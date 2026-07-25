@@ -10,6 +10,7 @@ import test from "node:test";
 
 import { SessionApprovalBroker } from "../bin/session/approval/SessionApprovalBroker.js";
 import { JsonlSessionMessageStore } from "../bin/session/messages/JsonlSessionMessageStore.js";
+import { LocalFileSystem } from "../bin/workspace/LocalFileSystem.js";
 import { SessionMessages } from "../bin/session/SessionMessages.js";
 import { SessionEventHub } from "../bin/session/runtime/SessionEventHub.js";
 import { SessionTurn } from "../bin/session/SessionTurn.js";
@@ -20,6 +21,7 @@ async function create_turn_harness(execute_run) {
   const messages = new SessionMessages({
     session_id,
     store: new JsonlSessionMessageStore({
+      files: new LocalFileSystem(root_path),
       session_id,
       file_path: path.join(root_path, "active.jsonl"),
     }),
@@ -29,7 +31,7 @@ async function create_turn_harness(execute_run) {
 
   const turn = new SessionTurn({
     session_id,
-    project_root: root_path,
+    workspace_path: root_path,
     executor: {
       run: async ({ runContext }) => await execute_run(runContext),
       stop: () => false,

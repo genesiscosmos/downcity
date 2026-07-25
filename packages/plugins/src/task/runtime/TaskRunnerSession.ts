@@ -16,7 +16,7 @@ import type { SessionRunResult } from "@downcity/agent";
 import type { TaskSessionRuntimePort } from "@/task/runtime/TaskRunnerTypes.js";
 import {
   DefaultSessionComposer,
-  JsonlSessionMessageStore,
+  create_session_message_store,
   SessionMessages,
 } from "@downcity/agent";
 import { DefaultSessionSystemComposer } from "@downcity/agent";
@@ -117,7 +117,8 @@ export function createTaskSessionRuntimePort(params: {
     const messages_dir_path = runMessagesDirPath || path.join(runDirAbs, key);
     const created = new SessionMessages({
       session_id: key,
-      store: new JsonlSessionMessageStore({
+      store: create_session_message_store({
+        files: context.files,
         session_id: key,
         file_path: path.join(messages_dir_path, "active.jsonl"),
         assistant_message_file_path: path.join(

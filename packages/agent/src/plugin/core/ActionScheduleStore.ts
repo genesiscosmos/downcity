@@ -8,8 +8,6 @@
  * - 文件只记录状态事件；对外仍暴露稳定的调度任务查询与状态更新接口。
  */
 
-import fs from "fs-extra";
-import path from "node:path";
 import type {
   ActionScheduleJobRecord,
   ActionScheduleJobStatus,
@@ -17,6 +15,7 @@ import type {
 } from "@/plugin/types/ActionSchedule.js";
 import { generateId } from "@/utils/Id.js";
 import { getDowncityScheduleDbPath } from "@/config/Paths.js";
+import type { FileSystem } from "@/types/workspace/FileSystem.js";
 
 type ActionScheduleJobEvent =
   | {
@@ -60,9 +59,12 @@ type ActionScheduleJobEvent =
       error?: string;
     };
 
-function readJsonlLines(filePath: string): string[] {
-  if (!fs.existsSync(filePath)) return [];
-  const raw = fs.readFileSync(filePath, "utf-8");
+async function read_jsonl_lines(
+  files: FileSystem,
+  file_path: string,
+): Promise<string[]> {
+  if (!(await files.path_exists(file_path))) return [];
+  const raw = (await files.read_file(file_path)).toString("utf8");
   return raw
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -131,14 +133,14 @@ function compareJobs(
  * ActionSchedule Store。
  */
 export class ActionScheduleStore {
-  private readonly filePath: string;
+  private readonly file_path: string;
+  private readonly lock_path: string;
+  private readonly files: FileSystem;
 
-  constructor(projectRoot: string) {
-    this.filePath = getDowncityScheduleDbPath(projectRoot);
-    fs.ensureDirSync(path.dirname(this.filePath));
-    if (!fs.existsSync(this.filePath)) {
-      fs.writeFileSync(this.filePath, "", "utf-8");
-    }
+  constructor(files: FileSystem) {
+    this.files = files;
+    this.file_path = getDowncityScheduleDbPath(files.root_path);
+    this.lock_path = `${this.file_path}.lock`;
   }
 
   /**
@@ -152,7 +154,7 @@ export class ActionScheduleStore {
   /**
    * 创建调度任务。
    */
-  createJob(input: CreateActionScheduleJobInput): ActionScheduleJobRecord {
+  async createJob(input: CreateActionScheduleJobInput): Promise<ActionScheduleJobRecord> {
     const now = Date.now();
     const job: ActionScheduleJobRecord = {
       id: `sched_${generateId()}`,
@@ -164,10 +166,12 @@ export class ActionScheduleStore {
       createdAt: now,
       updatedAt: now,
     };
-    this.appendEvent({
-      v: 1,
-      type: "created",
-      job,
+    await this.with_store_lock(async () => {
+      await this.append_event_unlocked({
+        v: 1,
+        type: "created",
+        job,
+      });
     });
     return job;
   }
@@ -175,84 +179,95 @@ export class ActionScheduleStore {
   /**
    * 获取单个任务。
    */
-  getJobById(jobId: string): ActionScheduleJobRecord | null {
+  async getJobById(jobId: string): Promise<ActionScheduleJobRecord | null> {
     const key = String(jobId || "").trim();
     if (!key) return null;
-    return this.readJobMap().get(key) || null;
+    return await this.with_store_lock(async () =>
+      (await this.read_job_map_unlocked()).get(key) || null
+    );
   }
 
   /**
    * 列出指定状态的任务。
    */
-  listJobsByStatus(
+  async listJobsByStatus(
     statuses: ActionScheduleJobStatus[],
-  ): ActionScheduleJobRecord[] {
+  ): Promise<ActionScheduleJobRecord[]> {
     if (statuses.length === 0) return [];
     const allowed = new Set(statuses);
-    return this.readJobs()
-      .filter((job) => allowed.has(job.status))
-      .sort(compareJobs);
+    return await this.with_store_lock(async () =>
+      (await this.read_jobs_unlocked())
+        .filter((job) => allowed.has(job.status))
+        .sort(compareJobs)
+    );
   }
 
   /**
    * 列出任务。
    */
-  listJobs(params?: {
+  async listJobs(params?: {
     status?: ActionScheduleJobStatus;
     limit?: number;
-  }): ActionScheduleJobRecord[] {
+  }): Promise<ActionScheduleJobRecord[]> {
     const limit =
       typeof params?.limit === "number" && Number.isFinite(params.limit)
         ? Math.max(1, Math.trunc(params.limit))
         : 100;
-    const jobs = this.readJobs()
-      .filter((job) => !params?.status || job.status === params.status)
-      .sort(compareJobs);
-    return jobs.slice(0, limit);
+    return await this.with_store_lock(async () => {
+      const jobs = (await this.read_jobs_unlocked())
+        .filter((job) => !params?.status || job.status === params.status)
+        .sort(compareJobs);
+      return jobs.slice(0, limit);
+    });
   }
 
   /**
    * 列出已到点且待执行的任务。
    */
-  listDuePendingJobs(nowMs: number): ActionScheduleJobRecord[] {
-    return this.readJobs()
-      .filter(
-        (job) =>
-          job.status === "pending" && job.runAtMs <= Math.trunc(nowMs),
-      )
-      .sort(compareJobs);
+  async listDuePendingJobs(nowMs: number): Promise<ActionScheduleJobRecord[]> {
+    return await this.with_store_lock(async () =>
+      (await this.read_jobs_unlocked())
+        .filter(
+          (job) =>
+            job.status === "pending" && job.runAtMs <= Math.trunc(nowMs),
+        )
+        .sort(compareJobs)
+    );
   }
 
   /**
    * 启动恢复时，把历史 `running` 回退到 `pending`。
    */
-  resetRunningJobsToPending(): number {
-    const runningJobs = this.readJobs().filter((job) => job.status === "running");
-    const now = Date.now();
-    for (const job of runningJobs) {
-      this.appendEvent({
-        v: 1,
-        type: "status",
-        jobId: job.id,
-        status: "pending",
-        updatedAt: now,
-      });
-    }
-    return runningJobs.length;
+  async resetRunningJobsToPending(): Promise<number> {
+    return await this.with_store_lock(async () => {
+      const running_jobs = (await this.read_jobs_unlocked())
+        .filter((job) => job.status === "running");
+      const now = Date.now();
+      for (const job of running_jobs) {
+        await this.append_event_unlocked({
+          v: 1,
+          type: "status",
+          jobId: job.id,
+          status: "pending",
+          updatedAt: now,
+        });
+      }
+      return running_jobs.length;
+    });
   }
 
   /**
    * 将任务标记为执行中。
    */
-  markJobRunning(jobId: string): boolean {
-    return this.transitionPendingJob(jobId, "running");
+  async markJobRunning(jobId: string): Promise<boolean> {
+    return await this.transition_pending_job(jobId, "running");
   }
 
   /**
    * 将任务标记为成功。
    */
-  markJobSucceeded(jobId: string): boolean {
-    return this.updateTerminalStatus({
+  async markJobSucceeded(jobId: string): Promise<boolean> {
+    return await this.update_terminal_status({
       jobId,
       status: "succeeded",
     });
@@ -261,8 +276,8 @@ export class ActionScheduleStore {
   /**
    * 将任务标记为失败。
    */
-  markJobFailed(jobId: string, error: string): boolean {
-    return this.updateTerminalStatus({
+  async markJobFailed(jobId: string, error: string): Promise<boolean> {
+    return await this.update_terminal_status({
       jobId,
       status: "failed",
       error,
@@ -272,8 +287,8 @@ export class ActionScheduleStore {
   /**
    * 将任务标记为取消。
    */
-  markJobCancelled(jobId: string): boolean {
-    return this.updateTerminalStatus({
+  async markJobCancelled(jobId: string): Promise<boolean> {
+    return await this.update_terminal_status({
       jobId,
       status: "cancelled",
     });
@@ -282,23 +297,23 @@ export class ActionScheduleStore {
   /**
    * 取消待执行任务。
    */
-  cancelPendingJob(jobId: string): boolean {
-    return this.transitionPendingJob(jobId, "cancelled");
+  async cancelPendingJob(jobId: string): Promise<boolean> {
+    return await this.transition_pending_job(jobId, "cancelled");
   }
 
   /**
    * 仅读取当前任务快照。
    */
-  private readJobs(): ActionScheduleJobRecord[] {
-    return [...this.readJobMap().values()];
+  private async read_jobs_unlocked(): Promise<ActionScheduleJobRecord[]> {
+    return [...(await this.read_job_map_unlocked()).values()];
   }
 
   /**
    * 重放事件流，构造当前任务快照。
    */
-  private readJobMap(): Map<string, ActionScheduleJobRecord> {
+  private async read_job_map_unlocked(): Promise<Map<string, ActionScheduleJobRecord>> {
     const jobs = new Map<string, ActionScheduleJobRecord>();
-    for (const line of readJsonlLines(this.filePath)) {
+    for (const line of await read_jsonl_lines(this.files, this.file_path)) {
       const event = parseEvent(line);
       if (!event) continue;
       if (event.type === "created") {
@@ -323,49 +338,56 @@ export class ActionScheduleStore {
   /**
    * 追加单条事件。
    */
-  private appendEvent(event: ActionScheduleJobEvent): void {
-    fs.appendFileSync(this.filePath, `${JSON.stringify(event)}\n`, "utf-8");
+  private async append_event_unlocked(event: ActionScheduleJobEvent): Promise<void> {
+    await this.files.append_file(this.file_path, `${JSON.stringify(event)}\n`);
+  }
+
+  /** 使用 Workspace 跨进程锁串行执行一次调度存储事务。 */
+  private async with_store_lock<T>(action: () => Promise<T>): Promise<T> {
+    return await this.files.with_file_lock(this.lock_path, action);
   }
 
   /**
    * 执行 pending -> target 的状态迁移。
    */
-  private transitionPendingJob(
+  private async transition_pending_job(
     jobId: string,
     status: "running" | "cancelled",
-  ): boolean {
-    const current = this.getJobById(jobId);
-    if (!current || current.status !== "pending") {
-      return false;
-    }
-    this.appendEvent({
-      v: 1,
-      type: "status",
-      jobId: current.id,
-      status,
-      updatedAt: Date.now(),
+  ): Promise<boolean> {
+    return await this.with_store_lock(async () => {
+      const current = (await this.read_job_map_unlocked()).get(jobId);
+      if (!current || current.status !== "pending") return false;
+      await this.append_event_unlocked({
+        v: 1,
+        type: "status",
+        jobId: current.id,
+        status,
+        updatedAt: Date.now(),
+      });
+      return true;
     });
-    return true;
   }
 
   /**
    * 统一写入终态。
    */
-  private updateTerminalStatus(params: {
+  private async update_terminal_status(params: {
     jobId: string;
     status: Exclude<ActionScheduleJobStatus, "pending" | "running">;
     error?: string;
-  }): boolean {
-    const current = this.getJobById(params.jobId);
-    if (!current) return false;
-    this.appendEvent({
-      v: 1,
-      type: "status",
-      jobId: current.id,
-      status: params.status,
-      updatedAt: Date.now(),
-      ...(params.error ? { error: String(params.error) } : {}),
+  }): Promise<boolean> {
+    return await this.with_store_lock(async () => {
+      const current = (await this.read_job_map_unlocked()).get(params.jobId);
+      if (!current) return false;
+      await this.append_event_unlocked({
+        v: 1,
+        type: "status",
+        jobId: current.id,
+        status: params.status,
+        updatedAt: Date.now(),
+        ...(params.error ? { error: String(params.error) } : {}),
+      });
+      return true;
     });
-    return true;
   }
 }

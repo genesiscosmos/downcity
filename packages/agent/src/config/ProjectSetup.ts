@@ -9,7 +9,6 @@ import fs from "fs-extra";
 import path from "node:path";
 import {
   getCacheDirPath,
-  getDowncityAgentsRootDirPath,
   getLogsDirPath,
   getDowncityDataDirPath,
   getDowncityDebugDirPath,
@@ -18,6 +17,7 @@ import {
   getDowncityPublicDirPath,
   getDowncityTasksDirPath,
 } from "@/config/Paths.js";
+import { get_sdk_agents_root_dir_path } from "@/store/LocalStorePaths.js";
 
 /**
  * 确保 `.downcity` 运行目录结构完整。
@@ -30,7 +30,7 @@ function ensure_runtime_directories(projectRoot: string): void {
   fs.ensureDirSync(getCacheDirPath(projectRoot));
   fs.ensureDirSync(getDowncityProfileDirPath(projectRoot));
   fs.ensureDirSync(getDowncityDataDirPath(projectRoot));
-  fs.ensureDirSync(getDowncityAgentsRootDirPath(projectRoot));
+  fs.ensureDirSync(get_sdk_agents_root_dir_path(projectRoot));
   fs.ensureDirSync(getDowncityPublicDirPath(projectRoot));
   fs.ensureDirSync(path.join(projectRoot, ".agents", "skills"));
   fs.ensureDirSync(getDowncityDebugDirPath(projectRoot));

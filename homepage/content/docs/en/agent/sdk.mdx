@@ -66,6 +66,17 @@ async function decide_approval(approval_id: string, decision: "approved" | "deni
 }
 ```
 
-Use `session.messages()` for a history snapshot. After a disconnect, reload the snapshot and establish a new subscription.
+Use `session.messages()` for a canonical history snapshot. It returns the current Active page and a `next_before_sequence` cursor when older immutable Segments exist. After a disconnect, reload the snapshot and establish a new subscription.
+
+Hosts that render a flat activity feed can use the SDK projection instead of depending on `.downcity` file names:
+
+```ts
+import { to_session_message_timeline_events } from "@downcity/agent";
+
+const page = await session.messages();
+const timeline = page.items.flatMap(to_session_message_timeline_events);
+```
+
+Session JSONL, logs, and scheduled actions all use the Workspace FileSystem for rooted paths, atomic writes, and cross-process file transactions. Applications should use Agent and Session APIs for structured state rather than reading the physical storage layout.
 
 Continue with the [full Agent SDK docs](/en/agent-sdk-docs).

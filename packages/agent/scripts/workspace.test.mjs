@@ -11,11 +11,13 @@ import { Agent, Workspace } from "../bin/index.js";
 
 test("Workspace exposes file tools without requiring Shell", async (t) => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-"));
-  t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
 
   const workspace = new Workspace({ path: root_path });
   const agent = new Agent({ id: "workspace-files", workspace });
-  t.after(async () => await agent.dispose());
+  t.after(async () => {
+    await agent.dispose();
+    await fs.rm(root_path, { recursive: true, force: true });
+  });
 
   assert.equal(workspace.path, await fs.realpath(root_path));
   assert.deepEqual(Object.keys(workspace.tools).sort(), [

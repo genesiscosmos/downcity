@@ -6,8 +6,8 @@
  * - 仅处理轻量配置摘要与索引信息，不负责消息 JSONL 的读写。
  */
 
-import fs from "fs-extra";
 import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.js";
+import type { FileSystem } from "@/types/workspace/FileSystem.js";
 
 function normalizeModelLabel(input: unknown): string | undefined {
   const label = typeof input === "string" ? input.trim() : "";
@@ -68,9 +68,13 @@ export async function readSessionMetadataFromPath(input: {
   sessionId: string;
   /** 当前 agentId。 */
   agentId: string;
+  /** 当前 Workspace 的统一文件能力。 */
+  files: FileSystem;
 }): Promise<SessionHistoryMetaV1> {
   try {
-    const raw = (await fs.readJson(input.filePath)) as Partial<SessionHistoryMetaV1>;
+    const raw = JSON.parse(
+      (await input.files.read_file(input.filePath)).toString("utf8"),
+    ) as Partial<SessionHistoryMetaV1>;
     return normalize_session_metadata(raw, input.sessionId, input.agentId);
   } catch {
     return normalize_session_metadata({}, input.sessionId, input.agentId);

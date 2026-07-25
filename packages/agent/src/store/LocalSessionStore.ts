@@ -8,11 +8,11 @@
 
 import { JsonlSessionMessageStore } from "@/session/messages/JsonlSessionMessageStore.js";
 import {
-  getSdkAgentSessionInstructionPath,
-  getSdkAgentSessionMetaPath,
-  getSdkAgentSessionAssistantMessagePath,
-  getSdkAgentSessionMessagesPath,
-} from "@/session/storage/Paths.js";
+  get_sdk_agent_session_instruction_path,
+  get_sdk_agent_session_meta_path,
+  get_sdk_agent_session_assistant_message_path,
+  get_sdk_agent_session_messages_path,
+} from "@/store/LocalStorePaths.js";
 import { normalize_session_metadata } from "@/session/storage/Metadata.js";
 import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
@@ -38,13 +38,14 @@ export class LocalSessionStore implements SessionStore {
     this.agent_id = options.agent_id;
     this.session_id = options.session_id;
     this.messages = new JsonlSessionMessageStore({
+      files: this.files,
       session_id: this.session_id,
-      file_path: getSdkAgentSessionMessagesPath(
+      file_path: get_sdk_agent_session_messages_path(
         this.files.root_path,
         this.agent_id,
         this.session_id,
       ),
-      assistant_message_file_path: getSdkAgentSessionAssistantMessagePath(
+      assistant_message_file_path: get_sdk_agent_session_assistant_message_path(
         this.files.root_path,
         this.agent_id,
         this.session_id,
@@ -85,7 +86,7 @@ export class LocalSessionStore implements SessionStore {
 
   /** 写入显式 system 快照。 */
   async write_instruction(instruction: string): Promise<void> {
-    const instruction_path = getSdkAgentSessionInstructionPath(
+    const instruction_path = get_sdk_agent_session_instruction_path(
       this.files.root_path,
       this.agent_id,
       this.session_id,
@@ -95,7 +96,7 @@ export class LocalSessionStore implements SessionStore {
 
   /** 返回当前 Session instruction.md 的 Workspace 路径。 */
   private instruction_path(): string {
-    return getSdkAgentSessionInstructionPath(
+    return get_sdk_agent_session_instruction_path(
       this.files.root_path,
       this.agent_id,
       this.session_id,
@@ -104,7 +105,7 @@ export class LocalSessionStore implements SessionStore {
 
   /** 返回当前 Session meta.json 的 Workspace 路径。 */
   private metadata_path(): string {
-    return getSdkAgentSessionMetaPath(
+    return get_sdk_agent_session_meta_path(
       this.files.root_path,
       this.agent_id,
       this.session_id,

@@ -2,7 +2,7 @@
  * 文件工具公开类型。
  *
  * 关键点（中文）
- * - 文件工具由 `@downcity/shell` 持有，与 PTY shell action 分离。
+ * - 文件工具由 Workspace 持有，与 Shell/PTY action 分离。
  * - 所有模型可见字段统一使用 snake_case。
  * - 成功与失败均返回结构化结果，避免依赖异常文本判断执行状态。
  */

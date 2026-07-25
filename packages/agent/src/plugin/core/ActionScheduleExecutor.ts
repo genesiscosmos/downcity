@@ -18,9 +18,9 @@ export async function runDueActionScheduleJobs(params: {
   context: AgentContext;
   store: ActionScheduleStore;
 }): Promise<void> {
-  const dueJobs = params.store.listDuePendingJobs(Date.now());
+  const dueJobs = await params.store.listDuePendingJobs(Date.now());
   for (const job of dueJobs) {
-    const claimed = params.store.markJobRunning(job.id);
+    const claimed = await params.store.markJobRunning(job.id);
     if (!claimed) continue;
 
     try {
@@ -31,7 +31,7 @@ export async function runDueActionScheduleJobs(params: {
         context: params.context,
       });
       if (!result.success) {
-        params.store.markJobFailed(
+        await params.store.markJobFailed(
           job.id,
           result.message || "scheduled action failed",
         );
@@ -44,9 +44,9 @@ export async function runDueActionScheduleJobs(params: {
         continue;
       }
 
-      params.store.markJobSucceeded(job.id);
+      await params.store.markJobSucceeded(job.id);
     } catch (error) {
-      params.store.markJobFailed(job.id, String(error));
+      await params.store.markJobFailed(job.id, String(error));
       params.context.logger.warn("[action-schedule] job failed", {
         jobId: job.id,
         pluginName: job.pluginName,

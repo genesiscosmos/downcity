@@ -2,19 +2,18 @@
  * 单 agent control API 会话路由。
  *
  * 关键点（中文）
- * - 聚合控制面会话消息、归档、system prompt 与执行相关接口。
+ * - 聚合控制面会话消息、system prompt 与执行相关接口。
  * - 仅负责编排请求与响应；消息读取、时间线映射、执行拼装复用 helper。
  * - 会话控制接口统一暴露在 `/api/control/*` 下。
  */
 
 import type { SystemModelMessage } from "ai";
-import fs from "fs-extra";
-import { resolveSessionSystemMessages } from "@downcity/agent";
 import {
-  getDowncitySessionMessagesArchiveDirPath,
-  getDowncitySessionMessagesArchivePath,
-  getDowncitySessionMessagesPath,
-} from "@/city/config/Paths.js";
+  resolveSessionSystemMessages,
+  to_session_message_timeline_events,
+  type AgentSession,
+  type SessionMessage,
+} from "@downcity/agent";
 import type { ControlSessionExecuteRequestBody } from "@/city/agent/control/types/ControlSessionExecute.js";
 import type { ControlRouteRegistrationParams } from "@/city/agent/http/control/types/ControlRoutes.js";
 import {
@@ -22,14 +21,30 @@ import {
   decodeMaybe,
   toLimit,
 } from "@/city/agent/control/CommonHelpers.js";
-import {
-  listControlSessionSummaries,
-  loadSessionMessagesFromFile,
-  toUiMessageTimeline,
-} from "@/city/agent/control/Helpers.js";
+import { list_control_session_summaries } from "@/city/agent/control/Helpers.js";
 import { executeBySessionId } from "@/city/agent/control/ExecuteBySession.js";
 
 const CITY_CHAT_SESSION_ID = "city-chat-main";
+
+/** 从最新 Active 开始向前读取，返回指定数量的最近可见 Message。 */
+async function read_recent_session_messages(
+  session: AgentSession,
+  limit: number,
+): Promise<{ items: SessionMessage[]; total: number }> {
+  let page = await session.messages();
+  const items = [...page.items];
+  const total = page.total;
+  while (items.length < limit && page.has_more && page.next_before_sequence) {
+    page = await session.messages({
+      before_sequence: page.next_before_sequence,
+    });
+    items.unshift(...page.items);
+  }
+  return {
+    items: items.slice(-limit),
+    total,
+  };
+}
 
 function normalizeSystemText(input: string | null | undefined): string {
   return String(input || "").trim();
@@ -101,12 +116,10 @@ export function registerControlSessionRoutes(
         const executingSessionIds = new Set<string>(
           runtime.sessions.list_executing_session_ids(),
         );
-        const sessions = await listControlSessionSummaries({
-          projectRoot: runtime.rootPath,
-          agentId: runtime.agent_id,
+        const sessions = await list_control_session_summaries(
+          runtime.sessions,
           limit,
-          executingSessionIds,
-        });
+        );
         const hasCityChatSession = sessions.some(
           (item) => String(item.sessionId || "").trim() === CITY_CHAT_SESSION_ID,
         );
@@ -144,20 +157,16 @@ export function registerControlSessionRoutes(
           return c.json({ success: false, error: "Missing sessionId" }, 400);
         }
 
-        const filePath = getDowncitySessionMessagesPath(
-          runtime.rootPath,
-          runtime.agent_id,
-          sessionId,
+        const session = await runtime.sessions.get(sessionId);
+        const history = await read_recent_session_messages(session, limit);
+        const sliced = history.items.flatMap((message) =>
+          to_session_message_timeline_events(message)
         );
-        const messages = await loadSessionMessagesFromFile(filePath);
-        const sliced = messages
-          .slice(-limit)
-          .flatMap((message) => toUiMessageTimeline(message));
         return c.json({
           success: true,
           sessionId,
           total: sliced.length,
-          rawTotal: messages.length,
+          rawTotal: history.total,
           messages: sliced,
         });
       } catch (error) {
@@ -209,152 +218,6 @@ export function registerControlSessionRoutes(
           success: true,
           sessionId,
           cleared: true,
-        });
-      } catch (error) {
-        return c.json({ success: false, error: String(error) }, 500);
-      }
-    });
-  }
-
-  for (const routePath of buildControlRouteAliases("/sessions/:sessionId/archives")) {
-    app.get(routePath, async (c) => {
-      try {
-        const runtime = params.getAgentContext();
-        const limit = toLimit(c.req.query("limit"), 100);
-        const sessionId = decodeMaybe(String(c.req.param("sessionId") || "").trim());
-        if (!sessionId) {
-          return c.json({ success: false, error: "Missing sessionId" }, 400);
-        }
-
-        const archiveDirPath = getDowncitySessionMessagesArchiveDirPath(
-          runtime.rootPath,
-          runtime.agent_id,
-          sessionId,
-        );
-        if (!(await fs.pathExists(archiveDirPath))) {
-          return c.json({
-            success: true,
-            sessionId,
-            archives: [],
-          });
-        }
-
-        const entries = await fs.readdir(archiveDirPath, { withFileTypes: true });
-        const archives: Array<{
-          archiveId: string;
-          archivedAt?: number;
-          messageCount: number;
-        }> = [];
-
-        for (const entry of entries) {
-          if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
-          const archiveId = decodeMaybe(entry.name.slice(0, -5));
-          if (!archiveId) continue;
-
-          const archivePath = getDowncitySessionMessagesArchivePath(
-            runtime.rootPath,
-            runtime.agent_id,
-            sessionId,
-            archiveId,
-          );
-          const payload = (await fs.readJson(archivePath).catch(() => null)) as
-            | {
-                archivedAt?: unknown;
-                messages?: unknown;
-              }
-            | null;
-          const archivedAtFromPayload =
-            typeof payload?.archivedAt === "number" &&
-            Number.isFinite(payload.archivedAt)
-              ? payload.archivedAt
-              : undefined;
-          const archivedAtFromStat =
-            typeof archivedAtFromPayload === "number"
-              ? undefined
-              : await fs
-                  .stat(archivePath)
-                  .then((stat) => stat.mtimeMs)
-                  .catch(() => undefined);
-          const messageCount = Array.isArray(payload?.messages)
-            ? payload.messages.length
-            : 0;
-
-          archives.push({
-            archiveId,
-            ...(typeof archivedAtFromPayload === "number"
-              ? { archivedAt: archivedAtFromPayload }
-              : typeof archivedAtFromStat === "number"
-                ? { archivedAt: archivedAtFromStat }
-                : {}),
-            messageCount,
-          });
-        }
-
-        archives.sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
-
-        return c.json({
-          success: true,
-          sessionId,
-          archives: archives.slice(0, limit),
-        });
-      } catch (error) {
-        return c.json({ success: false, error: String(error) }, 500);
-      }
-    });
-  }
-
-  for (const routePath of buildControlRouteAliases("/sessions/:sessionId/archives/:archiveId")) {
-    app.get(routePath, async (c) => {
-      try {
-        const runtime = params.getAgentContext();
-        const sessionId = decodeMaybe(String(c.req.param("sessionId") || "").trim());
-        const archiveId = decodeMaybe(String(c.req.param("archiveId") || "").trim());
-        if (!sessionId) {
-          return c.json({ success: false, error: "Missing sessionId" }, 400);
-        }
-        if (!archiveId) {
-          return c.json({ success: false, error: "Missing archiveId" }, 400);
-        }
-
-        const archivePath = getDowncitySessionMessagesArchivePath(
-          runtime.rootPath,
-          runtime.agent_id,
-          sessionId,
-          archiveId,
-        );
-        if (!(await fs.pathExists(archivePath))) {
-          return c.json(
-            { success: false, error: `Archive not found: ${archiveId}` },
-            404,
-          );
-        }
-
-        const payload = (await fs.readJson(archivePath).catch(() => null)) as
-          | {
-              archivedAt?: unknown;
-              messages?: unknown;
-            }
-          | null;
-        const archivedAt =
-          typeof payload?.archivedAt === "number" &&
-          Number.isFinite(payload.archivedAt)
-            ? payload.archivedAt
-            : undefined;
-        const archivedMessages = Array.isArray(payload?.messages)
-          ? payload.messages
-          : [];
-        const messages = archivedMessages.flatMap((message) =>
-          toUiMessageTimeline(message as Parameters<typeof toUiMessageTimeline>[0]),
-        );
-
-        return c.json({
-          success: true,
-          sessionId,
-          archiveId,
-          ...(typeof archivedAt === "number" ? { archivedAt } : {}),
-          total: messages.length,
-          rawTotal: archivedMessages.length,
-          messages,
         });
       } catch (error) {
         return c.json({ success: false, error: String(error) }, 500);

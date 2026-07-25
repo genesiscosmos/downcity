@@ -39,6 +39,9 @@ export interface FileSystem {
   /** 读取 Workspace 内文件的完整字节内容。 */
   read_file(file_path: string): Promise<Buffer>;
 
+  /** 读取 Workspace 内普通文件的字节大小。 */
+  file_size(file_path: string): Promise<number>;
+
   /** 创建 Workspace 内目录及缺失的父目录。 */
   ensure_directory(directory_path: string): Promise<void>;
 
@@ -53,6 +56,17 @@ export interface FileSystem {
 
   /** 原子创建或覆盖 Workspace 内的完整文件内容。 */
   write_file_atomically(file_path: string, content: string | Buffer): Promise<void>;
+
+  /** 向 Workspace 文件末尾追加完整字节内容。 */
+  append_file(file_path: string, content: string | Buffer): Promise<void>;
+
+  /**
+   * 使用 Workspace 内的独占锁串行执行文件事务。
+   *
+   * @param lock_path 锁文件路径；调用完成后由 FileSystem 自动释放。
+   * @param action 获得锁后执行的事务；异常会原样向调用方抛出。
+   */
+  with_file_lock<T>(lock_path: string, action: () => Promise<T>): Promise<T>;
 
   /** 执行一次受项目根目录限制的结构化文件操作。 */
   run_file_action(request: FileToolActionRequest): Promise<FileToolActionResult>;

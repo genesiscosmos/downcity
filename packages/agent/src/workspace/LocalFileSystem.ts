@@ -22,9 +22,12 @@ import type {
 import { run_file_action } from "@/workspace/file/FileActionRuntime.js";
 import { run_search_action } from "@/workspace/search/SearchActionRuntime.js";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import {
   access,
+  appendFile,
   mkdir,
+  open,
   readFile,
   readdir,
   rename,
@@ -32,6 +35,17 @@ import {
   stat,
 } from "node:fs/promises";
 import { write_file_atomically } from "@/workspace/file/FileAtomicWriter.js";
+
+const FILE_LOCK_STALE_MS = 120_000;
+const FILE_LOCK_TIMEOUT_MS = FILE_LOCK_STALE_MS * 2;
+const FILE_LOCK_RETRY_MS = 40;
+
+/** 等待指定毫秒数，避免争锁循环持续占用事件循环。 */
+async function wait_for_lock_retry(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, FILE_LOCK_RETRY_MS);
+  });
+}
 
 /** Node.js 本地文件系统实现。 */
 export class LocalFileSystem implements FileSystem {
@@ -66,6 +80,11 @@ export class LocalFileSystem implements FileSystem {
   /** 读取 Workspace 文件的完整字节内容。 */
   async read_file(file_path: string): Promise<Buffer> {
     return await readFile(this.resolve_path(file_path));
+  }
+
+  /** 读取普通文件的字节大小。 */
+  async file_size(file_path: string): Promise<number> {
+    return (await stat(this.resolve_path(file_path))).size;
   }
 
   /** 创建目录及缺失的父目录。 */
@@ -116,6 +135,62 @@ export class LocalFileSystem implements FileSystem {
       overwrite: true,
       ...(typeof mode === "number" ? { mode } : {}),
     });
+  }
+
+  /** 串行调用方可使用的文件追加能力。 */
+  async append_file(file_path: string, content: string | Buffer): Promise<void> {
+    const resolved_path = this.resolve_path(file_path);
+    await mkdir(path.dirname(resolved_path), { recursive: true });
+    await appendFile(
+      resolved_path,
+      Buffer.isBuffer(content) ? content : Buffer.from(content, "utf8"),
+    );
+  }
+
+  /** 使用跨进程锁文件串行执行 Workspace 文件事务。 */
+  async with_file_lock<T>(
+    lock_path: string,
+    action: () => Promise<T>,
+  ): Promise<T> {
+    const resolved_lock_path = this.resolve_path(lock_path);
+    await mkdir(path.dirname(resolved_lock_path), { recursive: true });
+    const token = `${process.pid}:${Date.now()}:${randomUUID()}`;
+    const started_at = Date.now();
+
+    while (true) {
+      try {
+        const lock_file = await open(resolved_lock_path, "wx");
+        await lock_file.writeFile(token, "utf8");
+        await lock_file.close();
+        break;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        try {
+          const lock_stat = await stat(resolved_lock_path);
+          if (Date.now() - lock_stat.mtimeMs > FILE_LOCK_STALE_MS) {
+            await rm(resolved_lock_path, { force: true });
+          }
+        } catch {
+          // 锁可能已由持有者释放，下一轮直接重新竞争。
+        }
+        if (Date.now() - started_at > FILE_LOCK_TIMEOUT_MS) {
+          throw new Error(`Workspace file lock timeout: ${resolved_lock_path}`);
+        }
+        await wait_for_lock_retry();
+      }
+    }
+
+    try {
+      return await action();
+    } finally {
+      try {
+        if ((await readFile(resolved_lock_path, "utf8")).trim() === token) {
+          await rm(resolved_lock_path, { force: true });
+        }
+      } catch {
+        // 锁已被清理时无需再次处理。
+      }
+    }
   }
 
   /** 执行一次结构化文件操作。 */

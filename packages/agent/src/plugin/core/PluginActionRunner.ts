@@ -60,9 +60,9 @@ async function schedulePluginAction(params: {
       scheduleInput.runAtMs,
       "schedule.runAtMs",
     );
-    const store = new ActionScheduleStore(params.context.rootPath);
+    const store = new ActionScheduleStore(params.context.files);
     try {
-      const job = store.createJob({
+      const job = await store.createJob({
         pluginName: params.pluginName,
         actionName: params.command,
         payload: params.payload ?? null,

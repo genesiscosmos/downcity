@@ -14,10 +14,7 @@ import { create_file_tools } from "@/workspace/tool/FileTools.js";
 import { create_search_tools } from "@/workspace/tool/SearchTools.js";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 import { LocalFileSystem } from "@/workspace/LocalFileSystem.js";
-import type {
-  WorkspaceOptions,
-  WorkspaceResources,
-} from "@/types/workspace/Workspace.js";
+import type { WorkspaceOptions } from "@/types/workspace/Workspace.js";
 import type { AgentStore } from "@/types/store/AgentStore.js";
 import { LocalAgentStore } from "@/store/LocalAgentStore.js";
 
@@ -35,7 +32,7 @@ function resolve_workspace_path(input: string): string {
 }
 
 /** 本地 Workspace。 */
-export class Workspace implements WorkspaceResources {
+export class Workspace {
   /** 已解析且不可变的项目根目录。 */
   readonly path: string;
 

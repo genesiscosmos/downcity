@@ -54,10 +54,8 @@ export interface SessionOptions {
    */
   agentId: string;
 
-  /**
-   * 当前项目根目录。
-   */
-  projectRoot: string;
+  /** 当前 Session 所属 Workspace 的绝对根目录。 */
+  workspace_path: string;
 
   /** 当前 Session 独享的领域持久化视图。 */
   store: SessionStore;

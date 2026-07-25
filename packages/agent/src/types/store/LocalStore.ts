@@ -28,6 +28,8 @@ export interface LocalSessionStoreOptions {
 
 /** JsonlSessionMessageStore 构造参数。 */
 export interface JsonlSessionMessageStoreOptions {
+  /** 当前 Message Store 与 Session 共用的 Workspace 文件能力。 */
+  files: FileSystem;
   /** 当前 Session 的稳定标识。 */
   session_id: string;
   /** Active JSONL 文件的绝对路径。 */

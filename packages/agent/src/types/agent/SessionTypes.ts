@@ -7,7 +7,6 @@
  */
 
 import type { AgentModel } from "@/agent/AgentModel.js";
-import type { SessionRecordV1 } from "@/executor/types/SessionRecords.js";
 
 /**
  * 新建 session 的输入参数。
@@ -82,11 +81,6 @@ export interface AgentSessionConfigSnapshot {
   /** 当前模型支持的总上下文窗口长度，单位为 token。 */
   model_context_window?: number;
 }
-
-/**
- * Session records视图类型。
- */
-export type AgentSessionRecordsView = "message" | "timeline";
 
 /**
  * Session 时间线事件。
@@ -284,62 +278,6 @@ export interface AgentSessionSummaryPage {
   nextCursor?: string;
   /** 是否仍有更多结果。 */
   hasMore: boolean;
-}
-
-/**
- * Session records 读取输入。
- */
-export interface AgentSessionRecordsInput {
-  /** 当前页返回上限。 */
-  limit?: number;
-  /** 分页游标。 */
-  cursor?: string;
-  /**
-   * 返回顺序。
-   *
-   * 说明（中文）
-   * - `asc`：从旧到新
-   * - `desc`：从新到旧
-   */
-  order?: "asc" | "desc";
-  /**
-   * 返回视图类型。
-   *
-   * 说明（中文）
-   * - `message`：原始 session 消息
-   * - `timeline`：适合直接渲染 UI 的平铺事件
-   */
-  view?: AgentSessionRecordsView;
-}
-
-/**
- * Session records 分页结果。
- */
-export interface AgentSessionRecordsPage {
-  /** 当前读取所对应的 session 信息。 */
-  session: AgentSessionInfo;
-  /** 当前页实际返回视图。 */
-  view: AgentSessionRecordsView;
-  /**
-   * 当前页数据列表。
-   *
-   * 说明（中文）
-   * - `view=message` 时返回 `SessionRecordV1[]`
-   * - `view=timeline` 时返回 `AgentSessionTimelineEvent[]`
-   */
-  items: SessionRecordV1[] | AgentSessionTimelineEvent[];
-  /**
-   * 过滤前后的总条数。
-   *
-   * 说明（中文）
-   * - 对 `view=message` 表示消息条数。
-   * - 对 `view=timeline` 表示时间线事件条数。
-   */
-  total: number;
-  /** 下一页游标。 */
-  next_cursor?: string;
-  /** 是否仍有更多数据。 */
-  has_more: boolean;
 }
 
 /**

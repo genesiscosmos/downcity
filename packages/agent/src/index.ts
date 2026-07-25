@@ -18,14 +18,12 @@ export type {
   SessionMessageStore,
   SessionStore,
 } from "./types/store/SessionStore.js";
+export { create_session_message_store } from "./store/SessionMessageStoreFactory.js";
 export type {
   FileSystem,
   WorkspaceDirectoryEntry,
 } from "./types/workspace/FileSystem.js";
-export type {
-  WorkspaceOptions,
-  WorkspaceResources,
-} from "./types/workspace/Workspace.js";
+export type { WorkspaceOptions } from "./types/workspace/Workspace.js";
 export { RemoteAgent } from "./remote/RemoteAgent.js";
 export { Session } from "./session/Session.js";
 export type { SessionOptions } from "./types/session/SessionOptions.js";
@@ -53,6 +51,7 @@ export type {
   AgentSessionSystemBlockSource,
   AgentSessionSystemSessionInfo,
   AgentSessionSystemSnapshot,
+  AgentSessionTimelineEvent,
 } from "./types/agent/SessionTypes.js";
 export type {
   ListSessionMessagesInput,
@@ -77,6 +76,7 @@ export type {
   SessionUserTextPart,
   SessionToolApprovalSnapshot,
 } from "./types/session/SessionMessage.js";
+export { to_session_message_timeline_events } from "./session/browse/SessionMessageTimeline.js";
 export type {
   SessionContextSnapshot,
   SessionMessageStorageStats,
@@ -153,7 +153,6 @@ export type {
 export { Executor } from "./executor/Executor.js";
 export { DefaultSessionComposer } from "./session/DefaultSessionComposer.js";
 export { SessionMessages } from "./session/SessionMessages.js";
-export { JsonlSessionMessageStore } from "./session/messages/JsonlSessionMessageStore.js";
 export type {
   AppendCompletedAssistantMessageInput,
   AppendExternalSessionAssistantMessageInput,
@@ -251,7 +250,6 @@ export {
   load_project_dotenv,
   resolve_agent_env,
 } from "./config/AgentEnv.js";
-export { getDowncitySessionMessagesPath } from "./config/Paths.js";
 export {
   getPlatformStoreDbPath,
   getPlatformStoreKeyPath,

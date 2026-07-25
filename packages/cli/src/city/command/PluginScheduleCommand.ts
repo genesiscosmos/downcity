@@ -8,7 +8,7 @@
  */
 
 import type { Command } from "commander";
-import { ActionScheduleStore } from "@downcity/agent";
+import { ActionScheduleStore, Workspace } from "@downcity/agent";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import type { PluginCliBaseOptions } from "@downcity/agent";
 import {
@@ -78,9 +78,10 @@ export async function runPluginScheduleListCommand(params: {
     const limit = params.limitRaw
       ? parsePositiveIntOption(params.limitRaw, "limit")
       : 100;
-    const store = new ActionScheduleStore(projectRoot);
+    const workspace = new Workspace({ path: projectRoot });
+    const store = new ActionScheduleStore(workspace.files);
     try {
-      const jobs = store.listJobs({ status, limit });
+      const jobs = await store.listJobs({ status, limit });
       printResult({
         asJson: params.options.json,
         success: true,
@@ -94,6 +95,7 @@ export async function runPluginScheduleListCommand(params: {
       });
     } finally {
       store.close();
+      await workspace.dispose();
     }
   } catch (error) {
     printResult({
@@ -153,9 +155,10 @@ export async function runPluginScheduleInfoCommand(params: {
     return;
   }
 
-  const store = new ActionScheduleStore(projectRoot);
+  const workspace = new Workspace({ path: projectRoot });
+  const store = new ActionScheduleStore(workspace.files);
   try {
-    const job = store.getJobById(jobId);
+    const job = await store.getJobById(jobId);
     if (!job) {
       printResult({
         asJson: params.options.json,
@@ -177,6 +180,7 @@ export async function runPluginScheduleInfoCommand(params: {
     });
   } finally {
     store.close();
+    await workspace.dispose();
   }
 }
 
@@ -226,9 +230,10 @@ export async function runPluginScheduleCancelCommand(params: {
     return;
   }
 
-  const store = new ActionScheduleStore(projectRoot);
+  const workspace = new Workspace({ path: projectRoot });
+  const store = new ActionScheduleStore(workspace.files);
   try {
-    const current = store.getJobById(jobId);
+    const current = await store.getJobById(jobId);
     if (!current) {
       printResult({
         asJson: params.options.json,
@@ -253,7 +258,7 @@ export async function runPluginScheduleCancelCommand(params: {
       return;
     }
 
-    const cancelled = store.cancelPendingJob(jobId);
+    const cancelled = await store.cancelPendingJob(jobId);
     if (!cancelled) {
       printResult({
         asJson: params.options.json,
@@ -271,11 +276,12 @@ export async function runPluginScheduleCancelCommand(params: {
       success: true,
       title: "plugin schedule cancelled",
       payload: {
-        job: store.getJobById(jobId),
+        job: await store.getJobById(jobId),
       },
     });
   } finally {
     store.close();
+    await workspace.dispose();
   }
 }
 

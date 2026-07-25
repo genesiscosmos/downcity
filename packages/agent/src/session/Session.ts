@@ -83,7 +83,7 @@ export class Session implements AgentSession {
   readonly id: string;
   readonly agentId: string;
 
-  private readonly project_root: string;
+  private readonly workspace_path: string;
   private readonly store: SessionStore;
   private readonly get_session_store: SessionOptions["get_session_store"];
   private readonly tools: Record<string, Tool>;
@@ -116,7 +116,7 @@ export class Session implements AgentSession {
   constructor(options: SessionOptions) {
     this.id = String(options.sessionId || "").trim();
     this.agentId = String(options.agentId || "").trim();
-    this.project_root = String(options.projectRoot || "").trim();
+    this.workspace_path = String(options.workspace_path || "").trim();
     this.store = options.store;
     this.get_session_store = options.get_session_store;
     this.tools = options.tools;
@@ -139,8 +139,8 @@ export class Session implements AgentSession {
     if (!this.agentId) {
       throw new Error("Session requires a non-empty agentId");
     }
-    if (!this.project_root) {
-      throw new Error("Session requires a non-empty project_root");
+    if (!this.workspace_path) {
+      throw new Error("Session requires a non-empty workspace_path");
     }
 
     this.events = new SessionEventHub();
@@ -176,7 +176,7 @@ export class Session implements AgentSession {
     });
     this.session_turn = new SessionTurn({
       session_id: this.id,
-      project_root: this.project_root,
+      workspace_path: this.workspace_path,
       executor: this.executor,
       state: this.state,
       events: this.events,
@@ -414,7 +414,7 @@ export class Session implements AgentSession {
           logger: this.logger,
         });
     return buildSessionInfo({
-      projectRoot: this.project_root,
+      projectRoot: this.workspace_path,
       agentId: this.agentId,
       sessionId: this.id,
       metadata: metadata_with_title,
@@ -442,7 +442,7 @@ export class Session implements AgentSession {
       session: {
         agentId: this.agentId,
         sessionId: this.id,
-        projectRoot: this.project_root,
+        projectRoot: this.workspace_path,
         createdAt: new Date(this.state.get_created_at()).toISOString(),
         timezone: this.state.get_timezone(),
       },
@@ -569,7 +569,7 @@ export class Session implements AgentSession {
   private create_fork_session(session_id: string): this {
     return this.create_child_session({
       agentId: this.agentId,
-      projectRoot: this.project_root,
+      workspace_path: this.workspace_path,
       store: this.get_session_store(session_id),
       get_session_store: this.get_session_store,
       sessionId: session_id,
@@ -682,7 +682,7 @@ export class Session implements AgentSession {
       session: {
         agent_id: this.agentId,
         session_id: this.id,
-        project_root: this.project_root,
+        project_root: this.workspace_path,
         created_at: this.local_state.created_at,
         timezone: this.local_state.timezone,
       },

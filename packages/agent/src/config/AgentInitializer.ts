@@ -15,7 +15,6 @@ import fs from "fs-extra";
 import path from "node:path";
 import {
   getCacheDirPath,
-  getDowncityAgentsRootDirPath,
   getLogsDirPath,
   getDowncityDataDirPath,
   getDowncityDebugDirPath,
@@ -27,6 +26,7 @@ import {
   getDowncityResourcesDirPath,
   getDowncityTasksDirPath,
 } from "@/config/Paths.js";
+import { get_sdk_agents_root_dir_path } from "@/store/LocalStorePaths.js";
 import type { EnvFileEntry } from "@/types/common/EnvFile.js";
 import { appendMissingEnvEntries } from "@/config/EnvFile.js";
 import { ensureGitignoreEntry } from "@/config/Gitignore.js";
@@ -134,7 +134,7 @@ export async function initializeAgentProject(
     getCacheDirPath(projectRoot),
     getDowncityProfileDirPath(projectRoot),
     getDowncityDataDirPath(projectRoot),
-    getDowncityAgentsRootDirPath(projectRoot),
+    get_sdk_agents_root_dir_path(projectRoot),
     getDowncityPublicDirPath(projectRoot),
     getDowncityResourcesDirPath(projectRoot),
     skills_dir_path,

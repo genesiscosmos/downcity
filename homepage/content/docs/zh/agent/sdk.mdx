@@ -66,6 +66,17 @@ async function decide_approval(approval_id: string, decision: "approved" | "deni
 }
 ```
 
-历史快照使用 `session.messages()`；连接断开后重新读取快照并建立新的订阅。
+历史快照使用 `session.messages()`。它返回当前 Active 页；存在更早的不可变 Segment 时，会同时返回 `next_before_sequence` 游标。连接断开后重新读取快照并建立新的订阅。
+
+需要渲染平铺活动时间线的宿主可以直接使用 SDK 投影，不需要依赖 `.downcity` 的物理文件名：
+
+```ts
+import { to_session_message_timeline_events } from "@downcity/agent";
+
+const page = await session.messages();
+const timeline = page.items.flatMap(to_session_message_timeline_events);
+```
+
+Session JSONL、日志和调度任务统一通过 Workspace FileSystem 完成根目录限制、原子写入与跨进程文件事务。应用应通过 Agent 和 Session API 访问结构化状态，而不是直接读取物理存储布局。
 
 继续阅读：[完整 Agent SDK 文档](/zh/agent-sdk-docs)。

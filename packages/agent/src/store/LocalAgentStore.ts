@@ -19,11 +19,11 @@ import type { AgentStore } from "@/types/store/AgentStore.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import { LocalSessionStore } from "@/store/LocalSessionStore.js";
 import {
-  getSdkAgentArchivedSessionDirPath,
-  getSdkAgentArchivedSessionsDirPath,
-  getSdkAgentSessionDirPath,
-  getSdkAgentSessionMessagesDirPath,
-} from "@/session/storage/Paths.js";
+  get_sdk_agent_archived_session_dir_path,
+  get_sdk_agent_archived_sessions_dir_path,
+  get_sdk_agent_session_dir_path,
+  get_sdk_agent_session_messages_dir_path,
+} from "@/store/LocalStorePaths.js";
 import {
   listArchivedAgentSessionSummaryPage,
   listAgentSessionSummaryPage,
@@ -89,7 +89,7 @@ export class LocalAgentStore implements AgentStore {
 
   /** 清空活动 Session Message 数据。 */
   async clear_session_messages(session_id: string): Promise<boolean> {
-    const messages_path = getSdkAgentSessionMessagesDirPath(
+    const messages_path = get_sdk_agent_session_messages_dir_path(
       this.files.root_path,
       this.agent_id,
       session_id,
@@ -110,6 +110,7 @@ export class LocalAgentStore implements AgentStore {
       agentId: this.agent_id,
       input,
       executingSessionIds: new Set(executing_session_ids),
+      files: this.files,
     });
   }
 
@@ -119,7 +120,7 @@ export class LocalAgentStore implements AgentStore {
     if (!(await this.files.path_exists(source_path))) {
       throw new Error(`Session "${session_id}" not found`);
     }
-    const target_path = getSdkAgentArchivedSessionDirPath(
+    const target_path = get_sdk_agent_archived_session_dir_path(
       this.files.root_path,
       this.agent_id,
       session_id,
@@ -127,7 +128,7 @@ export class LocalAgentStore implements AgentStore {
     if (await this.files.path_exists(target_path)) {
       throw new Error(`Archived session "${session_id}" already exists`);
     }
-    await this.files.ensure_directory(getSdkAgentArchivedSessionsDirPath(
+    await this.files.ensure_directory(get_sdk_agent_archived_sessions_dir_path(
       this.files.root_path,
       this.agent_id,
     ));
@@ -147,12 +148,13 @@ export class LocalAgentStore implements AgentStore {
       projectRoot: this.files.root_path,
       agentId: this.agent_id,
       input,
+      files: this.files,
     });
   }
 
   /** 永久删除全部归档 Session。 */
   async clean_archive(): Promise<AgentCleanArchiveResult> {
-    const archive_path = getSdkAgentArchivedSessionsDirPath(
+    const archive_path = get_sdk_agent_archived_sessions_dir_path(
       this.files.root_path,
       this.agent_id,
     );
@@ -165,7 +167,7 @@ export class LocalAgentStore implements AgentStore {
       if (!entry.is_directory) continue;
       const session_id = decode_session_id(entry.name);
       if (!session_id) continue;
-      await this.files.remove_path(getSdkAgentArchivedSessionDirPath(
+      await this.files.remove_path(get_sdk_agent_archived_session_dir_path(
         this.files.root_path,
         this.agent_id,
         session_id,
@@ -180,7 +182,7 @@ export class LocalAgentStore implements AgentStore {
 
   /** 返回活动 Session 物理目录，仅供本地实现内部使用。 */
   private session_path(session_id: string): string {
-    return getSdkAgentSessionDirPath(
+    return get_sdk_agent_session_dir_path(
       this.files.root_path,
       this.agent_id,
       session_id,

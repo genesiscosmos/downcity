@@ -36,8 +36,8 @@ export interface ActiveSessionTurnState {
 export interface SessionTurnOptions {
   /** 当前 Session 的稳定标识。 */
   session_id: string;
-  /** 当前项目的绝对根目录。 */
-  project_root: string;
+  /** 当前 Session 所属 Workspace 的绝对根目录。 */
+  workspace_path: string;
   /** 当前 Session 的模型执行器。 */
   executor: Executor;
   /** 当前 Session 的配置与 Metadata 状态。 */

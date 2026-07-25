@@ -11,7 +11,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { listPluginStates } from "@downcity/agent";
 import { buildControlRouteAliases, toLimit } from "@/city/agent/control/CommonHelpers.js";
-import { listControlSessionSummaries, readRecentLogs } from "@/city/agent/control/Helpers.js";
+import { list_control_session_summaries, readRecentLogs } from "@/city/agent/control/Helpers.js";
 import type { ControlRouteRegistrationParams } from "@/city/agent/http/control/types/ControlRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -48,11 +48,10 @@ export function registerControlOverviewRoutes(
           c.req.query("sessionLimit") || c.req.query("contextLimit"),
           20,
         );
-        const sessions = await listControlSessionSummaries({
-          projectRoot: runtime.rootPath,
-          agentId: runtime.agent_id,
-          limit: sessionLimit,
-        });
+        const sessions = await list_control_session_summaries(
+          runtime.sessions,
+          sessionLimit,
+        );
         const runtimePlugins = listPluginStates({
           context: params.getAgentContext(),
         });

@@ -19,7 +19,9 @@ Agent
 └─ Workspace            统一资源容器
    ├─ FileSystem        Node.js 跨平台文件能力
    │  ├─ AgentTools     模型可调用的文件与搜索工具
-   │  └─ AgentStore     结构化 Session 持久化
+   │  ├─ AgentStore     结构化 Session 持久化
+   │  ├─ Logger         Agent 日志
+   │  └─ ActionSchedule Plugin 调度事件流
    └─ Shell?            命令、进程、PTY 与 Sandbox
       └─ Platform Sandbox Adapter
 ```
@@ -62,7 +64,7 @@ const agent = new Agent({
 | --- | --- | --- |
 | `Agent` | 装配 Workspace、Tool、Plugin、Session 与 Store | 项目路径和平台 Sandbox 细节 |
 | `Workspace` | 统一提供 FileSystem、AgentTools、AgentStore 与可选 Shell | Agent 和 Session 领域编排 |
-| `LocalFileSystem` | Workspace 范围内的安全文件操作 | Session 领域规则和命令执行 |
+| `LocalFileSystem` | Workspace 范围内的安全文件、原子覆盖与跨进程锁 | Session 领域规则和命令执行 |
 | `AgentStore` | 基于 Workspace FileSystem 提供结构化 Session 持久化 | 通用文件 Tool 和 Shell 命令 |
 | `Shell` | Command、Shell Session、PTY、审批和 Sandbox | Session 历史与通用系统服务 |
 | `Sandbox Adapter` | 将统一策略映射到当前 OS | Agent 和 Session 业务 |
@@ -390,52 +392,23 @@ interface FileSystem {
   remove_path(target_path: string): Promise<void>;
   move_path(source_path: string, target_path: string): Promise<void>;
 
-  /** 读取项目内文件并执行大小限制。 */
-  read_file(
-    path: ProjectPath,
-    options?: FileReadOptions,
-  ): Promise<Uint8Array>;
+  /** 判断、读取和统计 Workspace 文件。 */
+  path_exists(file_path: string): Promise<boolean>;
+  read_file(file_path: string): Promise<Buffer>;
+  file_size(file_path: string): Promise<number>;
 
-  /** 原子写入项目内文件。 */
-  write_file(
-    path: ProjectPath,
-    content: Uint8Array,
-    options?: FileWriteOptions,
-  ): Promise<void>;
+  /** 向 JSONL 等事件流追加完整记录。 */
+  append_file(file_path: string, content: string | Buffer): Promise<void>;
 
-  /** 返回目录直接子项。 */
-  read_directory(path: ProjectPath): Promise<FileEntry[]>;
-
-  /** 在明确限制内遍历项目目录。 */
-  walk(
-    path: ProjectPath,
-    options: FileWalkOptions,
-  ): Promise<FileWalkResult>;
-
-  /** 返回文件或目录元数据。 */
-  stat(path: ProjectPath): Promise<FileMetadata | null>;
-
-  /** 删除项目内文件或目录。 */
-  remove(
-    path: ProjectPath,
-    options?: FileRemoveOptions,
-  ): Promise<void>;
+  /** 使用独占锁文件串行执行跨进程文件事务。 */
+  with_file_lock<T>(
+    lock_path: string,
+    action: () => Promise<T>,
+  ): Promise<T>;
 }
 ```
 
-### 9.1 ProjectPath
-
-```ts
-/** 当前项目根目录内的逻辑相对路径。 */
-type ProjectPath = string & {
-  readonly __project_path: unique symbol;
-};
-
-/** 创建经过统一语法校验的 ProjectPath。 */
-function project_path(input: string): ProjectPath;
-```
-
-必须拒绝：
+所有传入路径都会重新经过 Workspace root 校验，并拒绝：
 
 - NUL 和非法编码。
 - `..` 越界。
@@ -443,7 +416,7 @@ function project_path(input: string): ProjectPath;
 - Windows drive、UNC 和 device path。
 - Windows 保留设备名。
 
-### 9.2 安全规则
+### 9.1 安全规则
 
 - root 初始化时执行 realpath/canonicalize。
 - Windows 比较路径时兼容大小写不敏感语义。
@@ -453,7 +426,7 @@ function project_path(input: string): ProjectPath;
 - Windows 检测 junction 与 reparse point。
 - 文件错误只返回逻辑相对路径。
 
-### 9.3 有界遍历
+### 9.2 有界遍历
 
 参考 Codex 的 bounded walk，目录遍历必须要求：
 
@@ -572,34 +545,22 @@ interface AgentStore {
   /** 返回指定 Session 的持久化视图。 */
   session(session_id: string): SessionStore;
 
-  /** 返回 Memory 存储。 */
-  memory(): MemoryStore;
-
-  /** 返回 Task 存储。 */
-  tasks(): TaskStore;
+  /** 管理 Session 列表、删除与归档。 */
+  list_sessions(input?: AgentListSessionsInput): Promise<AgentSessionSummaryPage>;
+  remove_session(session_id: string): Promise<boolean>;
+  archive_session(session_id: string): Promise<AgentArchiveSessionResult>;
 
   /** flush 并释放锁与数据库连接。 */
   dispose(): Promise<void>;
 }
 
 interface SessionStore {
-  /** 初始化并执行结构校验与崩溃恢复。 */
-  initialize(): Promise<void>;
-
-  /** 在事务内分配 sequence 并提交 Message。 */
-  commit_message(input: CommitMessageInput): Promise<SessionMessage>;
-
-  /** 返回当前 Active Message。 */
-  load_active_messages(): Promise<SessionMessage[]>;
-
-  /** 返回全部可审计历史。 */
-  load_history(): Promise<SessionMessage[]>;
-
-  /** 原子提交 Segment、Summary 与 Active 集合。 */
-  compact(input: CompactSessionInput): Promise<SessionSegment>;
-
-  /** 返回 Session Metadata Store。 */
-  metadata(): SessionMetadataStore;
+  /** Message、Metadata 与 Instruction 共享同一个 Session 生命周期。 */
+  readonly messages: SessionMessageStore;
+  read_metadata(): Promise<SessionHistoryMetaV1>;
+  write_metadata(metadata: SessionHistoryMetaV1): Promise<void>;
+  read_instruction(): Promise<string | null>;
+  write_instruction(instruction: string): Promise<void>;
 }
 ```
 
@@ -608,19 +569,27 @@ interface SessionStore {
 runtime 数据位于当前 Workspace：
 
 ```text
-.downcity/agents/<encoded_agent_id>/
-├─ sessions/
-├─ memory/
-├─ tasks/
-├─ cache/
-└─ logs/
+.downcity/
+├─ agents/<encoded_agent_id>/
+│  ├─ sessions/<encoded_session_id>/
+│  │  ├─ instruction.md
+│  │  └─ messages/
+│  │     ├─ meta.json
+│  │     ├─ active.jsonl
+│  │     ├─ assistant_message.json
+│  │     └─ segments/
+│  └─ archived-sessions/
+├─ logs/
+└─ schedule.jsonl
 ```
 
 AgentStore 与 AgentTools 使用相同的 Workspace FileSystem。Store 不承担访问控制；模型和 Shell 可以像访问其他项目文件一样访问 `.downcity`。
 
 ### 13.2 Store 实现
 
-- 当前阶段：JSONL LocalAgentStore。
+- 当前阶段：JSONL LocalAgentStore；路径规则只存在于 `LocalStorePaths`。
+- Message Store、Session 浏览、Logger 与 ActionSchedule 全部通过 Workspace FileSystem 访问文件。
+- JSONL Message 与 ActionSchedule 的复合读写通过同一跨进程文件锁能力串行化。
 - 稳定阶段：SQLite LocalAgentStore。
 - 测试：InMemoryAgentStore。
 - 未来服务端：PostgresAgentStore。
@@ -643,7 +612,9 @@ class Session {
 }
 ```
 
-Session 不接收 project_root，不拼接消息路径，不直接调用 `node:fs`，也不通过 Shell Tool 读取历史。
+Session 只接收用于模型上下文和附件解析的 `workspace_path`，不拼接 Store 路径、不直接调用 `node:fs`，也不通过 Shell Tool 读取历史。
+
+`initializeAgentProject` / `ProjectSetup` 是 Workspace 创建前的 bootstrap：它负责创建项目目录和初始配置，因此允许直接使用 Node 文件 API。Workspace 构造完成后，Agent、Session、Store、Logger 与 ActionSchedule 的运行时文件访问统一走 Workspace FileSystem；bootstrap 不进入运行时资源图。
 
 调用关系：
 
@@ -656,7 +627,7 @@ Session → SessionStore → JSONL / SQLite / Remote DB
 ### 15.1 并发
 
 - 单个 Session 在进程内只有一个 commit queue。
-- 跨进程使用 Store lock 或数据库 transaction。
+- 跨进程使用 Workspace FileSystem 独占锁；未来数据库实现使用 transaction。
 - sequence 在锁或事务内生成。
 - Message 和 Metadata 的相关更新保持原子性。
 
@@ -824,7 +795,9 @@ Agent、Session 和 Tool 不解析 `ENOENT`、HRESULT 或平台错误文本。
 
 - [x] 定义 AgentStore、SessionStore 与显式 SessionMessageStore contract。
 - [x] Session 的 Message、Metadata、Instruction 与归档不再拼接物理路径。
-- [x] JSONL 读写与既有目录约定收敛到 LocalAgentStore。
+- [x] JSONL 读写与目录约定收敛到 LocalAgentStore 和 LocalStorePaths。
+- [x] CLI control/history 只通过 Agent Session/Store API 访问 Session，不维护第二套物理路径。
+- [x] Logger 与 ActionSchedule 复用 Workspace FileSystem。
 - [ ] runtime 数据迁移到用户级目录。
 
 ### Phase 3：收敛 Shell

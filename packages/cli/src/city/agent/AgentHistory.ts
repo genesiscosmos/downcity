@@ -7,10 +7,9 @@
  * - 命令必须显式传 `--hard`，避免误删运行时历史。
  */
 
-import fs from "fs-extra";
 import path from "node:path";
+import { Workspace } from "@downcity/agent";
 import { clean_chat_storage } from "@downcity/plugins/chat";
-import { getDowncitySessionDirPath } from "@/city/config/Paths.js";
 import { CliError } from "@/shared/CliError.js";
 import type {
   AgentHistoryCleanOptions,
@@ -70,13 +69,14 @@ export async function agentHistoryCleanCommand(
     });
   }
 
-  const sessionDir = getDowncitySessionDirPath(
-    projectRoot,
-    resolveAgentId(projectRoot),
-    sessionId,
-  );
-  const removedSessionDir = await fs.pathExists(sessionDir);
-  if (removedSessionDir) await fs.remove(sessionDir);
+  const workspace = new Workspace({ path: projectRoot });
+  let removedSessionDir = false;
+  try {
+    const store = workspace.bind_agent(resolveAgentId(projectRoot));
+    removedSessionDir = await store.remove_session(sessionId);
+  } finally {
+    await workspace.dispose();
+  }
 
   const result: AgentHistoryCleanResult = {
     projectRoot: path.resolve(projectRoot),

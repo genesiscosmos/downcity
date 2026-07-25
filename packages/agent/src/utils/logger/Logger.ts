@@ -6,11 +6,11 @@
  * - 结构化字段写入 JSONL，便于后续检索与审计。
  */
 
-import fs from "fs-extra";
-import path from "path";
 import { getLogsDirPath } from "@/config/Paths.js";
 import { getTimestamp } from "@/utils/Time.js";
 import type { JsonObject } from "@/types/common/Json.js";
+import type { FileSystem } from "@/types/workspace/FileSystem.js";
+import { LocalFileSystem } from "@/workspace/LocalFileSystem.js";
 
 type LogDetails = {
   [key: string]: JsonObject[keyof JsonObject] | undefined;
@@ -195,7 +195,7 @@ export class Logger {
   private logLevel: string = "info";
   private writeChain: Promise<void> = Promise.resolve();
   private readonly maxInMemoryEntries = 2000;
-  private projectRoot: string | null = null;
+  private workspace_files: FileSystem | null = null;
 
   constructor(logLevel: string = "info") {
     this.logLevel = logLevel;
@@ -211,7 +211,12 @@ export class Logger {
    */
   bindProjectRoot(projectRoot: string): void {
     const root = String(projectRoot || "").trim();
-    this.projectRoot = root || null;
+    this.workspace_files = root ? new LocalFileSystem(root) : null;
+  }
+
+  /** 绑定现有 Workspace FileSystem，避免创建第二套文件入口。 */
+  bind_workspace(files: FileSystem): void {
+    this.workspace_files = files;
   }
 
   /**
@@ -322,14 +327,13 @@ export class Logger {
    * - 每条日志一行 JSON，便于 grep / 流式消费。
    */
   private async saveToFile(entry: LogEntry): Promise<void> {
-    if (!this.projectRoot) return;
-    const logsDir = getLogsDirPath(this.projectRoot);
+    if (!this.workspace_files) return;
+    const logsDir = getLogsDirPath(this.workspace_files.root_path);
     const date = String(entry.timestamp || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
-    const logFile = path.join(logsDir, `${date}.jsonl`);
+    const logFile = this.workspace_files.resolve_path(logsDir, `${date}.jsonl`);
 
     const logLine = JSON.stringify(entry) + "\n";
-    await fs.ensureDir(logsDir);
-    await fs.appendFile(logFile, logLine);
+    await this.workspace_files.append_file(logFile, logLine);
   }
 
   private generateId(): string {

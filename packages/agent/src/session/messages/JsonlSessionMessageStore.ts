@@ -5,10 +5,7 @@
  * sequence 范围命名的不可变 Segment，并在 Segment 末尾追加累计 Summary footer。
  */
 
-import fs from "fs-extra";
-import { open, readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { generateId } from "@/utils/Id.js";
 import type { SessionAssistantMessage, SessionMessage } from "@/types/session/SessionMessage.js";
 import type {
   SessionMessageStorageStats,
@@ -22,6 +19,7 @@ import type {
   SessionMessageCommitState,
 } from "@/types/store/SessionStore.js";
 import type { JsonlSessionMessageStoreOptions } from "@/types/store/LocalStore.js";
+import type { FileSystem } from "@/types/workspace/FileSystem.js";
 
 const SEGMENT_FILE_PATTERN = /^(\d+)-(\d+)\.jsonl$/;
 const SEQUENCE_FILE_WIDTH = 12;
@@ -34,8 +32,10 @@ export class JsonlSessionMessageStore {
   readonly segments_dir_path: string;
 
   private readonly lock_file_path: string;
+  private readonly files: FileSystem;
 
   constructor(options: JsonlSessionMessageStoreOptions) {
+    this.files = options.files;
     this.session_id = String(options.session_id || "").trim();
     this.active_file_path = path.resolve(options.file_path);
     this.assistant_message_file_path = path.resolve(
@@ -85,7 +85,7 @@ export class JsonlSessionMessageStore {
         finalized.revision >= draft.revision &&
         finalized.status !== "streaming"
       ) {
-        await fs.remove(this.assistant_message_file_path);
+        await this.files.remove_path(this.assistant_message_file_path);
       }
     });
   }
@@ -144,7 +144,7 @@ export class JsonlSessionMessageStore {
       null;
     const paths = [this.active_file_path, ...ranges.map((range) => range.file_path)];
     const sizes = await Promise.all(
-      paths.map(async (file_path) => await stat(file_path).then((value) => value.size).catch(() => 0)),
+      paths.map(async (file_path) => await this.files.file_size(file_path).catch(() => 0)),
     );
     const latest_sequence = Math.max(
       latest_range?.end_sequence || 0,
@@ -176,7 +176,9 @@ export class JsonlSessionMessageStore {
   /** 读取当前运行中的 Assistant 草稿。 */
   async read_assistant_message(): Promise<SessionAssistantMessage | null> {
     try {
-      const value = await fs.readJson(this.assistant_message_file_path) as SessionAssistantMessage;
+      const value = JSON.parse(
+        (await this.files.read_file(this.assistant_message_file_path)).toString("utf8"),
+      ) as SessionAssistantMessage;
       this.validate_message(value);
       return value.type === "assistant" && value.status === "streaming" ? value : null;
     } catch (error) {
@@ -242,7 +244,7 @@ export class JsonlSessionMessageStore {
         messages: current_messages,
       });
       this.validate_message(message);
-      await fs.appendFile(this.active_file_path, `${JSON.stringify(message)}\n`, "utf8");
+      await this.files.append_file(this.active_file_path, `${JSON.stringify(message)}\n`);
       return message;
     });
   }
@@ -259,8 +261,8 @@ export class JsonlSessionMessageStore {
       if (message.revision !== current.revision + 1) {
         throw new Error(`Invalid final Assistant revision: ${message.message_id}`);
       }
-      await fs.appendFile(this.active_file_path, `${JSON.stringify(message)}\n`, "utf8");
-      await fs.remove(this.assistant_message_file_path);
+      await this.files.append_file(this.active_file_path, `${JSON.stringify(message)}\n`);
+      await this.files.remove_path(this.assistant_message_file_path);
     });
   }
 
@@ -296,7 +298,7 @@ export class JsonlSessionMessageStore {
         end_sequence,
         file_path: this.segment_file_path(start_sequence, end_sequence),
       };
-      if (await fs.pathExists(range.file_path)) {
+      if (await this.files.path_exists(range.file_path)) {
         throw new Error(`Session Segment already exists: ${range.file_path}`);
       }
       await this.write_segment_unsafe(range, segment_messages, input.summary);
@@ -311,10 +313,10 @@ export class JsonlSessionMessageStore {
   /** 扫描 Segment 文件名并返回 sequence 升序索引。 */
   async list_segment_ranges(): Promise<SessionSegmentRange[]> {
     await this.ensure_layout();
-    const entries = await fs.readdir(this.segments_dir_path, { withFileTypes: true });
+    const entries = await this.files.read_directory(this.segments_dir_path);
     const ranges = entries
       .flatMap<SessionSegmentRange>((entry) => {
-        if (!entry.isFile()) return [];
+        if (!entry.is_file) return [];
         const match = SEGMENT_FILE_PATTERN.exec(entry.name);
         if (!match) return [];
         const start_sequence = Number(match[1]);
@@ -345,7 +347,7 @@ export class JsonlSessionMessageStore {
 
   /** 读取并验证一个不可变 Segment。 */
   private async read_segment(range: SessionSegmentRange): Promise<SessionSegmentSnapshot> {
-    const raw = await fs.readFile(range.file_path, "utf8");
+    const raw = (await this.files.read_file(range.file_path)).toString("utf8");
     const lines = raw.split("\n").map((line) => line.trim()).filter(Boolean);
     const summary_value = JSON.parse(lines.pop() || "null") as SessionSegmentSummary | null;
     this.validate_summary(summary_value, range.end_sequence);
@@ -380,7 +382,9 @@ export class JsonlSessionMessageStore {
 
   /** 读取 Active 原始行，并按 Message ID 保留最高 revision。 */
   private async read_folded_active_messages_unsafe(): Promise<SessionMessage[]> {
-    const raw = await fs.readFile(this.active_file_path, "utf8").catch(() => "");
+    const raw = await this.files.read_file(this.active_file_path)
+      .then((value) => value.toString("utf8"))
+      .catch(() => "");
     const by_id = new Map<string, SessionMessage>();
     for (const line of raw.split("\n")) {
       if (!line.trim()) continue;
@@ -403,19 +407,18 @@ export class JsonlSessionMessageStore {
 
   /** 原子覆盖 Assistant 草稿。 */
   private async write_assistant_message_unsafe(message: SessionAssistantMessage): Promise<void> {
-    const temporary_path = `${this.assistant_message_file_path}.${process.pid}.${Date.now()}.tmp`;
-    await fs.writeJson(temporary_path, message, { spaces: 2 });
-    await fs.move(temporary_path, this.assistant_message_file_path, { overwrite: true });
+    await this.files.write_file_atomically(
+      this.assistant_message_file_path,
+      `${JSON.stringify(message, null, 2)}\n`,
+    );
   }
 
   /** 原子覆盖 Active，只写入每个 Message 的最终 revision。 */
   private async write_active_messages_unsafe(messages: SessionMessage[]): Promise<void> {
-    const temporary_path = `${this.active_file_path}.${process.pid}.${Date.now()}.tmp`;
     const content = messages.length > 0
       ? `${messages.map((message) => JSON.stringify(message)).join("\n")}\n`
       : "";
-    await fs.writeFile(temporary_path, content, "utf8");
-    await fs.move(temporary_path, this.active_file_path, { overwrite: true });
+    await this.files.write_file_atomically(this.active_file_path, content);
   }
 
   /** 原子创建一个带累计 Summary footer 的 Segment。 */
@@ -424,13 +427,14 @@ export class JsonlSessionMessageStore {
     messages: SessionMessage[],
     summary: SessionSegmentSummary,
   ): Promise<void> {
-    const temporary_path = `${range.file_path}.${process.pid}.${Date.now()}.tmp`;
     const content = `${[
       ...messages.map((message) => JSON.stringify(message)),
       JSON.stringify(summary),
     ].join("\n")}\n`;
-    await fs.writeFile(temporary_path, content, "utf8");
-    await fs.move(temporary_path, range.file_path, { overwrite: false });
+    if (await this.files.path_exists(range.file_path)) {
+      throw new Error(`Session Segment already exists: ${range.file_path}`);
+    }
+    await this.files.write_file_atomically(range.file_path, content);
   }
 
   /** 生成稳定的 Segment sequence 范围文件名。 */
@@ -489,44 +493,17 @@ export class JsonlSessionMessageStore {
 
   /** 创建 Active、Segment 与锁所需目录。 */
   private async ensure_layout(): Promise<void> {
-    await fs.ensureDir(path.dirname(this.active_file_path));
-    await fs.ensureDir(this.segments_dir_path);
-    await fs.ensureFile(this.active_file_path);
+    await this.files.ensure_directory(path.dirname(this.active_file_path));
+    await this.files.ensure_directory(this.segments_dir_path);
+    if (!(await this.files.path_exists(this.active_file_path))) {
+      await this.files.write_file_atomically(this.active_file_path, "");
+    }
   }
 
   /** 使用同目录锁串行化 Active、草稿与 Segment 写入。 */
   private async with_write_lock<T>(callback: () => Promise<T>): Promise<T> {
     await this.ensure_layout();
-    const token = `${process.pid}:${Date.now()}:${generateId()}`;
-    const stale_ms = 30_000;
-    const started_at = Date.now();
-    while (true) {
-      try {
-        const file = await open(this.lock_file_path, "wx");
-        await file.writeFile(token, "utf8");
-        await file.close();
-        break;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-        try {
-          const lock_stat = await stat(this.lock_file_path);
-          if (Date.now() - lock_stat.mtimeMs > stale_ms) await fs.remove(this.lock_file_path);
-        } catch { /* 锁文件可能刚被释放。 */ }
-        if (Date.now() - started_at > stale_ms * 2) {
-          throw new Error(`Session message lock timeout: ${this.lock_file_path}`);
-        }
-        await new Promise((resolve) => setTimeout(resolve, 40));
-      }
-    }
-    try {
-      return await callback();
-    } finally {
-      try {
-        if ((await readFile(this.lock_file_path, "utf8")).trim() === token) {
-          await fs.remove(this.lock_file_path);
-        }
-      } catch { /* 锁已被清理。 */ }
-    }
+    return await this.files.with_file_lock(this.lock_file_path, callback);
   }
 }
 

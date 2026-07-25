@@ -9,6 +9,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { JsonlSessionMessageStore } from "../bin/session/messages/JsonlSessionMessageStore.js";
+import { LocalFileSystem } from "../bin/workspace/LocalFileSystem.js";
 import { SessionMessages } from "../bin/session/SessionMessages.js";
 import { SessionApprovalBroker } from "../bin/session/approval/SessionApprovalBroker.js";
 import { compose_session_compaction } from "../bin/session/messages/SessionMessageCompaction.js";
@@ -75,14 +76,15 @@ async function create_recorder(
   const file_path = path.join(root_path, "active.jsonl");
   const assistant_message_file_path = path.join(root_path, "assistant_message.json");
   const events = [];
-  const store = create_store({ session_id, file_path });
+  const files = new LocalFileSystem(root_path);
+  const store = create_store({ files, session_id, file_path });
   const recorder = new SessionMessages({
     session_id,
     store,
     publish: (mutation) => events.push(mutation),
   });
   await recorder.initialize();
-  return { recorder, store, events, file_path, assistant_message_file_path };
+  return { recorder, store, events, files, file_path, assistant_message_file_path };
 }
 
 async function read_jsonl(file_path) {
@@ -100,7 +102,11 @@ async function create_seeded_recorder(session_id, messages) {
   );
   const recorder = new SessionMessages({
     session_id,
-    store: new JsonlSessionMessageStore({ session_id, file_path }),
+    store: new JsonlSessionMessageStore({
+      files: new LocalFileSystem(root_path),
+      session_id,
+      file_path,
+    }),
     publish: () => {},
   });
   await recorder.initialize();
@@ -1238,7 +1244,7 @@ test("step 最终快照缺少 canonical Tool chunk 时拒绝猜测顺序", async
 });
 
 test("重启时将 Assistant 草稿收口为 stopped，并将运行中 Action 标记失败", async () => {
-  const { recorder, file_path, assistant_message_file_path } = await create_recorder("recovery-test");
+  const { recorder, files, file_path, assistant_message_file_path } = await create_recorder("recovery-test");
   await recorder.append_user_message({
     turn_id: "turn-1",
     input_type: "prompt",
@@ -1252,7 +1258,7 @@ test("重启时将 Assistant 草稿收口为 stopped，并将运行中 Action �
   const recovered_events = [];
   const recovered = new SessionMessages({
     session_id: "recovery-test",
-    store: new JsonlSessionMessageStore({ session_id: "recovery-test", file_path }),
+    store: new JsonlSessionMessageStore({ files, session_id: "recovery-test", file_path }),
     publish: (mutation) => recovered_events.push(mutation),
   });
   await recovered.initialize();
@@ -1330,7 +1336,7 @@ test("compact 把 Active 前缀关闭为带累计 Summary 的 Segment", async ()
 
 test("重启后从最新 Segment Summary 与 Active 恢复模型上下文", async () => {
   const session_id = "compact-restart-test";
-  const { recorder, file_path } = await create_recorder(session_id);
+  const { recorder, files, file_path } = await create_recorder(session_id);
   for (let index = 1; index <= 6; index += 1) {
     await recorder.append_user_message({
       turn_id: `turn-${String(index)}`,
@@ -1357,7 +1363,7 @@ test("重启后从最新 Segment Summary 与 Active 恢复模型上下文", asyn
 
   const restarted = new SessionMessages({
     session_id,
-    store: new JsonlSessionMessageStore({ session_id, file_path }),
+    store: new JsonlSessionMessageStore({ files, session_id, file_path }),
     publish: () => {},
   });
   await restarted.initialize();
@@ -1372,7 +1378,7 @@ test("重启后从最新 Segment Summary 与 Active 恢复模型上下文", asyn
 
 test("Compact 两步提交中断后会清理 Active 与 Segment 的重叠前缀", async () => {
   const session_id = "compact-overlap-recovery-test";
-  const { recorder, file_path } = await create_recorder(session_id);
+  const { recorder, files, file_path } = await create_recorder(session_id);
   for (let index = 1; index <= 6; index += 1) {
     await recorder.append_user_message({
       turn_id: `turn-${String(index)}`,
@@ -1414,7 +1420,7 @@ test("Compact 两步提交中断后会清理 Active 与 Segment 的重叠前缀"
 
   const restarted = new SessionMessages({
     session_id,
-    store: new JsonlSessionMessageStore({ session_id, file_path }),
+    store: new JsonlSessionMessageStore({ files, session_id, file_path }),
     publish: () => {},
   });
   await restarted.initialize();

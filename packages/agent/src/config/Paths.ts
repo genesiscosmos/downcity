@@ -4,7 +4,7 @@
  * 职责说明（中文）
  * - 统一管理单个 agent 项目根目录下的静态文件、`.downcity` 目录与运行时状态文件路径。
  * - 负责把“路径协议”集中到一个模块，避免各领域模块自行拼接字符串。
- * - 为初始化、会话存储、聊天路由、调试文件等子系统提供一致的路径入口。
+ * - 为初始化、日志、任务与调试文件等非 Store 子系统提供一致的路径入口。
  *
  * 边界说明（中文）
  * - 这里只负责路径计算，不负责目录创建、文件读写或存在性校验。
@@ -82,124 +82,6 @@ export function getDowncityScheduleDbPath(cwd: string): string {
  */
 export function getDowncityDataDirPath(cwd: string): string {
   return path.join(getDowncityDirPath(cwd), "data");
-}
-
-/**
- * 返回项目内全部 agent 实例目录的根路径。
- *
- * 关键点（中文）
- * - 单项目虽然通常只有一个 agent 入口，但底层仍按 agentId 分层组织。
- */
-export function getDowncityAgentsRootDirPath(cwd: string): string {
-  return path.join(getDowncityDirPath(cwd), "agents");
-}
-
-/**
- * 返回指定 agent 的运行态目录路径。
- *
- * 关键点（中文）
- * - `agentId` 会做 URL 编码，避免特殊字符污染文件系统结构。
- * - 当前仅供本模块内部拼接 session 根目录使用。
- */
-function getDowncityAgentDirPath(cwd: string, agentId: string): string {
-  return path.join(
-    getDowncityAgentsRootDirPath(cwd),
-    encodeURIComponent(String(agentId || "").trim()),
-  );
-}
-
-/**
- * 返回指定 agent 的 session 根目录路径。
- */
-export function getDowncitySessionRootDirPath(
-  cwd: string,
-  agentId: string,
-): string {
-  return path.join(getDowncityAgentDirPath(cwd, agentId), "sessions");
-}
-
-/**
- * 返回指定 session 的运行态目录路径。
- *
- * 关键点（中文）
- * - `sessionId` 同样会做 URL 编码，保证路径可安全持久化。
- */
-export function getDowncitySessionDirPath(
-  cwd: string,
-  agentId: string,
-  sessionId: string,
-): string {
-  return path.join(
-    getDowncitySessionRootDirPath(cwd, agentId),
-    encodeURIComponent(String(sessionId || "").trim()),
-  );
-}
-
-/**
- * Session Messages（会话消息，唯一事实源）。
- *
- * 关键点（中文）
- * - `.downcity/agents/<encodedAgentId>/sessions/<encodedSessionId>/messages/messages.jsonl`：每行一个 UIMessage（user/assistant）
- * - compact 会把被折叠的原始段写入 `messages/archive/*`（可审计）
- */
-export function getDowncitySessionMessagesDirPath(
-  cwd: string,
-  agentId: string,
-  sessionId: string,
-): string {
-  return path.join(getDowncitySessionDirPath(cwd, agentId, sessionId), "messages");
-}
-
-/**
- * 返回 session 消息事实源文件路径。
- *
- * 关键点（中文）
- * - 当前唯一事实源是 `messages.jsonl`，所有历史组装都应基于它。
- */
-export function getDowncitySessionMessagesPath(
-  cwd: string,
-  agentId: string,
-  sessionId: string,
-): string {
-  return path.join(
-    getDowncitySessionMessagesDirPath(cwd, agentId, sessionId),
-    "messages.jsonl",
-  );
-}
-
-/**
- * 返回 session 消息归档目录路径。
- *
- * 关键点（中文）
- * - compaction 时被折叠的原始消息段会写入该目录，便于审计和回溯。
- */
-export function getDowncitySessionMessagesArchiveDirPath(
-  cwd: string,
-  agentId: string,
-  sessionId: string,
-): string {
-  return path.join(
-    getDowncitySessionMessagesDirPath(cwd, agentId, sessionId),
-    "archive",
-  );
-}
-
-/**
- * 返回指定归档文件的完整路径。
- *
- * 关键点（中文）
- * - `archiveId` 会做 URL 编码，避免 compaction 生成的标识污染文件名。
- */
-export function getDowncitySessionMessagesArchivePath(
-  cwd: string,
-  agentId: string,
-  sessionId: string,
-  archiveId: string,
-): string {
-  return path.join(
-    getDowncitySessionMessagesArchiveDirPath(cwd, agentId, sessionId),
-    `${encodeURIComponent(String(archiveId || "").trim())}.json`,
-  );
 }
 
 /**

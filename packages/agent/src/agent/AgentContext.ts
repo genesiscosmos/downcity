@@ -11,6 +11,7 @@ import type { AgentSessions } from "@/agent/AgentSessions.js";
 import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { Shell } from "@downcity/shell";
+import type { FileSystem } from "@/types/workspace/FileSystem.js";
 
 /**
  * AgentContext 构造参数。
@@ -23,6 +24,9 @@ interface AgentContextOptions {
 
   /** 当前项目根目录。 */
   rootPath: string;
+
+  /** 当前 Workspace 的统一文件能力。 */
+  files: FileSystem;
 
   /** 当前 Agent 统一日志器。 */
   logger: Logger;
@@ -52,6 +56,9 @@ export class AgentContext {
   /** 当前项目根目录。 */
   readonly rootPath: string;
 
+  /** 当前 Workspace 的统一文件能力。 */
+  readonly files: FileSystem;
+
   /** 当前 Agent 统一日志器。 */
   readonly logger: Logger;
 
@@ -71,6 +78,7 @@ export class AgentContext {
     this.shell = options.shell;
     this.agent_id = options.agent_id;
     this.rootPath = options.rootPath;
+    this.files = options.files;
     this.logger = options.logger;
     this.get_env = options.get_env;
     this.get_systems = options.get_systems;

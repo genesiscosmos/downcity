@@ -43,7 +43,7 @@ type AgentSessionsOptions = {
   /**
    * 当前项目根目录。
    */
-  project_root: string;
+  workspace_path: string;
 
   /** 当前 Agent 独享的领域持久化入口。 */
   store: AgentStore;
@@ -88,7 +88,7 @@ type AgentSessionsOptions = {
  */
 export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly agent_id: string;
-  private readonly project_root: string;
+  private readonly workspace_path: string;
   private readonly store: AgentStore;
   private readonly tools: Record<string, Tool>;
   private readonly logger: Logger;
@@ -102,7 +102,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
 
   constructor(options: AgentSessionsOptions) {
     this.agent_id = options.agent_id;
-    this.project_root = options.project_root;
+    this.workspace_path = options.workspace_path;
     this.store = options.store;
     this.tools = options.tools;
     this.logger = options.logger;
@@ -315,7 +315,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
 
     const created = new this.SessionClass({
       agentId: this.agent_id,
-      projectRoot: this.project_root,
+      workspace_path: this.workspace_path,
       store: this.store.session(resolved_session_id),
       get_session_store: (session_id) => this.store.session(session_id),
       sessionId: resolved_session_id,
@@ -338,7 +338,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private load_instruction_system_blocks(): AgentSessionSystemBlock[] {
     return createInstructionSystemBlocks(
       this.get_instruction(),
-      this.project_root,
+      this.workspace_path,
     );
   }
 

@@ -83,7 +83,7 @@ export class Agent {
         : {}),
     };
     this.logger = new Logger();
-    this.logger.bindProjectRoot(this.workspace.path);
+    this.logger.bind_workspace(this.workspace.files);
     this.env = resolve_agent_env(this.workspace.path, options.env);
     this.instruction = normalizeInstructionInput(options.instruction);
 
@@ -91,7 +91,7 @@ export class Agent {
 
     this.sessions = new AgentSessions({
       agent_id: this.id,
-      project_root: this.workspace.path,
+      workspace_path: this.workspace.path,
       store,
       tools: this.tools,
       logger: this.logger,
@@ -108,6 +108,7 @@ export class Agent {
       ...(this.workspace.shell ? { shell: this.workspace.shell } : {}),
       agent_id: this.id,
       rootPath: this.workspace.path,
+      files: this.workspace.files,
       logger: this.logger,
       get_env: () => this.env,
       get_systems: () => this.instruction,

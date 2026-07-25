@@ -51,7 +51,7 @@ const QUEUED_PROMPT_CANCELLED_MESSAGE =
  */
 export class SessionTurn {
   private readonly session_id: string;
-  private readonly project_root: string;
+  private readonly workspace_path: string;
   private readonly executor: Executor;
   private readonly state: SessionState;
   private readonly messages: SessionMessages;
@@ -66,7 +66,7 @@ export class SessionTurn {
 
   constructor(options: SessionTurnOptions) {
     this.session_id = String(options.session_id || "").trim();
-    this.project_root = String(options.project_root || "").trim();
+    this.workspace_path = String(options.workspace_path || "").trim();
     this.executor = options.executor;
     this.state = options.state;
     this.messages = options.messages;
@@ -76,8 +76,8 @@ export class SessionTurn {
     if (!this.session_id) {
       throw new Error("SessionTurn requires a non-empty sessionId");
     }
-    if (!this.project_root) {
-      throw new Error("SessionTurn requires a non-empty project_root");
+    if (!this.workspace_path) {
+      throw new Error("SessionTurn requires a non-empty workspace_path");
     }
   }
 
@@ -447,7 +447,7 @@ export class SessionTurn {
     const run_context: SessionRunContext = {
       turnId: input.turn_id,
       sessionId: this.session_id,
-      projectRoot: this.project_root,
+      projectRoot: this.workspace_path,
       onStepCallback: async () => {
         if (this.has_pending_command() && assistant_writer_ref.current) {
           await assistant_writer_ref.current.complete();
@@ -580,7 +580,7 @@ export class SessionTurn {
     return {
       turnId: turn_id,
       sessionId: this.session_id,
-      projectRoot: this.project_root,
+      projectRoot: this.workspace_path,
       onActionCallback: async (event) => {
         await this.persist_action_event(event);
       },
@@ -597,7 +597,7 @@ export class SessionTurn {
     input_type: "prompt" | "steer",
   ): Promise<SessionUserMessageV1> {
     const message = await this.messages.append_prompt_message({
-      project_root: this.project_root,
+      project_root: this.workspace_path,
       prompt,
       turn_id,
       input_type,

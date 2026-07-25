@@ -34,8 +34,8 @@ export interface ActionScheduleRuntimeHandle {
 export async function startActionScheduleRuntime(
   context: AgentContext,
 ): Promise<ActionScheduleRuntimeHandle> {
-  const store = new ActionScheduleStore(context.rootPath);
-  const recovered = store.resetRunningJobsToPending();
+  const store = new ActionScheduleStore(context.files);
+  const recovered = await store.resetRunningJobsToPending();
   if (recovered > 0) {
     context.logger.warn(
       formatActionScheduleLogMessage("Recovered interrupted running jobs"),
