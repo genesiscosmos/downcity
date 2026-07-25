@@ -1,45 +1,100 @@
 ---
 title: Agent SDK
-description: Build local and remote Agent integrations with @downcity/agent
+description: Build local or remote Agents with project files, sandboxed commands, plugins, and persistent Sessions
 ---
 
 # Agent SDK
 
-`@downcity/agent` provides `Agent` for in-process execution and `RemoteAgent` for a runtime exposed over HTTP, HTTPS, or RPC. The working object in both modes is a Session.
+`@downcity/agent` provides a local `Agent` and a remote `RemoteAgent`. Both are session-first: Agent composes capabilities, while Session owns a continuous conversation and its execution state.
 
-## Local embedding
+## One-minute mental model
+
+```mermaid
+flowchart LR
+    Host["SDK host"] --> Workspace["Workspace<br/>project resources and security boundary"]
+    Workspace --> Agent["Agent<br/>capability composition root"]
+    Agent --> Session["Session<br/>stateful execution container"]
+    Session --> Turn["Turn<br/>one prompt execution"]
+    Agent --> Plugin["Plugin<br/>extension capability"]
+```
+
+| Object | Owns | Does not own |
+| --- | --- | --- |
+| `Workspace` | Project files, env, Store, Tools, Shell, and Sandbox | Models, plugins, Session orchestration |
+| `Agent` | Model, instructions, final Tools, plugins, and Sessions | HTTP/RPC transports |
+| `Session` | Conversation state, message history, execution order, and approvals | Project resource ownership |
+| `PluginContext` | Stable Agent capabilities projected to a Plugin | A second Agent facade |
+| `SessionRunContext` | Explicit snapshot for one execution | Long-lived Agent state |
+| `RemoteAgent` | Access to a server-side Agent and its Sessions | Server-side model configuration |
+
+## Choose local or remote
+
+| Scenario | Use |
+| --- | --- |
+| Agent and application run in the same Node.js process | `Agent` |
+| The application injects models, Tools, plugins, and Shell directly | `Agent` |
+| Another process already exposes the Agent over HTTP/RPC | `RemoteAgent` |
+| The client only creates Sessions, sends prompts, and subscribes | `RemoteAgent` |
+
+Network serving does not belong to Agent. Use `AgentHTTP` or `AgentRPC` from `@downcity/server` to expose a local Agent.
+
+## Recommended local composition
+
+Shell is the standard entry for project commands and processes. The SDK does not select a platform Sandbox automatically; install and inject the Adapter for the current operating system. This example uses macOS:
 
 ```ts
-const agent = new Agent({
-  id: "repo-helper",
-  workspace: new Workspace({ path: process.cwd() }),
-  model,
-  tools: { search: search_tool },
+import { Agent, Workspace } from "@downcity/agent";
+import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { Shell } from "@downcity/shell";
+
+const shell = new Shell({
+  sandbox: new MacOsSeatbeltSandbox(),
 });
 
-const session = await agent.sessions.create();
-const turn = await session.prompt({ query: "Summarize this repository" });
-await turn.finished;
-await agent.dispose();
+const workspace = new Workspace({
+  path: process.cwd(),
+  shell,
+});
+
+const agent = new Agent({
+  id: "repo-helper",
+  workspace,
+  model,
+});
+
+try {
+  const session = await agent.sessions.create();
+  const turn = await session.prompt({ query: "Summarize this repository" });
+  const result = await turn.finished;
+  console.log(result.text);
+} finally {
+  await agent.dispose();
+}
 ```
 
-The Agent holds the default runtime model. A local Session can override it with `session.set({ model })`; execution always prefers the Session model and falls back to the Agent model.
+Remember this primary path:
 
-## Remote access
-
-```ts
-const agent = new RemoteAgent({ url: "http://127.0.0.1:5314" });
-const session = await agent.sessions.create();
+```text
+Workspace + Shell → Agent → Session → prompt() → turn.finished → dispose()
 ```
 
-Remote Sessions do not expose model configuration. The server host owns the local Agent and its runtime model instance.
+`agent.dispose()` releases the Agent and its exclusive Workspace, including plugin lifecycle, ActionSchedule, Shell processes, PTYs, and Sandbox resources. Do not dispose the same Workspace again in the normal flow.
 
-## Session API
+## Model ownership
 
-- `agent.sessions.create()` / `get()` / `list()`
-- `session.prompt()` and `turn.finished`
-- `session.subscribe()` for the unified live Mutation stream
-- `session.messages()` for snapshots
-- `session.stop()`, `system()`, and `fork()`
+In pure SDK embedding, the host owns model instances:
 
-Use `AgentHTTP` or `AgentRPC` from `@downcity/server` when the runtime must be exposed over the network.
+- Set the default with `new Agent({ model })`.
+- Or override it for one local Session with `await session.set({ model })`.
+
+In a Downcity project, the CLI host resolves the model from project configuration and the City AIService catalog. Remote Sessions do not expose client-side model configuration; the server host always owns the model.
+
+## Recommended reading order
+
+1. [Local Agent quickstart](/en/agent-sdk-docs/local-agent/quickstart)
+2. [Sessions overview](/en/agent-sdk-docs/sessions/overview)
+3. [Shell and Sandbox](/en/agent-sdk-docs/local-agent/shell-reference)
+4. [Tools and plugins](/en/agent-sdk-docs/local-agent/tools-and-plugins)
+5. [Remote Agent](/en/agent-sdk-docs/remote-agent/quickstart)
+6. [SDK Surface](/en/agent-sdk-docs/api-reference/sdk-surface)
+7. [Agent SDK architecture](/en/docs/agent/sdk-architecture)

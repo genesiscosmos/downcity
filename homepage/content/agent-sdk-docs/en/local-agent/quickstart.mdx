@@ -1,78 +1,106 @@
 ---
 title: Local Agent Quickstart
-description: Create a runnable Agent in your local process with the Agent SDK
+description: Create a local Agent with a model, Shell, platform Sandbox, and its first Session execution
 ---
 
 # Local Agent Quickstart
 
+Use this path to embed an Agent directly in a Node.js application. A complete local Agent combines a Workspace, Shell, platform Sandbox, model, and Session.
+
 ## Install
 
+This example uses macOS:
+
 ```bash
-pnpm add @downcity/agent
+pnpm add @downcity/agent @downcity/shell @downcity/sandbox-macos @ai-sdk/openai
 ```
 
-## Minimal example
+On another platform, replace only the Sandbox package and instance:
+
+| Platform | Package | Adapter |
+| --- | --- | --- |
+| macOS | `@downcity/sandbox-macos` | `MacOsSeatbeltSandbox` |
+| Linux | `@downcity/sandbox-linux` | `LinuxBubblewrapSandbox` |
+| Windows | `@downcity/sandbox-windows-mxc` | `WindowsMxcSandbox` |
+
+## Complete minimal example
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
 import { createOpenAI } from "@ai-sdk/openai";
+import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { Shell } from "@downcity/shell";
 
 const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
 
+const shell = new Shell({
+  sandbox: new MacOsSeatbeltSandbox(),
+});
+
+const workspace = new Workspace({
+  path: "/path/to/project",
+  shell,
+});
+
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
-  tools: {},
+  workspace,
   model: openai.responses("gpt-5"),
 });
 
-const session = await agent.sessions.create();
-const turn = await session.prompt({
-  query: "Summarize the current repository structure",
-});
+try {
+  const session = await agent.sessions.create();
+  const turn = await session.prompt({
+    query: "Summarize the current repository structure",
+  });
 
-const result = await turn.finished;
-console.log(result.text);
+  const result = await turn.finished;
+  console.log(result.text);
+} finally {
+  await agent.dispose();
+}
 ```
 
-## The four most important steps
+## Six key steps
 
-1. `new Workspace(...)`
-2. `new Agent({ workspace })`
-3. `await agent.sessions.create()`
-4. make sure the Agent or Session has a model
+1. Create the Sandbox Adapter for the current platform.
+2. Create `Shell` and inject the Sandbox.
+3. Create `Workspace` and pass it the Shell.
+4. Create `Agent` with the Workspace and model.
+5. Create a Session, start a Turn with `prompt()`, and await `turn.finished`.
+6. Call `agent.dispose()` in `finally`.
 
-Step 4 is the easiest one to forget, and it is also the most common local SDK mistake.
+Shell matters: without it, Workspace still provides file and search Tools, but Agent has no `shell_exec` or `shell_session` and cannot run project commands or manage long-lived processes. The SDK does not choose a Sandbox automatically or silently fall back to unrestricted execution when an Adapter is missing.
 
-You can satisfy step 4 in either way. Runtime resolution always prefers the Session model, then falls back to the Agent model:
+## Objects and lifecycle
 
-- pass a model to `new Agent({ model })`
-- call `await session.set({ model })` for one specific local session
-
-If you skip step 4 entirely, the local session has no model and cannot execute.
-
-When you are using the SDK for the first time, avoid stacking complex tools, managed plugins, extra plugins, or Downcity HTTP exposure immediately. Get the shortest execution path working first.
-
-## Agent lifecycle
-
-After `new Agent(...)`, plugin lifecycle and ActionSchedule start automatically. Most callers use sessions directly:
-
-```ts
-const session = await agent.sessions.create();
-const turn = await session.prompt({ query: "hello" });
-await turn.finished;
+```text
+Workspace + Shell → Agent → Session → Turn
+                         └──────────────→ agent.dispose()
 ```
 
-Session entry points already wait for the current Agent runtime internally; model execution starts after plugin lifecycle is ready. You can still call `await agent.ready()` as an explicit checkpoint, for example before inspecting plugin state right after construction or before exposing the Agent over RPC / HTTP.
+- One Workspace instance can bind to only one Agent.
+- Multiple Workspace instances may point to the same physical directory for different Agents.
+- Plugin lifecycle and ActionSchedule begin starting immediately after `new Agent(...)`.
+- Session entry points wait for the Agent runtime; call `await agent.ready()` only when you need an explicit startup checkpoint.
+- `agent.dispose()` also releases the exclusive Workspace, Shell processes, PTYs, and Sandbox. Do not call `workspace.dispose()` again.
+- HTTP/RPC transports do not belong to Agent; use `@downcity/server` when you need network serving.
 
-When you are done, call `await agent.dispose()` to stop plugin lifecycle and ActionSchedule and dispose its exclusive Workspace, including Shell processes, PTYs, and Sandbox resources.
+## Model resolution
 
-If you need to expose the agent to other processes over RPC or HTTP, use the separate package [`@downcity/server`](/en/agent-sdk-docs/local-agent/http-and-rpc). The Agent itself no longer starts any transport.
+Local execution resolves the model in this order:
 
-## Continue reading
+1. A Session model set with `await session.set({ model })`.
+2. The default `model` passed to Agent.
 
+If neither exists, the Session cannot execute. A pure SDK host owns model instances directly; in a Downcity project, the CLI host resolves the model from project configuration and the City AIService catalog.
+
+## Next steps
+
+- [Sessions overview](/en/agent-sdk-docs/sessions/overview)
+- [Shell and Sandbox](/en/agent-sdk-docs/local-agent/shell-reference)
+- [Tools and plugins](/en/agent-sdk-docs/local-agent/tools-and-plugins)
 - [Constructor options](/en/agent-sdk-docs/local-agent/constructor-options)
-- [Local Agent RPC and Downcity HTTP](/en/agent-sdk-docs/local-agent/http-and-rpc)
-- [Session set / prompt / subscribe](/en/agent-sdk-docs/sessions/overview)
+- [HTTP and RPC](/en/agent-sdk-docs/local-agent/http-and-rpc)

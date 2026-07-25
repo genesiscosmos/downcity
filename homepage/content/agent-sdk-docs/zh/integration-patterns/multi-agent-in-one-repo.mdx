@@ -12,10 +12,16 @@ description: 用多个 agent_id 在同一项目目录里隔离不同的 SDK Agen
 例如：
 
 ```ts
-new Agent({ id: "planner", path: repoPath, tools: {} });
-new Agent({ id: "reviewer", path: repoPath, tools: {} });
+new Agent({
+  id: "planner",
+  workspace: new Workspace({ path: repo_path }),
+});
+new Agent({
+  id: "reviewer",
+  workspace: new Workspace({ path: repo_path }),
+});
 ```
 
-这样它们的 session 会落到不同目录里，不会混在一起。
+每个 Agent 必须使用独立的 Workspace 实例。两个 Workspace 可以指向同一物理目录；Store 会按 `agent_id` 分区，因此 Session 不会混在一起。如果两个 Agent 都需要命令能力，也应分别创建和传入 Shell 实例。
 
 如果你做的是“同一仓库里多个不同角色的 agent”，这会非常有用。

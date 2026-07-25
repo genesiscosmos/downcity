@@ -17,9 +17,13 @@ pnpm add @downcity/server
 
 ```ts
 import { AgentRPC } from "@downcity/server";
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 
-const agent = new Agent({ id: "demo", path: process.cwd() });
+const agent = new Agent({
+  id: "demo",
+  workspace: new Workspace({ path: process.cwd() }),
+  model,
+});
 const rpc = new AgentRPC(agent);
 
 const binding = await rpc.listen();

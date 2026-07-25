@@ -1,102 +1,106 @@
 ---
 title: 本地 Agent 快速开始
-description: 用 Agent SDK 在本地进程里创建一个可执行的 Agent，并理解本地模型与 Federation AIService 模型的差异
+description: 创建带模型、Shell 和平台 Sandbox 的本地 Agent，并完成第一次 Session 执行
 ---
 
 # 本地 Agent 快速开始
 
+这条路径适合把 Agent 直接嵌入 Node.js 应用。一个完整的本地 Agent 由 Workspace、Shell、平台 Sandbox、模型和 Session 组成。
+
 ## 安装
 
+以下示例使用 macOS：
+
 ```bash
-pnpm add @downcity/agent
+pnpm add @downcity/agent @downcity/shell @downcity/sandbox-macos @ai-sdk/openai
 ```
 
-## 最小示例
+其他平台只替换 Sandbox package 和实例：
+
+| 平台 | Package | Adapter |
+| --- | --- | --- |
+| macOS | `@downcity/sandbox-macos` | `MacOsSeatbeltSandbox` |
+| Linux | `@downcity/sandbox-linux` | `LinuxBubblewrapSandbox` |
+| Windows | `@downcity/sandbox-windows-mxc` | `WindowsMxcSandbox` |
+
+## 完整的最小示例
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
 import { createOpenAI } from "@ai-sdk/openai";
+import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { Shell } from "@downcity/shell";
 
 const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
 
+const shell = new Shell({
+  sandbox: new MacOsSeatbeltSandbox(),
+});
+
+const workspace = new Workspace({
+  path: "/path/to/project",
+  shell,
+});
+
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
-  tools: {},
+  workspace,
   model: openai.responses("gpt-5"),
 });
 
-const session = await agent.sessions.create();
-const turn = await session.prompt({
-  query: "总结一下当前仓库结构",
-});
+try {
+  const session = await agent.sessions.create();
+  const turn = await session.prompt({
+    query: "总结当前仓库结构",
+  });
 
-const result = await turn.finished;
-console.log(result.text);
+  const result = await turn.finished;
+  console.log(result.text);
+} finally {
+  await agent.dispose();
+}
 ```
 
-## 最重要的三步
+## 六个关键步骤
 
-1. `new Workspace(...)`
-2. `new Agent({ workspace })`
-3. `await agent.sessions.create()`
-4. 确保 Agent 或 Session 有 model
+1. 创建当前平台的 Sandbox Adapter。
+2. 创建 `Shell` 并注入 Sandbox。
+3. 创建 `Workspace` 并传入 Shell。
+4. 创建 `Agent` 并传入 Workspace 与模型。
+5. 创建 Session，通过 `prompt()` 启动 Turn，并等待 `turn.finished`。
+6. 在 `finally` 中调用 `agent.dispose()`。
 
-这四步里第 4 步最容易被遗漏，也是本地 SDK 最常见的踩坑点。
+Shell 很重要：没有 Shell 时，Workspace 仍提供文件和搜索工具，但 Agent 没有 `shell_exec` 与 `shell_session`，无法运行项目命令或管理长时间进程。SDK 不会自动选择 Sandbox，也不会在缺少 Adapter 时静默切换到 unrestricted。
 
-第 4 步有两种做法，执行时按 Session 模型、Agent 模型的顺序解析：
+## 对象与生命周期
 
-- 构造 Agent 时传入 `new Agent({ model })`
-- 对某个本地 Session 单独调用 `await session.set({ model })`
-
-如果两种都没做，本地 session 没有模型，无法执行。
-
-## 一个关键区分
-
-### 纯 SDK 嵌入模式
-
-如果你是直接把 `@downcity/agent` 嵌到自己的 Node 应用里，最常见就是：
-
-- `new Agent({ model })`
-- 或本地 `session.set({ model })`
-
-模型实例由你的宿主代码直接持有。
-
-### Downcity Agent 项目模式
-
-如果你是在正常的 Downcity / Downcity 项目里跑 Agent，通常不应该在项目里直接持有 provider 配置或模型实例。
-
-这时模型来自：
-
-- Agent config `execution.modelId`
-- 已连接的 `Federation AIService`
-
-也就是说：
-
-- Agent 项目只选择 `modelId`
-- `Federation AIService` 管理 provider、API key、模型目录
-
-## Agent 的生命周期
-
-`new Agent(...)` 之后，plugin lifecycle 与 ActionSchedule 会立即开始启动。调用方通常直接：
-
-```ts
-const session = await agent.sessions.create();
-const turn = await session.prompt({ query: "hello" });
-await turn.finished;
+```text
+Workspace + Shell → Agent → Session → Turn
+                         └──────────────→ agent.dispose()
 ```
 
-Session 入口内部已经隐式等待当前 Agent runtime；模型开始执行前，plugin lifecycle 已完成。`await agent.ready()` 仍然可以作为显式检查点使用，适合在构造后立刻读取 plugin 状态或暴露 RPC / HTTP 服务前调用。
+- 一个 Workspace 实例只能绑定一个 Agent。
+- 同一物理目录可以创建多个 Workspace 实例，分别交给不同 Agent。
+- `new Agent(...)` 后，Plugin lifecycle 与 ActionSchedule 会立即开始启动。
+- Session 入口会等待 Agent runtime 就绪；只有需要显式启动检查点时才调用 `await agent.ready()`。
+- `agent.dispose()` 会同时释放独占 Workspace、Shell 进程、PTY 和 Sandbox，不需要再次调用 `workspace.dispose()`。
+- HTTP/RPC transport 不属于 Agent；需要网络服务时使用 `@downcity/server`。
 
-不再使用时先调用 `await agent.dispose()` 停掉 plugin lifecycle 与 ActionSchedule。Workspace 由调用方持有；如果配置了 Shell，还需要调用 `await workspace.dispose()` 关闭进程、PTY 和 Sandbox。Agent 不会擅自关闭可能被其他 Agent 共享的 Workspace。
+## 模型如何解析
 
-如果需要把当前 Agent 暴露给其他进程使用（RPC 或 HTTP），请使用独立包 [`@downcity/server`](/zh/agent-sdk-docs/local-agent/http-and-rpc)。Agent 自身不再启动任何 transport。
+本地执行按以下顺序选择模型：
 
-## 继续阅读
+1. Session 通过 `await session.set({ model })` 设置的模型。
+2. Agent 构造参数中的默认 `model`。
 
+如果两处都没有模型，Session 无法执行。纯 SDK 嵌入模式由宿主持有模型实例；Downcity 项目模式则由 CLI 宿主根据项目配置和 City AIService 模型目录解析模型。
+
+## 下一步
+
+- [Session 总览](/zh/agent-sdk-docs/sessions/overview)
+- [Shell 与沙箱](/zh/agent-sdk-docs/local-agent/shell-reference)
+- [Tools 与 Plugins](/zh/agent-sdk-docs/local-agent/tools-and-plugins)
 - [构造参数](/zh/agent-sdk-docs/local-agent/constructor-options)
-- [本地 Agent RPC 与 Downcity HTTP](/zh/agent-sdk-docs/local-agent/http-and-rpc)
-- [Agent 与 Federation AIService](/zh/agent-sdk-docs/integration-patterns/agent-with-city-ai-service)
-- [Session set / prompt / subscribe](/zh/agent-sdk-docs/sessions/overview)
+- [HTTP 与 RPC](/zh/agent-sdk-docs/local-agent/http-and-rpc)

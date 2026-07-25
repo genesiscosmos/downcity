@@ -17,9 +17,13 @@ pnpm add @downcity/server
 
 ```ts
 import { AgentHTTP } from "@downcity/server";
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 
-const agent = new Agent({ id: "demo", path: process.cwd() });
+const agent = new Agent({
+  id: "demo",
+  workspace: new Workspace({ path: process.cwd() }),
+  model,
+});
 const http = new AgentHTTP(agent);
 
 const binding = await http.server().listen({ host: "127.0.0.1", port: 5314 });

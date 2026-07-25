@@ -1,160 +1,100 @@
 ---
 title: Agent SDK
-description: 理解 @downcity/agent 提供的本地 Agent、远程 Agent、Session，以及它与 City AIService 的关系
+description: 使用 @downcity/agent 构建具备项目文件、受控命令、Plugin 与持久 Session 的本地或远程 Agent
 ---
 
 # Agent SDK
 
-`@downcity/agent` 当前提供两类主要 SDK 入口：
+`@downcity/agent` 提供本地 `Agent` 与远程 `RemoteAgent`。两种模式都以 Session 为主要工作对象：Agent 负责组合能力，Session 负责承载一段持续对话及其执行状态。
 
-- `Agent`：本地嵌入式 agent
-- `RemoteAgent`：远程 agent 客户端
+## 一分钟心智模型
 
-这套 SDK 的核心是 `session`。无论本地还是远程，真正承载执行的都是 session，而不是 `Agent` 本身。
+```mermaid
+flowchart LR
+    Host["SDK 宿主"] --> Workspace["Workspace<br/>项目资源与安全边界"]
+    Workspace --> Agent["Agent<br/>能力组合根"]
+    Agent --> Session["Session<br/>有状态执行容器"]
+    Session --> Turn["Turn<br/>一次 prompt 执行"]
+    Agent --> Plugin["Plugin<br/>扩展能力"]
+```
 
-## 两条常见使用路径
+| 对象 | 负责 | 不负责 |
+| --- | --- | --- |
+| `Workspace` | 项目文件、Env、Store、Tools、Shell 与 Sandbox | 模型、Plugin、Session 编排 |
+| `Agent` | 模型、指令、最终 Tools、Plugins、Sessions | HTTP/RPC transport |
+| `Session` | 对话状态、消息历史、执行顺序与审批 | 项目资源所有权 |
+| `PluginContext` | Agent 投影给 Plugin 的稳定能力 | 充当第二个 Agent |
+| `SessionRunContext` | 单次执行的显式快照 | 保存长期 Agent 状态 |
+| `RemoteAgent` | 访问服务端 Agent 与 Session | 配置服务端模型 |
 
-### 1. 纯 SDK 嵌入模式
+## 选择本地还是远程
 
-这种模式下，宿主自己持有模型实例：
+| 场景 | 使用 |
+| --- | --- |
+| Agent 与应用运行在同一个 Node.js 进程 | `Agent` |
+| 应用需要直接注入模型、Tool、Plugin 和 Shell | `Agent` |
+| Agent 已由另一个进程通过 HTTP/RPC 暴露 | `RemoteAgent` |
+| 客户端只需要创建 Session、发送 prompt 和订阅结果 | `RemoteAgent` |
 
-- `new Agent({ model })`
-- 或由宿主对某个 Session 调用 `await session.set({ model })`
+网络服务不属于 Agent。需要暴露本地 Agent 时，使用 `@downcity/server` 提供的 `AgentHTTP` 或 `AgentRPC`。
 
-适合：
+## 推荐的本地组合
 
-- Node 服务内直接嵌入
-- 本地脚本或内部工具
-- 你已经自己管理模型实例
+Shell 是本地 Agent 使用项目命令和进程的标准入口。SDK 不会自动选择平台 Sandbox；应用只安装并注入当前操作系统对应的 Adapter。以下示例使用 macOS：
 
-### 2. Downcity / Downcity / City 集成模式
+```ts
+import { Agent, Workspace } from "@downcity/agent";
+import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { Shell } from "@downcity/shell";
 
-这种模式下，Agent 项目不直接持有 provider、API key 或模型实例。
+const shell = new Shell({
+  sandbox: new MacOsSeatbeltSandbox(),
+});
 
-模型目录和 provider 细节由 `City AIService` 持有，Agent 项目只绑定：
+const workspace = new Workspace({
+  path: process.cwd(),
+  shell,
+});
 
-```json
-{
-  "execution": {
-    "type": "api",
-    "modelId": "quality"
-  }
+const agent = new Agent({
+  id: "repo-helper",
+  workspace,
+  model,
+});
+
+try {
+  const session = await agent.sessions.create();
+  const turn = await session.prompt({ query: "总结当前仓库" });
+  const result = await turn.finished;
+  console.log(result.text);
+} finally {
+  await agent.dispose();
 }
 ```
 
-适合：
+只需要记住这条主链路：
 
-- 正常的 Downcity Agent 项目
-- 多个 Agent 共享同一套模型池
-- 希望把 provider、key、模型目录统一收口到 City
-
-## 什么时候用 `Agent`
-
-当你的应用和 agent 运行在同一进程，或者至少在同一个本地运行环境里，适合直接用：
-
-```ts
-import { Agent } from "@downcity/agent";
+```text
+Workspace + Shell → Agent → Session → prompt() → turn.finished → dispose()
 ```
 
-你可以显式传入：
+`agent.dispose()` 会释放 Agent 及其独占 Workspace，包括 Plugin lifecycle、ActionSchedule、Shell 进程、PTY 和 Sandbox。不要在正常流程中再次单独释放同一个 Workspace。
 
-- `id`
-- `path`
-- `tools`
-- `instruction`
-- `model`
-- `plugins`
+## 模型归属
 
-它更像本地嵌入式执行壳。
+纯 SDK 嵌入模式由宿主持有模型实例：
 
-## 什么时候用 `RemoteAgent`
+- 在 `new Agent({ model })` 中设置默认模型。
+- 或对一个本地 Session 调用 `await session.set({ model })` 覆盖默认模型。
 
-当另一个进程已经把 agent 暴露出来时，适合用：
-
-```ts
-import { RemoteAgent } from "@downcity/agent";
-```
-
-独立 `AgentHTTP` 使用根地址，例如 `http://127.0.0.1:5314`；Downcity gateway 则使用它公开的 Agent 路径。
-
-去连接它。
-
-`RemoteAgent` 当前支持：
-
-- `http://...`
-- `https://...`
-- `rpc://...`
-
-它更像配套的远程客户端，而不是模型宿主。
-
-## 共同的核心对象：Session
-
-无论是本地还是远程，SDK 的核心使用面都围绕 session：
-
-- `agent.sessions.create()`
-- `agent.sessions.get(session_id)`
-- `agent.sessions.list()`
-- `get_info()`
-- `prompt()`
-- `subscribe()`
-- `messages()`
-- `system()`
-- `fork()`
-
-现在统一的交互模型是：
-
-- `const turn = await session.prompt(...)`
-- `session.subscribe(...)`
-- `await turn.finished`
-
-大多数 SDK 使用问题，最终都会落到“session 应该怎么创建、配置和消费”。
-
-## 一个重要差异
-
-### 纯本地 SDK session
-
-本地 SDK session 的模型由宿主注入：
-
-```ts
-new Agent({ model })
-```
-
-或者：
-
-```ts
-await session.set({ model })
-```
-
-### Downcity Agent 项目
-
-项目 runtime 的模型来自：
-
-- `downcity.json.execution.modelId`
-- 已连接的 `City AIService` 模型目录
-
-也就是说，在 Downcity 集成模式里：
-
-- Agent 项目只保存 `modelId`
-- Downcity 负责去 City AIService 解析这个 `modelId`
-- provider、key、baseURL 都不放在 Agent 项目里
-
-### 远程 SDK session
-
-远程 Session 不提供模型配置 API。实际模型始终由服务端宿主选择并在执行前注入。
+Downcity 项目模式由 CLI 宿主根据项目配置和 City AIService 模型目录解析模型。远程 Session 不提供客户端模型配置 API，模型始终由服务端宿主持有。
 
 ## 推荐阅读顺序
 
-1. [本地 Agent](/zh/agent-sdk-docs/local-agent/quickstart)
-2. [Agent 与 City AIService](/zh/agent-sdk-docs/integration-patterns/agent-with-city-ai-service)
-3. [Session](/zh/agent-sdk-docs/sessions/overview)
-4. [Plugin 总览](/zh/agent-sdk-docs/plugins/overview)
+1. [本地 Agent 快速开始](/zh/agent-sdk-docs/local-agent/quickstart)
+2. [Session 总览](/zh/agent-sdk-docs/sessions/overview)
+3. [Shell 与沙箱](/zh/agent-sdk-docs/local-agent/shell-reference)
+4. [Tools 与 Plugins](/zh/agent-sdk-docs/local-agent/tools-and-plugins)
 5. [远程 Agent](/zh/agent-sdk-docs/remote-agent/quickstart)
 6. [SDK Surface](/zh/agent-sdk-docs/api-reference/sdk-surface)
-7. [API 参考](/zh/agent-sdk-docs/api-reference/agent-class)
-
-## 相关文档
-
-- [City AIService](/zh/city-sdk-docs/service/ai/index)
-- [添加模型](/zh/city-sdk-docs/quickstart/add-model)
-- [模型配置（City + Agent）](/zh/docs/configuration/model)
-- [把模型绑定到 Agent](/zh/docs/agent/configuration/models/bind-model-to-agent)
+7. [Agent SDK 架构](/zh/docs/agent/sdk-architecture)

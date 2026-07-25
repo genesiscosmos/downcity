@@ -1,37 +1,96 @@
 ---
 title: SDK Surface
-description: The public Agent, RemoteAgent, and Session API
+description: Understand the Agent SDK public surface in everyday, advanced, and framework-integration layers
 ---
 
 # SDK Surface
 
-The SDK is session-first. `Agent` owns local runtime assembly and `RemoteAgent` connects to an exposed runtime.
+The `@downcity/agent` root exports the complete extension surface, but ordinary applications do not need every export. Start with the everyday core, then enter the Session, Plugin, or transport integration layer only when required.
 
-## `Agent`
+## Layer 1: everyday core
 
-- `new Agent(options)`, `ready()`, `dispose()`
-- `sessions.create()`, `get()`, `list()`, `archive()`, `archived()`, `clean_archive()`, `remove()`, `clear_messages()`
-- `set_instruction()`; Workspace exposes `get_env()`, `set_env()`, and `patch_env()`
-- `get_logger()`, `get_shell()`, and `plugins`
+Most local applications need only:
 
-Local plugin actions use `agent.plugins.run_action(...)`. HTTP and RPC transports are supplied by `AgentHTTP` and `AgentRPC` in `@downcity/server`.
+- `Workspace`: create the project resource and security boundary and receive Shell.
+- `Agent`: compose the model, instructions, Tools, plugins, and Sessions.
+- `agent.sessions.create()` / `get()`: create or restore a Session.
+- `session.prompt()`: start one Turn.
+- `turn.finished`: await the final result.
+- `agent.dispose()`: release Agent and its exclusive Workspace.
 
-Agent owns its runtime state and long-lived objects, while Workspace owns project env and resources. The full project config remains in an upstream host such as the CLI. `PluginContext` is an internal projection for plugins; hosts use the explicit Agent facade.
+```ts
+const workspace = new Workspace({ path, shell });
+const agent = new Agent({ id, workspace, model });
 
-`agent.get_logger()` returns the logger owned by that Agent. For standalone integration code, `get_logger(project_root?)` creates a new independent logger instance; the package does not expose a process-global logger.
+try {
+  const session = await agent.sessions.create();
+  const turn = await session.prompt({ query: "Inspect the project" });
+  const result = await turn.finished;
+} finally {
+  await agent.dispose();
+}
+```
 
-## `RemoteAgent`
+The local SDK is session-first: Agent performs composition, while Session owns interaction and execution state.
 
-- `new RemoteAgent({ url, token? })`
-- `sessions` collection methods matching local Agent
-- `run_plugin_action()` and `close()`
+## Layer 2: common advanced APIs
 
-HTTP URLs use the server root such as `http://127.0.0.1:5314`; RPC uses `rpc://127.0.0.1:15314`.
+### Agent and Workspace
 
-## Sessions
+- `agent.ready()`: wait for Plugin runtime when an explicit startup checkpoint is needed.
+- `agent.set_instruction()`: update static Agent instructions.
+- `agent.plugins`: inspect, control, or call plugins.
+- `workspace.get_env()` / `set_env()` / `patch_env()`: manage the project execution environment.
+- `agent.get_logger()` / `get_shell()`: host integration entry points.
 
-Both local and remote Sessions provide `get_info()`, `prompt()`, `stop()`, `subscribe()`, `messages()`, `system()`, `approvals()`, `approval_mode()`, `set_approval_mode()`, `resolve_approval()`, and `fork()`.
+### Session
 
-Local Sessions additionally provide `set({ model })` with a runtime model instance, `syncshot()` for explicitly regenerating the system, and `snapshot()` for persisting the fixed complete system. Remote Sessions expose none of these capabilities; the server host owns their model and system persistence policy.
+- `get_info()`: read Session state.
+- `subscribe()`: subscribe to live Mutations.
+- `messages()`: load message snapshots.
+- `stop()`: stop the current execution.
+- `system()`: load the current system.
+- `approvals()` / `resolve_approval()`: handle Shell approvals.
+- `fork()`: branch from an existing Session.
+- `snapshot()` / `syncshot()`: manage local Session system snapshots.
+- `set({ model })`: override the model for one local Session.
 
-`subscribe()` emits the unified live Mutation stream after the subscription is established. Load initial Message and Session snapshots, and reload them after reconnecting.
+For a live UI, load initial Session and Message snapshots before calling `subscribe()`. Reload snapshots after reconnecting; the event stream is not a complete database.
+
+## Layer 3: framework integration
+
+Use these capabilities only when building plugins, servers, or custom runtime components:
+
+- `PluginContext`: the stable capability view projected from Agent to a Plugin; hosts should not acquire or retain it.
+- `SessionRunContext`: the explicit snapshot passed across Composer, Executor, and Tools for one execution.
+- Interfaces such as `AgentSession` and `SessionExecutor`: replace or extend default implementations.
+- RPC/HTTP types: implement a custom transport or protocol integration.
+
+Network server implementations belong to `@downcity/server`. Local `Agent` does not listen on ports or manage transport lifecycle.
+
+## Local and remote
+
+| Capability | Local `Agent` | `RemoteAgent` |
+| --- | --- | --- |
+| Create, get, and list Sessions | Yes | Yes |
+| Prompt, subscribe, messages, stop, approvals, and fork | Yes | Yes |
+| Inject Workspace, Shell, Tools, and plugins | Yes | No |
+| Set the Agent default model | Yes | No |
+| `session.set({ model })` | Yes | No |
+| `snapshot()` / `syncshot()` | Yes | No |
+| Manage the server transport | Not responsible | Connects only |
+
+The server host always owns the model and system persistence policy for a remote Session.
+
+## Lifecycle rules
+
+```text
+one Workspace instance → one Agent → one agent.dispose()
+```
+
+- The caller constructs Workspace; Agent releases it after binding.
+- Multiple Agents may target the same physical directory, but each needs a separate Workspace instance.
+- `agent.dispose()` releases Plugin runtime, Workspace, Shell, PTYs, and Sandbox.
+- `RemoteAgent.close()` closes only the client connection, not the server-side Agent.
+
+Continue with the [Agent API](/en/agent-sdk-docs/api-reference/agent-class) and [Sessions overview](/en/agent-sdk-docs/sessions/overview).

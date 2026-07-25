@@ -43,7 +43,6 @@ console.log(binding.url); // rpc://127.0.0.1:15314
 // 关闭
 await rpc.close();
 await agent.dispose();
-await workspace.dispose();
 ```
 
 `AgentRPC` 默认监听 `127.0.0.1:15314`，协议为 NDJSON，无鉴权，仅用于本机或可信网络。

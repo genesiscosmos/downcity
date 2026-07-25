@@ -83,6 +83,16 @@ Workspace 实例只有一个生命周期所有者：
 
 多个 Agent 可以操作同一物理目录，但应分别创建 Workspace。Store 按 `agent_id` 分区，因此 Session 数据不会混合。
 
+### 生命周期所有权
+
+Workspace 由调用方创建，但绑定 Agent 后由 Agent 统一管理释放：
+
+```text
+调用方创建 Workspace → Agent 绑定 Workspace → agent.dispose() 统一释放
+```
+
+`agent.dispose()` 会依次关闭 Agent 长期运行状态并释放 Workspace 持有的 Store、Shell、进程和 Sandbox。正常使用中不需要再调用同一个 `workspace.dispose()`。如果构造 Agent 前的初始化失败，Workspace 尚未绑定，调用方才需要自行释放它。
+
 ## 三种 Workspace 能力
 
 ### LocalFileSystem
@@ -187,10 +197,15 @@ macOS、Linux 和 Windows 使用同一个 Workspace、Agent、Session 和 Store�
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
+import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { Shell } from "@downcity/shell";
+
+const shell = new Shell({
+  sandbox: new MacOsSeatbeltSandbox(),
+});
 
 const workspace = new Workspace({
   path: process.cwd(),
-  env: { API_KEY: process.env.API_KEY },
   shell,
 });
 

@@ -1,205 +1,96 @@
 ---
 title: SDK Surface
-description: 从开发者视角理解 Agent、RemoteAgent 和 Session 的实际公开 API 使用面
+description: 按日常使用、常用进阶和框架集成三个层级理解 Agent SDK 的公开能力
 ---
 
 # SDK Surface
 
-如果你只想记住开发者真正会用到的 API 形态，可以先记这四个对象：
+`@downcity/agent` 的根入口会导出完整的扩展类型，但普通应用不需要理解全部导出。先掌握日常核心，再按场景进入 Session、Plugin 或 transport 集成层。
 
-- `Agent`：本地 runtime 入口
-- `RemoteAgent`：远程 session 客户端
-- `AgentSession`：本地工作对象
-- `RemoteAgentSession`：远程工作对象
+## 第一层：日常核心
 
-## 推荐心智模型
+大多数本地应用只需要：
 
-这个 SDK 本质上是 session-first 的。
-
-大多数应用里，真正承载执行的不是 `Agent` 本身，而是下面这些方法返回的 session：
-
-- `agent.sessions.create()`
-- `agent.sessions.get(session_id)`
-- `remoteAgent.sessions.create()`
-- `remoteAgent.sessions.get(session_id)`
-
-## 本地典型流程
+- `Workspace`：创建项目资源与安全边界，并接收 Shell。
+- `Agent`：组合模型、指令、Tools、Plugins 和 Sessions。
+- `agent.sessions.create()` / `get()`：创建或恢复 Session。
+- `session.prompt()`：启动一次 Turn。
+- `turn.finished`：等待最终结果。
+- `agent.dispose()`：释放 Agent 及其独占 Workspace。
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+const workspace = new Workspace({ path, shell });
+const agent = new Agent({ id, workspace, model });
 
-const agent = new Agent({
-  id: "demo",
-  workspace: new Workspace({ path: process.cwd() }),
-});
-
-const session = await agent.sessions.create();
-await session.set({ model });
-
-const turn = await session.prompt({
-  query: "总结一下这个仓库",
-});
-
-await turn.finished;
+try {
+  const session = await agent.sessions.create();
+  const turn = await session.prompt({ query: "检查项目" });
+  const result = await turn.finished;
+} finally {
+  await agent.dispose();
+}
 ```
 
-多个 Session 共用模型时，在 `Agent` 构造参数中传入默认模型；需要覆盖时再调用 `session.set({ model })`。
+本地 SDK 是 session-first 的：Agent 负责组合，真正承载交互和执行状态的是 Session。
 
-## 远程典型流程
+## 第二层：常用进阶
 
-```ts
-import { RemoteAgent } from "@downcity/agent";
+### Agent 与 Workspace
 
-const agent = new RemoteAgent({
-  url: "http://127.0.0.1:5314/agents/repo-helper",
-});
+- `agent.ready()`：需要显式启动检查点时等待 Plugin runtime。
+- `agent.set_instruction()`：更新 Agent 静态指令。
+- `agent.plugins`：查询、控制或调用 Plugin。
+- `workspace.get_env()` / `set_env()` / `patch_env()`：管理项目执行环境。
+- `agent.get_logger()` / `get_shell()`：宿主集成入口。
 
-const session = await agent.sessions.get("repo-analysis");
-const turn = await session.prompt({
-  query: "继续",
-});
+### Session
 
-await turn.finished;
+- `get_info()`：读取 Session 状态。
+- `subscribe()`：订阅实时 Mutation。
+- `messages()`：读取消息快照。
+- `stop()`：停止当前执行。
+- `system()`：读取当前 system。
+- `approvals()` / `resolve_approval()`：处理 Shell 审批。
+- `fork()`：从现有 Session 创建分支。
+- `snapshot()` / `syncshot()`：管理本地 Session system 快照。
+- `set({ model })`：只覆盖当前本地 Session 的模型。
+
+如果应用有实时 UI，应先读取初始 Session 与 Message 快照，再建立 `subscribe()`；重连后重新读取快照，不要把事件流当作完整数据库。
+
+## 第三层：框架集成
+
+以下能力只在构建 Plugin、服务端或自定义运行时组件时使用：
+
+- `PluginContext`：Agent 投影给 Plugin 的稳定能力视图；宿主不应主动获取或持有它。
+- `SessionRunContext`：单次执行在 Composer、Executor、Tool 间传递的显式快照。
+- `AgentSession`、`SessionExecutor` 等接口：替换或扩展默认实现。
+- RPC/HTTP 类型：实现自定义 transport 或协议集成。
+
+网络服务实现位于 `@downcity/server`。本地 `Agent` 不监听端口，也不管理 transport 生命周期。
+
+## 本地与远程
+
+| 能力 | 本地 `Agent` | `RemoteAgent` |
+| --- | --- | --- |
+| 创建、获取、列出 Session | 支持 | 支持 |
+| `prompt()`、订阅、消息、停止、审批、fork | 支持 | 支持 |
+| 注入 Workspace、Shell、Tools、Plugins | 支持 | 不支持 |
+| 设置 Agent 默认模型 | 支持 | 不支持 |
+| `session.set({ model })` | 支持 | 不支持 |
+| `snapshot()` / `syncshot()` | 支持 | 不支持 |
+| 管理服务端 transport | 不负责 | 只连接 |
+
+远程 Session 的模型与 system 持久化策略始终由服务端宿主决定。
+
+## 生命周期规则
+
+```text
+一个 Workspace 实例 → 一个 Agent → 一次 agent.dispose()
 ```
 
-## `Agent`
+- Workspace 由调用方构造，绑定后由 Agent 统一释放。
+- 多个 Agent 可以指向同一物理目录，但必须分别创建 Workspace 实例。
+- `agent.dispose()` 会释放 Plugin runtime、Workspace、Shell、PTY 和 Sandbox。
+- `RemoteAgent.close()` 只关闭客户端连接，不释放服务端 Agent。
 
-当 agent runtime 和你的应用运行在同一本地进程或同一个宿主环境里时，用 `Agent`。
-
-核心方法：
-
-- `new Agent(options)`
-- `agent.ready()`
-- `agent.dispose()`
-- `agent.sessions`
-- `agent.set_instruction(input)`
-- `agent.get_logger()`
-- `agent.get_shell()`
-- `agent.plugins`
-
-典型职责：
-
-- 创建和恢复本地 session
-- 在构造时自动启动 plugin lifecycle 与 ActionSchedule，必要时显式 `ready()` / `dispose()`
-- 暴露 plugin 集成入口
-- 持有 instruction、model、最终 tools、plugins 与 sessions；env 由 Workspace 持有
-- 在内部通过 `PluginContext` 只向 Plugin 投影稳定能力
-
-完整项目 config 由 CLI 等上游宿主持有，不进入 Agent。宿主直接依赖 Agent 的明确 facade，不接触 `PluginContext`。
-
-`agent.get_logger()` 返回当前 Agent 自己持有的 logger。独立集成代码可以调用 `get_logger(project_root?)` 创建新的隔离实例；package 不再暴露进程级全局 logger。
-
-如果你需要 RPC 或 HTTP 暴露，请使用 [`@downcity/server`](/zh/agent-sdk-docs/local-agent/http-and-rpc) 提供的 `AgentRPC` / `AgentHTTP`。
-
-## `RemoteAgent`
-
-当另一个进程已经暴露了 agent 时，用 `RemoteAgent`。
-
-核心方法：
-
-- `new RemoteAgent({ url })`
-- `agent.sessions`
-
-它当前支持：
-
-- `http://...`
-- `https://...`
-- `rpc://...`
-
-典型职责：
-
-- 连接一个已有的远程 agent 服务
-- 切换到已知的远程 session
-- 浏览可用的远程 session 列表
-- 响应 runtime plugin action，例如 shell 审批请求
-
-## `AgentSession`
-
-`AgentSession` 是本地模式下最核心的执行对象。
-
-核心方法：
-
-- `session.id`
-- `session.agent_id`
-- `session.config`
-- `session.set(input)`
-- `session.get_info()`
-- `session.prompt(input)`
-- `session.stop()`
-- `session.subscribe(subscriber)`
-- `session.messages(input?)`
-- `session.system()`
-- `session.syncshot()`
-- `session.snapshot()`
-- `session.approvals()`
-- `session.approval_mode()`
-- `session.set_approval_mode(input)`
-- `session.resolve_approval(input)`
-- `session.fork(input?)`
-
-典型顺序：
-
-1. `await agent.sessions.create()`
-2. `await session.set({ model })` 或在 `Agent` 构造时传默认模型
-3. `const turn = await session.prompt({ query })`
-4. `await turn.finished`
-5. 按需再用 `session.messages()` / `session.get_info()` / `session.fork()`
-
-## `RemoteAgentSession`
-
-`RemoteAgentSession` 尽量保持和本地 session 一样的交互形状，但不负责客户端侧模型注入。
-
-核心方法：
-
-- `session.id`
-- `session.get_info()`
-- `session.prompt(input)`
-- `session.stop()`
-- `session.subscribe(subscriber)`
-- `session.messages(input?)`
-- `session.system()`
-- `session.approvals()`
-- `session.approval_mode()`
-- `session.set_approval_mode(input)`
-- `session.resolve_approval(input)`
-- `session.fork(input?)`
-
-一个关键差异：
-
-- 本地 `AgentSession` 支持 `set({ model })`
-- 本地 `AgentSession` 支持 `snapshot()` 显式持久化当前固定的完整 system
-- 本地 `AgentSession` 支持 `syncshot()` 使用 Agent 当前配置重新生成 system
-- 远程 `RemoteAgentSession` 不提供模型配置方法
-
-## Agent 项目和 Federation AIService 的关系
-
-如果你在正常的 Downcity Agent 项目里使用这套 SDK，还要额外区分：
-
-- 纯 SDK 嵌入：Agent 持有默认实例，本地 Session 可通过 `session.set({ model })` 覆盖
-- Downcity 项目：通过 `execution.modelId` 绑定到 `Federation AIService`
-
-也就是说，`session.set({ model })` 不是所有场景都该用的默认路径。
-
-## 什么时候用哪个方法
-
-- 需要一条全新的会话：`agent.sessions.create()`
-- 需要继续一个已知 session：`agent.sessions.get(session_id)`
-  - 需要做 session 切换器、历史侧边栏或第三方 session 浏览器：`agent.sessions.list()`
-  - 需要归档单个不再活跃的会话：`agent.sessions.archive({ id })`
-  - 需要浏览已归档的会话列表：`agent.sessions.archived(input?)`
-  - 需要永久清空已归档会话：`agent.sessions.clean_archive()`
-- 需要读取单个 session 的当前摘要/详情：`get_info()`
-- 需要分页读取会话内容：`messages()`
-- 需要实时监听 Message、流式增量、Turn 与 Session 状态：`subscribe()`
-- 需要处理当前 Session 的工具审批：`approvals()` / `resolve_approval()`
-- 需要停止当前 turn 并清空未吸收队列：`stop()`
-- 需要查看当前实际生效的 system prompt 快照：`system()`
-- 需要从当前状态分叉一条新会话：`fork()`
-
-## 继续阅读
-
-- [Agent 类](/zh/agent-sdk-docs/api-reference/agent-class)
-- [RemoteAgent 类](/zh/agent-sdk-docs/api-reference/remote-agent-class)
-- [Agent 与 Federation AIService](/zh/agent-sdk-docs/integration-patterns/agent-with-city-ai-service)
-- [Session 总览](/zh/agent-sdk-docs/sessions/overview)
-- [Session 类型与结果](/zh/agent-sdk-docs/api-reference/session-types)
+继续阅读：[Agent API](/zh/agent-sdk-docs/api-reference/agent-class)和[Session 总览](/zh/agent-sdk-docs/sessions/overview)。

@@ -43,7 +43,6 @@ console.log(binding.url); // rpc://127.0.0.1:15314
 // shutdown
 await rpc.close();
 await agent.dispose();
-await workspace.dispose();
 ```
 
 `AgentRPC` defaults to `127.0.0.1:15314`. The protocol is NDJSON, no auth. Use it on local or trusted networks.

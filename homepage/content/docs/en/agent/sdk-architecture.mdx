@@ -83,6 +83,16 @@ one Workspace instance → one Agent → one dispose
 
 Multiple Agents may use the same physical directory, but each needs a separate Workspace instance. Store data is partitioned by `agent_id`, so their Sessions do not mix.
 
+### Lifecycle ownership
+
+The caller constructs Workspace, but Agent owns its disposal after binding:
+
+```text
+caller creates Workspace → Agent binds Workspace → agent.dispose() releases both
+```
+
+`agent.dispose()` shuts down long-lived Agent state and releases the Store, Shell, processes, and Sandbox held by Workspace. Do not call `workspace.dispose()` again in the normal flow. The caller disposes Workspace directly only when initialization fails before Agent binds it.
+
 ## Three Workspace capabilities
 
 ### LocalFileSystem
@@ -187,10 +197,15 @@ The CLI/City host owns user-level `~/.downcity`, global databases, and key files
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
+import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { Shell } from "@downcity/shell";
+
+const shell = new Shell({
+  sandbox: new MacOsSeatbeltSandbox(),
+});
 
 const workspace = new Workspace({
   path: process.cwd(),
-  env: { API_KEY: process.env.API_KEY },
   shell,
 });
 

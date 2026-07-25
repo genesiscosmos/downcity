@@ -52,9 +52,10 @@ const agent = new Agent({
 
 Workspace 会把项目根目录绑定给 Shell，Agent 不再直接配置或持有 Shell。独立使用 Shell 时仍可以传入 `root_path`。
 
-### 方法
+### 释放资源
 
-- `workspace.dispose()` — 释放 Workspace 持有的 Shell 资源
+- Workspace 已绑定 Agent 时调用 `agent.dispose()`，它会一并释放 Shell。
+- 只有 Workspace 尚未绑定 Agent 时，才直接调用 `workspace.dispose()`。
 - `shell.set_safe_read_only_paths(paths)` — 替换宿主批准的额外只读目录
 
 审批请求会在 `session.subscribe((mutation) => {})` 中表现为 `approval-required` Tool Part。应用层从 `mutation.part.approval.request` 读取完整 Shell 请求，再使用 `session.resolve_approval(...)` 提交用户决定；重连后可通过 `session.approvals()` 恢复 pending 请求。不要直接调用 Shell Runtime 的内部审批方法。
