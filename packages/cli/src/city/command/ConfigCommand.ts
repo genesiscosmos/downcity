@@ -175,8 +175,8 @@ async function runConfigCommand(
 function applyCommonOptions(command: Command): Command {
   return command
     .option("--agent <agent_id>", t({
-      zh: "目标 Agent ID（默认按当前目录或交互选择）",
-      en: "target Agent ID (defaults to current directory lookup or interactive selection)",
+      zh: "目标 Agent ID（省略时打开全局 Agent 选择器）",
+      en: "target Agent ID (opens the global Agent selector when omitted)",
     }))
     .option("--json [enabled]", t({
       zh: "以 JSON 输出",

@@ -5,10 +5,10 @@ description: Downcity CLI 套件 — downcity 管理本地 Agent，downfed 管�
 
 # CLI
 
-Downcity 提供两个 CLI 二进制文件：
+Downcity 提供两个相互独立的 CLI 工具：
 
-- **`city`**（别名 `downcity`）— 管理全局 Agent、Workspace 绑定和本地宿主状态。
-- **`fed`**（别名 `downfed`）— 管理与项目关联的 Federation 部署、City 实体和服务资源。
+- **`city`**（别名 `downcity`）— 基于 `City()` 与 Agent SDK 提供 Agent 管理、运行控制和控制台的本机 City 容器。
+- **`fed`**（别名 `downfed`）— Federation Server Manager，负责注册和管理 Federation Server，并提供基于 `federation.json` 的项目命令。
 
 两者共享相同的全局标志（`--verbose`、`--quiet`、`--lang`）和帮助系统。
 
@@ -22,7 +22,7 @@ Agent 是全局实体，`agent_id` 是唯一身份；Workspace 路径只是可�
 
 ## downcity
 
-`downcity` 是本地管理 CLI。它处理 Agent 生命周期、插件、环境变量、token 和 Federation 连接。
+`downcity` 是本机 City 容器。它统一管理全局 Agent 身份，并基于 `City()` 与 Agent SDK 提供生命周期控制、插件、环境变量、token、Federation 连接和控制台。
 
 ### 全局命令
 
@@ -39,14 +39,14 @@ Agent 是全局实体，`agent_id` 是唯一身份；Workspace 路径只是可�
 
 | 命令 | 说明 |
 |---------|-------------|
-| `downcity agent create [path]` | 创建并初始化 Agent 项目 |
+| `downcity agent create [path]` | 创建 Agent 并初始化 Workspace 资产 |
 | `downcity agent list` | 列出全局受管 Agent 与 Workspace 绑定 |
 | `downcity agent start [agent_id]` | 启动 Agent（后台/前台） |
 | `downcity agent stop [agent_id]` | 停止后台 Agent 守护进程 |
 | `downcity agent restart [agent_id]` | 重启后台 Agent 守护进程 |
 | `downcity agent status [agent_id]` | 查看后台 Agent 状态 |
 | `downcity agent doctor [agent_id]` | 诊断守护进程状态文件 |
-| `downcity agent chat` | 在终端中与 Agent 对话 |
+| `downcity agent chat [--to agent_id]` | 在终端中与 Agent 对话 |
 | `downcity agent history` | 管理 Agent 会话历史 |
 
 ### Plugin 命令
@@ -65,7 +65,7 @@ Agent 是全局实体，`agent_id` 是唯一身份；Workspace 路径只是可�
 
 ## downfed
 
-`downfed` 是 Federation 管理 CLI。它处理部署、项目脚手架和管理操作。
+`downfed` 是 Federation Server Manager。它通过 TUI 注册、选择和管理 Federation Server；项目命令则读取当前目录的 `federation.json`，执行创建、部署和管理流程。
 
 | 命令 | 说明 |
 |---------|-------------|
@@ -76,6 +76,10 @@ Agent 是全局实体，`agent_id` 是唯一身份；Workspace 路径只是可�
 | `downfed query <method> <path>` | 查询当前 active Federation 的 HTTP API |
 | `downfed create [dir]` | 创建新 Federation 项目骨架 |
 | `downfed deploy [source]` | 部署 Federation 项目 |
+
+## 平台支持
+
+CLI 架构天然跨平台。macOS 与 Linux 是稳定支持目标；Windows 原生 Adapter 已接入，目前成熟度为 preview / unstable。
 
 ## 全局标志
 

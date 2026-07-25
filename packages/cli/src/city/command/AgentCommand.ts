@@ -73,8 +73,8 @@ export function registerAgentCommands(
   agent
     .command("create [path]")
     .description(t({
-      zh: "创建/初始化一个 Agent 项目",
-      en: "create and initialize an Agent project",
+      zh: "创建 Agent 并初始化 Workspace 资产",
+      en: "create an Agent and initialize its Workspace assets",
     }))
     .option("-f, --force [enabled]", t({
       zh: "允许覆盖已有 Agent 配置（危险操作）",
@@ -88,8 +88,8 @@ export function registerAgentCommands(
   agent
     .command("list")
     .description(t({
-      zh: "列出已登记到 City 的 Agent 项目",
-      en: "list Agent projects registered in City",
+      zh: "列出已登记到 City 的全局 Agent",
+      en: "list global Agents registered in City",
     }))
     .option("--running [enabled]", t({
       zh: "仅列出当前运行中的 Agent",

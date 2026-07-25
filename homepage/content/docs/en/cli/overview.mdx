@@ -5,10 +5,10 @@ description: The Downcity CLI suite — downcity for local agents and downfed fo
 
 # CLI
 
-Downcity provides two CLI binaries:
+Downcity provides two independent CLI tools:
 
-- **`city`** (alias `downcity`) — manages global Agents, Workspace bindings, and local host state.
-- **`fed`** (alias `downfed`) — manages project-associated Federation deployments, City entities, and service resources.
+- **`city`** (alias `downcity`) — the local City container built on `City()` and the Agent SDK for Agent management, runtime control, and console workflows.
+- **`fed`** (alias `downfed`) — the Federation Server Manager for registering and operating Federation Servers, plus `federation.json`-based project commands.
 
 Both share the same global flags (`--verbose`, `--quiet`, `--lang`) and help system.
 
@@ -22,7 +22,7 @@ An Agent is a global entity identified by `agent_id`; a Workspace path is only a
 
 ## downcity
 
-`downcity` is the local management CLI. It handles agent lifecycle, plugins, environment variables, tokens, and Federation connections.
+`downcity` is the local City container. It manages global Agent identities and uses `City()` with the Agent SDK to provide lifecycle control, plugins, environment variables, tokens, Federation connections, and console workflows.
 
 ### Global commands
 
@@ -39,14 +39,14 @@ An Agent is a global entity identified by `agent_id`; a Workspace path is only a
 
 | Command | Description |
 |---------|-------------|
-| `downcity agent create [path]` | Create and initialize an Agent project |
+| `downcity agent create [path]` | Create an Agent and initialize Workspace assets |
 | `downcity agent list` | List managed Agents and Workspace bindings |
 | `downcity agent start [agent_id]` | Start an Agent (background or foreground) |
 | `downcity agent stop [agent_id]` | Stop the background Agent daemon |
 | `downcity agent restart [agent_id]` | Restart the background Agent daemon |
 | `downcity agent status [agent_id]` | Show background Agent daemon status |
 | `downcity agent doctor [agent_id]` | Diagnose daemon state files |
-| `downcity agent chat` | Chat with an Agent in the terminal |
+| `downcity agent chat [--to agent_id]` | Chat with an Agent in the terminal |
 | `downcity agent history` | Manage Agent conversation history |
 
 ### Plugin commands
@@ -65,7 +65,7 @@ An Agent is a global entity identified by `agent_id`; a Workspace path is only a
 
 ## downfed
 
-`downfed` is the Federation management CLI. It handles deployment, project scaffolding, and admin operations.
+`downfed` is the Federation Server Manager. Its TUI registers, selects, and manages Federation Servers. Project commands read `federation.json` from the current directory for creation, deployment, and management workflows.
 
 | Command | Description |
 |---------|-------------|
@@ -76,6 +76,10 @@ An Agent is a global entity identified by `agent_id`; a Workspace path is only a
 | `downfed query <method> <path>` | Query the active Federation HTTP API |
 | `downfed create [dir]` | Scaffold a new Federation project |
 | `downfed deploy [source]` | Deploy a Federation project |
+
+## Platform support
+
+The CLI architecture is cross-platform. macOS and Linux are stable targets. Native Windows support is integrated through the Windows adapter and is currently preview / unstable.
 
 ## Global flags
 

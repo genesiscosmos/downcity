@@ -1,8 +1,8 @@
 {
   "name": "downcity",
-  "version": "1.1.370",
+  "version": "1.1.371",
   "type": "module",
-  "description": "Downcity CLI — unified City and Agent host management",
+  "description": "Downcity CLI — local City container and Federation Server management",
   "bin": {
     "city": "./bin/downcity.js",
     "downcity": "./bin/downcity.js",

@@ -1,5 +1,5 @@
 /**
- * AgentHost：单个受管 Agent 的宿主组合根。
+ * ManagedAgentRuntime：单个受管 Agent 的运行组合根。
  *
  * 职责（中文）
  * - 从全局 Managed Agent 配置构建模型、Plugin、Sandbox、Workspace 与 Agent。
@@ -17,7 +17,7 @@ import { createCityBuiltinPlugins } from "@/city/runtime/plugins/CityBuiltinPlug
 import { mergeProcessEnvWithPlatformGlobalEnv } from "@/city/env/ProcessEnv.js";
 import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
 import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
-import type { CreateAgentHostInput } from "@/city/types/agent/AgentHost.js";
+import type { CreateManagedAgentRuntimeInput } from "@/city/types/agent/ManagedAgentRuntime.js";
 import { CliError } from "@/shared/CliError.js";
 
 /** 解析并校验 TCP 端口。 */
@@ -35,9 +35,9 @@ function parse_port(
   return port;
 }
 
-/** 已启动的 Agent 宿主；所有内部资源只能由该对象统一释放。 */
-export class AgentHost {
-  /** Agent 领域实例。 */
+/** 已启动的受管 Agent Runtime；所有内部资源只能由该对象统一释放。 */
+export class ManagedAgentRuntime {
+  /** Agent SDK 实例。 */
   readonly agent: Agent;
 
   private readonly rpc: AgentRPC;
@@ -54,7 +54,7 @@ export class AgentHost {
     this.gateway = input.gateway;
   }
 
-  /** 按依赖逆序幂等停止整个宿主。 */
+  /** 按依赖逆序幂等停止整个 Runtime。 */
   async stop(): Promise<void> {
     if (this.stopped) return;
     this.stopped = true;
@@ -69,7 +69,9 @@ export class AgentHost {
   }
 
   /** 创建全部依赖并完成 RPC、HTTP 两个 transport 的启动。 */
-  static async start(input: CreateAgentHostInput): Promise<AgentHost> {
+  static async start(
+    input: CreateManagedAgentRuntimeInput,
+  ): Promise<ManagedAgentRuntime> {
     const config = get_managed_agent(input.target.agent_id);
     const workspace_path = path.resolve(input.target.workspace_path);
     if (!config || path.resolve(config.workspace_path) !== workspace_path) {
@@ -144,7 +146,7 @@ export class AgentHost {
         get_agent: () => agent,
         sdkRouter: agent_http.router(),
       });
-      return new AgentHost({ agent, rpc, gateway });
+      return new ManagedAgentRuntime({ agent, rpc, gateway });
     } catch (error) {
       await rpc.close();
       await agent.dispose();
@@ -153,9 +155,9 @@ export class AgentHost {
   }
 }
 
-/** 创建并启动一个 AgentHost。 */
-export async function create_agent_host(
-  input: CreateAgentHostInput,
-): Promise<AgentHost> {
-  return AgentHost.start(input);
+/** 创建并启动一个受管 Agent Runtime。 */
+export async function create_managed_agent_runtime(
+  input: CreateManagedAgentRuntimeInput,
+): Promise<ManagedAgentRuntime> {
+  return ManagedAgentRuntime.start(input);
 }

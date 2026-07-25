@@ -156,6 +156,69 @@ test("Agent model 命令已注册到 CLI", () => {
   assert.doesNotMatch(result.stdout, /--session-id/);
 });
 
+test("非交互 Agent 命令不根据当前 Workspace 推断目标", async () => {
+  const platform_root = create_temp_root();
+  const workspace_root = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  process.env.DC_MODEL_DB_KEY = "config-storage-agent-selection-test";
+  let reset_key_cache = () => {};
+  try {
+    const crypto = await import("../bin/city/runtime/store/crypto.js");
+    reset_key_cache = crypto.resetModelDbKeyCache;
+    reset_key_cache();
+    const repository = await import(
+      "../bin/city/process/registry/ManagedAgentRepository.js"
+    );
+    repository.create_managed_agent({
+      agent_id: "workspace_agent",
+      workspace_path: workspace_root,
+      execution: { type: "api", model_id: "model_a" },
+    });
+
+    const cli_path = path.resolve("bin/downcity.js");
+    const environment = {
+      ...process.env,
+      DC_PLATFORM_ROOT: platform_root,
+      NO_COLOR: "1",
+    };
+    const implicit_result = spawnSync(
+      process.execPath,
+      [cli_path, "agent", "status"],
+      {
+        cwd: workspace_root,
+        encoding: "utf8",
+        env: environment,
+      },
+    );
+    assert.equal(implicit_result.status, 1);
+    assert.match(
+      `${implicit_result.stdout}\n${implicit_result.stderr}`,
+      /Agent ID is required/,
+    );
+
+    const explicit_result = spawnSync(
+      process.execPath,
+      [cli_path, "agent", "status", "workspace_agent"],
+      {
+        cwd: workspace_root,
+        encoding: "utf8",
+        env: environment,
+      },
+    );
+    assert.equal(explicit_result.status, 0, explicit_result.stderr);
+    assert.doesNotMatch(
+      `${explicit_result.stdout}\n${explicit_result.stderr}`,
+      /Agent ID is required/,
+    );
+  } finally {
+    reset_key_cache();
+    delete process.env.DC_PLATFORM_ROOT;
+    delete process.env.DC_MODEL_DB_KEY;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+    fs.rmSync(workspace_root, { recursive: true, force: true });
+  }
+});
+
 test("Agent 模型选择只接受对话执行模型", async () => {
   const binding = await import(
     "../bin/city/runtime/city-model/CityAiServiceBinding.js"

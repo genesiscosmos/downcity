@@ -20,7 +20,7 @@ downcity update
 ### Agent lifecycle
 
 ```bash
-# Create a new Agent project
+# Create an Agent and initialize Workspace assets
 downcity agent create my-project
 
 # List globally managed Agents
@@ -49,10 +49,10 @@ downcity agent doctor <agent_id> --fix
 # Chat with an Agent
 downcity agent chat
 # Send a one-shot message
-downcity agent chat -m "hello"
+downcity agent chat --to <agent_id> -m "hello"
 ```
 
-`agent_id` is the stable lifecycle target. When omitted, the CLI first uses a unique binding for the current Workspace, then offers an interactive selector. Non-interactive calls fail when the target is not unique.
+`agent_id` is the stable target for every command that operates on one Agent. When omitted in a TTY, the CLI always opens the global Agent selector without filtering or inferring from the current Workspace. Non-interactive calls fail with `Agent ID is required`. Collection and creation flows such as `agent list` and `agent create` do not require an existing Agent ID.
 
 `downcity agent list` shows running Agents first, then sorts Agents with the same status by Agent ID. Daemon state lives under `~/.downcity/runtimes/<agent_id>/`. Agents listen on `127.0.0.1` by default; external listening requires an explicit `--host`, and protected HTTP routes require a Bearer token.
 

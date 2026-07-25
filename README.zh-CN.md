@@ -23,7 +23,7 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 
 | 包 / 目录 | 作用 |
 | --- | --- |
-| `downcity` | 公共 CLI 聚合包：`city`/`downcity` 管理全局 Agent 宿主，`fed`/`downfed` 管理与项目关联的 Federation。 |
+| `downcity` | 公共 CLI 聚合包：`city`/`downcity` 是管理 Agent、运行时与控制台的本机 City 容器；`fed`/`downfed` 是 Federation Server Manager。 |
 | `@downcity/agent` | 单 Agent runtime 与 SDK，负责 session、tool loop、service、plugin、HTTP/RPC、sandbox 与宿主接入。 |
 | `@downcity/city` | City runtime 与访问 SDK，负责 service 注册、action、auth、env、city 访问边界与 HTTP 调用。 |
 | `@downcity/type` | 跨 package 共享协议类型，包含 City 返回的 City 模型描述等核心类型。 |
@@ -68,7 +68,7 @@ pnpm add -g downcity
 downcity --version
 ```
 
-`downcity` 既负责本机 Agent 宿主，也负责 City 管理。使用 `downcity update` 更新全局 CLI。
+`downcity` 是基于 `City()` 与 Agent SDK 管理和运行 Agent 的本机 City 容器。使用 `downcity update` 更新全局 CLI。同一安装包还提供 `fed`/`downfed`，用于管理 Federation Server。
 
 ### 2. 初始化平台
 
@@ -87,7 +87,7 @@ downcity federation status
 
 `downcity` 负责模型和 Service 资源管理。`downcity federation` 负责把当前 City 连接导入本机 Agent runtime。
 
-### 4. 创建 Agent 项目
+### 4. 创建 Agent
 
 在目标仓库中执行：
 
@@ -112,10 +112,10 @@ your-project/
 
 ```bash
 downcity agent list
-downcity agent start
-downcity agent status
-downcity agent chat -m "总结一下这个项目"
-downcity agent chat --new-session
+downcity agent start <agent_id>
+downcity agent status <agent_id>
+downcity agent chat --to <agent_id> -m "总结一下这个项目"
+downcity agent chat --to <agent_id> --new-session
 ```
 
 交互式 chat 会先选择已有 session，也可以直接创建新 session 后进入 TUI。
@@ -136,7 +136,7 @@ downcity agent list
 
 ```bash
 downcity agent list
-downcity agent status
+downcity agent status <agent_id>
 ```
 
 ## SDK 示例

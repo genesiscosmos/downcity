@@ -7,10 +7,10 @@ npm install -g downcity
 downcity -v
 ```
 
-安装后会得到 `city` / `downcity` 与 `fed` / `downfed` 两组命令：
+安装后会得到 `city` / `downcity` 与 `fed` / `downfed` 两个相互独立的工具：
 
-- `fed` 创建、部署和管理 Federation；Local Node.js 和 Cloudflare Workers 都通过 `fed deploy` 部署。
-- `city` 管理本机 Agent、插件、chat 与 Federation 用户登录态。
+- `city` 是本机 City 容器，基于 `City()` 与 Agent SDK 管理全局 Agent、运行时、插件、chat 和控制台。
+- `fed` 是 Federation Server Manager；TUI 用于注册和管理 Server，项目命令读取当前目录的 `federation.json`。Local Node.js 和 Cloudflare Workers 都通过 `fed deploy` 部署。
 
 ```bash
 fed create ./my-fed

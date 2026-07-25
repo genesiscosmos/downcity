@@ -110,20 +110,18 @@ export async function resolveChatTargetAgentId(inputId?: string): Promise<string
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     emitCliBlock({
       tone: "error",
-      title: "Agent id is required",
+      title: "Agent ID is required",
       note: "Use `city agent chat --to <id>` or run this command in an interactive terminal.",
     });
     return null;
   }
 
-  const runningAgents = (await list_registered_agents_for_cli()).filter(
-    (item) => item.status === "running",
-  );
-  if (runningAgents.length === 0) {
+  const registered_agents = await list_registered_agents_for_cli();
+  if (registered_agents.length === 0) {
     emitCliBlock({
       tone: "error",
-      title: "No running agents",
-      note: "Run `city agent start` first.",
+      title: "No managed agents",
+      note: "Run `city agent create <workspace_path>` first.",
     });
     return null;
   }
@@ -132,9 +130,9 @@ export async function resolveChatTargetAgentId(inputId?: string): Promise<string
     type: "select",
     name: "agent_id",
     message: "选择要聊天的 Agent",
-    choices: runningAgents.map((agent) => ({
+    choices: registered_agents.map((agent) => ({
       title: agent.agent_id,
-      description: agent.workspace_path,
+      description: `${agent.status} · ${agent.workspace_path}`,
       value: agent.agent_id,
     })),
     initial: 0,

@@ -3,16 +3,14 @@
  *
  * 关键点（中文）
  * - `agent_id` 是选择和命令调用的唯一稳定值。
- * - 当前目录仅用于反查绑定 Agent；同一路径存在多个 Agent 时必须交互选择或显式传 ID。
+ * - 未显式传入 ID 时只允许打开全局选择器，不根据当前 Workspace 推断目标。
  * - 运行状态当前由 Daemon lease 推导，不写回 Agent 配置。
  */
 
-import path from "node:path";
 import prompts from "@/city/tui/Prompts.js";
 import {
   get_managed_agent,
   list_managed_agents,
-  list_managed_agents_by_workspace,
 } from "@/city/process/registry/ManagedAgentRepository.js";
 import type {
   CliAgentPromptChoice,
@@ -136,10 +134,10 @@ export async function emit_registered_agent_list(): Promise<void> {
 /**
  * 解析命令目标 Agent。
  *
- * 优先级（中文）
- * 1. 显式 `agent_id`。
- * 2. 当前目录唯一绑定的 Agent。
- * 3. 交互选择。
+ * 规则（中文）
+ * 1. 显式 `agent_id` 时直接解析。
+ * 2. 未传 ID 且处于 TTY 时打开全局 Agent 选择器。
+ * 3. 未传 ID 且处于非 TTY 时明确失败，禁止任何路径推断。
  */
 export async function resolve_cli_agent_target(
   agent_id_input?: string,
@@ -159,15 +157,6 @@ export async function resolve_cli_agent_target(
     };
   }
 
-  const current_workspace_path = path.resolve(process.cwd());
-  const current_agents = list_managed_agents_by_workspace(current_workspace_path);
-  if (current_agents.length === 1) {
-    return {
-      agent_id: current_agents[0].agent_id,
-      workspace_path: current_agents[0].workspace_path,
-    };
-  }
-
   const agents = await list_registered_agents_for_cli();
   if (agents.length === 0) {
     throw new CliError({
@@ -177,19 +166,11 @@ export async function resolve_cli_agent_target(
   }
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new CliError({
-      title: current_agents.length > 1
-        ? "Current Workspace is bound to multiple Agents"
-        : "Agent ID is required",
+      title: "Agent ID is required",
       fix: "city agent start <agent_id>",
     });
   }
-  const selected_agent_id = await prompt_managed_agent_id(
-    current_agents.length > 1
-      ? agents.filter((agent) =>
-          agent.workspace_path === current_workspace_path
-        )
-      : agents,
-  );
+  const selected_agent_id = await prompt_managed_agent_id(agents);
   if (!selected_agent_id) {
     throw new CliError({
       title: "Agent selection cancelled",

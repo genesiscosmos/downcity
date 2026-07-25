@@ -20,7 +20,7 @@ downcity update
 ### Agent 生命周期
 
 ```bash
-# 创建新 Agent 项目
+# 创建 Agent 并初始化 Workspace 资产
 downcity agent create my-project
 
 # 列出全局受管 Agent
@@ -49,10 +49,10 @@ downcity agent doctor <agent_id> --fix
 # 与 Agent 对话
 downcity agent chat
 # 发送一次性消息
-downcity agent chat -m "hello"
+downcity agent chat --to <agent_id> -m "hello"
 ```
 
-`agent_id` 是生命周期命令的稳定目标。省略时，CLI 会先尝试当前 Workspace 的唯一绑定，再在交互式终端中选择；非交互模式无法唯一确定时会直接报错。
+所有操作单个 Agent 的命令都以 `agent_id` 作为稳定目标。在 TTY 中省略 ID 时，CLI 始终打开全局 Agent 选择器，不按当前 Workspace 过滤，也不会根据路径推断；非交互模式会直接报错 `Agent ID is required`。`agent list`、`agent create` 等集合或创建流程不要求已有 Agent ID。
 
 `downcity agent list` 会优先展示正在运行的 Agent，同一状态下按 Agent ID 排序。daemon 状态保存在 `~/.downcity/runtimes/<agent_id>/`，默认只监听 `127.0.0.1`；对外监听需要显式传 `--host`，受保护 HTTP 路由要求 Bearer Token。
 

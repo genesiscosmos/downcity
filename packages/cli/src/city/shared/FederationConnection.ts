@@ -2,7 +2,7 @@
  * City 与 Federation 成员资格管理服务。
  *
  * 关键点（中文）
- * - `city` CLI 作为本机 Agent 宿主，通过 Federation 访问共享资源。
+ * - `city` CLI 作为本机 City 容器，通过 Federation 访问共享资源。
  * - 本模块维护 City 加入的 Federation、登录态与本地 profile。
  * - City 只读发现 `downfed` admin 配置的 Federation，但不依赖其内部模块。
  * - CLI 命令装配统一放在 `src/command/FederationCommand.ts`，本模块只保留状态与登录流程。

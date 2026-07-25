@@ -7,7 +7,7 @@ description: Downcity 命令行参考文档的位置
 
 Downcity docs 解释设计模型、运行边界和配置语义。
 
-`downcity` / `city` 负责本机 Agent 宿主、本机项目管理，以及连接到某个 Federation。Federation 创建、部署和基础设施运维由 `fed` / `downfed` 负责；精确参数以本机安装的 CLI help 为准，SDK 侧 CLI 边界详见 City SDK 文档。
+`downcity` / `city` 是基于 `City()` 与 Agent SDK 的本机 City 容器，负责全局 Agent 管理、运行控制与控制台。`fed` / `downfed` 是 Federation Server Manager，TUI 管理已注册 Server，项目命令读取当前目录的 `federation.json`；精确参数以本机安装的 CLI help 为准。
 
 - [CLI：fed 与 city](/zh/city-sdk-docs/packages/cli)
 

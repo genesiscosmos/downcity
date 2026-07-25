@@ -89,7 +89,7 @@ function resolveInstalledAgentVersion(): string {
  * 注册 downcity 子命令到给定的 commander 命令组。
  *
  * 关键点（中文）
- * - 将本地 Agent 宿主所需的全部子命令注册到传入的 program 上。
+ * - 将本机 City 容器所需的全部子命令注册到传入的 program 上。
  * - 子命令实现统一放在 `src/city/command/`，本函数只负责装配。
  */
 export function registerCityCommands(program: Command): void {

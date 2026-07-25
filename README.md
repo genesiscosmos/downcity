@@ -23,7 +23,7 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 
 | Package | Purpose |
 | --- | --- |
-| `downcity` | Public CLI bundle with `city`/`downcity` for global Agent hosting and `fed`/`downfed` for project-associated Federation administration. |
+| `downcity` | Public CLI bundle: `city`/`downcity` is the local City container for Agent management, runtime, and console workflows; `fed`/`downfed` is the Federation Server Manager. |
 | `@downcity/agent` | Single-agent runtime and SDK for sessions, tool loops, services, plugins, HTTP/RPC, sandboxing, and host integration. |
 | `@downcity/city` | City runtime and access SDK for Service registration, Actions, auth, env, city-scoped access, and HTTP calling. |
 | `@downcity/type` | Shared protocol types used across packages, including City model descriptors returned by City. |
@@ -36,7 +36,7 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 
 - Global Agent management: store Agent identity and config in `~/.downcity/downcity.db`, while binding each Agent to any Workspace path.
 - Local agent operations: run `downcity agent start`, `downcity agent status`, and `downcity agent list` to host and inspect local agents.
-- Agent lifecycle: create, start, stop, restart, inspect, chat with, diagnose, and observe project agents.
+- Agent lifecycle: create, start, stop, restart, inspect, chat with, diagnose, and observe globally managed Agents.
 - City connection: use `downcity federation` to connect local Agents to the active City server; manage City models and Service resources with `city`.
 - City backend capabilities: reuse accounts, balance, usage, payment, env, auth, and Service routing across agents and products.
 - Built-in agent capabilities: `chat`, `task`, `memory`, `shell`, `contact`, `skill`, `web`, `sound`, and `workboard`.
@@ -68,7 +68,7 @@ The package exposes the `downcity` command (alias `city`):
 downcity --version
 ```
 
-`downcity` hosts and manages local Agents and administers the City. Use `downcity update` to upgrade the global CLI.
+`downcity` is the local City container for managing and running Agents through `City()` and the Agent SDK. Use `downcity update` to upgrade the global CLI. The same package also provides `fed`/`downfed` for Federation Server management.
 
 ### 2. Initialize the platform
 
@@ -87,7 +87,7 @@ downcity federation status
 
 `downcity` manages City models and Service resources. `downcity federation` imports the active City connection for local Agent runtime use.
 
-### 4. Create an agent project
+### 4. Create an Agent
 
 Run this inside the target repository:
 
@@ -112,10 +112,10 @@ your-project/
 
 ```bash
 downcity agent list
-downcity agent start
-downcity agent status
-downcity agent chat -m "Summarize this repository"
-downcity agent chat --new-session
+downcity agent start <agent_id>
+downcity agent status <agent_id>
+downcity agent chat --to <agent_id> -m "Summarize this repository"
+downcity agent chat --to <agent_id> --new-session
 ```
 
 Interactive chat can also pick an existing session or create a new one before the TUI opens.
@@ -136,7 +136,7 @@ Useful status commands:
 
 ```bash
 downcity agent list
-downcity agent status
+downcity agent status <agent_id>
 ```
 
 ## SDK Example
