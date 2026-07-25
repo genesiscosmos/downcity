@@ -19,6 +19,7 @@ description: 用一个 pipeline 场景说明 plugin 如何对输入值做链式�
 ```ts
 import {
   Agent,
+  Workspace,
   BasePlugin,
   type JsonObject,
   type PluginHooks,
@@ -47,7 +48,7 @@ class MessageAugmentPlugin extends BasePlugin {
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new MessageAugmentPlugin()],
 });

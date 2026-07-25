@@ -23,7 +23,7 @@ Agent 构造时传入的 plugin 会自动注册：
 ```ts
 const agent = new Agent({
   id: "agent",
-  path: process.cwd(),
+  workspace: new Workspace({ path: process.cwd() }),
   plugins: [new WebPlugin()],
 });
 

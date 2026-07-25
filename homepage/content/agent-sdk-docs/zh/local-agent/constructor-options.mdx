@@ -1,6 +1,6 @@
 ---
 title: Agent 构造参数
-description: 详细说明本地 Agent 的 id、path、instruction、model、env、tools 和 plugins 参数
+description: 详细说明 Workspace 以及本地 Agent 的 id、instruction、model、env、tools 和 plugins 参数
 ---
 
 # Agent 构造参数
@@ -8,14 +8,18 @@ description: 详细说明本地 Agent 的 id、path、instruction、model、env�
 本地 Agent 的构造方式：
 
 ```ts
+const workspace = new Workspace({
+  path,
+  shell,
+});
+
 new Agent({
   id,
-  path,
+  workspace,
   model,
   env,
   instruction,
   tools,
-  shell,
   plugins,
   Session,
 })
@@ -39,16 +43,27 @@ agent 的稳定标识。
 
 因为它直接决定了 session 落盘目录分区。
 
-## `path`
+## `workspace`
 
-当前 agent 绑定的项目根目录。
+当前 Agent 可以访问的项目资源与安全边界。Workspace 统一持有项目根目录、文件与搜索工具，以及可选 Shell：
 
-SDK 会基于它：
+```ts
+const workspace = new Workspace({
+  path: "/path/to/project",
+  shell,
+});
+```
 
-- 读取项目 `.env`
-- 组织会话落盘目录
+关键点：
 
-如果 `path` 给错，Agent 会从错误的项目读取 `.env`，并把会话数据写入错误目录。
+- macOS、Linux 和 Windows 使用同一个 `Workspace`
+- `path` 会在 Workspace 构造时解析为真实绝对目录
+- 文件和搜索工具固定限制在 Workspace 内
+- Shell 与文件工具使用同一个项目根目录
+- Workspace 可以被多个 Agent 共享
+- Workspace 生命周期属于调用方，不由 Agent 自动释放
+
+如果 `path` 不存在、不是目录或为空，Workspace 会立即拒绝构造。
 
 ## `instruction`
 
@@ -57,7 +72,7 @@ SDK 会基于它：
 ```ts
 new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   instruction: [
     "你是一个简洁的代码助手。",
     "解释代码时优先给出明确文件引用。",
@@ -81,7 +96,7 @@ Agent 持有的默认 `AgentModel` 实例。`AgentModel` 可以是 AI SDK `Langu
 ```ts
 new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   model: openai.responses("gpt-5"),
 });
 ```
@@ -101,7 +116,7 @@ new Agent({
 ```ts
 new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   env: {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "",
   },
@@ -120,7 +135,7 @@ new Agent({
 构造 agent 之后，你也可以在运行期增量更新或整体替换 configured env：
 
 ```ts
-const agent = new Agent({ id, path, env: { FOO: "1" } });
+const agent = new Agent({ id, workspace, env: { FOO: "1" } });
 
 agent.getEnv();              // => { FOO: "1" }
 agent.patchEnv({ BAR: "2" }); // 增量合并
@@ -152,28 +167,31 @@ agent 级默认工具集合。
 
 这很适合“多个 session 共用一套默认工具能力”的场景。
 
-## `shell`
+## Workspace 的 `shell`
 
 详细配置参见 [Shell 与沙箱](/zh/agent-sdk-docs/local-agent/shell-reference)。
 
 可选的内建 shell 能力。
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { Shell } from "@downcity/shell";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
-  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  workspace: new Workspace({
+    path: "/path/to/project",
+    shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  }),
 });
 ```
 
 关键点：
 
 - Shell 不是 plugin
-- Agent 会从 Shell 实例挂载 `shell_exec`、`shell_session`、`grep`、`find`、`read`、`write` 和 `edit`
+- Shell 只挂载 `shell_exec` 和 `shell_session`
+- Workspace 自身挂载 `grep`、`find`、`read`、`write` 和 `edit`，没有 Shell 时仍可使用
 - session 与 turn 上下文由 Agent 内部自动接线
 - 审批归属具体 Session，使用 `session.approvals()`、`session.resolve_approval(...)` 和 `session.set_approval_mode(...)`
 - 文件和搜索工具固定限制在 Agent 项目根目录内，不提供 unrestricted 模式
@@ -185,13 +203,13 @@ const agent = new Agent({
 例如：
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { WebPlugin } from "@downcity/plugins/web";
 import { SkillPlugin } from "@downcity/plugins/skill";
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new SkillPlugin(), new WebPlugin()],
 });
@@ -217,6 +235,7 @@ SDK 会为当前 `Agent` 创建独立的 plugin registry。
 ```ts
 import {
   Agent,
+  Workspace,
   DefaultSessionComposer,
   Session,
   type SessionOptions,
@@ -247,7 +266,7 @@ class CustomSession extends Session {
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   Session: CustomSession,
 });
 ```

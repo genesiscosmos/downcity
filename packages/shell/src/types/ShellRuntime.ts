@@ -64,7 +64,7 @@ export interface ShellToolExecutionContext {
  */
 export interface ShellOptions {
   /**
-   * 项目根目录。未传时由 Agent 构造阶段补齐。
+   * 项目根目录。未传时由 Workspace 构造阶段补齐。
    */
   root_path?: string;
   /**
@@ -90,16 +90,6 @@ export interface ShellOptions {
    * 可选日志器。
    */
   logger?: ShellRuntimeLogger;
-}
-
-/**
- * Agent 内部补齐给 Shell 的宿主参数。
- */
-export interface ShellConfigureOptions extends Omit<ShellOptions, "sandbox"> {
-  /**
-   * Agent id。
-   */
-  agent_id?: string;
 }
 
 /**

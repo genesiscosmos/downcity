@@ -152,7 +152,7 @@ downcity agent status .
 ### Local agent
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { createOpenAI } from "@ai-sdk/openai";
 
 const openai = createOpenAI({
@@ -161,7 +161,7 @@ const openai = createOpenAI({
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
 });
 

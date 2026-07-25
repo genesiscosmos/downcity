@@ -7,8 +7,8 @@
  */
 
 import type { Tool } from "ai";
-import type { Shell } from "@downcity/shell";
 import type { AgentModel } from "@/agent/AgentModel.js";
+import type { Workspace } from "@/workspace/Workspace.js";
 import type { Plugin } from "@/types/plugin/PluginDefinition.js";
 import type {
   AgentManagedSession,
@@ -39,8 +39,14 @@ export interface AgentOptions {
    */
   id: string;
 
-  /** 当前 agent 绑定的项目根目录。 */
-  path: string;
+  /**
+   * 当前 Agent 可以访问的项目资源与安全边界。
+   *
+   * 关键点（中文）
+   * - Workspace 统一持有项目根目录、文件/搜索能力与可选 Shell。
+   * - Workspace 的生命周期属于创建它的调用方，Agent dispose 不会关闭它。
+   */
+  workspace: Workspace;
 
   /**
    * 当前 agent 默认可用的工具集合。
@@ -50,15 +56,6 @@ export interface AgentOptions {
    * - session 运行时会直接复用这份工具集合。
    */
   tools?: Record<string, Tool>;
-
-  /**
-   * 当前 agent 内建 shell 能力。
-   *
-   * 关键点（中文）
-   * - Shell 不是 plugin，而是 agent 直接挂载的内建工具对象。
-   * - 未传入时，Agent 不会自动注入 shell tools。
-   */
-  shell?: Shell;
 
   /**
    * 调用方显式传入的静态基础指令。

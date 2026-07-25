@@ -23,7 +23,7 @@ Plugins passed to the Agent constructor are registered automatically:
 ```ts
 const agent = new Agent({
   id: "agent",
-  path: process.cwd(),
+  workspace: new Workspace({ path: process.cwd() }),
   plugins: [new WebPlugin()],
 });
 

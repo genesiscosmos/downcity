@@ -12,6 +12,7 @@ import {
   Agent,
   DefaultSessionComposer,
   Session,
+  Workspace,
 } from "../bin/index.js";
 
 function create_input(model) {
@@ -120,7 +121,7 @@ test("Session system 快照与 Custom Composer 的实际模型输入一致", asy
   );
   const agent = new Agent({
     id: "custom_composer_agent",
-    path: project_root,
+    workspace: new Workspace({ path: project_root }),
     model: new MockLanguageModelV3({ modelId: "custom-composer-model" }),
     Session: CustomSession,
   });

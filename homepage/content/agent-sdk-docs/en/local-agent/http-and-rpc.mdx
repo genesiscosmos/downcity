@@ -25,12 +25,13 @@ RPC and HTTP are no longer Agent responsibilities.
 `AgentRPC` exposes an `Agent` over NDJSON-on-TCP for `RemoteAgent("rpc://...")`.
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { AgentRPC } from "@downcity/server";
 
+const workspace = new Workspace({ path });
 const agent = new Agent({
   id,
-  path,
+  workspace,
   model,
 });
 await agent.ready();
@@ -42,6 +43,7 @@ console.log(binding.url); // rpc://127.0.0.1:15314
 // shutdown
 await rpc.close();
 await agent.dispose();
+await workspace.dispose();
 ```
 
 `AgentRPC` defaults to `127.0.0.1:15314`. The protocol is NDJSON, no auth. Use it on local or trusted networks.
@@ -53,12 +55,13 @@ await agent.dispose();
 ### Mode 1: standalone HTTP server
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { AgentHTTP } from "@downcity/server";
 
+const workspace = new Workspace({ path });
 const agent = new Agent({
   id,
-  path,
+  workspace,
   model,
 });
 await agent.ready();

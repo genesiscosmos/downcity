@@ -12,7 +12,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { Agent, RemoteAgent } from "../../agent/bin/index.js";
+import { Agent, RemoteAgent, Workspace } from "../../agent/bin/index.js";
 import { AgentRPC } from "../bin/index.js";
 
 async function reserve_port() {
@@ -39,7 +39,7 @@ test("RPC uses the Agent runtime model and queues compact", async () => {
   };
   const agent = new Agent({
     id: "rpc_model_agent",
-    path: project_root,
+    workspace: new Workspace({ path: project_root }),
     model,
   });
   const rpc = new AgentRPC(agent);

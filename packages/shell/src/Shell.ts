@@ -8,7 +8,6 @@
 
 import type { ShellHostContext } from "@/types/ShellHostContext.js";
 import type {
-  ShellConfigureOptions,
   ShellOptions,
   ShellToolAction,
   ShellToolRunContext,
@@ -29,25 +28,11 @@ import {
   writeShellSession,
 } from "@/session/ShellActionRuntime.js";
 import { createShellTools } from "@/tool/ShellTools.js";
-import { create_file_tools } from "@/tool/FileTools.js";
-import { run_file_action } from "@/file/FileActionRuntime.js";
-import { create_search_tools } from "@/tool/SearchTools.js";
-import { run_search_action } from "@/search/SearchActionRuntime.js";
 import { resolve_sandbox_policy } from "@/sandbox/SandboxPolicy.js";
 import {
   run_sandbox_command,
   type SandboxStartInput,
 } from "@/sandbox/Sandbox.js";
-import type {
-  FileToolActionRequest,
-  FileToolActionResult,
-  FileToolSet,
-} from "@/types/FileTool.js";
-import type {
-  SearchToolActionRequest,
-  SearchToolActionResult,
-  SearchToolSet,
-} from "@/types/SearchTool.js";
 
 /**
  * Shell 运行时对象。
@@ -63,12 +48,12 @@ export class Shell {
   /**
    * Shell 宿主配置。
    */
-  private host_options: ShellConfigureOptions;
+  private host_options: ShellOptions;
 
   /**
    * 模型可调用的 shell tools。
    */
-  readonly tools: ShellToolSet & FileToolSet & SearchToolSet;
+  readonly tools: ShellToolSet;
 
   constructor(options: ShellOptions) {
     this.sandbox = options.sandbox;
@@ -90,31 +75,28 @@ export class Shell {
             params.toolCallId,
           ),
       }),
-      ...create_file_tools({
-        run_file_action: async (request) =>
-          await this.run_file_action(request),
-      }),
-      ...create_search_tools({
-        run_search_action: async (request) =>
-          await this.run_search_action(request),
-      }),
     };
   }
 
   /**
-   * 补齐宿主上下文。
+   * 将 Shell 一次性绑定到 Workspace 根目录。
    *
-   * 关键点（中文）：这是 Agent 内部装配入口，不会覆盖构造阶段注入的 sandbox。
+   * 关键点（中文）
+   * - 同一个 Shell 可以被同一路径重复绑定，方便组合根幂等初始化。
+   * - 已绑定后拒绝切换目录，避免活动进程与后续命令跨越 Workspace 安全边界。
    */
-  configure(options: ShellConfigureOptions): void {
-    const next_env = this.resolve_configure_env(options);
-    this.host_options = {
-      ...this.host_options,
-      ...options,
-      // 关键点（中文）：env 是宿主提供的动态对象引用，不能 clone 成快照。
-      env: next_env,
-      logger: options.logger || this.host_options.logger,
-    };
+  bind(root_path: string): void {
+    const next_root_path = String(root_path || "").trim();
+    if (!next_root_path) {
+      throw new Error("Shell.bind requires a non-empty root_path");
+    }
+    const current_root_path = String(this.host_options.root_path || "").trim();
+    if (current_root_path && current_root_path !== next_root_path) {
+      throw new Error(
+        `Shell is already bound to another Workspace: ${current_root_path}`,
+      );
+    }
+    this.host_options.root_path = next_root_path;
   }
 
   /**
@@ -229,30 +211,6 @@ export class Shell {
   }
 
   /**
-   * 执行一个项目内结构化文件 action。
-   *
-   * 关键点（中文）
-   * - 文件 action 与 PTY action 使用独立协议，避免 read/write 语义冲突。
-   * - 权限边界只读取 Shell 已配置的 root_path，不提供 unrestricted 模式。
-   */
-  private async run_file_action(
-    request: FileToolActionRequest,
-  ): Promise<FileToolActionResult> {
-    return await run_file_action(this.create_host_context(), request);
-  }
-
-  /**
-   * 执行一个项目内结构化搜索 action。
-   *
-   * 关键点（中文）：搜索与 PTY shell action 使用独立协议，不需要拼接 shell 命令。
-   */
-  private async run_search_action(
-    request: SearchToolActionRequest,
-  ): Promise<SearchToolActionResult> {
-    return await run_search_action(this.create_host_context(), request);
-  }
-
-  /**
    * 根据单次 action 的显式运行上下文构建宿主上下文。
    */
   private create_host_context(
@@ -260,7 +218,7 @@ export class Shell {
   ): ShellHostContext {
     const root_path = String(this.host_options.root_path || "").trim();
     if (!root_path) {
-      throw new Error("Shell requires root_path. Pass Shell through new Agent({ shell }) or construct Shell with root_path.");
+      throw new Error("Shell requires root_path. Bind it through new Workspace({ path, shell }).");
     }
     const session_id = run_context.ownerContextId || "";
     const turn_id = run_context.turnId || "";
@@ -269,9 +227,7 @@ export class Shell {
       rootPath: root_path,
       env: run_context.env || this.host_options.env,
       safe_read_only_paths: this.host_options.safe_read_only_paths,
-      config: {
-        ...(this.host_options.agent_id ? { id: this.host_options.agent_id } : {}),
-      },
+      config: {},
       logger: this.host_options.logger,
       approval_gateway: run_context.approval_gateway,
       shellIntegration: {
@@ -283,23 +239,4 @@ export class Shell {
     };
   }
 
-  private resolve_configure_env(
-    options: ShellConfigureOptions,
-  ): ShellConfigureOptions["env"] {
-    if (options.env === undefined) return this.host_options.env;
-    if (!this.host_options.env || options.agent_id) return options.env;
-    if (this.host_options.env === options.env) return options.env;
-
-    // 关键点（中文）：后续 configure env 视为动态 patch，写回当前共享引用。
-    for (const [raw_key, raw_value] of Object.entries(options.env)) {
-      const key = String(raw_key || "").trim();
-      if (!key) continue;
-      if (raw_value === undefined) {
-        delete this.host_options.env[key];
-        continue;
-      }
-      this.host_options.env[key] = String(raw_value);
-    }
-    return this.host_options.env;
-  }
 }

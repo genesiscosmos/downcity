@@ -25,12 +25,13 @@ RPC 与 HTTP 不再是 Agent 的职责。
 `AgentRPC` 把 `Agent` 通过 NDJSON-over-TCP 暴露给 `RemoteAgent("rpc://...")` 使用。
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { AgentRPC } from "@downcity/server";
 
+const workspace = new Workspace({ path });
 const agent = new Agent({
   id,
-  path,
+  workspace,
   model,
 });
 await agent.ready();
@@ -42,6 +43,7 @@ console.log(binding.url); // rpc://127.0.0.1:15314
 // 关闭
 await rpc.close();
 await agent.dispose();
+await workspace.dispose();
 ```
 
 `AgentRPC` 默认监听 `127.0.0.1:15314`，协议为 NDJSON，无鉴权，仅用于本机或可信网络。
@@ -53,12 +55,13 @@ await agent.dispose();
 ### 方式 1：独立 HTTP server
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { AgentHTTP } from "@downcity/server";
 
+const workspace = new Workspace({ path });
 const agent = new Agent({
   id,
-  path,
+  workspace,
   model,
 });
 await agent.ready();

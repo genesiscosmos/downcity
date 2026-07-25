@@ -6,11 +6,11 @@
  * - 文件路径策略产生的错误会映射为搜索工具自己的稳定错误码。
  */
 
-import { FileToolRuntimeError } from "@/file/FileToolError.js";
+import { FileToolRuntimeError } from "@/workspace/file/FileToolError.js";
 import type {
   SearchToolErrorCode,
   SearchToolFailure,
-} from "@/types/SearchTool.js";
+} from "@/types/workspace/SearchTool.js";
 
 /** 搜索工具可识别的内部错误。 */
 export class SearchToolRuntimeError extends Error {

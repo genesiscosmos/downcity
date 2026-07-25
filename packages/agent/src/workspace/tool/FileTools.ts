@@ -16,14 +16,14 @@ import type {
   ReadFileToolResult,
   WriteFileToolInput,
   WriteFileToolResult,
-} from "@/types/FileTool.js";
+} from "@/types/workspace/FileTool.js";
 import {
   edit_file_tool_input_schema,
   read_file_tool_input_schema,
   write_file_tool_input_schema,
-} from "@/tool/FileToolSchemas.js";
+} from "@/workspace/tool/FileToolSchemas.js";
 
-/** 创建 Shell 持有的结构化文件工具。 */
+/** 创建 Workspace 持有的结构化文件工具。 */
 export function create_file_tools(runner: FileToolRunner): FileToolSet {
   const read = tool({
     description:

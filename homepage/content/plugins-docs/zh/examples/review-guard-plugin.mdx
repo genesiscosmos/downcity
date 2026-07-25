@@ -17,7 +17,7 @@ description: 用一个 guard 场景说明 plugin 如何在现有链路里做阻�
 ## 示例
 
 ```ts
-import { Agent, BasePlugin, type PluginHooks } from "@downcity/agent";
+import { Agent, Workspace, BasePlugin, type PluginHooks } from "@downcity/agent";
 
 class ReviewGuardPlugin extends BasePlugin {
   readonly name = "review_guard";
@@ -40,7 +40,7 @@ class ReviewGuardPlugin extends BasePlugin {
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new ReviewGuardPlugin()],
 });

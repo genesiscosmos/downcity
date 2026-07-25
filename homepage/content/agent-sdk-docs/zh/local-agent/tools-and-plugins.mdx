@@ -12,7 +12,7 @@ description: 如何给本地 Agent 注入工具与显式 plugin 实例
 ```ts
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {
     my_tool: myTool,
   },
@@ -28,18 +28,20 @@ const agent = new Agent({
 如果 Agent 需要拥有 shell 执行能力，使用 `@downcity/shell`：
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { Shell } from "@downcity/shell";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
-  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  workspace: new Workspace({
+    path: "/path/to/project",
+    shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  }),
 });
 ```
 
-这会挂载七个模型工具：
+Workspace 默认挂载五个文件与搜索工具，Shell 额外增加两个命令工具，因此 Agent 最终获得七个模型工具：
 
 - `shell_exec`：一次性非交互命令
 - `shell_session`：长任务和需要 stdin 的 PTY 交互式会话
@@ -49,7 +51,7 @@ const agent = new Agent({
 - `write`：创建文件或显式原子覆盖完整文件
 - `edit`：通过唯一文本匹配原子编辑单个文件
 
-文件和搜索工具只允许访问 Agent 项目根目录。它们没有 unrestricted 模式；项目外操作仍然必须通过 Shell 的 unrestricted 审批流程。`grep` 和 `find` 会遵守 ignore 文件，默认最多返回 200 项，并允许通过 `max_results` 提高到 2,000 项。
+文件和搜索工具只允许访问 Workspace 根目录，即使没有 Shell 也可使用。它们没有 unrestricted 模式；项目外操作仍然必须通过 Shell 的 unrestricted 审批流程。`grep` 和 `find` 会遵守 ignore 文件，默认最多返回 200 项，并允许通过 `max_results` 提高到 2,000 项。
 
 `read` 读取 PNG、JPEG、GIF、WebP 或 BMP 图片时，会把图片作为临时 user file part 注入下一个模型 step。其他二进制文件只返回元数据。
 
@@ -89,12 +91,12 @@ await session.resolve_approval({
 如果你希望本地 Agent 持有长期运行的 plugin 能力，比如 chat 渠道，可以显式传入 plugin 实例：
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { ChatPlugin, TelegramChannel } from "@downcity/plugins/chat";
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [
     new ChatPlugin({
@@ -120,13 +122,13 @@ const agent = new Agent({
 如果你需要让本地 Agent 持有一组 plugin，可以显式传入实例对象：
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { WebPlugin } from "@downcity/plugins/web";
 import { SkillPlugin } from "@downcity/plugins/skill";
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new SkillPlugin(), new WebPlugin()],
 });
@@ -163,7 +165,7 @@ const plugins = agent.plugins.list();
 自定义 plugin 可以用 `createPlugin` / `createAction` 声明 action metadata：
 
 ```ts
-import { Agent, createAction, createPlugin } from "@downcity/agent";
+import { Agent, Workspace, createAction, createPlugin } from "@downcity/agent";
 import { z } from "zod";
 
 const demo_plugin = createPlugin({
@@ -205,7 +207,7 @@ const demo_plugin = createPlugin({
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   plugins: [demo_plugin],
 });
 ```
@@ -217,12 +219,12 @@ const agent = new Agent({
 如果你希望 Agent 在对话过程中自己触发生图，可以把图片能力包装成 `ImagePlugin`：
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { ImagePlugin } from "@downcity/plugins/image";
 
 const agent = new Agent({
   id: "creative-agent",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   model,
   plugins: [
     new ImagePlugin({

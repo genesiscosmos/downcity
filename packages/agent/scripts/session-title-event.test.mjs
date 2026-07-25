@@ -14,7 +14,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 
 import { MockLanguageModelV3 } from "ai/test";
-import { Agent } from "../bin/index.js";
+import { Agent, Workspace } from "../bin/index.js";
 
 function create_stream_text_result(text) {
   return {
@@ -97,7 +97,7 @@ test("Session keeps title empty when no model is available", async () => {
   );
   const agent = new Agent({
     id: "title_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
   });
   const session = await agent.sessions.create();
   const events = [];
@@ -129,7 +129,7 @@ test("Session logs title generation failure without blocking the session", async
   );
   const agent = new Agent({
     id: "title_log_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
     model: create_failing_title_model(),
   });
   const session = await agent.sessions.create();
@@ -174,7 +174,7 @@ test("Session retries title generation after model becomes available", async () 
   );
   const agent = new Agent({
     id: "title_retry_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
   });
   const session = await agent.sessions.create();
   const events = [];

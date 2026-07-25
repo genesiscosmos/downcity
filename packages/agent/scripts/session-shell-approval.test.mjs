@@ -13,7 +13,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { MockLanguageModelV3 } from "ai/test";
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { Shell } from "@downcity/shell";
 import { create_platform_sandbox } from "./PlatformSandbox.mjs";
 
@@ -120,9 +120,11 @@ test("unrestricted Shell 审批保留当前 Turn 并等待用户决定", async (
   });
   const agent = new Agent({
     id: "session_shell_approval_agent",
-    path: project_root,
+    workspace: new Workspace({
+      path: project_root,
+      shell: new Shell({ sandbox }),
+    }),
     model,
-    shell: new Shell({ sandbox }),
   });
 
   try {

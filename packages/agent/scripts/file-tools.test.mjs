@@ -1,5 +1,5 @@
 /**
- * @file 验证 Shell 持有的结构化文件工具。
+ * @file 验证 Workspace 可装配的结构化文件工具。
  *
  * 关键点（中文）
  * - 覆盖读取分页、二进制识别、原子写入和精确编辑。
@@ -12,8 +12,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { Shell } from "@downcity/shell";
-import { test_sandbox } from "./TestSandbox.mjs";
+import { Workspace } from "@downcity/agent";
 
 async function create_fixture(t) {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-file-tools-"));
@@ -25,12 +24,12 @@ async function create_fixture(t) {
   return {
     root_path,
     outside_path,
-    shell: new Shell({ root_path, sandbox: test_sandbox }),
+    tools: new Workspace({ path: root_path }).tools,
   };
 }
 
-async function execute_tool(shell, name, input) {
-  const execute = shell.tools[name]?.execute;
+async function execute_tool(tools, name, input) {
+  const execute = tools[name]?.execute;
   assert.equal(typeof execute, "function", `${name} tool must be executable`);
   return await execute(input, {
     toolCallId: `test-${name}`,
@@ -41,7 +40,7 @@ async function execute_tool(shell, name, input) {
 
 test("write creates parents and read paginates text with a stable hash", async (t) => {
   const fixture = await create_fixture(t);
-  const written = await execute_tool(fixture.shell, "write", {
+  const written = await execute_tool(fixture.tools, "write", {
     file_path: "nested/example.txt",
     content: "first\r\nsecond\r\nthird\r\nfourth\r\n",
   });
@@ -53,7 +52,7 @@ test("write creates parents and read paginates text with a stable hash", async (
     "first\nsecond\nthird\nfourth\n",
   );
 
-  const first_page = await execute_tool(fixture.shell, "read", {
+  const first_page = await execute_tool(fixture.tools, "read", {
     file_path: "nested/example.txt",
     limit: 2,
   });
@@ -66,7 +65,7 @@ test("write creates parents and read paginates text with a stable hash", async (
   assert.equal(first_page.next_offset, 2);
   assert.match(first_page.sha256, /^[a-f0-9]{64}$/);
 
-  const second_page = await execute_tool(fixture.shell, "read", {
+  const second_page = await execute_tool(fixture.tools, "read", {
     file_path: "nested/example.txt",
     offset: first_page.next_offset,
     limit: 2,
@@ -81,7 +80,7 @@ test("write rejects implicit overwrite and preserves file permissions", async (t
   const file_path = path.join(fixture.root_path, "mode.txt");
   await fs.writeFile(file_path, "before\n", { mode: 0o640 });
 
-  const rejected = await execute_tool(fixture.shell, "write", {
+  const rejected = await execute_tool(fixture.tools, "write", {
     file_path: "mode.txt",
     content: "after\n",
   });
@@ -89,7 +88,7 @@ test("write rejects implicit overwrite and preserves file permissions", async (t
   assert.equal(rejected.error_code, "file_exists");
   assert.equal(await fs.readFile(file_path, "utf8"), "before\n");
 
-  const replaced = await execute_tool(fixture.shell, "write", {
+  const replaced = await execute_tool(fixture.tools, "write", {
     file_path: "mode.txt",
     content: "after\n",
     overwrite: true,
@@ -106,7 +105,7 @@ test("read identifies binary files without returning raw bytes", async (t) => {
     path.join(fixture.root_path, "image.png"),
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01, 0x02]),
   );
-  const result = await execute_tool(fixture.shell, "read", {
+  const result = await execute_tool(fixture.tools, "read", {
     file_path: "image.png",
   });
   assert.equal(result.success, true);
@@ -124,7 +123,7 @@ test("read returns supported images as data URLs", async (t) => {
   ]);
   await fs.writeFile(path.join(fixture.root_path, "input.bin"), image);
 
-  const result = await execute_tool(fixture.shell, "read", {
+  const result = await execute_tool(fixture.tools, "read", {
     file_path: "input.bin",
   });
   assert.equal(result.success, true);
@@ -139,7 +138,7 @@ test("read returns supported images as data URLs", async (t) => {
 
 test("file tools reject project escapes and symbolic-link escapes", async (t) => {
   const fixture = await create_fixture(t);
-  const direct_escape = await execute_tool(fixture.shell, "write", {
+  const direct_escape = await execute_tool(fixture.tools, "write", {
     file_path: path.join(fixture.outside_path, "escape.txt"),
     content: "blocked",
   });
@@ -147,7 +146,7 @@ test("file tools reject project escapes and symbolic-link escapes", async (t) =>
   assert.equal(direct_escape.error_code, "sandbox_denied");
 
   await fs.symlink(fixture.outside_path, path.join(fixture.root_path, "outside-link"));
-  const symlink_escape = await execute_tool(fixture.shell, "write", {
+  const symlink_escape = await execute_tool(fixture.tools, "write", {
     file_path: "outside-link/escape.txt",
     content: "blocked",
   });
@@ -160,12 +159,12 @@ test("edit applies multiple exact replacements atomically and preserves CRLF", a
   const fixture = await create_fixture(t);
   const file_path = path.join(fixture.root_path, "edit.txt");
   await fs.writeFile(file_path, "alpha\r\nvalue = 1\r\nomega\r\n", "utf8");
-  const before = await execute_tool(fixture.shell, "read", {
+  const before = await execute_tool(fixture.tools, "read", {
     file_path: "edit.txt",
   });
   assert.equal(before.success, true);
 
-  const edited = await execute_tool(fixture.shell, "edit", {
+  const edited = await execute_tool(fixture.tools, "edit", {
     file_path: "edit.txt",
     expected_sha256: before.sha256,
     edits: [
@@ -187,7 +186,7 @@ test("edit rejects duplicate, overlapping, and stale operations without writes",
   const file_path = path.join(fixture.root_path, "guarded.txt");
   await fs.writeFile(file_path, "abc abc def\n", "utf8");
 
-  const duplicate = await execute_tool(fixture.shell, "edit", {
+  const duplicate = await execute_tool(fixture.tools, "edit", {
     file_path: "guarded.txt",
     edits: [{ old_text: "abc", new_text: "x" }],
   });
@@ -196,11 +195,11 @@ test("edit rejects duplicate, overlapping, and stale operations without writes",
   assert.equal(await fs.readFile(file_path, "utf8"), "abc abc def\n");
 
   await fs.writeFile(file_path, "abcdef\n", "utf8");
-  const before = await execute_tool(fixture.shell, "read", {
+  const before = await execute_tool(fixture.tools, "read", {
     file_path: "guarded.txt",
   });
   assert.equal(before.success, true);
-  const overlapping = await execute_tool(fixture.shell, "edit", {
+  const overlapping = await execute_tool(fixture.tools, "edit", {
     file_path: "guarded.txt",
     edits: [
       { old_text: "abc", new_text: "x" },
@@ -212,7 +211,7 @@ test("edit rejects duplicate, overlapping, and stale operations without writes",
   assert.equal(await fs.readFile(file_path, "utf8"), "abcdef\n");
 
   await fs.writeFile(file_path, "changed\n", "utf8");
-  const stale = await execute_tool(fixture.shell, "edit", {
+  const stale = await execute_tool(fixture.tools, "edit", {
     file_path: "guarded.txt",
     expected_sha256: before.sha256,
     edits: [{ old_text: "changed", new_text: "overwritten" }],
@@ -231,14 +230,14 @@ test("edit preserves UTF-16LE encoding and BOM", async (t) => {
   ]);
   await fs.writeFile(file_path, original);
 
-  const read_result = await execute_tool(fixture.shell, "read", {
+  const read_result = await execute_tool(fixture.tools, "read", {
     file_path: "utf16.txt",
   });
   assert.equal(read_result.success, true);
   assert.equal(read_result.encoding, "utf-16le");
   assert.equal(read_result.content, "hello");
 
-  const edit_result = await execute_tool(fixture.shell, "edit", {
+  const edit_result = await execute_tool(fixture.tools, "edit", {
     file_path: "utf16.txt",
     expected_sha256: read_result.sha256,
     edits: [{ old_text: "hello", new_text: "world" }],

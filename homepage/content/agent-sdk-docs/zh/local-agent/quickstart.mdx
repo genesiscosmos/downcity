@@ -14,7 +14,7 @@ pnpm add @downcity/agent
 ## 最小示例
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { createOpenAI } from "@ai-sdk/openai";
 
 const openai = createOpenAI({
@@ -23,7 +23,7 @@ const openai = createOpenAI({
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   model: openai.responses("gpt-5"),
 });
@@ -39,13 +39,14 @@ console.log(result.text);
 
 ## 最重要的三步
 
-1. `new Agent(...)`
-2. `await agent.sessions.create()`
-3. 确保 Agent 或 Session 有 model
+1. `new Workspace(...)`
+2. `new Agent({ workspace })`
+3. `await agent.sessions.create()`
+4. 确保 Agent 或 Session 有 model
 
-这三步里第 3 步最容易被遗漏，也是本地 SDK 最常见的踩坑点。
+这四步里第 4 步最容易被遗漏，也是本地 SDK 最常见的踩坑点。
 
-第 3 步有两种做法，执行时按 Session 模型、Agent 模型的顺序解析：
+第 4 步有两种做法，执行时按 Session 模型、Agent 模型的顺序解析：
 
 - 构造 Agent 时传入 `new Agent({ model })`
 - 对某个本地 Session 单独调用 `await session.set({ model })`
@@ -89,7 +90,7 @@ await turn.finished;
 
 Session 入口内部已经隐式等待当前 Agent runtime；模型开始执行前，plugin lifecycle 已完成。`await agent.ready()` 仍然可以作为显式检查点使用，适合在构造后立刻读取 plugin 状态或暴露 RPC / HTTP 服务前调用。
 
-不再使用时调用 `await agent.dispose()`，会停掉 plugin lifecycle、ActionSchedule、shell 等 Agent 自有运行时资源。
+不再使用时先调用 `await agent.dispose()` 停掉 plugin lifecycle 与 ActionSchedule。Workspace 由调用方持有；如果配置了 Shell，还需要调用 `await workspace.dispose()` 关闭进程、PTY 和 Sandbox。Agent 不会擅自关闭可能被其他 Agent 共享的 Workspace。
 
 如果需要把当前 Agent 暴露给其他进程使用（RPC 或 HTTP），请使用独立包 [`@downcity/server`](/zh/agent-sdk-docs/local-agent/http-and-rpc)。Agent 自身不再启动任何 transport。
 

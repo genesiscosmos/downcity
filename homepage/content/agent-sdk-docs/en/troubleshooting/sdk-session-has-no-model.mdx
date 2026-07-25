@@ -16,7 +16,7 @@ You can fix it in either way:
 ```ts
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   model,
 });
 ```

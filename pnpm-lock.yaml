@@ -195,6 +195,9 @@ importers:
       fs-extra:
         specifier: ^11.3.5
         version: 11.3.5
+      globby:
+        specifier: ^11.1.0
+        version: 11.1.0
       hono:
         specifier: ^4.12.23
         version: 4.12.23
@@ -644,9 +647,6 @@ importers:
       fs-extra:
         specifier: ^11.3.5
         version: 11.3.5
-      globby:
-        specifier: ^11.1.0
-        version: 11.1.0
       node-pty:
         specifier: 1.2.0-beta.14
         version: 1.2.0-beta.14

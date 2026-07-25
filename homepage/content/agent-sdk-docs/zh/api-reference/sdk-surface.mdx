@@ -26,11 +26,11 @@ description: 从开发者视角理解 Agent、RemoteAgent 和 Session 的实际�
 ## 本地典型流程
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 
 const agent = new Agent({
   id: "demo",
-  path: process.cwd(),
+  workspace: new Workspace({ path: process.cwd() }),
 });
 
 const session = await agent.sessions.create();

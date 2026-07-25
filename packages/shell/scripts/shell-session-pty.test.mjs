@@ -39,17 +39,22 @@ async function create_context() {
   };
 }
 
-test("Shell exposes command, file, and search tools", () => {
+test("Shell only exposes command tools", () => {
   const shell = new Shell({ root_path: process.cwd(), sandbox: test_sandbox });
   assert.deepEqual(Object.keys(shell.tools).sort(), [
-    "edit",
-    "find",
-    "grep",
-    "read",
     "shell_exec",
     "shell_session",
-    "write",
   ]);
+});
+
+test("Shell rejects rebinding to another Workspace", () => {
+  const shell = new Shell({ sandbox: test_sandbox });
+  shell.bind("/workspace/first");
+  shell.bind("/workspace/first");
+  assert.throws(
+    () => shell.bind("/workspace/second"),
+    /already bound to another Workspace/,
+  );
 });
 
 test("shell_exec defaults to a ten-minute total timeout", () => {

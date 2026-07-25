@@ -38,7 +38,7 @@ When several Sessions share one model, provide the instance directly to the Agen
 ```ts
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   model,
 });
 ```

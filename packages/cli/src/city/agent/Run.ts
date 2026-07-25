@@ -13,6 +13,7 @@
 import path from "node:path";
 import {
   Agent,
+  Workspace,
   resolve_agent_env,
 } from "@downcity/agent";
 import { Shell } from "@downcity/shell";
@@ -103,10 +104,13 @@ export async function runCommand(
   });
   const sandbox = await create_platform_sandbox();
 
-  const agent = new Agent({
-    id: agentId,
+  const workspace = new Workspace({
     path: projectRoot,
     shell: new Shell({ sandbox }),
+  });
+  const agent = new Agent({
+    id: agentId,
+    workspace,
     model,
     plugins,
     env: hostEnv,
@@ -149,6 +153,7 @@ export async function runCommand(
     await server.stop();
     await rpc.close();
     await agent.dispose();
+    await workspace.dispose();
     // Save logs
     await agentLogger.saveAllLogs();
 

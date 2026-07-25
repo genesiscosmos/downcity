@@ -12,7 +12,7 @@ Local Agents can receive an explicit tool set:
 ```ts
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {
     my_tool: myTool,
   },
@@ -26,18 +26,20 @@ These tools are available during session execution.
 Use `@downcity/shell` when the Agent should own shell execution tools:
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { Shell } from "@downcity/shell";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
-  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  workspace: new Workspace({
+    path: "/path/to/project",
+    shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  }),
 });
 ```
 
-This mounts seven model tools:
+Workspace mounts five file and search tools by default. Shell adds two command tools, so the Agent receives seven model tools in total:
 
 - `shell_exec`: one-shot non-interactive commands
 - `shell_session`: long-running or stdin-driven interactive PTY sessions
@@ -47,7 +49,7 @@ This mounts seven model tools:
 - `write`: file creation or explicit atomic full-file replacement
 - `edit`: atomic exact-text edits within one file
 
-File and search tools can only access the Agent project root. They have no unrestricted mode; operations outside the project still require the Shell unrestricted approval flow. `grep` and `find` respect ignore files, return at most 200 results by default, and accept `max_results` up to 2,000.
+File and search tools can only access the Workspace root and remain available without Shell. They have no unrestricted mode; operations outside the project still require the Shell unrestricted approval flow. `grep` and `find` respect ignore files, return at most 200 results by default, and accept `max_results` up to 2,000.
 
 When `read` opens a PNG, JPEG, GIF, WebP, or BMP image, the image is attached to the next model step as a temporary user file part. Other binary files return metadata only.
 
@@ -87,13 +89,13 @@ A live UI reads the complete local-tool request from `mutation.part.approval.req
 Local Agents can also receive explicit plugin instances:
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { WebPlugin } from "@downcity/plugins/web";
 import { SkillPlugin } from "@downcity/plugins/skill";
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   plugins: [new SkillPlugin(), new WebPlugin()],
 });
 ```
@@ -118,7 +120,7 @@ When the model is unsure how to call an action, it should call `plugin_read({ pl
 Custom plugins can declare action metadata with `createPlugin` / `createAction`:
 
 ```ts
-import { Agent, createAction, createPlugin } from "@downcity/agent";
+import { Agent, Workspace, createAction, createPlugin } from "@downcity/agent";
 import { z } from "zod";
 
 const demo_plugin = createPlugin({
@@ -160,7 +162,7 @@ const demo_plugin = createPlugin({
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   plugins: [demo_plugin],
 });
 ```
@@ -172,12 +174,12 @@ The `zod` schema handles runtime validation. `json_schema` and `examples` are re
 Use `ChatPlugin` when you want the SDK runtime to own long-lived chat channels:
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { ChatPlugin, TelegramChannel } from "@downcity/plugins/chat";
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   plugins: [
     new ChatPlugin({
       channels: [
@@ -199,12 +201,12 @@ Each channel object owns its own env and credential parsing, so `ChatPlugin` onl
 Use `ImagePlugin` when you want an Agent to generate images during a conversation:
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { ImagePlugin } from "@downcity/plugins/image";
 
 const agent = new Agent({
   id: "creative-agent",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   model,
   plugins: [
     new ImagePlugin({

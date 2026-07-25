@@ -24,12 +24,13 @@ downcity agent start
 ### Option 2: start a standalone RPC or HTTP server
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { AgentRPC } from "@downcity/server";
 
+const workspace = new Workspace({ path });
 const agent = new Agent({
   id,
-  path,
+  workspace,
   model,
 });
 await agent.ready();

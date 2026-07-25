@@ -9,7 +9,6 @@
 
 import { lstat, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import type { ShellHostContext } from "@/types/ShellHostContext.js";
 import type {
   EditFileToolInput,
   EditFileToolResult,
@@ -20,9 +19,9 @@ import type {
   ReadFileToolResult,
   WriteFileToolInput,
   WriteFileToolResult,
-} from "@/types/FileTool.js";
-import { resolve_file_tool_path } from "@/file/FilePathPolicy.js";
-import { FileToolRuntimeError, to_file_tool_failure } from "@/file/FileToolError.js";
+} from "@/types/workspace/FileTool.js";
+import { resolve_file_tool_path } from "@/workspace/file/FilePathPolicy.js";
+import { FileToolRuntimeError, to_file_tool_failure } from "@/workspace/file/FileToolError.js";
 import {
   count_text_lines,
   create_file_sha256,
@@ -32,8 +31,8 @@ import {
   encode_text_file,
   is_binary_file,
   normalize_text_to_lf,
-} from "@/file/FileEncoding.js";
-import { write_file_atomically } from "@/file/FileAtomicWriter.js";
+} from "@/workspace/file/FileEncoding.js";
+import { write_file_atomically } from "@/workspace/file/FileAtomicWriter.js";
 
 const DEFAULT_READ_LINES = 500;
 const MAX_READ_LINES = 2_000;
@@ -79,7 +78,7 @@ function split_text_lines(content: string): string[] {
 
 /** 执行文件读取。 */
 async function read_file_action(
-  context: ShellHostContext,
+  context: { readonly rootPath: string },
   input: ReadFileToolInput,
 ): Promise<ReadFileToolResult> {
   let file_path = "";
@@ -181,7 +180,7 @@ async function read_file_action(
 
 /** 执行文件写入。 */
 async function write_file_action(
-  context: ShellHostContext,
+  context: { readonly rootPath: string },
   input: WriteFileToolInput,
 ): Promise<WriteFileToolResult> {
   let file_path = "";
@@ -263,7 +262,7 @@ function resolve_line_number(content: string, position: number): number {
 
 /** 执行文件精确编辑。 */
 async function edit_file_action(
-  context: ShellHostContext,
+  context: { readonly rootPath: string },
   input: EditFileToolInput,
 ): Promise<EditFileToolResult> {
   let file_path = "";
@@ -415,7 +414,7 @@ async function edit_file_action(
 
 /** 执行一个文件 action。 */
 export async function run_file_action(
-  context: ShellHostContext,
+  context: { readonly rootPath: string },
   request: FileToolActionRequest,
 ): Promise<FileToolActionResult> {
   switch (request.action) {

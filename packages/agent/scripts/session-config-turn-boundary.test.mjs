@@ -13,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { MockLanguageModelV3 } from "ai/test";
-import { Agent } from "../bin/index.js";
+import { Agent, Workspace } from "../bin/index.js";
 import {
   createAction,
   createPlugin,
@@ -101,7 +101,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
   });
   const agent = new Agent({
     id: "config_turn_boundary_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
     model,
     instruction: ["instruction:old"],
     env: { TURN_ENV: "old" },
@@ -177,7 +177,7 @@ test("Plugin registry changes do not rewrite an existing Session system", async 
   );
   const agent = new Agent({
     id: "fixed_plugin_system_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
     model: new MockLanguageModelV3({ modelId: "fixed-plugin-system-model" }),
   });
   const runtime_plugin = createPlugin({
@@ -248,7 +248,7 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
   const model = new MockLanguageModelV3({ modelId: "syncshot-model" });
   const agent = new Agent({
     id: "syncshot_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
     model,
     instruction: ["instruction:initial"],
     plugins: [create_system_plugin("plugin-system:initial")],
@@ -303,7 +303,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
   const model = new MockLanguageModelV3({ modelId: "instruction-restart-model" });
   const first_agent = new Agent({
     id: "instruction_restart_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
     model,
     instruction: ["instruction:old"],
     plugins: [createPlugin({
@@ -349,7 +349,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
 
   const restarted_agent = new Agent({
     id: "instruction_restart_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
     model,
     instruction: ["instruction:new"],
   });
@@ -381,7 +381,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
 
   const fallback_agent = new Agent({
     id: "instruction_restart_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
     model,
     instruction: ["instruction:new"],
   });
@@ -408,7 +408,7 @@ test("empty Session snapshot suppresses Agent instruction after restart", async 
   const model = new MockLanguageModelV3({ modelId: "empty-snapshot-model" });
   const first_agent = new Agent({
     id: "empty_snapshot_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
     model,
   });
   try {
@@ -422,7 +422,7 @@ test("empty Session snapshot suppresses Agent instruction after restart", async 
 
   const restarted_agent = new Agent({
     id: "empty_snapshot_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
     model,
     instruction: ["instruction:must-not-appear"],
   });
@@ -480,7 +480,7 @@ test("running session model changes apply with steer at the next Session step", 
   });
   const agent = new Agent({
     id: "session_step_boundary_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
     model: old_model,
     plugins: [runtime_plugin],
   });
@@ -537,7 +537,7 @@ test("config remains effective when its action message cannot be persisted", asy
   });
   const agent = new Agent({
     id: "config_action_observability_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
     model: old_model,
   });
 

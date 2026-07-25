@@ -12,7 +12,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { Shell } from "@downcity/shell";
 import { create_platform_sandbox } from "./PlatformSandbox.mjs";
 
@@ -45,8 +45,10 @@ test("agent setEnv and patchEnv are visible in shell safe sandbox", async (t) =>
 
   const agent = new Agent({
     id: "agent-env-shell-sandbox-test",
-    path: root_path,
-    shell: new Shell({ sandbox }),
+    workspace: new Workspace({
+      path: root_path,
+      shell: new Shell({ sandbox }),
+    }),
   });
 
   try {
@@ -64,19 +66,6 @@ test("agent setEnv and patchEnv are visible in shell safe sandbox", async (t) =>
     assert.match(first_output, /DC=dc_initial/);
     assert.match(first_output, /REMOVED=remove_me/);
     assert.match(first_output, /HOST_ONLY=\n/);
-
-    agent.getShell()?.configure({
-      env: {
-        DYNAMIC_ENV_REPRO: "configured_value",
-      },
-    });
-
-    const configured_output = await execute_shell(
-      agent,
-      'printf "CURRENT=%s\\nHOST_ONLY=%s\\n" "$DYNAMIC_ENV_REPRO" "$HOST_ONLY_ENV_REPRO"',
-    );
-    assert.match(configured_output, /CURRENT=configured_value/);
-    assert.match(configured_output, /HOST_ONLY=\n/);
 
     agent.patchEnv({
       DYNAMIC_ENV_REPRO: "updated_value",

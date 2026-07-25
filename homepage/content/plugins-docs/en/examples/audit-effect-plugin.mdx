@@ -22,7 +22,7 @@ That is a clean `effect` use case.
 ## Example
 
 ```ts
-import { Agent, BasePlugin, type PluginHooks } from "@downcity/agent";
+import { Agent, Workspace, BasePlugin, type PluginHooks } from "@downcity/agent";
 
 class AuditEffectPlugin extends BasePlugin {
   readonly name = "audit_effect";
@@ -42,7 +42,7 @@ class AuditEffectPlugin extends BasePlugin {
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new AuditEffectPlugin()],
 });

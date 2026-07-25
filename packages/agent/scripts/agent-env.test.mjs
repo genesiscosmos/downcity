@@ -8,6 +8,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   Agent,
+  Workspace,
   initializeAgentProject,
   resolve_agent_env,
 } from "../bin/index.js";
@@ -44,10 +45,13 @@ test("Agent 运行时只使用显式 id，不读取完整项目 config", async (
       id: "legacy_id",
       version: "9.9.9",
     }));
-    const agent = new Agent({ id: "sdk_id", path: project_root });
+    const agent = new Agent({
+      id: "sdk_id",
+      workspace: new Workspace({ path: project_root }),
+    });
     assert.equal(agent.id, "sdk_id");
     assert.equal(agent.getContext().agent_id, "sdk_id");
-    assert.equal(agent.getContext().rootPath, project_root);
+    assert.equal(agent.getContext().rootPath, fs.realpathSync(project_root));
     await agent.ready();
     await agent.dispose();
   } finally {

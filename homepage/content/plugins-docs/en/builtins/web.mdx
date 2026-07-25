@@ -12,12 +12,12 @@ It exposes an `install` action that only returns instructions. The action does n
 ## Registration
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { WebPlugin } from "@downcity/plugins/web";
 
 const agent = new Agent({
   id: "research-agent",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   plugins: [new WebPlugin()],
 });
 ```

@@ -12,6 +12,7 @@ import type { AgentModel } from "@/agent/AgentModel.js";
 import { AgentContext } from "@/agent/AgentContext.js";
 import type { AgentOptions } from "@/types/agent/AgentOptions.js";
 import type { Shell } from "@downcity/shell";
+import type { Workspace } from "@/workspace/Workspace.js";
 import { Logger } from "@/utils/logger/Logger.js";
 import { resolve_agent_env } from "@/config/AgentEnv.js";
 import { normalizeInstructionInput } from "@/agent/AgentInstructions.js";
@@ -27,8 +28,8 @@ export class Agent {
   /** 当前 Agent 的稳定标识，用于区分 Session 存储目录与运行时归属。 */
   readonly id: string;
 
-  /** 当前 Agent 绑定的项目根目录绝对路径。 */
-  readonly path: string;
+  /** 当前 Agent 引用的项目资源与安全边界。 */
+  readonly workspace: Workspace;
 
   /** 当前 Agent 向所有 Session 提供的工具集合。 */
   readonly tools: Record<string, Tool>;
@@ -63,43 +64,33 @@ export class Agent {
   /** 当前 Agent 的长期运行状态与生命周期。 */
   private readonly state: AgentState;
 
-  /** 当前 Agent 可选的内建 Shell 实例。 */
-  private readonly shell?: AgentOptions["shell"];
-
   /** 当前 Agent configured instruction 的可变有序集合。 */
   private instruction: string[];
 
   constructor(options: AgentOptions) {
     this.id = String(options.id || "").trim();
-    this.path = String(options.path || "").trim();
     if (!this.id) throw new Error("Agent requires a non-empty id");
-    if (!this.path) throw new Error("Agent requires a non-empty path");
+    if (!options.workspace) throw new Error("Agent requires a Workspace");
+    this.workspace = options.workspace;
 
     this.SessionClass = options.Session;
     this.model = options.model;
-    this.tools = options.tools && typeof options.tools === "object"
-      ? { ...options.tools }
-      : {};
+    this.tools = {
+      ...this.workspace.tools,
+      ...(options.tools && typeof options.tools === "object"
+        ? options.tools
+        : {}),
+    };
     this.logger = new Logger();
-    this.logger.bindProjectRoot(this.path);
-    this.env = resolve_agent_env(this.path, options.env);
+    this.logger.bindProjectRoot(this.workspace.path);
+    this.env = resolve_agent_env(this.workspace.path, options.env);
     this.instruction = normalizeInstructionInput(options.instruction);
-    this.shell = options.shell;
 
     this.plugins = new PluginRegistry(options.plugins || []);
-    if (this.shell) {
-      this.shell.configure({
-        root_path: this.path,
-        env: this.env,
-        agent_id: this.id,
-        logger: this.logger,
-      });
-      Object.assign(this.tools, this.shell.tools);
-    }
 
     this.sessions = new AgentSessions({
       agent_id: this.id,
-      project_root: this.path,
+      project_root: this.workspace.path,
       tools: this.tools,
       logger: this.logger,
       get_instruction: () => this.instruction,
@@ -112,9 +103,9 @@ export class Agent {
       SessionClass: this.SessionClass,
     });
     this.context = new AgentContext({
-      ...(this.shell ? { shell: this.shell } : {}),
+      ...(this.workspace.shell ? { shell: this.workspace.shell } : {}),
       agent_id: this.id,
-      rootPath: this.path,
+      rootPath: this.workspace.path,
       logger: this.logger,
       get_env: () => this.env,
       get_systems: () => this.instruction,
@@ -128,7 +119,6 @@ export class Agent {
       plugins: this.plugins,
       sessions: this.sessions,
       tools: this.tools,
-      shell: this.shell,
     });
   }
 
@@ -147,7 +137,8 @@ export class Agent {
    * 释放当前 Agent 持有的长期运行时对象。
    *
    * 关键点（中文）
-   * - 关闭 plugin lifecycle、ActionSchedule、shell 等 Agent 自有资源。
+   * - 关闭 plugin lifecycle 与 ActionSchedule 等 Agent 自有资源。
+   * - Workspace 由调用方持有，因此这里不会关闭共享 Shell。
    * - 不负责任何 transport（RPC / HTTP）；transport 由 `@downcity/server` 自行管理。
    */
   async dispose(): Promise<void> {
@@ -236,6 +227,6 @@ export class Agent {
    * 返回当前 agent 挂载的 Shell。
    */
   getShell(): Shell | undefined {
-    return this.shell;
+    return this.workspace.shell;
   }
 }

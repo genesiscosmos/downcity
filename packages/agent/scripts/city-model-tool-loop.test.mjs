@@ -16,7 +16,7 @@ import { MockLanguageModelV3 } from "ai/test";
 import { tool } from "ai";
 import { z } from "zod";
 
-import { Agent } from "../bin/index.js";
+import { Agent, Workspace } from "../bin/index.js";
 import { createAction, createPlugin } from "../bin/plugin/core/PluginActionFactory.js";
 import { CITY_MODEL_KIND } from "@downcity/type";
 
@@ -126,7 +126,7 @@ test("CityModel uses direct LanguageModel path and sends tool result back", asyn
   });
   const agent = new Agent({
     id: "tool_loop_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
     plugins: [skill_plugin],
     tools: {
       ping: tool({

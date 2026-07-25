@@ -58,13 +58,13 @@ Managed plugins are the reason the old split runtime language is no longer the r
 ## How plugins attach in the local SDK
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { WebPlugin } from "@downcity/plugins/web";
 import { SkillPlugin } from "@downcity/plugins/skill";
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new SkillPlugin(), new WebPlugin()],
 });

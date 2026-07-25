@@ -12,7 +12,7 @@ description: Build local and remote Agent integrations with @downcity/agent
 ```ts
 const agent = new Agent({
   id: "repo-helper",
-  path: process.cwd(),
+  workspace: new Workspace({ path: process.cwd() }),
   model,
   tools: { search: search_tool },
 });

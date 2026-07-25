@@ -10,7 +10,7 @@ description: Agent 的构造、就绪、执行与关闭
 ```ts
 const agent = new Agent({
   id: "my-agent",
-  path: process.cwd(),
+  workspace: new Workspace({ path: process.cwd() }),
   model,
 });
 

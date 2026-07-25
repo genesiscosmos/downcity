@@ -48,7 +48,7 @@ Plugin "skill" is not ready
 ```ts
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   plugins: [new SkillPlugin(), new WebPlugin()],
   model,
 });
@@ -260,7 +260,7 @@ Session 入口内部已经隐式等待后台启动
 ```ts
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   plugins: [new SkillPlugin(), new WebPlugin()],
   model,
 });

@@ -34,7 +34,7 @@ The `Shell` class manages command execution and the approval runtime. Applicatio
 
 ```ts
 import { Shell } from "@downcity/shell";
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const shell = new Shell({
@@ -43,23 +43,25 @@ const shell = new Shell({
 
 const agent = new Agent({
   id: "demo",
-  path: process.cwd(),
-  shell,
+  workspace: new Workspace({
+    path: process.cwd(),
+    shell,
+  }),
 });
 ```
 
-When Shell is mounted through `Agent`, no path option is needed; the Agent configures its project root and runtime context. Pass `root_path` only when using Shell independently.
+Workspace binds its project root to Shell; Agent no longer configures or owns Shell directly. Pass `root_path` only when using Shell independently.
 
 ### Methods
 
-- `shell.dispose()` — Release shell resources.
+- `workspace.dispose()` — Release Shell resources owned by Workspace.
 - `shell.set_safe_read_only_paths(paths)` — Replace host-approved read-only directories.
 
 Approval requests appear as an `approval-required` Tool Part in `session.subscribe((mutation) => {})`. Read the complete Shell request from `mutation.part.approval.request`, then submit the user's decision with `session.resolve_approval(...)`. A reconnected client can recover pending requests with `session.approvals()`. Do not call internal Shell Runtime approval methods directly.
 
 ## Model tools
 
-A Shell mounted on an Agent provides:
+Workspace always provides file and search tools; configuring Shell adds two command tools:
 
 | Tool | Purpose |
 |------|---------|
@@ -81,7 +83,7 @@ For PNG, JPEG, GIF, WebP, and BMP files, `read` returns image metadata and a dat
 
 `find` accepts a POSIX glob `pattern`, includes dotfiles, respects `.gitignore`, and does not follow symbolic links. Both search tools return up to 200 results by default and accept `max_results` up to 2,000.
 
-All file and search tools are fixed to the project root and reject symbolic-link escapes. They never request unrestricted access.
+`shell_exec` and `shell_session` belong to Shell; the other five tools belong to Workspace. All file and search tools are fixed to the Workspace root and reject symbolic-link escapes. They never request unrestricted access.
 
 ## Sandbox
 

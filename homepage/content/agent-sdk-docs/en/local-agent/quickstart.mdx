@@ -14,7 +14,7 @@ pnpm add @downcity/agent
 ## Minimal example
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { createOpenAI } from "@ai-sdk/openai";
 
 const openai = createOpenAI({
@@ -23,7 +23,7 @@ const openai = createOpenAI({
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   model: openai.responses("gpt-5"),
 });
@@ -37,20 +37,21 @@ const result = await turn.finished;
 console.log(result.text);
 ```
 
-## The three most important steps
+## The four most important steps
 
-1. `new Agent(...)`
-2. `await agent.sessions.create()`
-3. make sure the Agent or Session has a model
+1. `new Workspace(...)`
+2. `new Agent({ workspace })`
+3. `await agent.sessions.create()`
+4. make sure the Agent or Session has a model
 
-Step 3 is the easiest one to forget, and it is also the most common local SDK mistake.
+Step 4 is the easiest one to forget, and it is also the most common local SDK mistake.
 
-You can satisfy step 3 in either way. Runtime resolution always prefers the Session model, then falls back to the Agent model:
+You can satisfy step 4 in either way. Runtime resolution always prefers the Session model, then falls back to the Agent model:
 
 - pass a model to `new Agent({ model })`
 - call `await session.set({ model })` for one specific local session
 
-If you skip step 3 entirely, the local session has no model and cannot execute.
+If you skip step 4 entirely, the local session has no model and cannot execute.
 
 When you are using the SDK for the first time, avoid stacking complex tools, managed plugins, extra plugins, or Downcity HTTP exposure immediately. Get the shortest execution path working first.
 
@@ -66,7 +67,7 @@ await turn.finished;
 
 Session entry points already wait for the current Agent runtime internally; model execution starts after plugin lifecycle is ready. You can still call `await agent.ready()` as an explicit checkpoint, for example before inspecting plugin state right after construction or before exposing the Agent over RPC / HTTP.
 
-When you are done, call `await agent.dispose()` to stop plugin lifecycle, ActionSchedule, and shell.
+When you are done, call `await agent.dispose()` to stop plugin lifecycle and ActionSchedule. The caller owns Workspace; if it contains Shell, also call `await workspace.dispose()` to close processes, PTYs, and Sandbox resources. Agent never closes a potentially shared Workspace.
 
 If you need to expose the agent to other processes over RPC or HTTP, use the separate package [`@downcity/server`](/en/agent-sdk-docs/local-agent/http-and-rpc). The Agent itself no longer starts any transport.
 

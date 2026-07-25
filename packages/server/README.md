@@ -18,12 +18,13 @@ pnpm add @downcity/agent @downcity/server
 ## 用法
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { AgentRPC, AgentHTTP } from "@downcity/server";
 
+const workspace = new Workspace({ path });
 const agent = new Agent({
   id,
-  path,
+  workspace,
   model,
 });
 await agent.ready();

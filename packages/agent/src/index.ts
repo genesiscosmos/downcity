@@ -9,6 +9,12 @@
 
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
+export { Workspace } from "./workspace/Workspace.js";
+export type { FileSystem } from "./types/workspace/FileSystem.js";
+export type {
+  WorkspaceOptions,
+  WorkspaceResources,
+} from "./types/workspace/Workspace.js";
 export { RemoteAgent } from "./remote/RemoteAgent.js";
 export { Session } from "./session/Session.js";
 export type { SessionOptions } from "./types/session/SessionOptions.js";

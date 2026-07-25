@@ -13,7 +13,7 @@ import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { Bureau, City, type CityModel } from "@downcity/city";
 
 const DEFAULT_FEDERATION_URL = "http://127.0.0.1:43127";
@@ -160,7 +160,7 @@ async function create_agent_session(config: ClientConfig, model: CityModel) {
   mkdirSync(config.agent_path, { recursive: true });
   const agent = new Agent({
     id: config.agent_id,
-    path: config.agent_path,
+    workspace: new Workspace({ path: config.agent_path }),
     model,
     instruction: [
       "你是 Downcity templates/client 的本地调试 Agent。",

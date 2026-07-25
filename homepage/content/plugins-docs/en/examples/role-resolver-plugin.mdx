@@ -20,6 +20,7 @@ That makes it a classic `resolve` case.
 ```ts
 import {
   Agent,
+  Workspace,
   BasePlugin,
   type PluginResolveHook,
 } from "@downcity/agent";
@@ -46,7 +47,7 @@ class RoleResolverPlugin extends BasePlugin {
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new RoleResolverPlugin()],
 });

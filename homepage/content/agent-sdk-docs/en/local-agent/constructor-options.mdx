@@ -1,6 +1,6 @@
 ---
 title: Agent Constructor Options
-description: Detailed explanation of the local Agent id, path, instruction, model, env, tools, and plugins options
+description: Detailed explanation of Workspace and the local Agent id, instruction, model, env, tools, and plugins options
 ---
 
 # Agent Constructor Options
@@ -8,14 +8,18 @@ description: Detailed explanation of the local Agent id, path, instruction, mode
 The local Agent is constructed like this:
 
 ```ts
+const workspace = new Workspace({
+  path,
+  shell,
+});
+
 new Agent({
   id,
-  path,
+  workspace,
   model,
   env,
   instruction,
   tools,
-  shell,
   plugins,
   Session,
 })
@@ -39,16 +43,27 @@ Recommended properties:
 
 That is because it directly controls the session storage partition.
 
-## `path`
+## `workspace`
 
-The project root directory bound to the current agent.
+The project resource and security boundary available to the Agent. Workspace owns the project root, file and search tools, and an optional Shell:
 
-The SDK uses it to:
+```ts
+const workspace = new Workspace({
+  path: "/path/to/project",
+  shell,
+});
+```
 
-- load the project `.env`
-- organize session storage
+Key points:
 
-If `path` is wrong, the agent will read the wrong `.env` and write runtime data in the wrong context.
+- macOS, Linux, and Windows use the same `Workspace`
+- `path` is resolved to a real absolute directory during construction
+- file and search tools remain confined to the Workspace
+- Shell and file tools share the same project root
+- multiple Agents may share one Workspace
+- the caller owns the Workspace lifecycle
+
+Workspace construction fails immediately when `path` is empty, missing, or not a directory.
 
 ## `instruction`
 
@@ -57,7 +72,7 @@ Static caller-provided instructions for the local SDK Agent.
 ```ts
 new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   instruction: [
     "You are a concise code assistant.",
     "Prefer direct file references when explaining code.",
@@ -81,7 +96,7 @@ The default `AgentModel` instance held by the Agent. `AgentModel` can be an AI S
 ```ts
 new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   model: openai.responses("gpt-5"),
 });
 ```
@@ -101,7 +116,7 @@ The environment snapshot visible to this agent.
 ```ts
 new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   env: {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "",
   },
@@ -120,7 +135,7 @@ Key points:
 After constructing the agent, you can update or replace its configured environment variables at runtime:
 
 ```ts
-const agent = new Agent({ id, path, env: { FOO: "1" } });
+const agent = new Agent({ id, workspace, env: { FOO: "1" } });
 
 agent.getEnv();              // => { FOO: "1" }
 agent.patchEnv({ BAR: "2" }); // merge
@@ -152,26 +167,29 @@ Key points:
 
 This is a good fit when multiple sessions should share a stable default tool set.
 
-## `shell`
+## Workspace `shell`
 
 Optional built-in shell capability.
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { Shell } from "@downcity/shell";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
-  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  workspace: new Workspace({
+    path: "/path/to/project",
+    shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  }),
 });
 ```
 
 Key points:
 
 - Shell is not a plugin
-- the Agent mounts `shell_exec`, `shell_session`, `grep`, `find`, `read`, `write`, and `edit` from the Shell instance
+- Shell only mounts `shell_exec` and `shell_session`
+- Workspace mounts `grep`, `find`, `read`, `write`, and `edit`, even without Shell
 - session and turn context are wired internally
 - approvals belong to a specific Session; use `session.approvals()`, `session.resolve_approval(...)`, and `session.set_approval_mode(...)`
 - file and search tools are always restricted to the Agent project root and have no unrestricted mode
@@ -183,13 +201,13 @@ This accepts already-instantiated `BasePlugin` objects.
 For example:
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { WebPlugin } from "@downcity/plugins/web";
 import { SkillPlugin } from "@downcity/plugins/skill";
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new SkillPlugin(), new WebPlugin()],
 });
@@ -215,6 +233,7 @@ Use this when you want to replace the local session implementation or inject cus
 ```ts
 import {
   Agent,
+  Workspace,
   DefaultSessionComposer,
   Session,
   type SessionOptions,
@@ -245,7 +264,7 @@ class CustomSession extends Session {
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   Session: CustomSession,
 });
 ```

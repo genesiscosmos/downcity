@@ -14,13 +14,13 @@ import type {
   GrepToolResult,
   SearchToolRunner,
   SearchToolSet,
-} from "@/types/SearchTool.js";
+} from "@/types/workspace/SearchTool.js";
 import {
   find_tool_input_schema,
   grep_tool_input_schema,
-} from "@/tool/SearchToolSchemas.js";
+} from "@/workspace/tool/SearchToolSchemas.js";
 
-/** 创建 Shell 持有的结构化搜索工具。 */
+/** 创建 Workspace 持有的结构化搜索工具。 */
 export function create_search_tools(runner: SearchToolRunner): SearchToolSet {
   const grep = tool({
     description:

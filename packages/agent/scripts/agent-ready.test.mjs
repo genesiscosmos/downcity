@@ -13,7 +13,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 
 import { MockLanguageModelV3 } from "ai/test";
-import { Agent } from "../bin/index.js";
+import { Agent, Workspace } from "../bin/index.js";
 import { createPlugin } from "../bin/plugin/core/PluginActionFactory.js";
 
 function create_deferred() {
@@ -138,7 +138,7 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
   });
   const agent = new Agent({
     id: "ready_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
     plugins: [blocking_plugin],
     model,
   });
@@ -189,7 +189,7 @@ test("agent ready isolates plugin lifecycle start failures", async () => {
   });
   const agent = new Agent({
     id: "ready_isolation_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
     plugins: [failing_plugin, healthy_plugin],
   });
 
@@ -210,7 +210,7 @@ test("AgentState installs plugin tools when an action plugin is registered", asy
   );
   const agent = new Agent({
     id: "state_plugin_tools_agent",
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
   });
   const action_plugin = createPlugin({
     name: "dynamic_action",

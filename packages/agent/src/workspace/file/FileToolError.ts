@@ -10,7 +10,7 @@ import type {
   FileEditDetail,
   FileToolErrorCode,
   FileToolFailure,
-} from "@/types/FileTool.js";
+} from "@/types/workspace/FileTool.js";
 
 /** 文件工具可识别的内部错误。 */
 export class FileToolRuntimeError extends Error {

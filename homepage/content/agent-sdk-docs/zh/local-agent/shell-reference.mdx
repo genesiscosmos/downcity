@@ -34,7 +34,7 @@ npx @downcity/sandbox-windows-srt setup
 
 ```ts
 import { Shell } from "@downcity/shell";
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const shell = new Shell({
@@ -43,23 +43,25 @@ const shell = new Shell({
 
 const agent = new Agent({
   id: "demo",
-  path: process.cwd(),
-  shell,
+  workspace: new Workspace({
+    path: process.cwd(),
+    shell,
+  }),
 });
 ```
 
-通过 `Agent` 装配时不需要传入路径；Agent 会把自己的项目根目录和运行时上下文配置给 Shell。独立使用 Shell 时可以传入 `root_path`。
+Workspace 会把项目根目录绑定给 Shell，Agent 不再直接配置或持有 Shell。独立使用 Shell 时仍可以传入 `root_path`。
 
 ### 方法
 
-- `shell.dispose()` — 释放 shell 资源
+- `workspace.dispose()` — 释放 Workspace 持有的 Shell 资源
 - `shell.set_safe_read_only_paths(paths)` — 替换宿主批准的额外只读目录
 
 审批请求会在 `session.subscribe((mutation) => {})` 中表现为 `approval-required` Tool Part。应用层从 `mutation.part.approval.request` 读取完整 Shell 请求，再使用 `session.resolve_approval(...)` 提交用户决定；重连后可通过 `session.approvals()` 恢复 pending 请求。不要直接调用 Shell Runtime 的内部审批方法。
 
 ## 模型工具
 
-传给 Agent 的 Shell 会提供：
+Workspace 始终提供文件与搜索工具；配置 Shell 后再增加两个命令工具：
 
 | 工具 | 用途 |
 |------|------|
@@ -81,7 +83,7 @@ const agent = new Agent({
 
 `find` 接受 POSIX glob `pattern`，包含 dotfile、遵守 `.gitignore`，且不会跟随符号链接。两个搜索工具默认最多返回 200 项，`max_results` 最大为 2,000。
 
-所有文件和搜索工具都固定限制在项目根目录内，并拒绝符号链接逃逸。它们不会申请 unrestricted 权限。
+其中 `shell_exec` 与 `shell_session` 属于 Shell，其余五个工具属于 Workspace。所有文件和搜索工具都固定限制在 Workspace 根目录内，并拒绝符号链接逃逸。它们不会申请 unrestricted 权限。
 
 ## 沙箱
 

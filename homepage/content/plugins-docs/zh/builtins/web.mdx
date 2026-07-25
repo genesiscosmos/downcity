@@ -12,12 +12,12 @@ description: 说明 web 内建 plugin 如何注入联网方法论，并向 Agent
 ## 注册
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { WebPlugin } from "@downcity/plugins/web";
 
 const agent = new Agent({
   id: "research-agent",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   plugins: [new WebPlugin()],
 });
 ```

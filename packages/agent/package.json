@@ -1,6 +1,6 @@
 {
   "name": "@downcity/agent",
-  "version": "1.1.287",
+  "version": "1.1.288",
   "type": "module",
   "description": "Downcity Agent 运行时 — 单 Agent 执行壳与本机 RPC 能力",
   "main": "./bin/index.js",
@@ -28,6 +28,7 @@
     "dotenv": "^17.4.2",
     "execa": "^9.6.1",
     "fs-extra": "^11.3.5",
+    "globby": "^11.1.0",
     "hono": "^4.12.23",
     "js-yaml": "^4.1.1",
     "nanoid": "^5.1.11",

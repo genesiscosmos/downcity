@@ -1,5 +1,5 @@
 /**
- * @file 验证 Shell 持有的 grep / find 项目搜索工具。
+ * @file 验证 Workspace 可装配的 grep / find 项目搜索工具。
  *
  * 关键点（中文）
  * - grep 覆盖字面量、正则、大小写、结果截断与项目路径边界。
@@ -13,8 +13,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { Shell } from "@downcity/shell";
-import { test_sandbox } from "./TestSandbox.mjs";
+import { Workspace } from "@downcity/agent";
 
 const rg_available = spawnSync("rg", ["--version"], { stdio: "ignore" }).status === 0;
 
@@ -28,12 +27,12 @@ async function create_fixture(t) {
   return {
     root_path,
     outside_path,
-    shell: new Shell({ root_path, sandbox: test_sandbox }),
+    tools: new Workspace({ path: root_path }).tools,
   };
 }
 
-async function execute_tool(shell, name, input, abort_signal) {
-  const execute = shell.tools[name]?.execute;
+async function execute_tool(tools, name, input, abort_signal) {
+  const execute = tools[name]?.execute;
   assert.equal(typeof execute, "function", `${name} tool must be executable`);
   return await execute(input, {
     toolCallId: `test-${name}`,
@@ -50,7 +49,7 @@ test("grep returns structured literal matches and respects .gitignore", { skip: 
   await fs.writeFile(path.join(fixture.root_path, "src", "main.ts"), "é Beta value\n", "utf8");
   await fs.writeFile(path.join(fixture.root_path, "ignored", "secret.ts"), "Beta hidden\n", "utf8");
 
-  const result = await execute_tool(fixture.shell, "grep", {
+  const result = await execute_tool(fixture.tools, "grep", {
     query: "beta",
     glob: ["*.ts"],
   });
@@ -74,7 +73,7 @@ test("grep supports case-sensitive regex and bounded results", { skip: !rg_avail
     "Item 1\nitem 2\nItem 3\nItem 4\n",
     "utf8",
   );
-  const result = await execute_tool(fixture.shell, "grep", {
+  const result = await execute_tool(fixture.tools, "grep", {
     query: "Item [0-9]",
     literal: false,
     case_sensitive: true,
@@ -85,7 +84,7 @@ test("grep supports case-sensitive regex and bounded results", { skip: !rg_avail
   assert.deepEqual(result.matches.map((item) => item.line_number), [1, 3]);
   assert.equal(result.truncated, true);
 
-  const invalid = await execute_tool(fixture.shell, "grep", {
+  const invalid = await execute_tool(fixture.tools, "grep", {
     query: "(",
     literal: false,
   });
@@ -95,7 +94,7 @@ test("grep supports case-sensitive regex and bounded results", { skip: !rg_avail
 
 test("grep rejects paths outside the project root", { skip: !rg_available }, async (t) => {
   const fixture = await create_fixture(t);
-  const result = await execute_tool(fixture.shell, "grep", {
+  const result = await execute_tool(fixture.tools, "grep", {
     query: "outside",
     path: fixture.outside_path,
   });
@@ -113,7 +112,7 @@ test("find uses glob while respecting ignore rules and dotfiles", async (t) => {
   await fs.writeFile(path.join(fixture.root_path, "src", "nested", "value.ts"), "value\n", "utf8");
   await fs.writeFile(path.join(fixture.root_path, "ignored", "secret.ts"), "secret\n", "utf8");
 
-  const result = await execute_tool(fixture.shell, "find", {
+  const result = await execute_tool(fixture.tools, "find", {
     pattern: "**/*.ts",
   });
   assert.equal(result.success, true);
@@ -136,7 +135,7 @@ test("find scopes patterns to path and stops at max_results", async (t) => {
     fs.writeFile(path.join(fixture.root_path, "src", "ignored.ts"), "ignored\n"),
     fs.writeFile(path.join(fixture.root_path, "src", "c.js"), "c\n"),
   ]);
-  const result = await execute_tool(fixture.shell, "find", {
+  const result = await execute_tool(fixture.tools, "find", {
     pattern: "*.ts",
     path: "src",
     max_results: 1,
@@ -146,7 +145,7 @@ test("find scopes patterns to path and stops at max_results", async (t) => {
   assert.equal(result.files[0].startsWith("src/"), true);
   assert.equal(result.truncated, true);
 
-  const ignored = await execute_tool(fixture.shell, "find", {
+  const ignored = await execute_tool(fixture.tools, "find", {
     pattern: "ignored.ts",
     path: "src",
   });
@@ -159,13 +158,13 @@ test("find rejects parent glob segments and does not follow symlinks", async (t)
   await fs.writeFile(path.join(fixture.outside_path, "outside.ts"), "outside\n", "utf8");
   await fs.symlink(fixture.outside_path, path.join(fixture.root_path, "outside-link"));
 
-  const invalid = await execute_tool(fixture.shell, "find", {
+  const invalid = await execute_tool(fixture.tools, "find", {
     pattern: "../**/*.ts",
   });
   assert.equal(invalid.success, false);
   assert.equal(invalid.error_code, "invalid_pattern");
 
-  const result = await execute_tool(fixture.shell, "find", {
+  const result = await execute_tool(fixture.tools, "find", {
     pattern: "**/*.ts",
   });
   assert.equal(result.success, true);
@@ -177,7 +176,7 @@ test("search tools expose aborted results", async (t) => {
   const controller = new AbortController();
   controller.abort();
   const result = await execute_tool(
-    fixture.shell,
+    fixture.tools,
     "find",
     { pattern: "**/*" },
     controller.signal,

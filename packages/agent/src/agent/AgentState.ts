@@ -5,11 +5,10 @@
  * - 统一连接 PluginRegistry、AgentContext、AgentSessions 与共享 tools。
  * - 持有 Plugin lifecycle 与 ActionSchedule 的启动状态。
  * - Agent 构造完成后立即开始启动，调用方通过 `ready()` 等待。
- * - Agent 释放时统一停止 ActionSchedule、Plugin lifecycle 与 Shell。
+ * - Agent 释放时统一停止 ActionSchedule 与 Plugin lifecycle。
  * - RPC / HTTP 等 transport 不属于 AgentState，由上游宿主独立管理。
  */
 
-import type { Shell } from "@downcity/shell";
 import type { Tool } from "ai";
 import type { AgentContext } from "@/agent/AgentContext.js";
 import type { AgentSessions } from "@/agent/AgentSessions.js";
@@ -38,9 +37,6 @@ export class AgentState {
   /** 当前 Agent 与 Session 共享的可变工具集合。 */
   private readonly tools: Record<string, Tool>;
 
-  /** 当前 Agent 持有的可选 Shell 实例。 */
-  private readonly shell?: Shell;
-
   /** Plugin lifecycle 与 ActionSchedule 的唯一启动 Promise。 */
   private readonly ready_promise: Promise<void>;
 
@@ -55,7 +51,6 @@ export class AgentState {
     this.plugins = options.plugins;
     this.sessions = options.sessions;
     this.tools = options.tools;
-    this.shell = options.shell;
 
     this.plugins.bind_context(this.context);
     this.ensure_plugin_tools();
@@ -83,7 +78,6 @@ export class AgentState {
       await this.context.plugins.unregisterAll();
       this.plugins_started = false;
     }
-    await this.shell?.dispose();
   }
 
   /**

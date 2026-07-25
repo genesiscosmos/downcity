@@ -10,7 +10,7 @@ description: Construct, ready, execute, and dispose an Agent
 ```ts
 const agent = new Agent({
   id: "my-agent",
-  path: process.cwd(),
+  workspace: new Workspace({ path: process.cwd() }),
   model,
 });
 

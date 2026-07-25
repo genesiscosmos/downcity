@@ -17,7 +17,7 @@ That is the most natural kind of `guard` scenario.
 ## Example
 
 ```ts
-import { Agent, BasePlugin, type PluginHooks } from "@downcity/agent";
+import { Agent, Workspace, BasePlugin, type PluginHooks } from "@downcity/agent";
 
 class ReviewGuardPlugin extends BasePlugin {
   readonly name = "review_guard";
@@ -40,7 +40,7 @@ class ReviewGuardPlugin extends BasePlugin {
 
 const agent = new Agent({
   id: "repo-helper",
-  path: "/path/to/project",
+  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new ReviewGuardPlugin()],
 });

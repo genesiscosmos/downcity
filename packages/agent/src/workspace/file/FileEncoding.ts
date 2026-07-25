@@ -9,7 +9,7 @@
 
 import crypto from "node:crypto";
 import path from "node:path";
-import { FileToolRuntimeError } from "@/file/FileToolError.js";
+import { FileToolRuntimeError } from "@/workspace/file/FileToolError.js";
 
 const BINARY_SAMPLE_BYTES = 512;
 

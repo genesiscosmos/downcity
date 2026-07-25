@@ -13,7 +13,6 @@ import path from "node:path";
 import readline from "node:readline";
 import type { Readable } from "node:stream";
 import globby from "globby";
-import type { ShellHostContext } from "@/types/ShellHostContext.js";
 import type {
   FindToolInput,
   FindToolResult,
@@ -22,12 +21,12 @@ import type {
   GrepToolResult,
   SearchToolActionRequest,
   SearchToolActionResult,
-} from "@/types/SearchTool.js";
-import { resolve_search_tool_path } from "@/file/FilePathPolicy.js";
+} from "@/types/workspace/SearchTool.js";
+import { resolve_search_tool_path } from "@/workspace/file/FilePathPolicy.js";
 import {
   SearchToolRuntimeError,
   to_search_tool_failure,
-} from "@/search/SearchToolError.js";
+} from "@/workspace/search/SearchToolError.js";
 
 const DEFAULT_MAX_RESULTS = 200;
 const MAX_RESULTS = 2_000;
@@ -151,7 +150,7 @@ function resolve_rg_file_path(root_path: string, output_path: string): string {
 
 /** 执行 ripgrep 内容搜索。 */
 async function grep_action(
-  context: ShellHostContext,
+  context: { readonly rootPath: string },
   input: GrepToolInput,
   abort_signal?: AbortSignal,
 ): Promise<GrepToolResult> {
@@ -313,7 +312,7 @@ async function grep_action(
 
 /** 执行 glob 文件发现。 */
 async function find_action(
-  context: ShellHostContext,
+  context: { readonly rootPath: string },
   input: FindToolInput,
   abort_signal?: AbortSignal,
 ): Promise<FindToolResult> {
@@ -421,7 +420,7 @@ async function find_action(
 
 /** 执行一个项目搜索 action。 */
 export async function run_search_action(
-  context: ShellHostContext,
+  context: { readonly rootPath: string },
   request: SearchToolActionRequest,
 ): Promise<SearchToolActionResult> {
   switch (request.action) {

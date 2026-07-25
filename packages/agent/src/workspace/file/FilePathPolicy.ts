@@ -9,8 +9,8 @@
 
 import path from "node:path";
 import { lstat, realpath } from "node:fs/promises";
-import { FileToolRuntimeError } from "@/file/FileToolError.js";
-import type { ResolvedFileToolPath } from "@/types/FileTool.js";
+import { FileToolRuntimeError } from "@/workspace/file/FileToolError.js";
+import type { ResolvedFileToolPath } from "@/types/workspace/FileTool.js";
 
 /** 判断目标路径是否等于根目录或位于根目录之下。 */
 function is_path_inside_root(root_path: string, target_path: string): boolean {
@@ -63,7 +63,7 @@ async function resolve_project_tool_path(params: {
   if (!raw_root_path) {
     throw new FileToolRuntimeError({
       error_code: "invalid_path",
-      message: "Shell file tools require a non-empty root_path",
+      message: "Workspace file tools require a non-empty root_path",
     });
   }
   if (!raw_file_path || raw_file_path.includes("\0")) {

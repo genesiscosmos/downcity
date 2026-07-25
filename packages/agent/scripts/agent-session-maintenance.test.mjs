@@ -7,7 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { Agent } from "../bin/index.js";
+import { Agent, Workspace } from "../bin/index.js";
 
 function create_project_root() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "downcity-session-maintenance-"));
@@ -26,7 +26,10 @@ function get_session_path(root_path, agent_id, session_id) {
 
 test("AgentContext sessions 负责清空消息和删除 Session 数据", async () => {
   const root_path = create_project_root();
-  const agent = new Agent({ id: "agent_test", path: root_path });
+  const agent = new Agent({
+    id: "agent_test",
+    workspace: new Workspace({ path: root_path }),
+  });
   try {
     await agent.ready();
     assert.equal(agent.getContext().sessions, agent.sessions);

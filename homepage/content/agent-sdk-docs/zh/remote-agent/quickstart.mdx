@@ -24,12 +24,13 @@ downcity agent start
 ### 方式 2：服务端启动独立 RPC 或 HTTP
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { AgentRPC } from "@downcity/server";
 
+const workspace = new Workspace({ path });
 const agent = new Agent({
   id,
-  path,
+  workspace,
   model,
 });
 await agent.ready();

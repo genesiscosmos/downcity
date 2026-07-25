@@ -14,7 +14,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 
 import { MockLanguageModelV3 } from "ai/test";
-import { Agent } from "../bin/index.js";
+import { Agent, Workspace } from "../bin/index.js";
 
 function create_mock_title_model(title_text) {
   return new MockLanguageModelV3({
@@ -60,7 +60,7 @@ async function create_agent_with_titled_session(input) {
   );
   const agent = new Agent({
     id: input.agent_id,
-    path: agent_path,
+    workspace: new Workspace({ path: agent_path }),
     model: create_mock_title_model(input.title),
   });
   const collection = agent.sessions;
@@ -94,7 +94,7 @@ test("list_sessions returns persisted title from active session metadata", async
     const meta = JSON.parse(
       await fs.readFile(
         path.join(
-          agent.path,
+          agent.workspace.path,
           ".downcity",
           "agents",
           encodeURIComponent(agent.id),
@@ -112,7 +112,7 @@ test("list_sessions returns persisted title from active session metadata", async
     assert.equal(meta.previewText, "Need the session list to show the generated title");
     const history_stat = await fs.stat(
       path.join(
-        agent.path,
+        agent.workspace.path,
         ".downcity",
         "agents",
         encodeURIComponent(agent.id),
@@ -151,7 +151,7 @@ test("list_sessions reflects canonical SessionMessages changes", async () => {
     first_user_text: "Initial history",
   });
   const messages_dir = path.join(
-    agent.path,
+    agent.workspace.path,
     ".downcity",
     "agents",
     encodeURIComponent(agent.id),
