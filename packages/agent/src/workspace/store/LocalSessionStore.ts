@@ -27,7 +27,7 @@ export class LocalSessionStore implements SessionStore {
   /** 当前 Session 的 JSONL Message Store。 */
   readonly messages: JsonlSessionMessageStore;
 
-  /** 当前 Store 与 AgentTools 共用的 Workspace 文件能力。 */
+  /** 当前 Store 与 WorkspaceTools 共用的 Workspace 文件能力。 */
   private readonly files: FileSystem;
 
   /** 当前 Agent 的稳定标识。 */

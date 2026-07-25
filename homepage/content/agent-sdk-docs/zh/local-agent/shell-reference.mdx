@@ -145,17 +145,17 @@ macOS 还会自动解析 `xcode-select -p`，把当前 Xcode 运行目录加入�
 
 ### Env
 
-`shell_exec` 和 `shell_session` 使用当前 Session step 已生效的 Agent env 构造子进程环境。宿主可以通过 `agent.setEnv(next)` 或 `agent.patchEnv(patch)` 动态更新 configured env；已有 Session 会在下一个 step 检查点提交该修改，当前 provider 请求及其工具调用继续使用原 env。如果当前 Session turn 没有后续 step，则在下一个 Session turn 开始时提交。
+`shell_exec` 和 `shell_session` 使用当前 Session step 已生效的 Workspace env 构造子进程环境。宿主可以通过 `workspace.set_env(next)` 或 `workspace.patch_env(patch)` 动态更新 configured env；已有 Session 会在下一个 step 检查点提交该修改，当前 provider 请求及其工具调用继续使用原 env。如果当前 Session turn 没有后续 step，则在下一个 Session turn 开始时提交。
 
 safe sandbox 只会导出两类环境变量：
 
 - shell 运行所需的最小基础变量，例如 `PATH`、`LANG`、`SHELL`
-- 当前 Agent env 中显式存在的 key
+- 当前 Workspace env 中显式存在的 key
 
-这意味着 `.env`、构造参数 `env` 和运行时 `agent.patchEnv()` 写入的 key 可以被 sandbox 内命令读取，但 SDK 不会把完整宿主 `process.env` 暴露给 sandbox。
+这意味着 `.env`、Workspace 构造参数 `env` 和运行时 `workspace.patch_env()` 写入的 key 可以被 sandbox 内命令读取，但 SDK 不会把完整宿主 `process.env` 暴露给 sandbox。
 
 ```ts
-agent.patchEnv({
+workspace.patch_env({
   GITHUB_TOKEN: token,
 });
 

@@ -67,7 +67,7 @@ await turn.finished;
 
 Session entry points already wait for the current Agent runtime internally; model execution starts after plugin lifecycle is ready. You can still call `await agent.ready()` as an explicit checkpoint, for example before inspecting plugin state right after construction or before exposing the Agent over RPC / HTTP.
 
-When you are done, call `await agent.dispose()` to stop plugin lifecycle and ActionSchedule. The caller owns Workspace; if it contains Shell, also call `await workspace.dispose()` to close processes, PTYs, and Sandbox resources. Agent never closes a potentially shared Workspace.
+When you are done, call `await agent.dispose()` to stop plugin lifecycle and ActionSchedule and dispose its exclusive Workspace, including Shell processes, PTYs, and Sandbox resources.
 
 If you need to expose the agent to other processes over RPC or HTTP, use the separate package [`@downcity/server`](/en/agent-sdk-docs/local-agent/http-and-rpc). The Agent itself no longer starts any transport.
 

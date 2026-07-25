@@ -73,7 +73,6 @@ await turn.finished;
 - `agent.dispose()`
 - `agent.sessions`
 - `agent.setInstruction(input)`
-- `agent.getEnv()` / `agent.setEnv()` / `agent.patchEnv()`
 - `agent.getLogger()`
 - `agent.getContext()`
 - `agent.getShell()`
@@ -84,7 +83,7 @@ await turn.finished;
 - 创建和恢复本地 session
 - 在构造时自动启动 plugin lifecycle 与 ActionSchedule，必要时显式 `ready()` / `dispose()`
 - 暴露 plugin 集成入口
-- 持有 env、instruction、model、tools、plugins 与 sessions 这几类运行时状态和对象
+- 持有 instruction、model、最终 tools、plugins 与 sessions；env 由 Workspace 持有
 - 通过 `AgentContext` 向 Plugin 与宿主投影受限能力
 
 完整项目 config 由 CLI 等上游宿主持有，不进入 Agent。`AgentContext` 也不保存 config 或复制 Agent 状态。

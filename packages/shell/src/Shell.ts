@@ -115,6 +115,18 @@ export class Shell {
   }
 
   /**
+   * 更新当前 Shell 的 Workspace 基础环境变量。
+   *
+   * 关键点（中文）
+   * - Workspace 在构造和 env 修改时调用本方法。
+   * - Session Tool 仍优先使用单个 Step 显式传入的 effective env。
+   * - 已启动进程保持创建时的环境，新值只影响后续进程。
+   */
+  set_env(env: Readonly<Record<string, string>>): void {
+    this.host_options.env = { ...env };
+  }
+
+  /**
    * 替换 Safe Sandbox 的宿主只读目录。
    *
    * 关键点（中文）

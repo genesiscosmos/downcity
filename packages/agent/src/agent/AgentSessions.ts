@@ -63,8 +63,8 @@ type AgentSessionsOptions = {
    */
   get_instruction: () => string[];
 
-  /** 延迟读取当前 Agent configured env。 */
-  get_agent_env: () => Record<string, string>;
+  /** 延迟读取当前 Workspace configured env。 */
+  get_workspace_env: () => Record<string, string>;
 
   /** 创建当前 configured Plugin registry 的 Session step 执行视图。 */
   get_agent_plugins: () => AgentPluginExecutionRuntime;
@@ -93,7 +93,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly tools: Record<string, Tool>;
   private readonly logger: Logger;
   private readonly get_instruction: AgentSessionsOptions["get_instruction"];
-  private readonly get_agent_env: AgentSessionsOptions["get_agent_env"];
+  private readonly get_workspace_env: AgentSessionsOptions["get_workspace_env"];
   private readonly get_agent_plugins: AgentSessionsOptions["get_agent_plugins"];
   private readonly ensure_agent_ready: AgentSessionsOptions["ensure_agent_ready"];
   private readonly SessionClass: AgentSessionConstructor;
@@ -107,7 +107,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     this.tools = options.tools;
     this.logger = options.logger;
     this.get_instruction = options.get_instruction;
-    this.get_agent_env = options.get_agent_env;
+    this.get_workspace_env = options.get_workspace_env;
     this.get_agent_plugins = options.get_agent_plugins;
     this.ensure_agent_ready = options.ensure_agent_ready;
     this.SessionClass = options.SessionClass || Session;
@@ -323,7 +323,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       logger: this.logger,
       instruction_system_blocks: this.load_instruction_system_blocks(),
       get_instruction_system_blocks: () => this.load_instruction_system_blocks(),
-      getAgentEnv: () => this.get_agent_env(),
+      getWorkspaceEnv: () => this.get_workspace_env(),
       getAgentModel: () => this.get_agent_model(),
       get_agent_plugins: () => this.get_agent_plugins(),
       getManagedPluginSystemBlocks: async () => [],

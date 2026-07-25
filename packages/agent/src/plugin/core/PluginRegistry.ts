@@ -28,6 +28,13 @@ import type {
   PluginSnapshot,
 } from "@/types/plugin/PluginState.js";
 import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
+import type { Tool } from "ai";
+import { createPluginTools } from "@executor/tools/plugin/PluginToolDefinition.js";
+import type {
+  PluginRegistryChange,
+  PluginRegistrySubscriber,
+  PluginRegistryUnsubscribe,
+} from "@/types/plugin/PluginRegistry.js";
 
 function now_ms(): number {
   return Date.now();
@@ -105,12 +112,8 @@ export class PluginRegistry implements AgentPlugins {
 
   private readonly retired_records = new Set<PluginRuntimeRecord>();
 
-  private change_listener?: (input: {
-    /** 当前修改是注册还是卸载。 */
-    type: "register" | "unregister";
-    /** 当前修改的 plugin 名称。 */
-    plugin_name: string;
-  }) => void;
+  /** Plugin 配置变化订阅器。 */
+  private readonly change_subscribers = new Set<PluginRegistrySubscriber>();
 
   constructor(plugins: Plugin[] = []) {
     this.hookRegistry = new HookRegistry({
@@ -144,11 +147,26 @@ export class PluginRegistry implements AgentPlugins {
     return this.context;
   }
 
+  /** 订阅 Plugin 配置的后续变化。 */
+  subscribe_change(
+    subscriber: PluginRegistrySubscriber,
+  ): PluginRegistryUnsubscribe {
+    this.change_subscribers.add(subscriber);
+    return () => {
+      this.change_subscribers.delete(subscriber);
+    };
+  }
+
   /**
-   * 设置 Agent 内部配置修改监听器。
+   * 返回当前 Registry 向 Agent 提供的 Plugin Tools。
+   *
+   * 关键点（中文）
+   * - 没有任何 Action 时不暴露空壳 Tool。
+   * - Tool 闭包绑定当前 Registry，动态 Plugin 变化无需重建 bridge。
    */
-  set_change_listener(listener: PluginRegistry["change_listener"]): void {
-    this.change_listener = listener;
+  tools(): Record<string, Tool> {
+    if (!this.list().some((plugin) => plugin.actions.length > 0)) return {};
+    return { ...createPluginTools({ plugins: this }) };
   }
 
   /**
@@ -173,7 +191,7 @@ export class PluginRegistry implements AgentPlugins {
 
     try {
       await this.start_record(record);
-      this.change_listener?.({ type: "register", plugin_name: key });
+      this.publish_change({ type: "register", plugin_name: key });
       return to_plugin_snapshot(record);
     } catch (error) {
       this.unregister_hooks(key);
@@ -221,8 +239,19 @@ export class PluginRegistry implements AgentPlugins {
     this.unregister_hooks(key);
     this.records.delete(key);
     this.retire_record(record);
-    this.change_listener?.({ type: "unregister", plugin_name: key });
+    this.publish_change({ type: "unregister", plugin_name: key });
     return true;
+  }
+
+  /** 将 Plugin 配置变化发布给 Agent 等持有者。 */
+  private publish_change(change: PluginRegistryChange): void {
+    for (const subscriber of this.change_subscribers) {
+      try {
+        subscriber(change);
+      } catch {
+        // 观察者失败不能回滚已经完成的 Plugin 配置修改。
+      }
+    }
   }
 
   /**

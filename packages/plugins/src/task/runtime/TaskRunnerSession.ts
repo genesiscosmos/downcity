@@ -67,7 +67,7 @@ export function createTaskSessionRuntimePort(params: {
   runSessionId: string;
   userSimulatorSessionId: string;
   /** 当前 task 显式继承的 Agent env 快照。 */
-  agent_env?: Readonly<Record<string, string>>;
+  workspace_env?: Readonly<Record<string, string>>;
   /** 当前 task 显式继承的 Agent instruction 快照。 */
   agent_systems?: readonly string[];
 }): TaskSessionRuntimePort {
@@ -78,8 +78,8 @@ export function createTaskSessionRuntimePort(params: {
     runSessionId,
     userSimulatorSessionId,
   } = params;
-  const effective_env = params.agent_env
-    ? { ...params.agent_env }
+  const effective_env = params.workspace_env
+    ? { ...params.workspace_env }
     : { ...context.env };
   const effective_systems = params.agent_systems
     ? [...params.agent_systems]
@@ -140,7 +140,7 @@ export function createTaskSessionRuntimePort(params: {
         ...composed,
         system: await systemComposer.resolve({
           sessionId: input.session.session_id,
-          agentEnv: input.state.env,
+          workspace_env: input.state.env,
           agentSystems: input.state.systems,
           injectedUserMessages: [],
           deferredPersistedUserMessages: [],

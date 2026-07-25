@@ -31,7 +31,7 @@ async function execute_shell(agent, cmd) {
   return String(result.output || "");
 }
 
-test("agent setEnv and patchEnv are visible in shell safe sandbox", async (t) => {
+test("workspace set_env and patch_env are visible in shell safe sandbox", async (t) => {
   const sandbox = await create_platform_sandbox();
   const preflight = await sandbox.preflight();
   if (!preflight.ok) {
@@ -43,16 +43,17 @@ test("agent setEnv and patchEnv are visible in shell safe sandbox", async (t) =>
   const previous_host_value = process.env.HOST_ONLY_ENV_REPRO;
   process.env.HOST_ONLY_ENV_REPRO = "host_secret";
 
+  const workspace = new Workspace({
+    path: root_path,
+    shell: new Shell({ sandbox }),
+  });
   const agent = new Agent({
     id: "agent-env-shell-sandbox-test",
-    workspace: new Workspace({
-      path: root_path,
-      shell: new Shell({ sandbox }),
-    }),
+    workspace,
   });
 
   try {
-    agent.setEnv({
+    workspace.set_env({
       DYNAMIC_ENV_REPRO: "initial_value",
       DC_DYNAMIC_REPRO: "dc_initial",
       REMOVED_ENV_REPRO: "remove_me",
@@ -67,7 +68,7 @@ test("agent setEnv and patchEnv are visible in shell safe sandbox", async (t) =>
     assert.match(first_output, /REMOVED=remove_me/);
     assert.match(first_output, /HOST_ONLY=\n/);
 
-    agent.patchEnv({
+    workspace.patch_env({
       DYNAMIC_ENV_REPRO: "updated_value",
       ADDED_ENV_REPRO: "added_value",
       REMOVED_ENV_REPRO: null,

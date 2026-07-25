@@ -204,7 +204,7 @@ test("agent ready isolates plugin lifecycle start failures", async () => {
   }
 });
 
-test("AgentState installs plugin tools when an action plugin is registered", async () => {
+test("Agent registers PluginRegistry tools and removes them with the last action plugin", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-state-plugin-tools-"),
   );
@@ -230,6 +230,11 @@ test("AgentState installs plugin tools when an action plugin is registered", asy
 
     assert.notEqual(agent.tools.plugin_read, undefined);
     assert.notEqual(agent.tools.plugin_call, undefined);
+
+    await agent.plugins.unregister("dynamic_action");
+
+    assert.equal(agent.tools.plugin_read, undefined);
+    assert.equal(agent.tools.plugin_call, undefined);
   } finally {
     await agent.dispose();
   }

@@ -89,7 +89,24 @@ const plugin = new ChatPlugin({
 });
 ```
 
-`channelAccountId` 仍可作为账号池绑定能力使用，但 SDK 主路径推荐直接把 channel 需要的 env 传给对应 channel 对象。
+`channelAccountId` 仍可作为账号池绑定能力使用，但必须由宿主显式注入 `account_store`。Chat Plugin 只依赖存储契约，不读取 CLI 的 `~/.downcity`、SQLite 或密钥文件：
+
+```ts
+import type { ChatChannelAccountStore } from "@downcity/plugins/chat";
+
+const account_store: ChatChannelAccountStore = create_my_account_store();
+
+const plugin = new ChatPlugin({
+  account_store,
+  channels: [
+    new TelegramChannel({
+      channelAccountId: "telegram-main",
+    }),
+  ],
+});
+```
+
+如果不使用共享账号池，SDK 主路径仍推荐直接把 channel 需要的 env 传给对应 channel 对象。
 
 ## 飞书依赖
 

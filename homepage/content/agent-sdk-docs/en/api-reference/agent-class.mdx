@@ -11,9 +11,6 @@ The local `Agent` exposes the following main public API:
 - `agent.ready()`
 - `agent.dispose()`
 - `agent.sessions`
-- `agent.getEnv()`
-- `agent.setEnv(next)`
-- `agent.patchEnv(patch)`
 - `agent.getLogger()`
 - `agent.getContext()`
 - `agent.getShell()`
@@ -41,8 +38,7 @@ The local `Agent` exposes the following main public API:
 ## Constructor options
 
 - `id`
-- `path`
-- `env`
+- `workspace`
 - `tools`
 - `instruction`
 - `model`
@@ -54,6 +50,10 @@ There is currently no `mode` constructor option.
 `model` is the `AgentModel` instance held by the Agent and can be either an AI SDK `LanguageModel` or a City `CityModel`. A local Session can hold its own `AgentModel` through `session.set({ model })`; execution prefers the Session model and falls back to the Agent model. The SDK does not persist or restore model instances or model IDs.
 
 Full project and Plugin configuration belongs to an upstream host such as the CLI. The host constructs Plugin instances from that configuration and passes them through `plugins`; Agent and `AgentContext` do not read, mutate, or persist it.
+
+## Workspace env
+
+Environment belongs to Workspace rather than Agent. Workspace reads the project `.env`, then applies explicit constructor `env` overrides. Use `workspace.get_env()`, `workspace.set_env(next)`, and `workspace.patch_env(patch)` to manage it. Existing Sessions commit changes at the next step checkpoint; an in-flight provider request and its tools keep the already effective snapshot.
 
 ## `ready()` and `dispose()`
 

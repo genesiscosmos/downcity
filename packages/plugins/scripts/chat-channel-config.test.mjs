@@ -3,7 +3,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ChatPlugin } from "../bin/index.js";
+import { ChatPlugin, TelegramChannel } from "../bin/index.js";
 
 function create_channel(name) {
   return {
@@ -30,4 +30,32 @@ test("ChatPlugin 不提供配置修改 action", () => {
   assert.equal("close" in plugin.actions, false);
   assert.equal("configuration" in plugin.actions, false);
   assert.equal("configure" in plugin.actions, false);
+});
+
+test("ChatPlugin 只通过宿主注入的 account_store 解析共享账号", () => {
+  const account = {
+    id: "telegram-main",
+    channel: "telegram",
+    name: "main bot",
+    botToken: "token",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const reads = [];
+  const account_store = {
+    list: () => [account],
+    get: (account_id) => {
+      reads.push(account_id);
+      return account_id === account.id ? account : null;
+    },
+    upsert: async () => {},
+    remove: async () => {},
+  };
+  const plugin = new ChatPlugin({
+    account_store,
+    channels: [new TelegramChannel({ channelAccountId: account.id })],
+  });
+
+  assert.equal(plugin.resolveChannelAccount({}, "telegram"), account);
+  assert.deepEqual(reads, [account.id]);
 });

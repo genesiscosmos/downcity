@@ -3,20 +3,25 @@
  *
  * 职责说明（中文）
  * - 只解析一次项目根目录，并将 Store、Tool 与可选 Shell 绑定到同一资源容器。
- * - AgentStore 与 AgentTools 共用同一个 FileSystem 和目录访问范围。
+ * - AgentStore 与 WorkspaceTools 共用同一个 FileSystem 和目录访问范围。
  * - 每个 Workspace 实例只绑定一个 Agent；同一物理目录可创建多个独立实例。
  */
 
 import { realpathSync, statSync } from "node:fs";
 import path from "node:path";
-import type { Tool } from "ai";
-import { create_file_tools } from "@/workspace/tool/FileTools.js";
-import { create_search_tools } from "@/workspace/tool/SearchTools.js";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 import { LocalFileSystem } from "@/workspace/LocalFileSystem.js";
 import type { WorkspaceOptions } from "@/types/workspace/Workspace.js";
 import type { AgentStore } from "@/types/store/AgentStore.js";
 import { LocalAgentStore } from "@/workspace/store/LocalAgentStore.js";
+import type { WorkspaceTools } from "@/types/workspace/WorkspaceTools.js";
+import type {
+  WorkspaceEnvPatch,
+  WorkspaceEnvSubscriber,
+  WorkspaceEnvUnsubscribe,
+} from "@/types/workspace/WorkspaceEnv.js";
+import { resolve_workspace_env } from "@/workspace/WorkspaceEnv.js";
+import { create_workspace_tools } from "@/workspace/tool/WorkspaceTools.js";
 
 /** 将调用方路径解析为稳定、真实的本地目录。 */
 function resolve_workspace_path(input: string): string {
@@ -40,7 +45,7 @@ export class Workspace {
   readonly files: FileSystem;
 
   /** Workspace 内可用的文件、搜索与可选命令工具。 */
-  readonly tools: Record<string, Tool>;
+  readonly tools: WorkspaceTools;
 
   /** Workspace 内可选的受控命令执行能力。 */
   readonly shell?: WorkspaceOptions["shell"];
@@ -54,22 +59,50 @@ export class Workspace {
   /** 当前 Workspace 为唯一 Agent 创建的结构化 Store。 */
   private bound_store?: AgentStore;
 
+  /** 当前 Workspace configured env 的唯一可变状态。 */
+  private readonly env: Record<string, string>;
+
+  /** Workspace env 变化订阅器。 */
+  private readonly env_subscribers = new Set<WorkspaceEnvSubscriber>();
+
   constructor(options: WorkspaceOptions) {
     this.path = resolve_workspace_path(options.path);
     this.files = new LocalFileSystem(this.path);
+    this.env = resolve_workspace_env(this.path, options.env);
     this.shell = options.shell;
     this.shell?.bind(this.path);
+    this.shell?.set_env(this.env);
+    this.tools = create_workspace_tools({
+      files: this.files,
+      ...(this.shell ? { shell: this.shell } : {}),
+    });
+  }
 
-    this.tools = {
-      ...create_file_tools({
-        run_file_action: async (request) =>
-          await this.files.run_file_action(request),
-      }),
-      ...create_search_tools({
-        run_search_action: async (request) =>
-          await this.files.run_search_action(request),
-      }),
-      ...(this.shell?.tools || {}),
+  /** 返回当前 Workspace env 的浅拷贝快照。 */
+  get_env(): Record<string, string> {
+    return { ...this.env };
+  }
+
+  /** 整体覆盖 Workspace env，并通知已绑定的 Agent。 */
+  set_env(next: WorkspaceEnvPatch): void {
+    const previous = this.get_env();
+    for (const key of Object.keys(this.env)) delete this.env[key];
+    this.apply_env_patch(next);
+    this.publish_env_if_changed(previous);
+  }
+
+  /** 增量修改 Workspace env，并通知已绑定的 Agent。 */
+  patch_env(patch: WorkspaceEnvPatch): void {
+    const previous = this.get_env();
+    this.apply_env_patch(patch);
+    this.publish_env_if_changed(previous);
+  }
+
+  /** 订阅 Workspace env 的后续变化。 */
+  subscribe_env(subscriber: WorkspaceEnvSubscriber): WorkspaceEnvUnsubscribe {
+    this.env_subscribers.add(subscriber);
+    return () => {
+      this.env_subscribers.delete(subscriber);
     };
   }
 
@@ -110,5 +143,38 @@ export class Workspace {
       }
     })();
     await this.dispose_promise;
+  }
+
+  /** 原地应用一次 env patch。 */
+  private apply_env_patch(patch: WorkspaceEnvPatch): void {
+    if (!patch || typeof patch !== "object") return;
+    for (const [raw_key, raw_value] of Object.entries(patch)) {
+      const key = String(raw_key || "").trim();
+      if (!key) continue;
+      if (raw_value === null || raw_value === undefined) {
+        delete this.env[key];
+        continue;
+      }
+      this.env[key] = String(raw_value);
+    }
+  }
+
+  /** 只在内容真实变化时发布完整 env 快照。 */
+  private publish_env_if_changed(previous: Record<string, string>): void {
+    const current = this.get_env();
+    const previous_keys = Object.keys(previous);
+    const current_keys = Object.keys(current);
+    const changed = previous_keys.length !== current_keys.length ||
+      current_keys.some((key) => previous[key] !== current[key]);
+    if (!changed) return;
+    const snapshot = Object.freeze(current);
+    this.shell?.set_env(snapshot);
+    for (const subscriber of this.env_subscribers) {
+      try {
+        subscriber(snapshot);
+      } catch {
+        // 观察者失败不能回滚已经完成的 Workspace env 修改。
+      }
+    }
   }
 }

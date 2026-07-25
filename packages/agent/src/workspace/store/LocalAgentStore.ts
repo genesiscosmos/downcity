@@ -42,7 +42,7 @@ function decode_session_id(input: string): string {
 
 /** 默认本地 Agent Store。 */
 export class LocalAgentStore implements AgentStore {
-  /** 当前 Store 与 AgentTools 共用的 Workspace 文件能力。 */
+  /** 当前 Store 与 WorkspaceTools 共用的 Workspace 文件能力。 */
   private readonly files: FileSystem;
 
   /** 当前 Agent 的稳定标识。 */

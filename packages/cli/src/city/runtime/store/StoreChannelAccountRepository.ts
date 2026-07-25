@@ -9,7 +9,7 @@
 import type {
   StoredChannelAccount,
   UpsertChannelAccountInput,
-} from "@downcity/agent";
+} from "@downcity/plugins/chat";
 import { decryptText, decryptTextSync, encryptText } from "@/city/runtime/store/crypto.js";
 import type { PlatformStoreContext } from "@/city/runtime/store/StoreShared.js";
 import {

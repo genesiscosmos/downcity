@@ -362,8 +362,8 @@ export async function runTaskDefinition(params: {
       taskId,
       trigger,
       executionId,
-      ...(params.run_context?.agentEnv
-        ? { agent_env: { ...params.run_context.agentEnv } }
+      ...(params.run_context?.workspace_env
+        ? { workspace_env: { ...params.run_context.workspace_env } }
         : {}),
       ...(params.run_context?.agentSystems
         ? { agent_systems: [...params.run_context.agentSystems] }

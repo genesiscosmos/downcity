@@ -80,13 +80,13 @@ export interface SessionRunContext {
   consume_history_reload?: () => boolean;
 
   /**
-   * 当前 Session step 实际使用的 Agent env。
+   * 当前 Session step 实际使用的 Workspace env。
    *
    * 关键点（中文）
    * - 由 Session 统一输入队列在 step 检查点更新。
    * - tool/plugin 调用通过显式 run_context 读取，避免看到刚写入但尚未生效的 env。
    */
-  agentEnv?: Readonly<Record<string, string>>;
+  workspace_env?: Readonly<Record<string, string>>;
 
   /** 当前 Session step 已提交生效的 Agent instruction 文本。 */
   agentSystems?: readonly string[];

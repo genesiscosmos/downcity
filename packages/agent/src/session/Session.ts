@@ -96,14 +96,14 @@ export class Session implements AgentSession {
   private readonly events: SessionEventHub;
   private readonly approval_broker: SessionApprovalBroker;
   private readonly local_state: SessionLocalState;
-  private readonly get_agent_env: SessionOptions["getAgentEnv"];
+  private readonly get_workspace_env: SessionOptions["getWorkspaceEnv"];
   private readonly get_agent_model: SessionOptions["getAgentModel"];
   private readonly get_agent_plugins: SessionOptions["get_agent_plugins"];
   private readonly get_instruction_system_blocks:
     SessionOptions["get_instruction_system_blocks"];
   private effective_instruction_system_blocks: AgentSessionSystemBlock[];
   private instruction_initialize_promise: Promise<void> | null = null;
-  private effective_agent_env: Record<string, string>;
+  private effective_workspace_env: Record<string, string>;
   private effective_agent_plugins: AgentPluginExecutionRuntime;
   /** 当前 Session 首次生成后固定的完整 system snapshot。 */
   private system_snapshot_blocks: AgentSessionSystemBlock[] | null = null;
@@ -121,14 +121,14 @@ export class Session implements AgentSession {
     this.get_session_store = options.get_session_store;
     this.tools = options.tools;
     this.logger = options.logger;
-    this.get_agent_env = options.getAgentEnv;
+    this.get_workspace_env = options.getWorkspaceEnv;
     this.get_agent_model = options.getAgentModel;
     this.get_agent_plugins = options.get_agent_plugins;
     this.get_instruction_system_blocks = options.get_instruction_system_blocks;
     this.effective_instruction_system_blocks = options
       .instruction_system_blocks
       .map((block) => ({ ...block }));
-    this.effective_agent_env = { ...options.getAgentEnv() };
+    this.effective_workspace_env = { ...options.getWorkspaceEnv() };
     this.effective_agent_plugins = options.get_agent_plugins();
     this.get_managed_plugin_system_blocks = options.getManagedPluginSystemBlocks;
     this.ensure_configured_hook = options.ensureConfigured;
@@ -291,7 +291,7 @@ export class Session implements AgentSession {
   enqueue_agent_command(command: AgentSessionCommand): void {
     if (command.type === "env") {
       this.session_turn.enqueue_command({
-        type: "agent_env",
+        type: "workspace_env",
         command_id: command.command_id,
         env: command.env,
       });
@@ -322,11 +322,11 @@ export class Session implements AgentSession {
       }
       return;
     }
-    if (command.type === "agent_env") {
-      this.effective_agent_env = { ...command.env };
+    if (command.type === "workspace_env") {
+      this.effective_workspace_env = { ...command.env };
       await this.emit_config_action_event({
         id: `agent-env:${this.id}:${command.command_id}`,
-        title: "Agent environment updated",
+        title: "Workspace environment updated",
         state: "completed",
         turnId: turn_id,
       });
@@ -579,7 +579,7 @@ export class Session implements AgentSession {
         (block) => ({ ...block }),
       ),
       get_instruction_system_blocks: this.get_instruction_system_blocks,
-      getAgentEnv: this.get_agent_env,
+      getWorkspaceEnv: this.get_workspace_env,
       get_agent_plugins: this.get_agent_plugins,
       getManagedPluginSystemBlocks: this.get_managed_plugin_system_blocks,
       ensureConfigured: this.ensure_configured_hook,
@@ -689,7 +689,7 @@ export class Session implements AgentSession {
       state: {
         model: this.get_model(),
         model_context_window: this.get_model_context_window(),
-        env: Object.freeze({ ...this.effective_agent_env }),
+        env: Object.freeze({ ...this.effective_workspace_env }),
         systems: Object.freeze(
           instruction_system_blocks.map((block) => block.content),
         ),

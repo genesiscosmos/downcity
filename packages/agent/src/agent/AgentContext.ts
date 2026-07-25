@@ -90,7 +90,7 @@ export class AgentContext {
    * 读取 Agent 已配置的 env。
    *
    * 关键点（中文）
-   * - Session step 的 effective env 由 Plugin action 参数 `run_context.agentEnv` 显式提供。
+   * - Session step 的 effective env 由 Plugin action 参数 `run_context.workspace_env` 显式提供。
    * - 该 getter 不根据异步调用链隐式切换结果。
    */
   get env(): Readonly<Record<string, string>> {

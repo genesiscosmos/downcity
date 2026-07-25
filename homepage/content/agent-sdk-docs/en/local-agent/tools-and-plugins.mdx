@@ -39,7 +39,7 @@ const agent = new Agent({
 });
 ```
 
-Workspace mounts five file and search tools by default. Shell adds two command tools, so the Agent receives seven model tools in total:
+Workspace creates WorkspaceTools from five file/search tools by default. Shell contributes two command tools, and Agent registers the resulting set in `agent.tools`:
 
 - `shell_exec`: one-shot non-interactive commands
 - `shell_session`: long-running or stdin-driven interactive PTY sessions
@@ -49,7 +49,7 @@ Workspace mounts five file and search tools by default. Shell adds two command t
 - `write`: file creation or explicit atomic full-file replacement
 - `edit`: atomic exact-text edits within one file
 
-File and search tools can only access the Workspace root and remain available without Shell. They have no unrestricted mode; operations outside the project still require the Shell unrestricted approval flow. `grep` and `find` respect ignore files, return at most 200 results by default, and accept `max_results` up to 2,000.
+File and search tools can only access the Workspace root and remain available without Shell. Generic `unrestricted` belongs only to Shell; File/Search, Plugin, and custom tools do not share that switch. Outside-project access requires Shell unrestricted approval, an explicit user attachment, or a dedicated host tool. `grep` and `find` respect ignore files, return at most 200 results by default, and accept `max_results` up to 2,000.
 
 When `read` opens a PNG, JPEG, GIF, WebP, or BMP image, the image is attached to the next model step as a temporary user file part. Other binary files return metadata only.
 
@@ -110,12 +110,14 @@ Each `Agent` has its own plugin registry and its own `plugin_read` / `plugin_cal
 
 ## plugin action metadata
 
-Plugins with actions automatically give the Agent two built-in tools:
+When actions exist, PluginRegistry provides two tools and Agent registers them in its final tool collection:
 
 - `plugin_read`: reads registered plugin actions, input schemas, and examples
 - `plugin_call`: executes a plugin action
 
 When the model is unsure how to call an action, it should call `plugin_read({ plugin, action })` first, then call `plugin_call(...)`. `plugin_call` validates payloads against the action `input_schema` before execution.
+
+WorkspaceTools, Plugin Tools, and `AgentOptions.tools` cannot reuse a name. Agent throws on a conflict instead of silently overriding an existing tool.
 
 Custom plugins can declare action metadata with `createPlugin` / `createAction`:
 
@@ -167,7 +169,7 @@ const agent = new Agent({
 });
 ```
 
-The `zod` schema handles runtime validation. `json_schema` and `examples` are returned by `plugin_read` for the model or UI. `run_context` is present when the action runs through a session tool and can be absent for direct CLI, HTTP, or scheduler calls. Use `run_context.agentEnv` for the effective env committed at the current session step; `context.env` is the Agent's configured baseline. Existing `class extends BasePlugin` plugins still work, and can gradually move individual actions to `createAction(...)`.
+The `zod` schema handles runtime validation. `json_schema` and `examples` are returned by `plugin_read` for the model or UI. `run_context` is present when the action runs through a session tool and can be absent for direct CLI, HTTP, or scheduler calls. Use `run_context.workspace_env` for the effective env committed at the current session step; `context.env` is the current Workspace configuration snapshot. Existing `class extends BasePlugin` plugins still work, and can gradually move individual actions to `createAction(...)`.
 
 ## ChatPlugin
 

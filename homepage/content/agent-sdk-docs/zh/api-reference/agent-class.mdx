@@ -11,9 +11,6 @@ description: 本地 Agent SDK 的核心公开接口
 - `agent.ready()`
 - `agent.dispose()`
 - `agent.sessions`
-- `agent.getEnv()`
-- `agent.setEnv(next)`
-- `agent.patchEnv(patch)`
 - `agent.getLogger()`
 - `agent.getContext()`
 - `agent.getShell()`
@@ -41,8 +38,7 @@ description: 本地 Agent SDK 的核心公开接口
 ## 构造参数
 
 - `id`
-- `path`
-- `env`
+- `workspace`
 - `tools`
 - `instruction`
 - `model`
@@ -62,22 +58,22 @@ description: 本地 Agent SDK 的核心公开接口
 
 从 API 设计上看，它更像一个“session 工厂 + 运行时生命周期入口”。Transport（RPC、HTTP）由 [`@downcity/server`](/zh/agent-sdk-docs/local-agent/http-and-rpc) 单独提供。
 
-## Env
+## Workspace Env
 
-`Agent` 的 env 是当前实例生命周期内的动态运行时状态。构造参数 `env` 与项目根目录 `.env` 会组成初始值；同名值以 `.env` 为准，之后宿主可以在不重建 Agent 的情况下更新它。
+Env 是 Workspace 的动态项目执行状态。Workspace 先读取项目根目录 `.env`，再用构造参数 `env` 覆盖同名值。宿主可以在不重建 Agent 的情况下更新它。
 
-- `agent.getEnv()`：返回当前 env 的浅拷贝快照
-- `agent.setEnv(next)`：整体替换当前 env
-- `agent.patchEnv(patch)`：增量更新当前 env，字段值为 `null` 或 `undefined` 时删除该 key
+- `workspace.get_env()`：返回当前 env 的浅拷贝快照
+- `workspace.set_env(next)`：整体替换当前 env
+- `workspace.patch_env(patch)`：增量更新当前 env，字段值为 `null` 或 `undefined` 时删除该 key
 
 `agent.setInstruction()` 只更新当前 Agent 的默认 instruction：之后通过 `sessions.create()` 创建的新 Session 会使用新 instruction，当前内存中的已有 Session 不会被回溯修改。本地 Session 可调用 `session.syncshot()` 显式采用 Agent 当前 instruction 和 plugin；调用 `session.snapshot()` 可以把固定后的完整 system 持久化到 `instruction.md`。
 
-`setEnv()`、`patchEnv()` 以及 plugin 注册表修改采用 Session step 边界：配置方法成功后，已有 Session 会把修改加入自己的统一输入队列，并在下一个 step 检查点生效。当前流式响应和工具执行继续使用本 step 已经提交的 env 与 plugin 视图；如果本轮没有后续 step，则在下一个 Session turn 开始时生效。
+Workspace env 与 plugin 注册表修改采用 Session step 边界：配置方法成功后，Agent 会把修改加入已有 Session 的统一输入队列，并在下一个 step 检查点生效。当前流式响应和工具执行继续使用本 step 已经提交的 env 与 plugin 视图；如果本轮没有后续 step，则在下一个 Session turn 开始时生效。
 
-生效时 Session timeline 会写入 completed action message。新创建的 Session 直接使用 Agent 最新配置，不需要重放此前的 action。默认 safe sandbox 会允许当前 Session step 已生效的 Agent env 进入 shell 子进程，但不会继承完整宿主 `process.env`。
+生效时 Session timeline 会写入 completed action message。新创建的 Session 直接使用 Workspace 当前 env。默认 safe sandbox 会允许当前 Session step 已生效的 Workspace env 进入 shell 子进程，但不会继承完整宿主 `process.env`。
 
 ```ts
-agent.patchEnv({
+workspace.patch_env({
   OPENAI_API_KEY: token,
   OLD_TOKEN: null,
 });

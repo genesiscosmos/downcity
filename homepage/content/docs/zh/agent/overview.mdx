@@ -24,7 +24,7 @@ const agent = new Agent({
   id: "repo-helper",
   workspace: new Workspace({ path: "/path/to/project" }),
   model: myModel,
-  tools: [myTool],
+  tools: { my_tool: myTool },
   plugins: [myPlugin],
 });
 ```
@@ -57,4 +57,6 @@ Agent 执行模型很简单：
 继续阅读：
 
 - [Agent SDK](/zh/docs/agent/sdk)
+- [SDK 架构](/zh/docs/agent/sdk-architecture)
+- [运行时架构](/zh/docs/agent/runtime-architecture)
 - [Agent 生命周期](/zh/docs/agent/lifecycle)

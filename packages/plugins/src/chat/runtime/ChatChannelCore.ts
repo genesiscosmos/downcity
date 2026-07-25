@@ -8,10 +8,9 @@
  */
 
 import type { AgentContext } from "@downcity/agent";
-import type { StoredChannelAccount } from "@downcity/agent";
+import type { StoredChannelAccount } from "@/chat/types/ChannelAccountStore.js";
 import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
-import { getStoredChannelAccountSync } from "@/chat/accounts/Store.js";
 
 const CHAT_CHANNEL_NAMES: ChatChannelName[] = ["telegram", "feishu", "qq"];
 
@@ -85,8 +84,7 @@ export function resolveChannelAccountId(
  * 解析渠道 account。
  *
  * 关键点（中文）
- * - 优先使用 ChatPlugin 实例上的显式解析逻辑。
- * - 若实例只提供 channelAccountId，再从默认全局账号池读取对应账号。
+ * - 账号只通过 ChatPlugin 实例解析，Plugin Core 不访问宿主全局路径或数据库。
  * - 不从项目文件隐式推断运行时账号。
  */
 export function resolveChannelAccount(
@@ -95,14 +93,7 @@ export function resolveChannelAccount(
 ): StoredChannelAccount | null {
   const plugin = resolveChatPluginBindings(context);
   const explicit = plugin?.resolveChannelAccount?.(context, channel);
-  if (explicit) return explicit;
-  const channelAccountId = resolveChannelAccountId(context, channel);
-  const account = channelAccountId
-    ? getStoredChannelAccountSync(channelAccountId)
-    : null;
-  if (!account) return null;
-  if (account.channel !== channel) return null;
-  return account;
+  return explicit?.channel === channel ? explicit : null;
 }
 
 /**

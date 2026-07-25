@@ -205,7 +205,7 @@ export class ContactPlugin extends BasePlugin {
       context,
       this.options,
       payload.endpoint || this.options.endpoint,
-      run_context?.agentEnv,
+      run_context?.workspace_env,
     );
     const agentName = getAgentName(context);
 
@@ -251,7 +251,7 @@ export class ContactPlugin extends BasePlugin {
     const targetReachability = classifyContactEndpoint(parsed.endpoint);
     const shouldResolveRequesterEndpoint =
       payload.endpoint ||
-      hasRuntimePublicEndpointEnv(context, run_context?.agentEnv) ||
+      hasRuntimePublicEndpointEnv(context, run_context?.workspace_env) ||
       targetReachability === "loopback" ||
       targetReachability === "private";
     const requesterEndpointCandidate = shouldResolveRequesterEndpoint
@@ -259,7 +259,7 @@ export class ContactPlugin extends BasePlugin {
           context,
           this.options,
           payload.endpoint || this.options.endpoint,
-          run_context?.agentEnv,
+          run_context?.workspace_env,
         )
       : undefined;
     const callbackDecision = buildContactApproveCallbackDecision({

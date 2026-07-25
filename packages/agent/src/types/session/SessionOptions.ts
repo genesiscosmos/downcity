@@ -97,13 +97,13 @@ export interface SessionOptions {
   get_instruction_system_blocks: () => AgentSessionSystemBlock[];
 
   /**
-   * 读取当前 Agent configured env。
+   * 读取当前 Workspace configured env。
    *
    * 关键点（中文）
    * - Session 创建时用它建立初始 effective env。
-   * - 后续 Agent env 修改通过 Session command 在 step 检查点执行。
+   * - 后续 Workspace env 修改通过 Session command 在 step 检查点执行。
    */
-  getAgentEnv: () => Record<string, string>;
+  getWorkspaceEnv: () => Record<string, string>;
 
   /** 创建当前 Agent configured plugin 的 Session step 执行视图。 */
   get_agent_plugins: () => AgentPluginExecutionRuntime;

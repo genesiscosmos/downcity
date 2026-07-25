@@ -81,7 +81,7 @@ export async function runTaskNow(params: {
   executionId?: string;
   projectRoot?: string;
   /** 发起该任务的 Session step 已提交生效的 env 快照。 */
-  agent_env?: Readonly<Record<string, string>>;
+  workspace_env?: Readonly<Record<string, string>>;
   /** 发起该任务的 Session step 已提交生效的 instruction 快照。 */
   agent_systems?: readonly string[];
 }): Promise<{
@@ -197,7 +197,7 @@ export async function runTaskNow(params: {
       runDirAbs,
       runSessionId,
       userSimulatorSessionId,
-      ...(params.agent_env ? { agent_env: params.agent_env } : {}),
+      ...(params.workspace_env ? { workspace_env: params.workspace_env } : {}),
       ...(params.agent_systems ? { agent_systems: params.agent_systems } : {}),
     });
     let lastRoundRuleErrors: string[] = [];

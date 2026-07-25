@@ -22,7 +22,10 @@ import { PlatformStore } from "@/city/runtime/store/index.js";
 import { t } from "@/shared/CliLocale.js";
 import type { AgentStartOptions } from "@/city/types/AgentStartOptions.js";
 import type { DowncityConfig } from "@downcity/agent";
-import type { StoredChannelAccount, StoredChannelAccountChannel } from "@downcity/agent";
+import type {
+  StoredChannelAccount,
+  StoredChannelAccountChannel,
+} from "@downcity/plugins/chat";
 import {
   readAgentConfig as readStoredAgentConfig,
   upsertAgentConfig,

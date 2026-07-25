@@ -25,6 +25,12 @@ export { clean_chat_storage } from "./chat/runtime/ChatStorage.js";
 
 export type { ChatChannelAccountListItem } from "./chat/types/ChannelAccount.js";
 export type {
+  ChatChannelAccountStore,
+  StoredChannelAccount,
+  StoredChannelAccountChannel,
+  UpsertChannelAccountInput,
+} from "./chat/types/ChannelAccountStore.js";
+export type {
   ChatStorageCleanInput,
   ChatStorageCleanResult,
 } from "./chat/types/ChatStorage.js";

@@ -10,14 +10,14 @@ import {
   Agent,
   Workspace,
   initializeAgentProject,
-  resolve_agent_env,
+  resolve_workspace_env,
 } from "../bin/index.js";
 
 function create_project_root() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "downcity-agent-env-"));
 }
 
-test("项目 .env 覆盖宿主环境且不修改 process.env", () => {
+test("Workspace 显式 env 覆盖项目 .env 且不修改 process.env", () => {
   const project_root = create_project_root();
   const original_value = process.env.DOWNCITY_ENV_TEST;
   try {
@@ -25,11 +25,11 @@ test("项目 .env 覆盖宿主环境且不修改 process.env", () => {
       path.join(project_root, ".env"),
       "DOWNCITY_ENV_TEST=project\nPROJECT_ONLY=value\n",
     );
-    const env = resolve_agent_env(project_root, {
+    const env = resolve_workspace_env(project_root, {
       DOWNCITY_ENV_TEST: "host",
       HOST_ONLY: "value",
     });
-    assert.equal(env.DOWNCITY_ENV_TEST, "project");
+    assert.equal(env.DOWNCITY_ENV_TEST, "host");
     assert.equal(env.HOST_ONLY, "value");
     assert.equal(env.PROJECT_ONLY, "value");
     assert.equal(process.env.DOWNCITY_ENV_TEST, original_value);

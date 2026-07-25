@@ -24,6 +24,12 @@ export type {
   WorkspaceDirectoryEntry,
 } from "./types/workspace/FileSystem.js";
 export type { WorkspaceOptions } from "./types/workspace/Workspace.js";
+export type {
+  WorkspaceEnvPatch,
+  WorkspaceEnvSubscriber,
+  WorkspaceEnvUnsubscribe,
+} from "./types/workspace/WorkspaceEnv.js";
+export type { WorkspaceTools } from "./types/workspace/WorkspaceTools.js";
 export { RemoteAgent } from "./remote/RemoteAgent.js";
 export { Session } from "./session/Session.js";
 export type { SessionOptions } from "./types/session/SessionOptions.js";
@@ -248,12 +254,8 @@ export {
 } from "./workspace/setup/AgentInitializer.js";
 export {
   load_project_dotenv,
-  resolve_agent_env,
-} from "./agent/AgentEnv.js";
-export {
-  getPlatformStoreDbPath,
-  getPlatformStoreKeyPath,
-} from "./platform/PlatformPaths.js";
+  resolve_workspace_env,
+} from "./workspace/WorkspaceEnv.js";
 export {
   ensureRuntimeProjectReady,
 } from "./workspace/setup/ProjectSetup.js";
@@ -405,11 +407,8 @@ export { resolveSessionId } from "./executor/ids/resolveSessionId.js";
 
 // Platform store 类型
 export type {
-  StoredChannelAccount,
-  StoredChannelAccountChannel,
   StoredEnvEntry,
   StoredGlobalEnvEntry,
-  UpsertChannelAccountInput,
   UpsertEnvEntryInput,
   UpsertGlobalEnvEntryInput,
 } from "./types/platform/Store.js";

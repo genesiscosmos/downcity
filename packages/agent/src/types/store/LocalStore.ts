@@ -3,14 +3,14 @@
  *
  * 关键点（中文）
  * - 本地 Store 只接收 Workspace 已创建的 FileSystem，不单独接收存储根目录。
- * - AgentStore 与 SessionStore 因而始终和 AgentTools 使用同一资源容器。
+ * - AgentStore 与 SessionStore 因而始终和 WorkspaceTools 使用同一资源容器。
  */
 
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 
 /** LocalAgentStore 构造参数。 */
 export interface LocalAgentStoreOptions {
-  /** 当前 Store 与 AgentTools 共用的 Workspace 文件能力。 */
+  /** 当前 Store 与 WorkspaceTools 共用的 Workspace 文件能力。 */
   files: FileSystem;
   /** 当前 Agent 的稳定标识，用于划分 `.downcity/agents` 子目录。 */
   agent_id: string;
@@ -18,7 +18,7 @@ export interface LocalAgentStoreOptions {
 
 /** LocalSessionStore 构造参数。 */
 export interface LocalSessionStoreOptions {
-  /** 当前 Store 与 AgentTools 共用的 Workspace 文件能力。 */
+  /** 当前 Store 与 WorkspaceTools 共用的 Workspace 文件能力。 */
   files: FileSystem;
   /** 当前 Session 所属 Agent 的稳定标识。 */
   agent_id: string;

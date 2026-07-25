@@ -1,6 +1,6 @@
 ---
 title: Agent Constructor Options
-description: Detailed explanation of Workspace and the local Agent id, instruction, model, env, tools, and plugins options
+description: Detailed explanation of Workspace env, WorkspaceTools, and local Agent id, instruction, model, tools, and plugins
 ---
 
 # Agent Constructor Options
@@ -11,13 +11,13 @@ The local Agent is constructed like this:
 const workspace = new Workspace({
   path,
   shell,
+  env,
 });
 
 new Agent({
   id,
   workspace,
   model,
-  env,
   instruction,
   tools,
   plugins,
@@ -60,8 +60,9 @@ Key points:
 - `path` is resolved to a real absolute directory during construction
 - file and search tools remain confined to the Workspace
 - Shell and file tools share the same project root
-- multiple Agents may share one Workspace
-- the caller owns the Workspace lifecycle
+- one Workspace instance binds exactly one Agent
+- multiple Agents may target the same directory through separate Workspace instances
+- `agent.dispose()` also disposes its exclusive Workspace
 
 Workspace construction fails immediately when `path` is empty, missing, or not a directory.
 
@@ -109,14 +110,13 @@ Key points:
 - a local Session can override the Agent model with `session.set({ model })`
 - effective model resolution always checks the Session model before the Agent model
 
-## `env`
+## Workspace `env`
 
-The environment snapshot visible to this agent.
+The project execution environment owned by the Workspace.
 
 ```ts
-new Agent({
-  id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
+const workspace = new Workspace({
+  path: "/path/to/project",
   env: {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "",
   },
@@ -125,32 +125,31 @@ new Agent({
 
 Key points:
 
-- the SDK only consumes the explicit environment map you pass in
-- the SDK no longer splits global env and agent env
+- the SDK reads the project `.env` first, then applies explicit Workspace `env` overrides
+- env belongs to Workspace rather than Agent
 - if a host needs layered env merging, it should merge first and then pass the final result through `env`
-- these values become the Agent runtime env, but are not written back to the system environment automatically
+- these values become the Workspace runtime env, but are not written back to the system environment automatically
 
 ### Updating env at runtime
 
-After constructing the agent, you can update or replace its configured environment variables at runtime:
+You can update or replace Workspace environment variables at runtime:
 
 ```ts
-const agent = new Agent({ id, workspace, env: { FOO: "1" } });
-
-agent.getEnv();              // => { FOO: "1" }
-agent.patchEnv({ BAR: "2" }); // merge
-agent.patchEnv({ FOO: null }); // null means delete
-agent.setEnv({ ONLY: "ok" });  // replace all
+workspace.set_env({ FOO: "1" });
+workspace.get_env();                // => { FOO: "1" }
+workspace.patch_env({ BAR: "2" }); // merge
+workspace.patch_env({ FOO: null }); // null means delete
+workspace.set_env({ ONLY: "ok" }); // replace all
 ```
 
 Key points:
 
-- `getEnv()` returns a shallow snapshot, so mutating it does not affect the agent
-- `patchEnv()` treats `null` / `undefined` as delete; other values are coerced to string
-- `setEnv()` clears the current env first and then writes the new values, keeping the same underlying reference
+- `get_env()` returns a shallow snapshot
+- `patch_env()` treats `null` / `undefined` as delete
+- `set_env()` replaces the current Workspace env
 - `agent.setInstruction()` affects only Sessions created afterwards and does not retroactively change existing in-memory Sessions
 - restored Sessions regenerate from the Agent's current instruction and plugins when `instruction.md` is absent; use `session.syncshot()` to refresh an existing Session and `session.snapshot()` to persist it
-- Agent env and plugin changes commit in existing Sessions at the next Session step checkpoint
+- Workspace env and plugin changes commit in existing Sessions at the next Session step checkpoint
 - an in-flight provider request and its tool calls keep the env that was effective for the current step
 - if the current Session turn has no later step, the queued change is committed when the next Session turn starts
 - the Session timeline emits a completed action message when the change becomes effective
@@ -158,12 +157,15 @@ Key points:
 
 ## `tools`
 
-The default tool set at the agent level.
+Additional caller-defined tools registered on the Agent.
 
 Key points:
 
-- it belongs to the agent, not the session
-- sessions created by this agent reuse the same tool collection
+- Workspace provides file, search, and optional Shell tools as WorkspaceTools
+- PluginRegistry provides `plugin_read` and `plugin_call`
+- `AgentOptions.tools` provides caller-defined tools
+- Agent owns the final merged collection shared by Sessions
+- duplicate names across any source throw instead of silently overriding tools
 
 This is a good fit when multiple sessions should share a stable default tool set.
 

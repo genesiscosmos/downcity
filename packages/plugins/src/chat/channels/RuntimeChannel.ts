@@ -8,10 +8,12 @@
  */
 
 import type { AgentContext } from "@downcity/agent";
-import type { StoredChannelAccount } from "@downcity/agent";
 import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 import type { ChatChannel } from "@/chat/types/ChatPluginOptions.js";
-import { getStoredChannelAccountSync } from "@/chat/accounts/Store.js";
+import type {
+  ChatChannelAccountStore,
+  StoredChannelAccount,
+} from "@/chat/types/ChannelAccountStore.js";
 
 /**
  * env 字典。
@@ -78,9 +80,11 @@ abstract class BaseRuntimeChatChannel implements ChatChannel {
     return this.channelAccountId;
   }
 
-  protected getStoredAccount(): StoredChannelAccount | null {
-    if (!this.channelAccountId) return null;
-    const account = getStoredChannelAccountSync(this.channelAccountId);
+  protected getStoredAccount(
+    account_store?: ChatChannelAccountStore,
+  ): StoredChannelAccount | null {
+    if (!this.channelAccountId || !account_store) return null;
+    const account = account_store.get(this.channelAccountId);
     if (!account || account.channel !== this.name) return null;
     return account;
   }
@@ -89,7 +93,10 @@ abstract class BaseRuntimeChatChannel implements ChatChannel {
     return new Date().toISOString();
   }
 
-  abstract getAccount(context: AgentContext): StoredChannelAccount | null;
+  abstract getAccount(
+    context: AgentContext,
+    account_store?: ChatChannelAccountStore,
+  ): StoredChannelAccount | null;
 }
 
 /**
@@ -117,8 +124,11 @@ export class TelegramChannel extends BaseRuntimeChatChannel {
     this.botToken = String(options.botToken || "").trim() || undefined;
   }
 
-  getAccount(_context: AgentContext): StoredChannelAccount | null {
-    const storedAccount = this.getStoredAccount();
+  getAccount(
+    _context: AgentContext,
+    account_store?: ChatChannelAccountStore,
+  ): StoredChannelAccount | null {
+    const storedAccount = this.getStoredAccount(account_store);
     if (storedAccount) return storedAccount;
 
     const token = String(this.botToken || this.env.TELEGRAM_BOT_TOKEN || "").trim();
@@ -169,8 +179,11 @@ export class FeishuChannel extends BaseRuntimeChatChannel {
     this.domain = String(options.domain || "").trim() || undefined;
   }
 
-  getAccount(_context: AgentContext): StoredChannelAccount | null {
-    const storedAccount = this.getStoredAccount();
+  getAccount(
+    _context: AgentContext,
+    account_store?: ChatChannelAccountStore,
+  ): StoredChannelAccount | null {
+    const storedAccount = this.getStoredAccount(account_store);
     if (storedAccount) return storedAccount;
 
     const appId = String(this.appId || this.env.FEISHU_APP_ID || "").trim();
@@ -227,8 +240,11 @@ export class QqChannel extends BaseRuntimeChatChannel {
     this.sandbox = options.sandbox === true;
   }
 
-  getAccount(_context: AgentContext): StoredChannelAccount | null {
-    const storedAccount = this.getStoredAccount();
+  getAccount(
+    _context: AgentContext,
+    account_store?: ChatChannelAccountStore,
+  ): StoredChannelAccount | null {
+    const storedAccount = this.getStoredAccount(account_store);
     if (storedAccount) return storedAccount;
 
     const appId = String(this.appId || this.env.QQ_APP_ID || "").trim();

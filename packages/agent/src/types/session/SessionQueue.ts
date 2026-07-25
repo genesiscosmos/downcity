@@ -23,10 +23,10 @@ export interface SessionModelQueueCommand {
   action_title?: string;
 }
 
-/** Agent env 在 Session Step 检查点生效的命令。 */
+/** Workspace env 在 Session Step 检查点生效的命令。 */
 export interface SessionEnvQueueCommand {
-  /** 命令种类固定为 Agent env 更新。 */
-  type: "agent_env";
+  /** 命令种类固定为 Workspace env 更新。 */
+  type: "workspace_env";
   /** 当前命令的稳定唯一标识。 */
   command_id: string;
   /** 下一 Step 使用的完整环境变量快照。 */
@@ -66,7 +66,7 @@ export type AgentSessionCommand = {
     type: "env";
     /** 当前命令唯一标识。 */
     command_id: string;
-    /** 下一 Session Step 使用的完整 Agent env。 */
+    /** 下一 Session Step 使用的完整 Workspace env。 */
     env: Record<string, string>;
   }
   | {

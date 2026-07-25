@@ -14,7 +14,7 @@ import path from "node:path";
 import {
   Agent,
   Workspace,
-  resolve_agent_env,
+  resolve_workspace_env,
 } from "@downcity/agent";
 import { Shell } from "@downcity/shell";
 import { AgentHTTP, AgentRPC } from "@downcity/server";
@@ -43,7 +43,7 @@ export async function runCommand(
   options: AgentStartOptions,
 ): Promise<void> {
   const projectRoot = path.resolve(cwd);
-  const hostEnv = resolve_agent_env(
+  const hostEnv = resolve_workspace_env(
     projectRoot,
     mergeProcessEnvWithPlatformGlobalEnv(),
   );
@@ -107,13 +107,13 @@ export async function runCommand(
   const workspace = new Workspace({
     path: projectRoot,
     shell: new Shell({ sandbox }),
+    env: hostEnv,
   });
   const agent = new Agent({
     id: agentId,
     workspace,
     model,
     plugins,
-    env: hostEnv,
   });
 
   process.env.DC_BAY_PORT = String(port);

@@ -15,4 +15,13 @@ export interface WorkspaceOptions {
 
   /** Workspace 内可选的受控命令执行能力。 */
   shell?: Shell;
+
+  /**
+   * Workspace 的显式环境变量覆盖项。
+   *
+   * 关键点（中文）
+   * - 显式值覆盖 Workspace 根目录 `.env` 中的同名字段。
+   * - 最终环境变量由 Workspace 持有，不会写回 `process.env` 或 `.env`。
+   */
+  env?: Record<string, string | undefined>;
 }

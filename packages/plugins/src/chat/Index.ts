@@ -22,3 +22,9 @@ export type {
   ChatChannel,
   ChatPluginOptions,
 } from "./types/ChatPluginOptions.js";
+export type {
+  ChatChannelAccountStore,
+  StoredChannelAccount,
+  StoredChannelAccountChannel,
+  UpsertChannelAccountInput,
+} from "./types/ChannelAccountStore.js";

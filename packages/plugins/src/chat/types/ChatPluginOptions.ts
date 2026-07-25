@@ -8,9 +8,12 @@
  */
 
 import type { AgentContext } from "@downcity/agent";
-import type { StoredChannelAccount } from "@downcity/agent";
 import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 import type { ChatQueueWorkerConfig } from "@/chat/types/ChatQueueWorker.js";
+import type {
+  ChatChannelAccountStore,
+  StoredChannelAccount,
+} from "@/chat/types/ChannelAccountStore.js";
 
 /**
  * Chat channel 对象协议。
@@ -31,13 +34,24 @@ export interface ChatChannel {
   /**
    * 解析当前 channel 的运行态账号。
    */
-  getAccount(context: AgentContext): StoredChannelAccount | null;
+  getAccount(
+    context: AgentContext,
+    account_store?: ChatChannelAccountStore,
+  ): StoredChannelAccount | null;
 }
 
 /**
  * ChatPlugin 显式构造参数。
  */
 export interface ChatPluginOptions {
+  /**
+   * 宿主显式注入的共享 Chat Account 存储。
+   *
+   * 说明（中文）
+   * - Plugin 不感知该存储使用 SQLite、内存还是远程服务。
+   * - 未提供时仍可通过 Channel 构造参数或 Workspace env 直接提供凭据。
+   */
+  account_store?: ChatChannelAccountStore;
   /**
    * Chat queue worker 运行配置。
    *

@@ -1,6 +1,6 @@
 ---
 title: Agent 构造参数
-description: 详细说明 Workspace 以及本地 Agent 的 id、instruction、model、env、tools 和 plugins 参数
+description: 详细说明 Workspace env、WorkspaceTools 以及本地 Agent 的 id、instruction、model、tools 和 plugins 参数
 ---
 
 # Agent 构造参数
@@ -11,13 +11,13 @@ description: 详细说明 Workspace 以及本地 Agent 的 id、instruction、mo
 const workspace = new Workspace({
   path,
   shell,
+  env,
 });
 
 new Agent({
   id,
   workspace,
   model,
-  env,
   instruction,
   tools,
   plugins,
@@ -60,8 +60,9 @@ const workspace = new Workspace({
 - `path` 会在 Workspace 构造时解析为真实绝对目录
 - 文件和搜索工具固定限制在 Workspace 内
 - Shell 与文件工具使用同一个项目根目录
-- Workspace 可以被多个 Agent 共享
-- Workspace 生命周期属于调用方，不由 Agent 自动释放
+- 一个 Workspace 实例只绑定一个 Agent
+- 多个 Agent 可以指向同一目录，但必须分别创建 Workspace
+- `agent.dispose()` 会同时释放它独占的 Workspace
 
 如果 `path` 不存在、不是目录或为空，Workspace 会立即拒绝构造。
 
@@ -109,14 +110,13 @@ new Agent({
 - 本地 Session 可通过 `session.set({ model })` 覆盖 Agent 模型
 - 有效模型解析顺序固定为 Session 模型、Agent 模型
 
-## `env`
+## Workspace 的 `env`
 
-这个 agent 可见的环境变量快照。
+Env 描述当前 Workspace 的项目执行环境，由 Workspace 持有：
 
 ```ts
-new Agent({
-  id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
+const workspace = new Workspace({
+  path: "/path/to/project",
   env: {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "",
   },
@@ -125,32 +125,31 @@ new Agent({
 
 关键点：
 
-- SDK 会先采用显式传入的 `env`，再由项目 `.env` 覆盖同名值
-- SDK 不再区分 global env 和 agent env
+- SDK 先读取项目 `.env`，再用 Workspace 构造参数 `env` 覆盖同名值
+- Env 属于 Workspace，不属于 Agent
 - 如果宿主需要合并多层 env，应先在外部合并，再把最终结果传给 `env`
-- 这些值会成为 Agent 的运行时 env，但不会自动回写系统环境变量
+- 这些值会成为 Workspace 的运行时 env，但不会自动回写系统环境变量
 
 ### 运行时更新 env
 
-构造 agent 之后，你也可以在运行期增量更新或整体替换 configured env：
+构造 Workspace 之后，可以在运行期增量更新或整体替换 configured env：
 
 ```ts
-const agent = new Agent({ id, workspace, env: { FOO: "1" } });
-
-agent.getEnv();              // => { FOO: "1" }
-agent.patchEnv({ BAR: "2" }); // 增量合并
-agent.patchEnv({ FOO: null }); // null 表示删除
-agent.setEnv({ ONLY: "ok" });  // 整体覆盖
+workspace.set_env({ FOO: "1" });
+workspace.get_env();                // => { FOO: "1" }
+workspace.patch_env({ BAR: "2" }); // 增量合并
+workspace.patch_env({ FOO: null }); // null 表示删除
+workspace.set_env({ ONLY: "ok" }); // 整体覆盖
 ```
 
 关键点：
 
-- `getEnv()` 返回的是浅拷贝快照，修改它不会影响 agent 真实状态
-- `patchEnv()` 中 `null` / `undefined` 表示删除该 key，其余值会强制转字符串
-- `setEnv()` 会先清空当前 env，再写入新值，仍然保持原引用不变
+- `get_env()` 返回浅拷贝快照
+- `patch_env()` 中 `null` / `undefined` 表示删除该 key
+- `set_env()` 整体覆盖当前 Workspace env
 - `agent.setInstruction()` 只影响之后新建的 Session，不会回溯修改当前内存中的已有 Session
 - Session 恢复时若没有 `instruction.md`，会从 Agent 当前 instruction 和 plugin 重新生成 system；已有 Session 可用 `session.syncshot()` 手动刷新，并用 `session.snapshot()` 持久化
-- Agent env 与 plugin 修改会在已有 Session 的下一个 Session step 检查点提交
+- Workspace env 与 plugin 修改会在已有 Session 的下一个 Session step 检查点提交
 - 正在进行的 provider 请求及其工具调用继续使用当前 step 已生效的 env
 - 如果当前 Session turn 没有后续 step，排队中的修改会在下一个 Session turn 开始时提交
 - 配置真正生效时，Session timeline 会写入 completed action message
@@ -158,12 +157,15 @@ agent.setEnv({ ONLY: "ok" });  // 整体覆盖
 
 ## `tools`
 
-agent 级默认工具集合。
+Agent 最终持有的额外自定义工具集合。
 
 关键点：
 
-- 它属于 agent 级，不是 session 级
-- 当前 agent 创建出来的 session 会直接复用这份工具集合
+- Workspace 提供文件、搜索和可选 Shell 组成的 WorkspaceTools
+- PluginRegistry 提供 `plugin_read` 和 `plugin_call`
+- `AgentOptions.tools` 提供调用方自定义工具
+- Agent 统一注册三类工具并由 Session 共享
+- 任意来源的工具重名会直接报错，不会静默覆盖
 
 这很适合“多个 session 共用一套默认工具能力”的场景。
 

@@ -8,15 +8,7 @@
  */
 
 import crypto from "node:crypto";
-import type { StoredChannelAccountChannel } from "@downcity/agent";
 import { resolveChatChannelBotInfo } from "@/chat/channels/BotInfoProvider.js";
-import {
-  getStoredChannelAccountSync,
-  listStoredChannelAccountsSync,
-  normalizeChannelAccountChannel,
-  removeStoredChannelAccount,
-  upsertStoredChannelAccount,
-} from "./Store.js";
 import type {
   ChatChannelAccountCreateInput,
   ChatChannelAccountListItem,
@@ -24,7 +16,11 @@ import type {
   ChatChannelAccountProbeResult,
   ChatChannelAccountUpsertInput,
 } from "@/chat/types/ChannelAccount.js";
-import type { StoredChannelAccount } from "@downcity/agent";
+import type {
+  ChatChannelAccountStore,
+  StoredChannelAccount,
+  StoredChannelAccountChannel,
+} from "@/chat/types/ChannelAccountStore.js";
 
 const SUPPORTED_CHANNELS: readonly StoredChannelAccountChannel[] = [
   "telegram",
@@ -47,6 +43,13 @@ function assertChannel(input: string): StoredChannelAccountChannel {
     );
   }
   return channel;
+}
+
+/** 将外部渠道输入收敛为 Chat Account 支持的稳定枚举。 */
+function normalize_channel_account_channel(
+  input: string,
+): StoredChannelAccountChannel {
+  return assertChannel(input);
 }
 
 function normalizeOptionalText(value: unknown): string | undefined {
@@ -77,7 +80,12 @@ function pickFirstNonEmpty(inputs: unknown[]): string {
  * ChatChannelAccountManager。
  */
 export class ChatChannelAccountManager {
-  constructor() {}
+  /** 当前管理器唯一使用的宿主账号存储。 */
+  private readonly account_store: ChatChannelAccountStore;
+
+  constructor(account_store: ChatChannelAccountStore) {
+    this.account_store = account_store;
+  }
 
   /**
    * 生成唯一 chat account id。
@@ -95,7 +103,7 @@ export class ChatChannelAccountManager {
     for (let index = 0; index < 8; index += 1) {
       const suffix = crypto.randomBytes(3).toString("hex");
       const candidate = `${prefix}-${suffix}`.slice(0, 64);
-      const existing = getStoredChannelAccountSync(candidate);
+      const existing = this.account_store.get(candidate);
       if (!existing) return candidate;
     }
     return `${params.channel}-${Date.now().toString(36)}`;
@@ -211,7 +219,7 @@ export class ChatChannelAccountManager {
    */
   async list(): Promise<ChatChannelAccountListResult> {
     return {
-      items: listStoredChannelAccountsSync().map((account) =>
+      items: this.account_store.list().map((account) =>
         toChannelAccountListItem(account),
       ),
     };
@@ -226,7 +234,7 @@ export class ChatChannelAccountManager {
     const name = String(input.name || "").trim();
     if (!name) throw new Error("chat account name cannot be empty");
 
-    const channel = normalizeChannelAccountChannel(input.channel);
+    const channel = normalize_channel_account_channel(input.channel);
 
     if (input.botToken !== undefined && input.clearBotToken === true) {
       throw new Error("botToken and clearBotToken cannot be used together");
@@ -238,7 +246,7 @@ export class ChatChannelAccountManager {
       throw new Error("appSecret and clearAppSecret cannot be used together");
     }
 
-    const current = getStoredChannelAccountSync(id);
+    const current = this.account_store.get(id);
     const nextBotToken = input.clearBotToken
       ? undefined
       : input.botToken !== undefined
@@ -264,7 +272,7 @@ export class ChatChannelAccountManager {
       ? normalizeOptionalText(input.creator)
       : current?.creator;
 
-    await upsertStoredChannelAccount({
+    await this.account_store.upsert({
       id,
       channel,
       name,
@@ -286,7 +294,7 @@ export class ChatChannelAccountManager {
   async remove(idInput: string): Promise<void> {
     const id = String(idInput || "").trim();
     if (!id) throw new Error("chat account id cannot be empty");
-    await removeStoredChannelAccount(id);
+    await this.account_store.remove(id);
   }
 }
 

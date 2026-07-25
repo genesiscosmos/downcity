@@ -20,8 +20,8 @@ export interface PluginRunContext {
   /** 当前 Agent 绑定的项目根目录。 */
   readonly projectRoot?: string;
 
-  /** 当前 Session step 已提交生效的 Agent env 快照。 */
-  readonly agentEnv?: Readonly<Record<string, string>>;
+  /** 当前 Session step 已提交生效的 Workspace env 快照。 */
+  readonly workspace_env?: Readonly<Record<string, string>>;
 
   /** 当前 Session step 已提交生效的 instruction 快照。 */
   readonly agentSystems?: readonly string[];

@@ -1,4 +1,10 @@
 {
   "title": "Agent",
-  "pages": ["overview", "sdk", "lifecycle"]
+  "pages": [
+    "overview",
+    "sdk",
+    "sdk-architecture",
+    "runtime-architecture",
+    "lifecycle"
+  ]
 }

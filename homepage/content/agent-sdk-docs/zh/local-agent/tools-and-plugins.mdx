@@ -41,7 +41,7 @@ const agent = new Agent({
 });
 ```
 
-Workspace 默认挂载五个文件与搜索工具，Shell 额外增加两个命令工具，因此 Agent 最终获得七个模型工具：
+Workspace 默认生成由五个文件/搜索工具组成的 WorkspaceTools，Shell 额外加入两个命令工具；Agent 再将这组工具注册到最终 `agent.tools`：
 
 - `shell_exec`：一次性非交互命令
 - `shell_session`：长任务和需要 stdin 的 PTY 交互式会话
@@ -51,7 +51,7 @@ Workspace 默认挂载五个文件与搜索工具，Shell 额外增加两个命�
 - `write`：创建文件或显式原子覆盖完整文件
 - `edit`：通过唯一文本匹配原子编辑单个文件
 
-文件和搜索工具只允许访问 Workspace 根目录，即使没有 Shell 也可使用。它们没有 unrestricted 模式；项目外操作仍然必须通过 Shell 的 unrestricted 审批流程。`grep` 和 `find` 会遵守 ignore 文件，默认最多返回 200 项，并允许通过 `max_results` 提高到 2,000 项。
+文件和搜索工具只允许访问 Workspace 根目录，即使没有 Shell 也可使用。通用 `unrestricted` 只属于 Shell；File/Search、Plugin 和自定义 Tool 不共享这个开关。项目外操作需要 Shell unrestricted 审批、用户显式附件或宿主注册的专用 Tool。`grep` 和 `find` 会遵守 ignore 文件，默认最多返回 200 项，并允许通过 `max_results` 提高到 2,000 项。
 
 `read` 读取 PNG、JPEG、GIF、WebP 或 BMP 图片时，会把图片作为临时 user file part 注入下一个模型 step。其他二进制文件只返回元数据。
 
@@ -155,12 +155,14 @@ const plugins = agent.plugins.list();
 
 ## plugin action metadata
 
-带 action 的 plugin 会让 Agent 自动获得两个内置 tool：
+存在 action 时，PluginRegistry 提供两个 Tool，再由 Agent 注册到最终工具集合：
 
 - `plugin_read`：读取已注册 plugin 的 action、参数 schema 和示例
 - `plugin_call`：执行指定 plugin action
 
 如果模型不确定某个 action 怎么传参数，应该先调用 `plugin_read({ plugin, action })`，再调用 `plugin_call(...)`。`plugin_call` 在执行前会按 action 的 `input_schema` 校验 payload。
+
+WorkspaceTools、Plugin Tools 与 `AgentOptions.tools` 的名称不能重复；发现冲突时 Agent 构造或注册流程直接报错，不会静默覆盖已有 Tool。
 
 自定义 plugin 可以用 `createPlugin` / `createAction` 声明 action metadata：
 
@@ -212,7 +214,7 @@ const agent = new Agent({
 });
 ```
 
-`zod` schema 负责运行时校验；`json_schema` 和 `examples` 用于 `plugin_read` 返回给模型或 UI。action 通过 session tool 执行时会收到 `run_context`；CLI、HTTP 或 scheduler 直接调用时该字段可能不存在。当前 Session step 已提交生效的 env 应读取 `run_context.agentEnv`，`context.env` 只表示 Agent 的配置基线。旧的 `class extends BasePlugin` 写法仍然可用，也可以只在 `actions` 里逐步换成 `createAction(...)`。
+`zod` schema 负责运行时校验；`json_schema` 和 `examples` 用于 `plugin_read` 返回给模型或 UI。action 通过 session tool 执行时会收到 `run_context`；CLI、HTTP 或 scheduler 直接调用时该字段可能不存在。当前 Session step 已提交生效的 env 应读取 `run_context.workspace_env`，`context.env` 表示 Workspace 当前配置快照。旧的 `class extends BasePlugin` 写法仍然可用，也可以只在 `actions` 里逐步换成 `createAction(...)`。
 
 ## ImagePlugin
 

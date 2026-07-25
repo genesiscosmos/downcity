@@ -6,14 +6,13 @@
 >
 > 本文基于 2026-07-25 对 Codex、Anthropic Sandbox Runtime、OpenHands 与 VS Code 的公开源码调研形成，同时记录目标设计与实际迁移进度。
 
-实现进度：Workspace 已统一提供 LocalFileSystem、AgentTools、AgentStore 与可选 Shell；SessionStore 领域边界和新的 Agent 构造 API 已实现。默认 Store 沿用 Workspace 内 `.downcity` JSONL 布局；SQLite 与 Plugin 进程隔离仍属于后续阶段。
+实现进度：Workspace 已统一提供 LocalFileSystem、WorkspaceTools、Env、AgentStore 与可选 Shell；Agent 统一注册 Workspace、Plugin 与自定义 Tools。默认 Store 沿用 Workspace 内 `.downcity` JSONL 布局；SQLite 与 Plugin 进程隔离仍属于后续阶段。
 
 源码按职责直接表达领域边界：
 
 ```text
 src/
 ├─ agent/                 Agent facade、运行环境与执行绑定
-├─ platform/              Workspace 之外的系统级路径规则
 └─ workspace/
    ├─ Workspace.ts        资源容器与生命周期
    ├─ LocalFileSystem.ts  项目文件原子能力
@@ -22,7 +21,7 @@ src/
    └─ store/              Agent、Session 与 Message 本地持久化
 ```
 
-`AgentEnv` 和 `ExecutionBinding` 属于 Agent 运行时；`PlatformPaths` 属于平台级路径；初始化、Workspace 路径和 Store 实现均属于 Workspace。共享协议类型仍统一放在 `src/types/`，不随实现目录移动。
+`ExecutionBinding` 属于 Agent 运行时；`WorkspaceEnv`、初始化、Workspace 路径和 Store 实现属于 Workspace。用户级 `~/.downcity` 路径、全局数据库和密钥属于 CLI/City 宿主，不由 Agent 包定义。共享协议类型仍统一放在 `src/types/`，不随实现目录移动。
 
 ## 1. 最终结论
 
@@ -34,7 +33,8 @@ Downcity 当前是运行在本机 Node.js 进程中的 Agent SDK。Node.js 已�
 Agent
 └─ Workspace            统一资源容器
    ├─ FileSystem        Node.js 跨平台文件能力
-   │  ├─ AgentTools     模型可调用的文件与搜索工具
+   │  ├─ WorkspaceTools 模型可调用的文件、搜索与可选 Shell 工具
+   │  ├─ Env            项目执行环境
    │  ├─ AgentStore     结构化 Session 持久化
    │  ├─ Logger         Agent 日志
    │  └─ ActionSchedule Plugin 调度事件流
@@ -79,7 +79,7 @@ const agent = new Agent({
 | 模块 | 职责 | 不负责 |
 | --- | --- | --- |
 | `Agent` | 装配 Workspace、Tool、Plugin、Session 与 Store | 项目路径和平台 Sandbox 细节 |
-| `Workspace` | 统一提供 FileSystem、AgentTools、AgentStore 与可选 Shell | Agent 和 Session 领域编排 |
+| `Workspace` | 统一提供 FileSystem、WorkspaceTools、Env、AgentStore 与可选 Shell | Agent 和 Session 领域编排 |
 | `LocalFileSystem` | Workspace 范围内的安全文件、原子覆盖与跨进程锁 | Session 领域规则和命令执行 |
 | `AgentStore` | 基于 Workspace FileSystem 提供结构化 Session 持久化 | 通用文件 Tool 和 Shell 命令 |
 | `Shell` | Command、Shell Session、PTY、审批和 Sandbox | Session 历史与通用系统服务 |
@@ -184,8 +184,8 @@ Agent → Shell → SystemHandler → Files / Session / Logs / Cache
 ### 4.4 AgentStore 是 Workspace 的结构化分支
 
 - Workspace 是 Agent 可使用的统一资源容器。
-- AgentStore 与 AgentTools 共用相同的 FileSystem 和项目目录。
-- AgentTools 与 Shell 可以正常读取或修改 `.downcity` 中的历史、Instruction 和审计数据。
+- AgentStore 与 WorkspaceTools 共用相同的 FileSystem 和项目目录。
+- WorkspaceTools 与 Shell 可以正常读取或修改 `.downcity` 中的历史、Instruction 和审计数据。
 - AgentStore 不是权限边界，只负责路径布局、Message sequence、Metadata、归档和崩溃恢复等领域语义。
 
 因此 Store 由 Workspace 提供，创建 Agent 时不再单独注入 Store。
@@ -305,8 +305,6 @@ interface AgentOptions {
   /** 当前 Agent 默认额外 Tool。 */
   tools?: Record<string, Tool>;
 
-  /** Agent 级环境变量覆盖。 */
-  env?: Record<string, string>;
 }
 ```
 
@@ -325,6 +323,9 @@ interface WorkspaceOptions {
 
   /** Workspace 内可选的受控命令执行能力。 */
   shell?: Shell;
+
+  /** 显式环境变量，覆盖 Workspace 根目录 `.env`。 */
+  env?: Record<string, string | undefined>;
 }
 
 class Workspace {
@@ -333,6 +334,14 @@ class Workspace {
 
   /** 项目根目录内的受控文件能力。 */
   readonly files: FileSystem;
+
+  /** 文件、搜索与可选 Shell 组成的 Workspace Tools。 */
+  readonly tools: WorkspaceTools;
+
+  /** 读取与修改当前 Workspace Env。 */
+  get_env(): Record<string, string>;
+  set_env(next: WorkspaceEnvPatch): void;
+  patch_env(patch: WorkspaceEnvPatch): void;
 
   /** 唯一绑定指定 Agent，并基于当前 FileSystem 创建结构化 Store。 */
   bind_agent(agent_id: string): AgentStore;
@@ -360,18 +369,13 @@ class Agent {
     this.id = require_agent_id(options.id);
     this.workspace = options.workspace;
 
+    this.plugins = new PluginRegistry(options.plugins ?? []);
+    this.tools = register_tools_or_throw(
+      this.workspace.tools,
+      this.plugins.tools(),
+      options.tools ?? {},
+    );
     this.store = this.workspace.bind_agent(this.id);
-
-    this.tools = {
-      ...create_file_tools(this.workspace.files),
-      ...create_search_tools(this.workspace.files),
-      ...(this.workspace.shell
-        ? create_shell_tools(this.workspace.shell, {
-            env: resolve_agent_env(options.env),
-          })
-        : {}),
-      ...(options.tools ?? {}),
-    };
 
     this.sessions = new AgentSessions({
       store: this.store,
@@ -386,7 +390,7 @@ class Agent {
 
 - Workspace 只 canonicalize 一次项目根目录。
 - Workspace 保证 LocalFileSystem 与 Shell 共享同一个已解析 root。
-- AgentStore 与 AgentTools 共用 Workspace FileSystem 和根目录。
+- AgentStore 与 WorkspaceTools 共用 Workspace FileSystem 和根目录。
 - 模型不能控制任何装配参数。
 
 ## 9. LocalFileSystem
@@ -599,7 +603,7 @@ runtime 数据位于当前 Workspace：
 └─ schedule.jsonl
 ```
 
-AgentStore 与 AgentTools 使用相同的 Workspace FileSystem。Store 不承担访问控制；模型和 Shell 可以像访问其他项目文件一样访问 `.downcity`。
+AgentStore 与 WorkspaceTools 使用相同的 Workspace FileSystem。Store 不承担访问控制；模型和 Shell 可以像访问其他项目文件一样访问 `.downcity`。
 
 ### 13.2 Store 实现
 
@@ -683,7 +687,7 @@ JSONL 可以作为导入导出和审计格式，不必永久承担并发数据�
 
 - File Tool：可信实现、rooted FileSystem、路径校验。
 - Shell Tool：审批、Platform Sandbox、network policy。
-- AgentStore：结构化状态接口，与 AgentTools 共用 rooted FileSystem。
+- AgentStore：结构化状态接口，与 WorkspaceTools 共用 rooted FileSystem。
 - 第三方 Plugin：独立 Plugin Host 和 OS Sandbox。
 
 ### 16.3 TOCTOU
@@ -698,12 +702,12 @@ JSONL 可以作为导入导出和审计格式，不必永久承担并发数据�
 
 ## 17. 环境变量
 
-- Agent 只使用调用方传入 env 和受控项目 `.env`。
+- Workspace 只使用调用方传入 env 和受控项目 `.env`，显式 env 优先。
 - 不把完整 `process.env` 自动传给模型或子进程。
 - Shell 使用 allowlist 构建子进程 env。
 - 密钥不写入 Message、Tool Result 和普通日志。
 - Windows 环境变量名称按大小写不敏感处理。
-- Agent env 修改不回写宿主进程。
+- Workspace env 修改不回写宿主进程或项目 `.env`。
 
 ## 18. 生命周期
 
@@ -857,9 +861,9 @@ interface WorkspaceBackend {
 4. File/Search Tool 不依赖 Shell command protocol。
 5. Shell 不负责 Session Store、Memory 或普通文件服务。
 6. Session 不知道物理存储路径与格式。
-7. AgentStore 与 AgentTools 共用 Workspace FileSystem；Store 不作为权限边界。
+7. AgentStore 与 WorkspaceTools 共用 Workspace FileSystem；Store 不作为权限边界。
 8. Workspace 保证 LocalFileSystem 与 Shell 使用同一个 canonical project root。
-9. runtime 数据默认位于 Workspace `.downcity`，可由 AgentTools 与 Shell 访问。
+9. runtime 数据默认位于 Workspace `.downcity`，可由 WorkspaceTools 与 Shell 访问。
 10. macOS、Linux、Windows 运行同一 Node.js contract tests。
 11. Platform Adapter 只处理原生 Sandbox 与进程差异。
 12. 不可信 Plugin 使用进程级强制隔离。
@@ -873,7 +877,7 @@ new Agent({ id, workspace })
 new Workspace({ path, shell? })
        ┌──────┼─────────────┐
        ▼      ▼             ▼
- FileSystem  AgentTools    Shell
+ FileSystem WorkspaceTools Shell
        │                    │
        ▼                    ▼
  AgentStore          Sandbox Adapter

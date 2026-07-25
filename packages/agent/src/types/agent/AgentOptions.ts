@@ -98,14 +98,4 @@ export interface AgentOptions {
    */
   Session?: AgentSessionConstructor;
 
-  /**
-   * 当前 agent 的显式环境变量覆盖项。
-   *
-   * 关键点（中文）
-   * - 这里表示宿主显式注入给 agent 的基础 env。
-   * - `Agent` 会在这份基础 env 之上继续叠加项目 `.env`。
-   * - 覆盖后的最终值会成为 Agent 运行时 env，但不会回写到宿主环境。
-   */
-  env?: Record<string, string>;
-
 }

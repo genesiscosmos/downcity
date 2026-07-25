@@ -16,13 +16,15 @@ import {
 import { ensurePlatformStoreSchema } from "@/city/runtime/store/StoreSchema.js";
 import type { PlatformStoreContext } from "@/city/runtime/store/StoreShared.js";
 import type {
-  StoredChannelAccount,
   StoredEnvEntry,
   StoredGlobalEnvEntry,
-  UpsertChannelAccountInput,
   UpsertEnvEntryInput,
   UpsertGlobalEnvEntryInput,
 } from "@downcity/agent";
+import type {
+  StoredChannelAccount,
+  UpsertChannelAccountInput,
+} from "@downcity/plugins/chat";
 import {
   getPlatformRootDirPath,
 } from "@/city/process/registry/CityPaths.js";

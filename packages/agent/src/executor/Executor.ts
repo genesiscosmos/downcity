@@ -341,7 +341,7 @@ export class Executor implements SessionExecutor {
     );
     const model = compose_input.state.model;
     if (!model) throw new Error("requires a configured model.");
-    run_context.agentEnv = Object.freeze({ ...compose_input.state.env });
+    run_context.workspace_env = Object.freeze({ ...compose_input.state.env });
     run_context.agentSystems = Object.freeze([
       ...compose_input.state.systems,
     ]);
@@ -397,7 +397,7 @@ export class Executor implements SessionExecutor {
       shell_run_context: {
         ownerContextId: String(run_context.sessionId || "").trim() || undefined,
         turnId: String(run_context.turnId || "").trim() || undefined,
-        ...(run_context.agentEnv ? { env: run_context.agentEnv } : {}),
+        ...(run_context.workspace_env ? { env: run_context.workspace_env } : {}),
         ...(run_context.shell_approval_gateway
           ? { approval_gateway: run_context.shell_approval_gateway }
           : {}),

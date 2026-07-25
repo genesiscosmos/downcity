@@ -51,7 +51,6 @@ src/
 ├── index.ts               # 包公开入口
 ├── agent/                 # Agent facade、状态、模型、环境与执行绑定
 ├── executor/              # LLM/Tool Loop、执行恢复与内存上下文折叠
-├── platform/              # 当前操作系统的全局路径规则
 ├── plugin/                # Plugin registry、执行视图、工具桥接与生命周期
 ├── remote/                # RemoteAgent、RemoteSession 与 HTTP/RPC transport
 ├── session/               # Session facade、State、Turn、Queue、Messages 与 Composer
@@ -66,17 +65,15 @@ src/
   - SDK facade 层
   - `Agent.ts` 负责本地 Agent 实例装配
   - `AgentSessions.ts` 负责 Session 集合生命周期
-  - `AgentEnv.ts` 与 `ExecutionBinding.ts` 负责 Agent 运行环境和执行绑定
+  - `ExecutionBinding.ts` 负责 Agent 执行目标绑定
 
 - `src/workspace/`
   - 统一承载项目根目录、文件系统、模型工具、初始化和结构化存储
   - `setup/` 负责项目 `.env`、`.gitignore` 与 `.downcity` 初始化
   - `store/` 负责 Agent、Session 和 JSONL Message 的本地持久化
+  - `WorkspaceEnv.ts` 负责 Workspace 环境变量装配
+  - `tool/WorkspaceTools.ts` 组合文件、搜索与可选 Shell 工具
   - `WorkspacePaths.ts` 负责 Workspace 内部路径布局
-
-- `src/platform/`
-  - 只承载不属于具体 Workspace 的当前系统路径规则
-  - 不包含文件工具、Store 或 Sandbox 实现
 
 - `src/session/`
   - `Session.ts` 是公开 facade 与 Session 对象装配入口
@@ -127,3 +124,6 @@ src/
 - `session / executor / plugin` 是三大核心分层
 - `SessionMessages` 是 Message 唯一事实源，Executor 不持有 Store
 - `types / utils` 提供横向公共支撑
+
+完整架构、执行链、持久化、Plugin、Shell 与跨平台设计见
+[`docs/agent-sdk-architecture.md`](../../docs/agent-sdk-architecture.md)。

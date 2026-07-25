@@ -32,6 +32,7 @@ import type {
   SoundPluginTtsInput,
 } from "@downcity/plugins/sound";
 import { CityUserManager } from "@/city/shared/CityUserManager.js";
+import { CityChatAccountStore } from "@/city/runtime/plugins/CityChatAccountStore.js";
 
 const city_user_manager = new CityUserManager();
 
@@ -94,6 +95,7 @@ export function createCityStaticBuiltinPlugins(input: {
     new WebPlugin(),
     new WorkboardPlugin(),
     new ChatPlugin({
+      account_store: new CityChatAccountStore(),
       queue: input.config?.plugins?.chat?.queue,
       channels: create_city_chat_channels(input.config),
     }),

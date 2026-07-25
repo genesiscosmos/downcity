@@ -39,7 +39,7 @@ actions: {
 - 执行业务逻辑
 - 返回 `success / data / error / message`
 
-当 action 由 Session 中的 tool 调用时，参数还会包含该 Session turn 的显式 `run_context`。CLI、HTTP 或 scheduler 直接调用时该字段可能不存在。本轮 step 的有效配置读取 `run_context.agentEnv` 与 `run_context.agentSystems`；`context.env` 与 `context.systems` 仍然是 Agent 层级的配置基线。
+当 action 由 Session 中的 tool 调用时，参数还会包含该 Session turn 的显式 `run_context`。CLI、HTTP 或 scheduler 直接调用时该字段可能不存在。本轮 step 的有效配置读取 `run_context.workspace_env` 与 `run_context.agentSystems`；`context.env` 是 Workspace 当前配置快照，`context.systems` 是 Agent 指令。
 
 ## `command`
 

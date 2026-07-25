@@ -8,7 +8,7 @@
 
 import type { JsonObject } from "@downcity/agent";
 import type { AgentContext } from "@downcity/agent";
-import type { StoredChannelAccount } from "@downcity/agent";
+import type { StoredChannelAccount } from "@/chat/types/ChannelAccountStore.js";
 import type {
   ChatChannelName,
   ChatChannelStateSnapshot,

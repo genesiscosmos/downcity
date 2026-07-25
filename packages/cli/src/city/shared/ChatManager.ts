@@ -12,9 +12,10 @@ import prompts, { type PromptObject } from "@/city/tui/Prompts.js";
 import {
   ChatChannelAccountManager,
   type ChatChannelAccountListItem,
+  type StoredChannelAccountChannel,
 } from "@downcity/plugins/chat";
 import { emitCliBlock } from "@/shared/CliReporter.js";
-import type { StoredChannelAccountChannel } from "@downcity/agent";
+import { CityChatAccountStore } from "@/city/runtime/plugins/CityChatAccountStore.js";
 import type {
   ChatAccountAction,
   ChatManagerListSelection,
@@ -25,7 +26,7 @@ import { t } from "@/shared/CliLocale.js";
 const CHAT_CHANNELS: StoredChannelAccountChannel[] = ["telegram", "feishu", "qq"];
 
 function createChannelAccountManager(): ChatChannelAccountManager {
-  return new ChatChannelAccountManager();
+  return new ChatChannelAccountManager(new CityChatAccountStore());
 }
 
 function isInteractiveTerminal(): boolean {

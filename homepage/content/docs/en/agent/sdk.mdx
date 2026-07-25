@@ -10,13 +10,17 @@ Use `@downcity/agent` to create an Agent, manage Sessions, and execute model cal
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
 
+const workspace = new Workspace({
+  path: process.cwd(),
+  env: { API_KEY: process.env.API_KEY ?? "" },
+});
+
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: process.cwd() }),
+  workspace,
   model,
   tools: { search: search_tool },
   plugins: [plugin],
-  env: { API_KEY: process.env.API_KEY ?? "" },
 });
 
 const session = await agent.sessions.create();
@@ -26,7 +30,7 @@ const result = await turn.finished;
 await agent.dispose();
 ```
 
-`Workspace` is the unified resource container for AgentStore, AgentTools, and an optional Shell. Session history and metadata live in the same project's `.downcity` directory and remain readable and editable through Workspace file tools; Agent construction does not require separate Store configuration.
+`Workspace` is the unified resource container for AgentStore, WorkspaceTools, Env, and an optional Shell. Session history and metadata live in the same project's `.downcity` directory and remain readable and editable through Workspace file tools; Agent construction does not require separate Store configuration.
 
 Each Workspace instance binds to exactly one Agent and is released by `agent.dispose()`. Multiple Agents may operate on the same physical directory by using separate Workspace instances.
 
@@ -79,4 +83,8 @@ const timeline = page.items.flatMap(to_session_message_timeline_events);
 
 Session JSONL, logs, and scheduled actions all use the Workspace FileSystem for rooted paths, atomic writes, and cross-process file transactions. Applications should use Agent and Session APIs for structured state rather than reading the physical storage layout.
 
-Continue with the [full Agent SDK docs](/en/agent-sdk-docs).
+Continue with:
+
+- [SDK architecture](/en/docs/agent/sdk-architecture)
+- [Runtime architecture](/en/docs/agent/runtime-architecture)
+- [Complete Agent SDK API docs](/en/agent-sdk-docs)

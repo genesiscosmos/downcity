@@ -183,7 +183,10 @@ export class ChatPlugin extends BasePlugin {
     context: AgentContext,
     channel: ChatChannelName,
   ) {
-    return this.getChannel(channel)?.getAccount(context) || null;
+    return this.getChannel(channel)?.getAccount(
+      context,
+      this.options.account_store,
+    ) || null;
   }
 
   private getChannel(channel: ChatChannelName): ChatChannel | null {

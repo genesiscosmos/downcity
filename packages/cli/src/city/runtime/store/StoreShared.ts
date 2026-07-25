@@ -7,7 +7,7 @@
  */
 
 import Database from "better-sqlite3";
-import type { StoredChannelAccountChannel } from "@downcity/agent";
+import type { StoredChannelAccountChannel } from "@downcity/plugins/chat";
 
 /**
  * PlatformStore 子模块上下文。

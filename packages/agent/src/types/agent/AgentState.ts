@@ -2,12 +2,10 @@
  * AgentState 内部装配参数。
  *
  * 职责说明（中文）
- * - 只描述 AgentState 连接 PluginRegistry、Session 与 tools 所需的稳定引用。
- * - 这些对象都由 Agent 先完成创建，AgentState 只负责运行时连接和生命周期。
+ * - 只描述 AgentState 启动 PluginRegistry 长期运行时所需的稳定引用。
+ * - 工具注册与 Session 同步由 Agent 负责，AgentState 只负责生命周期。
  */
 
-import type { Tool } from "ai";
-import type { AgentSessions } from "@/agent/AgentSessions.js";
 import type { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
 import type { AgentContext } from "@/agent/AgentContext.js";
 
@@ -20,11 +18,5 @@ export interface AgentStateOptions {
 
   /** 当前 Agent 唯一的 PluginRegistry 实例。 */
   plugins: PluginRegistry;
-
-  /** 当前 Agent 唯一的 Session 集合。 */
-  sessions: AgentSessions;
-
-  /** 当前 Agent 与 Session 共享的可变工具集合。 */
-  tools: Record<string, Tool>;
 
 }

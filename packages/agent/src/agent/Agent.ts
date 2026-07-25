@@ -14,12 +14,31 @@ import type { AgentOptions } from "@/types/agent/AgentOptions.js";
 import type { Shell } from "@downcity/shell";
 import type { Workspace } from "@/workspace/Workspace.js";
 import { Logger } from "@/utils/logger/Logger.js";
-import { resolve_agent_env } from "@/agent/AgentEnv.js";
 import { normalizeInstructionInput } from "@/agent/AgentInstructions.js";
 import { AgentSessions } from "@/agent/AgentSessions.js";
 import { AgentState } from "@/agent/AgentState.js";
 import { generateId } from "@/utils/Id.js";
 import { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
+import type { PluginRegistryUnsubscribe } from "@/types/plugin/PluginRegistry.js";
+import type { WorkspaceEnvUnsubscribe } from "@/types/workspace/WorkspaceEnv.js";
+
+const RESERVED_PLUGIN_TOOL_NAMES = new Set(["plugin_read", "plugin_call"]);
+
+/** 将一个来源明确的 Tool Set 注册到 Agent，并拒绝静默覆盖。 */
+function register_agent_tools(
+  target: Record<string, Tool>,
+  source: Record<string, Tool>,
+  source_name: string,
+): void {
+  for (const [tool_name, tool_definition] of Object.entries(source)) {
+    if (Object.prototype.hasOwnProperty.call(target, tool_name)) {
+      throw new Error(
+        `Agent tool name conflict: "${tool_name}" from ${source_name}`,
+      );
+    }
+    target[tool_name] = tool_definition;
+  }
+}
 
 /**
  * SDK 本地 Agent。
@@ -55,9 +74,6 @@ export class Agent {
   /** 提供给 Plugin、Session 与宿主集成层共享的 Agent 执行上下文。 */
   private readonly context: AgentContext;
 
-  /** 当前 Agent configured env 的可变共享对象。 */
-  private readonly env: Record<string, string>;
-
   /** 调用方提供的自定义 Session 类；省略时使用 SDK 默认实现。 */
   private readonly SessionClass: AgentOptions["Session"];
 
@@ -67,27 +83,49 @@ export class Agent {
   /** 当前 Agent configured instruction 的可变有序集合。 */
   private instruction: string[];
 
+  /** 取消 Workspace env 变化订阅的函数。 */
+  private readonly unsubscribe_workspace_env: WorkspaceEnvUnsubscribe;
+
+  /** 取消 PluginRegistry 变化订阅的函数。 */
+  private readonly unsubscribe_plugin_change: PluginRegistryUnsubscribe;
+
+  /** 当前由 PluginRegistry 注册到 Agent 的 Tool 名称。 */
+  private readonly plugin_tool_names = new Set<string>();
+
   constructor(options: AgentOptions) {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Agent requires a non-empty id");
     if (!options.workspace) throw new Error("Agent requires a Workspace");
     this.workspace = options.workspace;
-    const store = this.workspace.bind_agent(this.id);
 
     this.SessionClass = options.Session;
     this.model = options.model;
-    this.tools = {
-      ...this.workspace.tools,
-      ...(options.tools && typeof options.tools === "object"
-        ? options.tools
-        : {}),
-    };
+    this.plugins = new PluginRegistry(options.plugins || []);
+    this.tools = {};
+    for (const tool_name of Object.keys(this.workspace.tools)) {
+      if (RESERVED_PLUGIN_TOOL_NAMES.has(tool_name)) {
+        throw new Error(
+          `Agent tool name conflict: "${tool_name}" is reserved for PluginRegistry`,
+        );
+      }
+    }
+    register_agent_tools(this.tools, this.workspace.tools, "WorkspaceTools");
+    this.sync_plugin_tools();
+    const custom_tools = options.tools && typeof options.tools === "object"
+      ? options.tools
+      : {};
+    for (const tool_name of Object.keys(custom_tools)) {
+      if (RESERVED_PLUGIN_TOOL_NAMES.has(tool_name)) {
+        throw new Error(
+          `Agent tool name conflict: "${tool_name}" is reserved for PluginRegistry`,
+        );
+      }
+    }
+    register_agent_tools(this.tools, custom_tools, "AgentOptions.tools");
     this.logger = new Logger();
     this.logger.bind_workspace(this.workspace.files);
-    this.env = resolve_agent_env(this.workspace.path, options.env);
     this.instruction = normalizeInstructionInput(options.instruction);
-
-    this.plugins = new PluginRegistry(options.plugins || []);
+    const store = this.workspace.bind_agent(this.id);
 
     this.sessions = new AgentSessions({
       agent_id: this.id,
@@ -96,7 +134,7 @@ export class Agent {
       tools: this.tools,
       logger: this.logger,
       get_instruction: () => this.instruction,
-      get_agent_env: () => this.getEnv(),
+      get_workspace_env: () => this.workspace.get_env(),
       get_agent_plugins: () => this.plugins.execution_view(),
       ensure_agent_ready: async () => {
         await this.ready();
@@ -110,18 +148,29 @@ export class Agent {
       rootPath: this.workspace.path,
       files: this.workspace.files,
       logger: this.logger,
-      get_env: () => this.env,
+      get_env: () => this.workspace.get_env(),
       get_systems: () => this.instruction,
       sessions: this.sessions,
       plugins: this.plugins,
+    });
+
+    this.unsubscribe_workspace_env = this.workspace.subscribe_env((env) => {
+      this.sessions.broadcast_env({ ...env }, generateId());
+    });
+    this.unsubscribe_plugin_change = this.plugins.subscribe_change((change) => {
+      this.sync_plugin_tools();
+      const verb = change.type === "register" ? "registered" : "unregistered";
+      this.sessions.broadcast_plugins({
+        command_id: generateId(),
+        title: `Agent plugin ${change.plugin_name} ${verb}`,
+        plugins: this.plugins.execution_view(),
+      });
     });
 
     // 关键点（中文）：装配完成后创建唯一状态对象，并立即启动长期运行时。
     this.state = new AgentState({
       context: this.context,
       plugins: this.plugins,
-      sessions: this.sessions,
-      tools: this.tools,
     });
   }
 
@@ -145,6 +194,8 @@ export class Agent {
    * - 不负责任何 transport（RPC / HTTP）；transport 由 `@downcity/server` 自行管理。
    */
   async dispose(): Promise<void> {
+    this.unsubscribe_workspace_env();
+    this.unsubscribe_plugin_change();
     try {
       await this.state.dispose();
     } finally {
@@ -162,62 +213,6 @@ export class Agent {
   setInstruction(input: string | string[]): void {
     const next_instruction = normalizeInstructionInput(input);
     this.instruction.splice(0, this.instruction.length, ...next_instruction);
-  }
-
-  /**
-   * 返回当前 agent env 的浅拷贝快照。
-   *
-   * 关键点（中文）
-   * - 返回的是拷贝，调用方修改它不会影响 agent 真实状态。
-   * - 想改 env 请使用 `setEnv` / `patchEnv`。
-   */
-  getEnv(): Record<string, string> {
-    return { ...this.env };
-  }
-
-  /**
-   * 整体覆盖 agent env。
-   *
-   * 关键点（中文）
-   * - 直接清空当前共享 env 对象，再写入新值，保证 plugin / runtime / shell 看到的是同一引用。
-   * - 仅写入字符串值，`null` / `undefined` 表示删除该 key。
-   */
-  setEnv(next: Record<string, string | null | undefined>): void {
-    for (const key of Object.keys(this.env)) {
-      delete this.env[key];
-    }
-    this.apply_env_patch(next);
-    this.sessions.broadcast_env(this.env, generateId());
-  }
-
-  /**
-   * 增量合并 agent env。
-   *
-   * 关键点（中文）
-   * - `null` / `undefined` 表示删除该 key；其他值会强制转字符串后写入。
-   * - configured env 原地更新；已有 Session 在下一 step 检查点提交 effective env。
-   */
-  patchEnv(patch: Record<string, string | null | undefined>): void {
-    this.apply_env_patch(patch);
-    this.sessions.broadcast_env(this.env, generateId());
-  }
-
-  /**
-   * 原地应用一次 env patch，不触发重复广播。
-   */
-  private apply_env_patch(
-    patch: Record<string, string | null | undefined>,
-  ): void {
-    if (!patch || typeof patch !== "object") return;
-    for (const [raw_key, raw_value] of Object.entries(patch)) {
-      const key = String(raw_key || "").trim();
-      if (!key) continue;
-      if (raw_value === null || raw_value === undefined) {
-        delete this.env[key];
-        continue;
-      }
-      this.env[key] = String(raw_value);
-    }
   }
 
   /**
@@ -239,5 +234,18 @@ export class Agent {
    */
   getShell(): Shell | undefined {
     return this.workspace.shell;
+  }
+
+  /** 将 PluginRegistry 当前 Tool Set 同步到 Agent 持有的工具集合。 */
+  private sync_plugin_tools(): void {
+    for (const tool_name of this.plugin_tool_names) {
+      delete this.tools[tool_name];
+    }
+    this.plugin_tool_names.clear();
+    const plugin_tools = this.plugins.tools();
+    register_agent_tools(this.tools, plugin_tools, "PluginRegistry");
+    for (const tool_name of Object.keys(plugin_tools)) {
+      this.plugin_tool_names.add(tool_name);
+    }
   }
 }

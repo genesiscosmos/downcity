@@ -1,0 +1,198 @@
+---
+title: Agent Runtime Architecture
+description: Session execution, checkpoints, message persistence, security boundaries, and cross-platform behavior
+---
+
+# Agent Runtime Architecture
+
+The runtime is designed to execute every input in a deterministic order, expose intermediate model and Tool state, and recover Sessions after process interruption.
+
+## Session is the execution boundary
+
+Each Session owns independent:
+
+- ID, metadata, and model override.
+- Message history and System Snapshot.
+- Prompt/Command queue.
+- Tool approval state.
+- Composer and Executor.
+- Live Mutation stream.
+
+```ts
+const session = await agent.sessions.create();
+const turn = await session.prompt({ query: "Inspect and fix the project" });
+const result = await turn.finished;
+```
+
+`prompt()` returns a Turn Handle instead of direct text. `finished` resolves for both success and failure; inspect `result.success` and `result.error` for the outcome.
+
+## How one Prompt runs
+
+```mermaid
+sequenceDiagram
+    participant App as Host
+    participant Session
+    participant Queue as SessionQueue
+    participant Messages as SessionMessages
+    participant Composer
+    participant Executor
+    participant Model as LanguageModel
+    participant Tool
+
+    App->>Session: prompt(query)
+    Session->>Queue: enqueue Prompt
+    Queue->>Messages: persist User Message
+    Queue->>Executor: create stable run context
+    Executor->>Composer: compose system, history, tools
+    Executor->>Model: run model Step
+    Model-->>Executor: text / reasoning / tool chunks
+    Executor->>Messages: write Assistant draft and Mutations
+    Executor->>Tool: execute Tool Call
+    Tool-->>Executor: Tool Result
+    Executor->>Model: continue Tool Loop
+    Executor->>Messages: commit final Assistant Message
+    Executor-->>App: turn.finished
+```
+
+The runtime guarantees:
+
+1. The User Message is persisted before the model call.
+2. Streaming Assistant output is first written as a recoverable draft.
+3. Text, Reasoning, Tool Calls, and Tool Results preserve canonical model-stream order.
+4. The Assistant Message enters Active history only after completion.
+5. An interrupted run can recover from the draft and Action state.
+
+## State checkpoints
+
+Only one execution loop is active per Session. Every input that can affect the next Step enters one ordered queue:
+
+- User Prompts.
+- Workspace environment updates.
+- Plugin registry updates.
+- Session model updates.
+- Explicit compaction.
+
+Changes are committed at Step boundaries, never halfway through a model call or Tool execution. An active Step uses the stable execution view created for it.
+
+Model resolution order is:
+
+```text
+Session model > Agent model
+```
+
+Agent and Session hold model instances supplied by the host. The SDK does not select or restore model services from a string model ID.
+
+## Composer and Executor
+
+`SessionComposer` owns model-context policy: combining system blocks, translating history, supplying Tools, creating compaction plans, and identifying context-limit errors.
+
+`Executor` owns one run: preventing concurrent execution within a Session, creating the run context, calling Composer, driving the model and Tool Loop, and handling aborts, retries, and context-limit recovery.
+
+Neither object knows the physical Session storage path, the Agent list, or HTTP/RPC transports.
+
+## System Snapshot
+
+A Session supports three System semantics:
+
+- Default: use the current Agent instruction, Plugin system, and Session context at execution time.
+- `snapshot()`: persist the current complete system for this Session.
+- `syncshot()`: regenerate from current Agent state and replace an existing snapshot.
+
+`system()` returns the effective structured System Snapshot. Updating the Agent instruction does not unconditionally overwrite a Session that has already been snapshotted.
+
+## Messages and persistence
+
+Local state lives under `.downcity` in the Workspace:
+
+```text
+<workspace>/.downcity/
+├─ agents/<agent-id>/
+│  ├─ sessions/<session-id>/
+│  │  ├─ instruction.md
+│  │  └─ messages/
+│  │     ├─ meta.json
+│  │     ├─ active.jsonl
+│  │     ├─ assistant_message.json
+│  │     └─ segments/*.jsonl
+│  └─ archived-sessions/
+├─ resources/
+├─ logs/
+├─ schedule.jsonl
+└─ sandbox/
+```
+
+- `active.jsonl` stores history since the last compaction.
+- `assistant_message.json` stores the latest complete streaming Assistant draft.
+- `segments` stores immutable compacted history prefixes.
+- `instruction.md` stores an explicitly persisted System Snapshot.
+
+Messages use monotonically increasing `sequence` values; streaming updates to the same Message use increasing `revision` values. JSON files are atomically replaced with a temporary file, `fsync`, and `rename`; cross-process writes are serialized through Workspace locks.
+
+Hosts should read structured state through `session.messages()`, `get_info()`, and `system()` instead of depending on these physical file names.
+
+## Live observation
+
+`subscribe()` emits Mutations that occur after subscription:
+
+```ts
+const unsubscribe = session.subscribe((mutation) => {
+  if (mutation.variant === "delta" && mutation.type === "text") {
+    process.stdout.write(mutation.delta);
+  }
+});
+```
+
+Mutations cover complete Messages, Assistant Parts, text/reasoning deltas, Turn state, and Session state. After a disconnect, reload the canonical snapshot with `messages()` before establishing a new subscription.
+
+## Plugin runtime
+
+Plugins belong to Agent, not Workspace. They may contribute Actions, System text, Hooks, Resolve Points, Lifecycle behavior, and HTTP injection definitions.
+
+PluginRegistry changes take effect at Session checkpoints. A Plugin startup failure isolates that Plugin without blocking others. Agent disposal stops ActionSchedule and unloads Plugins.
+
+ActionSchedule is a local delayed Plugin Action scheduler. Events are stored in `.downcity/schedule.jsonl`; after restart, abandoned running entries recover to pending. It is not a distributed scheduler and provides no cross-machine leader election.
+
+## Security model
+
+Security is enforced at distinct capability boundaries:
+
+| Capability | Enforced boundary | Permission semantics |
+| --- | --- | --- |
+| File/Search Tools | Rooted LocalFileSystem | May actively access only the Workspace |
+| Safe Shell | OS Sandbox Adapter | Workspace is writable; host-declared extra paths are read-only |
+| Unrestricted Shell | Approval gateway | The user explicitly authorizes one command |
+| Plugin | Plugin business authorization | Workspace does not own all Plugin resource access |
+| Custom Tool | Registering host | Agent Core does not infer business permissions |
+
+Explicit attachments may use an absolute path selected by the host because they are declared Prompt inputs. This does not expand where model-driven File/Search Tools may browse.
+
+## Cross-platform strategy
+
+Node.js already normalizes files, paths, networking, JSON, timers, AbortController, and basic child processes. Agent, Session, Store, and Workspace therefore contain no operating-system branches.
+
+Only native security and process semantics enter platform Adapters:
+
+- macOS Seatbelt.
+- Linux Bubblewrap / namespaces.
+- Windows MXC or SRT.
+- Unix PTY and Windows ConPTY.
+- Signals, process groups, and Windows Job Objects.
+
+When Downcity is installed on macOS, core packages contain portable TypeScript/JavaScript logic but do not automatically install native Windows Sandbox packages. Supporting Windows only changes the Sandbox Adapter injected by the host.
+
+## Lifecycle
+
+```mermaid
+flowchart LR
+    Construct["new Agent"] --> Plugins["start Plugin lifecycle"]
+    Plugins --> Schedule["start ActionSchedule"]
+    Schedule --> Ready["agent.ready()"]
+    Ready --> Running["create or restore Sessions"]
+    Running --> Dispose["agent.dispose()"]
+    Dispose --> Workspace["Workspace.dispose()"]
+    Workspace --> Shell["close processes and Sandbox"]
+```
+
+`ready()` is an optional explicit readiness barrier; Sessions also wait before their first execution. `dispose()` releases Agent, Plugin, Schedule, Workspace, and Shell resources, but it does not close HTTP/RPC transports created by `@downcity/server`.
+
+Continue with [Agent Lifecycle](/en/docs/agent/lifecycle).

@@ -175,3 +175,44 @@ test("Chat 装配严格使用当前 Agent 绑定与 queue 配置", async () => {
   assert.equal(unbound.isChannelEnabled({}, "telegram"), false);
   assert.equal(unbound.getChannelAccountId({}, "telegram"), "");
 });
+
+test("CLI 通过 City Store Adapter 向 ChatPlugin 注入共享账号", async () => {
+  const platform_root = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  try {
+    const { CityChatAccountStore } = await import(
+      "../bin/city/runtime/plugins/CityChatAccountStore.js"
+    );
+    const account_store = new CityChatAccountStore();
+    await account_store.upsert({
+      id: "telegram-main",
+      channel: "telegram",
+      name: "main bot",
+    });
+
+    const { createCityStaticBuiltinPlugins } = await import(
+      "../bin/city/runtime/plugins/CityBuiltinPlugins.js"
+    );
+    const plugins = createCityStaticBuiltinPlugins({
+      config: {
+        id: "agent_test",
+        version: "1.0.0",
+        plugins: {
+          chat: {
+            channels: {
+              telegram: {
+                enabled: true,
+                channelAccountId: "telegram-main",
+              },
+            },
+          },
+        },
+      },
+    });
+    const chat = plugins.find((plugin) => plugin.name === "chat");
+    assert.equal(chat.resolveChannelAccount({}, "telegram")?.name, "main bot");
+  } finally {
+    delete process.env.DC_PLATFORM_ROOT;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+  }
+});

@@ -99,12 +99,15 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
       }),
     },
   });
+  const workspace = new Workspace({
+    path: agent_path,
+    env: { TURN_ENV: "old" },
+  });
   const agent = new Agent({
     id: "config_turn_boundary_agent",
-    workspace: new Workspace({ path: agent_path }),
+    workspace,
     model,
     instruction: ["instruction:old"],
-    env: { TURN_ENV: "old" },
     plugins: [runtime_plugin],
   });
 
@@ -116,7 +119,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
     await first_provider_request_started.promise;
 
     agent.setInstruction(["instruction:new"]);
-    agent.patchEnv({ TURN_ENV: "new" });
+    workspace.patch_env({ TURN_ENV: "new" });
     await agent.plugins.unregister("runtime-config");
     const steer_turn_promise = session.prompt({ query: "steer" });
 
@@ -142,7 +145,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
       .filter((message) => message.type === "action" && message.status === "completed")
       .map((message) => message.title);
     assert.deepEqual(completed_actions, [
-      "Agent environment updated",
+      "Workspace environment updated",
       "Agent plugin runtime-config unregistered",
     ]);
 

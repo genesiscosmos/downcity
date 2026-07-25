@@ -9,7 +9,7 @@
 
 import path from "node:path";
 import { getLogger } from "@/utils/logger/Logger.js";
-import { resolve_agent_env } from "@/agent/AgentEnv.js";
+import { resolve_workspace_env } from "@/workspace/WorkspaceEnv.js";
 import { findPluginByName } from "@/plugin/core/PluginCatalog.js";
 import type { JsonValue } from "@/types/common/Json.js";
 import type { Plugin } from "@/types/plugin/PluginDefinition.js";
@@ -33,7 +33,7 @@ export function createLocalPluginCommandContext(
 ): PluginCommandContext {
   const projectRoot = typeof input === "string" ? input : input.projectRoot;
   const rootPath = path.resolve(String(projectRoot || "").trim() || ".");
-  const env = resolve_agent_env(rootPath);
+  const env = resolve_workspace_env(rootPath);
   const agent_id = String(
     typeof input === "string" ? "" : input.agent_id || "",
   ).trim() || path.basename(rootPath) || "agent";

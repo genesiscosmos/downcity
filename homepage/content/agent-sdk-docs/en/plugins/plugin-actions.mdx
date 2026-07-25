@@ -39,7 +39,7 @@ actions: {
 - running the business logic
 - returning `success / data / error / message`
 
-When an action is called by a Session tool, its parameters also include the explicit `run_context` for that Session turn. It may be absent for direct CLI, HTTP, or scheduler calls. Use `run_context.agentEnv` and `run_context.agentSystems` for the effective step configuration; `context.env` and `context.systems` remain the Agent-level configured values.
+When an action is called by a Session tool, its parameters also include the explicit `run_context` for that Session turn. It may be absent for direct CLI, HTTP, or scheduler calls. Use `run_context.workspace_env` and `run_context.agentSystems` for the effective step configuration; `context.env` is the current Workspace snapshot and `context.systems` contains Agent instructions.
 
 ## `command`
 

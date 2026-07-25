@@ -10,13 +10,17 @@ description: 在 Node 应用中嵌入 Downcity Agent 运行时
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
 
+const workspace = new Workspace({
+  path: process.cwd(),
+  env: { API_KEY: process.env.API_KEY ?? "" },
+});
+
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: process.cwd() }),
+  workspace,
   model,
   tools: { search: search_tool },
   plugins: [plugin],
-  env: { API_KEY: process.env.API_KEY ?? "" },
 });
 
 const session = await agent.sessions.create();
@@ -26,7 +30,7 @@ const result = await turn.finished;
 await agent.dispose();
 ```
 
-`Workspace` 是统一资源容器，同时提供 AgentStore、AgentTools 与可选 Shell。Session 历史和元数据默认保存在同一个项目的 `.downcity` 目录中，也可以被 Workspace 的文件工具正常读取和编辑；创建 Agent 时不需要单独配置 Store。
+`Workspace` 是统一资源容器，同时提供 AgentStore、WorkspaceTools、Env 与可选 Shell。Session 历史和元数据默认保存在同一个项目的 `.downcity` 目录中，也可以被 Workspace 的文件工具正常读取和编辑；创建 Agent 时不需要单独配置 Store。
 
 每个 Workspace 实例只绑定一个 Agent，并由 `agent.dispose()` 一并释放。多个 Agent 可以操作同一物理目录，但需要分别创建 Workspace 实例。
 
@@ -79,4 +83,8 @@ const timeline = page.items.flatMap(to_session_message_timeline_events);
 
 Session JSONL、日志和调度任务统一通过 Workspace FileSystem 完成根目录限制、原子写入与跨进程文件事务。应用应通过 Agent 和 Session API 访问结构化状态，而不是直接读取物理存储布局。
 
-继续阅读：[完整 Agent SDK 文档](/zh/agent-sdk-docs)。
+继续阅读：
+
+- [SDK 架构](/zh/docs/agent/sdk-architecture)
+- [运行时架构](/zh/docs/agent/runtime-architecture)
+- [完整 Agent SDK API 文档](/zh/agent-sdk-docs)
