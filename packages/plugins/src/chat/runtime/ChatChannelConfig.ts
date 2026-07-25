@@ -7,7 +7,7 @@
  */
 
 import type { JsonObject } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { StoredChannelAccount } from "@/chat/types/ChannelAccountStore.js";
 import type {
   ChatChannelName,
@@ -35,7 +35,7 @@ function toJsonObject(input: unknown): JsonObject {
  * - 字段命名与 Agent 全局配置保持一致，便于前端直接映射编辑。
  */
 export function buildChatChannelConfigSummary(
-  context: AgentContext,
+  context: PluginContext,
   channel: ChatChannelName,
   accountInput?: StoredChannelAccount | null,
 ): Record<string, string | number | boolean | null> {
@@ -68,7 +68,7 @@ export function buildChatChannelConfigSummary(
  */
 export function getChatChannelStatus(
   state: ChatChannelState,
-  context: AgentContext,
+  context: PluginContext,
   channel: ChatChannelName,
 ): ChatChannelStateSnapshot {
   const enabled = isChatChannelEnabled(context, channel);

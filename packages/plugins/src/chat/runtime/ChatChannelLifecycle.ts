@@ -7,7 +7,7 @@
  * - 本模块不处理配置持久化，也不负责 action 输入输出包装。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
 import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 import { createTelegramBot } from "@/chat/channels/telegram/Bot.js";
@@ -44,7 +44,7 @@ async function createFeishuBotLazy(
      */
     domain: string;
   },
-  context: AgentContext,
+  context: PluginContext,
 ) {
   const module_value = await import("@/chat/channels/feishu/Feishu.js");
   return await module_value.createFeishuBot(options, context);
@@ -52,7 +52,7 @@ async function createFeishuBotLazy(
 
 async function startTelegramChannel(
   state: ChatChannelState,
-  context: AgentContext,
+  context: PluginContext,
 ): Promise<void> {
   if (!isChatChannelEnabled(context, "telegram")) return;
   context.logger.info("Telegram channel enabled");
@@ -73,7 +73,7 @@ async function startTelegramChannel(
 
 async function startFeishuChannel(
   state: ChatChannelState,
-  context: AgentContext,
+  context: PluginContext,
 ): Promise<void> {
   if (!isChatChannelEnabled(context, "feishu")) return;
   context.logger.info("Feishu channel enabled");
@@ -97,7 +97,7 @@ async function startFeishuChannel(
 
 async function startQQChannel(
   state: ChatChannelState,
-  context: AgentContext,
+  context: PluginContext,
 ): Promise<void> {
   if (!isChatChannelEnabled(context, "qq")) return;
   context.logger.info("QQ chat platform enabled");
@@ -124,7 +124,7 @@ async function startQQChannel(
  */
 export async function startSingleChatChannel(
   state: ChatChannelState,
-  context: AgentContext,
+  context: PluginContext,
   channel: ChatChannelName,
 ): Promise<void> {
   if (channel === "telegram") {
@@ -169,7 +169,7 @@ export async function stopSingleChatChannel(
  */
 export async function startChatChannels(
   state: ChatChannelState,
-  context: AgentContext,
+  context: PluginContext,
 ): Promise<void> {
   if (state.telegram || state.feishu || state.qq) {
     await stopChatChannels(state);

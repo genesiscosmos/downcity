@@ -37,12 +37,12 @@ export async function assertPlatformModelReady(modelId: string): Promise<void> {
 /**
  * 断言项目 execution 绑定已声明且目标模型可用。
  */
-export async function assertProjectExecutionModelReady(projectRoot: string): Promise<void> {
-  const config = readAgentConfig(projectRoot);
+export async function assertProjectExecutionModelReady(project_root: string): Promise<void> {
+  const config = readAgentConfig(project_root);
   if (!config) {
     throw new Error("Agent config not found in global DB. Run `city agent create` first.");
   }
-  const primaryModelId = String(config.execution?.type === "api" ? config.execution.modelId || "" : "").trim();
+  const primaryModelId = String(config.execution?.type === "api" ? config.execution.model_id || "" : "").trim();
   if (!primaryModelId) {
     throw new Error(
       'Invalid agent config: "execution" is required and must be { "type": "api", "modelId": "..." }',

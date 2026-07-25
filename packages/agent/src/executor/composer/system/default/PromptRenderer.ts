@@ -19,7 +19,7 @@ import {
  * 关键点（中文）
  * - 自动过滤空串并执行变量替换。
  */
-export async function transformPromptsIntoSystemMessages(
+export async function transform_prompts_into_system_messages(
   prompts: string[],
   options?: {
     /**
@@ -30,7 +30,7 @@ export async function transformPromptsIntoSystemMessages(
     /**
      * 会话 ID（用于模板变量）。
      */
-    sessionId?: string;
+    session_id?: string;
 
     /**
      * 变量替换模式。

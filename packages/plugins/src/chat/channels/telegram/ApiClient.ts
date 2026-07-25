@@ -40,9 +40,9 @@ export class TelegramApiClient {
   private readonly rootPath: string;
   private readonly logger: Logger;
 
-  constructor(opts: { botToken: string; projectRoot: string; logger: Logger }) {
+  constructor(opts: { botToken: string; project_root: string; logger: Logger }) {
     this.botToken = opts.botToken;
-    this.rootPath = opts.projectRoot;
+    this.rootPath = opts.project_root;
     this.logger = opts.logger;
   }
 
@@ -134,7 +134,7 @@ export class TelegramApiClient {
           throw error;
         }
 
-        const delayMs =
+        const delay_ms =
           TELEGRAM_SEND_RETRY_DELAYS_MS[attempt] ||
           TELEGRAM_SEND_RETRY_DELAYS_MS[
             TELEGRAM_SEND_RETRY_DELAYS_MS.length - 1
@@ -142,10 +142,10 @@ export class TelegramApiClient {
         this.logger.warn("Telegram send failed, retrying", {
           method,
           attempt: attempt + 1,
-          retryInMs: delayMs,
+          retryInMs: delay_ms,
           error: String(error),
         });
-        await sleep(delayMs);
+        await sleep(delay_ms);
       }
     }
 
@@ -344,7 +344,7 @@ export class TelegramApiClient {
    */
   async setMessageReaction(
     chatId: string,
-    messageId: number,
+    message_id: number,
     opts?: { emoji?: string; isBig?: boolean },
   ): Promise<void> {
     const emoji =
@@ -353,7 +353,7 @@ export class TelegramApiClient {
         : "👍";
     await this.requestJson("setMessageReaction", {
       chat_id: chatId,
-      message_id: messageId,
+      message_id: message_id,
       reaction: [{ type: "emoji", emoji }],
       ...(opts?.isBig === true ? { is_big: true } : {}),
     });

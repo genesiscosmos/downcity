@@ -51,7 +51,7 @@ export class AgentRPC {
         host,
         port,
         sessions: this.agent.sessions,
-        getAgentContext: () => this.agent.getContext(),
+        get_agent: () => this.agent,
       });
       this.rpc_instance = instance;
       this.current_binding = {

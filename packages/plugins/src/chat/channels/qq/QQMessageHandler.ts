@@ -8,7 +8,7 @@
  */
 
 import type { Logger } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type {
   ChannelChatKeyParams,
   IncomingChatAccessParams,
@@ -38,7 +38,7 @@ export type QqMessageActor = {
   /**
    * QQ 用户 ID / openid。
    */
-  userId?: string;
+  user_id?: string;
   /**
    * QQ 用户展示名。
    */
@@ -52,7 +52,7 @@ export interface QQMessageHandlerOptions {
   /**
    * 当前 agent context。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * 项目根目录。
    */
@@ -66,7 +66,7 @@ export interface QQMessageHandlerOptions {
    */
   getBotUserId(): string;
   /**
-   * 计算 channel chatKey。
+   * 计算 channel chat_key。
    */
   getChatKey(params: ChannelChatKeyParams): string;
   /** 入站 Chat Access 判定。 */
@@ -90,15 +90,15 @@ export interface QQMessageHandlerOptions {
    */
   shouldSkipDuplicatedInboundMessage(
     eventType: string,
-    messageId: string | undefined,
+    message_id: string | undefined,
   ): Promise<boolean>;
   /**
    * Audit 队列写入。
    */
   enqueueAuditMessage(params: {
     chatId: string;
-    messageId?: string;
-    userId?: string;
+    message_id?: string;
+    user_id?: string;
     text: string;
     meta?: ChannelUserMessageMeta;
   }): Promise<void>;
@@ -108,7 +108,7 @@ export interface QQMessageHandlerOptions {
   handleCommand(params: {
     chatId: string;
     chatType: string;
-    messageId: string;
+    message_id: string;
     command: string;
   }): Promise<void>;
   /**
@@ -117,7 +117,7 @@ export interface QQMessageHandlerOptions {
   executeAndReply(params: {
     chatId: string;
     chatType: string;
-    messageId: string;
+    message_id: string;
     instructions: string;
     actor?: QqMessageActor;
     chatTitle?: string;
@@ -140,15 +140,15 @@ export async function handleQqGroupMessage(
 ): Promise<void> {
   const eventType = String(params.eventType || "").trim();
   const data = params.data;
-  const messageId =
+  const message_id =
     typeof data.id === "string" ? data.id.trim() : String(data.id || "").trim();
-  if (!messageId) return;
+  if (!message_id) return;
 
   const groupId = resolveQqGroupChatId(data);
   if (!groupId) {
     options.logger.warn("QQ 群消息缺少 groupId，已忽略", {
       eventType: eventType || EventType.GROUP_MESSAGE_CREATE,
-      messageId,
+      message_id,
     });
     return;
   }
@@ -168,19 +168,19 @@ export async function handleQqC2CMessage(
   options: QQMessageHandlerOptions,
   data: QQMessageData,
 ): Promise<void> {
-  const messageId =
+  const message_id =
     typeof data.id === "string" ? data.id.trim() : String(data.id || "").trim();
-  if (!messageId) return;
+  if (!message_id) return;
 
   const actor = extractQqAuthorIdentity(data.author, data);
   const chatId = resolveQqC2cChatId({
     data,
-    actorUserId: actor.userId,
+    actor_user_id: actor.user_id,
   });
   if (!chatId) {
-    options.logger.warn("QQ C2C 消息缺少 userId，已忽略", {
+    options.logger.warn("QQ C2C 消息缺少 user_id，已忽略", {
       eventType: EventType.C2C_MESSAGE_CREATE,
-      messageId,
+      message_id,
     });
     return;
   }
@@ -201,13 +201,13 @@ export async function handleQqChannelMessage(
   options: QQMessageHandlerOptions,
   data: QQMessageData,
 ): Promise<void> {
-  const { id: messageId, channel_id: channelId, content, author } = data;
-  if (!channelId || !messageId) return;
+  const { id: message_id, channel_id: channelId, content, author } = data;
+  if (!channelId || !message_id) return;
   const chatType = "channel";
   if (
     await options.shouldSkipDuplicatedInboundMessage(
       EventType.AT_MESSAGE_CREATE,
-      messageId,
+      message_id,
     )
   ) {
     return;
@@ -226,15 +226,15 @@ export async function handleQqChannelMessage(
     chatId: channelId,
     chatType,
     chatTitle,
-    userId: actor.userId,
+    user_id: actor.user_id,
     username: actor.username,
   });
   if (!access_result.allowed) return;
 
   const botUserId = options.getBotUserId();
-  if (actor.userId && botUserId && actor.userId === botUserId) {
+  if (actor.user_id && botUserId && actor.user_id === botUserId) {
     options.logger.debug("忽略机器人自身消息（channel）", {
-      messageId,
+      message_id,
       channelId,
       botUserId,
     });
@@ -247,7 +247,7 @@ export async function handleQqChannelMessage(
     await options.handleCommand({
       chatId: channelId,
       chatType: "channel",
-      messageId,
+      message_id,
       command: userMessage,
     });
     return;
@@ -257,8 +257,8 @@ export async function handleQqChannelMessage(
     context: options.context,
     rootPath: options.rootPath,
     chatId: channelId,
-    chatKey: options.getChatKey({ chatId: channelId, chatType }),
-    messageId,
+    chat_key: options.getChatKey({ chatId: channelId, chatType }),
+    message_id,
     userMessage,
     attachments: incomingAttachments,
     getAuthToken: () => options.getAuthToken(),
@@ -268,7 +268,7 @@ export async function handleQqChannelMessage(
   await options.executeAndReply({
     chatId: channelId,
     chatType: "channel",
-    messageId,
+    message_id,
     instructions,
     actor,
     chatTitle,
@@ -290,24 +290,24 @@ async function handleQqInboundMessage(
 ): Promise<void> {
   const eventType = String(params.eventType || "").trim();
   const chatId = String(params.chatId || "").trim();
-  const messageId =
+  const message_id =
     typeof params.data.id === "string"
       ? params.data.id.trim()
       : String(params.data.id || "").trim();
-  if (!chatId || !messageId) return;
+  if (!chatId || !message_id) return;
 
-  if (await options.shouldSkipDuplicatedInboundMessage(eventType, messageId)) {
+  if (await options.shouldSkipDuplicatedInboundMessage(eventType, message_id)) {
     return;
   }
 
   const actor = params.actor || extractQqAuthorIdentity(params.data.author, params.data);
   const chatType = params.chatType;
-  if (!actor.userId) {
-    options.logger.warn("QQ 入站消息缺少发送者 userId，已忽略", {
+  if (!actor.user_id) {
+    options.logger.warn("QQ 入站消息缺少发送者 user_id，已忽略", {
       eventType,
       chatId,
       chatType,
-      messageId,
+      message_id,
     });
     return;
   }
@@ -318,7 +318,7 @@ async function handleQqInboundMessage(
     actorName: actor.username,
   });
   const isGroup = chatType === "group";
-  const chatKey = options.getChatKey({ chatId, chatType });
+  const chat_key = options.getChatKey({ chatId, chatType });
   const rawContent = String(params.data.content || "");
   const incomingAttachments = extractQqInboundAttachments(params.data);
   const hasIncomingAttachment = incomingAttachments.length > 0;
@@ -331,7 +331,7 @@ async function handleQqInboundMessage(
     chatId,
     chatType,
     chatTitle,
-    userId: actor.userId,
+    user_id: actor.user_id,
     username: actor.username,
   });
   if (!access_result.allowed) {
@@ -348,8 +348,8 @@ async function handleQqInboundMessage(
   const enqueueAudit = async (opts: { reason: string; kind?: string }): Promise<void> => {
     await options.enqueueAuditMessage({
       chatId,
-      messageId,
-      userId: actor.userId,
+      message_id,
+      user_id: actor.user_id,
       text: buildQqAuditText({
         rawContent,
         cleanedText,
@@ -366,12 +366,12 @@ async function handleQqInboundMessage(
     });
   };
 
-  if (actor.userId && botUserId && actor.userId === botUserId) {
+  if (actor.user_id && botUserId && actor.user_id === botUserId) {
     if (isGroup) {
       await enqueueAudit({ reason: "bot_originated" });
     }
     options.logger.debug("忽略机器人自身消息", {
-      messageId,
+      message_id,
       chatId,
       chatType,
       botUserId,
@@ -396,7 +396,7 @@ async function handleQqInboundMessage(
     await options.handleCommand({
       chatId,
       chatType,
-      messageId,
+      message_id,
       command: cleanedText,
     });
     return;
@@ -411,8 +411,8 @@ async function handleQqInboundMessage(
     context: options.context,
     rootPath: options.rootPath,
     chatId,
-    chatKey,
-    messageId,
+    chat_key,
+    message_id,
     userMessage: cleanedText,
     attachments: incomingAttachments,
     getAuthToken: () => options.getAuthToken(),
@@ -425,7 +425,7 @@ async function handleQqInboundMessage(
   await options.executeAndReply({
     chatId,
     chatType,
-    messageId,
+    message_id,
     instructions,
     actor,
     chatTitle,

@@ -447,7 +447,7 @@ export async function resolveFeishuReplyContext(
     const item = Array.isArray(payload?.data?.items) ? payload.data.items[0] : undefined;
     if (!item) return undefined;
     return buildFeishuReplyContext({
-      messageId:
+      message_id:
         typeof item.message_id === "string" ? item.message_id : parentMessageId,
       messageType: item.msg_type,
       ...(typeof item.body?.content === "string"
@@ -472,7 +472,7 @@ export async function downloadFeishuIncomingAttachments(
     /**
      * 当前消息 ID。
      */
-    messageId: string;
+    message_id: string;
     /**
      * 待下载附件列表。
      */
@@ -489,17 +489,17 @@ export async function downloadFeishuIncomingAttachments(
     try {
       const resource = await deps.client.im.v1.messageResource.get({
         path: {
-          message_id: params.messageId,
+          message_id: params.message_id,
           file_key: attachment.resourceKey,
         },
         params: {
-          type: attachment.resourceType,
+          type: attachment.resource_type,
         },
       });
 
       const fileName = buildFeishuInboundCacheFileName({
         attachment,
-        messageId: params.messageId,
+        message_id: params.message_id,
         headers: resource.headers,
       });
       const outPath = path.join(dir, fileName);
@@ -511,9 +511,9 @@ export async function downloadFeishuIncomingAttachments(
       });
     } catch (error) {
       deps.logger.warn("Failed to download incoming Feishu attachment", {
-        messageId: params.messageId,
+        message_id: params.message_id,
         resourceKey: attachment.resourceKey,
-        resourceType: attachment.resourceType,
+        resource_type: attachment.resource_type,
         error: String(error),
       });
     }

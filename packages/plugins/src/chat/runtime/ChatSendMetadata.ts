@@ -133,38 +133,38 @@ export function parseChatSendOptionsFromMetadata(params: {
       : {};
   const strict = params.strict === true;
 
-  const chatKey = normalizeText(
-    pickMetadataValue(metadata, ["chatKey", "chat-key"]),
+  const chat_key = normalizeText(
+    pickMetadataValue(metadata, ["chat_key", "chat-key"]),
   );
-  const delayMs = parseNonNegativeInt(
-    pickMetadataValue(metadata, ["delayMs", "delay-ms", "delay"]),
+  const delay_ms = parseNonNegativeInt(
+    pickMetadataValue(metadata, ["delay_ms", "delay-ms", "delay"]),
     "delay",
     strict,
   );
-  const sendAtMs = parseSendAtMs(
-    pickMetadataValue(metadata, ["sendAtMs", "send-at-ms", "sendAt", "send-at", "time"]),
+  const send_at_ms = parseSendAtMs(
+    pickMetadataValue(metadata, ["send_at_ms", "send-at-ms", "sendAt", "send-at", "time"]),
     "time",
     strict,
   );
-  if (typeof delayMs === "number" && typeof sendAtMs === "number") {
+  if (typeof delay_ms === "number" && typeof send_at_ms === "number") {
     throw new Error("`delay` and `time` cannot be used together.");
   }
 
   const explicitMessageId = parseOptionalMessageId(
-    pickMetadataValue(metadata, ["messageId", "message-id"]),
+    pickMetadataValue(metadata, ["message_id", "message-id"]),
   );
   const replyRaw = pickMetadataValue(metadata, ["reply"]);
   const replyAsBoolean = parseBoolean(replyRaw);
   const replyAsMessageId =
     explicitMessageId || (replyAsBoolean === undefined ? parseOptionalMessageId(replyRaw) : undefined);
-  const replyToMessage =
+  const reply_to_message =
     replyAsBoolean === true || typeof replyAsMessageId === "string";
 
   return {
-    ...(chatKey ? { chatKey } : {}),
-    ...(typeof delayMs === "number" ? { delayMs } : {}),
-    ...(typeof sendAtMs === "number" ? { sendAtMs } : {}),
-    ...(replyToMessage ? { replyToMessage: true } : {}),
-    ...(typeof replyAsMessageId === "string" ? { messageId: replyAsMessageId } : {}),
+    ...(chat_key ? { chat_key } : {}),
+    ...(typeof delay_ms === "number" ? { delay_ms } : {}),
+    ...(typeof send_at_ms === "number" ? { send_at_ms } : {}),
+    ...(reply_to_message ? { reply_to_message: true } : {}),
+    ...(typeof replyAsMessageId === "string" ? { message_id: replyAsMessageId } : {}),
   };
 }

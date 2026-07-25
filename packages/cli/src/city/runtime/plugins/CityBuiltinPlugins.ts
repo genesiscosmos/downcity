@@ -7,7 +7,8 @@
  * - 静态 CLI catalog 使用同一套 City 装配入口，但不注入需要 City 登录态的 image/sound。
  */
 
-import type { BasePlugin, DowncityConfig } from "@downcity/agent";
+import type { BasePlugin } from "@downcity/agent";
+import type { DowncityConfig } from "@/city/types/config/DowncityConfig.js";
 import {
   ChatPlugin,
   FeishuChannel,

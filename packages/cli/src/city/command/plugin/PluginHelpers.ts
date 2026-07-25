@@ -10,9 +10,9 @@
 
 import prompts from "@/city/tui/Prompts.js";
 import {
-  listPluginViews,
-  listPluginsWithLifecycle,
-  listPluginsWithoutLifecycle,
+  list_plugin_views,
+  list_plugins_with_lifecycle,
+  list_plugins_without_lifecycle,
 } from "@downcity/agent";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import type { JsonValue, PluginCliBaseOptions } from "@downcity/agent";
@@ -28,7 +28,7 @@ type StaticCatalogEntry = {
   kind: "agent-runtime" | "action";
   actionCount: number;
   actions: string[];
-  hasSystem: boolean;
+  has_system: boolean;
   note?: string;
 };
 
@@ -54,12 +54,12 @@ export function createVisiblePluginCatalog() {
   return createPluginCatalog();
 }
 
-export function listVisiblePluginActions(pluginName: string, actions: string[]): string[] {
-  if (pluginName === "chat") {
+export function listVisiblePluginActions(plugin_name: string, actions: string[]): string[] {
+  if (plugin_name === "chat") {
     // 关键点（中文）：City 只展示 chat plugin 的用户操作能力，不展示 platform 运行态控制。
     return actions.filter((action) => !CHAT_RUNTIME_ACTIONS_HIDDEN_FROM_CITY.has(action));
   }
-  if (pluginName === "contact") {
+  if (plugin_name === "contact") {
     // 关键点（中文）：remote* action 是 agent-to-agent 内部协议入口，不作为普通用户 action 展示。
     return actions.filter((action) => !CONTACT_REMOTE_ACTIONS_HIDDEN_FROM_CITY.has(action));
   }
@@ -67,16 +67,16 @@ export function listVisiblePluginActions(pluginName: string, actions: string[]):
 }
 
 export async function resolvePluginProjectRoot(options: PluginCliBaseOptions): Promise<{
-  projectRoot?: string;
+  project_root?: string;
   error?: string;
 }> {
-  return { projectRoot: resolveProjectRoot(options.path) };
+  return { project_root: resolveProjectRoot(options.path) };
 }
 
-export function validatePluginProjectRoot(projectRoot: string): string | null {
-  return readAgentConfig(projectRoot)
+export function validatePluginProjectRoot(project_root: string): string | null {
+  return readAgentConfig(project_root)
     ? null
-    : `Invalid plugin project path: ${projectRoot}. Missing agent config. Run \`city agent create\` first.`;
+    : `Invalid plugin project path: ${project_root}. Missing agent config. Run \`city agent create\` first.`;
 }
 
 export function parseCommandPayload(raw?: string): JsonValue | undefined {
@@ -105,7 +105,7 @@ export function renderPluginCatalogTable(rows: Array<{
   title: string;
   kind: "agent-runtime" | "action";
   actionCount: number;
-  hasSystem: boolean;
+  has_system: boolean;
 }>): void {
   if (rows.length === 0) {
     emitCliBlock({
@@ -121,7 +121,7 @@ export function renderPluginCatalogTable(rows: Array<{
     row.name,
     row.kind,
     String(row.actionCount),
-    row.hasSystem ? "yes" : "no",
+    row.has_system ? "yes" : "no",
     row.title,
   ]);
   const widths = headers.map((header, index) =>
@@ -146,7 +146,7 @@ export function renderPluginCatalogTable(rows: Array<{
 
 export function listStaticCatalogEntries(): StaticCatalogEntry[] {
   const plugins = createVisiblePluginCatalog();
-  const managedEntries = listPluginsWithLifecycle(plugins).map((plugin) => {
+  const managedEntries = list_plugins_with_lifecycle(plugins).map((plugin) => {
     const actions = listVisiblePluginActions(
       plugin.name,
       Object.keys(plugin.actions || {}).sort((left, right) => left.localeCompare(right)),
@@ -157,20 +157,20 @@ export function listStaticCatalogEntries(): StaticCatalogEntry[] {
       kind: "agent-runtime" as const,
       actionCount: actions.length,
       actions,
-      hasSystem: typeof plugin.system === "function",
+      has_system: typeof plugin.system === "function",
       note: "Runs inside an agent. City only shows the catalog here; runtime is owned by the agent process.",
     };
   });
 
-  const localPlugins = listPluginsWithoutLifecycle(plugins);
-  const localEntries = listPluginViews(localPlugins).map((plugin) => {
+  const localPlugins = list_plugins_without_lifecycle(plugins);
+  const localEntries = list_plugin_views(localPlugins).map((plugin) => {
     return {
       name: plugin.name,
       title: plugin.title,
       kind: "action" as const,
       actionCount: plugin.actions.length,
       actions: [...plugin.actions],
-      hasSystem: plugin.hasSystem,
+      has_system: plugin.has_system,
       note: "Action/system plugin. It runs through agent/plugin action execution, not City runtime.",
     };
   });
@@ -185,8 +185,8 @@ export function listStaticCatalogEntries(): StaticCatalogEntry[] {
   return [...unique.values()].sort((left, right) => left.name.localeCompare(right.name));
 }
 
-export function findStaticCatalogEntry(pluginName: string): StaticCatalogEntry | null {
-  return listStaticCatalogEntries().find((item) => item.name === pluginName) || null;
+export function findStaticCatalogEntry(plugin_name: string): StaticCatalogEntry | null {
+  return listStaticCatalogEntries().find((item) => item.name === plugin_name) || null;
 }
 
 type plugin_manager_selection =
@@ -209,11 +209,11 @@ type plugin_manager_selection =
 export function formatPluginDescription(plugin: StaticCatalogEntry): string {
   return t({
     zh: [
-      `${plugin.kind} · ${plugin.actionCount} 个 action · System ${plugin.hasSystem ? "yes" : "no"}`,
+      `${plugin.kind} · ${plugin.actionCount} 个 action · System ${plugin.has_system ? "yes" : "no"}`,
       "Enter 查看完整能力详情。",
     ].filter(Boolean).join("\n"),
     en: [
-      `${plugin.kind} · ${plugin.actionCount} actions · System ${plugin.hasSystem ? "yes" : "no"}`,
+      `${plugin.kind} · ${plugin.actionCount} actions · System ${plugin.has_system ? "yes" : "no"}`,
       "Press Enter to inspect details.",
     ].filter(Boolean).join("\n"),
   });
@@ -280,7 +280,7 @@ export async function promptPluginName(message: string): Promise<string | null> 
   const plugins = listStaticCatalogEntries();
   const response = (await prompts({
     type: "select",
-    name: "pluginName",
+    name: "plugin_name",
     message,
     choices: plugins.map((plugin) => ({
       title: plugin.name,
@@ -291,23 +291,23 @@ export async function promptPluginName(message: string): Promise<string | null> 
       value: plugin.name,
     })),
     initial: 0,
-  })) as { pluginName?: string };
-  const pluginName = String(response.pluginName || "").trim();
-  return pluginName || null;
+  })) as { plugin_name?: string };
+  const plugin_name = String(response.plugin_name || "").trim();
+  return plugin_name || null;
 }
 
 export async function resolveInteractivePluginName(params: {
-  pluginName?: string;
+  plugin_name?: string;
   message: string;
 }): Promise<string | null> {
-  const explicit = String(params.pluginName || "").trim();
+  const explicit = String(params.plugin_name || "").trim();
   if (explicit) return explicit;
 
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     emitCliBlock({
       tone: "error",
       title: "Plugin name is required",
-      note: "Use `city plugin info <pluginName>` or run this command in an interactive terminal.",
+      note: "Use `city plugin info <plugin_name>` or run this command in an interactive terminal.",
     });
     return null;
   }
@@ -332,7 +332,7 @@ export async function runPluginListCommand(options: { json?: boolean }): Promise
         title: plugin.title,
         kind: plugin.kind,
         actionCount: plugin.actionCount,
-        hasSystem: plugin.hasSystem,
+        has_system: plugin.has_system,
       })),
     );
     return;
@@ -348,28 +348,28 @@ export async function runPluginListCommand(options: { json?: boolean }): Promise
 }
 
 export async function runPluginInfoCommand(params: {
-  pluginName?: string;
+  plugin_name?: string;
   options: { json?: boolean };
 }): Promise<void> {
-  const pluginName = await resolveInteractivePluginName({
-    pluginName: params.pluginName,
+  const plugin_name = await resolveInteractivePluginName({
+    plugin_name: params.plugin_name,
     message: t({
       zh: "选择要查看的 Plugin",
       en: "Select a plugin to inspect",
     }),
   });
-  if (!pluginName) {
+  if (!plugin_name) {
     return;
   }
 
-  const plugin = findStaticCatalogEntry(pluginName);
+  const plugin = findStaticCatalogEntry(plugin_name);
   if (!plugin) {
     printResult({
       asJson: params.options.json === true,
       success: false,
       title: "plugin info failed",
       payload: {
-        error: `Unknown plugin: ${pluginName}`,
+        error: `Unknown plugin: ${plugin_name}`,
       },
     });
     return;
@@ -378,12 +378,12 @@ export async function runPluginInfoCommand(params: {
   if (params.options.json !== true) {
     emitCliBlock({
       tone: "info",
-      title: `Plugin ${pluginName}`,
+      title: `Plugin ${plugin_name}`,
       summary: plugin.kind,
       facts: [
         {
           label: "title",
-          value: plugin.title || pluginName,
+          value: plugin.title || plugin_name,
         },
         {
           label: "kind",
@@ -395,7 +395,7 @@ export async function runPluginInfoCommand(params: {
         },
         {
           label: "system",
-          value: plugin.hasSystem ? "yes" : "no",
+          value: plugin.has_system ? "yes" : "no",
         },
         ...(plugin.note
           ? [
@@ -415,7 +415,7 @@ export async function runPluginInfoCommand(params: {
     success: true,
     title: "plugin info ok",
     payload: {
-      pluginName,
+      plugin_name,
       plugin,
     },
   });

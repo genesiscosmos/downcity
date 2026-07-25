@@ -6,7 +6,7 @@
  * - chat / queue 等渠道语义由宿主显式注入的 plugin 自行实现。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { Agent } from "@downcity/agent";
 import type { ControlSessionExecuteAttachmentInput } from "@/city/agent/control/types/ControlSessionExecute.js";
 import { buildExecuteInputText } from "@/city/agent/control/ExecuteInput.js";
 
@@ -17,24 +17,24 @@ import { buildExecuteInputText } from "@/city/agent/control/ExecuteInput.js";
  * - 按普通 session 同步执行。
  */
 export async function executeBySessionId(params: {
-  agentState: AgentContext;
-  sessionId: string;
+  agentState: Agent;
+  session_id: string;
   instructions: string;
   attachments?: ControlSessionExecuteAttachmentInput[];
 }) {
-  const sessionId = String(params.sessionId || "").trim();
+  const session_id = String(params.session_id || "").trim();
   const instructions = String(params.instructions || "").trim();
-  if (!sessionId) throw new Error("Missing sessionId");
+  if (!session_id) throw new Error("Missing session_id");
   if (!instructions) throw new Error("Missing instructions");
 
   const executeInput = await buildExecuteInputText({
-    projectRoot: params.agentState.rootPath,
-    sessionId,
+    project_root: params.agentState.workspace.path,
+    session_id,
     instructions,
     attachments: params.attachments,
   });
 
-  const session = params.agentState.sessions.runtime(sessionId);
+  const session = params.agentState.sessions.runtime(session_id);
   const turn = await session.prompt({
     query: executeInput,
   });
@@ -43,7 +43,7 @@ export async function executeBySessionId(params: {
   return {
     success: result.success,
     ...(result.error ? { error: result.error } : {}),
-    assistantMessage: result.assistantMessage,
+    assistant_message: result.assistant_message,
     userVisible: result.text.trim(),
     queued: false,
   };

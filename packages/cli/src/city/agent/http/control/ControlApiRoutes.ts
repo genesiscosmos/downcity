@@ -21,7 +21,7 @@ export function registerControlApiRoutes(
 ): void {
   register_control_chat_access_routes({
     app: params.app,
-    get_agent_context: params.getAgentContext,
+    get_agent: params.get_agent,
   });
   registerControlOverviewRoutes(params);
   registerControlSessionRoutes(params);

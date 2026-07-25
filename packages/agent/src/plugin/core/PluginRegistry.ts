@@ -7,7 +7,7 @@
  * - action、system、hook、resolve 都统一以“已注册且 ready”为生效边界。
  */
 
-import { toPluginView } from "@/plugin/core/PluginCatalog.js";
+import { to_plugin_view } from "@/plugin/core/PluginCatalog.js";
 import { HookRegistry } from "@/plugin/core/HookRegistry.js";
 import type { Plugin } from "@/types/plugin/PluginDefinition.js";
 import type { PluginActionResult } from "@/types/plugin/PluginAction.js";
@@ -21,7 +21,7 @@ import type {
   PluginView,
 } from "@/types/plugin/PluginRuntime.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
-import type { AgentContext } from "@/agent/AgentContext.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { JsonValue } from "@/types/common/Json.js";
 import type {
   PluginRuntimeRecord,
@@ -104,7 +104,7 @@ async function run_serial(
  * PluginRegistry：Agent plugin 注册、卸载与调用实现。
  */
 export class PluginRegistry implements AgentPlugins {
-  private context?: AgentContext;
+  private context?: PluginContext;
 
   private readonly hookRegistry: HookRegistry;
 
@@ -118,7 +118,7 @@ export class PluginRegistry implements AgentPlugins {
   constructor(plugins: Plugin[] = []) {
     this.hookRegistry = new HookRegistry({
       get_context: () => this.require_context(),
-      is_plugin_ready: (plugin_name) => this.isReady(plugin_name),
+      is_plugin_ready: (plugin_name) => this.is_ready(plugin_name),
     });
     for (const plugin of plugins) {
       this.mount(plugin);
@@ -126,21 +126,21 @@ export class PluginRegistry implements AgentPlugins {
   }
 
   /**
-   * 绑定当前 Registry 所属的唯一 AgentContext。
+   * 绑定当前 Registry 所属的唯一 PluginContext。
    *
    * 关键点（中文）
    * - 初始 Plugin 可以在 Context 创建前同步挂载。
    * - lifecycle、action、hook 首次执行前必须完成绑定。
    */
-  bind_context(context: AgentContext): void {
+  bind_context(context: PluginContext): void {
     if (this.context && this.context !== context) {
       throw new Error("PluginRegistry context is already bound");
     }
     this.context = context;
   }
 
-  /** 返回已经绑定的 AgentContext。 */
-  private require_context(): AgentContext {
+  /** 返回已经绑定的 PluginContext。 */
+  private require_context(): PluginContext {
     if (!this.context) {
       throw new Error("PluginRegistry context is not bound");
     }
@@ -205,7 +205,7 @@ export class PluginRegistry implements AgentPlugins {
    *
    * 说明（中文）
    * - 仅供 Agent 构造期使用，避免构造函数里 await。
-   * - 后续 `startAll()` 会统一启动这些初始 plugin。
+   * - 后续 `start_all()` 会统一启动这些初始 plugin。
    */
   mount(plugin: Plugin): PluginSnapshot {
     const key = normalize_plugin_name(plugin.name);
@@ -230,8 +230,8 @@ export class PluginRegistry implements AgentPlugins {
    * - lifecycle.stop 等当前活跃 Session step 的 execution lease 全部释放后执行。
    * - 该方法返回配置修改结果，不等待仍在运行的 step 结束。
    */
-  async unregister(pluginName: string): Promise<boolean> {
-    const key = normalize_plugin_name(pluginName);
+  async unregister(plugin_name: string): Promise<boolean> {
+    const key = normalize_plugin_name(plugin_name);
     if (!key) return false;
     const record = this.records.get(key);
     if (!record) return false;
@@ -257,7 +257,7 @@ export class PluginRegistry implements AgentPlugins {
   /**
    * 启动全部已挂载 plugin。
    */
-  async startAll(): Promise<PluginSnapshot[]> {
+  async start_all(): Promise<PluginSnapshot[]> {
     const snapshots: PluginSnapshot[] = [];
     for (const record of this.records.values()) {
       try {
@@ -273,7 +273,7 @@ export class PluginRegistry implements AgentPlugins {
   /**
    * 卸载全部 plugin。
    */
-  async unregisterAll(): Promise<void> {
+  async unregister_all(): Promise<void> {
     for (const name of Array.from(this.records.keys())) {
       await this.unregister(name);
     }
@@ -286,24 +286,24 @@ export class PluginRegistry implements AgentPlugins {
   /**
    * 判断 plugin 是否已注册且 ready。
    */
-  isReady(pluginName: string): boolean {
-    const record = this.records.get(normalize_plugin_name(pluginName));
+  is_ready(plugin_name: string): boolean {
+    const record = this.records.get(normalize_plugin_name(plugin_name));
     return Boolean(record && record.state === "ready");
   }
 
   /**
    * 读取单个 plugin 快照。
    */
-  status(pluginName: string): PluginSnapshot | null {
-    const record = this.records.get(normalize_plugin_name(pluginName));
+  status(plugin_name: string): PluginSnapshot | null {
+    const record = this.records.get(normalize_plugin_name(plugin_name));
     return record ? to_plugin_snapshot(record) : null;
   }
 
   /**
    * 判断 plugin 是否已注册。
    */
-  has(pluginName: string): boolean {
-    return this.records.has(normalize_plugin_name(pluginName));
+  has(plugin_name: string): boolean {
+    return this.records.has(normalize_plugin_name(plugin_name));
   }
 
   private register_hooks(plugin: Plugin): void {
@@ -332,13 +332,13 @@ export class PluginRegistry implements AgentPlugins {
       }
     }
 
-    for (const [pointName, handler] of Object.entries(plugin.resolves || {})) {
-      this.hookRegistry.resolve(pointName, key, handler);
+    for (const [point_name, handler] of Object.entries(plugin.resolves || {})) {
+      this.hookRegistry.resolve(point_name, key, handler);
     }
   }
 
-  private unregister_hooks(pluginName: string): void {
-    this.hookRegistry.unregisterPlugin(pluginName);
+  private unregister_hooks(plugin_name: string): void {
+    this.hookRegistry.unregisterPlugin(plugin_name);
   }
 
   private async start_record(record: PluginRuntimeRecord): Promise<void> {
@@ -377,39 +377,39 @@ export class PluginRegistry implements AgentPlugins {
   /**
    * 运行 pipeline 点。
    */
-  async pipeline<T = JsonValue>(pointName: string, value: T): Promise<T> {
-    return this.hookRegistry.pipelineValue(pointName, value);
+  async pipeline<T = JsonValue>(point_name: string, value: T): Promise<T> {
+    return this.hookRegistry.pipelineValue(point_name, value);
   }
 
   /**
    * 运行 guard 点。
    */
-  async guard<T = JsonValue>(pointName: string, value: T): Promise<void> {
-    return this.hookRegistry.guardValue(pointName, value);
+  async guard<T = JsonValue>(point_name: string, value: T): Promise<void> {
+    return this.hookRegistry.guardValue(point_name, value);
   }
 
   /**
    * 运行 effect 点。
    */
-  async effect<T = JsonValue>(pointName: string, value: T): Promise<void> {
-    return this.hookRegistry.effectValue(pointName, value);
+  async effect<T = JsonValue>(point_name: string, value: T): Promise<void> {
+    return this.hookRegistry.effectValue(point_name, value);
   }
 
   /**
    * 运行 resolve 点。
    */
   async resolve<TInput = JsonValue, TOutput = JsonValue>(
-    pointName: string,
+    point_name: string,
     value: TInput,
   ): Promise<TOutput> {
-    return this.hookRegistry.resolveValue<TInput, TOutput>(pointName, value);
+    return this.hookRegistry.resolveValue<TInput, TOutput>(point_name, value);
   }
 
   /**
    * 获取单个 plugin 定义。
    */
-  get(pluginName: string): Plugin | null {
-    return this.records.get(normalize_plugin_name(pluginName))?.plugin || null;
+  get(plugin_name: string): Plugin | null {
+    return this.records.get(normalize_plugin_name(plugin_name))?.plugin || null;
   }
 
   /**
@@ -417,7 +417,7 @@ export class PluginRegistry implements AgentPlugins {
    */
   list(): PluginView[] {
     return Array.from(this.records.values())
-      .map((record) => toPluginView(record.plugin))
+      .map((record) => to_plugin_view(record.plugin))
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
@@ -434,11 +434,11 @@ export class PluginRegistry implements AgentPlugins {
    * 读取 action metadata。
    */
   private readAction(
-    actionName: string,
+    action_name: string,
     action: NonNullable<Plugin["actions"]>[string],
   ): PluginActionReadView {
     return {
-      name: actionName,
+      name: action_name,
       description: String(action.description || "").trim(),
       has_input_schema: Boolean(action.input_schema),
       ...(action.input_schema?.json_schema
@@ -467,24 +467,24 @@ export class PluginRegistry implements AgentPlugins {
     records: ReadonlyMap<string, PluginRuntimeRecord>,
     params: { plugin?: string; action?: string },
   ): PluginReadView | { plugins: PluginView[] } {
-    const pluginName = normalize_plugin_name(params.plugin || "");
-    if (!pluginName) {
+    const plugin_name = normalize_plugin_name(params.plugin || "");
+    if (!plugin_name) {
       return {
         plugins: Array.from(records.values())
-          .map((record) => toPluginView(record.plugin))
+          .map((record) => to_plugin_view(record.plugin))
           .sort((left, right) => left.name.localeCompare(right.name)),
       };
     }
-    const plugin = records.get(pluginName)?.plugin || null;
+    const plugin = records.get(plugin_name)?.plugin || null;
     if (!plugin) {
-      throw new Error(`Unknown plugin: ${pluginName}`);
+      throw new Error(`Unknown plugin: ${plugin_name}`);
     }
-    const actionName = normalize_plugin_name(params.action || "");
-    if (actionName && !plugin.actions?.[actionName]) {
-      throw new Error(`Unknown action: ${pluginName}.${actionName}`);
+    const action_name = normalize_plugin_name(params.action || "");
+    if (action_name && !plugin.actions?.[action_name]) {
+      throw new Error(`Unknown action: ${plugin_name}.${action_name}`);
     }
     const actions = Object.entries(plugin.actions || {})
-      .filter(([name]) => !actionName || name === actionName)
+      .filter(([name]) => !action_name || name === action_name)
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([name, action]) => this.readAction(name, action));
     return {
@@ -498,14 +498,14 @@ export class PluginRegistry implements AgentPlugins {
   /**
    * 检查 plugin 可用性。
    */
-  async availability(pluginName: string): Promise<PluginAvailability> {
-    const key = normalize_plugin_name(pluginName);
+  async availability(plugin_name: string): Promise<PluginAvailability> {
+    const key = normalize_plugin_name(plugin_name);
     const record = this.records.get(key);
     if (!record) {
       return {
         enabled: false,
         available: false,
-        reasons: [`Unknown plugin: ${pluginName}`],
+        reasons: [`Unknown plugin: ${plugin_name}`],
       };
     }
 
@@ -532,8 +532,8 @@ export class PluginRegistry implements AgentPlugins {
    * 按 action schema 校验 payload。
    */
   private parseActionPayload(params: {
-    pluginName: string;
-    actionName: string;
+    plugin_name: string;
+    action_name: string;
     payload: JsonValue;
     action: NonNullable<Plugin["actions"]>[string];
   }): PluginActionResult<JsonValue> | { input: JsonValue } {
@@ -545,15 +545,15 @@ export class PluginRegistry implements AgentPlugins {
     }
     return {
       success: false,
-      error: `Invalid payload for ${params.pluginName}.${params.actionName}: ${parsed.error.message}`,
-      message: `Invalid payload for ${params.pluginName}.${params.actionName}`,
+      error: `Invalid payload for ${params.plugin_name}.${params.action_name}: ${parsed.error.message}`,
+      message: `Invalid payload for ${params.plugin_name}.${params.action_name}`,
     };
   }
 
   /**
    * 运行 plugin action。
    */
-  async runAction(params: {
+  async run_action(params: {
     plugin: string;
     action: string;
     payload?: JsonValue;
@@ -584,8 +584,8 @@ export class PluginRegistry implements AgentPlugins {
       };
     }
 
-    const actionName = normalize_plugin_name(params.action);
-    if (!actionName) {
+    const action_name = normalize_plugin_name(params.action);
+    if (!action_name) {
       return {
         success: false,
         error: "action is required",
@@ -601,19 +601,19 @@ export class PluginRegistry implements AgentPlugins {
       };
     }
 
-    const action = record.plugin.actions?.[actionName];
+    const action = record.plugin.actions?.[action_name];
     if (!action) {
       return {
         success: false,
-        error: `Plugin "${record.plugin.name}" does not implement action "${actionName}"`,
-        message: `Plugin "${record.plugin.name}" does not implement action "${actionName}"`,
+        error: `Plugin "${record.plugin.name}" does not implement action "${action_name}"`,
+        message: `Plugin "${record.plugin.name}" does not implement action "${action_name}"`,
       };
     }
 
     try {
       const parsed_payload = this.parseActionPayload({
-        pluginName: record.plugin.name,
-        actionName,
+        plugin_name: record.plugin.name,
+        action_name,
         payload: (params.payload ?? {}) as JsonValue,
         action,
       });
@@ -623,8 +623,8 @@ export class PluginRegistry implements AgentPlugins {
       const result = await action.execute({
         context: this.require_context(),
         input: parsed_payload.input,
-        pluginName: record.plugin.name,
-        actionName,
+        plugin_name: record.plugin.name,
+        action_name,
         ...(params.run_context ? { run_context: params.run_context } : {}),
       });
       return result;
@@ -640,7 +640,7 @@ export class PluginRegistry implements AgentPlugins {
   /**
    * 读取当前生效的 plugin system blocks。
    */
-  async systemBlocks(
+  async system_blocks(
     run_context?: SessionRunContext,
   ): Promise<AgentSessionSystemBlock[]> {
     return await this.system_blocks_from_records(this.records, run_context);
@@ -687,9 +687,9 @@ export class PluginRegistry implements AgentPlugins {
     const records = new Map(this.records);
     return {
       read: (params) => this.read_from_records(records, params),
-      runAction: async (params) =>
+      run_action: async (params) =>
         await this.run_action_from_records(records, params),
-      systemBlocks: async (run_context) =>
+      system_blocks: async (run_context) =>
         await this.system_blocks_from_records(records, run_context),
       acquire: () => this.acquire_execution_view(records),
     };
@@ -717,9 +717,9 @@ export class PluginRegistry implements AgentPlugins {
     let released = false;
     return {
       read: (params) => this.read_from_records(leased_records, params),
-      runAction: async (params) =>
+      run_action: async (params) =>
         await this.run_action_from_records(leased_records, params),
-      systemBlocks: async (run_context) =>
+      system_blocks: async (run_context) =>
         await this.system_blocks_from_records(leased_records, run_context),
       release: async () => {
         if (released) return;

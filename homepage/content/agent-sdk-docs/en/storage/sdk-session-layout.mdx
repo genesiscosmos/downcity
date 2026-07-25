@@ -8,7 +8,7 @@ description: File layout and data boundaries for local SDK Agent Sessions
 Local SDK Agent Sessions are persisted under:
 
 ```text
-<projectRoot>/.downcity/agents/<agentId>/sessions/<sessionId>/
+<project_root>/.downcity/agents/<agent_id>/sessions/<session_id>/
 └── messages/
     ├── active.jsonl
     ├── assistant_message.json
@@ -17,7 +17,7 @@ Local SDK Agent Sessions are persisted under:
         └── <start_sequence>-<end_sequence>.jsonl
 ```
 
-`agentId` isolates Agents in the same project and `sessionId` isolates each continuous conversation.
+`agent_id` isolates Agents in the same project and `session_id` isolates each continuous conversation.
 
 - `active.jsonl`: complete `SessionMessage` snapshots retained after the latest Compact.
 - `assistant_message.json`: the one complete in-progress Assistant draft.

@@ -11,7 +11,7 @@ import {
   isToolUIPart,
   type UIMessagePart,
 } from "ai";
-import { pickLastSuccessfulChatSendText } from "@/executor/messages/UserVisibleText.js";
+import { pick_last_successful_chat_send_text } from "@/executor/messages/UserVisibleText.js";
 import type {
   SessionMessageRecordV1,
   SessionRecordV1,
@@ -70,6 +70,6 @@ export function resolve_session_message_preview(
   if (plain_text) return plain_text;
   if (message.role !== "assistant") return "";
 
-  const user_visible = pickLastSuccessfulChatSendText(message).trim();
+  const user_visible = pick_last_successful_chat_send_text(message).trim();
   return user_visible || extract_assistant_tool_summary(message);
 }

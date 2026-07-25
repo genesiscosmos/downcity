@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - tool（如 `chat_send`）通过 dispatcher 把消息发回对应平台
- * - dispatcher 本身不关心 chatKey/history，只关心“怎么把一段 text 发出去”
+ * - dispatcher 本身不关心 chat_key/history，只关心“怎么把一段 text 发出去”
  */
 import type {
   ChatDispatchChannel,

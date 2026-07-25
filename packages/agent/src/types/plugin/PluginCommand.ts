@@ -6,7 +6,7 @@
  * - lifecycle 面向 runtime 主动 start/stop 钩子。
  */
 
-import type { AgentContext } from "@/agent/AgentContext.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { JsonValue } from "@/types/common/Json.js";
 
@@ -16,23 +16,23 @@ import type { JsonValue } from "@/types/common/Json.js";
  * 关键点（中文）
  * - 这里表达的是“CLI 命令执行 plugin 时真正需要的最小上下文”。
  * - plugin 命令不应依赖 session、plugin invoke、agent runtime 等长期宿主对象。
- * - agent runtime 在需要复用 action 时，直接传入自身更完整的 AgentContext 即可。
+ * - agent runtime 在需要复用 action 时，直接传入自身更完整的 PluginContext 即可。
  */
 export interface PluginCommandContext {
   /** 当前 Agent 稳定标识。 */
   agent_id: string;
   /** 当前项目根目录。 */
-  rootPath: string;
+  workspace_path: string;
   /** 当前统一日志器。 */
   logger: Logger;
   /**
    * 当前项目环境变量快照。
    *
    * 关键点（中文）
-   * - 这里约定为宿主已经整理好的最终可见 env 视图。
-   * - plugin 不再区分 global env 与 agent env，避免上下文语义膨胀。
+   * - 这里约定为宿主已经整理好的最终可见 workspace_env 视图。
+   * - plugin 不再区分 global workspace_env 与 agent workspace_env，避免上下文语义膨胀。
    */
-  env: Record<string, string>;
+  workspace_env: Record<string, string>;
 }
 
 /**
@@ -40,7 +40,7 @@ export interface PluginCommandContext {
  */
 export interface PluginCommandParams {
   /** 当前统一执行上下文。 */
-  context: AgentContext;
+  context: PluginContext;
   /** 当前命令名称。 */
   command: string;
   /** 命令附带 payload（可选）。 */
@@ -67,9 +67,9 @@ export interface PluginCommandResult {
  */
 export interface PluginLifecycle {
   /** plugin 启动钩子。 */
-  start?(context: AgentContext): Promise<void> | void;
+  start?(context: PluginContext): Promise<void> | void;
   /** plugin 停止钩子。 */
-  stop?(context: AgentContext): Promise<void> | void;
+  stop?(context: PluginContext): Promise<void> | void;
   /** plugin 非 action 命令钩子。 */
   command?(
     params: PluginCommandParams,

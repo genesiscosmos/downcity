@@ -42,9 +42,9 @@ export async function runCommand(
   cwd: string = ".",
   options: AgentStartOptions,
 ): Promise<void> {
-  const projectRoot = path.resolve(cwd);
+  const project_root = path.resolve(cwd);
   const hostEnv = resolve_workspace_env(
-    projectRoot,
+    project_root,
     mergeProcessEnvWithPlatformGlobalEnv(),
   );
   // 端口解析（中文）：允许 number / string；空值返回 undefined 以便走配置回退链。
@@ -63,7 +63,7 @@ export async function runCommand(
     }
     return num;
   };
-  const config = readAgentConfig(projectRoot);
+  const config = readAgentConfig(project_root);
   if (!config) {
     throw new CliError({
       title: "Agent config not found",
@@ -91,7 +91,7 @@ export async function runCommand(
 
   const host = (options.host ?? config.start?.host ?? "0.0.0.0").trim();
   const rpc_host = "127.0.0.1";
-  const agentId = config.id || resolveAgentId(projectRoot);
+  const agent_id = config.id || resolveAgentId(project_root);
   const model = await createRuntimeModel({
     config,
     env: hostEnv,
@@ -105,12 +105,12 @@ export async function runCommand(
   const sandbox = await create_platform_sandbox();
 
   const workspace = new Workspace({
-    path: projectRoot,
+    path: project_root,
     shell: new Shell({ sandbox }),
     env: hostEnv,
   });
   const agent = new Agent({
-    id: agentId,
+    id: agent_id,
     workspace,
     model,
     plugins,
@@ -120,8 +120,8 @@ export async function runCommand(
   process.env.DC_BAY_HOST = host;
   process.env.DC_AGENT_RPC_PORT = String(rpc_port);
   process.env.DC_AGENT_RPC_HOST = rpc_host;
-  process.env.DC_AGENT_ID = agentId;
-  process.env.DC_AGENT_PATH = projectRoot;
+  process.env.DC_AGENT_ID = agent_id;
+  process.env.DC_AGENT_PATH = project_root;
 
   // 关键点（中文）：等待 Agent 持有的 plugin lifecycle 与 ActionSchedule 启动完成。
   await agent.ready();
@@ -136,11 +136,11 @@ export async function runCommand(
   const server = await startAgentHttpGateway({
     host,
     port,
-    getAgentContext: () => agent.getContext(),
+    get_agent: () => agent,
     sdkRouter: agent_http.router(),
   });
 
-  const agentLogger = agent.getLogger();
+  const agentLogger = agent.get_logger();
 
   // 处理进程信号
   // 停机顺序（中文）：HTTP gateway -> plugin runtimes / RPC server -> flush logs。
@@ -155,7 +155,7 @@ export async function runCommand(
     await agent.dispose();
     await workspace.dispose();
     // Save logs
-    await agentLogger.saveAllLogs();
+    await agentLogger.save_all_logs();
 
     agentLogger.info("👋 Downcity city stopped");
     process.exit(0);

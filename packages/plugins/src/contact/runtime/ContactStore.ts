@@ -110,7 +110,7 @@ function normalizeStoredContact(input: unknown): AgentContact | null {
     status: isContactStatus(item.status) ? item.status : "trusted",
     outboundToken,
     inboundTokenHash,
-    createdAt: normalizeOptionalTimestamp(item.createdAt) ?? 0,
+    created_at: normalizeOptionalTimestamp(item.created_at) ?? 0,
     ...(normalizeOptionalTimestamp(item.lastSeenAt) !== undefined
       ? { lastSeenAt: normalizeOptionalTimestamp(item.lastSeenAt) }
       : {}),
@@ -147,7 +147,7 @@ export function normalizeContactEndpoint(endpoint: string): string {
  * 保存 contact。
  */
 export async function saveContact(
-  projectRoot: string,
+  project_root: string,
   contact: AgentContact,
 ): Promise<AgentContact> {
   const normalized: AgentContact = {
@@ -159,7 +159,7 @@ export async function saveContact(
     status: contact.status || "trusted",
     outboundToken: contact.outboundToken || null,
     inboundTokenHash: contact.inboundTokenHash || null,
-    createdAt: contact.createdAt || Date.now(),
+    created_at: contact.created_at || Date.now(),
   };
   if (!normalized.name) throw new Error("contact name is required");
   if (normalized.reachability !== "inbound" && !normalized.endpoint) {
@@ -171,11 +171,11 @@ export async function saveContact(
   if (normalized.reachability !== "outbound" && !normalized.inboundTokenHash) {
     throw new Error("contact inbound token hash is required for inbound contacts");
   }
-  await fs.ensureDir(getContactDirectoryPath(projectRoot, normalized.id));
-  await fs.writeJson(getContactJsonPath(projectRoot, normalized.id), normalized, {
+  await fs.ensureDir(getContactDirectoryPath(project_root, normalized.id));
+  await fs.writeJson(getContactJsonPath(project_root, normalized.id), normalized, {
     spaces: 2,
   });
-  await fs.ensureFile(getContactMessagesPath(projectRoot, normalized.id));
+  await fs.ensureFile(getContactMessagesPath(project_root, normalized.id));
   return normalized;
 }
 
@@ -183,10 +183,10 @@ export async function saveContact(
  * 读取 contact。
  */
 export async function readContact(
-  projectRoot: string,
+  project_root: string,
   contactId: string,
 ): Promise<AgentContact | null> {
-  const filePath = getContactJsonPath(projectRoot, contactId);
+  const filePath = getContactJsonPath(project_root, contactId);
   if (!(await fs.pathExists(filePath))) return null;
   const raw = await fs.readJson(filePath).catch(() => null);
   // 关键点（中文）：读取时归一化可恢复字段，避免一次局部写入让已收到的 contact 在列表中消失。
@@ -196,14 +196,14 @@ export async function readContact(
 /**
  * 列出全部 contact。
  */
-export async function listContacts(projectRoot: string): Promise<AgentContact[]> {
-  const root = getContactsRootPath(projectRoot);
+export async function listContacts(project_root: string): Promise<AgentContact[]> {
+  const root = getContactsRootPath(project_root);
   if (!(await fs.pathExists(root))) return [];
   const entries = await fs.readdir(root, { withFileTypes: true });
   const contacts: AgentContact[] = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    const contact = await readContact(projectRoot, entry.name);
+    const contact = await readContact(project_root, entry.name);
     if (contact) contacts.push(contact);
   }
   return contacts.sort((a, b) => a.name.localeCompare(b.name));
@@ -213,12 +213,12 @@ export async function listContacts(projectRoot: string): Promise<AgentContact[]>
  * 按 id/name 查找 contact。
  */
 export async function findContact(
-  projectRoot: string,
+  project_root: string,
   query: string,
 ): Promise<AgentContact | null> {
   const value = String(query || "").trim();
   if (!value) return null;
-  const contacts = await listContacts(projectRoot);
+  const contacts = await listContacts(project_root);
   const lower = value.toLowerCase();
   return (
     contacts.find((item) => item.id.toLowerCase() === lower) ||
@@ -232,25 +232,25 @@ export async function findContact(
  * 根据入站 token 查找 contact。
  */
 export async function findContactByInboundToken(
-  projectRoot: string,
+  project_root: string,
   token: string,
 ): Promise<AgentContact | null> {
-  const tokenHash = hashContactToken(token);
-  const contacts = await listContacts(projectRoot);
-  return contacts.find((item) => item.inboundTokenHash === tokenHash) || null;
+  const token_hash = hashContactToken(token);
+  const contacts = await listContacts(project_root);
+  return contacts.find((item) => item.inboundTokenHash === token_hash) || null;
 }
 
 /**
  * 更新 contact 最近在线时间。
  */
 export async function touchContactSeen(
-  projectRoot: string,
+  project_root: string,
   contactId: string,
   seenAt: number = Date.now(),
 ): Promise<AgentContact | null> {
-  const contact = await readContact(projectRoot, contactId);
+  const contact = await readContact(project_root, contactId);
   if (!contact) return null;
-  return await saveContact(projectRoot, {
+  return await saveContact(project_root, {
     ...contact,
     lastSeenAt: seenAt,
   });
@@ -260,11 +260,11 @@ export async function touchContactSeen(
  * 追加 contact chat 消息。
  */
 export async function appendContactMessage(
-  projectRoot: string,
+  project_root: string,
   contactId: string,
   message: ContactChatMessage,
 ): Promise<void> {
-  const filePath = getContactMessagesPath(projectRoot, contactId);
+  const filePath = getContactMessagesPath(project_root, contactId);
   await fs.ensureDir(path.dirname(filePath));
   await fs.appendFile(filePath, `${JSON.stringify(message)}\n`, "utf-8");
 }
@@ -273,10 +273,10 @@ export async function appendContactMessage(
  * 读取 contact chat 历史。
  */
 export async function readContactMessages(
-  projectRoot: string,
+  project_root: string,
   contactId: string,
 ): Promise<ContactChatMessage[]> {
-  const filePath = getContactMessagesPath(projectRoot, contactId);
+  const filePath = getContactMessagesPath(project_root, contactId);
   if (!(await fs.pathExists(filePath))) return [];
   const text = await fs.readFile(filePath, "utf-8");
   const out: ContactChatMessage[] = [];

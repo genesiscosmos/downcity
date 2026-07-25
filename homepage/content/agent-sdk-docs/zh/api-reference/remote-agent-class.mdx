@@ -9,7 +9,7 @@ description: 远程 Agent 客户端的核心公开接口
 
 - `new RemoteAgent({ url })`
 - `agent.sessions`
-- `agent.runPluginAction(input)`
+- `agent.run_plugin_action(input)`
 
 `agent.sessions.create()` 和 `agent.sessions.get()` 返回 `RemoteAgentSession`。
 
@@ -18,18 +18,18 @@ description: 远程 Agent 客户端的核心公开接口
 `agent.sessions` 返回一个 `AgentSessions`，包含以下方法：
 
 - `agent.sessions.create(input?)`
-- `agent.sessions.get(sessionId)`
+- `agent.sessions.get(session_id)`
 - `agent.sessions.list(input?)`
 - `agent.sessions.archive({ id })`
 - `agent.sessions.archived(input?)`
 - `agent.sessions.clean_archive()`
 
-## `runPluginAction`
+## `run_plugin_action`
 
-当你的客户端 UI 需要调用远程 runtime 上的 plugin action 时，使用 `runPluginAction()`。
+当你的客户端 UI 需要调用远程 runtime 上的 plugin action 时，使用 `run_plugin_action()`。
 
 ```ts
-await agent.runPluginAction({
+await agent.run_plugin_action({
   plugin: "example",
   action: "refresh",
   payload: {

@@ -44,13 +44,13 @@ export interface SessionExecutorPort {
  */
 export interface SessionPort {
   /** 当前 Session 稳定标识。 */
-  readonly sessionId: string;
+  readonly session_id: string;
 
   /** 获取当前 Session 优先解析后的运行时模型实例。 */
-  getModel(): LanguageModel | undefined;
+  get_model(): LanguageModel | undefined;
 
   /** 获取当前 Session 的执行端口。 */
-  getExecutor(): SessionExecutorPort;
+  get_executor(): SessionExecutorPort;
 
   /** 读取当前 Session 的累计 Summary 与 Active Message 快照。 */
   context(): Promise<SessionContextSnapshot>;
@@ -86,12 +86,12 @@ export interface SessionPort {
     message?: SessionRecordV1 | null;
 
     /** 未传入完整消息时使用的兜底文本。 */
-    fallbackText?: string;
+    fallback_text?: string;
 
     /** 当前消息附加元数据。 */
     extra?: SessionMetadataV1["extra"];
   }): Promise<void>;
 
   /** 返回当前 Session 是否正在执行。 */
-  isExecuting(): boolean;
+  is_executing(): boolean;
 }

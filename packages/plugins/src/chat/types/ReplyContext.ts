@@ -18,7 +18,7 @@ export interface InboundReplyContext {
    * - 该值来自平台原始 reply 目标。
    * - 主要用于审计与调试，模型通常不会直接依赖它做推理。
    */
-  messageId?: string;
+  message_id?: string;
 
   /**
    * 被引用消息发送者的展示名。

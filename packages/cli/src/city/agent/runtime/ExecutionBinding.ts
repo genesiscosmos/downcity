@@ -1,5 +1,5 @@
 /**
- * Agent 执行绑定解析与校验模块。
+ * CLI/City Agent 执行绑定解析与校验模块。
  *
  * 职责说明（中文）
  * - 统一负责从宿主传入的 Agent 配置中读取执行目标定义。
@@ -11,27 +11,27 @@
  * - 当前只接受 agent 包已经落地支持的执行绑定格式。
  */
 
-import type { DowncityConfig } from "@/types/config/DowncityConfig.js";
-import type { ExecutionBindingConfig } from "@/types/config/ExecutionBinding.js";
+import type { DowncityConfig } from "@/city/types/config/DowncityConfig.js";
+import type { ExecutionBindingConfig } from "@/city/types/config/ExecutionBinding.js";
 
 /**
  * 读取项目执行绑定。
  *
  * 关键点（中文）
- * - 当前只接受 `execution.type = "api"` 且存在非空 `modelId` 的配置。
+ * - 当前只接受 `execution.type = "api"` 且存在非空 `model_id` 的配置。
  * - 若结构不满足最小要求，则返回 `null`，由调用方决定是兜底还是报错。
  */
-export function readProjectExecutionBinding(
+export function read_project_execution_binding(
   config: DowncityConfig,
 ): ExecutionBindingConfig | null {
   const execution = config.execution;
   if (!execution || typeof execution !== "object") return null;
   if (execution.type !== "api") return null;
-  const modelId = String(execution.modelId || "").trim();
-  if (!modelId) return null;
+  const model_id = String(execution.model_id || "").trim();
+  if (!model_id) return null;
   return {
     type: "api",
-    modelId,
+    model_id,
   };
 }
 
@@ -42,9 +42,9 @@ export function readProjectExecutionBinding(
  * - 适合在配置加载完成后的早期阶段调用，尽早暴露缺失执行目标的问题。
  * - 失败时抛出稳定错误文案，便于 CLI 和上层界面直接展示。
  */
-export function assertProjectExecutionTarget(config: DowncityConfig): void {
-  if (readProjectExecutionBinding(config) !== null) return;
+export function assert_project_execution_target(config: DowncityConfig): void {
+  if (read_project_execution_binding(config) !== null) return;
   throw new Error(
-    'Invalid Agent config: "execution" is required and must be { "type": "api", "modelId": "..." }',
+    'Invalid Agent config: "execution" is required and must be { "type": "api", "model_id": "..." }',
   );
 }

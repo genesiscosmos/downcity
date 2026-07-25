@@ -15,12 +15,12 @@ export async function list_control_session_summaries(
   limit: number,
 ): Promise<ControlSessionSummary[]> {
   return (await sessions.list({ limit })).items.map((session) => ({
-    sessionId: session.sessionId,
-    messageCount: session.messageCount,
-    ...(typeof session.updatedAt === "number"
-      ? { updatedAt: session.updatedAt }
+    session_id: session.session_id,
+    message_count: session.message_count,
+    ...(typeof session.updated_at === "number"
+      ? { updated_at: session.updated_at }
       : {}),
-    ...(session.previewText ? { lastText: session.previewText } : {}),
+    ...(session.preview_text ? { lastText: session.preview_text } : {}),
     ...(session.executing ? { executing: true } : {}),
   }));
 }

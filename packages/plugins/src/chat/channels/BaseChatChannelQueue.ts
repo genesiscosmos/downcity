@@ -14,7 +14,7 @@ import {
   prepareChatEnqueue,
 } from "@/chat/runtime/EnqueueDispatch.js";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { JsonObject } from "@downcity/agent";
 import type { IncomingChatMessage } from "./BaseChatChannel.js";
 import {
@@ -32,7 +32,7 @@ export interface EnqueueAuditChannelMessageParams {
   /**
    * 当前 execution runtime。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * 当前渠道。
    */
@@ -48,11 +48,11 @@ export interface EnqueueAuditChannelMessageParams {
   /**
    * 可选消息 id。
    */
-  messageId?: string;
+  message_id?: string;
   /**
    * 可选用户 id。
    */
-  userId?: string;
+  user_id?: string;
   /**
    * 可选扩展 meta。
    */
@@ -66,7 +66,7 @@ export interface EnqueueExecChannelMessageParams {
   /**
    * 当前 execution runtime。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * 当前渠道。
    */
@@ -92,40 +92,40 @@ export async function enqueueAuditChannelMessage(
   const chatType = typeof meta.chatType === "string" ? meta.chatType : undefined;
   const chatTitle =
     typeof meta.chatTitle === "string" ? meta.chatTitle.trim() || undefined : undefined;
-  const sessionId = await resolveOrCreateChannelSessionId({
+  const session_id = await resolveOrCreateChannelSessionId({
     context: params.context,
     channel: params.channel,
     chatId: params.chatId,
     chatType,
     messageThreadId,
   });
-  if (!sessionId) return;
+  if (!session_id) return;
 
   const extra = stripUndefinedMeta(meta);
   await appendInboundChannelHistory({
     context: params.context,
     logger: params.context.logger,
     channel: params.channel,
-    sessionId,
+    session_id,
     chatId: params.chatId,
     ingressKind: "audit",
     text: params.text,
     targetType: chatType,
     threadId: messageThreadId,
-    messageId: params.messageId,
-    actorId: params.userId,
+    message_id: params.message_id,
+    actorId: params.user_id,
     actorName: username,
     extra,
   });
   await updateChannelChatMeta({
     context: params.context,
     channel: params.channel,
-    sessionId,
+    session_id,
     chatId: params.chatId,
     targetType: chatType,
     threadId: messageThreadId,
-    messageId: params.messageId,
-    actorId: params.userId,
+    message_id: params.message_id,
+    actorId: params.user_id,
     actorName: username,
     chatTitle,
   });
@@ -135,13 +135,13 @@ export async function enqueueAuditChannelMessage(
     input: {
       kind: "audit",
       channel: params.channel,
-      chatKey: sessionId,
+      chat_key: session_id,
       chatId: params.chatId,
       text: params.text,
       ...(chatType ? { chatType } : {}),
       ...(typeof messageThreadId === "number" ? { threadId: messageThreadId } : {}),
-      ...(typeof params.messageId === "string" ? { messageId: params.messageId } : {}),
-      ...(typeof params.userId === "string" ? { actorId: params.userId } : {}),
+      ...(typeof params.message_id === "string" ? { message_id: params.message_id } : {}),
+      ...(typeof params.user_id === "string" ? { actorId: params.user_id } : {}),
       ...(typeof username === "string" ? { actorName: username } : {}),
       extra,
     },
@@ -150,15 +150,15 @@ export async function enqueueAuditChannelMessage(
     kind: "audit",
     channel: params.channel,
     targetId: params.chatId,
-    sessionId,
+    session_id,
     ...(typeof preparedAudit.actorId === "string"
       ? { actorId: preparedAudit.actorId }
       : {}),
     ...(typeof preparedAudit.actorName === "string"
       ? { actorName: preparedAudit.actorName }
       : {}),
-    ...(typeof preparedAudit.messageId === "string"
-      ? { messageId: preparedAudit.messageId }
+    ...(typeof preparedAudit.message_id === "string"
+      ? { message_id: preparedAudit.message_id }
       : {}),
     text: preparedAudit.text,
     ...(typeof preparedAudit.threadId === "number"
@@ -187,26 +187,26 @@ export async function enqueueAuditChannelMessage(
  */
 export async function enqueueExecChannelMessage(
   params: EnqueueExecChannelMessageParams,
-): Promise<{ chatKey: string; position: number }> {
+): Promise<{ chat_key: string; position: number }> {
   const msg = params.message;
   const inboundExtra =
     msg.extra && typeof msg.extra === "object" ? stripUndefinedMeta(msg.extra) : {};
   const mergedExtra: JsonObject = { ...inboundExtra };
 
-  const chatKey = await resolveOrCreateChannelSessionId({
+  const chat_key = await resolveOrCreateChannelSessionId({
     context: params.context,
     channel: params.channel,
     chatId: msg.chatId,
     chatType: msg.chatType,
     messageThreadId: msg.messageThreadId,
   });
-  if (!chatKey) {
-    throw new Error("Failed to resolve sessionId for incoming chat message");
+  if (!chat_key) {
+    throw new Error("Failed to resolve session_id for incoming chat message");
   }
 
   const rawQueuedText = buildQueuedUserMessageWithInfo({
-    messageId: msg.messageId,
-    userId: msg.userId,
+    message_id: msg.message_id,
+    user_id: msg.user_id,
     username: msg.username,
     receivedAt: msg.receivedAt,
     userTimezone: msg.userTimezone,
@@ -217,15 +217,15 @@ export async function enqueueExecChannelMessage(
     input: {
       kind: "exec",
       channel: params.channel,
-      chatKey,
+      chat_key,
       chatId: msg.chatId,
       text: rawQueuedText,
       ...(msg.chatType ? { chatType: msg.chatType } : {}),
       ...(typeof msg.messageThreadId === "number"
         ? { threadId: msg.messageThreadId }
         : {}),
-      ...(typeof msg.messageId === "string" ? { messageId: msg.messageId } : {}),
-      ...(typeof msg.userId === "string" ? { actorId: msg.userId } : {}),
+      ...(typeof msg.message_id === "string" ? { message_id: msg.message_id } : {}),
+      ...(typeof msg.user_id === "string" ? { actorId: msg.user_id } : {}),
       ...(typeof msg.username === "string" ? { actorName: msg.username } : {}),
       extra: mergedExtra,
     },
@@ -238,7 +238,7 @@ export async function enqueueExecChannelMessage(
 
   await appendExecIngress({
     context: params.context,
-    sessionId: chatKey,
+    session_id: chat_key,
     channel: params.channel,
     chatId: msg.chatId,
     text: queuedText,
@@ -248,8 +248,8 @@ export async function enqueueExecChannelMessage(
     ...(typeof preparedExec.threadId === "number"
       ? { threadId: preparedExec.threadId }
       : {}),
-    ...(typeof preparedExec.messageId === "string"
-      ? { messageId: preparedExec.messageId }
+    ...(typeof preparedExec.message_id === "string"
+      ? { message_id: preparedExec.message_id }
       : {}),
     ...(typeof preparedExec.actorId === "string"
       ? { actorId: preparedExec.actorId }
@@ -263,12 +263,12 @@ export async function enqueueExecChannelMessage(
   await updateChannelChatMeta({
     context: params.context,
     channel: params.channel,
-    sessionId: chatKey,
+    session_id: chat_key,
     chatId: msg.chatId,
     targetType: msg.chatType,
     threadId: msg.messageThreadId,
-    messageId: msg.messageId,
-    actorId: msg.userId,
+    message_id: msg.message_id,
+    actorId: msg.user_id,
     actorName: msg.username,
     chatTitle: msg.chatTitle,
   });
@@ -277,7 +277,7 @@ export async function enqueueExecChannelMessage(
     kind: "exec",
     channel: params.channel,
     targetId: msg.chatId,
-    sessionId: chatKey,
+    session_id: chat_key,
     text: queuedText,
     ...(typeof preparedExec.chatType === "string"
       ? { targetType: preparedExec.chatType }
@@ -285,8 +285,8 @@ export async function enqueueExecChannelMessage(
     ...(typeof preparedExec.threadId === "number"
       ? { threadId: preparedExec.threadId }
       : {}),
-    ...(typeof preparedExec.messageId === "string"
-      ? { messageId: preparedExec.messageId }
+    ...(typeof preparedExec.message_id === "string"
+      ? { message_id: preparedExec.message_id }
       : {}),
     ...(typeof preparedExec.actorId === "string"
       ? { actorId: preparedExec.actorId }
@@ -305,5 +305,5 @@ export async function enqueueExecChannelMessage(
     },
   });
 
-  return { chatKey, position: execEnqueued.lanePosition };
+  return { chat_key, position: execEnqueued.lanePosition };
 }

@@ -10,9 +10,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { createAction } from "@downcity/agent";
+import { create_action } from "@downcity/agent";
 import { BasePlugin } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type {
   JsonObject,
   JsonValue,
@@ -234,7 +234,7 @@ async function local_image_to_data_url(input: {
  * 归一化单个图片内容片段。
  */
 async function normalize_image_content_part(
-  context: AgentContext,
+  context: PluginContext,
   part: ImagePluginContent,
 ): Promise<ImagePluginResolvedContent> {
   if (part.type === "text") return part;
@@ -253,7 +253,7 @@ async function normalize_image_content_part(
     };
   }
   const local = await local_image_to_data_url({
-    root_path: context.rootPath,
+    root_path: context.workspace_path,
     image_url: url,
     media_type: part.media_type,
   });
@@ -299,7 +299,7 @@ function copy_resolved_image_input(input: ImagePluginInput): ImagePluginResolved
  * 把 Agent 友好的公开输入转成 City 图片任务使用的输入。
  */
 async function normalize_image_create_input(
-  context: AgentContext,
+  context: PluginContext,
   input: ImagePluginInput,
 ): Promise<ImagePluginResolvedInput> {
   assert_public_image_create_input(input);
@@ -323,7 +323,7 @@ async function normalize_image_create_input(
  * 为图片创建输入解析并补齐插件级默认模型。
  */
 async function apply_default_image_model(
-  context: AgentContext,
+  context: PluginContext,
   input: ImagePluginResolvedInput,
   default_model: ImagePluginDefaultModel | undefined,
 ): Promise<ImagePluginResolvedInput> {
@@ -525,7 +525,7 @@ export class ImagePlugin extends BasePlugin {
   /**
    * 图片插件给模型的使用说明。
    */
-  system(_context: AgentContext): string {
+  system(_context: PluginContext): string {
     return [
       "# Image Plugin",
       "",
@@ -611,7 +611,7 @@ export class ImagePlugin extends BasePlugin {
    * 显式 action 集合。
    */
   readonly actions = {
-    models: createAction({
+    models: create_action({
       description: "List image-capable models available to ImagePlugin.",
       input_schema: z.object({}).passthrough(),
       execute: async () => {
@@ -639,7 +639,7 @@ export class ImagePlugin extends BasePlugin {
         }
       },
     }),
-    image_create: createAction({
+    image_create: create_action({
       description:
         "Create an async image job only after explicit user confirmation because image creation consumes quota. Use prompt for text-only generation, or content for reference images and edits.",
       input_schema: {
@@ -711,7 +711,7 @@ export class ImagePlugin extends BasePlugin {
           },
         },
       ],
-      execute: async ({ context, input }: { context: AgentContext; input: JsonValue }) => {
+      execute: async ({ context, input }: { context: PluginContext; input: JsonValue }) => {
         try {
           const normalized_payload = normalize_image_payload(input);
           const normalized_input = await apply_default_image_model(
@@ -735,7 +735,7 @@ export class ImagePlugin extends BasePlugin {
         }
       },
     }),
-    image_result: createAction({
+    image_result: create_action({
       description:
         "Read an async image job. By default reads once; pass until_done=true to block-wait until succeeded/failed or max_wait_ms times out.",
       input_schema: {

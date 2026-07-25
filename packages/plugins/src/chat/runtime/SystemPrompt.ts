@@ -7,7 +7,7 @@
  * - 统一从 request context + ChatMetaStore 读取当前 chat 元信息。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { PluginRunContext } from "@downcity/agent";
 import type { ChatEnvironmentPromptInput } from "@/chat/types/ChatPromptContext.js";
 import { readChatMetaBySessionId } from "@/chat/runtime/ChatMetaStore.js";
@@ -24,21 +24,21 @@ function normalizePromptValue(value: unknown, fallback: string): string {
  * - 非 chat session 或尚未建立 chat route 时返回 `null`。
  */
 export async function resolveCurrentChatEnvironmentPromptInput(
-  context: AgentContext,
+  context: PluginContext,
   run_context?: PluginRunContext,
 ): Promise<ChatEnvironmentPromptInput | null> {
-  const sessionId = String(run_context?.sessionId || "").trim();
-  if (!sessionId) return null;
+  const session_id = String(run_context?.session_id || "").trim();
+  if (!session_id) return null;
 
   const meta = await readChatMetaBySessionId({
     context,
-    sessionId,
+    session_id,
   }).catch(() => null);
   if (!meta?.channel || !meta.chatId) return null;
 
   return {
-    sessionId: meta.sessionId,
-    chatKey: meta.sessionId,
+    session_id: meta.session_id,
+    chat_key: meta.session_id,
     channel: meta.channel,
     chatId: meta.chatId,
     ...(meta.targetType ? { chatType: meta.targetType } : {}),
@@ -55,8 +55,8 @@ export function buildChatEnvironmentPrompt(input: ChatEnvironmentPromptInput): s
     "# Current Chat Environment",
     "以下字段只描述当前 chat 会话环境与路由，不是用户身份信息：",
     `- channel: ${normalizePromptValue(input.channel, "unknown")}`,
-    `- session_id: ${normalizePromptValue(input.sessionId, "unknown")}`,
-    `- chat_key: ${normalizePromptValue(input.chatKey, "unknown")}`,
+    `- session_id: ${normalizePromptValue(input.session_id, "unknown")}`,
+    `- chat_key: ${normalizePromptValue(input.chat_key, "unknown")}`,
     `- chat_id: ${normalizePromptValue(input.chatId, "unknown")}`,
     `- chat_type: ${normalizePromptValue(input.chatType, "unknown")}`,
     `- thread_id: ${normalizePromptValue(
@@ -77,7 +77,7 @@ export function buildChatEnvironmentPrompt(input: ChatEnvironmentPromptInput): s
  * 读取并渲染当前请求的 chat 环境 prompt。
  */
 export async function buildCurrentChatEnvironmentPrompt(
-  context: AgentContext,
+  context: PluginContext,
   run_context?: PluginRunContext,
 ): Promise<string> {
   const input = await resolveCurrentChatEnvironmentPromptInput(

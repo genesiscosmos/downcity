@@ -12,8 +12,8 @@ import type { JsonObject, JsonValue } from "@downcity/agent";
 import type { PluginActionCommandInput } from "@downcity/agent";
 import type { ChatSendActionPayload } from "@/chat/types/ChatPluginActionPayload.js";
 import {
-  buildChatMessageText,
-  parseChatMessageMarkup,
+  build_chat_message_text,
+  parse_chat_message_markup,
 } from "@downcity/agent";
 import { parseChatSendOptionsFromMetadata } from "@/chat/runtime/ChatSendMetadata.js";
 import {
@@ -101,43 +101,43 @@ function parseChatSendTextProtocol(params: {
   explicitReplyToMessage?: boolean;
   explicitMessageId?: string;
 }): ChatSendActionPayload {
-  const parsed = parseChatMessageMarkup(normalizeChatSendText(params.rawText));
+  const parsed = parse_chat_message_markup(normalizeChatSendText(params.rawText));
   const metadataOptions = parseChatSendOptionsFromMetadata({
     metadata: parsed.metadata,
     strict: true,
   });
 
-  const delayMs =
+  const delay_ms =
     typeof params.explicitDelayMs === "number"
       ? params.explicitDelayMs
-      : metadataOptions.delayMs;
-  const sendAtMs =
+      : metadataOptions.delay_ms;
+  const send_at_ms =
     typeof params.explicitSendAtMs === "number"
       ? params.explicitSendAtMs
-      : metadataOptions.sendAtMs;
-  if (typeof delayMs === "number" && typeof sendAtMs === "number") {
+      : metadataOptions.send_at_ms;
+  if (typeof delay_ms === "number" && typeof send_at_ms === "number") {
     throw new Error("`delay` and `time` cannot be used together.");
   }
 
-  const chatKey = resolveChatKey({
-    chatKey: params.explicitChatKey || metadataOptions.chatKey,
+  const chat_key = resolveChatKey({
+    chat_key: params.explicitChatKey || metadataOptions.chat_key,
   });
-  const messageId = String(
-    params.explicitMessageId || metadataOptions.messageId || "",
+  const message_id = String(
+    params.explicitMessageId || metadataOptions.message_id || "",
   ).trim();
-  const replyToMessage =
+  const reply_to_message =
     params.explicitReplyToMessage === true ||
-    metadataOptions.replyToMessage === true;
+    metadataOptions.reply_to_message === true;
 
   return {
-    text: buildChatMessageText({
+    text: build_chat_message_text({
       segments: parsed.segments,
     }),
-    ...(chatKey ? { chatKey } : {}),
-    ...(typeof delayMs === "number" ? { delayMs } : {}),
-    ...(typeof sendAtMs === "number" ? { sendAtMs } : {}),
-    ...(replyToMessage ? { replyToMessage: true } : {}),
-    ...(messageId ? { messageId } : {}),
+    ...(chat_key ? { chat_key } : {}),
+    ...(typeof delay_ms === "number" ? { delay_ms } : {}),
+    ...(typeof send_at_ms === "number" ? { send_at_ms } : {}),
+    ...(reply_to_message ? { reply_to_message: true } : {}),
+    ...(message_id ? { message_id } : {}),
   };
 }
 
@@ -177,39 +177,39 @@ export async function mapChatSendCommandInput(
 
   const delayRaw = getStringOpt(input.opts, "delay");
   const timeRaw = getStringOpt(input.opts, "time");
-  const replyToMessage = getBooleanOpt(input.opts, "reply");
-  const messageId = getStringOpt(input.opts, "messageId");
-  const delayMs = delayRaw
+  const reply_to_message = getBooleanOpt(input.opts, "reply");
+  const message_id = getStringOpt(input.opts, "message_id");
+  const delay_ms = delayRaw
     ? parseNonNegativeIntOptionOrThrow(delayRaw, "delay")
     : undefined;
-  const sendAtMs = timeRaw ? parseSendTimeOptionOrThrow(timeRaw, "time") : undefined;
-  if (typeof delayMs === "number" && typeof sendAtMs === "number") {
+  const send_at_ms = timeRaw ? parseSendTimeOptionOrThrow(timeRaw, "time") : undefined;
+  if (typeof delay_ms === "number" && typeof send_at_ms === "number") {
     throw new Error("`--delay` and `--time` cannot be used together.");
   }
   const payload = parseChatSendTextProtocol({
     rawText: text,
-    explicitChatKey: getStringOpt(input.opts, "chatKey"),
-    ...(typeof delayMs === "number" ? { explicitDelayMs: delayMs } : {}),
-    ...(typeof sendAtMs === "number" ? { explicitSendAtMs: sendAtMs } : {}),
-    ...(replyToMessage ? { explicitReplyToMessage: true } : {}),
-    ...(messageId ? { explicitMessageId: messageId } : {}),
+    explicitChatKey: getStringOpt(input.opts, "chat_key"),
+    ...(typeof delay_ms === "number" ? { explicitDelayMs: delay_ms } : {}),
+    ...(typeof send_at_ms === "number" ? { explicitSendAtMs: send_at_ms } : {}),
+    ...(reply_to_message ? { explicitReplyToMessage: true } : {}),
+    ...(message_id ? { explicitMessageId: message_id } : {}),
   });
-  const chatKey = resolveChatKey({
-    chatKey: payload.chatKey,
+  const chat_key = resolveChatKey({
+    chat_key: payload.chat_key,
   });
-  if (!chatKey) {
+  if (!chat_key) {
     throw new Error(
-      "Missing chatKey. Provide --chat-key or ensure DC_CTX_CHAT_KEY is injected in current shell context.",
+      "Missing chat_key. Provide --chat-key or ensure DC_CTX_CHAT_KEY is injected in current shell context.",
     );
   }
 
   return {
     text: payload.text,
-    chatKey,
-    ...(typeof payload.delayMs === "number" ? { delayMs: payload.delayMs } : {}),
-    ...(typeof payload.sendAtMs === "number" ? { sendAtMs: payload.sendAtMs } : {}),
-    ...(payload.replyToMessage === true ? { replyToMessage: true } : {}),
-    ...(payload.messageId ? { messageId: payload.messageId } : {}),
+    chat_key,
+    ...(typeof payload.delay_ms === "number" ? { delay_ms: payload.delay_ms } : {}),
+    ...(typeof payload.send_at_ms === "number" ? { send_at_ms: payload.send_at_ms } : {}),
+    ...(payload.reply_to_message === true ? { reply_to_message: true } : {}),
+    ...(payload.message_id ? { message_id: payload.message_id } : {}),
   };
 }
 
@@ -221,9 +221,9 @@ export function mapChatSendApiInput(body: JsonValue): ChatSendActionPayload {
     throw new Error("Invalid JSON body");
   }
   const payload = body as JsonObject;
-  const delayRaw = payload.delayMs ?? payload.delay;
-  const timeRaw = payload.sendAtMs ?? payload.sendAt ?? payload.time;
-  const replyRaw = payload.replyToMessage ?? payload.reply;
+  const delayRaw = payload.delay_ms ?? payload.delay;
+  const timeRaw = payload.send_at_ms ?? payload.sendAt ?? payload.time;
+  const replyRaw = payload.reply_to_message ?? payload.reply;
   const delayText =
     typeof delayRaw === "string" || typeof delayRaw === "number"
       ? String(delayRaw).trim()
@@ -232,24 +232,24 @@ export function mapChatSendApiInput(body: JsonValue): ChatSendActionPayload {
     typeof timeRaw === "string" || typeof timeRaw === "number"
       ? String(timeRaw).trim()
       : "";
-  const delayMs = delayText
-    ? parseNonNegativeIntOptionOrThrow(delayText, "delayMs")
+  const delay_ms = delayText
+    ? parseNonNegativeIntOptionOrThrow(delayText, "delay_ms")
     : undefined;
-  const sendAtMs = timeText
-    ? parseSendTimeOptionOrThrow(timeText, "sendAtMs")
+  const send_at_ms = timeText
+    ? parseSendTimeOptionOrThrow(timeText, "send_at_ms")
     : undefined;
-  if (typeof delayMs === "number" && typeof sendAtMs === "number") {
-    throw new Error("`delayMs` and `sendAtMs` cannot be used together.");
+  if (typeof delay_ms === "number" && typeof send_at_ms === "number") {
+    throw new Error("`delay_ms` and `send_at_ms` cannot be used together.");
   }
   return parseChatSendTextProtocol({
     rawText: String(payload.text ?? ""),
     explicitChatKey:
-      typeof payload.chatKey === "string" ? payload.chatKey.trim() : undefined,
-    ...(typeof delayMs === "number" ? { explicitDelayMs: delayMs } : {}),
-    ...(typeof sendAtMs === "number" ? { explicitSendAtMs: sendAtMs } : {}),
+      typeof payload.chat_key === "string" ? payload.chat_key.trim() : undefined,
+    ...(typeof delay_ms === "number" ? { explicitDelayMs: delay_ms } : {}),
+    ...(typeof send_at_ms === "number" ? { explicitSendAtMs: send_at_ms } : {}),
     ...(replyRaw === true ? { explicitReplyToMessage: true } : {}),
-    ...(typeof payload.messageId === "string" || typeof payload.messageId === "number"
-      ? { explicitMessageId: String(payload.messageId).trim() }
+    ...(typeof payload.message_id === "string" || typeof payload.message_id === "number"
+      ? { explicitMessageId: String(payload.message_id).trim() }
       : {}),
   });
 }

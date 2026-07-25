@@ -22,12 +22,12 @@ function decodeJson(input: string): ContactLinkCodePayload {
   const agentName = String(parsed.agentName || "").trim();
   const endpoint = String(parsed.endpoint || "").trim();
   const secret = String(parsed.secret || "").trim();
-  const createdAt = Number(parsed.createdAt);
-  const expiresAt = Number(parsed.expiresAt);
+  const created_at = Number(parsed.created_at);
+  const expires_at = Number(parsed.expires_at);
   if (!linkId || !agentName || !endpoint || !secret) {
     throw new Error("Invalid contact link code");
   }
-  if (!Number.isFinite(createdAt) || !Number.isFinite(expiresAt)) {
+  if (!Number.isFinite(created_at) || !Number.isFinite(expires_at)) {
     throw new Error("Invalid contact link timestamps");
   }
   return {
@@ -36,8 +36,8 @@ function decodeJson(input: string): ContactLinkCodePayload {
     agentName,
     endpoint,
     secret,
-    createdAt,
-    expiresAt,
+    created_at,
+    expires_at,
   };
 }
 
@@ -63,8 +63,8 @@ export function parseContactLinkCode(code: string): ContactLinkCodePayload {
  * 判断 link code 是否过期。
  */
 export function isContactLinkExpired(
-  payload: Pick<ContactLinkCodePayload, "expiresAt">,
+  payload: Pick<ContactLinkCodePayload, "expires_at">,
   nowMs: number = Date.now(),
 ): boolean {
-  return Number(payload.expiresAt) <= nowMs;
+  return Number(payload.expires_at) <= nowMs;
 }

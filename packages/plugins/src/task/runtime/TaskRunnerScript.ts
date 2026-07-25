@@ -6,7 +6,7 @@
  * - 这里集中处理 script 执行、结果校验与进度更新，Runner 主链只消费归一化结果。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type {
   ShipTaskRunExecutionStatusV1,
   ShipTaskRunResultStatusV1,
@@ -23,15 +23,15 @@ export interface RunScriptTaskBranchParams {
   /**
    * 当前 Agent 执行上下文。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * 当前 run 目录绝对路径。
    */
   runDirAbs: string;
   /**
-   * script 任务绑定的 sessionId。
+   * script 任务绑定的 session_id。
    */
-  sessionId: string;
+  session_id: string;
   /**
    * script 正文。
    */
@@ -111,7 +111,7 @@ export async function runScriptTaskBranch(
     const scriptResult = await runScriptTask({
       context: params.context,
       runDirAbs: params.runDirAbs,
-      sessionId: params.sessionId,
+      session_id: params.session_id,
       scriptBody: params.scriptBody,
     });
     outputText = scriptResult.outputText;

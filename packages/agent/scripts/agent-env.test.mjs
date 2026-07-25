@@ -9,7 +9,6 @@ import test from "node:test";
 import {
   Agent,
   Workspace,
-  initializeAgentProject,
   resolve_workspace_env,
 } from "../bin/index.js";
 
@@ -50,41 +49,9 @@ test("Agent 运行时只使用显式 id，不读取完整项目 config", async (
       workspace: new Workspace({ path: project_root }),
     });
     assert.equal(agent.id, "sdk_id");
-    assert.equal(agent.getContext().agent_id, "sdk_id");
-    assert.equal(agent.getContext().rootPath, fs.realpathSync(project_root));
+    assert.equal(agent.workspace.path, fs.realpathSync(project_root));
     await agent.ready();
     await agent.dispose();
-  } finally {
-    fs.rmSync(project_root, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
-  }
-});
-
-test("项目初始化只创建 .env、Skills 和运行目录并返回真实结果", async () => {
-  const project_root = create_project_root();
-  try {
-    const first = await initializeAgentProject({
-      projectRoot: project_root,
-      id: "init_agent",
-      execution: { type: "api", modelId: "model_a" },
-    });
-    assert.equal(fs.existsSync(path.join(project_root, ".env")), true);
-    assert.equal(fs.existsSync(path.join(project_root, ".env.example")), false);
-    assert.equal(fs.existsSync(path.join(project_root, ".agents", "skills")), true);
-    assert.equal(first.createdFiles.includes(".env"), true);
-    assert.equal(first.createdFiles.includes(".agents/skills/"), true);
-    assert.equal(first.createdFiles.includes(".downcity/"), true);
-    const gitignore = fs.readFileSync(path.join(project_root, ".gitignore"), "utf8");
-    assert.match(gitignore, /^\.env$/m);
-    assert.match(gitignore, /^\.downcity$/m);
-
-    const second = await initializeAgentProject({
-      projectRoot: project_root,
-      id: "init_agent",
-      execution: { type: "api", modelId: "model_a" },
-    });
-    assert.equal(second.skippedFiles.includes(".env"), true);
-    assert.equal(second.skippedFiles.includes(".agents/skills/"), true);
-    assert.equal(second.skippedFiles.includes(".downcity/"), true);
   } finally {
     fs.rmSync(project_root, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
   }

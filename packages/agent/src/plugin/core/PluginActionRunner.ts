@@ -7,7 +7,7 @@
  * - 延迟调度仍复用本模块，保证 schedule 到点后走统一 action 规则。
  */
 
-import type { AgentContext } from "@/agent/AgentContext.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { PluginAction, PluginActionResult } from "@/types/plugin/PluginAction.js";
 import type { PluginCommandResult } from "@/types/plugin/PluginCommand.js";
 import type { PluginSnapshot } from "@/types/plugin/PluginState.js";
@@ -23,9 +23,9 @@ export function resolvePluginAction(
   plugin: {
     actions?: Record<string, PluginAction<JsonValue, JsonValue>>;
   },
-  actionName: string,
+  action_name: string,
 ): PluginAction<JsonValue, JsonValue> | null {
-  const key = String(actionName || "").trim();
+  const key = String(action_name || "").trim();
   if (!key) return null;
   return plugin.actions?.[key] || null;
 }
@@ -34,47 +34,47 @@ export function resolvePluginAction(
  * 执行一个 plugin action。
  */
 export async function invokePluginAction(params: {
-  pluginName: string;
-  actionName: string;
+  plugin_name: string;
+  action_name: string;
   payload?: JsonValue;
-  context: AgentContext;
+  context: PluginContext;
 }): Promise<PluginActionResult<JsonValue>> {
-  return await params.context.plugins.runAction({
-    plugin: params.pluginName,
-    action: params.actionName,
+  return await params.context.plugins.run_action({
+    plugin: params.plugin_name,
+    action: params.action_name,
     payload: params.payload,
   });
 }
 
 async function schedulePluginAction(params: {
-  pluginName: string;
+  plugin_name: string;
   command: string;
   payload?: JsonValue;
   schedule: JsonValue | PluginActionScheduleInput;
-  recordSnapshot: PluginSnapshot;
-  context: AgentContext;
+  record_snapshot: PluginSnapshot;
+  context: PluginContext;
 }): Promise<PluginCommandResult & { plugin?: PluginSnapshot }> {
   try {
     const scheduleInput = params.schedule as Partial<PluginActionScheduleInput>;
-    const runAtMs = normalizeRunAtMsOrThrow(
-      scheduleInput.runAtMs,
-      "schedule.runAtMs",
+    const run_at_ms = normalizeRunAtMsOrThrow(
+      scheduleInput.run_at_ms,
+      "schedule.run_at_ms",
     );
     const store = new ActionScheduleStore(params.context.files);
     try {
-      const job = await store.createJob({
-        pluginName: params.pluginName,
-        actionName: params.command,
+      const job = await store.create_job({
+        plugin_name: params.plugin_name,
+        action_name: params.command,
         payload: params.payload ?? null,
-        runAtMs,
+        run_at_ms,
       });
       return {
         success: true,
-        plugin: params.recordSnapshot,
+        plugin: params.record_snapshot,
         data: {
           scheduled: true,
-          jobId: job.id,
-          runAtMs: job.runAtMs,
+          job_id: job.id,
+          run_at_ms: job.run_at_ms,
           status: job.status,
         },
       };
@@ -84,7 +84,7 @@ async function schedulePluginAction(params: {
   } catch (error) {
     return {
       success: false,
-      plugin: params.recordSnapshot,
+      plugin: params.record_snapshot,
       message: String(error),
     };
   }
@@ -93,24 +93,24 @@ async function schedulePluginAction(params: {
 /**
  * 统一执行 plugin command。
  */
-export async function runPluginCommand(params: {
-  pluginName: string;
+export async function run_plugin_command(params: {
+  plugin_name: string;
   command: string;
   payload?: JsonValue;
   schedule?: JsonValue | PluginActionScheduleInput;
-  context: AgentContext;
+  context: PluginContext;
 }): Promise<PluginCommandResult & { plugin?: PluginSnapshot }> {
-  const pluginName = String(params.pluginName || "").trim();
+  const plugin_name = String(params.plugin_name || "").trim();
   const command = String(params.command || "")
     .trim()
     .toLowerCase();
-  const plugin = params.context.plugins.get(pluginName);
-  const snapshot = params.context.plugins.status(pluginName) || undefined;
+  const plugin = params.context.plugins.get(plugin_name);
+  const snapshot = params.context.plugins.status(plugin_name) || undefined;
 
   if (!plugin || !snapshot) {
     return {
       success: false,
-      message: `Unknown plugin: ${params.pluginName}`,
+      message: `Unknown plugin: ${params.plugin_name}`,
     };
   }
 
@@ -140,17 +140,17 @@ export async function runPluginCommand(params: {
     }
 
     return await schedulePluginAction({
-      pluginName: plugin.name,
+      plugin_name: plugin.name,
       command,
       payload: params.payload,
       schedule: params.schedule,
-      recordSnapshot: snapshot,
+      record_snapshot: snapshot,
       context: params.context,
     });
   }
 
   if (action) {
-    const result = await params.context.plugins.runAction({
+    const result = await params.context.plugins.run_action({
       plugin: plugin.name,
       action: command,
       payload: params.payload,

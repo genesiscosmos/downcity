@@ -18,23 +18,23 @@ import {
 } from "../bin/executor/tools/plugin/PluginToolBridge.js";
 import { createPluginTools } from "../bin/executor/tools/plugin/PluginToolDefinition.js";
 import { plugin_call_input_schema } from "../bin/executor/tools/plugin/PluginToolSchemas.js";
-import { createAction, createPlugin } from "../bin/plugin/core/PluginActionFactory.js";
+import { create_action, create_plugin } from "../bin/plugin/core/PluginActionFactory.js";
 import { PluginRegistry } from "../bin/plugin/core/PluginRegistry.js";
 import { z } from "zod";
 
 function create_run_context(project_root) {
   return {
-    sessionId: "session_test",
-    projectRoot: project_root,
-    injectedUserMessages: [],
-    deferredPersistedUserMessages: [],
-    pendingAssistantFileParts: [],
+    session_id: "session_test",
+    project_root: project_root,
+    injected_user_messages: [],
+    deferred_persisted_user_messages: [],
+    pending_assistant_file_parts: [],
   };
 }
 
 function create_registry(plugin) {
   const registry = new PluginRegistry([plugin]);
-  registry.bind_context({ rootPath: process.cwd() });
+  registry.bind_context({ workspace_path: process.cwd() });
   return registry;
 }
 
@@ -60,7 +60,7 @@ test("invokePluginCallTool returns absolute paths for materialized file parts", 
     list: () => [],
     read: () => ({ plugins: [] }),
     availability: async () => ({ enabled: true, available: true, reasons: [] }),
-    runAction: async () => ({
+    run_action: async () => ({
       success: true,
       message: "image generated",
       data: {
@@ -107,7 +107,7 @@ test("invokePluginCallTool returns absolute paths for materialized file parts", 
   assert.deepEqual(await fs.readFile(result.files[0].path), bytes);
   assert.equal("data" in result, false);
 
-  const pending_parts = run_context.pendingAssistantFileParts;
+  const pending_parts = run_context.pending_assistant_file_parts;
   assert.equal(pending_parts.length, 1);
   assert.equal(pending_parts[0].url, result.files[0].relative_path);
 });
@@ -142,7 +142,7 @@ test("invokePluginReadTool returns plugin action metadata", async () => {
       ],
     }),
     availability: async () => ({ enabled: true, available: true, reasons: [] }),
-    runAction: async () => ({ success: false, error: "not used" }),
+    run_action: async () => ({ success: false, error: "not used" }),
     pipeline: async (_, value) => value,
     guard: async () => {},
     effect: async () => {},
@@ -169,7 +169,7 @@ test("invokePluginReadTool returns plugin action metadata", async () => {
 
 test("invokePluginReadTool rejects unregistered plugins", async () => {
   const registry = create_registry(
-    createPlugin({
+    create_plugin({
       name: "skill",
       title: "Skill",
       description: "Manage skills",
@@ -190,7 +190,7 @@ test("invokePluginReadTool rejects unregistered plugins", async () => {
 
 test("invokePluginReadTool rejects unknown plugin actions", async () => {
   const registry = create_registry(
-    createPlugin({
+    create_plugin({
       name: "skill",
       title: "Skill",
       description: "Manage skills",
@@ -210,12 +210,12 @@ test("invokePluginReadTool rejects unknown plugin actions", async () => {
 });
 
 test("PluginRegistry validates action payload with metadata schema", async () => {
-  const plugin = createPlugin({
+  const plugin = create_plugin({
     name: "demo",
     title: "Demo",
     description: "Demo plugin",
     actions: {
-      echo: createAction({
+      echo: create_action({
         description: "Echo text",
         input_schema: {
           zod: z.object({
@@ -243,7 +243,7 @@ test("PluginRegistry validates action payload with metadata schema", async () =>
   assert.equal(metadata.actions[0].description, "Echo text");
   assert.equal(metadata.actions[0].has_input_schema, true);
 
-  const invalid = await registry.runAction({
+  const invalid = await registry.run_action({
     plugin: "demo",
     action: "echo",
     payload: {},
@@ -251,7 +251,7 @@ test("PluginRegistry validates action payload with metadata schema", async () =>
   assert.equal(invalid.success, false);
   assert.match(invalid.error, /Invalid payload/);
 
-  const valid = await registry.runAction({
+  const valid = await registry.run_action({
     plugin: "demo",
     action: "echo",
     payload: { text: "hello" },
@@ -262,18 +262,18 @@ test("PluginRegistry validates action payload with metadata schema", async () =>
 
 test("createPluginTools binds plugin_call to the current registry", async () => {
   function create_owner_registry(owner) {
-    const plugin = createPlugin({
+    const plugin = create_plugin({
       name: "skill",
       title: `Skill ${owner}`,
       description: "Owner scoped skill plugin",
       actions: {
-        lookup: createAction({
+        lookup: create_action({
           description: "Return registry owner",
           execute: async ({ run_context }) => ({
             success: true,
             data: {
               owner,
-              session_id: run_context?.sessionId,
+              session_id: run_context?.session_id,
             },
             message: owner,
           }),
@@ -289,7 +289,7 @@ test("createPluginTools binds plugin_call to the current registry", async () => 
   const tools_b = createPluginTools({ plugins: registry_b });
   const create_execution_options = (session_id) => {
     const run_context = create_run_context(process.cwd());
-    run_context.sessionId = session_id;
+    run_context.session_id = session_id;
     return {
       toolCallId: `call_${session_id}`,
       messages: [],
@@ -323,12 +323,12 @@ test("createPluginTools binds plugin_call to the current registry", async () => 
 
 test("PluginRegistry keeps plugin ready after action business failure", async () => {
   let call_count = 0;
-  const plugin = createPlugin({
+  const plugin = create_plugin({
     name: "skill",
     title: "Skill",
     description: "Retryable skill plugin",
     actions: {
-      lookup: createAction({
+      lookup: create_action({
         description: "Fail once then succeed",
         execute: async () => {
           call_count += 1;
@@ -350,7 +350,7 @@ test("PluginRegistry keeps plugin ready after action business failure", async ()
   });
   const registry = create_registry(plugin);
 
-  const failed = await registry.runAction({
+  const failed = await registry.run_action({
     plugin: "skill",
     action: "lookup",
     payload: { name: "missing" },
@@ -358,7 +358,7 @@ test("PluginRegistry keeps plugin ready after action business failure", async ()
   assert.equal(failed.success, false);
   assert.equal(registry.status("skill").status, "ready");
 
-  const retry = await registry.runAction({
+  const retry = await registry.run_action({
     plugin: "skill",
     action: "lookup",
     payload: { name: "exists" },
@@ -371,7 +371,7 @@ test("PluginRegistry keeps plugin ready after action business failure", async ()
 test("PluginRegistry delays lifecycle stop until the active execution lease is released", async () => {
   let lifecycle_active = false;
   let stop_count = 0;
-  const plugin = createPlugin({
+  const plugin = create_plugin({
     name: "leased-plugin",
     title: "Leased Plugin",
     description: "Keeps runtime resources alive for an active Session step",
@@ -385,7 +385,7 @@ test("PluginRegistry delays lifecycle stop until the active execution lease is r
       },
     },
     actions: {
-      status: createAction({
+      status: create_action({
         description: "Read lifecycle state",
         execute: async () => ({
           success: lifecycle_active,
@@ -395,7 +395,7 @@ test("PluginRegistry delays lifecycle stop until the active execution lease is r
     },
   });
   const registry = create_registry(plugin);
-  await registry.startAll();
+  await registry.start_all();
   const lease = registry.execution_view().acquire();
 
   assert.equal(await registry.unregister("leased-plugin"), true);
@@ -403,7 +403,7 @@ test("PluginRegistry delays lifecycle stop until the active execution lease is r
   assert.equal(lifecycle_active, true);
   assert.equal(stop_count, 0);
 
-  const result = await lease.runAction({
+  const result = await lease.run_action({
     plugin: "leased-plugin",
     action: "status",
   });

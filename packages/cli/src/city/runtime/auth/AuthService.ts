@@ -6,8 +6,8 @@
  * - 路由层只调用这里，不直接碰数据库与密码哈希细节。
  */
 
-import type { AuthIssuedToken, AuthTokenSummary } from "@downcity/agent";
-import type { AuthPrincipal, AuthTokenRecord, AuthUser } from "@downcity/agent";
+import type { AuthIssuedToken, AuthTokenSummary } from "@downcity/type";
+import type { AuthPrincipal, AuthTokenRecord, AuthUser } from "@downcity/type";
 import { AuthError } from "@/city/runtime/auth/AuthError.js";
 import { AuthStore, type AuthStoreOptions } from "@/city/runtime/auth/AuthStore.js";
 import { extractBearerToken, generateAccessToken, hashAccessToken } from "@/city/runtime/auth/TokenService.js";
@@ -42,7 +42,7 @@ export interface AuthCurrentUserPayload {
   /**
    * 展示名。
    */
-  displayName?: string;
+  display_name?: string;
   /**
    * 角色列表。
    */
@@ -92,12 +92,12 @@ export class AuthService {
    * 确保存在本机 CLI 主体，并为其签发新的 access token。
    */
   ensureLocalCliAccess(input: {
-    tokenName: string;
-    expiresAt?: string;
+    token_name: string;
+    expires_at?: string;
   }): { user: AuthCurrentUserPayload; token: AuthIssuedToken } {
     const token = this.createLocalCliToken({
-      name: input.tokenName,
-      expiresAt: input.expiresAt,
+      name: input.token_name,
+      expires_at: input.expires_at,
     });
     const user = this.requireLocalCliUser();
     return {
@@ -114,7 +114,7 @@ export class AuthService {
     if (!user) return [];
     return this.store
       .listTokensByUserId(user.id)
-      .filter((item) => !item.revokedAt)
+      .filter((item) => !item.revoked_at)
       .map((item) => this.store.toTokenSummary(item));
   }
 
@@ -123,21 +123,21 @@ export class AuthService {
    */
   createLocalCliToken(input: {
     name: string;
-    expiresAt?: string;
+    expires_at?: string;
   }): AuthIssuedToken {
     const user = this.ensureLocalCliUser();
     const issued = this.issueTokenForUser({
       user,
-      tokenName: input.name,
-      expiresAt: input.expiresAt,
+      token_name: input.name,
+      expires_at: input.expires_at,
     });
     this.store.insertAuditLog({
-      actorUserId: user.id,
-      resourceType: "auth_token",
-      resourceId: issued.record.id,
+      actor_user_id: user.id,
+      resource_type: "auth_token",
+      resource_id: issued.record.id,
       action: "token_create",
       result: "success",
-      metaJson: JSON.stringify({
+      meta_json: JSON.stringify({
         name: issued.record.name,
         source: "local-cli",
       }),
@@ -154,12 +154,12 @@ export class AuthService {
     const deleted = this.store.deleteToken(record.id);
     if (!deleted) throw new AuthError("Token not found", 404);
     this.store.insertAuditLog({
-      actorUserId: user.id,
-      resourceType: "auth_token",
-      resourceId: record.id,
+      actor_user_id: user.id,
+      resource_type: "auth_token",
+      resource_id: record.id,
       action: "token_delete",
       result: "success",
-      metaJson: JSON.stringify({
+      meta_json: JSON.stringify({
         name: record.name,
         source: "local-cli",
       }),
@@ -174,21 +174,21 @@ export class AuthService {
     if (!plainToken) throw new AuthError("Missing bearer token", 401);
     const record = this.store.findTokenByHash(hashAccessToken(plainToken));
     if (!record) throw new AuthError("Invalid bearer token", 401);
-    if (record.revokedAt) throw new AuthError("Token is revoked", 401);
-    if (record.expiresAt && new Date(record.expiresAt).getTime() <= Date.now()) {
+    if (record.revoked_at) throw new AuthError("Token is revoked", 401);
+    if (record.expires_at && new Date(record.expires_at).getTime() <= Date.now()) {
       throw new AuthError("Token is expired", 401);
     }
-    const user = this.store.getUserById(record.userId);
+    const user = this.store.getUserById(record.user_id);
     if (!user) throw new AuthError("User not found for token", 401);
     this.ensureUserActive(user);
     this.store.touchToken(record.id);
     return {
-      userId: user.id,
+      user_id: user.id,
       username: user.username,
-      displayName: user.displayName,
+      display_name: user.display_name,
       status: user.status,
-      tokenId: record.id,
-      tokenName: record.name,
+      token_id: record.id,
+      token_name: record.name,
       roles: this.store.listRoleNamesByUserId(user.id),
       permissions: this.store.listPermissionKeysByUserId(user.id),
     };
@@ -199,9 +199,9 @@ export class AuthService {
    */
   getCurrentUser(principal: AuthPrincipal): AuthCurrentUserPayload {
     return {
-      id: principal.userId,
+      id: principal.user_id,
       username: principal.username,
-      displayName: principal.displayName,
+      display_name: principal.display_name,
       roles: [...principal.roles],
       permissions: [...principal.permissions],
     };
@@ -212,23 +212,23 @@ export class AuthService {
    */
   createToken(principal: AuthPrincipal, input: {
     name: string;
-    expiresAt?: string;
+    expires_at?: string;
   }): AuthIssuedToken {
-    const user = this.store.getUserById(principal.userId);
+    const user = this.store.getUserById(principal.user_id);
     if (!user) throw new AuthError("User not found", 404);
     const issued = this.issueTokenForUser({
       user,
-      tokenName: input.name,
-      expiresAt: input.expiresAt,
+      token_name: input.name,
+      expires_at: input.expires_at,
     });
     this.store.insertAuditLog({
-      actorUserId: principal.userId,
-      actorTokenId: principal.tokenId,
-      resourceType: "auth_token",
-      resourceId: issued.record.id,
+      actor_user_id: principal.user_id,
+      actor_token_id: principal.token_id,
+      resource_type: "auth_token",
+      resource_id: issued.record.id,
       action: "token_create",
       result: "success",
-      metaJson: JSON.stringify({ name: issued.record.name }),
+      meta_json: JSON.stringify({ name: issued.record.name }),
     });
     return issued.token;
   }
@@ -238,8 +238,8 @@ export class AuthService {
    */
   listTokens(principal: AuthPrincipal): AuthTokenSummary[] {
     return this.store
-      .listTokensByUserId(principal.userId)
-      .filter((item) => !item.revokedAt)
+      .listTokensByUserId(principal.user_id)
+      .filter((item) => !item.revoked_at)
       .map((item) => this.store.toTokenSummary(item));
   }
 
@@ -247,36 +247,36 @@ export class AuthService {
    * 删除当前用户的 token。
    */
   deleteToken(principal: AuthPrincipal, tokenIdInput: string): void {
-    const tokenId = String(tokenIdInput || "").trim();
-    if (!tokenId) throw new AuthError("tokenId is required", 400);
-    const record = this.store.getTokenById(tokenId);
-    if (!record || record.userId !== principal.userId) {
+    const token_id = String(tokenIdInput || "").trim();
+    if (!token_id) throw new AuthError("token_id is required", 400);
+    const record = this.store.getTokenById(token_id);
+    if (!record || record.user_id !== principal.user_id) {
       throw new AuthError("Token not found", 404);
     }
     const deleted = this.store.deleteToken(record.id);
     if (!deleted) throw new AuthError("Token not found", 404);
     this.store.insertAuditLog({
-      actorUserId: principal.userId,
-      actorTokenId: principal.tokenId,
-      resourceType: "auth_token",
-      resourceId: tokenId,
+      actor_user_id: principal.user_id,
+      actor_token_id: principal.token_id,
+      resource_type: "auth_token",
+      resource_id: token_id,
       action: "token_delete",
       result: "success",
-      metaJson: JSON.stringify({ name: record.name }),
+      meta_json: JSON.stringify({ name: record.name }),
     });
   }
 
   private issueTokenForUser(params: {
     user: AuthUser;
-    tokenName: string;
-    expiresAt?: string;
+    token_name: string;
+    expires_at?: string;
   }): { record: ReturnType<AuthStore["createToken"]>; token: AuthIssuedToken } {
     const plainToken = generateAccessToken();
     const record = this.store.createToken({
-      userId: params.user.id,
-      name: this.requireTokenName(params.tokenName),
-      tokenHash: hashAccessToken(plainToken),
-      expiresAt: optionalTrimmedText(params.expiresAt),
+      user_id: params.user.id,
+      name: this.requireTokenName(params.token_name),
+      token_hash: hashAccessToken(plainToken),
+      expires_at: optionalTrimmedText(params.expires_at),
     });
     return {
       record,
@@ -290,10 +290,10 @@ export class AuthService {
     }
   }
 
-  private isTokenActive(record: Pick<AuthTokenRecord, "revokedAt" | "expiresAt">): boolean {
-    if (record.revokedAt) return false;
-    if (!record.expiresAt) return true;
-    return new Date(record.expiresAt).getTime() > Date.now();
+  private isTokenActive(record: Pick<AuthTokenRecord, "revoked_at" | "expires_at">): boolean {
+    if (record.revoked_at) return false;
+    if (!record.expires_at) return true;
+    return new Date(record.expires_at).getTime() > Date.now();
   }
 
   private ensureLocalCliUser(): AuthUser {
@@ -305,21 +305,21 @@ export class AuthService {
     }
     const user = this.store.createUser({
       username: LOCAL_CLI_USERNAME,
-      passwordHash: LOCAL_CLI_PASSWORD_HASH,
-      displayName: LOCAL_CLI_DISPLAY_NAME,
+      password_hash: LOCAL_CLI_PASSWORD_HASH,
+      display_name: LOCAL_CLI_DISPLAY_NAME,
       status: "active",
     });
     this.store.assignRoleToUser({
-      userId: user.id,
+      user_id: user.id,
       roleName: "admin",
     });
     return user;
   }
 
  private requireTokenName(value: string): string {
-   const tokenName = String(value || "").trim();
-   if (!tokenName) throw new AuthError("token name is required", 400);
-   return tokenName;
+   const token_name = String(value || "").trim();
+   if (!token_name) throw new AuthError("token name is required", 400);
+   return token_name;
  }
 
  private requireLocalCliUser(): AuthUser {
@@ -333,10 +333,10 @@ export class AuthService {
     tokenIdInput: string,
     expectedUserId: string,
   ): AuthTokenRecord {
-    const tokenId = String(tokenIdInput || "").trim();
-    if (!tokenId) throw new AuthError("tokenId is required", 400);
-    const record = this.store.getTokenById(tokenId);
-    if (!record || record.userId !== expectedUserId) {
+    const token_id = String(tokenIdInput || "").trim();
+    if (!token_id) throw new AuthError("token_id is required", 400);
+    const record = this.store.getTokenById(token_id);
+    if (!record || record.user_id !== expectedUserId) {
       throw new AuthError("Token not found", 404);
     }
     return record;
@@ -346,7 +346,7 @@ export class AuthService {
     return {
       id: user.id,
       username: user.username,
-      displayName: user.displayName,
+      display_name: user.display_name,
       roles: this.store.listRoleNamesByUserId(user.id),
       permissions: this.store.listPermissionKeysByUserId(user.id),
     };

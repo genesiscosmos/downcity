@@ -6,7 +6,7 @@
  * - 细节类型分散在 State / Command / Action / Runtime / Setup / HTTP 模块。
  */
 
-import type { AgentContext } from "@/agent/AgentContext.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { StructuredConfig } from "@/types/plugin/PluginConfig.js";
 import type { PluginActions } from "@/types/plugin/PluginAction.js";
 import type {
@@ -67,14 +67,14 @@ export interface Plugin {
    * @param run_context 当前 Session run 上下文；非 Session 快照读取时可缺省。
    */
   system?: (
-    context: AgentContext,
+    context: PluginContext,
     run_context?: PluginRunContext,
   ) => string | Promise<string>;
   /** Plugin 生命周期定义（可选）。 */
   lifecycle?: PluginLifecycle;
   /** Plugin 可用性检查器（可选）。 */
   availability?: (
-    context: PluginCommandContext | AgentContext,
+    context: PluginCommandContext | PluginContext,
   ) => Promise<PluginAvailability> | PluginAvailability;
   /** Plugin HTTP 注入定义（可选）。 */
   http?: PluginHttpDefinition;

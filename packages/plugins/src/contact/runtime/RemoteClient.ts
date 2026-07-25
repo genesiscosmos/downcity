@@ -66,7 +66,7 @@ async function postPluginCommand<T>(params: {
     method: "POST",
     headers,
     body: JSON.stringify({
-      pluginName: "contact",
+      plugin_name: "contact",
       command: params.command,
       payload: payloadBody,
     }),

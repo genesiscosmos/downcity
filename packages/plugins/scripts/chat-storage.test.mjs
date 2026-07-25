@@ -33,15 +33,15 @@ test("clean_chat_storage 只清理 Chat Plugin 自有数据", async () => {
     fs.writeFileSync(path.join(chat_dir, "history.jsonl"), "{}\n");
     fs.writeFileSync(meta_path, JSON.stringify({
       v: 1,
-      updatedAt: Date.now(),
+      updated_at: Date.now(),
       sessionIdByTargetKey: { "telegram|chat_1||": session_id },
       routesBySessionId: {
         [session_id]: {
           v: 1,
-          sessionId: session_id,
+          session_id: session_id,
           channel: "telegram",
           chatId: "chat_1",
-          updatedAt: Date.now(),
+          updated_at: Date.now(),
         },
       },
     }));
@@ -78,10 +78,10 @@ test("chat.history_clear action 只清空事件历史", async () => {
     fs.writeFileSync(history_path, "{}\n");
     const plugin = new ChatPlugin({ channels: [] });
     const result = await plugin.actions.history_clear.execute({
-      context: { rootPath: root_path },
-      input: { sessionId: session_id },
-      pluginName: "chat",
-      actionName: "history_clear",
+      context: { workspace_path: root_path },
+      input: { session_id: session_id },
+      plugin_name: "chat",
+      action_name: "history_clear",
     });
     assert.equal(result.success, true);
     assert.equal(result.data.cleared, true);

@@ -11,7 +11,7 @@ import type { Command } from "commander";
 import type { JsonObject, JsonValue } from "@/types/common/Json.js";
 import type { Plugin } from "@/types/plugin/PluginDefinition.js";
 import type { PluginAction } from "@/types/plugin/PluginAction.js";
-import { runLocalPluginAction } from "@/plugin/core/PluginLocalExecution.js";
+import { run_local_plugin_action } from "@/plugin/core/PluginLocalExecution.js";
 import { printResult } from "@/utils/cli/CliOutput.js";
 
 type PluginCliBridgeOptions = {
@@ -121,7 +121,7 @@ function registerPluginActionCommand(params: {
   program: Command;
   plugins: Plugin[];
   plugin: Plugin;
-  actionName: string;
+  action_name: string;
   action: PluginAction<JsonValue, JsonValue>;
 }): void {
   const commandSpec = params.action.command;
@@ -135,7 +135,7 @@ function registerPluginActionCommand(params: {
       .helpOption("--help", "display help for command");
 
   const actionCommand = pluginCommand
-    .command(params.actionName)
+    .command(params.action_name)
     .description(commandSpec.description)
     .helpOption("--help", "display help for command")
     .option("--path <path>", "项目根目录（默认当前目录）", ".")
@@ -170,7 +170,7 @@ function registerPluginActionCommand(params: {
 
     let payload: JsonValue;
     try {
-      payload = await commandSpec.mapInput({
+      payload = await commandSpec.map_input({
         args: positionalArgs,
         opts: actionOptions,
       });
@@ -178,7 +178,7 @@ function registerPluginActionCommand(params: {
       printResult({
         asJson: bridgeOptions.json,
         success: false,
-        title: `${params.plugin.name}.${params.actionName} failed`,
+        title: `${params.plugin.name}.${params.action_name} failed`,
         payload: {
           error: `Failed to parse command input: ${String(error)}`,
         },
@@ -186,19 +186,19 @@ function registerPluginActionCommand(params: {
       return;
     }
 
-    const local = await runLocalPluginAction({
+    const local = await run_local_plugin_action({
       plugins: params.plugins,
-      projectRoot: resolveProjectRoot(bridgeOptions.path),
-      pluginName: params.plugin.name,
-      actionName: params.actionName,
+      project_root: resolveProjectRoot(bridgeOptions.path),
+      plugin_name: params.plugin.name,
+      action_name: params.action_name,
       payload,
     });
     printResult({
       asJson: bridgeOptions.json,
       success: Boolean(local.success),
       title: local.success
-        ? `${params.plugin.name}.${params.actionName} ok`
-        : `${params.plugin.name}.${params.actionName} failed`,
+        ? `${params.plugin.name}.${params.action_name} ok`
+        : `${params.plugin.name}.${params.action_name} failed`,
       payload: {
         ...(local.data !== undefined ? { data: local.data } : {}),
         ...(local.message ? { message: local.message } : {}),
@@ -211,18 +211,18 @@ function registerPluginActionCommand(params: {
 /**
  * 注册指定 plugin 集合的 action CLI 命令。
  */
-export function registerPluginActionCommandsForCli(params: {
+export function register_plugin_action_commands_for_cli(params: {
   program: Command;
   plugins: Iterable<Plugin>;
 }): void {
   const plugins = [...params.plugins];
   for (const plugin of plugins) {
-    for (const [actionName, action] of Object.entries(plugin.actions || {})) {
+    for (const [action_name, action] of Object.entries(plugin.actions || {})) {
       registerPluginActionCommand({
         program: params.program,
         plugins,
         plugin,
-        actionName,
+        action_name,
         action,
       });
     }

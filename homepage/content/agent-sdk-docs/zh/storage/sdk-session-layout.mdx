@@ -8,7 +8,7 @@ description: 本地 SDK Agent 的 Session 文件布局与数据边界
 本地 SDK Agent 的 Session 默认落盘到：
 
 ```text
-<projectRoot>/.downcity/agents/<agentId>/sessions/<sessionId>/
+<project_root>/.downcity/agents/<agent_id>/sessions/<session_id>/
 └── messages/
     ├── active.jsonl
     ├── assistant_message.json
@@ -17,7 +17,7 @@ description: 本地 SDK Agent 的 Session 文件布局与数据边界
         └── <start_sequence>-<end_sequence>.jsonl
 ```
 
-`agentId` 隔离同一项目中的多个 Agent，`sessionId` 隔离每条连续对话。
+`agent_id` 隔离同一项目中的多个 Agent，`session_id` 隔离每条连续对话。
 
 - `active.jsonl`：上次 Compact 后保留的完整 `SessionMessage` 快照。
 - `assistant_message.json`：唯一的运行中 Assistant 完整草稿。

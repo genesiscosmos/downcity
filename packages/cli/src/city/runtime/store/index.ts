@@ -20,7 +20,7 @@ import type {
   StoredGlobalEnvEntry,
   UpsertEnvEntryInput,
   UpsertGlobalEnvEntryInput,
-} from "@downcity/agent";
+} from "@/city/types/platform/PlatformStore.js";
 import type {
   StoredChannelAccount,
   UpsertChannelAccountInput,

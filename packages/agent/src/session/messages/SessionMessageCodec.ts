@@ -40,7 +40,7 @@ export function to_executor_history(
       metadata: {
         v: 1,
         ts: snapshot.summary.created_at,
-        sessionId: session_id,
+        session_id: session_id,
         source: "compact",
         kind: "summary",
         extra: {
@@ -66,8 +66,8 @@ export function to_executor_ui_message(
   const metadata: SessionMetadataV1 = {
     v: 1,
     ts: message.updated_at,
-    sessionId: message.session_id,
-    turnId: message.turn_id,
+    session_id: message.session_id,
+    turn_id: message.turn_id,
     source:
       message.type === "user"
         ? "ingress"

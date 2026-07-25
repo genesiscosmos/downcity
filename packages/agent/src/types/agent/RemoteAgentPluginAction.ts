@@ -43,10 +43,10 @@ export type RemoteAgentPluginActionResult =
     /**
      * Runtime 回传的 plugin 名称。
      */
-    pluginName?: string;
+    plugin_name?: string;
 
     /**
      * Runtime 回传的 action 名称。
      */
-    actionName?: string;
+    action_name?: string;
   };

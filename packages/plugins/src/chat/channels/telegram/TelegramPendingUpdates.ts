@@ -50,8 +50,8 @@ export interface TelegramPendingUpdatePlatform {
  */
 export type TelegramPendingAuditWriter = (params: {
   chatId: string;
-  messageId?: string;
-  userId?: string;
+  message_id?: string;
+  user_id?: string;
   text: string;
   meta?: ChannelUserMessageMeta;
 }) => Promise<void>;
@@ -120,7 +120,7 @@ async function enqueuePendingMessage(params: {
     typeof message.message_thread_id === "number"
       ? message.message_thread_id
       : undefined;
-  const chatKey = buildTelegramChatKey(chatId, messageThreadId);
+  const chat_key = buildTelegramChatKey(chatId, messageThreadId);
   const from = message.from;
   const chatTitle = getTelegramChatTitle(message.chat);
   const botId = params.platform.getBotId();
@@ -147,14 +147,14 @@ async function enqueuePendingMessage(params: {
     !!message.audio ||
     !!message.video;
 
-  const messageId =
+  const message_id =
     typeof message.message_id === "number" ? String(message.message_id) : undefined;
   const actorId = from?.id ? String(from.id) : undefined;
 
   await params.enqueueAuditMessage({
     chatId,
-    messageId,
-    userId: actorId,
+    message_id,
+    user_id: actorId,
     text: buildTelegramAuditText({ rawText, hasIncomingAttachment, message }),
     meta: {
       kind: "pending",
@@ -165,7 +165,7 @@ async function enqueuePendingMessage(params: {
       messageThreadId,
       username: from?.username,
       fromIsBot,
-      chatKey,
+      chat_key,
     },
   });
 }
@@ -190,8 +190,8 @@ async function enqueuePendingCallbackQuery(params: {
       : undefined;
   await params.enqueueAuditMessage({
     chatId,
-    messageId: undefined,
-    userId: query.from?.id ? String(query.from.id) : undefined,
+    message_id: undefined,
+    user_id: query.from?.id ? String(query.from.id) : undefined,
     text: `[callback_query] ${String(query.data || "").slice(0, 1000)}`.trim(),
     meta: {
       kind: "pending",

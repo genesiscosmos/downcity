@@ -142,7 +142,7 @@ export async function sendFeishuPlatformMessage(
   deps: FeishuMessagingDeps,
   chatId: string,
   chatType: string,
-  messageId: string | undefined,
+  message_id: string | undefined,
   msgType: FeishuMessagePayloadType,
   content: Record<string, unknown> | string,
 ): Promise<void> {
@@ -152,10 +152,10 @@ export async function sendFeishuPlatformMessage(
   const serializedContent =
     typeof content === "string" ? content : JSON.stringify(content);
   try {
-    if (chatType !== "p2p" && messageId) {
+    if (chatType !== "p2p" && message_id) {
       await deps.client.im.v1.message.reply({
         path: {
-          message_id: messageId,
+          message_id: message_id,
         },
         data: {
           content: serializedContent,
@@ -194,25 +194,25 @@ export async function sendFeishuAttachment(
   deps: FeishuMessagingDeps,
   chatId: string,
   chatType: string,
-  messageId: string | undefined,
+  message_id: string | undefined,
   attachment: ParsedFeishuAttachmentCommand,
 ): Promise<void> {
   const localPath = await resolveAttachmentLocalPath(deps, attachment.pathOrUrl);
   if (attachment.type === "photo") {
     const imageKey = await uploadImageToFeishu(deps, localPath);
-    await sendFeishuPlatformMessage(deps, chatId, chatType, messageId, "image", {
+    await sendFeishuPlatformMessage(deps, chatId, chatType, message_id, "image", {
       image_key: imageKey,
     });
   } else {
     const fileKey = await uploadFileToFeishu(deps, localPath);
-    await sendFeishuPlatformMessage(deps, chatId, chatType, messageId, "file", {
+    await sendFeishuPlatformMessage(deps, chatId, chatType, message_id, "file", {
       file_key: fileKey,
     });
   }
 
   const caption = String(attachment.caption || "").trim();
   if (caption) {
-    await sendFeishuPlatformMessage(deps, chatId, chatType, messageId, "text", {
+    await sendFeishuPlatformMessage(deps, chatId, chatType, message_id, "text", {
       text: caption,
     });
   }

@@ -21,7 +21,7 @@ test("canonical message chunk 写入失败时拒绝继续完成 turn", async () 
   await assert.rejects(
     collectFinalAssistantMessageFromUiStream({
       result,
-      sessionId: "callback-failure-test",
+      session_id: "callback-failure-test",
       abortSignal: abort_controller.signal,
       logger: { log: async () => {} },
       buildFallbackAssistantMessage: (text) => ({
@@ -29,7 +29,7 @@ test("canonical message chunk 写入失败时拒绝继续完成 turn", async () 
         role: "assistant",
         parts: [{ type: "text", text }],
       }),
-      onUiMessageChunkCallback: async () => {
+      on_ui_message_chunk_callback: async () => {
         throw new Error("canonical write failed");
       },
     }),

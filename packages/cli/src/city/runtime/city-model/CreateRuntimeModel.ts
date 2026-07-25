@@ -7,7 +7,7 @@
  * - 真实 provider、密钥、endpoint 与模型实现都由 City 的 AIService 负责。
  */
 
-import { getLogger } from "@downcity/agent";
+import { get_logger } from "@downcity/agent";
 import type { AgentModel } from "@downcity/agent";
 import { createCityAiAgentModel } from "@/city/runtime/city-model/CityAiServiceBinding.js";
 import type { StoredAgentConfig } from "@/city/process/registry/AgentConfigStore.js";
@@ -52,7 +52,7 @@ function readProjectExecutionBinding(
   const execution = config.execution;
   if (!execution || typeof execution !== "object") return null;
   if (execution.type !== "api") return null;
-  const modelId = String(execution.modelId || "").trim();
+  const modelId = String(execution.model_id || "").trim();
   if (!modelId) return null;
   return {
     type: "api",
@@ -66,7 +66,7 @@ function readProjectExecutionBinding(
 export async function createRuntimeModel(
   input: RuntimeModelFactoryInput,
 ): Promise<AgentModel> {
-  const logger = getLogger();
+  const logger = get_logger();
   const execution = readProjectExecutionBinding(input.config);
   if (!execution) {
     await logger.log("warn", "No agent execution configured");

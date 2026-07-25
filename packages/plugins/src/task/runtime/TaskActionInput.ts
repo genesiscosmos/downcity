@@ -6,7 +6,7 @@
  * - 参数校验尽量前置到输入层，避免进入执行层后才发现字段非法。
  */
 
-import { resolveSessionId } from "@downcity/agent";
+import { resolve_session_id } from "@downcity/agent";
 import type { JsonValue } from "@downcity/agent";
 import type { PluginActionCommandInput } from "@downcity/agent";
 import type { ShipTaskKind, ShipTaskStatus } from "@/task/types/Task.js";
@@ -69,13 +69,13 @@ function readTaskKindOrThrow(value?: string): ShipTaskKind | undefined {
 }
 
 function resolveSessionIdOrThrow(input?: string): string {
-  const sessionId = resolveSessionId({ sessionId: input });
-  if (!sessionId) {
+  const session_id = resolve_session_id({ session_id: input });
+  if (!session_id) {
     throw new Error(
-      "Missing sessionId. Provide --session-id or ensure DC_SESSION_ID is available.",
+      "Missing session_id. Provide --session-id or ensure DC_SESSION_ID is available.",
     );
   }
-  return sessionId;
+  return session_id;
 }
 
 function mapTaskListCommandInput(
@@ -93,7 +93,7 @@ function mapTaskCreateCommandInput(
   if (!title) throw new Error("Missing title");
   if (!description) throw new Error("Missing description");
 
-  const sessionId = resolveSessionIdOrThrow(getStringOpt(opts, "sessionId"));
+  const session_id = resolveSessionIdOrThrow(getStringOpt(opts, "session_id"));
   const kind = readTaskKindOrThrow(getStringOpt(opts, "kind"));
   const review = getBooleanLikeOpt(opts, "review");
   const status = readTaskStatusOrThrow(getStringOpt(opts, "status"));
@@ -107,7 +107,7 @@ function mapTaskCreateCommandInput(
     title,
     when: String(getStringOpt(opts, "when") || "@manual").trim() || "@manual",
     description,
-    sessionId,
+    session_id,
     ...(kind ? { kind } : {}),
     ...(typeof review === "boolean" ? { review } : {}),
     ...(resolvedStatus ? { status: resolvedStatus } : {}),
@@ -154,7 +154,7 @@ function mapTaskUpdateCommandInput(params: {
     typeof getStringOpt(opts, "title") === "string" ||
     typeof getStringOpt(opts, "when") === "string" ||
     typeof getStringOpt(opts, "description") === "string" ||
-    typeof getStringOpt(opts, "sessionId") === "string" ||
+    typeof getStringOpt(opts, "session_id") === "string" ||
     typeof kind === "string" ||
     typeof review === "boolean" ||
     getBooleanOpt(opts, "clearWhen") === true ||
@@ -177,8 +177,8 @@ function mapTaskUpdateCommandInput(params: {
     ...(typeof getStringOpt(opts, "description") === "string"
       ? { description: getStringOpt(opts, "description") }
       : {}),
-    ...(typeof getStringOpt(opts, "sessionId") === "string"
-      ? { sessionId: getStringOpt(opts, "sessionId") }
+    ...(typeof getStringOpt(opts, "session_id") === "string"
+      ? { session_id: getStringOpt(opts, "session_id") }
       : {}),
     ...(typeof kind === "string" ? { kind } : {}),
     ...(typeof review === "boolean" ? { review } : {}),

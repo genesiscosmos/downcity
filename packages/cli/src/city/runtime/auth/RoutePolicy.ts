@@ -7,8 +7,7 @@
  */
 
 import type { MiddlewareHandler } from "hono";
-import type { AuthRoutePolicy } from "@downcity/agent";
-import type { AuthPermissionKey } from "@downcity/agent";
+import type { AuthRoutePolicy, AuthPermissionKey } from "@downcity/type";
 import { isAuthError as isAuthDomainError } from "@/city/runtime/auth/AuthError.js";
 import type { AuthService } from "@/city/runtime/auth/AuthService.js";
 import { AUTH_PRINCIPAL_CONTEXT_KEY, type AuthMiddlewareVariables } from "@/city/runtime/auth/AuthMiddleware.js";
@@ -17,72 +16,72 @@ import { AUTH_PRINCIPAL_CONTEXT_KEY, type AuthMiddlewareVariables } from "@/city
  * Server 侧路由权限矩阵。
  */
 export const SERVER_AUTH_ROUTE_POLICIES: AuthRoutePolicy[] = [
-  { path: "/api/auth/*", method: "*", requireAuth: false },
-  { path: "/health", method: "GET", requireAuth: false },
+  { path: "/api/auth/*", method: "*", require_auth: false },
+  { path: "/health", method: "GET", require_auth: false },
   {
     path: "/api/execute",
     method: "POST",
-    requireAuth: true,
-    anyPermissions: ["agent.execute"],
+    require_auth: true,
+    any_permissions: ["agent.execute"],
   },
   {
     path: "/api/plugins/list",
     method: "GET",
-    requireAuth: true,
-    anyPermissions: ["plugin.read"],
+    require_auth: true,
+    any_permissions: ["plugin.read"],
   },
   {
     path: "/api/plugins/control",
     method: "POST",
-    requireAuth: true,
-    anyPermissions: ["plugin.write"],
+    require_auth: true,
+    any_permissions: ["plugin.write"],
   },
   {
     path: "/api/plugins/command",
     method: "POST",
-    requireAuth: true,
-    anyPermissions: ["plugin.write"],
+    require_auth: true,
+    any_permissions: ["plugin.write"],
   },
   {
     path: "/api/plugins/catalog",
     method: "GET",
-    requireAuth: true,
-    anyPermissions: ["plugin.read"],
+    require_auth: true,
+    any_permissions: ["plugin.read"],
   },
   {
     path: "/api/plugins/availability",
     method: "POST",
-    requireAuth: true,
-    anyPermissions: ["plugin.read"],
+    require_auth: true,
+    any_permissions: ["plugin.read"],
   },
   {
     path: "/api/plugins/action",
     method: "POST",
-    requireAuth: true,
-    anyPermissions: ["plugin.write"],
+    require_auth: true,
+    any_permissions: ["plugin.write"],
   },
   {
     path: "/api/control/chat/access",
     method: "GET",
-    requireAuth: true,
-    anyPermissions: ["plugin.read"],
+    require_auth: true,
+    any_permissions: ["plugin.read"],
   },
   {
     path: "/api/control/chat/access/*",
     method: "POST",
-    requireAuth: true,
-    anyPermissions: ["plugin.write"],
+    require_auth: true,
+    any_permissions: ["plugin.write"],
   },
   {
     path: "/api/control/chat/access/*",
     method: "DELETE",
-    requireAuth: true,
-    anyPermissions: ["plugin.write"],
+    require_auth: true,
+    any_permissions: ["plugin.write"],
   },
   {
     path: "/api/control/*",
     method: "*",
-    requireAuth: true,
+    require_auth: true,
   },
 ];
 
@@ -90,72 +89,72 @@ export const SERVER_AUTH_ROUTE_POLICIES: AuthRoutePolicy[] = [
  * 控制面网关侧路由权限矩阵。
  */
 export const GATEWAY_AUTH_ROUTE_POLICIES: AuthRoutePolicy[] = [
-  { path: "/api/auth/*", method: "*", requireAuth: false },
-  { path: "/health", method: "GET", requireAuth: false },
+  { path: "/api/auth/*", method: "*", require_auth: false },
+  { path: "/health", method: "GET", require_auth: false },
   {
     path: "/agents/*",
     method: "*",
-    requireAuth: true,
-    anyPermissions: ["agent.execute"],
+    require_auth: true,
+    any_permissions: ["agent.execute"],
   },
   {
     path: "/api/ui/agents",
     method: "GET",
-    requireAuth: true,
-    anyPermissions: ["agent.read"],
+    require_auth: true,
+    any_permissions: ["agent.read"],
   },
   {
     path: "/api/ui/agents/create",
     method: "POST",
-    requireAuth: true,
-    anyPermissions: ["agent.write"],
+    require_auth: true,
+    any_permissions: ["agent.write"],
   },
   {
     path: "/api/ui/agents/start",
     method: "POST",
-    requireAuth: true,
-    anyPermissions: ["agent.write"],
+    require_auth: true,
+    any_permissions: ["agent.write"],
   },
   {
     path: "/api/ui/agents/restart",
     method: "POST",
-    requireAuth: true,
-    anyPermissions: ["agent.write"],
+    require_auth: true,
+    any_permissions: ["agent.write"],
   },
   {
     path: "/api/ui/agents/stop",
     method: "POST",
-    requireAuth: true,
-    anyPermissions: ["agent.write"],
+    require_auth: true,
+    any_permissions: ["agent.write"],
   },
   {
     path: "/api/ui/model*",
     method: "*",
-    requireAuth: true,
-    anyPermissions: ["model.read"],
+    require_auth: true,
+    any_permissions: ["model.read"],
   },
   {
     path: "/api/ui/env*",
     method: "*",
-    requireAuth: true,
-    anyPermissions: ["env.read"],
+    require_auth: true,
+    any_permissions: ["env.read"],
   },
   {
     path: "/api/ui/channel*",
     method: "*",
-    requireAuth: true,
-    anyPermissions: ["channel.read"],
+    require_auth: true,
+    any_permissions: ["channel.read"],
   },
   {
     path: "/api/ui/plugins*",
     method: "*",
-    requireAuth: true,
-    anyPermissions: ["plugin.read"],
+    require_auth: true,
+    any_permissions: ["plugin.read"],
   },
   {
     path: "/api/ui/*",
     method: "*",
-    requireAuth: true,
+    require_auth: true,
   },
 ];
 
@@ -186,7 +185,7 @@ export function createRouteAuthGuardMiddleware(
 ): MiddlewareHandler<{ Variables: AuthMiddlewareVariables }> {
   return async (c, next) => {
     const policy = resolveAuthRoutePolicy(c.req.path, c.req.method, policies);
-    if (!policy || policy.requireAuth !== true) {
+    if (!policy || policy.require_auth !== true) {
       await next();
       return;
     }
@@ -198,7 +197,7 @@ export function createRouteAuthGuardMiddleware(
       const principal = authService.authenticateBearerHeader(
         c.req.header("authorization"),
       );
-      ensurePermissions(principal.permissions, policy.anyPermissions);
+      ensurePermissions(principal.permissions, policy.any_permissions);
       c.set(AUTH_PRINCIPAL_CONTEXT_KEY, principal);
       await next();
     } catch (error) {
@@ -230,10 +229,10 @@ function matchesPath(patternInput: string, actualPath: string): boolean {
 
 function ensurePermissions(
   userPermissions: AuthPermissionKey[],
-  anyPermissions: AuthRoutePolicy["anyPermissions"],
+  any_permissions: AuthRoutePolicy["any_permissions"],
 ): void {
-  if (!anyPermissions || anyPermissions.length === 0) return;
-  if (anyPermissions.some((permission) => userPermissions.includes(permission))) return;
+  if (!any_permissions || any_permissions.length === 0) return;
+  if (any_permissions.some((permission) => userPermissions.includes(permission))) return;
   throw new ErrorWithStatus("Permission denied", 403);
 }
 

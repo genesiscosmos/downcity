@@ -12,7 +12,7 @@ import type {
   JsonObject,
   JsonValue,
 } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 
 /**
  * 图片生成文本内容片段。
@@ -243,7 +243,7 @@ export interface ImagePluginModelsResult {
  */
 export interface ImagePluginDefaultModelResolverInput {
   /** 当前 Agent 运行上下文，可用于读取项目根目录、会话上下文或宿主状态。 */
-  context: AgentContext;
+  context: PluginContext;
   /** 已解析后的图片生成输入，可用于根据 prompt、messages、尺寸或质量选择模型。 */
   input: ImagePluginResolvedInput;
 }

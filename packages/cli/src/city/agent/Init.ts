@@ -13,11 +13,11 @@
 import path from "path";
 import prompts from "@/city/tui/Prompts.js";
 import {
-  initializeAgentProject,
-  normalizeDefaultAgentId,
-} from "@downcity/agent";
-import type { AgentProjectChannel } from "@downcity/agent";
-import type { ExecutionBindingConfig } from "@downcity/agent";
+  initialize_agent_project,
+  normalize_default_agent_id,
+} from "@/city/agent/setup/AgentInitializer.js";
+import type { AgentProjectChannel } from "@/city/types/config/AgentProject.js";
+import type { ExecutionBindingConfig } from "@/city/types/config/ExecutionBinding.js";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { CliError } from "@/shared/CliError.js";
 import {
@@ -57,10 +57,10 @@ export async function initCommand(
   cwd: string = ".",
   options: { force?: boolean } = {},
 ): Promise<void> {
-  const projectRoot = path.resolve(cwd);
-  const projectBaseName = path.basename(projectRoot);
+  const project_root = path.resolve(cwd);
+  const projectBaseName = path.basename(project_root);
   const default_agent_id =
-    normalizeDefaultAgentId(projectBaseName) || projectBaseName;
+    normalize_default_agent_id(projectBaseName) || projectBaseName;
   let allowOverwrite = Boolean(options.force);
 
   emitCliBlock({
@@ -69,12 +69,12 @@ export async function initCommand(
     facts: [
       {
         label: "Project",
-        value: projectRoot,
+        value: project_root,
       },
     ],
   });
 
-  const existingAgentConfig = readAgentConfig(projectRoot);
+  const existingAgentConfig = readAgentConfig(project_root);
   const modelChoices = await listPlatformModelChoices();
   const modelChoiceIds = modelChoices.map((item) => item.value);
   if (modelChoiceIds.length === 0) {
@@ -143,7 +143,7 @@ export async function initCommand(
     String(response.primaryModelId || "").trim() || modelChoiceIds[0];
   const execution: ExecutionBindingConfig = {
     type: "api",
-    modelId: primaryModelId,
+    model_id: primaryModelId,
   };
   await assertPlatformModelReady(primaryModelId);
   const selectedChannels = Array.isArray(response.channels)
@@ -153,16 +153,16 @@ export async function initCommand(
   for (const channel of selectedChannels) {
     channels_config[channel] = { enabled: true };
   }
-  const initResult = await initializeAgentProject(
+  const initResult = await initialize_agent_project(
     {
-      projectRoot,
+      project_root: project_root,
       id: agent_id,
       execution,
       channels: selectedChannels,
     },
   );
   upsertAgentConfig({
-    projectRoot,
+    project_root,
     id: agent_id,
     version: "1.0.0",
     execution,
@@ -174,13 +174,13 @@ export async function initCommand(
         }
       : undefined,
   });
-  await upsertManagedAgentEntry({ projectRoot });
+  await upsertManagedAgentEntry({ project_root });
 
   const createdItems = [
-    ...initResult.createdFiles,
+    ...initResult.created_files,
     "global DB agent config",
   ];
-  const skippedItems = [...initResult.skippedFiles];
+  const skippedItems = [...initResult.skipped_files];
 
   emitCliBlock({
     tone: "success",

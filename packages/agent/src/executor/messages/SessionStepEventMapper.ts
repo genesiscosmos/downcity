@@ -19,7 +19,7 @@ function toRecord(value: unknown): UnknownRecord | null {
 function resolveToolName(value: unknown): string {
   const record = toRecord(value);
   if (!record) return "";
-  const toolName =
+  const tool_name =
     typeof record.toolName === "string"
       ? record.toolName
       : typeof record.tool === "string"
@@ -27,7 +27,7 @@ function resolveToolName(value: unknown): string {
         : typeof record.name === "string"
           ? record.name
           : "";
-  return String(toolName || "").trim();
+  return String(tool_name || "").trim();
 }
 
 function resolveToolCallId(value: unknown): string {
@@ -105,16 +105,16 @@ function toDataPartType(type: string): string {
 }
 
 /**
- * 从 stepResult 提取按顺序写入同一条 assistant message 的 parts。
+ * 从 step_result 提取按顺序写入同一条 assistant message 的 parts。
  */
 export function buildSessionStepParts(params: {
-  stepIndex: number;
-  stepResult?: unknown;
+  step_index: number;
+  step_result?: unknown;
   text: string;
   visibility?: "visible" | "internal";
 }): SessionMessageRecordV1["parts"] {
   const out: SessionMessageRecordV1["parts"] = [];
-  const stepRecord = toRecord(params.stepResult) || {};
+  const stepRecord = toRecord(params.step_result) || {};
   const toolCalls = Array.isArray(stepRecord.toolCalls) ? stepRecord.toolCalls : [];
   const toolResults = Array.isArray(stepRecord.toolResults)
     ? stepRecord.toolResults
@@ -150,7 +150,7 @@ export function buildSessionStepParts(params: {
 
   for (let index = 0; index < toolCalls.length; index += 1) {
     const toolCall = toolCalls[index];
-    const toolName = resolveToolName(toolCall) || "unknown_tool";
+    const tool_name = resolveToolName(toolCall) || "unknown_tool";
     const toolCallId = resolveToolCallId(toolCall);
     const input = resolveToolCallInput(toolCall);
     const toolResult = toolCallId ? toolResultsByCallId.get(toolCallId) : undefined;
@@ -159,7 +159,7 @@ export function buildSessionStepParts(params: {
     const errorText = resolveToolResultErrorText(toolResult);
     out.push(
       {
-        type: `tool-${toolName}`,
+        type: `tool-${tool_name}`,
         ...(toolCallId ? { toolCallId } : {}),
         ...(input !== undefined ? { input } : {}),
         ...(errorText

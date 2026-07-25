@@ -162,8 +162,8 @@ export class QQGatewayClient {
       apiBase: this.getApiBase(),
       getAuthToken: () => this.getAuthToken(),
       getExecutorStatus: () => this.getExecutorStatus(),
-      requestReconnect: (reason, delayMs) => {
-        this.requestReconnect(reason, delayMs);
+      requestReconnect: (reason, delay_ms) => {
+        this.requestReconnect(reason, delay_ms);
       },
     });
   }
@@ -203,8 +203,8 @@ export class QQGatewayClient {
   /**
    * 请求一次重连。
    */
-  requestReconnect(reason: string, delayMs?: number): void {
-    this.scheduleReconnect(reason, delayMs);
+  requestReconnect(reason: string, delay_ms?: number): void {
+    this.scheduleReconnect(reason, delay_ms);
   }
 
   /**
@@ -213,7 +213,7 @@ export class QQGatewayClient {
   async sendMessage(
     chatId: string,
     chatType: string,
-    messageId: string,
+    message_id: string,
     text: string,
     msgSeq: number = 1,
   ): Promise<void> {
@@ -223,7 +223,7 @@ export class QQGatewayClient {
         apiBase: this.getApiBase(),
         chatId,
         chatType,
-        messageId,
+        message_id,
         text,
         msgSeq,
         maxAttempts: this.sendMaxAttempts,
@@ -231,7 +231,7 @@ export class QQGatewayClient {
         getAuthToken: () => this.getAuthToken(),
         clearAccessTokenCache: () => this.clearAccessTokenCache(),
         closeSocketForRecovery: (reason) => this.closeSocketForRecovery(reason),
-        scheduleReconnect: (reason, delayMs) => this.scheduleReconnect(reason, delayMs),
+        scheduleReconnect: (reason, delay_ms) => this.scheduleReconnect(reason, delay_ms),
       });
     } catch (error) {
       this.logger.error("发送 QQ 消息失败", { error: String(error) });
@@ -297,7 +297,7 @@ export class QQGatewayClient {
   /**
    * 计划一次重连。
    */
-  private scheduleReconnect(reason: string, delayMs?: number): void {
+  private scheduleReconnect(reason: string, delay_ms?: number): void {
     if (!this.isRunning) return;
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       this.logger.error("QQ 重连次数已达上限，停止自动重连", {
@@ -309,8 +309,8 @@ export class QQGatewayClient {
     }
 
     const delay =
-      typeof delayMs === "number" && Number.isFinite(delayMs)
-        ? Math.max(0, Math.trunc(delayMs))
+      typeof delay_ms === "number" && Number.isFinite(delay_ms)
+        ? Math.max(0, Math.trunc(delay_ms))
         : 5000 * (this.reconnectAttempts + 1);
 
     if (this.reconnectTimer) {
@@ -376,8 +376,8 @@ export class QQGatewayClient {
       resetReconnectAttempts: () => {
         this.reconnectAttempts = 0;
       },
-      scheduleReconnect: (reason, delayMs) =>
-        this.scheduleReconnect(reason, delayMs),
+      scheduleReconnect: (reason, delay_ms) =>
+        this.scheduleReconnect(reason, delay_ms),
       handlePayload: async (payload) => {
         await handleQqGatewayPayload({
           logger: this.logger,

@@ -25,11 +25,11 @@ export interface AgentChatCliOptions {
   /** 一次性发送的消息文本。 */
   message?: string;
   /**
-   * 显式指定要进入或复用的 sessionId。
+   * 显式指定要进入或复用的 session_id。
    *
    * 关键点（中文）：该字段来自 commander 的 `--session-id` camelCase 映射。
    */
-  sessionId?: string;
+  session_id?: string;
   /** 是否新建一个独立 session 后进入 chat。 */
   newSession?: boolean;
   /** 是否输出 JSON。 */
@@ -58,8 +58,8 @@ export interface AgentChatExecuteResult {
 export interface AgentChatExecuteResponse {
   /** 本轮 chat 执行是否成功。 */
   success: boolean;
-  /** 实际执行使用的 sessionId。 */
-  sessionId?: string;
+  /** 实际执行使用的 session_id。 */
+  session_id?: string;
   /** 执行结果。 */
   result?: AgentChatExecuteResult;
   /** 顶层错误信息。 */
@@ -80,8 +80,8 @@ export interface AgentChatTransportOptions {
  * chat session 解析选项。
  */
 export interface AgentChatSessionOptions {
-  /** 显式指定要进入或复用的 sessionId。 */
-  sessionId?: string;
+  /** 显式指定要进入或复用的 session_id。 */
+  session_id?: string;
   /** 是否新建一个独立 session。 */
   newSession?: boolean;
 }
@@ -92,24 +92,24 @@ export interface AgentChatSessionOptions {
 export interface AgentChatSessionChoice {
   /** 当前选项类型。 */
   kind: "create" | "session";
-  /** 选中后要使用的 sessionId。 */
-  sessionId?: string;
+  /** 选中后要使用的 session_id。 */
+  session_id?: string;
 }
 
 /**
  * TUI 内展示的 session 摘要。
  */
 export interface AgentChatSessionSummaryView {
-  /** 当前 sessionId。 */
-  sessionId: string;
+  /** 当前 session_id。 */
+  session_id: string;
   /** 可读标题。 */
   title?: string;
   /** 最近预览文本。 */
-  previewText?: string;
+  preview_text?: string;
   /** 已落盘消息数。 */
-  messageCount: number;
+  message_count: number;
   /** 最近更新时间（ms）。 */
-  updatedAt?: number;
+  updated_at?: number;
   /** 是否正在执行。 */
   executing?: boolean;
 }
@@ -119,11 +119,11 @@ export interface AgentChatSessionSummaryView {
  */
 export interface AgentChatExecutionOutcome {
   /** 目标 agent id。 */
-  agentId: string;
+  agent_id: string;
   /** 目标 agent 项目根目录。 */
-  projectRoot?: string;
-  /** 实际执行使用的 sessionId。 */
-  sessionId: string;
+  project_root?: string;
+  /** 实际执行使用的 session_id。 */
+  session_id: string;
   /** 请求是否成功。 */
   success: boolean;
   /** 执行结果响应体。 */

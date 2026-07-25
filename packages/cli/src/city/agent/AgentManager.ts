@@ -41,7 +41,7 @@ export async function runInteractiveAgentManager(): Promise<void> {
       }
       if (selection.type === "agent") {
         const agents = await loadAgentSummaries();
-        const agent = agents.find((item) => item.projectRoot === selection.project_root);
+        const agent = agents.find((item) => item.project_root === selection.project_root);
         if (!agent) {
           last_message = `Agent 不存在：${selection.project_root}`;
           continue;

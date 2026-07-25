@@ -9,7 +9,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { getCacheDirPath } from "@/city/config/Paths.js";
-import { renderChatMessageFileTag } from "@downcity/agent";
+import { render_chat_message_file_tag } from "@downcity/agent";
 import type {
   ControlSessionExecuteAttachmentInput,
   ControlSessionExecuteAttachmentType,
@@ -47,8 +47,8 @@ function normalizeAttachmentCaption(value: unknown): string | undefined {
   return text.slice(0, 180);
 }
 
-function toProjectRelativePath(projectRoot: string, absPath: string): string | null {
-  const relative = path.relative(projectRoot, absPath);
+function toProjectRelativePath(project_root: string, absPath: string): string | null {
+  const relative = path.relative(project_root, absPath);
   if (!relative) return null;
   if (relative.startsWith("..")) return null;
   if (path.isAbsolute(relative)) return null;
@@ -96,15 +96,15 @@ function inferAttachmentExt(params: {
 }
 
 async function resolveAttachmentPathFromInput(params: {
-  projectRoot: string;
+  project_root: string;
   attachment: ControlSessionExecuteAttachmentInput;
 }): Promise<string | null> {
   const rawPath = String(params.attachment.path || "").trim();
   if (!rawPath) return null;
   const abs = path.isAbsolute(rawPath)
     ? path.normalize(rawPath)
-    : path.resolve(params.projectRoot, rawPath);
-  const relative = toProjectRelativePath(params.projectRoot, abs);
+    : path.resolve(params.project_root, rawPath);
+  const relative = toProjectRelativePath(params.project_root, abs);
   if (!relative) return null;
   const stat = await fs
     .stat(abs)
@@ -134,8 +134,8 @@ function resolveAttachmentBytes(
 }
 
 async function materializeAttachmentContent(params: {
-  projectRoot: string;
-  sessionId: string;
+  project_root: string;
+  session_id: string;
   attachment: ControlSessionExecuteAttachmentInput;
   index: number;
 }): Promise<string | null> {
@@ -157,18 +157,18 @@ async function materializeAttachmentContent(params: {
     fileName: params.attachment.fileName,
     fallbackExt: ext,
   });
-  const safeContext = String(params.sessionId || "session")
+  const safeContext = String(params.session_id || "session")
     .replace(/[^A-Za-z0-9_-]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 32);
   const prefix = safeContext || "context";
   const fileName = `${Date.now()}-${prefix}-${String(params.index + 1).padStart(2, "0")}-${safeName}`;
-  const cacheDir = path.join(getCacheDirPath(params.projectRoot), "chrome-extension");
+  const cacheDir = path.join(getCacheDirPath(params.project_root), "chrome-extension");
   await fs.ensureDir(cacheDir);
   const absPath = path.join(cacheDir, fileName);
   await fs.writeFile(absPath, bytes);
-  return toProjectRelativePath(params.projectRoot, absPath);
+  return toProjectRelativePath(params.project_root, absPath);
 }
 
 function toAttachmentLine(params: {
@@ -176,7 +176,7 @@ function toAttachmentLine(params: {
   relativePath: string;
   caption?: string;
 }): string {
-  return renderChatMessageFileTag({
+  return render_chat_message_file_tag({
     type: params.type,
     path: params.relativePath,
     ...(params.caption ? { caption: params.caption } : {}),
@@ -187,8 +187,8 @@ function toAttachmentLine(params: {
  * 构造 execute 入站文本。
  */
 export async function buildExecuteInputText(params: {
-  projectRoot: string;
-  sessionId: string;
+  project_root: string;
+  session_id: string;
   instructions: string;
   attachments?: ControlSessionExecuteAttachmentInput[];
 }): Promise<string> {
@@ -206,14 +206,14 @@ export async function buildExecuteInputText(params: {
     const caption = normalizeAttachmentCaption(attachment.caption);
 
     const reusePath = await resolveAttachmentPathFromInput({
-      projectRoot: params.projectRoot,
+      project_root: params.project_root,
       attachment,
     });
     const relativePath =
       reusePath ||
       (await materializeAttachmentContent({
-        projectRoot: params.projectRoot,
-        sessionId: params.sessionId,
+        project_root: params.project_root,
+        session_id: params.session_id,
         attachment,
         index,
       }));

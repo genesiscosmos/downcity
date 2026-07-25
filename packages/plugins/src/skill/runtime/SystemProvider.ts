@@ -30,14 +30,14 @@ export async function buildSkillsSystemText(
   runtime: SkillSystemRuntime,
   run_context?: PluginRunContext,
 ): Promise<string> {
-  const sessionId = String(run_context?.sessionId || "").trim();
+  const session_id = String(run_context?.session_id || "").trim();
   const discoveredSkills = discoverSkillsSync(
     runtime.rootPath,
     runtime.options,
   );
 
-  if (sessionId) {
-    setSessionAvailableSkills(sessionId, discoveredSkills);
+  if (session_id) {
+    setSessionAvailableSkills(session_id, discoveredSkills);
   }
 
   return render_skills_prompt_section(

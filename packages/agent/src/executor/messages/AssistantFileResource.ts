@@ -39,10 +39,10 @@ export interface MaterializeAssistantFilePartsParams {
    * 当前项目根目录。
    *
    * 关键点（中文）
-   * - 正常 session run 必须显式传入 projectRoot。
+   * - 正常 session run 必须显式传入 project_root。
    * - 旧入口未传时仅为兼容回退到 `process.cwd()`。
    */
-  projectRoot?: string;
+  project_root?: string;
 
   /**
    * 待处理的 assistant file parts。
@@ -50,8 +50,8 @@ export interface MaterializeAssistantFilePartsParams {
   parts: FileUIPart[];
 }
 
-function resolve_project_root(projectRoot: string | undefined): string {
-  const raw = String(projectRoot || "").trim();
+function resolve_project_root(project_root: string | undefined): string {
+  const raw = String(project_root || "").trim();
   return path.resolve(raw || process.cwd());
 }
 
@@ -114,13 +114,13 @@ export function toAgentRelativePath(params: {
   /**
    * 当前 Agent 项目根目录。
    */
-  projectRoot: string;
+  project_root: string;
   /**
    * 项目内文件绝对路径。
    */
   filePath: string;
 }): string {
-  const project_root = resolve_project_root(params.projectRoot);
+  const project_root = resolve_project_root(params.project_root);
   const relative = path
     .relative(project_root, params.filePath)
     .split(path.sep)
@@ -143,7 +143,7 @@ export function resolveAgentFilePath(params: {
   /**
    * 当前 Agent 项目根目录。
    */
-  projectRoot: string;
+  project_root: string;
   /**
    * 待解析的相对路径或绝对路径。
    */
@@ -151,7 +151,7 @@ export function resolveAgentFilePath(params: {
 }): string {
   const raw = String(params.filePath || "").trim();
   if (!raw) return "";
-  const project_root = resolve_project_root(params.projectRoot);
+  const project_root = resolve_project_root(params.project_root);
   const file_path = path.isAbsolute(raw)
     ? path.resolve(raw)
     : path.resolve(project_root, raw);
@@ -162,7 +162,7 @@ export function resolveAgentFilePath(params: {
 }
 
 async function write_resource_file(params: {
-  projectRoot: string;
+  project_root: string;
   mediaType: string;
   filename?: string;
   bytes: Buffer;
@@ -172,7 +172,7 @@ async function write_resource_file(params: {
     extension_from_filename(params.filename) ||
     extension_from_media_type(params.mediaType);
   const file_name = `${hash}${ext}`;
-  const resources_dir = getDowncityResourcesDirPath(params.projectRoot);
+  const resources_dir = getDowncityResourcesDirPath(params.project_root);
   const file_path = path.join(resources_dir, file_name);
 
   await fs.ensureDir(resources_dir);
@@ -306,7 +306,7 @@ function describe_error_cause(error: Error): string {
 }
 
 async function read_local_resource(
-  projectRoot: string,
+  project_root: string,
   raw_url: string,
 ): Promise<{
   mediaType?: string;
@@ -318,7 +318,7 @@ async function read_local_resource(
     ? fileURLToPath(raw)
     : path.isAbsolute(raw)
       ? raw
-      : path.resolve(projectRoot, raw);
+      : path.resolve(project_root, raw);
   const file_stat = await fs.stat(file_path);
   if (file_stat.size > MAX_ASSISTANT_RESOURCE_BYTES) {
     throw new Error(`Assistant file resource exceeds 25 MiB: ${file_path}`);
@@ -337,7 +337,7 @@ async function read_local_resource(
 }
 
 async function materialize_file_part(params: {
-  projectRoot: string;
+  project_root: string;
   part: FileUIPart;
 }): Promise<FileUIPart> {
   const raw_url = String(params.part.url || "").trim();
@@ -353,7 +353,7 @@ async function materialize_file_part(params: {
       String(params.part.mediaType || parsed_data_url.media_type || "").trim() ||
       "application/octet-stream";
     const file_path = await write_resource_file({
-      projectRoot: params.projectRoot,
+      project_root: params.project_root,
       mediaType: media_type,
       filename:
         typeof params.part.filename === "string" ? params.part.filename : undefined,
@@ -363,7 +363,7 @@ async function materialize_file_part(params: {
       ...params.part,
       mediaType: media_type,
       url: toAgentRelativePath({
-        projectRoot: params.projectRoot,
+        project_root: params.project_root,
         filePath: file_path,
       }),
     };
@@ -376,7 +376,7 @@ async function materialize_file_part(params: {
         String(params.part.mediaType || source.mediaType || "").trim() ||
         "application/octet-stream";
       const file_path = await write_resource_file({
-        projectRoot: params.projectRoot,
+        project_root: params.project_root,
         mediaType: media_type,
         filename:
           typeof params.part.filename === "string"
@@ -388,7 +388,7 @@ async function materialize_file_part(params: {
         ...params.part,
         mediaType: media_type,
         url: toAgentRelativePath({
-          projectRoot: params.projectRoot,
+          project_root: params.project_root,
           filePath: file_path,
         }),
       };
@@ -403,12 +403,12 @@ async function materialize_file_part(params: {
     }
   }
 
-  const source = await read_local_resource(params.projectRoot, raw_url);
+  const source = await read_local_resource(params.project_root, raw_url);
   const media_type =
     String(params.part.mediaType || source.mediaType || "").trim() ||
     "application/octet-stream";
   const file_path = await write_resource_file({
-    projectRoot: params.projectRoot,
+    project_root: params.project_root,
     mediaType: media_type,
     filename:
       typeof params.part.filename === "string"
@@ -420,7 +420,7 @@ async function materialize_file_part(params: {
     ...params.part,
     mediaType: media_type,
     url: toAgentRelativePath({
-      projectRoot: params.projectRoot,
+      project_root: params.project_root,
       filePath: file_path,
     }),
   };
@@ -435,11 +435,11 @@ export async function materializeAssistantFileParts(
   const parts = Array.isArray(params.parts) ? params.parts : [];
   if (parts.length === 0) return [];
 
-  const project_root = resolve_project_root(params.projectRoot);
+  const project_root = resolve_project_root(params.project_root);
   const out: FileUIPart[] = [];
 
   for (const part of parts) {
-    out.push(await materialize_file_part({ projectRoot: project_root, part }));
+    out.push(await materialize_file_part({ project_root: project_root, part }));
   }
 
   return out;

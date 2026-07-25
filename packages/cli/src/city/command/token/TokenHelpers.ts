@@ -7,7 +7,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import type { AuthTokenSummary } from "@downcity/agent";
+import type { AuthTokenSummary } from "@downcity/type";
 
 /**
  * 当前是否为交互式终端。
@@ -20,8 +20,8 @@ export function isInteractiveTerminal(): boolean {
  * 判断 token 是否已过期。
  */
 export function isTokenExpired(token: AuthTokenSummary): boolean {
-  if (!token.expiresAt) return false;
-  return new Date(token.expiresAt).getTime() <= Date.now();
+  if (!token.expires_at) return false;
+  return new Date(token.expires_at).getTime() <= Date.now();
 }
 
 /**
@@ -65,29 +65,29 @@ export function buildTokenFacts(token: AuthTokenSummary): Array<{ label: string;
     },
     {
       label: "Created",
-      value: token.createdAt,
+      value: token.created_at,
     },
-    ...(token.updatedAt
+    ...(token.updated_at
       ? [
           {
             label: "Updated",
-            value: token.updatedAt,
+            value: token.updated_at,
           },
         ]
       : []),
-    ...(token.lastUsedAt
+    ...(token.last_used_at
       ? [
           {
             label: "Last used",
-            value: token.lastUsedAt,
+            value: token.last_used_at,
           },
         ]
       : []),
-    ...(token.expiresAt
+    ...(token.expires_at
       ? [
           {
             label: "Expires",
-            value: token.expiresAt,
+            value: token.expires_at,
           },
         ]
       : []),

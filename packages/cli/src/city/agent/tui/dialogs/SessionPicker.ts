@@ -35,8 +35,8 @@ const ELLIPSIS = "…";
 export interface SessionPickerResult {
   /** 结果类型。 */
   kind: "create" | "session";
-  /** 选中的 sessionId，create 时为 undefined。 */
-  sessionId?: string;
+  /** 选中的 session_id，create 时为 undefined。 */
+  session_id?: string;
 }
 
 interface SessionItem {
@@ -70,7 +70,7 @@ export class SessionPickerComponent implements Component, Focusable {
 
   /**
    * @param sessions 远程 session 摘要列表。
-   * @param current_session_id 当前生效的 sessionId。
+   * @param current_session_id 当前生效的 session_id。
    * @param on_select 选中回调。
    * @param on_cancel 取消回调。
    * @param max_visible 最大可见项数。
@@ -94,7 +94,7 @@ export class SessionPickerComponent implements Component, Focusable {
    * 刷新列表数据。
    *
    * @param sessions 新的 session 列表。
-   * @param current_session_id 当前 sessionId。
+   * @param current_session_id 当前 session_id。
    */
   refresh(sessions: AgentChatSessionSummaryView[], current_session_id: string): void {
     this.current_session_id = current_session_id;
@@ -211,12 +211,12 @@ export class SessionPickerComponent implements Component, Focusable {
     };
 
     const session_items = sessions
-      .filter((session) => session.sessionId !== AGENT_CHAT_DEFAULT_SESSION_ID)
+      .filter((session) => session.session_id !== AGENT_CHAT_DEFAULT_SESSION_ID)
       .map((session) => ({
-        value: session.sessionId,
-        label: session.title || session.sessionId,
+        value: session.session_id,
+        label: session.title || session.session_id,
         description: this.build_session_description(session),
-        is_current: session.sessionId === this.current_session_id,
+        is_current: session.session_id === this.current_session_id,
         is_create: false,
       }));
 
@@ -224,15 +224,15 @@ export class SessionPickerComponent implements Component, Focusable {
   }
 
   private build_session_description(session: AgentChatSessionSummaryView): string {
-    const parts = [`${session.messageCount} messages`];
-    if (session.previewText) {
-      parts.push(singleLine(session.previewText));
+    const parts = [`${session.message_count} messages`];
+    if (session.preview_text) {
+      parts.push(singleLine(session.preview_text));
     }
     if (session.executing) {
       parts.push("running");
     }
-    if (session.updatedAt) {
-      parts.push(formatRelativeTime(session.updatedAt));
+    if (session.updated_at) {
+      parts.push(formatRelativeTime(session.updated_at));
     }
     return parts.join(" · ");
   }
@@ -298,7 +298,7 @@ export class SessionPickerComponent implements Component, Focusable {
     if (item.is_create) {
       this.on_select({ kind: "create" });
     } else {
-      this.on_select({ kind: "session", sessionId: item.value });
+      this.on_select({ kind: "session", session_id: item.value });
     }
   }
 

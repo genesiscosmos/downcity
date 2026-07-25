@@ -22,7 +22,7 @@ export interface DaemonMeta {
   /** 每次 daemon 启动生成的唯一实例 ID，用于识别 PID 复用。 */
   instanceId: string;
   /** daemon 所属 agent 项目的绝对路径。 */
-  projectRoot: string;
+  project_root: string;
   /** daemon 启动时间（ISO 时间字符串）。 */
   startedAt: string;
   /** 启动 daemon 时使用的命令。 */
@@ -40,7 +40,7 @@ export interface DaemonRuntimeIdentity {
   /** RPC 服务所属进程的操作系统 pid。 */
   pid: number;
   /** RPC 服务所属 agent 项目的绝对路径。 */
-  projectRoot: string;
+  project_root: string;
   /** 当前 daemon 启动实例的唯一 ID。 */
   instanceId: string;
 }

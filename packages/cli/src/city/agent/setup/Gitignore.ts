@@ -21,11 +21,11 @@ import path from "node:path";
  * - 返回值用于告诉调用方本次是新建、更新还是无需修改。
  * - 设计目标是“尽量少打扰用户已有文件结构”。
  */
-export async function ensureGitignoreEntry(
-  projectRoot: string,
+export async function ensure_gitignore_entry(
+  project_root: string,
   entry: string,
 ): Promise<"created" | "updated" | "unchanged"> {
-  const normalizedProjectRoot = path.resolve(String(projectRoot || "").trim() || ".");
+  const normalizedProjectRoot = path.resolve(String(project_root || "").trim() || ".");
   const normalizedEntry = String(entry || "").trim();
   if (!normalizedEntry) return "unchanged";
 

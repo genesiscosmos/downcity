@@ -1,5 +1,5 @@
 /**
- * 项目执行绑定类型定义（api 模式）。
+ * CLI/City 项目执行绑定类型定义（api 模式）。
  *
  * 关键点（中文）
  * - 项目运行入口只有一种执行模式：`api`。
@@ -23,5 +23,5 @@ export interface ExecutionBindingConfig {
    * - 必须能通过 City 的 `/v1/ai/models` 目录查询到。
    * - 例如：`deepseek-v4-flash`、`fast`、`quality`。
    */
-  modelId: string;
+  model_id: string;
 }

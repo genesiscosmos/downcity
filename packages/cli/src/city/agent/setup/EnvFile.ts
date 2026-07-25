@@ -11,8 +11,12 @@
  */
 
 import fs from "fs-extra";
-import type { EnvFileEntry } from "@/types/common/EnvFile.js";
-import { escapeRegExp } from "@/utils/string/EscapeRegExp.js";
+import type { EnvFileEntry } from "@/city/types/config/EnvFile.js";
+
+/** 转义正则表达式中的特殊字符。 */
+function escape_reg_exp(input: string): string {
+  return String(input || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 /**
  * 解析 Env 文本中已经声明的变量键名集合。
@@ -21,7 +25,7 @@ import { escapeRegExp } from "@/utils/string/EscapeRegExp.js";
  * - 会忽略空行与注释行。
  * - 仅识别 `KEY=value` 的基础形式，足够覆盖当前 agent 配置初始化流程。
  */
-export function parseEnvKeys(content: string): Set<string> {
+export function parse_env_keys(content: string): Set<string> {
   const out = new Set<string>();
   for (const rawLine of String(content || "").split(/\r?\n/)) {
     const line = String(rawLine || "").trim();
@@ -42,7 +46,7 @@ export function parseEnvKeys(content: string): Set<string> {
  * - `entries` 中的空键名会被自动忽略，避免写入无效行。
  * - 该函数默认服务项目初始化阶段，因此输出格式偏向“可读、可手改”。
  */
-export async function appendMissingEnvEntries(
+export async function append_missing_env_entries(
   filePath: string,
   sectionTitle: string,
   entries: EnvFileEntry[],
@@ -61,7 +65,7 @@ export async function appendMissingEnvEntries(
     existing = await fs.readFile(normalizedFilePath, "utf-8");
   }
 
-  const existingKeys = parseEnvKeys(existing);
+  const existingKeys = parse_env_keys(existing);
   let nextContent = existing;
   const appendedEntries: EnvFileEntry[] = [];
 
@@ -71,7 +75,7 @@ export async function appendMissingEnvEntries(
       continue;
     }
     if (!writableOverwriteKeys.has(entry.key)) continue;
-    const linePattern = new RegExp(`^${escapeRegExp(entry.key)}\\s*=.*$`, "gm");
+    const linePattern = new RegExp(`^${escape_reg_exp(entry.key)}\\s*=.*$`, "gm");
     if (linePattern.test(nextContent)) {
       nextContent = nextContent.replace(linePattern, `${entry.key}=${entry.value}`);
     }

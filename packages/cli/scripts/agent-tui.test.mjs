@@ -382,9 +382,9 @@ test("Session Picker 在输入框下方保持搜索和选择能力", () => {
   let selected_session;
   slot.show(new SessionPickerComponent({
     sessions: [{
-      sessionId: "session-2",
+      session_id: "session-2",
       title: "Second session",
-      messageCount: 2,
+      message_count: 2,
       executing: false,
     }],
     current_session_id: "default",
@@ -396,5 +396,5 @@ test("Session Picker 在输入框下方保持搜索和选择能力", () => {
   for (const character of "second") slot.handleInput(character);
   assert.match(plain(slot.render(64)).join("\n"), /Search: second/);
   slot.handleInput("\r");
-  assert.deepEqual(selected_session, { kind: "session", sessionId: "session-2" });
+  assert.deepEqual(selected_session, { kind: "session", session_id: "session-2" });
 });

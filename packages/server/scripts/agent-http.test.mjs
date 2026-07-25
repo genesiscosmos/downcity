@@ -30,10 +30,10 @@ function create_fake_agent() {
   const subscribers = new Set();
   let compact_count = 0;
   const info = {
-    agentId: "http-test-agent",
-    sessionId: "http-test-session",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    agent_id: "http-test-agent",
+    session_id: "http-test-session",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
   const session = {
     async get_info() {
@@ -46,7 +46,7 @@ function create_fake_agent() {
             mutation_id: "turn-start-http-test",
             variant: "turn",
             type: "start",
-            session_id: info.sessionId,
+            session_id: info.session_id,
             turn_id: "turn-http-test",
             status: "running",
             created_at: Date.now(),
@@ -57,7 +57,7 @@ function create_fake_agent() {
             mutation_id: "mutation-http-test",
             message_id: "message-http-test",
             revision: 1,
-            session_id: info.sessionId,
+            session_id: info.session_id,
             turn_id: "turn-http-test",
             created_at: Date.now(),
             part_id: "part-http-test",
@@ -67,7 +67,7 @@ function create_fake_agent() {
             mutation_id: "approval-http-mutation",
             variant: "part",
             type: "tool",
-            session_id: info.sessionId,
+            session_id: info.session_id,
             turn_id: "turn-http-test",
             message_id: "message-http-test",
             revision: 2,
@@ -83,7 +83,7 @@ function create_fake_agent() {
               input: { cmd: "pwd" },
               approval: {
                 approval_id: "approval-http-test",
-                session_id: info.sessionId,
+                session_id: info.session_id,
                 turn_id: "turn-http-test",
                 tool_call_id: "call-http-test",
                 tool_name: "shell_exec",
@@ -100,7 +100,7 @@ function create_fake_agent() {
             mutation_id: "turn-finish-http-test",
             variant: "turn",
             type: "finish",
-            session_id: info.sessionId,
+            session_id: info.session_id,
             turn_id: "turn-http-test",
             status: "completed",
             created_at: Date.now(),
@@ -116,7 +116,7 @@ function create_fake_agent() {
     },
     async set() {},
     async stop() {
-      return { stopped: false, cancelledQueuedPrompts: 0, reason: "idle" };
+      return { stopped: false, cancelled_queued_prompts: 0, reason: "idle" };
     },
     async compact() {
       compact_count += 1;
@@ -125,12 +125,12 @@ function create_fake_agent() {
       return { items: [], total: 0, source: "active", has_more: false };
     },
     async system() {
-      return { sessionId: info.sessionId, session: info, blocks: [] };
+      return { session_id: info.session_id, session: info, blocks: [] };
     },
     async approvals() {
       return [{
         approval_id: "approval-http-test",
-        session_id: info.sessionId,
+        session_id: info.session_id,
         tool_name: "shell_exec",
         command: "pwd",
         cwd: "/tmp",
@@ -140,10 +140,10 @@ function create_fake_agent() {
       }];
     },
     async approval_mode() {
-      return { session_id: info.sessionId, mode: "ask" };
+      return { session_id: info.session_id, mode: "ask" };
     },
     async set_approval_mode({ mode }) {
-      return { session_id: info.sessionId, mode };
+      return { session_id: info.session_id, mode };
     },
     async resolve_approval({ approval_id, decision }) {
       return { success: true, approval_id, decision };
@@ -167,17 +167,17 @@ function create_fake_agent() {
         return session;
       },
       async archive() {
-        return { sessionId: info.sessionId, archivedAt: new Date().toISOString() };
+        return { session_id: info.session_id, archived_at: new Date().toISOString() };
       },
       async archived() {
         return { items: [], has_more: false };
       },
       async clean_archive() {
-        return { removedSessionIds: [] };
+        return { removed_session_ids: [] };
       },
     },
     plugins: {
-      async runAction({ plugin, action, payload }) {
+      async run_action({ plugin, action, payload }) {
         return { success: true, data: { plugin, action, payload } };
       },
     },
@@ -234,7 +234,7 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", async ()
     await session.compact();
     assert.equal(fake_agent.read_compact_count(), 1);
 
-    const action = await remote_agent.runPluginAction({
+    const action = await remote_agent.run_plugin_action({
       plugin: "demo",
       action: "echo",
       payload: { text: "hello" },
@@ -246,8 +246,8 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", async ()
         action: "echo",
         payload: { text: "hello" },
       },
-      pluginName: "demo",
-      actionName: "echo",
+      plugin_name: "demo",
+      action_name: "echo",
     });
   } finally {
     await remote_agent.close();

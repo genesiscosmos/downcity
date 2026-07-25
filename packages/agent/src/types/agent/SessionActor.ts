@@ -116,8 +116,8 @@ export interface AgentSessionActor {
  * 本地 Agent 返回的公开 session 接口。
  */
 export interface AgentSession extends AgentSessionActor {
-  /** 当前 session 所属 agentId。 */
-  readonly agentId: string;
+  /** 当前 session 所属 agent_id。 */
+  readonly agent_id: string;
 
   /** 当前 session 配置快照。 */
   readonly config: AgentSessionConfigSnapshot;

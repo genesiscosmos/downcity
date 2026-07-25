@@ -7,7 +7,7 @@
  */
 
 import { resolve } from "node:path";
-import type { ManagedAgentProcessView } from "@downcity/agent";
+import type { ManagedAgentProcessView } from "@/city/types/runtime/Platform.js";
 import type { AgentStartOptions } from "@/city/types/AgentStartOptions.js";
 import { allocateAvailablePort } from "@/city/process/daemon/PortAllocator.js";
 import {
@@ -19,7 +19,7 @@ import {
   listManagedAgentEntries,
 } from "@/city/process/registry/CityRegistry.js";
 import { CliError } from "@/shared/CliError.js";
-import { injectAgentContext } from "@/shared/IndexSupport.js";
+import { inject_agent_context } from "@/shared/IndexSupport.js";
 import { checkAgentPreflight } from "@/city/shared/PluginTargetSupport.js";
 
 /**
@@ -38,24 +38,24 @@ export async function resolveRunningManagedAgents(_params?: {
 
   for (const entry of entries) {
     if (entry.status !== "running") continue;
-    const project_root = resolve(String(entry.projectRoot || "").trim() || ".");
+    const project_root = resolve(String(entry.project_root || "").trim() || ".");
     const daemon_pid = await readDaemonPid(project_root);
     if (!daemon_pid || !isDaemonProcessAlive(daemon_pid)) {
       continue;
     }
 
     views.push({
-      projectRoot: project_root,
+      project_root: project_root,
       registeredPid: daemon_pid,
       daemonPid: daemon_pid,
       running: true,
       startedAt: entry.startedAt,
-      updatedAt: entry.updatedAt,
+      updated_at: entry.updated_at,
       logPath: getDaemonLogPath(project_root),
     });
   }
 
-  return views.sort((left, right) => left.projectRoot.localeCompare(right.projectRoot));
+  return views.sort((left, right) => left.project_root.localeCompare(right.project_root));
 }
 
 /**
@@ -65,7 +65,7 @@ export async function ensureRegisteredAgentProjectRoot(cwd: string): Promise<str
   const project_root = resolve(String(cwd || "."));
   const entries = await listManagedAgentEntries();
   const matched = entries.some(
-    (entry) => resolve(String(entry.projectRoot || "").trim() || ".") === project_root,
+    (entry) => resolve(String(entry.project_root || "").trim() || ".") === project_root,
   );
   if (matched) return project_root;
 
@@ -83,18 +83,18 @@ export async function prepareForegroundAgent(
   cwd: string,
   options: AgentStartOptions & { foreground?: boolean },
 ): Promise<{
-  projectRoot: string;
+  project_root: string;
   options: AgentStartOptions & { foreground?: boolean };
   shouldForeground: boolean;
 }> {
-  injectAgentContext(cwd);
+  inject_agent_context(cwd);
   const project_root = resolve(String(cwd || "."));
   await checkAgentPreflight(project_root);
 
   const should_foreground = options.foreground === true;
   if (!should_foreground) {
     return {
-      projectRoot: project_root,
+      project_root: project_root,
       options,
       shouldForeground: false,
     };
@@ -107,7 +107,7 @@ export async function prepareForegroundAgent(
       : await allocateAvailablePort({ host });
 
   return {
-    projectRoot: project_root,
+    project_root: project_root,
     shouldForeground: true,
     options: {
       ...options,

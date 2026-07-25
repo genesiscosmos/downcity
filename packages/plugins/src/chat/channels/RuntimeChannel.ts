@@ -7,7 +7,7 @@
  * - channelAccountId 仅作为账号池绑定能力保留，不再是 ChatPlugin 顶层配置。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 import type { ChatChannel } from "@/chat/types/ChatPluginOptions.js";
 import type {
@@ -63,20 +63,20 @@ abstract class BaseRuntimeChatChannel implements ChatChannel {
   protected enabled: boolean;
   protected env: ChatChannelEnv;
   protected channelAccountId: string;
-  protected displayName: string;
+  protected display_name: string;
 
   protected constructor(options: BaseChatChannelOptions = {}) {
     this.enabled = options.enabled !== false;
     this.env = options.env || {};
     this.channelAccountId = String(options.channelAccountId || "").trim();
-    this.displayName = String(options.name || "").trim();
+    this.display_name = String(options.name || "").trim();
   }
 
-  isEnabled(_context: AgentContext): boolean {
+  isEnabled(_context: PluginContext): boolean {
     return this.enabled;
   }
 
-  getChannelAccountId(_context: AgentContext): string {
+  getChannelAccountId(_context: PluginContext): string {
     return this.channelAccountId;
   }
 
@@ -94,7 +94,7 @@ abstract class BaseRuntimeChatChannel implements ChatChannel {
   }
 
   abstract getAccount(
-    context: AgentContext,
+    context: PluginContext,
     account_store?: ChatChannelAccountStore,
   ): StoredChannelAccount | null;
 }
@@ -125,7 +125,7 @@ export class TelegramChannel extends BaseRuntimeChatChannel {
   }
 
   getAccount(
-    _context: AgentContext,
+    _context: PluginContext,
     account_store?: ChatChannelAccountStore,
   ): StoredChannelAccount | null {
     const storedAccount = this.getStoredAccount(account_store);
@@ -137,10 +137,10 @@ export class TelegramChannel extends BaseRuntimeChatChannel {
     return {
       id: this.channelAccountId || "chat-sdk-telegram",
       channel: "telegram",
-      name: this.displayName || "telegram",
+      name: this.display_name || "telegram",
       botToken: token,
-      createdAt: now,
-      updatedAt: now,
+      created_at: now,
+      updated_at: now,
     };
   }
 }
@@ -180,7 +180,7 @@ export class FeishuChannel extends BaseRuntimeChatChannel {
   }
 
   getAccount(
-    _context: AgentContext,
+    _context: PluginContext,
     account_store?: ChatChannelAccountStore,
   ): StoredChannelAccount | null {
     const storedAccount = this.getStoredAccount(account_store);
@@ -196,12 +196,12 @@ export class FeishuChannel extends BaseRuntimeChatChannel {
     return {
       id: this.channelAccountId || "chat-sdk-feishu",
       channel: "feishu",
-      name: this.displayName || "feishu",
+      name: this.display_name || "feishu",
       appId,
       appSecret,
       ...(domain ? { domain } : {}),
-      createdAt: now,
-      updatedAt: now,
+      created_at: now,
+      updated_at: now,
     };
   }
 }
@@ -241,7 +241,7 @@ export class QqChannel extends BaseRuntimeChatChannel {
   }
 
   getAccount(
-    _context: AgentContext,
+    _context: PluginContext,
     account_store?: ChatChannelAccountStore,
   ): StoredChannelAccount | null {
     const storedAccount = this.getStoredAccount(account_store);
@@ -257,12 +257,12 @@ export class QqChannel extends BaseRuntimeChatChannel {
     return {
       id: this.channelAccountId || "chat-sdk-qq",
       channel: "qq",
-      name: this.displayName || "qq",
+      name: this.display_name || "qq",
       appId,
       appSecret,
       ...(sandbox ? { sandbox: true } : {}),
-      createdAt: now,
-      updatedAt: now,
+      created_at: now,
+      updated_at: now,
     };
   }
 }

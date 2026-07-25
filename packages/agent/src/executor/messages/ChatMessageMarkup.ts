@@ -164,7 +164,7 @@ export function extractChatMessageFileTags(source: string): ChatMessageFileTag[]
  * 移除正文中的 `<file>` 标签，仅保留文本段。
  */
 export function stripChatMessageFileTags(source: string): string {
-  return buildChatMessageText({
+  return build_chat_message_text({
     segments: extractChatMessageSegments(source).filter(
       (segment): segment is ChatMessageTextSegment => segment.kind === "text",
     ),
@@ -181,7 +181,7 @@ function normalizeTagAttributeValue(value: string, quote: '"' | "'"): string {
 /**
  * 渲染一条标准化 `<file>` 标签。
  */
-export function renderChatMessageFileTag(file: ChatMessageFileTag): string {
+export function render_chat_message_file_tag(file: ChatMessageFileTag): string {
   const path = normalizeText(file.path);
   if (!path) return "";
   const type = normalizeChatMessageFileType(file.type);
@@ -196,7 +196,7 @@ export function renderChatMessageFileTag(file: ChatMessageFileTag): string {
 
 function renderChatMessageSegment(segment: ChatMessageSegment): string {
   if (segment.kind === "text") return normalizeText(segment.text);
-  return renderChatMessageFileTag(segment.file);
+  return render_chat_message_file_tag(segment.file);
 }
 
 /**
@@ -204,7 +204,7 @@ function renderChatMessageSegment(segment: ChatMessageSegment): string {
  */
 export function buildChatMessageFileBlock(files: ChatMessageFileTag[]): string {
   return files
-    .map((file) => renderChatMessageFileTag(file))
+    .map((file) => render_chat_message_file_tag(file))
     .filter((item) => normalizeText(item).length > 0)
     .join("\n");
 }
@@ -212,18 +212,18 @@ export function buildChatMessageFileBlock(files: ChatMessageFileTag[]): string {
 /**
  * 把片段重建成统一消息文本。
  */
-export function buildChatMessageText(params: {
-  bodyText?: string;
+export function build_chat_message_text(params: {
+  body_text?: string;
   files?: ChatMessageFileTag[];
   segments?: ChatMessageSegment[];
 }): string {
   const segments = Array.isArray(params.segments)
     ? params.segments
     : [
-        ...(normalizeText(params.bodyText)
+        ...(normalizeText(params.body_text)
           ? [{
               kind: "text",
-              text: normalizeText(params.bodyText),
+              text: normalizeText(params.body_text),
             } satisfies ChatMessageTextSegment]
           : []),
         ...(Array.isArray(params.files)
@@ -243,14 +243,14 @@ export function buildChatMessageText(params: {
 /**
  * 统一解析一段 chat 消息文本。
  */
-export function parseChatMessageMarkup(source: string): ParsedChatMessageMarkup {
+export function parse_chat_message_markup(source: string): ParsedChatMessageMarkup {
   const extracted = extractChatMessageFrontmatter({
     source: String(source || ""),
   });
   const segments = extractChatMessageSegments(extracted.body);
   return {
     metadata: extracted.metadata,
-    bodyText: buildChatMessageText({
+    body_text: build_chat_message_text({
       segments: segments.filter(
         (segment): segment is ChatMessageTextSegment => segment.kind === "text",
       ),

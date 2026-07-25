@@ -24,24 +24,24 @@ import { readAgentConfig } from "@/city/process/registry/AgentConfigStore.js";
  * - 未初始化：提示执行 `city agent create`
  */
 export async function statusCommand(cwd: string = "."): Promise<void> {
-  const projectRoot = path.resolve(cwd);
+  const project_root = path.resolve(cwd);
   const missingInitFiles: string[] = [];
 
-  if (!readAgentConfig(projectRoot)) {
+  if (!readAgentConfig(project_root)) {
     missingInitFiles.push("global DB agent config");
   }
 
-  const pid = await readDaemonPid(projectRoot);
+  const pid = await readDaemonPid(project_root);
 
   if (pid && isProcessAlive(pid)) {
-    const meta = await readDaemonMeta(projectRoot);
+    const meta = await readDaemonMeta(project_root);
 
     emitCliBlock({
       tone: "success",
       title: "Agent status",
       summary: "running",
       facts: [
-        ["project", projectRoot],
+        ["project", project_root],
         ...(meta?.startedAt ? [["started at", meta.startedAt]] : []),
         ...(missingInitFiles.length > 0
           ? [["warning", `missing init files: ${missingInitFiles.join(", ")}`]]
@@ -52,7 +52,7 @@ export async function statusCommand(cwd: string = "."): Promise<void> {
   }
 
   if (pid) {
-    const reasons = await diagnoseDaemonStaleReasons(projectRoot, pid);
+    const reasons = await diagnoseDaemonStaleReasons(project_root, pid);
     emitCliBlock({
       tone: "warning",
       title: "Agent status",
@@ -60,7 +60,7 @@ export async function statusCommand(cwd: string = "."): Promise<void> {
       facts: [
         {
           label: "project",
-          value: projectRoot,
+          value: project_root,
         },
         {
           label: "reason",
@@ -68,7 +68,7 @@ export async function statusCommand(cwd: string = "."): Promise<void> {
         },
         {
           label: "fix",
-          value: `city agent doctor ${projectRoot} --fix`,
+          value: `city agent doctor ${project_root} --fix`,
         },
       ],
     });
@@ -83,7 +83,7 @@ export async function statusCommand(cwd: string = "."): Promise<void> {
       facts: [
         {
           label: "project",
-          value: projectRoot,
+          value: project_root,
         },
         {
           label: "missing",
@@ -105,7 +105,7 @@ export async function statusCommand(cwd: string = "."): Promise<void> {
     facts: [
       {
         label: "project",
-        value: projectRoot,
+        value: project_root,
       },
     ],
   });

@@ -49,20 +49,20 @@ const execFileAsync = promisify(execFileCb);
 /**
  * 计算 daemon pid 文件路径。
  */
-export const getDaemonPidPath = (projectRoot: string): string =>
-  path.join(getDowncityDebugDirPath(projectRoot), DAEMON_PID_FILENAME);
+export const getDaemonPidPath = (project_root: string): string =>
+  path.join(getDowncityDebugDirPath(project_root), DAEMON_PID_FILENAME);
 
 /**
  * 计算 daemon 日志文件路径。
  */
-export const getDaemonLogPath = (projectRoot: string): string =>
-  path.join(getDowncityDebugDirPath(projectRoot), DAEMON_LOG_FILENAME);
+export const getDaemonLogPath = (project_root: string): string =>
+  path.join(getDowncityDebugDirPath(project_root), DAEMON_LOG_FILENAME);
 
 /**
  * 计算 daemon 元数据文件路径。
  */
-export const getDaemonMetaPath = (projectRoot: string): string =>
-  path.join(getDowncityDebugDirPath(projectRoot), DAEMON_META_FILENAME);
+export const getDaemonMetaPath = (project_root: string): string =>
+  path.join(getDowncityDebugDirPath(project_root), DAEMON_META_FILENAME);
 
 /**
  * 读取 daemon pid。
@@ -71,10 +71,10 @@ export const getDaemonMetaPath = (projectRoot: string): string =>
  * - 读取失败或内容非法统一返回 `null`，调用方走无进程分支。
  */
 export const readDaemonPid = async (
-  projectRoot: string,
+  project_root: string,
 ): Promise<number | null> => {
   try {
-    const raw = await fs.readFile(getDaemonPidPath(projectRoot), "utf-8");
+    const raw = await fs.readFile(getDaemonPidPath(project_root), "utf-8");
     const pid = Number.parseInt(String(raw).trim(), 10);
     return Number.isFinite(pid) && pid > 0 ? pid : null;
   } catch {
@@ -102,10 +102,10 @@ export const isProcessAlive = (pid: number): boolean => {
  * - 该函数用于状态展示，不抛异常。
  */
 export const readDaemonMeta = async (
-  projectRoot: string,
+  project_root: string,
 ): Promise<DaemonMeta | null> => {
   try {
-    const value = await fs.readJson(getDaemonMetaPath(projectRoot));
+    const value = await fs.readJson(getDaemonMetaPath(project_root));
     const pid = Number((value as { pid?: unknown })?.pid);
     if (!Number.isFinite(pid) || pid <= 0) return null;
     const startedAt = String(
@@ -116,7 +116,7 @@ export const readDaemonMeta = async (
       (value as { command?: unknown })?.command || "",
     ).trim();
     const project = String(
-      (value as { projectRoot?: unknown })?.projectRoot || "",
+      (value as { project_root?: unknown })?.project_root || "",
     ).trim();
     const instanceId = String(
       (value as { instanceId?: unknown })?.instanceId || "",
@@ -132,7 +132,7 @@ export const readDaemonMeta = async (
  * 诊断 stale 原因。
  */
 export const diagnoseDaemonStaleReasons = async (
-  projectRoot: string,
+  project_root: string,
   pid: number,
 ): Promise<DaemonStaleReason[]> => {
   const reasons: DaemonStaleReason[] = [];
@@ -141,7 +141,7 @@ export const diagnoseDaemonStaleReasons = async (
     message: "pid file exists but process is not alive",
   });
 
-  const metaPath = getDaemonMetaPath(projectRoot);
+  const metaPath = getDaemonMetaPath(project_root);
   const metaExists = await fs.pathExists(metaPath);
   if (!metaExists) {
     reasons.push({
@@ -161,7 +161,7 @@ export const diagnoseDaemonStaleReasons = async (
     return reasons;
   }
 
-  const parsedMeta = await readDaemonMeta(projectRoot);
+  const parsedMeta = await readDaemonMeta(project_root);
   if (!parsedMeta) {
     const raw_meta = await fs.readJson(metaPath).catch(() => null) as { instanceId?: unknown } | null;
     if (!String(raw_meta?.instanceId || "").trim()) {
@@ -184,8 +184,8 @@ export const diagnoseDaemonStaleReasons = async (
     });
   }
 
-  const metaProjectRoot = path.resolve(String(parsedMeta.projectRoot || ""));
-  const expectedProjectRoot = path.resolve(projectRoot);
+  const metaProjectRoot = path.resolve(String(parsedMeta.project_root || ""));
+  const expectedProjectRoot = path.resolve(project_root);
   if (metaProjectRoot !== expectedProjectRoot) {
     reasons.push({
       code: "meta_project_mismatch",
@@ -203,18 +203,18 @@ export const diagnoseDaemonStaleReasons = async (
  * - 若 pid 文件存在但进程不存在，移除 pid/meta，恢复可重启状态。
  */
 export const cleanupStaleDaemonFiles = async (
-  projectRoot: string,
+  project_root: string,
 ): Promise<void> => {
-  const pid = await readDaemonPid(projectRoot);
+  const pid = await readDaemonPid(project_root);
   if (!pid) return;
   if (isProcessAlive(pid)) return;
 
   // 关键注释：pid 文件存在但进程已退出，属于“脏状态”，这里直接清理。
-  await fs.remove(getDaemonPidPath(projectRoot));
-  await fs.remove(getDaemonMetaPath(projectRoot));
+  await fs.remove(getDaemonPidPath(project_root));
+  await fs.remove(getDaemonMetaPath(project_root));
   // 关键点（中文）：僵尸 daemon 清理时标记 stopped，保留历史记录。
   try {
-    await markManagedAgentStopped(projectRoot);
+    await markManagedAgentStopped(project_root);
   } catch {
     // ignore registry sync errors
   }
@@ -224,12 +224,12 @@ export const cleanupStaleDaemonFiles = async (
  * 写入 daemon pid 与元数据文件。
  */
 export const writeDaemonFiles = async (
-  projectRoot: string,
+  project_root: string,
   meta: DaemonMeta,
 ): Promise<void> => {
-  await fs.ensureDir(getDowncityDebugDirPath(projectRoot));
-  await fs.writeFile(getDaemonPidPath(projectRoot), String(meta.pid), "utf-8");
-  await fs.writeJson(getDaemonMetaPath(projectRoot), meta, { spaces: 2 });
+  await fs.ensureDir(getDowncityDebugDirPath(project_root));
+  await fs.writeFile(getDaemonPidPath(project_root), String(meta.pid), "utf-8");
+  await fs.writeJson(getDaemonMetaPath(project_root), meta, { spaces: 2 });
 };
 
 /**
@@ -306,10 +306,10 @@ async function read_daemon_runtime_identity(params: {
         };
         const data = frame.data;
         const pid = Number(data?.pid);
-        const projectRoot = String(data?.projectRoot || "").trim();
+        const project_root = String(data?.project_root || "").trim();
         const instanceId = String(data?.instanceId || "").trim();
-        finish(frame.success === true && Number.isInteger(pid) && pid > 0 && projectRoot && instanceId
-          ? { pid, projectRoot, instanceId }
+        finish(frame.success === true && Number.isInteger(pid) && pid > 0 && project_root && instanceId
+          ? { pid, project_root, instanceId }
           : null);
       } catch {
         finish(null);
@@ -322,11 +322,11 @@ async function read_daemon_runtime_identity(params: {
 
 /** 判断 RPC 返回身份是否与 daemon meta 完全一致。 */
 function daemon_identity_matches(
-  meta: Pick<DaemonMeta, "pid" | "projectRoot" | "instanceId">,
+  meta: Pick<DaemonMeta, "pid" | "project_root" | "instanceId">,
   identity: DaemonRuntimeIdentity,
 ): boolean {
   return identity.pid === meta.pid
-    && path.resolve(identity.projectRoot) === path.resolve(meta.projectRoot)
+    && path.resolve(identity.project_root) === path.resolve(meta.project_root)
     && identity.instanceId === meta.instanceId;
 }
 
@@ -371,7 +371,7 @@ async function command_matches_daemon_meta(meta: DaemonMeta): Promise<boolean> {
     && command.includes(cli_path)
     && command.includes("agent start")
     && command.includes("--foreground true")
-    && command.includes(path.resolve(meta.projectRoot));
+    && command.includes(path.resolve(meta.project_root));
 }
 
 /**
@@ -379,7 +379,7 @@ async function command_matches_daemon_meta(meta: DaemonMeta): Promise<boolean> {
  */
 async function waitForDaemonReady(params: {
   pid: number;
-  projectRoot: string;
+  project_root: string;
   instanceId: string;
   args: string[];
   timeoutMs?: number;
@@ -405,7 +405,7 @@ async function waitForDaemonReady(params: {
     if (identity && daemon_identity_matches({
       pid: params.pid,
       instanceId: params.instanceId,
-      projectRoot: params.projectRoot,
+      project_root: params.project_root,
     }, identity)) {
       return;
     }
@@ -422,16 +422,16 @@ async function waitForDaemonReady(params: {
  * 回滚启动失败状态。
  */
 async function rollback_daemon_startup(params: {
-  projectRoot: string;
+  project_root: string;
   pid: number;
   instanceId: string;
 }): Promise<void> {
   const read_owned_meta = async (): Promise<DaemonMeta | null> => {
-    const meta = await readDaemonMeta(params.projectRoot);
+    const meta = await readDaemonMeta(params.project_root);
     return meta
       && meta.pid === params.pid
       && meta.instanceId === params.instanceId
-      && path.resolve(meta.projectRoot) === path.resolve(params.projectRoot)
+      && path.resolve(meta.project_root) === path.resolve(params.project_root)
       ? meta
       : null;
   };
@@ -458,10 +458,10 @@ async function rollback_daemon_startup(params: {
 
   // 只有文件仍描述本次启动实例时才清理，避免覆盖并发启动的新 daemon 状态。
   if (!await read_owned_meta()) return;
-  await fs.remove(getDaemonPidPath(params.projectRoot));
-  await fs.remove(getDaemonMetaPath(params.projectRoot));
+  await fs.remove(getDaemonPidPath(params.project_root));
+  await fs.remove(getDaemonMetaPath(params.project_root));
   try {
-    await markManagedAgentStopped(params.projectRoot);
+    await markManagedAgentStopped(params.project_root);
   } catch {
     // ignore registry sync errors
   }
@@ -477,19 +477,19 @@ async function rollback_daemon_startup(params: {
  * 4) 写入 pid/meta 供 stop/restart 使用
  */
 export const startDaemonProcess = async (params: {
-  projectRoot: string;
+  project_root: string;
   cliPath: string;
   args: string[];
 }): Promise<{ pid: number; logPath: string }> => {
-  const { projectRoot, cliPath, args } = params;
+  const { project_root, cliPath, args } = params;
   const instanceId = randomUUID();
 
-  await fs.ensureDir(getDowncityDebugDirPath(projectRoot));
-  await cleanupStaleDaemonFiles(projectRoot);
+  await fs.ensureDir(getDowncityDebugDirPath(project_root));
+  await cleanupStaleDaemonFiles(project_root);
 
-  const existingPid = await readDaemonPid(projectRoot);
+  const existingPid = await readDaemonPid(project_root);
   if (existingPid && isProcessAlive(existingPid)) {
-    const existing_meta = await readDaemonMeta(projectRoot);
+    const existing_meta = await readDaemonMeta(project_root);
     const existing_rpc_port = existing_meta
       ? parsePortLike(pickArgValue(existing_meta.args, "--rpc-port"))
       : undefined;
@@ -499,7 +499,7 @@ export const startDaemonProcess = async (params: {
     const confirmed_existing = Boolean(
       existing_meta
       && existing_meta.pid === existingPid
-      && path.resolve(existing_meta.projectRoot) === path.resolve(projectRoot)
+      && path.resolve(existing_meta.project_root) === path.resolve(project_root)
       && (existing_identity
         ? daemon_identity_matches(existing_meta, existing_identity)
         : await command_matches_daemon_meta(existing_meta)),
@@ -507,11 +507,11 @@ export const startDaemonProcess = async (params: {
     if (confirmed_existing) {
       throw new Error(`Daemon already running (pid: ${existingPid})`);
     }
-    await fs.remove(getDaemonPidPath(projectRoot));
-    await fs.remove(getDaemonMetaPath(projectRoot));
+    await fs.remove(getDaemonPidPath(project_root));
+    await fs.remove(getDaemonMetaPath(project_root));
   }
 
-  const logPath = getDaemonLogPath(projectRoot);
+  const logPath = getDaemonLogPath(project_root);
   const logFd = fs.openSync(logPath, "a");
 
   const childEnv: NodeJS.ProcessEnv = {
@@ -522,7 +522,7 @@ export const startDaemonProcess = async (params: {
 
   // 关键注释：daemon 进程必须 detached + unref 才能在父进程退出后继续运行。
   const child = spawn(process.execPath, [cliPath, ...args], {
-    cwd: projectRoot,
+    cwd: project_root,
     detached: true,
     stdio: ["ignore", logFd, logFd],
     env: childEnv,
@@ -535,10 +535,10 @@ export const startDaemonProcess = async (params: {
     throw new Error("Failed to start daemon process (missing pid)");
   }
 
-  await writeDaemonFiles(projectRoot, {
+  await writeDaemonFiles(project_root, {
     pid: child.pid,
     instanceId,
-    projectRoot,
+    project_root,
     startedAt: new Date().toISOString(),
     command: process.execPath,
     args: [cliPath, ...args],
@@ -550,21 +550,21 @@ export const startDaemonProcess = async (params: {
   try {
     await waitForDaemonReady({
       pid: child.pid,
-      projectRoot,
+      project_root,
       instanceId,
       args,
     });
 
     // 关键点（中文）：启动成功后必须登记到 managed agent registry，否则该 daemon 视为“无效启动”。
     await upsertManagedAgentEntry({
-      projectRoot,
+      project_root,
       pid: child.pid,
       status: "running",
     });
   } catch (error) {
     // 回滚：无法 ready 或无法登记时立即停止 daemon 并清理状态文件。
     await rollback_daemon_startup({
-      projectRoot,
+      project_root,
       pid: child.pid,
       instanceId,
     });
@@ -583,29 +583,29 @@ export const startDaemonProcess = async (params: {
  * - 无论 stop 结果如何，最终清理 pid/meta，避免状态残留。
  */
 export const stopDaemonProcess = async (params: {
-  projectRoot: string;
+  project_root: string;
   timeoutMs?: number;
 }): Promise<{ stopped: boolean; pid?: number }> => {
-  const { projectRoot, timeoutMs = 10_000 } = params;
+  const { project_root, timeoutMs = 10_000 } = params;
 
-  await cleanupStaleDaemonFiles(projectRoot);
-  const pid = await readDaemonPid(projectRoot);
+  await cleanupStaleDaemonFiles(project_root);
+  const pid = await readDaemonPid(project_root);
   if (!pid) return { stopped: false };
 
   if (!isProcessAlive(pid)) {
-    await fs.remove(getDaemonPidPath(projectRoot));
-    await fs.remove(getDaemonMetaPath(projectRoot));
+    await fs.remove(getDaemonPidPath(project_root));
+    await fs.remove(getDaemonMetaPath(project_root));
     return { stopped: false, pid };
   }
 
-  const meta = await readDaemonMeta(projectRoot);
+  const meta = await readDaemonMeta(project_root);
   if (
     !meta
     || meta.pid !== pid
-    || path.resolve(meta.projectRoot) !== path.resolve(projectRoot)
+    || path.resolve(meta.project_root) !== path.resolve(project_root)
   ) {
-    await fs.remove(getDaemonPidPath(projectRoot));
-    await fs.remove(getDaemonMetaPath(projectRoot));
+    await fs.remove(getDaemonPidPath(project_root));
+    await fs.remove(getDaemonMetaPath(project_root));
     return { stopped: false, pid };
   }
 
@@ -617,8 +617,8 @@ export const stopDaemonProcess = async (params: {
     ? daemon_identity_matches(meta, identity)
     : await command_matches_daemon_meta(meta);
   if (!confirmed) {
-    await fs.remove(getDaemonPidPath(projectRoot));
-    await fs.remove(getDaemonMetaPath(projectRoot));
+    await fs.remove(getDaemonPidPath(project_root));
+    await fs.remove(getDaemonMetaPath(project_root));
     return { stopped: false, pid };
   }
 
@@ -639,11 +639,11 @@ export const stopDaemonProcess = async (params: {
     }
   }
 
-  await fs.remove(getDaemonPidPath(projectRoot));
-  await fs.remove(getDaemonMetaPath(projectRoot));
+  await fs.remove(getDaemonPidPath(project_root));
+  await fs.remove(getDaemonMetaPath(project_root));
   // 关键点（中文）：停止后标记为 stopped，保留历史记录。
   try {
-    await markManagedAgentStopped(projectRoot);
+    await markManagedAgentStopped(project_root);
   } catch {
     // ignore registry sync errors
   }

@@ -57,17 +57,17 @@ const result = await turn.finished;
 
 ```ts
 {
-  turnId: string;
+  turn_id: string;
   success: boolean;
   text: string;
   error?: string;
-  assistantMessage?: unknown;
+  assistant_message?: unknown;
 }
 ```
 
 因此应用代码必须检查 `success`，而不是只等待 Promise 成功兑现。
 
-`assistantMessage` 只在当前 Turn 实际产生 Assistant 内容时存在。模型或运行时在输出前失败时，结果只包含 `success: false` 与 `error`，用户可见错误通过 Session 的 canonical `error` Message 持久化。
+`assistant_message` 只在当前 Turn 实际产生 Assistant 内容时存在。模型或运行时在输出前失败时，结果只包含 `success: false` 与 `error`，用户可见错误通过 Session 的 canonical `error` Message 持久化。
 
 ## 运行中继续输入
 

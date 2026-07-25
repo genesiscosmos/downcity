@@ -83,7 +83,7 @@ function user_rows(snapshot: dashboard_snapshot): admin_tui_table_row[] {
     ...snapshot.users.recent_users.map((item) => row(
       t({ zh: "最近用户", en: "Recent user" }),
       read_text(item.user_id ?? item.id),
-      `${read_text(item.auth_email ?? item.email)} ${format_date(item.auth_created_at ?? item.created_at ?? item.createdAt)}`,
+      `${read_text(item.auth_email ?? item.email)} ${format_date(item.auth_created_at ?? item.created_at ?? item.created_at)}`,
     )),
   ];
 }

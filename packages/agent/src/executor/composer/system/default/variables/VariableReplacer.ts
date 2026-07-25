@@ -11,9 +11,9 @@ import type { PromptVariables } from "@executor/composer/system/default/variable
 import { renderTemplateVariables } from "@/utils/Template.js";
 import {
   formatDateInTimezone,
-  formatDateTimeInTimezone,
+  format_date_time_in_timezone,
   formatYearInTimezone,
-  resolveRuntimeTimezone,
+  resolve_runtime_timezone,
 } from "@/utils/Time.js";
 
 /**
@@ -34,7 +34,7 @@ async function buildPromptVariables(options?: {
   /**
    * 会话 ID（用于 `session_id`）。
    */
-  sessionId?: string;
+  session_id?: string;
 
   /**
    * 变量替换模式（默认 full）。
@@ -43,7 +43,7 @@ async function buildPromptVariables(options?: {
 }): Promise<PromptVariables> {
   const mode = options?.mode === "stable" ? "stable" : "full";
   const projectPath = String(options?.projectPath || "").trim() || process.cwd();
-  const safeLocalTimezone = resolveRuntimeTimezone();
+  const safeLocalTimezone = resolve_runtime_timezone();
   const now = new Date();
   if (mode === "stable") {
     return {
@@ -53,23 +53,23 @@ async function buildPromptVariables(options?: {
       timezone: safeLocalTimezone,
       location: "[See runtime clock tail message]",
       projectPath,
-      projectRoot: projectPath,
-      sessionId: "[Runtime session id]",
+      project_root: projectPath,
+      session_id: "[Runtime session id]",
     };
   }
 
   const geo = await resolvePromptGeoContext();
-  const sessionId = String(options?.sessionId || "").trim() || "unknown";
+  const session_id = String(options?.session_id || "").trim() || "unknown";
   return {
     // 关键点（中文）：时间字段只使用本机 runtime 时区，避免代理/IP 地理推断改变 cron 与相对时间口径。
     currentDate: formatDateInTimezone(now, safeLocalTimezone),
-    currentTime: formatDateTimeInTimezone(now, safeLocalTimezone),
+    currentTime: format_date_time_in_timezone(now, safeLocalTimezone),
     currentYear: formatYearInTimezone(now, safeLocalTimezone),
     timezone: safeLocalTimezone,
     location: geo.location,
     projectPath,
-    projectRoot: projectPath,
-    sessionId,
+    project_root: projectPath,
+    session_id,
   };
 }
 
@@ -97,7 +97,7 @@ export async function replaceVariablesInPrompts(
     /**
      * 会话 ID（用于 `session_id`）。
      */
-    sessionId?: string;
+    session_id?: string;
 
     /**
      * 变量替换模式（默认 full）。
@@ -114,8 +114,8 @@ export async function replaceVariablesInPrompts(
     timezone: variables.timezone,
     location: variables.location,
     project_path: variables.projectPath,
-    project_root: variables.projectRoot,
-    session_id: variables.sessionId,
+    project_root: variables.project_root,
+    session_id: variables.session_id,
   });
 }
 
@@ -136,19 +136,19 @@ export function buildRuntimeClockSystemPrompt(options?: {
   /**
    * 会话 ID（用于 `session_id`）。
    */
-  sessionId?: string;
+  session_id?: string;
 }): string {
-  const timezone = resolveRuntimeTimezone();
+  const timezone = resolve_runtime_timezone();
   const projectPath = String(options?.projectPath || "").trim() || process.cwd();
-  const sessionId = String(options?.sessionId || "").trim() || "unknown";
+  const session_id = String(options?.session_id || "").trim() || "unknown";
   const now = new Date();
   return [
     "# Runtime Clock Context",
     "The following fields are the authoritative time context for this run. Prefer them when resolving relative time expressions such as today, tomorrow, or a specific hour:",
     `- current_date: ${formatDateInTimezone(now, timezone)}`,
-    `- current_time: ${formatDateTimeInTimezone(now, timezone)}`,
+    `- current_time: ${format_date_time_in_timezone(now, timezone)}`,
     `- timezone: ${timezone}`,
-    `- session_id: ${sessionId}`,
+    `- session_id: ${session_id}`,
     `- project_root: ${projectPath}`,
   ].join("\n");
 }

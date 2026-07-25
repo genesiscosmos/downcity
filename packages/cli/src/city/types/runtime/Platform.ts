@@ -1,5 +1,5 @@
 /**
- * Platform：control plane / managed-agent 相关共享类型定义。
+ * CLI/City Platform：control plane / managed-agent 类型定义。
  *
  * 关键点（中文）
  * - control plane runtime 自身的进程状态类型仍保留在这里，因为它属于 city control plane 的公开契约。
@@ -12,19 +12,19 @@
  */
 export interface PlatformAgentOption {
   /**
-   * UI 侧唯一标识（使用 projectRoot 绝对路径）。
+   * UI 侧唯一标识（使用 project_root 绝对路径）。
    */
   id: string;
 
   /**
    * Agent 全局配置中的稳定标识。
    */
-  agentId: string;
+  agent_id: string;
 
   /**
    * agent 项目根目录（绝对路径）。
    */
-  projectRoot: string;
+  project_root: string;
 
   /**
    * 当前 downcity 托管的 Agent 进程是否存活。
@@ -54,7 +54,7 @@ export interface PlatformAgentOption {
   /**
    * registry 最近刷新时间（ISO8601）。
    */
-  updatedAt: string;
+  updated_at: string;
 
   /**
    * 最近停止时间（ISO8601，可选）。
@@ -147,7 +147,7 @@ export interface PlatformAgentDirectoryInspection {
   /**
    * 探测的项目绝对路径。
    */
-  projectRoot: string;
+  project_root: string;
 
   /**
    * 该目录是否已满足最小 agent 初始化条件。
@@ -165,7 +165,7 @@ export interface PlatformAgentDirectoryInspection {
   /**
    * 当前目录解析出的 agent id（若存在）。
    */
-  agentId?: string;
+  agent_id?: string;
 
   /**
    * 当前读取到的主模型 ID（若存在）。
@@ -343,7 +343,7 @@ export interface ManagedAgentRegistryEntry {
   /**
    * agent 项目根目录绝对路径。
    */
-  projectRoot: string;
+  project_root: string;
 
   /**
    * registry 最近一次记录的 downcity 托管进程 pid。
@@ -358,7 +358,7 @@ export interface ManagedAgentRegistryEntry {
   /**
    * 最近刷新时间（ISO8601）。
    */
-  updatedAt: string;
+  updated_at: string;
 
   /**
    * registry 记录状态。
@@ -383,7 +383,7 @@ export interface ManagedAgentRegistryV1 {
   /**
    * registry 最近更新时间（ISO8601）。
    */
-  updatedAt: string;
+  updated_at: string;
 
   /**
    * 当前登记的 agent 列表。
@@ -398,7 +398,7 @@ export interface ManagedAgentProcessView {
   /**
    * agent 项目根目录绝对路径。
    */
-  projectRoot: string;
+  project_root: string;
 
   /**
    * registry 中登记的 pid。
@@ -423,7 +423,7 @@ export interface ManagedAgentProcessView {
   /**
    * 最近更新时间（ISO8601）。
    */
-  updatedAt: string;
+  updated_at: string;
 
   /**
    * downcity 托管进程日志文件路径。

@@ -9,7 +9,7 @@
 
 import path from "path";
 import type { Logger } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { JsonObject } from "@downcity/agent";
 import type {
   IncomingChatAccessParams,
@@ -24,7 +24,7 @@ import {
   augmentChatInboundInput,
   buildChatInboundText,
 } from "@/chat/runtime/InboundAugment.js";
-import { renderChatMessageFileTag } from "@downcity/agent";
+import { render_chat_message_file_tag } from "@downcity/agent";
 import { extractTelegramReplyContext } from "./ReplyContext.js";
 import {
   getActorName,
@@ -58,7 +58,7 @@ export interface TelegramMessagePlatform {
    */
   sendInboundAckReaction(params: {
     chatId: string;
-    messageId?: number;
+    message_id?: number;
     emoji: string;
   }): Promise<void>;
   /**
@@ -72,8 +72,8 @@ export interface TelegramMessagePlatform {
  */
 export type TelegramMessageAuditWriter = (params: {
   chatId: string;
-  messageId?: string;
-  userId?: string;
+  message_id?: string;
+  user_id?: string;
   text: string;
   meta?: ChannelUserMessageMeta;
 }) => Promise<void>;
@@ -86,7 +86,7 @@ export type TelegramMessageExecutor = (params: {
   instructions: string;
   from?: TelegramUser;
   chatTitle?: string;
-  messageId?: string;
+  message_id?: string;
   chatType?: NonNullable<TelegramUpdate["message"]>["chat"]["type"];
   messageThreadId?: number;
   receivedAt?: string;
@@ -110,7 +110,7 @@ export interface TelegramMessageHandlerOptions {
   /**
    * 当前 agent context。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * 项目根目录。
    */
@@ -149,9 +149,9 @@ export interface TelegramMessageHandlerOptions {
    */
   enqueueAuditMessage: TelegramMessageAuditWriter;
   /**
-   * 按 chatKey 串行执行。
+   * 按 chat_key 串行执行。
    */
-  runInChat(chatKey: string, fn: () => Promise<void>): Promise<void>;
+  runInChat(chat_key: string, fn: () => Promise<void>): Promise<void>;
   /**
    * 命令处理。
    */
@@ -180,7 +180,7 @@ export async function handleTelegramMessage(
         : "";
   const entities = message.entities || message.caption_entities;
   const hasIncomingAttachment = hasTelegramIncomingAttachment(message);
-  const messageId =
+  const message_id =
     typeof message.message_id === "number" ? String(message.message_id) : undefined;
   const receivedAt =
     typeof message.date === "number" && Number.isFinite(message.date)
@@ -198,13 +198,13 @@ export async function handleTelegramMessage(
   const actorName = getActorName(from);
   const chatTitle = getTelegramChatTitle(message.chat);
   const isGroup = isTelegramGroupChat(message.chat.type);
-  const chatKey = buildTelegramChatKey(chatId, messageThreadId);
+  const chat_key = buildTelegramChatKey(chatId, messageThreadId);
 
   if (!actorId) {
-    options.logger.warn("Telegram 消息缺少发送者 userId，已忽略", {
+    options.logger.warn("Telegram 消息缺少发送者 user_id，已忽略", {
       chatId,
       chatType: message.chat.type,
-      messageId,
+      message_id,
       messageThreadId,
       hasFrom: !!from,
     });
@@ -215,7 +215,7 @@ export async function handleTelegramMessage(
     chatId,
     chatType: message.chat.type,
     chatTitle,
-    userId: actorId,
+    user_id: actorId,
     username: actorName,
   });
   if (!access_result.allowed) {
@@ -237,8 +237,8 @@ export async function handleTelegramMessage(
     if (!isGroup) return;
     await options.enqueueAuditMessage({
       chatId,
-      messageId,
-      userId: actorId,
+      message_id,
+      user_id: actorId,
       text: buildTelegramAuditText({ rawText, hasIncomingAttachment, message }),
       meta: {
         chatType: message.chat.type,
@@ -258,14 +258,14 @@ export async function handleTelegramMessage(
     options.logger.debug("Ignored bot-originated message", {
       chatId,
       chatType: message.chat.type,
-      messageId,
-      fromId: from?.id,
+      message_id,
+      from_id: from?.id,
       fromUsername: from?.username,
     });
     return;
   }
 
-  await options.runInChat(chatKey, async () => {
+  await options.runInChat(chat_key, async () => {
     options.logger.debug("Telegram message received", {
       chatId,
       chatType: message.chat.type,
@@ -273,9 +273,9 @@ export async function handleTelegramMessage(
       actorId,
       actorUsername: from?.username,
       actorName,
-      messageId,
+      message_id,
       messageThreadId,
-      chatKey,
+      chat_key,
       hasIncomingAttachment,
       textPreview: rawText.length > 240 ? `${rawText.slice(0, 240)}…` : rawText,
       entityTypes: (entities || []).map((entity) => entity.type),
@@ -290,15 +290,15 @@ export async function handleTelegramMessage(
 
     await options.platform.sendInboundAckReaction({
       chatId,
-      messageId: parseTelegramMessageId(messageId),
+      message_id: parseTelegramMessageId(message_id),
       emoji: options.inboundAckEmoji,
     });
 
     if (rawText.startsWith("/")) {
       await options.enqueueAuditMessage({
         chatId,
-        messageId,
-        userId: actorId,
+        message_id,
+        user_id: actorId,
         text: buildTelegramAuditText({ rawText, hasIncomingAttachment, message }),
         meta: {
           chatType: message.chat.type,
@@ -330,8 +330,8 @@ export async function handleTelegramMessage(
       options,
       message,
       chatId,
-      messageId,
-      chatKey,
+      message_id,
+      chat_key,
     });
     const replyContext = extractTelegramReplyContext(message);
 
@@ -344,12 +344,12 @@ export async function handleTelegramMessage(
               channel: "telegram",
               chatId,
               chatType: message.chat.type,
-              chatKey,
-              messageId,
+              chat_key,
+              message_id,
               rootPath: options.rootPath,
               attachmentText:
                 attachmentLines.length > 0 ? attachmentLines.join("\n") : undefined,
-              bodyText: cleaned ? cleaned.trim() : undefined,
+              body_text: cleaned ? cleaned.trim() : undefined,
               attachments: incomingAttachments.map((attachment) => ({
                 channel: "telegram" as const,
                 kind: attachment.type,
@@ -372,7 +372,7 @@ export async function handleTelegramMessage(
       instructions,
       from,
       chatTitle,
-      messageId,
+      message_id,
       chatType: message.chat.type,
       messageThreadId,
       receivedAt,
@@ -422,8 +422,8 @@ async function collectIncomingAttachments(params: {
   options: TelegramMessageHandlerOptions;
   message: TelegramUpdate["message"];
   chatId: string;
-  messageId?: string;
-  chatKey: string;
+  message_id?: string;
+  chat_key: string;
 }): Promise<{
   attachmentLines: string[];
   incomingAttachments: Array<{
@@ -447,7 +447,7 @@ async function collectIncomingAttachments(params: {
     for (const attachment of incomingAttachments) {
       const rel = path.relative(params.options.rootPath, attachment.path);
       attachmentLines.push(
-        renderChatMessageFileTag({
+        render_chat_message_file_tag({
           type: attachment.type,
           path: rel,
           ...(attachment.desc ? { caption: attachment.desc } : {}),
@@ -458,8 +458,8 @@ async function collectIncomingAttachments(params: {
     params.options.logger.warn("Failed to save incoming Telegram attachment(s)", {
       error: String(error),
       chatId: params.chatId,
-      messageId: params.messageId,
-      chatKey: params.chatKey,
+      message_id: params.message_id,
+      chat_key: params.chat_key,
     });
   }
 

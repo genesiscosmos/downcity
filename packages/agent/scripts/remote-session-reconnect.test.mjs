@@ -28,7 +28,7 @@ test("RemoteSession reconnects the event pump after transport close", async () =
       throw new Error("unused");
     },
     async stop() {
-      return { stopped: false, cancelledQueuedPrompts: 0, reason: "idle" };
+      return { stopped: false, cancelled_queued_prompts: 0, reason: "idle" };
     },
     async records() {
       throw new Error("unused");
@@ -41,15 +41,15 @@ test("RemoteSession reconnects the event pump after transport close", async () =
     },
   };
   const session = new RemoteSession(transport, {
-    agentId: "agent_test",
-    sessionId: "session_test",
-    messageCount: 0,
+    agent_id: "agent_test",
+    session_id: "session_test",
+    message_count: 0,
   });
 
   const first_turn = await session.prompt({ query: "first" });
   subscriptions[0].on_close(new Error("stream dropped"));
   assert.deepEqual(await first_turn.finished, {
-    turnId: "turn_1",
+    turn_id: "turn_1",
     text: "",
     success: false,
     error: "stream dropped",
@@ -78,9 +78,9 @@ test("RemoteSession queues compact through its transport", async () => {
     },
   };
   const session = new RemoteSession(transport, {
-    agentId: "agent_test",
-    sessionId: "session_test",
-    messageCount: 0,
+    agent_id: "agent_test",
+    session_id: "session_test",
+    message_count: 0,
   });
 
   await session.compact();

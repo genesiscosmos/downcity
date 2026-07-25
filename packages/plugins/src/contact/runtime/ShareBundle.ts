@@ -9,7 +9,7 @@
 import crypto from "node:crypto";
 import fs from "fs-extra";
 import path from "node:path";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type {
   ContactInboxShareFileInput,
   ContactInboxShareMeta,
@@ -127,7 +127,7 @@ export async function createShareInput(params: {
   /**
    * 当前 agent context。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * 发送方 contact id。
    */
@@ -172,7 +172,7 @@ export async function createShareInput(params: {
   }
 
   for (const rawPath of Array.isArray(params.paths) ? params.paths : []) {
-    const sourcePath = path.resolve(params.context.rootPath, String(rawPath || "").trim());
+    const sourcePath = path.resolve(params.context.workspace_path, String(rawPath || "").trim());
     const itemRoot = createItemRoot(sourcePath);
     const collected = await collectPathFiles({
       sourcePath,
@@ -235,7 +235,7 @@ export async function receiveShare(params: {
   /**
    * 项目根目录。
    */
-  projectRoot: string;
+  project_root: string;
   /**
    * share id。
    */
@@ -250,22 +250,22 @@ export async function receiveShare(params: {
    */
   receivedPath: string;
 }> {
-  const payload = await readContactInboxSharePayload(params.projectRoot, params.shareId);
+  const payload = await readContactInboxSharePayload(params.project_root, params.shareId);
   if (!payload) throw new Error(`Share payload not found: ${params.shareId}`);
   if (payload.kind !== "share") throw new Error(`Unsupported share payload: ${payload.kind}`);
 
-  const receivedPath = getContactReceivedSharePath(params.projectRoot, params.shareId);
+  const receivedPath = getContactReceivedSharePath(params.project_root, params.shareId);
   await fs.ensureDir(receivedPath);
   await fs.writeJson(path.join(receivedPath, "payload.json"), payload, { spaces: 2 });
 
-  const filesRoot = getInboxShareFilesRoot(params.projectRoot, params.shareId);
+  const filesRoot = getInboxShareFilesRoot(params.project_root, params.shareId);
   if (await fs.pathExists(filesRoot)) {
     await fs.copy(filesRoot, path.join(receivedPath, "files"), {
       overwrite: true,
     });
   }
 
-  await markContactInboxShareReceived(params.projectRoot, params.shareId);
+  await markContactInboxShareReceived(params.project_root, params.shareId);
   return {
     itemCount: payload.items.length,
     receivedPath,

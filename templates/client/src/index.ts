@@ -171,7 +171,7 @@ async function create_agent_session(config: ClientConfig, model: CityModel) {
   try {
     return await sessions.get("local_cli");
   } catch {
-    return await sessions.create({ sessionId: "local_cli" });
+    return await sessions.create({ session_id: "local_cli" });
   }
 }
 

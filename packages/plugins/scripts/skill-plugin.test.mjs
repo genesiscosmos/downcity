@@ -32,7 +32,7 @@ test("SkillPlugin 根据扫描参数生成 action 工作流提示", async () => 
     ignore: ["hidden-skill"],
   });
 
-  const prompt = await plugin.system({ rootPath: project_root });
+  const prompt = await plugin.system({ workspace_path: project_root });
 
   assert.match(prompt, /\[project\] \.agents\/skills ->/);
   assert.match(prompt, /\[custom\] \.agents\/shared-skills ->/);
@@ -53,11 +53,11 @@ test("find 和 install actions 只返回提示词且不创建扫描目录", asyn
   assert.equal(fs.existsSync(project_root), false);
 
   const find_result = await plugin.actions.find.execute({
-    context: { rootPath: project_root },
+    context: { workspace_path: project_root },
     input: { query: "web access" },
   });
   const install_result = await plugin.actions.install.execute({
-    context: { rootPath: project_root },
+    context: { workspace_path: project_root },
     input: { spec: "owner/repository@web-access" },
   });
 
@@ -83,7 +83,7 @@ test("install action 在没有扫描根时返回配置提示", async () => {
   const project_root = path.resolve("fixtures/no-skill-root");
   const plugin = new SkillPlugin({ use: [] });
   const result = await plugin.actions.install.execute({
-    context: { rootPath: project_root },
+    context: { workspace_path: project_root },
     input: { spec: "owner/repository@skill" },
   });
 

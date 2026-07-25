@@ -11,7 +11,7 @@ import type { JsonValue } from "@/types/common/Json.js";
 import type { PluginActionScheduleInput } from "@/plugin/types/ActionSchedule.js";
 import {
   normalizeRunAtMsOrThrow,
-  parseActionScheduleRunAtMsOrThrow,
+  parse_action_schedule_run_at_ms_or_throw,
 } from "@/plugin/core/ActionScheduleTime.js";
 
 type JsonRecord = Record<string, unknown>;
@@ -23,7 +23,7 @@ export type PluginCommandRequestBody = {
   /**
    * 目标 plugin 名称。
    */
-  pluginName: string;
+  plugin_name: string;
   /**
    * 目标 command / action 名称。
    */
@@ -49,43 +49,43 @@ function readScheduleInput(
   body: JsonRecord,
 ): PluginActionScheduleInput | undefined {
   const nestedSchedule = isJsonRecord(body.schedule) ? body.schedule : undefined;
-  const nestedRunAtMs = nestedSchedule?.runAtMs;
-  const topLevelDelay = body.delayMs ?? body.delay;
-  const topLevelTime = body.sendAtMs ?? body.sendAt ?? body.time;
+  const nestedRunAtMs = nestedSchedule?.run_at_ms;
+  const topLevelDelay = body.delay_ms ?? body.delay;
+  const topLevelTime = body.send_at_ms ?? body.sendAt ?? body.time;
 
   if (body.schedule !== undefined && !nestedSchedule) {
     throw new Error("schedule must be an object");
   }
   if (nestedRunAtMs !== undefined && (topLevelDelay !== undefined || topLevelTime !== undefined)) {
-    throw new Error("`schedule.runAtMs` cannot be used together with `delay/time`.");
+    throw new Error("`schedule.run_at_ms` cannot be used together with `delay/time`.");
   }
   if (nestedRunAtMs !== undefined) {
     return {
-      runAtMs: normalizeRunAtMsOrThrow(
+      run_at_ms: normalizeRunAtMsOrThrow(
         nestedRunAtMs as string | number | undefined,
-        "schedule.runAtMs",
+        "schedule.run_at_ms",
       ),
     };
   }
 
-  const runAtMs = parseActionScheduleRunAtMsOrThrow({
+  const run_at_ms = parse_action_schedule_run_at_ms_or_throw({
     delay: topLevelDelay as string | number | undefined,
     time: topLevelTime as string | number | undefined,
   });
-  if (typeof runAtMs !== "number") return undefined;
-  return { runAtMs };
+  if (typeof run_at_ms !== "number") return undefined;
+  return { run_at_ms };
 }
 
 /**
  * 解析统一 plugin runtime command 请求体。
  */
-export function parsePluginCommandRequestBody(
+export function parse_plugin_command_request_body(
   rawBody: JsonValue | undefined,
 ): PluginCommandRequestBody {
   const body = isJsonRecord(rawBody) ? rawBody : {};
   const schedule = readScheduleInput(body);
   return {
-    pluginName: String(body.pluginName || "").trim(),
+    plugin_name: String(body.plugin_name || "").trim(),
     command: String(body.command || "").trim(),
     ...(body.payload !== undefined ? { payload: body.payload as JsonValue } : {}),
     ...(schedule ? { schedule } : {}),

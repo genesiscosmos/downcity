@@ -1,6 +1,6 @@
 /**
  * `city plugin` 命令树入口。
-import { runLocalPluginAction } from "@downcity/agent";
+import { run_local_plugin_action } from "@downcity/agent";
  *
  * 关键点（中文）
  * - 负责注册所有 plugin 相关子命令。
@@ -9,7 +9,7 @@ import { runLocalPluginAction } from "@downcity/agent";
 
 import type { Command } from "commander";
 import type { PluginCliBaseOptions } from "@downcity/agent";
-import { runLocalPluginAction } from "@downcity/agent";
+import { run_local_plugin_action } from "@downcity/agent";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { helpText, t } from "@/shared/CliLocale.js";
 import { parseBoolean, parsePort } from "@/shared/IndexSupport.js";
@@ -50,7 +50,7 @@ export async function runInteractivePluginManager(): Promise<void> {
       }
       if (selection.type === "plugin") {
         await runPluginInfoCommand({
-          pluginName: selection.plugin_name,
+          plugin_name: selection.plugin_name,
           options: {
             json: false,
           },
@@ -67,13 +67,13 @@ export async function runInteractivePluginManager(): Promise<void> {
 }
 
 async function runPluginActionCommand(params: {
-  pluginName: string;
-  actionName: string;
+  plugin_name: string;
+  action_name: string;
   payload?: string;
   options: PluginCliBaseOptions;
 }): Promise<void> {
   const resolved = await resolvePluginProjectRoot(params.options);
-  if (!resolved.projectRoot) {
+  if (!resolved.project_root) {
     printResult({
       asJson: params.options.json,
       success: false,
@@ -85,7 +85,7 @@ async function runPluginActionCommand(params: {
     return;
   }
 
-  const pluginPathError = validatePluginProjectRoot(resolved.projectRoot);
+  const pluginPathError = validatePluginProjectRoot(resolved.project_root);
   if (pluginPathError) {
     printResult({
       asJson: params.options.json,
@@ -97,14 +97,14 @@ async function runPluginActionCommand(params: {
     });
     return;
   }
-  const config = readAgentConfig(resolved.projectRoot);
+  const config = readAgentConfig(resolved.project_root);
 
   const payload = parseCommandPayload(params.payload);
-  const local = await runLocalPluginAction({
+  const local = await run_local_plugin_action({
     plugins: createPluginCatalog(),
-    projectRoot: resolved.projectRoot,
-    pluginName: params.pluginName,
-    actionName: params.actionName,
+    project_root: resolved.project_root,
+    plugin_name: params.plugin_name,
+    action_name: params.action_name,
     ...(config?.id ? { agent_id: config.id } : {}),
     ...(payload !== undefined ? { payload } : {}),
   });
@@ -113,8 +113,8 @@ async function runPluginActionCommand(params: {
     success: Boolean(local.success),
     title: local.success ? "plugin action ok" : "plugin action failed",
     payload: {
-      pluginName: params.pluginName,
-      actionName: params.actionName,
+      plugin_name: params.plugin_name,
+      action_name: params.action_name,
       ...(local.data !== undefined ? { data: local.data } : {}),
       ...(local.message ? { message: local.message } : {}),
       ...(local.error ? { error: local.error } : {}),
@@ -158,7 +158,7 @@ export function registerPluginsCommand(program: Command): void {
     });
 
   plugin
-    .command("info [pluginName]")
+    .command("info [plugin_name]")
     .description(t({
       zh: "查看单个 plugin 的静态信息",
       en: "show static metadata for a single plugin",
@@ -168,15 +168,15 @@ export function registerPluginsCommand(program: Command): void {
       en: "output as JSON",
     }), parseBoolean)
     .helpOption("--help", helpText())
-    .action(async (pluginName: string | undefined, opts: { json?: boolean }) => {
+    .action(async (plugin_name: string | undefined, opts: { json?: boolean }) => {
       await runPluginInfoCommand({
-        pluginName,
+        plugin_name,
         options: opts,
       });
     });
 
   plugin
-    .command("command <pluginName> <command>")
+    .command("command <plugin_name> <command>")
     .description(t({
       zh: "按 agent 目标转发托管 plugin command",
       en: "forward a managed plugin command to an agent target",
@@ -211,12 +211,12 @@ export function registerPluginsCommand(program: Command): void {
     }), parseBoolean, true)
     .helpOption("--help", helpText())
     .action(async (
-      pluginName: string,
+      plugin_name: string,
       command: string,
       opts: PluginCliBaseOptions & { payload?: string },
     ) => {
       await runManagedPluginCommandBridge({
-        pluginName,
+        plugin_name,
         command,
         payloadRaw: opts.payload,
         options: opts,
@@ -224,7 +224,7 @@ export function registerPluginsCommand(program: Command): void {
     });
 
   plugin
-    .command("action <pluginName> <actionName>")
+    .command("action <plugin_name> <action_name>")
     .description(t({
       zh: "运行 plugin action（在当前本地项目内直接执行）",
       en: "run a plugin action directly in the current local project",
@@ -244,13 +244,13 @@ export function registerPluginsCommand(program: Command): void {
     .helpOption("--help", helpText())
     .action(
       async (
-        pluginName: string,
-        actionName: string,
+        plugin_name: string,
+        action_name: string,
         opts: PluginCliBaseOptions & { payload?: string },
       ) => {
         await runPluginActionCommand({
-          pluginName,
-          actionName,
+          plugin_name,
+          action_name,
           payload: opts.payload,
           options: opts,
         });

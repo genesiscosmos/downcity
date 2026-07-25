@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - Agent 管理态只写入全局数据库。
- * - 全局 DB 以 projectRoot 为主键保存 agent id、启动参数、execution 与 plugin usage 配置。
+ * - 全局 DB 以 project_root 为主键保存 agent id、启动参数、execution 与 plugin usage 配置。
  * - 项目目录不再承载配置文件，所有管理态配置只从全局 DB 读取。
  */
 
@@ -16,7 +16,7 @@ import {
   remove_agent_config_row,
   set_agent_config_row,
 } from "@/city/runtime/store/StoreAgentConfigRepository.js";
-import { normalizeDefaultAgentId } from "@downcity/agent";
+import { normalize_default_agent_id } from "@/city/agent/setup/AgentInitializer.js";
 import type {
   StoredAgentConfig,
 } from "@/city/types/AgentConfig.js";
@@ -28,35 +28,35 @@ function now_iso(): string {
   return new Date().toISOString();
 }
 
-function normalize_project_root(projectRoot: string): string {
-  const resolved = path.resolve(String(projectRoot || "").trim() || ".");
-  if (!resolved) throw new Error("projectRoot is required");
+function normalize_project_root(project_root: string): string {
+  const resolved = path.resolve(String(project_root || "").trim() || ".");
+  if (!resolved) throw new Error("project_root is required");
   return resolved;
 }
 
-function default_agent_id(projectRoot: string): string {
-  const baseName = path.basename(projectRoot);
-  return normalizeDefaultAgentId(baseName) || baseName || "agent";
+function default_agent_id(project_root: string): string {
+  const baseName = path.basename(project_root);
+  return normalize_default_agent_id(baseName) || baseName || "agent";
 }
 
 function normalize_config(
   input: Partial<StoredAgentConfig>,
   fallbackProjectRoot?: string,
 ): StoredAgentConfig {
-  const projectRoot = normalize_project_root(
-    input.projectRoot || fallbackProjectRoot || ".",
+  const project_root = normalize_project_root(
+    input.project_root || fallbackProjectRoot || ".",
   );
   const currentTime = now_iso();
   return {
-    projectRoot,
-    id: String(input.id || "").trim() || default_agent_id(projectRoot),
+    project_root,
+    id: String(input.id || "").trim() || default_agent_id(project_root),
     version: String(input.version || "").trim() || "1.0.0",
     ...(input.start ? { start: input.start } : {}),
     ...(input.execution ? { execution: input.execution } : {}),
     ...(input.plugins ? { plugins: input.plugins } : {}),
     ...(input.llm ? { llm: input.llm } : {}),
-    createdAt: String(input.createdAt || "").trim() || currentTime,
-    updatedAt: String(input.updatedAt || "").trim() || currentTime,
+    created_at: String(input.created_at || "").trim() || currentTime,
+    updated_at: String(input.updated_at || "").trim() || currentTime,
   };
 }
 
@@ -64,11 +64,11 @@ function normalize_config(
  * 读取指定项目的 Agent 配置。
  */
 export function readAgentConfig(projectRootInput: string): StoredAgentConfig | null {
-  const projectRoot = normalize_project_root(projectRootInput);
+  const project_root = normalize_project_root(projectRootInput);
   return withPlatformStore((context) => {
     migrate_agent_config_rows(context, CITY_AGENT_CONFIGS_KEY);
-    const stored = get_agent_config_row(context, projectRoot);
-    return stored ? normalize_config(stored, projectRoot) : null;
+    const stored = get_agent_config_row(context, project_root);
+    return stored ? normalize_config(stored, project_root) : null;
   });
 }
 
@@ -80,7 +80,7 @@ export function listAgentConfigs(): StoredAgentConfig[] {
     migrate_agent_config_rows(context, CITY_AGENT_CONFIGS_KEY);
     return list_agent_config_rows(context)
       .map((item) => normalize_config(item))
-      .sort((left, right) => left.projectRoot.localeCompare(right.projectRoot));
+      .sort((left, right) => left.project_root.localeCompare(right.project_root));
   });
 }
 
@@ -88,19 +88,19 @@ export function listAgentConfigs(): StoredAgentConfig[] {
  * 新增或更新 Agent 配置。
  */
 export function upsertAgentConfig(input: Partial<StoredAgentConfig> & {
-  projectRoot: string;
+  project_root: string;
 }): StoredAgentConfig {
-  const projectRoot = normalize_project_root(input.projectRoot);
+  const project_root = normalize_project_root(input.project_root);
   return withPlatformStore((context) => {
     migrate_agent_config_rows(context, CITY_AGENT_CONFIGS_KEY);
     const write_config = context.sqlite.transaction(() => {
-      const existing = get_agent_config_row(context, projectRoot);
+      const existing = get_agent_config_row(context, project_root);
       const next_config = normalize_config({
         ...(existing || {}),
         ...input,
-        projectRoot,
-        createdAt: existing?.createdAt || input.createdAt,
-        updatedAt: now_iso(),
+        project_root,
+        created_at: existing?.created_at || input.created_at,
+        updated_at: now_iso(),
       });
       set_agent_config_row(context, next_config);
       return next_config;
@@ -113,9 +113,9 @@ export function upsertAgentConfig(input: Partial<StoredAgentConfig> & {
  * 删除 Agent 配置。
  */
 export function removeAgentConfig(projectRootInput: string): void {
-  const projectRoot = normalize_project_root(projectRootInput);
+  const project_root = normalize_project_root(projectRootInput);
   withPlatformStore((context) => {
     migrate_agent_config_rows(context, CITY_AGENT_CONFIGS_KEY);
-    remove_agent_config_row(context, projectRoot);
+    remove_agent_config_row(context, project_root);
   });
 }

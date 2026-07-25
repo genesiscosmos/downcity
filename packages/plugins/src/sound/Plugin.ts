@@ -10,9 +10,9 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { BasePlugin, createAction } from "@downcity/agent";
+import { BasePlugin, create_action } from "@downcity/agent";
 import { z } from "zod";
-import type { AgentContext, JsonObject, JsonValue } from "@downcity/agent";
+import type { PluginContext, JsonObject, JsonValue } from "@downcity/agent";
 import { CHAT_PLUGIN_POINTS } from "@/chat/runtime/PluginPoints.js";
 import type {
   ChatInboundAugmentInput,
@@ -224,12 +224,12 @@ async function local_audio_to_data_url(input: {
  * 把 Agent 公开 ASR 输入解析为可直接发送给 FED 的输入。
  */
 async function resolve_asr_input(
-  context: AgentContext,
+  context: PluginContext,
   input: SoundPluginAsrInput,
 ): Promise<SoundPluginAsrInput> {
   if (!input.audio_path) return input;
   const local = await local_audio_to_data_url({
-    root_path: context.rootPath,
+    root_path: context.workspace_path,
     audio_path: input.audio_path,
     media_type: input.media_type,
   });
@@ -401,12 +401,12 @@ function append_voice_text(
   input: ChatInboundAugmentInput,
   voice_blocks: string[],
 ): ChatInboundAugmentInput {
-  const current = String(input.bodyText || "").trim();
+  const current = String(input.body_text || "").trim();
   const addition = voice_blocks.map((item) => item.trim()).filter(Boolean).join("\n\n");
   if (!addition) return input;
   return {
     ...input,
-    bodyText: [current, addition].filter(Boolean).join("\n\n"),
+    body_text: [current, addition].filter(Boolean).join("\n\n"),
   };
 }
 
@@ -464,7 +464,7 @@ export class SoundPlugin extends BasePlugin {
   /**
    * SoundPlugin 给 Agent 的使用说明。
    */
-  system(_context: AgentContext): string {
+  system(_context: PluginContext): string {
     return [
       "# Sound Plugin",
       "",
@@ -499,7 +499,7 @@ export class SoundPlugin extends BasePlugin {
    * 执行一次 ASR 转写。
    */
   private async transcribe(
-    context: AgentContext,
+    context: PluginContext,
     input: SoundPluginAsrInput,
   ): Promise<SoundPluginAsrResult> {
     const model = resolve_model_id("asr", input.model, this.default_asr_model);
@@ -531,7 +531,7 @@ export class SoundPlugin extends BasePlugin {
    */
   private async auto_transcribe_inbound(input: {
     /** 当前 Agent 上下文。 */
-    context: AgentContext;
+    context: PluginContext;
     /** chat 入站管道值。 */
     value: JsonValue;
   }): Promise<JsonValue> {
@@ -552,7 +552,7 @@ export class SoundPlugin extends BasePlugin {
           ...(attachment.contentType ? { media_type: attachment.contentType } : {}),
           ...(attachment.fileName ? { filename: attachment.fileName } : {}),
         });
-        const src = to_display_src(input.context.rootPath, attachment);
+        const src = to_display_src(input.context.workspace_path, attachment);
         voice_blocks.push(
           `<voice src="${escape_xml_attr(src)}">${escape_xml_text(result.text)}</voice>`,
         );
@@ -569,7 +569,7 @@ export class SoundPlugin extends BasePlugin {
   readonly hooks = {
     pipeline: {
       [CHAT_PLUGIN_POINTS.augmentInbound]: [
-        async ({ context, value }: { context: AgentContext; value: JsonValue }) =>
+        async ({ context, value }: { context: PluginContext; value: JsonValue }) =>
           await this.auto_transcribe_inbound({ context, value }),
       ],
     },
@@ -579,7 +579,7 @@ export class SoundPlugin extends BasePlugin {
    * 显式 action 集合。
    */
   readonly actions = {
-    models: createAction({
+    models: create_action({
       description: "List FED models that support ASR or TTS.",
       input_schema: {
         zod: SOUND_MODELS_INPUT_SCHEMA,
@@ -617,7 +617,7 @@ export class SoundPlugin extends BasePlugin {
         }
       },
     }),
-    asr: createAction({
+    asr: create_action({
       description:
         "Transcribe audio with a FED ASR model. Local audio paths are converted to data URLs before the FED call.",
       input_schema: {
@@ -640,7 +640,7 @@ export class SoundPlugin extends BasePlugin {
         { title: "Local audio", payload: { model: "asr-model-id", audio_path: "./input.wav" } },
         { title: "Remote audio", payload: { model: "asr-model-id", url: "https://example.com/audio.mp3" } },
       ],
-      execute: async ({ context, input }: { context: AgentContext; input: JsonValue }) => {
+      execute: async ({ context, input }: { context: PluginContext; input: JsonValue }) => {
         try {
           const result = await this.transcribe(context, normalize_asr_payload(input));
           return {
@@ -654,7 +654,7 @@ export class SoundPlugin extends BasePlugin {
         }
       },
     }),
-    tts: createAction({
+    tts: create_action({
       description:
         "Synthesize speech with a FED TTS model and return an AI SDK UIMessage containing audio.",
       input_schema: {

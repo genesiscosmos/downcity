@@ -19,9 +19,9 @@ export function extractFeishuSenderIdentity(
     return { senderId: openId, idType: "open_id" };
   }
 
-  const userId = String(data?.sender?.sender_id?.user_id || "").trim();
-  if (userId) {
-    return { senderId: userId, idType: "user_id" };
+  const user_id = String(data?.sender?.sender_id?.user_id || "").trim();
+  if (user_id) {
+    return { senderId: user_id, idType: "user_id" };
   }
 
   const unionId = String(data?.sender?.sender_id?.union_id || "").trim();

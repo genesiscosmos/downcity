@@ -32,7 +32,7 @@ agent 的稳定标识。
 它会影响 SDK session 落盘路径：
 
 ```text
-<projectRoot>/.downcity/agents/<agentId>/...
+<project_root>/.downcity/agents/<agent_id>/...
 ```
 
 推荐：
@@ -147,7 +147,7 @@ workspace.set_env({ ONLY: "ok" }); // 整体覆盖
 - `get_env()` 返回浅拷贝快照
 - `patch_env()` 中 `null` / `undefined` 表示删除该 key
 - `set_env()` 整体覆盖当前 Workspace env
-- `agent.setInstruction()` 只影响之后新建的 Session，不会回溯修改当前内存中的已有 Session
+- `agent.set_instruction()` 只影响之后新建的 Session，不会回溯修改当前内存中的已有 Session
 - Session 恢复时若没有 `instruction.md`，会从 Agent 当前 instruction 和 plugin 重新生成 system；已有 Session 可用 `session.syncshot()` 手动刷新，并用 `session.snapshot()` 持久化
 - Workspace env 与 plugin 修改会在已有 Session 的下一个 Session step 检查点提交
 - 正在进行的 provider 请求及其工具调用继续使用当前 step 已生效的 env
@@ -225,7 +225,7 @@ SDK 会为当前 `Agent` 创建独立的 plugin registry。
 - 它不会默认注册全部内建 plugin
 - 它不会复用全局 runtime 的 plugin manager
 - 同名 plugin 被重复注册时会直接报错
-- `agent.plugins` 与 `AgentContext.plugins` 会使用这份 registry
+- `agent.plugins` 与 `PluginContext.plugins` 会使用这份 registry
 - 按 Agent 的实际需要实例化对应 plugin，并将这些实例显式传入 `plugins`
 
 ## `Session`
@@ -269,14 +269,14 @@ class CustomSession extends Session {
 const agent = new Agent({
   id: "repo-helper",
   workspace: new Workspace({ path: "/path/to/project" }),
-  Session: CustomSession,
+  session_class: CustomSession,
 });
 ```
 
 关键点：
 
 - 传入的是 class，不是已经创建好的 session 实例
-- 这样 `Agent` 可以按不同 `sessionId` 创建多个 session
+- 这样 `Agent` 可以按不同 `session_id` 创建多个 session
 - Composer 自定义留在自定义 Session 类内部
 - Composer 只读取 Session 快照并组装 system、history、tools 或压缩计划，不直接持久化消息
 - `RemoteAgent` 不支持本地 Session 类，因为它只是远程 runtime 的访问器

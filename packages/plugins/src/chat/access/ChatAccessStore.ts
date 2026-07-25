@@ -10,7 +10,7 @@
 import Database from "better-sqlite3";
 import fs from "fs-extra";
 import path from "node:path";
-import { generateId } from "@downcity/agent";
+import { generate_id } from "@downcity/agent";
 import { ensure_chat_access_schema } from "@/chat/access/ChatAccessSchema.js";
 import type {
   ChatAccessEffect,
@@ -216,7 +216,7 @@ export class ChatAccessStore {
   upsert_principal(input: UpsertChatAccessPrincipalInput): ChatAccessPrincipal {
     const existing = this.get_principal_by_identity(input);
     const current_time = now_iso();
-    const principal_id = existing?.principal_id || `principal_${generateId()}`;
+    const principal_id = existing?.principal_id || `principal_${generate_id()}`;
     const first_seen_at = normalize_text(input.first_seen_at) || existing?.first_seen_at || current_time;
     const last_seen_at = normalize_text(input.last_seen_at) || current_time;
     this.database.prepare(`
@@ -259,7 +259,7 @@ export class ChatAccessStore {
   upsert_grant(input: UpsertChatAccessGrantInput): ChatAccessGrant {
     const existing = this.get_grant(input.principal_id, input.scope);
     const current_time = now_iso();
-    const grant_id = existing?.grant_id || `grant_${generateId()}`;
+    const grant_id = existing?.grant_id || `grant_${generate_id()}`;
     this.database.prepare(`
       INSERT INTO chat_access_grants (
         grant_id, principal_id, scope, effect, created_by, created_at, updated_at
@@ -336,7 +336,7 @@ export class ChatAccessStore {
       return { request: updated, created: false };
     }
 
-    const request_id = `req_${generateId()}`;
+    const request_id = `req_${generate_id()}`;
     this.database.prepare(`
       INSERT INTO chat_access_requests (
         request_id, principal_id, scope, chat_id, chat_type, status,
@@ -448,7 +448,7 @@ export class ChatAccessStore {
         decision, operator, detail_json, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      `audit_${generateId()}`,
+      `audit_${generate_id()}`,
       optional_text(input.principal_id) || null,
       optional_text(input.request_id) || null,
       normalize_text(input.action),

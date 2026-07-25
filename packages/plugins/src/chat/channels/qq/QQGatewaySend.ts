@@ -51,7 +51,7 @@ export interface SendQqMessageWithRetryParams {
   /**
    * 原始消息 ID。
    */
-  messageId: string;
+  message_id: string;
   /**
    * 文本内容。
    */
@@ -83,7 +83,7 @@ export interface SendQqMessageWithRetryParams {
   /**
    * 发送失败后触发重连的回调。
    */
-  scheduleReconnect: (reason: string, delayMs?: number) => void;
+  scheduleReconnect: (reason: string, delay_ms?: number) => void;
 }
 
 function buildQqSendRequest(params: {
@@ -102,7 +102,7 @@ function buildQqSendRequest(params: {
   /**
    * 原始消息 ID。
    */
-  messageId: string;
+  message_id: string;
   /**
    * 文本内容。
    */
@@ -116,7 +116,7 @@ function buildQqSendRequest(params: {
   const body: QQSendMessageBody = {
     content: params.text,
     msg_type: 0,
-    msg_id: params.messageId,
+    msg_id: params.message_id,
     msg_seq: params.msgSeq,
   };
 
@@ -209,7 +209,7 @@ export async function sendQqMessageWithRetry(
     apiBase: params.apiBase,
     chatId: params.chatId,
     chatType: params.chatType,
-    messageId: params.messageId,
+    message_id: params.message_id,
     text: params.text,
     msgSeq: params.msgSeq,
   });
@@ -244,7 +244,7 @@ export async function sendQqMessageWithRetry(
         maxAttempts: params.maxAttempts,
         chatType: params.chatType,
         chatId: params.chatId,
-        messageId: params.messageId,
+        message_id: params.message_id,
         error: errorText,
       });
       params.clearAccessTokenCache();

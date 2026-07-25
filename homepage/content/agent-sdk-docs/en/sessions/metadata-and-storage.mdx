@@ -8,7 +8,7 @@ description: Understand Active, Segments, cumulative Summaries, Assistant drafts
 SDK Sessions are persisted under the project directory. Applications should read and write through the Session API rather than use these files as their own database.
 
 ```text
-<projectRoot>/.downcity/agents/<agentId>/sessions/<sessionId>/
+<project_root>/.downcity/agents/<agent_id>/sessions/<session_id>/
 ├── instruction.md
 └── messages/
     ├── active.jsonl
@@ -19,7 +19,7 @@ SDK Sessions are persisted under the project directory. Applications should read
         └── 000000000901-000000001500.jsonl
 ```
 
-`agentId` is part of the storage partition. Multiple Agents in one project can use the same `sessionId` without conflict.
+`agent_id` is part of the storage partition. Multiple Agents in one project can use the same `session_id` without conflict.
 
 `instruction.md` is an optional complete system snapshot. A Session fixes its first generated system in memory by default. Local `session.snapshot()` creates or overwrites the file. `session.syncshot()` regenerates the in-memory system and also overwrites the file when it already exists. If the file is absent when restored, the Session regenerates from the Agent's current instruction and plugins; deleting the file restores that behavior.
 
@@ -118,6 +118,6 @@ When a Session starts or reopens, the SDK also checks the Assistant draft. Exist
 
 ## `meta.json`
 
-`meta.json` stores lightweight list and detail fields such as `sessionId`, `agentId`, title, model label, timestamps, message count, history bytes, and timezone. Runtime model instances are never persisted. The SDK updates these summaries as Session properties and Message state change.
+`meta.json` stores lightweight list and detail fields such as `session_id`, `agent_id`, title, model label, timestamps, message count, history bytes, and timezone. Runtime model instances are never persisted. The SDK updates these summaries as Session properties and Message state change.
 
 Archiving a Session and Compact Segments are distinct. `archive()` moves the entire Session into archived sessions storage; Compact only closes an old Active prefix under the current Session's `segments/` directory.

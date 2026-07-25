@@ -19,9 +19,9 @@ description: 从开发者视角理解 Agent、RemoteAgent 和 Session 的实际�
 大多数应用里，真正承载执行的不是 `Agent` 本身，而是下面这些方法返回的 session：
 
 - `agent.sessions.create()`
-- `agent.sessions.get(sessionId)`
+- `agent.sessions.get(session_id)`
 - `remoteAgent.sessions.create()`
-- `remoteAgent.sessions.get(sessionId)`
+- `remoteAgent.sessions.get(session_id)`
 
 ## 本地典型流程
 
@@ -72,10 +72,9 @@ await turn.finished;
 - `agent.ready()`
 - `agent.dispose()`
 - `agent.sessions`
-- `agent.setInstruction(input)`
-- `agent.getLogger()`
-- `agent.getContext()`
-- `agent.getShell()`
+- `agent.set_instruction(input)`
+- `agent.get_logger()`
+- `agent.get_shell()`
 - `agent.plugins`
 
 典型职责：
@@ -84,11 +83,11 @@ await turn.finished;
 - 在构造时自动启动 plugin lifecycle 与 ActionSchedule，必要时显式 `ready()` / `dispose()`
 - 暴露 plugin 集成入口
 - 持有 instruction、model、最终 tools、plugins 与 sessions；env 由 Workspace 持有
-- 通过 `AgentContext` 向 Plugin 与宿主投影受限能力
+- 在内部通过 `PluginContext` 只向 Plugin 投影稳定能力
 
-完整项目 config 由 CLI 等上游宿主持有，不进入 Agent。`AgentContext` 也不保存 config 或复制 Agent 状态。
+完整项目 config 由 CLI 等上游宿主持有，不进入 Agent。宿主直接依赖 Agent 的明确 facade，不接触 `PluginContext`。
 
-`agent.getLogger()` 返回当前 Agent 自己持有的 logger。独立集成代码可以调用 `getLogger(project_root?)` 创建新的隔离实例；package 不再暴露进程级全局 logger。
+`agent.get_logger()` 返回当前 Agent 自己持有的 logger。独立集成代码可以调用 `get_logger(project_root?)` 创建新的隔离实例；package 不再暴露进程级全局 logger。
 
 如果你需要 RPC 或 HTTP 暴露，请使用 [`@downcity/server`](/zh/agent-sdk-docs/local-agent/http-and-rpc) 提供的 `AgentRPC` / `AgentHTTP`。
 
@@ -121,7 +120,7 @@ await turn.finished;
 核心方法：
 
 - `session.id`
-- `session.agentId`
+- `session.agent_id`
 - `session.config`
 - `session.set(input)`
 - `session.get_info()`
@@ -184,7 +183,7 @@ await turn.finished;
 ## 什么时候用哪个方法
 
 - 需要一条全新的会话：`agent.sessions.create()`
-- 需要继续一个已知 session：`agent.sessions.get(sessionId)`
+- 需要继续一个已知 session：`agent.sessions.get(session_id)`
   - 需要做 session 切换器、历史侧边栏或第三方 session 浏览器：`agent.sessions.list()`
   - 需要归档单个不再活跃的会话：`agent.sessions.archive({ id })`
   - 需要浏览已归档的会话列表：`agent.sessions.archived(input?)`

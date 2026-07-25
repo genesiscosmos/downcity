@@ -120,7 +120,7 @@ export function buildAgentSecureSettingKey(
   agentIdInput: string,
   keyInput: string,
 ): string {
-  const agentId = normalizeNonEmptyText(agentIdInput, "agentId");
+  const agent_id = normalizeNonEmptyText(agentIdInput, "agent_id");
   const key = normalizeNonEmptyText(keyInput, "agent secure setting key");
-  return `agent:${agentId}:${key}`;
+  return `agent:${agent_id}:${key}`;
 }

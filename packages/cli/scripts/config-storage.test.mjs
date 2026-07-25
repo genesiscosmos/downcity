@@ -30,12 +30,12 @@ test("Agent 配置只从全局 DB 读取", async () => {
     platform_store.setSecureSettingJsonSync("city.agent.configs", {
       v: 1,
       configs: [{
-        projectRoot: project_root,
+        project_root: project_root,
         id: "migrated_agent",
         version: "1.0.0",
         execution: { type: "api", modelId: "model_a" },
-        createdAt: "2026-01-01T00:00:00.000Z",
-        updatedAt: "2026-01-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
       }],
     });
     platform_store.close();
@@ -43,7 +43,7 @@ test("Agent 配置只从全局 DB 读取", async () => {
     assert.equal(store.readAgentConfig(project_root).id, "migrated_agent");
 
     store.upsertAgentConfig({
-      projectRoot: project_root,
+      project_root: project_root,
       id: "db_agent",
       plugins: { chat: { queue: { maxConcurrency: 3 } } },
     });
@@ -55,13 +55,13 @@ test("Agent 配置只从全局 DB 读取", async () => {
 
     const second_project_root = path.join(platform_root, "second-agent");
     store.upsertAgentConfig({
-      projectRoot: second_project_root,
+      project_root: second_project_root,
       id: "second_agent",
       version: "1.0.0",
       execution: { type: "api", modelId: "model_b" },
     });
     store.upsertAgentConfig({
-      projectRoot: project_root,
+      project_root: project_root,
       start: { port: 7001 },
     });
     assert.equal(store.readAgentConfig(second_project_root).execution.modelId, "model_b");
@@ -75,12 +75,12 @@ test("Agent 配置只从全局 DB 读取", async () => {
         {
           ...store.readAgentConfig(project_root),
           id: "newer_legacy_daemon_update",
-          updatedAt: "2099-01-01T00:00:00.000Z",
+          updated_at: "2099-01-01T00:00:00.000Z",
         },
         {
           ...store.readAgentConfig(second_project_root),
           id: "stale_legacy_daemon_value",
-          updatedAt: "2000-01-01T00:00:00.000Z",
+          updated_at: "2000-01-01T00:00:00.000Z",
         },
       ],
     });

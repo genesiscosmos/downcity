@@ -155,8 +155,8 @@ function summarizeResponseBodyForDebug(body: unknown): JsonObject {
 /**
  * 汇总单个 step 的关键信号，便于定位“为什么没有继续下一轮”。
  */
-export function summarizeStepForDebug(stepResult: unknown): JsonObject {
-  const record = toJsonObject(stepResult) || {};
+export function summarizeStepForDebug(step_result: unknown): JsonObject {
+  const record = toJsonObject(step_result) || {};
   const usage = toJsonObject(record.usage);
   const response = toJsonObject(record.response);
   const toolCalls = Array.isArray(record.toolCalls) ? record.toolCalls : [];
@@ -241,8 +241,8 @@ export function mergeAssistantUiMessages(
     metadata: {
       v: incomingMetadata?.v ?? baseMetadata?.v ?? 1,
       ts: incomingMetadata?.ts ?? baseMetadata?.ts ?? Date.now(),
-      sessionId:
-        incomingMetadata?.sessionId ?? baseMetadata?.sessionId ?? "",
+      session_id:
+        incomingMetadata?.session_id ?? baseMetadata?.session_id ?? "",
       ...(baseMetadata || {}),
       ...(incomingMetadata || {}),
     },
@@ -256,14 +256,14 @@ export function mergeAssistantUiMessages(
 function pickIncompleteToolParts(
   message: SessionMessageRecordV1 | null | undefined,
 ): Array<{
-  toolName: string;
+  tool_name: string;
   state: string;
 }> {
   const parts = Array.isArray(message?.parts) ? message.parts : [];
   return parts
     .filter(isToolUIPart)
     .map((part) => ({
-      toolName: String(getToolName(part) || "unknown_tool"),
+      tool_name: String(getToolName(part) || "unknown_tool"),
       state:
         typeof toJsonObject(part)?.state === "string"
           ? String(toJsonObject(part)?.state)
@@ -303,13 +303,13 @@ export function buildIncompleteResponseRecoveryNudge(
  * 检测“响应被中断但模型没有正常完成”的情况。
  */
 export function detectIncompleteResponse(params: {
-  stepResult: unknown;
-  assistantMessage: SessionMessageRecordV1 | null | undefined;
+  step_result: unknown;
+  assistant_message: SessionMessageRecordV1 | null | undefined;
 }): {
   reason: string;
   details: JsonObject;
 } | null {
-  const record = toJsonObject(params.stepResult) || {};
+  const record = toJsonObject(params.step_result) || {};
   const finishReason =
     typeof record.finishReason === "string" ? record.finishReason : "";
   const rawFinishReason =
@@ -318,7 +318,7 @@ export function detectIncompleteResponse(params: {
   const toolCalls = Array.isArray(record.toolCalls) ? record.toolCalls : [];
   const toolResults = Array.isArray(record.toolResults) ? record.toolResults : [];
   const usage = toJsonObject(record.usage);
-  const incompleteToolParts = pickIncompleteToolParts(params.assistantMessage);
+  const incompleteToolParts = pickIncompleteToolParts(params.assistant_message);
 
   if (incompleteToolParts.length > 0) {
     return {
@@ -381,9 +381,9 @@ export function detectIncompleteResponse(params: {
  * 检测“只有口头计划，没有真正执行”的续跑信号。
  */
 export function detectTextOnlyContinuationReason(
-  stepResult: unknown,
+  step_result: unknown,
 ): string | null {
-  const record = toJsonObject(stepResult) || {};
+  const record = toJsonObject(step_result) || {};
   const finishReason =
     typeof record.finishReason === "string" ? record.finishReason : "";
   const text = typeof record.text === "string" ? record.text.trim() : "";

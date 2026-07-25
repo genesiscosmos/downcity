@@ -6,11 +6,11 @@
  * - 业务动作通过 handlers 注入，保持 `ContactPlugin` 类本身更薄。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { JsonObject, JsonValue } from "@downcity/agent";
 import type { PluginActions } from "@downcity/agent";
 import type { PluginRunContext } from "@downcity/agent";
-import { createAction } from "@downcity/agent";
+import { create_action } from "@downcity/agent";
 import { z } from "zod";
 import type {
   ContactApproveCommandPayload,
@@ -46,7 +46,7 @@ export type ContactActionHandlers = {
    * 生成一次性联系码。
    */
   link: (
-    context: AgentContext,
+    context: PluginContext,
     payload: ContactLinkCommandPayload,
     run_context?: PluginRunContext,
   ) => Promise<JsonValue>;
@@ -54,47 +54,47 @@ export type ContactActionHandlers = {
    * 使用联系码建立 contact。
    */
   approve: (
-    context: AgentContext,
+    context: PluginContext,
     payload: ContactApproveCommandPayload,
     run_context?: PluginRunContext,
   ) => Promise<JsonValue>;
   /**
    * 检查 contact 或 endpoint 可用性。
    */
-  check: (context: AgentContext, payload: ContactCheckCommandPayload) => Promise<JsonValue>;
+  check: (context: PluginContext, payload: ContactCheckCommandPayload) => Promise<JsonValue>;
   /**
    * 与 contact 对话或读取对话历史。
    */
-  chat: (context: AgentContext, payload: ContactChatCommandPayload) => Promise<JsonValue>;
+  chat: (context: PluginContext, payload: ContactChatCommandPayload) => Promise<JsonValue>;
   /**
    * 向 contact 分享内容。
    */
-  share: (context: AgentContext, payload: ContactShareCommandPayload) => Promise<JsonValue>;
+  share: (context: PluginContext, payload: ContactShareCommandPayload) => Promise<JsonValue>;
   /**
    * 处理远端 ping 请求。
    */
   remotePing: (
-    context: AgentContext,
+    context: PluginContext,
     payload: { token?: string },
   ) => Promise<ContactPingResponse>;
   /**
    * 处理远端 approve 请求。
    */
   remoteApprove: (
-    context: AgentContext,
+    context: PluginContext,
     request: ContactApproveLinkRequest,
   ) => Promise<ContactApproveLinkResponse>;
   /**
    * 处理远端 confirm 请求。
    */
   remoteConfirm: (
-    context: AgentContext,
+    context: PluginContext,
     request: ContactConfirmRequest,
   ) => Promise<ContactConfirmResponse>;
   /**
    * 处理远端 share 请求。
    */
-  remoteShare: (context: AgentContext, rawPayload: JsonValue) => Promise<JsonValue>;
+  remoteShare: (context: PluginContext, rawPayload: JsonValue) => Promise<JsonValue>;
 };
 
 /**
@@ -102,7 +102,7 @@ export type ContactActionHandlers = {
  */
 export function createContactActions(handlers: ContactActionHandlers): PluginActions {
   return {
-    link: createAction({
+    link: create_action({
       description: "Create a one-time contact link code for another agent to approve.",
       input_schema: {
         zod: z.object({ ttlSeconds: z.number().optional() }),
@@ -119,7 +119,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
         configure(command) {
           command.option("--ttl-seconds <seconds>", "Link expiration in seconds, defaulting to 600.", Number);
         },
-        mapInput({ opts }) {
+        map_input({ opts }) {
           const payload: JsonObject = {};
           if (typeof opts.ttlSeconds === "number") payload.ttlSeconds = opts.ttlSeconds;
           return payload;
@@ -134,7 +134,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
         ),
       }),
     }),
-    approve: createAction({
+    approve: create_action({
       description: "Use a contact link code to establish a peer-to-peer contact.",
       input_schema: {
         zod: z.object({
@@ -160,7 +160,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
             .argument("<code>")
             .option("--name <alias>", "Local contact alias.");
         },
-        mapInput({ args, opts }) {
+        map_input({ args, opts }) {
           const code = String(args[0] || "").trim();
           if (!code) throw new Error("Missing link code");
           const payload: JsonObject = { code };
@@ -177,7 +177,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
         ),
       }),
     }),
-    list: createAction({
+    list: create_action({
       description: "List established contacts.",
       input_schema: {
         zod: z.object({}).passthrough(),
@@ -186,18 +186,18 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
       examples: [{ title: "List contacts", payload: {} }],
       command: {
         description: "List established contacts.",
-        mapInput() {
+        map_input() {
           return {};
         },
       },
       execute: async (params) => ({
         success: true,
         data: {
-          contacts: await listContacts(params.context.rootPath),
+          contacts: await listContacts(params.context.workspace_path),
         } as unknown as JsonValue,
       }),
     }),
-    check: createAction({
+    check: create_action({
       description: "Check whether a contact or endpoint is currently online and reachable.",
       input_schema: {
         zod: z.object({
@@ -223,7 +223,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
             .argument("[target]")
             .option("--to <endpoint>", "Directly check an unsaved endpoint.");
         },
-        mapInput({ args, opts }) {
+        map_input({ args, opts }) {
           const payload: JsonObject = {};
           const target = String(args[0] || "").trim();
           if (target) payload.target = target;
@@ -239,7 +239,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
         ),
       }),
     }),
-    chat: createAction({
+    chat: create_action({
       description: "Chat with a contact in its long-lived conversation thread, or read conversation history.",
       input_schema: {
         zod: z.object({
@@ -264,7 +264,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
         configure(command) {
           command.requiredOption("--to <contact>", "Target contact.").argument("[message...]");
         },
-        mapInput({ args, opts }) {
+        map_input({ args, opts }) {
           const payload: JsonObject = {
             to: String(opts.to || "").trim(),
           };
@@ -281,7 +281,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
         ),
       }),
     }),
-    share: createAction({
+    share: create_action({
       description: "Share text, links, files, or directories with a contact.",
       input_schema: {
         zod: z.object({
@@ -316,7 +316,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
             .option("--link <url...>", "Links to share.")
             .argument("[paths...]");
         },
-        mapInput({ args, opts }) {
+        map_input({ args, opts }) {
           const links = Array.isArray(opts.link)
             ? opts.link.map((item) => String(item || "").trim()).filter(Boolean)
             : typeof opts.link === "string"
@@ -338,7 +338,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
         ),
       }),
     }),
-    inbox: createAction({
+    inbox: create_action({
       description: "View the contact inbox.",
       input_schema: {
         zod: z.object({}).passthrough(),
@@ -347,18 +347,18 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
       examples: [{ title: "View inbox", payload: {} }],
       command: {
         description: "View the contact inbox.",
-        mapInput() {
+        map_input() {
           return {};
         },
       },
       execute: async (params) => ({
         success: true,
         data: {
-          shares: await listContactInboxShares(params.context.rootPath),
+          shares: await listContactInboxShares(params.context.workspace_path),
         } as unknown as JsonValue,
       }),
     }),
-    receive: createAction({
+    receive: create_action({
       description: "Receive a share from the inbox.",
       input_schema: {
         zod: z.object({ shareId: z.string() }),
@@ -376,7 +376,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
         configure(command) {
           command.argument("<shareId>");
         },
-        mapInput({ args }) {
+        map_input({ args }) {
           const shareId = String(args[0] || "").trim();
           if (!shareId) throw new Error("Missing shareId");
           return { shareId };
@@ -385,12 +385,12 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
       execute: async (params) => ({
         success: true,
         data: (await receiveShare({
-          projectRoot: params.context.rootPath,
+          project_root: params.context.workspace_path,
           shareId: (params.input as unknown as ContactReceiveCommandPayload).shareId,
         })) as unknown as JsonValue,
       }),
     }),
-    remoteping: createAction({
+    remoteping: create_action({
       description: "Handle a remote ping request (internal endpoint).",
       execute: async (params) => ({
         success: true,
@@ -400,7 +400,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
         )) as unknown as JsonValue,
       }),
     }),
-    remoteapprove: createAction({
+    remoteapprove: create_action({
       description: "Handle a remote approve request (internal endpoint).",
       execute: async (params) => ({
         success: true,
@@ -410,7 +410,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
         )) as unknown as JsonValue,
       }),
     }),
-    remoteconfirm: createAction({
+    remoteconfirm: create_action({
       description: "Handle a remote confirm request (internal endpoint).",
       execute: async (params) => ({
         success: true,
@@ -420,7 +420,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
         )) as unknown as JsonValue,
       }),
     }),
-    remotechat: createAction({
+    remotechat: create_action({
       description: "Handle a remote chat request (internal endpoint).",
       execute: async (params) => {
         const payload = readContactObject(params.input);
@@ -435,7 +435,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
         };
       },
     }),
-    remoteshare: createAction({
+    remoteshare: create_action({
       description: "Handle a remote share request (internal endpoint).",
       execute: async (params) => ({
         success: true,

@@ -46,13 +46,13 @@ Core fields:
 
 Core fields:
 
-- `turnId`
+- `turn_id`
 - `success`
 - `error`
 - `text`
-- `assistantMessage` (usually available on local sessions)
+- `assistant_message` (usually available on local sessions)
 
-For most users, `text` is the field they consume most directly. Use `assistantMessage` when you need the final structured assistant payload, and the `SessionMutation` values from `session.subscribe()` for real-time UI updates before `finished` resolves.
+For most users, `text` is the field they consume most directly. Use `assistant_message` when you need the final structured assistant payload, and the `SessionMutation` values from `session.subscribe()` for real-time UI updates before `finished` resolves.
 
 ## Further reading
 

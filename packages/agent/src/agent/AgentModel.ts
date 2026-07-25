@@ -20,7 +20,7 @@ export type AgentModel = LanguageModel;
 /**
  * 将 Agent 可接受的模型输入归一为 AI SDK LanguageModel。
  */
-export function normalizeAgentModel(model: AgentModel): LanguageModel {
+export function normalize_agent_model(model: AgentModel): LanguageModel {
   return model;
 }
 
@@ -42,7 +42,7 @@ export function read_agent_model_context_window(
 /**
  * 从 Agent 模型输入推导展示标签。
  */
-export function inferAgentModelLabel(model: AgentModel | undefined): string | undefined {
+export function infer_agent_model_label(model: AgentModel | undefined): string | undefined {
   if (!model) return undefined;
   if (isCityModel(model)) return model.name || model.id;
   if (typeof model !== "object") return undefined;

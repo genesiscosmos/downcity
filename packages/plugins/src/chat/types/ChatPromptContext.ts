@@ -14,22 +14,22 @@ import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
  */
 export interface ChatEnvironmentPromptInput {
   /**
-   * 当前会话对应的 sessionId。
+   * 当前会话对应的 session_id。
    *
    * 说明（中文）
-   * - 对外统一使用 `sessionId` 语义。
+   * - 对外统一使用 `session_id` 语义。
    * - chat plugin runtime 内部统一按 session 语义路由与持久化。
    */
-  sessionId: string;
+  session_id: string;
 
   /**
-   * 当前 chatKey。
+   * 当前 chat_key。
    *
    * 说明（中文）
-   * - chat plugin runtime 里通常与 `sessionId` 一致。
+   * - chat plugin runtime 里通常与 `session_id` 一致。
    * - 保留独立字段，避免未来路由键语义调整时影响调用方。
    */
-  chatKey: string;
+  chat_key: string;
 
   /**
    * 当前消息来源渠道。
@@ -84,7 +84,7 @@ export interface QueuedUserInfoInput {
    * - 这是本次入站事件对应的平台消息标识。
    * - 保留在 user/request info 中，便于 reply/react 等操作定位本轮输入。
    */
-  messageId?: string;
+  message_id?: string;
 
   /**
    * 当前发言用户 ID。
@@ -92,7 +92,7 @@ export interface QueuedUserInfoInput {
    * 说明（中文）
    * - 来自平台侧用户标识，可能为空或不可得。
    */
-  userId?: string;
+  user_id?: string;
 
   /**
    * 当前发言用户名或昵称。

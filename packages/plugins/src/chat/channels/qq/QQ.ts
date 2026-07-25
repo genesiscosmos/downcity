@@ -9,7 +9,7 @@
  */
 
 import { BaseChatChannel } from "@/chat/channels/BaseChatChannel.js";
-import { parseChatMessageMarkup } from "@downcity/agent";
+import { parse_chat_message_markup } from "@downcity/agent";
 import { QqInboundDedupeStore } from "./QQInboundDedupe.js";
 import { getQqEventCaptureConfig } from "./QQEventCapture.js";
 import { QQGatewayClient } from "./QQGatewayClient.js";
@@ -28,7 +28,7 @@ import type {
   ChannelChatKeyParams,
   ChannelSendTextParams,
 } from "@/chat/channels/BaseChatChannel.js";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { JsonObject } from "@downcity/agent";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import type { QQConfig, QQMessageData } from "@/chat/channels/qq/types/QqChannel.js";
@@ -48,7 +48,7 @@ export class QQBot extends BaseChatChannel {
   private botDisplayName = "";
 
   constructor(
-    context: AgentContext,
+    context: PluginContext,
     appId: string,
     appSecret: string,
     useSandbox: boolean = false,
@@ -90,26 +90,26 @@ export class QQBot extends BaseChatChannel {
   protected async sendTextToPlatform(
     params: ChannelSendTextParams,
   ): Promise<void> {
-    const parsedMessage = parseChatMessageMarkup(String(params.text ?? ""));
+    const parsedMessage = parse_chat_message_markup(String(params.text ?? ""));
     if (parsedMessage.files.length > 0) {
       throw new Error("QQ outbound attachment is not supported yet.");
     }
 
     const chatType = typeof params.chatType === "string" ? params.chatType : "";
-    const messageId =
-      typeof params.messageId === "string" ? params.messageId : "";
-    if (!chatType || !messageId) {
-      throw new Error("QQ requires chatType + messageId to send a reply");
+    const message_id =
+      typeof params.message_id === "string" ? params.message_id : "";
+    if (!chatType || !message_id) {
+      throw new Error("QQ requires chatType + message_id to send a reply");
     }
 
-    const key = `${chatType}:${params.chatId}:${messageId}`;
+    const key = `${chatType}:${params.chatId}:${message_id}`;
     const nextSeq = (this.msgSeqByMessageKey.get(key) ?? 0) + 1;
     this.msgSeqByMessageKey.set(key, nextSeq);
     await this.gateway.sendMessage(
       params.chatId,
       chatType,
-      messageId,
-      parsedMessage.bodyText,
+      message_id,
+      parsedMessage.body_text,
       nextSeq,
     );
   }
@@ -278,8 +278,8 @@ export class QQBot extends BaseChatChannel {
       },
       buildAccessBlockedText: (params) =>
         this.buildAccessBlockedText(params),
-      shouldSkipDuplicatedInboundMessage: async (eventType, messageId) =>
-        await this.shouldSkipDuplicatedInboundMessage(eventType, messageId),
+      shouldSkipDuplicatedInboundMessage: async (eventType, message_id) =>
+        await this.shouldSkipDuplicatedInboundMessage(eventType, message_id),
       enqueueAuditMessage: async (params) => {
         await this.enqueueAuditMessage(params);
       },
@@ -287,7 +287,7 @@ export class QQBot extends BaseChatChannel {
         await this.handleCommand(
           params.chatId,
           params.chatType,
-          params.messageId,
+          params.message_id,
           params.command,
         );
       },
@@ -295,7 +295,7 @@ export class QQBot extends BaseChatChannel {
         await this.executeAndReply(
           params.chatId,
           params.chatType,
-          params.messageId,
+          params.message_id,
           params.instructions,
           params.actor,
           params.chatTitle,
@@ -310,19 +310,19 @@ export class QQBot extends BaseChatChannel {
    */
   private async shouldSkipDuplicatedInboundMessage(
     eventType: string,
-    messageId: string | undefined,
+    message_id: string | undefined,
   ): Promise<boolean> {
-    const id = typeof messageId === "string" ? messageId.trim() : "";
+    const id = typeof message_id === "string" ? message_id.trim() : "";
     if (!id) return false;
     const duplicated = await this.inboundDedupeStore.markAndCheckDuplicate({
       eventType,
-      messageId: id,
+      message_id: id,
     });
     if (!duplicated) return false;
 
     this.logger.info("忽略重复入站消息", {
       eventType,
-      messageId: id,
+      message_id: id,
     });
     return true;
   }
@@ -333,7 +333,7 @@ export class QQBot extends BaseChatChannel {
   private async handleCommand(
     chatId: string,
     chatType: string,
-    messageId: string,
+    message_id: string,
     command: string,
   ): Promise<void> {
     this.logger.info(`收到命令: ${command}`);
@@ -344,7 +344,7 @@ export class QQBot extends BaseChatChannel {
         chatType,
       });
     }
-    await this.gateway.sendMessage(chatId, chatType, messageId, action.responseText);
+    await this.gateway.sendMessage(chatId, chatType, message_id, action.responseText);
   }
 
   /**
@@ -353,7 +353,7 @@ export class QQBot extends BaseChatChannel {
   private async executeAndReply(
     chatId: string,
     chatType: string,
-    messageId: string,
+    message_id: string,
     instructions: string,
     actor?: QqMessageActor,
     chatTitle?: string,
@@ -363,8 +363,8 @@ export class QQBot extends BaseChatChannel {
         chatId,
         text: instructions,
         chatType,
-        messageId,
-        ...(actor?.userId ? { userId: actor.userId } : {}),
+        message_id,
+        ...(actor?.user_id ? { user_id: actor.user_id } : {}),
         ...(actor?.username ? { username: actor.username } : {}),
         ...(chatTitle ? { chatTitle } : {}),
       });
@@ -372,7 +372,7 @@ export class QQBot extends BaseChatChannel {
       await this.gateway.sendMessage(
         chatId,
         chatType,
-        messageId,
+        message_id,
         `❌ 执行错误: ${String(error)}`,
         1,
       );
@@ -385,7 +385,7 @@ export class QQBot extends BaseChatChannel {
  */
 export async function createQQBot(
   config: QQConfig,
-  context: AgentContext,
+  context: PluginContext,
 ): Promise<QQBot | null> {
   if (!config.enabled || !config.appId || !config.appSecret) {
     return null;

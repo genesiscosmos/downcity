@@ -8,7 +8,7 @@
 
 import path from "node:path";
 import type { ShipTaskStatus } from "./types/Task.js";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { PluginRunContext } from "@downcity/agent";
 import type { JsonValue } from "@downcity/agent";
 import {
@@ -95,10 +95,10 @@ function buildDefaultTaskBody(): string {
 
 
 export async function listTaskDefinitions(params: {
-  projectRoot: string;
+  project_root: string;
   status?: ShipTaskStatus;
 }): Promise<TaskListResponse> {
-  const root = path.resolve(params.projectRoot);
+  const root = path.resolve(params.project_root);
   const normalizedStatus = normalizeTaskStatus(params.status);
 
   const tasks = await listTasks(root);
@@ -116,7 +116,7 @@ export async function listTaskDefinitions(params: {
         : {}),
       when: task.when,
       status: task.status,
-      sessionId: task.sessionId,
+      session_id: task.session_id,
       kind: task.kind || "agent",
       ...(task.kind === "agent" ? { review: Boolean(task.review) } : {}),
       taskMdPath: task.taskMdPath,
@@ -126,10 +126,10 @@ export async function listTaskDefinitions(params: {
 }
 
 export async function createTaskDefinition(params: {
-  projectRoot: string;
+  project_root: string;
   request: TaskCreateRequest;
 }): Promise<TaskCreateResponse> {
-  const root = path.resolve(params.projectRoot);
+  const root = path.resolve(params.project_root);
   const req = params.request;
 
   const title = String(req.title || "").trim();
@@ -146,12 +146,12 @@ export async function createTaskDefinition(params: {
     };
   }
   const whenNormalized = normalizeTaskWhen(String(req.when || "@manual").trim() || "@manual");
-  const sessionId = String(req.sessionId || "").trim();
+  const session_id = String(req.session_id || "").trim();
   const kind = normalizeTaskKind(req.kind);
 
   if (!title) return { success: false, error: "Missing title" };
   if (!description) return { success: false, error: "Missing description" };
-  if (!sessionId) return { success: false, error: "Missing sessionId" };
+  if (!session_id) return { success: false, error: "Missing session_id" };
   if (!whenNormalized.ok) return { success: false, error: whenNormalized.error };
 
   const status = resolveTaskStatus(req.status, "enabled");
@@ -178,13 +178,13 @@ export async function createTaskDefinition(params: {
   try {
     const written = await writeTask({
       taskId: targetTaskId,
-      projectRoot: root,
+      project_root: root,
       overwrite: Boolean(req.overwrite) || Boolean(duplicated),
       frontmatter: {
         title,
         description,
         when: whenNormalized.value,
-        sessionId,
+        session_id,
         kind,
         ...(kind === "agent" && req.review === true ? { review: true } : {}),
         status,
@@ -206,15 +206,15 @@ export async function createTaskDefinition(params: {
 }
 
 export async function updateTaskDefinition(params: {
-  projectRoot: string;
+  project_root: string;
   request: TaskUpdateRequest;
 }): Promise<TaskUpdateResponse> {
-  const root = path.resolve(params.projectRoot);
+  const root = path.resolve(params.project_root);
   const req = params.request;
   const title = String(req.title || "").trim();
   let taskId = "";
   try {
-    taskId = await resolveTaskIdByTitle({ projectRoot: root, title });
+    taskId = await resolveTaskIdByTitle({ project_root: root, title });
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -229,7 +229,7 @@ export async function updateTaskDefinition(params: {
 
   try {
     const current = await readTask({
-      projectRoot: root,
+      project_root: root,
       taskId,
     });
 
@@ -260,9 +260,9 @@ export async function updateTaskDefinition(params: {
     const whenNormalized = normalizeTaskWhen(whenInput);
     if (!whenNormalized.ok) return { success: false, error: whenNormalized.error };
 
-    const sessionId =
-      typeof req.sessionId === "string" ? req.sessionId.trim() : current.frontmatter.sessionId;
-    if (!sessionId) return { success: false, error: "sessionId cannot be empty" };
+    const session_id =
+      typeof req.session_id === "string" ? req.session_id.trim() : current.frontmatter.session_id;
+    if (!session_id) return { success: false, error: "session_id cannot be empty" };
     const kind = normalizeTaskKind(
       req.kind === undefined ? current.frontmatter.kind : req.kind,
     );
@@ -291,14 +291,14 @@ export async function updateTaskDefinition(params: {
         : current.body;
 
     const written = await writeTask({
-      projectRoot: root,
+      project_root: root,
       taskId,
       overwrite: true,
       frontmatter: {
         title: nextTitle,
         description,
         when: whenNormalized.value,
-        sessionId,
+        session_id,
         kind,
         ...(kind === "agent" && review ? { review: true } : {}),
         status,
@@ -320,16 +320,16 @@ export async function updateTaskDefinition(params: {
 }
 
 export async function runTaskDefinition(params: {
-  context: AgentContext;
-  projectRoot: string;
+  context: PluginContext;
+  project_root: string;
   request: TaskRunRequest;
   run_context?: PluginRunContext;
 }): Promise<TaskRunResponse> {
-  const root = path.resolve(params.projectRoot);
+  const root = path.resolve(params.project_root);
   const title = String(params.request.title || "").trim();
   let taskId = "";
   try {
-    taskId = await resolveTaskIdByTitle({ projectRoot: root, title });
+    taskId = await resolveTaskIdByTitle({ project_root: root, title });
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -343,7 +343,7 @@ export async function runTaskDefinition(params: {
     // 关键点（中文）：run 改为“异步受理”，先做存在性校验，再后台执行。
     await readTask({
       taskId,
-      projectRoot: root,
+      project_root: root,
     });
 
     params.context.logger.info(
@@ -358,15 +358,15 @@ export async function runTaskDefinition(params: {
     const executionId = `${taskId}:${Date.now()}`;
     void runTaskNow({
       context: params.context,
-      projectRoot: root,
+      project_root: root,
       taskId,
       trigger,
       executionId,
       ...(params.run_context?.workspace_env
         ? { workspace_env: { ...params.run_context.workspace_env } }
         : {}),
-      ...(params.run_context?.agentSystems
-        ? { agent_systems: [...params.run_context.agentSystems] }
+      ...(params.run_context?.agent_systems
+        ? { agent_systems: [...params.run_context.agent_systems] }
         : {}),
     })
       .then((result) => {
@@ -417,14 +417,14 @@ export async function runTaskDefinition(params: {
 }
 
 export async function setTaskStatus(params: {
-  projectRoot: string;
+  project_root: string;
   request: TaskSetStatusRequest;
 }): Promise<TaskSetStatusResponse> {
-  const root = path.resolve(params.projectRoot);
+  const root = path.resolve(params.project_root);
   const title = String(params.request.title || "").trim();
   let taskId = "";
   try {
-    taskId = await resolveTaskIdByTitle({ projectRoot: root, title });
+    taskId = await resolveTaskIdByTitle({ project_root: root, title });
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -439,12 +439,12 @@ export async function setTaskStatus(params: {
 
   try {
     const task = await readTask({
-      projectRoot: root,
+      project_root: root,
       taskId,
     });
 
     await writeTask({
-      projectRoot: root,
+      project_root: root,
       taskId,
       overwrite: true,
       frontmatter: {
@@ -468,21 +468,21 @@ export async function setTaskStatus(params: {
 }
 
 export async function deleteTaskDefinition(params: {
-  projectRoot: string;
+  project_root: string;
   request: TaskDeleteRequest;
 }): Promise<TaskDeleteResponse> {
-  const root = path.resolve(params.projectRoot);
+  const root = path.resolve(params.project_root);
   const title = String(params.request.title || "").trim();
   let taskId = "";
   try {
-    taskId = await resolveTaskIdByTitle({ projectRoot: root, title });
+    taskId = await resolveTaskIdByTitle({ project_root: root, title });
   } catch (error) {
     return { success: false, error: String(error) };
   }
 
   try {
     const deleted = await deleteTask({
-      projectRoot: root,
+      project_root: root,
       taskId,
     });
     return {

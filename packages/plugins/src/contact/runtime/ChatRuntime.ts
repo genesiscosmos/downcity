@@ -6,7 +6,7 @@
  * - 远端收到 chat 后运行本地 agent session，并返回 assistant 文本。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { ContactChatResponse } from "@/contact/types/ContactChat.js";
 import type { SessionRecordV1 } from "@downcity/agent";
 import {
@@ -36,7 +36,7 @@ export async function receiveContactChatMessage(params: {
   /**
    * 当前 agent context。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * 入站 contact token。
    */
@@ -46,7 +46,7 @@ export async function receiveContactChatMessage(params: {
    */
   message: string;
 }): Promise<ContactChatResponse> {
-  const contact = await findContactByInboundToken(params.context.rootPath, params.token);
+  const contact = await findContactByInboundToken(params.context.workspace_path, params.token);
   if (!contact || contact.status !== "trusted") {
     return {
       success: false,
@@ -57,22 +57,22 @@ export async function receiveContactChatMessage(params: {
   }
 
   const now = Date.now();
-  await appendContactMessage(params.context.rootPath, contact.id, {
+  await appendContactMessage(params.context.workspace_path, contact.id, {
     role: "remote",
     text: params.message,
-    createdAt: now,
+    created_at: now,
   });
 
-  const sessionId = `contact_${contact.id}`;
-  const turn = await params.context.sessions.runtime(sessionId).prompt({
+  const session_id = `contact_${contact.id}`;
+  const turn = await params.context.sessions.runtime(session_id).prompt({
     query: params.message,
   });
   const result = await turn.finished;
-  const reply = extractMessageText(result.assistantMessage);
-  await appendContactMessage(params.context.rootPath, contact.id, {
+  const reply = extractMessageText(result.assistant_message);
+  await appendContactMessage(params.context.workspace_path, contact.id, {
     role: "local",
     text: reply,
-    createdAt: Date.now(),
+    created_at: Date.now(),
   });
 
   return {

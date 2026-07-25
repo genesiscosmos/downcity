@@ -6,7 +6,7 @@
  */
 export interface QqInboundDedupeSnapshotV1 {
   v: 1;
-  updatedAt: number;
+  updated_at: number;
   ids: string[];
 }
 

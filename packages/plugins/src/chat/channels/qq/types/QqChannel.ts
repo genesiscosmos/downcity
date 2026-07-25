@@ -400,7 +400,7 @@ export interface QqActorIdentity {
   /**
    * 归一化后的用户 ID。
    */
-  userId?: string;
+  user_id?: string;
   /**
    * 归一化后的展示名。
    */

@@ -9,37 +9,37 @@
 
 import type { Plugin } from "@/types/plugin/PluginDefinition.js";
 import type { PluginAvailability, PluginView } from "@/types/plugin/PluginRuntime.js";
-import type { AgentContext } from "@/agent/AgentContext.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 
 /**
  * 判断 plugin 是否声明了运行时生命周期。
  */
-export function hasPluginLifecycle(plugin: Plugin): boolean {
+export function has_plugin_lifecycle(plugin: Plugin): boolean {
   return Boolean(plugin.lifecycle);
 }
 
 /**
  * 过滤出声明了运行时生命周期的 plugin。
  */
-export function listPluginsWithLifecycle<T extends Plugin>(plugins: Iterable<T>): T[] {
-  return [...plugins].filter((plugin) => hasPluginLifecycle(plugin));
+export function list_plugins_with_lifecycle<T extends Plugin>(plugins: Iterable<T>): T[] {
+  return [...plugins].filter((plugin) => has_plugin_lifecycle(plugin));
 }
 
 /**
  * 过滤出没有运行时生命周期、可直接执行 action 的 plugin。
  */
-export function listPluginsWithoutLifecycle<T extends Plugin>(plugins: Iterable<T>): T[] {
-  return [...plugins].filter((plugin) => !hasPluginLifecycle(plugin));
+export function list_plugins_without_lifecycle<T extends Plugin>(plugins: Iterable<T>): T[] {
+  return [...plugins].filter((plugin) => !has_plugin_lifecycle(plugin));
 }
 
 /**
  * 按名称查找 plugin。
  */
-export function findPluginByName<T extends Plugin>(
+export function find_plugin_by_name<T extends Plugin>(
   plugins: Iterable<T>,
-  pluginName: string,
+  plugin_name: string,
 ): T | null {
-  const key = String(pluginName || "").trim();
+  const key = String(plugin_name || "").trim();
   if (!key) return null;
   return [...plugins].find((plugin) => plugin.name === key) || null;
 }
@@ -47,7 +47,7 @@ export function findPluginByName<T extends Plugin>(
 /**
  * 将 plugin 定义转换为目录视图。
  */
-export function toPluginView(plugin: Plugin): PluginView {
+export function to_plugin_view(plugin: Plugin): PluginView {
   return {
     name: plugin.name,
     title: String(plugin.title || plugin.name || "").trim(),
@@ -67,17 +67,17 @@ export function toPluginView(plugin: Plugin): PluginView {
     resolves: Object.keys(plugin.resolves || {}).sort((left, right) =>
       left.localeCompare(right),
     ),
-    hasSystem: typeof plugin.system === "function",
-    hasAvailability: typeof plugin.availability === "function",
+    has_system: typeof plugin.system === "function",
+    has_availability: typeof plugin.availability === "function",
   };
 }
 
 /**
  * 列出 plugin 目录视图。
  */
-export function listPluginViews(plugins: Iterable<Plugin>): PluginView[] {
+export function list_plugin_views(plugins: Iterable<Plugin>): PluginView[] {
   return [...plugins]
-    .map((plugin) => toPluginView(plugin))
+    .map((plugin) => to_plugin_view(plugin))
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
@@ -88,18 +88,18 @@ export function listPluginViews(plugins: Iterable<Plugin>): PluginView[] {
  * - 传入 context 时会调用 plugin 自己的 availability。
  * - 未传 context 时只返回静态目录说明，适合 Console 或 CLI 的目录回退展示。
  */
-export async function resolvePluginAvailability(params: {
+export async function resolve_plugin_availability(params: {
   plugins: Iterable<Plugin>;
-  pluginName: string;
-  context?: AgentContext;
+  plugin_name: string;
+  context?: PluginContext;
   agentError?: string;
 }): Promise<PluginAvailability> {
-  const plugin = findPluginByName(params.plugins, params.pluginName);
+  const plugin = find_plugin_by_name(params.plugins, params.plugin_name);
   if (!plugin) {
     return {
       enabled: false,
       available: false,
-      reasons: [`Unknown plugin: ${params.pluginName}`],
+      reasons: [`Unknown plugin: ${params.plugin_name}`],
     };
   }
 
@@ -128,17 +128,17 @@ export async function resolvePluginAvailability(params: {
 /**
  * 同步构建静态 plugin 可用性视图。
  */
-export function buildStaticPluginAvailability(params: {
+export function build_static_plugin_availability(params: {
   plugins: Iterable<Plugin>;
-  pluginName: string;
+  plugin_name: string;
   agentError?: string;
 }): PluginAvailability {
-  const plugin = findPluginByName(params.plugins, params.pluginName);
+  const plugin = find_plugin_by_name(params.plugins, params.plugin_name);
   if (!plugin) {
     return {
       enabled: false,
       available: false,
-      reasons: [`Unknown plugin: ${params.pluginName}`],
+      reasons: [`Unknown plugin: ${params.plugin_name}`],
     };
   }
 

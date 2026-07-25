@@ -7,8 +7,8 @@
  */
 
 import { listTaskDefinitions } from "@/task/Action.js";
-import { listPluginStates } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import { list_plugin_states } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { WorkboardSnapshot } from "@/workboard/types/Workboard.js";
 import { listWorkboardSessionSummaries } from "@/workboard/runtime/SessionSummary.js";
 import {
@@ -26,7 +26,7 @@ const WORKBOARD_RECENT_LIMIT = 8;
  * 采集当前 workboard 快照。
  */
 export async function collectWorkboardSnapshot(
-  context: AgentContext,
+  context: PluginContext,
 ): Promise<WorkboardSnapshot> {
   const collectedAt = new Date().toISOString();
   const executingSessionIds = new Set(context.sessions.list_executing_session_ids());
@@ -35,8 +35,8 @@ export async function collectWorkboardSnapshot(
     limit: WORKBOARD_RECENT_LIMIT + Math.max(executingSessionIds.size, 1),
     executingSessionIds,
   });
-  const runtimePlugins = listPluginStates({ context });
-  const taskResult = await listTaskDefinitions({ projectRoot: context.rootPath });
+  const runtimePlugins = list_plugin_states({ context });
+  const taskResult = await listTaskDefinitions({ project_root: context.workspace_path });
   const degradedCount = runtimePlugins.filter(
     (item) => item.status !== "ready",
   ).length;
@@ -52,7 +52,7 @@ export async function collectWorkboardSnapshot(
 
   const safeCurrent = current.length > 0
     ? current
-    : [buildIdleActivity({ updatedAt: collectedAt, recentCount: recent.length })];
+    : [buildIdleActivity({ updated_at: collectedAt, recentCount: recent.length })];
 
   return {
     agent: toWorkboardAgentSummary({

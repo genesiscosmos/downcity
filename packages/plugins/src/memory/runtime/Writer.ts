@@ -9,7 +9,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type {
   MemoryReadPayload,
   MemoryReadResponse,
@@ -56,11 +56,11 @@ function normalizeMarkdownPath(value: string): string {
   return clean.toLowerCase().endsWith(".md") ? clean : `${clean}.md`;
 }
 
-function resolveWikiPath(context: AgentContext, requestedPath?: string, title?: string): {
+function resolveWikiPath(context: PluginContext, requestedPath?: string, title?: string): {
   absPath: string;
   relPath: string;
 } {
-  const memoryRoot = path.join(context.rootPath, ".downcity", "memory");
+  const memoryRoot = path.join(context.workspace_path, ".downcity", "memory");
   const wikiRoot = path.join(memoryRoot, "wiki");
   const normalized = normalizeMarkdownPath(requestedPath || slugify(title || "inbox"));
   const withoutPrefix = normalized
@@ -72,17 +72,17 @@ function resolveWikiPath(context: AgentContext, requestedPath?: string, title?: 
   }
   return {
     absPath,
-    relPath: toRelPath(context.rootPath, absPath),
+    relPath: toRelPath(context.workspace_path, absPath),
   };
 }
 
-function resolveAllowedReadPath(context: AgentContext, relPath: string): string {
+function resolveAllowedReadPath(context: PluginContext, relPath: string): string {
   const normalized = relPath.replace(/\\/g, "/").replace(/^\/+/, "").trim();
   if (!normalized) {
     throw new Error("path is required");
   }
-  const absPath = path.resolve(context.rootPath, normalized);
-  const memoryRoot = path.resolve(path.join(context.rootPath, ".downcity", "memory"));
+  const absPath = path.resolve(context.workspace_path, normalized);
+  const memoryRoot = path.resolve(path.join(context.workspace_path, ".downcity", "memory"));
   const isMemoryPath = isWithin(memoryRoot, absPath);
   if (!isMemoryPath) {
     throw new Error("path is not allowed");
@@ -180,7 +180,7 @@ export async function ensureMemoryDirectories(rootPath: string): Promise<void> {
  * 读取指定记忆文件（支持行区间）。
  */
 export async function readMemory(
-  context: AgentContext,
+  context: PluginContext,
   payload: MemoryReadPayload,
 ): Promise<MemoryReadResponse> {
   const requestedPath = String(payload.path || "").trim();
@@ -188,7 +188,7 @@ export async function readMemory(
     throw new Error("path is required");
   }
   const absPath = resolveAllowedReadPath(context, requestedPath);
-  const relPath = toRelPath(context.rootPath, absPath);
+  const relPath = toRelPath(context.workspace_path, absPath);
   const exists = await fs
     .access(absPath)
     .then(() => true)
@@ -212,8 +212,8 @@ export async function readMemory(
 /**
  * 读取 wiki index 内容。
  */
-export async function readWikiIndex(context: AgentContext): Promise<string> {
-  const indexPath = path.join(context.rootPath, ".downcity", "memory", "wiki", "index.md");
+export async function readWikiIndex(context: PluginContext): Promise<string> {
+  const indexPath = path.join(context.workspace_path, ".downcity", "memory", "wiki", "index.md");
   return await readTextIfExists(indexPath);
 }
 
@@ -221,12 +221,12 @@ export async function readWikiIndex(context: AgentContext): Promise<string> {
  * 归档手动 source。
  */
 export async function appendManualSource(
-  context: AgentContext,
+  context: PluginContext,
   content: string,
   source?: string,
 ): Promise<{ path: string; writtenChars: number }> {
   const absPath = path.join(
-    context.rootPath,
+    context.workspace_path,
     ".downcity",
     "memory",
     "sources",
@@ -237,7 +237,7 @@ export async function appendManualSource(
   const entry = buildSourceEntry(content, source);
   await fs.appendFile(absPath, `\n${entry}`, "utf-8");
   return {
-    path: toRelPath(context.rootPath, absPath),
+    path: toRelPath(context.workspace_path, absPath),
     writtenChars: entry.length,
   };
 }
@@ -246,13 +246,13 @@ export async function appendManualSource(
  * 写入 session source。
  */
 export async function writeSessionSource(
-  context: AgentContext,
-  sessionId: string,
+  context: PluginContext,
+  session_id: string,
   content: string,
 ): Promise<{ path: string; writtenChars: number }> {
-  const safeSessionId = slugify(sessionId);
+  const safeSessionId = slugify(session_id);
   const absPath = path.join(
-    context.rootPath,
+    context.workspace_path,
     ".downcity",
     "memory",
     "sources",
@@ -261,12 +261,12 @@ export async function writeSessionSource(
   );
   const text = [
     "---",
-    `title: ${JSON.stringify(`Session ${sessionId}`)}`,
+    `title: ${JSON.stringify(`Session ${session_id}`)}`,
     `date: ${dateStamp()}`,
     'tags: ["memory-source", "session"]',
     "---",
     "",
-    `# Session ${sessionId}`,
+    `# Session ${session_id}`,
     "",
     content.trim(),
     "",
@@ -274,7 +274,7 @@ export async function writeSessionSource(
   await fs.mkdir(path.dirname(absPath), { recursive: true });
   await fs.writeFile(absPath, text, "utf-8");
   return {
-    path: toRelPath(context.rootPath, absPath),
+    path: toRelPath(context.workspace_path, absPath),
     writtenChars: text.length,
   };
 }
@@ -283,7 +283,7 @@ export async function writeSessionSource(
  * 写入完整 wiki page。
  */
 export async function writeWikiPage(
-  context: AgentContext,
+  context: PluginContext,
   draft: MemoryWikiPageDraft,
 ): Promise<{ path: string; writtenChars: number }> {
   const resolved = resolveWikiPath(context, draft.path, draft.title);
@@ -300,7 +300,7 @@ export async function writeWikiPage(
  * 追加写入 wiki page。
  */
 export async function appendWikiPage(
-  context: AgentContext,
+  context: PluginContext,
   payload: {
     path?: string;
     title?: string;
@@ -335,7 +335,7 @@ export async function appendWikiPage(
  * 使用 fallback 方式修订 wiki page。
  */
 export async function appendMemoryRevision(
-  context: AgentContext,
+  context: PluginContext,
   payload: MemoryRevisePayload,
 ): Promise<MemoryReviseResponse> {
   const written = await appendWikiPage(context, {

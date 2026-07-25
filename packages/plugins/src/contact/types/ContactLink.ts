@@ -33,11 +33,11 @@ export interface ContactLinkCodePayload {
   /**
    * link 创建时间戳。
    */
-  createdAt: number;
+  created_at: number;
   /**
    * link 过期时间戳。
    */
-  expiresAt: number;
+  expires_at: number;
 }
 
 /**
@@ -63,11 +63,11 @@ export interface ContactLinkRecord {
   /**
    * link 创建时间戳。
    */
-  createdAt: number;
+  created_at: number;
   /**
    * link 过期时间戳。
    */
-  expiresAt: number;
+  expires_at: number;
   /**
    * link 被使用的时间戳。
    */

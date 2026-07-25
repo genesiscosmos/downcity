@@ -202,15 +202,15 @@ export class Logger {
   }
 
   /**
-   * 绑定当前 logger 实例的 projectRoot。
+   * 绑定当前 logger 实例的 project_root。
    *
    * 关键点（中文）
    * - 每个 Agent / workspace 持有独立 Logger，绑定只影响当前实例。
    * - 落盘目录必须在实例初始化后明确指定。
-   * - 未绑定 projectRoot 时，只打印到 console，不写入 `.downcity/logs/*`。
+   * - 未绑定 project_root 时，只打印到 console，不写入 `.downcity/logs/*`。
    */
-  bindProjectRoot(projectRoot: string): void {
-    const root = String(projectRoot || "").trim();
+  bind_project_root(project_root: string): void {
+    const root = String(project_root || "").trim();
     this.workspace_files = root ? new LocalFileSystem(root) : null;
   }
 
@@ -273,7 +273,7 @@ export class Logger {
     details?: LogDetails,
   ): Promise<void> {
     const entry: LogEntry = {
-      id: this.generateId(),
+      id: this.generate_id(),
       timestamp: getTimestamp(),
       type,
       message: normalizeToAllowedMessageLabels(message),
@@ -336,27 +336,27 @@ export class Logger {
     await this.workspace_files.append_file(logFile, logLine);
   }
 
-  private generateId(): string {
+  private generate_id(): string {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
 
-  async saveAllLogs(): Promise<void> {
+  async save_all_logs(): Promise<void> {
     await this.writeChain.catch(() => {});
   }
 
-  getLogs(): LogEntry[] {
+  get_logs(): LogEntry[] {
     return this.logs;
   }
 
-  getLogsByType(type: LogEntry["type"]): LogEntry[] {
+  get_logs_by_type(type: LogEntry["type"]): LogEntry[] {
     return this.logs.filter((log) => log.type === type);
   }
 
-  getRecentLogs(count: number = 10): LogEntry[] {
+  get_recent_logs(count: number = 10): LogEntry[] {
     return this.logs.slice(-count);
   }
 
-  clearLogs(): void {
+  clear_logs(): void {
     this.logs = [];
   }
 }
@@ -366,11 +366,11 @@ export class Logger {
  *
  * 说明（中文）
  * - 每次调用都返回独立实例，避免不同 Agent / workspace 互相覆盖落盘目录。
- * - 提供 projectRoot 时立即绑定日志目录；未提供时仅输出到 console。
+ * - 提供 project_root 时立即绑定日志目录；未提供时仅输出到 console。
  */
-export function getLogger(project_root?: string, log_level?: string): Logger {
+export function get_logger(project_root?: string, log_level?: string): Logger {
   const logger = new Logger(log_level);
   const root = String(project_root || "").trim();
-  if (root) logger.bindProjectRoot(root);
+  if (root) logger.bind_project_root(root);
   return logger;
 }

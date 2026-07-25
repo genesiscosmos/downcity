@@ -13,14 +13,14 @@ import type { AgentModel } from "@/agent/AgentModel.js";
  */
 export interface AgentCreateSessionInput {
   /**
-   * 可选显式 sessionId。
+   * 可选显式 session_id。
    *
    * 关键点（中文）
    * - 传入时表达“创建意图”。
    * - 若该 session 已存在，SDK 应直接报错，而不是静默复用。
-   * - 省略时由 SDK 自动生成稳定且不可推导的 sessionId。
+   * - 省略时由 SDK 自动生成稳定且不可推导的 session_id。
    */
-  sessionId?: string;
+  session_id?: string;
 
 }
 
@@ -50,7 +50,7 @@ export interface AgentListSessionsInput {
    * 关键词过滤。
    *
    * 说明（中文）
-   * - 推荐用于匹配 `sessionId`、标题与预览文本。
+   * - 推荐用于匹配 `session_id`、标题与预览文本。
    * - 属于轻量包含匹配，不承诺复杂搜索语义。
    */
   query?: string;
@@ -77,7 +77,7 @@ export interface AgentSessionConfigSnapshot {
   /** 当前 session 绑定的默认模型实例。 */
   model?: AgentModel;
   /** 当前模型的轻量可读标签。 */
-  modelLabel?: string;
+  model_label?: string;
   /** 当前模型支持的总上下文窗口长度，单位为 token。 */
   model_context_window?: number;
 }
@@ -109,28 +109,28 @@ export interface AgentSessionTimelineEvent {
    * 说明（中文）
    * - 仅 `tool-call` / `tool-result` 这类事件通常会携带该字段。
    */
-  toolName?: string;
+  tool_name?: string;
   /**
    * 当前 action 标题。
    *
    * 说明（中文）
    * - 仅 `role=action` 的事件通常会携带该字段。
    */
-  actionTitle?: string;
+  action_title?: string;
   /**
    * 当前 action 描述。
    *
    * 说明（中文）
    * - 仅 `role=action` 的事件通常会携带该字段。
    */
-  actionDescription?: string;
+  action_description?: string;
   /**
    * 当前 action 状态。
    *
    * 说明（中文）
    * - 仅 `role=action` 的事件通常会携带该字段。
    */
-  actionState?: string;
+  action_state?: string;
 }
 
 /**
@@ -172,12 +172,12 @@ export interface AgentSessionSystemBlock {
  * 当前 session 的稳定上下文信息。
  */
 export interface AgentSessionSystemSessionInfo {
-  /** 当前 session 所属 agentId。 */
-  agentId: string;
+  /** 当前 session 所属 agent_id。 */
+  agent_id: string;
   /** 当前 session 唯一标识。 */
-  sessionId: string;
+  session_id: string;
   /** 当前 agent 绑定的项目根目录。 */
-  projectRoot: string;
+  project_root: string;
   /**
    * 当前 session 首次创建时间。
    *
@@ -185,7 +185,7 @@ export interface AgentSessionSystemSessionInfo {
    * - 这是 session 初始化时落盘的稳定参考时间，按 Date/ISO 字符串对外展示。
    * - 它不是每轮运行的当前时间，不会随着后续 turn 执行而改变。
    */
-  createdAt: string;
+  created_at: string;
   /**
    * 当前 session 初始化时解析到的系统时区。
    *
@@ -200,8 +200,8 @@ export interface AgentSessionSystemSessionInfo {
  * 当前 session 首次生成后固定的完整 system prompt 快照。
  */
 export interface AgentSessionSystemSnapshot {
-  /** 当前 sessionId。 */
-  sessionId: string;
+  /** 当前 session_id。 */
+  session_id: string;
   /**
    * 当前 session 的稳定上下文信息。
    *
@@ -219,17 +219,17 @@ export interface AgentSessionSystemSnapshot {
  * Session 摘要。
  */
 export interface AgentSessionSummary {
-  /** 当前 session 所属 agentId。 */
-  agentId: string;
+  /** 当前 session 所属 agent_id。 */
+  agent_id: string;
   /** 当前 session 唯一标识。 */
-  sessionId: string;
+  session_id: string;
   /**
    * 当前 session 可读标题。
    *
    * 说明（中文）
    * - 标题持久化在 session `meta.json` 顶层。
    * - SDK 只在模型成功生成标题时写入，不再从首条用户消息生成 fallback。
-   * - 标题允许为空，调用方需要展示占位文案时可自行回退到 `sessionId`。
+   * - 标题允许为空，调用方需要展示占位文案时可自行回退到 `session_id`。
    */
   title?: string;
   /**
@@ -239,15 +239,15 @@ export interface AgentSessionSummary {
    * - 通常来自最后一条用户可见消息的裁剪文本。
    * - 适合用于侧边栏、列表卡片或 session picker。
    */
-  previewText?: string;
+  preview_text?: string;
   /** 当前 session 首次创建时间（ms）。 */
-  createdAt?: number;
+  created_at?: number;
   /** 当前 session 最近一次更新时间（ms）。 */
-  updatedAt?: number;
+  updated_at?: number;
   /** 当前 session 已落盘消息数。 */
-  messageCount: number;
+  message_count: number;
   /** 当前 session 绑定模型的可读标签。 */
-  modelLabel?: string;
+  model_label?: string;
   /** 当前 session 是否处于执行中。 */
   executing?: boolean;
 }
@@ -275,9 +275,9 @@ export interface AgentSessionSummaryPage {
    */
   total: number;
   /** 下一页游标。 */
-  nextCursor?: string;
+  next_cursor?: string;
   /** 是否仍有更多结果。 */
-  hasMore: boolean;
+  has_more: boolean;
 }
 
 /**
@@ -291,7 +291,7 @@ export interface AgentSessionForkInput {
    * - 省略时复制当前 session 的完整消息历史。
    * - 传入时复制到该消息为止（包含该消息）。
    */
-  messageId?: string;
+  message_id?: string;
 }
 
 /**
@@ -333,7 +333,7 @@ export interface AgentArchiveSessionsInput {
    * 关键词过滤。
    *
    * 说明（中文）
-   * - 推荐用于匹配 `sessionId`、标题与预览文本。
+   * - 推荐用于匹配 `session_id`、标题与预览文本。
    * - 属于轻量包含匹配，不承诺复杂搜索语义。
    */
   query?: string;
@@ -344,9 +344,9 @@ export interface AgentArchiveSessionsInput {
  */
 export interface AgentArchiveSessionResult {
   /** 被归档的 session id。 */
-  sessionId: string;
+  session_id: string;
   /** 归档时间戳（ms）。 */
-  archivedAt: number;
+  archived_at: number;
 }
 
 /**
@@ -359,5 +359,5 @@ export interface AgentArchiveSessionsResult extends AgentSessionSummaryPage {}
  */
 export interface AgentCleanArchiveResult {
   /** 被永久删除的归档 session id 列表。 */
-  removedSessionIds: string[];
+  removed_session_ids: string[];
 }

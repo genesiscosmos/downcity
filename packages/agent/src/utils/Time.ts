@@ -10,14 +10,14 @@ export function getTimestamp(): string {
   return new Date().toISOString();
 }
 
-export function resolveRuntimeTimezone(): string {
+export function resolve_runtime_timezone(): string {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   return String(timezone || "").trim() || "UTC";
 }
 
 export function formatDateInTimezone(
   date: Date = new Date(),
-  timezone: string = resolveRuntimeTimezone(),
+  timezone: string = resolve_runtime_timezone(),
 ): string {
   try {
     // 关键点（中文）：sv-SE locale 默认输出 ISO 风格日期，便于模型稳定解析。
@@ -32,9 +32,9 @@ export function formatDateInTimezone(
   }
 }
 
-export function formatDateTimeInTimezone(
+export function format_date_time_in_timezone(
   date: Date = new Date(),
-  timezone: string = resolveRuntimeTimezone(),
+  timezone: string = resolve_runtime_timezone(),
 ): string {
   try {
     // 关键点（中文）：使用固定格式，确保模型读取时区信息时稳定。
@@ -58,7 +58,7 @@ export function formatDateTimeInTimezone(
 
 export function formatYearInTimezone(
   date: Date = new Date(),
-  timezone: string = resolveRuntimeTimezone(),
+  timezone: string = resolve_runtime_timezone(),
 ): string {
   try {
     return new Intl.DateTimeFormat("en-US", {

@@ -6,7 +6,7 @@
  * - 当前请求只注入当前 chat platform 的 prompt，避免平台规则串味。
  * - 该模块只负责 prompt 解析与拼装，不承担运行态控制职责。
  */
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { PluginRunContext } from "@downcity/agent";
 import {
   buildCurrentChatEnvironmentPrompt,
@@ -42,7 +42,7 @@ function resolveCurrentChatPromptChannel(
  * - 若当前 context 不是 chat platform（如 Console UI）或尚无路由元信息，则不注入 platform prompt。
  */
 export async function buildCurrentChannelPrompts(
-  context: AgentContext,
+  context: PluginContext,
   run_context?: PluginRunContext,
 ): Promise<string[]> {
   const chatEnvironment = await resolveCurrentChatEnvironmentPromptInput(
@@ -63,7 +63,7 @@ export async function buildCurrentChannelPrompts(
  * 构建 chat plugin 注入到 session 的 system 文本。
  */
 export async function buildChatPluginSystem(
-  context: AgentContext,
+  context: PluginContext,
   run_context?: PluginRunContext,
 ): Promise<string> {
   return [

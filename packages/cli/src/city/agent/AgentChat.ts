@@ -40,13 +40,13 @@ export async function chatCommand(options: AgentChatCliOptions): Promise<void> {
     return;
   }
 
-  const agentId = await resolveChatTargetAgentId(options.to);
-  if (!agentId) return;
+  const agent_id = await resolveChatTargetAgentId(options.to);
+  if (!agent_id) return;
 
   const oneShotMessage = normalizeChatMessage(String(options.message || ""));
   if (oneShotMessage) {
     await runOneShotChat({
-      agentId,
+      agent_id,
       message: oneShotMessage,
       options,
     });
@@ -72,7 +72,7 @@ export async function chatCommand(options: AgentChatCliOptions): Promise<void> {
   }
 
   const interactive = await resolveInteractiveChatSession({
-    agentId,
+    agent_id,
     options,
     transport: {
       host: options.host,
@@ -92,8 +92,8 @@ export async function chatCommand(options: AgentChatCliOptions): Promise<void> {
 
   try {
     await run_agent_chat_tui({
-      agent_id: agentId,
-      session_id: interactive.target.sessionId,
+      agent_id: agent_id,
+      session_id: interactive.target.session_id,
       list_sessions: async () =>
         await listRemoteChatSessions({
           remote_agent: interactive.remote_agent,
@@ -118,10 +118,10 @@ export async function chatCommand(options: AgentChatCliOptions): Promise<void> {
       },
       run_turn: async ({ session_id, message, interactive_renderer }) => {
         const outcome = await runSdkPromptTurn({
-          agentId,
+          agent_id,
           message,
           sessionOptions: {
-            sessionId: session_id,
+            session_id: session_id,
             newSession: false,
           },
           transport: {

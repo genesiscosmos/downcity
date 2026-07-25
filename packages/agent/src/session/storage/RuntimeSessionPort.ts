@@ -20,15 +20,15 @@ import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
  */
 export interface CreateRuntimeSessionPortParams {
   /**
-   * 当前 sessionId。
+   * 当前 session_id。
    */
-  sessionId: string;
+  session_id: string;
   /** 获取当前 Session 优先解析后的运行时模型实例。 */
-  getModel: SessionPort["getModel"];
+  get_model: SessionPort["get_model"];
   /**
    * 读取当前 session 底层执行端口。
    */
-  getExecutor: SessionPort["getExecutor"];
+  get_executor: SessionPort["get_executor"];
   /**
    * 追加一条新的 session prompt。
    */
@@ -54,13 +54,13 @@ export interface CreateRuntimeSessionPortParams {
   /**
    * 返回当前 session 是否正在执行。
    */
-  isExecuting: () => boolean;
+  is_executing: () => boolean;
   /** 读取当前 Session 的只读上下文快照。 */
   context: SessionPort["context"];
   /**
    * 在执行前确保当前 session 已完成初始化与宿主级配置。
    */
-  ensureReadyForExecution: () => Promise<void>;
+  ensure_ready_for_execution: () => Promise<void>;
 }
 
 /**
@@ -70,16 +70,16 @@ export function createRuntimeSessionPort(
   params: CreateRuntimeSessionPortParams,
 ): SessionPort {
   return {
-    sessionId: params.sessionId,
-    getModel: () => params.getModel(),
-    getExecutor: () => params.getExecutor(),
+    session_id: params.session_id,
+    get_model: () => params.get_model(),
+    get_executor: () => params.get_executor(),
     context: async () => await params.context(),
     prompt: async (input) => {
-      await params.ensureReadyForExecution();
+      await params.ensure_ready_for_execution();
       return await params.prompt(input);
     },
     stop: async () => {
-      await params.ensureReadyForExecution();
+      await params.ensure_ready_for_execution();
       return await params.stop();
     },
     subscribe: (subscriber) => {
@@ -91,6 +91,6 @@ export function createRuntimeSessionPort(
     append_assistant_message: async (messageParams) => {
       await params.append_assistant_message(messageParams);
     },
-    isExecuting: () => params.isExecuting(),
+    is_executing: () => params.is_executing(),
   };
 }

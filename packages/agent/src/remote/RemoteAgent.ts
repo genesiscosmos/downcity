@@ -51,16 +51,16 @@ export class RemoteAgent {
    * - 这是 RemoteAgent 顶层能力，不绑定某个 session。
    * - Shell approval 通过具体 RemoteSession 处理。
    */
-  async runPluginAction(
+  async run_plugin_action(
     input: RemoteAgentPluginActionInput,
   ): Promise<RemoteAgentPluginActionResult> {
     const plugin = String(input.plugin || "").trim();
     const action = String(input.action || "").trim();
     if (!plugin) {
-      throw new Error("runPluginAction requires a non-empty plugin");
+      throw new Error("run_plugin_action requires a non-empty plugin");
     }
     if (!action) {
-      throw new Error("runPluginAction requires a non-empty action");
+      throw new Error("run_plugin_action requires a non-empty action");
     }
     return await this.transport.run_plugin_action({
       plugin,

@@ -1,5 +1,5 @@
 /**
- * 统一账户 Token 响应类型。
+ * 跨 package 统一账户 Token 响应类型。
  *
  * 关键点（中文）
  * - 明文 token 只在签发时返回一次。
@@ -21,19 +21,19 @@ export interface AuthTokenSummary {
   /**
    * 过期时间（可选）。
    */
-  expiresAt?: string;
+  expires_at?: string;
   /**
    * 最近使用时间（可选）。
    */
-  lastUsedAt?: string;
+  last_used_at?: string;
   /**
    * 创建时间（ISO 字符串）。
    */
-  createdAt: string;
+  created_at: string;
   /**
    * 更新时间（ISO 字符串）。
    */
-  updatedAt: string;
+  updated_at: string;
 }
 
 /**

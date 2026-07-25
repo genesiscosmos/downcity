@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - Chat Plugin 是 channel meta、chat history 与渠道缓存路径的唯一所有者。
- * - AgentContext 只提供项目根目录，不暴露任何 Chat 领域路径。
+ * - PluginContext 只提供项目根目录，不暴露任何 Chat 领域路径。
  * - CLI 离线维护通过本模块操作 Chat 存储，不复制内部 JSON 结构。
  */
 
@@ -117,7 +117,7 @@ function resolve_session_id(
   if (mapped) return mapped;
   for (const route of Object.values(meta.routesBySessionId || {})) {
     if (route && matches_target(route, input)) {
-      return normalize_text(route.sessionId);
+      return normalize_text(route.session_id);
     }
   }
   return "";
@@ -149,7 +149,7 @@ async function remove_route(
     {
       ...meta,
       v: 1,
-      updatedAt: Date.now(),
+      updated_at: Date.now(),
       routesBySessionId: routes_by_session_id,
       sessionIdByTargetKey: session_id_by_target_key,
     },

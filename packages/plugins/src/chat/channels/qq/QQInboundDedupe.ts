@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 解决 QQ 网关在重连 / 重启后可能重复投递历史消息的问题。
- * - 去重 key 采用 `eventType:messageId`，避免跨事件类型冲突。
+ * - 去重 key 采用 `eventType:message_id`，避免跨事件类型冲突。
  * - 使用本地文件持久化，保证“重启后”仍可去重（best-effort）。
  */
 
@@ -78,14 +78,14 @@ export class QqInboundDedupeStore {
    */
   async markAndCheckDuplicate(params: {
     eventType: string;
-    messageId: string;
+    message_id: string;
   }): Promise<boolean> {
     await this.load();
     const eventType = String(params.eventType || "").trim();
-    const messageId = String(params.messageId || "").trim();
-    if (!eventType || !messageId) return false;
+    const message_id = String(params.message_id || "").trim();
+    if (!eventType || !message_id) return false;
 
-    const dedupeKey = `${eventType}:${messageId}`;
+    const dedupeKey = `${eventType}:${message_id}`;
     if (this.ids.has(dedupeKey)) return true;
 
     this.ids.add(dedupeKey);
@@ -113,7 +113,7 @@ export class QqInboundDedupeStore {
       await fs.ensureDir(path.dirname(this.filePath));
       const payload: QqInboundDedupeSnapshotV1 = {
         v: 1,
-        updatedAt: Date.now(),
+        updated_at: Date.now(),
         ids: Array.from(this.ids),
       };
       await fs.writeJson(this.filePath, payload, { spaces: 2 });

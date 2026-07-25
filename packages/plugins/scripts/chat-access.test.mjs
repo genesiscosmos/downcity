@@ -53,7 +53,7 @@ test("Telegram 授权命令使用代码格式并保留完整标识符", () => {
     const bot = new TelegramBot(
       {
         agent_id: "lucas_whitman",
-        rootPath: project_root,
+        workspace_path: project_root,
         logger: {
           debug() {},
           info() {},

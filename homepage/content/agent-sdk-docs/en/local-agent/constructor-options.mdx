@@ -32,7 +32,7 @@ The stable identifier of the agent.
 It affects the SDK session storage path:
 
 ```text
-<projectRoot>/.downcity/agents/<agentId>/...
+<project_root>/.downcity/agents/<agent_id>/...
 ```
 
 Recommended properties:
@@ -147,7 +147,7 @@ Key points:
 - `get_env()` returns a shallow snapshot
 - `patch_env()` treats `null` / `undefined` as delete
 - `set_env()` replaces the current Workspace env
-- `agent.setInstruction()` affects only Sessions created afterwards and does not retroactively change existing in-memory Sessions
+- `agent.set_instruction()` affects only Sessions created afterwards and does not retroactively change existing in-memory Sessions
 - restored Sessions regenerate from the Agent's current instruction and plugins when `instruction.md` is absent; use `session.syncshot()` to refresh an existing Session and `session.snapshot()` to persist it
 - Workspace env and plugin changes commit in existing Sessions at the next Session step checkpoint
 - an in-flight provider request and its tool calls keep the env that was effective for the current step
@@ -223,7 +223,7 @@ Key points:
 - it does not register every built-in plugin by default
 - it does not reuse the global plugin manager
 - duplicate plugin names throw immediately
-- `agent.plugins` and `AgentContext.plugins` use this registry
+- `agent.plugins` and `PluginContext.plugins` use this registry
 - instantiate the exact plugin set the Agent needs and pass those instances in `plugins`
 
 ## `Session`
@@ -267,14 +267,14 @@ class CustomSession extends Session {
 const agent = new Agent({
   id: "repo-helper",
   workspace: new Workspace({ path: "/path/to/project" }),
-  Session: CustomSession,
+  session_class: CustomSession,
 });
 ```
 
 Key points:
 
 - pass a class, not an already-created session instance
-- `Agent` can then create multiple sessions with different `sessionId` values
+- `Agent` can then create multiple sessions with different `session_id` values
 - Composer customization stays inside the custom Session class
 - Composer reads Session snapshots and composes system, history, tools, or compaction plans; it never persists messages directly
 - `RemoteAgent` does not support local Session classes because it only accesses a remote runtime

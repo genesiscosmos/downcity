@@ -17,7 +17,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { Agent, Workspace } from "../bin/index.js";
-import { createAction, createPlugin } from "../bin/plugin/core/PluginActionFactory.js";
+import { create_action, create_plugin } from "../bin/plugin/core/PluginActionFactory.js";
 import { CITY_MODEL_KIND } from "@downcity/type";
 
 /** 构造 AI SDK V3 usage。 */
@@ -109,12 +109,12 @@ test("CityModel uses direct LanguageModel path and sends tool result back", asyn
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-city-model-tool-loop-"),
   );
-  const skill_plugin = createPlugin({
+  const skill_plugin = create_plugin({
     name: "skill",
     title: "Skill",
     description: "Test skill plugin",
     actions: {
-      lookup: createAction({
+      lookup: create_action({
         description: "Lookup a skill",
         execute: async ({ input }) => ({
           success: true,
@@ -134,7 +134,7 @@ test("CityModel uses direct LanguageModel path and sends tool result back", asyn
         inputSchema: z.object({ value: z.string() }),
         execute: async ({ value }, options) => {
           tool_executed = true;
-          options.experimental_context.session_run_context.pendingAssistantFileParts.push({
+          options.experimental_context.session_run_context.pending_assistant_file_parts.push({
             type: "file",
             mediaType: "image/png",
             url: ".downcity/resources/tool-output.png",
@@ -175,7 +175,7 @@ test("CityModel uses direct LanguageModel path and sends tool result back", asyn
       openai: { itemId: "fc_1" },
     });
 
-    const result_file = result.assistantMessage.parts.find((part) => part.type === "file");
+    const result_file = result.assistant_message.parts.find((part) => part.type === "file");
     assert.deepEqual(result_file, {
       type: "file",
       mediaType: "image/png",

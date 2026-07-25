@@ -53,7 +53,7 @@ async function submit(query: string): Promise<void> {
 
 async function stop(): Promise<void> {
   const result = await session.stop();
-  if (result.cancelledQueuedPrompts > 0) {
+  if (result.cancelled_queued_prompts > 0) {
     show_notice("未开始的输入已取消");
   }
 }

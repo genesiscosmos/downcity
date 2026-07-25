@@ -27,7 +27,7 @@ test("daemon stop only cleans stale files when PID belongs to another process", 
     await writeDaemonFiles(project_root, {
       pid: child.pid,
       instanceId: "stale-instance-id",
-      projectRoot: project_root,
+      project_root: project_root,
       startedAt: new Date().toISOString(),
       command: process.execPath,
       args: [
@@ -42,7 +42,7 @@ test("daemon stop only cleans stale files when PID belongs to another process", 
       platform: process.platform,
     })
 
-    const result = await stopDaemonProcess({ projectRoot: project_root, timeoutMs: 50 })
+    const result = await stopDaemonProcess({ project_root: project_root, timeoutMs: 50 })
 
     assert.deepEqual(result, { stopped: false, pid: child.pid })
     assert.doesNotThrow(() => process.kill(child.pid, 0))
@@ -84,7 +84,7 @@ test("daemon stop terminates a process with matching command and instance identi
     await writeDaemonFiles(project_root, {
       pid: child.pid,
       instanceId: instance_id,
-      projectRoot: project_root,
+      project_root: project_root,
       startedAt: new Date().toISOString(),
       command: process.execPath,
       args,
@@ -92,7 +92,7 @@ test("daemon stop terminates a process with matching command and instance identi
       platform: process.platform,
     })
 
-    const result = await stopDaemonProcess({ projectRoot: project_root, timeoutMs: 1000 })
+    const result = await stopDaemonProcess({ project_root: project_root, timeoutMs: 1000 })
 
     assert.deepEqual(result, { stopped: true, pid: child.pid })
     await assert.rejects(fs.stat(getDaemonPidPath(project_root)), /ENOENT/)

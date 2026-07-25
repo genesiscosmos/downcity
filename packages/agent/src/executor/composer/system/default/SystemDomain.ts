@@ -7,8 +7,8 @@
  */
 
 import type { SystemModelMessage } from "ai";
-import { transformPromptsIntoSystemMessages } from "@executor/composer/system/default/PromptRenderer.js";
-import type { AgentContext } from "@/agent/AgentContext.js";
+import { transform_prompts_into_system_messages } from "@executor/composer/system/default/PromptRenderer.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import { buildRuntimeClockSystemPrompt } from "@executor/composer/system/default/variables/VariableReplacer.js";
 import {
   CORE_SYSTEM_PROMPT,
@@ -37,12 +37,12 @@ export function buildContextSystemPrompt(input: {
   /**
    * 项目根目录。
    */
-  projectRoot: string;
+  project_root: string;
 
   /**
    * 当前会话 ID。
    */
-  sessionId: string;
+  session_id: string;
 
   /**
    * 当前 system 模式（默认 chat）。
@@ -52,19 +52,19 @@ export function buildContextSystemPrompt(input: {
   /**
    * 额外上下文行（可选）。
    */
-  extraContextLines?: string[];
+  extra_context_lines?: string[];
 }): string {
-  const { projectRoot, extraContextLines } = input;
+  const { project_root, extra_context_lines } = input;
   const mode = input.mode === "task" ? "task" : "chat";
   if (mode === "chat") return "";
 
   const runtimeContextLines: string[] = [
     "Task runtime context:",
-    `- Project root: ${projectRoot}`,
+    `- Project root: ${project_root}`,
   ];
 
-  if (Array.isArray(extraContextLines) && extraContextLines.length > 0) {
-    runtimeContextLines.push(...extraContextLines);
+  if (Array.isArray(extra_context_lines) && extra_context_lines.length > 0) {
+    runtimeContextLines.push(...extra_context_lines);
   }
 
   const outputRules = [
@@ -94,18 +94,18 @@ export function resolveStaticSystemPrompts(input: {
   /**
    * 可选默认 core prompt 替换文本（task 场景常用）。
    */
-  replaceDefaultCorePrompt?: string;
+  replace_default_core_prompt?: string;
 }): string[] {
   const base = Array.isArray(input.systems) ? [...input.systems] : [];
-  const replacement = String(input.replaceDefaultCorePrompt || "").trim();
+  const replacement = String(input.replace_default_core_prompt || "").trim();
   if (!replacement) return base;
   return [...base.filter((item) => item !== DEFAULT_SHIP_PROMPTS), replacement];
 }
 
 type ResolvedSystemContextProfile = {
   mode: "chat" | "task";
-  replaceDefaultCorePrompt?: string;
-  disablePluginSystems: string[];
+  replace_default_core_prompt?: string;
+  disable_plugin_systems: string[];
 };
 
 /**
@@ -129,13 +129,13 @@ export function resolveSystemContextProfile(
   if (profile !== "task") {
     return {
       mode: "chat",
-      disablePluginSystems: [...DEFAULT_DISABLED_MANAGED_PLUGIN_NAMES],
+      disable_plugin_systems: [...DEFAULT_DISABLED_MANAGED_PLUGIN_NAMES],
     };
   }
   return {
     mode: "task",
-    replaceDefaultCorePrompt: TASK_SYSTEM_PROMPT,
-    disablePluginSystems: ["chat"],
+    replace_default_core_prompt: TASK_SYSTEM_PROMPT,
+    disable_plugin_systems: ["chat"],
   };
 }
 
@@ -150,16 +150,16 @@ export async function loadManagedPluginSystemPrompts(input: {
   /**
    * 当前执行上下文。
    */
-  context: AgentContext;
+  context: PluginContext;
 
   /**
    * 当前轮禁用的 plugin 名称集合。
    */
-  disabledPluginNames: string[];
+  disabled_plugin_names: string[];
 }): Promise<string[]> {
   const out: string[] = [];
-  const disabledPluginNames = new Set(
-    input.disabledPluginNames
+  const disabled_plugin_names = new Set(
+    input.disabled_plugin_names
       .map((item) => String(item || "").trim())
       .filter(Boolean),
   );
@@ -167,7 +167,7 @@ export async function loadManagedPluginSystemPrompts(input: {
   for (const snapshot of input.context.plugins.snapshots()) {
     const plugin = input.context.plugins.get(snapshot.name);
     if (!plugin) continue;
-    if (disabledPluginNames.has(plugin.name)) continue;
+    if (disabled_plugin_names.has(plugin.name)) continue;
     if (typeof plugin.system !== "function") continue;
     try {
       if (input.context.plugins.status(plugin.name)?.status !== "ready") continue;
@@ -198,7 +198,7 @@ export async function loadLocalPluginSystemPrompts(input: {
   /**
    * 当前统一执行上下文。
    */
-  context: AgentContext;
+  context: PluginContext;
 }): Promise<string[]> {
   void input;
   return [];
@@ -214,12 +214,12 @@ export async function buildSessionSystemMessages(input: {
   /**
    * 项目根目录（用于模板变量和运行态上下文）。
    */
-  projectRoot: string;
+  project_root: string;
 
   /**
    * 当前会话 ID。
    */
-  sessionId: string;
+  session_id: string;
 
   /**
    * 本轮模式（chat/task）。
@@ -229,66 +229,66 @@ export async function buildSessionSystemMessages(input: {
   /**
    * 可选默认 core prompt 替换文本（task 场景常用）。
    */
-  replaceDefaultCorePrompt?: string;
+  replace_default_core_prompt?: string;
 
   /**
    * 静态 system 文本集合（profile/soul/user/default）。
    */
-  staticSystemPrompts: string[];
+  static_system_prompts: string[];
 
   /**
    * 受 agent 托管的 plugin system 文本集合（main plugin + managed plugins）。
    */
-  managedPluginSystemPrompts: string[];
+  managed_plugin_system_prompts: string[];
 
   /**
    * 本地 plugin system 文本集合。
    */
-  localPluginSystemPrompts: string[];
+  local_plugin_system_prompts: string[];
 }): Promise<SystemModelMessage[]> {
   const runtimeClockText = buildRuntimeClockSystemPrompt({
-    projectPath: input.projectRoot,
-    sessionId: input.sessionId,
+    projectPath: input.project_root,
+    session_id: input.session_id,
   });
   const runtimeClockMessages: SystemModelMessage[] = runtimeClockText
     ? [{ role: "system", content: runtimeClockText }]
     : [];
   const runtimeSystemText = buildContextSystemPrompt({
-    projectRoot: input.projectRoot,
-    sessionId: input.sessionId,
+    project_root: input.project_root,
+    session_id: input.session_id,
     mode: input.mode,
   });
   const runtimeRuleMessages: SystemModelMessage[] = runtimeSystemText
     ? [{ role: "system", content: runtimeSystemText }]
     : [];
 
-  const staticSystemMessages = await transformPromptsIntoSystemMessages(
+  const staticSystemMessages = await transform_prompts_into_system_messages(
     resolveStaticSystemPrompts({
-      systems: input.staticSystemPrompts,
-      replaceDefaultCorePrompt: input.replaceDefaultCorePrompt,
+      systems: input.static_system_prompts,
+      replace_default_core_prompt: input.replace_default_core_prompt,
     }),
     {
-      projectPath: input.projectRoot,
+      projectPath: input.project_root,
       variableMode: "stable",
     },
   );
 
-  const managedPluginSystemMessages = await transformPromptsIntoSystemMessages(
-    Array.isArray(input.managedPluginSystemPrompts)
-      ? input.managedPluginSystemPrompts
+  const managedPluginSystemMessages = await transform_prompts_into_system_messages(
+    Array.isArray(input.managed_plugin_system_prompts)
+      ? input.managed_plugin_system_prompts
       : [],
     {
-      projectPath: input.projectRoot,
+      projectPath: input.project_root,
       variableMode: "stable",
     },
   );
 
-  const localPluginSystemMessages = await transformPromptsIntoSystemMessages(
-    Array.isArray(input.localPluginSystemPrompts)
-      ? input.localPluginSystemPrompts
+  const localPluginSystemMessages = await transform_prompts_into_system_messages(
+    Array.isArray(input.local_plugin_system_prompts)
+      ? input.local_plugin_system_prompts
       : [],
     {
-      projectPath: input.projectRoot,
+      projectPath: input.project_root,
       variableMode: "stable",
     },
   );
@@ -305,16 +305,16 @@ export async function buildSessionSystemMessages(input: {
 /**
  * 统一解析一次 Session 运行所需的 system messages（含上下文档位判定与 plugin 收集）。
  */
-export async function resolveSessionSystemMessages(input: {
+export async function resolve_session_system_messages(input: {
   /**
    * 项目根目录。
    */
-  projectRoot: string;
+  project_root: string;
 
   /**
    * 当前会话 ID。
    */
-  sessionId: string;
+  session_id: string;
 
   /**
    * 当前 system 档位（默认 chat）。
@@ -324,26 +324,26 @@ export async function resolveSessionSystemMessages(input: {
   /**
    * 当前静态 system 文本集合。
    */
-  staticSystemPrompts: string[];
+  static_system_prompts: string[];
 
   /**
    * 当前执行上下文。
    */
-  context: AgentContext;
+  context: PluginContext;
 
 }): Promise<SystemModelMessage[]> {
   const profile = resolveSystemContextProfile(input.profile);
   return await buildSessionSystemMessages({
-    projectRoot: input.projectRoot,
-    sessionId: input.sessionId,
+    project_root: input.project_root,
+    session_id: input.session_id,
     mode: profile.mode,
-    replaceDefaultCorePrompt: profile.replaceDefaultCorePrompt,
-    staticSystemPrompts: input.staticSystemPrompts,
-    managedPluginSystemPrompts: await loadManagedPluginSystemPrompts({
+    replace_default_core_prompt: profile.replace_default_core_prompt,
+    static_system_prompts: input.static_system_prompts,
+    managed_plugin_system_prompts: await loadManagedPluginSystemPrompts({
       context: input.context,
-      disabledPluginNames: profile.disablePluginSystems,
+      disabled_plugin_names: profile.disable_plugin_systems,
     }),
-    localPluginSystemPrompts: await loadLocalPluginSystemPrompts({
+    local_plugin_system_prompts: await loadLocalPluginSystemPrompts({
       context: input.context,
     }),
   });

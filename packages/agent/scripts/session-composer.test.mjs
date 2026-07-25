@@ -123,11 +123,11 @@ test("Session system 快照与 Custom Composer 的实际模型输入一致", asy
     id: "custom_composer_agent",
     workspace: new Workspace({ path: project_root }),
     model: new MockLanguageModelV3({ modelId: "custom-composer-model" }),
-    Session: CustomSession,
+    session_class: CustomSession,
   });
   try {
     const session = await agent.sessions.create({
-      sessionId: "custom_composer_session",
+      session_id: "custom_composer_session",
     });
     const snapshot = await session.system();
     assert.equal(snapshot.blocks.at(-1).content, "Custom snapshot behavior");

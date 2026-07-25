@@ -609,8 +609,8 @@ export class AgentChatTuiCoordinator {
         this.hide_session_picker();
         if (result.kind === "create") {
           void this.create_new_session();
-        } else if (result.sessionId) {
-          void this.switch_session(result.sessionId);
+        } else if (result.session_id) {
+          void this.switch_session(result.session_id);
         }
       },
       on_cancel: () => {

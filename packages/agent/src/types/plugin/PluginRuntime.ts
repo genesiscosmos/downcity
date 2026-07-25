@@ -6,7 +6,7 @@
  * - setup/usage UI 协议与 action 输入适配不放在这里。
  */
 
-import type { AgentContext } from "@/agent/AgentContext.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { StructuredConfig } from "@/types/plugin/PluginConfig.js";
 import type { JsonValue } from "@/types/common/Json.js";
 import type { PluginActionResult } from "@/types/plugin/PluginAction.js";
@@ -37,9 +37,9 @@ export interface PluginView {
   /** Plugin resolve 点名称列表。 */
   resolves: string[];
   /** 是否声明了 system 注入。 */
-  hasSystem: boolean;
+  has_system: boolean;
   /** 是否声明了 availability 检查。 */
-  hasAvailability: boolean;
+  has_availability: boolean;
 }
 
 /**
@@ -101,17 +101,17 @@ export interface AgentPlugins {
    * - 返回值表示 configured registry 是否发生删除。
    * - 活跃 Session step 仍可使用已捕获的 execution lease，lifecycle.stop 在 lease 释放后执行。
    */
-  unregister(pluginName: string): Promise<boolean>;
+  unregister(plugin_name: string): Promise<boolean>;
   /** 启动全部已挂载 plugin lifecycle。 */
-  startAll(): Promise<PluginSnapshot[]>;
+  start_all(): Promise<PluginSnapshot[]>;
   /** 卸载全部 plugin，并等待所有 execution lease 释放后的 lifecycle.stop 完成。 */
-  unregisterAll(): Promise<void>;
+  unregister_all(): Promise<void>;
   /** 判断 plugin 是否已注册。 */
-  has(pluginName: string): boolean;
+  has(plugin_name: string): boolean;
   /** 读取单个 plugin 定义。 */
-  get(pluginName: string): Plugin | null;
+  get(plugin_name: string): Plugin | null;
   /** 读取单个 plugin 注册快照。 */
-  status(pluginName: string): PluginSnapshot | null;
+  status(plugin_name: string): PluginSnapshot | null;
   /** 列出全部已注册 plugin 快照。 */
   snapshots(): PluginSnapshot[];
   /** 列出全部已注册 plugin。 */
@@ -124,9 +124,9 @@ export interface AgentPlugins {
     action?: string;
   }): PluginReadView | { plugins: PluginView[] };
   /** 检查指定 plugin 可用性。 */
-  availability(pluginName: string): Promise<PluginAvailability>;
+  availability(plugin_name: string): Promise<PluginAvailability>;
   /** 运行指定 plugin action。 */
-  runAction(params: {
+  run_action(params: {
     /** Plugin 名称。 */
     plugin: string;
     /** Action 名称。 */
@@ -137,18 +137,18 @@ export interface AgentPlugins {
     run_context?: SessionRunContext;
   }): Promise<PluginActionResult<JsonValue>>;
   /** 读取当前生效的 plugin system blocks。 */
-  systemBlocks(
+  system_blocks(
     run_context?: SessionRunContext,
   ): Promise<AgentSessionSystemBlock[]>;
   /** 运行 pipeline 点，按顺序链式变换值。 */
-  pipeline<T = JsonValue>(pointName: string, value: T): Promise<T>;
+  pipeline<T = JsonValue>(point_name: string, value: T): Promise<T>;
   /** 运行 guard 点；任一插件抛错即终止。 */
-  guard<T = JsonValue>(pointName: string, value: T): Promise<void>;
+  guard<T = JsonValue>(point_name: string, value: T): Promise<void>;
   /** 运行 effect 点；只执行副作用。 */
-  effect<T = JsonValue>(pointName: string, value: T): Promise<void>;
+  effect<T = JsonValue>(point_name: string, value: T): Promise<void>;
   /** 运行 resolve 点；要求存在且仅存在一个处理器。 */
   resolve<TInput = JsonValue, TOutput = JsonValue>(
-    pointName: string,
+    point_name: string,
     value: TInput,
   ): Promise<TOutput>;
 
@@ -167,7 +167,7 @@ export interface AgentPluginExecutionView {
   }): PluginReadView | { plugins: PluginView[] };
 
   /** 运行当前视图中捕获的 plugin action。 */
-  runAction(params: {
+  run_action(params: {
     /** Plugin 名称。 */
     plugin: string;
     /** Action 名称。 */
@@ -179,7 +179,7 @@ export interface AgentPluginExecutionView {
   }): Promise<PluginActionResult<JsonValue>>;
 
   /** 解析当前视图中捕获的 plugin system blocks。 */
-  systemBlocks(
+  system_blocks(
     run_context?: SessionRunContext,
   ): Promise<AgentSessionSystemBlock[]>;
 }
@@ -221,7 +221,7 @@ export interface PluginConfigDefinition<T extends StructuredConfig = StructuredC
   /** 配置作用域。 */
   scope: "global" | "project";
   /** 默认配置值。 */
-  defaultValue: T;
+  default_value: T;
 }
 
 /**
@@ -231,7 +231,7 @@ export type PluginPipelineHook<
   TValue extends JsonValue = JsonValue,
 > = (params: {
   /** 当前执行上下文。 */
-  context: AgentContext;
+  context: PluginContext;
   /** 当前值。 */
   value: TValue;
   /** 当前插件名称。 */
@@ -246,7 +246,7 @@ export type PluginPipelineHook<
  */
 export type PluginGuardHook<TValue extends JsonValue = JsonValue> = (params: {
   /** 当前执行上下文。 */
-  context: AgentContext;
+  context: PluginContext;
   /** 当前值。 */
   value: TValue;
   /** 当前插件名称。 */
@@ -258,7 +258,7 @@ export type PluginGuardHook<TValue extends JsonValue = JsonValue> = (params: {
  */
 export type PluginEffectHook<TValue extends JsonValue = JsonValue> = (params: {
   /** 当前执行上下文。 */
-  context: AgentContext;
+  context: PluginContext;
   /** 当前值。 */
   value: TValue;
   /** 当前插件名称。 */
@@ -273,7 +273,7 @@ export type PluginResolveHook<
   TOutput extends JsonValue = JsonValue,
 > = (params: {
   /** 当前执行上下文。 */
-  context: AgentContext;
+  context: PluginContext;
   /** 当前输入值。 */
   value: TInput;
   /** 当前插件名称。 */
@@ -296,5 +296,5 @@ export interface PluginHooks {
  * Plugin resolve 点集合。
  */
 export type PluginResolves = {
-  [pointName: string]: PluginResolveHook<JsonValue, JsonValue>;
+  [point_name: string]: PluginResolveHook<JsonValue, JsonValue>;
 };

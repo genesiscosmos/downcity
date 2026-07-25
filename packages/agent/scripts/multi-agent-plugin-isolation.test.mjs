@@ -13,7 +13,7 @@ import fs from "node:fs/promises";
 import { MockLanguageModelV3 } from "ai/test";
 
 import { Agent, Workspace } from "../bin/index.js";
-import { createAction, createPlugin } from "../bin/plugin/core/PluginActionFactory.js";
+import { create_action, create_plugin } from "../bin/plugin/core/PluginActionFactory.js";
 import { CITY_MODEL_KIND } from "@downcity/type";
 
 /** 构造 AI SDK V3 usage。 */
@@ -107,12 +107,12 @@ function create_test_model(model_id, model_requests) {
 
 /** 创建返回固定 owner 的 skill plugin。 */
 function create_owner_plugin(owner, executed_owners) {
-  return createPlugin({
+  return create_plugin({
     name: "skill",
     title: `Skill ${owner}`,
     description: "Return the owning Agent id",
     actions: {
-      lookup: createAction({
+      lookup: create_action({
         description: "Return registry owner",
         execute: async () => {
           executed_owners.push(owner);
@@ -146,8 +146,8 @@ test("multiple session prompts use only their owning Agent plugin registry", asy
   });
 
   try {
-    const session_a = await agent_a.sessions.create({ sessionId: "session_a" });
-    const session_b = await agent_b.sessions.create({ sessionId: "session_b" });
+    const session_a = await agent_a.sessions.create({ session_id: "session_a" });
+    const session_b = await agent_b.sessions.create({ session_id: "session_b" });
     const [turn_a, turn_b] = await Promise.all([
       session_a.prompt({ query: "Call your skill plugin" }),
       session_b.prompt({ query: "Call your skill plugin" }),

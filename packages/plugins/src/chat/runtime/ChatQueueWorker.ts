@@ -8,7 +8,7 @@
  */
 
 import type { Logger } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { ChatQueueWorkerConfig } from "@/chat/types/ChatQueueWorker.js";
 import type { ChatQueueItem } from "@/chat/types/ChatQueue.js";
 import type { SessionMutation } from "@downcity/agent";
@@ -18,7 +18,7 @@ import {
 } from "./ChatQueue.js";
 import { getChatSender } from "./ChatSendRegistry.js";
 import {
-  pickLastSuccessfulChatSendText,
+  pick_last_successful_chat_send_text,
 } from "@downcity/agent";
 import {
   buildChannelErrorText,
@@ -42,15 +42,15 @@ type LaneState = {
 };
 
 type TurnObservation = {
-  turnId: string;
-  sessionId: string;
-  messageId?: string;
+  turn_id: string;
+  session_id: string;
+  message_id?: string;
   typing: { stop: () => void };
 };
 
 export class ChatQueueWorker {
   private readonly logger: Logger;
-  private readonly context: AgentContext;
+  private readonly context: PluginContext;
   private readonly config: ChatQueueWorkerConfig;
   private readonly queueStore: ChatQueueStorePort;
 
@@ -63,7 +63,7 @@ export class ChatQueueWorker {
 
   constructor(params: {
     logger: Logger;
-    context: AgentContext;
+    context: PluginContext;
     queueStore?: ChatQueueStorePort;
     config?: Partial<ChatQueueWorkerConfig>;
   }) {
@@ -170,8 +170,8 @@ export class ChatQueueWorker {
    * - 只对支持显式取消的 runtime 生效（主要是 ACP）。
    * - 失败不影响正常排队；worker 仍会走串行兜底。
    */
-  private async requestTurnCancelIfSupported(sessionId: string): Promise<void> {
-    const sessionKey = String(sessionId || "").trim();
+  private async requestTurnCancelIfSupported(session_id: string): Promise<void> {
+    const sessionKey = String(session_id || "").trim();
     if (!sessionKey) return;
     try {
       // ACP executor removed; cancel is no longer supported through session executor port.
@@ -187,7 +187,7 @@ export class ChatQueueWorker {
     const control = item.control;
     if (!control) return false;
     if (control.type === "clear") {
-      this.queueStore.clear(item.sessionId);
+      this.queueStore.clear(item.session_id);
       return true;
     }
     return false;
@@ -222,8 +222,8 @@ export class ChatQueueWorker {
           ...(typeof item.targetType === "string" && item.targetType
             ? { chatType: item.targetType }
             : {}),
-          ...(typeof item.messageId === "string" && item.messageId
-            ? { messageId: item.messageId }
+          ...(typeof item.message_id === "string" && item.message_id
+            ? { message_id: item.message_id }
             : {}),
         });
       } catch {
@@ -251,9 +251,9 @@ export class ChatQueueWorker {
    * - 若 direct 未送达，则立刻回退到普通 channel 文本发送。
    */
   private async dispatchAssistantStepMessage(params: {
-    sessionId: string;
+    session_id: string;
     text: string;
-    messageId?: string;
+    message_id?: string;
   }): Promise<boolean> {
     const stepText = String(params.text || "").trim();
     if (!stepText) return false;
@@ -261,7 +261,7 @@ export class ChatQueueWorker {
     const dispatchedDirectly = await dispatchAssistantTextDirect({
       logger: this.logger,
       context: this.context,
-      sessionId: params.sessionId,
+      session_id: params.session_id,
       assistantText: stepText,
       phase: "step",
     });
@@ -272,9 +272,9 @@ export class ChatQueueWorker {
     return await dispatchTextToChannel({
       logger: this.logger,
       context: this.context,
-      sessionId: params.sessionId,
+      session_id: params.session_id,
       text: stepText,
-      messageId: params.messageId,
+      message_id: params.message_id,
       phase: "step",
     });
   }
@@ -290,8 +290,8 @@ export class ChatQueueWorker {
       return;
     }
 
-    const serviceContext = this.requireContext(first.sessionId);
-    this.ensureLaneSessionSubscription(lane, first.sessionId);
+    const serviceContext = this.requireContext(first.session_id);
+    this.ensureLaneSessionSubscription(lane, first.session_id);
 
     let clearRequested = false;
     const initialBurstItems = await collectInitialBurstItems({
@@ -315,16 +315,16 @@ export class ChatQueueWorker {
     }
 
     if (clearRequested) {
-      this.queueStore.clear(first.sessionId);
+      this.queueStore.clear(first.session_id);
     }
   }
 
   private ensureLaneSessionSubscription(
     lane: LaneState,
-    sessionId: string,
+    session_id: string,
   ): void {
     if (lane.unsubscribeSessionEvents) return;
-    const session = this.requireContext(sessionId);
+    const session = this.requireContext(session_id);
     lane.unsubscribeSessionEvents = session.subscribe((event) => {
       void this.handleLaneSessionEvent(lane, event);
     });
@@ -358,13 +358,13 @@ export class ChatQueueWorker {
 
     try {
       await this.dispatchAssistantStepMessage({
-        sessionId: observation.sessionId,
+        session_id: observation.session_id,
         text: segment_text,
-        messageId: observation.messageId,
+        message_id: observation.message_id,
       });
     } catch (error) {
       this.logger.warn("ChatQueueWorker assistant step dispatch failed", {
-        sessionId: observation.sessionId,
+        session_id: observation.session_id,
         error: String(error),
       });
     }
@@ -384,9 +384,9 @@ export class ChatQueueWorker {
         return;
       }
       const observation: TurnObservation = {
-        turnId: turn.id,
-        sessionId: item.sessionId,
-        messageId: item.messageId,
+        turn_id: turn.id,
+        session_id: item.session_id,
+        message_id: item.message_id,
         typing: this.startTypingHeartbeat(item),
       };
       params.lane.turnObservers.set(turn.id, observation);
@@ -412,15 +412,15 @@ export class ChatQueueWorker {
     } catch (error) {
       const channelErrorText = buildChannelErrorText(error);
       this.logger.error("ChatQueueWorker prompt submit failed", {
-        sessionId: item.sessionId,
+        session_id: item.session_id,
         error: String(error),
       });
       await dispatchTextToChannel({
         logger: this.logger,
         context: this.context,
-        sessionId: item.sessionId,
+        session_id: item.session_id,
         text: channelErrorText,
-        messageId: item.messageId,
+        message_id: item.message_id,
         phase: "error",
       });
     }
@@ -431,7 +431,7 @@ export class ChatQueueWorker {
     result: AgentSessionTurnResult,
   ): Promise<void> {
     const stopReason = String(
-      result.assistantMessage?.metadata?.extra?.stopReason || "",
+      result.assistant_message?.metadata?.extra?.stopReason || "",
     ).trim();
     if (stopReason === "cancelled") {
       return;
@@ -439,20 +439,20 @@ export class ChatQueueWorker {
 
     if (!result.success) {
       const resultErrorText =
-        pickLastSuccessfulChatSendText(result.assistantMessage) ||
+        pick_last_successful_chat_send_text(result.assistant_message) ||
         result.error ||
         "Execution failed";
       const channelErrorText = buildChannelErrorText(resultErrorText);
       this.logger.error("ChatQueueWorker turn finished with failure", {
-        sessionId: observation.sessionId,
+        session_id: observation.session_id,
         error: result.error || resultErrorText,
       });
       await dispatchTextToChannel({
         logger: this.logger,
         context: this.context,
-        sessionId: observation.sessionId,
+        session_id: observation.session_id,
         text: channelErrorText,
-        messageId: observation.messageId,
+        message_id: observation.message_id,
         phase: "error",
       });
       return;
@@ -465,7 +465,7 @@ export class ChatQueueWorker {
    * 关键点（中文）
    * - 在使用点显式校验，避免隐藏依赖来源。
    */
-  private requireContext(sessionId: string) {
-    return this.context.sessions.runtime(sessionId);
+  private requireContext(session_id: string) {
+    return this.context.sessions.runtime(session_id);
   }
 }

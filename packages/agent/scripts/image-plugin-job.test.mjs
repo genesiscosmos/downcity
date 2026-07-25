@@ -31,13 +31,13 @@ function create_image_message() {
   };
 }
 
-function create_context(rootPath = process.cwd()) {
-  return { rootPath };
+function create_context(workspace_path = process.cwd()) {
+  return { workspace_path };
 }
 
-function create_registry(plugin, rootPath = process.cwd()) {
+function create_registry(plugin, workspace_path = process.cwd()) {
   const registry = new PluginRegistry([plugin]);
-  registry.bind_context(create_context(rootPath));
+  registry.bind_context(create_context(workspace_path));
   return registry;
 }
 
@@ -67,8 +67,8 @@ test("ImagePlugin image_create returns image job", async () => {
   const result = await plugin.actions.image_create.execute({
     context: create_context(),
     input: { prompt: "draw" },
-    pluginName: "image",
-    actionName: "image_create",
+    plugin_name: "image",
+    action_name: "image_create",
   });
 
   assert.equal(result.success, true);
@@ -104,8 +104,8 @@ test("ImagePlugin models lists image-capable models", async () => {
   const result = await plugin.actions.models.execute({
     context: create_context(),
     input: {},
-    pluginName: "image",
-    actionName: "models",
+    plugin_name: "image",
+    action_name: "models",
   });
 
   assert.equal(result.success, true);
@@ -152,8 +152,8 @@ test("ImagePlugin image_result reads pending state once", async () => {
   const result = await plugin.actions.image_result.execute({
     context: create_context(),
     input: { job_id: "img_1" },
-    pluginName: "image",
-    actionName: "image_result",
+    plugin_name: "image",
+    action_name: "image_result",
   });
 
   assert.equal(result.success, true);
@@ -178,8 +178,8 @@ test("ImagePlugin image_result returns final message when succeeded", async () =
   const result = await plugin.actions.image_result.execute({
     context: create_context(),
     input: { job_id: "img_1" },
-    pluginName: "image",
-    actionName: "image_result",
+    plugin_name: "image",
+    action_name: "image_result",
   });
 
   assert.equal(result.success, true);
@@ -201,8 +201,8 @@ test("ImagePlugin image_result reports failed terminal job", async () => {
   const result = await plugin.actions.image_result.execute({
     context: create_context(),
     input: { job_id: "img_1" },
-    pluginName: "image",
-    actionName: "image_result",
+    plugin_name: "image",
+    action_name: "image_result",
   });
 
   assert.equal(result.success, false);
@@ -217,7 +217,7 @@ test("ImagePlugin image_result payload is schema validated by registry", async (
   });
   const registry = create_registry(plugin);
 
-  const result = await registry.runAction({
+  const result = await registry.run_action({
     plugin: "image",
     action: "image_result",
     payload: {},
@@ -248,8 +248,8 @@ test("ImagePlugin image_create converts local content image paths", async () => 
           { type: "image", url: "./input.png" },
         ],
       },
-      pluginName: "image",
-      actionName: "image_create",
+      plugin_name: "image",
+      action_name: "image_create",
     });
 
     assert.equal(result.success, true);
@@ -279,8 +279,8 @@ test("ImagePlugin image_create uses content instead of prompt when both exist", 
       prompt: "ignore this prompt",
       content: [{ type: "text", text: "use this content" }],
     },
-    pluginName: "image",
-    actionName: "image_create",
+    plugin_name: "image",
+    action_name: "image_create",
   });
 
   assert.equal(result.success, true);
@@ -306,8 +306,8 @@ test("ImagePlugin image_create keeps remote content image URLs", async () => {
         { type: "image", url: "https://example.com/input.webp", media_type: "image/webp" },
       ],
     },
-    pluginName: "image",
-    actionName: "image_create",
+    plugin_name: "image",
+    action_name: "image_create",
   });
 
   assert.equal(result.success, true);
@@ -331,8 +331,8 @@ test("ImagePlugin image_create rejects legacy messages and data URLs", async () 
         },
       ],
     },
-    pluginName: "image",
-    actionName: "image_create",
+    plugin_name: "image",
+    action_name: "image_create",
   });
 
   assert.equal(messages_result.success, false);
@@ -346,8 +346,8 @@ test("ImagePlugin image_create rejects legacy messages and data URLs", async () 
         { type: "image", url: "data:image/png;base64,cG5n" },
       ],
     },
-    pluginName: "image",
-    actionName: "image_create",
+    plugin_name: "image",
+    action_name: "image_create",
   });
 
   assert.equal(data_url_result.success, false);
@@ -390,8 +390,8 @@ test("ImagePlugin image_result polls until terminal when until_done=true", async
       max_wait_ms: 500,
       poll_interval_ms: 5,
     },
-    pluginName: "image",
-    actionName: "image_result",
+    plugin_name: "image",
+    action_name: "image_result",
   });
 
   assert.equal(result.success, true);
@@ -418,8 +418,8 @@ test("ImagePlugin image_result returns last status when max_wait_ms elapses", as
       max_wait_ms: 30,
       poll_interval_ms: 5,
     },
-    pluginName: "image",
-    actionName: "image_result",
+    plugin_name: "image",
+    action_name: "image_result",
   });
 
   assert.equal(result.success, true);

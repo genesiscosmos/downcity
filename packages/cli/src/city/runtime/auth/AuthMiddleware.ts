@@ -7,7 +7,7 @@
  */
 
 import type { Context, MiddlewareHandler } from "hono";
-import type { AuthPrincipal } from "@downcity/agent";
+import type { AuthPrincipal } from "@downcity/type";
 import { isAuthError } from "@/city/runtime/auth/AuthError.js";
 import type { AuthService } from "@/city/runtime/auth/AuthService.js";
 

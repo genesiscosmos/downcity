@@ -9,7 +9,7 @@ description: The core public API of the remote Agent client
 
 - `new RemoteAgent({ url })`
 - `agent.sessions`
-- `agent.runPluginAction(input)`
+- `agent.run_plugin_action(input)`
 
 `agent.sessions.create()` and `agent.sessions.get()` return `RemoteAgentSession`.
 
@@ -18,18 +18,18 @@ description: The core public API of the remote Agent client
 `agent.sessions` returns an `AgentSessions` with the following methods:
 
 - `agent.sessions.create(input?)`
-- `agent.sessions.get(sessionId)`
+- `agent.sessions.get(session_id)`
 - `agent.sessions.list(input?)`
 - `agent.sessions.archive({ id })`
 - `agent.sessions.archived(input?)`
 - `agent.sessions.clean_archive()`
 
-## `runPluginAction`
+## `run_plugin_action`
 
-Use `runPluginAction()` when your client UI needs to call an action on the remote runtime.
+Use `run_plugin_action()` when your client UI needs to call an action on the remote runtime.
 
 ```ts
-await agent.runPluginAction({
+await agent.run_plugin_action({
   plugin: "example",
   action: "refresh",
   payload: {

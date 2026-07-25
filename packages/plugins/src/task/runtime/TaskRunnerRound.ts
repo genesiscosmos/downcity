@@ -8,7 +8,7 @@
 
 import path from "node:path";
 import fs from "fs-extra";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { SessionRunResult } from "@downcity/agent";
 import type { SessionRunContext } from "@downcity/agent";
 import type { JsonObject } from "@downcity/agent";
@@ -87,11 +87,11 @@ function extractTextFromAssistantMessageParts(parts: unknown): string {
  * - task 的过程内容保留在 `messages.jsonl / dialogue.md`；`output.md` 只记录最后 assistant 文本。
  */
 export function pickAgentOutput(
-  assistantMessage: SessionRunResult["assistantMessage"],
+  assistant_message: SessionRunResult["assistant_message"],
 ): ChatSendOutputPick {
   return {
     text: extractTextFromAssistantMessageParts(
-      (assistantMessage as { parts?: unknown } | null)?.parts,
+      (assistant_message as { parts?: unknown } | null)?.parts,
     ),
     delivered: false,
   };
@@ -223,7 +223,7 @@ export function buildUserSimulatorQuery(params: {
  */
 export async function runAgentRound(params: {
   taskSessionRuntime: TaskSessionRuntimePort;
-  sessionId: string;
+  session_id: string;
   taskId: string;
   query: string;
   actorId: string;
@@ -232,7 +232,7 @@ export async function runAgentRound(params: {
   try {
     await appendTaskRoundUserMessage({
       taskSessionRuntime: params.taskSessionRuntime,
-      sessionId: params.sessionId,
+      session_id: params.session_id,
       taskId: params.taskId,
       query: params.query,
       actorId: params.actorId,
@@ -243,12 +243,12 @@ export async function runAgentRound(params: {
   }
 
   const result = await params.taskSessionRuntime
-    .getExecutor(params.sessionId)
+    .get_executor(params.session_id)
     .run({
       query: params.query,
-      runContext: create_task_run_context(params.sessionId),
+      run_context: create_task_run_context(params.session_id),
     });
-  const outputPick = pickAgentOutput(result.assistantMessage);
+  const outputPick = pickAgentOutput(result.assistant_message);
 
   if (!result.success) {
     const reason = outputPick.text || "agent run returned success=false";
@@ -270,9 +270,9 @@ export async function runAgentRound(params: {
  * 执行 script 类型任务。
  */
 export async function runScriptTask(params: {
-  context: AgentContext;
+  context: PluginContext;
   runDirAbs: string;
-  sessionId: string;
+  session_id: string;
   scriptBody: string;
 }): Promise<ScriptExecutionResult> {
   const body = String(params.scriptBody || "");
@@ -283,7 +283,7 @@ export async function runScriptTask(params: {
 
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
-    DC_SESSION_ID: params.sessionId,
+    DC_SESSION_ID: params.session_id,
   };
   stripTaskSecretEnv(childEnv);
   const shell = params.context.shell;
@@ -291,7 +291,7 @@ export async function runScriptTask(params: {
     throw new Error("Script task execution requires Agent to be configured with a Shell.");
   }
   const execResult = await shell.run_safe_command({
-    execution_id: `task-script:${params.sessionId}`,
+    execution_id: `task-script:${params.session_id}`,
     execution_dir: params.runDirAbs,
     cmd: `sh "${scriptAbs.replace(/(["\\$`])/g, "\\$1")}"`,
     cwd: params.runDirAbs,
@@ -313,10 +313,10 @@ export async function runScriptTask(params: {
  */
 function create_task_run_context(session_id: string): SessionRunContext {
   return {
-    sessionId: session_id,
-    injectedUserMessages: [],
-    deferredPersistedUserMessages: [],
-    pendingAssistantFileParts: [],
+    session_id: session_id,
+    injected_user_messages: [],
+    deferred_persisted_user_messages: [],
+    pending_assistant_file_parts: [],
   };
 }
 

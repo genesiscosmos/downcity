@@ -8,13 +8,13 @@
  */
 
 import { BasePlugin } from "@downcity/agent";
-import { createAction } from "@downcity/agent";
+import { create_action } from "@downcity/agent";
 import { z } from "zod";
 import type {
   PluginActions,
   PluginHttpDefinition,
 } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { JsonValue } from "@downcity/agent";
 import { getWorkboardSnapshotStore } from "@/workboard/runtime/Store.js";
 import type { WorkboardSnapshotResponse } from "@/workboard/types/Workboard.js";
@@ -23,7 +23,7 @@ import type { WorkboardSnapshotResponse } from "@/workboard/types/Workboard.js";
  * 读取 workboard 快照。
  */
 async function readWorkboardSnapshot(
-  context: AgentContext,
+  context: PluginContext,
 ): Promise<WorkboardSnapshotResponse> {
   const snapshot = await getWorkboardSnapshotStore({
     contextResolver: () => context,
@@ -58,7 +58,7 @@ export class WorkboardPlugin extends BasePlugin {
    * Workboard 对外 action。
    */
   readonly actions: PluginActions = {
-    snapshot: createAction({
+    snapshot: create_action({
       description: "Read the current structured runtime snapshot from the workboard.",
       input_schema: {
         zod: z.object({}).passthrough(),
@@ -82,18 +82,18 @@ export class WorkboardPlugin extends BasePlugin {
    */
   readonly http: PluginHttpDefinition = {
     server: {
-      authPolicies: [
+      auth_policies: [
         {
           path: "/api/workboard/*",
           method: "GET",
-          requireAuth: true,
-          anyPermissions: ["agent.read"],
+          require_auth: true,
+          any_permissions: ["agent.read"],
         },
       ],
-      register({ app, getContext }) {
+      register({ app, get_context }) {
         app.get("/api/workboard/snapshot", async (c) => {
           try {
-            return c.json(await readWorkboardSnapshot(getContext()));
+            return c.json(await readWorkboardSnapshot(get_context()));
           } catch (error) {
             return c.json(
               {

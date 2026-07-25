@@ -1,15 +1,15 @@
 /**
- * ChannelContextStore：渠道目标与 sessionId 映射存储。
+ * ChannelContextStore：渠道目标与 session_id 映射存储。
  *
  * 关键点（中文）
  * - 映射文件位于 `.downcity/channel/meta.json`。
- * - sessionId 由服务端随机生成并持久化，不依赖字符串拼接规则。
- * - 统一提供“按目标找 sessionId / 按 sessionId 找目标”能力。
+ * - session_id 由服务端随机生成并持久化，不依赖字符串拼接规则。
+ * - 统一提供“按目标找 session_id / 按 session_id 找目标”能力。
  */
 
 import fs from "fs-extra";
-import { generateId } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import { generate_id } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type {
   ChannelContextMetaFileV1,
   ChannelContextRouteV1,
@@ -52,13 +52,13 @@ function normalizeRoute(
   input: Partial<ChannelContextRouteV1> | null | undefined,
 ): ChannelContextRouteV1 | null {
   if (!input || typeof input !== "object") return null;
-  const sessionId = toOptionalTrimmedString(input.sessionId);
+  const session_id = toOptionalTrimmedString(input.session_id);
   const channel = toOptionalTrimmedString(input.channel);
   const chatId = toOptionalTrimmedString(input.chatId);
-  if (!sessionId || !channel || !chatId) return null;
+  if (!session_id || !channel || !chatId) return null;
   return {
     v: 1,
-    sessionId,
+    session_id,
     channel: channel as ChannelContextRouteV1["channel"],
     chatId,
     ...(toOptionalTrimmedString(input.targetType)
@@ -67,8 +67,8 @@ function normalizeRoute(
     ...(toOptionalThreadId(input.threadId)
       ? { threadId: toOptionalThreadId(input.threadId) }
       : {}),
-    ...(toOptionalTrimmedString(input.messageId)
-      ? { messageId: toOptionalTrimmedString(input.messageId) }
+    ...(toOptionalTrimmedString(input.message_id)
+      ? { message_id: toOptionalTrimmedString(input.message_id) }
       : {}),
     ...(toOptionalTrimmedString(input.actorId)
       ? { actorId: toOptionalTrimmedString(input.actorId) }
@@ -79,9 +79,9 @@ function normalizeRoute(
     ...(toOptionalTrimmedString(input.chatTitle)
       ? { chatTitle: toOptionalTrimmedString(input.chatTitle) }
       : {}),
-    updatedAt:
-      typeof input.updatedAt === "number" && Number.isFinite(input.updatedAt)
-        ? input.updatedAt
+    updated_at:
+      typeof input.updated_at === "number" && Number.isFinite(input.updated_at)
+        ? input.updated_at
         : Date.now(),
   };
 }
@@ -96,10 +96,10 @@ function normalizeMetaFile(
       ? input.routesBySessionId
       : {};
   if (rawRoutes && typeof rawRoutes === "object") {
-    for (const [sessionId, rawRoute] of Object.entries(rawRoutes)) {
+    for (const [session_id, rawRoute] of Object.entries(rawRoutes)) {
       const route = normalizeRoute(rawRoute as Partial<ChannelContextRouteV1>);
       if (!route) continue;
-      routesBySessionId[sessionId] = route;
+      routesBySessionId[session_id] = route;
     }
   }
 
@@ -109,18 +109,18 @@ function normalizeMetaFile(
       : {};
   if (rawTargetMap && typeof rawTargetMap === "object") {
     for (const [targetKey, sessionIdRaw] of Object.entries(rawTargetMap)) {
-      const sessionId = toOptionalTrimmedString(sessionIdRaw);
-      if (!targetKey || !sessionId) continue;
-      if (!routesBySessionId[sessionId]) continue;
-      sessionIdByTargetKey[targetKey] = sessionId;
+      const session_id = toOptionalTrimmedString(sessionIdRaw);
+      if (!targetKey || !session_id) continue;
+      if (!routesBySessionId[session_id]) continue;
+      sessionIdByTargetKey[targetKey] = session_id;
     }
   }
 
   return {
     v: 1,
-    updatedAt:
-      typeof input?.updatedAt === "number" && Number.isFinite(input.updatedAt)
-        ? input.updatedAt
+    updated_at:
+      typeof input?.updated_at === "number" && Number.isFinite(input.updated_at)
+        ? input.updated_at
         : Date.now(),
     sessionIdByTargetKey,
     routesBySessionId,
@@ -163,19 +163,19 @@ async function writeMetaFile(params: {
 }
 
 /**
- * 通过 sessionId 读取路由信息。
+ * 通过 session_id 读取路由信息。
  */
 export async function readChannelSessionRouteBySessionId(params: {
-  context: AgentContext;
-  sessionId: string;
+  context: PluginContext;
+  session_id: string;
 }): Promise<ChannelContextRouteV1 | null> {
-  const rootPath = String(params.context.rootPath || "").trim();
-  const sessionId = toOptionalTrimmedString(params.sessionId);
-  if (!rootPath || !sessionId) return null;
+  const rootPath = String(params.context.workspace_path || "").trim();
+  const session_id = toOptionalTrimmedString(params.session_id);
+  if (!rootPath || !session_id) return null;
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.rootPath),
+    filePath: get_chat_channel_meta_path(params.context.workspace_path),
   });
-  return normalizeRoute(file.routesBySessionId[sessionId]);
+  return normalizeRoute(file.routesBySessionId[session_id]);
 }
 
 /**
@@ -183,61 +183,61 @@ export async function readChannelSessionRouteBySessionId(params: {
  *
  * 关键点（中文）
  * - 数据源为 `.downcity/channel/meta.json` 的 `routesBySessionId`。
- * - 默认按 `updatedAt` 倒序返回，便于展示“最近活跃”会话。
+ * - 默认按 `updated_at` 倒序返回，便于展示“最近活跃”会话。
  */
 export async function listChannelSessionRoutes(params: {
-  context: AgentContext;
+  context: PluginContext;
 }): Promise<{
-  updatedAt: number;
+  updated_at: number;
   routes: ChannelContextRouteV1[];
 }> {
-  const rootPath = String(params.context.rootPath || "").trim();
+  const rootPath = String(params.context.workspace_path || "").trim();
   if (!rootPath) {
     return {
-      updatedAt: Date.now(),
+      updated_at: Date.now(),
       routes: [],
     };
   }
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.rootPath),
+    filePath: get_chat_channel_meta_path(params.context.workspace_path),
   });
   const routes = Object.values(file.routesBySessionId)
     .map((route) => normalizeRoute(route))
     .filter((route): route is ChannelContextRouteV1 => Boolean(route))
-    .sort((a, b) => b.updatedAt - a.updatedAt);
+    .sort((a, b) => b.updated_at - a.updated_at);
   return {
-    updatedAt: file.updatedAt,
+    updated_at: file.updated_at,
     routes,
   };
 }
 
 /**
- * 根据渠道目标查找已有 sessionId（不自动创建）。
+ * 根据渠道目标查找已有 session_id（不自动创建）。
  */
 export async function resolveChannelSessionIdByTarget(params: {
-  context: AgentContext;
+  context: PluginContext;
   target: ChannelContextTarget;
 }): Promise<string | null> {
-  const rootPath = String(params.context.rootPath || "").trim();
+  const rootPath = String(params.context.workspace_path || "").trim();
   if (!rootPath) return null;
   const targetKey = buildChannelTargetKey(params.target);
   if (!targetKey) return null;
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.rootPath),
+    filePath: get_chat_channel_meta_path(params.context.workspace_path),
   });
-  const sessionId = toOptionalTrimmedString(file.sessionIdByTargetKey[targetKey]);
-  if (!sessionId) return null;
-  return file.routesBySessionId[sessionId] ? sessionId : null;
+  const session_id = toOptionalTrimmedString(file.sessionIdByTargetKey[targetKey]);
+  if (!session_id) return null;
+  return file.routesBySessionId[session_id] ? session_id : null;
 }
 
 /**
- * 根据渠道目标解析或创建 sessionId。
+ * 根据渠道目标解析或创建 session_id。
  */
 export async function resolveOrCreateChannelSessionIdByTarget(params: {
-  context: AgentContext;
+  context: PluginContext;
   target: ChannelContextTarget;
 }): Promise<string | null> {
-  const rootPath = String(params.context.rootPath || "").trim();
+  const rootPath = String(params.context.workspace_path || "").trim();
   if (!rootPath) return null;
   const normalizedTarget = normalizeTarget(params.target);
   if (!normalizedTarget) return null;
@@ -245,7 +245,7 @@ export async function resolveOrCreateChannelSessionIdByTarget(params: {
   if (!targetKey) return null;
 
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.rootPath),
+    filePath: get_chat_channel_meta_path(params.context.workspace_path),
   });
   const existingSessionId = toOptionalTrimmedString(file.sessionIdByTargetKey[targetKey]);
   if (
@@ -256,64 +256,64 @@ export async function resolveOrCreateChannelSessionIdByTarget(params: {
     return existingSessionId;
   }
 
-  const nextSessionId = `ctx_${generateId()}`;
+  const nextSessionId = `ctx_${generate_id()}`;
   file.sessionIdByTargetKey[targetKey] = nextSessionId;
   file.routesBySessionId[nextSessionId] = {
     v: 1,
-    sessionId: nextSessionId,
+    session_id: nextSessionId,
     channel: normalizedTarget.channel,
     chatId: normalizedTarget.chatId,
     ...(normalizedTarget.targetType ? { targetType: normalizedTarget.targetType } : {}),
     ...(typeof normalizedTarget.threadId === "number"
       ? { threadId: normalizedTarget.threadId }
       : {}),
-    updatedAt: Date.now(),
+    updated_at: Date.now(),
   };
-  file.updatedAt = Date.now();
+  file.updated_at = Date.now();
   await writeMetaFile({
-    dirPath: get_chat_channel_dir_path(params.context.rootPath),
-    filePath: get_chat_channel_meta_path(params.context.rootPath),
+    dirPath: get_chat_channel_dir_path(params.context.workspace_path),
+    filePath: get_chat_channel_meta_path(params.context.workspace_path),
     file,
   });
   return nextSessionId;
 }
 
 /**
- * 更新指定 sessionId 的渠道路由信息。
+ * 更新指定 session_id 的渠道路由信息。
  */
 export async function upsertChannelSessionRouteBySessionId(params: {
-  context: AgentContext;
-  sessionId: string;
+  context: PluginContext;
+  session_id: string;
   target: ChannelContextTarget;
-  messageId?: string;
+  message_id?: string;
   actorId?: string;
   actorName?: string;
   chatTitle?: string;
 }): Promise<void> {
-  const rootPath = String(params.context.rootPath || "").trim();
-  const sessionId = toOptionalTrimmedString(params.sessionId);
+  const rootPath = String(params.context.workspace_path || "").trim();
+  const session_id = toOptionalTrimmedString(params.session_id);
   const normalizedTarget = normalizeTarget(params.target);
-  if (!rootPath || !sessionId || !normalizedTarget) return;
+  if (!rootPath || !session_id || !normalizedTarget) return;
   const targetKey = buildChannelTargetKey(normalizedTarget);
   if (!targetKey) return;
 
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.rootPath),
+    filePath: get_chat_channel_meta_path(params.context.workspace_path),
   });
-  const prev = normalizeRoute(file.routesBySessionId[sessionId]);
+  const prev = normalizeRoute(file.routesBySessionId[session_id]);
   const nextRoute: ChannelContextRouteV1 = {
     v: 1,
-    sessionId,
+    session_id,
     channel: normalizedTarget.channel,
     chatId: normalizedTarget.chatId,
     ...(normalizedTarget.targetType ? { targetType: normalizedTarget.targetType } : {}),
     ...(typeof normalizedTarget.threadId === "number"
       ? { threadId: normalizedTarget.threadId }
       : {}),
-    ...(toOptionalTrimmedString(params.messageId)
-      ? { messageId: toOptionalTrimmedString(params.messageId) }
-      : prev?.messageId
-        ? { messageId: prev.messageId }
+    ...(toOptionalTrimmedString(params.message_id)
+      ? { message_id: toOptionalTrimmedString(params.message_id) }
+      : prev?.message_id
+        ? { message_id: prev.message_id }
         : {}),
     ...(toOptionalTrimmedString(params.actorId)
       ? { actorId: toOptionalTrimmedString(params.actorId) }
@@ -330,36 +330,36 @@ export async function upsertChannelSessionRouteBySessionId(params: {
       : prev?.chatTitle
         ? { chatTitle: prev.chatTitle }
         : {}),
-    updatedAt: Date.now(),
+    updated_at: Date.now(),
   };
 
-  file.routesBySessionId[sessionId] = nextRoute;
-  file.sessionIdByTargetKey[targetKey] = sessionId;
-  file.updatedAt = Date.now();
+  file.routesBySessionId[session_id] = nextRoute;
+  file.sessionIdByTargetKey[targetKey] = session_id;
+  file.updated_at = Date.now();
   await writeMetaFile({
-    dirPath: get_chat_channel_dir_path(params.context.rootPath),
-    filePath: get_chat_channel_meta_path(params.context.rootPath),
+    dirPath: get_chat_channel_dir_path(params.context.workspace_path),
+    filePath: get_chat_channel_meta_path(params.context.workspace_path),
     file,
   });
 }
 
 /**
- * 删除指定 sessionId 的渠道路由映射。
+ * 删除指定 session_id 的渠道路由映射。
  *
  * 关键点（中文）
  * - 会同步清理 `routesBySessionId` 与 `sessionIdByTargetKey` 双索引。
  * - 仅影响 chat 路由，不触碰 context / chat 历史文件。
  */
 export async function removeChannelSessionRouteBySessionId(params: {
-  context: AgentContext;
-  sessionId: string;
+  context: PluginContext;
+  session_id: string;
 }): Promise<{
   removed: boolean;
   route: ChannelContextRouteV1 | null;
 }> {
-  const rootPath = String(params.context.rootPath || "").trim();
-  const sessionId = toOptionalTrimmedString(params.sessionId);
-  if (!rootPath || !sessionId) {
+  const rootPath = String(params.context.workspace_path || "").trim();
+  const session_id = toOptionalTrimmedString(params.session_id);
+  if (!rootPath || !session_id) {
     return {
       removed: false,
       route: null,
@@ -367,9 +367,9 @@ export async function removeChannelSessionRouteBySessionId(params: {
   }
 
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.rootPath),
+    filePath: get_chat_channel_meta_path(params.context.workspace_path),
   });
-  const route = normalizeRoute(file.routesBySessionId[sessionId]);
+  const route = normalizeRoute(file.routesBySessionId[session_id]);
   if (!route) {
     return {
       removed: false,
@@ -377,19 +377,19 @@ export async function removeChannelSessionRouteBySessionId(params: {
     };
   }
 
-  delete file.routesBySessionId[sessionId];
+  delete file.routesBySessionId[session_id];
   for (const [targetKey, mappedSessionId] of Object.entries(
     file.sessionIdByTargetKey,
   )) {
-    if (mappedSessionId === sessionId) {
+    if (mappedSessionId === session_id) {
       delete file.sessionIdByTargetKey[targetKey];
     }
   }
 
-  file.updatedAt = Date.now();
+  file.updated_at = Date.now();
   await writeMetaFile({
-    dirPath: get_chat_channel_dir_path(params.context.rootPath),
-    filePath: get_chat_channel_meta_path(params.context.rootPath),
+    dirPath: get_chat_channel_dir_path(params.context.workspace_path),
+    filePath: get_chat_channel_meta_path(params.context.workspace_path),
     file,
   });
   return {

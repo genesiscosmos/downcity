@@ -9,8 +9,8 @@
 
 import type { QueuedUserInfoInput } from "@/chat/types/ChatPromptContext.js";
 import {
-  formatDateTimeInTimezone,
-  resolveRuntimeTimezone,
+  format_date_time_in_timezone,
+  resolve_runtime_timezone,
 } from "@downcity/agent";
 
 function normalizeInfoValue(value: unknown): string {
@@ -36,15 +36,15 @@ function normalizeReceivedAtIso(input: unknown): string {
 export function buildQueuedUserMessageWithInfo(params: {
   text: string;
 } & QueuedUserInfoInput): string {
-  const runtimeTimezone = resolveRuntimeTimezone();
+  const runtimeTimezone = resolve_runtime_timezone();
   const receivedAtIso = normalizeReceivedAtIso(params.receivedAt);
   const receivedAtDate = new Date(receivedAtIso);
   const infoLines = [
-    `message_id: ${normalizeInfoValue(params.messageId || "unknown")}`,
-    `user_id: ${normalizeInfoValue(params.userId || "unknown")}`,
+    `message_id: ${normalizeInfoValue(params.message_id || "unknown")}`,
+    `user_id: ${normalizeInfoValue(params.user_id || "unknown")}`,
     `username: ${normalizeInfoValue(params.username || "unknown")}`,
     `received_at: ${normalizeInfoValue(receivedAtIso)}`,
-    `received_at_local: ${normalizeInfoValue(formatDateTimeInTimezone(receivedAtDate, runtimeTimezone))}`,
+    `received_at_local: ${normalizeInfoValue(format_date_time_in_timezone(receivedAtDate, runtimeTimezone))}`,
     `runtime_timezone: ${normalizeInfoValue(runtimeTimezone)}`,
   ];
   if (normalizeInfoValue(params.userTimezone)) {

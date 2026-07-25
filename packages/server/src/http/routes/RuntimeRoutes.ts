@@ -18,19 +18,19 @@ export function registerRuntimeRoutes(app: Hono, agent: Agent): void {
   app.post("/api/plugins/action", async (c) => {
     try {
       const body = await c.req.json().catch(() => null) as {
-        pluginName?: unknown;
-        actionName?: unknown;
+        plugin_name?: unknown;
+        action_name?: unknown;
         payload?: unknown;
       } | null;
-      const plugin_name = String(body?.pluginName || "").trim();
-      const action_name = String(body?.actionName || "").trim();
+      const plugin_name = String(body?.plugin_name || "").trim();
+      const action_name = String(body?.action_name || "").trim();
       if (!plugin_name) {
-        return c.json({ success: false, error: "pluginName is required" }, 400);
+        return c.json({ success: false, error: "plugin_name is required" }, 400);
       }
       if (!action_name) {
-        return c.json({ success: false, error: "actionName is required" }, 400);
+        return c.json({ success: false, error: "action_name is required" }, 400);
       }
-      const result = await agent.plugins.runAction({
+      const result = await agent.plugins.run_action({
         plugin: plugin_name,
         action: action_name,
         ...(body?.payload !== undefined
@@ -38,7 +38,7 @@ export function registerRuntimeRoutes(app: Hono, agent: Agent): void {
           : {}),
       });
       return c.json(
-        { ...result, pluginName: plugin_name, actionName: action_name },
+        { ...result, plugin_name: plugin_name, action_name: action_name },
         result.success ? 200 : 400,
       );
     } catch (error) {

@@ -4,7 +4,7 @@
  * 职责说明（中文）
  * - 由 `city agent start` 启动 HTTP 入口，对外承载控制面、plugin 与 SDK HTTP 路由。
  * - Agent 进程本体只暴露本机 RPC；HTTP server 生命周期归 City CLI 管理。
- * - HTTP route 实现放在 City 内部，Agent 只提供 AgentContext / sessionCollection。
+ * - HTTP route 实现放在 City 内部，Agent 只提供 Agent / sessionCollection。
  */
 
 import { Hono } from "hono";
@@ -19,7 +19,7 @@ import { healthRouter } from "@/city/agent/http/health/health.js";
 import { createPluginsRouter } from "@/city/agent/http/plugins/plugins.js";
 import { createStaticRouter } from "@/city/agent/http/static/static.js";
 import { createControlRouter } from "@/city/agent/http/control/ControlRouter.js";
-import type { AgentContext } from "@downcity/agent";
+import type { Agent } from "@downcity/agent";
 
 /**
  * Agent HTTP 网关启动参数。
@@ -30,7 +30,7 @@ export interface AgentHttpGatewayStartOptions {
   /** HTTP 服务监听主机。 */
   host: string;
   /** 当前 agent context 读取函数。 */
-  getAgentContext: () => AgentContext;
+  get_agent: () => Agent;
   /** 可选 SDK transport 子路由（来自 `@downcity/server` 的 `AgentHTTP.router()`）。 */
   sdkRouter?: HonoType;
 }
@@ -53,7 +53,7 @@ export interface AgentHttpGatewayInstance {
 export function createAgentHttpGatewayApp(
   options: Pick<
     AgentHttpGatewayStartOptions,
-    "getAgentContext" | "sdkRouter"
+    "get_agent" | "sdkRouter"
   >,
 ): Hono {
   const app = new Hono();
@@ -68,32 +68,24 @@ export function createAgentHttpGatewayApp(
     }),
   );
 
-  // 关键点（中文）：HTTP 协议面由 City 装配，Agent 只提供 AgentContext。
+  // 关键点（中文）：HTTP 协议面由 City 装配，Agent 只提供 Agent。
   app.route("/", createStaticRouter({
-    getAgentContext: options.getAgentContext,
+    get_agent: options.get_agent,
   }));
   app.route("/", healthRouter);
   app.route("/", createPluginsRouter({
-    getAgentContext: options.getAgentContext,
+    get_agent: options.get_agent,
   }));
   app.route("/", createExecuteRouter({
-    getAgentContext: options.getAgentContext,
+    get_agent: options.get_agent,
   }));
   app.route("/", createControlRouter({
-    getAgentContext: options.getAgentContext,
+    get_agent: options.get_agent,
   }));
   if (options.sdkRouter) {
     app.route("/", options.sdkRouter);
   }
-  for (const snapshot of options.getAgentContext().plugins.snapshots()) {
-    const plugin = options.getAgentContext().plugins.get(snapshot.name);
-    if (!plugin) continue;
-    plugin.http?.server?.register({
-      app,
-      getContext: options.getAgentContext,
-      pluginName: plugin.name,
-    });
-  }
+  options.get_agent().register_plugin_http_routes(app);
 
   return app;
 }
@@ -106,7 +98,7 @@ export async function startAgentHttpGateway(
 ): Promise<AgentHttpGatewayInstance> {
   const app = createAgentHttpGatewayApp(options);
   const server = createNodeServer(app, options);
-  const server_logger = options.getAgentContext().logger;
+  const server_logger = options.get_agent().get_logger();
 
   await new Promise<void>((resolve) => {
     server.listen(options.port, options.host, () => {
@@ -121,7 +113,7 @@ export async function startAgentHttpGateway(
     app,
     server,
     async stop(): Promise<void> {
-      await server_logger.saveAllLogs();
+      await server_logger.save_all_logs();
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
       });

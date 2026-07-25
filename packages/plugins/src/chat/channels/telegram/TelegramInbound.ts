@@ -2,14 +2,14 @@
  * TelegramInbound：Telegram 入站辅助逻辑。
  *
  * 关键点（中文）
- * - 只负责消息 ID 解析、chatKey 构造、审计文本、mention 清理、附件保存。
+ * - 只负责消息 ID 解析、chat_key 构造、审计文本、mention 清理、附件保存。
  * - 不承担授权、命令分发、消息入队等主流程职责。
  */
 
 import type { TelegramAttachmentType, TelegramUpdate } from "./Shared.js";
 
 /**
- * 构建 lane 维度 chatKey。
+ * 构建 lane 维度 chat_key。
  */
 export function buildTelegramChatKey(
   chatId: string,
@@ -28,8 +28,8 @@ export function buildTelegramChatKey(
 /**
  * 解析 Telegram 消息 ID。
  */
-export function parseTelegramMessageId(messageId?: string): number | undefined {
-  const raw = String(messageId || "").trim();
+export function parseTelegramMessageId(message_id?: string): number | undefined {
+  const raw = String(message_id || "").trim();
   if (!raw || !/^\d+$/.test(raw)) return undefined;
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed <= 0) {

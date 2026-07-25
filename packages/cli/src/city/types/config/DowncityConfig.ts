@@ -2,12 +2,12 @@
  * Downcity 配置类型定义。
  *
  * 关键点（中文）
- * - 作为全局共享类型，不挂在 console 目录下。
- * - 供 agent、plugin、control plane 宿主层多处复用，避免反向类型依赖。
+ * - 该配置只属于 CLI/City 控制面，不进入 Agent SDK。
+ * - Agent 只接收宿主已经装配好的 Workspace、Model 与 Plugin 实例。
  */
-import type { LlmConfig } from "@/types/config/LlmConfig.js";
-import type { ExecutionBindingConfig } from "@/types/config/ExecutionBinding.js";
-import type { JsonObject } from "@/types/common/Json.js";
+import type { JsonObject } from "@downcity/agent";
+import type { LlmConfig } from "@/city/types/config/LlmConfig.js";
+import type { ExecutionBindingConfig } from "@/city/types/config/ExecutionBinding.js";
 
 /**
  * 单个聊天渠道配置。
@@ -46,7 +46,7 @@ export interface DowncityChatPluginChannelsConfig {
  */
 export interface DowncityChatPluginQueueConfig {
   /**
-   * 全局最大并发（不同 chatKey 之间）。
+   * 全局最大并发（不同 chat_key 之间）。
    * 默认：2
    */
   maxConcurrency?: number;
@@ -54,7 +54,7 @@ export interface DowncityChatPluginQueueConfig {
    * 入站消息合并的防抖窗口（毫秒）。
    *
    * 关键点（中文）
-   * - 同一 chatKey 在该窗口内连续到达的多条消息，会在一次 run 前一起并入上下文。
+   * - 同一 chat_key 在该窗口内连续到达的多条消息，会在一次 run 前一起并入上下文。
    * - 典型场景：用户先发一句话，再紧接着转发链接/卡片。
    * - 设为 `0` 或负数可关闭该能力（立即执行首条消息）。
    *
@@ -79,7 +79,7 @@ export interface DowncityChatPluginQueueConfig {
  */
 export interface DowncityChatPluginConfig {
   /**
-   * Chat 调度队列（按 chatKey 分 lane）。
+   * Chat 调度队列（按 chat_key 分 lane）。
    */
   queue?: DowncityChatPluginQueueConfig;
   /**
@@ -99,7 +99,7 @@ export interface DowncityPluginConfigMap {
   /**
    * 其他插件配置。
    */
-  [pluginName: string]:
+  [plugin_name: string]:
     | JsonObject
     | DowncityChatPluginConfig
     | undefined;

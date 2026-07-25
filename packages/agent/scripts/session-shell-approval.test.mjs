@@ -129,7 +129,7 @@ test("unrestricted Shell 审批保留当前 Turn 并等待用户决定", async (
 
   try {
     const session = await agent.sessions.create({
-      sessionId: "session_shell_approval",
+      session_id: "session_shell_approval",
     });
     let approval_snapshot;
     let approval_result;

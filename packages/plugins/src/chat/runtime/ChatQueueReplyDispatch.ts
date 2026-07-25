@@ -7,7 +7,7 @@
  */
 
 import type { Logger } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import { parseDirectDispatchAssistantText } from "./DirectDispatchParser.js";
 import { sendActionByChatKey } from "./ChatkeySend.js";
 import { sendChatTextByChatKey } from "../Action.js";
@@ -22,14 +22,14 @@ import {
  */
 export async function dispatchAssistantTextDirect(params: {
   logger: Logger;
-  context: AgentContext;
-  sessionId: string;
+  context: PluginContext;
+  session_id: string;
   assistantText: string;
   phase?: "step" | "final" | "error";
 }): Promise<boolean> {
   const plan = parseDirectDispatchAssistantText({
     assistantText: params.assistantText,
-    fallbackChatKey: params.sessionId,
+    fallbackChatKey: params.session_id,
   });
   if (!plan) return false;
   let textDispatchSucceeded = false;
@@ -37,18 +37,18 @@ export async function dispatchAssistantTextDirect(params: {
   if (plan.text) {
     const target = await resolveChatReplyTarget({
       context: params.context,
-      chatKey: plan.text.chatKey,
+      chat_key: plan.text.chat_key,
     });
     const preparedText = await prepareChatReplyText({
       context: params.context,
       input: {
-        chatKey: plan.text.chatKey,
+        chat_key: plan.text.chat_key,
         ...(target.channel ? { channel: target.channel } : {}),
         ...(typeof target.chatId === "string" ? { chatId: target.chatId } : {}),
-        ...(typeof plan.text.messageId === "string"
-          ? { messageId: plan.text.messageId }
-          : typeof target.messageId === "string"
-            ? { messageId: target.messageId }
+        ...(typeof plan.text.message_id === "string"
+          ? { message_id: plan.text.message_id }
+          : typeof target.message_id === "string"
+            ? { message_id: target.message_id }
             : {}),
         text: plan.text.text,
         phase: params.phase || "final",
@@ -57,27 +57,27 @@ export async function dispatchAssistantTextDirect(params: {
     });
     const textResult = await sendChatTextByChatKey({
       context: params.context,
-      chatKey: plan.text.chatKey,
+      chat_key: plan.text.chat_key,
       text: preparedText,
-      replyToMessage: plan.text.replyToMessage,
-      messageId: plan.text.messageId,
-      ...(typeof plan.text.delayMs === "number"
-        ? { delayMs: plan.text.delayMs }
+      reply_to_message: plan.text.reply_to_message,
+      message_id: plan.text.message_id,
+      ...(typeof plan.text.delay_ms === "number"
+        ? { delay_ms: plan.text.delay_ms }
         : {}),
-      ...(typeof plan.text.sendAtMs === "number"
-        ? { sendAtMs: plan.text.sendAtMs }
+      ...(typeof plan.text.send_at_ms === "number"
+        ? { send_at_ms: plan.text.send_at_ms }
         : {}),
     });
     await emitChatReplyEffect({
       context: params.context,
       input: {
-        chatKey: plan.text.chatKey,
+        chat_key: plan.text.chat_key,
         ...(target.channel ? { channel: target.channel } : {}),
         ...(typeof target.chatId === "string" ? { chatId: target.chatId } : {}),
-        ...(typeof plan.text.messageId === "string"
-          ? { messageId: plan.text.messageId }
-          : typeof target.messageId === "string"
-            ? { messageId: target.messageId }
+        ...(typeof plan.text.message_id === "string"
+          ? { message_id: plan.text.message_id }
+          : typeof target.message_id === "string"
+            ? { message_id: target.message_id }
             : {}),
         text: preparedText,
         phase: params.phase || "final",
@@ -88,8 +88,8 @@ export async function dispatchAssistantTextDirect(params: {
     });
     if (!textResult.success) {
       params.logger.warn("Direct chat text dispatch failed", {
-        sessionId: params.sessionId,
-        targetChatKey: plan.text.chatKey,
+        session_id: params.session_id,
+        targetChatKey: plan.text.chat_key,
         error: textResult.error || "chat send failed",
       });
     } else {
@@ -100,16 +100,16 @@ export async function dispatchAssistantTextDirect(params: {
   for (const reaction of plan.reactions) {
     const reactResult = await sendActionByChatKey({
       context: params.context,
-      chatKey: reaction.chatKey,
+      chat_key: reaction.chat_key,
       action: "react",
-      messageId: reaction.messageId,
+      message_id: reaction.message_id,
       reactionEmoji: reaction.emoji,
       reactionIsBig: reaction.big,
     });
     if (!reactResult.success) {
       params.logger.warn("Direct chat reaction dispatch failed", {
-        sessionId: params.sessionId,
-        targetChatKey: reaction.chatKey,
+        session_id: params.session_id,
+        targetChatKey: reaction.chat_key,
         error: reactResult.error || "chat react failed",
       });
     }
@@ -123,28 +123,28 @@ export async function dispatchAssistantTextDirect(params: {
  */
 export async function dispatchTextToChannel(params: {
   logger: Logger;
-  context: AgentContext;
-  sessionId: string;
+  context: PluginContext;
+  session_id: string;
   text: string;
-  messageId?: string;
+  message_id?: string;
   phase?: "step" | "final" | "error";
 }): Promise<boolean> {
   const text = String(params.text || "").trim();
   if (!text) return false;
   const target = await resolveChatReplyTarget({
     context: params.context,
-    chatKey: params.sessionId,
+    chat_key: params.session_id,
   });
   const preparedText = await prepareChatReplyText({
     context: params.context,
     input: {
-      chatKey: params.sessionId,
+      chat_key: params.session_id,
       ...(target.channel ? { channel: target.channel } : {}),
       ...(typeof target.chatId === "string" ? { chatId: target.chatId } : {}),
-      ...(typeof params.messageId === "string"
-        ? { messageId: params.messageId }
-        : typeof target.messageId === "string"
-          ? { messageId: target.messageId }
+      ...(typeof params.message_id === "string"
+        ? { message_id: params.message_id }
+        : typeof target.message_id === "string"
+          ? { message_id: target.message_id }
           : {}),
       text,
       phase: params.phase || "final",
@@ -154,23 +154,23 @@ export async function dispatchTextToChannel(params: {
 
   const result = await sendChatTextByChatKey({
     context: params.context,
-    chatKey: params.sessionId,
+    chat_key: params.session_id,
     text: preparedText,
-    replyToMessage: true,
-    ...(typeof params.messageId === "string" && params.messageId
-      ? { messageId: params.messageId }
+    reply_to_message: true,
+    ...(typeof params.message_id === "string" && params.message_id
+      ? { message_id: params.message_id }
       : {}),
   });
   await emitChatReplyEffect({
     context: params.context,
     input: {
-      chatKey: params.sessionId,
+      chat_key: params.session_id,
       ...(target.channel ? { channel: target.channel } : {}),
       ...(typeof target.chatId === "string" ? { chatId: target.chatId } : {}),
-      ...(typeof params.messageId === "string"
-        ? { messageId: params.messageId }
-        : typeof target.messageId === "string"
-          ? { messageId: target.messageId }
+      ...(typeof params.message_id === "string"
+        ? { message_id: params.message_id }
+        : typeof target.message_id === "string"
+          ? { message_id: target.message_id }
           : {}),
       text: preparedText,
       phase: params.phase || "final",
@@ -182,7 +182,7 @@ export async function dispatchTextToChannel(params: {
 
   if (!result.success) {
     params.logger.warn("ChatQueueWorker forced channel dispatch failed", {
-      sessionId: params.sessionId,
+      session_id: params.session_id,
       error: result.error || "chat send failed",
     });
     return false;

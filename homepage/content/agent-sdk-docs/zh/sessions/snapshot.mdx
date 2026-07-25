@@ -16,7 +16,7 @@ await session.snapshot();
 文件位置：
 
 ```text
-<projectRoot>/.downcity/agents/<agentId>/sessions/<sessionId>/instruction.md
+<project_root>/.downcity/agents/<agent_id>/sessions/<session_id>/instruction.md
 ```
 
 恢复 Session 时，SDK 优先读取这个文件；文件不存在时使用 Agent 当前 instruction 和 plugin 重新生成。删除 `instruction.md` 即可取消持久化，后续恢复会重新生成。

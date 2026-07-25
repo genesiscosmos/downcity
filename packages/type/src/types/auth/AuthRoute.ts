@@ -1,5 +1,5 @@
 /**
- * 统一账户路由策略类型。
+ * 跨 package 统一账户路由策略类型。
  *
  * 关键点（中文）
  * - 当前文件先定义协议，后续路由全面切入 Bearer 鉴权时直接复用。
@@ -22,10 +22,9 @@ export interface AuthRoutePolicy {
   /**
    * 是否必须登录。
    */
-  requireAuth: boolean;
+  require_auth: boolean;
   /**
    * 通过该路由所需的任一权限集合。
    */
-  anyPermissions?: AuthPermissionKey[];
+  any_permissions?: AuthPermissionKey[];
 }
-

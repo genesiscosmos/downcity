@@ -21,16 +21,16 @@ import { resolveAgentId } from "@/shared/IndexSupport.js";
  * 3) 用人类可读 block 输出 stopped / not running
  */
 export async function stopCommand(cwd: string = "."): Promise<void> {
-  const projectRoot = path.resolve(cwd);
-  const result = await stopDaemonProcess({ projectRoot });
+  const project_root = path.resolve(cwd);
+  const result = await stopDaemonProcess({ project_root });
   emitCliBlock({
     tone: result.stopped ? "success" : "info",
     title: result.stopped ? "Agent daemon stopped" : "Agent daemon not running",
-    summary: resolveAgentId(projectRoot),
+    summary: resolveAgentId(project_root),
     facts: [
       {
         label: "Project",
-        value: projectRoot,
+        value: project_root,
       },
       ...(result.pid
         ? [

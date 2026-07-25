@@ -9,7 +9,6 @@
 import fs from "fs-extra";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { listPluginStates } from "@downcity/agent";
 import { buildControlRouteAliases, toLimit } from "@/city/agent/control/CommonHelpers.js";
 import { list_control_session_summaries, readRecentLogs } from "@/city/agent/control/Helpers.js";
 import type { ControlRouteRegistrationParams } from "@/city/agent/http/control/types/ControlRoutes.js";
@@ -43,7 +42,7 @@ export function registerControlOverviewRoutes(
   for (const routePath of buildControlRouteAliases("/overview")) {
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.getAgentContext();
+        const runtime = params.get_agent();
         const sessionLimit = toLimit(
           c.req.query("sessionLimit") || c.req.query("contextLimit"),
           20,
@@ -52,10 +51,8 @@ export function registerControlOverviewRoutes(
           runtime.sessions,
           sessionLimit,
         );
-        const runtimePlugins = listPluginStates({
-          context: params.getAgentContext(),
-        });
-        const taskResult = await params.getAgentContext().plugins.runAction({
+        const runtimePlugins = runtime.list_plugin_states();
+        const taskResult = await params.get_agent().plugins.run_action({
           plugin: "task",
           action: "list",
         });
@@ -65,7 +62,7 @@ export function registerControlOverviewRoutes(
             : {};
         const tasks = Array.isArray(taskData.tasks) ? taskData.tasks : [];
         const logs = await readRecentLogs({
-          projectRoot: runtime.rootPath,
+          project_root: runtime.workspace.path,
           limit: 50,
         });
 
@@ -80,7 +77,7 @@ export function registerControlOverviewRoutes(
           cityVersion: DC_VERSION,
           now: new Date().toISOString(),
           agent: {
-            id: runtime.agent_id,
+            id: runtime.id,
             status: "running",
           },
           sessions: {
@@ -104,9 +101,7 @@ export function registerControlOverviewRoutes(
     app.get(routePath, (c) => {
       return c.json({
         success: true,
-        plugins: listPluginStates({
-          context: params.getAgentContext(),
-        }),
+        plugins: params.get_agent().list_plugin_states(),
       });
     });
   }

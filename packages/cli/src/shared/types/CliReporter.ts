@@ -110,7 +110,7 @@ export type CliReportListItem = {
    *
    * 说明（中文）
    * - 与 block facts 语义一致，但缩进层级更深。
-   * - 用于展示 projectRoot、PID、log 等补充信息。
+   * - 用于展示 project_root、PID、log 等补充信息。
    */
   facts?: CliReportFact[];
 };

@@ -9,7 +9,8 @@
 
 import type { Tool } from "ai";
 import type { AgentModel } from "@/agent/AgentModel.js";
-import { AgentContext } from "@/agent/AgentContext.js";
+import { create_plugin_context } from "@/plugin/core/PluginContext.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { AgentOptions } from "@/types/agent/AgentOptions.js";
 import type { Shell } from "@downcity/shell";
 import type { Workspace } from "@/workspace/Workspace.js";
@@ -17,10 +18,23 @@ import { Logger } from "@/utils/logger/Logger.js";
 import { normalizeInstructionInput } from "@/agent/AgentInstructions.js";
 import { AgentSessions } from "@/agent/AgentSessions.js";
 import { AgentState } from "@/agent/AgentState.js";
-import { generateId } from "@/utils/Id.js";
+import { generate_id } from "@/utils/Id.js";
 import { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
 import type { PluginRegistryUnsubscribe } from "@/types/plugin/PluginRegistry.js";
 import type { WorkspaceEnvUnsubscribe } from "@/types/workspace/WorkspaceEnv.js";
+import type { Hono } from "hono";
+import type { JsonValue } from "@/types/common/Json.js";
+import type { PluginActionScheduleInput } from "@/plugin/types/ActionSchedule.js";
+import type { PluginCommandResult } from "@/types/plugin/PluginCommand.js";
+import type { PluginControlAction, PluginControlResult, PluginSnapshot } from "@/types/plugin/PluginState.js";
+import { control_plugin_state, list_plugin_states } from "@/plugin/core/PluginStateController.js";
+import { run_plugin_command } from "@/plugin/core/PluginActionRunner.js";
+import { register_plugin_http_routes } from "@/plugin/core/PluginHttpRoutes.js";
+import {
+  resolve_session_system_messages,
+  type SystemProfile,
+} from "@/executor/composer/system/default/SystemDomain.js";
+import type { SystemModelMessage } from "ai";
 
 const RESERVED_PLUGIN_TOOL_NAMES = new Set(["plugin_read", "plugin_call"]);
 
@@ -72,10 +86,10 @@ export class Agent {
   private readonly logger: Logger;
 
   /** 提供给 Plugin、Session 与宿主集成层共享的 Agent 执行上下文。 */
-  private readonly context: AgentContext;
+  private readonly plugin_context: PluginContext;
 
   /** 调用方提供的自定义 Session 类；省略时使用 SDK 默认实现。 */
-  private readonly SessionClass: AgentOptions["Session"];
+  private readonly session_class: AgentOptions["session_class"];
 
   /** 当前 Agent 的长期运行状态与生命周期。 */
   private readonly state: AgentState;
@@ -98,7 +112,7 @@ export class Agent {
     if (!options.workspace) throw new Error("Agent requires a Workspace");
     this.workspace = options.workspace;
 
-    this.SessionClass = options.Session;
+    this.session_class = options.session_class;
     this.model = options.model;
     this.plugins = new PluginRegistry(options.plugins || []);
     this.tools = {};
@@ -140,28 +154,28 @@ export class Agent {
         await this.ready();
       },
       get_agent_model: () => this.model,
-      SessionClass: this.SessionClass,
+      session_class: this.session_class,
     });
-    this.context = new AgentContext({
+    this.plugin_context = create_plugin_context({
       ...(this.workspace.shell ? { shell: this.workspace.shell } : {}),
       agent_id: this.id,
-      rootPath: this.workspace.path,
+      workspace_path: this.workspace.path,
       files: this.workspace.files,
       logger: this.logger,
-      get_env: () => this.workspace.get_env(),
-      get_systems: () => this.instruction,
+      get_workspace_env: () => this.workspace.get_env(),
+      get_instructions: () => this.instruction,
       sessions: this.sessions,
       plugins: this.plugins,
     });
 
     this.unsubscribe_workspace_env = this.workspace.subscribe_env((env) => {
-      this.sessions.broadcast_env({ ...env }, generateId());
+      this.sessions.broadcast_env({ ...env }, generate_id());
     });
     this.unsubscribe_plugin_change = this.plugins.subscribe_change((change) => {
       this.sync_plugin_tools();
       const verb = change.type === "register" ? "registered" : "unregistered";
       this.sessions.broadcast_plugins({
-        command_id: generateId(),
+        command_id: generate_id(),
         title: `Agent plugin ${change.plugin_name} ${verb}`,
         plugins: this.plugins.execution_view(),
       });
@@ -169,7 +183,7 @@ export class Agent {
 
     // 关键点（中文）：装配完成后创建唯一状态对象，并立即启动长期运行时。
     this.state = new AgentState({
-      context: this.context,
+      context: this.plugin_context,
       plugins: this.plugins,
     });
   }
@@ -200,7 +214,7 @@ export class Agent {
       await this.state.dispose();
     } finally {
       try {
-        await this.logger.saveAllLogs();
+        await this.logger.save_all_logs();
       } finally {
         await this.workspace.dispose();
       }
@@ -210,7 +224,7 @@ export class Agent {
   /**
    * 更新当前 SDK Agent 的静态基础指令。
    */
-  setInstruction(input: string | string[]): void {
+  set_instruction(input: string | string[]): void {
     const next_instruction = normalizeInstructionInput(input);
     this.instruction.splice(0, this.instruction.length, ...next_instruction);
   }
@@ -218,22 +232,86 @@ export class Agent {
   /**
    * 返回当前 agent 绑定的统一日志器。
    */
-  getLogger(): Logger {
+  get_logger(): Logger {
     return this.logger;
-  }
-
-  /**
-   * 返回当前 agent context。
-   */
-  getContext(): AgentContext {
-    return this.context;
   }
 
   /**
    * 返回当前 agent 挂载的 Shell。
    */
-  getShell(): Shell | undefined {
+  get_shell(): Shell | undefined {
     return this.workspace.shell;
+  }
+
+  /** 返回当前 Agent 已配置的静态指令快照。 */
+  get_instructions(): readonly string[] {
+    return [...this.instruction];
+  }
+
+  /** 列出当前 Agent 已注册的 Plugin 状态。 */
+  list_plugin_states(): PluginSnapshot[] {
+    return list_plugin_states({ context: this.plugin_context });
+  }
+
+  /** 执行当前 Agent 的 Plugin 注册状态控制动作。 */
+  async control_plugin_state(input: {
+    /** Plugin 稳定名称。 */
+    plugin_name: string;
+    /** 需要执行的状态控制动作。 */
+    action: PluginControlAction;
+  }): Promise<PluginControlResult> {
+    return await control_plugin_state({
+      plugin_name: input.plugin_name,
+      action: input.action,
+      context: this.plugin_context,
+    });
+  }
+
+  /** 执行当前 Agent 中已注册 Plugin 的 command 或 action。 */
+  async run_plugin_command(input: {
+    /** Plugin 稳定名称。 */
+    plugin_name: string;
+    /** Plugin command 或 action 名称。 */
+    command: string;
+    /** 可选 JSON payload。 */
+    payload?: JsonValue;
+    /** 可选延迟调度参数。 */
+    schedule?: JsonValue | PluginActionScheduleInput;
+  }): Promise<PluginCommandResult & { plugin?: PluginSnapshot }> {
+    return await run_plugin_command({
+      plugin_name: input.plugin_name,
+      command: input.command,
+      payload: input.payload,
+      schedule: input.schedule,
+      context: this.plugin_context,
+    });
+  }
+
+  /** 把当前 Agent 已注册 Plugin 的 HTTP 路由装配到宿主应用。 */
+  register_plugin_http_routes(app: Hono): void {
+    register_plugin_http_routes({
+      app,
+      get_context: () => this.plugin_context,
+      plugins: this.plugins.snapshots()
+        .map((snapshot) => this.plugins.get(snapshot.name))
+        .filter((plugin) => plugin !== null),
+    });
+  }
+
+  /** 解析指定 Session 当前可见的完整 system messages。 */
+  async resolve_system_messages(input: {
+    /** 需要解析 system 的 Session 标识。 */
+    session_id: string;
+    /** system 组合档位；省略时使用 chat。 */
+    profile?: SystemProfile;
+  }): Promise<SystemModelMessage[]> {
+    return await resolve_session_system_messages({
+      project_root: this.workspace.path,
+      session_id: input.session_id,
+      profile: input.profile || "chat",
+      static_system_prompts: [...this.instruction],
+      context: this.plugin_context,
+    });
   }
 
   /** 将 PluginRegistry 当前 Tool Set 同步到 Agent 持有的工具集合。 */

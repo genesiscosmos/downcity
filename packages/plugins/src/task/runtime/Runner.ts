@@ -8,7 +8,7 @@
  * - 把最终产物写入 run 目录的具体格式委托给 `TaskRunArtifacts.ts`。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type {
   DialogueRoundRecord,
   UserSimulatorDecision,
@@ -75,11 +75,11 @@ function buildTaskExecutionFailureText(params: {
  * 3) 产物落盘（messages.jsonl / output.md / result.md / error.md / run.json）。
  */
 export async function runTaskNow(params: {
-  context: AgentContext;
+  context: PluginContext;
   taskId: string;
   trigger: ShipTaskRunTriggerV1;
   executionId?: string;
-  projectRoot?: string;
+  project_root?: string;
   /** 发起该任务的 Session step 已提交生效的 env 快照。 */
   workspace_env?: Readonly<Record<string, string>>;
   /** 发起该任务的 Session step 已提交生效的 instruction 快照。 */
@@ -102,19 +102,19 @@ export async function runTaskNow(params: {
   runDirRel: string;
 }> {
   const context = params.context;
-  const root = String(params.projectRoot || context.rootPath || "").trim();
-  if (!root) throw new Error("projectRoot is required");
+  const root = String(params.project_root || context.workspace_path || "").trim();
+  if (!root) throw new Error("project_root is required");
 
   const startedAt = Date.now();
   const timestamp = formatTaskRunTimestamp(new Date(startedAt));
   const executionId = String(params.executionId || `${params.taskId}:${timestamp}`).trim();
 
-  const task = await readTask({ taskId: params.taskId, projectRoot: root });
+  const task = await readTask({ taskId: params.taskId, project_root: root });
   const runDirAbs = getTaskRunDir(root, task.taskId, timestamp);
   const { runDirRel } = await ensureRunDir({
     taskId: task.taskId,
     timestamp,
-    projectRoot: root,
+    project_root: root,
   });
   const filePaths = createTaskRunFilePaths(runDirAbs);
 
@@ -171,7 +171,7 @@ export async function runTaskNow(params: {
     const scriptResult = await runScriptTaskBranch({
       context,
       runDirAbs,
-      sessionId: task.frontmatter.sessionId,
+      session_id: task.frontmatter.session_id,
       scriptBody: task.body,
       runProgress,
     });
@@ -186,8 +186,8 @@ export async function runTaskNow(params: {
     errorText = scriptResult.errorText;
   } else {
     const task_model = context.sessions
-      .runtime(task.frontmatter.sessionId)
-      .getModel();
+      .runtime(task.frontmatter.session_id)
+      .get_model();
     if (!task_model) {
       throw new Error(`Task "${task.taskId}" requires a configured model`);
     }
@@ -232,7 +232,7 @@ export async function runTaskNow(params: {
         });
         const executorRound = await runAgentRound({
           taskSessionRuntime,
-          sessionId: runSessionId,
+          session_id: runSessionId,
           taskId: task.taskId,
           query: executorQuery,
           actorId: "scheduler",
@@ -242,13 +242,13 @@ export async function runTaskNow(params: {
         executorDelivered = executorRound.delivered;
         outputText = executorRound.outputText;
         executorAssistantMessageSnapshot = serializeDebugSnapshot(
-          executorRound.rawResult.assistantMessage,
+          executorRound.rawResult.assistant_message,
         );
 
         try {
           await appendTaskAssistantMessage({
             taskSessionRuntime,
-            sessionId: runSessionId,
+            session_id: runSessionId,
             taskId: task.taskId,
             rawResult: executorRound.rawResult,
           });
@@ -306,7 +306,7 @@ export async function runTaskNow(params: {
           });
           const simulatorRound = await runAgentRound({
             taskSessionRuntime,
-            sessionId: userSimulatorSessionId,
+            session_id: userSimulatorSessionId,
             taskId: task.taskId,
             query: userSimulatorQuery,
             actorId: "user_simulator",
@@ -314,12 +314,12 @@ export async function runTaskNow(params: {
           });
           userSimulatorOutput = simulatorRound.outputText;
           userSimulatorAssistantMessageSnapshot = serializeDebugSnapshot(
-            simulatorRound.rawResult.assistantMessage,
+            simulatorRound.rawResult.assistant_message,
           );
           try {
             await appendTaskAssistantMessage({
               taskSessionRuntime,
-              sessionId: userSimulatorSessionId,
+              session_id: userSimulatorSessionId,
               taskId: task.taskId,
               rawResult: simulatorRound.rawResult,
             });

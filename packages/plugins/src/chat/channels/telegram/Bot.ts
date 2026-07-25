@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - `TelegramBot` 只保留入站授权、命令分发、消息入队与回复编排。
  * - polling、runtime 状态、webhook 清理、自愈重试已下沉到 `TelegramPlatformClient`。
- * - chatKey / audit / mention 清理 / 附件保存已下沉到 `TelegramInbound`。
+ * - chat_key / audit / mention 清理 / 附件保存已下沉到 `TelegramInbound`。
  */
 
 import { BaseChatChannel } from "@/chat/channels/BaseChatChannel.js";
@@ -22,7 +22,7 @@ import {
   type TelegramUpdate,
   type TelegramUser,
 } from "./Shared.js";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { JsonObject } from "@downcity/agent";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import {
@@ -50,7 +50,7 @@ export class TelegramBot extends BaseChatChannel {
   private startTask: Promise<void> | null = null;
   private startupGeneration = 0;
 
-  constructor(context: AgentContext, botToken: string) {
+  constructor(context: PluginContext, botToken: string) {
     super({ channel: "telegram", context });
     this.botToken = botToken;
     this.platform = new TelegramPlatformClient({
@@ -99,8 +99,8 @@ export class TelegramBot extends BaseChatChannel {
     params: ChannelSendTextParams,
   ): Promise<void> {
     const replyToMessageId =
-      params.replyToMessage === true
-        ? parseTelegramMessageId(params.messageId)
+      params.reply_to_message === true
+        ? parseTelegramMessageId(params.message_id)
         : undefined;
     await this.sendMessage(params.chatId, params.text, {
       messageThreadId: params.messageThreadId,
@@ -122,13 +122,13 @@ export class TelegramBot extends BaseChatChannel {
     }
     if (params.action !== "react") return;
 
-    const messageId = parseTelegramMessageId(params.messageId);
-    if (!messageId) {
+    const message_id = parseTelegramMessageId(params.message_id);
+    if (!message_id) {
       throw new Error(
-        "Telegram reaction requires a numeric messageId. Provide --message-id or ensure chat meta has latest messageId.",
+        "Telegram reaction requires a numeric message_id. Provide --message-id or ensure chat meta has latest message_id.",
       );
     }
-    await this.platform.setMessageReaction(params.chatId, messageId, {
+    await this.platform.setMessageReaction(params.chatId, message_id, {
       emoji: params.reactionEmoji,
       isBig: params.reactionIsBig === true,
     });
@@ -240,8 +240,8 @@ export class TelegramBot extends BaseChatChannel {
         enqueueAuditMessage: async (params) => {
           await this.enqueueAuditMessage(params);
         },
-        runInChat: async (chatKey, fn) => {
-          await this.runInChat(chatKey, fn);
+        runInChat: async (chat_key, fn) => {
+          await this.runInChat(chat_key, fn);
         },
         handleCommand: async (params) => {
           await this.handleCommand(
@@ -257,7 +257,7 @@ export class TelegramBot extends BaseChatChannel {
             params.instructions,
             params.from,
             params.chatTitle,
-            params.messageId,
+            params.message_id,
             params.chatType,
             params.messageThreadId,
             params.receivedAt,
@@ -328,22 +328,22 @@ export class TelegramBot extends BaseChatChannel {
     instructions: string,
     from?: TelegramUser,
     chatTitle?: string,
-    messageId?: string,
+    message_id?: string,
     chatType?: NonNullable<TelegramUpdate["message"]>["chat"]["type"],
     messageThreadId?: number,
     receivedAt?: string,
     extra?: JsonObject,
   ): Promise<void> {
     try {
-      const userId = from?.id ? String(from.id) : undefined;
+      const user_id = from?.id ? String(from.id) : undefined;
       const username = from?.username ? String(from.username) : undefined;
       await this.enqueueMessage({
         chatId,
         text: instructions,
         chatType,
-        messageId,
+        message_id,
         messageThreadId,
-        userId,
+        user_id,
         username,
         receivedAt,
         chatTitle,
@@ -393,7 +393,7 @@ export class TelegramBot extends BaseChatChannel {
  */
 export function createTelegramBot(
   config: TelegramConfig,
-  context: AgentContext,
+  context: PluginContext,
 ): TelegramBot | null {
   if (!config.enabled || !config.botToken || config.botToken === "${}") {
     return null;

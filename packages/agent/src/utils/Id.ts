@@ -8,6 +8,6 @@
 
 import { nanoid } from "nanoid";
 
-export function generateId(): string {
+export function generate_id(): string {
   return nanoid(16);
 }

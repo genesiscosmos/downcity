@@ -114,10 +114,10 @@ export async function manageBalance(a: Bureau, _baseUrl: string, runtime: admin_
       }
 
       if (act === "history") {
-        const userId = await runtime.text(t({ zh: "user_id（可选）", en: "user_id (optional)" }));
+        const user_id = await runtime.text(t({ zh: "user_id（可选）", en: "user_id (optional)" }));
         const items = await runtime.with_loading(t({ zh: "余额历史", en: "Balance History" }), async () => await a.balance.listHistory({
           limit: 30,
-          user_id: userId ?? "",
+          user_id: user_id ?? "",
         }));
         await runtime.show_table({
           title: t({ zh: `${items.length} 条余额历史`, en: `${items.length} Balance History` }),
@@ -131,10 +131,10 @@ export async function manageBalance(a: Bureau, _baseUrl: string, runtime: admin_
       }
 
       if (act === "topups") {
-        const userId = await runtime.text(t({ zh: "user_id（可选）", en: "user_id (optional)" }));
+        const user_id = await runtime.text(t({ zh: "user_id（可选）", en: "user_id (optional)" }));
         const items = await runtime.with_loading("Topups", async () => await a.balance.listTopups({
           limit: 30,
-          user_id: userId ?? "",
+          user_id: user_id ?? "",
         }));
         await runtime.show_table({
           title: t({ zh: `${items.length} 个充值单`, en: `${items.length} Topups` }),
@@ -149,11 +149,11 @@ export async function manageBalance(a: Bureau, _baseUrl: string, runtime: admin_
 
       if (act === "redeem_codes") {
         const status = await runtime.text(t({ zh: "status（可选：active/redeemed/disabled）", en: "status (optional: active/redeemed/disabled)" }));
-        const userId = await runtime.text(t({ zh: "redeemed_by_user_id（可选）", en: "redeemed_by_user_id (optional)" }));
+        const user_id = await runtime.text(t({ zh: "redeemed_by_user_id（可选）", en: "redeemed_by_user_id (optional)" }));
         const items = await runtime.with_loading(t({ zh: "兑换码", en: "Redeem Codes" }), async () => await a.balance.redeemCodes.list({
           limit: 30,
           status: normalizeRedeemCodeStatus(status),
-          user_id: userId ?? "",
+          user_id: user_id ?? "",
         }));
         await runtime.show_table({
           title: t({ zh: `${items.length} 个兑换码`, en: `${items.length} Redeem Codes` }),
@@ -174,8 +174,8 @@ export async function manageBalance(a: Bureau, _baseUrl: string, runtime: admin_
       }
 
       if (act === "add" || act === "sub") {
-        const userId = await runtime.text("user_id");
-        if (!userId) continue;
+        const user_id = await runtime.text("user_id");
+        if (!user_id) continue;
         const rawCredits = await runtime.text("credits");
         if (!rawCredits) continue;
 
@@ -187,8 +187,8 @@ export async function manageBalance(a: Bureau, _baseUrl: string, runtime: admin_
 
         const note = await runtime.text(t({ zh: "备注（可选）", en: "note (optional)" }));
         const account = await runtime.with_loading(t({ zh: "更新余额", en: "Update Balance" }), async () => act === "add"
-          ? await a.balance.add({ user_id: userId, credits, note: note ?? "" })
-          : await a.balance.sub({ user_id: userId, credits, note: note ?? "" }));
+          ? await a.balance.add({ user_id: user_id, credits, note: note ?? "" })
+          : await a.balance.sub({ user_id: user_id, credits, note: note ?? "" }));
         await runtime.show_message("success", t({
           zh: `余额已更新：${account.user_id} -> ${account.credits}`,
           en: `credits updated: ${account.user_id} -> ${account.credits}`,

@@ -2,7 +2,7 @@
  * ChatMeta：chat plugin runtime 维护的 session 路由元信息。
  *
  * 关键点（中文）
- * - 只描述“如何把 sessionId 路由回平台 chat”
+ * - 只描述“如何把 session_id 路由回平台 chat”
  * - 由 chat plugin runtime 在接收入站消息时更新
  * - 不属于 core context message schema
  */
@@ -13,9 +13,9 @@ export type ChatMetaV1 = {
   /** schema 版本 */
   v: 1;
   /** 更新时间戳（ms） */
-  updatedAt: number;
+  updated_at: number;
   /** 会话 ID */
-  sessionId: string;
+  session_id: string;
   /** 平台通道 */
   channel: ChatDispatchChannel;
   /** 平台 chatId */
@@ -25,7 +25,7 @@ export type ChatMetaV1 = {
   /** 平台 thread/topic ID */
   threadId?: number;
   /** 平台最近消息 ID（QQ/部分平台回包依赖） */
-  messageId?: string;
+  message_id?: string;
   /** 最近发言用户 ID */
   actorId?: string;
   /** 最近发言用户昵称 */

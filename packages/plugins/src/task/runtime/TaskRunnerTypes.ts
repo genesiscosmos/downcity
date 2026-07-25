@@ -123,7 +123,7 @@ export type DialogueRoundRecord = {
    */
   executorDelivered: boolean;
   /**
-   * 执行器 assistantMessage 的调试快照。
+   * 执行器 assistant_message 的调试快照。
    */
   executorAssistantMessageSnapshot?: string;
   /**
@@ -143,7 +143,7 @@ export type DialogueRoundRecord = {
    */
   userSimulatorOutput?: string;
   /**
-   * 模拟用户 assistantMessage 的调试快照。
+   * 模拟用户 assistant_message 的调试快照。
    */
   userSimulatorAssistantMessageSnapshot?: string;
   /**
@@ -175,11 +175,11 @@ export type ScriptExecutionResult = {
  */
 export type TaskSessionRuntimePort = {
   /**
-   * 获取指定 sessionId 对应的 Session 执行端口。
+   * 获取指定 session_id 对应的 Session 执行端口。
    */
-  getExecutor(sessionId: string): SessionExecutor;
+  get_executor(session_id: string): SessionExecutor;
   /**
-   * 获取指定 sessionId 对应的 canonical Session Messages。
+   * 获取指定 session_id 对应的 canonical Session Messages。
    */
   get_messages(session_id: string): SessionMessages;
 };

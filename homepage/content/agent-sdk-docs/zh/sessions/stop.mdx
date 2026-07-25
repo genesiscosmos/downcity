@@ -21,8 +21,8 @@ const result = await turn.finished;
 ```ts
 type AgentSessionStopResult = {
   stopped: boolean;
-  turnId?: string;
-  cancelledQueuedPrompts: number;
+  turn_id?: string;
+  cancelled_queued_prompts: number;
   reason: "stopped" | "idle";
 };
 ```
@@ -30,8 +30,8 @@ type AgentSessionStopResult = {
 | 字段 | 含义 |
 | --- | --- |
 | `stopped` | 是否停止了活跃 Turn 或清空了排队输入 |
-| `turnId` | 被停止的活跃 Turn；仅有活跃 Turn 时存在 |
-| `cancelledQueuedPrompts` | 尚未绑定到 Turn 的输入数量 |
+| `turn_id` | 被停止的活跃 Turn；仅有活跃 Turn 时存在 |
+| `cancelled_queued_prompts` | 尚未绑定到 Turn 的输入数量 |
 | `reason` | `stopped` 或空闲状态的 `idle` |
 
 ## 输入队列语义

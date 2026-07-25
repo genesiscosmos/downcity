@@ -9,7 +9,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 
 const MAX_SYSTEM_MEMORY_ITEMS = 6;
 const MAX_SYSTEM_MEMORY_ITEM_CHARS = 260;
@@ -52,9 +52,9 @@ function extractStableLines(content: string): string[] {
  * 从 wiki 中提取少量稳定记忆。
  */
 export async function readStableSystemMemory(
-  context: AgentContext,
+  context: PluginContext,
 ): Promise<string[]> {
-  const wikiRoot = path.join(context.rootPath, ".downcity", "memory", "wiki");
+  const wikiRoot = path.join(context.workspace_path, ".downcity", "memory", "wiki");
   const candidates = [
     "index.md",
     "user-preferences.md",
@@ -88,7 +88,7 @@ export async function readStableSystemMemory(
  * 构建 memory plugin 的 system 文本。
  */
 export async function buildMemoryPluginSystemText(
-  context: AgentContext,
+  context: PluginContext,
 ): Promise<string> {
   const stableMemory = await readStableSystemMemory(context);
   return [

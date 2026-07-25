@@ -47,7 +47,7 @@ await agent.plugins.unregister("skill");
 卸载后：
 
 - `agent.plugins.get("skill")` 返回 `null`
-- `agent.plugins.runAction({ plugin: "skill", ... })` 会返回 unknown plugin
+- `agent.plugins.run_action({ plugin: "skill", ... })` 会返回 unknown plugin
 - 这个 plugin 的 hooks、resolves 和 action 不会再参与后续运行；已有 Session 已固定的 system 不会被回溯删除
 
 ## lifecycle.start / lifecycle.stop

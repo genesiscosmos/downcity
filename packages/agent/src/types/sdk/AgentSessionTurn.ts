@@ -16,7 +16,7 @@ export interface AgentSessionTurnResult {
   /**
    * 当前已完成 turn 的稳定标识。
    */
-  turnId: string;
+  turn_id: string;
 
   /**
    * 当前 turn 最终可见文本。
@@ -36,7 +36,7 @@ export interface AgentSessionTurnResult {
    * - 失败状态由 `success` 与 `error` 表达，不会伪造成 assistant 正文。
    * - transport / runtime service 若需要读取最终结构化输出，应优先消费这里。
    */
-  assistantMessage?: SessionMessageRecordV1;
+  assistant_message?: SessionMessageRecordV1;
 
   /**
    * 当前 turn 失败时的错误文本。
@@ -49,11 +49,11 @@ export interface AgentSessionTurnResult {
  */
 export interface AgentSessionTurnHandle {
   /**
-   * 当前句柄绑定到的 turnId。
+   * 当前句柄绑定到的 turn_id。
    *
    * 说明（中文）
    * - `prompt()` 只有在确定当前输入被并入哪个 turn 后才会返回。
-   * - 因此这里总是最终可用的 turnId，而不是临时 receipt id。
+   * - 因此这里总是最终可用的 turn_id，而不是临时 receipt id。
    */
   id: string;
 

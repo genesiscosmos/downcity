@@ -10,7 +10,7 @@
 
 import path from "node:path";
 import type { LanguageModel, Tool } from "ai";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import { Executor } from "@downcity/agent";
 import type { SessionRunResult } from "@downcity/agent";
 import type { TaskSessionRuntimePort } from "@/task/runtime/TaskRunnerTypes.js";
@@ -31,7 +31,7 @@ import type {
  */
 export async function appendTaskRoundUserMessage(params: {
   taskSessionRuntime: TaskSessionRuntimePort;
-  sessionId: string;
+  session_id: string;
   taskId: string;
   query: string;
   actorId: string;
@@ -39,7 +39,7 @@ export async function appendTaskRoundUserMessage(params: {
 }): Promise<void> {
   const text = String(params.query || "").trim();
   if (!text) return;
-  const messages = params.taskSessionRuntime.get_messages(params.sessionId);
+  const messages = params.taskSessionRuntime.get_messages(params.session_id);
   await messages.append_user_message({
     turn_id:
       `task:${params.taskId}:${params.actorId}:${Date.now()}`,
@@ -61,7 +61,7 @@ export async function appendTaskRoundUserMessage(params: {
  * - task runner 自己维护独立 history，不复用原 session 的消息落盘。
  */
 export function createTaskSessionRuntimePort(params: {
-  context: AgentContext;
+  context: PluginContext;
   model: LanguageModel;
   runDirAbs: string;
   runSessionId: string;
@@ -80,14 +80,14 @@ export function createTaskSessionRuntimePort(params: {
   } = params;
   const effective_env = params.workspace_env
     ? { ...params.workspace_env }
-    : { ...context.env };
+    : { ...context.workspace_env };
   const effective_systems = params.agent_systems
     ? [...params.agent_systems]
-    : [...context.systems];
+    : [...context.instructions];
   const systemComposer = new DefaultSessionSystemComposer({
-    projectRoot: context.rootPath,
-    getStaticSystemPrompts: () => [...effective_systems],
-    getContext: () => context,
+    project_root: context.workspace_path,
+    get_static_system_prompts: () => [...effective_systems],
+    get_context: () => context,
     profile: "task",
   });
   const messages_by_session_id = new Map<string, SessionMessages>();
@@ -105,7 +105,7 @@ export function createTaskSessionRuntimePort(params: {
 
     const key = String(session_id || "").trim();
     if (!key) {
-      throw new Error("TaskSessionRuntimePort requires a non-empty sessionId");
+      throw new Error("TaskSessionRuntimePort requires a non-empty session_id");
     }
     const runMessagesDirPath =
       key === runSessionId
@@ -139,12 +139,12 @@ export function createTaskSessionRuntimePort(params: {
       return {
         ...composed,
         system: await systemComposer.resolve({
-          sessionId: input.session.session_id,
+          session_id: input.session.session_id,
           workspace_env: input.state.env,
-          agentSystems: input.state.systems,
-          injectedUserMessages: [],
-          deferredPersistedUserMessages: [],
-          pendingAssistantFileParts: [],
+          agent_systems: input.state.systems,
+          injected_user_messages: [],
+          deferred_persisted_user_messages: [],
+          pending_assistant_file_parts: [],
         }),
         system_blocks: undefined,
       };
@@ -155,10 +155,10 @@ export function createTaskSessionRuntimePort(params: {
     get_messages(session_id: string): SessionMessages {
       return resolve_task_messages(session_id);
     },
-    getExecutor(sessionId: string): SessionExecutor {
-      const key = String(sessionId || "").trim();
+    get_executor(session_id: string): SessionExecutor {
+      const key = String(session_id || "").trim();
       if (!key) {
-        throw new Error("TaskSessionRuntimePort.getExecutor requires a non-empty sessionId");
+        throw new Error("TaskSessionRuntimePort.get_executor requires a non-empty session_id");
       }
       const existing = runtimesBySessionId.get(key);
       if (existing) return existing;
@@ -166,13 +166,13 @@ export function createTaskSessionRuntimePort(params: {
       const messages = resolve_task_messages(key);
       const composer = new TaskSessionComposer();
       const created = new Executor({
-        sessionId: key,
+        session_id: key,
         composer,
         get_compose_input: async (run_context, retry_count) => ({
           session: {
             agent_id: "task",
             session_id: key,
-            project_root: context.rootPath,
+            project_root: context.workspace_path,
             created_at: created_at_by_session_id.get(key) || Date.now(),
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           },
@@ -187,7 +187,7 @@ export function createTaskSessionRuntimePort(params: {
           },
           history: await messages.context_snapshot(),
           turn: {
-            ...(run_context.turnId ? { turn_id: run_context.turnId } : {}),
+            ...(run_context.turn_id ? { turn_id: run_context.turn_id } : {}),
             retry_count,
           },
         }),
@@ -197,7 +197,7 @@ export function createTaskSessionRuntimePort(params: {
             summary: plan.summary,
           });
         },
-        getModel: () => model,
+        get_model: () => model,
         logger: context.logger,
       });
       runtimesBySessionId.set(key, created);
@@ -211,16 +211,16 @@ export function createTaskSessionRuntimePort(params: {
  */
 export async function appendTaskAssistantMessage(params: {
   taskSessionRuntime: TaskSessionRuntimePort;
-  sessionId: string;
+  session_id: string;
   taskId: string;
   rawResult: SessionRunResult;
 }): Promise<void> {
-  const { taskSessionRuntime, sessionId, rawResult } = params;
-  const messages = taskSessionRuntime.get_messages(sessionId);
-  if (rawResult.assistantMessage) {
-    await messages.append_record(rawResult.assistantMessage);
+  const { taskSessionRuntime, session_id, rawResult } = params;
+  const messages = taskSessionRuntime.get_messages(session_id);
+  if (rawResult.assistant_message) {
+    await messages.append_record(rawResult.assistant_message);
   }
-  const deferredUserMessages = rawResult.deferredPersistedUserMessages || [];
+  const deferredUserMessages = rawResult.deferred_persisted_user_messages || [];
   for (const deferred of deferredUserMessages) {
     await messages.append_record(deferred);
   }

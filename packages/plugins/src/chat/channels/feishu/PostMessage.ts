@@ -104,7 +104,7 @@ function buildPostImageDescriptor(params: {
   const description = readString(params.description);
   return {
     type: "photo",
-    resourceType: "image",
+    resource_type: "image",
     resourceKey: params.imageKey,
     fileName: description || "image",
     description: description || "image",
@@ -117,7 +117,7 @@ function buildPostImageDescriptor(params: {
 }
 
 function buildPostFileDescriptor(params: {
-  resourceType: "file" | "audio" | "media" | "video";
+  resource_type: "file" | "audio" | "media" | "video";
   resourceKey: string;
   fileName?: string;
   duration?: number;
@@ -126,12 +126,12 @@ function buildPostFileDescriptor(params: {
   const fileName = readString(params.fileName);
   return {
     type:
-      params.resourceType === "audio"
+      params.resource_type === "audio"
         ? "audio"
-        : params.resourceType === "media" || params.resourceType === "video"
+        : params.resource_type === "media" || params.resource_type === "video"
           ? "video"
           : "document",
-    resourceType: params.resourceType,
+    resource_type: params.resource_type,
     resourceKey: params.resourceKey,
     ...(fileName ? { fileName } : {}),
     ...(fileName ? { description: fileName } : {}),
@@ -217,7 +217,7 @@ function parsePostElement(params: {
     if (fileKey) {
       params.attachments.push(
         buildPostFileDescriptor({
-          resourceType:
+          resource_type:
             tag === "audio"
               ? "audio"
               : tag === "file"
@@ -248,12 +248,12 @@ function parsePostElement(params: {
     return "---";
   }
 
-  const fallbackText =
+  const fallback_text =
     readString(element.text) ||
     readString(element.title) ||
     readString(element.href) ||
     readString(element.file_name);
-  if (fallbackText) return fallbackText;
+  if (fallback_text) return fallback_text;
 
   const fallbackImageKey = readString(element.image_key);
   if (fallbackImageKey) {

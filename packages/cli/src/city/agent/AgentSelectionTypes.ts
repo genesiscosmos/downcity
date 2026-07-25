@@ -4,7 +4,7 @@
 
 export type CliRegisteredAgentView = {
   id: string;
-  projectRoot: string;
+  project_root: string;
   status: "running" | "stopped";
 };
 
@@ -25,7 +25,7 @@ export type ResolveCliAgentStartTargetDecisionInput = {
 export type ResolveCliAgentStartTargetDecision =
   | {
       mode: "explicit" | "current";
-      projectRoot: string;
+      project_root: string;
     }
   | {
       mode: "prompt";

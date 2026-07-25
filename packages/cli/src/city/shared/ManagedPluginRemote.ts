@@ -28,7 +28,7 @@ const PLUGIN_COMMAND_TIMEOUT_MS = 120_000;
  */
 export async function runManagedPluginListCommand(options: PluginCliBaseOptions): Promise<void> {
   const resolved = await resolvePluginProjectRoot(options);
-  if (!resolved.projectRoot) {
+  if (!resolved.project_root) {
     printResult({
       asJson: options.json,
       success: false,
@@ -39,8 +39,8 @@ export async function runManagedPluginListCommand(options: PluginCliBaseOptions)
     });
     return;
   }
-  const projectRoot = resolved.projectRoot;
-  const pathError = validateAgentProjectRoot(projectRoot);
+  const project_root = resolved.project_root;
+  const pathError = validateAgentProjectRoot(project_root);
   if (pathError) {
     printResult({
       asJson: options.json,
@@ -53,7 +53,7 @@ export async function runManagedPluginListCommand(options: PluginCliBaseOptions)
     return;
   }
   const remote = await callServer<PluginStateListResponse>({
-    projectRoot,
+    project_root,
     path: "/api/plugins/list",
     method: "GET",
     host: options.host,
@@ -88,12 +88,12 @@ export async function runManagedPluginListCommand(options: PluginCliBaseOptions)
  * 执行 `plugin status/start/stop/restart`。
  */
 export async function runManagedPluginControlCommand(params: {
-  pluginName: string;
+  plugin_name: string;
   action: PluginControlAction;
   options: PluginCliBaseOptions;
 }): Promise<void> {
   const resolved = await resolvePluginProjectRoot(params.options);
-  if (!resolved.projectRoot) {
+  if (!resolved.project_root) {
     printResult({
       asJson: params.options.json,
       success: false,
@@ -104,8 +104,8 @@ export async function runManagedPluginControlCommand(params: {
     });
     return;
   }
-  const projectRoot = resolved.projectRoot;
-  const pathError = validateAgentProjectRoot(projectRoot);
+  const project_root = resolved.project_root;
+  const pathError = validateAgentProjectRoot(project_root);
   if (pathError) {
     printResult({
       asJson: params.options.json,
@@ -118,14 +118,14 @@ export async function runManagedPluginControlCommand(params: {
     return;
   }
   const remote = await callServer<PluginControlResponse>({
-    projectRoot,
+    project_root,
     path: "/api/plugins/control",
     method: "POST",
     host: params.options.host,
     port: params.options.port,
     authToken: params.options.token,
     body: {
-      pluginName: params.pluginName,
+      plugin_name: params.plugin_name,
       action: params.action,
     },
   });
@@ -157,13 +157,13 @@ export async function runManagedPluginControlCommand(params: {
  * 执行 `plugin command` 桥接。
  */
 export async function runManagedPluginCommandBridge(params: {
-  pluginName: string;
+  plugin_name: string;
   command: string;
   payloadRaw?: string;
   options: PluginCliBaseOptions;
 }): Promise<void> {
   const resolved = await resolvePluginProjectRoot(params.options);
-  if (!resolved.projectRoot) {
+  if (!resolved.project_root) {
     printResult({
       asJson: params.options.json,
       success: false,
@@ -174,8 +174,8 @@ export async function runManagedPluginCommandBridge(params: {
     });
     return;
   }
-  const projectRoot = resolved.projectRoot;
-  const pathError = validateAgentProjectRoot(projectRoot);
+  const project_root = resolved.project_root;
+  const pathError = validateAgentProjectRoot(project_root);
   if (pathError) {
     printResult({
       asJson: params.options.json,
@@ -188,7 +188,7 @@ export async function runManagedPluginCommandBridge(params: {
     return;
   }
   const remote = await callServer<PluginCommandResponse>({
-    projectRoot,
+    project_root,
     path: "/api/plugins/command",
     method: "POST",
     timeoutMs: PLUGIN_COMMAND_TIMEOUT_MS,
@@ -196,7 +196,7 @@ export async function runManagedPluginCommandBridge(params: {
     port: params.options.port,
     authToken: params.options.token,
     body: {
-      pluginName: params.pluginName,
+      plugin_name: params.plugin_name,
       command: params.command,
       ...(params.payloadRaw !== undefined
         ? { payload: parseCommandPayload(params.payloadRaw) }

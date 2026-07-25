@@ -30,12 +30,12 @@ export interface AgentManagedSession extends AgentSession {
   /**
    * 返回供 plugin/runtime 使用的 session 端口。
    */
-  getRuntimePort(): SessionPort;
+  get_runtime_port(): SessionPort;
 
   /**
    * 返回当前 session 是否正在执行。
    */
-  isExecuting(): boolean;
+  is_executing(): boolean;
 
   /**
    * 把 Agent configured state command 加入当前 Session 的统一输入队列。
@@ -52,7 +52,7 @@ export interface SessionOptions {
   /**
    * 当前 agent 稳定标识。
    */
-  agentId: string;
+  agent_id: string;
 
   /** 当前 Session 所属 Workspace 的绝对根目录。 */
   workspace_path: string;
@@ -64,9 +64,9 @@ export interface SessionOptions {
   get_session_store: (session_id: string) => SessionStore;
 
   /**
-   * 当前 sessionId。
+   * 当前 session_id。
    */
-  sessionId: string;
+  session_id: string;
 
   /**
    * 当前 agent 默认工具集合。
@@ -103,7 +103,7 @@ export interface SessionOptions {
    * - Session 创建时用它建立初始 effective env。
    * - 后续 Workspace env 修改通过 Session command 在 step 检查点执行。
    */
-  getWorkspaceEnv: () => Record<string, string>;
+  get_workspace_env: () => Record<string, string>;
 
   /** 创建当前 Agent configured plugin 的 Session step 执行视图。 */
   get_agent_plugins: () => AgentPluginExecutionRuntime;
@@ -111,15 +111,15 @@ export interface SessionOptions {
   /**
    * 读取当前 agent 显式注入的受托管 plugin system blocks。
    */
-  getManagedPluginSystemBlocks: () => Promise<AgentSessionSystemBlock[]>;
+  get_managed_plugin_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
 
   /**
    * 在执行前确保当前 session 已完成宿主侧默认配置。
    */
-  ensureConfigured?: (session: AgentManagedSession) => Promise<void>;
+  ensure_configured?: (session: AgentManagedSession) => Promise<void>;
 
   /** 读取 Agent 当前持有的运行时模型实例。 */
-  getAgentModel: () => AgentModel | undefined;
+  get_agent_model: () => AgentModel | undefined;
 
   /** 当前 Session 使用的统一执行策略；省略时使用默认 Composer。 */
   composer?: SessionComposer;

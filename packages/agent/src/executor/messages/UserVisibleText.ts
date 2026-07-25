@@ -14,7 +14,7 @@ import {
 } from "@/executor/types/SessionRecords.js";
 import {
   extractTextFromUiMessage,
-  extractToolCallsFromUiMessage,
+  extract_tool_calls_from_ui_message,
 } from "./UIMessageTransformer.js";
 
 /**
@@ -24,7 +24,7 @@ import {
  * - session 正式历史应尽量保留 AI SDK 最终 assistant UIMessage。
  * - 运行中 step/tool 的中断恢复由 inflight 快照承担，不再通过跳过最终 message 收口。
  */
-export function resolveAssistantMessageForPersistence(
+export function resolve_assistant_message_for_persistence(
   message: SessionRecordV1 | null | undefined,
 ): SessionMessageRecordV1 | null {
   if (!message || typeof message !== "object") return null;
@@ -39,11 +39,11 @@ export function resolveAssistantMessageForPersistence(
  * - 若 tool output 为空/非 JSON，走 best-effort 采用 input.text。
  * - 若无 tool call，则回退到 message 文本内容。
  */
-export function pickLastSuccessfulChatSendText(
+export function pick_last_successful_chat_send_text(
   message: SessionRecordV1 | null | undefined,
 ): string {
   if (!is_session_message_record(message)) return "";
-  const toolCalls = extractToolCallsFromUiMessage(message);
+  const toolCalls = extract_tool_calls_from_ui_message(message);
   // 关键点（中文）：优先从 chat_send 的 input.text 还原"用户可见回复"。
   for (let i = toolCalls.length - 1; i >= 0; i -= 1) {
     const tc = toolCalls[i];

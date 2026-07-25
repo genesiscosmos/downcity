@@ -56,19 +56,19 @@ export function mapChatListCommandInput(
 export function mapChatInfoCommandInput(
   input: PluginActionCommandInput,
 ): ChatInfoActionPayload {
-  const chatKey = getStringOpt(input.opts, "chatKey");
-  const sessionId = getStringOpt(input.opts, "sessionId");
+  const chat_key = getStringOpt(input.opts, "chat_key");
+  const session_id = getStringOpt(input.opts, "session_id");
   return {
-    ...(chatKey ? { chatKey } : {}),
-    ...(sessionId ? { sessionId } : {}),
+    ...(chat_key ? { chat_key } : {}),
+    ...(session_id ? { session_id } : {}),
   };
 }
 
 export function mapChatHistoryCommandInput(
   input: PluginActionCommandInput,
 ): ChatHistoryActionPayload {
-  const chatKey = getStringOpt(input.opts, "chatKey");
-  const sessionId = getStringOpt(input.opts, "sessionId");
+  const chat_key = getStringOpt(input.opts, "chat_key");
+  const session_id = getStringOpt(input.opts, "session_id");
   const direction = readHistoryDirectionOrThrow(
     getStringOpt(input.opts, "direction"),
   );
@@ -92,8 +92,8 @@ export function mapChatHistoryCommandInput(
   }
 
   return {
-    ...(chatKey ? { chatKey } : {}),
-    ...(sessionId ? { sessionId } : {}),
+    ...(chat_key ? { chat_key } : {}),
+    ...(session_id ? { session_id } : {}),
     ...(typeof limit === "number" ? { limit } : {}),
     ...(direction ? { direction } : {}),
     ...(typeof beforeTs === "number" ? { beforeTs } : {}),
@@ -104,22 +104,22 @@ export function mapChatHistoryCommandInput(
 export function mapChatReactCommandInput(
   input: PluginActionCommandInput,
 ): ChatReactActionPayload {
-  const chatKey = resolveChatKey({
-    chatKey: getStringOpt(input.opts, "chatKey"),
+  const chat_key = resolveChatKey({
+    chat_key: getStringOpt(input.opts, "chat_key"),
   });
-  if (!chatKey) {
+  if (!chat_key) {
     throw new Error(
-      "Missing chatKey. Provide --chat-key or ensure DC_CTX_CHAT_KEY is injected in current shell context.",
+      "Missing chat_key. Provide --chat-key or ensure DC_CTX_CHAT_KEY is injected in current shell context.",
     );
   }
 
   const emoji = getStringOpt(input.opts, "emoji");
-  const messageId = getStringOpt(input.opts, "messageId");
+  const message_id = getStringOpt(input.opts, "message_id");
   const big = getBooleanOpt(input.opts, "big");
   return {
-    chatKey,
+    chat_key,
     ...(emoji ? { emoji } : {}),
-    ...(messageId ? { messageId } : {}),
+    ...(message_id ? { message_id } : {}),
     ...(big ? { big: true } : {}),
   };
 }
@@ -127,10 +127,10 @@ export function mapChatReactCommandInput(
 export function mapChatDeleteCommandInput(
   input: PluginActionCommandInput,
 ): ChatDeleteActionPayload {
-  const chatKey = getStringOpt(input.opts, "chatKey");
-  const sessionId = getStringOpt(input.opts, "sessionId");
+  const chat_key = getStringOpt(input.opts, "chat_key");
+  const session_id = getStringOpt(input.opts, "session_id");
   return {
-    ...(chatKey ? { chatKey } : {}),
-    ...(sessionId ? { sessionId } : {}),
+    ...(chat_key ? { chat_key } : {}),
+    ...(session_id ? { session_id } : {}),
   };
 }

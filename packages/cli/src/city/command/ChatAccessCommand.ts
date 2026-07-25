@@ -50,7 +50,7 @@ function find_agent_by_id(agent_id: string): StoredAgentConfig | null {
   if (matches.length > 1) {
     throw new CliError({
       title: `Agent ID 不唯一：${agent_id}`,
-      note: matches.map((item) => item.projectRoot).join("\n"),
+      note: matches.map((item) => item.project_root).join("\n"),
     });
   }
   return matches[0] || null;
@@ -58,7 +58,7 @@ function find_agent_by_id(agent_id: string): StoredAgentConfig | null {
 
 function find_agent_by_path(project_root_input: string): StoredAgentConfig | null {
   const project_root = path.resolve(project_root_input);
-  return listAgentConfigs().find((config) => path.resolve(config.projectRoot) === project_root) || null;
+  return listAgentConfigs().find((config) => path.resolve(config.project_root) === project_root) || null;
 }
 
 async function choose_agent(): Promise<StoredAgentConfig | null> {
@@ -70,8 +70,8 @@ async function choose_agent(): Promise<StoredAgentConfig | null> {
     message: t({ zh: "选择要管理 Chat Access 的 Agent", en: "Select the Agent whose Chat Access you want to manage" }),
     choices: configs.map((config) => ({
       title: config.id,
-      description: config.projectRoot,
-      value: config.projectRoot,
+      description: config.project_root,
+      value: config.project_root,
     })),
     initial: 0,
   })) as { project_root?: string };
@@ -95,7 +95,7 @@ export async function choose_chat_access_target(): Promise<CliChatAccessTarget> 
 function to_target(config: StoredAgentConfig): CliChatAccessTarget {
   return {
     agent_id: config.id,
-    project_root: path.resolve(config.projectRoot),
+    project_root: path.resolve(config.project_root),
     config,
   };
 }

@@ -29,19 +29,19 @@ export function buildReplyContextInstruction(params: {
   const replyContext = params.replyContext;
   if (!replyContext) return body;
 
-  const messageId = normalizeReplyValue(replyContext.messageId);
+  const message_id = normalizeReplyValue(replyContext.message_id);
   const actorName = normalizeReplyValue(replyContext.actorName);
   const quoteText = normalizeReplyValue(replyContext.quoteText);
   const replyText = normalizeReplyValue(replyContext.text);
   const normalizedQuote =
     quoteText && quoteText !== replyText ? quoteText : undefined;
 
-  if (!messageId && !actorName && !normalizedQuote && !replyText) {
+  if (!message_id && !actorName && !normalizedQuote && !replyText) {
     return body;
   }
 
   const lines: string[] = ["<reply_context>"];
-  if (messageId) lines.push(`reply_message_id: ${messageId}`);
+  if (message_id) lines.push(`reply_message_id: ${message_id}`);
   if (actorName) lines.push(`reply_actor_name: ${actorName}`);
   if (normalizedQuote) {
     lines.push("reply_quote:");
@@ -69,15 +69,15 @@ export function buildReplyContextExtra(
 ): JsonObject | undefined {
   if (!replyContext) return undefined;
 
-  const messageId = normalizeReplyValue(replyContext.messageId);
+  const message_id = normalizeReplyValue(replyContext.message_id);
   const actorName = normalizeReplyValue(replyContext.actorName);
   const text = normalizeReplyValue(replyContext.text);
   const quoteText = normalizeReplyValue(replyContext.quoteText);
-  if (!messageId && !actorName && !text && !quoteText) return undefined;
+  if (!message_id && !actorName && !text && !quoteText) return undefined;
 
   return {
     hasReplyContext: true,
-    ...(messageId ? { replyMessageId: messageId } : {}),
+    ...(message_id ? { replyMessageId: message_id } : {}),
     ...(actorName ? { replyActorName: actorName } : {}),
     ...(text ? { replyText: text } : {}),
     ...(quoteText ? { replyQuoteText: quoteText } : {}),

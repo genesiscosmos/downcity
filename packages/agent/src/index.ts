@@ -34,8 +34,8 @@ export { RemoteAgent } from "./remote/RemoteAgent.js";
 export { Session } from "./session/Session.js";
 export type { SessionOptions } from "./types/session/SessionOptions.js";
 export {
-  inferAgentModelLabel,
-  normalizeAgentModel,
+  infer_agent_model_label,
+  normalize_agent_model,
   read_agent_model_context_window,
 } from "./agent/AgentModel.js";
 export type { AgentModel } from "./agent/AgentModel.js";
@@ -140,15 +140,15 @@ export type {
   AgentSessionTurnHandle,
   AgentSessionTurnResult,
 } from "./types/sdk/AgentSessionTurn.js";
-export { AgentContext } from "./agent/AgentContext.js";
+export type { PluginContext } from "./types/plugin/PluginContext.js";
 export type { SessionPort } from "./types/session/SessionPort.js";
 export type { StructuredConfig } from "./types/plugin/PluginConfig.js";
 
 // Plugin 作者 API
 export { BasePlugin } from "./plugin/core/BasePlugin.js";
 export {
-  createAction,
-  createPlugin,
+  create_action,
+  create_plugin,
 } from "./plugin/core/PluginActionFactory.js";
 export type {
   CreatePluginActionOptions,
@@ -181,7 +181,7 @@ export type {
   SessionStepInput,
 } from "./types/session/SessionComposer.js";
 export { DefaultSessionSystemComposer } from "./executor/composer/system/default/DefaultSessionSystemComposer.js";
-export { resolveSessionSystemMessages } from "./executor/composer/system/default/SystemDomain.js";
+export { resolve_session_system_messages } from "./executor/composer/system/default/SystemDomain.js";
 export type { SessionExecutor } from "./executor/types/SessionExecutor.js";
 export type {
   SessionAssistantStepCallback,
@@ -202,43 +202,43 @@ export {
   is_session_message_record,
 } from "./executor/types/SessionRecords.js";
 export type { SessionSystemMessage } from "./executor/types/SessionPrompts.js";
-export { transformPromptsIntoSystemMessages } from "./executor/composer/system/default/PromptRenderer.js";
+export { transform_prompts_into_system_messages } from "./executor/composer/system/default/PromptRenderer.js";
 // 通用 plugin 宿主工具
 export {
-  buildStaticPluginAvailability,
-  findPluginByName,
-  hasPluginLifecycle,
-  listPluginViews,
-  listPluginsWithLifecycle,
-  listPluginsWithoutLifecycle,
-  resolvePluginAvailability,
-  toPluginView,
+  build_static_plugin_availability,
+  find_plugin_by_name,
+  has_plugin_lifecycle,
+  list_plugin_views,
+  list_plugins_with_lifecycle,
+  list_plugins_without_lifecycle,
+  resolve_plugin_availability,
+  to_plugin_view,
 } from "./plugin/core/PluginCatalog.js";
 export {
-  listPluginAuthPolicies,
-  registerPluginHttpRoutes,
+  list_plugin_auth_policies,
+  register_plugin_http_routes,
 } from "./plugin/core/PluginHttpRoutes.js";
 export {
-  createLocalPluginCommandContext,
-  getLocalPluginAvailability,
-  runLocalPluginAction,
+  create_local_plugin_command_context,
+  get_local_plugin_availability,
+  run_local_plugin_action,
 } from "./plugin/core/PluginLocalExecution.js";
 export {
-  registerPluginActionCommandsForCli,
+  register_plugin_action_commands_for_cli,
 } from "./plugin/core/PluginCommand.js";
 
 // Runtime plugin 调度集成
 export { ActionScheduleStore } from "./plugin/core/ActionScheduleStore.js";
-export { parseActionScheduleRunAtMsOrThrow } from "./plugin/core/ActionScheduleTime.js";
+export { parse_action_schedule_run_at_ms_or_throw } from "./plugin/core/ActionScheduleTime.js";
 export {
-  pickLastSuccessfulChatSendText,
-  resolveAssistantMessageForPersistence,
+  pick_last_successful_chat_send_text,
+  resolve_assistant_message_for_persistence,
 } from "./executor/messages/UserVisibleText.js";
-export { extractToolCallsFromUiMessage } from "./executor/messages/UIMessageTransformer.js";
+export { extract_tool_calls_from_ui_message } from "./executor/messages/UIMessageTransformer.js";
 export {
-  buildChatMessageText,
-  parseChatMessageMarkup,
-  renderChatMessageFileTag,
+  build_chat_message_text,
+  parse_chat_message_markup,
+  render_chat_message_file_tag,
 } from "./executor/messages/ChatMessageMarkup.js";
 export type {
   ChatMessageFileTag,
@@ -247,81 +247,22 @@ export type {
   ChatMessageSendOptions,
 } from "./executor/messages/ChatMessageMarkupTypes.js";
 
-// 项目与配置集成
-export {
-  initializeAgentProject,
-  normalizeDefaultAgentId,
-} from "./workspace/setup/AgentInitializer.js";
+// Workspace 环境集成
 export {
   load_project_dotenv,
   resolve_workspace_env,
 } from "./workspace/WorkspaceEnv.js";
-export {
-  ensureRuntimeProjectReady,
-} from "./workspace/setup/ProjectSetup.js";
-export { assertProjectExecutionTarget } from "./agent/ExecutionBinding.js";
 
 // 日志
-export { getLogger, type Logger } from "./utils/logger/Logger.js";
-export { generateId } from "./utils/Id.js";
+export { get_logger, type Logger } from "./utils/logger/Logger.js";
+export { generate_id } from "./utils/Id.js";
 export {
-  formatDateTimeInTimezone,
-  resolveRuntimeTimezone,
+  format_date_time_in_timezone,
+  resolve_runtime_timezone,
 } from "./utils/Time.js";
-
-// 项目协议类型
-export type {
-  AgentProjectChannel,
-  AgentProjectInitializationInput,
-  AgentProjectInitializationResult,
-} from "./types/config/AgentProject.js";
-export type { ExecutionBindingConfig } from "./types/config/ExecutionBinding.js";
-
-// 配置与模型类型
-export type {
-  DowncityChatChannelConfig,
-  DowncityChatPluginChannelsConfig,
-  DowncityChatPluginConfig,
-  DowncityChatPluginQueueConfig,
-  DowncityConfig,
-  DowncityPluginConfigMap,
-} from "./types/config/DowncityConfig.js";
-export type {
-  LlmConfig,
-  LlmModelConfig,
-  LlmProviderConfig,
-  LlmProviderType,
-} from "./types/config/LlmConfig.js";
 
 // JSON 基础类型
 export type { JsonObject, JsonPrimitive, JsonValue } from "./types/common/Json.js";
-
-// Platform / city 控制面协议类型
-export type {
-  ControlPlaneRuntimeMeta,
-  ControlPlaneRuntimeStatus,
-  ManagedAgentProcessView,
-  ManagedAgentRegistryEntry,
-  ManagedAgentRegistryV1,
-  PlatformAgentDirectoryInspection,
-  PlatformAgentOption,
-  PlatformAgentsResponse,
-  PlatformConfigFileStatusItem,
-  PlatformConfigStatusResponse,
-  PlatformLocalModelsResponse,
-} from "./types/runtime/platform/Platform.js";
-
-export type {
-  PlatformAgentChatChannelStatus,
-} from "./types/runtime/platform/PlatformGateway.js";
-
-// Inline instant 协议类型
-export type {
-  InlineInstantExecutorType,
-  PlatformInlineInstantRunInput,
-  PlatformInlineInstantRunResult,
-  PlatformInlineInstantRunner,
-} from "./types/runtime/http/InlineInstant.js";
 
 // Plugin 作者与控制面类型
 export type {
@@ -391,11 +332,11 @@ export type {
 } from "./types/plugin/PluginControl.js";
 export type { PluginControlResult } from "./types/plugin/PluginState.js";
 export {
-  controlPluginState,
-  listPluginStates,
+  control_plugin_state,
+  list_plugin_states,
 } from "./plugin/core/PluginStateController.js";
-export { runPluginCommand } from "./plugin/core/PluginActionRunner.js";
-export { parsePluginCommandRequestBody } from "./plugin/core/PluginCommandRequest.js";
+export { run_plugin_command } from "./plugin/core/PluginActionRunner.js";
+export { parse_plugin_command_request_body } from "./plugin/core/PluginCommandRequest.js";
 
 // 跨包 RPC 与 session 标识协议
 export type {
@@ -403,39 +344,4 @@ export type {
   RpcRequest,
   RpcServerFrame,
 } from "./types/rpc/RpcProtocol.js";
-export { resolveSessionId } from "./executor/ids/resolveSessionId.js";
-
-// Platform store 类型
-export type {
-  StoredEnvEntry,
-  StoredGlobalEnvEntry,
-  UpsertEnvEntryInput,
-  UpsertGlobalEnvEntryInput,
-} from "./types/platform/Store.js";
-
-// HTTP auth 协议类型
-export {
-  AUTH_DEFAULT_ROLE_NAMES,
-  AUTH_DEFAULT_ROLES,
-  AUTH_PERMISSION_DESCRIPTIONS,
-  AUTH_PERMISSION_KEYS,
-} from "./types/runtime/auth/AuthPermission.js";
-export type {
-  AuthDefaultRoleDefinition,
-  AuthDefaultRoleName,
-  AuthPermissionKey,
-} from "./types/runtime/auth/AuthPermission.js";
-export type { AuthRoutePolicy } from "./types/runtime/auth/AuthRoute.js";
-export type {
-  AuthIssuedToken,
-  AuthTokenSummary,
-} from "./types/runtime/auth/AuthToken.js";
-export type {
-  AuthAuditLog,
-  AuthPermission,
-  AuthPrincipal,
-  AuthRole,
-  AuthTokenRecord,
-  AuthUser,
-  AuthUserStatus,
-} from "./types/runtime/auth/AuthTypes.js";
+export { resolve_session_id } from "./executor/ids/resolveSessionId.js";

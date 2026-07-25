@@ -13,8 +13,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command, Option } from "commander";
 import {
-  listPluginsWithoutLifecycle,
-  registerPluginActionCommandsForCli,
+  list_plugins_without_lifecycle,
+  register_plugin_action_commands_for_cli,
 } from "@downcity/agent";
 import { registerAgentCommands } from "@/city/command/AgentCommand.js";
 import { registerChatCommand } from "@/city/command/ChatCommand.js";
@@ -111,9 +111,9 @@ export function registerCityCommands(program: Command): void {
   // 关键点（中文）：受 agent 托管的 plugin 命令统一注册（chat / task / memory / shell / future managed plugins）。
   registerManagedPluginCommandsForCli(program, builtinPlugins);
   // 关键点（中文）：非生命周期 plugin actions 仍由 agent 包的命令注册器统一装配。
-  registerPluginActionCommandsForCli({
+  register_plugin_action_commands_for_cli({
     program,
-    plugins: listPluginsWithoutLifecycle(builtinPlugins),
+    plugins: list_plugins_without_lifecycle(builtinPlugins),
   });
 
   program.showHelpAfterError();

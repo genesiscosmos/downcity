@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - workboard 是对外展示面板，类型只保留公开安全的模糊状态。
- * - 不暴露 sessionId、路径、模型、service 名称、task 明细等内部信息。
+ * - 不暴露 session_id、路径、模型、service 名称、task 明细等内部信息。
  */
 
 /**
@@ -48,7 +48,7 @@ export interface WorkboardActivityItem {
   /**
    * 最近更新时间（ISO8601）。
    */
-  updatedAt: string;
+  updated_at: string;
   /**
    * 对外安全标签。
    */

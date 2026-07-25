@@ -5,19 +5,19 @@ description: Create, open, list, archive, and permanently clean up Sessions
 
 # Managing Sessions
 
-`agent.sessions` is the collection entry point. It manages only Sessions owned by the current Agent; it never searches or mutates another `agentId`'s data.
+`agent.sessions` is the collection entry point. It manages only Sessions owned by the current Agent; it never searches or mutates another `agent_id`'s data.
 
 ## Create and open
 
 ```ts
 const created = await agent.sessions.create({
-  sessionId: "repo-analysis",
+  session_id: "repo-analysis",
 });
 
 const existing = await agent.sessions.get("repo-analysis");
 ```
 
-`create()` expresses creation intent. It throws when the ID already exists instead of silently reusing it. When `sessionId` is omitted, the SDK generates a stable, non-guessable ID. For get-or-create behavior, call `get()` first and call `create()` only when it is missing.
+`create()` expresses creation intent. It throws when the ID already exists instead of silently reusing it. When `session_id` is omitted, the SDK generates a stable, non-guessable ID. For get-or-create behavior, call `get()` first and call `create()` only when it is missing.
 
 ## List and search
 
@@ -31,16 +31,16 @@ for (const item of page.items) {
   render_session_row(item);
 }
 
-if (page.hasMore) {
+if (page.has_more) {
   const next_page = await agent.sessions.list({
     limit: 30,
-    cursor: page.nextCursor,
+    cursor: page.next_cursor,
     query: "repo",
   });
 }
 ```
 
-List items are lightweight summaries, not complete Messages. Common fields are `sessionId`, `title`, `previewText`, `messageCount`, `modelLabel`, `updatedAt`, and `executing`. `cursor` is opaque: return it to the SDK unchanged.
+List items are lightweight summaries, not complete Messages. Common fields are `session_id`, `title`, `preview_text`, `message_count`, `model_label`, `updated_at`, and `executing`. `cursor` is opaque: return it to the SDK unchanged.
 
 `query` is a lightweight contains filter for a session picker. It is not a full-text search language.
 
@@ -52,14 +52,14 @@ await agent.sessions.archive({ id: "repo-analysis" });
 const archived_page = await agent.sessions.archived({ limit: 30 });
 
 const removed = await agent.sessions.clean_archive();
-console.log(removed.removedSessionIds);
+console.log(removed.removed_session_ids);
 ```
 
 Archiving removes a Session from the active list without immediately destroying it. A running Session cannot be archived; wait for its Turn or call `stop()` first.
 
 `clean_archive()` permanently deletes every archived Session. Treat it as an explicit empty-trash action and require user confirmation in a UI.
 
-For local maintenance, `remove(sessionId)` permanently deletes one active Session's Agent-owned data. `clear_messages(sessionId)` clears only its messages. Plugin-owned data is not deleted implicitly; call the owning Plugin when a workflow also needs to remove domain data.
+For local maintenance, `remove(session_id)` permanently deletes one active Session's Agent-owned data. `clear_messages(session_id)` clears only its messages. Plugin-owned data is not deleted implicitly; call the owning Plugin when a workflow also needs to remove domain data.
 
 ## UI guidance
 
@@ -68,4 +68,4 @@ For local maintenance, `remove(sessionId)` permanently deletes one active Sessio
 3. Render `executing: true` as the runtime state; do not guess from timestamps.
 4. Remove an archived item from the active list and reload archived data after success.
 
-A Session title can be empty. The presentation layer should fall back to `sessionId` or a product-defined placeholder.
+A Session title can be empty. The presentation layer should fall back to `session_id` or a product-defined placeholder.

@@ -15,7 +15,7 @@ import type {
   ChatDispatcher,
 } from "@/chat/types/ChatDispatcher.js";
 import type { Logger } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import { resolveChatQueueStore } from "@/chat/runtime/ChatQueue.js";
 import { deleteChatSessionById } from "@/chat/runtime/ChatSessionDelete.js";
 import {
@@ -34,7 +34,7 @@ import {
 } from "./BaseChatChannelQueue.js";
 
 /**
- * Channel chatKey 计算入参。
+ * Channel chat_key 计算入参。
  *
  * 说明（中文）
  * - chatId 必填；其余字段用于区分 topic/thread/消息上下文。
@@ -44,12 +44,12 @@ export type ChannelChatKeyParams = {
   chatId: string;
   messageThreadId?: number;
   chatType?: string;
-  messageId?: string;
+  message_id?: string;
 };
 
 export type ChannelSendTextParams = ChannelChatKeyParams & {
   text: string;
-  replyToMessage?: boolean;
+  reply_to_message?: boolean;
 };
 
 export type ChannelSendActionParams = ChannelChatKeyParams & {
@@ -62,7 +62,7 @@ export type ChannelSendActionParams = ChannelChatKeyParams & {
  * 入站消息统一结构（跨平台最小公共字段）。
  *
  * 说明（中文）
- * - chatId 是平台原始会话标识（非 sessionId）。
+ * - chatId 是平台原始会话标识（非 session_id）。
  * - messageThreadId 用于支持 topic / thread 细粒度并发。
  * - 该结构只描述“接收侧”，不包含平台发送参数。
  */
@@ -70,9 +70,9 @@ export type IncomingChatMessage = {
   chatId: string;
   text: string;
   chatType?: string;
-  messageId?: string;
+  message_id?: string;
   messageThreadId?: number;
-  userId?: string;
+  user_id?: string;
   username?: string;
   /**
    * 当前消息接收时间。
@@ -114,7 +114,7 @@ export type IncomingChatMessage = {
 export type IncomingChatAccessParams = {
   chatId: string;
   chatType?: string;
-  userId?: string;
+  user_id?: string;
   username?: string;
   chatTitle?: string;
 };
@@ -129,18 +129,18 @@ export type IncomingChatAccessResult = ChatAccessDecision;
  */
 export abstract class BaseChatChannel {
   readonly channel: ChatDispatchChannel;
-  protected readonly context: AgentContext;
+  protected readonly context: PluginContext;
   protected readonly rootPath: string;
   protected readonly logger: Logger;
   private readonly access_notice_sent_at = new Map<string, number>();
 
   protected constructor(params: {
     channel: ChatDispatchChannel;
-    context: AgentContext;
+    context: PluginContext;
   }) {
     this.channel = params.channel;
     this.context = params.context;
-    this.rootPath = params.context.rootPath;
+    this.rootPath = params.context.workspace_path;
     this.logger = params.context.logger;
 
     const dispatcher: ChatDispatcher = {
@@ -231,7 +231,7 @@ export abstract class BaseChatChannel {
     return create_chat_access_service(this.context).evaluate({
       channel: this.channel,
       issuer,
-      subject_id: String(params.userId || "").trim(),
+      subject_id: String(params.user_id || "").trim(),
       display_name: String(params.username || "").trim() || undefined,
       chat_id: String(params.chatId || "").trim(),
       chat_type: String(params.chatType || "").trim() || undefined,
@@ -310,8 +310,8 @@ export abstract class BaseChatChannel {
           chatType: normalized.chatType,
           messageThreadId: normalized.messageThreadId,
           text: normalized.text,
-          ...(typeof normalized.messageId === "string"
-            ? { messageId: normalized.messageId }
+          ...(typeof normalized.message_id === "string"
+            ? { message_id: normalized.message_id }
             : {}),
         });
       }
@@ -348,7 +348,7 @@ export abstract class BaseChatChannel {
         action,
         messageThreadId: params.messageThreadId,
         chatType: params.chatType,
-        messageId: params.messageId,
+        message_id: params.message_id,
         reactionEmoji: params.reactionEmoji,
         reactionIsBig: params.reactionIsBig,
       });
@@ -359,20 +359,20 @@ export abstract class BaseChatChannel {
   }
 
   /**
-   * 清理某个 sessionId 对应的 agent 会话状态。
+   * 清理某个 session_id 对应的 agent 会话状态。
    *
    * 说明（中文）
    * - 只清理 runtime / context 层状态，不直接删历史文件。
    * - 常用于用户触发“重置对话”类命令。
    */
-  clearChat(sessionId: string): void {
-    const key = String(sessionId || "").trim();
+  clearChat(session_id: string): void {
+    const key = String(session_id || "").trim();
     if (!key) return;
     resolveChatQueueStore(this.context).enqueue({
       kind: "control",
       channel: this.channel,
       targetId: key,
-      sessionId: key,
+      session_id: key,
       text: "",
       control: { type: "clear" },
     });
@@ -380,19 +380,19 @@ export abstract class BaseChatChannel {
   }
 
   /**
-   * 按渠道目标清理会话（映射到内部 sessionId）。
+   * 按渠道目标清理会话（映射到内部 session_id）。
    */
   protected async clearChatByTarget(params: ChannelChatKeyParams): Promise<void> {
     const chatId = String(params.chatId || "").trim();
     if (!chatId) return;
-    const sessionId = await resolveChannelSessionId({
+    const session_id = await resolveChannelSessionId({
       context: this.context,
       channel: this.channel,
       chatId,
       chatType: params.chatType,
       messageThreadId: params.messageThreadId,
     });
-    if (!sessionId) {
+    if (!session_id) {
       this.logger.info("Skip clear chat: context mapping not found", {
         channel: this.channel,
         chatId,
@@ -403,13 +403,13 @@ export abstract class BaseChatChannel {
     }
     const deleted = await deleteChatSessionById({
       context: this.context,
-      sessionId,
+      session_id,
     });
     if (!deleted.success) {
       this.logger.warn("Failed to delete chat context by target", {
         channel: this.channel,
         chatId,
-        sessionId,
+        session_id,
         error: deleted.error || "delete failed",
       });
       return;
@@ -417,7 +417,7 @@ export abstract class BaseChatChannel {
     this.logger.info("Deleted chat context by target", {
       channel: this.channel,
       chatId,
-      sessionId,
+      session_id,
       removedMeta: deleted.removedMeta,
       removedChatDir: deleted.removedChatDir,
       removedSessionDir: deleted.removedSessionDir,
@@ -429,8 +429,8 @@ export abstract class BaseChatChannel {
    */
   protected async enqueueAuditMessage(params: {
     chatId: string;
-    messageId?: string;
-    userId?: string;
+    message_id?: string;
+    user_id?: string;
     text: string;
     meta?: ChannelUserMessageMeta;
   }): Promise<void> {
@@ -439,8 +439,8 @@ export abstract class BaseChatChannel {
       channel: this.channel,
       chatId: params.chatId,
       text: params.text,
-      ...(typeof params.messageId === "string" ? { messageId: params.messageId } : {}),
-      ...(typeof params.userId === "string" ? { userId: params.userId } : {}),
+      ...(typeof params.message_id === "string" ? { message_id: params.message_id } : {}),
+      ...(typeof params.user_id === "string" ? { user_id: params.user_id } : {}),
       ...(params.meta ? { meta: params.meta } : {}),
     });
   }
@@ -449,12 +449,12 @@ export abstract class BaseChatChannel {
    * 将消息送入会话调度器队列。
    *
    * 返回值语义（中文）
-   * - chatKey: lane 归属键（同 key 串行）。
+   * - chat_key: lane 归属键（同 key 串行）。
    * - position: 当前 lane 中排队位置（便于日志与观测）。
    */
   protected async enqueueMessage(
     msg: IncomingChatMessage,
-  ): Promise<{ chatKey: string; position: number }> {
+  ): Promise<{ chat_key: string; position: number }> {
     return await enqueueExecChannelMessage({
       context: this.context,
       channel: this.channel,

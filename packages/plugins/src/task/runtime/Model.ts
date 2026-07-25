@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - `task.md` 使用 YAML frontmatter + markdown 正文
- * - frontmatter 必须包含：title/when/description/sessionId/status
+ * - frontmatter 必须包含：title/when/description/session_id/status
  * - `when` 统一承载触发语义：`@manual` / cron / `time:<ISO8601-with-timezone>`
  */
 
@@ -26,7 +26,7 @@ const REQUIRED_FIELDS: Array<keyof ShipTaskFrontmatterV1> = [
   "title",
   "when",
   "description",
-  "sessionId",
+  "session_id",
   "status",
 ];
 
@@ -213,9 +213,9 @@ export function parseTaskMarkdown(params: {
   taskId: string;
   markdown: string;
   taskMdPath: string;
-  projectRoot: string;
+  project_root: string;
 }): { ok: true; task: ShipTaskDefinitionV1 } | { ok: false; error: string } {
-  const { taskId, markdown, taskMdPath, projectRoot } = params;
+  const { taskId, markdown, taskMdPath, project_root } = params;
   const text = String(markdown ?? "");
   const { frontMatterYaml, body } = parseFrontMatter(text);
 
@@ -277,8 +277,8 @@ export function parseTaskMarkdown(params: {
   }
 
   const kind = normalizeTaskKind(meta.kind);
-  const bodyText = String(body ?? "").trim();
-  if (kind === "script" && !bodyText) {
+  const body_text = String(body ?? "").trim();
+  if (kind === "script" && !body_text) {
     return { ok: false, error: "script task body cannot be empty" };
   }
 
@@ -286,14 +286,14 @@ export function parseTaskMarkdown(params: {
     title: rawTitle,
     when: whenNormalized.value,
     description: String(meta.description).trim(),
-    sessionId: String(meta.sessionId).trim(),
+    session_id: String(meta.session_id).trim(),
     kind,
     ...(kind === "agent" && normalizeTaskReview(meta.review) === true ? { review: true } : {}),
     status,
   };
 
   const relTaskMdPath = path
-    .relative(projectRoot, taskMdPath)
+    .relative(project_root, taskMdPath)
     .split(path.sep)
     .join("/");
 
@@ -322,8 +322,8 @@ export function buildTaskMarkdown(params: {
   }
 
   const kind = normalizeTaskKind(frontmatter.kind);
-  const bodyText = String(body ?? "").trim();
-  if (kind === "script" && !bodyText) {
+  const body_text = String(body ?? "").trim();
+  if (kind === "script" && !body_text) {
     throw new Error("script task body cannot be empty");
   }
 
@@ -331,7 +331,7 @@ export function buildTaskMarkdown(params: {
     title: String(frontmatter.title || "").trim(),
     when: whenNormalized.value,
     description: String(frontmatter.description || "").trim(),
-    sessionId: String(frontmatter.sessionId || "").trim(),
+    session_id: String(frontmatter.session_id || "").trim(),
     kind,
     ...(kind === "agent" ? { review: Boolean(frontmatter.review) } : {}),
     status: String(frontmatter.status || "").trim(),
@@ -342,6 +342,6 @@ export function buildTaskMarkdown(params: {
     noRefs: true,
   });
 
-  const bodyWithTrailingLf = bodyText ? bodyText + "\n" : "";
+  const bodyWithTrailingLf = body_text ? body_text + "\n" : "";
   return `---\n${yamlText}---\n\n${bodyWithTrailingLf}`;
 }

@@ -9,7 +9,7 @@
 
 import type { Command } from "commander";
 import { PlatformStore } from "@/city/runtime/store/index.js";
-import type { StoredEnvEntry } from "@downcity/agent";
+import type { StoredEnvEntry } from "@/city/types/platform/PlatformStore.js";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import { parseBoolean } from "@/shared/IndexSupport.js";
@@ -111,8 +111,8 @@ async function emitKeysList(params: {
           key: item.key,
           description: item.description || "",
           scope: item.scope,
-          createdAt: item.createdAt,
-          updatedAt: item.updatedAt,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
         })),
       },
     });

@@ -72,10 +72,10 @@ function create_run_input(model, messages, context_window = 100) {
     },
     model,
     run_context: {
-      sessionId: "compact-runner-session",
-      injectedUserMessages: [],
-      deferredPersistedUserMessages: [],
-      pendingAssistantFileParts: [],
+      session_id: "compact-runner-session",
+      injected_user_messages: [],
+      deferred_persisted_user_messages: [],
+      pending_assistant_file_parts: [],
     },
     resolve_step_inputs: async () => ({
       model,
@@ -122,7 +122,7 @@ test("最终 step 达到 95% 时通过 run result 请求 writer 收口后持久�
     metadata: {
       v: 1,
       ts: 1,
-      sessionId: "compact-runner-session",
+      session_id: "compact-runner-session",
       source: "ingress",
       kind: "normal",
     },
@@ -144,7 +144,7 @@ test("新的持久化 Summary 只按 50% 水位验收一次", async () => {
     metadata: {
       v: 1,
       ts: 1,
-      sessionId: "compact-runner-session",
+      session_id: "compact-runner-session",
       source: "compact",
       kind: "summary",
     },
@@ -155,7 +155,7 @@ test("新的持久化 Summary 只按 50% 水位验收一次", async () => {
     metadata: {
       v: 1,
       ts: 2,
-      sessionId: "compact-runner-session",
+      session_id: "compact-runner-session",
       source: "ingress",
       kind: "normal",
     },
@@ -175,7 +175,7 @@ test("显式 compact 后在下一次 provider 调用前重载 canonical history"
     metadata: {
       v: 1,
       ts: 2,
-      sessionId: "compact-runner-session",
+      session_id: "compact-runner-session",
       source: "compact",
       kind: "summary",
     },
@@ -200,7 +200,7 @@ test("显式 compact 后在下一次 provider 调用前重载 canonical history"
     metadata: {
       v: 1,
       ts: 1,
-      sessionId: "compact-runner-session",
+      session_id: "compact-runner-session",
       source: "ingress",
       kind: "normal",
     },
@@ -238,7 +238,7 @@ test("Provider context-length error 在当前 tool-loop 内 deep compact 后重�
       metadata: {
         v: 1,
         ts: 1,
-        sessionId: "compact-runner-session",
+        session_id: "compact-runner-session",
         source: "ingress",
         kind: "normal",
       },

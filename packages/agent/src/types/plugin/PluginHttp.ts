@@ -7,23 +7,23 @@
  */
 
 import type { Hono } from "hono";
-import type { AgentContext } from "@/agent/AgentContext.js";
-import type { AuthRoutePolicy } from "@/types/runtime/auth/AuthRoute.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
+import type { AuthRoutePolicy } from "@downcity/type";
 
 /**
  * Plugin HTTP 注入参数。
  */
 export interface PluginHttpRegistration {
   /** 该组路由对应的鉴权策略列表。 */
-  authPolicies?: AuthRoutePolicy[];
+  auth_policies?: AuthRoutePolicy[];
   /** 向 runtime Hono 应用注册路由。 */
   register(params: {
     /** 当前 Hono 应用实例。 */
     app: Hono;
     /** 获取当前统一执行上下文。 */
-    getContext: () => AgentContext;
+    get_context: () => PluginContext;
     /** 当前 plugin 稳定名称。 */
-    pluginName: string;
+    plugin_name: string;
   }): void;
 }
 

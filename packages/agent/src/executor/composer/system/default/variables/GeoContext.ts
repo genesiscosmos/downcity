@@ -32,7 +32,7 @@ const GEO_REQUEST_TIMEOUT_MS = 3000;
 let cachedGeoContext:
   | {
       value: PromptGeoContext;
-      expiresAt: number;
+      expires_at: number;
     }
   | null = null;
 let inFlightGeoContext: Promise<PromptGeoContext> | null = null;
@@ -72,7 +72,7 @@ function buildFallbackGeoContext(): PromptGeoContext {
 function writeCache(value: PromptGeoContext): PromptGeoContext {
   cachedGeoContext = {
     value,
-    expiresAt: Date.now() + GEO_CACHE_TTL_MS,
+    expires_at: Date.now() + GEO_CACHE_TTL_MS,
   };
   return value;
 }
@@ -151,7 +151,7 @@ async function fetchIpWhoIsGeoContext(): Promise<PromptGeoContext | null> {
 
 async function loadGeoContext(): Promise<PromptGeoContext> {
   const now = Date.now();
-  if (cachedGeoContext && now < cachedGeoContext.expiresAt) {
+  if (cachedGeoContext && now < cachedGeoContext.expires_at) {
     return cachedGeoContext.value;
   }
 

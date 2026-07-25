@@ -6,7 +6,7 @@
  * - 支持 JSON 与人类可读两种模式。
  */
 
-import type { AuthIssuedToken, AuthTokenSummary } from "@downcity/agent";
+import type { AuthIssuedToken, AuthTokenSummary } from "@downcity/type";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import {

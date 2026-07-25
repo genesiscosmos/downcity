@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - `SessionRunInput` 表示上层会话入口输入（例如 context query）。
  * - `SessionExecuteInput` 表示 Executor 通过 Composer 装配后的中间运行态。
- * - 输出暴露可选 assistantMessage（UIMessage）。
+ * - 输出暴露可选 assistant_message（UIMessage）。
  */
 
 import type { FileUIPart, Tool, UIMessageChunk } from "ai";
@@ -37,7 +37,7 @@ export interface SessionAssistantStepCallbackInput {
   /**
    * 当前 step 序号（从 1 开始）。
    */
-  stepIndex: number;
+  step_index: number;
 
   /**
    * 当前 step 的可见性。
@@ -55,7 +55,7 @@ export interface SessionAssistantStepCallbackInput {
    * - 由运行时直接透传，供持久化层提取 tool call / tool result 顺序事件。
    * - 外部调用方不应依赖其稳定结构，只能做 best-effort 读取。
    */
-  stepResult?: unknown;
+  step_result?: unknown;
 }
 
 /**
@@ -113,12 +113,12 @@ export interface SessionRunResult {
    * - stop/abort 且没有任何 assistant 内容时可以为空。
    * - turn 状态通过 `success` / `error` 表达，不应伪造成 assistant 正文。
    */
-  assistantMessage?: SessionMessageRecordV1 | null;
+  assistant_message?: SessionMessageRecordV1 | null;
 
   /**
    * 工具运行期显式生成、并在 Assistant 末尾持久化的文件 Parts。
    *
-   * 关键点（中文）：该字段与聚合 `assistantMessage` 分离，Session 不需要从最终
+   * 关键点（中文）：该字段与聚合 `assistant_message` 分离，Session 不需要从最终
    * UIMessage 反推哪些文件来自工具通道。
    */
   assistant_file_parts?: FileUIPart[];
@@ -130,7 +130,7 @@ export interface SessionRunResult {
    * - 这些消息通常由 tool 运行时在执行过程中动态注入。
    * - 为保证消息顺序稳定，统一在 assistant 结果落盘后再由外层 Session 持久化。
    */
-  deferredPersistedUserMessages?: SessionUserMessageV1[];
+  deferred_persisted_user_messages?: SessionUserMessageV1[];
 
   /**
    * 本轮结束后是否需要把已完成的 canonical 历史持久化压缩。
@@ -158,7 +158,7 @@ export interface SessionRunInput {
    * - 这里承载 step 合并、UI chunk 回调等跨组件运行期数据。
    * - 若未传入，则由执行器按最小默认值兜底创建。
    */
-  runContext?: SessionRunContext;
+  run_context?: SessionRunContext;
 }
 
 /**

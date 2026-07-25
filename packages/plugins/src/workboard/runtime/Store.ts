@@ -6,11 +6,11 @@
  * - route 与 action 共享同一份快照，确保 workboard 展示一致。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { WorkboardSnapshot } from "@/workboard/types/Workboard.js";
 import { collectWorkboardSnapshot } from "@/workboard/runtime/Collector.js";
 
-type AgentContextResolver = () => AgentContext;
+type PluginContextResolver = () => PluginContext;
 
 const DEFAULT_WORKBOARD_INTERVAL_MS = 5_000;
 
@@ -18,7 +18,7 @@ const DEFAULT_WORKBOARD_INTERVAL_MS = 5_000;
  * Workboard 快照存储器。
  */
 class WorkboardSnapshotStore {
-  private contextResolver: AgentContextResolver;
+  private contextResolver: PluginContextResolver;
 
   private readonly intervalMs: number;
 
@@ -29,7 +29,7 @@ class WorkboardSnapshotStore {
   private inflight: Promise<WorkboardSnapshot> | null = null;
 
   constructor(params: {
-    contextResolver: AgentContextResolver;
+    contextResolver: PluginContextResolver;
     intervalMs?: number;
   }) {
     this.contextResolver = params.contextResolver;
@@ -39,7 +39,7 @@ class WorkboardSnapshotStore {
   /**
    * 更新上下文 resolver。
    */
-  setContextResolver(resolver: AgentContextResolver): void {
+  setContextResolver(resolver: PluginContextResolver): void {
     this.contextResolver = resolver;
   }
 
@@ -96,7 +96,7 @@ let sharedStore: WorkboardSnapshotStore | null = null;
  * 读取共享 workboard 快照缓存。
  */
 export function getWorkboardSnapshotStore(params: {
-  contextResolver: AgentContextResolver;
+  contextResolver: PluginContextResolver;
 }): WorkboardSnapshotStore {
   if (!sharedStore) {
     sharedStore = new WorkboardSnapshotStore({

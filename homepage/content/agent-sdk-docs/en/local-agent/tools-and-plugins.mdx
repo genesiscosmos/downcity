@@ -100,9 +100,9 @@ const agent = new Agent({
 });
 ```
 
-Registered plugin actions can be called through `agent.plugins.runAction(...)`, and plugin `system(context, run_context)` text is injected into session prompts.
+Registered plugin actions can be called through `agent.plugins.run_action(...)`, and plugin `system(context, run_context)` text is injected into session prompts.
 
-`AgentContext` does not expose a generic path bundle. A plugin uses `context.rootPath` as the project boundary and owns its domain storage paths inside the plugin. Operations on Agent Sessions go through `context.sessions`, not the Agent's Session directories.
+`PluginContext` does not expose a generic path bundle. A plugin uses `context.workspace_path` as the project boundary and owns its domain storage paths inside the plugin. Operations on Agent Sessions go through `context.sessions`, not the Agent's Session directories.
 
 `context.sessions` directly references the Agent's `AgentSessions`; it is not an adapter. Plugins use `context.sessions.runtime(session_id)` for the synchronous runtime port. SDK callers still restore an existing public Session with `await agent.sessions.get(session_id)`.
 
@@ -119,18 +119,18 @@ When the model is unsure how to call an action, it should call `plugin_read({ pl
 
 WorkspaceTools, Plugin Tools, and `AgentOptions.tools` cannot reuse a name. Agent throws on a conflict instead of silently overriding an existing tool.
 
-Custom plugins can declare action metadata with `createPlugin` / `createAction`:
+Custom plugins can declare action metadata with `create_plugin` / `create_action`:
 
 ```ts
-import { Agent, Workspace, createAction, createPlugin } from "@downcity/agent";
+import { Agent, Workspace, create_action, create_plugin } from "@downcity/agent";
 import { z } from "zod";
 
-const demo_plugin = createPlugin({
+const demo_plugin = create_plugin({
   name: "demo",
   title: "Demo",
   description: "Demo actions",
   actions: {
-    echo: createAction({
+    echo: create_action({
       description: "Echo text",
       input_schema: {
         zod: z.object({
@@ -154,7 +154,7 @@ const demo_plugin = createPlugin({
         success: true,
         data: {
           text: input.text,
-          session_id: run_context?.sessionId,
+          session_id: run_context?.session_id,
         },
         message: "echoed",
       }),
@@ -169,7 +169,7 @@ const agent = new Agent({
 });
 ```
 
-The `zod` schema handles runtime validation. `json_schema` and `examples` are returned by `plugin_read` for the model or UI. `run_context` is present when the action runs through a session tool and can be absent for direct CLI, HTTP, or scheduler calls. Use `run_context.workspace_env` for the effective env committed at the current session step; `context.env` is the current Workspace configuration snapshot. Existing `class extends BasePlugin` plugins still work, and can gradually move individual actions to `createAction(...)`.
+The `zod` schema handles runtime validation. `json_schema` and `examples` are returned by `plugin_read` for the model or UI. `run_context` is present when the action runs through a session tool and can be absent for direct CLI, HTTP, or scheduler calls. Use `run_context.workspace_env` for the effective env committed at the current session step; `context.workspace_env` is the current Workspace configuration snapshot. Existing `class extends BasePlugin` plugins still work, and can gradually move individual actions to `create_action(...)`.
 
 ## ChatPlugin
 

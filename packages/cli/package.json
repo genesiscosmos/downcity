@@ -1,6 +1,6 @@
 {
   "name": "downcity",
-  "version": "1.1.367",
+  "version": "1.1.368",
   "type": "module",
   "description": "Downcity CLI — unified City and Agent host management",
   "bin": {

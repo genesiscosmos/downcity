@@ -7,7 +7,7 @@
  * - 回发失败只记录日志，不影响 task run 自身状态。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { ShipTaskDefinitionV1 } from "@/task/types/Task.js";
 
 function resolveTaskFinalText(params: {
@@ -35,15 +35,15 @@ function resolveTaskFinalText(params: {
  * 通过 chat plugin runtime 发送 task 最终结果。
  */
 export async function dispatchTaskRunCompletionToChat(params: {
-  context: AgentContext;
+  context: PluginContext;
   task: ShipTaskDefinitionV1;
   executionId: string;
   outputText: string;
   errorText: string;
   resultErrors: string[];
 }): Promise<void> {
-  const sessionId = String(params.task.frontmatter.sessionId || "").trim();
-  if (!sessionId) return;
+  const session_id = String(params.task.frontmatter.session_id || "").trim();
+  if (!session_id) return;
 
   const finalText = resolveTaskFinalText({
     outputText: params.outputText,
@@ -53,19 +53,19 @@ export async function dispatchTaskRunCompletionToChat(params: {
   if (!finalText) return;
 
   try {
-    const sent = await params.context.plugins.runAction({
+    const sent = await params.context.plugins.run_action({
       plugin: "chat",
       action: "send",
       payload: {
-        chatKey: sessionId,
+        chat_key: session_id,
         text: finalText,
-        replyToMessage: true,
+        reply_to_message: true,
       },
     });
     if (!sent.success) {
       params.context.logger.warn("[TASK] Task completion chat send failed", {
         taskId: params.task.taskId,
-        sessionId,
+        session_id,
         executionId: params.executionId,
         error: sent.error || "chat send failed",
       });
@@ -73,7 +73,7 @@ export async function dispatchTaskRunCompletionToChat(params: {
   } catch (error) {
     params.context.logger.warn("[TASK] Task completion chat send failed", {
       taskId: params.task.taskId,
-      sessionId,
+      session_id,
       executionId: params.executionId,
       error: String(error),
     });

@@ -101,7 +101,7 @@ export interface FeishuIncomingAttachmentDescriptor {
    * 说明（中文）
    * - 会传给消息资源下载接口。
    */
-  resourceType: FeishuInboundResourceType;
+  resource_type: FeishuInboundResourceType;
 
   /**
    * 飞书消息资源 key。

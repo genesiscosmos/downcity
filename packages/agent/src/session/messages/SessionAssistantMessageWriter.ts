@@ -21,7 +21,7 @@ import type {
   SessionAssistantToolPart,
 } from "@/types/session/SessionMessage.js";
 import type { SessionToolInputReady } from "@/types/session/SessionTool.js";
-import { generateId } from "@/utils/Id.js";
+import { generate_id } from "@/utils/Id.js";
 
 /** 单个 Assistant segment 的流式 writer。 */
 export class SessionAssistantMessageWriter {
@@ -420,7 +420,7 @@ export class SessionAssistantMessageWriter {
       }
       case "start-step":
         await this.upsert_part({
-          part_id: `step:${generateId()}`,
+          part_id: `step:${generate_id()}`,
           sequence: this.next_part_sequence(),
           type: "step-start",
         });
@@ -434,7 +434,7 @@ export class SessionAssistantMessageWriter {
             : undefined;
           const part_id = data_id
             ? `data:${this.step_index}:${data_id}`
-            : `data:${generateId()}`;
+            : `data:${generate_id()}`;
           const current_part = current.parts.find((part) => part.part_id === part_id);
           await this.upsert_part({
             part_id,
@@ -508,7 +508,7 @@ export class SessionAssistantMessageWriter {
       return;
     }
     await this.upsert_part({
-      part_id: `file:${generateId()}`,
+      part_id: `file:${generate_id()}`,
       sequence: this.next_part_sequence(),
       type: "file",
       media_type: input.media_type,
@@ -651,7 +651,7 @@ export class SessionAssistantMessageWriter {
     const source_part_id = this.source_text_part_id(type, chunk_id);
     const active_part_id = this.active_text_part_ids.get(source_part_id);
     if (active_part_id) return active_part_id;
-    const part_id = `${type}:${generateId()}`;
+    const part_id = `${type}:${generate_id()}`;
     this.active_text_part_ids.set(source_part_id, part_id);
     return part_id;
   }

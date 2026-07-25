@@ -7,7 +7,7 @@
  * - `share` 分享文本、链接、文件和目录，并进入对方 inbox。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { PluginRunContext } from "@downcity/agent";
 import type { JsonValue } from "@downcity/agent";
 import type { PluginActions } from "@downcity/agent";
@@ -82,7 +82,7 @@ import {
 } from "./runtime/ContactPayload.js";
 
 async function resolveSelfEndpoint(
-  context: AgentContext,
+  context: PluginContext,
   options: ContactPluginOptions,
   endpointOverride?: string,
   effective_env?: Readonly<Record<string, string>>,
@@ -91,7 +91,7 @@ async function resolveSelfEndpoint(
   if (explicit) return normalizeContactEndpoint(explicit);
   const env = {
     ...process.env,
-    ...context.env,
+    ...context.workspace_env,
     ...effective_env,
   };
   const runtimePort = Number(process.env.DC_CITY_PORT || env.DC_CITY_PORT || "");
@@ -110,12 +110,12 @@ async function resolveSelfEndpoint(
 }
 
 function hasRuntimePublicEndpointEnv(
-  context: AgentContext,
+  context: PluginContext,
   effective_env?: Readonly<Record<string, string>>,
 ): boolean {
   const env = {
     ...process.env,
-    ...context.env,
+    ...context.workspace_env,
     ...effective_env,
   };
   return Boolean(
@@ -124,7 +124,7 @@ function hasRuntimePublicEndpointEnv(
   );
 }
 
-function getAgentName(context: AgentContext): string {
+function getAgentName(context: PluginContext): string {
   return String(context.agent_id || "downcity-agent").trim() || "downcity-agent";
 }
 
@@ -190,7 +190,7 @@ export class ContactPlugin extends BasePlugin {
   }
 
   private async link(
-    context: AgentContext,
+    context: PluginContext,
     payload: ContactLinkCommandPayload,
     run_context?: PluginRunContext,
   ) {
@@ -209,13 +209,13 @@ export class ContactPlugin extends BasePlugin {
     );
     const agentName = getAgentName(context);
 
-    await saveContactLinkRecord(context.rootPath, {
+    await saveContactLinkRecord(context.workspace_path, {
       id: linkId,
       agentName,
       endpoint,
       secretHash: hashContactToken(secret),
-      createdAt: now,
-      expiresAt: now + ttlSeconds * 1000,
+      created_at: now,
+      expires_at: now + ttlSeconds * 1000,
       usedAt: null,
     });
 
@@ -225,8 +225,8 @@ export class ContactPlugin extends BasePlugin {
       agentName,
       endpoint,
       secret,
-      createdAt: now,
-      expiresAt: now + ttlSeconds * 1000,
+      created_at: now,
+      expires_at: now + ttlSeconds * 1000,
     });
     return {
       code,
@@ -235,12 +235,12 @@ export class ContactPlugin extends BasePlugin {
       endpoint,
       endpointReachability: classifyContactEndpoint(endpoint),
       notes: buildContactLinkNotes({ endpoint }),
-      expiresAt: now + ttlSeconds * 1000,
+      expires_at: now + ttlSeconds * 1000,
     };
   }
 
   private async approve(
-    context: AgentContext,
+    context: PluginContext,
     payload: ContactApproveCommandPayload,
     run_context?: PluginRunContext,
   ) {
@@ -293,7 +293,7 @@ export class ContactPlugin extends BasePlugin {
     if (!response.success) throw new Error(response.error || "Contact approve failed");
 
     const name = String(payload.name || response.agentName || parsed.agentName).trim();
-    const contact = await saveContact(context.rootPath, {
+    const contact = await saveContact(context.workspace_path, {
       id: createStableContactId(name),
       name,
       endpoint: response.endpoint || parsed.endpoint,
@@ -301,7 +301,7 @@ export class ContactPlugin extends BasePlugin {
       status: "trusted",
       outboundToken: response.tokenForOwner,
       inboundTokenHash: tokenForRequester ? hashContactToken(tokenForRequester) : null,
-      createdAt: Date.now(),
+      created_at: Date.now(),
       lastSeenAt: Date.now(),
     });
     let confirmed = false;
@@ -326,7 +326,7 @@ export class ContactPlugin extends BasePlugin {
       }
     }
     const finalContact = confirmed
-      ? await saveContact(context.rootPath, {
+      ? await saveContact(context.workspace_path, {
           ...contact,
           reachability: "bidirectional",
           inboundTokenHash: tokenForRequester ? hashContactToken(tokenForRequester) : null,
@@ -351,12 +351,12 @@ export class ContactPlugin extends BasePlugin {
     };
   }
 
-  private async check(context: AgentContext, payload: ContactCheckCommandPayload) {
+  private async check(context: PluginContext, payload: ContactCheckCommandPayload) {
     const startedAt = Date.now();
     const endpointInput = String(payload.endpoint || "").trim();
     const contact = endpointInput
       ? null
-      : await findContact(context.rootPath, String(payload.target || "").trim());
+      : await findContact(context.workspace_path, String(payload.target || "").trim());
     const endpoint = endpointInput || contact?.endpoint || "";
     if (!endpoint) throw new Error("contact target or --to endpoint is required");
     if (contact && !contact.outboundToken) {
@@ -369,7 +369,7 @@ export class ContactPlugin extends BasePlugin {
         token: contact?.outboundToken || undefined,
       });
       if (contact && pong.success) {
-        await touchContactSeen(context.rootPath, contact.id);
+        await touchContactSeen(context.workspace_path, contact.id);
       }
       return {
         target: contact?.name || endpoint,
@@ -391,21 +391,21 @@ export class ContactPlugin extends BasePlugin {
     }
   }
 
-  private async chat(context: AgentContext, payload: ContactChatCommandPayload) {
-    const contact = await findContact(context.rootPath, payload.to);
+  private async chat(context: PluginContext, payload: ContactChatCommandPayload) {
+    const contact = await findContact(context.workspace_path, payload.to);
     if (!contact) throw new Error(`Contact not found: ${payload.to}`);
     const message = String(payload.message || "").trim();
     if (!message) {
       return {
         contact,
-        messages: await readContactMessages(context.rootPath, contact.id),
+        messages: await readContactMessages(context.workspace_path, contact.id),
       };
     }
 
-    await appendContactMessage(context.rootPath, contact.id, {
+    await appendContactMessage(context.workspace_path, contact.id, {
       role: "local",
       text: message,
-      createdAt: Date.now(),
+      created_at: Date.now(),
     });
     const outbound = requireOutboundContact(contact);
     const response = await callContactChat<ContactChatResponse>({
@@ -414,20 +414,20 @@ export class ContactPlugin extends BasePlugin {
       body: {
         senderContactId: contact.id,
         message,
-        createdAt: Date.now(),
+        created_at: Date.now(),
       } as unknown as JsonValue,
     });
     if (!response.success) throw new Error(response.error || "Contact chat failed");
-    await appendContactMessage(context.rootPath, contact.id, {
+    await appendContactMessage(context.workspace_path, contact.id, {
       role: "remote",
       text: response.reply,
-      createdAt: Date.now(),
+      created_at: Date.now(),
     });
     return response;
   }
 
-  private async share(context: AgentContext, payload: ContactShareCommandPayload) {
-    const contact = await findContact(context.rootPath, payload.to);
+  private async share(context: PluginContext, payload: ContactShareCommandPayload) {
+    const contact = await findContact(context.workspace_path, payload.to);
     if (!contact) throw new Error(`Contact not found: ${payload.to}`);
     const outbound = requireOutboundContact(contact);
     const share = await createShareInput({
@@ -455,7 +455,7 @@ export class ContactPlugin extends BasePlugin {
   }
 
   private async remotePing(
-    context: AgentContext,
+    context: PluginContext,
     payload: { token?: string },
   ): Promise<ContactPingResponse> {
     const token = String(payload.token || "").trim();
@@ -466,7 +466,7 @@ export class ContactPlugin extends BasePlugin {
         plugin: "contact",
       };
     }
-    const contact = await findContactByInboundToken(context.rootPath, token);
+    const contact = await findContactByInboundToken(context.workspace_path, token);
     return {
       success: true,
       agentName: getAgentName(context),
@@ -476,11 +476,11 @@ export class ContactPlugin extends BasePlugin {
   }
 
   private async remoteApprove(
-    context: AgentContext,
+    context: PluginContext,
     request: ContactApproveLinkRequest,
   ): Promise<ContactApproveLinkResponse> {
     return await approveContactLinkRequest({
-      projectRoot: context.rootPath,
+      project_root: context.workspace_path,
       ownerAgentName: getAgentName(context),
       ownerEndpoint: await resolveSelfEndpoint(context, this.options),
       request,
@@ -488,11 +488,11 @@ export class ContactPlugin extends BasePlugin {
   }
 
   private async remoteConfirm(
-    context: AgentContext,
+    context: PluginContext,
     request: ContactConfirmRequest,
   ): Promise<ContactConfirmResponse> {
     return await confirmContactLinkRequest({
-      projectRoot: context.rootPath,
+      project_root: context.workspace_path,
       ownerAgentName: getAgentName(context),
       request,
       verifyCallback: async ({ endpoint, token }) => {
@@ -505,11 +505,11 @@ export class ContactPlugin extends BasePlugin {
     });
   }
 
-  private async remoteShare(context: AgentContext, rawPayload: JsonValue) {
+  private async remoteShare(context: PluginContext, rawPayload: JsonValue) {
     const payload = readContactObject(rawPayload);
     const token = readContactString(payload, "token");
     const body = readContactObject(payload.body);
-    const contact = await findContactByInboundToken(context.rootPath, token);
+    const contact = await findContactByInboundToken(context.workspace_path, token);
     if (!contact || contact.status !== "trusted") {
       throw new Error("Invalid contact token");
     }
@@ -521,7 +521,7 @@ export class ContactPlugin extends BasePlugin {
       receivedAt: Date.now(),
       status: "pending" as const,
     };
-    await saveContactInboxShare(context.rootPath, {
+    await saveContactInboxShare(context.workspace_path, {
       meta,
       payload: share.payload,
       files: Array.isArray(share.files) ? share.files : [],

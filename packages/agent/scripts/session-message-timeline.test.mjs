@@ -61,6 +61,6 @@ test("Session timeline preserves assistant text and tool order", () => {
     "assistant-1:2",
     "assistant-1:3",
   ]);
-  assert.equal(events[1].toolName, "read");
+  assert.equal(events[1].tool_name, "read");
   assert.match(events[2].text, /"ok"/);
 });

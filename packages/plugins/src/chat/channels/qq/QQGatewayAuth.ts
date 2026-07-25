@@ -107,7 +107,7 @@ export interface TestQqGatewayConnectionParams {
   /**
    * 当探活发现异常时触发重连的回调。
    */
-  requestReconnect: (reason: string, delayMs?: number) => void;
+  requestReconnect: (reason: string, delay_ms?: number) => void;
 }
 
 /**

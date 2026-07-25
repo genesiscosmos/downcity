@@ -29,10 +29,10 @@ test("Workspace provides AgentStore on the same file resource", async (t) => {
   await session_store.messages.initialize();
   await session_store.write_metadata({
     v: 1,
-    sessionId: "first",
-    agentId: "store-test",
-    createdAt: 1,
-    updatedAt: 1,
+    session_id: "first",
+    agent_id: "store-test",
+    created_at: 1,
+    updated_at: 1,
     title: "独立存储",
   });
   await session_store.write_instruction("");
@@ -63,9 +63,9 @@ test("LocalAgentStore archives and cleans sessions", async (t) => {
   await store.session("archived").messages.initialize();
 
   const archived = await store.archive_session("archived");
-  assert.equal(archived.sessionId, "archived");
-  assert.equal((await store.list_archived_sessions()).items[0]?.sessionId, "archived");
-  assert.deepEqual((await store.clean_archive()).removedSessionIds, ["archived"]);
+  assert.equal(archived.session_id, "archived");
+  assert.equal((await store.list_archived_sessions()).items[0]?.session_id, "archived");
+  assert.deepEqual((await store.clean_archive()).removed_session_ids, ["archived"]);
   assert.equal((await store.list_archived_sessions()).items.length, 0);
 });
 
@@ -78,6 +78,6 @@ test("Agent obtains its Store from Workspace", async (t) => {
   });
 
   assert.equal(agent.workspace, workspace);
-  assert.equal((await agent.sessions.create({ sessionId: "first" })).id, "first");
+  assert.equal((await agent.sessions.create({ session_id: "first" })).id, "first");
   await agent.dispose();
 });

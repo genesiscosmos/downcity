@@ -109,7 +109,7 @@ export interface ParsedChatMessageMarkup {
    * 说明（中文）
    * - 会把多段文本按消息原始顺序合并，中间使用空行分隔。
    */
-  bodyText: string;
+  body_text: string;
 
   /**
    * 按出现顺序提取出的附件标签列表。
@@ -127,36 +127,36 @@ export interface ParsedChatMessageMarkup {
  */
 export interface ChatMessageSendOptions {
   /**
-   * 目标 chatKey。
+   * 目标 chat_key。
    *
    * 说明（中文）
    * - 未提供时由调用方回退到当前上下文或显式参数。
    */
-  chatKey?: string;
+  chat_key?: string;
 
   /**
    * 延迟发送毫秒数。
    *
    * 说明（中文）
-   * - 由 `delay/delayMs/delay-ms` 解析得到。
+   * - 由 `delay/delay_ms/delay-ms` 解析得到。
    */
-  delayMs?: number;
+  delay_ms?: number;
 
   /**
    * 定时发送的绝对毫秒时间戳。
    *
    * 说明（中文）
-   * - 由 `time/sendAt/sendAtMs` 等字段解析得到。
+   * - 由 `time/sendAt/send_at_ms` 等字段解析得到。
    */
-  sendAtMs?: number;
+  send_at_ms?: number;
 
   /**
    * 是否使用 reply 语义发送。
    *
    * 说明（中文）
-   * - 允许仅设置布尔值，也允许结合 `messageId` 一起使用。
+   * - 允许仅设置布尔值，也允许结合 `message_id` 一起使用。
    */
-  replyToMessage?: boolean;
+  reply_to_message?: boolean;
 
   /**
    * 可选目标消息 ID。
@@ -164,5 +164,5 @@ export interface ChatMessageSendOptions {
    * 说明（中文）
    * - 当前主要用于 Telegram/Feishu reply 场景。
    */
-  messageId?: string;
+  message_id?: string;
 }

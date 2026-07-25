@@ -41,7 +41,7 @@ export interface AgentSessionPromptInput {
  * - `string`：trim 后为空即视为空。
  * - `SessionUserMessagePart[]`：数组为空或仅包含空文本时视为空。
  */
-export function isAgentSessionPromptInputEmpty(input: AgentSessionPromptInput): boolean {
+export function is_agent_session_prompt_input_empty(input: AgentSessionPromptInput): boolean {
   const query = input.query;
   if (typeof query === "string") {
     return query.trim() === "";

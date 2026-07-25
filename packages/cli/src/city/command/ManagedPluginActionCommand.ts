@@ -10,9 +10,9 @@
 import path from "node:path";
 import type { Command } from "commander";
 import {
-  parseActionScheduleRunAtMsOrThrow,
+  parse_action_schedule_run_at_ms_or_throw,
 } from "@downcity/agent";
-import { listPluginsWithLifecycle } from "@downcity/agent";
+import { list_plugins_with_lifecycle } from "@downcity/agent";
 import type { BasePlugin, PluginAction } from "@downcity/agent";
 import type { JsonObject, JsonValue } from "@downcity/agent";
 import type { PluginActionScheduleInput } from "@downcity/agent";
@@ -28,13 +28,13 @@ function buildChatPluginHelpText(): string {
       "",
       "Chat quick guide:",
       "  直接输出 assistant 文本会发送到当前 chat platform。",
-      "  跨 chat 发送请使用 `city chat send --chat-key <chatKey>`。",
+      "  跨 chat 发送请使用 `city chat send --chat-key <chat_key>`。",
       "  如果要发正文/附件/定时消息，先看 `city chat send --help` 与 `city chat react --help`。",
       "",
       "Common examples:",
       "  city chat send --text 'done'",
-      "  city chat send --chat-key <chatKey> --text 'done'",
-      "  city chat react --message-id <messageId> --emoji '✅'",
+      "  city chat send --chat-key <chat_key> --text 'done'",
+      "  city chat react --message-id <message_id> --emoji '✅'",
       "  city chat context",
       "  city chat history --limit 30",
     ].join("\n");
@@ -44,13 +44,13 @@ function buildChatPluginHelpText(): string {
     "",
     "Chat quick guide:",
     "  Plain assistant text is sent to the current chat platform automatically.",
-    "  To send across chats, use `city chat send --chat-key <chatKey>`.",
+    "  To send across chats, use `city chat send --chat-key <chat_key>`.",
     "  For rich text, attachments, or scheduled messages, check `city chat send --help` and `city chat react --help` first.",
     "",
     "Common examples:",
     "  city chat send --text 'done'",
-    "  city chat send --chat-key <chatKey> --text 'done'",
-    "  city chat react --message-id <messageId> --emoji '✅'",
+    "  city chat send --chat-key <chat_key> --text 'done'",
+    "  city chat react --message-id <message_id> --emoji '✅'",
     "  city chat context",
     "  city chat history --limit 30",
   ].join("\n");
@@ -65,25 +65,25 @@ const CHAT_RUNTIME_ACTION_COMMANDS_HIDDEN_FROM_CITY = new Set([
 ]);
 
 function translateManagedPluginDescription(
-  pluginName: string,
-  actionName: string,
+  plugin_name: string,
+  action_name: string,
   description: string,
 ): string {
   if (getCliLocale() === "zh") {
     return description;
   }
 
-  if (pluginName === "chat") {
+  if (plugin_name === "chat") {
     const chatMap: Record<string, string> = {
-      list: "list recorded chat sessions for the current agent (chatTitle/chatKey)",
+      list: "list recorded chat sessions for the current agent (chatTitle/chat_key)",
       info: "show details for a selected chat session (route/local path/context snapshot)",
-      send: "send a message to a target chatKey",
+      send: "send a message to a target chat_key",
       react: "add a reaction to a target message (Telegram only for now)",
       context: "show the current conversation context snapshot",
       delete: "permanently delete a selected chat session (mapping + history + context)",
       history: "read chat history messages (latest 30 by default)",
     };
-    return chatMap[actionName] ?? description;
+    return chatMap[action_name] ?? description;
   }
 
   return description;
@@ -210,24 +210,24 @@ function hasLongOption(command: Command, longFlag: string): boolean {
 function extractCommandScheduleInput(
   options: Record<string, unknown>,
 ): PluginActionScheduleInput | undefined {
-  const runAtMs = parseActionScheduleRunAtMsOrThrow({
+  const run_at_ms = parse_action_schedule_run_at_ms_or_throw({
     delay: options.delay as string | number | undefined,
     time: options.time as string | number | undefined,
   });
-  if (typeof runAtMs !== "number") return undefined;
-  return { runAtMs };
+  if (typeof run_at_ms !== "number") return undefined;
+  return { run_at_ms };
 }
 
 function registerPluginActionCommand(params: {
   program: Command;
   plugin: BasePlugin;
-  actionName: string;
+  action_name: string;
   action: PluginAction<JsonValue, JsonValue>;
 }): void {
   // 关键点（中文）：chat platform 运行态与配置由 agent 内部管理，City 不注册这些快捷命令。
   if (
     params.plugin.name === "chat" &&
-    CHAT_RUNTIME_ACTION_COMMANDS_HIDDEN_FROM_CITY.has(params.actionName)
+    CHAT_RUNTIME_ACTION_COMMANDS_HIDDEN_FROM_CITY.has(params.action_name)
   ) {
     return;
   }
@@ -261,11 +261,11 @@ function registerPluginActionCommand(params: {
   }
 
   const actionCommand = pluginCommand
-    .command(params.actionName)
+    .command(params.action_name)
     .description(
       translateManagedPluginDescription(
         params.plugin.name,
-        params.actionName,
+        params.action_name,
         commandSpec.description,
       ),
     )
@@ -339,7 +339,7 @@ function registerPluginActionCommand(params: {
       printResult({
         asJson: bridgeOptions.json,
         success: false,
-        title: `${params.plugin.name}.${params.actionName} failed`,
+        title: `${params.plugin.name}.${params.action_name} failed`,
         payload: {
           error: `Failed to parse schedule input: ${String(error)}`,
         },
@@ -349,7 +349,7 @@ function registerPluginActionCommand(params: {
 
     let payload: JsonValue;
     try {
-      payload = await commandSpec.mapInput({
+      payload = await commandSpec.map_input({
         args: positionalArgs,
         opts: actionOptions,
       });
@@ -357,7 +357,7 @@ function registerPluginActionCommand(params: {
       printResult({
         asJson: bridgeOptions.json,
         success: false,
-        title: `${params.plugin.name}.${params.actionName} failed`,
+        title: `${params.plugin.name}.${params.action_name} failed`,
         payload: {
           error: `Failed to parse command input: ${String(error)}`,
         },
@@ -366,15 +366,15 @@ function registerPluginActionCommand(params: {
     }
 
     const remote = await callServer<PluginCommandResponse>({
-      projectRoot: resolveProjectRoot(bridgeOptions.path),
+      project_root: resolveProjectRoot(bridgeOptions.path),
       path: "/api/plugins/command",
       method: "POST",
       host: bridgeOptions.host,
       port: bridgeOptions.port,
       authToken: bridgeOptions.token,
       body: {
-        pluginName: params.plugin.name,
-        command: params.actionName,
+        plugin_name: params.plugin.name,
+        command: params.action_name,
         payload,
         ...(schedule ? { schedule } : {}),
       } as unknown as JsonValue,
@@ -386,8 +386,8 @@ function registerPluginActionCommand(params: {
         asJson: bridgeOptions.json,
         success: Boolean(data.success),
         title: data.success
-          ? `${params.plugin.name}.${params.actionName} ok`
-          : `${params.plugin.name}.${params.actionName} failed`,
+          ? `${params.plugin.name}.${params.action_name} ok`
+          : `${params.plugin.name}.${params.action_name} failed`,
         payload: {
           ...(data.data !== undefined ? { data: data.data } : {}),
           ...(data.message ? { message: data.message } : {}),
@@ -400,7 +400,7 @@ function registerPluginActionCommand(params: {
     printResult({
       asJson: bridgeOptions.json,
       success: false,
-      title: `${params.plugin.name}.${params.actionName} failed`,
+      title: `${params.plugin.name}.${params.action_name} failed`,
       payload: {
         error: remote.error || "Unknown error",
       },
@@ -415,13 +415,13 @@ export function registerManagedPluginCommandsForCli(
   program: Command,
   pluginsInput: BasePlugin[],
 ): void {
-  const plugins = listPluginsWithLifecycle(pluginsInput);
+  const plugins = list_plugins_with_lifecycle(pluginsInput);
   for (const plugin of plugins) {
-    for (const [actionName, action] of Object.entries(plugin.actions)) {
+    for (const [action_name, action] of Object.entries(plugin.actions)) {
       registerPluginActionCommand({
         program,
         plugin,
-        actionName,
+        action_name,
         action: action as PluginAction<JsonValue, JsonValue>,
       });
     }

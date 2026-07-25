@@ -2,14 +2,14 @@
  * AgentState：本地 Agent 长期运行状态与生命周期。
  *
  * 职责说明（中文）
- * - 统一连接 PluginRegistry 与 AgentContext。
+ * - 统一连接 PluginRegistry 与 PluginContext。
  * - 持有 Plugin lifecycle 与 ActionSchedule 的启动状态。
  * - Agent 构造完成后立即开始启动，调用方通过 `ready()` 等待。
  * - Agent 释放时统一停止 ActionSchedule 与 Plugin lifecycle。
  * - RPC / HTTP 等 transport 不属于 AgentState，由上游宿主独立管理。
  */
 
-import type { AgentContext } from "@/agent/AgentContext.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
 import type { AgentStateOptions } from "@/types/agent/AgentState.js";
 import {
@@ -22,7 +22,7 @@ import {
  */
 export class AgentState {
   /** 当前 Agent 共用的执行上下文。 */
-  private readonly context: AgentContext;
+  private readonly context: PluginContext;
 
   /** 当前 Agent 唯一的 PluginRegistry 实例。 */
   private readonly plugins: PluginRegistry;
@@ -58,7 +58,7 @@ export class AgentState {
     this.action_schedule_runtime?.stop();
     this.action_schedule_runtime = null;
     if (this.plugins_started) {
-      await this.context.plugins.unregisterAll();
+      await this.context.plugins.unregister_all();
       this.plugins_started = false;
     }
   }
@@ -72,7 +72,7 @@ export class AgentState {
    * - ActionSchedule 启动失败不阻断 Agent ready。
    */
   private async start_runtime(): Promise<void> {
-    const snapshots = await this.plugins.startAll();
+    const snapshots = await this.plugins.start_all();
     this.plugins_started = true;
     for (const item of snapshots) {
       if (item.status === "error") {

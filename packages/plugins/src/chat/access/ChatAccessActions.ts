@@ -6,7 +6,7 @@
  * - CLI 可以直接复用 ChatAccessService，不依赖运行中 Agent。
  */
 
-import { createAction } from "@downcity/agent";
+import { create_action } from "@downcity/agent";
 import type { PluginActions } from "@downcity/agent";
 import type { JsonValue } from "@downcity/agent";
 import { z } from "zod";
@@ -19,7 +19,7 @@ const scope_schema = z.enum(["direct", "group", "all"]);
 /** 创建 Chat Access Action 集合。 */
 export function create_chat_access_actions(): PluginActions {
   return {
-    [CHAT_ACCESS_ACTIONS.snapshot]: createAction({
+    [CHAT_ACCESS_ACTIONS.snapshot]: create_action({
       description: "Read Chat Access principals, grants, and requests for the current Agent.",
       input_schema: {
         zod: z.object({}).passthrough(),
@@ -30,7 +30,7 @@ export function create_chat_access_actions(): PluginActions {
         data: create_chat_access_service(context).snapshot() as unknown as JsonValue,
       }),
     }),
-    [CHAT_ACCESS_ACTIONS.approve]: createAction({
+    [CHAT_ACCESS_ACTIONS.approve]: create_action({
       description: "Approve a pending Chat Access request.",
       input_schema: {
         zod: z.object({
@@ -60,7 +60,7 @@ export function create_chat_access_actions(): PluginActions {
         };
       },
     }),
-    [CHAT_ACCESS_ACTIONS.deny]: createAction({
+    [CHAT_ACCESS_ACTIONS.deny]: create_action({
       description: "Deny a pending Chat Access request.",
       input_schema: {
         zod: z.object({
@@ -90,7 +90,7 @@ export function create_chat_access_actions(): PluginActions {
         };
       },
     }),
-    [CHAT_ACCESS_ACTIONS.set]: createAction({
+    [CHAT_ACCESS_ACTIONS.set]: create_action({
       description: "Set allow or deny for a known Chat Access principal.",
       input_schema: {
         zod: z.object({
@@ -123,7 +123,7 @@ export function create_chat_access_actions(): PluginActions {
         };
       },
     }),
-    [CHAT_ACCESS_ACTIONS.revoke]: createAction({
+    [CHAT_ACCESS_ACTIONS.revoke]: create_action({
       description: "Revoke Chat Access grants for a known principal.",
       input_schema: {
         zod: z.object({

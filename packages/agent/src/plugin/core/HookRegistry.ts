@@ -13,25 +13,25 @@ import type {
   PluginPipelineHook,
   PluginResolveHook,
 } from "@/types/plugin/PluginRuntime.js";
-import type { AgentContext } from "@/agent/AgentContext.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 
 type PipelineRecord = {
-  pluginName: string;
+  plugin_name: string;
   handler: PluginPipelineHook<JsonValue>;
 };
 
 type GuardRecord = {
-  pluginName: string;
+  plugin_name: string;
   handler: PluginGuardHook<JsonValue>;
 };
 
 type EffectRecord = {
-  pluginName: string;
+  plugin_name: string;
   handler: PluginEffectHook<JsonValue>;
 };
 
 type ResolveRecord = {
-  pluginName: string;
+  plugin_name: string;
   handler: PluginResolveHook<JsonValue, JsonValue>;
 };
 
@@ -39,7 +39,7 @@ type ResolveRecord = {
  * HookRegistry：plugin 点注册与执行实现。
  */
 export class HookRegistry {
-  private readonly get_context: () => AgentContext;
+  private readonly get_context: () => PluginContext;
   private readonly is_plugin_ready: (plugin_name: string) => boolean;
 
   private readonly pipelineHooks = new Map<string, PipelineRecord[]>();
@@ -51,7 +51,7 @@ export class HookRegistry {
   private readonly resolveHooks = new Map<string, ResolveRecord>();
 
   constructor(params: {
-    get_context: () => AgentContext;
+    get_context: () => PluginContext;
     is_plugin_ready: (plugin_name: string) => boolean;
   }) {
     this.get_context = params.get_context;
@@ -62,17 +62,17 @@ export class HookRegistry {
    * 注册 pipeline 扩展点。
    */
   pipeline(
-    pointName: string,
-    pluginName: string,
+    point_name: string,
+    plugin_name: string,
     handler: PluginPipelineHook<JsonValue>,
   ): void {
-    const key = String(pointName || "").trim();
+    const key = String(point_name || "").trim();
     if (!key) {
       throw new Error("Pipeline point name is required");
     }
     const bucket = this.pipelineHooks.get(key) || [];
     bucket.push({
-      pluginName: String(pluginName || "").trim(),
+      plugin_name: String(plugin_name || "").trim(),
       handler,
     });
     this.pipelineHooks.set(key, bucket);
@@ -82,17 +82,17 @@ export class HookRegistry {
    * 注册 guard 扩展点。
    */
   guard(
-    pointName: string,
-    pluginName: string,
+    point_name: string,
+    plugin_name: string,
     handler: PluginGuardHook<JsonValue>,
   ): void {
-    const key = String(pointName || "").trim();
+    const key = String(point_name || "").trim();
     if (!key) {
       throw new Error("Guard point name is required");
     }
     const bucket = this.guardHooks.get(key) || [];
     bucket.push({
-      pluginName: String(pluginName || "").trim(),
+      plugin_name: String(plugin_name || "").trim(),
       handler,
     });
     this.guardHooks.set(key, bucket);
@@ -102,17 +102,17 @@ export class HookRegistry {
    * 注册 effect 扩展点。
    */
   effect(
-    pointName: string,
-    pluginName: string,
+    point_name: string,
+    plugin_name: string,
     handler: PluginEffectHook<JsonValue>,
   ): void {
-    const key = String(pointName || "").trim();
+    const key = String(point_name || "").trim();
     if (!key) {
       throw new Error("Effect point name is required");
     }
     const bucket = this.effectHooks.get(key) || [];
     bucket.push({
-      pluginName: String(pluginName || "").trim(),
+      plugin_name: String(plugin_name || "").trim(),
       handler,
     });
     this.effectHooks.set(key, bucket);
@@ -125,11 +125,11 @@ export class HookRegistry {
    * - resolve 语义要求单点单处理器，避免 service 侧再做二次仲裁。
    */
   resolve(
-    pointName: string,
-    pluginName: string,
+    point_name: string,
+    plugin_name: string,
     handler: PluginResolveHook<JsonValue, JsonValue>,
   ): void {
-    const key = String(pointName || "").trim();
+    const key = String(point_name || "").trim();
     if (!key) {
       throw new Error("Resolve point name is required");
     }
@@ -137,7 +137,7 @@ export class HookRegistry {
       throw new Error(`Resolve point already registered: ${key}`);
     }
     this.resolveHooks.set(key, {
-      pluginName: String(pluginName || "").trim(),
+      plugin_name: String(plugin_name || "").trim(),
       handler,
     });
   }
@@ -145,40 +145,40 @@ export class HookRegistry {
   /**
    * 移除指定 plugin 注册的全部扩展点。
    */
-  unregisterPlugin(pluginName: string): void {
-    const key = String(pluginName || "").trim();
+  unregisterPlugin(plugin_name: string): void {
+    const key = String(plugin_name || "").trim();
     if (!key) return;
 
-    for (const [pointName, bucket] of this.pipelineHooks.entries()) {
-      const next = bucket.filter((item) => item.pluginName !== key);
+    for (const [point_name, bucket] of this.pipelineHooks.entries()) {
+      const next = bucket.filter((item) => item.plugin_name !== key);
       if (next.length > 0) {
-        this.pipelineHooks.set(pointName, next);
+        this.pipelineHooks.set(point_name, next);
       } else {
-        this.pipelineHooks.delete(pointName);
+        this.pipelineHooks.delete(point_name);
       }
     }
 
-    for (const [pointName, bucket] of this.guardHooks.entries()) {
-      const next = bucket.filter((item) => item.pluginName !== key);
+    for (const [point_name, bucket] of this.guardHooks.entries()) {
+      const next = bucket.filter((item) => item.plugin_name !== key);
       if (next.length > 0) {
-        this.guardHooks.set(pointName, next);
+        this.guardHooks.set(point_name, next);
       } else {
-        this.guardHooks.delete(pointName);
+        this.guardHooks.delete(point_name);
       }
     }
 
-    for (const [pointName, bucket] of this.effectHooks.entries()) {
-      const next = bucket.filter((item) => item.pluginName !== key);
+    for (const [point_name, bucket] of this.effectHooks.entries()) {
+      const next = bucket.filter((item) => item.plugin_name !== key);
       if (next.length > 0) {
-        this.effectHooks.set(pointName, next);
+        this.effectHooks.set(point_name, next);
       } else {
-        this.effectHooks.delete(pointName);
+        this.effectHooks.delete(point_name);
       }
     }
 
-    for (const [pointName, record] of this.resolveHooks.entries()) {
-      if (record.pluginName === key) {
-        this.resolveHooks.delete(pointName);
+    for (const [point_name, record] of this.resolveHooks.entries()) {
+      if (record.plugin_name === key) {
+        this.resolveHooks.delete(point_name);
       }
     }
   }
@@ -199,8 +199,8 @@ export class HookRegistry {
   /**
    * 运行 pipeline 扩展点。
    */
-  async pipelineValue<T = JsonValue>(pointName: string, value: T): Promise<T> {
-    const key = String(pointName || "").trim();
+  async pipelineValue<T = JsonValue>(point_name: string, value: T): Promise<T> {
+    const key = String(point_name || "").trim();
     if (!key) return value;
     const bucket = this.pipelineHooks.get(key) || [];
     if (bucket.length === 0) return value;
@@ -208,11 +208,11 @@ export class HookRegistry {
     const context = this.get_context();
     let current = value as JsonValue;
     for (const item of bucket) {
-      if (!this.is_plugin_ready(item.pluginName)) continue;
+      if (!this.is_plugin_ready(item.plugin_name)) continue;
       current = await item.handler({
         context,
         value: current,
-        plugin: item.pluginName,
+        plugin: item.plugin_name,
       });
     }
     return current as T;
@@ -221,19 +221,19 @@ export class HookRegistry {
   /**
    * 运行 guard 扩展点。
    */
-  async guardValue<T = JsonValue>(pointName: string, value: T): Promise<void> {
-    const key = String(pointName || "").trim();
+  async guardValue<T = JsonValue>(point_name: string, value: T): Promise<void> {
+    const key = String(point_name || "").trim();
     if (!key) return;
     const bucket = this.guardHooks.get(key) || [];
     if (bucket.length === 0) return;
 
     const context = this.get_context();
     for (const item of bucket) {
-      if (!this.is_plugin_ready(item.pluginName)) continue;
+      if (!this.is_plugin_ready(item.plugin_name)) continue;
       await item.handler({
         context,
         value: value as JsonValue,
-        plugin: item.pluginName,
+        plugin: item.plugin_name,
       });
     }
   }
@@ -241,19 +241,19 @@ export class HookRegistry {
   /**
    * 运行 effect 扩展点。
    */
-  async effectValue<T = JsonValue>(pointName: string, value: T): Promise<void> {
-    const key = String(pointName || "").trim();
+  async effectValue<T = JsonValue>(point_name: string, value: T): Promise<void> {
+    const key = String(point_name || "").trim();
     if (!key) return;
     const bucket = this.effectHooks.get(key) || [];
     if (bucket.length === 0) return;
 
     const context = this.get_context();
     for (const item of bucket) {
-      if (!this.is_plugin_ready(item.pluginName)) continue;
+      if (!this.is_plugin_ready(item.plugin_name)) continue;
       await item.handler({
         context,
         value: value as JsonValue,
-        plugin: item.pluginName,
+        plugin: item.plugin_name,
       });
     }
   }
@@ -262,10 +262,10 @@ export class HookRegistry {
    * 运行 resolve 点。
    */
   async resolveValue<TInput = JsonValue, TOutput = JsonValue>(
-    pointName: string,
+    point_name: string,
     value: TInput,
   ): Promise<TOutput> {
-    const key = String(pointName || "").trim();
+    const key = String(point_name || "").trim();
     if (!key) {
       throw new Error("Resolve point name is required");
     }
@@ -274,14 +274,14 @@ export class HookRegistry {
       throw new Error(`No plugin resolver registered for point: ${key}`);
     }
     const context = this.get_context();
-    if (!this.is_plugin_ready(record.pluginName)) {
+    if (!this.is_plugin_ready(record.plugin_name)) {
       throw new Error(`No active plugin resolver registered for point: ${key}`);
     }
 
     return await record.handler({
       context,
       value: value as JsonValue,
-      plugin: record.pluginName,
+      plugin: record.plugin_name,
     }) as TOutput;
   }
 }

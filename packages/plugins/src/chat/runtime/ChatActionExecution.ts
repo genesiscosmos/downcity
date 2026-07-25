@@ -9,7 +9,7 @@
 
 import path from "node:path";
 import type { JsonObject } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { PluginRunContext } from "@downcity/agent";
 import type {
   ChatDeleteActionPayload,
@@ -45,21 +45,21 @@ import {
  * 执行 `chat.history_clear` action。
  */
 export async function execute_chat_history_clear_action(params: {
-  context: AgentContext;
+  context: PluginContext;
   payload: ChatHistoryClearActionPayload;
 }) {
-  const session_id = String(params.payload.sessionId || "").trim();
+  const session_id = String(params.payload.session_id || "").trim();
   if (!session_id) {
     return {
       success: false,
-      error: "Missing sessionId",
+      error: "Missing session_id",
     };
   }
-  const cleared = await clear_chat_history(params.context.rootPath, session_id);
+  const cleared = await clear_chat_history(params.context.workspace_path, session_id);
   return {
     success: true,
     data: {
-      sessionId: session_id,
+      session_id: session_id,
       cleared,
     },
   };
@@ -76,15 +76,15 @@ function toChatHistoryView(events: ChatHistoryEventV1[]): JsonObject[] {
  * 执行 `chat.context` action。
  */
 export async function executeChatContextAction(params: {
-  context: AgentContext;
+  context: PluginContext;
   payload: ChatSessionActionPayload;
   run_context?: PluginRunContext;
 }) {
   const snapshot = resolveChatSessionSnapshot({
     context: params.context,
     run_context: params.run_context,
-    ...(params.payload.chatKey ? { chatKey: params.payload.chatKey } : {}),
-    ...(params.payload.sessionId ? { sessionId: params.payload.sessionId } : {}),
+    ...(params.payload.chat_key ? { chat_key: params.payload.chat_key } : {}),
+    ...(params.payload.session_id ? { session_id: params.payload.session_id } : {}),
   });
   return {
     success: true,
@@ -98,7 +98,7 @@ export async function executeChatContextAction(params: {
  * 执行 `chat.list` action。
  */
 export async function executeChatListAction(params: {
-  context: AgentContext;
+  context: PluginContext;
   payload: ChatListActionPayload;
 }) {
   const rawChannel = String(params.payload.channel || "").trim();
@@ -124,7 +124,7 @@ export async function executeChatListAction(params: {
     .filter((route) => {
       if (!qLower) return true;
       return (
-        matches(route.sessionId) ||
+        matches(route.session_id) ||
         matches(route.chatId) ||
         matches(route.chatTitle) ||
         matches(route.actorName) ||
@@ -135,8 +135,8 @@ export async function executeChatListAction(params: {
 
   const total = filtered.length;
   const chats: ChatListItemV1[] = filtered.slice(0, limit).map((route) => ({
-    chatKey: route.sessionId,
-    sessionId: route.sessionId,
+    chat_key: route.session_id,
+    session_id: route.session_id,
     channel: route.channel,
     chatId: route.chatId,
     ...(route.targetType ? { targetType: route.targetType } : {}),
@@ -144,15 +144,15 @@ export async function executeChatListAction(params: {
     ...(route.chatTitle ? { chatTitle: route.chatTitle } : {}),
     ...(route.actorName ? { actorName: route.actorName } : {}),
     ...(route.actorId ? { actorId: route.actorId } : {}),
-    updatedAt: route.updatedAt,
-    isoUpdatedAt: new Date(route.updatedAt).toISOString(),
+    updated_at: route.updated_at,
+    isoUpdatedAt: new Date(route.updated_at).toISOString(),
   }));
 
   return {
     success: true,
     data: {
-      metaUpdatedAt: meta.updatedAt,
-      metaIsoUpdatedAt: new Date(meta.updatedAt).toISOString(),
+      metaUpdatedAt: meta.updated_at,
+      metaIsoUpdatedAt: new Date(meta.updated_at).toISOString(),
       total,
       count: chats.length,
       chats,
@@ -164,55 +164,55 @@ export async function executeChatListAction(params: {
  * 执行 `chat.info` action。
  */
 export async function executeChatInfoAction(params: {
-  context: AgentContext;
+  context: PluginContext;
   payload: ChatInfoActionPayload;
   run_context?: PluginRunContext;
 }) {
-  const explicitSessionId = String(params.payload.sessionId || "").trim();
-  const explicitChatKey = String(params.payload.chatKey || "").trim();
+  const explicitSessionId = String(params.payload.session_id || "").trim();
+  const explicitChatKey = String(params.payload.chat_key || "").trim();
   const snapshot = resolveChatSessionSnapshot({
     context: params.context,
     run_context: params.run_context,
-    ...(explicitSessionId ? { sessionId: explicitSessionId } : {}),
-    ...(explicitChatKey ? { chatKey: explicitChatKey } : {}),
+    ...(explicitSessionId ? { session_id: explicitSessionId } : {}),
+    ...(explicitChatKey ? { chat_key: explicitChatKey } : {}),
   });
 
-  const sessionId = String(explicitSessionId || snapshot.sessionId || "").trim();
-  const chatKey = String(explicitChatKey || snapshot.chatKey || sessionId || "").trim();
-  if (!sessionId) {
+  const session_id = String(explicitSessionId || snapshot.session_id || "").trim();
+  const chat_key = String(explicitChatKey || snapshot.chat_key || session_id || "").trim();
+  if (!session_id) {
     return {
       success: false,
       error:
-        "Missing sessionId. Provide --session-id/--chat-key or ensure DC_SESSION_ID/DC_CTX_CHAT_KEY is injected.",
+        "Missing session_id. Provide --session-id/--chat-key or ensure DC_SESSION_ID/DC_CTX_CHAT_KEY is injected.",
     };
   }
 
   const route = await readChatMetaBySessionId({
     context: params.context,
-    sessionId,
+    session_id,
   });
 
   const toPosixRelativePath = (absPath: string): string =>
-    path.relative(params.context.rootPath, absPath).split(path.sep).join("/");
+    path.relative(params.context.workspace_path, absPath).split(path.sep).join("/");
 
   const channelMetaPath = toPosixRelativePath(
-    get_chat_channel_meta_path(params.context.rootPath),
+    get_chat_channel_meta_path(params.context.workspace_path),
   );
   const chatDirPath = toPosixRelativePath(
-    get_chat_session_dir_path(params.context.rootPath, sessionId),
+    get_chat_session_dir_path(params.context.workspace_path, session_id),
   );
   const historyPath = toPosixRelativePath(
-    get_chat_history_path(params.context.rootPath, sessionId),
+    get_chat_history_path(params.context.workspace_path, session_id),
   );
 
   return {
     success: true,
     data: {
-      sessionId,
-      chatKey,
+      session_id,
+      chat_key,
       context: snapshot,
       route,
-      ...(route ? { routeIsoUpdatedAt: new Date(route.updatedAt).toISOString() } : {}),
+      ...(route ? { routeIsoUpdatedAt: new Date(route.updated_at).toISOString() } : {}),
       paths: {
         channelMetaPath,
         chatDirPath,
@@ -226,7 +226,7 @@ export async function executeChatInfoAction(params: {
  * 执行 `chat.history` action。
  */
 export async function executeChatHistoryAction(params: {
-  context: AgentContext;
+  context: PluginContext;
   payload: ChatHistoryActionPayload;
   run_context?: PluginRunContext;
 }) {
@@ -234,32 +234,32 @@ export async function executeChatHistoryAction(params: {
   const snapshot = resolveChatSessionSnapshot({
     context: params.context,
     run_context: params.run_context,
-    ...(payload.chatKey ? { chatKey: payload.chatKey } : {}),
-    ...(payload.sessionId ? { sessionId: payload.sessionId } : {}),
+    ...(payload.chat_key ? { chat_key: payload.chat_key } : {}),
+    ...(payload.session_id ? { session_id: payload.session_id } : {}),
   });
-  const explicitSessionId = String(payload.sessionId || "").trim();
-  const explicitChatKey = String(payload.chatKey || "").trim();
-  const sessionId = String(
-    explicitSessionId || explicitChatKey || snapshot.sessionId || "",
+  const explicitSessionId = String(payload.session_id || "").trim();
+  const explicitChatKey = String(payload.chat_key || "").trim();
+  const session_id = String(
+    explicitSessionId || explicitChatKey || snapshot.session_id || "",
   ).trim();
-  if (!sessionId) {
+  if (!session_id) {
     return {
       success: false,
       error:
-        "Missing sessionId. Provide --session-id/--chat-key or ensure DC_SESSION_ID is injected.",
+        "Missing session_id. Provide --session-id/--chat-key or ensure DC_SESSION_ID is injected.",
     };
   }
 
   const historyResult = await readChatHistory({
     context: params.context,
-    sessionId,
+    session_id,
     limit: payload.limit,
     direction: payload.direction || "all",
     beforeTs: payload.beforeTs,
     afterTs: payload.afterTs,
   });
   const historyPath = historyResult.historyPath
-    .replace(`${params.context.rootPath}/`, "")
+    .replace(`${params.context.workspace_path}/`, "")
     .split("\\")
     .join("/");
 
@@ -278,37 +278,37 @@ export async function executeChatHistoryAction(params: {
  * 执行 `chat.send` action。
  */
 export async function executeChatSendAction(params: {
-  context: AgentContext;
+  context: PluginContext;
   payload: ChatSendActionPayload;
   run_context?: PluginRunContext;
 }) {
-  const chatKey = resolveChatKey({
-    chatKey: params.payload.chatKey,
+  const chat_key = resolveChatKey({
+    chat_key: params.payload.chat_key,
     context: params.context,
     run_context: params.run_context,
   });
-  if (!chatKey) {
+  if (!chat_key) {
     return {
       success: false,
-      error: "Missing chatKey",
+      error: "Missing chat_key",
     };
   }
 
   const shouldScheduleInBackground =
-    typeof params.payload.delayMs === "number" ||
-    typeof params.payload.sendAtMs === "number";
+    typeof params.payload.delay_ms === "number" ||
+    typeof params.payload.send_at_ms === "number";
   const result = await sendChatTextByChatKey({
     context: params.context,
-    chatKey,
+    chat_key,
     text: String(params.payload.text || ""),
-    delayMs: params.payload.delayMs,
-    sendAtMs: params.payload.sendAtMs,
+    delay_ms: params.payload.delay_ms,
+    send_at_ms: params.payload.send_at_ms,
     // 关键点（中文）：plugin runtime action 面向 CLI/API，定时或延迟发送应立即返回，
     // 由 runtime 在后台内存中继续等待并到点投递，避免 HTTP 请求长时间挂起。
     ...(shouldScheduleInBackground ? { nonBlockingDelay: true } : {}),
-    replyToMessage: params.payload.replyToMessage === true,
-    ...(typeof params.payload.messageId === "string" && params.payload.messageId.trim()
-      ? { messageId: params.payload.messageId.trim() }
+    reply_to_message: params.payload.reply_to_message === true,
+    ...(typeof params.payload.message_id === "string" && params.payload.message_id.trim()
+      ? { message_id: params.payload.message_id.trim() }
       : {}),
     run_context: params.run_context,
   });
@@ -321,7 +321,7 @@ export async function executeChatSendAction(params: {
   return {
     success: true,
     data: {
-      chatKey: result.chatKey || chatKey,
+      chat_key: result.chat_key || chat_key,
     },
   };
 }
@@ -330,28 +330,28 @@ export async function executeChatSendAction(params: {
  * 执行 `chat.react` action。
  */
 export async function executeChatReactAction(params: {
-  context: AgentContext;
+  context: PluginContext;
   payload: ChatReactActionPayload;
   run_context?: PluginRunContext;
 }) {
-  const chatKey = resolveChatKey({
-    chatKey: params.payload.chatKey,
+  const chat_key = resolveChatKey({
+    chat_key: params.payload.chat_key,
     context: params.context,
     run_context: params.run_context,
   });
-  if (!chatKey) {
+  if (!chat_key) {
     return {
       success: false,
-      error: "Missing chatKey",
+      error: "Missing chat_key",
     };
   }
 
-  const messageId = String(params.payload.messageId || "").trim() || undefined;
+  const message_id = String(params.payload.message_id || "").trim() || undefined;
   const result = await sendChatActionByChatKey({
     context: params.context,
-    chatKey,
+    chat_key,
     action: "react",
-    messageId,
+    message_id,
     reactionEmoji: params.payload.emoji,
     reactionIsBig: params.payload.big === true,
   });
@@ -364,8 +364,8 @@ export async function executeChatReactAction(params: {
   return {
     success: true,
     data: {
-      chatKey: result.chatKey || chatKey,
-      ...(messageId ? { messageId } : {}),
+      chat_key: result.chat_key || chat_key,
+      ...(message_id ? { message_id } : {}),
       ...(typeof params.payload.emoji === "string" && params.payload.emoji.trim()
         ? { emoji: params.payload.emoji.trim() }
         : {}),
@@ -378,15 +378,15 @@ export async function executeChatReactAction(params: {
  * 执行 `chat.delete` action。
  */
 export async function executeChatDeleteAction(params: {
-  context: AgentContext;
+  context: PluginContext;
   payload: ChatDeleteActionPayload;
   run_context?: PluginRunContext;
 }) {
   const result = await deleteChatByChatKey({
     context: params.context,
     run_context: params.run_context,
-    ...(params.payload.chatKey ? { chatKey: params.payload.chatKey } : {}),
-    ...(params.payload.sessionId ? { sessionId: params.payload.sessionId } : {}),
+    ...(params.payload.chat_key ? { chat_key: params.payload.chat_key } : {}),
+    ...(params.payload.session_id ? { session_id: params.payload.session_id } : {}),
   });
   if (!result.success) {
     return {
@@ -397,7 +397,7 @@ export async function executeChatDeleteAction(params: {
   return {
     success: true,
     data: {
-      sessionId: result.sessionId || null,
+      session_id: result.session_id || null,
       deleted: result.deleted === true,
       removedMeta: result.removedMeta === true,
       removedChatDir: result.removedChatDir === true,

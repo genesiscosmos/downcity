@@ -106,8 +106,8 @@ export class LocalAgentStore implements AgentStore {
     executing_session_ids: ReadonlySet<string>,
   ): Promise<AgentSessionSummaryPage> {
     return await listAgentSessionSummaryPage({
-      projectRoot: this.files.root_path,
-      agentId: this.agent_id,
+      project_root: this.files.root_path,
+      agent_id: this.agent_id,
       input,
       executingSessionIds: new Set(executing_session_ids),
       files: this.files,
@@ -135,8 +135,8 @@ export class LocalAgentStore implements AgentStore {
     await this.files.move_path(source_path, target_path);
     this.sessions.delete(session_id);
     return {
-      sessionId: session_id,
-      archivedAt: Date.now(),
+      session_id: session_id,
+      archived_at: Date.now(),
     };
   }
 
@@ -145,8 +145,8 @@ export class LocalAgentStore implements AgentStore {
     input?: AgentArchiveSessionsInput,
   ): Promise<AgentArchiveSessionsResult> {
     return await listArchivedAgentSessionSummaryPage({
-      projectRoot: this.files.root_path,
-      agentId: this.agent_id,
+      project_root: this.files.root_path,
+      agent_id: this.agent_id,
       input,
       files: this.files,
     });
@@ -159,7 +159,7 @@ export class LocalAgentStore implements AgentStore {
       this.agent_id,
     );
     if (!(await this.files.path_exists(archive_path))) {
-      return { removedSessionIds: [] };
+      return { removed_session_ids: [] };
     }
     const entries = await this.files.read_directory(archive_path);
     const removed_session_ids: string[] = [];
@@ -174,7 +174,7 @@ export class LocalAgentStore implements AgentStore {
       ));
       removed_session_ids.push(session_id);
     }
-    return { removedSessionIds: removed_session_ids };
+    return { removed_session_ids: removed_session_ids };
   }
 
   /** 本地 JSONL Store 当前没有常驻句柄。 */

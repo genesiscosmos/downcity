@@ -23,8 +23,8 @@ import {
   is_session_action_record,
   is_session_message_record,
 } from "@downcity/agent";
-import { pickLastSuccessfulChatSendText } from "@downcity/agent";
-import { extractToolCallsFromUiMessage } from "@downcity/agent";
+import { pick_last_successful_chat_send_text } from "@downcity/agent";
+import { extract_tool_calls_from_ui_message } from "@downcity/agent";
 import type { ControlTimelineEvent, ControlTimelineRole } from "@/city/agent/control/types/ControlViewData.js";
 import { truncateText } from "@/city/agent/control/CommonHelpers.js";
 
@@ -79,7 +79,7 @@ function extractMessageText(parts: unknown): string {
 }
 
 function extractAssistantToolSummary(message: SessionMessageRecordV1): string {
-  const toolCalls = extractToolCallsFromUiMessage(message);
+  const toolCalls = extract_tool_calls_from_ui_message(message);
   if (!Array.isArray(toolCalls) || toolCalls.length === 0) return "";
   const toolNames = Array.from(
     new Set(toolCalls.map((item) => String(item.tool || "").trim()).filter(Boolean)),
@@ -128,9 +128,9 @@ function toUiMessageEvent(params: {
   role: ControlTimelineRole;
   text: string;
   sequence: number;
-  toolName?: string;
+  tool_name?: string;
 }): ControlTimelineEvent {
-  const { message, role, text, sequence, toolName } = params;
+  const { message, role, text, sequence, tool_name } = params;
   const metadata = (message.metadata || null) as SessionMetadataV1 | null;
 
   return {
@@ -140,7 +140,7 @@ function toUiMessageEvent(params: {
     ...(typeof metadata?.kind === "string" ? { kind: metadata.kind } : {}),
     ...(typeof metadata?.source === "string" ? { source: metadata.source } : {}),
     text,
-    ...(toolName ? { toolName } : {}),
+    ...(tool_name ? { tool_name } : {}),
   };
 }
 
@@ -151,9 +151,9 @@ function toActionEvent(message: SessionActionRecordV1): ControlTimelineEvent {
     role: "action",
     ...(typeof metadata?.ts === "number" ? { ts: metadata.ts } : {}),
     text: resolveUiMessageText(message),
-    actionTitle: message.title,
-    ...(message.description ? { actionDescription: message.description } : {}),
-    actionState: message.state,
+    action_title: message.title,
+    ...(message.description ? { action_description: message.description } : {}),
+    action_state: message.state,
   };
 }
 
@@ -170,7 +170,7 @@ function resolveUiMessageText(message: SessionRecordV1): string {
 
   if (message.role !== "assistant") return "";
 
-  const userVisible = pickLastSuccessfulChatSendText(message).trim();
+  const userVisible = pick_last_successful_chat_send_text(message).trim();
   if (userVisible) return userVisible;
 
   return extractAssistantToolSummary(message);
@@ -224,7 +224,7 @@ export function toUiMessageTimeline(
     }
 
     if (isToolUIPart(part)) {
-      const toolName = resolveToolName(partObject, String(getToolName(part) || ""));
+      const tool_name = resolveToolName(partObject, String(getToolName(part) || ""));
       const inputText = stringifyForDisplay(extractToolCallInput(partObject));
       events.push(
         toUiMessageEvent({
@@ -232,7 +232,7 @@ export function toUiMessageTimeline(
           role: "tool-call",
           text: inputText || "(empty)",
           sequence,
-          toolName,
+          tool_name,
         }),
       );
       sequence += 1;
@@ -245,7 +245,7 @@ export function toUiMessageTimeline(
             role: "tool-result",
             text: stringifyForDisplay(output) || "(empty)",
             sequence,
-            toolName,
+            tool_name,
           }),
         );
         sequence += 1;

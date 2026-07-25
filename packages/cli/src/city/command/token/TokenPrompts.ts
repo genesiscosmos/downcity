@@ -7,7 +7,7 @@
  */
 
 import prompts from "@/city/tui/Prompts.js";
-import type { AuthIssuedToken, AuthTokenSummary } from "@downcity/agent";
+import type { AuthIssuedToken, AuthTokenSummary } from "@downcity/type";
 import { AuthService } from "@/city/runtime/auth/AuthService.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import {
@@ -23,7 +23,7 @@ async function promptTokenCreateInput(params?: {
   defaultExpiresAt?: string;
 }): Promise<{
   name: string;
-  expiresAt?: string;
+  expires_at?: string;
 } | null> {
   if (!isInteractiveTerminal()) {
     emitCliBlock({
@@ -46,7 +46,7 @@ async function promptTokenCreateInput(params?: {
     },
     {
       type: "text",
-      name: "expiresAt",
+      name: "expires_at",
       message: "过期时间（可选，ISO 字符串）",
       initial: String(params?.defaultExpiresAt || "").trim(),
       validate: (value: string) => {
@@ -59,7 +59,7 @@ async function promptTokenCreateInput(params?: {
     },
   ])) as {
     name?: string;
-    expiresAt?: string;
+    expires_at?: string;
   };
 
   const name = String(response.name || "").trim();
@@ -71,10 +71,10 @@ async function promptTokenCreateInput(params?: {
     return null;
   }
 
-  const expiresAt = String(response.expiresAt || "").trim();
+  const expires_at = String(response.expires_at || "").trim();
   return {
     name,
-    expiresAt: expiresAt || undefined,
+    expires_at: expires_at || undefined,
   };
 }
 
@@ -83,7 +83,7 @@ export async function promptTokenIdForDelete(): Promise<string | null> {
     emitCliBlock({
       tone: "error",
       title: "Token ID is required",
-      note: "Use `city token delete <tokenId>` or run this command in an interactive terminal.",
+      note: "Use `city token delete <token_id>` or run this command in an interactive terminal.",
     });
     return null;
   }
@@ -102,7 +102,7 @@ export async function promptTokenIdForDelete(): Promise<string | null> {
 
     const response = (await prompts({
       type: "select",
-      name: "tokenId",
+      name: "token_id",
       message: "选择要删除的 token",
       choices: tokens.map((item) => ({
         title: item.name,
@@ -110,17 +110,17 @@ export async function promptTokenIdForDelete(): Promise<string | null> {
         value: item.id,
       })),
       initial: 0,
-    })) as { tokenId?: string };
+    })) as { token_id?: string };
 
-    const tokenId = String(response.tokenId || "").trim();
-    if (!tokenId) {
+    const token_id = String(response.token_id || "").trim();
+    if (!token_id) {
       emitCliBlock({
         tone: "info",
         title: "Token delete cancelled",
       });
       return null;
     }
-    return tokenId;
+    return token_id;
   } finally {
     authService.close();
   }
@@ -206,11 +206,11 @@ async function runInteractiveCreateFlow(): Promise<void> {
 }
 
 export async function runInteractiveCreateCommandFlow(options: {
-  expiresAt?: string;
+  expires_at?: string;
 }): Promise<void> {
   const input = await promptTokenCreateInput({
     defaultName: "token",
-    defaultExpiresAt: options.expiresAt,
+    defaultExpiresAt: options.expires_at,
   });
   if (!input) return;
 
@@ -235,7 +235,7 @@ async function runInteractiveTokenBrowser(): Promise<void> {
 
     const response = (await prompts({
       type: "select",
-      name: "tokenId",
+      name: "token_id",
       message: "选择一个 token 查看详情",
       choices: [
         ...tokens.map((item) => ({
@@ -250,13 +250,13 @@ async function runInteractiveTokenBrowser(): Promise<void> {
         },
       ],
       initial: 0,
-    })) as { tokenId?: string };
+    })) as { token_id?: string };
 
-    const tokenId = String(response.tokenId || "").trim();
-    if (!tokenId || tokenId === "__back__") return;
+    const token_id = String(response.token_id || "").trim();
+    if (!token_id || token_id === "__back__") return;
 
     while (true) {
-      const current = loadLocalCliTokens().find((item) => item.id === tokenId);
+      const current = loadLocalCliTokens().find((item) => item.id === token_id);
       if (!current) {
         emitCliBlock({
           tone: "warning",
@@ -358,11 +358,11 @@ export async function runInteractiveTokenCommand(): Promise<void> {
     }
 
     if (action === "delete") {
-      const tokenId = await promptTokenIdForDelete();
-      if (!tokenId) {
+      const token_id = await promptTokenIdForDelete();
+      if (!token_id) {
         continue;
       }
-      deleteToken(tokenId, false);
+      deleteToken(token_id, false);
       continue;
     }
   }

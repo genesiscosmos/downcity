@@ -23,7 +23,7 @@ import type {
 } from "@/types/sdk/AgentSessionTurn.js";
 import { extractTextFromParts, extractTextFromUiMessage } from "@/executor/messages/UIMessageTransformer.js";
 import type { Executor } from "@/executor/Executor.js";
-import { isAgentSessionPromptInputEmpty } from "@/types/sdk/AgentSessionPrompt.js";
+import { is_agent_session_prompt_input_empty } from "@/types/sdk/AgentSessionPrompt.js";
 import type { SessionRunResult } from "@/executor/types/SessionRun.js";
 import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
 import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
@@ -33,7 +33,7 @@ import {
   SessionMessages,
 } from "@/session/SessionMessages.js";
 import { from_ui_assistant_parts } from "@/session/messages/SessionMessageCodec.js";
-import { generateId } from "@/utils/Id.js";
+import { generate_id } from "@/utils/Id.js";
 import type { SessionApprovalBroker } from "@/session/approval/SessionApprovalBroker.js";
 import { SessionQueue } from "@/session/SessionQueue.js";
 import type {
@@ -74,7 +74,7 @@ export class SessionTurn {
     this.approvals = options.approvals;
     this.apply_command = options.apply_command;
     if (!this.session_id) {
-      throw new Error("SessionTurn requires a non-empty sessionId");
+      throw new Error("SessionTurn requires a non-empty session_id");
     }
     if (!this.workspace_path) {
       throw new Error("SessionTurn requires a non-empty workspace_path");
@@ -85,7 +85,7 @@ export class SessionTurn {
    * 追加一条新的 prompt。
    */
   async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
-    if (isAgentSessionPromptInputEmpty(input)) {
+    if (is_agent_session_prompt_input_empty(input)) {
       throw new Error("session.prompt requires a non-empty query");
     }
     await this.state.ensure_runnable();
@@ -104,7 +104,7 @@ export class SessionTurn {
   /** 把显式历史压缩加入统一输入队列。 */
   async compact(): Promise<void> {
     await this.state.ensure_runnable();
-    this.enqueue_command({ type: "compact", command_id: generateId() });
+    this.enqueue_command({ type: "compact", command_id: generate_id() });
   }
 
   /**
@@ -154,8 +154,8 @@ export class SessionTurn {
     );
     return {
       stopped,
-      ...(active_turn ? { turnId: active_turn.turn_id } : {}),
-      cancelledQueuedPrompts: cancelled_queued_prompts,
+      ...(active_turn ? { turn_id: active_turn.turn_id } : {}),
+      cancelled_queued_prompts: cancelled_queued_prompts,
       reason: stopped ? "stopped" : "idle",
     };
   }
@@ -210,11 +210,11 @@ export class SessionTurn {
         });
         const stopped = active_turn.abort_controller.signal.aborted;
         const final_result: AgentSessionTurnResult = {
-          turnId: turn_id,
+          turn_id: turn_id,
           text: result.text,
           success: stopped ? false : result.success,
-          ...(result.assistantMessage
-            ? { assistantMessage: result.assistantMessage }
+          ...(result.assistant_message
+            ? { assistant_message: result.assistant_message }
             : {}),
           ...(stopped
             ? { error: TURN_STOPPED_MESSAGE }
@@ -238,7 +238,7 @@ export class SessionTurn {
           ? TURN_STOPPED_MESSAGE
           : error instanceof Error ? error.message : String(error);
         const final_result: AgentSessionTurnResult = {
-          turnId: turn_id,
+          turn_id: turn_id,
           text: "",
           success: false,
           error: message,
@@ -284,7 +284,7 @@ export class SessionTurn {
       const turn_id = `turn:${this.session_id}:cancelled:${Date.now()}:${nanoid(6)}`;
       const cancelled_turn = create_active_session_turn_state(turn_id);
       const final_result: AgentSessionTurnResult = {
-        turnId: turn_id,
+        turn_id: turn_id,
         text: "",
         success: false,
         error: QUEUED_PROMPT_CANCELLED_MESSAGE,
@@ -402,8 +402,8 @@ export class SessionTurn {
         metadata: {
           v: 1,
           ts: Date.now(),
-          sessionId: this.session_id,
-          turnId: turn_id,
+          session_id: this.session_id,
+          turn_id: turn_id,
         },
       });
     }
@@ -418,7 +418,7 @@ export class SessionTurn {
   }): Promise<{
     text: string;
     success: boolean;
-    assistantMessage?: SessionMessageRecordV1 | null;
+    assistant_message?: SessionMessageRecordV1 | null;
     error?: string;
   }> {
     const assistant_writer_ref: {
@@ -445,10 +445,10 @@ export class SessionTurn {
     };
 
     const run_context: SessionRunContext = {
-      turnId: input.turn_id,
-      sessionId: this.session_id,
-      projectRoot: this.workspace_path,
-      onStepCallback: async () => {
+      turn_id: input.turn_id,
+      session_id: this.session_id,
+      project_root: this.workspace_path,
+      on_step_callback: async () => {
         if (this.has_pending_command() && assistant_writer_ref.current) {
           await assistant_writer_ref.current.complete();
           assistant_writer_ref.current = null;
@@ -460,13 +460,13 @@ export class SessionTurn {
         }
         return merged;
       },
-      hasPendingStepInput: () => this.has_pending_prompt(),
+      has_pending_step_input: () => this.has_pending_prompt(),
       consume_history_reload: () => {
         const requested = history_reload_requested;
         history_reload_requested = false;
         return requested;
       },
-      onUiMessageChunkCallback: async (chunk) => {
+      on_ui_message_chunk_callback: async (chunk) => {
         if (!is_assistant_content_chunk(chunk.type)) return;
         const writer = await ensure_assistant_writer();
         await writer.apply_chunk(chunk);
@@ -488,13 +488,13 @@ export class SessionTurn {
         await writer.prepare_tool_input(tool_input);
       },
       shell_approval_gateway: this.approvals,
-      onActionCallback: async (event) => {
+      on_action_callback: async (event) => {
         await this.persist_action_event(event);
       },
-      injectedUserMessages: [],
-      deferredPersistedUserMessages: [],
-      pendingAssistantFileParts: [],
-      ...(input.abort_signal ? { abortSignal: input.abort_signal } : {}),
+      injected_user_messages: [],
+      deferred_persisted_user_messages: [],
+      pending_assistant_file_parts: [],
+      ...(input.abort_signal ? { abort_signal: input.abort_signal } : {}),
     };
     const query = input.prompt_input.query;
     const executor_query = typeof query === "string"
@@ -509,7 +509,7 @@ export class SessionTurn {
     try {
       result = await this.executor.run({
         query: executor_query,
-        runContext: run_context,
+        run_context: run_context,
       });
     } finally {
       if (this.active_run_context === run_context) {
@@ -518,8 +518,8 @@ export class SessionTurn {
       }
     }
 
-    const final_assistant_parts = result.assistantMessage
-      ? from_ui_assistant_parts(result.assistantMessage.parts)
+    const final_assistant_parts = result.assistant_message
+      ? from_ui_assistant_parts(result.assistant_message.parts)
       : [];
     const final_assistant_writer = assistant_writer_ref.current;
     if (final_assistant_writer) {
@@ -533,7 +533,7 @@ export class SessionTurn {
       } else {
         await final_assistant_writer.fail(result.error);
       }
-    } else if (result.assistantMessage && final_assistant_parts.length > 0) {
+    } else if (result.assistant_message && final_assistant_parts.length > 0) {
       assistant_segment_index += 1;
       const fallback_writer = await this.messages.open_assistant_message({
         turn_id: input.turn_id,
@@ -557,19 +557,19 @@ export class SessionTurn {
     }
     await this.state.touch_metadata();
     const deferred_count = await this.messages.append_deferred_user_messages(
-      result.deferredPersistedUserMessages,
+      result.deferred_persisted_user_messages,
     );
     if (deferred_count > 0) await this.state.touch_metadata();
     if (result.compact_required) {
       await this.executor.compact_history(run_context);
     }
     return {
-      text: result.assistantMessage
-        ? extractTextFromUiMessage(result.assistantMessage)
+      text: result.assistant_message
+        ? extractTextFromUiMessage(result.assistant_message)
         : "",
       success: result.success,
-      ...(result.assistantMessage
-        ? { assistantMessage: result.assistantMessage }
+      ...(result.assistant_message
+        ? { assistant_message: result.assistant_message }
         : {}),
       ...(result.error ? { error: result.error } : {}),
     };
@@ -578,15 +578,15 @@ export class SessionTurn {
   /** 为 Turn 开始前的 compact 命令创建最小运行上下文。 */
   private create_compaction_run_context(turn_id: string): SessionRunContext {
     return {
-      turnId: turn_id,
-      sessionId: this.session_id,
-      projectRoot: this.workspace_path,
-      onActionCallback: async (event) => {
+      turn_id: turn_id,
+      session_id: this.session_id,
+      project_root: this.workspace_path,
+      on_action_callback: async (event) => {
         await this.persist_action_event(event);
       },
-      injectedUserMessages: [],
-      deferredPersistedUserMessages: [],
-      pendingAssistantFileParts: [],
+      injected_user_messages: [],
+      deferred_persisted_user_messages: [],
+      pending_assistant_file_parts: [],
     };
   }
 

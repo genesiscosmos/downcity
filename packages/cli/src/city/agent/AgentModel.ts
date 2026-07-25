@@ -30,7 +30,7 @@ async function resolve_agent_target(
 ): Promise<AgentModelAgentTarget> {
   const agents = await listRegisteredAgentsForCli();
   const matched = agents.find(
-    (agent) => path.resolve(agent.projectRoot) === project_root,
+    (agent) => path.resolve(agent.project_root) === project_root,
   );
   if (!matched) {
     throw new CliError({
@@ -99,7 +99,7 @@ async function resolve_model_id(params: {
 function read_agent_default_model_id(project_root: string): string {
   const config = readAgentConfig(project_root);
   return String(
-    config?.execution?.type === "api" ? config.execution.modelId || "" : "",
+    config?.execution?.type === "api" ? config.execution.model_id || "" : "",
   ).trim();
 }
 
@@ -109,10 +109,10 @@ function update_agent_default_model(
   model_id: string,
 ): void {
   upsertAgentConfig({
-    projectRoot: project_root,
+    project_root: project_root,
     execution: {
       type: "api",
-      modelId: model_id,
+      model_id,
     },
   });
 }

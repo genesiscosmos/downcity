@@ -26,7 +26,7 @@ export function registerAuthRoutes(params: {
   const authService = params.authService || new DefaultAuthService();
   const router = new Hono();
   const protectedRouter = new Hono<{ Variables: AuthMiddlewareVariables }>();
-  const requireAuth = createRequireAuthMiddleware(authService);
+  const require_auth = createRequireAuthMiddleware(authService);
 
   router.get("/status", (c) => {
     const initialized = authService.hasLocalCliAccess();
@@ -37,7 +37,7 @@ export function registerAuthRoutes(params: {
     });
   });
 
-  protectedRouter.get("/me", requireAuth, (c) => {
+  protectedRouter.get("/me", require_auth, (c) => {
     const principal = getAuthPrincipal(c);
     return c.json({
       success: true,
@@ -45,7 +45,7 @@ export function registerAuthRoutes(params: {
     });
   });
 
-  protectedRouter.get("/token/list", requireAuth, (c) => {
+  protectedRouter.get("/token/list", require_auth, (c) => {
     const principal = getAuthPrincipal(c);
     return c.json({
       success: true,
@@ -53,18 +53,18 @@ export function registerAuthRoutes(params: {
     });
   });
 
-  protectedRouter.post("/token/create", requireAuth, async (c) => {
+  protectedRouter.post("/token/create", require_auth, async (c) => {
     try {
       const principal = getAuthPrincipal(c);
       const body = (await c.req.json().catch(() => ({}))) as {
         name?: string;
-        expiresAt?: string;
+        expires_at?: string;
       };
       return c.json({
         success: true,
         token: authService.createToken(principal, {
           name: String(body.name || ""),
-          expiresAt: typeof body.expiresAt === "string" ? body.expiresAt : undefined,
+          expires_at: typeof body.expires_at === "string" ? body.expires_at : undefined,
         }),
       });
     } catch (error) {
@@ -72,13 +72,13 @@ export function registerAuthRoutes(params: {
     }
   });
 
-  protectedRouter.post("/token/delete", requireAuth, async (c) => {
+  protectedRouter.post("/token/delete", require_auth, async (c) => {
     try {
       const principal = getAuthPrincipal(c);
       const body = (await c.req.json().catch(() => ({}))) as {
-        tokenId?: string;
+        token_id?: string;
       };
-      authService.deleteToken(principal, String(body.tokenId || ""));
+      authService.deleteToken(principal, String(body.token_id || ""));
       return c.json({ success: true });
     } catch (error) {
       return toErrorResponse(c, error);

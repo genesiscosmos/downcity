@@ -35,7 +35,7 @@ function normalize_thread_id(input: unknown): number | undefined {
  * 执行 `city agent history clean`。
  */
 export async function agentHistoryCleanCommand(
-  projectRoot: string,
+  project_root: string,
   options: AgentHistoryCleanOptions,
 ): Promise<AgentHistoryCleanResult> {
   if (options.hard !== true) {
@@ -47,9 +47,9 @@ export async function agentHistoryCleanCommand(
   }
 
   const chat_result = await clean_chat_storage({
-    root_path: projectRoot,
-    ...(normalizeText(options.sessionId)
-      ? { session_id: normalizeText(options.sessionId) }
+    root_path: project_root,
+    ...(normalizeText(options.session_id)
+      ? { session_id: normalizeText(options.session_id) }
       : {}),
     ...(normalizeText(options.channel) ? { channel: normalizeText(options.channel) } : {}),
     ...(normalizeText(options.chatId) ? { chat_id: normalizeText(options.chatId) } : {}),
@@ -60,8 +60,8 @@ export async function agentHistoryCleanCommand(
       ? { thread_id: normalize_thread_id(options.threadId) }
       : {}),
   });
-  const sessionId = chat_result.session_id;
-  if (!sessionId) {
+  const session_id = chat_result.session_id;
+  if (!session_id) {
     throw new CliError({
       title: "Cannot resolve target session",
       note: "Provide --session-id, or provide --channel and --chat-id for a known chat route.",
@@ -69,18 +69,18 @@ export async function agentHistoryCleanCommand(
     });
   }
 
-  const workspace = new Workspace({ path: projectRoot });
+  const workspace = new Workspace({ path: project_root });
   let removedSessionDir = false;
   try {
-    const store = workspace.bind_agent(resolveAgentId(projectRoot));
-    removedSessionDir = await store.remove_session(sessionId);
+    const store = workspace.bind_agent(resolveAgentId(project_root));
+    removedSessionDir = await store.remove_session(session_id);
   } finally {
     await workspace.dispose();
   }
 
   const result: AgentHistoryCleanResult = {
-    projectRoot: path.resolve(projectRoot),
-    sessionId,
+    project_root: path.resolve(project_root),
+    session_id,
     removedSessionDir,
     removedChatDir: chat_result.removed_chat_dir,
     removedRoute: chat_result.removed_route,
@@ -100,8 +100,8 @@ export async function agentHistoryCleanCommand(
     tone: "success",
     title: "Agent history cleaned",
     facts: [
-      { label: "Project", value: result.projectRoot },
-      { label: "Session", value: result.sessionId },
+      { label: "Project", value: result.project_root },
+      { label: "Session", value: result.session_id },
       { label: "Session dir", value: result.removedSessionDir ? "removed" : "not found" },
       { label: "Chat dir", value: result.removedChatDir ? "removed" : "not found" },
       { label: "Route", value: result.removedRoute ? "removed" : "not found" },

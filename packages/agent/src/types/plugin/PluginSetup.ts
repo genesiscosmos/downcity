@@ -43,7 +43,7 @@ export interface PluginSetupField {
    * 说明（中文）
    * - 若存在，则 Console 打开 setup 弹窗时会先调用该 action 拉取下拉选项。
    */
-  sourceAction?: string;
+  source_action?: string;
 }
 
 /**
@@ -66,9 +66,9 @@ export interface PluginSetupDefinition {
   /** setup 字段列表。 */
   fields: PluginSetupField[];
   /** 主动作 action 名称。 */
-  primaryAction: string;
+  primary_action: string;
   /** 状态同步 action 名称（可选）。 */
-  statusAction?: string;
+  status_action?: string;
 }
 
 /**
@@ -107,9 +107,9 @@ export interface PluginUsageField {
   /** 字段是否禁用。 */
   disabled?: boolean;
   /** 布尔字段为 true 时的标签（可选）。 */
-  trueLabel?: string;
+  true_label?: string;
   /** 布尔字段为 false 时的标签（可选）。 */
-  falseLabel?: string;
+  false_label?: string;
   /** 静态选项列表（可选）。 */
   options?: PluginUsageFieldOption[];
   /**
@@ -118,7 +118,7 @@ export interface PluginUsageField {
    * 说明（中文）
    * - Console 打开 usage 面板时会先调用该 action 同步下拉选项。
    */
-  sourceAction?: string;
+  source_action?: string;
 }
 
 /**
@@ -132,7 +132,7 @@ export interface PluginUsageDefinition {
   /** agent 使用该 plugin 时可配置的字段列表。 */
   fields: PluginUsageField[];
   /** 保存 usage 配置时调用的 action。 */
-  saveAction: string;
+  save_action: string;
   /** 读取当前 usage 快照时调用的 action（可选）。 */
-  statusAction?: string;
+  status_action?: string;
 }

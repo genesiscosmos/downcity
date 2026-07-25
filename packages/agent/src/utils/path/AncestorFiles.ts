@@ -18,14 +18,14 @@ import path from "node:path";
  * - 若文件名为空，则直接返回空数组，避免调用方拼接出异常路径。
  */
 export function collectAncestorNamedFilePaths(
-  projectRoot: string,
+  project_root: string,
   filename: string,
 ): string[] {
   const normalizedFilename = String(filename || "").trim();
   if (!normalizedFilename) return [];
 
   const paths: string[] = [];
-  let dir = path.resolve(String(projectRoot || "").trim() || ".");
+  let dir = path.resolve(String(project_root || "").trim() || ".");
   while (true) {
     const candidate = path.join(dir, normalizedFilename);
     if (fs.existsSync(candidate)) {

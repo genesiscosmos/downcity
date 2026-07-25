@@ -77,7 +77,7 @@ export interface MemoryDigestHandlerInput {
   /**
    * 触发 digest 的 session id。
    */
-  sessionId?: string;
+  session_id?: string;
 
   /**
    * 当前 wiki index 内容，方便模型决定更新哪些页面。
@@ -372,7 +372,7 @@ export interface MemoryDigestPayload {
   /**
    * 目标 session id。
    */
-  sessionId: string;
+  session_id: string;
 
   /**
    * 可选最大提取消息条数。
@@ -397,7 +397,7 @@ export interface MemoryDigestResponse {
   /**
    * 参与 digest 的消息条数。
    */
-  messageCount: number;
+  message_count: number;
 
   /**
    * 当前 digest 模式。

@@ -189,8 +189,8 @@ export class ExecutorRecoveryPolicy {
     return {
       success: false,
       error: input.error_text,
-      deferredPersistedUserMessages: [
-        ...input.run_context.deferredPersistedUserMessages,
+      deferred_persisted_user_messages: [
+        ...input.run_context.deferred_persisted_user_messages,
       ],
     };
   }

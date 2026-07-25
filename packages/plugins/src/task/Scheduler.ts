@@ -6,7 +6,7 @@
  * - cron 调度执行器由宿主注入，task runtime 不依赖具体实现。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import {
   isTaskWhenManual,
   resolveTaskWhenCronExpression,
@@ -23,7 +23,7 @@ function formatTaskLogMessage(message: string): string {
 }
 
 export async function registerTaskCronJobs(params: {
-  context: AgentContext;
+  context: PluginContext;
   engine: TaskCronEngine;
   /**
    * cron 表达式使用的 IANA 时区。
@@ -36,7 +36,7 @@ export async function registerTaskCronJobs(params: {
 }): Promise<{ tasksFound: number; jobsScheduled: number }> {
   const context = params.context;
   const logger = context.logger;
-  const tasks = await listTasks(context.rootPath);
+  const tasks = await listTasks(context.workspace_path);
   const runtimeTimezone = params.timezone;
 
   let jobsScheduled = 0;
@@ -49,7 +49,7 @@ export async function registerTaskCronJobs(params: {
     try {
       const task = await readTask({
         taskId: item.taskId,
-        projectRoot: context.rootPath,
+        project_root: context.workspace_path,
       });
       latestWhen = task.frontmatter.when;
     } catch {}
@@ -78,7 +78,7 @@ export async function registerTaskCronJobs(params: {
               // 关键点（中文）：触发瞬间复查最新 task.md，避免 status/when 变更后仍沿用旧注册状态。
               const latest = await readTask({
                 taskId,
-                projectRoot: context.rootPath,
+                project_root: context.workspace_path,
               });
               if (String(latest.frontmatter.status).toLowerCase() !== "enabled") {
                 return;
@@ -91,7 +91,7 @@ export async function registerTaskCronJobs(params: {
               const result = await runTaskNow({
                 context,
                 taskId,
-                projectRoot: context.rootPath,
+                project_root: context.workspace_path,
                 trigger: { type: "cron" },
               });
 
@@ -166,7 +166,7 @@ export async function registerTaskCronJobs(params: {
           try {
             const latest = await readTask({
               taskId,
-              projectRoot: context.rootPath,
+              project_root: context.workspace_path,
             });
             if (String(latest.frontmatter.status).toLowerCase() !== "enabled") return;
             const latestPlannedMs = resolveTaskWhenOneShotMs(latest.frontmatter.when);
@@ -177,7 +177,7 @@ export async function registerTaskCronJobs(params: {
             const result = await runTaskNow({
               context,
               taskId,
-              projectRoot: context.rootPath,
+              project_root: context.workspace_path,
               trigger: { type: "time" },
             });
 
@@ -206,10 +206,10 @@ export async function registerTaskCronJobs(params: {
               try {
                 const latest = await readTask({
                   taskId,
-                  projectRoot: context.rootPath,
+                  project_root: context.workspace_path,
                 });
                 await writeTask({
-                  projectRoot: context.rootPath,
+                  project_root: context.workspace_path,
                   taskId,
                   overwrite: true,
                   frontmatter: {

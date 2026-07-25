@@ -47,24 +47,24 @@ export interface ResolvedDirectTextPayload {
   /**
    * 最终目标会话键（已回填默认值）。
    */
-  chatKey: string;
+  chat_key: string;
 
   /**
    * 是否以 reply 语义发送正文。
    *
  * 说明（中文）
  * - 语义与 `downcity chat send --reply` 一致。
- * - 当 metadata 提供 `reply: true` 或显式 `messageId` 时自动为 true。
+ * - 当 metadata 提供 `reply: true` 或显式 `message_id` 时自动为 true。
   */
-  replyToMessage: boolean;
+  reply_to_message: boolean;
 
   /**
    * 可选 reply 目标消息 ID。
    *
    * 说明（中文）
-   * - 来自 metadata 的 `messageId`，或 `reply` 的旧式 messageId 写法。
+   * - 来自 metadata 的 `message_id`，或 `reply` 的旧式 message_id 写法。
    */
-  messageId?: string;
+  message_id?: string;
 
   /**
    * 可选延迟发送毫秒数。
@@ -72,7 +72,7 @@ export interface ResolvedDirectTextPayload {
    * 说明（中文）
    * - 与 `downcity chat send --delay` 对齐。
    */
-  delayMs?: number;
+  delay_ms?: number;
 
   /**
    * 可选定时发送毫秒时间戳。
@@ -80,7 +80,7 @@ export interface ResolvedDirectTextPayload {
    * 说明（中文）
    * - 与 `downcity chat send --time` 对齐。
    */
-  sendAtMs?: number;
+  send_at_ms?: number;
 }
 
 /**
@@ -95,7 +95,7 @@ export interface ResolvedDirectReactionPayload {
   /**
    * 最终目标会话键（已回填默认值）。
    */
-  chatKey: string;
+  chat_key: string;
 
   /**
    * 可选目标消息 ID。
@@ -103,7 +103,7 @@ export interface ResolvedDirectReactionPayload {
    * 说明（中文）
    * - 来自主文本 metadata 的 `reply`。
    */
-  messageId?: string;
+  message_id?: string;
 
   /**
    * 是否使用大表情。

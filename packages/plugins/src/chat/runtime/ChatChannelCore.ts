@@ -7,7 +7,7 @@
  * - 目标是让 chat platform 子模块共享同一套最小公共基元。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { StoredChannelAccount } from "@/chat/types/ChannelAccountStore.js";
 import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
@@ -15,16 +15,16 @@ import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
 const CHAT_CHANNEL_NAMES: ChatChannelName[] = ["telegram", "feishu", "qq"];
 
 export type ChatRuntimeBindings = {
-  getChannelAccountId?(context: AgentContext, channel: ChatChannelName): string;
+  getChannelAccountId?(context: PluginContext, channel: ChatChannelName): string;
   resolveChannelAccount?(
-    context: AgentContext,
+    context: PluginContext,
     channel: ChatChannelName,
   ): StoredChannelAccount | null;
-  isChannelEnabled?(context: AgentContext, channel: ChatChannelName): boolean;
+  isChannelEnabled?(context: PluginContext, channel: ChatChannelName): boolean;
 };
 
 export function resolveChatPluginBindings(
-  context: AgentContext,
+  context: PluginContext,
 ): ChatRuntimeBindings | null {
   const candidate = context.plugins.get("chat") as
     | ChatRuntimeBindings
@@ -71,7 +71,7 @@ export function resolveTargetChannels(channel?: ChatChannelName): ChatChannelNam
  * 读取渠道绑定的 bot account id。
  */
 export function resolveChannelAccountId(
-  context: AgentContext,
+  context: PluginContext,
   channel: ChatChannelName,
 ): string {
   const plugin = resolveChatPluginBindings(context);
@@ -88,7 +88,7 @@ export function resolveChannelAccountId(
  * - 不从项目文件隐式推断运行时账号。
  */
 export function resolveChannelAccount(
-  context: AgentContext,
+  context: PluginContext,
   channel: ChatChannelName,
 ): StoredChannelAccount | null {
   const plugin = resolveChatPluginBindings(context);
@@ -114,7 +114,7 @@ export function isChannelAccountConfigured(
  * 判断指定渠道当前是否启用。
  */
 export function isChatChannelEnabled(
-  context: AgentContext,
+  context: PluginContext,
   channel: ChatChannelName,
 ): boolean {
   const plugin = resolveChatPluginBindings(context);

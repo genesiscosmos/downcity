@@ -7,7 +7,7 @@
  */
 
 export interface AgentHistoryCleanOptions {
-  sessionId?: string;
+  session_id?: string;
   channel?: string;
   chatId?: string;
   targetType?: string;
@@ -17,8 +17,8 @@ export interface AgentHistoryCleanOptions {
 }
 
 export interface AgentHistoryCleanResult {
-  projectRoot: string;
-  sessionId: string;
+  project_root: string;
+  session_id: string;
   removedSessionDir: boolean;
   removedChatDir: boolean;
   removedRoute: boolean;

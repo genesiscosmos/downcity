@@ -2,8 +2,8 @@
  * ChannelContext 类型定义。
  *
  * 关键点（中文）
- * - 描述渠道目标（platform target）与内部 sessionId 的映射结构。
- * - 映射由 chat plugin runtime 维护，sessionId 对外保持稳定但不可推导。
+ * - 描述渠道目标（platform target）与内部 session_id 的映射结构。
+ * - 映射由 chat plugin runtime 维护，session_id 对外保持稳定但不可推导。
  */
 
 import type { ChatDispatchChannel } from "./ChatDispatcher.js";
@@ -31,7 +31,7 @@ export type ChannelContextTarget = {
 };
 
 /**
- * `sessionId -> 渠道目标` 路由条目。
+ * `session_id -> 渠道目标` 路由条目。
  */
 export type ChannelContextRouteV1 = {
   /**
@@ -39,9 +39,9 @@ export type ChannelContextRouteV1 = {
    */
   v: 1;
   /**
-   * 内部 sessionId（随机生成，不可推导）。
+   * 内部 session_id（随机生成，不可推导）。
    */
-  sessionId: string;
+  session_id: string;
   /**
    * 渠道类型（telegram/feishu/qq）。
    */
@@ -59,9 +59,9 @@ export type ChannelContextRouteV1 = {
    */
   threadId?: number;
   /**
-   * 最近入站/出站相关 messageId（用于回复语义补全）。
+   * 最近入站/出站相关 message_id（用于回复语义补全）。
    */
-  messageId?: string;
+  message_id?: string;
   /**
    * 最近触发该会话的用户 ID。
    */
@@ -81,7 +81,7 @@ export type ChannelContextRouteV1 = {
   /**
    * 路由条目更新时间（毫秒时间戳）。
    */
-  updatedAt: number;
+  updated_at: number;
 };
 
 /**
@@ -95,16 +95,16 @@ export type ChannelContextMetaFileV1 = {
   /**
    * 文件更新时间（毫秒时间戳）。
    */
-  updatedAt: number;
+  updated_at: number;
   /**
-   * 目标键 -> sessionId 映射索引。
+   * 目标键 -> session_id 映射索引。
    *
    * 说明（中文）
    * - 目标键由 `channel/chatId/targetType/threadId` 归一化后拼接。
    */
   sessionIdByTargetKey: Record<string, string>;
   /**
-   * sessionId -> 路由信息映射索引。
+   * session_id -> 路由信息映射索引。
    */
   routesBySessionId: Record<string, ChannelContextRouteV1>;
 };

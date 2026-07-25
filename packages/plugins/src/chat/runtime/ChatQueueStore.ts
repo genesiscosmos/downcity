@@ -7,7 +7,7 @@
  * - 旧的 `ChatQueue.ts` 会保留共享门面，逐步迁移到显式实例注入。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type {
   ChatQueueEnqueueParams,
   ChatQueueEnqueueResult,
@@ -58,7 +58,7 @@ export interface ChatQueueStorePort {
  *
  * 关键点（中文）
  * - 迁移阶段仍保留一份共享实例，避免一次性改动所有旧入口。
- * - 新代码应优先通过 `AgentContext.agent` 解析显式 queue store。
+ * - 新代码应优先通过 `PluginContext.agent` 解析显式 queue store。
  */
 /**
  * Chat queue 实例级存储。
@@ -96,7 +96,7 @@ export class ChatQueueStore implements ChatQueueStorePort {
   }
 
   enqueue(params: ChatQueueEnqueueParams): ChatQueueEnqueueResult {
-    const laneKey = this.normalizeLaneKey(params.sessionId);
+    const laneKey = this.normalizeLaneKey(params.session_id);
     const lane = this.getLane(laneKey);
     const item: ChatQueueItem = {
       ...params,
@@ -174,7 +174,7 @@ export function getSharedChatQueueStore(): ChatQueueStore {
  * - 新路径优先读取当前 Agent 注册的 ChatPlugin 实例。
  * - 迁移阶段若拿不到，则回退到共享 queue store，保证旧入口可继续工作。
  */
-export function resolveChatQueueStore(context?: AgentContext): ChatQueueStorePort {
+export function resolveChatQueueStore(context?: PluginContext): ChatQueueStorePort {
   const chatService = context?.plugins.get("chat") as
     | { queueStore?: ChatQueueStorePort }
     | undefined;

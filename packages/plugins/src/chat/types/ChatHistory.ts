@@ -16,13 +16,13 @@ type ChatHistoryBaseEventV1 = {
   v: 1;
   id: string;
   ts: number;
-  sessionId: string;
+  session_id: string;
   channel: ChatDispatchChannel;
   chatId: string;
   text: string;
   targetType?: string;
   threadId?: number;
-  messageId?: string;
+  message_id?: string;
   actorId?: string;
   actorName?: string;
   extra?: JsonObject;

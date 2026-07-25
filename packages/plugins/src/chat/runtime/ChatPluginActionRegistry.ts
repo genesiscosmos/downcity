@@ -9,7 +9,7 @@
 
 import type { Command } from "commander";
 import type { PluginActions } from "@downcity/agent";
-import { createAction } from "@downcity/agent";
+import { create_action } from "@downcity/agent";
 import { z } from "zod";
 import type {
   ChatDeleteActionPayload,
@@ -59,12 +59,12 @@ const CHAT_SEND_HELP_TEXT = [
   "",
   "常用示例：",
   "  downcity chat send --text 'done'",
-  "  downcity chat send --chat-key <chatKey> --text 'done'",
-  "  cat <<'EOF' | downcity chat send --stdin --chat-key <chatKey>",
+  "  downcity chat send --chat-key <chat_key> --text 'done'",
+  "  cat <<'EOF' | downcity chat send --stdin --chat-key <chat_key>",
   "  第一行",
   "  第二行",
   "  EOF",
-  "  downcity chat send --text-file ./result.md --chat-key <chatKey>",
+  "  downcity chat send --text-file ./result.md --chat-key <chat_key>",
   "",
   "说明：",
   "  当前会话可省略 `--chat-key`；跨 chat 发送时必须显式传 `--chat-key`。",
@@ -75,8 +75,8 @@ const CHAT_REACT_HELP_TEXT = [
   "",
   "常用示例：",
   "  downcity chat react --emoji '👍'",
-  "  downcity chat react --emoji '✅' --message-id <messageId>",
-  "  downcity chat react --chat-key <chatKey> --message-id <messageId> --emoji '🔥'",
+  "  downcity chat react --emoji '✅' --message-id <message_id>",
+  "  downcity chat react --chat-key <chat_key> --message-id <message_id> --emoji '🔥'",
   "",
   "说明：",
   "  当前会话可省略 `--chat-key`；跨 chat 操作时显式传 `--chat-key`。",
@@ -96,7 +96,7 @@ export function createChatPluginActions(params: {
   channelState: ChatChannelState;
 }): PluginActions {
   return {
-    status: createAction({
+    status: create_action({
       description: "View chat channel connection status.",
       input_schema: {
         zod: z.object({}).passthrough(),
@@ -107,7 +107,7 @@ export function createChatPluginActions(params: {
         configure(command: Command) {
           command.option("--channel <name>", "Specify channel (telegram|feishu|qq).");
         },
-        mapInput: mapChatChannelCommandInput,
+        map_input: mapChatChannelCommandInput,
       },
       execute: async (actionParams) => {
         return executeChatStatusAction({
@@ -117,7 +117,7 @@ export function createChatPluginActions(params: {
         });
       },
     }),
-    test: createAction({
+    test: create_action({
       description: "Test chat channel connectivity.",
       input_schema: {
         zod: z.object({}).passthrough(),
@@ -128,7 +128,7 @@ export function createChatPluginActions(params: {
         configure(command: Command) {
           command.option("--channel <name>", "Specify channel (telegram|feishu|qq).");
         },
-        mapInput: mapChatChannelCommandInput,
+        map_input: mapChatChannelCommandInput,
       },
       execute: async (actionParams) => {
         return executeChatTestAction({
@@ -138,7 +138,7 @@ export function createChatPluginActions(params: {
         });
       },
     }),
-    reconnect: createAction({
+    reconnect: create_action({
       description: "Reconnect chat channels, all by default.",
       input_schema: {
         zod: z.object({}).passthrough(),
@@ -149,7 +149,7 @@ export function createChatPluginActions(params: {
         configure(command: Command) {
           command.option("--channel <name>", "Specify channel (telegram|feishu|qq).");
         },
-        mapInput: mapChatChannelCommandInput,
+        map_input: mapChatChannelCommandInput,
       },
       execute: async (actionParams) => {
         return executeChatReconnectAction({
@@ -159,21 +159,21 @@ export function createChatPluginActions(params: {
         });
       },
     }),
-    list: createAction({
+    list: create_action({
       description: "List chat conversations recorded by the current agent.",
       input_schema: {
         zod: z.object({}).passthrough(),
         json_schema: { type: "object", properties: {}, additionalProperties: true },
       },
       command: {
-        description: "List chat conversations recorded by the current agent (chatTitle/chatKey).",
+        description: "List chat conversations recorded by the current agent (chatTitle/chat_key).",
         configure(command: Command) {
           command
             .option("--channel <name>", "Filter by channel (telegram|feishu|qq).")
             .option("--limit <n>", "Return the latest N records, default 50.")
-            .option("--q <text>", "Keyword filter (title/chatId/sessionId/actor).");
+            .option("--q <text>", "Keyword filter (title/chatId/session_id/actor).");
         },
-        mapInput: mapChatListCommandInput,
+        map_input: mapChatListCommandInput,
       },
       execute: async (actionParams) => {
         return executeChatListAction({
@@ -182,7 +182,7 @@ export function createChatPluginActions(params: {
         });
       },
     }),
-    info: createAction({
+    info: create_action({
       description: "View route, paths, and context snapshot for a specified chat conversation.",
       input_schema: {
         zod: z.object({}).passthrough(),
@@ -192,10 +192,10 @@ export function createChatPluginActions(params: {
         description: "View specified chat conversation info (route/local paths/context snapshot).",
         configure(command: Command) {
           command
-            .option("--chat-key <chatKey>", "Target chatKey; reads DC_CTX_CHAT_KEY if omitted.")
-            .option("--session-id <sessionId>", "Explicit sessionId, with higher priority.");
+            .option("--chat-key <chat_key>", "Target chat_key; reads DC_CTX_CHAT_KEY if omitted.")
+            .option("--session-id <session_id>", "Explicit session_id, with higher priority.");
         },
-        mapInput: mapChatInfoCommandInput,
+        map_input: mapChatInfoCommandInput,
       },
       execute: async (actionParams) => {
         return executeChatInfoAction({
@@ -205,14 +205,14 @@ export function createChatPluginActions(params: {
         });
       },
     }),
-    send: createAction({
-      description: "Send a message to the target chatKey, supporting text, attachments, and delay.",
+    send: create_action({
+      description: "Send a message to the target chat_key, supporting text, attachments, and delay.",
       input_schema: {
         zod: z.object({}).passthrough(),
         json_schema: { type: "object", properties: {}, additionalProperties: true },
       },
       command: {
-        description: "Send a message to the target chatKey.",
+        description: "Send a message to the target chat_key.",
         configure(command: Command) {
           command
             .option("--text <text>", "Message body.")
@@ -221,12 +221,12 @@ export function createChatPluginActions(params: {
             .option("--reply", "Explicitly reply to the target message with reply_to_message.", false)
             .option("--message-id <id>", "Explicit reply target message ID.")
             .option(
-              "--chat-key <chatKey>",
-              "Target chatKey; reads DC_CTX_CHAT_KEY if omitted.",
+              "--chat-key <chat_key>",
+              "Target chat_key; reads DC_CTX_CHAT_KEY if omitted.",
             );
           attachCommandHelpText(command, CHAT_SEND_HELP_TEXT);
         },
-        mapInput: mapChatSendCommandInput,
+        map_input: mapChatSendCommandInput,
       },
       execute: async (actionParams) => {
         return executeChatSendAction({
@@ -236,7 +236,7 @@ export function createChatPluginActions(params: {
         });
       },
     }),
-    react: createAction({
+    react: create_action({
       description: "React to a target message, currently supported only by Telegram.",
       input_schema: {
         zod: z.object({}).passthrough(),
@@ -250,12 +250,12 @@ export function createChatPluginActions(params: {
             .option("--big", "Use large reaction effect (Telegram is_big).", false)
             .option("--message-id <id>", "Target message ID; defaults to chat meta when available.")
             .option(
-              "--chat-key <chatKey>",
-              "Target chatKey; reads DC_CTX_CHAT_KEY if omitted.",
+              "--chat-key <chat_key>",
+              "Target chat_key; reads DC_CTX_CHAT_KEY if omitted.",
             );
           attachCommandHelpText(command, CHAT_REACT_HELP_TEXT);
         },
-        mapInput: mapChatReactCommandInput,
+        map_input: mapChatReactCommandInput,
       },
       execute: async (actionParams) => {
         return executeChatReactAction({
@@ -265,7 +265,7 @@ export function createChatPluginActions(params: {
         });
       },
     }),
-    context: createAction({
+    context: create_action({
       description: "View current conversation context snapshot.",
       input_schema: {
         zod: z.object({}).passthrough(),
@@ -274,13 +274,13 @@ export function createChatPluginActions(params: {
       command: {
         description: "View current conversation context snapshot.",
         configure(command: Command) {
-          command.option("--chat-key <chatKey>", "Explicitly override chatKey.");
+          command.option("--chat-key <chat_key>", "Explicitly override chat_key.");
         },
-        mapInput(input) {
-          const chatKey =
-            typeof input.opts.chatKey === "string" ? String(input.opts.chatKey).trim() : "";
+        map_input(input) {
+          const chat_key =
+            typeof input.opts.chat_key === "string" ? String(input.opts.chat_key).trim() : "";
           return {
-            ...(chatKey ? { chatKey } : {}),
+            ...(chat_key ? { chat_key } : {}),
           };
         },
       },
@@ -292,7 +292,7 @@ export function createChatPluginActions(params: {
         });
       },
     }),
-    delete: createAction({
+    delete: create_action({
       description: "Permanently delete a specified chat conversation, including mapping, history, and context.",
       input_schema: {
         zod: z.object({}).passthrough(),
@@ -302,10 +302,10 @@ export function createChatPluginActions(params: {
         description: "Permanently delete a specified chat conversation, including mapping, history, and context.",
         configure(command: Command) {
           command
-            .option("--chat-key <chatKey>", "Explicit chatKey.")
-            .option("--session-id <sessionId>", "Explicit sessionId.");
+            .option("--chat-key <chat_key>", "Explicit chat_key.")
+            .option("--session-id <session_id>", "Explicit session_id.");
         },
-        mapInput: mapChatDeleteCommandInput,
+        map_input: mapChatDeleteCommandInput,
       },
       execute: async (actionParams) => {
         return executeChatDeleteAction({
@@ -315,7 +315,7 @@ export function createChatPluginActions(params: {
         });
       },
     }),
-    history: createAction({
+    history: create_action({
       description: "Read chat history messages.",
       input_schema: {
         zod: z.object({}).passthrough(),
@@ -325,8 +325,8 @@ export function createChatPluginActions(params: {
         description: "Read chat history messages, defaulting to the latest 30.",
         configure(command: Command) {
           command
-            .option("--chat-key <chatKey>", "Explicitly override chatKey.")
-            .option("--session-id <sessionId>", "Explicitly override sessionId.")
+            .option("--chat-key <chat_key>", "Explicitly override chat_key.")
+            .option("--session-id <session_id>", "Explicitly override session_id.")
             .option("--limit <n>", "Return the latest N records, default 30.")
             .option(
               "--direction <direction>",
@@ -335,7 +335,7 @@ export function createChatPluginActions(params: {
             .option("--before-ts <ts>", "Return only records with ts lower than this value, in milliseconds.")
             .option("--after-ts <ts>", "Return only records with ts greater than this value, in milliseconds.");
         },
-        mapInput: mapChatHistoryCommandInput,
+        map_input: mapChatHistoryCommandInput,
       },
       execute: async (actionParams) => {
         return executeChatHistoryAction({
@@ -345,14 +345,14 @@ export function createChatPluginActions(params: {
         });
       },
     }),
-    history_clear: createAction({
+    history_clear: create_action({
       description: "Clear the Chat Plugin event history for one Session.",
       input_schema: {
-        zod: z.object({ sessionId: z.string().min(1) }),
+        zod: z.object({ session_id: z.string().min(1) }),
         json_schema: {
           type: "object",
-          properties: { sessionId: { type: "string" } },
-          required: ["sessionId"],
+          properties: { session_id: { type: "string" } },
+          required: ["session_id"],
           additionalProperties: false,
         },
       },

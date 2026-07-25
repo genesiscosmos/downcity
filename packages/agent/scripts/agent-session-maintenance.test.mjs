@@ -24,7 +24,7 @@ function get_session_path(root_path, agent_id, session_id) {
   );
 }
 
-test("AgentContext sessions 负责清空消息和删除 Session 数据", async () => {
+test("Agent sessions 负责清空消息和删除 Session 数据", async () => {
   const root_path = create_project_root();
   const agent = new Agent({
     id: "agent_test",
@@ -32,22 +32,21 @@ test("AgentContext sessions 负责清空消息和删除 Session 数据", async (
   });
   try {
     await agent.ready();
-    assert.equal(agent.getContext().sessions, agent.sessions);
     const session_id = "session_test";
-    await agent.sessions.create({ sessionId: session_id });
+    await agent.sessions.create({ session_id: session_id });
     const session_path = get_session_path(root_path, agent.id, session_id);
     const messages_path = path.join(session_path, "messages");
     fs.mkdirSync(messages_path, { recursive: true });
     fs.writeFileSync(path.join(messages_path, "active.jsonl"), "{}\n");
 
     assert.equal(
-      await agent.getContext().sessions.clear_messages(session_id),
+      await agent.sessions.clear_messages(session_id),
       true,
     );
     assert.equal(fs.existsSync(messages_path), false);
     assert.equal(fs.existsSync(session_path), true);
 
-    assert.equal(await agent.getContext().sessions.remove(session_id), true);
+    assert.equal(await agent.sessions.remove(session_id), true);
     assert.equal(fs.existsSync(session_path), false);
   } finally {
     await agent.dispose();

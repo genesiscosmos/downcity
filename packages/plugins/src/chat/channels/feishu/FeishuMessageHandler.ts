@@ -9,7 +9,7 @@
 
 import path from "path";
 import type { Logger } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type {
   IncomingChatAccessParams,
   IncomingChatAccessResult,
@@ -24,7 +24,7 @@ import {
   augmentChatInboundInput,
   buildChatInboundText,
 } from "@/chat/runtime/InboundAugment.js";
-import { renderChatMessageFileTag } from "@downcity/agent";
+import { render_chat_message_file_tag } from "@downcity/agent";
 import { parseFeishuInboundMessage } from "./InboundAttachment.js";
 import {
   extractFeishuSenderIdentity,
@@ -44,7 +44,7 @@ export interface FeishuMessageHandlerOptions {
   /**
    * 当前 agent context。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * 项目根目录。
    */
@@ -54,7 +54,7 @@ export interface FeishuMessageHandlerOptions {
    */
   logger: Logger;
   /**
-   * 构建 chatKey。
+   * 构建 chat_key。
    */
   buildChatKey(chatId: string): string;
   /**
@@ -77,7 +77,7 @@ export interface FeishuMessageHandlerOptions {
    * 下载入站附件。
    */
   downloadIncomingAttachments(params: {
-    messageId: string;
+    message_id: string;
     attachments: ReturnType<typeof parseFeishuInboundMessage>["attachments"];
   }): Promise<FeishuDownloadedAttachment[]>;
   /**
@@ -101,7 +101,7 @@ export interface FeishuMessageHandlerOptions {
   /**
    * 发送入站 ack reaction。
    */
-  sendInboundAckReaction(params: { messageId: string }): Promise<void>;
+  sendInboundAckReaction(params: { message_id: string }): Promise<void>;
   /**
    * 记录已知会话。
    */
@@ -126,16 +126,16 @@ export interface FeishuMessageHandlerOptions {
    */
   buildAccessBlockedText(params: { result: IncomingChatAccessResult }): string;
   /**
-   * 按 chatKey 串行执行。
+   * 按 chat_key 串行执行。
    */
-  runInChat(chatKey: string, fn: () => Promise<void>): Promise<void>;
+  runInChat(chat_key: string, fn: () => Promise<void>): Promise<void>;
   /**
    * 命令处理。
    */
   handleCommand(params: {
     chatId: string;
     chatType: string;
-    messageId: string;
+    message_id: string;
     command: string;
   }): Promise<void>;
   /**
@@ -144,7 +144,7 @@ export interface FeishuMessageHandlerOptions {
   executeAndReply(params: {
     chatId: string;
     chatType: string;
-    messageId: string;
+    message_id: string;
     instructions: string;
     actorId?: string;
     actorName?: string;
@@ -157,7 +157,7 @@ export interface FeishuMessageHandlerOptions {
   sendErrorMessage(params: {
     chatId: string;
     chatType: string;
-    messageId: string;
+    message_id: string;
     errorText: string;
   }): Promise<void>;
 }
@@ -188,10 +188,10 @@ export async function handleFeishuMessage(
     const normalizedMessageId = String(message_id || "").trim();
     if (!normalizedMessageId) return;
     if (!actorId) {
-      options.logger.warn("飞书消息缺少发送者 userId/open_id，已忽略", {
+      options.logger.warn("飞书消息缺少发送者 user_id/open_id，已忽略", {
         chatId: chat_id,
         chatType: chat_type,
-        messageId: normalizedMessageId,
+        message_id: normalizedMessageId,
       });
       return;
     }
@@ -230,7 +230,7 @@ export async function handleFeishuMessage(
           options,
           chatId: chat_id,
           chatType: chat_type,
-          messageId: message_id,
+          message_id: message_id,
           messageType: message_type,
           content,
           parentMessageId: parent_id,
@@ -239,7 +239,7 @@ export async function handleFeishuMessage(
         await options.sendErrorMessage({
           chatId: chat_id,
           chatType: chat_type,
-          messageId: message_id,
+          message_id: message_id,
           errorText: `Failed to parse message: ${String(error)}`,
         });
         handled = true;
@@ -258,7 +258,7 @@ export async function handleFeishuMessage(
         actorId,
         chatId: chat_id,
         chatType: chat_type,
-        messageId: message_id,
+        message_id: message_id,
         ...parsedInput,
       });
       handled = handledByAuth;
@@ -284,7 +284,7 @@ async function parseIncomingMessage(params: {
   options: FeishuMessageHandlerOptions;
   chatId: string;
   chatType: string;
-  messageId: string;
+  message_id: string;
   messageType: string;
   content: string;
   parentMessageId?: string;
@@ -302,7 +302,7 @@ async function parseIncomingMessage(params: {
     await params.options.sendErrorMessage({
       chatId: params.chatId,
       chatType: params.chatType,
-      messageId: params.messageId,
+      message_id: params.message_id,
       errorText: `Unsupported Feishu message type: ${parsed.unsupportedType}`,
     });
     return {
@@ -315,7 +315,7 @@ async function parseIncomingMessage(params: {
   return {
     userMessage: parsed.text,
     incomingAttachments: await params.options.downloadIncomingAttachments({
-      messageId: params.messageId,
+      message_id: params.message_id,
       attachments: parsed.attachments,
     }),
     replyContext: await params.options.resolveReplyContext({
@@ -335,7 +335,7 @@ async function handleAuthorizedMessage(params: {
   actorId: string;
   chatId: string;
   chatType: string;
-  messageId: string;
+  message_id: string;
   userMessage: string;
   incomingAttachments: FeishuDownloadedAttachment[];
   replyContext?: InboundReplyContext;
@@ -347,7 +347,7 @@ async function handleAuthorizedMessage(params: {
     actorId,
     chatId,
     chatType,
-    messageId,
+    message_id,
     incomingAttachments,
     replyContext,
   } = params;
@@ -366,7 +366,7 @@ async function handleAuthorizedMessage(params: {
     chatId,
     chatType,
     chatTitle,
-    userId: actorId,
+    user_id: actorId,
     username: actorName,
   });
   if (!access_result.allowed) {
@@ -386,14 +386,14 @@ async function handleAuthorizedMessage(params: {
     ...(chatTitle ? { chatTitle } : {}),
   });
 
-  await options.sendInboundAckReaction({ messageId });
+  await options.sendInboundAckReaction({ message_id });
 
   await options.runInChat(threadId, async () => {
     if (userMessage.startsWith("/") && incomingAttachments.length === 0) {
       await options.handleCommand({
         chatId,
         chatType,
-        messageId,
+        message_id,
         command: userMessage,
       });
       return;
@@ -401,7 +401,7 @@ async function handleAuthorizedMessage(params: {
 
     const attachmentLines = incomingAttachments.map((attachment) => {
       const rel = path.relative(options.rootPath, attachment.path);
-      return renderChatMessageFileTag({
+      return render_chat_message_file_tag({
         type: attachment.type,
         path: rel,
         ...(attachment.desc ? { caption: attachment.desc } : {}),
@@ -421,12 +421,12 @@ async function handleAuthorizedMessage(params: {
               channel: "feishu",
               chatId,
               chatType,
-              chatKey: threadId,
-              messageId,
+              chat_key: threadId,
+              message_id,
               rootPath: options.rootPath,
               attachmentText:
                 attachmentLines.length > 0 ? attachmentLines.join("\n") : undefined,
-              bodyText: userMessage ? userMessage.trim() : undefined,
+              body_text: userMessage ? userMessage.trim() : undefined,
               attachments: incomingAttachments.map((attachment) => ({
                 channel: "feishu" as const,
                 kind: attachment.type,
@@ -447,7 +447,7 @@ async function handleAuthorizedMessage(params: {
     await options.executeAndReply({
       chatId,
       chatType,
-      messageId,
+      message_id,
       instructions,
       actorId,
       actorName,

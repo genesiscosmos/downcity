@@ -9,9 +9,9 @@
  */
 
 import { BasePlugin } from "@downcity/agent";
-import { createAction } from "@downcity/agent";
+import { create_action } from "@downcity/agent";
 import { z } from "zod";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { JsonObject, JsonValue, PluginActionResult } from "@downcity/agent";
 import { WEB_PLUGIN_PROMPT } from "@/web/WebPromptAssets.js";
 import { render_web_install_prompt } from "@/web/runtime/Prompt.js";
@@ -79,7 +79,7 @@ export class WebPlugin extends BasePlugin {
    * WebPlugin 对外 action。
    */
   readonly actions = {
-    [WEB_PLUGIN_ACTIONS.install]: createAction({
+    [WEB_PLUGIN_ACTIONS.install]: create_action({
       description:
         "Return instructions for installing web-related Skills and CLIs. This action does not install anything.",
       input_schema: {
@@ -117,7 +117,7 @@ export class WebPlugin extends BasePlugin {
             .option("--target <target>", "web-access、agent-browser 或 all")
             .option("--scope <scope>", "agent-browser CLI 安装位置：user 或 project");
         },
-        mapInput({ opts }): JsonObject {
+        map_input({ opts }): JsonObject {
           return {
             ...(get_install_target_opt(opts)
               ? { target: get_install_target_opt(opts) }
@@ -145,7 +145,7 @@ export class WebPlugin extends BasePlugin {
   /**
    * 注入联网方法论提示词。
    */
-  system(_context: AgentContext): string {
+  system(_context: PluginContext): string {
     return WEB_PLUGIN_PROMPT;
   }
 }

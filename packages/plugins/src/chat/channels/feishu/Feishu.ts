@@ -14,7 +14,7 @@ import type {
   ChannelChatKeyParams,
   ChannelSendTextParams,
 } from "@/chat/channels/BaseChatChannel.js";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { JsonObject } from "@downcity/agent";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import type { ParsedFeishuAttachmentCommand } from "@/chat/types/FeishuAttachment.js";
@@ -55,7 +55,7 @@ export class FeishuBot extends BaseChatChannel {
   > = new Map();
 
   constructor(
-    context: AgentContext,
+    context: PluginContext,
     appId: string,
     appSecret: string,
     domain: string | undefined,
@@ -64,7 +64,7 @@ export class FeishuBot extends BaseChatChannel {
     this.appId = appId;
     this.appSecret = appSecret;
     this.domain = domain;
-    this.dedupeDir = get_feishu_dedupe_dir_path(context.rootPath);
+    this.dedupeDir = get_feishu_dedupe_dir_path(context.workspace_path);
     this.platform = new FeishuPlatformClient({
       context,
       config: {
@@ -91,13 +91,13 @@ export class FeishuBot extends BaseChatChannel {
     params: ChannelSendTextParams,
   ): Promise<void> {
     const chatType = typeof params.chatType === "string" ? params.chatType : "p2p";
-    const messageId =
-      typeof params.messageId === "string" ? params.messageId : undefined;
+    const message_id =
+      typeof params.message_id === "string" ? params.message_id : undefined;
     const text = String(params.text ?? "");
-    const shouldReplyToMessage = params.replyToMessage === true;
+    const shouldReplyToMessage = params.reply_to_message === true;
 
-    if (shouldReplyToMessage && messageId && chatType !== "p2p") {
-      await this.sendMessage(params.chatId, chatType, messageId, text);
+    if (shouldReplyToMessage && message_id && chatType !== "p2p") {
+      await this.sendMessage(params.chatId, chatType, message_id, text);
     } else {
       await this.sendChatMessage(params.chatId, chatType, text);
     }
@@ -222,14 +222,14 @@ export class FeishuBot extends BaseChatChannel {
       },
       buildAccessBlockedText: (params) =>
         this.buildAccessBlockedText(params),
-      runInChat: async (chatKey, fn) => {
-        await this.runInChat(chatKey, fn);
+      runInChat: async (chat_key, fn) => {
+        await this.runInChat(chat_key, fn);
       },
       handleCommand: async (params) => {
         await this.handleCommand(
           params.chatId,
           params.chatType,
-          params.messageId,
+          params.message_id,
           params.command,
         );
       },
@@ -237,7 +237,7 @@ export class FeishuBot extends BaseChatChannel {
         await this.executeAndReply(
           params.chatId,
           params.chatType,
-          params.messageId,
+          params.message_id,
           params.instructions,
           params.actorId,
           params.actorName,
@@ -249,7 +249,7 @@ export class FeishuBot extends BaseChatChannel {
         await this.sendErrorMessage(
           params.chatId,
           params.chatType,
-          params.messageId,
+          params.message_id,
           params.errorText,
         );
       },
@@ -262,7 +262,7 @@ export class FeishuBot extends BaseChatChannel {
   private async handleCommand(
     chatId: string,
     chatType: string,
-    messageId: string,
+    message_id: string,
     command: string,
   ): Promise<void> {
     this.logger.info(`Received Feishu command: ${command}`);
@@ -300,7 +300,7 @@ Available commands:
         responseText = `Unknown command: ${command}\nType /help to view available commands`;
     }
 
-    await this.sendMessage(chatId, chatType, messageId, responseText);
+    await this.sendMessage(chatId, chatType, message_id, responseText);
   }
 
   /**
@@ -309,7 +309,7 @@ Available commands:
   private async executeAndReply(
     chatId: string,
     chatType: string,
-    messageId: string,
+    message_id: string,
     instructions: string,
     actorId?: string,
     actorName?: string,
@@ -317,18 +317,18 @@ Available commands:
     extra?: JsonObject,
   ): Promise<void> {
     try {
-      const { chatKey } = await this.enqueueMessage({
+      const { chat_key } = await this.enqueueMessage({
         chatId,
         text: instructions,
         chatType,
-        messageId,
-        userId: actorId,
+        message_id,
+        user_id: actorId,
         username: actorName,
         chatTitle,
         ...(extra ? { extra } : {}),
       });
 
-      this.knownChats.set(chatKey, {
+      this.knownChats.set(chat_key, {
         chatId,
         chatType,
         ...(chatTitle ? { chatTitle } : {}),
@@ -337,7 +337,7 @@ Available commands:
       await this.sendErrorMessage(
         chatId,
         chatType,
-        messageId,
+        message_id,
         `Execution error: ${String(error)}`,
       );
     }
@@ -349,11 +349,11 @@ Available commands:
   async sendMessage(
     chatId: string,
     chatType: string,
-    messageId: string,
+    message_id: string,
     text: string,
   ): Promise<void> {
     const parsed = parseFeishuAttachments(text);
-    await this.sendParsedMessage(chatId, chatType, messageId, parsed.segments);
+    await this.sendParsedMessage(chatId, chatType, message_id, parsed.segments);
   }
 
   /**
@@ -374,7 +374,7 @@ Available commands:
   private async sendParsedMessage(
     chatId: string,
     chatType: string,
-    messageId: string | undefined,
+    message_id: string | undefined,
     segments: Array<
       | {
           kind: "text";
@@ -390,16 +390,16 @@ Available commands:
       if (segment.kind === "text") {
         const normalizedText = String(segment.text || "").trim();
         if (!normalizedText) continue;
-        await this.sendPlatformMessage(chatId, chatType, messageId, "text", {
+        await this.sendPlatformMessage(chatId, chatType, message_id, "text", {
           text: normalizedText,
         });
         continue;
       }
 
       try {
-        await this.sendAttachment(chatId, chatType, messageId, segment.attachment);
+        await this.sendAttachment(chatId, chatType, message_id, segment.attachment);
       } catch (error) {
-        await this.sendPlatformMessage(chatId, chatType, messageId, "text", {
+        await this.sendPlatformMessage(chatId, chatType, message_id, "text", {
           text: `❌ Failed to send attachment: ${segment.attachment.pathOrUrl}\n${String(error)}`,
         });
       }
@@ -412,10 +412,10 @@ Available commands:
   async sendAttachment(
     chatId: string,
     chatType: string,
-    messageId: string | undefined,
+    message_id: string | undefined,
     attachment: ParsedFeishuAttachmentCommand,
   ): Promise<void> {
-    await this.platform.sendAttachment(chatId, chatType, messageId, attachment);
+    await this.platform.sendAttachment(chatId, chatType, message_id, attachment);
   }
 
   /**
@@ -424,11 +424,11 @@ Available commands:
   async sendPlatformMessage(
     chatId: string,
     chatType: string,
-    messageId: string | undefined,
+    message_id: string | undefined,
     msgType: FeishuMessagePayloadType,
     content: Record<string, unknown> | string,
   ): Promise<void> {
-    await this.platform.sendPlatformMessage(chatId, chatType, messageId, msgType, content);
+    await this.platform.sendPlatformMessage(chatId, chatType, message_id, msgType, content);
   }
 
   /**
@@ -437,10 +437,10 @@ Available commands:
   private async sendErrorMessage(
     chatId: string,
     chatType: string,
-    messageId: string,
+    message_id: string,
     errorText: string,
   ): Promise<void> {
-    await this.sendMessage(chatId, chatType, messageId, `❌ ${errorText}`);
+    await this.sendMessage(chatId, chatType, message_id, `❌ ${errorText}`);
   }
 
   /**
@@ -452,7 +452,7 @@ Available commands:
   }
 
   /**
-   * 生成 chatKey。
+   * 生成 chat_key。
    */
   private buildChatKey(chatId: string): string {
     return `feishu-chat-${chatId}`;
@@ -464,7 +464,7 @@ Available commands:
  */
 export async function createFeishuBot(
   config: FeishuConfig,
-  context: AgentContext,
+  context: PluginContext,
 ): Promise<FeishuBot | null> {
   if (!config.enabled || !config.appId || !config.appSecret) {
     return null;

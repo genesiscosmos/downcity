@@ -44,7 +44,7 @@ export interface PluginAvailabilityResponse {
   /**
    * Plugin 名称（可选）。
    */
-  pluginName?: string;
+  plugin_name?: string;
   /**
    * Plugin 可用性视图（可选）。
    */
@@ -66,11 +66,11 @@ export interface PluginActionResponse {
   /**
    * Plugin 名称（可选）。
    */
-  pluginName?: string;
+  plugin_name?: string;
   /**
    * Action 名称（可选）。
    */
-  actionName?: string;
+  action_name?: string;
   /**
    * 返回数据（可选）。
    */

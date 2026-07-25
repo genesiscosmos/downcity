@@ -57,17 +57,17 @@ const result = await turn.finished;
 
 ```ts
 {
-  turnId: string;
+  turn_id: string;
   success: boolean;
   text: string;
   error?: string;
-  assistantMessage?: unknown;
+  assistant_message?: unknown;
 }
 ```
 
 Application code must check `success`; waiting for promise fulfillment alone is not a success check.
 
-`assistantMessage` exists only when the Turn produced actual Assistant content. If the model or runtime fails before producing output, the result contains only `success: false` and `error`; the Session persists the user-visible failure as a canonical `error` Message.
+`assistant_message` exists only when the Turn produced actual Assistant content. If the model or runtime fails before producing output, the result contains only `success: false` and `error`; the Session persists the user-visible failure as a canonical `error` Message.
 
 ## Sending input while a Turn runs
 

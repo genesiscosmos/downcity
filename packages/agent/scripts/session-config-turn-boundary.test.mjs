@@ -15,8 +15,8 @@ import fs from "node:fs/promises";
 import { MockLanguageModelV3 } from "ai/test";
 import { Agent, Workspace } from "../bin/index.js";
 import {
-  createAction,
-  createPlugin,
+  create_action,
+  create_plugin,
 } from "../bin/plugin/core/PluginActionFactory.js";
 
 function create_deferred() {
@@ -82,7 +82,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
       return create_stream_text_result(`done:${String(provider_request_count)}`);
     },
   });
-  const runtime_plugin = createPlugin({
+  const runtime_plugin = create_plugin({
     name: "runtime-config",
     title: "Runtime Config",
     description: "Provides a system block for turn-boundary tests",
@@ -91,9 +91,9 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
         plugin_stop_count += 1;
       },
     },
-    system: (context) => `plugin-env:${context.env.TURN_ENV || "missing"}`,
+    system: (context) => `plugin-env:${context.workspace_env.TURN_ENV || "missing"}`,
     actions: {
-      ping: createAction({
+      ping: create_action({
         description: "Ping",
         execute: async () => ({ success: true, data: { ok: true } }),
       }),
@@ -113,12 +113,12 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
 
   try {
     const session = await agent.sessions.create({
-      sessionId: "config_turn_boundary_session",
+      session_id: "config_turn_boundary_session",
     });
     const first_turn = await session.prompt({ query: "first" });
     await first_provider_request_started.promise;
 
-    agent.setInstruction(["instruction:new"]);
+    agent.set_instruction(["instruction:new"]);
     workspace.patch_env({ TURN_ENV: "new" });
     await agent.plugins.unregister("runtime-config");
     const steer_turn_promise = session.prompt({ query: "steer" });
@@ -160,7 +160,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
     assert.doesNotMatch(restored_system_text, /instruction:old/);
 
     const new_session = await agent.sessions.create({
-      sessionId: "config_turn_boundary_new_session",
+      session_id: "config_turn_boundary_new_session",
     });
     const new_system = await new_session.system();
     const new_system_text = new_system.blocks
@@ -183,7 +183,7 @@ test("Plugin registry changes do not rewrite an existing Session system", async 
     workspace: new Workspace({ path: agent_path }),
     model: new MockLanguageModelV3({ modelId: "fixed-plugin-system-model" }),
   });
-  const runtime_plugin = createPlugin({
+  const runtime_plugin = create_plugin({
     name: "runtime-system",
     title: "Runtime System",
     description: "Provides a fixed Session system test block",
@@ -192,7 +192,7 @@ test("Plugin registry changes do not rewrite an existing Session system", async 
 
   try {
     const existing_session = await agent.sessions.create({
-      sessionId: "existing_session",
+      session_id: "existing_session",
     });
     const existing_before = await existing_session.system();
 
@@ -201,7 +201,7 @@ test("Plugin registry changes do not rewrite an existing Session system", async 
     assert.deepEqual(existing_after_register, existing_before);
 
     const registered_session = await agent.sessions.create({
-      sessionId: "registered_session",
+      session_id: "registered_session",
     });
     const registered_before = await registered_session.system();
     assert.match(
@@ -214,7 +214,7 @@ test("Plugin registry changes do not rewrite an existing Session system", async 
     assert.deepEqual(registered_after_unregister, registered_before);
 
     const unregistered_session = await agent.sessions.create({
-      sessionId: "unregistered_session",
+      session_id: "unregistered_session",
     });
     assert.doesNotMatch(
       (await unregistered_session.system()).blocks
@@ -242,7 +242,7 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
     session_id,
     "instruction.md",
   );
-  const create_system_plugin = (content) => createPlugin({
+  const create_system_plugin = (content) => create_plugin({
     name: "syncshot-system",
     title: "Syncshot System",
     description: "Provides system text refreshed by session.syncshot()",
@@ -258,14 +258,14 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
   });
 
   try {
-    const session = await agent.sessions.create({ sessionId: session_id });
+    const session = await agent.sessions.create({ session_id: session_id });
     const initial_text = (await session.system()).blocks
       .map((block) => block.content)
       .join("\n");
     assert.match(initial_text, /instruction:initial/);
     assert.match(initial_text, /plugin-system:initial/);
 
-    agent.setInstruction(["instruction:refreshed"]);
+    agent.set_instruction(["instruction:refreshed"]);
     await agent.plugins.register(create_system_plugin("plugin-system:refreshed"));
     await session.syncshot();
 
@@ -278,7 +278,7 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
     await assert.rejects(fs.access(instruction_path));
 
     await session.snapshot();
-    agent.setInstruction(["instruction:latest"]);
+    agent.set_instruction(["instruction:latest"]);
     await agent.plugins.register(create_system_plugin("plugin-system:latest"));
     await Promise.all([session.snapshot(), session.syncshot()]);
 
@@ -309,7 +309,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     workspace: new Workspace({ path: agent_path }),
     model,
     instruction: ["instruction:old"],
-    plugins: [createPlugin({
+    plugins: [create_plugin({
       name: "snapshot-system",
       title: "Snapshot System",
       description: "Provides system text persisted by session.snapshot()",
@@ -319,7 +319,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
 
   try {
     const session = await first_agent.sessions.create({
-      sessionId: "instruction_restart_session",
+      session_id: "instruction_restart_session",
     });
     const first_system = await session.system();
     assert.match(
@@ -416,7 +416,7 @@ test("empty Session snapshot suppresses Agent instruction after restart", async 
   });
   try {
     const session = await first_agent.sessions.create({
-      sessionId: "empty_snapshot_session",
+      session_id: "empty_snapshot_session",
     });
     await session.snapshot();
   } finally {
@@ -470,12 +470,12 @@ test("running session model changes apply with steer at the next Session step", 
       return create_stream_text_result("new response");
     },
   });
-  const runtime_plugin = createPlugin({
+  const runtime_plugin = create_plugin({
     name: "model-boundary",
     title: "Model Boundary",
     description: "Ensures the main provider request has tools",
     actions: {
-      ping: createAction({
+      ping: create_action({
         description: "Ping",
         execute: async () => ({ success: true, data: { ok: true } }),
       }),
@@ -490,7 +490,7 @@ test("running session model changes apply with steer at the next Session step", 
 
   try {
     const session = await agent.sessions.create({
-      sessionId: "session_step_boundary_session",
+      session_id: "session_step_boundary_session",
     });
     const first_turn = await session.prompt({ query: "first" });
     await old_model_started.promise;
@@ -546,7 +546,7 @@ test("config remains effective when its action message cannot be persisted", asy
 
   try {
     const session = await agent.sessions.create({
-      sessionId: "config_action_observability_session",
+      session_id: "config_action_observability_session",
     });
     session.emit_action_event = async () => {
       throw new Error("action store unavailable");

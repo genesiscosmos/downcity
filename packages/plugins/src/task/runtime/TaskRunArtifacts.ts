@@ -222,7 +222,7 @@ export async function writeTaskRunInputArtifact(
       `- title: ${params.task.frontmatter.title}`,
       `- when: \`${params.task.frontmatter.when}\``,
       `- status: \`${params.task.frontmatter.status}\``,
-      `- sessionId: \`${params.task.frontmatter.sessionId}\``,
+      `- session_id: \`${params.task.frontmatter.session_id}\``,
       `- kind: \`${params.taskKind}\``,
       ...(params.taskKind === "agent"
         ? [`- review: \`${String(params.reviewEnabled)}\``]
@@ -274,7 +274,7 @@ function buildDialogueLines(params: WriteTaskRunArtifactsParams): string[] {
     lines.push("```");
     lines.push("");
     if (round.executorAssistantMessageSnapshot) {
-      lines.push("### Executor raw assistantMessage snapshot");
+      lines.push("### Executor raw assistant_message snapshot");
       lines.push("");
       lines.push("```json");
       lines.push(round.executorAssistantMessageSnapshot);
@@ -321,7 +321,7 @@ function buildDialogueLines(params: WriteTaskRunArtifactsParams): string[] {
     }
     if (round.userSimulatorAssistantMessageSnapshot) {
       lines.push("");
-      lines.push("raw assistantMessage snapshot:");
+      lines.push("raw assistant_message snapshot:");
       lines.push("```json");
       lines.push(round.userSimulatorAssistantMessageSnapshot);
       lines.push("```");
@@ -461,7 +461,7 @@ export async function writeTaskRunArtifacts(
     taskId: params.task.taskId,
     timestamp: params.timestamp,
     executionId: params.executionId,
-    sessionId: params.task.frontmatter.sessionId,
+    session_id: params.task.frontmatter.session_id,
     trigger: params.trigger,
     status: params.status,
     executionStatus: params.executionStatus,

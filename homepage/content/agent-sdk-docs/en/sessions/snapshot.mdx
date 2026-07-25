@@ -16,7 +16,7 @@ await session.snapshot();
 The file is stored at:
 
 ```text
-<projectRoot>/.downcity/agents/<agentId>/sessions/<sessionId>/instruction.md
+<project_root>/.downcity/agents/<agent_id>/sessions/<session_id>/instruction.md
 ```
 
 When restoring the Session, the SDK reads this file first. If it does not exist, the Session regenerates its system from the Agent's current instruction and plugins. Deleting `instruction.md` cancels persistence and restores that behavior.

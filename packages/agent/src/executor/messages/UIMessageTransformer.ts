@@ -123,7 +123,7 @@ export function extractTextFromUiMessage(
 /**
  * 从 UIMessage 中提取 tool 调用记录。
  */
-export function extractToolCallsFromUiMessage(
+export function extract_tool_calls_from_ui_message(
   message: UIMessage | null | undefined,
 ): ToolCallSummary[] {
   const parts = toUiParts(message);
@@ -134,15 +134,15 @@ export function extractToolCallsFromUiMessage(
     const toolUiPart = isToolUIPart(part) ? part : null;
     if (!toolUiPart) continue;
 
-    const toolName = resolveToolName(partObject, tryReadAiToolName(part));
-    if (!toolName) continue;
+    const tool_name = resolveToolName(partObject, tryReadAiToolName(part));
+    if (!tool_name) continue;
 
     const rawInput = (part as { input?: JsonValue }).input;
     const input = toToolInput(rawInput);
     const output = extractToolOutput(partObject);
 
     out.push({
-      tool: toolName,
+      tool: tool_name,
       input,
       output,
     });

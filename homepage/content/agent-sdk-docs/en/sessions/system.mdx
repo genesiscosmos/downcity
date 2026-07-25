@@ -17,12 +17,12 @@ It returns a structured system snapshot:
 
 ```ts
 {
-  sessionId: string;
+  session_id: string;
   session: {
-    agentId: string;
-    sessionId: string;
-    projectRoot: string;
-    createdAt: string;
+    agent_id: string;
+    session_id: string;
+    project_root: string;
+    created_at: string;
     timezone: string;
   };
   blocks: Array<{
@@ -38,7 +38,7 @@ The blocks can include:
 - caller-provided static `instruction`
 - Downcity Agent core guidance, including Harness design, Shell command rules, and plugin system rules
 - registered and enabled plugin system text
-- stable session context, including `agentId`, `sessionId`, `projectRoot`, creation time, and timezone
+- stable session context, including `agent_id`, `session_id`, `project_root`, creation time, and timezone
 
 The returned blocks are the same stable system blocks used by `session.prompt()`. The first generated system is fixed in the Session's memory; later Agent instruction or plugin registry changes do not alter it. Newly created Sessions use the latest configuration.
 
@@ -61,12 +61,12 @@ Even when the host provides `instruction`, `core` is still injected immediately 
 
 ```json
 {
-  "sessionId": "design-review",
+  "session_id": "design-review",
   "session": {
-    "agentId": "city-dev",
-    "sessionId": "design-review",
-    "projectRoot": "/path/to/project",
-    "createdAt": "2026-05-19T14:16:25.048Z",
+    "agent_id": "city-dev",
+    "session_id": "design-review",
+    "project_root": "/path/to/project",
+    "created_at": "2026-05-19T14:16:25.048Z",
     "timezone": "Asia/Shanghai"
   },
   "blocks": [

@@ -14,7 +14,7 @@ import fs from "node:fs/promises";
 
 import { MockLanguageModelV3 } from "ai/test";
 import { Agent, Workspace } from "../bin/index.js";
-import { createPlugin } from "../bin/plugin/core/PluginActionFactory.js";
+import { create_plugin } from "../bin/plugin/core/PluginActionFactory.js";
 
 function create_deferred() {
   let resolve;
@@ -93,7 +93,7 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
   const lifecycle_ready = create_deferred();
   let model_stream_calls = 0;
 
-  const blocking_plugin = createPlugin({
+  const blocking_plugin = create_plugin({
     name: "blocking",
     title: "Blocking",
     description: "Blocks lifecycle start until the test releases it",
@@ -145,7 +145,7 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
 
   try {
     const session = await agent.sessions.create({
-      sessionId: "ready_session",
+      session_id: "ready_session",
     });
     const prompt_promise = session.prompt({
       query: "hello",
@@ -171,7 +171,7 @@ test("agent ready isolates plugin lifecycle start failures", async () => {
     path.join(os.tmpdir(), "downcity-agent-ready-isolation-"),
   );
   let healthy_started = false;
-  const failing_plugin = createPlugin({
+  const failing_plugin = create_plugin({
     name: "failing",
     lifecycle: {
       start: async () => {
@@ -179,7 +179,7 @@ test("agent ready isolates plugin lifecycle start failures", async () => {
       },
     },
   });
-  const healthy_plugin = createPlugin({
+  const healthy_plugin = create_plugin({
     name: "healthy",
     lifecycle: {
       start: async () => {
@@ -212,7 +212,7 @@ test("Agent registers PluginRegistry tools and removes them with the last action
     id: "state_plugin_tools_agent",
     workspace: new Workspace({ path: agent_path }),
   });
-  const action_plugin = createPlugin({
+  const action_plugin = create_plugin({
     name: "dynamic_action",
     actions: {
       ping: {

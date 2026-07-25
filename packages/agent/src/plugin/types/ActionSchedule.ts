@@ -30,11 +30,11 @@ export interface ActionScheduleJobRecord {
   /**
    * 目标 plugin 名称。
    */
-  pluginName: string;
+  plugin_name: string;
   /**
    * 目标 action 名称。
    */
-  actionName: string;
+  action_name: string;
   /**
    * 原始 action payload。
    */
@@ -42,7 +42,7 @@ export interface ActionScheduleJobRecord {
   /**
    * 计划执行时间（毫秒时间戳）。
    */
-  runAtMs: number;
+  run_at_ms: number;
   /**
    * 当前任务状态。
    */
@@ -54,11 +54,11 @@ export interface ActionScheduleJobRecord {
   /**
    * 创建时间（毫秒时间戳）。
    */
-  createdAt: number;
+  created_at: number;
   /**
    * 最近更新时间（毫秒时间戳）。
    */
-  updatedAt: number;
+  updated_at: number;
 }
 
 /**
@@ -68,11 +68,11 @@ export interface CreateActionScheduleJobInput {
   /**
    * 目标 plugin 名称。
    */
-  pluginName: string;
+  plugin_name: string;
   /**
    * 目标 action 名称。
    */
-  actionName: string;
+  action_name: string;
   /**
    * 目标 action payload。
    */
@@ -80,7 +80,7 @@ export interface CreateActionScheduleJobInput {
   /**
    * 计划执行时间（毫秒时间戳）。
    */
-  runAtMs: number;
+  run_at_ms: number;
 }
 
 /**
@@ -90,5 +90,5 @@ export interface PluginActionScheduleInput {
   /**
    * 计划执行时间（毫秒时间戳）。
    */
-  runAtMs: number;
+  run_at_ms: number;
 }

@@ -73,7 +73,7 @@ export async function ensure_project_execution_model_ready(
   }
 
   const configured_model_id = String(
-    config.execution?.type === "api" ? config.execution.modelId || "" : "",
+    config.execution?.type === "api" ? config.execution.model_id || "" : "",
   ).trim();
   const choices = await listPlatformModelChoices();
   const decision = resolve_agent_execution_model_recovery({
@@ -126,10 +126,10 @@ export async function ensure_project_execution_model_ready(
   }
 
   upsertAgentConfig({
-    projectRoot: project_root,
+    project_root: project_root,
     execution: {
       type: "api",
-      modelId: selected_model_id,
+      model_id: selected_model_id,
     },
   });
 }

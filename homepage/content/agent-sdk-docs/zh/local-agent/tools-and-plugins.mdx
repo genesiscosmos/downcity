@@ -140,14 +140,14 @@ const plugins = agent.plugins.list();
 
 这意味着：
 
-- plugin action 可以通过 `agent.plugins.runAction(...)` 调用
+- plugin action 可以通过 `agent.plugins.run_action(...)` 调用
 - plugin hook 里拿到的 `context.plugins` 会指向同一份 registry
 - 同名 plugin 重复注册会直接报错
 - SDK 不会默认注册全部内建 plugin
 
-当前本地 SDK 会接通 plugin registry、`AgentContext.plugins`，并在 session prompt 中注入已注册 plugin 的 `system(context, run_context)` 文本。
+当前本地 SDK 会接通 plugin registry、`PluginContext.plugins`，并在 session prompt 中注入已注册 plugin 的 `system(context, run_context)` 文本。
 
-`AgentContext` 不提供通用路径集合。Plugin 通过 `context.rootPath` 确定项目边界，并在自己的模块内管理领域存储路径；需要操作 Agent Session 时使用 `context.sessions`，不要读取 Agent 的 Session 目录。
+`PluginContext` 不提供通用路径集合。Plugin 通过 `context.workspace_path` 确定项目边界，并在自己的模块内管理领域存储路径；需要操作 Agent Session 时使用 `context.sessions`，不要读取 Agent 的 Session 目录。
 
 `context.sessions` 直接引用当前 Agent 的 `AgentSessions`，不是转发对象。Plugin 需要同步运行时端口时使用 `context.sessions.runtime(session_id)`；SDK 用户恢复一个已存在的公开 Session 时仍使用 `await agent.sessions.get(session_id)`。
 
@@ -164,18 +164,18 @@ const plugins = agent.plugins.list();
 
 WorkspaceTools、Plugin Tools 与 `AgentOptions.tools` 的名称不能重复；发现冲突时 Agent 构造或注册流程直接报错，不会静默覆盖已有 Tool。
 
-自定义 plugin 可以用 `createPlugin` / `createAction` 声明 action metadata：
+自定义 plugin 可以用 `create_plugin` / `create_action` 声明 action metadata：
 
 ```ts
-import { Agent, Workspace, createAction, createPlugin } from "@downcity/agent";
+import { Agent, Workspace, create_action, create_plugin } from "@downcity/agent";
 import { z } from "zod";
 
-const demo_plugin = createPlugin({
+const demo_plugin = create_plugin({
   name: "demo",
   title: "Demo",
   description: "Demo actions",
   actions: {
-    echo: createAction({
+    echo: create_action({
       description: "回显一段文本",
       input_schema: {
         zod: z.object({
@@ -199,7 +199,7 @@ const demo_plugin = createPlugin({
         success: true,
         data: {
           text: input.text,
-          session_id: run_context?.sessionId,
+          session_id: run_context?.session_id,
         },
         message: "echoed",
       }),
@@ -214,7 +214,7 @@ const agent = new Agent({
 });
 ```
 
-`zod` schema 负责运行时校验；`json_schema` 和 `examples` 用于 `plugin_read` 返回给模型或 UI。action 通过 session tool 执行时会收到 `run_context`；CLI、HTTP 或 scheduler 直接调用时该字段可能不存在。当前 Session step 已提交生效的 env 应读取 `run_context.workspace_env`，`context.env` 表示 Workspace 当前配置快照。旧的 `class extends BasePlugin` 写法仍然可用，也可以只在 `actions` 里逐步换成 `createAction(...)`。
+`zod` schema 负责运行时校验；`json_schema` 和 `examples` 用于 `plugin_read` 返回给模型或 UI。action 通过 session tool 执行时会收到 `run_context`；CLI、HTTP 或 scheduler 直接调用时该字段可能不存在。当前 Session step 已提交生效的 env 应读取 `run_context.workspace_env`，`context.workspace_env` 表示 Workspace 当前配置快照。旧的 `class extends BasePlugin` 写法仍然可用，也可以只在 `actions` 里逐步换成 `create_action(...)`。
 
 ## ImagePlugin
 

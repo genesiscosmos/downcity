@@ -31,7 +31,7 @@ export type TaskListItem = {
   body?: string;
   when: string;
   status: string;
-  sessionId: string;
+  session_id: string;
   kind?: "agent" | "script";
   review?: boolean;
   taskMdPath: string;
@@ -55,8 +55,8 @@ function isDirectoryNameTimestamp(name: string): boolean {
  * - 遍历 `.downcity/task/*` 目录并解析每个 `task.md`。
  * - 通过子目录时间戳推断 `lastRunTimestamp`。
  */
-export async function listTasks(projectRoot: string): Promise<TaskListItem[]> {
-  const root = String(projectRoot || "").trim();
+export async function listTasks(project_root: string): Promise<TaskListItem[]> {
+  const root = String(project_root || "").trim();
   if (!root) return [];
 
   const dir = getTaskRootDir(root);
@@ -88,7 +88,7 @@ export async function listTasks(projectRoot: string): Promise<TaskListItem[]> {
       taskId,
       markdown: raw,
       taskMdPath,
-      projectRoot: root,
+      project_root: root,
     });
     if (!parsed.ok) continue;
 
@@ -114,7 +114,7 @@ export async function listTasks(projectRoot: string): Promise<TaskListItem[]> {
       ...(parsed.task.body ? { body: parsed.task.body } : {}),
       when: parsed.task.frontmatter.when,
       status: parsed.task.frontmatter.status,
-      sessionId: parsed.task.frontmatter.sessionId,
+      session_id: parsed.task.frontmatter.session_id,
       kind: parsed.task.frontmatter.kind || "agent",
       ...(parsed.task.frontmatter.kind === "agent"
         ? { review: Boolean(parsed.task.frontmatter.review) }
@@ -136,11 +136,11 @@ export async function listTasks(projectRoot: string): Promise<TaskListItem[]> {
  * - 若磁盘中存在同 title 多定义，会拒绝并提示冲突。
  */
 export async function resolveTaskIdByTitle(params: {
-  projectRoot: string;
+  project_root: string;
   title: string;
 }): Promise<string> {
-  const root = String(params.projectRoot || "").trim();
-  if (!root) throw new Error("projectRoot is required");
+  const root = String(params.project_root || "").trim();
+  if (!root) throw new Error("project_root is required");
   const title = String(params.title || "").trim();
   if (!title) throw new Error("title is required");
 
@@ -156,9 +156,9 @@ export async function resolveTaskIdByTitle(params: {
 /**
  * 读取单个任务定义。
  */
-export async function readTask(params: { taskId: string; projectRoot: string }): Promise<ShipTaskDefinitionV1> {
-  const root = String(params.projectRoot || "").trim();
-  if (!root) throw new Error("projectRoot is required");
+export async function readTask(params: { taskId: string; project_root: string }): Promise<ShipTaskDefinitionV1> {
+  const root = String(params.project_root || "").trim();
+  if (!root) throw new Error("project_root is required");
   const taskId = normalizeTaskId(params.taskId);
 
   const taskMdPath = getTaskMdPath(root, taskId);
@@ -167,7 +167,7 @@ export async function readTask(params: { taskId: string; projectRoot: string }):
     taskId,
     markdown: raw,
     taskMdPath,
-    projectRoot: root,
+    project_root: root,
   });
   if (!parsed.ok) throw new Error(parsed.error);
   return parsed.task;
@@ -178,10 +178,10 @@ export async function readTask(params: { taskId: string; projectRoot: string }):
  */
 export async function deleteTask(params: {
   taskId: string;
-  projectRoot: string;
+  project_root: string;
 }): Promise<{ taskId: string; taskDirPath: string }> {
-  const root = String(params.projectRoot || "").trim();
-  if (!root) throw new Error("projectRoot is required");
+  const root = String(params.project_root || "").trim();
+  if (!root) throw new Error("project_root is required");
   const taskId = normalizeTaskId(params.taskId);
 
   const taskMdPath = getTaskMdPath(root, taskId);
@@ -208,11 +208,11 @@ export async function writeTask(params: {
   taskId: string;
   frontmatter: ShipTaskFrontmatterV1;
   body: string;
-  projectRoot: string;
+  project_root: string;
   overwrite?: boolean;
 }): Promise<{ taskId: string; taskMdPath: string }> {
-  const root = String(params.projectRoot || "").trim();
-  if (!root) throw new Error("projectRoot is required");
+  const root = String(params.project_root || "").trim();
+  if (!root) throw new Error("project_root is required");
   const taskId = normalizeTaskId(params.taskId);
 
   const dir = getTaskDir(root, taskId);
@@ -239,10 +239,10 @@ export async function writeTask(params: {
 export async function ensureRunDir(params: {
   taskId: string;
   timestamp: string;
-  projectRoot: string;
+  project_root: string;
 }): Promise<{ runDir: string; runDirRel: string }> {
-  const root = String(params.projectRoot || "").trim();
-  if (!root) throw new Error("projectRoot is required");
+  const root = String(params.project_root || "").trim();
+  if (!root) throw new Error("project_root is required");
   const taskId = normalizeTaskId(params.taskId);
   const runDir = getTaskRunDir(root, taskId, params.timestamp);
   await fs.ensureDir(runDir);

@@ -10,7 +10,7 @@
 import type { Dirent } from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type {
   MemoryDefaults,
   MemorySourceType,
@@ -150,9 +150,9 @@ export async function listMemorySourceFiles(
  * 创建一个新的 memory plugin state。
  */
 export function createMemoryRuntimeState(
-  context: AgentContext,
+  context: PluginContext,
 ): MemoryRuntimeState {
   return {
-    rootPath: context.rootPath,
+    rootPath: context.workspace_path,
   };
 }

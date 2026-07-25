@@ -35,9 +35,9 @@ export interface StoredChannelAccount {
   /** QQ 是否使用 Sandbox 环境。 */
   sandbox?: boolean;
   /** 账号创建时间 ISO 字符串。 */
-  createdAt: string;
+  created_at: string;
   /** 账号最后更新时间 ISO 字符串。 */
-  updatedAt: string;
+  updated_at: string;
 }
 
 /** 新增或更新 Chat Account 的输入。 */

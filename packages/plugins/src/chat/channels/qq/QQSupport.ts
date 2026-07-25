@@ -7,7 +7,7 @@
  */
 
 import { buildChatInboundText, augmentChatInboundInput } from "@/chat/runtime/InboundAugment.js";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { JsonObject } from "@downcity/agent";
 import type { QQMessageData, QQReadyUser } from "@/chat/channels/qq/types/QqChannel.js";
 import type { QqIncomingAttachment } from "@/chat/types/QqVoice.js";
@@ -52,7 +52,7 @@ export interface BuildQqInboundInstructionsParams {
   /**
    * 当前执行上下文。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * 项目根目录。
    */
@@ -64,11 +64,11 @@ export interface BuildQqInboundInstructionsParams {
   /**
    * chat queue key。
    */
-  chatKey: string;
+  chat_key: string;
   /**
    * 当前消息 id。
    */
-  messageId: string;
+  message_id: string;
   /**
    * 用户文本。
    */
@@ -185,11 +185,11 @@ export function resolveQqGroupChatId(data: QQMessageData): string {
  */
 export function resolveQqC2cChatId(params: {
   data: QQMessageData;
-  actorUserId?: string;
+  actor_user_id?: string;
 }): string {
-  const { data, actorUserId } = params;
+  const { data, actor_user_id } = params;
   return [
-    actorUserId,
+    actor_user_id,
     data.user_openid,
     data.openid,
     data.author_id,
@@ -252,10 +252,10 @@ export async function buildQqInboundInstructions(
       input: {
         channel: "qq",
         chatId: params.chatId,
-        chatKey: params.chatKey,
-        messageId: params.messageId,
+        chat_key: params.chat_key,
+        message_id: params.message_id,
         rootPath: params.rootPath,
-        bodyText: text || undefined,
+        body_text: text || undefined,
         attachments: resolvedAttachments,
       },
     }),

@@ -130,8 +130,8 @@ export async function upsertChannelAccount(
   const channel = normalizeChannelAccountChannel(input.channel);
   const name = normalizeNonEmptyText(input.name, "chat account name");
   const existing = await getChannelAccount(context, id);
-  const createdAt = existing?.createdAt || nowIso();
-  const updatedAt = nowIso();
+  const created_at = existing?.created_at || nowIso();
+  const updated_at = nowIso();
 
   const nextBotToken =
     Object.prototype.hasOwnProperty.call(input, "botToken")
@@ -182,8 +182,8 @@ export async function upsertChannelAccount(
     appSecretEncrypted,
     optionalTrimmedText(input.domain) || null,
     input.sandbox === true ? 1 : 0,
-    createdAt,
-    updatedAt,
+    created_at,
+    updated_at,
   );
 }
 
@@ -228,8 +228,8 @@ function buildChannelAccountFromRowSync(
     appSecret: optionalTrimmedText(appSecret),
     domain: optionalTrimmedText(String(row.domain || "")),
     sandbox: Number(row.sandbox || 0) === 1,
-    createdAt: String(row.created_at || ""),
-    updatedAt: String(row.updated_at || ""),
+    created_at: String(row.created_at || ""),
+    updated_at: String(row.updated_at || ""),
   };
 }
 
@@ -263,7 +263,7 @@ async function buildChannelAccountFromRow(
     appSecret: optionalTrimmedText(appSecret),
     domain: optionalTrimmedText(String(row.domain || "")),
     sandbox: Number(row.sandbox || 0) === 1,
-    createdAt: String(row.created_at || ""),
-    updatedAt: String(row.updated_at || ""),
+    created_at: String(row.created_at || ""),
+    updated_at: String(row.updated_at || ""),
   };
 }

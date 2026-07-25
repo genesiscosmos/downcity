@@ -7,7 +7,7 @@
  * - 只有极少数非 turn 场景才允许显式补写 `session messages`
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { JsonObject } from "@downcity/agent";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
 import { appendInboundChatHistory } from "./ChatHistoryStore.js";
@@ -38,14 +38,14 @@ export function buildExecIngressExtra(extra?: JsonObject): JsonObject {
  * - 可避免 queue / control / transport 在 session 外重复持久化 user 消息。
  */
 export async function appendExecIngress(params: {
-  context: AgentContext;
-  sessionId: string;
+  context: PluginContext;
+  session_id: string;
   channel: ChatDispatchChannel;
   chatId: string;
   text: string;
   targetType?: string;
   threadId?: number;
-  messageId?: string;
+  message_id?: string;
   actorId?: string;
   actorName?: string;
   extra?: JsonObject;
@@ -53,14 +53,14 @@ export async function appendExecIngress(params: {
   const execExtra = buildExecIngressExtra(params.extra);
   await appendInboundChatHistory({
     context: params.context,
-    sessionId: params.sessionId,
+    session_id: params.session_id,
     channel: params.channel,
     chatId: params.chatId,
     ingressKind: "exec",
     text: params.text,
     ...(params.targetType ? { targetType: params.targetType } : {}),
     ...(typeof params.threadId === "number" ? { threadId: params.threadId } : {}),
-    ...(params.messageId ? { messageId: params.messageId } : {}),
+    ...(params.message_id ? { message_id: params.message_id } : {}),
     ...(params.actorId ? { actorId: params.actorId } : {}),
     ...(params.actorName ? { actorName: params.actorName } : {}),
     extra: execExtra,

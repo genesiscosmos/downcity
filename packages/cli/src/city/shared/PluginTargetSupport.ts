@@ -62,23 +62,23 @@ export async function checkShellSandboxHostPreflight(): Promise<void> {
  * @throws {CliError} 任一校验失败时抛出。
  */
 export async function checkAgentPreflight(
-  projectRoot: string,
+  project_root: string,
   options?: AgentPreflightOptions,
 ): Promise<void> {
   if (options?.requireShellSandbox !== false) {
     await checkShellSandboxHostPreflight();
   }
 
-  if (!readAgentConfig(projectRoot)) {
+  if (!readAgentConfig(project_root)) {
     throw new CliError({
       title: "Project not initialized",
-      note: `Agent config not found in the global DB: ${projectRoot}`,
+      note: `Agent config not found in the global DB: ${project_root}`,
       fix: "city agent create",
     });
   }
 
   // 关键点（中文）：失配时由 TTY 选择器恢复模型，避免切换 Federation 后只能手工修配置。
-  await ensure_project_execution_model_ready(projectRoot);
+  await ensure_project_execution_model_ready(project_root);
 }
 
 /**
@@ -128,20 +128,20 @@ export function resolveProjectRoot(pathInput?: string): string {
 }
 
 /**
- * 通过 agent id 解析 projectRoot。
+ * 通过 agent id 解析 project_root。
  */
-export async function resolveProjectRootByAgentId(agentId: string): Promise<{
-  projectRoot?: string;
+export async function resolveProjectRootByAgentId(agent_id: string): Promise<{
+  project_root?: string;
   error?: string;
 }> {
-  const target = String(agentId || "").trim().toLowerCase();
+  const target = String(agent_id || "").trim().toLowerCase();
   if (!target) {
     return { error: "--agent requires a non-empty value" };
   }
 
   const entries = await listManagedAgentEntries();
   const matchedRoots = entries
-    .map((entry) => path.resolve(String(entry.projectRoot || "").trim() || "."))
+    .map((entry) => path.resolve(String(entry.project_root || "").trim() || "."))
     .filter((root, index, all) => all.indexOf(root) === index)
     .filter((root) => {
       const byDirName = path.basename(root).toLowerCase() === target;
@@ -151,23 +151,23 @@ export async function resolveProjectRootByAgentId(agentId: string): Promise<{
 
   if (matchedRoots.length === 0) {
     return {
-      error: `Agent not found in managed agent registry: ${agentId}. Run "city agent list" to inspect ids.`,
+      error: `Agent not found in managed agent registry: ${agent_id}. Run "city agent list" to inspect ids.`,
     };
   }
   if (matchedRoots.length > 1) {
     return {
-      error: `Agent id is ambiguous: ${agentId}. Matched paths: ${matchedRoots.join(", ")}`,
+      error: `Agent id is ambiguous: ${agent_id}. Matched paths: ${matchedRoots.join(", ")}`,
     };
   }
 
-  return { projectRoot: matchedRoots[0] };
+  return { project_root: matchedRoots[0] };
 }
 
 /**
  * 统一解析 plugin runtime 命令目标路径（agent 优先于 path）。
  */
 export async function resolvePluginProjectRoot(options: PluginCliBaseOptions): Promise<{
-  projectRoot?: string;
+  project_root?: string;
   error?: string;
 }> {
   const explicitAgent = String(options.agent || "").trim();
@@ -182,33 +182,33 @@ export async function resolvePluginProjectRoot(options: PluginCliBaseOptions): P
     const envAgentId = String(process.env.DC_AGENT_ID || "").trim();
     if (envAgentId) {
       const byId = await resolveProjectRootByAgentId(envAgentId);
-      if (byId.projectRoot) {
+      if (byId.project_root) {
         return byId;
       }
     }
   }
 
-  const projectRoot = resolveProjectRoot(options.path);
+  const project_root = resolveProjectRoot(options.path);
   const entries = await listManagedAgentEntries();
   const registered = entries.some(
     (entry) =>
-      path.resolve(String(entry.projectRoot || "").trim() || ".") === projectRoot,
+      path.resolve(String(entry.project_root || "").trim() || ".") === project_root,
   );
   if (!registered) {
     return {
       error:
-        `Agent is not registered in managed agent registry: ${projectRoot}. ` +
+        `Agent is not registered in managed agent registry: ${project_root}. ` +
         `Run "city agent list" to inspect registered agents.`,
     };
   }
-  return { projectRoot };
+  return { project_root };
 }
 
 /**
  * 解析 ActionSchedule 管理命令目标路径。
  */
 export async function resolvePluginScheduleProjectRoot(options: PluginCliBaseOptions): Promise<{
-  projectRoot?: string;
+  project_root?: string;
   error?: string;
 }> {
   const explicitAgent = String(options.agent || "").trim();
@@ -216,16 +216,16 @@ export async function resolvePluginScheduleProjectRoot(options: PluginCliBaseOpt
     return resolveProjectRootByAgentId(explicitAgent);
   }
   return {
-    projectRoot: resolveProjectRoot(options.path),
+    project_root: resolveProjectRoot(options.path),
   };
 }
 
 /**
  * 校验路径是否为有效 agent 项目目录。
  */
-export function validateAgentProjectRoot(projectRoot: string): string | null {
-  if (readAgentConfig(projectRoot)) return null;
-  return `Invalid agent path: ${projectRoot}. Missing global DB agent config.`;
+export function validateAgentProjectRoot(project_root: string): string | null {
+  if (readAgentConfig(project_root)) return null;
+  return `Invalid agent path: ${project_root}. Missing global DB agent config.`;
 }
 
 /**

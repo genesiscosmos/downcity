@@ -124,7 +124,7 @@ export class RpcClient {
     const data = await this.request<{ result: AgentArchiveSessionResult }>({
       method: "sdk.sessions.archive",
       params: {
-        sessionId: input.id,
+        session_id: input.id,
       },
     });
     return data.result;
@@ -147,12 +147,12 @@ export class RpcClient {
    * 清空远程已归档 session。
    */
   async clean_archive(): Promise<AgentCleanArchiveResult> {
-    const data = await this.request<{ removedSessionIds: string[] }>({
+    const data = await this.request<{ removed_session_ids: string[] }>({
       method: "sdk.sessions.archived.clean",
     });
     return {
-      removedSessionIds: Array.isArray(data.removedSessionIds)
-        ? data.removedSessionIds
+      removed_session_ids: Array.isArray(data.removed_session_ids)
+        ? data.removed_session_ids
         : [],
     };
   }
@@ -164,7 +164,7 @@ export class RpcClient {
     const data = await this.request<{ session: AgentSessionInfo }>({
       method: "sdk.sessions.get",
       params: {
-        sessionId: session_id,
+        session_id: session_id,
       },
     });
     return data.session;
@@ -180,7 +180,7 @@ export class RpcClient {
     const data = await this.request<{ turn: { id: string } }>({
       method: "sdk.sessions.prompt",
       params: {
-        sessionId: params.session_id,
+        session_id: params.session_id,
         input: params.input,
       },
     });
@@ -194,7 +194,7 @@ export class RpcClient {
     const data = await this.request<{ result: AgentSessionStopResult }>({
       method: "sdk.sessions.stop",
       params: {
-        sessionId: session_id,
+        session_id: session_id,
       },
     });
     return data.result;
@@ -207,7 +207,7 @@ export class RpcClient {
     await this.request<{ queued: true }>({
       method: "sdk.sessions.compact",
       params: {
-        sessionId: session_id,
+        session_id: session_id,
       },
     });
   }
@@ -222,7 +222,7 @@ export class RpcClient {
     const data = await this.request<{ messages: SessionMessagePage }>({
       method: "sdk.sessions.messages",
       params: {
-        sessionId: params.session_id,
+        session_id: params.session_id,
         input: params.input,
       },
     });
@@ -236,7 +236,7 @@ export class RpcClient {
     const data = await this.request<{ system: AgentSessionSystemSnapshot }>({
       method: "sdk.sessions.system",
       params: {
-        sessionId: session_id,
+        session_id: session_id,
       },
     });
     return data.system;
@@ -245,7 +245,7 @@ export class RpcClient {
   async get_session_approvals(session_id: string): Promise<SessionApproval[]> {
     const data = await this.request<{ approvals: SessionApproval[] }>({
       method: "sdk.sessions.approvals",
-      params: { sessionId: session_id },
+      params: { session_id: session_id },
     });
     return data.approvals;
   }
@@ -253,7 +253,7 @@ export class RpcClient {
   async get_session_approval_mode(session_id: string): Promise<SessionApprovalModeSnapshot> {
     const data = await this.request<{ approval_mode: SessionApprovalModeSnapshot }>({
       method: "sdk.sessions.approvalMode",
-      params: { sessionId: session_id },
+      params: { session_id: session_id },
     });
     return data.approval_mode;
   }
@@ -264,7 +264,7 @@ export class RpcClient {
   ): Promise<SessionApprovalModeSnapshot> {
     const data = await this.request<{ approval_mode: SessionApprovalModeSnapshot }>({
       method: "sdk.sessions.setApprovalMode",
-      params: { sessionId: session_id, input },
+      params: { session_id: session_id, input },
     });
     return data.approval_mode;
   }
@@ -275,7 +275,7 @@ export class RpcClient {
   ): Promise<SessionApprovalResult> {
     const data = await this.request<{ result: SessionApprovalResult }>({
       method: "sdk.sessions.resolveApproval",
-      params: { sessionId: session_id, input },
+      params: { session_id: session_id, input },
     });
     return data.result;
   }
@@ -290,8 +290,8 @@ export class RpcClient {
     const data = await this.request<{ session: AgentSessionInfo }>({
       method: "sdk.sessions.fork",
       params: {
-        sessionId: params.session_id,
-        ...(params.message_id ? { messageId: params.message_id } : {}),
+        session_id: params.session_id,
+        ...(params.message_id ? { message_id: params.message_id } : {}),
       },
     });
     return data.session;
@@ -309,7 +309,7 @@ export class RpcClient {
     const data = await this.request<{ subscriptionId: string }>({
       method: "sdk.sessions.subscribe",
       params: {
-        sessionId: params.session_id,
+        session_id: params.session_id,
       },
     });
     const subscription_id = String(data.subscriptionId || "").trim();
@@ -350,11 +350,11 @@ export class RpcClient {
    */
   async clear_internal_session_messages(
     session_id: string,
-  ): Promise<{ sessionId: string; cleared: boolean }> {
-    return await this.request<{ sessionId: string; cleared: boolean }>({
+  ): Promise<{ session_id: string; cleared: boolean }> {
+    return await this.request<{ session_id: string; cleared: boolean }>({
       method: "internal.sessions.clear_messages",
       params: {
-        sessionId: session_id,
+        session_id: session_id,
       },
     });
   }
@@ -364,11 +364,11 @@ export class RpcClient {
    */
   async clear_internal_chat_history(
     session_id: string,
-  ): Promise<{ sessionId: string; cleared: boolean }> {
-    return await this.request<{ sessionId: string; cleared: boolean }>({
+  ): Promise<{ session_id: string; cleared: boolean }> {
+    return await this.request<{ session_id: string; cleared: boolean }>({
       method: "internal.sessions.clear_chat_history",
       params: {
-        sessionId: session_id,
+        session_id: session_id,
       },
     });
   }
@@ -382,7 +382,7 @@ export class RpcClient {
     return await this.request<RpcSystemPromptPayload>({
       method: "internal.sessions.resolve_system_prompt",
       params: {
-        sessionId: session_id,
+        session_id: session_id,
       },
     });
   }
@@ -417,7 +417,7 @@ export class RpcClient {
     return await this.request<PluginControlResult>({
       method: "internal.plugins.control",
       params: {
-        pluginName: params.plugin_name,
+        plugin_name: params.plugin_name,
         action: params.action,
       },
     });
@@ -435,7 +435,7 @@ export class RpcClient {
     return await this.request<PluginCommandResult & { plugin?: PluginSnapshot }>({
       method: "internal.plugins.command",
       params: {
-        pluginName: params.plugin_name,
+        plugin_name: params.plugin_name,
         command: params.command,
         ...(params.payload !== undefined ? { payload: params.payload } : {}),
         ...(params.schedule !== undefined ? { schedule: params.schedule } : {}),
@@ -454,7 +454,7 @@ export class RpcClient {
     }>({
       method: "internal.plugins.availability",
       params: {
-        pluginName: plugin_name,
+        plugin_name: plugin_name,
       },
     });
     return data.availability;
@@ -468,17 +468,17 @@ export class RpcClient {
     action_name: string;
     payload?: JsonValue;
   }): Promise<PluginActionResult<JsonValue> & {
-    pluginName?: string;
-    actionName?: string;
+    plugin_name?: string;
+    action_name?: string;
   }> {
     return await this.request<PluginActionResult<JsonValue> & {
-      pluginName?: string;
-      actionName?: string;
+      plugin_name?: string;
+      action_name?: string;
     }>({
       method: "internal.plugins.action",
       params: {
-        pluginName: params.plugin_name,
-        actionName: params.action_name,
+        plugin_name: params.plugin_name,
+        action_name: params.action_name,
         ...(params.payload !== undefined ? { payload: params.payload } : {}),
       },
     });

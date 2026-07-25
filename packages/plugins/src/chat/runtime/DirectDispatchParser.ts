@@ -14,8 +14,8 @@ import type {
   ResolvedDirectTextPayload,
 } from "@/chat/types/DirectDispatch.js";
 import {
-  buildChatMessageText,
-  parseChatMessageMarkup,
+  build_chat_message_text,
+  parse_chat_message_markup,
 } from "@downcity/agent";
 import { parseChatSendOptionsFromMetadata } from "@/chat/runtime/ChatSendMetadata.js";
 import type { ChatMessageSegment } from "@downcity/agent";
@@ -72,24 +72,24 @@ function resolveTextPlan(params: {
     metadata: params.metadata,
     strict: false,
   });
-  const chatKey = normalizeText(sendOptions.chatKey || params.fallbackChatKey);
-  const text = buildChatMessageText({
+  const chat_key = normalizeText(sendOptions.chat_key || params.fallbackChatKey);
+  const text = build_chat_message_text({
     segments: params.segments,
   });
-  if (!chatKey || !text) return null;
+  if (!chat_key || !text) return null;
 
   return {
     text,
-    chatKey,
-    replyToMessage: sendOptions.replyToMessage === true,
-    ...(typeof sendOptions.messageId === "string" && sendOptions.messageId
-      ? { messageId: sendOptions.messageId }
+    chat_key,
+    reply_to_message: sendOptions.reply_to_message === true,
+    ...(typeof sendOptions.message_id === "string" && sendOptions.message_id
+      ? { message_id: sendOptions.message_id }
       : {}),
-    ...(typeof sendOptions.delayMs === "number"
-      ? { delayMs: sendOptions.delayMs }
+    ...(typeof sendOptions.delay_ms === "number"
+      ? { delay_ms: sendOptions.delay_ms }
       : {}),
-    ...(typeof sendOptions.sendAtMs === "number"
-      ? { sendAtMs: sendOptions.sendAtMs }
+    ...(typeof sendOptions.send_at_ms === "number"
+      ? { send_at_ms: sendOptions.send_at_ms }
       : {}),
   };
 }
@@ -104,17 +104,17 @@ function resolveReactionPlans(params: {
     metadata: params.metadata,
     strict: false,
   });
-  const chatKey = normalizeText(sendOptions.chatKey || params.fallbackChatKey);
-  const messageId = normalizeText(sendOptions.messageId);
-  if (!chatKey) return out;
+  const chat_key = normalizeText(sendOptions.chat_key || params.fallbackChatKey);
+  const message_id = normalizeText(sendOptions.message_id);
+  if (!chat_key) return out;
 
   for (const react of params.reacts) {
     const emoji = normalizeText(react.emoji);
     if (!emoji) continue;
     out.push({
       emoji,
-      chatKey,
-      ...(messageId ? { messageId } : {}),
+      chat_key,
+      ...(message_id ? { message_id } : {}),
       big: react.big === true,
     });
   }
@@ -137,7 +137,7 @@ export function parseDirectDispatchAssistantText(params: {
   const fallbackChatKey = normalizeText(params.fallbackChatKey);
   if (!normalizeText(source) || !fallbackChatKey) return null;
 
-  const parsed = parseChatMessageMarkup(source);
+  const parsed = parse_chat_message_markup(source);
   const reacts = parseReactionsFromMetadata(parsed.metadata);
   const textPlan = resolveTextPlan({
     fallbackChatKey,

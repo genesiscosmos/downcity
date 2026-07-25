@@ -142,7 +142,7 @@ test("Session logs title generation failure without blocking the session", async
 
     assert.equal((await session.get_info()).title, undefined);
 
-    await agent.getLogger().saveAllLogs();
+    await agent.get_logger().save_all_logs();
     const log_lines = await read_log_lines(agent_path);
     const title_failure_log = log_lines
       .map((line) => JSON.parse(line))
@@ -150,9 +150,9 @@ test("Session logs title generation failure without blocking the session", async
 
     assert.ok(title_failure_log);
     assert.equal(title_failure_log.type, "warn");
-    assert.equal(title_failure_log.details.sessionId, session.id);
+    assert.equal(title_failure_log.details.session_id, session.id);
     assert.equal(
-      title_failure_log.details.modelLabel,
+      title_failure_log.details.model_label,
       "mock-session-title-failing-model",
     );
     assert.equal(

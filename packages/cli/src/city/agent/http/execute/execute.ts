@@ -8,7 +8,7 @@
  */
 
 import { Hono } from "hono";
-import type { AgentContext } from "@downcity/agent";
+import type { Agent } from "@downcity/agent";
 
 /**
  * 执行入口路由参数。
@@ -17,7 +17,7 @@ type ExecuteRouterOptions = {
   /**
    * 读取当前 agent runtime。
    */
-  getAgentContext: () => AgentContext;
+  get_agent: () => Agent;
 };
 
 /**
@@ -29,9 +29,9 @@ export function createExecuteRouter(
   const router = new Hono();
 
   router.post("/api/execute", async (c) => {
-    let bodyText = "";
+    let body_text = "";
     try {
-      bodyText = await c.req.text();
+      body_text = await c.req.text();
     } catch {
       return c.json(
         { success: false, message: "Unable to read request body" },
@@ -39,24 +39,24 @@ export function createExecuteRouter(
       );
     }
 
-    if (!bodyText) {
+    if (!body_text) {
       return c.json({ success: false, message: "Request body is empty" }, 400);
     }
 
     let body: {
       instructions?: string;
       chatId?: string;
-      userId?: string;
+      user_id?: string;
       actorId?: string;
-      messageId?: string;
+      message_id?: string;
     };
     try {
-      body = JSON.parse(bodyText) as typeof body;
+      body = JSON.parse(body_text) as typeof body;
     } catch {
       return c.json(
         {
           success: false,
-          message: `JSON parse failed: ${bodyText.substring(0, 50)}...`,
+          message: `JSON parse failed: ${body_text.substring(0, 50)}...`,
         },
         400,
       );
@@ -75,9 +75,9 @@ export function createExecuteRouter(
     }
 
     try {
-      const sessionId = `api:chat:${chatId}`;
-      const agentState = options.getAgentContext();
-      const session = agentState.sessions.runtime(sessionId);
+      const session_id = `api:chat:${chatId}`;
+      const agentState = options.get_agent();
+      const session = agentState.sessions.runtime(session_id);
       const turn = await session.prompt({
         query: String(instructions),
       });
@@ -86,7 +86,7 @@ export function createExecuteRouter(
       return c.json({
         success: result.success,
         ...(result.error ? { error: result.error } : {}),
-        assistantMessage: result.assistantMessage,
+        assistant_message: result.assistant_message,
       });
     } catch (error) {
       return c.json({ success: false, message: String(error) }, 500);

@@ -20,11 +20,11 @@ export type ChatQueueItem = {
   kind: ChatQueueItemKind;
   channel: "telegram" | "feishu" | "qq";
   targetId: string;
-  sessionId: string;
+  session_id: string;
   text: string;
   targetType?: string;
   threadId?: number;
-  messageId?: string;
+  message_id?: string;
   actorId?: string;
   actorName?: string;
   extra?: JsonObject;

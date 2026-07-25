@@ -18,8 +18,8 @@ function isLinkRecord(input: unknown): input is ContactLinkRecord {
       typeof item.agentName === "string" &&
       typeof item.endpoint === "string" &&
       typeof item.secretHash === "string" &&
-      typeof item.createdAt === "number" &&
-      typeof item.expiresAt === "number",
+      typeof item.created_at === "number" &&
+      typeof item.expires_at === "number",
   );
 }
 
@@ -27,11 +27,11 @@ function isLinkRecord(input: unknown): input is ContactLinkRecord {
  * 保存 link 记录。
  */
 export async function saveContactLinkRecord(
-  projectRoot: string,
+  project_root: string,
   record: ContactLinkRecord,
 ): Promise<void> {
-  await fs.ensureDir(getContactLinksRootPath(projectRoot));
-  await fs.writeJson(getContactLinkPath(projectRoot, record.id), record, {
+  await fs.ensureDir(getContactLinksRootPath(project_root));
+  await fs.writeJson(getContactLinkPath(project_root, record.id), record, {
     spaces: 2,
   });
 }
@@ -40,10 +40,10 @@ export async function saveContactLinkRecord(
  * 读取 link 记录。
  */
 export async function readContactLinkRecord(
-  projectRoot: string,
+  project_root: string,
   linkId: string,
 ): Promise<ContactLinkRecord | null> {
-  const filePath = getContactLinkPath(projectRoot, linkId);
+  const filePath = getContactLinkPath(project_root, linkId);
   if (!(await fs.pathExists(filePath))) return null;
   const raw = await fs.readJson(filePath).catch(() => null);
   return isLinkRecord(raw) ? raw : null;

@@ -6,7 +6,7 @@
  * - 所有字段都面向"项目骨架创建"语义，不掺杂 runtime 状态。
  */
 
-import type { ExecutionBindingConfig } from "@/types/config/ExecutionBinding.js";
+import type { ExecutionBindingConfig } from "@/city/types/config/ExecutionBinding.js";
 
 /**
  * 可选的 chat channel 标识。
@@ -20,7 +20,7 @@ export interface AgentProjectInitializationInput {
   /**
    * agent 项目根目录（绝对路径或可解析相对路径）。
    */
-  projectRoot: string;
+  project_root: string;
 
   /**
    * agent 唯一标识。
@@ -56,7 +56,7 @@ export interface AgentProjectInitializationResult {
   /**
    * 已解析后的 agent 项目根目录（绝对路径）。
    */
-  projectRoot: string;
+  project_root: string;
 
   /**
    * 最终写入的 agent id。
@@ -71,15 +71,15 @@ export interface AgentProjectInitializationResult {
   /**
    * 最终选择的 City AIService 模型 ID。
    */
-  modelId?: string;
+  model_id?: string;
 
   /**
    * 本次实际创建/写入的文件列表。
    */
-  createdFiles: string[];
+  created_files: string[];
 
   /**
    * 因已存在而跳过的文件列表。
    */
-  skippedFiles: string[];
+  skipped_files: string[];
 }

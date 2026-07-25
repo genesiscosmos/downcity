@@ -31,7 +31,7 @@ export interface PromptVariables {
   /** 当前项目路径。 */
   projectPath: string;
   /** 当前项目根路径。 */
-  projectRoot: string;
+  project_root: string;
   /** 当前会话标识。 */
-  sessionId: string;
+  session_id: string;
 }

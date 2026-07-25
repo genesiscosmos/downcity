@@ -6,7 +6,7 @@
  * - 这里只读取消息数量、更新时间与执行中状态，不暴露消息内容。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 
 /**
  * Workboard 内部 session 摘要。
@@ -15,15 +15,15 @@ export interface WorkboardSessionSummary {
   /**
    * session 稳定标识，仅供内部排序和执行态匹配使用，不会进入公开输出。
    */
-  sessionId: string;
+  session_id: string;
   /**
    * 当前 session 消息数量。
    */
-  messageCount: number;
+  message_count: number;
   /**
    * 最近更新时间戳。
    */
-  updatedAt?: number;
+  updated_at?: number;
   /**
    * 当前 session 是否仍在执行。
    */
@@ -37,7 +37,7 @@ export async function listWorkboardSessionSummaries(params: {
   /**
    * Agent runtime context。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * 返回上限。
    */
@@ -51,10 +51,10 @@ export async function listWorkboardSessionSummaries(params: {
     limit: Math.max(1, params.limit),
   });
   return page.items.map((item) => ({
-    sessionId: item.sessionId,
-    messageCount: item.messageCount,
-    ...(typeof item.updatedAt === "number" ? { updatedAt: item.updatedAt } : {}),
-    ...(item.executing || params.executingSessionIds?.has(item.sessionId)
+    session_id: item.session_id,
+    message_count: item.message_count,
+    ...(typeof item.updated_at === "number" ? { updated_at: item.updated_at } : {}),
+    ...(item.executing || params.executingSessionIds?.has(item.session_id)
       ? { executing: true }
       : {}),
   }));

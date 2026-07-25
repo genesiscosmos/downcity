@@ -21,7 +21,7 @@ import type {
   SessionRecordV1,
   SessionMessageRecordV1,
 } from "@/executor/types/SessionRecords.js";
-import { parseChatMessageMarkup } from "@/executor/messages/ChatMessageMarkup.js";
+import { parse_chat_message_markup } from "@/executor/messages/ChatMessageMarkup.js";
 
 /**
  * 从 `<file>` 标签中解析附件描述。
@@ -33,7 +33,7 @@ function parseAttachmentLinesFromText(text: string): Array<{
 }> {
   const raw = String(text || "");
   if (!raw.trim()) return [];
-  return parseChatMessageMarkup(raw).files.map((file) => ({
+  return parse_chat_message_markup(raw).files.map((file) => ({
     type: file.type,
     path: file.path,
     ...(typeof file.caption === "string" && file.caption.trim()
@@ -68,7 +68,7 @@ function buildDataUrl(mediaType: string, buffer: Buffer): string {
 }
 
 function resolveHydratableFilePath(
-  projectRoot: string | undefined,
+  project_root: string | undefined,
   rawPath: string,
 ): string | null {
   const raw = String(rawPath || "").trim();
@@ -76,7 +76,7 @@ function resolveHydratableFilePath(
   if (raw.startsWith("file://")) return fileURLToPath(raw);
   if (path.isAbsolute(raw)) return path.resolve(raw);
 
-  const root = path.resolve(String(projectRoot || "").trim() || process.cwd());
+  const root = path.resolve(String(project_root || "").trim() || process.cwd());
   const absPath = path.resolve(root, raw);
   const rel = path.relative(root, absPath);
   if (rel === "" || rel.startsWith("..") || path.isAbsolute(rel)) return null;
@@ -85,10 +85,10 @@ function resolveHydratableFilePath(
 
 async function hydrateFileUrlPart(
   part: FileUIPart,
-  projectRoot?: string,
+  project_root?: string,
 ): Promise<FileUIPart> {
   const url = String(part.url || "").trim();
-  const filePath = resolveHydratableFilePath(projectRoot, url);
+  const filePath = resolveHydratableFilePath(project_root, url);
   if (!filePath) return part;
   try {
     const buffer = await fs.readFile(filePath);
@@ -175,7 +175,7 @@ export async function hydrateUserPromptFileParts(
  */
 export async function hydrateFileUrlPartsForModel(
   messages: SessionMessageRecordV1[],
-  projectRoot?: string,
+  project_root?: string,
 ): Promise<SessionMessageRecordV1[]> {
   if (!Array.isArray(messages) || messages.length === 0) return messages;
 
@@ -194,7 +194,7 @@ export async function hydrateFileUrlPartsForModel(
         nextParts.push(part);
         continue;
       }
-      const nextPart = await hydrateFileUrlPart(part as FileUIPart, projectRoot);
+      const nextPart = await hydrateFileUrlPart(part as FileUIPart, project_root);
       if (nextPart !== part) changed = true;
       nextParts.push(nextPart as SessionMessageRecordV1["parts"][number]);
     }
@@ -210,11 +210,11 @@ export async function hydrateFileUrlPartsForModel(
  */
 export async function injectFilePartsFromAttachments(
   messages: SessionMessageRecordV1[],
-  projectRoot?: string,
+  project_root?: string,
 ): Promise<SessionMessageRecordV1[]> {
   if (!Array.isArray(messages) || messages.length === 0) return messages;
 
-  const root = path.resolve(String(projectRoot || "").trim() || process.cwd());
+  const root = path.resolve(String(project_root || "").trim() || process.cwd());
   const out: SessionMessageRecordV1[] = [];
 
   for (const message of messages) {

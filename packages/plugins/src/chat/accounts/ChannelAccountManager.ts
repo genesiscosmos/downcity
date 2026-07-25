@@ -316,7 +316,7 @@ function toChannelAccountListItem(
     botTokenMasked: maskSecret(account.botToken),
     appIdMasked: maskSecret(account.appId),
     appSecretMasked: maskSecret(account.appSecret),
-    createdAt: account.createdAt,
-    updatedAt: account.updatedAt,
+    created_at: account.created_at,
+    updated_at: account.updated_at,
   };
 }

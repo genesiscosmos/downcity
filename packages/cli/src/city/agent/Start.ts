@@ -33,10 +33,10 @@ export async function startCommand(
   cwd: string = ".",
   options: AgentStartOptions,
 ): Promise<void> {
-  const projectRoot = path.resolve(cwd);
+  const project_root = path.resolve(cwd);
 
   // 关键点（中文）：统一预检，替代分散的内联校验。
-  await checkAgentPreflight(projectRoot);
+  await checkAgentPreflight(project_root);
 
   // 计算当前 CLI 的入口路径（编译后是 `bin/index.js`）。
   // 本模块位于 `bin/city/agent/`，需上溯两级才能到达 `bin/index.js`。
@@ -44,11 +44,11 @@ export async function startCommand(
   const __dirname = path.dirname(__filename);
   const cliPath = path.resolve(__dirname, "../../index.js");
 
-  const args = await buildRunArgsFromOptions(projectRoot, options || {});
+  const args = await buildRunArgsFromOptions(project_root, options || {});
 
   try {
     const { logPath: _logPath } = await startDaemonProcess({
-      projectRoot,
+      project_root,
       cliPath,
       args,
     });
@@ -56,11 +56,11 @@ export async function startCommand(
     emitCliBlock({
       tone: "success",
       title: "Agent daemon started",
-      summary: resolveAgentId(projectRoot),
+      summary: resolveAgentId(project_root),
       facts: [
         {
           label: "Project",
-          value: projectRoot,
+          value: project_root,
         },
       ],
     });

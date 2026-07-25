@@ -8,7 +8,7 @@
 
 import type { Command } from "commander";
 import type { PluginActions } from "@downcity/agent";
-import { createAction } from "@downcity/agent";
+import { create_action } from "@downcity/agent";
 import { z } from "zod";
 import type { TaskListActionPayload } from "@/task/types/TaskPluginTypes.js";
 import type {
@@ -49,7 +49,7 @@ const TASK_CREATE_SCHEMA = z.object({
   title: z.string(),
   when: z.string(),
   description: z.string(),
-  sessionId: z.string(),
+  session_id: z.string(),
   kind: TASK_KIND_SCHEMA.optional(),
   review: z.boolean().optional(),
   status: TASK_STATUS_SCHEMA.optional(),
@@ -63,7 +63,7 @@ const TASK_UPDATE_SCHEMA = z.object({
   when: z.string().optional(),
   clearWhen: z.boolean().optional(),
   description: z.string().optional(),
-  sessionId: z.string().optional(),
+  session_id: z.string().optional(),
   kind: TASK_KIND_SCHEMA.optional(),
   review: z.boolean().optional(),
   status: TASK_STATUS_SCHEMA.optional(),
@@ -92,7 +92,7 @@ export function createTaskPluginActions(params: {
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }): PluginActions {
   return {
-    list: createAction({
+    list: create_action({
       description: "List task definitions, optionally filtered by status.",
       input_schema: {
         zod: TASK_LIST_SCHEMA,
@@ -119,7 +119,7 @@ export function createTaskPluginActions(params: {
             "Filter by status (enabled|paused|disabled).",
           );
         },
-        mapInput: mapTaskListCommandPayload,
+        map_input: mapTaskListCommandPayload,
       },
       execute: async (actionParams) => {
         return executeTaskListAction({
@@ -128,18 +128,18 @@ export function createTaskPluginActions(params: {
         });
       },
     }),
-    create: createAction({
+    create: create_action({
       description: "Create a task definition.",
       input_schema: {
         zod: TASK_CREATE_SCHEMA,
         json_schema: {
           type: "object",
-          required: ["title", "when", "description", "sessionId"],
+          required: ["title", "when", "description", "session_id"],
           properties: {
             title: { type: "string", description: "Task name and unique semantic identifier." },
             when: { type: "string", description: "Trigger condition (@manual | cron | time:ISO8601)." },
             description: { type: "string", description: "Task description." },
-            sessionId: { type: "string", description: "Task execution sessionId." },
+            session_id: { type: "string", description: "Task execution session_id." },
             kind: { type: "string", enum: ["agent", "script"], description: "Execution kind." },
             review: { type: "boolean", description: "Whether to enable multi-turn review." },
             status: { type: "string", enum: ["enabled", "paused", "disabled"], description: "Task status." },
@@ -155,7 +155,7 @@ export function createTaskPluginActions(params: {
             title: "daily-report",
             when: "@manual",
             description: "Generate a daily report",
-            sessionId: "session-1",
+            session_id: "session-1",
             status: "enabled",
           },
         },
@@ -170,8 +170,8 @@ export function createTaskPluginActions(params: {
             .option("--kind <kind>", "Execution kind (agent|script).", "agent")
             .option("--review <review>", "Whether to enable multi-turn review (true|false).")
             .option(
-              "--session-id <sessionId>",
-              "Task execution sessionId. If omitted, DC_SESSION_ID is used when available.",
+              "--session-id <session_id>",
+              "Task execution session_id. If omitted, DC_SESSION_ID is used when available.",
             )
             .option(
               "--status <status>",
@@ -185,7 +185,7 @@ export function createTaskPluginActions(params: {
             .option("--body <body>", "Task body.")
             .option("--overwrite", "Overwrite an existing task.md.", false);
         },
-        mapInput: mapTaskCreateCommandPayload,
+        map_input: mapTaskCreateCommandPayload,
       },
       execute: async (actionParams) => {
         return executeTaskCreateAction({
@@ -195,7 +195,7 @@ export function createTaskPluginActions(params: {
         });
       },
     }),
-    run: createAction({
+    run: create_action({
       description: "Run a task manually.",
       input_schema: {
         zod: TASK_RUN_SCHEMA,
@@ -216,7 +216,7 @@ export function createTaskPluginActions(params: {
             .argument("<title>")
             .option("--reason <reason>", "Reason for manual run.");
         },
-        mapInput: mapTaskRunCommandPayload,
+        map_input: mapTaskRunCommandPayload,
       },
       execute: async (actionParams) => {
         return executeTaskRunAction({
@@ -226,7 +226,7 @@ export function createTaskPluginActions(params: {
         });
       },
     }),
-    delete: createAction({
+    delete: create_action({
       description: "Delete a task definition and historical run directories.",
       input_schema: {
         zod: TASK_DELETE_SCHEMA,
@@ -244,7 +244,7 @@ export function createTaskPluginActions(params: {
         configure(command: Command) {
           command.argument("<title>");
         },
-        mapInput: mapTaskDeleteCommandPayload,
+        map_input: mapTaskDeleteCommandPayload,
       },
       execute: async (actionParams) => {
         return executeTaskDeleteAction({
@@ -254,7 +254,7 @@ export function createTaskPluginActions(params: {
         });
       },
     }),
-    update: createAction({
+    update: create_action({
       description: "Update a task definition.",
       input_schema: {
         zod: TASK_UPDATE_SCHEMA,
@@ -267,7 +267,7 @@ export function createTaskPluginActions(params: {
             when: { type: "string", description: "New trigger condition." },
             clearWhen: { type: "boolean", description: "Whether to clear the trigger condition." },
             description: { type: "string", description: "New description." },
-            sessionId: { type: "string", description: "New sessionId." },
+            session_id: { type: "string", description: "New session_id." },
             kind: { type: "string", enum: ["agent", "script"] },
             review: { type: "boolean" },
             status: { type: "string", enum: ["enabled", "paused", "disabled"] },
@@ -293,7 +293,7 @@ export function createTaskPluginActions(params: {
             .option("--kind <kind>", "Execution kind (agent|script).")
             .option("--review <review>", "Whether to enable multi-turn review (true|false).")
             .option("--clear-when", "Clear when and fall back to @manual.", false)
-            .option("--session-id <sessionId>", "Task execution sessionId.")
+            .option("--session-id <session_id>", "Task execution session_id.")
             .option("--status <status>", "Status (enabled|paused|disabled).")
             .option(
               "--activate",
@@ -303,7 +303,7 @@ export function createTaskPluginActions(params: {
             .option("--body <body>", "Set task body.")
             .option("--clear-body", "Clear task body.", false);
         },
-        mapInput: mapTaskUpdateCommandPayload,
+        map_input: mapTaskUpdateCommandPayload,
       },
       execute: async (actionParams) => {
         return executeTaskUpdateAction({
@@ -313,7 +313,7 @@ export function createTaskPluginActions(params: {
         });
       },
     }),
-    status: createAction({
+    status: create_action({
       description: "Set task status (enabled|paused|disabled).",
       input_schema: {
         zod: TASK_STATUS_REQ_SCHEMA,
@@ -334,7 +334,7 @@ export function createTaskPluginActions(params: {
         configure(command: Command) {
           command.argument("<title>").argument("<status>");
         },
-        mapInput: mapTaskStatusCommandPayload,
+        map_input: mapTaskStatusCommandPayload,
       },
       execute: async (actionParams) => {
         return executeTaskStatusAction({
@@ -344,7 +344,7 @@ export function createTaskPluginActions(params: {
         });
       },
     }),
-    enable: createAction({
+    enable: create_action({
       description: "Enable a task (status=enabled).",
       input_schema: {
         zod: z.object({ title: z.string() }),
@@ -360,7 +360,7 @@ export function createTaskPluginActions(params: {
         configure(command: Command) {
           command.argument("<title>");
         },
-        mapInput: mapTaskEnableCommandPayload,
+        map_input: mapTaskEnableCommandPayload,
       },
       execute: async (actionParams) => {
         return executeTaskStatusAction({
@@ -370,7 +370,7 @@ export function createTaskPluginActions(params: {
         });
       },
     }),
-    disable: createAction({
+    disable: create_action({
       description: "Disable a task (status=disabled).",
       input_schema: {
         zod: z.object({ title: z.string() }),
@@ -386,7 +386,7 @@ export function createTaskPluginActions(params: {
         configure(command: Command) {
           command.argument("<title>");
         },
-        mapInput: mapTaskDisableCommandPayload,
+        map_input: mapTaskDisableCommandPayload,
       },
       execute: async (actionParams) => {
         return executeTaskStatusAction({

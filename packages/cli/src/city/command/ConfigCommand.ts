@@ -56,18 +56,18 @@ function parseConfigValue(rawValue: string): unknown {
   }
 }
 
-function readStoredConfig(projectRoot: string): StoredAgentConfig {
-  const config = readAgentConfig(projectRoot);
+function readStoredConfig(project_root: string): StoredAgentConfig {
+  const config = readAgentConfig(project_root);
   if (!config) {
     throw new Error(`Agent config not found in global DB. Run "city agent create" first.`);
   }
   return config;
 }
 
-function writeStoredConfig(projectRoot: string, config: StoredAgentConfig): void {
+function writeStoredConfig(project_root: string, config: StoredAgentConfig): void {
   upsertAgentConfig({
     ...config,
-    projectRoot,
+    project_root,
   });
 }
 
@@ -140,7 +140,7 @@ function unsetByPath(
 function runConfigCommand(
   options: { path?: string; json?: boolean },
   handler: (input: {
-    projectRoot: string;
+    project_root: string;
     config: StoredAgentConfig;
   }) => {
     title: string;
@@ -150,18 +150,18 @@ function runConfigCommand(
 ): void {
   const asJson = options.json !== false;
   try {
-    const projectRoot = resolveProjectRoot(options.path);
-    const config = readStoredConfig(projectRoot);
-    const result = handler({ projectRoot, config });
+    const project_root = resolveProjectRoot(options.path);
+    const config = readStoredConfig(project_root);
+    const result = handler({ project_root, config });
     if (result.save) {
-      writeStoredConfig(projectRoot, config);
+      writeStoredConfig(project_root, config);
     }
     printResult({
       asJson,
       success: true,
       title: result.title,
       payload: {
-        projectRoot,
+        project_root,
         ...result.payload,
       },
     });

@@ -77,7 +77,7 @@ type AgentSessionsOptions = {
   /**
    * 当前 agent 使用的本地 Session 类。
    */
-  SessionClass?: AgentSessionConstructor;
+  session_class?: AgentSessionConstructor;
 
   /** 读取 Agent 当前持有的运行时模型实例。 */
   get_agent_model: () => AgentModel | undefined;
@@ -96,7 +96,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly get_workspace_env: AgentSessionsOptions["get_workspace_env"];
   private readonly get_agent_plugins: AgentSessionsOptions["get_agent_plugins"];
   private readonly ensure_agent_ready: AgentSessionsOptions["ensure_agent_ready"];
-  private readonly SessionClass: AgentSessionConstructor;
+  private readonly session_class: AgentSessionConstructor;
   private readonly get_agent_model: AgentSessionsOptions["get_agent_model"];
   private readonly sessions_by_id = new Map<string, AgentManagedSession>();
 
@@ -110,7 +110,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     this.get_workspace_env = options.get_workspace_env;
     this.get_agent_plugins = options.get_agent_plugins;
     this.ensure_agent_ready = options.ensure_agent_ready;
-    this.SessionClass = options.SessionClass || Session;
+    this.session_class = options.session_class || Session;
     this.get_agent_model = options.get_agent_model;
   }
 
@@ -124,7 +124,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   /** 返回当前所有执行中的 Session 标识。 */
   list_executing_session_ids(): string[] {
     return this.list_cached_sessions()
-      .filter((session) => session.isExecuting())
+      .filter((session) => session.is_executing())
       .map((session) => session.id);
   }
 
@@ -168,7 +168,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 获取或创建一个 session runtime port。
    */
   runtime(session_id: string): SessionPort {
-    return this.get_or_create_session({ session_id }).getRuntimePort();
+    return this.get_or_create_session({ session_id }).get_runtime_port();
   }
 
   /**
@@ -178,7 +178,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     input?: AgentCreateSessionInput,
   ): Promise<AgentSession> {
     const explicit_session_id =
-      String(input?.sessionId || "").trim() || undefined;
+      String(input?.session_id || "").trim() || undefined;
     if (
       explicit_session_id &&
       (this.sessions_by_id.has(explicit_session_id) ||
@@ -199,7 +199,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async get(session_id: string): Promise<AgentSession> {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) {
-      throw new Error("sessions.get requires a non-empty sessionId");
+      throw new Error("sessions.get requires a non-empty session_id");
     }
     if (
       !this.sessions_by_id.has(resolved_session_id) &&
@@ -224,10 +224,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async remove(session_id: string): Promise<boolean> {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) {
-      throw new Error("sessions.remove requires a non-empty sessionId");
+      throw new Error("sessions.remove requires a non-empty session_id");
     }
     const cached = this.sessions_by_id.get(resolved_session_id);
-    if (cached?.isExecuting()) {
+    if (cached?.is_executing()) {
       await cached.stop();
     }
     const existed = await this.store.remove_session(resolved_session_id);
@@ -241,10 +241,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async clear_messages(session_id: string): Promise<boolean> {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) {
-      throw new Error("sessions.clear_messages requires a non-empty sessionId");
+      throw new Error("sessions.clear_messages requires a non-empty session_id");
     }
     const cached = this.sessions_by_id.get(resolved_session_id);
-    if (cached?.isExecuting()) {
+    if (cached?.is_executing()) {
       throw new Error(`Session "${resolved_session_id}" is currently executing`);
     }
     const existed = await this.store.clear_session_messages(resolved_session_id);
@@ -313,21 +313,21 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const cached = this.sessions_by_id.get(resolved_session_id);
     if (cached) return cached;
 
-    const created = new this.SessionClass({
-      agentId: this.agent_id,
+    const created = new this.session_class({
+      agent_id: this.agent_id,
       workspace_path: this.workspace_path,
       store: this.store.session(resolved_session_id),
       get_session_store: (session_id) => this.store.session(session_id),
-      sessionId: resolved_session_id,
+      session_id: resolved_session_id,
       tools: this.tools,
       logger: this.logger,
       instruction_system_blocks: this.load_instruction_system_blocks(),
       get_instruction_system_blocks: () => this.load_instruction_system_blocks(),
-      getWorkspaceEnv: () => this.get_workspace_env(),
-      getAgentModel: () => this.get_agent_model(),
+      get_workspace_env: () => this.get_workspace_env(),
+      get_agent_model: () => this.get_agent_model(),
       get_agent_plugins: () => this.get_agent_plugins(),
-      getManagedPluginSystemBlocks: async () => [],
-      ensureConfigured: async (session) => {
+      get_managed_plugin_system_blocks: async () => [],
+      ensure_configured: async (session) => {
         await this.ensure_agent_ready();
       },
     });

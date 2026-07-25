@@ -33,7 +33,7 @@ async function create_turn_harness(execute_run) {
     session_id,
     workspace_path: root_path,
     executor: {
-      run: async ({ runContext }) => await execute_run(runContext),
+      run: async ({ run_context }) => await execute_run(run_context),
       stop: () => false,
       compact_history: async () => ({ compacted: false, reason: "nothing_to_compact" }),
     },
@@ -55,7 +55,7 @@ test("Provider 在输出前失败时只持久化 Error Message", async () => {
   const { messages, turn } = await create_turn_harness(async () => ({
     success: false,
     error: "quota exceeded",
-    deferredPersistedUserMessages: [],
+    deferred_persisted_user_messages: [],
   }));
 
   const handle = await turn.prompt({ query: "hello" });
@@ -64,7 +64,7 @@ test("Provider 在输出前失败时只持久化 Error Message", async () => {
 
   assert.equal(result.success, false);
   assert.equal(result.error, "quota exceeded");
-  assert.equal(result.assistantMessage, undefined);
+  assert.equal(result.assistant_message, undefined);
   assert.deepEqual(page.items.map((message) => message.type), ["user", "error"]);
   assert.equal(page.items[1].code, "turn_execution_failed");
   assert.equal(page.items[1].message, "quota exceeded");
@@ -72,17 +72,17 @@ test("Provider 在输出前失败时只持久化 Error Message", async () => {
 
 test("Provider 在部分输出后失败时保留 failed Assistant 并追加 Error Message", async () => {
   const { messages, turn } = await create_turn_harness(async (run_context) => {
-    await run_context.onUiMessageChunkCallback({ type: "text-start", id: "text-1" });
-    await run_context.onUiMessageChunkCallback({
+    await run_context.on_ui_message_chunk_callback({ type: "text-start", id: "text-1" });
+    await run_context.on_ui_message_chunk_callback({
       type: "text-delta",
       id: "text-1",
       delta: "partial response",
     });
-    await run_context.onUiMessageChunkCallback({ type: "text-end", id: "text-1" });
+    await run_context.on_ui_message_chunk_callback({ type: "text-end", id: "text-1" });
     return {
       success: false,
       error: "stream interrupted",
-      deferredPersistedUserMessages: [],
+      deferred_persisted_user_messages: [],
     };
   });
 
@@ -91,7 +91,7 @@ test("Provider 在部分输出后失败时保留 failed Assistant 并追加 Erro
   const page = await messages.list_messages();
 
   assert.equal(result.success, false);
-  assert.equal(result.assistantMessage, undefined);
+  assert.equal(result.assistant_message, undefined);
   assert.deepEqual(page.items.map((message) => message.type), [
     "user",
     "assistant",
@@ -105,29 +105,29 @@ test("Provider 在部分输出后失败时保留 failed Assistant 并追加 Erro
 test("Turn 使用 step canonical chunks 保持 Tool 与最终正文顺序", async () => {
   const { messages, turn } = await create_turn_harness(async (run_context) => {
     await run_context.on_ui_message_step_start();
-    await run_context.onUiMessageChunkCallback({
+    await run_context.on_ui_message_chunk_callback({
       type: "tool-input-start",
       toolCallId: "call-1",
       toolName: "shell_exec",
     });
-    await run_context.onUiMessageChunkCallback({
+    await run_context.on_ui_message_chunk_callback({
       type: "tool-input-available",
       toolCallId: "call-1",
       toolName: "shell_exec",
       input: { cmd: "pwd" },
     });
-    await run_context.onUiMessageChunkCallback({
+    await run_context.on_ui_message_chunk_callback({
       type: "tool-output-available",
       toolCallId: "call-1",
       output: { success: true },
     });
-    await run_context.onUiMessageChunkCallback({ type: "text-start", id: "text-1" });
-    await run_context.onUiMessageChunkCallback({
+    await run_context.on_ui_message_chunk_callback({ type: "text-start", id: "text-1" });
+    await run_context.on_ui_message_chunk_callback({
       type: "text-delta",
       id: "text-1",
       delta: "最终结论",
     });
-    await run_context.onUiMessageChunkCallback({ type: "text-end", id: "text-1" });
+    await run_context.on_ui_message_chunk_callback({ type: "text-end", id: "text-1" });
     const assistant_message = {
       id: "assistant-1",
       role: "assistant",
@@ -146,8 +146,8 @@ test("Turn 使用 step canonical chunks 保持 Tool 与最终正文顺序", asyn
     await run_context.on_ui_message_step_finish(assistant_message);
     return {
       success: true,
-      assistantMessage: assistant_message,
-      deferredPersistedUserMessages: [],
+      assistant_message: assistant_message,
+      deferred_persisted_user_messages: [],
     };
   });
 
@@ -164,13 +164,13 @@ test("Turn 使用 step canonical chunks 保持 Tool 与最终正文顺序", asyn
 test("Turn 在 step 最终快照出现未流式写入的 Tool 时失败", async () => {
   const { messages, turn } = await create_turn_harness(async (run_context) => {
     await run_context.on_ui_message_step_start();
-    await run_context.onUiMessageChunkCallback({ type: "text-start", id: "text-1" });
-    await run_context.onUiMessageChunkCallback({
+    await run_context.on_ui_message_chunk_callback({ type: "text-start", id: "text-1" });
+    await run_context.on_ui_message_chunk_callback({
       type: "text-delta",
       id: "text-1",
       delta: "最终结论",
     });
-    await run_context.onUiMessageChunkCallback({ type: "text-end", id: "text-1" });
+    await run_context.on_ui_message_chunk_callback({ type: "text-end", id: "text-1" });
     try {
       await run_context.on_ui_message_step_finish({
         id: "assistant-1",
@@ -192,7 +192,7 @@ test("Turn 在 step 最终快照出现未流式写入的 Tool 时失败", async 
       return {
         success: false,
         error: error.message,
-        deferredPersistedUserMessages: [],
+        deferred_persisted_user_messages: [],
       };
     }
   });

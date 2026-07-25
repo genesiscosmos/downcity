@@ -114,11 +114,11 @@ export interface ChatChannelAccountListItem {
   /**
    * 创建时间（ISO 字符串）。
    */
-  createdAt: string;
+  created_at: string;
   /**
    * 更新时间（ISO 字符串）。
    */
-  updatedAt: string;
+  updated_at: string;
 }
 
 /**

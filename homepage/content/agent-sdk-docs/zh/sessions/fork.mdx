@@ -11,11 +11,11 @@ description: 从完整历史或指定 Message 创建可独立继续执行的新 
 const full_branch = await session.fork();
 
 const branch_at_message = await session.fork({
-  messageId: "assistant:repo-analysis:abc",
+  message_id: "assistant:repo-analysis:abc",
 });
 ```
 
-也可以直接传入 `messageId` 字符串：
+也可以直接传入 `message_id` 字符串：
 
 ```ts
 const branch = await session.fork("assistant:repo-analysis:abc");
@@ -26,7 +26,7 @@ const branch = await session.fork("assistant:repo-analysis:abc");
 | 调用 | 复制范围 |
 | --- | --- |
 | `fork()` | 当前可见历史的完整状态 |
-| `fork({ messageId })` | 从开头复制到该 Message，包含该 Message |
+| `fork({ message_id })` | 从开头复制到该 Message，包含该 Message |
 
 分叉点是顶层 Message，不是 Assistant 内的 `part_id`。如果需要在工具调用前后试验不同方向，先在 `messages()` 中找到对应 Assistant Message 的 `message_id`。
 

@@ -40,7 +40,7 @@ export class TelegramChannelConfiguration extends ChatChannelConfiguration {
             nullable: false,
             writable: true,
             restartRequired: true,
-            defaultValue: false,
+            default_value: false,
             example: true,
           },
           {

@@ -33,7 +33,7 @@ test("materializeAssistantFileParts stores data URL images under .downcity/resou
   const data_url = `data:image/png;base64,${bytes.toString("base64")}`;
 
   const parts = await materializeAssistantFileParts({
-    projectRoot: project_root,
+    project_root: project_root,
     parts: [
       {
         type: "file",
@@ -77,7 +77,7 @@ test("materializeAssistantFileParts downloads remote file URLs into resources", 
     const remote_url = `http://127.0.0.1:${address.port}/image.png`;
 
     const parts = await materializeAssistantFileParts({
-      projectRoot: project_root,
+      project_root: project_root,
       parts: [
         {
           type: "file",
@@ -120,7 +120,7 @@ test("materializeAssistantFileParts rejects oversized remote resources before do
     assert.ok(address);
     const remote_url = `http://127.0.0.1:${address.port}/large.bin`;
     const parts = await materializeAssistantFileParts({
-      projectRoot: project_root,
+      project_root: project_root,
       parts: [
         {
           type: "file",
@@ -148,7 +148,7 @@ test("materializeAssistantFileParts resolves relative local file URLs from agent
   await fs.writeFile(path.join(project_root, "input.png"), bytes);
 
   const parts = await materializeAssistantFileParts({
-    projectRoot: project_root,
+    project_root: project_root,
     parts: [
       {
         type: "file",
@@ -172,7 +172,7 @@ test("hydrateFileUrlPartsForModel converts relative resource paths back to data 
   );
   const bytes = Buffer.from("hydrate-bytes-for-test", "utf8");
   const materialized = await materializeAssistantFileParts({
-    projectRoot: project_root,
+    project_root: project_root,
     parts: [
       {
         type: "file",
@@ -191,7 +191,7 @@ test("hydrateFileUrlPartsForModel converts relative resource paths back to data 
         metadata: {
           v: 1,
           ts: Date.now(),
-          sessionId: "session_test",
+          session_id: "session_test",
         },
         parts: materialized,
       },
@@ -283,7 +283,7 @@ test("hydrateFileUrlPartsForModel keeps old file URLs compatible", async () => {
         metadata: {
           v: 1,
           ts: Date.now(),
-          sessionId: "session_test",
+          session_id: "session_test",
         },
         parts: [
           {
@@ -321,7 +321,7 @@ test("injectFilePartsFromAttachments resolves relative file tags from agent proj
         metadata: {
           v: 1,
           ts: Date.now(),
-          sessionId: "session_test",
+          session_id: "session_test",
         },
         parts: [
           {

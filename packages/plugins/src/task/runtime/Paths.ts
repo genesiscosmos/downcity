@@ -6,7 +6,7 @@
  * - definition: `./.downcity/task/<taskId>/task.md`
  * - run dir: `./.downcity/task/<taskId>/<timestamp>/`
  *
- * 同时定义“task run sessionId”格式，用于把 Agent 的 session 映射到 run 目录：
+ * 同时定义“task run session_id”格式，用于把 Agent 的 session 映射到 run 目录：
  * - `task-run:<taskId>:<timestamp>`
  */
 
@@ -59,16 +59,16 @@ export function normalizeTaskId(input: string): string {
   return id;
 }
 
-export function getTaskRootDir(projectRoot: string): string {
-  return path.join(String(projectRoot || "").trim(), ".downcity", "task");
+export function getTaskRootDir(project_root: string): string {
+  return path.join(String(project_root || "").trim(), ".downcity", "task");
 }
 
-export function getTaskDir(projectRoot: string, taskId: string): string {
-  return path.join(getTaskRootDir(projectRoot), normalizeTaskId(taskId));
+export function getTaskDir(project_root: string, taskId: string): string {
+  return path.join(getTaskRootDir(project_root), normalizeTaskId(taskId));
 }
 
-export function getTaskMdPath(projectRoot: string, taskId: string): string {
-  return path.join(getTaskDir(projectRoot, taskId), "task.md");
+export function getTaskMdPath(project_root: string, taskId: string): string {
+  return path.join(getTaskDir(project_root, taskId), "task.md");
 }
 
 export function formatTaskRunTimestamp(date: Date = new Date()): string {
@@ -85,13 +85,13 @@ export function formatTaskRunTimestamp(date: Date = new Date()): string {
 }
 
 export function getTaskRunDir(
-  projectRoot: string,
+  project_root: string,
   taskId: string,
   timestamp: string,
 ): string {
   const ts = String(timestamp || "").trim();
   if (!ts) throw new Error("timestamp is required");
-  return path.join(getTaskDir(projectRoot, taskId), ts);
+  return path.join(getTaskDir(project_root, taskId), ts);
 }
 
 export function createTaskRunSessionId(taskId: string, timestamp: string): string {
@@ -102,9 +102,9 @@ export function createTaskRunSessionId(taskId: string, timestamp: string): strin
 }
 
 export function parseTaskRunSessionId(
-  sessionId: string,
+  session_id: string,
 ): { taskId: string; timestamp: string } | null {
-  const key = String(sessionId || "").trim();
+  const key = String(session_id || "").trim();
   if (!key) return null;
   const m = key.match(/^task-run:([^:]+):(.+)$/);
   if (!m) return null;

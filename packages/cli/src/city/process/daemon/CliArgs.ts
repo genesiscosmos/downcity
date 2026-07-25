@@ -18,11 +18,11 @@ import { allocateAvailablePort } from "@/city/process/daemon/PortAllocator.js";
  * - 只透传用户显式传入的字段，避免污染默认值决策。
  */
 export const buildRunArgsFromOptions = async (
-  projectRoot: string,
+  project_root: string,
   options: AgentStartOptions,
 ): Promise<string[]> => {
   // 关键点（中文）：daemon 子进程必须强制前台模式，避免再次进入 startCommand 形成递归拉起。
-  const args: string[] = ["agent", "start", projectRoot, "--foreground", "true"];
+  const args: string[] = ["agent", "start", project_root, "--foreground", "true"];
 
   // 关键点（中文）：host 未指定时统一落到 0.0.0.0，保持历史监听行为。
   const host = String(options.host || "0.0.0.0").trim() || "0.0.0.0";

@@ -10,8 +10,8 @@ A plugin can declare:
 ```ts
 http: {
   runtime: {
-    authPolicies: [...],
-    register({ app, getContext, pluginName }) {
+    auth_policies: [...],
+    register({ app, get_context, plugin_name }) {
       // register routes
     },
   },
@@ -27,7 +27,7 @@ It lets a plugin declare:
 
 and leaves server assembly to the runtime layer.
 
-## `authPolicies`
+## `auth_policies`
 
 This describes:
 

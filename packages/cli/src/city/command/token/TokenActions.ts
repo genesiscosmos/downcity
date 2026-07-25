@@ -6,7 +6,7 @@
  * - 每个动作都自行管理 AuthService 生命周期。
  */
 
-import type { AuthIssuedToken, AuthTokenSummary } from "@downcity/agent";
+import type { AuthIssuedToken, AuthTokenSummary } from "@downcity/type";
 import { AuthService } from "@/city/runtime/auth/AuthService.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
@@ -16,14 +16,14 @@ import { printResult } from "@/city/utils/cli/CliOutput.js";
  */
 export function createToken(params: {
   name: string;
-  expiresAt?: string;
+  expires_at?: string;
   json?: boolean;
 }): AuthIssuedToken {
   const authService = new AuthService();
   try {
     const issued = authService.createLocalCliToken({
       name: params.name,
-      expiresAt: params.expiresAt,
+      expires_at: params.expires_at,
     });
 
     if (params.json === true) {
@@ -61,18 +61,18 @@ export function createToken(params: {
 /**
  * 删除指定 token。
  */
-export function deleteToken(tokenId: string, json = false): void {
+export function deleteToken(token_id: string, json = false): void {
   const authService = new AuthService();
   try {
     const tokens = authService.listLocalCliTokens();
-    const deleted = tokens.find((item) => item.id === tokenId);
-    authService.deleteLocalCliToken(tokenId);
+    const deleted = tokens.find((item) => item.id === token_id);
+    authService.deleteLocalCliToken(token_id);
     if (json === true) {
       printResult({
         asJson: true,
         success: true,
         title: "token deleted",
-        payload: { tokenId },
+        payload: { token_id },
       });
       return;
     }
@@ -80,11 +80,11 @@ export function deleteToken(tokenId: string, json = false): void {
     emitCliBlock({
       tone: "success",
       title: "Token deleted",
-      summary: deleted?.name || tokenId,
+      summary: deleted?.name || token_id,
       facts: [
         {
           label: "Id",
-          value: tokenId,
+          value: token_id,
         },
       ],
     });

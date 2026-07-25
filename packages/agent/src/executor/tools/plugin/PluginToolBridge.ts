@@ -79,7 +79,7 @@ function summarize_materialized_files(
       filename: typeof part.filename === "string" ? part.filename : "",
       relative_path,
       path: resolveAgentFilePath({
-        projectRoot: project_root,
+        project_root: project_root,
         filePath: relative_path,
       }),
     };
@@ -135,27 +135,27 @@ export async function invokePluginCallTool(
 
   try {
     const run_context = params.run_context;
-    const plugins = run_context.agentPlugins || params.plugins;
-    const result = await plugins.runAction({
+    const plugins = run_context.agent_plugins || params.plugins;
+    const result = await plugins.run_action({
       plugin,
       action,
       payload,
       run_context,
     });
-    const project_root = resolve_project_root(run_context.projectRoot);
+    const project_root = resolve_project_root(run_context.project_root);
     const raw_file_parts = result.success
       ? extract_assistant_file_parts(result.data)
       : [];
     const file_parts =
       raw_file_parts.length > 0
         ? await materializeAssistantFileParts({
-            projectRoot: project_root,
+            project_root: project_root,
             parts: raw_file_parts,
           })
         : [];
     const files = summarize_materialized_files(file_parts, project_root);
     if (file_parts.length > 0) {
-      run_context.pendingAssistantFileParts.push(...file_parts);
+      run_context.pending_assistant_file_parts.push(...file_parts);
     }
     const data = summarize_action_data(result.data);
     return {
@@ -190,7 +190,7 @@ export async function invokePluginReadTool(
 ): Promise<PluginReadToolResult> {
   const input: PluginReadInput = params.input;
   try {
-    const plugins = params.run_context.agentPlugins || params.plugins;
+    const plugins = params.run_context.agent_plugins || params.plugins;
     const data = plugins.read({
       plugin: typeof input.plugin === "string" ? input.plugin : undefined,
       action: typeof input.action === "string" ? input.action : undefined,

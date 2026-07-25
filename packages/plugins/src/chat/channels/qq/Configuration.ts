@@ -39,7 +39,7 @@ export class QqChannelConfiguration extends ChatChannelConfiguration {
             nullable: false,
             writable: true,
             restartRequired: true,
-            defaultValue: false,
+            default_value: false,
             example: true,
           },
           {

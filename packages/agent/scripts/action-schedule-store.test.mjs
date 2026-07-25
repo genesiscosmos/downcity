@@ -19,18 +19,18 @@ test("ActionScheduleStore persists through Workspace FileSystem", async (t) => {
   const workspace = new Workspace({ path: workspace_path });
   const store = new ActionScheduleStore(workspace.files);
 
-  const created = await store.createJob({
-    pluginName: "demo",
-    actionName: "run",
+  const created = await store.create_job({
+    plugin_name: "demo",
+    action_name: "run",
     payload: { value: 1 },
-    runAtMs: Date.now() - 1,
+    run_at_ms: Date.now() - 1,
   });
-  assert.equal((await store.listDuePendingJobs(Date.now())).length, 1);
-  assert.equal(await store.markJobRunning(created.id), true);
-  assert.equal((await store.getJobById(created.id))?.status, "running");
-  assert.equal(await store.resetRunningJobsToPending(), 1);
-  assert.equal(await store.cancelPendingJob(created.id), true);
-  assert.equal((await store.getJobById(created.id))?.status, "cancelled");
+  assert.equal((await store.list_due_pending_jobs(Date.now())).length, 1);
+  assert.equal(await store.mark_job_running(created.id), true);
+  assert.equal((await store.get_job_by_id(created.id))?.status, "running");
+  assert.equal(await store.reset_running_jobs_to_pending(), 1);
+  assert.equal(await store.cancel_pending_job(created.id), true);
+  assert.equal((await store.get_job_by_id(created.id))?.status, "cancelled");
 
   await workspace.dispose();
 });
@@ -46,19 +46,19 @@ test("ActionScheduleStore serializes cross-instance pending claims", async (t) =
   const second_workspace = new Workspace({ path: workspace_path });
   const first_store = new ActionScheduleStore(first_workspace.files);
   const second_store = new ActionScheduleStore(second_workspace.files);
-  const created = await first_store.createJob({
-    pluginName: "demo",
-    actionName: "run",
+  const created = await first_store.create_job({
+    plugin_name: "demo",
+    action_name: "run",
     payload: null,
-    runAtMs: Date.now(),
+    run_at_ms: Date.now(),
   });
 
   const claims = await Promise.all([
-    first_store.markJobRunning(created.id),
-    second_store.markJobRunning(created.id),
+    first_store.mark_job_running(created.id),
+    second_store.mark_job_running(created.id),
   ]);
   assert.deepEqual(claims.sort(), [false, true]);
-  assert.equal((await first_store.getJobById(created.id))?.status, "running");
+  assert.equal((await first_store.get_job_by_id(created.id))?.status, "running");
 
   await Promise.all([
     first_workspace.dispose(),
@@ -76,26 +76,26 @@ test("ActionScheduleStore only allows running jobs to enter terminal states", as
   const workspace = new Workspace({ path: workspace_path });
   const store = new ActionScheduleStore(workspace.files);
 
-  const cancelled = await store.createJob({
-    pluginName: "demo",
-    actionName: "cancelled",
+  const cancelled = await store.create_job({
+    plugin_name: "demo",
+    action_name: "cancelled",
     payload: null,
-    runAtMs: Date.now(),
+    run_at_ms: Date.now(),
   });
-  assert.equal(await store.cancelPendingJob(cancelled.id), true);
-  assert.equal(await store.markJobSucceeded(cancelled.id), false);
-  assert.equal((await store.getJobById(cancelled.id))?.status, "cancelled");
+  assert.equal(await store.cancel_pending_job(cancelled.id), true);
+  assert.equal(await store.mark_job_succeeded(cancelled.id), false);
+  assert.equal((await store.get_job_by_id(cancelled.id))?.status, "cancelled");
 
-  const running = await store.createJob({
-    pluginName: "demo",
-    actionName: "running",
+  const running = await store.create_job({
+    plugin_name: "demo",
+    action_name: "running",
     payload: null,
-    runAtMs: Date.now(),
+    run_at_ms: Date.now(),
   });
-  assert.equal(await store.markJobRunning(running.id), true);
-  assert.equal(await store.markJobSucceeded(running.id), true);
-  assert.equal(await store.markJobFailed(running.id, "late failure"), false);
-  assert.equal((await store.getJobById(running.id))?.status, "succeeded");
+  assert.equal(await store.mark_job_running(running.id), true);
+  assert.equal(await store.mark_job_succeeded(running.id), true);
+  assert.equal(await store.mark_job_failed(running.id, "late failure"), false);
+  assert.equal((await store.get_job_by_id(running.id))?.status, "succeeded");
 
   await workspace.dispose();
 });

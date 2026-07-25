@@ -7,7 +7,7 @@
  * - `TelegramBot` 只保留入站授权、命令分发、消息入队等业务编排。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import { TelegramApiClient } from "./ApiClient.js";
 import { TelegramStateStore } from "./StateStore.js";
@@ -23,7 +23,7 @@ export interface TelegramPlatformClientOptions {
   /**
    * 当前执行上下文。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * Telegram bot token。
    */
@@ -48,7 +48,7 @@ export interface TelegramPlatformClientOptions {
  * Telegram 平台运行时。
  */
 export class TelegramPlatformClient {
-  private readonly logger: AgentContext["logger"];
+  private readonly logger: PluginContext["logger"];
   private readonly api: TelegramApiClient;
   private readonly stateStore: TelegramStateStore;
   private readonly onMessage: TelegramPlatformClientOptions["onMessage"];
@@ -74,10 +74,10 @@ export class TelegramPlatformClient {
     this.botToken = options.botToken;
     this.api = new TelegramApiClient({
       botToken: options.botToken,
-      projectRoot: options.context.rootPath,
+      project_root: options.context.workspace_path,
       logger: options.context.logger,
     });
-    this.stateStore = new TelegramStateStore(options.context.rootPath);
+    this.stateStore = new TelegramStateStore(options.context.workspace_path);
     this.onMessage = options.onMessage;
     this.onCallbackQuery = options.onCallbackQuery;
     this.onWebhookConflictResolved = options.onWebhookConflictResolved;
@@ -298,18 +298,18 @@ export class TelegramPlatformClient {
    */
   async sendInboundAckReaction(params: {
     chatId: string;
-    messageId?: number;
+    message_id?: number;
     emoji: string;
   }): Promise<void> {
-    if (!params.messageId) return;
+    if (!params.message_id) return;
     try {
-      await this.api.setMessageReaction(params.chatId, params.messageId, {
+      await this.api.setMessageReaction(params.chatId, params.message_id, {
         emoji: params.emoji,
       });
     } catch (error) {
       this.logger.warn("Telegram 入站 ack reaction 失败，继续处理消息", {
         chatId: params.chatId,
-        messageId: params.messageId,
+        message_id: params.message_id,
         error: String(error),
       });
     }
@@ -354,10 +354,10 @@ export class TelegramPlatformClient {
    */
   async setMessageReaction(
     chatId: string,
-    messageId: number,
+    message_id: number,
     opts?: { emoji?: string; isBig?: boolean },
   ): Promise<void> {
-    await this.api.setMessageReaction(chatId, messageId, opts);
+    await this.api.setMessageReaction(chatId, message_id, opts);
   }
 
   /**

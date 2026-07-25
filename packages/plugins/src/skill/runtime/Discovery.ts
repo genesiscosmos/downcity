@@ -57,7 +57,7 @@ function shouldIgnoreSkill(
  * 扫描并发现本地 skills。
  *
  * 关键点（中文）
- * - skills 的扫描根目录与 projectRoot 强相关（默认 `.agents/skills`）
+ * - skills 的扫描根目录与 project_root 强相关（默认 `.agents/skills`）
  * - 这里做成同步函数：启动时扫描一次，产出 prompt section 与 tools 索引
  */
 /**
@@ -68,10 +68,10 @@ function shouldIgnoreSkill(
  * 4) 最终按 name 排序，保证输出稳定
  */
 export function discoverSkillsSync(
-  projectRoot: string,
+  project_root: string,
   options?: SkillPluginOptions | null,
 ): SkillDefinition[] {
-  const root = String(projectRoot || "").trim();
+  const root = String(project_root || "").trim();
   if (!root) return [];
   const resolvedOptions = resolveSkillPluginOptions(options);
   const roots = getSkillSearchRoots(root, resolvedOptions);

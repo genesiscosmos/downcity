@@ -47,10 +47,10 @@ function create_session_info(
 ): AgentSessionSystemSessionInfo {
   const created_at = Number.isFinite(input.created_at) ? input.created_at : 0;
   return {
-    agentId: String(input.agent_id || "").trim(),
-    sessionId: String(input.session_id || "").trim(),
-    projectRoot: String(input.project_root || "").trim(),
-    createdAt: new Date(created_at).toISOString(),
+    agent_id: String(input.agent_id || "").trim(),
+    session_id: String(input.session_id || "").trim(),
+    project_root: String(input.project_root || "").trim(),
+    created_at: new Date(created_at).toISOString(),
     timezone: String(input.timezone || "").trim() || "UTC",
   };
 }
@@ -60,9 +60,9 @@ function create_session_system_block(
 ): AgentSessionSystemBlock {
   const content = [
     "Current session context:",
-    `You are serving agent "${session.agentId}" in session "${session.sessionId}".`,
-    `The current project root is "${session.projectRoot}".`,
-    `This session was created at ${session.createdAt}, with ${session.timezone} as its reference timezone.`,
+    `You are serving agent "${session.agent_id}" in session "${session.session_id}".`,
+    `The current project root is "${session.project_root}".`,
+    `This session was created at ${session.created_at}, with ${session.timezone} as its reference timezone.`,
     "This creation time is a stable reference for the session and does not represent the current time for every run.",
     "If the user message provides a newer current time, a relative time, or other dynamic context, prioritize the dynamic information from the user message.",
   ].join("\n");

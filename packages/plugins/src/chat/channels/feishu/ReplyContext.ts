@@ -47,12 +47,12 @@ function describeFeishuMessage(params: {
  * 构造 Feishu reply 上下文。
  */
 export function buildFeishuReplyContext(params: {
-  messageId?: string;
+  message_id?: string;
   actorName?: string;
   messageType?: string;
   content?: string;
 }): InboundReplyContext | undefined {
-  const messageId = String(params.messageId || "").trim();
+  const message_id = String(params.message_id || "").trim();
   const actorName = String(params.actorName || "").trim();
   const text = describeFeishuMessage({
     messageType: params.messageType,
@@ -61,7 +61,7 @@ export function buildFeishuReplyContext(params: {
 
   if (!actorName && !text) return undefined;
   return {
-    ...(messageId ? { messageId } : {}),
+    ...(message_id ? { message_id } : {}),
     ...(actorName ? { actorName } : {}),
     ...(text ? { text } : {}),
   };

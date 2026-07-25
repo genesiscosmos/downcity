@@ -39,17 +39,17 @@ type SessionBrowseBaseInput = {
   /**
    * 当前项目根目录。
    */
-  projectRoot: string;
+  project_root: string;
 
   /**
-   * 当前 agentId。
+   * 当前 agent_id。
    */
-  agentId: string;
+  agent_id: string;
 
   /**
-   * 当前 sessionId。
+   * 当前 session_id。
    */
-  sessionId: string;
+  session_id: string;
 
   /**
    * 当前 session 已读取到的 metadata。
@@ -180,8 +180,8 @@ function project_canonical_message_record(message: SessionMessage): SessionRecor
     metadata: {
       v: 1,
       ts: message.updated_at,
-      sessionId: message.session_id,
-      ...(message.turn_id ? { turnId: message.turn_id } : {}),
+      session_id: message.session_id,
+      ...(message.turn_id ? { turn_id: message.turn_id } : {}),
     },
   }];
 }
@@ -205,14 +205,14 @@ export function buildSessionInfo(
   input: SessionBrowseBaseInput,
 ): AgentSessionInfo {
   const messages = input.messages;
-  const previewText = messages && messages.length > 0
+  const preview_text = messages && messages.length > 0
     ? truncateText(
         resolve_session_message_preview(messages[messages.length - 1]),
         180,
       )
-    : input.metadata.previewText;
-  const message_count = typeof input.metadata.messageCount === "number"
-    ? input.metadata.messageCount
+    : input.metadata.preview_text;
+  const message_count = typeof input.metadata.message_count === "number"
+    ? input.metadata.message_count
     : messages
       ? filterUserVisibleHistoryMessages(messages).length
       : 0;
@@ -221,19 +221,19 @@ export function buildSessionInfo(
       ? input.metadata.title.trim()
       : undefined;
   return {
-    agentId: input.agentId,
-    sessionId: input.sessionId,
+    agent_id: input.agent_id,
+    session_id: input.session_id,
     ...(title ? { title } : {}),
-    ...(previewText ? { previewText } : {}),
-    messageCount: message_count,
-    ...(typeof input.metadata.createdAt === "number"
-      ? { createdAt: input.metadata.createdAt }
+    ...(preview_text ? { preview_text } : {}),
+    message_count: message_count,
+    ...(typeof input.metadata.created_at === "number"
+      ? { created_at: input.metadata.created_at }
       : {}),
-    ...(typeof input.metadata.updatedAt === "number"
-      ? { updatedAt: input.metadata.updatedAt }
+    ...(typeof input.metadata.updated_at === "number"
+      ? { updated_at: input.metadata.updated_at }
       : {}),
-    ...(input.metadata.modelLabel
-      ? { modelLabel: input.metadata.modelLabel }
+    ...(input.metadata.model_label
+      ? { model_label: input.metadata.model_label }
       : {}),
     ...(typeof input.metadata.timezone === "string" && input.metadata.timezone.trim()
       ? { timezone: input.metadata.timezone.trim() }
@@ -271,7 +271,7 @@ async function resolve_session_summary_metadata(input: {
   if (
     !input.refresh &&
     !has_inflight &&
-    typeof input.metadata.messageCount === "number" &&
+    typeof input.metadata.message_count === "number" &&
     input.metadata.historyBytes === history_bytes
   ) {
     return input.metadata;
@@ -284,14 +284,14 @@ async function resolve_session_summary_metadata(input: {
   const preview_text = last_message
     ? truncateText(resolve_session_message_preview(last_message), 180)
     : "";
-  const { previewText: _previous_preview, ...metadata_without_preview } = input.metadata;
+  const { preview_text: _previous_preview, ...metadata_without_preview } = input.metadata;
   void _previous_preview;
   const next_metadata: SessionHistoryMetaV1 = {
     ...metadata_without_preview,
-    messageCount: storage_stats.message_count,
+    message_count: storage_stats.message_count,
     historyBytes: history_bytes,
-    ...(preview_text || input.metadata.previewText
-      ? { previewText: preview_text || input.metadata.previewText }
+    ...(preview_text || input.metadata.preview_text
+      ? { preview_text: preview_text || input.metadata.preview_text }
       : {}),
   };
   await input.files.write_file_atomically(
@@ -370,8 +370,8 @@ async function resolve_session_disk_stats(
  * 列出指定 agent 的 session 摘要页。
  */
 export async function listAgentSessionSummaryPage(params: {
-  projectRoot: string;
-  agentId: string;
+  project_root: string;
+  agent_id: string;
   input?: AgentListSessionsInput;
   executingSessionIds?: Set<string>;
   files: FileSystem;
@@ -380,15 +380,15 @@ export async function listAgentSessionSummaryPage(params: {
   const cursor = normalizeCursor(params.input?.cursor);
   const query = String(params.input?.query || "").trim().toLowerCase();
   const sessionsRoot = get_sdk_agent_sessions_root_dir_path(
-    params.projectRoot,
-    params.agentId,
+    params.project_root,
+    params.agent_id,
   );
 
   if (!(await params.files.path_exists(sessionsRoot))) {
     return {
       items: [],
       total: 0,
-      hasMore: false,
+      has_more: false,
     };
   }
 
@@ -397,55 +397,55 @@ export async function listAgentSessionSummaryPage(params: {
 
   for (const entry of entries) {
     if (!entry.is_directory) continue;
-    const sessionId = decodeMaybe(entry.name);
-    if (!sessionId) continue;
+    const session_id = decodeMaybe(entry.name);
+    if (!session_id) continue;
     const meta_path = get_sdk_agent_session_meta_path(
-      params.projectRoot,
-      params.agentId,
-      sessionId,
+      params.project_root,
+      params.agent_id,
+      session_id,
     );
     const messages_path = get_sdk_agent_session_messages_path(
-      params.projectRoot,
-      params.agentId,
-      sessionId,
+      params.project_root,
+      params.agent_id,
+      session_id,
     );
     const persisted_metadata = await readSessionMetadataFromPath({
       filePath: meta_path,
-      sessionId,
-      agentId: params.agentId,
+      session_id,
+      agent_id: params.agent_id,
       files: params.files,
     });
     const metadata = await resolve_session_summary_metadata({
       metadata: persisted_metadata,
       messagesPath: messages_path,
       metaPath: meta_path,
-      refresh: params.executingSessionIds?.has(sessionId) === true,
+      refresh: params.executingSessionIds?.has(session_id) === true,
       files: params.files,
     });
     const info = buildSessionInfo({
-      projectRoot: params.projectRoot,
-      agentId: params.agentId,
-      sessionId,
+      project_root: params.project_root,
+      agent_id: params.agent_id,
+      session_id,
       metadata,
-      executing: params.executingSessionIds?.has(sessionId),
+      executing: params.executingSessionIds?.has(session_id),
     });
     const summary: AgentSessionSummary = {
-      agentId: info.agentId,
-      sessionId: info.sessionId,
+      agent_id: info.agent_id,
+      session_id: info.session_id,
       ...(info.title ? { title: info.title } : {}),
-      ...(info.previewText ? { previewText: info.previewText } : {}),
-      messageCount: info.messageCount,
-      ...(typeof info.createdAt === "number" ? { createdAt: info.createdAt } : {}),
-      ...(typeof info.updatedAt === "number" ? { updatedAt: info.updatedAt } : {}),
-      ...(info.modelLabel ? { modelLabel: info.modelLabel } : {}),
+      ...(info.preview_text ? { preview_text: info.preview_text } : {}),
+      message_count: info.message_count,
+      ...(typeof info.created_at === "number" ? { created_at: info.created_at } : {}),
+      ...(typeof info.updated_at === "number" ? { updated_at: info.updated_at } : {}),
+      ...(info.model_label ? { model_label: info.model_label } : {}),
       ...(info.executing ? { executing: true } : {}),
     };
 
     if (query) {
       const haystack = [
-        summary.sessionId,
+        summary.session_id,
         summary.title || "",
-        summary.previewText || "",
+        summary.preview_text || "",
       ]
         .join("\n")
         .toLowerCase();
@@ -455,7 +455,7 @@ export async function listAgentSessionSummaryPage(params: {
     summaries.push(summary);
   }
 
-  summaries.sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+  summaries.sort((left, right) => (right.updated_at || 0) - (left.updated_at || 0));
 
   const items = summaries.slice(cursor, cursor + limit);
   const nextOffset = cursor + items.length;
@@ -463,9 +463,9 @@ export async function listAgentSessionSummaryPage(params: {
     items,
     total: summaries.length,
     ...(nextOffset < summaries.length
-      ? { nextCursor: encodeCursor(nextOffset) }
+      ? { next_cursor: encodeCursor(nextOffset) }
       : {}),
-    hasMore: nextOffset < summaries.length,
+    has_more: nextOffset < summaries.length,
   };
 }
 
@@ -473,8 +473,8 @@ export async function listAgentSessionSummaryPage(params: {
  * 列出指定 agent 的已归档 session 摘要页。
  */
 export async function listArchivedAgentSessionSummaryPage(params: {
-  projectRoot: string;
-  agentId: string;
+  project_root: string;
+  agent_id: string;
   input?: AgentListSessionsInput;
   files: FileSystem;
 }): Promise<AgentSessionSummaryPage> {
@@ -482,15 +482,15 @@ export async function listArchivedAgentSessionSummaryPage(params: {
   const cursor = normalizeCursor(params.input?.cursor);
   const query = String(params.input?.query || "").trim().toLowerCase();
   const archivedRoot = get_sdk_agent_archived_sessions_dir_path(
-    params.projectRoot,
-    params.agentId,
+    params.project_root,
+    params.agent_id,
   );
 
   if (!(await params.files.path_exists(archivedRoot))) {
     return {
       items: [],
       total: 0,
-      hasMore: false,
+      has_more: false,
     };
   }
 
@@ -499,22 +499,22 @@ export async function listArchivedAgentSessionSummaryPage(params: {
 
   for (const entry of entries) {
     if (!entry.is_directory) continue;
-    const sessionId = decodeMaybe(entry.name);
-    if (!sessionId) continue;
+    const session_id = decodeMaybe(entry.name);
+    if (!session_id) continue;
     const meta_path = get_sdk_agent_archived_session_meta_path(
-      params.projectRoot,
-      params.agentId,
-      sessionId,
+      params.project_root,
+      params.agent_id,
+      session_id,
     );
     const messages_path = get_sdk_agent_archived_session_messages_path(
-      params.projectRoot,
-      params.agentId,
-      sessionId,
+      params.project_root,
+      params.agent_id,
+      session_id,
     );
     const persisted_metadata = await readSessionMetadataFromPath({
       filePath: meta_path,
-      sessionId,
-      agentId: params.agentId,
+      session_id,
+      agent_id: params.agent_id,
       files: params.files,
     });
     const metadata = await resolve_session_summary_metadata({
@@ -526,28 +526,28 @@ export async function listArchivedAgentSessionSummaryPage(params: {
     });
     // 关键点（中文）：归档 session 不再生成新 title，仅读取归档目录内已有 meta。
     const info = buildSessionInfo({
-      projectRoot: params.projectRoot,
-      agentId: params.agentId,
-      sessionId,
+      project_root: params.project_root,
+      agent_id: params.agent_id,
+      session_id,
       metadata,
       executing: false,
     });
     const summary: AgentSessionSummary = {
-      agentId: info.agentId,
-      sessionId: info.sessionId,
+      agent_id: info.agent_id,
+      session_id: info.session_id,
       ...(info.title ? { title: info.title } : {}),
-      ...(info.previewText ? { previewText: info.previewText } : {}),
-      messageCount: info.messageCount,
-      ...(typeof info.createdAt === "number" ? { createdAt: info.createdAt } : {}),
-      ...(typeof info.updatedAt === "number" ? { updatedAt: info.updatedAt } : {}),
-      ...(info.modelLabel ? { modelLabel: info.modelLabel } : {}),
+      ...(info.preview_text ? { preview_text: info.preview_text } : {}),
+      message_count: info.message_count,
+      ...(typeof info.created_at === "number" ? { created_at: info.created_at } : {}),
+      ...(typeof info.updated_at === "number" ? { updated_at: info.updated_at } : {}),
+      ...(info.model_label ? { model_label: info.model_label } : {}),
     };
 
     if (query) {
       const haystack = [
-        summary.sessionId,
+        summary.session_id,
         summary.title || "",
-        summary.previewText || "",
+        summary.preview_text || "",
       ]
         .join("\n")
         .toLowerCase();
@@ -557,7 +557,7 @@ export async function listArchivedAgentSessionSummaryPage(params: {
     summaries.push(summary);
   }
 
-  summaries.sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+  summaries.sort((left, right) => (right.updated_at || 0) - (left.updated_at || 0));
 
   const items = summaries.slice(cursor, cursor + limit);
   const nextOffset = cursor + items.length;
@@ -565,8 +565,8 @@ export async function listArchivedAgentSessionSummaryPage(params: {
     items,
     total: summaries.length,
     ...(nextOffset < summaries.length
-      ? { nextCursor: encodeCursor(nextOffset) }
+      ? { next_cursor: encodeCursor(nextOffset) }
       : {}),
-    hasMore: nextOffset < summaries.length,
+    has_more: nextOffset < summaries.length,
   };
 }

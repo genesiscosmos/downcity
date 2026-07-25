@@ -51,7 +51,7 @@ test("RPC uses the Agent runtime model and queues compact", async () => {
     await agent.ready();
     await rpc.listen({ host: "127.0.0.1", port });
     const session = await remote_agent.sessions.create({
-      sessionId: "rpc-model-session",
+      session_id: "rpc-model-session",
     });
     assert.equal("modelId" in (await session.get_info()), false);
     await session.compact();

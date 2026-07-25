@@ -23,7 +23,7 @@ function decode_config(value_encrypted: unknown): StoredAgentConfig | null {
 }
 
 function resolve_updated_at_ms(config: StoredAgentConfig): number {
-  const timestamp = Date.parse(String(config.updatedAt || ""));
+  const timestamp = Date.parse(String(config.updated_at || ""));
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
@@ -72,10 +72,10 @@ export function set_agent_config_row(
       config_encrypted = excluded.config_encrypted,
       updated_at = excluded.updated_at;
   `).run(
-    config.projectRoot,
+    config.project_root,
     encrypted,
-    config.createdAt,
-    config.updatedAt,
+    config.created_at,
+    config.updated_at,
   );
 }
 
@@ -111,8 +111,8 @@ export function migrate_agent_config_rows(
     for (const config of Array.isArray(legacy_state.configs)
       ? legacy_state.configs
       : []) {
-      if (!config?.projectRoot) continue;
-      const existing = get_agent_config_row(context, config.projectRoot);
+      if (!config?.project_root) continue;
+      const existing = get_agent_config_row(context, config.project_root);
       if (
         existing &&
         resolve_updated_at_ms(existing) >= resolve_updated_at_ms(config)

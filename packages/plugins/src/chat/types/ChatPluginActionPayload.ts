@@ -25,25 +25,25 @@ export type ChatSendActionPayload = {
    */
   text: string;
   /**
-   * 目标 chatKey；未显式传入时可由执行上下文补全。
+   * 目标 chat_key；未显式传入时可由执行上下文补全。
    */
-  chatKey?: string;
+  chat_key?: string;
   /**
-   * 延迟发送毫秒数；与 `sendAtMs` 互斥。
+   * 延迟发送毫秒数；与 `send_at_ms` 互斥。
    */
-  delayMs?: number;
+  delay_ms?: number;
   /**
-   * 绝对发送时间戳（毫秒）；与 `delayMs` 互斥。
+   * 绝对发送时间戳（毫秒）；与 `delay_ms` 互斥。
    */
-  sendAtMs?: number;
+  send_at_ms?: number;
   /**
    * 是否使用 reply_to_message 语义回复目标消息。
    */
-  replyToMessage?: boolean;
+  reply_to_message?: boolean;
   /**
    * 显式指定目标消息 ID；通常用于 reply/react 等场景。
    */
-  messageId?: string;
+  message_id?: string;
 };
 
 /**
@@ -51,13 +51,13 @@ export type ChatSendActionPayload = {
  */
 export type ChatSessionActionPayload = {
   /**
-   * 目标 chatKey；与 sessionId 二选一即可。
+   * 目标 chat_key；与 session_id 二选一即可。
    */
-  chatKey?: string;
+  chat_key?: string;
   /**
-   * 目标 sessionId；优先级高于 chatKey。
+   * 目标 session_id；优先级高于 chat_key。
    */
-  sessionId?: string;
+  session_id?: string;
 };
 
 /**
@@ -70,7 +70,7 @@ export type ChatHistoryActionPayload = ChatHistoryRequest;
  */
 export interface ChatHistoryClearActionPayload {
   /** 要清空 Chat 事件历史的 Session 标识。 */
-  sessionId: string;
+  session_id: string;
 }
 
 /**

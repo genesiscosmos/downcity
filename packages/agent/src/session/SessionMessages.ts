@@ -7,7 +7,7 @@
  */
 
 import type { UIMessage } from "ai";
-import { generateId } from "@/utils/Id.js";
+import { generate_id } from "@/utils/Id.js";
 import { SessionAssistantMessageWriter } from "@/session/messages/SessionAssistantMessageWriter.js";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
 import type { JsonObject } from "@/types/common/Json.js";
@@ -111,7 +111,7 @@ export class SessionMessages {
     const message = await this.create_message((sequence, created_at) => ({
       message_id:
         String(input.message_id || "").trim() ||
-        `user:${this.session_id}:${generateId()}`,
+        `user:${this.session_id}:${generate_id()}`,
       session_id: this.session_id,
       turn_id: input.turn_id,
       sequence,
@@ -133,7 +133,7 @@ export class SessionMessages {
     const message = (await this.create_message((sequence, created_at) => ({
       message_id:
         String(input.message_id || "").trim() ||
-        `assistant:${this.session_id}:${generateId()}`,
+        `assistant:${this.session_id}:${generate_id()}`,
       session_id: this.session_id,
       turn_id: input.turn_id,
       sequence,
@@ -157,7 +157,7 @@ export class SessionMessages {
   async append_completed_assistant_message(
     input: AppendCompletedAssistantMessageInput,
   ): Promise<SessionAssistantMessage> {
-    const turn_id = input.turn_id || `external:${this.session_id}:${generateId()}`;
+    const turn_id = input.turn_id || `external:${this.session_id}:${generate_id()}`;
     const writer = await this.open_assistant_message({
       turn_id,
       segment_index: 1,
@@ -188,7 +188,7 @@ export class SessionMessages {
       }
       const writer = await this.open_action_message({
         message_id: action.id,
-        turn_id: action.metadata.turnId,
+        turn_id: action.metadata.turn_id,
         action_type: String(action.id || "").split(":")[0] || "action",
         title: action.title,
         description: action.description,
@@ -201,7 +201,7 @@ export class SessionMessages {
     }
 
     const turn_id = String(
-      record.metadata?.turnId || `external:${this.session_id}:${generateId()}`,
+      record.metadata?.turn_id || `external:${this.session_id}:${generate_id()}`,
     );
     if (record.role === "user") {
       await this.append_user_message({
@@ -291,7 +291,7 @@ export class SessionMessages {
     for (const message of messages) {
       await this.append_user_message({
         turn_id: String(
-          message.metadata?.turnId ||
+          message.metadata?.turn_id ||
             `deferred:${this.session_id}:${Date.now()}`,
         ),
         input_type: "steer",
@@ -307,7 +307,7 @@ export class SessionMessages {
     if (!existing) {
       const writer = await this.open_action_message({
         message_id: event.id,
-        turn_id: event.metadata.turnId,
+        turn_id: event.metadata.turn_id,
         action_type: infer_action_type(event.id),
         title: event.title,
         description: event.description,
@@ -333,7 +333,7 @@ export class SessionMessages {
     const message = (await this.create_message((sequence, created_at) => ({
       message_id:
         String(input.message_id || "").trim() ||
-        `action:${this.session_id}:${generateId()}`,
+        `action:${this.session_id}:${generate_id()}`,
       session_id: this.session_id,
       ...(input.turn_id ? { turn_id: input.turn_id } : {}),
       sequence,
@@ -381,7 +381,7 @@ export class SessionMessages {
     input: AppendSessionErrorMessageInput,
   ): Promise<SessionErrorMessage> {
     return (await this.create_message((sequence, created_at) => ({
-      message_id: `error:${this.session_id}:${generateId()}`,
+      message_id: `error:${this.session_id}:${generate_id()}`,
       session_id: this.session_id,
       ...(input.turn_id ? { turn_id: input.turn_id } : {}),
       sequence,
@@ -550,7 +550,7 @@ export class SessionMessages {
     };
     await this.store.write_assistant_message(message);
     this.accept_mutation({
-      mutation_id: generateId(),
+      mutation_id: generate_id(),
       variant: "delta",
       type,
       message_id,
@@ -597,7 +597,7 @@ export class SessionMessages {
     };
     await this.store.write_assistant_message(message);
     this.accept_mutation({
-      mutation_id: generateId(),
+      mutation_id: generate_id(),
       variant: "part",
       type: next_part.type,
       message_id,
@@ -810,7 +810,7 @@ export class SessionMessages {
     message: SessionMessage,
   ): SessionMessageSnapshotMutation {
     return {
-      mutation_id: generateId(),
+      mutation_id: generate_id(),
       variant: "message",
       type: message.type,
       message_id: message.message_id,
@@ -929,7 +929,7 @@ function require_streaming_assistant(
 function resolve_import_id(map: Map<string, string>, source_id: string, prefix: string): string {
   const existing = map.get(source_id);
   if (existing) return existing;
-  const created = `${prefix}:${generateId()}`;
+  const created = `${prefix}:${generate_id()}`;
   map.set(source_id, created);
   return created;
 }

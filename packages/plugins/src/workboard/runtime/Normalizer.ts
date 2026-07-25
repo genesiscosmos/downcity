@@ -15,7 +15,7 @@ import type {
   WorkboardSignalItem,
   WorkboardSummary,
 } from "@/workboard/types/Workboard.js";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 
 function toIsoString(timestamp?: number): string {
   if (!timestamp || !Number.isFinite(timestamp)) {
@@ -60,18 +60,18 @@ function buildMomentum(params: { currentCount: number; recentCount: number }): s
 }
 
 function buildRunningSummary(item: WorkboardSessionSummary): string {
-  const messageCount = typeof item.messageCount === "number" ? item.messageCount : 0;
-  if (messageCount >= 24) return "正在延展一段较长的工作脉络，并持续生成新的内容。";
-  if (messageCount >= 8) return "正在承接连续输入，逐步形成新的阶段结果。";
-  if (messageCount > 0) return "正在回应当前输入，并把工作继续向前展开。";
+  const message_count = typeof item.message_count === "number" ? item.message_count : 0;
+  if (message_count >= 24) return "正在延展一段较长的工作脉络，并持续生成新的内容。";
+  if (message_count >= 8) return "正在承接连续输入，逐步形成新的阶段结果。";
+  if (message_count > 0) return "正在回应当前输入，并把工作继续向前展开。";
   return "当前处于活跃展开之中。";
 }
 
 function buildRecentSummary(item: WorkboardSessionSummary, index: number): string {
-  const messageCount = typeof item.messageCount === "number" ? item.messageCount : 0;
-  if (index === 0 && messageCount > 0) return "刚刚完成一段新的展开，正在短暂停留。";
-  if (messageCount >= 12) return "近期完成了一次较长的内容延展。";
-  if (messageCount > 0) return "近期完成了一次常规更新。";
+  const message_count = typeof item.message_count === "number" ? item.message_count : 0;
+  if (index === 0 && message_count > 0) return "刚刚完成一段新的展开，正在短暂停留。";
+  if (message_count >= 12) return "近期完成了一次较长的内容延展。";
+  if (message_count > 0) return "近期完成了一次常规更新。";
   return "近期出现了一次轻微变化。";
 }
 
@@ -79,7 +79,7 @@ function buildRecentSummary(item: WorkboardSessionSummary, index: number): strin
  * 构建 agent 顶部公开摘要。
  */
 export function toWorkboardAgentSummary(params: {
-  context: AgentContext;
+  context: PluginContext;
   collectedAt: string;
   currentCount: number;
   recentCount: number;
@@ -114,7 +114,7 @@ export function toRunningActivity(params: {
     title,
     summary: buildRunningSummary(params.item),
     status: "active",
-    updatedAt: toIsoString(params.item.updatedAt),
+    updated_at: toIsoString(params.item.updated_at),
     tags: ["public", "active"],
   };
 }
@@ -134,7 +134,7 @@ export function toRecentActivity(params: {
     title,
     summary: buildRecentSummary(params.item, params.index),
     status: params.index === 0 ? "steady" : "waiting",
-    updatedAt: toIsoString(params.item.updatedAt),
+    updated_at: toIsoString(params.item.updated_at),
     tags: ["public", "recent"],
   };
 }
@@ -143,7 +143,7 @@ export function toRecentActivity(params: {
  * 构建空闲占位项。
  */
 export function buildIdleActivity(params: {
-  updatedAt: string;
+  updated_at: string;
   recentCount: number;
 }): WorkboardActivityItem {
   return {
@@ -154,7 +154,7 @@ export function buildIdleActivity(params: {
       ? "刚刚有过新的更新，现在等待下一次输入。"
       : "当前没有明显变化，等待新的触发。",
     status: "waiting",
-    updatedAt: params.updatedAt,
+    updated_at: params.updated_at,
     tags: ["public", "idle"],
   };
 }

@@ -19,7 +19,7 @@ import type {
  * Agent 可使用的 Session 类。
  *
  * 关键点（中文）
- * - 传 class，而不是传实例，保证 Agent 可以按 sessionId 创建多个 session。
+ * - 传 class，而不是传实例，保证 Agent 可以按 session_id 创建多个 session。
  * - 自定义类可继承默认 `Session`，并在构造函数里注入自己的 Composer。
  */
 export type AgentSessionConstructor = new (
@@ -34,7 +34,7 @@ export interface AgentOptions {
    * 当前 agent 的稳定标识。
    *
    * 关键点（中文）
-   * - 用于 `.downcity/agents/<agentId>/...` 目录分区。
+   * - 用于 `.downcity/agents/<agent_id>/...` 目录分区。
    * - 应保持稳定、可 URL 编码、尽量不要依赖展示名称。
    */
   id: string;
@@ -96,6 +96,6 @@ export interface AgentOptions {
    * - 如果需要自定义 Composer，请在自定义 Session 类内部传给 `super({ composer })`。
    * - 该能力仅适用于本地 `Agent`。
    */
-  Session?: AgentSessionConstructor;
+  session_class?: AgentSessionConstructor;
 
 }

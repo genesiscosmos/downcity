@@ -17,7 +17,7 @@ import { SoundPlugin } from "../bin/index.js";
 
 function create_context(root_path) {
   return {
-    rootPath: root_path,
+    workspace_path: root_path,
   };
 }
 
@@ -25,8 +25,8 @@ async function run_action(plugin, action_name, context, input) {
   return await plugin.actions[action_name].execute({
     context,
     input,
-    pluginName: plugin.name,
-    actionName: action_name,
+    plugin_name: plugin.name,
+    action_name: action_name,
   });
 }
 
@@ -227,8 +227,8 @@ test("auto_asr 把 chat 语音附件转写追加到正文", async () => {
       value: {
         channel: "telegram",
         chatId: "chat-1",
-        rootPath: root_path,
-        bodyText: "original",
+        workspace_path: root_path,
+        body_text: "original",
         attachments: [
           {
             channel: "telegram",
@@ -241,7 +241,7 @@ test("auto_asr 把 chat 语音附件转写追加到正文", async () => {
       },
     });
     assert.equal(
-      result.bodyText,
+      result.body_text,
       "original\n\n<voice src=\"message.ogg\">hello &lt;world&gt;</voice>",
     );
   } finally {

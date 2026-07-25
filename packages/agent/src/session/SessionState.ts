@@ -8,7 +8,7 @@
  */
 
 import {
-  inferAgentModelLabel,
+  infer_agent_model_label,
   read_agent_model_context_window,
 } from "@/agent/AgentModel.js";
 import { resolveSystemTimezone } from "@/session/storage/Metadata.js";
@@ -19,7 +19,7 @@ import type {
 } from "@/types/agent/SessionTypes.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import type { SessionModelQueueCommand } from "@/types/session/SessionQueue.js";
-import { generateId } from "@/utils/Id.js";
+import { generate_id } from "@/utils/Id.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import { SessionMessages } from "@/session/SessionMessages.js";
 import { to_executor_history } from "@/session/messages/SessionMessageCodec.js";
@@ -91,15 +91,15 @@ export class SessionState {
     this.state.initialize_promise = (async () => {
       const metadata = await this.store.read_metadata();
       const created_at =
-        typeof metadata.createdAt === "number" ? metadata.createdAt : Date.now();
+        typeof metadata.created_at === "number" ? metadata.created_at : Date.now();
       const timezone =
         typeof metadata.timezone === "string" && metadata.timezone.trim()
           ? metadata.timezone.trim()
           : resolveSystemTimezone();
       await this.store.write_metadata({
         ...metadata,
-        agentId: this.agent_id,
-        createdAt: created_at,
+        agent_id: this.agent_id,
+        created_at: created_at,
         timezone,
       });
       this.state.created_at = created_at;
@@ -151,10 +151,10 @@ export class SessionState {
     options?: SessionSetOptions,
   ): Promise<SessionConfiguredCommandResult> {
     const should_emit_action = options?.emit_action !== false;
-    const previous_model_label = this.state.session_config.modelLabel;
+    const previous_model_label = this.state.session_config.model_label;
     const next_model = input.model;
     const next_model_label = next_model
-      ? inferAgentModelLabel(next_model)
+      ? infer_agent_model_label(next_model)
       : undefined;
     const previous_model_name = String(previous_model_label || "").trim();
     const next_model_name = String(next_model_label || "").trim();
@@ -166,30 +166,30 @@ export class SessionState {
         next_model_name &&
         previous_model_name !== next_model_name,
     );
-    const action_id = `model-switching:${this.session_id}:${Date.now()}:${generateId()}`;
+    const action_id = `model-switching:${this.session_id}:${Date.now()}:${generate_id()}`;
 
     const next_config: AgentSessionConfigSnapshot = {
       ...this.state.session_config,
     };
     if (next_model) {
       next_config.model = next_model;
-      next_config.modelLabel = next_model_label;
+      next_config.model_label = next_model_label;
       next_config.model_context_window =
         read_agent_model_context_window(next_model);
     }
     const metadata = await this.store.read_metadata();
     await this.store.write_metadata({
       ...metadata,
-      agentId: this.agent_id,
-      updatedAt: Date.now(),
-      ...(next_model_label ? { modelLabel: next_model_label } : {}),
+      agent_id: this.agent_id,
+      updated_at: Date.now(),
+      ...(next_model_label ? { model_label: next_model_label } : {}),
     });
     this.state.session_config = next_config;
 
     if (options?.emit_action === false) {
       await this.apply_model_command({
         type: "session_model",
-        command_id: generateId(),
+        command_id: generate_id(),
         config: next_config,
       });
       return {};
@@ -198,7 +198,7 @@ export class SessionState {
     return {
       command: {
         type: "session_model",
-        command_id: generateId(),
+        command_id: generate_id(),
         config: next_config,
         ...(should_emit_model_switch_action
           ? {
@@ -231,14 +231,14 @@ export class SessionState {
     const metadata = await this.store.read_metadata();
     await this.store.write_metadata({
       ...metadata,
-      agentId: this.agent_id,
-      updatedAt: Date.now(),
-      ...(this.state.session_config.modelLabel
-        ? { modelLabel: this.state.session_config.modelLabel }
+      agent_id: this.agent_id,
+      updated_at: Date.now(),
+      ...(this.state.session_config.model_label
+        ? { model_label: this.state.session_config.model_label }
         : {}),
-      messageCount: stats.message_count,
+      message_count: stats.message_count,
       historyBytes: stats.history_bytes,
-      ...(preview_text ? { previewText: preview_text } : {}),
+      ...(preview_text ? { preview_text: preview_text } : {}),
     });
   }
 
@@ -258,7 +258,7 @@ export class SessionState {
     const before_metadata = await this.store.read_metadata();
     const before_title = String(before_metadata.title || "").trim();
     const next_metadata = await ensureSessionTitle({
-      sessionId: this.session_id,
+      session_id: this.session_id,
       store: this.store,
       messages,
       ...(input?.generate
@@ -266,8 +266,8 @@ export class SessionState {
             model: this.get_model(),
           }
         : {}),
-      ...(this.state.session_config.modelLabel
-        ? { modelLabel: this.state.session_config.modelLabel }
+      ...(this.state.session_config.model_label
+        ? { model_label: this.state.session_config.model_label }
         : {}),
       logger: this.logger,
       generate: input?.generate === true,
@@ -275,7 +275,7 @@ export class SessionState {
     const next_title = String(next_metadata.title || "").trim();
     if (!next_title || next_title === before_title) return;
     this.publish_event({
-      mutation_id: generateId(),
+      mutation_id: generate_id(),
       variant: "session",
       type: "title",
       session_id: this.session_id,

@@ -8,14 +8,9 @@
  */
 
 import { Hono } from "hono";
-import type { AgentContext } from "@downcity/agent";
-import {
-  controlPluginState,
-  listPluginStates,
-} from "@downcity/agent";
+import type { Agent } from "@downcity/agent";
 import type { PluginControlAction } from "@downcity/agent";
-import { parsePluginCommandRequestBody } from "@downcity/agent";
-import { runPluginCommand } from "@downcity/agent";
+import { parse_plugin_command_request_body } from "@downcity/agent";
 
 /**
  * Plugin 路由参数。
@@ -24,7 +19,7 @@ type PluginsRouterOptions = {
   /**
    * 读取当前 agent 执行上下文。
    */
-  getAgentContext: () => AgentContext;
+  get_agent: () => Agent;
 };
 
 /**
@@ -38,26 +33,26 @@ export function createPluginsRouter(
   router.get("/api/plugins/catalog", (c) => {
     return c.json({
       success: true,
-      plugins: options.getAgentContext().plugins.list(),
+      plugins: options.get_agent().plugins.list(),
     });
   });
 
   router.get("/api/plugins/list", (c) => {
     return c.json({
       success: true,
-      plugins: listPluginStates({ context: options.getAgentContext() }),
+      plugins: options.get_agent().list_plugin_states(),
     });
   });
 
   router.post("/api/plugins/control", async (c) => {
     const body = await c.req.json().catch(() => null);
-    const pluginName = String(body?.pluginName || "").trim();
+    const plugin_name = String(body?.plugin_name || "").trim();
     const action = String(body?.action || "")
       .trim()
       .toLowerCase();
 
-    if (!pluginName) {
-      return c.json({ success: false, error: "pluginName is required" }, 400);
+    if (!plugin_name) {
+      return c.json({ success: false, error: "plugin_name is required" }, 400);
     }
     if (!action) {
       return c.json({ success: false, error: "action is required" }, 400);
@@ -66,10 +61,9 @@ export function createPluginsRouter(
       return c.json({ success: false, error: "invalid action" }, 400);
     }
 
-    const result = await controlPluginState({
-      pluginName,
+    const result = await options.get_agent().control_plugin_state({
+      plugin_name: plugin_name,
       action: action as PluginControlAction,
-      context: options.getAgentContext(),
     });
     return c.json(result, result.success ? 200 : 400);
   });
@@ -78,67 +72,66 @@ export function createPluginsRouter(
     const body = await c.req.json().catch(() => null);
     let requestBody;
     try {
-      requestBody = parsePluginCommandRequestBody(body);
+      requestBody = parse_plugin_command_request_body(body);
     } catch (error) {
       return c.json({ success: false, error: String(error) }, 400);
     }
 
-    if (!requestBody.pluginName) {
-      return c.json({ success: false, error: "pluginName is required" }, 400);
+    if (!requestBody.plugin_name) {
+      return c.json({ success: false, error: "plugin_name is required" }, 400);
     }
     if (!requestBody.command) {
       return c.json({ success: false, error: "command is required" }, 400);
     }
 
-    const result = await runPluginCommand({
-      pluginName: requestBody.pluginName,
+    const result = await options.get_agent().run_plugin_command({
+      plugin_name: requestBody.plugin_name,
       command: requestBody.command,
       payload: requestBody.payload,
       schedule: requestBody.schedule,
-      context: options.getAgentContext(),
     });
     return c.json(result, result.success ? 200 : 400);
   });
 
   router.post("/api/plugins/availability", async (c) => {
     const body = await c.req.json().catch(() => null);
-    const pluginName = String(body?.pluginName || "").trim();
+    const plugin_name = String(body?.plugin_name || "").trim();
 
-    if (!pluginName) {
-      return c.json({ success: false, error: "pluginName is required" }, 400);
+    if (!plugin_name) {
+      return c.json({ success: false, error: "plugin_name is required" }, 400);
     }
 
     const availability =
-      await options.getAgentContext().plugins.availability(pluginName);
+      await options.get_agent().plugins.availability(plugin_name);
     return c.json({
       success: true,
-      pluginName,
+      plugin_name,
       availability,
     });
   });
 
   router.post("/api/plugins/action", async (c) => {
     const body = await c.req.json().catch(() => null);
-    const pluginName = String(body?.pluginName || "").trim();
-    const actionName = String(body?.actionName || "").trim();
+    const plugin_name = String(body?.plugin_name || "").trim();
+    const action_name = String(body?.action_name || "").trim();
 
-    if (!pluginName) {
-      return c.json({ success: false, error: "pluginName is required" }, 400);
+    if (!plugin_name) {
+      return c.json({ success: false, error: "plugin_name is required" }, 400);
     }
-    if (!actionName) {
-      return c.json({ success: false, error: "actionName is required" }, 400);
+    if (!action_name) {
+      return c.json({ success: false, error: "action_name is required" }, 400);
     }
 
-    const result = await options.getAgentContext().plugins.runAction({
-      plugin: pluginName,
-      action: actionName,
+    const result = await options.get_agent().plugins.run_action({
+      plugin: plugin_name,
+      action: action_name,
       payload: body?.payload,
     });
     return c.json(
       {
         ...result,
-        pluginName,
-        actionName,
+        plugin_name,
+        action_name,
       },
       result.success ? 200 : 400,
     );

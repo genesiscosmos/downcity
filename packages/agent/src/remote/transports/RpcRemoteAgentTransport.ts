@@ -119,7 +119,7 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     const message_id =
       typeof input === "string"
         ? String(input || "").trim() || undefined
-        : String(input?.messageId || "").trim() || undefined;
+        : String(input?.message_id || "").trim() || undefined;
     return await this.client.fork_session({
       session_id,
       ...(message_id ? { message_id } : {}),

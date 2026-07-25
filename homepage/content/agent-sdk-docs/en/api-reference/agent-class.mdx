@@ -11,29 +11,28 @@ The local `Agent` exposes the following main public API:
 - `agent.ready()`
 - `agent.dispose()`
 - `agent.sessions`
-- `agent.getLogger()`
-- `agent.getContext()`
-- `agent.getShell()`
+- `agent.get_logger()`
+- `agent.get_shell()`
 - `agent.plugins`
 
 `agent.sessions.create()` and `agent.sessions.get()` return `AgentSession`.
 
-`agent.getLogger()`, `agent.getContext()`, and `agent.getShell()` are advanced integration helpers. `AgentContext` exposes only the runtime capabilities needed by plugins and host integrations. It does not contain the full project config or a second copy of Agent state.
+Hosts use explicit `Agent` capabilities such as `workspace`, `sessions`, `plugins`, `get_logger()`, and `get_shell()`. `PluginContext` is projected internally to plugins; it is not a host API or a second copy of Agent state.
 
 ## Sessions
 
 `agent.sessions` returns an `AgentSessions` with the following methods:
 
 - `agent.sessions.create(input?)`
-- `agent.sessions.get(sessionId)`
+- `agent.sessions.get(session_id)`
 - `agent.sessions.list(input?)`
 - `agent.sessions.archive({ id })`
 - `agent.sessions.archived(input?)`
 - `agent.sessions.clean_archive()`
-- `agent.sessions.remove(sessionId)`
-- `agent.sessions.clear_messages(sessionId)`
+- `agent.sessions.remove(session_id)`
+- `agent.sessions.clear_messages(session_id)`
 
-`archive({ id })` moves an existing non-executing session to the archive. `archived(input?)` lists archived sessions and `clean_archive()` permanently removes them. `remove(sessionId)` permanently deletes one local Session's Agent-owned data. `clear_messages(sessionId)` clears only its messages and keeps the Session.
+`archive({ id })` moves an existing non-executing session to the archive. `archived(input?)` lists archived sessions and `clean_archive()` permanently removes them. `remove(session_id)` permanently deletes one local Session's Agent-owned data. `clear_messages(session_id)` clears only its messages and keeps the Session.
 
 ## Constructor options
 
@@ -43,13 +42,13 @@ The local `Agent` exposes the following main public API:
 - `instruction`
 - `model`
 - `plugins`
-- `Session`
+- `session_class`
 
 There is currently no `mode` constructor option.
 
 `model` is the `AgentModel` instance held by the Agent and can be either an AI SDK `LanguageModel` or a City `CityModel`. A local Session can hold its own `AgentModel` through `session.set({ model })`; execution prefers the Session model and falls back to the Agent model. The SDK does not persist or restore model instances or model IDs.
 
-Full project and Plugin configuration belongs to an upstream host such as the CLI. The host constructs Plugin instances from that configuration and passes them through `plugins`; Agent and `AgentContext` do not read, mutate, or persist it.
+Full project and Plugin configuration belongs to an upstream host such as the CLI. The host constructs Plugin instances and passes them through `plugins`; Agent does not read, mutate, or persist that control-plane configuration.
 
 ## Workspace env
 

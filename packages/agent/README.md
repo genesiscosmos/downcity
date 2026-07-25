@@ -119,8 +119,8 @@ src/
 
 - `agent` 承载本地 Agent 核心运行时，`remote` 承载独立的远程 SDK 客户端
 - `workspace` 承载项目资源、初始化和持久化能力，`platform` 只处理系统级路径
-- `Agent` facade 是实例级装配中心，也是 env、instruction、model、tools、plugins 与 sessions 的唯一状态所有者
-- `AgentContext` 只向 Plugin 与宿主投影受限运行时能力，不保存完整项目 config 或第二份 Agent 状态
+- `Agent` facade 是实例级装配中心，持有 instruction、model、tools、plugins 与 sessions；env 由 Workspace 持有
+- `PluginContext` 只在 Agent 内部向 Plugin 投影稳定能力，不向宿主暴露
 - `session / executor / plugin` 是三大核心分层
 - `SessionMessages` 是 Message 唯一事实源，Executor 不持有 Store
 - `types / utils` 提供横向公共支撑

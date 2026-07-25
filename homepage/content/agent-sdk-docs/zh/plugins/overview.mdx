@@ -76,7 +76,7 @@ const plugins = agent.plugins.list();
 
 - `plugins` 是当前这个 `Agent` 私有的 registry
 - SDK 不会自动注册所有 built-in plugin
-- 你可以直接使用 `agent.plugins.list()`、`availability()`、`runAction()`
+- 你可以直接使用 `agent.plugins.list()`、`availability()`、`run_action()`
 - Session 首次生成 system 时，只从这个 SDK `Agent` 当时已注册的 plugin 收集文本；之后固定
 
 ## 一个 plugin 可能包含什么

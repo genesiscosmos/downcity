@@ -9,10 +9,10 @@
 import type {
   SessionSystemComposer,
 } from "@executor/composer/system/SessionSystemComposer.js";
-import type { AgentContext } from "@/agent/AgentContext.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
 import {
-  resolveSessionSystemMessages,
+  resolve_session_system_messages,
   type SystemProfile,
 } from "@executor/composer/system/default/SystemDomain.js";
 
@@ -20,17 +20,17 @@ type DefaultSessionSystemComposerOptions = {
   /**
    * 项目根目录，用于渲染运行时 system 模板。
    */
-  projectRoot: string;
+  project_root: string;
 
   /**
    * 读取当前生效的静态 system 文本集合。
    */
-  getStaticSystemPrompts: () => string[];
+  get_static_system_prompts: () => string[];
 
   /**
    * 读取当前执行上下文（用于加载 plugin system 文本）。
    */
-  getContext: () => AgentContext;
+  get_context: () => PluginContext;
 
   /**
    * system 档位（默认 chat）。
@@ -44,33 +44,33 @@ type DefaultSessionSystemComposerOptions = {
 export class DefaultSessionSystemComposer implements SessionSystemComposer {
   readonly name = "prompt_system";
 
-  private readonly projectRoot: string;
-  private readonly getStaticSystemPrompts: DefaultSessionSystemComposerOptions["getStaticSystemPrompts"];
-  private readonly getContext: DefaultSessionSystemComposerOptions["getContext"];
+  private readonly project_root: string;
+  private readonly get_static_system_prompts: DefaultSessionSystemComposerOptions["get_static_system_prompts"];
+  private readonly get_context: DefaultSessionSystemComposerOptions["get_context"];
   private readonly profile: SystemProfile;
 
   constructor(options: DefaultSessionSystemComposerOptions) {
-    const projectRoot = String(options.projectRoot || "").trim();
-    if (!projectRoot) {
-      throw new Error("DefaultSessionSystemComposer requires a non-empty projectRoot");
+    const project_root = String(options.project_root || "").trim();
+    if (!project_root) {
+      throw new Error("DefaultSessionSystemComposer requires a non-empty project_root");
     }
-    this.projectRoot = projectRoot;
-    this.getStaticSystemPrompts = options.getStaticSystemPrompts;
-    this.getContext = options.getContext;
+    this.project_root = project_root;
+    this.get_static_system_prompts = options.get_static_system_prompts;
+    this.get_context = options.get_context;
     this.profile = options.profile === "task" ? "task" : "chat";
   }
 
   async resolve(run_context: SessionRunContext) {
-    const sessionId = String(run_context.sessionId || "").trim();
-    if (!sessionId) {
-      throw new Error("DefaultSessionSystemComposer.resolve requires a non-empty sessionId");
+    const session_id = String(run_context.session_id || "").trim();
+    if (!session_id) {
+      throw new Error("DefaultSessionSystemComposer.resolve requires a non-empty session_id");
     }
-    return await resolveSessionSystemMessages({
-      projectRoot: this.projectRoot,
-      sessionId,
+    return await resolve_session_system_messages({
+      project_root: this.project_root,
+      session_id,
       profile: this.profile,
-      staticSystemPrompts: this.getStaticSystemPrompts(),
-      context: this.getContext(),
+      static_system_prompts: this.get_static_system_prompts(),
+      context: this.get_context(),
     });
   }
 }

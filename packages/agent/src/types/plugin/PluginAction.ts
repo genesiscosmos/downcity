@@ -9,7 +9,7 @@
 import type { Command } from "commander";
 import type { Context as HonoContext } from "hono";
 import type { z } from "zod";
-import type { AgentContext } from "@/agent/AgentContext.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { PluginRunContext } from "@/types/plugin/PluginRunContext.js";
 import type { JsonObject, JsonValue } from "@/types/common/Json.js";
 
@@ -80,7 +80,7 @@ export interface PluginActionCommand<P extends JsonValue = JsonValue> {
   /** 额外 commander 配置（可选）。 */
   configure?: (command: Command) => void;
   /** 将 CLI 输入映射为 payload。 */
-  mapInput: (input: PluginActionCommandInput) => P | Promise<P>;
+  map_input: (input: PluginActionCommandInput) => P | Promise<P>;
 }
 
 /**
@@ -92,7 +92,7 @@ export interface PluginActionApi<P extends JsonValue = JsonValue> {
   /** HTTP 路径。 */
   path?: string;
   /** 将 HTTP 输入映射为 payload（可选）。 */
-  mapInput?: (ctx: HonoContext) => P | Promise<P>;
+  map_input?: (ctx: HonoContext) => P | Promise<P>;
 }
 
 /**
@@ -147,7 +147,7 @@ export interface PluginAction<
   /** Action 执行器。 */
   execute: (params: {
     /** 当前执行上下文。 */
-    context: AgentContext;
+    context: PluginContext;
     /**
      * 当前 action 所属的 Session run 上下文。
      *
@@ -159,9 +159,9 @@ export interface PluginAction<
     /** 已通过 schema 校验后的输入。 */
     input: P;
     /** 当前插件名称。 */
-    pluginName: string;
+    plugin_name: string;
     /** 当前 Action 名称。 */
-    actionName: string;
+    action_name: string;
   }) => Promise<PluginActionResult<R>> | PluginActionResult<R>;
 }
 
@@ -169,5 +169,5 @@ export interface PluginAction<
  * Plugin Action 集合。
  */
 export type PluginActions = {
-  [actionName: string]: PluginAction<JsonValue, JsonValue>;
+  [action_name: string]: PluginAction<JsonValue, JsonValue>;
 };

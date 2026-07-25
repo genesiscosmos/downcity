@@ -11,11 +11,11 @@ description: Create an independent Session from full history or a specific Messa
 const full_branch = await session.fork();
 
 const branch_at_message = await session.fork({
-  messageId: "assistant:repo-analysis:abc",
+  message_id: "assistant:repo-analysis:abc",
 });
 ```
 
-You can also pass a `messageId` string directly:
+You can also pass a `message_id` string directly:
 
 ```ts
 const branch = await session.fork("assistant:repo-analysis:abc");
@@ -26,7 +26,7 @@ const branch = await session.fork("assistant:repo-analysis:abc");
 | Call | Copied range |
 | --- | --- |
 | `fork()` | The complete current visible history |
-| `fork({ messageId })` | History from the beginning through that Message, inclusive |
+| `fork({ message_id })` | History from the beginning through that Message, inclusive |
 
 The boundary is a top-level Message, not an Assistant `part_id`. To experiment before or after a tool call, first locate the containing Assistant Message's `message_id` through `messages()`.
 

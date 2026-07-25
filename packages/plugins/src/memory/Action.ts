@@ -10,7 +10,7 @@
 import type { UIDataTypes, UIMessagePart, UITools } from "ai";
 import { isTextUIPart } from "ai";
 import type { PluginActionResult } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { JsonValue } from "@downcity/agent";
 import type { SessionMessage } from "@downcity/agent";
 import type {
@@ -141,7 +141,7 @@ function toWikiMemoryPath(value: string): string {
  * status action。
  */
 export async function statusMemoryAction(
-  context: AgentContext,
+  context: PluginContext,
   state: MemoryRuntimeState,
 ): Promise<PluginActionResult<JsonValue>> {
   try {
@@ -162,7 +162,7 @@ export async function statusMemoryAction(
  * search action。
  */
 export async function searchMemoryAction(
-  context: AgentContext,
+  context: PluginContext,
   state: MemoryRuntimeState,
   payload: MemorySearchPayload,
 ): Promise<PluginActionResult<JsonValue>> {
@@ -184,7 +184,7 @@ export async function searchMemoryAction(
  * read action。
  */
 export async function readMemoryAction(
-  context: AgentContext,
+  context: PluginContext,
   payload: MemoryReadPayload,
 ): Promise<PluginActionResult<JsonValue>> {
   try {
@@ -202,7 +202,7 @@ export async function readMemoryAction(
  * remember action。
  */
 export async function rememberMemoryAction(
-  context: AgentContext,
+  context: PluginContext,
   options: MemoryPluginOptions,
   payload: MemoryRememberPayload,
 ): Promise<PluginActionResult<JsonValue>> {
@@ -221,7 +221,7 @@ export async function rememberMemoryAction(
       }));
       const revised = readReviseResult(
         await options.revise({
-          rootPath: context.rootPath,
+          rootPath: context.workspace_path,
           path: targetPath,
           currentContent: current.text,
           instruction: "Integrate this new memory into the wiki page. Deduplicate and keep it concise.",
@@ -270,19 +270,19 @@ export async function rememberMemoryAction(
  * digest action。
  */
 export async function digestMemoryAction(
-  context: AgentContext,
+  context: PluginContext,
   options: MemoryPluginOptions,
   payload: MemoryDigestPayload,
 ): Promise<PluginActionResult<JsonValue>> {
   try {
-    const sessionId = String(payload.sessionId || "").trim();
-    if (!sessionId) {
-      throw new Error("sessionId is required");
+    const session_id = String(payload.session_id || "").trim();
+    if (!session_id) {
+      throw new Error("session_id is required");
     }
     const maxMessages = Number.isFinite(payload.maxMessages)
       ? Math.max(1, Math.floor(payload.maxMessages as number))
       : 30;
-    const snapshot = await context.sessions.runtime(sessionId).context();
+    const snapshot = await context.sessions.runtime(session_id).context();
     const total = snapshot.messages.length;
     const start = Math.max(0, total - maxMessages);
     const messages = snapshot.messages.slice(start);
@@ -298,16 +298,16 @@ export async function digestMemoryAction(
       "",
       transcript,
     ].join("\n");
-    const source = await writeSessionSource(context, sessionId, sourceText);
+    const source = await writeSessionSource(context, session_id, sourceText);
 
     if (options.digest) {
       const wikiIndex = await readWikiIndex(context);
       const digested = readDigestPages(
         await options.digest({
-          rootPath: context.rootPath,
+          rootPath: context.workspace_path,
           sourceText,
           sourcePath: source.path,
-          sessionId,
+          session_id,
           wikiIndex,
         }),
       );
@@ -319,7 +319,7 @@ export async function digestMemoryAction(
       const response: MemoryDigestResponse = {
         sourcePath: source.path,
         wikiPaths,
-        messageCount: lines.length,
+        message_count: lines.length,
         mode: "digested",
         summary: digested.summary,
       };
@@ -335,7 +335,7 @@ export async function digestMemoryAction(
     const response: MemoryDigestResponse = {
       sourcePath: source.path,
       wikiPaths: [written.path],
-      messageCount: lines.length,
+      message_count: lines.length,
       mode: "archived",
     };
     return { success: true, data: response as unknown as JsonValue };
@@ -351,7 +351,7 @@ export async function digestMemoryAction(
  * revise action。
  */
 export async function reviseMemoryAction(
-  context: AgentContext,
+  context: PluginContext,
   options: MemoryPluginOptions,
   payload: MemoryRevisePayload,
 ): Promise<PluginActionResult<JsonValue>> {
@@ -372,7 +372,7 @@ export async function reviseMemoryAction(
       }));
       const revised = readReviseResult(
         await options.revise({
-          rootPath: context.rootPath,
+          rootPath: context.workspace_path,
           path: targetPath,
           currentContent: current.text,
           instruction,

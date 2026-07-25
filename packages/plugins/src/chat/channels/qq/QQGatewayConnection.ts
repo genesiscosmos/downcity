@@ -59,7 +59,7 @@ export interface ConnectQqGatewayWebSocketParams {
   /**
    * 计划重连。
    */
-  scheduleReconnect(reason: string, delayMs?: number): void;
+  scheduleReconnect(reason: string, delay_ms?: number): void;
   /**
    * 处理已解析的 Gateway payload。
    */

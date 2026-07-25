@@ -7,7 +7,7 @@
  * - Agent 注册 plugin 时自动启动 lifecycle；卸载时自动停止 lifecycle。
  */
 
-import type { AgentContext } from "@/agent/AgentContext.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { Plugin } from "@/types/plugin/PluginDefinition.js";
 import type { PluginActions } from "@/types/plugin/PluginAction.js";
 import type { PluginCommandContext, PluginLifecycle } from "@/types/plugin/PluginCommand.js";
@@ -86,14 +86,14 @@ export abstract class BasePlugin implements Plugin {
    * Plugin 可用性检查。
    */
   availability?(
-    context: PluginCommandContext | AgentContext,
+    context: PluginCommandContext | PluginContext,
   ): Promise<PluginAvailability> | PluginAvailability;
 
   /**
    * Plugin system 文本提供器。
    */
   system?(
-    context: AgentContext,
+    context: PluginContext,
     run_context?: PluginRunContext,
   ): Promise<string> | string;
 

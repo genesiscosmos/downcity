@@ -8,7 +8,6 @@
 
 import fs from "fs-extra";
 import { basename, dirname, join } from "path";
-import { runPluginCommand } from "@downcity/agent";
 import { getDowncityTasksDirPath } from "@/city/config/Paths.js";
 import type { ControlRouteRegistrationParams } from "@/city/agent/http/control/types/ControlRoutes.js";
 import {
@@ -42,7 +41,7 @@ async function listTasksViaPlugin(params: {
   routes: ControlRouteRegistrationParams;
   status?: string;
 }): Promise<TaskListItem[]> {
-  const result = await params.routes.getAgentContext().plugins.runAction({
+  const result = await params.routes.get_agent().plugins.run_action({
     plugin: "task",
     action: "list",
     payload: params.status ? { status: params.status } : undefined,
@@ -74,7 +73,7 @@ async function resolveTaskIdByTitleViaPlugin(params: {
  * 读取任务当前是否仍在执行。
  */
 async function readTaskRunningState(params: {
-  projectRoot: string;
+  project_root: string;
   routes: ControlRouteRegistrationParams;
   title: string;
   lastRunTimestamp?: string;
@@ -94,7 +93,7 @@ async function readTaskRunningState(params: {
   }
 
   const progressPath = join(
-    getDowncityTasksDirPath(params.projectRoot),
+    getDowncityTasksDirPath(params.project_root),
     taskId,
     timestamp,
     "run-progress.json",
@@ -116,7 +115,7 @@ export function registerControlTaskRoutes(
   for (const routePath of buildControlRouteAliases("/tasks")) {
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.getAgentContext();
+        const runtime = params.get_agent();
         const status = toOptionalString(c.req.query("status"));
         const tasks = await listTasksViaPlugin({
           routes: params,
@@ -125,7 +124,7 @@ export function registerControlTaskRoutes(
         const tasksWithRunning = await Promise.all(
           tasks.map(async (task) => {
             const running = await readTaskRunningState({
-              projectRoot: runtime.rootPath,
+              project_root: runtime.workspace.path,
               routes: params,
               title: String(task.title || "").trim(),
               lastRunTimestamp: task.lastRunTimestamp,
@@ -156,14 +155,13 @@ export function registerControlTaskRoutes(
         }
 
         const reason = toOptionalString(body.reason);
-        const result = await runPluginCommand({
-          pluginName: "task",
+        const result = await params.get_agent().run_plugin_command({
+          plugin_name: "task",
           command: "run",
           payload: {
             title,
             ...(reason ? { reason } : {}),
           },
-          context: params.getAgentContext(),
         });
         return c.json(result, result.success ? 200 : 400);
       } catch (error) {
@@ -187,14 +185,13 @@ export function registerControlTaskRoutes(
           return c.json({ success: false, error: "Invalid status" }, 400);
         }
 
-        const result = await runPluginCommand({
-          pluginName: "task",
+        const result = await params.get_agent().run_plugin_command({
+          plugin_name: "task",
           command: "status",
           payload: {
             title,
             status,
           },
-          context: params.getAgentContext(),
         });
         if (!result.success) {
           return c.json(
@@ -224,13 +221,12 @@ export function registerControlTaskRoutes(
           return c.json({ success: false, error: "Invalid title" }, 400);
         }
 
-        const result = await runPluginCommand({
-          pluginName: "task",
+        const result = await params.get_agent().run_plugin_command({
+          plugin_name: "task",
           command: "delete",
           payload: {
             title,
           },
-          context: params.getAgentContext(),
         });
         if (!result.success) {
           return c.json({ success: false, error: result.message || "task delete failed" }, 400);
@@ -252,7 +248,7 @@ export function registerControlTaskRoutes(
   for (const routePath of buildControlRouteAliases("/tasks/:title/runs/:timestamp")) {
     app.delete(routePath, async (c) => {
       try {
-        const runtime = params.getAgentContext();
+        const runtime = params.get_agent();
         const title = decodeMaybe(String(c.req.param("title") || "").trim());
         const timestamp = String(c.req.param("timestamp") || "").trim();
         if (!title) {
@@ -271,7 +267,7 @@ export function registerControlTaskRoutes(
         } catch {
           return c.json({ success: false, error: "Task not found" }, 404);
         }
-        const runDir = join(getDowncityTasksDirPath(runtime.rootPath), taskId, timestamp);
+        const runDir = join(getDowncityTasksDirPath(runtime.workspace.path), taskId, timestamp);
         if (!(await fs.pathExists(runDir))) {
           return c.json({ success: false, error: "Run not found" }, 404);
         }
@@ -303,7 +299,7 @@ export function registerControlTaskRoutes(
   for (const routePath of buildControlRouteAliases("/tasks/:title/runs")) {
     app.delete(routePath, async (c) => {
       try {
-        const runtime = params.getAgentContext();
+        const runtime = params.get_agent();
         const title = decodeMaybe(String(c.req.param("title") || "").trim());
         if (!title) {
           return c.json({ success: false, error: "Invalid title" }, 400);
@@ -319,7 +315,7 @@ export function registerControlTaskRoutes(
           return c.json({ success: false, error: "Task not found" }, 404);
         }
 
-        const taskDir = join(getDowncityTasksDirPath(runtime.rootPath), taskId);
+        const taskDir = join(getDowncityTasksDirPath(runtime.workspace.path), taskId);
         if (!(await fs.pathExists(taskDir))) {
           return c.json({
             success: true,
@@ -368,7 +364,7 @@ export function registerControlTaskRoutes(
 
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.getAgentContext();
+        const runtime = params.get_agent();
         const title = decodeMaybe(String(c.req.param("title") || "").trim());
         if (!title) {
           return c.json({ success: false, error: "Invalid title" }, 400);
@@ -376,7 +372,7 @@ export function registerControlTaskRoutes(
 
         const limit = toLimit(c.req.query("limit"), 50);
         const runs = await listTaskRuns({
-          projectRoot: runtime.rootPath,
+          project_root: runtime.workspace.path,
           title,
           limit,
         });
@@ -390,7 +386,7 @@ export function registerControlTaskRoutes(
   for (const routePath of buildControlRouteAliases("/tasks/:title/runs/:timestamp")) {
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.getAgentContext();
+        const runtime = params.get_agent();
         const title = decodeMaybe(String(c.req.param("title") || "").trim());
         const timestamp = String(c.req.param("timestamp") || "").trim();
         if (!title) {
@@ -401,7 +397,7 @@ export function registerControlTaskRoutes(
         }
 
         const detail = await readTaskRunDetail({
-          projectRoot: runtime.rootPath,
+          project_root: runtime.workspace.path,
           title,
           timestamp,
         });
@@ -418,10 +414,10 @@ export function registerControlTaskRoutes(
   for (const routePath of buildControlRouteAliases("/logs")) {
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.getAgentContext();
+        const runtime = params.get_agent();
         const limit = toLimit(c.req.query("limit"), 200);
         const logs = await readRecentLogs({
-          projectRoot: runtime.rootPath,
+          project_root: runtime.workspace.path,
           limit,
         });
         return c.json({

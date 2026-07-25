@@ -7,7 +7,7 @@
  */
 
 import fs from "node:fs/promises";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type {
   MemorySearchPayload,
   MemorySearchResponse,
@@ -148,7 +148,7 @@ function chunkMarkdown(content: string): Array<{
 }
 
 async function readMemoryChunks(
-  context: AgentContext,
+  context: PluginContext,
   options: { includeSources?: boolean },
 ): Promise<Array<{
   path: string;
@@ -157,7 +157,7 @@ async function readMemoryChunks(
   endLine: number;
   text: string;
 }>> {
-  const files = await listMemorySourceFiles(context.rootPath, options);
+  const files = await listMemorySourceFiles(context.workspace_path, options);
   const out: Array<{
     path: string;
     source: "wiki" | "source" | "working";
@@ -184,11 +184,11 @@ async function readMemoryChunks(
  * 收集当前 memory Markdown 状态。
  */
 export async function collectMemoryStatus(
-  context: AgentContext,
+  context: PluginContext,
   state: MemoryRuntimeState,
 ): Promise<MemoryStatusResponse> {
   void state;
-  const files = await listMemorySourceFiles(context.rootPath, {
+  const files = await listMemorySourceFiles(context.workspace_path, {
     includeSources: true,
   });
   const sourceCounts: MemorySourceStat[] = [
@@ -224,7 +224,7 @@ export async function collectMemoryStatus(
  * 执行检索。
  */
 export async function searchMemory(
-  context: AgentContext,
+  context: PluginContext,
   state: MemoryRuntimeState,
   payload: MemorySearchPayload,
 ): Promise<MemorySearchResponse> {

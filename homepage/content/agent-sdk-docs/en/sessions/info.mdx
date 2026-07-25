@@ -11,10 +11,10 @@ description: Use session.get_info() to read title, preview, model, and execution
 const info = await session.get_info();
 
 render_header({
-  title: info.title || info.sessionId,
-  preview: info.previewText,
+  title: info.title || info.session_id,
+  preview: info.preview_text,
   is_running: info.executing === true,
-  model: info.modelLabel,
+  model: info.model_label,
 });
 ```
 
@@ -22,12 +22,12 @@ render_header({
 
 | Field | Meaning |
 | --- | --- |
-| `agentId` / `sessionId` | Stable ownership and identity |
+| `agent_id` / `session_id` | Stable ownership and identity |
 | `title` | An optional persisted title |
-| `previewText` | Recent text preview for lists |
-| `messageCount` | Number of persisted Messages |
-| `modelLabel` | Runtime model label inferred for observability |
-| `createdAt` / `updatedAt` | Timestamps in milliseconds |
+| `preview_text` | Recent text preview for lists |
+| `message_count` | Number of persisted Messages |
+| `model_label` | Runtime model label inferred for observability |
+| `created_at` / `updated_at` | Timestamps in milliseconds |
 | `executing` | Whether a Turn is currently active |
 | `timezone` | Reference timezone recorded when the Session was created |
 
@@ -37,7 +37,7 @@ render_header({
 
 After the first user message, the SDK tries to generate and persist a title with the currently available model. If no model is available or generation fails, the title may remain empty; the SDK does not guarantee a fallback from the first user message.
 
-The UI must fall back to `sessionId`, `previewText`, or its own new-conversation label when `title` is empty. A title update is published live as `variant: "session", type: "title"`.
+The UI must fall back to `session_id`, `preview_text`, or its own new-conversation label when `title` is empty. A title update is published live as `variant: "session", type: "title"`.
 
 ## List versus detail
 
@@ -45,4 +45,4 @@ The UI must fall back to `sessionId`, `previewText`, or its own new-conversation
 - Selected Session: use `get_info()` to refresh header and execution state.
 - Content area: load history with `messages()` and keep it synchronized with `subscribe()`.
 
-Do not infer execution from `updatedAt`; a timestamp indicates recent persistence, not an active Turn.
+Do not infer execution from `updated_at`; a timestamp indicates recent persistence, not an active Turn.

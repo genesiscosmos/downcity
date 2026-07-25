@@ -7,7 +7,7 @@
  * - 对外只暴露 action 级入口，供 ChatPluginActions 装配使用。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
 import type {
   ChatReconnectActionPayload,
@@ -30,7 +30,7 @@ import {
  */
 export async function executeChatStatusAction(params: {
   state: ChatChannelState;
-  context: AgentContext;
+  context: PluginContext;
   payload: ChatStatusActionPayload;
 }) {
   const channels = resolveTargetChannels(params.payload.channel);
@@ -50,7 +50,7 @@ export async function executeChatStatusAction(params: {
  */
 export async function executeChatTestAction(params: {
   state: ChatChannelState;
-  context: AgentContext;
+  context: PluginContext;
   payload: ChatTestActionPayload;
 }) {
   const channels = resolveTargetChannels(params.payload.channel);
@@ -104,7 +104,7 @@ export async function executeChatTestAction(params: {
  */
 export async function executeChatReconnectAction(params: {
   state: ChatChannelState;
-  context: AgentContext;
+  context: PluginContext;
   payload: ChatReconnectActionPayload;
 }) {
   const targets = resolveTargetChannels(params.payload.channel);

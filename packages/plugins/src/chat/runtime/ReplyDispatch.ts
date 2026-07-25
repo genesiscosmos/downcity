@@ -6,7 +6,7 @@
  * - 仅服务 agent 执行生命周期，不覆盖手动 `chat send`。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { ChatReplyDispatchInput, ChatReplyEffectInput } from "@/chat/types/ChatPlugin.js";
 import type { JsonValue } from "@downcity/agent";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
@@ -21,7 +21,7 @@ function normalizeText(value: string | undefined): string {
  * 回复前文本增强。
  */
 export async function prepareChatReplyText(params: {
-  context: AgentContext;
+  context: PluginContext;
   input: ChatReplyDispatchInput;
 }): Promise<string> {
   const input = {
@@ -45,7 +45,7 @@ export async function prepareChatReplyText(params: {
  * 回复后事件分发。
  */
 export async function emitChatReplyEffect(params: {
-  context: AgentContext;
+  context: PluginContext;
   input: ChatReplyEffectInput;
 }): Promise<void> {
   await params.context.plugins.effect(
@@ -55,24 +55,24 @@ export async function emitChatReplyEffect(params: {
 }
 
 /**
- * 基于 chatKey 补齐回复目标上下文。
+ * 基于 chat_key 补齐回复目标上下文。
  */
 export async function resolveChatReplyTarget(params: {
-  context: AgentContext;
-  chatKey: string;
+  context: PluginContext;
+  chat_key: string;
 }): Promise<{
   channel?: ChatDispatchChannel;
   chatId?: string;
-  messageId?: string;
+  message_id?: string;
 }> {
   const target = await resolveDispatchTargetByChatKey({
     context: params.context,
-    chatKey: params.chatKey,
+    chat_key: params.chat_key,
   });
   if (!target) return {};
   return {
     channel: target.channel,
     chatId: target.chatId,
-    ...(target.messageId ? { messageId: target.messageId } : {}),
+    ...(target.message_id ? { message_id: target.message_id } : {}),
   };
 }

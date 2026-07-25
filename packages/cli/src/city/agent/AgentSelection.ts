@@ -10,7 +10,7 @@
 import { resolve } from "path";
 import prompts from "@/city/tui/Prompts.js";
 import { listManagedAgentEntries } from "@/city/process/registry/CityRegistry.js";
-import type { ManagedAgentRegistryEntry } from "@downcity/agent";
+import type { ManagedAgentRegistryEntry } from "@/city/types/runtime/Platform.js";
 import type {
   CliAgentPromptChoice,
   CliRegisteredAgentView,
@@ -27,8 +27,8 @@ import { readAgentConfig } from "@/city/process/registry/AgentConfigStore.js";
 /**
  * 判断一个目录是否已经满足最小 agent 初始化条件。
  */
-function isInitializedAgentProject(projectRoot: string): boolean {
-  return Boolean(readAgentConfig(projectRoot));
+function isInitializedAgentProject(project_root: string): boolean {
+  return Boolean(readAgentConfig(project_root));
 }
 
 /**
@@ -37,10 +37,10 @@ function isInitializedAgentProject(projectRoot: string): boolean {
 function toCliRegisteredAgentView(
   entry: ManagedAgentRegistryEntry,
 ): CliRegisteredAgentView {
-  const projectRoot = resolve(String(entry.projectRoot || "").trim() || ".");
+  const project_root = resolve(String(entry.project_root || "").trim() || ".");
   return {
-    id: resolveAgentId(projectRoot),
-    projectRoot,
+    id: resolveAgentId(project_root),
+    project_root,
     status: entry.status === "stopped" ? "stopped" : "running",
   };
 }
@@ -54,14 +54,14 @@ export async function listRegisteredAgentsForCli(): Promise<CliRegisteredAgentVi
     syncRegistry: false,
   });
   const runningProjectRoots = new Set(
-    runningViews.map((item) => resolve(String(item.projectRoot || "").trim() || ".")),
+    runningViews.map((item) => resolve(String(item.project_root || "").trim() || ".")),
   );
   return entries
     .map((entry) => {
       const view = toCliRegisteredAgentView(entry);
       return {
         ...view,
-        status: runningProjectRoots.has(view.projectRoot) ? "running" : "stopped",
+        status: runningProjectRoots.has(view.project_root) ? "running" : "stopped",
       } satisfies CliRegisteredAgentView;
     })
     .sort((left, right) => {
@@ -69,7 +69,7 @@ export async function listRegisteredAgentsForCli(): Promise<CliRegisteredAgentVi
       const status_priority = Number(right.status === "running") - Number(left.status === "running");
       return status_priority
         || left.id.localeCompare(right.id)
-        || left.projectRoot.localeCompare(right.projectRoot);
+        || left.project_root.localeCompare(right.project_root);
     });
 }
 
@@ -81,8 +81,8 @@ export function buildCliAgentPromptChoices(
 ): CliAgentPromptChoice[] {
   return agents.map((agent) => ({
     title: agent.id,
-    value: agent.projectRoot,
-    description: `${agent.status} · ${agent.projectRoot}`,
+    value: agent.project_root,
+    description: `${agent.status} · ${agent.project_root}`,
   }));
 }
 
@@ -96,7 +96,7 @@ export function resolveCliAgentStartTargetDecision(
   if (explicitPath) {
     return {
       mode: "explicit",
-      projectRoot: resolve(explicitPath),
+      project_root: resolve(explicitPath),
     };
   }
 
@@ -104,7 +104,7 @@ export function resolveCliAgentStartTargetDecision(
   if (input.currentDirectoryInitialized) {
     return {
       mode: "current",
-      projectRoot: currentWorkingDirectory,
+      project_root: currentWorkingDirectory,
     };
   }
 
@@ -135,14 +135,14 @@ async function promptRegisteredAgentProjectRoot(
 ): Promise<string | null> {
   const response = (await prompts({
     type: "select",
-    name: "projectRoot",
+    name: "project_root",
     message: "选择要启动的 Agent",
     choices: buildCliAgentPromptChoices(agents),
     initial: 0,
-  })) as { projectRoot?: string };
+  })) as { project_root?: string };
 
-  const projectRoot = String(response.projectRoot || "").trim();
-  return projectRoot || null;
+  const project_root = String(response.project_root || "").trim();
+  return project_root || null;
 }
 
 /**
@@ -172,7 +172,7 @@ export async function emitRegisteredAgentList(): Promise<void> {
       facts: [
         {
           label: "Project",
-          value: agent.projectRoot,
+          value: agent.project_root,
         },
         {
           label: "Status",
@@ -239,7 +239,7 @@ export async function emitRegisteredAgentListWithOptions(options?: {
       facts: [
         {
           label: "Project",
-          value: agent.projectRoot,
+          value: agent.project_root,
         },
         {
           label: "Status",
@@ -267,7 +267,7 @@ export async function resolveCliAgentStartProjectRoot(
   });
 
   if (decision.mode === "explicit" || decision.mode === "current") {
-    return decision.projectRoot;
+    return decision.project_root;
   }
 
   if (decision.mode === "error") {

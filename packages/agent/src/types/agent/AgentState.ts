@@ -7,14 +7,14 @@
  */
 
 import type { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
-import type { AgentContext } from "@/agent/AgentContext.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 
 /**
  * AgentState 构造参数。
  */
 export interface AgentStateOptions {
   /** 当前 Agent 共用的执行上下文。 */
-  context: AgentContext;
+  context: PluginContext;
 
   /** 当前 Agent 唯一的 PluginRegistry 实例。 */
   plugins: PluginRegistry;

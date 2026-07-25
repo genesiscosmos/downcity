@@ -51,7 +51,7 @@ export interface AgentContact {
   /**
    * contact 创建时间戳。
    */
-  createdAt: number;
+  created_at: number;
   /**
    * 最近一次成功通信时间戳。
    */
@@ -78,5 +78,5 @@ export interface ContactChatMessage {
   /**
    * 消息创建时间戳。
    */
-  createdAt: number;
+  created_at: number;
 }

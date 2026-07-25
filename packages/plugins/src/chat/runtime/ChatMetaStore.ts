@@ -1,13 +1,13 @@
 /**
- * ChatMetaStore：按 sessionId 维护 chat 路由元信息。
+ * ChatMetaStore：按 session_id 维护 chat 路由元信息。
  *
  * 关键点（中文）
  * - 入站消息到达时由 chat plugin runtime 写入
- * - 出站按 sessionId/chatKey 发送时由 chat plugin runtime 读取
+ * - 出站按 session_id/chat_key 发送时由 chat plugin runtime 读取
  * - 底层数据落在 `.downcity/channel/meta.json`，由 ChannelContextStore 统一维护
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { ChatMetaV1 } from "@/chat/types/ChatMeta.js";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
 import {
@@ -18,8 +18,8 @@ import {
   upsertChannelSessionRouteBySessionId,
 } from "./ChannelContextStore.js";
 
-function normalizeSessionId(sessionId: string): string {
-  return String(sessionId || "").trim();
+function normalizeSessionId(session_id: string): string {
+  return String(session_id || "").trim();
 }
 
 function normalizeChatId(chatId: string): string {
@@ -27,28 +27,28 @@ function normalizeChatId(chatId: string): string {
 }
 
 /**
- * 读取指定 sessionId 的 chat meta。
+ * 读取指定 session_id 的 chat meta。
  */
 export async function readChatMetaBySessionId(params: {
-  context: AgentContext;
-  sessionId: string;
+  context: PluginContext;
+  session_id: string;
 }): Promise<ChatMetaV1 | null> {
-  const sessionId = normalizeSessionId(params.sessionId);
-  if (!sessionId) return null;
+  const session_id = normalizeSessionId(params.session_id);
+  if (!session_id) return null;
   const route = await readChannelSessionRouteBySessionId({
     context: params.context,
-    sessionId,
+    session_id,
   });
   if (!route) return null;
   return {
     v: 1,
-    updatedAt: route.updatedAt,
-    sessionId: route.sessionId,
+    updated_at: route.updated_at,
+    session_id: route.session_id,
     channel: route.channel,
     chatId: route.chatId,
     ...(route.targetType ? { targetType: route.targetType } : {}),
     ...(typeof route.threadId === "number" ? { threadId: route.threadId } : {}),
-    ...(route.messageId ? { messageId: route.messageId } : {}),
+    ...(route.message_id ? { message_id: route.message_id } : {}),
     ...(route.actorId ? { actorId: route.actorId } : {}),
     ...(route.actorName ? { actorName: route.actorName } : {}),
     ...(route.chatTitle ? { chatTitle: route.chatTitle } : {}),
@@ -56,33 +56,33 @@ export async function readChatMetaBySessionId(params: {
 }
 
 /**
- * 更新指定 sessionId 的 chat meta（全量覆盖最近快照）。
+ * 更新指定 session_id 的 chat meta（全量覆盖最近快照）。
  */
 export async function upsertChatMetaBySessionId(params: {
-  context: AgentContext;
-  sessionId: string;
+  context: PluginContext;
+  session_id: string;
   channel: ChatDispatchChannel;
   chatId: string;
   targetType?: string;
   threadId?: number;
-  messageId?: string;
+  message_id?: string;
   actorId?: string;
   actorName?: string;
   chatTitle?: string;
 }): Promise<void> {
-  const sessionId = normalizeSessionId(params.sessionId);
+  const session_id = normalizeSessionId(params.session_id);
   const chatId = normalizeChatId(params.chatId);
-  if (!sessionId || !chatId) return;
+  if (!session_id || !chatId) return;
   await upsertChannelSessionRouteBySessionId({
     context: params.context,
-    sessionId,
+    session_id,
     target: {
       channel: params.channel,
       chatId,
       ...(typeof params.targetType === "string" ? { targetType: params.targetType } : {}),
       ...(typeof params.threadId === "number" ? { threadId: params.threadId } : {}),
     },
-    messageId: params.messageId,
+    message_id: params.message_id,
     actorId: params.actorId,
     actorName: params.actorName,
     chatTitle: params.chatTitle,
@@ -90,10 +90,10 @@ export async function upsertChatMetaBySessionId(params: {
 }
 
 /**
- * 通过渠道目标查找已有 sessionId。
+ * 通过渠道目标查找已有 session_id。
  */
 export async function resolveSessionIdByChatTarget(params: {
-  context: AgentContext;
+  context: PluginContext;
   channel: ChatDispatchChannel;
   chatId: string;
   targetType?: string;
@@ -113,10 +113,10 @@ export async function resolveSessionIdByChatTarget(params: {
 }
 
 /**
- * 通过渠道目标解析或创建 sessionId。
+ * 通过渠道目标解析或创建 session_id。
  */
 export async function resolveOrCreateSessionIdByChatTarget(params: {
-  context: AgentContext;
+  context: PluginContext;
   channel: ChatDispatchChannel;
   chatId: string;
   targetType?: string;
@@ -136,21 +136,21 @@ export async function resolveOrCreateSessionIdByChatTarget(params: {
 }
 
 /**
- * 删除指定 sessionId 的 chat meta 映射。
+ * 删除指定 session_id 的 chat meta 映射。
  *
  * 关键点（中文）
- * - 删除后该 sessionId 不再可用于 chatKey 路由发送。
- * - 若同一 target 重新收到入站消息，会创建新的 sessionId。
+ * - 删除后该 session_id 不再可用于 chat_key 路由发送。
+ * - 若同一 target 重新收到入站消息，会创建新的 session_id。
  */
 export async function removeChatMetaBySessionId(params: {
-  context: AgentContext;
-  sessionId: string;
+  context: PluginContext;
+  session_id: string;
 }): Promise<{
   removed: boolean;
   route: ChatMetaV1 | null;
 }> {
-  const sessionId = normalizeSessionId(params.sessionId);
-  if (!sessionId) {
+  const session_id = normalizeSessionId(params.session_id);
+  if (!session_id) {
     return {
       removed: false,
       route: null,
@@ -158,7 +158,7 @@ export async function removeChatMetaBySessionId(params: {
   }
   const result = await removeChannelSessionRouteBySessionId({
     context: params.context,
-    sessionId,
+    session_id,
   });
   const route = result.route;
   if (!route) {
@@ -171,13 +171,13 @@ export async function removeChatMetaBySessionId(params: {
     removed: result.removed,
     route: {
       v: 1,
-      updatedAt: route.updatedAt,
-      sessionId: route.sessionId,
+      updated_at: route.updated_at,
+      session_id: route.session_id,
       channel: route.channel,
       chatId: route.chatId,
       ...(route.targetType ? { targetType: route.targetType } : {}),
       ...(typeof route.threadId === "number" ? { threadId: route.threadId } : {}),
-      ...(route.messageId ? { messageId: route.messageId } : {}),
+      ...(route.message_id ? { message_id: route.message_id } : {}),
       ...(route.actorId ? { actorId: route.actorId } : {}),
       ...(route.actorName ? { actorName: route.actorName } : {}),
       ...(route.chatTitle ? { chatTitle: route.chatTitle } : {}),

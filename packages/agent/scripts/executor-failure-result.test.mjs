@@ -11,10 +11,10 @@ import { ExecutorRecoveryPolicy } from "../bin/executor/services/ExecutorRecover
 
 function create_run_context(overrides = {}) {
   return {
-    sessionId: "executor-failure-test",
-    injectedUserMessages: [],
-    deferredPersistedUserMessages: [],
-    pendingAssistantFileParts: [],
+    session_id: "executor-failure-test",
+    injected_user_messages: [],
+    deferred_persisted_user_messages: [],
+    pending_assistant_file_parts: [],
     ...overrides,
   };
 }
@@ -48,7 +48,7 @@ function create_runner_input(model, run_context) {
     metadata: {
       v: 1,
       ts: 1,
-      sessionId: "executor-failure-test",
+      session_id: "executor-failure-test",
       source: "ingress",
       kind: "normal",
     },
@@ -81,7 +81,7 @@ test("CoreEngine Provider 失败时只返回结构化错误", async () => {
     metadata: {
       v: 1,
       ts: 1,
-      sessionId: "executor-failure-test",
+      session_id: "executor-failure-test",
       source: "ingress",
       kind: "normal",
     },
@@ -98,7 +98,7 @@ test("CoreEngine Provider 失败时只返回结构化错误", async () => {
 
   assert.equal(result.success, false);
   assert.match(result.error, /quota exceeded/);
-  assert.equal(result.assistantMessage, undefined);
+  assert.equal(result.assistant_message, undefined);
 });
 
 test("CoreEngine 成功流按 start、chunks、finish 完成 canonical step", async () => {
@@ -116,7 +116,7 @@ test("CoreEngine 成功流按 start、chunks、finish 完成 canonical step", as
     model,
     create_run_context({
       on_ui_message_step_start: async () => events.push("start"),
-      onUiMessageChunkCallback: async (chunk) => events.push(chunk.type),
+      on_ui_message_chunk_callback: async (chunk) => events.push(chunk.type),
       on_ui_message_step_finish: async (message) => {
         events.push(`finish:${message.parts.map((part) => part.type).join(",")}`);
       },
@@ -146,7 +146,7 @@ test("CoreEngine chunk 写入失败时中止 canonical step", async () => {
     model,
     create_run_context({
       on_ui_message_step_start: async () => events.push("start"),
-      onUiMessageChunkCallback: async () => {
+      on_ui_message_chunk_callback: async () => {
         throw new Error("canonical write failed");
       },
       on_ui_message_step_finish: async () => events.push("finish"),
@@ -180,5 +180,5 @@ test("恢复策略捕获普通异常后只返回结构化错误", async () => {
 
   assert.equal(result.success, false);
   assert.match(result.error, /configuration failed/);
-  assert.equal(result.assistantMessage, undefined);
+  assert.equal(result.assistant_message, undefined);
 });

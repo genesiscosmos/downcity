@@ -38,7 +38,7 @@ export type AgentManagerConfigAction =
 
 export interface AgentManagerAgentSummary {
   id: string;
-  projectRoot: string;
+  project_root: string;
   status: "running" | "stopped";
   execution_binding?: string;
   channels: string[];

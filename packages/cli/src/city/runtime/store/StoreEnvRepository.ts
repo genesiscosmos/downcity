@@ -11,7 +11,7 @@ import type {
   StoredGlobalEnvEntry,
   UpsertEnvEntryInput,
   UpsertGlobalEnvEntryInput,
-} from "@downcity/agent";
+} from "@/city/types/platform/PlatformStore.js";
 import { decryptText, decryptTextSync, encryptText } from "@/city/runtime/store/crypto.js";
 import type { PlatformStoreContext } from "@/city/runtime/store/StoreShared.js";
 import { normalizeNonEmptyText, nowIso } from "@/city/runtime/store/StoreShared.js";
@@ -37,8 +37,8 @@ function buildEnvEntryFromRowSync(row: {
     key,
     description: String(row.description || "").trim() || undefined,
     value: decryptTextSync(encrypted),
-    createdAt: String(row.created_at || ""),
-    updatedAt: String(row.updated_at || ""),
+    created_at: String(row.created_at || ""),
+    updated_at: String(row.updated_at || ""),
   };
 }
 
@@ -63,8 +63,8 @@ async function buildEnvEntryFromRow(row: {
     key,
     description: String(row.description || "").trim() || undefined,
     value: await decryptText(encrypted),
-    createdAt: String(row.created_at || ""),
-    updatedAt: String(row.updated_at || ""),
+    created_at: String(row.created_at || ""),
+    updated_at: String(row.updated_at || ""),
   };
 }
 
@@ -120,7 +120,7 @@ export async function upsertEnvEntry(
   input: UpsertEnvEntryInput,
 ): Promise<void> {
   const scope = "global";
-  const agentId = "";
+  const agent_id = "";
   const key = normalizeNonEmptyText(input.key, "global env key");
   const description = String(input.description || "").trim();
   const value = String(input.value ?? "");
@@ -133,9 +133,9 @@ export async function upsertEnvEntry(
       LIMIT 1;
       `,
     )
-    .get(scope, agentId, key) as { created_at?: unknown } | undefined;
-  const createdAt = String(existing?.created_at || nowIso());
-  const updatedAt = nowIso();
+    .get(scope, agent_id, key) as { created_at?: unknown } | undefined;
+  const created_at = String(existing?.created_at || nowIso());
+  const updated_at = nowIso();
   const encrypted = await encryptText(value);
   context.sqlite
     .prepare(
@@ -156,7 +156,7 @@ export async function upsertEnvEntry(
         updated_at = excluded.updated_at;
       `,
     )
-    .run(scope, agentId, key, description || null, encrypted, createdAt, updatedAt);
+    .run(scope, agent_id, key, description || null, encrypted, created_at, updated_at);
 }
 
 /**

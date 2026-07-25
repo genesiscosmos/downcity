@@ -44,10 +44,10 @@ function deriveTaskIdFromTitle(title: string): string {
  * 读取近期日志。
  */
 export async function readRecentLogs(params: {
-  projectRoot: string;
+  project_root: string;
   limit: number;
 }): Promise<ControlLogEntry[]> {
-  const logsDir = getLogsDirPath(params.projectRoot);
+  const logsDir = getLogsDirPath(params.project_root);
   if (!(await fs.pathExists(logsDir))) return [];
 
   const files = (await fs.readdir(logsDir, { withFileTypes: true }))
@@ -87,20 +87,20 @@ export async function readRecentLogs(params: {
   return out;
 }
 
-async function resolveTaskDir(projectRoot: string, title: string): Promise<string> {
+async function resolveTaskDir(project_root: string, title: string): Promise<string> {
   const taskId = deriveTaskIdFromTitle(title);
-  return path.join(getDowncityTasksDirPath(projectRoot), taskId);
+  return path.join(getDowncityTasksDirPath(project_root), taskId);
 }
 
 /**
  * 枚举任务运行摘要。
  */
 export async function listTaskRuns(params: {
-  projectRoot: string;
+  project_root: string;
   title: string;
   limit: number;
 }): Promise<ControlTaskRunSummary[]> {
-  const taskDir = await resolveTaskDir(params.projectRoot, params.title);
+  const taskDir = await resolveTaskDir(params.project_root, params.title);
   if (!(await fs.pathExists(taskDir))) return [];
 
   const entries = await fs.readdir(taskDir, { withFileTypes: true });
@@ -117,7 +117,7 @@ export async function listTaskRuns(params: {
     const runDir = path.join(taskDir, timestamp);
     const metaPath = path.join(runDir, "run.json");
     const progressPath = path.join(runDir, "run-progress.json");
-    const runDirRel = path.relative(params.projectRoot, runDir).split(path.sep).join("/");
+    const runDirRel = path.relative(params.project_root, runDir).split(path.sep).join("/");
     const meta = (await fs.readJson(metaPath).catch(() => null)) as {
       status?: string;
       executionStatus?: string;
@@ -132,7 +132,7 @@ export async function listTaskRuns(params: {
       status?: string;
       phase?: string;
       message?: string;
-      updatedAt?: number;
+      updated_at?: number;
       round?: number;
       maxRounds?: number;
     } | null;
@@ -157,7 +157,7 @@ export async function listTaskRuns(params: {
       ...(inProgress ? { inProgress: true } : {}),
       ...(typeof progress?.phase === "string" ? { progressPhase: progress.phase } : {}),
       ...(typeof progress?.message === "string" ? { progressMessage: progress.message } : {}),
-      ...(typeof progress?.updatedAt === "number" ? { progressUpdatedAt: progress.updatedAt } : {}),
+      ...(typeof progress?.updated_at === "number" ? { progressUpdatedAt: progress.updated_at } : {}),
       ...(typeof progress?.round === "number" ? { progressRound: progress.round } : {}),
       ...(typeof progress?.maxRounds === "number" ? { progressMaxRounds: progress.maxRounds } : {}),
       ...(typeof meta?.startedAt === "number" ? { startedAt: meta.startedAt } : {}),
@@ -178,11 +178,11 @@ export async function listTaskRuns(params: {
  * 读取任务运行详情。
  */
 export async function readTaskRunDetail(params: {
-  projectRoot: string;
+  project_root: string;
   title: string;
   timestamp: string;
 }): Promise<ControlTaskRunDetail | null> {
-  const taskDir = await resolveTaskDir(params.projectRoot, params.title);
+  const taskDir = await resolveTaskDir(params.project_root, params.title);
   const runDir = path.join(taskDir, params.timestamp);
   if (!(await fs.pathExists(runDir))) return null;
 
@@ -206,7 +206,7 @@ export async function readTaskRunDetail(params: {
     phase?: string;
     message?: string;
     startedAt?: number;
-    updatedAt?: number;
+    updated_at?: number;
     endedAt?: number;
     round?: number;
     maxRounds?: number;
@@ -226,7 +226,7 @@ export async function readTaskRunDetail(params: {
   return {
     title: params.title,
     timestamp: params.timestamp,
-    runDirRel: path.relative(params.projectRoot, runDir).split(path.sep).join("/"),
+    runDirRel: path.relative(params.project_root, runDir).split(path.sep).join("/"),
     meta: await readJson<Record<string, unknown>>("run.json"),
     ...(progress ? { progress } : {}),
     dialogue: await readJson<Record<string, unknown>>("dialogue.json"),

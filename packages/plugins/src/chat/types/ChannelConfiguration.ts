@@ -92,7 +92,7 @@ export interface ChatChannelConfigurationField {
   /**
    * 默认值（可选）。
    */
-  defaultValue?: ChatChannelConfigurationPrimitive;
+  default_value?: ChatChannelConfigurationPrimitive;
   /**
    * 示例值（可选）。
    */

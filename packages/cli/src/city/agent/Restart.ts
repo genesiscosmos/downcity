@@ -29,10 +29,10 @@ export async function restartCommand(
   cwd: string = ".",
   options: AgentStartOptions,
 ): Promise<void> {
-  const projectRoot = path.resolve(cwd);
+  const project_root = path.resolve(cwd);
 
   // 关键点（中文）：统一预检项目初始化状态、sandbox 与 execution binding。
-  await checkAgentPreflight(projectRoot);
+  await checkAgentPreflight(project_root);
 
   // 计算当前 CLI 的入口路径（编译后是 `bin/index.js`）。
   // 本模块位于 `bin/city/agent/`，需上溯两级才能到达 `bin/index.js`。
@@ -41,10 +41,10 @@ export async function restartCommand(
   const cliPath = path.resolve(__dirname, "../../index.js");
 
   try {
-    await stopDaemonProcess({ projectRoot });
-    const args = await buildRunArgsFromOptions(projectRoot, options || {});
+    await stopDaemonProcess({ project_root });
+    const args = await buildRunArgsFromOptions(project_root, options || {});
     await startDaemonProcess({
-      projectRoot,
+      project_root,
       cliPath,
       args,
     });
@@ -52,11 +52,11 @@ export async function restartCommand(
     emitCliBlock({
       tone: "success",
       title: "Agent daemon restarted",
-      summary: resolveAgentId(projectRoot),
+      summary: resolveAgentId(project_root),
       facts: [
         {
           label: "Project",
-          value: projectRoot,
+          value: project_root,
         },
       ],
     });

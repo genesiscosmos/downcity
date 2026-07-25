@@ -1,0 +1,52 @@
+/**
+ * PluginContext 工厂：构造 Agent 向 Plugin 投影的只读能力视图。
+ *
+ * 关键点（中文）
+ * - 固定能力直接引用唯一实例。
+ * - env 与 instruction 使用 getter 延迟读取，避免复制可变状态。
+ */
+
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
+
+/** PluginContext 工厂输入。 */
+export interface CreatePluginContextInput {
+  /** 当前 Agent 稳定标识。 */
+  agent_id: PluginContext["agent_id"];
+  /** 当前 Workspace 绝对根目录。 */
+  workspace_path: PluginContext["workspace_path"];
+  /** 当前 Workspace 文件能力。 */
+  files: PluginContext["files"];
+  /** 当前 Workspace 可选 Shell。 */
+  shell?: PluginContext["shell"];
+  /** 当前 Agent 日志器。 */
+  logger: PluginContext["logger"];
+  /** 当前 Agent Session 集合。 */
+  sessions: PluginContext["sessions"];
+  /** 当前 Agent Plugin 注册表视图。 */
+  plugins: PluginContext["plugins"];
+  /** 延迟读取 Workspace env。 */
+  get_workspace_env: () => PluginContext["workspace_env"];
+  /** 延迟读取 Agent instruction。 */
+  get_instructions: () => PluginContext["instructions"];
+}
+
+/** 创建一个不复制动态状态的 PluginContext。 */
+export function create_plugin_context(
+  input: CreatePluginContextInput,
+): PluginContext {
+  return Object.freeze({
+    agent_id: input.agent_id,
+    workspace_path: input.workspace_path,
+    files: input.files,
+    ...(input.shell ? { shell: input.shell } : {}),
+    logger: input.logger,
+    sessions: input.sessions,
+    plugins: input.plugins,
+    get workspace_env() {
+      return input.get_workspace_env();
+    },
+    get instructions() {
+      return input.get_instructions();
+    },
+  });
+}

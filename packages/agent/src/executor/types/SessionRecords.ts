@@ -46,9 +46,9 @@ export type SessionIngressKind = "exec";
  */
 export type SessionMessageSourceRangeV1 = {
   /** 起始消息 ID。 */
-  fromId: string;
+  from_id: string;
   /** 结束消息 ID。 */
-  toId: string;
+  to_id: string;
   /** 被覆盖的原始消息数量。 */
   count: number;
 };
@@ -62,17 +62,17 @@ export type SessionMetadataV1 = {
   /** 当前消息写入时的毫秒时间戳。 */
   ts: number;
   /** 当前消息所属的 session ID。 */
-  sessionId: string;
+  session_id: string;
   /** 当前消息所属 turn。 */
-  turnId?: string;
+  turn_id?: string;
   /** 当前消息是普通消息还是摘要消息。 */
   kind?: SessionMessageKind;
   /** 当前消息来自入站、出站还是 compact。 */
   source?: SessionMessageSource;
   /** compact 摘要对应的 archive 文件 ID，用于用户历史按层读取更早消息。 */
-  archiveId?: string;
+  archive_id?: string;
   /** compact 摘要所覆盖的原始消息范围。 */
-  sourceRange?: SessionMessageSourceRangeV1;
+  source_range?: SessionMessageSourceRangeV1;
   /**
    * 扩展元信息。
    *
@@ -102,9 +102,9 @@ export type SessionActionMetadataV1 = {
   /** 当前 action 写入时的毫秒时间戳。 */
   ts: number;
   /** 当前 action 所属的 session ID。 */
-  sessionId: string;
+  session_id: string;
   /** 当前 action 关联的 turn 标识。 */
-  turnId?: string;
+  turn_id?: string;
 };
 
 /**
@@ -142,7 +142,7 @@ export type SessionActionRecordInputV1 = {
   /** 当前 action 状态。 */
   state: SessionActionStateV1;
   /** 当前 action 关联的 turn 标识。 */
-  turnId?: string;
+  turn_id?: string;
   /** 可选 action 元信息覆盖。 */
   metadata?: Partial<SessionActionMetadataV1>;
 };
@@ -189,8 +189,8 @@ export function to_session_action_record(
       ? action.metadata
       : {};
   const turn_id =
-    String(metadata.turnId || "").trim() ||
-    ("turnId" in action ? String(action.turnId || "").trim() : "");
+    String(metadata.turn_id || "").trim() ||
+    ("turn_id" in action ? String(action.turn_id || "").trim() : "");
   return {
     type: "action",
     id,
@@ -200,8 +200,8 @@ export function to_session_action_record(
     metadata: {
       v: 1,
       ts: typeof metadata.ts === "number" ? metadata.ts : Date.now(),
-      sessionId: String(metadata.sessionId || "").trim() || session_id,
-      ...(turn_id ? { turnId: turn_id } : {}),
+      session_id: String(metadata.session_id || "").trim() || session_id,
+      ...(turn_id ? { turn_id: turn_id } : {}),
     },
   };
 }

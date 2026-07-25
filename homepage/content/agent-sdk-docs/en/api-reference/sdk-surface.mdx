@@ -11,20 +11,20 @@ The SDK is session-first. `Agent` owns local runtime assembly and `RemoteAgent` 
 
 - `new Agent(options)`, `ready()`, `dispose()`
 - `sessions.create()`, `get()`, `list()`, `archive()`, `archived()`, `clean_archive()`, `remove()`, `clear_messages()`
-- `setInstruction()`; Workspace exposes `get_env()`, `set_env()`, and `patch_env()`
-- `getLogger()`, `getContext()`, `getShell()`, and `plugins`
+- `set_instruction()`; Workspace exposes `get_env()`, `set_env()`, and `patch_env()`
+- `get_logger()`, `get_shell()`, and `plugins`
 
-Local plugin actions use `agent.plugins.runAction(...)`. HTTP and RPC transports are supplied by `AgentHTTP` and `AgentRPC` in `@downcity/server`.
+Local plugin actions use `agent.plugins.run_action(...)`. HTTP and RPC transports are supplied by `AgentHTTP` and `AgentRPC` in `@downcity/server`.
 
-Agent owns its runtime state and long-lived objects, while Workspace owns project env and resources. The full project config remains in an upstream host such as the CLI; `AgentContext` only projects the limited capabilities required by plugins and host integrations.
+Agent owns its runtime state and long-lived objects, while Workspace owns project env and resources. The full project config remains in an upstream host such as the CLI. `PluginContext` is an internal projection for plugins; hosts use the explicit Agent facade.
 
-`agent.getLogger()` returns the logger owned by that Agent. For standalone integration code, `getLogger(project_root?)` creates a new independent logger instance; the package does not expose a process-global logger.
+`agent.get_logger()` returns the logger owned by that Agent. For standalone integration code, `get_logger(project_root?)` creates a new independent logger instance; the package does not expose a process-global logger.
 
 ## `RemoteAgent`
 
 - `new RemoteAgent({ url, token? })`
 - `sessions` collection methods matching local Agent
-- `runPluginAction()` and `close()`
+- `run_plugin_action()` and `close()`
 
 HTTP URLs use the server root such as `http://127.0.0.1:5314`; RPC uses `rpc://127.0.0.1:15314`.
 

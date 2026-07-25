@@ -5,7 +5,7 @@
  */
 
 import { generateText, type LanguageModel } from "ai";
-import { generateId } from "@/utils/Id.js";
+import { generate_id } from "@/utils/Id.js";
 import {
   build_initial_session_compaction_prompt,
   build_update_session_compaction_prompt,
@@ -95,7 +95,7 @@ export async function compose_session_compaction(input: {
     summary: {
       record_type: "summary",
       session_id: input.session_id,
-      summary_id: `summary:${input.session_id}:${generateId()}`,
+      summary_id: `summary:${input.session_id}:${generate_id()}`,
       through_sequence: boundary.sequence,
       text: summary,
       created_at: Date.now(),

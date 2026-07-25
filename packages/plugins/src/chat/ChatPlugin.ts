@@ -10,7 +10,7 @@
 
 import { BasePlugin } from "@downcity/agent";
 import type { PluginActions } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { PluginRunContext } from "@downcity/agent";
 import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
 import type { ChatQueueWorkerConfig } from "@/chat/types/ChatQueueWorker.js";
@@ -89,7 +89,7 @@ export class ChatPlugin extends BasePlugin {
    * 当前 plugin 的 system 文本构建器。
    */
   readonly system = async (
-    context: AgentContext,
+    context: PluginContext,
     run_context?: PluginRunContext,
   ): Promise<string> => {
     return await buildChatPluginSystem(context, run_context);
@@ -103,7 +103,7 @@ export class ChatPlugin extends BasePlugin {
   /**
    * 启动当前实例的 queue worker。
    */
-  private startQueueWorker(context: AgentContext): void {
+  private startQueueWorker(context: PluginContext): void {
     if (this.queueWorker) return;
     const worker = new ChatQueueWorker({
       logger: context.logger,
@@ -153,7 +153,7 @@ export class ChatPlugin extends BasePlugin {
    * 读取 queue worker 配置。
    */
   getQueueWorkerConfig(
-    context: AgentContext,
+    context: PluginContext,
   ): Partial<ChatQueueWorkerConfig> | undefined {
     void context;
     return this.options.queue;
@@ -162,7 +162,7 @@ export class ChatPlugin extends BasePlugin {
   /**
    * 判断指定渠道是否启用。
    */
-  isChannelEnabled(context: AgentContext, channel: ChatChannelName): boolean {
+  isChannelEnabled(context: PluginContext, channel: ChatChannelName): boolean {
     return this.getChannel(channel)?.isEnabled(context) === true;
   }
 
@@ -170,7 +170,7 @@ export class ChatPlugin extends BasePlugin {
    * 读取指定渠道的显式账户 ID。
    */
   getChannelAccountId(
-    context: AgentContext,
+    context: PluginContext,
     channel: ChatChannelName,
   ): string {
     return String(this.getChannel(channel)?.getChannelAccountId(context) || "").trim();
@@ -180,7 +180,7 @@ export class ChatPlugin extends BasePlugin {
    * 解析指定渠道当前应使用的账户。
    */
   resolveChannelAccount(
-    context: AgentContext,
+    context: PluginContext,
     channel: ChatChannelName,
   ) {
     return this.getChannel(channel)?.getAccount(

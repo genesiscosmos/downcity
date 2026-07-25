@@ -78,10 +78,10 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
         "Content-Type": "application/json",
       }),
       body: JSON.stringify({
-        ...(input?.sessionId ? { sessionId: input.sessionId } : {}),
+        ...(input?.session_id ? { session_id: input.session_id } : {}),
       }),
     });
-    if (!payload.success || !payload.session?.sessionId) {
+    if (!payload.success || !payload.session?.session_id) {
       throw new Error(String(payload.error || "Remote session create failed"));
     }
     return payload.session;
@@ -95,7 +95,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}`, {
       headers: this.headers(),
     });
-    if (!payload.success || !payload.session?.sessionId) {
+    if (!payload.success || !payload.session?.session_id) {
       throw new Error(String(payload.error || "Remote session info failed"));
     }
     return payload.session;
@@ -255,7 +255,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     const message_id =
       typeof input === "string"
         ? String(input || "").trim() || undefined
-        : String(input?.messageId || "").trim() || undefined;
+        : String(input?.message_id || "").trim() || undefined;
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
@@ -266,10 +266,10 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
         "Content-Type": "application/json",
       }),
       body: JSON.stringify({
-        ...(message_id ? { messageId: message_id } : {}),
+        ...(message_id ? { message_id: message_id } : {}),
       }),
     });
-    if (!payload.success || !payload.session?.sessionId) {
+    if (!payload.success || !payload.session?.session_id) {
       throw new Error(String(payload.error || "Remote session fork failed"));
     }
     return payload.session;
@@ -306,8 +306,8 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
-      sessionId?: string;
-      archivedAt?: number;
+      session_id?: string;
+      archived_at?: number;
     }>(
       `${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/archive`,
       {
@@ -317,14 +317,14 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
         }),
       },
     );
-    if (!payload.success || !payload.sessionId) {
+    if (!payload.success || !payload.session_id) {
       throw new Error(String(payload.error || "Remote session archive failed"));
     }
     return {
-      sessionId: payload.sessionId,
-      archivedAt:
-        typeof payload.archivedAt === "number" && Number.isFinite(payload.archivedAt)
-          ? payload.archivedAt
+      session_id: payload.session_id,
+      archived_at:
+        typeof payload.archived_at === "number" && Number.isFinite(payload.archived_at)
+          ? payload.archived_at
           : Date.now(),
     };
   }
@@ -356,7 +356,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
-      removedSessionIds?: string[];
+      removed_session_ids?: string[];
     }>(`${this.base_url}/api/sdk/archived-sessions`, {
       method: "DELETE",
       headers: this.headers(),
@@ -365,8 +365,8 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       throw new Error(String(payload.error || "Remote clean archive failed"));
     }
     return {
-      removedSessionIds: Array.isArray(payload.removedSessionIds)
-        ? payload.removedSessionIds
+      removed_session_ids: Array.isArray(payload.removed_session_ids)
+        ? payload.removed_session_ids
         : [],
     };
   }
@@ -382,8 +382,8 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
           "Content-Type": "application/json",
         }),
         body: JSON.stringify({
-          pluginName: input.plugin,
-          actionName: input.action,
+          plugin_name: input.plugin,
+          action_name: input.action,
           ...(input.payload !== undefined ? { payload: input.payload } : {}),
         }),
       },

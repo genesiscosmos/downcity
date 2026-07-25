@@ -2,7 +2,7 @@
  * SDK Session 元数据辅助。
  *
  * 关键点（中文）
- * - 统一负责 `.downcity/agents/<agentId>/sessions/<sessionId>/messages/meta.json` 的规范化读取。
+ * - 统一负责 `.downcity/agents/<agent_id>/sessions/<session_id>/messages/meta.json` 的规范化读取。
  * - 仅处理轻量配置摘要与索引信息，不负责消息 JSONL 的读写。
  */
 
@@ -64,10 +64,10 @@ function normalize_history_bytes(input: unknown): number | undefined {
 export async function readSessionMetadataFromPath(input: {
   /** meta.json 文件路径。 */
   filePath: string;
-  /** 当前 sessionId。 */
-  sessionId: string;
-  /** 当前 agentId。 */
-  agentId: string;
+  /** 当前 session_id。 */
+  session_id: string;
+  /** 当前 agent_id。 */
+  agent_id: string;
   /** 当前 Workspace 的统一文件能力。 */
   files: FileSystem;
 }): Promise<SessionHistoryMetaV1> {
@@ -75,9 +75,9 @@ export async function readSessionMetadataFromPath(input: {
     const raw = JSON.parse(
       (await input.files.read_file(input.filePath)).toString("utf8"),
     ) as Partial<SessionHistoryMetaV1>;
-    return normalize_session_metadata(raw, input.sessionId, input.agentId);
+    return normalize_session_metadata(raw, input.session_id, input.agent_id);
   } catch {
-    return normalize_session_metadata({}, input.sessionId, input.agentId);
+    return normalize_session_metadata({}, input.session_id, input.agent_id);
   }
 }
 
@@ -89,28 +89,28 @@ export function normalize_session_metadata(
 ): SessionHistoryMetaV1 {
   return {
     v: 1,
-    sessionId: session_id,
-    agentId: agent_id,
-    createdAt:
-      typeof raw.createdAt === "number" && Number.isFinite(raw.createdAt)
-        ? raw.createdAt
+    session_id: session_id,
+    agent_id: agent_id,
+    created_at:
+      typeof raw.created_at === "number" && Number.isFinite(raw.created_at)
+        ? raw.created_at
         : Date.now(),
     timezone: normalizeTimezone(raw.timezone) || resolveSystemTimezone(),
-    updatedAt:
-      typeof raw.updatedAt === "number" && Number.isFinite(raw.updatedAt)
-        ? raw.updatedAt
+    updated_at:
+      typeof raw.updated_at === "number" && Number.isFinite(raw.updated_at)
+        ? raw.updated_at
         : 0,
     ...(normalizeSessionTitle(raw.title)
       ? { title: normalizeSessionTitle(raw.title) }
       : {}),
-    ...(normalizeModelLabel(raw.modelLabel)
-      ? { modelLabel: normalizeModelLabel(raw.modelLabel) }
+    ...(normalizeModelLabel(raw.model_label)
+      ? { model_label: normalizeModelLabel(raw.model_label) }
       : {}),
-    ...(normalize_message_count(raw.messageCount) !== undefined
-      ? { messageCount: normalize_message_count(raw.messageCount) }
+    ...(normalize_message_count(raw.message_count) !== undefined
+      ? { message_count: normalize_message_count(raw.message_count) }
       : {}),
-    ...(normalize_preview_text(raw.previewText)
-      ? { previewText: normalize_preview_text(raw.previewText) }
+    ...(normalize_preview_text(raw.preview_text)
+      ? { preview_text: normalize_preview_text(raw.preview_text) }
       : {}),
     ...(normalize_history_bytes(raw.historyBytes) !== undefined
       ? { historyBytes: normalize_history_bytes(raw.historyBytes) }

@@ -28,7 +28,7 @@ test("install action 默认返回 web-access 安装工作流", async () => {
   assert.equal(fs.existsSync(project_root), false);
 
   const result = await plugin.actions.install.execute({
-    context: { rootPath: project_root },
+    context: { workspace_path: project_root },
     input: {},
   });
 
@@ -46,7 +46,7 @@ test("install action 默认返回 web-access 安装工作流", async () => {
 test("agent-browser project 提示包含 Skill 与项目 CLI 安装步骤", async () => {
   const plugin = new WebPlugin();
   const result = await plugin.actions.install.execute({
-    context: { rootPath: path.resolve("fixtures/web-agent-browser-instructions") },
+    context: { workspace_path: path.resolve("fixtures/web-agent-browser-instructions") },
     input: { target: "agent-browser", scope: "project" },
   });
 
@@ -63,7 +63,7 @@ test("agent-browser project 提示包含 Skill 与项目 CLI 安装步骤", asyn
 test("all 目标返回两个 Skill 和用户级 CLI 提示", async () => {
   const plugin = new WebPlugin();
   const result = await plugin.actions.install.execute({
-    context: { rootPath: path.resolve("fixtures/web-all-instructions") },
+    context: { workspace_path: path.resolve("fixtures/web-all-instructions") },
     input: { target: "all", scope: "user" },
   });
 
@@ -76,7 +76,7 @@ test("all 目标返回两个 Skill 和用户级 CLI 提示", async () => {
 
 test("system prompt 明确 install 只返回提示", () => {
   const plugin = new WebPlugin();
-  const prompt = plugin.system({ rootPath: process.cwd() });
+  const prompt = plugin.system({ workspace_path: process.cwd() });
 
   assert.match(prompt, /return installation instructions/);
   assert.match(prompt, /never executes commands/);

@@ -56,22 +56,22 @@ export interface ControlTimelineEvent {
   /**
    * 工具名称。
    */
-  toolName?: string;
+  tool_name?: string;
 
   /**
    * action 标题。
    */
-  actionTitle?: string;
+  action_title?: string;
 
   /**
    * action 描述。
    */
-  actionDescription?: string;
+  action_description?: string;
 
   /**
    * action 状态。
    */
-  actionState?: string;
+  action_state?: string;
 }
 
 /**
@@ -82,19 +82,19 @@ export interface ControlSessionSummary {
    * 会话 ID。
    *
    * 说明（中文）
-   * - 对内对外统一使用 `sessionId` 语义。
+   * - 对内对外统一使用 `session_id` 语义。
    */
-  sessionId: string;
+  session_id: string;
 
   /**
    * 消息数量。
    */
-  messageCount: number;
+  message_count: number;
 
   /**
    * 最后更新时间（毫秒）。
    */
-  updatedAt?: number;
+  updated_at?: number;
 
   /**
    * 最后一条消息角色。
@@ -303,7 +303,7 @@ export interface ControlTaskRunDetail {
     /**
      * 更新时间。
      */
-    updatedAt?: number;
+    updated_at?: number;
 
     /**
      * 结束时间。

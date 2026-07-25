@@ -10,7 +10,7 @@
 import { Executor } from "@executor/Executor.js";
 import type { LanguageModel, Tool } from "ai";
 import {
-  normalizeAgentModel,
+  normalize_agent_model,
   read_agent_model_context_window,
   type AgentModel,
 } from "@/agent/AgentModel.js";
@@ -64,7 +64,7 @@ import type {
   SessionStepInput,
 } from "@/types/session/SessionComposer.js";
 import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
-import { generateId } from "@/utils/Id.js";
+import { generate_id } from "@/utils/Id.js";
 import { nanoid } from "nanoid";
 import { buildSessionInfo } from "@/session/browse/Browse.js";
 import { ensureSessionTitle } from "@/session/SessionTitle.js";
@@ -81,23 +81,23 @@ import type { SessionStore } from "@/types/store/SessionStore.js";
  */
 export class Session implements AgentSession {
   readonly id: string;
-  readonly agentId: string;
+  readonly agent_id: string;
 
   private readonly workspace_path: string;
   private readonly store: SessionStore;
   private readonly get_session_store: SessionOptions["get_session_store"];
   private readonly tools: Record<string, Tool>;
   private readonly logger: SessionOptions["logger"];
-  private readonly get_managed_plugin_system_blocks: SessionOptions["getManagedPluginSystemBlocks"];
-  private readonly ensure_configured_hook?: SessionOptions["ensureConfigured"];
+  private readonly get_managed_plugin_system_blocks: SessionOptions["get_managed_plugin_system_blocks"];
+  private readonly ensure_configured_hook?: SessionOptions["ensure_configured"];
   private readonly composer: SessionComposer;
   private readonly session_messages: SessionMessages;
   private readonly executor: Executor;
   private readonly events: SessionEventHub;
   private readonly approval_broker: SessionApprovalBroker;
   private readonly local_state: SessionLocalState;
-  private readonly get_workspace_env: SessionOptions["getWorkspaceEnv"];
-  private readonly get_agent_model: SessionOptions["getAgentModel"];
+  private readonly get_workspace_env: SessionOptions["get_workspace_env"];
+  private readonly get_agent_model: SessionOptions["get_agent_model"];
   private readonly get_agent_plugins: SessionOptions["get_agent_plugins"];
   private readonly get_instruction_system_blocks:
     SessionOptions["get_instruction_system_blocks"];
@@ -114,30 +114,30 @@ export class Session implements AgentSession {
   private runtime_port: SessionPort | null = null;
 
   constructor(options: SessionOptions) {
-    this.id = String(options.sessionId || "").trim();
-    this.agentId = String(options.agentId || "").trim();
+    this.id = String(options.session_id || "").trim();
+    this.agent_id = String(options.agent_id || "").trim();
     this.workspace_path = String(options.workspace_path || "").trim();
     this.store = options.store;
     this.get_session_store = options.get_session_store;
     this.tools = options.tools;
     this.logger = options.logger;
-    this.get_workspace_env = options.getWorkspaceEnv;
-    this.get_agent_model = options.getAgentModel;
+    this.get_workspace_env = options.get_workspace_env;
+    this.get_agent_model = options.get_agent_model;
     this.get_agent_plugins = options.get_agent_plugins;
     this.get_instruction_system_blocks = options.get_instruction_system_blocks;
     this.effective_instruction_system_blocks = options
       .instruction_system_blocks
       .map((block) => ({ ...block }));
-    this.effective_workspace_env = { ...options.getWorkspaceEnv() };
+    this.effective_workspace_env = { ...options.get_workspace_env() };
     this.effective_agent_plugins = options.get_agent_plugins();
-    this.get_managed_plugin_system_blocks = options.getManagedPluginSystemBlocks;
-    this.ensure_configured_hook = options.ensureConfigured;
+    this.get_managed_plugin_system_blocks = options.get_managed_plugin_system_blocks;
+    this.ensure_configured_hook = options.ensure_configured;
     this.composer = options.composer || new DefaultSessionComposer();
     if (!this.id) {
-      throw new Error("Session requires a non-empty sessionId");
+      throw new Error("Session requires a non-empty session_id");
     }
-    if (!this.agentId) {
-      throw new Error("Session requires a non-empty agentId");
+    if (!this.agent_id) {
+      throw new Error("Session requires a non-empty agent_id");
     }
     if (!this.workspace_path) {
       throw new Error("Session requires a non-empty workspace_path");
@@ -158,7 +158,7 @@ export class Session implements AgentSession {
     this.local_state = this.create_local_state();
     this.executor = this.create_executor();
     this.state = new SessionState({
-      agent_id: this.agentId,
+      agent_id: this.agent_id,
       session_id: this.id,
       store: this.store,
       messages: this.session_messages,
@@ -226,10 +226,10 @@ export class Session implements AgentSession {
       await this.initialize_instruction();
       const should_persist = await this.store.has_instruction();
       const run_context: SessionRunContext = {
-        sessionId: this.id,
-        injectedUserMessages: [],
-        deferredPersistedUserMessages: [],
-        pendingAssistantFileParts: [],
+        session_id: this.id,
+        injected_user_messages: [],
+        deferred_persisted_user_messages: [],
+        pending_assistant_file_parts: [],
       };
       const composed = await this.composer.compose(
         await this.create_compose_input(run_context, 0, true),
@@ -317,7 +317,7 @@ export class Session implements AgentSession {
           id: command.action_id,
           title: command.action_title,
           state: "completed",
-          turnId: turn_id,
+          turn_id: turn_id,
         });
       }
       return;
@@ -328,7 +328,7 @@ export class Session implements AgentSession {
         id: `agent-env:${this.id}:${command.command_id}`,
         title: "Workspace environment updated",
         state: "completed",
-        turnId: turn_id,
+        turn_id: turn_id,
       });
       return;
     }
@@ -337,7 +337,7 @@ export class Session implements AgentSession {
       id: `agent-plugins:${this.id}:${command.command_id}`,
       title: command.title,
       state: "completed",
-      turnId: turn_id,
+      turn_id: turn_id,
     });
   }
 
@@ -408,18 +408,18 @@ export class Session implements AgentSession {
     const metadata_with_title = metadata.title
       ? metadata
       : await ensureSessionTitle({
-          sessionId: this.id,
+          session_id: this.id,
           store: this.store,
           messages: records,
           logger: this.logger,
         });
     return buildSessionInfo({
-      projectRoot: this.workspace_path,
-      agentId: this.agentId,
-      sessionId: this.id,
+      project_root: this.workspace_path,
+      agent_id: this.agent_id,
+      session_id: this.id,
       metadata: metadata_with_title,
       messages: records,
-      executing: this.isExecuting(),
+      executing: this.is_executing(),
     });
   }
 
@@ -438,12 +438,12 @@ export class Session implements AgentSession {
     const composed = await this.compose_for_view();
     const blocks = resolve_composed_system_blocks(composed);
     return {
-      sessionId: this.id,
+      session_id: this.id,
       session: {
-        agentId: this.agentId,
-        sessionId: this.id,
-        projectRoot: this.workspace_path,
-        createdAt: new Date(this.state.get_created_at()).toISOString(),
+        agent_id: this.agent_id,
+        session_id: this.id,
+        project_root: this.workspace_path,
+        created_at: new Date(this.state.get_created_at()).toISOString(),
         timezone: this.state.get_timezone(),
       },
       blocks,
@@ -453,8 +453,8 @@ export class Session implements AgentSession {
   /**
    * 返回当前 session 是否正在执行。
    */
-  isExecuting(): boolean {
-    return this.session_turn.is_active() || this.executor.isExecuting();
+  is_executing(): boolean {
+    return this.session_turn.is_active() || this.executor.is_executing();
   }
 
   /**
@@ -463,7 +463,7 @@ export class Session implements AgentSession {
   async fork(input?: AgentSessionForkInput | string): Promise<this> {
     const message_id = typeof input === "string"
       ? String(input || "").trim() || undefined
-      : String(input?.messageId || "").trim() || undefined;
+      : String(input?.message_id || "").trim() || undefined;
     const messages = await this.session_messages.list_history_messages();
     const fork_messages = message_id
       ? this.resolve_fork_messages(messages, message_id)
@@ -516,7 +516,7 @@ export class Session implements AgentSession {
     );
     if (target_index < 0) {
       throw new Error(
-        `Cannot fork session "${this.id}": messageId "${message_id}" not found.`,
+        `Cannot fork session "${this.id}": message_id "${message_id}" not found.`,
       );
     }
     return messages.slice(0, target_index + 1);
@@ -525,12 +525,12 @@ export class Session implements AgentSession {
   /**
    * 返回供受托管 plugin 使用的 session 端口。
    */
-  getRuntimePort(): SessionPort {
+  get_runtime_port(): SessionPort {
     if (this.runtime_port) return this.runtime_port;
     this.runtime_port = createRuntimeSessionPort({
-      sessionId: this.id,
-      getModel: () => this.get_model(),
-      getExecutor: () => this.executor.getExecutor(),
+      session_id: this.id,
+      get_model: () => this.get_model(),
+      get_executor: () => this.executor.get_executor(),
       prompt: async (input) => await this.prompt(input),
       stop: async () => await this.stop(),
       subscribe: (subscriber) => this.subscribe(subscriber),
@@ -545,14 +545,14 @@ export class Session implements AgentSession {
       append_assistant_message: async (message_params) => {
         const appended = await this.session_messages.append_external_assistant_message({
           message: message_params.message,
-          fallback_text: message_params.fallbackText,
+          fallback_text: message_params.fallback_text,
         });
         if (appended) await this.state.touch_metadata();
       },
-      isExecuting: () => this.isExecuting(),
+      is_executing: () => this.is_executing(),
       context: async () => await this.session_messages.context_snapshot(),
-      ensureReadyForExecution: async () => {
-        await this.ensureReadyForExecution();
+      ensure_ready_for_execution: async () => {
+        await this.ensure_ready_for_execution();
       },
     });
     return this.runtime_port;
@@ -561,29 +561,29 @@ export class Session implements AgentSession {
   /**
    * 在执行前确保 session 已完成初始化与宿主装配。
    */
-  async ensureReadyForExecution(): Promise<void> {
+  async ensure_ready_for_execution(): Promise<void> {
     await this.initialize_instruction();
     await this.state.ensure_ready_for_execution();
   }
 
   private create_fork_session(session_id: string): this {
     return this.create_child_session({
-      agentId: this.agentId,
+      agent_id: this.agent_id,
       workspace_path: this.workspace_path,
       store: this.get_session_store(session_id),
       get_session_store: this.get_session_store,
-      sessionId: session_id,
+      session_id: session_id,
       tools: this.tools,
       logger: this.logger,
       instruction_system_blocks: this.effective_instruction_system_blocks.map(
         (block) => ({ ...block }),
       ),
       get_instruction_system_blocks: this.get_instruction_system_blocks,
-      getWorkspaceEnv: this.get_workspace_env,
+      get_workspace_env: this.get_workspace_env,
       get_agent_plugins: this.get_agent_plugins,
-      getManagedPluginSystemBlocks: this.get_managed_plugin_system_blocks,
-      ensureConfigured: this.ensure_configured_hook,
-      getAgentModel: this.get_agent_model,
+      get_managed_plugin_system_blocks: this.get_managed_plugin_system_blocks,
+      ensure_configured: this.ensure_configured_hook,
+      get_agent_model: this.get_agent_model,
       composer: this.composer,
     });
   }
@@ -596,10 +596,10 @@ export class Session implements AgentSession {
    * - 子类仍可覆盖该方法，接管更特殊的子会话创建逻辑。
    */
   protected create_child_session(options: SessionOptions): this {
-    const SessionClass = this.constructor as new (
+    const session_class = this.constructor as new (
       options: SessionOptions,
     ) => Session;
-    return new SessionClass(options) as this;
+    return new session_class(options) as this;
   }
 
   /** 恢复显式固化的完整 system snapshot；文件不存在时等待首次生成。 */
@@ -649,13 +649,13 @@ export class Session implements AgentSession {
   /** 创建只依赖统一 Composer 的 Turn Executor。 */
   private create_executor(): Executor {
     return new Executor({
-      sessionId: this.id,
+      session_id: this.id,
       composer: this.composer,
       get_compose_input: async (run_context, retry_count) =>
         await this.create_compose_input(run_context, retry_count),
       commit_compaction: async (plan, run_context) =>
         await this.commit_compaction_plan(plan, run_context),
-      getModel: () => this.get_model(),
+      get_model: () => this.get_model(),
       logger: this.logger,
       get_plugins: () => this.effective_agent_plugins,
       apply_system_snapshot: (input) => this.apply_system_snapshot(input),
@@ -674,13 +674,13 @@ export class Session implements AgentSession {
     const plugin_system_blocks = this.system_snapshot_blocks && !refresh_system
       ? []
       : refresh_system
-        ? await this.get_agent_plugins().systemBlocks(run_context)
-        : run_context.agentPlugins
-          ? await run_context.agentPlugins.systemBlocks(run_context)
-          : await this.effective_agent_plugins.systemBlocks(run_context);
+        ? await this.get_agent_plugins().system_blocks(run_context)
+        : run_context.agent_plugins
+          ? await run_context.agent_plugins.system_blocks(run_context)
+          : await this.effective_agent_plugins.system_blocks(run_context);
     return {
       session: {
-        agent_id: this.agentId,
+        agent_id: this.agent_id,
         session_id: this.id,
         project_root: this.workspace_path,
         created_at: this.local_state.created_at,
@@ -703,7 +703,7 @@ export class Session implements AgentSession {
       },
       history: await this.session_messages.context_snapshot(),
       turn: {
-        ...(run_context.turnId ? { turn_id: run_context.turnId } : {}),
+        ...(run_context.turn_id ? { turn_id: run_context.turn_id } : {}),
         retry_count,
       },
     };
@@ -712,10 +712,10 @@ export class Session implements AgentSession {
   /** 使用统一 Composer 生成只读 system/history 查询结果。 */
   private async compose_for_view(): Promise<SessionStepInput> {
     const run_context: SessionRunContext = {
-      sessionId: this.id,
-      injectedUserMessages: [],
-      deferredPersistedUserMessages: [],
-      pendingAssistantFileParts: [],
+      session_id: this.id,
+      injected_user_messages: [],
+      deferred_persisted_user_messages: [],
+      pending_assistant_file_parts: [],
     };
     const composed = await this.composer.compose(
       await this.create_compose_input(run_context, 0),
@@ -762,12 +762,12 @@ export class Session implements AgentSession {
     plan: SessionCompactionPlan,
     run_context: SessionRunContext,
   ): Promise<void> {
-    const action_id = `compacting:${this.id}:${generateId()}`;
+    const action_id = `compacting:${this.id}:${generate_id()}`;
     await this.emit_action_event({
       id: action_id,
       title: "Compacting session messages",
       state: "running",
-      ...(run_context.turnId ? { turnId: run_context.turnId } : {}),
+      ...(run_context.turn_id ? { turn_id: run_context.turn_id } : {}),
     });
     try {
       await this.session_messages.compact_active({
@@ -781,7 +781,7 @@ export class Session implements AgentSession {
           ? `Closed Active through Message ${plan.boundary_message_id} with deterministic fallback Summary.`
           : `Closed Active through Message ${plan.boundary_message_id}.`,
         state: "completed",
-        ...(run_context.turnId ? { turnId: run_context.turnId } : {}),
+        ...(run_context.turn_id ? { turn_id: run_context.turn_id } : {}),
       });
       await this.state.touch_metadata();
     } catch (error) {
@@ -790,7 +790,7 @@ export class Session implements AgentSession {
         title: "Session messages compact failed",
         description: error instanceof Error ? error.message : String(error),
         state: "failed",
-        ...(run_context.turnId ? { turnId: run_context.turnId } : {}),
+        ...(run_context.turn_id ? { turn_id: run_context.turn_id } : {}),
       });
       throw error;
     }
@@ -803,7 +803,7 @@ export class Session implements AgentSession {
    */
   get_model(): LanguageModel | undefined {
     const model = this.get_selected_model();
-    return model ? normalizeAgentModel(model) : undefined;
+    return model ? normalize_agent_model(model) : undefined;
   }
 
   /** 按 Session 优先、Agent 兜底规则读取当前配置的 AgentModel。 */
@@ -837,8 +837,8 @@ export class Session implements AgentSession {
       metadata: {
         v: 1,
         ts: Date.now(),
-        sessionId: this.id,
-        ...(input.turnId ? { turnId: input.turnId } : {}),
+        session_id: this.id,
+        ...(input.turn_id ? { turn_id: input.turn_id } : {}),
       },
     });
     await this.state.touch_metadata();
@@ -854,13 +854,13 @@ export class Session implements AgentSession {
         title: input.title,
         description: input.description,
         state: input.state,
-        turnId: "turnId" in input ? input.turnId : input.metadata?.turnId,
+        turn_id: "turn_id" in input ? input.turn_id : input.metadata?.turn_id,
       });
       return true;
     } catch (error) {
       try {
         await this.logger.log("warn", "[agent] config action persistence failed", {
-          sessionId: this.id,
+          session_id: this.id,
           actionId: String(input.id || ""),
           error: error instanceof Error ? error.message : String(error),
         });

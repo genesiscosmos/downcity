@@ -68,10 +68,10 @@ function findSkill(skills: SkillDefinition[], name: string): SkillDefinition | n
 }
 
 function getSkills(
-  projectRoot: string,
+  project_root: string,
   options?: SkillPluginOptions | null,
 ): SkillDefinition[] {
-  const root = path.resolve(projectRoot);
+  const root = path.resolve(project_root);
   return discoverSkillsSync(root, options);
 }
 
@@ -79,11 +79,11 @@ function getSkills(
  * 在“已学会（本地可发现）”技能里做精确匹配。
  */
 export function findLearnedSkillExact(
-  projectRoot: string,
+  project_root: string,
   query: string,
   options?: SkillPluginOptions | null,
 ): SkillSummary | null {
-  const skills = getSkills(projectRoot, options);
+  const skills = getSkills(project_root, options);
   const target = findSkillExact(skills, query);
   return target ? toSkillSummary(target) : null;
 }
@@ -92,7 +92,7 @@ export function findLearnedSkillExact(
  * 在“已学会（本地可发现）”技能里做模糊搜索。
  */
 export function searchLearnedSkills(
-  projectRoot: string,
+  project_root: string,
   query: string,
   limit: number = 10,
   options?: SkillPluginOptions | null,
@@ -100,7 +100,7 @@ export function searchLearnedSkills(
   const q = String(query || "").trim().toLowerCase();
   if (!q) return [];
 
-  const skills = getSkills(projectRoot, options);
+  const skills = getSkills(project_root, options);
   const matched = skills.filter((item) => {
     const id = item.id.toLowerCase();
     const name = item.name.toLowerCase();
@@ -115,10 +115,10 @@ export function searchLearnedSkills(
  * 列出当前项目下可发现的全部 skill。
  */
 export function listSkills(
-  projectRoot: string,
+  project_root: string,
   options?: SkillPluginOptions | null,
 ): SkillListResponse {
-  const skills = getSkills(projectRoot, options).map(toSkillSummary);
+  const skills = getSkills(project_root, options).map(toSkillSummary);
   return {
     success: true,
     skills,
@@ -132,7 +132,7 @@ export async function lookupSkill(params: {
   /**
    * 项目根目录。
    */
-  projectRoot: string;
+  project_root: string;
   /**
    * skill lookup 请求。
    */
@@ -142,7 +142,7 @@ export async function lookupSkill(params: {
    */
   options?: SkillPluginOptions | null;
 }): Promise<SkillLookupResponse> {
-  const root = path.resolve(params.projectRoot);
+  const root = path.resolve(params.project_root);
   const skills = getSkills(root, params.options);
   const target = findSkill(skills, params.request.name);
   if (!target) {

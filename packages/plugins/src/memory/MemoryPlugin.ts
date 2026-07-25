@@ -9,10 +9,10 @@
 
 import type { Command } from "commander";
 import type { JsonObject, JsonValue } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { PluginActions } from "@downcity/agent";
 import { BasePlugin } from "@downcity/agent";
-import { createAction } from "@downcity/agent";
+import { create_action } from "@downcity/agent";
 import { z } from "zod";
 import {
   digestMemoryAction,
@@ -105,7 +105,7 @@ export class MemoryPlugin extends BasePlugin {
   /**
    * 当前 plugin 的 system 文本提供器。
    */
-  async system(context: AgentContext): Promise<string> {
+  async system(context: PluginContext): Promise<string> {
     return await buildMemoryPluginSystemText(context);
   }
 
@@ -113,8 +113,8 @@ export class MemoryPlugin extends BasePlugin {
    * 当前 plugin 生命周期。
    */
   readonly lifecycle = {
-    start: async (context: AgentContext): Promise<void> => {
-      await ensureMemoryDirectories(context.rootPath);
+    start: async (context: PluginContext): Promise<void> => {
+      await ensureMemoryDirectories(context.workspace_path);
       this.getOrCreateRuntimeState(context);
     },
     stop: async (): Promise<void> => {
@@ -126,7 +126,7 @@ export class MemoryPlugin extends BasePlugin {
    * 当前 plugin action 定义表。
    */
   readonly actions: PluginActions = {
-    status: createAction({
+    status: create_action({
       description: "View memory wiki status (wiki/source/working).",
       input_schema: {
         zod: z.object({}).passthrough(),
@@ -135,7 +135,7 @@ export class MemoryPlugin extends BasePlugin {
       examples: [{ title: "View status", payload: {} }],
       command: {
         description: "View memory wiki status (wiki/source/working).",
-        mapInput() {
+        map_input() {
           return {};
         },
       },
@@ -144,7 +144,7 @@ export class MemoryPlugin extends BasePlugin {
         return await statusMemoryAction(params.context, state);
       },
     }),
-    search: createAction({
+    search: create_action({
       description: "Search memory wiki, optionally extending into the source layer.",
       input_schema: {
         zod: z.object({
@@ -176,7 +176,7 @@ export class MemoryPlugin extends BasePlugin {
             .option("--min-score <number>", "Minimum relevance score.", parseNumber)
             .option("--include-sources", "Also search the raw source layer.");
         },
-        mapInput({ args, opts }) {
+        map_input({ args, opts }) {
           const payload: JsonObject = {
             query: String(args[0] || ""),
           };
@@ -203,7 +203,7 @@ export class MemoryPlugin extends BasePlugin {
         });
       },
     }),
-    read: createAction({
+    read: create_action({
       description: "Read a memory wiki/source file excerpt.",
       input_schema: {
         zod: z.object({
@@ -232,7 +232,7 @@ export class MemoryPlugin extends BasePlugin {
             .option("--from <number>", "Starting line, 1-based.", parsePositiveInteger)
             .option("--lines <number>", "Number of lines to read.", parsePositiveInteger);
         },
-        mapInput({ args, opts }) {
+        map_input({ args, opts }) {
           const payload: JsonObject = {
             path: String(args[0] || ""),
           };
@@ -254,7 +254,7 @@ export class MemoryPlugin extends BasePlugin {
         });
       },
     }),
-    remember: createAction({
+    remember: create_action({
       description: "Record facts, preferences, or decisions into memory wiki.",
       input_schema: {
         zod: z.object({
@@ -286,7 +286,7 @@ export class MemoryPlugin extends BasePlugin {
             .option("--wiki-path <path>", "Target wiki page path.")
             .option("--source <source>", "Source note.");
         },
-        mapInput({ opts }) {
+        map_input({ opts }) {
           const payload: JsonObject = {
             content: String(opts.content || ""),
           };
@@ -312,35 +312,35 @@ export class MemoryPlugin extends BasePlugin {
         });
       },
     }),
-    digest: createAction({
+    digest: create_action({
       description: "Digest a session into memory wiki.",
       input_schema: {
         zod: z.object({
-          sessionId: z.string(),
+          session_id: z.string(),
           maxMessages: z.number().optional(),
         }),
         json_schema: {
           type: "object",
-          required: ["sessionId"],
+          required: ["session_id"],
           properties: {
-            sessionId: { type: "string", description: "Session ID." },
+            session_id: { type: "string", description: "Session ID." },
             maxMessages: { type: "number", description: "Message extraction window." },
           },
         },
       },
       examples: [
-        { title: "Digest session", payload: { sessionId: "sess-1" } },
+        { title: "Digest session", payload: { session_id: "sess-1" } },
       ],
       command: {
         description: "Digest a session into memory wiki.",
         configure(command: Command) {
           command
-            .requiredOption("--session-id <sessionId>", "Session ID.")
+            .requiredOption("--session-id <session_id>", "Session ID.")
             .option("--max-messages <number>", "Message extraction window.", parsePositiveInteger);
         },
-        mapInput({ opts }) {
+        map_input({ opts }) {
           const payload: JsonObject = {
-            sessionId: String(opts.sessionId || ""),
+            session_id: String(opts.session_id || ""),
           };
           if (typeof opts.maxMessages === "number") {
             payload.maxMessages = opts.maxMessages;
@@ -351,12 +351,12 @@ export class MemoryPlugin extends BasePlugin {
       execute: async (params) => {
         const body = readBodyObject(params.input);
         return await digestMemoryAction(params.context, this.options, {
-          sessionId: readString(body, "sessionId"),
+          session_id: readString(body, "session_id"),
           maxMessages: readOptionalNumber(body, "maxMessages"),
         });
       },
     }),
-    revise: createAction({
+    revise: create_action({
       description: "Revise a memory wiki page based on new evidence.",
       input_schema: {
         zod: z.object({
@@ -388,7 +388,7 @@ export class MemoryPlugin extends BasePlugin {
             .requiredOption("--instruction <text>", "Revision instruction.")
             .option("--evidence <text>", "New evidence.");
         },
-        mapInput({ args, opts }) {
+        map_input({ args, opts }) {
           const payload: JsonObject = {
             path: String(args[0] || ""),
             instruction: String(opts.instruction || ""),
@@ -413,7 +413,7 @@ export class MemoryPlugin extends BasePlugin {
   /**
    * 获取或创建当前实例绑定的 memory plugin state。
    */
-  private getOrCreateRuntimeState(context: AgentContext): MemoryRuntimeState {
+  private getOrCreateRuntimeState(context: PluginContext): MemoryRuntimeState {
     if (!this.runtimeState) {
       this.runtimeState = createMemoryRuntimeState(context);
     }

@@ -44,7 +44,7 @@ flowchart TD
     Agent --> AgentState["AgentState"]
     Agent --> Plugins["PluginRegistry"]
     Agent --> Sessions["AgentSessions"]
-    Agent --> Context["AgentContext"]
+    Agent -.-> Context["PluginContext（仅 Plugin 投影）"]
 
     Sessions --> Session["Session"]
     AgentStore --> SessionStore["LocalSessionStore"]
@@ -136,7 +136,7 @@ packages/agent/src/
 ├─ index.ts                    公共入口
 ├─ agent/
 │  ├─ Agent.ts                 本地 Agent facade 与组合根
-│  ├─ AgentContext.ts          向 Plugin 和内部运行时投影稳定能力
+│  ├─ PluginContext.ts          向 Plugin 和内部运行时投影稳定能力
 │  ├─ AgentState.ts            Plugin 与调度器长期生命周期
 │  ├─ AgentSessions.ts         Session 集合、缓存和生命周期
 │  ├─ AgentModel.ts            模型实例规范化
@@ -314,7 +314,7 @@ sequenceDiagram
     W-->>A: LocalAgentStore
     A->>A: 装配 instruction、model、logger
     A->>P: 注册 Plugin
-    A->>A: 创建 AgentSessions 与 AgentContext
+    A->>A: 创建 AgentSessions 与 PluginContext
     A->>AS: 启动长期运行状态
     AS->>P: 启动 Plugin lifecycle
     AS->>AS: 启动 ActionSchedule
@@ -352,7 +352,7 @@ SDK 不修改 `process.env`。`workspace.set_env()` 和 `workspace.patch_env()` 
 
 `AgentOptions.instruction` 是显式、稳定的基础指令。SDK 还会加入最小 core instruction、Plugin system 和 Session context。
 
-`setInstruction()` 更新 Agent 当前 instruction，但已经固化 system snapshot 的 Session 不会被无条件覆盖。Session 可以显式调用 `syncshot()` 重新生成。
+`set_instruction()` 更新 Agent 当前 instruction，但已经固化 system snapshot 的 Session 不会被无条件覆盖。Session 可以显式调用 `syncshot()` 重新生成。
 
 ## 8. Session：有状态执行主体
 

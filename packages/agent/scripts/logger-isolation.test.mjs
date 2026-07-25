@@ -2,7 +2,7 @@
  * @file 验证 logger 实例不会跨 workspace 共享落盘目录。
  *
  * 关键点（中文）
- * - 每次 getLogger 调用都应返回独立实例。
+ * - 每次 get_logger 调用都应返回独立实例。
  * - 两个实例并发写日志时，只能写入各自项目的 `.downcity/logs`。
  */
 
@@ -12,7 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
 
-import { getLogger } from "../bin/index.js";
+import { get_logger } from "../bin/index.js";
 
 /**
  * 读取项目日志目录内的全部 JSONL 文本。
@@ -27,22 +27,22 @@ async function read_project_logs(project_root) {
   return chunks.join("\n");
 }
 
-test("getLogger keeps concurrent workspace logs isolated", async () => {
+test("get_logger keeps concurrent workspace logs isolated", async () => {
   const root_a = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-logger-isolation-a-"),
   );
   const root_b = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-logger-isolation-b-"),
   );
-  const logger_a = getLogger(root_a);
-  const logger_b = getLogger(root_b);
+  const logger_a = get_logger(root_a);
+  const logger_b = get_logger(root_b);
 
   assert.notEqual(logger_a, logger_b);
   await Promise.all([
     logger_a.log("info", "workspace_a_only"),
     logger_b.log("info", "workspace_b_only"),
   ]);
-  await Promise.all([logger_a.saveAllLogs(), logger_b.saveAllLogs()]);
+  await Promise.all([logger_a.save_all_logs(), logger_b.save_all_logs()]);
 
   const [logs_a, logs_b] = await Promise.all([
     read_project_logs(root_a),

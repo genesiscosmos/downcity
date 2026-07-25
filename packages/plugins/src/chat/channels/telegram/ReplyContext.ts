@@ -57,7 +57,7 @@ export function extractTelegramReplyContext(
   const replied = message?.reply_to_message;
   if (!replied) return undefined;
 
-  const messageId =
+  const message_id =
     typeof replied.message_id === "number" && Number.isFinite(replied.message_id)
       ? String(replied.message_id)
       : undefined;
@@ -66,9 +66,9 @@ export function extractTelegramReplyContext(
   const quoteText =
     typeof message?.quote?.text === "string" ? message.quote.text.trim() : undefined;
 
-  if (!messageId && !actorName && !text && !quoteText) return undefined;
+  if (!message_id && !actorName && !text && !quoteText) return undefined;
   return {
-    ...(messageId ? { messageId } : {}),
+    ...(message_id ? { message_id } : {}),
     ...(actorName ? { actorName } : {}),
     ...(text ? { text } : {}),
     ...(quoteText ? { quoteText } : {}),

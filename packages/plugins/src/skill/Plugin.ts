@@ -9,7 +9,7 @@
  */
 
 import { BasePlugin } from "@downcity/agent";
-import { createAction } from "@downcity/agent";
+import { create_action } from "@downcity/agent";
 import { z } from "zod";
 import type { Plugin } from "@downcity/agent";
 import type { JsonObject, JsonValue } from "@downcity/agent";
@@ -63,14 +63,14 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
     async system(context, run_context) {
       const dynamicText = String(
         await buildSkillsSystemText({
-          rootPath: context.rootPath,
+          rootPath: context.workspace_path,
           options,
         }, run_context),
       ).trim();
       return [SKILL_PLUGIN_PROMPT, dynamicText].filter(Boolean).join("\n\n");
     },
     actions: {
-      [SKILL_PLUGIN_ACTIONS.find]: createAction({
+      [SKILL_PLUGIN_ACTIONS.find]: create_action({
         description:
           "Return shell instructions for finding a skill. This action does not execute the search.",
         input_schema: {
@@ -100,7 +100,7 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
           configure(command) {
             command.argument("<query>");
           },
-          mapInput({ args }): SkillPluginFindPayload {
+          map_input({ args }): SkillPluginFindPayload {
             const query = String(args[0] || "").trim();
             if (!query) throw new Error("Missing query");
             return { query };
@@ -119,7 +119,7 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
           };
         },
       }),
-      [SKILL_PLUGIN_ACTIONS.install]: createAction({
+      [SKILL_PLUGIN_ACTIONS.install]: create_action({
         description:
           "Return scan-aware shell instructions for installing a skill. This action does not install anything.",
         input_schema: {
@@ -149,7 +149,7 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
           configure(command) {
             command.argument("<spec>");
           },
-          mapInput({ args }): SkillPluginInstallPayload {
+          map_input({ args }): SkillPluginInstallPayload {
             const spec = String(args[0] || "").trim();
             if (!spec) throw new Error("Missing spec");
             return { spec };
@@ -164,7 +164,7 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
               kind: "instructions",
               spec: payload.spec,
               prompt: render_skill_install_prompt(
-                params.context.rootPath,
+                params.context.workspace_path,
                 options,
                 payload.spec,
               ),
@@ -172,7 +172,7 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
           };
         },
       }),
-      [SKILL_PLUGIN_ACTIONS.list]: createAction({
+      [SKILL_PLUGIN_ACTIONS.list]: create_action({
         description: "List currently learned skills discoverable locally.",
         input_schema: {
           zod: z.object({}).passthrough(),
@@ -189,7 +189,7 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
         ],
         command: {
           description: "List currently learned skills discoverable locally.",
-          mapInput() {
+          map_input() {
             return {};
           },
         },
@@ -199,11 +199,11 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
         execute(params): PluginActionResult<JsonObject> {
           return {
             success: true,
-            data: listSkills(params.context.rootPath, options) as unknown as JsonObject,
+            data: listSkills(params.context.workspace_path, options) as unknown as JsonObject,
           };
         },
       }),
-      [SKILL_PLUGIN_ACTIONS.lookup]: createAction({
+      [SKILL_PLUGIN_ACTIONS.lookup]: create_action({
         description: "Read learned skill content (SKILL.md).",
         input_schema: {
           zod: z.object({
@@ -228,7 +228,7 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
           configure(command) {
             command.argument("<name>");
           },
-          mapInput({ args }): SkillPluginLookupPayload {
+          map_input({ args }): SkillPluginLookupPayload {
             const name = String(args[0] || "").trim();
             if (!name) throw new Error("Missing name");
             return { name };
@@ -236,7 +236,7 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
         },
         api: {
           method: "POST",
-          async mapInput(c): Promise<SkillPluginLookupPayload> {
+          async map_input(c): Promise<SkillPluginLookupPayload> {
             const body = readJsonObject(await c.req.json());
             const name = String(body.name || "").trim();
             if (!name) throw new Error("Missing name");
@@ -246,7 +246,7 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
         async execute(params): Promise<PluginActionResult<JsonObject>> {
           const payload = params.input as SkillPluginLookupPayload;
           const result = await lookupSkill({
-            projectRoot: params.context.rootPath,
+            project_root: params.context.workspace_path,
             request: {
               name: payload.name,
             },

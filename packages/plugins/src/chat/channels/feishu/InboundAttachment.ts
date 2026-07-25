@@ -84,7 +84,7 @@ function buildDescriptor(
   if (messageType === "image" && imageKey) {
     return {
       type: "photo",
-      resourceType: "image",
+      resource_type: "image",
       resourceKey: imageKey,
       fileName: fileName || "image",
       description: fileName || "image",
@@ -95,7 +95,7 @@ function buildDescriptor(
   if (messageType === "file" && fileKey) {
     return {
       type: "document",
-      resourceType: "file",
+      resource_type: "file",
       resourceKey: fileKey,
       ...(fileName ? { fileName } : {}),
       ...(fileName ? { description: fileName } : {}),
@@ -106,7 +106,7 @@ function buildDescriptor(
   if (messageType === "audio" && fileKey) {
     return {
       type: "audio",
-      resourceType: "audio",
+      resource_type: "audio",
       resourceKey: fileKey,
       fileName: fileName || "audio",
       description: fileName || "audio",
@@ -117,7 +117,7 @@ function buildDescriptor(
   if ((messageType === "media" || messageType === "video") && fileKey) {
     return {
       type: "video",
-      resourceType: messageType,
+      resource_type: messageType,
       resourceKey: fileKey,
       fileName: fileName || "video.mp4",
       description: fileName || "video",
@@ -239,7 +239,7 @@ export function parseFeishuInboundMessage(params: {
  */
 export function buildFeishuInboundCacheFileName(params: {
   attachment: FeishuIncomingAttachmentDescriptor;
-  messageId: string;
+  message_id: string;
   headers?: Record<string, unknown>;
 }): string {
   const headers = params.headers || {};
@@ -256,6 +256,6 @@ export function buildFeishuInboundCacheFileName(params: {
     extFromMimeType(contentType) ||
     defaultExtByAttachmentType(params.attachment);
   const baseWithoutExt = currentExt ? safeBase.slice(0, -currentExt.length) : safeBase;
-  const uniq = `${Date.now()}-${String(params.messageId || "").slice(0, 12) || "feishu"}`;
+  const uniq = `${Date.now()}-${String(params.message_id || "").slice(0, 12) || "feishu"}`;
   return `${uniq}-${baseWithoutExt}${ext}`;
 }

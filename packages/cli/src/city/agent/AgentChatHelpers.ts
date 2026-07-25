@@ -41,11 +41,11 @@ import type { AgentChatInteractiveRendererPort } from "@/city/types/AgentChatInt
 
 export type ResolvedAgentChatTarget = {
   /** 目标 agent id。 */
-  agentId: string;
+  agent_id: string;
   /** 目标项目根目录。 */
-  projectRoot: string;
-  /** 当前 chat 绑定的 sessionId。 */
-  sessionId: string;
+  project_root: string;
+  /** 当前 chat 绑定的 session_id。 */
+  session_id: string;
   /** 当前 chat 是否要求创建全新的 session。 */
   createNewSession: boolean;
 };
@@ -74,7 +74,7 @@ export function resolveAgentChatSessionOptions(
       success: false;
       error: string;
     } {
-  const explicit_session_id = String(input?.sessionId || "").trim();
+  const explicit_session_id = String(input?.session_id || "").trim();
   const should_create_new_session = input?.newSession === true;
 
   if (explicit_session_id && should_create_new_session) {
@@ -100,7 +100,7 @@ export function resolveAgentChatSessionOptions(
 }
 
 export function hasExplicitSessionSelection(input: AgentChatSessionOptions): boolean {
-  return Boolean(String(input.sessionId || "").trim() || input.newSession === true);
+  return Boolean(String(input.session_id || "").trim() || input.newSession === true);
 }
 
 export async function resolveChatTargetAgentId(inputId?: string): Promise<string | null> {
@@ -130,24 +130,24 @@ export async function resolveChatTargetAgentId(inputId?: string): Promise<string
 
   const response = (await prompts({
     type: "select",
-    name: "agentId",
+    name: "agent_id",
     message: "选择要聊天的 Agent",
     choices: runningAgents.map((agent) => ({
       title: agent.id,
-      description: agent.projectRoot,
+      description: agent.project_root,
       value: agent.id,
     })),
     initial: 0,
-  })) as { agentId?: string };
-  const agentId = String(response.agentId || "").trim();
-  if (!agentId) {
+  })) as { agent_id?: string };
+  const agent_id = String(response.agent_id || "").trim();
+  if (!agent_id) {
     emitCliBlock({
       tone: "info",
       title: "Agent chat cancelled",
     });
     return null;
   }
-  return agentId;
+  return agent_id;
 }
 
 export async function resolveAgentChatTarget(
@@ -163,56 +163,56 @@ export async function resolveAgentChatTarget(
       outcome: AgentChatExecutionOutcome;
     }
 > {
-  const agentId = String(agentIdInput || "").trim();
+  const agent_id = String(agentIdInput || "").trim();
   const resolved_session = resolveAgentChatSessionOptions(sessionOptions);
-  const sessionId = resolved_session.success
+  const session_id = resolved_session.success
     ? resolved_session.session_id
     : AGENT_CHAT_DEFAULT_SESSION_ID;
   if (!resolved_session.success) {
     return {
       success: false,
       outcome: {
-        agentId,
-        sessionId,
+        agent_id,
+        session_id,
         success: false,
         error: resolved_session.error,
       },
     };
   }
 
-  if (!agentId) {
+  if (!agent_id) {
     return {
       success: false,
       outcome: {
-        agentId: "",
-        sessionId,
+        agent_id: "",
+        session_id,
         success: false,
         error: "Missing target agent id.",
       },
     };
   }
 
-  const resolved = await resolveProjectRootByAgentId(agentId);
-  if (!resolved.projectRoot) {
+  const resolved = await resolveProjectRootByAgentId(agent_id);
+  if (!resolved.project_root) {
     return {
       success: false,
       outcome: {
-        agentId,
-        sessionId,
+        agent_id,
+        session_id,
         success: false,
         error: resolved.error || "Failed to resolve agent project path",
       },
     };
   }
 
-  const pathError = validateAgentProjectRoot(resolved.projectRoot);
+  const pathError = validateAgentProjectRoot(resolved.project_root);
   if (pathError) {
     return {
       success: false,
       outcome: {
-        agentId,
-        projectRoot: resolved.projectRoot,
-        sessionId,
+        agent_id,
+        project_root: resolved.project_root,
+        session_id,
         success: false,
         error: pathError,
       },
@@ -222,15 +222,15 @@ export async function resolveAgentChatTarget(
   const registeredAgents = await listRegisteredAgentsForCli();
   const registeredAgent = registeredAgents.find(
     (item) =>
-      item.projectRoot === resolved.projectRoot || item.id === agentId,
+      item.project_root === resolved.project_root || item.id === agent_id,
   );
   if (registeredAgent && registeredAgent.status !== "running") {
     return {
       success: false,
       outcome: {
-        agentId,
-        projectRoot: resolved.projectRoot,
-        sessionId,
+        agent_id,
+        project_root: resolved.project_root,
+        session_id,
         success: false,
         error: "Agent is not running. Run `city agent start` first.",
       },
@@ -240,9 +240,9 @@ export async function resolveAgentChatTarget(
   return {
     success: true,
     target: {
-      agentId,
-      projectRoot: resolved.projectRoot,
-      sessionId,
+      agent_id,
+      project_root: resolved.project_root,
+      session_id,
       createNewSession: resolved_session.create_new_session,
     },
   };
@@ -262,7 +262,7 @@ export function printAssistantReply(replyText: string): void {
 }
 
 export function printAgentChatFailure(params: {
-  agentId: string;
+  agent_id: string;
   error?: string;
 }): void {
   emitCliBlock({
@@ -271,7 +271,7 @@ export function printAgentChatFailure(params: {
     facts: [
       {
         label: "agent",
-        value: params.agentId,
+        value: params.agent_id,
       },
       {
         label: "error",
@@ -282,7 +282,7 @@ export function printAgentChatFailure(params: {
 }
 
 export async function resolveInteractiveChatSession(params: {
-  agentId: string;
+  agent_id: string;
   options: AgentChatCliOptions;
   transport?: { host?: string; port?: number };
 }): Promise<
@@ -304,8 +304,8 @@ export async function resolveInteractiveChatSession(params: {
     };
   }
 
-  const resolved = await resolveAgentChatTarget(params.agentId, {
-    sessionId: preselected_session.session_id,
+  const resolved = await resolveAgentChatTarget(params.agent_id, {
+    session_id: preselected_session.session_id,
     newSession: false,
   });
   if (!resolved.success) {
@@ -317,7 +317,7 @@ export async function resolveInteractiveChatSession(params: {
   resolved.target.createNewSession = preselected_session.create_new_session;
 
   const remote_agent = await createRemoteAgent({
-    projectRoot: resolved.target.projectRoot,
+    project_root: resolved.target.project_root,
     transport: params.transport,
   });
 
@@ -327,7 +327,7 @@ export async function resolveInteractiveChatSession(params: {
         remote_agent,
         session_id: preselected_session.session_id,
       });
-      resolved.target.sessionId = created.session_id;
+      resolved.target.session_id = created.session_id;
       resolved.target.createNewSession = false;
     }
     return {
@@ -342,7 +342,7 @@ export async function resolveInteractiveChatSession(params: {
   // 用户仍可在 TUI 内通过 /session 命令随时切换。
   const latest_session_id = await resolveLatestChatSessionId({ remote_agent });
   if (latest_session_id) {
-    resolved.target.sessionId = latest_session_id;
+    resolved.target.session_id = latest_session_id;
   }
   return {
     success: true,
@@ -355,7 +355,7 @@ export async function resolveInteractiveChatSession(params: {
  * 解析最近活跃的 chat session id。
  *
  * 说明（中文）
- * - 按 `updatedAt` 取最新的会话；缺失 `updatedAt` 视为最旧。
+ * - 按 `updated_at` 取最新的会话；缺失 `updated_at` 视为最旧。
  * - 列表为空时返回 null，由调用方回落到默认 session。
  *
  * @param params.remote_agent 远程 agent 句柄。
@@ -375,15 +375,15 @@ async function resolveLatestChatSessionId(params: {
   }
   let latest = sessions[0];
   for (const candidate of sessions) {
-    if ((candidate.updatedAt ?? 0) > (latest.updatedAt ?? 0)) {
+    if ((candidate.updated_at ?? 0) > (latest.updated_at ?? 0)) {
       latest = candidate;
     }
   }
-  return latest.sessionId;
+  return latest.session_id;
 }
 
 export async function runSdkPromptTurn(params: {
-  agentId: string;
+  agent_id: string;
   message: string;
   sessionOptions?: AgentChatSessionOptions;
   transport?: { host?: string; port?: number };
@@ -393,8 +393,8 @@ export async function runSdkPromptTurn(params: {
   success: boolean;
   error?: string;
   emittedVisibleText: boolean;
-  sessionId: string;
-  projectRoot?: string;
+  session_id: string;
+  project_root?: string;
   text?: string;
 }> {
   const message = normalizeChatMessage(params.message);
@@ -404,32 +404,32 @@ export async function runSdkPromptTurn(params: {
       success: false,
       error: "Chat message is required.",
       emittedVisibleText: false,
-      sessionId: resolved_session.success
+      session_id: resolved_session.success
         ? resolved_session.session_id
         : AGENT_CHAT_DEFAULT_SESSION_ID,
       text: "",
     };
   }
 
-  const resolved = await resolveAgentChatTarget(params.agentId, params.sessionOptions);
+  const resolved = await resolveAgentChatTarget(params.agent_id, params.sessionOptions);
   if (!resolved.success) {
     return {
       success: false,
       error: resolved.outcome.error,
       emittedVisibleText: false,
-      sessionId: resolved.outcome.sessionId,
-      ...(resolved.outcome.projectRoot ? { projectRoot: resolved.outcome.projectRoot } : {}),
+      session_id: resolved.outcome.session_id,
+      ...(resolved.outcome.project_root ? { project_root: resolved.outcome.project_root } : {}),
       text: "",
     };
   }
 
   const remote_agent = await createRemoteAgent({
-    projectRoot: resolved.target.projectRoot,
+    project_root: resolved.target.project_root,
     transport: params.transport,
   });
   const session = await getOrCreateRemoteSession({
     remote_agent,
-    session_id: resolved.target.sessionId,
+    session_id: resolved.target.session_id,
     create_new_session: resolved.target.createNewSession,
   });
 
@@ -497,8 +497,8 @@ export async function runSdkPromptTurn(params: {
       success: result.success,
       ...(result.error ? { error: result.error } : {}),
       emittedVisibleText: emitted_visible_text,
-      sessionId: resolved.target.sessionId,
-      projectRoot: resolved.target.projectRoot,
+      session_id: resolved.target.session_id,
+      project_root: resolved.target.project_root,
       text: final_text,
     };
   } catch (error) {
@@ -512,8 +512,8 @@ export async function runSdkPromptTurn(params: {
       success: false,
       error: error instanceof Error ? error.message : String(error),
       emittedVisibleText: emitted_visible_text,
-      sessionId: resolved.target.sessionId,
-      projectRoot: resolved.target.projectRoot,
+      session_id: resolved.target.session_id,
+      project_root: resolved.target.project_root,
       text: final_text,
     };
   } finally {
@@ -526,28 +526,28 @@ export async function runSdkPromptTurn(params: {
  * 向目标 agent 的 SDK actor session 发送一轮消息。
  */
 export async function executeAgentChatTurn(params: {
-  agentId: string;
+  agent_id: string;
   message: string;
   sessionOptions?: AgentChatSessionOptions;
   transport?: { host?: string; port?: number };
 }): Promise<AgentChatExecutionOutcome> {
   const message = normalizeChatMessage(params.message);
   const resolved_session = resolveAgentChatSessionOptions(params.sessionOptions);
-  const sessionId = resolved_session.success
+  const session_id = resolved_session.success
     ? resolved_session.session_id
     : AGENT_CHAT_DEFAULT_SESSION_ID;
 
   if (!message) {
     return {
-      agentId: String(params.agentId || "").trim(),
-      sessionId,
+      agent_id: String(params.agent_id || "").trim(),
+      session_id,
       success: false,
       error: "Chat message is required.",
     };
   }
 
   const outcome = await runSdkPromptTurn({
-    agentId: params.agentId,
+    agent_id: params.agent_id,
     message,
     sessionOptions: params.sessionOptions,
     transport: params.transport,
@@ -555,13 +555,13 @@ export async function executeAgentChatTurn(params: {
   });
 
   return {
-    agentId: params.agentId,
-    ...(outcome.projectRoot ? { projectRoot: outcome.projectRoot } : {}),
-    sessionId: outcome.sessionId,
+    agent_id: params.agent_id,
+    ...(outcome.project_root ? { project_root: outcome.project_root } : {}),
+    session_id: outcome.session_id,
     success: outcome.success,
     payload: {
       success: outcome.success,
-      sessionId: outcome.sessionId,
+      session_id: outcome.session_id,
       result: {
         success: outcome.success,
         userVisible: outcome.text || "",
@@ -574,16 +574,16 @@ export async function executeAgentChatTurn(params: {
 }
 
 export async function runOneShotChat(params: {
-  agentId: string;
+  agent_id: string;
   message: string;
   options: AgentChatCliOptions;
 }): Promise<void> {
   if (params.options.json === true) {
     const outcome = await executeAgentChatTurn({
-      agentId: params.agentId,
+      agent_id: params.agent_id,
       message: params.message,
       sessionOptions: {
-        sessionId: params.options.sessionId,
+        session_id: params.options.session_id,
         newSession: params.options.newSession,
       },
       transport: {
@@ -596,9 +596,9 @@ export async function runOneShotChat(params: {
       success: outcome.success,
       title: "agent chat",
       payload: {
-        agent: params.agentId,
-        ...(outcome.projectRoot ? { projectRoot: outcome.projectRoot } : {}),
-        sessionId: outcome.sessionId,
+        agent: params.agent_id,
+        ...(outcome.project_root ? { project_root: outcome.project_root } : {}),
+        session_id: outcome.session_id,
         ...(outcome.payload?.result ? { result: outcome.payload.result } : {}),
         ...(outcome.error ? { error: outcome.error } : {}),
       },
@@ -607,10 +607,10 @@ export async function runOneShotChat(params: {
   }
 
   const outcome = await runSdkPromptTurn({
-    agentId: params.agentId,
+    agent_id: params.agent_id,
     message: params.message,
     sessionOptions: {
-      sessionId: params.options.sessionId,
+      session_id: params.options.session_id,
       newSession: params.options.newSession,
     },
     transport: {
@@ -621,7 +621,7 @@ export async function runOneShotChat(params: {
 
   if (!outcome.success) {
     printAgentChatFailure({
-      agentId: params.agentId,
+      agent_id: params.agent_id,
       error: outcome.error,
     });
     return;

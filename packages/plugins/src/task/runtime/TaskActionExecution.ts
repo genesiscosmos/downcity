@@ -6,7 +6,7 @@
  * - task 定义变更后的 scheduler reload 通过回调注入，避免执行层依赖具体 service 实现。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { PluginRunContext } from "@downcity/agent";
 import type {
   TaskCronRegisterResult,
@@ -42,7 +42,7 @@ export type TaskSchedulerReloadPort = (params: {
   /**
    * 当前执行上下文。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * 触发本次 reload 的变更动作。
    */
@@ -66,10 +66,10 @@ export type { TaskCronRegisterResult } from "@/task/types/TaskPluginTypes.js";
  * - 重载失败不阻断主操作，仅记录 warning 供排查。
  */
 export async function reloadTaskSchedulerAfterMutation(params: {
-  context: AgentContext;
+  context: PluginContext;
   action: "create" | "update" | "delete" | "status";
   title: string;
-  reloadScheduler: (context: AgentContext) => Promise<TaskCronRegisterResult>;
+  reloadScheduler: (context: PluginContext) => Promise<TaskCronRegisterResult>;
 }): Promise<TaskSchedulerReloadResult> {
   try {
     const result = await params.reloadScheduler(params.context);
@@ -108,13 +108,13 @@ export async function reloadTaskSchedulerAfterMutation(params: {
  * 执行 `task.list` action。
  */
 export async function executeTaskListAction(params: {
-  context: AgentContext;
+  context: PluginContext;
   payload: TaskListActionPayload;
 }) {
   return {
     success: true,
     data: await listTaskDefinitions({
-      projectRoot: params.context.rootPath,
+      project_root: params.context.workspace_path,
       ...(params.payload.status ? { status: params.payload.status } : {}),
     }),
   };
@@ -124,13 +124,13 @@ export async function executeTaskListAction(params: {
  * 执行 `task.create` action。
  */
 export async function executeTaskCreateAction(params: {
-  context: AgentContext;
+  context: PluginContext;
   payload: TaskCreateRequest;
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }) {
   const payload = params.payload;
   const result = await createTaskDefinition({
-    projectRoot: params.context.rootPath,
+    project_root: params.context.workspace_path,
     request: payload,
   });
   if (!result.success) {
@@ -157,13 +157,13 @@ export async function executeTaskCreateAction(params: {
  * 执行 `task.run` action。
  */
 export async function executeTaskRunAction(params: {
-  context: AgentContext;
+  context: PluginContext;
   payload: TaskRunRequest;
   run_context?: PluginRunContext;
 }) {
   const result = await runTaskDefinition({
     context: params.context,
-    projectRoot: params.context.rootPath,
+    project_root: params.context.workspace_path,
     request: params.payload,
     run_context: params.run_context,
   });
@@ -183,13 +183,13 @@ export async function executeTaskRunAction(params: {
  * 执行 `task.delete` action。
  */
 export async function executeTaskDeleteAction(params: {
-  context: AgentContext;
+  context: PluginContext;
   payload: TaskDeleteRequest;
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }) {
   const payload = params.payload;
   const result = await deleteTaskDefinition({
-    projectRoot: params.context.rootPath,
+    project_root: params.context.workspace_path,
     request: payload,
   });
   if (!result.success) {
@@ -216,13 +216,13 @@ export async function executeTaskDeleteAction(params: {
  * 执行 `task.update` action。
  */
 export async function executeTaskUpdateAction(params: {
-  context: AgentContext;
+  context: PluginContext;
   payload: TaskUpdateRequest;
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }) {
   const payload = params.payload;
   const result = await updateTaskDefinition({
-    projectRoot: params.context.rootPath,
+    project_root: params.context.workspace_path,
     request: payload,
   });
   if (!result.success) {
@@ -249,13 +249,13 @@ export async function executeTaskUpdateAction(params: {
  * 执行 `task.status` action。
  */
 export async function executeTaskStatusAction(params: {
-  context: AgentContext;
+  context: PluginContext;
   payload: TaskSetStatusRequest;
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }) {
   const payload = params.payload;
   const result = await setTaskStatus({
-    projectRoot: params.context.rootPath,
+    project_root: params.context.workspace_path,
     request: payload,
   });
   if (!result.success) {

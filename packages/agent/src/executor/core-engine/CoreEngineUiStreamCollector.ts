@@ -12,7 +12,7 @@ import type { Logger } from "@/utils/logger/Logger.js";
 import type { JsonObject } from "@/types/common/Json.js";
 import type { SessionMessageRecordV1 } from "@/executor/types/SessionRecords.js";
 import type { SessionUiMessageChunkCallback } from "@/executor/types/SessionRun.js";
-import { generateId } from "@/utils/Id.js";
+import { generate_id } from "@/utils/Id.js";
 import {
   summarizeUiMessageForDebug,
   toInlinePreview,
@@ -27,9 +27,9 @@ export async function collectFinalAssistantMessageFromUiStream(params: {
    */
   result: ReturnType<typeof streamText>;
   /**
-   * 当前 sessionId，用于日志关联。
+   * 当前 session_id，用于日志关联。
    */
-  sessionId: string;
+  session_id: string;
   /**
    * 当前日志器。
    */
@@ -41,7 +41,7 @@ export async function collectFinalAssistantMessageFromUiStream(params: {
   /**
    * UI stream chunk 回调。
    */
-  onUiMessageChunkCallback?: SessionUiMessageChunkCallback;
+  on_ui_message_chunk_callback?: SessionUiMessageChunkCallback;
   /**
    * 当前 turn 的取消信号。
    *
@@ -49,7 +49,7 @@ export async function collectFinalAssistantMessageFromUiStream(params: {
    * - stop 触发后，UI stream 可能在 onFinish 前中断。
    * - 此时仍应尽量用已经收到的 text delta 构造可持久化 assistant 消息。
    */
-  abortSignal?: AbortSignal;
+  abort_signal?: AbortSignal;
 }): Promise<SessionMessageRecordV1> {
   let streamedAssistantMessage: SessionMessageRecordV1 | null = null;
   let uiFinishSummary: JsonObject | null = null;
@@ -59,13 +59,13 @@ export async function collectFinalAssistantMessageFromUiStream(params: {
   const uiStream = params.result.toUIMessageStream<SessionMessageRecordV1>({
     // 关键点（中文）：SDK stream 需要 reasoning 旁路事件时可直接消费；最终落盘仍由 responseMessage 收敛。
     originalMessages: [],
-    generateMessageId: () => `a:${params.sessionId}:${generateId()}`,
+    generateMessageId: () => `a:${params.session_id}:${generate_id()}`,
     messageMetadata: ({ part }) => {
       if (part.type !== "start" && part.type !== "finish") return undefined;
       return {
         v: 1,
         ts: Date.now(),
-        sessionId: params.sessionId,
+        session_id: params.session_id,
         source: "egress",
         kind: "normal",
       };
@@ -89,22 +89,22 @@ export async function collectFinalAssistantMessageFromUiStream(params: {
       if (chunk.type === "text-delta") {
         streamed_text += String(chunk.delta || "");
       }
-      if (typeof params.onUiMessageChunkCallback !== "function") continue;
+      if (typeof params.on_ui_message_chunk_callback !== "function") continue;
       try {
-        await params.onUiMessageChunkCallback(chunk);
+        await params.on_ui_message_chunk_callback(chunk);
       } catch (error) {
         callback_failed = true;
         throw error;
       }
     }
   } catch (error) {
-    if (callback_failed || !params.abortSignal?.aborted) {
+    if (callback_failed || !params.abort_signal?.aborted) {
       throw error;
     }
   }
 
   await params.logger.log("info", "[agent] ui.finish", {
-    sessionId: params.sessionId,
+    session_id: params.session_id,
     ...(uiFinishSummary || {
       responseMessageMissing: true,
     }),
@@ -123,7 +123,7 @@ export async function collectFinalAssistantMessageFromUiStream(params: {
   }
 
   await params.logger.log("warn", "[agent] final.message.fallback", {
-    sessionId: params.sessionId,
+    session_id: params.session_id,
     assistantTextLength: assistantText.length,
     assistantTextPreview: toInlinePreview(assistantText),
   });

@@ -79,10 +79,10 @@ export function parseScheduleTimeOptionOrThrow(
  * 解析 command 层调度输入并归一化为绝对毫秒时间戳。
  *
  * 说明（中文）
- * - `delayMs` 与 `time` 只能二选一。
+ * - `delay_ms` 与 `time` 只能二选一。
  * - 未传时返回 `undefined`，表示立即执行。
  */
-export function parseActionScheduleRunAtMsOrThrow(params: {
+export function parse_action_schedule_run_at_ms_or_throw(params: {
   delay?: string | number | undefined;
   time?: string | number | undefined;
 }): number | undefined {
@@ -111,7 +111,7 @@ export function parseActionScheduleRunAtMsOrThrow(params: {
 }
 
 /**
- * 规范化 API/存储层传入的 runAtMs。
+ * 规范化 API/存储层传入的 run_at_ms。
  */
 export function normalizeRunAtMsOrThrow(
   value: string | number | undefined,

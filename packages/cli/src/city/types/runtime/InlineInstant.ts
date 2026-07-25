@@ -1,5 +1,5 @@
 /**
- * Inline 即时执行类型定义。
+ * CLI/City Inline 即时执行类型定义。
  *
  * 关键点（中文）
  * - 统一描述 Chrome Extension Inline Composer 的“即时模式”请求与返回。
@@ -50,7 +50,7 @@ export interface PlatformInlineInstantRunInput {
    * 说明（中文）
    * - 当前实现中等同于 agent 项目根目录绝对路径。
    */
-  agentId?: string;
+  agent_id?: string;
 }
 
 /**
@@ -58,9 +58,9 @@ export interface PlatformInlineInstantRunInput {
  */
 export interface PlatformInlineInstantRunResult {
   /**
-   * 本次即时执行内部使用的临时 sessionId。
+   * 本次即时执行内部使用的临时 session_id。
    */
-  sessionId: string;
+  session_id: string;
 
   /**
    * 实际执行使用的 executor 类型。
@@ -78,9 +78,9 @@ export interface PlatformInlineInstantRunResult {
   modelId?: string;
 
   /**
-   * 若为 `acp` executor，则回传本次命中的 agentId。
+   * 若为 `acp` executor，则回传本次命中的 agent_id。
    */
-  agentId?: string;
+  agent_id?: string;
 }
 
 /**

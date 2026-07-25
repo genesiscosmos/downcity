@@ -46,7 +46,7 @@ function create_timeline_event(input: {
     role: input.role,
     ts: input.message.updated_at,
     text: input.text,
-    ...(input.tool_name ? { toolName: input.tool_name } : {}),
+    ...(input.tool_name ? { tool_name: input.tool_name } : {}),
   };
 }
 
@@ -92,9 +92,9 @@ export function to_session_message_timeline_events(
       text: message.description
         ? `${message.title}\n${message.description}`
         : message.title,
-      actionTitle: message.title,
-      ...(message.description ? { actionDescription: message.description } : {}),
-      actionState: message.status,
+      action_title: message.title,
+      ...(message.description ? { action_description: message.description } : {}),
+      action_state: message.status,
     }];
   }
   if (message.type === "error") {

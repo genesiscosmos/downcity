@@ -1,6 +1,8 @@
 /**
  * LLM 配置类型定义。
  *
+ * CLI/City LLM 宿主配置。
+ *
  * 设计目标（中文）
  * - 将“provider 连接信息”与“model 选择/采样参数”解耦。
  * - 支持在平台全局层配置多个 provider 与多个 model。

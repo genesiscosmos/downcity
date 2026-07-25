@@ -11,10 +11,10 @@ description: 用 session.get_info() 读取标题、预览、模型与执行状�
 const info = await session.get_info();
 
 render_header({
-  title: info.title || info.sessionId,
-  preview: info.previewText,
+  title: info.title || info.session_id,
+  preview: info.preview_text,
   is_running: info.executing === true,
-  model: info.modelLabel,
+  model: info.model_label,
 });
 ```
 
@@ -22,12 +22,12 @@ render_header({
 
 | 字段 | 含义 |
 | --- | --- |
-| `agentId` / `sessionId` | 稳定归属与身份 |
+| `agent_id` / `session_id` | 稳定归属与身份 |
 | `title` | 可为空的持久化标题 |
-| `previewText` | 适合列表的近期文本预览 |
-| `messageCount` | 已落盘 Message 数量 |
-| `modelLabel` | 仅用于观测的运行时模型标签 |
-| `createdAt` / `updatedAt` | 毫秒时间戳 |
+| `preview_text` | 适合列表的近期文本预览 |
+| `message_count` | 已落盘 Message 数量 |
+| `model_label` | 仅用于观测的运行时模型标签 |
+| `created_at` / `updated_at` | 毫秒时间戳 |
 | `executing` | 当前是否有活跃 Turn |
 | `timezone` | 创建 Session 时记录的参考时区 |
 
@@ -37,7 +37,7 @@ render_header({
 
 首条用户消息后，SDK 会尝试使用当前可用模型生成标题并持久化。模型不可用或生成失败时，标题可以保持为空；SDK 不会保证用首条消息自动生成 fallback。
 
-因此 UI 必须在 `title` 为空时回退到 `sessionId`、`previewText` 或产品自己的“新会话”文案。标题更新会以 `variant: "session", type: "title"` Mutation 实时发布。
+因此 UI 必须在 `title` 为空时回退到 `session_id`、`preview_text` 或产品自己的“新会话”文案。标题更新会以 `variant: "session", type: "title"` Mutation 实时发布。
 
 ## 列表与详情的分工
 
@@ -45,4 +45,4 @@ render_header({
 - 当前选中会话：使用 `get_info()` 更新头部和执行状态。
 - 内容区域：使用 `messages()` 加载历史，使用 `subscribe()` 保持同步。
 
-不要用 `updatedAt` 代替 `executing` 判断运行状态；时间戳只说明最近写入，不说明当前是否仍在执行。
+不要用 `updated_at` 代替 `executing` 判断运行状态；时间戳只说明最近写入，不说明当前是否仍在执行。

@@ -36,7 +36,7 @@ export class CoreEngineMessageState {
   /**
    * 当前项目根目录，用于解析历史中的相对路径 file part。
    */
-  private readonly projectRoot?: string;
+  private readonly project_root?: string;
 
   private constructor(params: {
     /**
@@ -54,12 +54,12 @@ export class CoreEngineMessageState {
     /**
      * 当前项目根目录。
      */
-    projectRoot?: string;
+    project_root?: string;
   }) {
     this.sessionMessages = params.sessionMessages;
     this.currentModelMessages = params.modelMessages;
     this.tools = params.tools;
-    this.projectRoot = params.projectRoot;
+    this.project_root = params.project_root;
   }
 
   /**
@@ -77,7 +77,7 @@ export class CoreEngineMessageState {
     /**
      * 当前项目根目录。
      */
-    projectRoot?: string;
+    project_root?: string;
   }): Promise<CoreEngineMessageState> {
     const sessionMessages = Array.isArray(params.messages)
       ? [...params.messages]
@@ -87,10 +87,10 @@ export class CoreEngineMessageState {
       modelMessages: await toModelMessages(
         sessionMessages,
         params.tools,
-        params.projectRoot,
+        params.project_root,
       ),
       tools: params.tools,
-      projectRoot: params.projectRoot,
+      project_root: params.project_root,
     });
   }
 
@@ -159,7 +159,7 @@ export class CoreEngineMessageState {
     this.currentModelMessages = await toModelMessages(
       this.sessionMessages,
       tools,
-      this.projectRoot,
+      this.project_root,
     );
   }
 
@@ -170,7 +170,7 @@ export class CoreEngineMessageState {
     const modelMessages = await toModelMessages(
       messages,
       this.tools,
-      this.projectRoot,
+      this.project_root,
     );
     if (modelMessages.length > 0) {
       this.currentModelMessages = [...this.currentModelMessages, ...modelMessages];
@@ -179,7 +179,7 @@ export class CoreEngineMessageState {
     this.currentModelMessages = await toModelMessages(
       this.sessionMessages,
       this.tools,
-      this.projectRoot,
+      this.project_root,
     );
     return [];
   }

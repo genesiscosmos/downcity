@@ -2,8 +2,8 @@
  * @file 验证 session 列表从正确目录读取持久化 title。
  *
  * 关键点（中文）
- * - 普通列表只读取 `.downcity/agents/<agentId>/sessions` 下的 meta。
- * - 归档列表只读取 `.downcity/agents/<agentId>/archived-sessions` 下的 meta。
+ * - 普通列表只读取 `.downcity/agents/<agent_id>/sessions` 下的 meta。
+ * - 归档列表只读取 `.downcity/agents/<agent_id>/archived-sessions` 下的 meta。
  * - title 允许为空；这里仅验证已由模型生成并落盘的 title 能被列表返回。
  */
 
@@ -65,7 +65,7 @@ async function create_agent_with_titled_session(input) {
   });
   const collection = agent.sessions;
   const session = await collection.create({
-    sessionId: input.session_id,
+    session_id: input.session_id,
   });
   await session.set({ model: create_mock_title_model(input.title) });
 
@@ -108,8 +108,8 @@ test("list_sessions returns persisted title from active session metadata", async
     );
 
     assert.equal(page.total, 1);
-    assert.equal(meta.messageCount, 1);
-    assert.equal(meta.previewText, "Need the session list to show the generated title");
+    assert.equal(meta.message_count, 1);
+    assert.equal(meta.preview_text, "Need the session list to show the generated title");
     const history_stat = await fs.stat(
       path.join(
         agent.workspace.path,
@@ -125,15 +125,15 @@ test("list_sessions returns persisted title from active session metadata", async
     assert.equal(meta.historyBytes, history_stat.size);
     assert.deepEqual(
       page.items.map((item) => ({
-        sessionId: item.sessionId,
+        session_id: item.session_id,
         title: item.title,
-        messageCount: item.messageCount,
+        message_count: item.message_count,
       })),
       [
         {
-          sessionId: session.id,
+          session_id: session.id,
           title: "列表标题",
-          messageCount: 1,
+          message_count: 1,
         },
       ],
     );
@@ -188,11 +188,11 @@ test("list_sessions reflects canonical SessionMessages changes", async () => {
       "000000000001-000000000001.jsonl",
     ));
 
-    assert.equal(page.items[0].messageCount, 2);
-    assert.equal(info.messageCount, 2);
-    assert.equal(page.items[0].previewText, "Recorder appended history");
-    assert.equal(repaired_meta.messageCount, 2);
-    assert.equal(repaired_meta.previewText, "Recorder appended history");
+    assert.equal(page.items[0].message_count, 2);
+    assert.equal(info.message_count, 2);
+    assert.equal(page.items[0].preview_text, "Recorder appended history");
+    assert.equal(repaired_meta.message_count, 2);
+    assert.equal(repaired_meta.preview_text, "Recorder appended history");
     assert.equal(repaired_meta.historyBytes, history_stat.size + segment_stat.size);
   } finally {
     await agent.dispose();
@@ -220,15 +220,15 @@ test("archive_sessions returns title from archived session metadata", async () =
     assert.equal(archived_page.total, 1);
     assert.deepEqual(
       archived_page.items.map((item) => ({
-        sessionId: item.sessionId,
+        session_id: item.session_id,
         title: item.title,
-        messageCount: item.messageCount,
+        message_count: item.message_count,
       })),
       [
         {
-          sessionId: session.id,
+          session_id: session.id,
           title: "归档标题",
-          messageCount: 1,
+          message_count: 1,
         },
       ],
     );

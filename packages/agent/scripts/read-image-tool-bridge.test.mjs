@@ -18,11 +18,11 @@ import {
 test("read image data is injected as a user file part", async () => {
   const data_url = "data:image/png;base64,iVBORw0KGgo=";
   const run_context = {
-    sessionId: "session-1",
-    turnId: "turn-1",
-    injectedUserMessages: [],
-    deferredPersistedUserMessages: [],
-    pendingAssistantFileParts: [],
+    session_id: "session-1",
+    turn_id: "turn-1",
+    injected_user_messages: [],
+    deferred_persisted_user_messages: [],
+    pending_assistant_file_parts: [],
   };
   const output = inject_read_image_user_message({
     tool_name: "read",
@@ -38,8 +38,8 @@ test("read image data is injected as a user file part", async () => {
 
   assert.equal(output.data_url, undefined);
   assert.equal(output.image_attached, true);
-  assert.equal(run_context.injectedUserMessages.length, 1);
-  const message = run_context.injectedUserMessages[0];
+  assert.equal(run_context.injected_user_messages.length, 1);
+  const message = run_context.injected_user_messages[0];
   assert.equal(message.role, "user");
   assert.equal(message.parts[0].type, "text");
   assert.equal(message.parts[1].type, "file");
@@ -56,10 +56,10 @@ test("read image data is injected as a user file part", async () => {
 test("non-image tool results are unchanged", () => {
   const output = { success: true, type: "text", content: "hello" };
   const run_context = {
-    sessionId: "session-1",
-    injectedUserMessages: [],
-    deferredPersistedUserMessages: [],
-    pendingAssistantFileParts: [],
+    session_id: "session-1",
+    injected_user_messages: [],
+    deferred_persisted_user_messages: [],
+    pending_assistant_file_parts: [],
   };
   const result = inject_read_image_user_message({
     tool_name: "read",
@@ -67,5 +67,5 @@ test("non-image tool results are unchanged", () => {
     run_context,
   });
   assert.equal(result, output);
-  assert.deepEqual(run_context.injectedUserMessages, []);
+  assert.deepEqual(run_context.injected_user_messages, []);
 });

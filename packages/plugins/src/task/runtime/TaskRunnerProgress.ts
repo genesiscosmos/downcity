@@ -75,7 +75,7 @@ export function createRunProgressWriter(params: {
       phase: current.phase,
       message: current.message,
       startedAt: params.startedAt,
-      updatedAt: now,
+      updated_at: now,
       ...(typeof current.endedAt === "number" ? { endedAt: current.endedAt } : {}),
       ...(current.runStatus ? { runStatus: current.runStatus } : {}),
       ...(current.executionStatus ? { executionStatus: current.executionStatus } : {}),

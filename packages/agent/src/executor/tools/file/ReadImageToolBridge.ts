@@ -8,7 +8,7 @@
  */
 
 import path from "node:path";
-import { generateId } from "@/utils/Id.js";
+import { generate_id } from "@/utils/Id.js";
 import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
 
 /** 把普通对象归一为可检查的记录。 */
@@ -40,15 +40,15 @@ export function inject_read_image_user_message(params: {
     return params.output;
   }
 
-  params.run_context.injectedUserMessages.push({
-    id: `read-image:${generateId()}`,
+  params.run_context.injected_user_messages.push({
+    id: `read-image:${generate_id()}`,
     role: "user",
     metadata: {
       v: 1,
       ts: Date.now(),
-      sessionId: params.run_context.sessionId,
-      ...(params.run_context.turnId
-        ? { turnId: params.run_context.turnId }
+      session_id: params.run_context.session_id,
+      ...(params.run_context.turn_id
+        ? { turn_id: params.run_context.turn_id }
         : {}),
       source: "ingress",
       kind: "normal",

@@ -8,8 +8,8 @@
 
 import type { Hono } from "hono";
 import type { Plugin } from "@/types/plugin/PluginDefinition.js";
-import type { AgentContext } from "@/agent/AgentContext.js";
-import type { AuthRoutePolicy } from "@/types/runtime/auth/AuthRoute.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
+import type { AuthRoutePolicy } from "@downcity/type";
 
 function dedupeAuthPolicies(policies: AuthRoutePolicy[]): AuthRoutePolicy[] {
   const records = new Map<string, AuthRoutePolicy>();
@@ -23,25 +23,25 @@ function dedupeAuthPolicies(policies: AuthRoutePolicy[]): AuthRoutePolicy[] {
 /**
  * 收集全部 plugin HTTP 鉴权策略。
  */
-export function listPluginAuthPolicies(plugins: Iterable<Plugin>): AuthRoutePolicy[] {
+export function list_plugin_auth_policies(plugins: Iterable<Plugin>): AuthRoutePolicy[] {
   return dedupeAuthPolicies(
-    [...plugins].flatMap((plugin) => plugin.http?.server?.authPolicies || []),
+    [...plugins].flatMap((plugin) => plugin.http?.server?.auth_policies || []),
   );
 }
 
 /**
  * 注册全部 plugin HTTP 路由。
  */
-export function registerPluginHttpRoutes(params: {
+export function register_plugin_http_routes(params: {
   app: Hono;
-  getContext: () => AgentContext;
+  get_context: () => PluginContext;
   plugins: Iterable<Plugin>;
 }): void {
   for (const plugin of params.plugins) {
     plugin.http?.server?.register({
       app: params.app,
-      getContext: params.getContext,
-      pluginName: plugin.name,
+      get_context: params.get_context,
+      plugin_name: plugin.name,
     });
   }
 }

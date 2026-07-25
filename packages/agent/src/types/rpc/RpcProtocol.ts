@@ -60,7 +60,7 @@ export type RpcRequest =
       /** 目标 session 参数。 */
       params: {
         /** 目标 session id。 */
-        sessionId: string;
+        session_id: string;
       };
     }
   | {
@@ -71,7 +71,7 @@ export type RpcRequest =
       /** 归档参数。 */
       params: {
         /** 目标 session id。 */
-        sessionId: string;
+        session_id: string;
       };
     }
   | {
@@ -96,7 +96,7 @@ export type RpcRequest =
       /** prompt 参数。 */
       params: {
         /** 目标 session id。 */
-        sessionId: string;
+        session_id: string;
         /** SDK prompt 输入。 */
         input: AgentSessionPromptInput;
       };
@@ -109,7 +109,7 @@ export type RpcRequest =
       /** 停止参数。 */
       params: {
         /** 目标 session id。 */
-        sessionId: string;
+        session_id: string;
       };
     }
   | {
@@ -120,7 +120,7 @@ export type RpcRequest =
       /** 目标 Session 参数。 */
       params: {
         /** 目标 session id。 */
-        sessionId: string;
+        session_id: string;
       };
     }
   | {
@@ -131,7 +131,7 @@ export type RpcRequest =
       /** messages 查询参数。 */
       params: {
         /** 目标 session id。 */
-        sessionId: string;
+        session_id: string;
         /** messages 分页参数。 */
         input?: ListSessionMessagesInput;
       };
@@ -142,7 +142,7 @@ export type RpcRequest =
       /** 列出指定 Session 的 pending 工具审批。 */
       method: "sdk.sessions.approvals";
       /** 目标 Session 参数。 */
-      params: { sessionId: string };
+      params: { session_id: string };
     }
   | {
       /** 请求 id，用于匹配响应。 */
@@ -150,7 +150,7 @@ export type RpcRequest =
       /** 读取指定 Session 的工具审批模式。 */
       method: "sdk.sessions.approvalMode";
       /** 目标 Session 参数。 */
-      params: { sessionId: string };
+      params: { session_id: string };
     }
   | {
       /** 请求 id，用于匹配响应。 */
@@ -158,7 +158,7 @@ export type RpcRequest =
       /** 更新指定 Session 的工具审批模式。 */
       method: "sdk.sessions.setApprovalMode";
       /** Session 与审批模式参数。 */
-      params: { sessionId: string; input: SetSessionApprovalModeInput };
+      params: { session_id: string; input: SetSessionApprovalModeInput };
     }
   | {
       /** 请求 id，用于匹配响应。 */
@@ -166,7 +166,7 @@ export type RpcRequest =
       /** 处理指定 Session 的 pending 工具审批。 */
       method: "sdk.sessions.resolveApproval";
       /** Session 与审批决策参数。 */
-      params: { sessionId: string; input: ResolveSessionApprovalInput };
+      params: { session_id: string; input: ResolveSessionApprovalInput };
     }
   | {
       /** 请求 id，用于匹配响应。 */
@@ -176,7 +176,7 @@ export type RpcRequest =
       /** 目标 session 参数。 */
       params: {
         /** 目标 session id。 */
-        sessionId: string;
+        session_id: string;
       };
     }
   | {
@@ -187,9 +187,9 @@ export type RpcRequest =
       /** 分叉参数。 */
       params: {
         /** 源 session id。 */
-        sessionId: string;
+        session_id: string;
         /** 可选源消息 id。 */
-        messageId?: string;
+        message_id?: string;
       };
     }
   | {
@@ -200,7 +200,7 @@ export type RpcRequest =
       /** 订阅参数。 */
       params: {
         /** 目标 session id。 */
-        sessionId: string;
+        session_id: string;
       };
     }
   | {
@@ -228,7 +228,7 @@ export type RpcRequest =
       /** 目标 session 参数。 */
       params: {
         /** 目标 session id。 */
-        sessionId: string;
+        session_id: string;
       };
     }
   | {
@@ -239,7 +239,7 @@ export type RpcRequest =
       /** 目标 session 参数。 */
       params: {
         /** 目标 session id。 */
-        sessionId: string;
+        session_id: string;
       };
     }
   | {
@@ -250,7 +250,7 @@ export type RpcRequest =
       /** 目标 session 参数。 */
       params: {
         /** 目标 session id。 */
-        sessionId: string;
+        session_id: string;
       };
     }
   | {
@@ -273,7 +273,7 @@ export type RpcRequest =
       /** plugin 控制参数。 */
       params: {
         /** plugin 名称。 */
-        pluginName: string;
+        plugin_name: string;
         /** 控制动作。 */
         action: PluginControlAction;
       };
@@ -286,7 +286,7 @@ export type RpcRequest =
       /** plugin command 参数。 */
       params: {
         /** plugin 名称。 */
-        pluginName: string;
+        plugin_name: string;
         /** command 名称。 */
         command: string;
         /** command payload。 */
@@ -303,7 +303,7 @@ export type RpcRequest =
       /** plugin 参数。 */
       params: {
         /** plugin 名称。 */
-        pluginName: string;
+        plugin_name: string;
       };
     }
   | {
@@ -314,9 +314,9 @@ export type RpcRequest =
       /** plugin action 参数。 */
       params: {
         /** plugin 名称。 */
-        pluginName: string;
+        plugin_name: string;
         /** action 名称。 */
-        actionName: string;
+        action_name: string;
         /** action payload。 */
         payload?: JsonValue;
       };
@@ -400,7 +400,7 @@ export interface RpcInternalStatus {
   /** RPC 服务所属进程的操作系统 pid。 */
   pid: number;
   /** 当前 Agent 项目的绝对路径。 */
-  projectRoot: string;
+  project_root: string;
   /** daemon 启动实例 ID；非 daemon 前台进程返回空字符串。 */
   instanceId: string;
 }
@@ -444,7 +444,7 @@ export interface RpcSystemPromptPayload {
   /** 请求是否成功。 */
   success?: boolean;
   /** 当前 session id。 */
-  sessionId: string;
+  session_id: string;
   /** system message 总数。 */
   totalMessages: number;
   /** system message 总字符数。 */

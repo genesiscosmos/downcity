@@ -1,5 +1,5 @@
 import path from "path";
-import { parseChatMessageMarkup } from "@downcity/agent";
+import { parse_chat_message_markup } from "@downcity/agent";
 
 /**
  * Telegram 集成配置。
@@ -257,7 +257,7 @@ export function parseTelegramAttachments(text: string): {
       }
   >;
 } {
-  const parsed = parseChatMessageMarkup(text);
+  const parsed = parse_chat_message_markup(text);
   const attachments: Array<{
     type: TelegramAttachmentType;
     pathOrUrl: string;
@@ -336,7 +336,7 @@ export function parseTelegramAttachments(text: string): {
     });
   }
 
-  return { text: parsed.bodyText, attachments, segments };
+  return { text: parsed.body_text, attachments, segments };
 }
 
 function formatActorName(name: string): string {

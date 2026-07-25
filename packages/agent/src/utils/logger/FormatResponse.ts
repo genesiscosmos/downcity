@@ -89,7 +89,7 @@ function summarizeResponseObjectForLog(
   };
 }
 
-function summarizeSseBodyForLog(bodyText: string): JsonObject {
+function summarizeSseBodyForLog(body_text: string): JsonObject {
   const eventTypes: string[] = [];
   const streamedOutputTypes: string[] = [];
   const functionCallNames: string[] = [];
@@ -153,7 +153,7 @@ function summarizeSseBodyForLog(bodyText: string): JsonObject {
     currentEvent = "";
   };
 
-  for (const rawLine of String(bodyText || "").split(/\r?\n/)) {
+  for (const rawLine of String(body_text || "").split(/\r?\n/)) {
     const line = String(rawLine || "");
     if (!line.trim()) {
       flushEvent();
@@ -196,10 +196,10 @@ export async function parseFetchResponseForLog(
 }> {
   const maxBodyPreviewChars = 2000;
   const contentType = String(response.headers.get("content-type") || "").trim();
-  let bodyText = "";
+  let body_text = "";
 
   try {
-    bodyText = await response.text();
+    body_text = await response.text();
   } catch (error) {
     const errorText = String(error || "unknown_error");
     return {
@@ -224,7 +224,7 @@ export async function parseFetchResponseForLog(
 
   let responseSummary: JsonObject = {};
   if (contentType.includes("application/json")) {
-    const parsed = safeJsonParse(bodyText);
+    const parsed = safeJsonParse(body_text);
     if (parsed && isJsonObject(parsed)) {
       const nestedResponse = getObjectField(parsed, "response");
       responseSummary = summarizeResponseObjectForLog(
@@ -232,10 +232,10 @@ export async function parseFetchResponseForLog(
       );
     }
   } else if (contentType.includes("text/event-stream")) {
-    responseSummary = summarizeSseBodyForLog(bodyText);
+    responseSummary = summarizeSseBodyForLog(body_text);
   }
 
-  const preview = toInlineLogValue(bodyText, maxBodyPreviewChars);
+  const preview = toInlineLogValue(body_text, maxBodyPreviewChars);
   const responseTextParts = [
     formatLogField(
       "agent",
@@ -258,7 +258,7 @@ export async function parseFetchResponseForLog(
       ...(contentType ? { contentType } : {}),
       ...(opts?.url ? { url: opts.url } : {}),
       ...(opts?.method ? { method: opts.method } : {}),
-      responseBodyLength: bodyText.length,
+      responseBodyLength: body_text.length,
       ...responseSummary,
     },
   };

@@ -21,8 +21,8 @@ const result = await turn.finished;
 ```ts
 type AgentSessionStopResult = {
   stopped: boolean;
-  turnId?: string;
-  cancelledQueuedPrompts: number;
+  turn_id?: string;
+  cancelled_queued_prompts: number;
   reason: "stopped" | "idle";
 };
 ```
@@ -30,8 +30,8 @@ type AgentSessionStopResult = {
 | Field | Meaning |
 | --- | --- |
 | `stopped` | Whether an active Turn was stopped or queued input was cleared |
-| `turnId` | The active Turn that was stopped; present only for an active Turn |
-| `cancelledQueuedPrompts` | Number of inputs not yet assigned to a Turn |
+| `turn_id` | The active Turn that was stopped; present only for an active Turn |
+| `cancelled_queued_prompts` | Number of inputs not yet assigned to a Turn |
 | `reason` | `stopped`, or `idle` when there was nothing to stop |
 
 ## Input queue semantics

@@ -7,7 +7,7 @@
  */
 
 import type { AgentSessions } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { Agent } from "@downcity/agent";
 import type { RpcEventFrame } from "@/types/RpcProtocol.js";
 
 /**
@@ -21,7 +21,7 @@ export interface RpcServerStartOptions {
   /** Session 集合访问口。 */
   sessions: AgentSessions;
   /** Agent 上下文访问口。 */
-  getAgentContext?: () => AgentContext;
+  get_agent?: () => Agent;
 }
 
 /**
@@ -31,7 +31,7 @@ export interface RpcRequestHandlerOptions {
   /** Session 集合访问口。 */
   sessions: AgentSessions;
   /** Agent 上下文访问口。 */
-  getAgentContext?: () => AgentContext;
+  get_agent?: () => Agent;
 }
 
 /**
@@ -39,7 +39,7 @@ export interface RpcRequestHandlerOptions {
  */
 export interface RpcSocketSubscription {
   /** 被订阅的 session id。 */
-  sessionId: string;
+  session_id: string;
   /** 取消订阅函数。 */
   unsubscribe: () => void;
 }

@@ -2,7 +2,7 @@ import type {
   FeishuAttachmentType,
   ParsedFeishuAttachmentCommand,
 } from "@/chat/types/FeishuAttachment.js";
-import { parseChatMessageMarkup } from "@downcity/agent";
+import { parse_chat_message_markup } from "@downcity/agent";
 
 /**
  * Feishu channel 公共工具。
@@ -43,7 +43,7 @@ export function parseFeishuAttachments(text: string): {
       }
   >;
 } {
-  const parsed = parseChatMessageMarkup(text);
+  const parsed = parse_chat_message_markup(text);
   const attachments: ParsedFeishuAttachmentCommand[] = parsed.files.map((file) => ({
     type: normalizeAttachmentType(file.type),
     pathOrUrl: String(file.path || "").trim(),
@@ -87,7 +87,7 @@ export function parseFeishuAttachments(text: string): {
   }
 
   return {
-    text: parsed.bodyText,
+    text: parsed.body_text,
     attachments,
     segments,
   };

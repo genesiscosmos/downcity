@@ -8,9 +8,9 @@ import type { SkillDefinition } from "@/skill/types/SkillDefinition.js";
  * - core 不依赖该结构
  */
 export type SessionSkillStateSnapshot = {
-  sessionId: string;
+  session_id: string;
   allSkills: SkillDefinition[];
-  updatedAt: number;
+  updated_at: number;
 };
 
 /**
@@ -18,5 +18,5 @@ export type SessionSkillStateSnapshot = {
  */
 export type SessionSkillStateInternal = {
   allSkillsById: Map<string, SkillDefinition>;
-  updatedAt: number;
+  updated_at: number;
 };

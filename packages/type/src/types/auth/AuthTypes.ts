@@ -1,5 +1,5 @@
 /**
- * 统一账户领域基础类型。
+ * 跨 package 统一账户领域基础类型。
  *
  * 关键点（中文）
  * - 这些类型描述的是 auth 表记录与运行时 principal，不承载路由细节。
@@ -28,11 +28,11 @@ export interface AuthUser {
   /**
    * 密码哈希值。
    */
-  passwordHash: string;
+  password_hash: string;
   /**
    * 展示名称。
    */
-  displayName?: string;
+  display_name?: string;
   /**
    * 用户状态。
    */
@@ -40,11 +40,11 @@ export interface AuthUser {
   /**
    * 创建时间（ISO 字符串）。
    */
-  createdAt: string;
+  created_at: string;
   /**
    * 更新时间（ISO 字符串）。
    */
-  updatedAt: string;
+  updated_at: string;
 }
 
 /**
@@ -66,11 +66,11 @@ export interface AuthRole {
   /**
    * 创建时间（ISO 字符串）。
    */
-  createdAt: string;
+  created_at: string;
   /**
    * 更新时间（ISO 字符串）。
    */
-  updatedAt: string;
+  updated_at: string;
 }
 
 /**
@@ -92,11 +92,11 @@ export interface AuthPermission {
   /**
    * 创建时间（ISO 字符串）。
    */
-  createdAt: string;
+  created_at: string;
   /**
    * 更新时间（ISO 字符串）。
    */
-  updatedAt: string;
+  updated_at: string;
 }
 
 /**
@@ -110,7 +110,7 @@ export interface AuthTokenRecord {
   /**
    * 所属用户 ID。
    */
-  userId: string;
+  user_id: string;
   /**
    * token 名称。
    */
@@ -118,27 +118,27 @@ export interface AuthTokenRecord {
   /**
    * token 哈希值。
    */
-  tokenHash: string;
+  token_hash: string;
   /**
    * 过期时间（可选）。
    */
-  expiresAt?: string;
+  expires_at?: string;
   /**
    * 吊销时间（可选）。
    */
-  revokedAt?: string;
+  revoked_at?: string;
   /**
    * 最近使用时间（可选）。
    */
-  lastUsedAt?: string;
+  last_used_at?: string;
   /**
    * 创建时间（ISO 字符串）。
    */
-  createdAt: string;
+  created_at: string;
   /**
    * 更新时间（ISO 字符串）。
    */
-  updatedAt: string;
+  updated_at: string;
 }
 
 /**
@@ -152,19 +152,19 @@ export interface AuthAuditLog {
   /**
    * 操作人用户 ID。
    */
-  actorUserId?: string;
+  actor_user_id?: string;
   /**
    * 操作人 token ID。
    */
-  actorTokenId?: string;
+  actor_token_id?: string;
   /**
    * 资源类型。
    */
-  resourceType: string;
+  resource_type: string;
   /**
    * 资源 ID。
    */
-  resourceId?: string;
+  resource_id?: string;
   /**
    * 动作名。
    */
@@ -176,7 +176,7 @@ export interface AuthAuditLog {
   /**
    * 请求 ID。
    */
-  requestId?: string;
+  request_id?: string;
   /**
    * 请求 IP。
    */
@@ -184,15 +184,15 @@ export interface AuthAuditLog {
   /**
    * User-Agent。
    */
-  userAgent?: string;
+  user_agent?: string;
   /**
    * 附加元数据 JSON 字符串。
    */
-  metaJson?: string;
+  meta_json?: string;
   /**
    * 创建时间（ISO 字符串）。
    */
-  createdAt: string;
+  created_at: string;
 }
 
 /**
@@ -202,7 +202,7 @@ export interface AuthPrincipal {
   /**
    * 当前用户 ID。
    */
-  userId: string;
+  user_id: string;
   /**
    * 当前用户名。
    */
@@ -210,7 +210,7 @@ export interface AuthPrincipal {
   /**
    * 当前展示名。
    */
-  displayName?: string;
+  display_name?: string;
   /**
    * 当前用户状态。
    */
@@ -218,11 +218,11 @@ export interface AuthPrincipal {
   /**
    * 当前 token 记录 ID。
    */
-  tokenId: string;
+  token_id: string;
   /**
    * 当前 token 名称。
    */
-  tokenName: string;
+  token_name: string;
   /**
    * 当前用户角色列表。
    */
@@ -232,4 +232,3 @@ export interface AuthPrincipal {
    */
   permissions: AuthPermissionKey[];
 }
-

@@ -7,7 +7,7 @@
  * - 普通 plugin 先启动，ActionSchedule 再开始轮询，避免到期 action 执行到未启动的 plugin。
  */
 
-import type { AgentContext } from "@/agent/AgentContext.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import { runDueActionScheduleJobs } from "@/plugin/core/ActionScheduleExecutor.js";
 import { ActionScheduleStore } from "@/plugin/core/ActionScheduleStore.js";
 
@@ -32,10 +32,10 @@ export interface ActionScheduleRuntimeHandle {
  * 启动 ActionSchedule 轮询 runtime。
  */
 export async function startActionScheduleRuntime(
-  context: AgentContext,
+  context: PluginContext,
 ): Promise<ActionScheduleRuntimeHandle> {
   const store = new ActionScheduleStore(context.files);
-  const recovered = await store.resetRunningJobsToPending();
+  const recovered = await store.reset_running_jobs_to_pending();
   if (recovered > 0) {
     context.logger.warn(
       formatActionScheduleLogMessage("Recovered interrupted running jobs"),

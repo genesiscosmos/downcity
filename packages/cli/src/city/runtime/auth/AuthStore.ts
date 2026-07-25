@@ -11,19 +11,19 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { nanoid } from "nanoid";
 import { getPlatformStoreDbPath } from "@/city/process/registry/CityPaths.js";
-import type { AuthIssuedToken, AuthTokenSummary } from "@downcity/agent";
+import type { AuthIssuedToken, AuthTokenSummary } from "@downcity/type";
 import {
   AUTH_DEFAULT_ROLES,
   AUTH_PERMISSION_DESCRIPTIONS,
   AUTH_PERMISSION_KEYS,
   type AuthDefaultRoleName,
   type AuthPermissionKey,
-} from "@downcity/agent";
+} from "@downcity/type";
 import type {
   AuthAuditLog,
   AuthTokenRecord,
   AuthUser,
-} from "@downcity/agent";
+} from "@downcity/type";
 import {
   nowIso,
   normalizeNonEmptyText,
@@ -154,29 +154,29 @@ export class AuthStore {
    */
   createUser(input: {
     username: string;
-    passwordHash: string;
-    displayName?: string;
+    password_hash: string;
+    display_name?: string;
     status?: "active" | "disabled";
   }): AuthUser {
     const id = nanoid();
     const now = nowIso();
     const username = normalizeNonEmptyText(input.username, "username");
-    const passwordHash = normalizeNonEmptyText(input.passwordHash, "passwordHash");
-    const displayName = optionalTrimmedText(input.displayName);
+    const password_hash = normalizeNonEmptyText(input.password_hash, "password_hash");
+    const display_name = optionalTrimmedText(input.display_name);
     const status = input.status === "disabled" ? "disabled" : "active";
     this.sqlite
       .prepare(
         "INSERT INTO auth_users (id, username, password_hash, display_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
       )
-      .run(id, username, passwordHash, displayName || null, status, now, now);
+      .run(id, username, password_hash, display_name || null, status, now, now);
     return {
       id,
       username,
-      passwordHash,
-      displayName,
+      password_hash,
+      display_name,
       status,
-      createdAt: now,
-      updatedAt: now,
+      created_at: now,
+      updated_at: now,
     };
   }
 
@@ -195,10 +195,10 @@ export class AuthStore {
    * 根据用户 ID 读取用户。
    */
   getUserById(userIdInput: string): AuthUser | null {
-    const userId = normalizeNonEmptyText(userIdInput, "userId");
+    const user_id = normalizeNonEmptyText(userIdInput, "user_id");
     const row = this.sqlite
       .prepare("SELECT * FROM auth_users WHERE id = ?")
-      .get(userId) as SqliteRow | undefined;
+      .get(user_id) as SqliteRow | undefined;
     return row ? this.toAuthUser(row) : null;
   }
 
@@ -216,49 +216,49 @@ export class AuthStore {
    * 更新用户基础资料。
    */
   updateUser(params: {
-    userId: string;
-    displayName?: string;
+    user_id: string;
+    display_name?: string;
     status?: "active" | "disabled";
   }): AuthUser | null {
-    const userId = normalizeNonEmptyText(params.userId, "userId");
-    const current = this.getUserById(userId);
+    const user_id = normalizeNonEmptyText(params.user_id, "user_id");
+    const current = this.getUserById(user_id);
     if (!current) return null;
-    const nextDisplayName = optionalTrimmedText(params.displayName);
+    const nextDisplayName = optionalTrimmedText(params.display_name);
     const nextStatus = params.status === "disabled" ? "disabled" : "active";
-    const updatedAt = nowIso();
+    const updated_at = nowIso();
     this.sqlite
       .prepare(
         "UPDATE auth_users SET display_name = ?, status = ?, updated_at = ? WHERE id = ?",
       )
-      .run(nextDisplayName || null, nextStatus, updatedAt, userId);
-    return this.getUserById(userId);
+      .run(nextDisplayName || null, nextStatus, updated_at, user_id);
+    return this.getUserById(user_id);
   }
 
   /**
    * 更新用户密码哈希。
    */
   updateUserPasswordHash(params: {
-    userId: string;
-    passwordHash: string;
+    user_id: string;
+    password_hash: string;
   }): AuthUser | null {
-    const userId = normalizeNonEmptyText(params.userId, "userId");
-    const passwordHash = normalizeNonEmptyText(params.passwordHash, "passwordHash");
-    const current = this.getUserById(userId);
+    const user_id = normalizeNonEmptyText(params.user_id, "user_id");
+    const password_hash = normalizeNonEmptyText(params.password_hash, "password_hash");
+    const current = this.getUserById(user_id);
     if (!current) return null;
-    const updatedAt = nowIso();
+    const updated_at = nowIso();
     this.sqlite
       .prepare(
         "UPDATE auth_users SET password_hash = ?, updated_at = ? WHERE id = ?",
       )
-      .run(passwordHash, updatedAt, userId);
-    return this.getUserById(userId);
+      .run(password_hash, updated_at, user_id);
+    return this.getUserById(user_id);
   }
 
   /**
    * 给用户绑定角色。
    */
-  assignRoleToUser(params: { userId: string; roleName: AuthDefaultRoleName | string }): void {
-    const userId = normalizeNonEmptyText(params.userId, "userId");
+  assignRoleToUser(params: { user_id: string; roleName: AuthDefaultRoleName | string }): void {
+    const user_id = normalizeNonEmptyText(params.user_id, "user_id");
     const role = this.sqlite
       .prepare("SELECT id FROM auth_roles WHERE name = ?")
       .get(normalizeNonEmptyText(params.roleName, "roleName")) as { id?: unknown } | undefined;
@@ -267,14 +267,14 @@ export class AuthStore {
       .prepare(
         "INSERT OR IGNORE INTO auth_user_roles (id, user_id, role_id, created_at) VALUES (?, ?, ?, ?)",
       )
-      .run(nanoid(), userId, String(role.id), nowIso());
+      .run(nanoid(), user_id, String(role.id), nowIso());
   }
 
   /**
    * 读取用户角色名列表。
    */
   listRoleNamesByUserId(userIdInput: string): string[] {
-    const userId = normalizeNonEmptyText(userIdInput, "userId");
+    const user_id = normalizeNonEmptyText(userIdInput, "user_id");
     const rows = this.sqlite
       .prepare(
         `
@@ -285,7 +285,7 @@ export class AuthStore {
           ORDER BY roles.name ASC
         `,
       )
-      .all(userId) as Array<{ name?: unknown }>;
+      .all(user_id) as Array<{ name?: unknown }>;
     return rows.map((row) => String(row.name || "").trim()).filter(Boolean);
   }
 
@@ -293,32 +293,32 @@ export class AuthStore {
    * 清空用户当前绑定的全部角色。
    */
   clearRolesByUserId(userIdInput: string): void {
-    const userId = normalizeNonEmptyText(userIdInput, "userId");
+    const user_id = normalizeNonEmptyText(userIdInput, "user_id");
     this.sqlite
       .prepare("DELETE FROM auth_user_roles WHERE user_id = ?")
-      .run(userId);
+      .run(user_id);
   }
 
   /**
    * 用新的角色集合覆盖用户角色绑定。
    */
   replaceRolesByUserId(params: {
-    userId: string;
+    user_id: string;
     roleNames: string[];
   }): string[] {
-    const userId = normalizeNonEmptyText(params.userId, "userId");
+    const user_id = normalizeNonEmptyText(params.user_id, "user_id");
     const roleNames = [...new Set(params.roleNames.map((item) => String(item || "").trim()).filter(Boolean))];
     const tx = this.sqlite.transaction(() => {
-      this.clearRolesByUserId(userId);
+      this.clearRolesByUserId(user_id);
       for (const roleName of roleNames) {
         this.assignRoleToUser({
-          userId,
+          user_id,
           roleName,
         });
       }
     });
     tx();
-    return this.listRoleNamesByUserId(userId);
+    return this.listRoleNamesByUserId(user_id);
   }
 
   /**
@@ -344,7 +344,7 @@ export class AuthStore {
    * 读取用户权限 key 列表。
    */
   listPermissionKeysByUserId(userIdInput: string): AuthPermissionKey[] {
-    const userId = normalizeNonEmptyText(userIdInput, "userId");
+    const user_id = normalizeNonEmptyText(userIdInput, "user_id");
     const rows = this.sqlite
       .prepare(
         `
@@ -356,7 +356,7 @@ export class AuthStore {
           ORDER BY perms.key ASC
         `,
       )
-      .all(userId) as Array<{ key?: unknown }>;
+      .all(user_id) as Array<{ key?: unknown }>;
     return rows
       .map((row) => String(row.key || "").trim())
       .filter(Boolean) as AuthPermissionKey[];
@@ -366,30 +366,30 @@ export class AuthStore {
    * 创建 token 记录。
    */
   createToken(input: {
-    userId: string;
+    user_id: string;
     name: string;
-    tokenHash: string;
-    expiresAt?: string;
+    token_hash: string;
+    expires_at?: string;
   }): AuthTokenRecord {
     const id = nanoid();
     const now = nowIso();
-    const userId = normalizeNonEmptyText(input.userId, "userId");
+    const user_id = normalizeNonEmptyText(input.user_id, "user_id");
     const name = normalizeNonEmptyText(input.name, "name");
-    const tokenHash = normalizeNonEmptyText(input.tokenHash, "tokenHash");
-    const expiresAt = optionalTrimmedText(input.expiresAt);
+    const token_hash = normalizeNonEmptyText(input.token_hash, "token_hash");
+    const expires_at = optionalTrimmedText(input.expires_at);
     this.sqlite
       .prepare(
         "INSERT INTO auth_tokens (id, user_id, name, token_hash, expires_at, revoked_at, last_used_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?)",
       )
-      .run(id, userId, name, tokenHash, expiresAt || null, now, now);
+      .run(id, user_id, name, token_hash, expires_at || null, now, now);
     return {
       id,
-      userId,
+      user_id,
       name,
-      tokenHash,
-      expiresAt,
-      createdAt: now,
-      updatedAt: now,
+      token_hash,
+      expires_at,
+      created_at: now,
+      updated_at: now,
     };
   }
 
@@ -397,10 +397,10 @@ export class AuthStore {
    * 根据 token 哈希读取记录。
    */
   findTokenByHash(tokenHashInput: string): AuthTokenRecord | null {
-    const tokenHash = normalizeNonEmptyText(tokenHashInput, "tokenHash");
+    const token_hash = normalizeNonEmptyText(tokenHashInput, "token_hash");
     const row = this.sqlite
       .prepare("SELECT * FROM auth_tokens WHERE token_hash = ?")
-      .get(tokenHash) as SqliteRow | undefined;
+      .get(token_hash) as SqliteRow | undefined;
     return row ? this.toAuthToken(row) : null;
   }
 
@@ -408,10 +408,10 @@ export class AuthStore {
    * 根据 token ID 读取记录。
    */
   getTokenById(tokenIdInput: string): AuthTokenRecord | null {
-    const tokenId = normalizeNonEmptyText(tokenIdInput, "tokenId");
+    const token_id = normalizeNonEmptyText(tokenIdInput, "token_id");
     const row = this.sqlite
       .prepare("SELECT * FROM auth_tokens WHERE id = ?")
-      .get(tokenId) as SqliteRow | undefined;
+      .get(token_id) as SqliteRow | undefined;
     return row ? this.toAuthToken(row) : null;
   }
 
@@ -419,10 +419,10 @@ export class AuthStore {
    * 读取用户 token 列表。
    */
   listTokensByUserId(userIdInput: string): AuthTokenRecord[] {
-    const userId = normalizeNonEmptyText(userIdInput, "userId");
+    const user_id = normalizeNonEmptyText(userIdInput, "user_id");
     const rows = this.sqlite
       .prepare("SELECT * FROM auth_tokens WHERE user_id = ? ORDER BY created_at DESC")
-      .all(userId) as SqliteRow[];
+      .all(user_id) as SqliteRow[];
     return rows.map((row) => this.toAuthToken(row));
   }
 
@@ -430,33 +430,33 @@ export class AuthStore {
    * 更新 token 最后使用时间。
    */
   touchToken(tokenIdInput: string): void {
-    const tokenId = normalizeNonEmptyText(tokenIdInput, "tokenId");
+    const token_id = normalizeNonEmptyText(tokenIdInput, "token_id");
     const now = nowIso();
     this.sqlite
       .prepare("UPDATE auth_tokens SET last_used_at = ?, updated_at = ? WHERE id = ?")
-      .run(now, now, tokenId);
+      .run(now, now, token_id);
   }
 
   /**
    * 吊销 token。
    */
   revokeToken(tokenIdInput: string): AuthTokenRecord | null {
-    const tokenId = normalizeNonEmptyText(tokenIdInput, "tokenId");
+    const token_id = normalizeNonEmptyText(tokenIdInput, "token_id");
     const now = nowIso();
     this.sqlite
       .prepare("UPDATE auth_tokens SET revoked_at = ?, updated_at = ? WHERE id = ?")
-      .run(now, now, tokenId);
-    return this.getTokenById(tokenId);
+      .run(now, now, token_id);
+    return this.getTokenById(token_id);
   }
 
   /**
    * 删除 token。
    */
   deleteToken(tokenIdInput: string): boolean {
-    const tokenId = normalizeNonEmptyText(tokenIdInput, "tokenId");
+    const token_id = normalizeNonEmptyText(tokenIdInput, "token_id");
     const result = this.sqlite
       .prepare("DELETE FROM auth_tokens WHERE id = ?")
-      .run(tokenId);
+      .run(token_id);
     return result.changes > 0;
   }
 
@@ -464,32 +464,32 @@ export class AuthStore {
    * 写入审计日志。
    */
   insertAuditLog(input: {
-    actorUserId?: string;
-    actorTokenId?: string;
-    resourceType: string;
-    resourceId?: string;
+    actor_user_id?: string;
+    actor_token_id?: string;
+    resource_type: string;
+    resource_id?: string;
     action: string;
     result: string;
-    requestId?: string;
+    request_id?: string;
     ip?: string;
-    userAgent?: string;
-    metaJson?: string;
+    user_agent?: string;
+    meta_json?: string;
   }): AuthAuditLog {
     const id = nanoid();
-    const createdAt = nowIso();
+    const created_at = nowIso();
     const row: AuthAuditLog = {
       id,
-      actorUserId: optionalTrimmedText(input.actorUserId),
-      actorTokenId: optionalTrimmedText(input.actorTokenId),
-      resourceType: normalizeNonEmptyText(input.resourceType, "resourceType"),
-      resourceId: optionalTrimmedText(input.resourceId),
+      actor_user_id: optionalTrimmedText(input.actor_user_id),
+      actor_token_id: optionalTrimmedText(input.actor_token_id),
+      resource_type: normalizeNonEmptyText(input.resource_type, "resource_type"),
+      resource_id: optionalTrimmedText(input.resource_id),
       action: normalizeNonEmptyText(input.action, "action"),
       result: normalizeNonEmptyText(input.result, "result"),
-      requestId: optionalTrimmedText(input.requestId),
+      request_id: optionalTrimmedText(input.request_id),
       ip: optionalTrimmedText(input.ip),
-      userAgent: optionalTrimmedText(input.userAgent),
-      metaJson: optionalTrimmedText(input.metaJson),
-      createdAt,
+      user_agent: optionalTrimmedText(input.user_agent),
+      meta_json: optionalTrimmedText(input.meta_json),
+      created_at,
     };
     this.sqlite
       .prepare(
@@ -497,17 +497,17 @@ export class AuthStore {
       )
       .run(
         row.id,
-        row.actorUserId || null,
-        row.actorTokenId || null,
-        row.resourceType,
-        row.resourceId || null,
+        row.actor_user_id || null,
+        row.actor_token_id || null,
+        row.resource_type,
+        row.resource_id || null,
         row.action,
         row.result,
-        row.requestId || null,
+        row.request_id || null,
         row.ip || null,
-        row.userAgent || null,
-        row.metaJson || null,
-        row.createdAt,
+        row.user_agent || null,
+        row.meta_json || null,
+        row.created_at,
       );
     return row;
   }
@@ -519,10 +519,10 @@ export class AuthStore {
     return {
       id: record.id,
       name: record.name,
-      expiresAt: record.expiresAt,
-      lastUsedAt: record.lastUsedAt,
-      createdAt: record.createdAt,
-      updatedAt: record.updatedAt,
+      expires_at: record.expires_at,
+      last_used_at: record.last_used_at,
+      created_at: record.created_at,
+      updated_at: record.updated_at,
     };
   }
 
@@ -540,25 +540,25 @@ export class AuthStore {
     return {
       id: String(row.id || ""),
       username: String(row.username || ""),
-      passwordHash: String(row.password_hash || ""),
-      displayName: optionalTrimmedText(String(row.display_name || "")),
+      password_hash: String(row.password_hash || ""),
+      display_name: optionalTrimmedText(String(row.display_name || "")),
       status: String(row.status || "active") === "disabled" ? "disabled" : "active",
-      createdAt: String(row.created_at || ""),
-      updatedAt: String(row.updated_at || ""),
+      created_at: String(row.created_at || ""),
+      updated_at: String(row.updated_at || ""),
     };
   }
 
   private toAuthToken(row: SqliteRow): AuthTokenRecord {
     return {
       id: String(row.id || ""),
-      userId: String(row.user_id || ""),
+      user_id: String(row.user_id || ""),
       name: String(row.name || ""),
-      tokenHash: String(row.token_hash || ""),
-      expiresAt: optionalTrimmedText(String(row.expires_at || "")),
-      revokedAt: optionalTrimmedText(String(row.revoked_at || "")),
-      lastUsedAt: optionalTrimmedText(String(row.last_used_at || "")),
-      createdAt: String(row.created_at || ""),
-      updatedAt: String(row.updated_at || ""),
+      token_hash: String(row.token_hash || ""),
+      expires_at: optionalTrimmedText(String(row.expires_at || "")),
+      revoked_at: optionalTrimmedText(String(row.revoked_at || "")),
+      last_used_at: optionalTrimmedText(String(row.last_used_at || "")),
+      created_at: String(row.created_at || ""),
+      updated_at: String(row.updated_at || ""),
     };
   }
 

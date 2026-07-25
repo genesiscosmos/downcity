@@ -43,7 +43,7 @@ export interface SessionLocalState {
   initialize_promise: Promise<void> | null;
 
   /**
-   * ensureReadyForExecution() 过程中的并发复用 Promise。
+   * ensure_ready_for_execution() 过程中的并发复用 Promise。
    */
   ensure_configured_promise: Promise<void> | null;
 }

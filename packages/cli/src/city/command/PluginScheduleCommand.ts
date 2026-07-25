@@ -48,7 +48,7 @@ export async function runPluginScheduleListCommand(params: {
   limitRaw?: string;
 }): Promise<void> {
   const resolved = await resolvePluginScheduleProjectRoot(params.options);
-  if (!resolved.projectRoot) {
+  if (!resolved.project_root) {
     printResult({
       asJson: params.options.json,
       success: false,
@@ -59,8 +59,8 @@ export async function runPluginScheduleListCommand(params: {
     });
     return;
   }
-  const projectRoot = resolved.projectRoot;
-  const pathError = validateAgentProjectRoot(projectRoot);
+  const project_root = resolved.project_root;
+  const pathError = validateAgentProjectRoot(project_root);
   if (pathError) {
     printResult({
       asJson: params.options.json,
@@ -78,10 +78,10 @@ export async function runPluginScheduleListCommand(params: {
     const limit = params.limitRaw
       ? parsePositiveIntOption(params.limitRaw, "limit")
       : 100;
-    const workspace = new Workspace({ path: projectRoot });
+    const workspace = new Workspace({ path: project_root });
     const store = new ActionScheduleStore(workspace.files);
     try {
-      const jobs = await store.listJobs({ status, limit });
+      const jobs = await store.list_jobs({ status, limit });
       printResult({
         asJson: params.options.json,
         success: true,
@@ -113,11 +113,11 @@ export async function runPluginScheduleListCommand(params: {
  * 执行 `plugin schedule info`。
  */
 export async function runPluginScheduleInfoCommand(params: {
-  jobId: string;
+  job_id: string;
   options: PluginCliBaseOptions;
 }): Promise<void> {
   const resolved = await resolvePluginScheduleProjectRoot(params.options);
-  if (!resolved.projectRoot) {
+  if (!resolved.project_root) {
     printResult({
       asJson: params.options.json,
       success: false,
@@ -128,8 +128,8 @@ export async function runPluginScheduleInfoCommand(params: {
     });
     return;
   }
-  const projectRoot = resolved.projectRoot;
-  const pathError = validateAgentProjectRoot(projectRoot);
+  const project_root = resolved.project_root;
+  const pathError = validateAgentProjectRoot(project_root);
   if (pathError) {
     printResult({
       asJson: params.options.json,
@@ -142,30 +142,30 @@ export async function runPluginScheduleInfoCommand(params: {
     return;
   }
 
-  const jobId = String(params.jobId || "").trim();
-  if (!jobId) {
+  const job_id = String(params.job_id || "").trim();
+  if (!job_id) {
     printResult({
       asJson: params.options.json,
       success: false,
       title: "plugin schedule info failed",
       payload: {
-        error: "jobId is required",
+        error: "job_id is required",
       },
     });
     return;
   }
 
-  const workspace = new Workspace({ path: projectRoot });
+  const workspace = new Workspace({ path: project_root });
   const store = new ActionScheduleStore(workspace.files);
   try {
-    const job = await store.getJobById(jobId);
+    const job = await store.get_job_by_id(job_id);
     if (!job) {
       printResult({
         asJson: params.options.json,
         success: false,
         title: "plugin schedule info failed",
         payload: {
-          error: `Scheduled job not found: ${jobId}`,
+          error: `Scheduled job not found: ${job_id}`,
         },
       });
       return;
@@ -188,11 +188,11 @@ export async function runPluginScheduleInfoCommand(params: {
  * 执行 `plugin schedule cancel`。
  */
 export async function runPluginScheduleCancelCommand(params: {
-  jobId: string;
+  job_id: string;
   options: PluginCliBaseOptions;
 }): Promise<void> {
   const resolved = await resolvePluginScheduleProjectRoot(params.options);
-  if (!resolved.projectRoot) {
+  if (!resolved.project_root) {
     printResult({
       asJson: params.options.json,
       success: false,
@@ -203,8 +203,8 @@ export async function runPluginScheduleCancelCommand(params: {
     });
     return;
   }
-  const projectRoot = resolved.projectRoot;
-  const pathError = validateAgentProjectRoot(projectRoot);
+  const project_root = resolved.project_root;
+  const pathError = validateAgentProjectRoot(project_root);
   if (pathError) {
     printResult({
       asJson: params.options.json,
@@ -217,30 +217,30 @@ export async function runPluginScheduleCancelCommand(params: {
     return;
   }
 
-  const jobId = String(params.jobId || "").trim();
-  if (!jobId) {
+  const job_id = String(params.job_id || "").trim();
+  if (!job_id) {
     printResult({
       asJson: params.options.json,
       success: false,
       title: "plugin schedule cancel failed",
       payload: {
-        error: "jobId is required",
+        error: "job_id is required",
       },
     });
     return;
   }
 
-  const workspace = new Workspace({ path: projectRoot });
+  const workspace = new Workspace({ path: project_root });
   const store = new ActionScheduleStore(workspace.files);
   try {
-    const current = await store.getJobById(jobId);
+    const current = await store.get_job_by_id(job_id);
     if (!current) {
       printResult({
         asJson: params.options.json,
         success: false,
         title: "plugin schedule cancel failed",
         payload: {
-          error: `Scheduled job not found: ${jobId}`,
+          error: `Scheduled job not found: ${job_id}`,
         },
       });
       return;
@@ -258,14 +258,14 @@ export async function runPluginScheduleCancelCommand(params: {
       return;
     }
 
-    const cancelled = await store.cancelPendingJob(jobId);
+    const cancelled = await store.cancel_pending_job(job_id);
     if (!cancelled) {
       printResult({
         asJson: params.options.json,
         success: false,
         title: "plugin schedule cancel failed",
         payload: {
-          error: `Failed to cancel scheduled job: ${jobId}`,
+          error: `Failed to cancel scheduled job: ${job_id}`,
         },
       });
       return;
@@ -276,7 +276,7 @@ export async function runPluginScheduleCancelCommand(params: {
       success: true,
       title: "plugin schedule cancelled",
       payload: {
-        job: await store.getJobById(jobId),
+        job: await store.get_job_by_id(job_id),
       },
     });
   } finally {
@@ -322,28 +322,28 @@ export function registerPluginScheduleCommands(plugin: Command): void {
 
   addPluginScheduleOptions(
     schedule
-      .command("info <jobId>")
+      .command("info <job_id>")
       .description(t({
         zh: "查看单个延迟 action 任务详情",
         en: "show details for a single delayed action job",
       })),
-  ).action(async (jobId: string, opts: PluginCliBaseOptions) => {
+  ).action(async (job_id: string, opts: PluginCliBaseOptions) => {
     await runPluginScheduleInfoCommand({
-      jobId,
+      job_id,
       options: opts,
     });
   });
 
   addPluginScheduleOptions(
     schedule
-      .command("cancel <jobId>")
+      .command("cancel <job_id>")
       .description(t({
         zh: "取消一个尚未执行的延迟 action 任务",
         en: "cancel a delayed action job that has not started yet",
       })),
-  ).action(async (jobId: string, opts: PluginCliBaseOptions) => {
+  ).action(async (job_id: string, opts: PluginCliBaseOptions) => {
     await runPluginScheduleCancelCommand({
-      jobId,
+      job_id,
       options: opts,
     });
   });

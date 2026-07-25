@@ -2,15 +2,15 @@
  * ChatHistoryStore：聊天事件流持久化。
  *
  * 关键点（中文）
- * - 写入 `.downcity/chat/<sessionId>/history.jsonl`（append-only）。
+ * - 写入 `.downcity/chat/<session_id>/history.jsonl`（append-only）。
  * - 记录 inbound（audit/exec）与 outbound 事件。
  * - 与 session message history 分离，避免审计噪声进入模型上下文。
  */
 
 import fs from "fs-extra";
 import path from "node:path";
-import { generateId } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import { generate_id } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import { get_chat_history_path } from "@/chat/runtime/ChatStorage.js";
 import type { JsonObject } from "@downcity/agent";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
@@ -41,31 +41,31 @@ function toOptionalObject(value: JsonObject | undefined): JsonObject | undefined
 }
 
 function buildInboundEvent(params: {
-  sessionId: string;
+  session_id: string;
   channel: ChatDispatchChannel;
   chatId: string;
   ingressKind: ChatHistoryIngressKind;
   text: string;
   targetType?: string;
   threadId?: number;
-  messageId?: string;
+  message_id?: string;
   actorId?: string;
   actorName?: string;
   extra?: JsonObject;
 }): ChatHistoryInboundEventV1 {
   return {
     v: 1,
-    id: `chat:${generateId()}`,
+    id: `chat:${generate_id()}`,
     ts: Date.now(),
     direction: "inbound",
     ingressKind: params.ingressKind,
-    sessionId: params.sessionId,
+    session_id: params.session_id,
     channel: params.channel,
     chatId: params.chatId,
     text: params.text,
     ...(params.targetType ? { targetType: params.targetType } : {}),
     ...(typeof params.threadId === "number" ? { threadId: params.threadId } : {}),
-    ...(params.messageId ? { messageId: params.messageId } : {}),
+    ...(params.message_id ? { message_id: params.message_id } : {}),
     ...(params.actorId ? { actorId: params.actorId } : {}),
     ...(params.actorName ? { actorName: params.actorName } : {}),
     ...(params.extra ? { extra: params.extra } : {}),
@@ -73,29 +73,29 @@ function buildInboundEvent(params: {
 }
 
 function buildOutboundEvent(params: {
-  sessionId: string;
+  session_id: string;
   channel: ChatDispatchChannel;
   chatId: string;
   text: string;
   targetType?: string;
   threadId?: number;
-  messageId?: string;
+  message_id?: string;
   actorId?: string;
   actorName?: string;
   extra?: JsonObject;
 }): ChatHistoryOutboundEventV1 {
   return {
     v: 1,
-    id: `chat:${generateId()}`,
+    id: `chat:${generate_id()}`,
     ts: Date.now(),
     direction: "outbound",
-    sessionId: params.sessionId,
+    session_id: params.session_id,
     channel: params.channel,
     chatId: params.chatId,
     text: params.text,
     ...(params.targetType ? { targetType: params.targetType } : {}),
     ...(typeof params.threadId === "number" ? { threadId: params.threadId } : {}),
-    ...(params.messageId ? { messageId: params.messageId } : {}),
+    ...(params.message_id ? { message_id: params.message_id } : {}),
     ...(params.actorId ? { actorId: params.actorId } : {}),
     ...(params.actorName ? { actorName: params.actorName } : {}),
     ...(params.extra ? { extra: params.extra } : {}),
@@ -112,7 +112,7 @@ function isChatHistoryEventV1(value: unknown): value is ChatHistoryEventV1 {
   if (obj.v !== 1) return false;
   if (!isValidHistoryDirection(obj.direction)) return false;
   if (typeof obj.id !== "string" || !obj.id.trim()) return false;
-  if (typeof obj.sessionId !== "string" || !obj.sessionId.trim()) return false;
+  if (typeof obj.session_id !== "string" || !obj.session_id.trim()) return false;
   if (typeof obj.channel !== "string" || !obj.channel.trim()) return false;
   if (typeof obj.chatId !== "string" || !obj.chatId.trim()) return false;
   if (typeof obj.text !== "string") return false;
@@ -132,39 +132,39 @@ function isChatHistoryEventV1(value: unknown): value is ChatHistoryEventV1 {
  * - 调用方应在入队前调用，以满足“先审计后执行”链路。
  */
 export async function appendInboundChatHistory(params: {
-  context: AgentContext;
-  sessionId: string;
+  context: PluginContext;
+  session_id: string;
   channel: ChatDispatchChannel;
   chatId: string;
   ingressKind: ChatHistoryIngressKind;
   text: string;
   targetType?: string;
   threadId?: number;
-  messageId?: string;
+  message_id?: string;
   actorId?: string;
   actorName?: string;
   extra?: JsonObject;
 }): Promise<void> {
-  const rootPath = normalizeTrimmedString(params.context.rootPath);
-  const sessionId = normalizeTrimmedString(params.sessionId);
+  const rootPath = normalizeTrimmedString(params.context.workspace_path);
+  const session_id = normalizeTrimmedString(params.session_id);
   const chatId = normalizeTrimmedString(params.chatId);
-  if (!rootPath || !sessionId || !chatId) return;
+  if (!rootPath || !session_id || !chatId) return;
 
   const event = buildInboundEvent({
-    sessionId,
+    session_id,
     channel: params.channel,
     chatId,
     ingressKind: params.ingressKind,
     text: String(params.text ?? ""),
     targetType: toOptionalTrimmedString(params.targetType),
     threadId: toOptionalFiniteNumber(params.threadId),
-    messageId: toOptionalTrimmedString(params.messageId),
+    message_id: toOptionalTrimmedString(params.message_id),
     actorId: toOptionalTrimmedString(params.actorId),
     actorName: toOptionalTrimmedString(params.actorName),
     extra: toOptionalObject(params.extra),
   });
 
-  const file = get_chat_history_path(params.context.rootPath, sessionId);
+  const file = get_chat_history_path(params.context.workspace_path, session_id);
   await fs.ensureDir(path.dirname(file));
   await fs.appendFile(file, JSON.stringify(event) + "\n", "utf8");
 }
@@ -177,60 +177,60 @@ export async function appendInboundChatHistory(params: {
  * - 该函数只做落盘，不影响实际发送链路。
  */
 export async function appendOutboundChatHistory(params: {
-  context: AgentContext;
-  sessionId: string;
+  context: PluginContext;
+  session_id: string;
   channel: ChatDispatchChannel;
   chatId: string;
   text: string;
   targetType?: string;
   threadId?: number;
-  messageId?: string;
+  message_id?: string;
   actorId?: string;
   actorName?: string;
   extra?: JsonObject;
 }): Promise<void> {
-  const rootPath = normalizeTrimmedString(params.context.rootPath);
-  const sessionId = normalizeTrimmedString(params.sessionId);
+  const rootPath = normalizeTrimmedString(params.context.workspace_path);
+  const session_id = normalizeTrimmedString(params.session_id);
   const chatId = normalizeTrimmedString(params.chatId);
-  if (!rootPath || !sessionId || !chatId) return;
+  if (!rootPath || !session_id || !chatId) return;
 
   const event = buildOutboundEvent({
-    sessionId,
+    session_id,
     channel: params.channel,
     chatId,
     text: String(params.text ?? ""),
     targetType: toOptionalTrimmedString(params.targetType),
     threadId: toOptionalFiniteNumber(params.threadId),
-    messageId: toOptionalTrimmedString(params.messageId),
+    message_id: toOptionalTrimmedString(params.message_id),
     actorId: toOptionalTrimmedString(params.actorId),
     actorName: toOptionalTrimmedString(params.actorName),
     extra: toOptionalObject(params.extra),
   });
 
-  const file = get_chat_history_path(params.context.rootPath, sessionId);
+  const file = get_chat_history_path(params.context.workspace_path, session_id);
   await fs.ensureDir(path.dirname(file));
   await fs.appendFile(file, JSON.stringify(event) + "\n", "utf8");
 }
 
 /**
- * 读取 chat 历史事件（按 sessionId）。
+ * 读取 chat 历史事件（按 session_id）。
  *
  * 关键点（中文）
  * - 默认返回最近 N 条（按时间升序）。
  * - 仅做文件读取与过滤，不涉及任何业务 side-effect。
  */
 export async function readChatHistory(params: {
-  context: AgentContext;
-  sessionId: string;
+  context: PluginContext;
+  session_id: string;
   limit?: number;
   direction?: ChatHistoryDirection | "all";
   beforeTs?: number;
   afterTs?: number;
 }): Promise<{ historyPath: string; events: ChatHistoryEventV1[] }> {
-  const rootPath = normalizeTrimmedString(params.context.rootPath);
-  const sessionId = normalizeTrimmedString(params.sessionId);
-  const historyPath = get_chat_history_path(params.context.rootPath, sessionId);
-  if (!rootPath || !sessionId) {
+  const rootPath = normalizeTrimmedString(params.context.workspace_path);
+  const session_id = normalizeTrimmedString(params.session_id);
+  const historyPath = get_chat_history_path(params.context.workspace_path, session_id);
+  if (!rootPath || !session_id) {
     return {
       historyPath,
       events: [],

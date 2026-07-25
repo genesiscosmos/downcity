@@ -6,7 +6,7 @@
  * - 控制动作与类型协议保持一致，只支持状态查询和卸载。
  */
 
-import type { AgentContext } from "@/agent/AgentContext.js";
+import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type {
   PluginControlAction,
   PluginControlResult,
@@ -16,8 +16,8 @@ import type {
 /**
  * 列出当前 Agent 已注册 plugin 快照。
  */
-export function listPluginStates(input?: {
-  context?: AgentContext;
+export function list_plugin_states(input?: {
+  context?: PluginContext;
 }): PluginSnapshot[] {
   return input?.context?.plugins.snapshots() || [];
 }
@@ -25,33 +25,33 @@ export function listPluginStates(input?: {
 /**
  * 执行 plugin 控制动作。
  */
-export async function controlPluginState(params: {
-  pluginName: string;
+export async function control_plugin_state(params: {
+  plugin_name: string;
   action: PluginControlAction;
-  context: AgentContext;
+  context: PluginContext;
 }): Promise<PluginControlResult> {
-  const pluginName = String(params.pluginName || "").trim();
-  if (!pluginName) {
+  const plugin_name = String(params.plugin_name || "").trim();
+  if (!plugin_name) {
     return {
       success: false,
-      error: "pluginName is required",
+      error: "plugin_name is required",
     };
   }
 
   const action = String(params.action || "").trim().toLowerCase();
   if (action === "status") {
-    const plugin = params.context.plugins.status(pluginName);
+    const plugin = params.context.plugins.status(plugin_name);
     return plugin
       ? { success: true, plugin }
-      : { success: false, error: `Unknown plugin: ${pluginName}` };
+      : { success: false, error: `Unknown plugin: ${plugin_name}` };
   }
 
   if (action === "unregister") {
-    const plugin = params.context.plugins.status(pluginName) || undefined;
-    const success = await params.context.plugins.unregister(pluginName);
+    const plugin = params.context.plugins.status(plugin_name) || undefined;
+    const success = await params.context.plugins.unregister(plugin_name);
     return success
       ? { success: true, ...(plugin ? { plugin } : {}) }
-      : { success: false, error: `Unknown plugin: ${pluginName}` };
+      : { success: false, error: `Unknown plugin: ${plugin_name}` };
   }
 
   return {

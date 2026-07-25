@@ -47,7 +47,7 @@ await agent.plugins.unregister("skill");
 After unregistering:
 
 - `agent.plugins.get("skill")` returns `null`
-- `agent.plugins.runAction({ plugin: "skill", ... })` returns unknown plugin
+- `agent.plugins.run_action({ plugin: "skill", ... })` returns unknown plugin
 - that plugin's hooks, resolves, and actions no longer participate in future runs; system text already fixed by existing Sessions is not removed retroactively
 
 ## lifecycle.start / lifecycle.stop

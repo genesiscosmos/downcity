@@ -6,7 +6,7 @@
  * - Shell 通过强类型 Gateway 等待结果，不保存或反向发布 Session 状态。
  */
 
-import { generateId } from "@/utils/Id.js";
+import { generate_id } from "@/utils/Id.js";
 import type {
   ShellApprovalGateway,
   ShellApprovalHandle,
@@ -48,7 +48,7 @@ export class SessionApprovalBroker implements ShellApprovalGateway {
     if (input.session_id !== this.session_id) {
       throw new Error(`Approval Session mismatch: ${input.session_id}`);
     }
-    const approval_id = `ap_${generateId()}`;
+    const approval_id = `ap_${generate_id()}`;
     if (this.mode === "always-allow") {
       return {
         approval_id,

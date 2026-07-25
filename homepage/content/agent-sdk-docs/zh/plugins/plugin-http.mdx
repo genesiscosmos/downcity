@@ -10,8 +10,8 @@ plugin 可以声明：
 ```ts
 http: {
   runtime: {
-    authPolicies: [...],
-    register({ app, getContext, pluginName }) {
+    auth_policies: [...],
+    register({ app, get_context, plugin_name }) {
       // register routes
     },
   },
@@ -27,7 +27,7 @@ http: {
 
 而 server 侧只负责统一装配。
 
-## `authPolicies`
+## `auth_policies`
 
 这里声明的是：
 

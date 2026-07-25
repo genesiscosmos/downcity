@@ -29,7 +29,7 @@ flowchart TD
 `agent.plugins` is the SDK-facing entry point for application code.
 
 ```ts
-const result = await agent.plugins.runAction({
+const result = await agent.plugins.run_action({
   plugin: "skill",
   action: "lookup",
   payload: {
@@ -49,7 +49,7 @@ Common calls:
 ```ts
 agent.plugins.list();
 agent.plugins.availability("skill");
-agent.plugins.runAction({ plugin: "skill", action: "list", payload: {} });
+agent.plugins.run_action({ plugin: "skill", action: "list", payload: {} });
 agent.plugins.pipeline("chat.enrich_message", value);
 agent.plugins.guard("chat.authorize_message", value);
 agent.plugins.effect("audit.observe", value);
@@ -128,7 +128,7 @@ plugin_call({
 The tool turns that into:
 
 ```ts
-agent.plugins.runAction({
+agent.plugins.run_action({
   plugin: "skill",
   action: "lookup",
   payload: {

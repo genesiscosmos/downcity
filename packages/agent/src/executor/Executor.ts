@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - SDK 对外对象叫 `Session`，这里是内部执行层。
- * - 一个 Executor 只对应一个固定的 `sessionId`。
+ * - 一个 Executor 只对应一个固定的 `session_id`。
  * - 负责 history 写入、显式运行上下文、executing 状态、Composer 编排与 tool-loop 执行。
  */
 
@@ -31,7 +31,7 @@ type ExecutorOptions = {
   /**
    * 当前会话 ID。
    */
-  sessionId: string;
+  session_id: string;
 
   /** 当前 Session 使用的统一 Composer。 */
   composer: SessionComposer;
@@ -54,7 +54,7 @@ type ExecutorOptions = {
   /**
    * 读取当前 session 使用的模型实例。
    */
-  getModel: () => LanguageModel | undefined;
+  get_model: () => LanguageModel | undefined;
 
   /**
    * 统一日志器。
@@ -72,13 +72,13 @@ export class Executor implements SessionExecutor {
   /**
    * 当前 session 标识。
    */
-  readonly sessionId: string;
+  readonly session_id: string;
 
   private readonly composer: SessionComposer;
   private readonly get_compose_input: ExecutorOptions["get_compose_input"];
   private readonly apply_system_snapshot?: ExecutorOptions["apply_system_snapshot"];
   private readonly commit_compaction: ExecutorOptions["commit_compaction"];
-  private readonly getModel: ExecutorOptions["getModel"];
+  private readonly get_model: ExecutorOptions["get_model"];
   private readonly get_plugins: ExecutorOptions["get_plugins"];
   private readonly logger: Logger;
   private readonly recovery_policy: ExecutorRecoveryPolicy;
@@ -88,26 +88,26 @@ export class Executor implements SessionExecutor {
   private abort_controller: AbortController | null = null;
 
   constructor(options: ExecutorOptions) {
-    const sessionId = String(options.sessionId || "").trim();
-    if (!sessionId) {
-      throw new Error("Executor requires a non-empty sessionId");
+    const session_id = String(options.session_id || "").trim();
+    if (!session_id) {
+      throw new Error("Executor requires a non-empty session_id");
     }
 
-    this.sessionId = sessionId;
+    this.session_id = session_id;
     this.composer = options.composer;
     this.get_compose_input = options.get_compose_input;
     this.apply_system_snapshot = options.apply_system_snapshot;
     this.commit_compaction = options.commit_compaction;
-    this.getModel = options.getModel;
+    this.get_model = options.get_model;
     this.get_plugins = options.get_plugins;
     this.logger = options.logger;
     this.recovery_policy = new ExecutorRecoveryPolicy({
-      session_id: this.sessionId,
+      session_id: this.session_id,
       should_compact: (error) => this.composer.should_compact(error),
       logger: this.logger,
     });
     this.core_engine_runner = new CoreEngineRunner({
-      session_id: this.sessionId,
+      session_id: this.session_id,
       logger: this.logger,
       should_compact_on_error: (error) =>
         this.composer.should_compact(error),
@@ -117,7 +117,7 @@ export class Executor implements SessionExecutor {
   /**
    * 返回当前 session 是否正在执行。
    */
-  isExecuting(): boolean {
+  is_executing(): boolean {
     return this.executing;
   }
 
@@ -138,7 +138,7 @@ export class Executor implements SessionExecutor {
    * 关键点（中文）
    * - 兼容 runtime/service 端口语义：Executor 自己就是执行端口。
    */
-  getExecutor(): SessionExecutor {
+  get_executor(): SessionExecutor {
     return this;
   }
 
@@ -151,7 +151,7 @@ export class Executor implements SessionExecutor {
    */
   async run(params: {
     query: string;
-    runContext?: SessionRunContext;
+    run_context?: SessionRunContext;
   }): Promise<SessionRunResult> {
     if (this.executing) {
       // 关键点（中文）：同一个 Session 实例只允许一个活跃 run，
@@ -159,8 +159,8 @@ export class Executor implements SessionExecutor {
       throw new Error("Executor.run does not support concurrent execution");
     }
     const query = String(params.query || "").trim();
-    const run_context = this.createRunContext(params.runContext);
-    const upstream_abort_signal = run_context.abortSignal;
+    const run_context = this.createRunContext(params.run_context);
+    const upstream_abort_signal = run_context.abort_signal;
     const abort_controller = new AbortController();
     const abort_from_upstream = () => {
       if (!abort_controller.signal.aborted) {
@@ -175,7 +175,7 @@ export class Executor implements SessionExecutor {
       });
     }
     this.abort_controller = abort_controller;
-    run_context.abortSignal = abort_controller.signal;
+    run_context.abort_signal = abort_controller.signal;
     this.executing = true;
     this.recovery_policy.reset_run_state();
     try {
@@ -342,7 +342,7 @@ export class Executor implements SessionExecutor {
     const model = compose_input.state.model;
     if (!model) throw new Error("requires a configured model.");
     run_context.workspace_env = Object.freeze({ ...compose_input.state.env });
-    run_context.agentSystems = Object.freeze([
+    run_context.agent_systems = Object.freeze([
       ...compose_input.state.systems,
     ]);
     const raw_input = await this.composer.compose(compose_input);
@@ -363,9 +363,9 @@ export class Executor implements SessionExecutor {
   ): Promise<void> {
     await this.release_step_plugins(run_context);
     if (this.get_plugins) {
-      run_context.agentPlugins = this.get_plugins().acquire();
+      run_context.agent_plugins = this.get_plugins().acquire();
     } else {
-      delete run_context.agentPlugins;
+      delete run_context.agent_plugins;
     }
   }
 
@@ -375,9 +375,9 @@ export class Executor implements SessionExecutor {
   private async release_step_plugins(
     run_context: SessionRunContext,
   ): Promise<void> {
-    const plugins = run_context.agentPlugins;
+    const plugins = run_context.agent_plugins;
     if (!plugins) return;
-    delete run_context.agentPlugins;
+    delete run_context.agent_plugins;
     await plugins.release();
   }
 
@@ -395,8 +395,8 @@ export class Executor implements SessionExecutor {
     const execution_context: SessionToolExecutionContext = {
       session_run_context: run_context,
       shell_run_context: {
-        ownerContextId: String(run_context.sessionId || "").trim() || undefined,
-        turnId: String(run_context.turnId || "").trim() || undefined,
+        ownerContextId: String(run_context.session_id || "").trim() || undefined,
+        turnId: String(run_context.turn_id || "").trim() || undefined,
         ...(run_context.workspace_env ? { env: run_context.workspace_env } : {}),
         ...(run_context.shell_approval_gateway
           ? { approval_gateway: run_context.shell_approval_gateway }
@@ -444,33 +444,33 @@ export class Executor implements SessionExecutor {
     input?: SessionRunContext,
   ): SessionRunContext {
     const source = input || {
-      sessionId: this.sessionId,
-      injectedUserMessages: [],
-      deferredPersistedUserMessages: [],
-      pendingAssistantFileParts: [],
+      session_id: this.session_id,
+      injected_user_messages: [],
+      deferred_persisted_user_messages: [],
+      pending_assistant_file_parts: [],
     };
     const {
-      sessionId,
-      projectRoot,
-      injectedUserMessages,
-      deferredPersistedUserMessages,
-      pendingAssistantFileParts,
+      session_id,
+      project_root,
+      injected_user_messages,
+      deferred_persisted_user_messages,
+      pending_assistant_file_parts,
       ...runtime_context
     } = source;
     return {
       ...runtime_context,
-      sessionId: String(sessionId || this.sessionId).trim(),
-      ...(typeof projectRoot === "string" && projectRoot.trim()
-        ? { projectRoot: projectRoot.trim() }
+      session_id: String(session_id || this.session_id).trim(),
+      ...(typeof project_root === "string" && project_root.trim()
+        ? { project_root: project_root.trim() }
         : {}),
-      injectedUserMessages: Array.isArray(injectedUserMessages)
-        ? [...injectedUserMessages]
+      injected_user_messages: Array.isArray(injected_user_messages)
+        ? [...injected_user_messages]
         : [],
-      deferredPersistedUserMessages: Array.isArray(deferredPersistedUserMessages)
-        ? [...deferredPersistedUserMessages]
+      deferred_persisted_user_messages: Array.isArray(deferred_persisted_user_messages)
+        ? [...deferred_persisted_user_messages]
         : [],
-      pendingAssistantFileParts: Array.isArray(pendingAssistantFileParts)
-        ? [...pendingAssistantFileParts]
+      pending_assistant_file_parts: Array.isArray(pending_assistant_file_parts)
+        ? [...pending_assistant_file_parts]
         : [],
     };
   }
@@ -479,7 +479,7 @@ export class Executor implements SessionExecutor {
    * 读取当前 session 模型。
    */
   private resolveModelOrThrow(): LanguageModel {
-    const model = this.getModel();
+    const model = this.get_model();
     if (!model) {
       throw new Error("requires a configured model.");
     }

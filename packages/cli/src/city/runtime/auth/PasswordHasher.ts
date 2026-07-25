@@ -23,8 +23,8 @@ export function hashPassword(passwordInput: string): string {
  */
 export function verifyPassword(passwordInput: string, passwordHashInput: string): boolean {
   const password = String(passwordInput || "");
-  const passwordHash = String(passwordHashInput || "").trim();
-  const parts = passwordHash.split("$");
+  const password_hash = String(passwordHashInput || "").trim();
+  const parts = password_hash.split("$");
   if (parts.length !== 3 || parts[0] !== "scrypt") return false;
   const salt = parts[1];
   const expectedHex = parts[2];

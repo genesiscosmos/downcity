@@ -9,7 +9,7 @@
 
 import { BasePlugin } from "@downcity/agent";
 import type { PluginActions } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type {
   TaskCronRegisterResult,
   TaskSchedulerReloadResult,
@@ -24,7 +24,7 @@ import {
   reloadTaskSchedulerAfterMutation,
 } from "@/task/runtime/TaskActionExecution.js";
 import { TASK_PLUGIN_PROMPT } from "@/task/runtime/TaskPluginSystem.js";
-import { resolveRuntimeTimezone } from "@downcity/agent";
+import { resolve_runtime_timezone } from "@downcity/agent";
 
 const TASK_LOG_PREFIX = "[TASK]";
 
@@ -124,7 +124,7 @@ export class TaskPlugin extends BasePlugin {
    * 启动当前实例的 cron runtime。
    */
   async startCronRuntime(
-    context: AgentContext,
+    context: PluginContext,
   ): Promise<TaskCronRegisterResult | null> {
     if (this.cronEngine) return null;
 
@@ -155,7 +155,7 @@ export class TaskPlugin extends BasePlugin {
    * 重启当前实例的 cron runtime。
    */
   async restartCronRuntime(
-    context: AgentContext,
+    context: PluginContext,
   ): Promise<TaskCronRegisterResult> {
     await this.stopCronRuntime();
     const started = await this.startCronRuntime(context);
@@ -171,7 +171,7 @@ export class TaskPlugin extends BasePlugin {
    * 任务定义变更后重载 scheduler。
    */
   private async reloadSchedulerAfterMutation(params: {
-    context: AgentContext;
+    context: PluginContext;
     action: "create" | "update" | "delete" | "status";
     title: string;
   }): Promise<TaskSchedulerReloadResult> {
@@ -187,6 +187,6 @@ export class TaskPlugin extends BasePlugin {
    * 解析当前 task cron 使用的时区。
    */
   private resolveTimezone(): string {
-    return String(this.options.timezone || "").trim() || resolveRuntimeTimezone();
+    return String(this.options.timezone || "").trim() || resolve_runtime_timezone();
   }
 }

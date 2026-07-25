@@ -22,7 +22,7 @@ export interface AgentSessionStopResult {
    * - 当前没有活跃 turn 时不会返回该字段。
    * - 如果只是清空尚未启动的队列，也不会返回该字段。
    */
-  turnId?: string;
+  turn_id?: string;
 
   /**
    * 本次 stop 取消的未绑定 prompt 数量。
@@ -30,7 +30,7 @@ export interface AgentSessionStopResult {
    * 说明（中文）
    * - 已经被当前 turn 吸收的 prompt 不计入这里，它们会随当前 turn 一起结束。
    */
-  cancelledQueuedPrompts: number;
+  cancelled_queued_prompts: number;
 
   /**
    * 本次 stop 的归因。

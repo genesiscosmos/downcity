@@ -40,8 +40,8 @@ export function build_dashboard_snapshot(raw_data: dashboard_raw_data, range: da
     new_30d: count_records_since(raw_data.accounts_users, window.thirty_days_start),
     current_session_users: count_unique(
       raw_data.accounts_sessions
-        .filter((item) => read_string(item.status) === "active" || read_time(item.expires_at ?? item.expiresAt) > window.now)
-        .map((item) => read_string(item.user_id ?? item.userId)),
+        .filter((item) => read_string(item.status) === "active" || read_time(item.expires_at ?? item.expires_at) > window.now)
+        .map((item) => read_string(item.user_id ?? item.user_id)),
     ),
     new_in_range: raw_data.accounts_users.filter((item) => in_range(item, window)).length,
     recent_users: sort_recent(raw_data.accounts_users).slice(0, 10),
@@ -222,11 +222,11 @@ function has_amount_minor(row: dashboard_record): boolean {
 }
 
 function read_row_created_at(row: dashboard_record): number {
-  return read_time(row.createdAt ?? row.created_at ?? row.auth_created_at ?? row.profile_created_at);
+  return read_time(row.created_at ?? row.created_at ?? row.auth_created_at ?? row.profile_created_at);
 }
 
 function read_row_time(row: dashboard_record): number {
-  const updated_time = read_time(row.updated_at ?? row.updatedAt);
+  const updated_time = read_time(row.updated_at ?? row.updated_at);
   return Number.isFinite(updated_time) ? updated_time : read_row_created_at(row);
 }
 

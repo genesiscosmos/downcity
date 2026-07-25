@@ -7,7 +7,7 @@
  * - `FeishuBot` 只调用这里暴露的平台能力，不再直接持有底层 Feishu 连接细节。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type {
   FeishuConfig,
   FeishuDownloadedAttachment,
@@ -43,7 +43,7 @@ export interface FeishuPlatformClientOptions {
   /**
    * 当前执行上下文。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * 飞书渠道配置。
    */
@@ -58,9 +58,9 @@ export interface FeishuPlatformClientOptions {
  * 飞书平台 client。
  */
 export class FeishuPlatformClient {
-  private readonly context: AgentContext;
+  private readonly context: PluginContext;
   private readonly rootPath: string;
-  private readonly logger: AgentContext["logger"];
+  private readonly logger: PluginContext["logger"];
   private readonly appId: string;
   private readonly appSecret: string;
   private readonly domain?: string;
@@ -78,7 +78,7 @@ export class FeishuPlatformClient {
 
   constructor(options: FeishuPlatformClientOptions) {
     this.context = options.context;
-    this.rootPath = options.context.rootPath;
+    this.rootPath = options.context.workspace_path;
     this.logger = options.context.logger;
     this.appId = options.config.appId;
     this.appSecret = options.config.appSecret;
@@ -243,12 +243,12 @@ export class FeishuPlatformClient {
   /**
    * 给入站消息补一个轻量 ack reaction。
    */
-  async sendInboundAckReaction(params: { messageId?: string }): Promise<void> {
-    const messageId = String(params.messageId || "").trim();
-    if (!messageId || !this.client?.im?.v1?.messageReaction?.create) return;
+  async sendInboundAckReaction(params: { message_id?: string }): Promise<void> {
+    const message_id = String(params.message_id || "").trim();
+    if (!message_id || !this.client?.im?.v1?.messageReaction?.create) return;
     try {
       await this.client.im.v1.messageReaction.create({
-        path: { message_id: messageId },
+        path: { message_id: message_id },
         data: {
           reaction_type: {
             emoji_type: FEISHU_INBOUND_ACK_REACTION_TYPE,
@@ -257,7 +257,7 @@ export class FeishuPlatformClient {
       });
     } catch (error) {
       this.logger.warn("飞书入站 ack reaction 失败，继续处理消息", {
-        messageId,
+        message_id,
         reactionType: FEISHU_INBOUND_ACK_REACTION_TYPE,
         error: String(error),
       });
@@ -295,7 +295,7 @@ export class FeishuPlatformClient {
    * 下载入站附件。
    */
   async downloadIncomingAttachments(params: {
-    messageId: string;
+    message_id: string;
     attachments: FeishuIncomingAttachmentDescriptor[];
   }): Promise<FeishuDownloadedAttachment[]> {
     return downloadFeishuIncomingAttachments(this.getLookupDeps(), params);
@@ -307,10 +307,10 @@ export class FeishuPlatformClient {
   async sendAttachment(
     chatId: string,
     chatType: string,
-    messageId: string | undefined,
+    message_id: string | undefined,
     attachment: ParsedFeishuAttachmentCommand,
   ): Promise<void> {
-    return sendFeishuAttachment(this.getMessagingDeps(), chatId, chatType, messageId, attachment);
+    return sendFeishuAttachment(this.getMessagingDeps(), chatId, chatType, message_id, attachment);
   }
 
   /**
@@ -319,7 +319,7 @@ export class FeishuPlatformClient {
   async sendPlatformMessage(
     chatId: string,
     chatType: string,
-    messageId: string | undefined,
+    message_id: string | undefined,
     msgType: FeishuMessagePayloadType,
     content: Record<string, unknown> | string,
   ): Promise<void> {
@@ -327,7 +327,7 @@ export class FeishuPlatformClient {
       this.getMessagingDeps(),
       chatId,
       chatType,
-      messageId,
+      message_id,
       msgType,
       content,
     );

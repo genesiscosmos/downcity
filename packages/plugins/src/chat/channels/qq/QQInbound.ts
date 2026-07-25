@@ -144,21 +144,21 @@ export function extractQqAuthorIdentity(
     author?.user?.name,
     rawAuthor.nick,
     rawAuthor.display_name,
-    rawAuthor.displayName,
+    rawAuthor.display_name,
     rawAuthor.member_nick,
     rawAuthor.memberNick,
     rawAuthor.card,
     rawAuthor.remark,
     rawAuthorUser.nick,
     rawAuthorUser.display_name,
-    rawAuthorUser.displayName,
+    rawAuthorUser.display_name,
     rawData.nickname,
     rawData.username,
     rawData.nick,
     rawData.user_name,
     rawData.userName,
     rawData.display_name,
-    rawData.displayName,
+    rawData.display_name,
     rawSender.nickname,
     rawSender.username,
     rawSender.nick,
@@ -171,7 +171,7 @@ export function extractQqAuthorIdentity(
     rawMember.card,
   ];
 
-  const userId = userIdCandidates
+  const user_id = userIdCandidates
     .map((value) => (typeof value === "string" ? value.trim() : ""))
     .find(Boolean);
   const username = usernameCandidates
@@ -179,7 +179,7 @@ export function extractQqAuthorIdentity(
     .find(Boolean);
 
   return {
-    ...(userId ? { userId } : {}),
+    ...(user_id ? { user_id } : {}),
     ...(username ? { username } : {}),
   };
 }

@@ -38,8 +38,8 @@ test("ChatPlugin 只通过宿主注入的 account_store 解析共享账号", () 
     channel: "telegram",
     name: "main bot",
     botToken: "token",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
   };
   const reads = [];
   const account_store = {

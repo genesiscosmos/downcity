@@ -21,7 +21,7 @@ export interface ContactRemoteChatRequest {
   /**
    * 消息创建时间戳。
    */
-  createdAt: number;
+  created_at: number;
 }
 
 /**

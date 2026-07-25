@@ -1,19 +1,19 @@
 /**
- * ChatSessionDelete：按 sessionId 彻底删除 chat 会话数据。
+ * ChatSessionDelete：按 session_id 彻底删除 chat 会话数据。
  *
  * 关键点（中文）
  * - 删除路由映射（`.downcity/channel/meta.json`）
- * - 删除 chat 审计目录（`.downcity/chat/<sessionId>/`）
- * - 删除 core session 目录（`.downcity/agents/<agentId>/sessions/<sessionId>/`）
+ * - 删除 chat 审计目录（`.downcity/chat/<session_id>/`）
+ * - 删除 core session 目录（`.downcity/agents/<agent_id>/sessions/<session_id>/`）
  * - 清理运行中 agent 与队列，避免残留任务继续执行
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import { resolveChatQueueStore } from "@/chat/runtime/ChatQueue.js";
 import { clean_chat_storage } from "@/chat/runtime/ChatStorage.js";
 
-function normalizeSessionId(sessionId: string): string {
-  return String(sessionId || "").trim();
+function normalizeSessionId(session_id: string): string {
+  return String(session_id || "").trim();
 }
 
 /**
@@ -23,39 +23,39 @@ function normalizeSessionId(sessionId: string): string {
  * - 幂等：目标不存在时返回 success + deleted=false，避免上层重试复杂化。
  */
 export async function deleteChatSessionById(params: {
-  context: AgentContext;
-  sessionId: string;
+  context: PluginContext;
+  session_id: string;
 }): Promise<{
   success: boolean;
-  sessionId: string;
+  session_id: string;
   deleted: boolean;
   removedMeta: boolean;
   removedChatDir: boolean;
   removedSessionDir: boolean;
   error?: string;
 }> {
-  const sessionId = normalizeSessionId(params.sessionId);
-  if (!sessionId) {
+  const session_id = normalizeSessionId(params.session_id);
+  if (!session_id) {
     return {
       success: false,
-      sessionId: "",
+      session_id: "",
       deleted: false,
       removedMeta: false,
       removedChatDir: false,
       removedSessionDir: false,
-      error: "Missing sessionId",
+      error: "Missing session_id",
     };
   }
 
   try {
     // 关键点（中文）：先停执行，再删文件，避免删除过程中仍有任务写入。
-    resolveChatQueueStore(params.context).clear(sessionId);
+    resolveChatQueueStore(params.context).clear(session_id);
 
     const chat_result = await clean_chat_storage({
-      root_path: params.context.rootPath,
-      session_id: sessionId,
+      root_path: params.context.workspace_path,
+      session_id: session_id,
     });
-    const removed_session_dir = await params.context.sessions.remove(sessionId);
+    const removed_session_dir = await params.context.sessions.remove(session_id);
 
     const deleted =
       chat_result.removed_route ||
@@ -64,7 +64,7 @@ export async function deleteChatSessionById(params: {
 
     return {
       success: true,
-      sessionId,
+      session_id,
       deleted,
       removedMeta: chat_result.removed_route,
       removedChatDir: chat_result.removed_chat_dir,
@@ -73,7 +73,7 @@ export async function deleteChatSessionById(params: {
   } catch (error) {
     return {
       success: false,
-      sessionId,
+      session_id,
       deleted: false,
       removedMeta: false,
       removedChatDir: false,

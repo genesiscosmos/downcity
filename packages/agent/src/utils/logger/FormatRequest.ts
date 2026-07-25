@@ -34,7 +34,7 @@ const UNLIMITED_LOG_CHARS = Number.MAX_SAFE_INTEGER;
  *
  * 关键点（中文）
  * - 用于 LLM 请求日志的增量打印，避免每轮都重复输出全量历史 messages。
- * - key 建议使用 sessionId；无 key 时保持原有行为（全量打印）。
+ * - key 建议使用 session_id；无 key 时保持原有行为（全量打印）。
  */
 const lastLoggedMessagesCountByKey = new Map<string, number>();
 
@@ -199,7 +199,7 @@ function formatMessagesForLog(
       continue;
     }
 
-    let bodyText = "";
+    let body_text = "";
     let userInfoAttrs: string[] = [];
     if ("content" in message) {
       const isSystemRole = role === "system" || role === "developer";
@@ -209,10 +209,10 @@ function formatMessagesForLog(
       );
       if (role === "user") {
         const parsedInfoBlock = parseInfoBlockText(contentText);
-        bodyText = parsedInfoBlock ? parsedInfoBlock.body : contentText;
+        body_text = parsedInfoBlock ? parsedInfoBlock.body : contentText;
         userInfoAttrs = parsedInfoBlock ? buildInfoAttrs(parsedInfoBlock.info) : [];
       } else {
-        bodyText = contentText;
+        body_text = contentText;
       }
     }
 
@@ -220,7 +220,7 @@ function formatMessagesForLog(
       pushLabeledTextBlock(
         out,
         "user",
-        bodyText || "-",
+        body_text || "-",
         opts.maxContentChars,
         userInfoAttrs,
       );
@@ -228,7 +228,7 @@ function formatMessagesForLog(
     }
 
     if (role === "system" || role === "developer") {
-      pushLabeledTextBlock(out, "system", bodyText || "-", opts.maxSystemChars);
+      pushLabeledTextBlock(out, "system", body_text || "-", opts.maxSystemChars);
       continue;
     }
 
@@ -239,7 +239,7 @@ function formatMessagesForLog(
       itemType === "tool_error" ||
       itemType === "tool-error"
     ) {
-      const toolResultText = [bodyText, outputText, output].filter(Boolean).join(" | ");
+      const toolResultText = [body_text, outputText, output].filter(Boolean).join(" | ");
       pushLabeledTextBlock(
         out,
         "tool_result",
@@ -249,9 +249,9 @@ function formatMessagesForLog(
       continue;
     }
 
-    const assistantText = [bodyText, outputText, output]
+    const assistantText = [body_text, outputText, output]
       .filter(Boolean)
-      .join(bodyText ? "" : " | ");
+      .join(body_text ? "" : " | ");
     if (assistantText) {
       pushLabeledTextBlock(out, "assistant", assistantText, opts.maxContentChars);
     }
@@ -315,7 +315,7 @@ export function parseFetchRequestForLog(
   init?: RequestInit,
   opts?: {
     /**
-     * 增量日志 key，通常使用 sessionId。
+     * 增量日志 key，通常使用 session_id。
      */
     incrementalKey?: string;
   },

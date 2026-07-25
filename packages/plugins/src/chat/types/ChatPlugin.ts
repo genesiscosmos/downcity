@@ -77,11 +77,11 @@ export interface ChatInboundAugmentInput {
   /**
    * 当前 lane / context 对应键。
    */
-  chatKey?: string;
+  chat_key?: string;
   /**
    * 当前消息 ID。
    */
-  messageId?: string;
+  message_id?: string;
   /**
    * 当前工程根目录。
    */
@@ -96,7 +96,7 @@ export interface ChatInboundAugmentInput {
   /**
    * chat plugin runtime 已抽取的正文文本。
    */
-  bodyText?: string;
+  body_text?: string;
   /**
    * plugin 追加的中间文本块。
    *
@@ -121,7 +121,7 @@ export interface ChatReplyDispatchInput {
   /**
    * 当前会话 key。
    */
-  chatKey: string;
+  chat_key: string;
   /**
    * 目标会话 ID。
    */
@@ -129,7 +129,7 @@ export interface ChatReplyDispatchInput {
   /**
    * 目标消息 ID。
    */
-  messageId?: string;
+  message_id?: string;
   /**
    * 当前回复文本。
    */
@@ -155,7 +155,7 @@ export interface ChatReplyEffectInput {
   /**
    * 当前会话 key。
    */
-  chatKey: string;
+  chat_key: string;
   /**
    * 目标会话 ID。
    */
@@ -163,7 +163,7 @@ export interface ChatReplyEffectInput {
   /**
    * 目标消息 ID。
    */
-  messageId?: string;
+  message_id?: string;
   /**
    * 最终尝试发送的文本。
    */
@@ -201,7 +201,7 @@ export interface ChatEnqueuePipelineInput {
   /**
    * 当前 lane / context 键。
    */
-  chatKey: string;
+  chat_key: string;
   /**
    * 目标会话 ID。
    */
@@ -221,7 +221,7 @@ export interface ChatEnqueuePipelineInput {
   /**
    * 消息 ID。
    */
-  messageId?: string;
+  message_id?: string;
   /**
    * 发送者 ID。
    */

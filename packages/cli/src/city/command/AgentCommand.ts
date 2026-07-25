@@ -23,7 +23,7 @@ import { statusCommand } from "@/city/agent/Status.js";
 import { configure_agent_model } from "@/city/agent/AgentModel.js";
 import type { AgentStartOptions } from "@/city/types/AgentStartOptions.js";
 import type { AgentModelCommandOptions } from "@/city/types/AgentModel.js";
-import { createVersionBanner, injectAgentContext, parseBoolean, parsePort } from "@/shared/IndexSupport.js";
+import { createVersionBanner, inject_agent_context, parseBoolean, parsePort } from "@/shared/IndexSupport.js";
 import { runWithSpinner } from "@/city/utils/cli/Spinner.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import {
@@ -134,14 +134,14 @@ export function registerAgentCommands(
       createVersionBanner(
         context.version,
         async (cwd: string | undefined, options: AgentStartOptions & { foreground?: boolean }) => {
-          const projectRoot = await resolveCliAgentStartProjectRoot(cwd);
+          const project_root = await resolveCliAgentStartProjectRoot(cwd);
 
-          const prepared = await prepareForegroundAgent(projectRoot, options);
+          const prepared = await prepareForegroundAgent(project_root, options);
           if (prepared.shouldForeground) {
-            await runCommand(prepared.projectRoot, prepared.options);
+            await runCommand(prepared.project_root, prepared.options);
             return;
           }
-          await startCommand(prepared.projectRoot, prepared.options);
+          await startCommand(prepared.project_root, prepared.options);
         },
       ),
     );
@@ -160,7 +160,7 @@ export function registerAgentCommands(
       zh: "一次性发送一轮消息并退出",
       en: "send one message and exit",
     }))
-    .option("--session-id <sessionId>", t({
+    .option("--session-id <session_id>", t({
       zh: "进入或复用指定 session",
       en: "enter or reuse a specific session",
     }))
@@ -184,7 +184,7 @@ export function registerAgentCommands(
         options: {
           to?: string;
           message?: string;
-          sessionId?: string;
+          session_id?: string;
           newSession?: boolean;
           json?: boolean;
           host?: string;
@@ -208,7 +208,7 @@ export function registerAgentCommands(
       zh: "按 session 或 chat 目标硬清理一条会话历史",
       en: "hard-clean one conversation history entry by session or chat target",
     }))
-    .option("--session-id <sessionId>", t({
+    .option("--session-id <session_id>", t({
       zh: "目标 session ID",
       en: "target session ID",
     }))
@@ -242,7 +242,7 @@ export function registerAgentCommands(
       async (
         cwd: string = ".",
         options: {
-          sessionId?: string;
+          session_id?: string;
           channel?: string;
           chatId?: string;
           targetType?: string;
@@ -251,8 +251,8 @@ export function registerAgentCommands(
           json?: boolean;
         },
       ) => {
-        const projectRoot = await ensureRegisteredAgentProjectRoot(cwd);
-        await agentHistoryCleanCommand(projectRoot, options);
+        const project_root = await ensureRegisteredAgentProjectRoot(cwd);
+        await agentHistoryCleanCommand(project_root, options);
       },
     ));
 
@@ -283,9 +283,9 @@ export function registerAgentCommands(
     }))
     .helpOption("--help", helpText())
     .action(createVersionBanner(context.version, async (cwd: string = ".") => {
-      const projectRoot = await ensureRegisteredAgentProjectRoot(cwd);
-      injectAgentContext(projectRoot);
-      await statusCommand(projectRoot);
+      const project_root = await ensureRegisteredAgentProjectRoot(cwd);
+      inject_agent_context(project_root);
+      await statusCommand(project_root);
     }));
 
   agent
@@ -302,9 +302,9 @@ export function registerAgentCommands(
     .action(createVersionBanner(
       context.version,
       async (cwd: string = ".", options: { fix?: boolean }) => {
-        const projectRoot = await ensureRegisteredAgentProjectRoot(cwd);
-        injectAgentContext(projectRoot);
-        const pid = await readDaemonPid(projectRoot);
+        const project_root = await ensureRegisteredAgentProjectRoot(cwd);
+        inject_agent_context(project_root);
+        const pid = await readDaemonPid(project_root);
 
         if (!pid) {
           emitCliBlock({
@@ -313,7 +313,7 @@ export function registerAgentCommands(
             facts: [
               {
                 label: "Project",
-                value: projectRoot,
+                value: project_root,
               },
             ],
           });
@@ -327,21 +327,21 @@ export function registerAgentCommands(
             facts: [
               {
                 label: "Project",
-                value: projectRoot,
+                value: project_root,
               },
             ],
           });
           return;
         }
 
-        const staleReasons = await diagnoseDaemonStaleReasons(projectRoot, pid);
+        const staleReasons = await diagnoseDaemonStaleReasons(project_root, pid);
         emitCliBlock({
           tone: "warning",
           title: "Stale daemon state detected",
           facts: [
             {
               label: "Project",
-              value: projectRoot,
+              value: project_root,
             },
             {
               label: "Reason",
@@ -365,7 +365,7 @@ export function registerAgentCommands(
         }
 
         await runWithSpinner(
-          () => cleanupStaleDaemonFiles(projectRoot),
+          () => cleanupStaleDaemonFiles(project_root),
           { text: "Cleaning stale daemon files..." },
         );
         emitCliBlock({
@@ -374,7 +374,7 @@ export function registerAgentCommands(
           facts: [
             {
               label: "Project",
-              value: projectRoot,
+              value: project_root,
             },
           ],
         });
@@ -389,9 +389,9 @@ export function registerAgentCommands(
     }))
     .helpOption("--help", helpText())
     .action(createVersionBanner(context.version, async (cwd: string = ".") => {
-      const projectRoot = await ensureRegisteredAgentProjectRoot(cwd);
-      injectAgentContext(projectRoot);
-      await stopCommand(projectRoot);
+      const project_root = await ensureRegisteredAgentProjectRoot(cwd);
+      inject_agent_context(project_root);
+      await stopCommand(project_root);
     }));
 
   agent
@@ -406,8 +406,8 @@ export function registerAgentCommands(
     }))
     .helpOption("--help", helpText())
     .action(createVersionBanner(context.version, async (cwd: string = ".", options: AgentStartOptions) => {
-      const projectRoot = await ensureRegisteredAgentProjectRoot(cwd);
-      injectAgentContext(projectRoot);
-      await restartCommand(projectRoot, options);
+      const project_root = await ensureRegisteredAgentProjectRoot(cwd);
+      inject_agent_context(project_root);
+      await restartCommand(project_root, options);
     }));
 }

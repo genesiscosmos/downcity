@@ -187,7 +187,7 @@ export class CoreEngineRunner {
       const message_state = await CoreEngineMessageState.create({
         messages: input.execute_input.messages,
         tools,
-        projectRoot: input.run_context.projectRoot,
+        project_root: input.run_context.project_root,
       });
       let persisted_compaction_summary_id = resolve_compaction_summary_id(
         input.execute_input.messages,
@@ -209,16 +209,16 @@ export class CoreEngineRunner {
             ? summary.toolResultCount
             : 0;
         await this.logger.log("info", "[agent] step.finish", {
-          sessionId: session_id,
-          stepIndex: step_count,
+          session_id: session_id,
+          step_index: step_count,
           ...summary,
         });
-        if (input.run_context.onAssistantStepCallback) {
+        if (input.run_context.on_assistant_step_callback) {
           try {
-            await input.run_context.onAssistantStepCallback({
+            await input.run_context.on_assistant_step_callback({
               text: String((step_result as { text?: unknown })?.text || "").trim(),
-              stepIndex: step_count,
-              stepResult: step_result,
+              step_index: step_count,
+              step_result: step_result,
             });
           } catch {
             // Assistant step 观察回调失败不能改变模型执行结果。
@@ -240,12 +240,12 @@ export class CoreEngineRunner {
       while (step_count < MAX_TOOL_LOOP_STEPS) {
         // 关键点（中文）：steer 与 command 在同一个 Session step 检查点执行。
         // 当前流与 tool callback 保持原执行视图，下一 step 再统一读取 effective 配置。
-        const injected_messages = [...input.run_context.injectedUserMessages];
-        input.run_context.injectedUserMessages = [];
+        const injected_messages = [...input.run_context.injected_user_messages];
+        input.run_context.injected_user_messages = [];
         let queued_messages: SessionRecordV1[] = [];
-        if (input.run_context.onStepCallback) {
+        if (input.run_context.on_step_callback) {
           try {
-            queued_messages = await input.run_context.onStepCallback();
+            queued_messages = await input.run_context.on_step_callback();
           } catch {
             queued_messages = [];
           }
@@ -269,7 +269,7 @@ export class CoreEngineRunner {
                 this.validated_compaction_summary_id,
           );
           await this.logger.log("info", "[agent] context.history_reloaded", {
-            sessionId: session_id,
+            session_id: session_id,
             recordCount: canonical_records.length,
             compactionSummaryId: persisted_compaction_summary_id || undefined,
           });
@@ -287,7 +287,7 @@ export class CoreEngineRunner {
           compact_validation_pending = true;
           compact_required = true;
           await this.logger.log("info", "[agent] context.compacted", {
-            sessionId: session_id,
+            session_id: session_id,
             reason: "usage_threshold",
             compactDepth: compact_depth,
             previousMessageCount: previous_message_count,
@@ -311,11 +311,11 @@ export class CoreEngineRunner {
             onStepFinish: on_step_finish,
             messages: message_state.modelMessages,
             tools,
-            abortSignal: input.run_context.abortSignal,
+            abortSignal: input.run_context.abort_signal,
             onError: async ({ error }) => {
               last_observed_stream_error = error;
               await this.logger.log("error", "[agent] stream.error", {
-                sessionId: session_id,
+                session_id: session_id,
                 ...summarizeStreamError(error),
               });
             },
@@ -324,12 +324,12 @@ export class CoreEngineRunner {
           step_assistant_ui_message =
             await collectFinalAssistantMessageFromUiStream({
               result,
-              sessionId: session_id,
+              session_id: session_id,
               logger: this.logger,
               buildFallbackAssistantMessage: (text) =>
                 build_fallback_assistant_message(session_id, text),
-              onUiMessageChunkCallback: input.run_context.onUiMessageChunkCallback,
-              abortSignal: input.run_context.abortSignal,
+              on_ui_message_chunk_callback: input.run_context.on_ui_message_chunk_callback,
+              abort_signal: input.run_context.abort_signal,
             });
 
           if (input.run_context.on_ui_message_step_finish) {
@@ -377,7 +377,7 @@ export class CoreEngineRunner {
             compact_validation_pending = true;
             compact_required = true;
             await this.logger.log("warn", "[agent] context.compacted", {
-              sessionId: session_id,
+              session_id: session_id,
               reason: "provider_context_error",
               retryCount: context_error_compaction_retries,
               compactDepth: compact_depth,
@@ -411,8 +411,8 @@ export class CoreEngineRunner {
           }
           if (compact_pending) compact_required = true;
           await this.logger.log("info", "[agent] context.usage", {
-            sessionId: session_id,
-            stepIndex: step_count,
+            session_id: session_id,
+            step_index: step_count,
             usageRatio: usage_ratio,
             contextWindow: step_inputs.context_window,
             validatingCompaction: validating_compaction,
@@ -421,8 +421,8 @@ export class CoreEngineRunner {
         }
 
         const incomplete_response = detectIncompleteResponse({
-          stepResult: last_step,
-          assistantMessage: step_assistant_ui_message,
+          step_result: last_step,
+          assistant_message: step_assistant_ui_message,
         });
         const text_only_continuation_reason =
           detectTextOnlyContinuationReason(last_step);
@@ -438,8 +438,8 @@ export class CoreEngineRunner {
         });
 
         await this.logger.log("info", "[agent] loop.decision", {
-          sessionId: session_id,
-          stepIndex: step_count,
+          session_id: session_id,
+          step_index: step_count,
           continueForToolCalls: loop_decision.continueForToolCalls,
           continueForTextOnly: loop_decision.continueForTextOnly,
           continueForIncompleteRecovery:
@@ -461,8 +461,8 @@ export class CoreEngineRunner {
         ) {
           incomplete_response_recovery_count += 1;
           await this.logger.log("warn", "[agent] incomplete_response.recover", {
-            sessionId: session_id,
-            stepIndex: step_count,
+            session_id: session_id,
+            step_index: step_count,
             recoveryCount: incomplete_response_recovery_count,
             reason: incomplete_response.reason,
             ...incomplete_response.details,
@@ -475,7 +475,7 @@ export class CoreEngineRunner {
             extra: {
               internal: "agent_incomplete_response_recover",
               reason: incomplete_response.reason,
-              stepIndex: step_count,
+              step_index: step_count,
             },
           });
           await message_state.appendUserTextMessage(recovery_message);
@@ -484,8 +484,8 @@ export class CoreEngineRunner {
 
         if (incomplete_response) {
           await this.logger.log("error", "[agent] incomplete_response", {
-            sessionId: session_id,
-            stepIndex: step_count,
+            session_id: session_id,
+            step_index: step_count,
             reason: incomplete_response.reason,
             recoveryCount: incomplete_response_recovery_count,
             ...incomplete_response.details,
@@ -515,7 +515,7 @@ export class CoreEngineRunner {
             extra: {
               internal: "agent_loop_auto_continue",
               reason: text_only_continuation_reason,
-              stepIndex: step_count,
+              step_index: step_count,
             },
           });
           await message_state.appendUserTextMessage(continuation_message);
@@ -523,7 +523,7 @@ export class CoreEngineRunner {
         }
 
         // 关键点（中文）：stop 前做 tail merge，覆盖最后一个 step 后才入队的新 user 消息。
-        const tail_merged_message_count = input.run_context.hasPendingStepInput?.()
+        const tail_merged_message_count = input.run_context.has_pending_step_input?.()
           ? 1
           : 0;
         if (
@@ -534,8 +534,8 @@ export class CoreEngineRunner {
           text_only_continuation_count = 0;
           incomplete_response_recovery_count = 0;
           await this.logger.log("info", "[agent] loop.tail_merge_continue", {
-            sessionId: session_id,
-            stepIndex: step_count,
+            session_id: session_id,
+            step_index: step_count,
             mergedUserMessageCount: tail_merged_message_count,
           });
           continue;
@@ -546,7 +546,7 @@ export class CoreEngineRunner {
 
       if (step_count >= MAX_TOOL_LOOP_STEPS) {
         await this.logger.log("warn", "[agent] loop.max_steps_reached", {
-          sessionId: session_id,
+          session_id: session_id,
           stepCount: step_count,
           totalToolCallCount: total_tool_call_count,
           totalToolResultCount: total_tool_result_count,
@@ -556,18 +556,18 @@ export class CoreEngineRunner {
       const final_message = mergePendingAssistantFileParts(
         final_assistant_ui_message ||
           build_fallback_assistant_message(session_id, "Execution completed"),
-        input.run_context.pendingAssistantFileParts,
+        input.run_context.pending_assistant_file_parts,
       );
 
       await this.logger.log("info", "[agent] final.message", {
-        sessionId: session_id,
+        session_id: session_id,
         ...summarizeUiMessageForDebug(final_message),
       });
       await logAssistantMessageNow(this.logger, final_message);
 
       const duration = Date.now() - start_time;
       await this.logger.log("info", "[agent] finish", {
-        sessionId: session_id,
+        session_id: session_id,
         duration,
         stepCount: step_count,
         totalToolCallCount: total_tool_call_count,
@@ -576,33 +576,33 @@ export class CoreEngineRunner {
 
       return {
         success: true,
-        assistantMessage: final_message,
-        assistant_file_parts: [...input.run_context.pendingAssistantFileParts],
+        assistant_message: final_message,
+        assistant_file_parts: [...input.run_context.pending_assistant_file_parts],
         ...(compact_required ? { compact_required: true } : {}),
-        deferredPersistedUserMessages: [
-          ...input.run_context.deferredPersistedUserMessages,
+        deferred_persisted_user_messages: [
+          ...input.run_context.deferred_persisted_user_messages,
         ],
       };
     } catch (error) {
-      if (input.run_context.abortSignal?.aborted) {
+      if (input.run_context.abort_signal?.aborted) {
         const error_text = TURN_STOPPED_MESSAGE;
         await this.logger.log("info", "[agent] stopped", {
-          sessionId: session_id,
+          session_id: session_id,
         });
         const stopped_message = final_assistant_ui_message
           ? mergePendingAssistantFileParts(
               final_assistant_ui_message,
-              input.run_context.pendingAssistantFileParts,
+              input.run_context.pending_assistant_file_parts,
             )
           : null;
         return {
           success: false,
           error: error_text,
-          ...(stopped_message ? { assistantMessage: stopped_message } : {}),
-          assistant_file_parts: [...input.run_context.pendingAssistantFileParts],
+          ...(stopped_message ? { assistant_message: stopped_message } : {}),
+          assistant_file_parts: [...input.run_context.pending_assistant_file_parts],
           ...(compact_required ? { compact_required: true } : {}),
-          deferredPersistedUserMessages: [
-            ...input.run_context.deferredPersistedUserMessages,
+          deferred_persisted_user_messages: [
+            ...input.run_context.deferred_persisted_user_messages,
           ],
         };
       }
@@ -623,10 +623,10 @@ export class CoreEngineRunner {
       return {
         success: false,
         error: error_text,
-        assistant_file_parts: [...input.run_context.pendingAssistantFileParts],
+        assistant_file_parts: [...input.run_context.pending_assistant_file_parts],
         ...(compact_required ? { compact_required: true } : {}),
-        deferredPersistedUserMessages: [
-          ...input.run_context.deferredPersistedUserMessages,
+        deferred_persisted_user_messages: [
+          ...input.run_context.deferred_persisted_user_messages,
         ],
       };
     }
@@ -645,7 +645,7 @@ function build_internal_user_message(input: {
     metadata: {
       v: 1,
       ts: Date.now(),
-      sessionId: input.session_id,
+      session_id: input.session_id,
       source: "ingress",
       kind: "normal",
       extra: input.extra,
@@ -665,7 +665,7 @@ function build_fallback_assistant_message(
     metadata: {
       v: 1,
       ts: Date.now(),
-      sessionId: session_id,
+      session_id: session_id,
       source: "egress",
       kind: "normal",
     },

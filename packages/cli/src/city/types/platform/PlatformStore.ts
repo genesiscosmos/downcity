@@ -1,5 +1,5 @@
 /**
- * 平台存储类型定义。
+ * CLI/City 平台存储类型定义。
  *
  * 关键点（中文）
  * - downcity 只保存平台级 env 与安全配置。
@@ -37,11 +37,11 @@ export interface StoredEnvEntry {
   /**
    * 创建时间（ISO 字符串）。
    */
-  createdAt: string;
+  created_at: string;
   /**
    * 更新时间（ISO 字符串）。
    */
-  updatedAt: string;
+  updated_at: string;
 }
 
 /**

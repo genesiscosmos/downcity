@@ -78,7 +78,7 @@ export function registerTokenCommand(program: Command): void {
     }))
     .helpOption("--help", helpText())
     .action(async (name: string | undefined, options: {
-      expiresAt?: string;
+      expires_at?: string;
       json?: boolean;
     }) => {
       const normalizedName = String(name || "").trim();
@@ -93,14 +93,14 @@ export function registerTokenCommand(program: Command): void {
           return;
         }
         await runInteractiveCreateCommandFlow({
-          expiresAt: options.expiresAt,
+          expires_at: options.expires_at,
         });
         return;
       }
 
       createToken({
         name: normalizedName,
-        expiresAt: options.expiresAt,
+        expires_at: options.expires_at,
         json: options.json === true,
       });
     });
@@ -111,7 +111,7 @@ export function registerTokenCommand(program: Command): void {
       zh: "删除指定 token",
       en: "delete a selected token",
     }))
-    .argument("[tokenId]", t({
+    .argument("[token_id]", t({
       zh: "token 记录 ID",
       en: "token record ID",
     }))
@@ -120,14 +120,14 @@ export function registerTokenCommand(program: Command): void {
       en: "output as JSON",
     }))
     .helpOption("--help", helpText())
-    .action(async (tokenId: string | undefined, options: { json?: boolean }) => {
-      const normalizedTokenId = String(tokenId || "").trim();
+    .action(async (token_id: string | undefined, options: { json?: boolean }) => {
+      const normalizedTokenId = String(token_id || "").trim();
       if (!normalizedTokenId) {
         if (options.json === true) {
           emitCliBlock({
             tone: "error",
             title: "Token ID is required",
-            note: "JSON 模式下必须显式传入 tokenId。",
+            note: "JSON 模式下必须显式传入 token_id。",
           });
           process.exitCode = 1;
           return;

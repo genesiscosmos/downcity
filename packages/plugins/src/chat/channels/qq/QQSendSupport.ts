@@ -75,9 +75,9 @@ export function isRetryableQqSendFailure(errorText: string): boolean {
  */
 export async function waitBeforeQqSendRetry(attempt: number): Promise<void> {
   const safeAttempt = Number.isFinite(attempt) && attempt > 0 ? Math.trunc(attempt) : 1;
-  const delayMs = Math.min(4000, 600 * 2 ** (safeAttempt - 1));
+  const delay_ms = Math.min(4000, 600 * 2 ** (safeAttempt - 1));
   const jitterMs = Math.floor(Math.random() * 180);
-  await sleepMs(delayMs + jitterMs);
+  await sleepMs(delay_ms + jitterMs);
 }
 
 /**

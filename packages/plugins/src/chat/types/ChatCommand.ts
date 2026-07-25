@@ -7,53 +7,53 @@
  */
 
 export type ChatSessionSnapshot = {
-  sessionId?: string;
-  chatKey?: string;
+  session_id?: string;
+  chat_key?: string;
   channel?: string;
   chatId?: string;
   messageThreadId?: number;
   chatType?: string;
-  userId?: string;
-  messageId?: string;
+  user_id?: string;
+  message_id?: string;
 };
 
 export type ChatSendRequest = {
   text: string;
-  chatKey?: string;
-  delayMs?: number;
-  sendAtMs?: number;
-  replyToMessage?: boolean;
-  messageId?: string;
+  chat_key?: string;
+  delay_ms?: number;
+  send_at_ms?: number;
+  reply_to_message?: boolean;
+  message_id?: string;
 };
 
 export type ChatSendResponse = {
   success: boolean;
-  chatKey?: string;
+  chat_key?: string;
   error?: string;
 };
 
 export type ChatReactRequest = {
-  chatKey?: string;
-  messageId?: string;
+  chat_key?: string;
+  message_id?: string;
   emoji?: string;
   big?: boolean;
 };
 
 export type ChatReactResponse = {
   success: boolean;
-  chatKey?: string;
-  messageId?: string;
+  chat_key?: string;
+  message_id?: string;
   error?: string;
 };
 
 export type ChatDeleteRequest = {
-  chatKey?: string;
-  sessionId?: string;
+  chat_key?: string;
+  session_id?: string;
 };
 
 export type ChatDeleteResponse = {
   success: boolean;
-  sessionId?: string;
+  session_id?: string;
   deleted?: boolean;
   removedMeta?: boolean;
   removedChatDir?: boolean;
@@ -64,8 +64,8 @@ export type ChatDeleteResponse = {
 export type ChatHistoryDirection = "all" | "inbound" | "outbound";
 
 export type ChatHistoryRequest = {
-  chatKey?: string;
-  sessionId?: string;
+  chat_key?: string;
+  session_id?: string;
   limit?: number;
   direction?: ChatHistoryDirection;
   beforeTs?: number;
@@ -98,7 +98,7 @@ export type ChatListRequest = {
    * 关键词查询。
    *
    * 说明（中文）
-   * - 会在 `sessionId/chatId/chatTitle/actorName/actorId` 中做包含匹配（不区分大小写）。
+   * - 会在 `session_id/chatId/chatTitle/actorName/actorId` 中做包含匹配（不区分大小写）。
    */
   q?: string;
 };
@@ -108,19 +108,19 @@ export type ChatListRequest = {
  */
 export type ChatListItemV1 = {
   /**
-   * 可发送的 chatKey。
+   * 可发送的 chat_key。
    *
    * 关键点（中文）
-   * - 当前实现下 `chatKey === sessionId`。
+   * - 当前实现下 `chat_key === session_id`。
    */
-  chatKey: string;
+  chat_key: string;
   /**
-   * 对外稳定的 sessionId。
+   * 对外稳定的 session_id。
    *
    * 说明（中文）
    * - 当前内部以 session 语义统一建模。
    */
-  sessionId: string;
+  session_id: string;
   /**
    * 渠道类型（telegram/feishu/qq）。
    */
@@ -152,9 +152,9 @@ export type ChatListItemV1 = {
   /**
    * 最近更新的毫秒时间戳。
    */
-  updatedAt: number;
+  updated_at: number;
   /**
-   * `updatedAt` 的 ISO 时间字符串（UTC）。
+   * `updated_at` 的 ISO 时间字符串（UTC）。
    */
   isoUpdatedAt: string;
 };
@@ -164,11 +164,11 @@ export type ChatListItemV1 = {
  */
 export type ChatInfoRequest = {
   /**
-   * 目标 chatKey（不传则尝试读取 DC_CTX_CHAT_KEY / 当前请求上下文）。
+   * 目标 chat_key（不传则尝试读取 DC_CTX_CHAT_KEY / 当前请求上下文）。
    */
-  chatKey?: string;
+  chat_key?: string;
   /**
-   * 显式 sessionId（优先级高于 chatKey）。
+   * 显式 session_id（优先级高于 chat_key）。
    */
-  sessionId?: string;
+  session_id?: string;
 };

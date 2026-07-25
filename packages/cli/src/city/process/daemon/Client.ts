@@ -63,13 +63,13 @@ function pickArgValue(args: string[], key: string): string | undefined {
 }
 
 type ResolveDaemonEndpointParams = {
-  projectRoot: string;
+  project_root: string;
   host?: string;
   port?: number;
 };
 
 function resolveDaemonEndpointFromSources(params: {
-  projectRoot: string;
+  project_root: string;
   explicit_host?: string;
   explicit_port?: number;
   env_host_name: string;
@@ -88,7 +88,7 @@ function resolveDaemonEndpointFromSources(params: {
   let daemonArgHost: string | undefined;
   let daemonArgPort: number | undefined;
   try {
-    const metaPath = getDaemonMetaPath(params.projectRoot);
+    const metaPath = getDaemonMetaPath(params.project_root);
     if (fs.existsSync(metaPath)) {
       const raw = fs.readJsonSync(metaPath) as { args?: unknown };
       const args = Array.isArray(raw?.args)
@@ -124,12 +124,12 @@ function resolveDaemonEndpointFromSources(params: {
  * 4) 默认 `127.0.0.1:5314`
  */
 export function resolveDaemonEndpoint(params: {
-  projectRoot: string;
+  project_root: string;
   host?: string;
   port?: number;
 }): DaemonEndpoint {
   return resolveDaemonEndpointFromSources({
-    projectRoot: params.projectRoot,
+    project_root: params.project_root,
     explicit_host: params.host,
     explicit_port: params.port,
     env_host_name: "DC_CITY_HOST",
@@ -154,7 +154,7 @@ export function resolveDaemonRpcEndpoint(
   params: ResolveDaemonEndpointParams,
 ): DaemonEndpoint {
   return resolveDaemonEndpointFromSources({
-    projectRoot: params.projectRoot,
+    project_root: params.project_root,
     explicit_host: params.host,
     explicit_port: params.port,
     env_host_name: "DC_AGENT_RPC_HOST",
@@ -178,7 +178,7 @@ export async function callServer<T>(
   params: DaemonJsonApiCallParams,
 ): Promise<DaemonJsonApiCallResult<T>> {
   const endpoint = resolveDaemonEndpoint({
-    projectRoot: params.projectRoot,
+    project_root: params.project_root,
     host: params.host,
     port: params.port,
   });

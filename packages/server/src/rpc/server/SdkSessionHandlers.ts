@@ -43,73 +43,73 @@ export async function handleSdkSessionRpcRequest(params: {
       return true;
     }
     case "sdk.sessions.get": {
-      const session = await options.sessions.get(request.params.sessionId);
+      const session = await options.sessions.get(request.params.session_id);
       write_success(request.id, { session: await session.get_info() });
       return true;
     }
     case "sdk.sessions.prompt": {
-      const session = await options.sessions.get(request.params.sessionId);
+      const session = await options.sessions.get(request.params.session_id);
       const turn = await session.prompt(request.params.input);
       write_success(request.id, { turn: { id: turn.id } });
       return true;
     }
     case "sdk.sessions.stop": {
-      const session = await options.sessions.get(request.params.sessionId);
+      const session = await options.sessions.get(request.params.session_id);
       const result = await session.stop();
       write_success(request.id, { result });
       return true;
     }
     case "sdk.sessions.compact": {
-      const session = await options.sessions.get(request.params.sessionId);
+      const session = await options.sessions.get(request.params.session_id);
       await session.compact();
       write_success(request.id, { queued: true });
       return true;
     }
     case "sdk.sessions.messages": {
-      const session = await options.sessions.get(request.params.sessionId);
+      const session = await options.sessions.get(request.params.session_id);
       const messages = await session.messages(request.params.input);
       write_success(request.id, { messages });
       return true;
     }
     case "sdk.sessions.approvals": {
-      const session = await options.sessions.get(request.params.sessionId);
+      const session = await options.sessions.get(request.params.session_id);
       write_success(request.id, { approvals: await session.approvals() });
       return true;
     }
     case "sdk.sessions.approvalMode": {
-      const session = await options.sessions.get(request.params.sessionId);
+      const session = await options.sessions.get(request.params.session_id);
       write_success(request.id, { approval_mode: await session.approval_mode() });
       return true;
     }
     case "sdk.sessions.setApprovalMode": {
-      const session = await options.sessions.get(request.params.sessionId);
+      const session = await options.sessions.get(request.params.session_id);
       write_success(request.id, {
         approval_mode: await session.set_approval_mode(request.params.input),
       });
       return true;
     }
     case "sdk.sessions.resolveApproval": {
-      const session = await options.sessions.get(request.params.sessionId);
+      const session = await options.sessions.get(request.params.session_id);
       write_success(request.id, {
         result: await session.resolve_approval(request.params.input),
       });
       return true;
     }
     case "sdk.sessions.system": {
-      const session = await options.sessions.get(request.params.sessionId);
+      const session = await options.sessions.get(request.params.session_id);
       write_success(request.id, { system: await session.system() });
       return true;
     }
     case "sdk.sessions.fork": {
-      const session = await options.sessions.get(request.params.sessionId);
-      const forked = await session.fork(request.params.messageId);
+      const session = await options.sessions.get(request.params.session_id);
+      const forked = await session.fork(request.params.message_id);
       write_success(request.id, { session: await forked.get_info() });
       return true;
     }
     case "sdk.sessions.subscribe": {
-      const session = await options.sessions.get(request.params.sessionId);
+      const session = await options.sessions.get(request.params.session_id);
       const subscription_id = [
-        request.params.sessionId,
+        request.params.session_id,
         Date.now(),
         Math.random().toString(36).slice(2, 10),
       ].join(":");
@@ -121,7 +121,7 @@ export async function handleSdkSessionRpcRequest(params: {
         });
       });
       subscriptions.set(subscription_id, {
-        sessionId: request.params.sessionId,
+        session_id: request.params.session_id,
         unsubscribe,
       });
       write_success(request.id, { subscriptionId: subscription_id });
@@ -138,7 +138,7 @@ export async function handleSdkSessionRpcRequest(params: {
     }
     case "sdk.sessions.archive": {
       const result = await options.sessions.archive({
-        id: request.params.sessionId,
+        id: request.params.session_id,
       });
       write_success(request.id, { result });
       return true;
@@ -150,7 +150,7 @@ export async function handleSdkSessionRpcRequest(params: {
     }
     case "sdk.sessions.archived.clean": {
       const result = await options.sessions.clean_archive();
-      write_success(request.id, { removedSessionIds: result.removedSessionIds });
+      write_success(request.id, { removed_session_ids: result.removed_session_ids });
       return true;
     }
     default:

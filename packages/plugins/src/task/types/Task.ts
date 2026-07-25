@@ -16,8 +16,8 @@ export type ShipTaskFrontmatterV1 = {
   when: string;
   /** 任务描述（给执行器的意图说明） */
   description: string;
-  /** 任务执行会话标识（sessionId） */
-  sessionId: string;
+  /** 任务执行会话标识（session_id） */
+  session_id: string;
   /** 任务执行类型（agent=交给 agent 执行；script=直接执行 task 正文脚本） */
   kind?: ShipTaskKind;
   /** 是否启用 review 多轮复核（仅 `kind=agent` 生效；默认 false，false 时单轮执行） */
@@ -100,7 +100,7 @@ export type ShipTaskRunProgressV1 = {
   /** 开始时间（ms） */
   startedAt: number;
   /** 最近更新时间（ms） */
-  updatedAt: number;
+  updated_at: number;
   /** 结束时间（ms，完成后可选） */
   endedAt?: number;
   /** 最终 run 状态（完成后可选） */
@@ -127,7 +127,7 @@ export type ShipTaskRunMetaV1 = {
   /** 本次执行唯一 ID */
   executionId: string;
   /** 任务执行会话标识 */
-  sessionId: string;
+  session_id: string;
   /** 触发来源 */
   trigger: ShipTaskRunTriggerV1;
   /** 最终状态（综合执行阶段 + 结果校验） */

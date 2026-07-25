@@ -29,15 +29,15 @@ function normalizeSkillRootCandidate(candidate: string): string {
   return normalized;
 }
 
-function resolveSkillRootPath(projectRoot: string, raw: string): string {
+function resolveSkillRootPath(project_root: string, raw: string): string {
   const expanded = expandHome(raw);
   return path.isAbsolute(expanded)
     ? path.normalize(expanded)
-    : path.resolve(projectRoot, expanded);
+    : path.resolve(project_root, expanded);
 }
 
 export function getSkillSearchRoots(
-  projectRoot: string,
+  project_root: string,
   options?: SkillPluginOptions | null,
 ): SkillRoot[] {
   const skillPluginOptions = resolveSkillPluginOptions(options);
@@ -58,7 +58,7 @@ export function getSkillSearchRoots(
 
   // 1) project roots（最高优先级）
   for (const raw of rawProject) {
-    const resolved = normalizeSkillRootCandidate(resolveSkillRootPath(projectRoot, raw));
+    const resolved = normalizeSkillRootCandidate(resolveSkillRootPath(project_root, raw));
     roots.push({
       source: "project",
       raw,
@@ -71,7 +71,7 @@ export function getSkillSearchRoots(
 
   // 2) constructor paths：用户显式传入的路径，统一视为 custom 来源
   for (const raw of rawConfigured) {
-    const resolved = normalizeSkillRootCandidate(resolveSkillRootPath(projectRoot, raw));
+    const resolved = normalizeSkillRootCandidate(resolveSkillRootPath(project_root, raw));
     roots.push({
       source: "custom",
       raw,
@@ -84,7 +84,7 @@ export function getSkillSearchRoots(
 
   // 3) home root（用户目录）
   for (const raw of rawHome) {
-    const resolved = normalizeSkillRootCandidate(resolveSkillRootPath(projectRoot, raw));
+    const resolved = normalizeSkillRootCandidate(resolveSkillRootPath(project_root, raw));
     roots.push({
       source: "home",
       raw,

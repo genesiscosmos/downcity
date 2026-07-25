@@ -28,7 +28,7 @@ test("Workspace exposes file tools without requiring Shell", async (t) => {
     "write",
   ]);
   assert.equal(agent.workspace, workspace);
-  assert.equal(agent.getShell(), undefined);
+  assert.equal(agent.get_shell(), undefined);
 });
 
 test("Workspace binds one Agent and is disposed with it", async (t) => {

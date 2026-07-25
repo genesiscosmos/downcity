@@ -124,15 +124,15 @@ export const sleep = async (ms: number): Promise<void> =>
 /**
  * 从项目根目录推断 agent id。
  */
-export function resolveAgentId(projectRoot: string): string {
-  const fallback = basename(projectRoot)
+export function resolveAgentId(project_root: string): string {
+  const fallback = basename(project_root)
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .replace(/_{2,}/g, "_")
-    .trim() || basename(projectRoot);
-  const stored = readAgentConfig(projectRoot);
+    .trim() || basename(project_root);
+  const stored = readAgentConfig(project_root);
   if (stored?.id) return stored.id;
 
   return fallback;
@@ -141,13 +141,13 @@ export function resolveAgentId(projectRoot: string): string {
 /**
  * 注入当前 agent 执行上下文。
  */
-export function injectAgentContext(pathInput: string = "."): {
-  projectRoot: string;
-  agentId: string;
+export function inject_agent_context(pathInput: string = "."): {
+  project_root: string;
+  agent_id: string;
 } {
-  const projectRoot = resolve(String(pathInput || "."));
-  const agentId = resolveAgentId(projectRoot);
-  process.env.DC_AGENT_PATH = projectRoot;
-  process.env.DC_AGENT_ID = agentId;
-  return { projectRoot, agentId };
+  const project_root = resolve(String(pathInput || "."));
+  const agent_id = resolveAgentId(project_root);
+  process.env.DC_AGENT_PATH = project_root;
+  process.env.DC_AGENT_ID = agent_id;
+  return { project_root, agent_id };
 }

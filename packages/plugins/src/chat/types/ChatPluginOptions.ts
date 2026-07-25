@@ -7,7 +7,7 @@
  * - 这样 ChatPlugin 不再理解 Telegram、Feishu、QQ 的具体配置字段。
  */
 
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 import type { ChatQueueWorkerConfig } from "@/chat/types/ChatQueueWorker.js";
 import type {
@@ -26,16 +26,16 @@ export interface ChatChannel {
   /**
    * 当前 channel 是否启用。
    */
-  isEnabled(context: AgentContext): boolean;
+  isEnabled(context: PluginContext): boolean;
   /**
    * 当前 channel 绑定的账号池记录 ID。
    */
-  getChannelAccountId(context: AgentContext): string;
+  getChannelAccountId(context: PluginContext): string;
   /**
    * 解析当前 channel 的运行态账号。
    */
   getAccount(
-    context: AgentContext,
+    context: PluginContext,
     account_store?: ChatChannelAccountStore,
   ): StoredChannelAccount | null;
 }

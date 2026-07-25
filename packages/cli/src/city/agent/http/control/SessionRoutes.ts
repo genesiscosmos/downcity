@@ -9,7 +9,6 @@
 
 import type { SystemModelMessage } from "ai";
 import {
-  resolveSessionSystemMessages,
   to_session_message_timeline_events,
   type AgentSession,
   type SessionMessage,
@@ -111,7 +110,7 @@ export function registerControlSessionRoutes(
   for (const routePath of buildControlRouteAliases("/sessions")) {
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.getAgentContext();
+        const runtime = params.get_agent();
         const limit = toLimit(c.req.query("limit"));
         const executingSessionIds = new Set<string>(
           runtime.sessions.list_executing_session_ids(),
@@ -121,15 +120,15 @@ export function registerControlSessionRoutes(
           limit,
         );
         const hasCityChatSession = sessions.some(
-          (item) => String(item.sessionId || "").trim() === CITY_CHAT_SESSION_ID,
+          (item) => String(item.session_id || "").trim() === CITY_CHAT_SESSION_ID,
         );
         const enrichedSessions = hasCityChatSession
           ? sessions
           : [
               {
-                sessionId: CITY_CHAT_SESSION_ID,
-                messageCount: 0,
-                updatedAt: Date.now(),
+                session_id: CITY_CHAT_SESSION_ID,
+                message_count: 0,
+                updated_at: Date.now(),
                 lastRole: "system" as const,
                 lastText: "City chat",
                 channel: "city",
@@ -147,24 +146,24 @@ export function registerControlSessionRoutes(
     });
   }
 
-  for (const routePath of buildControlRouteAliases("/sessions/:sessionId/messages")) {
+  for (const routePath of buildControlRouteAliases("/sessions/:session_id/messages")) {
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.getAgentContext();
+        const runtime = params.get_agent();
         const limit = toLimit(c.req.query("limit"), 200);
-        const sessionId = decodeMaybe(String(c.req.param("sessionId") || "").trim());
-        if (!sessionId) {
-          return c.json({ success: false, error: "Missing sessionId" }, 400);
+        const session_id = decodeMaybe(String(c.req.param("session_id") || "").trim());
+        if (!session_id) {
+          return c.json({ success: false, error: "Missing session_id" }, 400);
         }
 
-        const session = await runtime.sessions.get(sessionId);
+        const session = await runtime.sessions.get(session_id);
         const history = await read_recent_session_messages(session, limit);
         const sliced = history.items.flatMap((message) =>
           to_session_message_timeline_events(message)
         );
         return c.json({
           success: true,
-          sessionId,
+          session_id,
           total: sliced.length,
           rawTotal: history.total,
           messages: sliced,
@@ -175,19 +174,19 @@ export function registerControlSessionRoutes(
     });
   }
 
-  for (const routePath of buildControlRouteAliases("/sessions/:sessionId/messages")) {
+  for (const routePath of buildControlRouteAliases("/sessions/:session_id/messages")) {
     app.delete(routePath, async (c) => {
       try {
-        const runtime = params.getAgentContext();
-        const sessionId = decodeMaybe(String(c.req.param("sessionId") || "").trim());
-        if (!sessionId) {
-          return c.json({ success: false, error: "Missing sessionId" }, 400);
+        const runtime = params.get_agent();
+        const session_id = decodeMaybe(String(c.req.param("session_id") || "").trim());
+        if (!session_id) {
+          return c.json({ success: false, error: "Missing session_id" }, 400);
         }
 
-        await runtime.sessions.clear_messages(sessionId);
+        await runtime.sessions.clear_messages(session_id);
         return c.json({
           success: true,
-          sessionId,
+          session_id,
           cleared: true,
         });
       } catch (error) {
@@ -196,19 +195,19 @@ export function registerControlSessionRoutes(
     });
   }
 
-  for (const routePath of buildControlRouteAliases("/sessions/:sessionId/chat-history")) {
+  for (const routePath of buildControlRouteAliases("/sessions/:session_id/chat-history")) {
     app.delete(routePath, async (c) => {
       try {
-        const runtime = params.getAgentContext();
-        const sessionId = decodeMaybe(String(c.req.param("sessionId") || "").trim());
-        if (!sessionId) {
-          return c.json({ success: false, error: "Missing sessionId" }, 400);
+        const runtime = params.get_agent();
+        const session_id = decodeMaybe(String(c.req.param("session_id") || "").trim());
+        if (!session_id) {
+          return c.json({ success: false, error: "Missing session_id" }, 400);
         }
 
-        const result = await runtime.plugins.runAction({
+        const result = await runtime.plugins.run_action({
           plugin: "chat",
           action: "history_clear",
-          payload: { sessionId },
+          payload: { session_id },
         });
         if (!result.success) {
           throw new Error(result.error || result.message || "Chat history clear failed");
@@ -216,7 +215,7 @@ export function registerControlSessionRoutes(
 
         return c.json({
           success: true,
-          sessionId,
+          session_id,
           cleared: true,
         });
       } catch (error) {
@@ -228,20 +227,17 @@ export function registerControlSessionRoutes(
   for (const routePath of buildControlRouteAliases("/system-prompt")) {
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.getAgentContext();
-        const sessionId =
-          decodeMaybe(String(c.req.query("sessionId") || "").trim()) ||
+        const runtime = params.get_agent();
+        const session_id =
+          decodeMaybe(String(c.req.query("session_id") || "").trim()) ||
           CITY_CHAT_SESSION_ID;
-        const systemMessages = await resolveSessionSystemMessages({
-          projectRoot: runtime.rootPath,
-          sessionId,
+        const systemMessages = await runtime.resolve_system_messages({
+          session_id: session_id,
           profile: "chat",
-          staticSystemPrompts: [...runtime.systems],
-          context: params.getAgentContext(),
         });
         return c.json({
           success: true,
-          sessionId,
+          session_id,
           ...toSystemPromptPayload(systemMessages),
         });
       } catch (error) {
@@ -250,15 +246,15 @@ export function registerControlSessionRoutes(
     });
   }
 
-  for (const routePath of buildControlRouteAliases("/sessions/:sessionId/execute")) {
+  for (const routePath of buildControlRouteAliases("/sessions/:session_id/execute")) {
     app.post(routePath, async (c) => {
       try {
-        const runtime = params.getAgentContext();
-        const sessionId = decodeMaybe(String(c.req.param("sessionId") || "").trim());
+        const runtime = params.get_agent();
+        const session_id = decodeMaybe(String(c.req.param("session_id") || "").trim());
         const body = (await c.req.json().catch(() => ({}))) as Partial<ControlSessionExecuteRequestBody>;
         const instructions = String(body.instructions || "").trim();
-        if (!sessionId) {
-          return c.json({ success: false, error: "Missing sessionId" }, 400);
+        if (!session_id) {
+          return c.json({ success: false, error: "Missing session_id" }, 400);
         }
         if (!instructions) {
           return c.json({ success: false, error: "Missing instructions" }, 400);
@@ -266,13 +262,13 @@ export function registerControlSessionRoutes(
 
         const result = await executeBySessionId({
           agentState: runtime,
-          sessionId,
+          session_id,
           instructions,
           attachments: Array.isArray(body.attachments) ? body.attachments : undefined,
         });
         return c.json({
           success: true,
-          sessionId,
+          session_id,
           result,
         });
       } catch (error) {

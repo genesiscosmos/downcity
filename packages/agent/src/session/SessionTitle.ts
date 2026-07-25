@@ -25,9 +25,9 @@ export interface EnsureSessionTitleParams {
   store: SessionStore;
 
   /**
-   * 当前 sessionId。
+   * 当前 session_id。
    */
-  sessionId: string;
+  session_id: string;
 
   /**
    * 当前 session 已落盘消息。
@@ -42,7 +42,7 @@ export interface EnsureSessionTitleParams {
   /**
    * 当前模型展示标签；仅用于排障日志，不参与生成逻辑。
    */
-  modelLabel?: string;
+  model_label?: string;
 
   /**
    * 当前 session 运行日志器；标题生成失败时仅记录摘要，不影响主流程。
@@ -134,7 +134,7 @@ async function logSessionTitleDiagnostic(input: {
   /**
    * 当前 session 标识。
    */
-  sessionId: string;
+  session_id: string;
 
   /**
    * 日志级别。
@@ -159,7 +159,7 @@ async function logSessionTitleDiagnostic(input: {
   if (!input.logger) return;
   try {
     await input.logger.log(input.level, input.message, {
-      sessionId: input.sessionId,
+      session_id: input.session_id,
       ...input.details,
     });
   } catch {
@@ -176,12 +176,12 @@ async function generateSessionTitle(input: {
   /**
    * 当前 session 标识。
    */
-  sessionId: string;
+  session_id: string;
 
   /**
    * 当前模型展示标签；仅用于排障日志。
    */
-  modelLabel?: string;
+  model_label?: string;
 
   /**
    * 首条用户消息文本。
@@ -214,11 +214,11 @@ async function generateSessionTitle(input: {
     if (!generatedTitle) {
       await logSessionTitleDiagnostic({
         logger: input.logger,
-        sessionId: input.sessionId,
+        session_id: input.session_id,
         level: "warn",
         message: "[agent] session_title.empty",
         details: {
-          modelLabel: input.modelLabel || null,
+          model_label: input.model_label || null,
           firstUserTextLength: input.firstUserText.length,
           rawTitleLength: String(text || "").length,
         },
@@ -229,11 +229,11 @@ async function generateSessionTitle(input: {
     const effectiveError = observedStreamError || error;
     await logSessionTitleDiagnostic({
       logger: input.logger,
-      sessionId: input.sessionId,
+      session_id: input.session_id,
       level: "warn",
       message: "[agent] session_title.generate_failed",
       details: {
-        modelLabel: input.modelLabel || null,
+        model_label: input.model_label || null,
         firstUserTextLength: input.firstUserText.length,
         ...summarizeTitleError(effectiveError),
       },
@@ -259,13 +259,13 @@ export async function ensureSessionTitle(
   if (!input.model || !firstUserText) {
     await logSessionTitleDiagnostic({
       logger: input.logger,
-      sessionId: input.sessionId,
+      session_id: input.session_id,
       level: "debug",
       message: "[agent] session_title.skipped",
       details: {
         reason: !input.model ? "missing_model" : "missing_first_user_text",
-        modelLabel: input.modelLabel || null,
-        messageCount: input.messages.length,
+        model_label: input.model_label || null,
+        message_count: input.messages.length,
       },
     });
     return current;
@@ -273,8 +273,8 @@ export async function ensureSessionTitle(
 
   const generatedTitle = await generateSessionTitle({
     model: input.model,
-    sessionId: input.sessionId,
-    modelLabel: input.modelLabel,
+    session_id: input.session_id,
+    model_label: input.model_label,
     firstUserText,
     logger: input.logger,
   });

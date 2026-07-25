@@ -6,7 +6,7 @@
  * - 不处理命令行交互与本地 agent 解析，只负责与 daemon RPC 的通信侧逻辑。
  */
 
-import { generateId } from "@/city/utils/Id.js";
+import { generate_id } from "@/city/utils/Id.js";
 import {
   RemoteAgent,
   type AgentSessionSummary,
@@ -29,13 +29,13 @@ export type AgentChatRemoteTarget = {
 };
 
 /**
- * 生成 CLI chat 专用的新 sessionId。
+ * 生成 CLI chat 专用的新 session_id。
  */
 export function createAgentChatSessionId(): string {
   return [
     AGENT_CHAT_NEW_SESSION_ID_PREFIX,
     Date.now(),
-    generateId().slice(0, 8),
+    generate_id().slice(0, 8),
   ].join("-");
 }
 
@@ -43,12 +43,12 @@ export function createAgentChatSessionId(): string {
  * 解析 chat 远程目标地址。
  */
 export async function resolveAgentChatRemoteTarget(params: {
-  projectRoot: string;
+  project_root: string;
   transport?: AgentChatTransportOptions;
 }): Promise<AgentChatRemoteTarget> {
   // 关键点（中文）：chat 固定走 Agent 本机 RPC，由 City 负责对外暴露。
   const endpoint = resolveDaemonRpcEndpoint({
-    projectRoot: params.projectRoot,
+    project_root: params.project_root,
     host: params.transport?.host,
     port: params.transport?.port,
   });
@@ -61,7 +61,7 @@ export async function resolveAgentChatRemoteTarget(params: {
  * 创建 RemoteAgent 实例。
  */
 export async function createRemoteAgent(params: {
-  projectRoot: string;
+  project_root: string;
   transport?: AgentChatTransportOptions;
 }): Promise<RemoteAgent> {
   const target = await resolveAgentChatRemoteTarget(params);
@@ -78,10 +78,10 @@ export async function listRemoteChatSessions(params: {
 }): Promise<AgentChatSessionSummaryView[]> {
   const page = await params.remote_agent.sessions.list({ limit: 30 });
   const sessions = page.items.map(toSessionSummaryView);
-  if (!sessions.some((item) => item.sessionId === AGENT_CHAT_DEFAULT_SESSION_ID)) {
+  if (!sessions.some((item) => item.session_id === AGENT_CHAT_DEFAULT_SESSION_ID)) {
     sessions.unshift({
-      sessionId: AGENT_CHAT_DEFAULT_SESSION_ID,
-      messageCount: 0,
+      session_id: AGENT_CHAT_DEFAULT_SESSION_ID,
+      message_count: 0,
     });
   }
   return sessions;
@@ -96,7 +96,7 @@ export async function createRemoteChatSession(params: {
 }): Promise<{ session_id: string }> {
   const session_id = String(params.session_id || "").trim() || createAgentChatSessionId();
   const session = await params.remote_agent.sessions.create({
-    sessionId: session_id,
+    session_id: session_id,
   });
   return {
     session_id: session.id,
@@ -114,14 +114,14 @@ export async function getOrCreateRemoteSession(params: {
   const collection = params.remote_agent.sessions;
   if (params.create_new_session === true) {
     return await collection.create({
-      sessionId: params.session_id,
+      session_id: params.session_id,
     });
   }
   try {
     return await collection.get(params.session_id);
   } catch {
     return await collection.create({
-      sessionId: params.session_id,
+      session_id: params.session_id,
     });
   }
 }
@@ -133,11 +133,11 @@ export function toSessionSummaryView(
   summary: AgentSessionSummary,
 ): AgentChatSessionSummaryView {
   return {
-    sessionId: summary.sessionId,
+    session_id: summary.session_id,
     ...(summary.title ? { title: summary.title } : {}),
-    ...(summary.previewText ? { previewText: summary.previewText } : {}),
-    messageCount: summary.messageCount,
-    ...(typeof summary.updatedAt === "number" ? { updatedAt: summary.updatedAt } : {}),
+    ...(summary.preview_text ? { preview_text: summary.preview_text } : {}),
+    message_count: summary.message_count,
+    ...(typeof summary.updated_at === "number" ? { updated_at: summary.updated_at } : {}),
     ...(summary.executing ? { executing: true } : {}),
   };
 }
@@ -147,8 +147,8 @@ export function toSessionSummaryView(
  */
 export function buildSessionChoiceDescription(summary: AgentChatSessionSummaryView): string {
   const parts = [
-    `${summary.messageCount} messages`,
-    summary.previewText || "",
+    `${summary.message_count} messages`,
+    summary.preview_text || "",
     summary.executing ? "running" : "",
   ].filter(Boolean);
   return parts.join(" · ");

@@ -8,7 +8,7 @@
 
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
 import type { Logger } from "@downcity/agent";
-import type { AgentContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/agent";
 import type { JsonObject, JsonValue } from "@downcity/agent";
 import {
   resolveSessionIdByChatTarget,
@@ -31,13 +31,13 @@ export type ChannelUserMessageMeta = {
 };
 
 /**
- * 基于渠道目标解析 sessionId 的输入。
+ * 基于渠道目标解析 session_id 的输入。
  */
 export interface ChannelSessionTargetParams {
   /**
    * 当前 execution runtime。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * 当前渠道。
    */
@@ -63,15 +63,15 @@ export interface ChannelChatMetaParams {
   /**
    * 当前 execution runtime。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * 当前渠道。
    */
   channel: ChatDispatchChannel;
   /**
-   * sessionId。
+   * session_id。
    */
-  sessionId: string;
+  session_id: string;
   /**
    * 平台 chatId。
    */
@@ -87,7 +87,7 @@ export interface ChannelChatMetaParams {
   /**
    * 可选消息 id。
    */
-  messageId?: string;
+  message_id?: string;
   /**
    * 可选用户 id。
    */
@@ -109,7 +109,7 @@ export interface ChannelInboundHistoryParams {
   /**
    * 当前 execution runtime。
    */
-  context: AgentContext;
+  context: PluginContext;
   /**
    * 日志器。
    */
@@ -119,9 +119,9 @@ export interface ChannelInboundHistoryParams {
    */
   channel: ChatDispatchChannel;
   /**
-   * sessionId。
+   * session_id。
    */
-  sessionId: string;
+  session_id: string;
   /**
    * 平台 chatId。
    */
@@ -145,7 +145,7 @@ export interface ChannelInboundHistoryParams {
   /**
    * 可选消息 id。
    */
-  messageId?: string;
+  message_id?: string;
   /**
    * 可选用户 id。
    */
@@ -175,7 +175,7 @@ export interface ChannelToolOutboundHistoryParams extends ChannelSessionTargetPa
   /**
    * 可选消息 id。
    */
-  messageId?: string;
+  message_id?: string;
 }
 
 /**
@@ -190,7 +190,7 @@ export function stripUndefinedMeta(meta: ChannelUserMessageMeta): JsonObject {
 }
 
 /**
- * 通过渠道目标解析或创建 sessionId。
+ * 通过渠道目标解析或创建 session_id。
  */
 export async function resolveOrCreateChannelSessionId(
   params: ChannelSessionTargetParams,
@@ -209,7 +209,7 @@ export async function resolveOrCreateChannelSessionId(
 }
 
 /**
- * 通过渠道目标解析已有 sessionId。
+ * 通过渠道目标解析已有 session_id。
  */
 export async function resolveChannelSessionId(
   params: ChannelSessionTargetParams,
@@ -235,12 +235,12 @@ export async function updateChannelChatMeta(
 ): Promise<void> {
   await upsertChatMetaBySessionId({
     context: params.context,
-    sessionId: params.sessionId,
+    session_id: params.session_id,
     channel: params.channel,
     chatId: params.chatId,
     targetType: params.targetType,
     threadId: params.threadId,
-    messageId: params.messageId,
+    message_id: params.message_id,
     actorId: params.actorId,
     actorName: params.actorName,
     chatTitle: params.chatTitle,
@@ -256,14 +256,14 @@ export async function appendInboundChannelHistory(
   try {
     await appendInboundChatHistory({
       context: params.context,
-      sessionId: params.sessionId,
+      session_id: params.session_id,
       channel: params.channel,
       chatId: params.chatId,
       ingressKind: params.ingressKind,
       text: params.text,
       targetType: params.targetType,
       threadId: params.threadId,
-      messageId: params.messageId,
+      message_id: params.message_id,
       actorId: params.actorId,
       actorName: params.actorName,
       extra: params.extra,
@@ -272,7 +272,7 @@ export async function appendInboundChannelHistory(
     params.logger.warn("Failed to append inbound chat history", {
       error: String(error),
       channel: params.channel,
-      sessionId: params.sessionId,
+      session_id: params.session_id,
       chatId: params.chatId,
       ingressKind: params.ingressKind,
     });
@@ -289,13 +289,13 @@ export async function appendToolOutboundChannelHistory(
   const text = String(params.text ?? "");
   if (!chatId || !text.trim()) return;
 
-  const sessionId = await resolveOrCreateChannelSessionId(params);
-  if (!sessionId) return;
+  const session_id = await resolveOrCreateChannelSessionId(params);
+  if (!session_id) return;
 
   try {
     await appendOutboundChatHistory({
       context: params.context,
-      sessionId,
+      session_id,
       channel: params.channel,
       chatId,
       text,
@@ -303,8 +303,8 @@ export async function appendToolOutboundChannelHistory(
       ...(typeof params.messageThreadId === "number"
         ? { threadId: params.messageThreadId }
         : {}),
-      ...(typeof params.messageId === "string" && params.messageId
-        ? { messageId: params.messageId }
+      ...(typeof params.message_id === "string" && params.message_id
+        ? { message_id: params.message_id }
         : {}),
       extra: {
         source: "channel_send_tool_text",
@@ -314,7 +314,7 @@ export async function appendToolOutboundChannelHistory(
     params.logger.warn("Failed to append outbound chat history", {
       error: String(error),
       channel: params.channel,
-      sessionId,
+      session_id,
       chatId,
     });
   }

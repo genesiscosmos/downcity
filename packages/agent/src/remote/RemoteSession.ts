@@ -27,7 +27,7 @@ import type {
   ListSessionMessagesInput,
   SessionMessagePage,
 } from "@/types/session/SessionMessage.js";
-import { isAgentSessionPromptInputEmpty } from "@/types/sdk/AgentSessionPrompt.js";
+import { is_agent_session_prompt_input_empty } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type {
@@ -59,7 +59,7 @@ type RemoteTurnLifecycle = {
 /** 远程 Session 客户端。 */
 export class RemoteSession implements RemoteAgentSession {
   readonly id: string;
-  readonly agentId: string;
+  readonly agent_id: string;
   readonly config: AgentSessionConfigSnapshot;
 
   private readonly transport: RemoteSessionTransport;
@@ -73,10 +73,10 @@ export class RemoteSession implements RemoteAgentSession {
 
   constructor(transport: RemoteSessionTransport, info: AgentSessionInfo) {
     this.transport = transport;
-    this.id = info.sessionId;
-    this.agentId = info.agentId;
+    this.id = info.session_id;
+    this.agent_id = info.agent_id;
     this.config = {
-      ...(info.modelLabel ? { modelLabel: info.modelLabel } : {}),
+      ...(info.model_label ? { model_label: info.model_label } : {}),
     };
     this.event_hub = new SessionEventHub();
   }
@@ -88,7 +88,7 @@ export class RemoteSession implements RemoteAgentSession {
 
   /** 向当前远程 Session 追加 Prompt。 */
   async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
-    if (isAgentSessionPromptInputEmpty(input)) {
+    if (is_agent_session_prompt_input_empty(input)) {
       throw new Error("remote session.prompt requires a non-empty query");
     }
     await this.ensure_event_pump();
@@ -185,7 +185,7 @@ export class RemoteSession implements RemoteAgentSession {
     if (mutation.variant === "turn" && mutation.type === "finish") {
       const lifecycle = this.ensure_turn_lifecycle(mutation.turn_id);
       const result: AgentSessionTurnResult = {
-        turnId: mutation.turn_id,
+        turn_id: mutation.turn_id,
         text: mutation.text || "",
         success: mutation.status === "completed",
         ...(mutation.error ? { error: mutation.error } : {}),
@@ -222,7 +222,7 @@ export class RemoteSession implements RemoteAgentSession {
     for (const lifecycle of this.turns_by_id.values()) {
       if (lifecycle.result) continue;
       const result: AgentSessionTurnResult = {
-        turnId: lifecycle.turn_id,
+        turn_id: lifecycle.turn_id,
         text: "",
         success: false,
         error: message,

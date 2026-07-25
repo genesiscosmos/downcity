@@ -43,7 +43,7 @@ export interface ApproveContactLinkRequestInput {
   /**
    * 当前 agent 项目根目录，用于读取 link 记录并保存 contact。
    */
-  projectRoot: string;
+  project_root: string;
   /**
    * 当前 agent 名称，也就是 link 所属方名称。
    */
@@ -121,7 +121,7 @@ export interface ConfirmContactLinkRequestInput {
   /**
    * 当前 agent 项目根目录，用于读取 link 记录并更新 contact。
    */
-  projectRoot: string;
+  project_root: string;
   /**
    * 当前 agent 名称，也就是 link 所属方名称。
    */

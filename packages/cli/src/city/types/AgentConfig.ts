@@ -6,14 +6,14 @@
  * - 类型只描述持久化形态；读写、迁移与规范化逻辑由 registry 层负责。
  */
 
-import type { DowncityConfig } from "@downcity/agent";
+import type { DowncityConfig } from "@/city/types/config/DowncityConfig.js";
 
 /**
  * DB 内保存的单个 Agent 配置。
  */
 export interface StoredAgentConfig {
   /** agent 项目根目录。 */
-  projectRoot: string;
+  project_root: string;
   /** agent 稳定标识。 */
   id: string;
   /** 配置版本。 */
@@ -27,9 +27,9 @@ export interface StoredAgentConfig {
   /** LLM 宿主配置。 */
   llm?: DowncityConfig["llm"];
   /** 创建时间。 */
-  createdAt: string;
+  created_at: string;
   /** 更新时间。 */
-  updatedAt: string;
+  updated_at: string;
 }
 
 /**
