@@ -7,6 +7,8 @@ description: Construct, ready, execute, and dispose an Agent
 
 `new Agent(options)` starts plugin lifecycle and ActionSchedule during construction. There is no `agent.start()` or `agent.stop()`.
 
+Run only one active runtime for the same Agent ID in the same physical Workspace. ActionSchedule is a local scheduler and does not coordinate duplicate Agent processes.
+
 ```ts
 const agent = new Agent({
   id: "my-agent",

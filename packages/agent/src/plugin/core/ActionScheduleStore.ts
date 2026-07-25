@@ -285,16 +285,6 @@ export class ActionScheduleStore {
   }
 
   /**
-   * 将任务标记为取消。
-   */
-  async markJobCancelled(jobId: string): Promise<boolean> {
-    return await this.update_terminal_status({
-      jobId,
-      status: "cancelled",
-    });
-  }
-
-  /**
    * 取消待执行任务。
    */
   async cancelPendingJob(jobId: string): Promise<boolean> {
@@ -378,7 +368,7 @@ export class ActionScheduleStore {
   }): Promise<boolean> {
     return await this.with_store_lock(async () => {
       const current = (await this.read_job_map_unlocked()).get(params.jobId);
-      if (!current) return false;
+      if (!current || current.status !== "running") return false;
       await this.append_event_unlocked({
         v: 1,
         type: "status",

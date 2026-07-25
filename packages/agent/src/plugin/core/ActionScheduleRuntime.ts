@@ -11,7 +11,7 @@ import type { AgentContext } from "@/agent/AgentContext.js";
 import { runDueActionScheduleJobs } from "@/plugin/core/ActionScheduleExecutor.js";
 import { ActionScheduleStore } from "@/plugin/core/ActionScheduleStore.js";
 
-const ACTION_SCHEDULE_POLL_INTERVAL_MS = 200;
+const ACTION_SCHEDULE_POLL_INTERVAL_MS = 1_000;
 const ACTION_SCHEDULE_LOG_PREFIX = "[ACTION_SCHEDULE]";
 
 function formatActionScheduleLogMessage(message: string): string {

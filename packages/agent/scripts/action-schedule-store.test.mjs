@@ -65,3 +65,37 @@ test("ActionScheduleStore serializes cross-instance pending claims", async (t) =
     second_workspace.dispose(),
   ]);
 });
+
+test("ActionScheduleStore only allows running jobs to enter terminal states", async (t) => {
+  const workspace_path = await fs.mkdtemp(
+    path.join(os.tmpdir(), "downcity-action-schedule-state-"),
+  );
+  t.after(async () => {
+    await fs.rm(workspace_path, { recursive: true, force: true });
+  });
+  const workspace = new Workspace({ path: workspace_path });
+  const store = new ActionScheduleStore(workspace.files);
+
+  const cancelled = await store.createJob({
+    pluginName: "demo",
+    actionName: "cancelled",
+    payload: null,
+    runAtMs: Date.now(),
+  });
+  assert.equal(await store.cancelPendingJob(cancelled.id), true);
+  assert.equal(await store.markJobSucceeded(cancelled.id), false);
+  assert.equal((await store.getJobById(cancelled.id))?.status, "cancelled");
+
+  const running = await store.createJob({
+    pluginName: "demo",
+    actionName: "running",
+    payload: null,
+    runAtMs: Date.now(),
+  });
+  assert.equal(await store.markJobRunning(running.id), true);
+  assert.equal(await store.markJobSucceeded(running.id), true);
+  assert.equal(await store.markJobFailed(running.id, "late failure"), false);
+  assert.equal((await store.getJobById(running.id))?.status, "succeeded");
+
+  await workspace.dispose();
+});
