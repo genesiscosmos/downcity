@@ -8,7 +8,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { JsonlSessionMessageStore } from "../bin/session/messages/JsonlSessionMessageStore.js";
+import { JsonlSessionMessageStore } from "../bin/workspace/store/JsonlSessionMessageStore.js";
 import { LocalFileSystem } from "../bin/workspace/LocalFileSystem.js";
 import { SessionMessages } from "../bin/session/SessionMessages.js";
 import { SessionApprovalBroker } from "../bin/session/approval/SessionApprovalBroker.js";

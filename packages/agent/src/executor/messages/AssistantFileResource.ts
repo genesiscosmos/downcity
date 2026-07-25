@@ -13,7 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "fs-extra";
 import type { FileUIPart } from "ai";
-import { getDowncityResourcesDirPath } from "@/config/Paths.js";
+import { getDowncityResourcesDirPath } from "@/workspace/WorkspacePaths.js";
 
 /** 单个 assistant 资源下载允许占用的最长时间。 */
 const ASSISTANT_RESOURCE_TIMEOUT_MS = 30_000;

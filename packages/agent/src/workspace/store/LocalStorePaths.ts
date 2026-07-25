@@ -1,5 +1,5 @@
 /**
- * LocalAgentStore 的 Session 路径规则。
+ * Workspace LocalAgentStore 的 Session 路径规则。
  *
  * 关键点（中文）
  * - 所有 agent session 统一落盘到 `.downcity/agents/<agent_id>/sessions/<session_id>/...`。

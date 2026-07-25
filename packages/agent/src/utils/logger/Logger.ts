@@ -6,7 +6,7 @@
  * - 结构化字段写入 JSONL，便于后续检索与审计。
  */
 
-import { getLogsDirPath } from "@/config/Paths.js";
+import { getLogsDirPath } from "@/workspace/WorkspacePaths.js";
 import { getTimestamp } from "@/utils/Time.js";
 import type { JsonObject } from "@/types/common/Json.js";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";

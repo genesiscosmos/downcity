@@ -49,27 +49,34 @@ packages/agent
 ```text
 src/
 ├── index.ts               # 包公开入口
-├── agent/                 # Agent facade、AgentState、AgentSessions 与 AgentModel
-├── config/                # 项目环境、运行路径与初始化能力
+├── agent/                 # Agent facade、状态、模型、环境与执行绑定
 ├── executor/              # LLM/Tool Loop、执行恢复与内存上下文折叠
+├── platform/              # 当前操作系统的全局路径规则
 ├── plugin/                # Plugin registry、执行视图、工具桥接与生命周期
 ├── remote/                # RemoteAgent、RemoteSession 与 HTTP/RPC transport
 ├── session/               # Session facade、State、Turn、Queue、Messages 与 Composer
 ├── types/                 # agent / executor / session / plugin 等共享协议类型
-└── utils/                 # 日志、存储、资源和通用辅助能力
+├── utils/                 # 日志、资源和通用辅助能力
+└── workspace/             # 项目文件、工具、初始化、路径与结构化存储
 ```
 
 ## 顶层目录职责
-
-- `src/config/`
-  - 项目配置、项目级路径解析与项目初始化
-  - `project/` 收口 agent 项目脚手架与初始化结果类型
-  - 负责项目 `.env`、`.downcity/*` 路径规则与 execution binding
 
 - `src/agent/`
   - SDK facade 层
   - `Agent.ts` 负责本地 Agent 实例装配
   - `AgentSessions.ts` 负责 Session 集合生命周期
+  - `AgentEnv.ts` 与 `ExecutionBinding.ts` 负责 Agent 运行环境和执行绑定
+
+- `src/workspace/`
+  - 统一承载项目根目录、文件系统、模型工具、初始化和结构化存储
+  - `setup/` 负责项目 `.env`、`.gitignore` 与 `.downcity` 初始化
+  - `store/` 负责 Agent、Session 和 JSONL Message 的本地持久化
+  - `WorkspacePaths.ts` 负责 Workspace 内部路径布局
+
+- `src/platform/`
+  - 只承载不属于具体 Workspace 的当前系统路径规则
+  - 不包含文件工具、Store 或 Sandbox 实现
 
 - `src/session/`
   - `Session.ts` 是公开 facade 与 Session 对象装配入口
@@ -77,7 +84,7 @@ src/
   - `SessionTurn.ts` 管理输入队列和 Turn 生命周期
   - `SessionMessages.ts` 是 canonical Message 唯一事实源
   - `DefaultSessionComposer.ts` 负责 system/history/tools 与压缩计划定制
-  - `messages/` 放 JSONL Store、Assistant writer、Message codec 与 compaction
+  - `messages/` 放 Assistant writer、Message codec 与 compaction；JSONL Store 位于 `workspace/store/`
   - 完整设计见 [`docs/session-runtime-architecture.md`](../../docs/session-runtime-architecture.md)
 
 - `src/executor/`
@@ -114,7 +121,7 @@ src/
 其中：
 
 - `agent` 承载本地 Agent 核心运行时，`remote` 承载独立的远程 SDK 客户端
-- `config` 承载项目初始化等宿主集成能力，不进入 Agent 核心生命周期
+- `workspace` 承载项目资源、初始化和持久化能力，`platform` 只处理系统级路径
 - `Agent` facade 是实例级装配中心，也是 env、instruction、model、tools、plugins 与 sessions 的唯一状态所有者
 - `AgentContext` 只向 Plugin 与宿主投影受限运行时能力，不保存完整项目 config 或第二份 Agent 状态
 - `session / executor / plugin` 是三大核心分层

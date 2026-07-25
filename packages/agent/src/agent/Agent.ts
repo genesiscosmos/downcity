@@ -14,7 +14,7 @@ import type { AgentOptions } from "@/types/agent/AgentOptions.js";
 import type { Shell } from "@downcity/shell";
 import type { Workspace } from "@/workspace/Workspace.js";
 import { Logger } from "@/utils/logger/Logger.js";
-import { resolve_agent_env } from "@/config/AgentEnv.js";
+import { resolve_agent_env } from "@/agent/AgentEnv.js";
 import { normalizeInstructionInput } from "@/agent/AgentInstructions.js";
 import { AgentSessions } from "@/agent/AgentSessions.js";
 import { AgentState } from "@/agent/AgentState.js";

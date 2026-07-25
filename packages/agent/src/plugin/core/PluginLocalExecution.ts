@@ -9,7 +9,7 @@
 
 import path from "node:path";
 import { getLogger } from "@/utils/logger/Logger.js";
-import { resolve_agent_env } from "@/config/AgentEnv.js";
+import { resolve_agent_env } from "@/agent/AgentEnv.js";
 import { findPluginByName } from "@/plugin/core/PluginCatalog.js";
 import type { JsonValue } from "@/types/common/Json.js";
 import type { Plugin } from "@/types/plugin/PluginDefinition.js";

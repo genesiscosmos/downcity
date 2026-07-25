@@ -9,7 +9,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { SessionApprovalBroker } from "../bin/session/approval/SessionApprovalBroker.js";
-import { JsonlSessionMessageStore } from "../bin/session/messages/JsonlSessionMessageStore.js";
+import { JsonlSessionMessageStore } from "../bin/workspace/store/JsonlSessionMessageStore.js";
 import { LocalFileSystem } from "../bin/workspace/LocalFileSystem.js";
 import { SessionMessages } from "../bin/session/SessionMessages.js";
 import { SessionEventHub } from "../bin/session/runtime/SessionEventHub.js";

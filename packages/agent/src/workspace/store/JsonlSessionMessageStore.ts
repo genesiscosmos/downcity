@@ -1,5 +1,5 @@
 /**
- * Session Message 的 Active + Segment JSONL 存储。
+ * Workspace Session Message 的 Active + Segment JSONL 存储。
  *
  * Active 保存上次 Compact 后产生的真实 Message；Compact 把 Active 前缀写入按
  * sequence 范围命名的不可变 Segment，并在 Segment 末尾追加累计 Summary footer。

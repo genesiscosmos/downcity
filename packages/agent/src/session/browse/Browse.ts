@@ -29,7 +29,7 @@ import {
   get_sdk_agent_session_messages_path,
   get_sdk_agent_session_meta_path,
   get_sdk_agent_sessions_root_dir_path,
-} from "@/store/LocalStorePaths.js";
+} from "@/workspace/store/LocalStorePaths.js";
 import { readSessionMetadataFromPath } from "@/session/storage/Metadata.js";
 import { to_executor_ui_message } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";

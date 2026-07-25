@@ -14,7 +14,7 @@ import type {
   CreateActionScheduleJobInput,
 } from "@/plugin/types/ActionSchedule.js";
 import { generateId } from "@/utils/Id.js";
-import { getDowncityScheduleDbPath } from "@/config/Paths.js";
+import { getDowncityScheduleDbPath } from "@/workspace/WorkspacePaths.js";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 
 type ActionScheduleJobEvent =

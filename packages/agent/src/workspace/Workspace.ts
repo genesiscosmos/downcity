@@ -16,7 +16,7 @@ import type { FileSystem } from "@/types/workspace/FileSystem.js";
 import { LocalFileSystem } from "@/workspace/LocalFileSystem.js";
 import type { WorkspaceOptions } from "@/types/workspace/Workspace.js";
 import type { AgentStore } from "@/types/store/AgentStore.js";
-import { LocalAgentStore } from "@/store/LocalAgentStore.js";
+import { LocalAgentStore } from "@/workspace/store/LocalAgentStore.js";
 
 /** 将调用方路径解析为稳定、真实的本地目录。 */
 function resolve_workspace_path(input: string): string {

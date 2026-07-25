@@ -1,5 +1,5 @@
 /**
- * Agent 配置域 `.gitignore` 维护模块。
+ * Workspace 初始化 `.gitignore` 维护模块。
  *
  * 职责说明（中文）
  * - 负责在 agent 项目初始化阶段把必要的忽略规则补进 `.gitignore`。

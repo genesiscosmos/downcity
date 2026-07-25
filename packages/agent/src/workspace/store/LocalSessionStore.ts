@@ -1,18 +1,18 @@
 /**
- * LocalSessionStore：单个本地 Session 的 JSONL 持久化视图。
+ * LocalSessionStore：Workspace 内单个 Session 的 JSONL 持久化视图。
  *
  * 职责说明（中文）
  * - 集中创建 Message Store，并封装 Metadata 与 Instruction 的物理路径。
  * - Session 领域只持有本对象，不再自行拼接任何存储路径。
  */
 
-import { JsonlSessionMessageStore } from "@/session/messages/JsonlSessionMessageStore.js";
+import { JsonlSessionMessageStore } from "@/workspace/store/JsonlSessionMessageStore.js";
 import {
   get_sdk_agent_session_instruction_path,
   get_sdk_agent_session_meta_path,
   get_sdk_agent_session_assistant_message_path,
   get_sdk_agent_session_messages_path,
-} from "@/store/LocalStorePaths.js";
+} from "@/workspace/store/LocalStorePaths.js";
 import { normalize_session_metadata } from "@/session/storage/Metadata.js";
 import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";

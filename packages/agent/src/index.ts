@@ -18,7 +18,7 @@ export type {
   SessionMessageStore,
   SessionStore,
 } from "./types/store/SessionStore.js";
-export { create_session_message_store } from "./store/SessionMessageStoreFactory.js";
+export { create_session_message_store } from "./workspace/store/SessionMessageStoreFactory.js";
 export type {
   FileSystem,
   WorkspaceDirectoryEntry,
@@ -245,19 +245,19 @@ export type {
 export {
   initializeAgentProject,
   normalizeDefaultAgentId,
-} from "./config/AgentInitializer.js";
+} from "./workspace/setup/AgentInitializer.js";
 export {
   load_project_dotenv,
   resolve_agent_env,
-} from "./config/AgentEnv.js";
+} from "./agent/AgentEnv.js";
 export {
   getPlatformStoreDbPath,
   getPlatformStoreKeyPath,
-} from "./config/PlatformPaths.js";
+} from "./platform/PlatformPaths.js";
 export {
   ensureRuntimeProjectReady,
-} from "./config/ProjectSetup.js";
-export { assertProjectExecutionTarget } from "./config/ExecutionBinding.js";
+} from "./workspace/setup/ProjectSetup.js";
+export { assertProjectExecutionTarget } from "./agent/ExecutionBinding.js";
 
 // 日志
 export { getLogger, type Logger } from "./utils/logger/Logger.js";

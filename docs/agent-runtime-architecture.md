@@ -8,6 +8,22 @@
 
 实现进度：Workspace 已统一提供 LocalFileSystem、AgentTools、AgentStore 与可选 Shell；SessionStore 领域边界和新的 Agent 构造 API 已实现。默认 Store 沿用 Workspace 内 `.downcity` JSONL 布局；SQLite 与 Plugin 进程隔离仍属于后续阶段。
 
+源码按职责直接表达领域边界：
+
+```text
+src/
+├─ agent/                 Agent facade、运行环境与执行绑定
+├─ platform/              Workspace 之外的系统级路径规则
+└─ workspace/
+   ├─ Workspace.ts        资源容器与生命周期
+   ├─ LocalFileSystem.ts  项目文件原子能力
+   ├─ WorkspacePaths.ts   Workspace 内部路径布局
+   ├─ setup/              项目初始化
+   └─ store/              Agent、Session 与 Message 本地持久化
+```
+
+`AgentEnv` 和 `ExecutionBinding` 属于 Agent 运行时；`PlatformPaths` 属于平台级路径；初始化、Workspace 路径和 Store 实现均属于 Workspace。共享协议类型仍统一放在 `src/types/`，不随实现目录移动。
+
 ## 1. 最终结论
 
 Downcity 当前是运行在本机 Node.js 进程中的 Agent SDK。Node.js 已经统一了 macOS、Linux、Windows 的常规文件、路径、网络和数据处理能力。Downcity 不需要额外的 `Host` 或 `SystemHandler`，但需要一个明确的 `Workspace`，将 Agent 可以访问的项目路径、文件能力和命令能力收敛到同一个安全作用域。

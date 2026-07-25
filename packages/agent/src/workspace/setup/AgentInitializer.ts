@@ -1,5 +1,5 @@
 /**
- * Agent 项目初始化模块。
+ * Agent Workspace 项目初始化模块。
  *
  * 职责说明（中文）
  * - CLI `downcity agent create` 与 Console 共用同一套初始化逻辑，避免模板与目录结构分叉。
@@ -25,11 +25,11 @@ import {
   getDowncityPublicDirPath,
   getDowncityResourcesDirPath,
   getDowncityTasksDirPath,
-} from "@/config/Paths.js";
-import { get_sdk_agents_root_dir_path } from "@/store/LocalStorePaths.js";
+} from "@/workspace/WorkspacePaths.js";
+import { get_sdk_agents_root_dir_path } from "@/workspace/store/LocalStorePaths.js";
 import type { EnvFileEntry } from "@/types/common/EnvFile.js";
-import { appendMissingEnvEntries } from "@/config/EnvFile.js";
-import { ensureGitignoreEntry } from "@/config/Gitignore.js";
+import { appendMissingEnvEntries } from "@/workspace/setup/EnvFile.js";
+import { ensureGitignoreEntry } from "@/workspace/setup/Gitignore.js";
 import { ensureDir } from "@/utils/storage/index.js";
 import type {
   AgentProjectChannel,
@@ -37,7 +37,7 @@ import type {
   AgentProjectInitializationResult,
 } from "@/types/config/AgentProject.js";
 import type { ExecutionBindingConfig } from "@/types/config/ExecutionBinding.js";
-import { assertProjectExecutionTarget } from "@/config/ExecutionBinding.js";
+import { assertProjectExecutionTarget } from "@/agent/ExecutionBinding.js";
 
 /**
  * 规范化默认 Agent ID。

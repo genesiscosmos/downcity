@@ -1,5 +1,5 @@
 /**
- * ProjectSetup：本地 Agent 启动前项目结构准备模块。
+ * ProjectSetup：本地 Workspace 启动前项目结构准备模块。
  *
  * 关键点（中文）
  * - 统一确保 `.downcity/*` 目录结构存在，避免调用方重复拼装目录逻辑。
@@ -16,8 +16,8 @@ import {
   getDowncityProfileDirPath,
   getDowncityPublicDirPath,
   getDowncityTasksDirPath,
-} from "@/config/Paths.js";
-import { get_sdk_agents_root_dir_path } from "@/store/LocalStorePaths.js";
+} from "@/workspace/WorkspacePaths.js";
+import { get_sdk_agents_root_dir_path } from "@/workspace/store/LocalStorePaths.js";
 
 /**
  * 确保 `.downcity` 运行目录结构完整。

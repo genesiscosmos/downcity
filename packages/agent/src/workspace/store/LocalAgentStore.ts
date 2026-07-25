@@ -1,5 +1,5 @@
 /**
- * LocalAgentStore：本地 Agent 领域数据入口。
+ * LocalAgentStore：Workspace 内本地 Agent 领域数据入口。
  *
  * 职责说明（中文）
  * - 统一管理 Session 创建判断、删除、列表、归档与清理。
@@ -17,13 +17,13 @@ import type {
 } from "@/types/agent/SessionTypes.js";
 import type { AgentStore } from "@/types/store/AgentStore.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
-import { LocalSessionStore } from "@/store/LocalSessionStore.js";
+import { LocalSessionStore } from "@/workspace/store/LocalSessionStore.js";
 import {
   get_sdk_agent_archived_session_dir_path,
   get_sdk_agent_archived_sessions_dir_path,
   get_sdk_agent_session_dir_path,
   get_sdk_agent_session_messages_dir_path,
-} from "@/store/LocalStorePaths.js";
+} from "@/workspace/store/LocalStorePaths.js";
 import {
   listArchivedAgentSessionSummaryPage,
   listAgentSessionSummaryPage,
