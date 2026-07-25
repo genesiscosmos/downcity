@@ -44,7 +44,8 @@ export interface AgentOptions {
    *
    * 关键点（中文）
    * - Workspace 统一持有项目根目录、文件/搜索能力与可选 Shell。
-   * - Workspace 的生命周期属于创建它的调用方，Agent dispose 不会关闭它。
+   * - 每个 Workspace 实例只能绑定一个 Agent，并由 Agent dispose 统一释放。
+   * - 多个 Agent 可以指向同一物理目录，但必须分别创建 Workspace 实例。
    */
   workspace: Workspace;
 

@@ -10,7 +10,6 @@ import type { UIMessage } from "ai";
 import { generateId } from "@/utils/Id.js";
 import { SessionAssistantMessageWriter } from "@/session/messages/SessionAssistantMessageWriter.js";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
-import { JsonlSessionMessageStore } from "@/session/messages/JsonlSessionMessageStore.js";
 import type { JsonObject } from "@/types/common/Json.js";
 import type {
   ListSessionMessagesInput,
@@ -58,13 +57,14 @@ import type {
   OpenSessionAssistantMessageInput,
   SessionMessagesOptions,
 } from "@/types/session/SessionMessages.js";
+import type { SessionMessageStore } from "@/types/store/SessionStore.js";
 
 export { SessionAssistantMessageWriter } from "@/session/messages/SessionAssistantMessageWriter.js";
 
 /** 唯一 Session Message 写入服务。 */
 export class SessionMessages {
   readonly session_id: string;
-  private readonly store: JsonlSessionMessageStore;
+  private readonly store: SessionMessageStore;
   private readonly publish: SessionMessagesOptions["publish"];
   private readonly messages_by_id = new Map<string, SessionMessage>();
   /** 按 Assistant Message 隔离的完整写事务链。 */

@@ -7,7 +7,6 @@
  * - Session 对象创建细节集中在这里，避免 facade 和 lifecycle 重复依赖 Session 构造逻辑。
  */
 
-import fs from "fs-extra";
 import { nanoid } from "nanoid";
 import type { Tool } from "ai";
 import type { AgentModel } from "@/agent/AgentModel.js";
@@ -30,27 +29,10 @@ import type {
 } from "@/types/agent/SessionActor.js";
 import type { AgentManagedSession } from "@/types/session/SessionOptions.js";
 import { Session } from "@/session/Session.js";
-import {
-  getSdkAgentArchivedSessionDirPath,
-  getSdkAgentArchivedSessionsDirPath,
-  getSdkAgentSessionDirPath,
-  getSdkAgentSessionMessagesDirPath,
-} from "@/session/storage/Paths.js";
-import {
-  listArchivedAgentSessionSummaryPage,
-  listAgentSessionSummaryPage,
-} from "@/session/browse/Browse.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import { createInstructionSystemBlocks } from "@/agent/AgentInstructions.js";
 import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.js";
-
-function decodeMaybe(input: string): string {
-  try {
-    return decodeURIComponent(input);
-  } catch {
-    return input;
-  }
-}
+import type { AgentStore } from "@/types/store/AgentStore.js";
 
 type AgentSessionsOptions = {
   /**
@@ -62,6 +44,9 @@ type AgentSessionsOptions = {
    * 当前项目根目录。
    */
   project_root: string;
+
+  /** 当前 Agent 独享的领域持久化入口。 */
+  store: AgentStore;
 
   /**
    * 当前 agent 默认工具集合。
@@ -104,6 +89,7 @@ type AgentSessionsOptions = {
 export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly agent_id: string;
   private readonly project_root: string;
+  private readonly store: AgentStore;
   private readonly tools: Record<string, Tool>;
   private readonly logger: Logger;
   private readonly get_instruction: AgentSessionsOptions["get_instruction"];
@@ -117,6 +103,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   constructor(options: AgentSessionsOptions) {
     this.agent_id = options.agent_id;
     this.project_root = options.project_root;
+    this.store = options.store;
     this.tools = options.tools;
     this.logger = options.logger;
     this.get_instruction = options.get_instruction;
@@ -195,13 +182,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     if (
       explicit_session_id &&
       (this.sessions_by_id.has(explicit_session_id) ||
-        (await fs.pathExists(
-          getSdkAgentSessionDirPath(
-            this.project_root,
-            this.agent_id,
-            explicit_session_id,
-          ),
-        )))
+        (await this.store.has_session(explicit_session_id)))
     ) {
       throw new Error(`Session "${explicit_session_id}" already exists`);
     }
@@ -220,14 +201,9 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     if (!resolved_session_id) {
       throw new Error("sessions.get requires a non-empty sessionId");
     }
-    const session_dir_path = getSdkAgentSessionDirPath(
-      this.project_root,
-      this.agent_id,
-      resolved_session_id,
-    );
     if (
       !this.sessions_by_id.has(resolved_session_id) &&
-      !(await fs.pathExists(session_dir_path))
+      !(await this.store.has_session(resolved_session_id))
     ) {
       throw new Error(`Session "${resolved_session_id}" not found`);
     }
@@ -254,13 +230,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     if (cached?.isExecuting()) {
       await cached.stop();
     }
-    const session_dir_path = getSdkAgentSessionDirPath(
-      this.project_root,
-      this.agent_id,
-      resolved_session_id,
-    );
-    const existed = await fs.pathExists(session_dir_path);
-    if (existed) await fs.remove(session_dir_path);
+    const existed = await this.store.remove_session(resolved_session_id);
     this.sessions_by_id.delete(resolved_session_id);
     return existed;
   }
@@ -277,13 +247,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     if (cached?.isExecuting()) {
       throw new Error(`Session "${resolved_session_id}" is currently executing`);
     }
-    const messages_dir_path = getSdkAgentSessionMessagesDirPath(
-      this.project_root,
-      this.agent_id,
-      resolved_session_id,
-    );
-    const existed = await fs.pathExists(messages_dir_path);
-    if (existed) await fs.remove(messages_dir_path);
+    const existed = await this.store.clear_session_messages(resolved_session_id);
     this.sessions_by_id.delete(resolved_session_id);
     return existed;
   }
@@ -294,12 +258,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async list(
     input?: AgentListSessionsInput,
   ): Promise<AgentSessionSummaryPage> {
-    return await listAgentSessionSummaryPage({
-      projectRoot: this.project_root,
-      agentId: this.agent_id,
+    return await this.store.list_sessions(
       input,
-      executingSessionIds: new Set(this.list_executing_session_ids()),
-    });
+      new Set(this.list_executing_session_ids()),
+    );
   }
 
   /**
@@ -318,37 +280,9 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       throw new Error(`Session "${session_id}" is currently executing`);
     }
 
-    const source_path = getSdkAgentSessionDirPath(
-      this.project_root,
-      this.agent_id,
-      session_id,
-    );
-    if (!(await fs.pathExists(source_path))) {
-      throw new Error(`Session "${session_id}" not found`);
-    }
-
-    const target_path = getSdkAgentArchivedSessionDirPath(
-      this.project_root,
-      this.agent_id,
-      session_id,
-    );
-    if (await fs.pathExists(target_path)) {
-      throw new Error(`Archived session "${session_id}" already exists`);
-    }
-
-    await fs.ensureDir(getSdkAgentArchivedSessionsDirPath(
-      this.project_root,
-      this.agent_id,
-    ));
-    await fs.move(source_path, target_path);
-
-    // 关键点（中文）：归档后清理缓存，避免后续操作访问已移动目录。
+    const result = await this.store.archive_session(session_id);
     this.sessions_by_id.delete(session_id);
-
-    return {
-      sessionId: session_id,
-      archivedAt: Date.now(),
-    };
+    return result;
   }
 
   /**
@@ -357,46 +291,14 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async archived(
     input?: AgentArchiveSessionsInput,
   ): Promise<AgentArchiveSessionsResult> {
-    return await listArchivedAgentSessionSummaryPage({
-      projectRoot: this.project_root,
-      agentId: this.agent_id,
-      input,
-    });
+    return await this.store.list_archived_sessions(input);
   }
 
   /**
    * 永久清空已归档 session。
    */
   async clean_archive(): Promise<AgentCleanArchiveResult> {
-    const archived_root = getSdkAgentArchivedSessionsDirPath(
-      this.project_root,
-      this.agent_id,
-    );
-    if (!(await fs.pathExists(archived_root))) {
-      return {
-        removedSessionIds: [],
-      };
-    }
-
-    const entries = await fs.readdir(archived_root, { withFileTypes: true });
-    const removed_session_ids: string[] = [];
-
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const session_id = decodeMaybe(entry.name);
-      if (!session_id) continue;
-      const session_path = getSdkAgentArchivedSessionDirPath(
-        this.project_root,
-        this.agent_id,
-        session_id,
-      );
-      await fs.remove(session_path);
-      removed_session_ids.push(session_id);
-    }
-
-    return {
-      removedSessionIds: removed_session_ids,
-    };
+    return await this.store.clean_archive();
   }
 
   private get_or_create_session(input?: {
@@ -414,6 +316,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const created = new this.SessionClass({
       agentId: this.agent_id,
       projectRoot: this.project_root,
+      store: this.store.session(resolved_session_id),
+      get_session_store: (session_id) => this.store.session(session_id),
       sessionId: resolved_session_id,
       tools: this.tools,
       logger: this.logger,

@@ -10,7 +10,18 @@
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
 export { Workspace } from "./workspace/Workspace.js";
-export type { FileSystem } from "./types/workspace/FileSystem.js";
+export type { AgentStore } from "./types/store/AgentStore.js";
+export type {
+  CompactActiveMessagesInput,
+  CompactActiveMessagesResult,
+  SessionMessageCommitState,
+  SessionMessageStore,
+  SessionStore,
+} from "./types/store/SessionStore.js";
+export type {
+  FileSystem,
+  WorkspaceDirectoryEntry,
+} from "./types/workspace/FileSystem.js";
 export type {
   WorkspaceOptions,
   WorkspaceResources,

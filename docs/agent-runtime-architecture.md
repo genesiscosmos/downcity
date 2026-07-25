@@ -1,12 +1,12 @@
 # Agent 本地 Runtime 架构设计
 
-> 状态：Proposal
+> 状态：Implemented（SQLite 与 Plugin 进程隔离除外）
 >
 > 范围：`@downcity/agent`、`@downcity/shell`、Session 持久化、跨平台执行和安全边界。
 >
 > 本文基于 2026-07-25 对 Codex、Anthropic Sandbox Runtime、OpenHands 与 VS Code 的公开源码调研形成，同时记录目标设计与实际迁移进度。
 
-实现进度：Workspace、LocalFileSystem、File/Search Tool 迁移、Shell 命令职责和新的 Agent 构造 API 已实现；AgentStore、SQLite 与 Plugin 进程隔离仍属于后续阶段。
+实现进度：Workspace 已统一提供 LocalFileSystem、AgentTools、AgentStore 与可选 Shell；SessionStore 领域边界和新的 Agent 构造 API 已实现。默认 Store 沿用 Workspace 内 `.downcity` JSONL 布局；SQLite 与 Plugin 进程隔离仍属于后续阶段。
 
 ## 1. 最终结论
 
@@ -16,12 +16,12 @@ Downcity 当前是运行在本机 Node.js 进程中的 Agent SDK。Node.js 已�
 
 ```text
 Agent
-├─ Workspace            项目资源与安全作用域
-│  ├─ path              当前本地项目根目录
-│  ├─ FileSystem        Node.js 跨平台文件能力
-│  └─ Shell?            命令、进程、PTY 与 Sandbox
-│     └─ Platform Sandbox Adapter
-└─ AgentStore           Agent / Session 领域持久化
+└─ Workspace            统一资源容器
+   ├─ FileSystem        Node.js 跨平台文件能力
+   │  ├─ AgentTools     模型可调用的文件与搜索工具
+   │  └─ AgentStore     结构化 Session 持久化
+   └─ Shell?            命令、进程、PTY 与 Sandbox
+      └─ Platform Sandbox Adapter
 ```
 
 公开 API 保持简单：
@@ -61,9 +61,9 @@ const agent = new Agent({
 | 模块 | 职责 | 不负责 |
 | --- | --- | --- |
 | `Agent` | 装配 Workspace、Tool、Plugin、Session 与 Store | 项目路径和平台 Sandbox 细节 |
-| `Workspace` | 统一项目路径、文件能力与可选 Shell | Session、Memory 和 Task 持久化 |
+| `Workspace` | 统一提供 FileSystem、AgentTools、AgentStore 与可选 Shell | Agent 和 Session 领域编排 |
 | `LocalFileSystem` | Workspace 范围内的安全文件操作 | Session 领域规则和命令执行 |
-| `AgentStore` | Session、Message、Memory 与 Task 持久化 | 项目文件和 Shell 命令 |
+| `AgentStore` | 基于 Workspace FileSystem 提供结构化 Session 持久化 | 通用文件 Tool 和 Shell 命令 |
 | `Shell` | Command、Shell Session、PTY、审批和 Sandbox | Session 历史与通用系统服务 |
 | `Sandbox Adapter` | 将统一策略映射到当前 OS | Agent 和 Session 业务 |
 
@@ -86,7 +86,7 @@ const agent = new Agent({
 ### 2.3 安全
 
 - 模型文件工具只能访问项目根目录。
-- Agent 私有 Session 历史默认不放在项目目录内。
+- Session 历史位于 Workspace `.downcity`，与其他项目资源使用同一访问边界。
 - Shell 子进程通过 OS Sandbox 强制限制。
 - Tool input 不能修改根目录、Store 路径或 Sandbox Policy。
 - 不可信 Plugin 不在 Agent Core 进程中运行。
@@ -163,14 +163,14 @@ Agent → Shell → SystemHandler → Files / Session / Logs / Cache
 
 当前 `Workspace` 只有本地 Node.js 实现。macOS、Linux 和 Windows 使用同一个类，只替换 Shell 的 Sandbox Adapter。它不是为了假设中的 Remote Workspace 提前设计的通用协议。
 
-### 4.4 Workspace 与 AgentStore 必须分离
+### 4.4 AgentStore 是 Workspace 的结构化分支
 
-- Workspace 是 Agent 操作的用户项目。
-- AgentStore 是 Agent 自身的私有领域数据。
-- 项目可以被删除或切换，Session 历史仍应保持明确生命周期。
-- 模型和 Shell 子进程不能因为拥有 Workspace 就获得 Store 访问权。
+- Workspace 是 Agent 可使用的统一资源容器。
+- AgentStore 与 AgentTools 共用相同的 FileSystem 和项目目录。
+- AgentTools 与 Shell 可以正常读取或修改 `.downcity` 中的历史、Instruction 和审计数据。
+- AgentStore 不是权限边界，只负责路径布局、Message sequence、Metadata、归档和崩溃恢复等领域语义。
 
-因此 Agent 分别持有 Workspace 与 AgentStore，Workspace 不包含 Store。
+因此 Store 由 Workspace 提供，创建 Agent 时不再单独注入 Store。
 
 ## 5. 公开项目参考
 
@@ -225,7 +225,7 @@ flowchart TD
     Agent --> Workspace
     Workspace --> Files["LocalFileSystem"]
     Workspace --> Shell["Shell"]
-    Agent --> Store["AgentStore"]
+    Workspace --> Store["AgentStore"]
     Agent --> Sessions["AgentSessions"]
 
     Sessions --> Session["Session"]
@@ -250,7 +250,7 @@ flowchart TD
 Agent → Workspace
 Workspace → LocalFileSystem
 Workspace → Shell
-Agent → AgentStore
+Workspace → AgentStore
 Shell → Sandbox Adapter
 Session → SessionStore
 ```
@@ -258,7 +258,7 @@ Session → SessionStore
 禁止：
 
 - Shell 依赖 Agent、Session 或 AgentStore。
-- Workspace 依赖 Agent、Session 或 AgentStore。
+- Workspace 依赖 Agent 或 Session。
 - AgentStore 依赖 Shell。
 - Session 直接调用 `node:fs`。
 - File Tool 通过 Shell command 读取普通文件。
@@ -274,9 +274,6 @@ interface AgentOptions {
 
   /** 当前 Agent 可以访问的项目资源边界。 */
   workspace: Workspace;
-
-  /** 可选领域 Store；省略时使用 LocalAgentStore。 */
-  store?: AgentStore;
 
   /** 当前 Agent 默认模型。 */
   model?: AgentModel;
@@ -319,6 +316,9 @@ class Workspace {
   /** 项目根目录内的受控文件能力。 */
   readonly files: FileSystem;
 
+  /** 唯一绑定指定 Agent，并基于当前 FileSystem 创建结构化 Store。 */
+  bind_agent(agent_id: string): AgentStore;
+
   /** 项目根目录内可选的受控命令能力。 */
   readonly shell?: Shell;
 
@@ -342,16 +342,7 @@ class Agent {
     this.id = require_agent_id(options.id);
     this.workspace = options.workspace;
 
-    this.store = options.store ?? new LocalAgentStore({
-      agent_id: this.id,
-      project_path: this.workspace.path,
-    });
-
-    if (this.workspace.shell) {
-      this.workspace.shell.protect_paths(
-        this.store.protected_paths(),
-      );
-    }
+    this.store = this.workspace.bind_agent(this.id);
 
     this.tools = {
       ...create_file_tools(this.workspace.files),
@@ -377,7 +368,7 @@ class Agent {
 
 - Workspace 只 canonicalize 一次项目根目录。
 - Workspace 保证 LocalFileSystem 与 Shell 共享同一个已解析 root。
-- Store 私有路径通过 `protected_paths` 加入 Shell deny-read policy。
+- AgentStore 与 AgentTools 共用 Workspace FileSystem 和根目录。
 - 模型不能控制任何装配参数。
 
 ## 9. LocalFileSystem
@@ -387,6 +378,18 @@ class Agent {
 ```ts
 /** 项目根目录内的受控文件能力。 */
 interface FileSystem {
+  /** 将 Workspace 相对路径解析为受控本地路径。 */
+  resolve_path(...segments: string[]): string;
+
+  /** 通过临时文件、fsync 与 rename 原子覆盖完整文件。 */
+  write_file_atomically(file_path: string, content: string | Buffer): Promise<void>;
+
+  /** 创建目录、扫描直接子项、删除或原子移动 Workspace 路径。 */
+  ensure_directory(directory_path: string): Promise<void>;
+  read_directory(directory_path: string): Promise<WorkspaceDirectoryEntry[]>;
+  remove_path(target_path: string): Promise<void>;
+  move_path(source_path: string, target_path: string): Promise<void>;
+
   /** 读取项目内文件并执行大小限制。 */
   read_file(
     path: ProjectPath,
@@ -575,9 +578,6 @@ interface AgentStore {
   /** 返回 Task 存储。 */
   tasks(): TaskStore;
 
-  /** 返回必须对 Shell 子进程隐藏的物理目录。 */
-  protected_paths(): string[];
-
   /** flush 并释放锁与数据库连接。 */
   dispose(): Promise<void>;
 }
@@ -605,10 +605,10 @@ interface SessionStore {
 
 ### 13.1 默认存储位置
 
-runtime 数据默认放在项目目录之外：
+runtime 数据位于当前 Workspace：
 
 ```text
-~/.downcity/agents/<encoded_agent_id>/
+.downcity/agents/<encoded_agent_id>/
 ├─ sessions/
 ├─ memory/
 ├─ tasks/
@@ -616,9 +616,7 @@ runtime 数据默认放在项目目录之外：
 └─ logs/
 ```
 
-项目中的 `.downcity/` 只保留需要随仓库迁移的公开配置，不保存模型不应读取的 Session 历史和密钥。
-
-Node.js 的 `node:os`、`node:path` 足以处理三个系统的默认目录。需要遵守系统标准目录时，可在 LocalAgentStore 内使用轻量 platform-path resolver，不向 Agent/Session 暴露。
+AgentStore 与 AgentTools 使用相同的 Workspace FileSystem。Store 不承担访问控制；模型和 Shell 可以像访问其他项目文件一样访问 `.downcity`。
 
 ### 13.2 Store 实现
 
@@ -698,7 +696,7 @@ JSONL 可以作为导入导出和审计格式，不必永久承担并发数据�
 
 - File Tool：可信实现、rooted FileSystem、路径校验。
 - Shell Tool：审批、Platform Sandbox、network policy。
-- AgentStore：位于项目外，并加入 Shell deny-read policy。
+- AgentStore：结构化状态接口，与 AgentTools 共用 rooted FileSystem。
 - 第三方 Plugin：独立 Plugin Host 和 OS Sandbox。
 
 ### 16.3 TOCTOU
@@ -725,9 +723,9 @@ JSONL 可以作为导入导出和审计格式，不必永久承担并发数据�
 所有权：
 
 ```text
-Application owns Workspace and Agent
-Workspace owns LocalFileSystem and optional Shell
-Agent references Workspace and owns AgentStore
+Application creates Agent and its exclusive Workspace
+Agent owns one Workspace instance
+Workspace owns LocalFileSystem, AgentStore and optional Shell
 Shell owns child processes and Sandbox Adapter
 ```
 
@@ -741,7 +739,7 @@ Shell owns child processes and Sandbox Adapter
 6. Workspace 关闭 Shell 的活动进程与 PTY。
 7. Workspace 释放 Shell Sandbox Adapter。
 
-默认由创建 Workspace 的 Application 负责调用 `workspace.dispose()`。多个 Agent 可以共享 Workspace，因此 Agent dispose 不得擅自关闭共享 Workspace。
+Workspace 实例与 Agent 严格一对一绑定，`agent.dispose()` 必须同时释放 Store、Shell 与 Sandbox。多个 Agent 可以操作同一物理目录，但必须分别创建 Workspace 实例，避免共享 PTY、审批状态和生命周期。
 
 所有 dispose 必须幂等。单步失败不能阻止其他资源清理，最终返回聚合错误。
 
@@ -824,10 +822,10 @@ Agent、Session 和 Tool 不解析 `ENOENT`、HRESULT 或平台错误文本。
 
 ### Phase 2：抽出 AgentStore
 
-- 定义 AgentStore、SessionStore。
-- Session 删除 project_root 和物理路径拼接。
-- JSONL 读写收敛到 LocalAgentStore。
-- runtime 数据迁移到用户级目录。
+- [x] 定义 AgentStore、SessionStore 与显式 SessionMessageStore contract。
+- [x] Session 的 Message、Metadata、Instruction 与归档不再拼接物理路径。
+- [x] JSONL 读写与既有目录约定收敛到 LocalAgentStore。
+- [ ] runtime 数据迁移到用户级目录。
 
 ### Phase 3：收敛 Shell
 
@@ -868,9 +866,9 @@ interface WorkspaceBackend {
 4. File/Search Tool 不依赖 Shell command protocol。
 5. Shell 不负责 Session Store、Memory 或普通文件服务。
 6. Session 不知道物理存储路径与格式。
-7. AgentStore 不暴露给模型和 Shell 子进程。
+7. AgentStore 与 AgentTools 共用 Workspace FileSystem；Store 不作为权限边界。
 8. Workspace 保证 LocalFileSystem 与 Shell 使用同一个 canonical project root。
-9. runtime 数据默认位于项目外，并进入 Shell deny-read policy。
+9. runtime 数据默认位于 Workspace `.downcity`，可由 AgentTools 与 Shell 访问。
 10. macOS、Linux、Windows 运行同一 Node.js contract tests。
 11. Platform Adapter 只处理原生 Sandbox 与进程差异。
 12. 不可信 Plugin 使用进程级强制隔离。
@@ -878,17 +876,21 @@ interface WorkspaceBackend {
 ## 23. 最终框架
 
 ```text
-new Workspace({ path, shell? })    new Agent({ id, workspace, store? })
-              │                                  │
-       ┌──────┴──────┐                    ┌──────┴──────┐
-       ▼             ▼                    ▼             ▼
-LocalFileSystem     Shell              Workspace    AgentStore
-       │             │                    │             │
-       ▼             ▼                    ▼             ▼
- File/Search   Sandbox Adapter          Tools      Session Store
-    Tools      macOS/Linux/Windows
+new Agent({ id, workspace })
+              │
+              ▼
+new Workspace({ path, shell? })
+       ┌──────┼─────────────┐
+       ▼      ▼             ▼
+ FileSystem  AgentTools    Shell
+       │                    │
+       ▼                    ▼
+ AgentStore          Sandbox Adapter
+       │              macOS/Linux/Windows
+       ▼
+ SessionStore
 ```
 
 最终原则：
 
-> Node.js 负责跨平台常规能力；Workspace 负责项目资源与安全作用域；Agent 负责领域装配；Store 负责持久化事实；Shell 只负责进程；Sandbox Adapter 只负责操作系统强制隔离。
+> Node.js 负责跨平台常规能力；Workspace 统一提供 Store、Tool 与 Shell 资源；Agent 负责领域装配；Store 只负责结构化持久化语义；Sandbox Adapter 只负责操作系统强制隔离。

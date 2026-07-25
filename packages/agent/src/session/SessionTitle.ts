@@ -12,11 +12,8 @@ import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.j
 import type { SessionRecordV1 } from "@/executor/types/SessionRecords.js";
 import { is_session_message_record } from "@/executor/types/SessionRecords.js";
 import type { Logger } from "@/utils/logger/Logger.js";
-import {
-  normalizeSessionTitle,
-  readSessionMetadata,
-  writeSessionMetadata,
-} from "@/session/storage/Metadata.js";
+import { normalizeSessionTitle } from "@/session/storage/Metadata.js";
+import type { SessionStore } from "@/types/store/SessionStore.js";
 
 const GENERATED_SESSION_TITLE_MAX_CHARS = 24;
 
@@ -24,15 +21,8 @@ const GENERATED_SESSION_TITLE_MAX_CHARS = 24;
  * 标题持久化参数。
  */
 export interface EnsureSessionTitleParams {
-  /**
-   * 当前项目根目录。
-   */
-  projectRoot: string;
-
-  /**
-   * 当前 agent 稳定标识。
-   */
-  agentId: string;
+  /** 当前 Session 的领域持久化入口。 */
+  store: SessionStore;
 
   /**
    * 当前 sessionId。
@@ -259,7 +249,7 @@ async function generateSessionTitle(input: {
 export async function ensureSessionTitle(
   input: EnsureSessionTitleParams,
 ): Promise<SessionHistoryMetaV1> {
-  const current = await readSessionMetadata(input);
+  const current = await input.store.read_metadata();
   if (current.title) return current;
 
   const firstUserText = resolveFirstUserText(input.messages);
@@ -294,11 +284,6 @@ export async function ensureSessionTitle(
     ...current,
     title: generatedTitle,
   };
-  await writeSessionMetadata({
-    projectRoot: input.projectRoot,
-    agentId: input.agentId,
-    sessionId: input.sessionId,
-    meta: generatedMeta,
-  });
+  await input.store.write_metadata(generatedMeta);
   return generatedMeta;
 }

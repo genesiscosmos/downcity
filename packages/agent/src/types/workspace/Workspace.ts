@@ -2,13 +2,14 @@
  * Workspace 公共类型。
  *
  * 关键点（中文）
- * - Workspace 是项目资源与安全作用域，不保存 Agent 的领域状态。
+ * - Workspace 是统一资源容器，同时提供 Store、Tool 与可选 Shell。
  * - 所有平台共用同一类型，平台差异由可选 Shell 的 Sandbox Adapter 处理。
  */
 
 import type { Tool } from "ai";
 import type { Shell } from "@downcity/shell";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
+import type { AgentStore } from "@/types/store/AgentStore.js";
 
 /** Workspace 构造参数。 */
 export interface WorkspaceOptions {
@@ -29,6 +30,9 @@ export interface WorkspaceResources {
 
   /** Workspace 内可用的文件、搜索与可选命令工具。 */
   readonly tools: Record<string, Tool>;
+
+  /** 将当前 Workspace 实例唯一绑定到指定 Agent，并返回其结构化 Store。 */
+  bind_agent(agent_id: string): AgentStore;
 
   /** Workspace 内可选的受控命令执行能力。 */
   readonly shell?: Shell;

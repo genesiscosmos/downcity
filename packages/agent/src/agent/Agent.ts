@@ -72,6 +72,7 @@ export class Agent {
     if (!this.id) throw new Error("Agent requires a non-empty id");
     if (!options.workspace) throw new Error("Agent requires a Workspace");
     this.workspace = options.workspace;
+    const store = this.workspace.bind_agent(this.id);
 
     this.SessionClass = options.Session;
     this.model = options.model;
@@ -91,6 +92,7 @@ export class Agent {
     this.sessions = new AgentSessions({
       agent_id: this.id,
       project_root: this.workspace.path,
+      store,
       tools: this.tools,
       logger: this.logger,
       get_instruction: () => this.instruction,
@@ -138,11 +140,19 @@ export class Agent {
    *
    * 关键点（中文）
    * - 关闭 plugin lifecycle 与 ActionSchedule 等 Agent 自有资源。
-   * - Workspace 由调用方持有，因此这里不会关闭共享 Shell。
+   * - Workspace 与 Agent 一对一绑定，因此这里同时关闭 Shell 与 Sandbox。
    * - 不负责任何 transport（RPC / HTTP）；transport 由 `@downcity/server` 自行管理。
    */
   async dispose(): Promise<void> {
-    await this.state.dispose();
+    try {
+      await this.state.dispose();
+    } finally {
+      try {
+        await this.logger.saveAllLogs();
+      } finally {
+        await this.workspace.dispose();
+      }
+    }
   }
 
   /**

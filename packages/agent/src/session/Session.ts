@@ -14,7 +14,6 @@ import {
   read_agent_model_context_window,
   type AgentModel,
 } from "@/agent/AgentModel.js";
-import { JsonlSessionMessageStore } from "@/session/messages/JsonlSessionMessageStore.js";
 import { SessionMessages } from "@/session/SessionMessages.js";
 import type {
   AgentSessionConfigSnapshot,
@@ -25,10 +24,6 @@ import type {
   AgentSessionSystemSnapshot,
 } from "@/types/agent/SessionTypes.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
-import {
-  getSdkAgentSessionAssistantMessagePath,
-  getSdkAgentSessionDirPath,
-} from "@/session/storage/Paths.js";
 import { resolveSystemTimezone } from "@/session/storage/Metadata.js";
 import { createRuntimeSessionPort } from "@/session/storage/RuntimeSessionPort.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
@@ -73,18 +68,13 @@ import { generateId } from "@/utils/Id.js";
 import { nanoid } from "nanoid";
 import { buildSessionInfo } from "@/session/browse/Browse.js";
 import { ensureSessionTitle } from "@/session/SessionTitle.js";
-import { readSessionMetadata } from "@/session/storage/Metadata.js";
-import {
-  has_session_instruction,
-  read_session_instruction,
-  write_session_instruction,
-} from "@/session/storage/Instruction.js";
 import { to_executor_history } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
 import type {
   SessionActionRecordInputV1,
   SessionActionRecordV1,
 } from "@/executor/types/SessionRecords.js";
+import type { SessionStore } from "@/types/store/SessionStore.js";
 
 /**
  * SDK 本地 Session。
@@ -94,12 +84,13 @@ export class Session implements AgentSession {
   readonly agentId: string;
 
   private readonly project_root: string;
+  private readonly store: SessionStore;
+  private readonly get_session_store: SessionOptions["get_session_store"];
   private readonly tools: Record<string, Tool>;
   private readonly logger: SessionOptions["logger"];
   private readonly get_managed_plugin_system_blocks: SessionOptions["getManagedPluginSystemBlocks"];
   private readonly ensure_configured_hook?: SessionOptions["ensureConfigured"];
   private readonly composer: SessionComposer;
-  private readonly message_store: JsonlSessionMessageStore;
   private readonly session_messages: SessionMessages;
   private readonly executor: Executor;
   private readonly events: SessionEventHub;
@@ -126,6 +117,8 @@ export class Session implements AgentSession {
     this.id = String(options.sessionId || "").trim();
     this.agentId = String(options.agentId || "").trim();
     this.project_root = String(options.projectRoot || "").trim();
+    this.store = options.store;
+    this.get_session_store = options.get_session_store;
     this.tools = options.tools;
     this.logger = options.logger;
     this.get_agent_env = options.getAgentEnv;
@@ -151,10 +144,9 @@ export class Session implements AgentSession {
     }
 
     this.events = new SessionEventHub();
-    this.message_store = this.create_message_store();
     this.session_messages = new SessionMessages({
       session_id: this.id,
-      store: this.message_store,
+      store: this.store.messages,
       publish: (mutation) => {
         this.events.publish(mutation);
       },
@@ -167,8 +159,8 @@ export class Session implements AgentSession {
     this.executor = this.create_executor();
     this.state = new SessionState({
       agent_id: this.agentId,
-      project_root: this.project_root,
       session_id: this.id,
+      store: this.store,
       messages: this.session_messages,
       state: this.local_state,
       logger: this.logger,
@@ -232,11 +224,7 @@ export class Session implements AgentSession {
   async syncshot(): Promise<void> {
     await this.run_system_mutation(async () => {
       await this.initialize_instruction();
-      const should_persist = await has_session_instruction({
-        project_root: this.project_root,
-        agent_id: this.agentId,
-        session_id: this.id,
-      });
+      const should_persist = await this.store.has_instruction();
       const run_context: SessionRunContext = {
         sessionId: this.id,
         injectedUserMessages: [],
@@ -413,20 +401,15 @@ export class Session implements AgentSession {
    */
   async get_info(): Promise<AgentSessionInfo> {
     const [metadata, snapshot] = await Promise.all([
-      readSessionMetadata({
-        projectRoot: this.project_root,
-        agentId: this.agentId,
-        sessionId: this.id,
-      }),
+      this.store.read_metadata(),
       this.session_messages.context_snapshot(),
     ]);
     const records = to_executor_history(this.id, snapshot);
     const metadata_with_title = metadata.title
       ? metadata
       : await ensureSessionTitle({
-          projectRoot: this.project_root,
-          agentId: this.agentId,
           sessionId: this.id,
+          store: this.store,
           messages: records,
           logger: this.logger,
         });
@@ -587,6 +570,8 @@ export class Session implements AgentSession {
     return this.create_child_session({
       agentId: this.agentId,
       projectRoot: this.project_root,
+      store: this.get_session_store(session_id),
+      get_session_store: this.get_session_store,
       sessionId: session_id,
       tools: this.tools,
       logger: this.logger,
@@ -621,11 +606,7 @@ export class Session implements AgentSession {
   private async initialize_instruction(): Promise<void> {
     if (!this.instruction_initialize_promise) {
       this.instruction_initialize_promise = (async () => {
-        const persisted_instruction = await read_session_instruction({
-          project_root: this.project_root,
-          agent_id: this.agentId,
-          session_id: this.id,
-        });
+        const persisted_instruction = await this.store.read_instruction();
         if (persisted_instruction === null) return;
 
         const instruction = persisted_instruction.trim();
@@ -652,24 +633,6 @@ export class Session implements AgentSession {
       })();
     }
     await this.instruction_initialize_promise;
-  }
-
-  private create_message_store(): JsonlSessionMessageStore {
-    const session_dir_path = getSdkAgentSessionDirPath(
-      this.project_root,
-      this.agentId,
-      this.id,
-    );
-    const messages_dir_path = `${session_dir_path}/messages`;
-    return new JsonlSessionMessageStore({
-      session_id: this.id,
-      file_path: `${messages_dir_path}/active.jsonl`,
-      assistant_message_file_path: getSdkAgentSessionAssistantMessagePath(
-        this.project_root,
-        this.agentId,
-        this.id,
-      ),
-    });
   }
 
   private create_local_state(): SessionLocalState {
@@ -789,12 +752,9 @@ export class Session implements AgentSession {
   private async write_system_snapshot(
     blocks: readonly AgentSessionSystemBlock[],
   ): Promise<void> {
-    await write_session_instruction({
-      project_root: this.project_root,
-      agent_id: this.agentId,
-      session_id: this.id,
-      instruction: blocks.map((block) => block.content).join("\n\n"),
-    });
+    await this.store.write_instruction(
+      blocks.map((block) => block.content).join("\n\n"),
+    );
   }
 
   /** 提交 Composer 生成的 Segment 压缩计划。 */

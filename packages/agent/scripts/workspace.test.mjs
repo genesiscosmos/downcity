@@ -29,7 +29,7 @@ test("Workspace exposes file tools without requiring Shell", async (t) => {
   assert.equal(agent.getShell(), undefined);
 });
 
-test("Agent dispose does not close a shared Workspace", async (t) => {
+test("Workspace binds one Agent and is disposed with it", async (t) => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-shared-"));
   t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
   let dispose_count = 0;
@@ -44,14 +44,29 @@ test("Agent dispose does not close a shared Workspace", async (t) => {
   };
   const workspace_path = await fs.realpath(root_path);
   const workspace = new Workspace({ path: root_path, shell });
-  const first_agent = new Agent({ id: "workspace-first", workspace });
-  const second_agent = new Agent({ id: "workspace-second", workspace });
+  const agent = new Agent({ id: "workspace-first", workspace });
+  assert.throws(
+    () => new Agent({ id: "workspace-second", workspace }),
+    /already bound to Agent "workspace-first"/,
+  );
+
+  await agent.dispose();
+  await agent.dispose();
+  assert.equal(dispose_count, 1);
+});
+
+test("separate Workspace instances may use the same directory", async (t) => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-directory-"));
+  t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
+  const first_agent = new Agent({
+    id: "workspace-directory-first",
+    workspace: new Workspace({ path: root_path }),
+  });
+  const second_agent = new Agent({
+    id: "workspace-directory-second",
+    workspace: new Workspace({ path: root_path }),
+  });
 
   await first_agent.dispose();
   await second_agent.dispose();
-  assert.equal(dispose_count, 0);
-
-  await workspace.dispose();
-  await workspace.dispose();
-  assert.equal(dispose_count, 1);
 });

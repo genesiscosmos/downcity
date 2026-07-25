@@ -16,40 +16,12 @@ import type {
   SessionSegmentSnapshot,
   SessionSegmentSummary,
 } from "@/types/session/SessionSegment.js";
-
-/** Active JSONL 存储构造参数。 */
-export interface JsonlSessionMessageStoreOptions {
-  /** 当前 Session 标识。 */
-  session_id: string;
-  /** active.jsonl 的绝对或相对路径。 */
-  file_path: string;
-  /** Assistant 运行中快照路径，默认与 active.jsonl 同目录。 */
-  assistant_message_file_path?: string;
-}
-
-/** 在写锁内计算新 Message 所需的状态。 */
-export interface SessionMessageCommitState {
-  /** 下一条真实 Message 的全局线性顺序。 */
-  message_sequence: number;
-  /** 当前 Active 与 Assistant 草稿组成的运行态 Message。 */
-  messages: SessionMessage[];
-}
-
-/** Compact 提交参数。 */
-export interface CompactActiveMessagesInput {
-  /** 移入新 Segment 的最后一条真实 Message sequence。 */
-  through_sequence: number;
-  /** 写在新 Segment 文件末尾的累计 Summary。 */
-  summary: SessionSegmentSummary;
-}
-
-/** Compact 提交结果。 */
-export interface CompactActiveMessagesResult {
-  /** 新创建的不可变 Segment。 */
-  segment: SessionSegmentSnapshot;
-  /** Compact 后继续留在 Active 的真实 Message。 */
-  active_messages: SessionMessage[];
-}
+import type {
+  CompactActiveMessagesInput,
+  CompactActiveMessagesResult,
+  SessionMessageCommitState,
+} from "@/types/store/SessionStore.js";
+import type { JsonlSessionMessageStoreOptions } from "@/types/store/LocalStore.js";
 
 const SEGMENT_FILE_PATTERN = /^(\d+)-(\d+)\.jsonl$/;
 const SEQUENCE_FILE_WIDTH = 12;

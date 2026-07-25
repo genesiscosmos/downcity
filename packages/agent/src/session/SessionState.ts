@@ -11,13 +11,7 @@ import {
   inferAgentModelLabel,
   read_agent_model_context_window,
 } from "@/agent/AgentModel.js";
-import {
-  patchSessionModelLabel,
-  readSessionMetadata,
-  resolveSystemTimezone,
-  writeSessionMetadata,
-} from "@/session/storage/Metadata.js";
-import { touchSessionMetadata } from "@/session/storage/Metadata.js";
+import { resolveSystemTimezone } from "@/session/storage/Metadata.js";
 import { ensureSessionTitle } from "@/session/SessionTitle.js";
 import type {
   AgentSessionConfigSnapshot,
@@ -35,14 +29,15 @@ import type {
   SessionSetOptions,
   SessionStateOptions,
 } from "@/types/session/SessionState.js";
+import type { SessionStore } from "@/types/store/SessionStore.js";
 
 /**
  * 本地 Session 配置与 Metadata 状态管理器。
  */
 export class SessionState {
   private readonly agent_id: string;
-  private readonly project_root: string;
   private readonly session_id: string;
+  private readonly store: SessionStore;
   private readonly messages: SessionMessages;
   private readonly state: SessionLocalState;
   private readonly logger: Logger;
@@ -52,8 +47,8 @@ export class SessionState {
 
   constructor(options: SessionStateOptions) {
     this.agent_id = options.agent_id;
-    this.project_root = options.project_root;
     this.session_id = options.session_id;
+    this.store = options.store;
     this.messages = options.messages;
     this.state = options.state;
     this.logger = options.logger;
@@ -94,27 +89,18 @@ export class SessionState {
       return;
     }
     this.state.initialize_promise = (async () => {
-      const metadata = await readSessionMetadata({
-        projectRoot: this.project_root,
-        agentId: this.agent_id,
-        sessionId: this.session_id,
-      });
+      const metadata = await this.store.read_metadata();
       const created_at =
         typeof metadata.createdAt === "number" ? metadata.createdAt : Date.now();
       const timezone =
         typeof metadata.timezone === "string" && metadata.timezone.trim()
           ? metadata.timezone.trim()
           : resolveSystemTimezone();
-      await writeSessionMetadata({
-        projectRoot: this.project_root,
+      await this.store.write_metadata({
+        ...metadata,
         agentId: this.agent_id,
-        sessionId: this.session_id,
-        meta: {
-          ...metadata,
-          agentId: this.agent_id,
-          createdAt: created_at,
-          timezone,
-        },
+        createdAt: created_at,
+        timezone,
       });
       this.state.created_at = created_at;
       this.state.timezone = timezone;
@@ -191,11 +177,12 @@ export class SessionState {
       next_config.model_context_window =
         read_agent_model_context_window(next_model);
     }
-    await patchSessionModelLabel({
-      projectRoot: this.project_root,
+    const metadata = await this.store.read_metadata();
+    await this.store.write_metadata({
+      ...metadata,
       agentId: this.agent_id,
-      sessionId: this.session_id,
-      model: next_config.model,
+      updatedAt: Date.now(),
+      ...(next_model_label ? { modelLabel: next_model_label } : {}),
     });
     this.state.session_config = next_config;
 
@@ -241,14 +228,17 @@ export class SessionState {
     const preview_text = resolve_message_preview(
       stats.latest_message || undefined,
     ).slice(0, 180);
-    await touchSessionMetadata({
-      projectRoot: this.project_root,
+    const metadata = await this.store.read_metadata();
+    await this.store.write_metadata({
+      ...metadata,
       agentId: this.agent_id,
-      sessionId: this.session_id,
-      sessionConfig: this.state.session_config,
-      message_count: stats.message_count,
-      history_bytes: stats.history_bytes,
-      ...(preview_text ? { preview_text } : {}),
+      updatedAt: Date.now(),
+      ...(this.state.session_config.modelLabel
+        ? { modelLabel: this.state.session_config.modelLabel }
+        : {}),
+      messageCount: stats.message_count,
+      historyBytes: stats.history_bytes,
+      ...(preview_text ? { previewText: preview_text } : {}),
     });
   }
 
@@ -265,16 +255,11 @@ export class SessionState {
       this.session_id,
       await this.messages.context_snapshot(),
     );
-    const before_metadata = await readSessionMetadata({
-      projectRoot: this.project_root,
-      agentId: this.agent_id,
-      sessionId: this.session_id,
-    });
+    const before_metadata = await this.store.read_metadata();
     const before_title = String(before_metadata.title || "").trim();
     const next_metadata = await ensureSessionTitle({
-      projectRoot: this.project_root,
-      agentId: this.agent_id,
       sessionId: this.session_id,
+      store: this.store,
       messages,
       ...(input?.generate
         ? {

@@ -11,15 +11,16 @@ import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import type { SessionMutation } from "@/types/session/SessionMutation.js";
 import type { SessionQueueCommand } from "@/types/session/SessionQueue.js";
 import type { Logger } from "@/utils/logger/Logger.js";
+import type { SessionStore } from "@/types/store/SessionStore.js";
 
 /** SessionState 构造参数。 */
 export interface SessionStateOptions {
   /** 当前 Agent 的稳定标识。 */
   agent_id: string;
-  /** 当前项目的绝对根目录。 */
-  project_root: string;
   /** 当前 Session 的稳定标识。 */
   session_id: string;
+  /** 当前 Session 独享的领域持久化视图。 */
+  store: SessionStore;
   /** 当前 Session 的 canonical Message 入口。 */
   messages: SessionMessages;
   /** 当前 Session 的可变内存状态。 */

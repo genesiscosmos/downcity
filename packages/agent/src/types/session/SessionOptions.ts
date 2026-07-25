@@ -16,6 +16,7 @@ import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.j
 import type { AgentSessionCommand } from "@/types/session/SessionQueue.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { Logger } from "@/utils/logger/Logger.js";
+import type { SessionStore } from "@/types/store/SessionStore.js";
 
 /**
  * Agent 可管理的本地 Session 实例。
@@ -57,6 +58,12 @@ export interface SessionOptions {
    * 当前项目根目录。
    */
   projectRoot: string;
+
+  /** 当前 Session 独享的领域持久化视图。 */
+  store: SessionStore;
+
+  /** 为 fork 创建另一个 Session 的领域持久化视图。 */
+  get_session_store: (session_id: string) => SessionStore;
 
   /**
    * 当前 sessionId。
