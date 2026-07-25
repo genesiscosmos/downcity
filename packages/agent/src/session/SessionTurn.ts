@@ -21,7 +21,7 @@ import type {
   AgentSessionTurnHandle,
   AgentSessionTurnResult,
 } from "@/types/sdk/AgentSessionTurn.js";
-import { extractTextFromParts, extractTextFromUiMessage } from "@/executor/messages/UIMessageTransformer.js";
+import { extract_text_from_parts, extract_text_from_ui_message } from "@/executor/messages/UIMessageTransformer.js";
 import type { Executor } from "@/executor/Executor.js";
 import { is_agent_session_prompt_input_empty } from "@/types/sdk/AgentSessionPrompt.js";
 import type { SessionRunResult } from "@/executor/types/SessionRun.js";
@@ -499,7 +499,7 @@ export class SessionTurn {
     const query = input.prompt_input.query;
     const executor_query = typeof query === "string"
       ? query
-      : extractTextFromParts(query);
+      : extract_text_from_parts(query);
     this.active_run_context = run_context;
     this.request_active_history_reload = () => {
       history_reload_requested = true;
@@ -565,7 +565,7 @@ export class SessionTurn {
     }
     return {
       text: result.assistant_message
-        ? extractTextFromUiMessage(result.assistant_message)
+        ? extract_text_from_ui_message(result.assistant_message)
         : "",
       success: result.success,
       ...(result.assistant_message

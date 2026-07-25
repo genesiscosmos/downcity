@@ -14,6 +14,6 @@
  * - 返回值适合直接插入 `new RegExp(...)` 的模式字符串。
  * - 不会自动添加边界、分组或 flags。
  */
-export function escapeRegExp(input: string): string {
+export function escape_reg_exp(input: string): string {
   return String(input || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

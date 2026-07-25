@@ -19,6 +19,13 @@ const package_root = path.resolve(
 );
 
 const public_declaration_files = [
+  "agent/Agent.d.ts",
+  "agent/AgentSessions.d.ts",
+  "remote/RemoteAgent.d.ts",
+  "remote/RemoteSession.d.ts",
+  "session/Session.d.ts",
+  "workspace/Workspace.d.ts",
+  "plugin/core/PluginRegistry.d.ts",
   "types/agent/AgentOptions.d.ts",
   "types/agent/SessionActor.d.ts",
   "types/agent/SessionTypes.d.ts",
@@ -37,6 +44,7 @@ const public_declaration_files = [
   "types/plugin/PluginRunContext.d.ts",
   "types/plugin/PluginSetup.d.ts",
   "plugin/types/ActionSchedule.d.ts",
+  "types/rpc/RpcProtocol.d.ts",
 ];
 
 /** 删除声明文件注释，避免示例文本参与标识符检查。 */
@@ -72,4 +80,30 @@ test("Agent SDK root exports do not expose camelCase functions", () => {
   ].map((match) => match[1]);
 
   assert.deepEqual([...new Set(camel_function_exports)], []);
+});
+
+test("Agent internal module exports use snake_case function names", () => {
+  const source_root = path.join(package_root, "src");
+  const failures = [];
+  const camel_export_pattern =
+    /^export\s+(?:async\s+)?function\s+([a-z][A-Za-z0-9_]*[A-Z][A-Za-z0-9_]*)\b/gm;
+
+  /** 递归扫描 Agent 源码，覆盖未从根入口暴露的内部模块 API。 */
+  function visit(directory) {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const absolute_path = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(absolute_path);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.endsWith(".ts")) continue;
+      const content = strip_comments(fs.readFileSync(absolute_path, "utf8"));
+      for (const match of content.matchAll(camel_export_pattern)) {
+        failures.push(`${path.relative(source_root, absolute_path)}: ${match[1]}`);
+      }
+    }
+  }
+
+  visit(source_root);
+  assert.deepEqual(failures, []);
 });

@@ -14,29 +14,29 @@ import {
   type StepResult,
   type Tool,
 } from "ai";
-import { logAssistantMessageNow } from "@executor/messages/SessionMessageLog.js";
+import { log_assistant_message_now } from "@executor/messages/SessionMessageLog.js";
 import {
   MAX_INCOMPLETE_RESPONSE_RECOVERIES,
   MAX_TEXT_ONLY_CONTINUATIONS,
   MAX_TOOL_LOOP_STEPS,
-  buildIncompleteResponseRecoveryNudge,
-  buildTextOnlyContinuationNudge,
-  detectIncompleteResponse,
-  detectTextOnlyContinuationReason,
-  mergeAssistantUiMessages,
-  summarizeStepForDebug,
-  summarizeUiMessageForDebug,
-  toInlinePreview,
+  build_incomplete_response_recovery_nudge,
+  build_text_only_continuation_nudge,
+  detect_incomplete_response,
+  detect_text_only_continuation_reason,
+  merge_assistant_ui_messages,
+  summarize_step_for_debug,
+  summarize_ui_message_for_debug,
+  to_inline_preview,
 } from "@executor/core-engine/CoreEngineSignals.js";
 import {
-  evaluateCoreEngineLoopDecision,
-  shouldContinueForTailMergedUserMessages,
+  evaluate_core_engine_loop_decision,
+  should_continue_for_tail_merged_user_messages,
 } from "@executor/core-engine/CoreEngineLoopDecision.js";
 import {
-  resolveEffectiveCoreEngineError,
-  summarizeStreamError,
+  resolve_effective_core_engine_error,
+  summarize_stream_error,
 } from "@executor/core-engine/CoreEngineError.js";
-import { collectFinalAssistantMessageFromUiStream } from "@executor/core-engine/CoreEngineUiStreamCollector.js";
+import { collect_final_assistant_message_from_ui_stream } from "@executor/core-engine/CoreEngineUiStreamCollector.js";
 import { CoreEngineMessageState } from "@executor/core-engine/CoreEngineMessageState.js";
 import {
   deep_compact_model_messages,
@@ -201,7 +201,7 @@ export class CoreEngineRunner {
       let total_tool_result_count = 0;
       const on_step_finish = async (step_result: unknown): Promise<void> => {
         step_count += 1;
-        const summary = summarizeStepForDebug(step_result);
+        const summary = summarize_step_for_debug(step_result);
         total_tool_call_count +=
           typeof summary.toolCallCount === "number" ? summary.toolCallCount : 0;
         total_tool_result_count +=
@@ -316,13 +316,13 @@ export class CoreEngineRunner {
               last_observed_stream_error = error;
               await this.logger.log("error", "[agent] stream.error", {
                 session_id: session_id,
-                ...summarizeStreamError(error),
+                ...summarize_stream_error(error),
               });
             },
           });
 
           step_assistant_ui_message =
-            await collectFinalAssistantMessageFromUiStream({
+            await collect_final_assistant_message_from_ui_stream({
               result,
               session_id: session_id,
               logger: this.logger,
@@ -339,7 +339,7 @@ export class CoreEngineRunner {
           }
           canonical_step_finished = true;
 
-          final_assistant_ui_message = mergeAssistantUiMessages(
+          final_assistant_ui_message = merge_assistant_ui_messages(
             final_assistant_ui_message,
             step_assistant_ui_message,
           );
@@ -383,7 +383,7 @@ export class CoreEngineRunner {
               compactDepth: compact_depth,
               previousMessageCount: previous_message_count,
               nextMessageCount: message_state.modelMessages.length,
-              ...summarizeStreamError(compact_error),
+              ...summarize_stream_error(compact_error),
             });
             continue;
           }
@@ -420,13 +420,13 @@ export class CoreEngineRunner {
           });
         }
 
-        const incomplete_response = detectIncompleteResponse({
+        const incomplete_response = detect_incomplete_response({
           step_result: last_step,
           assistant_message: step_assistant_ui_message,
         });
         const text_only_continuation_reason =
-          detectTextOnlyContinuationReason(last_step);
-        const loop_decision = evaluateCoreEngineLoopDecision({
+          detect_text_only_continuation_reason(last_step);
+        const loop_decision = evaluate_core_engine_loop_decision({
           hasIncompleteResponse: incomplete_response !== null,
           incompleteRecoveryCount: incomplete_response_recovery_count,
           maxIncompleteRecoveries: MAX_INCOMPLETE_RESPONSE_RECOVERIES,
@@ -452,7 +452,7 @@ export class CoreEngineRunner {
           toolCallCount: last_step.toolCalls.length,
           toolResultCount: last_step.toolResults.length,
           finishReason: last_step.finishReason,
-          textPreview: toInlinePreview(last_step.text),
+          textPreview: to_inline_preview(last_step.text),
         });
 
         if (
@@ -469,7 +469,7 @@ export class CoreEngineRunner {
           });
           const recovery_message = build_internal_user_message({
             session_id,
-            text: buildIncompleteResponseRecoveryNudge(
+            text: build_incomplete_response_recovery_nudge(
               incomplete_response_recovery_count,
             ),
             extra: {
@@ -511,7 +511,7 @@ export class CoreEngineRunner {
           incomplete_response_recovery_count = 0;
           const continuation_message = build_internal_user_message({
             session_id,
-            text: buildTextOnlyContinuationNudge(text_only_continuation_count),
+            text: build_text_only_continuation_nudge(text_only_continuation_count),
             extra: {
               internal: "agent_loop_auto_continue",
               reason: text_only_continuation_reason,
@@ -527,7 +527,7 @@ export class CoreEngineRunner {
           ? 1
           : 0;
         if (
-          shouldContinueForTailMergedUserMessages({
+          should_continue_for_tail_merged_user_messages({
             mergedUserMessageCount: tail_merged_message_count,
           })
         ) {
@@ -561,9 +561,9 @@ export class CoreEngineRunner {
 
       await this.logger.log("info", "[agent] final.message", {
         session_id: session_id,
-        ...summarizeUiMessageForDebug(final_message),
+        ...summarize_ui_message_for_debug(final_message),
       });
-      await logAssistantMessageNow(this.logger, final_message);
+      await log_assistant_message_now(this.logger, final_message);
 
       const duration = Date.now() - start_time;
       await this.logger.log("info", "[agent] finish", {
@@ -611,7 +611,7 @@ export class CoreEngineRunner {
         throw error;
       }
 
-      const error_text = resolveEffectiveCoreEngineError({
+      const error_text = resolve_effective_core_engine_error({
         error,
         streamError: last_observed_stream_error,
       });

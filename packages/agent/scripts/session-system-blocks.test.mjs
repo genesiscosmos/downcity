@@ -9,11 +9,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createInstructionSystemBlocks } from "../bin/agent/AgentInstructions.js";
+import { create_instruction_system_blocks } from "../bin/agent/AgentInstructions.js";
 import { build_session_system_blocks } from "../bin/session/SessionSystem.js";
 
 test("instruction blocks keep Downcity core after custom instruction", () => {
-  const blocks = createInstructionSystemBlocks(
+  const blocks = create_instruction_system_blocks(
     ["你是这个项目的工程 agent。"],
     "/tmp/downcity-project",
   );
@@ -44,7 +44,7 @@ test("session system blocks are ordered as instruction, core, plugin, session", 
     created_at: Date.UTC(2026, 6, 9, 8, 0, 0),
     timezone: "Asia/Shanghai",
     get_instruction_system_blocks: () =>
-      createInstructionSystemBlocks(
+      create_instruction_system_blocks(
         ["使用中文回复。"],
         "/tmp/downcity-project",
       ),

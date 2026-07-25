@@ -139,7 +139,7 @@ async function hydrateFileUrlPartStrict(
  * - 已经是 data URL 或远程 URL 的附件保持原样。
  * - 本地文件读取失败时直接报错，避免模型请求拿到不可访问的本地路径。
  */
-export async function hydrateUserPromptFileParts(
+export async function hydrate_user_prompt_file_parts(
   parts: SessionUserMessagePart[],
   project_root?: string,
 ): Promise<SessionUserMessagePart[]> {
@@ -173,7 +173,7 @@ export async function hydrateUserPromptFileParts(
  * - 该函数只修改本轮内存消息，不回写历史。
  * - 新历史保留 Agent 根目录相对路径，旧历史的 `file://` 仍继续兼容。
  */
-export async function hydrateFileUrlPartsForModel(
+export async function hydrate_file_url_parts_for_model(
   messages: SessionMessageRecordV1[],
   project_root?: string,
 ): Promise<SessionMessageRecordV1[]> {
@@ -208,7 +208,7 @@ export async function hydrateFileUrlPartsForModel(
 /**
  * 在 user 消息上注入 FileUIPart，以便多模态模型直接消费本地附件。
  */
-export async function injectFilePartsFromAttachments(
+export async function inject_file_parts_from_attachments(
   messages: SessionMessageRecordV1[],
   project_root?: string,
 ): Promise<SessionMessageRecordV1[]> {

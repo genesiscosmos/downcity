@@ -17,8 +17,8 @@ import type {
   CreatePluginToolsOptions,
 } from "@/types/plugin/PluginToolRuntime.js";
 import {
-  invokePluginCallTool,
-  invokePluginReadTool,
+  invoke_plugin_call_tool,
+  invoke_plugin_read_tool,
 } from "./PluginToolBridge.js";
 import {
   plugin_call_input_schema,
@@ -46,13 +46,13 @@ function require_run_context(
 /**
  * 创建 `plugin_call`：调用当前 Agent 已注册 plugin action。
  */
-export function createPluginCallTool(options: CreatePluginToolsOptions) {
+export function create_plugin_call_tool(options: CreatePluginToolsOptions) {
   return tool({
     description:
       "Call a registered agent plugin action. Use plugin_read first when you need the action list, input schema, or examples. Generated files may be attached to the final assistant message automatically.",
     inputSchema: plugin_call_input_schema,
     execute: async (input, execution_options) =>
-      await invokePluginCallTool({
+      await invoke_plugin_call_tool({
         plugins: options.plugins,
         run_context: require_run_context(execution_options),
         input: input as PluginCallInput,
@@ -63,13 +63,13 @@ export function createPluginCallTool(options: CreatePluginToolsOptions) {
 /**
  * 创建 `plugin_read`：读取当前 Agent 已注册 plugin / action metadata。
  */
-export function createPluginReadTool(options: CreatePluginToolsOptions) {
+export function create_plugin_read_tool(options: CreatePluginToolsOptions) {
   return tool({
     description:
       "Read registered agent plugin metadata, including action names, descriptions, input schemas, and examples. Use this before plugin_call when the payload shape is unclear.",
     inputSchema: plugin_read_input_schema,
     execute: async (input, execution_options) =>
-      await invokePluginReadTool({
+      await invoke_plugin_read_tool({
         plugins: options.plugins,
         run_context: require_run_context(execution_options),
         input: input as PluginReadInput,
@@ -80,11 +80,11 @@ export function createPluginReadTool(options: CreatePluginToolsOptions) {
 /**
  * 创建当前 Agent 专属 Plugin 工具集合。
  */
-export function createPluginTools(
+export function create_plugin_tools(
   options: CreatePluginToolsOptions,
 ): AgentPluginTools {
   return {
-    plugin_call: createPluginCallTool(options),
-    plugin_read: createPluginReadTool(options),
+    plugin_call: create_plugin_call_tool(options),
+    plugin_read: create_plugin_read_tool(options),
   };
 }

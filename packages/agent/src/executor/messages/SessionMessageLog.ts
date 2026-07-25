@@ -14,7 +14,7 @@ import type { SessionMessageRecordV1 } from "@/executor/types/SessionRecords.js"
 /**
  * 从 UI message 中提取 assistant 文本部分。
  */
-export function extractAssistantTextForLog(
+export function extract_assistant_text_for_log(
   message: SessionMessageRecordV1,
 ): string {
   if (!Array.isArray(message.parts)) return "";
@@ -28,11 +28,11 @@ export function extractAssistantTextForLog(
 /**
  * 立即输出 assistant 文本日志。
  */
-export async function logAssistantMessageNow(
+export async function log_assistant_message_now(
   logger: Logger,
   message: SessionMessageRecordV1,
 ): Promise<void> {
-  const text = extractAssistantTextForLog(message) || "-";
+  const text = extract_assistant_text_for_log(message) || "-";
   const normalized = text.replace(/\r\n/g, "\n");
   const lines = normalized.split("\n");
   const out = [`[assistant] ${lines[0] || "-"}`];

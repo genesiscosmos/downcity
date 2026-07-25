@@ -15,7 +15,7 @@ import type { AgentOptions } from "@/types/agent/AgentOptions.js";
 import type { Shell } from "@downcity/shell";
 import type { Workspace } from "@/workspace/Workspace.js";
 import { Logger } from "@/utils/logger/Logger.js";
-import { normalizeInstructionInput } from "@/agent/AgentInstructions.js";
+import { normalize_instruction_input } from "@/agent/AgentInstructions.js";
 import { AgentSessions } from "@/agent/AgentSessions.js";
 import { AgentState } from "@/agent/AgentState.js";
 import { generate_id } from "@/utils/Id.js";
@@ -138,7 +138,7 @@ export class Agent {
     register_agent_tools(this.tools, custom_tools, "AgentOptions.tools");
     this.logger = new Logger();
     this.logger.bind_workspace(this.workspace.files);
-    this.instruction = normalizeInstructionInput(options.instruction);
+    this.instruction = normalize_instruction_input(options.instruction);
     const store = this.workspace.bind_agent(this.id);
 
     this.sessions = new AgentSessions({
@@ -225,7 +225,7 @@ export class Agent {
    * 更新当前 SDK Agent 的静态基础指令。
    */
   set_instruction(input: string | string[]): void {
-    const next_instruction = normalizeInstructionInput(input);
+    const next_instruction = normalize_instruction_input(input);
     this.instruction.splice(0, this.instruction.length, ...next_instruction);
   }
 

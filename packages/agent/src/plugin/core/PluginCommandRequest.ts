@@ -10,7 +10,7 @@
 import type { JsonValue } from "@/types/common/Json.js";
 import type { PluginActionScheduleInput } from "@/plugin/types/ActionSchedule.js";
 import {
-  normalizeRunAtMsOrThrow,
+  normalize_run_at_ms_or_throw,
   parse_action_schedule_run_at_ms_or_throw,
 } from "@/plugin/core/ActionScheduleTime.js";
 
@@ -61,7 +61,7 @@ function readScheduleInput(
   }
   if (nestedRunAtMs !== undefined) {
     return {
-      run_at_ms: normalizeRunAtMsOrThrow(
+      run_at_ms: normalize_run_at_ms_or_throw(
         nestedRunAtMs as string | number | undefined,
         "schedule.run_at_ms",
       ),

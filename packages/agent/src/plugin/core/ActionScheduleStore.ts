@@ -14,7 +14,7 @@ import type {
   CreateActionScheduleJobInput,
 } from "@/plugin/types/ActionSchedule.js";
 import { generate_id } from "@/utils/Id.js";
-import { getDowncityScheduleDbPath } from "@/workspace/WorkspacePaths.js";
+import { get_downcity_schedule_db_path } from "@/workspace/WorkspacePaths.js";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 
 type ActionScheduleJobEvent =
@@ -139,7 +139,7 @@ export class ActionScheduleStore {
 
   constructor(files: FileSystem) {
     this.files = files;
-    this.file_path = getDowncityScheduleDbPath(files.root_path);
+    this.file_path = get_downcity_schedule_db_path(files.root_path);
     this.lock_path = `${this.file_path}.lock`;
   }
 

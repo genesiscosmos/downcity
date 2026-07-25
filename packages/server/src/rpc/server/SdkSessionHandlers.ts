@@ -116,7 +116,7 @@ export async function handleSdkSessionRpcRequest(params: {
       const unsubscribe = session.subscribe((event) => {
         write_event({
           type: "event",
-          subscriptionId: subscription_id,
+          subscription_id: subscription_id,
           event,
         });
       });
@@ -124,14 +124,14 @@ export async function handleSdkSessionRpcRequest(params: {
         session_id: request.params.session_id,
         unsubscribe,
       });
-      write_success(request.id, { subscriptionId: subscription_id });
+      write_success(request.id, { subscription_id: subscription_id });
       return true;
     }
     case "sdk.sessions.unsubscribe": {
-      const subscription = subscriptions.get(request.params.subscriptionId);
+      const subscription = subscriptions.get(request.params.subscription_id);
       if (subscription) {
         subscription.unsubscribe();
-        subscriptions.delete(request.params.subscriptionId);
+        subscriptions.delete(request.params.subscription_id);
       }
       write_success(request.id, { unsubscribed: true });
       return true;

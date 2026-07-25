@@ -13,7 +13,7 @@ import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
 import type { AgentStateOptions } from "@/types/agent/AgentState.js";
 import {
-  startActionScheduleRuntime,
+  start_action_schedule_runtime,
   type ActionScheduleRuntimeHandle,
 } from "@/plugin/core/ActionScheduleRuntime.js";
 
@@ -83,7 +83,7 @@ export class AgentState {
     }
 
     try {
-      this.action_schedule_runtime = await startActionScheduleRuntime(
+      this.action_schedule_runtime = await start_action_schedule_runtime(
         this.context,
       );
     } catch (error) {

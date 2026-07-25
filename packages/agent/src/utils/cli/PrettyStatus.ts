@@ -29,7 +29,7 @@ function paint(input: string, code: string): string {
   return `${code}${input}${ANSI.reset}`;
 }
 
-export function toneTag(tone: StatusTone): string {
+export function tone_tag(tone: StatusTone): string {
   if (tone === "success") return paint("OK", ANSI.fgGreen);
   if (tone === "error") return paint("ERR", ANSI.fgRed);
   if (tone === "warning") return paint("WARN", ANSI.fgYellow);
@@ -48,13 +48,13 @@ export function bold(input: string): string {
 /**
  * 打印面板。
  */
-export function printPanel(params: {
+export function print_panel(params: {
   title: string;
   tone?: StatusTone;
   lines: string[];
 }): void {
   const tone = params.tone || "neutral";
-  const title = `${toneTag(tone)} ${bold(params.title)}`;
+  const title = `${tone_tag(tone)} ${bold(params.title)}`;
   const contentLines = [title, ...params.lines];
 
   const maxLineLength = Math.max(
@@ -75,7 +75,7 @@ export function printPanel(params: {
 /**
  * 渲染对齐字段行。
  */
-export function renderKeyValueLines(
+export function render_key_value_lines(
   entries: Array<[string, string]>,
   indent: number = 2,
 ): string[] {

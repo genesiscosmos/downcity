@@ -9,7 +9,7 @@
 
 import { type SystemModelMessage } from "ai";
 import {
-  replaceVariablesInPrompts,
+  replace_variables_in_prompts,
   type PromptVariableMode,
 } from "@executor/composer/system/default/variables/VariableReplacer.js";
 
@@ -46,7 +46,7 @@ export async function transform_prompts_into_system_messages(
   return Promise.all(
     nonEmptyPrompts.map(async (item) => ({
       role: "system" as const,
-      content: await replaceVariablesInPrompts(item, options),
+      content: await replace_variables_in_prompts(item, options),
     })),
   );
 }

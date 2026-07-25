@@ -6,8 +6,8 @@
  * - 结构化字段写入 JSONL，便于后续检索与审计。
  */
 
-import { getLogsDirPath } from "@/workspace/WorkspacePaths.js";
-import { getTimestamp } from "@/utils/Time.js";
+import { get_logs_dir_path } from "@/workspace/WorkspacePaths.js";
+import { get_timestamp } from "@/utils/Time.js";
 import type { JsonObject } from "@/types/common/Json.js";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 import { LocalFileSystem } from "@/workspace/LocalFileSystem.js";
@@ -274,7 +274,7 @@ export class Logger {
   ): Promise<void> {
     const entry: LogEntry = {
       id: this.generate_id(),
-      timestamp: getTimestamp(),
+      timestamp: get_timestamp(),
       type,
       message: normalizeToAllowedMessageLabels(message),
       details: normalizeLogDetails(details),
@@ -328,7 +328,7 @@ export class Logger {
    */
   private async saveToFile(entry: LogEntry): Promise<void> {
     if (!this.workspace_files) return;
-    const logsDir = getLogsDirPath(this.workspace_files.root_path);
+    const logsDir = get_logs_dir_path(this.workspace_files.root_path);
     const date = String(entry.timestamp || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
     const logFile = this.workspace_files.resolve_path(logsDir, `${date}.jsonl`);
 

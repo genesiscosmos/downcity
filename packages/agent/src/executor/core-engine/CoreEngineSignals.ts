@@ -92,7 +92,7 @@ function toJsonObject(value: unknown): JsonObject | null {
 /**
  * 生成日志友好的单行预览文本。
  */
-export function toInlinePreview(value: unknown): string {
+export function to_inline_preview(value: unknown): string {
   const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
   if (!normalized) return "";
   return normalized.length > DEBUG_TEXT_PREVIEW_MAX_CHARS
@@ -155,7 +155,7 @@ function summarizeResponseBodyForDebug(body: unknown): JsonObject {
 /**
  * 汇总单个 step 的关键信号，便于定位“为什么没有继续下一轮”。
  */
-export function summarizeStepForDebug(step_result: unknown): JsonObject {
+export function summarize_step_for_debug(step_result: unknown): JsonObject {
   const record = toJsonObject(step_result) || {};
   const usage = toJsonObject(record.usage);
   const response = toJsonObject(record.response);
@@ -171,7 +171,7 @@ export function summarizeStepForDebug(step_result: unknown): JsonObject {
     rawFinishReason:
       typeof record.rawFinishReason === "string" ? record.rawFinishReason : null,
     textLength: typeof record.text === "string" ? record.text.length : 0,
-    textPreview: toInlinePreview(record.text),
+    textPreview: to_inline_preview(record.text),
     toolCallCount: toolCalls.length,
     toolCallNames: pickToolNames(toolCalls),
     toolResultCount: toolResults.length,
@@ -191,7 +191,7 @@ export function summarizeStepForDebug(step_result: unknown): JsonObject {
 /**
  * 汇总最终 assistant UI 消息的调试摘要。
  */
-export function summarizeUiMessageForDebug(
+export function summarize_ui_message_for_debug(
   message: SessionMessageRecordV1 | null | undefined,
 ): JsonObject {
   const parts = Array.isArray(message?.parts) ? message.parts : [];
@@ -217,7 +217,7 @@ export function summarizeUiMessageForDebug(
     partCount: parts.length,
     partTypes,
     textLength: text.length,
-    textPreview: toInlinePreview(text),
+    textPreview: to_inline_preview(text),
     toolPartCount: toolNames.length,
     toolNames,
   };
@@ -229,7 +229,7 @@ export function summarizeUiMessageForDebug(
  * 关键点（中文）
  * - 多 step 场景下，最终 assistant message 需要把各 step 的 UI part 串起来。
  */
-export function mergeAssistantUiMessages(
+export function merge_assistant_ui_messages(
   base: SessionMessageRecordV1 | null,
   incoming: SessionMessageRecordV1,
 ): SessionMessageRecordV1 {
@@ -287,7 +287,7 @@ function looksLikeIncompleteText(text: string): boolean {
 /**
  * 构造“不完整响应恢复”提示。
  */
-export function buildIncompleteResponseRecoveryNudge(
+export function build_incomplete_response_recovery_nudge(
   recoveryIndex: number,
 ): string {
   const round = Math.max(1, recoveryIndex);
@@ -302,7 +302,7 @@ export function buildIncompleteResponseRecoveryNudge(
 /**
  * 检测“响应被中断但模型没有正常完成”的情况。
  */
-export function detectIncompleteResponse(params: {
+export function detect_incomplete_response(params: {
   step_result: unknown;
   assistant_message: SessionMessageRecordV1 | null | undefined;
 }): {
@@ -327,7 +327,7 @@ export function detectIncompleteResponse(params: {
         finishReason: finishReason || null,
         rawFinishReason: rawFinishReason || null,
         incompleteToolParts,
-        textPreview: toInlinePreview(text),
+        textPreview: to_inline_preview(text),
       },
     };
   }
@@ -353,7 +353,7 @@ export function detectIncompleteResponse(params: {
         finishReason,
         rawFinishReason: rawFinishReason || null,
         textLength: text.length,
-        textPreview: toInlinePreview(text),
+        textPreview: to_inline_preview(text),
         toolCallCount: toolCalls.length,
         toolResultCount: toolResults.length,
         inputTokens:
@@ -372,7 +372,7 @@ export function detectIncompleteResponse(params: {
       finishReason,
       rawFinishReason: rawFinishReason || null,
       textLength: text.length,
-      textPreview: toInlinePreview(text),
+      textPreview: to_inline_preview(text),
     },
   };
 }
@@ -380,7 +380,7 @@ export function detectIncompleteResponse(params: {
 /**
  * 检测“只有口头计划，没有真正执行”的续跑信号。
  */
-export function detectTextOnlyContinuationReason(
+export function detect_text_only_continuation_reason(
   step_result: unknown,
 ): string | null {
   const record = toJsonObject(step_result) || {};
@@ -403,7 +403,7 @@ export function detectTextOnlyContinuationReason(
 /**
  * 构造“text-only 续跑”提示。
  */
-export function buildTextOnlyContinuationNudge(
+export function build_text_only_continuation_nudge(
   continuationIndex: number,
 ): string {
   const round = Math.max(1, continuationIndex);

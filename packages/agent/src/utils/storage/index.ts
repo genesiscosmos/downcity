@@ -8,12 +8,12 @@
 import fs from "fs-extra";
 import type { JsonValue } from "@/types/common/Json.js";
 
-export async function ensureDir(dir: string): Promise<void> {
+export async function ensure_dir(dir: string): Promise<void> {
   if (!fs.existsSync(dir)) {
     await fs.mkdir(dir, { recursive: true });
   }
 }
 
-export async function saveJson(filePath: string, data: JsonValue | object): Promise<void> {
+export async function save_json(filePath: string, data: JsonValue | object): Promise<void> {
   await fs.writeJson(filePath, data, { spaces: 2 });
 }

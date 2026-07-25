@@ -14,7 +14,7 @@ import { run_plugin_command } from "@/plugin/core/PluginActionRunner.js";
 /**
  * 执行当前已到点的 pending 任务。
  */
-export async function runDueActionScheduleJobs(params: {
+export async function run_due_action_schedule_jobs(params: {
   context: PluginContext;
   store: ActionScheduleStore;
 }): Promise<void> {

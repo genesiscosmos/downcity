@@ -175,6 +175,6 @@ async function loadGeoContext(): Promise<PromptGeoContext> {
 /**
  * 解析 prompt 所需地理上下文。
  */
-export async function resolvePromptGeoContext(): Promise<PromptGeoContext> {
+export async function resolve_prompt_geo_context(): Promise<PromptGeoContext> {
   return loadGeoContext();
 }

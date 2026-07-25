@@ -27,7 +27,7 @@ Its core capability today is one runtime HTTP route:
 
 Because it shows a very important point:
 
-- a plugin does not have to be “used” mainly through `runAction(...)`
+- a plugin does not have to be “used” mainly through `run_action(...)`
 
 Some plugins are not mainly consumed by the agent itself. Their main consumers are:
 
@@ -98,7 +98,7 @@ Then render the returned structure as a workboard or activity panel.
 
 ## How to think about it in the SDK
 
-For `workboard`, the important question is not “how do I `runAction` it?”
+For `workboard`, the important question is not “how do I `run_action` it?”
 
 The important question is “how does it safely contribute runtime HTTP routes?”
 

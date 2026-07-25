@@ -9,7 +9,7 @@
 import type { SystemModelMessage } from "ai";
 import { transform_prompts_into_system_messages } from "@executor/composer/system/default/PromptRenderer.js";
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
-import { buildRuntimeClockSystemPrompt } from "@executor/composer/system/default/variables/VariableReplacer.js";
+import { build_runtime_clock_system_prompt } from "@executor/composer/system/default/variables/VariableReplacer.js";
 import {
   CORE_SYSTEM_PROMPT,
   TASK_SYSTEM_PROMPT,
@@ -33,7 +33,7 @@ export const DEFAULT_SHIP_PROMPTS = CORE_SYSTEM_PROMPT;
  * - 仅承载“稳定规则”块，避免把每轮变化字段放在前缀 system。
  * - task 模式下追加任务输出规则；chat 模式为空。
  */
-export function buildContextSystemPrompt(input: {
+export function build_context_system_prompt(input: {
   /**
    * 项目根目录。
    */
@@ -85,7 +85,7 @@ export function buildContextSystemPrompt(input: {
  * - task 执行上下文可替换默认 core prompt（`DEFAULT_SHIP_PROMPTS`）为任务专用提示词。
  * - PROFILE/SOUL 等其他静态提示保持不变。
  */
-export function resolveStaticSystemPrompts(input: {
+export function resolve_static_system_prompts(input: {
   /**
    * 当前静态 system 文本集合。
    */
@@ -123,7 +123,7 @@ export type SystemProfile = "chat" | "task";
  * - chat 模式：使用默认 core prompt 与全部 plugin system。
  * - task 模式：自动替换 task core prompt，并禁用 chat plugin system。
  */
-export function resolveSystemContextProfile(
+export function resolve_system_context_profile(
   profile?: SystemProfile,
 ): ResolvedSystemContextProfile {
   if (profile !== "task") {
@@ -146,7 +146,7 @@ export function resolveSystemContextProfile(
  * - core prompt 已包含 plugin 系统总规则；这里仅收集各 plugin 自己的 system prompt。
  * - 单个加载失败走 fail-open，不阻断主链路。
  */
-export async function loadManagedPluginSystemPrompts(input: {
+export async function load_managed_plugin_system_prompts(input: {
   /**
    * 当前执行上下文。
    */
@@ -194,7 +194,7 @@ export async function loadManagedPluginSystemPrompts(input: {
  * - 若 plugin 显式声明 availability 且当前 unavailable，则跳过其 system 注入。
  * - 单个 plugin 加载失败走 fail-open，不阻断主链路。
  */
-export async function loadLocalPluginSystemPrompts(input: {
+export async function load_local_plugin_system_prompts(input: {
   /**
    * 当前统一执行上下文。
    */
@@ -210,7 +210,7 @@ export async function loadLocalPluginSystemPrompts(input: {
  * 关键点（中文）
  * - context/static/plugin 的组装逻辑统一收敛在 system 域。
  */
-export async function buildSessionSystemMessages(input: {
+export async function build_session_system_messages(input: {
   /**
    * 项目根目录（用于模板变量和运行态上下文）。
    */
@@ -246,14 +246,14 @@ export async function buildSessionSystemMessages(input: {
    */
   local_plugin_system_prompts: string[];
 }): Promise<SystemModelMessage[]> {
-  const runtimeClockText = buildRuntimeClockSystemPrompt({
+  const runtimeClockText = build_runtime_clock_system_prompt({
     projectPath: input.project_root,
     session_id: input.session_id,
   });
   const runtimeClockMessages: SystemModelMessage[] = runtimeClockText
     ? [{ role: "system", content: runtimeClockText }]
     : [];
-  const runtimeSystemText = buildContextSystemPrompt({
+  const runtimeSystemText = build_context_system_prompt({
     project_root: input.project_root,
     session_id: input.session_id,
     mode: input.mode,
@@ -263,7 +263,7 @@ export async function buildSessionSystemMessages(input: {
     : [];
 
   const staticSystemMessages = await transform_prompts_into_system_messages(
-    resolveStaticSystemPrompts({
+    resolve_static_system_prompts({
       systems: input.static_system_prompts,
       replace_default_core_prompt: input.replace_default_core_prompt,
     }),
@@ -332,18 +332,18 @@ export async function resolve_session_system_messages(input: {
   context: PluginContext;
 
 }): Promise<SystemModelMessage[]> {
-  const profile = resolveSystemContextProfile(input.profile);
-  return await buildSessionSystemMessages({
+  const profile = resolve_system_context_profile(input.profile);
+  return await build_session_system_messages({
     project_root: input.project_root,
     session_id: input.session_id,
     mode: profile.mode,
     replace_default_core_prompt: profile.replace_default_core_prompt,
     static_system_prompts: input.static_system_prompts,
-    managed_plugin_system_prompts: await loadManagedPluginSystemPrompts({
+    managed_plugin_system_prompts: await load_managed_plugin_system_prompts({
       context: input.context,
       disabled_plugin_names: profile.disable_plugin_systems,
     }),
-    local_plugin_system_prompts: await loadLocalPluginSystemPrompts({
+    local_plugin_system_prompts: await load_local_plugin_system_prompts({
       context: input.context,
     }),
   });

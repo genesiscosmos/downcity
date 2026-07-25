@@ -46,7 +46,7 @@ function parseTagAttributes(rawAttrs: string): Record<string, string> {
 /**
  * 归一化附件类型。
  */
-export function normalizeChatMessageFileType(value: unknown): ChatMessageFileType {
+export function normalize_chat_message_file_type(value: unknown): ChatMessageFileType {
   const text = normalizeText(value).toLowerCase();
   if (text === "photo" || text === "image") return "photo";
   if (text === "voice") return "voice";
@@ -58,7 +58,7 @@ export function normalizeChatMessageFileType(value: unknown): ChatMessageFileTyp
 /**
  * 提取 frontmatter metadata。
  */
-export function extractChatMessageFrontmatter(params: {
+export function extract_chat_message_frontmatter(params: {
   source: string;
 }): {
   metadata: Record<string, unknown>;
@@ -109,7 +109,7 @@ function toFileSegment(file: ChatMessageFileTag): ChatMessageFileSegment | null 
     kind: "file",
     file: {
       path,
-      type: normalizeChatMessageFileType(file.type),
+      type: normalize_chat_message_file_type(file.type),
       ...(normalizeText(file.caption)
         ? { caption: normalizeText(file.caption) }
         : {}),
@@ -120,7 +120,7 @@ function toFileSegment(file: ChatMessageFileTag): ChatMessageFileSegment | null 
 /**
  * 提取 `<file>` 标签，并保留正文/附件的真实顺序。
  */
-export function extractChatMessageSegments(source: string): ChatMessageSegment[] {
+export function extract_chat_message_segments(source: string): ChatMessageSegment[] {
   const out: ChatMessageSegment[] = [];
   const text = String(source || "");
 
@@ -139,7 +139,7 @@ export function extractChatMessageSegments(source: string): ChatMessageSegment[]
     const path = normalizeText(match[2] || attrs.path);
     const fileSegment = toFileSegment({
       path,
-      type: normalizeChatMessageFileType(attrs.type),
+      type: normalize_chat_message_file_type(attrs.type),
       ...(normalizeText(attrs.caption) ? { caption: normalizeText(attrs.caption) } : {}),
     });
     if (fileSegment) out.push(fileSegment);
@@ -154,8 +154,8 @@ export function extractChatMessageSegments(source: string): ChatMessageSegment[]
 /**
  * 提取 `<file>` 标签列表。
  */
-export function extractChatMessageFileTags(source: string): ChatMessageFileTag[] {
-  return extractChatMessageSegments(source)
+export function extract_chat_message_file_tags(source: string): ChatMessageFileTag[] {
+  return extract_chat_message_segments(source)
     .filter((segment): segment is ChatMessageFileSegment => segment.kind === "file")
     .map((segment) => segment.file);
 }
@@ -163,9 +163,9 @@ export function extractChatMessageFileTags(source: string): ChatMessageFileTag[]
 /**
  * 移除正文中的 `<file>` 标签，仅保留文本段。
  */
-export function stripChatMessageFileTags(source: string): string {
+export function strip_chat_message_file_tags(source: string): string {
   return build_chat_message_text({
-    segments: extractChatMessageSegments(source).filter(
+    segments: extract_chat_message_segments(source).filter(
       (segment): segment is ChatMessageTextSegment => segment.kind === "text",
     ),
   });
@@ -184,7 +184,7 @@ function normalizeTagAttributeValue(value: string, quote: '"' | "'"): string {
 export function render_chat_message_file_tag(file: ChatMessageFileTag): string {
   const path = normalizeText(file.path);
   if (!path) return "";
-  const type = normalizeChatMessageFileType(file.type);
+  const type = normalize_chat_message_file_type(file.type);
   const caption = normalizeText(file.caption);
   const quote: '"' | "'" = caption.includes('"') && !caption.includes("'") ? "'" : '"';
   const safeCaption = caption
@@ -202,7 +202,7 @@ function renderChatMessageSegment(segment: ChatMessageSegment): string {
 /**
  * 把附件列表渲染回统一的 `<file>` 文本块。
  */
-export function buildChatMessageFileBlock(files: ChatMessageFileTag[]): string {
+export function build_chat_message_file_block(files: ChatMessageFileTag[]): string {
   return files
     .map((file) => render_chat_message_file_tag(file))
     .filter((item) => normalizeText(item).length > 0)
@@ -244,10 +244,10 @@ export function build_chat_message_text(params: {
  * 统一解析一段 chat 消息文本。
  */
 export function parse_chat_message_markup(source: string): ParsedChatMessageMarkup {
-  const extracted = extractChatMessageFrontmatter({
+  const extracted = extract_chat_message_frontmatter({
     source: String(source || ""),
   });
-  const segments = extractChatMessageSegments(extracted.body);
+  const segments = extract_chat_message_segments(extracted.body);
   return {
     metadata: extracted.metadata,
     body_text: build_chat_message_text({

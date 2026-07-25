@@ -17,7 +17,7 @@ function normalizeModelLabel(input: unknown): string | undefined {
 /**
  * 归一化 session 标题。
  */
-export function normalizeSessionTitle(input: unknown): string | undefined {
+export function normalize_session_title(input: unknown): string | undefined {
   const title = typeof input === "string" ? input.trim() : "";
   return title || undefined;
 }
@@ -25,7 +25,7 @@ export function normalizeSessionTitle(input: unknown): string | undefined {
 /**
  * 读取当前系统时区。
  */
-export function resolveSystemTimezone(): string {
+export function resolve_system_timezone(): string {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return typeof timezone === "string" && timezone.trim()
     ? timezone.trim()
@@ -61,7 +61,7 @@ function normalize_history_bytes(input: unknown): number | undefined {
  * - 供归档 session 等需要脱离默认 `sessions/` 目录的场景复用。
  * - 路径本身不做校验，调用方需保证可访问。
  */
-export async function readSessionMetadataFromPath(input: {
+export async function read_session_metadata_from_path(input: {
   /** meta.json 文件路径。 */
   filePath: string;
   /** 当前 session_id。 */
@@ -95,13 +95,13 @@ export function normalize_session_metadata(
       typeof raw.created_at === "number" && Number.isFinite(raw.created_at)
         ? raw.created_at
         : Date.now(),
-    timezone: normalizeTimezone(raw.timezone) || resolveSystemTimezone(),
+    timezone: normalizeTimezone(raw.timezone) || resolve_system_timezone(),
     updated_at:
       typeof raw.updated_at === "number" && Number.isFinite(raw.updated_at)
         ? raw.updated_at
         : 0,
-    ...(normalizeSessionTitle(raw.title)
-      ? { title: normalizeSessionTitle(raw.title) }
+    ...(normalize_session_title(raw.title)
+      ? { title: normalize_session_title(raw.title) }
       : {}),
     ...(normalizeModelLabel(raw.model_label)
       ? { model_label: normalizeModelLabel(raw.model_label) }

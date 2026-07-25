@@ -13,7 +13,7 @@ import { DEFAULT_SHIP_PROMPTS } from "@executor/composer/system/default/SystemDo
 /**
  * 归一化调用方传入的静态 instruction。
  */
-export function normalizeInstructionInput(
+export function normalize_instruction_input(
   input: string | string[] | undefined,
 ): string[] {
   const items = Array.isArray(input)
@@ -37,7 +37,7 @@ function createCoreInstructionContent(project_root: string): string {
 /**
  * 构造进入 session system prompt 的 instruction block。
  */
-export function createInstructionSystemBlocks(
+export function create_instruction_system_blocks(
   instruction: string[],
   project_root: string,
 ): AgentSessionSystemBlock[] {

@@ -11,8 +11,8 @@ import {
   infer_agent_model_label,
   read_agent_model_context_window,
 } from "@/agent/AgentModel.js";
-import { resolveSystemTimezone } from "@/session/storage/Metadata.js";
-import { ensureSessionTitle } from "@/session/SessionTitle.js";
+import { resolve_system_timezone } from "@/session/storage/Metadata.js";
+import { ensure_session_title } from "@/session/SessionTitle.js";
 import type {
   AgentSessionConfigSnapshot,
   AgentSessionSetInput,
@@ -95,7 +95,7 @@ export class SessionState {
       const timezone =
         typeof metadata.timezone === "string" && metadata.timezone.trim()
           ? metadata.timezone.trim()
-          : resolveSystemTimezone();
+          : resolve_system_timezone();
       await this.store.write_metadata({
         ...metadata,
         agent_id: this.agent_id,
@@ -257,7 +257,7 @@ export class SessionState {
     );
     const before_metadata = await this.store.read_metadata();
     const before_title = String(before_metadata.title || "").trim();
-    const next_metadata = await ensureSessionTitle({
+    const next_metadata = await ensure_session_title({
       session_id: this.session_id,
       store: this.store,
       messages,

@@ -25,8 +25,8 @@ import {
   get_sdk_agent_session_messages_dir_path,
 } from "@/workspace/store/LocalStorePaths.js";
 import {
-  listArchivedAgentSessionSummaryPage,
-  listAgentSessionSummaryPage,
+  list_archived_agent_session_summary_page,
+  list_agent_session_summary_page,
 } from "@/session/browse/Browse.js";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 import type { LocalAgentStoreOptions } from "@/types/store/LocalStore.js";
@@ -105,7 +105,7 @@ export class LocalAgentStore implements AgentStore {
     input: AgentListSessionsInput | undefined,
     executing_session_ids: ReadonlySet<string>,
   ): Promise<AgentSessionSummaryPage> {
-    return await listAgentSessionSummaryPage({
+    return await list_agent_session_summary_page({
       project_root: this.files.root_path,
       agent_id: this.agent_id,
       input,
@@ -144,7 +144,7 @@ export class LocalAgentStore implements AgentStore {
   async list_archived_sessions(
     input?: AgentArchiveSessionsInput,
   ): Promise<AgentArchiveSessionsResult> {
-    return await listArchivedAgentSessionSummaryPage({
+    return await list_archived_agent_session_summary_page({
       project_root: this.files.root_path,
       agent_id: this.agent_id,
       input,

@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { collectFinalAssistantMessageFromUiStream } from "../bin/executor/core-engine/CoreEngineUiStreamCollector.js";
+import { collect_final_assistant_message_from_ui_stream } from "../bin/executor/core-engine/CoreEngineUiStreamCollector.js";
 
 test("canonical message chunk 写入失败时拒绝继续完成 turn", async () => {
   const abort_controller = new AbortController();
@@ -19,7 +19,7 @@ test("canonical message chunk 写入失败时拒绝继续完成 turn", async () 
   };
 
   await assert.rejects(
-    collectFinalAssistantMessageFromUiStream({
+    collect_final_assistant_message_from_ui_stream({
       result,
       session_id: "callback-failure-test",
       abortSignal: abort_controller.signal,

@@ -55,7 +55,7 @@ Skill Plugin 提供四个 action：
 列出 Skill：
 
 ```ts
-const result = await agent.plugins.runAction({
+const result = await agent.plugins.run_action({
   plugin: "skill",
   action: "list",
   payload: {},
@@ -65,7 +65,7 @@ const result = await agent.plugins.runAction({
 读取 Skill：
 
 ```ts
-const result = await agent.plugins.runAction({
+const result = await agent.plugins.run_action({
   plugin: "skill",
   action: "lookup",
   payload: {
@@ -91,7 +91,7 @@ plugin_call({
 调用 `find` 获取查找提示：
 
 ```ts
-const find_instructions = await agent.plugins.runAction({
+const find_instructions = await agent.plugins.run_action({
   plugin: "skill",
   action: "find",
   payload: {
@@ -103,7 +103,7 @@ const find_instructions = await agent.plugins.runAction({
 调用 `install` 获取安装提示：
 
 ```ts
-const install_instructions = await agent.plugins.runAction({
+const install_instructions = await agent.plugins.run_action({
   plugin: "skill",
   action: "install",
   payload: {

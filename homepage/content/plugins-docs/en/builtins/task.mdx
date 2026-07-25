@@ -33,7 +33,7 @@ Use `downcity task` when you want a reusable task definition:
 
 ```bash
 downcity task list
-downcity task create --title "daily-summary" --description "Send a daily summary" --when "0 9 * * *" --session-id <sessionId>
+downcity task create --title "daily-summary" --description "Send a daily summary" --when "0 9 * * *" --session-id <session_id>
 downcity task run daily-summary --reason "manual check"
 downcity task update daily-summary --status paused
 downcity task enable daily-summary
@@ -60,7 +60,7 @@ const plugin = new TaskPlugin({
 ## SDK action use
 
 ```ts
-await agent.plugins.runAction({
+await agent.plugins.run_action({
   plugin: "task",
   action: "run",
   payload: {
@@ -76,7 +76,7 @@ The action names are `list`, `create`, `run`, `delete`, `update`, `status`, `ena
 
 - long-lived cron runtime belongs to the plugin instance
 - cron timezone comes from constructor `timezone`, defaulting to the local machine timezone
-- agent tasks read the effective runtime model from the Session port in AgentContext
+- agent tasks read the effective runtime model from the Session port in PluginContext
 - task scheduler reload is triggered after create, update, delete, or status mutation
 - the running-task lock belongs to the plugin instance, so reloads still keep each task serial
 - the plugin can also accept lifecycle commands such as reload or reschedule

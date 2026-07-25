@@ -19,8 +19,8 @@ import {
   type SessionRecordV1,
 } from "@/executor/types/SessionRecords.js";
 import {
-  hydrateFileUrlPartsForModel,
-  injectFilePartsFromAttachments,
+  hydrate_file_url_parts_for_model,
+  inject_file_parts_from_attachments,
 } from "@executor/messages/SessionAttachmentMapper.js";
 
 /**
@@ -31,7 +31,7 @@ import {
  * - 输入：任意 SessionRecordV1[]（可能混有 assistant/tool/action/空消息）。
  * - 输出：只包含“非空 user 文本”的消息数组。
  */
-export function pickMergedUserMessages(
+export function pick_merged_user_messages(
   messages: SessionRecordV1[],
 ): SessionRecordV1[] {
   // 如果不是数组，直接返回空数组，避免后续 filter 报错。
@@ -72,7 +72,7 @@ export function pickMergedUserMessages(
  * - 输入：context 消息数组 + 可用工具集合。
  * - 输出：可直接喂给 streamText 的 messages。
  */
-export async function toModelMessages(
+export async function to_model_messages(
   messages: SessionRecordV1[],
   tools: Record<string, Tool>,
   project_root?: string,
@@ -85,13 +85,13 @@ export async function toModelMessages(
   if (model_messages.length === 0) return [];
 
   // 第一步（中文）：在 user 消息上注入 file parts（多模态附件）。
-  const enrichedMessages = await injectFilePartsFromAttachments(
+  const enrichedMessages = await inject_file_parts_from_attachments(
     model_messages,
     project_root,
   );
 
   // 第二步（中文）：把历史里的资源 URL 在内存中 hydrate 成模型可消费的 data URL。
-  const hydratedMessages = await hydrateFileUrlPartsForModel(
+  const hydratedMessages = await hydrate_file_url_parts_for_model(
     enrichedMessages,
     project_root,
   );

@@ -14,14 +14,14 @@ import type { SessionMessageRecordV1 } from "@/executor/types/SessionRecords.js"
 import type { SessionUiMessageChunkCallback } from "@/executor/types/SessionRun.js";
 import { generate_id } from "@/utils/Id.js";
 import {
-  summarizeUiMessageForDebug,
-  toInlinePreview,
+  summarize_ui_message_for_debug,
+  to_inline_preview,
 } from "@executor/core-engine/CoreEngineSignals.js";
 
 /**
  * 收敛 UI stream 中的最终 assistant 消息。
  */
-export async function collectFinalAssistantMessageFromUiStream(params: {
+export async function collect_final_assistant_message_from_ui_stream(params: {
   /**
    * 当前 `streamText` 执行结果。
    */
@@ -79,7 +79,7 @@ export async function collectFinalAssistantMessageFromUiStream(params: {
         isAborted: event.isAborted,
         finishReason:
           typeof event.finishReason === "string" ? event.finishReason : null,
-        ...summarizeUiMessageForDebug(event.responseMessage),
+        ...summarize_ui_message_for_debug(event.responseMessage),
       };
     },
   });
@@ -125,7 +125,7 @@ export async function collectFinalAssistantMessageFromUiStream(params: {
   await params.logger.log("warn", "[agent] final.message.fallback", {
     session_id: params.session_id,
     assistantTextLength: assistantText.length,
-    assistantTextPreview: toInlinePreview(assistantText),
+    assistantTextPreview: to_inline_preview(assistantText),
   });
 
   return params.buildFallbackAssistantMessage(

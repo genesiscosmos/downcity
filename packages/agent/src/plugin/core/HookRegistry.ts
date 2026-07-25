@@ -145,7 +145,7 @@ export class HookRegistry {
   /**
    * 移除指定 plugin 注册的全部扩展点。
    */
-  unregisterPlugin(plugin_name: string): void {
+  unregister_plugin(plugin_name: string): void {
     const key = String(plugin_name || "").trim();
     if (!key) return;
 

@@ -8,20 +8,20 @@
 
 import type { JsonObject, JsonValue } from "@/types/common/Json.js";
 import {
-  buildInfoAttrs,
-  contentToText,
-  extractFunctionCallExecCommandCmd,
-  extractMessages,
-  extractSystemForLog,
-  formatLogField,
-  getObjectField,
-  getStringField,
-  isJsonObject,
-  parseInfoBlockText,
-  pushLabeledTextBlock,
-  safeJsonParse,
-  stringifyCompact,
-  toInlineLogValue,
+  build_info_attrs,
+  content_to_text,
+  extract_function_call_exec_command_cmd,
+  extract_messages,
+  extract_system_for_log,
+  format_log_field,
+  get_object_field,
+  get_string_field,
+  is_json_object,
+  parse_info_block_text,
+  push_labeled_text_block,
+  safe_json_parse,
+  stringify_compact,
+  to_inline_log_value,
   truncate,
   type ParsedPayload,
 } from "./FormatShared.js";
@@ -65,13 +65,13 @@ function formatToolCalls(
   const out: FormattedToolCall[] = [];
 
   for (const toolCall of toolCalls) {
-    if (!isJsonObject(toolCall)) continue;
+    if (!is_json_object(toolCall)) continue;
 
-    const id = getStringField(toolCall, "id");
-    const type = getStringField(toolCall, "type");
-    const fn = getObjectField(toolCall, "function");
+    const id = get_string_field(toolCall, "id");
+    const type = get_string_field(toolCall, "type");
+    const fn = get_object_field(toolCall, "function");
     const name =
-      (fn && getStringField(fn, "name")) || getStringField(toolCall, "tool");
+      (fn && get_string_field(fn, "name")) || get_string_field(toolCall, "tool");
     const argsRaw = fn ? fn.arguments : toolCall.arguments;
     const args =
       typeof argsRaw === "string"
@@ -96,7 +96,7 @@ function summarizeValue(value: JsonValue | undefined): string {
     return String(value);
   }
   if (Array.isArray(value)) return `[array:${value.length}]`;
-  if (isJsonObject(value)) return `[object:${Object.keys(value).length}]`;
+  if (is_json_object(value)) return `[object:${Object.keys(value).length}]`;
   return String(value);
 }
 
@@ -122,13 +122,13 @@ function normalizeSystemTextForLog(
     return truncate(merged, maxChars);
   }
 
-  if (isJsonObject(system)) {
+  if (is_json_object(system)) {
     const directText =
-      getStringField(system, "text") ||
-      getStringField(system, "content") ||
-      getStringField(system, "instructions");
+      get_string_field(system, "text") ||
+      get_string_field(system, "content") ||
+      get_string_field(system, "instructions");
     if (directText) return truncate(directText, maxChars);
-    return stringifyCompact(system, maxChars);
+    return stringify_compact(system, maxChars);
   }
 
   return truncate(String(system), maxChars);
@@ -154,8 +154,8 @@ function formatMessagesForLog(
   const out: string[] = [];
 
   for (const message of messages) {
-    const role = String(getStringField(message, "role") || "").trim().toLowerCase();
-    const itemType = String(getStringField(message, "type") || "")
+    const role = String(get_string_field(message, "role") || "").trim().toLowerCase();
+    const itemType = String(get_string_field(message, "type") || "")
       .trim()
       .toLowerCase();
     const output = summarizeValue(message.output);
@@ -171,14 +171,14 @@ function formatMessagesForLog(
           .filter(Boolean)
           .join(" | ");
         if (detail) {
-          pushLabeledTextBlock(out, "tool", detail, opts.maxToolArgsChars);
+          push_labeled_text_block(out, "tool", detail, opts.maxToolArgsChars);
         }
       }
     }
 
     if (itemType === "function_call") {
-      const functionName = String(getStringField(message, "name") || "").trim();
-      const functionCallExecCmd = extractFunctionCallExecCommandCmd(message);
+      const functionName = String(get_string_field(message, "name") || "").trim();
+      const functionCallExecCmd = extract_function_call_exec_command_cmd(message);
       const argsText =
         typeof message.arguments === "string"
           ? truncate(message.arguments, opts.maxToolArgsChars)
@@ -190,7 +190,7 @@ function formatMessagesForLog(
       ]
         .filter(Boolean)
         .join(" | ");
-      pushLabeledTextBlock(
+      push_labeled_text_block(
         out,
         "tool",
         functionCallDetail || "function_call",
@@ -203,21 +203,21 @@ function formatMessagesForLog(
     let userInfoAttrs: string[] = [];
     if ("content" in message) {
       const isSystemRole = role === "system" || role === "developer";
-      const contentText = contentToText(
+      const contentText = content_to_text(
         message.content,
         isSystemRole ? opts.maxSystemChars : opts.maxContentChars,
       );
       if (role === "user") {
-        const parsedInfoBlock = parseInfoBlockText(contentText);
+        const parsedInfoBlock = parse_info_block_text(contentText);
         body_text = parsedInfoBlock ? parsedInfoBlock.body : contentText;
-        userInfoAttrs = parsedInfoBlock ? buildInfoAttrs(parsedInfoBlock.info) : [];
+        userInfoAttrs = parsedInfoBlock ? build_info_attrs(parsedInfoBlock.info) : [];
       } else {
         body_text = contentText;
       }
     }
 
     if (role === "user") {
-      pushLabeledTextBlock(
+      push_labeled_text_block(
         out,
         "user",
         body_text || "-",
@@ -228,7 +228,7 @@ function formatMessagesForLog(
     }
 
     if (role === "system" || role === "developer") {
-      pushLabeledTextBlock(out, "system", body_text || "-", opts.maxSystemChars);
+      push_labeled_text_block(out, "system", body_text || "-", opts.maxSystemChars);
       continue;
     }
 
@@ -240,7 +240,7 @@ function formatMessagesForLog(
       itemType === "tool-error"
     ) {
       const toolResultText = [body_text, outputText, output].filter(Boolean).join(" | ");
-      pushLabeledTextBlock(
+      push_labeled_text_block(
         out,
         "tool_result",
         toolResultText || "-",
@@ -253,7 +253,7 @@ function formatMessagesForLog(
       .filter(Boolean)
       .join(body_text ? "" : " | ");
     if (assistantText) {
-      pushLabeledTextBlock(out, "assistant", assistantText, opts.maxContentChars);
+      push_labeled_text_block(out, "assistant", assistantText, opts.maxContentChars);
     }
   }
 
@@ -265,10 +265,10 @@ function formatPayloadSummaryLines(
   maxChars: number,
 ): string[] {
   if (Array.isArray(payload)) {
-    return [formatLogField("agent", `payload=[array:${payload.length}]`)];
+    return [format_log_field("agent", `payload=[array:${payload.length}]`)];
   }
   const keys = Object.keys(payload).slice(0, 12).join(",") || "-";
-  return [formatLogField("agent", toInlineLogValue(`payload.keys=${keys}`, maxChars))];
+  return [format_log_field("agent", to_inline_log_value(`payload.keys=${keys}`, maxChars))];
 }
 
 function selectMessagesForIncrementalLog(
@@ -298,11 +298,11 @@ function selectMessagesForIncrementalLog(
 function trimLeadingAssistantMessages(messages: JsonObject[]): JsonObject[] {
   if (!Array.isArray(messages) || messages.length === 0) return [];
   const firstUserIndex = messages.findIndex(
-    (message) => getStringField(message, "role") === "user",
+    (message) => get_string_field(message, "role") === "user",
   );
   if (firstUserIndex <= 0) return messages;
   for (let index = 0; index < firstUserIndex; index += 1) {
-    if (getStringField(messages[index], "role") !== "assistant") {
+    if (get_string_field(messages[index], "role") !== "assistant") {
       return messages;
     }
   }
@@ -310,7 +310,7 @@ function trimLeadingAssistantMessages(messages: JsonObject[]): JsonObject[] {
   return messages.slice(firstUserIndex);
 }
 
-export function parseFetchRequestForLog(
+export function parse_fetch_request_for_log(
   input: string | URL | Request,
   init?: RequestInit,
   opts?: {
@@ -351,7 +351,7 @@ export function parseFetchRequestForLog(
   );
 
   const initBody = typeof init?.body === "string" ? init.body : undefined;
-  const payload = safeJsonParse(initBody);
+  const payload = safe_json_parse(initBody);
   if (!payload) {
     if (initBody) {
       return {
@@ -363,17 +363,17 @@ export function parseFetchRequestForLog(
         messages: null,
         system: undefined,
         toolsCount: 0,
-        requestText: formatLogField("agent", "llm.request non-json body"),
+        requestText: format_log_field("agent", "llm.request non-json body"),
         meta: { kind: "llm_request", url, method },
       };
     }
     return null;
   }
 
-  const payloadObject = isJsonObject(payload) ? payload : undefined;
-  const model = payloadObject ? getStringField(payloadObject, "model") : undefined;
-  const system = extractSystemForLog(payloadObject);
-  const messages = payloadObject ? extractMessages(payloadObject) : null;
+  const payloadObject = is_json_object(payload) ? payload : undefined;
+  const model = payloadObject ? get_string_field(payloadObject, "model") : undefined;
+  const system = extract_system_for_log(payloadObject);
+  const messages = payloadObject ? extract_messages(payloadObject) : null;
   const tools = payloadObject ? payloadObject.tools : undefined;
   const toolChoiceRaw = payloadObject
     ? payloadObject.tool_choice ?? payloadObject.toolChoice
@@ -382,11 +382,11 @@ export function parseFetchRequestForLog(
     typeof toolChoiceRaw === "string"
       ? toolChoiceRaw
       : toolChoiceRaw !== undefined
-        ? stringifyCompact(toolChoiceRaw as JsonValue | object, 300)
+        ? stringify_compact(toolChoiceRaw as JsonValue | object, 300)
         : undefined;
   const toolsCount = Array.isArray(tools)
     ? tools.length
-    : isJsonObject(tools)
+    : is_json_object(tools)
       ? Object.keys(tools).length
       : 0;
 
@@ -395,7 +395,7 @@ export function parseFetchRequestForLog(
 
   if (messages && Array.isArray(messages)) {
     const hasSystemMessage = messages.some((item) => {
-      const role = String(getStringField(item, "role") || "")
+      const role = String(get_string_field(item, "role") || "")
         .trim()
         .toLowerCase();
       return role === "system" || role === "developer";
@@ -403,7 +403,7 @@ export function parseFetchRequestForLog(
     if (!hasSystemMessage) {
       const systemText = normalizeSystemTextForLog(system, maxSystemChars).trim();
       if (systemText) {
-        pushLabeledTextBlock(messageTextParts, "system", systemText, maxSystemChars);
+        push_labeled_text_block(messageTextParts, "system", systemText, maxSystemChars);
       }
     }
 
@@ -418,13 +418,13 @@ export function parseFetchRequestForLog(
       maxSystemChars,
     }));
     if (selectedMessages.length === 0) {
-      messageTextParts.push(formatLogField("agent", "no incremental items"));
+      messageTextParts.push(format_log_field("agent", "no incremental items"));
     }
   } else {
     messageTextParts.push(...formatPayloadSummaryLines(payload, maxChars));
   }
   if (messageTextParts.length === 0) {
-    messageTextParts.push(formatLogField("agent", "empty"));
+    messageTextParts.push(format_log_field("agent", "empty"));
   }
 
   return {

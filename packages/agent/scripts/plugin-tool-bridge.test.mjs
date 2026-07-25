@@ -13,10 +13,10 @@ import path from "node:path";
 import fs from "node:fs/promises";
 
 import {
-  invokePluginCallTool,
-  invokePluginReadTool,
+  invoke_plugin_call_tool,
+  invoke_plugin_read_tool,
 } from "../bin/executor/tools/plugin/PluginToolBridge.js";
-import { createPluginTools } from "../bin/executor/tools/plugin/PluginToolDefinition.js";
+import { create_plugin_tools } from "../bin/executor/tools/plugin/PluginToolDefinition.js";
 import { plugin_call_input_schema } from "../bin/executor/tools/plugin/PluginToolSchemas.js";
 import { create_action, create_plugin } from "../bin/plugin/core/PluginActionFactory.js";
 import { PluginRegistry } from "../bin/plugin/core/PluginRegistry.js";
@@ -50,7 +50,7 @@ test("plugin_call payload schema allows arbitrary object properties", async () =
   assert.deepEqual(payload_schema.default, {});
 });
 
-test("invokePluginCallTool returns absolute paths for materialized file parts", async () => {
+test("invoke_plugin_call_tool returns absolute paths for materialized file parts", async () => {
   const project_root = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-plugin-tool-files-"),
   );
@@ -85,7 +85,7 @@ test("invokePluginCallTool returns absolute paths for materialized file parts", 
   };
 
   const run_context = create_run_context(project_root);
-  const result = await invokePluginCallTool({
+  const result = await invoke_plugin_call_tool({
     plugins,
     run_context,
     input: {
@@ -112,7 +112,7 @@ test("invokePluginCallTool returns absolute paths for materialized file parts", 
   assert.equal(pending_parts[0].url, result.files[0].relative_path);
 });
 
-test("invokePluginReadTool returns plugin action metadata", async () => {
+test("invoke_plugin_read_tool returns plugin action metadata", async () => {
   const plugins = {
     list: () => [],
     read: () => ({
@@ -151,7 +151,7 @@ test("invokePluginReadTool returns plugin action metadata", async () => {
     },
   };
 
-  const result = await invokePluginReadTool({
+  const result = await invoke_plugin_read_tool({
     plugins,
     run_context: create_run_context(process.cwd()),
     input: {
@@ -167,7 +167,7 @@ test("invokePluginReadTool returns plugin action metadata", async () => {
   assert.equal(result.data.actions[0].examples[0].payload.prompt, "draw");
 });
 
-test("invokePluginReadTool rejects unregistered plugins", async () => {
+test("invoke_plugin_read_tool rejects unregistered plugins", async () => {
   const registry = create_registry(
     create_plugin({
       name: "skill",
@@ -177,7 +177,7 @@ test("invokePluginReadTool rejects unregistered plugins", async () => {
     }),
   );
 
-  const result = await invokePluginReadTool({
+  const result = await invoke_plugin_read_tool({
     plugins: registry,
     run_context: create_run_context(process.cwd()),
     input: { plugin: "task" },
@@ -188,7 +188,7 @@ test("invokePluginReadTool rejects unregistered plugins", async () => {
   assert.match(result.data.error, /Unknown plugin: task/);
 });
 
-test("invokePluginReadTool rejects unknown plugin actions", async () => {
+test("invoke_plugin_read_tool rejects unknown plugin actions", async () => {
   const registry = create_registry(
     create_plugin({
       name: "skill",
@@ -198,7 +198,7 @@ test("invokePluginReadTool rejects unknown plugin actions", async () => {
     }),
   );
 
-  const result = await invokePluginReadTool({
+  const result = await invoke_plugin_read_tool({
     plugins: registry,
     run_context: create_run_context(process.cwd()),
     input: { plugin: "skill", action: "missing" },
@@ -260,7 +260,7 @@ test("PluginRegistry validates action payload with metadata schema", async () =>
   assert.equal(valid.data.text, "hello");
 });
 
-test("createPluginTools binds plugin_call to the current registry", async () => {
+test("create_plugin_tools binds plugin_call to the current registry", async () => {
   function create_owner_registry(owner) {
     const plugin = create_plugin({
       name: "skill",
@@ -285,8 +285,8 @@ test("createPluginTools binds plugin_call to the current registry", async () => 
 
   const registry_a = create_owner_registry("agent_a");
   const registry_b = create_owner_registry("agent_b");
-  const tools_a = createPluginTools({ plugins: registry_a });
-  const tools_b = createPluginTools({ plugins: registry_b });
+  const tools_a = create_plugin_tools({ plugins: registry_a });
+  const tools_b = create_plugin_tools({ plugins: registry_b });
   const create_execution_options = (session_id) => {
     const run_context = create_run_context(process.cwd());
     run_context.session_id = session_id;

@@ -6,8 +6,8 @@
  * - 保持 shell 调用与 AI 调用都可稳定解析。
  */
 import {
-  printPanel,
-  renderKeyValueLines,
+  print_panel,
+  render_key_value_lines,
   type StatusTone,
 } from "@/utils/cli/PrettyStatus.js";
 
@@ -18,7 +18,7 @@ import {
  * - 默认 JSON（便于脚本解析）。
  * - `asJson=false` 时输出可读文本。
  */
-export function printResult(params: {
+export function print_result(params: {
   asJson?: boolean;
   success: boolean;
   title: string;
@@ -40,7 +40,7 @@ export function printResult(params: {
   );
   const lines = renderObject(entries, 0);
   const tone: StatusTone = params.success ? "success" : "error";
-  printPanel({
+  print_panel({
     title: params.title,
     tone,
     lines: lines.length > 0 ? lines : ["  no details"],
@@ -56,7 +56,7 @@ function renderScalar(
   value: string | number | boolean | null,
   indent: number,
 ): string[] {
-  return renderKeyValueLines(
+  return render_key_value_lines(
     [[key, value === null ? "null" : String(value)]],
     indent,
   );
@@ -68,7 +68,7 @@ function renderArray(
   indent: number,
 ): string[] {
   const lines: string[] = [];
-  const [header] = renderKeyValueLines([[key, value.length === 0 ? "[]" : ""]], indent);
+  const [header] = render_key_value_lines([[key, value.length === 0 ? "[]" : ""]], indent);
   if (header) lines.push(header);
   if (value.length === 0) {
     return lines;
@@ -116,7 +116,7 @@ function renderObject(entries: Array<[string, unknown]>, indent: number): string
     }
 
     if (isPlainObject(value)) {
-      const [header] = renderKeyValueLines([[key, ""]], indent);
+      const [header] = render_key_value_lines([[key, ""]], indent);
       if (header) lines.push(header);
       lines.push(...renderObject(Object.entries(value), indent + 2));
       continue;

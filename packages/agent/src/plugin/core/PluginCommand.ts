@@ -12,7 +12,7 @@ import type { JsonObject, JsonValue } from "@/types/common/Json.js";
 import type { Plugin } from "@/types/plugin/PluginDefinition.js";
 import type { PluginAction } from "@/types/plugin/PluginAction.js";
 import { run_local_plugin_action } from "@/plugin/core/PluginLocalExecution.js";
-import { printResult } from "@/utils/cli/CliOutput.js";
+import { print_result } from "@/utils/cli/CliOutput.js";
 
 type PluginCliBridgeOptions = {
   /**
@@ -175,7 +175,7 @@ function registerPluginActionCommand(params: {
         opts: actionOptions,
       });
     } catch (error) {
-      printResult({
+      print_result({
         asJson: bridgeOptions.json,
         success: false,
         title: `${params.plugin.name}.${params.action_name} failed`,
@@ -193,7 +193,7 @@ function registerPluginActionCommand(params: {
       action_name: params.action_name,
       payload,
     });
-    printResult({
+    print_result({
       asJson: bridgeOptions.json,
       success: Boolean(local.success),
       title: local.success

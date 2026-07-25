@@ -118,10 +118,10 @@ export const readDaemonMeta = async (
     const project = String(
       (value as { project_root?: unknown })?.project_root || "",
     ).trim();
-    const instanceId = String(
-      (value as { instanceId?: unknown })?.instanceId || "",
+    const instance_id = String(
+      (value as { instance_id?: unknown })?.instance_id || "",
     ).trim();
-    if (!command || !project || !instanceId) return null;
+    if (!command || !project || !instance_id) return null;
     return value as DaemonMeta;
   } catch {
     return null;
@@ -163,11 +163,11 @@ export const diagnoseDaemonStaleReasons = async (
 
   const parsedMeta = await readDaemonMeta(project_root);
   if (!parsedMeta) {
-    const raw_meta = await fs.readJson(metaPath).catch(() => null) as { instanceId?: unknown } | null;
-    if (!String(raw_meta?.instanceId || "").trim()) {
+    const raw_meta = await fs.readJson(metaPath).catch(() => null) as { instance_id?: unknown } | null;
+    if (!String(raw_meta?.instance_id || "").trim()) {
       reasons.push({
         code: "meta_instance_missing",
-        message: "daemon meta file is missing instanceId",
+        message: "daemon meta file is missing instance_id",
       });
     }
     reasons.push({
@@ -307,9 +307,9 @@ async function read_daemon_runtime_identity(params: {
         const data = frame.data;
         const pid = Number(data?.pid);
         const project_root = String(data?.project_root || "").trim();
-        const instanceId = String(data?.instanceId || "").trim();
-        finish(frame.success === true && Number.isInteger(pid) && pid > 0 && project_root && instanceId
-          ? { pid, project_root, instanceId }
+        const instance_id = String(data?.instance_id || "").trim();
+        finish(frame.success === true && Number.isInteger(pid) && pid > 0 && project_root && instance_id
+          ? { pid, project_root, instance_id }
           : null);
       } catch {
         finish(null);
@@ -322,12 +322,12 @@ async function read_daemon_runtime_identity(params: {
 
 /** 判断 RPC 返回身份是否与 daemon meta 完全一致。 */
 function daemon_identity_matches(
-  meta: Pick<DaemonMeta, "pid" | "project_root" | "instanceId">,
+  meta: Pick<DaemonMeta, "pid" | "project_root" | "instance_id">,
   identity: DaemonRuntimeIdentity,
 ): boolean {
   return identity.pid === meta.pid
     && path.resolve(identity.project_root) === path.resolve(meta.project_root)
-    && identity.instanceId === meta.instanceId;
+    && identity.instance_id === meta.instance_id;
 }
 
 /** 读取指定 PID 的操作系统命令行。 */
@@ -365,7 +365,7 @@ async function command_matches_daemon_meta(meta: DaemonMeta): Promise<boolean> {
     read_process_command(meta.pid),
     read_process_instance_id(meta.pid),
   ]);
-  if (!command || instance_id !== meta.instanceId) return false;
+  if (!command || instance_id !== meta.instance_id) return false;
   const cli_path = path.resolve(String(meta.args[0] || ""));
   return Boolean(cli_path)
     && command.includes(cli_path)
@@ -380,7 +380,7 @@ async function command_matches_daemon_meta(meta: DaemonMeta): Promise<boolean> {
 async function waitForDaemonReady(params: {
   pid: number;
   project_root: string;
-  instanceId: string;
+  instance_id: string;
   args: string[];
   timeoutMs?: number;
 }): Promise<void> {
@@ -404,7 +404,7 @@ async function waitForDaemonReady(params: {
     const identity = await read_daemon_runtime_identity({ host: rpc_host, port: rpc_port });
     if (identity && daemon_identity_matches({
       pid: params.pid,
-      instanceId: params.instanceId,
+      instance_id: params.instance_id,
       project_root: params.project_root,
     }, identity)) {
       return;
@@ -424,13 +424,13 @@ async function waitForDaemonReady(params: {
 async function rollback_daemon_startup(params: {
   project_root: string;
   pid: number;
-  instanceId: string;
+  instance_id: string;
 }): Promise<void> {
   const read_owned_meta = async (): Promise<DaemonMeta | null> => {
     const meta = await readDaemonMeta(params.project_root);
     return meta
       && meta.pid === params.pid
-      && meta.instanceId === params.instanceId
+      && meta.instance_id === params.instance_id
       && path.resolve(meta.project_root) === path.resolve(params.project_root)
       ? meta
       : null;
@@ -482,7 +482,7 @@ export const startDaemonProcess = async (params: {
   args: string[];
 }): Promise<{ pid: number; logPath: string }> => {
   const { project_root, cliPath, args } = params;
-  const instanceId = randomUUID();
+  const instance_id = randomUUID();
 
   await fs.ensureDir(getDowncityDebugDirPath(project_root));
   await cleanupStaleDaemonFiles(project_root);
@@ -517,7 +517,7 @@ export const startDaemonProcess = async (params: {
   const childEnv: NodeJS.ProcessEnv = {
     ...mergeProcessEnvWithPlatformGlobalEnv(process.env),
     DOWNCITY_DAEMON: "1",
-    DOWNCITY_DAEMON_INSTANCE_ID: instanceId,
+    DOWNCITY_DAEMON_INSTANCE_ID: instance_id,
   };
 
   // 关键注释：daemon 进程必须 detached + unref 才能在父进程退出后继续运行。
@@ -537,7 +537,7 @@ export const startDaemonProcess = async (params: {
 
   await writeDaemonFiles(project_root, {
     pid: child.pid,
-    instanceId,
+    instance_id,
     project_root,
     startedAt: new Date().toISOString(),
     command: process.execPath,
@@ -551,7 +551,7 @@ export const startDaemonProcess = async (params: {
     await waitForDaemonReady({
       pid: child.pid,
       project_root,
-      instanceId,
+      instance_id,
       args,
     });
 
@@ -566,7 +566,7 @@ export const startDaemonProcess = async (params: {
     await rollback_daemon_startup({
       project_root,
       pid: child.pid,
-      instanceId,
+      instance_id,
     });
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`${message}. Check daemon log: ${logPath}`);

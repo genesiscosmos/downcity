@@ -8,13 +8,13 @@
 
 import type { JsonObject, JsonValue } from "@/types/common/Json.js";
 import {
-  formatLogField,
-  getArrayField,
-  getObjectField,
-  getStringField,
-  isJsonObject,
-  safeJsonParse,
-  toInlineLogValue,
+  format_log_field,
+  get_array_field,
+  get_object_field,
+  get_string_field,
+  is_json_object,
+  safe_json_parse,
+  to_inline_log_value,
 } from "./FormatShared.js";
 
 interface ProviderResponseLike {
@@ -45,8 +45,8 @@ function pickOutputTypes(output: JsonValue[] | undefined): string[] {
   if (!Array.isArray(output)) return [];
   return output
     .map((item) => {
-      if (!isJsonObject(item)) return "";
-      return getStringField(item, "type") || "";
+      if (!is_json_object(item)) return "";
+      return get_string_field(item, "type") || "";
     })
     .filter((type) => Boolean(type))
     .slice(0, 16);
@@ -56,9 +56,9 @@ function pickFunctionCallNames(output: JsonValue[] | undefined): string[] {
   if (!Array.isArray(output)) return [];
   return output
     .map((item) => {
-      if (!isJsonObject(item)) return "";
-      if (getStringField(item, "type") !== "function_call") return "";
-      return getStringField(item, "name") || "";
+      if (!is_json_object(item)) return "";
+      if (get_string_field(item, "type") !== "function_call") return "";
+      return get_string_field(item, "name") || "";
     })
     .filter((name) => Boolean(name))
     .slice(0, 8);
@@ -69,20 +69,20 @@ function summarizeResponseObjectForLog(
 ): JsonObject {
   if (!responseObject) return {};
 
-  const output = getArrayField(responseObject, "output");
+  const output = get_array_field(responseObject, "output");
   const incompleteDetails =
-    getObjectField(responseObject, "incomplete_details") ||
-    getObjectField(responseObject, "incompleteDetails");
+    get_object_field(responseObject, "incomplete_details") ||
+    get_object_field(responseObject, "incompleteDetails");
   const finishReason =
-    getStringField(responseObject, "finish_reason") ||
-    getStringField(responseObject, "finishReason");
+    get_string_field(responseObject, "finish_reason") ||
+    get_string_field(responseObject, "finishReason");
 
   return {
-    responseId: getStringField(responseObject, "id") || null,
-    responseObjectType: getStringField(responseObject, "object") || null,
+    responseId: get_string_field(responseObject, "id") || null,
+    responseObjectType: get_string_field(responseObject, "object") || null,
     responseFinishReason: finishReason || null,
     responseIncompleteReason:
-      getStringField(incompleteDetails || {}, "reason") || null,
+      get_string_field(incompleteDetails || {}, "reason") || null,
     responseOutputCount: Array.isArray(output) ? output.length : 0,
     responseOutputTypes: pickOutputTypes(output),
     responseFunctionCallNames: pickFunctionCallNames(output),
@@ -111,23 +111,23 @@ function summarizeSseBodyForLog(body_text: string): JsonObject {
       return;
     }
 
-    const parsed = safeJsonParse(rawData);
-    if (parsed && isJsonObject(parsed)) {
-      const explicitType = getStringField(parsed, "type");
+    const parsed = safe_json_parse(rawData);
+    if (parsed && is_json_object(parsed)) {
+      const explicitType = get_string_field(parsed, "type");
       const eventLabel = currentEvent || explicitType || "message";
       eventTypes.push(eventLabel);
 
-      const nestedResponse = getObjectField(parsed, "response");
+      const nestedResponse = get_object_field(parsed, "response");
       if (nestedResponse) {
         lastResponseObject = nestedResponse;
       }
 
-      const nestedItem = getObjectField(parsed, "item");
-      const itemType = getStringField(nestedItem || {}, "type");
+      const nestedItem = get_object_field(parsed, "item");
+      const itemType = get_string_field(nestedItem || {}, "type");
       if (itemType && !streamedOutputTypes.includes(itemType)) {
         streamedOutputTypes.push(itemType);
       }
-      const functionName = getStringField(nestedItem || {}, "name");
+      const functionName = get_string_field(nestedItem || {}, "name");
       if (
         itemType === "function_call" &&
         functionName &&
@@ -136,7 +136,7 @@ function summarizeSseBodyForLog(body_text: string): JsonObject {
         functionCallNames.push(functionName);
       }
 
-      const directOutput = getArrayField(parsed, "output");
+      const directOutput = get_array_field(parsed, "output");
       for (const outputType of pickOutputTypes(directOutput)) {
         if (!streamedOutputTypes.includes(outputType)) {
           streamedOutputTypes.push(outputType);
@@ -178,7 +178,7 @@ function summarizeSseBodyForLog(body_text: string): JsonObject {
   };
 }
 
-export async function parseFetchResponseForLog(
+export async function parse_fetch_response_for_log(
   response: ProviderResponseLike,
   opts?: {
     /**
@@ -203,9 +203,9 @@ export async function parseFetchResponseForLog(
   } catch (error) {
     const errorText = String(error || "unknown_error");
     return {
-      responseText: formatLogField(
+      responseText: format_log_field(
         "agent",
-        toInlineLogValue(
+        to_inline_log_value(
           `llm.response status=${response.status} ok=${response.ok} contentType=${contentType || "-"} body_read_error=${errorText}`,
           maxBodyPreviewChars,
         ),
@@ -224,9 +224,9 @@ export async function parseFetchResponseForLog(
 
   let responseSummary: JsonObject = {};
   if (contentType.includes("application/json")) {
-    const parsed = safeJsonParse(body_text);
-    if (parsed && isJsonObject(parsed)) {
-      const nestedResponse = getObjectField(parsed, "response");
+    const parsed = safe_json_parse(body_text);
+    if (parsed && is_json_object(parsed)) {
+      const nestedResponse = get_object_field(parsed, "response");
       responseSummary = summarizeResponseObjectForLog(
         nestedResponse || parsed,
       );
@@ -235,18 +235,18 @@ export async function parseFetchResponseForLog(
     responseSummary = summarizeSseBodyForLog(body_text);
   }
 
-  const preview = toInlineLogValue(body_text, maxBodyPreviewChars);
+  const preview = to_inline_log_value(body_text, maxBodyPreviewChars);
   const responseTextParts = [
-    formatLogField(
+    format_log_field(
       "agent",
-      toInlineLogValue(
+      to_inline_log_value(
         `llm.response status=${response.status} ok=${response.ok} contentType=${contentType || "-"}`,
         maxBodyPreviewChars,
       ),
     ),
   ];
   if (preview) {
-    responseTextParts.push(formatLogField("response_body", preview));
+    responseTextParts.push(format_log_field("response_body", preview));
   }
 
   return {

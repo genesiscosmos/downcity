@@ -29,7 +29,7 @@ import type {
 } from "@/types/plugin/PluginState.js";
 import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
 import type { Tool } from "ai";
-import { createPluginTools } from "@executor/tools/plugin/PluginToolDefinition.js";
+import { create_plugin_tools } from "@executor/tools/plugin/PluginToolDefinition.js";
 import type {
   PluginRegistryChange,
   PluginRegistrySubscriber,
@@ -166,7 +166,7 @@ export class PluginRegistry implements AgentPlugins {
    */
   tools(): Record<string, Tool> {
     if (!this.list().some((plugin) => plugin.actions.length > 0)) return {};
-    return { ...createPluginTools({ plugins: this }) };
+    return { ...create_plugin_tools({ plugins: this }) };
   }
 
   /**
@@ -338,7 +338,7 @@ export class PluginRegistry implements AgentPlugins {
   }
 
   private unregister_hooks(plugin_name: string): void {
-    this.hookRegistry.unregisterPlugin(plugin_name);
+    this.hookRegistry.unregister_plugin(plugin_name);
   }
 
   private async start_record(record: PluginRuntimeRecord): Promise<void> {

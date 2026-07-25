@@ -55,7 +55,7 @@ The Skill Plugin exposes four actions:
 List skills:
 
 ```ts
-const result = await agent.plugins.runAction({
+const result = await agent.plugins.run_action({
   plugin: "skill",
   action: "list",
   payload: {},
@@ -65,7 +65,7 @@ const result = await agent.plugins.runAction({
 Read a skill:
 
 ```ts
-const result = await agent.plugins.runAction({
+const result = await agent.plugins.run_action({
   plugin: "skill",
   action: "lookup",
   payload: {
@@ -91,7 +91,7 @@ plugin_call({
 Call `find` to get search instructions:
 
 ```ts
-const find_instructions = await agent.plugins.runAction({
+const find_instructions = await agent.plugins.run_action({
   plugin: "skill",
   action: "find",
   payload: {
@@ -103,7 +103,7 @@ const find_instructions = await agent.plugins.runAction({
 Call `install` to get installation instructions:
 
 ```ts
-const install_instructions = await agent.plugins.runAction({
+const install_instructions = await agent.plugins.run_action({
   plugin: "skill",
   action: "install",
   payload: {

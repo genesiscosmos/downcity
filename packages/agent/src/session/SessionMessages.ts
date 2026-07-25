@@ -45,7 +45,7 @@ import {
   from_ui_user_parts,
   to_executor_ui_message,
 } from "@/session/messages/SessionMessageCodec.js";
-import { hydrateUserPromptFileParts } from "@executor/messages/SessionAttachmentMapper.js";
+import { hydrate_user_prompt_file_parts } from "@executor/messages/SessionAttachmentMapper.js";
 import type {
   AppendCompletedAssistantMessageInput,
   AppendExternalSessionAssistantMessageInput,
@@ -269,7 +269,7 @@ export class SessionMessages {
     const query = input.prompt.query;
     const ui_parts = typeof query === "string"
       ? [{ type: "text" as const, text: query.trim() }]
-      : await hydrateUserPromptFileParts(
+      : await hydrate_user_prompt_file_parts(
           Array.isArray(query) ? query : [],
           input.project_root,
         );

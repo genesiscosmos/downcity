@@ -6,13 +6,13 @@
  * - 与 message 组装解耦，便于独立复用与测试。
  */
 
-import { resolvePromptGeoContext } from "@executor/composer/system/default/variables/GeoContext.js";
+import { resolve_prompt_geo_context } from "@executor/composer/system/default/variables/GeoContext.js";
 import type { PromptVariables } from "@executor/composer/system/default/variables/PromptTypes.js";
-import { renderTemplateVariables } from "@/utils/Template.js";
+import { render_template_variables } from "@/utils/Template.js";
 import {
-  formatDateInTimezone,
+  format_date_in_timezone,
   format_date_time_in_timezone,
-  formatYearInTimezone,
+  format_year_in_timezone,
   resolve_runtime_timezone,
 } from "@/utils/Time.js";
 
@@ -49,7 +49,7 @@ async function buildPromptVariables(options?: {
     return {
       currentDate: "[See runtime clock tail message]",
       currentTime: "[See runtime clock tail message]",
-      currentYear: formatYearInTimezone(now, safeLocalTimezone),
+      currentYear: format_year_in_timezone(now, safeLocalTimezone),
       timezone: safeLocalTimezone,
       location: "[See runtime clock tail message]",
       projectPath,
@@ -58,13 +58,13 @@ async function buildPromptVariables(options?: {
     };
   }
 
-  const geo = await resolvePromptGeoContext();
+  const geo = await resolve_prompt_geo_context();
   const session_id = String(options?.session_id || "").trim() || "unknown";
   return {
     // 关键点（中文）：时间字段只使用本机 runtime 时区，避免代理/IP 地理推断改变 cron 与相对时间口径。
-    currentDate: formatDateInTimezone(now, safeLocalTimezone),
+    currentDate: format_date_in_timezone(now, safeLocalTimezone),
     currentTime: format_date_time_in_timezone(now, safeLocalTimezone),
-    currentYear: formatYearInTimezone(now, safeLocalTimezone),
+    currentYear: format_year_in_timezone(now, safeLocalTimezone),
     timezone: safeLocalTimezone,
     location: geo.location,
     projectPath,
@@ -86,7 +86,7 @@ async function buildPromptVariables(options?: {
  * - `{{project_root}}`
  * - `{{session_id}}`
  */
-export async function replaceVariablesInPrompts(
+export async function replace_variables_in_prompts(
   prompt: string,
   options?: {
     /**
@@ -107,7 +107,7 @@ export async function replaceVariablesInPrompts(
 ): Promise<string> {
   if (!prompt) return prompt;
   const variables = await buildPromptVariables(options);
-  return renderTemplateVariables(prompt, {
+  return render_template_variables(prompt, {
     current_date: variables.currentDate,
     current_time: variables.currentTime,
     current_year: variables.currentYear,
@@ -127,7 +127,7 @@ export async function replaceVariablesInPrompts(
  * - 这里在 messages 尾部补齐 `current_date/current_time/timezone`，让 chat、task、prompt 的时间语义统一。
  * - 只使用本机 runtime 时区，避免每轮为了地理位置进行网络请求。
  */
-export function buildRuntimeClockSystemPrompt(options?: {
+export function build_runtime_clock_system_prompt(options?: {
   /**
    * 项目路径（用于 `project_root`）。
    */
@@ -145,7 +145,7 @@ export function buildRuntimeClockSystemPrompt(options?: {
   return [
     "# Runtime Clock Context",
     "The following fields are the authoritative time context for this run. Prefer them when resolving relative time expressions such as today, tomorrow, or a specific hour:",
-    `- current_date: ${formatDateInTimezone(now, timezone)}`,
+    `- current_date: ${format_date_in_timezone(now, timezone)}`,
     `- current_time: ${format_date_time_in_timezone(now, timezone)}`,
     `- timezone: ${timezone}`,
     `- session_id: ${session_id}`,

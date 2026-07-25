@@ -11,7 +11,7 @@ import type { JsonObject } from "@/types/common/Json.js";
 /**
  * 归一化 stream 错误日志字段。
  */
-export function summarizeStreamError(error: unknown): JsonObject {
+export function summarize_stream_error(error: unknown): JsonObject {
   const record =
     error && typeof error === "object" && !Array.isArray(error)
       ? (error as Record<string, unknown>)
@@ -28,7 +28,7 @@ export function summarizeStreamError(error: unknown): JsonObject {
 /**
  * 提取实际应返回给上层的错误文本。
  */
-export function resolveEffectiveCoreEngineError(params: {
+export function resolve_effective_core_engine_error(params: {
   /**
    * 外层捕获到的执行错误。
    */

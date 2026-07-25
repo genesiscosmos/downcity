@@ -95,7 +95,7 @@ function extractToolOutput(part: ToolPartCompatShape): string {
 /**
  * 从 parts 数组中提取纯文本。
  */
-export function extractTextFromParts(
+export function extract_text_from_parts(
   parts: SessionUserMessagePart[] | null | undefined,
 ): string {
   if (!Array.isArray(parts)) return "";
@@ -109,7 +109,7 @@ export function extractTextFromParts(
 /**
  * 从 UIMessage 中提取纯文本。
  */
-export function extractTextFromUiMessage(
+export function extract_text_from_ui_message(
   message: UIMessage | null | undefined,
 ): string {
   const parts = toUiParts(message);

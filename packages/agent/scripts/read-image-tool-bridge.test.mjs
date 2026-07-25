@@ -11,8 +11,8 @@ import assert from "node:assert/strict";
 
 import { inject_read_image_user_message } from "../bin/executor/tools/file/ReadImageToolBridge.js";
 import {
-  pickMergedUserMessages,
-  toModelMessages,
+  pick_merged_user_messages,
+  to_model_messages,
 } from "../bin/executor/messages/SessionMessageCodec.js";
 
 test("read image data is injected as a user file part", async () => {
@@ -45,9 +45,9 @@ test("read image data is injected as a user file part", async () => {
   assert.equal(message.parts[1].type, "file");
   assert.equal(message.parts[1].url, data_url);
   assert.equal(message.parts[1].mediaType, "image/png");
-  assert.equal(pickMergedUserMessages([message]).length, 1);
+  assert.equal(pick_merged_user_messages([message]).length, 1);
 
-  const model_messages = await toModelMessages([message], {});
+  const model_messages = await to_model_messages([message], {});
   assert.equal(model_messages.length, 1);
   assert.equal(model_messages[0].role, "user");
   assert.match(JSON.stringify(model_messages[0]), /iVBORw0KGgo=/);

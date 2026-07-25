@@ -13,7 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "fs-extra";
 import type { FileUIPart } from "ai";
-import { getDowncityResourcesDirPath } from "@/workspace/WorkspacePaths.js";
+import { get_downcity_resources_dir_path } from "@/workspace/WorkspacePaths.js";
 
 /** 单个 assistant 资源下载允许占用的最长时间。 */
 const ASSISTANT_RESOURCE_TIMEOUT_MS = 30_000;
@@ -110,7 +110,7 @@ function filename_from_url(raw_url: string): string | undefined {
 /**
  * 将项目内文件路径转换为基于 Agent 根目录的相对路径。
  */
-export function toAgentRelativePath(params: {
+export function to_agent_relative_path(params: {
   /**
    * 当前 Agent 项目根目录。
    */
@@ -139,7 +139,7 @@ export function toAgentRelativePath(params: {
  * - 绝对路径原样归一化后返回。
  * - 越界路径返回空字符串，由调用方决定是否忽略。
  */
-export function resolveAgentFilePath(params: {
+export function resolve_agent_file_path(params: {
   /**
    * 当前 Agent 项目根目录。
    */
@@ -172,7 +172,7 @@ async function write_resource_file(params: {
     extension_from_filename(params.filename) ||
     extension_from_media_type(params.mediaType);
   const file_name = `${hash}${ext}`;
-  const resources_dir = getDowncityResourcesDirPath(params.project_root);
+  const resources_dir = get_downcity_resources_dir_path(params.project_root);
   const file_path = path.join(resources_dir, file_name);
 
   await fs.ensureDir(resources_dir);
@@ -362,7 +362,7 @@ async function materialize_file_part(params: {
     return {
       ...params.part,
       mediaType: media_type,
-      url: toAgentRelativePath({
+      url: to_agent_relative_path({
         project_root: params.project_root,
         filePath: file_path,
       }),
@@ -387,7 +387,7 @@ async function materialize_file_part(params: {
       return {
         ...params.part,
         mediaType: media_type,
-        url: toAgentRelativePath({
+        url: to_agent_relative_path({
           project_root: params.project_root,
           filePath: file_path,
         }),
@@ -419,7 +419,7 @@ async function materialize_file_part(params: {
   return {
     ...params.part,
     mediaType: media_type,
-    url: toAgentRelativePath({
+    url: to_agent_relative_path({
       project_root: params.project_root,
       filePath: file_path,
     }),
@@ -429,7 +429,7 @@ async function materialize_file_part(params: {
 /**
  * 将 assistant file part 中的资源统一落盘为 Agent 根目录相对路径。
  */
-export async function materializeAssistantFileParts(
+export async function materialize_assistant_file_parts(
   params: MaterializeAssistantFilePartsParams,
 ): Promise<FileUIPart[]> {
   const parts = Array.isArray(params.parts) ? params.parts : [];

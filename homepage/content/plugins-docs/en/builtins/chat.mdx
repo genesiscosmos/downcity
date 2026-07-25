@@ -40,12 +40,12 @@ Most users do not control the channel runtime directly. They use the `downcity c
 ```bash
 downcity chat
 downcity chat list
-downcity chat info --chat-key <chatKey>
-downcity chat send --chat-key <chatKey> --text "Done"
-downcity chat react --chat-key <chatKey> --message-id <messageId> --emoji "👍"
-downcity chat context --chat-key <chatKey>
-downcity chat history --chat-key <chatKey> --limit 30
-downcity chat delete --chat-key <chatKey>
+downcity chat info --chat-key <chat_key>
+downcity chat send --chat-key <chat_key> --text "Done"
+downcity chat react --chat-key <chat_key> --message-id <message_id> --emoji "👍"
+downcity chat context --chat-key <chat_key>
+downcity chat history --chat-key <chat_key> --limit 30
+downcity chat delete --chat-key <chat_key>
 ```
 
 `downcity chat` with no subcommand opens the interactive chat account manager. Use it to add Telegram, Feishu, or QQ accounts before connecting an agent to those accounts.
@@ -131,11 +131,11 @@ When Feishu is enabled without the SDK installed, the runtime error tells you wh
 In an embedded SDK scenario, call the visible chat actions by plugin name:
 
 ```ts
-await agent.plugins.runAction({
+await agent.plugins.run_action({
   plugin: "chat",
   action: "send",
   payload: {
-    chatKey: "telegram:123456",
+    chat_key: "telegram:123456",
     text: "Done",
   },
 });
@@ -165,7 +165,7 @@ Authorization actions also live under `chat`:
 SDK example:
 
 ```ts
-await agent.plugins.runAction({
+await agent.plugins.run_action({
   plugin: "chat",
   action: "authorization-set-user-role",
   payload: {

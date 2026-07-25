@@ -17,7 +17,7 @@ import path from "node:path";
  * - 返回结果按“最上层目录 -> 当前项目目录”排序，适合做逐层覆盖合并。
  * - 若文件名为空，则直接返回空数组，避免调用方拼接出异常路径。
  */
-export function collectAncestorNamedFilePaths(
+export function collect_ancestor_named_file_paths(
   project_root: string,
   filename: string,
 ): string[] {

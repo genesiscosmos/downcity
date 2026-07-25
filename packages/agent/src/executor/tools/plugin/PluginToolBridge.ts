@@ -22,8 +22,8 @@ import type {
   InvokePluginReadToolOptions,
 } from "@/types/plugin/PluginToolRuntime.js";
 import {
-  materializeAssistantFileParts,
-  resolveAgentFilePath,
+  materialize_assistant_file_parts,
+  resolve_agent_file_path,
 } from "@executor/messages/AssistantFileResource.js";
 
 /**
@@ -78,7 +78,7 @@ function summarize_materialized_files(
       media_type: part.mediaType,
       filename: typeof part.filename === "string" ? part.filename : "",
       relative_path,
-      path: resolveAgentFilePath({
+      path: resolve_agent_file_path({
         project_root: project_root,
         filePath: relative_path,
       }),
@@ -105,7 +105,7 @@ function summarize_action_data(data: JsonValue | undefined): JsonObject | undefi
 /**
  * 调用 plugin action 并桥接最终 assistant file parts。
  */
-export async function invokePluginCallTool(
+export async function invoke_plugin_call_tool(
   params: InvokePluginCallToolOptions,
 ): Promise<PluginCallToolResult> {
   const input: PluginCallInput = params.input;
@@ -148,7 +148,7 @@ export async function invokePluginCallTool(
       : [];
     const file_parts =
       raw_file_parts.length > 0
-        ? await materializeAssistantFileParts({
+        ? await materialize_assistant_file_parts({
             project_root: project_root,
             parts: raw_file_parts,
           })
@@ -185,7 +185,7 @@ export async function invokePluginCallTool(
 /**
  * 读取 plugin / action metadata。
  */
-export async function invokePluginReadTool(
+export async function invoke_plugin_read_tool(
   params: InvokePluginReadToolOptions,
 ): Promise<PluginReadToolResult> {
   const input: PluginReadInput = params.input;

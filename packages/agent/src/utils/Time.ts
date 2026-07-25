@@ -6,7 +6,7 @@
  * 2. 提供耗时格式化，便于日志和 CLI 输出使用一致单位。
  * 3. 提供 runtime 时区格式化，确保 prompt / message / task 共享同一时间口径。
  */
-export function getTimestamp(): string {
+export function get_timestamp(): string {
   return new Date().toISOString();
 }
 
@@ -15,7 +15,7 @@ export function resolve_runtime_timezone(): string {
   return String(timezone || "").trim() || "UTC";
 }
 
-export function formatDateInTimezone(
+export function format_date_in_timezone(
   date: Date = new Date(),
   timezone: string = resolve_runtime_timezone(),
 ): string {
@@ -56,7 +56,7 @@ export function format_date_time_in_timezone(
   }
 }
 
-export function formatYearInTimezone(
+export function format_year_in_timezone(
   date: Date = new Date(),
   timezone: string = resolve_runtime_timezone(),
 ): string {

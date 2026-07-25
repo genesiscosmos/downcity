@@ -32,7 +32,7 @@ import {
   Agent,
   Workspace,
   BasePlugin,
-  type AgentContext,
+  type PluginContext,
   type PluginActions,
   type PluginConfigDefinition,
 } from "@downcity/agent";
@@ -51,8 +51,8 @@ class NotesPlugin extends BasePlugin {
     },
   } satisfies PluginConfigDefinition;
 
-  system(context: AgentContext) {
-    return `Project notes folder: ${context.rootPath}/.notes`;
+  system(context: PluginContext) {
+    return `Project notes folder: ${context.workspace_path}/.notes`;
   }
 
   readonly actions: PluginActions = {
@@ -62,7 +62,7 @@ class NotesPlugin extends BasePlugin {
         return {
           success: true,
           data: {
-            rootPath: context.rootPath,
+            workspace_path: context.workspace_path,
           },
         };
       },
@@ -77,7 +77,7 @@ const agent = new Agent({
   plugins: [new NotesPlugin()],
 });
 
-const status = await agent.plugins.runAction({
+const status = await agent.plugins.run_action({
   plugin: "notes",
   action: "status",
 });
@@ -95,7 +95,7 @@ const status = await agent.plugins.runAction({
 这里最值得注意的是：
 
 - `status` 因为声明了 `allowWhenDisabled: true`，即使 plugin 被显式禁用也能用于自检
-- `agent.plugins.runAction(...)` 是最直接的显式调用入口
+- `agent.plugins.run_action(...)` 是最直接的显式调用入口
 - 如果你再实现 `system()`，当这个 plugin 注册到 Agent 上时，本地 SDK session 主路径会注入这段 system 文本
 
 ## 相关文档

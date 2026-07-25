@@ -43,7 +43,7 @@ function parseNonNegativeIntOptionOrThrow(value: string, fieldName: string): num
  * - Unix 时间戳秒/毫秒
  * - ISO 时间字符串（必须显式带时区）
  */
-export function parseScheduleTimeOptionOrThrow(
+export function parse_schedule_time_option_or_throw(
   value: string,
   fieldName: string,
 ): number {
@@ -104,7 +104,7 @@ export function parse_action_schedule_run_at_ms_or_throw(params: {
   }
 
   if (timeText) {
-    return parseScheduleTimeOptionOrThrow(timeText, "time");
+    return parse_schedule_time_option_or_throw(timeText, "time");
   }
 
   return undefined;
@@ -113,7 +113,7 @@ export function parse_action_schedule_run_at_ms_or_throw(params: {
 /**
  * 规范化 API/存储层传入的 run_at_ms。
  */
-export function normalizeRunAtMsOrThrow(
+export function normalize_run_at_ms_or_throw(
   value: string | number | undefined,
   fieldName: string,
 ): number {

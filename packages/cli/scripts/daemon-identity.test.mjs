@@ -26,7 +26,7 @@ test("daemon stop only cleans stale files when PID belongs to another process", 
     assert.ok(child.pid)
     await writeDaemonFiles(project_root, {
       pid: child.pid,
-      instanceId: "stale-instance-id",
+      instance_id: "stale-instance-id",
       project_root: project_root,
       startedAt: new Date().toISOString(),
       command: process.execPath,
@@ -83,7 +83,7 @@ test("daemon stop terminates a process with matching command and instance identi
     assert.ok(child.pid)
     await writeDaemonFiles(project_root, {
       pid: child.pid,
-      instanceId: instance_id,
+      instance_id: instance_id,
       project_root: project_root,
       startedAt: new Date().toISOString(),
       command: process.execPath,

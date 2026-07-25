@@ -211,7 +211,7 @@ export type RpcRequest =
       /** 取消订阅参数。 */
       params: {
         /** 当前订阅 id。 */
-        subscriptionId: string;
+        subscription_id: string;
       };
     }
   | {
@@ -358,7 +358,7 @@ export interface RpcReadyFrame {
   /** 帧类型。 */
   type: "ready";
   /** 当前订阅 id。 */
-  subscriptionId: string;
+  subscription_id: string;
 }
 
 /**
@@ -368,7 +368,7 @@ export interface RpcEventFrame {
   /** 帧类型。 */
   type: "event";
   /** 当前订阅 id。 */
-  subscriptionId: string;
+  subscription_id: string;
   /** session 事件。 */
   event: SessionMutation;
 }
@@ -402,7 +402,7 @@ export interface RpcInternalStatus {
   /** 当前 Agent 项目的绝对路径。 */
   project_root: string;
   /** daemon 启动实例 ID；非 daemon 前台进程返回空字符串。 */
-  instanceId: string;
+  instance_id: string;
 }
 
 /**
@@ -446,9 +446,9 @@ export interface RpcSystemPromptPayload {
   /** 当前 session id。 */
   session_id: string;
   /** system message 总数。 */
-  totalMessages: number;
+  total_messages: number;
   /** system message 总字符数。 */
-  totalChars: number;
+  total_chars: number;
   /** system message 分段。 */
   sections: RpcSystemPromptSection[];
 }

@@ -86,7 +86,7 @@ zod: ^4.4.3
 - 不修改 `skill.lookup` 的 action schema。
 - 不把 `skill.lookup.name` 提升到 `plugin_call` 外层。
 - 不为每个 plugin action 动态生成独立模型 tool。
-- 不改变 `PluginRegistry.runAction()` 的 payload 校验职责。
+- 不改变 `PluginRegistry.run_action()` 的 payload 校验职责。
 - 不改变现有 plugin action 的 `input_schema.zod` 与 `input_schema.json_schema` 设计。
 
 `skill.lookup` 要求 `name` 是正确的业务约束，问题发生在 `plugin_call` 外层通用透传 schema。
@@ -289,7 +289,7 @@ z.record(z.string(), z.any())
 packages/agent/src/executor/tools/plugin/PluginToolSchemas.ts
 ```
 
-或通过 `createPluginTools()` 间接读取 tool schema。
+或通过 `create_plugin_tools()` 间接读取 tool schema。
 
 核心断言：
 
@@ -384,7 +384,7 @@ plugin_call({
 - `plugin_call.payload` 暴露给模型的 JSON Schema 为 `additionalProperties: true`。
 - `plugin_call` 外层仍保持 `additionalProperties: false`。
 - `skill.lookup` 不做任何改动。
-- `PluginRegistry.runAction()` 仍负责具体 action payload 的运行时校验。
+- `PluginRegistry.run_action()` 仍负责具体 action payload 的运行时校验。
 - local-node + Kimi Coding 可以正常生成 `payload.name`。
 - existing tool loop 测试仍通过。
 - `@downcity/agent` typecheck 通过。

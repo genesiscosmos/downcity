@@ -14,6 +14,6 @@
  * - 数组、`null`、函数都不会被视为普通对象。
  * - 当前只要求“可按键遍历的普通对象”，不强制校验原型链来源。
  */
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
+export function is_plain_object(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

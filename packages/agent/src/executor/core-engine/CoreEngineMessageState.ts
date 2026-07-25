@@ -10,8 +10,8 @@
 import type { ModelMessage, Tool } from "ai";
 import type { SessionRecordV1 } from "@/executor/types/SessionRecords.js";
 import {
-  pickMergedUserMessages,
-  toModelMessages,
+  pick_merged_user_messages,
+  to_model_messages,
 } from "@executor/messages/SessionMessageCodec.js";
 
 /**
@@ -84,7 +84,7 @@ export class CoreEngineMessageState {
       : [];
     return new CoreEngineMessageState({
       sessionMessages,
-      modelMessages: await toModelMessages(
+      modelMessages: await to_model_messages(
         sessionMessages,
         params.tools,
         params.project_root,
@@ -107,7 +107,7 @@ export class CoreEngineMessageState {
   async appendMergedUserMessages(
     messages: SessionRecordV1[],
   ): Promise<ModelMessage[]> {
-    const mergedMessages = pickMergedUserMessages(messages);
+    const mergedMessages = pick_merged_user_messages(messages);
     if (mergedMessages.length === 0) return [];
     return await this.appendSessionMessagesAsModelMessages(mergedMessages);
   }
@@ -156,7 +156,7 @@ export class CoreEngineMessageState {
     tools: Record<string, Tool>,
   ): Promise<void> {
     this.sessionMessages = Array.isArray(messages) ? [...messages] : [];
-    this.currentModelMessages = await toModelMessages(
+    this.currentModelMessages = await to_model_messages(
       this.sessionMessages,
       tools,
       this.project_root,
@@ -167,7 +167,7 @@ export class CoreEngineMessageState {
     messages: SessionRecordV1[],
   ): Promise<ModelMessage[]> {
     this.sessionMessages = [...this.sessionMessages, ...messages];
-    const modelMessages = await toModelMessages(
+    const modelMessages = await to_model_messages(
       messages,
       this.tools,
       this.project_root,
@@ -176,7 +176,7 @@ export class CoreEngineMessageState {
       this.currentModelMessages = [...this.currentModelMessages, ...modelMessages];
       return modelMessages;
     }
-    this.currentModelMessages = await toModelMessages(
+    this.currentModelMessages = await to_model_messages(
       this.sessionMessages,
       this.tools,
       this.project_root,

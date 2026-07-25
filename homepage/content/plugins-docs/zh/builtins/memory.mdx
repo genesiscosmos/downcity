@@ -72,14 +72,14 @@ downcity memory status
 downcity memory search "project decision" --max-results 5
 downcity memory read .downcity/memory/wiki/project-decisions.md --from 1 --lines 20
 downcity memory remember --content "Prefer constructor-based plugin config." --topic "plugin system"
-downcity memory digest --session-id <sessionId> --max-messages 30
+downcity memory digest --session-id <session_id> --max-messages 30
 downcity memory revise .downcity/memory/wiki/plugin-system.md --instruction "Merge the latest constructor config decision"
 ```
 
 ## SDK action 用法
 
 ```ts
-await agent.plugins.runAction({
+await agent.plugins.run_action({
   plugin: "memory",
   action: "remember",
   payload: {

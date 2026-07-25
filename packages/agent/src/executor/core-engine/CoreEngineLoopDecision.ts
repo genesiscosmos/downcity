@@ -21,7 +21,7 @@ import type {
  * 3. text-only 自动续跑
  * 4. 停止
  */
-export function evaluateCoreEngineLoopDecision(
+export function evaluate_core_engine_loop_decision(
   input: SessionLoopDecisionInput,
 ): SessionLoopDecision {
   if (
@@ -73,7 +73,7 @@ export function evaluateCoreEngineLoopDecision(
  * - 只要最后一次 tail merge 真正并入了新的 user 消息，就必须续跑。
  * - 这样可以覆盖“最后一个 step 结束后，新消息才到达”的收尾窗口。
  */
-export function shouldContinueForTailMergedUserMessages(
+export function should_continue_for_tail_merged_user_messages(
   input: SessionTailMergeContinuationInput,
 ): boolean {
   return input.mergedUserMessageCount > 0;

@@ -14,12 +14,12 @@ import type { PluginSnapshot } from "@/types/plugin/PluginState.js";
 import type { PluginActionScheduleInput } from "@/plugin/types/ActionSchedule.js";
 import type { JsonValue } from "@/types/common/Json.js";
 import { ActionScheduleStore } from "@/plugin/core/ActionScheduleStore.js";
-import { normalizeRunAtMsOrThrow } from "@/plugin/core/ActionScheduleTime.js";
+import { normalize_run_at_ms_or_throw } from "@/plugin/core/ActionScheduleTime.js";
 
 /**
  * 按名称解析 plugin action。
  */
-export function resolvePluginAction(
+export function resolve_plugin_action(
   plugin: {
     actions?: Record<string, PluginAction<JsonValue, JsonValue>>;
   },
@@ -33,7 +33,7 @@ export function resolvePluginAction(
 /**
  * 执行一个 plugin action。
  */
-export async function invokePluginAction(params: {
+export async function invoke_plugin_action(params: {
   plugin_name: string;
   action_name: string;
   payload?: JsonValue;
@@ -56,7 +56,7 @@ async function schedulePluginAction(params: {
 }): Promise<PluginCommandResult & { plugin?: PluginSnapshot }> {
   try {
     const scheduleInput = params.schedule as Partial<PluginActionScheduleInput>;
-    const run_at_ms = normalizeRunAtMsOrThrow(
+    const run_at_ms = normalize_run_at_ms_or_throw(
       scheduleInput.run_at_ms,
       "schedule.run_at_ms",
     );
@@ -129,7 +129,7 @@ export async function run_plugin_command(params: {
     };
   }
 
-  const action = resolvePluginAction(plugin, command);
+  const action = resolve_plugin_action(plugin, command);
   if (params.schedule !== undefined && params.schedule !== null) {
     if (!action) {
       return {

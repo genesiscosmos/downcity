@@ -19,6 +19,6 @@ description: 用一个 runtime HTTP 场景说明 plugin 如何注入自己的只
 
 也就是说：
 
-- `plugin.http.server` 不是 `agent.plugins.runAction(...)` 这一类显式调用
+- `plugin.http.server` 不是 `agent.plugins.run_action(...)` 这一类显式调用
 - 当前由 Downcity 暴露 HTTP，并为运行中的 Agent 自动挂载 plugin HTTP 路由
 - 如果你需要这一层，就应该把它理解成更完整的 host/runtime 集成能力

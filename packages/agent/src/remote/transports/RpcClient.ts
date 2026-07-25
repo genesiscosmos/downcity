@@ -306,15 +306,15 @@ export class RpcClient {
     on_event: (event: SessionMutation) => void;
     on_close: (error?: unknown) => void;
   }): Promise<RpcSessionSubscription> {
-    const data = await this.request<{ subscriptionId: string }>({
+    const data = await this.request<{ subscription_id: string }>({
       method: "sdk.sessions.subscribe",
       params: {
         session_id: params.session_id,
       },
     });
-    const subscription_id = String(data.subscriptionId || "").trim();
+    const subscription_id = String(data.subscription_id || "").trim();
     if (!subscription_id) {
-      throw new Error("RPC subscription did not return subscriptionId");
+      throw new Error("RPC subscription did not return subscription_id");
     }
     this.subscriptions.set(subscription_id, {
       on_ready: params.on_ready,
@@ -329,7 +329,7 @@ export class RpcClient {
         await this.request({
           method: "sdk.sessions.unsubscribe",
           params: {
-            subscriptionId: subscription_id,
+            subscription_id: subscription_id,
           },
         });
       },
@@ -603,12 +603,12 @@ export class RpcClient {
   private consume_line(line: string): void {
     const payload = JSON.parse(line) as RpcClientFrame;
     if ("type" in payload && payload.type === "ready") {
-      const subscription = this.subscriptions.get(payload.subscriptionId);
+      const subscription = this.subscriptions.get(payload.subscription_id);
       subscription?.on_ready();
       return;
     }
     if ("type" in payload && payload.type === "event") {
-      const subscription = this.subscriptions.get(payload.subscriptionId);
+      const subscription = this.subscriptions.get(payload.subscription_id);
       subscription?.on_event(payload.event);
       return;
     }

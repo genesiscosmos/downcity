@@ -13,7 +13,7 @@ import {
   type SessionMessageRecordV1,
 } from "@/executor/types/SessionRecords.js";
 import {
-  extractTextFromUiMessage,
+  extract_text_from_ui_message,
   extract_tool_calls_from_ui_message,
 } from "./UIMessageTransformer.js";
 
@@ -71,5 +71,5 @@ export function pick_last_successful_chat_send_text(
       return text;
     }
   }
-  return extractTextFromUiMessage(message);
+  return extract_text_from_ui_message(message);
 }

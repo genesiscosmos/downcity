@@ -7,7 +7,7 @@
  * - 这里只负责结构合并，不负责字段合法性校验。
  */
 
-import { isPlainObject } from "@/utils/object/ObjectGuards.js";
+import { is_plain_object } from "@/utils/object/ObjectGuards.js";
 
 /**
  * 深合并两个未知值。
@@ -17,8 +17,8 @@ import { isPlainObject } from "@/utils/object/ObjectGuards.js";
  * - 数组始终以 `override` 为准，不做拼接。
  * - 当 `override === undefined` 时保留 `base`，便于做配置层覆盖。
  */
-export function deepMerge(base: unknown, override: unknown): unknown {
-  if (!isPlainObject(base) || !isPlainObject(override)) {
+export function deep_merge(base: unknown, override: unknown): unknown {
+  if (!is_plain_object(base) || !is_plain_object(override)) {
     return override === undefined ? base : override;
   }
 
@@ -29,8 +29,8 @@ export function deepMerge(base: unknown, override: unknown): unknown {
       out[key] = overrideValue;
       continue;
     }
-    if (isPlainObject(overrideValue) && isPlainObject(baseValue)) {
-      out[key] = deepMerge(baseValue, overrideValue);
+    if (is_plain_object(overrideValue) && is_plain_object(baseValue)) {
+      out[key] = deep_merge(baseValue, overrideValue);
       continue;
     }
     out[key] = overrideValue === undefined ? baseValue : overrideValue;

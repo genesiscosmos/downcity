@@ -66,7 +66,7 @@ export interface CreateRuntimeSessionPortParams {
 /**
  * 创建供 plugin runtime 使用的 session 端口。
  */
-export function createRuntimeSessionPort(
+export function create_runtime_session_port(
   params: CreateRuntimeSessionPortParams,
 ): SessionPort {
   return {

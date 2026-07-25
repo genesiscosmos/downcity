@@ -107,7 +107,7 @@ function toDataPartType(type: string): string {
 /**
  * 从 step_result 提取按顺序写入同一条 assistant message 的 parts。
  */
-export function buildSessionStepParts(params: {
+export function build_session_step_parts(params: {
   step_index: number;
   step_result?: unknown;
   text: string;

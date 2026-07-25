@@ -27,7 +27,7 @@ description: 详细说明 workboard 内建 plugin 如何通过 runtime HTTP 暴�
 
 因为它说明了一件很关键的事：
 
-- plugin 不一定非要靠 `runAction(...)` 才算“被使用”
+- plugin 不一定非要靠 `run_action(...)` 才算“被使用”
 
 有些 plugin 的主要消费者并不是 agent 自己，而是：
 
@@ -98,7 +98,7 @@ description: 详细说明 workboard 内建 plugin 如何通过 runtime HTTP 暴�
 
 ## 在 SDK 里怎么理解它
 
-对于 `workboard`，最重要的不是“怎么 `runAction`”，而是“它如何把 HTTP 路由安全地挂进 runtime”。
+对于 `workboard`，最重要的不是“怎么 `run_action`”，而是“它如何把 HTTP 路由安全地挂进 runtime”。
 
 也就是说，这个 plugin 的主要消费方式更接近：
 

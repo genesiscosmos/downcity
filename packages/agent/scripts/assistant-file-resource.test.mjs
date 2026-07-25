@@ -14,25 +14,25 @@ import fs from "node:fs/promises";
 import http from "node:http";
 import { pathToFileURL } from "node:url";
 
-import { materializeAssistantFileParts } from "../bin/executor/messages/AssistantFileResource.js";
+import { materialize_assistant_file_parts } from "../bin/executor/messages/AssistantFileResource.js";
 import {
-  hydrateUserPromptFileParts,
-  hydrateFileUrlPartsForModel,
-  injectFilePartsFromAttachments,
+  hydrate_user_prompt_file_parts,
+  hydrate_file_url_parts_for_model,
+  inject_file_parts_from_attachments,
 } from "../bin/executor/messages/SessionAttachmentMapper.js";
 
 function resource_path_from_relative_path(project_root, relative_path) {
   return path.join(project_root, String(relative_path || ""));
 }
 
-test("materializeAssistantFileParts stores data URL images under .downcity/resources", async () => {
+test("materialize_assistant_file_parts stores data URL images under .downcity/resources", async () => {
   const project_root = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-assistant-resource-"),
   );
   const bytes = Buffer.from("png-bytes-for-test", "utf8");
   const data_url = `data:image/png;base64,${bytes.toString("base64")}`;
 
-  const parts = await materializeAssistantFileParts({
+  const parts = await materialize_assistant_file_parts({
     project_root: project_root,
     parts: [
       {
@@ -59,7 +59,7 @@ test("materializeAssistantFileParts stores data URL images under .downcity/resou
   assert.deepEqual(await fs.readFile(resource_path), bytes);
 });
 
-test("materializeAssistantFileParts downloads remote file URLs into resources", async () => {
+test("materialize_assistant_file_parts downloads remote file URLs into resources", async () => {
   const project_root = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-assistant-remote-resource-"),
   );
@@ -76,7 +76,7 @@ test("materializeAssistantFileParts downloads remote file URLs into resources", 
     assert.ok(address);
     const remote_url = `http://127.0.0.1:${address.port}/image.png`;
 
-    const parts = await materializeAssistantFileParts({
+    const parts = await materialize_assistant_file_parts({
       project_root: project_root,
       parts: [
         {
@@ -101,7 +101,7 @@ test("materializeAssistantFileParts downloads remote file URLs into resources", 
   }
 });
 
-test("materializeAssistantFileParts rejects oversized remote resources before download", async () => {
+test("materialize_assistant_file_parts rejects oversized remote resources before download", async () => {
   const project_root = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-assistant-large-resource-"),
   );
@@ -119,7 +119,7 @@ test("materializeAssistantFileParts rejects oversized remote resources before do
     assert.equal(typeof address, "object");
     assert.ok(address);
     const remote_url = `http://127.0.0.1:${address.port}/large.bin`;
-    const parts = await materializeAssistantFileParts({
+    const parts = await materialize_assistant_file_parts({
       project_root: project_root,
       parts: [
         {
@@ -140,14 +140,14 @@ test("materializeAssistantFileParts rejects oversized remote resources before do
   }
 });
 
-test("materializeAssistantFileParts resolves relative local file URLs from agent project root", async () => {
+test("materialize_assistant_file_parts resolves relative local file URLs from agent project root", async () => {
   const project_root = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-assistant-relative-resource-"),
   );
   const bytes = Buffer.from("relative-local-png-bytes", "utf8");
   await fs.writeFile(path.join(project_root, "input.png"), bytes);
 
-  const parts = await materializeAssistantFileParts({
+  const parts = await materialize_assistant_file_parts({
     project_root: project_root,
     parts: [
       {
@@ -166,12 +166,12 @@ test("materializeAssistantFileParts resolves relative local file URLs from agent
   );
 });
 
-test("hydrateFileUrlPartsForModel converts relative resource paths back to data URLs in memory", async () => {
+test("hydrate_file_url_parts_for_model converts relative resource paths back to data URLs in memory", async () => {
   const project_root = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-assistant-hydrate-"),
   );
   const bytes = Buffer.from("hydrate-bytes-for-test", "utf8");
-  const materialized = await materializeAssistantFileParts({
+  const materialized = await materialize_assistant_file_parts({
     project_root: project_root,
     parts: [
       {
@@ -183,7 +183,7 @@ test("hydrateFileUrlPartsForModel converts relative resource paths back to data 
     ],
   });
 
-  const messages = await hydrateFileUrlPartsForModel(
+  const messages = await hydrate_file_url_parts_for_model(
     [
       {
         id: "a:test:1",
@@ -209,7 +209,7 @@ test("hydrateFileUrlPartsForModel converts relative resource paths back to data 
   assert.match(materialized[0].url, /^\.downcity\/resources\//);
 });
 
-test("hydrateUserPromptFileParts converts local image paths to data URLs before persistence", async () => {
+test("hydrate_user_prompt_file_parts converts local image paths to data URLs before persistence", async () => {
   const project_root = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-user-prompt-image-"),
   );
@@ -217,7 +217,7 @@ test("hydrateUserPromptFileParts converts local image paths to data URLs before 
   const image_path = path.join(project_root, "image.png");
   await fs.writeFile(image_path, bytes);
 
-  const parts = await hydrateUserPromptFileParts(
+  const parts = await hydrate_user_prompt_file_parts(
     [
       {
         type: "text",
@@ -242,10 +242,10 @@ test("hydrateUserPromptFileParts converts local image paths to data URLs before 
   );
 });
 
-test("hydrateUserPromptFileParts keeps existing data URLs and non-image files unchanged", async () => {
+test("hydrate_user_prompt_file_parts keeps existing data URLs and non-image files unchanged", async () => {
   const data_url = "data:image/png;base64,already-base64";
   const pdf_url = "/tmp/input.pdf";
-  const parts = await hydrateUserPromptFileParts(
+  const parts = await hydrate_user_prompt_file_parts(
     [
       {
         type: "file",
@@ -267,7 +267,7 @@ test("hydrateUserPromptFileParts keeps existing data URLs and non-image files un
   assert.equal(parts[1]?.url, pdf_url);
 });
 
-test("hydrateFileUrlPartsForModel keeps old file URLs compatible", async () => {
+test("hydrate_file_url_parts_for_model keeps old file URLs compatible", async () => {
   const project_root = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-assistant-file-url-"),
   );
@@ -275,7 +275,7 @@ test("hydrateFileUrlPartsForModel keeps old file URLs compatible", async () => {
   const file_path = path.join(project_root, "legacy.png");
   await fs.writeFile(file_path, bytes);
 
-  const messages = await hydrateFileUrlPartsForModel(
+  const messages = await hydrate_file_url_parts_for_model(
     [
       {
         id: "a:test:legacy",
@@ -306,14 +306,14 @@ test("hydrateFileUrlPartsForModel keeps old file URLs compatible", async () => {
   );
 });
 
-test("injectFilePartsFromAttachments resolves relative file tags from agent project root", async () => {
+test("inject_file_parts_from_attachments resolves relative file tags from agent project root", async () => {
   const project_root = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-attachment-relative-"),
   );
   const bytes = Buffer.from("attachment-relative-png-bytes", "utf8");
   await fs.writeFile(path.join(project_root, "input.png"), bytes);
 
-  const messages = await injectFilePartsFromAttachments(
+  const messages = await inject_file_parts_from_attachments(
     [
       {
         id: "u:test:attachment",

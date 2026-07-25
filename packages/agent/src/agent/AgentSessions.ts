@@ -30,7 +30,7 @@ import type {
 import type { AgentManagedSession } from "@/types/session/SessionOptions.js";
 import { Session } from "@/session/Session.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
-import { createInstructionSystemBlocks } from "@/agent/AgentInstructions.js";
+import { create_instruction_system_blocks } from "@/agent/AgentInstructions.js";
 import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.js";
 import type { AgentStore } from "@/types/store/AgentStore.js";
 
@@ -336,7 +336,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   }
 
   private load_instruction_system_blocks(): AgentSessionSystemBlock[] {
-    return createInstructionSystemBlocks(
+    return create_instruction_system_blocks(
       this.get_instruction(),
       this.workspace_path,
     );

@@ -103,7 +103,7 @@ sequenceDiagram
   Model->>Tool: plugin_call({ plugin: "skill", action: "lookup" })
   Tool->>Global: require_plugin_tool_runtime()
   Global-->>Tool: 返回最后一次 set 的 runtime
-  Tool->>Registry: runAction({ plugin, action, payload })
+  Tool->>Registry: run_action({ plugin, action, payload })
   Registry->>Registry: 检查 skill 是否 ready
   alt skill ready
     Registry->>Skill: execute(payload)
@@ -135,7 +135,7 @@ sequenceDiagram
   SessionA->>Tool: 模型调用 plugin_call(skill.lookup)
   Tool->>Global: require_plugin_tool_runtime()
   Global-->>Tool: B.registry
-  Tool->>AgentB: runAction(skill.lookup)
+  Tool->>AgentB: run_action(skill.lookup)
 ```
 
 这个流程的本质问题：
@@ -147,7 +147,7 @@ plugin runtime 来源却是 Agent B
 
 ### 3.5 当前 plugin 状态污染流程
 
-当前 `PluginRegistry.runAction()` 中，如果 action 返回 `success: false`，会把整个 plugin 状态设置为 `error`。
+当前 `PluginRegistry.run_action()` 中，如果 action 返回 `success: false`，会把整个 plugin 状态设置为 `error`。
 
 ```mermaid
 flowchart TD
@@ -298,9 +298,9 @@ setPluginToolRuntime(plugins);
 优化后内部入口：
 
 ```ts
-import { createPluginTools } from "...";
+import { create_plugin_tools } from "...";
 
-const plugin_tools = createPluginTools({
+const plugin_tools = create_plugin_tools({
   plugins,
 });
 
@@ -324,11 +324,11 @@ export interface CreatePluginToolsOptions {
   plugins: AgentPlugins;
 }
 
-export function createPluginCallTool(options: CreatePluginToolsOptions): Tool;
+export function create_plugin_call_tool(options: CreatePluginToolsOptions): Tool;
 
-export function createPluginReadTool(options: CreatePluginToolsOptions): Tool;
+export function create_plugin_read_tool(options: CreatePluginToolsOptions): Tool;
 
-export function createPluginTools(
+export function create_plugin_tools(
   options: CreatePluginToolsOptions,
 ): {
   plugin_call: Tool;
@@ -345,13 +345,13 @@ setPluginToolRuntime(...)
 如果测试仍需要直接调用 bridge，可以改为：
 
 ```ts
-invokePluginCallTool({
+invoke_plugin_call_tool({
   runtime: plugins,
   input,
 });
 ```
 
-或者让测试直接使用 `createPluginCallTool({ plugins })`。
+或者让测试直接使用 `create_plugin_call_tool({ plugins })`。
 
 ## 7. 优化后装配流程
 
@@ -360,7 +360,7 @@ flowchart TD
   A["new Agent(options)"] --> B["AgentAssemblyService.assemble()"]
   B --> C["createAgentPluginRegistry()"]
   C --> D["生成当前 Agent 的 plugin_registry"]
-  D --> E["createPluginTools({ plugins: plugin_registry })"]
+  D --> E["create_plugin_tools({ plugins: plugin_registry })"]
   E --> F["生成当前 Agent 专属 plugin_read"]
   E --> G["生成当前 Agent 专属 plugin_call"]
   F --> H["挂到当前 Agent.tools"]
@@ -386,7 +386,7 @@ sequenceDiagram
   participant SkillA as Agent A skill plugin
 
   Model->>ToolA: plugin_call({ plugin: "skill", action: "lookup" })
-  ToolA->>RegistryA: runAction({ plugin, action, payload })
+  ToolA->>RegistryA: run_action({ plugin, action, payload })
   RegistryA->>RegistryA: 检查 skill lifecycle 状态
   alt skill ready
     RegistryA->>SkillA: execute(payload)
@@ -418,15 +418,15 @@ sequenceDiagram
   participant RegistryB as B.registry
 
   Host->>AgentA: new Agent({ path: workspace_1 })
-  AgentA->>ToolA: createPluginTools({ plugins: A.registry })
+  AgentA->>ToolA: create_plugin_tools({ plugins: A.registry })
   Host->>AgentB: new Agent({ path: workspace_2 })
-  AgentB->>ToolB: createPluginTools({ plugins: B.registry })
+  AgentB->>ToolB: create_plugin_tools({ plugins: B.registry })
   Host->>AgentA: session.prompt()
   AgentA->>ToolA: 模型调用 plugin_call(skill.lookup)
-  ToolA->>RegistryA: runAction(skill.lookup)
+  ToolA->>RegistryA: run_action(skill.lookup)
   Host->>AgentB: session.prompt()
   AgentB->>ToolB: 模型调用 plugin_call(skill.lookup)
-  ToolB->>RegistryB: runAction(skill.lookup)
+  ToolB->>RegistryB: run_action(skill.lookup)
 ```
 
 ## 10. 优化后 ready 语义
@@ -640,7 +640,7 @@ flowchart TD
 职责变化：
 
 - 从静态 tool 定义改为 tool 工厂。
-- 暴露 `createPluginCallTool()`、`createPluginReadTool()`、`createPluginTools()`。
+- 暴露 `create_plugin_call_tool()`、`create_plugin_read_tool()`、`create_plugin_tools()`。
 - 不再导出生产路径使用的 `setPluginToolRuntime()`。
 
 ### 13.2 `PluginToolBridge.ts`
@@ -648,18 +648,18 @@ flowchart TD
 职责变化：
 
 - 移除模块级 `plugin_tool_runtime`。
-- `invokePluginCallTool()` 接收显式 runtime。
-- `invokePluginReadTool()` 接收显式 runtime。
+- `invoke_plugin_call_tool()` 接收显式 runtime。
+- `invoke_plugin_read_tool()` 接收显式 runtime。
 
 建议形态：
 
 ```ts
-export async function invokePluginCallTool(params: {
+export async function invoke_plugin_call_tool(params: {
   plugins: AgentPlugins;
   input: PluginCallInput;
 }): Promise<PluginCallToolResult>;
 
-export async function invokePluginReadTool(params: {
+export async function invoke_plugin_read_tool(params: {
   plugins: AgentPlugins;
   input: PluginReadInput;
 }): Promise<PluginReadToolResult>;
@@ -683,7 +683,7 @@ setPluginToolRuntime(plugins);
 优化后：
 
 ```ts
-const plugin_tools = createPluginTools({ plugins });
+const plugin_tools = create_plugin_tools({ plugins });
 tools.plugin_read = tools.plugin_read || plugin_tools.plugin_read;
 tools.plugin_call = tools.plugin_call || plugin_tools.plugin_call;
 ```
@@ -822,10 +822,10 @@ unknown action returns does not implement action
 构造两个 fake plugin：
 
 ```ts
-const plugin_a = createPlugin({
+const plugin_a = create_plugin({
   name: "skill",
   actions: {
-    lookup: createAction({
+    lookup: create_action({
       execute: async () => ({
         success: true,
         data: {
@@ -836,10 +836,10 @@ const plugin_a = createPlugin({
   },
 });
 
-const plugin_b = createPlugin({
+const plugin_b = create_plugin({
   name: "skill",
   actions: {
-    lookup: createAction({
+    lookup: create_action({
       execute: async () => ({
         success: true,
         data: {
@@ -881,7 +881,7 @@ pnpm --filter @downcity/agent typecheck
 ## 19. 实施顺序
 
 1. 重构 `PluginToolBridge.ts`，让 invoke 函数显式接收 `plugins`。
-2. 重构 `PluginToolDefinition.ts`，提供 `createPluginTools()`。
+2. 重构 `PluginToolDefinition.ts`，提供 `create_plugin_tools()`。
 3. 修改 `AgentAssemblyService.ts`，为每个 Agent 创建专属 plugin tools。
 4. 删除生产路径上的 `setPluginToolRuntime()` 调用。
 5. 修改 `AgentSessionManager.ts`，注入并调用 `ensure_agent_ready()`。

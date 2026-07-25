@@ -24,8 +24,8 @@ import type {
   AgentSessionSystemSnapshot,
 } from "@/types/agent/SessionTypes.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
-import { resolveSystemTimezone } from "@/session/storage/Metadata.js";
-import { createRuntimeSessionPort } from "@/session/storage/RuntimeSessionPort.js";
+import { resolve_system_timezone } from "@/session/storage/Metadata.js";
+import { create_runtime_session_port } from "@/session/storage/RuntimeSessionPort.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type {
   SessionMutationSubscriber,
@@ -66,8 +66,8 @@ import type {
 import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
 import { generate_id } from "@/utils/Id.js";
 import { nanoid } from "nanoid";
-import { buildSessionInfo } from "@/session/browse/Browse.js";
-import { ensureSessionTitle } from "@/session/SessionTitle.js";
+import { build_session_info } from "@/session/browse/Browse.js";
+import { ensure_session_title } from "@/session/SessionTitle.js";
 import { to_executor_history } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
 import type {
@@ -407,13 +407,13 @@ export class Session implements AgentSession {
     const records = to_executor_history(this.id, snapshot);
     const metadata_with_title = metadata.title
       ? metadata
-      : await ensureSessionTitle({
+      : await ensure_session_title({
           session_id: this.id,
           store: this.store,
           messages: records,
           logger: this.logger,
         });
-    return buildSessionInfo({
+    return build_session_info({
       project_root: this.workspace_path,
       agent_id: this.agent_id,
       session_id: this.id,
@@ -527,7 +527,7 @@ export class Session implements AgentSession {
    */
   get_runtime_port(): SessionPort {
     if (this.runtime_port) return this.runtime_port;
-    this.runtime_port = createRuntimeSessionPort({
+    this.runtime_port = create_runtime_session_port({
       session_id: this.id,
       get_model: () => this.get_model(),
       get_executor: () => this.executor.get_executor(),
@@ -640,7 +640,7 @@ export class Session implements AgentSession {
       session_config: {},
       effective_session_config: {},
       created_at: Date.now(),
-      timezone: resolveSystemTimezone(),
+      timezone: resolve_system_timezone(),
       initialize_promise: null,
       ensure_configured_promise: null,
     };

@@ -17,11 +17,11 @@ function isJsonObjectLike(value: JsonValue | null | undefined): value is JsonObj
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function isJsonObject(value: JsonValue | null | undefined): value is JsonObject {
+export function is_json_object(value: JsonValue | null | undefined): value is JsonObject {
   return isJsonObjectLike(value);
 }
 
-export function getStringField(
+export function get_string_field(
   objectValue: JsonObject,
   field: string,
 ): string | undefined {
@@ -29,7 +29,7 @@ export function getStringField(
   return typeof value === "string" ? value : undefined;
 }
 
-export function getObjectField(
+export function get_object_field(
   objectValue: JsonObject,
   field: string,
 ): JsonObject | undefined {
@@ -37,7 +37,7 @@ export function getObjectField(
   return isJsonObjectLike(value) ? value : undefined;
 }
 
-export function getArrayField(
+export function get_array_field(
   objectValue: JsonObject,
   field: string,
 ): JsonValue[] | undefined {
@@ -45,7 +45,7 @@ export function getArrayField(
   return Array.isArray(value) ? value : undefined;
 }
 
-export function safeJsonParse(input: string | undefined): ParsedPayload | null {
+export function safe_json_parse(input: string | undefined): ParsedPayload | null {
   if (typeof input !== "string") return null;
   const trimmed = input.trim();
   if (!trimmed) return null;
@@ -63,7 +63,7 @@ export function truncate(text: string, maxChars: number): string {
   return text.slice(0, maxChars) + `…(truncated, ${text.length} chars total)`;
 }
 
-export function stringifyCompact(
+export function stringify_compact(
   value: JsonValue | object | undefined,
   maxChars: number,
 ): string {
@@ -74,11 +74,11 @@ export function stringifyCompact(
   }
 }
 
-export function toInlineLogValue(value: string, maxChars: number): string {
+export function to_inline_log_value(value: string, maxChars: number): string {
   return truncate(String(value || ""), maxChars).replace(/\r?\n/g, "\\n");
 }
 
-export function formatLogField(key: string, value: string): string {
+export function format_log_field(key: string, value: string): string {
   return `[${key}] ${value}`;
 }
 
@@ -96,7 +96,7 @@ function normalizeAttrValue(input: string): string {
     .replace(/[\]\[]/g, "");
 }
 
-export function pushLabeledTextBlock(
+export function push_labeled_text_block(
   out: string[],
   label: "system" | "user" | "assistant" | "tool" | "tool_result",
   text: string,
@@ -109,10 +109,10 @@ export function pushLabeledTextBlock(
     .replace(/\n/g, "\\n");
   const headLabel =
     Array.isArray(attrs) && attrs.length > 0 ? `${label} ${attrs.join(" ")}` : label;
-  out.push(formatLogField(headLabel, normalized || "-"));
+  out.push(format_log_field(headLabel, normalized || "-"));
 }
 
-export function parseInfoBlockText(value: string): {
+export function parse_info_block_text(value: string): {
   info: Record<string, string>;
   body: string;
 } | null {
@@ -138,7 +138,7 @@ export function parseInfoBlockText(value: string): {
   };
 }
 
-export function buildInfoAttrs(info: Record<string, string>): string[] {
+export function build_info_attrs(info: Record<string, string>): string[] {
   const preferredOrder = [
     "message_id",
     "user_id",
@@ -171,20 +171,20 @@ export function buildInfoAttrs(info: Record<string, string>): string[] {
   return attrs;
 }
 
-export function contentToText(content: JsonValue | undefined, maxChars: number): string {
+export function content_to_text(content: JsonValue | undefined, maxChars: number): string {
   if (typeof content === "string") return truncate(content, maxChars);
   if (Array.isArray(content)) {
     const parts = content
       .map((part) => {
         if (!isJsonObjectLike(part)) return "";
-        const partType = getStringField(part, "type");
+        const partType = get_string_field(part, "type");
         // 关键点（中文）：OpenAI Responses 在 assistant 历史里常见 `output_text`，必须纳入日志提取，否则会显示为 `-`。
         if (
           partType === "text" ||
           partType === "input_text" ||
           partType === "output_text"
         ) {
-          return String(getStringField(part, "text") ?? "");
+          return String(get_string_field(part, "text") ?? "");
         }
         // 关键点（中文）：tool 事件由请求侧单独输出为 [tool]/[tool_result]，这里不混入文本。
         if (
@@ -201,46 +201,46 @@ export function contentToText(content: JsonValue | undefined, maxChars: number):
       .join("\n");
     return truncate(parts, maxChars);
   }
-  if (isJsonObjectLike(content)) return stringifyCompact(content, maxChars);
+  if (isJsonObjectLike(content)) return stringify_compact(content, maxChars);
   return truncate(String(content ?? ""), maxChars);
 }
 
-export function parsePossibleJsonObject(
+export function parse_possible_json_object(
   value: JsonValue | undefined,
 ): JsonObject | undefined {
   if (isJsonObjectLike(value)) return value;
   if (typeof value !== "string") return undefined;
-  const parsed = safeJsonParse(value);
+  const parsed = safe_json_parse(value);
   return isJsonObjectLike(parsed) ? parsed : undefined;
 }
 
-export function extractFunctionCallExecCommandCmd(
+export function extract_function_call_exec_command_cmd(
   message: JsonObject,
 ): string | undefined {
-  const itemType = getStringField(message, "type");
+  const itemType = get_string_field(message, "type");
   if (itemType !== "function_call") return undefined;
 
-  const name = getStringField(message, "name");
+  const name = get_string_field(message, "name");
   if (name !== "shell_session" && name !== "shell_exec") return undefined;
 
-  const argsObj = parsePossibleJsonObject(message.arguments);
+  const argsObj = parse_possible_json_object(message.arguments);
   if (!argsObj) return undefined;
-  return getStringField(argsObj, "cmd");
+  return get_string_field(argsObj, "cmd");
 }
 
-export function extractMessages(payload: JsonObject): JsonObject[] | null {
-  const messages = getArrayField(payload, "messages");
+export function extract_messages(payload: JsonObject): JsonObject[] | null {
+  const messages = get_array_field(payload, "messages");
   if (Array.isArray(messages)) {
     return messages.filter((item): item is JsonObject => isJsonObjectLike(item));
   }
-  const input = getArrayField(payload, "input");
+  const input = get_array_field(payload, "input");
   if (Array.isArray(input)) {
     return input.filter((item): item is JsonObject => isJsonObjectLike(item));
   }
   return null;
 }
 
-export function extractSystemForLog(
+export function extract_system_for_log(
   payload: JsonObject | undefined,
 ): JsonValue | undefined {
   if (!payload) return undefined;
@@ -249,7 +249,7 @@ export function extractSystemForLog(
   if (typeof system === "string" && system.trim()) return system;
 
   // 关键点（中文）：OpenAI Responses 请求把 system prompt 放在 `instructions` 字段。
-  const instructions = getStringField(payload, "instructions");
+  const instructions = get_string_field(payload, "instructions");
   if (typeof instructions === "string" && instructions.trim()) {
     return instructions;
   }

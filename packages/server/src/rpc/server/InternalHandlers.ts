@@ -36,7 +36,7 @@ export async function handleInternalRpcRequest(params: {
         status: "ok",
         pid: process.pid,
         project_root: context.workspace.path,
-        instanceId: String(process.env.DOWNCITY_DAEMON_INSTANCE_ID || "").trim(),
+        instance_id: String(process.env.DOWNCITY_DAEMON_INSTANCE_ID || "").trim(),
       });
       return true;
     }
@@ -187,8 +187,8 @@ function toSystemPromptPayload(messages: SystemModelMessage[]): {
     title: string;
     items: Array<{ index: number; content: string }>;
   }>;
-  totalMessages: number;
-  totalChars: number;
+  total_messages: number;
+  total_chars: number;
 } {
   const items = messages
     .map((message, index) => ({
@@ -196,7 +196,7 @@ function toSystemPromptPayload(messages: SystemModelMessage[]): {
       content: toSystemMessageText(message),
     }))
     .filter((item) => item.content);
-  const totalChars = items.reduce(
+  const total_chars = items.reduce(
     (acc, item) => acc + String(item.content || "").length,
     0,
   );
@@ -208,7 +208,7 @@ function toSystemPromptPayload(messages: SystemModelMessage[]): {
         items,
       },
     ],
-    totalMessages: items.length,
-    totalChars,
+    total_messages: items.length,
+    total_chars,
   };
 }

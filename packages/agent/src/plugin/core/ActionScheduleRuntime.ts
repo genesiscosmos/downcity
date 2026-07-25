@@ -8,7 +8,7 @@
  */
 
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
-import { runDueActionScheduleJobs } from "@/plugin/core/ActionScheduleExecutor.js";
+import { run_due_action_schedule_jobs } from "@/plugin/core/ActionScheduleExecutor.js";
 import { ActionScheduleStore } from "@/plugin/core/ActionScheduleStore.js";
 
 const ACTION_SCHEDULE_POLL_INTERVAL_MS = 1_000;
@@ -31,7 +31,7 @@ export interface ActionScheduleRuntimeHandle {
 /**
  * 启动 ActionSchedule 轮询 runtime。
  */
-export async function startActionScheduleRuntime(
+export async function start_action_schedule_runtime(
   context: PluginContext,
 ): Promise<ActionScheduleRuntimeHandle> {
   const store = new ActionScheduleStore(context.files);
@@ -51,7 +51,7 @@ export async function startActionScheduleRuntime(
     if (stopped || ticking) return;
     ticking = true;
     try {
-      await runDueActionScheduleJobs({
+      await run_due_action_schedule_jobs({
         context,
         store,
       });

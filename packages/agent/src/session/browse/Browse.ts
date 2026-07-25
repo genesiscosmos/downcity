@@ -30,7 +30,7 @@ import {
   get_sdk_agent_session_meta_path,
   get_sdk_agent_sessions_root_dir_path,
 } from "@/workspace/store/LocalStorePaths.js";
-import { readSessionMetadataFromPath } from "@/session/storage/Metadata.js";
+import { read_session_metadata_from_path } from "@/session/storage/Metadata.js";
 import { to_executor_ui_message } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
@@ -111,7 +111,7 @@ function encodeCursor(offset: number): string | undefined {
 /**
  * 读取指定 JSONL 消息文件。
  */
-export async function loadSessionMessagesFromPath(
+export async function load_session_messages_from_path(
   filePath: string,
   files: FileSystem,
 ): Promise<SessionRecordV1[]> {
@@ -201,7 +201,7 @@ function filterUserVisibleHistoryMessages(
 /**
  * 基于 metadata + messages 构建 SDK session 详情。
  */
-export function buildSessionInfo(
+export function build_session_info(
   input: SessionBrowseBaseInput,
 ): AgentSessionInfo {
   const messages = input.messages;
@@ -276,7 +276,7 @@ async function resolve_session_summary_metadata(input: {
   ) {
     return input.metadata;
   }
-  const messages = await loadSessionMessagesFromPath(
+  const messages = await load_session_messages_from_path(
     input.messagesPath,
     input.files,
   );
@@ -369,7 +369,7 @@ async function resolve_session_disk_stats(
 /**
  * 列出指定 agent 的 session 摘要页。
  */
-export async function listAgentSessionSummaryPage(params: {
+export async function list_agent_session_summary_page(params: {
   project_root: string;
   agent_id: string;
   input?: AgentListSessionsInput;
@@ -409,7 +409,7 @@ export async function listAgentSessionSummaryPage(params: {
       params.agent_id,
       session_id,
     );
-    const persisted_metadata = await readSessionMetadataFromPath({
+    const persisted_metadata = await read_session_metadata_from_path({
       filePath: meta_path,
       session_id,
       agent_id: params.agent_id,
@@ -422,7 +422,7 @@ export async function listAgentSessionSummaryPage(params: {
       refresh: params.executingSessionIds?.has(session_id) === true,
       files: params.files,
     });
-    const info = buildSessionInfo({
+    const info = build_session_info({
       project_root: params.project_root,
       agent_id: params.agent_id,
       session_id,
@@ -472,7 +472,7 @@ export async function listAgentSessionSummaryPage(params: {
 /**
  * 列出指定 agent 的已归档 session 摘要页。
  */
-export async function listArchivedAgentSessionSummaryPage(params: {
+export async function list_archived_agent_session_summary_page(params: {
   project_root: string;
   agent_id: string;
   input?: AgentListSessionsInput;
@@ -511,7 +511,7 @@ export async function listArchivedAgentSessionSummaryPage(params: {
       params.agent_id,
       session_id,
     );
-    const persisted_metadata = await readSessionMetadataFromPath({
+    const persisted_metadata = await read_session_metadata_from_path({
       filePath: meta_path,
       session_id,
       agent_id: params.agent_id,
@@ -525,7 +525,7 @@ export async function listArchivedAgentSessionSummaryPage(params: {
       files: params.files,
     });
     // 关键点（中文）：归档 session 不再生成新 title，仅读取归档目录内已有 meta。
-    const info = buildSessionInfo({
+    const info = build_session_info({
       project_root: params.project_root,
       agent_id: params.agent_id,
       session_id,

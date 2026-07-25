@@ -12,7 +12,7 @@ import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.j
 import type { SessionRecordV1 } from "@/executor/types/SessionRecords.js";
 import { is_session_message_record } from "@/executor/types/SessionRecords.js";
 import type { Logger } from "@/utils/logger/Logger.js";
-import { normalizeSessionTitle } from "@/session/storage/Metadata.js";
+import { normalize_session_title } from "@/session/storage/Metadata.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 
 const GENERATED_SESSION_TITLE_MAX_CHARS = 24;
@@ -92,7 +92,7 @@ function normalizeGeneratedTitle(input: string): string | undefined {
     .split("\n")
     .map((line) => line.trim())
     .find(Boolean);
-  const title = normalizeSessionTitle(
+  const title = normalize_session_title(
     String(firstLine || "")
       .replace(/^["'`“”‘’]+|["'`“”‘’]+$/g, "")
       .replace(/^标题[:：]\s*/i, "")
@@ -246,7 +246,7 @@ async function generateSessionTitle(input: {
 /**
  * 确保当前 session meta 中持久化 title。
  */
-export async function ensureSessionTitle(
+export async function ensure_session_title(
   input: EnsureSessionTitleParams,
 ): Promise<SessionHistoryMetaV1> {
   const current = await input.store.read_metadata();

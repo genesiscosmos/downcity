@@ -15,7 +15,7 @@ import type { TemplateVariableMap } from "@/types/common/Template.js";
  * - 变量名支持字母、数字、下划线，且允许写成 `{{ key }}`。
  * - 未提供值的变量保持原样，便于排查模板与变量映射不一致问题。
  */
-export function renderTemplateVariables(
+export function render_template_variables(
   template: string,
   variables: TemplateVariableMap,
 ): string {

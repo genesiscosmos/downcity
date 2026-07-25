@@ -33,7 +33,7 @@ description: task 定义、task actions，以及归属于 plugin 实例的 cron 
 
 ```bash
 downcity task list
-downcity task create --title "daily-summary" --description "Send a daily summary" --when "0 9 * * *" --session-id <sessionId>
+downcity task create --title "daily-summary" --description "Send a daily summary" --when "0 9 * * *" --session-id <session_id>
 downcity task run daily-summary --reason "manual check"
 downcity task update daily-summary --status paused
 downcity task enable daily-summary
@@ -60,7 +60,7 @@ const plugin = new TaskPlugin({
 ## SDK action 用法
 
 ```ts
-await agent.plugins.runAction({
+await agent.plugins.run_action({
   plugin: "task",
   action: "run",
   payload: {
@@ -76,7 +76,7 @@ action 名称是 `list`、`create`、`run`、`delete`、`update`、`status`、`e
 
 - 长期 cron runtime 归属于 plugin 实例
 - cron 时区来自 constructor `timezone`，默认本机时区
-- agent task 通过 AgentContext 的 Session runtime port 读取有效模型实例
+- agent task 通过 PluginContext 的 Session runtime port 读取有效模型实例
 - create / update / delete / status 变更后会触发 scheduler reload
 - task 运行中锁归属于 plugin 实例，reload 时也会保持同一 task 串行执行
 - plugin 也支持 reload / reschedule 这类 lifecycle command
