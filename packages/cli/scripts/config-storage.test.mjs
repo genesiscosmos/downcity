@@ -22,100 +22,134 @@ test("Agent 配置只从全局 DB 读取", async () => {
       id: "legacy_agent",
       version: "1.0.0",
     }));
-    const store = await import("../bin/city/process/registry/AgentConfigStore.js");
-    assert.equal(store.readAgentConfig(project_root), null);
+    const repository = await import(
+      "../bin/city/process/registry/ManagedAgentRepository.js"
+    );
+    assert.equal(repository.list_managed_agents_by_workspace(project_root).length, 0);
 
-    const { PlatformStore } = await import("../bin/city/runtime/store/index.js");
-    const platform_store = new PlatformStore();
-    platform_store.setSecureSettingJsonSync("city.agent.configs", {
-      v: 1,
-      configs: [{
-        project_root: project_root,
-        id: "migrated_agent",
-        version: "1.0.0",
-        execution: { type: "api", modelId: "model_a" },
-        created_at: "2026-01-01T00:00:00.000Z",
-        updated_at: "2026-01-01T00:00:00.000Z",
-      }],
-    });
-    platform_store.close();
-
-    assert.equal(store.readAgentConfig(project_root).id, "migrated_agent");
-
-    store.upsertAgentConfig({
-      project_root: project_root,
-      id: "db_agent",
+    repository.create_managed_agent({
+      agent_id: "db_agent",
+      workspace_path: project_root,
+      execution: { type: "api", model_id: "model_a" },
       plugins: { chat: { queue: { maxConcurrency: 3 } } },
     });
-    const merged_config = store.readAgentConfig(project_root);
-    assert.equal(merged_config.id, "db_agent");
-    assert.equal(merged_config.execution.modelId, "model_a");
-    assert.equal(merged_config.plugins.chat.queue.maxConcurrency, 3);
+    const config = repository.get_managed_agent("db_agent");
+    assert.equal(config.agent_id, "db_agent");
+    assert.equal(config.execution.model_id, "model_a");
+    assert.equal(config.plugins.chat.queue.maxConcurrency, 3);
     assert.equal(fs.existsSync(path.join(platform_root, "downcity.db")), true);
 
-    const second_project_root = path.join(platform_root, "second-agent");
-    store.upsertAgentConfig({
-      project_root: second_project_root,
-      id: "second_agent",
-      version: "1.0.0",
-      execution: { type: "api", modelId: "model_b" },
+    repository.create_managed_agent({
+      agent_id: "second_agent",
+      workspace_path: project_root,
+      execution: { type: "api", model_id: "model_b" },
     });
-    store.upsertAgentConfig({
-      project_root: project_root,
+    repository.update_managed_agent({
+      agent_id: "db_agent",
       start: { port: 7001 },
     });
-    assert.equal(store.readAgentConfig(second_project_root).execution.modelId, "model_b");
-    assert.equal(store.readAgentConfig(project_root).execution.modelId, "model_a");
-    assert.equal(store.readAgentConfig(project_root).start.port, 7001);
-
-    const rolling_upgrade_store = new PlatformStore();
-    rolling_upgrade_store.setSecureSettingJsonSync("city.agent.configs", {
-      v: 1,
-      configs: [
-        {
-          ...store.readAgentConfig(project_root),
-          id: "newer_legacy_daemon_update",
-          updated_at: "2099-01-01T00:00:00.000Z",
-        },
-        {
-          ...store.readAgentConfig(second_project_root),
-          id: "stale_legacy_daemon_value",
-          updated_at: "2000-01-01T00:00:00.000Z",
-        },
-      ],
-    });
-    rolling_upgrade_store.close();
-    assert.equal(
-      store.readAgentConfig(project_root).id,
-      "newer_legacy_daemon_update",
+    assert.equal(repository.get_managed_agent("second_agent").execution.model_id, "model_b");
+    assert.equal(repository.get_managed_agent("db_agent").execution.model_id, "model_a");
+    assert.equal(repository.get_managed_agent("db_agent").start.port, 7001);
+    assert.deepEqual(
+      repository.list_managed_agents_by_workspace(project_root)
+        .map((agent) => agent.agent_id),
+      ["db_agent", "second_agent"],
     );
-    assert.equal(store.readAgentConfig(second_project_root).id, "second_agent");
+    assert.throws(
+      () => repository.get_managed_agent_by_workspace(project_root),
+      /multiple agents/,
+    );
 
     const database = new Database(path.join(platform_root, "downcity.db"));
     const row_count = database.prepare(
-      "SELECT COUNT(*) AS count FROM agent_configs;",
+      "SELECT COUNT(*) AS count FROM managed_agents;",
     ).get().count;
-    const legacy_count = database.prepare(`
-      SELECT COUNT(*) AS count
-      FROM platform_secure_settings
-      WHERE key = 'city.agent.configs';
-    `).get().count;
     database.close();
     assert.equal(row_count, 2);
-    assert.equal(legacy_count, 0);
   } finally {
+    delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });
     fs.rmSync(project_root, { recursive: true, force: true });
   }
 });
 
+test("Daemon 状态按 agent_id 隔离在全局 runtime", async () => {
+  const platform_root = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  try {
+    const paths = await import("../bin/city/process/registry/CityPaths.js");
+    const daemon = await import("../bin/city/process/daemon/Manager.js");
+    const runtime_dir = paths.get_agent_runtime_dir_path("agent_one");
+    assert.equal(runtime_dir, path.join(platform_root, "runtimes", "agent_one"));
+    assert.equal(
+      daemon.getDaemonPidPath("agent_one"),
+      path.join(runtime_dir, "daemon.pid"),
+    );
+    assert.equal(
+      daemon.getDaemonMetaPath("agent_one"),
+      path.join(runtime_dir, "daemon.json"),
+    );
+    assert.equal(
+      daemon.getDaemonLogPath("agent_one"),
+      path.join(runtime_dir, "daemon.log"),
+    );
+    assert.throws(
+      () => paths.get_agent_runtime_dir_path("../outside"),
+      /Invalid agent_id/,
+    );
+  } finally {
+    delete process.env.DC_PLATFORM_ROOT;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+  }
+});
+
+test("Agent HTTP 路由默认拒绝未认证请求", async () => {
+  const platform_root = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  try {
+    const { Hono } = await import("hono");
+    const { AuthService } = await import("../bin/city/runtime/auth/AuthService.js");
+    const {
+      createRouteAuthGuardMiddleware,
+      SERVER_AUTH_ROUTE_POLICIES,
+    } = await import("../bin/city/runtime/auth/RoutePolicy.js");
+    const auth_service = new AuthService();
+    const app = new Hono();
+    app.use("*", createRouteAuthGuardMiddleware(
+      auth_service,
+      SERVER_AUTH_ROUTE_POLICIES,
+    ));
+    app.get("/health", (context) => context.json({ status: "ok" }));
+    app.get("/private", (context) => context.json({ status: "ok" }));
+
+    assert.equal((await app.request("/health")).status, 200);
+    assert.equal((await app.request("/private")).status, 401);
+
+    const issued = auth_service.ensureLocalCliAccess({ token_name: "test" });
+    const authenticated = await app.request("/private", {
+      headers: { authorization: `Bearer ${issued.token.token}` },
+    });
+    assert.equal(authenticated.status, 200);
+    auth_service.close();
+  } finally {
+    delete process.env.DC_PLATFORM_ROOT;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+  }
+});
+
 test("Agent model 命令已注册到 CLI", () => {
   const cli_path = path.resolve("bin/downcity.js");
+  const platform_root = create_temp_root();
   const result = spawnSync(
     process.execPath,
     [cli_path, "agent", "model", "--help"],
-    { encoding: "utf8" },
+    {
+      encoding: "utf8",
+      env: { ...process.env, DC_PLATFORM_ROOT: platform_root },
+    },
   );
+  fs.rmSync(platform_root, { recursive: true, force: true });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Usage: \S+ agent model/);
   assert.match(result.stdout, /--set <model-id>/);

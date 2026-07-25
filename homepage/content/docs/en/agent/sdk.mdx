@@ -9,9 +9,12 @@ Use `@downcity/agent` to create an Agent, manage Sessions, and execute model cal
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
+import { Shell } from "@downcity/shell";
+import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const workspace = new Workspace({
   path: process.cwd(),
+  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
   env: { API_KEY: process.env.API_KEY ?? "" },
 });
 

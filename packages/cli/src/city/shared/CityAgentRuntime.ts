@@ -6,21 +6,19 @@
  * - City 管理命令仍通过 `city` 入口负责。
  */
 
-import { resolve } from "node:path";
 import type { ManagedAgentProcessView } from "@/city/types/runtime/Platform.js";
 import type { AgentStartOptions } from "@/city/types/AgentStartOptions.js";
 import { allocateAvailablePort } from "@/city/process/daemon/PortAllocator.js";
 import {
   getDaemonLogPath,
   isProcessAlive as isDaemonProcessAlive,
+  readDaemonMeta,
   readDaemonPid,
 } from "@/city/process/daemon/Manager.js";
-import {
-  listManagedAgentEntries,
-} from "@/city/process/registry/CityRegistry.js";
-import { CliError } from "@/shared/CliError.js";
 import { inject_agent_context } from "@/shared/IndexSupport.js";
 import { checkAgentPreflight } from "@/city/shared/PluginTargetSupport.js";
+import { list_managed_agents } from "@/city/process/registry/ManagedAgentRepository.js";
+import type { DaemonTarget } from "@/city/process/daemon/Types.js";
 
 /**
  * 解析当前仍在运行的 managed agent。
@@ -33,82 +31,62 @@ export async function resolveRunningManagedAgents(_params?: {
    */
   syncRegistry?: boolean;
 }): Promise<ManagedAgentProcessView[]> {
-  const entries = await listManagedAgentEntries();
+  const entries = list_managed_agents();
   const views: ManagedAgentProcessView[] = [];
 
   for (const entry of entries) {
-    if (entry.status !== "running") continue;
-    const project_root = resolve(String(entry.project_root || "").trim() || ".");
-    const daemon_pid = await readDaemonPid(project_root);
+    const daemon_pid = await readDaemonPid(entry.agent_id);
     if (!daemon_pid || !isDaemonProcessAlive(daemon_pid)) {
       continue;
     }
+    const meta = await readDaemonMeta(entry.agent_id);
 
     views.push({
-      project_root: project_root,
-      registeredPid: daemon_pid,
-      daemonPid: daemon_pid,
+      agent_id: entry.agent_id,
+      workspace_path: entry.workspace_path,
+      daemon_pid,
       running: true,
-      startedAt: entry.startedAt,
+      started_at: meta?.started_at ?? "",
       updated_at: entry.updated_at,
-      logPath: getDaemonLogPath(project_root),
+      log_path: getDaemonLogPath(entry.agent_id),
     });
   }
 
-  return views.sort((left, right) => left.project_root.localeCompare(right.project_root));
-}
-
-/**
- * 确认目标 agent 已登记到 City registry。
- */
-export async function ensureRegisteredAgentProjectRoot(cwd: string): Promise<string> {
-  const project_root = resolve(String(cwd || "."));
-  const entries = await listManagedAgentEntries();
-  const matched = entries.some(
-    (entry) => resolve(String(entry.project_root || "").trim() || ".") === project_root,
-  );
-  if (matched) return project_root;
-
-  throw new CliError({
-    title: "Agent is not registered in managed agent registry",
-    note: `project: ${project_root}`,
-    fix: "city agent start <path>",
-  });
+  return views.sort((left, right) => left.agent_id.localeCompare(right.agent_id));
 }
 
 /**
  * 为前台 agent 运行补齐上下文与模型绑定。
  */
 export async function prepareForegroundAgent(
-  cwd: string,
+  target: DaemonTarget,
   options: AgentStartOptions & { foreground?: boolean },
 ): Promise<{
-  project_root: string;
+  target: DaemonTarget;
   options: AgentStartOptions & { foreground?: boolean };
-  shouldForeground: boolean;
+  should_foreground: boolean;
 }> {
-  inject_agent_context(cwd);
-  const project_root = resolve(String(cwd || "."));
-  await checkAgentPreflight(project_root);
-
   const should_foreground = options.foreground === true;
   if (!should_foreground) {
     return {
-      project_root: project_root,
+      target,
       options,
-      shouldForeground: false,
+      should_foreground: false,
     };
   }
 
-  const host = String(options.host || "0.0.0.0").trim() || "0.0.0.0";
+  inject_agent_context(target);
+  await checkAgentPreflight(target);
+
+  const host = String(options.host || "127.0.0.1").trim() || "127.0.0.1";
   const foreground_port =
     options.port !== undefined && options.port !== null && options.port !== ""
       ? options.port
       : await allocateAvailablePort({ host });
 
   return {
-    project_root: project_root,
-    shouldForeground: true,
+    target,
+    should_foreground: true,
     options: {
       ...options,
       host,

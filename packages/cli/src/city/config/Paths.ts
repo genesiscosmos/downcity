@@ -30,10 +30,6 @@ export function getDowncityTasksDirPath(cwd: string): string {
   return path.join(getDowncityDirPath(cwd), "task");
 }
 
-export function getDowncityDebugDirPath(cwd: string): string {
-  return path.join(getDowncityDirPath(cwd), ".debug");
-}
-
 /**
  * `.downcity/public` 公开资源目录路径。
  */

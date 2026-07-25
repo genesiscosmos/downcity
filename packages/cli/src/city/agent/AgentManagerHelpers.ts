@@ -14,7 +14,7 @@ import { stopCommand } from "@/city/agent/Stop.js";
 import { restartCommand } from "@/city/agent/Restart.js";
 import { chatCommand } from "@/city/agent/AgentChat.js";
 import { configure_agent_model } from "@/city/agent/AgentModel.js";
-import { listRegisteredAgentsForCli } from "@/city/agent/AgentSelection.js";
+import { list_registered_agents_for_cli } from "@/city/agent/AgentSelection.js";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { inject_agent_context } from "@/shared/IndexSupport.js";
 import { prepareForegroundAgent } from "@/city/shared/CityAgentRuntime.js";
@@ -27,9 +27,9 @@ import type {
   StoredChannelAccountChannel,
 } from "@downcity/plugins/chat";
 import {
-  readAgentConfig as readStoredAgentConfig,
-  upsertAgentConfig,
-} from "@/city/process/registry/AgentConfigStore.js";
+  get_managed_agent,
+  update_managed_agent,
+} from "@/city/process/registry/ManagedAgentRepository.js";
 import type {
   AgentManagerAgentAction,
   AgentManagerConfigAction,
@@ -55,12 +55,12 @@ export function isInteractiveTerminal(): boolean {
 }
 
 export async function loadAgentSummaries(): Promise<AgentManagerAgentSummary[]> {
-  const agents = await listRegisteredAgentsForCli();
+  const agents = await list_registered_agents_for_cli();
   return agents.map((agent) => {
-    const config = readAgentConfig(agent.project_root);
+    const config = readAgentConfig(agent.agent_id);
     return {
-      id: String(config?.id || "").trim() || agent.id,
-      project_root: agent.project_root,
+      id: String(config?.id || "").trim() || agent.agent_id,
+      project_root: agent.workspace_path,
       status: agent.status,
       execution_binding: readAgentExecutionBinding(config),
       channels: readAgentChannelSummaries(config),
@@ -75,15 +75,37 @@ export async function loadAgentSummaries(): Promise<AgentManagerAgentSummary[]> 
  * - 交互式 manager 不能长期持有旧快照，否则启动/停止后菜单状态会误导用户。
  */
 export async function reloadAgentSummary(
-  project_root: string,
+  agent_id: string,
   fallback: AgentManagerAgentSummary,
 ): Promise<AgentManagerAgentSummary> {
   const agents = await loadAgentSummaries();
-  return agents.find((agent) => agent.project_root === project_root) || fallback;
+  return agents.find((agent) => agent.id === agent_id) || fallback;
 }
 
-export function readAgentConfig(project_root: string): DowncityConfig | null {
-  return readStoredAgentConfig(project_root) as DowncityConfig | null;
+export function readAgentConfig(agent_id: string): DowncityConfig | null {
+  const agent = get_managed_agent(agent_id);
+  if (!agent) return null;
+  return {
+    id: agent.agent_id,
+    version: agent.version,
+    ...(agent.start ? { start: agent.start } : {}),
+    ...(agent.execution ? { execution: agent.execution } : {}),
+    ...(agent.plugins ? { plugins: agent.plugins } : {}),
+    ...(agent.llm ? { llm: agent.llm } : {}),
+  };
+}
+
+/** 保存管理器编辑后的 Agent 配置。 */
+function write_agent_config(agent_id: string, config: DowncityConfig): void {
+  const agent = get_managed_agent(agent_id);
+  if (!agent) throw new Error(`Agent not found: ${agent_id}`);
+  update_managed_agent({
+    agent_id: agent.agent_id,
+    start: config.start,
+    execution: config.execution,
+    plugins: config.plugins,
+    llm: config.llm,
+  });
 }
 
 export function readAgentExecutionBinding(config: DowncityConfig | null): string {
@@ -180,7 +202,7 @@ export async function promptAgentListSelection(
         description: formatAgentDetail(agent),
         value: {
           type: "agent" as const,
-          project_root: agent.project_root,
+          agent_id: agent.id,
         },
       })),
       {
@@ -362,14 +384,6 @@ export async function promptAgentConfigAction(
         disabled: true,
       },
       {
-        title: t({ zh: "配置 ID", en: "Configure ID" }),
-        description: t({
-          zh: `当前：${agent.id}。修改后会写入 CLI 全局 DB。`,
-          en: `Current: ${agent.id}. Changes are written to the CLI global DB.`,
-        }),
-        value: "configureId",
-      },
-      {
         title: t({ zh: "配置默认模型", en: "Configure default model" }),
         description: t({
           zh: "从当前 Federation 的 AI models 中选择 Agent 默认模型。",
@@ -416,14 +430,20 @@ export async function promptCreateProjectPath(): Promise<string | null> {
   return String(response.projectPath || ".").trim() || ".";
 }
 
-export async function startAgentProject(project_root: string): Promise<void> {
+export async function startAgentProject(
+  agent_id: string,
+  project_root: string,
+): Promise<void> {
   const options: AgentStartOptions & { foreground?: boolean } = {};
-  const prepared = await prepareForegroundAgent(project_root, options);
-  if (prepared.shouldForeground) {
-    await runCommand(prepared.project_root, prepared.options);
+  const prepared = await prepareForegroundAgent({
+    agent_id,
+    workspace_path: project_root,
+  }, options);
+  if (prepared.should_foreground) {
+    await runCommand(prepared.target, prepared.options);
     return;
   }
-  await startCommand(prepared.project_root, prepared.options);
+  await startCommand(prepared.target, prepared.options);
 }
 
 export async function runCreateFlow(): Promise<void> {
@@ -436,57 +456,6 @@ export async function runCreateFlow(): Promise<void> {
     return;
   }
   await initCommand(projectPath, {});
-}
-
-export async function configureAgentId(agent: AgentManagerAgentSummary): Promise<AgentManagerAgentSummary> {
-  const response = (await prompts({
-    type: "text",
-    name: "id",
-    message: t({ zh: "Agent ID", en: "Agent ID" }),
-    initial: agent.id,
-    validate: (value) =>
-      String(value || "").trim().length > 0
-        ? true
-        : t({ zh: "Agent ID 不能为空", en: "Agent ID cannot be empty" }),
-  })) as { id?: string };
-
-  if (response.id === undefined) {
-    emitCliBlock({
-      tone: "info",
-      title: "Agent id unchanged",
-    });
-    return agent;
-  }
-
-  const nextId = String(response.id || "").trim();
-  if (nextId === agent.id) {
-    emitCliBlock({
-      tone: "info",
-      title: "Agent id unchanged",
-      summary: agent.id,
-    });
-    return agent;
-  }
-
-  const raw = readStoredAgentConfig(agent.project_root);
-  upsertAgentConfig({
-    ...(raw || {}),
-    project_root: agent.project_root,
-    id: nextId,
-  });
-  emitCliBlock({
-    tone: "success",
-    title: "Agent id updated",
-    facts: [
-      { label: "previous", value: agent.id },
-      { label: "current", value: nextId },
-      { label: "project", value: agent.project_root },
-    ],
-  });
-  return {
-    ...agent,
-    id: nextId,
-  };
 }
 
 export function buildAccountTitle(account: StoredChannelAccount): string {
@@ -536,7 +505,7 @@ export async function promptChannelAccountId(params: {
 export async function connectAgentChannels(
   agent: AgentManagerAgentSummary,
 ): Promise<AgentManagerAgentSummary> {
-  const raw = readStoredAgentConfig(agent.project_root) as DowncityConfig | null;
+  const raw = readAgentConfig(agent.id);
   const nextRaw: DowncityConfig = {
     id: agent.id,
     version: "1.0.0",
@@ -567,12 +536,9 @@ export async function connectAgentChannels(
         enabled: current?.enabled === true,
       };
     }
-    upsertAgentConfig({
-      ...nextRaw,
-      project_root: agent.project_root,
-    });
+    write_agent_config(agent.id, nextRaw);
 
-    const nextConfig = readAgentConfig(agent.project_root);
+    const nextConfig = readAgentConfig(agent.id);
     const cleanedAgent = {
       ...agent,
       channels: readAgentChannelSummaries(nextConfig),
@@ -632,11 +598,8 @@ export async function connectAgentChannels(
     };
   }
 
-  upsertAgentConfig({
-    ...nextRaw,
-    project_root: agent.project_root,
-  });
-  const nextConfig = readAgentConfig(agent.project_root);
+  write_agent_config(agent.id, nextRaw);
+  const nextConfig = readAgentConfig(agent.id);
   const nextAgent = {
     ...agent,
     channels: readAgentChannelSummaries(nextConfig),
@@ -659,7 +622,7 @@ export async function runSelectedAgentManager(agent_input: AgentManagerAgentSumm
   let agent = agent_input;
   let last_message = "";
   while (true) {
-    agent = await reloadAgentSummary(agent.project_root, agent);
+    agent = await reloadAgentSummary(agent.id, agent);
     const action = await promptAgentAction(agent, last_message);
     last_message = "";
     if (!action) {
@@ -673,29 +636,38 @@ export async function runSelectedAgentManager(agent_input: AgentManagerAgentSumm
 
     try {
       if (action === "start") {
-        await startAgentProject(agent.project_root);
+        await startAgentProject(agent.id, agent.project_root);
         const previous_agent = agent;
-        agent = await reloadAgentSummary(agent.project_root, agent);
+    agent = await reloadAgentSummary(agent.id, agent);
         last_message = format_agent_start_result(previous_agent, agent);
         continue;
       }
       if (action === "stop") {
         const previous_agent = agent;
-        await stopCommand(agent.project_root);
-        agent = await reloadAgentSummary(agent.project_root, agent);
+        await stopCommand({
+          agent_id: agent.id,
+          workspace_path: agent.project_root,
+        });
+    agent = await reloadAgentSummary(agent.id, agent);
         last_message = format_agent_stop_result(previous_agent, agent);
         continue;
       }
       if (action === "restart") {
         const previous_agent = agent;
-        inject_agent_context(agent.project_root);
-        await restartCommand(agent.project_root, {});
-        agent = await reloadAgentSummary(agent.project_root, agent);
+        inject_agent_context({
+          agent_id: agent.id,
+          workspace_path: agent.project_root,
+        });
+        await restartCommand({
+          agent_id: agent.id,
+          workspace_path: agent.project_root,
+        }, {});
+    agent = await reloadAgentSummary(agent.id, agent);
         last_message = format_agent_restart_result(previous_agent, agent);
         continue;
       }
       if (action === "chat") {
-        agent = await reloadAgentSummary(agent.project_root, agent);
+    agent = await reloadAgentSummary(agent.id, agent);
         if (agent.status !== "running") {
           last_message = t({
             zh: "无法聊天：请先启动当前 Agent",
@@ -704,7 +676,7 @@ export async function runSelectedAgentManager(agent_input: AgentManagerAgentSumm
           continue;
         }
         await chatCommand({ to: agent.id });
-        agent = await reloadAgentSummary(agent.project_root, agent);
+    agent = await reloadAgentSummary(agent.id, agent);
         continue;
       }
       if (action === "configure") {
@@ -712,17 +684,9 @@ export async function runSelectedAgentManager(agent_input: AgentManagerAgentSumm
         if (!config_action || config_action === "back") {
           continue;
         }
-        if (config_action === "configureId") {
-          agent = await configureAgentId(agent);
-          last_message = t({
-            zh: `配置已更新：${agent.id}`,
-            en: `Config updated: ${agent.id}`,
-          });
-          continue;
-        }
         if (config_action === "configureModel") {
-          const result = await configure_agent_model(agent.project_root);
-          agent = await reloadAgentSummary(agent.project_root, agent);
+          const result = await configure_agent_model(agent.id);
+    agent = await reloadAgentSummary(agent.id, agent);
           last_message = result?.changed
             ? t({
                 zh: `Agent 默认模型已更新：${result.current_model_id}`,

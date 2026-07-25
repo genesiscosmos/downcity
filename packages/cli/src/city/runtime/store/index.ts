@@ -95,7 +95,7 @@ export class PlatformStore {
   clearAll(): void {
     this.sqlite.exec("DELETE FROM platform_secure_settings;");
     this.sqlite.exec("DELETE FROM env_entries;");
-    this.sqlite.exec("DELETE FROM agent_configs;");
+    this.sqlite.exec("DELETE FROM managed_agents;");
     this.sqlite.exec("DELETE FROM channel_accounts;");
   }
 

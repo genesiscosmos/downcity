@@ -7,11 +7,19 @@
  */
 
 /** daemon pid 文件名。 */
-export const DAEMON_PID_FILENAME = "downcity.pid";
+export const DAEMON_PID_FILENAME = "daemon.pid";
 /** daemon 日志文件名。 */
-export const DAEMON_LOG_FILENAME = "downcity.daemon.log";
+export const DAEMON_LOG_FILENAME = "daemon.log";
 /** daemon 元数据文件名。 */
-export const DAEMON_META_FILENAME = "downcity.daemon.json";
+export const DAEMON_META_FILENAME = "daemon.json";
+
+/** daemon 管理入口使用的稳定目标。 */
+export interface DaemonTarget {
+  /** 受管 Agent 的稳定全局 ID。 */
+  agent_id: string;
+  /** Agent 当前绑定的 Workspace 绝对路径。 */
+  workspace_path: string;
+}
 
 /**
  * daemon 元数据文件结构。
@@ -21,10 +29,12 @@ export interface DaemonMeta {
   pid: number;
   /** 每次 daemon 启动生成的唯一实例 ID，用于识别 PID 复用。 */
   instance_id: string;
-  /** daemon 所属 agent 项目的绝对路径。 */
-  project_root: string;
+  /** daemon 所属受管 Agent 的稳定全局 ID。 */
+  agent_id: string;
+  /** daemon 启动时绑定的 Workspace 绝对路径。 */
+  workspace_path: string;
   /** daemon 启动时间（ISO 时间字符串）。 */
-  startedAt: string;
+  started_at: string;
   /** 启动 daemon 时使用的命令。 */
   command: string;
   /** 启动 daemon 时使用的参数列表。 */
@@ -39,8 +49,10 @@ export interface DaemonMeta {
 export interface DaemonRuntimeIdentity {
   /** RPC 服务所属进程的操作系统 pid。 */
   pid: number;
-  /** RPC 服务所属 agent 项目的绝对路径。 */
-  project_root: string;
+  /** RPC 服务所属 Agent 的稳定全局 ID。 */
+  agent_id: string;
+  /** RPC 服务所属 Workspace 的绝对路径。 */
+  workspace_path: string;
   /** 当前 daemon 启动实例的唯一 ID。 */
   instance_id: string;
 }
@@ -55,7 +67,8 @@ export interface DaemonStaleReason {
     | "meta_missing"
     | "meta_invalid"
     | "meta_pid_mismatch"
-    | "meta_project_mismatch"
+    | "meta_agent_mismatch"
+    | "meta_workspace_mismatch"
     | "meta_instance_missing";
   /** 面向用户展示的原因说明。 */
   message: string;

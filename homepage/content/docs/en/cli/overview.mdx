@@ -7,16 +7,18 @@ description: The Downcity CLI suite — downcity for local agents and downfed fo
 
 Downcity provides two CLI binaries:
 
-- **`downcity`** (alias `city`) — manages local agents, global config, and City state.
-- **`downfed`** — manages Federation deployment, City entities, and service resources.
+- **`city`** (alias `downcity`) — manages global Agents, Workspace bindings, and local host state.
+- **`fed`** (alias `downfed`) — manages project-associated Federation deployments, City entities, and service resources.
 
 Both share the same global flags (`--verbose`, `--quiet`, `--lang`) and help system.
 
 ## Local storage
 
-- `downcity` stores local City state, encrypted credentials, environment variables, channel accounts, and registered Agent project paths in `~/.downcity/downcity.db`.
+- `downcity` stores managed Agents, Workspace bindings, local City state, encrypted credentials, environment variables, and channel accounts in `~/.downcity/downcity.db`.
 - `downfed` stores Federation admin profiles, admin keys, Cloudflare account selection, and CLI preferences in `~/.downcity/federation.db`.
-- Agent runtime status is resolved from each project daemon's local meta/pid files under `<project>/.downcity/.debug/`.
+- Agent runtime state is stored by `agent_id` under `~/.downcity/runtimes/<agent_id>/`; Workspaces do not contain daemon PID, log, or metadata files.
+
+An Agent is a global entity identified by `agent_id`; a Workspace path is only a mutable binding. Multiple Agents may bind to one Workspace, so lifecycle commands target `agent_id` and never infer identity from a directory name.
 
 ## downcity
 
@@ -38,12 +40,12 @@ Both share the same global flags (`--verbose`, `--quiet`, `--lang`) and help sys
 | Command | Description |
 |---------|-------------|
 | `downcity agent create [path]` | Create and initialize an Agent project |
-| `downcity agent list` | List registered Agent projects |
-| `downcity agent start [path]` | Start an Agent (background or foreground) |
-| `downcity agent stop [path]` | Stop the background Agent daemon |
-| `downcity agent restart [path]` | Restart the background Agent daemon |
-| `downcity agent status [path]` | Show background Agent daemon status |
-| `downcity agent doctor [path]` | Diagnose daemon state files |
+| `downcity agent list` | List managed Agents and Workspace bindings |
+| `downcity agent start [agent_id]` | Start an Agent (background or foreground) |
+| `downcity agent stop [agent_id]` | Stop the background Agent daemon |
+| `downcity agent restart [agent_id]` | Restart the background Agent daemon |
+| `downcity agent status [agent_id]` | Show background Agent daemon status |
+| `downcity agent doctor [agent_id]` | Diagnose daemon state files |
 | `downcity agent chat` | Chat with an Agent in the terminal |
 | `downcity agent history` | Manage Agent conversation history |
 

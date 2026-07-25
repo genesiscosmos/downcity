@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 这里负责把“哪些接口需要登录、需要什么权限”集中配置。
- * - 当系统还没有任何统一账户用户时，受保护接口默认放行，避免首次 bootstrap 被锁死。
+ * - 未匹配到公开策略的接口默认要求认证，避免新路由绕过鉴权。
  */
 
 import type { MiddlewareHandler } from "hono";
@@ -83,6 +83,7 @@ export const SERVER_AUTH_ROUTE_POLICIES: AuthRoutePolicy[] = [
     method: "*",
     require_auth: true,
   },
+  { path: "*", method: "*", require_auth: true },
 ];
 
 /**
@@ -186,10 +187,6 @@ export function createRouteAuthGuardMiddleware(
   return async (c, next) => {
     const policy = resolveAuthRoutePolicy(c.req.path, c.req.method, policies);
     if (!policy || policy.require_auth !== true) {
-      await next();
-      return;
-    }
-    if (!authService.hasLocalCliAccess()) {
       await next();
       return;
     }

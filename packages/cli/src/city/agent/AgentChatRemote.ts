@@ -43,12 +43,12 @@ export function createAgentChatSessionId(): string {
  * 解析 chat 远程目标地址。
  */
 export async function resolveAgentChatRemoteTarget(params: {
-  project_root: string;
+  agent_id: string;
   transport?: AgentChatTransportOptions;
 }): Promise<AgentChatRemoteTarget> {
   // 关键点（中文）：chat 固定走 Agent 本机 RPC，由 City 负责对外暴露。
   const endpoint = resolveDaemonRpcEndpoint({
-    project_root: params.project_root,
+    agent_id: params.agent_id,
     host: params.transport?.host,
     port: params.transport?.port,
   });
@@ -61,7 +61,7 @@ export async function resolveAgentChatRemoteTarget(params: {
  * 创建 RemoteAgent 实例。
  */
 export async function createRemoteAgent(params: {
-  project_root: string;
+  agent_id: string;
   transport?: AgentChatTransportOptions;
 }): Promise<RemoteAgent> {
   const target = await resolveAgentChatRemoteTarget(params);

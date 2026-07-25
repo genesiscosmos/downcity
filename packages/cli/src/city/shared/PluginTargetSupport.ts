@@ -9,15 +9,17 @@
  */
 
 import path from "node:path";
-import { listManagedAgentEntries } from "@/city/process/registry/CityRegistry.js";
 import type { JsonValue } from "@downcity/agent";
-import { resolveAgentId } from "@/shared/IndexSupport.js";
 import { CliError } from "@/shared/CliError.js";
 import type { ActionScheduleJobStatus } from "@downcity/agent";
 import type { PluginCliBaseOptions } from "@downcity/agent";
 import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
-import { readAgentConfig } from "@/city/process/registry/AgentConfigStore.js";
-import { ensure_project_execution_model_ready } from "@/city/agent/AgentExecutionModelRecovery.js";
+import {
+  get_managed_agent,
+  list_managed_agents_by_workspace,
+} from "@/city/process/registry/ManagedAgentRepository.js";
+import { ensure_agent_execution_model_ready } from "@/city/agent/AgentExecutionModelRecovery.js";
+import type { DaemonTarget } from "@/city/process/daemon/Types.js";
 
 /**
  * Agent 启动前预检选项。
@@ -62,23 +64,24 @@ export async function checkShellSandboxHostPreflight(): Promise<void> {
  * @throws {CliError} 任一校验失败时抛出。
  */
 export async function checkAgentPreflight(
-  project_root: string,
+  target: DaemonTarget,
   options?: AgentPreflightOptions,
 ): Promise<void> {
   if (options?.requireShellSandbox !== false) {
     await checkShellSandboxHostPreflight();
   }
 
-  if (!readAgentConfig(project_root)) {
+  const agent = get_managed_agent(target.agent_id);
+  if (!agent || path.resolve(agent.workspace_path) !== path.resolve(target.workspace_path)) {
     throw new CliError({
-      title: "Project not initialized",
-      note: `Agent config not found in the global DB: ${project_root}`,
-      fix: "city agent create",
+      title: "Agent target is not managed",
+      note: `${target.agent_id} → ${target.workspace_path}`,
+      fix: "city agent list",
     });
   }
 
   // 关键点（中文）：失配时由 TTY 选择器恢复模型，避免切换 Federation 后只能手工修配置。
-  await ensure_project_execution_model_ready(project_root);
+  await ensure_agent_execution_model_ready(target.agent_id);
 }
 
 /**
@@ -131,6 +134,7 @@ export function resolveProjectRoot(pathInput?: string): string {
  * 通过 agent id 解析 project_root。
  */
 export async function resolveProjectRootByAgentId(agent_id: string): Promise<{
+  agent_id?: string;
   project_root?: string;
   error?: string;
 }> {
@@ -139,34 +143,20 @@ export async function resolveProjectRootByAgentId(agent_id: string): Promise<{
     return { error: "--agent requires a non-empty value" };
   }
 
-  const entries = await listManagedAgentEntries();
-  const matchedRoots = entries
-    .map((entry) => path.resolve(String(entry.project_root || "").trim() || "."))
-    .filter((root, index, all) => all.indexOf(root) === index)
-    .filter((root) => {
-      const byDirName = path.basename(root).toLowerCase() === target;
-      const byProjectId = resolveAgentId(root).toLowerCase() === target;
-      return byDirName || byProjectId;
-    });
-
-  if (matchedRoots.length === 0) {
+  const agent = get_managed_agent(target);
+  if (!agent) {
     return {
-      error: `Agent not found in managed agent registry: ${agent_id}. Run "city agent list" to inspect ids.`,
+      error: `Agent not found: ${agent_id}. Run "city agent list" to inspect ids.`,
     };
   }
-  if (matchedRoots.length > 1) {
-    return {
-      error: `Agent id is ambiguous: ${agent_id}. Matched paths: ${matchedRoots.join(", ")}`,
-    };
-  }
-
-  return { project_root: matchedRoots[0] };
+  return { agent_id: agent.agent_id, project_root: agent.workspace_path };
 }
 
 /**
  * 统一解析 plugin runtime 命令目标路径（agent 优先于 path）。
  */
 export async function resolvePluginProjectRoot(options: PluginCliBaseOptions): Promise<{
+  agent_id?: string;
   project_root?: string;
   error?: string;
 }> {
@@ -189,25 +179,27 @@ export async function resolvePluginProjectRoot(options: PluginCliBaseOptions): P
   }
 
   const project_root = resolveProjectRoot(options.path);
-  const entries = await listManagedAgentEntries();
-  const registered = entries.some(
-    (entry) =>
-      path.resolve(String(entry.project_root || "").trim() || ".") === project_root,
-  );
-  if (!registered) {
+  const agents = list_managed_agents_by_workspace(project_root);
+  if (agents.length === 0) {
     return {
       error:
         `Agent is not registered in managed agent registry: ${project_root}. ` +
         `Run "city agent list" to inspect registered agents.`,
     };
   }
-  return { project_root };
+  if (agents.length > 1) {
+    return {
+      error: `Workspace is bound to multiple agents. Pass --agent with one of: ${agents.map((agent) => agent.agent_id).join(", ")}`,
+    };
+  }
+  return { agent_id: agents[0].agent_id, project_root };
 }
 
 /**
  * 解析 ActionSchedule 管理命令目标路径。
  */
 export async function resolvePluginScheduleProjectRoot(options: PluginCliBaseOptions): Promise<{
+  agent_id?: string;
   project_root?: string;
   error?: string;
 }> {
@@ -215,17 +207,22 @@ export async function resolvePluginScheduleProjectRoot(options: PluginCliBaseOpt
   if (explicitAgent) {
     return resolveProjectRootByAgentId(explicitAgent);
   }
-  return {
-    project_root: resolveProjectRoot(options.path),
-  };
+  const project_root = resolveProjectRoot(options.path);
+  const agents = list_managed_agents_by_workspace(project_root);
+  return agents.length === 1
+    ? { agent_id: agents[0].agent_id, project_root }
+    : { project_root, error: agents.length === 0
+      ? `Agent not found for Workspace: ${project_root}`
+      : `Workspace is bound to multiple agents. Pass --agent with one of: ${agents.map((agent) => agent.agent_id).join(", ")}` };
 }
 
 /**
  * 校验路径是否为有效 agent 项目目录。
  */
 export function validateAgentProjectRoot(project_root: string): string | null {
-  if (readAgentConfig(project_root)) return null;
-  return `Invalid agent path: ${project_root}. Missing global DB agent config.`;
+  return String(project_root || "").trim()
+    ? null
+    : "Agent Workspace path is required.";
 }
 
 /**

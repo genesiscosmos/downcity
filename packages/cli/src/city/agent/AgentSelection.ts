@@ -1,300 +1,205 @@
 /**
- * agent 列表与交互式选择辅助模块。
+ * 全局受管 Agent 的列表与目标选择。
  *
  * 关键点（中文）
- * - 统一承接 `city agent list` 的 registry 展示逻辑。
- * - 统一承接 `city agent start` 在省略路径时的目标选择逻辑。
- * - 规则固定为：显式路径优先，其次当前目录已初始化，最后才进入交互选择。
+ * - `agent_id` 是选择和命令调用的唯一稳定值。
+ * - 当前目录仅用于反查绑定 Agent；同一路径存在多个 Agent 时必须交互选择或显式传 ID。
+ * - 运行状态当前由 Daemon lease 推导，不写回 Agent 配置。
  */
 
-import { resolve } from "path";
+import path from "node:path";
 import prompts from "@/city/tui/Prompts.js";
-import { listManagedAgentEntries } from "@/city/process/registry/CityRegistry.js";
-import type { ManagedAgentRegistryEntry } from "@/city/types/runtime/Platform.js";
+import {
+  get_managed_agent,
+  list_managed_agents,
+  list_managed_agents_by_workspace,
+} from "@/city/process/registry/ManagedAgentRepository.js";
 import type {
   CliAgentPromptChoice,
-  CliRegisteredAgentView,
-  ResolveCliAgentStartTargetDecision,
-  ResolveCliAgentStartTargetDecisionInput,
-} from "@/city/agent/AgentSelectionTypes.js";
+  CliManagedAgentView,
+} from "@/city/types/agent/AgentSelection.js";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import { CliError } from "@/shared/CliError.js";
-import { resolveAgentId } from "@/shared/IndexSupport.js";
-import { resolveRunningManagedAgents } from "@/city/shared/CityAgentRuntime.js";
-import { readAgentConfig } from "@/city/process/registry/AgentConfigStore.js";
+import {
+  isProcessAlive as is_daemon_process_alive,
+  readDaemonPid as read_daemon_pid,
+} from "@/city/process/daemon/Manager.js";
 
-/**
- * 判断一个目录是否已经满足最小 agent 初始化条件。
- */
-function isInitializedAgentProject(project_root: string): boolean {
-  return Boolean(readAgentConfig(project_root));
-}
-
-/**
- * 将 registry entry 转换为 CLI 展示视图。
- */
-function toCliRegisteredAgentView(
-  entry: ManagedAgentRegistryEntry,
-): CliRegisteredAgentView {
-  const project_root = resolve(String(entry.project_root || "").trim() || ".");
+/** 将数据库实体转换为 CLI 状态视图。 */
+async function to_cli_managed_agent_view(agent: {
+  agent_id: string;
+  workspace_path: string;
+}): Promise<CliManagedAgentView> {
+  const daemon_pid = await read_daemon_pid(agent.agent_id);
   return {
-    id: resolveAgentId(project_root),
-    project_root,
-    status: entry.status === "stopped" ? "stopped" : "running",
+    agent_id: agent.agent_id,
+    workspace_path: agent.workspace_path,
+    status: daemon_pid && is_daemon_process_alive(daemon_pid)
+      ? "running"
+      : "stopped",
   };
 }
 
-/**
- * 读取当前 registry 中的已登记 agent 列表。
- */
-export async function listRegisteredAgentsForCli(): Promise<CliRegisteredAgentView[]> {
-  const entries = await listManagedAgentEntries();
-  const runningViews = await resolveRunningManagedAgents({
-    syncRegistry: false,
-  });
-  const runningProjectRoots = new Set(
-    runningViews.map((item) => resolve(String(item.project_root || "").trim() || ".")),
+/** 读取全部受管 Agent 的 CLI 视图。 */
+export async function list_registered_agents_for_cli(): Promise<CliManagedAgentView[]> {
+  const agents = await Promise.all(
+    list_managed_agents().map((agent) => to_cli_managed_agent_view(agent)),
   );
-  return entries
-    .map((entry) => {
-      const view = toCliRegisteredAgentView(entry);
-      return {
-        ...view,
-        status: runningProjectRoots.has(view.project_root) ? "running" : "stopped",
-      } satisfies CliRegisteredAgentView;
-    })
-    .sort((left, right) => {
-      // 关键点（中文）：运行中的 Agent 固定置顶，同状态内保持原有稳定排序。
-      const status_priority = Number(right.status === "running") - Number(left.status === "running");
-      return status_priority
-        || left.id.localeCompare(right.id)
-        || left.project_root.localeCompare(right.project_root);
-    });
+  return agents.sort((left, right) => {
+    const status_priority = Number(right.status === "running") -
+      Number(left.status === "running");
+    return status_priority || left.agent_id.localeCompare(right.agent_id);
+  });
 }
 
-/**
- * 构建交互式选择器的 choices。
- */
-export function buildCliAgentPromptChoices(
-  agents: CliRegisteredAgentView[],
+/** 构建交互式 Agent 选项。 */
+export function build_cli_agent_prompt_choices(
+  agents: CliManagedAgentView[],
 ): CliAgentPromptChoice[] {
   return agents.map((agent) => ({
-    title: agent.id,
-    value: agent.project_root,
-    description: `${agent.status} · ${agent.project_root}`,
+    title: agent.agent_id,
+    value: agent.agent_id,
+    description: `${agent.status} · ${agent.workspace_path}`,
   }));
 }
 
-/**
- * 解析 `agent start` 在当前上下文下应该如何决定目标目录。
- */
-export function resolveCliAgentStartTargetDecision(
-  input: ResolveCliAgentStartTargetDecisionInput,
-): ResolveCliAgentStartTargetDecision {
-  const explicitPath = String(input.pathInput || "").trim();
-  if (explicitPath) {
-    return {
-      mode: "explicit",
-      project_root: resolve(explicitPath),
-    };
-  }
-
-  const currentWorkingDirectory = resolve(input.currentWorkingDirectory || ".");
-  if (input.currentDirectoryInitialized) {
-    return {
-      mode: "current",
-      project_root: currentWorkingDirectory,
-    };
-  }
-
-  if (input.registeredAgents.length === 0) {
-    return {
-      mode: "error",
-      reason: "no-registered-agents",
-    };
-  }
-
-  if (!input.interactive) {
-    return {
-      mode: "error",
-      reason: "non-interactive",
-    };
-  }
-
-  return {
-    mode: "prompt",
-  };
-}
-
-/**
- * 通过终端交互让用户选择一个已登记 agent。
- */
-async function promptRegisteredAgentProjectRoot(
-  agents: CliRegisteredAgentView[],
+/** 交互选择一个全局 Agent ID。 */
+async function prompt_managed_agent_id(
+  agents: CliManagedAgentView[],
 ): Promise<string | null> {
   const response = (await prompts({
     type: "select",
-    name: "project_root",
-    message: "选择要启动的 Agent",
-    choices: buildCliAgentPromptChoices(agents),
+    name: "agent_id",
+    message: "选择 Agent",
+    choices: build_cli_agent_prompt_choices(agents),
     initial: 0,
-  })) as { project_root?: string };
-
-  const project_root = String(response.project_root || "").trim();
-  return project_root || null;
+  })) as { agent_id?: string };
+  return String(response.agent_id || "").trim() || null;
 }
 
-/**
- * 输出已登记 agent 列表。
- */
-export async function emitRegisteredAgentList(): Promise<void> {
-  const agents = await listRegisteredAgentsForCli();
-  const filteredAgents = agents;
-
-  if (filteredAgents.length === 0) {
-    emitCliBlock({
-      tone: "info",
-      title: "Agents",
-      summary: "0 registered",
-      note: "Run `city agent start <path>` once to register an agent with City.",
-    });
-    return;
-  }
-
-  emitCliList({
-    tone: "accent",
-    title: "Agents",
-    summary: `${filteredAgents.length} registered`,
-    items: filteredAgents.map((agent) => ({
-      tone: agent.status === "running" ? "success" : "info",
-      title: agent.id,
-      facts: [
-        {
-          label: "Project",
-          value: agent.project_root,
-        },
-        {
-          label: "Status",
-          value: agent.status,
-        },
-      ],
-    })),
-  });
-}
-
-/**
- * 输出已登记 agent 列表，可选仅显示运行中项目。
- */
-export async function emitRegisteredAgentListWithOptions(options?: {
-  /**
-   * 是否只输出当前运行中的 agent。
-   */
-  runningOnly?: boolean;
-  /**
-   * 是否以 JSON 输出。
-   */
-  asJson?: boolean;
+/** 输出全局受管 Agent 列表。 */
+export async function emit_registered_agent_list_with_options(options?: {
+  /** 是否仅展示运行中的 Agent。 */
+  running_only?: boolean;
+  /** 是否输出 JSON。 */
+  as_json?: boolean;
 }): Promise<void> {
-  const allAgents = await listRegisteredAgentsForCli();
-  const agents = options?.runningOnly === true
-    ? allAgents.filter((item) => item.status === "running")
-    : allAgents;
-
-  if (options?.asJson === true) {
+  const all_agents = await list_registered_agents_for_cli();
+  const agents = options?.running_only
+    ? all_agents.filter((agent) => agent.status === "running")
+    : all_agents;
+  if (options?.as_json) {
     printResult({
       asJson: true,
       success: true,
       title: "agents",
       payload: {
         count: agents.length,
-        runningOnly: options.runningOnly === true,
+        running_only: options.running_only === true,
         agents,
       },
     });
     return;
   }
-
   if (agents.length === 0) {
     emitCliBlock({
       tone: "info",
-      title: options?.runningOnly === true ? "Running agents" : "Agents",
-      summary: options?.runningOnly === true ? "0 running" : "0 registered",
-      note: options?.runningOnly === true
-        ? "No agent daemon is currently running."
-        : "Run `city agent start <path>` once to register an agent with City.",
+      title: options?.running_only ? "Running agents" : "Agents",
+      summary: options?.running_only ? "0 running" : "0 managed",
+      note: options?.running_only
+        ? "No Agent daemon is currently running."
+        : "Run `city agent create <workspace_path>` to create one.",
     });
     return;
   }
-
   emitCliList({
     tone: "accent",
-    title: options?.runningOnly === true ? "Running agents" : "Agents",
-    summary: options?.runningOnly === true
-      ? `${agents.length} running`
-      : `${agents.length} registered`,
+    title: options?.running_only ? "Running agents" : "Agents",
+    summary: `${agents.length} managed`,
     items: agents.map((agent) => ({
       tone: agent.status === "running" ? "success" : "info",
-      title: agent.id,
+      title: agent.agent_id,
       facts: [
-        {
-          label: "Project",
-          value: agent.project_root,
-        },
-        {
-          label: "Status",
-          value: agent.status,
-        },
+        { label: "Workspace", value: agent.workspace_path },
+        { label: "Status", value: agent.status },
       ],
     })),
   });
 }
 
+/** 输出全部受管 Agent。 */
+export async function emit_registered_agent_list(): Promise<void> {
+  await emit_registered_agent_list_with_options();
+}
+
 /**
- * 为 `city agent start` 解析最终要启动的项目目录。
+ * 解析命令目标 Agent。
+ *
+ * 优先级（中文）
+ * 1. 显式 `agent_id`。
+ * 2. 当前目录唯一绑定的 Agent。
+ * 3. 交互选择。
  */
-export async function resolveCliAgentStartProjectRoot(
-  pathInput?: string,
-): Promise<string> {
-  const currentWorkingDirectory = resolve(process.cwd());
-  const registeredAgents = await listRegisteredAgentsForCli();
-  const decision = resolveCliAgentStartTargetDecision({
-    pathInput,
-    currentWorkingDirectory,
-    currentDirectoryInitialized: isInitializedAgentProject(currentWorkingDirectory),
-    interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
-    registeredAgents,
-  });
-
-  if (decision.mode === "explicit" || decision.mode === "current") {
-    return decision.project_root;
-  }
-
-  if (decision.mode === "error") {
-    if (decision.reason === "no-registered-agents") {
+export async function resolve_cli_agent_target(
+  agent_id_input?: string,
+): Promise<{ agent_id: string; workspace_path: string }> {
+  const explicit_agent_id = String(agent_id_input || "").trim();
+  if (explicit_agent_id) {
+    const agent = get_managed_agent(explicit_agent_id);
+    if (!agent) {
       throw new CliError({
-        title: "No registered agents",
-        fix: "city agent start <path>",
+        title: `Agent not found: ${explicit_agent_id}`,
+        fix: "city agent list",
       });
     }
-
-    throw new CliError({
-      title: "Agent path is required",
-      fix: "city agent start <path>",
-    });
+    return {
+      agent_id: agent.agent_id,
+      workspace_path: agent.workspace_path,
+    };
   }
 
-  const selectedProjectRoot = await promptRegisteredAgentProjectRoot(registeredAgents);
-  if (!selectedProjectRoot) {
-    emitCliBlock({
-      tone: "info",
-      title: "Agent start cancelled",
-    });
+  const current_workspace_path = path.resolve(process.cwd());
+  const current_agents = list_managed_agents_by_workspace(current_workspace_path);
+  if (current_agents.length === 1) {
+    return {
+      agent_id: current_agents[0].agent_id,
+      workspace_path: current_agents[0].workspace_path,
+    };
+  }
+
+  const agents = await list_registered_agents_for_cli();
+  if (agents.length === 0) {
     throw new CliError({
-      title: "Agent start cancelled",
+      title: "No managed agents",
+      fix: "city agent create <workspace_path>",
+    });
+  }
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new CliError({
+      title: current_agents.length > 1
+        ? "Current Workspace is bound to multiple Agents"
+        : "Agent ID is required",
+      fix: "city agent start <agent_id>",
+    });
+  }
+  const selected_agent_id = await prompt_managed_agent_id(
+    current_agents.length > 1
+      ? agents.filter((agent) =>
+          agent.workspace_path === current_workspace_path
+        )
+      : agents,
+  );
+  if (!selected_agent_id) {
+    throw new CliError({
+      title: "Agent selection cancelled",
       exitCode: 0,
     });
   }
-
-  return selectedProjectRoot;
+  const selected_agent = get_managed_agent(selected_agent_id);
+  if (!selected_agent) throw new Error(`Agent not found: ${selected_agent_id}`);
+  return {
+    agent_id: selected_agent.agent_id,
+    workspace_path: selected_agent.workspace_path,
+  };
 }

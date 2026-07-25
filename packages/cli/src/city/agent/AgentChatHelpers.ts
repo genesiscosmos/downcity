@@ -20,7 +20,7 @@ import {
   resolveProjectRootByAgentId,
   validateAgentProjectRoot,
 } from "@/city/shared/PluginTargetSupport.js";
-import { listRegisteredAgentsForCli } from "@/city/agent/AgentSelection.js";
+import { list_registered_agents_for_cli } from "@/city/agent/AgentSelection.js";
 import {
   createAgentChatSessionId,
   createRemoteAgent,
@@ -116,7 +116,7 @@ export async function resolveChatTargetAgentId(inputId?: string): Promise<string
     return null;
   }
 
-  const runningAgents = (await listRegisteredAgentsForCli()).filter(
+  const runningAgents = (await list_registered_agents_for_cli()).filter(
     (item) => item.status === "running",
   );
   if (runningAgents.length === 0) {
@@ -133,9 +133,9 @@ export async function resolveChatTargetAgentId(inputId?: string): Promise<string
     name: "agent_id",
     message: "选择要聊天的 Agent",
     choices: runningAgents.map((agent) => ({
-      title: agent.id,
-      description: agent.project_root,
-      value: agent.id,
+      title: agent.agent_id,
+      description: agent.workspace_path,
+      value: agent.agent_id,
     })),
     initial: 0,
   })) as { agent_id?: string };
@@ -219,10 +219,10 @@ export async function resolveAgentChatTarget(
     };
   }
 
-  const registeredAgents = await listRegisteredAgentsForCli();
+  const registeredAgents = await list_registered_agents_for_cli();
   const registeredAgent = registeredAgents.find(
     (item) =>
-      item.project_root === resolved.project_root || item.id === agent_id,
+      item.workspace_path === resolved.project_root || item.agent_id === agent_id,
   );
   if (registeredAgent && registeredAgent.status !== "running") {
     return {
@@ -317,7 +317,7 @@ export async function resolveInteractiveChatSession(params: {
   resolved.target.createNewSession = preselected_session.create_new_session;
 
   const remote_agent = await createRemoteAgent({
-    project_root: resolved.target.project_root,
+    agent_id: resolved.target.agent_id,
     transport: params.transport,
   });
 
@@ -424,7 +424,7 @@ export async function runSdkPromptTurn(params: {
   }
 
   const remote_agent = await createRemoteAgent({
-    project_root: resolved.target.project_root,
+    agent_id: resolved.target.agent_id,
     transport: params.transport,
   });
   const session = await getOrCreateRemoteSession({

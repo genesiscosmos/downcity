@@ -28,7 +28,7 @@ const PLUGIN_COMMAND_TIMEOUT_MS = 120_000;
  */
 export async function runManagedPluginListCommand(options: PluginCliBaseOptions): Promise<void> {
   const resolved = await resolvePluginProjectRoot(options);
-  if (!resolved.project_root) {
+  if (!resolved.agent_id || !resolved.project_root) {
     printResult({
       asJson: options.json,
       success: false,
@@ -53,7 +53,7 @@ export async function runManagedPluginListCommand(options: PluginCliBaseOptions)
     return;
   }
   const remote = await callServer<PluginStateListResponse>({
-    project_root,
+    agent_id: resolved.agent_id,
     path: "/api/plugins/list",
     method: "GET",
     host: options.host,
@@ -93,7 +93,7 @@ export async function runManagedPluginControlCommand(params: {
   options: PluginCliBaseOptions;
 }): Promise<void> {
   const resolved = await resolvePluginProjectRoot(params.options);
-  if (!resolved.project_root) {
+  if (!resolved.agent_id || !resolved.project_root) {
     printResult({
       asJson: params.options.json,
       success: false,
@@ -118,7 +118,7 @@ export async function runManagedPluginControlCommand(params: {
     return;
   }
   const remote = await callServer<PluginControlResponse>({
-    project_root,
+    agent_id: resolved.agent_id,
     path: "/api/plugins/control",
     method: "POST",
     host: params.options.host,
@@ -163,7 +163,7 @@ export async function runManagedPluginCommandBridge(params: {
   options: PluginCliBaseOptions;
 }): Promise<void> {
   const resolved = await resolvePluginProjectRoot(params.options);
-  if (!resolved.project_root) {
+  if (!resolved.agent_id || !resolved.project_root) {
     printResult({
       asJson: params.options.json,
       success: false,
@@ -188,7 +188,7 @@ export async function runManagedPluginCommandBridge(params: {
     return;
   }
   const remote = await callServer<PluginCommandResponse>({
-    project_root,
+    agent_id: resolved.agent_id,
     path: "/api/plugins/command",
     method: "POST",
     timeoutMs: PLUGIN_COMMAND_TIMEOUT_MS,

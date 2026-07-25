@@ -31,6 +31,29 @@ export function getPlatformStoreDbPath(): string {
 }
 
 /**
+ * 全部 Agent 的全局运行状态根目录。
+ *
+ * 关键点（中文）：运行状态属于受管 Agent，不属于 Workspace，因此不能写入项目目录。
+ */
+export function get_agent_runtimes_dir_path(): string {
+  return path.join(getPlatformRootDirPath(), "runtimes");
+}
+
+/**
+ * 单个 Agent 的全局运行状态目录。
+ *
+ * @param agent_id 受管 Agent 的稳定全局 ID。
+ */
+export function get_agent_runtime_dir_path(agent_id: string): string {
+  const normalized_agent_id = String(agent_id || "").trim();
+  if (!normalized_agent_id) throw new Error("agent_id is required");
+  if (!/^[a-z0-9_]+$/u.test(normalized_agent_id)) {
+    throw new Error(`Invalid agent_id: ${normalized_agent_id}`);
+  }
+  return path.join(get_agent_runtimes_dir_path(), normalized_agent_id);
+}
+
+/**
  * Federation 管理端 SQLite 数据库路径（用户级）。
  */
 export function getFederationStoreDbPath(): string {
@@ -49,36 +72,4 @@ export function getCityRuntimeDirPath(): string {
  */
 export function getPlatformStoreKeyPath(): string {
   return path.join(getCityRuntimeDirPath(), "model-db.key");
-}
-
-/**
- * city 后台 pid 文件路径。
- */
-export function getCityPidPath(): string {
-  return path.join(getCityRuntimeDirPath(), "city.pid");
-}
-
-/**
- * city 后台日志路径（stdout/stderr 合并）。
- */
-export function getCityLogPath(): string {
-  return path.join(getCityRuntimeDirPath(), "city.log");
-}
-
-/**
- * 旧 Console gateway pid 文件路径。
- *
- * 关键点（中文）：仅保留路径约定，便于后续迁移或清理旧安装状态文件。
- */
-export function getGatewayPidPath(): string {
-  return path.join(getCityRuntimeDirPath(), "gateway.pid");
-}
-
-/**
- * 旧 Console gateway 元数据路径。
- *
- * 关键点（中文）：仅保留路径约定，便于后续迁移或清理旧安装状态文件。
- */
-export function getGatewayMetaPath(): string {
-  return path.join(getCityRuntimeDirPath(), "gateway.json");
 }

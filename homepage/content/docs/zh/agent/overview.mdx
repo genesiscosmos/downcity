@@ -19,10 +19,15 @@ description: Agent SDK 是什么，以及如何运行 Agent 工作
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
+import { Shell } from "@downcity/shell";
+import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
+  workspace: new Workspace({
+    path: "/path/to/project",
+    shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  }),
   model: myModel,
   tools: { my_tool: myTool },
   plugins: [myPlugin],

@@ -10,9 +10,14 @@ description: Agent 的构造、就绪、执行与关闭
 同一个 Agent ID 在同一物理 Workspace 中只能运行一个活动 runtime。ActionSchedule 是本地调度器，不负责协调重复启动的 Agent 进程。
 
 ```ts
+import { Agent, Workspace } from "@downcity/agent";
+import { Shell } from "@downcity/shell";
+import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+
+const shell = new Shell({ sandbox: new MacOsSeatbeltSandbox() });
 const agent = new Agent({
   id: "my-agent",
-  workspace: new Workspace({ path: process.cwd() }),
+  workspace: new Workspace({ path: process.cwd(), shell }),
   model,
 });
 

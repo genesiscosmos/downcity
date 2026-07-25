@@ -9,7 +9,7 @@
 import { basename, dirname, resolve } from "path";
 import { emitCliHeader, emitCliBlock, resetCliSectionFlow } from "@/shared/CliReporter.js";
 import { CliError } from "@/shared/CliError.js";
-import { readAgentConfig } from "@/city/process/registry/AgentConfigStore.js";
+import type { DaemonTarget } from "@/city/process/daemon/Types.js";
 
 /**
  * 在关键运行命令执行前打印当前终端命令版本。
@@ -122,32 +122,14 @@ export const sleep = async (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * 从项目根目录推断 agent id。
- */
-export function resolveAgentId(project_root: string): string {
-  const fallback = basename(project_root)
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .replace(/_{2,}/g, "_")
-    .trim() || basename(project_root);
-  const stored = readAgentConfig(project_root);
-  if (stored?.id) return stored.id;
-
-  return fallback;
-}
-
-/**
  * 注入当前 agent 执行上下文。
  */
-export function inject_agent_context(pathInput: string = "."): {
-  project_root: string;
+export function inject_agent_context(target: DaemonTarget): {
+  workspace_path: string;
   agent_id: string;
 } {
-  const project_root = resolve(String(pathInput || "."));
-  const agent_id = resolveAgentId(project_root);
-  process.env.DC_AGENT_PATH = project_root;
-  process.env.DC_AGENT_ID = agent_id;
-  return { project_root, agent_id };
+  const workspace_path = resolve(target.workspace_path);
+  process.env.DC_AGENT_PATH = workspace_path;
+  process.env.DC_AGENT_ID = target.agent_id;
+  return { workspace_path, agent_id: target.agent_id };
 }

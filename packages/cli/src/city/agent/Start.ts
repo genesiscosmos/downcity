@@ -17,9 +17,9 @@ import { startDaemonProcess } from "@/city/process/daemon/Manager.js";
 import { buildRunArgsFromOptions } from "@/city/process/daemon/CliArgs.js";
 import type { AgentStartOptions } from "@/city/types/AgentStartOptions.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
-import { resolveAgentId } from "@/shared/IndexSupport.js";
 import { checkAgentPreflight } from "@/city/shared/PluginTargetSupport.js";
 import { CliError } from "@/shared/CliError.js";
+import type { DaemonTarget } from "@/city/process/daemon/Types.js";
 
 /**
  * daemon 启动入口。
@@ -30,13 +30,11 @@ import { CliError } from "@/shared/CliError.js";
  * 3) 通过 daemon manager 后台拉起并打印 pid/log
  */
 export async function startCommand(
-  cwd: string = ".",
+  target: DaemonTarget,
   options: AgentStartOptions,
 ): Promise<void> {
-  const project_root = path.resolve(cwd);
-
   // 关键点（中文）：统一预检，替代分散的内联校验。
-  await checkAgentPreflight(project_root);
+  await checkAgentPreflight(target);
 
   // 计算当前 CLI 的入口路径（编译后是 `bin/index.js`）。
   // 本模块位于 `bin/city/agent/`，需上溯两级才能到达 `bin/index.js`。
@@ -44,11 +42,12 @@ export async function startCommand(
   const __dirname = path.dirname(__filename);
   const cliPath = path.resolve(__dirname, "../../index.js");
 
-  const args = await buildRunArgsFromOptions(project_root, options || {});
+  const args = await buildRunArgsFromOptions(target.agent_id, options || {});
 
   try {
-    const { logPath: _logPath } = await startDaemonProcess({
-      project_root,
+    await startDaemonProcess({
+      agent_id: target.agent_id,
+      workspace_path: target.workspace_path,
       cliPath,
       args,
     });
@@ -56,11 +55,11 @@ export async function startCommand(
     emitCliBlock({
       tone: "success",
       title: "Agent daemon started",
-      summary: resolveAgentId(project_root),
+      summary: target.agent_id,
       facts: [
         {
-          label: "Project",
-          value: project_root,
+          label: "Workspace",
+          value: target.workspace_path,
         },
       ],
     });

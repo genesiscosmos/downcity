@@ -23,7 +23,7 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 
 | Package | Purpose |
 | --- | --- |
-| `downcity` | Public CLI bundle that installs the `downcity` command (alias `city`) for local Agent hosting and City administration. |
+| `downcity` | Public CLI bundle with `city`/`downcity` for global Agent hosting and `fed`/`downfed` for project-associated Federation administration. |
 | `@downcity/agent` | Single-agent runtime and SDK for sessions, tool loops, services, plugins, HTTP/RPC, sandboxing, and host integration. |
 | `@downcity/city` | City runtime and access SDK for Service registration, Actions, auth, env, city-scoped access, and HTTP calling. |
 | `@downcity/type` | Shared protocol types used across packages, including City model descriptors returned by City. |
@@ -34,7 +34,7 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 
 ## Core Capabilities
 
-- Agent project runtime: initialize a repo or folder with `PROFILE.md`, `SOUL.md`, `downcity.json`, and `.downcity/`.
+- Global Agent management: store Agent identity and config in `~/.downcity/downcity.db`, while binding each Agent to any Workspace path.
 - Local agent operations: run `downcity agent start`, `downcity agent status`, and `downcity agent list` to host and inspect local agents.
 - Agent lifecycle: create, start, stop, restart, inspect, chat with, diagnose, and observe project agents.
 - City connection: use `downcity federation` to connect local Agents to the active City server; manage City models and Service resources with `city`.
@@ -95,33 +95,25 @@ Run this inside the target repository:
 downcity agent create .
 ```
 
-This creates or updates:
+This creates Workspace assets without an Agent declaration file; Agent identity and config stay in the global database:
 
 ```text
 your-project/
-├── PROFILE.md
-├── SOUL.md
-├── downcity.json
 ├── .agents/
 │   └── skills/
 └── .downcity/
-    ├── cache/
-    ├── config/
-    ├── data/
-    ├── debug/
-    ├── logs/
-    ├── profile/
-    ├── public/
-    ├── schema/
-    ├── session/
-    └── tasks/
+    ├── agents/
+    ├── chat/
+    ├── memory/
+    └── task/
 ```
 
 ### 5. Start the agent and talk to it
 
 ```bash
-downcity agent start .
-downcity agent status .
+downcity agent list
+downcity agent start
+downcity agent status
 downcity agent chat -m "Summarize this repository"
 downcity agent chat --new-session
 ```
@@ -131,7 +123,7 @@ Interactive chat can also pick an existing session or create a new one before th
 To run in the foreground:
 
 ```bash
-downcity agent start . --foreground
+downcity agent start --foreground
 ```
 
 ### 6. Inspect running agents
@@ -144,7 +136,7 @@ Useful status commands:
 
 ```bash
 downcity agent list
-downcity agent status .
+downcity agent status
 ```
 
 ## SDK Example
@@ -153,6 +145,8 @@ downcity agent status .
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
+import { Shell } from "@downcity/shell";
+import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 import { createOpenAI } from "@ai-sdk/openai";
 
 const openai = createOpenAI({
@@ -161,7 +155,10 @@ const openai = createOpenAI({
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
+  workspace: new Workspace({
+    path: "/path/to/project",
+    shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  }),
   tools: {},
 });
 

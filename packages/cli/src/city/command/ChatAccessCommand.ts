@@ -15,8 +15,12 @@ import {
   type ChatAccessEffect,
   type ChatAccessRequestStatus,
 } from "@downcity/plugins/chat";
-import { listAgentConfigs } from "@/city/process/registry/AgentConfigStore.js";
-import type { StoredAgentConfig } from "@/city/types/AgentConfig.js";
+import {
+  get_managed_agent,
+  get_managed_agent_by_workspace,
+  list_managed_agents,
+} from "@/city/process/registry/ManagedAgentRepository.js";
+import type { ManagedAgent } from "@/city/types/agent/ManagedAgent.js";
 import type {
   ChatAccessCommandOptions,
   ChatAccessRequestsOptions,
@@ -41,42 +45,31 @@ function is_interactive_terminal(): boolean {
   return process.stdin.isTTY === true && process.stdout.isTTY === true;
 }
 
-function find_agent_by_id(agent_id: string): StoredAgentConfig | null {
-  const normalized_id = String(agent_id || "").trim().toLowerCase();
-  if (!normalized_id) return null;
-  const matches = listAgentConfigs().filter((config) =>
-    String(config.id || "").trim().toLowerCase() === normalized_id,
-  );
-  if (matches.length > 1) {
-    throw new CliError({
-      title: `Agent ID 不唯一：${agent_id}`,
-      note: matches.map((item) => item.project_root).join("\n"),
-    });
-  }
-  return matches[0] || null;
+function find_agent_by_id(agent_id: string): ManagedAgent | null {
+  return get_managed_agent(agent_id);
 }
 
-function find_agent_by_path(project_root_input: string): StoredAgentConfig | null {
+function find_agent_by_path(project_root_input: string): ManagedAgent | null {
   const project_root = path.resolve(project_root_input);
-  return listAgentConfigs().find((config) => path.resolve(config.project_root) === project_root) || null;
+  return get_managed_agent_by_workspace(project_root);
 }
 
-async function choose_agent(): Promise<StoredAgentConfig | null> {
-  const configs = listAgentConfigs();
+async function choose_agent(): Promise<ManagedAgent | null> {
+  const configs = list_managed_agents();
   if (configs.length === 0) return null;
   const response = (await prompts({
     type: "select",
     name: "project_root",
     message: t({ zh: "选择要管理 Chat Access 的 Agent", en: "Select the Agent whose Chat Access you want to manage" }),
     choices: configs.map((config) => ({
-      title: config.id,
-      description: config.project_root,
-      value: config.project_root,
+      title: config.agent_id,
+      description: config.workspace_path,
+      value: config.agent_id,
     })),
     initial: 0,
   })) as { project_root?: string };
-  const project_root = String(response.project_root || "").trim();
-  return project_root ? find_agent_by_path(project_root) : null;
+  const agent_id = String(response.project_root || "").trim();
+  return agent_id ? find_agent_by_id(agent_id) : null;
 }
 
 /** 交互式选择 Chat Access 的目标 Agent。 */
@@ -92,10 +85,10 @@ export async function choose_chat_access_target(): Promise<CliChatAccessTarget> 
   });
 }
 
-function to_target(config: StoredAgentConfig): CliChatAccessTarget {
+function to_target(config: ManagedAgent): CliChatAccessTarget {
   return {
-    agent_id: config.id,
-    project_root: path.resolve(config.project_root),
+    agent_id: config.agent_id,
+    project_root: path.resolve(config.workspace_path),
     config,
   };
 }

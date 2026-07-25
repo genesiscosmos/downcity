@@ -18,9 +18,10 @@ import { printResult } from "@/city/utils/cli/CliOutput.js";
 import type { JsonValue, PluginCliBaseOptions } from "@downcity/agent";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { t } from "@/shared/CliLocale.js";
-import { resolveProjectRoot } from "@/city/shared/PluginTargetSupport.js";
+import {
+  resolvePluginProjectRoot as resolve_managed_plugin_target,
+} from "@/city/shared/PluginTargetSupport.js";
 import { createCityStaticBuiltinPlugins } from "@/city/runtime/plugins/CityBuiltinPlugins.js";
-import { readAgentConfig } from "@/city/process/registry/AgentConfigStore.js";
 
 type StaticCatalogEntry = {
   name: string;
@@ -67,16 +68,15 @@ export function listVisiblePluginActions(plugin_name: string, actions: string[])
 }
 
 export async function resolvePluginProjectRoot(options: PluginCliBaseOptions): Promise<{
+  agent_id?: string;
   project_root?: string;
   error?: string;
 }> {
-  return { project_root: resolveProjectRoot(options.path) };
+  return resolve_managed_plugin_target(options);
 }
 
 export function validatePluginProjectRoot(project_root: string): string | null {
-  return readAgentConfig(project_root)
-    ? null
-    : `Invalid plugin project path: ${project_root}. Missing agent config. Run \`city agent create\` first.`;
+  return project_root ? null : "Plugin Workspace path is required.";
 }
 
 export function parseCommandPayload(raw?: string): JsonValue | undefined {

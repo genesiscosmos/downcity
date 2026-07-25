@@ -8,7 +8,6 @@
  */
 
 import { Hono } from "hono";
-import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import http from "node:http";
 import { Readable } from "node:stream";
@@ -20,6 +19,11 @@ import { createPluginsRouter } from "@/city/agent/http/plugins/plugins.js";
 import { createStaticRouter } from "@/city/agent/http/static/static.js";
 import { createControlRouter } from "@/city/agent/http/control/ControlRouter.js";
 import type { Agent } from "@downcity/agent";
+import { AuthService } from "@/city/runtime/auth/AuthService.js";
+import {
+  createRouteAuthGuardMiddleware,
+  SERVER_AUTH_ROUTE_POLICIES,
+} from "@/city/runtime/auth/RoutePolicy.js";
 
 /**
  * Agent HTTP 网关启动参数。
@@ -33,6 +37,8 @@ export interface AgentHttpGatewayStartOptions {
   get_agent: () => Agent;
   /** 可选 SDK transport 子路由（来自 `@downcity/server` 的 `AgentHTTP.router()`）。 */
   sdkRouter?: HonoType;
+  /** 可复用的全局鉴权服务；省略时由网关创建并负责关闭。 */
+  auth_service?: AuthService;
 }
 
 /**
@@ -53,20 +59,16 @@ export interface AgentHttpGatewayInstance {
 export function createAgentHttpGatewayApp(
   options: Pick<
     AgentHttpGatewayStartOptions,
-    "get_agent" | "sdkRouter"
-  >,
+  "get_agent" | "sdkRouter"
+  > & { auth_service: AuthService },
 ): Hono {
   const app = new Hono();
 
   app.use("*", logger());
-  app.use(
-    "*",
-    cors({
-      origin: "*",
-      allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowHeaders: ["Content-Type", "Authorization"],
-    }),
-  );
+  app.use("*", createRouteAuthGuardMiddleware(
+    options.auth_service,
+    SERVER_AUTH_ROUTE_POLICIES,
+  ));
 
   // 关键点（中文）：HTTP 协议面由 City 装配，Agent 只提供 Agent。
   app.route("/", createStaticRouter({
@@ -96,18 +98,27 @@ export function createAgentHttpGatewayApp(
 export async function startAgentHttpGateway(
   options: AgentHttpGatewayStartOptions,
 ): Promise<AgentHttpGatewayInstance> {
-  const app = createAgentHttpGatewayApp(options);
+  const owns_auth_service = !options.auth_service;
+  const auth_service = options.auth_service ?? new AuthService();
+  const app = createAgentHttpGatewayApp({ ...options, auth_service });
   const server = createNodeServer(app, options);
   const server_logger = options.get_agent().get_logger();
 
-  await new Promise<void>((resolve) => {
-    server.listen(options.port, options.host, () => {
-      server_logger.info(
-        `🚀 City Agent HTTP gateway started: http://${options.host}:${options.port}`,
-      );
-      resolve();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(options.port, options.host, () => {
+        server.off("error", reject);
+        server_logger.info(
+          `🚀 City Agent HTTP gateway started: http://${options.host}:${options.port}`,
+        );
+        resolve();
+      });
     });
-  });
+  } catch (error) {
+    if (owns_auth_service) auth_service.close();
+    throw error;
+  }
 
   return {
     app,
@@ -117,6 +128,7 @@ export async function startAgentHttpGateway(
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
       });
+      if (owns_auth_service) auth_service.close();
       server_logger.info("City Agent HTTP gateway stopped");
     },
   };

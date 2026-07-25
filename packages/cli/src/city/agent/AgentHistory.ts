@@ -17,7 +17,7 @@ import type {
 } from "@/city/agent/AgentHistoryTypes.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
-import { resolveAgentId } from "@/shared/IndexSupport.js";
+import type { DaemonTarget } from "@/city/process/daemon/Types.js";
 
 function normalizeText(input: unknown): string {
   return String(input || "").trim();
@@ -35,9 +35,10 @@ function normalize_thread_id(input: unknown): number | undefined {
  * 执行 `city agent history clean`。
  */
 export async function agentHistoryCleanCommand(
-  project_root: string,
+  target: DaemonTarget,
   options: AgentHistoryCleanOptions,
 ): Promise<AgentHistoryCleanResult> {
+  const project_root = target.workspace_path;
   if (options.hard !== true) {
     throw new CliError({
       title: "Hard clean requires --hard",
@@ -72,7 +73,7 @@ export async function agentHistoryCleanCommand(
   const workspace = new Workspace({ path: project_root });
   let removedSessionDir = false;
   try {
-    const store = workspace.bind_agent(resolveAgentId(project_root));
+    const store = workspace.bind_agent(target.agent_id);
     removedSessionDir = await store.remove_session(session_id);
   } finally {
     await workspace.dispose();

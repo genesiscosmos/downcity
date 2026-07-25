@@ -399,8 +399,10 @@ export interface RpcInternalStatus {
   status: string;
   /** RPC 服务所属进程的操作系统 pid。 */
   pid: number;
-  /** 当前 Agent 项目的绝对路径。 */
-  project_root: string;
+  /** 当前 Agent 的稳定全局 ID。 */
+  agent_id: string;
+  /** 当前 Agent 绑定的 Workspace 绝对路径。 */
+  workspace_path: string;
   /** daemon 启动实例 ID；非 daemon 前台进程返回空字符串。 */
   instance_id: string;
 }

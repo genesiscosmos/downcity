@@ -1,5 +1,5 @@
 /**
- * `city agent create`：在目标目录生成最小可用的 Downcity 工程骨架与配置文件。
+ * `city agent create`：创建全局受管 Agent 并绑定一个 Workspace。
  *
  * 目标
  * - 生成 `.agents/skills` 与 `.downcity/` 运行目录
@@ -25,10 +25,10 @@ import {
   listPlatformModelChoices,
 } from "@/city/runtime/city-model/ExecutionModelBinding.js";
 import {
-  readAgentConfig,
-  upsertAgentConfig,
-} from "@/city/process/registry/AgentConfigStore.js";
-import { upsertManagedAgentEntry } from "@/city/process/registry/CityRegistry.js";
+  create_managed_agent,
+  get_managed_agent,
+  save_managed_agent,
+} from "@/city/process/registry/ManagedAgentRepository.js";
 
 type InitPromptResponse = {
   id?: string;
@@ -74,7 +74,6 @@ export async function initCommand(
     ],
   });
 
-  const existingAgentConfig = readAgentConfig(project_root);
   const modelChoices = await listPlatformModelChoices();
   const modelChoiceIds = modelChoices.map((item) => item.value);
   if (modelChoiceIds.length === 0) {
@@ -83,28 +82,6 @@ export async function initCommand(
       note: "Please register at least one model in City AIService and ensure the City user token can access it.",
       fix: "city",
     });
-  }
-
-  // 关键点（中文）：项目配置只保存在全局 DB，重复创建时只询问是否覆盖该记录。
-  if (existingAgentConfig) {
-    if (!allowOverwrite) {
-      const confirmResponse = (await prompts({
-        type: "confirm",
-        name: "overwrite",
-        message:
-          "Agent config already exists in the global DB. Overwrite it and continue?",
-        initial: false,
-      })) as { overwrite?: boolean };
-
-      if (!confirmResponse.overwrite) {
-        emitCliBlock({
-          tone: "info",
-          title: "Initialization cancelled",
-        });
-        return;
-      }
-      allowOverwrite = true;
-    }
   }
 
   // Collect configuration information
@@ -153,6 +130,23 @@ export async function initCommand(
   for (const channel of selectedChannels) {
     channels_config[channel] = { enabled: true };
   }
+  const existing_agent = get_managed_agent(agent_id);
+  if (existing_agent && !allowOverwrite) {
+    const confirm_response = (await prompts({
+      type: "confirm",
+      name: "overwrite",
+      message: `Agent "${agent_id}" already exists. Rebind it to this Workspace and replace its configuration?`,
+      initial: false,
+    })) as { overwrite?: boolean };
+    if (!confirm_response.overwrite) {
+      emitCliBlock({
+        tone: "info",
+        title: "Agent creation cancelled",
+      });
+      return;
+    }
+    allowOverwrite = true;
+  }
   const initResult = await initialize_agent_project(
     {
       project_root: project_root,
@@ -161,24 +155,35 @@ export async function initCommand(
       channels: selectedChannels,
     },
   );
-  upsertAgentConfig({
-    project_root,
-    id: agent_id,
-    version: "1.0.0",
-    execution,
-    plugins: Object.keys(channels_config).length > 0
-      ? {
-          chat: {
-            channels: channels_config,
-          },
-        }
-      : undefined,
-  });
-  await upsertManagedAgentEntry({ project_root });
+  const plugins = Object.keys(channels_config).length > 0
+    ? {
+        chat: {
+          channels: channels_config,
+        },
+      }
+    : undefined;
+  if (existing_agent && allowOverwrite) {
+    save_managed_agent({
+      agent_id,
+      workspace_path: project_root,
+      version: "1.0.0",
+      execution,
+      ...(plugins ? { plugins } : {}),
+      created_at: existing_agent.created_at,
+      updated_at: existing_agent.updated_at,
+    });
+  } else {
+    create_managed_agent({
+      agent_id,
+      workspace_path: project_root,
+      execution,
+      plugins,
+    });
+  }
 
   const createdItems = [
     ...initResult.created_files,
-    "global DB agent config",
+    "global managed agent",
   ];
   const skippedItems = [...initResult.skipped_files];
 

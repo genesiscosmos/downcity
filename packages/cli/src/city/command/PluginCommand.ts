@@ -26,7 +26,6 @@ import {
   runPluginListCommand,
   validatePluginProjectRoot,
 } from "./plugin/PluginHelpers.js";
-import { readAgentConfig } from "@/city/process/registry/AgentConfigStore.js";
 
 export async function runInteractivePluginManager(): Promise<void> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -73,7 +72,7 @@ async function runPluginActionCommand(params: {
   options: PluginCliBaseOptions;
 }): Promise<void> {
   const resolved = await resolvePluginProjectRoot(params.options);
-  if (!resolved.project_root) {
+  if (!resolved.agent_id || !resolved.project_root) {
     printResult({
       asJson: params.options.json,
       success: false,
@@ -97,15 +96,13 @@ async function runPluginActionCommand(params: {
     });
     return;
   }
-  const config = readAgentConfig(resolved.project_root);
-
   const payload = parseCommandPayload(params.payload);
   const local = await run_local_plugin_action({
     plugins: createPluginCatalog(),
     project_root: resolved.project_root,
     plugin_name: params.plugin_name,
     action_name: params.action_name,
-    ...(config?.id ? { agent_id: config.id } : {}),
+    agent_id: resolved.agent_id,
     ...(payload !== undefined ? { payload } : {}),
   });
   printResult({

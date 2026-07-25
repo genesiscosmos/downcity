@@ -40,7 +40,4 @@ export interface AgentModelSelectionResponse {
 export interface AgentModelAgentTarget {
   /** 目标 Agent 稳定 ID。 */
   agent_id: string;
-
-  /** Agent 当前运行状态，仅用于命令结果上下文。 */
-  status: "running" | "stopped";
 }

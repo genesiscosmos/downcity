@@ -123,7 +123,6 @@ export async function initialize_agent_project(
     path.join(downcity_dir_path, "public"),
     path.join(downcity_dir_path, "resources"),
     skills_dir_path,
-    path.join(downcity_dir_path, ".debug"),
   ];
   for (const directory of directories) {
     await fs.ensureDir(directory);

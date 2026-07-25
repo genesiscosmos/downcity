@@ -7,10 +7,9 @@
  * - 若目标 agent 未运行，命令保持幂等，只输出 not running。
  */
 
-import path from "path";
 import { stopDaemonProcess } from "@/city/process/daemon/Manager.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
-import { resolveAgentId } from "@/shared/IndexSupport.js";
+import type { DaemonTarget } from "@/city/process/daemon/Types.js";
 
 /**
  * stop 命令执行流程。
@@ -20,17 +19,16 @@ import { resolveAgentId } from "@/shared/IndexSupport.js";
  * 2) 调用 daemon manager 停止进程组
  * 3) 用人类可读 block 输出 stopped / not running
  */
-export async function stopCommand(cwd: string = "."): Promise<void> {
-  const project_root = path.resolve(cwd);
-  const result = await stopDaemonProcess({ project_root });
+export async function stopCommand(target: DaemonTarget): Promise<void> {
+  const result = await stopDaemonProcess(target);
   emitCliBlock({
     tone: result.stopped ? "success" : "info",
     title: result.stopped ? "Agent daemon stopped" : "Agent daemon not running",
-    summary: resolveAgentId(project_root),
+    summary: target.agent_id,
     facts: [
       {
-        label: "Project",
-        value: project_root,
+        label: "Workspace",
+        value: target.workspace_path,
       },
       ...(result.pid
         ? [

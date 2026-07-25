@@ -7,17 +7,17 @@
  * - 所有输出统一支持 JSON（默认）与可读文本两种模式。
  */
 
-import path from "node:path";
 import type { Command } from "commander";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import { aliasCommand } from "@/city/shared/Alias.js";
 import { parseBoolean } from "@/shared/IndexSupport.js";
 import { helpText, t } from "@/shared/CliLocale.js";
 import {
-  readAgentConfig,
-  upsertAgentConfig,
-  type StoredAgentConfig,
-} from "@/city/process/registry/AgentConfigStore.js";
+  get_managed_agent,
+  save_managed_agent,
+} from "@/city/process/registry/ManagedAgentRepository.js";
+import type { ManagedAgent } from "@/city/types/agent/ManagedAgent.js";
+import { resolve_cli_agent_target } from "@/city/agent/AgentSelection.js";
 
 /**
  * 解析项目根目录。
@@ -26,10 +26,6 @@ import {
  * - `city config` 是本机 City 配置命令，只需要纯路径解析能力。
  * - 不依赖 City plugin 目标解析模块，避免配置命令耦合运行态目标解析。
  */
-function resolveProjectRoot(pathInput?: string): string {
-  return path.resolve(String(pathInput || "."));
-}
-
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -56,19 +52,16 @@ function parseConfigValue(rawValue: string): unknown {
   }
 }
 
-function readStoredConfig(project_root: string): StoredAgentConfig {
-  const config = readAgentConfig(project_root);
+function readStoredConfig(agent_id: string): ManagedAgent {
+  const config = get_managed_agent(agent_id);
   if (!config) {
     throw new Error(`Agent config not found in global DB. Run "city agent create" first.`);
   }
   return config;
 }
 
-function writeStoredConfig(project_root: string, config: StoredAgentConfig): void {
-  upsertAgentConfig({
-    ...config,
-    project_root,
-  });
+function writeStoredConfig(config: ManagedAgent): void {
+  save_managed_agent(config);
 }
 
 function getByPath(
@@ -137,31 +130,32 @@ function unsetByPath(
   return { removed: true, previous };
 }
 
-function runConfigCommand(
-  options: { path?: string; json?: boolean },
+async function runConfigCommand(
+  options: { agent?: string; json?: boolean },
   handler: (input: {
-    project_root: string;
-    config: StoredAgentConfig;
+    agent_id: string;
+    config: ManagedAgent;
   }) => {
     title: string;
     payload: Record<string, unknown>;
     save?: boolean;
   },
-): void {
+): Promise<void> {
   const asJson = options.json !== false;
   try {
-    const project_root = resolveProjectRoot(options.path);
-    const config = readStoredConfig(project_root);
-    const result = handler({ project_root, config });
+    const target = await resolve_cli_agent_target(options.agent);
+    const config = readStoredConfig(target.agent_id);
+    const result = handler({ agent_id: target.agent_id, config });
     if (result.save) {
-      writeStoredConfig(project_root, config);
+      writeStoredConfig(config);
     }
     printResult({
       asJson,
       success: true,
       title: result.title,
       payload: {
-        project_root,
+        agent_id: target.agent_id,
+        workspace_path: target.workspace_path,
         ...result.payload,
       },
     });
@@ -180,10 +174,10 @@ function runConfigCommand(
 
 function applyCommonOptions(command: Command): Command {
   return command
-    .option("--path <path>", t({
-      zh: "项目根目录（默认当前目录）",
-      en: "project root path (default: current directory)",
-    }), ".")
+    .option("--agent <agent_id>", t({
+      zh: "目标 Agent ID（默认按当前目录或交互选择）",
+      en: "target Agent ID (defaults to current directory lookup or interactive selection)",
+    }))
     .option("--json [enabled]", t({
       zh: "以 JSON 输出",
       en: "output as JSON",
@@ -210,8 +204,8 @@ export function registerConfigCommand(program: Command): void {
         en: "read Agent config, optionally from a single path",
       }))
       .helpOption("--help", helpText()),
-  ).action((keyPath: string | undefined, options: { path?: string; json?: boolean }) => {
-    runConfigCommand(options, ({ config: downcityConfig }) => {
+  ).action(async (keyPath: string | undefined, options: { agent?: string; json?: boolean }) => {
+    await runConfigCommand(options, ({ config: downcityConfig }) => {
       if (!keyPath) {
         return {
           title: "config loaded",
@@ -245,10 +239,10 @@ export function registerConfigCommand(program: Command): void {
     (
       keyPath: string,
       value: string,
-      options: { path?: string; json?: boolean },
+      options: { agent?: string; json?: boolean },
     ) => {
       const pathTokens = parseConfigPath(keyPath);
-      runConfigCommand(options, ({ config: downcityConfig }) => {
+      return runConfigCommand(options, ({ config: downcityConfig }) => {
         const parsed = parseConfigValue(value);
         const changed = setByPath(
           downcityConfig as unknown as Record<string, unknown>,
@@ -277,9 +271,9 @@ export function registerConfigCommand(program: Command): void {
         en: "remove a value at an Agent config path",
       }))
       .helpOption("--help", helpText()),
-  ).action((keyPath: string, options: { path?: string; json?: boolean }) => {
+  ).action(async (keyPath: string, options: { agent?: string; json?: boolean }) => {
     const pathTokens = parseConfigPath(keyPath);
-    runConfigCommand(options, ({ config: downcityConfig }) => {
+    await runConfigCommand(options, ({ config: downcityConfig }) => {
       const removed = unsetByPath(
         downcityConfig as unknown as Record<string, unknown>,
         pathTokens,

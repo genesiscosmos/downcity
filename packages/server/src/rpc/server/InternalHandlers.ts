@@ -35,7 +35,8 @@ export async function handleInternalRpcRequest(params: {
       write_success(request.id, {
         status: "ok",
         pid: process.pid,
-        project_root: context.workspace.path,
+        agent_id: context.id,
+        workspace_path: context.workspace.path,
         instance_id: String(process.env.DOWNCITY_DAEMON_INSTANCE_ID || "").trim(),
       });
       return true;

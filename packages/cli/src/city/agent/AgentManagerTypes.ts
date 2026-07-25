@@ -10,8 +10,8 @@ export type AgentManagerListSelection =
       /** 选择类型：进入某个已登记 Agent。 */
       type: "agent";
 
-      /** 目标 Agent 项目根目录。 */
-      project_root: string;
+      /** 目标 Agent 的稳定全局 ID。 */
+      agent_id: string;
     }
   | {
       /** 选择类型：创建新的 Agent 项目。 */
@@ -31,7 +31,6 @@ export type AgentManagerAgentAction =
   | "back";
 
 export type AgentManagerConfigAction =
-  | "configureId"
   | "configureModel"
   | "connectChatAccounts"
   | "back";

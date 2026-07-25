@@ -13,9 +13,9 @@ import { buildRunArgsFromOptions } from "@/city/process/daemon/CliArgs.js";
 import { startDaemonProcess, stopDaemonProcess } from "@/city/process/daemon/Manager.js";
 import type { AgentStartOptions } from "@/city/types/AgentStartOptions.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
-import { resolveAgentId } from "@/shared/IndexSupport.js";
 import { checkAgentPreflight } from "@/city/shared/PluginTargetSupport.js";
 import { CliError } from "@/shared/CliError.js";
+import type { DaemonTarget } from "@/city/process/daemon/Types.js";
 
 /**
  * restart 命令执行流程。
@@ -26,13 +26,11 @@ import { CliError } from "@/shared/CliError.js";
  * 3) 按当前参数重建启动参数并拉起新 daemon
  */
 export async function restartCommand(
-  cwd: string = ".",
+  target: DaemonTarget,
   options: AgentStartOptions,
 ): Promise<void> {
-  const project_root = path.resolve(cwd);
-
   // 关键点（中文）：统一预检项目初始化状态、sandbox 与 execution binding。
-  await checkAgentPreflight(project_root);
+  await checkAgentPreflight(target);
 
   // 计算当前 CLI 的入口路径（编译后是 `bin/index.js`）。
   // 本模块位于 `bin/city/agent/`，需上溯两级才能到达 `bin/index.js`。
@@ -41,10 +39,11 @@ export async function restartCommand(
   const cliPath = path.resolve(__dirname, "../../index.js");
 
   try {
-    await stopDaemonProcess({ project_root });
-    const args = await buildRunArgsFromOptions(project_root, options || {});
+    await stopDaemonProcess(target);
+    const args = await buildRunArgsFromOptions(target.agent_id, options || {});
     await startDaemonProcess({
-      project_root,
+      agent_id: target.agent_id,
+      workspace_path: target.workspace_path,
       cliPath,
       args,
     });
@@ -52,11 +51,11 @@ export async function restartCommand(
     emitCliBlock({
       tone: "success",
       title: "Agent daemon restarted",
-      summary: resolveAgentId(project_root),
+      summary: target.agent_id,
       facts: [
         {
-          label: "Project",
-          value: project_root,
+          label: "Workspace",
+          value: target.workspace_path,
         },
       ],
     });

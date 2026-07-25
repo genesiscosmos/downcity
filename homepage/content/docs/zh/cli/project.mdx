@@ -5,7 +5,7 @@ description: Agent 项目目录、全局配置和运行数据的边界
 
 # 项目结构
 
-Agent 的管理配置统一保存在全局数据库。项目目录只保留项目环境、Skills 和运行数据，不保存配置副本。
+Agent 的管理配置统一保存在全局数据库。Agent 不需要项目声明文件；项目目录只作为 Workspace，保留环境、Skills 和业务运行数据。
 
 ## 目录布局
 
@@ -34,13 +34,15 @@ my-project/
 
 CLI、交互管理器和 Agent daemon 都读取同一份数据库，不维护项目配置副本。
 
+`agent_id` 是全局主键，Workspace 路径不是身份。一个 Workspace 可以同时绑定多个 Agent；每个 Agent 的 daemon 状态独立保存在 `~/.downcity/runtimes/<agent_id>/daemon.json`、`daemon.pid` 和 `daemon.log`。
+
 ## 项目资产
 
 `.env` 的优先级高于平台全局环境和当前 CLI 进程环境，并默认加入 `.gitignore`。`.agents/skills` 是项目中唯一由用户管理并进入版本控制的 Agent 能力资产。
 
 ## 运行数据
 
-`.downcity/` 只保存会话、Chat Access、任务、记忆、日志和缓存等运行数据。不要把管理配置写入该目录。
+`.downcity/` 只保存会话、Chat Access、任务、记忆和缓存等业务运行数据。不要把管理配置、PID 或 daemon 元数据写入该目录。
 
 继续阅读：
 

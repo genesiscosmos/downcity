@@ -5,7 +5,7 @@ description: Boundaries between Agent projects, global config, and runtime data
 
 # Project Structure
 
-Agent management config lives in one global database. A project directory only contains project env, Skills, and runtime data; it does not keep a second config copy.
+Agent management config lives in one global database. Agents require no project declaration file; a project directory is only a Workspace containing env, Skills, and business runtime data.
 
 ## Directory layout
 
@@ -34,13 +34,15 @@ The default database is `~/.downcity/downcity.db`. With `DC_PLATFORM_ROOT`, it b
 
 The CLI, interactive manager, and Agent daemon all read this database. There is no project config copy.
 
+`agent_id` is the global primary key; a Workspace path is not an identity. Multiple Agents may bind to one Workspace. Each Agent keeps independent daemon state at `~/.downcity/runtimes/<agent_id>/daemon.json`, `daemon.pid`, and `daemon.log`.
+
 ## Project assets
 
 Project `.env` overrides platform global env and the current CLI process env, and is added to `.gitignore` by default. `.agents/skills` is the only user-managed Agent capability asset intended for version control.
 
 ## Runtime data
 
-`.downcity/` only contains sessions, Chat Access, tasks, memory, logs, and caches. Management config does not belong there.
+`.downcity/` only contains sessions, Chat Access, tasks, memory, and caches. Management config, PIDs, and daemon metadata do not belong there.
 
 Continue with:
 

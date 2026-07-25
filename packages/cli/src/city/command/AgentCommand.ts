@@ -8,8 +8,8 @@
 
 import type { Command, Option } from "commander";
 import {
-  emitRegisteredAgentListWithOptions,
-  resolveCliAgentStartProjectRoot,
+  emit_registered_agent_list_with_options,
+  resolve_cli_agent_target,
 } from "@/city/agent/AgentSelection.js";
 import { runInteractiveAgentManager } from "@/city/agent/AgentManager.js";
 import { chatCommand } from "@/city/agent/AgentChat.js";
@@ -32,10 +32,7 @@ import {
   isProcessAlive as isDaemonProcessAlive,
   readDaemonPid,
 } from "@/city/process/daemon/Manager.js";
-import {
-  ensureRegisteredAgentProjectRoot,
-  prepareForegroundAgent,
-} from "@/city/shared/CityAgentRuntime.js";
+import { prepareForegroundAgent } from "@/city/shared/CityAgentRuntime.js";
 import { helpText, t } from "@/shared/CliLocale.js";
 
 /**
@@ -106,15 +103,15 @@ export function registerAgentCommands(
     .action(createVersionBanner(
       context.version,
       async (options: { running?: boolean; json?: boolean }) => {
-        await emitRegisteredAgentListWithOptions({
-          runningOnly: options.running === true,
-          asJson: options.json === true,
+        await emit_registered_agent_list_with_options({
+          running_only: options.running === true,
+          as_json: options.json === true,
         });
       },
     ));
 
   agent
-    .command("start [path]")
+    .command("start [agent_id]")
     .description(t({
       zh: "启动 Agent 进程（后台/前台）",
       en: "start an Agent process in the background or foreground",
@@ -122,8 +119,8 @@ export function registerAgentCommands(
     .addOption(new context.hiddenPortOption("--port <port>").argParser(parsePort).hideHelp())
     .addOption(new context.hiddenPortOption("--rpc-port <port>").argParser(parsePort).hideHelp())
     .option("-h, --host <host>", t({
-      zh: "服务主机（默认 0.0.0.0）",
-      en: "service host (default: 0.0.0.0)",
+      zh: "服务主机（默认 127.0.0.1）",
+      en: "service host (default: 127.0.0.1)",
     }))
     .option("--foreground [enabled]", t({
       zh: "前台启动（仅当前终端）",
@@ -133,15 +130,14 @@ export function registerAgentCommands(
     .action(
       createVersionBanner(
         context.version,
-        async (cwd: string | undefined, options: AgentStartOptions & { foreground?: boolean }) => {
-          const project_root = await resolveCliAgentStartProjectRoot(cwd);
-
-          const prepared = await prepareForegroundAgent(project_root, options);
-          if (prepared.shouldForeground) {
-            await runCommand(prepared.project_root, prepared.options);
+        async (agent_id: string | undefined, options: AgentStartOptions & { foreground?: boolean }) => {
+          const target = await resolve_cli_agent_target(agent_id);
+          const prepared = await prepareForegroundAgent(target, options);
+          if (prepared.should_foreground) {
+            await runCommand(prepared.target, prepared.options);
             return;
           }
-          await startCommand(prepared.project_root, prepared.options);
+          await startCommand(prepared.target, prepared.options);
         },
       ),
     );
@@ -203,7 +199,7 @@ export function registerAgentCommands(
     }));
 
   history
-    .command("clean [path]")
+    .command("clean [agent_id]")
     .description(t({
       zh: "按 session 或 chat 目标硬清理一条会话历史",
       en: "hard-clean one conversation history entry by session or chat target",
@@ -240,7 +236,7 @@ export function registerAgentCommands(
     .action(createVersionBanner(
       context.version,
       async (
-        cwd: string = ".",
+        agent_id: string | undefined,
         options: {
           session_id?: string;
           channel?: string;
@@ -251,13 +247,13 @@ export function registerAgentCommands(
           json?: boolean;
         },
       ) => {
-        const project_root = await ensureRegisteredAgentProjectRoot(cwd);
-        await agentHistoryCleanCommand(project_root, options);
+        const target = await resolve_cli_agent_target(agent_id);
+        await agentHistoryCleanCommand(target, options);
       },
     ));
 
   agent
-    .command("model [path]")
+    .command("model [agent_id]")
     .description(t({
       zh: "配置 Agent 默认模型",
       en: "configure the Agent default model",
@@ -269,27 +265,27 @@ export function registerAgentCommands(
     .helpOption("--help", helpText())
     .action(createVersionBanner(
       context.version,
-      async (cwd: string = ".", options: AgentModelCommandOptions) => {
-        const project_root = await ensureRegisteredAgentProjectRoot(cwd);
-        await configure_agent_model(project_root, options);
+      async (agent_id: string | undefined, options: AgentModelCommandOptions) => {
+        const target = await resolve_cli_agent_target(agent_id);
+        await configure_agent_model(target.agent_id, options);
       },
     ));
 
   agent
-    .command("status [path]")
+    .command("status [agent_id]")
     .description(t({
       zh: "查看后台 Agent 进程（daemon）状态",
       en: "show background Agent daemon status",
     }))
     .helpOption("--help", helpText())
-    .action(createVersionBanner(context.version, async (cwd: string = ".") => {
-      const project_root = await ensureRegisteredAgentProjectRoot(cwd);
-      inject_agent_context(project_root);
-      await statusCommand(project_root);
+    .action(createVersionBanner(context.version, async (agent_id: string | undefined) => {
+      const target = await resolve_cli_agent_target(agent_id);
+      inject_agent_context(target);
+      await statusCommand(target);
     }));
 
   agent
-    .command("doctor [path]")
+    .command("doctor [agent_id]")
     .description(t({
       zh: "诊断 daemon 状态文件；可选修复僵尸 pid/meta",
       en: "diagnose daemon state files and optionally clean stale pid/meta data",
@@ -301,10 +297,10 @@ export function registerAgentCommands(
     .helpOption("--help", helpText())
     .action(createVersionBanner(
       context.version,
-      async (cwd: string = ".", options: { fix?: boolean }) => {
-        const project_root = await ensureRegisteredAgentProjectRoot(cwd);
-        inject_agent_context(project_root);
-        const pid = await readDaemonPid(project_root);
+      async (agent_id: string | undefined, options: { fix?: boolean }) => {
+        const target = await resolve_cli_agent_target(agent_id);
+        inject_agent_context(target);
+        const pid = await readDaemonPid(target.agent_id);
 
         if (!pid) {
           emitCliBlock({
@@ -312,8 +308,8 @@ export function registerAgentCommands(
             title: "No daemon state found",
             facts: [
               {
-                label: "Project",
-                value: project_root,
+                label: "Agent",
+                value: target.agent_id,
               },
             ],
           });
@@ -326,22 +322,22 @@ export function registerAgentCommands(
             title: "Daemon process is alive",
             facts: [
               {
-                label: "Project",
-                value: project_root,
+                label: "Agent",
+                value: target.agent_id,
               },
             ],
           });
           return;
         }
 
-        const staleReasons = await diagnoseDaemonStaleReasons(project_root, pid);
+        const staleReasons = await diagnoseDaemonStaleReasons(target, pid);
         emitCliBlock({
           tone: "warning",
           title: "Stale daemon state detected",
           facts: [
             {
-              label: "Project",
-              value: project_root,
+              label: "Agent",
+              value: target.agent_id,
             },
             {
               label: "Reason",
@@ -357,7 +353,7 @@ export function registerAgentCommands(
             facts: [
               {
                 label: "Command",
-                value: "city agent doctor <path> --fix",
+                value: "city agent doctor <agent_id> --fix",
               },
             ],
           });
@@ -365,7 +361,7 @@ export function registerAgentCommands(
         }
 
         await runWithSpinner(
-          () => cleanupStaleDaemonFiles(project_root),
+          () => cleanupStaleDaemonFiles(target.agent_id),
           { text: "Cleaning stale daemon files..." },
         );
         emitCliBlock({
@@ -373,8 +369,8 @@ export function registerAgentCommands(
           title: "Cleaned stale daemon state",
           facts: [
             {
-              label: "Project",
-              value: project_root,
+              label: "Agent",
+              value: target.agent_id,
             },
           ],
         });
@@ -382,32 +378,32 @@ export function registerAgentCommands(
     ));
 
   agent
-    .command("stop [path]")
+    .command("stop [agent_id]")
     .description(t({
       zh: "停止后台 Agent 进程（daemon）",
       en: "stop the background Agent daemon",
     }))
     .helpOption("--help", helpText())
-    .action(createVersionBanner(context.version, async (cwd: string = ".") => {
-      const project_root = await ensureRegisteredAgentProjectRoot(cwd);
-      inject_agent_context(project_root);
-      await stopCommand(project_root);
+    .action(createVersionBanner(context.version, async (agent_id: string | undefined) => {
+      const target = await resolve_cli_agent_target(agent_id);
+      inject_agent_context(target);
+      await stopCommand(target);
     }));
 
   agent
-    .command("restart [path]")
+    .command("restart [agent_id]")
     .description(t({
       zh: "重启后台 Agent 进程（daemon）",
       en: "restart the background Agent daemon",
     }))
     .option("-h, --host <host>", t({
-      zh: "服务主机（默认 0.0.0.0）",
-      en: "service host (default: 0.0.0.0)",
+      zh: "服务主机（默认 127.0.0.1）",
+      en: "service host (default: 127.0.0.1)",
     }))
     .helpOption("--help", helpText())
-    .action(createVersionBanner(context.version, async (cwd: string = ".", options: AgentStartOptions) => {
-      const project_root = await ensureRegisteredAgentProjectRoot(cwd);
-      inject_agent_context(project_root);
-      await restartCommand(project_root, options);
+    .action(createVersionBanner(context.version, async (agent_id: string | undefined, options: AgentStartOptions) => {
+      const target = await resolve_cli_agent_target(agent_id);
+      inject_agent_context(target);
+      await restartCommand(target, options);
     }));
 }

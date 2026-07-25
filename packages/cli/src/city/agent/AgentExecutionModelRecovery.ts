@@ -7,15 +7,14 @@
  * - 非交互模式不做隐式选择，返回包含可用模型和修复命令的 CliError。
  */
 
-import path from "node:path";
 import prompts from "@/city/tui/Prompts.js";
 import { t } from "@/shared/CliLocale.js";
 import { CliError } from "@/shared/CliError.js";
 import { listPlatformModelChoices } from "@/city/runtime/city-model/ExecutionModelBinding.js";
 import {
-  readAgentConfig,
-  upsertAgentConfig,
-} from "@/city/process/registry/AgentConfigStore.js";
+  get_managed_agent,
+  update_managed_agent,
+} from "@/city/process/registry/ManagedAgentRepository.js";
 import type { AgentModelSelectionResponse } from "@/city/types/AgentModel.js";
 import type {
   AgentExecutionModelRecoveryDecision,
@@ -52,23 +51,23 @@ export function resolve_agent_execution_model_recovery(
 
 /** 构建非交互模式下可直接执行的模型修复命令。 */
 function build_model_recovery_command(
-  project_root: string,
+  agent_id: string,
   model_id: string,
 ): string {
-  return `city agent model ${JSON.stringify(project_root)} --set ${JSON.stringify(model_id)}`;
+  return `city agent model ${JSON.stringify(agent_id)} --set ${JSON.stringify(model_id)}`;
 }
 
-/** 确保项目默认模型可以在当前 Federation 中解析。 */
-export async function ensure_project_execution_model_ready(
-  project_root_input: string,
+/** 确保受管 Agent 的默认模型可以在当前 Federation 中解析。 */
+export async function ensure_agent_execution_model_ready(
+  agent_id_input: string,
 ): Promise<void> {
-  const project_root = path.resolve(String(project_root_input || "").trim() || ".");
-  const config = readAgentConfig(project_root);
+  const agent_id = String(agent_id_input || "").trim();
+  const config = get_managed_agent(agent_id);
   if (!config) {
     throw new CliError({
       title: "Agent config not found",
-      note: `project: ${project_root}`,
-      fix: `city agent create ${JSON.stringify(project_root)}`,
+      note: `agent: ${agent_id}`,
+      fix: "city agent list",
     });
   }
 
@@ -99,7 +98,7 @@ export async function ensure_project_execution_model_ready(
         `configured: ${decision.previous_model_id || "(not configured)"}`,
         `available: ${available_model_ids.join(", ")}`,
       ].join("\n"),
-      fix: build_model_recovery_command(project_root, available_model_ids[0]),
+      fix: build_model_recovery_command(agent_id, available_model_ids[0]),
     });
   }
 
@@ -125,8 +124,8 @@ export async function ensure_project_execution_model_ready(
     });
   }
 
-  upsertAgentConfig({
-    project_root: project_root,
+  update_managed_agent({
+    agent_id: config.agent_id,
     execution: {
       type: "api",
       model_id: selected_model_id,

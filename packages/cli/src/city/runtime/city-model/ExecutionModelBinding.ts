@@ -13,7 +13,6 @@ import {
   type CityAiModelChoice,
 } from "@/city/runtime/city-model/CityAiServiceBinding.js";
 import { mergeProcessEnvWithPlatformGlobalEnv } from "@/city/env/ProcessEnv.js";
-import { readAgentConfig } from "@/city/process/registry/AgentConfigStore.js";
 
 /**
  * City AIService 模型下拉候选项。
@@ -32,21 +31,4 @@ export async function listPlatformModelChoices(): Promise<PlatformModelChoice[]>
  */
 export async function assertPlatformModelReady(modelId: string): Promise<void> {
   await assertCityAiModelReady(modelId, mergeProcessEnvWithPlatformGlobalEnv());
-}
-
-/**
- * 断言项目 execution 绑定已声明且目标模型可用。
- */
-export async function assertProjectExecutionModelReady(project_root: string): Promise<void> {
-  const config = readAgentConfig(project_root);
-  if (!config) {
-    throw new Error("Agent config not found in global DB. Run `city agent create` first.");
-  }
-  const primaryModelId = String(config.execution?.type === "api" ? config.execution.model_id || "" : "").trim();
-  if (!primaryModelId) {
-    throw new Error(
-      'Invalid agent config: "execution" is required and must be { "type": "api", "modelId": "..." }',
-    );
-  }
-  await assertPlatformModelReady(primaryModelId);
 }

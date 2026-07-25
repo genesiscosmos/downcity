@@ -7,14 +7,12 @@
  * - 配置更新在 Agent 下次启动或重启时解析为运行时模型实例。
  */
 
-import path from "node:path";
 import prompts from "@/city/tui/Prompts.js";
 import { listPlatformModelChoices } from "@/city/runtime/city-model/ExecutionModelBinding.js";
-import { listRegisteredAgentsForCli } from "@/city/agent/AgentSelection.js";
 import {
-  readAgentConfig,
-  upsertAgentConfig,
-} from "@/city/process/registry/AgentConfigStore.js";
+  get_managed_agent,
+  update_managed_agent,
+} from "@/city/process/registry/ManagedAgentRepository.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { CliError } from "@/shared/CliError.js";
 import type {
@@ -25,23 +23,17 @@ import type {
 } from "@/city/types/AgentModel.js";
 
 /** 解析已登记的目标 Agent，不要求 daemon 正在运行。 */
-async function resolve_agent_target(
-  project_root: string,
-): Promise<AgentModelAgentTarget> {
-  const agents = await listRegisteredAgentsForCli();
-  const matched = agents.find(
-    (agent) => path.resolve(agent.project_root) === project_root,
-  );
-  if (!matched) {
+function resolve_agent_target(agent_id: string): AgentModelAgentTarget {
+  const agent = get_managed_agent(agent_id);
+  if (!agent) {
     throw new CliError({
       title: "Agent is not registered",
-      note: `project: ${project_root}`,
-      fix: `downcity agent create ${project_root}`,
+      note: `agent: ${agent_id}`,
+      fix: "city agent list",
     });
   }
   return {
-    agent_id: matched.id,
-    status: matched.status,
+    agent_id: agent.agent_id,
   };
 }
 
@@ -51,8 +43,8 @@ async function resolve_model_id(params: {
   current_model_id: string;
   /** 命令显式传入的 Federation 模型 ID。 */
   requested_model_id?: string;
-  /** 目标 Agent 项目根目录。 */
-  project_root: string;
+  /** 目标 Agent ID。 */
+  agent_id: string;
 }): Promise<string | null> {
   const choices = await listPlatformModelChoices();
   if (choices.length === 0) {
@@ -69,7 +61,7 @@ async function resolve_model_id(params: {
       throw new CliError({
         title: `Model not available: ${requested_model_id}`,
         note: "目标模型不在当前 Federation User City 返回的对话模型中。",
-        fix: `downcity agent model ${params.project_root} --set <model-id>`,
+        fix: `city agent model ${params.agent_id} --set <model-id>`,
       });
     }
     return requested_model_id;
@@ -77,7 +69,7 @@ async function resolve_model_id(params: {
   if (process.stdin.isTTY !== true || process.stdout.isTTY !== true) {
     throw new CliError({
       title: "Model id is required in non-interactive mode",
-      fix: `downcity agent model ${params.project_root} --set <model-id>`,
+      fix: `city agent model ${params.agent_id} --set <model-id>`,
     });
   }
 
@@ -96,8 +88,8 @@ async function resolve_model_id(params: {
 }
 
 /** 读取 Agent 当前默认模型 ID。 */
-function read_agent_default_model_id(project_root: string): string {
-  const config = readAgentConfig(project_root);
+function read_agent_default_model_id(agent_id: string): string {
+  const config = get_managed_agent(agent_id);
   return String(
     config?.execution?.type === "api" ? config.execution.model_id || "" : "",
   ).trim();
@@ -105,11 +97,13 @@ function read_agent_default_model_id(project_root: string): string {
 
 /** 写入 Agent 默认模型 ID。 */
 function update_agent_default_model(
-  project_root: string,
+  agent_id: string,
   model_id: string,
 ): void {
-  upsertAgentConfig({
-    project_root: project_root,
+  const agent = get_managed_agent(agent_id);
+  if (!agent) throw new Error(`Agent not found: ${agent_id}`);
+  update_managed_agent({
+    agent_id: agent.agent_id,
     execution: {
       type: "api",
       model_id,
@@ -119,21 +113,23 @@ function update_agent_default_model(
 
 /** 配置 Agent 默认模型。 */
 export async function configure_agent_model(
-  project_root_input: string,
+  agent_id_input: string,
   options: AgentModelCommandOptions = {},
 ): Promise<AgentModelConfigurationResult | null> {
-  const project_root = path.resolve(project_root_input);
-  const agent = await resolve_agent_target(project_root);
-  const previous_model_id = read_agent_default_model_id(project_root);
+  const agent = resolve_agent_target(agent_id_input);
+  const config = get_managed_agent(agent.agent_id);
+  if (!config) throw new Error(`Agent not found: ${agent.agent_id}`);
+  const project_root = config.workspace_path;
+  const previous_model_id = read_agent_default_model_id(agent.agent_id);
   const selected_model_id = await resolve_model_id({
     current_model_id: previous_model_id,
     requested_model_id: options.set,
-    project_root,
+    agent_id: agent.agent_id,
   });
   if (!selected_model_id) return null;
 
   const changed = selected_model_id !== previous_model_id;
-  if (changed) update_agent_default_model(project_root, selected_model_id);
+  if (changed) update_agent_default_model(agent.agent_id, selected_model_id);
 
   const result: AgentModelConfigurationResult = {
     project_root,

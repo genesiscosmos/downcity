@@ -18,14 +18,14 @@ import { allocateAvailablePort } from "@/city/process/daemon/PortAllocator.js";
  * - 只透传用户显式传入的字段，避免污染默认值决策。
  */
 export const buildRunArgsFromOptions = async (
-  project_root: string,
+  agent_id: string,
   options: AgentStartOptions,
 ): Promise<string[]> => {
   // 关键点（中文）：daemon 子进程必须强制前台模式，避免再次进入 startCommand 形成递归拉起。
-  const args: string[] = ["agent", "start", project_root, "--foreground", "true"];
+  const args: string[] = ["agent", "start", agent_id, "--foreground", "true"];
 
-  // 关键点（中文）：host 未指定时统一落到 0.0.0.0，保持历史监听行为。
-  const host = String(options.host || "0.0.0.0").trim() || "0.0.0.0";
+  // 关键点（中文）：默认只监听本机；对外暴露必须由用户显式指定 host。
+  const host = String(options.host || "127.0.0.1").trim() || "127.0.0.1";
 
   // 关键点（中文）：外层 HTTP gateway 端口统一由 City 分配。
   const port = await allocateAvailablePort({ host });

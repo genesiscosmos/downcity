@@ -5,7 +5,7 @@ description: Create an Agent project and its global config with the CLI
 
 # Project Init
 
-`city agent create` creates the runtime and Skills directories, then stores Agent config in the global database.
+`city agent create` creates Workspace runtime and Skills directories, then stores the Agent as a global entity. It does not generate an Agent declaration file in the Workspace.
 
 ```bash
 city agent create my-project
@@ -28,7 +28,7 @@ The global database stores the Agent ID, model binding, startup options, and Plu
 city agent create my-project --force
 ```
 
-After initialization, add project Skills under `.agents/skills` and run `city agent start`.
+After initialization, add project Skills under `.agents/skills`, inspect the generated `agent_id` with `city agent list`, then run `city agent start <agent_id>`.
 
 Continue with:
 

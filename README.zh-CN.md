@@ -23,7 +23,7 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 
 | 包 / 目录 | 作用 |
 | --- | --- |
-| `downcity` | 官方 CLI 聚合包，安装后提供 `downcity` 命令（别名 `city`），用于本机 Agent 宿主与 City 管理。 |
+| `downcity` | 公共 CLI 聚合包：`city`/`downcity` 管理全局 Agent 宿主，`fed`/`downfed` 管理与项目关联的 Federation。 |
 | `@downcity/agent` | 单 Agent runtime 与 SDK，负责 session、tool loop、service、plugin、HTTP/RPC、sandbox 与宿主接入。 |
 | `@downcity/city` | City runtime 与访问 SDK，负责 service 注册、action、auth、env、city 访问边界与 HTTP 调用。 |
 | `@downcity/type` | 跨 package 共享协议类型，包含 City 返回的 City 模型描述等核心类型。 |
@@ -34,7 +34,7 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 
 ## 核心能力
 
-- Agent 项目 runtime：把 repo 或 folder 初始化为带有 `PROFILE.md`、`SOUL.md`、`downcity.json` 和 `.downcity/` 的运行单元。
+- 全局 Agent 管理：Agent 身份与配置保存在 `~/.downcity/downcity.db`，每个 Agent 可绑定任意 Workspace 路径。
 - 本机 Agent 运维：通过 `downcity agent start`、`downcity agent status`、`downcity agent list` 托管和查看本机 Agent。
 - Agent 生命周期管理：创建、启动、停止、重启、诊断、对话、查看历史。
 - City 连接：通过 `downcity federation` 让本机 Agent 连接当前 City server；模型和 Service 资源由 `city` 管理。
@@ -95,33 +95,25 @@ downcity federation status
 downcity agent create .
 ```
 
-初始化后会创建或更新：
+初始化后会创建 Workspace 资产，但不会生成 Agent 声明文件；Agent 身份与配置保存在全局数据库：
 
 ```text
 your-project/
-├── PROFILE.md
-├── SOUL.md
-├── downcity.json
 ├── .agents/
 │   └── skills/
 └── .downcity/
-    ├── cache/
-    ├── config/
-    ├── data/
-    ├── debug/
-    ├── logs/
-    ├── profile/
-    ├── public/
-    ├── schema/
-    ├── session/
-    └── tasks/
+    ├── agents/
+    ├── chat/
+    ├── memory/
+    └── task/
 ```
 
 ### 5. 启动 Agent 并对话
 
 ```bash
-downcity agent start .
-downcity agent status .
+downcity agent list
+downcity agent start
+downcity agent status
 downcity agent chat -m "总结一下这个项目"
 downcity agent chat --new-session
 ```
@@ -131,7 +123,7 @@ downcity agent chat --new-session
 如果希望在当前终端前台运行：
 
 ```bash
-downcity agent start . --foreground
+downcity agent start --foreground
 ```
 
 ### 6. 查看运行中的 Agent
@@ -144,7 +136,7 @@ downcity agent list
 
 ```bash
 downcity agent list
-downcity agent status .
+downcity agent status
 ```
 
 ## SDK 示例
@@ -153,6 +145,8 @@ downcity agent status .
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
+import { Shell } from "@downcity/shell";
+import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 import { createOpenAI } from "@ai-sdk/openai";
 
 const openai = createOpenAI({
@@ -161,7 +155,10 @@ const openai = createOpenAI({
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
+  workspace: new Workspace({
+    path: "/path/to/project",
+    shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  }),
   tools: {},
 });
 

@@ -337,78 +337,17 @@ export interface PlatformConfigStatusResponse {
 }
 
 /**
- * control plane 管理的单条 agent registry 记录。
- */
-export interface ManagedAgentRegistryEntry {
-  /**
-   * agent 项目根目录绝对路径。
-   */
-  project_root: string;
-
-  /**
-   * registry 最近一次记录的 downcity 托管进程 pid。
-   */
-  pid: number;
-
-  /**
-   * 首次登记时间（ISO8601）。
-   */
-  startedAt: string;
-
-  /**
-   * 最近刷新时间（ISO8601）。
-   */
-  updated_at: string;
-
-  /**
-   * registry 记录状态。
-   */
-  status: "running" | "stopped";
-
-  /**
-   * 最近停止时间（仅 stopped 时有值）。
-   */
-  stoppedAt?: string;
-}
-
-/**
- * control plane 管理的 agent registry 文件结构。
- */
-export interface ManagedAgentRegistryV1 {
-  /**
-   * registry schema 版本。
-   */
-  v: 1;
-
-  /**
-   * registry 最近更新时间（ISO8601）。
-   */
-  updated_at: string;
-
-  /**
-   * 当前登记的 agent 列表。
-   */
-  agents: ManagedAgentRegistryEntry[];
-}
-
-/**
  * `downcity agent list --running` 输出可复用的受管 agent 运行态视图。
  */
 export interface ManagedAgentProcessView {
-  /**
-   * agent 项目根目录绝对路径。
-   */
-  project_root: string;
+  /** Agent 的稳定全局 ID。 */
+  agent_id: string;
 
-  /**
-   * registry 中登记的 pid。
-   */
-  registeredPid: number;
+  /** Agent 当前绑定的 Workspace 绝对路径。 */
+  workspace_path: string;
 
-  /**
-   * 当前实际存活的 downcity 托管进程 pid。
-   */
-  daemonPid: number;
+  /** 当前实际存活的 daemon pid。 */
+  daemon_pid: number;
 
   /**
    * 当前是否运行中。
@@ -418,7 +357,7 @@ export interface ManagedAgentProcessView {
   /**
    * 首次启动时间（ISO8601）。
    */
-  startedAt: string;
+  started_at: string;
 
   /**
    * 最近更新时间（ISO8601）。
@@ -428,5 +367,5 @@ export interface ManagedAgentProcessView {
   /**
    * downcity 托管进程日志文件路径。
    */
-  logPath: string;
+  log_path: string;
 }

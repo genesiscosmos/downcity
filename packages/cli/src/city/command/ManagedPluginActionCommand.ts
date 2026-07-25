@@ -7,7 +7,6 @@
  * - 命令注册表与调度时间解析统一复用 agent 包实现，避免 City 维护第二套事实源。
  */
 
-import path from "node:path";
 import type { Command } from "commander";
 import {
   parse_action_schedule_run_at_ms_or_throw,
@@ -21,6 +20,7 @@ import { callServer } from "@/city/process/daemon/Client.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import { parseBoolean, parsePort } from "@/shared/IndexSupport.js";
 import { getCliLocale, helpText, t } from "@/shared/CliLocale.js";
+import { resolvePluginProjectRoot } from "@/city/shared/PluginTargetSupport.js";
 
 function buildChatPluginHelpText(): string {
   if (getCliLocale() === "zh") {
@@ -96,10 +96,6 @@ type PluginCliBridgeOptions = {
   token?: string;
   json?: boolean;
 };
-
-function resolveProjectRoot(pathInput?: string): string {
-  return path.resolve(String(pathInput || "."));
-}
 
 function toJsonValue(input: unknown): JsonValue | undefined {
   if (input === null) return null;
@@ -365,8 +361,18 @@ function registerPluginActionCommand(params: {
       return;
     }
 
+    const resolved_target = await resolvePluginProjectRoot(bridgeOptions);
+    if (!resolved_target.agent_id) {
+      printResult({
+        asJson: bridgeOptions.json,
+        success: false,
+        title: `${params.plugin.name}.${params.action_name} failed`,
+        payload: { error: resolved_target.error || "Failed to resolve Agent" },
+      });
+      return;
+    }
     const remote = await callServer<PluginCommandResponse>({
-      project_root: resolveProjectRoot(bridgeOptions.path),
+      agent_id: resolved_target.agent_id,
       path: "/api/plugins/command",
       method: "POST",
       host: bridgeOptions.host,

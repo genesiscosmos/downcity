@@ -10,9 +10,14 @@ description: Construct, ready, execute, and dispose an Agent
 Run only one active runtime for the same Agent ID in the same physical Workspace. ActionSchedule is a local scheduler and does not coordinate duplicate Agent processes.
 
 ```ts
+import { Agent, Workspace } from "@downcity/agent";
+import { Shell } from "@downcity/shell";
+import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+
+const shell = new Shell({ sandbox: new MacOsSeatbeltSandbox() });
 const agent = new Agent({
   id: "my-agent",
-  workspace: new Workspace({ path: process.cwd() }),
+  workspace: new Workspace({ path: process.cwd(), shell }),
   model,
 });
 

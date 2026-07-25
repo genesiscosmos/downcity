@@ -23,28 +23,28 @@ downcity update
 # Create a new Agent project
 downcity agent create my-project
 
-# List registered Agent projects
+# List globally managed Agents
 downcity agent list
 
 # Start an Agent in the background
-downcity agent start
+downcity agent start <agent_id>
 
 # Start an Agent in the foreground
-downcity agent start --foreground
+downcity agent start <agent_id> --foreground
 
 # Stop the Agent daemon
-downcity agent stop
+downcity agent stop <agent_id>
 
 # Restart the Agent daemon
-downcity agent restart
+downcity agent restart <agent_id>
 
 # Check Agent status
-downcity agent status
+downcity agent status <agent_id>
 
 # Diagnose daemon issues
-downcity agent doctor
+downcity agent doctor <agent_id>
 # Fix stale daemon state
-downcity agent doctor --fix
+downcity agent doctor <agent_id> --fix
 
 # Chat with an Agent
 downcity agent chat
@@ -52,9 +52,11 @@ downcity agent chat
 downcity agent chat -m "hello"
 ```
 
-`downcity agent list` shows running Agents first, then sorts Agents with the same status by Agent ID.
+`agent_id` is the stable lifecycle target. When omitted, the CLI first uses a unique binding for the current Workspace, then offers an interactive selector. Non-interactive calls fail when the target is not unique.
 
-`downcity agent model <path> --set <model-id>` updates the Agent default model and takes effect after the next start or restart. Interactive mode selects the Agent default from the Federation model catalog.
+`downcity agent list` shows running Agents first, then sorts Agents with the same status by Agent ID. Daemon state lives under `~/.downcity/runtimes/<agent_id>/`. Agents listen on `127.0.0.1` by default; external listening requires an explicit `--host`, and protected HTTP routes require a Bearer token.
+
+`downcity agent model <agent_id> --set <model-id>` updates the Agent default model and takes effect after the next start or restart. Interactive mode selects the Agent default from the Federation model catalog.
 
 When an Agent starts or restarts and its saved default model is missing from the current Federation catalog, an interactive terminal opens the current Federation model picker. The selected model is saved and the original start flow continues. Non-interactive mode never selects implicitly; it returns the available models and an executable `agent model --set` fix command.
 

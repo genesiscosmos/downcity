@@ -7,16 +7,18 @@ description: Downcity CLI 套件 — downcity 管理本地 Agent，downfed 管�
 
 Downcity 提供两个 CLI 二进制文件：
 
-- **`downcity`**（别名 `city`）— 管理本地 Agent、全局配置和 City 状态。
-- **`downfed`** — 管理 Federation 部署、City 实体和服务资源。
+- **`city`**（别名 `downcity`）— 管理全局 Agent、Workspace 绑定和本地宿主状态。
+- **`fed`**（别名 `downfed`）— 管理与项目关联的 Federation 部署、City 实体和服务资源。
 
 两者共享相同的全局标志（`--verbose`、`--quiet`、`--lang`）和帮助系统。
 
 ## 本地存储
 
-- `downcity` 将本地 City 状态、加密凭证、环境变量、渠道账号和已登记 Agent 项目路径保存到 `~/.downcity/downcity.db`。
+- `downcity` 将受管 Agent、Workspace 绑定、本地 City 状态、加密凭证、环境变量和渠道账号保存到 `~/.downcity/downcity.db`。
 - `downfed` 将 Federation admin profile、admin key、Cloudflare account 选择和 CLI 偏好保存到 `~/.downcity/federation.db`。
-- Agent 运行状态从每个项目的 `<project>/.downcity/.debug/` daemon meta/pid 文件推导。
+- Agent 运行状态按 `agent_id` 保存在 `~/.downcity/runtimes/<agent_id>/`；Workspace 中不保存 PID、日志或 daemon 元数据。
+
+Agent 是全局实体，`agent_id` 是唯一身份；Workspace 路径只是可变绑定。多个 Agent 可以绑定同一个 Workspace，因此生命周期命令使用 `agent_id`，不会用目录名猜测身份。
 
 ## downcity
 
@@ -38,12 +40,12 @@ Downcity 提供两个 CLI 二进制文件：
 | 命令 | 说明 |
 |---------|-------------|
 | `downcity agent create [path]` | 创建并初始化 Agent 项目 |
-| `downcity agent list` | 列出已登记的 Agent 项目 |
-| `downcity agent start [path]` | 启动 Agent（后台/前台） |
-| `downcity agent stop [path]` | 停止后台 Agent 守护进程 |
-| `downcity agent restart [path]` | 重启后台 Agent 守护进程 |
-| `downcity agent status [path]` | 查看后台 Agent 状态 |
-| `downcity agent doctor [path]` | 诊断守护进程状态文件 |
+| `downcity agent list` | 列出全局受管 Agent 与 Workspace 绑定 |
+| `downcity agent start [agent_id]` | 启动 Agent（后台/前台） |
+| `downcity agent stop [agent_id]` | 停止后台 Agent 守护进程 |
+| `downcity agent restart [agent_id]` | 重启后台 Agent 守护进程 |
+| `downcity agent status [agent_id]` | 查看后台 Agent 状态 |
+| `downcity agent doctor [agent_id]` | 诊断守护进程状态文件 |
 | `downcity agent chat` | 在终端中与 Agent 对话 |
 | `downcity agent history` | 管理 Agent 会话历史 |
 
