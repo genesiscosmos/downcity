@@ -31,12 +31,24 @@ test("Agent 配置只从全局 DB 读取", async () => {
       agent_id: "db_agent",
       workspace_path: project_root,
       execution: { type: "api", model_id: "model_a" },
-      plugins: { chat: { queue: { maxConcurrency: 3 } } },
+    });
+    const plugins = await import(
+      "../bin/city/process/registry/PluginRepository.js"
+    );
+    plugins.set_agent_plugin_binding({
+      agent_id: "db_agent",
+      plugin_name: "chat",
+      enabled: true,
+      config: { queue: { maxConcurrency: 3 } },
     });
     const config = repository.get_managed_agent("db_agent");
     assert.equal(config.agent_id, "db_agent");
     assert.equal(config.execution.model_id, "model_a");
-    assert.equal(config.plugins.chat.queue.maxConcurrency, 3);
+    assert.equal("plugins" in config, false);
+    assert.equal(
+      plugins.get_agent_plugin_binding("db_agent", "chat").config.queue.maxConcurrency,
+      3,
+    );
     assert.equal(fs.existsSync(path.join(platform_root, "downcity.db")), true);
 
     repository.create_managed_agent({
@@ -114,7 +126,7 @@ test("Agent HTTP 路由默认拒绝未认证请求", async () => {
       createRouteAuthGuardMiddleware,
       SERVER_AUTH_ROUTE_POLICIES,
     } = await import("../bin/city/runtime/auth/RoutePolicy.js");
-    const auth_service = new AuthService();
+    const auth_service = new AuthService({ agent_id: "agent_one" });
     const app = new Hono();
     app.use("*", createRouteAuthGuardMiddleware(
       auth_service,
@@ -126,16 +138,95 @@ test("Agent HTTP 路由默认拒绝未认证请求", async () => {
     assert.equal((await app.request("/health")).status, 200);
     assert.equal((await app.request("/private")).status, 401);
 
-    const issued = auth_service.ensureLocalCliAccess({ token_name: "test" });
+    const issued = auth_service.create_token({ name: "test" });
     const authenticated = await app.request("/private", {
-      headers: { authorization: `Bearer ${issued.token.token}` },
+      headers: { authorization: `Bearer ${issued.token}` },
     });
     assert.equal(authenticated.status, 200);
+
+    const other_agent_service = new AuthService({ agent_id: "agent_two" });
+    assert.throws(
+      () => other_agent_service.authenticate_bearer_header(`Bearer ${issued.token}`),
+      /Invalid bearer token/,
+    );
     auth_service.close();
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });
   }
+});
+
+test("Plugin 安装与 Agent Binding 配置使用全局数据库", async () => {
+  const platform_root = create_temp_root();
+  const workspace_root = create_temp_root();
+  const plugin_source = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  try {
+    fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
+      name: "example",
+      version: "1.0.0",
+      entry: "index.js",
+      config_schema: {
+        type: "object",
+        required: ["endpoint"],
+        properties: { endpoint: { type: "string" } },
+        additionalProperties: false,
+      },
+    }));
+    fs.writeFileSync(path.join(plugin_source, "index.js"), "export const plugin_factory = {};\n");
+    const agents = await import("../bin/city/process/registry/ManagedAgentRepository.js");
+    const plugins = await import("../bin/city/process/registry/PluginRepository.js");
+    const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
+    agents.create_managed_agent({ agent_id: "plugin_agent", workspace_path: workspace_root });
+    const installed = await installer.install_plugin(plugin_source);
+    assert.equal(installed.plugin_name, "example");
+    assert.equal(fs.existsSync(installed.entry_path), true);
+    assert.throws(
+      () => plugins.set_agent_plugin_binding({
+        agent_id: "plugin_agent",
+        plugin_name: "example",
+        enabled: true,
+        config: {},
+      }),
+      /config.endpoint is required/,
+    );
+    const binding = plugins.set_agent_plugin_binding({
+      agent_id: "plugin_agent",
+      plugin_name: "example",
+      enabled: true,
+      config: { endpoint: "https://example.com" },
+    });
+    assert.equal(binding.config.endpoint, "https://example.com");
+    assert.equal(agents.get_managed_agent("plugin_agent").plugins, undefined);
+  } finally {
+    delete process.env.DC_PLATFORM_ROOT;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+    fs.rmSync(workspace_root, { recursive: true, force: true });
+    fs.rmSync(plugin_source, { recursive: true, force: true });
+  }
+});
+
+test("CLI 不再注册旧 City 与 Plugin 特例命令", () => {
+  const cli_path = path.resolve("bin/downcity.js");
+  const platform_root = create_temp_root();
+  const root_help = spawnSync(process.execPath, [cli_path, "--help"], {
+    encoding: "utf8",
+    env: { ...process.env, DC_PLATFORM_ROOT: platform_root },
+  });
+  const agent_help = spawnSync(process.execPath, [cli_path, "agent", "--help"], {
+    encoding: "utf8",
+    env: { ...process.env, DC_PLATFORM_ROOT: platform_root },
+  });
+  const plugin_help = spawnSync(process.execPath, [cli_path, "plugin", "--help"], {
+    encoding: "utf8",
+    env: { ...process.env, DC_PLATFORM_ROOT: platform_root },
+  });
+  fs.rmSync(platform_root, { recursive: true, force: true });
+  assert.equal(root_help.status, 0, root_help.stderr);
+  assert.doesNotMatch(root_help.stdout, /^\s+(init|update|config|chat|task|memory|skill|web|contact)\b/m);
+  assert.doesNotMatch(agent_help.stdout, /^\s+(chat|history)\b/m);
+  assert.doesNotMatch(plugin_help.stdout, /^\s+(command|schedule)\b/m);
+  assert.match(plugin_help.stdout, /^\s+action\b/m);
 });
 
 test("Agent model 命令已注册到 CLI", () => {

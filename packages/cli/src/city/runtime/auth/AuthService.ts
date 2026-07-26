@@ -1,354 +1,121 @@
 /**
- * 统一账户服务层。
+ * 单 Agent Bearer Token 服务。
  *
  * 关键点（中文）
- * - 该模块承接本机 token 初始化、token 校验与 token 管理等业务语义。
- * - 路由层只调用这里，不直接碰数据库与密码哈希细节。
+ * - 每个服务实例只服务一个 Agent Gateway。
+ * - Token 对所属 Agent 的非公开 HTTP API 拥有完整能力，不引入用户、角色与权限。
+ * - 明文 Token 只在创建时返回一次。
  */
 
-import type { AuthIssuedToken, AuthTokenSummary } from "@downcity/type";
-import type { AuthPrincipal, AuthTokenRecord, AuthUser } from "@downcity/type";
+import { randomUUID } from "node:crypto";
 import { AuthError } from "@/city/runtime/auth/AuthError.js";
-import { AuthStore, type AuthStoreOptions } from "@/city/runtime/auth/AuthStore.js";
-import { extractBearerToken, generateAccessToken, hashAccessToken } from "@/city/runtime/auth/TokenService.js";
-import { optionalTrimmedText } from "@/city/runtime/store/StoreShared.js";
+import {
+  extractBearerToken,
+  generateAccessToken,
+  hashAccessToken,
+} from "@/city/runtime/auth/TokenService.js";
+import { withPlatformStore } from "@/city/runtime/store/index.js";
+import {
+  get_agent_token_row_by_hash,
+  insert_agent_token_row,
+  list_agent_token_rows,
+  remove_agent_token_row,
+  touch_agent_token_row,
+} from "@/city/runtime/store/StoreAgentTokenRepository.js";
+import type {
+  AgentTokenPrincipal,
+  AgentTokenSummary,
+  IssuedAgentToken,
+} from "@/city/types/auth/AgentToken.js";
 
-const LOCAL_CLI_USERNAME = "local-cli";
-const LOCAL_CLI_DISPLAY_NAME = "Local CLI";
-const LOCAL_CLI_PASSWORD_HASH = "[token-only-local-cli]";
-
-/**
- * AuthService 构造参数。
- */
-export interface AuthServiceOptions extends AuthStoreOptions {
-  /**
-   * 复用外部传入的 store。
-   */
-  store?: AuthStore;
+/** AuthService 构造参数。 */
+export interface AuthServiceOptions {
+  /** 当前 Gateway 所属 Agent ID。 */
+  agent_id: string;
 }
 
-/**
- * 登录/初始化后返回的用户摘要。
- */
-export interface AuthCurrentUserPayload {
-  /**
-   * 用户 ID。
-   */
-  id: string;
-  /**
-   * 用户名。
-   */
-  username: string;
-  /**
-   * 展示名。
-   */
-  display_name?: string;
-  /**
-   * 角色列表。
-   */
-  roles: string[];
-  /**
-   * 权限列表。
-   */
-  permissions: string[];
-}
-
-/**
- * AuthService 门面。
- */
+/** 单 Agent Token 服务。 */
 export class AuthService {
-  private readonly store: AuthStore;
-  private readonly ownsStore: boolean;
+  private readonly agent_id: string;
 
-  constructor(options: AuthServiceOptions = {}) {
-    if (options.store) {
-      this.store = options.store;
-      this.ownsStore = false;
-      return;
-    }
-    this.store = new AuthStore(options);
-    this.ownsStore = true;
+  constructor(options: AuthServiceOptions) {
+    this.agent_id = String(options.agent_id || "").trim();
+    if (!this.agent_id) throw new Error("agent_id is required");
   }
 
-  /**
-   * 关闭底层连接。
-   */
-  close(): void {
-    if (this.ownsStore) this.store.close();
+  /** 服务不持有长连接，保留统一生命周期接口。 */
+  close(): void {}
+
+  /** 列出当前 Agent 的全部 Token 摘要。 */
+  list_tokens(): AgentTokenSummary[] {
+    return withPlatformStore((context) =>
+      list_agent_token_rows(context, this.agent_id).map(({ token_hash: _hash, ...item }) => item)
+    );
   }
 
-  /**
-   * 判断当前是否已经存在可用的本机 CLI access token。
-   */
-  hasLocalCliAccess(): boolean {
-    const user = this.store.findUserByUsername(LOCAL_CLI_USERNAME);
-    if (!user) return false;
-    return this.store
-      .listTokensByUserId(user.id)
-      .some((item) => this.isTokenActive(item));
-  }
-
-  /**
-   * 确保存在本机 CLI 主体，并为其签发新的 access token。
-   */
-  ensureLocalCliAccess(input: {
-    token_name: string;
-    expires_at?: string;
-  }): { user: AuthCurrentUserPayload; token: AuthIssuedToken } {
-    const token = this.createLocalCliToken({
-      name: input.token_name,
-      expires_at: input.expires_at,
-    });
-    const user = this.requireLocalCliUser();
-    return {
-      user: this.toUserPayload(user),
-      token,
+  /** 为当前 Agent 创建新 Token。 */
+  create_token(input: { name: string; expires_at?: string }): IssuedAgentToken {
+    const name = String(input.name || "").trim();
+    if (!name) throw new AuthError("Token name is required", 400);
+    const expires_at = normalize_expiry(input.expires_at);
+    const token = generateAccessToken();
+    const current_time = new Date().toISOString();
+    const record = {
+      token_id: randomUUID(),
+      agent_id: this.agent_id,
+      name,
+      token_hash: hashAccessToken(token),
+      ...(expires_at ? { expires_at } : {}),
+      created_at: current_time,
+      updated_at: current_time,
     };
+    withPlatformStore((context) => insert_agent_token_row(context, record));
+    const { token_hash: _hash, ...summary } = record;
+    return { ...summary, token };
   }
 
-  /**
-   * 读取本机 CLI 主体的 token 列表。
-   */
-  listLocalCliTokens(): AuthTokenSummary[] {
-    const user = this.store.findUserByUsername(LOCAL_CLI_USERNAME);
-    if (!user) return [];
-    return this.store
-      .listTokensByUserId(user.id)
-      .filter((item) => !item.revoked_at)
-      .map((item) => this.store.toTokenSummary(item));
+  /** 删除当前 Agent 的一个 Token。 */
+  delete_token(token_id_input: string): void {
+    const token_id = String(token_id_input || "").trim();
+    if (!token_id) throw new AuthError("token_id is required", 400);
+    const removed = withPlatformStore((context) =>
+      remove_agent_token_row(context, this.agent_id, token_id)
+    );
+    if (!removed) throw new AuthError("Token not found", 404);
   }
 
-  /**
-   * 为本机 CLI 主体签发新的 access token。
-   */
-  createLocalCliToken(input: {
-    name: string;
-    expires_at?: string;
-  }): AuthIssuedToken {
-    const user = this.ensureLocalCliUser();
-    const issued = this.issueTokenForUser({
-      user,
-      token_name: input.name,
-      expires_at: input.expires_at,
-    });
-    this.store.insertAuditLog({
-      actor_user_id: user.id,
-      resource_type: "auth_token",
-      resource_id: issued.record.id,
-      action: "token_create",
-      result: "success",
-      meta_json: JSON.stringify({
-        name: issued.record.name,
-        source: "local-cli",
-      }),
-    });
-    return issued.token;
-  }
-
-  /**
-   * 删除本机 CLI 主体下的 token。
-   */
-  deleteLocalCliToken(tokenIdInput: string): void {
-    const user = this.requireLocalCliUser();
-    const record = this.requireLocalCliTokenRecord(tokenIdInput, user.id);
-    const deleted = this.store.deleteToken(record.id);
-    if (!deleted) throw new AuthError("Token not found", 404);
-    this.store.insertAuditLog({
-      actor_user_id: user.id,
-      resource_type: "auth_token",
-      resource_id: record.id,
-      action: "token_delete",
-      result: "success",
-      meta_json: JSON.stringify({
-        name: record.name,
-        source: "local-cli",
-      }),
-    });
-  }
-
-  /**
-   * 解析 Authorization 头并返回 principal。
-   */
-  authenticateBearerHeader(headerValue: string | undefined): AuthPrincipal {
-    const plainToken = extractBearerToken(headerValue);
-    if (!plainToken) throw new AuthError("Missing bearer token", 401);
-    const record = this.store.findTokenByHash(hashAccessToken(plainToken));
-    if (!record) throw new AuthError("Invalid bearer token", 401);
-    if (record.revoked_at) throw new AuthError("Token is revoked", 401);
+  /** 校验 Authorization 头，并确保 Token 属于当前 Agent。 */
+  authenticate_bearer_header(header_value: string | undefined): AgentTokenPrincipal {
+    const token = extractBearerToken(header_value);
+    if (!token) throw new AuthError("Missing bearer token", 401);
+    const token_hash = hashAccessToken(token);
+    const record = withPlatformStore((context) =>
+      get_agent_token_row_by_hash(context, token_hash)
+    );
+    if (!record || record.agent_id !== this.agent_id) {
+      throw new AuthError("Invalid bearer token", 401);
+    }
     if (record.expires_at && new Date(record.expires_at).getTime() <= Date.now()) {
       throw new AuthError("Token is expired", 401);
     }
-    const user = this.store.getUserById(record.user_id);
-    if (!user) throw new AuthError("User not found for token", 401);
-    this.ensureUserActive(user);
-    this.store.touchToken(record.id);
+    const current_time = new Date().toISOString();
+    withPlatformStore((context) =>
+      touch_agent_token_row(context, record.token_id, current_time)
+    );
     return {
-      user_id: user.id,
-      username: user.username,
-      display_name: user.display_name,
-      status: user.status,
-      token_id: record.id,
+      agent_id: record.agent_id,
+      token_id: record.token_id,
       token_name: record.name,
-      roles: this.store.listRoleNamesByUserId(user.id),
-      permissions: this.store.listPermissionKeysByUserId(user.id),
     };
   }
+}
 
-  /**
-   * 返回当前用户信息。
-   */
-  getCurrentUser(principal: AuthPrincipal): AuthCurrentUserPayload {
-    return {
-      id: principal.user_id,
-      username: principal.username,
-      display_name: principal.display_name,
-      roles: [...principal.roles],
-      permissions: [...principal.permissions],
-    };
-  }
-
-  /**
-   * 为当前 Bearer 调用主体创建新的 token。
-   */
-  createToken(principal: AuthPrincipal, input: {
-    name: string;
-    expires_at?: string;
-  }): AuthIssuedToken {
-    const user = this.store.getUserById(principal.user_id);
-    if (!user) throw new AuthError("User not found", 404);
-    const issued = this.issueTokenForUser({
-      user,
-      token_name: input.name,
-      expires_at: input.expires_at,
-    });
-    this.store.insertAuditLog({
-      actor_user_id: principal.user_id,
-      actor_token_id: principal.token_id,
-      resource_type: "auth_token",
-      resource_id: issued.record.id,
-      action: "token_create",
-      result: "success",
-      meta_json: JSON.stringify({ name: issued.record.name }),
-    });
-    return issued.token;
-  }
-
-  /**
-   * 读取当前用户 token 列表。
-   */
-  listTokens(principal: AuthPrincipal): AuthTokenSummary[] {
-    return this.store
-      .listTokensByUserId(principal.user_id)
-      .filter((item) => !item.revoked_at)
-      .map((item) => this.store.toTokenSummary(item));
-  }
-
-  /**
-   * 删除当前用户的 token。
-   */
-  deleteToken(principal: AuthPrincipal, tokenIdInput: string): void {
-    const token_id = String(tokenIdInput || "").trim();
-    if (!token_id) throw new AuthError("token_id is required", 400);
-    const record = this.store.getTokenById(token_id);
-    if (!record || record.user_id !== principal.user_id) {
-      throw new AuthError("Token not found", 404);
-    }
-    const deleted = this.store.deleteToken(record.id);
-    if (!deleted) throw new AuthError("Token not found", 404);
-    this.store.insertAuditLog({
-      actor_user_id: principal.user_id,
-      actor_token_id: principal.token_id,
-      resource_type: "auth_token",
-      resource_id: token_id,
-      action: "token_delete",
-      result: "success",
-      meta_json: JSON.stringify({ name: record.name }),
-    });
-  }
-
-  private issueTokenForUser(params: {
-    user: AuthUser;
-    token_name: string;
-    expires_at?: string;
-  }): { record: ReturnType<AuthStore["createToken"]>; token: AuthIssuedToken } {
-    const plainToken = generateAccessToken();
-    const record = this.store.createToken({
-      user_id: params.user.id,
-      name: this.requireTokenName(params.token_name),
-      token_hash: hashAccessToken(plainToken),
-      expires_at: optionalTrimmedText(params.expires_at),
-    });
-    return {
-      record,
-      token: this.store.toIssuedToken(record, plainToken),
-    };
-  }
-
-  private ensureUserActive(user: AuthUser): void {
-    if (user.status !== "active") {
-      throw new AuthError("User is disabled", 403);
-    }
-  }
-
-  private isTokenActive(record: Pick<AuthTokenRecord, "revoked_at" | "expires_at">): boolean {
-    if (record.revoked_at) return false;
-    if (!record.expires_at) return true;
-    return new Date(record.expires_at).getTime() > Date.now();
-  }
-
-  private ensureLocalCliUser(): AuthUser {
-    this.store.ensureDefaultCatalog();
-    const existing = this.store.findUserByUsername(LOCAL_CLI_USERNAME);
-    if (existing) {
-      this.ensureUserActive(existing);
-      return existing;
-    }
-    const user = this.store.createUser({
-      username: LOCAL_CLI_USERNAME,
-      password_hash: LOCAL_CLI_PASSWORD_HASH,
-      display_name: LOCAL_CLI_DISPLAY_NAME,
-      status: "active",
-    });
-    this.store.assignRoleToUser({
-      user_id: user.id,
-      roleName: "admin",
-    });
-    return user;
-  }
-
- private requireTokenName(value: string): string {
-   const token_name = String(value || "").trim();
-   if (!token_name) throw new AuthError("token name is required", 400);
-   return token_name;
- }
-
- private requireLocalCliUser(): AuthUser {
-    const user = this.store.findUserByUsername(LOCAL_CLI_USERNAME);
-    if (!user) throw new AuthError("Local CLI access is not initialized", 404);
-    this.ensureUserActive(user);
-    return user;
-  }
-
-  private requireLocalCliTokenRecord(
-    tokenIdInput: string,
-    expectedUserId: string,
-  ): AuthTokenRecord {
-    const token_id = String(tokenIdInput || "").trim();
-    if (!token_id) throw new AuthError("token_id is required", 400);
-    const record = this.store.getTokenById(token_id);
-    if (!record || record.user_id !== expectedUserId) {
-      throw new AuthError("Token not found", 404);
-    }
-    return record;
-  }
-
-  private toUserPayload(user: AuthUser): AuthCurrentUserPayload {
-    return {
-      id: user.id,
-      username: user.username,
-      display_name: user.display_name,
-      roles: this.store.listRoleNamesByUserId(user.id),
-      permissions: this.store.listPermissionKeysByUserId(user.id),
-    };
-  }
+/** 规范化可选过期时间。 */
+function normalize_expiry(input: string | undefined): string | undefined {
+  const raw = String(input || "").trim();
+  if (!raw) return undefined;
+  const date = new Date(raw);
+  if (!Number.isFinite(date.getTime())) throw new AuthError("Invalid expires_at", 400);
+  if (date.getTime() <= Date.now()) throw new AuthError("expires_at must be in the future", 400);
+  return date.toISOString();
 }

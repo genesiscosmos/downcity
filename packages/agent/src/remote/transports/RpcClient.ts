@@ -30,13 +30,8 @@ import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type {
   PluginActionResult,
 } from "@/types/plugin/PluginAction.js";
-import type { PluginCommandResult } from "@/types/plugin/PluginCommand.js";
 import type { PluginAvailability, PluginView } from "@/types/plugin/PluginRuntime.js";
-import type {
-  PluginControlAction,
-  PluginControlResult,
-  PluginSnapshot,
-} from "@/types/plugin/PluginState.js";
+import type { PluginSnapshot } from "@/types/plugin/PluginState.js";
 import type { SessionMutation } from "@/types/session/SessionMutation.js";
 import type {
   ResolveSessionApprovalInput,
@@ -405,42 +400,6 @@ export class RpcClient {
       method: "internal.plugins.list",
     });
     return Array.isArray(data.plugins) ? data.plugins : [];
-  }
-
-  /**
-   * 控制 Agent runtime 内 plugin 生命周期。
-   */
-  async control_internal_plugin(params: {
-    plugin_name: string;
-    action: PluginControlAction;
-  }): Promise<PluginControlResult> {
-    return await this.request<PluginControlResult>({
-      method: "internal.plugins.control",
-      params: {
-        plugin_name: params.plugin_name,
-        action: params.action,
-      },
-    });
-  }
-
-  /**
-   * 执行 Agent runtime 内 plugin command。
-   */
-  async run_internal_plugin_command(params: {
-    plugin_name: string;
-    command: string;
-    payload?: JsonValue;
-    schedule?: JsonValue;
-  }): Promise<PluginCommandResult & { plugin?: PluginSnapshot }> {
-    return await this.request<PluginCommandResult & { plugin?: PluginSnapshot }>({
-      method: "internal.plugins.command",
-      params: {
-        plugin_name: params.plugin_name,
-        command: params.command,
-        ...(params.payload !== undefined ? { payload: params.payload } : {}),
-        ...(params.schedule !== undefined ? { schedule: params.schedule } : {}),
-      },
-    });
   }
 
   /**

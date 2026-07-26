@@ -22,13 +22,13 @@ It is not an Agent Core permission system or a general Role/Permission model. Af
 When an unapproved user sends a direct message, the Chat Plugin creates or reuses a pending request and returns a command like:
 
 ```bash
-downcity chat access approve req_xxx --agent assistant
+city plugin action chat access-approve assistant --input '{"request_id":"req_xxx"}' --token <token>
 ```
 
 Administrators can inspect requests first:
 
 ```bash
-downcity chat access requests --agent assistant --status pending
+city plugin action chat access-snapshot assistant --input '{}' --token <token>
 ```
 
 Unapproved group messages are silent by default, but their pending requests appear in the same management list.
@@ -41,11 +41,11 @@ Each Agent stores its own data at:
 <agent_project>/.downcity/chat/access.db
 ```
 
-The database contains principals, requests, allow/deny grants, and audit events. It does not contain bot tokens, app secrets, or message bodies. Chat accounts and credentials remain in the City-global `~/.downcity/downcity.db`; Agent configuration stores only the bound `channelAccountId`.
+The database contains principals, requests, allow/deny grants, and audit events. It does not contain bot tokens, app secrets, or message bodies. Chat accounts and credentials remain in the City-global `~/.downcity/downcity.db`; the Chat Plugin Binding stores only the bound `channelAccountId`.
 
 ## Difference from City Auth
 
-City Auth protects HTTP and Console control-plane login and route permissions. Chat Access decides whether an external Telegram, Feishu, or QQ user may send messages to a specific Agent. Their data, identities, and decision paths are separate.
+An Agent Token protects the HTTP control plane. Each token belongs to one Agent and has full access to that Agent API; it contains no User, Role, or Permission. Chat Access decides whether an external Telegram, Feishu, or QQ user may send messages to a specific Agent. Their data, identities, and decision paths are separate.
 
 ## Related docs
 

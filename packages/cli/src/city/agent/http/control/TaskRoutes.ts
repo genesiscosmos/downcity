@@ -155,9 +155,9 @@ export function registerControlTaskRoutes(
         }
 
         const reason = toOptionalString(body.reason);
-        const result = await params.get_agent().run_plugin_command({
-          plugin_name: "task",
-          command: "run",
+        const result = await params.get_agent().plugins.run_action({
+          plugin: "task",
+          action: "run",
           payload: {
             title,
             ...(reason ? { reason } : {}),
@@ -185,9 +185,9 @@ export function registerControlTaskRoutes(
           return c.json({ success: false, error: "Invalid status" }, 400);
         }
 
-        const result = await params.get_agent().run_plugin_command({
-          plugin_name: "task",
-          command: "status",
+        const result = await params.get_agent().plugins.run_action({
+          plugin: "task",
+          action: "status",
           payload: {
             title,
             status,
@@ -195,7 +195,7 @@ export function registerControlTaskRoutes(
         });
         if (!result.success) {
           return c.json(
-            { success: false, error: result.message || "task status update failed" },
+            { success: false, error: result.error || result.message || "task status update failed" },
             400,
           );
         }
@@ -221,15 +221,15 @@ export function registerControlTaskRoutes(
           return c.json({ success: false, error: "Invalid title" }, 400);
         }
 
-        const result = await params.get_agent().run_plugin_command({
-          plugin_name: "task",
-          command: "delete",
+        const result = await params.get_agent().plugins.run_action({
+          plugin: "task",
+          action: "delete",
           payload: {
             title,
           },
         });
         if (!result.success) {
-          return c.json({ success: false, error: result.message || "task delete failed" }, 400);
+          return c.json({ success: false, error: result.error || result.message || "task delete failed" }, 400);
         }
         const data =
           result.data && typeof result.data === "object" && !Array.isArray(result.data)

@@ -12,8 +12,6 @@ import {
   resolve_cli_agent_target,
 } from "@/city/agent/AgentSelection.js";
 import { runInteractiveAgentManager } from "@/city/agent/AgentManager.js";
-import { chatCommand } from "@/city/agent/AgentChat.js";
-import { agentHistoryCleanCommand } from "@/city/agent/AgentHistory.js";
 import { initCommand } from "@/city/agent/Init.js";
 import { restartCommand } from "@/city/agent/Restart.js";
 import { stopCommand } from "@/city/agent/Stop.js";
@@ -34,6 +32,7 @@ import {
 } from "@/city/process/daemon/Manager.js";
 import { prepareForegroundAgent } from "@/city/shared/CityAgentRuntime.js";
 import { helpText, t } from "@/shared/CliLocale.js";
+import { registerAgentTokenCommand } from "@/city/command/TokenCommand.js";
 
 /**
  * agent 命令注册参数。
@@ -141,116 +140,6 @@ export function registerAgentCommands(
         },
       ),
     );
-
-  agent
-    .command("chat")
-    .description(t({
-      zh: "在终端中与指定 Agent 对话（交互式或一次性）",
-      en: "chat with a selected Agent in the terminal (interactive or one-shot)",
-    }))
-    .option("-t, --to <id>", t({
-      zh: "目标 agent id（省略时交互选择）",
-      en: "target agent id (interactive selection when omitted)",
-    }))
-    .option("-m, --message <text>", t({
-      zh: "一次性发送一轮消息并退出",
-      en: "send one message and exit",
-    }))
-    .option("--session-id <session_id>", t({
-      zh: "进入或复用指定 session",
-      en: "enter or reuse a specific session",
-    }))
-    .option("--new-session [enabled]", t({
-      zh: "新建一个独立 session 后进入 chat",
-      en: "create a new isolated session before chatting",
-    }), parseBoolean)
-    .option("--json [enabled]", t({
-      zh: "一次性模式下以 JSON 输出",
-      en: "output as JSON in one-shot mode",
-    }), parseBoolean)
-    .option("--host <host>", t({
-      zh: "RPC host（覆盖自动解析）",
-      en: "RPC host override",
-    }))
-    .addOption(new context.hiddenPortOption("--port <port>").argParser(parsePort).hideHelp())
-    .helpOption("--help", helpText())
-    .action(createVersionBanner(
-      context.version,
-      async (
-        options: {
-          to?: string;
-          message?: string;
-          session_id?: string;
-          newSession?: boolean;
-          json?: boolean;
-          host?: string;
-          port?: number;
-        },
-      ) => {
-        await chatCommand(options);
-      },
-    ));
-
-  const history = agent
-    .command("history")
-    .description(t({
-      zh: "维护 Agent 会话历史",
-      en: "manage Agent conversation history",
-    }));
-
-  history
-    .command("clean [agent_id]")
-    .description(t({
-      zh: "按 session 或 chat 目标硬清理一条会话历史",
-      en: "hard-clean one conversation history entry by session or chat target",
-    }))
-    .option("--session-id <session_id>", t({
-      zh: "目标 session ID",
-      en: "target session ID",
-    }))
-    .option("--channel <channel>", t({
-      zh: "目标聊天渠道，例如 telegram",
-      en: "target chat channel, for example telegram",
-    }))
-    .option("--chat-id <chatId>", t({
-      zh: "目标渠道 chat ID",
-      en: "target channel chat ID",
-    }))
-    .option("--target-type <targetType>", t({
-      zh: "目标渠道会话类型",
-      en: "target channel conversation type",
-    }))
-    .option("--thread-id <threadId>", t({
-      zh: "目标线程 ID",
-      en: "target thread ID",
-    }))
-    .option("--hard [enabled]", t({
-      zh: "执行硬清理：删除 session/chat/route",
-      en: "perform a hard cleanup by deleting session/chat/route",
-    }), parseBoolean)
-    .option("--json [enabled]", t({
-      zh: "以 JSON 输出",
-      en: "output as JSON",
-    }), parseBoolean)
-    .helpOption("--help", helpText())
-    .action(createVersionBanner(
-      context.version,
-      async (
-        agent_id: string | undefined,
-        options: {
-          session_id?: string;
-          channel?: string;
-          chatId?: string;
-          targetType?: string;
-          threadId?: string;
-          hard?: boolean;
-          json?: boolean;
-        },
-      ) => {
-        const target = await resolve_cli_agent_target(agent_id);
-        await agentHistoryCleanCommand(target, options);
-      },
-    ));
 
   agent
     .command("model [agent_id]")
@@ -406,4 +295,6 @@ export function registerAgentCommands(
       inject_agent_context(target);
       await restartCommand(target, options);
     }));
+
+  registerAgentTokenCommand(agent);
 }

@@ -1,0 +1,175 @@
+/**
+ * Plugin 安装记录与 Agent Binding 行存储。
+ *
+ * 关键点（中文）
+ * - Manifest 使用普通 JSON，便于安装目录检查与展示。
+ * - Agent Plugin 配置使用平台密钥加密，避免普通配置中意外混入敏感字段后明文落盘。
+ */
+
+import type { PlatformStoreContext } from "@/city/runtime/store/StoreShared.js";
+import { decryptTextSync, encryptTextSync } from "@/city/runtime/store/crypto.js";
+import type { InstalledPlugin, PluginManifest } from "@/city/types/plugin/PluginManifest.js";
+import type { AgentPluginBinding } from "@/city/types/plugin/AgentPluginBinding.js";
+
+type InstalledPluginRow = {
+  plugin_name: string;
+  source: string;
+  version: string;
+  entry_path: string;
+  manifest_json: string;
+  integrity: string | null;
+  installed_at: string;
+  updated_at: string;
+};
+
+type AgentPluginRow = {
+  agent_id: string;
+  plugin_name: string;
+  enabled: number;
+  config_encrypted: string;
+  created_at: string;
+  updated_at: string;
+};
+
+/** 把已安装 Plugin 数据库行转换为领域记录。 */
+function decode_installed_plugin(row: InstalledPluginRow): InstalledPlugin {
+  return {
+    plugin_name: row.plugin_name,
+    source: row.source,
+    version: row.version,
+    entry_path: row.entry_path,
+    manifest: JSON.parse(row.manifest_json) as PluginManifest,
+    ...(row.integrity ? { integrity: row.integrity } : {}),
+    installed_at: row.installed_at,
+    updated_at: row.updated_at,
+  };
+}
+
+/** 把 Agent Plugin 数据库行转换为领域记录。 */
+function decode_agent_plugin(row: AgentPluginRow): AgentPluginBinding {
+  return {
+    agent_id: row.agent_id,
+    plugin_name: row.plugin_name,
+    enabled: row.enabled === 1,
+    config: JSON.parse(decryptTextSync(row.config_encrypted)),
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+/** 列出全部第三方已安装 Plugin。 */
+export function list_installed_plugin_rows(context: PlatformStoreContext): InstalledPlugin[] {
+  const rows = context.sqlite.prepare(`
+    SELECT * FROM installed_plugins ORDER BY plugin_name ASC;
+  `).all() as InstalledPluginRow[];
+  return rows.map(decode_installed_plugin);
+}
+
+/** 按名称读取第三方已安装 Plugin。 */
+export function get_installed_plugin_row(
+  context: PlatformStoreContext,
+  plugin_name: string,
+): InstalledPlugin | null {
+  const row = context.sqlite.prepare(`
+    SELECT * FROM installed_plugins WHERE plugin_name = ? LIMIT 1;
+  `).get(plugin_name) as InstalledPluginRow | undefined;
+  return row ? decode_installed_plugin(row) : null;
+}
+
+/** 原子写入第三方已安装 Plugin。 */
+export function set_installed_plugin_row(
+  context: PlatformStoreContext,
+  plugin: InstalledPlugin,
+): void {
+  context.sqlite.prepare(`
+    INSERT INTO installed_plugins (
+      plugin_name, source, version, entry_path, manifest_json,
+      integrity, installed_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(plugin_name) DO UPDATE SET
+      source = excluded.source,
+      version = excluded.version,
+      entry_path = excluded.entry_path,
+      manifest_json = excluded.manifest_json,
+      integrity = excluded.integrity,
+      updated_at = excluded.updated_at;
+  `).run(
+    plugin.plugin_name,
+    plugin.source,
+    plugin.version,
+    plugin.entry_path,
+    JSON.stringify(plugin.manifest),
+    plugin.integrity ?? null,
+    plugin.installed_at,
+    plugin.updated_at,
+  );
+}
+
+/** 删除第三方已安装 Plugin。 */
+export function remove_installed_plugin_row(
+  context: PlatformStoreContext,
+  plugin_name: string,
+): void {
+  context.sqlite.prepare(
+    "DELETE FROM installed_plugins WHERE plugin_name = ?;",
+  ).run(plugin_name);
+}
+
+/** 列出指定 Agent 的全部 Plugin Binding。 */
+export function list_agent_plugin_rows(
+  context: PlatformStoreContext,
+  agent_id: string,
+): AgentPluginBinding[] {
+  const rows = context.sqlite.prepare(`
+    SELECT * FROM agent_plugins WHERE agent_id = ? ORDER BY plugin_name ASC;
+  `).all(agent_id) as AgentPluginRow[];
+  return rows.map(decode_agent_plugin);
+}
+
+/** 按 Agent 与 Plugin 名称读取 Binding。 */
+export function get_agent_plugin_row(
+  context: PlatformStoreContext,
+  agent_id: string,
+  plugin_name: string,
+): AgentPluginBinding | null {
+  const row = context.sqlite.prepare(`
+    SELECT * FROM agent_plugins
+    WHERE agent_id = ? AND plugin_name = ?
+    LIMIT 1;
+  `).get(agent_id, plugin_name) as AgentPluginRow | undefined;
+  return row ? decode_agent_plugin(row) : null;
+}
+
+/** 原子写入 Agent Plugin Binding。 */
+export function set_agent_plugin_row(
+  context: PlatformStoreContext,
+  binding: AgentPluginBinding,
+): void {
+  context.sqlite.prepare(`
+    INSERT INTO agent_plugins (
+      agent_id, plugin_name, enabled, config_encrypted, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(agent_id, plugin_name) DO UPDATE SET
+      enabled = excluded.enabled,
+      config_encrypted = excluded.config_encrypted,
+      updated_at = excluded.updated_at;
+  `).run(
+    binding.agent_id,
+    binding.plugin_name,
+    binding.enabled ? 1 : 0,
+    encryptTextSync(JSON.stringify(binding.config)),
+    binding.created_at,
+    binding.updated_at,
+  );
+}
+
+/** 删除 Agent Plugin Binding。 */
+export function remove_agent_plugin_row(
+  context: PlatformStoreContext,
+  agent_id: string,
+  plugin_name: string,
+): void {
+  context.sqlite.prepare(`
+    DELETE FROM agent_plugins WHERE agent_id = ? AND plugin_name = ?;
+  `).run(agent_id, plugin_name);
+}

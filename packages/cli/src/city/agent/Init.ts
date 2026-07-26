@@ -29,6 +29,7 @@ import {
   get_managed_agent,
   save_managed_agent,
 } from "@/city/process/registry/ManagedAgentRepository.js";
+import { ensure_default_agent_plugin_bindings } from "@/city/process/registry/PluginRepository.js";
 
 type InitPromptResponse = {
   id?: string;
@@ -168,7 +169,6 @@ export async function initCommand(
       workspace_path: project_root,
       version: "1.0.0",
       execution,
-      ...(plugins ? { plugins } : {}),
       created_at: existing_agent.created_at,
       updated_at: existing_agent.updated_at,
     });
@@ -177,9 +177,11 @@ export async function initCommand(
       agent_id,
       workspace_path: project_root,
       execution,
-      plugins,
     });
   }
+  ensure_default_agent_plugin_bindings(agent_id, {
+    ...(plugins?.chat ? { chat: plugins.chat } : {}),
+  });
 
   const createdItems = [
     ...initResult.created_files,

@@ -23,12 +23,8 @@ import { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
 import type { PluginRegistryUnsubscribe } from "@/types/plugin/PluginRegistry.js";
 import type { WorkspaceEnvUnsubscribe } from "@/types/workspace/WorkspaceEnv.js";
 import type { Hono } from "hono";
-import type { JsonValue } from "@/types/common/Json.js";
-import type { PluginActionScheduleInput } from "@/plugin/types/ActionSchedule.js";
-import type { PluginCommandResult } from "@/types/plugin/PluginCommand.js";
-import type { PluginControlAction, PluginControlResult, PluginSnapshot } from "@/types/plugin/PluginState.js";
-import { control_plugin_state, list_plugin_states } from "@/plugin/core/PluginStateController.js";
-import { run_plugin_command } from "@/plugin/core/PluginActionRunner.js";
+import type { PluginSnapshot } from "@/types/plugin/PluginState.js";
+import { list_plugin_states } from "@/plugin/core/PluginStateController.js";
 import { register_plugin_http_routes } from "@/plugin/core/PluginHttpRoutes.js";
 import {
   resolve_session_system_messages,
@@ -251,40 +247,6 @@ export class Agent {
   /** 列出当前 Agent 已注册的 Plugin 状态。 */
   list_plugin_states(): PluginSnapshot[] {
     return list_plugin_states({ context: this.plugin_context });
-  }
-
-  /** 执行当前 Agent 的 Plugin 注册状态控制动作。 */
-  async control_plugin_state(input: {
-    /** Plugin 稳定名称。 */
-    plugin_name: string;
-    /** 需要执行的状态控制动作。 */
-    action: PluginControlAction;
-  }): Promise<PluginControlResult> {
-    return await control_plugin_state({
-      plugin_name: input.plugin_name,
-      action: input.action,
-      context: this.plugin_context,
-    });
-  }
-
-  /** 执行当前 Agent 中已注册 Plugin 的 command 或 action。 */
-  async run_plugin_command(input: {
-    /** Plugin 稳定名称。 */
-    plugin_name: string;
-    /** Plugin command 或 action 名称。 */
-    command: string;
-    /** 可选 JSON payload。 */
-    payload?: JsonValue;
-    /** 可选延迟调度参数。 */
-    schedule?: JsonValue | PluginActionScheduleInput;
-  }): Promise<PluginCommandResult & { plugin?: PluginSnapshot }> {
-    return await run_plugin_command({
-      plugin_name: input.plugin_name,
-      command: input.command,
-      payload: input.payload,
-      schedule: input.schedule,
-      context: this.plugin_context,
-    });
   }
 
   /** 把当前 Agent 已注册 Plugin 的 HTTP 路由装配到宿主应用。 */

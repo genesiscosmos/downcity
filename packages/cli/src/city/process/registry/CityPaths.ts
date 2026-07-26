@@ -39,6 +39,24 @@ export function get_agent_runtimes_dir_path(): string {
   return path.join(getPlatformRootDirPath(), "runtimes");
 }
 
+/** 全局安装的第三方 Plugin 制品目录。 */
+export function get_installed_plugins_dir_path(): string {
+  return path.join(getPlatformRootDirPath(), "plugins");
+}
+
+/**
+ * 单个全局 Plugin 的安装目录。
+ *
+ * @param plugin_name Plugin 稳定名称。
+ */
+export function get_installed_plugin_dir_path(plugin_name: string): string {
+  const normalized_plugin_name = String(plugin_name || "").trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]*$/u.test(normalized_plugin_name)) {
+    throw new Error(`Invalid plugin name: ${plugin_name}`);
+  }
+  return path.join(get_installed_plugins_dir_path(), normalized_plugin_name);
+}
+
 /**
  * 单个 Agent 的全局运行状态目录。
  *

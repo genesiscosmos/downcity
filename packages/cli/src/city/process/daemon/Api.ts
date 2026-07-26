@@ -41,7 +41,7 @@ export type DaemonJsonApiCallParams = {
    *
    * 说明（中文）
    * - 当前 City Agent HTTP gateway client 会消费该参数。
-   * - 用于 `session execute`、`plugin command` 这类可能持续几十秒的请求，
+   * - 用于 `session execute`、`plugin action` 这类可能持续几十秒的请求，
    *   避免被默认短超时误判成“Agent runtime 未启动”。
    */
   timeoutMs?: number;

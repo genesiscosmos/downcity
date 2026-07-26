@@ -7,7 +7,7 @@
  */
 
 import type { Context, MiddlewareHandler } from "hono";
-import type { AuthPrincipal } from "@downcity/type";
+import type { AgentTokenPrincipal } from "@/city/types/auth/AgentToken.js";
 import { isAuthError } from "@/city/runtime/auth/AuthError.js";
 import type { AuthService } from "@/city/runtime/auth/AuthService.js";
 
@@ -23,7 +23,7 @@ export interface AuthMiddlewareVariables {
   /**
    * 当前请求的认证主体。
    */
-  authPrincipal: AuthPrincipal;
+  authPrincipal: AgentTokenPrincipal;
 }
 
 /**
@@ -34,7 +34,7 @@ export function createRequireAuthMiddleware(
 ): MiddlewareHandler<{ Variables: AuthMiddlewareVariables }> {
   return async (c, next) => {
     try {
-      const principal = authService.authenticateBearerHeader(
+      const principal = authService.authenticate_bearer_header(
       c.req.header("authorization"),
       );
       c.set(AUTH_PRINCIPAL_CONTEXT_KEY, principal);
@@ -56,6 +56,6 @@ export function createRequireAuthMiddleware(
  */
 export function getAuthPrincipal(
   context: Context<{ Variables: AuthMiddlewareVariables }>,
-): AuthPrincipal {
+): AgentTokenPrincipal {
   return context.get(AUTH_PRINCIPAL_CONTEXT_KEY);
 }

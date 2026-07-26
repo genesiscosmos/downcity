@@ -1,164 +1,69 @@
 ---
 title: CLI Commands
-description: Common commands for downcity and downfed
+description: Common City and Fed commands
 ---
 
 # CLI Commands
 
-## downcity (city)
-
-### Global init and update
+## Agent
 
 ```bash
-# Initialize City global state
-downcity init
-
-# Update CLI to latest version
-downcity update
+city agent                         # Open the Agent panel
+city agent create [path]
+city agent list
+city agent start [agent_id]
+city agent stop [agent_id]
+city agent restart [agent_id]
+city agent status [agent_id]
+city agent doctor [agent_id]
+city agent model [agent_id]
 ```
 
-### Agent lifecycle
+## Per-Agent tokens
+
+A token belongs to exactly one Agent and can access all of that Agent's protected HTTP API. There are no User, Role, or Permission layers.
 
 ```bash
-# Create an Agent and initialize Workspace assets
-downcity agent create my-project
-
-# List globally managed Agents
-downcity agent list
-
-# Start an Agent in the background
-downcity agent start <agent_id>
-
-# Start an Agent in the foreground
-downcity agent start <agent_id> --foreground
-
-# Stop the Agent daemon
-downcity agent stop <agent_id>
-
-# Restart the Agent daemon
-downcity agent restart <agent_id>
-
-# Check Agent status
-downcity agent status <agent_id>
-
-# Diagnose daemon issues
-downcity agent doctor <agent_id>
-# Fix stale daemon state
-downcity agent doctor <agent_id> --fix
-
-# Chat with an Agent
-downcity agent chat
-# Send a one-shot message
-downcity agent chat --to <agent_id> -m "hello"
+city agent token list [agent_id]
+city agent token create [agent_id] --name automation
+city agent token create [agent_id] --name temporary --expires-at 2026-08-01T00:00:00Z
+city agent token delete <token_id> [agent_id]
 ```
 
-`agent_id` is the stable target for every command that operates on one Agent. When omitted in a TTY, the CLI always opens the global Agent selector without filtering or inferring from the current Workspace. Non-interactive calls fail with `Agent ID is required`. Collection and creation flows such as `agent list` and `agent create` do not require an existing Agent ID.
-
-`downcity agent list` shows running Agents first, then sorts Agents with the same status by Agent ID. Daemon state lives under `~/.downcity/runtimes/<agent_id>/`. Agents listen on `127.0.0.1` by default; external listening requires an explicit `--host`, and protected HTTP routes require a Bearer token.
-
-`downcity agent model <agent_id> --set <model-id>` updates the Agent default model and takes effect after the next start or restart. Interactive mode selects the Agent default from the Federation model catalog.
-
-When an Agent starts or restarts and its saved default model is missing from the current Federation catalog, an interactive terminal opens the current Federation model picker. The selected model is saved and the original start flow continues. Non-interactive mode never selects implicitly; it returns the available models and an executable `agent model --set` fix command.
-
-The interactive Agent Chat header shows the current session. Execution status appears with the Assistant in the message stream. After `/session`, the picker appears directly below the editor without covering message history.
-
-Scroll message history with the mouse wheel, `Up` / `Down` while the editor is empty, or `PageUp` / `PageDown`. Press `Ctrl+L` to return to the latest message. Tool executions are collapsed by default; `Ctrl+O` expands or collapses their arguments and results together.
-
-When an unrestricted shell operation needs approval, the Agent issues the tool request directly and the runtime pauses before execution; no separate chat confirmation is required. The same Tool update carries the complete command, working directory, reason, and approval ID, so the inline panel appears without a secondary details request. Choose Approve or Deny; `Esc` / `Ctrl+C` safely acts as Deny. If the remote decision fails, the request is retained and shown again instead of leaving the current turn without an approval path.
-
-While the Agent is running, `/approve`, `/deny`, `/help`, and `/quit` remain submittable. Commands that change the session or transcript (`/session`, `/new`, and `/clear`) are idle-only.
-
-While the Agent is running, pressing `Enter` for a regular message adds it to a local queue instead of starting a concurrent turn. The queue appears above the editor, and messages are sent one at a time in submission order after the current turn succeeds. With an empty editor, press `Up` to recall the most recently queued message for editing. If a turn fails, the remaining queued messages are dropped and the transcript explains why.
-
-### Agent history
+## Plugins
 
 ```bash
-# Clean a conversation history
-downcity agent history clean
-# Clean a specific session
-downcity agent history clean --session-id <id>
+city plugin list
+city plugin install <git-url-or-local-directory>
+city plugin uninstall <plugin_name>
+city plugin inspect <plugin_name>
+city plugin enable <plugin_name> [agent_id] --config '{"key":"value"}'
+city plugin disable <plugin_name> [agent_id]
+city plugin config <plugin_name> [agent_id]
+city plugin config <plugin_name> [agent_id] --set '{"key":"value"}'
+city plugin action <plugin_name> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
-### Environment variables
+A third-party repository must contain `downcity.plugin.json` and a prebuilt ESM entry. Installation never runs `npm install` or lifecycle scripts. The manifest declares schema/defaults; actual configuration belongs to the Agent Plugin Binding in the global database. The Runtime Factory receives validated config and creates the Plugin.
+
+After changing enable, disable, or config state, restart a running Agent to apply the new Runtime assembly.
+
+The CLI, Agent `plugin_call`, HTTP, and scheduled jobs all invoke Plugin Actions. There is no `plugin command`, and Chat is not a top-level CLI special case.
+
+## Env and Federation
 
 ```bash
-# List env vars
-downcity env list
-# Set an env var
-downcity env set KEY=value
-# Delete an env var
-downcity env delete KEY
-# Export env vars to .env
-downcity env copy
+city env
+city federation
 ```
 
-### Tokens
+## Fed
 
 ```bash
-# List API tokens
-downcity token list
-# Create a new token
-downcity token create
-# Delete a token
-downcity token delete <id>
+fed                              # Federation Server manager TUI
+fed server add
+fed server manage
+fed query GET /health
+fed create [dir]
+fed deploy [source]
 ```
-
-### Plugins
-
-```bash
-# Manage plugins interactively
-downcity plugins
-# Schedule plugin actions
-downcity plugins schedule
-```
-
-### Chat
-
-```bash
-# Manage chat resources interactively
-downcity chat
-# List pending requests for a specific Agent
-downcity chat access requests --agent <agentId> --status pending
-# Approve the request's direct or group scope
-downcity chat access approve <requestId> --agent <agentId>
-# Approve both direct and group messages
-downcity chat access approve <requestId> --agent <agentId> --scope all
-# List principals and grants
-downcity chat access list --agent <agentId>
-# Deny a request so later messages do not create another request
-downcity chat access deny <requestId> --agent <agentId>
-# Revoke grants so the user can request access again
-downcity chat access revoke <principalId> --agent <agentId> --scope all
-```
-
-## downfed
-
-```bash
-# Open interactive Federation manager
-downfed
-
-# Open admin interface
-downfed manage
-
-# Add a Federation server
-downfed server add
-
-# Enter a server workspace
-downfed server manage
-
-# Query Federation API
-downfed query GET /health
-
-# Create a new project
-downfed create my-project
-
-# Deploy a project
-downfed deploy
-# Deploy with options
-downfed deploy --verify --dry-run
-```
-
-Continue with:
-
-- [Project Init](/en/docs/cli/init)
-- [Project Structure](/en/docs/cli/project)

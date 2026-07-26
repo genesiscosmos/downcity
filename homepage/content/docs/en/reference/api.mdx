@@ -38,24 +38,6 @@ Request body:
 
 List managed plugin states.
 
-### `POST /api/plugins/control`
-
-```json
-{ "pluginName": "chat", "action": "restart" }
-```
-
-Supported `action`: `start | stop | restart | status`.
-
-### `POST /api/plugins/command`
-
-```json
-{
-  "pluginName": "task",
-  "command": "list",
-  "payload": { "status": "enabled" }
-}
-```
-
 ## Plugin API
 
 ### `GET /api/plugins/catalog`
@@ -65,15 +47,15 @@ List registered plugins.
 ### `POST /api/plugins/availability`
 
 ```json
-{ "pluginName": "sound" }
+{ "plugin_name": "sound" }
 ```
 
 ### `POST /api/plugins/action`
 
 ```json
 {
-  "pluginName": "sound",
-  "actionName": "models",
+  "plugin_name": "sound",
+  "action_name": "models",
   "payload": { "capability": "asr" }
 }
 ```
@@ -152,8 +134,8 @@ Notes:
 Plugin actions use:
 
 - `/api/plugins/action`
-- `/api/plugins/control`
-- `/api/plugins/command`
+
+Except for `GET /health`, Agent HTTP APIs require a Bearer Token issued for that Agent. Tokens do not contain Users, Roles, or Permissions; they only grant access to their owning Agent.
 
 ## Debug baseline
 

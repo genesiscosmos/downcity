@@ -1,143 +1,121 @@
 /**
- * `city token` 命令树。
+ * `city agent token` 命令树。
  *
- * 关键点（中文）
- * - token 管理只允许在本机 CLI 执行，不再暴露用户名密码登录流。
- * - 根命令支持交互式入口，减少用户记忆负担。
- * - 子命令依旧保留脚本友好的非交互模式，便于自动化调用。
+ * 关键点（中文）：Token 只属于一个 Agent，对该 Agent HTTP API 拥有完整访问能力。
  */
 
 import type { Command } from "commander";
+import { resolve_cli_agent_target } from "@/city/agent/AgentSelection.js";
 import { AuthService } from "@/city/runtime/auth/AuthService.js";
-import { emitCliBlock } from "@/shared/CliReporter.js";
+import { printResult } from "@/city/utils/cli/CliOutput.js";
+import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { helpText, t } from "@/shared/CliLocale.js";
-import { createToken, deleteToken } from "./token/TokenActions.js";
-import {
-  promptTokenIdForDelete,
-  runInteractiveCreateCommandFlow,
-  runInteractiveTokenCommand,
-} from "./token/TokenPrompts.js";
-import { printTokenList } from "./token/TokenRender.js";
 
-
-
-
-/**
- * 注册 `city token` 命令。
- */
-export function registerTokenCommand(program: Command): void {
-  const token = program
+/** 在 `city agent` 下注册 Token 管理命令。 */
+export function registerAgentTokenCommand(agent_command: Command): void {
+  const token = agent_command
     .command("token")
     .description(t({
-      zh: "管理本机 Bearer Token（无参数时启动交互式管理器）",
-      en: "manage local Bearer tokens (opens the interactive manager when used without arguments)",
+      zh: "管理单 Agent Bearer Token",
+      en: "manage Bearer tokens for one Agent",
     }))
-    .helpOption("--help", helpText())
-    .action(async () => {
-      await runInteractiveTokenCommand();
-    });
+    .helpOption("--help", helpText());
 
   token
-    .command("list")
-    .description(t({
-      zh: "列出本机 Bearer Token",
-      en: "list local Bearer tokens",
-    }))
-    .option("--json", t({
-      zh: "以 JSON 输出",
-      en: "output as JSON",
-    }))
+    .command("list [agent_id]")
+    .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
     .helpOption("--help", helpText())
-    .action((options: { json?: boolean }) => {
-      const authService = new AuthService();
-      try {
-        const tokens = authService.listLocalCliTokens();
-        printTokenList(tokens, options.json === true);
-      } finally {
-        authService.close();
-      }
-    });
-
-  token
-    .command("create")
-    .description(t({
-      zh: "签发新的本机 Bearer Token",
-      en: "issue a new local Bearer token",
-    }))
-    .argument("[name]", t({
-      zh: "token 名称",
-      en: "token name",
-    }))
-    .option("--expires-at <iso>", t({
-      zh: "可选过期时间（ISO 字符串）",
-      en: "optional expiration time in ISO format",
-    }))
-    .option("--json", t({
-      zh: "以 JSON 输出",
-      en: "output as JSON",
-    }))
-    .helpOption("--help", helpText())
-    .action(async (name: string | undefined, options: {
-      expires_at?: string;
-      json?: boolean;
-    }) => {
-      const normalizedName = String(name || "").trim();
-      if (!normalizedName) {
-        if (options.json === true) {
-          emitCliBlock({
-            tone: "error",
-            title: "Token name is required",
-            note: "JSON 模式下必须显式传入 token 名称。",
-          });
-          process.exitCode = 1;
-          return;
-        }
-        await runInteractiveCreateCommandFlow({
-          expires_at: options.expires_at,
+    .action(async (agent_id: string | undefined, options: { json?: boolean }) => {
+      const target = await resolve_cli_agent_target(agent_id);
+      const auth_service = new AuthService({ agent_id: target.agent_id });
+      const tokens = auth_service.list_tokens();
+      if (options.json) {
+        printResult({
+          asJson: true,
+          success: true,
+          title: "agent tokens",
+          payload: { agent_id: target.agent_id, tokens },
         });
         return;
       }
-
-      createToken({
-        name: normalizedName,
-        expires_at: options.expires_at,
-        json: options.json === true,
+      emitCliList({
+        tone: "accent",
+        title: `Agent tokens · ${target.agent_id}`,
+        summary: `${tokens.length} token(s)`,
+        items: tokens.map((item) => ({
+          title: item.name,
+          facts: [
+            { label: "ID", value: item.token_id },
+            { label: "Expires", value: item.expires_at ?? "never" },
+          ],
+        })),
       });
     });
 
   token
-    .command("delete")
-    .description(t({
-      zh: "删除指定 token",
-      en: "delete a selected token",
-    }))
-    .argument("[token_id]", t({
-      zh: "token 记录 ID",
-      en: "token record ID",
-    }))
-    .option("--json", t({
-      zh: "以 JSON 输出",
-      en: "output as JSON",
-    }))
+    .command("create [agent_id]")
+    .requiredOption("--name <name>", t({ zh: "Token 名称", en: "token name" }))
+    .option("--expires-at <iso>", t({ zh: "ISO 过期时间", en: "ISO expiration time" }))
+    .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
     .helpOption("--help", helpText())
-    .action(async (token_id: string | undefined, options: { json?: boolean }) => {
-      const normalizedTokenId = String(token_id || "").trim();
-      if (!normalizedTokenId) {
-        if (options.json === true) {
-          emitCliBlock({
-            tone: "error",
-            title: "Token ID is required",
-            note: "JSON 模式下必须显式传入 token_id。",
-          });
-          process.exitCode = 1;
-          return;
-        }
-        const selectedTokenId = await promptTokenIdForDelete();
-        if (!selectedTokenId) return;
-        deleteToken(selectedTokenId, false);
+    .action(async (
+      agent_id: string | undefined,
+      options: { name: string; expires_at?: string; json?: boolean },
+    ) => {
+      const target = await resolve_cli_agent_target(agent_id);
+      const issued = new AuthService({ agent_id: target.agent_id }).create_token({
+        name: options.name,
+        expires_at: options.expires_at,
+      });
+      if (options.json) {
+        printResult({
+          asJson: true,
+          success: true,
+          title: "agent token created",
+          payload: { ...issued },
+        });
         return;
       }
+      emitCliBlock({
+        tone: "success",
+        title: "Agent token created",
+        summary: issued.name,
+        facts: [
+          { label: "Agent", value: issued.agent_id },
+          { label: "Token ID", value: issued.token_id },
+          { label: "Bearer Token", value: issued.token },
+        ],
+        note: "Bearer Token 只显示这一次，请立即安全保存。",
+      });
+    });
 
-      deleteToken(normalizedTokenId, options.json === true);
+  token
+    .command("delete <token_id> [agent_id]")
+    .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
+    .helpOption("--help", helpText())
+    .action(async (
+      token_id: string,
+      agent_id: string | undefined,
+      options: { json?: boolean },
+    ) => {
+      const target = await resolve_cli_agent_target(agent_id);
+      new AuthService({ agent_id: target.agent_id }).delete_token(token_id);
+      if (options.json) {
+        printResult({
+          asJson: true,
+          success: true,
+          title: "agent token deleted",
+          payload: { agent_id: target.agent_id, token_id },
+        });
+        return;
+      }
+      emitCliBlock({
+        tone: "success",
+        title: "Agent token deleted",
+        facts: [
+          { label: "Agent", value: target.agent_id },
+          { label: "Token ID", value: token_id },
+        ],
+      });
     });
 }

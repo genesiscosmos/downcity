@@ -3,26 +3,17 @@
  *
  * 关键点（中文）
  * - 这里只组合 plugin 的各类能力，不展开每个能力的细节。
- * - 细节类型分散在 State / Command / Action / Runtime / Setup / HTTP 模块。
+ * - 细节类型分散在 State / Action / Runtime / Lifecycle / HTTP 模块。
  */
 
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
-import type { StructuredConfig } from "@/types/plugin/PluginConfig.js";
 import type { PluginActions } from "@/types/plugin/PluginAction.js";
 import type {
   PluginAvailability,
-  PluginConfigDefinition,
   PluginHooks,
   PluginResolves,
 } from "@/types/plugin/PluginRuntime.js";
-import type {
-  PluginCommandContext,
-  PluginLifecycle,
-} from "@/types/plugin/PluginCommand.js";
-import type {
-  PluginSetupDefinition,
-  PluginUsageDefinition,
-} from "@/types/plugin/PluginSetup.js";
+import type { PluginLifecycle } from "@/types/plugin/PluginCommand.js";
 import type { PluginHttpDefinition } from "@/types/plugin/PluginHttp.js";
 import type { PluginRunContext } from "@/types/plugin/PluginRunContext.js";
 
@@ -36,26 +27,8 @@ export interface Plugin {
   title: string;
   /** Plugin 面向人类的用途说明。 */
   description: string;
-  /** Plugin 配置定义（可选）。 */
-  config?: PluginConfigDefinition<StructuredConfig>;
   /** Plugin 显式 Action 集合（可选）。 */
   actions?: PluginActions;
-  /**
-   * Plugin setup 定义（可选）。
-   *
-   * 说明（中文）
-   * - 这是 Console 面向用户的安装/配置协议。
-   * - plugin 内部仍可复用 asset/helper，但 UI 只读取这层抽象。
-   */
-  setup?: PluginSetupDefinition;
-  /**
-   * Plugin usage 定义（可选）。
-   *
-   * 说明（中文）
-   * - 这是 agent 侧如何使用该 plugin 的配置协议。
-   * - 与 setup 不同，这里不负责依赖安装，只负责行为选择与运行参数。
-   */
-  usage?: PluginUsageDefinition;
   /** Plugin Hook 集合（可选）。 */
   hooks?: PluginHooks;
   /** Plugin resolve 点集合（可选）。 */
@@ -74,7 +47,7 @@ export interface Plugin {
   lifecycle?: PluginLifecycle;
   /** Plugin 可用性检查器（可选）。 */
   availability?: (
-    context: PluginCommandContext | PluginContext,
+    context: PluginContext,
   ) => Promise<PluginAvailability> | PluginAvailability;
   /** Plugin HTTP 注入定义（可选）。 */
   http?: PluginHttpDefinition;

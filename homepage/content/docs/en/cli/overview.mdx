@@ -1,95 +1,36 @@
 ---
 title: CLI
-description: The Downcity CLI suite — downcity for local agents and downfed for Federation
+description: City manages local Agents; Fed manages Federation Servers
 ---
 
 # CLI
 
-Downcity provides two independent CLI tools:
+The Downcity package installs two independent tools:
 
-- **`city`** (alias `downcity`) — the local City container built on `City()` and the Agent SDK for Agent management, runtime control, and console workflows.
-- **`fed`** (alias `downfed`) — the Federation Server Manager for registering and operating Federation Servers, plus `federation.json`-based project commands.
+- `city` (alias `downcity`) is the local City container for Agents, plugins, environment variables, and Federation connections.
+- `fed` (alias `downfed`) is the Federation Server Manager. Its TUI manages registered servers, while project commands read `federation.json` from the current project.
 
-Both share the same global flags (`--verbose`, `--quiet`, `--lang`) and help system.
+## City data model
 
-## Local storage
+An Agent is a global entity identified by `agent_id`; its Workspace path is only a mutable binding. Agents, plugin bindings, tokens, and environment variables live in `~/.downcity/downcity.db`. Daemon files live in `~/.downcity/runtimes/<agent_id>/`.
 
-- `downcity` stores managed Agents, Workspace bindings, local City state, encrypted credentials, environment variables, and channel accounts in `~/.downcity/downcity.db`.
-- `downfed` stores Federation admin profiles, admin keys, Cloudflare account selection, and CLI preferences in `~/.downcity/federation.db`.
-- Agent runtime state is stored by `agent_id` under `~/.downcity/runtimes/<agent_id>/`; Workspaces do not contain daemon PID, log, or metadata files.
+Plugin artifacts are installed globally under `~/.downcity/plugins/`. Plugin configuration is not stored on the Agent SDK runtime Plugin object. It is stored per `agent_id + plugin_name` in an Agent Plugin Binding.
 
-An Agent is a global entity identified by `agent_id`; a Workspace path is only a mutable binding. Multiple Agents may bind to one Workspace, so lifecycle commands target `agent_id` and never infer identity from a directory name.
+## City commands
 
-## downcity
+| Command | Purpose |
+|---|---|
+| `city agent` | Manage global Agents |
+| `city plugin` | Manage plugin artifacts, bindings, config, and actions |
+| `city env` | Manage environment variables injected by City |
+| `city federation` | Manage Federation connections |
 
-`downcity` is the local City container. It manages global Agent identities and uses `City()` with the Agent SDK to provide lifecycle control, plugins, environment variables, tokens, Federation connections, and console workflows.
+`city init`, `city update`, and `city config` are no longer provided. Upgrade globally with `npm i -g downcity@latest`.
 
-### Global commands
-
-| Command | Description |
-|---------|-------------|
-| `downcity init` | Initialize City global state (`~/.downcity/downcity.db`) |
-| `downcity update` | Update the downcity CLI to the latest version |
-| `downcity env` | Manage platform environment variables |
-| `downcity config` | Manage City configuration |
-| `downcity token` | Manage API tokens |
-| `downcity federation` | Manage Federation connections |
-
-### Agent commands
-
-| Command | Description |
-|---------|-------------|
-| `downcity agent create [path]` | Create an Agent and initialize Workspace assets |
-| `downcity agent list` | List managed Agents and Workspace bindings |
-| `downcity agent start [agent_id]` | Start an Agent (background or foreground) |
-| `downcity agent stop [agent_id]` | Stop the background Agent daemon |
-| `downcity agent restart [agent_id]` | Restart the background Agent daemon |
-| `downcity agent status [agent_id]` | Show background Agent daemon status |
-| `downcity agent doctor [agent_id]` | Diagnose daemon state files |
-| `downcity agent chat [--to agent_id]` | Chat with an Agent in the terminal |
-| `downcity agent history` | Manage Agent conversation history |
-
-### Plugin commands
-
-| Command | Description |
-|---------|-------------|
-| `downcity plugins` | Manage plugins (interactive or list actions) |
-| `downcity plugins schedule` | Manage plugin scheduling |
-
-### Chat commands
-
-| Command | Description |
-|---------|-------------|
-| `downcity chat` | Manage chat plugin resources (interactive) |
-| `downcity chat access` | Manage Chat user access for a specific Agent |
-
-## downfed
-
-`downfed` is the Federation Server Manager. Its TUI registers, selects, and manages Federation Servers. Project commands read `federation.json` from the current directory for creation, deployment, and management workflows.
-
-| Command | Description |
-|---------|-------------|
-| `downfed` | Open the interactive Federation management interface |
-| `downfed manage` | Open the admin management interface |
-| `downfed server manage` | Enter the admin workspace for a Federation |
-| `downfed server add` | Add a deployed Federation URL |
-| `downfed query <method> <path>` | Query the active Federation HTTP API |
-| `downfed create [dir]` | Scaffold a new Federation project |
-| `downfed deploy [source]` | Deploy a Federation project |
+Every command that operates on one Agent targets an `agent_id`. If omitted in a TTY, City opens the global Agent selector. Non-interactive calls fail with `Agent ID is required`; the current directory is never used for inference.
 
 ## Platform support
 
-The CLI architecture is cross-platform. macOS and Linux are stable targets. Native Windows support is integrated through the Windows adapter and is currently preview / unstable.
+The CLI architecture is cross-platform. macOS and Linux are stable targets; Windows adapters are currently preview quality.
 
-## Global flags
-
-- `--verbose` — print detailed progress output
-- `--quiet` — only print error output
-- `--lang <locale>` — set CLI language (zh/en)
-- `--help` — show help for any command
-
-Continue with:
-
-- [CLI Commands](/en/docs/cli/commands)
-- [Project Init](/en/docs/cli/init)
-- [Project Structure](/en/docs/cli/project)
+Continue with [CLI commands](/en/docs/cli/commands).

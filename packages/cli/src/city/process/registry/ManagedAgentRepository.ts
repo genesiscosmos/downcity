@@ -2,7 +2,7 @@
  * ManagedAgentRepository：Downcity 全局 Agent 的唯一配置仓储。
  *
  * 关键点（中文）
- * - Agent 身份、Workspace 绑定、模型与 Plugin 配置只保存在 `managed_agents` 表。
+ * - Agent 身份、Workspace 绑定与模型保存在 `managed_agents`；Plugin 配置保存在独立 Binding 表。
  * - 不再维护独立项目路径 Registry，也不从 Workspace 目录读取 Agent 声明。
  * - 多个 Agent 可以绑定同一个 Workspace，按路径反查时必须显式处理歧义。
  */
@@ -90,7 +90,7 @@ export function create_managed_agent(
 ): ManagedAgent {
   const agent_id = normalize_managed_agent_id(input.agent_id);
   const workspace_path = normalize_managed_workspace_path(input.workspace_path);
-  return withPlatformStore((context) => {
+  const agent = withPlatformStore((context) => {
     if (get_managed_agent_row(context, agent_id)) {
       throw new Error(`Agent already exists: ${agent_id}`);
     }
@@ -101,7 +101,6 @@ export function create_managed_agent(
       version: String(input.version || "").trim() || "1.0.0",
       ...(input.start ? { start: input.start } : {}),
       ...(input.execution ? { execution: input.execution } : {}),
-      ...(input.plugins ? { plugins: input.plugins } : {}),
       ...(input.llm ? { llm: input.llm } : {}),
       created_at: current_time,
       updated_at: current_time,
@@ -109,6 +108,7 @@ export function create_managed_agent(
     set_managed_agent_row(context, agent);
     return agent;
   });
+  return agent;
 }
 
 /** 更新现有受管 Agent。 */
@@ -136,9 +136,6 @@ export function update_managed_agent(
         : {}),
       ...(Object.prototype.hasOwnProperty.call(input, "execution")
         ? { execution: input.execution }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(input, "plugins")
-        ? { plugins: input.plugins }
         : {}),
       ...(Object.prototype.hasOwnProperty.call(input, "llm")
         ? { llm: input.llm }
@@ -172,5 +169,12 @@ export function save_managed_agent(input: ManagedAgent): ManagedAgent {
 /** 删除受管 Agent。 */
 export function remove_managed_agent(agent_id_input: string): void {
   const agent_id = normalize_managed_agent_id(agent_id_input);
-  withPlatformStore((context) => remove_managed_agent_row(context, agent_id));
+  withPlatformStore((context) => {
+    const remove = context.sqlite.transaction(() => {
+      context.sqlite.prepare("DELETE FROM agent_tokens WHERE agent_id = ?;").run(agent_id);
+      context.sqlite.prepare("DELETE FROM agent_plugins WHERE agent_id = ?;").run(agent_id);
+      remove_managed_agent_row(context, agent_id);
+    });
+    remove();
+  });
 }

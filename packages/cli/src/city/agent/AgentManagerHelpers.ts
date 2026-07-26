@@ -36,6 +36,11 @@ import type {
   AgentManagerListSelection,
   AgentManagerAgentSummary,
 } from "@/city/agent/AgentManagerTypes.js";
+import {
+  get_agent_plugin_binding,
+  set_agent_plugin_binding,
+} from "@/city/process/registry/PluginRepository.js";
+import type { JsonObject } from "@downcity/agent";
 
 const CHAT_CHANNELS: StoredChannelAccountChannel[] = ["telegram", "feishu", "qq"];
 
@@ -85,12 +90,15 @@ export async function reloadAgentSummary(
 export function readAgentConfig(agent_id: string): DowncityConfig | null {
   const agent = get_managed_agent(agent_id);
   if (!agent) return null;
+  const chat_binding = get_agent_plugin_binding(agent_id, "chat");
   return {
     id: agent.agent_id,
     version: agent.version,
     ...(agent.start ? { start: agent.start } : {}),
     ...(agent.execution ? { execution: agent.execution } : {}),
-    ...(agent.plugins ? { plugins: agent.plugins } : {}),
+    ...(chat_binding
+      ? { plugins: { chat: chat_binding.config } as DowncityConfig["plugins"] }
+      : {}),
     ...(agent.llm ? { llm: agent.llm } : {}),
   };
 }
@@ -103,9 +111,18 @@ function write_agent_config(agent_id: string, config: DowncityConfig): void {
     agent_id: agent.agent_id,
     start: config.start,
     execution: config.execution,
-    plugins: config.plugins,
     llm: config.llm,
   });
+  const chat_config = config.plugins?.chat;
+  const existing_binding = get_agent_plugin_binding(agent.agent_id, "chat");
+  if (chat_config || existing_binding) {
+    set_agent_plugin_binding({
+      agent_id: agent.agent_id,
+      plugin_name: "chat",
+      enabled: existing_binding?.enabled ?? true,
+      config: (chat_config ?? {}) as unknown as JsonObject,
+    });
+  }
 }
 
 export function readAgentExecutionBinding(config: DowncityConfig | null): string {

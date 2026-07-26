@@ -47,8 +47,8 @@ Chat 插件将 Agent 连接到 Telegram、飞书、QQ 等聊天渠道。它处�
 外部用户第一次发送消息时，Chat Plugin 会在当前 Agent 的 `.downcity/chat/access.db` 中记录 Principal，并在没有 Grant 时创建 pending Request。管理员使用 Request ID 批准或拒绝：
 
 ```bash
-downcity chat access requests --agent <agentId> --status pending
-downcity chat access approve <requestId> --agent <agentId>
+city plugin action chat access-snapshot <agent_id> --input '{}' --token <token>
+city plugin action chat access-approve <agent_id> --input '{"request_id":"<request_id>"}' --token <token>
 ```
 
 身份由渠道、当前 Chat 账号和平台用户 ID 共同确定。批准只对目标 Agent 生效，不会成为 City 全局权限，也不会传播到其他 Plugin。

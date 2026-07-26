@@ -1,164 +1,69 @@
 ---
 title: CLI 命令
-description: downcity 和 downfed 的常用命令
+description: City 与 Fed 的常用命令
 ---
 
 # CLI 命令
 
-## downcity (city)
-
-### 全局初始化与更新
+## Agent
 
 ```bash
-# 初始化 City 全局状态
-downcity init
-
-# 更新 CLI 到最新版本
-downcity update
+city agent                         # 打开 Agent 面板
+city agent create [path]
+city agent list
+city agent start [agent_id]
+city agent stop [agent_id]
+city agent restart [agent_id]
+city agent status [agent_id]
+city agent doctor [agent_id]
+city agent model [agent_id]
 ```
 
-### Agent 生命周期
+## 单 Agent Token
+
+Token 只属于一个 Agent，并可访问该 Agent 的全部非公开 HTTP API。没有 User、Role 或 Permission 层。
 
 ```bash
-# 创建 Agent 并初始化 Workspace 资产
-downcity agent create my-project
-
-# 列出全局受管 Agent
-downcity agent list
-
-# 在后台启动 Agent
-downcity agent start <agent_id>
-
-# 在前台启动 Agent
-downcity agent start <agent_id> --foreground
-
-# 停止 Agent 守护进程
-downcity agent stop <agent_id>
-
-# 重启 Agent 守护进程
-downcity agent restart <agent_id>
-
-# 检查 Agent 状态
-downcity agent status <agent_id>
-
-# 诊断守护进程问题
-downcity agent doctor <agent_id>
-# 修复僵尸守护进程状态
-downcity agent doctor <agent_id> --fix
-
-# 与 Agent 对话
-downcity agent chat
-# 发送一次性消息
-downcity agent chat --to <agent_id> -m "hello"
+city agent token list [agent_id]
+city agent token create [agent_id] --name automation
+city agent token create [agent_id] --name temporary --expires-at 2026-08-01T00:00:00Z
+city agent token delete <token_id> [agent_id]
 ```
 
-所有操作单个 Agent 的命令都以 `agent_id` 作为稳定目标。在 TTY 中省略 ID 时，CLI 始终打开全局 Agent 选择器，不按当前 Workspace 过滤，也不会根据路径推断；非交互模式会直接报错 `Agent ID is required`。`agent list`、`agent create` 等集合或创建流程不要求已有 Agent ID。
-
-`downcity agent list` 会优先展示正在运行的 Agent，同一状态下按 Agent ID 排序。daemon 状态保存在 `~/.downcity/runtimes/<agent_id>/`，默认只监听 `127.0.0.1`；对外监听需要显式传 `--host`，受保护 HTTP 路由要求 Bearer Token。
-
-`downcity agent model <agent_id> --set <model-id>` 更新 Agent 默认模型，并在下次启动或重启时生效。交互模式会从 Federation 模型目录中选择 Agent 默认模型。
-
-启动或重启 Agent 时，如果已保存的默认模型不在当前 Federation 模型目录中，交互式终端会直接展示当前 Federation 的模型选择器；选择完成后会更新默认模型并继续原启动流程。非交互模式不会自动选择，而会返回可用模型和对应的 `agent model --set` 修复命令。
-
-交互式 Agent Chat 顶部会显示当前 Session。执行中的状态会跟随 Assistant 消息显示在消息流内。在聊天中输入 `/session` 后，选择器会直接显示在输入框下方，不会遮挡消息历史。
-
-消息历史支持鼠标滚轮、空输入时的 `↑` / `↓`、`PageUp` / `PageDown`；`Ctrl+L` 可直接返回最新消息。工具执行默认折叠，使用 `Ctrl+O` 统一展开或收起参数与结果。
-
-当 unrestricted shell 操作需要审批时，Agent 会直接发起工具请求，由运行时在执行前暂停并显示审批面板，不需要先在聊天中重复确认。同一条 Tool 更新会携带完整命令、工作目录、申请原因和审批 ID，内联面板不需要再次请求详情；选择 Approve 或 Deny 后提交，`Esc` / `Ctrl+C` 按安全语义执行 Deny。远端提交失败时，请求会保留并重新显示，不会让当前轮次失去审批入口。
-
-Agent 执行期间仍可提交 `/approve`、`/deny`、`/help` 和 `/quit`。会改变会话或 transcript 的 `/session`、`/new`、`/clear` 仅在空闲时可用。
-
-Agent 执行期间按 `Enter` 发送普通消息会将其加入本地队列，而不是并发开启第二个 turn。队列会显示在输入框上方；当前 turn 成功结束后，消息会按提交顺序逐条发送。空输入框按 `↑` 可取回最近一条排队消息继续编辑。若某一 turn 失败，剩余排队消息会被丢弃并在消息流中提示。
-
-### Agent 历史
+## Plugin
 
 ```bash
-# 清理会话历史
-downcity agent history clean
-# 清理特定会话
-downcity agent history clean --session-id <id>
+city plugin list
+city plugin install <git-url-or-local-directory>
+city plugin uninstall <plugin_name>
+city plugin inspect <plugin_name>
+city plugin enable <plugin_name> [agent_id] --config '{"key":"value"}'
+city plugin disable <plugin_name> [agent_id]
+city plugin config <plugin_name> [agent_id]
+city plugin config <plugin_name> [agent_id] --set '{"key":"value"}'
+city plugin action <plugin_name> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
-### 环境变量
+第三方仓库必须包含 `downcity.plugin.json` 和已经构建好的 ESM entry。安装过程不会执行 `npm install` 或任何生命周期脚本。Manifest 声明 schema/default；实际配置由全局数据库中的 Agent Plugin Binding 持有，Runtime Factory 接收校验后的配置并创建 Plugin。
+
+修改 enable、disable 或 config 后，正在运行的 Agent 需要重启，新的 Runtime 装配才会生效。
+
+CLI、Agent `plugin_call`、HTTP 与定时任务统一调用 Plugin Action。不存在 `plugin command`，Chat 也不再是顶层命令特例。
+
+## Env 与 Federation
 
 ```bash
-# 列出环境变量
-downcity env list
-# 设置环境变量
-downcity env set KEY=value
-# 删除环境变量
-downcity env delete KEY
-# 导出环境变量到 .env
-downcity env copy
+city env
+city federation
 ```
 
-### Token
+## Fed
 
 ```bash
-# 列出 API token
-downcity token list
-# 创建新 token
-downcity token create
-# 删除 token
-downcity token delete <id>
+fed                              # Federation Server 管理 TUI
+fed server add
+fed server manage
+fed query GET /health
+fed create [dir]
+fed deploy [source]
 ```
-
-### Plugin
-
-```bash
-# 交互式管理插件
-downcity plugins
-# 调度插件操作
-downcity plugins schedule
-```
-
-### Chat
-
-```bash
-# 交互式管理 chat 资源
-downcity chat
-# 查看指定 Agent 的待批准请求
-downcity chat access requests --agent <agentId> --status pending
-# 批准请求自身对应的私聊或群聊范围
-downcity chat access approve <requestId> --agent <agentId>
-# 同时批准私聊和群聊
-downcity chat access approve <requestId> --agent <agentId> --scope all
-# 查看 Principal 和 Grant
-downcity chat access list --agent <agentId>
-# 拒绝请求，后续消息不会重复创建请求
-downcity chat access deny <requestId> --agent <agentId>
-# 撤销 Grant，用户可以再次发起请求
-downcity chat access revoke <principalId> --agent <agentId> --scope all
-```
-
-## downfed
-
-```bash
-# 打开交互式 Federation 管理器
-downfed
-
-# 打开 admin 界面
-downfed manage
-
-# 添加 Federation 服务器
-downfed server add
-
-# 进入服务器工作区
-downfed server manage
-
-# 查询 Federation API
-downfed query GET /health
-
-# 创建新项目
-downfed create my-project
-
-# 部署项目
-downfed deploy
-# 带选项部署
-downfed deploy --verify --dry-run
-```
-
-继续阅读：
-
-- [项目初始化](/zh/docs/cli/init)
-- [项目结构](/zh/docs/cli/project)

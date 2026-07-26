@@ -87,7 +87,6 @@ export class WorkboardPlugin extends BasePlugin {
           path: "/api/workboard/*",
           method: "GET",
           require_auth: true,
-          any_permissions: ["agent.read"],
         },
       ],
       register({ app, get_context }) {

@@ -14,7 +14,6 @@ import type {
   RpcRequestHandlerOptions,
   RpcWriteSuccess,
 } from "@/rpc/server/ServerTypes.js";
-import { parse_plugin_command_request_body } from "@downcity/agent";
 
 /**
  * 处理 internal RPC 请求。
@@ -99,27 +98,6 @@ export async function handleInternalRpcRequest(params: {
       write_success(request.id, {
         plugins: context.list_plugin_states(),
       });
-      return true;
-    }
-    case "internal.plugins.control": {
-      const context = requireAgent(options);
-      const result = await context.control_plugin_state({
-        plugin_name: request.params.plugin_name,
-        action: request.params.action,
-      });
-      write_success(request.id, result);
-      return true;
-    }
-    case "internal.plugins.command": {
-      const context = requireAgent(options);
-      const body = parse_plugin_command_request_body(request.params);
-      const result = await context.run_plugin_command({
-        plugin_name: body.plugin_name,
-        command: body.command,
-        payload: body.payload,
-        schedule: body.schedule,
-      });
-      write_success(request.id, result);
       return true;
     }
     case "internal.plugins.availability": {

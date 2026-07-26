@@ -34,6 +34,9 @@ import type {
 } from "@downcity/plugins/sound";
 import { CityUserManager } from "@/city/shared/CityUserManager.js";
 import { CityChatAccountStore } from "@/city/runtime/plugins/CityChatAccountStore.js";
+import type { AgentPluginBinding } from "@/city/types/plugin/AgentPluginBinding.js";
+import type { CityBuiltinPluginDescriptor } from "@/city/types/plugin/CityBuiltinPlugin.js";
+import { get_builtin_plugin_config } from "@/city/process/plugin/BuiltinPluginConfig.js";
 
 const city_user_manager = new CityUserManager();
 
@@ -76,6 +79,18 @@ function create_city_chat_channels(config?: DowncityConfig) {
   ];
 }
 
+/** 把 Binding 配置转换为旧 Chat 构造参数所需的宿主配置视图。 */
+function create_chat_host_config(
+  config: AgentPluginBinding["config"] | undefined,
+): DowncityConfig | undefined {
+  if (!config) return undefined;
+  return {
+    id: "runtime",
+    version: "1.0.0",
+    plugins: { chat: config },
+  } as DowncityConfig;
+}
+
 /**
  * 创建不依赖 City 登录态的 City 内建 plugin 集合。
  *
@@ -109,6 +124,34 @@ export function createCityStaticBuiltinPlugins(input: {
   ];
 }
 
+/** 返回 CLI 与控制台使用的内建 Plugin 静态目录。 */
+export function list_city_builtin_plugin_descriptors(): CityBuiltinPluginDescriptor[] {
+  const static_descriptors = createCityStaticBuiltinPlugins().map((plugin) => ({
+    plugin_name: plugin.name,
+    title: plugin.title || plugin.name,
+    description: plugin.description || "",
+    actions: Object.keys(plugin.actions || {}).sort(),
+    ...get_builtin_plugin_config(plugin.name),
+  }));
+  return [
+    ...static_descriptors,
+    {
+      plugin_name: "image",
+      title: "Image",
+      description: "City image model discovery, generation, and result lookup.",
+      actions: ["image_create", "image_result", "models"],
+      ...get_builtin_plugin_config("image"),
+    },
+    {
+      plugin_name: "sound",
+      title: "Sound",
+      description: "City speech model discovery, ASR, and TTS.",
+      actions: ["asr", "models", "tts"],
+      ...get_builtin_plugin_config("sound"),
+    },
+  ].sort((left, right) => left.plugin_name.localeCompare(right.plugin_name));
+}
+
 /**
  * 创建 City agent 运行期应启用的完整内建 plugin 集合。
  */
@@ -125,18 +168,29 @@ export async function createCityBuiltinPlugins(input: {
   host?: string;
   /** 当前 Agent HTTP runtime 的监听 port。 */
   port?: number;
+  /** 当前 Agent 在全局数据库中的全部 Plugin Binding。 */
+  bindings: AgentPluginBinding[];
 }): Promise<BasePlugin[]> {
+  const enabled_bindings = new Map(
+    input.bindings
+      .filter((binding) => binding.enabled)
+      .map((binding) => [binding.plugin_name, binding]),
+  );
+  const chat_config = create_chat_host_config(enabled_bindings.get("chat")?.config);
   const { city } = await city_user_manager.createUserClient({
     env: input.env ?? process.env,
   });
 
-  return [
-    ...createCityStaticBuiltinPlugins({
-      config: input.config,
-      host: input.host,
-      port: input.port,
-    }),
-    new ImagePlugin({
+  const plugins: BasePlugin[] = [];
+  const static_plugins = createCityStaticBuiltinPlugins({
+    config: chat_config,
+    host: input.host,
+    port: input.port,
+  });
+  for (const plugin of static_plugins) {
+    if (enabled_bindings.has(plugin.name)) plugins.push(plugin);
+  }
+  if (enabled_bindings.has("image")) plugins.push(new ImagePlugin({
       list_models: async () => {
         const catalog = await city.ai.catalog();
         return catalog.forModality("image").map((model): ImagePluginModel => ({
@@ -155,8 +209,8 @@ export async function createCityBuiltinPlugins(input: {
         }),
       image_result: async (image_input) =>
         await city.ai.image_result(image_input),
-    }),
-    new SoundPlugin({
+    }));
+  if (enabled_bindings.has("sound")) plugins.push(new SoundPlugin({
       list_models: async () => {
         const catalog = await city.ai.catalog();
         return catalog.all()
@@ -182,6 +236,6 @@ export async function createCityBuiltinPlugins(input: {
           ...tts_input,
           model: require_model_id(tts_input, "tts"),
         }),
-    }),
-  ];
+    }));
+  return plugins;
 }

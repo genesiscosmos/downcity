@@ -12,6 +12,7 @@ import type { PlatformStoreContext } from "@/city/runtime/store/StoreShared.js";
  * 初始化 PlatformStore 所需表结构。
  */
 export function ensurePlatformStoreSchema(context: PlatformStoreContext): void {
+  dropLegacyAuthSchema(context);
   context.sqlite.exec(`
     CREATE TABLE IF NOT EXISTS platform_secure_settings (
       key TEXT PRIMARY KEY NOT NULL,
@@ -80,156 +81,113 @@ export function ensurePlatformStoreSchema(context: PlatformStoreContext): void {
     ON channel_accounts(channel);
   `);
   ensureChannelAccountsTableColumns(context);
-  ensureAuthSchema(context);
+  ensureAgentTokenSchema(context);
+  ensurePluginSchema(context);
 }
 
 /**
- * 初始化平台认证与授权表结构。
+ * 删除旧的 User/Role/Permission/RBAC 表。
+ *
+ * 关键点（中文）：City Token 已收敛为单 Agent Token，旧账户模型不再参与迁移或兼容。
+ */
+function dropLegacyAuthSchema(context: PlatformStoreContext): void {
+  const legacy_table = context.sqlite.prepare(`
+    SELECT name FROM sqlite_master
+    WHERE type = 'table' AND name IN (
+      'auth_users', 'auth_roles', 'auth_permissions', 'auth_user_roles',
+      'auth_role_permissions', 'auth_tokens', 'auth_audit_logs'
+    )
+    LIMIT 1;
+  `).get() as { name?: string } | undefined;
+  if (!legacy_table) return;
+  context.sqlite.exec(`
+    DROP TABLE IF EXISTS auth_role_permissions;
+    DROP TABLE IF EXISTS auth_user_roles;
+    DROP TABLE IF EXISTS auth_audit_logs;
+    DROP TABLE IF EXISTS auth_tokens;
+    DROP TABLE IF EXISTS auth_permissions;
+    DROP TABLE IF EXISTS auth_roles;
+    DROP TABLE IF EXISTS auth_users;
+  `);
+}
+
+/**
+ * 初始化单 Agent Bearer Token 表结构。
  *
  * 关键点（中文）
- * - 该 schema 属于平台级全局能力，不依赖任何单个 agent 项目。
- * - V1 只建表与索引，不在这里写入默认数据，默认数据由 auth bootstrap 负责。
+ * - Token 只绑定一个 Agent，不引入用户、角色或权限目录。
+ * - 明文 Token 永不落库，只保存 SHA-256 哈希。
  */
-function ensureAuthSchema(context: PlatformStoreContext): void {
+function ensureAgentTokenSchema(context: PlatformStoreContext): void {
   context.sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS auth_users (
+    CREATE TABLE IF NOT EXISTS agent_tokens (
       id TEXT PRIMARY KEY NOT NULL,
-      username TEXT NOT NULL,
-      password_hash TEXT NOT NULL,
-      display_name TEXT,
-      status TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `);
-  context.sqlite.exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS auth_users_username_uq
-    ON auth_users(username);
-  `);
-
-  context.sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS auth_roles (
-      id TEXT PRIMARY KEY NOT NULL,
-      name TEXT NOT NULL,
-      description TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `);
-  context.sqlite.exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS auth_roles_name_uq
-    ON auth_roles(name);
-  `);
-
-  context.sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS auth_permissions (
-      id TEXT PRIMARY KEY NOT NULL,
-      key TEXT NOT NULL,
-      description TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `);
-  context.sqlite.exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS auth_permissions_key_uq
-    ON auth_permissions(key);
-  `);
-
-  context.sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS auth_user_roles (
-      id TEXT PRIMARY KEY NOT NULL,
-      user_id TEXT NOT NULL,
-      role_id TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-  `);
-  context.sqlite.exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS auth_user_roles_user_role_uq
-    ON auth_user_roles(user_id, role_id);
-  `);
-  context.sqlite.exec(`
-    CREATE INDEX IF NOT EXISTS auth_user_roles_user_id_idx
-    ON auth_user_roles(user_id);
-  `);
-  context.sqlite.exec(`
-    CREATE INDEX IF NOT EXISTS auth_user_roles_role_id_idx
-    ON auth_user_roles(role_id);
-  `);
-
-  context.sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS auth_role_permissions (
-      id TEXT PRIMARY KEY NOT NULL,
-      role_id TEXT NOT NULL,
-      permission_id TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-  `);
-  context.sqlite.exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS auth_role_permissions_role_permission_uq
-    ON auth_role_permissions(role_id, permission_id);
-  `);
-  context.sqlite.exec(`
-    CREATE INDEX IF NOT EXISTS auth_role_permissions_role_id_idx
-    ON auth_role_permissions(role_id);
-  `);
-  context.sqlite.exec(`
-    CREATE INDEX IF NOT EXISTS auth_role_permissions_permission_id_idx
-    ON auth_role_permissions(permission_id);
-  `);
-
-  context.sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS auth_tokens (
-      id TEXT PRIMARY KEY NOT NULL,
-      user_id TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
       name TEXT NOT NULL,
       token_hash TEXT NOT NULL,
       expires_at TEXT,
-      revoked_at TEXT,
       last_used_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
   `);
   context.sqlite.exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS auth_tokens_token_hash_uq
-    ON auth_tokens(token_hash);
+    CREATE UNIQUE INDEX IF NOT EXISTS agent_tokens_token_hash_uq
+    ON agent_tokens(token_hash);
   `);
   context.sqlite.exec(`
-    CREATE INDEX IF NOT EXISTS auth_tokens_user_id_idx
-    ON auth_tokens(user_id);
+    CREATE INDEX IF NOT EXISTS agent_tokens_agent_id_idx
+    ON agent_tokens(agent_id);
   `);
   context.sqlite.exec(`
-    CREATE INDEX IF NOT EXISTS auth_tokens_expires_at_idx
-    ON auth_tokens(expires_at);
+    CREATE INDEX IF NOT EXISTS agent_tokens_expires_at_idx
+    ON agent_tokens(expires_at);
   `);
+}
 
+/**
+ * 初始化 Plugin 安装目录与 Agent 绑定表。
+ *
+ * 关键点（中文）
+ * - installed_plugins 只描述全局已安装制品。
+ * - agent_plugins 保存 Agent 与 Plugin 的启用关系及结构化配置。
+ */
+function ensurePluginSchema(context: PlatformStoreContext): void {
   context.sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS auth_audit_logs (
-      id TEXT PRIMARY KEY NOT NULL,
-      actor_user_id TEXT,
-      actor_token_id TEXT,
-      resource_type TEXT NOT NULL,
-      resource_id TEXT,
-      action TEXT NOT NULL,
-      result TEXT NOT NULL,
-      request_id TEXT,
-      ip TEXT,
-      user_agent TEXT,
-      meta_json TEXT,
-      created_at TEXT NOT NULL
+    CREATE TABLE IF NOT EXISTS installed_plugins (
+      plugin_name TEXT PRIMARY KEY NOT NULL,
+      source TEXT NOT NULL,
+      version TEXT NOT NULL,
+      entry_path TEXT NOT NULL,
+      manifest_json TEXT NOT NULL,
+      integrity TEXT,
+      installed_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
   `);
   context.sqlite.exec(`
-    CREATE INDEX IF NOT EXISTS auth_audit_logs_actor_created_idx
-    ON auth_audit_logs(actor_user_id, created_at);
+    CREATE INDEX IF NOT EXISTS installed_plugins_updated_at_idx
+    ON installed_plugins(updated_at);
+  `);
+
+  context.sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS agent_plugins (
+      agent_id TEXT NOT NULL,
+      plugin_name TEXT NOT NULL,
+      enabled INTEGER NOT NULL,
+      config_encrypted TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (agent_id, plugin_name)
+    );
   `);
   context.sqlite.exec(`
-    CREATE INDEX IF NOT EXISTS auth_audit_logs_action_created_idx
-    ON auth_audit_logs(action, created_at);
+    CREATE INDEX IF NOT EXISTS agent_plugins_agent_id_idx
+    ON agent_plugins(agent_id);
   `);
   context.sqlite.exec(`
-    CREATE INDEX IF NOT EXISTS auth_audit_logs_resource_idx
-    ON auth_audit_logs(resource_type, resource_id);
+    CREATE INDEX IF NOT EXISTS agent_plugins_plugin_name_idx
+    ON agent_plugins(plugin_name);
   `);
 }
 

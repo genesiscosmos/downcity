@@ -99,7 +99,9 @@ export async function startAgentHttpGateway(
   options: AgentHttpGatewayStartOptions,
 ): Promise<AgentHttpGatewayInstance> {
   const owns_auth_service = !options.auth_service;
-  const auth_service = options.auth_service ?? new AuthService();
+  const auth_service = options.auth_service ?? new AuthService({
+    agent_id: options.get_agent().id,
+  });
   const app = createAgentHttpGatewayApp({ ...options, auth_service });
   const server = createNodeServer(app, options);
   const server_logger = options.get_agent().get_logger();

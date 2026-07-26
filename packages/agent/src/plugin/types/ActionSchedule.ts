@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 这里描述的是“某个 plugin action 在未来某个时间执行”的通用记录。
- * - 它不是独立 plugin，也不表达业务语义，只服务于 plugin command/action 协议。
+ * - 它不是独立 Plugin，也不表达业务语义，只服务于 Plugin Action 调度。
  * - 外部请求字段仍可叫 `schedule`，但内部类型统一归入 ActionSchedule 模块。
  */
 

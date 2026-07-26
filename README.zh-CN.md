@@ -68,17 +68,9 @@ pnpm add -g downcity
 downcity --version
 ```
 
-`downcity` 是基于 `City()` 与 Agent SDK 管理和运行 Agent 的本机 City 容器。使用 `downcity update` 更新全局 CLI。同一安装包还提供 `fed`/`downfed`，用于管理 Federation Server。
+`downcity` 是基于 `City()` 与 Agent SDK 管理和运行 Agent 的本机 City 容器。更新使用 `npm i -g downcity@latest`。同一安装包还提供 `fed`/`downfed`，用于管理 Federation Server。
 
-### 2. 初始化平台
-
-```bash
-downcity init
-```
-
-该命令会初始化 Downcity 的全局配置和存储，默认位于 `~/.downcity/`。
-
-### 3. 连接 City
+### 2. 连接 Federation
 
 ```bash
 downcity federation use
@@ -87,7 +79,7 @@ downcity federation status
 
 `downcity` 负责模型和 Service 资源管理。`downcity federation` 负责把当前 City 连接导入本机 Agent runtime。
 
-### 4. 创建 Agent
+### 3. 创建 Agent
 
 在目标仓库中执行：
 
@@ -108,17 +100,16 @@ your-project/
     └── task/
 ```
 
-### 5. 启动 Agent 并对话
+### 4. 启动 Agent
 
 ```bash
 downcity agent list
 downcity agent start <agent_id>
 downcity agent status <agent_id>
-downcity agent chat --to <agent_id> -m "总结一下这个项目"
-downcity agent chat --to <agent_id> --new-session
+downcity agent token create <agent_id> --name local
 ```
 
-交互式 chat 会先选择已有 session，也可以直接创建新 session 后进入 TUI。
+Plugin 能力统一通过 `city plugin action <plugin> <action> [agent_id]` 调用。
 
 如果希望在当前终端前台运行：
 
@@ -126,7 +117,7 @@ downcity agent chat --to <agent_id> --new-session
 downcity agent start --foreground
 ```
 
-### 6. 查看运行中的 Agent
+### 5. 查看运行中的 Agent
 
 ```bash
 downcity agent list

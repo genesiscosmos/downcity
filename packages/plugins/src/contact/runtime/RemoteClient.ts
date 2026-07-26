@@ -2,7 +2,7 @@
  * contact 远端 HTTP 客户端。
  *
  * 关键点（中文）
- * - contact 的 agent-to-agent 调用统一走 plugin runtime command 接口。
+ * - contact 的 agent-to-agent 调用统一走 Plugin Action 接口。
  * - 已建联后的敏感调用必须携带 contact token。
  */
 
@@ -25,24 +25,24 @@ function normalizeEndpoint(endpoint: string): string {
   return url.toString().replace(/\/$/, "");
 }
 
-function unwrapPluginCommandEnvelope<T>(value: T): T {
+function unwrap_plugin_action_envelope<T>(value: T): T {
   if (!isRecord(value)) return value;
   const inner = value.data;
   if (typeof value.success === "boolean" && isRecord(inner)) {
-    // 关键点（中文）：统一 command 路由会包一层 `{ success, data }`。
+    // 关键点（中文）：统一 Action 路由会包一层 `{ success, data }`。
     return inner as T;
   }
   return value;
 }
 
-async function postPluginCommand<T>(params: {
+async function post_plugin_action<T>(params: {
   endpoint: string;
-  command: string;
+  action: string;
   body?: JsonValue;
   token?: string;
   wrapBody?: boolean;
 }): Promise<T> {
-  const url = new URL("/api/plugins/command", normalizeEndpoint(params.endpoint)).toString();
+  const url = new URL("/api/plugins/action", normalizeEndpoint(params.endpoint)).toString();
   const payloadBody =
     params.wrapBody
       ? {
@@ -67,7 +67,7 @@ async function postPluginCommand<T>(params: {
     headers,
     body: JSON.stringify({
       plugin_name: "contact",
-      command: params.command,
+      action_name: params.action,
       payload: payloadBody,
     }),
   });
@@ -78,7 +78,7 @@ async function postPluginCommand<T>(params: {
   if (!response.ok) {
     throw new Error(data?.error || data?.message || `HTTP ${response.status}`);
   }
-  return unwrapPluginCommandEnvelope<T>(data);
+  return unwrap_plugin_action_envelope<T>(data);
 }
 
 /**
@@ -88,9 +88,9 @@ export async function callContactPing<T>(params: {
   endpoint: string;
   token?: string;
 }): Promise<T> {
-  return await postPluginCommand<T>({
+  return await post_plugin_action<T>({
     endpoint: params.endpoint,
-    command: "remoteping",
+    action: "remoteping",
     token: params.token,
   });
 }
@@ -102,9 +102,9 @@ export async function callContactApprove<T>(params: {
   endpoint: string;
   body: JsonValue;
 }): Promise<T> {
-  return await postPluginCommand<T>({
+  return await post_plugin_action<T>({
     endpoint: params.endpoint,
-    command: "remoteapprove",
+    action: "remoteapprove",
     body: params.body,
   });
 }
@@ -116,9 +116,9 @@ export async function callContactConfirm<T>(params: {
   endpoint: string;
   body: JsonValue;
 }): Promise<T> {
-  return await postPluginCommand<T>({
+  return await post_plugin_action<T>({
     endpoint: params.endpoint,
-    command: "remoteconfirm",
+    action: "remoteconfirm",
     body: params.body,
   });
 }
@@ -131,9 +131,9 @@ export async function callContactChat<T>(params: {
   token: string;
   body: JsonValue;
 }): Promise<T> {
-  return await postPluginCommand<T>({
+  return await post_plugin_action<T>({
     endpoint: params.endpoint,
-    command: "remotechat",
+    action: "remotechat",
     token: params.token,
     body: params.body,
     wrapBody: true,
@@ -148,9 +148,9 @@ export async function callContactShare<T>(params: {
   token: string;
   body: JsonValue;
 }): Promise<T> {
-  return await postPluginCommand<T>({
+  return await post_plugin_action<T>({
     endpoint: params.endpoint,
-    command: "remoteshare",
+    action: "remoteshare",
     token: params.token,
     body: params.body,
     wrapBody: true,

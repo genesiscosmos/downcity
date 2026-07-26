@@ -38,24 +38,6 @@ description: Agent 对外 HTTP 接口与请求示例
 
 列出托管 plugin 运行状态。
 
-### `POST /api/plugins/control`
-
-```json
-{ "pluginName": "chat", "action": "restart" }
-```
-
-`action` 支持：`start | stop | restart | status`。
-
-### `POST /api/plugins/command`
-
-```json
-{
-  "pluginName": "task",
-  "command": "list",
-  "payload": { "status": "enabled" }
-}
-```
-
 ## Plugin API
 
 ### `GET /api/plugins/catalog`
@@ -65,15 +47,15 @@ description: Agent 对外 HTTP 接口与请求示例
 ### `POST /api/plugins/availability`
 
 ```json
-{ "pluginName": "sound" }
+{ "plugin_name": "sound" }
 ```
 
 ### `POST /api/plugins/action`
 
 ```json
 {
-  "pluginName": "sound",
-  "actionName": "models",
+  "plugin_name": "sound",
+  "action_name": "models",
   "payload": { "capability": "asr" }
 }
 ```
@@ -152,8 +134,8 @@ description: Agent 对外 HTTP 接口与请求示例
 plugin action 使用这些入口：
 
 - `/api/plugins/action`
-- `/api/plugins/control`
-- `/api/plugins/command`
+
+除 `GET /health` 外，Agent HTTP API 需要该 Agent 自己的 Bearer Token。Token 不包含 User、Role 或 Permission；它只允许访问所属 Agent。
 
 ## 调试建议
 

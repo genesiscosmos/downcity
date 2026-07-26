@@ -4,13 +4,11 @@
  * 职责说明：
  * 1. 提供 plugin catalog / state / availability 接口。
  * 2. 提供 plugin 注册状态查询与卸载接口。
- * 3. 提供 plugin command / action 桥接接口。
+ * 3. 提供统一 Plugin Action 桥接接口。
  */
 
 import { Hono } from "hono";
 import type { Agent } from "@downcity/agent";
-import type { PluginControlAction } from "@downcity/agent";
-import { parse_plugin_command_request_body } from "@downcity/agent";
 
 /**
  * Plugin 路由参数。
@@ -42,55 +40,6 @@ export function createPluginsRouter(
       success: true,
       plugins: options.get_agent().list_plugin_states(),
     });
-  });
-
-  router.post("/api/plugins/control", async (c) => {
-    const body = await c.req.json().catch(() => null);
-    const plugin_name = String(body?.plugin_name || "").trim();
-    const action = String(body?.action || "")
-      .trim()
-      .toLowerCase();
-
-    if (!plugin_name) {
-      return c.json({ success: false, error: "plugin_name is required" }, 400);
-    }
-    if (!action) {
-      return c.json({ success: false, error: "action is required" }, 400);
-    }
-    if (!["status", "unregister"].includes(action)) {
-      return c.json({ success: false, error: "invalid action" }, 400);
-    }
-
-    const result = await options.get_agent().control_plugin_state({
-      plugin_name: plugin_name,
-      action: action as PluginControlAction,
-    });
-    return c.json(result, result.success ? 200 : 400);
-  });
-
-  router.post("/api/plugins/command", async (c) => {
-    const body = await c.req.json().catch(() => null);
-    let requestBody;
-    try {
-      requestBody = parse_plugin_command_request_body(body);
-    } catch (error) {
-      return c.json({ success: false, error: String(error) }, 400);
-    }
-
-    if (!requestBody.plugin_name) {
-      return c.json({ success: false, error: "plugin_name is required" }, 400);
-    }
-    if (!requestBody.command) {
-      return c.json({ success: false, error: "command is required" }, 400);
-    }
-
-    const result = await options.get_agent().run_plugin_command({
-      plugin_name: requestBody.plugin_name,
-      command: requestBody.command,
-      payload: requestBody.payload,
-      schedule: requestBody.schedule,
-    });
-    return c.json(result, result.success ? 200 : 400);
   });
 
   router.post("/api/plugins/availability", async (c) => {

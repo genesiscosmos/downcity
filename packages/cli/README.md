@@ -9,7 +9,7 @@ downcity -v
 
 安装后会得到 `city` / `downcity` 与 `fed` / `downfed` 两个相互独立的工具：
 
-- `city` 是本机 City 容器，基于 `City()` 与 Agent SDK 管理全局 Agent、运行时、插件、chat 和控制台。
+- `city` 是本机 City 容器，基于 `City()` 与 Agent SDK 管理全局 Agent、运行时、Plugin 与控制台。
 - `fed` 是 Federation Server Manager；TUI 用于注册和管理 Server，项目命令读取当前目录的 `federation.json`。Local Node.js 和 Cloudflare Workers 都通过 `fed deploy` 部署。
 
 ```bash
@@ -21,6 +21,17 @@ fed
 ```
 
 `fed create` 默认生成 Local Node.js + SQLite 项目。Local deploy 会自动注入并保存 admin key。无参数执行 `fed` 会进入系统级 Federation 管理面板，已部署实例不依赖当前工作目录。
+
+City 的主要命令：
+
+```bash
+city agent create .
+city agent start <agent_id>
+city agent token create <agent_id> --name local
+city plugin action <plugin_name> <action_name> <agent_id> --input '{}'
+```
+
+Agent 与 Plugin Binding 统一保存在全局数据库；Plugin 配置不进入 Agent SDK 的运行时 Plugin 对象。未传 `agent_id` 时，TTY 打开全局 Agent 选择器，非交互环境直接报错。
 
 为独立产品后端登记 Bureau：
 

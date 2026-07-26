@@ -124,11 +124,11 @@ export interface DowncityConfig {
     host?: string;
   };
   /**
-   * plugins 配置。
+   * Plugin 宿主配置视图。
    *
    * 关键点（中文）
    * - 所有可配置能力统一收敛到 `plugins`，不再保留独立 `services` 域。
-   * - 需要持久化的 plugin 配置（例如 `plugins.chat.channels`）由宿主写入全局配置存储。
+   * - 该字段只用于宿主内部装配视图；持久化值位于全局数据库 `agent_plugins` Binding。
    * - key 为 plugin 名称，value 为对应插件的结构化配置对象。
    * - 当前阶段允许各 plugin 自定义字段，但必须保持 JSON 可序列化。
    */

@@ -1,95 +1,36 @@
 ---
 title: CLI
-description: Downcity CLI 套件 — downcity 管理本地 Agent，downfed 管理 Federation
+description: City 管理本机 Agent，Fed 管理 Federation Server
 ---
 
 # CLI
 
-Downcity 提供两个相互独立的 CLI 工具：
+Downcity 安装包提供两个独立工具：
 
-- **`city`**（别名 `downcity`）— 基于 `City()` 与 Agent SDK 提供 Agent 管理、运行控制和控制台的本机 City 容器。
-- **`fed`**（别名 `downfed`）— Federation Server Manager，负责注册和管理 Federation Server，并提供基于 `federation.json` 的项目命令。
+- `city`（别名 `downcity`）是本机 City 容器，管理 Agent、Plugin、环境变量和 Federation 连接。
+- `fed`（别名 `downfed`）是 Federation Server Manager；TUI 管理已注册 Server，项目命令读取当前目录的 `federation.json`。
 
-两者共享相同的全局标志（`--verbose`、`--quiet`、`--lang`）和帮助系统。
+## City 数据模型
 
-## 本地存储
+Agent 是全局实体，`agent_id` 是唯一身份，Workspace 路径只是可变绑定。Agent、Plugin Binding、Token 与环境变量统一保存在 `~/.downcity/downcity.db`；daemon 文件位于 `~/.downcity/runtimes/<agent_id>/`。
 
-- `downcity` 将受管 Agent、Workspace 绑定、本地 City 状态、加密凭证、环境变量和渠道账号保存到 `~/.downcity/downcity.db`。
-- `downfed` 将 Federation admin profile、admin key、Cloudflare account 选择和 CLI 偏好保存到 `~/.downcity/federation.db`。
-- Agent 运行状态按 `agent_id` 保存在 `~/.downcity/runtimes/<agent_id>/`；Workspace 中不保存 PID、日志或 daemon 元数据。
+Plugin 制品全局安装到 `~/.downcity/plugins/`。Plugin 配置不属于 Agent SDK 的运行时 Plugin 对象，而是按 `agent_id + plugin_name` 保存在 Agent Plugin Binding 中。
 
-Agent 是全局实体，`agent_id` 是唯一身份；Workspace 路径只是可变绑定。多个 Agent 可以绑定同一个 Workspace，因此生命周期命令使用 `agent_id`，不会用目录名猜测身份。
-
-## downcity
-
-`downcity` 是本机 City 容器。它统一管理全局 Agent 身份，并基于 `City()` 与 Agent SDK 提供生命周期控制、插件、环境变量、token、Federation 连接和控制台。
-
-### 全局命令
+## City 命令
 
 | 命令 | 说明 |
-|---------|-------------|
-| `downcity init` | 初始化 City 全局状态（`~/.downcity/downcity.db`） |
-| `downcity update` | 更新 downcity CLI 到最新版本 |
-| `downcity env` | 管理平台环境变量 |
-| `downcity config` | 管理 City 配置 |
-| `downcity token` | 管理 API token |
-| `downcity federation` | 管理 Federation 连接 |
+|---|---|
+| `city agent` | 管理全局 Agent |
+| `city plugin` | 管理 Plugin 制品、Binding、配置与 Action |
+| `city env` | 管理 City 注入的环境变量 |
+| `city federation` | 管理 Federation 连接 |
 
-### Agent 命令
+`city init`、`city update` 和 `city config` 不再提供。全局更新使用 `npm i -g downcity@latest`。
 
-| 命令 | 说明 |
-|---------|-------------|
-| `downcity agent create [path]` | 创建 Agent 并初始化 Workspace 资产 |
-| `downcity agent list` | 列出全局受管 Agent 与 Workspace 绑定 |
-| `downcity agent start [agent_id]` | 启动 Agent（后台/前台） |
-| `downcity agent stop [agent_id]` | 停止后台 Agent 守护进程 |
-| `downcity agent restart [agent_id]` | 重启后台 Agent 守护进程 |
-| `downcity agent status [agent_id]` | 查看后台 Agent 状态 |
-| `downcity agent doctor [agent_id]` | 诊断守护进程状态文件 |
-| `downcity agent chat [--to agent_id]` | 在终端中与 Agent 对话 |
-| `downcity agent history` | 管理 Agent 会话历史 |
-
-### Plugin 命令
-
-| 命令 | 说明 |
-|---------|-------------|
-| `downcity plugins` | 管理插件（交互式或列出操作） |
-| `downcity plugins schedule` | 管理插件调度 |
-
-### Chat 命令
-
-| 命令 | 说明 |
-|---------|-------------|
-| `downcity chat` | 管理 chat 插件资源（交互式） |
-| `downcity chat access` | 管理指定 Agent 的 Chat 用户准入 |
-
-## downfed
-
-`downfed` 是 Federation Server Manager。它通过 TUI 注册、选择和管理 Federation Server；项目命令则读取当前目录的 `federation.json`，执行创建、部署和管理流程。
-
-| 命令 | 说明 |
-|---------|-------------|
-| `downfed` | 打开交互式 Federation 管理界面 |
-| `downfed manage` | 打开 admin 管理界面 |
-| `downfed server manage` | 进入 Federation 的 admin 工作区 |
-| `downfed server add` | 添加已部署的 Federation URL |
-| `downfed query <method> <path>` | 查询当前 active Federation 的 HTTP API |
-| `downfed create [dir]` | 创建新 Federation 项目骨架 |
-| `downfed deploy [source]` | 部署 Federation 项目 |
+所有操作单个 Agent 的命令都以 `agent_id` 为目标。TTY 中省略 ID 时打开全局 Agent 选择器；非交互环境会返回 `Agent ID is required`，不会根据当前目录推断。
 
 ## 平台支持
 
-CLI 架构天然跨平台。macOS 与 Linux 是稳定支持目标；Windows 原生 Adapter 已接入，目前成熟度为 preview / unstable。
+CLI 架构天然跨平台。macOS 与 Linux 是稳定支持目标；Windows Adapter 当前为 preview。
 
-## 全局标志
-
-- `--verbose` — 打印详细进度输出
-- `--quiet` — 仅输出错误信息
-- `--lang <locale>` — 设置 CLI 语言（zh/en）
-- `--help` — 显示任何命令的帮助
-
-继续阅读：
-
-- [CLI 命令](/zh/docs/cli/commands)
-- [项目初始化](/zh/docs/cli/init)
-- [项目结构](/zh/docs/cli/project)
+继续阅读：[CLI 命令](/zh/docs/cli/commands)。

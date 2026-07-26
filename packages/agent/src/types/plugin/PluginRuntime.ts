@@ -7,7 +7,6 @@
  */
 
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
-import type { StructuredConfig } from "@/types/plugin/PluginConfig.js";
 import type { JsonValue } from "@/types/common/Json.js";
 import type { PluginActionResult } from "@/types/plugin/PluginAction.js";
 import type { PluginActionExample } from "@/types/plugin/PluginAction.js";
@@ -210,18 +209,6 @@ export interface AgentPluginExecutionRuntime extends AgentPluginExecutionView {
    * - 已退休或 lifecycle 未就绪的 Plugin 不会进入新 lease。
    */
   acquire(): AgentPluginExecutionLease;
-}
-
-/**
- * Plugin 配置定义。
- */
-export interface PluginConfigDefinition<T extends StructuredConfig = StructuredConfig> {
-  /** Plugin 稳定名称。 */
-  plugin: string;
-  /** 配置作用域。 */
-  scope: "global" | "project";
-  /** 默认配置值。 */
-  default_value: T;
 }
 
 /**

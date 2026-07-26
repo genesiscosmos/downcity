@@ -5,8 +5,6 @@
  * - 当前文件先定义协议，后续路由全面切入 Bearer 鉴权时直接复用。
  */
 
-import type { AuthPermissionKey } from "./AuthPermission.js";
-
 /**
  * 单条路由的鉴权策略。
  */
@@ -23,8 +21,4 @@ export interface AuthRoutePolicy {
    * 是否必须登录。
    */
   require_auth: boolean;
-  /**
-   * 通过该路由所需的任一权限集合。
-   */
-  any_permissions?: AuthPermissionKey[];
 }

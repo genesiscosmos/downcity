@@ -142,7 +142,6 @@ export type {
 } from "./types/sdk/AgentSessionTurn.js";
 export type { PluginContext } from "./types/plugin/PluginContext.js";
 export type { SessionPort } from "./types/session/SessionPort.js";
-export type { StructuredConfig } from "./types/plugin/PluginConfig.js";
 
 // Plugin 作者 API
 export { BasePlugin } from "./plugin/core/BasePlugin.js";
@@ -218,14 +217,6 @@ export {
   list_plugin_auth_policies,
   register_plugin_http_routes,
 } from "./plugin/core/PluginHttpRoutes.js";
-export {
-  create_local_plugin_command_context,
-  get_local_plugin_availability,
-  run_local_plugin_action,
-} from "./plugin/core/PluginLocalExecution.js";
-export {
-  register_plugin_action_commands_for_cli,
-} from "./plugin/core/PluginCommand.js";
 
 // Runtime plugin 调度集成
 export { ActionScheduleStore } from "./plugin/core/ActionScheduleStore.js";
@@ -280,14 +271,10 @@ export type {
   PluginActionInvokeResult,
 } from "./types/plugin/PluginAction.js";
 export type { Plugin } from "./types/plugin/PluginDefinition.js";
-export type {
-  PluginCommandResult,
-  PluginLifecycle,
-} from "./types/plugin/PluginCommand.js";
+export type { PluginLifecycle } from "./types/plugin/PluginCommand.js";
 export type {
   AgentPlugins,
   PluginAvailability,
-  PluginConfigDefinition,
   PluginEffectHook,
   PluginGuardHook,
   PluginHooks,
@@ -300,14 +287,6 @@ export type {
   PluginHttpDefinition,
   PluginHttpRegistration,
 } from "./types/plugin/PluginHttp.js";
-export type {
-  PluginSetupDefinition,
-  PluginSetupField,
-  PluginSetupFieldOption,
-  PluginUsageDefinition,
-  PluginUsageField,
-  PluginUsageFieldOption,
-} from "./types/plugin/PluginSetup.js";
 export type {
   PluginActionResponse,
   PluginCatalogResponse,
@@ -323,20 +302,11 @@ export type {
   CreateActionScheduleJobInput,
   PluginActionScheduleInput,
 } from "./plugin/types/ActionSchedule.js";
-export type {
-  PluginCliBaseOptions,
-  PluginCommandResponse,
-  PluginControlAction,
-  PluginControlResponse,
-  PluginStateListResponse,
-} from "./types/plugin/PluginControl.js";
-export type { PluginControlResult } from "./types/plugin/PluginState.js";
+export { list_plugin_states } from "./plugin/core/PluginStateController.js";
 export {
-  control_plugin_state,
-  list_plugin_states,
-} from "./plugin/core/PluginStateController.js";
-export { run_plugin_command } from "./plugin/core/PluginActionRunner.js";
-export { parse_plugin_command_request_body } from "./plugin/core/PluginCommandRequest.js";
+  invoke_plugin_action,
+  resolve_plugin_action,
+} from "./plugin/core/PluginActionRunner.js";
 
 // 跨包 RPC 与 session 标识协议
 export type {

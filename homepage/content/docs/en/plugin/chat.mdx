@@ -47,8 +47,8 @@ The actual bot credentials live in the CLI global DB (managed by City). Agent co
 When an external user sends a first message, the Chat Plugin records a principal in the current Agent's `.downcity/chat/access.db`. Without a grant, it creates a pending request. Administrators approve or deny by request ID:
 
 ```bash
-downcity chat access requests --agent <agentId> --status pending
-downcity chat access approve <requestId> --agent <agentId>
+city plugin action chat access-snapshot <agent_id> --input '{}' --token <token>
+city plugin action chat access-approve <agent_id> --input '{"request_id":"<request_id>"}' --token <token>
 ```
 
 Identity combines the channel, current Chat account, and platform user ID. Approval applies only to the target Agent; it is neither a City-global permission nor propagated to other Plugins.

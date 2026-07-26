@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - `agent_id` 是全局稳定身份，不能由 Workspace 路径推导。
  * - `workspace_path` 只是当前资源绑定，可以由用户重新绑定。
- * - 模型、Plugin 与启动配置全部由全局数据库持有，Workspace 不保存声明文件。
+ * - 模型与启动配置由 managed_agents 持有；Plugin 配置只属于 agent_plugins Binding。
  */
 
 import type { DowncityConfig } from "@/city/types/config/DowncityConfig.js";
@@ -25,9 +25,6 @@ export interface ManagedAgent {
 
   /** City AIService 模型绑定。 */
   execution?: DowncityConfig["execution"];
-
-  /** Agent 启用的 Plugin 及其宿主配置。 */
-  plugins?: DowncityConfig["plugins"];
 
   /** CLI 宿主侧 LLM 行为配置。 */
   llm?: DowncityConfig["llm"];
@@ -56,9 +53,6 @@ export interface CreateManagedAgentInput {
   /** 可选模型执行绑定。 */
   execution?: ManagedAgent["execution"];
 
-  /** 可选 Plugin 配置。 */
-  plugins?: ManagedAgent["plugins"];
-
   /** 可选 CLI 宿主 LLM 配置。 */
   llm?: ManagedAgent["llm"];
 }
@@ -76,9 +70,6 @@ export interface UpdateManagedAgentInput {
 
   /** 新的模型执行绑定。 */
   execution?: ManagedAgent["execution"];
-
-  /** 新的 Plugin 配置。 */
-  plugins?: ManagedAgent["plugins"];
 
   /** 新的 CLI 宿主 LLM 配置。 */
   llm?: ManagedAgent["llm"];

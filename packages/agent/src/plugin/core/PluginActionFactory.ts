@@ -22,20 +22,11 @@ import type {
 import type { Plugin } from "@/types/plugin/PluginDefinition.js";
 import type {
   PluginAvailability,
-  PluginConfigDefinition,
   PluginHooks,
   PluginResolves,
 } from "@/types/plugin/PluginRuntime.js";
-import type {
-  PluginCommandContext,
-  PluginLifecycle,
-} from "@/types/plugin/PluginCommand.js";
-import type {
-  PluginSetupDefinition,
-  PluginUsageDefinition,
-} from "@/types/plugin/PluginSetup.js";
+import type { PluginLifecycle } from "@/types/plugin/PluginCommand.js";
 import type { PluginHttpDefinition } from "@/types/plugin/PluginHttp.js";
-import type { StructuredConfig } from "@/types/plugin/PluginConfig.js";
 import type { PluginRunContext } from "@/types/plugin/PluginRunContext.js";
 
 /**
@@ -88,12 +79,6 @@ export interface CreatePluginOptions<TActions extends PluginActions> {
   description?: string;
   /** Plugin 显式 action 集合。 */
   actions?: TActions;
-  /** Plugin 配置定义。 */
-  config?: PluginConfigDefinition<StructuredConfig>;
-  /** Plugin setup 定义。 */
-  setup?: PluginSetupDefinition;
-  /** Plugin usage 定义。 */
-  usage?: PluginUsageDefinition;
   /** Plugin hook 集合。 */
   hooks?: PluginHooks;
   /** Plugin resolve 集合。 */
@@ -107,7 +92,7 @@ export interface CreatePluginOptions<TActions extends PluginActions> {
   lifecycle?: PluginLifecycle;
   /** Plugin 可用性检查。 */
   availability?: (
-    context: PluginCommandContext | PluginContext,
+    context: PluginContext,
   ) => Promise<PluginAvailability> | PluginAvailability;
   /** Plugin HTTP 注入定义。 */
   http?: PluginHttpDefinition;
@@ -171,9 +156,6 @@ export function create_plugin<TActions extends PluginActions>(
     title: String(options.title || name).trim(),
     description: String(options.description || "").trim(),
     actions: options.actions || ({} as TActions),
-    ...(options.config ? { config: options.config } : {}),
-    ...(options.setup ? { setup: options.setup } : {}),
-    ...(options.usage ? { usage: options.usage } : {}),
     ...(options.hooks ? { hooks: options.hooks } : {}),
     ...(options.resolves ? { resolves: options.resolves } : {}),
     ...(options.system ? { system: options.system } : {}),

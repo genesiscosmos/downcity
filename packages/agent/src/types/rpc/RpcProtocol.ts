@@ -26,7 +26,6 @@ import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js"
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type { ListSessionMessagesInput } from "@/types/session/SessionMessage.js";
 import type { JsonObject, JsonValue } from "@/types/common/Json.js";
-import type { PluginControlAction } from "@/types/plugin/PluginState.js";
 
 /**
  * RPC 请求。
@@ -264,36 +263,6 @@ export type RpcRequest =
       id: string;
       /** 列出 plugin 状态。 */
       method: "internal.plugins.list";
-    }
-  | {
-      /** 请求 id，用于匹配响应。 */
-      id: string;
-      /** 控制 plugin 生命周期。 */
-      method: "internal.plugins.control";
-      /** plugin 控制参数。 */
-      params: {
-        /** plugin 名称。 */
-        plugin_name: string;
-        /** 控制动作。 */
-        action: PluginControlAction;
-      };
-    }
-  | {
-      /** 请求 id，用于匹配响应。 */
-      id: string;
-      /** 执行 plugin command。 */
-      method: "internal.plugins.command";
-      /** plugin command 参数。 */
-      params: {
-        /** plugin 名称。 */
-        plugin_name: string;
-        /** command 名称。 */
-        command: string;
-        /** command payload。 */
-        payload?: JsonValue;
-        /** 可选调度 payload。 */
-        schedule?: JsonValue;
-      };
     }
   | {
       /** 请求 id，用于匹配响应。 */

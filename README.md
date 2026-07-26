@@ -68,17 +68,9 @@ The package exposes the `downcity` command (alias `city`):
 downcity --version
 ```
 
-`downcity` is the local City container for managing and running Agents through `City()` and the Agent SDK. Use `downcity update` to upgrade the global CLI. The same package also provides `fed`/`downfed` for Federation Server management.
+`downcity` is the local City container for managing and running Agents through `City()` and the Agent SDK. Upgrade with `npm i -g downcity@latest`. The same package also provides `fed`/`downfed` for Federation Server management.
 
-### 2. Initialize the platform
-
-```bash
-downcity init
-```
-
-This sets up the global Downcity storage and configuration, by default under `~/.downcity/`.
-
-### 3. Connect to City
+### 2. Connect to Federation
 
 ```bash
 downcity federation use
@@ -87,7 +79,7 @@ downcity federation status
 
 `downcity` manages City models and Service resources. `downcity federation` imports the active City connection for local Agent runtime use.
 
-### 4. Create an Agent
+### 3. Create an Agent
 
 Run this inside the target repository:
 
@@ -108,17 +100,16 @@ your-project/
     └── task/
 ```
 
-### 5. Start the agent and talk to it
+### 4. Start the Agent
 
 ```bash
 downcity agent list
 downcity agent start <agent_id>
 downcity agent status <agent_id>
-downcity agent chat --to <agent_id> -m "Summarize this repository"
-downcity agent chat --to <agent_id> --new-session
+downcity agent token create <agent_id> --name local
 ```
 
-Interactive chat can also pick an existing session or create a new one before the TUI opens.
+Invoke Plugin capabilities through `city plugin action <plugin> <action> [agent_id]`.
 
 To run in the foreground:
 
@@ -126,7 +117,7 @@ To run in the foreground:
 downcity agent start --foreground
 ```
 
-### 6. Inspect running agents
+### 5. Inspect running agents
 
 ```bash
 downcity agent list

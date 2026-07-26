@@ -8,7 +8,7 @@
 
 import type { Hono } from "hono";
 import type { Agent, JsonValue } from "@downcity/agent";
-import type { AuthPrincipal } from "@downcity/type";
+import type { AgentTokenPrincipal } from "@/city/types/auth/AgentToken.js";
 import { CHAT_ACCESS_ACTIONS } from "@downcity/plugins/chat";
 import { buildControlRouteAliases } from "@/city/agent/control/CommonHelpers.js";
 import type {
@@ -24,9 +24,9 @@ const CONTROL_OPERATOR = "city-control";
 
 function resolve_control_operator(context: unknown): string {
   const reader = context as ChatAccessControlContextReader;
-  const principal = reader.get?.(AUTH_PRINCIPAL_CONTEXT_KEY) as Partial<AuthPrincipal> | undefined;
-  const user_id = String(principal?.user_id || "").trim();
-  return user_id ? `city:${user_id}` : CONTROL_OPERATOR;
+  const principal = reader.get?.(AUTH_PRINCIPAL_CONTEXT_KEY) as Partial<AgentTokenPrincipal> | undefined;
+  const token_id = String(principal?.token_id || "").trim();
+  return token_id ? `city-token:${token_id}` : CONTROL_OPERATOR;
 }
 
 function normalize_scope(value: unknown): "direct" | "group" | "all" | undefined {

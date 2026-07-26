@@ -97,6 +97,9 @@ export class PlatformStore {
     this.sqlite.exec("DELETE FROM env_entries;");
     this.sqlite.exec("DELETE FROM managed_agents;");
     this.sqlite.exec("DELETE FROM channel_accounts;");
+    this.sqlite.exec("DELETE FROM agent_tokens;");
+    this.sqlite.exec("DELETE FROM agent_plugins;");
+    this.sqlite.exec("DELETE FROM installed_plugins;");
   }
 
   /**

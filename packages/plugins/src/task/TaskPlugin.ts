@@ -7,7 +7,7 @@
  * - 当前文件只保留实例骨架与 lifecycle，不再依赖旧的模块级单例。
  */
 
-import { BasePlugin } from "@downcity/agent";
+import { BasePlugin, create_action } from "@downcity/agent";
 import type { PluginActions } from "@downcity/agent";
 import type { PluginContext } from "@downcity/agent";
 import type {
@@ -78,10 +78,31 @@ export class TaskPlugin extends BasePlugin {
     super();
     this.options = options || {};
 
-    this.actions = createTaskPluginActions({
-      reloadSchedulerAfterMutation: async (params) =>
-        this.reloadSchedulerAfterMutation(params),
-    });
+    this.actions = {
+      ...createTaskPluginActions({
+        reloadSchedulerAfterMutation: async (params) =>
+          this.reloadSchedulerAfterMutation(params),
+      }),
+      reload: create_action({
+        description: "Reload the task scheduler from persisted tasks.",
+        execute: async ({ context }) => {
+          const result = await this.restartCronRuntime(context);
+          context.logger.info(
+            formatTaskLogMessage(
+              `Task cron trigger reloaded (tasks=${result.tasksFound}, jobs=${result.jobsScheduled})`,
+            ),
+          );
+          return {
+            success: true,
+            message: "task scheduler reloaded",
+            data: {
+              tasks_found: result.tasksFound,
+              jobs_scheduled: result.jobsScheduled,
+            },
+          };
+        },
+      }),
+    };
 
     this.lifecycle = {
       start: async (context) => {
@@ -97,25 +118,6 @@ export class TaskPlugin extends BasePlugin {
         const stopped = await this.stopCronRuntime();
         if (!stopped) return;
         context.logger.info(formatTaskLogMessage("Task cron trigger stopped"));
-      },
-      command: async ({ context, command }) => {
-        if (command !== "reschedule" && command !== "reload") {
-          return {
-            success: false,
-            message: `Unknown task command: ${command}`,
-          };
-        }
-
-        const result = await this.restartCronRuntime(context);
-        context.logger.info(
-          formatTaskLogMessage(
-            `Task cron trigger reloaded (tasks=${result.tasksFound}, jobs=${result.jobsScheduled})`,
-          ),
-        );
-        return {
-          success: true,
-          message: "task scheduler reloaded",
-        };
       },
     };
   }

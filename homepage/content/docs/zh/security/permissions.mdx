@@ -22,13 +22,13 @@ Chat Access 是 Chat Plugin 的准入能力，只回答一个问题：某个外�
 未批准用户发送私聊消息时，Chat Plugin 会创建或复用一个 pending Request，并返回类似命令：
 
 ```bash
-downcity chat access approve req_xxx --agent assistant
+city plugin action chat access-approve assistant --input '{"request_id":"req_xxx"}' --token <token>
 ```
 
 管理员也可以先查看请求：
 
 ```bash
-downcity chat access requests --agent assistant --status pending
+city plugin action chat access-snapshot assistant --input '{}' --token <token>
 ```
 
 群聊中的未批准消息默认静默拒绝，pending Request 仍会进入同一个管理列表。
@@ -41,11 +41,11 @@ downcity chat access requests --agent assistant --status pending
 <agent_project>/.downcity/chat/access.db
 ```
 
-数据库包含 Principal、Request、Allow/Deny Grant 和审计事件，不包含 Bot Token、App Secret 或消息正文。Chat 账号和密钥仍保存在 City 全局数据库 `~/.downcity/downcity.db`，Agent 配置只保存绑定的 `channelAccountId`。
+数据库包含 Principal、Request、Allow/Deny Grant 和审计事件，不包含 Bot Token、App Secret 或消息正文。Chat 账号和密钥仍保存在 City 全局数据库 `~/.downcity/downcity.db`，Chat Plugin Binding 只保存绑定的 `channelAccountId`。
 
 ## 与 City Auth 的区别
 
-City Auth 负责 HTTP/Console 控制面的登录认证和路由权限，例如谁能调用管理 API。Chat Access 负责外部 Telegram、飞书或 QQ 用户能否向某个 Agent 发送消息。两者数据、身份和判定路径互不混用。
+Agent Token 负责 HTTP 控制面认证。一个 Token 只属于一个 Agent，并拥有该 Agent API 的完整能力，不包含 User、Role 或 Permission。Chat Access 负责外部 Telegram、飞书或 QQ 用户能否向某个 Agent 发送消息。两者数据、身份和判定路径互不混用。
 
 ## 相关文档
 

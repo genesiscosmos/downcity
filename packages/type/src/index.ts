@@ -17,25 +17,4 @@ export type {
   CityModelReasoningEffort,
 } from "./types/CityModel.js";
 
-export {
-  AUTH_DEFAULT_ROLE_NAMES,
-  AUTH_DEFAULT_ROLES,
-  AUTH_PERMISSION_DESCRIPTIONS,
-  AUTH_PERMISSION_KEYS,
-} from "./types/auth/AuthPermission.js";
-export type {
-  AuthDefaultRoleDefinition,
-  AuthDefaultRoleName,
-  AuthPermissionKey,
-} from "./types/auth/AuthPermission.js";
 export type { AuthRoutePolicy } from "./types/auth/AuthRoute.js";
-export type { AuthIssuedToken, AuthTokenSummary } from "./types/auth/AuthToken.js";
-export type {
-  AuthAuditLog,
-  AuthPermission,
-  AuthPrincipal,
-  AuthRole,
-  AuthTokenRecord,
-  AuthUser,
-  AuthUserStatus,
-} from "./types/auth/AuthTypes.js";

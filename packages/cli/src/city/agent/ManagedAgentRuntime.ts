@@ -14,8 +14,13 @@ import { AgentHTTP, AgentRPC } from "@downcity/server";
 import { startAgentHttpGateway } from "@/city/agent/AgentHttpGateway.js";
 import { createRuntimeModel } from "@/city/runtime/city-model/CreateRuntimeModel.js";
 import { createCityBuiltinPlugins } from "@/city/runtime/plugins/CityBuiltinPlugins.js";
+import { create_external_plugins } from "@/city/runtime/plugins/CityExternalPlugins.js";
 import { mergeProcessEnvWithPlatformGlobalEnv } from "@/city/env/ProcessEnv.js";
 import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
+import {
+  ensure_default_agent_plugin_bindings,
+  list_agent_plugin_bindings,
+} from "@/city/process/registry/PluginRepository.js";
 import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
 import type { CreateManagedAgentRuntimeInput } from "@/city/types/agent/ManagedAgentRuntime.js";
 import { CliError } from "@/shared/CliError.js";
@@ -106,16 +111,25 @@ export class ManagedAgentRuntime {
       workspace_path,
       mergeProcessEnvWithPlatformGlobalEnv(),
     );
-    const [model, plugins, sandbox] = await Promise.all([
+    ensure_default_agent_plugin_bindings(config.agent_id);
+    const plugin_bindings = list_agent_plugin_bindings(config.agent_id);
+    const [model, builtin_plugins, external_plugins, sandbox] = await Promise.all([
       createRuntimeModel({ config, env }),
       createCityBuiltinPlugins({
         env,
         config: { ...config, id: config.agent_id },
         host,
         port,
+        bindings: plugin_bindings,
+      }),
+      create_external_plugins({
+        agent_id: config.agent_id,
+        workspace_path,
+        bindings: plugin_bindings,
       }),
       create_platform_sandbox(),
     ]);
+    const plugins = [...builtin_plugins, ...external_plugins];
     const workspace = new Workspace({
       path: workspace_path,
       shell: new Shell({ sandbox }),

@@ -63,20 +63,3 @@ export interface PluginSnapshot {
   /** 最近错误。 */
   last_error?: string;
 }
-
-/**
- * Plugin 控制动作。
- */
-export type PluginControlAction = "unregister" | "status";
-
-/**
- * plugin 控制结果。
- */
-export interface PluginControlResult {
-  /** 控制动作是否成功。 */
-  success: boolean;
-  /** 成功或失败后返回的最新 plugin 快照。 */
-  plugin?: PluginSnapshot;
-  /** 失败时的错误信息。 */
-  error?: string;
-}

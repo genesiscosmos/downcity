@@ -12,16 +12,9 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command, Option } from "commander";
-import {
-  list_plugins_without_lifecycle,
-  register_plugin_action_commands_for_cli,
-} from "@downcity/agent";
 import { registerAgentCommands } from "@/city/command/AgentCommand.js";
-import { registerChatCommand } from "@/city/command/ChatCommand.js";
 import { registerGatewayCommands } from "@/city/command/GatewayCommand.js";
-import { registerManagedPluginCommandsForCli } from "@/city/command/ManagedPluginActionCommand.js";
 import { registerPluginsCommand } from "@/city/command/PluginCommand.js";
-import { createCityStaticBuiltinPlugins } from "@/city/runtime/plugins/CityBuiltinPlugins.js";
 import { runInteractiveCityManager } from "@/city/shared/CityManager.js";
 import { readPersistedCityCliLocale } from "@/city/shared/CityStateStore.js";
 import { setCliVerbosity } from "@/shared/CliReporter.js";
@@ -94,8 +87,6 @@ function resolveInstalledAgentVersion(): string {
  */
 export function registerCityCommands(program: Command): void {
   const installedAgentVersion = resolveInstalledAgentVersion();
-  const builtinPlugins = createCityStaticBuiltinPlugins();
-
   registerGatewayCommands(program, {
     version: packageJson.version,
     cliPath: cli_path,
@@ -105,16 +96,7 @@ export function registerCityCommands(program: Command): void {
     agentVersion: installedAgentVersion,
     hiddenPortOption: Option,
   });
-  registerChatCommand(program, packageJson.version);
   registerPluginsCommand(program);
-
-  // 关键点（中文）：受 agent 托管的 plugin 命令统一注册（chat / task / memory / shell / future managed plugins）。
-  registerManagedPluginCommandsForCli(program, builtinPlugins);
-  // 关键点（中文）：非生命周期 plugin actions 仍由 agent 包的命令注册器统一装配。
-  register_plugin_action_commands_for_cli({
-    program,
-    plugins: list_plugins_without_lifecycle(builtinPlugins),
-  });
 
   program.showHelpAfterError();
   program.showSuggestionAfterError();
