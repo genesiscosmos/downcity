@@ -61,6 +61,11 @@ export class AgentHeaderComponent implements Component {
   /** 构建 Session 与模型上下文。 */
   private build_context(): string {
     const title = this.app_state.session_title?.trim() || "Untitled";
-    return `${title} · ${this.app_state.session_id}`;
+    const security_policy = this.app_state.approval_mode === "always-allow"
+      ? "Always Allow"
+      : this.app_state.approval_mode === "ask"
+        ? "Default"
+        : "Loading";
+    return `${title} · Security: ${security_policy} · ${this.app_state.session_id}`;
   }
 }

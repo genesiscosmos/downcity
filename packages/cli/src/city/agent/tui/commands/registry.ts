@@ -39,6 +39,12 @@ export const BUILTIN_SLASH_COMMANDS: readonly SlashCommand[] = [
     availability: "idle-only",
   },
   {
+    name: "security",
+    aliases: [],
+    description: "Choose the current Session security policy",
+    availability: "idle-only",
+  },
+  {
     name: "approve",
     aliases: ["a"],
     description: "Approve an unrestricted sandbox request (/approve <approval_id>)",

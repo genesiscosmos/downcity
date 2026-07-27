@@ -40,6 +40,15 @@ my-project/
 - `city agent status` — check if the agent is running
 - `city agent logs` — view runtime logs
 
+## Chat TUI security policy
+
+After opening Chat from the Agent manager, use `/security` to choose the current Session security policy:
+
+- `Default` — maps to the Session `ask` mode; every unrestricted Shell action requires an explicit approval.
+- `Always Allow` — maps to `always-allow`; future unrestricted Shell actions in the current Session are approved automatically.
+
+The active policy appears in the Chat header. A policy change affects only future Shell requests in the current Session; an already pending request still requires an explicit response. `Always Allow` does not bypass dangerous-command rejection, Workspace boundaries, or other runtime safety checks.
+
 ## What the CLI does
 
 1. Reads agent config from the CLI global DB

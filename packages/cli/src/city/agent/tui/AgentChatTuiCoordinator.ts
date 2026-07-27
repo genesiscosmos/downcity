@@ -26,10 +26,15 @@ import { MessageListComponent } from "@/city/agent/tui/components/MessageList.js
 import { QueuedInputQueue } from "@/city/agent/tui/controllers/QueuedInputQueue.js";
 import { SessionPickerComponent } from "@/city/agent/tui/dialogs/SessionPicker.js";
 import { ApprovalPanelComponent } from "@/city/agent/tui/dialogs/ApprovalDialog.js";
+import { SecurityPolicyPanelComponent } from "@/city/agent/tui/dialogs/SecurityPolicyDialog.js";
 import { PiTuiChatRenderer } from "@/city/agent/tui/PiTuiChatRenderer.js";
 import type { AgentChatSessionSummaryView } from "@/city/agent/AgentChatTypes.js";
 import type { AgentChatInteractiveRendererPort } from "@/city/types/AgentChatInteractive.js";
-import type { SessionMessage } from "@downcity/agent";
+import type {
+  SessionApprovalMode,
+  SessionApprovalModeSnapshot,
+  SessionMessage,
+} from "@downcity/agent";
 import type {
   AgentChatApprovalView,
   AppState,
@@ -61,13 +66,19 @@ export interface AgentChatTuiCoordinatorOptions {
    * 加载指定 session 的历史记录。
    *
    * 关键点（中文）
-   * - 返回可读标题与 canonical Session Message 快照。
+   * - 返回可读标题、canonical Session Message 与真实审批模式快照。
    * - coordinator 在进入或切换 session 时调用。
    */
-  load_session_history: (session_id: string) => Promise<{
+  load_session_context: (session_id: string) => Promise<{
     title: string;
     messages: SessionMessage[];
+    approval_mode: SessionApprovalMode;
   }>;
+  /** 更新指定 Session 后续高风险操作使用的审批模式。 */
+  set_approval_mode: (
+    session_id: string,
+    mode: SessionApprovalMode,
+  ) => Promise<SessionApprovalModeSnapshot>;
   /** 执行一轮对话。 */
   run_turn: (input: {
     session_id: string;
@@ -111,6 +122,7 @@ export class AgentChatTuiCoordinator {
   private remove_input_listener: (() => void) | null = null;
   private command_panel_loading = false;
   private draining_input_queue = false;
+  private approval_mode_update_promise: Promise<boolean> | null = null;
 
   /**
    * 待处理的 unrestricted sandbox 审批请求队列。
@@ -145,6 +157,9 @@ export class AgentChatTuiCoordinator {
       show_session_picker: async () => {
         await this.show_session_picker();
       },
+      show_security_policy_picker: () => {
+        this.show_security_policy_picker();
+      },
       approve: async (approval_id) => {
         await this.approve(approval_id);
       },
@@ -166,6 +181,7 @@ export class AgentChatTuiCoordinator {
     this.app_state = {
       agent_id: options.agent_id,
       session_id: options.session_id,
+      approval_mode: undefined,
       session_title: undefined,
       is_executing: false,
       queued_message_count: 0,
@@ -494,6 +510,10 @@ export class AgentChatTuiCoordinator {
    * @param message 用户消息。
    */
   private async run_turn(message: string): Promise<boolean> {
+    if (this.approval_mode_update_promise) {
+      const policy_updated = await this.approval_mode_update_promise;
+      if (!policy_updated) return false;
+    }
     this.app_state.is_executing = true;
     this.header.set_state(this.app_state);
     this.footer.set_state(this.app_state);
@@ -626,10 +646,67 @@ export class AgentChatTuiCoordinator {
     this.request_render();
   }
 
+  /** 在输入框下方展示当前 Session 的安全策略选择器。 */
+  private show_security_policy_picker(): void {
+    if (!this.can_open_command_panel()) return;
+    if (!this.app_state.approval_mode) {
+      this.add_error_message("Security policy is not available for this Session.");
+      this.request_render();
+      return;
+    }
+    const picker = new SecurityPolicyPanelComponent({
+      current_mode: this.app_state.approval_mode,
+      on_select: (mode) => {
+        this.hide_command_panel();
+        this.apply_approval_mode(mode);
+      },
+      on_cancel: () => {
+        this.hide_command_panel();
+      },
+    });
+    this.command_panel.show(picker);
+    this.tui.setFocus(this.command_panel as Component);
+    this.request_render();
+  }
+
+  /** 启动单一策略更新任务，避免新 Turn 越过尚未生效的权限选择。 */
+  private apply_approval_mode(mode: SessionApprovalMode): void {
+    if (mode === this.app_state.approval_mode || this.approval_mode_update_promise) return;
+    const update_promise = this.update_approval_mode(mode);
+    this.approval_mode_update_promise = update_promise;
+    void update_promise.finally(() => {
+      if (this.approval_mode_update_promise === update_promise) {
+        this.approval_mode_update_promise = null;
+      }
+    });
+  }
+
+  /** 通过 Session API 更新审批模式，并在成功后刷新 Header。 */
+  private async update_approval_mode(mode: SessionApprovalMode): Promise<boolean> {
+    if (mode === this.app_state.approval_mode) return true;
+    try {
+      const snapshot = await this.options.set_approval_mode(
+        this.current_session_id,
+        mode,
+      );
+      if (snapshot.session_id !== this.current_session_id) return false;
+      this.app_state.approval_mode = snapshot.mode;
+      this.header.set_state(this.app_state);
+      this.footer.set_state(this.app_state);
+      this.request_render();
+      return true;
+    } catch (error) {
+      this.add_error_message(`Failed to update security policy: ${this.format_error(error)}`);
+      this.request_render();
+      return false;
+    }
+  }
+
   /** 判断当前是否允许打开输入框下方交互面板。 */
   private can_open_command_panel(): boolean {
     return !this.stopped
       && !this.command_panel_loading
+      && this.approval_mode_update_promise === null
       && !this.command_panel.is_active
       && !this.approval_panel.is_active;
   }
@@ -667,6 +744,7 @@ export class AgentChatTuiCoordinator {
     this.received_approval_ids.clear();
     this.app_state.session_id = session_id;
     this.app_state.session_title = undefined;
+    this.app_state.approval_mode = undefined;
     this.header.set_state(this.app_state);
     this.footer.set_state(this.app_state);
     this.terminal.setTitle(this.build_title());
@@ -685,8 +763,11 @@ export class AgentChatTuiCoordinator {
    */
   private async load_history(session_id: string): Promise<void> {
     try {
-      const { title, messages } = await this.options.load_session_history(session_id);
+      const { title, messages, approval_mode } =
+        await this.options.load_session_context(session_id);
+      if (session_id !== this.current_session_id) return;
       this.app_state.session_title = title;
+      this.app_state.approval_mode = approval_mode;
       this.header.set_state(this.app_state);
       this.footer.set_state(this.app_state);
       this.terminal.setTitle(this.build_title());

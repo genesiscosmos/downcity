@@ -20,6 +20,7 @@ import { resolve_transcript_scroll_delta } from "../bin/city/agent/tui/controlle
 import { QueuedInputQueue } from "../bin/city/agent/tui/controllers/QueuedInputQueue.js";
 import { PiTuiChatRenderer } from "../bin/city/agent/tui/PiTuiChatRenderer.js";
 import { ApprovalPanelComponent } from "../bin/city/agent/tui/dialogs/ApprovalDialog.js";
+import { SecurityPolicyPanelComponent } from "../bin/city/agent/tui/dialogs/SecurityPolicyDialog.js";
 import { SessionPickerComponent } from "../bin/city/agent/tui/dialogs/SessionPicker.js";
 import { resolveSlashCommandInput } from "../bin/city/agent/tui/commands/resolve.js";
 
@@ -552,6 +553,7 @@ test("Header 与 Footer 在宽屏和窄屏下保持上下文与操作层级", ()
   const app_state = {
     agent_id: "demo",
     session_id: "session-123456789",
+    approval_mode: "ask",
     session_title: "Build diagnostics",
     is_executing: false,
     queued_message_count: 0,
@@ -566,6 +568,11 @@ test("Header 与 Footer 在宽屏和窄屏下保持上下文与操作层级", ()
     assert.ok([...header_lines, ...footer_lines].every((line) => visibleWidth(line) <= width));
     assert.match(plain(header_lines).join("\n"), /DOWNCITY AGENT/);
   }
+  assert.match(plain(header.render(96)).join("\n"), /Security: Default/);
+
+  app_state.approval_mode = "always-allow";
+  header.set_state(app_state);
+  assert.match(plain(header.render(96)).join("\n"), /Security: Always Allow/);
 
   app_state.transcript_scroll_offset = 9;
   footer.set_state(app_state);
@@ -695,9 +702,47 @@ test("执行期间保留审批命令提交能力并阻止破坏性 Slash 命令"
     "blocked",
   );
   assert.equal(
+    resolveSlashCommandInput({ input: "/security", is_streaming: true }).kind,
+    "blocked",
+  );
+  assert.equal(
     resolveSlashCommandInput({ input: "/model", is_streaming: true }).kind,
     "message",
   );
+});
+
+test("Security Policy 选择器直接提交 canonical SessionApprovalMode", () => {
+  let selected_mode;
+  let cancelled = false;
+  const picker = new SecurityPolicyPanelComponent({
+    current_mode: "ask",
+    on_select: (mode) => {
+      selected_mode = mode;
+    },
+    on_cancel: () => {
+      cancelled = true;
+    },
+  });
+
+  const rendered = plain(picker.render(88)).join("\n");
+  assert.match(rendered, /Security policy/);
+  assert.match(rendered, /Default.*current/);
+  assert.match(rendered, /Always Allow/);
+  assert.ok(picker.render(32).every((line) => visibleWidth(line) <= 32));
+
+  picker.handleInput("\u001B[B");
+  picker.handleInput("\r");
+  assert.equal(selected_mode, "always-allow");
+
+  const cancel_picker = new SecurityPolicyPanelComponent({
+    current_mode: "always-allow",
+    on_select: () => {},
+    on_cancel: () => {
+      cancelled = true;
+    },
+  });
+  cancel_picker.handleInput("\u001B");
+  assert.equal(cancelled, true);
 });
 
 test("内联槽位空闲时不占高度并把输入转交给下方面板", () => {

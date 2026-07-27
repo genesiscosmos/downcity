@@ -9,7 +9,11 @@
 import { AgentChatTuiCoordinator } from "@/city/agent/tui/AgentChatTuiCoordinator.js";
 import type { AgentChatInteractiveRendererPort } from "@/city/types/AgentChatInteractive.js";
 import type { AgentChatSessionSummaryView } from "@/city/agent/AgentChatTypes.js";
-import type { SessionMessage } from "@downcity/agent";
+import type {
+  SessionApprovalMode,
+  SessionApprovalModeSnapshot,
+  SessionMessage,
+} from "@downcity/agent";
 
 /**
  * 启动 city agent chat 的交互式 TUI。
@@ -25,11 +29,17 @@ export async function run_agent_chat_tui(params: {
   list_sessions: () => Promise<AgentChatSessionSummaryView[]>;
   /** 创建新 session。 */
   create_session: () => Promise<{ session_id: string }>;
-  /** 加载指定 session 历史。 */
-  load_session_history: (session_id: string) => Promise<{
+  /** 加载指定 Session 的完整 Chat 上下文。 */
+  load_session_context: (session_id: string) => Promise<{
     title: string;
     messages: SessionMessage[];
+    approval_mode: SessionApprovalMode;
   }>;
+  /** 更新指定 Session 后续高风险操作使用的审批模式。 */
+  set_approval_mode: (
+    session_id: string,
+    mode: SessionApprovalMode,
+  ) => Promise<SessionApprovalModeSnapshot>;
   /** 执行一轮对话。 */
   run_turn: (input: {
     session_id: string;
@@ -55,7 +65,8 @@ export async function run_agent_chat_tui(params: {
     session_id: params.session_id,
     list_sessions: params.list_sessions,
     create_session: params.create_session,
-    load_session_history: params.load_session_history,
+    load_session_context: params.load_session_context,
+    set_approval_mode: params.set_approval_mode,
     run_turn: params.run_turn,
     respond_interaction: params.respond_interaction,
   });

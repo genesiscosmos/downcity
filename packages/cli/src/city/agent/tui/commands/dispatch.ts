@@ -62,6 +62,9 @@ async function handle_built_in_slash_command(
     case "sessions":
       await host.show_session_picker();
       return;
+    case "security":
+      host.show_security_policy_picker();
+      return;
     case "approve":
       await host.approve(_args.trim());
       return;
