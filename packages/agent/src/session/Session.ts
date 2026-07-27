@@ -48,11 +48,9 @@ import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
 import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
 import { SessionState } from "@/session/SessionState.js";
 import { SessionTurn } from "@/session/SessionTurn.js";
+import { SessionQueue } from "@/session/SessionQueue.js";
+import { SessionCommand } from "@/session/SessionCommand.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
-import type {
-  AgentSessionCommand,
-  SessionQueueCommand,
-} from "@/types/session/SessionQueue.js";
 import type { SessionOptions } from "@/types/session/SessionOptions.js";
 import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.js";
 import { SessionInteractions } from "@/session/control/SessionInteractions.js";
@@ -73,8 +71,8 @@ import { to_executor_history } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
 import type {
   SessionActionRecordInputV1,
-  SessionActionRecordV1,
 } from "@/executor/types/SessionRecords.js";
+import type { SessionCommandOptions } from "@/types/session/SessionCommand.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 
 /**
@@ -97,6 +95,8 @@ export class Session implements AgentSession {
   private readonly events: SessionEventHub;
   private readonly session_interactions: SessionInteractions;
   private readonly shell_approval_adapter: SessionShellApprovalAdapter;
+  /** 已被 Session 接受、等待或已经在 Step 检查点提交的审批模式。 */
+  private configured_approval_mode: SessionApprovalModeSnapshot["mode"] = "ask";
   private readonly local_state: SessionLocalState;
   private readonly get_workspace_env: SessionOptions["get_workspace_env"];
   private readonly get_agent_model: SessionOptions["get_agent_model"];
@@ -112,6 +112,8 @@ export class Session implements AgentSession {
   /** 串行化 snapshot / syncshot 对 system 与 instruction.md 的修改。 */
   private system_mutation_chain: Promise<void> = Promise.resolve();
   private readonly state: SessionState;
+  /** 当前 Session 独享的 Command FIFO。 */
+  private readonly session_queue = new SessionQueue();
   private readonly session_turn: SessionTurn;
   private runtime_port: SessionPort | null = null;
 
@@ -186,11 +188,11 @@ export class Session implements AgentSession {
       executor: this.executor,
       state: this.state,
       events: this.events,
+      logger: this.logger,
       messages: this.session_messages,
       interactions: this.session_interactions,
       shell_approval_gateway: this.shell_approval_adapter,
-      apply_command: async (command, turn_id) =>
-        await this.apply_queue_command(command, turn_id),
+      queue: this.session_queue,
     });
   }
 
@@ -264,9 +266,22 @@ export class Session implements AgentSession {
    */
   async set(input: AgentSessionSetInput): Promise<void> {
     const configured = await this.state.set(input);
-    if (configured.command) {
-      this.session_turn.enqueue_command(configured.command);
-    }
+    if (!configured.model_change) return;
+    const model_change = configured.model_change;
+    this.enqueue_command({
+      execute: async () => {
+        this.state.apply_model_config(model_change.config);
+      },
+      ...(model_change.action_id && model_change.action_title
+        ? {
+            completion: {
+              type: "action" as const,
+              id: model_change.action_id,
+              title: model_change.action_title,
+            },
+          }
+        : {}),
+    });
   }
 
   /**
@@ -288,63 +303,66 @@ export class Session implements AgentSession {
    * 把一次显式历史压缩加入当前 Session 的有序输入队列。
    */
   async compact(): Promise<void> {
-    await this.session_turn.compact();
-  }
-
-  /**
-   * 把 Agent configured state command 加入当前 Session 的统一输入队列。
-   */
-  enqueue_agent_command(command: AgentSessionCommand): void {
-    if (command.type === "env") {
-      this.session_turn.enqueue_command({
-        type: "workspace_env",
-        command_id: command.command_id,
-        env: command.env,
-      });
-      return;
-    }
-    this.session_turn.enqueue_command({
-      type: "agent_plugins",
-      command_id: command.command_id,
-      title: command.title,
-      plugins: command.plugins,
+    await this.state.ensure_runnable();
+    const command_id = generate_id();
+    this.enqueue_command({
+      execute: async () => {
+        try {
+          await this.session_turn.compact_history(command_id);
+        } catch (error) {
+          await this.logger.log("warn", "[agent] session compact command failed", {
+            session_id: this.id,
+            command_id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      },
     });
   }
 
-  /** 在 Step 检查点提交明确的 Session/Agent 状态命令。 */
-  private async apply_queue_command(
-    command: Exclude<SessionQueueCommand, { type: "compact" }>,
-    turn_id: string,
-  ): Promise<void> {
-    if (command.type === "session_model") {
-      await this.state.apply_model_command(command);
-      if (command.action_id && command.action_title) {
-        await this.emit_config_action_event({
-          id: command.action_id,
-          title: command.action_title,
-          state: "completed",
-          turn_id: turn_id,
-        });
-      }
-      return;
-    }
-    if (command.type === "workspace_env") {
-      this.effective_workspace_env = { ...command.env };
-      await this.emit_config_action_event({
-        id: `agent-env:${this.id}:${command.command_id}`,
+  /** 把 Workspace env 快照加入当前 Session 的有序输入队列。 */
+  enqueue_workspace_env(input: {
+    /** 当前 Workspace env 修改的稳定标识。 */
+    command_id: string;
+    /** 下一 Session Step 使用的完整环境变量快照。 */
+    env: Record<string, string>;
+  }): void {
+    this.enqueue_command({
+      execute: async () => {
+        this.effective_workspace_env = { ...input.env };
+      },
+      completion: {
+        type: "action",
+        id: `agent-env:${this.id}:${input.command_id}`,
         title: "Workspace environment updated",
-        state: "completed",
-        turn_id: turn_id,
-      });
-      return;
-    }
-    this.effective_agent_plugins = command.plugins;
-    await this.emit_config_action_event({
-      id: `agent-plugins:${this.id}:${command.command_id}`,
-      title: command.title,
-      state: "completed",
-      turn_id: turn_id,
+      },
     });
+  }
+
+  /** 把 Agent Plugin 执行视图加入当前 Session 的有序输入队列。 */
+  enqueue_agent_plugins(input: {
+    /** 当前 Plugin 修改的稳定标识。 */
+    command_id: string;
+    /** 当前 Plugin 修改的用户可读标题。 */
+    title: string;
+    /** 下一 Session Step 使用的 Plugin 执行视图。 */
+    plugins: AgentPluginExecutionRuntime;
+  }): void {
+    this.enqueue_command({
+      execute: async () => {
+        this.effective_agent_plugins = input.plugins;
+      },
+      completion: {
+        type: "action",
+        id: `agent-plugins:${this.id}:${input.command_id}`,
+        title: input.title,
+      },
+    });
+  }
+
+  /** 创建一个具体 Session Command 对象并加入当前 FIFO。 */
+  private enqueue_command(options: SessionCommandOptions): void {
+    this.session_queue.enqueue_command(new SessionCommand(options));
   }
 
   /**
@@ -363,12 +381,32 @@ export class Session implements AgentSession {
 
   /** 读取当前 Session 的工具审批模式。 */
   async approval_mode(): Promise<SessionApprovalModeSnapshot> {
-    return this.shell_approval_adapter.get_mode();
+    return this.get_approval_mode_snapshot();
   }
 
-  /** 更新当前 Session 的工具审批模式。 */
+  /** 把当前 Session 的工具审批模式更新加入有序输入队列。 */
   async set_approval_mode(input: SetSessionApprovalModeInput): Promise<SessionApprovalModeSnapshot> {
-    return this.shell_approval_adapter.set_mode(input.mode);
+    await this.state.ensure_runnable();
+    const mode = input.mode === "always-allow" ? "always-allow" : "ask";
+    if (mode === this.configured_approval_mode) {
+      return this.get_approval_mode_snapshot();
+    }
+    this.configured_approval_mode = mode;
+    this.enqueue_command({
+      execute: async () => {
+        this.shell_approval_adapter.set_effective_mode(mode);
+      },
+    });
+    return this.get_approval_mode_snapshot();
+  }
+
+  /** 构建 configured 与 effective 审批模式的统一公开快照。 */
+  private get_approval_mode_snapshot(): SessionApprovalModeSnapshot {
+    return {
+      session_id: this.id,
+      mode: this.configured_approval_mode,
+      effective_mode: this.shell_approval_adapter.get_effective_mode(),
+    };
   }
 
   /** 提交当前 Session 的 Interaction 用户响应。 */
@@ -848,33 +886,6 @@ export class Session implements AgentSession {
       },
     });
     await this.state.touch_metadata();
-  }
-
-  /** 尽力记录配置 Action，不让 timeline 故障反向改变已提交配置。 */
-  private async emit_config_action_event(
-    input: SessionActionRecordInputV1 | SessionActionRecordV1,
-  ): Promise<boolean> {
-    try {
-      await this.emit_action_event({
-        id: input.id,
-        title: input.title,
-        description: input.description,
-        state: input.state,
-        turn_id: "turn_id" in input ? input.turn_id : input.metadata?.turn_id,
-      });
-      return true;
-    } catch (error) {
-      try {
-        await this.logger.log("warn", "[agent] config action persistence failed", {
-          session_id: this.id,
-          actionId: String(input.id || ""),
-          error: error instanceof Error ? error.message : String(error),
-        });
-      } catch {
-        // 配置已提交，日志失败也不能反向改变 effective state。
-      }
-      return false;
-    }
   }
 
 }

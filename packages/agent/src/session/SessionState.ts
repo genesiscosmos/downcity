@@ -18,14 +18,13 @@ import type {
   AgentSessionSetInput,
 } from "@/types/agent/SessionTypes.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
-import type { SessionModelQueueCommand } from "@/types/session/SessionQueue.js";
 import { generate_id } from "@/utils/Id.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import { SessionMessages } from "@/session/SessionMessages.js";
 import { to_executor_history } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
 import type {
-  SessionConfiguredCommandResult,
+  SessionConfiguredStateResult,
   SessionSetOptions,
   SessionStateOptions,
 } from "@/types/session/SessionState.js";
@@ -149,7 +148,7 @@ export class SessionState {
   async set(
     input: AgentSessionSetInput,
     options?: SessionSetOptions,
-  ): Promise<SessionConfiguredCommandResult> {
+  ): Promise<SessionConfiguredStateResult> {
     const should_emit_action = options?.emit_action !== false;
     const previous_model_label = this.state.session_config.model_label;
     const next_model = input.model;
@@ -187,18 +186,12 @@ export class SessionState {
     this.state.session_config = next_config;
 
     if (options?.emit_action === false) {
-      await this.apply_model_command({
-        type: "session_model",
-        command_id: generate_id(),
-        config: next_config,
-      });
+      this.apply_model_config(next_config);
       return {};
     }
 
     return {
-      command: {
-        type: "session_model",
-        command_id: generate_id(),
+      model_change: {
         config: next_config,
         ...(should_emit_model_switch_action
           ? {
@@ -212,11 +205,9 @@ export class SessionState {
   }
 
   /** 在 Session Step 检查点提交模型配置。 */
-  async apply_model_command(
-    command: SessionModelQueueCommand,
-  ): Promise<void> {
+  apply_model_config(config: AgentSessionConfigSnapshot): void {
     this.state.effective_session_config = {
-      ...command.config,
+      ...config,
     };
   }
 

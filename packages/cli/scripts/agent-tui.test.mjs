@@ -64,11 +64,11 @@ function create_assistant_message_event(message, mutation_id = "assistant-messag
   };
 }
 
-test("transcript 导航同时识别分页键和鼠标滚轮", () => {
+test("transcript 导航使用键盘且不消费终端鼠标事件", () => {
   assert.equal(resolve_transcript_scroll_delta("\u001B[5~", 12), 12);
   assert.equal(resolve_transcript_scroll_delta("\u001B[6~", 12), -12);
-  assert.equal(resolve_transcript_scroll_delta("\u001B[<64;20;8M", 12), 3);
-  assert.equal(resolve_transcript_scroll_delta("\u001B[<65;20;8M", 12), -3);
+  assert.equal(resolve_transcript_scroll_delta("\u001B[<64;20;8M", 12), null);
+  assert.equal(resolve_transcript_scroll_delta("\u001B[<65;20;8M", 12), null);
   assert.equal(resolve_transcript_scroll_delta("a", 12), null);
 });
 
@@ -553,7 +553,11 @@ test("Header 与 Footer 在宽屏和窄屏下保持上下文与操作层级", ()
   const app_state = {
     agent_id: "demo",
     session_id: "session-123456789",
-    approval_mode: "ask",
+    approval_mode: {
+      session_id: "session-123456789",
+      mode: "ask",
+      effective_mode: "ask",
+    },
     session_title: "Build diagnostics",
     is_executing: false,
     queued_message_count: 0,
@@ -570,9 +574,18 @@ test("Header 与 Footer 在宽屏和窄屏下保持上下文与操作层级", ()
   }
   assert.match(plain(header.render(96)).join("\n"), /Security: Default/);
 
-  app_state.approval_mode = "always-allow";
+  app_state.approval_mode = {
+    session_id: "session-123456789",
+    mode: "always-allow",
+    effective_mode: "ask",
+  };
   header.set_state(app_state);
   assert.match(plain(header.render(96)).join("\n"), /Security: Always Allow/);
+  assert.match(plain(header.render(96)).join("\n"), /queued/);
+
+  app_state.approval_mode.effective_mode = "always-allow";
+  header.set_state(app_state);
+  assert.doesNotMatch(plain(header.render(96)).join("\n"), /queued/);
 
   app_state.transcript_scroll_offset = 9;
   footer.set_state(app_state);
@@ -688,7 +701,7 @@ test("审批 part 展示请求详情且 Esc 按安全语义拒绝", () => {
   assert.equal(decision, "deny");
 });
 
-test("执行期间保留审批命令提交能力并阻止破坏性 Slash 命令", () => {
+test("执行期间允许审批与安全策略命令并阻止破坏性 Slash 命令", () => {
   assert.equal(
     resolveSlashCommandInput({ input: "/approve ap_1", is_streaming: true }).kind,
     "builtin",
@@ -703,7 +716,7 @@ test("执行期间保留审批命令提交能力并阻止破坏性 Slash 命令"
   );
   assert.equal(
     resolveSlashCommandInput({ input: "/security", is_streaming: true }).kind,
-    "blocked",
+    "builtin",
   );
   assert.equal(
     resolveSlashCommandInput({ input: "/model", is_streaming: true }).kind,

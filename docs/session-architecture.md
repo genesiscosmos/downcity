@@ -44,6 +44,7 @@ flowchart TB
         end
     end
 
+    Facade --> Queue
     Facade --> Turn
     Facade --> Interactions
     Queue --> Turn
@@ -62,8 +63,13 @@ flowchart TB
 
 ### 2.1 控制面
 
-- `SessionTurn` 拥有 active Turn、检查点和停止语义。
-- `SessionQueue` 保存尚未在检查点生效的 Prompt 与 Command。
+- `Session` 拥有 `SessionQueue`，并为配置、维护操作创建具体 Command 对象。
+- `SessionTurn` 是 Queue 的唯一消费者，拥有 active Turn、检查点和停止语义。
+- `SessionQueue` 只保存尚未在检查点执行的 `SessionCommand` 对象，不解释业务类型。
+- Prompt 是一种带执行与取消行为的 Session Command；stop 只移除可取消 Command。
+- Command 可选声明完成信息；SessionTurn 在执行成功后将其持久化为 canonical Action Message。
+- Action Message 持久化成功后由 SessionMessages 自动发布 Mutation，不单独配置 Event。
+- respond 直接兑现 Interaction waiter，stop 直接中断 Turn；两者都不是 Command。
 - `SessionInteractions` 拥有 pending waiter、超时、取消和恢复执行。
 
 ### 2.2 执行面

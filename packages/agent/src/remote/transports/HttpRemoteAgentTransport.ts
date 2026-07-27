@@ -414,15 +414,17 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       error?: string;
       session_id?: string;
       mode?: SessionApprovalModeSnapshot["mode"];
+      effective_mode?: SessionApprovalModeSnapshot["effective_mode"];
     }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/approval-mode`, {
       headers: this.headers(),
     });
-    if (!payload.success || !payload.session_id || !payload.mode) {
+    if (!payload.success || !payload.session_id || !payload.mode || !payload.effective_mode) {
       throw new Error(String(payload.error || "Remote shell approval mode failed"));
     }
     return {
       session_id: payload.session_id,
       mode: payload.mode,
+      effective_mode: payload.effective_mode,
     };
   }
 
@@ -440,10 +442,19 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       }),
       body: JSON.stringify({ mode: input.mode }),
     });
-    if (payload.success !== true) {
+    if (
+      payload.success !== true ||
+      !payload.session_id ||
+      !payload.mode ||
+      !payload.effective_mode
+    ) {
       throw new Error(String(payload.error || "Remote shell approval mode update failed"));
     }
-    return payload;
+    return {
+      session_id: payload.session_id,
+      mode: payload.mode,
+      effective_mode: payload.effective_mode,
+    };
   }
 
   async respond(

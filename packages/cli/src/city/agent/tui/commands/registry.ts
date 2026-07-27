@@ -42,7 +42,7 @@ export const BUILTIN_SLASH_COMMANDS: readonly SlashCommand[] = [
     name: "security",
     aliases: [],
     description: "Choose the current Session security policy",
-    availability: "idle-only",
+    availability: "always",
   },
   {
     name: "approve",

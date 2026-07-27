@@ -15,6 +15,7 @@ import { LocalFileSystem } from "../bin/workspace/LocalFileSystem.js";
 import { SessionMessages } from "../bin/session/SessionMessages.js";
 import { SessionEventHub } from "../bin/session/runtime/SessionEventHub.js";
 import { SessionTurn } from "../bin/session/SessionTurn.js";
+import { SessionQueue } from "../bin/session/SessionQueue.js";
 
 async function create_turn_harness(execute_run) {
   const session_id = "session-turn-failure-test";
@@ -50,9 +51,10 @@ async function create_turn_harness(execute_run) {
     },
     messages,
     events: new SessionEventHub(),
+    logger: { log: async () => {} },
+    queue: new SessionQueue(),
     interactions,
     shell_approval_gateway,
-    apply_command: async () => {},
   });
 
   return { messages, turn };

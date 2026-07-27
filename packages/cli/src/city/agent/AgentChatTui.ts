@@ -33,8 +33,12 @@ export async function run_agent_chat_tui(params: {
   load_session_context: (session_id: string) => Promise<{
     title: string;
     messages: SessionMessage[];
-    approval_mode: SessionApprovalMode;
+    approval_mode: SessionApprovalModeSnapshot;
   }>;
+  /** 读取指定 Session configured 与 effective 审批模式。 */
+  get_approval_mode: (
+    session_id: string,
+  ) => Promise<SessionApprovalModeSnapshot>;
   /** 更新指定 Session 后续高风险操作使用的审批模式。 */
   set_approval_mode: (
     session_id: string,
@@ -66,6 +70,7 @@ export async function run_agent_chat_tui(params: {
     list_sessions: params.list_sessions,
     create_session: params.create_session,
     load_session_context: params.load_session_context,
+    get_approval_mode: params.get_approval_mode,
     set_approval_mode: params.set_approval_mode,
     run_turn: params.run_turn,
     respond_interaction: params.respond_interaction,

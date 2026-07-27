@@ -154,8 +154,9 @@ packages/agent/src/
 ├─ session/
 │  ├─ Session.ts               Session facade 与内部装配
 │  ├─ SessionState.ts          Metadata 与 Session 配置
-│  ├─ SessionTurn.ts           Prompt/Command 队列与 Turn 编排
-│  ├─ SessionQueue.ts          有序输入队列
+│  ├─ SessionTurn.ts           Command 消费与 Turn 编排
+│  ├─ SessionQueue.ts          Session 持有的 Command FIFO
+│  ├─ SessionCommand.ts       Session FIFO 中的可执行对象
 │  ├─ SessionMessages.ts       canonical Message 唯一事实源
 │  ├─ DefaultSessionComposer.ts 默认模型上下文组装策略
 │  ├─ approval/                Tool 审批
@@ -361,7 +362,7 @@ Session 是 SDK 最重要的运行边界。每个 Session 拥有：
 - 独立 ID 和 Metadata。
 - 独立模型覆盖配置。
 - 独立 Message 历史。
-- 独立 Prompt/Command 队列。
+- Session 持有的可执行 Command 对象队列。
 - 独立 Tool 审批状态。
 - 独立 Executor。
 - 独立实时 Mutation 流。
@@ -463,8 +464,11 @@ sequenceDiagram
     participant Tool as Tool Runtime
 
     App->>Session: prompt({ query })
-    Session->>Queue: enqueue_prompt
-    Turn->>Queue: 取 Prompt 和检查点 Commands
+    Session->>Turn: prompt({ query })
+    Turn->>Queue: enqueue(SessionCommand)
+    Turn->>Queue: take_next / drain
+    Queue-->>Turn: concrete command object
+    Turn->>Turn: command.execute()
     Turn->>Messages: 持久化 User Message
     Turn->>Executor: run(query, run_context)
     Executor->>Composer: compose(system, history, tools)

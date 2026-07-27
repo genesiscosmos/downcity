@@ -105,7 +105,7 @@ export interface AgentSessionActor {
   /** 读取当前 Session 的工具审批模式。 */
   approval_mode(): Promise<SessionApprovalModeSnapshot>;
 
-  /** 更新当前 Session 的工具审批模式。 */
+  /** 把当前 Session 的工具审批模式更新加入有序输入队列。 */
   set_approval_mode(input: SetSessionApprovalModeInput): Promise<SessionApprovalModeSnapshot>;
 
   /** 提交当前 Session 的 Interaction 用户响应。 */

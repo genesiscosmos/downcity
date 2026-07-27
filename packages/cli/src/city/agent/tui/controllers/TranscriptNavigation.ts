@@ -1,23 +1,11 @@
 /**
  * Agent Chat transcript 导航输入解析器。
  *
- * 统一处理分页键、方向键组合与 SGR 鼠标滚轮事件，避免 Coordinator
- * 和 Editor 分别维护互相冲突的滚动规则。
+ * 统一处理分页键与方向键组合，避免 Coordinator 和 Editor 分别维护互相冲突的
+ * 滚动规则。TUI 不启用鼠标追踪，保留终端原生文本框选与复制能力。
  */
 
 import { Key, matchesKey } from "@earendil-works/pi-tui";
-
-/** 启用基础鼠标事件与 SGR 扩展坐标编码。 */
-export const TRANSCRIPT_MOUSE_TRACKING_ENABLE = "\u001B[?1000h\u001B[?1006h";
-
-/** 恢复终端默认鼠标行为。 */
-export const TRANSCRIPT_MOUSE_TRACKING_DISABLE = "\u001B[?1006l\u001B[?1000l";
-
-/** SGR 鼠标事件：button、column、row、press/release。 */
-const SGR_MOUSE_EVENT = /^\u001B\[<(\d+);(\d+);(\d+)([Mm])$/;
-
-/** 单次鼠标滚轮滚动的 transcript 行数。 */
-const MOUSE_WHEEL_SCROLL_LINES = 3;
 
 /**
  * 将终端输入解析为 transcript 滚动增量。
@@ -40,10 +28,5 @@ export function resolve_transcript_scroll_delta(
   if (matchesKey(data, Key.shift("down"))) return -1;
   if (matchesKey(data, Key.ctrl("l"))) return Number.NEGATIVE_INFINITY;
 
-  const mouse_event = data.match(SGR_MOUSE_EVENT);
-  if (!mouse_event || mouse_event[4] !== "M") return null;
-  const button_code = Number(mouse_event[1]);
-  if (button_code === 64) return MOUSE_WHEEL_SCROLL_LINES;
-  if (button_code === 65) return -MOUSE_WHEEL_SCROLL_LINES;
   return null;
 }

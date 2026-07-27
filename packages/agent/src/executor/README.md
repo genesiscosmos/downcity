@@ -6,7 +6,7 @@
 
 ## 边界
 
-- `SessionTurn` 拥有输入队列、Turn Handle、取消信号与 Assistant Message 收口。
+- `Session` 拥有输入队列并创建 Command；`SessionTurn` 负责消费、Turn Handle、取消信号与 Assistant Message 收口。
 - `SessionComposer` 根据只读 Session 快照组装 system、messages 和 tools。
 - `Executor` 管理单次模型执行、上下文超限重试和 Step Plugin Lease。
 - `CoreEngineRunner` 执行 `streamText()`、Tool Loop、续写和内存上下文折叠。

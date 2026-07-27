@@ -13,7 +13,6 @@ import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.js";
-import type { AgentSessionCommand } from "@/types/session/SessionQueue.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
@@ -37,12 +36,23 @@ export interface AgentManagedSession extends AgentSession {
    */
   is_executing(): boolean;
 
-  /**
-   * 把 Agent configured state command 加入当前 Session 的统一输入队列。
-   */
-  enqueue_agent_command(
-    command: AgentSessionCommand,
-  ): void;
+  /** 把 Workspace env 快照加入当前 Session 的有序输入队列。 */
+  enqueue_workspace_env(input: {
+    /** 当前 Workspace env 修改的稳定标识。 */
+    command_id: string;
+    /** 下一 Session Step 使用的完整环境变量快照。 */
+    env: Record<string, string>;
+  }): void;
+
+  /** 把 Agent Plugin 执行视图加入当前 Session 的有序输入队列。 */
+  enqueue_agent_plugins(input: {
+    /** 当前 Plugin 修改的稳定标识。 */
+    command_id: string;
+    /** 当前 Plugin 修改的用户可读标题。 */
+    title: string;
+    /** 下一 Session Step 使用的 Plugin 执行视图。 */
+    plugins: AgentPluginExecutionRuntime;
+  }): void;
 }
 
 /**

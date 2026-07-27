@@ -12,10 +12,7 @@ import type {
   ShellApprovalStatus,
 } from "@downcity/shell";
 import type { SessionInteractions } from "@/session/control/SessionInteractions.js";
-import type {
-  SessionApprovalMode,
-  SessionApprovalModeSnapshot,
-} from "@/types/session/SessionInteraction.js";
+import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
 import { generate_id } from "@/utils/Id.js";
 
 /** 单个 Session 的 Shell 高风险操作审批 Adapter。 */
@@ -85,14 +82,13 @@ export class SessionShellApprovalAdapter implements ShellApprovalGateway {
     };
   }
 
-  /** 读取当前 Session 的高风险操作审批模式。 */
-  get_mode(): SessionApprovalModeSnapshot {
-    return { session_id: this.session_id, mode: this.mode };
+  /** 读取当前 Session 执行面使用的高风险操作审批模式。 */
+  get_effective_mode(): SessionApprovalMode {
+    return this.mode;
   }
 
-  /** 更新后续高风险操作请求使用的审批模式。 */
-  set_mode(mode: SessionApprovalMode): SessionApprovalModeSnapshot {
+  /** 在 Session Step 检查点提交后续高风险操作请求使用的审批模式。 */
+  set_effective_mode(mode: SessionApprovalMode): void {
     this.mode = mode === "always-allow" ? "always-allow" : "ask";
-    return this.get_mode();
   }
 }

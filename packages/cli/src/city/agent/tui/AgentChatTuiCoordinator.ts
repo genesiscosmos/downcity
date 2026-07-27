@@ -44,11 +44,7 @@ import {
   resolveSlashCommandInput,
   type SlashCommandHost,
 } from "@/city/agent/tui/commands/index.js";
-import {
-  resolve_transcript_scroll_delta,
-  TRANSCRIPT_MOUSE_TRACKING_DISABLE,
-  TRANSCRIPT_MOUSE_TRACKING_ENABLE,
-} from "@/city/agent/tui/controllers/TranscriptNavigation.js";
+import { resolve_transcript_scroll_delta } from "@/city/agent/tui/controllers/TranscriptNavigation.js";
 
 /**
  * 协调器构造选项。
@@ -72,8 +68,12 @@ export interface AgentChatTuiCoordinatorOptions {
   load_session_context: (session_id: string) => Promise<{
     title: string;
     messages: SessionMessage[];
-    approval_mode: SessionApprovalMode;
+    approval_mode: SessionApprovalModeSnapshot;
   }>;
+  /** 读取指定 Session configured 与 effective 审批模式。 */
+  get_approval_mode: (
+    session_id: string,
+  ) => Promise<SessionApprovalModeSnapshot>;
   /** 更新指定 Session 后续高风险操作使用的审批模式。 */
   set_approval_mode: (
     session_id: string,
@@ -265,7 +265,6 @@ export class AgentChatTuiCoordinator {
     await this.load_history(this.current_session_id);
 
     this.tui.start();
-    this.terminal.write(TRANSCRIPT_MOUSE_TRACKING_ENABLE);
 
     return await new Promise<void>((resolve) => {
       this.resolve_run = resolve;
@@ -402,7 +401,6 @@ export class AgentChatTuiCoordinator {
     this.hide_session_picker();
     this.hide_approval_panel();
     this.remove_input_listener?.();
-    this.terminal.write(TRANSCRIPT_MOUSE_TRACKING_DISABLE);
     this.tui.stop();
     this.resolve_run?.();
   }
@@ -533,6 +531,8 @@ export class AgentChatTuiCoordinator {
       interactive_renderer: renderer,
     });
 
+    await this.refresh_approval_mode();
+
     this.app_state.is_executing = false;
     this.header.set_state(this.app_state);
     this.footer.set_state(this.app_state);
@@ -655,7 +655,7 @@ export class AgentChatTuiCoordinator {
       return;
     }
     const picker = new SecurityPolicyPanelComponent({
-      current_mode: this.app_state.approval_mode,
+      current_mode: this.app_state.approval_mode.mode,
       on_select: (mode) => {
         this.hide_command_panel();
         this.apply_approval_mode(mode);
@@ -671,7 +671,7 @@ export class AgentChatTuiCoordinator {
 
   /** 启动单一策略更新任务，避免新 Turn 越过尚未生效的权限选择。 */
   private apply_approval_mode(mode: SessionApprovalMode): void {
-    if (mode === this.app_state.approval_mode || this.approval_mode_update_promise) return;
+    if (mode === this.app_state.approval_mode?.mode || this.approval_mode_update_promise) return;
     const update_promise = this.update_approval_mode(mode);
     this.approval_mode_update_promise = update_promise;
     void update_promise.finally(() => {
@@ -683,14 +683,14 @@ export class AgentChatTuiCoordinator {
 
   /** 通过 Session API 更新审批模式，并在成功后刷新 Header。 */
   private async update_approval_mode(mode: SessionApprovalMode): Promise<boolean> {
-    if (mode === this.app_state.approval_mode) return true;
+    if (mode === this.app_state.approval_mode?.mode) return true;
     try {
       const snapshot = await this.options.set_approval_mode(
         this.current_session_id,
         mode,
       );
       if (snapshot.session_id !== this.current_session_id) return false;
-      this.app_state.approval_mode = snapshot.mode;
+      this.app_state.approval_mode = snapshot;
       this.header.set_state(this.app_state);
       this.footer.set_state(this.app_state);
       this.request_render();
@@ -699,6 +699,19 @@ export class AgentChatTuiCoordinator {
       this.add_error_message(`Failed to update security policy: ${this.format_error(error)}`);
       this.request_render();
       return false;
+    }
+  }
+
+  /** 刷新一次 configured/effective 审批模式，呈现队列是否已经提交。 */
+  private async refresh_approval_mode(): Promise<void> {
+    try {
+      const snapshot = await this.options.get_approval_mode(this.current_session_id);
+      if (snapshot.session_id !== this.current_session_id) return;
+      this.app_state.approval_mode = snapshot;
+      this.header.set_state(this.app_state);
+      this.footer.set_state(this.app_state);
+    } catch {
+      // Turn 结果已经完成，策略刷新失败不应把一次成功执行改写为失败。
     }
   }
 

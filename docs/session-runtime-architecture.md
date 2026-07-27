@@ -4,9 +4,9 @@
 
 Agent SDK 的 Session Runtime 遵循以下边界：
 
-- `Session` 是公开 Facade 和对象装配入口。
+- `Session` 是公开 Facade、对象装配入口和 `SessionQueue` 所有者。
 - `SessionState` 只管理配置、初始化状态、标题和 Metadata。
-- `SessionTurn` 只管理输入队列、Turn 生命周期、Steer、停止和执行收口。
+- `SessionTurn` 是 Queue 的唯一消费者，只管理 Turn 生命周期、Steer、停止和执行收口。
 - `SessionMessages` 是 canonical Message 的唯一事实源。
 - `SessionComposer` 只读取快照并生成模型输入或压缩计划。
 - `Executor` 只执行单次 LLM/Tool Loop，不持有 History Store，也不写 Session 文件。
@@ -16,9 +16,10 @@ Agent SDK 的 Session Runtime 遵循以下边界：
 | 模块 | 职责 | 不负责 |
 | --- | --- | --- |
 | `AgentSessions` | 创建、恢复、缓存 Session，注入 Agent 级模型、环境、指令和 Plugin | Turn 执行和消息持久化 |
-| `Session` | 对外 API、组件装配、模型解析、配置 Command 提交、压缩计划提交 | Tool Loop 细节 |
+| `Session` | 对外 API、组件装配、Queue 所有权、Command 创建、模型解析、压缩计划提交 | Tool Loop 细节 |
 | `SessionState` | configured/effective 配置、初始化、标题和 Metadata | 创建或更新 Message |
-| `SessionQueue` | 按 FIFO 保存 Prompt 和显式 Command | 解释或执行队列项 |
+| `SessionQueue` | 按 FIFO 保存具体 `SessionCommand` 对象 | 识别 Prompt、配置或 Compact 等业务种类 |
+| `SessionCommand` | 封装检查点行为、可选取消行为和可选完成信息 | 持有 Queue、Message Store 或 EventHub |
 | `SessionTurn` | Turn Handle、Queue 消费、Steer 合并、Abort、Assistant Writer 收口 | 选择模型输入策略 |
 | `SessionInteractions` | pending 用户交互、超时、取消与恢复执行 | 保存 canonical Interaction 状态 |
 | `SessionComposer` | 组装 system、messages、tools，生成压缩计划 | 写 Message、Metadata、Mutation 或 JSONL |
@@ -35,8 +36,10 @@ flowchart LR
 
     subgraph SessionDomain["Session Domain"]
         Session --> State["SessionState<br/>配置和 Metadata"]
-        Session --> Turn["SessionTurn<br/>Turn 编排"]
-        Turn --> Queue["SessionQueue<br/>FIFO 输入"]
+        Session --> Queue["SessionQueue<br/>Command FIFO"]
+        Session --> Turn["SessionTurn<br/>Queue 消费与 Turn 编排"]
+        Queue --> QueueCommand["SessionCommand<br/>execute / cancel"]
+        Turn -->|"take_next / drain"| Queue
         Turn --> Messages["SessionMessages<br/>Message 事实源"]
         Turn --> Executor["Executor<br/>单次执行"]
         Session --> Composer["SessionComposer<br/>只读组装策略"]
@@ -74,9 +77,10 @@ sequenceDiagram
     App->>Session: prompt(input)
     Session->>Turn: prompt(input)
     Turn->>State: ensure_runnable()
-    Turn->>Queue: enqueue_prompt(input)
-    Queue-->>Turn: Prompt + 之前的 Commands
-    Turn->>Session: apply_queue_command()
+    Turn->>Queue: enqueue(SessionCommand)
+    Turn->>Queue: take_next()
+    Queue-->>Turn: command
+    Turn->>Turn: command.execute()
     Turn->>Messages: append_prompt_message()
     Turn->>Executor: run()
     Executor->>Session: create_compose_input()
@@ -90,8 +94,8 @@ sequenceDiagram
 
     opt Step 检查点存在新输入
         Turn->>Queue: drain()
-        Turn->>Messages: 持久化 Steer Message
-        Turn->>Session: 提交配置 Command
+        Turn->>Turn: 依次 command.execute()
+        Turn->>Messages: Prompt Command 持久化 Steer Message
         Executor->>Composer: 基于新快照组装下一 Step
     end
 
@@ -104,16 +108,35 @@ sequenceDiagram
 
 Assistant 输出端口在普通 Tool Loop、Provider continuation 和恢复重试之间保持同一个 Message Writer。模型 step 只改变 Assistant 内部 Part；只有持久化新的 User steer 后才关闭当前 Assistant Message，后续输出再惰性创建下一条 Message。Session 不保存额外的 Assistant segment identity 或 index。
 
-Queue 不保存闭包，只保存以下显式事实：
+Queue 不保存不断扩张的业务 union，只保存同一种可执行对象：
 
 ```text
-prompt
-session_model
-agent_instruction
-agent_env
-agent_plugins
-compact
+SessionQueue
+  └─ SessionCommand[]
+       ├─ execute()
+       └─ cancel()  // 可选行为，没有取消行为的 Command 在 stop 后保留
 ```
+
+Prompt、model、env、plugins、approval mode 与 compact 的差异只存在于各自
+Command 创建时绑定的执行闭包中。出队路径始终只有 `await command.execute()`；
+Queue 和 SessionTurn 不需要随业务输入种类增加而修改。
+
+Command 可以通过可选 `completion` 声明成功执行后需要持久化的 Action 信息。
+未声明时静默完成；声明后由 SessionTurn 交给 SessionMessages 持久化。Message
+提交成功会自然发布对应 Mutation，不允许分别配置“写 Message”和“发 Event”。
+
+```text
+SessionCommand
+  ├─ execute
+  ├─ cancel?       // stop 时的可选行为
+  └─ completion?   // canonical Action Message 描述
+```
+
+完成信息持久化失败只影响可观测 timeline，不回滚已经执行成功的领域状态，也不
+阻断同一 FIFO 中后续 Prompt。
+
+`stop()` 与 Interaction `respond()` 不属于 Command：前者立即中断当前执行，
+后者立即兑现当前 waiter。两者都直接调用对应领域对象，避免等待 Queue 检查点。
 
 ## 5. 模型与配置
 

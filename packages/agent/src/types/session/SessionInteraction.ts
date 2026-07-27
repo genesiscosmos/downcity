@@ -19,8 +19,10 @@ export type SessionApprovalMode = "ask" | "always-allow";
 export interface SessionApprovalModeSnapshot {
   /** 当前审批模式所属 Session 标识。 */
   session_id: string;
-  /** 当前 Session 生效的审批模式。 */
+  /** 当前 Session 已接受的 configured 审批模式。 */
   mode: SessionApprovalMode;
+  /** 当前 Session 执行面在最近 Step 检查点提交的审批模式。 */
+  effective_mode: SessionApprovalMode;
 }
 
 /** 更新当前 Session 高风险操作审批模式的输入。 */

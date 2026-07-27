@@ -9,7 +9,6 @@ import type { SessionMessages } from "@/session/SessionMessages.js";
 import type { AgentSessionConfigSnapshot } from "@/types/agent/SessionTypes.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import type { SessionMutation } from "@/types/session/SessionMutation.js";
-import type { SessionQueueCommand } from "@/types/session/SessionQueue.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 
@@ -41,8 +40,18 @@ export interface SessionSetOptions {
   emit_action?: boolean;
 }
 
-/** Session 配置成功写入后的队列提交结果。 */
-export interface SessionConfiguredCommandResult {
-  /** 等待在下一 Session Step 检查点执行的 Command。 */
-  command?: SessionQueueCommand;
+/** 等待在 Session Step 检查点提交的模型变化。 */
+export interface SessionConfiguredModelChange {
+  /** 下一 Session Step 使用的完整配置快照。 */
+  config: AgentSessionConfigSnapshot;
+  /** 配置提交后需要写入的可选 Action 标识。 */
+  action_id?: string;
+  /** 配置提交后需要写入的可选 Action 标题。 */
+  action_title?: string;
+}
+
+/** Session 配置成功写入后的领域结果。 */
+export interface SessionConfiguredStateResult {
+  /** 需要由 Session 创建 Command 的模型变化。 */
+  model_change?: SessionConfiguredModelChange;
 }

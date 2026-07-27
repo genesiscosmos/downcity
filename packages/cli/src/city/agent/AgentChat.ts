@@ -112,8 +112,12 @@ export async function chatCommand(options: AgentChatCliOptions): Promise<void> {
         return {
           title,
           messages: messages.items,
-          approval_mode: approval_mode.mode,
+          approval_mode,
         };
+      },
+      get_approval_mode: async (session_id) => {
+        const session = await interactive.remote_agent.sessions.get(session_id);
+        return await session.approval_mode();
       },
       set_approval_mode: async (session_id, mode) => {
         const session = await interactive.remote_agent.sessions.get(session_id);

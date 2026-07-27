@@ -1,64 +1,99 @@
 /**
- * @file 验证 SessionQueue 只维护 Prompt/Command 的确定 FIFO 顺序。
+ * @file 验证 SessionQueue 只保存具体 Command 对象并维护确定的 FIFO 顺序。
  */
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import { SessionQueue } from "../bin/session/SessionQueue.js";
+import { SessionCommand } from "../bin/session/SessionCommand.js";
 
-function model_command(command_id) {
-  return {
-    type: "session_model",
-    command_id,
-    config: {},
-  };
+function create_command(name, executed, cancel) {
+  return new SessionCommand({
+    execute: async () => {
+      executed.push(name);
+    },
+    ...(cancel ? { cancel } : {}),
+  });
 }
 
-test("SessionQueue 返回首个 Prompt 及其之前的命令", () => {
+test("SessionQueue 按 FIFO 返回具体 Command 对象", async () => {
   const queue = new SessionQueue();
-  queue.enqueue_command(model_command("command-1"));
-  const handle = queue.enqueue_prompt({ query: "first" });
-  queue.enqueue_command({ type: "compact", command_id: "compact-1" });
+  const executed = [];
+  const first = create_command("first", executed);
+  const second = create_command("second", executed);
 
-  const next = queue.take_next_prompt();
-  assert.deepEqual(next.commands.map((item) => item.command_id), ["command-1"]);
-  assert.equal(next.prompt.input.query, "first");
-  assert.equal(handle instanceof Promise, true);
-  assert.equal(queue.has_command(), true);
-  assert.equal(queue.has_prompt(), false);
+  queue.enqueue_command(first);
+  queue.enqueue_command(second);
+
+  assert.equal(queue.take_next(), first);
+  assert.equal(queue.take_next(), second);
+  assert.equal(queue.take_next(), undefined);
+  assert.equal(queue.has_command(), false);
+
+  await first.execute();
+  await second.execute();
+  assert.deepEqual(executed, ["first", "second"]);
 });
 
-test("SessionQueue drain 保留 Prompt 和 Command 的原始顺序", () => {
+test("SessionQueue drain 保留 Command 对象的原始顺序", async () => {
   const queue = new SessionQueue();
-  queue.enqueue_prompt({ query: "steer-1" });
-  queue.enqueue_command(model_command("command-1"));
-  queue.enqueue_prompt({ query: "steer-2" });
+  const executed = [];
+  queue.enqueue_command(create_command("first", executed));
+  queue.enqueue_command(create_command("second", executed));
+  queue.enqueue_command(create_command("third", executed));
 
-  assert.deepEqual(
-    queue.drain().map((item) => item.type),
-    ["prompt", "session_model", "prompt"],
-  );
-  assert.equal(queue.has_prompt(), false);
+  const commands = queue.drain();
+  assert.equal(queue.has_command(), false);
+  for (const command of commands) await command.execute();
+  assert.deepEqual(executed, ["first", "second", "third"]);
 });
 
-test("SessionQueue cancel_prompts 取消 Prompt 但保留命令", () => {
+test("SessionQueue cancel 只移除拥有取消行为的 Command", async () => {
   const queue = new SessionQueue();
-  queue.enqueue_prompt({ query: "queued" });
-  queue.enqueue_command({ type: "compact", command_id: "compact-1" });
+  const executed = [];
+  const cancelled = [];
+  queue.enqueue_command(create_command("prompt", executed, () => {
+    cancelled.push("prompt");
+  }));
+  queue.enqueue_command(create_command("action", executed));
 
-  assert.equal(queue.cancel_prompts().length, 1);
-  assert.deepEqual(queue.drain(), [
-    { type: "compact", command_id: "compact-1" },
-  ]);
+  assert.equal(queue.cancel(), 1);
+  assert.deepEqual(cancelled, ["prompt"]);
+
+  const retained = queue.drain();
+  assert.equal(retained.length, 1);
+  await retained[0].execute();
+  assert.deepEqual(executed, ["action"]);
 });
 
-test("SessionQueue 可以把未处理输入恢复到队列头部", () => {
+test("SessionQueue 可以把未处理 Command 恢复到队列头部", async () => {
   const queue = new SessionQueue();
-  queue.enqueue_command({ type: "compact", command_id: "tail" });
-  queue.restore_front([model_command("head")]);
+  const executed = [];
+  const head = create_command("head", executed);
+  const middle = create_command("middle", executed);
+  const tail = create_command("tail", executed);
+  queue.enqueue_command(tail);
+  queue.restore_front([head, middle]);
 
-  assert.deepEqual(
-    queue.drain().map((item) => item.command_id),
-    ["head", "tail"],
-  );
+  for (const command of queue.drain()) await command.execute();
+  assert.deepEqual(executed, ["head", "middle", "tail"]);
+});
+
+test("SessionCommand 成功执行后返回可选的持久化完成信息", async () => {
+  const completion = {
+    type: "action",
+    id: "config-completed",
+    title: "Configuration updated",
+    description: "The next step uses the new configuration.",
+  };
+  const command = new SessionCommand({
+    execute: async () => {},
+    completion,
+  });
+  const silent_command = new SessionCommand({
+    execute: async () => {},
+  });
+
+  assert.deepEqual(await command.execute(), completion);
+  assert.equal(await silent_command.execute(), undefined);
 });

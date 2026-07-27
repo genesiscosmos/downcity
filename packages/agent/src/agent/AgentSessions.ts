@@ -138,8 +138,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    */
   broadcast_env(env: Record<string, string>, command_id: string): void {
     for (const session of this.sessions_by_id.values()) {
-      session.enqueue_agent_command({
-        type: "env",
+      session.enqueue_workspace_env({
         command_id,
         env: { ...env },
       });
@@ -155,8 +154,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     plugins: AgentPluginExecutionRuntime;
   }): void {
     for (const session of this.sessions_by_id.values()) {
-      session.enqueue_agent_command({
-        type: "plugins",
+      session.enqueue_agent_plugins({
         command_id: input.command_id,
         title: input.title,
         plugins: input.plugins,

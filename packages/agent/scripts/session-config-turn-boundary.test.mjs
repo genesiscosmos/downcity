@@ -492,6 +492,11 @@ test("running session model changes apply with steer at the next Session step", 
     const session = await agent.sessions.create({
       session_id: "session_step_boundary_session",
     });
+    await session.set({ model: old_model });
+    const mutations = [];
+    const unsubscribe = session.subscribe((mutation) => {
+      mutations.push(mutation);
+    });
     const first_turn = await session.prompt({ query: "first" });
     await old_model_started.promise;
 
@@ -512,10 +517,96 @@ test("running session model changes apply with steer at the next Session step", 
         message.type === "action" &&
         message.title === "Session model switched from old-model to new-model",
     );
-    assert.deepEqual(model_actions, []);
+    assert.equal(model_actions.length, 1);
+    assert.equal(model_actions[0].status, "completed");
+    assert.equal(
+      mutations.some(
+        (mutation) =>
+          mutation.variant === "message" &&
+          mutation.type === "action" &&
+          mutation.message.status === "completed" &&
+          mutation.message.title ===
+            "Session model switched from old-model to new-model",
+      ),
+      true,
+    );
+    unsubscribe();
   } finally {
     release_old_model.resolve();
     await agent.dispose();
+  }
+});
+
+test("running session approval mode changes stay queued until the next Session step", async () => {
+  const agent_path = await fs.mkdtemp(
+    path.join(os.tmpdir(), "downcity-session-approval-mode-boundary-"),
+  );
+  const first_provider_request_started = create_deferred();
+  const release_first_provider_request = create_deferred();
+  let provider_request_count = 0;
+  const model = new MockLanguageModelV3({
+    modelId: "approval-mode-boundary-model",
+    doStream: async (options) => {
+      const has_tools = Array.isArray(options.tools) && options.tools.length > 0;
+      if (!has_tools) return create_stream_text_result("Approval title");
+      provider_request_count += 1;
+      if (provider_request_count === 1) {
+        first_provider_request_started.resolve();
+        await release_first_provider_request.promise;
+      }
+      return create_stream_text_result(`approval:${provider_request_count}`);
+    },
+  });
+  const runtime_plugin = create_plugin({
+    name: "approval-mode-boundary",
+    title: "Approval Mode Boundary",
+    description: "Keeps the provider request on the tool-enabled execution path",
+    actions: {
+      ping: create_action({
+        description: "Ping",
+        execute: async () => ({ success: true, data: { ok: true } }),
+      }),
+    },
+  });
+  const agent = new Agent({
+    id: "approval_mode_boundary_agent",
+    workspace: new Workspace({ path: agent_path }),
+    model,
+    plugins: [runtime_plugin],
+  });
+
+  try {
+    const session = await agent.sessions.create({
+      session_id: "approval_mode_boundary_session",
+    });
+    const first_turn = await session.prompt({ query: "first" });
+    await first_provider_request_started.promise;
+
+    assert.deepEqual(await session.set_approval_mode({ mode: "always-allow" }), {
+      session_id: session.id,
+      mode: "always-allow",
+      effective_mode: "ask",
+    });
+
+    release_first_provider_request.resolve();
+    assert.equal((await first_turn.finished).success, true);
+    assert.deepEqual(await session.approval_mode(), {
+      session_id: session.id,
+      mode: "always-allow",
+      effective_mode: "ask",
+    });
+
+    const second_turn = await session.prompt({ query: "second" });
+    assert.equal((await second_turn.finished).success, true);
+    assert.deepEqual(await session.approval_mode(), {
+      session_id: session.id,
+      mode: "always-allow",
+      effective_mode: "always-allow",
+    });
+  } finally {
+    release_first_provider_request.resolve();
+    await agent.dispose();
+    await fs.rm(agent_path, { recursive: true, force: true });
   }
 });
 
@@ -548,14 +639,19 @@ test("config remains effective when its action message cannot be persisted", asy
     const session = await agent.sessions.create({
       session_id: "config_action_observability_session",
     });
-    session.emit_action_event = async () => {
+    await session.set({ model: old_model });
+    const initial_turn = await session.prompt({ query: "initialize model" });
+    assert.equal((await initial_turn.finished).success, true);
+    model_calls.splice(0, model_calls.length);
+
+    session.session_messages.persist_action_record = async () => {
       throw new Error("action store unavailable");
     };
 
     await session.set({ model: new_model });
     const turn = await session.prompt({ query: "use configured model" });
     assert.equal((await turn.finished).success, true);
-    assert.deepEqual(model_calls, ["new", "new"]);
+    assert.deepEqual(model_calls, ["new"]);
 
     const messages = await session.messages();
     assert.equal(messages.items.some((message) => message.type === "action"), false);

@@ -9,9 +9,10 @@ import type { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
 import type { SessionMessages } from "@/session/SessionMessages.js";
 import type { SessionState } from "@/session/SessionState.js";
 import type { AgentSessionTurnResult } from "@/types/sdk/AgentSessionTurn.js";
-import type { SessionQueueCommand } from "@/types/session/SessionQueue.js";
 import type { SessionInteractionLifecycle } from "@/types/session/SessionInteraction.js";
 import type { SessionExecutionPort } from "@/types/session/SessionExecution.js";
+import type { SessionQueue } from "@/session/SessionQueue.js";
+import type { Logger } from "@/utils/logger/Logger.js";
 
 /** Promise 延迟控制器。 */
 export interface SessionDeferred<T> {
@@ -31,6 +32,8 @@ export interface ActiveSessionTurnState {
   deferred_finished: SessionDeferred<AgentSessionTurnResult>;
   /** 当前 Turn 的取消控制器。 */
   abort_controller: AbortController;
+  /** 当前 Turn 是否已经接收并持久化首条 Prompt。 */
+  prompt_started: boolean;
 }
 
 /** SessionTurn 构造参数。 */
@@ -47,13 +50,12 @@ export interface SessionTurnOptions {
   messages: SessionMessages;
   /** 当前 Session 的 Mutation 总线。 */
   events: SessionEventHub;
+  /** 当前 Session 的统一日志器。 */
+  logger: Logger;
+  /** 当前 Session 拥有的有序 Command 队列。 */
+  queue: SessionQueue;
   /** 当前 Session 的用户异步交互运行时。 */
   interactions: SessionInteractionLifecycle;
   /** Shell 高风险操作使用的协议适配器。 */
   shell_approval_gateway: ShellApprovalGateway;
-  /** 在 Step 检查点提交 Session 或 Agent 状态 Command。 */
-  apply_command: (
-    command: Exclude<SessionQueueCommand, { type: "compact" }>,
-    turn_id: string,
-  ) => Promise<void>;
 }

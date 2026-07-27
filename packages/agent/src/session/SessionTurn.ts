@@ -1,10 +1,10 @@
 /**
- * SessionTurn：Session 输入队列与 Turn 生命周期的唯一所有者。
+ * SessionTurn：Session Command Queue 的唯一消费者与 Turn 生命周期所有者。
  *
  * 关键点（中文）
- * - `prompt()` 是唯一输入入口，内部决定并入当前 turn 还是排到下一 turn。
+ * - Prompt 会先构造成 Session Command，再由统一 FIFO 决定进入当前或下一 Turn。
  * - 不把调度逻辑塞进 Executor；Executor 继续只负责单次执行。
- * - 这里不暴露历史或消息模型，只编排 prompt 队列与 turn 生命周期。
+ * - Queue 由 Session 持有；这里不解释配置种类，只执行出队 Command。
  */
 
 import { nanoid } from "nanoid";
@@ -16,7 +16,6 @@ import type {
 } from "@/executor/types/SessionRecords.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
-import type { SessionQueueCommand } from "@/types/session/SessionQueue.js";
 import type {
   AgentSessionTurnHandle,
   AgentSessionTurnResult,
@@ -28,17 +27,18 @@ import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
 import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
 import { SessionState } from "@/session/SessionState.js";
 import { SessionMessages } from "@/session/SessionMessages.js";
-import { generate_id } from "@/utils/Id.js";
 import type { ShellApprovalGateway } from "@downcity/shell";
 import type { SessionInteractionLifecycle } from "@/types/session/SessionInteraction.js";
 import type { SessionExecutionPort } from "@/types/session/SessionExecution.js";
 import { SessionAssistantOutputAdapter } from "@/session/execution/SessionAssistantOutputAdapter.js";
 import { SessionQueue } from "@/session/SessionQueue.js";
+import { SessionCommand } from "@/session/SessionCommand.js";
 import type {
   ActiveSessionTurnState,
   SessionDeferred,
   SessionTurnOptions,
 } from "@/types/session/SessionTurn.js";
+import type { SessionCommandCompletion } from "@/types/session/SessionCommand.js";
 
 const TURN_STOPPED_MESSAGE = "Turn stopped";
 const QUEUED_PROMPT_CANCELLED_MESSAGE =
@@ -54,14 +54,16 @@ export class SessionTurn {
   private readonly state: SessionState;
   private readonly messages: SessionMessages;
   private readonly events: SessionEventHub;
+  private readonly logger: SessionTurnOptions["logger"];
   private readonly interactions: SessionInteractionLifecycle;
   private readonly shell_approval_gateway: ShellApprovalGateway;
-  private readonly apply_command: SessionTurnOptions["apply_command"];
-  private readonly queue = new SessionQueue();
+  private readonly queue: SessionQueue;
+  private pending_prompt_count = 0;
   private processing_promise: Promise<void> | null = null;
   private active_turn: ActiveSessionTurnState | null = null;
   private active_run_context: SessionRunContext | null = null;
   private request_active_history_reload: (() => void) | null = null;
+  private checkpoint_merged_messages: SessionUserMessageV1[] | null = null;
 
   constructor(options: SessionTurnOptions) {
     this.session_id = String(options.session_id || "").trim();
@@ -70,9 +72,10 @@ export class SessionTurn {
     this.state = options.state;
     this.messages = options.messages;
     this.events = options.events;
+    this.logger = options.logger;
+    this.queue = options.queue;
     this.interactions = options.interactions;
     this.shell_approval_gateway = options.shell_approval_gateway;
-    this.apply_command = options.apply_command;
     if (!this.session_id) {
       throw new Error("SessionTurn requires a non-empty session_id");
     }
@@ -89,29 +92,26 @@ export class SessionTurn {
       throw new Error("session.prompt requires a non-empty query");
     }
     await this.state.ensure_runnable();
-    const handle_promise = this.queue.enqueue_prompt(input);
+    const deferred_handle = create_deferred<AgentSessionTurnHandle>();
+    this.pending_prompt_count += 1;
+    this.queue.enqueue_command(new SessionCommand({
+      execute: async () => {
+        await this.execute_prompt_command(input, deferred_handle);
+      },
+      cancel: () => {
+        this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
+        this.resolve_cancelled_prompt(deferred_handle);
+      },
+    }));
     this.ensure_processing();
-    return await handle_promise;
-  }
-
-  /**
-   * 把一次已成功创建的 command 加入统一输入队列。
-   */
-  enqueue_command(command: SessionQueueCommand): void {
-    this.queue.enqueue_command(command);
-  }
-
-  /** 把显式历史压缩加入统一输入队列。 */
-  async compact(): Promise<void> {
-    await this.state.ensure_runnable();
-    this.enqueue_command({ type: "compact", command_id: generate_id() });
+    return await deferred_handle.promise;
   }
 
   /**
    * 判断是否存在等待并入下一 Session step 的 prompt。
    */
   has_pending_prompt(): boolean {
-    return this.queue.has_prompt();
+    return this.pending_prompt_count > 0;
   }
 
   /**
@@ -119,6 +119,11 @@ export class SessionTurn {
    */
   has_pending_command(): boolean {
     return this.queue.has_command();
+  }
+
+  /** 返回当前正在消费 Session Command 的 Turn 标识。 */
+  get_active_turn_id(): string {
+    return this.require_active_turn().turn_id;
   }
 
   /**
@@ -174,10 +179,6 @@ export class SessionTurn {
 
   private async process_loop(): Promise<void> {
     while (this.has_pending_prompt()) {
-      const next = this.queue.take_next_prompt();
-      if (!next) break;
-      const current = next.prompt;
-
       const turn_id = `turn:${this.session_id}:${Date.now()}:${nanoid(6)}`;
       const active_turn = create_active_session_turn_state(turn_id);
       this.active_turn = active_turn;
@@ -190,129 +191,27 @@ export class SessionTurn {
         status: "running",
         created_at: Date.now(),
       });
-      current.deferred_handle.resolve(create_turn_handle(active_turn));
 
-      try {
-        await this.execute_commands(
-          next.commands,
-          active_turn,
-        );
-        await this.persist_prompt_message(
-          current.input,
-          turn_id,
-          "prompt",
-        );
-        const result = await this.execute_prompt_turn({
-          turn_id,
-          prompt_input: current.input,
-          on_step_merge: async () => {
-            return await this.drain_queued_inputs(active_turn);
-          },
-          abort_signal: active_turn.abort_controller.signal,
-        });
-        const stopped = active_turn.abort_controller.signal.aborted;
-        const final_result: AgentSessionTurnResult = {
-          turn_id: turn_id,
-          text: result.text,
-          success: stopped ? false : result.success,
-          ...(stopped
-            ? { error: TURN_STOPPED_MESSAGE }
-            : result.error ? { error: result.error } : {}),
-        };
-        active_turn.result = final_result;
-        this.events.publish({
-          mutation_id: nanoid(),
-          variant: "turn",
-          type: "finish",
-          session_id: this.session_id,
-          turn_id,
-          status: stopped ? "stopped" : final_result.success ? "completed" : "failed",
-          created_at: Date.now(),
-          text: final_result.text,
-          ...(final_result.error ? { error: final_result.error } : {}),
-        });
-        active_turn.deferred_finished.resolve(final_result);
-      } catch (error) {
-        const message = active_turn.abort_controller.signal.aborted
-          ? TURN_STOPPED_MESSAGE
-          : error instanceof Error ? error.message : String(error);
-        const final_result: AgentSessionTurnResult = {
-          turn_id: turn_id,
-          text: "",
-          success: false,
-          error: message,
-        };
-        active_turn.result = final_result;
-        if (message !== TURN_STOPPED_MESSAGE) {
-          try {
-            await this.messages.append_error_message({
-              scope: "turn",
-              turn_id,
-              code: "turn_execution_failed",
-              message,
-              recoverable: true,
-            });
-          } catch {
-            // Error Message 写入失败不能阻止 turn handle 收口。
-          }
+      while (this.active_turn === active_turn) {
+        const command = this.queue.take_next();
+        if (!command) {
+          await this.fail_active_turn(
+            active_turn,
+            new Error("Session Queue lost its pending Prompt Command"),
+          );
+          break;
         }
-        this.events.publish({
-          mutation_id: nanoid(),
-          variant: "turn",
-          type: "finish",
-          session_id: this.session_id,
-          turn_id,
-          status: active_turn.abort_controller.signal.aborted ? "stopped" : "failed",
-          created_at: Date.now(),
-          text: "",
-          error: message,
-        });
-        active_turn.deferred_finished.resolve(final_result);
-      } finally {
-        if (this.active_turn === active_turn) {
-          this.active_turn = null;
+        try {
+          await this.execute_command(command);
+        } catch (error) {
+          await this.fail_active_turn(active_turn, error);
         }
       }
     }
   }
 
   private cancel_queued_prompts(): number {
-    const cancelled = this.queue.cancel_prompts();
-    if (cancelled.length <= 0) return 0;
-    for (const item of cancelled) {
-      const turn_id = `turn:${this.session_id}:cancelled:${Date.now()}:${nanoid(6)}`;
-      const cancelled_turn = create_active_session_turn_state(turn_id);
-      const final_result: AgentSessionTurnResult = {
-        turn_id: turn_id,
-        text: "",
-        success: false,
-        error: QUEUED_PROMPT_CANCELLED_MESSAGE,
-      };
-      cancelled_turn.result = final_result;
-      cancelled_turn.deferred_finished.resolve(final_result);
-      this.events.publish({
-        mutation_id: nanoid(),
-        variant: "turn",
-        type: "start",
-        session_id: this.session_id,
-        turn_id,
-        status: "running",
-        created_at: Date.now(),
-      });
-      this.events.publish({
-        mutation_id: nanoid(),
-        variant: "turn",
-        type: "finish",
-        session_id: this.session_id,
-        turn_id,
-        status: "failed",
-        created_at: Date.now(),
-        text: "",
-        error: QUEUED_PROMPT_CANCELLED_MESSAGE,
-      });
-      item.deferred_handle.resolve(create_turn_handle(cancelled_turn));
-    }
-    return cancelled.length;
+    return this.queue.cancel();
   }
 
   /**
@@ -324,63 +223,70 @@ export class SessionTurn {
     const drained = this.queue.drain();
     if (drained.length <= 0) return [];
     const merged: SessionUserMessageV1[] = [];
+    this.checkpoint_merged_messages = merged;
 
-    for (let index = 0; index < drained.length; index += 1) {
-      const item = drained[index];
-      if (item.type !== "prompt") {
+    try {
+      for (let index = 0; index < drained.length; index += 1) {
+        const command = drained[index];
         try {
-          await this.execute_queue_command(item, active_turn.turn_id);
+          await this.execute_command(command);
         } catch {
-          // command 自己负责失败观测；单条失败不能吞掉后续 steer 或 command。
+          // Prompt 持久化失败时恢复尚未处理的对象；Action 自己负责失败观测。
+          this.queue.restore_front(drained.slice(index));
+          break;
         }
-        continue;
       }
-      try {
-        const message = await this.persist_prompt_message(
-          item.input,
-          active_turn.turn_id,
-          "steer",
-        );
-        item.deferred_handle.resolve(create_turn_handle(active_turn));
-        merged.push(message);
-      } catch {
-        // 关键点（中文）：若某条消息持久化失败，把未处理部分重新放回队列头部，避免静默丢失。
-        const remaining = drained.slice(index);
-        this.queue.restore_front(remaining);
-        break;
-      }
+    } finally {
+      this.checkpoint_merged_messages = null;
     }
 
     return merged;
   }
 
-  /**
-   * 执行一组已经从统一队列截取的 command。
-   */
-  private async execute_commands(
-    commands: SessionQueueCommand[],
-    active_turn: ActiveSessionTurnState,
+  /** 执行 Command，并尽力持久化其声明的 canonical 完成信息。 */
+  private async execute_command(command: SessionCommand): Promise<void> {
+    const completion = await command.execute();
+    if (!completion) return;
+    await this.persist_command_completion(completion);
+  }
+
+  /** 持久化 Command 完成信息；观测失败不能反向改变已经提交的领域状态。 */
+  private async persist_command_completion(
+    completion: SessionCommandCompletion,
   ): Promise<void> {
-    if (commands.length <= 0) return;
-    for (const command of commands) {
+    const turn_id = this.require_active_turn().turn_id;
+    try {
+      await this.persist_action_event({
+        type: "action",
+        id: completion.id,
+        title: completion.title,
+        ...(completion.description
+          ? { description: completion.description }
+          : {}),
+        state: "completed",
+        metadata: {
+          v: 1,
+          ts: Date.now(),
+          session_id: this.session_id,
+          turn_id,
+        },
+      });
+    } catch (error) {
       try {
-        await this.execute_queue_command(command, active_turn.turn_id);
+        await this.logger.log("warn", "[agent] command completion persistence failed", {
+          session_id: this.session_id,
+          command_id: completion.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
       } catch {
-        // command 自己负责失败观测；单条失败不能阻断当前 prompt。
+        // 领域状态已经提交，日志失败同样不能反向改变 Command 结果。
       }
     }
   }
 
-  /** 在 Step 检查点解释并提交一条领域命令。 */
-  private async execute_queue_command(
-    command: SessionQueueCommand,
-    turn_id: string,
-  ): Promise<void> {
-    if (command.type !== "compact") {
-      await this.apply_command(command, turn_id);
-      return;
-    }
-
+  /** 在当前 Turn 上执行一次显式历史压缩。 */
+  async compact_history(command_id: string): Promise<void> {
+    const turn_id = this.require_active_turn().turn_id;
     const run_context = this.active_run_context ||
       this.create_compaction_run_context(turn_id);
     const result = await this.executor.compact_history(run_context);
@@ -394,7 +300,7 @@ export class SessionTurn {
     if (result.reason === "nothing_to_compact") {
       await this.persist_action_event({
         type: "action",
-        id: `compacting:${this.session_id}:${command.command_id}`,
+        id: `compacting:${this.session_id}:${command_id}`,
         title: "Session messages already compact",
         description: "The Session has no active messages to compact.",
         state: "completed",
@@ -406,6 +312,158 @@ export class SessionTurn {
         },
       });
     }
+  }
+
+  /** 执行一个出队 Prompt；首条 Prompt 启动 Turn，后续 Prompt 作为 steer 合并。 */
+  private async execute_prompt_command(
+    input: AgentSessionPromptInput,
+    deferred_handle: SessionDeferred<AgentSessionTurnHandle>,
+  ): Promise<void> {
+    const active_turn = this.require_active_turn();
+    if (active_turn.prompt_started) {
+      const message = await this.persist_prompt_message(
+        input,
+        active_turn.turn_id,
+        "steer",
+      );
+      this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
+      deferred_handle.resolve(create_turn_handle(active_turn));
+      this.checkpoint_merged_messages?.push(message);
+      return;
+    }
+
+    active_turn.prompt_started = true;
+    this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
+    deferred_handle.resolve(create_turn_handle(active_turn));
+    try {
+      await this.persist_prompt_message(input, active_turn.turn_id, "prompt");
+      const result = await this.execute_prompt_turn({
+        turn_id: active_turn.turn_id,
+        prompt_input: input,
+        on_step_merge: async () => await this.drain_queued_inputs(active_turn),
+        abort_signal: active_turn.abort_controller.signal,
+      });
+      this.finish_active_turn(active_turn, result);
+    } catch (error) {
+      await this.fail_active_turn(active_turn, error);
+    }
+  }
+
+  /** 读取当前正在消费 Session Command 的 Active Turn。 */
+  private require_active_turn(): ActiveSessionTurnState {
+    if (this.active_turn) return this.active_turn;
+    throw new Error("Session Command requires an active Turn");
+  }
+
+  /** 用 Executor 结果结束当前 Active Turn。 */
+  private finish_active_turn(
+    active_turn: ActiveSessionTurnState,
+    result: SessionRunResult,
+  ): void {
+    const stopped = active_turn.abort_controller.signal.aborted;
+    const final_result: AgentSessionTurnResult = {
+      turn_id: active_turn.turn_id,
+      text: result.text,
+      success: stopped ? false : result.success,
+      ...(stopped
+        ? { error: TURN_STOPPED_MESSAGE }
+        : result.error ? { error: result.error } : {}),
+    };
+    active_turn.result = final_result;
+    this.events.publish({
+      mutation_id: nanoid(),
+      variant: "turn",
+      type: "finish",
+      session_id: this.session_id,
+      turn_id: active_turn.turn_id,
+      status: stopped ? "stopped" : final_result.success ? "completed" : "failed",
+      created_at: Date.now(),
+      text: final_result.text,
+      ...(final_result.error ? { error: final_result.error } : {}),
+    });
+    active_turn.deferred_finished.resolve(final_result);
+    if (this.active_turn === active_turn) this.active_turn = null;
+  }
+
+  /** 以失败结果结束当前 Active Turn，并尽力持久化 Error Message。 */
+  private async fail_active_turn(
+    active_turn: ActiveSessionTurnState,
+    error: unknown,
+  ): Promise<void> {
+    if (active_turn.result) return;
+    const message = active_turn.abort_controller.signal.aborted
+      ? TURN_STOPPED_MESSAGE
+      : error instanceof Error ? error.message : String(error);
+    const final_result: AgentSessionTurnResult = {
+      turn_id: active_turn.turn_id,
+      text: "",
+      success: false,
+      error: message,
+    };
+    active_turn.result = final_result;
+    if (message !== TURN_STOPPED_MESSAGE) {
+      try {
+        await this.messages.append_error_message({
+          scope: "turn",
+          turn_id: active_turn.turn_id,
+          code: "turn_execution_failed",
+          message,
+          recoverable: true,
+        });
+      } catch {
+        // Error Message 写入失败不能阻止 Turn Handle 收口。
+      }
+    }
+    this.events.publish({
+      mutation_id: nanoid(),
+      variant: "turn",
+      type: "finish",
+      session_id: this.session_id,
+      turn_id: active_turn.turn_id,
+      status: active_turn.abort_controller.signal.aborted ? "stopped" : "failed",
+      created_at: Date.now(),
+      text: "",
+      error: message,
+    });
+    active_turn.deferred_finished.resolve(final_result);
+    if (this.active_turn === active_turn) this.active_turn = null;
+  }
+
+  /** 为一条尚未执行的 Prompt 创建可观测取消结果。 */
+  private resolve_cancelled_prompt(
+    deferred_handle: SessionDeferred<AgentSessionTurnHandle>,
+  ): void {
+    const turn_id = `turn:${this.session_id}:cancelled:${Date.now()}:${nanoid(6)}`;
+    const cancelled_turn = create_active_session_turn_state(turn_id);
+    const final_result: AgentSessionTurnResult = {
+      turn_id,
+      text: "",
+      success: false,
+      error: QUEUED_PROMPT_CANCELLED_MESSAGE,
+    };
+    cancelled_turn.result = final_result;
+    cancelled_turn.deferred_finished.resolve(final_result);
+    this.events.publish({
+      mutation_id: nanoid(),
+      variant: "turn",
+      type: "start",
+      session_id: this.session_id,
+      turn_id,
+      status: "running",
+      created_at: Date.now(),
+    });
+    this.events.publish({
+      mutation_id: nanoid(),
+      variant: "turn",
+      type: "finish",
+      session_id: this.session_id,
+      turn_id,
+      status: "failed",
+      created_at: Date.now(),
+      text: "",
+      error: QUEUED_PROMPT_CANCELLED_MESSAGE,
+    });
+    deferred_handle.resolve(create_turn_handle(cancelled_turn));
   }
 
   /** 执行一个 Turn 内的模型与 Tool Step Loop。 */
@@ -566,6 +624,7 @@ function create_active_session_turn_state(
     result: null,
     deferred_finished: create_deferred<AgentSessionTurnResult>(),
     abort_controller: new AbortController(),
+    prompt_started: false,
   };
 }
 
