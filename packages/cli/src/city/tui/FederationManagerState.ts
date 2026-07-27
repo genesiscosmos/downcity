@@ -244,13 +244,13 @@ function build_city_items(params: {
         detail: format_membership_detail(params.membership),
       },
       {
-        id: "balance",
+        id: "credits",
         title: params.balance
           ? t({
-            zh: `余额：${params.balance.display || params.balance.credits}`,
-            en: `Balance: ${params.balance.display || params.balance.credits}`,
+            zh: `Credits：${params.balance.display || params.balance.credits}`,
+            en: `Credits: ${params.balance.display || params.balance.credits}`,
           })
-          : t({ zh: "余额：暂不可用", en: "Balance: unavailable" }),
+          : t({ zh: "Credits：暂不可用", en: "Credits: unavailable" }),
         subtitle: params.balance
           ? t({
             zh: `更新：${params.balance.updated_at}`,
@@ -259,7 +259,7 @@ function build_city_items(params: {
           : params.balance_error ?? "",
         detail: params.balance
           ? format_balance_detail(params.balance)
-          : format_error_detail(t({ zh: "余额暂不可用", en: "Balance unavailable" }), params.balance_error),
+          : format_error_detail(t({ zh: "Credits 暂不可用", en: "Credits unavailable" }), params.balance_error),
         disabled: true,
       },
       {

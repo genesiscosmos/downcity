@@ -6,7 +6,7 @@
  * - 对外可见类型（如 DodoPaymentProviderOptions）放在 payment/types.ts
  */
 
-import type { PaymentTopupRecord } from "../../types.js";
+import type { PaymentOrderSnapshot } from "../../types.js";
 
 /**
  * Dodo SDK 运行环境。
@@ -19,8 +19,8 @@ export type DodoPaymentEnvironment = "test_mode" | "live_mode";
 export interface DodoCreateCheckoutSessionInput {
   /** 服务内部支付记录 ID。 */
   payment_id: string;
-  /** 充值单信息。 */
-  topup: PaymentTopupRecord;
+  /** 支付订单快照。 */
+  payment: PaymentOrderSnapshot;
   /** Dodo product_id。 */
   product_id: string;
   /** 结算币种。 */

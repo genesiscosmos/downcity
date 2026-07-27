@@ -4,7 +4,7 @@
  * 关键说明（中文）
  * - `payment` 是唯一对外服务，Stripe / Creem / Dodo / Waffo 都是 provider。
  * - provider 只负责创建 checkout、解析 webhook 和声明自身配置。
- * - 支付记录、webhook 事件和 balance 入账都由 PaymentService 统一负责。
+ * - 支付记录与 webhook 事件由 PaymentService 负责，Credits 入账通过 on_paid 边界交给接入方。
  */
 
 import type { EnvRequirement } from "@downcity/city";
@@ -34,21 +34,19 @@ export type PaymentEventSyncStatus =
   | "ignored"
   | "failed";
 
-/**
- * 充值单最小只读视图。
- */
-export interface PaymentTopupRecord extends Record<string, unknown> {
-  /** 充值单 ID。 */
-  topup_id: string;
-  /** 充值目标用户 ID。 */
+/** Provider 创建 Checkout 时读取的支付订单快照。 */
+export interface PaymentOrderSnapshot extends Record<string, unknown> {
+  /** PaymentService 内部支付订单 ID。 */
+  payment_id: string;
+  /** 支付订单所属用户 ID。 */
   user_id: string;
-  /** 充值额度，单位为 credits。 */
+  /** 支付成功后应发放的额度。 */
   credits: number;
-  /** 充值金额，单位为 USD cents，用于支付 provider。 */
-  usd_cents?: number;
-  /** 充值单状态。 */
-  status: string;
-  /** 充值说明。 */
+  /** 真实支付金额，单位为结算币种的最小货币单位。 */
+  amount_minor: number;
+  /** 结算币种。 */
+  currency: string;
+  /** 订单说明。 */
   note: string;
 }
 
@@ -90,8 +88,8 @@ export interface PaymentProviderContext {
 export interface PaymentProviderCheckoutInput {
   /** 服务内部 payment ID。 */
   payment_id: string;
-  /** 充值单快照。 */
-  topup: PaymentTopupRecord;
+  /** 支付订单快照。 */
+  payment: PaymentOrderSnapshot;
   /** 当前请求。 */
   request: Request;
   /** City runtime env 上下文。 */
@@ -144,8 +142,6 @@ export interface PaymentProviderWebhookEvent {
   status: PaymentStatus | "ignored";
   /** 服务内部 payment ID。 */
   payment_id?: string;
-  /** balance topup ID。 */
-  topup_id?: string;
   /** provider checkout/session ID。 */
   provider_session_id?: string;
   /** provider payment ID。 */
@@ -180,34 +176,30 @@ export interface PaymentProvider {
  * Payment 服务配置。
  */
 export interface PaymentServiceOptions {
-  /** 读取充值单。 */
-  readTopup(topup_id: string): Promise<PaymentTopupRecord>;
-  /** 完成充值单并真正入账。 */
-  finishTopup(
-    topup_id: string,
-    extra?: {
-      /** 说明文本。 */
-      note?: string;
-      /** 外部引用 ID。 */
-      ref?: string;
-      /** 结构化扩展字段。 */
-      meta?: Record<string, unknown>;
-    },
-  ): Promise<PaymentTopupRecord>;
   /** 当前 City 启用的支付 provider。 */
   providers: PaymentProvider[];
+  /** 支付订单首次确认 paid 后触发；接入方应使用 payment_id 幂等发放 Credits。 */
+  on_paid(record: PaymentRecord): Promise<void>;
 }
 
 /**
  * 统一创建 Checkout 请求。
  */
 export interface PaymentCreateCheckoutInput extends Record<string, unknown> {
-  /** 对应的 balance topup ID。 */
-  topup_id?: string;
   /** 支付方式 ID，例如 `stripe`、`dodo`。 */
   method_id?: string;
   /** `method_id` 的别名，方便服务端脚本直接调用。 */
   provider?: string;
+  /** 支付成功后发放的正数 Credits。 */
+  credits: number;
+  /** 支付金额，单位为结算币种的最小货币单位。 */
+  amount_minor: number;
+  /** 客户端为本次支付意图提供的稳定幂等键。 */
+  idempotency_key: string;
+  /** 面向用户与审计的订单说明。 */
+  note?: string;
+  /** 结构化订单信息。 */
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -218,8 +210,6 @@ export interface PaymentCheckoutCreateResult extends Record<string, unknown> {
   payment_id: string;
   /** provider ID。 */
   provider: string;
-  /** 对应的 topup ID。 */
-  topup_id: string;
   /** provider checkout/session ID。 */
   provider_session_id: string;
   /** provider payment ID。 */
@@ -240,10 +230,10 @@ export interface PaymentRecord extends Record<string, unknown> {
   payment_id: string;
   /** provider ID。 */
   provider: string;
-  /** 对应的 balance topup ID。 */
-  topup_id: string;
   /** 充值目标用户 ID。 */
   user_id: string;
+  /** 创建支付意图时使用的稳定幂等键。 */
+  idempotency_key: string;
   /** provider checkout/session ID。 */
   provider_session_id: string;
   /** provider payment ID。 */
@@ -260,6 +250,8 @@ export interface PaymentRecord extends Record<string, unknown> {
   status: PaymentStatus;
   /** 第三方 Checkout 托管页面 URL。 */
   checkout_url: string;
+  /** 面向用户与审计的订单说明。 */
+  note: string;
   /** 扩展字段 JSON 文本。 */
   metadata_json: string;
   /** 创建时间。 */

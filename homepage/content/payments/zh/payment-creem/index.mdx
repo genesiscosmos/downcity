@@ -1,90 +1,15 @@
 ---
-title: "Creem Payment 服务"
-description: "把一次性 Creem Checkout 支付同步成用户全局余额充值。"
+title: Creem Payment Provider
 ---
 
-`PaymentService` 通过 `creemPaymentProvider()` 创建 Creem 托管 Checkout，并在 Creem 通过 webhook 确认支付成功后，完成一笔已经存在的 `balance` topup。
-
-它不是 subscription 或 entitlement 服务。这个服务只负责 Checkout 创建、本地支付记录、webhook 事件记录，以及最后调用 `balance.finishTopup()` 入账。
-
-## 启用方式
+将 `creemPaymentProvider()` 放入 `PaymentService.providers`，配置 `CREEM_API_KEY`、`CREEM_PRODUCT_ID` 和可选的 `CREEM_WEBHOOK_SECRET`。用户创建订单：
 
 ```ts
-import { Federation } from "@downcity/city";
-import {
-  BalanceService,
-  PaymentService,
-  creemPaymentProvider,
-} from "@downcity/services";
-
-const base = new Federation({ db });
-const balance = new BalanceService();
-
-base.use(balance);
-base.use(new PaymentService({
-  // 关键说明（中文）：PaymentService 直接接收 readTopup / finishTopup 两个函数，
-  // 不再需要 balance bridge 对象包一层。
-  readTopup: async (topup_id) => await balance.readTopup(topup_id),
-  finishTopup: async (topup_id, extra) => await balance.finishTopup(topup_id, extra),
-  providers: [
-      creemPaymentProvider({
-        api_key: process.env.CREEM_API_KEY,
-        product_id: process.env.CREEM_PRODUCT_ID,
-        webhook_secret: process.env.CREEM_WEBHOOK_SECRET,
-      }),
-  ],
-}));
-```
-
-## 必需 env
-
-- `CREEM_API_KEY`：用于创建 Checkout 的 API key
-- `CREEM_PRODUCT_ID`：Creem 托管 Checkout 使用的 product
-- `CREEM_WEBHOOK_SECRET`：可选，用于校验 `creem-signature`
-- `DOWNCITY_CITY_BASE_URL`：可选，City 对外访问地址，用于生成内置结果页
-- `CREEM_CURRENCY`：可选，支付方式目录展示用币种
-- `CREEM_API_BASE_URL`：可选，测试环境 API 地址覆写
-
-Creem 的 success URL 会自动基于 `DOWNCITY_CITY_BASE_URL` 生成；未配置时会回退到当前请求 origin，方便本地开发。
-
-## 前端流程
-
-先通过 `balance` 创建可信 topup，再为它创建 Creem checkout：
-
-```ts
-const checkout = await user.service("payment").action("checkout/create").invoke({
-  method_id: "creem",
-  topup_id: "topup_demo",
+await city.payment.method("creem").invoke({
+  credits: 5_000_000,
+  amount_minor: 500,
+  idempotency_key: "order_123",
 });
-
-location.href = checkout.checkout_url;
 ```
 
-`PaymentService()` 也会在支付方式目录里暴露 Creem：
-
-```ts
-const methods = await guest.service("payment").get("methods");
-```
-
-只有同时配置 `CREEM_API_KEY` 和 `CREEM_PRODUCT_ID` 时，Creem method 才会是 enabled。
-
-## Webhook 同步
-
-把 Creem webhook 事件发到：
-
-```txt
-POST /v1/payment/webhook
-```
-
-服务会基于事件 ID 幂等应用 `checkout.completed`。重复事件只返回已有同步状态，不会重复给余额入账。
-
-## 路由
-
-- `GET /v1/payment/methods`
-- `POST /v1/payment/checkout/create`
-- `GET /v1/payment/payments/me`
-- `GET /v1/payment/payments`
-- `GET /v1/payment/events`
-- `POST /v1/payment/webhook`
-- `GET /v1/payment/redirect/success`
-- `GET /v1/payment/redirect/cancel`
+Payment 通过 `on_paid(record)` 通知接入方，接入方使用 `payment:${record.payment_id}` 幂等调用 `credits.topup()`。

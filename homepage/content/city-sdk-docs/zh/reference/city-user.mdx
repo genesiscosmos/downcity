@@ -342,7 +342,9 @@ const usage = await city.service("usage").get("me");
 const methods = await city.payment.methods();
 
 const checkout = await city.payment.method("stripe").invoke({
-  topup_id: "topup_demo",
+  credits: 5_000_000,
+  amount_minor: 500,
+  idempotency_key: "order_123",
 });
 ```
 
@@ -392,7 +394,9 @@ const usage = await city.service("usage").get("me");
 const methods = await city.payment.methods();
 
 const checkout = await city.payment.method("stripe").invoke({
-  topup_id: "topup_demo",
+  credits: 5_000_000,
+  amount_minor: 500,
+  idempotency_key: "order_123",
 });
 ```
 

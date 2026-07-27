@@ -101,7 +101,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { Federation, R2Storage } from "@downcity/city";
 import {
   AccountsService,
-  BalanceService,
+  CreditsService,
   UsageService,
   githubAccountsProvider,
   googleAccountsProvider,
@@ -136,7 +136,7 @@ async function create_federation(env: Env): Promise<Federation> {
       wechatAccountsProvider(),
     ],
   }));
-  federation.use(new BalanceService());
+  federation.use(new CreditsService());
   federation.use(new UsageService({ record_errors: true }));
   await federation.health();
   return federation;

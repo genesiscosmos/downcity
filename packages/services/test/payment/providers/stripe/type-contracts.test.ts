@@ -12,25 +12,8 @@ const base = new Federation({
   db: {} as never,
 });
 
-const readTopup = async (_topup_id: string) => ({
-  topup_id: "topup_demo",
-  user_id: "user_1",
-  credits: 100_000_000,
-  status: "pending",
-  note: "demo",
-});
-
-const finishTopup = async (_topup_id: string) => ({
-  topup_id: "topup_demo",
-  user_id: "user_1",
-  credits: 100_000_000,
-  status: "paid",
-  note: "demo",
-});
-
 base.use(new PaymentService({
-  readTopup,
-  finishTopup,
+  on_paid: async (_record) => undefined,
   providers: [
     stripePaymentProvider({
       currency: "usd",

@@ -1,107 +1,21 @@
 ---
-title: Billing Integration
-description: "How @downcity/services combines with hooks, plans, balances, and payment services instead of replacing them."
+title: Usage and Credits billing
+description: Record usage facts, calculate prices in the product, and charge through Credits.
 ---
 
-The most common misunderstanding about the usage service is: "if I install it, I now have a billing system."
-
-A more accurate relationship is:
-
-- the usage service records facts
-- hooks own business rules
-- payment and balance own funding state
-
-## The most common composition
-
-```txt
-usage service
-  -> records call facts
-hook
-  -> decides quotas, plans, balances
-payment provider
-  -> syncs payment results and completes topups
-```
-
-## A practical integration example
+`UsageService` records model and service-call facts. It does not own pricing. Product logic calculates Credits from real usage and calls `credits.charge()`.
 
 ```ts
-import { UsageService } from "@downcity/services";
-import { BalanceService } from "@downcity/services";
-import { PaymentService } from "@downcity/services";
-import { stripePaymentProvider } from "@downcity/services";
+const ai = new AIService({ credits });
 
-const balance = new BalanceService();
-
-base.use(new UsageService({
-  record_errors: true,
-}));
-
-base.use(balance);
-base.use(new PaymentService({
-  readTopup: async (topup_id) => await balance.readTopup(topup_id),
-  finishTopup: async (topup_id, extra) => await balance.finishTopup(topup_id, extra),
-  providers: [
-    stripePaymentProvider({
-      secret_key: process.env.STRIPE_SECRET_KEY,
-      webhook_secret: process.env.STRIPE_WEBHOOK_SECRET,
-    }),
-  ],
-}));
+await credits.charge({
+  user_id: "user_123",
+  credits: calculate_credits(usage),
+  source: "model_usage",
+  ref: usage.request_id,
+  idempotency_key: `model_usage:${usage.request_id}`,
+  metadata: { model_id: usage.model_id },
+});
 ```
 
-That means:
-
-- usage records how much was used
-- payment tells the frontend which payment providers are currently exposed
-- the provider syncs successful payments into topups and balance
-- your own hooks or systems still decide how charging should work
-
-## Common scenarios
-
-### Scenario 1: entitlement first, usage later
-
-This is common for subscription or plan-based cities.
-
-### Scenario 2: analytics now, billing later
-
-Many cities first need to know which models, cities, and users consume the most before they need a full billing engine.
-
-## A common trusted-side export example
-
-```ts
-const summary = await admin.service("usage").get("summary");
-
-await syncUsageToBillingSystem(summary);
-```
-
-## Why not put all charging logic inside the usage service
-
-Products vary too much: per-call pricing, per-model pricing, quota-based pricing, and included usage plus overage billing all have different rules.
-
-## Common API surface
-
-- `UsageService({ record_errors })`
-- `admin.service("usage").get("summary")`
-- `guest.service("payment").get("methods")`
-- `PaymentService({ balance, providers: [stripePaymentProvider()] })`
-
-## Common misunderstandings
-
-### The usage service does not generate your pricing model
-
-It provides fact inputs, not a full commercial strategy engine.
-
-### Payment state and usage are not the same thing
-
-- payment / balance: was the wallet funded and how much balance remains?
-- usage: how much was consumed?
-
-### Not all billing logic should live inside City
-
-Many teams use City as the fact layer and access layer while keeping higher-level commercial logic in their own systems.
-
-## Read next
-
-- For the usage fact model, read [Usage Event Model](/en/payments/usage/event-model)
-- For usage read surfaces, read [Querying and Summary](/en/payments/usage/querying-and-summary)
-- For Stripe topup syncing, read [@downcity/services](/en/payments)
+The AIService Credits bridge checks minimum availability before execution and charges real usage afterward. Payment orders credit the Primary Card through `PaymentService.on_paid`; the lifecycles stay separate.

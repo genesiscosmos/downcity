@@ -172,7 +172,9 @@ const paymentMethodDescribeContract: Promise<UserPaymentMethod> = paymentMethod.
 const paymentMethodInvokeContract: Promise<{ checkout_url: string }> = paymentMethod.invoke<{
   checkout_url: string;
 }>({
-  topup_id: "topup_demo",
+  credits: 5_000_000,
+  amount_minor: 500,
+  idempotency_key: "order_123",
 });
 void paymentMethodDescribeContract;
 void paymentMethodInvokeContract;

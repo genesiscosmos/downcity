@@ -11,8 +11,6 @@ import type { admin_tui_runtime } from "@/federation/types/AdminTui.js";
 interface StripePaymentListItem {
   /** 支付记录 ID */
   payment_id: string;
-  /** 充值单 ID */
-  topup_id: string;
   /** 用户 ID */
   user_id: string;
   /** 充值额度，单位为 credits。 */
@@ -39,7 +37,7 @@ interface StripeEventListItem {
 }
 
 export async function managePayment(a: Bureau, baseUrl: string, runtime: admin_tui_runtime): Promise<void> {
-  const svc = a.service("payment.stripe");
+  const svc = a.service("payment");
   const endpoints = buildStripeEndpoints(baseUrl);
   while (true) {
     const act = await runtime.select(t({ zh: "支付方式", en: "Payment methods" }), [

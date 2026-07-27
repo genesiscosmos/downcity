@@ -1,64 +1,34 @@
 ---
-title: "@downcity/services"
-description: "统一安装 Downcity 官方 accounts、balance、usage、Stripe 支付和 Creem 支付服务。"
+title: Accounts、Credits 与 Payment
+description: Downcity 官方身份、额度、支付和用量服务。
 ---
 
-`@downcity/services` 把 Downcity 官方服务合并成一个包，但仍然保留清晰的能力边界。
+`@downcity/services` 提供四个职责独立的领域：
 
-你安装一个包，就能按需启用：
-
-- `AccountsService`：注册、登录、OAuth、会话和 `user_token`
-- `BalanceService`：全局余额、流水、充值单和 redeem code
-- `PaymentService`：统一暴露当前 City 开放的支付方式，配合 `stripePaymentProvider`、`creemPaymentProvider` 等 provider 使用
-- `UsageService`：记录真实用户侧 service 调用事实
-
-## 安装
-
-```bash
-pnpm add @downcity/services
-```
-
-## 最小接入
+- `AccountsService` 拥有登录与用户身份。
+- `CreditsService` 拥有 Primary / Ephemeral Cards 和账务记录。
+- `PaymentService` 拥有支付订单、Checkout 与 webhook。
+- `UsageService` 记录服务调用用量。
 
 ```ts
-import { Federation } from "@downcity/city";
-import {
-  AccountsService,
-  BalanceService,
-  creemPaymentProvider,
-  PaymentService,
-  stripePaymentProvider,
-  UsageService,
-} from "@downcity/services";
+const credits = new CreditsService();
+const payment = new PaymentService({
+  providers: [stripePaymentProvider()],
+  on_paid: async (record) => {
+    await credits.topup({
+      card: { kind: "primary", user_id: record.user_id },
+      credits: record.credits,
+      source: "payment",
+      ref: record.payment_id,
+      idempotency_key: `payment:${record.payment_id}`,
+    });
+  },
+});
 
-const base = new Federation({ db });
-const balance = new BalanceService();
-
-base.use(new AccountsService());
-base.use(balance);
-base.use(new PaymentService({
-  readTopup: async (topup_id) => await balance.readTopup(topup_id),
-  finishTopup: async (topup_id, extra) => await balance.finishTopup(topup_id, extra),
-  providers: [
-    stripePaymentProvider(),
-    creemPaymentProvider(),
-  ],
-}));
-base.use(new UsageService());
+federation.use(new AccountsService());
+federation.use(credits);
+federation.use(payment);
+federation.use(new UsageService());
 ```
 
-产品侧通常先调用：
-
-```ts
-const methods = await guest.service("payment").get("methods");
-```
-
-然后再根据返回的 `methods.items` 选择具体支付方式，比如 `stripe` 或 `creem`。
-
-## 按能力阅读
-
-1. 账号能力读 [Accounts 服务](/zh/payments/accounts)
-2. 余额能力读 [Balance 服务](/zh/payments/balance)
-3. 使用记录读 [Usage 服务](/zh/payments/usage)
-4. Stripe 充值读 [Stripe Payment 服务](/zh/payments/payment-stripe)
-5. Creem 充值读 [Creem Payment 服务](/zh/payments/payment-creem)
+从 [Credits Cards](/zh/payments/credits) 开始了解额度模型，支付接入见各 Provider 页面。

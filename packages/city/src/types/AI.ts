@@ -202,8 +202,8 @@ export type AIModelEnvRequirement = CityModelEnvRequirement;
 
 /** AIService 配置。 */
 export interface AIServiceOptions {
-  /** AI 专用余额桥接。 */
-  balance?: AIBalanceBridge;
+  /** AI 专用 Credits 桥接。 */
+  credits?: AICreditsBridge;
   /** 图片异步任务允许保持 queued/running 的最长时间，单位毫秒。 */
   image_max_pending_duration_ms?: number;
 }
@@ -226,20 +226,22 @@ export interface AICharge {
   metadata?: Record<string, unknown>;
 }
 
-/** AIService 提交给外部 Balance bridge 的扣费输入。 */
-export interface AIBalanceChargeInput extends AICharge {
+/** AIService 提交给外部 Credits bridge 的扣费输入。 */
+export interface AICreditsChargeInput extends AICharge {
   /** 当前用户 ID。 */
   user_id: string;
   /** 相同键的重复提交必须只产生一次扣费。 */
-  idempotency_key?: string;
+  idempotency_key: string;
+  /** Credits Transaction 的业务来源。 */
+  source: "model_usage";
 }
 
-/** AIService 依赖的最小 Balance bridge。 */
-export interface AIBalanceBridge {
-  /** 执行余额前置检查。 */
-  precheck?(user_id: string, needed_credits?: number): Promise<{ credits: number }>;
+/** AIService 依赖的最小 Credits bridge。 */
+export interface AICreditsBridge {
+  /** 执行 Credits 前置检查。 */
+  precheck?(user_id: string, needed_credits?: number): Promise<{ available_credits: number }>;
   /** 执行扣费并记录账单。 */
-  charge(input: AIBalanceChargeInput): Promise<unknown>;
+  charge(input: AICreditsChargeInput): Promise<unknown>;
 }
 
 /** Channel 或模型生成账单时可读取的显式输入。 */

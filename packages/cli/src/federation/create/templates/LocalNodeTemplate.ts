@@ -112,7 +112,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { Federation } from "@downcity/city";
 import {
   AccountsService,
-  BalanceService,
+  CreditsService,
   UsageService,
 } from "@downcity/services";
 
@@ -189,7 +189,7 @@ sqlite.pragma("journal_mode = WAL");
 const federation = new Federation({ db: drizzle(sqlite) });
 
 federation.use(new AccountsService({ local_login: true }));
-federation.use(new BalanceService());
+federation.use(new CreditsService());
 federation.use(new UsageService({ record_errors: true }));
 
 await federation.health();

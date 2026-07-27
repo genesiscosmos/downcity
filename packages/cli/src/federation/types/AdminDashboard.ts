@@ -19,7 +19,7 @@ export type dashboard_service_status = "ready" | "missing" | "error" | "partial"
 /**
  * Dashboard 依赖服务 ID。
  */
-export type dashboard_service_id = "accounts" | "usage" | "balance" | "payment";
+export type dashboard_service_id = "accounts" | "usage" | "credits" | "payment";
 
 /**
  * Dashboard 视图。
@@ -77,11 +77,11 @@ export interface dashboard_raw_data {
   /** usage event 记录。 */
   usage_events: dashboard_record[];
 
-  /** balance account 记录。 */
-  balance_users: dashboard_record[];
+  /** Credits 用户汇总记录。 */
+  credits_users: dashboard_record[];
 
-  /** balance topup 记录。 */
-  balance_topups: dashboard_record[];
+  /** Credits Topup Transactions。 */
+  credits_topups: dashboard_record[];
 
   /** payment 记录。 */
   payment_payments: dashboard_record[];
@@ -222,7 +222,7 @@ export interface dashboard_revenue_metrics {
 /**
  * 余额指标。
  */
-export interface dashboard_balance_metrics {
+export interface dashboard_credits_metrics {
   /** 当前余额 credits 总和。 */
   current_balance_total: number;
 
@@ -304,8 +304,8 @@ export interface dashboard_snapshot {
   /** 收入指标。 */
   revenue: dashboard_revenue_metrics;
 
-  /** 余额指标。 */
-  balance: dashboard_balance_metrics;
+  /** Credits 指标。 */
+  credits: dashboard_credits_metrics;
 
   /** 用量指标。 */
   usage: dashboard_usage_metrics;

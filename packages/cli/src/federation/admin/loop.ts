@@ -15,7 +15,7 @@ import { manageEnv } from "@/federation/admin/commands/service-env.js";
 import { manageDashboard } from "@/federation/admin/commands/dashboard.js";
 import { manageCities } from "@/federation/admin/commands/cities.js";
 import { manageAccounts } from "@/federation/admin/commands/accounts.js";
-import { manageBalance } from "@/federation/admin/commands/balance.js";
+import { manage_credits } from "@/federation/admin/commands/credits.js";
 import { manageUsage } from "@/federation/admin/commands/usage.js";
 import { managePayment } from "@/federation/admin/commands/payment.js";
 import { manageCustom } from "@/federation/admin/commands/custom.js";
@@ -30,7 +30,7 @@ const commands: Record<string, (a: Bureau, baseUrl: string, runtime: admin_tui_r
   models: manageModels,
   cities: manageCities,
   accounts: manageAccounts,
-  balance: manageBalance,
+  credits: manage_credits,
   usage: manageUsage,
   payment: managePayment,
   custom: manageCustom,
@@ -130,13 +130,13 @@ export async function adminLoop(
         },
         {
           label: t({
-            zh: "余额",
-            en: "Balance",
+            zh: "Credits",
+            en: "Credits",
           }),
-          value: "balance",
+          value: "credits",
           hint: t({
-            zh: "管理用户余额账户、余额流水、充值单、兑换码，以及人工增加或扣减余额。",
-            en: "Manage user balance accounts, ledger history, topups, redeem codes, and manual balance adjustments.",
+            zh: "管理用户永久与限时 Cards、额度变动和不可变流水。",
+            en: "Manage primary and ephemeral cards, credit transactions, and immutable history.",
           }),
         },
         {

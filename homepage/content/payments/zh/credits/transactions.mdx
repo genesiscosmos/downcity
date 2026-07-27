@@ -1,0 +1,23 @@
+---
+title: Transactions 与消费顺序
+description: 通过 Transaction 和 Entries 原子、幂等地改变 Credits。
+---
+
+Topup 和 Charge 都产生一条 `CreditsTransaction`。每张受影响 Card 对应一条不可变 `CreditsTransactionEntry`，Entry 同时承担账本职责。
+
+```ts
+await bureau.credits.charge({
+  user_id: "user_123",
+  credits: 250_000,
+  source: "model_usage",
+  ref: "request_456",
+  idempotency_key: "model_usage:request_456",
+});
+```
+
+未指定 Card 时，服务按到期时间从早到晚消费有效 Ephemeral Cards，再消费 Primary Card。指定 Card 时不会跨 Card。总额度不足时整体失败并返回 `402`，不会产生部分扣费。
+
+```ts
+const transactions = await bureau.credits.transactions.list({ user_id: "user_123" });
+const entries = await bureau.credits.history.list({ transaction_id: transactions[0].transaction_id });
+```

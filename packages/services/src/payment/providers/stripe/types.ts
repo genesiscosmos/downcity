@@ -6,7 +6,7 @@
  * - 对外可见类型（如 StripePaymentProviderOptions）放在 payment/types.ts
  */
 
-import type { PaymentTopupRecord } from "../../types.js";
+import type { PaymentOrderSnapshot } from "../../types.js";
 
 /**
  * Stripe Checkout API 创建参数。
@@ -14,8 +14,8 @@ import type { PaymentTopupRecord } from "../../types.js";
 export interface StripeCreateCheckoutSessionInput {
   /** 服务内部支付记录 ID。 */
   payment_id: string;
-  /** 充值单信息。 */
-  topup: PaymentTopupRecord;
+  /** 支付订单快照。 */
+  payment: PaymentOrderSnapshot;
   /** 结算币种。 */
   currency: string;
   /** 支付成功跳转地址。 */

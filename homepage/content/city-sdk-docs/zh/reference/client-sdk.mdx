@@ -63,7 +63,9 @@ const items = await city.service("cities").get("list");
 // 支付方式
 const methods = await city.payment.methods();
 const checkout = await city.payment.method("stripe").invoke({
-  topup_id: "topup_demo",
+  credits: 5_000_000,
+  amount_minor: 500,
+  idempotency_key: "order_123",
 });
 
 // 管理端

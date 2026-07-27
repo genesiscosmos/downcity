@@ -1,93 +1,11 @@
 ---
-title: "Waffo Pancake Payment 服务"
-description: "把一次性 Waffo Pancake Checkout 同步成用户全局余额充值。"
+title: Waffo Payment Provider
 ---
 
-`PaymentService` 通过 `waffoPaymentProvider()` 与 `@waffo/pancake-ts` SDK 创建 Waffo Pancake Checkout，并在 Waffo 通过 `order.completed` webhook 确认支付成功后，完成一笔已经存在的 `balance` topup。
-
-服务会把 Downcity 的 `payment_id` 写入 Waffo `orderMerchantExternalId`，因此 webhook 同步可以稳定找到本地支付记录，不依赖买家可修改字段。
-
-## 启用方式
+将 `waffoPaymentProvider()` 放入 `PaymentService.providers`，配置 Merchant ID、Private Key、Product ID 与 webhook public key。
 
 ```ts
-import { Federation } from "@downcity/city";
-import {
-  BalanceService,
-  PaymentService,
-  waffoPaymentProvider,
-} from "@downcity/services";
-
-const base = new Federation({ db });
-const balance = new BalanceService();
-
-base.use(balance);
-base.use(new PaymentService({
-  // 关键说明（中文）：PaymentService 直接接收 readTopup / finishTopup 两个函数，
-  // 不再需要 balance bridge 对象包一层。
-  readTopup: async (topup_id) => await balance.readTopup(topup_id),
-  finishTopup: async (topup_id, extra) => await balance.finishTopup(topup_id, extra),
-  providers: [
-      waffoPaymentProvider({
-        merchant_id: process.env.WAFFO_MERCHANT_ID,
-        private_key: process.env.WAFFO_PRIVATE_KEY,
-        product_id: process.env.WAFFO_PRODUCT_ID,
-        webhook_public_key: process.env.WAFFO_WEBHOOK_PUBLIC_KEY,
-      }),
-  ],
-}));
+await city.payment.method("waffo").invoke({ credits: 5_000_000, amount_minor: 500, idempotency_key: "order_123" });
 ```
 
-## 必需 env
-
-- `WAFFO_MERCHANT_ID`：Waffo Merchant ID，例如 `MER_6gyg0Q5asJBoY5GSNmZt7P`
-- `WAFFO_PRIVATE_KEY`：`@waffo/pancake-ts` SDK 使用的 API private key
-- `WAFFO_PRODUCT_ID`：Waffo Checkout 使用的 product
-- `WAFFO_WEBHOOK_PUBLIC_KEY`：可选，用于校验 webhook；SDK 也可以使用内置 Waffo public key
-- `WAFFO_ENVIRONMENT`：可选，`test` 或 `prod`，默认 `test`
-- `DOWNCITY_CITY_BASE_URL`：可选，City 对外访问地址，用于生成内置结果页
-- `WAFFO_CURRENCY`：可选，支付方式目录展示用币种
-- `WAFFO_API_BASE_URL`：可选，测试环境 API 地址覆写
-
-Waffo 的 success URL 会自动基于 `DOWNCITY_CITY_BASE_URL` 生成；未配置时会回退到当前请求 origin，方便本地开发。
-
-## 前端流程
-
-先通过 `balance` 创建可信 topup，再为它创建 Waffo checkout：
-
-```ts
-const checkout = await user.service("payment").action("checkout/create").invoke({
-  method_id: "waffo",
-  topup_id: "topup_demo",
-});
-
-location.href = checkout.checkout_url;
-```
-
-`PaymentService()` 也会在支付方式目录里暴露 Waffo：
-
-```ts
-const methods = await guest.service("payment").get("methods");
-```
-
-只有同时配置 `WAFFO_MERCHANT_ID`、`WAFFO_PRIVATE_KEY` 和 `WAFFO_PRODUCT_ID` 时，Waffo method 才会是 enabled。
-
-## Webhook 同步
-
-把 Waffo webhook 事件发到：
-
-```txt
-POST /v1/payment/webhook
-```
-
-服务会通过 Waffo SDK 校验 `x-waffo-signature`，并基于 delivery id 幂等应用 `order.completed`。
-
-## 路由
-
-- `GET /v1/payment/methods`
-- `POST /v1/payment/checkout/create`
-- `GET /v1/payment/payments/me`
-- `GET /v1/payment/payments`
-- `GET /v1/payment/events`
-- `POST /v1/payment/webhook`
-- `GET /v1/payment/redirect/success`
-- `GET /v1/payment/redirect/cancel`
+支付确认后由 `on_paid(record)` 幂等发放 Primary Card Credits。

@@ -23,7 +23,7 @@ import { sqliteAsyncJobs } from "../async-job/schema.js";
 import type { AsyncJobRecord } from "../../types/AsyncJob.js";
 import type { CityModelDescriptor } from "@downcity/type";
 import type {
-  AIBalanceBridge,
+  AICreditsBridge,
   AIBillInput,
   AICharge,
   AIImageCreateResult,
@@ -124,14 +124,14 @@ export class AIService extends Service {
   /** SDK 通路 action 映射（modality → action） */
   private modalityActions = new Map<string, ActionFn>();
 
-  /** AI 专用余额桥接。 */
-  private readonly balance?: AIBalanceBridge;
+  /** AI 专用 Credits 桥接。 */
+  private readonly credits?: AICreditsBridge;
   /** 图片异步任务允许保持 queued/running 的最长时间。 */
   private readonly image_max_pending_duration_ms: number;
 
   constructor(options: AIServiceOptions = {}) {
     super({ id: "ai", name: "AI", tables: { async_jobs: sqliteAsyncJobs } });
-    this.balance = options.balance;
+    this.credits = options.credits;
     this.image_max_pending_duration_ms = normalizePositiveNumber(
       options.image_max_pending_duration_ms,
       DEFAULT_IMAGE_MAX_PENDING_DURATION_MS,
@@ -698,17 +698,17 @@ export class AIService extends Service {
   }
 
   /**
-   * AI 消费型 Action 的余额前置检查。
+   * AI 消费型 Action 的 Credits 前置检查。
    *
    * 关键说明（中文）
-   * - 默认只拦截已经欠费的用户，适配 AI 后置 usage 扣费
-   * - admin 或没有用户归属的调用不产生用户扣费，也不做用户余额检查
+   * - 默认要求用户至少有一个可用 Credit，适配 AI 后置 usage 扣费
+   * - admin 或没有用户归属的调用不产生用户扣费，也不做用户 Credits 检查
    * - image/result、image/fetch、models 等非消费型 Action 不挂载该 hook
    */
   private async precheck(ctx: Context): Promise<void> {
     const user_id = ctx.user?.user_id;
-    if (!user_id || !this.balance?.precheck) return;
-    await this.balance.precheck(user_id);
+    if (!user_id || !this.credits?.precheck) return;
+    await this.credits.precheck(user_id);
   }
 
   /**
@@ -776,7 +776,7 @@ export class AIService extends Service {
     fallback_user_id?: string,
     response?: Response,
   ): Promise<Response | undefined> {
-    if (!charge || !this.balance) return response;
+    if (!charge || !this.credits) return response;
     ctx.locals.ai_charge_handled = true;
     let charge_line: AICharge | undefined;
     let charge_user_id: string | undefined;
@@ -788,14 +788,18 @@ export class AIService extends Service {
         const user_id = line.user_id ?? fallback_user_id ?? ctx.user?.user_id;
         charge_user_id = user_id;
         if (!user_id) return;
-        await this.balance?.charge({
+        const resolved_idempotency_key = idempotency_key
+          ?? ctx.request?.headers.get("idempotency-key")?.trim()
+          ?? `ai:${crypto.randomUUID()}`;
+        await this.credits?.charge({
           ...line,
           user_id,
-          ...(idempotency_key ? { idempotency_key } : {}),
+          idempotency_key: resolved_idempotency_key,
+          source: "model_usage",
         });
       })
       .catch((error) => {
-        console.error("[AIService] balance charge failed", {
+        console.error("[AIService] credits charge failed", {
           user_id: charge_user_id,
           service_id: ctx.service?.id,
           action_id: ctx.action?.id,

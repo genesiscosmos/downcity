@@ -29,11 +29,11 @@ export async function fetch_dashboard_raw_data(a: Bureau): Promise<dashboard_raw
   const usage_events = await read_endpoint(services, "usage", "events", async () =>
     (await a.service("usage").get<{ items: dashboard_record[] }>("events")).items
   );
-  const balance_users = await read_endpoint(services, "balance", "users", async () =>
-    await a.balance.listUsers(200) as unknown as dashboard_record[]
+  const credits_users = await read_endpoint(services, "credits", "users", async () =>
+    await a.credits.list_users({ limit: 200 }) as unknown as dashboard_record[]
   );
-  const balance_topups = await read_endpoint(services, "balance", "topups", async () =>
-    await a.balance.listTopups({ limit: 200 }) as unknown as dashboard_record[]
+  const credits_topups = await read_endpoint(services, "credits", "topups", async () =>
+    await a.credits.transactions.list({ kind: "topup", limit: 200 }) as unknown as dashboard_record[]
   );
   const payment_payments = await read_endpoint(services, "payment", "payments", async () =>
     (await a.service("payment").get<{ items: dashboard_record[] }>("payments")).items
@@ -48,8 +48,8 @@ export async function fetch_dashboard_raw_data(a: Bureau): Promise<dashboard_raw
     accounts_users,
     accounts_sessions,
     usage_events,
-    balance_users,
-    balance_topups,
+    credits_users,
+    credits_topups,
     payment_payments,
     payment_events,
   };
@@ -62,7 +62,7 @@ function create_initial_service_state(): dashboard_service_state_map {
   return {
     accounts: create_service_state(),
     usage: create_service_state(),
-    balance: create_service_state(),
+    credits: create_service_state(),
     payment: create_service_state(),
   };
 }

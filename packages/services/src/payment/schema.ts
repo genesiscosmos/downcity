@@ -15,8 +15,8 @@ import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 export const paymentPayments = sqliteTable("service_payment_payments", {
   payment_id: text("payment_id").primaryKey(),
   provider: text("provider").notNull(),
-  topup_id: text("topup_id").notNull(),
   user_id: text("user_id").notNull(),
+  idempotency_key: text("idempotency_key").notNull(),
   provider_session_id: text("provider_session_id").notNull(),
   provider_payment_id: text("provider_payment_id").notNull(),
   provider_order_id: text("provider_order_id").notNull(),
@@ -25,6 +25,7 @@ export const paymentPayments = sqliteTable("service_payment_payments", {
   currency: text("currency").notNull(),
   status: text("status").notNull(),
   checkout_url: text("checkout_url").notNull(),
+  note: text("note").notNull(),
   metadata_json: text("metadata_json").notNull(),
   created_at: text("created_at").notNull(),
   updated_at: text("updated_at").notNull(),

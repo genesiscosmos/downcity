@@ -1,0 +1,34 @@
+---
+title: Payment 入账
+description: PaymentService 拥有支付订单，确认 paid 后向 Primary Card 发放额度。
+---
+
+`PaymentService` 管理 pending、paid、canceled 等订单状态。`CreditsService.topup()` 只接收已经确认的额度。
+
+```ts
+const credits = new CreditsService();
+const payment = new PaymentService({
+  providers: [stripePaymentProvider()],
+  on_paid: async (record) => {
+    await credits.topup({
+      card: { kind: "primary", user_id: record.user_id },
+      credits: record.credits,
+      source: "payment",
+      ref: record.payment_id,
+      idempotency_key: `payment:${record.payment_id}`,
+      note: record.note,
+    });
+  },
+});
+```
+
+用户直接创建支付订单，无需先在 Credits 中创建 pending Topup：
+
+```ts
+await city.payment.method("stripe").invoke({
+  credits: 5_000_000,
+  amount_minor: 500,
+  idempotency_key: "order_123",
+  note: "购买 Credits",
+});
+```

@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 被 PaymentService.install() 调用，完成所有 /v1/payment/* 路由注册。
- * - 所有 balance 交互通过传入的 service 对象进行，不直接依赖 BalanceService 类型。
+ * - PaymentService 自己拥有支付订单；paid 后通过 on_paid 通知接入方发放 Credits。
  */
 
 import type { ServiceInstallContext } from "@downcity/city";
@@ -21,12 +21,12 @@ import type {
   PaymentCreateCheckoutInput,
   PaymentEventRecord,
   PaymentEventSyncStatus,
+  PaymentOrderSnapshot,
   PaymentProvider,
   PaymentProviderWebhookEvent,
   PaymentProviderWebhookInput,
   PaymentRecord,
   PaymentStatus,
-  PaymentTopupRecord,
 } from "./types.js";
 
 /**
@@ -66,10 +66,8 @@ const PAYMENT_CHECKOUT_CREATION_LEASE_MS = 5 * 60 * 1000;
  * - 使用 interface 避免 routes.ts 与 service.ts 之间的循环类型依赖。
  */
 interface PaymentServiceLike {
-  /** 读取充值单。 */
-  readTopup(topup_id: string): Promise<PaymentTopupRecord>;
-  /** 完成充值并入账。 */
-  finishTopup(topup_id: string, extra?: Record<string, unknown>): Promise<PaymentTopupRecord>;
+  /** 通知接入方处理已确认支付订单。 */
+  on_paid(record: PaymentRecord): Promise<void>;
   /** 获取已挂载的 provider 列表。 */
   getProviders(): PaymentProvider[];
 }
@@ -106,22 +104,23 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
         return requestCtx.jsonResponse({ error: `Payment provider ${provider.id} is disabled${reason}` }, 400);
       }
 
-      const userId = normalizeRequired(requestCtx.user?.user_id, "user_id");
-      const topup = await service.readTopup(normalizeRequired(body.topup_id, "topup_id"));
-      if (topup.user_id !== userId) {
-        return requestCtx.jsonResponse({ error: "Topup does not belong to current user" }, 403);
-      }
-      if (topup.status !== "pending") {
-        return requestCtx.jsonResponse({ error: `Topup is already ${topup.status}` }, 409);
-      }
-
-      const payment_id = await create_stable_payment_id(provider.id, topup.topup_id);
+      const user_id = normalizeRequired(requestCtx.user?.user_id, "user_id");
+      const credits = read_positive_integer(body.credits, "credits");
+      const amount_minor = read_positive_integer(body.amount_minor, "amount_minor");
+      const idempotency_key = normalizeRequired(body.idempotency_key, "idempotency_key");
+      const note = normalizeOptionalText(body.note);
+      const payment_id = await create_stable_payment_id(provider.id, user_id, idempotency_key);
       const reservation = await claim_checkout_creation({
         payments,
         payment_id,
         provider: provider.id,
         method_currency: method.currency,
-        topup,
+        user_id,
+        credits,
+        amount_minor,
+        idempotency_key,
+        note,
+        metadata: read_metadata(body.metadata),
       });
       if (reservation.ready) {
         return requestCtx.jsonResponse(toCheckoutResult(reservation.record));
@@ -147,7 +146,7 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
       try {
         const created = await provider.createCheckout({
           payment_id: reservation.record.payment_id,
-          topup,
+          payment: to_order_snapshot(reservation.record),
           request: requestCtx.request,
           ctx,
           success_url: successURL,
@@ -157,7 +156,6 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
           payments,
           reservation,
           created,
-          topup,
           provider: provider.id,
         });
         return requestCtx.jsonResponse(toCheckoutResult(row));
@@ -282,7 +280,7 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
       return htmlResponse(renderRedirectPage({
         title: "Payment successful",
         heading: "Payment completed",
-        description: "Your payment has been accepted. If the balance view has not refreshed yet, close this page and return to your app.",
+        description: "Your payment has been accepted. If the Credits view has not refreshed yet, close this page and return to your app.",
         request: requestCtx.request,
       }));
     },
@@ -380,7 +378,7 @@ function readPaymentEventLease(value: string): number {
 }
 
 /**
- * 同步 webhook 事件到本地支付记录与 balance。
+ * 同步 webhook 事件到本地支付订单，并在首次确认 paid 时通知接入方。
  */
 async function syncPaymentEvent(input: {
   provider: PaymentProvider;
@@ -398,21 +396,17 @@ async function syncPaymentEvent(input: {
   if (payment.status !== "pending" && event.status !== "paid") return "ignored";
 
   if (event.status === "paid") {
-    const topup = await service.readTopup(payment.topup_id);
-    if (topup.status === "pending") {
-      await service.finishTopup(payment.topup_id, {
-        note: `${provider.id} topup`,
-        ref: event.ref || event.provider_payment_id || event.provider_order_id || event.provider_session_id || payment.provider_session_id,
-        meta: {
-          provider: provider.id,
-          payment_id: payment.payment_id,
-          provider_session_id: event.provider_session_id || payment.provider_session_id,
-          provider_payment_id: event.provider_payment_id || payment.provider_payment_id,
-          provider_order_id: event.provider_order_id || payment.provider_order_id,
-          ...(event.meta ?? {}),
-        },
-      });
-    }
+    await service.on_paid({
+      ...payment,
+      provider_session_id: event.provider_session_id || payment.provider_session_id,
+      provider_payment_id: event.provider_payment_id || payment.provider_payment_id,
+      provider_order_id: event.provider_order_id || payment.provider_order_id,
+      metadata_json: JSON.stringify({
+        ...read_metadata_json(payment.metadata_json),
+        ref: event.ref,
+        ...(event.meta ?? {}),
+      }),
+    });
   }
 
   await updatePayment(payments, payment.payment_id, {
@@ -448,27 +442,14 @@ async function findPaymentByWebhookEvent(
     const record = (await payments.select({ provider, provider_order_id: event.provider_order_id }))[0];
     if (record) return record;
   }
-  if (event.topup_id) return await findActivePaymentByTopup(payments, provider, event.topup_id);
   return undefined;
 }
 
 /**
- * 查找某充值单对应的最新的 pending 支付记录。
- */
-async function findActivePaymentByTopup(
-  payments: PaymentTable,
-  provider: string,
-  topupId: string,
-): Promise<PaymentRecord | undefined> {
-  const rows = sortPayments(await payments.select({ provider, topup_id: topupId }));
-  return rows.find((row) => row.status === "pending");
-}
-
-/**
- * 原子占用某个 topup/provider 的 Checkout 创建权。
+ * 原子占用某个用户支付意图的 Checkout 创建权。
  *
  * 关键说明（中文）
- * - payment_id 由 provider + topup_id 稳定生成，数据库主键承担并发唯一约束。
+ * - payment_id 由 provider + user_id + idempotency_key 稳定生成，数据库主键承担并发唯一约束。
  * - 空 checkout_url 表示创建中；租约过期或失败记录可由下一次请求接管。
  */
 async function claim_checkout_creation(input: {
@@ -476,13 +457,22 @@ async function claim_checkout_creation(input: {
   payment_id: string;
   provider: string;
   method_currency: string;
-  topup: PaymentTopupRecord;
+  user_id: string;
+  credits: number;
+  amount_minor: number;
+  idempotency_key: string;
+  note: string;
+  metadata: Record<string, unknown>;
 }): Promise<PaymentCheckoutCreationClaim> {
-  const existing_rows = sortPayments(await input.payments.select({
-    provider: input.provider,
-    topup_id: input.topup.topup_id,
-  }));
-  let current = existing_rows[0];
+  let current = (await input.payments.select({ payment_id: input.payment_id }))[0];
+  if (current && (
+    current.user_id !== input.user_id
+    || current.credits !== input.credits
+    || current.amount_minor !== input.amount_minor
+    || current.currency !== input.method_currency
+  )) {
+    throw new Error("idempotency_key was already used with different payment parameters");
+  }
   if (current?.status === "pending" && current.checkout_url) {
     return { claimed: false, ready: true, record: current, lease_metadata_json: "" };
   }
@@ -492,6 +482,7 @@ async function claim_checkout_creation(input: {
 
   const now = new Date().toISOString();
   const lease_metadata_json = JSON.stringify({
+    ...input.metadata,
     checkout_lease: `${PAYMENT_EVENT_LEASE_PREFIX}${Date.now() + PAYMENT_CHECKOUT_CREATION_LEASE_MS}`,
     provider: input.provider,
   });
@@ -499,16 +490,17 @@ async function claim_checkout_creation(input: {
     const record: PaymentRecord = {
       payment_id: input.payment_id,
       provider: input.provider,
-      topup_id: input.topup.topup_id,
-      user_id: input.topup.user_id,
+      user_id: input.user_id,
+      idempotency_key: input.idempotency_key,
       provider_session_id: "",
       provider_payment_id: "",
       provider_order_id: "",
-      credits: input.topup.credits,
-      amount_minor: readPaymentAmountMinor(input.topup),
+      credits: input.credits,
+      amount_minor: input.amount_minor,
       currency: input.method_currency,
       status: "pending",
       checkout_url: "",
+      note: input.note,
       metadata_json: lease_metadata_json,
       created_at: now,
       updated_at: now,
@@ -571,7 +563,6 @@ async function finish_checkout_creation(input: {
   payments: PaymentTable;
   reservation: PaymentCheckoutCreationClaim;
   created: Awaited<ReturnType<PaymentProvider["createCheckout"]>>;
-  topup: PaymentTopupRecord;
   provider: string;
 }): Promise<PaymentRecord> {
   const values: Partial<PaymentRecord> = {
@@ -580,7 +571,7 @@ async function finish_checkout_creation(input: {
     provider_order_id: normalizeOptionalText(input.created.provider_order_id),
     checkout_url: input.created.checkout_url,
     metadata_json: JSON.stringify({
-      note: input.topup.note,
+      ...without_checkout_lease(read_metadata_json(input.reservation.lease_metadata_json)),
       provider: input.provider,
       ...(input.created.metadata ?? {}),
     }),
@@ -618,9 +609,9 @@ async function fail_checkout_creation(
   });
 }
 
-/** 为 provider + topup 生成跨进程稳定的 payment 主键。 */
-async function create_stable_payment_id(provider: string, topup_id: string): Promise<string> {
-  const bytes = new TextEncoder().encode(`${provider}:${topup_id}`);
+/** 为 provider + user + idempotency_key 生成跨进程稳定的 Payment 主键。 */
+async function create_stable_payment_id(provider: string, user_id: string, idempotency_key: string): Promise<string> {
+  const bytes = new TextEncoder().encode(`${provider}:${user_id}:${idempotency_key}`);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   const suffix = Array.from(new Uint8Array(digest).slice(0, 16))
     .map((value) => value.toString(16).padStart(2, "0"))
@@ -685,7 +676,6 @@ function toCheckoutResult(row: PaymentRecord): PaymentCheckoutCreateResult {
   return {
     payment_id: row.payment_id,
     provider: row.provider,
-    topup_id: row.topup_id,
     provider_session_id: row.provider_session_id,
     provider_payment_id: row.provider_payment_id,
     provider_order_id: row.provider_order_id,
@@ -694,15 +684,47 @@ function toCheckoutResult(row: PaymentRecord): PaymentCheckoutCreateResult {
   };
 }
 
-/**
- * 读取真实支付金额。
- */
-function readPaymentAmountMinor(topup: PaymentTopupRecord): number {
-  const amount_minor = Number(topup.usd_cents);
-  if (!Number.isSafeInteger(amount_minor) || amount_minor <= 0) {
-    throw new TypeError("topup.usd_cents is required for payment revenue tracking");
+/** 读取正安全整数。 */
+function read_positive_integer(value: unknown, label: string): number {
+  const normalized = Number(value);
+  if (!Number.isSafeInteger(normalized) || normalized <= 0) {
+    throw new TypeError(`${label} must be a positive safe integer`);
   }
-  return amount_minor;
+  return normalized;
+}
+
+/** 读取结构化 metadata。 */
+function read_metadata(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+/** 解析数据库中的 metadata JSON。 */
+function read_metadata_json(value: string): Record<string, unknown> {
+  try {
+    return read_metadata(JSON.parse(value || "{}"));
+  } catch {
+    return {};
+  }
+}
+
+/** 移除仅供内部并发控制使用的 Checkout 租约。 */
+function without_checkout_lease(value: Record<string, unknown>): Record<string, unknown> {
+  const { checkout_lease: _checkout_lease, ...metadata } = value;
+  return metadata;
+}
+
+/** 将持久化 Payment 投影为 Provider 所需的只读订单快照。 */
+function to_order_snapshot(row: PaymentRecord): PaymentOrderSnapshot {
+  return {
+    payment_id: row.payment_id,
+    user_id: row.user_id,
+    credits: row.credits,
+    amount_minor: row.amount_minor,
+    currency: row.currency,
+    note: row.note,
+  };
 }
 
 /**

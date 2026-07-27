@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 这些类型只描述 City CLI 用户侧展示与调用结果。
  * - `credits` / `usd_cents` 的数值单位清晰表达在字段名中。
- * - 真实余额账户、充值单与支付记录仍由 City 的 balance/payment 服务定义。
+ * - 真实额度由 CreditsService 持有，支付订单由 PaymentService 持有。
  */
 
 /**
@@ -45,58 +45,6 @@ export interface CityBalanceAccount extends Record<string, unknown> {
 /**
  * 当前登录用户创建的充值单摘要。
  */
-export interface CityBalanceTopup extends Record<string, unknown> {
-  /**
-   * 充值单 ID。
-   */
-  topup_id: string;
-
-  /**
-   * City 用户 ID。
-   */
-  user_id: string;
-
-  /**
-   * 充值额度，单位为 credits。
-   */
-  credits: number;
-
-  /**
-   * 充值金额，单位为 USD cents。
-   */
-  usd_cents?: number;
-
-  /**
-   * 充值单状态。
-   */
-  status: string;
-
-  /**
-   * 充值说明。
-   */
-  note: string;
-
-  /**
-   * 外部引用 ID。
-   */
-  ref: string;
-
-  /**
-   * 扩展字段 JSON 文本。
-   */
-  metadata_json: string;
-
-  /**
-   * 充值单创建时间。
-   */
-  created_at: string;
-
-  /**
-   * 充值单更新时间。
-   */
-  updated_at: string;
-}
-
 /**
  * 支付 checkout 创建结果。
  */
@@ -105,11 +53,6 @@ export interface CityCheckoutResult extends Record<string, unknown> {
    * 支付服务内部记录 ID。
    */
   payment_id?: string;
-
-  /**
-   * 对应的充值单 ID。
-   */
-  topup_id?: string;
 
   /**
    * 第三方支付 checkout session ID。
@@ -131,10 +74,11 @@ export interface CityCheckoutResult extends Record<string, unknown> {
  * 当前登录用户充值流程结果。
  */
 export interface CityRechargeResult {
-  /**
-   * 充值单。
-   */
-  topup: CityBalanceTopup;
+  /** 支付成功后发放的 Credits。 */
+  credits: number;
+
+  /** 支付金额，单位为结算币种的最小货币单位。 */
+  amount_minor: number;
 
   /**
    * 支付 checkout 创建结果。

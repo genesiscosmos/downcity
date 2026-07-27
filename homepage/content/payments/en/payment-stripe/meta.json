@@ -1,9 +1,4 @@
 {
   "title": "Stripe Payment Service",
-  "pages": [
-    "index",
-    "topups-and-checkout",
-    "webhooks-and-sync",
-    "crediting-balance"
-  ]
+  "pages": ["index"]
 }

@@ -1,0 +1,25 @@
+---
+title: Credits Service
+description: 使用永久 Primary Card 与限时 Ephemeral Card 管理用户额度。
+---
+
+`CreditsService` 只负责额度持有和消费，不负责支付订单、奖励活动规则或模型定价。
+
+```ts
+import { Federation } from "@downcity/city";
+import { CreditsService } from "@downcity/services";
+
+const federation = new Federation({ db });
+const credits = new CreditsService();
+federation.use(credits);
+```
+
+用户读取自己的总可用额度：
+
+```ts
+const summary = await city.service("credits").get("me");
+```
+
+服务会返回 `primary_credits`、`ephemeral_credits`、`available_credits`、下一到期时间和有效临时 Card 数量。
+
+管理端使用 `bureau.credits` typed invoker。第一版不支持匿名主体、转账、负余额、Card 延期或关闭。

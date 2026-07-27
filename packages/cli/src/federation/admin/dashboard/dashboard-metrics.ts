@@ -81,15 +81,15 @@ export function build_dashboard_snapshot(raw_data: dashboard_raw_data, range: da
       range: read_revenue(range_paid_payments_with_amount),
       today: read_revenue(paid_payments.filter((item) => has_amount_minor(item) && is_since(read_row_time(item), window.today_start))),
     },
-    balance: {
-      current_balance_total: raw_data.balance_users.reduce((sum, item) => sum + read_number(item.credits), 0),
-      credited_total: raw_data.balance_topups
-        .filter((item) => read_string(item.status) === "paid")
+    credits: {
+      current_balance_total: raw_data.credits_users.reduce((sum, item) => sum + read_number(item.available_credits), 0),
+      credited_total: raw_data.credits_topups
+        .filter((item) => read_string(item.status) === "applied")
         .reduce((sum, item) => sum + read_number(item.credits), 0),
-      paid_topup_credits_range: raw_data.balance_topups
-        .filter((item) => read_string(item.status) === "paid" && in_range(item, window))
+      paid_topup_credits_range: raw_data.credits_topups
+        .filter((item) => read_string(item.status) === "applied" && in_range(item, window))
         .reduce((sum, item) => sum + read_number(item.credits), 0),
-      pending_topups: raw_data.balance_topups.filter((item) => read_string(item.status) === "pending").length,
+      pending_topups: raw_data.payment_payments.filter((item) => read_string(item.status) === "pending").length,
     },
     usage: {
       total_events: raw_data.usage_events.length,

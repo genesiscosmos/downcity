@@ -13,7 +13,7 @@ import { Federation, AIService } from "@downcity/city";
 import type { AIBillInput } from "@downcity/city";
 import {
   AccountsService,
-  BalanceService,
+  CreditsService,
   PaymentService,
   UsageService,
   creemPaymentProvider,
@@ -31,7 +31,6 @@ import {
 } from "./image-channel.js";
 import { DeepSeekChannel } from "./deepseek-channel.js";
 
-const INITIAL_BALANCE = 100_000_000;
 const CHAT_REQUEST_COST_CREDITS = 10_000;
 const IMAGE_COST_CREDITS = 50_000;
 const WORKER_VERSION = "0.0.1";
@@ -60,7 +59,7 @@ async function init_federation(env: Env): Promise<Federation> {
   const db = drizzle(env.DB);
 
   // 关键说明（中文）
-  // 顺序有依赖关系：payment 依赖 balance 暴露的 readTopup / finishTopup；ai 依赖 balance 执行扣费。
+  // Payment 在 paid 后通过 CreditsService 发放额度，AI 通过 CreditsService 扣费。
   const federation = new Federation({ db });
 
   federation.use(new AccountsService({
@@ -71,12 +70,19 @@ async function init_federation(env: Env): Promise<Federation> {
     ],
   }));
 
-  const balance = new BalanceService({ init_credits: INITIAL_BALANCE });
-  federation.use(balance);
+  const credits = new CreditsService();
+  federation.use(credits);
 
   federation.use(new PaymentService({
-    readTopup: async (topup_id) => await balance.readTopup(topup_id),
-    finishTopup: async (topup_id, extra) => await balance.finishTopup(topup_id, extra),
+    on_paid: async (record) => {
+      await credits.topup({
+        card: { kind: "primary", user_id: record.user_id },
+        credits: record.credits,
+        source: "payment",
+        ref: record.payment_id,
+        idempotency_key: `payment:${record.payment_id}`,
+      });
+    },
     providers: [
       stripePaymentProvider(),
       creemPaymentProvider(),
@@ -108,7 +114,7 @@ async function init_federation(env: Env): Promise<Federation> {
     env_key: "GEMINI_API_KEY",
   });
 
-  const ai = new AIService({ balance });
+  const ai = new AIService({ credits });
   ai.use([
     deepseek_channel.model({
       id: "deepseek-v4-flash",

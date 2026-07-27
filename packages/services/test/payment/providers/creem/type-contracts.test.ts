@@ -13,27 +13,10 @@ import {
   type PaymentCheckoutCreateResult,
 } from "../../../../src/index.js";
 
-const readTopup = async (topup_id: string) => ({
-  topup_id,
-  user_id: "user_1",
-  credits: 100_000_000,
-  status: "pending",
-  note: "demo",
-});
-
-const finishTopup = async (topup_id: string) => ({
-  topup_id,
-  user_id: "user_1",
-  credits: 100_000_000,
-  status: "paid",
-  note: "demo",
-});
-
 const base = new Federation({ db: {} as any });
 
 base.use(new PaymentService({
-  readTopup,
-  finishTopup,
+  on_paid: async (_record) => undefined,
   providers: [
     creemPaymentProvider({
       api_key: "creem_test",
@@ -46,7 +29,6 @@ base.use(new PaymentService({
 const checkout: PaymentCheckoutCreateResult = {
   payment_id: "pay_demo",
   provider: "creem",
-  topup_id: "topup_demo",
   provider_session_id: "ch_demo",
   provider_payment_id: "",
   provider_order_id: "",

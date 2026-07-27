@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 只面向当前 City 已登录的 City user，不提供 admin 加款入口。
- * - 充值链路复用 City 的 balance topup 与 payment checkout 服务。
+ * - 余额读取来自 CreditsService；充值订单由 PaymentService 直接创建。
  * - 交互菜单只调用这里的高层函数，避免 FederationConnection 模块继续膨胀。
  */
 
@@ -12,7 +12,6 @@ import { open_system_browser } from "@/shared/SystemBrowser.js";
 import { CityUserManager } from "@/city/shared/CityUserManager.js";
 import type {
   CityBalanceAccount,
-  CityBalanceTopup,
   CityCheckoutResult,
   CityRechargeInput,
   CityRechargeResult,
@@ -26,7 +25,17 @@ const cityUserManager = new CityUserManager();
  */
 export async function readCurrentCityBalance(): Promise<CityBalanceAccount> {
   const { user, city } = await cityUserManager.createUserClient();
-  const account = await city.service("balance").get<CityBalanceAccount>("me");
+  const summary = await city.service("credits").get<{
+    user_id: string;
+    available_credits: number;
+  }>("me");
+  const account: CityBalanceAccount = {
+    user_id: summary.user_id,
+    credits: summary.available_credits,
+    display: `${summary.available_credits} Credits`,
+    created_at: "",
+    updated_at: new Date().toISOString(),
+  };
   assertBalanceUserMatchesToken(account, user.user_id);
   return account;
 }
@@ -40,24 +49,24 @@ export async function rechargeCurrentCityUser(
   const { city } = await cityUserManager.createUserClient();
   const credits = normalizePositiveInteger(input.credits, "credits");
   const method_id = normalizeText(input.method_id) || DEFAULT_PAYMENT_METHOD_ID;
-  const topup = await city.service("balance").action("topups/create").invoke<CityBalanceTopup>({
+  const amount_minor = Math.max(1, Math.round(credits / 10_000));
+  const checkout = await city.payment.method(method_id).invoke<CityCheckoutResult>({
     credits,
+    amount_minor,
+    idempotency_key: normalizeText(input.ref) || `city_cli:${crypto.randomUUID()}`,
     note: normalizeText(input.note) || "City user recharge",
-    ref: normalizeText(input.ref),
-    meta: {
+    metadata: {
       source: "city-cli",
       method_id,
     },
-  });
-  const checkout = await city.payment.method(method_id).invoke<CityCheckoutResult>({
-    topup_id: topup.topup_id,
   });
   const checkout_url = normalizeText(checkout.checkout_url);
   const should_open = input.open_checkout !== false;
   const opened = should_open && checkout_url ? open_system_browser(checkout_url) : false;
 
   return {
-    topup,
+    credits,
+    amount_minor,
     checkout,
     method_id,
     opened,
@@ -73,8 +82,8 @@ function assertBalanceUserMatchesToken(
   }
   if (account.user_id !== token_user_id) {
     throw new Error([
-      "Balance account user does not match the authenticated token.",
-      `balance=${account.user_id}`,
+      "Credits user does not match the authenticated token.",
+      `credits=${account.user_id}`,
       `token=${token_user_id}`,
       "Run `city city logout` and then `city city login`.",
     ].join(" "));
@@ -89,7 +98,7 @@ export async function emitCurrentCityBalance(): Promise<void> {
 
   emitCliBlock({
     tone: "success",
-    title: "User balance",
+    title: "User Credits",
     summary: account.display || String(account.credits),
     facts: [
       { label: "user", value: account.user_id },
@@ -108,13 +117,10 @@ export function emitCityRechargeResult(result: CityRechargeResult): void {
   emitCliBlock({
     tone: checkout_url ? "success" : "warning",
     title: "User recharge",
-    summary: result.topup.status,
+    summary: String(result.checkout.status ?? "pending"),
     facts: [
-      { label: "credits", value: String(result.topup.credits) },
-      ...(typeof result.topup.usd_cents === "number"
-        ? [{ label: "usd_cents", value: String(result.topup.usd_cents) }]
-        : []),
-      { label: "topup", value: result.topup.topup_id },
+      { label: "credits", value: String(result.credits) },
+      { label: "amount_minor", value: String(result.amount_minor) },
       { label: "method", value: result.method_id },
       ...(result.checkout.payment_id
         ? [{ label: "payment", value: String(result.checkout.payment_id) }]

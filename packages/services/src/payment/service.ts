@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - payment 是唯一支付服务，Stripe / Creem / Dodo / Waffo 都只是 provider。
- * - 统一负责 checkout、本地支付记录、webhook 幂等、状态同步和 balance 入账。
+ * - 统一负责 checkout、本地支付订单、webhook 幂等与状态同步。
  * - 所有 provider 共用 `/v1/payment/*` 路由和统一 payments/events 表。
  */
 
@@ -11,7 +11,7 @@ import { InstallableService, type EnvRequirement, type ServiceInstallContext } f
 import { paymentEvents, paymentPayments } from "./schema.js";
 import { mergeEnvRequirements, normalizeProviders } from "./helpers.js";
 import { installPaymentRoutes } from "./routes.js";
-import type { PaymentProvider, PaymentServiceOptions } from "./types.js";
+import type { PaymentProvider, PaymentRecord, PaymentServiceOptions } from "./types.js";
 
 /**
  * Payment 服务自身 env。
@@ -51,6 +51,7 @@ export class PaymentService extends InstallableService {
       "统一支付服务。Stripe、Creem、Dodo、Waffo 都作为 provider 挂载。",
       "前端先读取 /methods，再通过 /checkout/create 创建对应 provider 的 checkout。",
       "所有 provider 共用 /webhook、/payments、/events 和统一 payment 表。",
+      "支付确认后通过 on_paid 通知接入方幂等发放 Credits。",
     ].join("\n");
   }
 
@@ -58,18 +59,9 @@ export class PaymentService extends InstallableService {
     installPaymentRoutes(this, ctx);
   }
 
-  /**
-   * 读取充值单。
-   */
-  readTopup(topup_id: string) {
-    return this.options.readTopup(topup_id);
-  }
-
-  /**
-   * 完成充值并入账。
-   */
-  finishTopup(topup_id: string, extra?: Record<string, unknown>) {
-    return this.options.finishTopup(topup_id, extra);
+  /** 通知接入方处理已确认支付订单。 */
+  on_paid(record: PaymentRecord): Promise<void> {
+    return this.options.on_paid(record);
   }
 
   /**

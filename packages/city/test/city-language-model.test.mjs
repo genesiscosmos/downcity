@@ -98,7 +98,7 @@ test("CityModel directly streams through Federation LanguageModelV3 runtime", as
     },
   })
   const ai = new AIService({
-    balance: {
+    credits: {
       charge: async (input) => charges.push(input),
     },
   })

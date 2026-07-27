@@ -23,7 +23,7 @@ description: 可信环境如何管理 city、签发 user_token，并维护 Runti
 - 管 `city`
 - 签 `user_token`
 - 维护 runtime env
-- 执行可信侧 balance / redeem_code 管理动作
+- 执行可信侧 Credits Card 与 Transaction 管理动作
 
 如果 `User City` 负责“用户态怎么调用 City”，那 `Admin City` 负责“可信侧怎么把这个调用环境准备好”。
 
@@ -277,16 +277,23 @@ const sessions = await admin.service("accounts").get("sessions");
 const payments = await admin.service("payment").get("payments");
 ```
 
-现在 `balance` 还提供了一层 typed invoker，适合管理余额和 `redeem_code`：
+`credits` 提供 typed invoker，用于管理 Cards 与账务变动：
 
 ```ts
-const issued = await admin.balance.redeemCodes.create({
-  credits: 300_000_000,
-  note: "campaign gift",
+const card = await admin.credits.cards.create_ephemeral({
+  user_id: "user_123",
+  name: "活动奖励",
+  initial_credits: 300_000_000,
+  expires_at: "2026-08-31T00:00:00.000Z",
+  source: "campaign",
+  idempotency_key: "campaign:user_123",
 });
 
-await admin.balance.redeemCodes.disable({
-  redeem_code_id: issued.redeem_code_id,
+await admin.credits.topup({
+  card: { kind: "ephemeral", card_id: card.card_id },
+  credits: 10_000_000,
+  source: "campaign_bonus",
+  idempotency_key: "campaign_bonus:user_123",
 });
 ```
 

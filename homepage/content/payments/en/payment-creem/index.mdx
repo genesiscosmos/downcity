@@ -1,90 +1,11 @@
 ---
-title: "Creem Payment Service"
-description: "Turn one-time Creem Checkout payments into global balance topups."
+title: Creem Payment Provider
 ---
 
-`PaymentService` with `creemPaymentProvider()` adds a hosted Creem Checkout flow that completes an existing `balance` topup after Creem confirms payment through webhook.
-
-It is not a subscription or entitlement service. The service only owns Checkout creation, local payment records, webhook event records, and the final call to `balance.finishTopup()`.
-
-## Enable it
+Add `creemPaymentProvider()` to `PaymentService.providers`. Configure `CREEM_API_KEY`, `CREEM_PRODUCT_ID`, and optionally `CREEM_WEBHOOK_SECRET`.
 
 ```ts
-import { Federation } from "@downcity/city";
-import {
-  BalanceService,
-  PaymentService,
-  creemPaymentProvider,
-} from "@downcity/services";
-
-const base = new Federation({ db });
-const balance = new BalanceService();
-
-base.use(balance);
-base.use(new PaymentService({
-  // PaymentService takes `readTopup` and `finishTopup` directly.
-  // There is no balance bridge object anymore.
-  readTopup: async (topup_id) => await balance.readTopup(topup_id),
-  finishTopup: async (topup_id, extra) => await balance.finishTopup(topup_id, extra),
-  providers: [
-      creemPaymentProvider({
-        api_key: process.env.CREEM_API_KEY,
-        product_id: process.env.CREEM_PRODUCT_ID,
-        webhook_secret: process.env.CREEM_WEBHOOK_SECRET,
-      }),
-  ],
-}));
+await city.payment.method("creem").invoke({ credits: 5_000_000, amount_minor: 500, idempotency_key: "order_123" });
 ```
 
-## Required env
-
-- `CREEM_API_KEY`: API key used to create Checkout sessions
-- `CREEM_PRODUCT_ID`: Creem product used for the hosted Checkout page
-- `CREEM_WEBHOOK_SECRET`: optional webhook signing secret for `creem-signature`
-- `DOWNCITY_CITY_BASE_URL`: optional public City base URL used to derive built-in result pages
-- `CREEM_CURRENCY`: optional display currency for payment method discovery
-- `CREEM_API_BASE_URL`: optional API base URL override for tests
-
-The Creem success redirect URL is generated automatically from `DOWNCITY_CITY_BASE_URL`. If it is not configured, the service falls back to the current request origin for local development.
-
-## Frontend flow
-
-Create a trusted topup first through `balance`, then create a Creem checkout for it:
-
-```ts
-const checkout = await user.service("payment").action("checkout/create").invoke({
-  method_id: "creem",
-  topup_id: "topup_demo",
-});
-
-location.href = checkout.checkout_url;
-```
-
-`PaymentService()` also exposes Creem through:
-
-```ts
-const methods = await guest.service("payment").get("methods");
-```
-
-The Creem method is enabled only when both `CREEM_API_KEY` and `CREEM_PRODUCT_ID` are configured.
-
-## Webhook sync
-
-Configure Creem to send webhook events to:
-
-```txt
-POST /v1/payment/webhook
-```
-
-The service applies `checkout.completed` once per event id. Repeated events return the stored sync status and do not credit balance twice.
-
-## Routes
-
-- `GET /v1/payment/methods`
-- `POST /v1/payment/checkout/create`
-- `GET /v1/payment/payments/me`
-- `GET /v1/payment/payments`
-- `GET /v1/payment/events`
-- `POST /v1/payment/webhook`
-- `GET /v1/payment/redirect/success`
-- `GET /v1/payment/redirect/cancel`
+Use `on_paid(record)` to call `credits.topup()` idempotently with `payment:${record.payment_id}`.

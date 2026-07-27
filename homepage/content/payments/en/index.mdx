@@ -1,64 +1,34 @@
 ---
-title: "@downcity/services"
-description: "Install one Downcity package for accounts, balance, usage, Stripe payment, and Creem payment services."
+title: Accounts, Credits, and Payment
+description: Official Downcity identity, credits, payment, and usage services.
 ---
 
-`@downcity/services` combines the official Downcity services into one package while keeping the capability boundaries clear.
+`@downcity/services` separates four domains:
 
-With one installation, you can opt into:
-
-- `AccountsService` for registration, login, OAuth, sessions, and `user_token`
-- `BalanceService` for global wallet, ledger, topups, and redeem codes
-- `PaymentService` for exposing which payment methods the current City supports, together with providers like `stripePaymentProvider` and `creemPaymentProvider`
-- `UsageService` for real user-side service-call facts
-
-## Install
-
-```bash
-pnpm add @downcity/services
-```
-
-## Minimal setup
+- `AccountsService` owns login and user identity.
+- `CreditsService` owns Primary / Ephemeral Cards and accounting records.
+- `PaymentService` owns payment orders, Checkout, and webhooks.
+- `UsageService` records service usage.
 
 ```ts
-import { Federation } from "@downcity/city";
-import {
-  AccountsService,
-  BalanceService,
-  creemPaymentProvider,
-  PaymentService,
-  stripePaymentProvider,
-  UsageService,
-} from "@downcity/services";
+const credits = new CreditsService();
+const payment = new PaymentService({
+  providers: [stripePaymentProvider()],
+  on_paid: async (record) => {
+    await credits.topup({
+      card: { kind: "primary", user_id: record.user_id },
+      credits: record.credits,
+      source: "payment",
+      ref: record.payment_id,
+      idempotency_key: `payment:${record.payment_id}`,
+    });
+  },
+});
 
-const base = new Federation({ db });
-const balance = new BalanceService();
-
-base.use(new AccountsService());
-base.use(balance);
-base.use(new PaymentService({
-  readTopup: async (topup_id) => await balance.readTopup(topup_id),
-  finishTopup: async (topup_id, extra) => await balance.finishTopup(topup_id, extra),
-  providers: [
-    stripePaymentProvider(),
-    creemPaymentProvider(),
-  ],
-}));
-base.use(new UsageService());
+federation.use(new AccountsService());
+federation.use(credits);
+federation.use(payment);
+federation.use(new UsageService());
 ```
 
-On the product side, the usual first call is:
-
-```ts
-const methods = await guest.service("payment").get("methods");
-```
-
-Then the frontend can choose the concrete method from `methods.items`, such as `stripe` or `creem`.
-
-## Read by capability
-
-1. For auth, read [Accounts Service](/en/payments/accounts)
-2. For wallet flows, read [Balance Service](/en/payments/balance)
-3. For usage events, read [Usage Service](/en/payments/usage)
-4. For Stripe topups, read [Stripe Payment Service](/en/payments/payment-stripe)
-5. For Creem topups, read [Creem Payment Service](/en/payments/payment-creem)
+Start with [Credits Cards](/en/payments/credits) for the credit model, then choose a payment provider.

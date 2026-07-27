@@ -14,7 +14,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { Federation, AIService } from "@downcity/city";
 import {
   AccountsService,
-  BalanceService,
+  CreditsService,
   PaymentService,
   UsageService,
   githubAccountsProvider,
@@ -129,7 +129,7 @@ async function sync_local_env(federation: Federation): Promise<void> {
  *
  * 关键点（中文）
  * - 不再通过 compose_city 函数隐藏装配过程，所有 service 的创建与注册都平铺在这里。
- * - 顺序有依赖关系：payment 依赖 balance，ai 依赖 balance 执行扣费。
+ * - Payment 在 paid 后通过 CreditsService 发放额度，AI 通过 CreditsService 扣费。
  */
 const federation = new Federation({ db });
 
@@ -143,12 +143,19 @@ const accounts = new AccountsService({
 });
 federation.use(accounts);
 
-const balance = new BalanceService({});
-federation.use(balance);
+const credits = new CreditsService();
+federation.use(credits);
 
 const payment = new PaymentService({
-  readTopup: async (topup_id) => await balance.readTopup(topup_id),
-  finishTopup: async (topup_id, extra) => await balance.finishTopup(topup_id, extra),
+  on_paid: async (record) => {
+    await credits.topup({
+      card: { kind: "primary", user_id: record.user_id },
+      credits: record.credits,
+      source: "payment",
+      ref: record.payment_id,
+      idempotency_key: `payment:${record.payment_id}`,
+    });
+  },
   providers: [stripePaymentProvider()],
 });
 federation.use(payment);
@@ -156,7 +163,7 @@ federation.use(payment);
 const usage = new UsageService({ record_errors: true });
 federation.use(usage);
 
-const ai = new AIService({ balance });
+const ai = new AIService({ credits });
 ai.use(Object.values(models));
 federation.use(ai);
 

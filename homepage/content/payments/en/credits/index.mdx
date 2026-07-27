@@ -1,0 +1,19 @@
+---
+title: Credits Service
+description: Manage permanent Primary Cards and expiring Ephemeral Cards.
+---
+
+`CreditsService` owns credit storage and consumption. It does not own payment orders, reward campaign rules, or model pricing.
+
+```ts
+import { Federation } from "@downcity/city";
+import { CreditsService } from "@downcity/services";
+
+const federation = new Federation({ db });
+const credits = new CreditsService();
+federation.use(credits);
+```
+
+Users can read their available credits with `city.service("credits").get("me")`. The response separates Primary and Ephemeral credits and includes the next expiration time.
+
+Trusted backends manage credits through the typed `bureau.credits` API. Anonymous subjects, transfers, negative balances, and Card extension or closure are intentionally out of scope.

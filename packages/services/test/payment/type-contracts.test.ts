@@ -5,29 +5,12 @@
 import { Federation } from "@downcity/city";
 import { PaymentService, stripePaymentProvider } from "../../src/index.js";
 
-const readTopup = async (topup_id: string) => ({
-  topup_id,
-  user_id: "user_1",
-  credits: 100_000_000,
-  status: "pending",
-  note: "demo",
-});
-
-const finishTopup = async (topup_id: string) => ({
-  topup_id,
-  user_id: "user_1",
-  credits: 100_000_000,
-  status: "paid",
-  note: "demo",
-});
-
 const base = new Federation({
   db: {} as never,
 });
 
 base.use(new PaymentService({
-  readTopup,
-  finishTopup,
+  on_paid: async (_record) => undefined,
   providers: [
     stripePaymentProvider(),
   ],

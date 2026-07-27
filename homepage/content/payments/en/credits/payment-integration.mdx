@@ -1,0 +1,32 @@
+---
+title: Payment crediting
+description: Let PaymentService own orders and issue Primary Card credits only after paid.
+---
+
+```ts
+const credits = new CreditsService();
+const payment = new PaymentService({
+  providers: [stripePaymentProvider()],
+  on_paid: async (record) => {
+    await credits.topup({
+      card: { kind: "primary", user_id: record.user_id },
+      credits: record.credits,
+      source: "payment",
+      ref: record.payment_id,
+      idempotency_key: `payment:${record.payment_id}`,
+      note: record.note,
+    });
+  },
+});
+```
+
+Users create a Payment order directly; Credits does not store pending payment topups:
+
+```ts
+await city.payment.method("stripe").invoke({
+  credits: 5_000_000,
+  amount_minor: 500,
+  idempotency_key: "order_123",
+  note: "Buy Credits",
+});
+```

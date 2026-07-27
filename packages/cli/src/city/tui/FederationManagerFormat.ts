@@ -134,7 +134,7 @@ export function format_login_detail(membership: FederationMembershipState): stri
 
 export function format_balance_detail(account: CityBalanceAccount): string {
   return [
-    `{bold}${t({ zh: "余额", en: "Balance" })}{/bold}`,
+    `{bold}Credits{/bold}`,
     account.display || String(account.credits),
     "",
     `user: ${account.user_id}`,
@@ -183,10 +183,9 @@ export function format_recharge_result(result: CityRechargeResult): string {
     : "";
   return [
     `{bold}${t({ zh: "充值已创建", en: "Recharge created" })}{/bold}`,
-    `credits: ${result.topup.credits}`,
-    ...(typeof result.topup.usd_cents === "number" ? [`usd_cents: ${result.topup.usd_cents}`] : []),
-    `status: ${result.topup.status}`,
-    `topup: ${result.topup.topup_id}`,
+    `credits: ${result.credits}`,
+    `amount_minor: ${result.amount_minor}`,
+    `status: ${result.checkout.status ?? "pending"}`,
     `method: ${result.method_id}`,
     result.checkout.payment_id ? `payment: ${result.checkout.payment_id}` : "",
     checkout_url ? `checkout: ${checkout_url}` : "",

@@ -3,7 +3,7 @@
  *
  * 关键说明（中文）
  * - 对外统一暴露 Downcity 官方服务
- * - 对外统一暴露 accounts / balance / payment / usage 等官方服务
+ * - 对外统一暴露 accounts / credits / payment / usage 等官方服务
  * - Email / GitHub / Google / WeChat 统一作为 accounts provider 暴露
  * - Stripe / Creem / Dodo / Waffo 统一作为 payment provider 暴露
  * - 业务侧只需要从一个包完成导入
@@ -46,35 +46,32 @@ export type {
   OAuthAccountsProviderOptions,
 } from "./accounts/types.js";
 
-export { balanceAccounts, balanceCharges, balanceLedger, balanceOperations, balanceRedeemCodes, balanceTopups } from "./balance/schema.js";
-export { BalanceService } from "./balance/service.js";
+export {
+  CreditsService,
+  creditsEphemeralCards,
+  creditsPrimaryCards,
+  creditsTransactionEntries,
+  creditsTransactions,
+} from "./credits/index.js";
 export type {
-  BalanceAccount,
-  BalanceCharge,
-  BalanceChargeInput,
-  BalanceChargeQuery,
-  BalanceChargeStatus,
-  BalanceCreditsConversion,
-  BalanceCreateRedeemCodeInput,
-  BalanceExtra,
-  BalanceHistoryQuery,
-  BalanceLedgerEntry,
-  BalanceLedgerKind,
-  BalancePrecheckCreditsResolver,
-  BalancePrecheckHook,
-  BalancePrecheckHookOptions,
-  BalancePrecheckUserResolver,
-  BalanceRedeemCode,
-  BalanceRedeemCodeIssueResult,
-  BalanceRedeemCodeQuery,
-  BalanceRedeemCodeRedeemResult,
-  BalanceRedeemCodeStatus,
-  BalanceServiceOptions,
-  BalanceTopup,
-  BalanceTopupQuery,
-  BalanceTopupStatus,
-  BalanceUserBalance,
-} from "./balance/types.js";
+  CreditsCardReference,
+  CreditsCardsView,
+  CreditsChargeInput,
+  CreditsEphemeralCard,
+  CreditsEphemeralCardCreateInput,
+  CreditsEphemeralCardQuery,
+  CreditsEphemeralCardStatus,
+  CreditsHistoryQuery,
+  CreditsPrimaryCard,
+  CreditsSummary,
+  CreditsTopupInput,
+  CreditsUserQuery,
+  CreditsTransaction,
+  CreditsTransactionEntry,
+  CreditsTransactionKind,
+  CreditsTransactionQuery,
+  CreditsTransactionStatus,
+} from "./credits/index.js";
 export {
   CREDITS_PER_USD,
   USD_DECIMAL_PLACES,
@@ -106,7 +103,7 @@ export type {
   PaymentProviderWebhookInput,
   PaymentRecord,
  PaymentServiceOptions,
- PaymentTopupRecord,
+ PaymentOrderSnapshot,
  PaymentStatus,
 } from "./payment/types.js";
 export type {

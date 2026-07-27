@@ -23,7 +23,7 @@ It usually owns three things:
 - managing `city`
 - issuing `user_token`
 - maintaining runtime env
-- running trusted-side balance / redeem_code administration
+- running trusted-side Credits Card and Transaction administration
 
 If `User City` owns "how a user-context city call reaches City," then `Admin City` owns "how the trusted side prepares that call environment."
 
@@ -277,16 +277,23 @@ const sessions = await admin.service("accounts").get("sessions");
 const payments = await admin.service("payment").get("payments");
 ```
 
-`balance` now also exposes a typed invoker for wallet and `redeem_code` administration:
+`credits` exposes a typed invoker for Cards and accounting changes:
 
 ```ts
-const issued = await admin.balance.redeemCodes.create({
-  credits: 300_000_000,
-  note: "campaign gift",
+const card = await admin.credits.cards.create_ephemeral({
+  user_id: "user_123",
+  name: "Campaign reward",
+  initial_credits: 300_000_000,
+  expires_at: "2026-08-31T00:00:00.000Z",
+  source: "campaign",
+  idempotency_key: "campaign:user_123",
 });
 
-await admin.balance.redeemCodes.disable({
-  redeem_code_id: issued.redeem_code_id,
+await admin.credits.topup({
+  card: { kind: "ephemeral", card_id: card.card_id },
+  credits: 10_000_000,
+  source: "campaign_bonus",
+  idempotency_key: "campaign_bonus:user_123",
 });
 ```
 

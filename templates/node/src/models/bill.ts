@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 模型在注册时通过 bill() 生成账单行。
- * - BalanceService 负责真正扣款和记录账单。
+ * - CreditsService 负责真正扣款和记录 Transaction。
  */
 
 import type { AIBillInput } from "@downcity/city";

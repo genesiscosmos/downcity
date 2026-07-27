@@ -35,17 +35,15 @@ export async function createStripeCheckoutSession(
   body.set("mode", "payment");
   body.set("success_url", input.success_url);
   body.set("cancel_url", input.cancel_url);
-  body.set("client_reference_id", input.topup.topup_id);
+  body.set("client_reference_id", input.payment.payment_id);
   body.set("metadata[payment_id]", input.payment_id);
-  body.set("metadata[topup_id]", input.topup.topup_id);
-  body.set("metadata[user_id]", input.topup.user_id);
+  body.set("metadata[user_id]", input.payment.user_id);
   body.set("line_items[0][price_data][currency]", input.currency);
   body.set("line_items[0][price_data][product_data][name]", input.item_name);
-  body.set("line_items[0][price_data][unit_amount]", String(readTopupAmountUsdCents(input.topup)));
+  body.set("line_items[0][price_data][unit_amount]", String(input.payment.amount_minor));
   body.set("line_items[0][quantity]", "1");
   body.set("payment_intent_data[metadata][payment_id]", input.payment_id);
-  body.set("payment_intent_data[metadata][topup_id]", input.topup.topup_id);
-  body.set("payment_intent_data[metadata][user_id]", input.topup.user_id);
+  body.set("payment_intent_data[metadata][user_id]", input.payment.user_id);
 
   const response = await fetch(`${normalizeStripeApiBaseURL(api_base_url)}/checkout/sessions`, {
     method: "POST",
@@ -131,16 +129,6 @@ export function readMetadata(value: unknown): Record<string, unknown> {
 /**
  * 读取支付 provider 需要的 USD cents 金额。
  */
-function readTopupAmountUsdCents(topup: { credits?: unknown; usd_cents?: unknown }): number {
-  const direct = Number(topup.usd_cents);
-  if (Number.isSafeInteger(direct) && direct > 0) return direct;
-  const fallback = Math.round(Number(topup.credits) / 10_000);
-  if (!Number.isSafeInteger(fallback) || fallback <= 0) {
-    throw new TypeError("topup usd_cents must be a positive integer");
-  }
-  return fallback;
-}
-
 /**
  * 读取 JSON 响应并兜底为空对象。
  */

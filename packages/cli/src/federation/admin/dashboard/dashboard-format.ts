@@ -127,10 +127,10 @@ function revenue_rows(snapshot: dashboard_snapshot): admin_tui_table_row[] {
     ...money_rows("Revenue", t({ zh: "Range 收入", en: "Range revenue" }), snapshot.revenue.range),
     ...money_rows("Revenue", t({ zh: "今日收入", en: "Today revenue" }), snapshot.revenue.today),
     row("Health", t({ zh: "缺少金额的 paid payment", en: "Paid payments missing amount" }), format_number(snapshot.health.missing_revenue_amount_count)),
-    row("Balance", t({ zh: "Range 入账 credits", en: "Paid topup credits in range" }), format_number(snapshot.balance.paid_topup_credits_range)),
-    row("Balance", t({ zh: "累计入账 credits", en: "Credited total" }), format_number(snapshot.balance.credited_total)),
-    row("Balance", t({ zh: "当前余额 credits", en: "Current balance" }), format_number(snapshot.balance.current_balance_total)),
-    row("Balance", t({ zh: "待支付充值单", en: "Pending topups" }), format_number(snapshot.balance.pending_topups)),
+    row("Credits", t({ zh: "Range 入账 credits", en: "Applied topups in range" }), format_number(snapshot.credits.paid_topup_credits_range)),
+    row("Credits", t({ zh: "累计入账 credits", en: "Credited total" }), format_number(snapshot.credits.credited_total)),
+    row("Credits", t({ zh: "当前可用 credits", en: "Current available credits" }), format_number(snapshot.credits.current_balance_total)),
+    row("Payment", t({ zh: "待支付订单", en: "Pending orders" }), format_number(snapshot.credits.pending_topups)),
   ];
 }
 

@@ -1,0 +1,28 @@
+---
+title: Primary and Ephemeral Cards
+description: Create and query permanent and expiring credits.
+---
+
+Each user has one permanent Primary Card. Ephemeral Cards require a future `expires_at` and are suitable for trials, campaigns, and creator rewards.
+
+```ts
+const card = await bureau.credits.cards.create_ephemeral({
+  user_id: "user_123",
+  name: "7-day welcome credits",
+  initial_credits: 1_000_000,
+  expires_at: "2026-08-03T00:00:00.000Z",
+  source: "welcome",
+  ref: "campaign_v1",
+  idempotency_key: "welcome:user_123",
+});
+
+await bureau.credits.topup({
+  card: { kind: "ephemeral", card_id: card.card_id },
+  credits: 100_000,
+  source: "creator_reward",
+  ref: "content_789",
+  idempotency_key: "creator_reward:content_789",
+});
+```
+
+Card lists return active Ephemeral Cards by default. Pass `include_history: true` to include depleted and expired Cards.

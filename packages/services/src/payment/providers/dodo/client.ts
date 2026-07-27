@@ -47,17 +47,16 @@ export async function createDodoCheckoutSession(
     product_cart: [{
       product_id: input.product_id,
       quantity: 1,
-      amount: readTopupAmountUsdCents(input.topup),
+      amount: input.payment.amount_minor,
     }],
     billing_currency: input.currency.toUpperCase() as any,
     return_url: input.return_url,
     cancel_url: input.cancel_url,
     metadata: {
       payment_id: input.payment_id,
-      topup_id: input.topup.topup_id,
-      user_id: input.topup.user_id,
-      credits: String(input.topup.credits),
-      usd_cents: String(readTopupAmountUsdCents(input.topup)),
+      user_id: input.payment.user_id,
+      credits: String(input.payment.credits),
+      amount_minor: String(input.payment.amount_minor),
     },
   }, {
     idempotencyKey: input.payment_id,
@@ -112,12 +111,3 @@ export function normalizeDodoEnvironment(value: unknown): DodoPaymentEnvironment
 /**
  * 读取支付 provider 需要的 USD cents 金额。
  */
-function readTopupAmountUsdCents(topup: { credits?: unknown; usd_cents?: unknown }): number {
-  const direct = Number(topup.usd_cents);
-  if (Number.isSafeInteger(direct) && direct > 0) return direct;
-  const fallback = Math.round(Number(topup.credits) / 10_000);
-  if (!Number.isSafeInteger(fallback) || fallback <= 0) {
-    throw new TypeError("topup usd_cents must be a positive integer");
-  }
-  return fallback;
-}

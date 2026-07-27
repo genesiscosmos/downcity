@@ -398,13 +398,15 @@ test("User City payment.method(id).invoke() dispatches to the unified payment ch
   assert.equal(method.id, "stripe")
   assert.equal((await method.describe()).service, "payment")
   assert.deepEqual(
-    await method.invoke({ topup_id: "topup_demo" }),
+    await method.invoke({ credits: 5_000_000, amount_minor: 500, idempotency_key: "order_123" }),
     { checkout_url: "https://checkout.stripe.test/session_123" },
   )
 
   assert.equal(requests[1].url, "https://api.example.com/base/v1/payment/checkout/create")
   assert.deepEqual(JSON.parse(requests[1].init.body), {
-    topup_id: "topup_demo",
+    credits: 5_000_000,
+    amount_minor: 500,
+    idempotency_key: "order_123",
     method_id: "stripe",
   })
 })
@@ -430,7 +432,7 @@ test("User City payment.method(id).invoke() rejects disabled or user-required me
   })
 
   await assert.rejects(
-    disabledClient.payment.method("stripe").invoke({ topup_id: "topup_demo" }),
+    disabledClient.payment.method("stripe").invoke({ credits: 5_000_000, amount_minor: 500, idempotency_key: "order_123" }),
     /payment method "stripe" is disabled: not_configured/,
   )
 
@@ -453,7 +455,7 @@ test("User City payment.method(id).invoke() rejects disabled or user-required me
   })
 
   await assert.rejects(
-    guestClient.payment.method("stripe").invoke({ topup_id: "topup_demo" }),
+    guestClient.payment.method("stripe").invoke({ credits: 5_000_000, amount_minor: 500, idempotency_key: "order_123" }),
     /user_token is required for payment method "stripe"/,
   )
 })
@@ -469,6 +471,35 @@ test("Bureau service() uses the shared /v1 route prefix", async () => {
   assert.deepEqual(result, { ok: true })
   assert.equal(requests[0].url, "http://localhost:3001/v1/usage/report")
   assert.equal(requests[0].init.headers.authorization, "Bearer sk")
+})
+
+test("Bureau credits exposes typed Card and Transaction invokers", async () => {
+  const requests = []
+  const bureau = new Bureau({
+    federation_url: "http://localhost:3001",
+    bureau_token: "sk",
+    fetch: async (url, init) => {
+      requests.push({ url, init })
+      if (url.includes("/users?")) return json({ items: [{ user_id: "user_1" }] })
+      if (url.includes("/cards/ephemeral?")) return json({ items: [{ card_id: "card_1" }] })
+      if (url.includes("/transactions?")) return json({ items: [{ transaction_id: "ctx_1" }] })
+      if (url.includes("/history?")) return json({ items: [{ entry_id: "cte_1" }] })
+      return json({ transaction_id: "ctx_1" })
+    },
+  })
+
+  assert.equal((await bureau.credits.list_users({ limit: 5 }))[0].user_id, "user_1")
+  assert.equal((await bureau.credits.cards.list_ephemeral({ user_id: "user_1" }))[0].card_id, "card_1")
+  assert.equal((await bureau.credits.transactions.list({ user_id: "user_1" }))[0].transaction_id, "ctx_1")
+  assert.equal((await bureau.credits.history.list({ user_id: "user_1" }))[0].entry_id, "cte_1")
+  await bureau.credits.topup({
+    card: { kind: "primary", user_id: "user_1" },
+    credits: 100,
+    source: "test",
+    idempotency_key: "test:1",
+  })
+  assert.equal(requests[4].url, "http://localhost:3001/v1/credits/topups/create")
+  assert.equal(requests[4].init.headers.authorization, "Bearer sk")
 })
 
 test("Bureau env list / catalog / upsert / remove", async () => {

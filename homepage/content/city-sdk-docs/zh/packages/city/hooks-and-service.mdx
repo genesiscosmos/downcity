@@ -61,7 +61,7 @@ global
 import { Federation } from "@downcity/city";
 import {
   AccountsService,
-  BalanceService,
+  CreditsService,
   PaymentService,
   googleAccountsProvider,
   stripePaymentProvider,
@@ -69,7 +69,7 @@ import {
 } from "@downcity/services";
 
 const base = new Federation({ db });
-const balance = new BalanceService();
+const credits = new CreditsService();
 
 base.use(new AccountsService({
   token_ttl: "7d",
@@ -78,10 +78,17 @@ base.use(new AccountsService({
   ],
 }));
 
-base.use(balance);
+base.use(credits);
 base.use(new PaymentService({
-  readTopup: async (topup_id) => await balance.readTopup(topup_id),
-  finishTopup: async (topup_id, extra) => await balance.finishTopup(topup_id, extra),
+  on_paid: async (record) => {
+    await credits.topup({
+      card: { kind: "primary", user_id: record.user_id },
+      credits: record.credits,
+      source: "payment",
+      ref: record.payment_id,
+      idempotency_key: `payment:${record.payment_id}`,
+    });
+  },
   providers: [
     stripePaymentProvider({
       secret_key: process.env.STRIPE_SECRET_KEY,
@@ -130,7 +137,9 @@ const methods = await guest.service("payment").get("methods");
 
 const checkout = await user.service("payment").action("checkout/create").invoke({
   method_id: "stripe",
-  topup_id: "topup_demo",
+  credits: 5_000_000,
+  amount_minor: 500,
+  idempotency_key: "order_123",
 });
 ```
 

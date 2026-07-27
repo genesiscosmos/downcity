@@ -1,136 +1,21 @@
 ---
-title: 和计费逻辑怎么配
-description: "@downcity/services 如何和 hook、套餐、余额、支付服务组合，而不是直接替代它们。"
+title: Usage 与 Credits 计费
+description: Usage 记录事实，业务计算价格，Credits 执行扣费。
 ---
 
-usage service 最常见的误解是：“装上它就等于我已经有计费系统了”。
-
-实际更准确的关系是：
-
-- usage service 负责记录事实
-- hook 负责业务规则
-- payment / balance 负责充值结果和余额状态
-
-## 先看最常见组合
-
-```txt
-usage service
-  -> 记录调用事实
-hook
-  -> 判断额度、套餐、余额
-payment provider
-  -> 同步支付结果并完成充值
-```
-
-这个组合的好处是，每一层职责清楚，不会因为一种商业规则变化就把整套 usage 结构推翻。
-
-## 一个实际接法示例
+`UsageService` 保存模型或 Service 调用事实，不拥有价格策略。业务层根据真实 usage 计算 Credits，再调用 `credits.charge()`。
 
 ```ts
-import { UsageService } from "@downcity/services";
-import { BalanceService } from "@downcity/services";
-import { PaymentService } from "@downcity/services";
-import { stripePaymentProvider } from "@downcity/services";
+const ai = new AIService({ credits });
 
-const balance = new BalanceService();
-
-base.use(new UsageService({
-  record_errors: true,
-}));
-
-base.use(balance);
-base.use(new PaymentService({
-  readTopup: async (topup_id) => await balance.readTopup(topup_id),
-  finishTopup: async (topup_id, extra) => await balance.finishTopup(topup_id, extra),
-  providers: [
-    stripePaymentProvider({
-      secret_key: process.env.STRIPE_SECRET_KEY,
-      webhook_secret: process.env.STRIPE_WEBHOOK_SECRET,
-    }),
-  ],
-}));
+const transaction = await credits.charge({
+  user_id: "user_123",
+  credits: calculate_credits(usage),
+  source: "model_usage",
+  ref: usage.request_id,
+  idempotency_key: `model_usage:${usage.request_id}`,
+  metadata: { model_id: usage.model_id },
+});
 ```
 
-这个配置表达的是：
-
-- usage 负责记录“用了多少”
-- payment 负责告诉前端“当前有哪些支付 provider”
-- provider 负责把支付结果同步进 topup / balance
-- 你自己的 hook / 后端逻辑负责判断“该怎么收费”
-
-## 常见场景
-
-### 场景一：先有 entitlement，再按 usage 计量
-
-这适合订阅制或套餐制产品：
-
-- Stripe 决定用户是否有资格
-- usage 决定用户用了多少
-- 你自己的系统决定超额后怎么处理
-
-### 场景二：只统计，不立刻收费
-
-很多产品第一阶段并不着急上线完整账单，只想先知道：
-
-- 哪些模型被用得最多
-- 哪些 downcity 消耗最大
-- 哪些用户是重度使用者
-
-usage service 很适合这种“先看事实、后定规则”的阶段。
-
-## 管理侧读取账单输入数据的例子
-
-```ts
-const summary = await admin.service("usage").get("summary");
-
-await syncUsageToBillingSystem(summary);
-```
-
-这种模式很常见，因为很多团队并不想把所有商业规则都写死在 City 内部。
-
-## 为什么不把所有逻辑都塞进 usage service
-
-因为不同产品收费方式差异太大：
-
-- 按次收费
-- 按模型收费
-- 按额度收费
-- 套餐内免费，超额再收费
-- 不同 downcity 用不同规则
-
-Downcity 更适合把：
-
-- 事实记录做通用
-- 商业规则留给你的 hook 和系统
-
-## 常用 API / 入口
-
-这一页最相关的入口通常是：
-
-- `UsageService({ record_errors })`
-- `admin.service("usage").get("summary")`
-- `guest.service("payment").get("methods")`
-- `PaymentService({ balance, providers: [stripePaymentProvider()] })`
-
-## 常见误解
-
-### usage service 不会自动生成你的价格体系
-
-它提供的是事实输入，而不是商业策略引擎。
-
-### 支付结果和 usage 不是一回事
-
-- payment / balance：有没有完成充值、余额还有多少
-- usage：用了多少
-
-两者常常要一起治理，但不应该混成一个概念。
-
-### 不是所有计费逻辑都应该放在 City 里
-
-很多团队会把 City 作为事实层和权限层，把更上层的财务 / 商业逻辑放在自己的系统里。
-
-## 继续阅读
-
-- 想理解 usage 记录了什么，读 [Usage 事实模型](/zh/payments/usage/event-model)
-- 想看读取入口，读 [查询与汇总](/zh/payments/usage/querying-and-summary)
-- 想看 Stripe 充值怎么同步到账，读 [@downcity/services](/zh/payments)
+AIService 的 Credits bridge 会在调用前检查最小可用额度，并在得到真实 usage 后扣费。支付订单通过 `PaymentService.on_paid` 给 Primary Card 入账，两条链路不会混合生命周期。

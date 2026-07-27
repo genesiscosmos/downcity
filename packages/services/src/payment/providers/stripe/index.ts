@@ -53,7 +53,7 @@ export function stripePaymentProvider(options: StripePaymentProviderOptions = {}
         normalizeStripeApiBaseURL(input.ctx.env("STRIPE_API_BASE_URL") || options.api_base_url),
         {
           payment_id: input.payment_id,
-          topup: input.topup,
+          payment: input.payment,
           currency: normalizeCurrency(input.ctx.env("STRIPE_CURRENCY")) || normalizeCurrency(options.currency) || "usd",
           success_url: input.success_url,
           cancel_url: input.cancel_url,
@@ -96,7 +96,6 @@ export function stripePaymentProvider(options: StripePaymentProviderOptions = {}
         payload: event,
         status,
         payment_id: normalizeOptionalText(metadata.payment_id),
-        topup_id: normalizeOptionalText(metadata.topup_id) || normalizeOptionalText(object.client_reference_id),
         provider_session_id: is_payment_intent ? undefined : normalizeOptionalText(object.id),
         provider_payment_id: is_payment_intent
           ? normalizeOptionalText(object.id)

@@ -68,7 +68,7 @@ export function waffoPaymentProvider(options: WaffoPaymentProviderOptions = {}):
       });
       const created = await createWaffoCheckoutSession(client, {
         payment_id: input.payment_id,
-        topup: input.topup,
+        payment: input.payment,
         product_id,
         currency: normalizeCurrency(input.ctx.env("WAFFO_CURRENCY")) || normalizeCurrency(options.currency) || "usd",
         success_url: input.success_url,
@@ -81,7 +81,7 @@ export function waffoPaymentProvider(options: WaffoPaymentProviderOptions = {}):
     },
     async parseWebhook(input) {
       const client = createWaffoClient({
-        merchant_id: options.merchant_id ?? input.ctx.env("WAFFO_MERCHANT_ID") ?? "MER_webhook",
+        merchant_id: options.merchant_id ?? input.ctx.env("WAFFO_MERCHANT_ID") ?? "MER_0000000000000000000000",
         private_key: options.private_key ?? input.ctx.env("WAFFO_PRIVATE_KEY") ?? fallbackWaffoPrivateKey(),
         webhook_public_key: options.webhook_public_key ?? input.ctx.env("WAFFO_WEBHOOK_PUBLIC_KEY"),
         api_base_url: options.api_base_url ?? input.ctx.env("WAFFO_API_BASE_URL"),
@@ -103,7 +103,6 @@ export function waffoPaymentProvider(options: WaffoPaymentProviderOptions = {}):
         payload: event,
         status: type === "order.completed" ? "paid" : "ignored",
         payment_id: normalizeOptionalText(data.orderMerchantExternalId),
-        topup_id: normalizeOptionalText(metadata.topup_id),
         provider_payment_id: payment_id,
         provider_order_id: order_id,
         ref: payment_id || order_id,

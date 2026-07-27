@@ -88,9 +88,9 @@ export class Bureau {
     });
   }
 
-  /** Federation 余额管理入口。 */
-  get balance(): AdminPactAccess["balance"] {
-    return this.admin_access.balance;
+  /** Federation Credits 管理入口。 */
+  get credits(): AdminPactAccess["credits"] {
+    return this.admin_access.credits;
   }
 
   /** Federation City 管理入口。 */

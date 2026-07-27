@@ -1,0 +1,18 @@
+---
+title: Transactions and charge order
+description: Apply atomic and idempotent Credits changes through Transactions and Entries.
+---
+
+Every Topup or Charge creates one `CreditsTransaction`. Each affected Card produces an immutable `CreditsTransactionEntry`; Entries are also the ledger.
+
+```ts
+await bureau.credits.charge({
+  user_id: "user_123",
+  credits: 250_000,
+  source: "model_usage",
+  ref: "request_456",
+  idempotency_key: "model_usage:request_456",
+});
+```
+
+Automatic charges consume active Ephemeral Cards by earliest expiration, then the Primary Card. A selected Card charge never spills into another Card. Insufficient credits return `402` without a partial charge.

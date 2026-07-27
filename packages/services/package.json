@@ -1,7 +1,7 @@
 {
   "name": "@downcity/services",
-  "version": "0.1.220",
-  "description": "Downcity public services package for accounts, balance, usage, Stripe, Creem, Dodo, and Waffo payment flows.",
+  "version": "0.1.222",
+  "description": "Downcity public services package for accounts, Credits Cards, usage, and provider-based payment flows.",
   "type": "module",
   "main": "./bin/index.js",
   "module": "./bin/index.js",
@@ -31,7 +31,7 @@
     "downcity",
     "service",
     "accounts",
-    "balance",
+    "credits",
     "usage",
     "stripe",
     "creem",

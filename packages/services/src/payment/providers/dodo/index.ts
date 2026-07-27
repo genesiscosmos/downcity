@@ -63,7 +63,7 @@ export function dodoPaymentProvider(options: DodoPaymentProviderOptions = {}): P
       });
       const created = await createDodoCheckoutSession(client, {
         payment_id: input.payment_id,
-        topup: input.topup,
+        payment: input.payment,
         product_id,
         currency: normalizeCurrency(input.ctx.env("DODO_CURRENCY")) || normalizeCurrency(options.currency) || "usd",
         return_url: input.success_url,
@@ -107,7 +107,6 @@ export function dodoPaymentProvider(options: DodoPaymentProviderOptions = {}): P
               ? "canceled"
               : "ignored",
         payment_id: normalizeOptionalText(metadata.payment_id),
-        topup_id: normalizeOptionalText(metadata.topup_id),
         provider_session_id: checkout_session_id,
         provider_payment_id,
         ref: provider_payment_id || checkout_session_id,

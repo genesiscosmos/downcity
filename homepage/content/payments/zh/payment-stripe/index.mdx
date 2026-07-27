@@ -1,104 +1,29 @@
 ---
-title: "Stripe Payment 服务"
-description: "把一次性 Stripe 支付同步成用户全局余额充值。"
+title: Stripe Payment Provider
+description: 使用 Stripe Checkout 创建 Payment 订单，并在 paid webhook 后发放 Credits。
 ---
 
-Stripe 通过 `PaymentService` + `stripePaymentProvider()` 提供能力，职责很收敛：
-
-- 创建 Stripe Checkout
-- 记录 Stripe 支付记录
-- 记录 webhook 事件
-- 在支付成功后完成 `balance topup`
-
-它不是 entitlement 服务，也不处理 subscription。
-
-## 这组文档怎么读
-
-建议按下面顺序读：
-
-1. 先读 [充值单与 Checkout](/zh/payments/payment-stripe/topups-and-checkout)，理解为什么这条链路一定要建立在 topup 上。
-2. 再读 [Webhook 与同步](/zh/payments/payment-stripe/webhooks-and-sync)，理解 Stripe 支付结果怎么进入 City。
-3. 最后读 [到账与余额](/zh/payments/payment-stripe/crediting-balance)，理解为什么真正入账必须统一走 `balance.finishTopup()`。
-
-## 它提供什么
-
-- Stripe 支付记录表
-- Stripe webhook 事件表
-- Stripe Checkout 创建能力
-- 支付成功后自动完成 topup
-- Stripe 相关 env requirements 暴露
-
-## 它不负责什么
-
-- 不负责 subscription
-- 不负责 entitlement
-- 不直接维护余额账户或流水
-- 不替代 `@downcity/services`
-
-## 什么时候用它
-
-- 你已经决定用 Stripe 做一次性充值
-- 你需要把支付成功稳定同步成用户全局余额
-- 你希望 Stripe webhook、支付记录和到账逻辑都由一个服务统一承接
-
-## 安装
-
-```bash
-pnpm add @downcity/services
+```ts
+const payment = new PaymentService({
+  providers: [stripePaymentProvider()],
+  on_paid: async (record) => {
+    await credits.topup({
+      card: { kind: "primary", user_id: record.user_id },
+      credits: record.credits,
+      source: "payment",
+      ref: record.payment_id,
+      idempotency_key: `payment:${record.payment_id}`,
+    });
+  },
+});
 ```
 
-## 启用方式
+配置 `STRIPE_SECRET_KEY` 和可选的 `STRIPE_WEBHOOK_SECRET`，webhook 地址为 `/v1/payment/webhook?provider=stripe`。
 
 ```ts
-import { Federation } from "@downcity/city";
-import {
-  BalanceService,
-  PaymentService,
-  stripePaymentProvider,
-} from "@downcity/services";
-
-const base = new Federation({ db });
-const balance = new BalanceService();
-
-base.use(balance);
-base.use(new PaymentService({
-  // 关键说明（中文）：PaymentService 直接接收 readTopup / finishTopup 两个函数，
-  // 不再需要 balance bridge 对象包一层。
-  readTopup: async (topup_id) => await balance.readTopup(topup_id),
-  finishTopup: async (topup_id, extra) => await balance.finishTopup(topup_id, extra),
-  providers: [
-      stripePaymentProvider({
-        secret_key: process.env.STRIPE_SECRET_KEY,
-        webhook_secret: process.env.STRIPE_WEBHOOK_SECRET,
-      }),
-  ],
-}));
+await city.payment.method("stripe").invoke({
+  credits: 5_000_000,
+  amount_minor: 500,
+  idempotency_key: "order_123",
+});
 ```
-
-Stripe 的 success / cancel URL 会自动基于 `DOWNCITY_CITY_BASE_URL` 生成；未配置时会回退到当前请求 origin，方便本地开发。
-
-## 前端先读什么
-
-如果你希望像登录方式那样，先判断“当前 City 到底开没开支付入口”，可以先读：
-
-```ts
-const methods = await guest.service("payment").get("methods");
-```
-
-返回的 `methods.items` 会告诉你当前是否开放了 Stripe Checkout。
-
-## 最常见的组合方式
-
-- 和 [@downcity/services](/zh/payments) 配合，建立“充值单 -> Stripe 支付 -> 到账”的闭环
-- 和 [@downcity/city](/zh/city-sdk-docs/packages/city/federation) 配合，由前端触发 Checkout 创建
-- 和 [CLI](/zh/city-sdk-docs/packages/cli) 配合，由 `city` 本机入口发起 Stripe 充值并打开浏览器
-- 和 [@downcity/services](/zh/payments) 配合，把“充了多少”和“用了多少”拆开治理
-
-## 路由
-
-- `GET /v1/payment/methods`
-- `POST /v1/payment/checkout/create`
-- `GET /v1/payment/payments/me`
-- `GET /v1/payment/payments`
-- `GET /v1/payment/events`
-- `POST /v1/payment/webhook`

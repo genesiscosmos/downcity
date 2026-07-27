@@ -2,7 +2,7 @@
 
 Downcity 官方服务聚合包。
 
-这个包统一提供账号、余额、usage、统一 Payment 与多支付 provider 等官方服务，避免业务侧分别安装多个 `service-*` 包。
+这个包统一提供账号、Credits Cards、usage、统一 Payment 与多支付 provider 等官方服务。
 
 ## 安装
 
@@ -15,7 +15,7 @@ pnpm add @downcity/services
 ```ts
 import {
   AccountsService,
-  BalanceService,
+  CreditsService,
   PaymentService,
   UsageService,
   creemPaymentProvider,
@@ -40,7 +40,9 @@ const methods = await guest.service("payment").get("methods");
 ```ts
 const checkout = await user.service("payment").action("checkout/create").invoke({
   method_id: "stripe",
-  topup_id: "topup_demo",
+  credits: 5_000_000,
+  amount_minor: 500,
+  idempotency_key: "order_123",
 });
 ```
 
@@ -49,7 +51,9 @@ Creem 支付方式使用同样的调用形态：
 ```ts
 const checkout = await user.service("payment").action("checkout/create").invoke({
   method_id: "creem",
-  topup_id: "topup_demo",
+  credits: 5_000_000,
+  amount_minor: 500,
+  idempotency_key: "order_123",
 });
 ```
 
@@ -57,8 +61,8 @@ const checkout = await user.service("payment").action("checkout/create").invoke(
 
 - `AccountsService`：统一账号服务容器，负责账号表、better-auth、profile、OAuth callback 和 `user_token` 签发
 - `emailAccountsProvider()` / `githubAccountsProvider()` / `googleAccountsProvider()` / `wechatAccountsProvider()`：作为 provider 挂到统一 `AccountsService`
-- `BalanceService`：全局余额账户、流水、充值单与兑换码
-- `PaymentService`：统一暴露支付方式、checkout、webhook、payments 与入账同步
+- `CreditsService`：永久 Primary Card、限时 Ephemeral Card、Transaction 与不可变 Entries
+- `PaymentService`：拥有支付订单并统一暴露支付方式、checkout、webhook 与 payments；paid 后通过 `on_paid` 接入 Credits
 - `UsageService`：记录真实用户侧 service 调用事件
 - `stripePaymentProvider()` / `creemPaymentProvider()` / `dodoPaymentProvider()` / `waffoPaymentProvider()`：作为 provider 挂到统一 `PaymentService`
 

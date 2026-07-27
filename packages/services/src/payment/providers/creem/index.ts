@@ -60,7 +60,7 @@ export function creemPaymentProvider(options: CreemPaymentProviderOptions = {}):
         normalizeCreemApiBaseURL(input.ctx.env("CREEM_API_BASE_URL") || options.api_base_url),
         {
           payment_id: input.payment_id,
-          topup: input.topup,
+          payment: input.payment,
           product_id,
           success_url: input.success_url,
         },
@@ -100,7 +100,6 @@ export function creemPaymentProvider(options: CreemPaymentProviderOptions = {}):
               ? "failed"
               : "ignored",
         payment_id: normalizeOptionalText(metadata.payment_id) || normalizeOptionalText(object.request_id),
-        topup_id: normalizeOptionalText(metadata.topup_id),
         provider_session_id: checkout_id,
         provider_order_id: order_id,
         ref: order_id || checkout_id,

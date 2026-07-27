@@ -1,0 +1,32 @@
+---
+title: Primary 与 Ephemeral Cards
+description: 创建和查询永久额度与限时额度。
+---
+
+每个用户只有一张永久 `Primary Card`。`Ephemeral Card` 必须有未来的 `expires_at`，适合新用户体验、活动或创作者奖励。
+
+```ts
+const card = await bureau.credits.cards.create_ephemeral({
+  user_id: "user_123",
+  name: "新用户 7 天体验卡",
+  initial_credits: 1_000_000,
+  expires_at: "2026-08-03T00:00:00.000Z",
+  source: "welcome",
+  ref: "campaign_v1",
+  idempotency_key: "welcome:user_123",
+});
+```
+
+给现有 Card 增加额度：
+
+```ts
+await bureau.credits.topup({
+  card: { kind: "ephemeral", card_id: card.card_id },
+  credits: 100_000,
+  source: "creator_reward",
+  ref: "content_789",
+  idempotency_key: "creator_reward:content_789",
+});
+```
+
+默认 Card 列表只返回未过期且有余额的 Ephemeral Cards；传入 `include_history: true` 可查看已耗尽和已过期 Card。

@@ -558,7 +558,7 @@ test("AIService charges explicit provider charge lines", async () => {
     const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
 
     const ai = new AIService({
-      balance: {
+      credits: {
         async charge(input) {
           charges.push({
             user_id: input.user_id,
@@ -645,7 +645,7 @@ test("AIService /stream keeps the model stream open until deferred charge settle
     const charges = []
     const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
     const ai = new AIService({
-      balance: {
+      credits: {
         async charge(input) {
           await new Promise((resolve) => setTimeout(resolve, 30))
           charges.push(input)
@@ -713,14 +713,22 @@ test("AIService /stream keeps the model stream open until deferred charge settle
     }))
     assert.deepEqual(charges, [])
     assert.match(await response.text(), /"type":"finish"/)
-    assert.deepEqual(charges, [{ user_id: "user_1", credits: 321, note: "stream charge" }])
+    assert.equal(charges.length, 1)
+    assert.deepEqual(charges[0], {
+      user_id: "user_1",
+      credits: 321,
+      note: "stream charge",
+      idempotency_key: charges[0].idempotency_key,
+      source: "model_usage",
+    })
+    assert.match(charges[0].idempotency_key, /^ai:/)
   } finally {
     process.chdir(cwd)
     await fs.rm(tempDir, { recursive: true, force: true })
   }
 })
 
-test("AIService runs balance precheck before provider actions", async () => {
+test("AIService runs Credits precheck before provider actions", async () => {
   const cwd = process.cwd()
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-ai-balance-precheck-"))
 
@@ -732,10 +740,10 @@ test("AIService runs balance precheck before provider actions", async () => {
     const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
 
     const ai = new AIService({
-      balance: {
+      credits: {
         async precheck() {
           precheckCalls += 1
-          const error = new Error("insufficient balance: current -1 credits")
+          const error = new Error("insufficient credits")
           error.statusCode = 402
           throw error
         },
@@ -828,7 +836,7 @@ test("AIService uses provider bill when model bill is not set", async () => {
     const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
 
     const ai = new AIService({
-      balance: {
+      credits: {
         async charge(input) {
           charges.push({
             credits: input.credits,
@@ -1251,7 +1259,7 @@ test("AIService lets model bill override provider bill", async () => {
     const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
 
     const ai = new AIService({
-      balance: {
+      credits: {
         async charge(input) {
           charges.push({
             credits: input.credits,
@@ -1851,10 +1859,10 @@ test("AIService charges image jobs only after provider result succeeds", async (
     const queueMessages = useMemoryQueue(base)
 
     const ai = new AIService({
-      balance: {
+      credits: {
         async charge(input) {
           charge_attempts += 1
-          if (charge_attempts === 1) throw new Error("temporary balance failure")
+          if (charge_attempts === 1) throw new Error("temporary credits failure")
           charges.push(input)
         },
       },
@@ -1938,7 +1946,7 @@ test("AIService charges image jobs only after provider result succeeds", async (
     assert.equal(body.job_id, "img_priced_1")
     assert.deepEqual(charges, [])
     const fetch_message = queueMessages.shift()
-    await assert.rejects(base.queue.call(fetch_message), /temporary balance failure/)
+    await assert.rejects(base.queue.call(fetch_message), /temporary credits failure/)
     await Promise.all([
       base.queue.call(fetch_message),
       base.queue.call(fetch_message),
@@ -1957,6 +1965,7 @@ test("AIService charges image jobs only after provider result succeeds", async (
     assert.deepEqual(charges, [{
       user_id: "user_1",
       idempotency_key: `ai_image:${body.job_id}`,
+      source: "model_usage",
       credits: 777,
       note: "AI image result",
       ref: body.job_id,
@@ -2000,7 +2009,7 @@ test("AIService prefers action charge over model bill", async () => {
     const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
 
     const ai = new AIService({
-      balance: {
+      credits: {
         async charge(input) {
           charges.push({
             credits: input.credits,

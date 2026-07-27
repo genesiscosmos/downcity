@@ -91,12 +91,30 @@ export type {
   AISDKProviderOptions,
   AIResolvedReasoning,
   AICharge,
+  AICreditsBridge,
+  AICreditsChargeInput,
   AIBill,
   AIBillInput,
   AIChargedResult,
   AIImageCreateResult,
   AIImageResult,
 } from "./types/AI.js";
+
+export type {
+  CreditsCardReference,
+  CreditsChargeInput,
+  CreditsEphemeralCard,
+  CreditsEphemeralCardCreateInput,
+  CreditsEphemeralCardQuery,
+  CreditsHistoryQuery,
+  CreditsPrimaryCard,
+  CreditsSummary,
+  CreditsTopupInput,
+  CreditsTransaction,
+  CreditsTransactionEntry,
+  CreditsTransactionQuery,
+  CreditsUserQuery,
+} from "./pact/invoker/credits/types.js";
 
 export {
   buildAssistantMessage,
@@ -228,7 +246,12 @@ export type {
   UserModelInput,
 } from "./pact/invoker/ai/types.js";
 
-export { BalanceInvoker, BalanceRedeemCodeInvoker } from "./pact/invoker/balance/index.js";
+export {
+  CreditsCardsInvoker,
+  CreditsHistoryInvoker,
+  CreditsInvoker,
+  CreditsTransactionsInvoker,
+} from "./pact/invoker/credits/index.js";
 export { CitiesInvoker } from "./pact/invoker/cities/index.js";
 export { EnvInvoker } from "./pact/invoker/env/index.js";
 
@@ -237,21 +260,6 @@ export type {
   AdminModelRecord,
   AdminServiceSummary,
 } from "./pact/admin/types.js";
-
-export type {
-  BalanceAccountRecord,
-  BalanceHistoryListInput,
-  BalanceLedgerRecord,
-  BalanceMutationInput,
-  BalanceRedeemCodeCreateInput,
-  BalanceRedeemCodeDisableInput,
-  BalanceRedeemCodeIssueResult,
-  BalanceRedeemCodeListInput,
-  BalanceRedeemCodeRecord,
-  BalanceTopupListInput,
-  BalanceTopupRecord,
-  BalanceTopupUpdateInput,
-} from "./pact/invoker/balance/types.js";
 
 export type {
   CityCreateInput,

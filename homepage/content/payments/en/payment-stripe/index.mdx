@@ -1,104 +1,29 @@
 ---
-title: "Stripe Payment Service"
-description: "Turn one-time Stripe payments into global balance topups."
+title: Stripe Payment Provider
+description: Create Payment orders with Stripe Checkout and issue Credits after a paid webhook.
 ---
 
-Stripe is exposed through `PaymentService` + `stripePaymentProvider()` and has a narrow responsibility:
-
-- create Stripe Checkout Sessions
-- store Stripe payment records
-- store webhook events
-- finish a `balance topup` after payment succeeds
-
-It is not an entitlement service and does not handle subscriptions.
-
-## How to read this section
-
-The recommended order is:
-
-1. Start with [Topups and Checkout](/en/payments/payment-stripe/topups-and-checkout) to understand why this flow is built on top of topups.
-2. Continue with [Webhooks and sync](/en/payments/payment-stripe/webhooks-and-sync) to understand how Stripe payment results enter City.
-3. Finish with [Crediting balance](/en/payments/payment-stripe/crediting-balance) to understand why wallet crediting must go through `balance.finishTopup()`.
-
-## What it provides
-
-- a Stripe payment table
-- a Stripe webhook event table
-- Stripe Checkout creation
-- automatic topup completion after successful payment
-- exposed Stripe env requirements for admin tooling
-
-## What it does not own
-
-- subscriptions
-- downcity access grants
-- wallet account or ledger storage
-- replacement for `@downcity/services`
-
-## Use it when
-
-- you already chose Stripe for one-time wallet recharge
-- you want successful payments to become global user balance
-- you want one service to own webhook records, payment records, and topup completion
-
-## Install
-
-```bash
-pnpm add @downcity/services
+```ts
+const payment = new PaymentService({
+  providers: [stripePaymentProvider()],
+  on_paid: async (record) => {
+    await credits.topup({
+      card: { kind: "primary", user_id: record.user_id },
+      credits: record.credits,
+      source: "payment",
+      ref: record.payment_id,
+      idempotency_key: `payment:${record.payment_id}`,
+    });
+  },
+});
 ```
 
-## Enable it
+Configure `STRIPE_SECRET_KEY` and optionally `STRIPE_WEBHOOK_SECRET`. Send webhooks to `/v1/payment/webhook?provider=stripe`.
 
 ```ts
-import { Federation } from "@downcity/city";
-import {
-  BalanceService,
-  PaymentService,
-  stripePaymentProvider,
-} from "@downcity/services";
-
-const base = new Federation({ db });
-const balance = new BalanceService();
-
-base.use(balance);
-base.use(new PaymentService({
-  // PaymentService takes `readTopup` and `finishTopup` directly.
-  // There is no balance bridge object anymore.
-  readTopup: async (topup_id) => await balance.readTopup(topup_id),
-  finishTopup: async (topup_id, extra) => await balance.finishTopup(topup_id, extra),
-  providers: [
-      stripePaymentProvider({
-        secret_key: process.env.STRIPE_SECRET_KEY,
-        webhook_secret: process.env.STRIPE_WEBHOOK_SECRET,
-      }),
-  ],
-}));
+await city.payment.method("stripe").invoke({
+  credits: 5_000_000,
+  amount_minor: 500,
+  idempotency_key: "order_123",
+});
 ```
-
-Stripe success and cancel URLs are generated automatically from `DOWNCITY_CITY_BASE_URL`. If it is not configured, the service falls back to the current request origin for local development.
-
-## What the frontend should read first
-
-If you want payment UI to behave like login-method discovery, start with:
-
-```ts
-const methods = await guest.service("payment").get("methods");
-```
-
-`methods.items` tells the frontend whether the current City actually exposes Stripe Checkout.
-
-## Most common combinations
-
-- Pair it with [@downcity/services](/en/payments) for the full "topup -> Stripe payment -> wallet credit" flow
-- Pair it with [@downcity/city](/en/city-sdk-docs/packages/city/federation) so the frontend can trigger Checkout creation
-- Pair it with [CLI](/en/city-sdk-docs/packages/cli) so a `city` local CLI user can start Stripe Checkout and open the browser
-- Pair it with [@downcity/services](/en/payments) to keep "how much was funded" separate from "how much was consumed"
-
-## Routes
-
-- `GET /v1/payment/methods`
-- `POST /v1/payment/checkout/create`
-- `GET /v1/payment/payments/me`
-- `GET /v1/payment/payments`
-- `GET /v1/payment/events`
-- `POST /v1/payment/webhook`
