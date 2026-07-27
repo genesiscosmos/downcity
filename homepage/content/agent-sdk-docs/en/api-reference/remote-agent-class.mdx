@@ -41,24 +41,23 @@ await agent.run_plugin_action({
 Shell approvals belong to the specific remote Session, not the top-level `RemoteAgent`:
 
 ```ts
-const approvals = await session.approvals();
-await session.resolve_approval({
-  approval_id: approvals[0].approval_id,
-  decision: "approved",
+const interactions = await session.interactions();
+await session.respond({
+  interaction_id: interactions[0].request.interaction_id,
+  response: { kind: "approval", decision: "approved" },
 });
 ```
 
-You can also handle an approval-required Tool Part through the unified Mutation stream:
+You can also handle a pending Interaction Part through the unified Mutation stream:
 
 ```ts
 session.subscribe((mutation) => {
   if (
     mutation.variant === "part" &&
-    mutation.type === "tool" &&
-    mutation.part.state === "approval-required" &&
-    mutation.part.approval?.request
+    mutation.type === "interaction" &&
+    mutation.part.status === "pending"
   ) {
-    show_approval_request(mutation.part.approval.request);
+    render_interaction(mutation.part);
   }
 });
 ```

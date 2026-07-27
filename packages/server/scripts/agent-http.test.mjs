@@ -66,27 +66,30 @@ function create_fake_agent() {
           subscriber({
             mutation_id: "approval-http-mutation",
             variant: "part",
-            type: "tool",
+            type: "interaction",
             session_id: info.session_id,
             turn_id: "turn-http-test",
             message_id: "message-http-test",
             revision: 2,
             created_at: Date.now(),
-            part_id: "tool:call-http-test",
+            part_id: "interaction:interaction-http-test",
             part: {
-              part_id: "tool:call-http-test",
+              part_id: "interaction:interaction-http-test",
               sequence: 2,
-              type: "tool",
-              tool_call_id: "call-http-test",
-              tool_name: "shell_exec",
-              state: "approval-required",
-              input: { cmd: "pwd" },
-              approval: {
-                approval_id: "approval-http-test",
-                session_id: info.session_id,
+              type: "interaction",
+              interaction_id: "interaction-http-test",
+              interaction_type: "approval",
+              status: "pending",
+              request: {
+                interaction_id: "interaction-http-test",
                 turn_id: "turn-http-test",
-                tool_call_id: "call-http-test",
-                tool_name: "shell_exec",
+                kind: "approval",
+                source: {
+                  type: "tool",
+                  tool_call_id: "call-http-test",
+                  tool_name: "shell_exec",
+                },
+                title: "Approve shell_exec",
                 command: "pwd",
                 cwd: "/tmp",
                 reason: "test",
@@ -127,16 +130,20 @@ function create_fake_agent() {
     async system() {
       return { session_id: info.session_id, session: info, blocks: [] };
     },
-    async approvals() {
+    async interactions() {
       return [{
-        approval_id: "approval-http-test",
-        session_id: info.session_id,
-        tool_name: "shell_exec",
-        command: "pwd",
-        cwd: "/tmp",
-        reason: "test",
-        operation: "exec",
-        created_at: Date.now(),
+        request: {
+          interaction_id: "interaction-http-test",
+          turn_id: "turn-http-test",
+          kind: "approval",
+          source: { type: "tool", tool_call_id: "call-http-test", tool_name: "shell_exec" },
+          title: "Approve shell_exec",
+          command: "pwd",
+          cwd: "/tmp",
+          reason: "test",
+          operation: "exec",
+          created_at: Date.now(),
+        },
       }];
     },
     async approval_mode() {
@@ -145,8 +152,8 @@ function create_fake_agent() {
     async set_approval_mode({ mode }) {
       return { session_id: info.session_id, mode };
     },
-    async resolve_approval({ approval_id, decision }) {
-      return { success: true, approval_id, decision };
+    async respond({ interaction_id, response }) {
+      return { status: "resolved", interaction_id, response };
     },
     async fork() {
       return session;
@@ -198,13 +205,12 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", async ()
       mutations.push(mutation);
       if (
         mutation.variant === "part" &&
-        mutation.type === "tool" &&
-        mutation.part.state === "approval-required" &&
-        mutation.part.approval
+        mutation.type === "interaction" &&
+        mutation.part.status === "pending"
       ) {
-        approval_decision = session.resolve_approval({
-          approval_id: mutation.part.approval.approval_id,
-          decision: "approved",
+        approval_decision = session.respond({
+          interaction_id: mutation.part.interaction_id,
+          response: { kind: "approval", decision: "approved" },
         });
       }
     });
@@ -217,19 +223,23 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", async ()
     assert.deepEqual(mutations.map((mutation) => mutation.variant), ["turn", "delta", "part", "turn"]);
     assert.equal(mutations[1].delta, "HTTP transport works");
     assert.deepEqual(await approval_decision, {
-      success: true,
-      approval_id: "approval-http-test",
-      decision: "approved",
+      status: "resolved",
+      interaction_id: "interaction-http-test",
+      response: { kind: "approval", decision: "approved" },
     });
 
-    assert.equal((await session.approvals())[0].approval_id, "approval-http-test");
+    assert.equal((await session.interactions())[0].request.interaction_id, "interaction-http-test");
     assert.equal((await session.set_approval_mode({ mode: "always-allow" })).mode, "always-allow");
     assert.deepEqual(
-      await session.resolve_approval({
-        approval_id: "approval-http-test",
-        decision: "approved",
+      await session.respond({
+        interaction_id: "interaction-http-test",
+        response: { kind: "approval", decision: "approved" },
       }),
-      { success: true, approval_id: "approval-http-test", decision: "approved" },
+      {
+        status: "resolved",
+        interaction_id: "interaction-http-test",
+        response: { kind: "approval", decision: "approved" },
+      },
     );
     await session.compact();
     assert.equal(fake_agent.read_compact_count(), 1);

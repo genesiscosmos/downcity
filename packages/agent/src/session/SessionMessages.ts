@@ -9,11 +9,13 @@
 import type { UIMessage } from "ai";
 import { generate_id } from "@/utils/Id.js";
 import { SessionAssistantMessageWriter } from "@/session/messages/SessionAssistantMessageWriter.js";
+import { SessionMessageInteractionWriter } from "@/session/messages/SessionMessageInteractionWriter.js";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
 import type { JsonObject } from "@/types/common/Json.js";
 import type {
   ListSessionMessagesInput,
   SessionActionMessage,
+  SessionAssistantInteractionPart,
   SessionAssistantMessage,
   SessionAssistantMessagePart,
   SessionAssistantToolPart,
@@ -33,7 +35,10 @@ import type {
   SessionSegmentSummary,
 } from "@/types/session/SessionSegment.js";
 import type { SessionStreamingToolLocation } from "@/types/session/SessionTool.js";
-import type { SessionApproval } from "@/types/session/SessionApproval.js";
+import type {
+  SessionInteractionRequest,
+  SessionInteractionResponse,
+} from "@/types/session/SessionInteraction.js";
 import type {
   SessionActionRecordV1,
   SessionRecordV1,
@@ -69,6 +74,8 @@ export class SessionMessages {
   private readonly messages_by_id = new Map<string, SessionMessage>();
   /** 按 Assistant Message 隔离的完整写事务链。 */
   private readonly assistant_write_chains = new Map<string, Promise<void>>();
+  /** Assistant Message 内 Interaction Part 的原子状态写入器。 */
+  private readonly interaction_writer: SessionMessageInteractionWriter;
   private initialized = false;
 
   constructor(options: SessionMessagesOptions) {
@@ -76,6 +83,14 @@ export class SessionMessages {
     this.store = options.store;
     this.publish = options.publish;
     if (!this.session_id) throw new Error("SessionMessages requires session_id");
+    this.interaction_writer = new SessionMessageInteractionWriter({
+      list_messages: () => this.messages_by_id.values(),
+      find_streaming_tool: (tool_call_id) => this.find_streaming_tool(tool_call_id),
+      enqueue_assistant_write: (message_id, operation) =>
+        this.enqueue_assistant_write(message_id, operation),
+      commit_assistant_snapshot: (current, parts) =>
+        this.commit_assistant_snapshot(current, parts),
+    });
   }
 
   /** 恢复已有 Message，并收口进程中断遗留的运行状态。 */
@@ -126,7 +141,7 @@ export class SessionMessages {
     return message as SessionUserMessage;
   }
 
-  /** 创建可持续接收 chunk 的 Assistant segment。 */
+  /** 创建可持续接收 chunk 的 Assistant Message。 */
   async open_assistant_message(
     input: OpenSessionAssistantMessageInput,
   ): Promise<SessionAssistantMessageWriter> {
@@ -143,7 +158,6 @@ export class SessionMessages {
       updated_at: created_at,
       type: "assistant",
       kind: input.kind || "normal",
-      segment_index: input.segment_index,
       status: "streaming",
       parts: [],
       ...(input.summary_through_message_id
@@ -160,7 +174,6 @@ export class SessionMessages {
     const turn_id = input.turn_id || `external:${this.session_id}:${generate_id()}`;
     const writer = await this.open_assistant_message({
       turn_id,
-      segment_index: 1,
       kind: input.kind || "normal",
       visibility: input.visibility || "visible",
       ...(input.summary_through_message_id
@@ -659,16 +672,49 @@ export class SessionMessages {
     const current = require_message([...this.messages_by_id.values()], message_id, "assistant");
     require_streaming_assistant(current);
     const created_at = Date.now();
+    const interrupted_interactions = status === "stopped"
+      ? current.parts.filter(
+          (part): part is SessionAssistantInteractionPart =>
+            part.type === "interaction" && part.status === "pending",
+        )
+      : [];
+    const interrupted_tool_ids = new Set(
+      interrupted_interactions.flatMap((part) =>
+        part.request.source.type === "tool"
+          ? [part.request.source.tool_call_id]
+          : [],
+      ),
+    );
     const message: SessionAssistantMessage = {
       ...current,
       revision: current.revision + 1,
       status,
       updated_at: created_at,
-      parts: current.parts.map((part) =>
-        part.type === "text" || part.type === "reasoning"
-          ? { ...part, state: "done" as const }
-          : part,
-      ),
+      parts: current.parts.map((part) => {
+        if (part.type === "text" || part.type === "reasoning") {
+          return { ...part, state: "done" as const };
+        }
+        if (part.type === "interaction" && part.status === "pending") {
+          return {
+            ...part,
+            status: "cancelled" as const,
+            cancel_reason: "runtime_interrupted" as const,
+            resolved_at: created_at,
+          };
+        }
+        if (
+          part.type === "tool" &&
+          part.state === "waiting-user" &&
+          interrupted_tool_ids.has(part.tool_call_id)
+        ) {
+          return {
+            ...part,
+            state: "failed" as const,
+            error: "Interaction cancelled",
+          };
+        }
+        return part;
+      }),
     };
     await this.store.finalize_assistant_message(message);
     this.accept_message(message);
@@ -710,71 +756,37 @@ export class SessionMessages {
     return undefined;
   }
 
-  /** 把完整审批请求写入对应的流式 Tool Part。 */
-  async request_tool_approval(approval: SessionApproval): Promise<void> {
-    const { message_id } = this.require_streaming_tool(approval.tool_call_id);
-    await this.enqueue_assistant_write(message_id, async () => {
-      const tool = this.require_streaming_tool(approval.tool_call_id);
-      if (tool.message_id !== message_id) {
-        throw new Error(`Tool Assistant Message changed: ${approval.tool_call_id}`);
-      }
-      if (tool.part.state !== "ready") {
-        throw new Error(
-          `Tool approval requires ready input: ${approval.tool_call_id} (${tool.part.state})`,
-        );
-      }
-      await this.update_assistant_part_serialized(message_id, {
-        ...tool.part,
-        state: "approval-required",
-        approval: {
-          approval_id: approval.approval_id,
-          request: approval,
-        },
-      });
-    });
+  /** 返回当前 Session 中全部等待用户响应的 canonical Interaction。 */
+  list_pending_interactions(): SessionAssistantInteractionPart[] {
+    return this.interaction_writer.list_pending();
   }
 
-  /** 在 Tool 恢复执行前提交审批决定对应的 Part 状态。 */
-  async resolve_tool_approval(input: {
-    /** 当前审批请求标识。 */
-    approval_id: string;
-    /** 当前审批最终决定。 */
-    decision: "approved" | "denied" | "expired";
-    /** 当前审批关联的 Tool Call。 */
-    tool_call_id: string;
-  }): Promise<void> {
-    const { message_id } = this.require_streaming_tool(input.tool_call_id);
-    await this.enqueue_assistant_write(message_id, async () => {
-      const tool = this.require_streaming_tool(input.tool_call_id);
-      if (tool.message_id !== message_id) {
-        throw new Error(`Tool Assistant Message changed: ${input.tool_call_id}`);
-      }
-      if (tool.part.approval?.approval_id !== input.approval_id) {
-        throw new Error(`Tool approval identity mismatch: ${input.approval_id}`);
-      }
-      await this.update_assistant_part_serialized(message_id, {
-        ...tool.part,
-        state: input.decision === "approved" ? "running" : "failed",
-        approval: {
-          ...tool.part.approval,
-          approval_id: input.approval_id,
-          approved: input.decision === "approved",
-          ...(input.decision === "expired"
-            ? { reason: "Approval expired" }
-            : input.decision === "denied"
-              ? { reason: "Approval denied" }
-              : {}),
+  /** 原子创建 Interaction，并把关联 Tool 转为 waiting-user。 */
+  async request_interaction(
+    request: SessionInteractionRequest,
+  ): Promise<SessionAssistantInteractionPart> {
+    return this.interaction_writer.request(request);
+  }
+
+  /** 原子保存用户响应，并按 Interaction 结果恢复或终止关联 Tool。 */
+  async resolve_interaction(
+    interaction_id: string,
+    response: SessionInteractionResponse,
+  ): Promise<SessionAssistantInteractionPart> {
+    return this.interaction_writer.resolve(interaction_id, response);
+  }
+
+  /** 原子结束未响应 Interaction，并把关联 Tool 标记为失败。 */
+  async close_interaction(
+    interaction_id: string,
+    input:
+      | { status: "expired" }
+      | {
+          status: "cancelled";
+          reason: "turn_stopped" | "session_disposed" | "runtime_interrupted";
         },
-        ...(input.decision === "approved"
-          ? {}
-          : {
-              error:
-                input.decision === "expired"
-                  ? "Approval expired"
-                  : "Approval denied",
-            }),
-      });
-    });
+  ): Promise<SessionAssistantInteractionPart> {
+    return this.interaction_writer.close(interaction_id, input);
   }
 
   /**
@@ -799,11 +811,46 @@ export class SessionMessages {
     }
   }
 
-  /** 查找当前流式 Assistant 中的 Tool Part，否则抛出明确错误。 */
-  private require_streaming_tool(tool_call_id: string): SessionStreamingToolLocation {
-    const tool = this.find_streaming_tool(tool_call_id);
-    if (tool) return tool;
-    throw new Error(`Streaming Tool Part not found: ${tool_call_id}`);
+  /** 原子提交包含多个 Part 状态变化的 Assistant 完整快照。 */
+  private async commit_assistant_snapshot(
+    current: SessionAssistantMessage,
+    parts: SessionAssistantMessagePart[],
+  ): Promise<void> {
+    const created_at = Date.now();
+    const message: SessionAssistantMessage = {
+      ...current,
+      revision: current.revision + 1,
+      updated_at: created_at,
+      parts: structuredClone(parts).sort(
+        (left, right) => left.sequence - right.sequence,
+      ),
+    };
+    await this.store.write_assistant_message(message);
+    const current_by_id = new Map(
+      current.parts.map((part) => [part.part_id, part]),
+    );
+    const changed_parts = message.parts.filter((part) => {
+      const previous = current_by_id.get(part.part_id);
+      return !previous || JSON.stringify(previous) !== JSON.stringify(part);
+    });
+    if (changed_parts.length === 0) {
+      this.accept_message(message);
+      return;
+    }
+    for (const part of changed_parts) {
+      this.accept_mutation({
+        mutation_id: generate_id(),
+        variant: "part",
+        type: part.type,
+        message_id: message.message_id,
+        revision: message.revision,
+        session_id: this.session_id,
+        turn_id: message.turn_id,
+        created_at,
+        part_id: part.part_id,
+        part: structuredClone(part),
+      } as SessionMutation, message);
+    }
   }
 
   private build_message_mutation(

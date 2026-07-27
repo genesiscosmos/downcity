@@ -40,11 +40,10 @@ const unsubscribe = session.subscribe((mutation) => {
 
   if (
     mutation.variant === "part" &&
-    mutation.type === "tool" &&
-    mutation.part.state === "approval-required" &&
-    mutation.part.approval?.request
+    mutation.type === "interaction" &&
+    mutation.part.status === "pending"
   ) {
-    show_approval_request(mutation.part.approval.request);
+    render_interaction(mutation.part);
   }
 });
 
@@ -66,13 +65,13 @@ On failure, the canonical `error` Message carries the user-visible error. Use `t
 | `SessionMessage` | The only persisted history model | Initial load, reconnect, history browsing |
 | `SessionMutation` | Live protocol for changes after subscription | Streaming UI, tool state, title updates |
 | `TurnHandle` | Execution handle for an accepted input | Waiting for the final result, checking a stopped turn |
-| `SessionApproval` | A pending tool request in this Session | Approval UI and background processing |
+| `SessionPendingInteraction` | A request waiting for user input | Approval, questions, background processing |
 
 Do not treat Messages and Mutations as interchangeable. Messages are recoverable state snapshots; Mutations deliver state changes to a live client.
 
 ## Local versus remote
 
-Both expose `prompt()`, `stop()`, `compact()`, `subscribe()`, `messages()`, `approvals()`, and `fork()`. Local Sessions additionally provide `syncshot()` to regenerate the system and `snapshot()` to explicitly persist it; remote refresh and persistence policy belongs to the server host.
+Both expose `prompt()`, `stop()`, `compact()`, `subscribe()`, `messages()`, `interactions()`, `respond()`, and `fork()`. Local Sessions additionally provide `syncshot()` to regenerate the system and `snapshot()` to explicitly persist it; remote refresh and persistence policy belongs to the server host.
 
 | Context | Configure a model |
 | --- | --- |
@@ -89,7 +88,7 @@ Remote clients do not participate in model selection. IDs, defaults, and recover
 - Read and stream: `session.messages()`, `session.get_info()`, and `session.subscribe()`
 - Control execution: `session.stop()`, `session.set()`, [`session.compact()`](/en/agent-sdk-docs/sessions/compact), and `session.fork()`
 - Refresh and persist system: [`session.syncshot()`](/en/agent-sdk-docs/sessions/syncshot), [`session.snapshot()`](/en/agent-sdk-docs/sessions/snapshot)
-- Tool approval: `session.approvals()`, `session.resolve_approval()`, and `session.approval_mode()`
+- Tool approval: `session.interactions()`, `session.respond()`, and `session.approval_mode()`
 - Inspect context: `session.system()` and [metadata and storage](/en/agent-sdk-docs/sessions/metadata-and-storage)
 
 ## Next

@@ -40,11 +40,10 @@ const unsubscribe = session.subscribe((mutation) => {
 
   if (
     mutation.variant === "part" &&
-    mutation.type === "tool" &&
-    mutation.part.state === "approval-required" &&
-    mutation.part.approval?.request
+    mutation.type === "interaction" &&
+    mutation.part.status === "pending"
   ) {
-    show_approval_request(mutation.part.approval.request);
+    render_interaction(mutation.part);
   }
 });
 
@@ -66,13 +65,13 @@ unsubscribe();
 | `SessionMessage` | 持久化历史的唯一模型 | 首次加载、重连、历史浏览 |
 | `SessionMutation` | 订阅后的实时变化协议 | 流式渲染、工具状态、标题更新 |
 | `TurnHandle` | 一次输入归属的执行句柄 | 等待最终结果、停止后检查结果 |
-| `SessionApproval` | 当前 Session 的待审批工具请求 | 审批页、后台处理 |
+| `SessionPendingInteraction` | 当前 Session 等待用户响应的请求 | 审批、问答、后台处理 |
 
 Message 和 Mutation 不要混用：Message 是可恢复的状态快照；Mutation 是把状态变化及时送到客户端的协议。
 
 ## 本地与远程的差异
 
-两者都有 `prompt()`、`stop()`、`compact()`、`subscribe()`、`messages()`、`approvals()` 和 `fork()`。本地 Session 还提供 `syncshot()` 手动重新生成 system，以及 `snapshot()` 显式持久化完整 system；远程 Session 的 system 刷新与持久化策略由服务端宿主管理。
+两者都有 `prompt()`、`stop()`、`compact()`、`subscribe()`、`messages()`、`interactions()`、`respond()` 和 `fork()`。本地 Session 还提供 `syncshot()` 手动重新生成 system，以及 `snapshot()` 显式持久化完整 system；远程 Session 的 system 刷新与持久化策略由服务端宿主管理。
 
 | 场景 | 配置模型 |
 | --- | --- |
@@ -89,7 +88,7 @@ Message 和 Mutation 不要混用：Message 是可恢复的状态快照；Mutati
 - 读取与实时：`session.messages()`、`session.get_info()`、`session.subscribe()`
 - 运行控制：`session.stop()`、`session.set()`、[`session.compact()`](/zh/agent-sdk-docs/sessions/compact)、`session.fork()`
 - system 刷新与持久化：[`session.syncshot()`](/zh/agent-sdk-docs/sessions/syncshot)、[`session.snapshot()`](/zh/agent-sdk-docs/sessions/snapshot)
-- 工具审批：`session.approvals()`、`session.resolve_approval()`、`session.approval_mode()`
+- 工具审批：`session.interactions()`、`session.respond()`、`session.approval_mode()`
 - 调试上下文：`session.system()`、[元数据与落盘](/zh/agent-sdk-docs/sessions/metadata-and-storage)
 
 ## 下一步

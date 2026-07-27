@@ -123,7 +123,7 @@ export type DialogueRoundRecord = {
    */
   executorDelivered: boolean;
   /**
-   * 执行器 assistant_message 的调试快照。
+   * 执行器最终文本的调试快照。
    */
   executorAssistantMessageSnapshot?: string;
   /**
@@ -143,7 +143,7 @@ export type DialogueRoundRecord = {
    */
   userSimulatorOutput?: string;
   /**
-   * 模拟用户 assistant_message 的调试快照。
+   * 模拟用户最终文本的调试快照。
    */
   userSimulatorAssistantMessageSnapshot?: string;
   /**

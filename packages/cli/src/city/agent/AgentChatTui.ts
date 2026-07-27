@@ -9,7 +9,7 @@
 import { AgentChatTuiCoordinator } from "@/city/agent/tui/AgentChatTuiCoordinator.js";
 import type { AgentChatInteractiveRendererPort } from "@/city/types/AgentChatInteractive.js";
 import type { AgentChatSessionSummaryView } from "@/city/agent/AgentChatTypes.js";
-import type { TranscriptEntry } from "@/city/agent/tui/types.js";
+import type { SessionMessage } from "@downcity/agent";
 
 /**
  * 启动 city agent chat 的交互式 TUI。
@@ -28,7 +28,7 @@ export async function run_agent_chat_tui(params: {
   /** 加载指定 session 历史。 */
   load_session_history: (session_id: string) => Promise<{
     title: string;
-    entries: TranscriptEntry[];
+    messages: SessionMessage[];
   }>;
   /** 执行一轮对话。 */
   run_turn: (input: {
@@ -43,11 +43,11 @@ export async function run_agent_chat_tui(params: {
   }>;
 
   /** 处理指定 Session 的 unrestricted sandbox 审批请求。 */
-  resolve_approval: (
+  respond_interaction: (
     session_id: string,
-    approval_id: string,
+    interaction_id: string,
     decision: "approved" | "denied",
-  ) => Promise<{ success: boolean; decision: string }>;
+  ) => Promise<{ status: "resolved" | "expired" | "cancelled" }>;
 
 }): Promise<void> {
   const coordinator = new AgentChatTuiCoordinator({
@@ -57,7 +57,7 @@ export async function run_agent_chat_tui(params: {
     create_session: params.create_session,
     load_session_history: params.load_session_history,
     run_turn: params.run_turn,
-    resolve_approval: params.resolve_approval,
+    respond_interaction: params.respond_interaction,
   });
 
   await coordinator.run();

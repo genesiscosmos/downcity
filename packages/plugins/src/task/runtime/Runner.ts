@@ -28,7 +28,7 @@ import {
 import { ensureRunDir, readTask } from "./Store.js";
 import { createRunProgressWriter, serializeDebugSnapshot, summarizeText } from "./TaskRunnerProgress.js";
 import {
-  appendTaskAssistantMessage,
+  appendTaskDeferredMessages,
   createTaskSessionRuntimePort,
 } from "./TaskRunnerSession.js";
 import {
@@ -242,11 +242,11 @@ export async function runTaskNow(params: {
         executorDelivered = executorRound.delivered;
         outputText = executorRound.outputText;
         executorAssistantMessageSnapshot = serializeDebugSnapshot(
-          executorRound.rawResult.assistant_message,
+          { text: executorRound.rawResult.text },
         );
 
         try {
-          await appendTaskAssistantMessage({
+          await appendTaskDeferredMessages({
             taskSessionRuntime,
             session_id: runSessionId,
             taskId: task.taskId,
@@ -314,10 +314,10 @@ export async function runTaskNow(params: {
           });
           userSimulatorOutput = simulatorRound.outputText;
           userSimulatorAssistantMessageSnapshot = serializeDebugSnapshot(
-            simulatorRound.rawResult.assistant_message,
+            { text: simulatorRound.rawResult.text },
           );
           try {
-            await appendTaskAssistantMessage({
+            await appendTaskDeferredMessages({
               taskSessionRuntime,
               session_id: userSimulatorSessionId,
               taskId: task.taskId,

@@ -86,15 +86,15 @@ When access is removed, Shell closes active sessions that could retain the previ
 Clients approve shell requests through the Session that started the tool call:
 
 ```ts
-const pending = await session.approvals();
+const pending = await session.interactions();
 
-await session.resolve_approval({
-  approval_id: pending[0].approval_id,
-  decision: "approved",
+await session.respond({
+  interaction_id: pending[0].request.interaction_id,
+  response: { kind: "approval", decision: "approved" },
 });
 ```
 
-Local and remote Sessions expose the same API. A live UI reads the request from `mutation.part.approval` when `session.subscribe()` receives an approval-required Tool Part, then submits the decision with `session.resolve_approval(...)`.
+Local and remote Sessions expose the same API. A live UI reads a pending Interaction Part while the related Tool is `waiting-user`, then submits the response with `session.respond(...)`.
 
 ## Session Approval Mode
 

@@ -36,11 +36,13 @@ interface SessionMessagePage {
 | `type` | Meaning | Typical presentation |
 | --- | --- | --- |
 | `user` | User input or in-flight steering | User bubble and attachments |
-| `assistant` | One generated model response segment | Text, reasoning, tools, files |
+| `assistant` | One continuous generated response | Text, reasoning, tools, files |
 | `action` | Runtime activity such as a model change or compaction | Status notice |
 | `error` | A displayable Session or Turn error | Error callout and retry entry point |
 
 A Session has one top-level Message sequence ordered by `sequence`. Tool calls are neither a second Timeline nor top-level Messages: they live in an Assistant Message's `parts`, so `text -> tool -> text` is persisted in its real generation order.
+
+An ordinary Tool Loop, Provider continuation, or recovery retry does not create another Assistant Message. It appends ordered Parts to the current Assistant. Only a new User Message—including an in-flight steer—closes the preceding Assistant Message, after which later output creates the next Assistant Message. Model-step boundaries use `step-start` Parts and require no separate segment field.
 
 `SessionMessage` is the persistence format; AI SDK `UIMessage` is the Executor and UI boundary format. Serializable User and Assistant UI parts can be projected into Session parts and restored as an equivalent `UIMessage`. `action` and `error` are Downcity Session top-level types and are never sent to the model.
 
@@ -52,7 +54,8 @@ If a Turn fails before producing any Assistant content, the Session writes one `
 | --- | --- | --- |
 | `text` | `text`, `state` | Visible output, `streaming -> done` |
 | `reasoning` | `text`, `state` | Reasoning output; product decides whether to display it |
-| `tool` | `tool_call_id`, `tool_name`, `state`, `approval`, metadata | Tool input, approval, execution, and result |
+| `tool` | `tool_call_id`, `tool_name`, `state`, metadata | Tool input, waiting, execution, and result |
+| `interaction` | `interaction_id`, `interaction_type`, `status`, `request`, `response` | Asynchronous user approval or questions |
 | `file` | `url`, `media_type`, `provider_metadata` | A file generated or referenced by the Assistant |
 | `source` | `source_type`, `source_id`, URL or document fields | An AI SDK URL or document source |
 | `data` | `data_type`, `data`, `data_id` | Persisted structured UI data |
@@ -80,24 +83,29 @@ These fields are opaque data required by capabilities such as Provider continuat
 
 Text, reasoning, file, and source parts also preserve their own `provider_metadata`. Stream updates with the same `data_id` or `source_id` replace the existing Part without changing its `sequence`. An AI SDK data chunk with `transient: true` is delivered to the live UI but is not persisted in the Session.
 
-Tool approvals use one snapshot:
+Tool Parts do not carry a duplicate approval snapshot. User participation uses a separate
+Interaction Part:
 
 ```ts
-interface SessionToolApprovalSnapshot {
-  approval_id: string;
-  approved?: boolean;
-  reason?: string;
-  request?: SessionApproval;
+interface SessionAssistantInteractionPart {
+  interaction_id: string;
+  interaction_type: "approval" | "question";
+  status: "pending" | "resolved" | "expired" | "cancelled";
+  request: SessionInteractionRequest;
+  response?: SessionInteractionResponse;
 }
 ```
 
-Native AI SDK approvals persist `approval_id / approved / reason`. A local Downcity Shell approval additionally stores its command, working directory, and expiry under `approval.request`. The `approval-required -> running/completed` path and a rejected `failed` state all update the same Tool Part.
+A related Tool follows `ready -> waiting-user -> running -> completed`; denial, expiry, or
+cancellation moves it to `failed`. The Tool and Interaction are committed in one Assistant
+revision. Two Part Mutations with the same revision are two changes from one atomic snapshot,
+not two independent transactions.
 
 ## Order, revision, and visibility
 
 Every Message has a stable `message_id`, a creation-time `sequence` that never changes, and a `revision` that increases with each complete snapshot update. A client must not replace a greater revision with a lower one.
 
-At the end of each model step, the SDK validates the final UIMessage against the canonical chunks by Part count, type, order, and stable identity. A final snapshot mismatch or canonical Part write failure fails the Turn. The SDK does not infer identity from text content and never publishes an incomplete completed history. When a client receives a complete `message` Mutation with a greater revision, it should replace the whole Message instead of retaining the older revision's Parts array.
+At the end of each model step, the SDK validates the final UIMessage against the canonical chunks by Part count, type, order, and stable identity. The AI SDK can emit an empty placeholder Part for Text or Reasoning that has start/end events but no delta; the SDK ignores such Parts before validation and does not add them to canonical history. Any other final snapshot mismatch or canonical Part write failure fails the Turn. The SDK does not infer identity from text content and never publishes an incomplete completed history. When a client receives a complete `message` Mutation with a greater revision, it should replace the whole Message instead of retaining the older revision's Parts array.
 
 `messages()` returns only `visibility: "visible"` Messages by default. Pass `include_internal: true` for debugging or audit. A Compact Summary is not a Message, consumes no sequence, and never appears in `messages()`.
 

@@ -18,7 +18,6 @@ test("Session timeline preserves assistant text and tool order", () => {
     updated_at: 20,
     type: "assistant",
     kind: "normal",
-    segment_index: 1,
     status: "completed",
     parts: [
       {

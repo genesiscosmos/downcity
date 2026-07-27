@@ -1,11 +1,8 @@
 /**
- * 流式会话事件控制器。
+ * canonical Session Mutation 到 Chat TUI Transcript 的实时控制器。
  *
- * 关键点（中文）
- * - 对齐 Kimi Code StreamingUIController 的语义方法：
- *   appendAssistantDelta / onStreamingTextStart / onStreamingTextUpdate / onStreamingTextEnd。
- * - 用 _streaming_block 维护当前 assistant 条目，保证增量只更新同一个组件。
- * - flush 节拍合并高频 text-delta，降低终端重绘开销。
+ * 控制器按 message_id 定位 canonical Message，按 part_id 更新 Assistant Part。
+ * Message 创建 Mutation 必须先于对应 Part/Delta；TUI 不构造缺少领域字段的占位消息。
  */
 
 import type { SessionMutation } from "@downcity/agent";
@@ -13,78 +10,46 @@ import type { SessionMutation } from "@downcity/agent";
 import type { MessageListComponent } from "@/city/agent/tui/components/MessageList.js";
 import { BRAILLE_SPINNER_INTERVAL_MS } from "@/city/agent/tui/constant/rendering.js";
 import { STREAMING_UI_FLUSH_MS } from "@/city/agent/tui/constant/streaming.js";
-import { generateTuiId } from "@/city/agent/tui/utils/id.js";
-import type { TranscriptEntry } from "@/city/agent/tui/types.js";
 
-/**
- * StreamingUIController 构造选项。
- */
+/** StreamingUIController 构造选项。 */
 export interface StreamingUIOptions {
   /** 消息流组件。 */
   message_list: MessageListComponent;
-  /** TUI 请求重绘回调。流式 delta、tool 事件、结束都会调用。 */
+  /** TUI 请求重绘回调；高频 Mutation 会按固定节拍合并。 */
   request_render: () => void;
 }
 
-interface StreamingBlock {
-  /** assistant 条目 ID。 */
-  entry_id: string;
-}
-
-/**
- * 流式 UI 控制器。
- */
+/** 将 Session Mutation 投影到 Assistant-owned Transcript。 */
 export class StreamingUIController {
-  private message_list: MessageListComponent;
-  private request_render_fn: () => void;
+  private readonly message_list: MessageListComponent;
+  private readonly request_render_fn: () => void;
   private active_turn_id = "";
-  private streaming_block: StreamingBlock | null = null;
-  private assistant_draft = "";
-  private pending_assistant_flush = false;
-  private flush_timer: ReturnType<typeof setTimeout> | null = null;
-  private last_flush_at = 0;
   private pending_render = false;
+  private render_timer: ReturnType<typeof setTimeout> | null = null;
+  private last_render_at = 0;
   private working_spinner_timer: ReturnType<typeof setInterval> | null = null;
-  private readonly tool_call_ids = new Set<string>();
 
-  /**
-   * @param options 构造选项。
-   */
+  /** @param options 控制器依赖与重绘回调。 */
   constructor(options: StreamingUIOptions) {
     this.message_list = options.message_list;
     this.request_render_fn = options.request_render;
   }
 
-  /**
-   * 启动新一轮渲染。
-   */
+  /** 启动新一轮；Assistant 容器在首个 canonical Message/Part/Delta 到达时创建。 */
   start_turn(): void {
     this.active_turn_id = "";
-    this.tool_call_ids.clear();
-    this.on_streaming_text_end();
-    this.assistant_draft = "";
-    this.pending_assistant_flush = false;
     this.pending_render = false;
-    this.clear_flush_timer();
+    this.clear_render_timer();
     this.start_working_spinner();
-    this.on_streaming_text_start();
     this.request_render_fn();
   }
 
-  /**
-   * 绑定当前 turn id。
-   *
-   * @param turn_id turn id。
-   */
+  /** @param turn_id 当前 Session Turn 的稳定标识。 */
   attach_turn_id(turn_id: string): void {
     this.active_turn_id = String(turn_id || "").trim();
   }
 
-  /**
-   * 处理单个 session 事件。
-   *
-   * @param event Session Mutation。
-   */
+  /** 按 Mutation 身份更新 Assistant Message 或其他顶层状态条目。 */
   handle_event(event: SessionMutation): void {
     const event_turn_id = "turn_id" in event ? event.turn_id || "" : "";
     if (event_turn_id && this.active_turn_id && event_turn_id !== this.active_turn_id) {
@@ -92,197 +57,78 @@ export class StreamingUIController {
     }
 
     if (event.variant === "delta") {
-      if (event.type === "text") this.append_assistant_delta(event.delta);
+      if (event.type !== "text") return;
+      this.message_list.append_assistant_delta(
+        event.message_id,
+        event.part_id,
+        event.delta,
+        event.revision,
+        event.created_at,
+      );
+      this.schedule_render();
       return;
     }
-    if (event.variant === "message") {
-      if (event.type === "error") this.add_error(event.message.message);
-      if (
-        event.type === "assistant" &&
-        event.message.status !== "streaming"
-      ) this.finalize_assistant();
+
+    if (event.variant === "part") {
+      this.message_list.upsert_assistant_part(
+        event.message_id,
+        event.part,
+        event.revision,
+        event.created_at,
+      );
+      this.schedule_render();
       return;
     }
-    if (event.variant !== "part" || event.type !== "tool") return;
-    const part = event.part;
-    this.finalize_assistant();
-    if (!this.tool_call_ids.has(part.tool_call_id)) {
-      this.tool_call_ids.add(part.tool_call_id);
-      this.add_tool_call(
-        part.tool_name,
-        part.tool_call_id,
-        part.input,
-      );
-    } else if (part.input !== undefined) {
-      // 关键点（中文）：input-start 只创建占位卡片，ready/approval 事件负责原位补全输入。
-      this.message_list.update_tool_input(
-        part.tool_call_id,
-        part.tool_name,
-        part.input,
-      );
-    }
-    if (part.state === "approval-required" && part.approval) {
-      this.message_list.require_tool_approval(
-        part.tool_call_id,
-        part.approval.approval_id,
-      );
-    }
-    if (part.state === "completed") {
-      this.message_list.update_tool_result(part.tool_call_id, part.output, "success");
-    }
-    if (part.state === "failed") {
-      this.message_list.update_tool_result(
-        part.tool_call_id,
-        part.error || "Tool failed",
-        "error",
-      );
-    }
+
+    if (event.variant !== "message") return;
+    this.message_list.upsert_message(event.message);
+    this.schedule_render();
   }
 
-  /**
-   * 结束当前一轮渲染。
-   */
+  /** 结束当前轮次并停止动画；终态 Message Mutation 是状态的首选事实来源。 */
   finish_turn(): void {
-    this.finalize_assistant();
-    this.flush();
+    this.flush_render();
     this.stop_working_spinner();
   }
 
-  /**
-   * 追加 assistant 文本增量。
-   *
-   * @param delta 新增文本片段。
-   */
-  private append_assistant_delta(delta: string): void {
-    if (this.streaming_block === null) {
-      this.on_streaming_text_start();
-    }
-    this.assistant_draft += delta;
-    this.pending_assistant_flush = true;
-    this.schedule_render();
-  }
-
-  /**
-   * 开始一个新的 assistant 流式条目。
-   */
-  private on_streaming_text_start(): void {
-    const entry_id = generateTuiId();
-    const entry: TranscriptEntry = {
-      id: entry_id,
-      kind: "assistant",
-      text: "",
-      streaming: true,
-      created_at: Date.now(),
-    };
-    this.message_list.add_entry(entry);
-    this.streaming_block = { entry_id };
-  }
-
-  /**
-   * 将当前 draft 刷入组件与条目。
-   */
-  private flush(): void {
-    this.clear_flush_timer();
-    if (!this.pending_assistant_flush) {
-      return;
-    }
-    this.pending_assistant_flush = false;
-    this.last_flush_at = Date.now();
-
-    if (this.streaming_block !== null) {
-      this.message_list.update_assistant_text(
-        this.streaming_block.entry_id,
-        this.assistant_draft,
-        true,
-      );
-    }
-
-    if (this.pending_render) {
-      this.pending_render = false;
-      this.request_render_fn();
-    }
-  }
-
-  /**
-   * 结束当前 assistant 流式条目。
-   */
-  private on_streaming_text_end(): void {
-    if (this.streaming_block === null) {
-      return;
-    }
-    const { entry_id } = this.streaming_block;
-    this.message_list.update_assistant_text(entry_id, this.assistant_draft, false);
-    this.streaming_block = null;
-    this.assistant_draft = "";
-    this.pending_assistant_flush = false;
-  }
-
-  /**
-   * 结束当前 assistant 文本块。
-   */
-  private finalize_assistant(): void {
-    this.flush();
-    this.on_streaming_text_end();
-    this.schedule_render();
-  }
-
-  private add_tool_call(tool_name: string, tool_call_id: string, args: unknown): void {
-    const entry: TranscriptEntry = {
-      id: generateTuiId(),
-      kind: "tool-call",
-      tool_call_id,
-      tool_name,
-      args,
-      status: "pending",
-      created_at: Date.now(),
-    };
-    this.message_list.add_entry(entry);
-    this.schedule_render();
-  }
-
-  private add_error(text: string): void {
-    const entry: TranscriptEntry = {
-      id: generateTuiId(),
-      kind: "error",
-      text,
-      created_at: Date.now(),
-    };
-    this.message_list.add_entry(entry);
-    this.schedule_render();
-  }
-
-  /**
-   * 调度一次重绘。多次调用会被合并到下一个 STREAMING_UI_FLUSH_MS 节拍。
-   */
+  /** 合并高频 Mutation 产生的终端重绘请求。 */
   private schedule_render(): void {
     this.pending_render = true;
-    if (this.flush_timer !== null) {
-      return;
-    }
-    const elapsed = Date.now() - this.last_flush_at;
-    const delay = elapsed >= STREAMING_UI_FLUSH_MS ? 0 : STREAMING_UI_FLUSH_MS - elapsed;
-    this.flush_timer = setTimeout(() => {
-      this.flush();
-    }, delay);
+    if (this.render_timer !== null) return;
+    const elapsed = Date.now() - this.last_render_at;
+    const delay = elapsed >= STREAMING_UI_FLUSH_MS
+      ? 0
+      : STREAMING_UI_FLUSH_MS - elapsed;
+    this.render_timer = setTimeout(() => this.flush_render(), delay);
   }
 
-  private clear_flush_timer(): void {
-    if (this.flush_timer === null) {
-      return;
-    }
-    clearTimeout(this.flush_timer);
-    this.flush_timer = null;
+  /** 立即提交一次已经排队的重绘。 */
+  private flush_render(): void {
+    this.clear_render_timer();
+    if (!this.pending_render) return;
+    this.pending_render = false;
+    this.last_render_at = Date.now();
+    this.request_render_fn();
   }
 
-  /** 启动消息流中 Assistant working 的低频重绘。 */
+  /** 取消尚未执行的合并重绘定时器。 */
+  private clear_render_timer(): void {
+    if (this.render_timer === null) return;
+    clearTimeout(this.render_timer);
+    this.render_timer = null;
+  }
+
+  /** 启动 Assistant working 与 Tool active 状态的低频动画重绘。 */
   private start_working_spinner(): void {
     if (this.working_spinner_timer !== null) return;
-    this.working_spinner_timer = setInterval(() => {
+    const timer = setInterval(() => {
       this.request_render_fn();
     }, BRAILLE_SPINNER_INTERVAL_MS);
+    if (typeof timer.unref === "function") timer.unref();
+    this.working_spinner_timer = timer;
   }
 
-  /** 当前 Turn 结束后停止 Assistant working 的动画重绘。 */
+  /** 当前 Turn 结束后停止动画重绘。 */
   private stop_working_spinner(): void {
     if (this.working_spinner_timer === null) return;
     clearInterval(this.working_spinner_timer);

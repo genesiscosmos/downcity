@@ -98,8 +98,8 @@ export class AgentChatInteractiveRenderer implements AgentChatInteractiveRendere
       }));
     }
     this.set_spinner_text(
-      part.state === "approval-required"
-        ? "Waiting for approval..."
+      part.state === "waiting-user"
+        ? "Waiting for user..."
         : part.state === "completed" || part.state === "failed"
           ? "Thinking..."
           : `Running ${part.tool_name}...`,

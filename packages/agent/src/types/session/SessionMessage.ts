@@ -5,9 +5,15 @@
  * 均为内部 part，不提升为顶层消息。
  */
 
-import type { ProviderMetadata } from "ai";
 import type { JsonObject, JsonValue } from "@/types/common/Json.js";
-import type { SessionApproval } from "@/types/session/SessionApproval.js";
+import type {
+  SessionInteractionRequest,
+  SessionInteractionResponse,
+  SessionInteractionStatus,
+} from "@/types/session/SessionInteraction.js";
+
+/** Session 持久化的 Provider metadata 映射。 */
+export type SessionProviderMetadata = Record<string, JsonObject>;
 
 /** Message 默认展示范围。 */
 export type SessionMessageVisibility = "visible" | "internal";
@@ -55,7 +61,7 @@ export interface SessionUserTextPart {
   /** User 文本已经完整，不参与流式更新。 */
   state: "done";
   /** AI SDK User text part 携带的可序列化 Provider metadata。 */
-  provider_metadata?: ProviderMetadata;
+  provider_metadata?: SessionProviderMetadata;
 }
 
 /** User 文件 part。 */
@@ -71,7 +77,7 @@ export interface SessionUserFilePart {
   /** 可选原始文件名。 */
   filename?: string;
   /** AI SDK User file part 携带的可序列化 Provider metadata。 */
-  provider_metadata?: ProviderMetadata;
+  provider_metadata?: SessionProviderMetadata;
 }
 
 /** User 结构化数据 part。 */
@@ -117,19 +123,7 @@ export interface SessionAssistantTextPart {
   /** 文本 part 是否已经结束。 */
   state: "streaming" | "done";
   /** AI SDK text / reasoning part 携带的可序列化 Provider metadata。 */
-  provider_metadata?: ProviderMetadata;
-}
-
-/** Tool approval 在 UIMessage 中的完整语义快照。 */
-export interface SessionToolApprovalSnapshot {
-  /** AI SDK approval request 的稳定标识。 */
-  approval_id: string;
-  /** 已经作出决定时记录是否批准；等待决定时省略。 */
-  approved?: boolean;
-  /** Provider 或用户给出的可选决定原因。 */
-  reason?: string;
-  /** Downcity 本地审批运行时的完整请求；仅本地工具审批存在。 */
-  request?: SessionApproval;
+  provider_metadata?: SessionProviderMetadata;
 }
 
 /** Assistant 工具 part。 */
@@ -145,7 +139,7 @@ export interface SessionAssistantToolPart {
   /** 工具注册名称。 */
   tool_name: string;
   /** 工具当前生命周期状态。 */
-  state: "input-streaming" | "ready" | "approval-required" | "running" | "completed" | "failed";
+  state: "input-streaming" | "ready" | "waiting-user" | "running" | "completed" | "failed";
   /** 流式接收中的参数原文。 */
   input_text?: string;
   /** 收敛后的结构化输入。 */
@@ -165,13 +159,35 @@ export interface SessionAssistantToolPart {
   /** 当前工具结果是否只是后续会被替换的临时结果。 */
   preliminary?: boolean;
   /** 工具调用阶段由 AI SDK Provider 返回的可序列化 metadata。 */
-  call_provider_metadata?: ProviderMetadata;
+  call_provider_metadata?: SessionProviderMetadata;
   /** 工具结果阶段由 AI SDK Provider 返回的可序列化 metadata。 */
-  result_provider_metadata?: ProviderMetadata;
+  result_provider_metadata?: SessionProviderMetadata;
   /** 当前工具是否由模型 Provider 直接执行。 */
   provider_executed?: boolean;
-  /** 当前 Tool 等待或已经处理过的完整审批语义。 */
-  approval?: SessionToolApprovalSnapshot;
+}
+
+/** Assistant 用户异步交互 part。 */
+export interface SessionAssistantInteractionPart {
+  /** Assistant Message 内稳定的 part 标识。 */
+  part_id: string;
+  /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
+  sequence: number;
+  /** part 类型固定为 interaction。 */
+  type: "interaction";
+  /** 当前 Interaction 的稳定唯一标识。 */
+  interaction_id: string;
+  /** 当前 Interaction 的具体业务类型。 */
+  interaction_type: "approval" | "question";
+  /** 当前 Interaction 的生命周期状态。 */
+  status: SessionInteractionStatus;
+  /** 已持久化的完整 Interaction 请求。 */
+  request: SessionInteractionRequest;
+  /** 用户已响应时保存的结构化响应。 */
+  response?: SessionInteractionResponse;
+  /** Interaction 进入终态的时间戳，单位为毫秒。 */
+  resolved_at?: number;
+  /** Interaction 被取消时保存的稳定原因。 */
+  cancel_reason?: "turn_stopped" | "session_disposed" | "runtime_interrupted";
 }
 
 /** Assistant 文件 part。 */
@@ -189,7 +205,7 @@ export interface SessionAssistantFilePart {
   /** 可选原始文件名。 */
   filename?: string;
   /** AI SDK Assistant file part 携带的可序列化 Provider metadata。 */
-  provider_metadata?: ProviderMetadata;
+  provider_metadata?: SessionProviderMetadata;
 }
 
 /** Assistant 结构化数据 part。 */
@@ -225,7 +241,7 @@ export interface SessionAssistantUrlSourcePart {
   /** source 的可选展示标题。 */
   title?: string;
   /** AI SDK source part 携带的可序列化 Provider metadata。 */
-  provider_metadata?: ProviderMetadata;
+  provider_metadata?: SessionProviderMetadata;
 }
 
 /** Assistant document source part。 */
@@ -247,7 +263,7 @@ export interface SessionAssistantDocumentSourcePart {
   /** document source 的可选文件名。 */
   filename?: string;
   /** AI SDK source part 携带的可序列化 Provider metadata。 */
-  provider_metadata?: ProviderMetadata;
+  provider_metadata?: SessionProviderMetadata;
 }
 
 /** Assistant source part。 */
@@ -269,6 +285,7 @@ export interface SessionAssistantStepPart {
 export type SessionAssistantMessagePart =
   | SessionAssistantTextPart
   | SessionAssistantToolPart
+  | SessionAssistantInteractionPart
   | SessionAssistantFilePart
   | SessionAssistantDataPart
   | SessionAssistantSourcePart
@@ -278,10 +295,8 @@ export type SessionAssistantMessagePart =
 export interface SessionAssistantMessage extends SessionMessageBase {
   /** Message 类型固定为 assistant。 */
   type: "assistant";
-  /** 普通 assistant segment 或内部 compact summary。 */
+  /** 普通 Assistant 回复或内部 compact summary。 */
   kind: "normal" | "summary";
-  /** Assistant 在所属 turn 内的 segment 序号，从一开始。 */
-  segment_index: number;
   /** Assistant 当前执行状态。 */
   status: "streaming" | "completed" | "stopped" | "failed";
   /** Assistant 内按真实生成顺序保存的 parts。 */

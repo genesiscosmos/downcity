@@ -23,7 +23,7 @@ import type {
 import type { SessionToolInputReady } from "@/types/session/SessionTool.js";
 import { generate_id } from "@/utils/Id.js";
 
-/** 单个 Assistant segment 的流式 writer。 */
+/** 单个 Assistant Message 的流式 writer。 */
 export class SessionAssistantMessageWriter {
   readonly message_id: string;
   private readonly recorder: SessionMessages;
@@ -134,6 +134,7 @@ export class SessionAssistantMessageWriter {
       }
       case "text-delta":
       case "reasoning-delta": {
+        if (chunk.delta.length === 0) return;
         const type = chunk.type === "text-delta" ? "text" : "reasoning";
         const part_id = this.resolve_text_part_id(type, chunk.id);
         await this.ensure_text_part(
@@ -305,17 +306,13 @@ export class SessionAssistantMessageWriter {
         const tool = this.find_tool(chunk.toolCallId);
         await this.upsert_tool(chunk.toolCallId, {
           tool_name: tool?.tool_name || "unknown",
-          state: "approval-required",
-          approval: { approval_id: chunk.approvalId },
+          state: "waiting-user",
         });
         return;
       }
       case "tool-output-available": {
         const tool = this.find_tool(chunk.toolCallId);
-        if (
-          tool?.state === "failed" &&
-          (tool.error === "Approval denied" || tool.error === "Approval expired")
-        ) return;
+        if (tool?.state === "failed") return;
         const result_provider_metadata = to_session_provider_metadata(
           chunk.providerMetadata,
         );
@@ -365,12 +362,6 @@ export class SessionAssistantMessageWriter {
           tool_name: tool?.tool_name || "unknown",
           state: "failed",
           error: "Tool output denied",
-          approval: {
-            ...(tool?.approval || {}),
-            approval_id:
-              tool?.approval?.approval_id || `approval:${chunk.toolCallId}`,
-            approved: false,
-          },
         });
         return;
       }
@@ -525,21 +516,21 @@ export class SessionAssistantMessageWriter {
     await this.write_chain;
   }
 
-  /** 正常完成当前 assistant segment。 */
+  /** 正常完成当前 Assistant Message。 */
   async complete(): Promise<void> {
     await this.enqueue_write(async () => {
       await this.close_serialized("completed");
     });
   }
 
-  /** 停止当前 assistant segment，并保留已有 parts。 */
+  /** 停止当前 Assistant Message，并保留已有 Parts。 */
   async stop(): Promise<void> {
     await this.enqueue_write(async () => {
       await this.close_serialized("stopped");
     });
   }
 
-  /** 以失败状态关闭当前 assistant segment。 */
+  /** 以失败状态关闭当前 Assistant Message。 */
   async fail(_error: unknown): Promise<void> {
     await this.enqueue_write(async () => {
       await this.close_serialized("failed");

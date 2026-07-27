@@ -12,18 +12,11 @@ import type {
   AgentSessionActionEvent,
   AgentSessionActionRecord,
 } from "@/types/sdk/AgentSessionAction.js";
-import type {
-  SessionAssistantStepCallback,
-  SessionUiMessageChunkCallback,
-  SessionUiMessageStepAbortCallback,
-  SessionUiMessageStepFinishCallback,
-  SessionUiMessageStepStartCallback,
-} from "@/executor/types/SessionRun.js";
 import type { SessionUserMessageV1 } from "@/executor/types/SessionRecords.js";
 import type { FileUIPart } from "ai";
 import type { AgentPluginExecutionLease } from "@/types/plugin/PluginRuntime.js";
 import type { ShellApprovalGateway } from "@downcity/shell";
-import type { SessionToolInputReady } from "@/types/session/SessionTool.js";
+import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 
 /**
  * 单次 session run 的运行上下文。
@@ -94,47 +87,8 @@ export interface SessionRunContext {
   /** 当前 Session step 持有的 Plugin 执行 lease。 */
   agent_plugins?: AgentPluginExecutionLease;
 
-  /**
-   * assistant step 完成回调。
-   *
-   * 关键点（中文）
-   * - 用于把中间 step 文本或 reasoning 事件回传给 Session 事件流。
-   */
-  on_assistant_step_callback?: SessionAssistantStepCallback;
-
-  /**
-   * UI stream chunk 回调。
-   *
-   * 关键点（中文）
-   * - 用于把底层模型 UI chunk 旁路输出到订阅流或 transport。
-   */
-  on_ui_message_chunk_callback?: SessionUiMessageChunkCallback;
-
-  /**
-   * 单个模型 UI stream 开始回调。
-   *
-   * 关键点（中文）：Session writer 用它建立独立 step 作用域，确保重复 chunk id
-   * 不会跨模型调用复用同一个 canonical Part。
-   */
-  on_ui_message_step_start?: SessionUiMessageStepStartCallback;
-
-  /**
-   * 单个模型 UI stream 完成快照回调。
-   *
-   * 关键点（中文）：最终快照只校验当前 step 的顺序并补充 metadata，不能创建、
-   * 删除或重排 canonical Part。
-   */
-  on_ui_message_step_finish?: SessionUiMessageStepFinishCallback;
-
-  /**
-   * 单个模型 UI stream 异常结束回调。
-   *
-   * 关键点（中文）：用于释放 step 作用域；已经持久化的流式 Part 继续保留。
-   */
-  on_ui_message_step_abort?: SessionUiMessageStepAbortCallback;
-
-  /** Tool 实现开始执行前提交完整输入的顺序屏障。 */
-  on_tool_input_ready?: (input: SessionToolInputReady) => Promise<void>;
+  /** Executor 写入 canonical Assistant Message 使用的唯一输出端口。 */
+  assistant_output?: SessionAssistantOutput;
 
   /** 当前 Session 拥有的 unrestricted 审批网关。 */
   shell_approval_gateway?: ShellApprovalGateway;

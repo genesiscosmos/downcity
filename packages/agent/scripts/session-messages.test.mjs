@@ -11,7 +11,8 @@ import path from "node:path";
 import { JsonlSessionMessageStore } from "../bin/workspace/store/JsonlSessionMessageStore.js";
 import { LocalFileSystem } from "../bin/workspace/LocalFileSystem.js";
 import { SessionMessages } from "../bin/session/SessionMessages.js";
-import { SessionApprovalBroker } from "../bin/session/approval/SessionApprovalBroker.js";
+import { SessionInteractions } from "../bin/session/control/SessionInteractions.js";
+import { SessionShellApprovalAdapter } from "../bin/session/execution/tools/SessionShellApprovalAdapter.js";
 import { compose_session_compaction } from "../bin/session/messages/SessionMessageCompaction.js";
 import {
   from_ui_assistant_parts,
@@ -155,7 +156,7 @@ test("delta 只更新 Assistant 草稿，完成后才写入 active.jsonl", async
     input_type: "prompt",
     parts: [{ part_id: "user-text-1", type: "text", text: "你好", state: "done" }],
   });
-  const writer = await recorder.open_assistant_message({ turn_id: "turn-1", segment_index: 1 });
+  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
   await writer.apply_chunk({ type: "text-start", id: "text-1" });
   await writer.apply_chunk({ type: "text-delta", id: "text-1", delta: "你" });
   await writer.apply_chunk({ type: "text-delta", id: "text-1", delta: "好" });
@@ -189,11 +190,15 @@ test("delta 只更新 Assistant 草稿，完成后才写入 active.jsonl", async
 
 test("Tool Runtime 在文本中间保持输入、审批和输出的确定顺序", async () => {
   const { recorder, events, file_path } = await create_recorder("tool-order-test");
-  const approval_broker = new SessionApprovalBroker({
+  const interactions = new SessionInteractions({
     session_id: "tool-order-test",
     messages: recorder,
   });
-  const writer = await recorder.open_assistant_message({ turn_id: "turn-1", segment_index: 1 });
+  const approval_adapter = new SessionShellApprovalAdapter({
+    session_id: "tool-order-test",
+    interactions,
+  });
+  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
   await writer.apply_chunk({ type: "text-start", id: "text-1" });
   await writer.apply_chunk({ type: "text-delta", id: "text-1", delta: "before" });
   await writer.apply_chunk({ type: "text-end", id: "text-1" });
@@ -205,7 +210,7 @@ test("Tool Runtime 在文本中间保持输入、审批和输出的确定顺序"
     input: { cmd: "pwd", sandbox: "unrestricted", reason: "Inspect directory" },
   });
   assert.equal(recorder.get_message(writer.message_id).parts[1].state, "ready");
-  const approval_handle = await approval_broker.request({
+  const approval_handle = await approval_adapter.request({
     shell_id: "shell-1",
     tool_call_id: "call-1",
     tool_name: "shell_exec",
@@ -217,10 +222,10 @@ test("Tool Runtime 在文本中间保持输入、审批和输出的确定顺序"
     operation: "exec",
     timeout_ms: 60_000,
   });
-  assert.equal(recorder.get_message(writer.message_id).parts[1].state, "approval-required");
-  await approval_broker.resolve({
-    approval_id: approval_handle.approval_id,
-    decision: "approved",
+  assert.equal(recorder.get_message(writer.message_id).parts[1].state, "waiting-user");
+  await interactions.respond({
+    interaction_id: approval_handle.approval_id,
+    response: { kind: "approval", decision: "approved" },
   });
   assert.equal(await approval_handle.decision, "approved");
   await writer.apply_chunk({ type: "text-start", id: "text-2" });
@@ -230,8 +235,8 @@ test("Tool Runtime 在文本中间保持输入、审批和输出的确定顺序"
   await writer.complete();
 
   const assistant = (await read_jsonl(file_path))[0];
-  assert.deepEqual(assistant.parts.map((part) => part.type), ["text", "tool", "text"]);
-  assert.deepEqual(assistant.parts.map((part) => part.sequence), [1, 2, 3]);
+  assert.deepEqual(assistant.parts.map((part) => part.type), ["text", "tool", "interaction", "text"]);
+  assert.deepEqual(assistant.parts.map((part) => part.sequence), [1, 2, 3, 4]);
   assert.equal(assistant.parts[1].state, "completed");
   assert.deepEqual(assistant.parts[1].output, { count: 1 });
   assert.deepEqual(
@@ -241,7 +246,7 @@ test("Tool Runtime 在文本中间保持输入、审批和输出的确定顺序"
     [
       [2, "input-streaming"],
       [2, "ready"],
-      [2, "approval-required"],
+      [2, "waiting-user"],
       [2, "running"],
       [2, "completed"],
     ],
@@ -252,7 +257,6 @@ test("Streaming Tool Provider metadata 在输入和输出状态间完整保留",
   const { recorder, file_path } = await create_recorder("tool-provider-metadata-test");
   const writer = await recorder.open_assistant_message({
     turn_id: "turn-provider-metadata",
-    segment_index: 1,
   });
   await writer.begin_step();
   await writer.apply_chunk({
@@ -311,7 +315,6 @@ test("AI SDK 流式 metadata、source、data、step 和审批状态完整持久�
   const { recorder, file_path } = await create_recorder("ui-chunk-semantics-test");
   const writer = await recorder.open_assistant_message({
     turn_id: "turn-ui-chunks",
-    segment_index: 1,
   });
   await writer.apply_chunk({
     type: "text-start",
@@ -417,10 +420,7 @@ test("AI SDK 流式 metadata、source、data、step 和审批状态完整持久�
   assert.equal(tool_part.title, "Lookup");
   assert.equal(tool_part.dynamic, true);
   assert.deepEqual(tool_part.tool_metadata, { category: "search" });
-  assert.deepEqual(tool_part.approval, {
-    approval_id: "approval_stream_1",
-    approved: false,
-  });
+  assert.equal("approval" in tool_part, false);
   assert.equal(
     assistant.parts.some((part) => part.type === "data" && part.data_id === "transient_1"),
     false,
@@ -458,7 +458,6 @@ test("UI Tool Provider metadata 经 Session roundtrip 后恢复为 ModelMessage 
     updated_at: 1,
     type: "assistant",
     kind: "normal",
-    segment_index: 1,
     status: "completed",
     parts,
   });
@@ -509,7 +508,6 @@ test("UI Tool Provider metadata 经 Session roundtrip 后恢复为 ModelMessage 
     updated_at: 2,
     type: "assistant",
     kind: "normal",
-    segment_index: 2,
     status: "completed",
     parts: from_ui_assistant_parts([{
       type: "dynamic-tool",
@@ -534,7 +532,7 @@ test("UI Tool Provider metadata 经 Session roundtrip 后恢复为 ModelMessage 
   });
 });
 
-test("SessionMessage 无损恢复 AI SDK UIMessage 的完整 Part 语义", () => {
+test("SessionMessage 保留稳定语义并归一化 AI SDK 原生审批字段", () => {
   const user_parts = [
     {
       type: "text",
@@ -690,24 +688,32 @@ test("SessionMessage 无损恢复 AI SDK UIMessage 的完整 Part 语义", () =>
     updated_at: 2,
     type: "assistant",
     kind: "normal",
-    segment_index: 1,
     status: "streaming",
     parts: canonical_parts,
   });
-  assert.deepEqual(restored_assistant.parts, assistant_parts);
+  assert.deepEqual(restored_assistant.parts.slice(0, 9), assistant_parts.slice(0, 9));
+  const restored_tools = restored_assistant.parts.slice(9);
+  assert.deepEqual(
+    restored_tools.map((part) => part.state),
+    ["input-available", "input-available", "output-available", "output-error", "output-error"],
+  );
+  assert.equal(restored_tools.every((part) => !("approval" in part)), true);
   assert.equal(canonical_parts.find((part) => part.tool_call_id === "call_ready").dynamic, false);
   assert.equal(canonical_parts.find((part) => part.tool_call_id === "call_completed").dynamic, true);
 });
 
-test("Approval Broker 只接受已经准备完整输入的 Tool", async () => {
+test("Session Interaction 只接受已经准备完整输入的 Tool", async () => {
   const { recorder, events } = await create_recorder("tool-ready-barrier-test");
-  const approval_broker = new SessionApprovalBroker({
+  const interactions = new SessionInteractions({
     session_id: "tool-ready-barrier-test",
     messages: recorder,
   });
+  const approval_adapter = new SessionShellApprovalAdapter({
+    session_id: "tool-ready-barrier-test",
+    interactions,
+  });
   const writer = await recorder.open_assistant_message({
     turn_id: "turn-ready-barrier",
-    segment_index: 1,
   });
   const approval_input = {
     shell_id: "shell-ready-barrier",
@@ -722,10 +728,10 @@ test("Approval Broker 只接受已经准备完整输入的 Tool", async () => {
     timeout_ms: 60_000,
   };
   await assert.rejects(
-    approval_broker.request(approval_input),
+    approval_adapter.request(approval_input),
     /Streaming Tool Part not found/,
   );
-  assert.equal(approval_broker.list().length, 0);
+  assert.equal(interactions.list().length, 0);
 
   const tool_input_ready = writer.prepare_tool_input({
     tool_call_id: "call-ready-barrier",
@@ -744,16 +750,17 @@ test("Approval Broker 只接受已经准备完整输入的 Tool", async () => {
     toolName: "shell_exec",
   });
   await tool_input_ready;
-  const approval_handle = await approval_broker.request(approval_input);
+  const approval_handle = await approval_adapter.request(approval_input);
 
   const tool = recorder.get_message(writer.message_id).parts[0];
-  assert.equal(tool.state, "approval-required");
-  assert.equal(tool.approval.approval_id, approval_handle.approval_id);
-  assert.equal(tool.approval.request.command, approval_input.command);
+  const interaction = recorder.get_message(writer.message_id).parts[1];
+  assert.equal(tool.state, "waiting-user");
+  assert.equal(interaction.interaction_id, approval_handle.approval_id);
+  assert.equal(interaction.request.command, approval_input.command);
   assert.equal(tool.input.cmd, "ls -la /Users/example/Desktop");
-  await approval_broker.resolve({
-    approval_id: approval_handle.approval_id,
-    decision: "denied",
+  await interactions.respond({
+    interaction_id: approval_handle.approval_id,
+    response: { kind: "approval", decision: "denied" },
   });
   assert.equal(await approval_handle.decision, "denied");
   await writer.apply_chunk({
@@ -766,20 +773,154 @@ test("Approval Broker 只接受已经准备完整输入的 Tool", async () => {
     events
       .filter((event) => event.variant === "part" && event.type === "tool")
       .map((event) => event.part.state),
-    ["input-streaming", "ready", "approval-required", "failed"],
+    ["input-streaming", "ready", "waiting-user", "failed"],
   );
 });
 
-test("流式更新与 Approval 共享 Assistant revision 写队列", async () => {
+test("Question Interaction 校验文本、单选与多选回答后恢复执行", async () => {
+  const { recorder } = await create_recorder("question-interaction-test");
+  const interactions = new SessionInteractions({
+    session_id: "question-interaction-test",
+    messages: recorder,
+  });
+  const writer = await recorder.open_assistant_message({
+    turn_id: "turn-question",
+  });
+  const handle = await interactions.request({
+    interaction_id: "interaction-question",
+    turn_id: "turn-question",
+    kind: "question",
+    source: { type: "execution" },
+    title: "补充信息",
+    questions: [
+      { question_id: "name", prompt: "项目名称？", response_type: "text" },
+      {
+        question_id: "region",
+        prompt: "部署区域？",
+        response_type: "single_select",
+        options: [{ value: "cn", label: "中国" }],
+      },
+      {
+        question_id: "features",
+        prompt: "启用能力？",
+        response_type: "multi_select",
+        options: [{ value: "search", label: "搜索" }],
+      },
+    ],
+    created_at: Date.now(),
+  });
+
+  await assert.rejects(
+    interactions.respond({
+      interaction_id: handle.interaction_id,
+      response: {
+        kind: "question",
+        answers: [{ question_id: "name", value: "Downcity" }],
+      },
+    }),
+    /answer count mismatch/,
+  );
+  const result = await interactions.respond({
+    interaction_id: handle.interaction_id,
+    response: {
+      kind: "question",
+      answers: [
+        { question_id: "name", value: "Downcity" },
+        { question_id: "region", value: "cn" },
+        { question_id: "features", value: ["search"] },
+      ],
+    },
+  });
+
+  assert.deepEqual(await handle.result, result);
+  const interaction = recorder.get_message(writer.message_id).parts[0];
+  assert.equal(interaction.type, "interaction");
+  assert.equal(interaction.status, "resolved");
+  assert.deepEqual(interaction.response, result.response);
+});
+
+test("取消 Interaction 先原子关闭 Tool 与 Interaction，再兑现等待结果", async () => {
+  const { recorder } = await create_recorder("cancel-interaction-test");
+  const interactions = new SessionInteractions({
+    session_id: "cancel-interaction-test",
+    messages: recorder,
+  });
+  const writer = await recorder.open_assistant_message({
+    turn_id: "turn-cancel",
+  });
+  await writer.apply_chunk({
+    type: "tool-input-start",
+    toolCallId: "call-cancel",
+    toolName: "ask_user",
+  });
+  await writer.prepare_tool_input({
+    tool_call_id: "call-cancel",
+    tool_name: "ask_user",
+    input: { prompt: "继续吗？" },
+  });
+  const handle = await interactions.request({
+    interaction_id: "interaction-cancel",
+    turn_id: "turn-cancel",
+    kind: "question",
+    source: {
+      type: "tool",
+      tool_call_id: "call-cancel",
+      tool_name: "ask_user",
+    },
+    title: "确认",
+    questions: [{ question_id: "continue", prompt: "继续吗？", response_type: "text" }],
+    created_at: Date.now(),
+  });
+
+  await interactions.cancel_all("turn_stopped");
+  assert.deepEqual(await handle.result, {
+    status: "cancelled",
+    interaction_id: "interaction-cancel",
+    reason: "turn_stopped",
+  });
+  const parts = recorder.get_message(writer.message_id).parts;
+  assert.equal(parts.find((part) => part.type === "tool").state, "failed");
+  assert.equal(parts.find((part) => part.type === "interaction").status, "cancelled");
+});
+
+test("Interaction 超时后持久化 expired 终态", async () => {
+  const { recorder } = await create_recorder("expire-interaction-test");
+  const interactions = new SessionInteractions({
+    session_id: "expire-interaction-test",
+    messages: recorder,
+  });
+  const writer = await recorder.open_assistant_message({
+    turn_id: "turn-expire",
+  });
+  const handle = await interactions.request({
+    interaction_id: "interaction-expire",
+    turn_id: "turn-expire",
+    kind: "question",
+    source: { type: "execution" },
+    title: "即将超时",
+    questions: [{ question_id: "value", prompt: "请输入", response_type: "text" }],
+    created_at: Date.now(),
+    expires_at: Date.now() + 10,
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(await handle.result, {
+    status: "expired",
+    interaction_id: "interaction-expire",
+  });
+  assert.equal(recorder.get_message(writer.message_id).parts[0].status, "expired");
+});
+
+test("流式更新与 Interaction 共享 Assistant revision 写队列", async () => {
   const session_id = "approval-revision-queue-test";
   const { recorder, store, events } = await create_recorder(
     session_id,
     (options) => new PausingAssistantMessageStore(options),
   );
-  const approval_broker = new SessionApprovalBroker({ session_id, messages: recorder });
+  const interactions = new SessionInteractions({ session_id, messages: recorder });
+  const approval_adapter = new SessionShellApprovalAdapter({ session_id, interactions });
   const writer = await recorder.open_assistant_message({
     turn_id: "turn-approval-race",
-    segment_index: 1,
   });
   await writer.apply_chunk({
     type: "tool-input-start",
@@ -805,7 +946,7 @@ test("流式更新与 Approval 共享 Assistant revision 写队列", async () =>
     delta: "命令",
   });
   await gate.started;
-  const approval_write = approval_broker.request({
+  const approval_write = approval_adapter.request({
     shell_id: "shell-approval-race",
     tool_call_id: "call-approval-race",
     tool_name: "shell_exec",
@@ -827,36 +968,37 @@ test("流式更新与 Approval 共享 Assistant revision 写队列", async () =>
   const tool = assistant.parts.find((part) => part.type === "tool");
   const text_part = assistant.parts.find((part) => part.type === "text");
   assert.equal(assistant.revision, 7);
-  assert.equal(tool.state, "approval-required");
-  assert.equal(tool.approval.approval_id, approval_handle.approval_id);
+  const interaction = assistant.parts.find((part) => part.type === "interaction");
+  assert.equal(tool.state, "waiting-user");
+  assert.equal(interaction.interaction_id, approval_handle.approval_id);
   assert.equal(tool.input.cmd, "ls -la ~");
   assert.equal(text_part.text, "准备执行命令");
   assert.deepEqual(
     events
       .filter((event) => event.message_id === writer.message_id)
       .map((event) => event.revision),
-    [1, 2, 3, 4, 5, 6, 7],
+    [1, 2, 3, 4, 5, 6, 7, 7],
   );
   assert.equal(
     events.some(
       (event) =>
         event.variant === "part" &&
-        event.type === "tool" &&
-        event.part.state === "approval-required",
+        event.type === "interaction" &&
+        event.part.status === "pending",
     ),
     true,
   );
 
-  await approval_broker.resolve({
-    approval_id: approval_handle.approval_id,
-    decision: "denied",
+  await interactions.respond({
+    interaction_id: approval_handle.approval_id,
+    response: { kind: "approval", decision: "denied" },
   });
   assert.equal(await approval_handle.decision, "denied");
 });
 
 test("不同模型 step 重复使用 Text chunk ID 时仍保持真实 Part 顺序", async () => {
   const { recorder, file_path } = await create_recorder("reused-text-id-order-test");
-  const writer = await recorder.open_assistant_message({ turn_id: "turn-1", segment_index: 1 });
+  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
 
   await writer.begin_step();
   await writer.apply_chunk({ type: "text-start", id: "txt-0" });
@@ -935,7 +1077,7 @@ test("不同模型 step 重复使用 Text chunk ID 时仍保持真实 Part 顺�
 
 test("不同模型 step 重复 Source 与 Data ID 时创建独立 canonical Parts", async () => {
   const { recorder, file_path } = await create_recorder("reused-structured-id-order-test");
-  const writer = await recorder.open_assistant_message({ turn_id: "turn-1", segment_index: 1 });
+  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
 
   for (const step of [1, 2]) {
     await writer.begin_step();
@@ -980,9 +1122,66 @@ test("不同模型 step 重复 Source 与 Data ID 时创建独立 canonical Part
   assert.notEqual(assistant.parts[1].part_id, assistant.parts[3].part_id);
 });
 
+test("step 最终快照忽略没有 delta 的空 Text 与 Reasoning Part", async () => {
+  const { recorder, file_path } = await create_recorder("empty-final-text-part-test");
+  const writer = await recorder.open_assistant_message({
+    turn_id: "turn-empty-final-text",
+  });
+
+  await writer.begin_step();
+  await writer.apply_chunk({ type: "text-start", id: "text-empty" });
+  await writer.apply_chunk({ type: "text-delta", id: "text-empty", delta: "" });
+  await writer.apply_chunk({ type: "text-end", id: "text-empty" });
+  await writer.apply_chunk({
+    type: "tool-input-start",
+    toolCallId: "call-1",
+    toolName: "find",
+  });
+  await writer.apply_chunk({
+    type: "tool-input-available",
+    toolCallId: "call-1",
+    toolName: "find",
+    input: { glob: "**/*.mdx" },
+  });
+  await writer.apply_chunk({
+    type: "tool-output-available",
+    toolCallId: "call-1",
+    output: ["document.mdx"],
+  });
+  await writer.apply_chunk({ type: "reasoning-start", id: "reasoning-empty" });
+  await writer.apply_chunk({ type: "reasoning-end", id: "reasoning-empty" });
+  const final_parts = from_ui_assistant_parts([
+    {
+      type: "text",
+      text: "",
+      state: "done",
+    },
+    {
+      type: "tool-find",
+      toolCallId: "call-1",
+      state: "output-available",
+      input: { glob: "**/*.mdx" },
+      output: ["document.mdx"],
+    },
+    {
+      type: "reasoning",
+      text: "",
+      state: "done",
+    },
+  ]);
+  assert.deepEqual(final_parts.map((part) => part.type), ["tool"]);
+  await writer.finish_step(final_parts);
+  await writer.complete();
+
+  const assistant = (await read_jsonl(file_path))[0];
+  assert.equal(assistant.status, "completed");
+  assert.deepEqual(assistant.parts.map((part) => part.type), ["tool"]);
+  assert.equal(assistant.parts[0].tool_call_id, "call-1");
+});
+
 test("空 Text Start 不会抢占后续 Tool 的真实顺序", async () => {
   const { recorder, events, file_path } = await create_recorder("deferred-text-order-test");
-  const writer = await recorder.open_assistant_message({ turn_id: "turn-1", segment_index: 1 });
+  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
 
   await writer.begin_step();
   await writer.apply_chunk({ type: "reasoning-start", id: "reasoning-0" });
@@ -1058,7 +1257,6 @@ test("Tool 执行先到时等待 stream 固定 canonical Part 顺序", async () 
   const { recorder, file_path } = await create_recorder("pending-tool-input-order-test");
   const writer = await recorder.open_assistant_message({
     turn_id: "turn-pending-tool-input",
-    segment_index: 1,
   });
 
   await writer.begin_step();
@@ -1131,7 +1329,6 @@ test("step abort 与 writer close 会拒绝未释放的 Tool 输入屏障", asyn
   const { recorder } = await create_recorder("pending-tool-input-cleanup-test");
   const aborted_writer = await recorder.open_assistant_message({
     turn_id: "turn-aborted-tool-input",
-    segment_index: 1,
   });
   await aborted_writer.begin_step();
   const aborted_input = assert.rejects(
@@ -1149,7 +1346,6 @@ test("step abort 与 writer close 会拒绝未释放的 Tool 输入屏障", asyn
 
   const closed_writer = await recorder.open_assistant_message({
     turn_id: "turn-closed-tool-input",
-    segment_index: 2,
   });
   const closed_input = assert.rejects(
     closed_writer.prepare_tool_input({
@@ -1171,7 +1367,6 @@ test("Tool Part 持久化失败时不会释放对应执行等待", async () => {
   );
   const writer = await recorder.open_assistant_message({
     turn_id: "turn-tool-part-persistence",
-    segment_index: 1,
   });
   await writer.begin_step();
   const tool_input = assert.rejects(
@@ -1201,7 +1396,7 @@ test("Tool Part 持久化失败时不会释放对应执行等待", async () => {
 
 test("step 最终快照缺少 canonical Tool chunk 时拒绝猜测顺序", async () => {
   const { recorder, events, file_path } = await create_recorder("final-reconcile-order-test");
-  const writer = await recorder.open_assistant_message({ turn_id: "turn-1", segment_index: 1 });
+  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
 
   await writer.begin_step();
   await writer.apply_chunk({ type: "text-start", id: "text-0" });
@@ -1243,16 +1438,46 @@ test("step 最终快照缺少 canonical Tool chunk 时拒绝猜测顺序", async
   assert.equal(assistant.parts[0].part_id, streamed_text_part_id);
 });
 
-test("重启时将 Assistant 草稿收口为 stopped，并将运行中 Action 标记失败", async () => {
+test("重启时收口 Assistant、取消 Interaction 并标记运行中 Action 失败", async () => {
   const { recorder, files, file_path, assistant_message_file_path } = await create_recorder("recovery-test");
   await recorder.append_user_message({
     turn_id: "turn-1",
     input_type: "prompt",
     parts: [{ part_id: "u1", type: "text", text: "one", state: "done" }],
   });
-  const writer = await recorder.open_assistant_message({ turn_id: "turn-1", segment_index: 1 });
+  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
   await writer.apply_chunk({ type: "text-start", id: "text-1" });
   await writer.apply_chunk({ type: "text-delta", id: "text-1", delta: "partial" });
+  await writer.apply_chunk({
+    type: "tool-input-start",
+    toolCallId: "call-recovery",
+    toolName: "shell_exec",
+  });
+  await writer.prepare_tool_input({
+    tool_call_id: "call-recovery",
+    tool_name: "shell_exec",
+    input: { cmd: "pwd" },
+  });
+  const interactions = new SessionInteractions({
+    session_id: "recovery-test",
+    messages: recorder,
+  });
+  await interactions.request({
+    interaction_id: "interaction-recovery",
+    turn_id: "turn-1",
+    kind: "approval",
+    source: {
+      type: "tool",
+      tool_call_id: "call-recovery",
+      tool_name: "shell_exec",
+    },
+    title: "Approve shell_exec",
+    command: "pwd",
+    cwd: "/workspace",
+    reason: "test recovery",
+    operation: "exec",
+    created_at: Date.now(),
+  });
   await recorder.open_action_message({ message_id: "running-action", action_type: "fork", title: "Forking" });
 
   const recovered_events = [];
@@ -1267,6 +1492,12 @@ test("重启时将 Assistant 草稿收口为 stopped，并将运行中 Action �
   assert.deepEqual(page.items.map((message) => message.type), ["user", "assistant", "action"]);
   assert.equal(page.items[1].status, "stopped");
   assert.equal(page.items[1].parts[0].text, "partial");
+  assert.equal(page.items[1].parts.find((part) => part.type === "tool").state, "failed");
+  const recovered_interaction = page.items[1].parts.find(
+    (part) => part.type === "interaction",
+  );
+  assert.equal(recovered_interaction.status, "cancelled");
+  assert.equal(recovered_interaction.cancel_reason, "runtime_interrupted");
   assert.equal(page.items[2].status, "failed");
   assert.deepEqual(recovered_events.map((event) => `${event.variant}:${event.type}`), [
     "message:assistant",

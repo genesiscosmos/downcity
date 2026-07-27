@@ -415,8 +415,8 @@ export class Executor implements SessionExecutor {
         ...tool,
         execute: async (args: unknown, options: ToolExecutionOptions) => {
           const tool_call_id = String(options.toolCallId || "").trim();
-          if (tool_call_id && run_context.on_tool_input_ready) {
-            await run_context.on_tool_input_ready({
+          if (tool_call_id && run_context.assistant_output) {
+            await run_context.assistant_output.prepare_tool_input({
               tool_call_id,
               tool_name: name,
               input: args,

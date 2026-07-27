@@ -34,12 +34,12 @@ import type { PluginAvailability, PluginView } from "@/types/plugin/PluginRuntim
 import type { PluginSnapshot } from "@/types/plugin/PluginState.js";
 import type { SessionMutation } from "@/types/session/SessionMutation.js";
 import type {
-  ResolveSessionApprovalInput,
-  SessionApproval,
+  RespondSessionInteractionInput,
   SessionApprovalModeSnapshot,
-  SessionApprovalResult,
+  SessionInteractionResult,
+  SessionPendingInteraction,
   SetSessionApprovalModeInput,
-} from "@/types/session/SessionApproval.js";
+} from "@/types/session/SessionInteraction.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type {
   RpcClientEndpoint,
@@ -237,12 +237,12 @@ export class RpcClient {
     return data.system;
   }
 
-  async get_session_approvals(session_id: string): Promise<SessionApproval[]> {
-    const data = await this.request<{ approvals: SessionApproval[] }>({
-      method: "sdk.sessions.approvals",
+  async get_session_interactions(session_id: string): Promise<SessionPendingInteraction[]> {
+    const data = await this.request<{ interactions: SessionPendingInteraction[] }>({
+      method: "sdk.sessions.interactions",
       params: { session_id: session_id },
     });
-    return data.approvals;
+    return data.interactions;
   }
 
   async get_session_approval_mode(session_id: string): Promise<SessionApprovalModeSnapshot> {
@@ -264,12 +264,12 @@ export class RpcClient {
     return data.approval_mode;
   }
 
-  async resolve_session_approval(
+  async respond_session_interaction(
     session_id: string,
-    input: ResolveSessionApprovalInput,
-  ): Promise<SessionApprovalResult> {
-    const data = await this.request<{ result: SessionApprovalResult }>({
-      method: "sdk.sessions.resolveApproval",
+    input: RespondSessionInteractionInput,
+  ): Promise<SessionInteractionResult> {
+    const data = await this.request<{ result: SessionInteractionResult }>({
+      method: "sdk.sessions.respond",
       params: { session_id: session_id, input },
     });
     return data.result;

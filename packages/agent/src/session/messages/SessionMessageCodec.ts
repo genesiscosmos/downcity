@@ -84,7 +84,7 @@ export function to_executor_ui_message(
       visibility: message.visibility,
       ...(message.type === "user"
         ? { inputType: message.input_type }
-        : { segmentIndex: message.segment_index, status: message.status }),
+        : { status: message.status }),
     },
   };
   return {
@@ -153,12 +153,16 @@ export function from_ui_assistant_parts(
     const candidate = part as Record<string, unknown>;
     const type = String(candidate.type || "");
     if (type === "text" || type === "reasoning") {
+      const text = String(candidate.text || "");
+      // 关键点（中文）：AI SDK 会为只有 start/end、没有 delta 的流生成空占位 Part。
+      // canonical history 不保存无内容的协议占位，避免与只按 delta 创建 Part 的 writer 分叉。
+      if (text.length === 0) return [];
       const provider_metadata = to_session_provider_metadata(candidate.providerMetadata);
       return [{
         part_id: `${type}:${index + 1}`,
         sequence: index + 1,
         type: type as "text" | "reasoning",
-        text: String(candidate.text || ""),
+        text,
         state: candidate.state === "streaming" ? "streaming" as const : "done" as const,
         ...(provider_metadata !== undefined ? { provider_metadata } : {}),
       }];
@@ -224,7 +228,6 @@ export function from_ui_assistant_parts(
         candidate.resultProviderMetadata,
       );
       const tool_metadata = to_session_json_object(candidate.toolMetadata);
-      const approval = to_session_json_object(candidate.approval);
       return [{
         part_id: String(candidate.toolCallId || `tool:${index + 1}`),
         sequence: index + 1,
@@ -240,7 +243,7 @@ export function from_ui_assistant_parts(
             : state === "output-error" || state === "output-denied"
               ? "failed" as const
               : state === "approval-requested"
-                ? "approval-required" as const
+                ? "waiting-user" as const
                 : state === "input-streaming"
                   ? "input-streaming" as const
                   : state === "input-available"
@@ -274,19 +277,6 @@ export function from_ui_assistant_parts(
           : {}),
         ...(typeof candidate.providerExecuted === "boolean"
           ? { provider_executed: candidate.providerExecuted }
-          : {}),
-        ...(approval?.id
-          ? {
-              approval: {
-                approval_id: String(approval.id),
-                ...(typeof approval.approved === "boolean"
-                  ? { approved: approval.approved }
-                  : {}),
-                ...(typeof approval.reason === "string"
-                  ? { reason: approval.reason }
-                  : {}),
-              },
-            }
           : {}),
       }];
     }
@@ -405,6 +395,25 @@ function to_ui_assistant_parts(
     if (part.type === "step-start") {
       return { type: "step-start" };
     }
+    if (part.type === "interaction") {
+      return {
+        type: "data-session-interaction",
+        id: part.interaction_id,
+        data: {
+          interaction_id: part.interaction_id,
+          interaction_type: part.interaction_type,
+          status: part.status,
+          request: part.request,
+          ...(part.response !== undefined ? { response: part.response } : {}),
+          ...(part.resolved_at !== undefined
+            ? { resolved_at: part.resolved_at }
+            : {}),
+          ...(part.cancel_reason !== undefined
+            ? { cancel_reason: part.cancel_reason }
+            : {}),
+        },
+      } as UIMessage["parts"][number];
+    }
     if (!("tool_call_id" in part)) {
       throw new Error(`Unsupported Assistant part: ${part.type}`);
     }
@@ -442,39 +451,12 @@ function to_ui_assistant_parts(
         ...(part.preliminary !== undefined
           ? { preliminary: part.preliminary }
           : {}),
-        ...(part.approval?.approved === true
-          ? {
-              approval: {
-                id: part.approval.approval_id,
-                approved: true as const,
-                ...(part.approval.reason !== undefined
-                  ? { reason: part.approval.reason }
-                  : {}),
-              },
-            }
-          : {}),
         ...(part.result_provider_metadata !== undefined
           ? { resultProviderMetadata: part.result_provider_metadata }
           : {}),
       };
     }
     if (part.state === "failed") {
-      if (part.approval?.approved === false) {
-        return {
-          ...tool_identity_fields,
-          toolCallId: part.tool_call_id,
-          state: "output-denied",
-          input,
-          ...call_provider_fields,
-          approval: {
-            id: part.approval.approval_id,
-            approved: false,
-            ...(part.approval.reason !== undefined
-              ? { reason: part.approval.reason }
-              : {}),
-          },
-        };
-      }
       return {
         ...tool_identity_fields,
         toolCallId: part.tool_call_id,
@@ -483,46 +465,9 @@ function to_ui_assistant_parts(
         ...(part.raw_input !== undefined ? { rawInput: part.raw_input } : {}),
         errorText: part.error || "Tool failed",
         ...call_provider_fields,
-        ...(part.approval?.approved === true
-          ? {
-              approval: {
-                id: part.approval.approval_id,
-                approved: true as const,
-                ...(part.approval.reason !== undefined
-                  ? { reason: part.approval.reason }
-                  : {}),
-              },
-            }
-          : {}),
         ...(part.result_provider_metadata !== undefined
           ? { resultProviderMetadata: part.result_provider_metadata }
           : {}),
-      };
-    }
-    if (part.state === "approval-required") {
-      return {
-        ...tool_identity_fields,
-        toolCallId: part.tool_call_id,
-        state: "approval-requested",
-        input,
-        approval: { id: part.approval?.approval_id || `approval:${part.tool_call_id}` },
-        ...call_provider_fields,
-      };
-    }
-    if (part.state === "running" && part.approval?.approved !== undefined) {
-      return {
-        ...tool_identity_fields,
-        toolCallId: part.tool_call_id,
-        state: "approval-responded",
-        input,
-        ...call_provider_fields,
-        approval: {
-          id: part.approval.approval_id,
-          approved: part.approval.approved,
-          ...(part.approval.reason !== undefined
-            ? { reason: part.approval.reason }
-            : {}),
-        },
       };
     }
     return {

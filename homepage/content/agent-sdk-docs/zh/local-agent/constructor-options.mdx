@@ -195,7 +195,7 @@ const agent = new Agent({
 - Shell 只挂载 `shell_exec` 和 `shell_session`
 - Workspace 自身挂载 `grep`、`find`、`read`、`write` 和 `edit`，没有 Shell 时仍可使用
 - session 与 turn 上下文由 Agent 内部自动接线
-- 审批归属具体 Session，使用 `session.approvals()`、`session.resolve_approval(...)` 和 `session.set_approval_mode(...)`
+- 审批归属具体 Session，使用 `session.interactions()`、`session.respond(...)` 和 `session.set_approval_mode(...)`
 - 文件和搜索工具固定限制在 Agent 项目根目录内，不提供 unrestricted 模式
 
 ## `plugins`

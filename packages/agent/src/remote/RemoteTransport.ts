@@ -25,12 +25,12 @@ import type {
 } from "@/types/agent/RemoteAgentPluginAction.js";
 import type { SessionMutation } from "@/types/session/SessionMutation.js";
 import type {
-  ResolveSessionApprovalInput,
-  SessionApproval,
+  RespondSessionInteractionInput,
   SessionApprovalModeSnapshot,
-  SessionApprovalResult,
+  SessionInteractionResult,
+  SessionPendingInteraction,
   SetSessionApprovalModeInput,
-} from "@/types/session/SessionApproval.js";
+} from "@/types/session/SessionInteraction.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type {
@@ -81,8 +81,8 @@ export type RemoteSessionTransport = {
     session_id: string,
     input?: AgentSessionForkInput | string,
   ): Promise<AgentSessionInfo>;
-  /** 列出指定 Session 的 pending 工具审批。 */
-  approvals(session_id: string): Promise<SessionApproval[]>;
+  /** 列出指定 Session 正在等待用户响应的 Interaction。 */
+  interactions(session_id: string): Promise<SessionPendingInteraction[]>;
   /** 读取指定 Session 的工具审批模式。 */
   approval_mode(session_id: string): Promise<SessionApprovalModeSnapshot>;
   /** 更新指定 Session 的工具审批模式。 */
@@ -90,11 +90,11 @@ export type RemoteSessionTransport = {
     session_id: string,
     input: SetSessionApprovalModeInput,
   ): Promise<SessionApprovalModeSnapshot>;
-  /** 处理指定 Session 的 pending 工具审批。 */
-  resolve_approval(
+  /** 提交指定 Session 的 Interaction 用户响应。 */
+  respond(
     session_id: string,
-    input: ResolveSessionApprovalInput,
-  ): Promise<SessionApprovalResult>;
+    input: RespondSessionInteractionInput,
+  ): Promise<SessionInteractionResult>;
 };
 
 /**

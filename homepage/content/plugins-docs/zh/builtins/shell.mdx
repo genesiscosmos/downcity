@@ -86,15 +86,15 @@ await shell.set_safe_read_only_paths([
 前端或 SDK 客户端通过发起工具调用的 Session 审批：
 
 ```ts
-const pending = await session.approvals();
+const pending = await session.interactions();
 
-await session.resolve_approval({
-  approval_id: pending[0].approval_id,
-  decision: "approved",
+await session.respond({
+  interaction_id: pending[0].request.interaction_id,
+  response: { kind: "approval", decision: "approved" },
 });
 ```
 
-本地和远程 Session 暴露相同 API。实时 UI 在 `session.subscribe()` 收到 `approval-required` Tool Part 时，从 `mutation.part.approval` 读取请求，再通过 `session.resolve_approval(...)` 提交决定。
+本地和远程 Session 暴露相同 API。实时 UI 从 pending Interaction Part 读取请求，关联 Tool 同时处于 `waiting-user`，再通过 `session.respond(...)` 提交决定。
 
 ## Session Approval Mode
 

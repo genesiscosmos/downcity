@@ -1,6 +1,6 @@
 {
   "name": "@downcity/services",
-  "version": "0.1.218",
+  "version": "0.1.220",
   "description": "Downcity public services package for accounts, balance, usage, Stripe, Creem, Dodo, and Waffo payment flows.",
   "type": "module",
   "main": "./bin/index.js",

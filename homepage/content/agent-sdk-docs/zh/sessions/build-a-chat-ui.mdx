@@ -65,22 +65,23 @@ async function stop(): Promise<void> {
 
 - 按顶层 Message 的 `sequence` 渲染对话。
 - Assistant 内按 Part 的 `sequence` 渲染文本、工具、再文本。
+- 一个 Assistant Message 只渲染一次角色标题；Tool Loop 和 Provider continuation 产生的新 Part 继续留在同一角色容器中。
 - `delta` 只追加到当前 text/reasoning Part。
 - `part` 用稳定 `part_id` 覆盖完整状态。
 - `message` 用 `message_id + revision` 覆盖完整 Message。
 - 顶层 `error` Message 是一次失败唯一的用户可见错误提示。
-- Tool Part 为 `approval-required` 时显示审批控件；为 `running` 时显示执行中；为 `failed` 时展示错误。
+- Interaction Part 为 `pending` 时显示交互控件；关联 Tool 为 `waiting-user` 时显示等待状态。
 
-不要把工具调用平铺到第二份可持久化列表，也不要用最终 `turn.text` 覆盖已经按 Part 渲染的 Assistant Message。`turn.finished.error` 只用于控制流和日志；若已经渲染 `error` Message，不要再追加一条错误提示。
+不要创建 Transcript Message DTO 或把工具调用平铺到第二份可持久化列表，也不要用最终 `turn.text` 覆盖已经按 Part 渲染的 Assistant Message。`turn.finished.error` 只用于控制流和日志；若已经渲染 `error` Message，不要再追加一条错误提示。
 
 ## 审批卡片
 
-审批 UI 从 Tool Part 和 `session.approvals()` 得到相同身份：
+审批 UI 从 Interaction Part 或 `session.interactions()` 得到相同身份：
 
 ```ts
-await session.resolve_approval({
-  approval_id,
-  decision: "approved",
+await session.respond({
+  interaction_id,
+  response: { kind: "approval", decision: "approved" },
 });
 ```
 
@@ -93,6 +94,6 @@ await session.resolve_approval({
 1. `unsubscribe()` 旧会话。
 2. 清空旧会话的消息、Turn 与审批 UI 状态。
 3. 取到新 Session 后执行初始化流程。
-4. 不复用旧会话的 `approval_id`、`part_id` 或 Turn loading 状态。
+4. 不复用旧会话的 `interaction_id`、`part_id` 或 Turn loading 状态。
 
 这是避免“审批提交给错误会话”和“历史滚动显示旧 Delta”的必要边界。

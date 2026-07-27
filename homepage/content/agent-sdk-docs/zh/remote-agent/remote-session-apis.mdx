@@ -12,7 +12,7 @@ description: RemoteAgent 下 session 可用的核心方法和能力边界
 - `subscribe()`
 - `messages()`
 - `system()`
-- `approvals()` / `resolve_approval()`
+- `interactions()` / `respond()`
 - `approval_mode()` / `set_approval_mode()`
 - `fork()`
 
@@ -49,7 +49,7 @@ const unsubscribe = session.subscribe((event) => {
 unsubscribe();
 ```
 
-订阅会收到 `message | part | delta | turn | session` 五类 Mutation。审批请求表现为状态为 `approval-required` 的 Tool Part；本地工具从 `mutation.part.approval.request` 读取完整请求，再通过 `session.resolve_approval(...)` 提交决定。
+订阅会收到 `message | part | delta | turn | session` 五类 Mutation。用户参与请求表现为 pending Interaction Part，关联 Tool 同时进入 `waiting-user`；通过 `session.respond(...)` 提交结构化响应。
 
 ## 历史消息
 

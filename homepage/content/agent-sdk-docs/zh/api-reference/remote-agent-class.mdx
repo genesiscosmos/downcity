@@ -41,24 +41,23 @@ await agent.run_plugin_action({
 Shell 审批属于具体远程 Session，不属于 `RemoteAgent` 顶层。可以查询后处理：
 
 ```ts
-const approvals = await session.approvals();
-await session.resolve_approval({
-  approval_id: approvals[0].approval_id,
-  decision: "approved",
+const interactions = await session.interactions();
+await session.respond({
+  interaction_id: interactions[0].request.interaction_id,
+  response: { kind: "approval", decision: "approved" },
 });
 ```
 
-也可以在统一 Mutation 流里处理 `approval-required` Tool Part：
+也可以在统一 Mutation 流里处理 pending Interaction Part：
 
 ```ts
 session.subscribe((mutation) => {
   if (
     mutation.variant === "part" &&
-    mutation.type === "tool" &&
-    mutation.part.state === "approval-required" &&
-    mutation.part.approval?.request
+    mutation.type === "interaction" &&
+    mutation.part.status === "pending"
   ) {
-    show_approval_request(mutation.part.approval.request);
+    render_interaction(mutation.part);
   }
 });
 ```

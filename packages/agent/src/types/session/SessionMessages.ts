@@ -42,8 +42,6 @@ export interface AppendSessionUserMessageInput {
 export interface OpenSessionAssistantMessageInput {
   /** 当前 Assistant 所属 Turn。 */
   turn_id: string;
-  /** 当前 Assistant 在 Turn 内的 Segment 序号。 */
-  segment_index: number;
   /** 当前 Assistant 是普通回复还是压缩 Summary。 */
   kind?: "normal" | "summary";
   /** 当前 Message 的默认展示范围。 */

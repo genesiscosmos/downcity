@@ -10,8 +10,10 @@ description: 如何使用 CLI 管理 Agent 项目
 ## 项目初始化
 
 ```bash
-city agent create my-project
+city agent create
 ```
+
+不传路径时，可以选择当前目录或通过系统原生窗口选择其他文件夹；也可以显式传入相对路径或绝对路径，例如 `city agent create .`、`city agent create ./my-project`。
 
 这会生成：
 

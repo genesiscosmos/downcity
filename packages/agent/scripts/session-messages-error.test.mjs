@@ -50,7 +50,6 @@ test("open_assistant_message 透传草稿写入失败", async () => {
   await assert.rejects(
     messages.open_assistant_message({
       turn_id: "turn-1",
-      segment_index: 1,
     }),
     /disk full/,
   );

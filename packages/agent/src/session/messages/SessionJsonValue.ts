@@ -5,8 +5,8 @@
  * 避免 Tool、User Data 等外部输入污染 canonical Message。
  */
 
-import type { ProviderMetadata } from "ai";
 import type { JsonObject, JsonValue } from "@/types/common/Json.js";
+import type { SessionProviderMetadata } from "@/types/session/SessionMessage.js";
 
 /** 把任意运行时输入转换为可持久化的 JSON 值。 */
 export function to_session_json_value(input: unknown): JsonValue {
@@ -46,13 +46,13 @@ export function to_session_json_object(input: unknown): JsonObject | undefined {
  */
 export function to_session_provider_metadata(
   input: unknown,
-): ProviderMetadata | undefined {
+): SessionProviderMetadata | undefined {
   if (!is_plain_object(input)) return undefined;
   try {
     const value = JSON.parse(JSON.stringify(input)) as unknown;
     if (!is_plain_object(value)) return undefined;
     if (!Object.values(value).every(is_plain_object)) return undefined;
-    return value as ProviderMetadata;
+    return value as SessionProviderMetadata;
   } catch {
     return undefined;
   }

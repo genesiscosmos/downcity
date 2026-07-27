@@ -16,7 +16,8 @@ description: Session 输入输出对象里最重要的字段和语义
 - `AgentSessionTurnResult`
 - `SessionMutation`
 - `SessionMessage`
-- `SessionApproval`
+- `SessionPendingInteraction`
+- `RespondSessionInteractionInput`
 - `AgentSessionInfo`
 
 ## 先按用途选择类型
@@ -26,7 +27,7 @@ description: Session 输入输出对象里最重要的字段和语义
 | 首次加载、历史与重连恢复 | `SessionMessagePage` / `SessionMessage` |
 | 实时文本、工具和标题 | `SessionMutation` |
 | 等待一次执行结束 | `AgentSessionTurnHandle` / `AgentSessionTurnResult` |
-| 展示或提交工具审批 | `SessionApproval` / `SessionApprovalResult` |
+| 展示或提交用户异步交互 | `SessionPendingInteraction` / `SessionInteractionResult` |
 | 侧边栏与当前会话头部 | `AgentSessionSummary` / `AgentSessionInfo` |
 
 ## `AgentSessionPromptInput`
@@ -51,9 +52,9 @@ description: Session 输入输出对象里最重要的字段和语义
 - `success`
 - `error`
 - `text`
-- `assistant_message`（本地 session 通常可用）
 
-对大多数用户来说，最常直接消费的是 `text`。如果你需要最终的结构化 assistant 结果，可以读取 `assistant_message`；如果你需要在 `finished` 兑现前实时更新 UI，配合 `session.subscribe()` 返回的 `SessionMutation` 即可。
+`text` 用于简洁的最终结果。结构化 Assistant Message 只有一份 canonical 状态，
+应通过 `session.messages()` 与 `session.subscribe()` 读取，不会在 Turn Result 中复制。
 
 ## `AgentSessionStopResult`
 
@@ -71,5 +72,5 @@ description: Session 输入输出对象里最重要的字段和语义
 - [输入与 Turn](/zh/agent-sdk-docs/sessions/prompt-and-turns)：输入格式、steering 与排队语义。
 - [Message 与 Part](/zh/agent-sdk-docs/sessions/messages)：持久化线性历史、revision 与分页。
 - [实时订阅](/zh/agent-sdk-docs/sessions/subscribe)：五类 Mutation 与客户端合并规则。
-- [工具审批](/zh/agent-sdk-docs/sessions/approvals)：Session 级审批与审批模式。
+- [用户异步交互](/zh/agent-sdk-docs/sessions/approvals)：Session 级审批、问题与响应。
 - [Session 详情](/zh/agent-sdk-docs/sessions/info)：摘要、标题与执行状态字段。

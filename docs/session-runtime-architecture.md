@@ -20,6 +20,7 @@ Agent SDK 的 Session Runtime 遵循以下边界：
 | `SessionState` | configured/effective 配置、初始化、标题和 Metadata | 创建或更新 Message |
 | `SessionQueue` | 按 FIFO 保存 Prompt 和显式 Command | 解释或执行队列项 |
 | `SessionTurn` | Turn Handle、Queue 消费、Steer 合并、Abort、Assistant Writer 收口 | 选择模型输入策略 |
+| `SessionInteractions` | pending 用户交互、超时、取消与恢复执行 | 保存 canonical Interaction 状态 |
 | `SessionComposer` | 组装 system、messages、tools，生成压缩计划 | 写 Message、Metadata、Mutation 或 JSONL |
 | `Executor` | 单次执行、Step 刷新、上下文超限重试、Plugin Lease | Session 生命周期和持久化 |
 | `SessionMessages` | User、Assistant、Action、Error Message 和 Segment 提交 | 选择何时执行或压缩 |
@@ -41,7 +42,8 @@ flowchart LR
         Session --> Composer["SessionComposer<br/>只读组装策略"]
         Executor --> Composer
         Executor --> Engine["CoreEngineRunner<br/>LLM / Tool Loop"]
-        Turn --> Approvals["SessionApprovalBroker"]
+        Turn --> Interactions["SessionInteractions<br/>用户异步交互"]
+        Turn --> Output["SessionAssistantOutputAdapter"]
         Messages --> Events["SessionEventHub"]
     end
 
@@ -67,6 +69,7 @@ sequenceDiagram
     participant Executor
     participant Composer as SessionComposer
     participant Engine as CoreEngine / Model
+    participant Output as AssistantOutputAdapter
 
     App->>Session: prompt(input)
     Session->>Turn: prompt(input)
@@ -82,8 +85,8 @@ sequenceDiagram
     Executor->>Composer: compose(readonly snapshot)
     Composer-->>Executor: system + messages + tools
     Executor->>Engine: run()
-    Engine-->>Turn: Stream Chunk / Tool Callback
-    Turn->>Messages: 更新 Assistant Draft
+    Engine->>Output: Assistant 输出端口
+    Output->>Messages: 更新 Assistant Draft
 
     opt Step 检查点存在新输入
         Turn->>Queue: drain()
@@ -98,6 +101,8 @@ sequenceDiagram
 ```
 
 一个 Session 同时只运行一个活跃 Turn。新的 Prompt 如果在 Step 检查点被消费，会作为 `steer` 并入当前 Turn；否则保留到下一个 Turn。`stop()` 取消当前 Turn 和排队 Prompt，但保留尚未提交的配置 Command。
+
+Assistant 输出端口在普通 Tool Loop、Provider continuation 和恢复重试之间保持同一个 Message Writer。模型 step 只改变 Assistant 内部 Part；只有持久化新的 User steer 后才关闭当前 Assistant Message，后续输出再惰性创建下一条 Message。Session 不保存额外的 Assistant segment identity 或 index。
 
 Queue 不保存闭包，只保存以下显式事实：
 

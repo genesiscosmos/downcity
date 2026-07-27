@@ -26,12 +26,12 @@ import type {
   SessionMutationUnsubscribe,
 } from "@/types/session/SessionMutation.js";
 import type {
-  ResolveSessionApprovalInput,
-  SessionApproval,
+  RespondSessionInteractionInput,
   SessionApprovalModeSnapshot,
-  SessionApprovalResult,
+  SessionInteractionResult,
+  SessionPendingInteraction,
   SetSessionApprovalModeInput,
-} from "@/types/session/SessionApproval.js";
+} from "@/types/session/SessionInteraction.js";
 import type {
   ListSessionMessagesInput,
   SessionMessagePage,
@@ -99,8 +99,8 @@ export interface AgentSessionActor {
   /** 读取当前 session 生效的 system 快照。 */
   system(): Promise<AgentSessionSystemSnapshot>;
 
-  /** 列出当前 Session 的 pending 工具审批。 */
-  approvals(): Promise<SessionApproval[]>;
+  /** 列出当前 Session 正在等待用户响应的 Interaction。 */
+  interactions(): Promise<SessionPendingInteraction[]>;
 
   /** 读取当前 Session 的工具审批模式。 */
   approval_mode(): Promise<SessionApprovalModeSnapshot>;
@@ -108,8 +108,8 @@ export interface AgentSessionActor {
   /** 更新当前 Session 的工具审批模式。 */
   set_approval_mode(input: SetSessionApprovalModeInput): Promise<SessionApprovalModeSnapshot>;
 
-  /** 处理当前 Session 的 pending 工具审批。 */
-  resolve_approval(input: ResolveSessionApprovalInput): Promise<SessionApprovalResult>;
+  /** 提交当前 Session 的 Interaction 用户响应。 */
+  respond(input: RespondSessionInteractionInput): Promise<SessionInteractionResult>;
 }
 
 /**

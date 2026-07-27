@@ -65,22 +65,23 @@ Disable Send for empty input. Drive the Stop button from Turn Mutations or `get_
 
 - Render the conversation by top-level Message `sequence`.
 - Render text, tool, then text inside an Assistant by Part `sequence`.
+- Render one role heading per Assistant Message. Parts from Tool Loops and Provider continuations stay in that same role container.
 - Append a `delta` only to its current text/reasoning Part.
 - Replace complete Part state by stable `part_id`.
 - Replace complete Message state by `message_id + revision`.
 - Treat the top-level `error` Message as the single user-visible error for one failure.
-- Render approval controls for `approval-required`, progress for `running`, and errors for `failed` Tool Parts.
+- Render controls for a `pending` Interaction and a waiting state for its `waiting-user` Tool.
 
-Do not flatten tool calls into another persisted list and do not overwrite an Assistant already rendered by Parts with final `turn.text`. Use `turn.finished.error` only for control flow and logging; when the UI already renders an `error` Message, do not append another error notice.
+Do not create Transcript Message DTOs, flatten tool calls into another persisted list, or overwrite an Assistant already rendered by Parts with final `turn.text`. Use `turn.finished.error` only for control flow and logging; when the UI already renders an `error` Message, do not append another error notice.
 
 ## Approval card
 
-Approval UI gets the same identity from a Tool Part and `session.approvals()`:
+Approval UI gets the same identity from an Interaction Part or `session.interactions()`:
 
 ```ts
-await session.resolve_approval({
-  approval_id,
-  decision: "approved",
+await session.respond({
+  interaction_id,
+  response: { kind: "approval", decision: "approved" },
 });
 ```
 
@@ -93,6 +94,6 @@ Switch Sessions in this order:
 1. `unsubscribe()` from the old Session.
 2. Clear old messages, Turn state, and approval UI state.
 3. After obtaining the new Session, run initialization.
-4. Never reuse the old Session's `approval_id`, `part_id`, or Turn loading state.
+4. Never reuse the old Session's `interaction_id`, `part_id`, or Turn loading state.
 
 This boundary prevents approval decisions from targeting the wrong Session and prevents old Deltas from appearing in the new history.

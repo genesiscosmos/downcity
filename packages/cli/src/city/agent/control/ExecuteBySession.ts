@@ -43,7 +43,6 @@ export async function executeBySessionId(params: {
   return {
     success: result.success,
     ...(result.error ? { error: result.error } : {}),
-    assistant_message: result.assistant_message,
     userVisible: result.text.trim(),
     queued: false,
   };

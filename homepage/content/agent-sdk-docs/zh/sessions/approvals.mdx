@@ -1,72 +1,78 @@
 ---
-title: 工具审批
-description: 在具体 Session 内查询、展示和处理 unrestricted 工具请求
+title: 用户异步交互
+description: 在 Session 内处理审批、问题与等待用户响应的执行
 ---
 
-# 工具审批
+# 用户异步交互
 
-审批属于触发工具调用的 Session，不属于顶层 `Agent`。这保证多个 Session 并行运行时，审批不会被提交到错误的对话。
+Interaction 表示当前 Turn 的执行需要用户参与。第一阶段支持 `approval` 与
+`question`；它们使用同一套生命周期、查询和响应 API。
 
-Shell 等工具请求额外权限时，当前 Assistant Message 中对应的 Tool Part 进入 `approval-required` 状态。
+Interaction 是 Assistant Message 的 Part，不是新的顶层 Message，也不会创建新 Turn。
+当 Interaction 来自 Tool 时，Tool 与 Interaction 在同一个 Assistant revision 中原子更新：
 
 ```text
-ready -> approval-required -> running -> completed
-                         \-> failed
+创建：Tool ready -> waiting-user + Interaction pending
+响应：Interaction resolved + Tool running / failed
+结束：Interaction expired / cancelled + Tool failed
 ```
 
-## 展示实时请求并提交决定
-
-`approval-required` Tool Part 会携带统一审批快照；本地 Shell 的完整请求位于 `approval.request`。订阅只报告状态，不提供命令通道：
+## 订阅并响应
 
 ```ts
 const unsubscribe = session.subscribe((mutation) => {
   if (
     mutation.variant !== "part" ||
-    mutation.type !== "tool" ||
-    mutation.part.state !== "approval-required" ||
-    !mutation.part.approval?.request
-  ) {
-    return;
-  }
+    mutation.type !== "interaction" ||
+    mutation.part.status !== "pending"
+  ) return;
 
-  show_approval_request(mutation.part.approval.request);
+  render_interaction(mutation.part);
 });
 
-// 用户确认后：
-await session.resolve_approval({
-  approval_id,
-  decision: "approved",
+await session.respond({
+  interaction_id,
+  response: {
+    kind: "approval",
+    decision: "approved",
+  },
 });
 ```
 
-支持的决策只有 `approved` 与 `denied`。`subscribe()` 始终保持为纯数据流，只在用户明确操作后调用 `resolve_approval()`。后续 Tool Part Mutation 才是最终状态依据。
+`subscribe()` 只报告已经持久化的状态。`respond()` 先原子提交 Interaction 与关联 Tool，
+成功后才恢复原执行。请求不存在、已经终结或响应类型不匹配时会抛出明确错误。
 
-## 先查询，后处理
-
-后台审批页、恢复后的客户端或无法持续订阅的客户端，应使用 Session 方法：
+## 查询 pending Interaction
 
 ```ts
-const pending = await session.approvals();
+const pending = await session.interactions();
 
-for (const approval of pending) {
-  render_approval({
-    tool_name: approval.tool_name,
-    command: approval.command,
-    cwd: approval.cwd,
-    reason: approval.reason,
-    operation: approval.operation,
-  });
+for (const { request } of pending) {
+  if (request.kind === "approval") {
+    render_approval(request);
+  } else {
+    render_questions(request.questions);
+  }
 }
+```
 
-await session.resolve_approval({
-  approval_id: pending[0].approval_id,
-  decision: "denied",
+Question 支持 `text`、`single_select` 与 `multi_select`。回答必须覆盖请求中的全部
+`question_id`：
+
+```ts
+await session.respond({
+  interaction_id,
+  response: {
+    kind: "question",
+    answers: [
+      { question_id: "region", value: "cn" },
+      { question_id: "features", value: ["search", "files"] },
+    ],
+  },
 });
 ```
 
-`resolve_approval()` 只处理当前 Session 的 pending 请求。请求不存在、已被其他客户端处理或属于其他 Session 时，结果的 `success` 为 `false`，而不是越权处理它。
-
-## 审批模式
+## Shell 审批模式
 
 ```ts
 const current = await session.approval_mode();
@@ -78,17 +84,18 @@ await session.set_approval_mode({
 
 | 模式 | 行为 |
 | --- | --- |
-| `ask` | 默认模式。每次 unrestricted 请求进入待审批队列。 |
-| `always-allow` | 该 Session 后续的新请求自动批准。 |
+| `ask` | unrestricted Shell 请求创建 approval Interaction。 |
+| `always-allow` | 当前 Session 后续 Shell 请求自动批准。 |
 
-`always-allow` 不会改变 sandbox 类型，不会影响其他 Session，也不会自动处理已经 pending 的请求。产品应明确显示当前模式，并把高权限模式放在显式用户选择之后。
+审批模式是 Shell Adapter 的执行策略，不是通用 Interaction 状态。它不改变 sandbox，
+不影响其他 Session，也不会处理已经 pending 的 Interaction。
 
 ## UI 实现要点
 
-- 用 `approval_id` 作为审批卡片稳定 key，用 `tool_call_id` 关联 Tool Part。
-- 状态为 `approval-required` 时将工具输出区保持在等待状态，不能标记为完成。
-- 决策提交后等待下一个 Part Mutation 显示 `running`、`completed` 或 `failed`，不要在客户端伪造成功。
-- 同一个请求可以有多个订阅者，提交结果以 `resolve_approval()` 的 `success` 为准。
-- Session 切换时清理旧会话的审批队列；不能把旧 Session 的 `approval_id` 发送给新 Session。
+- 使用 `interaction_id` 作为交互卡片稳定 key。
+- `source.type === "tool"` 时，用 `source.tool_call_id` 关联 Tool Part。
+- Tool 为 `waiting-user` 时保持等待态，不要在客户端伪造 `running` 或成功。
+- `resolved`、`expired`、`cancelled` 都是终态，不能重复响应。
+- Session 切换时清理旧交互 UI，不能把旧 Session 的 `interaction_id` 发给新 Session。
 
-完整 Tool Part 状态与渲染方式见 [实时订阅](/zh/agent-sdk-docs/sessions/subscribe)。
+完整 Part 状态见 [Message 与 Part](/zh/agent-sdk-docs/sessions/messages)。

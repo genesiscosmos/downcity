@@ -35,12 +35,12 @@ import type {
   TransportSubscription,
 } from "@/remote/RemoteTransport.js";
 import type {
-  ResolveSessionApprovalInput,
-  SessionApproval,
+  RespondSessionInteractionInput,
   SessionApprovalModeSnapshot,
-  SessionApprovalResult,
+  SessionInteractionResult,
+  SessionPendingInteraction,
   SetSessionApprovalModeInput,
-} from "@/types/session/SessionApproval.js";
+} from "@/types/session/SessionInteraction.js";
 
 type SdkEventsReadyFrame = {
   /** SDK HTTP events 连接内部 ready 标记。 */
@@ -394,18 +394,18 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return payload;
   }
 
-  async approvals(session_id: string): Promise<SessionApproval[]> {
+  async interactions(session_id: string): Promise<SessionPendingInteraction[]> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
-      approvals?: SessionApproval[];
-    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/approvals`, {
+      interactions?: SessionPendingInteraction[];
+    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/interactions`, {
       headers: this.headers(),
     });
-    if (!payload.success || !Array.isArray(payload.approvals)) {
-      throw new Error(String(payload.error || "Remote shell approvals failed"));
+    if (!payload.success || !Array.isArray(payload.interactions)) {
+      throw new Error(String(payload.error || "Remote session interactions failed"));
     }
-    return payload.approvals;
+    return payload.interactions;
   }
 
   async approval_mode(session_id: string): Promise<SessionApprovalModeSnapshot> {
@@ -446,23 +446,25 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return payload;
   }
 
-  async resolve_approval(
+  async respond(
     session_id: string,
-    input: ResolveSessionApprovalInput,
-  ): Promise<SessionApprovalResult> {
-    const payload = await read_http_json<SessionApprovalResult & {
+    input: RespondSessionInteractionInput,
+  ): Promise<SessionInteractionResult> {
+    const payload = await read_http_json<{
+      success?: boolean;
+      result?: SessionInteractionResult;
       error?: string;
-    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/approval`, {
+    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/respond`, {
       method: "POST",
       headers: this.headers({
         "Content-Type": "application/json",
       }),
       body: JSON.stringify(input),
     });
-    if (typeof payload.success !== "boolean") {
-      throw new Error(String(payload.error || "Remote session approval failed"));
+    if (!payload.success || !payload.result) {
+      throw new Error(String(payload.error || "Remote session interaction response failed"));
     }
-    return payload;
+    return payload.result;
   }
 }
 

@@ -12,7 +12,7 @@ import {
   resolve_cli_agent_target,
 } from "@/city/agent/AgentSelection.js";
 import { runInteractiveAgentManager } from "@/city/agent/AgentManager.js";
-import { initCommand } from "@/city/agent/Init.js";
+import { run_agent_create_command } from "@/city/agent/Init.js";
 import { restartCommand } from "@/city/agent/Restart.js";
 import { stopCommand } from "@/city/agent/Stop.js";
 import { runCommand } from "@/city/agent/Run.js";
@@ -80,8 +80,8 @@ export function registerAgentCommands(
       en: "allow overwriting existing Agent config (dangerous)",
     }), parseBoolean)
     .helpOption("--help", helpText())
-    .action(createVersionBanner(context.version, async (cwd: string = ".", options: { force?: boolean }) => {
-      await initCommand(cwd, options);
+    .action(createVersionBanner(context.version, async (workspace_path: string | undefined, options: { force?: boolean }) => {
+      await run_agent_create_command(workspace_path, options);
     }));
 
   agent

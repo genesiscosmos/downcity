@@ -24,7 +24,6 @@ import {
   runOneShotChat,
   runSdkPromptTurn,
 } from "@/city/agent/AgentChatHelpers.js";
-import { session_messages_to_entries } from "@/city/agent/tui/history/HistoryLoader.js";
 
 /**
  * `city agent chat` 统一入口。
@@ -109,12 +108,14 @@ export async function chatCommand(options: AgentChatCliOptions): Promise<void> {
           session.messages(),
         ]);
         const title = info.title?.trim() || "Untitled";
-        const entries = session_messages_to_entries(messages.items);
-        return { title, entries };
+        return { title, messages: messages.items };
       },
-      resolve_approval: async (session_id, approval_id, decision) => {
+      respond_interaction: async (session_id, interaction_id, decision) => {
         const session = await interactive.remote_agent.sessions.get(session_id);
-        return await session.resolve_approval({ approval_id, decision });
+        return await session.respond({
+          interaction_id,
+          response: { kind: "approval", decision },
+        });
       },
       run_turn: async ({ session_id, message, interactive_renderer }) => {
         const outcome = await runSdkPromptTurn({

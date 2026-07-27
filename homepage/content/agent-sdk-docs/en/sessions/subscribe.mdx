@@ -97,7 +97,7 @@ session.subscribe((mutation) => {
 The same Tool Part is updated under the same `part_id`:
 
 ```text
-input-streaming -> ready -> approval-required -> running -> completed
+input-streaming -> ready -> waiting-user -> running -> completed
                                                    \-> failed
 ready ----------------------------------------------> running
 ```

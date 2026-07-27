@@ -274,7 +274,7 @@ function buildDialogueLines(params: WriteTaskRunArtifactsParams): string[] {
     lines.push("```");
     lines.push("");
     if (round.executorAssistantMessageSnapshot) {
-      lines.push("### Executor raw assistant_message snapshot");
+      lines.push("### Executor result text snapshot");
       lines.push("");
       lines.push("```json");
       lines.push(round.executorAssistantMessageSnapshot);
@@ -321,7 +321,7 @@ function buildDialogueLines(params: WriteTaskRunArtifactsParams): string[] {
     }
     if (round.userSimulatorAssistantMessageSnapshot) {
       lines.push("");
-      lines.push("raw assistant_message snapshot:");
+      lines.push("result text snapshot:");
       lines.push("```json");
       lines.push(round.userSimulatorAssistantMessageSnapshot);
       lines.push("```");

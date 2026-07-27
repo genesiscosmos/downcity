@@ -1,113 +1,122 @@
 /**
- * 助手消息组件。
+ * Assistant Message 角色容器组件。
  *
- * 关键点（中文）
- * - 完全对齐 Kimi Code AssistantMessageComponent：使用 pi-tui Markdown 渲染助手文本。
- * - 使用 Assistant 角色标题与执行状态建立稳定层级。
- * - 流式阶段展示 working 状态，完成后自动收敛为普通角色标题。
+ * 一个组件对应一个 canonical Assistant Message，并按 Part sequence 渲染可见文本
+ * 与 Tool Call。Tool 不再作为 Transcript 顶层条目，因此即使没有正文也能保持
+ * Assistant 所有权；Interaction 等 Part 仍保留在条目中，由专用交互面板处理。
  */
 
-import { Container, Markdown, truncateToWidth, type Component } from "@earendil-works/pi-tui";
+import { Markdown, truncateToWidth, type Component } from "@earendil-works/pi-tui";
 
+import { ToolActivityComponent } from "@/city/agent/tui/components/ToolActivity.js";
 import {
   BRAILLE_SPINNER_FRAMES,
   MESSAGE_INDENT,
 } from "@/city/agent/tui/constant/rendering.js";
 import { current_theme } from "@/city/agent/tui/theme/index.js";
 import { createMarkdownTheme } from "@/city/agent/tui/theme/pi-tui-theme.js";
+import type { SessionAssistantMessage } from "@downcity/agent";
 
-/**
- * 渲染一条助手消息。
- */
+/** 缓存一个 Text Part 的 Markdown 组件及其源文本。 */
+interface TextPartView {
+  /** 当前缓存对应的完整文本。 */
+  text: string;
+  /** 负责实际 Markdown 布局与 ANSI 渲染的组件。 */
+  component: Markdown;
+}
+
+/** 渲染并原位更新一条 Assistant Message。 */
 export class AssistantMessageComponent implements Component {
-  private content_container: Container;
-  private last_text = "";
-  private show_bullet: boolean;
-  private streaming = false;
+  private message: SessionAssistantMessage;
+  private readonly text_views = new Map<string, TextPartView>();
+  private readonly tool_views = new Map<string, ToolActivityComponent>();
 
-  /**
-   * @param show_bullet 是否在首行显示状态子弹。
-   */
-  constructor(show_bullet: boolean = true, streaming: boolean = false) {
-    this.show_bullet = show_bullet;
-    this.streaming = streaming;
-    this.content_container = new Container();
+  /** @param message 初次渲染的 canonical Assistant Message 快照。 */
+  constructor(message: SessionAssistantMessage) {
+    this.message = structuredClone(message);
+    this.synchronize_part_views();
   }
 
-  /**
-   * 设置是否显示首行 bullet。
-   *
-   * @param show 是否显示。
-   */
-  set_show_bullet(show: boolean): void {
-    this.show_bullet = show;
+  /** 使用最新 canonical Assistant Message 快照原位更新角色容器。 */
+  update_message(message: SessionAssistantMessage): void {
+    this.message = structuredClone(message);
+    this.synchronize_part_views();
   }
 
-  /**
-   * 更新要渲染的文本。
-   *
-   * @param text 助手文本。
-   */
-  update_content(text: string, streaming: boolean = this.streaming): void {
-    const display_text = text;
-    if (display_text === this.last_text && streaming === this.streaming) {
-      return;
-    }
-    this.last_text = display_text;
-    this.streaming = streaming;
-    this.content_container.clear();
-    if (display_text.trim().length > 0) {
-      this.content_container.addChild(
-        new Markdown(display_text.trim(), 0, 0, createMarkdownTheme()),
-      );
-    }
-  }
-
-  /**
-   * 主题切换时重置缓存。
-   */
+  /** 主题切换后重建带 ANSI 缓存的 Markdown 组件。 */
   invalidate(): void {
-    // Markdown 会缓存 ANSI 颜色，主题切换后需要重建。
-    this.content_container.clear();
-    if (this.last_text.trim().length > 0) {
-      this.content_container.addChild(
-        new Markdown(this.last_text.trim(), 0, 0, createMarkdownTheme()),
-      );
-    }
+    this.text_views.clear();
+    this.synchronize_part_views();
   }
 
-  /**
-   * 渲染助手消息。
-   *
-   * @param width 可用宽度。
-   * @returns 渲染后的行数组。
-   */
+  /** 按 canonical Part 顺序渲染 Assistant 标题、正文与 Tool Call。 */
   render(width: number): string[] {
-    const has_content = this.last_text.trim().length > 0;
-    if (!has_content && !this.streaming) {
-      return [];
-    }
-
     const safe_width = Math.max(0, width);
-    if (safe_width <= 0) {
-      return [""];
-    }
+    if (safe_width <= 0) return [""];
 
-    const content_width = Math.max(1, safe_width - MESSAGE_INDENT.length);
-    const content_lines = has_content
-      ? this.content_container.render(content_width)
-      : [];
+    const visible_parts = this.message.parts.filter((part) => {
+      if (part.type === "tool") return true;
+      return part.type === "text" && part.text.trim().length > 0;
+    });
+    const streaming = this.message.status === "streaming";
+    if (visible_parts.length === 0 && !streaming) return [];
 
     const role = current_theme.bold_fg("primary", "Assistant");
-    const state = this.streaming
-      ? current_theme.dim_fg("primary", ` · ${get_working_frame()} working`)
-      : "";
-    const lines: string[] = ["", this.show_bullet ? `${role}${state}` : state.trimStart()];
-    for (const content_line of content_lines) {
-      lines.push(MESSAGE_INDENT + content_line);
+    const waiting_for_user = this.message.parts.some((part) =>
+      (part.type === "tool" && part.state === "waiting-user") ||
+      (part.type === "interaction" && part.status === "pending")
+    );
+    const state = waiting_for_user
+      ? current_theme.bold_fg("warning", " · waiting for you")
+      : streaming
+        ? current_theme.dim_fg("primary", ` · ${get_working_frame()} working`)
+        : "";
+    const lines: string[] = ["", `${role}${state}`];
+    for (const part of visible_parts) {
+      if (part.type === "text") {
+        const view = this.text_views.get(part.part_id);
+        if (!view) continue;
+        const content_width = Math.max(1, safe_width - MESSAGE_INDENT.length);
+        for (const content_line of view.component.render(content_width)) {
+          lines.push(MESSAGE_INDENT + content_line);
+        }
+        continue;
+      }
+      if (part.type === "tool") {
+        const view = this.tool_views.get(part.part_id);
+        if (view) lines.push(...view.render(safe_width));
+      }
     }
 
     return lines.map((line) => truncateToWidth(line, safe_width, "…"));
+  }
+
+  /** 同步 Part 组件缓存，并移除 canonical Message 中已不存在的旧 Part。 */
+  private synchronize_part_views(): void {
+    const current_part_ids = new Set(this.message.parts.map((part) => part.part_id));
+    for (const part_id of this.text_views.keys()) {
+      if (!current_part_ids.has(part_id)) this.text_views.delete(part_id);
+    }
+    for (const part_id of this.tool_views.keys()) {
+      if (!current_part_ids.has(part_id)) this.tool_views.delete(part_id);
+    }
+
+    for (const part of this.message.parts) {
+      if (part.type === "text") {
+        const current = this.text_views.get(part.part_id);
+        if (current?.text === part.text) continue;
+        this.text_views.set(part.part_id, {
+          text: part.text,
+          component: new Markdown(part.text.trim(), 0, 0, createMarkdownTheme()),
+        });
+        continue;
+      }
+      if (part.type === "tool") {
+        const current = this.tool_views.get(part.part_id);
+        if (current) current.update_part(part);
+        else this.tool_views.set(part.part_id, new ToolActivityComponent(part));
+      }
+    }
   }
 }
 

@@ -27,23 +27,22 @@ if (mutation.variant === "delta" && mutation.type === "text") {
 - `turn`：Turn 的 `start` / `finish` 生命周期
 - `session`：Session 自身状态变化，例如 `title`
 
-Tool Part 进入 `approval-required` 后会携带审批快照，本地工具的完整请求位于 `approval.request`。订阅保持为纯数据通道，用户决定通过 Session 命令 API 提交：
+Interaction Part 进入 `pending` 后携带完整请求；关联 Tool 同时进入 `waiting-user`。订阅保持为纯数据通道，用户决定通过 Session 命令 API 提交：
 
 ```ts
 session.subscribe((mutation) => {
   if (
     mutation.variant === "part" &&
-    mutation.type === "tool" &&
-    mutation.part.state === "approval-required" &&
-    mutation.part.approval?.request
+    mutation.type === "interaction" &&
+    mutation.part.status === "pending"
   ) {
-    show_approval_request(mutation.part.approval.request);
+    render_interaction(mutation.part);
   }
 });
 
-await session.resolve_approval({
-  approval_id,
-  decision: "approved",
+await session.respond({
+  interaction_id,
+  response: { kind: "approval", decision: "approved" },
 });
 ```
 

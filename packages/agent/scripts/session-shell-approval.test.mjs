@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 通过真实 Agent、Executor 与 Shell tool loop 发起 unrestricted 请求。
- * - approval-required Mutation 必须携带当前 Session、Turn 与 Tool Call 标识。
+ * - approval Interaction 必须携带当前 Turn 与 Tool Call 标识。
  * - 用户批准后命令才执行，最终 Tool Part 收口为 completed。
  */
 
@@ -131,19 +131,21 @@ test("unrestricted Shell 审批保留当前 Turn 并等待用户决定", async (
     const session = await agent.sessions.create({
       session_id: "session_shell_approval",
     });
-    let approval_snapshot;
-    let approval_result;
+    let interaction_snapshot;
+    let interaction_result;
     const unsubscribe = session.subscribe((mutation) => {
       if (
         mutation.variant !== "part" ||
-        mutation.type !== "tool" ||
-        mutation.part.state !== "approval-required" ||
-        !mutation.part.approval
+        mutation.type !== "interaction" ||
+        mutation.part.interaction_type !== "approval" ||
+        mutation.part.status !== "pending" ||
+        mutation.part.request.kind !== "approval" ||
+        mutation.part.request.source.type !== "tool"
       ) return;
-      approval_snapshot = mutation.part.approval;
-      approval_result = session.resolve_approval({
-        approval_id: mutation.part.approval.approval_id,
-        decision: "approved",
+      interaction_snapshot = mutation.part;
+      interaction_result = session.respond({
+        interaction_id: mutation.part.interaction_id,
+        response: { kind: "approval", decision: "approved" },
       });
     });
 
@@ -157,14 +159,13 @@ test("unrestricted Shell 审批保留当前 Turn 并等待用户决定", async (
     const tool_part = messages.items
       .flatMap((message) => message.type === "assistant" ? message.parts : [])
       .find((part) => part.type === "tool" && part.tool_call_id === "call_unrestricted");
-    assert.ok(approval_snapshot, JSON.stringify(messages.items));
-    assert.equal(approval_snapshot.request.session_id, session.id);
-    assert.equal(approval_snapshot.request.turn_id, turn.id);
-    assert.equal(approval_snapshot.request.tool_call_id, "call_unrestricted");
-    assert.deepEqual(await approval_result, {
-      success: true,
-      approval_id: approval_snapshot.approval_id,
-      decision: "approved",
+    assert.ok(interaction_snapshot, JSON.stringify(messages.items));
+    assert.equal(interaction_snapshot.request.turn_id, turn.id);
+    assert.equal(interaction_snapshot.request.source.tool_call_id, "call_unrestricted");
+    assert.deepEqual(await interaction_result, {
+      status: "resolved",
+      interaction_id: interaction_snapshot.interaction_id,
+      response: { kind: "approval", decision: "approved" },
     });
     assert.equal(tool_part?.state, "completed");
     assert.equal(tool_part?.output?.output, "approval-ok");

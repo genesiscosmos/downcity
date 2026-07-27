@@ -98,7 +98,7 @@ test("CoreEngine Provider 失败时只返回结构化错误", async () => {
 
   assert.equal(result.success, false);
   assert.match(result.error, /quota exceeded/);
-  assert.equal(result.assistant_message, undefined);
+  assert.equal(result.text, "");
 });
 
 test("CoreEngine 成功流按 start、chunks、finish 完成 canonical step", async () => {
@@ -115,12 +115,14 @@ test("CoreEngine 成功流按 start、chunks、finish 完成 canonical step", as
   const result = await runner.run(create_runner_input(
     model,
     create_run_context({
-      on_ui_message_step_start: async () => events.push("start"),
-      on_ui_message_chunk_callback: async (chunk) => events.push(chunk.type),
-      on_ui_message_step_finish: async (message) => {
-        events.push(`finish:${message.parts.map((part) => part.type).join(",")}`);
+      assistant_output: {
+        begin_step: async () => events.push("start"),
+        write_chunk: async (chunk) => events.push(chunk.type),
+        finish_step: async (message) => {
+          events.push(`finish:${message.parts.map((part) => part.type).join(",")}`);
+        },
+        abort_step: async () => events.push("abort"),
       },
-      on_ui_message_step_abort: async () => events.push("abort"),
     }),
   ));
 
@@ -145,12 +147,14 @@ test("CoreEngine chunk 写入失败时中止 canonical step", async () => {
   const result = await runner.run(create_runner_input(
     model,
     create_run_context({
-      on_ui_message_step_start: async () => events.push("start"),
-      on_ui_message_chunk_callback: async () => {
-        throw new Error("canonical write failed");
+      assistant_output: {
+        begin_step: async () => events.push("start"),
+        write_chunk: async () => {
+          throw new Error("canonical write failed");
+        },
+        finish_step: async () => events.push("finish"),
+        abort_step: async () => events.push("abort"),
       },
-      on_ui_message_step_finish: async () => events.push("finish"),
-      on_ui_message_step_abort: async () => events.push("abort"),
     }),
   ));
 

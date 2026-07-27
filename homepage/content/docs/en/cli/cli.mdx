@@ -10,8 +10,10 @@ The `city` CLI is a convenience wrapper around the Agent SDK. It reads agent con
 ## Project initialization
 
 ```bash
-city agent create my-project
+city agent create
 ```
+
+With no path, choose the current directory or another folder through the native system picker. Relative and absolute path arguments are also supported, for example `city agent create .` and `city agent create ./my-project`.
 
 This generates:
 

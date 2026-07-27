@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - `SessionRunInput` 表示上层会话入口输入（例如 context query）。
  * - `SessionExecuteInput` 表示 Executor 通过 Composer 装配后的中间运行态。
- * - 输出暴露可选 assistant_message（UIMessage）。
+ * - 输出只返回执行结果；Assistant Message 通过显式输出端口写入唯一事实源。
  */
 
 import type { FileUIPart, Tool, UIMessageChunk } from "ai";
@@ -101,25 +101,19 @@ export interface SessionRunResult {
    */
   success: boolean;
 
+  /** 本轮最终用户可见文本，不承载 Assistant Message 快照。 */
+  text: string;
+
   /**
    * 失败时的错误信息（成功时为空）。
    */
   error?: string;
 
   /**
-   * 最终 assistant 消息。
-   *
-   * 关键点（中文）
-   * - stop/abort 且没有任何 assistant 内容时可以为空。
-   * - turn 状态通过 `success` / `error` 表达，不应伪造成 assistant 正文。
-   */
-  assistant_message?: SessionMessageRecordV1 | null;
-
-  /**
    * 工具运行期显式生成、并在 Assistant 末尾持久化的文件 Parts。
    *
-   * 关键点（中文）：该字段与聚合 `assistant_message` 分离，Session 不需要从最终
-   * UIMessage 反推哪些文件来自工具通道。
+   * 关键点（中文）：该字段与 canonical Message 输出端口分离，Session 不需要从
+   * 最终 UIMessage 反推哪些文件来自工具通道。
    */
   assistant_file_parts?: FileUIPart[];
 

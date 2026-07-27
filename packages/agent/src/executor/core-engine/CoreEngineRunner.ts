@@ -15,6 +15,7 @@ import {
   type Tool,
 } from "ai";
 import { log_assistant_message_now } from "@executor/messages/SessionMessageLog.js";
+import { pick_last_successful_chat_send_text } from "@executor/messages/UserVisibleText.js";
 import {
   MAX_INCOMPLETE_RESPONSE_RECOVERIES,
   MAX_TEXT_ONLY_CONTINUATIONS,
@@ -213,17 +214,6 @@ export class CoreEngineRunner {
           step_index: step_count,
           ...summary,
         });
-        if (input.run_context.on_assistant_step_callback) {
-          try {
-            await input.run_context.on_assistant_step_callback({
-              text: String((step_result as { text?: unknown })?.text || "").trim(),
-              step_index: step_count,
-              step_result: step_result,
-            });
-          } catch {
-            // Assistant step 观察回调失败不能改变模型执行结果。
-          }
-        }
       };
 
       let text_only_continuation_count = 0;
@@ -301,8 +291,8 @@ export class CoreEngineRunner {
         let canonical_step_started = false;
         let canonical_step_finished = false;
         try {
-          if (input.run_context.on_ui_message_step_start) {
-            await input.run_context.on_ui_message_step_start();
+          if (input.run_context.assistant_output) {
+            await input.run_context.assistant_output.begin_step();
             canonical_step_started = true;
           }
           const result = streamText({
@@ -328,12 +318,16 @@ export class CoreEngineRunner {
               logger: this.logger,
               buildFallbackAssistantMessage: (text) =>
                 build_fallback_assistant_message(session_id, text),
-              on_ui_message_chunk_callback: input.run_context.on_ui_message_chunk_callback,
+              on_ui_message_chunk_callback: input.run_context.assistant_output
+                ? async (chunk) => {
+                    await input.run_context.assistant_output?.write_chunk(chunk);
+                  }
+                : undefined,
               abort_signal: input.run_context.abort_signal,
             });
 
-          if (input.run_context.on_ui_message_step_finish) {
-            await input.run_context.on_ui_message_step_finish(
+          if (input.run_context.assistant_output) {
+            await input.run_context.assistant_output.finish_step(
               step_assistant_ui_message,
             );
           }
@@ -352,9 +346,9 @@ export class CoreEngineRunner {
           if (
             canonical_step_started &&
             !canonical_step_finished &&
-            input.run_context.on_ui_message_step_abort
+            input.run_context.assistant_output
           ) {
-            await input.run_context.on_ui_message_step_abort();
+            await input.run_context.assistant_output.abort_step();
           }
           const compact_error = this.should_compact_on_error(error)
             ? error
@@ -576,7 +570,7 @@ export class CoreEngineRunner {
 
       return {
         success: true,
-        assistant_message: final_message,
+        text: pick_last_successful_chat_send_text(final_message),
         assistant_file_parts: [...input.run_context.pending_assistant_file_parts],
         ...(compact_required ? { compact_required: true } : {}),
         deferred_persisted_user_messages: [
@@ -597,8 +591,10 @@ export class CoreEngineRunner {
           : null;
         return {
           success: false,
+          text: stopped_message
+            ? pick_last_successful_chat_send_text(stopped_message)
+            : "",
           error: error_text,
-          ...(stopped_message ? { assistant_message: stopped_message } : {}),
           assistant_file_parts: [...input.run_context.pending_assistant_file_parts],
           ...(compact_required ? { compact_required: true } : {}),
           deferred_persisted_user_messages: [
@@ -622,6 +618,9 @@ export class CoreEngineRunner {
 
       return {
         success: false,
+        text: final_assistant_ui_message
+          ? pick_last_successful_chat_send_text(final_assistant_ui_message)
+          : "",
         error: error_text,
         assistant_file_parts: [...input.run_context.pending_assistant_file_parts],
         ...(compact_required ? { compact_required: true } : {}),

@@ -188,6 +188,7 @@ export class ExecutorRecoveryPolicy {
   }): SessionRunResult {
     return {
       success: false,
+      text: "",
       error: input.error_text,
       deferred_persisted_user_messages: [
         ...input.run_context.deferred_persisted_user_messages,

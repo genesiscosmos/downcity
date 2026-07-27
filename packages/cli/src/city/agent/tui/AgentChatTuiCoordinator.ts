@@ -29,10 +29,10 @@ import { ApprovalPanelComponent } from "@/city/agent/tui/dialogs/ApprovalDialog.
 import { PiTuiChatRenderer } from "@/city/agent/tui/PiTuiChatRenderer.js";
 import type { AgentChatSessionSummaryView } from "@/city/agent/AgentChatTypes.js";
 import type { AgentChatInteractiveRendererPort } from "@/city/types/AgentChatInteractive.js";
+import type { SessionMessage } from "@downcity/agent";
 import type {
   AgentChatApprovalView,
   AppState,
-  TranscriptEntry,
 } from "@/city/agent/tui/types.js";
 import {
   dispatchSlashCommand,
@@ -61,12 +61,12 @@ export interface AgentChatTuiCoordinatorOptions {
    * 加载指定 session 的历史记录。
    *
    * 关键点（中文）
-   * - 返回可读标题与可渲染的 transcript 条目。
+   * - 返回可读标题与 canonical Session Message 快照。
    * - coordinator 在进入或切换 session 时调用。
    */
   load_session_history: (session_id: string) => Promise<{
     title: string;
-    entries: TranscriptEntry[];
+    messages: SessionMessage[];
   }>;
   /** 执行一轮对话。 */
   run_turn: (input: {
@@ -81,11 +81,11 @@ export interface AgentChatTuiCoordinatorOptions {
   }>;
 
   /** 批准 unrestricted sandbox 审批请求。 */
-  resolve_approval: (
+  respond_interaction: (
     session_id: string,
-    approval_id: string,
+    interaction_id: string,
     decision: "approved" | "denied",
-  ) => Promise<{ success: boolean; decision: string }>;
+  ) => Promise<{ status: "resolved" | "expired" | "cancelled" }>;
 }
 
 /**
@@ -111,13 +111,6 @@ export class AgentChatTuiCoordinator {
   private remove_input_listener: (() => void) | null = null;
   private command_panel_loading = false;
   private draining_input_queue = false;
-
-  /**
-   * 全局 tool output 展开状态。
-   * 对齐 Kimi Code：Ctrl+O 统一切换所有 tool 卡片，
-   * 新创建的 tool 卡片也会沿用当前状态。
-   */
-  private tool_output_expanded = false;
 
   /**
    * 待处理的 unrestricted sandbox 审批请求队列。
@@ -209,10 +202,6 @@ export class AgentChatTuiCoordinator {
     this.editor.on_ctrl_s = () => {
       void this.stop();
     };
-    this.editor.on_ctrl_o = () => {
-      this.toggle_tool_output_expansion();
-      this.request_render();
-    };
     this.editor.on_up_arrow_empty = () => {
       const recalled = this.input_queue.recall_latest();
       if (recalled) {
@@ -299,7 +288,7 @@ export class AgentChatTuiCoordinator {
       reason: params.reason,
       on_decide: (decision) => {
         this.hide_approval_panel();
-        void this.resolve_approval_panel(params, decision);
+        void this.respond_approval_panel(params, decision);
       },
     });
 
@@ -348,7 +337,7 @@ export class AgentChatTuiCoordinator {
   /**
    * 提交面板决策；失败时将请求放回队首，避免 Agent 永久等待。
    */
-  private async resolve_approval_panel(
+  private async respond_approval_panel(
     approval: AgentChatApprovalView,
     decision: "approve" | "deny",
   ): Promise<void> {
@@ -373,12 +362,12 @@ export class AgentChatTuiCoordinator {
     session_id = this.current_session_id,
   ): Promise<boolean> {
     try {
-      const result = await this.options.resolve_approval(
+      const result = await this.options.respond_interaction(
         session_id,
         approval_id,
         decision === "approve" ? "approved" : "denied",
       );
-      if (result.success) return true;
+      if (result.status === "resolved") return true;
       this.add_error_message(`Failed to ${decision} ${approval_id}`);
     } catch (error) {
       this.add_error_message(this.format_error(error));
@@ -509,7 +498,6 @@ export class AgentChatTuiCoordinator {
     this.header.set_state(this.app_state);
     this.footer.set_state(this.app_state);
     this.message_list.scroll_to_bottom();
-    this.add_user_message(message);
     this.request_render();
 
     const renderer = new PiTuiChatRenderer(
@@ -697,32 +685,16 @@ export class AgentChatTuiCoordinator {
    */
   private async load_history(session_id: string): Promise<void> {
     try {
-      const { title, entries } = await this.options.load_session_history(session_id);
+      const { title, messages } = await this.options.load_session_history(session_id);
       this.app_state.session_title = title;
       this.header.set_state(this.app_state);
       this.footer.set_state(this.app_state);
       this.terminal.setTitle(this.build_title());
-      for (const entry of entries) {
-        this.message_list.add_entry(entry);
-      }
+      this.message_list.set_messages(messages);
       this.message_list.scroll_to_bottom();
     } catch (error) {
       this.add_error_message(`Failed to load history: ${this.format_error(error)}`);
     }
-  }
-
-  /**
-   * 添加用户消息。
-   *
-   * @param text 用户文本。
-   */
-  private add_user_message(text: string): void {
-    this.message_list.add_entry({
-      id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      kind: "user",
-      text,
-      created_at: Date.now(),
-    });
   }
 
   /**
@@ -731,9 +703,9 @@ export class AgentChatTuiCoordinator {
    * @param text 状态文本。
    */
   private add_status_message(text: string): void {
-    this.message_list.add_entry({
+    this.message_list.add_notice({
       id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      kind: "status",
+      kind: "local-status",
       text,
       created_at: Date.now(),
     });
@@ -745,9 +717,9 @@ export class AgentChatTuiCoordinator {
    * @param text 错误文本。
    */
   private add_error_message(text: string): void {
-    this.message_list.add_entry({
+    this.message_list.add_notice({
       id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      kind: "error",
+      kind: "local-error",
       text,
       created_at: Date.now(),
     });
@@ -800,13 +772,4 @@ export class AgentChatTuiCoordinator {
     return error instanceof Error ? error.message : String(error);
   }
 
-  /**
-   * 统一切换所有 tool 卡片的展开/折叠状态。
-   * 对齐 Kimi Code 的 Ctrl+O：全局 toolOutputExpanded 翻转，
-   * 同时作用于现有及后续新建的 tool 卡片。
-   */
-  private toggle_tool_output_expansion(): void {
-    this.tool_output_expanded = !this.tool_output_expanded;
-    this.message_list.set_all_tool_blocks_expanded(this.tool_output_expanded);
-  }
 }

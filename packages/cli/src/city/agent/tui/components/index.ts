@@ -10,5 +10,5 @@ export { CommandHelpPanelComponent } from "@/city/agent/tui/components/CommandHe
 export { InlinePanelSlotComponent } from "@/city/agent/tui/components/InlinePanelSlot.js";
 export { MessageListComponent } from "@/city/agent/tui/components/MessageList.js";
 export { QueuedMessagesComponent } from "@/city/agent/tui/components/QueuedMessages.js";
-export { ToolCallBlockComponent, type ToolBlockEntry } from "@/city/agent/tui/components/ToolCallBlock.js";
+export { ToolActivityComponent } from "@/city/agent/tui/components/ToolActivity.js";
 export { UserMessageComponent } from "@/city/agent/tui/components/UserMessage.js";

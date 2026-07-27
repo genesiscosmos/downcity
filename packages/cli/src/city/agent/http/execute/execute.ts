@@ -86,7 +86,7 @@ export function createExecuteRouter(
       return c.json({
         success: result.success,
         ...(result.error ? { error: result.error } : {}),
-        assistant_message: result.assistant_message,
+        text: result.text,
       });
     } catch (error) {
       return c.json({ success: false, message: String(error) }, 500);

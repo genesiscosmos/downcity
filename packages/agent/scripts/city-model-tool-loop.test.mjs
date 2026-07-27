@@ -175,15 +175,17 @@ test("CityModel uses direct LanguageModel path and sends tool result back", asyn
       openai: { itemId: "fc_1" },
     });
 
-    const result_file = result.assistant_message.parts.find((part) => part.type === "file");
+    const session_messages = await session.messages({ include_internal: true });
+    const persisted_assistant = session_messages.items.find((message) => message.type === "assistant");
+    const result_file = persisted_assistant.parts.find((part) => part.type === "file");
     assert.deepEqual(result_file, {
+      part_id: result_file.part_id,
+      sequence: result_file.sequence,
       type: "file",
-      mediaType: "image/png",
+      media_type: "image/png",
       url: ".downcity/resources/tool-output.png",
       filename: "tool-output.png",
     });
-    const session_messages = await session.messages({ include_internal: true });
-    const persisted_assistant = session_messages.items.find((message) => message.type === "assistant");
     const persisted_tool = persisted_assistant.parts.find((part) => part.type === "tool");
     assert.deepEqual(persisted_tool.call_provider_metadata, {
       openai: { itemId: "fc_1" },

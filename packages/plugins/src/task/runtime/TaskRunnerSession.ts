@@ -209,7 +209,7 @@ export function createTaskSessionRuntimePort(params: {
 /**
  * 把 task session 的 assistant 消息落盘到对应 run context history Store。
  */
-export async function appendTaskAssistantMessage(params: {
+export async function appendTaskDeferredMessages(params: {
   taskSessionRuntime: TaskSessionRuntimePort;
   session_id: string;
   taskId: string;
@@ -217,9 +217,6 @@ export async function appendTaskAssistantMessage(params: {
 }): Promise<void> {
   const { taskSessionRuntime, session_id, rawResult } = params;
   const messages = taskSessionRuntime.get_messages(session_id);
-  if (rawResult.assistant_message) {
-    await messages.append_record(rawResult.assistant_message);
-  }
   const deferredUserMessages = rawResult.deferred_persisted_user_messages || [];
   for (const deferred of deferredUserMessages) {
     await messages.append_record(deferred);

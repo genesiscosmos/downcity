@@ -1,94 +1,96 @@
 ---
-title: Tool Approvals
-description: Query, display, and resolve unrestricted tool requests within a specific Session
+title: Asynchronous User Interactions
+description: Handle approvals, questions, and execution waiting for user input within a Session
 ---
 
-# Tool Approvals
+# Asynchronous User Interactions
 
-An approval belongs to the Session that started the tool call, not to the top-level `Agent`. This prevents a decision from being submitted to the wrong conversation when Sessions run in parallel.
+An Interaction means that the current Turn needs user participation. The first release supports
+`approval` and `question` through one lifecycle, query API, and response API.
 
-When a tool such as Shell requests extra permission, its Tool Part in the current Assistant Message enters `approval-required`.
+An Interaction is an Assistant Message Part, not a top-level Message or a new Turn. For a Tool
+source, the Tool and Interaction change atomically in one Assistant revision:
 
 ```text
-ready -> approval-required -> running -> completed
-                         \-> failed
+create:  Tool ready -> waiting-user + Interaction pending
+respond: Interaction resolved + Tool running / failed
+close:   Interaction expired / cancelled + Tool failed
 ```
 
-## Display a live request and resolve it
-
-An approval-required Tool Part carries the unified approval snapshot. A local Shell request is available under `approval.request`. The subscription only reports state; it does not expose a command channel:
+## Subscribe and respond
 
 ```ts
 const unsubscribe = session.subscribe((mutation) => {
   if (
     mutation.variant !== "part" ||
-    mutation.type !== "tool" ||
-    mutation.part.state !== "approval-required" ||
-    !mutation.part.approval?.request
-  ) {
-    return;
-  }
+    mutation.type !== "interaction" ||
+    mutation.part.status !== "pending"
+  ) return;
 
-  show_approval_request(mutation.part.approval.request);
+  render_interaction(mutation.part);
 });
 
-// After user confirmation:
-await session.resolve_approval({
-  approval_id,
-  decision: "approved",
+await session.respond({
+  interaction_id,
+  response: {
+    kind: "approval",
+    decision: "approved",
+  },
 });
 ```
 
-The only decisions are `approved` and `denied`. Keep `subscribe()` as a data-only stream and call `resolve_approval()` only in response to an explicit user action. The next Tool Part Mutation is the authoritative resulting state.
+`subscribe()` only reports persisted state. `respond()` atomically commits the Interaction and
+related Tool before it resumes execution. A missing or terminal request, or a response-kind
+mismatch, throws an explicit error.
 
-## Query first, resolve later
-
-An approval screen, a reconnected client, or a client without a continuous subscription should use Session methods:
+## Query pending Interactions
 
 ```ts
-const pending = await session.approvals();
+const pending = await session.interactions();
 
-for (const approval of pending) {
-  render_approval({
-    tool_name: approval.tool_name,
-    command: approval.command,
-    cwd: approval.cwd,
-    reason: approval.reason,
-    operation: approval.operation,
-  });
+for (const { request } of pending) {
+  if (request.kind === "approval") render_approval(request);
+  else render_questions(request.questions);
 }
+```
 
-await session.resolve_approval({
-  approval_id: pending[0].approval_id,
-  decision: "denied",
+Questions support `text`, `single_select`, and `multi_select`. Answers must cover every requested
+`question_id`:
+
+```ts
+await session.respond({
+  interaction_id,
+  response: {
+    kind: "question",
+    answers: [
+      { question_id: "region", value: "cn" },
+      { question_id: "features", value: ["search", "files"] },
+    ],
+  },
 });
 ```
 
-`resolve_approval()` only handles a pending request in the current Session. When the request is missing, already resolved by another client, or belongs to another Session, its result has `success: false`; it is never resolved across a Session boundary.
-
-## Approval modes
+## Shell approval mode
 
 ```ts
 const current = await session.approval_mode();
-
-await session.set_approval_mode({
-  mode: "always-allow",
-});
+await session.set_approval_mode({ mode: "always-allow" });
 ```
 
 | Mode | Behavior |
 | --- | --- |
-| `ask` | Default. Every unrestricted request enters the pending queue. |
-| `always-allow` | New future requests in this Session are automatically approved. |
+| `ask` | An unrestricted Shell request creates an approval Interaction. |
+| `always-allow` | Future Shell requests in this Session are approved automatically. |
 
-`always-allow` does not change the sandbox type, affect other Sessions, or resolve requests that are already pending. A product should surface the active mode clearly and place elevated permission behind explicit user choice.
+Approval mode is a Shell Adapter execution policy, not general Interaction state. It does not
+change the sandbox, affect other Sessions, or resolve already-pending Interactions.
 
 ## UI implementation details
 
-- Use `approval_id` as the stable approval-card key and `tool_call_id` to link it to the Tool Part.
-- Keep a tool output area waiting while the Part is `approval-required`; do not mark it complete.
-- After submitting a decision, wait for the next Part Mutation to show `running`, `completed`, or `failed`; do not synthesize success client-side.
-- One request can have multiple subscribers; `resolve_approval()`'s `success` is authoritative.
-- On Session change, clear the old approval queue. Never send an old Session's `approval_id` to a new Session.
+- Use `interaction_id` as the stable card key.
+- For `source.type === "tool"`, link it with `source.tool_call_id`.
+- Keep a `waiting-user` Tool in a waiting state; do not synthesize running or success client-side.
+- `resolved`, `expired`, and `cancelled` are terminal and cannot be answered again.
+- Clear old Interaction UI when switching Sessions; never send an old Session's ID to a new one.
 
-See [Live subscriptions](/en/agent-sdk-docs/sessions/subscribe) for complete Tool Part state and rendering.
+See [Messages and Parts](/en/agent-sdk-docs/sessions/messages) for complete Part states.

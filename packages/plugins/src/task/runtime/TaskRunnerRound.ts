@@ -12,6 +12,7 @@ import type { PluginContext } from "@downcity/agent";
 import type { SessionRunResult } from "@downcity/agent";
 import type { SessionRunContext } from "@downcity/agent";
 import type { JsonObject } from "@downcity/agent";
+import { SessionAssistantOutputAdapter } from "@downcity/agent";
 import type {
   ChatSendOutputPick,
   ScriptExecutionResult,
@@ -63,21 +64,6 @@ export function tryExtractJsonObject(text: string): JsonObject | null {
   return null;
 }
 
-function extractTextFromAssistantMessageParts(parts: unknown): string {
-  if (!Array.isArray(parts)) return "";
-  const texts: string[] = [];
-  for (const part of parts) {
-    if (!part || typeof part !== "object") continue;
-    const p = part as { type?: unknown; text?: unknown };
-    if (p.type !== "text" && p.type !== "input_text") continue;
-    if (typeof p.text !== "string") continue;
-    const value = p.text.trim();
-    if (!value) continue;
-    texts.push(value);
-  }
-  return texts.join("\n").trim();
-}
-
 /**
  * 从 assistant 输出中提取 task 的最终结果文本。
  *
@@ -87,12 +73,10 @@ function extractTextFromAssistantMessageParts(parts: unknown): string {
  * - task 的过程内容保留在 `messages.jsonl / dialogue.md`；`output.md` 只记录最后 assistant 文本。
  */
 export function pickAgentOutput(
-  assistant_message: SessionRunResult["assistant_message"],
+  text: string,
 ): ChatSendOutputPick {
   return {
-    text: extractTextFromAssistantMessageParts(
-      (assistant_message as { parts?: unknown } | null)?.parts,
-    ),
+    text: String(text || "").trim(),
     delivered: false,
   };
 }
@@ -242,13 +226,20 @@ export async function runAgentRound(params: {
     // ignore
   }
 
-  const result = await params.taskSessionRuntime
-    .get_executor(params.session_id)
-    .run({
+  const assistant_output = new SessionAssistantOutputAdapter({
+    turn_id: `task:${params.taskId}:${params.actorId}:${Date.now()}`,
+    messages: params.taskSessionRuntime.get_messages(params.session_id),
+  });
+  const result = await params.taskSessionRuntime.get_executor(params.session_id).run({
       query: params.query,
-      run_context: create_task_run_context(params.session_id),
+      run_context: create_task_run_context(params.session_id, assistant_output),
     });
-  const outputPick = pickAgentOutput(result.assistant_message);
+  await assistant_output.finish({
+    status: result.success ? "completed" : "failed",
+    ...(result.error ? { error: result.error } : {}),
+    file_parts: result.assistant_file_parts || [],
+  });
+  const outputPick = pickAgentOutput(result.text);
 
   if (!result.success) {
     const reason = outputPick.text || "agent run returned success=false";
@@ -311,9 +302,13 @@ export async function runScriptTask(params: {
 /**
  * 创建 task runner 的显式 session run context。
  */
-function create_task_run_context(session_id: string): SessionRunContext {
+function create_task_run_context(
+  session_id: string,
+  assistant_output: SessionAssistantOutputAdapter,
+): SessionRunContext {
   return {
     session_id: session_id,
+    assistant_output,
     injected_user_messages: [],
     deferred_persisted_user_messages: [],
     pending_assistant_file_parts: [],

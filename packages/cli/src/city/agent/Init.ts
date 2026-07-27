@@ -30,6 +30,7 @@ import {
   save_managed_agent,
 } from "@/city/process/registry/ManagedAgentRepository.js";
 import { ensure_default_agent_plugin_bindings } from "@/city/process/registry/PluginRepository.js";
+import { select_agent_create_workspace } from "@/city/agent/create/AgentCreateWorkspace.js";
 
 type InitPromptResponse = {
   id?: string;
@@ -55,7 +56,7 @@ type ChatChannelsConfig = Partial<Record<AgentProjectChannel, {
  * 4) 生成最小可运行结构（skills 目录仅创建，不做自动同步/安装）
  */
 export async function initCommand(
-  cwd: string = ".",
+  cwd: string,
   options: { force?: boolean } = {},
 ): Promise<void> {
   const project_root = path.resolve(cwd);
@@ -312,4 +313,24 @@ export async function initCommand(
     tone: "info",
     title: "Tip",
   });
+}
+
+/**
+ * 统一执行命令行与 Agent Manager 的创建流程。
+ *
+ * 显式路径直接使用；没有路径参数时才允许用户选择当前目录或打开系统文件夹窗口。
+ */
+export async function run_agent_create_command(
+  path_argument: string | undefined,
+  options: { force?: boolean } = {},
+): Promise<void> {
+  const project_root = await select_agent_create_workspace(path_argument);
+  if (!project_root) {
+    emitCliBlock({
+      tone: "info",
+      title: "Agent creation cancelled",
+    });
+    return;
+  }
+  await initCommand(project_root, options);
 }

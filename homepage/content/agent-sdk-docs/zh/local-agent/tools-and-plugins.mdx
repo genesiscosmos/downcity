@@ -77,14 +77,14 @@ await agent.tools.edit.execute({
 Unrestricted sandbox 请求归属发起工具调用的 Session：
 
 ```ts
-const approvals = await session.approvals();
-await session.resolve_approval({
-  approval_id: approvals[0].approval_id,
-  decision: "approved",
+const interactions = await session.interactions();
+await session.respond({
+  interaction_id: interactions[0].request.interaction_id,
+  response: { kind: "approval", decision: "approved" },
 });
 ```
 
-实时 UI 在 `session.subscribe((mutation) => {})` 收到 `approval-required` Tool Part 时，从 `mutation.part.approval.request` 读取完整本地工具请求，并在用户决定后调用 `session.resolve_approval(...)`。
+实时 UI 从 pending Interaction Part 读取完整请求；关联 Tool 同时处于 `waiting-user`，用户决定后调用 `session.respond(...)`。
 
 ## plugin 实例
 

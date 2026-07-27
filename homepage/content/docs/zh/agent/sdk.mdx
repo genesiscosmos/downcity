@@ -51,7 +51,7 @@ const unsubscribe = session.subscribe((mutation) => {
 });
 ```
 
-Tool 生命周期统一使用 `variant: "part"`、`type: "tool"`。等待用户决定的 unrestricted 请求会在 `mutation.part.approval` 中携带完整审批信息；审批决定通过独立的 Session 命令提交，不通过事件回调回复：
+Tool 生命周期使用 `type: "tool"`，用户参与使用 `type: "interaction"`。pending Interaction 携带完整请求，关联 Tool 同时进入 `waiting-user`；响应通过独立 Session 命令提交：
 
 同一 Assistant step 内的 Part 顺序始终与模型流一致。即使 Tool 已提前进入执行准备，它也会等待对应的 Tool Part 出现在流中，不会越过尚未写入的前置文本。等待按 `tool_call_id` 相互隔离，多个 Tool 仍可并发执行；客户端应按 Mutation 与历史快照中的顺序直接渲染，无需自行重排。
 
@@ -59,17 +59,18 @@ Tool 生命周期统一使用 `variant: "part"`、`type: "tool"`。等待用户�
 const unsubscribe = session.subscribe((mutation) => {
   if (
     mutation.variant === "part" &&
-    mutation.type === "tool" &&
-    mutation.part.state === "approval-required" &&
-    mutation.part.approval
+    mutation.type === "interaction" &&
+    mutation.part.status === "pending"
   ) {
-    const { approval_id, command, cwd, reason } = mutation.part.approval;
-    show_approval({ approval_id, command, cwd, reason });
+    render_interaction(mutation.part);
   }
 });
 
-async function decide_approval(approval_id: string, decision: "approved" | "denied") {
-  await session.resolve_approval({ approval_id, decision });
+async function decide_approval(interaction_id: string, decision: "approved" | "denied") {
+  await session.respond({
+    interaction_id,
+    response: { kind: "approval", decision },
+  });
 }
 ```
 

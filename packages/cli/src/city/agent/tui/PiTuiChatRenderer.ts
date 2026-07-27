@@ -71,23 +71,22 @@ export class PiTuiChatRenderer implements AgentChatInteractiveRendererPort {
     ) {
       this.emitted_visible_text = true;
     }
+    if (event.variant !== "part" || event.type !== "interaction") return;
+    const interaction = event.part;
+    const request = interaction.request;
     if (
-      event.variant === "part" &&
-      event.type === "tool" &&
-      event.part.state === "approval-required" &&
-      event.part.approval?.request
-    ) {
-      const approval = event.part.approval;
-      const request = approval.request;
-      if (!request) return;
-      this.on_approval_request?.({
-        approval_id: approval.approval_id,
-        tool_name: request.tool_name,
-        cmd: request.command,
-        cwd: request.cwd,
-        reason: request.reason,
-      });
-    }
+      interaction.interaction_type !== "approval" ||
+      interaction.status !== "pending" ||
+      request.kind !== "approval" ||
+      request.source.type !== "tool"
+    ) return;
+    this.on_approval_request?.({
+      approval_id: interaction.interaction_id,
+      tool_name: request.source.tool_name,
+      cmd: request.command,
+      cwd: request.cwd,
+      reason: request.reason,
+    });
   }
 
   /**

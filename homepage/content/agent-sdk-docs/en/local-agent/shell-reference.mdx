@@ -58,7 +58,7 @@ Workspace binds its project root to Shell; Agent no longer configures or owns Sh
 - Call `workspace.dispose()` directly only when Workspace has not been bound to Agent.
 - `shell.set_safe_read_only_paths(paths)` — Replace host-approved read-only directories.
 
-Approval requests appear as an `approval-required` Tool Part in `session.subscribe((mutation) => {})`. Read the complete Shell request from `mutation.part.approval.request`, then submit the user's decision with `session.resolve_approval(...)`. A reconnected client can recover pending requests with `session.approvals()`. Do not call internal Shell Runtime approval methods directly.
+Approval requests appear as pending Interaction Parts while their Tools are `waiting-user`. Read the complete Shell request from the Interaction `request`, then submit the user's decision with `session.respond(...)`. A reconnected client can recover pending requests with `session.interactions()`. Do not call internal Shell Runtime approval methods directly.
 
 ## Model tools
 

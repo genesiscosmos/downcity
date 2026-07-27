@@ -12,12 +12,12 @@ import type {
 } from "@/types/agent/SessionTypes.js";
 import type { RemoteAgentSession } from "@/types/agent/SessionActor.js";
 import type {
-  ResolveSessionApprovalInput,
-  SessionApproval,
+  RespondSessionInteractionInput,
   SessionApprovalModeSnapshot,
-  SessionApprovalResult,
+  SessionInteractionResult,
+  SessionPendingInteraction,
   SetSessionApprovalModeInput,
-} from "@/types/session/SessionApproval.js";
+} from "@/types/session/SessionInteraction.js";
 import type {
   SessionMutation,
   SessionMutationSubscriber,
@@ -131,9 +131,9 @@ export class RemoteSession implements RemoteAgentSession {
     return await this.transport.system(this.id);
   }
 
-  /** 列出当前远程 Session 的 pending 工具审批。 */
-  async approvals(): Promise<SessionApproval[]> {
-    return await this.transport.approvals(this.id);
+  /** 列出当前远程 Session 正在等待用户响应的 Interaction。 */
+  async interactions(): Promise<SessionPendingInteraction[]> {
+    return await this.transport.interactions(this.id);
   }
 
   /** 读取当前远程 Session 的工具审批模式。 */
@@ -146,9 +146,9 @@ export class RemoteSession implements RemoteAgentSession {
     return await this.transport.set_approval_mode(this.id, input);
   }
 
-  /** 处理当前远程 Session 的 pending 工具审批。 */
-  async resolve_approval(input: ResolveSessionApprovalInput): Promise<SessionApprovalResult> {
-    return await this.transport.resolve_approval(this.id, input);
+  /** 提交当前远程 Session 的 Interaction 用户响应。 */
+  async respond(input: RespondSessionInteractionInput): Promise<SessionInteractionResult> {
+    return await this.transport.respond(this.id, input);
   }
 
   /** 从当前远程 Session 创建分支。 */

@@ -15,7 +15,10 @@ import type {
   AgentArchiveSessionsInput,
 } from "@downcity/agent";
 import type { AgentSessionPromptInput } from "@downcity/agent";
-import type { SessionApprovalDecision, SessionApprovalMode } from "@downcity/agent";
+import type {
+  RespondSessionInteractionInput,
+  SessionApprovalMode,
+} from "@downcity/agent";
 
 const NDJSON_CONTENT_TYPE = "application/x-ndjson; charset=utf-8";
 const SDK_EVENTS_READY_FRAME = {
@@ -341,10 +344,10 @@ export function registerSdkSessionRoutes(
     }
   });
 
-  app.get("/api/sdk/sessions/:session_id/approvals", async (c) => {
+  app.get("/api/sdk/sessions/:session_id/interactions", async (c) => {
     try {
       const session = await sessions.get(String(c.req.param("session_id") || "").trim());
-      return c.json({ success: true, approvals: await session.approvals() });
+      return c.json({ success: true, interactions: await session.interactions() });
     } catch (error) {
       return c.json({ success: false, error: error instanceof Error ? error.message : String(error) }, 500);
     }
@@ -373,21 +376,22 @@ export function registerSdkSessionRoutes(
     }
   });
 
-  app.post("/api/sdk/sessions/:session_id/approval", async (c) => {
+  app.post("/api/sdk/sessions/:session_id/respond", async (c) => {
     try {
       const session = await sessions.get(String(c.req.param("session_id") || "").trim());
-      const body = await c.req.json().catch(() => null) as {
-        approval_id?: unknown;
-        decision?: unknown;
-      } | null;
-      const approval_id = String(body?.approval_id || "").trim();
-      const decision = String(body?.decision || "") as SessionApprovalDecision;
-      if (!approval_id) return c.json({ success: false, error: "approval_id is required" }, 400);
-      if (decision !== "approved" && decision !== "denied") {
-        return c.json({ success: false, error: "decision must be approved or denied" }, 400);
+      const body = await c.req.json().catch(() => null) as Partial<RespondSessionInteractionInput> | null;
+      const interaction_id = String(body?.interaction_id || "").trim();
+      if (!interaction_id) {
+        return c.json({ success: false, error: "interaction_id is required" }, 400);
       }
-      const result = await session.resolve_approval({ approval_id, decision });
-      return c.json(result, result.success ? 200 : 404);
+      if (!body?.response || typeof body.response !== "object") {
+        return c.json({ success: false, error: "response is required" }, 400);
+      }
+      const result = await session.respond({
+        interaction_id,
+        response: body.response,
+      });
+      return c.json({ success: true, result });
     } catch (error) {
       return c.json({ success: false, error: error instanceof Error ? error.message : String(error) }, 500);
     }

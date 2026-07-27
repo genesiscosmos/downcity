@@ -36,12 +36,12 @@ import type {
   TransportSubscription,
 } from "@/remote/RemoteTransport.js";
 import type {
-  ResolveSessionApprovalInput,
-  SessionApproval,
+  RespondSessionInteractionInput,
   SessionApprovalModeSnapshot,
-  SessionApprovalResult,
+  SessionInteractionResult,
+  SessionPendingInteraction,
   SetSessionApprovalModeInput,
-} from "@/types/session/SessionApproval.js";
+} from "@/types/session/SessionInteraction.js";
 
 /**
  * 本机 RPC transport。
@@ -156,8 +156,8 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     });
   }
 
-  async approvals(session_id: string): Promise<SessionApproval[]> {
-    return await this.client.get_session_approvals(session_id);
+  async interactions(session_id: string): Promise<SessionPendingInteraction[]> {
+    return await this.client.get_session_interactions(session_id);
   }
 
   async approval_mode(session_id: string): Promise<SessionApprovalModeSnapshot> {
@@ -171,11 +171,11 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     return await this.client.set_session_approval_mode(session_id, input);
   }
 
-  async resolve_approval(
+  async respond(
     session_id: string,
-    input: ResolveSessionApprovalInput,
-  ): Promise<SessionApprovalResult> {
-    return await this.client.resolve_session_approval(session_id, input);
+    input: RespondSessionInteractionInput,
+  ): Promise<SessionInteractionResult> {
+    return await this.client.respond_session_interaction(session_id, input);
   }
 
   async close(): Promise<void> {

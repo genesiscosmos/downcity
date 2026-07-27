@@ -18,9 +18,6 @@ import {
 } from "./ChatQueue.js";
 import { getChatSender } from "./ChatSendRegistry.js";
 import {
-  pick_last_successful_chat_send_text,
-} from "@downcity/agent";
-import {
   buildChannelErrorText,
   collectInitialBurstItems,
   normalizeChatQueueWorkerConfig,
@@ -430,16 +427,13 @@ export class ChatQueueWorker {
     observation: TurnObservation,
     result: AgentSessionTurnResult,
   ): Promise<void> {
-    const stopReason = String(
-      result.assistant_message?.metadata?.extra?.stopReason || "",
-    ).trim();
-    if (stopReason === "cancelled") {
+    if (String(result.error || "").trim().toLowerCase() === "cancelled") {
       return;
     }
 
     if (!result.success) {
       const resultErrorText =
-        pick_last_successful_chat_send_text(result.assistant_message) ||
+        result.text ||
         result.error ||
         "Execution failed";
       const channelErrorText = buildChannelErrorText(resultErrorText);

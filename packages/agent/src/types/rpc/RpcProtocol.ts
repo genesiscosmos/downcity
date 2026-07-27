@@ -19,9 +19,9 @@ import type {
 } from "@/types/agent/SessionTypes.js";
 import type { SessionMutation } from "@/types/session/SessionMutation.js";
 import type {
-  ResolveSessionApprovalInput,
+  RespondSessionInteractionInput,
   SetSessionApprovalModeInput,
-} from "@/types/session/SessionApproval.js";
+} from "@/types/session/SessionInteraction.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type { ListSessionMessagesInput } from "@/types/session/SessionMessage.js";
@@ -138,8 +138,8 @@ export type RpcRequest =
   | {
       /** 请求 id，用于匹配响应。 */
       id: string;
-      /** 列出指定 Session 的 pending 工具审批。 */
-      method: "sdk.sessions.approvals";
+      /** 列出指定 Session 正在等待用户响应的 Interaction。 */
+      method: "sdk.sessions.interactions";
       /** 目标 Session 参数。 */
       params: { session_id: string };
     }
@@ -162,10 +162,10 @@ export type RpcRequest =
   | {
       /** 请求 id，用于匹配响应。 */
       id: string;
-      /** 处理指定 Session 的 pending 工具审批。 */
-      method: "sdk.sessions.resolveApproval";
-      /** Session 与审批决策参数。 */
-      params: { session_id: string; input: ResolveSessionApprovalInput };
+      /** 提交指定 Session 的 Interaction 用户响应。 */
+      method: "sdk.sessions.respond";
+      /** Session 与 Interaction 响应参数。 */
+      params: { session_id: string; input: RespondSessionInteractionInput };
     }
   | {
       /** 请求 id，用于匹配响应。 */

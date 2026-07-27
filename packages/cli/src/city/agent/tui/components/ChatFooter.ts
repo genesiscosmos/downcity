@@ -69,20 +69,20 @@ export class ChatFooterComponent implements Component {
       );
       const stop = current_theme.bold_fg("warning", "Ctrl+C stop");
       const rest = width >= MEDIUM_HINT_MIN_WIDTH
-        ? "↑ edit queue · Ctrl+O tools"
+        ? "↑ edit queue · ↑/↓ scroll"
         : "↑/↓ scroll";
       return `${queue}  ${stop}  ${current_theme.dim_fg("textMuted", rest)}`;
     }
     if (width >= WIDE_HINT_MIN_WIDTH) {
       return current_theme.dim_fg(
         "textMuted",
-        "Enter send   ↑/↓ scroll   PgUp/PgDn page   Ctrl+O tools   / commands",
+        "Enter send   ↑/↓ scroll   PgUp/PgDn page   / commands",
       );
     }
     if (width >= MEDIUM_HINT_MIN_WIDTH) {
       return current_theme.dim_fg(
         "textMuted",
-        "Enter send · ↑/↓ scroll · Ctrl+O tools · /help",
+        "Enter send · ↑/↓ scroll · /help",
       );
     }
     return current_theme.dim_fg("textMuted", "Enter send · /help");

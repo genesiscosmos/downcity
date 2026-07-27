@@ -51,7 +51,7 @@ const unsubscribe = session.subscribe((mutation) => {
 });
 ```
 
-Tool lifecycle updates use `variant: "part"` and `type: "tool"`. An unrestricted request that is waiting for a decision includes the complete approval details in `mutation.part.approval`; submit the decision through the Session command API rather than replying through the event callback:
+Tool lifecycle updates use `type: "tool"`; user participation uses `type: "interaction"`. A pending Interaction carries the request while its Tool is `waiting-user`; submit responses through the Session command API:
 
 Part order within an Assistant step always follows the model stream. If Tool execution becomes ready before its Tool Part reaches the stream, execution waits at that boundary instead of overtaking preceding text. Waits are isolated by `tool_call_id`, so multiple Tools can still execute concurrently. Clients should render Mutations and history snapshots in their recorded order without reordering them.
 
@@ -59,17 +59,18 @@ Part order within an Assistant step always follows the model stream. If Tool exe
 const unsubscribe = session.subscribe((mutation) => {
   if (
     mutation.variant === "part" &&
-    mutation.type === "tool" &&
-    mutation.part.state === "approval-required" &&
-    mutation.part.approval
+    mutation.type === "interaction" &&
+    mutation.part.status === "pending"
   ) {
-    const { approval_id, command, cwd, reason } = mutation.part.approval;
-    show_approval({ approval_id, command, cwd, reason });
+    render_interaction(mutation.part);
   }
 });
 
-async function decide_approval(approval_id: string, decision: "approved" | "denied") {
-  await session.resolve_approval({ approval_id, decision });
+async function decide_approval(interaction_id: string, decision: "approved" | "denied") {
+  await session.respond({
+    interaction_id,
+    response: { kind: "approval", decision },
+  });
 }
 ```
 

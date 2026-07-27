@@ -75,14 +75,14 @@ await agent.tools.edit.execute({
 Unrestricted sandbox requests belong to the Session that started the tool call:
 
 ```ts
-const approvals = await session.approvals();
-await session.resolve_approval({
-  approval_id: approvals[0].approval_id,
-  decision: "approved",
+const interactions = await session.interactions();
+await session.respond({
+  interaction_id: interactions[0].request.interaction_id,
+  response: { kind: "approval", decision: "approved" },
 });
 ```
 
-A live UI reads the complete local-tool request from `mutation.part.approval.request` when `session.subscribe((mutation) => {})` receives an approval-required Tool Part, then calls `session.resolve_approval(...)` after the user decides.
+A live UI reads the complete request from a pending Interaction Part while the related Tool is `waiting-user`, then calls `session.respond(...)` after the user decides.
 
 ## plugins
 

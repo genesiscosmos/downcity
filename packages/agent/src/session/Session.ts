@@ -32,12 +32,12 @@ import type {
   SessionMutationUnsubscribe,
 } from "@/types/session/SessionMutation.js";
 import type {
-  ResolveSessionApprovalInput,
-  SessionApproval,
+  RespondSessionInteractionInput,
   SessionApprovalModeSnapshot,
-  SessionApprovalResult,
+  SessionInteractionResult,
+  SessionPendingInteraction,
   SetSessionApprovalModeInput,
-} from "@/types/session/SessionApproval.js";
+} from "@/types/session/SessionInteraction.js";
 import type {
   ListSessionMessagesInput,
   SessionMessagePage,
@@ -55,7 +55,8 @@ import type {
 } from "@/types/session/SessionQueue.js";
 import type { SessionOptions } from "@/types/session/SessionOptions.js";
 import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.js";
-import { SessionApprovalBroker } from "@/session/approval/SessionApprovalBroker.js";
+import { SessionInteractions } from "@/session/control/SessionInteractions.js";
+import { SessionShellApprovalAdapter } from "@/session/execution/tools/SessionShellApprovalAdapter.js";
 import { DefaultSessionComposer } from "@/session/DefaultSessionComposer.js";
 import type {
   SessionComposer,
@@ -94,7 +95,8 @@ export class Session implements AgentSession {
   private readonly session_messages: SessionMessages;
   private readonly executor: Executor;
   private readonly events: SessionEventHub;
-  private readonly approval_broker: SessionApprovalBroker;
+  private readonly session_interactions: SessionInteractions;
+  private readonly shell_approval_adapter: SessionShellApprovalAdapter;
   private readonly local_state: SessionLocalState;
   private readonly get_workspace_env: SessionOptions["get_workspace_env"];
   private readonly get_agent_model: SessionOptions["get_agent_model"];
@@ -151,9 +153,13 @@ export class Session implements AgentSession {
         this.events.publish(mutation);
       },
     });
-    this.approval_broker = new SessionApprovalBroker({
+    this.session_interactions = new SessionInteractions({
       session_id: this.id,
       messages: this.session_messages,
+    });
+    this.shell_approval_adapter = new SessionShellApprovalAdapter({
+      session_id: this.id,
+      interactions: this.session_interactions,
     });
     this.local_state = this.create_local_state();
     this.executor = this.create_executor();
@@ -181,7 +187,8 @@ export class Session implements AgentSession {
       state: this.state,
       events: this.events,
       messages: this.session_messages,
-      approvals: this.approval_broker,
+      interactions: this.session_interactions,
+      shell_approval_gateway: this.shell_approval_adapter,
       apply_command: async (command, turn_id) =>
         await this.apply_queue_command(command, turn_id),
     });
@@ -274,8 +281,7 @@ export class Session implements AgentSession {
    * 停止当前 turn，并取消尚未被吸收的排队 prompt。
    */
   async stop(): Promise<AgentSessionStopResult> {
-    await this.approval_broker.expire_all();
-    return this.session_turn.stop();
+    return await this.session_turn.stop();
   }
 
   /**
@@ -350,24 +356,24 @@ export class Session implements AgentSession {
     return this.events.subscribe(subscriber);
   }
 
-  /** 列出当前 Session 的 pending 工具审批。 */
-  async approvals(): Promise<SessionApproval[]> {
-    return this.approval_broker.list();
+  /** 列出当前 Session 正在等待用户响应的 Interaction。 */
+  async interactions(): Promise<SessionPendingInteraction[]> {
+    return this.session_interactions.list();
   }
 
   /** 读取当前 Session 的工具审批模式。 */
   async approval_mode(): Promise<SessionApprovalModeSnapshot> {
-    return this.approval_broker.get_mode();
+    return this.shell_approval_adapter.get_mode();
   }
 
   /** 更新当前 Session 的工具审批模式。 */
   async set_approval_mode(input: SetSessionApprovalModeInput): Promise<SessionApprovalModeSnapshot> {
-    return this.approval_broker.set_mode(input.mode);
+    return this.shell_approval_adapter.set_mode(input.mode);
   }
 
-  /** 处理当前 Session 的 pending 工具审批。 */
-  async resolve_approval(input: ResolveSessionApprovalInput): Promise<SessionApprovalResult> {
-    return await this.approval_broker.resolve(input);
+  /** 提交当前 Session 的 Interaction 用户响应。 */
+  async respond(input: RespondSessionInteractionInput): Promise<SessionInteractionResult> {
+    return await this.session_interactions.respond(input);
   }
 
   /**

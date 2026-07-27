@@ -18,6 +18,6 @@ const page = await session.messages();
 unsubscribe();
 ```
 
-The subscription emits `message | part | delta | turn | session`. An approval request is an approval-required Tool Part: read a local tool's complete request from `mutation.part.approval.request` and resolve it with `session.resolve_approval(...)`.
+The subscription emits `message | part | delta | turn | session`. User participation is a pending Interaction Part while its related Tool is `waiting-user`; submit a structured response with `session.respond(...)`.
 
 Remote clients do not select models through the Agent SDK. The server host owns model IDs, defaults, recovery, and runtime instance injection.

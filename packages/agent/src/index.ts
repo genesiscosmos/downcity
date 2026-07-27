@@ -65,6 +65,7 @@ export type {
   SessionAssistantDataPart,
   SessionAssistantDocumentSourcePart,
   SessionAssistantFilePart,
+  SessionAssistantInteractionPart,
   SessionAssistantMessage,
   SessionAssistantMessagePart,
   SessionAssistantSourcePart,
@@ -80,9 +81,9 @@ export type {
   SessionUserMessage,
   SessionUserMessagePart,
   SessionUserTextPart,
-  SessionToolApprovalSnapshot,
 } from "./types/session/SessionMessage.js";
 export { to_session_message_timeline_events } from "./session/browse/SessionMessageTimeline.js";
+export { SessionAssistantOutputAdapter } from "./session/execution/SessionAssistantOutputAdapter.js";
 export type {
   SessionContextSnapshot,
   SessionMessageStorageStats,
@@ -104,14 +105,31 @@ export type {
   SessionTurnMutation,
 } from "./types/session/SessionMutation.js";
 export type {
-  ResolveSessionApprovalInput,
-  SessionApproval,
-  SessionApprovalDecision,
+  RespondSessionInteractionInput,
+  SessionApprovalInteractionRequest,
+  SessionApprovalInteractionResponse,
   SessionApprovalMode,
   SessionApprovalModeSnapshot,
-  SessionApprovalResult,
+  SessionCancelledInteractionResult,
+  SessionExpiredInteractionResult,
+  SessionInteractionAnswer,
+  SessionInteractionHandle,
+  SessionInteractionLifecycle,
+  SessionInteractionOption,
+  SessionInteractionPort,
+  SessionInteractionQuestion,
+  SessionInteractionQuestionResponseType,
+  SessionInteractionRequest,
+  SessionInteractionResponse,
+  SessionInteractionResult,
+  SessionInteractionSource,
+  SessionInteractionStatus,
+  SessionPendingInteraction,
+  SessionQuestionInteractionRequest,
+  SessionQuestionInteractionResponse,
+  SessionResolvedInteractionResult,
   SetSessionApprovalModeInput,
-} from "./types/session/SessionApproval.js";
+} from "./types/session/SessionInteraction.js";
 export type {
   AgentOptions,
   AgentSessionConstructor,

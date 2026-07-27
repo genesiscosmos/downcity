@@ -7,7 +7,7 @@
  */
 
 import prompts from "@/city/tui/Prompts.js";
-import { initCommand } from "@/city/agent/Init.js";
+import { run_agent_create_command } from "@/city/agent/Init.js";
 import { runCommand } from "@/city/agent/Run.js";
 import { startCommand } from "@/city/agent/Start.js";
 import { stopCommand } from "@/city/agent/Stop.js";
@@ -435,18 +435,6 @@ export async function promptAgentConfigAction(
   return response.action || null;
 }
 
-export async function promptCreateProjectPath(): Promise<string | null> {
-  const response = (await prompts({
-    type: "text",
-    name: "projectPath",
-    message: t({ zh: "Agent 项目路径", en: "Agent project path" }),
-    initial: ".",
-  })) as { projectPath?: string };
-
-  if (response.projectPath === undefined) return null;
-  return String(response.projectPath || ".").trim() || ".";
-}
-
 export async function startAgentProject(
   agent_id: string,
   project_root: string,
@@ -464,15 +452,7 @@ export async function startAgentProject(
 }
 
 export async function runCreateFlow(): Promise<void> {
-  const projectPath = await promptCreateProjectPath();
-  if (!projectPath) {
-    emitCliBlock({
-      tone: "info",
-      title: "Agent create cancelled",
-    });
-    return;
-  }
-  await initCommand(projectPath, {});
+  await run_agent_create_command(undefined, {});
 }
 
 export function buildAccountTitle(account: StoredChannelAccount): string {

@@ -8,26 +8,10 @@
 
 import type { PluginContext } from "@downcity/agent";
 import type { ContactChatResponse } from "@/contact/types/ContactChat.js";
-import type { SessionRecordV1 } from "@downcity/agent";
 import {
   appendContactMessage,
   findContactByInboundToken,
 } from "./ContactStore.js";
-
-function extractMessageText(message: SessionRecordV1 | null | undefined): string {
-  const parts = Array.isArray((message as { parts?: unknown } | null)?.parts)
-    ? ((message as { parts: unknown[] }).parts)
-    : [];
-  return parts
-    .map((part) => {
-      if (!part || typeof part !== "object") return "";
-      const item = part as { type?: unknown; text?: unknown };
-      return item.type === "text" ? String(item.text || "") : "";
-    })
-    .filter(Boolean)
-    .join("\n")
-    .trim();
-}
 
 /**
  * 处理远端 contact chat 消息。
@@ -68,7 +52,7 @@ export async function receiveContactChatMessage(params: {
     query: params.message,
   });
   const result = await turn.finished;
-  const reply = extractMessageText(result.assistant_message);
+  const reply = result.text.trim();
   await appendContactMessage(params.context.workspace_path, contact.id, {
     role: "local",
     text: reply,
