@@ -500,7 +500,10 @@ test("running session model changes apply with steer at the next Session step", 
     const first_turn = await session.prompt({ query: "first" });
     await old_model_started.promise;
 
-    await session.set({ model: new_model });
+    await session.set({
+      model: new_model,
+      security: { approval_mode: "always-allow" },
+    });
     const steer_turn_promise = session.prompt({ query: "continue" });
     assert.deepEqual(model_calls, ["old-model"]);
 
@@ -515,7 +518,9 @@ test("running session model changes apply with steer at the next Session step", 
     const model_actions = messages.items.filter(
       (message) =>
         message.type === "action" &&
-        message.title === "Session model switched from old-model to new-model",
+        message.title === "Session configuration updated" &&
+        message.description ===
+          "model: new-model; security.approval_mode: always-allow",
     );
     assert.equal(model_actions.length, 1);
     assert.equal(model_actions[0].status, "completed");
@@ -525,8 +530,9 @@ test("running session model changes apply with steer at the next Session step", 
           mutation.variant === "message" &&
           mutation.type === "action" &&
           mutation.message.status === "completed" &&
-          mutation.message.title ===
-            "Session model switched from old-model to new-model",
+          mutation.message.title === "Session configuration updated" &&
+          mutation.message.description ===
+            "model: new-model; security.approval_mode: always-allow",
       ),
       true,
     );
@@ -582,27 +588,49 @@ test("running session approval mode changes stay queued until the next Session s
     const first_turn = await session.prompt({ query: "first" });
     await first_provider_request_started.promise;
 
-    assert.deepEqual(await session.set_approval_mode({ mode: "always-allow" }), {
+    await session.set({ security: { approval_mode: "always-allow" } });
+    assert.deepEqual(await session.status(), {
       session_id: session.id,
-      mode: "always-allow",
-      effective_mode: "ask",
+      state: "running",
+      active_turn_id: first_turn.id,
+      security: {
+        approval_mode: "always-allow",
+        effective_approval_mode: "ask",
+      },
     });
 
     release_first_provider_request.resolve();
     assert.equal((await first_turn.finished).success, true);
-    assert.deepEqual(await session.approval_mode(), {
+    assert.deepEqual(await session.status(), {
       session_id: session.id,
-      mode: "always-allow",
-      effective_mode: "ask",
+      state: "idle",
+      security: {
+        approval_mode: "always-allow",
+        effective_approval_mode: "ask",
+      },
     });
 
     const second_turn = await session.prompt({ query: "second" });
     assert.equal((await second_turn.finished).success, true);
-    assert.deepEqual(await session.approval_mode(), {
+    assert.deepEqual(await session.status(), {
       session_id: session.id,
-      mode: "always-allow",
-      effective_mode: "always-allow",
+      state: "idle",
+      security: {
+        approval_mode: "always-allow",
+        effective_approval_mode: "always-allow",
+      },
     });
+    const messages = await session.messages();
+    assert.equal(
+      messages.items.some(
+        (message) =>
+          message.type === "action" &&
+          message.status === "completed" &&
+          message.title === "Session configuration updated" &&
+          message.description === "security.approval_mode: always-allow",
+      ),
+      true,
+    );
   } finally {
     release_first_provider_request.resolve();
     await agent.dispose();
@@ -643,6 +671,9 @@ test("config remains effective when its action message cannot be persisted", asy
     const initial_turn = await session.prompt({ query: "initialize model" });
     assert.equal((await initial_turn.finished).success, true);
     model_calls.splice(0, model_calls.length);
+    const initial_action_count = (await session.messages()).items.filter(
+      (message) => message.type === "action",
+    ).length;
 
     session.session_messages.persist_action_record = async () => {
       throw new Error("action store unavailable");
@@ -654,7 +685,10 @@ test("config remains effective when its action message cannot be persisted", asy
     assert.deepEqual(model_calls, ["new"]);
 
     const messages = await session.messages();
-    assert.equal(messages.items.some((message) => message.type === "action"), false);
+    assert.equal(
+      messages.items.filter((message) => message.type === "action").length,
+      initial_action_count,
+    );
   } finally {
     await agent.dispose();
   }

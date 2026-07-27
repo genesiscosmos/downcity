@@ -50,7 +50,10 @@ export type {
   AgentSessionConfigSnapshot,
   AgentSessionForkInput,
   AgentSessionInfo,
+  AgentSessionSecurityConfig,
+  AgentSessionSecurityStatus,
   AgentSessionSetInput,
+  AgentSessionStatus,
   AgentSessionSummary,
   AgentSessionSummaryPage,
   AgentSessionSystemBlock,
@@ -58,6 +61,7 @@ export type {
   AgentSessionSystemSessionInfo,
   AgentSessionSystemSnapshot,
   AgentSessionTimelineEvent,
+  RemoteSessionSetInput,
 } from "./types/agent/SessionTypes.js";
 export type {
   ListSessionMessagesInput,
@@ -109,7 +113,6 @@ export type {
   SessionApprovalInteractionRequest,
   SessionApprovalInteractionResponse,
   SessionApprovalMode,
-  SessionApprovalModeSnapshot,
   SessionCancelledInteractionResult,
   SessionExpiredInteractionResult,
   SessionInteractionAnswer,
@@ -128,7 +131,6 @@ export type {
   SessionQuestionInteractionRequest,
   SessionQuestionInteractionResponse,
   SessionResolvedInteractionResult,
-  SetSessionApprovalModeInput,
 } from "./types/session/SessionInteraction.js";
 export type {
   AgentOptions,

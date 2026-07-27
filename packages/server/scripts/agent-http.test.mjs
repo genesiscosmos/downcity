@@ -29,6 +29,7 @@ async function reserve_port() {
 function create_fake_agent() {
   const subscribers = new Set();
   let compact_count = 0;
+  let approval_mode = "ask";
   const info = {
     agent_id: "http-test-agent",
     session_id: "http-test-session",
@@ -117,7 +118,11 @@ function create_fake_agent() {
       subscribers.add(subscriber);
       return () => subscribers.delete(subscriber);
     },
-    async set() {},
+    async set(input) {
+      if (input.security?.approval_mode) {
+        approval_mode = input.security.approval_mode;
+      }
+    },
     async stop() {
       return { stopped: false, cancelled_queued_prompts: 0, reason: "idle" };
     },
@@ -146,11 +151,15 @@ function create_fake_agent() {
         },
       }];
     },
-    async approval_mode() {
-      return { session_id: info.session_id, mode: "ask", effective_mode: "ask" };
-    },
-    async set_approval_mode({ mode }) {
-      return { session_id: info.session_id, mode, effective_mode: "ask" };
+    async status() {
+      return {
+        session_id: info.session_id,
+        state: "idle",
+        security: {
+          approval_mode,
+          effective_approval_mode: "ask",
+        },
+      };
     },
     async respond({ interaction_id, response }) {
       return { status: "resolved", interaction_id, response };
@@ -229,14 +238,11 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", async ()
     });
 
     assert.equal((await session.interactions())[0].request.interaction_id, "interaction-http-test");
-    assert.deepEqual(
-      await session.set_approval_mode({ mode: "always-allow" }),
-      {
-        session_id: "http-test-session",
-        mode: "always-allow",
-        effective_mode: "ask",
-      },
-    );
+    await session.set({ security: { approval_mode: "always-allow" } });
+    assert.deepEqual((await session.status()).security, {
+      approval_mode: "always-allow",
+      effective_approval_mode: "ask",
+    });
     assert.deepEqual(
       await session.respond({
         interaction_id: "interaction-http-test",

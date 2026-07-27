@@ -16,8 +16,10 @@ import type {
   AgentCleanArchiveResult,
   AgentSessionForkInput,
   AgentSessionInfo,
+  AgentSessionStatus,
   AgentSessionSummaryPage,
   AgentSessionSystemSnapshot,
+  RemoteSessionSetInput,
 } from "@/types/agent/SessionTypes.js";
 import type {
   ListSessionMessagesInput,
@@ -37,10 +39,8 @@ import type {
 } from "@/remote/RemoteTransport.js";
 import type {
   RespondSessionInteractionInput,
-  SessionApprovalModeSnapshot,
   SessionInteractionResult,
   SessionPendingInteraction,
-  SetSessionApprovalModeInput,
 } from "@/types/session/SessionInteraction.js";
 
 /**
@@ -160,15 +160,15 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     return await this.client.get_session_interactions(session_id);
   }
 
-  async approval_mode(session_id: string): Promise<SessionApprovalModeSnapshot> {
-    return await this.client.get_session_approval_mode(session_id);
+  async status(session_id: string): Promise<AgentSessionStatus> {
+    return await this.client.get_session_status(session_id);
   }
 
-  async set_approval_mode(
+  async set(
     session_id: string,
-    input: SetSessionApprovalModeInput,
-  ): Promise<SessionApprovalModeSnapshot> {
-    return await this.client.set_session_approval_mode(session_id, input);
+    input: RemoteSessionSetInput,
+  ): Promise<void> {
+    await this.client.set_session(session_id, input);
   }
 
   async respond(

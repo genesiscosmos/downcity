@@ -104,11 +104,11 @@ Shell approval mode is scoped to the current session:
 - `always-allow`: automatically approves shell approvals in the current session.
 
 ```ts
-await session.set_approval_mode({
-  mode: "always-allow",
+await session.set({
+  security: { approval_mode: "always-allow" },
 });
 
-const current = await session.approval_mode();
+const current = await session.status();
 ```
 
 `always-allow` does not change the sandbox mode. It only records new unrestricted requests as approved instead of creating pending approvals. Existing pending approvals are not auto-approved.

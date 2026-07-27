@@ -1,6 +1,6 @@
 {
   "name": "@downcity/server",
-  "version": "0.1.126",
+  "version": "0.1.127",
   "type": "module",
   "description": "Downcity Server — local transport layer for Agent runtimes",
   "main": "./bin/index.js",

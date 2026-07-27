@@ -15,13 +15,11 @@ import type {
   AgentArchiveSessionResult,
   AgentArchiveSessionsResult,
   AgentCleanArchiveResult,
+  RemoteSessionSetInput,
   AgentSessionSystemSnapshot,
 } from "@/types/agent/SessionTypes.js";
 import type { SessionMutation } from "@/types/session/SessionMutation.js";
-import type {
-  RespondSessionInteractionInput,
-  SetSessionApprovalModeInput,
-} from "@/types/session/SessionInteraction.js";
+import type { RespondSessionInteractionInput } from "@/types/session/SessionInteraction.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type { ListSessionMessagesInput } from "@/types/session/SessionMessage.js";
@@ -146,18 +144,18 @@ export type RpcRequest =
   | {
       /** 请求 id，用于匹配响应。 */
       id: string;
-      /** 读取指定 Session 的工具审批模式。 */
-      method: "sdk.sessions.approvalMode";
+      /** 读取指定 Session 的运行与安全状态。 */
+      method: "sdk.sessions.status";
       /** 目标 Session 参数。 */
       params: { session_id: string };
     }
   | {
       /** 请求 id，用于匹配响应。 */
       id: string;
-      /** 更新指定 Session 的工具审批模式。 */
-      method: "sdk.sessions.setApprovalMode";
-      /** Session 与审批模式参数。 */
-      params: { session_id: string; input: SetSessionApprovalModeInput };
+      /** 更新指定 Session 的可序列化动态配置。 */
+      method: "sdk.sessions.set";
+      /** Session 与动态配置参数。 */
+      params: { session_id: string; input: RemoteSessionSetInput };
     }
   | {
       /** 请求 id，用于匹配响应。 */

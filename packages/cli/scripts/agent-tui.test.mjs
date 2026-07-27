@@ -553,10 +553,9 @@ test("Header 与 Footer 在宽屏和窄屏下保持上下文与操作层级", ()
   const app_state = {
     agent_id: "demo",
     session_id: "session-123456789",
-    approval_mode: {
-      session_id: "session-123456789",
-      mode: "ask",
-      effective_mode: "ask",
+    security: {
+      approval_mode: "ask",
+      effective_approval_mode: "ask",
     },
     session_title: "Build diagnostics",
     is_executing: false,
@@ -574,16 +573,15 @@ test("Header 与 Footer 在宽屏和窄屏下保持上下文与操作层级", ()
   }
   assert.match(plain(header.render(96)).join("\n"), /Security: Default/);
 
-  app_state.approval_mode = {
-    session_id: "session-123456789",
-    mode: "always-allow",
-    effective_mode: "ask",
+  app_state.security = {
+    approval_mode: "always-allow",
+    effective_approval_mode: "ask",
   };
   header.set_state(app_state);
   assert.match(plain(header.render(96)).join("\n"), /Security: Always Allow/);
   assert.match(plain(header.render(96)).join("\n"), /queued/);
 
-  app_state.approval_mode.effective_mode = "always-allow";
+  app_state.security.effective_approval_mode = "always-allow";
   header.set_state(app_state);
   assert.doesNotMatch(plain(header.render(96)).join("\n"), /queued/);
 

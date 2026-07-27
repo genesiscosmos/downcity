@@ -1,6 +1,6 @@
 {
   "name": "@downcity/sandbox-windows-srt",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "type": "module",
   "description": "Downcity Anthropic Sandbox Runtime adapter for native Windows",
   "main": "./bin/index.js",

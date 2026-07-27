@@ -1,6 +1,6 @@
 {
   "name": "@downcity/sandbox-linux",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "type": "module",
   "description": "Downcity Linux Bubblewrap sandbox adapter",
   "main": "./bin/index.js",

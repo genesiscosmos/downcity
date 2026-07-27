@@ -76,16 +76,15 @@ export async function handleSdkSessionRpcRequest(params: {
       write_success(request.id, { interactions: await session.interactions() });
       return true;
     }
-    case "sdk.sessions.approvalMode": {
+    case "sdk.sessions.status": {
       const session = await options.sessions.get(request.params.session_id);
-      write_success(request.id, { approval_mode: await session.approval_mode() });
+      write_success(request.id, { status: await session.status() });
       return true;
     }
-    case "sdk.sessions.setApprovalMode": {
+    case "sdk.sessions.set": {
       const session = await options.sessions.get(request.params.session_id);
-      write_success(request.id, {
-        approval_mode: await session.set_approval_mode(request.params.input),
-      });
+      await session.set(request.params.input);
+      write_success(request.id, { queued: true });
       return true;
     }
     case "sdk.sessions.respond": {

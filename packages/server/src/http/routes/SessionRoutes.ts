@@ -15,10 +15,7 @@ import type {
   AgentArchiveSessionsInput,
 } from "@downcity/agent";
 import type { AgentSessionPromptInput } from "@downcity/agent";
-import type {
-  RespondSessionInteractionInput,
-  SessionApprovalMode,
-} from "@downcity/agent";
+import type { RespondSessionInteractionInput } from "@downcity/agent";
 
 const NDJSON_CONTENT_TYPE = "application/x-ndjson; charset=utf-8";
 const SDK_EVENTS_READY_FRAME = {
@@ -353,24 +350,30 @@ export function registerSdkSessionRoutes(
     }
   });
 
-  app.get("/api/sdk/sessions/:session_id/approval-mode", async (c) => {
+  app.get("/api/sdk/sessions/:session_id/status", async (c) => {
     try {
       const session = await sessions.get(String(c.req.param("session_id") || "").trim());
-      return c.json({ success: true, ...(await session.approval_mode()) });
+      return c.json({ success: true, status: await session.status() });
     } catch (error) {
       return c.json({ success: false, error: error instanceof Error ? error.message : String(error) }, 500);
     }
   });
 
-  app.post("/api/sdk/sessions/:session_id/approval-mode", async (c) => {
+  app.post("/api/sdk/sessions/:session_id/set", async (c) => {
     try {
       const session = await sessions.get(String(c.req.param("session_id") || "").trim());
-      const body = await c.req.json().catch(() => null) as { mode?: unknown } | null;
-      const mode = String(body?.mode || "") as SessionApprovalMode;
+      const body = await c.req.json().catch(() => null) as {
+        security?: { approval_mode?: unknown };
+      } | null;
+      const mode = String(body?.security?.approval_mode || "");
       if (mode !== "ask" && mode !== "always-allow") {
-        return c.json({ success: false, error: "mode must be ask or always-allow" }, 400);
+        return c.json({
+          success: false,
+          error: "security.approval_mode must be ask or always-allow",
+        }, 400);
       }
-      return c.json({ success: true, ...(await session.set_approval_mode({ mode })) });
+      await session.set({ security: { approval_mode: mode } });
+      return c.json({ success: true, queued: true });
     } catch (error) {
       return c.json({ success: false, error: error instanceof Error ? error.message : String(error) }, 500);
     }

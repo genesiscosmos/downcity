@@ -7,6 +7,7 @@
  */
 
 import type { AgentModel } from "@/agent/AgentModel.js";
+import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
 
 /**
  * 新建 session 的输入参数。
@@ -67,7 +68,48 @@ export interface AgentSessionSetInput {
    * - SDK 只接受宿主已经解析完成的运行时模型实例。
    * - 模型选择、ID 与持久化全部由宿主负责。
    */
-  model: AgentModel;
+  model?: AgentModel;
+
+  /**
+   * 当前 Session 的安全策略。
+   *
+   * 关键点（中文）
+   * - configured 值在 `set()` 返回前被 Session 接受。
+   * - 执行面在下一 Session Step 检查点原子提交该值。
+   */
+  security?: AgentSessionSecurityConfig;
+}
+
+/** 可通过本地或远程 Session 动态更新的安全策略。 */
+export interface AgentSessionSecurityConfig {
+  /** 高风险操作是否需要用户逐次审批。 */
+  approval_mode: SessionApprovalMode;
+}
+
+/** 远程 Session 可序列化的动态配置输入。 */
+export interface RemoteSessionSetInput {
+  /** 当前远程 Session 的安全策略。 */
+  security: AgentSessionSecurityConfig;
+}
+
+/** Session 当前安全状态。 */
+export interface AgentSessionSecurityStatus {
+  /** Session 已接受的 configured 审批模式。 */
+  approval_mode: SessionApprovalMode;
+  /** 执行面在最近 Step 检查点提交的审批模式。 */
+  effective_approval_mode: SessionApprovalMode;
+}
+
+/** Session 当前运行状态。 */
+export interface AgentSessionStatus {
+  /** 当前状态所属 Session 标识。 */
+  session_id: string;
+  /** Session 当前是否正在执行 Turn。 */
+  state: "idle" | "running";
+  /** 当前正在执行的 Turn 标识；空闲时省略。 */
+  active_turn_id?: string;
+  /** 当前 Session 的安全状态。 */
+  security: AgentSessionSecurityStatus;
 }
 
 /**

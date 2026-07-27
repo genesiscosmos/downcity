@@ -17,8 +17,10 @@ import type {
   AgentArchiveSessionsResult,
   AgentCleanArchiveResult,
   AgentSessionInfo,
+  AgentSessionStatus,
   AgentSessionSummaryPage,
   AgentSessionSystemSnapshot,
+  RemoteSessionSetInput,
 } from "@/types/agent/SessionTypes.js";
 import type {
   ListSessionMessagesInput,
@@ -35,10 +37,8 @@ import type { PluginSnapshot } from "@/types/plugin/PluginState.js";
 import type { SessionMutation } from "@/types/session/SessionMutation.js";
 import type {
   RespondSessionInteractionInput,
-  SessionApprovalModeSnapshot,
   SessionInteractionResult,
   SessionPendingInteraction,
-  SetSessionApprovalModeInput,
 } from "@/types/session/SessionInteraction.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type {
@@ -245,23 +245,22 @@ export class RpcClient {
     return data.interactions;
   }
 
-  async get_session_approval_mode(session_id: string): Promise<SessionApprovalModeSnapshot> {
-    const data = await this.request<{ approval_mode: SessionApprovalModeSnapshot }>({
-      method: "sdk.sessions.approvalMode",
+  async get_session_status(session_id: string): Promise<AgentSessionStatus> {
+    const data = await this.request<{ status: AgentSessionStatus }>({
+      method: "sdk.sessions.status",
       params: { session_id: session_id },
     });
-    return data.approval_mode;
+    return data.status;
   }
 
-  async set_session_approval_mode(
+  async set_session(
     session_id: string,
-    input: SetSessionApprovalModeInput,
-  ): Promise<SessionApprovalModeSnapshot> {
-    const data = await this.request<{ approval_mode: SessionApprovalModeSnapshot }>({
-      method: "sdk.sessions.setApprovalMode",
+    input: RemoteSessionSetInput,
+  ): Promise<void> {
+    await this.request<{ queued: true }>({
+      method: "sdk.sessions.set",
       params: { session_id: session_id, input },
     });
-    return data.approval_mode;
   }
 
   async respond_session_interaction(

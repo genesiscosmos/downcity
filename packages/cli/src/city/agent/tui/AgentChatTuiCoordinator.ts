@@ -31,8 +31,9 @@ import { PiTuiChatRenderer } from "@/city/agent/tui/PiTuiChatRenderer.js";
 import type { AgentChatSessionSummaryView } from "@/city/agent/AgentChatTypes.js";
 import type { AgentChatInteractiveRendererPort } from "@/city/types/AgentChatInteractive.js";
 import type {
+  AgentSessionSecurityStatus,
+  AgentSessionStatus,
   SessionApprovalMode,
-  SessionApprovalModeSnapshot,
   SessionMessage,
 } from "@downcity/agent";
 import type {
@@ -68,17 +69,17 @@ export interface AgentChatTuiCoordinatorOptions {
   load_session_context: (session_id: string) => Promise<{
     title: string;
     messages: SessionMessage[];
-    approval_mode: SessionApprovalModeSnapshot;
+    security: AgentSessionSecurityStatus;
   }>;
-  /** 读取指定 Session configured 与 effective 审批模式。 */
-  get_approval_mode: (
+  /** 读取指定 Session 的运行与安全状态。 */
+  get_session_status: (
     session_id: string,
-  ) => Promise<SessionApprovalModeSnapshot>;
+  ) => Promise<AgentSessionStatus>;
   /** 更新指定 Session 后续高风险操作使用的审批模式。 */
-  set_approval_mode: (
+  set_session_security: (
     session_id: string,
     mode: SessionApprovalMode,
-  ) => Promise<SessionApprovalModeSnapshot>;
+  ) => Promise<void>;
   /** 执行一轮对话。 */
   run_turn: (input: {
     session_id: string;
@@ -181,7 +182,7 @@ export class AgentChatTuiCoordinator {
     this.app_state = {
       agent_id: options.agent_id,
       session_id: options.session_id,
-      approval_mode: undefined,
+      security: undefined,
       session_title: undefined,
       is_executing: false,
       queued_message_count: 0,
@@ -649,13 +650,13 @@ export class AgentChatTuiCoordinator {
   /** 在输入框下方展示当前 Session 的安全策略选择器。 */
   private show_security_policy_picker(): void {
     if (!this.can_open_command_panel()) return;
-    if (!this.app_state.approval_mode) {
+    if (!this.app_state.security) {
       this.add_error_message("Security policy is not available for this Session.");
       this.request_render();
       return;
     }
     const picker = new SecurityPolicyPanelComponent({
-      current_mode: this.app_state.approval_mode.mode,
+      current_mode: this.app_state.security.approval_mode,
       on_select: (mode) => {
         this.hide_command_panel();
         this.apply_approval_mode(mode);
@@ -671,7 +672,7 @@ export class AgentChatTuiCoordinator {
 
   /** 启动单一策略更新任务，避免新 Turn 越过尚未生效的权限选择。 */
   private apply_approval_mode(mode: SessionApprovalMode): void {
-    if (mode === this.app_state.approval_mode?.mode || this.approval_mode_update_promise) return;
+    if (mode === this.app_state.security?.approval_mode || this.approval_mode_update_promise) return;
     const update_promise = this.update_approval_mode(mode);
     this.approval_mode_update_promise = update_promise;
     void update_promise.finally(() => {
@@ -683,14 +684,15 @@ export class AgentChatTuiCoordinator {
 
   /** 通过 Session API 更新审批模式，并在成功后刷新 Header。 */
   private async update_approval_mode(mode: SessionApprovalMode): Promise<boolean> {
-    if (mode === this.app_state.approval_mode?.mode) return true;
+    if (mode === this.app_state.security?.approval_mode) return true;
     try {
-      const snapshot = await this.options.set_approval_mode(
+      await this.options.set_session_security(
         this.current_session_id,
         mode,
       );
-      if (snapshot.session_id !== this.current_session_id) return false;
-      this.app_state.approval_mode = snapshot;
+      const status = await this.options.get_session_status(this.current_session_id);
+      if (status.session_id !== this.current_session_id) return false;
+      this.app_state.security = status.security;
       this.header.set_state(this.app_state);
       this.footer.set_state(this.app_state);
       this.request_render();
@@ -705,9 +707,9 @@ export class AgentChatTuiCoordinator {
   /** 刷新一次 configured/effective 审批模式，呈现队列是否已经提交。 */
   private async refresh_approval_mode(): Promise<void> {
     try {
-      const snapshot = await this.options.get_approval_mode(this.current_session_id);
-      if (snapshot.session_id !== this.current_session_id) return;
-      this.app_state.approval_mode = snapshot;
+      const status = await this.options.get_session_status(this.current_session_id);
+      if (status.session_id !== this.current_session_id) return;
+      this.app_state.security = status.security;
       this.header.set_state(this.app_state);
       this.footer.set_state(this.app_state);
     } catch {
@@ -757,7 +759,7 @@ export class AgentChatTuiCoordinator {
     this.received_approval_ids.clear();
     this.app_state.session_id = session_id;
     this.app_state.session_title = undefined;
-    this.app_state.approval_mode = undefined;
+    this.app_state.security = undefined;
     this.header.set_state(this.app_state);
     this.footer.set_state(this.app_state);
     this.terminal.setTitle(this.build_title());
@@ -776,11 +778,11 @@ export class AgentChatTuiCoordinator {
    */
   private async load_history(session_id: string): Promise<void> {
     try {
-      const { title, messages, approval_mode } =
+      const { title, messages, security } =
         await this.options.load_session_context(session_id);
       if (session_id !== this.current_session_id) return;
       this.app_state.session_title = title;
-      this.app_state.approval_mode = approval_mode;
+      this.app_state.security = security;
       this.header.set_state(this.app_state);
       this.footer.set_state(this.app_state);
       this.terminal.setTitle(this.build_title());

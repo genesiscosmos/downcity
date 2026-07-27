@@ -5,7 +5,8 @@ description: Core RemoteAgent Session methods and their boundaries
 
 # Remote Session API
 
-Remote Sessions provide `get_info()`, `prompt()`, `stop()`, `subscribe()`, `messages()`, `system()`, approval methods, and `fork()`.
+Remote Sessions provide `get_info()`, `prompt()`, `stop()`, `compact()`, `subscribe()`, `messages()`,
+`system()`, `interactions()`, `respond()`, `status()`, `set({ security })`, and `fork()`.
 
 ```ts
 const session = await agent.sessions.create();
@@ -15,9 +16,15 @@ const turn = await session.prompt({ query: "Continue" });
 await turn.finished;
 
 const page = await session.messages();
+const status = await session.status();
+
+await session.set({
+  security: { approval_mode: "always-allow" },
+});
 unsubscribe();
 ```
 
 The subscription emits `message | part | delta | turn | session`. User participation is a pending Interaction Part while its related Tool is `waiting-user`; submit a structured response with `session.respond(...)`.
 
-Remote clients do not select models through the Agent SDK. The server host owns model IDs, defaults, recovery, and runtime instance injection.
+Remote clients can set serializable security policy but do not select models through the Agent SDK.
+The server host owns model IDs, defaults, recovery, and runtime instance injection.

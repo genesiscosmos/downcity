@@ -10,6 +10,8 @@ description: Session 输入输出对象里最重要的字段和语义
 - `AgentSession`
 - `RemoteAgentSession`
 - `AgentSessionSetInput`
+- `RemoteSessionSetInput`
+- `AgentSessionStatus`
 - `AgentSessionPromptInput`
 - `AgentSessionStopResult`
 - `AgentSessionTurnHandle`
@@ -29,6 +31,10 @@ description: Session 输入输出对象里最重要的字段和语义
 | 等待一次执行结束 | `AgentSessionTurnHandle` / `AgentSessionTurnResult` |
 | 展示或提交用户异步交互 | `SessionPendingInteraction` / `SessionInteractionResult` |
 | 侧边栏与当前会话头部 | `AgentSessionSummary` / `AgentSessionInfo` |
+| 运行状态与安全策略 | `AgentSessionStatus` |
+
+`AgentSessionStatus.security` 同时提供 configured `approval_mode` 与检查点已经提交的
+`effective_approval_mode`。两者不同时，配置仍在 Session Queue 中等待执行。
 
 ## `AgentSessionPromptInput`
 

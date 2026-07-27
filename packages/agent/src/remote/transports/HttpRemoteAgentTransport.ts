@@ -16,8 +16,10 @@ import type {
   AgentCleanArchiveResult,
   AgentSessionForkInput,
   AgentSessionInfo,
+  AgentSessionStatus,
   AgentSessionSummaryPage,
   AgentSessionSystemSnapshot,
+  RemoteSessionSetInput,
 } from "@/types/agent/SessionTypes.js";
 import type {
   ListSessionMessagesInput,
@@ -36,10 +38,8 @@ import type {
 } from "@/remote/RemoteTransport.js";
 import type {
   RespondSessionInteractionInput,
-  SessionApprovalModeSnapshot,
   SessionInteractionResult,
   SessionPendingInteraction,
-  SetSessionApprovalModeInput,
 } from "@/types/session/SessionInteraction.js";
 
 type SdkEventsReadyFrame = {
@@ -408,53 +408,38 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return payload.interactions;
   }
 
-  async approval_mode(session_id: string): Promise<SessionApprovalModeSnapshot> {
+  async status(session_id: string): Promise<AgentSessionStatus> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
-      session_id?: string;
-      mode?: SessionApprovalModeSnapshot["mode"];
-      effective_mode?: SessionApprovalModeSnapshot["effective_mode"];
-    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/approval-mode`, {
+      status?: AgentSessionStatus;
+    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/status`, {
       headers: this.headers(),
     });
-    if (!payload.success || !payload.session_id || !payload.mode || !payload.effective_mode) {
-      throw new Error(String(payload.error || "Remote shell approval mode failed"));
+    if (!payload.success || !payload.status) {
+      throw new Error(String(payload.error || "Remote session status failed"));
     }
-    return {
-      session_id: payload.session_id,
-      mode: payload.mode,
-      effective_mode: payload.effective_mode,
-    };
+    return payload.status;
   }
 
-  async set_approval_mode(
+  async set(
     session_id: string,
-    input: SetSessionApprovalModeInput,
-  ): Promise<SessionApprovalModeSnapshot> {
-    const payload = await read_http_json<SessionApprovalModeSnapshot & {
+    input: RemoteSessionSetInput,
+  ): Promise<void> {
+    const payload = await read_http_json<{
       success?: boolean;
       error?: string;
-    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/approval-mode`, {
+      queued?: boolean;
+    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/set`, {
       method: "POST",
       headers: this.headers({
         "Content-Type": "application/json",
       }),
-      body: JSON.stringify({ mode: input.mode }),
+      body: JSON.stringify(input),
     });
-    if (
-      payload.success !== true ||
-      !payload.session_id ||
-      !payload.mode ||
-      !payload.effective_mode
-    ) {
-      throw new Error(String(payload.error || "Remote shell approval mode update failed"));
+    if (payload.success !== true || payload.queued !== true) {
+      throw new Error(String(payload.error || "Remote session set failed"));
     }
-    return {
-      session_id: payload.session_id,
-      mode: payload.mode,
-      effective_mode: payload.effective_mode,
-    };
   }
 
   async respond(

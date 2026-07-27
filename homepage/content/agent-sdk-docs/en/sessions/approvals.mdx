@@ -73,8 +73,13 @@ await session.respond({
 ## Shell approval mode
 
 ```ts
-const current = await session.approval_mode();
-const queued = await session.set_approval_mode({ mode: "always-allow" });
+const current = await session.status();
+
+await session.set({
+  security: {
+    approval_mode: "always-allow",
+  },
+});
 ```
 
 | Mode | Behavior |
@@ -85,11 +90,15 @@ const queued = await session.set_approval_mode({ mode: "always-allow" });
 Approval mode is a Shell Adapter execution policy, not general Interaction state. It does not
 change the sandbox, affect other Sessions, or resolve already-pending Interactions.
 
-`set_approval_mode()` accepts the configured value into the Session's ordered input queue. The
-current Provider request and Tool callbacks keep their captured policy; the new mode becomes
-effective at the next Session Step checkpoint. The returned snapshot exposes `mode` as the
-configured value and `effective_mode` as the execution value. When they differ, the change is
-still queued. If the current Turn has no next Step, the command is applied before the next prompt.
+`set()` accepts the configured value and appends one `SessionCommand` to the Session's ordered input
+queue. The current Provider request and Tool callbacks keep their captured policy; the new mode
+becomes effective at the next Session Step checkpoint. If the current Turn has no next Step, the
+command is applied before the next prompt.
+
+Read the projection with `status()`: `security.approval_mode` is the configured value and
+`security.effective_approval_mode` is the execution value. When they differ, the update is still
+queued. After the Command commits, the Session persists a completed `Session configuration updated`
+Action.
 
 ## UI implementation details
 

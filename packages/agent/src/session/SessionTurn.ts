@@ -126,6 +126,11 @@ export class SessionTurn {
     return this.require_active_turn().turn_id;
   }
 
+  /** 返回当前 Active Turn 标识；Session 空闲时返回 undefined。 */
+  current_turn_id(): string | undefined {
+    return this.active_turn?.turn_id;
+  }
+
   /**
    * 返回当前 actor prompt 调度器是否仍处于活跃态。
    *

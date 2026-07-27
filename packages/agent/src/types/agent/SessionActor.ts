@@ -18,8 +18,10 @@ import type {
   AgentSessionForkInput,
   AgentSessionInfo,
   AgentSessionSetInput,
+  AgentSessionStatus,
   AgentSessionSummaryPage,
   AgentSessionSystemSnapshot,
+  RemoteSessionSetInput,
 } from "@/types/agent/SessionTypes.js";
 import type {
   SessionMutationSubscriber,
@@ -27,10 +29,8 @@ import type {
 } from "@/types/session/SessionMutation.js";
 import type {
   RespondSessionInteractionInput,
-  SessionApprovalModeSnapshot,
   SessionInteractionResult,
   SessionPendingInteraction,
-  SetSessionApprovalModeInput,
 } from "@/types/session/SessionInteraction.js";
 import type {
   ListSessionMessagesInput,
@@ -102,11 +102,8 @@ export interface AgentSessionActor {
   /** 列出当前 Session 正在等待用户响应的 Interaction。 */
   interactions(): Promise<SessionPendingInteraction[]>;
 
-  /** 读取当前 Session 的工具审批模式。 */
-  approval_mode(): Promise<SessionApprovalModeSnapshot>;
-
-  /** 把当前 Session 的工具审批模式更新加入有序输入队列。 */
-  set_approval_mode(input: SetSessionApprovalModeInput): Promise<SessionApprovalModeSnapshot>;
+  /** 读取当前 Session 的运行与安全状态。 */
+  status(): Promise<AgentSessionStatus>;
 
   /** 提交当前 Session 的 Interaction 用户响应。 */
   respond(input: RespondSessionInteractionInput): Promise<SessionInteractionResult>;
@@ -139,6 +136,9 @@ export interface AgentSession extends AgentSessionActor {
  * 远程 Agent 返回的公开 session 接口。
  */
 export interface RemoteAgentSession extends AgentSessionActor {
+  /** 写入当前远程 Session 的可序列化动态配置。 */
+  set(input: RemoteSessionSetInput): Promise<void>;
+
   /** 从当前远程 session 创建一个分叉会话。 */
   fork(input?: AgentSessionForkInput | string): Promise<RemoteAgentSession>;
 }

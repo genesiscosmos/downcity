@@ -8,15 +8,15 @@ import type {
   AgentSessionConfigSnapshot,
   AgentSessionForkInput,
   AgentSessionInfo,
+  AgentSessionStatus,
   AgentSessionSystemSnapshot,
+  RemoteSessionSetInput,
 } from "@/types/agent/SessionTypes.js";
 import type { RemoteAgentSession } from "@/types/agent/SessionActor.js";
 import type {
   RespondSessionInteractionInput,
-  SessionApprovalModeSnapshot,
   SessionInteractionResult,
   SessionPendingInteraction,
-  SetSessionApprovalModeInput,
 } from "@/types/session/SessionInteraction.js";
 import type {
   SessionMutation,
@@ -136,14 +136,14 @@ export class RemoteSession implements RemoteAgentSession {
     return await this.transport.interactions(this.id);
   }
 
-  /** 读取当前远程 Session 的工具审批模式。 */
-  async approval_mode(): Promise<SessionApprovalModeSnapshot> {
-    return await this.transport.approval_mode(this.id);
+  /** 读取当前远程 Session 的运行与安全状态。 */
+  async status(): Promise<AgentSessionStatus> {
+    return await this.transport.status(this.id);
   }
 
-  /** 更新当前远程 Session 的工具审批模式。 */
-  async set_approval_mode(input: SetSessionApprovalModeInput): Promise<SessionApprovalModeSnapshot> {
-    return await this.transport.set_approval_mode(this.id, input);
+  /** 更新当前远程 Session 的可序列化动态配置。 */
+  async set(input: RemoteSessionSetInput): Promise<void> {
+    await this.transport.set(this.id, input);
   }
 
   /** 提交当前远程 Session 的 Interaction 用户响应。 */

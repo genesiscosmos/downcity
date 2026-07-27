@@ -69,14 +69,56 @@ unsubscribe();
 
 Message 和 Mutation 不要混用：Message 是可恢复的状态快照；Mutation 是把状态变化及时送到客户端的协议。
 
+## Session 运行模型
+
+Session 是输入排序和持久化的一致性边界。Prompt、模型修改、环境更新、Plugin 更新、
+审批模式修改和 Compact 都在服务端进入同一个 FIFO，在 Turn 开始前或 Model Step
+检查点按提交顺序执行。远程客户端只调用 Session API，不在客户端复制调度逻辑。
+
+```mermaid
+flowchart TB
+    App["SDK / Remote Client"] --> Session["Session<br/>API 与生命周期边界"]
+
+    subgraph Runtime["权威 Session Runtime"]
+        Session --> Queue["有序输入队列<br/>SessionCommand FIFO"]
+        Queue --> Turn["Turn 调度器<br/>唯一消费者"]
+        Turn --> Executor["Executor<br/>Model / Tool Step Loop"]
+        Session --> Security["Security Policy<br/>configured / effective"]
+        Security --> Executor
+        Session --> Status["status() 只读投影"]
+        Turn -.-> Status
+        Security -.-> Status
+
+        Session --> Interactions["Interactions<br/>Approval / Question waiter"]
+        Session --> Messages["SessionMessages<br/>Canonical 状态"]
+        Executor --> Messages
+        Executor --> Interactions
+
+        Turn -->|"Command 完成信息"| Messages
+        Messages --> Store["Message Store"]
+        Messages --> Events["Session Mutation"]
+    end
+
+    Session -->|"respond() 直接兑现 waiter"| Interactions
+    Session -->|"stop() 立即中断"| Turn
+    Events --> App
+```
+
+只有需要 FIFO 顺序和 Step 检查点的操作才进入队列。`respond()` 必须立即恢复当前
+Interaction，`stop()` 必须立即中断当前 Turn，因此两者不会排队。
+
+Command 可以声明成功后的 Action 完成信息。Session 先执行领域修改，再持久化
+canonical Action Message；Message 提交成功后才发布对应 Mutation。完成信息落盘失败
+不会回滚已经生效的配置，也不会发布并不存在的成功事件。
+
 ## 本地与远程的差异
 
-两者都有 `prompt()`、`stop()`、`compact()`、`subscribe()`、`messages()`、`interactions()`、`respond()` 和 `fork()`。本地 Session 还提供 `syncshot()` 手动重新生成 system，以及 `snapshot()` 显式持久化完整 system；远程 Session 的 system 刷新与持久化策略由服务端宿主管理。
+两者都有 `prompt()`、`stop()`、`compact()`、`subscribe()`、`messages()`、`interactions()`、`respond()`、`status()`、`set({ security })` 和 `fork()`。本地 Session 还提供 `set({ model })`、`syncshot()` 与 `snapshot()`；远程 Session 的模型和 system 策略由服务端宿主管理。
 
 | 场景 | 配置模型 |
 | --- | --- |
 | 本地 `AgentSession` | `session.set({ model })`，接收 `AgentModel` 实例 |
-| `RemoteAgentSession` | 不提供模型配置方法；远程客户端只执行 Session |
+| `RemoteAgentSession` | `session.set({ security })`；不接受模型实例 |
 | Downcity Agent 项目 | CLI 解析 `execution.modelId`，在构造 Agent 时传入 `AgentModel` 实例 |
 
 远程客户端不参与模型选择；模型 ID、默认值和恢复策略都属于服务端宿主。
@@ -88,7 +130,7 @@ Message 和 Mutation 不要混用：Message 是可恢复的状态快照；Mutati
 - 读取与实时：`session.messages()`、`session.get_info()`、`session.subscribe()`
 - 运行控制：`session.stop()`、`session.set()`、[`session.compact()`](/zh/agent-sdk-docs/sessions/compact)、`session.fork()`
 - system 刷新与持久化：[`session.syncshot()`](/zh/agent-sdk-docs/sessions/syncshot)、[`session.snapshot()`](/zh/agent-sdk-docs/sessions/snapshot)
-- 工具审批：`session.interactions()`、`session.respond()`、`session.approval_mode()`
+- 工具审批：`session.interactions()`、`session.respond()`、`session.set({ security })`、`session.status()`
 - 调试上下文：`session.system()`、[元数据与落盘](/zh/agent-sdk-docs/sessions/metadata-and-storage)
 
 ## 下一步

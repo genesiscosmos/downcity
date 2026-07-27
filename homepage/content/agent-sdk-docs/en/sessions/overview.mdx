@@ -69,14 +69,61 @@ On failure, the canonical `error` Message carries the user-visible error. Use `t
 
 Do not treat Messages and Mutations as interchangeable. Messages are recoverable state snapshots; Mutations deliver state changes to a live client.
 
+## Session runtime model
+
+A Session is the ordering and persistence boundary for its inputs. Prompts, model changes,
+environment updates, plugin updates, approval-mode changes, and compaction enter one
+server-side FIFO. They execute in submission order before a Turn starts or at a Model Step
+checkpoint. Remote clients call Session APIs and do not duplicate this scheduling logic.
+
+```mermaid
+flowchart TB
+    App["SDK / Remote Client"] --> Session["Session<br/>API and lifecycle boundary"]
+
+    subgraph Runtime["Authoritative Session Runtime"]
+        Session --> Queue["Ordered input queue<br/>SessionCommand FIFO"]
+        Queue --> Turn["Turn scheduler<br/>sole consumer"]
+        Turn --> Executor["Executor<br/>Model / Tool Step Loop"]
+        Session --> Security["Security Policy<br/>configured / effective"]
+        Security --> Executor
+        Session --> Status["status() read projection"]
+        Turn -.-> Status
+        Security -.-> Status
+
+        Session --> Interactions["Interactions<br/>Approval / Question waiter"]
+        Session --> Messages["SessionMessages<br/>Canonical state"]
+        Executor --> Messages
+        Executor --> Interactions
+
+        Turn -->|"Command completion"| Messages
+        Messages --> Store["Message Store"]
+        Messages --> Events["Session Mutation"]
+    end
+
+    Session -->|"respond() resolves the waiter directly"| Interactions
+    Session -->|"stop() interrupts immediately"| Turn
+    Events --> App
+```
+
+Only operations that require FIFO ordering and Step checkpoints enter the queue. `respond()`
+must resume the current Interaction immediately, while `stop()` must interrupt the active Turn,
+so neither operation is queued.
+
+A Command may declare an Action completion to persist after successful execution. The Session
+applies the domain change first and then persists the canonical Action Message. Its Mutation is
+published only after that Message commits. A completion-persistence failure does not roll back an
+already applied configuration and does not publish a success event that has no persisted state.
+
 ## Local versus remote
 
-Both expose `prompt()`, `stop()`, `compact()`, `subscribe()`, `messages()`, `interactions()`, `respond()`, and `fork()`. Local Sessions additionally provide `syncshot()` to regenerate the system and `snapshot()` to explicitly persist it; remote refresh and persistence policy belongs to the server host.
+Both expose `prompt()`, `stop()`, `compact()`, `subscribe()`, `messages()`, `interactions()`,
+`respond()`, `status()`, `set({ security })`, and `fork()`. Local Sessions additionally provide
+`set({ model })`, `syncshot()`, and `snapshot()`; remote model and system policy belongs to the server host.
 
 | Context | Configure a model |
 | --- | --- |
 | Local `AgentSession` | `session.set({ model })`; accepts an `AgentModel` instance |
-| `RemoteAgentSession` | No model configuration API; the remote client only executes the Session |
+| `RemoteAgentSession` | `session.set({ security })`; does not accept model instances |
 | Downcity Agent project | CLI resolves `execution.modelId` and passes an `AgentModel` instance to the Agent |
 
 Remote clients do not participate in model selection. IDs, defaults, and recovery belong to the server host.
@@ -88,7 +135,7 @@ Remote clients do not participate in model selection. IDs, defaults, and recover
 - Read and stream: `session.messages()`, `session.get_info()`, and `session.subscribe()`
 - Control execution: `session.stop()`, `session.set()`, [`session.compact()`](/en/agent-sdk-docs/sessions/compact), and `session.fork()`
 - Refresh and persist system: [`session.syncshot()`](/en/agent-sdk-docs/sessions/syncshot), [`session.snapshot()`](/en/agent-sdk-docs/sessions/snapshot)
-- Tool approval: `session.interactions()`, `session.respond()`, and `session.approval_mode()`
+- Tool approval: `session.interactions()`, `session.respond()`, `session.set({ security })`, and `session.status()`
 - Inspect context: `session.system()` and [metadata and storage](/en/agent-sdk-docs/sessions/metadata-and-storage)
 
 ## Next

@@ -19,6 +19,7 @@ import type {
   AgentSessionConfigSnapshot,
   AgentSessionForkInput,
   AgentSessionInfo,
+  AgentSessionStatus,
   AgentSessionSetInput,
   AgentSessionSystemBlock,
   AgentSessionSystemSnapshot,
@@ -33,10 +34,9 @@ import type {
 } from "@/types/session/SessionMutation.js";
 import type {
   RespondSessionInteractionInput,
-  SessionApprovalModeSnapshot,
+  SessionApprovalMode,
   SessionInteractionResult,
   SessionPendingInteraction,
-  SetSessionApprovalModeInput,
 } from "@/types/session/SessionInteraction.js";
 import type {
   ListSessionMessagesInput,
@@ -96,7 +96,7 @@ export class Session implements AgentSession {
   private readonly session_interactions: SessionInteractions;
   private readonly shell_approval_adapter: SessionShellApprovalAdapter;
   /** 已被 Session 接受、等待或已经在 Step 检查点提交的审批模式。 */
-  private configured_approval_mode: SessionApprovalModeSnapshot["mode"] = "ask";
+  private configured_approval_mode: SessionApprovalMode = "ask";
   private readonly local_state: SessionLocalState;
   private readonly get_workspace_env: SessionOptions["get_workspace_env"];
   private readonly get_agent_model: SessionOptions["get_agent_model"];
@@ -265,22 +265,49 @@ export class Session implements AgentSession {
    * 写入当前 session 默认配置。
    */
   async set(input: AgentSessionSetInput): Promise<void> {
-    const configured = await this.state.set(input);
-    if (!configured.model_change) return;
-    const model_change = configured.model_change;
+    if (!input.model && !input.security) {
+      throw new Error("session.set requires model or security");
+    }
+    const requested_approval_mode = input.security?.approval_mode;
+    if (
+      requested_approval_mode !== undefined &&
+      requested_approval_mode !== "ask" &&
+      requested_approval_mode !== "always-allow"
+    ) {
+      throw new Error("security.approval_mode must be ask or always-allow");
+    }
+    const model_config = input.model
+      ? await this.state.set_model(input.model)
+      : undefined;
+    const next_approval_mode = requested_approval_mode;
+    const security_changed = Boolean(
+      next_approval_mode && next_approval_mode !== this.configured_approval_mode,
+    );
+    if (next_approval_mode !== undefined) {
+      this.configured_approval_mode = next_approval_mode;
+    }
+    if (!model_config && !security_changed) return;
+    const changed_fields = [
+      ...(model_config
+        ? [`model: ${String(model_config.model_label || "configured")}`]
+        : []),
+      ...(security_changed
+        ? [`security.approval_mode: ${String(next_approval_mode)}`]
+        : []),
+    ];
     this.enqueue_command({
       execute: async () => {
-        this.state.apply_model_config(model_change.config);
+        if (model_config) this.state.apply_model_config(model_config);
+        if (security_changed && next_approval_mode) {
+          this.shell_approval_adapter.set_effective_mode(next_approval_mode);
+        }
       },
-      ...(model_change.action_id && model_change.action_title
-        ? {
-            completion: {
-              type: "action" as const,
-              id: model_change.action_id,
-              title: model_change.action_title,
-            },
-          }
-        : {}),
+      completion: {
+        type: "action",
+        id: `session-config:${this.id}:${Date.now()}:${generate_id()}`,
+        title: "Session configuration updated",
+        description: changed_fields.join("; "),
+      },
     });
   }
 
@@ -379,33 +406,17 @@ export class Session implements AgentSession {
     return this.session_interactions.list();
   }
 
-  /** 读取当前 Session 的工具审批模式。 */
-  async approval_mode(): Promise<SessionApprovalModeSnapshot> {
-    return this.get_approval_mode_snapshot();
-  }
-
-  /** 把当前 Session 的工具审批模式更新加入有序输入队列。 */
-  async set_approval_mode(input: SetSessionApprovalModeInput): Promise<SessionApprovalModeSnapshot> {
-    await this.state.ensure_runnable();
-    const mode = input.mode === "always-allow" ? "always-allow" : "ask";
-    if (mode === this.configured_approval_mode) {
-      return this.get_approval_mode_snapshot();
-    }
-    this.configured_approval_mode = mode;
-    this.enqueue_command({
-      execute: async () => {
-        this.shell_approval_adapter.set_effective_mode(mode);
-      },
-    });
-    return this.get_approval_mode_snapshot();
-  }
-
-  /** 构建 configured 与 effective 审批模式的统一公开快照。 */
-  private get_approval_mode_snapshot(): SessionApprovalModeSnapshot {
+  /** 读取当前 Session 的运行与安全状态。 */
+  async status(): Promise<AgentSessionStatus> {
+    const active_turn_id = this.session_turn.current_turn_id();
     return {
       session_id: this.id,
-      mode: this.configured_approval_mode,
-      effective_mode: this.shell_approval_adapter.get_effective_mode(),
+      state: active_turn_id || this.executor.is_executing() ? "running" : "idle",
+      ...(active_turn_id ? { active_turn_id } : {}),
+      security: {
+        approval_mode: this.configured_approval_mode,
+        effective_approval_mode: this.shell_approval_adapter.get_effective_mode(),
+      },
     };
   }
 
@@ -526,10 +537,8 @@ export class Session implements AgentSession {
       await forked.initialize();
       const session_config = this.state.get_config();
       if (session_config.model) {
-        await forked.state.set(
-          { model: session_config.model },
-          { emit_action: false },
-        );
+        const forked_config = await forked.state.set_model(session_config.model);
+        forked.state.apply_model_config(forked_config);
       }
       await forked.session_messages.import_messages(fork_messages);
       await this.emit_action_event({

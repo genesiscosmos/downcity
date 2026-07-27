@@ -75,10 +75,12 @@ await session.respond({
 ## Shell 审批模式
 
 ```ts
-const current = await session.approval_mode();
+const current = await session.status();
 
-const queued = await session.set_approval_mode({
-  mode: "always-allow",
+await session.set({
+  security: {
+    approval_mode: "always-allow",
+  },
 });
 ```
 
@@ -90,10 +92,13 @@ const queued = await session.set_approval_mode({
 审批模式是 Shell Adapter 的执行策略，不是通用 Interaction 状态。它不改变 sandbox，
 不影响其他 Session，也不会处理已经 pending 的 Interaction。
 
-`set_approval_mode()` 会把 configured 值加入 Session 有序输入队列。当前 Provider 请求与
-Tool callback 继续使用已经捕获的策略，新模式在下一个 Session Step 检查点生效。返回快照中
-`mode` 表示 configured 值，`effective_mode` 表示执行面当前值；两者不同时表示修改仍在排队。
-如果当前 Turn 没有下一个 Step，该命令会在下一条 prompt 开始前提交。
+`set()` 会接受 configured 值，并把一个 `SessionCommand` 加入 Session 有序输入队列。
+当前 Provider 请求与 Tool callback 继续使用已经捕获的策略，新模式在下一个 Session Step
+检查点生效。如果当前 Turn 没有下一个 Step，该命令会在下一条 prompt 开始前提交。
+
+通过 `status()` 读取状态：`security.approval_mode` 是 configured 值，
+`security.effective_approval_mode` 是执行面当前值；两者不同时表示修改仍在排队。Command
+成功提交后，Session 会持久化一条 `Session configuration updated` completed Action。
 
 ## UI 实现要点
 

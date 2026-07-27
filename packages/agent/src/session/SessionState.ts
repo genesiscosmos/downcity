@@ -15,19 +15,15 @@ import { resolve_system_timezone } from "@/session/storage/Metadata.js";
 import { ensure_session_title } from "@/session/SessionTitle.js";
 import type {
   AgentSessionConfigSnapshot,
-  AgentSessionSetInput,
 } from "@/types/agent/SessionTypes.js";
+import type { AgentModel } from "@/agent/AgentModel.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import { generate_id } from "@/utils/Id.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import { SessionMessages } from "@/session/SessionMessages.js";
 import { to_executor_history } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
-import type {
-  SessionConfiguredStateResult,
-  SessionSetOptions,
-  SessionStateOptions,
-} from "@/types/session/SessionState.js";
+import type { SessionStateOptions } from "@/types/session/SessionState.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 
 /**
@@ -145,37 +141,14 @@ export class SessionState {
   /**
    * 写入当前 session 配置。
    */
-  async set(
-    input: AgentSessionSetInput,
-    options?: SessionSetOptions,
-  ): Promise<SessionConfiguredStateResult> {
-    const should_emit_action = options?.emit_action !== false;
-    const previous_model_label = this.state.session_config.model_label;
-    const next_model = input.model;
-    const next_model_label = next_model
-      ? infer_agent_model_label(next_model)
-      : undefined;
-    const previous_model_name = String(previous_model_label || "").trim();
-    const next_model_name = String(next_model_label || "").trim();
-    const should_emit_model_switch_action = Boolean(
-      next_model &&
-        should_emit_action &&
-        this.state.session_config.model &&
-        previous_model_name &&
-        next_model_name &&
-        previous_model_name !== next_model_name,
-    );
-    const action_id = `model-switching:${this.session_id}:${Date.now()}:${generate_id()}`;
-
+  async set_model(model: AgentModel): Promise<AgentSessionConfigSnapshot> {
+    const next_model_label = infer_agent_model_label(model);
     const next_config: AgentSessionConfigSnapshot = {
       ...this.state.session_config,
+      model,
+      model_label: next_model_label,
+      model_context_window: read_agent_model_context_window(model),
     };
-    if (next_model) {
-      next_config.model = next_model;
-      next_config.model_label = next_model_label;
-      next_config.model_context_window =
-        read_agent_model_context_window(next_model);
-    }
     const metadata = await this.store.read_metadata();
     await this.store.write_metadata({
       ...metadata,
@@ -184,24 +157,7 @@ export class SessionState {
       ...(next_model_label ? { model_label: next_model_label } : {}),
     });
     this.state.session_config = next_config;
-
-    if (options?.emit_action === false) {
-      this.apply_model_config(next_config);
-      return {};
-    }
-
-    return {
-      model_change: {
-        config: next_config,
-        ...(should_emit_model_switch_action
-          ? {
-              action_id,
-              action_title:
-                `Session model switched from ${previous_model_name} to ${next_model_name}`,
-            }
-          : {}),
-      },
-    };
+    return next_config;
   }
 
   /** 在 Session Step 检查点提交模型配置。 */

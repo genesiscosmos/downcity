@@ -6,7 +6,7 @@
  * - 会话消息直接使用 @downcity/agent 的 canonical SessionMessage，不在此复制。
  */
 
-import type { SessionApprovalModeSnapshot } from "@downcity/agent";
+import type { AgentSessionSecurityStatus } from "@downcity/agent";
 
 /** Agent Chat 审批面板所需的规范化请求详情。 */
 export interface AgentChatApprovalView {
@@ -49,7 +49,7 @@ export interface AppState {
   session_id: string;
 
   /** 当前 Session configured 与 effective 审批模式快照；加载前为空。 */
-  approval_mode?: SessionApprovalModeSnapshot;
+  security?: AgentSessionSecurityStatus;
 
   /**
    * 当前 session 可读标题。

@@ -10,6 +10,8 @@ The most common input and output objects are:
 - `AgentSession`
 - `RemoteAgentSession`
 - `AgentSessionSetInput`
+- `RemoteSessionSetInput`
+- `AgentSessionStatus`
 - `AgentSessionPromptInput`
 - `AgentSessionTurnHandle`
 - `AgentSessionTurnResult`
@@ -28,6 +30,10 @@ The most common input and output objects are:
 | Waiting for one execution to finish | `AgentSessionTurnHandle` / `AgentSessionTurnResult` |
 | Displaying or responding to user interaction | `SessionPendingInteraction` / `SessionInteractionResult` |
 | Sidebar and selected Session header | `AgentSessionSummary` / `AgentSessionInfo` |
+| Runtime and security state | `AgentSessionStatus` |
+
+`AgentSessionStatus.security` exposes both the configured `approval_mode` and the checkpoint-committed
+`effective_approval_mode`. When they differ, the configuration is still waiting in the Session Queue.
 
 ## `AgentSessionPromptInput`
 

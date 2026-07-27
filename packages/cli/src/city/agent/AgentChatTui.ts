@@ -10,8 +10,9 @@ import { AgentChatTuiCoordinator } from "@/city/agent/tui/AgentChatTuiCoordinato
 import type { AgentChatInteractiveRendererPort } from "@/city/types/AgentChatInteractive.js";
 import type { AgentChatSessionSummaryView } from "@/city/agent/AgentChatTypes.js";
 import type {
+  AgentSessionSecurityStatus,
+  AgentSessionStatus,
   SessionApprovalMode,
-  SessionApprovalModeSnapshot,
   SessionMessage,
 } from "@downcity/agent";
 
@@ -33,17 +34,17 @@ export async function run_agent_chat_tui(params: {
   load_session_context: (session_id: string) => Promise<{
     title: string;
     messages: SessionMessage[];
-    approval_mode: SessionApprovalModeSnapshot;
+    security: AgentSessionSecurityStatus;
   }>;
-  /** 读取指定 Session configured 与 effective 审批模式。 */
-  get_approval_mode: (
+  /** 读取指定 Session 的运行与安全状态。 */
+  get_session_status: (
     session_id: string,
-  ) => Promise<SessionApprovalModeSnapshot>;
+  ) => Promise<AgentSessionStatus>;
   /** 更新指定 Session 后续高风险操作使用的审批模式。 */
-  set_approval_mode: (
+  set_session_security: (
     session_id: string,
     mode: SessionApprovalMode,
-  ) => Promise<SessionApprovalModeSnapshot>;
+  ) => Promise<void>;
   /** 执行一轮对话。 */
   run_turn: (input: {
     session_id: string;
@@ -70,8 +71,8 @@ export async function run_agent_chat_tui(params: {
     list_sessions: params.list_sessions,
     create_session: params.create_session,
     load_session_context: params.load_session_context,
-    get_approval_mode: params.get_approval_mode,
-    set_approval_mode: params.set_approval_mode,
+    get_session_status: params.get_session_status,
+    set_session_security: params.set_session_security,
     run_turn: params.run_turn,
     respond_interaction: params.respond_interaction,
   });

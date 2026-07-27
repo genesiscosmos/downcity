@@ -16,8 +16,10 @@ import type {
   AgentCleanArchiveResult,
   AgentSessionForkInput,
   AgentSessionInfo,
+  AgentSessionStatus,
   AgentSessionSummaryPage,
   AgentSessionSystemSnapshot,
+  RemoteSessionSetInput,
 } from "@/types/agent/SessionTypes.js";
 import type {
   RemoteAgentPluginActionInput,
@@ -26,10 +28,8 @@ import type {
 import type { SessionMutation } from "@/types/session/SessionMutation.js";
 import type {
   RespondSessionInteractionInput,
-  SessionApprovalModeSnapshot,
   SessionInteractionResult,
   SessionPendingInteraction,
-  SetSessionApprovalModeInput,
 } from "@/types/session/SessionInteraction.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
@@ -83,13 +83,10 @@ export type RemoteSessionTransport = {
   ): Promise<AgentSessionInfo>;
   /** 列出指定 Session 正在等待用户响应的 Interaction。 */
   interactions(session_id: string): Promise<SessionPendingInteraction[]>;
-  /** 读取指定 Session 的工具审批模式。 */
-  approval_mode(session_id: string): Promise<SessionApprovalModeSnapshot>;
-  /** 更新指定 Session 的工具审批模式。 */
-  set_approval_mode(
-    session_id: string,
-    input: SetSessionApprovalModeInput,
-  ): Promise<SessionApprovalModeSnapshot>;
+  /** 读取指定 Session 的运行与安全状态。 */
+  status(session_id: string): Promise<AgentSessionStatus>;
+  /** 更新指定 Session 的可序列化动态配置。 */
+  set(session_id: string, input: RemoteSessionSetInput): Promise<void>;
   /** 提交指定 Session 的 Interaction 用户响应。 */
   respond(
     session_id: string,

@@ -103,25 +103,25 @@ export async function chatCommand(options: AgentChatCliOptions): Promise<void> {
         }),
       load_session_context: async (session_id) => {
         const session = await interactive.remote_agent.sessions.get(session_id);
-        const [info, messages, approval_mode] = await Promise.all([
+        const [info, messages, status] = await Promise.all([
           session.get_info(),
           session.messages(),
-          session.approval_mode(),
+          session.status(),
         ]);
         const title = info.title?.trim() || "Untitled";
         return {
           title,
           messages: messages.items,
-          approval_mode,
+          security: status.security,
         };
       },
-      get_approval_mode: async (session_id) => {
+      get_session_status: async (session_id) => {
         const session = await interactive.remote_agent.sessions.get(session_id);
-        return await session.approval_mode();
+        return await session.status();
       },
-      set_approval_mode: async (session_id, mode) => {
+      set_session_security: async (session_id, mode) => {
         const session = await interactive.remote_agent.sessions.get(session_id);
-        return await session.set_approval_mode({ mode });
+        await session.set({ security: { approval_mode: mode } });
       },
       respond_interaction: async (session_id, interaction_id, decision) => {
         const session = await interactive.remote_agent.sessions.get(session_id);

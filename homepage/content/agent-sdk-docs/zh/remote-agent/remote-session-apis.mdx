@@ -13,7 +13,8 @@ description: RemoteAgent 下 session 可用的核心方法和能力边界
 - `messages()`
 - `system()`
 - `interactions()` / `respond()`
-- `approval_mode()` / `set_approval_mode()`
+- `status()` / `set({ security })`
+- `stop()` / `compact()`
 - `fork()`
 
 这些 API 尽量和本地 session 的使用面保持一致，方便你在本地和远程模式之间复用同一套心智模型。
@@ -62,6 +63,18 @@ const messages = await session.messages();
 ```ts
 const system = await session.system();
 ```
+
+## 状态与安全策略
+
+```ts
+const status = await session.status();
+
+await session.set({
+  security: { approval_mode: "always-allow" },
+});
+```
+
+远程 Session 只能写入可序列化的安全配置，不能传输本地模型实例。
 
 ## 分叉
 

@@ -104,11 +104,11 @@ Shell approval mode 只作用于当前 session：
 - `always-allow`：当前 session 内自动通过 shell approval，不再弹出新的 pending approval。
 
 ```ts
-await session.set_approval_mode({
-  mode: "always-allow",
+await session.set({
+  security: { approval_mode: "always-allow" },
 });
 
-const current = await session.approval_mode();
+const current = await session.status();
 ```
 
 `always-allow` 不改变 sandbox 模式，只是把原本需要手动批准的 unrestricted 请求自动记录为 approved。已有 pending approval 不会被自动批准。

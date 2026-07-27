@@ -6,7 +6,6 @@
 
 import type { LanguageModel } from "ai";
 import type { SessionMessages } from "@/session/SessionMessages.js";
-import type { AgentSessionConfigSnapshot } from "@/types/agent/SessionTypes.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import type { SessionMutation } from "@/types/session/SessionMutation.js";
 import type { Logger } from "@/utils/logger/Logger.js";
@@ -32,26 +31,4 @@ export interface SessionStateOptions {
   get_model: () => LanguageModel | undefined;
   /** 发布 Session Mutation 的函数。 */
   publish_event: (mutation: SessionMutation) => void;
-}
-
-/** Session 配置写入选项。 */
-export interface SessionSetOptions {
-  /** 是否为本次配置变化生成 Model Switching Action。 */
-  emit_action?: boolean;
-}
-
-/** 等待在 Session Step 检查点提交的模型变化。 */
-export interface SessionConfiguredModelChange {
-  /** 下一 Session Step 使用的完整配置快照。 */
-  config: AgentSessionConfigSnapshot;
-  /** 配置提交后需要写入的可选 Action 标识。 */
-  action_id?: string;
-  /** 配置提交后需要写入的可选 Action 标题。 */
-  action_title?: string;
-}
-
-/** Session 配置成功写入后的领域结果。 */
-export interface SessionConfiguredStateResult {
-  /** 需要由 Session 创建 Command 的模型变化。 */
-  model_change?: SessionConfiguredModelChange;
 }
