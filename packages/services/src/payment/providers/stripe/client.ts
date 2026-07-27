@@ -95,6 +95,10 @@ export async function verifyStripeSignature(
   const timestamp = parts.t;
   const signature = parts.v1;
   if (!timestamp || !signature) return false;
+  const timestamp_seconds = Number(timestamp);
+  if (!Number.isFinite(timestamp_seconds) || Math.abs(Date.now() / 1000 - timestamp_seconds) > 300) {
+    return false;
+  }
 
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -126,9 +130,6 @@ export function readMetadata(value: unknown): Record<string, unknown> {
     : {};
 }
 
-/**
- * 读取支付 provider 需要的 USD cents 金额。
- */
 /**
  * 读取 JSON 响应并兜底为空对象。
  */

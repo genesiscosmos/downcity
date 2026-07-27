@@ -178,8 +178,30 @@ export interface PaymentProvider {
 export interface PaymentServiceOptions {
   /** 当前 City 启用的支付 provider。 */
   providers: PaymentProvider[];
+  /** 根据用户提交的自由充值金额，在服务端解析本次应发放的 Credits。 */
+  resolve_topup(input: PaymentTopupResolutionInput):
+    | PaymentTopupResolution
+    | Promise<PaymentTopupResolution>;
   /** 支付订单首次确认 paid 后触发；接入方应使用 payment_id 幂等发放 Credits。 */
   on_paid(record: PaymentRecord): Promise<void>;
+}
+
+/** 服务端 Credits 结算函数的输入。 */
+export interface PaymentTopupResolutionInput {
+  /** 发起充值的用户 ID。 */
+  user_id: string;
+  /** 当前支付 Provider ID。 */
+  provider: string;
+  /** Provider 使用的结算币种。 */
+  currency: string;
+  /** 用户希望支付的金额，单位为结算币种的最小货币单位。 */
+  topup_amount_minor: number;
+}
+
+/** 服务端根据充值金额生成的权益快照。 */
+export interface PaymentTopupResolution {
+  /** 支付成功后应发放的正数 Credits。 */
+  credits: number;
 }
 
 /**
@@ -190,10 +212,8 @@ export interface PaymentCreateCheckoutInput extends Record<string, unknown> {
   method_id?: string;
   /** `method_id` 的别名，方便服务端脚本直接调用。 */
   provider?: string;
-  /** 支付成功后发放的正数 Credits。 */
-  credits: number;
-  /** 支付金额，单位为结算币种的最小货币单位。 */
-  amount_minor: number;
+  /** 自由充值金额，单位为结算币种的最小货币单位。 */
+  topup_amount_minor: number;
   /** 客户端为本次支付意图提供的稳定幂等键。 */
   idempotency_key: string;
   /** 面向用户与审计的订单说明。 */
@@ -220,6 +240,12 @@ export interface PaymentCheckoutCreateResult extends Record<string, unknown> {
   checkout_url: string;
   /** 当前支付状态。 */
   status: PaymentStatus;
+  /** 服务端针对本次支付计算出的 Credits 快照。 */
+  credits: number;
+  /** 实际充值金额，单位为结算币种的最小货币单位。 */
+  topup_amount_minor: number;
+  /** 本次支付使用的结算币种。 */
+  currency: string;
 }
 
 /**

@@ -8,7 +8,12 @@
  */
 
 export { PaymentService } from "./service.js";
-export type { PaymentOrderSnapshot, PaymentServiceOptions } from "./types.js";
+export type {
+  PaymentOrderSnapshot,
+  PaymentServiceOptions,
+  PaymentTopupResolution,
+  PaymentTopupResolutionInput,
+} from "./types.js";
 export { paymentEvents, paymentPayments } from "./schema.js";
 export {
   creemPaymentProvider,

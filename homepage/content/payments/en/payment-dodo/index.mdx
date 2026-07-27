@@ -5,7 +5,7 @@ title: Dodo Payment Provider
 Add `dodoPaymentProvider()` to `PaymentService.providers` and configure the Dodo API key, product ID, and webhook key.
 
 ```ts
-await city.payment.method("dodo").invoke({ credits: 5_000_000, amount_minor: 500, idempotency_key: "order_123" });
+await city.payment.method("dodo").invoke({ topup_amount_minor: 500, idempotency_key: "order_123" });
 ```
 
 PaymentService stores orders and events; Credits receives confirmed credits only from `on_paid`.

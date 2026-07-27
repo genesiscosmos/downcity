@@ -5,7 +5,7 @@ title: Waffo Payment Provider
 将 `waffoPaymentProvider()` 放入 `PaymentService.providers`，配置 Merchant ID、Private Key、Product ID 与 webhook public key。
 
 ```ts
-await city.payment.method("waffo").invoke({ credits: 5_000_000, amount_minor: 500, idempotency_key: "order_123" });
+await city.payment.method("waffo").invoke({ topup_amount_minor: 500, idempotency_key: "order_123" });
 ```
 
 支付确认后由 `on_paid(record)` 幂等发放 Primary Card Credits。

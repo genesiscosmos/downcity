@@ -2,12 +2,11 @@
 title: Creem Payment Provider
 ---
 
-将 `creemPaymentProvider()` 放入 `PaymentService.providers`，配置 `CREEM_API_KEY`、`CREEM_PRODUCT_ID` 和可选的 `CREEM_WEBHOOK_SECRET`。用户创建订单：
+将 `creemPaymentProvider()` 放入 `PaymentService.providers`，必须配置 `CREEM_API_KEY`、`CREEM_PRODUCT_ID` 和 `CREEM_WEBHOOK_SECRET`。`CREEM_PRODUCT_ID` 必须指向一次性、税费包含在价格内的产品，`CREEM_CURRENCY` 必须与该产品币种一致。Payment 会使用服务端订单金额作为 Creem `custom_price`，其有效范围是 100–99,999,999 个最小货币单位。缺少验签密钥时 Provider 不可用。用户创建订单：
 
 ```ts
 await city.payment.method("creem").invoke({
-  credits: 5_000_000,
-  amount_minor: 500,
+  topup_amount_minor: 500,
   idempotency_key: "order_123",
 });
 ```

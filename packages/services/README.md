@@ -40,8 +40,7 @@ const methods = await guest.service("payment").get("methods");
 ```ts
 const checkout = await user.service("payment").action("checkout/create").invoke({
   method_id: "stripe",
-  credits: 5_000_000,
-  amount_minor: 500,
+  topup_amount_minor: 500,
   idempotency_key: "order_123",
 });
 ```
@@ -51,8 +50,7 @@ Creem 支付方式使用同样的调用形态：
 ```ts
 const checkout = await user.service("payment").action("checkout/create").invoke({
   method_id: "creem",
-  credits: 5_000_000,
-  amount_minor: 500,
+  topup_amount_minor: 500,
   idempotency_key: "order_123",
 });
 ```

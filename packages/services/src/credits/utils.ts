@@ -9,6 +9,12 @@ import type {
 } from "./types/Card.js";
 import type { CreditsTransaction, CreditsTransactionEntry } from "./types/Transaction.js";
 
+/** 单个用户允许持有的最大安全 Credits 总量。 */
+export const MAX_USER_CREDITS = Number.MAX_SAFE_INTEGER;
+
+/** 单个用户允许持有的最大有效 Ephemeral Card 数量。 */
+export const MAX_ACTIVE_EPHEMERAL_CARDS = 100;
+
 /** 读取非空文本。 */
 export function read_required_text(value: unknown, label: string): string {
   const normalized = String(value ?? "").trim();
@@ -28,6 +34,19 @@ export function read_credits(value: unknown, label = "credits"): number {
     throw new TypeError(`${label} must be a positive safe integer`);
   }
   return normalized;
+}
+
+/** 读取并统一为 UTC ISO 字符串的未来时间。 */
+export function read_future_iso_timestamp(value: unknown, label = "expires_at"): string {
+  const normalized = read_required_text(value, label);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/u.test(normalized)) {
+    throw new TypeError(`${label} must be an ISO 8601 timestamp`);
+  }
+  const timestamp = Date.parse(normalized);
+  if (!Number.isFinite(timestamp) || timestamp <= Date.now()) {
+    throw new TypeError(`${label} must be a future ISO timestamp`);
+  }
+  return new Date(timestamp).toISOString();
 }
 
 /** 读取查询条数。 */
@@ -59,7 +78,23 @@ export async function stable_id(prefix: string, value: string): Promise<string> 
 
 /** 稳定序列化 JSON。 */
 export function stringify_json(value: Record<string, unknown> | undefined): string {
-  return JSON.stringify(value ?? {});
+  return stable_stringify(value ?? {});
+}
+
+/** 按对象字段名稳定序列化 JSON，用于幂等参数与审计快照。 */
+export function stable_stringify(value: unknown): string {
+  return JSON.stringify(sort_json_value(value));
+}
+
+/** 递归规范化 JSON 对象字段顺序。 */
+function sort_json_value(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sort_json_value);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, sort_json_value(item)]),
+  );
 }
 
 /** 解析 Primary Card 数据库行。 */

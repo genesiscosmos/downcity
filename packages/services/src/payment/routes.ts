@@ -27,6 +27,7 @@ import type {
   PaymentProviderWebhookInput,
   PaymentRecord,
   PaymentStatus,
+  PaymentTopupResolutionInput,
 } from "./types.js";
 
 /**
@@ -66,6 +67,8 @@ const PAYMENT_CHECKOUT_CREATION_LEASE_MS = 5 * 60 * 1000;
  * - 使用 interface 避免 routes.ts 与 service.ts 之间的循环类型依赖。
  */
 interface PaymentServiceLike {
+  /** 根据自由充值金额解析服务端 Credits 快照。 */
+  resolve_topup(input: PaymentTopupResolutionInput): Promise<{ credits: number }>;
   /** 通知接入方处理已确认支付订单。 */
   on_paid(record: PaymentRecord): Promise<void>;
   /** 获取已挂载的 provider 列表。 */
@@ -97,6 +100,9 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
     auth: ["user"],
     async handler(requestCtx) {
       const body = await requestCtx.json<PaymentCreateCheckoutInput>();
+      if ("credits" in body || "amount_minor" in body) {
+        throw new TypeError("checkout only accepts topup_amount_minor; Credits are resolved by the server");
+      }
       const provider = readProvider(providers, body.method_id || body.provider);
       const method = provider.method(ctx);
       if (!method.enabled) {
@@ -105,11 +111,19 @@ export function installPaymentRoutes(service: PaymentServiceLike, ctx: ServiceIn
       }
 
       const user_id = normalizeRequired(requestCtx.user?.user_id, "user_id");
-      const credits = read_positive_integer(body.credits, "credits");
-      const amount_minor = read_positive_integer(body.amount_minor, "amount_minor");
+      const amount_minor = read_positive_integer(body.topup_amount_minor, "topup_amount_minor");
       const idempotency_key = normalizeRequired(body.idempotency_key, "idempotency_key");
       const note = normalizeOptionalText(body.note);
       const payment_id = await create_stable_payment_id(provider.id, user_id, idempotency_key);
+      const current_payment = (await payments.select({ payment_id }))[0];
+      const credits = current_payment
+        ? current_payment.credits
+        : read_positive_integer((await service.resolve_topup({
+          user_id,
+          provider: provider.id,
+          currency: method.currency,
+          topup_amount_minor: amount_minor,
+        })).credits, "resolved credits");
       const reservation = await claim_checkout_creation({
         payments,
         payment_id,
@@ -465,11 +479,14 @@ async function claim_checkout_creation(input: {
   metadata: Record<string, unknown>;
 }): Promise<PaymentCheckoutCreationClaim> {
   let current = (await input.payments.select({ payment_id: input.payment_id }))[0];
+  const current_metadata = current ? read_metadata_json(current.metadata_json) : {};
+  const current_request_metadata = read_metadata(current_metadata.checkout_request_metadata);
   if (current && (
     current.user_id !== input.user_id
-    || current.credits !== input.credits
     || current.amount_minor !== input.amount_minor
     || current.currency !== input.method_currency
+    || current.note !== input.note
+    || stable_stringify(current_request_metadata) !== stable_stringify(input.metadata)
   )) {
     throw new Error("idempotency_key was already used with different payment parameters");
   }
@@ -483,6 +500,7 @@ async function claim_checkout_creation(input: {
   const now = new Date().toISOString();
   const lease_metadata_json = JSON.stringify({
     ...input.metadata,
+    checkout_request_metadata: input.metadata,
     checkout_lease: `${PAYMENT_EVENT_LEASE_PREFIX}${Date.now() + PAYMENT_CHECKOUT_CREATION_LEASE_MS}`,
     provider: input.provider,
   });
@@ -681,6 +699,9 @@ function toCheckoutResult(row: PaymentRecord): PaymentCheckoutCreateResult {
     provider_order_id: row.provider_order_id,
     checkout_url: row.checkout_url,
     status: row.status,
+    credits: row.credits,
+    topup_amount_minor: row.amount_minor,
+    currency: row.currency,
   };
 }
 
@@ -698,6 +719,22 @@ function read_metadata(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+}
+
+/** 稳定序列化 Checkout 请求 metadata，用于完整幂等冲突检查。 */
+function stable_stringify(value: unknown): string {
+  return JSON.stringify(sort_json_value(value));
+}
+
+/** 递归排序 JSON 对象字段。 */
+function sort_json_value(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sort_json_value);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, sort_json_value(item)]),
+  );
 }
 
 /** 解析数据库中的 metadata JSON。 */

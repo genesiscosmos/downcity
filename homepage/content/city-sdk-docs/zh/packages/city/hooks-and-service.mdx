@@ -80,6 +80,7 @@ base.use(new AccountsService({
 
 base.use(credits);
 base.use(new PaymentService({
+  resolve_topup: ({ topup_amount_minor }) => ({ credits: topup_amount_minor * 10_000 }),
   on_paid: async (record) => {
     await credits.topup({
       card: { kind: "primary", user_id: record.user_id },
@@ -137,8 +138,7 @@ const methods = await guest.service("payment").get("methods");
 
 const checkout = await user.service("payment").action("checkout/create").invoke({
   method_id: "stripe",
-  credits: 5_000_000,
-  amount_minor: 500,
+  topup_amount_minor: 500,
   idempotency_key: "order_123",
 });
 ```

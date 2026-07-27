@@ -31,13 +31,16 @@ export function stripePaymentProvider(options: StripePaymentProviderOptions = {}
     label,
     env: [
       { key: "STRIPE_SECRET_KEY", description: "Stripe secret key，用于创建 Checkout Session", required: true },
-      { key: "STRIPE_WEBHOOK_SECRET", description: "Stripe webhook signing secret，用于校验 stripe-signature", required: false },
+      { key: "STRIPE_WEBHOOK_SECRET", description: "Stripe webhook signing secret，用于校验 stripe-signature", required: true },
       { key: "STRIPE_CURRENCY", description: "默认结算币种，例如 usd", required: false },
       { key: "STRIPE_ITEM_NAME", description: "Stripe Checkout 展示的默认商品名", required: false },
       { key: "STRIPE_API_BASE_URL", description: "可选的 Stripe API 基础地址覆写，通常只用于测试环境", required: false },
     ],
     method(ctx) {
-      const enabled = Boolean(options.secret_key || ctx.env("STRIPE_SECRET_KEY"));
+      const enabled = Boolean(
+        (options.secret_key || ctx.env("STRIPE_SECRET_KEY"))
+        && (options.webhook_secret || ctx.env("STRIPE_WEBHOOK_SECRET")),
+      );
       return paymentMethodItem({
         id: "stripe",
         enabled,
@@ -70,25 +73,28 @@ export function stripePaymentProvider(options: StripePaymentProviderOptions = {}
     },
     async parseWebhook(input) {
       const webhook_secret = options.webhook_secret ?? input.ctx.env("STRIPE_WEBHOOK_SECRET");
-      if (webhook_secret) {
-        const valid = await verifyStripeSignature(
-          input.raw,
-          input.request.headers.get("stripe-signature"),
-          webhook_secret,
-        );
-        if (!valid) throw new Error("Invalid Stripe signature");
-      }
+      if (!webhook_secret) throw new Error("Stripe webhook secret is not configured");
+      const valid = await verifyStripeSignature(
+        input.raw,
+        input.request.headers.get("stripe-signature"),
+        webhook_secret,
+      );
+      if (!valid) throw new Error("Invalid Stripe signature");
       const event = parseStripeWebhookEvent(input.raw);
       const object = readMetadata(event.data?.object);
       const metadata = readMetadata(object.metadata);
       const type = normalizeOptionalText(event.type) || "unknown";
       const status = type === "checkout.session.completed"
-        ? "paid"
-        : type === "checkout.session.expired"
-          ? "expired"
-          : type === "payment_intent.payment_failed"
+        ? normalizeOptionalText(object.payment_status) === "paid" ? "paid" : "pending"
+        : type === "checkout.session.async_payment_succeeded"
+          ? "paid"
+          : type === "checkout.session.async_payment_failed"
             ? "failed"
-            : "ignored";
+            : type === "checkout.session.expired"
+              ? "expired"
+              : type === "payment_intent.payment_failed"
+                ? "failed"
+                : "ignored";
       const is_payment_intent = type === "payment_intent.payment_failed";
       return {
         event_id: normalizeRequired(event.id, "stripe event id"),

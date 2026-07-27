@@ -16,11 +16,13 @@ import {
 const base = new Federation({ db: {} as any });
 
 base.use(new PaymentService({
+  resolve_topup: ({ topup_amount_minor }) => ({ credits: topup_amount_minor * 10_000 }),
   on_paid: async (_record) => undefined,
   providers: [
     creemPaymentProvider({
       api_key: "creem_test",
       product_id: "prod_test",
+      webhook_secret: "webhook_test",
       currency: "usd",
     }),
   ],
@@ -34,6 +36,9 @@ const checkout: PaymentCheckoutCreateResult = {
   provider_order_id: "",
   checkout_url: "https://checkout.creem.test/ch_demo",
   status: "pending",
+  credits: 5_000_000,
+  topup_amount_minor: 500,
+  currency: "usd",
 };
 
 void checkout;

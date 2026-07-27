@@ -14,6 +14,9 @@ description: Downcity 官方身份、额度、支付和用量服务。
 const credits = new CreditsService();
 const payment = new PaymentService({
   providers: [stripePaymentProvider()],
+  resolve_topup: ({ topup_amount_minor }) => ({
+    credits: topup_amount_minor * 10_000,
+  }),
   on_paid: async (record) => {
     await credits.topup({
       card: { kind: "primary", user_id: record.user_id },

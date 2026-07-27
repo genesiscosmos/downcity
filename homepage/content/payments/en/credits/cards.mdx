@@ -3,7 +3,7 @@ title: Primary and Ephemeral Cards
 description: Create and query permanent and expiring credits.
 ---
 
-Each user has one permanent Primary Card. Ephemeral Cards require a future `expires_at` and are suitable for trials, campaigns, and creator rewards.
+Each user has one permanent Primary Card and at most 100 unexpired Ephemeral Cards with a positive balance. `expires_at` must be ISO 8601 and is stored as UTC.
 
 ```ts
 const card = await bureau.credits.cards.create_ephemeral({
@@ -25,4 +25,4 @@ await bureau.credits.topup({
 });
 ```
 
-Card lists return active Ephemeral Cards by default. Pass `include_history: true` to include depleted and expired Cards.
+Card lists return active Ephemeral Cards by default. Pass `include_history: true` to include unexpired depleted Cards. Expired Cards are deleted on the next access, while their accounting history remains available through Transaction Entries.

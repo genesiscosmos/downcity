@@ -7,6 +7,9 @@ description: Let PaymentService own orders and issue Primary Card credits only a
 const credits = new CreditsService();
 const payment = new PaymentService({
   providers: [stripePaymentProvider()],
+  resolve_topup: ({ topup_amount_minor }) => ({
+    credits: topup_amount_minor * 10_000,
+  }),
   on_paid: async (record) => {
     await credits.topup({
       card: { kind: "primary", user_id: record.user_id },
@@ -24,9 +27,10 @@ Users create a Payment order directly; Credits does not store pending payment to
 
 ```ts
 await city.payment.method("stripe").invoke({
-  credits: 5_000_000,
-  amount_minor: 500,
+  topup_amount_minor: 500,
   idempotency_key: "order_123",
   note: "Buy Credits",
 });
 ```
+
+The user submits only the real payment amount. `resolve_topup` calculates and snapshots Credits on the Federation server, so the client never controls the conversion rate.

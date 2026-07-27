@@ -33,15 +33,16 @@ export function creemPaymentProvider(options: CreemPaymentProviderOptions = {}):
     label,
     env: [
       { key: "CREEM_API_KEY", description: "Creem API key，用于创建 Checkout Session", required: true },
-      { key: "CREEM_PRODUCT_ID", description: "Creem product_id，用于创建 Checkout Session", required: true },
-      { key: "CREEM_WEBHOOK_SECRET", description: "Creem webhook signing secret，用于校验 creem-signature", required: false },
-      { key: "CREEM_CURRENCY", description: "默认结算币种，例如 usd；仅用于支付目录展示和本地记录", required: false },
+      { key: "CREEM_PRODUCT_ID", description: "Creem 一次性、含税支付 product_id，用于创建动态价格 Checkout Session", required: true },
+      { key: "CREEM_WEBHOOK_SECRET", description: "Creem webhook signing secret，用于校验 creem-signature", required: true },
+      { key: "CREEM_CURRENCY", description: "Creem 产品币种，例如 usd；必须与 product_id 的实际币种一致", required: false },
       { key: "CREEM_API_BASE_URL", description: "可选的 Creem API 基础地址覆写，通常只用于测试环境", required: false },
     ],
     method(ctx) {
       const enabled = Boolean(
         (options.api_key || ctx.env("CREEM_API_KEY"))
-        && (options.product_id || ctx.env("CREEM_PRODUCT_ID")),
+        && (options.product_id || ctx.env("CREEM_PRODUCT_ID"))
+        && (options.webhook_secret || ctx.env("CREEM_WEBHOOK_SECRET")),
       );
       return paymentMethodItem({
         id: "creem",
@@ -55,6 +56,9 @@ export function creemPaymentProvider(options: CreemPaymentProviderOptions = {}):
       const product_id = options.product_id ?? input.ctx.env("CREEM_PRODUCT_ID");
       if (!api_key) throw new Error("Creem API key is not configured");
       if (!product_id) throw new Error("Creem product id is not configured");
+      if (input.payment.amount_minor < 100 || input.payment.amount_minor > 99_999_999) {
+        throw new RangeError("Creem custom price must be between 100 and 99999999 minor units");
+      }
       const created = await createCreemCheckoutSession(
         api_key,
         normalizeCreemApiBaseURL(input.ctx.env("CREEM_API_BASE_URL") || options.api_base_url),
@@ -68,19 +72,18 @@ export function creemPaymentProvider(options: CreemPaymentProviderOptions = {}):
       return {
         provider_session_id: created.checkout_id,
         checkout_url: created.checkout_url,
-        metadata: { product_id },
+        metadata: { product_id, custom_price: input.payment.amount_minor },
       };
     },
     async parseWebhook(input) {
       const webhook_secret = options.webhook_secret ?? input.ctx.env("CREEM_WEBHOOK_SECRET");
-      if (webhook_secret) {
-        const valid = await verifyCreemSignature(
-          input.raw,
-          input.request.headers.get("creem-signature"),
-          webhook_secret,
-        );
-        if (!valid) throw new Error("Invalid Creem signature");
-      }
+      if (!webhook_secret) throw new Error("Creem webhook secret is not configured");
+      const valid = await verifyCreemSignature(
+        input.raw,
+        input.request.headers.get("creem-signature"),
+        webhook_secret,
+      );
+      if (!valid) throw new Error("Invalid Creem signature");
       const event = parseCreemWebhookEvent(input.raw);
       const object = readCreemEventObject(event);
       const metadata = readMetadata(object.metadata);

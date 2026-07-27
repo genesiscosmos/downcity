@@ -102,9 +102,11 @@ export type {
   PaymentProviderWebhookEvent,
   PaymentProviderWebhookInput,
   PaymentRecord,
- PaymentServiceOptions,
- PaymentOrderSnapshot,
- PaymentStatus,
+  PaymentServiceOptions,
+  PaymentOrderSnapshot,
+  PaymentStatus,
+  PaymentTopupResolution,
+  PaymentTopupResolutionInput,
 } from "./payment/types.js";
 export type {
   CreemPaymentProviderOptions,

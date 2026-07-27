@@ -9,6 +9,9 @@ description: PaymentService 拥有支付订单，确认 paid 后向 Primary Card
 const credits = new CreditsService();
 const payment = new PaymentService({
   providers: [stripePaymentProvider()],
+  resolve_topup: ({ topup_amount_minor }) => ({
+    credits: topup_amount_minor * 10_000,
+  }),
   on_paid: async (record) => {
     await credits.topup({
       card: { kind: "primary", user_id: record.user_id },
@@ -26,9 +29,10 @@ const payment = new PaymentService({
 
 ```ts
 await city.payment.method("stripe").invoke({
-  credits: 5_000_000,
-  amount_minor: 500,
+  topup_amount_minor: 500,
   idempotency_key: "order_123",
   note: "购买 Credits",
 });
 ```
+
+用户只能提交真实支付金额。`resolve_topup` 在 Federation 服务端计算并冻结本单 Credits，客户端不能指定兑换比例。

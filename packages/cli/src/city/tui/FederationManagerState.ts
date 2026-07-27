@@ -271,7 +271,7 @@ function build_city_items(params: {
         }),
         detail: t({
           zh: "输入金额和说明后，City 会创建充值单和 checkout 页面。",
-          en: "Enter a credits amount and note; City will create a topup and checkout page.",
+          en: "Enter a payment amount; the Federation will calculate Credits and create a checkout page.",
         }),
       },
       {

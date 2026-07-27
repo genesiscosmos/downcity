@@ -398,14 +398,13 @@ test("User City payment.method(id).invoke() dispatches to the unified payment ch
   assert.equal(method.id, "stripe")
   assert.equal((await method.describe()).service, "payment")
   assert.deepEqual(
-    await method.invoke({ credits: 5_000_000, amount_minor: 500, idempotency_key: "order_123" }),
+    await method.invoke({ topup_amount_minor: 500, idempotency_key: "order_123" }),
     { checkout_url: "https://checkout.stripe.test/session_123" },
   )
 
   assert.equal(requests[1].url, "https://api.example.com/base/v1/payment/checkout/create")
   assert.deepEqual(JSON.parse(requests[1].init.body), {
-    credits: 5_000_000,
-    amount_minor: 500,
+    topup_amount_minor: 500,
     idempotency_key: "order_123",
     method_id: "stripe",
   })
@@ -432,7 +431,7 @@ test("User City payment.method(id).invoke() rejects disabled or user-required me
   })
 
   await assert.rejects(
-    disabledClient.payment.method("stripe").invoke({ credits: 5_000_000, amount_minor: 500, idempotency_key: "order_123" }),
+    disabledClient.payment.method("stripe").invoke({ topup_amount_minor: 500, idempotency_key: "order_123" }),
     /payment method "stripe" is disabled: not_configured/,
   )
 
@@ -455,7 +454,7 @@ test("User City payment.method(id).invoke() rejects disabled or user-required me
   })
 
   await assert.rejects(
-    guestClient.payment.method("stripe").invoke({ credits: 5_000_000, amount_minor: 500, idempotency_key: "order_123" }),
+    guestClient.payment.method("stripe").invoke({ topup_amount_minor: 500, idempotency_key: "order_123" }),
     /user_token is required for payment method "stripe"/,
   )
 })

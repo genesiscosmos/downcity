@@ -38,6 +38,7 @@ export async function createCreemCheckoutSession(
     },
     body: JSON.stringify({
       product_id: input.product_id,
+      custom_price: input.payment.amount_minor,
       success_url: input.success_url,
       request_id: input.payment_id,
       metadata: {
@@ -122,9 +123,6 @@ export function readCreemEventObject(event: Record<string, unknown>): Record<str
   return readMetadata((event.data as { object?: unknown } | undefined)?.object);
 }
 
-/**
- * 读取支付 provider 需要的 USD cents 金额。
- */
 /**
  * 常量时间比较两个签名字符串。
  */

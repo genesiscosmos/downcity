@@ -970,15 +970,16 @@ Ephemeral Cards 默认排序：
 
 1. 有效且有余额，越早过期越靠前。
 2. 已耗尽。
-3. 已过期。
+3. 已过期 Card 不再保留在 Card 表中。
 
-默认只返回有效 Card；显式传入 `include_history = true` 时才返回已耗尽和已过期 Card。
+每个用户最多拥有 100 张未过期且余额大于零的 Ephemeral Cards。默认只返回有效 Card；显式传入 `include_history = true` 时返回尚未过期但已经耗尽的 Card。过期 Card 在下一次 Credits 访问时惰性删除，历史事实继续保留在 Transaction Entries 中。
 
 ## 14. PaymentService 边界
 
 PaymentService 负责：
 
-- 支付商品与金额。
+- 接收用户自由输入的最小货币单位金额。
+- 通过服务端 `resolve_topup` 策略计算 Credits，并把金额与 Credits 固化为订单快照。
 - Checkout。
 - Provider webhook。
 - 支付订单状态。
@@ -1006,6 +1007,9 @@ Payment Order
 ```ts
 const payment = new PaymentService({
   providers: [stripe_payment_provider()],
+  resolve_topup: ({ topup_amount_minor }) => ({
+    credits: topup_amount_minor * 10_000,
+  }),
   on_paid: async (record) => {
     await credits.topup({
       card: {
@@ -1021,6 +1025,17 @@ const payment = new PaymentService({
   },
 });
 ```
+
+用户创建 Checkout 时只能提交真实支付金额，不能提交 Credits 或兑换比例：
+
+```ts
+await city.payment.method("stripe").invoke({
+  topup_amount_minor: 500,
+  idempotency_key: "order_123",
+});
+```
+
+所有 Provider 必须配置 webhook 验签密钥才可启用；缺少配置、缺少签名或签名无效时一律拒绝。Stripe 只有在 `payment_status = paid` 或收到异步支付成功事件后才能确认到账。
 
 PaymentService 不直接修改 Card 表，CreditsService 不保存等待支付的订单，也不解析 Provider webhook。
 
@@ -1158,7 +1173,9 @@ pnpm all:patch:build
 - Primary Card 永不过期且余额不能小于零。
 - 一个用户可以拥有多张 Ephemeral Card。
 - Ephemeral Card 必须设置未来到期时间。
-- 到期 Ephemeral Card 不进入可用余额，也不能 Topup 或 Charge。
+- Ephemeral Card 到期时间统一保存为 UTC ISO 8601。
+- 每个用户最多拥有 100 张未过期且有余额的 Ephemeral Card。
+- 到期 Ephemeral Card 自动删除，不进入可用余额，也不能 Topup 或 Charge；Entries 历史继续保留。
 - Bureau 可以创建 Ephemeral Card 并原子写入初始 Topup。
 - Bureau 可以给仍有效的指定 Card Topup。
 - 相同幂等键重试不会重复创建 Card、Topup 或 Charge。
@@ -1171,4 +1188,7 @@ pnpm all:patch:build
 - Card 快照、Transaction 与 Entries 在同一事务提交。
 - Credits 查询可以分别展示 Primary、Ephemeral 与总可用额度。
 - Payment 确认后只通过 `credits.topup()` 入账。
+- 用户只提交 `topup_amount_minor`，Credits 由 Federation 服务端结算并固化到 Payment 快照。
+- Provider 缺少 webhook 验签配置时不可用，未签名或错误签名事件不能入账。
+- 用户全部可用 Credits 始终位于 JavaScript 安全整数范围内。
 - 迁移脚本发现旧负余额或账务不一致时停止，不静默修改资产。

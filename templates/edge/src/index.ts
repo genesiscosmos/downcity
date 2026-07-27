@@ -74,6 +74,9 @@ async function init_federation(env: Env): Promise<Federation> {
   federation.use(credits);
 
   federation.use(new PaymentService({
+    resolve_topup: ({ topup_amount_minor }) => ({
+      credits: topup_amount_minor * 10_000,
+    }),
     on_paid: async (record) => {
       await credits.topup({
         card: { kind: "primary", user_id: record.user_id },

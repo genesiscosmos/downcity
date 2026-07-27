@@ -10,6 +10,7 @@ const base = new Federation({
 });
 
 base.use(new PaymentService({
+  resolve_topup: ({ topup_amount_minor }) => ({ credits: topup_amount_minor * 10_000 }),
   on_paid: async (_record) => undefined,
   providers: [
     stripePaymentProvider(),

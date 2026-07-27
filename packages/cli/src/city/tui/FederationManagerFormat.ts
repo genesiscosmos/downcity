@@ -184,7 +184,7 @@ export function format_recharge_result(result: CityRechargeResult): string {
   return [
     `{bold}${t({ zh: "充值已创建", en: "Recharge created" })}{/bold}`,
     `credits: ${result.credits}`,
-    `amount_minor: ${result.amount_minor}`,
+    `topup_amount_minor: ${result.topup_amount_minor}`,
     `status: ${result.checkout.status ?? "pending"}`,
     `method: ${result.method_id}`,
     result.checkout.payment_id ? `payment: ${result.checkout.payment_id}` : "",

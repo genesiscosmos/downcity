@@ -6,7 +6,7 @@
  * - webhook 验签使用 SDK 自带 RSA-SHA256 verify
  */
 
-import { WaffoPancake } from "@waffo/pancake-ts";
+import { TaxCategory, WaffoPancake } from "@waffo/pancake-ts";
 import { normalizeOptionalText, normalizeRequired } from "../../helpers.js";
 import type {
   WaffoCheckoutSessionResult,
@@ -46,6 +46,10 @@ export async function createWaffoCheckoutSession(
   const response = await client.checkout.createSession({
     productId: input.product_id,
     currency: input.currency.toUpperCase(),
+    priceSnapshot: {
+      amount: format_minor_amount(input.payment.amount_minor, input.currency),
+      taxCategory: TaxCategory.DigitalGoods,
+    },
     successUrl: input.success_url,
     orderMerchantExternalId: input.payment_id,
     metadata: {
@@ -60,6 +64,16 @@ export async function createWaffoCheckoutSession(
     session_id: normalizeRequired(response.sessionId, "Waffo checkout session id"),
     checkout_url: normalizeRequired(response.checkoutUrl, "Waffo checkout url"),
   };
+}
+
+/** 把最小货币单位金额转换为 Waffo 需要的展示金额字符串。 */
+function format_minor_amount(amount_minor: number, currency: string): string {
+  const fraction_digits = new Intl.NumberFormat("en", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).resolvedOptions().maximumFractionDigits ?? 2;
+  const divisor = 10 ** fraction_digits;
+  return (amount_minor / divisor).toFixed(fraction_digits);
 }
 
 /**
@@ -137,7 +151,3 @@ export function fallbackWaffoPrivateKey(): string {
     "-----END RSA PRIVATE KEY-----",
   ].join("\n");
 }
-
-/**
- * 读取支付 provider 需要的 USD cents 金额。
- */

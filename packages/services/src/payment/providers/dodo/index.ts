@@ -33,7 +33,7 @@ export function dodoPaymentProvider(options: DodoPaymentProviderOptions = {}): P
     env: [
       { key: "DODO_PAYMENTS_API_KEY", description: "Dodo Payments API key，用于创建 Checkout Session", required: true },
       { key: "DODO_PRODUCT_ID", description: "Dodo product_id，用于创建 Checkout Session", required: true },
-      { key: "DODO_WEBHOOK_KEY", description: "Dodo webhook signing key，用于校验 webhook", required: false },
+      { key: "DODO_WEBHOOK_KEY", description: "Dodo webhook signing key，用于校验 webhook", required: true },
       { key: "DODO_ENVIRONMENT", description: "Dodo SDK 环境：test_mode 或 live_mode；默认 test_mode", required: false },
       { key: "DODO_CURRENCY", description: "默认结算币种，例如 usd", required: false },
       { key: "DODO_API_BASE_URL", description: "可选的 Dodo API 基础地址覆写，通常只用于测试环境", required: false },
@@ -41,7 +41,8 @@ export function dodoPaymentProvider(options: DodoPaymentProviderOptions = {}): P
     method(ctx) {
       const enabled = Boolean(
         (options.api_key || ctx.env("DODO_PAYMENTS_API_KEY"))
-        && (options.product_id || ctx.env("DODO_PRODUCT_ID")),
+        && (options.product_id || ctx.env("DODO_PRODUCT_ID"))
+        && (options.webhook_key || ctx.env("DODO_WEBHOOK_KEY")),
       );
       return paymentMethodItem({
         id: "dodo",
@@ -78,6 +79,7 @@ export function dodoPaymentProvider(options: DodoPaymentProviderOptions = {}): P
     },
     async parseWebhook(input) {
       const webhook_key = options.webhook_key ?? input.ctx.env("DODO_WEBHOOK_KEY");
+      if (!webhook_key) throw new Error("Dodo webhook key is not configured");
       const client = createDodoClient({
         api_key: options.api_key ?? input.ctx.env("DODO_PAYMENTS_API_KEY") ?? "webhook_only",
         webhook_key,
@@ -88,7 +90,7 @@ export function dodoPaymentProvider(options: DodoPaymentProviderOptions = {}): P
         client,
         raw: input.raw,
         headers: input.request.headers,
-        verify: Boolean(webhook_key),
+        verify: true,
       });
       const object = readMetadata(event.data || event.object);
       const metadata = readMetadata(object.metadata);

@@ -68,6 +68,15 @@ export interface CityCheckoutResult extends Record<string, unknown> {
    * 当前支付状态。
    */
   status?: string;
+
+  /** 服务端为本次充值结算出的 Credits。 */
+  credits?: number;
+
+  /** 实际充值金额，单位为结算币种的最小货币单位。 */
+  topup_amount_minor?: number;
+
+  /** 本次支付的结算币种。 */
+  currency?: string;
 }
 
 /**
@@ -78,7 +87,7 @@ export interface CityRechargeResult {
   credits: number;
 
   /** 支付金额，单位为结算币种的最小货币单位。 */
-  amount_minor: number;
+  topup_amount_minor: number;
 
   /**
    * 支付 checkout 创建结果。
@@ -100,10 +109,8 @@ export interface CityRechargeResult {
  * 当前登录用户充值输入。
  */
 export interface CityRechargeInput {
-  /**
-   * 充值额度，单位为 credits。
-   */
-  credits: number;
+  /** 自由充值金额，单位为结算币种的最小货币单位。 */
+  topup_amount_minor: number;
 
   /**
    * 支付方式 ID。

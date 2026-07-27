@@ -142,3 +142,114 @@ test("CreditsService manages primary and ephemeral cards atomically", async () =
     await fs.rm(temp_dir, { recursive: true, force: true })
   }
 })
+
+test("CreditsService enforces expiration, active card, safe total, and full idempotency boundaries", async () => {
+  const cwd = process.cwd()
+  const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-credits-limits-"))
+  try {
+    process.chdir(temp_dir)
+    const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
+    const federation = new Federation({ db })
+    const credits = new CreditsService()
+    federation.use(credits)
+    await federation.health()
+
+    await assert.rejects(
+      credits.cards.create_ephemeral({
+        user_id: "date_user",
+        name: "invalid date",
+        initial_credits: 1,
+        expires_at: new Date(Date.now() + 86_400_000).toUTCString(),
+        source: "test",
+        idempotency_key: "date:invalid",
+      }),
+      /ISO 8601/,
+    )
+
+    const expiring = await credits.cards.create_ephemeral({
+      user_id: "date_user",
+      name: "expires",
+      initial_credits: 10,
+      expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+      source: "test",
+      idempotency_key: "date:expires",
+    })
+    db.$client.prepare(
+      "UPDATE service_credits_ephemeral_cards SET expires_at = ? WHERE card_id = ?",
+    ).run(new Date(Date.now() - 1_000).toISOString(), expiring.card_id)
+    assert.equal((await credits.read("date_user")).available_credits, 0)
+    await assert.rejects(credits.cards.get_ephemeral(expiring.card_id), /not found/)
+
+    const expires_at = new Date(Date.now() + 86_400_000).toISOString()
+    for (let index = 0; index < 100; index++) {
+      await credits.cards.create_ephemeral({
+        user_id: "card_limit_user",
+        name: `card ${index}`,
+        initial_credits: 1,
+        expires_at,
+        source: "test",
+        idempotency_key: `card_limit:${index}`,
+      })
+    }
+    await assert.rejects(
+      credits.cards.create_ephemeral({
+        user_id: "card_limit_user",
+        name: "card 101",
+        initial_credits: 1,
+        expires_at,
+        source: "test",
+        idempotency_key: "card_limit:101",
+      }),
+      /active ephemeral card limit exceeded/,
+    )
+    await credits.charge({
+      user_id: "card_limit_user",
+      credits: 100,
+      source: "test",
+      idempotency_key: "card_limit:charge",
+    })
+    assert.equal((await credits.read("card_limit_user")).available_credits, 0)
+
+    const maximum_topup = await credits.topup({
+      card: { kind: "primary", user_id: "safe_user" },
+      credits: Number.MAX_SAFE_INTEGER,
+      source: "test",
+      ref: "maximum",
+      metadata: { left: 1, right: 2 },
+      idempotency_key: "safe:maximum",
+    })
+    const reordered_retry = await credits.topup({
+      card: { user_id: "safe_user", kind: "primary" },
+      credits: Number.MAX_SAFE_INTEGER,
+      source: "test",
+      ref: "maximum",
+      metadata: { right: 2, left: 1 },
+      idempotency_key: "safe:maximum",
+    })
+    assert.equal(reordered_retry.transaction_id, maximum_topup.transaction_id)
+    await assert.rejects(
+      credits.topup({
+        card: { kind: "primary", user_id: "safe_user" },
+        credits: 1,
+        source: "test",
+        idempotency_key: "safe:overflow",
+      }),
+      /user credits limit exceeded/,
+    )
+    assert.equal(Number.isSafeInteger((await credits.read("safe_user")).available_credits), true)
+    await assert.rejects(
+      credits.topup({
+        card: { kind: "primary", user_id: "safe_user" },
+        credits: Number.MAX_SAFE_INTEGER,
+        source: "different_source",
+        ref: "maximum",
+        metadata: { left: 1, right: 2 },
+        idempotency_key: "safe:maximum",
+      }),
+      /idempotency_key was already used/,
+    )
+  } finally {
+    process.chdir(cwd)
+    await fs.rm(temp_dir, { recursive: true, force: true })
+  }
+})

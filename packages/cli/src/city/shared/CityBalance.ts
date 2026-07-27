@@ -47,12 +47,10 @@ export async function rechargeCurrentCityUser(
   input: CityRechargeInput,
 ): Promise<CityRechargeResult> {
   const { city } = await cityUserManager.createUserClient();
-  const credits = normalizePositiveInteger(input.credits, "credits");
+  const topup_amount_minor = normalizePositiveInteger(input.topup_amount_minor, "topup_amount_minor");
   const method_id = normalizeText(input.method_id) || DEFAULT_PAYMENT_METHOD_ID;
-  const amount_minor = Math.max(1, Math.round(credits / 10_000));
   const checkout = await city.payment.method(method_id).invoke<CityCheckoutResult>({
-    credits,
-    amount_minor,
+    topup_amount_minor,
     idempotency_key: normalizeText(input.ref) || `city_cli:${crypto.randomUUID()}`,
     note: normalizeText(input.note) || "City user recharge",
     metadata: {
@@ -65,8 +63,8 @@ export async function rechargeCurrentCityUser(
   const opened = should_open && checkout_url ? open_system_browser(checkout_url) : false;
 
   return {
-    credits,
-    amount_minor,
+    credits: normalizePositiveInteger(checkout.credits, "checkout.credits"),
+    topup_amount_minor,
     checkout,
     method_id,
     opened,
@@ -120,7 +118,7 @@ export function emitCityRechargeResult(result: CityRechargeResult): void {
     summary: String(result.checkout.status ?? "pending"),
     facts: [
       { label: "credits", value: String(result.credits) },
-      { label: "amount_minor", value: String(result.amount_minor) },
+      { label: "topup_amount_minor", value: String(result.topup_amount_minor) },
       { label: "method", value: result.method_id },
       ...(result.checkout.payment_id
         ? [{ label: "payment", value: String(result.checkout.payment_id) }]

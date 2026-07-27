@@ -35,7 +35,7 @@ export function waffoPaymentProvider(options: WaffoPaymentProviderOptions = {}):
       { key: "WAFFO_MERCHANT_ID", description: "Waffo Merchant ID，例如 MER_xxx", required: true },
       { key: "WAFFO_PRIVATE_KEY", description: "Waffo API private key，用于 SDK 请求签名", required: true },
       { key: "WAFFO_PRODUCT_ID", description: "Waffo product_id，用于创建 Checkout Session", required: true },
-      { key: "WAFFO_WEBHOOK_PUBLIC_KEY", description: "Waffo webhook public key，用于校验 x-waffo-signature", required: false },
+      { key: "WAFFO_WEBHOOK_PUBLIC_KEY", description: "Waffo webhook public key，用于校验 x-waffo-signature", required: true },
       { key: "WAFFO_ENVIRONMENT", description: "Waffo 环境：test 或 prod；默认 test", required: false },
       { key: "WAFFO_CURRENCY", description: "默认结算币种，例如 usd", required: false },
       { key: "WAFFO_API_BASE_URL", description: "可选的 Waffo API 基础地址覆写，通常只用于测试环境", required: false },
@@ -44,7 +44,8 @@ export function waffoPaymentProvider(options: WaffoPaymentProviderOptions = {}):
       const enabled = Boolean(
         (options.merchant_id || ctx.env("WAFFO_MERCHANT_ID"))
         && (options.private_key || ctx.env("WAFFO_PRIVATE_KEY"))
-        && (options.product_id || ctx.env("WAFFO_PRODUCT_ID")),
+        && (options.product_id || ctx.env("WAFFO_PRODUCT_ID"))
+        && (options.webhook_public_key || ctx.env("WAFFO_WEBHOOK_PUBLIC_KEY")),
       );
       return paymentMethodItem({
         id: "waffo",
@@ -80,10 +81,12 @@ export function waffoPaymentProvider(options: WaffoPaymentProviderOptions = {}):
       };
     },
     async parseWebhook(input) {
+      const webhook_public_key = options.webhook_public_key ?? input.ctx.env("WAFFO_WEBHOOK_PUBLIC_KEY");
+      if (!webhook_public_key) throw new Error("Waffo webhook public key is not configured");
       const client = createWaffoClient({
         merchant_id: options.merchant_id ?? input.ctx.env("WAFFO_MERCHANT_ID") ?? "MER_0000000000000000000000",
         private_key: options.private_key ?? input.ctx.env("WAFFO_PRIVATE_KEY") ?? fallbackWaffoPrivateKey(),
-        webhook_public_key: options.webhook_public_key ?? input.ctx.env("WAFFO_WEBHOOK_PUBLIC_KEY"),
+        webhook_public_key,
         api_base_url: options.api_base_url ?? input.ctx.env("WAFFO_API_BASE_URL"),
       });
       const event = parseWaffoWebhookEvent({

@@ -233,8 +233,9 @@ Common keys:
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 | `DOWNCITY_CITY_BASE_URL` | Public City base URL used to derive payment result pages |
 | `CREEM_API_KEY` | Creem API key for Checkout creation |
-| `CREEM_PRODUCT_ID` | Creem product used for hosted Checkout |
-| `CREEM_WEBHOOK_SECRET` | Optional Creem webhook signing secret |
+| `CREEM_PRODUCT_ID` | One-time, tax-inclusive Creem product used for hosted Checkout |
+| `CREEM_CURRENCY` | Creem product currency; it must match the product's actual currency |
+| `CREEM_WEBHOOK_SECRET` | Creem webhook signing secret; the provider is disabled when missing |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Optional Google OAuth login |
 | `WECHAT_CLIENT_ID` / `WECHAT_CLIENT_SECRET` | Optional WeChat website login |
 

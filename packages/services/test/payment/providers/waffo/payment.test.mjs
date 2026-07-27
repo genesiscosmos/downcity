@@ -25,6 +25,35 @@ test("Waffo provider maps paid webhook to a Payment order", async () => {
   assert.equal(event.provider_order_id, "order_1")
 })
 
+test("Waffo provider rejects missing webhook configuration", async () => {
+  const provider = waffoPaymentProvider({
+    merchant_id: "MER_0000000000000000000000",
+    private_key: fallbackWaffoPrivateKey(),
+    product_id: "PROD_0000000000000000000000",
+  })
+  assert.equal(provider.method({ env: () => undefined }).enabled, false)
+  await assert.rejects(provider.parseWebhook({
+    raw: "{}",
+    request: new Request("http://localhost/webhook", { method: "POST", body: "{}" }),
+    ctx: { env: () => undefined },
+  }), /not configured/)
+})
+
+test("Waffo provider rejects an invalid webhook signature", async () => {
+  const private_key = fallbackWaffoPrivateKey()
+  const webhook_public_key = createPublicKey(private_key).export({ type: "spki", format: "pem" }).toString()
+  const provider = waffoPaymentProvider({ webhook_public_key })
+  await assert.rejects(provider.parseWebhook({
+    raw: "{}",
+    request: new Request("http://localhost/webhook", {
+      method: "POST",
+      body: "{}",
+      headers: { "x-waffo-signature": `t=${Date.now()},v1=invalid` },
+    }),
+    ctx: { env: () => undefined },
+  }))
+})
+
 function webhook_input(body, private_key) {
   const raw = JSON.stringify(body)
   const timestamp = String(Date.now())

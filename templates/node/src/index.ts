@@ -97,6 +97,8 @@ const bootstrap_env_keys = [
   "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY",
   "BETTER_AUTH_SECRET",
   "DEEPSEEK_API_KEY",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
 ] as const;
 
 /**
@@ -147,6 +149,9 @@ const credits = new CreditsService();
 federation.use(credits);
 
 const payment = new PaymentService({
+  resolve_topup: ({ topup_amount_minor }) => ({
+    credits: topup_amount_minor * 10_000,
+  }),
   on_paid: async (record) => {
     await credits.topup({
       card: { kind: "primary", user_id: record.user_id },

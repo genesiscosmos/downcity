@@ -6,6 +6,7 @@ description: Create Payment orders with Stripe Checkout and issue Credits after 
 ```ts
 const payment = new PaymentService({
   providers: [stripePaymentProvider()],
+  resolve_topup: ({ topup_amount_minor }) => ({ credits: topup_amount_minor * 10_000 }),
   on_paid: async (record) => {
     await credits.topup({
       card: { kind: "primary", user_id: record.user_id },
@@ -18,12 +19,11 @@ const payment = new PaymentService({
 });
 ```
 
-Configure `STRIPE_SECRET_KEY` and optionally `STRIPE_WEBHOOK_SECRET`. Send webhooks to `/v1/payment/webhook?provider=stripe`.
+Configure both `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`. Without webhook verification configuration the Provider is disabled and webhook requests are rejected. Send webhooks to `/v1/payment/webhook?provider=stripe`.
 
 ```ts
 await city.payment.method("stripe").invoke({
-  credits: 5_000_000,
-  amount_minor: 500,
+  topup_amount_minor: 500,
   idempotency_key: "order_123",
 });
 ```

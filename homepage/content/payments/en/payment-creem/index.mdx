@@ -2,10 +2,10 @@
 title: Creem Payment Provider
 ---
 
-Add `creemPaymentProvider()` to `PaymentService.providers`. Configure `CREEM_API_KEY`, `CREEM_PRODUCT_ID`, and optionally `CREEM_WEBHOOK_SECRET`.
+Add `creemPaymentProvider()` to `PaymentService.providers`. `CREEM_API_KEY`, `CREEM_PRODUCT_ID`, and `CREEM_WEBHOOK_SECRET` are all required. `CREEM_PRODUCT_ID` must reference a one-time product with tax included in its price, and `CREEM_CURRENCY` must match that product's currency. Payment passes the server-side order amount as Creem `custom_price`, which must be between 100 and 99,999,999 minor currency units.
 
 ```ts
-await city.payment.method("creem").invoke({ credits: 5_000_000, amount_minor: 500, idempotency_key: "order_123" });
+await city.payment.method("creem").invoke({ topup_amount_minor: 500, idempotency_key: "order_123" });
 ```
 
 Use `on_paid(record)` to call `credits.topup()` idempotently with `payment:${record.payment_id}`.

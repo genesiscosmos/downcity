@@ -107,7 +107,3 @@ export function normalizeDodoEnvironment(value: unknown): DodoPaymentEnvironment
   if (normalized === "test") return "test_mode";
   return "test_mode";
 }
-
-/**
- * 读取支付 provider 需要的 USD cents 金额。
- */

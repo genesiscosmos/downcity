@@ -5,7 +5,7 @@ title: Waffo Payment Provider
 Add `waffoPaymentProvider()` to `PaymentService.providers` and configure the merchant ID, private key, product ID, and webhook public key.
 
 ```ts
-await city.payment.method("waffo").invoke({ credits: 5_000_000, amount_minor: 500, idempotency_key: "order_123" });
+await city.payment.method("waffo").invoke({ topup_amount_minor: 500, idempotency_key: "order_123" });
 ```
 
 Issue Primary Card Credits idempotently from `on_paid(record)` after payment confirmation.

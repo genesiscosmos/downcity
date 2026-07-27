@@ -11,7 +11,13 @@ import { InstallableService, type EnvRequirement, type ServiceInstallContext } f
 import { paymentEvents, paymentPayments } from "./schema.js";
 import { mergeEnvRequirements, normalizeProviders } from "./helpers.js";
 import { installPaymentRoutes } from "./routes.js";
-import type { PaymentProvider, PaymentRecord, PaymentServiceOptions } from "./types.js";
+import type {
+  PaymentProvider,
+  PaymentRecord,
+  PaymentServiceOptions,
+  PaymentTopupResolution,
+  PaymentTopupResolutionInput,
+} from "./types.js";
 
 /**
  * Payment 服务自身 env。
@@ -62,6 +68,11 @@ export class PaymentService extends InstallableService {
   /** 通知接入方处理已确认支付订单。 */
   on_paid(record: PaymentRecord): Promise<void> {
     return this.options.on_paid(record);
+  }
+
+  /** 使用 Federation 服务端策略把自由充值金额结算为 Credits。 */
+  async resolve_topup(input: PaymentTopupResolutionInput): Promise<PaymentTopupResolution> {
+    return await this.options.resolve_topup(input);
   }
 
   /**

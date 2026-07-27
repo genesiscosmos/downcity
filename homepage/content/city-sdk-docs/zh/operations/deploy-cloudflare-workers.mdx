@@ -233,8 +233,9 @@ curl -X POST https://my-city.<your-subdomain>.workers.dev/v1/env/upsert \
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook 签名密钥 |
 | `DOWNCITY_CITY_BASE_URL` | City 对外访问地址，用于生成支付结果页 |
 | `CREEM_API_KEY` | 创建 Creem Checkout 的 API key |
-| `CREEM_PRODUCT_ID` | Creem 托管 Checkout 使用的 product |
-| `CREEM_WEBHOOK_SECRET` | 可选，Creem webhook 签名密钥 |
+| `CREEM_PRODUCT_ID` | Creem 托管 Checkout 使用的一次性、含税支付 product |
+| `CREEM_CURRENCY` | Creem product 的币种，必须与产品实际币种一致 |
+| `CREEM_WEBHOOK_SECRET` | Creem webhook 签名密钥；缺失时 Provider 不可用 |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 可选，Google OAuth 登录 |
 | `WECHAT_CLIENT_ID` / `WECHAT_CLIENT_SECRET` | 可选，微信网站应用登录 |
 

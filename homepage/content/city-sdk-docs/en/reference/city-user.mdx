@@ -343,8 +343,7 @@ If you want product code to think in terms of "payment methods" instead of hand-
 const methods = await city.payment.methods();
 
 const checkout = await city.payment.method("stripe").invoke({
-  credits: 5_000_000,
-  amount_minor: 500,
+  topup_amount_minor: 500,
   idempotency_key: "order_123",
 });
 ```
@@ -395,8 +394,7 @@ const usage = await city.service("usage").get("me");
 const methods = await city.payment.methods();
 
 const checkout = await city.payment.method("stripe").invoke({
-  credits: 5_000_000,
-  amount_minor: 500,
+  topup_amount_minor: 500,
   idempotency_key: "order_123",
 });
 ```

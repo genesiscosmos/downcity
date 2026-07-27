@@ -19,7 +19,14 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
     const federation = new Federation({ db: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
     const credits = new CreditsService()
     const provider = create_test_provider()
+    let resolved_topup
+    let resolve_topup_count = 0
     const payment = new PaymentService({
+      resolve_topup: (input) => {
+        resolve_topup_count += 1
+        resolved_topup = input
+        return { credits: input.topup_amount_minor * 10 }
+      },
       providers: [provider],
       on_paid: async (record) => {
         await credits.topup({
@@ -42,24 +49,63 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
       city_id: city.city_id,
       user_id: "user_1",
     }))).json()
+    const rejected_legacy = await federation.fetch(user_request(token.user_token, "/v1/payment/checkout/create", {
+      method_id: "test",
+      credits: 999_999_999,
+      amount_minor: 1,
+      topup_amount_minor: 1,
+      idempotency_key: "checkout:legacy",
+    }))
+    assert.equal(rejected_legacy.ok, false)
+    assert.equal((await credits.read("user_1")).available_credits, 0)
+
     const request = user_request(token.user_token, "/v1/payment/checkout/create", {
       method_id: "test",
-      credits: 500,
-      amount_minor: 99,
+      topup_amount_minor: 99,
       idempotency_key: "checkout:1",
       note: "购买 500 Credits",
+      metadata: { campaign: "summer", nested: { b: 2, a: 1 } },
     })
     const checkout = await (await federation.fetch(request)).json()
     const duplicate = await (await federation.fetch(user_request(token.user_token, "/v1/payment/checkout/create", {
       method_id: "test",
-      credits: 500,
-      amount_minor: 99,
+      topup_amount_minor: 99,
       idempotency_key: "checkout:1",
       note: "购买 500 Credits",
+      metadata: { nested: { a: 1, b: 2 }, campaign: "summer" },
     }))).json()
     assert.equal(duplicate.payment_id, checkout.payment_id)
+    assert.deepEqual(resolved_topup, {
+      user_id: "user_1",
+      provider: "test",
+      currency: "usd",
+      topup_amount_minor: 99,
+    })
+    assert.equal(checkout.credits, 990)
+    assert.equal(checkout.topup_amount_minor, 99)
+    assert.equal(resolve_topup_count, 1)
     assert.equal(provider.last_payment().payment_id, checkout.payment_id)
     assert.equal(provider.last_payment().amount_minor, 99)
+    assert.equal(provider.last_payment().credits, 990)
+
+    const conflicting_note = await federation.fetch(user_request(token.user_token, "/v1/payment/checkout/create", {
+      method_id: "test",
+      topup_amount_minor: 99,
+      idempotency_key: "checkout:1",
+      note: "不同说明",
+      metadata: { campaign: "summer", nested: { a: 1, b: 2 } },
+    }))
+    assert.equal(conflicting_note.ok, false)
+
+    const conflicting_metadata = await federation.fetch(user_request(token.user_token, "/v1/payment/checkout/create", {
+      method_id: "test",
+      topup_amount_minor: 99,
+      idempotency_key: "checkout:1",
+      note: "购买 500 Credits",
+      metadata: { campaign: "winter", nested: { a: 1, b: 2 } },
+    }))
+    assert.equal(conflicting_metadata.ok, false)
+    assert.equal(resolve_topup_count, 1)
 
     const webhook = () => new Request("http://localhost/v1/payment/webhook?provider=test", {
       method: "POST",
@@ -67,9 +113,9 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
       body: JSON.stringify({ event_id: "event_1", payment_id: checkout.payment_id }),
     })
     assert.equal((await federation.fetch(webhook())).status, 200)
-    assert.equal((await credits.read("user_1")).primary_credits, 500)
+    assert.equal((await credits.read("user_1")).primary_credits, 990)
     assert.equal((await federation.fetch(webhook())).status, 200)
-    assert.equal((await credits.read("user_1")).primary_credits, 500)
+    assert.equal((await credits.read("user_1")).primary_credits, 990)
   } finally {
     process.chdir(cwd)
     await fs.rm(temp_dir, { recursive: true, force: true })

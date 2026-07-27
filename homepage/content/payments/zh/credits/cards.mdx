@@ -3,7 +3,7 @@ title: Primary 与 Ephemeral Cards
 description: 创建和查询永久额度与限时额度。
 ---
 
-每个用户只有一张永久 `Primary Card`。`Ephemeral Card` 必须有未来的 `expires_at`，适合新用户体验、活动或创作者奖励。
+每个用户只有一张永久 `Primary Card`。一个用户最多有 100 张未过期且有余额的 `Ephemeral Card`，适合新用户体验、活动或创作者奖励。`expires_at` 必须是 ISO 8601 时间，并会统一保存为 UTC。
 
 ```ts
 const card = await bureau.credits.cards.create_ephemeral({
@@ -29,4 +29,4 @@ await bureau.credits.topup({
 });
 ```
 
-默认 Card 列表只返回未过期且有余额的 Ephemeral Cards；传入 `include_history: true` 可查看已耗尽和已过期 Card。
+默认 Card 列表只返回未过期且有余额的 Ephemeral Cards；传入 `include_history: true` 可查看尚未过期但已经耗尽的 Card。过期 Card 会在下一次访问时自动删除，历史账务仍保留在 Transaction Entries 中。
