@@ -21,26 +21,11 @@ description: plugin action 延迟/定时重派发的内部调度基础设施
 
 - 为什么调度能力归属于 plugin lifecycle，而不是 agent 顶层壳
 - 延迟/定时 plugin action 是怎么被重新调用的
-- 为什么它通过 `downcity plugin schedule` 管理，而不是单独提供 `downcity schedule` 命令
+- 为什么它属于 Plugin runtime，而不是顶层 CLI 命令
 
 ## 用户怎么使用
 
-给 plugin action 命令加 `--delay` 或 `--time`，就会创建 scheduled job：
-
-```bash
-downcity chat send --chat-key <chat_key> --text "Later" --delay 60000
-downcity memory remember --content "Remember this later" --time "2026-06-06T09:00:00+08:00"
-```
-
-通过 `downcity plugin schedule` 查看或取消 scheduled job：
-
-```bash
-downcity plugin schedule list
-downcity plugin schedule info <jobId>
-downcity plugin schedule cancel <jobId>
-```
-
-如果要做可复用自动化，用 `task` plugin，而不是一次性的 scheduled action。
+Action schedule 当前是 Plugin runtime 内部基础设施，不提供独立 CLI 管理命令。如果要做用户可管理、可复用的自动化，使用 `task` Plugin。
 
 ## 关键语义
 

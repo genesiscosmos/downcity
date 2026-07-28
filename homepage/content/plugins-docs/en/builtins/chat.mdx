@@ -35,22 +35,17 @@ Use `chat` when you need:
 
 ## How users use it
 
-Most users do not control the channel runtime directly. They use the `downcity chat` shortcuts that Downcity exposes for chat sessions:
+The CLI does not have a separate Chat configuration command. Use the shared Plugin manager to select accounts, enable channels, and save the current Agent Binding:
 
 ```bash
-downcity chat
-downcity chat list
-downcity chat info --chat-key <chat_key>
-downcity chat send --chat-key <chat_key> --text "Done"
-downcity chat react --chat-key <chat_key> --message-id <message_id> --emoji "👍"
-downcity chat context --chat-key <chat_key>
-downcity chat history --chat-key <chat_key> --limit 30
-downcity chat delete --chat-key <chat_key>
+city plugin config chat <agent_id> --interactive
 ```
 
-`downcity chat` with no subcommand opens the interactive chat account manager. Use it to add Telegram, Feishu, or QQ accounts before connecting an agent to those accounts.
+Use the generic Plugin Action command when you need to invoke a Chat Action from the terminal:
 
-Downcity intentionally hides channel-runtime actions such as `status`, `test`, `open`, `close`, `reconnect`, `configuration`, and `configure` from the user-facing `downcity chat` shortcut. Those actions exist inside the plugin runtime, but they are not the normal CLI path for users.
+```bash
+city plugin action chat send <agent_id> --input '{"chat_key":"telegram:123456","text":"Done"}' --token <token>
+```
 
 ## SDK Assembly
 
@@ -89,7 +84,7 @@ const plugin = new ChatPlugin({
 });
 ```
 
-`channelAccountId` remains available for account-pool bindings, but the host must explicitly inject an `account_store`. Chat Plugin depends only on the storage contract and never reads the CLI's `~/.downcity`, SQLite database, or key files:
+`channel_account_id` can bind an account from a shared pool, but the host must explicitly inject an `account_store`. Chat Plugin depends only on the storage contract and never reads the CLI's `~/.downcity`, SQLite database, or key files:
 
 ```ts
 import type { ChatChannelAccountStore } from "@downcity/plugins/chat";
@@ -100,7 +95,7 @@ const plugin = new ChatPlugin({
   account_store,
   channels: [
     new TelegramChannel({
-      channelAccountId: "telegram-main",
+      channel_account_id: "telegram-main",
     }),
   ],
 });
@@ -141,7 +136,7 @@ await agent.plugins.run_action({
 });
 ```
 
-The main user-facing actions are `list`, `info`, `send`, `react`, `context`, `history`, and `delete`.
+The common actions are `list`, `info`, `send`, `react`, `context`, `history`, and `delete`.
 
 ## Built-in Authorization
 

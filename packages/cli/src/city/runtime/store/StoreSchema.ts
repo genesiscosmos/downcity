@@ -7,6 +7,7 @@
  */
 
 import type { PlatformStoreContext } from "@/city/runtime/store/StoreShared.js";
+import { decryptTextSync, encryptTextSync } from "@/city/runtime/store/crypto.js";
 
 /**
  * 初始化 PlatformStore 所需表结构。
@@ -83,6 +84,7 @@ export function ensurePlatformStoreSchema(context: PlatformStoreContext): void {
   ensureChannelAccountsTableColumns(context);
   ensureAgentTokenSchema(context);
   ensurePluginSchema(context);
+  migrate_chat_plugin_config(context);
 }
 
 /**
@@ -157,6 +159,7 @@ function ensurePluginSchema(context: PlatformStoreContext): void {
     CREATE TABLE IF NOT EXISTS installed_plugins (
       plugin_name TEXT PRIMARY KEY NOT NULL,
       source TEXT NOT NULL,
+      resolved_commit TEXT,
       version TEXT NOT NULL,
       entry_path TEXT NOT NULL,
       manifest_json TEXT NOT NULL,
@@ -169,6 +172,7 @@ function ensurePluginSchema(context: PlatformStoreContext): void {
     CREATE INDEX IF NOT EXISTS installed_plugins_updated_at_idx
     ON installed_plugins(updated_at);
   `);
+  ensure_installed_plugin_columns(context);
 
   context.sqlite.exec(`
     CREATE TABLE IF NOT EXISTS agent_plugins (
@@ -189,6 +193,91 @@ function ensurePluginSchema(context: PlatformStoreContext): void {
     CREATE INDEX IF NOT EXISTS agent_plugins_plugin_name_idx
     ON agent_plugins(plugin_name);
   `);
+}
+
+/** 补齐 installed_plugins 表的增量制品来源字段。 */
+function ensure_installed_plugin_columns(context: PlatformStoreContext): void {
+  const rows = context.sqlite
+    .prepare("PRAGMA table_info(installed_plugins)")
+    .all() as Array<{ name?: unknown }>;
+  const columns = new Set(
+    rows.map((row) => String(row.name || "").trim()).filter(Boolean),
+  );
+  if (!columns.has("resolved_commit")) {
+    context.sqlite.exec("ALTER TABLE installed_plugins ADD COLUMN resolved_commit TEXT;");
+  }
+}
+
+/**
+ * 把旧 Chat Binding 配置一次性迁移为 snake_case canonical 数据。
+ *
+ * 关键点（中文）
+ * - 迁移完成后运行时只理解新协议，不保留双字段读取分支。
+ * - 事务内逐行解密、转换并重新加密，避免部分 Agent 留在旧状态。
+ */
+function migrate_chat_plugin_config(context: PlatformStoreContext): void {
+  const rows = context.sqlite.prepare(`
+    SELECT agent_id, config_encrypted
+    FROM agent_plugins
+    WHERE plugin_name = 'chat';
+  `).all() as Array<{ agent_id: string; config_encrypted: string }>;
+  const updates: Array<{ agent_id: string; config_encrypted: string }> = [];
+
+  for (const row of rows) {
+    const config = JSON.parse(decryptTextSync(row.config_encrypted)) as Record<string, unknown>;
+    let changed = false;
+    const queue = as_record(config.queue);
+    if (queue) {
+      changed = move_record_field(queue, "maxConcurrency", "max_concurrency") || changed;
+      changed = move_record_field(queue, "mergeDebounceMs", "merge_debounce_ms") || changed;
+      changed = move_record_field(queue, "mergeMaxWaitMs", "merge_max_wait_ms") || changed;
+    }
+    const channels = as_record(config.channels);
+    if (channels) {
+      for (const value of Object.values(channels)) {
+        const channel = as_record(value);
+        if (channel) {
+          changed = move_record_field(channel, "channelAccountId", "channel_account_id") || changed;
+        }
+      }
+    }
+    if (changed) {
+      updates.push({
+        agent_id: row.agent_id,
+        config_encrypted: encryptTextSync(JSON.stringify(config)),
+      });
+    }
+  }
+
+  const commit = context.sqlite.transaction(() => {
+    const update = context.sqlite.prepare(`
+      UPDATE agent_plugins
+      SET config_encrypted = ?, updated_at = ?
+      WHERE agent_id = ? AND plugin_name = 'chat';
+    `);
+    const current_time = new Date().toISOString();
+    for (const item of updates) update.run(item.config_encrypted, current_time, item.agent_id);
+  });
+  commit();
+}
+
+/** 把旧字段移动为新字段，已有新字段始终优先。 */
+function move_record_field(
+  record: Record<string, unknown>,
+  old_key: string,
+  new_key: string,
+): boolean {
+  if (!Object.prototype.hasOwnProperty.call(record, old_key)) return false;
+  if (!Object.prototype.hasOwnProperty.call(record, new_key)) record[new_key] = record[old_key];
+  delete record[old_key];
+  return true;
+}
+
+/** 把未知值收窄为普通 record。 */
+function as_record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
 /**

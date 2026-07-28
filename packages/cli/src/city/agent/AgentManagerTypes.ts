@@ -32,7 +32,7 @@ export type AgentManagerAgentAction =
 
 export type AgentManagerConfigAction =
   | "configureModel"
-  | "connectChatAccounts"
+  | "configurePlugins"
   | "back";
 
 export interface AgentManagerAgentSummary {
@@ -40,5 +40,4 @@ export interface AgentManagerAgentSummary {
   project_root: string;
   status: "running" | "stopped";
   execution_binding?: string;
-  channels: string[];
 }

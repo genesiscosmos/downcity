@@ -21,26 +21,11 @@ Use action scheduling as a mental model when you want to understand:
 
 - why scheduling belongs to plugin lifecycle instead of the top-level agent shell
 - how delayed plugin actions are re-invoked
-- why it is managed through `downcity plugin schedule`, not through a separate `downcity schedule` command
+- why it belongs to the Plugin runtime rather than a top-level CLI command
 
 ## How users use it
 
-Create scheduled jobs by adding `--delay` or `--time` to a plugin action command:
-
-```bash
-downcity chat send --chat-key <chat_key> --text "Later" --delay 60000
-downcity memory remember --content "Remember this later" --time "2026-06-06T09:00:00+08:00"
-```
-
-Inspect or cancel scheduled jobs through `downcity plugin schedule`:
-
-```bash
-downcity plugin schedule list
-downcity plugin schedule info <jobId>
-downcity plugin schedule cancel <jobId>
-```
-
-For reusable automation, use the `task` plugin instead of one scheduled action.
+Action scheduling is currently internal Plugin runtime infrastructure and has no standalone CLI management command. Use the `task` Plugin for user-managed, reusable automation.
 
 ## Important semantics
 

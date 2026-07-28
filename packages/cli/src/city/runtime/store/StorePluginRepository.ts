@@ -14,6 +14,7 @@ import type { AgentPluginBinding } from "@/city/types/plugin/AgentPluginBinding.
 type InstalledPluginRow = {
   plugin_name: string;
   source: string;
+  resolved_commit: string | null;
   version: string;
   entry_path: string;
   manifest_json: string;
@@ -36,10 +37,11 @@ function decode_installed_plugin(row: InstalledPluginRow): InstalledPlugin {
   return {
     plugin_name: row.plugin_name,
     source: row.source,
+    ...(row.resolved_commit ? { resolved_commit: row.resolved_commit } : {}),
     version: row.version,
     entry_path: row.entry_path,
     manifest: JSON.parse(row.manifest_json) as PluginManifest,
-    ...(row.integrity ? { integrity: row.integrity } : {}),
+    integrity: row.integrity ?? "",
     installed_at: row.installed_at,
     updated_at: row.updated_at,
   };
@@ -83,11 +85,12 @@ export function set_installed_plugin_row(
 ): void {
   context.sqlite.prepare(`
     INSERT INTO installed_plugins (
-      plugin_name, source, version, entry_path, manifest_json,
+      plugin_name, source, resolved_commit, version, entry_path, manifest_json,
       integrity, installed_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(plugin_name) DO UPDATE SET
       source = excluded.source,
+      resolved_commit = excluded.resolved_commit,
       version = excluded.version,
       entry_path = excluded.entry_path,
       manifest_json = excluded.manifest_json,
@@ -96,6 +99,7 @@ export function set_installed_plugin_row(
   `).run(
     plugin.plugin_name,
     plugin.source,
+    plugin.resolved_commit ?? null,
     plugin.version,
     plugin.entry_path,
     JSON.stringify(plugin.manifest),

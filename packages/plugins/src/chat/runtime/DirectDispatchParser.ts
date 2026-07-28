@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 默认把 assistant 文本原样当作用户可见正文发送。
- * - frontmatter metadata 语义与 `downcity chat send` 保持一致。
+ * - frontmatter metadata 语义与 Chat send action 保持一致。
  * - 额外保留 `react` 字段用于 direct 模式贴表情。
  */
 
@@ -125,7 +125,7 @@ function resolveReactionPlans(params: {
  * 从 assistant 文本中解析 direct 出站执行计划。
  *
  * 协议（中文）
- * - frontmatter metadata：与 `downcity chat send` 参数保持一致。
+ * - frontmatter metadata：与 Chat send action 输入保持一致。
  * - 附件统一使用 `<file type=\"document|photo|voice|audio|video\">path</file>`。
  * - `react` 仍仅用于 direct 模式的反应动作。
  */

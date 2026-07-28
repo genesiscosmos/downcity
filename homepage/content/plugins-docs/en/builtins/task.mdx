@@ -29,19 +29,14 @@ Use `task` when you need:
 
 ## How users use it
 
-Use `downcity task` when you want a reusable task definition:
+The CLI invokes task through the shared Plugin Action command:
 
 ```bash
-downcity task list
-downcity task create --title "daily-summary" --description "Send a daily summary" --when "0 9 * * *" --session-id <session_id>
-downcity task run daily-summary --reason "manual check"
-downcity task update daily-summary --status paused
-downcity task enable daily-summary
-downcity task disable daily-summary
-downcity task delete daily-summary
+city plugin action task list <agent_id> --input '{}' --token <token>
+city plugin action task run <agent_id> --input '{"title":"daily-summary","reason":"manual check"}' --token <token>
 ```
 
-Use `downcity chat send --delay/--time` or another plugin action with `--delay/--time` for a one-shot delayed action. Use `downcity task` when the automation should remain as a named, editable task.
+Use the `task` Plugin when automation should remain named, editable, and manually runnable, instead of adding another top-level CLI special case.
 
 ## SDK Assembly
 
@@ -83,7 +78,7 @@ The action names are `list`, `create`, `run`, `delete`, `update`, `status`, `ena
 
 ## Public status
 
-`TaskPlugin` is exported from `@downcity/plugins`. It can be attached directly in SDK usage, although the most common path is still through the agent runtime and `downcity task`.
+`TaskPlugin` is exported from `@downcity/plugins`. It can be attached directly in SDK usage; the CLI invokes it through the shared `city plugin action` command.
 
 ## Related docs
 

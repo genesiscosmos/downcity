@@ -1,96 +1,74 @@
 ---
 title: Plugin 配置
-description: 说明 plugin 的运行参数、setup / usage 协议，以及注册和配置的关系
+description: 理解 SDK Plugin 装配与 CLI Agent Binding 的边界
 ---
 
 # Plugin 配置
 
-Plugin 是否生效由 Agent runtime 的注册关系决定：
+Agent SDK 只负责注册已经构造好的 Runtime Plugin，不定义 CLI 的 Manifest、安装器或 `PluginFactory`：
 
 ```ts
 await agent.plugins.register(new SkillPlugin());
 await agent.plugins.unregister("skill");
 ```
 
-项目配置文件不提供 `plugins.<name>.enabled` 这类启用开关。
+## SDK 宿主
 
-## 参数配置
+嵌入式宿主直接通过 Plugin 构造参数传入运行配置：
 
-宿主仍然可以在自己的全局配置存储中保存 plugin 运行参数，例如渠道账号、默认模型或路径选项：
+```ts
+import { ChatPlugin, TelegramChannel } from "@downcity/plugins/chat";
+
+const chat = new ChatPlugin({
+  queue: {
+    max_concurrency: 4,
+    merge_debounce_ms: 500,
+  },
+  channels: [
+    new TelegramChannel({
+      bot_token: process.env.TELEGRAM_BOT_TOKEN,
+    }),
+  ],
+});
+
+await agent.plugins.register(chat);
+```
+
+SDK 不读取 City 数据库，也不解释 Agent Plugin Binding。凭证存储、配置界面和 Runtime 组装由宿主负责。
+
+## CLI / City 宿主
+
+CLI 使用独立控制面协议：
+
+```text
+Plugin Catalog
+  → Agent Plugin Binding（enabled + config）
+  → CLI Runtime Factory
+  → Agent Runtime Plugin
+```
+
+内建与外部 Plugin 都使用标准 JSON Schema 描述 Binding 配置。City 统一校验并保存配置；Agent 启动时，CLI 读取 Binding 并构造 Runtime Plugin。
+
+Chat Binding 示例：
 
 ```json
 {
-  "plugins": {
-    "chat": {
-      "channels": {
-        "telegram": {
-          "channelAccountId": "telegram-main"
-        }
-      }
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "channel_account_id": "telegram-main"
     }
   }
 }
 ```
 
-这类配置表达的是：
-
-- 当前 agent 怎么使用这个 plugin
-- plugin 自己需要哪些运行参数
-
-它不表达“是否启用”。是否启用只看 plugin 是否注册到 Agent。
-
-## `config.scope`
-
-plugin 类型里支持：
-
-- `global`
-- `project`
-
-这表示 plugin 配置字段的作用域。
-
-项目级参数通常写在宿主维护的 Agent 配置中：
-
-- CLI 场景：全局 DB 中的 `plugins.*`
-- SDK 场景：`new Agent({ config })` 或 plugin 构造参数
-
-全局参数可以由宿主或平台自己的配置系统保存。
-
-## `setup` 和 `usage`
-
-### `setup`
-
-`setup` 面向：
-
-- 安装
-- 修复
-- 初次依赖准备
-
-典型内容：
-
-- 安装依赖
-- 下载模型
-- 安装 Python 依赖
-
-### `usage`
-
-`usage` 面向：
-
-- 当前 agent 如何使用这个 plugin
-- 行为选项怎么保存
-
-典型内容：
-
-- 是否注入 prompt
-- 默认模型
-- 默认格式 / 语言 / 语速
+这个 Factory 属于 CLI，不属于 `@downcity/agent` 的公共 API。
 
 ## 推荐理解方式
 
-把 plugin 配置记成三句：
-
-- 注册 / 卸载决定 plugin 是否可见
-- `plugins.*` 只保存 plugin 运行参数，不表示是否启用
-- setup 和 usage 是 UI 协议层
+- Agent SDK：接收并运行 Plugin 对象。
+- SDK 宿主：自行构造 Plugin 并拥有配置来源。
+- CLI / City：拥有 Catalog、安装、Binding、Schema 表单和 Runtime Factory。
 
 ## 相关文档
 

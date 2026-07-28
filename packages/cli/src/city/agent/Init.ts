@@ -3,10 +3,10 @@
  *
  * 目标
  * - 生成 `.agents/skills` 与 `.downcity/` 运行目录
- * - 通过交互式问题收集必要配置（模型、channels 等）
+ * - 通过交互式问题收集 Agent 身份与默认模型
  *
  * 设计要点
- * - Chat channels 支持多选：选择结果写入 CLI 全局 DB 中的 agent 配置
+ * - Plugin 配置统一通过 Agent Plugin 管理器完成，创建流程不识别具体 Plugin
  * - 避免写入无意义的默认值：能省则省，保持配置简洁
  */
 
@@ -16,7 +16,6 @@ import {
   initialize_agent_project,
   normalize_default_agent_id,
 } from "@/city/agent/setup/AgentInitializer.js";
-import type { AgentProjectChannel } from "@/city/types/config/AgentProject.js";
 import type { ExecutionBindingConfig } from "@/city/types/config/ExecutionBinding.js";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { CliError } from "@/shared/CliError.js";
@@ -35,15 +34,7 @@ import { select_agent_create_workspace } from "@/city/agent/create/AgentCreateWo
 type InitPromptResponse = {
   id?: string;
   primaryModelId?: string;
-  channels?: string[];
 };
-
-type ChatChannelsConfig = Partial<Record<AgentProjectChannel, {
-  /** 当前渠道是否启用。 */
-  enabled?: boolean;
-  /** 绑定的 City chat account id。 */
-  channelAccountId?: string;
-}>>;
 
 
 /**
@@ -87,7 +78,7 @@ export async function initCommand(
   }
 
   // Collect configuration information
-  // 交互采集（中文）：agent id + model + chat platforms。
+  // 交互采集（中文）：Agent 创建只收集稳定身份与默认模型。
   const response = (await prompts([
     {
       type: "text",
@@ -102,17 +93,6 @@ export async function initCommand(
       choices: modelChoices,
       initial: 0,
     },
-    {
-      // 关键交互（中文）：Chat platforms 允许多选，未选择的就不写入 DB 配置。
-      type: "multiselect",
-      name: "channels",
-      message: "Select chat platforms (multi-select)",
-      choices: [
-        { title: "Telegram", value: "telegram" },
-        { title: "Feishu", value: "feishu" },
-        { title: "QQ", value: "qq" },
-      ],
-    },
   ])) as InitPromptResponse;
 
   // 关键点（中文）：agent_id 只写入全局 DB，项目目录不再保存配置副本。
@@ -125,13 +105,6 @@ export async function initCommand(
     model_id: primaryModelId,
   };
   await assertPlatformModelReady(primaryModelId);
-  const selectedChannels = Array.isArray(response.channels)
-    ? (response.channels as AgentProjectChannel[])
-    : [];
-  const channels_config: ChatChannelsConfig = {};
-  for (const channel of selectedChannels) {
-    channels_config[channel] = { enabled: true };
-  }
   const existing_agent = get_managed_agent(agent_id);
   if (existing_agent && !allowOverwrite) {
     const confirm_response = (await prompts({
@@ -154,16 +127,8 @@ export async function initCommand(
       project_root: project_root,
       id: agent_id,
       execution,
-      channels: selectedChannels,
     },
   );
-  const plugins = Object.keys(channels_config).length > 0
-    ? {
-        chat: {
-          channels: channels_config,
-        },
-      }
-    : undefined;
   if (existing_agent && allowOverwrite) {
     save_managed_agent({
       agent_id,
@@ -180,9 +145,7 @@ export async function initCommand(
       execution,
     });
   }
-  ensure_default_agent_plugin_bindings(agent_id, {
-    ...(plugins?.chat ? { chat: plugins.chat } : {}),
-  });
+  ensure_default_agent_plugin_bindings(agent_id);
 
   const createdItems = [
     ...initResult.created_files,
@@ -223,83 +186,15 @@ export async function initCommand(
     });
   }
 
-  const channelItems: Array<{ title: string; facts: Array<{ label: string; value: string }> }> = [];
-  if (selectedChannels.includes("feishu")) {
-    channelItems.push({
-      title: "feishu",
-      facts: [
-        {
-          label: "Bind",
-          value: "plugins.chat.channels.feishu.channelAccountId",
-        },
-        {
-          label: "Manage",
-          value: "city chat accounts",
-        },
-      ],
-    });
-  }
-  if (selectedChannels.includes("telegram")) {
-    channelItems.push({
-      title: "telegram",
-      facts: [
-        {
-          label: "Bind",
-          value: "plugins.chat.channels.telegram.channelAccountId",
-        },
-        {
-          label: "Manage",
-          value: "city chat accounts",
-        },
-      ],
-    });
-  }
-  if (selectedChannels.includes("qq")) {
-    channelItems.push({
-      title: "qq",
-      facts: [
-        {
-          label: "Bind",
-          value: "plugins.chat.channels.qq.channelAccountId",
-        },
-        {
-          label: "Manage",
-          value: "city chat accounts",
-        },
-      ],
-    });
-  }
-  if (channelItems.length > 0) {
-    emitCliList({
-      tone: "accent",
-      title: "Chat platforms",
-      items: channelItems,
-    });
-  }
-
   const nextSteps: string[] = [
     "Add reusable capabilities under .agents/skills",
     "Use downcity agent model --set <model-id> to update the Agent default model",
+    "Open Agent Config > Plugins to configure built-in or installed Plugins",
   ];
   if (primaryModelId) {
     nextSteps.push('Use "city agent start" to confirm the Agent can reach its configured model');
   }
 
-  if (selectedChannels.includes("telegram")) {
-    nextSteps.push(
-      "Bind plugins.chat.channels.telegram.channelAccountId to an existing chat account",
-    );
-  }
-  if (selectedChannels.includes("feishu")) {
-    nextSteps.push(
-      "Bind plugins.chat.channels.feishu.channelAccountId to an existing chat account",
-    );
-  }
-  if (selectedChannels.includes("qq")) {
-    nextSteps.push(
-      "Bind plugins.chat.channels.qq.channelAccountId to an existing chat account",
-    );
-  }
   nextSteps.push('Run "city agent start" to start the agent');
 
   emitCliList({

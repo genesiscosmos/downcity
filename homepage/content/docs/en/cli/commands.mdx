@@ -40,17 +40,19 @@ city agent token delete <token_id> [agent_id]
 
 ```bash
 city plugin list
-city plugin install <git-url-or-local-directory>
+city plugin install <local-directory|git-url|github:owner/repo#ref>
+city plugin update <plugin_name>
 city plugin uninstall <plugin_name>
 city plugin inspect <plugin_name>
 city plugin enable <plugin_name> [agent_id] --config '{"key":"value"}'
 city plugin disable <plugin_name> [agent_id]
 city plugin config <plugin_name> [agent_id]
 city plugin config <plugin_name> [agent_id] --set '{"key":"value"}'
+city plugin config <plugin_name> [agent_id] --interactive
 city plugin action <plugin_name> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
-A third-party repository must contain `downcity.plugin.json` and a prebuilt ESM entry. Installation never runs `npm install` or lifecycle scripts. The manifest declares schema/defaults; actual configuration belongs to the Agent Plugin Binding in the global database. The Runtime Factory receives validated config and creates the Plugin.
+A third-party repository must contain `downcity.plugin.json`, a JSON Schema, and a prebuilt self-contained ESM entry. Installation never runs `npm install`, build scripts, lifecycle scripts, or the Plugin entry. The manifest declares schema/defaults; actual configuration belongs to the Agent Plugin Binding in the global database. The Runtime Factory receives only validated config and creates the Plugin.
 
 After changing enable, disable, or config state, restart a running Agent to apply the new Runtime assembly.
 

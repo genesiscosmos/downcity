@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - channel 对象是 ChatPlugin 的运行态配置单元。
  * - env 由 channel 自己读取，ChatPlugin 不理解平台字段。
- * - channelAccountId 仅作为账号池绑定能力保留，不再是 ChatPlugin 顶层配置。
+ * - channel_account_id 仅作为账号池绑定能力保留，不再是 ChatPlugin 顶层配置。
  */
 
 import type { PluginContext } from "@downcity/agent";
@@ -47,7 +47,7 @@ export interface BaseChatChannelOptions {
    * - 仅在需要复用全局账号池时使用。
    * - SDK 主路径推荐直接通过 `env` 传入凭据。
    */
-  channelAccountId?: string;
+  channel_account_id?: string;
   /**
    * 运行态展示名称。
    */
@@ -62,13 +62,13 @@ abstract class BaseRuntimeChatChannel implements ChatChannel {
 
   protected enabled: boolean;
   protected env: ChatChannelEnv;
-  protected channelAccountId: string;
+  protected channel_account_id: string;
   protected display_name: string;
 
   protected constructor(options: BaseChatChannelOptions = {}) {
     this.enabled = options.enabled !== false;
     this.env = options.env || {};
-    this.channelAccountId = String(options.channelAccountId || "").trim();
+    this.channel_account_id = String(options.channel_account_id || "").trim();
     this.display_name = String(options.name || "").trim();
   }
 
@@ -77,14 +77,14 @@ abstract class BaseRuntimeChatChannel implements ChatChannel {
   }
 
   getChannelAccountId(_context: PluginContext): string {
-    return this.channelAccountId;
+    return this.channel_account_id;
   }
 
   protected getStoredAccount(
     account_store?: ChatChannelAccountStore,
   ): StoredChannelAccount | null {
-    if (!this.channelAccountId || !account_store) return null;
-    const account = account_store.get(this.channelAccountId);
+    if (!this.channel_account_id || !account_store) return null;
+    const account = account_store.get(this.channel_account_id);
     if (!account || account.channel !== this.name) return null;
     return account;
   }
@@ -109,7 +109,7 @@ export interface TelegramChannelOptions extends BaseChatChannelOptions {
    * 说明（中文）
    * - 优先级高于 `env.TELEGRAM_BOT_TOKEN`。
    */
-  botToken?: string;
+  bot_token?: string;
 }
 
 /**
@@ -117,11 +117,11 @@ export interface TelegramChannelOptions extends BaseChatChannelOptions {
  */
 export class TelegramChannel extends BaseRuntimeChatChannel {
   readonly name = "telegram" as const;
-  private readonly botToken?: string;
+  private readonly bot_token?: string;
 
   constructor(options: TelegramChannelOptions = {}) {
     super(options);
-    this.botToken = String(options.botToken || "").trim() || undefined;
+    this.bot_token = String(options.bot_token || "").trim() || undefined;
   }
 
   getAccount(
@@ -131,11 +131,11 @@ export class TelegramChannel extends BaseRuntimeChatChannel {
     const storedAccount = this.getStoredAccount(account_store);
     if (storedAccount) return storedAccount;
 
-    const token = String(this.botToken || this.env.TELEGRAM_BOT_TOKEN || "").trim();
+    const token = String(this.bot_token || this.env.TELEGRAM_BOT_TOKEN || "").trim();
     if (!token) return null;
     const now = this.nowIso();
     return {
-      id: this.channelAccountId || "chat-sdk-telegram",
+      id: this.channel_account_id || "chat-sdk-telegram",
       channel: "telegram",
       name: this.display_name || "telegram",
       botToken: token,
@@ -152,11 +152,11 @@ export interface FeishuChannelOptions extends BaseChatChannelOptions {
   /**
    * Feishu / Lark App ID。
    */
-  appId?: string;
+  app_id?: string;
   /**
    * Feishu / Lark App Secret。
    */
-  appSecret?: string;
+  app_secret?: string;
   /**
    * Feishu / Lark Open API 域名。
    */
@@ -168,14 +168,14 @@ export interface FeishuChannelOptions extends BaseChatChannelOptions {
  */
 export class FeishuChannel extends BaseRuntimeChatChannel {
   readonly name = "feishu" as const;
-  private readonly appId?: string;
-  private readonly appSecret?: string;
+  private readonly app_id?: string;
+  private readonly app_secret?: string;
   private readonly domain?: string;
 
   constructor(options: FeishuChannelOptions = {}) {
     super(options);
-    this.appId = String(options.appId || "").trim() || undefined;
-    this.appSecret = String(options.appSecret || "").trim() || undefined;
+    this.app_id = String(options.app_id || "").trim() || undefined;
+    this.app_secret = String(options.app_secret || "").trim() || undefined;
     this.domain = String(options.domain || "").trim() || undefined;
   }
 
@@ -186,15 +186,15 @@ export class FeishuChannel extends BaseRuntimeChatChannel {
     const storedAccount = this.getStoredAccount(account_store);
     if (storedAccount) return storedAccount;
 
-    const appId = String(this.appId || this.env.FEISHU_APP_ID || "").trim();
+    const appId = String(this.app_id || this.env.FEISHU_APP_ID || "").trim();
     const appSecret = String(
-      this.appSecret || this.env.FEISHU_APP_SECRET || "",
+      this.app_secret || this.env.FEISHU_APP_SECRET || "",
     ).trim();
     const domain = String(this.domain || this.env.FEISHU_DOMAIN || "").trim();
     if (!appId || !appSecret) return null;
     const now = this.nowIso();
     return {
-      id: this.channelAccountId || "chat-sdk-feishu",
+      id: this.channel_account_id || "chat-sdk-feishu",
       channel: "feishu",
       name: this.display_name || "feishu",
       appId,
@@ -213,11 +213,11 @@ export interface QqChannelOptions extends BaseChatChannelOptions {
   /**
    * QQ Bot App ID。
    */
-  appId?: string;
+  app_id?: string;
   /**
    * QQ Bot App Secret。
    */
-  appSecret?: string;
+  app_secret?: string;
   /**
    * 是否使用 QQ 沙箱模式。
    */
@@ -229,14 +229,14 @@ export interface QqChannelOptions extends BaseChatChannelOptions {
  */
 export class QqChannel extends BaseRuntimeChatChannel {
   readonly name = "qq" as const;
-  private readonly appId?: string;
-  private readonly appSecret?: string;
+  private readonly app_id?: string;
+  private readonly app_secret?: string;
   private readonly sandbox?: boolean;
 
   constructor(options: QqChannelOptions = {}) {
     super(options);
-    this.appId = String(options.appId || "").trim() || undefined;
-    this.appSecret = String(options.appSecret || "").trim() || undefined;
+    this.app_id = String(options.app_id || "").trim() || undefined;
+    this.app_secret = String(options.app_secret || "").trim() || undefined;
     this.sandbox = options.sandbox === true;
   }
 
@@ -247,15 +247,15 @@ export class QqChannel extends BaseRuntimeChatChannel {
     const storedAccount = this.getStoredAccount(account_store);
     if (storedAccount) return storedAccount;
 
-    const appId = String(this.appId || this.env.QQ_APP_ID || "").trim();
-    const appSecret = String(this.appSecret || this.env.QQ_APP_SECRET || "").trim();
+    const appId = String(this.app_id || this.env.QQ_APP_ID || "").trim();
+    const appSecret = String(this.app_secret || this.env.QQ_APP_SECRET || "").trim();
     const sandbox =
       this.sandbox === true ||
       String(this.env.QQ_SANDBOX || "").trim().toLowerCase() === "true";
     if (!appId || !appSecret) return null;
     const now = this.nowIso();
     return {
-      id: this.channelAccountId || "chat-sdk-qq",
+      id: this.channel_account_id || "chat-sdk-qq",
       channel: "qq",
       name: this.display_name || "qq",
       appId,

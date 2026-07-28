@@ -1,63 +1,109 @@
 ---
 title: Custom Plugin
-description: How to write and register a custom plugin for your Agent
+description: Build, publish, and configure an installable Downcity Plugin
 ---
 
 # Custom Plugin
 
-If the built-in plugins do not cover your needs, you can write a custom plugin. A plugin is a plain TypeScript module that implements the Plugin API.
+A CLI Plugin is a prebuilt static artifact. Its repository uses a JSON manifest to describe the entry and configuration contract. After installation, City adds the Plugin to the shared Catalog and stores enablement and configuration separately for each Agent.
 
-## Plugin structure
+## Artifact structure
+
+```text
+example-plugin/
+├── downcity.plugin.json
+└── dist/
+    ├── index.js
+    └── config.schema.json
+```
+
+`downcity.plugin.json`:
+
+```json
+{
+  "manifest_version": 1,
+  "name": "example",
+  "version": "1.0.0",
+  "entry": "dist/index.js",
+  "title": "Example",
+  "description": "An example Plugin",
+  "config": {
+    "schema": "dist/config.schema.json",
+    "defaults": {
+      "endpoint": "https://example.com"
+    }
+  }
+}
+```
+
+The manifest must be static JSON. `entry` and `config.schema` are paths relative to the repository root and cannot escape that root or point through symbolic links.
+
+## Configuration contract
+
+The configuration contract uses JSON Schema 2020-12. You can define it with Zod in source code and emit JSON Schema during the build:
 
 ```ts
-import { definePlugin } from "@downcity/agent-plugin";
+import { z } from "zod";
 
-export default definePlugin({
-  id: "my-plugin",
-  name: "My Plugin",
-  version: "1.0.0",
+export const config_schema = z.object({
+  endpoint: z.url(),
+}).strict();
 
-  async init(context) {
-    // lifecycle hook: called when the Agent starts
-  },
-
-  async destroy(context) {
-    // lifecycle hook: called when the Agent stops
-  },
-
-  tools: [
-    {
-      id: "myTool",
-      description: "Does something useful",
-      async handler(args) {
-        return { result: "done" };
-      },
-    },
-  ],
+const json_schema = z.toJSONSchema(config_schema, {
+  target: "draft-2020-12",
 });
 ```
 
-## Key concepts
+Your build script must write `json_schema` to `dist/config.schema.json`. City uses Ajv to validate the schema and defaults during installation, then validates every Agent Binding against the same schema. Zod is not the runtime protocol and does not belong in the manifest.
 
-- `id` — unique plugin identifier
-- `init` — startup hook for setup and connections
-- `destroy` — shutdown hook for cleanup
-- `tools` — functions the Agent can call during execution
+## Runtime Factory
 
-## Registering the plugin
-
-Pass it to the Agent constructor:
+The entry must export `plugin_factory`; a default export is also accepted. The Factory receives only the current Agent's validated `config`:
 
 ```ts
-import myPlugin from "./my-plugin";
+import type { JsonObject, Plugin } from "@downcity/agent";
 
-const agent = new Agent({
-  plugins: [myPlugin],
-});
+export const plugin_factory = {
+  create({ config }: { config: JsonObject }): Plugin {
+    return {
+      name: "example",
+      title: "Example",
+      description: `Endpoint: ${String(config.endpoint)}`,
+      actions: {},
+    };
+  },
+};
 ```
+
+The returned `name` must match the manifest `name`. `dist/index.js` must be self-contained ESM: bundle runtime dependencies into the artifact and use `@downcity/agent` only as a type-only build dependency.
+
+## Install and configure
+
+```bash
+# Local directory
+city plugin install ./example-plugin
+
+# Git URL with an optional branch or tag
+city plugin install https://github.com/acme/example-plugin.git#v1.0.0
+
+# GitHub shorthand
+city plugin install github:acme/example-plugin#main
+
+city plugin update example
+city plugin config example my-agent --interactive
+city plugin enable example my-agent
+```
+
+You can also open `city plugin` to install, update, select an Agent, configure, enable, or disable Plugins interactively. Restart a running Agent after a configuration change to assemble a new Runtime.
+
+## Trust boundary
+
+Installation reads only the manifest, JSON Schema, and static files. It does not run `npm install`, build scripts, lifecycle scripts, or the Plugin entry. City records the resolved Git commit for Git sources and a SHA-256 digest of the complete artifact.
+
+The Plugin entry executes when an Agent starts, so install only trusted sources. Static installation checks are not a substitute for reviewing third-party runtime code.
 
 Continue with:
 
 - [Chat Plugin](/en/docs/plugin/chat)
-- [Task Plugin](/en/docs/plugin/task)
+- [CLI Commands](/en/docs/cli/commands)
 - [Agent Plugins Docs](/en/plugins-docs)

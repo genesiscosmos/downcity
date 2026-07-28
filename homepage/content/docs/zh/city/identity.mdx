@@ -132,17 +132,13 @@ CLI 生成明文并写入 Federation 注册表。
 
 ## 渠道账号
 
-聊天平台的机器人凭证存储在 `~/.downcity/downcity.db` 中，并通过 ID 从项目引用：
+聊天平台的机器人凭证存储在 `~/.downcity/downcity.db` 中，并通过 ID 从 Chat Plugin Binding 引用：
 
 ```json
 {
-  "plugins": {
-    "chat": {
-      "channels": {
-        "telegram": {
-          "channelAccountId": "telegram-main"
-        }
-      }
+  "channels": {
+    "telegram": {
+      "channel_account_id": "telegram-main"
     }
   }
 }

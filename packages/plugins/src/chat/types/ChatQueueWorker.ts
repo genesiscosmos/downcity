@@ -13,13 +13,13 @@ export type ChatQueueWorkerConfig = {
   /**
    * 最大并发 lane 数。
    */
-  maxConcurrency: number;
+  max_concurrency: number;
   /**
    * burst merge 防抖窗口（毫秒）。
    */
-  mergeDebounceMs: number;
+  merge_debounce_ms: number;
   /**
    * burst merge 最长等待时间（毫秒）。
    */
-  mergeMaxWaitMs: number;
+  merge_max_wait_ms: number;
 };

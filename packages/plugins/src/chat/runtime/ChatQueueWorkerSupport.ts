@@ -21,31 +21,31 @@ const BURST_MERGE_POLL_INTERVAL_MS = 20;
 export function normalizeChatQueueWorkerConfig(
   input?: Partial<ChatQueueWorkerConfig>,
 ): ChatQueueWorkerConfig {
-  const maxConcurrency =
-    typeof input?.maxConcurrency === "number" && Number.isFinite(input.maxConcurrency)
-      ? Math.max(1, Math.min(32, Math.floor(input.maxConcurrency)))
+  const max_concurrency =
+    typeof input?.max_concurrency === "number" && Number.isFinite(input.max_concurrency)
+      ? Math.max(1, Math.min(32, Math.floor(input.max_concurrency)))
       : 2;
 
-  const mergeDebounceMs =
-    typeof input?.mergeDebounceMs === "number" &&
-    Number.isFinite(input.mergeDebounceMs)
-      ? Math.max(0, Math.min(60_000, Math.floor(input.mergeDebounceMs)))
+  const merge_debounce_ms =
+    typeof input?.merge_debounce_ms === "number" &&
+    Number.isFinite(input.merge_debounce_ms)
+      ? Math.max(0, Math.min(60_000, Math.floor(input.merge_debounce_ms)))
       : DEFAULT_MERGE_DEBOUNCE_MS;
 
-  const mergeMaxWaitMs =
-    typeof input?.mergeMaxWaitMs === "number" &&
-    Number.isFinite(input.mergeMaxWaitMs)
-      ? Math.max(0, Math.min(120_000, Math.floor(input.mergeMaxWaitMs)))
+  const merge_max_wait_ms =
+    typeof input?.merge_max_wait_ms === "number" &&
+    Number.isFinite(input.merge_max_wait_ms)
+      ? Math.max(0, Math.min(120_000, Math.floor(input.merge_max_wait_ms)))
       : DEFAULT_MERGE_MAX_WAIT_MS;
 
-  return { maxConcurrency, mergeDebounceMs, mergeMaxWaitMs };
+  return { max_concurrency, merge_debounce_ms, merge_max_wait_ms };
 }
 
 /**
  * 判断是否启用“启动前消息合并”。
  */
 export function isBurstMergeEnabled(config: ChatQueueWorkerConfig): boolean {
-  return config.mergeDebounceMs > 0 && config.mergeMaxWaitMs > 0;
+  return config.merge_debounce_ms > 0 && config.merge_max_wait_ms > 0;
 }
 
 /**
@@ -110,11 +110,11 @@ export async function collectInitialBurstItems(params: {
     const now = Date.now();
     const idleMs = now - lastInboundAt;
     const elapsedMs = now - startedAt;
-    if (idleMs >= params.config.mergeDebounceMs) break;
-    if (elapsedMs >= params.config.mergeMaxWaitMs) break;
+    if (idleMs >= params.config.merge_debounce_ms) break;
+    if (elapsedMs >= params.config.merge_max_wait_ms) break;
 
-    const remainingDebounceMs = params.config.mergeDebounceMs - idleMs;
-    const remainingMaxWaitMs = params.config.mergeMaxWaitMs - elapsedMs;
+    const remainingDebounceMs = params.config.merge_debounce_ms - idleMs;
+    const remainingMaxWaitMs = params.config.merge_max_wait_ms - elapsedMs;
     const sleepMs = Math.max(
       1,
       Math.min(

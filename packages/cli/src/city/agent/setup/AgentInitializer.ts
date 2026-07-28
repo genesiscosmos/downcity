@@ -17,7 +17,6 @@ import type { EnvFileEntry } from "@/city/types/config/EnvFile.js";
 import { append_missing_env_entries } from "@/city/agent/setup/EnvFile.js";
 import { ensure_gitignore_entry } from "@/city/agent/setup/Gitignore.js";
 import type {
-  AgentProjectChannel,
   AgentProjectInitializationInput,
   AgentProjectInitializationResult,
 } from "@/city/types/config/AgentProject.js";
@@ -42,24 +41,6 @@ export function normalize_default_agent_id(input: string): string {
 }
 
 /**
- * 规范化用户选择的渠道列表。
- *
- * 关键点（中文）
- * - 只保留当前 agent 初始化流程支持的渠道。
- * - 会自动去重并统一为小写，避免调用方在外部重复做清洗。
- */
-function normalize_channels(input: AgentProjectChannel[] | undefined): AgentProjectChannel[] {
-  const allowed = new Set<AgentProjectChannel>(["telegram", "feishu", "qq"]);
-  const seen = new Set<AgentProjectChannel>();
-  for (const item of Array.isArray(input) ? input : []) {
-    const value = String(item || "").trim().toLowerCase() as AgentProjectChannel;
-    if (!allowed.has(value)) continue;
-    seen.add(value);
-  }
-  return [...seen];
-}
-
-/**
  * 初始化 agent 项目骨架。
  *
  * 关键点（中文）
@@ -76,7 +57,6 @@ export async function initialize_agent_project(
   const agent_id = String(input.id || "").trim() || fallback_agent_id;
   const execution = input.execution as ExecutionBindingConfig;
 
-  const channels = normalize_channels(input.channels);
   const dot_env_path = path.join(project_root, ".env");
   const downcity_dir_path = path.join(project_root, ".downcity");
   const skills_dir_path = path.join(project_root, ".agents", "skills");
@@ -145,7 +125,6 @@ export async function initialize_agent_project(
     ...(execution?.type === "api" && String(execution.model_id || "").trim()
       ? { model_id: String(execution.model_id || "").trim() }
       : {}),
-    channels,
     created_files,
     skipped_files,
   };

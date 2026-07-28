@@ -39,14 +39,14 @@ test("Agent 配置只从全局 DB 读取", async () => {
       agent_id: "db_agent",
       plugin_name: "chat",
       enabled: true,
-      config: { queue: { maxConcurrency: 3 } },
+      config: { queue: { max_concurrency: 3 } },
     });
     const config = repository.get_managed_agent("db_agent");
     assert.equal(config.agent_id, "db_agent");
     assert.equal(config.execution.model_id, "model_a");
     assert.equal("plugins" in config, false);
     assert.equal(
-      plugins.get_agent_plugin_binding("db_agent", "chat").config.queue.maxConcurrency,
+      plugins.get_agent_plugin_binding("db_agent", "chat").config.queue.max_concurrency,
       3,
     );
     assert.equal(fs.existsSync(path.join(platform_root, "downcity.db")), true);
@@ -163,17 +163,32 @@ test("Plugin 安装与 Agent Binding 配置使用全局数据库", async () => {
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
     fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
+      manifest_version: 1,
       name: "example",
       version: "1.0.0",
       entry: "index.js",
-      config_schema: {
+      config: {
+        schema: "config.schema.json",
+      },
+    }));
+    fs.writeFileSync(path.join(plugin_source, "config.schema.json"), JSON.stringify({
         type: "object",
         required: ["endpoint"],
         properties: { endpoint: { type: "string" } },
         additionalProperties: false,
-      },
     }));
-    fs.writeFileSync(path.join(plugin_source, "index.js"), "export const plugin_factory = {};\n");
+    fs.writeFileSync(path.join(plugin_source, "index.js"), `
+export const plugin_factory = {
+  create({ config }) {
+    return {
+      name: "example",
+      title: "Example",
+      description: config.endpoint,
+      actions: {},
+    };
+  },
+};
+`);
     const agents = await import("../bin/city/process/registry/ManagedAgentRepository.js");
     const plugins = await import("../bin/city/process/registry/PluginRepository.js");
     const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
@@ -181,6 +196,7 @@ test("Plugin 安装与 Agent Binding 配置使用全局数据库", async () => {
     const installed = await installer.install_plugin(plugin_source);
     assert.equal(installed.plugin_name, "example");
     assert.equal(fs.existsSync(installed.entry_path), true);
+    assert.match(installed.integrity, /^sha256-[a-f0-9]{64}$/u);
     assert.throws(
       () => plugins.set_agent_plugin_binding({
         agent_id: "plugin_agent",
@@ -188,7 +204,7 @@ test("Plugin 安装与 Agent Binding 配置使用全局数据库", async () => {
         enabled: true,
         config: {},
       }),
-      /config.endpoint is required/,
+      /config must have required property 'endpoint'/,
     );
     const binding = plugins.set_agent_plugin_binding({
       agent_id: "plugin_agent",
@@ -197,11 +213,136 @@ test("Plugin 安装与 Agent Binding 配置使用全局数据库", async () => {
       config: { endpoint: "https://example.com" },
     });
     assert.equal(binding.config.endpoint, "https://example.com");
+    const runtime = await import("../bin/city/runtime/plugins/CityExternalPlugins.js");
+    const runtime_plugins = await runtime.create_external_plugins({ bindings: [binding] });
+    assert.equal(runtime_plugins.length, 1);
+    assert.equal(runtime_plugins[0].name, "example");
+    assert.equal(runtime_plugins[0].description, "https://example.com");
+    const renamed_manifest = JSON.parse(
+      fs.readFileSync(path.join(plugin_source, "downcity.plugin.json"), "utf8"),
+    );
+    renamed_manifest.name = "renamed-example";
+    fs.writeFileSync(
+      path.join(plugin_source, "downcity.plugin.json"),
+      JSON.stringify(renamed_manifest),
+    );
+    await assert.rejects(
+      () => installer.update_plugin("example"),
+      /Plugin update name mismatch/,
+    );
+    assert.equal(plugins.get_installed_plugin("example").version, "1.0.0");
     assert.equal(agents.get_managed_agent("plugin_agent").plugins, undefined);
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });
     fs.rmSync(workspace_root, { recursive: true, force: true });
+    fs.rmSync(plugin_source, { recursive: true, force: true });
+  }
+});
+
+test("内建与外部 Plugin 使用统一 Catalog 配置协议", async () => {
+  const platform_root = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  try {
+    const catalog = await import("../bin/city/process/plugin/PluginCatalog.js");
+    const chat = catalog.get_plugin_catalog_item("chat");
+    assert.ok(chat);
+    assert.equal(chat.source, "builtin");
+    assert.equal(
+      chat.config_schema.properties.channels.properties.telegram
+        .properties.channel_account_id.type,
+      "string",
+    );
+    assert.equal(
+      chat.config_schema.properties.channels.properties.telegram
+        .properties.channel_account_id.x_downcity.resource_type,
+      "channel_account",
+    );
+  } finally {
+    delete process.env.DC_PLATFORM_ROOT;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+  }
+});
+
+test("内建 Plugin 静态 Catalog 的 Action 与 Runtime 保持一致", async () => {
+  const platform_root = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  try {
+    const catalog = await import("../bin/city/process/plugin/PluginCatalog.js");
+    const runtime = await import("../bin/city/runtime/plugins/CityBuiltinPlugins.js");
+    for (const plugin of runtime.createCityStaticBuiltinPlugins()) {
+      const item = catalog.get_plugin_catalog_item(plugin.name);
+      assert.ok(item, `Missing Catalog item: ${plugin.name}`);
+      assert.deepEqual(item.actions, Object.keys(plugin.actions || {}).sort());
+    }
+  } finally {
+    delete process.env.DC_PLATFORM_ROOT;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+  }
+});
+
+test("Plugin 安装拒绝保留名称与非法 Manifest 默认配置", async () => {
+  const platform_root = create_temp_root();
+  const plugin_source = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  try {
+    const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
+    fs.writeFileSync(path.join(plugin_source, "index.js"), "export const plugin_factory = {};\n");
+    fs.writeFileSync(path.join(plugin_source, "config.schema.json"), JSON.stringify({
+      type: "object",
+      properties: {},
+    }));
+    fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
+      manifest_version: 1,
+      name: "chat",
+      version: "1.0.0",
+      entry: "index.js",
+    }));
+    await assert.rejects(
+      () => installer.install_plugin(plugin_source),
+      /name is reserved by a built-in Plugin/,
+    );
+
+    fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
+      manifest_version: 1,
+      name: "invalid-defaults",
+      version: "1.0.0",
+      entry: "index.js",
+      config: {
+        schema: "config.schema.json",
+        defaults: [],
+      },
+    }));
+    await assert.rejects(
+      () => installer.install_plugin(plugin_source),
+      /config.defaults must be an object/,
+    );
+
+    fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
+      manifest_version: 1,
+      name: "escaped-entry",
+      version: "1.0.0",
+      entry: "../outside.js",
+    }));
+    await assert.rejects(
+      () => installer.install_plugin(plugin_source),
+      /entry must stay inside the plugin directory/,
+    );
+
+    fs.symlinkSync("index.js", path.join(plugin_source, "linked-entry.js"));
+    fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
+      manifest_version: 1,
+      name: "linked-entry",
+      version: "1.0.0",
+      entry: "linked-entry.js",
+    }));
+    await assert.rejects(
+      () => installer.install_plugin(plugin_source),
+      /artifact cannot contain symlinks/,
+    );
+  } finally {
+    delete process.env.DC_PLATFORM_ROOT;
+    fs.rmSync(platform_root, { recursive: true, force: true });
     fs.rmSync(plugin_source, { recursive: true, force: true });
   }
 });
@@ -336,18 +477,12 @@ test("Chat 装配严格使用当前 Agent 绑定与 queue 配置", async () => {
     "../bin/city/runtime/plugins/CityBuiltinPlugins.js"
   );
   const plugins = createCityStaticBuiltinPlugins({
-    config: {
-      id: "agent_test",
-      version: "1.0.0",
-      plugins: {
-        chat: {
-          queue: { maxConcurrency: 5 },
-          channels: {
-            telegram: {
-              enabled: true,
-              channelAccountId: "telegram_bound",
-            },
-          },
+    chat_config: {
+      queue: { max_concurrency: 5 },
+      channels: {
+        telegram: {
+          enabled: true,
+          channel_account_id: "telegram_bound",
         },
       },
     },
@@ -357,7 +492,7 @@ test("Chat 装配严格使用当前 Agent 绑定与 queue 配置", async () => {
   assert.equal(chat.getChannelAccountId({}, "telegram"), "telegram_bound");
   assert.equal(chat.isChannelEnabled({}, "telegram"), true);
   assert.equal(chat.isChannelEnabled({}, "feishu"), false);
-  assert.deepEqual(chat.getQueueWorkerConfig({}), { maxConcurrency: 5 });
+  assert.deepEqual(chat.getQueueWorkerConfig({}), { max_concurrency: 5 });
 
   const unbound = createCityStaticBuiltinPlugins().find((plugin) => plugin.name === "chat");
   assert.equal(unbound.isChannelEnabled({}, "telegram"), false);
@@ -382,17 +517,11 @@ test("CLI 通过 City Store Adapter 向 ChatPlugin 注入共享账号", async ()
       "../bin/city/runtime/plugins/CityBuiltinPlugins.js"
     );
     const plugins = createCityStaticBuiltinPlugins({
-      config: {
-        id: "agent_test",
-        version: "1.0.0",
-        plugins: {
-          chat: {
-            channels: {
-              telegram: {
-                enabled: true,
-                channelAccountId: "telegram-main",
-              },
-            },
+      chat_config: {
+        channels: {
+          telegram: {
+            enabled: true,
+            channel_account_id: "telegram-main",
           },
         },
       },

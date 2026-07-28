@@ -23,12 +23,12 @@ import type { AgentPluginBinding, SetAgentPluginBindingInput } from "@/city/type
 import type { InstalledPlugin } from "@/city/types/plugin/PluginManifest.js";
 import { validate_plugin_config } from "@/city/process/plugin/PluginConfigValidator.js";
 import {
-  CITY_BUILTIN_PLUGIN_CONFIGS,
-  get_builtin_plugin_config,
-} from "@/city/process/plugin/BuiltinPluginConfig.js";
+  CITY_BUILTIN_PLUGIN_CATALOG,
+  get_builtin_plugin_catalog_definition,
+} from "@/city/process/plugin/BuiltinPluginCatalog.js";
 
 /** City 默认向新 Agent 启用的内建 Plugin 名称。 */
-export const DEFAULT_BUILTIN_PLUGIN_NAMES = CITY_BUILTIN_PLUGIN_CONFIGS
+export const DEFAULT_BUILTIN_PLUGIN_NAMES = CITY_BUILTIN_PLUGIN_CATALOG
   .map((item) => item.plugin_name);
 
 /** 规范化 Plugin 稳定名称。 */
@@ -60,6 +60,9 @@ export function get_installed_plugin(plugin_name_input: string): InstalledPlugin
 /** 写入完整的第三方 Plugin 安装记录。 */
 export function save_installed_plugin(plugin: InstalledPlugin): InstalledPlugin {
   const plugin_name = normalize_plugin_name(plugin.plugin_name);
+  if (is_builtin_plugin(plugin_name)) {
+    throw new Error(`Plugin name is reserved by a built-in Plugin: ${plugin_name}`);
+  }
   const normalized: InstalledPlugin = {
     ...plugin,
     plugin_name,
@@ -113,11 +116,11 @@ export function set_agent_plugin_binding(
   if (!is_builtin_plugin(plugin_name) && !get_installed_plugin(plugin_name)) {
     throw new Error(`Plugin is not installed: ${plugin_name}`);
   }
-  const builtin_config = get_builtin_plugin_config(plugin_name);
+  const builtin_config = get_builtin_plugin_catalog_definition(plugin_name);
   const installed_plugin = builtin_config ? null : get_installed_plugin(plugin_name);
   validate_plugin_config(
     input.config,
-    builtin_config?.config_schema ?? installed_plugin?.manifest.config_schema,
+    builtin_config?.config_schema ?? installed_plugin?.manifest.config?.schema,
   );
   const existing = withPlatformStore((context) =>
     get_agent_plugin_row(context, agent_id, plugin_name)
@@ -157,7 +160,7 @@ export function ensure_default_agent_plugin_bindings(
       plugin_name,
       enabled: true,
       config: initial_configs[plugin_name]
-        ?? get_builtin_plugin_config(plugin_name)?.default_config
+        ?? get_builtin_plugin_catalog_definition(plugin_name)?.default_config
         ?? {},
     });
   }

@@ -22,6 +22,12 @@ export {
 export { get_chat_access_db_path } from "./chat/access/ChatAccessStore.js";
 export { CHAT_ACCESS_ACTIONS } from "./chat/types/ChatAccess.js";
 export { clean_chat_storage } from "./chat/runtime/ChatStorage.js";
+export {
+  CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
+  chat_plugin_config_schema,
+  get_chat_channel_config_json_schema,
+  parse_chat_plugin_config,
+} from "./chat/config/ChatPluginConfig.js";
 
 export type { ChatChannelAccountListItem } from "./chat/types/ChannelAccount.js";
 export type {
@@ -45,6 +51,7 @@ export type {
   ChatChannel,
   ChatPluginOptions,
 } from "./chat/types/ChatPluginOptions.js";
+export type { ChatPluginConfig } from "./chat/config/ChatPluginConfig.js";
 export type {
   ApproveChatAccessRequestInput,
   ChatAccessDecision,

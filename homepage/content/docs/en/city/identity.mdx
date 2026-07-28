@@ -136,17 +136,13 @@ plaintext locally and writes only the registry hash.
 
 ## Channel accounts
 
-Bot credentials for messaging platforms are stored in `~/.downcity/downcity.db` and referenced by ID from the project:
+Bot credentials for messaging platforms are stored in `~/.downcity/downcity.db` and referenced by ID from the Chat Plugin Binding:
 
 ```json
 {
-  "plugins": {
-    "chat": {
-      "channels": {
-        "telegram": {
-          "channelAccountId": "telegram-main"
-        }
-      }
+  "channels": {
+    "telegram": {
+      "channel_account_id": "telegram-main"
     }
   }
 }

@@ -2,7 +2,7 @@
  * Chat send frontmatter metadata 解析工具。
  *
  * 关键点（中文）
- * - frontmatter 中的字段语义与 `downcity chat send` 参数保持一致。
+ * - frontmatter 中的字段语义与 Chat send action 输入保持一致。
  * - direct 模式也复用同一解析逻辑，避免 metadata 协议分叉。
  */
 

@@ -35,22 +35,17 @@ description: 渠道 runtime、queue worker、chat 授权、chat system text 和 
 
 ## 用户怎么使用
 
-大多数用户不直接控制渠道 runtime，而是使用 Downcity 暴露出来的 `downcity chat` 会话命令：
+CLI 不再为 Chat 建立单独的配置命令。使用统一 Plugin 管理器选择账号、启用渠道并保存当前 Agent 的 Binding：
 
 ```bash
-downcity chat
-downcity chat list
-downcity chat info --chat-key <chat_key>
-downcity chat send --chat-key <chat_key> --text "Done"
-downcity chat react --chat-key <chat_key> --message-id <message_id> --emoji "👍"
-downcity chat context --chat-key <chat_key>
-downcity chat history --chat-key <chat_key> --limit 30
-downcity chat delete --chat-key <chat_key>
+city plugin config chat <agent_id> --interactive
 ```
 
-不带子命令的 `downcity chat` 会打开交互式 chat account 管理器。先在这里添加 Telegram、Feishu 或 QQ 账号，再把 agent 连接到这些账号。
+需要从终端调用 Chat Action 时，也使用通用 Plugin Action 命令：
 
-Downcity 会刻意隐藏 `status`、`test`、`open`、`close`、`reconnect`、`configuration`、`configure` 这些渠道 runtime action。它们存在于 plugin runtime 里，但不是普通用户的 CLI 使用路径。
+```bash
+city plugin action chat send <agent_id> --input '{"chat_key":"telegram:123456","text":"Done"}' --token <token>
+```
 
 ## SDK 装配
 
@@ -89,7 +84,7 @@ const plugin = new ChatPlugin({
 });
 ```
 
-`channelAccountId` 仍可作为账号池绑定能力使用，但必须由宿主显式注入 `account_store`。Chat Plugin 只依赖存储契约，不读取 CLI 的 `~/.downcity`、SQLite 或密钥文件：
+`channel_account_id` 可作为账号池绑定能力使用，但必须由宿主显式注入 `account_store`。Chat Plugin 只依赖存储契约，不读取 CLI 的 `~/.downcity`、SQLite 或密钥文件：
 
 ```ts
 import type { ChatChannelAccountStore } from "@downcity/plugins/chat";
@@ -100,7 +95,7 @@ const plugin = new ChatPlugin({
   account_store,
   channels: [
     new TelegramChannel({
-      channelAccountId: "telegram-main",
+      channel_account_id: "telegram-main",
     }),
   ],
 });
@@ -141,7 +136,7 @@ await agent.plugins.run_action({
 });
 ```
 
-用户侧最常用的 action 是 `list`、`info`、`send`、`react`、`context`、`history`、`delete`。
+常用 action 是 `list`、`info`、`send`、`react`、`context`、`history`、`delete`。
 
 ## 内置授权能力
 

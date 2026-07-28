@@ -259,7 +259,7 @@ export abstract class BaseChatChannel {
     }
     const displayed_request_id = this.format_access_code(request_id);
     const approval_command = this.format_access_command(
-      `downcity chat access approve ${request_id} --agent ${agent_id}`,
+      `city plugin action chat access-approve ${agent_id} --input '{"request_id":"${request_id}"}' --token <token>`,
     );
     return [
       `当前账号尚未获准访问 Agent "${displayed_agent_id}"。`,

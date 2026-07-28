@@ -17,30 +17,30 @@ Chat 插件将 Agent 连接到 Telegram、飞书、QQ 等聊天渠道。它处�
 
 ## 配置
 
-渠道在 Agent 配置的 `plugins.chat.channels` 下配置。CLI 管理的项目会把这段配置保存在全局 DB 中：
+Chat 与其他 Plugin 一样，通过 Agent Plugin Binding 配置。CLI 使用 JSON Schema 生成统一表单，并把 Binding 保存在全局 DB 中：
 
 ```json
 {
-  "plugins": {
-    "chat": {
-      "channels": {
-        "telegram": {
-          "enabled": true,
-          "channelAccountId": "telegram-main"
-        },
-        "feishu": {
-          "enabled": true,
-          "channelAccountId": "feishu-work"
-        }
-      }
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "channel_account_id": "telegram-main"
+    },
+    "feishu": {
+      "enabled": true,
+      "channel_account_id": "feishu-work"
     }
   }
 }
 ```
 
+```bash
+city plugin config chat <agent_id> --interactive
+```
+
 ## 渠道账号
 
-实际的机器人凭证存储在 CLI 全局 DB 中（由 City 管理）。Agent 配置只通过 `channelAccountId` 引用它们。
+实际的机器人凭证存储在 CLI 全局 DB 中（由 City 管理）。Chat Binding 只通过 `channel_account_id` 引用它们。
 
 ## Chat Access
 

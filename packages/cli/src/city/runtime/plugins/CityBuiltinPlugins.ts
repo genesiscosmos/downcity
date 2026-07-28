@@ -4,16 +4,17 @@
  * 关键点（中文）
  * - City 运行期直接 new 每个 plugin，所有 constructor 参数都由 City 宿主层注入。
  * - `@downcity/plugins` 只提供 plugin class，不参与 City 全局账号、City 登录态或运行配置解析。
- * - 静态 CLI catalog 使用同一套 City 装配入口，但不注入需要 City 登录态的 image/sound。
+ * - 静态 Catalog 不依赖本模块，列出 Plugin 时不会提前创建 Runtime 对象。
  */
 
 import type { BasePlugin } from "@downcity/agent";
-import type { DowncityConfig } from "@/city/types/config/DowncityConfig.js";
 import {
   ChatPlugin,
   FeishuChannel,
   QqChannel,
   TelegramChannel,
+  parse_chat_plugin_config,
+  type ChatPluginConfig,
 } from "@downcity/plugins/chat";
 import { ContactPlugin } from "@downcity/plugins/contact";
 import { ImagePlugin } from "@downcity/plugins/image";
@@ -35,8 +36,6 @@ import type {
 import { CityUserManager } from "@/city/shared/CityUserManager.js";
 import { CityChatAccountStore } from "@/city/runtime/plugins/CityChatAccountStore.js";
 import type { AgentPluginBinding } from "@/city/types/plugin/AgentPluginBinding.js";
-import type { CityBuiltinPluginDescriptor } from "@/city/types/plugin/CityBuiltinPlugin.js";
-import { get_builtin_plugin_config } from "@/city/process/plugin/BuiltinPluginConfig.js";
 
 const city_user_manager = new CityUserManager();
 
@@ -57,8 +56,8 @@ function require_model_id(input: unknown, capability: string): string {
 /**
  * 创建 City 注入给 ChatPlugin 的 channel 实例。
  */
-function create_city_chat_channels(config?: DowncityConfig) {
-  const channels = config?.plugins?.chat?.channels;
+function create_city_chat_channels(config?: ChatPluginConfig) {
+  const channels = config?.channels;
   const telegram = channels?.telegram;
   const feishu = channels?.feishu;
   const qq = channels?.qq;
@@ -66,29 +65,17 @@ function create_city_chat_channels(config?: DowncityConfig) {
   return [
     new TelegramChannel({
       enabled: telegram?.enabled === true,
-      channelAccountId: telegram?.channelAccountId,
+      channel_account_id: telegram?.channel_account_id,
     }),
     new FeishuChannel({
       enabled: feishu?.enabled === true,
-      channelAccountId: feishu?.channelAccountId,
+      channel_account_id: feishu?.channel_account_id,
     }),
     new QqChannel({
       enabled: qq?.enabled === true,
-      channelAccountId: qq?.channelAccountId,
+      channel_account_id: qq?.channel_account_id,
     }),
   ];
-}
-
-/** 把 Binding 配置转换为旧 Chat 构造参数所需的宿主配置视图。 */
-function create_chat_host_config(
-  config: AgentPluginBinding["config"] | undefined,
-): DowncityConfig | undefined {
-  if (!config) return undefined;
-  return {
-    id: "runtime",
-    version: "1.0.0",
-    plugins: { chat: config },
-  } as DowncityConfig;
 }
 
 /**
@@ -98,9 +85,9 @@ function create_chat_host_config(
  */
 export function createCityStaticBuiltinPlugins(input: {
   /**
-   * 当前 Agent 配置；未提供时所有 chat channel 保持禁用。
+   * 当前 Chat Plugin Binding 配置；未提供时所有 channel 保持禁用。
    */
-  config?: DowncityConfig;
+  chat_config?: ChatPluginConfig;
   /** 当前 Agent HTTP runtime 的监听 host。 */
   host?: string;
   /** 当前 Agent HTTP runtime 的监听 port。 */
@@ -112,44 +99,16 @@ export function createCityStaticBuiltinPlugins(input: {
     new WorkboardPlugin(),
     new ChatPlugin({
       account_store: new CityChatAccountStore(),
-      queue: input.config?.plugins?.chat?.queue,
-      channels: create_city_chat_channels(input.config),
+      queue: input.chat_config?.queue,
+      channels: create_city_chat_channels(input.chat_config),
     }),
     new ContactPlugin({
-      host: input.host ?? input.config?.start?.host,
-      port: input.port ?? input.config?.start?.port,
+      host: input.host,
+      port: input.port,
     }),
     new TaskPlugin(),
     new MemoryPlugin(),
   ];
-}
-
-/** 返回 CLI 与控制台使用的内建 Plugin 静态目录。 */
-export function list_city_builtin_plugin_descriptors(): CityBuiltinPluginDescriptor[] {
-  const static_descriptors = createCityStaticBuiltinPlugins().map((plugin) => ({
-    plugin_name: plugin.name,
-    title: plugin.title || plugin.name,
-    description: plugin.description || "",
-    actions: Object.keys(plugin.actions || {}).sort(),
-    ...get_builtin_plugin_config(plugin.name),
-  }));
-  return [
-    ...static_descriptors,
-    {
-      plugin_name: "image",
-      title: "Image",
-      description: "City image model discovery, generation, and result lookup.",
-      actions: ["image_create", "image_result", "models"],
-      ...get_builtin_plugin_config("image"),
-    },
-    {
-      plugin_name: "sound",
-      title: "Sound",
-      description: "City speech model discovery, ASR, and TTS.",
-      actions: ["asr", "models", "tts"],
-      ...get_builtin_plugin_config("sound"),
-    },
-  ].sort((left, right) => left.plugin_name.localeCompare(right.plugin_name));
 }
 
 /**
@@ -160,10 +119,6 @@ export async function createCityBuiltinPlugins(input: {
    * 宿主显式注入的 env，用于支持 DOWNCITY_CITY_* 覆盖项。
    */
   env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
-  /**
-   * 当前运行 Agent 从全局 DB 读取的配置。
-   */
-  config: DowncityConfig;
   /** 当前 Agent HTTP runtime 的监听 host。 */
   host?: string;
   /** 当前 Agent HTTP runtime 的监听 port。 */
@@ -176,14 +131,17 @@ export async function createCityBuiltinPlugins(input: {
       .filter((binding) => binding.enabled)
       .map((binding) => [binding.plugin_name, binding]),
   );
-  const chat_config = create_chat_host_config(enabled_bindings.get("chat")?.config);
+  const chat_binding = enabled_bindings.get("chat");
+  const chat_config = chat_binding
+    ? parse_chat_plugin_config(chat_binding.config)
+    : undefined;
   const { city } = await city_user_manager.createUserClient({
     env: input.env ?? process.env,
   });
 
   const plugins: BasePlugin[] = [];
   const static_plugins = createCityStaticBuiltinPlugins({
-    config: chat_config,
+    chat_config,
     host: input.host,
     port: input.port,
   });

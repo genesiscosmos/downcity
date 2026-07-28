@@ -2,7 +2,7 @@
  * `city agent` 交互式管理器辅助函数。
  *
  * 关键点（中文）
- * - 负责 Agent 列表加载、配置读取、账号绑定、prompts 与运行时操作封装。
+ * - 负责 Agent 列表、模型和统一 Plugin Binding 管理，以及运行时操作封装。
  * - 交互式 manager 不能长期持有旧快照，启动/停止后需要重新加载摘要。
  */
 
@@ -15,45 +15,19 @@ import { restartCommand } from "@/city/agent/Restart.js";
 import { chatCommand } from "@/city/agent/AgentChat.js";
 import { configure_agent_model } from "@/city/agent/AgentModel.js";
 import { list_registered_agents_for_cli } from "@/city/agent/AgentSelection.js";
-import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
+import { emitCliBlock } from "@/shared/CliReporter.js";
 import { inject_agent_context } from "@/shared/IndexSupport.js";
 import { prepareForegroundAgent } from "@/city/shared/CityAgentRuntime.js";
-import { PlatformStore } from "@/city/runtime/store/index.js";
 import { t } from "@/shared/CliLocale.js";
 import type { AgentStartOptions } from "@/city/types/AgentStartOptions.js";
-import type { DowncityConfig } from "@/city/types/config/DowncityConfig.js";
-import type {
-  StoredChannelAccount,
-  StoredChannelAccountChannel,
-} from "@downcity/plugins/chat";
-import {
-  get_managed_agent,
-  update_managed_agent,
-} from "@/city/process/registry/ManagedAgentRepository.js";
+import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
 import type {
   AgentManagerAgentAction,
   AgentManagerConfigAction,
   AgentManagerListSelection,
   AgentManagerAgentSummary,
 } from "@/city/agent/AgentManagerTypes.js";
-import {
-  get_agent_plugin_binding,
-  set_agent_plugin_binding,
-} from "@/city/process/registry/PluginRepository.js";
-import type { JsonObject } from "@downcity/agent";
-
-const CHAT_CHANNELS: StoredChannelAccountChannel[] = ["telegram", "feishu", "qq"];
-
-type DanglingChannelAccount = {
-  /**
-   * 出现悬空引用的聊天渠道。
-   */
-  channel: StoredChannelAccountChannel;
-  /**
-   * agent 配置中引用但 City 全局账号池不存在的 account id。
-   */
-  accountId: string;
-};
+import { run_interactive_agent_plugin_manager } from "@/city/process/plugin/InteractivePluginManager.js";
 
 export function isInteractiveTerminal(): boolean {
   return process.stdin.isTTY === true && process.stdout.isTTY === true;
@@ -62,13 +36,14 @@ export function isInteractiveTerminal(): boolean {
 export async function loadAgentSummaries(): Promise<AgentManagerAgentSummary[]> {
   const agents = await list_registered_agents_for_cli();
   return agents.map((agent) => {
-    const config = readAgentConfig(agent.agent_id);
+    const config = get_managed_agent(agent.agent_id);
     return {
-      id: String(config?.id || "").trim() || agent.agent_id,
+      id: agent.agent_id,
       project_root: agent.workspace_path,
       status: agent.status,
-      execution_binding: readAgentExecutionBinding(config),
-      channels: readAgentChannelSummaries(config),
+      execution_binding: String(
+        config?.execution?.type === "api" ? config.execution.model_id || "" : "",
+      ).trim(),
     };
   });
 }
@@ -87,112 +62,18 @@ export async function reloadAgentSummary(
   return agents.find((agent) => agent.id === agent_id) || fallback;
 }
 
-export function readAgentConfig(agent_id: string): DowncityConfig | null {
-  const agent = get_managed_agent(agent_id);
-  if (!agent) return null;
-  const chat_binding = get_agent_plugin_binding(agent_id, "chat");
-  return {
-    id: agent.agent_id,
-    version: agent.version,
-    ...(agent.start ? { start: agent.start } : {}),
-    ...(agent.execution ? { execution: agent.execution } : {}),
-    ...(chat_binding
-      ? { plugins: { chat: chat_binding.config } as DowncityConfig["plugins"] }
-      : {}),
-    ...(agent.llm ? { llm: agent.llm } : {}),
-  };
-}
-
-/** 保存管理器编辑后的 Agent 配置。 */
-function write_agent_config(agent_id: string, config: DowncityConfig): void {
-  const agent = get_managed_agent(agent_id);
-  if (!agent) throw new Error(`Agent not found: ${agent_id}`);
-  update_managed_agent({
-    agent_id: agent.agent_id,
-    start: config.start,
-    execution: config.execution,
-    llm: config.llm,
-  });
-  const chat_config = config.plugins?.chat;
-  const existing_binding = get_agent_plugin_binding(agent.agent_id, "chat");
-  if (chat_config || existing_binding) {
-    set_agent_plugin_binding({
-      agent_id: agent.agent_id,
-      plugin_name: "chat",
-      enabled: existing_binding?.enabled ?? true,
-      config: (chat_config ?? {}) as unknown as JsonObject,
-    });
-  }
-}
-
-export function readAgentExecutionBinding(config: DowncityConfig | null): string {
-  return String(config?.execution?.type === "api" ? config.execution.model_id || "" : "").trim();
-}
-
-export function readAgentChannelSummaries(config: DowncityConfig | null): string[] {
-  const accountsById = loadChannelAccountMap();
-  const channels = config?.plugins?.chat?.channels || {};
-  const summaries: string[] = [];
-  for (const channel of CHAT_CHANNELS) {
-    const channelConfig = channels[channel];
-    const accountId = String(channelConfig?.channelAccountId || "").trim();
-    const enabled = channelConfig?.enabled === true;
-    if (!accountId && !enabled) continue;
-    const account = accountId ? accountsById.get(accountId) : null;
-    const accountLabel = account
-      ? account.name
-      : accountId
-        ? `missing account ${accountId}`
-        : "enabled, no account";
-    summaries.push(`${channel}:${accountLabel}`);
-  }
-  return summaries;
-}
-
-export function findDanglingChannelAccounts(config: DowncityConfig | null): DanglingChannelAccount[] {
-  const accountsById = loadChannelAccountMap();
-  const channels = config?.plugins?.chat?.channels || {};
-  const dangling: DanglingChannelAccount[] = [];
-  for (const channel of CHAT_CHANNELS) {
-    const accountId = String(channels[channel]?.channelAccountId || "").trim();
-    if (!accountId) continue;
-    if (accountsById.has(accountId)) continue;
-    dangling.push({ channel, accountId });
-  }
-  return dangling;
-}
-
-export function loadChannelAccounts(channel?: StoredChannelAccountChannel): StoredChannelAccount[] {
-  const store = new PlatformStore();
-  try {
-    return store.listChannelAccountsSync(channel);
-  } finally {
-    store.close();
-  }
-}
-
-export function loadChannelAccountMap(): Map<string, StoredChannelAccount> {
-  return new Map(loadChannelAccounts().map((account) => [account.id, account]));
-}
-
 export function formatAgentDetail(agent: AgentManagerAgentSummary): string {
   const execution_binding = agent.execution_binding || t({
     zh: "未配置",
     en: "not configured",
   });
-  const channels = agent.channels.length > 0
-    ? agent.channels.length === 1
-      ? agent.channels[0]
-      : t({ zh: `${agent.channels.length} 个账号`, en: `${agent.channels.length} accounts` })
-    : t({ zh: "未连接", en: "not connected" });
-
   return t({
     zh: [
-      `状态 ${agent.status === "running" ? "运行中" : "已停止"} · 模型 ${execution_binding} · Chat ${channels}`,
+      `状态 ${agent.status === "running" ? "运行中" : "已停止"} · 模型 ${execution_binding}`,
       "Enter 进入管理面板。",
     ].join("\n"),
     en: [
-      `Status ${agent.status} · Model ${execution_binding} · Chat ${channels}`,
+      `Status ${agent.status} · Model ${execution_binding}`,
       "Press Enter to manage this agent.",
     ].join("\n"),
   });
@@ -315,12 +196,12 @@ export async function promptAgentAction(
 export function formatAgentConfigPanelDescription(agent: AgentManagerAgentSummary): string {
   return t({
     zh: [
-      `Agent ${agent.id} · 模型 ${agent.execution_binding || "未配置"} · Chat ${agent.channels.length > 0 ? agent.channels.length : "未连接"}`,
-      "配置 Agent ID、默认模型或连接 City 全局 Chat 账号。",
+      `Agent ${agent.id} · 模型 ${agent.execution_binding || "未配置"}`,
+      "配置默认模型，以及内建或第三方 Plugin Binding。",
     ].join("\n"),
     en: [
-      `Agent ${agent.id} · Model ${agent.execution_binding || "not configured"} · Chat ${agent.channels.length > 0 ? agent.channels.length : "not connected"}`,
-      "Configure the Agent ID, default model, or City-level Chat accounts.",
+      `Agent ${agent.id} · Model ${agent.execution_binding || "not configured"}`,
+      "Configure the default model and built-in or installed Plugin bindings.",
     ].join("\n"),
   });
 }
@@ -409,12 +290,12 @@ export async function promptAgentConfigAction(
         value: "configureModel",
       },
       {
-        title: t({ zh: "连接 Chat 账号", en: "Connect chat accounts" }),
+        title: t({ zh: "配置 Plugins", en: "Configure Plugins" }),
         description: t({
-          zh: `当前：${agent.channels.length > 0 ? agent.channels.join(", ") : "未连接"}。把 City 全局 Chat 账号绑定到当前 Agent。`,
-          en: `Current: ${agent.channels.length > 0 ? agent.channels.join(", ") : "not connected"}. Bind City-level chat accounts to this agent.`,
+          zh: "统一启用、禁用和配置当前 Agent 的内建或第三方 Plugin。",
+          en: "Enable, disable, and configure built-in or installed Plugins for this Agent.",
         }),
-        value: "connectChatAccounts",
+        value: "configurePlugins",
       },
       {
         title: t({ zh: "导航", en: "Navigation" }),
@@ -453,166 +334,6 @@ export async function startAgentProject(
 
 export async function runCreateFlow(): Promise<void> {
   await run_agent_create_command(undefined, {});
-}
-
-export function buildAccountTitle(account: StoredChannelAccount): string {
-  const identity = String(account.identity || "").trim();
-  return identity ? `${account.name} (${identity})` : account.name;
-}
-
-export async function promptChannelAccountId(params: {
-  channel: StoredChannelAccountChannel;
-  currentAccountId: string;
-}): Promise<string | null | undefined> {
-  const accounts = loadChannelAccounts(params.channel);
-  const choices = [
-    {
-      title: t({ zh: "不连接", en: "Do not connect" }),
-      description: t({
-        zh: `关闭 ${params.channel} 与当前 Agent 的关联。`,
-        en: `Disable the ${params.channel} connection for the current agent.`,
-      }),
-      value: "",
-    },
-    ...accounts.map((account) => ({
-      title: buildAccountTitle(account),
-      description: account.id,
-      value: account.id,
-    })),
-  ];
-  const initial = Math.max(
-    0,
-    choices.findIndex((choice) => choice.value === params.currentAccountId),
-  );
-  const response = (await prompts({
-    type: "select",
-    name: "accountId",
-    message: t({
-      zh: `连接 ${params.channel} Chat 账号`,
-      en: `Connect ${params.channel} chat account`,
-    }),
-    choices,
-    initial,
-  })) as { accountId?: string };
-
-  if (response.accountId === undefined) return undefined;
-  return String(response.accountId || "").trim() || null;
-}
-
-export async function connectAgentChannels(
-  agent: AgentManagerAgentSummary,
-): Promise<AgentManagerAgentSummary> {
-  const raw = readAgentConfig(agent.id);
-  const nextRaw: DowncityConfig = {
-    id: agent.id,
-    version: "1.0.0",
-    ...(raw || {}),
-  };
-  const chatConfig = (((nextRaw.plugins ??= {}) as NonNullable<DowncityConfig["plugins"]>).chat ??= {});
-  const channelConfigs = chatConfig.channels ??= {};
-  const dangling = findDanglingChannelAccounts(nextRaw);
-  if (dangling.length > 0) {
-    emitCliList({
-      tone: "warning",
-      title: "Dangling chat accounts",
-      summary: `${dangling.length} found`,
-      items: dangling.map((item) => ({
-        title: item.channel,
-        facts: [
-          {
-            label: "missing",
-            value: item.accountId,
-          },
-        ],
-      })),
-    });
-
-    for (const item of dangling) {
-      const current = channelConfigs[item.channel];
-      channelConfigs[item.channel] = {
-        enabled: current?.enabled === true,
-      };
-    }
-    write_agent_config(agent.id, nextRaw);
-
-    const nextConfig = readAgentConfig(agent.id);
-    const cleanedAgent = {
-      ...agent,
-      channels: readAgentChannelSummaries(nextConfig),
-    };
-    emitCliBlock({
-      tone: "success",
-      title: "Dangling chat account links removed automatically",
-      summary: cleanedAgent.channels.length > 0 ? cleanedAgent.channels.join(", ") : "none",
-    });
-
-    const allAccountsAfterCleanup = loadChannelAccounts();
-    if (allAccountsAfterCleanup.length === 0) {
-      emitCliBlock({
-        tone: "info",
-        title: "No City chat accounts found",
-        note: "已清理悬空关联。请先运行 `city chat`，选择“管理 chat accounts”来配置 Telegram、Feishu 或 QQ account；agent 这里只做 connect。",
-      });
-      return cleanedAgent;
-    }
-
-    agent = cleanedAgent;
-  }
-
-  const allAccounts = loadChannelAccounts();
-  if (allAccounts.length === 0) {
-    emitCliBlock({
-      tone: "info",
-      title: "No City chat accounts found",
-      note: "请先运行 `city chat`，选择“管理 chat accounts”来配置 Telegram、Feishu 或 QQ account；agent 这里只做 connect。",
-    });
-    return agent;
-  }
-
-  for (const channel of CHAT_CHANNELS) {
-    const currentConfig = channelConfigs[channel];
-    const currentAccountId = String(currentConfig?.channelAccountId || "").trim();
-    const nextAccountId = await promptChannelAccountId({
-      channel,
-      currentAccountId,
-    });
-    if (nextAccountId === undefined) {
-      emitCliBlock({
-        tone: "info",
-        title: "Chat platform connection cancelled",
-      });
-      return agent;
-    }
-    if (nextAccountId === null) {
-      channelConfigs[channel] = {
-        enabled: false,
-      };
-      continue;
-    }
-    channelConfigs[channel] = {
-      enabled: true,
-      channelAccountId: nextAccountId,
-    };
-  }
-
-  write_agent_config(agent.id, nextRaw);
-  const nextConfig = readAgentConfig(agent.id);
-  const nextAgent = {
-    ...agent,
-    channels: readAgentChannelSummaries(nextConfig),
-  };
-  emitCliBlock({
-    tone: "success",
-    title: "Agent chat platforms connected",
-    summary: nextAgent.channels.length > 0 ? nextAgent.channels.join(", ") : "none",
-    facts: [
-      {
-        label: "project",
-        value: agent.project_root,
-      },
-    ],
-  });
-  return nextAgent;
 }
 
 export async function runSelectedAgentManager(agent_input: AgentManagerAgentSummary): Promise<void> {
@@ -692,11 +413,12 @@ export async function runSelectedAgentManager(agent_input: AgentManagerAgentSumm
             : t({ zh: "模型未修改", en: "Model unchanged" });
           continue;
         }
-        if (config_action === "connectChatAccounts") {
-          agent = await connectAgentChannels(agent);
+        if (config_action === "configurePlugins") {
+          await run_interactive_agent_plugin_manager(agent.id);
+          agent = await reloadAgentSummary(agent.id, agent);
           last_message = t({
-            zh: "Chat 账号连接已更新",
-            en: "Chat account bindings updated",
+            zh: "Plugin Binding 已更新",
+            en: "Plugin bindings updated",
           });
           continue;
         }

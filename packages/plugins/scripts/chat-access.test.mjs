@@ -75,7 +75,7 @@ test("Telegram 授权命令使用代码格式并保留完整标识符", () => {
     assert.match(text, /访问请求：`req_dFij9rOzsDnDPOVJ`/);
     assert.match(
       text,
-      /```bash\ndowncity chat access approve req_dFij9rOzsDnDPOVJ --agent lucas_whitman\n```/,
+      /```bash\ncity plugin action chat access-approve lucas_whitman --input '\{"request_id":"req_dFij9rOzsDnDPOVJ"\}' --token <token>\n```/,
     );
   } finally {
     remove_project_root(project_root);

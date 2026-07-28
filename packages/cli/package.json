@@ -1,6 +1,6 @@
 {
   "name": "downcity",
-  "version": "1.1.387",
+  "version": "1.1.388",
   "type": "module",
   "description": "Downcity CLI — local City container and Federation Server management",
   "bin": {
@@ -45,8 +45,11 @@
     "@larksuiteoapi/node-sdk": "^1.66.0",
     "@openrouter/ai-sdk-provider": "^2.9.0",
     "ai": "^6.0.193",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "better-sqlite3": "^12.10.0",
     "chalk": "^5.6.2",
+    "cli-highlight": "^2.1.11",
     "commander": "^15.0.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
@@ -60,8 +63,7 @@
     "openai": "^6.39.1",
     "ora": "^9.4.0",
     "ws": "^8.21.0",
-    "zod": "^4.4.3",
-    "cli-highlight": "^2.1.11"
+    "zod": "^4.4.3"
   },
   "optionalDependencies": {
     "@downcity/sandbox-linux": "workspace:^",

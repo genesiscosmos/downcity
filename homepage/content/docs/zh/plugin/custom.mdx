@@ -1,63 +1,109 @@
 ---
 title: 自定义插件
-description: 如何为 Agent 编写和注册自定义插件
+description: 编写、发布并为 Agent 配置可安装的 Downcity Plugin
 ---
 
 # 自定义插件
 
-如果内置插件不能满足需求，你可以编写自定义插件。插件是实现 Plugin API 的普通 TypeScript 模块。
+CLI Plugin 是一个预构建的静态制品。仓库使用 JSON Manifest 描述入口和配置协议；安装后，City 将 Plugin 加入统一 Catalog，并为每个 Agent 单独保存启用状态和配置。
 
-## 插件结构
+## 制品结构
+
+```text
+example-plugin/
+├── downcity.plugin.json
+└── dist/
+    ├── index.js
+    └── config.schema.json
+```
+
+`downcity.plugin.json`：
+
+```json
+{
+  "manifest_version": 1,
+  "name": "example",
+  "version": "1.0.0",
+  "entry": "dist/index.js",
+  "title": "Example",
+  "description": "一个示例 Plugin",
+  "config": {
+    "schema": "dist/config.schema.json",
+    "defaults": {
+      "endpoint": "https://example.com"
+    }
+  }
+}
+```
+
+Manifest 必须是静态 JSON。`entry` 和 `config.schema` 都是相对仓库根目录的路径，且不能指向目录外或符号链接。
+
+## 配置协议
+
+配置协议使用 JSON Schema 2020-12。你可以在源码中使用 Zod 定义配置，并在构建阶段输出 JSON Schema：
 
 ```ts
-import { definePlugin } from "@downcity/agent-plugin";
+import { z } from "zod";
 
-export default definePlugin({
-  id: "my-plugin",
-  name: "My Plugin",
-  version: "1.0.0",
+export const config_schema = z.object({
+  endpoint: z.url(),
+}).strict();
 
-  async init(context) {
-    // 生命周期钩子：Agent 启动时调用
-  },
-
-  async destroy(context) {
-    // 生命周期钩子：Agent 停止时调用
-  },
-
-  tools: [
-    {
-      id: "myTool",
-      description: "做一件有用的事",
-      async handler(args) {
-        return { result: "done" };
-      },
-    },
-  ],
+const json_schema = z.toJSONSchema(config_schema, {
+  target: "draft-2020-12",
 });
 ```
 
-## 关键概念
+构建脚本需要将 `json_schema` 写入 `dist/config.schema.json`。City 安装时使用 Ajv 校验 Schema 和默认值，配置时再用同一 Schema 校验 Agent Binding。Zod 不是运行期协议，也不应写进 Manifest。
 
-- `id` — 唯一插件标识符
-- `init` — 启动钩子，用于设置和连接
-- `destroy` — 关闭钩子，用于清理
-- `tools` — Agent 在执行过程中可调用的函数
+## Runtime Factory
 
-## 注册插件
-
-传给 Agent 构造函数：
+入口必须导出 `plugin_factory`，也可以使用默认导出。Factory 只接收当前 Agent 已通过校验的 `config`：
 
 ```ts
-import myPlugin from "./my-plugin";
+import type { JsonObject, Plugin } from "@downcity/agent";
 
-const agent = new Agent({
-  plugins: [myPlugin],
-});
+export const plugin_factory = {
+  create({ config }: { config: JsonObject }): Plugin {
+    return {
+      name: "example",
+      title: "Example",
+      description: `Endpoint: ${String(config.endpoint)}`,
+      actions: {},
+    };
+  },
+};
 ```
+
+Factory 返回的 `name` 必须与 Manifest 的 `name` 一致。`dist/index.js` 必须是自包含 ESM；运行期依赖需要打包进制品，`@downcity/agent` 只能作为编译期类型依赖使用。
+
+## 安装与配置
+
+```bash
+# 本地目录
+city plugin install ./example-plugin
+
+# Git URL，可附带 branch 或 tag
+city plugin install https://github.com/acme/example-plugin.git#v1.0.0
+
+# GitHub 简写
+city plugin install github:acme/example-plugin#main
+
+city plugin update example
+city plugin config example my-agent --interactive
+city plugin enable example my-agent
+```
+
+也可以使用 `city plugin` 打开管理面板，完成安装、更新、选择 Agent、配置和启停。配置变更后，需要重启正在运行的 Agent 才会进入新的 Runtime。
+
+## 安全边界
+
+安装过程只读取 Manifest、JSON Schema 和静态文件，不执行 `npm install`、构建脚本、生命周期脚本或 Plugin entry。City 会记录 Git commit（Git 来源）和完整制品的 SHA-256 摘要。
+
+Plugin entry 会在 Agent 启动时执行，因此只应安装可信来源。安装期静态检查不能替代对第三方运行时代码的审查。
 
 继续阅读：
 
 - [Chat 插件](/zh/docs/plugin/chat)
-- [Task 插件](/zh/docs/plugin/task)
+- [CLI 命令](/zh/docs/cli/commands)
 - [Agent Plugins Docs](/zh/plugins-docs)

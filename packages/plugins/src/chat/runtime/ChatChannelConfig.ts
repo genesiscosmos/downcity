@@ -14,7 +14,7 @@ import type {
   ChatChannelStateSnapshot,
 } from "@/chat/types/ChannelStatus.js";
 import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
-import { getChatChannelConfiguration } from "@/chat/channels/ConfigurationRegistry.js";
+import { get_chat_channel_config_json_schema } from "@/chat/config/ChatPluginConfig.js";
 import {
   getChatChannelBot,
   isChatChannelEnabled,
@@ -40,26 +40,26 @@ export function buildChatChannelConfigSummary(
   accountInput?: StoredChannelAccount | null,
 ): Record<string, string | number | boolean | null> {
   const account = accountInput ?? resolveChannelAccount(context, channel);
-  const channelAccountId = resolveChannelAccountId(context, channel);
+  const channel_account_id = resolveChannelAccountId(context, channel);
   const configured = isChannelAccountConfigured(channel, account);
   if (channel === "telegram") {
     return {
       enabled: isChatChannelEnabled(context, channel),
-      channelAccountId: channelAccountId || null,
-      channelAccountConfigured: configured,
+      channel_account_id: channel_account_id || null,
+      channel_account_configured: configured,
     };
   }
   if (channel === "feishu") {
     return {
       enabled: isChatChannelEnabled(context, channel),
-      channelAccountId: channelAccountId || null,
-      channelAccountConfigured: configured,
+      channel_account_id: channel_account_id || null,
+      channel_account_configured: configured,
     };
   }
   return {
     enabled: isChatChannelEnabled(context, channel),
-    channelAccountId: channelAccountId || null,
-    channelAccountConfigured: configured,
+    channel_account_id: channel_account_id || null,
+    channel_account_configured: configured,
   };
 }
 
@@ -97,7 +97,7 @@ export function getChatChannelStatus(
     detail: {
       ...(runtime?.detail || {}),
       config: buildChatChannelConfigSummary(context, channel, channelAccount),
-      configuration: toJsonObject(getChatChannelConfiguration(channel).describe()),
+      configuration: toJsonObject(get_chat_channel_config_json_schema(channel)),
     },
   };
 }

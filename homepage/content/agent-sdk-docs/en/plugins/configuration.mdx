@@ -1,114 +1,77 @@
 ---
 title: Plugin Configuration
-description: Understand agent plugin registration, runtime options, and the role of setup and usage
+description: Understand the boundary between SDK Plugin assembly and CLI Agent Bindings
 ---
 
 # Plugin Configuration
 
-Plugin configuration is easiest to understand in three layers:
+The Agent SDK registers already constructed Runtime Plugins. It does not define the CLI manifest, installer, or a `PluginFactory`:
 
-- agent-level registration
-- plugin runtime options
-- Console-facing `setup` and `usage` protocols
+```ts
+await agent.plugins.register(new SkillPlugin());
+await agent.plugins.unregister("skill");
+```
 
-## 1. Agent-level registration
+## SDK hosts
 
-Whether a plugin is active is determined by the Agent runtime registry.
+An embedded host passes runtime options directly through Plugin constructors:
 
-Registering a plugin makes it available. Unregistering removes it from the configured registry immediately and stops its lifecycle after active Session step leases release.
+```ts
+import { ChatPlugin, TelegramChannel } from "@downcity/plugins/chat";
 
-## 2. Plugin runtime options
+const chat = new ChatPlugin({
+  queue: {
+    max_concurrency: 4,
+    merge_debounce_ms: 500,
+  },
+  channels: [
+    new TelegramChannel({
+      bot_token: process.env.TELEGRAM_BOT_TOKEN,
+    }),
+  ],
+});
 
-Runtime options for how an agent uses a plugin usually live in:
+await agent.plugins.register(chat);
+```
+
+The SDK does not read the City database or interpret Agent Plugin Bindings. The host owns credential storage, configuration UI, and Runtime assembly.
+
+## CLI / City hosts
+
+The CLI uses a separate control-plane protocol:
+
+```text
+Plugin Catalog
+  → Agent Plugin Binding (enabled + config)
+  → CLI Runtime Factory
+  → Agent Runtime Plugin
+```
+
+Built-in and external Plugins both describe Binding configuration with standard JSON Schema. City validates and persists configuration through one path; when an Agent starts, the CLI reads its Bindings and constructs Runtime Plugins.
+
+Example Chat Binding:
 
 ```json
 {
-  "plugins": {
-    "chat": {
-      "channels": {
-        "telegram": {
-          "channelAccountId": "telegram-main"
-        }
-      }
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "channel_account_id": "telegram-main"
     }
   }
 }
 ```
 
-This expresses:
-
-- how the current agent uses the plugin
-- which runtime options the plugin needs
-
-## 3. `config.scope`
-
-Plugin config definitions support:
-
-- `global`
-- `project`
-
-This describes config field scope. The current built-in project plugins use project config for runtime options only.
-
-Many current built-in plugins keep agent-side runtime options at project scope.
-
-## What `setup` and `usage` mean
-
-### `setup`
-
-`setup` is about:
-
-- install
-- repair
-- dependency preparation
-
-Typical examples:
-
-- install dependencies
-- download a model
-- install Python dependencies
-
-### `usage`
-
-`usage` is about:
-
-- how the current agent should use that plugin
-- which behavior choices should be saved
-
-Typical examples:
-
-- whether to inject prompts
-- default model
-- default format, language, or speed
-
-## Why `setup` and `usage` are separate
-
-Because they solve different problems:
-
-- `setup` makes the capability exist
-- `usage` controls how the current agent uses it
-
-That split lets Console present clearer surfaces for:
-
-- `Install / Repair`
-- `Options`
-
-## How plugin config is usually persisted
-
-Host-side plugin settings are generally written back into the host config store.
-
-For the CLI, that means the agent config in the global DB. SDK hosts can pass the same values through `new Agent({ config })` or their own plugin constructors.
-
-The persistence path writes the `plugins` section instead of dumping the entire merged runtime state.
+This Factory belongs to the CLI and is not part of the `@downcity/agent` public API.
 
 ## Recommended mental model
 
-Remember these three lines:
-
-- registration decides whether the plugin is active
-- runtime options live under host-managed `plugins.<name>`
-- `setup` and `usage` are UI protocol layers
+- Agent SDK: accepts and runs Plugin objects.
+- SDK host: constructs Plugins and owns its configuration source.
+- CLI / City: owns the Catalog, installation, Bindings, Schema forms, and Runtime Factory.
 
 ## Related docs
 
 - [Plugin overview](/en/agent-sdk-docs/plugins/overview)
 - [Plugin availability](/en/agent-sdk-docs/plugins/plugin-availability)
+- [Plugin lifecycle](/en/agent-sdk-docs/plugins/lifecycle)

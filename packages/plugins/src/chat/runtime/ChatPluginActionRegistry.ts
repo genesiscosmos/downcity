@@ -53,34 +53,28 @@ import {
 const CHAT_SEND_HELP_TEXT = [
   "",
   "消息协议：",
-  "  frontmatter metadata 字段语义与 `downcity chat send` 参数一致。",
+  "  frontmatter metadata 字段语义与 Chat send action 输入一致。",
   "  附件使用 `<file type=\"...\">path</file>`，支持 `document/photo/voice/audio/video`。",
   "  正文与 `<file>` 可以交错出现，运行时会按原顺序发送。",
   "",
   "常用示例：",
-  "  downcity chat send --text 'done'",
-  "  downcity chat send --chat-key <chat_key> --text 'done'",
-  "  cat <<'EOF' | downcity chat send --stdin --chat-key <chat_key>",
-  "  第一行",
-  "  第二行",
-  "  EOF",
-  "  downcity chat send --text-file ./result.md --chat-key <chat_key>",
+  "  city plugin action chat send <agent_id> --input '{\"text\":\"done\"}' --token <token>",
+  "  city plugin action chat send <agent_id> --input '{\"chat_key\":\"<chat_key>\",\"text\":\"done\"}' --token <token>",
   "",
   "说明：",
   "  当前会话可省略 `--chat-key`；跨 chat 发送时必须显式传 `--chat-key`。",
-  "  `--delay` 与 `--time` 互斥；ISO 时间必须带时区。",
+  "  `delay` 与 `time` 互斥；ISO 时间必须带时区。",
 ].join("\n");
 
 const CHAT_REACT_HELP_TEXT = [
   "",
   "常用示例：",
-  "  downcity chat react --emoji '👍'",
-  "  downcity chat react --emoji '✅' --message-id <message_id>",
-  "  downcity chat react --chat-key <chat_key> --message-id <message_id> --emoji '🔥'",
+  "  city plugin action chat react <agent_id> --input '{\"emoji\":\"👍\"}' --token <token>",
+  "  city plugin action chat react <agent_id> --input '{\"chat_key\":\"<chat_key>\",\"message_id\":\"<message_id>\",\"emoji\":\"🔥\"}' --token <token>",
   "",
   "说明：",
   "  当前会话可省略 `--chat-key`；跨 chat 操作时显式传 `--chat-key`。",
-  "  `react` 需要目标消息，优先使用显式 `--message-id`。",
+  "  `react` 需要目标消息，优先使用显式 `message_id`。",
 ].join("\n");
 
 function attachCommandHelpText(command: Command, text: string): void {

@@ -11,8 +11,8 @@ description: City 如何管理聊天平台的机器人凭证
 
 1. 用户通过 City 控制台添加机器人凭证
 2. City 将凭证安全存储在 `~/.downcity/downcity.db` 中
-3. 凭证获得一个 `channelAccountId`
-4. Agent 配置通过 ID 引用该凭证
+3. 凭证获得一个 `channel_account_id`
+4. Agent 的 Chat Plugin Binding 通过 ID 引用该凭证
 
 ## 支持的平台
 
@@ -30,14 +30,10 @@ description: City 如何管理聊天平台的机器人凭证
 
 ```json
 {
-  "plugins": {
-    "chat": {
-      "channels": {
-        "telegram": {
-          "enabled": true,
-          "channelAccountId": "telegram-main"
-        }
-      }
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "channel_account_id": "telegram-main"
     }
   }
 }

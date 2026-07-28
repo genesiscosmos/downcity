@@ -118,14 +118,11 @@ export class ManagedAgentRuntime {
       createRuntimeModel({ config, env }),
       createCityBuiltinPlugins({
         env,
-        config: { ...config, id: config.agent_id },
         host,
         port,
         bindings: plugin_bindings,
       }),
       create_external_plugins({
-        agent_id: config.agent_id,
-        workspace_path,
         bindings: plugin_bindings,
       }),
       create_platform_sandbox(),

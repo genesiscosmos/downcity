@@ -18,17 +18,18 @@ import {
   get_installed_plugin,
   is_builtin_plugin,
   list_agent_plugin_bindings,
-  list_installed_plugins,
   remove_agent_plugin_binding,
   remove_installed_plugin,
   set_agent_plugin_binding,
 } from "@/city/process/registry/PluginRepository.js";
-import { install_plugin } from "@/city/process/plugin/PluginInstaller.js";
+import { install_plugin, update_plugin } from "@/city/process/plugin/PluginInstaller.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { helpText, t } from "@/shared/CliLocale.js";
 import { parsePort } from "@/shared/IndexSupport.js";
-import { list_city_builtin_plugin_descriptors } from "@/city/runtime/plugins/CityBuiltinPlugins.js";
+import { get_plugin_catalog_item, list_plugin_catalog } from "@/city/process/plugin/PluginCatalog.js";
+import { run_interactive_plugin_manager } from "@/city/process/plugin/InteractivePluginManager.js";
+import { prompt_and_save_plugin_binding } from "@/city/process/plugin/PluginBindingConfiguration.js";
 
 /** Plugin Action HTTP 返回结构。 */
 interface PluginActionHttpResponse {
@@ -42,31 +43,9 @@ interface PluginActionHttpResponse {
   error?: string;
 }
 
-/** City TUI 中的 Plugin 面板；展示全局可用制品，写操作仍使用明确子命令。 */
+/** City TUI 中的统一 Plugin 制品与 Binding 管理器。 */
 export async function runInteractivePluginManager(): Promise<void> {
-  const installed = list_installed_plugins();
-  const builtins = list_city_builtin_plugin_descriptors();
-  emitCliList({
-    tone: "accent",
-    title: "Plugins",
-    summary: `${builtins.length + installed.length} available`,
-    items: [
-      ...builtins.map((plugin) => ({
-        title: plugin.plugin_name,
-        facts: [
-          { label: "Source", value: "builtin" },
-          { label: "Actions", value: plugin.actions.join(", ") || "none" },
-        ],
-      })),
-      ...installed.map((item) => ({
-        title: item.plugin_name,
-        facts: [
-          { label: "Source", value: item.source },
-          { label: "Version", value: item.version },
-        ],
-      })),
-    ],
-  });
+  await run_interactive_plugin_manager();
 }
 
 /** 注册统一 Plugin 命令组。 */
@@ -82,32 +61,45 @@ export function registerPluginsCommand(program: Command): void {
     .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
     .helpOption("--help", helpText())
     .action((options: { json?: boolean }) => {
-      const builtins = list_city_builtin_plugin_descriptors().map((descriptor) => ({
-        ...descriptor,
-        source: "builtin" as const,
-      }));
-      const installed = list_installed_plugins().map((item) => ({
-        plugin_name: item.plugin_name,
-        source: item.source,
-        version: item.version,
-      }));
+      const catalog = list_plugin_catalog();
       if (options.json) {
         printResult({
           asJson: true,
           success: true,
           title: "plugins",
-          payload: { plugins: [...builtins, ...installed] },
+          payload: { plugins: catalog },
         });
         return;
       }
       emitCliList({
         tone: "accent",
         title: "Plugins",
-        summary: `${builtins.length + installed.length} available`,
-        items: [...builtins, ...installed].map((item) => ({
+        summary: `${catalog.length} available`,
+        items: catalog.map((item) => ({
           title: item.plugin_name,
-          facts: [{ label: "Source", value: item.source }],
+          facts: [
+            { label: "Source", value: item.source },
+            ...(item.version ? [{ label: "Version", value: item.version }] : []),
+          ],
         })),
+      });
+    });
+
+  plugin
+    .command("update <plugin_name>")
+    .helpOption("--help", helpText())
+    .action(async (plugin_name: string) => {
+      const installed = await update_plugin(plugin_name);
+      emitCliBlock({
+        tone: "success",
+        title: "Plugin updated",
+        summary: `${installed.plugin_name} · ${installed.version}`,
+        facts: [
+          { label: "Integrity", value: installed.integrity },
+          ...(installed.resolved_commit
+            ? [{ label: "Commit", value: installed.resolved_commit }]
+            : []),
+        ],
       });
     });
 
@@ -144,16 +136,26 @@ export function registerPluginsCommand(program: Command): void {
     .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
     .helpOption("--help", helpText())
     .action((plugin_name: string, options: { json?: boolean }) => {
+      const catalog_item = get_plugin_catalog_item(plugin_name);
+      if (!catalog_item) throw new Error(`Plugin not found: ${plugin_name}`);
       const installed = get_installed_plugin(plugin_name);
-      const builtin = list_city_builtin_plugin_descriptors()
-        .find((item) => item.plugin_name === plugin_name);
-      const data = installed ?? (builtin ? { ...builtin, source: "builtin" } : null);
-      if (!data) throw new Error(`Plugin not found: ${plugin_name}`);
       printResult({
         asJson: options.json === true,
         success: true,
         title: "plugin",
-        payload: { plugin: { ...data } },
+        payload: {
+          plugin: {
+            ...catalog_item,
+            ...(installed
+              ? {
+                  resolved_commit: installed.resolved_commit,
+                  integrity: installed.integrity,
+                  installed_at: installed.installed_at,
+                  updated_at: installed.updated_at,
+                }
+              : {}),
+          },
+        },
       });
     });
 
@@ -169,11 +171,12 @@ function register_binding_commands(plugin: Command): void {
     .helpOption("--help", helpText())
     .action(async (plugin_name: string, agent_id: string | undefined, options: { config?: string }) => {
       const target = await resolve_cli_agent_target(agent_id);
-      const installed = get_installed_plugin(plugin_name);
+      const catalog_item = get_plugin_catalog_item(plugin_name);
+      if (!catalog_item) throw new Error(`Plugin not found: ${plugin_name}`);
       const existing = get_agent_plugin_binding(target.agent_id, plugin_name);
       const config = options.config
         ? parse_json_object(options.config, "config")
-        : existing?.config ?? installed?.manifest.default_config ?? {};
+        : existing?.config ?? catalog_item.default_config;
       const binding = set_agent_plugin_binding({
         agent_id: target.agent_id,
         plugin_name,
@@ -207,13 +210,14 @@ function register_binding_commands(plugin: Command): void {
   plugin
     .command("config <plugin_name> [agent_id]")
     .option("--set <json>", t({ zh: "替换完整配置 JSON", en: "replace complete config JSON" }))
+    .option("--interactive", t({ zh: "打开 Schema 配置表单", en: "open Schema configuration form" }))
     .option("--remove", t({ zh: "删除该 Agent Binding", en: "remove this Agent binding" }))
     .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
     .helpOption("--help", helpText())
     .action(async (
       plugin_name: string,
       agent_id: string | undefined,
-      options: { set?: string; remove?: boolean; json?: boolean },
+      options: { set?: string; interactive?: boolean; remove?: boolean; json?: boolean },
     ) => {
       const target = await resolve_cli_agent_target(agent_id);
       const existing = get_agent_plugin_binding(target.agent_id, plugin_name);
@@ -230,6 +234,17 @@ function register_binding_commands(plugin: Command): void {
           config: parse_json_object(options.set, "config"),
         });
         print_binding(binding, options.json === true);
+        return;
+      }
+      if (options.interactive) {
+        const catalog_item = get_plugin_catalog_item(plugin_name);
+        if (!catalog_item) throw new Error(`Plugin not found: ${plugin_name}`);
+        const binding = await prompt_and_save_plugin_binding({
+          agent_id: target.agent_id,
+          plugin: catalog_item,
+          enabled: existing?.enabled ?? true,
+        });
+        if (binding) print_binding(binding, options.json === true);
         return;
       }
       if (!existing) throw new Error(`Plugin is not bound to agent: ${plugin_name}`);

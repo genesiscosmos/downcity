@@ -9,11 +9,6 @@
 import type { ExecutionBindingConfig } from "@/city/types/config/ExecutionBinding.js";
 
 /**
- * 可选的 chat channel 标识。
- */
-export type AgentProjectChannel = "telegram" | "feishu" | "qq";
-
-/**
  * 初始化 agent 项目的输入参数。
  */
 export interface AgentProjectInitializationInput {
@@ -39,14 +34,6 @@ export interface AgentProjectInitializationInput {
    */
   execution: ExecutionBindingConfig;
 
-  /**
-   * 需要启用的 chat channels。
-   *
-   * 关键点（中文）
-   * - SDK 初始化器只返回选择结果，不负责配置持久化。
-   */
-  channels?: AgentProjectChannel[];
-
 }
 
 /**
@@ -62,11 +49,6 @@ export interface AgentProjectInitializationResult {
    * 最终写入的 agent id。
    */
   id: string;
-
-  /**
-   * 最终启用的 chat channels。
-   */
-  channels: AgentProjectChannel[];
 
   /**
    * 最终选择的 City AIService 模型 ID。

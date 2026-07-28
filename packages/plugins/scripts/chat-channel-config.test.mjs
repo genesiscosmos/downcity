@@ -16,7 +16,7 @@ function create_channel(name) {
 
 test("ChatPlugin 配置只来自 constructor", () => {
   const telegram = create_channel("telegram");
-  const queue = { maxConcurrency: 7, mergeDebounceMs: 123 };
+  const queue = { max_concurrency: 7, merge_debounce_ms: 123 };
   const plugin = new ChatPlugin({ queue, channels: [telegram] });
 
   assert.equal(plugin.channels[0], telegram);
@@ -53,7 +53,7 @@ test("ChatPlugin 只通过宿主注入的 account_store 解析共享账号", () 
   };
   const plugin = new ChatPlugin({
     account_store,
-    channels: [new TelegramChannel({ channelAccountId: account.id })],
+    channels: [new TelegramChannel({ channel_account_id: account.id })],
   });
 
   assert.equal(plugin.resolveChannelAccount({}, "telegram"), account);

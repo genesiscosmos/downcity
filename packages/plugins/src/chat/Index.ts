@@ -11,6 +11,12 @@ export {
   QqChannel,
   TelegramChannel,
 } from "./channels/RuntimeChannel.js";
+export {
+  CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
+  chat_plugin_config_schema,
+  get_chat_channel_config_json_schema,
+  parse_chat_plugin_config,
+} from "./config/ChatPluginConfig.js";
 export type {
   BaseChatChannelOptions,
   ChatChannelEnv,
@@ -22,6 +28,7 @@ export type {
   ChatChannel,
   ChatPluginOptions,
 } from "./types/ChatPluginOptions.js";
+export type { ChatPluginConfig } from "./config/ChatPluginConfig.js";
 export type {
   ChatChannelAccountStore,
   StoredChannelAccount,

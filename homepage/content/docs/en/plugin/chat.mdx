@@ -17,30 +17,30 @@ The Chat plugin connects your Agent to messaging channels like Telegram, Feishu,
 
 ## Configuration
 
-Channels are configured under `plugins.chat.channels` in agent config. CLI-managed projects store this config in the global DB:
+Chat is configured like every other Plugin through an Agent Plugin Binding. The CLI generates a shared form from JSON Schema and stores the Binding in the global DB:
 
 ```json
 {
-  "plugins": {
-    "chat": {
-      "channels": {
-        "telegram": {
-          "enabled": true,
-          "channelAccountId": "telegram-main"
-        },
-        "feishu": {
-          "enabled": true,
-          "channelAccountId": "feishu-work"
-        }
-      }
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "channel_account_id": "telegram-main"
+    },
+    "feishu": {
+      "enabled": true,
+      "channel_account_id": "feishu-work"
     }
   }
 }
 ```
 
+```bash
+city plugin config chat <agent_id> --interactive
+```
+
 ## Channel accounts
 
-The actual bot credentials live in the CLI global DB (managed by City). Agent config only references them by `channelAccountId`.
+The actual bot credentials live in the CLI global DB (managed by City). The Chat Binding references them only by `channel_account_id`.
 
 ## Chat Access
 

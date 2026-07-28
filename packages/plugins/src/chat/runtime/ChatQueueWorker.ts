@@ -131,7 +131,7 @@ export class ChatQueueWorker {
 
   private async kick(): Promise<void> {
     if (this.stopped) return;
-    while (this.runningTotal < this.config.maxConcurrency) {
+    while (this.runningTotal < this.config.max_concurrency) {
       const lane = this.pickNextRunnableLane();
       if (!lane) return;
 
