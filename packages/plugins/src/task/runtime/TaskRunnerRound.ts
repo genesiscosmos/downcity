@@ -246,7 +246,6 @@ export async function runAgentRound(params: {
     await assistant_output.finish({
       status: result.success ? "completed" : "failed",
       ...(result.error ? { error: result.error } : {}),
-      file_parts: result.assistant_file_parts || [],
     });
   } finally {
     await turn_context.lifecycle.dispose();

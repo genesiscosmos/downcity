@@ -72,8 +72,23 @@ await session.respond({
 
 ## Model-initiated questions
 
-Every local Agent includes the `ask_question` Tool. When missing information would materially
-change the outcome, the model returns a standard Tool Call:
+`ask_question` is optional and is not registered by Agent by default. Add it explicitly when the
+model needs this capability:
+
+```ts
+import { Agent, Workspace } from "@downcity/agent";
+import { AskQuestionsTool } from "@downcity/agent/tools";
+
+const agent = new Agent({
+  id: "repo-helper",
+  workspace: new Workspace({ path: "/path/to/project" }),
+  tools: {
+    ask_question: AskQuestionsTool,
+  },
+});
+```
+
+When missing information would materially change the outcome, the model returns a standard Tool Call:
 
 ```json
 {

@@ -13,7 +13,7 @@ import {
 } from "@/session/SessionMessages.js";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import type { SessionToolInputReady } from "@/types/session/SessionTool.js";
-import type { FileUIPart, UIMessageChunk } from "ai";
+import type { UIMessage, UIMessageChunk } from "ai";
 
 /** 单个 Turn 使用的 Assistant 输出 Adapter。 */
 export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
@@ -79,23 +79,26 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     this.writer = null;
   }
 
-  /** 追加 Tool 文件并按 Turn 结果收口最后一个 canonical Message。 */
+  /** 把 Action 产生的完整 UI Parts 追加到当前 canonical Assistant Message。 */
+  async append_parts(parts: UIMessage["parts"]): Promise<void> {
+    if (!Array.isArray(parts) || parts.length === 0) return;
+    await (await this.ensure_writer()).append_parts(
+      from_ui_assistant_parts(parts),
+    );
+  }
+
+  /** 按 Turn 结果收口最后一个 canonical Message。 */
   async finish(input: {
     /** Assistant 最终状态。 */
     status: "completed" | "failed" | "stopped";
     /** 失败信息。 */
     error?: string;
-    /** Tool 生成的最终文件 Part。 */
-    file_parts: FileUIPart[];
   }): Promise<void> {
-    if (!this.writer && input.file_parts.length === 0) {
+    if (!this.writer) {
       this.step_pending = false;
       return;
     }
     const writer = await this.ensure_writer();
-    for (const part of from_ui_assistant_parts(input.file_parts)) {
-      if (part.type === "file") await writer.append_file_part(part);
-    }
     if (input.status === "stopped") await writer.stop();
     else if (input.status === "completed") await writer.complete();
     else await writer.fail(input.error);

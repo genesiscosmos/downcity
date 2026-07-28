@@ -635,7 +635,7 @@ flowchart TD
 
 ## 13. 涉及模块
 
-### 13.1 `PluginToolDefinition.ts`
+### 13.1 `PluginTools.ts`
 
 职责变化：
 
@@ -643,7 +643,7 @@ flowchart TD
 - 暴露 `create_plugin_call_tool()`、`create_plugin_read_tool()`、`create_plugin_tools()`。
 - 不再导出生产路径使用的 `setPluginToolRuntime()`。
 
-### 13.2 `PluginToolBridge.ts`
+### 13.2 `PluginToolRuntime.ts`
 
 职责变化：
 
@@ -880,8 +880,8 @@ pnpm --filter @downcity/agent typecheck
 
 ## 19. 实施顺序
 
-1. 重构 `PluginToolBridge.ts`，让 invoke 函数显式接收 `plugins`。
-2. 重构 `PluginToolDefinition.ts`，提供 `create_plugin_tools()`。
+1. 重构 `PluginToolRuntime.ts`，让 invoke 函数显式接收 `plugins`。
+2. 重构 `PluginTools.ts`，提供 `create_plugin_tools()`。
 3. 修改 `AgentAssemblyService.ts`，为每个 Agent 创建专属 plugin tools。
 4. 删除生产路径上的 `setPluginToolRuntime()` 调用。
 5. 修改 `AgentSessionManager.ts`，注入并调用 `ensure_agent_ready()`。

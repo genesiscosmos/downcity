@@ -511,6 +511,27 @@ export class SessionAssistantMessageWriter {
     });
   }
 
+  /** 把 Action 产生的完整 Assistant Parts 按当前消息顺序追加。 */
+  async append_parts(parts: SessionAssistantMessagePart[]): Promise<void> {
+    await this.enqueue_write(async () => {
+      if (this.closed) throw new Error("Assistant Message writer is closed");
+      for (const part of parts) {
+        if (part.type === "tool" || part.type === "interaction") {
+          throw new Error(`Action cannot append Assistant ${part.type} Part`);
+        }
+        const part_id = `${part.type}:${generate_id()}`;
+        await this.upsert_part({
+          ...part,
+          part_id,
+          sequence: this.next_part_sequence(),
+          ...(part.type === "text" || part.type === "reasoning"
+            ? { state: "done" as const }
+            : {}),
+        } as SessionAssistantMessagePart);
+      }
+    });
+  }
+
   /** 等待当前 Assistant writer 已入队的全部写操作完成。 */
   async flush(): Promise<void> {
     await this.write_chain;

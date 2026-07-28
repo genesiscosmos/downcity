@@ -162,9 +162,9 @@ Additional caller-defined tools registered on the Agent.
 Key points:
 
 - Workspace provides file, search, and optional Shell tools as WorkspaceTools
-- Agent core provides `ask_question`
 - PluginRegistry provides `plugin_read` and `plugin_call`
 - `AgentOptions.tools` provides caller-defined tools
+- optional tools such as `ask_question` must be imported from `@downcity/agent/tools` and passed explicitly
 - Agent owns the final merged collection shared by Sessions
 - duplicate names across any source throw instead of silently overriding tools
 

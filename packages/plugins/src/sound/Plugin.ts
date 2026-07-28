@@ -5,7 +5,7 @@
  * - 对 Agent 暴露 `models`、`asr`、`tts` 三个 action。
  * - 模型目录与真实 ASR/TTS 能力全部由 FED/City constructor 回调注入。
  * - 本地音频只负责读取并转换为 data URL，不加载或运行任何本地语音模型。
- * - TTS 返回 AI SDK UIMessage，音频 file part 由 agent 统一落盘。
+ * - TTS 返回已经落盘的本地音频 UIMessage Parts，并由 Action 声明 Assistant Message。
  */
 
 import fs from "node:fs/promises";
@@ -372,6 +372,16 @@ function normalize_tts_result(result: SoundPluginTtsResult): SoundPluginTtsResul
   if (!has_audio_file) {
     throw new TypeError("SoundPlugin tts UIMessage must contain an audio file part");
   }
+  for (const part of record.parts) {
+    const part_record = to_record(part);
+    if (part_record?.type !== "file") continue;
+    const url = String(part_record.url || "").trim();
+    if (!url || url.startsWith("data:") || /^https?:\/\//i.test(url)) {
+      throw new TypeError(
+        "SoundPlugin tts file parts must be saved locally before returning",
+      );
+    }
+  }
   return result;
 }
 
@@ -488,7 +498,7 @@ export class SoundPlugin extends BasePlugin {
       "## Results",
       "",
       "ASR returns transcript text and may include timed segments, language, and duration.",
-      "TTS returns an AI SDK UIMessage. Its audio file part is saved under project resources and attached to the assistant response automatically.",
+      "TTS returns an AI SDK UIMessage whose audio file part already points to a local file, and that part is attached to the assistant response.",
       "Do not invent a transcript or audio result when a FED call fails.",
       "",
       `When unsure, use \`plugin_read { plugin: \"${this.name}\", action: \"...\" }\` to inspect the complete schema.`,
@@ -686,8 +696,11 @@ export class SoundPlugin extends BasePlugin {
           const result = await this.synthesize(normalize_tts_payload(input));
           return {
             success: true,
-            data: result as unknown as JsonObject,
             message: "speech synthesized",
+            messages: [{
+              role: "assistant" as const,
+              parts: result.parts,
+            }],
           };
         } catch (error) {
           const message = describe_error(error);

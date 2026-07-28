@@ -41,27 +41,27 @@ const agent = new Agent({
 });
 ```
 
-Agent 始终提供 Session 交互工具；Workspace 默认生成由五个文件/搜索工具组成的 WorkspaceTools，Shell 额外加入两个命令工具。它们统一注册到最终 `agent.tools`：
+Workspace 默认生成由五个文件/搜索工具组成的 WorkspaceTools，Shell 额外加入两个命令工具。它们统一注册到最终 `agent.tools`：
 
-- `ask_question`：缺少会实质影响结果的信息时，暂停当前 Tool 并向用户提出结构化问题
 - `shell_exec`：一次性非交互命令
 - `shell_session`：长任务和需要 stdin 的 PTY 交互式会话
 - `grep`：底层直接使用 ripgrep 的结构化项目内容搜索
 - `find`：使用 POSIX glob 模式发现项目文件
-- `read`：分页读取文本并把图片注入模型输入
+- `read`：分页读取文本，并把图片或 PDF 注入模型输入
 - `write`：创建文件或显式原子覆盖完整文件
 - `edit`：通过唯一文本匹配原子编辑单个文件
 
 文件和搜索工具只允许访问 Workspace 根目录，即使没有 Shell 也可使用。通用 `unrestricted` 只属于 Shell；File/Search、Plugin 和自定义 Tool 不共享这个开关。项目外操作需要 Shell unrestricted 审批、用户显式附件或宿主注册的专用 Tool。`grep` 和 `find` 会遵守 ignore 文件，默认最多返回 200 项，并允许通过 `max_results` 提高到 2,000 项。
 
-`read` 读取 PNG、JPEG、GIF、WebP 或 BMP 图片时，会把图片作为临时 user file part 注入下一个模型 step。其他二进制文件只返回元数据。
+`read` 读取 PNG、JPEG、GIF、WebP、BMP 或 PDF 时，`output` 只包含普通文件结果，同时把指向本地文件的 User File Part 注入下一个模型 Step。Tool Result 不包含 base64；其他二进制文件只返回元数据。
 
 `read` 会返回文件 SHA-256。文件可能被其他进程同时修改时，把该值作为 `edit.expected_sha256` 传入，可以阻止过期编辑覆盖新内容：
 
 ```ts
-const current = await agent.tools.read.execute({
+const current_result = await agent.tools.read.execute({
   file_path: "src/index.ts",
 });
+const current = current_result.output;
 
 await agent.tools.edit.execute({
   file_path: "src/index.ts",
@@ -86,6 +86,21 @@ await session.respond({
 ```
 
 实时 UI 从 pending Interaction Part 读取完整请求；关联 Tool 同时处于 `waiting-user`，用户决定后调用 `session.respond(...)`。
+
+需要模型主动提问时，从独立工具入口显式注册：
+
+```ts
+import { Agent, Workspace } from "@downcity/agent";
+import { AskQuestionsTool } from "@downcity/agent/tools";
+
+const agent = new Agent({
+  id: "repo-helper",
+  workspace: new Workspace({ path: "/path/to/project" }),
+  tools: {
+    ask_question: AskQuestionsTool,
+  },
+});
+```
 
 `ask_question` 由模型作为标准 Tool Call 调用，不是 Provider 私有消息类型。它支持
 `text`、`single_select` 和 `multi_select`；用户回答后，答案作为 Tool Result 返回模型，
@@ -222,6 +237,8 @@ const agent = new Agent({
 
 `zod` schema 负责运行时校验；`json_schema` 和 `examples` 用于 `plugin_read` 返回给模型或 UI。action 通过 Session Tool 执行时会收到 `execution_context`；CLI、HTTP 或 scheduler 直接调用时该字段可能不存在。当前 Session Step 已提交生效的 env 应读取 `execution_context.workspace_env`，`context.workspace_env` 表示 Workspace 当前配置快照。旧的 `class extends BasePlugin` 写法仍然可用，也可以只在 `actions` 里逐步换成 `create_action(...)`。
 
+Tool 与 Plugin Action 使用同一条 Session 结果链路：普通结果放在 `output`，需要进入对话的内容直接使用 `messages: [{ role, parts }]`。User Parts 在下一个 Step 生效，Assistant Parts 写入当前 Assistant Message。Session 不下载或改写文件；Action 应先保存文件，再返回指向该本地路径的 File Part。
+
 ## ImagePlugin
 
 如果你希望 Agent 在对话过程中自己触发生图，可以把图片能力包装成 `ImagePlugin`：
@@ -313,13 +330,13 @@ const job = await plugin_call({
 
 `default_model` 是插件级默认图片模型，可以是字符串，也可以是同步或异步函数。Agent 调用 `image_create` 时如果没有传 `model`，`ImagePlugin` 会自动把 `default_model` 的字符串值或函数返回值补给下游的 `image_create(input)`；如果 payload 里显式传了 `model`，则以 payload 为准。没有配置 `default_model` 时，Agent 需要先确认模型 ID，可以调用 `models` 查看可用图片模型。
 
-`image_result` 默认只读取一次当前任务状态。如果返回 `queued` 或 `running`，保留 `job_id`，稍后继续调用 `image_result`。如果希望短任务在一次 tool 调用里等到终态，可以传 `until_done: true`，并按需设置 `max_wait_ms` / `poll_interval_ms`。如果返回 `succeeded`，`data` 会是包含图片 file parts 的 AI SDK `UIMessage`。
+`image_result` 默认只读取一次当前任务状态。如果返回 `queued` 或 `running`，保留 `job_id`，稍后继续调用 `image_result`。如果希望短任务在一次 tool 调用里等到终态，可以传 `until_done: true`，并按需设置 `max_wait_ms` / `poll_interval_ms`。如果返回 `succeeded`，`data` 保留任务摘要，图片 File Parts 直接进入当前 Assistant Message。
 
 `ImagePlugin` 不直接绑定 City，也不关心 OpenAI、DeepSeek 等 provider 的具体协议。传入 `image_create` 和 `image_result` 任务函数后，插件只负责把两步式任务 action 暴露给 Agent；默认轮询节奏由产品、Agent 或调用方根据 `poll_after_ms` 决定，`until_done` 只是插件层的简单等待能力。
 
 所谓“provider 输入解析”指的是：Agent 调用 `plugin_call` 时只传简单的 `prompt` 或 `content`；`ImagePlugin` 在内部把本地图片读成 data URL，并把 `content` 转成 `ImagePluginResolvedInput.messages` 后再交给 `image_create(input)`。这只是 ImagePlugin 到 City / provider adapter 的内部边界，不是给 Agent 使用的新协议。
 
-生成图片的 file parts 会统一落盘到 `.downcity/resources/`，以 `.downcity/resources/...` 这类 Agent 根目录相对路径引用，并自动合并进最终 assistant message。生成结果里的相对文件 URL 会先按 Agent 项目根目录解析，再进行资源落盘。`plugin_call` 结果也会通过 `files[].relative_path` 和 `files[].path` 返回 Agent 根目录相对路径与可直接打开的本机绝对路径。
+`image_result` 回调必须先把生成图片保存到本地，再在 UIMessage File Part 中返回本地绝对路径或相对 Agent 项目根目录的路径。HTTP URL 和 data URL 不是生成结果格式。Session 会原样持久化该 File Part，不再建立统一 Resource 目录或返回重复的文件摘要。
 
 ## plugin HTTP
 

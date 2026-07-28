@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 插件只暴露 image_create / image_result 两个任务 action。
  * - image_result 默认只读取一次当前状态；传 until_done=true 时会在 plugin 层等待终态。
- * - 成功图片仍以 UIMessage 返回，后续由 plugin bridge 落盘 file parts。
+ * - 成功图片由 Plugin 返回已指向本地文件的 Assistant Parts。
  */
 
 import test from "node:test";
@@ -25,7 +25,7 @@ function create_image_message() {
         type: "file",
         mediaType: "image/png",
         filename: "image.png",
-        url: "data:image/png;base64,cG5n",
+        url: "/workspace/image.png",
       },
     ],
   };
@@ -183,8 +183,13 @@ test("ImagePlugin image_result returns final message when succeeded", async () =
   });
 
   assert.equal(result.success, true);
-  assert.equal(result.data.role, "assistant");
-  assert.equal(result.data.parts[0].type, "file");
+  assert.equal(result.data.job_id, "img_1");
+  assert.equal(result.data.status, "succeeded");
+  assert.equal("result" in result.data, false);
+  assert.deepEqual(result.messages, [{
+    role: "assistant",
+    parts: message.parts,
+  }]);
 });
 
 test("ImagePlugin image_result reports failed terminal job", async () => {
@@ -395,7 +400,11 @@ test("ImagePlugin image_result polls until terminal when until_done=true", async
   });
 
   assert.equal(result.success, true);
-  assert.equal(result.data.role, "assistant");
+  assert.equal(result.data.status, "succeeded");
+  assert.deepEqual(result.messages, [{
+    role: "assistant",
+    parts: message.parts,
+  }]);
   assert.ok(calls.length >= 3);
 });
 

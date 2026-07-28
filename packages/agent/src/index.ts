@@ -2,7 +2,7 @@
  * @downcity/agent — Agent 运行时公开 API。
  *
  * 关键点（中文）
- * - 这是 agent 包唯一稳定的公开入口。
+ * - 这是 agent 包核心运行时的稳定公开入口；可选 Tool 通过 `@downcity/agent/tools` 导出。
  * - 只导出 Agent、plugin 作者 API、city 运行集成 API 与跨包协议类型。
  * - HTTP router、sandbox runner、内部 plugin runtime runner 等实现细节不从根入口暴露。
  */
@@ -179,6 +179,10 @@ export type {
   CreatePluginActionOptions,
   CreatePluginOptions,
 } from "./plugin/core/PluginActionFactory.js";
+export type {
+  ActionResult,
+  ActionResultMessage,
+} from "./types/action/ActionResult.js";
 
 // Session 与即时执行集成
 export { Executor } from "./executor/Executor.js";

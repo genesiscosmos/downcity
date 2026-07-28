@@ -7,7 +7,7 @@
  * - 输出只返回执行结果；Assistant Message 通过显式输出端口写入唯一事实源。
  */
 
-import type { FileUIPart, Tool, UIMessageChunk } from "ai";
+import type { Tool, UIMessageChunk } from "ai";
 import type {
   SessionRecordV1,
   SessionMessageRecordV1,
@@ -108,14 +108,6 @@ export interface SessionTurnExecutionResult {
    * 失败时的错误信息（成功时为空）。
    */
   error?: string;
-
-  /**
-   * 工具运行期显式生成、并在 Assistant 末尾持久化的文件 Parts。
-   *
-   * 关键点（中文）：该字段与 canonical Message 输出端口分离，Session 不需要从
-   * 最终 UIMessage 反推哪些文件来自工具通道。
-   */
-  assistant_file_parts?: FileUIPart[];
 
   /**
    * 本轮执行结束后待写入长期历史的 user 消息。

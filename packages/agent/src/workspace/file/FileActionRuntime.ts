@@ -105,7 +105,6 @@ async function read_file_action(
         truncated: false,
         type: "image",
         mime_type: image_mime_type,
-        data_url: `data:${image_mime_type};base64,${buffer.toString("base64")}`,
         sha256,
       };
     }

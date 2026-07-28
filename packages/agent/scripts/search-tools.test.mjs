@@ -34,11 +34,13 @@ async function create_fixture(t) {
 async function execute_tool(tools, name, input, abort_signal) {
   const execute = tools[name]?.execute;
   assert.equal(typeof execute, "function", `${name} tool must be executable`);
-  return await execute(input, {
+  const result = await execute(input, {
     toolCallId: `test-${name}`,
     messages: [],
     abortSignal: abort_signal || new AbortController().signal,
   });
+  assert.deepEqual(result.messages, []);
+  return result.output;
 }
 
 test("grep returns structured literal matches and respects .gitignore", { skip: !rg_available }, async (t) => {

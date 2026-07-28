@@ -14,6 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { MockLanguageModelV3 } from "ai/test";
 import { Agent, Workspace } from "@downcity/agent";
+import { AskQuestionsTool } from "@downcity/agent/tools";
 
 /** 构造 AI SDK V3 usage。 */
 function create_usage() {
@@ -95,7 +96,24 @@ function create_final_text_stream() {
   };
 }
 
-test("ask_question 等待用户回答并在同一个 Turn 继续模型执行", async () => {
+test("Agent 默认不注册 ask_question", async () => {
+  const project_root = await fs.mkdtemp(
+    path.join(os.tmpdir(), "downcity-agent-without-ask-question-"),
+  );
+  const agent = new Agent({
+    id: "agent_without_ask_question",
+    workspace: new Workspace({ path: project_root }),
+  });
+
+  try {
+    assert.equal("ask_question" in agent.tools, false);
+  } finally {
+    await agent.dispose();
+    await fs.rm(project_root, { recursive: true, force: true });
+  }
+});
+
+test("显式注入的 ask_question 等待回答并继续同一个 Turn", async () => {
   const project_root = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-session-ask-question-"),
   );
@@ -122,6 +140,9 @@ test("ask_question 等待用户回答并在同一个 Turn 继续模型执行", a
     id: "session_ask_question_agent",
     workspace: new Workspace({ path: project_root }),
     model,
+    tools: {
+      ask_question: AskQuestionsTool,
+    },
   });
 
   try {

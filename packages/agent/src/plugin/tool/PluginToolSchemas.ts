@@ -2,7 +2,7 @@
  * Plugin tool 输入 schema。
  *
  * 关键点（中文）
- * - plugin_call 是 agent 内置的最低层 plugin action 桥。
+ * - plugin_call 是 agent 内置的最低层 plugin action 入口。
  * - plugin_call.payload 是透传给具体 plugin action 的 JSON object。
  * - 这里不用 Zod 表达 payload 的开放对象语义，避免 AI SDK zodSchema
  *   转换后把 additionalProperties 收窄为 false。

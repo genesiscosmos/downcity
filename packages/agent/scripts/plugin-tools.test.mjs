@@ -1,23 +1,19 @@
 /**
- * @file 验证 plugin tool bridge 会把生成文件摘要为可打开路径。
+ * @file 验证 Plugin Tool 的 ActionResult 转换与 Agent 绑定。
  *
  * 关键点（中文）
- * - assistant message 使用 Agent 根目录相对路径，避免历史暴露本机路径。
- * - tool result 同时返回相对路径与本机绝对路径，便于模型与用户明确知道文件位置。
+ * - Plugin Action 自己产生本地 File Part，Tool 运行时不处理文件。
+ * - output 与 messages 分开返回，由 Executor 的统一边界分流。
  */
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import os from "node:os";
-import path from "node:path";
-import fs from "node:fs/promises";
-
 import {
   invoke_plugin_call_tool,
   invoke_plugin_read_tool,
-} from "../bin/executor/tools/plugin/PluginToolBridge.js";
-import { create_plugin_tools } from "../bin/executor/tools/plugin/PluginToolDefinition.js";
-import { plugin_call_input_schema } from "../bin/executor/tools/plugin/PluginToolSchemas.js";
+} from "../bin/plugin/tool/PluginToolRuntime.js";
+import { create_plugin_tools } from "../bin/plugin/tool/PluginTools.js";
+import { plugin_call_input_schema } from "../bin/plugin/tool/PluginToolSchemas.js";
 import { create_action, create_plugin } from "../bin/plugin/core/PluginActionFactory.js";
 import { PluginRegistry } from "../bin/plugin/core/PluginRegistry.js";
 import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
@@ -49,12 +45,7 @@ test("plugin_call payload schema allows arbitrary object properties", async () =
   assert.deepEqual(payload_schema.default, {});
 });
 
-test("invoke_plugin_call_tool returns absolute paths for materialized file parts", async () => {
-  const project_root = await fs.mkdtemp(
-    path.join(os.tmpdir(), "downcity-agent-plugin-tool-files-"),
-  );
-  const bytes = Buffer.from("png-bytes-for-plugin-tool", "utf8");
-
+test("invoke_plugin_call_tool preserves Action output and messages", async () => {
   const plugins = {
     list: () => [],
     read: () => ({ plugins: [] }),
@@ -62,18 +53,18 @@ test("invoke_plugin_call_tool returns absolute paths for materialized file parts
     run_action: async () => ({
       success: true,
       message: "image generated",
-      data: {
-        id: "msg_image_test",
+      data: { job_id: "img_1" },
+      messages: [{
         role: "assistant",
         parts: [
           {
             type: "file",
             mediaType: "image/png",
             filename: "image.png",
-            url: `data:image/png;base64,${bytes.toString("base64")}`,
+            url: "/workspace/image.png",
           },
         ],
-      },
+      }],
     }),
     pipeline: async (_, value) => value,
     guard: async () => {},
@@ -83,7 +74,7 @@ test("invoke_plugin_call_tool returns absolute paths for materialized file parts
     },
   };
 
-  const turn_context = create_turn_context(project_root);
+  const turn_context = create_turn_context("/workspace");
   const result = await invoke_plugin_call_tool({
     plugins,
     turn_context,
@@ -94,21 +85,23 @@ test("invoke_plugin_call_tool returns absolute paths for materialized file parts
     },
   });
 
-  assert.equal(result.success, true);
-  assert.equal(result.assistant_file_count, 1);
-  assert.equal(result.files?.length, 1);
-  assert.match(result.files[0].relative_path, /^\.downcity\/resources\//);
-  assert.equal(path.isAbsolute(result.files[0].path), true);
-  assert.equal(
-    path.dirname(result.files[0].path),
-    path.join(project_root, ".downcity", "resources"),
-  );
-  assert.deepEqual(await fs.readFile(result.files[0].path), bytes);
-  assert.equal("data" in result, false);
-
-  const pending_parts = turn_context.output.assistant_file_parts();
-  assert.equal(pending_parts.length, 1);
-  assert.equal(pending_parts[0].url, result.files[0].relative_path);
+  assert.deepEqual(result.output, {
+    success: true,
+    plugin: "image",
+    action: "image_result",
+    message: "image generated",
+    data: { job_id: "img_1" },
+  });
+  assert.deepEqual(result.messages, [{
+    role: "assistant",
+    parts: [{
+      type: "file",
+      mediaType: "image/png",
+      filename: "image.png",
+      url: "/workspace/image.png",
+    }],
+  }]);
+  assert.equal(turn_context.output.take_assistant_parts().length, 0);
 });
 
 test("invoke_plugin_read_tool returns plugin action metadata", async () => {
@@ -159,11 +152,12 @@ test("invoke_plugin_read_tool returns plugin action metadata", async () => {
     },
   });
 
-  assert.equal(result.success, true);
-  assert.equal(result.data.name, "image");
-  assert.equal(result.data.actions[0].name, "image_create");
-  assert.equal(result.data.actions[0].has_input_schema, true);
-  assert.equal(result.data.actions[0].examples[0].payload.prompt, "draw");
+  assert.equal(result.output.success, true);
+  assert.equal(result.output.data.name, "image");
+  assert.equal(result.output.data.actions[0].name, "image_create");
+  assert.equal(result.output.data.actions[0].has_input_schema, true);
+  assert.equal(result.output.data.actions[0].examples[0].payload.prompt, "draw");
+  assert.deepEqual(result.messages, []);
 });
 
 test("invoke_plugin_read_tool rejects unregistered plugins", async () => {
@@ -182,9 +176,9 @@ test("invoke_plugin_read_tool rejects unregistered plugins", async () => {
     input: { plugin: "task" },
   });
 
-  assert.equal(result.success, false);
-  assert.match(result.message, /Unknown plugin: task/);
-  assert.match(result.data.error, /Unknown plugin: task/);
+  assert.equal(result.output.success, false);
+  assert.match(result.output.message, /Unknown plugin: task/);
+  assert.match(result.output.data.error, /Unknown plugin: task/);
 });
 
 test("invoke_plugin_read_tool rejects unknown plugin actions", async () => {
@@ -203,9 +197,9 @@ test("invoke_plugin_read_tool rejects unknown plugin actions", async () => {
     input: { plugin: "skill", action: "missing" },
   });
 
-  assert.equal(result.success, false);
-  assert.match(result.message, /Unknown action: skill\.missing/);
-  assert.match(result.data.error, /Unknown action: skill\.missing/);
+  assert.equal(result.output.success, false);
+  assert.match(result.output.message, /Unknown action: skill\.missing/);
+  assert.match(result.output.data.error, /Unknown action: skill\.missing/);
 });
 
 test("PluginRegistry validates action payload with metadata schema", async () => {
@@ -316,19 +310,19 @@ test("create_plugin_tools binds plugin_call to the current registry", async () =
     payload: { name: "anything" },
   }, create_execution_options("session_b"));
 
-  assert.equal(result_a.success, true);
-  assert.equal(result_a.data.value.owner, "agent_a");
-  assert.equal(result_a.data.value.session_id, "session_a");
-  assert.deepEqual(result_a.data.value.context_keys, [
+  assert.equal(result_a.output.success, true);
+  assert.equal(result_a.output.data.owner, "agent_a");
+  assert.equal(result_a.output.data.session_id, "session_a");
+  assert.deepEqual(result_a.output.data.context_keys, [
     "abort_signal",
     "agent_systems",
     "project_root",
     "session_id",
     "turn_id",
   ]);
-  assert.equal(result_b.success, true);
-  assert.equal(result_b.data.value.owner, "agent_b");
-  assert.equal(result_b.data.value.session_id, "session_b");
+  assert.equal(result_b.output.success, true);
+  assert.equal(result_b.output.data.owner, "agent_b");
+  assert.equal(result_b.output.data.session_id, "session_b");
 });
 
 test("PluginRegistry keeps plugin ready after action business failure", async () => {

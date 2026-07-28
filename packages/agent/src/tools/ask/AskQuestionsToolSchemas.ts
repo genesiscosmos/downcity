@@ -40,7 +40,7 @@ const select_question_schema = z
   .strict();
 
 /** ask_question Tool 的运行时输入校验 Schema。 */
-export const ask_question_input_schema = z
+export const ask_questions_input_schema = z
   .object({
     title: z.string().trim().min(1)
       .describe("Short title for the question card."),

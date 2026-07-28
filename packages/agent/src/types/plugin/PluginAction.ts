@@ -12,6 +12,7 @@ import type { z } from "zod";
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
 import type { JsonObject, JsonValue } from "@/types/common/Json.js";
+import type { ActionResultMessage } from "@/types/action/ActionResult.js";
 
 /**
  * Plugin action 调用参数。
@@ -59,6 +60,8 @@ export interface PluginActionResult<R extends JsonValue = JsonValue> {
   error?: string;
   /** 人类可读消息（可选）。 */
   message?: string;
+  /** Action 执行后应写入 Session 的真实 User / Assistant Messages。 */
+  messages?: ActionResultMessage[];
 }
 
 /**

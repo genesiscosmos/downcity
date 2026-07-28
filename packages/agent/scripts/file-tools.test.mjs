@@ -29,6 +29,10 @@ async function create_fixture(t) {
 }
 
 async function execute_tool(tools, name, input) {
+  return (await execute_action_tool(tools, name, input)).output;
+}
+
+async function execute_action_tool(tools, name, input) {
   const execute = tools[name]?.execute;
   assert.equal(typeof execute, "function", `${name} tool must be executable`);
   return await execute(input, {
@@ -115,7 +119,7 @@ test("read identifies binary files without returning raw bytes", async (t) => {
   assert.equal(result.total_lines, 0);
 });
 
-test("read returns supported images as data URLs", async (t) => {
+test("read returns images as next-step User File Parts", async (t) => {
   const fixture = await create_fixture(t);
   const image = Buffer.from([
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
@@ -123,17 +127,46 @@ test("read returns supported images as data URLs", async (t) => {
   ]);
   await fs.writeFile(path.join(fixture.root_path, "input.bin"), image);
 
-  const result = await execute_tool(fixture.tools, "read", {
+  const result = await execute_action_tool(fixture.tools, "read", {
     file_path: "input.bin",
   });
-  assert.equal(result.success, true);
-  assert.equal(result.type, "image");
-  assert.equal(result.mime_type, "image/png");
-  assert.equal(result.content, "");
-  assert.equal(
-    result.data_url,
-    `data:image/png;base64,${image.toString("base64")}`,
+  assert.equal(result.output.success, true);
+  assert.equal(result.output.type, "image");
+  assert.equal(result.output.mime_type, "image/png");
+  assert.equal(result.output.content, "");
+  assert.deepEqual(result.messages, [{
+    role: "user",
+    parts: [{
+      type: "file",
+      url: result.output.file_path,
+      mediaType: "image/png",
+      filename: "input.bin",
+    }],
+  }]);
+});
+
+test("read returns PDFs as next-step User File Parts", async (t) => {
+  const fixture = await create_fixture(t);
+  await fs.writeFile(
+    path.join(fixture.root_path, "document.pdf"),
+    Buffer.from("%PDF-1.7\n% binary\u0000content", "utf8"),
   );
+
+  const result = await execute_action_tool(fixture.tools, "read", {
+    file_path: "document.pdf",
+  });
+  assert.equal(result.output.success, true);
+  assert.equal(result.output.type, "binary");
+  assert.equal(result.output.mime_type, "application/pdf");
+  assert.deepEqual(result.messages, [{
+    role: "user",
+    parts: [{
+      type: "file",
+      url: result.output.file_path,
+      mediaType: "application/pdf",
+      filename: "document.pdf",
+    }],
+  }]);
 });
 
 test("file tools reject project escapes and symbolic-link escapes", async (t) => {

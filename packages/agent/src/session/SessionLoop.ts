@@ -519,7 +519,6 @@ export class SessionLoop {
           ? "completed"
           : "failed",
       ...(result.error ? { error: result.error } : {}),
-      file_parts: result.assistant_file_parts || [],
     });
 
     if (!result.success && !turn_context.lifecycle.abort_signal.aborted && result.error) {

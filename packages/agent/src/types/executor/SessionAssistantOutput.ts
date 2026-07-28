@@ -5,7 +5,7 @@
  * 由 execution Adapter 完成，SessionMessages 仍是唯一 Assistant Message 事实源。
  */
 
-import type { FileUIPart, UIMessageChunk } from "ai";
+import type { UIMessage, UIMessageChunk } from "ai";
 import type { SessionMessageRecordV1 } from "@/executor/types/SessionRecords.js";
 import type { SessionToolInputReady } from "@/types/session/SessionTool.js";
 
@@ -23,13 +23,13 @@ export interface SessionAssistantOutput {
   prepare_tool_input(input: SessionToolInputReady): Promise<void>;
   /** User steer 已插入会话后，关闭它之前的当前 Assistant Message。 */
   close_current_message(): Promise<void>;
+  /** 把 Action 产生的完整 Parts 追加到当前 canonical Assistant Message。 */
+  append_parts(parts: UIMessage["parts"]): Promise<void>;
   /** 按 Turn 最终结果收口 Assistant 输出。 */
   finish(input: {
     /** Assistant 最终状态。 */
     status: "completed" | "failed" | "stopped";
     /** 失败时写入 Assistant Message 的错误文本。 */
     error?: string;
-    /** Tool 运行期生成、需要追加到 Assistant 末尾的文件 Part。 */
-    file_parts: FileUIPart[];
   }): Promise<void>;
 }

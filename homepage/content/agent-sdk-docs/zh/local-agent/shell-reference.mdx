@@ -76,7 +76,7 @@ Workspace 始终提供文件与搜索工具；配置 Shell 后再增加两个命
 
 `read` 默认最多返回 500 行，单次最多 2,000 行或 256KB。结果中的 `truncated` 和 `next_offset` 用于继续读取。`write` 单次最多写入 1MB，并自动创建父目录。
 
-对于 PNG、JPEG、GIF、WebP 和 BMP 文件，`read` 会返回图片元数据和 data URL，Agent 再把该 data URL 作为临时 user image part 注入下一个模型 step。其他二进制文件只返回元数据。
+对于 PNG、JPEG、GIF、WebP、BMP 和 PDF，`read` 的 `output` 只返回文件元数据，并把指向本地文件的 User File Part 注入下一个模型 Step。不在 Tool Result 中返回 base64。其他二进制文件只返回元数据。
 
 `edit` 一次最多接受 10 个修改，所有修改都基于原始文件匹配并且全部成功后才写入。可以把 `read.sha256` 传给 `edit.expected_sha256`，防止覆盖并发修改。
 

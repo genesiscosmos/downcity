@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 对 Agent 暴露 `image_create` / `image_result` 两步式任务 action。
  * - City / provider 的图片能力通过 image_create / image_result 任务函数注入。
- * - 成功结果返回 AI SDK UIMessage，后续由 plugin tool bridge 抽取 file parts 写回 assistant 消息。
+ * - 成功结果返回本地文件 UI Parts，Plugin Action 直接声明应写入的 Assistant Message。
  */
 
 import fs from "node:fs/promises";
@@ -391,6 +391,16 @@ function normalize_image_result(result: ImagePluginResult): ImagePluginResult {
   const record = to_record(result);
   if (!record || !Array.isArray(record.parts)) {
     throw new TypeError("ImagePlugin image provider must return an AI SDK UIMessage");
+  }
+  for (const part of record.parts) {
+    const part_record = to_record(part);
+    if (part_record?.type !== "file") continue;
+    const url = String(part_record.url || "").trim();
+    if (!url || url.startsWith("data:") || HTTP_URL_RE.test(url)) {
+      throw new TypeError(
+        "ImagePlugin result file parts must be saved locally before returning",
+      );
+    }
   }
   return result;
 }
@@ -794,16 +804,22 @@ export class ImagePlugin extends BasePlugin {
               message: current.error ?? current.message ?? "image job failed",
             };
           }
-          const data = current.status === "succeeded" && current.result
-            ? current.result as unknown as JsonObject
-            : current as unknown as JsonObject;
+          const { result, ...job } = current;
           return {
             success: true,
-            data,
+            data: job as unknown as JsonObject,
             message:
               current.status === "succeeded"
                 ? "image generated"
                 : `image job ${current.status}`,
+            ...(current.status === "succeeded" && result
+              ? {
+                  messages: [{
+                    role: "assistant" as const,
+                    parts: result.parts,
+                  }],
+                }
+              : {}),
           };
         } catch (error) {
           return {

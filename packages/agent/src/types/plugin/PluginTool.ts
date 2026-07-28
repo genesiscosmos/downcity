@@ -6,7 +6,10 @@
  * - payload 保持 JSON 对象，避免 tool 层理解具体 plugin 的业务字段。
  */
 
+import type { Tool } from "ai";
 import type { JsonObject } from "@/types/common/Json.js";
+import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
+import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 
 /**
  * plugin_call 输入。
@@ -31,22 +34,6 @@ export interface PluginReadInput {
 }
 
 /**
- * plugin_call 产生的 assistant 文件摘要。
- */
-export interface PluginCallToolFileResult {
-  /** 文件在本轮 assistant 文件列表中的顺序。 */
-  index: number;
-  /** 文件 MIME 类型，例如 `image/png`。 */
-  media_type: string;
-  /** 原始文件名；若上游未提供则为空字符串。 */
-  filename: string;
-  /** 基于 Agent 项目根目录的相对路径，例如 `.downcity/resources/xxx.png`。 */
-  relative_path: string;
-  /** 当前机器可直接打开的绝对文件路径，按 Agent 项目根目录解析。 */
-  path: string;
-}
-
-/**
  * plugin_call 返回给模型的摘要结果。
  */
 export interface PluginCallToolResult {
@@ -56,10 +43,6 @@ export interface PluginCallToolResult {
   plugin: string;
   /** 目标 action 名称。 */
   action: string;
-  /** 本次 action 产生并写入 assistant 消息的 file part 数量。 */
-  assistant_file_count: number;
-  /** 本次 action 产生的文件摘要，包含可直接打开的绝对路径。 */
-  files?: PluginCallToolFileResult[];
   /** 人类可读消息。 */
   message: string;
   /** 错误信息。 */
@@ -78,4 +61,43 @@ export interface PluginReadToolResult {
   message: string;
   /** 读取到的 metadata。 */
   data: JsonObject;
+}
+
+/** 创建当前 Agent 专属 Plugin Tools 的参数。 */
+export interface CreatePluginToolsOptions {
+  /** 当前 Agent 自己的 Plugin 调用面；Tool 只能访问该 Registry。 */
+  plugins: AgentPlugins;
+}
+
+/** 当前 Agent 专属的 Plugin Tools。 */
+export interface AgentPluginTools {
+  /** 通过闭包绑定当前 Registry 的 Plugin metadata 读取 Tool。 */
+  plugin_read: Tool;
+
+  /** 通过闭包绑定当前 Registry 的 Plugin Action 执行 Tool。 */
+  plugin_call: Tool;
+}
+
+/** 调用 plugin_call 运行时的显式依赖。 */
+export interface InvokePluginCallToolOptions {
+  /** 当前 Agent 自己的 Plugin 调用面。 */
+  plugins: AgentPlugins;
+
+  /** Executor 为当前 Tool Call 绑定的 Session Turn Context。 */
+  turn_context: SessionTurnContext;
+
+  /** 模型提交给 plugin_call 的结构化输入。 */
+  input: PluginCallInput;
+}
+
+/** 调用 plugin_read 运行时的显式依赖。 */
+export interface InvokePluginReadToolOptions {
+  /** 当前 Agent 自己的 Plugin 调用面。 */
+  plugins: AgentPlugins;
+
+  /** Executor 为当前 Tool Call 绑定的 Session Turn Context。 */
+  turn_context: SessionTurnContext;
+
+  /** 模型提交给 plugin_read 的结构化输入。 */
+  input: PluginReadInput;
 }

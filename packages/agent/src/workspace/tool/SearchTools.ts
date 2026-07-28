@@ -7,6 +7,7 @@
  */
 
 import { tool, type ToolExecutionOptions } from "ai";
+import type { ActionResult } from "@/types/action/ActionResult.js";
 import type {
   FindToolInput,
   FindToolResult,
@@ -29,12 +30,13 @@ export function create_search_tools(runner: SearchToolRunner): SearchToolSet {
     execute: async (
       input: GrepToolInput,
       options: ToolExecutionOptions,
-    ): Promise<GrepToolResult> => {
-      return await runner.run_search_action({
+    ): Promise<ActionResult<GrepToolResult>> => {
+      const output = await runner.run_search_action({
         action: "grep",
         input,
         abort_signal: options.abortSignal,
       }) as GrepToolResult;
+      return { output, messages: [] };
     },
   });
 
@@ -45,12 +47,13 @@ export function create_search_tools(runner: SearchToolRunner): SearchToolSet {
     execute: async (
       input: FindToolInput,
       options: ToolExecutionOptions,
-    ): Promise<FindToolResult> => {
-      return await runner.run_search_action({
+    ): Promise<ActionResult<FindToolResult>> => {
+      const output = await runner.run_search_action({
         action: "find",
         input,
         abort_signal: options.abortSignal,
       }) as FindToolResult;
+      return { output, messages: [] };
     },
   });
 

@@ -107,10 +107,6 @@ export interface ReadFileToolSuccess {
   type: "text" | "image" | "binary";
   /** 当前文件的 MIME 类型。 */
   mime_type?: string;
-  /** 图片文件读取后生成的 data URL，仅图片结果存在。 */
-  data_url?: string;
-  /** 图片是否已经作为 UserMessage file part 注入下一模型 step。 */
-  image_attached?: boolean;
   /** 文本文件实际采用的解码格式。 */
   encoding?: "utf-8" | "utf-16le" | "utf-16be";
   /** 原始文件内容的 SHA-256，可传给 edit 防止并发覆盖。 */

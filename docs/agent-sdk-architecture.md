@@ -542,7 +542,6 @@ Executor 不负责：
 │     │        └─ segments/
 │     │           └─ <start-sequence>-<end-sequence>.jsonl
 │     └─ archived-sessions/
-├─ resources/
 ├─ logs/
 ├─ schedule.jsonl
 └─ sandbox/
@@ -676,7 +675,7 @@ Session Prompt 可以携带 AI SDK file part，也允许宿主显式提供绝对
 
 - 显式附件代表宿主已经选择并交给本次 Session 的输入资源。
 - 模型文件工具仍然只能主动遍历和修改 Workspace。
-- Assistant 生成或引用的长期资源会收敛到 Workspace `.downcity/resources/`。
+- Assistant 文件由生成它的 Tool 或 Plugin 决定本地保存位置，Session 只持久化其 File Part。
 
 ## 14. 本地与远程 SDK
 

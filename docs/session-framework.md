@@ -309,6 +309,37 @@ flowchart LR
 `Executor` 不写 Session 文件、不消费 Session Queue、不拥有 Message Store，也不提交
 Segment。`SessionExecutor` 只有 `execute()` 一个能力，不存在第二套 Executor Port。
 
+### 9.1 Tool 与 Plugin Action 结果
+
+Agent 内置 Tool 与 Plugin Tool 统一使用 `ActionResult`：
+
+```ts
+interface ActionResult<TOutput> {
+  output: TOutput;
+  messages: Array<{
+    role: "user" | "assistant";
+    parts: UIMessage["parts"];
+  }>;
+}
+```
+
+`output` 是普通 Tool Result，Executor 解包后原样交给 AI SDK，并进入
+canonical Tool Part。`messages` 是真实的 UIMessage Parts：User Parts 在下一个
+Step 作为内部 User Message 注入，Assistant Parts 追加到当前 canonical
+Assistant Message。Session 不判断文件类型，不下载、复制或改写 Part；Tool 或
+Plugin Action 必须自己完成业务处理并返回最终消息格式。
+
+```mermaid
+flowchart LR
+    Tool["Tool 或 Plugin Action"] --> Result["ActionResult"]
+    Result --> Output["output"]
+    Result --> Messages["messages"]
+    Output --> SDK["AI SDK Tool Result"]
+    Messages --> Role{"role"}
+    Role -->|user| Input["下一 Step 的 User Message"]
+    Role -->|assistant| Writer["当前 Assistant Message"]
+```
+
 ## 10. Message 与 Part
 
 ```mermaid
@@ -497,8 +528,9 @@ Compact 发生在 Queue 检查点。三者共享 Composer、Plan、Segment 提�
 
 ## 15. ask_question 与 Interaction
 
-`ask_question` 是内置 Tool，不是新的 Turn API。它把模型 Tool Call 映射为 Question
-Interaction，等待用户回答后把答案作为 Tool Result 交回同一个 Turn。
+`ask_question` 是从 `@downcity/agent/tools` 按需导入并显式注册的 Tool，不是 Agent 默认能力，
+也不是新的 Turn API。它把模型 Tool Call 映射为 Question Interaction，等待用户回答后把
+答案作为 Tool Result 交回同一个 Turn。
 
 ```mermaid
 sequenceDiagram

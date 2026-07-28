@@ -167,7 +167,7 @@ export async function hydrate_user_prompt_file_parts(
 }
 
 /**
- * 将历史中的资源 file part 临时转换为模型可消费的 data URL。
+ * 将历史中的本地 file part 临时转换为模型可消费的 data URL。
  *
  * 关键点（中文）
  * - 该函数只修改本轮内存消息，不回写历史。

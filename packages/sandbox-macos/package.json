@@ -1,6 +1,6 @@
 {
   "name": "@downcity/sandbox-macos",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "type": "module",
   "description": "Downcity macOS Seatbelt sandbox adapter",
   "main": "./bin/index.js",

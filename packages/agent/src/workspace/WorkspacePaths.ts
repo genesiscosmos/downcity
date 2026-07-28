@@ -92,17 +92,6 @@ export function get_downcity_public_dir_path(cwd: string): string {
 }
 
 /**
- * 返回项目资源目录路径。
- *
- * 关键点（中文）
- * - 该目录用于存放会话历史引用的二进制资源，例如图片生成结果。
- * - `messages.jsonl` 只保存 Agent 根目录相对路径，避免暴露本机绝对路径或长期保存 base64。
- */
-export function get_downcity_resources_dir_path(cwd: string): string {
-  return path.join(get_downcity_dir_path(cwd), "resources");
-}
-
-/**
  * 返回项目任务目录路径。
  *
  * 关键点（中文）

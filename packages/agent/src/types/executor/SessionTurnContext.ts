@@ -7,7 +7,7 @@
  * - 可变状态只能通过行为方法更新，消费者不能直接操作内部数组、lease 或 callback。
  */
 
-import type { FileUIPart } from "ai";
+import type { UIMessage } from "ai";
 import type { ShellApprovalGateway } from "@downcity/shell";
 import type { SessionUserMessageV1 } from "@/executor/types/SessionRecords.js";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
@@ -139,19 +139,16 @@ export interface SessionTurnContext {
     consume_history_reload(): boolean;
   };
 
-  /** 当前运行的 Assistant、文件与辅助 Action 输出能力。 */
+  /** 当前运行的 Assistant Message 与辅助 Action 输出能力。 */
   readonly output: {
     /** canonical Assistant Message 的唯一写入端口。 */
     readonly assistant?: SessionAssistantOutput;
 
-    /** 附加一个最终应并入 Assistant UIMessage 的文件。 */
-    attach_file(part: FileUIPart): void;
+    /** 把 Action 产生的 Assistant Parts 加入当前 Step 收口队列。 */
+    enqueue_assistant_parts(parts: readonly UIMessage["parts"][number][]): void;
 
-    /** 附加多个最终应并入 Assistant UIMessage 的文件。 */
-    attach_files(parts: readonly FileUIPart[]): void;
-
-    /** 返回待并入最终 Assistant UIMessage 的文件快照。 */
-    assistant_file_parts(): readonly FileUIPart[];
+    /** 消费当前 Step 中等待写入 canonical Assistant Message 的 Parts。 */
+    take_assistant_parts(): UIMessage["parts"];
 
     /** 发布一条不进入 LLM 输入的 Session Action。 */
     publish_action(event: AgentSessionActionEvent): Promise<void>;

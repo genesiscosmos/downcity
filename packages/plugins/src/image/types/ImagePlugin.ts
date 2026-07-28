@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 这里仅定义图片 plugin 对图片能力的最低层协议，不绑定 city 或任意上游 provider。
  * - 图片成功结果使用 AI SDK UIMessage，保证 session 落盘格式与现有消息系统一致。
- * - 字段保持 JSON 可序列化，便于通过 plugin action 与 tool bridge 传递。
+ * - 字段保持 JSON 可序列化，便于通过 Plugin Action 与 Tool 传递。
  */
 
 import type { UIMessage } from "ai";

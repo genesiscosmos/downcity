@@ -76,7 +76,7 @@ Workspace always provides file and search tools; configuring Shell adds two comm
 
 `read` returns up to 500 lines by default, with a maximum of 2,000 lines or 256KB per call. Continue with `truncated` and `next_offset`. `write` accepts up to 1MB and creates parent directories automatically.
 
-For PNG, JPEG, GIF, WebP, and BMP files, `read` returns image metadata and a data URL. The Agent injects that data URL into the next model step as a temporary user image part. Other binary files return metadata only.
+For PNG, JPEG, GIF, WebP, BMP, and PDF files, `read.output` contains metadata only and the Tool injects a User File Part pointing to the local file into the next model step. The Tool Result does not contain base64. Other binary files return metadata only.
 
 `edit` accepts up to ten operations. Every operation is matched against the original file, and the file is written only when all operations are valid. Pass `read.sha256` as `edit.expected_sha256` to reject stale concurrent edits.
 

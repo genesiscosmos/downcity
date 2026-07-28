@@ -9,7 +9,6 @@
 
 import {
   convertToModelMessages,
-  isTextUIPart,
   type ModelMessage,
   type Tool,
   type ToolSet,
@@ -24,12 +23,12 @@ import {
 } from "@executor/messages/SessionAttachmentMapper.js";
 
 /**
- * 过滤回调返回值中的 user 文本消息。
+ * 过滤 Step 检查点返回的有效 User 消息。
  *
  * 关键点（中文）
- * - 用途：从 on_step_callback 返回的消息里挑出可并入推理上下文的 user 文本。
+ * - 用途：从运行期注入与 Session Queue 中挑出可并入推理上下文的 User 消息。
  * - 输入：任意 SessionRecordV1[]（可能混有 assistant/tool/action/空消息）。
- * - 输出：只包含“非空 user 文本”的消息数组。
+ * - 输出：包含非空文本或任意其他 UI Part 的 User 消息数组。
  */
 export function pick_merged_user_messages(
   messages: SessionRecordV1[],
@@ -48,19 +47,10 @@ export function pick_merged_user_messages(
     // 防御 3：parts 必须是数组。
     if (!Array.isArray(message.parts)) return false;
 
-    // 把所有 text part 拼接为一个字符串用于判空。
-    const text = message.parts
-      // 只保留 text 类型 part。
-      .filter(isTextUIPart)
-      // 提取 text 字段并规整为字符串。
-      .map((part) => String(part.text ?? ""))
-      // 多段文本按换行拼接。
-      .join("\n")
-      // 去除首尾空白。
-      .trim();
-
-    // 只有非空文本才视为有效消息。
-    return Boolean(text);
+    // 空文本不单独构成输入；File、Data 等非文本 Part 本身就是有效内容。
+    return message.parts.some((part) =>
+      part.type !== "text" || String(part.text ?? "").trim().length > 0
+    );
   });
 }
 
@@ -90,7 +80,7 @@ export async function to_model_messages(
     project_root,
   );
 
-  // 第二步（中文）：把历史里的资源 URL 在内存中 hydrate 成模型可消费的 data URL。
+  // 第二步（中文）：把历史里的本地文件 URL 在内存中 hydrate 成模型可消费的 data URL。
   const hydratedMessages = await hydrate_file_url_parts_for_model(
     enrichedMessages,
     project_root,

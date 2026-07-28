@@ -109,6 +109,8 @@ test("CityModel uses direct LanguageModel path and sends tool result back", asyn
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-city-model-tool-loop-"),
   );
+  const input_image_path = path.join(agent_path, "tool-input.png");
+  await fs.writeFile(input_image_path, Buffer.from("tool-input-image"));
   const skill_plugin = create_plugin({
     name: "skill",
     title: "Skill",
@@ -132,15 +134,31 @@ test("CityModel uses direct LanguageModel path and sends tool result back", asyn
       ping: tool({
         description: "ping tool",
         inputSchema: z.object({ value: z.string() }),
-        execute: async ({ value }, options) => {
+        execute: async ({ value }) => {
           tool_executed = true;
-          options.experimental_context.session_turn_context.output.attach_file({
-            type: "file",
-            mediaType: "image/png",
-            url: ".downcity/resources/tool-output.png",
-            filename: "tool-output.png",
-          });
-          return { echoed: value };
+          return {
+            output: { echoed: value },
+            messages: [
+              {
+                role: "assistant",
+                parts: [{
+                  type: "file",
+                  mediaType: "image/png",
+                  url: "/workspace/tool-output.png",
+                  filename: "tool-output.png",
+                }],
+              },
+              {
+                role: "user",
+                parts: [{
+                  type: "file",
+                  mediaType: "image/png",
+                  url: input_image_path,
+                  filename: "tool-input.png",
+                }],
+              },
+            ],
+          };
         },
       }),
     },
@@ -168,6 +186,16 @@ test("CityModel uses direct LanguageModel path and sends tool result back", asyn
     assert.match(serialized_second_prompt, /call_1/);
     assert.match(serialized_second_prompt, /echoed/);
     assert.match(serialized_second_prompt, /hello/);
+    const injected_file = model_requests[1].prompt
+      .filter((message) => message.role === "user")
+      .flatMap((message) => Array.isArray(message.content) ? message.content : [])
+      .find((part) => part.type === "file" && part.filename === "tool-input.png");
+    assert.ok(injected_file, JSON.stringify(model_requests[1].prompt.at(-1)));
+    assert.equal(injected_file.mediaType, "image/png");
+    assert.equal(
+      String(injected_file.data),
+      Buffer.from("tool-input-image").toString("base64"),
+    );
     const restored_tool_call = model_requests[1].prompt
       .flatMap((message) => Array.isArray(message.content) ? message.content : [])
       .find((part) => part.type === "tool-call" && part.toolCallId === "call_1");
@@ -183,17 +211,13 @@ test("CityModel uses direct LanguageModel path and sends tool result back", asyn
       sequence: result_file.sequence,
       type: "file",
       media_type: "image/png",
-      url: ".downcity/resources/tool-output.png",
+      url: "/workspace/tool-output.png",
       filename: "tool-output.png",
     });
     const persisted_tool = persisted_assistant.parts.find((part) => part.type === "tool");
     assert.deepEqual(persisted_tool.call_provider_metadata, {
       openai: { itemId: "fc_1" },
     });
-    const persisted_file = persisted_assistant.parts.find((part) => part.type === "file");
-    assert.equal(persisted_file.media_type, "image/png");
-    assert.equal(persisted_file.url, ".downcity/resources/tool-output.png");
-    assert.equal(persisted_file.filename, "tool-output.png");
   } finally {
     await agent.dispose();
   }

@@ -29,7 +29,7 @@ import type {
 } from "@/types/plugin/PluginState.js";
 import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
 import type { Tool } from "ai";
-import { create_plugin_tools } from "@executor/tools/plugin/PluginToolDefinition.js";
+import { create_plugin_tools } from "@/plugin/tool/PluginTools.js";
 import type {
   PluginRegistryChange,
   PluginRegistrySubscriber,

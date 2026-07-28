@@ -476,6 +476,11 @@ function create_file_tools(files: FileSystem): FileToolSet {
 }
 ```
 
+Agent 内置 Tool 返回统一的 `{ output, messages }`。`output` 是 AI SDK 看到的
+Tool Result；`messages` 直接使用 UIMessage Parts，用于把读取到的图片或 PDF 作为
+User Message 放入下一个 Step，或把 Plugin 产生的文件追加到当前 Assistant
+Message。Tool 自己产生最终 Part，Session 不定义 Resource、Bridge 或媒体归一化层。
+
 模型只能输入项目相对路径，不能输入：
 
 - root_path。
@@ -634,7 +639,7 @@ class Session {
 
 Session 只接收用于模型上下文和附件解析的 `workspace_path`，不拼接 Store 路径、不直接调用 `node:fs`，也不通过 Shell Tool 读取历史。
 
-Session 同时拥有 Interaction 状态与生命周期。`ask_question` 是无状态的 Agent 内置 Tool，
+Session 同时拥有 Interaction 状态与生命周期。`ask_question` 是由调用方按需注册的无状态 Tool，
 只通过当前 `SessionTurnContext.interactions` 创建 Question Interaction；
 用户回答先由 Session 原子提交，再作为 Tool Result 恢复同一 Turn 的模型执行。
 

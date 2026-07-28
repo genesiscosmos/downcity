@@ -74,8 +74,22 @@ await session.respond({
 
 ## 模型主动提问
 
-每个本地 Agent 都内置 `ask_question` Tool。模型缺少会实质影响结果的信息时，返回标准
-Tool Call：
+`ask_question` 是可选 Tool，不会由 Agent 默认注册。需要该能力时由调用方显式传入：
+
+```ts
+import { Agent, Workspace } from "@downcity/agent";
+import { AskQuestionsTool } from "@downcity/agent/tools";
+
+const agent = new Agent({
+  id: "repo-helper",
+  workspace: new Workspace({ path: "/path/to/project" }),
+  tools: {
+    ask_question: AskQuestionsTool,
+  },
+});
+```
+
+模型缺少会实质影响结果的信息时，返回标准 Tool Call：
 
 ```json
 {

@@ -1,25 +1,23 @@
 /**
- * Plugin tools。
+ * Plugin AI SDK tools。
  *
  * 设计目标（中文）
- * - plugin_call 是 agent 内置 plugin action 桥，类似 shell tool 的底层能力入口。
+ * - plugin_call 是 agent 内置 plugin action 的底层能力入口。
  * - tool 只负责 AI SDK 工具协议适配，不理解具体 plugin 的业务语义。
- * - 插件业务输出若包含 UIMessage file parts，会由 bridge 并入最终 assistant 消息。
+ * - Plugin Action 返回的 messages 由 Executor 的统一 ActionResult 边界分流。
  */
 
 import { tool, type ToolExecutionOptions } from "ai";
 import type {
-  PluginCallInput,
-  PluginReadInput,
-} from "@/executor/tools/plugin/types/PluginTool.js";
-import type {
   AgentPluginTools,
   CreatePluginToolsOptions,
-} from "@/types/plugin/PluginToolRuntime.js";
+  PluginCallInput,
+  PluginReadInput,
+} from "@/types/plugin/PluginTool.js";
 import {
   invoke_plugin_call_tool,
   invoke_plugin_read_tool,
-} from "./PluginToolBridge.js";
+} from "./PluginToolRuntime.js";
 import {
   plugin_call_input_schema,
   plugin_read_input_schema,

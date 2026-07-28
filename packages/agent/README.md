@@ -6,7 +6,7 @@
 
 - 本地 SDK：`Agent`、`Session`、`RemoteAgent`
 - 内部执行内核：Session Composer、LLM/Tool Loop、增量输出
-- Plugin 框架：registry、action、tool bridge 与执行生命周期
+- Plugin 框架：registry、action、tool runtime 与执行生命周期
 - 远程访问：`RemoteAgent`、HTTP/RPC transport
 
 `downcity` 负责多 Agent 管理、控制面网关、平台 CLI、共享模型目录接入与 daemon 进程管理；`@downcity/agent` 只负责单 Agent 的执行面。

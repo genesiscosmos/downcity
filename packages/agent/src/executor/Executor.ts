@@ -18,7 +18,8 @@ import type {
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import type { SessionToolExecutionContext } from "@/types/executor/SessionToolExecutionContext.js";
 import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.js";
-import { inject_read_image_user_message } from "@executor/tools/file/ReadImageToolBridge.js";
+import { is_action_result } from "@/types/action/ActionResult.js";
+import { generate_id } from "@/utils/Id.js";
 import type {
   SessionStepExecutionInput,
   SessionTurnExecutionResult,
@@ -336,11 +337,32 @@ export class Executor implements SessionExecutor {
             ...options,
             experimental_context: execution_context,
           });
-          return inject_read_image_user_message({
-            tool_name: name,
-            output,
-            turn_context,
-          });
+          if (!is_action_result(output)) return output;
+          for (const message of output.messages) {
+            if (message.role === "assistant") {
+              turn_context.output.enqueue_assistant_parts(message.parts);
+              continue;
+            }
+            turn_context.input.inject_user_message({
+              id: `u:${turn_context.session.session_id}:${generate_id()}`,
+              role: "user",
+              metadata: {
+                v: 1,
+                ts: Date.now(),
+                session_id: turn_context.session.session_id,
+                turn_id: turn_context.session.turn_id,
+                source: "ingress",
+                kind: "normal",
+                extra: {
+                  internal: "action_result",
+                  tool_name: name,
+                  ...(tool_call_id ? { tool_call_id } : {}),
+                },
+              },
+              parts: [...message.parts],
+            });
+          }
+          return output.output;
         },
       };
     }

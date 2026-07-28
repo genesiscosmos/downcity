@@ -11,7 +11,7 @@ import type {
 } from "@/types/session/SessionInteraction.js";
 
 /** 模型调用 ask_question 时提交的结构化输入。 */
-export interface AskQuestionToolInput {
+export interface AskQuestionsToolInput {
   /** 问题卡片向用户展示的简短标题。 */
   title: string;
   /** 本次需要用户完整回答的一到多条问题。 */
@@ -19,7 +19,7 @@ export interface AskQuestionToolInput {
 }
 
 /** 用户完成回答后返回给模型的结构化 Tool Result。 */
-export interface AskQuestionToolOutput {
+export interface AskQuestionsToolOutput {
   /** 当前提问已由用户完整回答。 */
   status: "resolved";
   /** 按 question_id 关联的完整回答集合。 */

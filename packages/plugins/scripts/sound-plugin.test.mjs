@@ -30,7 +30,7 @@ async function run_action(plugin, action_name, context, input) {
   });
 }
 
-function create_tts_message(url = "data:audio/mpeg;base64,dGVzdA==") {
+function create_tts_message(url = "/workspace/speech.mp3") {
   return {
     id: "sound:test",
     role: "assistant",
@@ -143,7 +143,11 @@ test("sound.tts 使用默认参数并返回 AI SDK UIMessage", async () => {
     voice: "alloy",
     format: "mp3",
   });
-  assert.deepEqual(result.data, message);
+  assert.equal("data" in result, false);
+  assert.deepEqual(result.messages, [{
+    role: "assistant",
+    parts: message.parts,
+  }]);
 });
 
 test("sound action 不会隐式选择模型或接受非 UIMessage TTS 结果", async () => {

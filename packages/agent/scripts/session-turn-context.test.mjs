@@ -42,11 +42,11 @@ test("SessionTurnContext 在检查点消费输入并封装输出缓冲", async (
     },
     parts: [{ type: "text", text: "injected" }],
   });
-  context.output.attach_file({
+  context.output.enqueue_assistant_parts([{
     type: "file",
     mediaType: "text/plain",
-    url: ".downcity/resources/result.txt",
-  });
+    url: "/workspace/result.txt",
+  }]);
 
   assert.deepEqual(
     (await context.input.checkpoint()).map((message) => message.id),
@@ -56,7 +56,8 @@ test("SessionTurnContext 在检查点消费输入并封装输出缓冲", async (
     (await context.input.checkpoint()).map((message) => message.id),
     ["queued-message"],
   );
-  assert.equal(context.output.assistant_file_parts().length, 1);
+  assert.equal(context.output.take_assistant_parts().length, 1);
+  assert.equal(context.output.take_assistant_parts().length, 0);
 });
 
 test("SessionTurnContext 负责 Plugin lease 与只读投影生命周期", async () => {

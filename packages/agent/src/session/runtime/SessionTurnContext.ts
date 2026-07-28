@@ -7,7 +7,7 @@
  * - Plugin 每次只获得新建的只读快照，不能越过扩展边界访问内核运行能力。
  */
 
-import type { FileUIPart } from "ai";
+import type { UIMessage } from "ai";
 import type { SessionUserMessageV1 } from "@/executor/types/SessionRecords.js";
 import type {
   SessionTurnContext,
@@ -43,7 +43,7 @@ class DefaultSessionTurnContext implements SessionTurnContext {
   private plugin_lease?: AgentPluginExecutionLease;
   private injected_user_messages: SessionUserMessageV1[] = [];
   private deferred_messages: SessionUserMessageV1[] = [];
-  private pending_file_parts: FileUIPart[] = [];
+  private pending_assistant_parts: UIMessage["parts"] = [];
 
   readonly lifecycle: SessionTurnContext["lifecycle"];
   readonly step: SessionTurnContext["step"];
@@ -153,13 +153,14 @@ class DefaultSessionTurnContext implements SessionTurnContext {
 
     this.output = Object.freeze({
       ...(init.assistant_output ? { assistant: init.assistant_output } : {}),
-      attach_file: (part) => {
-        context.pending_file_parts.push(part);
+      enqueue_assistant_parts: (parts) => {
+        context.pending_assistant_parts.push(...parts);
       },
-      attach_files: (parts) => {
-        context.pending_file_parts.push(...parts);
+      take_assistant_parts: () => {
+        const parts = context.pending_assistant_parts;
+        context.pending_assistant_parts = [];
+        return [...parts];
       },
-      assistant_file_parts: () => Object.freeze([...context.pending_file_parts]),
       publish_action: async (event) => {
         await context.init.publish_action?.(event);
       },

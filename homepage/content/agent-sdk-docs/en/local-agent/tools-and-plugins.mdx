@@ -39,27 +39,27 @@ const agent = new Agent({
 });
 ```
 
-Agent always provides its Session interaction tool. Workspace creates WorkspaceTools from five file/search tools by default, and Shell contributes two command tools. Agent registers all of them in `agent.tools`:
+Workspace creates WorkspaceTools from five file/search tools by default, and Shell contributes two command tools. Agent registers all of them in `agent.tools`:
 
-- `ask_question`: pause the current Tool and ask structured questions when missing information would materially change the outcome
 - `shell_exec`: one-shot non-interactive commands
 - `shell_session`: long-running or stdin-driven interactive PTY sessions
 - `grep`: structured project-content search powered directly by ripgrep
 - `find`: project file discovery with POSIX glob patterns
-- `read`: paginated text reads and image attachments
+- `read`: paginated text reads and image or PDF attachments
 - `write`: file creation or explicit atomic full-file replacement
 - `edit`: atomic exact-text edits within one file
 
 File and search tools can only access the Workspace root and remain available without Shell. Generic `unrestricted` belongs only to Shell; File/Search, Plugin, and custom tools do not share that switch. Outside-project access requires Shell unrestricted approval, an explicit user attachment, or a dedicated host tool. `grep` and `find` respect ignore files, return at most 200 results by default, and accept `max_results` up to 2,000.
 
-When `read` opens a PNG, JPEG, GIF, WebP, or BMP image, the image is attached to the next model step as a temporary user file part. Other binary files return metadata only.
+When `read` opens a PNG, JPEG, GIF, WebP, BMP, or PDF, `output` contains only the normal file result and a User File Part pointing to the local file is injected into the next model step. The Tool Result contains no base64. Other binary files return metadata only.
 
 `read` returns the file SHA-256. When another process may change the file concurrently, pass it as `edit.expected_sha256` to prevent a stale edit from replacing newer content:
 
 ```ts
-const current = await agent.tools.read.execute({
+const current_result = await agent.tools.read.execute({
   file_path: "src/index.ts",
 });
+const current = current_result.output;
 
 await agent.tools.edit.execute({
   file_path: "src/index.ts",
@@ -84,6 +84,21 @@ await session.respond({
 ```
 
 A live UI reads the complete request from a pending Interaction Part while the related Tool is `waiting-user`, then calls `session.respond(...)` after the user decides.
+
+Explicitly register the standalone tool when the model needs to ask questions:
+
+```ts
+import { Agent, Workspace } from "@downcity/agent";
+import { AskQuestionsTool } from "@downcity/agent/tools";
+
+const agent = new Agent({
+  id: "repo-helper",
+  workspace: new Workspace({ path: "/path/to/project" }),
+  tools: {
+    ask_question: AskQuestionsTool,
+  },
+});
+```
 
 The model invokes `ask_question` as a standard Tool Call, not as a provider-specific message type.
 It supports `text`, `single_select`, and `multi_select`. Once the user responds, the answers become
@@ -176,6 +191,8 @@ const agent = new Agent({
 ```
 
 The `zod` schema handles runtime validation. `json_schema` and `examples` are returned by `plugin_read` for the model or UI. `execution_context` is present when the action runs through a session tool and can be absent for direct CLI, HTTP, or scheduler calls. Use `execution_context.workspace_env` for the effective env committed at the current session step; `context.workspace_env` is the current Workspace configuration snapshot. Existing `class extends BasePlugin` plugins still work, and can gradually move individual actions to `create_action(...)`.
+
+Tools and Plugin Actions share one Session result path: put the ordinary result in `output`, and return content that belongs in the conversation as `messages: [{ role, parts }]`. User Parts become available in the next Step; Assistant Parts are written to the current Assistant Message. Session does not download or rewrite files. An Action must save a file first and return a File Part pointing to that local path.
 
 ## ChatPlugin
 
@@ -295,13 +312,13 @@ const job = await plugin_call({
 
 `default_model` is the plugin-level default image model. It can be a string, or a sync/async function. When the Agent calls `image_create` without a `model`, `ImagePlugin` injects the string value or function return value before calling the downstream `image_create(input)`. If the payload explicitly includes `model`, that payload value wins. Without `default_model`, call `models` first when the Agent needs to inspect available image model IDs.
 
-`image_result` reads the current job state once by default. If it returns `queued` or `running`, keep the `job_id` and call `image_result` again later. For short jobs, pass `until_done: true` to wait for a terminal state in one tool call, with optional `max_wait_ms` / `poll_interval_ms`. If it returns `succeeded`, `data` is the AI SDK `UIMessage` containing generated image file parts.
+`image_result` reads the current job state once by default. If it returns `queued` or `running`, keep the `job_id` and call `image_result` again later. For short jobs, pass `until_done: true` to wait for a terminal state in one tool call, with optional `max_wait_ms` / `poll_interval_ms`. If it returns `succeeded`, `data` keeps the job summary while image File Parts go directly into the current Assistant Message.
 
 `ImagePlugin` is provider-agnostic. It does not know about City, OpenAI, or DeepSeek directly. Pass `image_create` and `image_result` job functions, and the plugin exposes the two-step job actions to the Agent; by default the product, Agent, or caller decides when to poll again based on `poll_after_ms`, while `until_done` is only a simple plugin-level wait helper.
 
 “Resolved provider input” means this: the Agent only passes simple `prompt` or `content`; `ImagePlugin` reads local files into data URLs and converts `content` into `ImagePluginResolvedInput.messages` before calling `image_create(input)`. This is the internal boundary from ImagePlugin to City / provider adapters, not a third Agent-facing payload format.
 
-Generated image file parts are always materialized under `.downcity/resources/`, referenced by Agent-root relative paths such as `.downcity/resources/...`, and merged into the final assistant message automatically. Relative file URLs in generated file parts are resolved from the Agent project root before materialization. The `plugin_call` result also includes `files[].relative_path` and `files[].path` for the Agent-root relative path and absolute local file path.
+The `image_result` callback must save generated images locally before returning a UIMessage File Part with either an absolute local path or a path relative to the Agent project root. HTTP and data URLs are not valid generated-result paths. Session persists that File Part as returned; it does not maintain a shared Resource directory or duplicate file summaries in `plugin_call` output.
 
 ## plugin HTTP
 

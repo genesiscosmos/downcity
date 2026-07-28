@@ -13,6 +13,7 @@ import {
   type LanguageModel,
   type StepResult,
   type Tool,
+  type UIMessage,
 } from "ai";
 import { log_assistant_message_now } from "@executor/messages/SessionMessageLog.js";
 import { pick_last_successful_chat_send_text } from "@executor/messages/UserVisibleText.js";
@@ -76,28 +77,29 @@ function build_file_part_key(part: FileUIPart): string {
 /**
  * 把 tool/plugin 运行期产生的 file parts 并入最终 assistant UIMessage。
  */
-function mergePendingAssistantFileParts(
+function merge_assistant_parts(
   message: SessionMessageRecordV1,
-  parts: FileUIPart[],
+  parts: UIMessage["parts"],
 ): SessionMessageRecordV1 {
   if (!Array.isArray(parts) || parts.length === 0) return message;
   const current_parts = Array.isArray(message.parts) ? message.parts : [];
   const seen = new Set<string>();
   for (const part of current_parts) {
-    const candidate = part as FileUIPart;
+    const candidate = part as UIMessage["parts"][number];
     if (candidate?.type !== "file") continue;
-    seen.add(build_file_part_key(candidate));
+    seen.add(build_file_part_key(candidate as FileUIPart));
   }
-  const next_file_parts = parts.filter((part) => {
-    const key = build_file_part_key(part);
+  const next_parts = parts.filter((part) => {
+    if (part.type !== "file") return true;
+    const key = build_file_part_key(part as FileUIPart);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
-  if (next_file_parts.length === 0) return message;
+  if (next_parts.length === 0) return message;
   return {
     ...message,
-    parts: [...current_parts, ...next_file_parts],
+    parts: [...current_parts, ...next_parts],
   };
 }
 
@@ -320,6 +322,17 @@ export class CoreEngineRunner {
               step_assistant_ui_message,
             );
           }
+          const action_assistant_parts =
+            input.turn_context.output.take_assistant_parts();
+          if (action_assistant_parts.length > 0) {
+            await input.turn_context.output.assistant?.append_parts(
+              action_assistant_parts,
+            );
+            step_assistant_ui_message = merge_assistant_parts(
+              step_assistant_ui_message,
+              action_assistant_parts,
+            );
+          }
           canonical_step_finished = true;
 
           final_assistant_ui_message = merge_assistant_ui_messages(
@@ -536,11 +549,8 @@ export class CoreEngineRunner {
         });
       }
 
-      const final_message = mergePendingAssistantFileParts(
-        final_assistant_ui_message ||
-          build_fallback_assistant_message(session_id, "Execution completed"),
-        [...input.turn_context.output.assistant_file_parts()],
-      );
+      const final_message = final_assistant_ui_message ||
+        build_fallback_assistant_message(session_id, "Execution completed");
 
       await this.logger.log("info", "[agent] final.message", {
         session_id: session_id,
@@ -560,7 +570,6 @@ export class CoreEngineRunner {
       return {
         success: true,
         text: pick_last_successful_chat_send_text(final_message),
-        assistant_file_parts: [...input.turn_context.output.assistant_file_parts()],
         ...(compact_required ? { compact_required: true } : {}),
         deferred_persisted_user_messages: [
           ...input.turn_context.input.deferred_user_messages(),
@@ -572,19 +581,13 @@ export class CoreEngineRunner {
         await this.logger.log("info", "[agent] stopped", {
           session_id: session_id,
         });
-        const stopped_message = final_assistant_ui_message
-          ? mergePendingAssistantFileParts(
-              final_assistant_ui_message,
-              [...input.turn_context.output.assistant_file_parts()],
-            )
-          : null;
+        const stopped_message = final_assistant_ui_message;
         return {
           success: false,
           text: stopped_message
             ? pick_last_successful_chat_send_text(stopped_message)
             : "",
           error: error_text,
-          assistant_file_parts: [...input.turn_context.output.assistant_file_parts()],
           ...(compact_required ? { compact_required: true } : {}),
           deferred_persisted_user_messages: [
             ...input.turn_context.input.deferred_user_messages(),
@@ -611,7 +614,6 @@ export class CoreEngineRunner {
           ? pick_last_successful_chat_send_text(final_assistant_ui_message)
           : "",
         error: error_text,
-        assistant_file_parts: [...input.turn_context.output.assistant_file_parts()],
         ...(compact_required ? { compact_required: true } : {}),
         deferred_persisted_user_messages: [
           ...input.turn_context.input.deferred_user_messages(),
