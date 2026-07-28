@@ -18,16 +18,17 @@ unsubscribe();
 
 订阅回调可以是异步函数。单个订阅者抛错或 reject 不会回滚已持久化状态，也不会阻塞其他订阅者。
 
-## 五类 Mutation
+## 六类 Mutation
 
 所有 Mutation 都有 `mutation_id`、`session_id` 与 `created_at`。
 
 | `variant` | `type` | 用途 | 是否带 Message revision |
 | --- | --- | --- | --- |
 | `message` | `user | assistant | action | error` | 顶层 Message 的完整快照 | 是 |
-| `part` | `text | reasoning | tool | file | data` | Assistant Part 的完整快照 | 是 |
+| `part` | `text | reasoning | tool | interaction | file | data | source | step-start` | Assistant Part 的完整快照 | 是 |
 | `delta` | `text | reasoning` | 新增的原始文本片段 | 是 |
 | `turn` | `start | finish` | Turn 执行生命周期 | 否 |
+| `compact` | `start | finish` | 显式 Compact Command 生命周期 | 否 |
 | `session` | `title` | Session 自身属性变化 | 否 |
 
 `message`、`part` 和 `delta` 都在对应完整 Message 或 Assistant 草稿持久化成功后才发布。Mutation envelope 本身不写入 `active.jsonl` 或 Segment。
@@ -72,7 +73,7 @@ function apply_mutation(mutation: SessionMutation): void {
 
 客户端应保存每个 Message 已应用的最大 `revision`。低于或等于当前 revision 的 `message` / `part` 快照可以忽略，避免旧事件覆盖新状态。
 
-## Turn 与标题
+## Turn、Compact 与标题
 
 ```ts
 session.subscribe((mutation) => {
@@ -84,6 +85,10 @@ session.subscribe((mutation) => {
     set_turn_finished(mutation.turn_id, mutation.status, mutation.error);
   }
 
+  if (mutation.variant === "compact" && mutation.type === "finish") {
+    set_compact_finished(mutation.compact_id, mutation.status, mutation.reason);
+  }
+
   if (mutation.variant === "session" && mutation.type === "title") {
     set_session_title(mutation.title);
   }
@@ -91,6 +96,8 @@ session.subscribe((mutation) => {
 ```
 
 `turn.finish` 的状态为 `completed`、`failed` 或 `stopped`。它和 `turn.finished` 共同描述同一最终结果：前者适合订阅 UI，后者适合控制流。
+
+`compact.finish` 与 `compact_handle.finished` 使用同一最终结果语义：Mutation 适合更新 UI，Handle 适合业务控制流。
 
 ## 工具 Part 的状态机
 

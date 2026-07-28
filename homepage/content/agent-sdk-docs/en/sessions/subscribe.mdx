@@ -18,16 +18,17 @@ unsubscribe();
 
 The callback may be async. A thrown error or rejection from one subscriber does not roll back persisted state or block other subscribers.
 
-## Five Mutation variants
+## Six Mutation variants
 
 Every Mutation has `mutation_id`, `session_id`, and `created_at`.
 
 | `variant` | `type` | Purpose | Has Message revision |
 | --- | --- | --- | --- |
 | `message` | `user | assistant | action | error` | Complete top-level Message snapshot | Yes |
-| `part` | `text | reasoning | tool | file | data` | Complete Assistant Part snapshot | Yes |
+| `part` | `text | reasoning | tool | interaction | file | data | source | step-start` | Complete Assistant Part snapshot | Yes |
 | `delta` | `text | reasoning` | New raw text fragment | Yes |
 | `turn` | `start | finish` | Turn execution lifecycle | No |
+| `compact` | `start | finish` | Explicit Compact Command lifecycle | No |
 | `session` | `title` | Session property change | No |
 
 `message`, `part`, and `delta` are published only after the corresponding complete Message or Assistant draft is persisted. The Mutation envelope itself is never written to `active.jsonl` or a Segment.
@@ -72,7 +73,7 @@ function apply_mutation(mutation: SessionMutation): void {
 
 Track the greatest applied `revision` for each Message. A `message` or `part` snapshot at or below that revision can be ignored so an old event cannot overwrite newer state.
 
-## Turns and title updates
+## Turns, compaction, and title updates
 
 ```ts
 session.subscribe((mutation) => {
@@ -84,6 +85,10 @@ session.subscribe((mutation) => {
     set_turn_finished(mutation.turn_id, mutation.status, mutation.error);
   }
 
+  if (mutation.variant === "compact" && mutation.type === "finish") {
+    set_compact_finished(mutation.compact_id, mutation.status, mutation.reason);
+  }
+
   if (mutation.variant === "session" && mutation.type === "title") {
     set_session_title(mutation.title);
   }
@@ -91,6 +96,8 @@ session.subscribe((mutation) => {
 ```
 
 `turn.finish` has `completed`, `failed`, or `stopped` status. It and `turn.finished` describe the same final execution: the former is for subscription-driven UI, the latter for control flow.
+
+`compact.finish` and `compact_handle.finished` use the same final-result semantics: the Mutation is for UI updates, while the Handle is for application control flow.
 
 ## Tool Part state machine
 
