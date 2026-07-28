@@ -6,9 +6,10 @@
 
 ## 边界
 
-- `Session` 拥有输入队列并创建 Command；`SessionTurn` 负责消费、Turn Handle、取消信号与 Assistant Message 收口。
+- `Session` 拥有输入队列并创建 Command；`SessionLoop` 负责消费、Turn Handle 与 Assistant Message 收口。
+- `SessionTurnContext` 从 Turn 创建起唯一拥有取消信号、Step 快照和执行期资源。
 - `SessionComposer` 根据只读 Session 快照组装 system、messages 和 tools。
-- `Executor` 管理单次模型执行、上下文超限重试和 Step Plugin Lease。
+- `Executor` 管理单次模型执行、上下文超限重试和 Step Plugin Lease；它只对外提供 `execute()`。
 - `CoreEngineRunner` 执行 `streamText()`、Tool Loop、续写和内存上下文折叠。
 - `SessionMessages` 是 Message 唯一事实源；Executor 不写文件、不持有 Store。
 
@@ -16,26 +17,27 @@
 
 ```mermaid
 flowchart LR
-    Turn["SessionTurn"] --> Executor
+    Loop["SessionLoop"] --> Context["SessionTurnContext"]
+    Context --> Executor
     Executor --> Composer["SessionComposer"]
     Composer --> Input["system + messages + tools"]
     Executor --> Engine["CoreEngineRunner"]
     Input --> Engine
     Engine --> Model["LanguageModel"]
     Engine --> Tools["Tools / Plugins"]
-    Engine -->|"Chunk / Callback"| Turn
-    Turn --> Messages["SessionMessages"]
+    Engine -->|"Chunk / Callback"| Context
+    Context --> Messages["SessionMessages"]
 ```
 
-每个模型 Step 前，`SessionTurn` 先消费排队的 Steer 和状态 Command。Executor 随后捕获最新 effective state，并调用 Composer 生成完整 Step 输入。
+每个模型 Step 前，`SessionLoop` 先消费排队的 Steer 和状态 Command。Executor 随后捕获最新 effective state，并调用 Composer 生成完整 Step 输入。
 
 ```text
 Session.prompt()
-  -> SessionTurn 持久化 User Message
+  -> SessionLoop 持久化 User Message
   -> Executor 捕获只读 Session 快照
   -> SessionComposer.compose()
-  -> CoreEngineRunner.run()
-  -> SessionTurn 接收 Stream Chunk
+  -> CoreEngineRunner.execute()
+  -> SessionTurnContext 接收 Stream Chunk
   -> SessionMessages 完成 Assistant Message
 ```
 
@@ -48,9 +50,9 @@ Session.prompt()
 | `SystemComposer` | `DefaultSessionComposer.compose()` + `SessionSystem` |
 | `HistoryComposer` | `SessionMessages.context_snapshot()` + `SessionMessageCodec` |
 | `ContextComposer` 的 tools | `Session.create_compose_input()` + `SessionComposer.compose()` |
-| `ContextComposer` 的 Step Callback | `SessionTurn` + `CoreEngineRunner` |
+| `ContextComposer` 的 Step Callback | `SessionLoop` + `CoreEngineRunner` |
 | `ContextComposer` 的 fallback Assistant | `CoreEngineRunner` + `ExecutorRecoveryPolicy` |
-| `CompactionComposer` | `SessionComposer.compact()` + `should_compact()` |
+| `CompactionComposer` | `SessionComposer.compact()` + `should_compact()`，由 Session 提交计划 |
 
 统一 Composer 只回答两个策略问题：
 

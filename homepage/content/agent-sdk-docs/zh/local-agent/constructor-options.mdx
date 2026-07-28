@@ -162,9 +162,10 @@ Agent 最终持有的额外自定义工具集合。
 关键点：
 
 - Workspace 提供文件、搜索和可选 Shell 组成的 WorkspaceTools
+- Agent 内核提供 `ask_question`
 - PluginRegistry 提供 `plugin_read` 和 `plugin_call`
 - `AgentOptions.tools` 提供调用方自定义工具
-- Agent 统一注册三类工具并由 Session 共享
+- Agent 统一注册四类工具并由 Session 共享
 - 任意来源的工具重名会直接报错，不会静默覆盖
 
 这很适合“多个 session 共用一套默认工具能力”的场景。

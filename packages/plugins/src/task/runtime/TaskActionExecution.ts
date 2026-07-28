@@ -7,7 +7,7 @@
  */
 
 import type { PluginContext } from "@downcity/agent";
-import type { PluginRunContext } from "@downcity/agent";
+import type { PluginExecutionContext } from "@downcity/agent";
 import type {
   TaskCronRegisterResult,
   TaskListActionPayload,
@@ -159,13 +159,13 @@ export async function executeTaskCreateAction(params: {
 export async function executeTaskRunAction(params: {
   context: PluginContext;
   payload: TaskRunRequest;
-  run_context?: PluginRunContext;
+  execution_context?: PluginExecutionContext;
 }) {
   const result = await runTaskDefinition({
     context: params.context,
     project_root: params.context.workspace_path,
     request: params.payload,
-    run_context: params.run_context,
+    execution_context: params.execution_context,
   });
   if (!result.success) {
     return {

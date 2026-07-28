@@ -11,7 +11,7 @@
 import { BasePlugin } from "@downcity/agent";
 import type { PluginActions } from "@downcity/agent";
 import type { PluginContext } from "@downcity/agent";
-import type { PluginRunContext } from "@downcity/agent";
+import type { PluginExecutionContext } from "@downcity/agent";
 import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
 import type { ChatQueueWorkerConfig } from "@/chat/types/ChatQueueWorker.js";
 import type {
@@ -90,9 +90,9 @@ export class ChatPlugin extends BasePlugin {
    */
   readonly system = async (
     context: PluginContext,
-    run_context?: PluginRunContext,
+    execution_context?: PluginExecutionContext,
   ): Promise<string> => {
-    return await buildChatPluginSystem(context, run_context);
+    return await buildChatPluginSystem(context, execution_context);
   };
 
   /**

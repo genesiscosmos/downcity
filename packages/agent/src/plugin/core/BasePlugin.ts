@@ -17,7 +17,7 @@ import type {
   PluginResolves,
 } from "@/types/plugin/PluginRuntime.js";
 import type { PluginHttpDefinition } from "@/types/plugin/PluginHttp.js";
-import type { PluginRunContext } from "@/types/plugin/PluginRunContext.js";
+import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
 
 /**
  * BasePlugin 抽象基类。
@@ -73,7 +73,7 @@ export abstract class BasePlugin implements Plugin {
    */
   system?(
     context: PluginContext,
-    run_context?: PluginRunContext,
+    execution_context?: PluginExecutionContext,
   ): Promise<string> | string;
 
 }

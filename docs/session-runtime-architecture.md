@@ -6,7 +6,7 @@ Agent SDK 的 Session Runtime 遵循以下边界：
 
 - `Session` 是公开 Facade、对象装配入口和 `SessionQueue` 所有者。
 - `SessionState` 只管理配置、初始化状态、标题和 Metadata。
-- `SessionTurn` 是 Queue 的唯一消费者，只管理 Turn 生命周期、Steer、停止和执行收口。
+- `SessionLoop` 是 Queue 的唯一消费者，只管理 Turn 生命周期、Steer、停止和执行收口。
 - `SessionMessages` 是 canonical Message 的唯一事实源。
 - `SessionComposer` 只读取快照并生成模型输入或压缩计划。
 - `Executor` 只执行单次 LLM/Tool Loop，不持有 History Store，也不写 Session 文件。
@@ -20,10 +20,10 @@ Agent SDK 的 Session Runtime 遵循以下边界：
 | `SessionState` | configured/effective 配置、初始化、标题和 Metadata | 创建或更新 Message |
 | `SessionQueue` | 按 FIFO 保存具体 `SessionCommand` 对象 | 识别 Prompt、配置或 Compact 等业务种类 |
 | `SessionCommand` | 封装检查点行为、可选取消行为和可选完成信息 | 持有 Queue、Message Store 或 EventHub |
-| `SessionTurn` | Turn Handle、Queue 消费、Steer 合并、Abort、Assistant Writer 收口 | 选择模型输入策略 |
+| `SessionLoop` | Turn Handle、Queue 消费、Steer 合并、Abort、Assistant Writer 收口 | 选择模型输入策略 |
 | `SessionInteractions` | pending 用户交互、超时、取消与恢复执行 | 保存 canonical Interaction 状态 |
 | `SessionComposer` | 组装 system、messages、tools，生成压缩计划 | 写 Message、Metadata、Mutation 或 JSONL |
-| `Executor` | 单次执行、Step 刷新、上下文超限重试、Plugin Lease | Session 生命周期和持久化 |
+| `Executor` | 单次执行、Step 刷新、上下文超限重试、Plugin Lease | Session 生命周期、持久化和压缩计划提交 |
 | `SessionMessages` | User、Assistant、Action、Error Message 和 Segment 提交 | 选择何时执行或压缩 |
 | `JsonlSessionMessageStore` | Active、Assistant Draft、Segment 的物理读写 | Composer 策略 |
 
@@ -37,16 +37,18 @@ flowchart LR
     subgraph SessionDomain["Session Domain"]
         Session --> State["SessionState<br/>配置和 Metadata"]
         Session --> Queue["SessionQueue<br/>Command FIFO"]
-        Session --> Turn["SessionTurn<br/>Queue 消费与 Turn 编排"]
+        Session --> Loop["SessionLoop<br/>Queue 消费与 Turn 编排"]
         Queue --> QueueCommand["SessionCommand<br/>execute / cancel"]
-        Turn -->|"take_next / drain"| Queue
-        Turn --> Messages["SessionMessages<br/>Message 事实源"]
-        Turn --> Executor["Executor<br/>单次执行"]
+        Loop -->|"take_next / drain"| Queue
+        Loop --> Messages["SessionMessages<br/>Message 事实源"]
+        Loop --> Context["SessionTurnContext<br/>单个 Turn 上下文"]
+        Loop --> Executor["Executor<br/>Step 执行编排"]
+        Context --> Executor
         Session --> Composer["SessionComposer<br/>只读组装策略"]
         Executor --> Composer
         Executor --> Engine["CoreEngineRunner<br/>LLM / Tool Loop"]
-        Turn --> Interactions["SessionInteractions<br/>用户异步交互"]
-        Turn --> Output["SessionAssistantOutputAdapter"]
+        Loop --> Interactions["SessionInteractions<br/>用户异步交互"]
+        Loop --> Output["SessionAssistantOutputAdapter"]
         Messages --> Events["SessionEventHub"]
     end
 
@@ -65,7 +67,7 @@ flowchart LR
 sequenceDiagram
     participant App as 调用方
     participant Session
-    participant Turn as SessionTurn
+    participant Loop as SessionLoop
     participant Queue as SessionQueue
     participant State as SessionState
     participant Messages as SessionMessages
@@ -75,33 +77,35 @@ sequenceDiagram
     participant Output as AssistantOutputAdapter
 
     App->>Session: prompt(input)
-    Session->>Turn: prompt(input)
-    Turn->>State: ensure_runnable()
-    Turn->>Queue: enqueue(SessionCommand)
-    Turn->>Queue: take_next()
-    Queue-->>Turn: command
-    Turn->>Turn: command.execute()
-    Turn->>Messages: append_prompt_message()
-    Turn->>Executor: run()
+    Session->>Loop: prompt(input)
+    Loop->>State: ensure_runnable()
+    Loop->>Queue: enqueue(SessionCommand)
+    Loop->>Queue: take_next()
+    Queue-->>Loop: command
+    Loop->>Loop: command.execute()
+    Loop->>Messages: append_prompt_message()
+    Loop->>Loop: create SessionTurnContext
+    Loop->>Executor: execute(turn_context)
     Executor->>Session: create_compose_input()
     Session->>Messages: context_snapshot()
     Messages-->>Session: Summary + Active Messages
     Executor->>Composer: compose(readonly snapshot)
     Composer-->>Executor: system + messages + tools
-    Executor->>Engine: run()
+    Executor->>Engine: execute()
     Engine->>Output: Assistant 输出端口
     Output->>Messages: 更新 Assistant Draft
 
     opt Step 检查点存在新输入
-        Turn->>Queue: drain()
-        Turn->>Turn: 依次 command.execute()
-        Turn->>Messages: Prompt Command 持久化 Steer Message
+        Loop->>Queue: drain()
+        Loop->>Loop: 依次 command.execute()
+        Loop->>Messages: Prompt Command 持久化 Steer Message
         Executor->>Composer: 基于新快照组装下一 Step
     end
 
-    Turn->>Messages: complete Assistant Message
-    Turn->>State: 更新标题和 Metadata
-    Turn-->>App: turn.finished
+    Loop->>Messages: complete Assistant Message
+    Loop->>State: 更新标题和 Metadata
+    Loop->>Loop: dispose SessionTurnContext
+    Loop-->>App: turn.finished
 ```
 
 一个 Session 同时只运行一个活跃 Turn。新的 Prompt 如果在 Step 检查点被消费，会作为 `steer` 并入当前 Turn；否则保留到下一个 Turn。`stop()` 取消当前 Turn 和排队 Prompt，但保留尚未提交的配置 Command。
@@ -119,10 +123,10 @@ SessionQueue
 
 Prompt、model、env、plugins、approval mode 与 compact 的差异只存在于各自
 Command 创建时绑定的执行闭包中。出队路径始终只有 `await command.execute()`；
-Queue 和 SessionTurn 不需要随业务输入种类增加而修改。
+Queue 和 SessionLoop 不需要随业务输入种类增加而修改。
 
 Command 可以通过可选 `completion` 声明成功执行后需要持久化的 Action 信息。
-未声明时静默完成；声明后由 SessionTurn 交给 SessionMessages 持久化。Message
+未声明时静默完成；声明后由 SessionLoop 交给 SessionMessages 持久化。Message
 提交成功会自然发布对应 Mutation，不允许分别配置“写 Message”和“发 Event”。
 
 ```text
@@ -171,9 +175,9 @@ interface SessionComposer {
 | `SystemComposer.resolve()` | `DefaultSessionComposer.compose()` + `SessionSystem` |
 | `HistoryComposer.prepare()` | `SessionMessages.context_snapshot()` + `SessionMessageCodec.to_executor_history()` |
 | `ContextComposer.compose()` 的 tools | `Session.create_compose_input()` + `SessionComposer.compose()` |
-| `ContextComposer` 的 Prepare Step / Steer | `SessionTurn` + `CoreEngineRunner` |
-| `ContextComposer` 的 onStepFinish | `CoreEngineRunner` 直接调用 `SessionRunContext` Callback |
-| `ContextComposer` 的 fallback Assistant | `CoreEngineRunner` + `ExecutorRecoveryPolicy`，由 `SessionTurn` 持久化 |
+| `ContextComposer` 的 Prepare Step / Steer | `SessionLoop` + `CoreEngineRunner` |
+| `ContextComposer` 的 onStepFinish | `CoreEngineRunner` 通过 `SessionTurnContext.output` 写入 |
+| `ContextComposer` 的 fallback Assistant | `CoreEngineRunner` + `ExecutorRecoveryPolicy`，由 `SessionLoop` 持久化 |
 | `CompactionComposer.shouldCompactOnError()` | `SessionComposer.should_compact()` |
 | `CompactionComposer.run()` | `SessionComposer.compact()` 生成计划，`Session` 提交计划 |
 
@@ -228,15 +232,19 @@ messages/
 
 ```mermaid
 flowchart LR
-    Trigger["显式 compact / usage 阈值 / context error"] --> Composer["SessionComposer.compact()"]
+    Explicit["session.compact()"] --> Handle["Compact Handle\n入队后返回"]
+    Handle --> Queue["Session Queue 检查点"]
+    Queue --> Composer
+    Automatic["usage 阈值 / context error"] --> Composer["SessionComposer.compact()"]
     Composer --> Plan["SessionCompactionPlan"]
     Plan --> Session["Session.commit_compaction_plan()"]
     Session --> Messages["SessionMessages.compact_active()"]
     Messages --> Segment["不可变 Segment + 累计 Summary"]
     Messages --> Active["保留 Active 尾部"]
+    Messages --> Finished["handle.finished\n兑现稳定结果"]
 ```
 
-Composer 可以调用模型生成 Summary，但只返回计划。Segment 提交、Action Message、Metadata 更新和失败观测全部由 Session 领域完成。
+显式压缩、usage 阈值压缩和 context error 恢复都复用同一个 `Session.compact_history()` 领域入口。Composer 可以调用模型生成 Summary，但只返回计划；Segment 提交、Action Message、Metadata 更新和失败观测全部由 Session 领域完成。显式调用方通过 Compact Handle 等待队列命令真正结束，不从 Action Message 反推完成状态。
 
 ## 9. 架构不变量
 
@@ -247,9 +255,12 @@ Composer 可以调用模型生成 Summary，但只返回计划。Segment 提交�
 5. Assistant 草稿完成前不能提交持久化 Compact。
 6. 持久化成功后才能发布对应 Message Mutation。
 7. Plugin Execution Lease 以 Step 为边界获取和释放。
+8. `SessionLoop` 创建并释放 `SessionTurnContext`；Executor 和 Tool 只在 Turn 存续期内消费它。
+9. `SessionExecutor` 只有 `execute()`；持久化压缩由 Session 生成输入并提交计划。
+10. Compact Handle 必须在 canonical 压缩成功、确认无内容可压缩或失败后兑现；观测侧 Action、日志或订阅者失败不能悬空或改写领域结果。
 
 ## 10. 变更边界
 
 `9f3b6df5` 只移动类型、统一内部 snake_case 命名并补充类型导出，没有修改 Prompt、Queue、模型调用、Tool Loop、Message 持久化或 Compact 的执行顺序。
 
-此前的 Session Runtime 重构改变了内部架构和 SDK 扩展 API：旧多 Composer、HistoryStore、Recorder 和 PromptRuntime 已删除，统一为 `SessionComposer`、`SessionMessages` 和 `SessionTurn`。核心运行行为保持原语义，但自定义 Session 的接入方式和内部持久化模型属于明确变化。
+此前的 Session Runtime 重构改变了内部架构和 SDK 扩展 API：旧多 Composer、HistoryStore、Recorder 和 PromptRuntime 已删除，统一为 `SessionComposer`、`SessionMessages` 和 `SessionLoop`。核心运行行为保持原语义，但自定义 Session 的接入方式和内部持久化模型属于明确变化。

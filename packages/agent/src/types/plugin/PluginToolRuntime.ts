@@ -12,7 +12,7 @@ import type {
   PluginCallInput,
   PluginReadInput,
 } from "@/executor/tools/plugin/types/PluginTool.js";
-import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
+import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 
 /**
  * 创建 plugin tools 的参数。
@@ -65,13 +65,13 @@ export interface InvokePluginCallToolOptions {
   plugins: AgentPlugins;
 
   /**
-   * 当前 tool 调用所属的 Session run 上下文。
+   * 当前 Tool 调用所属的 Session Turn Context。
    *
    * 关键点（中文）
    * - 由 Executor 在每个 step 显式绑定。
    * - 用于选择当前 plugin lease、资源目录与 assistant file 队列。
    */
-  run_context: SessionRunContext;
+  turn_context: SessionTurnContext;
 
   /**
    * 模型提交给 plugin_call 的结构化输入。
@@ -88,8 +88,8 @@ export interface InvokePluginReadToolOptions {
    */
   plugins: AgentPlugins;
 
-  /** 当前 tool 调用所属的 Session run 上下文。 */
-  run_context: SessionRunContext;
+  /** 当前 Tool 调用所属的 Session Turn Context。 */
+  turn_context: SessionTurnContext;
 
   /**
    * 模型提交给 plugin_read 的结构化输入。

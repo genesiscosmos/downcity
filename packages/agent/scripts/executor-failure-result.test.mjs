@@ -8,15 +8,14 @@ import { MockLanguageModelV3 } from "ai/test";
 
 import { CoreEngineRunner } from "../bin/executor/core-engine/CoreEngineRunner.js";
 import { ExecutorRecoveryPolicy } from "../bin/executor/services/ExecutorRecoveryPolicy.js";
+import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
 
-function create_run_context(overrides = {}) {
-  return {
+function create_turn_context(overrides = {}) {
+  return create_session_turn_context({
     session_id: "executor-failure-test",
-    injected_user_messages: [],
-    deferred_persisted_user_messages: [],
-    pending_assistant_file_parts: [],
+    turn_id: "executor-failure-turn",
     ...overrides,
-  };
+  });
 }
 
 function create_text_stream(text) {
@@ -41,7 +40,7 @@ function create_text_stream(text) {
   };
 }
 
-function create_runner_input(model, run_context) {
+function create_execution_input(model, turn_context) {
   const messages = [{
     id: "user-1",
     role: "user",
@@ -57,7 +56,7 @@ function create_runner_input(model, run_context) {
   return {
     execute_input: { query: "hello", system: [], messages, tools: {} },
     model,
-    run_context,
+    turn_context,
     resolve_step_inputs: async () => ({ model, system: [], tools: {} }),
     reload_history: async () => messages,
   };
@@ -88,10 +87,10 @@ test("CoreEngine Provider 失败时只返回结构化错误", async () => {
     parts: [{ type: "text", text: "hello" }],
   }];
 
-  const result = await runner.run({
+  const result = await runner.execute({
     execute_input: { query: "hello", system: [], messages, tools: {} },
     model,
-    run_context: create_run_context(),
+    turn_context: create_turn_context(),
     resolve_step_inputs: async () => ({ model, system: [], tools: {} }),
     reload_history: async () => messages,
   });
@@ -112,9 +111,9 @@ test("CoreEngine 成功流按 start、chunks、finish 完成 canonical step", as
     logger: { log: async () => {} },
     should_compact_on_error: () => false,
   });
-  const result = await runner.run(create_runner_input(
+  const result = await runner.execute(create_execution_input(
     model,
-    create_run_context({
+    create_turn_context({
       assistant_output: {
         begin_step: async () => events.push("start"),
         write_chunk: async (chunk) => events.push(chunk.type),
@@ -144,9 +143,9 @@ test("CoreEngine chunk 写入失败时中止 canonical step", async () => {
     logger: { log: async () => {} },
     should_compact_on_error: () => false,
   });
-  const result = await runner.run(create_runner_input(
+  const result = await runner.execute(create_execution_input(
     model,
-    create_run_context({
+    create_turn_context({
       assistant_output: {
         begin_step: async () => events.push("start"),
         write_chunk: async () => {
@@ -169,15 +168,15 @@ test("恢复策略捕获普通异常后只返回结构化错误", async () => {
     logger: { log: async () => {} },
     should_compact: () => false,
   });
-  const run_context = create_run_context();
-  const result = await policy.run_with_retry({
+  const turn_context = create_turn_context();
+  const result = await policy.execute_with_retry({
     query: "hello",
     model: {},
-    run_context,
+    turn_context,
     prepare_execute_input: async () => {
       throw new Error("configuration failed");
     },
-    execute_prepared_run: async () => {
+    execute_prepared_input: async () => {
       throw new Error("unexpected execution");
     },
   });

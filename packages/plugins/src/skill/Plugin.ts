@@ -60,12 +60,12 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
     title: "Skill Catalog And Loader",
     description:
       "Lists and reads local skills, and injects scan-aware discovery and installation guidance into system prompts.",
-    async system(context, run_context) {
+    async system(context, execution_context) {
       const dynamicText = String(
         await buildSkillsSystemText({
           rootPath: context.workspace_path,
           options,
-        }, run_context),
+        }, execution_context),
       ).trim();
       return [SKILL_PLUGIN_PROMPT, dynamicText].filter(Boolean).join("\n\n");
     },

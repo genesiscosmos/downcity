@@ -38,6 +38,7 @@ import type {
 } from "@/types/session/SessionMessage.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
+import type { AgentSessionCompactHandle } from "@/types/sdk/AgentSessionCompact.js";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
 
 /**
@@ -83,10 +84,10 @@ export interface AgentSessionActor {
    * 把一次显式历史压缩加入当前 Session 的有序输入队列。
    *
    * 关键点（中文）
-   * - 返回表示 command 已成功入队，不表示压缩已经执行完成。
-   * - 实际结果通过 Session action message 对外观测。
+   * - 返回句柄表示 Command 已成功入队。
+   * - `handle.finished` 在压缩真正完成或失败后兑现。
    */
-  compact(): Promise<void>;
+  compact(): Promise<AgentSessionCompactHandle>;
 
   /** 订阅当前 session 的未来事件。 */
   subscribe(

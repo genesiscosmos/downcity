@@ -62,7 +62,8 @@ try {
 以下能力只在构建 Plugin、服务端或自定义运行时组件时使用：
 
 - `PluginContext`：Agent 投影给 Plugin 的稳定能力视图；宿主不应主动获取或持有它。
-- `SessionRunContext`：单次执行在 Composer、Executor、Tool 间传递的显式快照。
+- `SessionTurnContext`：一个 Turn 中统一管理身份、生命周期、Step、输入与输出协作的执行上下文；Plugin 只接收其只读投影 `PluginExecutionContext`。
+- `create_session_turn_context(...)`：自定义 Executor 或运行时组件创建上述 Turn Context 的标准工厂。
 - `AgentSession`、`SessionExecutor` 等接口：替换或扩展默认实现。
 - RPC/HTTP 类型：实现自定义 transport 或协议集成。
 

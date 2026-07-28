@@ -70,6 +70,42 @@ await session.respond({
 });
 ```
 
+## Model-initiated questions
+
+Every local Agent includes the `ask_question` Tool. When missing information would materially
+change the outcome, the model returns a standard Tool Call:
+
+```json
+{
+  "title": "Choose a deployment region",
+  "questions": [
+    {
+      "question_id": "region",
+      "prompt": "Which region should receive the deployment?",
+      "response_type": "single_select",
+      "options": [
+        { "value": "cn", "label": "China" },
+        { "value": "us", "label": "United States" }
+      ]
+    }
+  ]
+}
+```
+
+The Session atomically commits the Tool and Question Interaction as `waiting-user` / `pending`.
+After the host submits all answers through `session.respond(...)`, the Tool Result is:
+
+```json
+{
+  "status": "resolved",
+  "answers": [{ "question_id": "region", "value": "cn" }]
+}
+```
+
+The model then continues in the next Step of the same Turn. A question written only as assistant
+text does not enter this lifecycle: it completes the current Turn, and the next user message starts
+a new Turn.
+
 ## Shell approval mode
 
 ```ts

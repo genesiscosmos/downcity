@@ -72,6 +72,41 @@ await session.respond({
 });
 ```
 
+## 模型主动提问
+
+每个本地 Agent 都内置 `ask_question` Tool。模型缺少会实质影响结果的信息时，返回标准
+Tool Call：
+
+```json
+{
+  "title": "选择部署区域",
+  "questions": [
+    {
+      "question_id": "region",
+      "prompt": "需要部署到哪个区域？",
+      "response_type": "single_select",
+      "options": [
+        { "value": "cn", "label": "中国" },
+        { "value": "us", "label": "美国" }
+      ]
+    }
+  ]
+}
+```
+
+Session 会把该 Tool 与 Question Interaction 原子提交为 `waiting-user` / `pending`。调用方
+使用上面的 `session.respond(...)` 提交完整回答后，Tool Result 返回：
+
+```json
+{
+  "status": "resolved",
+  "answers": [{ "question_id": "region", "value": "cn" }]
+}
+```
+
+模型随后在同一个 Turn 的下一 Step 继续执行。普通 assistant 文本中的问句不会进入该
+生命周期：它会正常结束当前 Turn，用户的下一条消息会创建新 Turn。
+
 ## Shell 审批模式
 
 ```ts

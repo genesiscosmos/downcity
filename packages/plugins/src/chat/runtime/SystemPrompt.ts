@@ -8,7 +8,7 @@
  */
 
 import type { PluginContext } from "@downcity/agent";
-import type { PluginRunContext } from "@downcity/agent";
+import type { PluginExecutionContext } from "@downcity/agent";
 import type { ChatEnvironmentPromptInput } from "@/chat/types/ChatPromptContext.js";
 import { readChatMetaBySessionId } from "@/chat/runtime/ChatMetaStore.js";
 
@@ -25,9 +25,9 @@ function normalizePromptValue(value: unknown, fallback: string): string {
  */
 export async function resolveCurrentChatEnvironmentPromptInput(
   context: PluginContext,
-  run_context?: PluginRunContext,
+  execution_context?: PluginExecutionContext,
 ): Promise<ChatEnvironmentPromptInput | null> {
-  const session_id = String(run_context?.session_id || "").trim();
+  const session_id = String(execution_context?.session_id || "").trim();
   if (!session_id) return null;
 
   const meta = await readChatMetaBySessionId({
@@ -78,11 +78,11 @@ export function buildChatEnvironmentPrompt(input: ChatEnvironmentPromptInput): s
  */
 export async function buildCurrentChatEnvironmentPrompt(
   context: PluginContext,
-  run_context?: PluginRunContext,
+  execution_context?: PluginExecutionContext,
 ): Promise<string> {
   const input = await resolveCurrentChatEnvironmentPromptInput(
     context,
-    run_context,
+    execution_context,
   );
   if (!input) return "";
   return buildChatEnvironmentPrompt(input);

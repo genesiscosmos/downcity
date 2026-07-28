@@ -1,5 +1,5 @@
 /**
- * SessionTurn：Session Command Queue 的唯一消费者与 Turn 生命周期所有者。
+ * SessionLoop：Session Command Queue 的唯一消费者与 Turn 生命周期所有者。
  *
  * 关键点（中文）
  * - Prompt 会先构造成 Session Command，再由统一 FIFO 决定进入当前或下一 Turn。
@@ -22,22 +22,29 @@ import type {
 } from "@/types/sdk/AgentSessionTurn.js";
 import { extract_text_from_parts } from "@/executor/messages/UIMessageTransformer.js";
 import { is_agent_session_prompt_input_empty } from "@/types/sdk/AgentSessionPrompt.js";
-import type { SessionRunResult } from "@/executor/types/SessionRun.js";
-import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
+import type {
+  SessionCompactHistory,
+  SessionExecutor,
+  SessionTurnExecutionResult,
+} from "@/types/session/SessionExecution.js";
+import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
+import { create_session_turn_context } from "@/session/runtime/SessionTurnContext.js";
 import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
 import { SessionState } from "@/session/SessionState.js";
 import { SessionMessages } from "@/session/SessionMessages.js";
 import type { ShellApprovalGateway } from "@downcity/shell";
-import type { SessionInteractionLifecycle } from "@/types/session/SessionInteraction.js";
-import type { SessionExecutionPort } from "@/types/session/SessionExecution.js";
+import type {
+  SessionInteractionLifecycle,
+  SessionInteractionPort,
+} from "@/types/session/SessionInteraction.js";
 import { SessionAssistantOutputAdapter } from "@/session/execution/SessionAssistantOutputAdapter.js";
 import { SessionQueue } from "@/session/SessionQueue.js";
 import { SessionCommand } from "@/session/SessionCommand.js";
 import type {
   ActiveSessionTurnState,
   SessionDeferred,
-  SessionTurnOptions,
-} from "@/types/session/SessionTurn.js";
+  SessionLoopOptions,
+} from "@/types/session/SessionLoop.js";
 import type { SessionCommandCompletion } from "@/types/session/SessionCommand.js";
 
 const TURN_STOPPED_MESSAGE = "Turn stopped";
@@ -47,28 +54,29 @@ const QUEUED_PROMPT_CANCELLED_MESSAGE =
 /**
  * Session 输入队列与 Turn 编排器。
  */
-export class SessionTurn {
+export class SessionLoop {
   private readonly session_id: string;
   private readonly workspace_path: string;
-  private readonly executor: SessionExecutionPort;
+  private readonly executor: SessionExecutor;
+  private readonly compact_history_handler: SessionCompactHistory;
   private readonly state: SessionState;
   private readonly messages: SessionMessages;
   private readonly events: SessionEventHub;
-  private readonly logger: SessionTurnOptions["logger"];
-  private readonly interactions: SessionInteractionLifecycle;
+  private readonly logger: SessionLoopOptions["logger"];
+  private readonly interactions:
+    SessionInteractionLifecycle & SessionInteractionPort;
   private readonly shell_approval_gateway: ShellApprovalGateway;
   private readonly queue: SessionQueue;
   private pending_prompt_count = 0;
   private processing_promise: Promise<void> | null = null;
   private active_turn: ActiveSessionTurnState | null = null;
-  private active_run_context: SessionRunContext | null = null;
-  private request_active_history_reload: (() => void) | null = null;
   private checkpoint_merged_messages: SessionUserMessageV1[] | null = null;
 
-  constructor(options: SessionTurnOptions) {
+  constructor(options: SessionLoopOptions) {
     this.session_id = String(options.session_id || "").trim();
     this.workspace_path = String(options.workspace_path || "").trim();
     this.executor = options.executor;
+    this.compact_history_handler = options.compact_history;
     this.state = options.state;
     this.messages = options.messages;
     this.events = options.events;
@@ -77,10 +85,10 @@ export class SessionTurn {
     this.interactions = options.interactions;
     this.shell_approval_gateway = options.shell_approval_gateway;
     if (!this.session_id) {
-      throw new Error("SessionTurn requires a non-empty session_id");
+      throw new Error("SessionLoop requires a non-empty session_id");
     }
     if (!this.workspace_path) {
-      throw new Error("SessionTurn requires a non-empty workspace_path");
+      throw new Error("SessionLoop requires a non-empty workspace_path");
     }
   }
 
@@ -148,20 +156,15 @@ export class SessionTurn {
   async stop(): Promise<AgentSessionStopResult> {
     const active_turn = this.active_turn;
     const cancelled_queued_prompts = this.cancel_queued_prompts();
-    let executor_stop_requested = false;
 
-    if (active_turn) {
-      if (!active_turn.abort_controller.signal.aborted) {
-        active_turn.abort_controller.abort(new Error(TURN_STOPPED_MESSAGE));
-      }
-      executor_stop_requested = this.executor.stop();
-    }
+    active_turn?.turn_context?.lifecycle.abort(
+      new Error(TURN_STOPPED_MESSAGE),
+    );
 
     await this.interactions.cancel_all("turn_stopped");
 
     const stopped = Boolean(
       active_turn ||
-        executor_stop_requested ||
         cancelled_queued_prompts > 0,
     );
     return {
@@ -187,6 +190,7 @@ export class SessionTurn {
       const turn_id = `turn:${this.session_id}:${Date.now()}:${nanoid(6)}`;
       const active_turn = create_active_session_turn_state(turn_id);
       this.active_turn = active_turn;
+      active_turn.turn_context = this.create_turn_context(active_turn);
       this.events.publish({
         mutation_id: nanoid(),
         variant: "turn",
@@ -290,33 +294,45 @@ export class SessionTurn {
   }
 
   /** 在当前 Turn 上执行一次显式历史压缩。 */
-  async compact_history(command_id: string): Promise<void> {
+  async compact_history(
+    compact_id: string,
+  ): ReturnType<SessionCompactHistory> {
     const turn_id = this.require_active_turn().turn_id;
-    const run_context = this.active_run_context ||
-      this.create_compaction_run_context(turn_id);
-    const result = await this.executor.compact_history(run_context);
+    const result = await this.compact_history_handler({ turn_id });
     if (
       result.compacted &&
-      this.active_run_context !== null &&
-      run_context === this.active_run_context
+      this.active_turn?.turn_context
     ) {
-      this.request_active_history_reload?.();
+      this.require_active_turn().history_reload_requested = true;
     }
     if (result.reason === "nothing_to_compact") {
-      await this.persist_action_event({
-        type: "action",
-        id: `compacting:${this.session_id}:${command_id}`,
-        title: "Session messages already compact",
-        description: "The Session has no active messages to compact.",
-        state: "completed",
-        metadata: {
-          v: 1,
-          ts: Date.now(),
-          session_id: this.session_id,
-          turn_id: turn_id,
-        },
-      });
+      try {
+        await this.persist_action_event({
+          type: "action",
+          id: compact_id,
+          title: "Session messages already compact",
+          description: "The Session has no active messages to compact.",
+          state: "completed",
+          metadata: {
+            v: 1,
+            ts: Date.now(),
+            session_id: this.session_id,
+            turn_id: turn_id,
+          },
+        });
+      } catch (error) {
+        try {
+          await this.logger.log("warn", "[agent] compact result persistence failed", {
+            session_id: this.session_id,
+            compact_id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        } catch {
+          // 领域结果已经确定，Action 与日志失败都不能把成功压缩改写为失败。
+        }
+      }
     }
+    return result;
   }
 
   /** 执行一个出队 Prompt；首条 Prompt 启动 Turn，后续 Prompt 作为 steer 合并。 */
@@ -343,12 +359,10 @@ export class SessionTurn {
     try {
       await this.persist_prompt_message(input, active_turn.turn_id, "prompt");
       const result = await this.execute_prompt_turn({
-        turn_id: active_turn.turn_id,
+        active_turn,
         prompt_input: input,
-        on_step_merge: async () => await this.drain_queued_inputs(active_turn),
-        abort_signal: active_turn.abort_controller.signal,
       });
-      this.finish_active_turn(active_turn, result);
+      await this.finish_active_turn(active_turn, result);
     } catch (error) {
       await this.fail_active_turn(active_turn, error);
     }
@@ -361,11 +375,11 @@ export class SessionTurn {
   }
 
   /** 用 Executor 结果结束当前 Active Turn。 */
-  private finish_active_turn(
+  private async finish_active_turn(
     active_turn: ActiveSessionTurnState,
-    result: SessionRunResult,
-  ): void {
-    const stopped = active_turn.abort_controller.signal.aborted;
+    result: SessionTurnExecutionResult,
+  ): Promise<void> {
+    const stopped = active_turn.turn_context?.lifecycle.abort_signal.aborted === true;
     const final_result: AgentSessionTurnResult = {
       turn_id: active_turn.turn_id,
       text: result.text,
@@ -386,6 +400,7 @@ export class SessionTurn {
       text: final_result.text,
       ...(final_result.error ? { error: final_result.error } : {}),
     });
+    await this.dispose_turn_context(active_turn);
     active_turn.deferred_finished.resolve(final_result);
     if (this.active_turn === active_turn) this.active_turn = null;
   }
@@ -396,7 +411,8 @@ export class SessionTurn {
     error: unknown,
   ): Promise<void> {
     if (active_turn.result) return;
-    const message = active_turn.abort_controller.signal.aborted
+    const stopped = active_turn.turn_context?.lifecycle.abort_signal.aborted === true;
+    const message = stopped
       ? TURN_STOPPED_MESSAGE
       : error instanceof Error ? error.message : String(error);
     const final_result: AgentSessionTurnResult = {
@@ -425,11 +441,12 @@ export class SessionTurn {
       type: "finish",
       session_id: this.session_id,
       turn_id: active_turn.turn_id,
-      status: active_turn.abort_controller.signal.aborted ? "stopped" : "failed",
+      status: stopped ? "stopped" : "failed",
       created_at: Date.now(),
       text: "",
       error: message,
     });
+    await this.dispose_turn_context(active_turn);
     active_turn.deferred_finished.resolve(final_result);
     if (this.active_turn === active_turn) this.active_turn = null;
   }
@@ -473,70 +490,30 @@ export class SessionTurn {
 
   /** 执行一个 Turn 内的模型与 Tool Step Loop。 */
   private async execute_prompt_turn(input: {
-    turn_id: string;
+    active_turn: ActiveSessionTurnState;
     prompt_input: AgentSessionPromptInput;
-    on_step_merge: () => Promise<SessionUserMessageV1[]>;
-    abort_signal?: AbortSignal;
   }): Promise<{
     text: string;
     success: boolean;
     error?: string;
   }> {
-    const assistant_output = new SessionAssistantOutputAdapter({
-      turn_id: input.turn_id,
-      messages: this.messages,
-    });
-    let history_reload_requested = false;
-
-    const run_context: SessionRunContext = {
-      turn_id: input.turn_id,
-      session_id: this.session_id,
-      project_root: this.workspace_path,
-      on_step_callback: async () => {
-        const merged = await input.on_step_merge();
-        if (merged.length > 0) await assistant_output.close_current_message();
-        return merged;
-      },
-      has_pending_step_input: () => this.has_pending_prompt(),
-      consume_history_reload: () => {
-        const requested = history_reload_requested;
-        history_reload_requested = false;
-        return requested;
-      },
-      assistant_output,
-      shell_approval_gateway: this.shell_approval_gateway,
-      on_action_callback: async (event) => {
-        await this.persist_action_event(event);
-      },
-      injected_user_messages: [],
-      deferred_persisted_user_messages: [],
-      pending_assistant_file_parts: [],
-      ...(input.abort_signal ? { abort_signal: input.abort_signal } : {}),
-    };
+    const turn_context = input.active_turn.turn_context;
+    const assistant_output = turn_context?.output.assistant;
+    if (!turn_context || !assistant_output) {
+      throw new Error("Active Session Turn requires an initialized context");
+    }
     const query = input.prompt_input.query;
     const executor_query = typeof query === "string"
       ? query
       : extract_text_from_parts(query);
-    this.active_run_context = run_context;
-    this.request_active_history_reload = () => {
-      history_reload_requested = true;
-    };
-
-    let result: SessionRunResult;
-    try {
-      result = await this.executor.run({
-        query: executor_query,
-        run_context: run_context,
-      });
-    } finally {
-      if (this.active_run_context === run_context) {
-        this.active_run_context = null;
-        this.request_active_history_reload = null;
-      }
-    }
+    let result: SessionTurnExecutionResult;
+    result = await this.executor.execute({
+      query: executor_query,
+      turn_context,
+    });
 
     await assistant_output.finish({
-      status: input.abort_signal?.aborted
+      status: turn_context.lifecycle.abort_signal.aborted
         ? "stopped"
         : result.success
           ? "completed"
@@ -545,10 +522,10 @@ export class SessionTurn {
       file_parts: result.assistant_file_parts || [],
     });
 
-    if (!result.success && !input.abort_signal?.aborted && result.error) {
+    if (!result.success && !turn_context.lifecycle.abort_signal.aborted && result.error) {
       await this.messages.append_error_message({
         scope: "turn",
-        turn_id: input.turn_id,
+        turn_id: input.active_turn.turn_id,
         code: "turn_execution_failed",
         message: result.error,
         recoverable: true,
@@ -560,7 +537,9 @@ export class SessionTurn {
     );
     if (deferred_count > 0) await this.state.touch_metadata();
     if (result.compact_required) {
-      await this.executor.compact_history(run_context);
+      await this.compact_history_handler({
+        turn_id: input.active_turn.turn_id,
+      });
     }
     return {
       text: result.text,
@@ -569,19 +548,36 @@ export class SessionTurn {
     };
   }
 
-  /** 为 Turn 开始前的 compact 命令创建最小运行上下文。 */
-  private create_compaction_run_context(turn_id: string): SessionRunContext {
-    return {
-      turn_id: turn_id,
+  /** 在 Turn 创建时建立其唯一执行上下文和 Assistant 输出端口。 */
+  private create_turn_context(
+    active_turn: ActiveSessionTurnState,
+  ): SessionTurnContext {
+    const assistant_output = new SessionAssistantOutputAdapter({
+      turn_id: active_turn.turn_id,
+      messages: this.messages,
+    });
+    return create_session_turn_context({
+      turn_id: active_turn.turn_id,
       session_id: this.session_id,
       project_root: this.workspace_path,
-      on_action_callback: async (event) => {
+      merge_step_input: async () => {
+        const merged = await this.drain_queued_inputs(active_turn);
+        if (merged.length > 0) await assistant_output.close_current_message();
+        return merged;
+      },
+      has_pending_step_input: () => this.has_pending_prompt(),
+      consume_history_reload: () => {
+        const requested = active_turn.history_reload_requested;
+        active_turn.history_reload_requested = false;
+        return requested;
+      },
+      assistant_output,
+      shell_approval_gateway: this.shell_approval_gateway,
+      interactions: this.interactions,
+      publish_action: async (event) => {
         await this.persist_action_event(event);
       },
-      injected_user_messages: [],
-      deferred_persisted_user_messages: [],
-      pending_assistant_file_parts: [],
-    };
+    });
   }
 
   /** 持久化本轮 User 输入，并同步刷新标题与 metadata。 */
@@ -608,6 +604,25 @@ export class SessionTurn {
     await this.messages.persist_action_record(event);
     await this.state.touch_metadata();
   }
+
+  /** 由 Turn 生命周期所有者尽力释放其唯一 Context。 */
+  private async dispose_turn_context(
+    active_turn: ActiveSessionTurnState,
+  ): Promise<void> {
+    try {
+      await active_turn.turn_context?.lifecycle.dispose();
+    } catch (error) {
+      try {
+        await this.logger.log("warn", "[agent] turn context disposal failed", {
+          session_id: this.session_id,
+          turn_id: active_turn.turn_id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } catch {
+        // Context 已进入释放流程，日志失败不能阻止 Turn Handle 收口。
+      }
+    }
+  }
 }
 
 function create_deferred<T>(): SessionDeferred<T> {
@@ -628,7 +643,8 @@ function create_active_session_turn_state(
     turn_id,
     result: null,
     deferred_finished: create_deferred<AgentSessionTurnResult>(),
-    abort_controller: new AbortController(),
+    turn_context: null,
+    history_reload_requested: false,
     prompt_started: false,
   };
 }

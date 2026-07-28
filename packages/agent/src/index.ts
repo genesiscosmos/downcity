@@ -99,6 +99,7 @@ export {
   is_session_mutation,
 } from "./types/session/SessionMutation.js";
 export type {
+  SessionCompactMutation,
   SessionDeltaMutation,
   SessionMessageMutation,
   SessionMutation,
@@ -160,6 +161,11 @@ export type {
   AgentSessionTurnHandle,
   AgentSessionTurnResult,
 } from "./types/sdk/AgentSessionTurn.js";
+export type {
+  AgentSessionCompactHandle,
+  AgentSessionCompactReason,
+  AgentSessionCompactResult,
+} from "./types/sdk/AgentSessionCompact.js";
 export type { PluginContext } from "./types/plugin/PluginContext.js";
 export type { SessionPort } from "./types/session/SessionPort.js";
 
@@ -201,14 +207,18 @@ export type {
 } from "./types/session/SessionComposer.js";
 export { DefaultSessionSystemComposer } from "./executor/composer/system/default/DefaultSessionSystemComposer.js";
 export { resolve_session_system_messages } from "./executor/composer/system/default/SystemDomain.js";
-export type { SessionExecutor } from "./executor/types/SessionExecutor.js";
 export type {
   SessionAssistantStepCallback,
-  SessionRunResult,
-} from "./executor/types/SessionRun.js";
-export type { SessionRunContext } from "./types/executor/SessionRunContext.js";
+  SessionExecutor,
+  SessionTurnExecutionResult,
+} from "./types/session/SessionExecution.js";
+export { create_session_turn_context } from "./session/runtime/SessionTurnContext.js";
+export type {
+  SessionTurnContext,
+  SessionTurnContextInit,
+} from "./types/executor/SessionTurnContext.js";
 export type { SessionToolExecutionContext } from "./types/executor/SessionToolExecutionContext.js";
-export type { PluginRunContext } from "./types/plugin/PluginRunContext.js";
+export type { PluginExecutionContext } from "./types/plugin/PluginExecutionContext.js";
 export type {
   SessionActionRecordV1,
   SessionMessageRecordV1,

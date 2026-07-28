@@ -24,7 +24,7 @@ flowchart LR
 | `Agent` | 模型、指令、最终 Tools、Plugins、Sessions | HTTP/RPC transport |
 | `Session` | 对话状态、消息历史、执行顺序与审批 | 项目资源所有权 |
 | `PluginContext` | Agent 投影给 Plugin 的稳定能力 | 充当第二个 Agent |
-| `SessionRunContext` | 单次执行的显式快照 | 保存长期 Agent 状态 |
+| `SessionTurnContext` | 一个 Turn 的执行上下文与生命周期 | 保存长期 Agent 状态 |
 | `RemoteAgent` | 访问服务端 Agent 与 Session | 配置服务端模型 |
 
 ## 选择本地还是远程

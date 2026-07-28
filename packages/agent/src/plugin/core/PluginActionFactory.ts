@@ -27,7 +27,7 @@ import type {
 } from "@/types/plugin/PluginRuntime.js";
 import type { PluginLifecycle } from "@/types/plugin/PluginCommand.js";
 import type { PluginHttpDefinition } from "@/types/plugin/PluginHttp.js";
-import type { PluginRunContext } from "@/types/plugin/PluginRunContext.js";
+import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
 
 /**
  * 从 Zod schema 推导 JSON 输入类型。
@@ -56,8 +56,8 @@ export interface CreatePluginActionOptions<
   execute: (params: {
     /** 当前执行上下文。 */
     context: PluginContext;
-    /** 当前 action 的显式 Session run 上下文。 */
-    run_context?: PluginRunContext;
+    /** 当前 action 所属 Session Turn 的只读执行快照。 */
+    execution_context?: PluginExecutionContext;
     /** 已通过 schema 校验后的输入。 */
     input: P;
     /** 当前插件名称。 */
@@ -86,7 +86,7 @@ export interface CreatePluginOptions<TActions extends PluginActions> {
   /** Plugin system 文本构建器。 */
   system?: (
     context: PluginContext,
-    run_context?: PluginRunContext,
+    execution_context?: PluginExecutionContext,
   ) => string | Promise<string>;
   /** Plugin 生命周期定义。 */
   lifecycle?: PluginLifecycle;

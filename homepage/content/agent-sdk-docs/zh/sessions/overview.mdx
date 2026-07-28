@@ -81,12 +81,12 @@ flowchart TB
 
     subgraph Runtime["权威 Session Runtime"]
         Session --> Queue["有序输入队列<br/>SessionCommand FIFO"]
-        Queue --> Turn["Turn 调度器<br/>唯一消费者"]
-        Turn --> Executor["Executor<br/>Model / Tool Step Loop"]
+        Queue --> Loop["SessionLoop<br/>唯一消费者与 Turn 调度器"]
+        Loop --> Executor["Executor<br/>Model / Tool Step Loop"]
         Session --> Security["Security Policy<br/>configured / effective"]
         Security --> Executor
         Session --> Status["status() 只读投影"]
-        Turn -.-> Status
+        Loop -.-> Status
         Security -.-> Status
 
         Session --> Interactions["Interactions<br/>Approval / Question waiter"]
@@ -94,7 +94,7 @@ flowchart TB
         Executor --> Messages
         Executor --> Interactions
 
-        Turn -->|"Command 完成信息"| Messages
+        Loop -->|"Command 完成信息"| Messages
         Messages --> Store["Message Store"]
         Messages --> Events["Session Mutation"]
     end

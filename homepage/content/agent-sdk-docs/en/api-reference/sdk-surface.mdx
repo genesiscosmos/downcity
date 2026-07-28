@@ -62,7 +62,8 @@ For a live UI, load initial Session and Message snapshots before calling `subscr
 Use these capabilities only when building plugins, servers, or custom runtime components:
 
 - `PluginContext`: the stable capability view projected from Agent to a Plugin; hosts should not acquire or retain it.
-- `SessionRunContext`: the explicit snapshot passed across Composer, Executor, and Tools for one execution.
+- `SessionTurnContext`: the execution context that coordinates identity, lifecycle, steps, input, and output for one Turn; plugins receive only its read-only `PluginExecutionContext` projection.
+- `create_session_turn_context(...)`: the standard factory used by custom executors or runtime components to create that Turn Context.
 - Interfaces such as `AgentSession` and `SessionExecutor`: replace or extend default implementations.
 - RPC/HTTP types: implement a custom transport or protocol integration.
 

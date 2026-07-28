@@ -10,7 +10,7 @@ import type {
   SessionSystemComposer,
 } from "@executor/composer/system/SessionSystemComposer.js";
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
-import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
+import type { SessionComposeInput } from "@/types/session/SessionComposer.js";
 import {
   resolve_session_system_messages,
   type SystemProfile,
@@ -60,8 +60,8 @@ export class DefaultSessionSystemComposer implements SessionSystemComposer {
     this.profile = options.profile === "task" ? "task" : "chat";
   }
 
-  async resolve(run_context: SessionRunContext) {
-    const session_id = String(run_context.session_id || "").trim();
+  async resolve(input: SessionComposeInput) {
+    const session_id = input.session.session_id;
     if (!session_id) {
       throw new Error("DefaultSessionSystemComposer.resolve requires a non-empty session_id");
     }

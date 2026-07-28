@@ -8,7 +8,7 @@
  */
 
 import type { PluginContext } from "@downcity/agent";
-import type { PluginRunContext } from "@downcity/agent";
+import type { PluginExecutionContext } from "@downcity/agent";
 import type { JsonValue } from "@downcity/agent";
 import type { PluginActions } from "@downcity/agent";
 import { BasePlugin } from "@downcity/agent";
@@ -164,10 +164,10 @@ export class ContactPlugin extends BasePlugin {
     super();
     this.options = options || {};
     this.actions = createContactActions({
-      link: async (context, payload, run_context) =>
-        (await this.link(context, payload, run_context)) as unknown as JsonValue,
-      approve: async (context, payload, run_context) =>
-        (await this.approve(context, payload, run_context)) as unknown as JsonValue,
+      link: async (context, payload, execution_context) =>
+        (await this.link(context, payload, execution_context)) as unknown as JsonValue,
+      approve: async (context, payload, execution_context) =>
+        (await this.approve(context, payload, execution_context)) as unknown as JsonValue,
       check: async (context, payload) =>
         (await this.check(context, payload)) as unknown as JsonValue,
       chat: async (context, payload) =>
@@ -192,7 +192,7 @@ export class ContactPlugin extends BasePlugin {
   private async link(
     context: PluginContext,
     payload: ContactLinkCommandPayload,
-    run_context?: PluginRunContext,
+    execution_context?: PluginExecutionContext,
   ) {
     const now = Date.now();
     const ttlSeconds = Math.max(
@@ -205,7 +205,7 @@ export class ContactPlugin extends BasePlugin {
       context,
       this.options,
       payload.endpoint || this.options.endpoint,
-      run_context?.workspace_env,
+      execution_context?.workspace_env,
     );
     const agentName = getAgentName(context);
 
@@ -242,7 +242,7 @@ export class ContactPlugin extends BasePlugin {
   private async approve(
     context: PluginContext,
     payload: ContactApproveCommandPayload,
-    run_context?: PluginRunContext,
+    execution_context?: PluginExecutionContext,
   ) {
     const parsed = parseContactLinkCode(payload.code);
     // 关键点（中文）：approve 端不使用本机时钟预判过期，避免两台机器时钟不一致时把本来可用的 link 提前拦截。
@@ -251,7 +251,7 @@ export class ContactPlugin extends BasePlugin {
     const targetReachability = classifyContactEndpoint(parsed.endpoint);
     const shouldResolveRequesterEndpoint =
       payload.endpoint ||
-      hasRuntimePublicEndpointEnv(context, run_context?.workspace_env) ||
+      hasRuntimePublicEndpointEnv(context, execution_context?.workspace_env) ||
       targetReachability === "loopback" ||
       targetReachability === "private";
     const requesterEndpointCandidate = shouldResolveRequesterEndpoint
@@ -259,7 +259,7 @@ export class ContactPlugin extends BasePlugin {
           context,
           this.options,
           payload.endpoint || this.options.endpoint,
-          run_context?.workspace_env,
+          execution_context?.workspace_env,
         )
       : undefined;
     const callbackDecision = buildContactApproveCallbackDecision({

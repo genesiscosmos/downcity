@@ -28,26 +28,24 @@ import type { AgentSession } from "@/types/agent/SessionActor.js";
 import { resolve_system_timezone } from "@/session/storage/Metadata.js";
 import { create_runtime_session_port } from "@/session/storage/RuntimeSessionPort.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
-import type {
-  SessionMutationSubscriber,
-  SessionMutationUnsubscribe,
-} from "@/types/session/SessionMutation.js";
+import type { SessionMutationSubscriber, SessionMutationUnsubscribe } from "@/types/session/SessionMutation.js";
 import type {
   RespondSessionInteractionInput,
   SessionApprovalMode,
   SessionInteractionResult,
   SessionPendingInteraction,
 } from "@/types/session/SessionInteraction.js";
-import type {
-  ListSessionMessagesInput,
-  SessionMessagePage,
-} from "@/types/session/SessionMessage.js";
+import type { ListSessionMessagesInput, SessionMessagePage } from "@/types/session/SessionMessage.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
+import type { AgentSessionCompactHandle } from "@/types/sdk/AgentSessionCompact.js";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
 import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
+import { create_session_compact_operation } from "@/session/runtime/SessionCompactOperation.js";
+import { run_session_history_compaction } from "@/session/runtime/SessionHistoryCompaction.js";
+import { create_session_plugin_execution_context } from "@/session/runtime/SessionTurnContext.js";
 import { SessionState } from "@/session/SessionState.js";
-import { SessionTurn } from "@/session/SessionTurn.js";
+import { SessionLoop } from "@/session/SessionLoop.js";
 import { SessionQueue } from "@/session/SessionQueue.js";
 import { SessionCommand } from "@/session/SessionCommand.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
@@ -58,20 +56,20 @@ import { SessionShellApprovalAdapter } from "@/session/execution/tools/SessionSh
 import { DefaultSessionComposer } from "@/session/DefaultSessionComposer.js";
 import type {
   SessionComposer,
+  SessionComposeIdentity,
   SessionCompactionPlan,
   SessionComposeInput,
   SessionStepInput,
 } from "@/types/session/SessionComposer.js";
-import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
+import type { SessionCompactHistory } from "@/types/session/SessionExecution.js";
+import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import { generate_id } from "@/utils/Id.js";
 import { nanoid } from "nanoid";
 import { build_session_info } from "@/session/browse/Browse.js";
 import { ensure_session_title } from "@/session/SessionTitle.js";
 import { to_executor_history } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
-import type {
-  SessionActionRecordInputV1,
-} from "@/executor/types/SessionRecords.js";
+import type { SessionActionRecordInputV1 } from "@/executor/types/SessionRecords.js";
 import type { SessionCommandOptions } from "@/types/session/SessionCommand.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 
@@ -114,7 +112,7 @@ export class Session implements AgentSession {
   private readonly state: SessionState;
   /** 当前 Session 独享的 Command FIFO。 */
   private readonly session_queue = new SessionQueue();
-  private readonly session_turn: SessionTurn;
+  private readonly session_loop: SessionLoop;
   private runtime_port: SessionPort | null = null;
 
   constructor(options: SessionOptions) {
@@ -182,10 +180,11 @@ export class Session implements AgentSession {
         this.events.publish(event);
       },
     });
-    this.session_turn = new SessionTurn({
+    this.session_loop = new SessionLoop({
       session_id: this.id,
       workspace_path: this.workspace_path,
       executor: this.executor,
+      compact_history: async (input) => await this.compact_history(input),
       state: this.state,
       events: this.events,
       logger: this.logger,
@@ -234,14 +233,8 @@ export class Session implements AgentSession {
     await this.run_system_mutation(async () => {
       await this.initialize_instruction();
       const should_persist = await this.store.has_instruction();
-      const run_context: SessionRunContext = {
-        session_id: this.id,
-        injected_user_messages: [],
-        deferred_persisted_user_messages: [],
-        pending_assistant_file_parts: [],
-      };
       const composed = await this.composer.compose(
-        await this.create_compose_input(run_context, 0, true),
+        await this.create_compose_input(undefined, 0, true),
       );
       const next_blocks = resolve_composed_system_blocks(composed);
 
@@ -316,35 +309,60 @@ export class Session implements AgentSession {
    */
   async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
     await this.initialize_instruction();
-    return await this.session_turn.prompt(input);
+    return await this.session_loop.prompt(input);
   }
 
   /**
    * 停止当前 turn，并取消尚未被吸收的排队 prompt。
    */
   async stop(): Promise<AgentSessionStopResult> {
-    return await this.session_turn.stop();
+    return await this.session_loop.stop();
   }
 
   /**
    * 把一次显式历史压缩加入当前 Session 的有序输入队列。
    */
-  async compact(): Promise<void> {
+  async compact(): Promise<AgentSessionCompactHandle> {
     await this.state.ensure_runnable();
-    const command_id = generate_id();
-    this.enqueue_command({
-      execute: async () => {
-        try {
-          await this.session_turn.compact_history(command_id);
-        } catch (error) {
-          await this.logger.log("warn", "[agent] session compact command failed", {
-            session_id: this.id,
-            command_id,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
+    const compact_id = `compact:${this.id}:${generate_id()}`;
+    const operation = create_session_compact_operation({
+      compact_id,
+      run: async () => await this.session_loop.compact_history(compact_id),
+      log_error: async (error_message) => {
+        await this.logger.log("warn", "[agent] session compact command failed", {
+          session_id: this.id,
+          compact_id,
+          error: error_message,
+        });
+      },
+      publish_finish: (final_result) => {
+        this.events.publish({
+          mutation_id: nanoid(),
+          variant: "compact",
+          type: "finish",
+          session_id: this.id,
+          compact_id,
+          status: final_result.success ? "completed" : "failed",
+          compacted: final_result.compacted,
+          reason: final_result.reason,
+          created_at: Date.now(),
+          ...(final_result.error ? { error: final_result.error } : {}),
+        });
       },
     });
+    this.enqueue_command({
+      execute: operation.execute,
+    });
+    this.events.publish({
+      mutation_id: nanoid(),
+      variant: "compact",
+      type: "start",
+      session_id: this.id,
+      compact_id,
+      status: "queued",
+      created_at: Date.now(),
+    });
+    return operation.handle;
   }
 
   /** 把 Workspace env 快照加入当前 Session 的有序输入队列。 */
@@ -408,7 +426,7 @@ export class Session implements AgentSession {
 
   /** 读取当前 Session 的运行与安全状态。 */
   async status(): Promise<AgentSessionStatus> {
-    const active_turn_id = this.session_turn.current_turn_id();
+    const active_turn_id = this.session_loop.current_turn_id();
     return {
       session_id: this.id,
       state: active_turn_id || this.executor.is_executing() ? "running" : "idle",
@@ -509,7 +527,7 @@ export class Session implements AgentSession {
    * 返回当前 session 是否正在执行。
    */
   is_executing(): boolean {
-    return this.session_turn.is_active() || this.executor.is_executing();
+    return this.session_loop.is_active() || this.executor.is_executing();
   }
 
   /**
@@ -583,7 +601,7 @@ export class Session implements AgentSession {
     this.runtime_port = create_runtime_session_port({
       session_id: this.id,
       get_model: () => this.get_model(),
-      get_executor: () => this.executor.get_executor(),
+      get_executor: () => this.executor,
       prompt: async (input) => await this.prompt(input),
       stop: async () => await this.stop(),
       subscribe: (subscriber) => this.subscribe(subscriber),
@@ -704,10 +722,9 @@ export class Session implements AgentSession {
     return new Executor({
       session_id: this.id,
       composer: this.composer,
-      get_compose_input: async (run_context, retry_count) =>
-        await this.create_compose_input(run_context, retry_count),
-      commit_compaction: async (plan, run_context) =>
-        await this.commit_compaction_plan(plan, run_context),
+      get_compose_input: async (turn_context, retry_count) =>
+        await this.create_compose_input(turn_context, retry_count),
+      compact_history: async (input) => await this.compact_history(input),
       get_model: () => this.get_model(),
       logger: this.logger,
       get_plugins: () => this.effective_agent_plugins,
@@ -717,28 +734,42 @@ export class Session implements AgentSession {
 
   /** 为 Composer 创建当前 Step 的只读 Session 快照。 */
   private async create_compose_input(
-    run_context: SessionRunContext,
+    turn_context: SessionTurnContext | undefined,
     retry_count: number,
     refresh_system = false,
   ): Promise<SessionComposeInput> {
     const instruction_system_blocks = refresh_system
       ? this.get_instruction_system_blocks().map((block) => ({ ...block }))
       : this.effective_instruction_system_blocks.map((block) => ({ ...block }));
+    // 关键点（中文）：Plugin system 本身参与 Compose，必须先让它看到当前检查点
+    // 已确定的 env 与 instruction；Executor 会在 Compose 返回后提交最终 Step 快照。
+    turn_context?.step.commit({
+      workspace_env: this.effective_workspace_env,
+      agent_systems: instruction_system_blocks.map((block) => block.content),
+    });
+    const plugin_execution_context =
+      turn_context?.step.plugin_execution_context() ||
+      create_session_plugin_execution_context({
+        session_id: this.id,
+        project_root: this.workspace_path,
+        workspace_env: this.effective_workspace_env,
+        agent_systems: this.effective_instruction_system_blocks.map(
+          (block) => block.content,
+        ),
+      });
     const plugin_system_blocks = this.system_snapshot_blocks && !refresh_system
       ? []
       : refresh_system
-        ? await this.get_agent_plugins().system_blocks(run_context)
-        : run_context.agent_plugins
-          ? await run_context.agent_plugins.system_blocks(run_context)
-          : await this.effective_agent_plugins.system_blocks(run_context);
+        ? await this.get_agent_plugins().system_blocks(plugin_execution_context)
+        : turn_context?.step.plugins
+          ? await turn_context.step.plugins.system_blocks(
+              plugin_execution_context,
+            )
+          : await this.effective_agent_plugins.system_blocks(
+              plugin_execution_context,
+            );
     return {
-      session: {
-        agent_id: this.agent_id,
-        session_id: this.id,
-        project_root: this.workspace_path,
-        created_at: this.local_state.created_at,
-        timezone: this.local_state.timezone,
-      },
+      session: this.create_compose_identity(),
       state: {
         model: this.get_model(),
         model_context_window: this.get_model_context_window(),
@@ -756,22 +787,53 @@ export class Session implements AgentSession {
       },
       history: await this.session_messages.context_snapshot(),
       turn: {
-        ...(run_context.turn_id ? { turn_id: run_context.turn_id } : {}),
+        ...(turn_context
+          ? { turn_id: turn_context.session.turn_id }
+          : {}),
         retry_count,
       },
     };
   }
 
+  /** 创建 Composer 共用的稳定 Session 身份快照。 */
+  private create_compose_identity(): SessionComposeIdentity {
+    return {
+      agent_id: this.agent_id,
+      session_id: this.id,
+      project_root: this.workspace_path,
+      created_at: this.local_state.created_at,
+      timezone: this.local_state.timezone,
+    };
+  }
+
+  /** 生成并提交 canonical 历史压缩；该职责不进入 Executor。 */
+  private async compact_history(
+    input: Parameters<SessionCompactHistory>[0],
+  ): ReturnType<SessionCompactHistory> {
+    return await run_session_history_compaction({
+      turn_id: input.turn_id,
+      create_plan: async () => await this.composer.compact({
+        session: this.create_compose_identity(),
+        model: this.get_model(),
+        history: await this.session_messages.context_snapshot(),
+      }),
+      commit_plan: async (plan) => {
+        await this.commit_compaction_plan(plan, input.turn_id);
+      },
+      log_error: async (error_message) => {
+        await this.logger.log("warn", "[agent] session history compaction failed", {
+          session_id: this.id,
+          ...(input.turn_id ? { turn_id: input.turn_id } : {}),
+          error: error_message,
+        });
+      },
+    });
+  }
+
   /** 使用统一 Composer 生成只读 system/history 查询结果。 */
   private async compose_for_view(): Promise<SessionStepInput> {
-    const run_context: SessionRunContext = {
-      session_id: this.id,
-      injected_user_messages: [],
-      deferred_persisted_user_messages: [],
-      pending_assistant_file_parts: [],
-    };
     const composed = await this.composer.compose(
-      await this.create_compose_input(run_context, 0),
+      await this.create_compose_input(undefined, 0),
     );
     return this.apply_system_snapshot(composed);
   }
@@ -813,14 +875,16 @@ export class Session implements AgentSession {
   /** 提交 Composer 生成的 Segment 压缩计划。 */
   private async commit_compaction_plan(
     plan: SessionCompactionPlan,
-    run_context: SessionRunContext,
+    turn_id?: string,
   ): Promise<void> {
     const action_id = `compacting:${this.id}:${generate_id()}`;
     await this.emit_action_event({
       id: action_id,
       title: "Compacting session messages",
       state: "running",
-      ...(run_context.turn_id ? { turn_id: run_context.turn_id } : {}),
+      ...(turn_id
+        ? { turn_id }
+        : {}),
     });
     try {
       await this.session_messages.compact_active({
@@ -834,7 +898,9 @@ export class Session implements AgentSession {
           ? `Closed Active through Message ${plan.boundary_message_id} with deterministic fallback Summary.`
           : `Closed Active through Message ${plan.boundary_message_id}.`,
         state: "completed",
-        ...(run_context.turn_id ? { turn_id: run_context.turn_id } : {}),
+        ...(turn_id
+          ? { turn_id }
+          : {}),
       });
       await this.state.touch_metadata();
     } catch (error) {
@@ -843,7 +909,9 @@ export class Session implements AgentSession {
         title: "Session messages compact failed",
         description: error instanceof Error ? error.message : String(error),
         state: "failed",
-        ...(run_context.turn_id ? { turn_id: run_context.turn_id } : {}),
+        ...(turn_id
+          ? { turn_id }
+          : {}),
       });
       throw error;
     }

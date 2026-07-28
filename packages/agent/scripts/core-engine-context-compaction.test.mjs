@@ -13,6 +13,7 @@ import {
   should_compact_after_usage,
 } from "../bin/executor/core-engine/CoreEngineContextCompaction.js";
 import { CoreEngineRunner } from "../bin/executor/core-engine/CoreEngineRunner.js";
+import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
 
 function create_stream_text_result(text, input_tokens, output_tokens) {
   return {
@@ -62,7 +63,7 @@ function create_context_error_runner() {
   });
 }
 
-function create_run_input(model, messages, context_window = 100) {
+function create_turn_input(model, messages, context_window = 100) {
   return {
     execute_input: {
       query: "latest request",
@@ -71,12 +72,10 @@ function create_run_input(model, messages, context_window = 100) {
       tools: {},
     },
     model,
-    run_context: {
+    turn_context: create_session_turn_context({
       session_id: "compact-runner-session",
-      injected_user_messages: [],
-      deferred_persisted_user_messages: [],
-      pending_assistant_file_parts: [],
-    },
+      turn_id: "compact-runner-turn",
+    }),
     resolve_step_inputs: async () => ({
       model,
       system: [],
@@ -111,12 +110,12 @@ test("普通调用使用 95% 触发，compact 验收使用 50% 目标", () => {
   assert.equal(should_compact_after_usage(0.5001, true), true);
 });
 
-test("最终 step 达到 95% 时通过 run result 请求 writer 收口后持久化 compact", async () => {
+test("最终 Step 达到 95% 时通过 Turn 结果请求 writer 收口后持久化 compact", async () => {
   const model = new MockLanguageModelV3({
     modelId: "usage-trigger-model",
     doStream: async () => create_stream_text_result("done", 90, 5),
   });
-  const result = await create_runner().run(create_run_input(model, [{
+  const result = await create_runner().execute(create_turn_input(model, [{
     id: "user-1",
     role: "user",
     metadata: {
@@ -161,8 +160,8 @@ test("新的持久化 Summary 只按 50% 水位验收一次", async () => {
     },
     parts: [{ type: "text", text: "latest request" }],
   }];
-  const first = await runner.run(create_run_input(model, messages));
-  const second = await runner.run(create_run_input(model, messages));
+  const first = await runner.execute(create_turn_input(model, messages));
+  const second = await runner.execute(create_turn_input(model, messages));
   assert.equal(first.compact_required, true);
   assert.equal(second.compact_required, undefined);
 });
@@ -194,7 +193,7 @@ test("显式 compact 后在下一次 provider 调用前重载 canonical history"
       return create_stream_text_result("done", 20, 5);
     },
   });
-  const input = create_run_input(model, [{
+  const input = create_turn_input(model, [{
     id: "old-user",
     role: "user",
     metadata: {
@@ -206,14 +205,18 @@ test("显式 compact 后在下一次 provider 调用前重载 canonical history"
     },
     parts: [{ type: "text", text: "history before compact" }],
   }]);
-  input.run_context.consume_history_reload = () => {
-    const requested = reload_requested;
-    reload_requested = false;
-    return requested;
-  };
+  input.turn_context = create_session_turn_context({
+    session_id: "compact-runner-session",
+    turn_id: "compact-runner-turn",
+    consume_history_reload: () => {
+      const requested = reload_requested;
+      reload_requested = false;
+      return requested;
+    },
+  });
   input.reload_history = async () => compacted_records;
 
-  const result = await runner.run(input);
+  const result = await runner.execute(input);
 
   assert.equal(result.success, true);
   assert.equal(provider_prompts.length, 1);
@@ -231,8 +234,8 @@ test("Provider context-length error 在当前 tool-loop 内 deep compact 后重�
       return create_stream_text_result("recovered", 40, 5);
     },
   });
-  const result = await create_context_error_runner().run(
-    create_run_input(model, [{
+  const result = await create_context_error_runner().execute(
+    create_turn_input(model, [{
       id: "user-1",
       role: "user",
       metadata: {

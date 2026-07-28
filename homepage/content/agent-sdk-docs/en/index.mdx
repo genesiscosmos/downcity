@@ -24,7 +24,7 @@ flowchart LR
 | `Agent` | Model, instructions, final Tools, plugins, and Sessions | HTTP/RPC transports |
 | `Session` | Conversation state, message history, execution order, and approvals | Project resource ownership |
 | `PluginContext` | Stable Agent capabilities projected to a Plugin | A second Agent facade |
-| `SessionRunContext` | Explicit snapshot for one execution | Long-lived Agent state |
+| `SessionTurnContext` | Execution context and lifecycle for one Turn | Long-lived Agent state |
 | `RemoteAgent` | Access to a server-side Agent and its Sessions | Server-side model configuration |
 
 ## Choose local or remote

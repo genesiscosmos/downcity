@@ -10,6 +10,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { inject_read_image_user_message } from "../bin/executor/tools/file/ReadImageToolBridge.js";
+import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
 import {
   pick_merged_user_messages,
   to_model_messages,
@@ -17,13 +18,10 @@ import {
 
 test("read image data is injected as a user file part", async () => {
   const data_url = "data:image/png;base64,iVBORw0KGgo=";
-  const run_context = {
+  const turn_context = create_session_turn_context({
     session_id: "session-1",
     turn_id: "turn-1",
-    injected_user_messages: [],
-    deferred_persisted_user_messages: [],
-    pending_assistant_file_parts: [],
-  };
+  });
   const output = inject_read_image_user_message({
     tool_name: "read",
     output: {
@@ -33,13 +31,14 @@ test("read image data is injected as a user file part", async () => {
       mime_type: "image/png",
       data_url,
     },
-    run_context,
+    turn_context,
   });
 
   assert.equal(output.data_url, undefined);
   assert.equal(output.image_attached, true);
-  assert.equal(run_context.injected_user_messages.length, 1);
-  const message = run_context.injected_user_messages[0];
+  const injected_messages = await turn_context.input.checkpoint();
+  assert.equal(injected_messages.length, 1);
+  const message = injected_messages[0];
   assert.equal(message.role, "user");
   assert.equal(message.parts[0].type, "text");
   assert.equal(message.parts[1].type, "file");
@@ -53,19 +52,17 @@ test("read image data is injected as a user file part", async () => {
   assert.match(JSON.stringify(model_messages[0]), /iVBORw0KGgo=/);
 });
 
-test("non-image tool results are unchanged", () => {
+test("non-image tool results are unchanged", async () => {
   const output = { success: true, type: "text", content: "hello" };
-  const run_context = {
+  const turn_context = create_session_turn_context({
     session_id: "session-1",
-    injected_user_messages: [],
-    deferred_persisted_user_messages: [],
-    pending_assistant_file_parts: [],
-  };
+    turn_id: "turn-1",
+  });
   const result = inject_read_image_user_message({
     tool_name: "read",
     output,
-    run_context,
+    turn_context,
   });
   assert.equal(result, output);
-  assert.deepEqual(run_context.injected_user_messages, []);
+  assert.deepEqual(await turn_context.input.checkpoint(), []);
 });

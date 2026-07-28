@@ -11,10 +11,7 @@ import type {
   SessionMetadataV1,
   SessionRecordV1,
 } from "@/executor/types/SessionRecords.js";
-import type {
-  SessionRunInput,
-  SessionRunResult,
-} from "@/executor/types/SessionRun.js";
+import type { SessionExecutor } from "@/types/session/SessionExecution.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
@@ -23,21 +20,6 @@ import type {
   SessionMutationUnsubscribe,
 } from "@/types/session/SessionMutation.js";
 import type { SessionContextSnapshot } from "@/types/session/SessionSegment.js";
-
-/**
- * 单个 Session 执行端口。
- */
-export interface SessionExecutorPort {
-  /** 执行一次 Session run。 */
-  run(params: SessionRunInput): Promise<SessionRunResult>;
-
-  /**
-   * 请求取消当前正在执行的 turn。
-   *
-   * @returns `true` 表示已发出取消请求；`false` 表示当前没有可取消的执行。
-   */
-  stop(): boolean;
-}
 
 /**
  * 单个 Session 实例端口。
@@ -50,7 +32,7 @@ export interface SessionPort {
   get_model(): LanguageModel | undefined;
 
   /** 获取当前 Session 的执行端口。 */
-  get_executor(): SessionExecutorPort;
+  get_executor(): SessionExecutor;
 
   /** 读取当前 Session 的累计 Summary 与 Active Message 快照。 */
   context(): Promise<SessionContextSnapshot>;

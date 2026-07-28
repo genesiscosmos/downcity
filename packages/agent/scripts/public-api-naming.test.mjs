@@ -41,7 +41,7 @@ const public_declaration_files = [
   "types/plugin/PluginAction.d.ts",
   "types/plugin/PluginCommand.d.ts",
   "types/plugin/PluginHttp.d.ts",
-  "types/plugin/PluginRunContext.d.ts",
+  "types/plugin/PluginExecutionContext.d.ts",
   "plugin/types/ActionSchedule.d.ts",
   "types/rpc/RpcProtocol.d.ts",
 ];

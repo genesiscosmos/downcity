@@ -25,22 +25,22 @@ import {
   plugin_read_input_schema,
 } from "./PluginToolSchemas.js";
 import type { SessionToolExecutionContext } from "@/types/executor/SessionToolExecutionContext.js";
-import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
+import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 
 /**
  * 要求当前 plugin tool 具有 Executor 显式绑定的 Session 上下文。
  */
-function require_run_context(
+function require_turn_context(
   options: ToolExecutionOptions,
-): SessionRunContext {
+): SessionTurnContext {
   const execution_context = options.experimental_context as
     | Partial<SessionToolExecutionContext>
     | undefined;
-  const run_context = execution_context?.session_run_context;
-  if (!run_context) {
-    throw new Error("plugin tool requires an explicit session run context");
+  const turn_context = execution_context?.session_turn_context;
+  if (!turn_context) {
+    throw new Error("plugin tool requires an explicit Session Turn context");
   }
-  return run_context;
+  return turn_context;
 }
 
 /**
@@ -54,7 +54,7 @@ export function create_plugin_call_tool(options: CreatePluginToolsOptions) {
     execute: async (input, execution_options) =>
       await invoke_plugin_call_tool({
         plugins: options.plugins,
-        run_context: require_run_context(execution_options),
+        turn_context: require_turn_context(execution_options),
         input: input as PluginCallInput,
       }),
   });
@@ -71,7 +71,7 @@ export function create_plugin_read_tool(options: CreatePluginToolsOptions) {
     execute: async (input, execution_options) =>
       await invoke_plugin_read_tool({
         plugins: options.plugins,
-        run_context: require_run_context(execution_options),
+        turn_context: require_turn_context(execution_options),
         input: input as PluginReadInput,
       }),
   });

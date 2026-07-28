@@ -6,7 +6,7 @@
 >
 > 本文基于 2026-07-25 对 Codex、Anthropic Sandbox Runtime、OpenHands 与 VS Code 的公开源码调研形成，同时记录目标设计与实际迁移进度。
 
-实现进度：Workspace 已统一提供 LocalFileSystem、WorkspaceTools、Env、AgentStore 与可选 Shell；Agent 统一注册 Workspace、Plugin 与自定义 Tools。默认 Store 沿用 Workspace 内 `.downcity` JSONL 布局；SQLite 与 Plugin 进程隔离仍属于后续阶段。
+实现进度：Workspace 已统一提供 LocalFileSystem、WorkspaceTools、Env、AgentStore 与可选 Shell；Agent 统一注册 Session Interaction、Workspace、Plugin 与自定义 Tools。默认 Store 沿用 Workspace 内 `.downcity` JSONL 布局；SQLite 与 Plugin 进程隔离仍属于后续阶段。
 
 源码按职责直接表达领域边界：
 
@@ -633,6 +633,51 @@ class Session {
 ```
 
 Session 只接收用于模型上下文和附件解析的 `workspace_path`，不拼接 Store 路径、不直接调用 `node:fs`，也不通过 Shell Tool 读取历史。
+
+Session 同时拥有 Interaction 状态与生命周期。`ask_question` 是无状态的 Agent 内置 Tool，
+只通过当前 `SessionTurnContext.interactions` 创建 Question Interaction；
+用户回答先由 Session 原子提交，再作为 Tool Result 恢复同一 Turn 的模型执行。
+
+Session 执行层级固定为 `Session → Turn → Step`。`SessionLoop` 是长期存在的队列消费者，
+不是某一个 Turn；它在 Turn 创建时建立唯一的 `SessionTurnContext`。Context 是该 Turn
+内部各执行部门共同参考和中转的上下文中台，不是另一层 Run：
+
+```mermaid
+flowchart LR
+    Session["Session"] --> Loop["SessionLoop\n队列与 Turn 调度"]
+    Loop --> Context["SessionTurnContext\n一个 Turn 的执行上下文"]
+    Context --> Identity["session\n身份与项目归属"]
+    Context --> Lifecycle["lifecycle\n取消与释放"]
+    Context --> Step["step\nEnv / Systems / Plugin lease"]
+    Context --> Input["input\n检查点与动态 User 输入"]
+    Context --> Output["output\nAssistant / File / Action"]
+    Context --> Interactions["interactions\n用户异步交互"]
+    Context --> ShellPort["shell\n审批网关"]
+
+    Executor["Executor"] --> Lifecycle
+    Executor --> Step
+    Core["CoreEngine"] --> Input
+    Core --> Output
+    Tools["Built-in Tools"] --> Input
+    Tools --> Output
+    Tools --> Interactions
+
+    Step -->|"plugin_execution_context()"| PluginView["PluginExecutionContext\n只读调用快照"]
+    PluginView --> Plugin["Plugin"]
+```
+
+`SessionTurnContext` 维护以下不变量：
+
+- 身份在一个 Turn 内稳定，取消信号和 Plugin lease 的生命周期由 Context 统一闭合。
+- Env、instruction 和 Plugin execution lease 只在 Step 检查点切换。
+- 动态消息、延迟持久化消息和 Assistant 文件只能通过领域方法注入或读取，调用方不能直接修改内部数组。
+- Plugin 属于扩展边界，只接收新建的 `PluginExecutionContext` 只读投影，不能获得 Context 根对象、队列、输出端口或 lease。
+- Composer 继续接收 `SessionComposeInput` 只读快照，不依赖整个运行中台。
+- `system()`、`syncshot()` 和非 Turn compact 直接使用 Session 快照，不伪造 Turn Context。
+
+消息结构是另一条独立轴：`Session → Message → Part`。Step 是一次 Provider 调用，Part
+只是 Message 内有序的文本、Tool、Reasoning 或文件内容；多个 Step 可以写入同一个
+Assistant Message，二者不能混用。
 
 `initializeAgentProject` / `ProjectSetup` 是 Workspace 创建前的 bootstrap：它负责创建项目目录和初始配置，因此允许直接使用 Node 文件 API。Workspace 构造完成后，Agent、Session、Store、Logger 与 ActionSchedule 的运行时文件访问统一走 Workspace FileSystem；bootstrap 不进入运行时资源图。
 

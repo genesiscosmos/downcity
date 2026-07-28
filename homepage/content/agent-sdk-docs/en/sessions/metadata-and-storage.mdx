@@ -57,7 +57,7 @@ It does not scan all old Segments. Old Segments serve historical UI, Fork, and a
 sequenceDiagram
     participant App
     participant Session
-    participant Turn as SessionTurn
+    participant Loop as SessionLoop
     participant Composer as SessionComposer
     participant Messages as SessionMessages
     participant Store as Message Store
@@ -66,17 +66,17 @@ sequenceDiagram
     participant Model
 
     App->>Session: prompt({ query })
-    Session->>Turn: Queue and Turn orchestration
-    Turn->>Messages: create User Message
+    Session->>Loop: Queue and Turn orchestration
+    Loop->>Messages: create User Message
     Messages->>Store: persist complete User snapshot
     Store->>Active: append Message
     Session->>Composer: read-only Summary + Active snapshot
     Composer-->>Session: system + messages + tools
     Session->>Model: execute current Step
-    Model-->>Turn: text / tool / file chunks
-    Turn->>Messages: update Assistant draft and Parts
+    Model-->>Loop: text / tool / file chunks
+    Loop->>Messages: update Assistant draft and Parts
     Messages->>Store: atomically replace assistant_message.json
-    Turn->>Messages: complete Assistant Message
+    Loop->>Messages: complete Assistant Message
     Messages->>Store: persist final Assistant snapshot
     Store->>Active: append Message
     Session->>Session: Provider usage reaches 95% of context_window

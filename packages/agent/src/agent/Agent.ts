@@ -31,6 +31,9 @@ import {
   type SystemProfile,
 } from "@/executor/composer/system/default/SystemDomain.js";
 import type { SystemModelMessage } from "ai";
+import {
+  create_ask_question_tool,
+} from "@/executor/tools/interaction/AskQuestionToolDefinition.js";
 
 const RESERVED_PLUGIN_TOOL_NAMES = new Set(["plugin_read", "plugin_call"]);
 
@@ -112,6 +115,11 @@ export class Agent {
     this.model = options.model;
     this.plugins = new PluginRegistry(options.plugins || []);
     this.tools = {};
+    register_agent_tools(
+      this.tools,
+      { ask_question: create_ask_question_tool() },
+      "SessionInteractionTools",
+    );
     for (const tool_name of Object.keys(this.workspace.tools)) {
       if (RESERVED_PLUGIN_TOOL_NAMES.has(tool_name)) {
         throw new Error(

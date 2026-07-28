@@ -8,11 +8,12 @@ description: Queue an explicit Session history compaction locally or remotely
 `session.compact()` requests an explicit compaction of the current Session history.
 
 ```ts
-const unsubscribe = session.subscribe((mutation) => {
-  apply_mutation_to_ui(mutation);
-});
+const compact = await session.compact();
+const result = await compact.finished;
 
-await session.compact();
+if (!result.success) {
+  console.error(result.error);
+}
 await session.prompt({ query: "Continue from the compacted history" });
 ```
 
@@ -20,7 +21,7 @@ The method is available on both `AgentSession` and `RemoteAgentSession`.
 
 ## Queue semantics
 
-`await session.compact()` means that the command passed validation and entered the Session's ordered input queue. It does not wait for summary generation or history rewriting.
+`await session.compact()` returns a Handle after the command passes validation and enters the Session's ordered input queue. `handle.result` remains `null` while it is pending; `await handle.finished` waits until summary generation and canonical history rewriting have actually finished.
 
 - when the Session is idle, the command runs before the next `prompt()` turn starts
 - when a turn is active, it runs at the next Session step checkpoint
@@ -40,7 +41,15 @@ Compaction publishes action messages through the normal Session timeline:
 
 If there are no active records, the Session emits a completed action explaining that there was nothing to compact.
 
-Use `subscribe()` to observe these messages. The `compact()` return value only reports queue acceptance.
+The stable Handle result includes:
+
+- `compact_id`: the explicit compaction request ID
+- `success`: whether the request completed successfully; nothing to compact is also successful
+- `compacted`: whether a compaction plan was generated and committed
+- `reason`: `compacted | nothing_to_compact | compact_failed`
+- `error`: the failure message, when present
+
+`subscribe()` still emits `compact` lifecycle mutations and timeline actions for UI state. Application logic should normally await `handle.finished` instead of inferring completion from Action Messages.
 
 ## Automatic and explicit compaction
 

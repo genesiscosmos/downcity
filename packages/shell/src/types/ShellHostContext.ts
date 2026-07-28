@@ -29,7 +29,7 @@ export type ShellRunContext = {
 
 export type ShellHostIntegration = {
   /**
-   * 获取当前 agent/session run 上下文。
+   * 获取当前 Agent / Session Turn 的 Shell 执行上下文。
    */
   getRunContext?(): ShellRunContext | null | undefined;
 };

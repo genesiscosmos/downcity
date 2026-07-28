@@ -50,7 +50,7 @@ flowchart TD
     AgentStore --> SessionStore["LocalSessionStore"]
     Session --> SessionStore
     Session --> Messages["SessionMessages"]
-    Session --> Turn["SessionTurn"]
+    Session --> Loop["SessionLoop"]
     Session --> Composer["SessionComposer"]
     Session --> Executor["Executor"]
 
@@ -154,7 +154,7 @@ packages/agent/src/
 ├─ session/
 │  ├─ Session.ts               Session facade 与内部装配
 │  ├─ SessionState.ts          Metadata 与 Session 配置
-│  ├─ SessionTurn.ts           Command 消费与 Turn 编排
+│  ├─ SessionLoop.ts           Command 消费与 Turn 编排
 │  ├─ SessionQueue.ts          Session 持有的 Command FIFO
 │  ├─ SessionCommand.ts       Session FIFO 中的可执行对象
 │  ├─ SessionMessages.ts       canonical Message 唯一事实源
@@ -456,7 +456,7 @@ sequenceDiagram
     participant App as 调用方
     participant Session
     participant Queue as SessionQueue
-    participant Turn as SessionTurn
+    participant Loop as SessionLoop
     participant Messages as SessionMessages
     participant Composer
     participant Executor
@@ -464,13 +464,13 @@ sequenceDiagram
     participant Tool as Tool Runtime
 
     App->>Session: prompt({ query })
-    Session->>Turn: prompt({ query })
-    Turn->>Queue: enqueue(SessionCommand)
-    Turn->>Queue: take_next / drain
-    Queue-->>Turn: concrete command object
-    Turn->>Turn: command.execute()
-    Turn->>Messages: 持久化 User Message
-    Turn->>Executor: run(query, run_context)
+    Session->>Loop: prompt({ query })
+    Loop->>Queue: enqueue(SessionCommand)
+    Loop->>Queue: take_next / drain
+    Queue-->>Loop: concrete command object
+    Loop->>Loop: command.execute()
+    Loop->>Messages: 持久化 User Message
+    Loop->>Executor: execute(query, turn_context)
     Executor->>Composer: compose(system, history, tools)
     Composer->>Messages: 读取 canonical history
     Executor->>Model: 调用模型
@@ -480,7 +480,7 @@ sequenceDiagram
     Tool-->>Executor: Tool Result
     Executor->>Model: 继续下一 Step
     Executor->>Messages: finalize Assistant Message
-    Turn-->>App: turn.finished
+    Loop-->>App: turn.finished
 ```
 
 关键保证：
@@ -509,11 +509,11 @@ Composer 是模型上下文策略：
 
 Executor 是单 Session 的模型执行器：
 
-- 保证同一 Session 不并发 run。
-- 创建显式 `SessionRunContext`。
+- 保证同一 Session 不并发执行 Turn。
+- 消费 `SessionLoop` 创建的显式 `SessionTurnContext`。
 - 调用 Composer。
 - 驱动 CoreEngineRunner 和 Tool Loop。
-- 处理 abort、重试和上下文超限恢复。
+- 处理重试和上下文超限恢复；取消生命周期由 `SessionTurnContext` 持有。
 - 在 Step 边界刷新历史和 Plugin execution view。
 
 Executor 不负责：

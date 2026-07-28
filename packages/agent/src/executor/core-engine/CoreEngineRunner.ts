@@ -46,11 +46,11 @@ import {
 } from "@executor/core-engine/CoreEngineContextCompaction.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { JsonObject } from "@/types/common/Json.js";
-import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
+import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import type {
-  SessionExecuteInput,
-  SessionRunResult,
-} from "@/executor/types/SessionRun.js";
+  SessionStepExecutionInput,
+  SessionTurnExecutionResult,
+} from "@/types/session/SessionExecution.js";
 import type {
   SessionRecordV1,
   SessionMessageRecordV1,
@@ -116,11 +116,11 @@ interface CoreEngineRunnerOptions {
   should_compact_on_error: (error: unknown) => boolean;
 }
 
-interface CoreEngineRunInput {
+interface CoreEngineTurnInput {
   /**
    * 已装配好的执行输入。
    */
-  execute_input: SessionExecuteInput;
+  execute_input: SessionStepExecutionInput;
 
   /**
    * 当前轮模型实例。
@@ -130,7 +130,7 @@ interface CoreEngineRunInput {
   /**
    * 当前显式运行上下文。
    */
-  run_context: SessionRunContext;
+  turn_context: SessionTurnContext;
 
   /**
    * 在统一输入队列提交后解析当前 Session step 的 effective 配置。
@@ -139,9 +139,9 @@ interface CoreEngineRunInput {
     /** 当前 Session step 使用的模型。 */
     model: LanguageModel;
     /** 当前 Session step 使用的 system messages。 */
-    system: SessionExecuteInput["system"];
+    system: SessionStepExecutionInput["system"];
     /** 当前 Session step 使用的工具集合。 */
-    tools: SessionExecuteInput["tools"];
+    tools: SessionStepExecutionInput["tools"];
     /** 当前 Session step 模型支持的总上下文窗口长度。 */
     context_window?: number;
   }>;
@@ -173,7 +173,7 @@ export class CoreEngineRunner {
   /**
    * 执行一次已装配完成的模型/tool-loop 运行。
    */
-  async run(input: CoreEngineRunInput): Promise<SessionRunResult> {
+  async execute(input: CoreEngineTurnInput): Promise<SessionTurnExecutionResult> {
     const start_time = Date.now();
     const session_id = this.session_id;
     let system = Array.isArray(input.execute_input.system)
@@ -188,7 +188,7 @@ export class CoreEngineRunner {
       const message_state = await CoreEngineMessageState.create({
         messages: input.execute_input.messages,
         tools,
-        project_root: input.run_context.project_root,
+        project_root: input.turn_context.session.project_root,
       });
       let persisted_compaction_summary_id = resolve_compaction_summary_id(
         input.execute_input.messages,
@@ -230,24 +230,13 @@ export class CoreEngineRunner {
       while (step_count < MAX_TOOL_LOOP_STEPS) {
         // 关键点（中文）：steer 与 command 在同一个 Session step 检查点执行。
         // 当前流与 tool callback 保持原执行视图，下一 step 再统一读取 effective 配置。
-        const injected_messages = [...input.run_context.injected_user_messages];
-        input.run_context.injected_user_messages = [];
-        let queued_messages: SessionRecordV1[] = [];
-        if (input.run_context.on_step_callback) {
-          try {
-            queued_messages = await input.run_context.on_step_callback();
-          } catch {
-            queued_messages = [];
-          }
-        }
-        await append_merged_user_messages([
-          ...injected_messages,
-          ...queued_messages,
-        ]);
+        await append_merged_user_messages(
+          await input.turn_context.input.checkpoint(),
+        );
         const step_inputs = await input.resolve_step_inputs();
         system = Array.isArray(step_inputs.system) ? step_inputs.system : [];
         tools = step_inputs.tools;
-        if (input.run_context.consume_history_reload?.()) {
+        if (input.turn_context.input.consume_history_reload()) {
           const canonical_records = await input.reload_history();
           await message_state.replace_session_messages(canonical_records, tools);
           persisted_compaction_summary_id = resolve_compaction_summary_id(
@@ -291,8 +280,8 @@ export class CoreEngineRunner {
         let canonical_step_started = false;
         let canonical_step_finished = false;
         try {
-          if (input.run_context.assistant_output) {
-            await input.run_context.assistant_output.begin_step();
+          if (input.turn_context.output.assistant) {
+            await input.turn_context.output.assistant.begin_step();
             canonical_step_started = true;
           }
           const result = streamText({
@@ -301,7 +290,7 @@ export class CoreEngineRunner {
             onStepFinish: on_step_finish,
             messages: message_state.modelMessages,
             tools,
-            abortSignal: input.run_context.abort_signal,
+            abortSignal: input.turn_context.lifecycle.abort_signal,
             onError: async ({ error }) => {
               last_observed_stream_error = error;
               await this.logger.log("error", "[agent] stream.error", {
@@ -318,16 +307,16 @@ export class CoreEngineRunner {
               logger: this.logger,
               buildFallbackAssistantMessage: (text) =>
                 build_fallback_assistant_message(session_id, text),
-              on_ui_message_chunk_callback: input.run_context.assistant_output
+              on_ui_message_chunk_callback: input.turn_context.output.assistant
                 ? async (chunk) => {
-                    await input.run_context.assistant_output?.write_chunk(chunk);
+                    await input.turn_context.output.assistant?.write_chunk(chunk);
                   }
                 : undefined,
-              abort_signal: input.run_context.abort_signal,
+              abort_signal: input.turn_context.lifecycle.abort_signal,
             });
 
-          if (input.run_context.assistant_output) {
-            await input.run_context.assistant_output.finish_step(
+          if (input.turn_context.output.assistant) {
+            await input.turn_context.output.assistant.finish_step(
               step_assistant_ui_message,
             );
           }
@@ -346,9 +335,9 @@ export class CoreEngineRunner {
           if (
             canonical_step_started &&
             !canonical_step_finished &&
-            input.run_context.assistant_output
+            input.turn_context.output.assistant
           ) {
-            await input.run_context.assistant_output.abort_step();
+            await input.turn_context.output.assistant.abort_step();
           }
           const compact_error = this.should_compact_on_error(error)
             ? error
@@ -517,7 +506,7 @@ export class CoreEngineRunner {
         }
 
         // 关键点（中文）：stop 前做 tail merge，覆盖最后一个 step 后才入队的新 user 消息。
-        const tail_merged_message_count = input.run_context.has_pending_step_input?.()
+        const tail_merged_message_count = input.turn_context.input.has_pending()
           ? 1
           : 0;
         if (
@@ -550,7 +539,7 @@ export class CoreEngineRunner {
       const final_message = mergePendingAssistantFileParts(
         final_assistant_ui_message ||
           build_fallback_assistant_message(session_id, "Execution completed"),
-        input.run_context.pending_assistant_file_parts,
+        [...input.turn_context.output.assistant_file_parts()],
       );
 
       await this.logger.log("info", "[agent] final.message", {
@@ -571,14 +560,14 @@ export class CoreEngineRunner {
       return {
         success: true,
         text: pick_last_successful_chat_send_text(final_message),
-        assistant_file_parts: [...input.run_context.pending_assistant_file_parts],
+        assistant_file_parts: [...input.turn_context.output.assistant_file_parts()],
         ...(compact_required ? { compact_required: true } : {}),
         deferred_persisted_user_messages: [
-          ...input.run_context.deferred_persisted_user_messages,
+          ...input.turn_context.input.deferred_user_messages(),
         ],
       };
     } catch (error) {
-      if (input.run_context.abort_signal?.aborted) {
+      if (input.turn_context.lifecycle.abort_signal.aborted) {
         const error_text = TURN_STOPPED_MESSAGE;
         await this.logger.log("info", "[agent] stopped", {
           session_id: session_id,
@@ -586,7 +575,7 @@ export class CoreEngineRunner {
         const stopped_message = final_assistant_ui_message
           ? mergePendingAssistantFileParts(
               final_assistant_ui_message,
-              input.run_context.pending_assistant_file_parts,
+              [...input.turn_context.output.assistant_file_parts()],
             )
           : null;
         return {
@@ -595,10 +584,10 @@ export class CoreEngineRunner {
             ? pick_last_successful_chat_send_text(stopped_message)
             : "",
           error: error_text,
-          assistant_file_parts: [...input.run_context.pending_assistant_file_parts],
+          assistant_file_parts: [...input.turn_context.output.assistant_file_parts()],
           ...(compact_required ? { compact_required: true } : {}),
           deferred_persisted_user_messages: [
-            ...input.run_context.deferred_persisted_user_messages,
+            ...input.turn_context.input.deferred_user_messages(),
           ],
         };
       }
@@ -622,10 +611,10 @@ export class CoreEngineRunner {
           ? pick_last_successful_chat_send_text(final_assistant_ui_message)
           : "",
         error: error_text,
-        assistant_file_parts: [...input.run_context.pending_assistant_file_parts],
+        assistant_file_parts: [...input.turn_context.output.assistant_file_parts()],
         ...(compact_required ? { compact_required: true } : {}),
         deferred_persisted_user_messages: [
-          ...input.run_context.deferred_persisted_user_messages,
+          ...input.turn_context.input.deferred_user_messages(),
         ],
       };
     }

@@ -9,8 +9,9 @@
 import path from "node:path";
 import fs from "fs-extra";
 import type { PluginContext } from "@downcity/agent";
-import type { SessionRunResult } from "@downcity/agent";
-import type { SessionRunContext } from "@downcity/agent";
+import type { SessionTurnExecutionResult } from "@downcity/agent";
+import type { SessionTurnContext } from "@downcity/agent";
+import { create_session_turn_context } from "@downcity/agent";
 import type { JsonObject } from "@downcity/agent";
 import { SessionAssistantOutputAdapter } from "@downcity/agent";
 import type {
@@ -212,7 +213,7 @@ export async function runAgentRound(params: {
   query: string;
   actorId: string;
   actorName: string;
-}): Promise<{ outputText: string; delivered: boolean; rawResult: SessionRunResult }> {
+}): Promise<{ outputText: string; delivered: boolean; rawResult: SessionTurnExecutionResult }> {
   try {
     await appendTaskRoundUserMessage({
       taskSessionRuntime: params.taskSessionRuntime,
@@ -226,19 +227,30 @@ export async function runAgentRound(params: {
     // ignore
   }
 
+  const turn_id = `task:${params.taskId}:${params.actorId}:${Date.now()}`;
   const assistant_output = new SessionAssistantOutputAdapter({
-    turn_id: `task:${params.taskId}:${params.actorId}:${Date.now()}`,
+    turn_id,
     messages: params.taskSessionRuntime.get_messages(params.session_id),
   });
-  const result = await params.taskSessionRuntime.get_executor(params.session_id).run({
+  const turn_context = create_task_turn_context(
+    params.session_id,
+    turn_id,
+    assistant_output,
+  );
+  let result: SessionTurnExecutionResult;
+  try {
+    result = await params.taskSessionRuntime.get_executor(params.session_id).execute({
       query: params.query,
-      run_context: create_task_run_context(params.session_id, assistant_output),
+      turn_context,
     });
-  await assistant_output.finish({
-    status: result.success ? "completed" : "failed",
-    ...(result.error ? { error: result.error } : {}),
-    file_parts: result.assistant_file_parts || [],
-  });
+    await assistant_output.finish({
+      status: result.success ? "completed" : "failed",
+      ...(result.error ? { error: result.error } : {}),
+      file_parts: result.assistant_file_parts || [],
+    });
+  } finally {
+    await turn_context.lifecycle.dispose();
+  }
   const outputPick = pickAgentOutput(result.text);
 
   if (!result.success) {
@@ -300,19 +312,18 @@ export async function runScriptTask(params: {
 }
 
 /**
- * 创建 task runner 的显式 session run context。
+ * 创建 task runner 的显式 Session Turn Context。
  */
-function create_task_run_context(
+function create_task_turn_context(
   session_id: string,
+  turn_id: string,
   assistant_output: SessionAssistantOutputAdapter,
-): SessionRunContext {
-  return {
+): SessionTurnContext {
+  return create_session_turn_context({
     session_id: session_id,
+    turn_id,
     assistant_output,
-    injected_user_messages: [],
-    deferred_persisted_user_messages: [],
-    pending_assistant_file_parts: [],
-  };
+  });
 }
 
 /**

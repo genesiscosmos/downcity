@@ -8,11 +8,12 @@ description: 在本地或远程 Session 中排队执行一次显式历史压缩
 `session.compact()` 用于显式请求压缩当前 Session 历史。
 
 ```ts
-const unsubscribe = session.subscribe((mutation) => {
-  apply_mutation_to_ui(mutation);
-});
+const compact = await session.compact();
+const result = await compact.finished;
 
-await session.compact();
+if (!result.success) {
+  console.error(result.error);
+}
 await session.prompt({ query: "基于压缩后的历史继续" });
 ```
 
@@ -20,7 +21,7 @@ await session.prompt({ query: "基于压缩后的历史继续" });
 
 ## 队列语义
 
-`await session.compact()` 表示 command 已通过校验并进入 Session 有序输入队列，不表示摘要生成和历史重写已经完成。
+`await session.compact()` 返回一个 Handle，表示 command 已通过校验并进入 Session 有序输入队列。`handle.result` 在运行中为 `null`；`await handle.finished` 会等待摘要生成和 canonical 历史重写真正结束。
 
 - Session 空闲时，command 在下一次 `prompt()` turn 开始前执行
 - turn 运行中时，command 在下一个 Session step 检查点执行
@@ -40,7 +41,15 @@ await session.prompt({ query: "基于压缩后的历史继续" });
 
 如果当前没有可压缩的 active record，Session 会产生一条 completed action，说明不需要压缩。
 
-调用方通过 `subscribe()` 观察这些消息；`compact()` 的返回只表达入队是否成功。
+Handle 的稳定结果包含：
+
+- `compact_id`：本次显式压缩标识
+- `success`：请求是否成功结束；没有可压缩内容同样为 `true`
+- `compacted`：是否实际生成并提交了压缩计划
+- `reason`：`compacted | nothing_to_compact | compact_failed`
+- `error`：失败时的错误文本
+
+`subscribe()` 仍会发布 `compact` 生命周期 Mutation 和 timeline action，适合驱动 UI；业务代码应优先等待 `handle.finished`，不需要从 Action Message 反推完成状态。
 
 ## 自动压缩与显式压缩
 

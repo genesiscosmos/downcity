@@ -154,8 +154,9 @@ test("Composer compact 只返回计划，不修改 Message 快照", async () => 
   const input = create_input(model);
   const before = structuredClone(input.history);
   const plan = await new DefaultSessionComposer().compact({
-    ...input,
-    force: true,
+    session: input.session,
+    model: input.state.model,
+    history: input.history,
   });
 
   assert.equal(plan.through_sequence, 1);

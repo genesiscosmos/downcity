@@ -154,8 +154,8 @@ export function registerSdkSessionRoutes(
         return c.json({ success: false, error: "Missing session_id" }, 400);
       }
       const session = await sessions.get(session_id);
-      await session.compact();
-      return c.json({ success: true, queued: true });
+      const compact = await session.compact();
+      return c.json({ success: true, compact: { id: compact.id } });
     } catch (error) {
       return c.json(
         {

@@ -11,7 +11,7 @@ import type { streamText } from "ai";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { JsonObject } from "@/types/common/Json.js";
 import type { SessionMessageRecordV1 } from "@/executor/types/SessionRecords.js";
-import type { SessionUiMessageChunkCallback } from "@/executor/types/SessionRun.js";
+import type { SessionUiMessageChunkCallback } from "@/types/session/SessionExecution.js";
 import { generate_id } from "@/utils/Id.js";
 import {
   summarize_ui_message_for_debug,

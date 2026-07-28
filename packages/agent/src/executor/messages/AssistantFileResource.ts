@@ -39,7 +39,7 @@ export interface MaterializeAssistantFilePartsParams {
    * 当前项目根目录。
    *
    * 关键点（中文）
-   * - 正常 session run 必须显式传入 project_root。
+   * - 正常 Session Turn 必须显式传入 project_root。
    * - 旧入口未传时仅为兼容回退到 `process.cwd()`。
    */
   project_root?: string;

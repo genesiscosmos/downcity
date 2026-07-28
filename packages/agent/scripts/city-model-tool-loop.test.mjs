@@ -134,7 +134,7 @@ test("CityModel uses direct LanguageModel path and sends tool result back", asyn
         inputSchema: z.object({ value: z.string() }),
         execute: async ({ value }, options) => {
           tool_executed = true;
-          options.experimental_context.session_run_context.pending_assistant_file_parts.push({
+          options.experimental_context.session_turn_context.output.attach_file({
             type: "file",
             mediaType: "image/png",
             url: ".downcity/resources/tool-output.png",

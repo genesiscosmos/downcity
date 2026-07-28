@@ -80,10 +80,14 @@ export interface SessionStepInput {
   tools: Record<string, Tool>;
 }
 
-/** 持久化上下文压缩的组装参数。 */
-export interface SessionCompactionInput extends SessionComposeInput {
-  /** 是否由调用方明确要求执行持久化压缩。 */
-  force: boolean;
+/** 持久化上下文压缩所需的最小只读输入。 */
+export interface SessionCompactionInput {
+  /** 当前 Session 的稳定身份快照。 */
+  session: SessionComposeIdentity;
+  /** 当前 Session 实际使用的模型；只读或未配置场景允许为空。 */
+  model?: LanguageModel;
+  /** 当前 Session 的累计 Summary 与 Active Message 快照。 */
+  history: Readonly<SessionContextSnapshot>;
 }
 
 /** Composer 生成、等待 SessionMessages 提交的压缩计划。 */

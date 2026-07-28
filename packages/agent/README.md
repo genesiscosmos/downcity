@@ -78,7 +78,7 @@ src/
 - `src/session/`
   - `Session.ts` 是公开 facade 与 Session 对象装配入口
   - `SessionState.ts` 管理配置与 metadata
-  - `SessionTurn.ts` 管理输入队列和 Turn 生命周期
+  - `SessionLoop.ts` 管理输入队列和 Turn 生命周期
   - `SessionMessages.ts` 是 canonical Message 唯一事实源
   - `DefaultSessionComposer.ts` 负责 system/history/tools 与压缩计划定制
   - `messages/` 放 Assistant writer、Message codec 与 compaction；JSONL Store 位于 `workspace/store/`
@@ -112,7 +112,7 @@ src/
 `@downcity/agent` 的核心是一条单 Agent 执行链：
 
 ```text
-入口协议 -> Agent facade -> SessionTurn -> SessionComposer -> Executor -> SessionMessages
+入口协议 -> Agent facade -> SessionLoop -> SessionComposer -> Executor -> SessionMessages
 ```
 
 其中：

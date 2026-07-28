@@ -9,7 +9,7 @@
 
 import path from "node:path";
 import { generate_id } from "@/utils/Id.js";
-import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
+import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 
 /** 把普通对象归一为可检查的记录。 */
 function to_record(value: unknown): Record<string, unknown> | null {
@@ -26,7 +26,7 @@ export function inject_read_image_user_message(params: {
   /** 工具原始执行结果。 */
   output: unknown;
   /** 当前 Session turn 的显式运行上下文。 */
-  run_context: SessionRunContext;
+  turn_context: SessionTurnContext;
 }): unknown {
   if (params.tool_name !== "read") return params.output;
   const output = to_record(params.output);
@@ -40,15 +40,15 @@ export function inject_read_image_user_message(params: {
     return params.output;
   }
 
-  params.run_context.injected_user_messages.push({
+  params.turn_context.input.inject_user_message({
     id: `read-image:${generate_id()}`,
     role: "user",
     metadata: {
       v: 1,
       ts: Date.now(),
-      session_id: params.run_context.session_id,
-      ...(params.run_context.turn_id
-        ? { turn_id: params.run_context.turn_id }
+      session_id: params.turn_context.session.session_id,
+      ...(params.turn_context.session.turn_id
+        ? { turn_id: params.turn_context.session.turn_id }
         : {}),
       source: "ingress",
       kind: "normal",

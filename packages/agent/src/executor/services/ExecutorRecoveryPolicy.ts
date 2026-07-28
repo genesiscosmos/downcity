@@ -9,11 +9,11 @@
 
 import type { LanguageModel } from "ai";
 import type { Logger } from "@/utils/logger/Logger.js";
-import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
+import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import type {
-  SessionExecuteInput,
-  SessionRunResult,
-} from "@/executor/types/SessionRun.js";
+  SessionStepExecutionInput,
+  SessionTurnExecutionResult,
+} from "@/types/session/SessionExecution.js";
 
 /**
  * 可压缩错误的最大重试次数。
@@ -33,7 +33,7 @@ interface ExecutorRecoveryPolicyOptions {
   logger: Logger;
 }
 
-interface ExecutorPrepareRunInput {
+interface ExecutorPrepareExecutionInput {
   /**
    * 当前轮用户 query。
    */
@@ -47,7 +47,7 @@ interface ExecutorPrepareRunInput {
   /**
    * 当前显式运行上下文。
    */
-  run_context: SessionRunContext;
+  turn_context: SessionTurnContext;
 
   /**
    * 当前压缩重试次数。
@@ -55,11 +55,11 @@ interface ExecutorPrepareRunInput {
   retry_count: number;
 }
 
-interface ExecutorExecutePreparedRunInput {
+interface ExecutorExecutePreparedInput {
   /**
    * 已装配好的执行输入。
    */
-  execute_input: SessionExecuteInput;
+  execute_input: SessionStepExecutionInput;
 
   /**
    * 当前轮模型实例。
@@ -69,10 +69,10 @@ interface ExecutorExecutePreparedRunInput {
   /**
    * 当前显式运行上下文。
    */
-  run_context: SessionRunContext;
+  turn_context: SessionTurnContext;
 }
 
-interface ExecutorRecoveryRunInput {
+interface ExecutorRecoveryInput {
   /**
    * 当前轮用户 query。
    */
@@ -86,21 +86,21 @@ interface ExecutorRecoveryRunInput {
   /**
    * 当前显式运行上下文。
    */
-  run_context: SessionRunContext;
+  turn_context: SessionTurnContext;
 
   /**
    * 运行前装配执行输入。
    */
   prepare_execute_input: (
-    input: ExecutorPrepareRunInput,
-  ) => Promise<SessionExecuteInput>;
+    input: ExecutorPrepareExecutionInput,
+  ) => Promise<SessionStepExecutionInput>;
 
   /**
    * 执行已装配好的运行输入。
    */
-  execute_prepared_run: (
-    input: ExecutorExecutePreparedRunInput,
-  ) => Promise<SessionRunResult>;
+  execute_prepared_input: (
+    input: ExecutorExecutePreparedInput,
+  ) => Promise<SessionTurnExecutionResult>;
 }
 
 /**
@@ -121,29 +121,29 @@ export class ExecutorRecoveryPolicy {
   }
 
   /**
-   * 重置当前 run 级状态。
+   * 重置当前 Turn 执行状态。
    */
-  reset_run_state(): void {
+  reset_execution_state(): void {
     this.retry_count = 0;
   }
 
   /**
-   * 执行一次带恢复策略的 session run。
+   * 执行一次带恢复策略的 Session Turn。
    */
-  async run_with_retry(
-    input: ExecutorRecoveryRunInput,
-  ): Promise<SessionRunResult> {
+  async execute_with_retry(
+    input: ExecutorRecoveryInput,
+  ): Promise<SessionTurnExecutionResult> {
     try {
       const execute_input = await input.prepare_execute_input({
         query: input.query,
         model: input.model,
-        run_context: input.run_context,
+        turn_context: input.turn_context,
         retry_count: this.retry_count,
       });
-      return await input.execute_prepared_run({
+      return await input.execute_prepared_input({
         execute_input,
         model: input.model,
-        run_context: input.run_context,
+        turn_context: input.turn_context,
       });
     } catch (error) {
       if (this.should_compact(error)) {
@@ -154,13 +154,13 @@ export class ExecutorRecoveryPolicy {
 
         if (this.retry_count < MAX_COMPACTION_RETRY_ATTEMPTS) {
           this.retry_count += 1;
-          return await this.run_with_retry(input);
+          return await this.execute_with_retry(input);
         }
 
         return this.build_failure_result({
           error_text:
             "Context length exceeded and retries failed. Please resend your question.",
-          run_context: input.run_context,
+          turn_context: input.turn_context,
         });
       }
 
@@ -170,7 +170,7 @@ export class ExecutorRecoveryPolicy {
       });
       return this.build_failure_result({
         error_text,
-        run_context: input.run_context,
+        turn_context: input.turn_context,
       });
     }
   }
@@ -184,14 +184,14 @@ export class ExecutorRecoveryPolicy {
     /**
      * 当前显式运行上下文。
      */
-    run_context: SessionRunContext;
-  }): SessionRunResult {
+    turn_context: SessionTurnContext;
+  }): SessionTurnExecutionResult {
     return {
       success: false,
       text: "",
       error: input.error_text,
       deferred_persisted_user_messages: [
-        ...input.run_context.deferred_persisted_user_messages,
+        ...input.turn_context.input.deferred_user_messages(),
       ],
     };
   }

@@ -82,12 +82,12 @@ flowchart TB
 
     subgraph Runtime["Authoritative Session Runtime"]
         Session --> Queue["Ordered input queue<br/>SessionCommand FIFO"]
-        Queue --> Turn["Turn scheduler<br/>sole consumer"]
-        Turn --> Executor["Executor<br/>Model / Tool Step Loop"]
+        Queue --> Loop["SessionLoop<br/>sole consumer and Turn scheduler"]
+        Loop --> Executor["Executor<br/>Model / Tool Step Loop"]
         Session --> Security["Security Policy<br/>configured / effective"]
         Security --> Executor
         Session --> Status["status() read projection"]
-        Turn -.-> Status
+        Loop -.-> Status
         Security -.-> Status
 
         Session --> Interactions["Interactions<br/>Approval / Question waiter"]
@@ -95,7 +95,7 @@ flowchart TB
         Executor --> Messages
         Executor --> Interactions
 
-        Turn -->|"Command completion"| Messages
+        Loop -->|"Command completion"| Messages
         Messages --> Store["Message Store"]
         Messages --> Events["Session Mutation"]
     end

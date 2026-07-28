@@ -15,6 +15,9 @@ const unsubscribe = session.subscribe(apply_mutation);
 const turn = await session.prompt({ query: "Continue" });
 await turn.finished;
 
+const compact = await session.compact();
+await compact.finished;
+
 const page = await session.messages();
 const status = await session.status();
 
@@ -24,7 +27,9 @@ await session.set({
 unsubscribe();
 ```
 
-The subscription emits `message | part | delta | turn | session`. User participation is a pending Interaction Part while its related Tool is `waiting-user`; submit a structured response with `session.respond(...)`.
+The subscription emits `message | part | delta | turn | compact | session`. User participation is a pending Interaction Part while its related Tool is `waiting-user`; submit a structured response with `session.respond(...)`.
+
+Remote and local Sessions use the same compaction Handle: `compact()` returns after the command is queued, and `finished` resolves only after the server-side Compact Command actually completes.
 
 Remote clients can set serializable security policy but do not select models through the Agent SDK.
 The server host owns model IDs, defaults, recovery, and runtime instance injection.

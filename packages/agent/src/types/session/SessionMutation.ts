@@ -5,6 +5,7 @@
  */
 
 import type { SessionAssistantMessagePart, SessionMessage } from "@/types/session/SessionMessage.js";
+import type { AgentSessionCompactReason } from "@/types/sdk/AgentSessionCompact.js";
 
 /** 所有 Session Mutation 的公共字段。 */
 export interface SessionMutationBase {
@@ -89,6 +90,24 @@ export type SessionTurnMutation = SessionMutationBase & {
   error?: string;
 };
 
+/** 显式 Session 压缩请求的生命周期 Mutation。 */
+export type SessionCompactMutation = SessionMutationBase & {
+  /** Mutation 层级固定为 compact。 */
+  variant: "compact";
+  /** 当前压缩请求是进入队列还是已经结束。 */
+  type: "start" | "finish";
+  /** 当前显式压缩请求的稳定标识。 */
+  compact_id: string;
+  /** 当前压缩请求的生命周期状态。 */
+  status: "queued" | "completed" | "failed";
+  /** 完成时是否实际提交了压缩计划。 */
+  compacted?: boolean;
+  /** 完成时的稳定结束原因。 */
+  reason?: AgentSessionCompactReason;
+  /** 压缩失败时的错误文本。 */
+  error?: string;
+};
+
 /** Session 自身属性变化 Mutation。 */
 export type SessionStateMutation = SessionMutationBase & {
   /** Mutation 层级固定为 session。 */
@@ -105,6 +124,7 @@ export type SessionMutation =
   | SessionPartMutation
   | SessionDeltaMutation
   | SessionTurnMutation
+  | SessionCompactMutation
   | SessionStateMutation;
 
 /** Session Mutation 订阅回调。 */
@@ -125,6 +145,7 @@ export function is_session_mutation(input: unknown): input is SessionMutation {
     candidate.variant === "part" ||
     candidate.variant === "delta" ||
     candidate.variant === "turn" ||
+    candidate.variant === "compact" ||
     candidate.variant === "session"
   );
 }

@@ -134,15 +134,15 @@ export async function invoke_plugin_call_tool(
   }
 
   try {
-    const run_context = params.run_context;
-    const plugins = run_context.agent_plugins || params.plugins;
+    const turn_context = params.turn_context;
+    const plugins = turn_context.step.plugins || params.plugins;
     const result = await plugins.run_action({
       plugin,
       action,
       payload,
-      run_context,
+      execution_context: turn_context.step.plugin_execution_context(),
     });
-    const project_root = resolve_project_root(run_context.project_root);
+    const project_root = resolve_project_root(turn_context.session.project_root);
     const raw_file_parts = result.success
       ? extract_assistant_file_parts(result.data)
       : [];
@@ -155,7 +155,7 @@ export async function invoke_plugin_call_tool(
         : [];
     const files = summarize_materialized_files(file_parts, project_root);
     if (file_parts.length > 0) {
-      run_context.pending_assistant_file_parts.push(...file_parts);
+      turn_context.output.attach_files(file_parts);
     }
     const data = summarize_action_data(result.data);
     return {
@@ -190,7 +190,7 @@ export async function invoke_plugin_read_tool(
 ): Promise<PluginReadToolResult> {
   const input: PluginReadInput = params.input;
   try {
-    const plugins = params.run_context.agent_plugins || params.plugins;
+    const plugins = params.turn_context.step.plugins || params.plugins;
     const data = plugins.read({
       plugin: typeof input.plugin === "string" ? input.plugin : undefined,
       action: typeof input.action === "string" ? input.action : undefined,

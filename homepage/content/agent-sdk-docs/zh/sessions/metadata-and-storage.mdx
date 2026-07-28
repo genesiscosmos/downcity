@@ -57,7 +57,7 @@ Compact 后的下一次真实 usage 用于验收：不超过 `context_window` �
 sequenceDiagram
     participant App as 调用方
     participant Session
-    participant Turn as SessionTurn
+    participant Loop as SessionLoop
     participant Composer as SessionComposer
     participant Messages as SessionMessages
     participant Store as Message Store
@@ -66,17 +66,17 @@ sequenceDiagram
     participant Model
 
     App->>Session: prompt({ query })
-    Session->>Turn: Queue 与 Turn 编排
-    Turn->>Messages: 创建 User Message
+    Session->>Loop: Queue 与 Turn 编排
+    Loop->>Messages: 创建 User Message
     Messages->>Store: 持久化完整 User snapshot
     Store->>Active: append Message
     Session->>Composer: 只读 Summary + Active 快照
     Composer-->>Session: system + messages + tools
     Session->>Model: 执行当前 Step
-    Model-->>Turn: text / tool / file chunks
-    Turn->>Messages: 更新 Assistant 草稿与 Part
+    Model-->>Loop: text / tool / file chunks
+    Loop->>Messages: 更新 Assistant 草稿与 Part
     Messages->>Store: 原子覆盖 assistant_message.json
-    Turn->>Messages: 完成 Assistant Message
+    Loop->>Messages: 完成 Assistant Message
     Messages->>Store: 持久化最终 Assistant snapshot
     Store->>Active: append Message
     Session->>Session: Provider usage 达到 context_window 的 95%

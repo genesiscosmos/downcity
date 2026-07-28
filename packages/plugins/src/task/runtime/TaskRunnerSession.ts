@@ -12,7 +12,7 @@ import path from "node:path";
 import type { LanguageModel, Tool } from "ai";
 import type { PluginContext } from "@downcity/agent";
 import { Executor } from "@downcity/agent";
-import type { SessionRunResult } from "@downcity/agent";
+import type { SessionTurnExecutionResult } from "@downcity/agent";
 import type { TaskSessionRuntimePort } from "@/task/runtime/TaskRunnerTypes.js";
 import {
   DefaultSessionComposer,
@@ -138,14 +138,7 @@ export function createTaskSessionRuntimePort(params: {
       const composed = await super.compose(input);
       return {
         ...composed,
-        system: await systemComposer.resolve({
-          session_id: input.session.session_id,
-          workspace_env: input.state.env,
-          agent_systems: input.state.systems,
-          injected_user_messages: [],
-          deferred_persisted_user_messages: [],
-          pending_assistant_file_parts: [],
-        }),
+        system: await systemComposer.resolve(input),
         system_blocks: undefined,
       };
     }
@@ -168,7 +161,7 @@ export function createTaskSessionRuntimePort(params: {
       const created = new Executor({
         session_id: key,
         composer,
-        get_compose_input: async (run_context, retry_count) => ({
+        get_compose_input: async (turn_context, retry_count) => ({
           session: {
             agent_id: "task",
             session_id: key,
@@ -187,15 +180,36 @@ export function createTaskSessionRuntimePort(params: {
           },
           history: await messages.context_snapshot(),
           turn: {
-            ...(run_context.turn_id ? { turn_id: run_context.turn_id } : {}),
+            ...(turn_context?.session.turn_id
+              ? { turn_id: turn_context.session.turn_id }
+              : {}),
             retry_count,
           },
         }),
-        commit_compaction: async (plan) => {
-          await messages.compact_active({
-            through_sequence: plan.through_sequence,
-            summary: plan.summary,
-          });
+        compact_history: async () => {
+          try {
+            const plan = await composer.compact({
+              session: {
+                agent_id: "task",
+                session_id: key,
+                project_root: context.workspace_path,
+                created_at: created_at_by_session_id.get(key) || Date.now(),
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+              },
+              model,
+              history: await messages.context_snapshot(),
+            });
+            if (!plan) {
+              return { compacted: false, reason: "nothing_to_compact" };
+            }
+            await messages.compact_active({
+              through_sequence: plan.through_sequence,
+              summary: plan.summary,
+            });
+            return { compacted: true };
+          } catch {
+            return { compacted: false, reason: "compact_failed" };
+          }
         },
         get_model: () => model,
         logger: context.logger,
@@ -213,7 +227,7 @@ export async function appendTaskDeferredMessages(params: {
   taskSessionRuntime: TaskSessionRuntimePort;
   session_id: string;
   taskId: string;
-  rawResult: SessionRunResult;
+  rawResult: SessionTurnExecutionResult;
 }): Promise<void> {
   const { taskSessionRuntime, session_id, rawResult } = params;
   const messages = taskSessionRuntime.get_messages(session_id);

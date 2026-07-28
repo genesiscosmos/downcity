@@ -7,7 +7,7 @@
  */
 
 import type { PluginContext } from "@downcity/agent";
-import type { PluginRunContext } from "@downcity/agent";
+import type { PluginExecutionContext } from "@downcity/agent";
 import {
   sendActionByChatKey,
   sendTextByChatKey,
@@ -51,22 +51,23 @@ function readEnvNumber(name: string): number | undefined {
  *
  * 优先级（中文）
  * 1) 显式参数
- * 2) 显式 PluginRunContext
+ * 2) 显式 PluginExecutionContext
  * 3) 环境变量回退
  */
 export function resolveChatSessionSnapshot(input?: {
   session_id?: string;
   chat_key?: string;
   context?: PluginContext;
-  run_context?: PluginRunContext;
+  execution_context?: PluginExecutionContext;
 }): ChatSessionSnapshot {
-  const run_context = input?.run_context;
+  const execution_context = input?.execution_context;
 
   const explicitSessionId = String(input?.session_id || "").trim();
   const explicitChatKey = String(input?.chat_key || "").trim();
   const requestSessionId =
-    typeof run_context?.session_id === "string" && run_context.session_id.trim()
-      ? run_context.session_id.trim()
+    typeof execution_context?.session_id === "string" &&
+      execution_context.session_id.trim()
+      ? execution_context.session_id.trim()
       : undefined;
   const envSessionId = readEnvString("DC_SESSION_ID");
   const envChatKey = readEnvString("DC_CTX_CHAT_KEY");
@@ -128,13 +129,13 @@ export function resolve_session_id(input?: {
   session_id?: string;
   chat_key?: string;
   context?: PluginContext;
-  run_context?: PluginRunContext;
+  execution_context?: PluginExecutionContext;
 }): string | undefined {
   const snapshot = resolveChatSessionSnapshot({
     session_id: input?.session_id,
     chat_key: input?.chat_key,
     context: input?.context,
-    run_context: input?.run_context,
+    execution_context: input?.execution_context,
   });
   const key = String(snapshot.session_id || "").trim();
   return key ? key : undefined;
@@ -147,13 +148,13 @@ export function resolveChatKey(input?: {
   chat_key?: string;
   session_id?: string;
   context?: PluginContext;
-  run_context?: PluginRunContext;
+  execution_context?: PluginExecutionContext;
 }): string | undefined {
   const snapshot = resolveChatSessionSnapshot({
     chat_key: input?.chat_key,
     session_id: input?.session_id,
     context: input?.context,
-    run_context: input?.run_context,
+    execution_context: input?.execution_context,
   });
   const key = String(snapshot.chat_key || "").trim();
   return key ? key : undefined;
@@ -165,14 +166,14 @@ export function resolveChatKey(input?: {
  * 关键点（中文）
  * - 只有显式 reply 且未手动传入 message_id 时才尝试补全。
  * - 仅在目标 chat_key 与当前显式请求上下文一致时，才复用 `DC_CTX_MESSAGE_ID`。
- * - 这样可把一次 run 固定到触发它的那条消息，避免处理中被后续新消息覆盖。
+ * - 这样可把一次处理固定到触发它的那条消息，避免处理中被后续新消息覆盖。
  */
 function resolveReplyMessageIdForChatSend(params: {
   chat_key: string;
   context: PluginContext;
   reply_to_message: boolean;
   explicitMessageId?: string;
-  run_context?: PluginRunContext;
+  execution_context?: PluginExecutionContext;
 }): string | undefined {
   const explicitMessageId =
     typeof params.explicitMessageId === "string" && params.explicitMessageId.trim()
@@ -183,7 +184,7 @@ function resolveReplyMessageIdForChatSend(params: {
 
   const snapshot = resolveChatSessionSnapshot({
     context: params.context,
-    run_context: params.run_context,
+    execution_context: params.execution_context,
   });
   const snapshotChatKey = String(snapshot.chat_key || "").trim();
   const snapshotMessageId = String(snapshot.message_id || "").trim();
@@ -281,7 +282,7 @@ export async function sendChatTextByChatKey(params: {
   nonBlockingDelay?: boolean;
   reply_to_message?: boolean;
   message_id?: string;
-  run_context?: PluginRunContext;
+  execution_context?: PluginExecutionContext;
 }): Promise<ChatSendResponse> {
   const chat_key = String(params.chat_key || "").trim();
   const text = normalizeChatSendText(String(params.text ?? ""));
@@ -313,7 +314,7 @@ export async function sendChatTextByChatKey(params: {
     chat_key,
     reply_to_message,
     explicitMessageId: params.message_id,
-    run_context: params.run_context,
+    execution_context: params.execution_context,
   });
   const targetWaitMs = resolveTargetWaitMs({ delay_ms, send_at_ms });
   if (params.nonBlockingDelay === true && targetWaitMs > 0) {
@@ -455,13 +456,13 @@ export async function deleteChatByChatKey(params: {
   context: PluginContext;
   chat_key?: string;
   session_id?: string;
-  run_context?: PluginRunContext;
+  execution_context?: PluginExecutionContext;
 }): Promise<ChatDeleteResponse> {
   const chat_key = resolveChatKey({
     context: params.context,
     chat_key: params.chat_key,
     session_id: params.session_id,
-    run_context: params.run_context,
+    execution_context: params.execution_context,
   });
   const session_id = String(chat_key || "").trim();
   if (!session_id) {

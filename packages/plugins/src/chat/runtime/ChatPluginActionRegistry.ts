@@ -201,7 +201,7 @@ export function createChatPluginActions(params: {
         return executeChatInfoAction({
           context: actionParams.context,
           payload: actionParams.input as ChatInfoActionPayload,
-          run_context: actionParams.run_context,
+          execution_context: actionParams.execution_context,
         });
       },
     }),
@@ -232,7 +232,7 @@ export function createChatPluginActions(params: {
         return executeChatSendAction({
           context: actionParams.context,
           payload: actionParams.input as ChatSendActionPayload,
-          run_context: actionParams.run_context,
+          execution_context: actionParams.execution_context,
         });
       },
     }),
@@ -261,7 +261,7 @@ export function createChatPluginActions(params: {
         return executeChatReactAction({
           context: actionParams.context,
           payload: actionParams.input as ChatReactActionPayload,
-          run_context: actionParams.run_context,
+          execution_context: actionParams.execution_context,
         });
       },
     }),
@@ -288,7 +288,7 @@ export function createChatPluginActions(params: {
         return executeChatContextAction({
           context: actionParams.context,
           payload: actionParams.input as ChatSessionActionPayload,
-          run_context: actionParams.run_context,
+          execution_context: actionParams.execution_context,
         });
       },
     }),
@@ -311,7 +311,7 @@ export function createChatPluginActions(params: {
         return executeChatDeleteAction({
           context: actionParams.context,
           payload: actionParams.input as ChatDeleteActionPayload,
-          run_context: actionParams.run_context,
+          execution_context: actionParams.execution_context,
         });
       },
     }),
@@ -341,7 +341,7 @@ export function createChatPluginActions(params: {
         return executeChatHistoryAction({
           context: actionParams.context,
           payload: actionParams.input as ChatHistoryActionPayload,
-          run_context: actionParams.run_context,
+          execution_context: actionParams.execution_context,
         });
       },
     }),

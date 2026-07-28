@@ -52,7 +52,7 @@ export interface ShellToolRunContext {
  *
  * 关键点（中文）
  * - 该对象由宿主在每次 `tool.execute` 时通过 `experimental_context` 传入。
- * - Shell 只读取自己的字段，不感知 Agent 的 SessionRunContext。
+ * - Shell 只读取自己的字段，不感知 Agent 的 SessionTurnContext。
  */
 export interface ShellToolExecutionContext {
   /** 当前 Shell tool 调用的 session、turn 与 env 快照。 */

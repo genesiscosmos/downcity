@@ -27,7 +27,7 @@ flowchart TB
         Facade["Session Facade"]
 
         subgraph Control["控制面"]
-            Turn["SessionTurn"]
+            Loop["SessionLoop"]
             Queue["SessionQueue"]
             Interactions["SessionInteractions"]
         end
@@ -45,13 +45,13 @@ flowchart TB
     end
 
     Facade --> Queue
-    Facade --> Turn
+    Facade --> Loop
     Facade --> Interactions
-    Queue --> Turn
-    Turn --> Composer
-    Turn --> Executor
-    Turn --> SessionState
-    Turn --> Messages
+    Queue --> Loop
+    Loop --> Composer
+    Loop --> Executor
+    Loop --> SessionState
+    Loop --> Messages
     Executor -->|"Assistant Event"| Messages
     Executor -->|"Interaction Request"| Interactions
     Interactions -->|"Interaction Command"| Messages
@@ -64,10 +64,10 @@ flowchart TB
 ### 2.1 控制面
 
 - `Session` 拥有 `SessionQueue`，并为配置、维护操作创建具体 Command 对象。
-- `SessionTurn` 是 Queue 的唯一消费者，拥有 active Turn、检查点和停止语义。
+- `SessionLoop` 是 Queue 的唯一消费者，拥有 active Turn、检查点和停止语义。
 - `SessionQueue` 只保存尚未在检查点执行的 `SessionCommand` 对象，不解释业务类型。
 - Prompt 是一种带执行与取消行为的 Session Command；stop 只移除可取消 Command。
-- Command 可选声明完成信息；SessionTurn 在执行成功后将其持久化为 canonical Action Message。
+- Command 可选声明完成信息；SessionLoop 在执行成功后将其持久化为 canonical Action Message。
 - Action Message 持久化成功后由 SessionMessages 自动发布 Mutation，不单独配置 Event。
 - respond 直接兑现 Interaction waiter，stop 直接中断 Turn；两者都不是 Command。
 - `SessionInteractions` 拥有 pending waiter、超时、取消和恢复执行。
@@ -91,7 +91,7 @@ flowchart TB
 允许的协作方向：
 
 ```text
-控制面 → 执行面：SessionExecutionPort
+控制面 → 执行面：SessionExecutor
 执行面 → 状态面：SessionAssistantOutput
 执行面 → 控制面：SessionInteractionPort
 ```
@@ -99,7 +99,7 @@ flowchart TB
 禁止的依赖：
 
 - `SessionMessages` 依赖 Executor 实现或 Executor Record。
-- `SessionTurn` 解析 `UIMessageChunk` 或 AI SDK 最终消息。
+- `SessionLoop` 解析 `UIMessageChunk` 或 AI SDK 最终消息。
 - Executor 获取 `SessionMessages`、Writer 或 `SessionInteractions` 具体实例。
 - canonical Session 类型引用 AI SDK 类型。
 - Executor 返回另一份 Assistant Message 作为第二事实源。

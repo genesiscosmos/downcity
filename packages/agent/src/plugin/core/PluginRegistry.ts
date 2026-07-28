@@ -27,7 +27,7 @@ import type {
   PluginRuntimeRecord,
   PluginSnapshot,
 } from "@/types/plugin/PluginState.js";
-import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
+import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
 import type { Tool } from "ai";
 import { create_plugin_tools } from "@executor/tools/plugin/PluginToolDefinition.js";
 import type {
@@ -557,7 +557,7 @@ export class PluginRegistry implements AgentPlugins {
     plugin: string;
     action: string;
     payload?: JsonValue;
-    run_context?: SessionRunContext;
+    execution_context?: PluginExecutionContext;
   }): Promise<PluginActionResult<JsonValue>> {
     return await this.run_action_from_records(this.records, params);
   }
@@ -571,7 +571,7 @@ export class PluginRegistry implements AgentPlugins {
       plugin: string;
       action: string;
       payload?: JsonValue;
-      run_context?: SessionRunContext;
+      execution_context?: PluginExecutionContext;
     },
   ): Promise<PluginActionResult<JsonValue>> {
     const key = normalize_plugin_name(params.plugin);
@@ -625,7 +625,9 @@ export class PluginRegistry implements AgentPlugins {
         input: parsed_payload.input,
         plugin_name: record.plugin.name,
         action_name,
-        ...(params.run_context ? { run_context: params.run_context } : {}),
+        ...(params.execution_context
+          ? { execution_context: params.execution_context }
+          : {}),
       });
       return result;
     } catch (error) {
@@ -641,9 +643,12 @@ export class PluginRegistry implements AgentPlugins {
    * 读取当前生效的 plugin system blocks。
    */
   async system_blocks(
-    run_context?: SessionRunContext,
+    execution_context?: PluginExecutionContext,
   ): Promise<AgentSessionSystemBlock[]> {
-    return await this.system_blocks_from_records(this.records, run_context);
+    return await this.system_blocks_from_records(
+      this.records,
+      execution_context,
+    );
   }
 
   /**
@@ -651,7 +656,7 @@ export class PluginRegistry implements AgentPlugins {
    */
   private async system_blocks_from_records(
     records: ReadonlyMap<string, PluginRuntimeRecord>,
-    run_context?: SessionRunContext,
+    execution_context?: PluginExecutionContext,
   ): Promise<AgentSessionSystemBlock[]> {
     const context = this.require_context();
     const out: AgentSessionSystemBlock[] = [];
@@ -665,7 +670,7 @@ export class PluginRegistry implements AgentPlugins {
           if (!availability.available) continue;
         }
         const text = String(
-          await plugin.system(context, run_context),
+          await plugin.system(context, execution_context),
         ).trim();
         if (!text) continue;
         out.push({
@@ -689,8 +694,8 @@ export class PluginRegistry implements AgentPlugins {
       read: (params) => this.read_from_records(records, params),
       run_action: async (params) =>
         await this.run_action_from_records(records, params),
-      system_blocks: async (run_context) =>
-        await this.system_blocks_from_records(records, run_context),
+      system_blocks: async (execution_context) =>
+        await this.system_blocks_from_records(records, execution_context),
       acquire: () => this.acquire_execution_view(records),
     };
   }
@@ -719,8 +724,11 @@ export class PluginRegistry implements AgentPlugins {
       read: (params) => this.read_from_records(leased_records, params),
       run_action: async (params) =>
         await this.run_action_from_records(leased_records, params),
-      system_blocks: async (run_context) =>
-        await this.system_blocks_from_records(leased_records, run_context),
+      system_blocks: async (execution_context) =>
+        await this.system_blocks_from_records(
+          leased_records,
+          execution_context,
+        ),
       release: async () => {
         if (released) return;
         released = true;

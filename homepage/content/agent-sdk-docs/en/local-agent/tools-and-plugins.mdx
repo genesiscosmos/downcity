@@ -39,8 +39,9 @@ const agent = new Agent({
 });
 ```
 
-Workspace creates WorkspaceTools from five file/search tools by default. Shell contributes two command tools, and Agent registers the resulting set in `agent.tools`:
+Agent always provides its Session interaction tool. Workspace creates WorkspaceTools from five file/search tools by default, and Shell contributes two command tools. Agent registers all of them in `agent.tools`:
 
+- `ask_question`: pause the current Tool and ask structured questions when missing information would materially change the outcome
 - `shell_exec`: one-shot non-interactive commands
 - `shell_session`: long-running or stdin-driven interactive PTY sessions
 - `grep`: structured project-content search powered directly by ripgrep
@@ -84,6 +85,11 @@ await session.respond({
 
 A live UI reads the complete request from a pending Interaction Part while the related Tool is `waiting-user`, then calls `session.respond(...)` after the user decides.
 
+The model invokes `ask_question` as a standard Tool Call, not as a provider-specific message type.
+It supports `text`, `single_select`, and `multi_select`. Once the user responds, the answers become
+the Tool Result and the model continues in the next Step of the same Turn. See
+[Asynchronous User Interactions](/en/agent-sdk-docs/sessions/approvals) for the complete host flow.
+
 ## plugins
 
 Local Agents can also receive explicit plugin instances:
@@ -100,7 +106,7 @@ const agent = new Agent({
 });
 ```
 
-Registered plugin actions can be called through `agent.plugins.run_action(...)`, and plugin `system(context, run_context)` text is injected into session prompts.
+Registered plugin actions can be called through `agent.plugins.run_action(...)`, and plugin `system(context, execution_context)` text is injected into session prompts.
 
 `PluginContext` does not expose a generic path bundle. A plugin uses `context.workspace_path` as the project boundary and owns its domain storage paths inside the plugin. Operations on Agent Sessions go through `context.sessions`, not the Agent's Session directories.
 
@@ -150,11 +156,11 @@ const demo_plugin = create_plugin({
           payload: { text: "hello" },
         },
       ],
-      execute: async ({ input, run_context }) => ({
+      execute: async ({ input, execution_context }) => ({
         success: true,
         data: {
           text: input.text,
-          session_id: run_context?.session_id,
+          session_id: execution_context?.session_id,
         },
         message: "echoed",
       }),
@@ -169,7 +175,7 @@ const agent = new Agent({
 });
 ```
 
-The `zod` schema handles runtime validation. `json_schema` and `examples` are returned by `plugin_read` for the model or UI. `run_context` is present when the action runs through a session tool and can be absent for direct CLI, HTTP, or scheduler calls. Use `run_context.workspace_env` for the effective env committed at the current session step; `context.workspace_env` is the current Workspace configuration snapshot. Existing `class extends BasePlugin` plugins still work, and can gradually move individual actions to `create_action(...)`.
+The `zod` schema handles runtime validation. `json_schema` and `examples` are returned by `plugin_read` for the model or UI. `execution_context` is present when the action runs through a session tool and can be absent for direct CLI, HTTP, or scheduler calls. Use `execution_context.workspace_env` for the effective env committed at the current session step; `context.workspace_env` is the current Workspace configuration snapshot. Existing `class extends BasePlugin` plugins still work, and can gradually move individual actions to `create_action(...)`.
 
 ## ChatPlugin
 

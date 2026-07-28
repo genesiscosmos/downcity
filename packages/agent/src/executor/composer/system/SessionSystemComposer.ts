@@ -7,7 +7,7 @@
  */
 
 import type { SystemModelMessage } from "ai";
-import type { SessionRunContext } from "@/types/executor/SessionRunContext.js";
+import type { SessionComposeInput } from "@/types/session/SessionComposer.js";
 
 /**
  * Session system Composer 协议。
@@ -21,5 +21,5 @@ export interface SessionSystemComposer {
   /**
    * 解析本轮 system messages。
    */
-  resolve(run_context: SessionRunContext): Promise<SystemModelMessage[]>;
+  resolve(input: SessionComposeInput): Promise<SystemModelMessage[]>;
 }

@@ -15,7 +15,7 @@ import type {
 } from "@/types/plugin/PluginRuntime.js";
 import type { PluginLifecycle } from "@/types/plugin/PluginCommand.js";
 import type { PluginHttpDefinition } from "@/types/plugin/PluginHttp.js";
-import type { PluginRunContext } from "@/types/plugin/PluginRunContext.js";
+import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
 
 /**
  * Plugin 定义。
@@ -37,11 +37,11 @@ export interface Plugin {
    * Plugin system 文本构建器（可选）。
    *
    * @param context Agent 稳定能力上下文。
-   * @param run_context 当前 Session run 上下文；非 Session 快照读取时可缺省。
+   * @param execution_context 当前 Session Turn 的只读 Plugin 执行快照；非 Session 调用时可缺省。
    */
   system?: (
     context: PluginContext,
-    run_context?: PluginRunContext,
+    execution_context?: PluginExecutionContext,
   ) => string | Promise<string>;
   /** Plugin 生命周期定义（可选）。 */
   lifecycle?: PluginLifecycle;

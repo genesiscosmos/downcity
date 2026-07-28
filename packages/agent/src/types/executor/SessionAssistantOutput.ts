@@ -1,7 +1,7 @@
 /**
  * Executor 到 Session canonical Message 的 Assistant 输出端口。
  *
- * 该端口集中隔离 AI SDK 流协议。SessionTurn 只装配端口，不解析 Chunk，具体转换
+ * 该端口集中隔离 AI SDK 流协议。SessionLoop 只装配端口，不解析 Chunk，具体转换
  * 由 execution Adapter 完成，SessionMessages 仍是唯一 Assistant Message 事实源。
  */
 

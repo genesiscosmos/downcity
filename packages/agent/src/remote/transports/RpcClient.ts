@@ -198,13 +198,14 @@ export class RpcClient {
   /**
    * 把一次显式历史压缩加入远程 Session 的有序输入队列。
    */
-  async compact_session(session_id: string): Promise<void> {
-    await this.request<{ queued: true }>({
+  async compact_session(session_id: string): Promise<{ id: string }> {
+    const data = await this.request<{ compact: { id: string } }>({
       method: "sdk.sessions.compact",
       params: {
         session_id: session_id,
       },
     });
+    return data.compact;
   }
 
   /**

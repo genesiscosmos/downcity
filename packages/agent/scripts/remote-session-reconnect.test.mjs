@@ -72,9 +72,16 @@ test("RemoteSession reconnects the event pump after transport close", async () =
 
 test("RemoteSession queues compact through its transport", async () => {
   const compacted_session_ids = [];
+  let subscription;
   const transport = {
+    async subscribe(input) {
+      subscription = input;
+      input.on_ready();
+      return { close: async () => {} };
+    },
     async compact(session_id) {
       compacted_session_ids.push(session_id);
+      return { id: "compact_test" };
     },
   };
   const session = new RemoteSession(transport, {
@@ -83,7 +90,69 @@ test("RemoteSession queues compact through its transport", async () => {
     message_count: 0,
   });
 
-  await session.compact();
+  const handle = await session.compact();
 
   assert.deepEqual(compacted_session_ids, ["session_test"]);
+  assert.equal(handle.id, "compact_test");
+  assert.equal(handle.result, null);
+
+  subscription.on_event({
+    mutation_id: "compact-finish",
+    variant: "compact",
+    type: "finish",
+    session_id: "session_test",
+    compact_id: handle.id,
+    status: "completed",
+    compacted: false,
+    reason: "nothing_to_compact",
+    created_at: Date.now(),
+  });
+
+  assert.deepEqual(await handle.finished, {
+    compact_id: "compact_test",
+    success: true,
+    compacted: false,
+    reason: "nothing_to_compact",
+  });
+  assert.deepEqual(handle.result, await handle.finished);
+});
+
+test("RemoteSession preserves an early compact finish until transport returns", async () => {
+  let subscription;
+  const transport = {
+    async subscribe(input) {
+      subscription = input;
+      input.on_ready();
+      return { close: async () => {} };
+    },
+    async compact() {
+      subscription.on_event({
+        mutation_id: "compact-early-finish",
+        variant: "compact",
+        type: "finish",
+        session_id: "session_test",
+        compact_id: "compact_early",
+        status: "completed",
+        compacted: true,
+        reason: "compacted",
+        created_at: Date.now(),
+      });
+      return { id: "compact_early" };
+    },
+  };
+  const session = new RemoteSession(transport, {
+    agent_id: "agent_test",
+    session_id: "session_test",
+    message_count: 0,
+  });
+
+  const handle = await session.compact();
+
+  assert.deepEqual(handle.result, {
+    compact_id: "compact_early",
+    success: true,
+    compacted: true,
+    reason: "compacted",
+  });
+  assert.deepEqual(await handle.finished, handle.result);
 });

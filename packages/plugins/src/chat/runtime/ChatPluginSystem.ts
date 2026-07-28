@@ -7,7 +7,7 @@
  * - 该模块只负责 prompt 解析与拼装，不承担运行态控制职责。
  */
 import type { PluginContext } from "@downcity/agent";
-import type { PluginRunContext } from "@downcity/agent";
+import type { PluginExecutionContext } from "@downcity/agent";
 import {
   buildCurrentChatEnvironmentPrompt,
   resolveCurrentChatEnvironmentPromptInput,
@@ -43,11 +43,11 @@ function resolveCurrentChatPromptChannel(
  */
 export async function buildCurrentChannelPrompts(
   context: PluginContext,
-  run_context?: PluginRunContext,
+  execution_context?: PluginExecutionContext,
 ): Promise<string[]> {
   const chatEnvironment = await resolveCurrentChatEnvironmentPromptInput(
     context,
-    run_context,
+    execution_context,
   );
   if (!chatEnvironment) return [];
   const channel = resolveCurrentChatPromptChannel(
@@ -64,12 +64,12 @@ export async function buildCurrentChannelPrompts(
  */
 export async function buildChatPluginSystem(
   context: PluginContext,
-  run_context?: PluginRunContext,
+  execution_context?: PluginExecutionContext,
 ): Promise<string> {
   return [
     CHAT_PLUGIN_PROMPT,
-    await buildCurrentChatEnvironmentPrompt(context, run_context),
-    ...(await buildCurrentChannelPrompts(context, run_context)),
+    await buildCurrentChatEnvironmentPrompt(context, execution_context),
+    ...(await buildCurrentChannelPrompts(context, execution_context)),
   ]
     .filter(Boolean)
     .join("\n\n");

@@ -20,16 +20,15 @@ import { create_plugin_tools } from "../bin/executor/tools/plugin/PluginToolDefi
 import { plugin_call_input_schema } from "../bin/executor/tools/plugin/PluginToolSchemas.js";
 import { create_action, create_plugin } from "../bin/plugin/core/PluginActionFactory.js";
 import { PluginRegistry } from "../bin/plugin/core/PluginRegistry.js";
+import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
 import { z } from "zod";
 
-function create_run_context(project_root) {
-  return {
+function create_turn_context(project_root) {
+  return create_session_turn_context({
     session_id: "session_test",
+    turn_id: "turn_test",
     project_root: project_root,
-    injected_user_messages: [],
-    deferred_persisted_user_messages: [],
-    pending_assistant_file_parts: [],
-  };
+  });
 }
 
 function create_registry(plugin) {
@@ -84,10 +83,10 @@ test("invoke_plugin_call_tool returns absolute paths for materialized file parts
     },
   };
 
-  const run_context = create_run_context(project_root);
+  const turn_context = create_turn_context(project_root);
   const result = await invoke_plugin_call_tool({
     plugins,
-    run_context,
+    turn_context,
     input: {
       plugin: "image",
       action: "image_result",
@@ -107,7 +106,7 @@ test("invoke_plugin_call_tool returns absolute paths for materialized file parts
   assert.deepEqual(await fs.readFile(result.files[0].path), bytes);
   assert.equal("data" in result, false);
 
-  const pending_parts = run_context.pending_assistant_file_parts;
+  const pending_parts = turn_context.output.assistant_file_parts();
   assert.equal(pending_parts.length, 1);
   assert.equal(pending_parts[0].url, result.files[0].relative_path);
 });
@@ -153,7 +152,7 @@ test("invoke_plugin_read_tool returns plugin action metadata", async () => {
 
   const result = await invoke_plugin_read_tool({
     plugins,
-    run_context: create_run_context(process.cwd()),
+    turn_context: create_turn_context(process.cwd()),
     input: {
       plugin: "image",
       action: "image_create",
@@ -179,7 +178,7 @@ test("invoke_plugin_read_tool rejects unregistered plugins", async () => {
 
   const result = await invoke_plugin_read_tool({
     plugins: registry,
-    run_context: create_run_context(process.cwd()),
+    turn_context: create_turn_context(process.cwd()),
     input: { plugin: "task" },
   });
 
@@ -200,7 +199,7 @@ test("invoke_plugin_read_tool rejects unknown plugin actions", async () => {
 
   const result = await invoke_plugin_read_tool({
     plugins: registry,
-    run_context: create_run_context(process.cwd()),
+    turn_context: create_turn_context(process.cwd()),
     input: { plugin: "skill", action: "missing" },
   });
 
@@ -269,11 +268,12 @@ test("create_plugin_tools binds plugin_call to the current registry", async () =
       actions: {
         lookup: create_action({
           description: "Return registry owner",
-          execute: async ({ run_context }) => ({
+          execute: async ({ execution_context }) => ({
             success: true,
             data: {
               owner,
-              session_id: run_context?.session_id,
+              session_id: execution_context?.session_id,
+              context_keys: Object.keys(execution_context || {}).sort(),
             },
             message: owner,
           }),
@@ -288,13 +288,16 @@ test("create_plugin_tools binds plugin_call to the current registry", async () =
   const tools_a = create_plugin_tools({ plugins: registry_a });
   const tools_b = create_plugin_tools({ plugins: registry_b });
   const create_execution_options = (session_id) => {
-    const run_context = create_run_context(process.cwd());
-    run_context.session_id = session_id;
+    const turn_context = create_session_turn_context({
+      session_id,
+      turn_id: `turn_${session_id}`,
+      project_root: process.cwd(),
+    });
     return {
       toolCallId: `call_${session_id}`,
       messages: [],
       experimental_context: {
-        session_run_context: run_context,
+        session_turn_context: turn_context,
         shell_run_context: {
           ownerContextId: session_id,
         },
@@ -316,6 +319,13 @@ test("create_plugin_tools binds plugin_call to the current registry", async () =
   assert.equal(result_a.success, true);
   assert.equal(result_a.data.value.owner, "agent_a");
   assert.equal(result_a.data.value.session_id, "session_a");
+  assert.deepEqual(result_a.data.value.context_keys, [
+    "abort_signal",
+    "agent_systems",
+    "project_root",
+    "session_id",
+    "turn_id",
+  ]);
   assert.equal(result_b.success, true);
   assert.equal(result_b.data.value.owner, "agent_b");
   assert.equal(result_b.data.value.session_id, "session_b");

@@ -91,7 +91,8 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
         plugin_stop_count += 1;
       },
     },
-    system: (context) => `plugin-env:${context.workspace_env.TURN_ENV || "missing"}`,
+    system: (_context, execution_context) =>
+      `plugin-env:${execution_context?.workspace_env?.TURN_ENV || "missing"}`,
     actions: {
       ping: create_action({
         description: "Ping",

@@ -57,12 +57,11 @@ export class DefaultSessionComposer implements SessionComposer {
   async compact(
     input: SessionCompactionInput,
   ): Promise<SessionCompactionPlan | null> {
-    if (!input.force && input.turn.retry_count <= 0) return null;
-    if (!input.state.model) return null;
+    if (!input.model) return null;
     return await compose_session_compaction({
       session_id: input.session.session_id,
       snapshot: input.history,
-      model: input.state.model,
+      model: input.model,
     });
   }
 

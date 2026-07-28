@@ -10,7 +10,7 @@
 import path from "node:path";
 import type { JsonObject } from "@downcity/agent";
 import type { PluginContext } from "@downcity/agent";
-import type { PluginRunContext } from "@downcity/agent";
+import type { PluginExecutionContext } from "@downcity/agent";
 import type {
   ChatDeleteActionPayload,
   ChatHistoryActionPayload,
@@ -78,11 +78,11 @@ function toChatHistoryView(events: ChatHistoryEventV1[]): JsonObject[] {
 export async function executeChatContextAction(params: {
   context: PluginContext;
   payload: ChatSessionActionPayload;
-  run_context?: PluginRunContext;
+  execution_context?: PluginExecutionContext;
 }) {
   const snapshot = resolveChatSessionSnapshot({
     context: params.context,
-    run_context: params.run_context,
+    execution_context: params.execution_context,
     ...(params.payload.chat_key ? { chat_key: params.payload.chat_key } : {}),
     ...(params.payload.session_id ? { session_id: params.payload.session_id } : {}),
   });
@@ -166,13 +166,13 @@ export async function executeChatListAction(params: {
 export async function executeChatInfoAction(params: {
   context: PluginContext;
   payload: ChatInfoActionPayload;
-  run_context?: PluginRunContext;
+  execution_context?: PluginExecutionContext;
 }) {
   const explicitSessionId = String(params.payload.session_id || "").trim();
   const explicitChatKey = String(params.payload.chat_key || "").trim();
   const snapshot = resolveChatSessionSnapshot({
     context: params.context,
-    run_context: params.run_context,
+    execution_context: params.execution_context,
     ...(explicitSessionId ? { session_id: explicitSessionId } : {}),
     ...(explicitChatKey ? { chat_key: explicitChatKey } : {}),
   });
@@ -228,12 +228,12 @@ export async function executeChatInfoAction(params: {
 export async function executeChatHistoryAction(params: {
   context: PluginContext;
   payload: ChatHistoryActionPayload;
-  run_context?: PluginRunContext;
+  execution_context?: PluginExecutionContext;
 }) {
   const payload = params.payload;
   const snapshot = resolveChatSessionSnapshot({
     context: params.context,
-    run_context: params.run_context,
+    execution_context: params.execution_context,
     ...(payload.chat_key ? { chat_key: payload.chat_key } : {}),
     ...(payload.session_id ? { session_id: payload.session_id } : {}),
   });
@@ -280,12 +280,12 @@ export async function executeChatHistoryAction(params: {
 export async function executeChatSendAction(params: {
   context: PluginContext;
   payload: ChatSendActionPayload;
-  run_context?: PluginRunContext;
+  execution_context?: PluginExecutionContext;
 }) {
   const chat_key = resolveChatKey({
     chat_key: params.payload.chat_key,
     context: params.context,
-    run_context: params.run_context,
+    execution_context: params.execution_context,
   });
   if (!chat_key) {
     return {
@@ -310,7 +310,7 @@ export async function executeChatSendAction(params: {
     ...(typeof params.payload.message_id === "string" && params.payload.message_id.trim()
       ? { message_id: params.payload.message_id.trim() }
       : {}),
-    run_context: params.run_context,
+    execution_context: params.execution_context,
   });
   if (!result.success) {
     return {
@@ -332,12 +332,12 @@ export async function executeChatSendAction(params: {
 export async function executeChatReactAction(params: {
   context: PluginContext;
   payload: ChatReactActionPayload;
-  run_context?: PluginRunContext;
+  execution_context?: PluginExecutionContext;
 }) {
   const chat_key = resolveChatKey({
     chat_key: params.payload.chat_key,
     context: params.context,
-    run_context: params.run_context,
+    execution_context: params.execution_context,
   });
   if (!chat_key) {
     return {
@@ -380,11 +380,11 @@ export async function executeChatReactAction(params: {
 export async function executeChatDeleteAction(params: {
   context: PluginContext;
   payload: ChatDeleteActionPayload;
-  run_context?: PluginRunContext;
+  execution_context?: PluginExecutionContext;
 }) {
   const result = await deleteChatByChatKey({
     context: params.context,
-    run_context: params.run_context,
+    execution_context: params.execution_context,
     ...(params.payload.chat_key ? { chat_key: params.payload.chat_key } : {}),
     ...(params.payload.session_id ? { session_id: params.payload.session_id } : {}),
   });

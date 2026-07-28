@@ -91,7 +91,7 @@ export function buildChannelErrorText(error: unknown): string {
 }
 
 /**
- * 等待一小段时间，让同 lane 的连续消息尽量在一次 run 前合并。
+ * 等待一小段时间，让同 lane 的连续消息尽量在一次队列处理前合并。
  */
 export async function collectInitialBurstItems(params: {
   laneKey: string;
