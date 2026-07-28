@@ -103,16 +103,18 @@ export async function chatCommand(options: AgentChatCliOptions): Promise<void> {
         }),
       load_session_context: async (session_id) => {
         const session = await interactive.remote_agent.sessions.get(session_id);
-        const [info, messages, status] = await Promise.all([
+        const [info, messages, status, interactions] = await Promise.all([
           session.get_info(),
           session.messages(),
           session.status(),
+          session.interactions(),
         ]);
         const title = info.title?.trim() || "Untitled";
         return {
           title,
           messages: messages.items,
           security: status.security,
+          interactions,
         };
       },
       get_session_status: async (session_id) => {
@@ -123,11 +125,15 @@ export async function chatCommand(options: AgentChatCliOptions): Promise<void> {
         const session = await interactive.remote_agent.sessions.get(session_id);
         await session.set({ security: { approval_mode: mode } });
       },
-      respond_interaction: async (session_id, interaction_id, decision) => {
+      stop_session: async (session_id) => {
+        const session = await interactive.remote_agent.sessions.get(session_id);
+        return await session.stop();
+      },
+      respond_interaction: async (session_id, interaction_id, response) => {
         const session = await interactive.remote_agent.sessions.get(session_id);
         return await session.respond({
           interaction_id,
-          response: { kind: "approval", decision },
+          response,
         });
       },
       run_turn: async ({ session_id, message, interactive_renderer }) => {

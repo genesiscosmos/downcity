@@ -1,4 +1,7 @@
-import type { SessionMutation } from "@downcity/agent";
+import type {
+  SessionInteractionRequest,
+  SessionMutation,
+} from "@downcity/agent";
 
 /**
  * `city agent chat` 交互式渲染相关类型。
@@ -32,22 +35,19 @@ export interface AgentChatInteractiveRendererPort {
   /** 渲染单个 session 事件。 */
   render_event: (event: SessionMutation) => void;
 
-  /**
-   * 当 unrestricted sandbox 审批请求到达时触发。
-   *
-   * 说明（中文）
-   * - 由 TUI 实现弹窗选择器；stdout 版可忽略。
-   */
-  on_approval_request?: (params: {
-    approval_id: string;
-    tool_name: string;
-    cmd: string;
-    cwd: string;
-    reason: string;
-  }) => void;
+  /** pending Interaction 到达时触发；stdout 版可忽略。 */
+  on_interaction_request?: (request: SessionInteractionRequest) => void;
 
   /** 结束当前一轮渲染。 */
   finish_turn: () => AgentChatInteractiveRenderSnapshot;
+}
+
+/** Agent Chat 正在等待用户处理的一条 Session Interaction。 */
+export interface AgentChatPendingInteractionView {
+  /** Interaction 所属 Session 标识。 */
+  session_id: string;
+  /** Session 持久化的 canonical Interaction 请求。 */
+  request: SessionInteractionRequest;
 }
 
 /**

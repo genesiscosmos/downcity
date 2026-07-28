@@ -8,22 +8,6 @@
 
 import type { AgentSessionSecurityStatus } from "@downcity/agent";
 
-/** Agent Chat 审批面板所需的规范化请求详情。 */
-export interface AgentChatApprovalView {
-  /** 当前审批所属 Session 标识。 */
-  session_id: string;
-  /** 稳定审批 ID。 */
-  approval_id: string;
-  /** 发起审批的工具名称。 */
-  tool_name: string;
-  /** 待执行命令或输入内容。 */
-  cmd: string;
-  /** 待执行操作的工作目录。 */
-  cwd: string;
-  /** 申请 unrestricted 执行的业务原因。 */
-  reason: string;
-}
-
 /**
  * 当前 TUI 本地排队的用户输入。
  *

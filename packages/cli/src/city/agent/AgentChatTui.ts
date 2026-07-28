@@ -12,6 +12,8 @@ import type { AgentChatSessionSummaryView } from "@/city/agent/AgentChatTypes.js
 import type {
   AgentSessionSecurityStatus,
   AgentSessionStatus,
+  SessionInteractionResponse,
+  SessionPendingInteraction,
   SessionApprovalMode,
   SessionMessage,
 } from "@downcity/agent";
@@ -35,6 +37,8 @@ export async function run_agent_chat_tui(params: {
     title: string;
     messages: SessionMessage[];
     security: AgentSessionSecurityStatus;
+    /** 当前 Session 尚未处理的 Interaction。 */
+    interactions: SessionPendingInteraction[];
   }>;
   /** 读取指定 Session 的运行与安全状态。 */
   get_session_status: (
@@ -57,11 +61,14 @@ export async function run_agent_chat_tui(params: {
     text?: string;
   }>;
 
-  /** 处理指定 Session 的 unrestricted sandbox 审批请求。 */
+  /** 停止指定 Session 当前正在执行的 Turn。 */
+  stop_session: (session_id: string) => Promise<unknown>;
+
+  /** 处理指定 Session 的 pending Interaction。 */
   respond_interaction: (
     session_id: string,
     interaction_id: string,
-    decision: "approved" | "denied",
+    response: SessionInteractionResponse,
   ) => Promise<{ status: "resolved" | "expired" | "cancelled" }>;
 
 }): Promise<void> {
@@ -74,6 +81,7 @@ export async function run_agent_chat_tui(params: {
     get_session_status: params.get_session_status,
     set_session_security: params.set_session_security,
     run_turn: params.run_turn,
+    stop_session: params.stop_session,
     respond_interaction: params.respond_interaction,
   });
 

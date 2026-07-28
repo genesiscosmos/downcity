@@ -21,23 +21,23 @@ import type { MessageListComponent } from "@/city/agent/tui/components/MessageLi
 export class PiTuiChatRenderer implements AgentChatInteractiveRendererPort {
   private streaming_ui: StreamingUIController;
   private emitted_visible_text = false;
-  on_approval_request?: AgentChatInteractiveRendererPort["on_approval_request"];
+  on_interaction_request?: AgentChatInteractiveRendererPort["on_interaction_request"];
 
   /**
    * @param message_list 消息流组件。
    * @param request_render 通知 TUI 重绘的回调。
-   * @param on_approval_request approval 内联面板回调。
+   * @param on_interaction_request pending Interaction 内联面板回调。
    */
   constructor(
     message_list: MessageListComponent,
     request_render: () => void,
-    on_approval_request?: AgentChatInteractiveRendererPort["on_approval_request"],
+    on_interaction_request?: AgentChatInteractiveRendererPort["on_interaction_request"],
   ) {
     this.streaming_ui = new StreamingUIController({
       message_list,
       request_render,
     });
-    this.on_approval_request = on_approval_request;
+    this.on_interaction_request = on_interaction_request;
   }
 
   /**
@@ -73,20 +73,8 @@ export class PiTuiChatRenderer implements AgentChatInteractiveRendererPort {
     }
     if (event.variant !== "part" || event.type !== "interaction") return;
     const interaction = event.part;
-    const request = interaction.request;
-    if (
-      interaction.interaction_type !== "approval" ||
-      interaction.status !== "pending" ||
-      request.kind !== "approval" ||
-      request.source.type !== "tool"
-    ) return;
-    this.on_approval_request?.({
-      approval_id: interaction.interaction_id,
-      tool_name: request.source.tool_name,
-      cmd: request.command,
-      cwd: request.cwd,
-      reason: request.reason,
-    });
+    if (interaction.status !== "pending") return;
+    this.on_interaction_request?.(interaction.request);
   }
 
   /**

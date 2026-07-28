@@ -9,6 +9,7 @@
 
 import path from "node:path";
 import { Agent, Workspace, resolve_workspace_env } from "@downcity/agent";
+import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell } from "@downcity/shell";
 import { AgentHTTP, AgentRPC } from "@downcity/server";
 import { startAgentHttpGateway } from "@/city/agent/AgentHttpGateway.js";
@@ -140,6 +141,9 @@ export class ManagedAgentRuntime {
       workspace,
       model,
       plugins,
+      tools: {
+        ask_question: AskQuestionsTool,
+      },
     });
 
     process.env.DC_BAY_PORT = String(port);

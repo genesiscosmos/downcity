@@ -17,7 +17,13 @@ city agent restart [agent_id]
 city agent status [agent_id]
 city agent doctor [agent_id]
 city agent model [agent_id]
+city agent chat [agent_id]
 ```
+
+Agents assembled by `city agent start` enable the `ask_question` tool by default.
+In `city agent chat`, the model can present text, single-select, or multi-select
+questions when key information is missing. The CLI submits the complete answer set
+to the current Session and continues the same Turn. Press Esc to stop that Turn.
 
 ## Per-Agent tokens
 

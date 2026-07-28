@@ -20,6 +20,7 @@ import { resolve_transcript_scroll_delta } from "../bin/city/agent/tui/controlle
 import { QueuedInputQueue } from "../bin/city/agent/tui/controllers/QueuedInputQueue.js";
 import { PiTuiChatRenderer } from "../bin/city/agent/tui/PiTuiChatRenderer.js";
 import { ApprovalPanelComponent } from "../bin/city/agent/tui/dialogs/ApprovalDialog.js";
+import { QuestionPanelComponent } from "../bin/city/agent/tui/dialogs/QuestionDialog.js";
 import { SecurityPolicyPanelComponent } from "../bin/city/agent/tui/dialogs/SecurityPolicyDialog.js";
 import { SessionPickerComponent } from "../bin/city/agent/tui/dialogs/SessionPicker.js";
 import { resolveSlashCommandInput } from "../bin/city/agent/tui/commands/resolve.js";
@@ -676,13 +677,9 @@ test("审批 part 展示请求详情且 Esc 按安全语义拒绝", () => {
     },
   });
 
-  assert.deepEqual(approval_request, {
-    approval_id: "approval-1",
-    tool_name: "shell_exec",
-    cmd: "rm -rf build",
-    cwd: "/workspace",
-    reason: "Clean generated output",
-  });
+  assert.equal(approval_request.kind, "approval");
+  assert.equal(approval_request.interaction_id, "approval-1");
+  assert.equal(approval_request.source.tool_name, "shell_exec");
   assert.match(
     plain(message_list.render(64)).join("\n"),
     /Assistant · waiting for you[\s\S]*Tool · shell_exec · Waiting for approval[\s\S]*command\s+rm -rf build/,
@@ -690,13 +687,141 @@ test("审批 part 展示请求详情且 Esc 按安全语义拒绝", () => {
 
   let decision;
   const dialog = new ApprovalPanelComponent({
-    ...approval_request,
+    approval_id: approval_request.interaction_id,
+    tool_name: approval_request.source.tool_name,
+    cmd: approval_request.command,
+    cwd: approval_request.cwd,
+    reason: approval_request.reason,
     on_decide: (next_decision) => {
       decision = next_decision;
     },
   });
   dialog.handleInput("\u001B");
   assert.equal(decision, "deny");
+});
+
+test("Question Interaction 逐项收集文本、单选和多选答案", () => {
+  const request = {
+    interaction_id: "question-1",
+    turn_id: "turn-1",
+    kind: "question",
+    source: {
+      type: "tool",
+      tool_call_id: "call-question-1",
+      tool_name: "ask_question",
+    },
+    title: "Project settings",
+    questions: [
+      {
+        question_id: "name",
+        prompt: "Project name?",
+        response_type: "text",
+      },
+      {
+        question_id: "runtime",
+        prompt: "Choose runtime",
+        response_type: "single_select",
+        options: [
+          { value: "node", label: "Node.js" },
+          { value: "bun", label: "Bun" },
+        ],
+      },
+      {
+        question_id: "features",
+        prompt: "Choose features",
+        response_type: "multi_select",
+        options: [
+          { value: "lint", label: "Lint" },
+          { value: "test", label: "Test" },
+        ],
+      },
+    ],
+    created_at: 1,
+  };
+  let answers;
+  let cancelled = false;
+  const panel = new QuestionPanelComponent({
+    request,
+    on_submit: (value) => {
+      answers = value;
+    },
+    on_cancel: () => {
+      cancelled = true;
+    },
+  });
+  panel.focused = true;
+
+  assert.match(plain(panel.render(64)).join("\n"), /Project settings · 1\/3/);
+  panel.handleInput("Downcity");
+  panel.handleInput("\r");
+  panel.handleInput("\u001B[B");
+  panel.handleInput("\r");
+  panel.handleInput(" ");
+  panel.handleInput("\u001B[B");
+  panel.handleInput(" ");
+  panel.handleInput("\r");
+
+  assert.deepEqual(answers, [
+    { question_id: "name", value: "Downcity" },
+    { question_id: "runtime", value: "bun" },
+    { question_id: "features", value: ["lint", "test"] },
+  ]);
+  assert.equal(cancelled, false);
+  assert.ok(panel.render(32).every((line) => visibleWidth(line) <= 32));
+});
+
+test("Question Interaction 由 Renderer 原样转交通用回调", () => {
+  const message_list = new MessageListComponent({
+    get_viewport_height: () => 20,
+  });
+  let received_request;
+  const renderer = new PiTuiChatRenderer(
+    message_list,
+    () => {},
+    (request) => {
+      received_request = request;
+    },
+  );
+  const request = {
+    interaction_id: "question-2",
+    turn_id: "turn-2",
+    kind: "question",
+    source: {
+      type: "tool",
+      tool_call_id: "call-question-2",
+      tool_name: "ask_question",
+    },
+    title: "Confirm target",
+    questions: [{
+      question_id: "target",
+      prompt: "Which target?",
+      response_type: "text",
+    }],
+    created_at: 1,
+  };
+
+  renderer.render_event({
+    mutation_id: "mutation-question-2",
+    message_id: "assistant-2",
+    revision: 1,
+    session_id: "session-2",
+    turn_id: "turn-2",
+    created_at: 1,
+    variant: "part",
+    type: "interaction",
+    part_id: "interaction:question-2",
+    part: {
+      part_id: "interaction:question-2",
+      sequence: 1,
+      type: "interaction",
+      interaction_id: "question-2",
+      interaction_type: "question",
+      status: "pending",
+      request,
+    },
+  });
+
+  assert.deepEqual(received_request, request);
 });
 
 test("执行期间允许审批与安全策略命令并阻止破坏性 Slash 命令", () => {

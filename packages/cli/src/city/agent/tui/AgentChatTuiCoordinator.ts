@@ -2,7 +2,7 @@
  * city agent chat TUI 协调器。
  *
  * 关键点（中文）
- * - 使用 header → transcript → approval → editor → command → footer 的稳定操作台布局。
+ * - 使用 header → transcript → interaction → editor → command → footer 的稳定操作台布局。
  * - transcript 支持方向键、分页键与鼠标滚轮回看历史。
  * - 编辑器负责消费标准快捷键（Ctrl+C/D/O/S），再回调 coordinator。
  * - header 展示 Session 上下文，footer 只展示当前可执行操作与滚动状态。
@@ -26,20 +26,24 @@ import { MessageListComponent } from "@/city/agent/tui/components/MessageList.js
 import { QueuedInputQueue } from "@/city/agent/tui/controllers/QueuedInputQueue.js";
 import { SessionPickerComponent } from "@/city/agent/tui/dialogs/SessionPicker.js";
 import { ApprovalPanelComponent } from "@/city/agent/tui/dialogs/ApprovalDialog.js";
+import { QuestionPanelComponent } from "@/city/agent/tui/dialogs/QuestionDialog.js";
 import { SecurityPolicyPanelComponent } from "@/city/agent/tui/dialogs/SecurityPolicyDialog.js";
 import { PiTuiChatRenderer } from "@/city/agent/tui/PiTuiChatRenderer.js";
 import type { AgentChatSessionSummaryView } from "@/city/agent/AgentChatTypes.js";
-import type { AgentChatInteractiveRendererPort } from "@/city/types/AgentChatInteractive.js";
+import type {
+  AgentChatInteractiveRendererPort,
+  AgentChatPendingInteractionView,
+} from "@/city/types/AgentChatInteractive.js";
 import type {
   AgentSessionSecurityStatus,
   AgentSessionStatus,
   SessionApprovalMode,
+  SessionInteractionRequest,
+  SessionInteractionResponse,
   SessionMessage,
+  SessionPendingInteraction,
 } from "@downcity/agent";
-import type {
-  AgentChatApprovalView,
-  AppState,
-} from "@/city/agent/tui/types.js";
+import type { AppState } from "@/city/agent/tui/types.js";
 import {
   dispatchSlashCommand,
   resolveSlashCommandInput,
@@ -70,6 +74,8 @@ export interface AgentChatTuiCoordinatorOptions {
     title: string;
     messages: SessionMessage[];
     security: AgentSessionSecurityStatus;
+    /** 当前 Session 尚未处理的 Interaction。 */
+    interactions: SessionPendingInteraction[];
   }>;
   /** 读取指定 Session 的运行与安全状态。 */
   get_session_status: (
@@ -92,11 +98,13 @@ export interface AgentChatTuiCoordinatorOptions {
     text?: string;
   }>;
 
-  /** 批准 unrestricted sandbox 审批请求。 */
+  /** 停止指定 Session 当前正在执行的 Turn。 */
+  stop_session: (session_id: string) => Promise<unknown>;
+  /** 响应指定 Session 的 pending Interaction。 */
   respond_interaction: (
     session_id: string,
     interaction_id: string,
-    decision: "approved" | "denied",
+    response: SessionInteractionResponse,
   ) => Promise<{ status: "resolved" | "expired" | "cancelled" }>;
 }
 
@@ -112,7 +120,7 @@ export class AgentChatTuiCoordinator {
   private readonly message_list: MessageListComponent;
   private readonly editor: ChatEditorComponent;
   private readonly queued_messages: QueuedMessagesComponent;
-  private readonly approval_panel: InlinePanelSlotComponent;
+  private readonly interaction_panel: InlinePanelSlotComponent;
   private readonly command_panel: InlinePanelSlotComponent;
   private readonly input_queue = new QueuedInputQueue();
   private app_state: AppState;
@@ -125,14 +133,11 @@ export class AgentChatTuiCoordinator {
   private draining_input_queue = false;
   private approval_mode_update_promise: Promise<boolean> | null = null;
 
-  /**
-   * 待处理的 unrestricted sandbox 审批请求队列。
-   * 当模型并行发起多个需要审批的 tool call 时，依次弹出选择器。
-   */
-  private approval_queue: AgentChatApprovalView[] = [];
+  /** 待处理的 Session Interaction 队列；并行请求按到达顺序依次展示。 */
+  private interaction_queue: AgentChatPendingInteractionView[] = [];
 
-  /** 已接收的审批 ID，避免同一 part 快照重复展示。 */
-  private readonly received_approval_ids = new Set<string>();
+  /** 已接收的 Interaction ID，避免同一 part 快照重复展示。 */
+  private readonly received_interaction_ids = new Set<string>();
 
   /**
    * slash 命令宿主，解耦命令分发与 coordinator 内部实现。
@@ -197,7 +202,7 @@ export class AgentChatTuiCoordinator {
     this.header = new AgentHeaderComponent(this.app_state);
     this.footer = new ChatFooterComponent(this.app_state);
     this.queued_messages = new QueuedMessagesComponent();
-    this.approval_panel = new InlinePanelSlotComponent();
+    this.interaction_panel = new InlinePanelSlotComponent();
     this.command_panel = new InlinePanelSlotComponent();
 
     this.message_list = new MessageListComponent({
@@ -248,10 +253,10 @@ export class AgentChatTuiCoordinator {
     }
     this.running = true;
 
-    // 两个交互槽位进入正常布局流：审批在输入框上方，命令交互在输入框下方。
+    // 两个交互槽位进入正常布局流：Session Interaction 在输入框上方，命令交互在输入框下方。
     this.tui.addChild(this.header as Component);
     this.tui.addChild(this.message_list as Component);
-    this.tui.addChild(this.approval_panel as Component);
+    this.tui.addChild(this.interaction_panel as Component);
     this.tui.addChild(this.queued_messages as Component);
     this.tui.addChild(this.editor as Component);
     this.tui.addChild(this.command_panel as Component);
@@ -272,52 +277,74 @@ export class AgentChatTuiCoordinator {
     });
   }
 
-  /** 入队并尝试显示输入框上方的 unrestricted sandbox 审批面板。 */
-  private show_approval_panel(params: {
-    approval_id: string;
-    tool_name: string;
-    cmd: string;
-    cwd: string;
-    reason: string;
-  }): void {
-    if (this.stopped || this.received_approval_ids.has(params.approval_id)) return;
-    this.received_approval_ids.add(params.approval_id);
-    this.approval_queue.push({
-      session_id: this.current_session_id,
-      ...params,
-    });
-    this.ensure_approval_panel();
+  /** 将 canonical pending Interaction 加入当前 Session 的展示队列。 */
+  private show_interaction_panel(
+    request: SessionInteractionRequest,
+    session_id = this.current_session_id,
+  ): void {
+    if (
+      this.stopped ||
+      session_id !== this.current_session_id ||
+      this.received_interaction_ids.has(request.interaction_id)
+    ) return;
+    this.received_interaction_ids.add(request.interaction_id);
+    this.interaction_queue.push({ session_id, request });
+    this.ensure_interaction_panel();
   }
 
-  /** 当前没有审批面板且队列非空时，显示下一个请求。 */
-  private ensure_approval_panel(): void {
-    if (this.approval_panel.is_active || this.stopped || this.approval_queue.length === 0) {
-      return;
-    }
+  /** 当前没有活动面板时，按请求 kind 展示队首 Interaction。 */
+  private ensure_interaction_panel(): void {
+    if (
+      this.interaction_panel.is_active ||
+      this.stopped ||
+      this.interaction_queue.length === 0
+    ) return;
 
-    const params = this.approval_queue[0];
-    const panel = new ApprovalPanelComponent({
-      approval_id: params.approval_id,
-      tool_name: params.tool_name,
-      cmd: params.cmd,
-      cwd: params.cwd,
-      reason: params.reason,
-      on_decide: (decision) => {
-        this.hide_approval_panel();
-        void this.respond_approval_panel(params, decision);
-      },
-    });
+    const pending = this.interaction_queue[0];
+    if (!pending) return;
+    const request = pending.request;
+    const panel = request.kind === "approval"
+      ? new ApprovalPanelComponent({
+          approval_id: request.interaction_id,
+          tool_name: request.source.type === "tool"
+            ? request.source.tool_name
+            : "session",
+          cmd: request.command,
+          cwd: request.cwd,
+          reason: request.reason,
+          on_decide: (decision) => {
+            this.hide_interaction_panel();
+            void this.respond_interaction_panel(pending, {
+              kind: "approval",
+              decision: decision === "approve" ? "approved" : "denied",
+            });
+          },
+        })
+      : new QuestionPanelComponent({
+          request,
+          on_submit: (answers) => {
+            this.hide_interaction_panel();
+            void this.respond_interaction_panel(pending, {
+              kind: "question",
+              answers,
+            });
+          },
+          on_cancel: () => {
+            this.hide_interaction_panel();
+            void this.cancel_question_panel(pending);
+          },
+        });
 
     this.command_panel.clear();
-    this.approval_panel.show(panel);
-    this.tui.setFocus(this.approval_panel as Component);
+    this.interaction_panel.show(panel);
+    this.tui.setFocus(this.interaction_panel as Component);
     this.request_render();
   }
 
-  /** 隐藏当前审批面板并从队列移除当前请求。 */
-  private hide_approval_panel(): void {
-    if (this.approval_panel.is_active) this.approval_queue.shift();
-    this.approval_panel.clear();
+  /** 隐藏并移除当前 Interaction 面板。 */
+  private hide_interaction_panel(): void {
+    if (this.interaction_panel.is_active) this.interaction_queue.shift();
+    this.interaction_panel.clear();
     this.tui.setFocus(this.editor as Component);
     this.request_render();
   }
@@ -332,7 +359,10 @@ export class AgentChatTuiCoordinator {
       this.request_render();
       return;
     }
-    await this.submit_approval_decision(target_id, "approve");
+    await this.submit_interaction_response(target_id, {
+      kind: "approval",
+      decision: "approved",
+    });
     this.request_render();
   }
 
@@ -346,45 +376,61 @@ export class AgentChatTuiCoordinator {
       this.request_render();
       return;
     }
-    await this.submit_approval_decision(target_id, "deny");
+    await this.submit_interaction_response(target_id, {
+      kind: "approval",
+      decision: "denied",
+    });
     this.request_render();
   }
 
   /**
    * 提交面板决策；失败时将请求放回队首，避免 Agent 永久等待。
    */
-  private async respond_approval_panel(
-    approval: AgentChatApprovalView,
-    decision: "approve" | "deny",
+  private async respond_interaction_panel(
+    pending: AgentChatPendingInteractionView,
+    response: SessionInteractionResponse,
   ): Promise<void> {
-    const success = await this.submit_approval_decision(
-      approval.approval_id,
-      decision,
-      approval.session_id,
+    const handled = await this.submit_interaction_response(
+      pending.request.interaction_id,
+      response,
+      pending.session_id,
     );
-    if (!success && !this.stopped) this.approval_queue.unshift(approval);
-    this.ensure_approval_panel();
+    if (!handled && !this.stopped) this.interaction_queue.unshift(pending);
+    this.ensure_interaction_panel();
     this.request_render();
   }
 
-  /**
-   * 向远端 Shell runtime 提交审批决策。
-   *
-   * @returns 是否成功命中并完成 pending approval。
-   */
-  private async submit_approval_decision(
-    approval_id: string,
-    decision: "approve" | "deny",
+  /** 停止 Question 所属 Turn，让 Session 取消等待中的 Interaction。 */
+  private async cancel_question_panel(
+    pending: AgentChatPendingInteractionView,
+  ): Promise<void> {
+    try {
+      await this.options.stop_session(pending.session_id);
+    } catch (error) {
+      this.add_error_message(this.format_error(error));
+      if (!this.stopped) this.interaction_queue.unshift(pending);
+    }
+    this.ensure_interaction_panel();
+    this.request_render();
+  }
+
+  /** 向远端 Session 提交结构化 Interaction 响应。 */
+  private async submit_interaction_response(
+    interaction_id: string,
+    response: SessionInteractionResponse,
     session_id = this.current_session_id,
   ): Promise<boolean> {
     try {
       const result = await this.options.respond_interaction(
         session_id,
-        approval_id,
-        decision === "approve" ? "approved" : "denied",
+        interaction_id,
+        response,
       );
       if (result.status === "resolved") return true;
-      this.add_error_message(`Failed to ${decision} ${approval_id}`);
+      this.add_status_message(
+        `Interaction ${interaction_id} is already ${result.status}.`,
+      );
+      return true;
     } catch (error) {
       this.add_error_message(this.format_error(error));
     }
@@ -400,7 +446,7 @@ export class AgentChatTuiCoordinator {
     }
     this.stopped = true;
     this.hide_session_picker();
-    this.hide_approval_panel();
+    this.hide_interaction_panel();
     this.remove_input_listener?.();
     this.tui.stop();
     this.resolve_run?.();
@@ -422,7 +468,7 @@ export class AgentChatTuiCoordinator {
   private get_message_list_viewport_height(): number {
     const width = this.terminal.columns;
     const header_lines = this.header.render(width).length;
-    const approval_lines = this.approval_panel.render(width).length;
+    const interaction_lines = this.interaction_panel.render(width).length;
     const queued_messages_lines = this.queued_messages.render(width).length;
     const editor_lines = this.editor.render(width).length;
     const command_lines = this.command_panel.render(width).length;
@@ -431,7 +477,7 @@ export class AgentChatTuiCoordinator {
       1,
       this.terminal.rows
         - header_lines
-        - approval_lines
+        - interaction_lines
         - queued_messages_lines
         - editor_lines
         - command_lines
@@ -522,8 +568,8 @@ export class AgentChatTuiCoordinator {
     const renderer = new PiTuiChatRenderer(
       this.message_list,
       () => this.request_render(),
-      (params) => {
-        this.show_approval_panel(params);
+      (request) => {
+        this.show_interaction_panel(request);
       },
     );
     const outcome = await this.options.run_turn({
@@ -609,7 +655,7 @@ export class AgentChatTuiCoordinator {
     } finally {
       this.command_panel_loading = false;
     }
-    if (this.stopped || this.approval_panel.is_active) return;
+    if (this.stopped || this.interaction_panel.is_active) return;
 
     const picker = new SessionPickerComponent({
       sessions,
@@ -723,7 +769,7 @@ export class AgentChatTuiCoordinator {
       && !this.command_panel_loading
       && this.approval_mode_update_promise === null
       && !this.command_panel.is_active
-      && !this.approval_panel.is_active;
+      && !this.interaction_panel.is_active;
   }
 
   /** 清空输入框下方面板并恢复编辑器焦点。 */
@@ -755,8 +801,10 @@ export class AgentChatTuiCoordinator {
    * @param session_id 目标 session id。
    */
   private async switch_session(session_id: string): Promise<void> {
+    this.interaction_panel.clear();
+    this.interaction_queue = [];
     this.current_session_id = session_id;
-    this.received_approval_ids.clear();
+    this.received_interaction_ids.clear();
     this.app_state.session_id = session_id;
     this.app_state.session_title = undefined;
     this.app_state.security = undefined;
@@ -778,7 +826,7 @@ export class AgentChatTuiCoordinator {
    */
   private async load_history(session_id: string): Promise<void> {
     try {
-      const { title, messages, security } =
+      const { title, messages, security, interactions } =
         await this.options.load_session_context(session_id);
       if (session_id !== this.current_session_id) return;
       this.app_state.session_title = title;
@@ -788,6 +836,9 @@ export class AgentChatTuiCoordinator {
       this.terminal.setTitle(this.build_title());
       this.message_list.set_messages(messages);
       this.message_list.scroll_to_bottom();
+      for (const pending of interactions) {
+        this.show_interaction_panel(pending.request, session_id);
+      }
     } catch (error) {
       this.add_error_message(`Failed to load history: ${this.format_error(error)}`);
     }
@@ -828,7 +879,7 @@ export class AgentChatTuiCoordinator {
    * @returns 是否消费该输入。
    */
   private handle_global_input(data: string): { consume: boolean } | undefined {
-    if (this.approval_panel.is_active || this.command_panel.is_active) {
+    if (this.interaction_panel.is_active || this.command_panel.is_active) {
       return undefined;
     }
 

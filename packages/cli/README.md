@@ -31,6 +31,10 @@ city agent token create <agent_id> --name local
 city plugin action <plugin_name> <action_name> <agent_id> --input '{}'
 ```
 
+`city agent start` 创建的 Agent 默认启用 `ask_question` Tool。使用
+`city agent chat <agent_id>` 交互时，模型可以在缺少关键信息时显示文本、单选或多选问题；
+回答会通过 Session Interaction 提交，并在同一轮模型执行中继续处理。
+
 Agent 与 Plugin Binding 统一保存在全局数据库；Plugin 配置不进入 Agent SDK 的运行时 Plugin 对象。未传 `agent_id` 时，TTY 打开全局 Agent 选择器，非交互环境直接报错。
 
 为独立产品后端登记 Bureau：
