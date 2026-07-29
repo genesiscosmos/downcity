@@ -6,7 +6,7 @@ export function createSqliteDb(filepath) {
   sqlite.pragma("journal_mode = WAL")
   const db = drizzle(sqlite)
   return Object.assign(db, {
-    $client: { exec: (sql) => sqlite.exec(sql) },
+    $client: sqlite,
     raw: sqlite,
   })
 }

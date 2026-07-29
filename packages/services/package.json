@@ -1,7 +1,7 @@
 {
   "name": "@downcity/services",
-  "version": "0.1.233",
-  "description": "Downcity public services package for accounts, Credits Cards, usage, and provider-based payment flows.",
+  "version": "0.1.235",
+  "description": "Downcity public services for accounts, organizations, credits, usage, and provider-based payments.",
   "type": "module",
   "main": "./bin/index.js",
   "module": "./bin/index.js",
@@ -31,6 +31,8 @@
     "downcity",
     "service",
     "accounts",
+    "organizations",
+    "membership",
     "credits",
     "usage",
     "stripe",

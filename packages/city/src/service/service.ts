@@ -175,7 +175,7 @@ export class Service {
   readonly name: string;
   /** Service 级 hook，该 Service 下所有 Action 共享 */
   readonly hook = new Hook();
-  readonly tables?: Record<string, AnySQLiteTable | AnyPgTable>;
+  tables?: Record<string, AnySQLiteTable | AnyPgTable>;
   readonly env?: EnvRequirement[];
   /** 当前模块可选的说明文档。 */
   instruction?: InstructionDefinition;
@@ -206,6 +206,9 @@ export class Service {
 
   /** Federation 默认存储能力 */
   _storage?: FederationStorage;
+
+  /** 当前 Federation 数据库方言。 */
+  _database_dialect?: "sqlite" | "postgresql";
 
   constructor(options: {
     id: string;

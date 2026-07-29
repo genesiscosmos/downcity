@@ -15,6 +15,10 @@ import {
 import { httpError, randomSecret } from "../../utils/helpers.js";
 import { FederationKeyStore, USER_TOKEN_ALGORITHM } from "./federation-key-store.js";
 import type { CreateUserTokenInput, UserTokenPayload } from "./types.js";
+import type {
+  CreateFederationServiceTokenInput,
+  FederationServiceTokenIssueResult,
+} from "./types.js";
 
 const USER_TOKEN_AUDIENCE = "downcity:user" as const;
 const DEFAULT_USER_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -83,6 +87,42 @@ export class UserTokenAuthority {
       if (is_http_error(error)) throw error;
       throw map_jose_error(error, key_id);
     }
+  }
+
+  /** 为可信 Federation Service 签发受众绑定的业务 Token。 */
+  async sign_service_token(
+    input: CreateFederationServiceTokenInput,
+  ): Promise<FederationServiceTokenIssueResult> {
+    const audience = read_nonempty_input(input.audience, "audience");
+    const subject = read_nonempty_input(input.subject, "subject");
+    const prefix = read_token_prefix(input.prefix);
+    const ttl_seconds = parse_user_token_ttl(input.ttl);
+    validate_service_claims(input.claims);
+
+    const now = Math.floor(Date.now() / 1000);
+    const token_id = `token_${randomSecret(16)}`;
+    const signing_key = await this.key_store.ensure_active_key();
+    const private_jwk = JSON.parse(signing_key.private_jwk) as Record<string, unknown>;
+    const private_key = await importJWK(private_jwk, USER_TOKEN_ALGORITHM);
+    const jwt = await new SignJWT({ ...input.claims })
+      .setProtectedHeader({
+        alg: USER_TOKEN_ALGORITHM,
+        typ: "JWT",
+        kid: signing_key.key_id,
+      })
+      .setIssuer(this.issuer)
+      .setAudience(audience)
+      .setSubject(subject)
+      .setIssuedAt(now)
+      .setExpirationTime(now + ttl_seconds)
+      .setJti(token_id)
+      .sign(private_key);
+
+    return {
+      token: `${prefix}${jwt}`,
+      token_id,
+      expires_at: new Date((now + ttl_seconds) * 1000).toISOString(),
+    };
   }
 }
 
@@ -159,6 +199,34 @@ function validate_sign_input(input: CreateUserTokenInput): void {
   }
   if (typeof input.user_id !== "string" || !input.user_id.trim()) {
     throw new TypeError("user_id is required");
+  }
+}
+
+/** 读取签发输入中的必填文本。 */
+function read_nonempty_input(value: unknown, field: string): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new TypeError(`${field} is required`);
+  }
+  return value.trim();
+}
+
+/** 校验业务 Token 前缀，避免生成不可辨识的凭证。 */
+function read_token_prefix(value: unknown): string {
+  const prefix = read_nonempty_input(value, "prefix");
+  if (!/^[a-z][a-z0-9]*_$/u.test(prefix)) {
+    throw new TypeError("prefix must match /^[a-z][a-z0-9]*_$/");
+  }
+  return prefix;
+}
+
+/** 禁止 Service 覆盖由 Federation 统一拥有的 JWT 标准 Claims。 */
+function validate_service_claims(claims: Record<string, unknown>): void {
+  if (!claims || typeof claims !== "object" || Array.isArray(claims)) {
+    throw new TypeError("claims must be an object");
+  }
+  const reserved_claims = ["iss", "aud", "sub", "iat", "exp", "jti", "nbf"];
+  for (const claim of reserved_claims) {
+    if (claim in claims) throw new TypeError(`claims.${claim} is reserved`);
   }
 }
 

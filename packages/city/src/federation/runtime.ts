@@ -20,6 +20,9 @@ import type { FederationStorage } from "./storage.js";
 /** 表定义类型（SQLite 或 Postgres） */
 export type TableDef = AnySQLiteTable | AnyPgTable;
 
+/** Federation 当前数据库方言。 */
+export type FederationDatabaseDialect = "sqlite" | "postgresql";
+
 // ===========================================================================
 // EnvProvider — 环境变量提供者接口
 // ===========================================================================
@@ -119,6 +122,8 @@ export interface BuiltinTables {
  * 这是 Federation 内部从 Drizzle db 组装出来的结构，不作为用户主要入口。
  */
 export interface Runtime {
+  /** 当前数据库方言，由 Federation 从 Drizzle 实例推断。 */
+  dialect: FederationDatabaseDialect;
   /**
    * 数据库实例（Drizzle Database 接口）。
    *

@@ -175,7 +175,8 @@ export function build_federation_router(params: {
           started_at: new Date(),
         };
         try {
-          ctx.waitUntil = (promise) => c.executionCtx.waitUntil(promise);
+          const execution_context = c.executionCtx;
+          ctx.waitUntil = (promise) => execution_context.waitUntil(promise);
         } catch {
           ctx.waitUntil = undefined;
         }
@@ -349,5 +350,10 @@ function ensure_city_identity_match(ctx: Context): void {
 function build_error_response(error: unknown): Response {
   const message = error instanceof Error ? error.message : String(error);
   const status = (error as { statusCode?: number }).statusCode ?? 500;
-  return Response.json({ error: { message, type: "server_error" } }, { status: status as number });
+  const code = (error as { code?: string }).code;
+  return Response.json({ error: {
+    ...(code ? { code } : {}),
+    message,
+    type: "server_error",
+  } }, { status: status as number });
 }

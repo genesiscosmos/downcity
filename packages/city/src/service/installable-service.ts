@@ -13,6 +13,15 @@ import type { CityTableApi } from "../store/table-api.js";
 import type { CreateUserTokenInput, UserTokenIssueResult, RuntimeUser } from "../federation/auth/types.js";
 import type { InstructionDefinition } from "./instruction.js";
 import type { FederationRequestTransport } from "../federation/types.js";
+import type { FederationDatabaseDialect } from "../federation/runtime.js";
+import type {
+  CreateFederationServiceTokenInput,
+  FederationServiceTokenIssueResult,
+} from "../federation/auth/types.js";
+import { run_service_transaction } from "../store/transaction.js";
+import type { AnyPgTable } from "drizzle-orm/pg-core";
+import type { AnySQLiteTable } from "drizzle-orm/sqlite-core";
+import type { FederationQueue } from "../federation/queue.js";
 
 /**
  * 框架内部安装入口。
@@ -38,8 +47,37 @@ export interface ServiceInstallContext {
   };
 
   createUserToken(input: CreateUserTokenInput): Promise<UserTokenIssueResult>;
+  /** 使用 Federation Key Ring 签发受众绑定的 Service Token。 */
+  create_service_token(
+    input: CreateFederationServiceTokenInput,
+  ): Promise<FederationServiceTokenIssueResult>;
+  /** 在同一数据库事务中执行多表领域命令。 */
+  transaction<TResult>(
+    handler: (context: ServiceTransactionContext) => Promise<TResult>,
+  ): Promise<TResult>;
   env(key: string): string | undefined;
 }
+
+/** 绑定单一数据库事务的 Service Context。 */
+export interface ServiceTransactionContext {
+  /** 读取绑定当前事务连接的数据表。 */
+  table<TRow extends Record<string, unknown> = Record<string, unknown>>(
+    name: string,
+  ): CityTableApi<TRow>;
+}
+
+/** 单一方言下的 Service 数据库声明。 */
+export interface ServiceDatabaseSchema {
+  /** 当前方言使用的 Drizzle 表。 */
+  tables: Record<string, AnySQLiteTable | AnyPgTable>;
+  /** 在通用建表前执行的幂等 DDL。 */
+  ddl?: string[];
+}
+
+/** Service 按 Federation 方言提供数据库声明。 */
+export type ServiceDatabaseSchemas = Partial<
+  Record<FederationDatabaseDialect, ServiceDatabaseSchema>
+>;
 
 export interface ServiceActionRouteConfig {
   method: "GET" | "POST";
@@ -88,6 +126,10 @@ export interface ServiceRouteContext {
   request: Request;
   /** 当前请求来源 transport。 */
   transport?: FederationRequestTransport;
+  /** Worker 等运行时用于延长后台 Promise 生命周期的能力。 */
+  waitUntil?(promise: Promise<unknown>): void;
+  /** Federation 级异步 Action Queue。 */
+  queue?: FederationQueue;
   /** 读取已解析 JSON 请求体 */
   json<T extends Record<string, unknown> = Record<string, unknown>>(): Promise<T>;
   /** 读取原始文本请求体 */
@@ -115,6 +157,8 @@ function resolve_route_auth(
 
 export abstract class InstallableService extends Service {
   readonly schema?: Record<string, any>;
+  /** 新 Service 应优先使用的方言感知数据库声明。 */
+  readonly database_schemas?: ServiceDatabaseSchemas;
   /**
    * 服务级全局 hook。
    *
@@ -162,6 +206,8 @@ export abstract class InstallableService extends Service {
           city: svcCtx.city,
           request: svcCtx.request ?? new Request("http://local"),
           transport: svcCtx.transport,
+          waitUntil: svcCtx.waitUntil,
+          queue: svcCtx.queue,
           json: async <T extends Record<string, unknown> = Record<string, unknown>>() => svcCtx.input as T,
           text: async () => svcCtx.raw_body ?? JSON.stringify(svcCtx.input),
           jsonResponse: (body, status) => new Response(JSON.stringify(body), {
@@ -192,6 +238,31 @@ export abstract class InstallableService extends Service {
         return self._authenticator.createToken(input);
       },
 
+      async create_service_token(input) {
+        if (!self._authenticator) throw new Error("Authenticator not ready");
+        return self._authenticator.create_service_token(input);
+      },
+
+      async transaction(handler) {
+        if (!self._db || !self._client || !self._database_dialect) {
+          throw new Error("InstallableService transaction runtime is not ready");
+        }
+        return await run_service_transaction({
+          database: self._db,
+          client: self._client.$client,
+          dialect: self._database_dialect,
+          handler: async (database) => handler({
+            table<TRow extends Record<string, unknown> = Record<string, unknown>>(
+              name: string,
+            ): CityTableApi<TRow> {
+              const table = self.tables?.[name];
+              if (!table) throw new Error(`Unknown table: ${name}`);
+              return new TableApi(database, table, { coordinated: false }) as unknown as CityTableApi<TRow>;
+            },
+          }),
+        });
+      },
+
       env(key) {
         return self._env?.get(key);
       },
@@ -215,6 +286,7 @@ export type ServiceDefinition = {
   name?: string;
   version?: string;
   schema?: Record<string, unknown>;
+  database_schemas?: ServiceDatabaseSchemas;
   /**
    * 服务依赖的运行时环境变量声明。
    *
@@ -234,6 +306,7 @@ export function asInstallableService(bp: ServiceDefinition): InstallableService 
       (this as any).id = bp.id;
       if (bp.name) (this as any).name = bp.name;
       if (bp.schema) (this as any).tables = bp.schema;
+      if (bp.database_schemas) (this as any).database_schemas = bp.database_schemas;
       if (bp.instruction) this.instruction = bp.instruction;
     }
     install(ctx: ServiceInstallContext): void {

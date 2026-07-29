@@ -1,0 +1,97 @@
+---
+title: Organizations
+description: 使用 Federation 管理 Organization、成员关系和 City Server 访问凭证
+---
+
+# Organizations
+
+`OrganizationsService` 管理某个 City 下的 Organization 和成员关系。Federation
+是 Membership 的唯一权威来源，Space、文档、Git Repository 等项目资源仍由各自
+的 City Server 管理。
+
+如果你正在实现接收 Token 和撤权事件的后端，请直接阅读
+[City Server 接入 Organizations](./organizations-city-server)。
+
+如果你正在开发客户端或产品后端，请阅读
+[Organizations Federation API](./organizations-api)。
+
+## 安装
+
+```ts
+import { Federation } from "@downcity/city";
+import { OrganizationsService } from "@downcity/services";
+
+const federation = new Federation({ db });
+
+federation.use(new OrganizationsService({
+  max_organizations_per_user: 3,
+  organization_token_ttl: "7d",
+}));
+```
+
+额度统计用户当前作为 Owner 持有的 active Organization。归档会释放额度，Owner
+转移会把额度移动给新 Owner。
+
+## Membership
+
+Membership 表示一个 User 属于一个 Organization。每次成功加入都会创建新的
+`membership_id`；退出或被移除后，旧 Membership 永久失效。用户以后重新加入时
+会得到新的 `membership_id`，旧 Token 不会恢复。
+
+用户只能主动申请加入：
+
+```ts
+await city.service("organizations").action("join-requests/create").invoke({
+  organization_id: "org_01J...",
+});
+```
+
+Organizations Service 不提供公开 Organization 搜索。产品可以通过邀请链接、二维码
+或自己的业务流程分享 `organization_id`。
+
+## Organization Token
+
+成员通过 Federation 换取受众绑定的长期 Token：
+
+```ts
+const result = await city.service("organizations").action("token/create").invoke({
+  organization_id: "org_01J...",
+});
+
+await fetch(`${result.server_url}/v1/spaces`, {
+  headers: {
+    authorization: `Bearer ${result.organization_token}`,
+  },
+});
+```
+
+Organization Token 精确绑定 Organization 当前 `server_url`，并包含 `user_id`、
+`city_id`、`organization_id` 和 `membership_id`。City Server 必须使用 Federation
+JWKS 本地验签。原始 `user_token` 不应发送给 City Server。
+
+`organization_token_ttl` 默认为 `7d`，最大为 `30d`。Token 的及时撤权依赖下面的可靠事件链路，
+而不是等待 Token 自然过期。
+
+## 撤权
+
+Member 退出、被移除，Organization 归档或 Server URL 更新时，Federation 会向旧
+City Server 的固定端点投递签名撤权事件：
+
+```http
+POST /v1/downcity/organization-events
+```
+
+City Server 先持久化撤权状态，再返回成功。正常项目请求只执行本地 Token 验证和
+撤权检查，不需要在线访问 Federation。
+
+生产部署应为 Federation Queue 配置 Adapter，以便持续重试暂时失败的撤权事件。
+未配置 Queue 时，Event 仍保存在 Outbox，可通过管理 Action 手动重放。
+
+Organizations Service 支持 better-sqlite3 与 PostgreSQL。D1 当前不支持所需的交互式
+多表事务，因此 Service 会在初始化时明确拒绝 D1 runtime。
+
+## 归档
+
+Organization 归档不可恢复。归档会停止治理写入、停止签发 Token，并注销已签发的
+Organization Token。City Server 如何处理自己的 Space、文档或 Repository 不属于
+Organizations Service 的职责。

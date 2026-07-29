@@ -16,7 +16,11 @@ import { UserTokenAuthority } from "./auth/user-token-authority.js";
 import { BureauTokenStore } from "./auth/bureau-token-store.js";
 import { randomSecret } from "../utils/helpers.js";
 import { initialize_service, type Service } from "../service/service.js";
-import { InstallableService, install_service } from "../service/installable-service.js";
+import {
+  InstallableService,
+  install_service,
+  type ServiceDatabaseSchema,
+} from "../service/installable-service.js";
 import type { CityUserSchemaInput } from "../store/types.js";
 import type { Runtime } from "./runtime.js";
 import type { CityRecord } from "../service/cities/types.js";
@@ -57,6 +61,7 @@ export async function initialize_federation(params: {
   const { runtime, services, require_ready } = params;
   const { database, client, env, builtinTables } = runtime;
 
+  const service_databases = resolve_service_databases(services, runtime.dialect);
   const user_schema = collect_service_schemas(services);
   const table_map = new Map<string, CityTableApi>();
   table_map.set("cities", new TableApi(database, builtinTables.cities));
@@ -72,6 +77,11 @@ export async function initialize_federation(params: {
   }
 
   const db_client = { $client: client };
+  for (const schema of service_databases) {
+    for (const ddl of schema.ddl ?? []) {
+      await executeDDL(db_client, ddl);
+    }
+  }
   for (const table of table_map.values()) {
     const ddl = buildCreateUserTableSQL(table.schema);
     if (ddl) await executeDDL(db_client, ddl);
@@ -130,6 +140,7 @@ export async function initialize_federation(params: {
     service._baseURL = configured_base_url ?? runtime.baseURL;
     service._queue = params.queue as never;
     service._storage = runtime.storage;
+    service._database_dialect = runtime.dialect;
     if (service instanceof InstallableService) {
       install_service(service);
     }
@@ -143,6 +154,29 @@ export async function initialize_federation(params: {
     city_store,
     authenticator,
   };
+}
+
+/**
+ * 根据 Federation 当前方言选择 Service 数据库声明。
+ *
+ * 方言声明在建表和安装 Route 前完成，保证 Table API、DDL 与 Repository 使用
+ * 同一组表对象。
+ */
+function resolve_service_databases(
+  services: Service[],
+  dialect: Runtime["dialect"],
+): ServiceDatabaseSchema[] {
+  const resolved: ServiceDatabaseSchema[] = [];
+  for (const service of services) {
+    if (!(service instanceof InstallableService) || !service.database_schemas) continue;
+    const schema = service.database_schemas[dialect];
+    if (!schema) {
+      throw new Error(`${service.id} service does not support ${dialect}`);
+    }
+    service.tables = schema.tables;
+    resolved.push(schema);
+  }
+  return resolved;
 }
 
 /**

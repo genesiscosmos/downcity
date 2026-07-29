@@ -1,0 +1,99 @@
+---
+title: Organizations
+description: Manage organizations, memberships, and City Server access credentials in Federation
+---
+
+# Organizations
+
+`OrganizationsService` manages organizations and membership relationships within a City.
+Federation is the sole authority for Membership. Project resources such as spaces, documents,
+and Git repositories remain owned by their respective City Servers.
+
+If you are implementing the backend that receives tokens and revocation events, continue with
+[Integrate Organizations into a City Server](./organizations-city-server).
+
+For client and product-backend calls, see the complete
+[Organizations Federation API](./organizations-api).
+
+## Install
+
+```ts
+import { Federation } from "@downcity/city";
+import { OrganizationsService } from "@downcity/services";
+
+const federation = new Federation({ db });
+
+federation.use(new OrganizationsService({
+  max_organizations_per_user: 3,
+  organization_token_ttl: "7d",
+}));
+```
+
+The quota counts active organizations currently owned by a user. Archiving releases a slot,
+while an owner transfer moves the slot to the new owner.
+
+## Membership
+
+A Membership represents one user belonging to one organization. Each successful join creates
+a new `membership_id`. Leaving or removal permanently revokes that Membership. Rejoining creates
+a different ID, so old tokens never become valid again.
+
+Users join by submitting their own request:
+
+```ts
+await city.service("organizations").action("join-requests/create").invoke({
+  organization_id: "org_01J...",
+});
+```
+
+The service does not expose public organization search. Products can share `organization_id`
+through invitation links, QR codes, or their own workflows.
+
+## Organization Token
+
+An active member exchanges the current Federation `user_token` for an audience-bound token:
+
+```ts
+const result = await city.service("organizations").action("token/create").invoke({
+  organization_id: "org_01J...",
+});
+
+await fetch(`${result.server_url}/v1/spaces`, {
+  headers: {
+    authorization: `Bearer ${result.organization_token}`,
+  },
+});
+```
+
+The token is bound to the organization's current `server_url` and contains `user_id`, `city_id`,
+`organization_id`, and `membership_id`. The City Server verifies it locally with Federation JWKS.
+The original `user_token` must never be sent to the City Server.
+
+`organization_token_ttl` defaults to `7d` and cannot exceed `30d`. Timely revocation relies on
+the reliable event flow below rather than waiting for the token to expire naturally.
+
+## Revocation
+
+When a member leaves or is removed, an organization is archived, or its Server URL changes,
+Federation sends a signed revocation event to the old City Server:
+
+```http
+POST /v1/downcity/organization-events
+```
+
+The City Server persists the revocation before acknowledging it. Normal project requests only
+perform local token verification and revocation checks; they do not call Federation online.
+
+Production deployments should configure a Federation Queue adapter so failed deliveries keep
+retrying. Without a Queue adapter, events remain in the Outbox and can be replayed through the
+protected delivery action.
+
+Organizations Service supports better-sqlite3 and PostgreSQL. D1 does not currently provide the
+interactive multi-table transactions this service requires, so initialization explicitly rejects
+a D1 runtime.
+
+## Archive
+
+Archiving is terminal. It stops governance mutations and token issuance and revokes existing
+Organization Tokens. Organizations Service does not decide how the City Server retains or handles
+its own project resources.

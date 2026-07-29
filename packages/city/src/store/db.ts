@@ -26,6 +26,10 @@ export interface DbClient {
   close?(): void;
   /** 关闭连接（异步，可选） */
   end?(): Promise<void>;
+  /** better-sqlite3 同步事务能力，用于识别可交互事务运行时。 */
+  transaction?<TArgs extends unknown[], TResult>(
+    callback: (...args: TArgs) => TResult,
+  ): (...args: TArgs) => TResult;
 }
 
 // ===========================================================================
@@ -65,6 +69,10 @@ export interface Database {
   insert(t: unknown): { values(v: Record<string, unknown> | Record<string, unknown>[]): InsertQuery };
   update(t: unknown): { set(v: Record<string, unknown>): { where(c: SQL | undefined): Promise<unknown> } };
   delete(t: unknown): { where(c: SQL | undefined): Promise<unknown> };
+  /** PostgreSQL 等异步方言提供的原生事务入口。 */
+  transaction?<TResult>(
+    callback: (database: Database) => Promise<TResult>,
+  ): Promise<TResult> | TResult;
 }
 
 // ===========================================================================

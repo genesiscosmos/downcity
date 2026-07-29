@@ -13,7 +13,13 @@
 export { Federation } from "./federation/federation.js";
 export type { FederationOptions, FederationHealthStatus } from "./federation/types.js";
 export type { FederationFetchOptions, FederationRequestExecutionContext } from "./federation/types.js";
-export type { Runtime, EnvProvider, BuiltinTables, TableDef } from "./federation/runtime.js";
+export type {
+  Runtime,
+  EnvProvider,
+  BuiltinTables,
+  TableDef,
+  FederationDatabaseDialect,
+} from "./federation/runtime.js";
 export type { CityQueueAdapter, CityQueueMessage } from "./federation/queue.js";
 export { R2Storage } from "./federation/storage.js";
 export type {
@@ -62,6 +68,9 @@ export type {
   ServiceDefinition,
   ServiceInstallContext,
   ServiceRouteContext,
+  ServiceTransactionContext,
+  ServiceDatabaseSchema,
+  ServiceDatabaseSchemas,
 } from "./service/installable-service.js";
 
 export type {
@@ -153,6 +162,8 @@ export type {
   FederationDiscovery,
   FederationJwks,
   FederationPublicJwk,
+  CreateFederationServiceTokenInput,
+  FederationServiceTokenIssueResult,
 } from "./federation/auth/types.js";
 
 export type {

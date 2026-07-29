@@ -19,6 +19,8 @@ export interface ErrorWithStatus extends Error {
    * 要返回给客户端的 HTTP 状态码。
    */
   statusCode?: number;
+  /** 对外稳定错误码；未声明时由 Router 省略。 */
+  code?: string;
 }
 
 // ===========================================================================
@@ -72,6 +74,8 @@ export function json(body: unknown, status = 200): Response {
 export function httpError(statusCode: number, message: string): ErrorWithStatus {
   const error = new Error(message) as ErrorWithStatus;
   error.statusCode = statusCode;
+  const code = message.match(/^([A-Z][A-Z0-9_]+)(?::|$)/u)?.[1];
+  if (code) error.code = code;
   return error;
 }
 

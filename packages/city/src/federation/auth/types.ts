@@ -186,3 +186,27 @@ export interface UserTokenIssueResult {
    */
   expires_at: string;
 }
+
+/** Federation 为可信 Service 签发受众绑定 Token 的输入。 */
+export interface CreateFederationServiceTokenInput {
+  /** Token 受众，例如目标 City Server Origin。 */
+  audience: string;
+  /** Token 主体。 */
+  subject: string;
+  /** Token 类型前缀，例如 `ot_`。 */
+  prefix: string;
+  /** Token 有效期，格式与 user_token TTL 一致。 */
+  ttl: string | number;
+  /** Service 自己拥有的非标准 Claims。 */
+  claims: Record<string, unknown>;
+}
+
+/** Federation Service Token 签发结果。 */
+export interface FederationServiceTokenIssueResult {
+  /** 带业务前缀的 Compact JWT。 */
+  token: string;
+  /** Token 唯一 ID。 */
+  token_id: string;
+  /** ISO 8601 过期时间。 */
+  expires_at: string;
+}

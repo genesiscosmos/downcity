@@ -33,6 +33,7 @@ export function create_federation_runtime(options: FederationOptions): Runtime {
   const client = extract_db_client(options.db);
 
   return {
+    dialect: dialect === "pg" ? "postgresql" : "sqlite",
     database: options.db,
     client,
     env: new DatabaseEnvProvider(),

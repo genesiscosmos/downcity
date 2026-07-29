@@ -1,4 +1,4 @@
 {
   "title": "Federation & Service",
-  "pages": ["overview", "model-provider", "local-proxy", "service", "action", "routing"]
+  "pages": ["overview", "organizations", "organizations-api", "organizations-city-server", "model-provider", "local-proxy", "service", "action", "routing"]
 }

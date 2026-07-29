@@ -20,6 +20,8 @@ import type {
   UserTokenPayload,
   UserTokenIssueResult,
   RuntimeUser,
+  CreateFederationServiceTokenInput,
+  FederationServiceTokenIssueResult,
 } from "./types.js";
 import type { FederationTrustedIdentity } from "../types.js";
 
@@ -154,6 +156,13 @@ export class Authenticator {
    */
   async verifyToken(token: string): Promise<UserTokenPayload> {
     return this.token_authority.verify(token);
+  }
+
+  /** 为可信 Service 签发受众绑定的业务 Token。 */
+  create_service_token(
+    input: CreateFederationServiceTokenInput,
+  ): Promise<FederationServiceTokenIssueResult> {
+    return this.token_authority.sign_service_token(input);
   }
 
   /** 返回 Federation 当前可公开使用的 JWKS。 */

@@ -131,3 +131,43 @@ export type {
 
 export { usageEvents, UsageService } from "./usage/index.js";
 export type { UsageServiceOptions } from "./usage/index.js";
+
+export {
+  OrganizationsService,
+  pg_organization_events,
+  pg_organization_join_requests,
+  pg_organization_memberships,
+  pg_organization_owner_slots,
+  pg_organizations,
+  sqlite_organization_events,
+  sqlite_organization_join_requests,
+  sqlite_organization_memberships,
+  sqlite_organization_owner_slots,
+  sqlite_organizations,
+} from "./organizations/index.js";
+export type {
+  OrganizationCreateInput,
+  OrganizationEventRecord,
+  OrganizationEventType,
+  OrganizationIdInput,
+  OrganizationJoinRequestDecisionInput,
+  OrganizationJoinRequestIdInput,
+  OrganizationJoinRequestRecord,
+  OrganizationJoinRequestState,
+  OrganizationMemberRemoveInput,
+  OrganizationMemberRoleInput,
+  OrganizationMembershipRecord,
+  OrganizationMembershipState,
+  OrganizationOwnerSlotRecord,
+  OrganizationOwnerTransferInput,
+  OrganizationRecord,
+  OrganizationRevocationEvent,
+  OrganizationRole,
+  OrganizationsServiceOptions,
+  OrganizationServerUpdateInput,
+  OrganizationState,
+  OrganizationTokenClaims,
+  OrganizationTokenIssueResult,
+  OrganizationUpdateInput,
+  UserOrganization,
+} from "./organizations/index.js";

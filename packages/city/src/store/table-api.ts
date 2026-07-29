@@ -16,6 +16,7 @@ import {
 } from "drizzle-orm";
 import type { Database } from "./db.js";
 import { quoteIdent } from "../utils/helpers.js";
+import { run_coordinated_database_operation } from "./transaction.js";
 
 // ===========================================================================
 // CityTableApi 类型
@@ -47,36 +48,48 @@ export class TableApi implements CityTableApi {
   readonly schema: AnySQLiteTable | AnyPgTable;
 
   private readonly db: Database;
+  private readonly coordinated: boolean;
 
-  constructor(db: Database, schema: AnySQLiteTable | AnyPgTable) {
+  constructor(
+    db: Database,
+    schema: AnySQLiteTable | AnyPgTable,
+    options: { coordinated?: boolean } = {},
+  ) {
     this.db = db;
     this.schema = schema;
     this.name = getTableName(schema);
+    this.coordinated = options.coordinated ?? true;
   }
 
   async select(where: Record<string, unknown> = {}): Promise<Record<string, unknown>[]> {
-    const cond = buildCondition(this.schema, where);
-    const query = this.db.select().from(this.schema as unknown);
-    const rows = cond
-      ? await (query as { where(c: SQL | undefined): Promise<Record<string, unknown>[]> }).where(cond)
-      : await (query as Promise<Record<string, unknown>[]>);
-    return rows.map((row: Record<string, unknown>) => ({ ...row }));
+    return await this.run(async () => {
+      const cond = buildCondition(this.schema, where);
+      const query = this.db.select().from(this.schema as unknown);
+      const rows = cond
+        ? await (query as { where(c: SQL | undefined): Promise<Record<string, unknown>[]> }).where(cond)
+        : await (query as Promise<Record<string, unknown>[]>);
+      return rows.map((row: Record<string, unknown>) => ({ ...row }));
+    });
   }
 
   async insert(values: Record<string, unknown> | Record<string, unknown>[]): Promise<void> {
     const rows = Array.isArray(values) ? values : [values];
     if (rows.length === 0) throw new TypeError("insert() values cannot be empty");
-    await this.db.insert(this.schema as unknown).values(rows);
+    await this.run(async () => {
+      await this.db.insert(this.schema as unknown).values(rows);
+    });
   }
 
   async insert_if_absent(value: Record<string, unknown>): Promise<void> {
     if (Object.keys(value).length === 0) {
       throw new TypeError("insert_if_absent() value cannot be empty");
     }
-    await this.db
-      .insert(this.schema as unknown)
-      .values(value)
-      .onConflictDoNothing();
+    await this.run(async () => {
+      await this.db
+        .insert(this.schema as unknown)
+        .values(value)
+        .onConflictDoNothing();
+    });
   }
 
   async update(input: {
@@ -89,15 +102,23 @@ export class TableApi implements CityTableApi {
     const cond = buildCondition(this.schema, input.where);
     if (!cond) throw new TypeError("update() where cannot be empty");
     // Drizzle update 返回类型因方言而异
-    const result = await this.db.update(this.schema as unknown).set(input.values).where(cond);
+    const result = await this.run(async () =>
+      await this.db.update(this.schema as unknown).set(input.values).where(cond));
     return read_mutation_count(result);
   }
 
   async delete(where: Record<string, unknown>): Promise<number> {
     const cond = buildCondition(this.schema, where);
     if (!cond) throw new TypeError("delete() where cannot be empty");
-    const result = await this.db.delete(this.schema as unknown).where(cond);
+    const result = await this.run(async () =>
+      await this.db.delete(this.schema as unknown).where(cond));
     return read_mutation_count(result);
+  }
+
+  /** 执行普通协调操作，或在事务 Context 中直接使用绑定连接。 */
+  private async run<TResult>(handler: () => Promise<TResult>): Promise<TResult> {
+    if (!this.coordinated) return await handler();
+    return await run_coordinated_database_operation(this.db as object, handler);
   }
 }
 

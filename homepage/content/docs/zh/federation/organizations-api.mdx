@@ -1,0 +1,544 @@
+---
+title: Organizations Federation API
+description: Organizations Service 的完整 Federation HTTP 与 SDK API Reference
+---
+
+# Organizations Federation API
+
+这篇文档面向调用 Federation 的客户端和产品后端，完整描述 `OrganizationsService`
+公开的 Action。City Server 如何消费 `organization_token` 和撤权事件，请阅读
+[City Server 接入 Organizations](./organizations-city-server)。
+
+## 安装与配置
+
+```ts
+import { Federation } from "@downcity/city";
+import { OrganizationsService } from "@downcity/services";
+
+const federation = new Federation({ db });
+
+federation.use(new OrganizationsService({
+  max_organizations_per_user: 3,
+  organization_token_ttl: "7d",
+}));
+```
+
+| Option | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `max_organizations_per_user` | 是 | 无 | 一个用户在同一 City 中最多拥有的 active Organization 数量 |
+| `organization_token_ttl` | 否 | `7d` | Organization Token 有效期；支持秒数或 `s/m/h/d` 字符串，最大 `30d` |
+| `fetch` | 否 | `globalThis.fetch` | 撤权事件投递函数，主要用于自定义 Runtime 或测试 |
+
+当前支持 better-sqlite3 与 PostgreSQL。D1 缺少交互式多表事务，因此 Service 初始化时
+会明确拒绝 D1。生产环境应配置 Federation Queue Adapter 来重试 Outbox 事件。
+
+## Base URL 与认证
+
+所有公开 Action 位于：
+
+```text
+{federation_origin}/v1/organizations/{action}
+```
+
+除 `events/deliver` 外，所有接口都要求当前用户的 Federation `user_token`：
+
+```http
+Authorization: Bearer ub_<JWT>
+```
+
+`user_id` 和 `city_id` 始终从已经验证的 `user_token` 取得。客户端不能通过 Body 或
+Query 覆盖它们。Token 中的 City 必须和目标 Organization 的 `city_id` 一致。
+
+`events/deliver` 是运维接口，只接受 Federation Admin 凭证或 Runtime 内部可信身份。
+
+## HTTP 与 SDK 调用规则
+
+- `GET` Action 使用 Query String，不读取 JSON Body；
+- `POST` Action 使用 `application/json` Body；
+- 成功响应均为 `200 application/json`；
+- 时间字段均为 ISO 8601 字符串；
+- 未发生的时间和执行者字段当前返回空字符串 `""`。
+
+原始 HTTP：
+
+```http
+GET /v1/organizations/get?organization_id=org_01J...
+Authorization: Bearer ub_...
+```
+
+```http
+POST /v1/organizations/create
+Authorization: Bearer ub_...
+Content-Type: application/json
+
+{
+  "name": "Research Team",
+  "server_url": "https://city.example.com"
+}
+```
+
+通过 City SDK 调用：
+
+```ts
+const organizations = city.service("organizations");
+
+const my = await organizations.get("my");
+
+const created = await organizations.action("create").invoke({
+  name: "Research Team",
+  server_url: "https://city.example.com",
+});
+```
+
+## 公共数据结构
+
+### Organization
+
+```ts
+type Organization = {
+  organization_id: string; // org_<ULID>
+  city_id: string;
+  name: string;
+  server_url: string;
+  state: "active" | "archived";
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string; // active 时为 ""
+};
+```
+
+`server_url` 是标准化后的 City Server Origin：只能使用绝对 HTTP/HTTPS URL，不允许
+凭证、Path、Query 或 Fragment，保存时移除末尾 `/`。生产环境应使用 HTTPS。
+
+### Membership
+
+```ts
+type Membership = {
+  membership_id: string; // mem_<ULID>
+  organization_id: string;
+  user_id: string;
+  role: "owner" | "admin" | "member";
+  state: "active" | "removed";
+  created_at: string;
+  updated_at: string;
+  removed_at: string; // active 时为 ""
+  removed_by: string; // active 时为 ""
+};
+```
+
+removed Membership 永不恢复。用户重新加入会创建新的 `membership_id`。
+
+### Join Request
+
+```ts
+type JoinRequest = {
+  request_id: string; // join_<ULID>
+  organization_id: string;
+  user_id: string;
+  state: "pending" | "approved" | "rejected" | "canceled";
+  requested_at: string;
+  decided_at: string; // pending 时为 ""
+  decided_by: string; // pending 时为 ""
+};
+```
+
+## 角色权限
+
+| 操作 | Owner | Admin | Member |
+| --- | --- | --- | --- |
+| 读取 Organization 与成员列表 | ✓ | ✓ | ✓ |
+| 修改 Organization 名称 | ✓ | ✓ | — |
+| 修改 `server_url` | ✓ | — | — |
+| 归档 Organization | ✓ | — | — |
+| 批准或拒绝 Join Request | ✓ | ✓ | — |
+| 任命或撤销 Admin | ✓ | — | — |
+| 移除 Member | ✓ | ✓ | — |
+| 移除 Admin | ✓ | — | — |
+| 转移 Owner | ✓ | — | — |
+| 主动退出 | 先转移 | ✓ | ✓ |
+| 签发自己的 Organization Token | ✓ | ✓ | ✓ |
+
+Owner/Admin 不能直接添加用户。用户必须先主动创建 Join Request。
+
+## Action 总览
+
+| Method | Action | 权限 | 用途 |
+| --- | --- | --- | --- |
+| `GET` | `my` | User | 列出当前用户的 Organization |
+| `GET` | `get` | Member | 读取一个已加入的 Organization |
+| `POST` | `create` | User | 创建 Organization 并成为 Owner |
+| `POST` | `update` | Owner/Admin | 修改名称 |
+| `POST` | `server/update` | Owner | 修改 City Server URL |
+| `POST` | `archive` | Owner | 不可恢复地归档 Organization |
+| `GET` | `membership/get` | Member | 读取当前用户的 Membership |
+| `GET` | `members/list` | Member | 列出 active Membership |
+| `POST` | `members/role` | Owner | 设置 Admin/Member |
+| `POST` | `members/remove` | Owner/Admin | 移除允许管理的成员 |
+| `POST` | `members/leave` | Admin/Member | 主动退出 |
+| `POST` | `owner/transfer` | Owner | 转移唯一 Owner |
+| `POST` | `join-requests/create` | User | 主动申请加入 |
+| `POST` | `join-requests/cancel` | Applicant | 取消自己的 pending 申请 |
+| `GET` | `join-requests/list` | Owner/Admin | 列出 pending 申请 |
+| `POST` | `join-requests/decide` | Owner/Admin | 批准或拒绝申请 |
+| `POST` | `token/create` | Member | 换取 Organization Token |
+| `POST` | `events/deliver` | Federation Admin | 手动推进撤权 Outbox |
+
+## Organization API
+
+### `GET my`
+
+列出当前 Token City 中，用户仍有 active Membership 的 Organization。Organization
+归档后，如果 Membership 仍 active，仍会出现在列表中并标记 `state: "archived"`。
+
+```http
+GET /v1/organizations/my
+Authorization: Bearer ub_...
+```
+
+```json
+{
+  "items": [
+    {
+      "organization_id": "org_01J...",
+      "city_id": "city_01J...",
+      "name": "Research Team",
+      "server_url": "https://city.example.com",
+      "state": "active",
+      "created_by": "user_1",
+      "created_at": "2026-07-29T10:00:00.000Z",
+      "updated_at": "2026-07-29T10:00:00.000Z",
+      "archived_at": "",
+      "role": "owner",
+      "membership_id": "mem_01J...",
+      "membership_state": "active"
+    }
+  ]
+}
+```
+
+### `GET get`
+
+读取 Organization 和当前用户的 active Membership。
+
+```http
+GET /v1/organizations/get?organization_id=org_01J...
+Authorization: Bearer ub_...
+```
+
+```json
+{
+  "organization": { "organization_id": "org_01J...", "state": "active" },
+  "membership": { "membership_id": "mem_01J...", "role": "member", "state": "active" }
+}
+```
+
+只有 active Member 可以读取。接口允许读取自己仍有 Membership 的 archived Organization。
+
+### `POST create`
+
+任何已认证用户都可以在额度内创建 Organization。`city_id` 来自 `user_token`，创建者
+自动获得唯一 Owner Membership。
+
+```json
+{
+  "name": "Research Team",
+  "server_url": "https://city.example.com/"
+}
+```
+
+返回：
+
+```json
+{
+  "organization": {
+    "organization_id": "org_01J...",
+    "city_id": "city_01J...",
+    "name": "Research Team",
+    "server_url": "https://city.example.com",
+    "state": "active"
+  },
+  "membership": {
+    "membership_id": "mem_01J...",
+    "role": "owner",
+    "state": "active"
+  }
+}
+```
+
+创建额度只统计当前拥有的 active Organization。归档会释放槽位，Owner 转移会把槽位
+移动给新 Owner。并发创建由数据库事务和唯一额度槽位保护。
+
+### `POST update`
+
+Owner/Admin 修改展示名称：
+
+```json
+{
+  "organization_id": "org_01J...",
+  "name": "New Name"
+}
+```
+
+`name` 去除首尾空白后长度必须为 1–120。返回更新后的 Organization。
+
+### `POST server/update`
+
+只有 Owner 可以修改 Server Origin：
+
+```json
+{
+  "organization_id": "org_01J...",
+  "server_url": "https://new-city.example.com"
+}
+```
+
+更新与 `organization.server_url.changed` Outbox Event 在同一事务中提交。Event 投递给
+旧 Server；更新后签发的 Token 只绑定新 Server。相同 URL 是幂等操作，不创建 Event。
+
+### `POST archive`
+
+```json
+{ "organization_id": "org_01J..." }
+```
+
+只有 Owner 可以归档。归档不可恢复，并会：
+
+- 停止所有 Organization 治理写入；
+- 停止 Join Request 与 Token 签发；
+- 释放 Owner 创建额度；
+- 写入 `organization.archived` 撤权事件；
+- 保留 Organization、Membership、Join Request 和审计记录。
+
+返回更新后的 archived Organization。重复归档返回 `410 ORGANIZATION_ARCHIVED`。
+
+## Membership API
+
+### `GET membership/get`
+
+```http
+GET /v1/organizations/membership/get?organization_id=org_01J...
+Authorization: Bearer ub_...
+```
+
+返回 `{ organization, membership }`，其中 Membership 一定属于当前用户且为 active。
+
+### `GET members/list`
+
+```http
+GET /v1/organizations/members/list?organization_id=org_01J...
+Authorization: Bearer ub_...
+```
+
+任意 active Member 可以调用。返回：
+
+```json
+{ "items": [{ "membership_id": "mem_01J...", "role": "member", "state": "active" }] }
+```
+
+历史 removed Membership 不在结果中。
+
+### `POST members/role`
+
+只有 Owner 可以把 active Member/Admin 设置为 `admin` 或 `member`：
+
+```json
+{
+  "organization_id": "org_01J...",
+  "membership_id": "mem_01J...",
+  "role": "admin"
+}
+```
+
+不能用这个 Action 设置 Owner；Owner 必须通过 `owner/transfer` 转移。
+
+### `POST members/remove`
+
+```json
+{
+  "organization_id": "org_01J...",
+  "membership_id": "mem_01J..."
+}
+```
+
+- Owner 可以移除 Admin 或 Member；
+- Admin 只能移除 Member；
+- Owner 不能被移除，必须先转移；
+- 成功后返回 `state: "removed"` 的 Membership；
+- Membership 更新与 `organization.membership.removed` Event 原子提交。
+
+### `POST members/leave`
+
+Admin/Member 主动退出：
+
+```json
+{ "organization_id": "org_01J..." }
+```
+
+返回 removed Membership，并写入撤权 Event。Owner 调用会返回
+`409 OWNER_TRANSFER_REQUIRED`。
+
+### `POST owner/transfer`
+
+当前 Owner 将唯一 Owner 身份转移给另一个 active Membership：
+
+```json
+{
+  "organization_id": "org_01J...",
+  "membership_id": "mem_new_owner"
+}
+```
+
+新 Owner 必须还有可用的 Organization 创建额度。成功后原 Owner 变为 Admin：
+
+```json
+{
+  "previous_owner": { "membership_id": "mem_old", "role": "admin" },
+  "owner": { "membership_id": "mem_new_owner", "role": "owner" }
+}
+```
+
+## Join Request API
+
+### `POST join-requests/create`
+
+用户通过已知的 `organization_id` 主动申请：
+
+```json
+{ "organization_id": "org_01J..." }
+```
+
+Organizations Service 不提供公开搜索。产品应通过邀请链接、二维码或自己的业务流程
+传递 `organization_id`。
+
+首次申请返回 pending Join Request。重复申请幂等返回同一条 pending 记录。如果用户
+已经是 active Member，则返回：
+
+```json
+{
+  "state": "joined",
+  "organization": { "organization_id": "org_01J..." },
+  "membership": { "membership_id": "mem_01J...", "state": "active" }
+}
+```
+
+### `POST join-requests/cancel`
+
+申请人取消自己的 pending Request：
+
+```json
+{ "request_id": "join_01J..." }
+```
+
+返回 `state: "canceled"` 的 Join Request。已决定、已取消或属于其他用户的 Request
+统一按不存在处理。
+
+### `GET join-requests/list`
+
+```http
+GET /v1/organizations/join-requests/list?organization_id=org_01J...
+Authorization: Bearer ub_...
+```
+
+Owner/Admin 可调用，只返回 pending Request：
+
+```json
+{ "items": [{ "request_id": "join_01J...", "user_id": "user_2", "state": "pending" }] }
+```
+
+### `POST join-requests/decide`
+
+```json
+{
+  "request_id": "join_01J...",
+  "decision": "approved"
+}
+```
+
+`decision` 只能为 `approved` 或 `rejected`。Owner/Admin 可以决定 pending Request。
+批准会在同一事务中创建新的 Member Membership：
+
+```json
+{
+  "request": { "request_id": "join_01J...", "state": "approved" },
+  "membership": { "membership_id": "mem_01J...", "role": "member", "state": "active" }
+}
+```
+
+拒绝时只返回已更新的 `request`，`membership` 不存在。rejected/canceled 后允许用户
+重新申请，并生成新的 `request_id`。
+
+## Organization Token API
+
+### `POST token/create`
+
+active Member 使用当前 `user_token` 换取目标 City Server 的凭证：
+
+```json
+{ "organization_id": "org_01J..." }
+```
+
+```json
+{
+  "organization_token": "ot_eyJ...",
+  "organization_id": "org_01J...",
+  "server_url": "https://city.example.com",
+  "expires_at": "2026-08-05T10:00:00.000Z"
+}
+```
+
+Token 默认有效期为 7 天，`aud` 精确绑定返回的 `server_url`，包含 `user_id`、
+`city_id`、`organization_id` 和 `membership_id`。它不包含 Organization Role 或项目
+资源权限。客户端只能把它发送给返回的 City Server，不能用它调用 Federation API。
+
+archived Organization、removed Membership 或非成员调用都会失败。
+
+## Outbox 运维 API
+
+### `POST events/deliver`
+
+仅 Federation Admin 使用：
+
+```http
+POST /v1/organizations/events/deliver
+Authorization: Bearer <federation-admin-secret>
+Content-Type: application/json
+
+{}
+```
+
+```json
+{ "delivered": 12, "pending": 2 }
+```
+
+每次最多尝试一批 pending Event。`pending` 是尝试后完整 Outbox 中仍未成功的数量。
+生产运行时应优先配置 Queue Adapter 自动重试；这个 Action 用于运维重放和故障恢复。
+
+## 错误响应
+
+```json
+{
+  "error": {
+    "code": "ORGANIZATION_ROLE_DENIED",
+    "message": "ORGANIZATION_ROLE_DENIED",
+    "type": "server_error"
+  }
+}
+```
+
+| HTTP | Code | 含义 |
+| --- | --- | --- |
+| `400` | `ORGANIZATION_INPUT_INVALID` | 名称、ID、角色或决策格式错误 |
+| `400` | `ORGANIZATION_SERVER_URL_INVALID` | Server URL 不符合 Origin 规则 |
+| `401` | `AUTH_REQUIRED` 或无 Code | 缺少、过期或无效的用户凭证 |
+| `403` | `ORGANIZATION_CITY_MISMATCH` | Token City 与 Organization 不一致 |
+| `403` | `NOT_AN_ORGANIZATION_MEMBER` | 当前用户没有 active Membership |
+| `403` | `ORGANIZATION_ROLE_DENIED` | 当前治理角色不能执行操作 |
+| `404` | `ORGANIZATION_NOT_FOUND` | Organization 不存在 |
+| `404` | `ORGANIZATION_MEMBERSHIP_NOT_FOUND` | 目标 Membership 不存在或不再 active |
+| `404` | `JOIN_REQUEST_NOT_FOUND` | Join Request 不存在或不再 pending |
+| `409` | `ORGANIZATION_LIMIT_REACHED` | 当前用户的 Owner 创建额度已满 |
+| `409` | `OWNER_TRANSFER_REQUIRED` | 操作前必须转移 Owner |
+| `410` | `ORGANIZATION_ARCHIVED` | Organization 已归档，写入和 Token 签发停止 |
+
+客户端应基于 `error.code` 处理业务分支，不要匹配人类可读的 `message`。
