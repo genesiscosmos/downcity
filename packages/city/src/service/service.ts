@@ -23,6 +23,14 @@ import type { FederationStorage } from "../federation/storage.js";
 import type { FederationRequestTransport } from "../federation/types.js";
 import type { BureauTokenStore } from "../federation/auth/bureau-token-store.js";
 
+/**
+ * 框架内部初始化入口。
+ *
+ * 使用模块私有 Symbol，避免 Service 子类覆盖 Federation 掌握的生命周期入口。
+ * 业务 Service 只能通过 `on_init()` 扩展自己的初始化逻辑。
+ */
+const SERVICE_INITIALIZE = Symbol("downcity.service.initialize");
+
 // ===========================================================================
 // 鉴权级别
 // ===========================================================================
@@ -213,7 +221,21 @@ export class Service {
 
   // ========== 生命周期 ==========
 
-  async _onInit(): Promise<void> {}
+  /**
+   * 执行框架内部初始化流程。
+   *
+   * 该入口由 `initialize_service()` 通过模块私有 Symbol 调用，子类无法覆盖。
+   */
+  async [SERVICE_INITIALIZE](): Promise<void> {
+    await this.on_init();
+  }
+
+  /**
+   * Service 自定义初始化扩展点。
+   *
+   * 子类只应覆盖该方法处理自身状态，框架级安装流程由 Federation 独立保证。
+   */
+  protected async on_init(): Promise<void> {}
 
   // ========== Action 注册 ==========
 
@@ -286,6 +308,15 @@ export class Service {
       auth: item.auth,
     }));
   }
+}
+
+/**
+ * 执行 Service 自定义初始化。
+ *
+ * 该函数仅供 Federation 内部生命周期编排使用，不从 package 公共入口导出。
+ */
+export async function initialize_service(service: Service): Promise<void> {
+  await service[SERVICE_INITIALIZE]();
 }
 
 export type InstructionService = Service & InstructionCapable;

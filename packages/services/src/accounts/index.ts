@@ -122,7 +122,7 @@ export class AccountsService extends InstallableService {
     ].join("\n");
   }
 
-  async _onInit(): Promise<void> {
+  protected override async on_init(): Promise<void> {
     this.auth = betterAuth({
       secret: this._env?.get("BETTER_AUTH_SECRET"),
       database: drizzleAdapter(this.readDrizzleDb(), {
@@ -164,8 +164,6 @@ export class AccountsService extends InstallableService {
       },
       socialProviders: buildSocialProviders((key: string) => this._env?.get(key), this.getRegisteredOAuthProviderIds()),
     } as any);
-
-    await super._onInit();
   }
 
   install(ctx: ServiceInstallContext): void {

@@ -128,7 +128,7 @@ export class CreditsService extends InstallableService {
   }
 
   /** 初始化动态建表器尚未覆盖的索引与数据库级余额约束。 */
-  override async _onInit(): Promise<void> {
+  protected override async on_init(): Promise<void> {
     await raw_atomic(this.resolve_raw(), [
       { sql: `CREATE UNIQUE INDEX IF NOT EXISTS service_credits_transactions_kind_idempotency_idx ON ${TRANSACTION_TABLE} (kind, idempotency_key)`, params: [] },
       { sql: `CREATE INDEX IF NOT EXISTS service_credits_transactions_user_created_idx ON ${TRANSACTION_TABLE} (user_id, created_at)`, params: [] },

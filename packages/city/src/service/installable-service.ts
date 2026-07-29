@@ -14,6 +14,13 @@ import type { CreateUserTokenInput, UserTokenIssueResult, RuntimeUser } from "..
 import type { InstructionDefinition } from "./instruction.js";
 import type { FederationRequestTransport } from "../federation/types.js";
 
+/**
+ * 框架内部安装入口。
+ *
+ * 使用模块私有 Symbol，保证 InstallableService 子类无法覆盖路由安装流程。
+ */
+const INSTALL_SERVICE = Symbol("downcity.service.install");
+
 // ===========================================================================
 // ServiceInstallContext
 // ===========================================================================
@@ -122,7 +129,13 @@ export abstract class InstallableService extends Service {
 
   abstract install(ctx: ServiceInstallContext): void;
 
-  async _onInit(): Promise<void> {
+  /**
+   * 安装 Service 的 Schema 映射、Action Route、Native Route 与全局 Hook。
+   *
+   * 该入口由 `install_service()` 通过模块私有 Symbol 调用，业务子类只能实现
+   * `install(ctx)`，不能跳过框架安装流程。
+   */
+  [INSTALL_SERVICE](): void {
     if (this.schema && !this.tables) {
       (this as any).tables = this.schema;
     }
@@ -186,6 +199,15 @@ export abstract class InstallableService extends Service {
 
     this.install(ctx);
   }
+}
+
+/**
+ * 执行 InstallableService 框架安装流程。
+ *
+ * 该函数仅供 Federation 内部生命周期编排使用，不从 package 公共入口导出。
+ */
+export function install_service(service: InstallableService): void {
+  service[INSTALL_SERVICE]();
 }
 
 export type ServiceDefinition = {

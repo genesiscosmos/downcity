@@ -38,7 +38,7 @@ export class BureausService extends Service {
     }, { auth: ["admin"] });
   }
 
-  async _onInit(): Promise<void> {
+  protected override async on_init(): Promise<void> {
     this.store = this._bureauTokenStore!;
   }
 }

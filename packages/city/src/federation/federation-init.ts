@@ -15,7 +15,8 @@ import { CREATE_FEDERATION_ACTIVE_AUTH_KEY_INDEX_SQL } from "./auth/key-schema.j
 import { UserTokenAuthority } from "./auth/user-token-authority.js";
 import { BureauTokenStore } from "./auth/bureau-token-store.js";
 import { randomSecret } from "../utils/helpers.js";
-import type { Service } from "../service/service.js";
+import { initialize_service, type Service } from "../service/service.js";
+import { InstallableService, install_service } from "../service/installable-service.js";
 import type { CityUserSchemaInput } from "../store/types.js";
 import type { Runtime } from "./runtime.js";
 import type { CityRecord } from "../service/cities/types.js";
@@ -129,7 +130,10 @@ export async function initialize_federation(params: {
     service._baseURL = configured_base_url ?? runtime.baseURL;
     service._queue = params.queue as never;
     service._storage = runtime.storage;
-    await service._onInit();
+    if (service instanceof InstallableService) {
+      install_service(service);
+    }
+    await initialize_service(service);
   }
 
   return {

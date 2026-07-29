@@ -10,6 +10,7 @@ import {
   Federation,
   AIService,
   AIChannel,
+  InstallableService,
 } from "../bin/index.js"
 import { TableApi } from "../bin/store/table-api.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
@@ -70,6 +71,40 @@ test("TableApi reads postgres-js RowList count for compare-and-set updates", asy
     values: { status: "processing" },
   })
   assert.equal(changed, 1)
+})
+
+test("InstallableService always installs routes before custom initialization", async () => {
+  const lifecycle_events = []
+
+  class LifecycleService extends InstallableService {
+    id = "lifecycle"
+    name = "Lifecycle"
+
+    install(ctx) {
+      lifecycle_events.push("install")
+      ctx.route({
+        method: "GET",
+        path: "/ping",
+        public: true,
+        handler: () => Response.json({ initialized: true }),
+      })
+    }
+
+    async on_init() {
+      lifecycle_events.push("on_init")
+    }
+  }
+
+  const db = createSqliteDb(":memory:")
+  const federation = new Federation({ db, dialect: "sqlite", raw: db.raw })
+  federation.use(new LifecycleService())
+
+  await federation.health()
+
+  assert.deepEqual(lifecycle_events, ["install", "on_init"])
+  const response = await federation.fetch(new Request("http://localhost/v1/lifecycle/ping"))
+  assert.equal(response.status, 200)
+  assert.deepEqual(await response.json(), { initialized: true })
 })
 
 test("Federation instruction aggregates built-in and service documentation", async () => {

@@ -22,6 +22,19 @@ test("CreditsService manages primary and ephemeral cards atomically", async () =
     federation.use(credits)
     await federation.health()
 
+    for (const route_path of [
+      "/v1/credits/me",
+      "/v1/credits/cards/me",
+      "/v1/credits/transactions/me",
+    ]) {
+      const response = await federation.fetch(new Request(`http://localhost${route_path}`, {
+        headers: {
+          authorization: "Bearer invalid-token",
+        },
+      }))
+      assert.equal(response.status, 401, `${route_path} should be registered and require authentication`)
+    }
+
     await credits.read("user_without_transactions")
     assert.deepEqual(
       (await credits.list_users()).map((item) => item.user_id),

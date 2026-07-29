@@ -54,7 +54,7 @@ export class CitiesService extends Service {
     }, { auth: ["admin"] });
   }
 
-  async _onInit(): Promise<void> {
+  protected override async on_init(): Promise<void> {
     this.store = this._cityStore!;
     this.auth = this._authenticator!;
 
