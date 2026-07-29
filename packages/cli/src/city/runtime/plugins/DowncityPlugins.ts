@@ -50,32 +50,24 @@ const skill_manifest: PluginManifest = {
   name: "skill",
   title: "Skill Catalog And Loader",
   description: "Lists and reads local skills, and injects discovery guidance.",
-  actions: ["find", "install", "list", "lookup"],
 };
 
 const web_manifest: PluginManifest = {
   name: "web",
   title: "Web Methodology",
   description: "Injects web research and browser-use methodology for Agents.",
-  actions: ["install"],
 };
 
 const workboard_manifest: PluginManifest = {
   name: "workboard",
   title: "Workboard Snapshot",
   description: "Collects structured Agent runtime activity snapshots.",
-  actions: ["snapshot"],
 };
 
 const chat_manifest: PluginManifest = {
   name: "chat",
   title: "Chat",
   description: "Connects Agents to Telegram, Feishu, and QQ channels.",
-  actions: [
-    "access-approve", "access-deny", "access-revoke", "access-set",
-    "access-snapshot", "context", "delete", "history", "history_clear",
-    "info", "list", "react", "reconnect", "send", "status", "test",
-  ],
   config: { schema: CHAT_PLUGIN_CONFIG_JSON_SCHEMA, defaults: {} },
   resources: { schema: CHAT_PLUGIN_RESOURCE_JSON_SCHEMA },
 };
@@ -84,39 +76,30 @@ const contact_manifest: PluginManifest = {
   name: "contact",
   title: "Contact",
   description: "Manages trusted relationships and exchanges with remote Agents.",
-  actions: [
-    "approve", "chat", "check", "inbox", "link", "list", "receive",
-    "remoteapprove", "remotechat", "remoteconfirm", "remoteping",
-    "remoteshare", "share",
-  ],
 };
 
 const task_manifest: PluginManifest = {
   name: "task",
   title: "Task",
   description: "Manages reusable tasks and their trigger runtime.",
-  actions: ["create", "delete", "disable", "enable", "list", "reload", "run", "status", "update"],
 };
 
 const memory_manifest: PluginManifest = {
   name: "memory",
   title: "Memory",
   description: "Stores, searches, and revises Agent memories.",
-  actions: ["digest", "read", "remember", "revise", "search", "status"],
 };
 
 const image_manifest: PluginManifest = {
   name: "image",
   title: "Image",
   description: "Discovers image models, generates images, and reads results.",
-  actions: ["image_create", "image_result", "models"],
 };
 
 const sound_manifest: PluginManifest = {
   name: "sound",
   title: "Sound",
   description: "Discovers speech models and provides ASR and TTS.",
-  actions: ["asr", "models", "tts"],
 };
 
 class CitySkillPlugin extends SkillPlugin {

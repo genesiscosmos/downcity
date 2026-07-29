@@ -35,7 +35,6 @@ export class GithubPlugin {
     version: "1.0.0",
     title: "GitHub",
     description: "GitHub 集成",
-    actions: [],
     config: {
       schema: GITHUB_CONFIG_JSON_SCHEMA,
       defaults: {
@@ -90,6 +89,8 @@ export const GITHUB_CONFIG_JSON_SCHEMA = z.toJSONSchema(config_schema, {
 
 Resource Schema 描述完整 Item，要求 `id`、`type` 和 `name`。`id` 由 City 写入；普通字段和 `writeOnly` 字段由用户填写；其他 `readOnly` 字段由 `static resolve_resource` 返回。
 
+每个 Plugin 必须提供非空 `description`。City 会在普通 Plugin 列表、交互式列表和 JSON Catalog 中统一展示这段用途说明。
+
 Resolver 只在 Resource 创建、编辑或刷新时调用。Agent 启动只读取已经保存的完整 Resource Item，不会隐式联网刷新。
 
 ## 静态安装清单
@@ -98,14 +99,13 @@ Resolver 只在 Resource 创建、编辑或刷新时调用。Agent 启动只读�
 
 ```json
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "entry": "dist/index.js",
   "plugins": [
     {
       "name": "github",
       "version": "1.0.0",
       "title": "GitHub",
-      "actions": [],
       "config": {
         "schema": {
           "type": "object",
@@ -123,13 +123,15 @@ Resolver 只在 Resource 创建、编辑或刷新时调用。Agent 启动只读�
       "name": "linear",
       "version": "1.0.0",
       "title": "Linear",
-      "actions": []
+      "description": "Linear 集成"
     }
   ]
 }
 ```
 
 运行时，CLI 会确认 `plugins[]` 中每个 constructor 的静态 Manifest 与该安装快照一致。
+
+Action 不写入静态 Manifest。实际 Action 只由 Plugin 实例的 `actions` 定义，避免维护重复的 Action 名称列表。
 
 ## 安装与配置
 

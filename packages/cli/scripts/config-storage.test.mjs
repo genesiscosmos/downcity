@@ -181,13 +181,13 @@ test("一个入口安装多个 Plugin constructor 并使用统一 CLI Factory", 
       additionalProperties: false,
     };
     const installation_manifest = {
-      manifest_version: 2,
+      manifest_version: 3,
       entry: "index.js",
       plugins: [
         {
           name: "example",
           version: "1.0.0",
-          actions: [],
+          description: "Example Plugin for configuration tests.",
           config: { schema: config_schema },
           resources: { schema: structuredClone(resource_schema) },
         },
@@ -195,7 +195,7 @@ test("一个入口安装多个 Plugin constructor 并使用统一 CLI Factory", 
           name: "companion",
           version: "1.0.0",
           title: "Companion",
-          actions: [],
+          description: "Companion Plugin from the same entry.",
         },
       ],
     };
@@ -211,7 +211,7 @@ class ExamplePlugin {
   static manifest = {
     name: "example",
     version: "1.0.0",
-    actions: [],
+    description: "Example Plugin for configuration tests.",
     config: { schema: config_schema },
     resources: { schema: resource_schema },
   };
@@ -230,7 +230,7 @@ class CompanionPlugin {
     name: "companion",
     version: "1.0.0",
     title: "Companion",
-    actions: [],
+    description: "Companion Plugin from the same entry.",
   };
   constructor() {
     this.name = "companion";
@@ -368,6 +368,7 @@ test("内建与外部 Plugin 使用统一 Catalog 配置协议", async () => {
     const chat = catalog.get_plugin_catalog_item("chat");
     assert.ok(chat);
     assert.equal(chat.source, "builtin");
+    assert.equal(chat.description, "Connects Agents to Telegram, Feishu, and QQ channels.");
     assert.equal(
       chat.resource_schema.oneOf[0].properties.id.readOnly,
       true,
@@ -377,13 +378,27 @@ test("内建与外部 Plugin 使用统一 Catalog 配置协议", async () => {
       true,
     );
     assert.equal(chat.resource_schema.oneOf[0].properties.type.const, "telegram");
+    const list_result = spawnSync(
+      process.execPath,
+      [path.resolve("bin/downcity.js"), "plugin", "list"],
+      {
+        encoding: "utf8",
+        env: { ...process.env, NO_COLOR: "1" },
+      },
+    );
+    assert.equal(list_result.status, 0, list_result.stderr);
+    assert.match(list_result.stdout, /Chat \(chat\)/);
+    assert.match(
+      list_result.stdout,
+      /description\s+Connects Agents to Telegram, Feishu, and QQ channels\./,
+    );
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });
   }
 });
 
-test("内建 Plugin 静态 Manifest 的 Action 与实例保持一致", async () => {
+test("内建 Plugin 静态 Manifest 不复制运行时 Action", async () => {
   const platform_root = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
@@ -396,7 +411,9 @@ test("内建 Plugin 静态 Manifest 的 Action 与实例保持一致", async () 
       const item = catalog.get_plugin_catalog_item(plugin_name);
       assert.ok(item, `Missing Catalog item: ${plugin_name}`);
       assert.equal(plugin.name, plugin_name);
-      assert.deepEqual(item.actions, Object.keys(plugin.actions || {}).sort());
+      assert.equal("actions" in plugin_type.manifest, false);
+      assert.equal("actions" in item, false);
+      assert.equal(typeof plugin.actions, "object");
     }
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
@@ -412,9 +429,9 @@ test("Plugin 数组安装拒绝名称冲突与非法 Manifest", async () => {
     const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
     fs.writeFileSync(path.join(plugin_source, "index.js"), "export const plugins = [];\n");
     fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
-      manifest_version: 2,
+      manifest_version: 3,
       entry: "index.js",
-      plugins: [{ name: "chat", actions: [] }],
+      plugins: [{ name: "chat", description: "Conflicts with the built-in Chat Plugin." }],
     }));
     await assert.rejects(
       () => installer.install_plugins(plugin_source),
@@ -422,11 +439,35 @@ test("Plugin 数组安装拒绝名称冲突与非法 Manifest", async () => {
     );
 
     fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
-      manifest_version: 2,
+      manifest_version: 3,
+      entry: "index.js",
+      plugins: [{
+        name: "static-actions",
+        description: "Invalid Plugin with duplicated static Actions.",
+        actions: [],
+      }],
+    }));
+    await assert.rejects(
+      () => installer.install_plugins(plugin_source),
+      /contains unknown field: actions/,
+    );
+
+    fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
+      manifest_version: 3,
+      entry: "index.js",
+      plugins: [{ name: "missing-description" }],
+    }));
+    await assert.rejects(
+      () => installer.install_plugins(plugin_source),
+      /Plugin description is required: missing-description/,
+    );
+
+    fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
+      manifest_version: 3,
       entry: "index.js",
       plugins: [{
         name: "invalid-defaults",
-        actions: [],
+        description: "Invalid Plugin defaults fixture.",
         config: { schema: { type: "object", properties: {} }, defaults: [] },
       }],
     }));
@@ -436,9 +477,9 @@ test("Plugin 数组安装拒绝名称冲突与非法 Manifest", async () => {
     );
 
     fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
-      manifest_version: 2,
+      manifest_version: 3,
       entry: "../outside.js",
-      plugins: [{ name: "escaped-entry", actions: [] }],
+      plugins: [{ name: "escaped-entry", description: "Escaped entry fixture." }],
     }));
     await assert.rejects(
       () => installer.install_plugins(plugin_source),
@@ -447,9 +488,9 @@ test("Plugin 数组安装拒绝名称冲突与非法 Manifest", async () => {
 
     fs.symlinkSync("index.js", path.join(plugin_source, "linked-entry.js"));
     fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
-      manifest_version: 2,
+      manifest_version: 3,
       entry: "linked-entry.js",
-      plugins: [{ name: "linked-entry", actions: [] }],
+      plugins: [{ name: "linked-entry", description: "Linked entry fixture." }],
     }));
     await assert.rejects(
       () => installer.install_plugins(plugin_source),
@@ -468,13 +509,13 @@ test("Plugin constructor 静态 Manifest 必须与安装快照一致", async () 
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
     fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
-      manifest_version: 2,
+      manifest_version: 3,
       entry: "index.js",
-      plugins: [{ name: "declared", actions: [] }],
+      plugins: [{ name: "declared", description: "Static Manifest mismatch fixture." }],
     }));
     fs.writeFileSync(path.join(plugin_source, "index.js"), `
 class UnexpectedPlugin {
-  static manifest = { name: "unexpected", actions: [] };
+  static manifest = { name: "unexpected", description: "Static Manifest mismatch fixture." };
   constructor() { this.name = "unexpected"; this.actions = {}; }
 }
 export const plugins = [UnexpectedPlugin];

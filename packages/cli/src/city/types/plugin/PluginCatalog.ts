@@ -28,9 +28,6 @@ export interface PluginCatalogItem {
   /** 可展示的原始安装来源；内建 Plugin 不提供。 */
   source_label?: string;
 
-  /** Plugin 对外暴露的 Action 名称。 */
-  actions: string[];
-
   /** 标准 JSON Schema 2020-12 配置协议。 */
   config_schema?: JsonObject;
 

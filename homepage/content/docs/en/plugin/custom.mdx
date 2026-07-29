@@ -35,7 +35,6 @@ export class GithubPlugin {
     version: "1.0.0",
     title: "GitHub",
     description: "GitHub integration",
-    actions: [],
     config: {
       schema: GITHUB_CONFIG_JSON_SCHEMA,
       defaults: {
@@ -90,6 +89,8 @@ export const GITHUB_CONFIG_JSON_SCHEMA = z.toJSONSchema(config_schema, {
 
 A Resource Schema describes a complete Item and requires `id`, `type`, and `name`. City writes `id`; users provide ordinary and `writeOnly` fields; `static resolve_resource` returns the remaining `readOnly` fields.
 
+Every Plugin must provide a non-empty `description`. City displays it consistently in the plain Plugin list, interactive list, and JSON Catalog.
+
 The Resolver runs only while creating, editing, or refreshing a Resource. Agent startup reads the saved complete Item and never performs an implicit network refresh.
 
 ## Static installation manifest
@@ -98,14 +99,13 @@ Installation cannot execute a third-party entry. The build must therefore genera
 
 ```json
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "entry": "dist/index.js",
   "plugins": [
     {
       "name": "github",
       "version": "1.0.0",
       "title": "GitHub",
-      "actions": [],
       "config": {
         "schema": {
           "type": "object",
@@ -123,13 +123,15 @@ Installation cannot execute a third-party entry. The build must therefore genera
       "name": "linear",
       "version": "1.0.0",
       "title": "Linear",
-      "actions": []
+      "description": "Linear integration"
     }
   ]
 }
 ```
 
 At runtime, the CLI verifies that every constructor static manifest in `plugins[]` matches this installed snapshot.
+
+Actions do not appear in the static manifest. The Plugin instance `actions` collection is the only source of runtime Actions, avoiding a duplicated name list that can drift.
 
 ## Install and configure
 

@@ -93,8 +93,11 @@ export function registerPluginsCommand(program: Command): void {
         title: "Plugins",
         summary: `${catalog.length} plugins`,
         items: catalog.map((item) => ({
-          title: item.plugin_name,
+          title: item.title === item.plugin_name
+            ? item.plugin_name
+            : `${item.title} (${item.plugin_name})`,
           facts: [
+            { label: "Description", value: item.description },
             { label: "Source", value: item.source },
             ...(item.version ? [{ label: "Version", value: item.version }] : []),
           ],

@@ -43,7 +43,12 @@ export async function run_interactive_plugin_manager(): Promise<void> {
       choices: [
         ...catalog.map((plugin) => ({
           title: plugin.title,
-          description: `${plugin.plugin_name} · ${plugin.source}${plugin.version ? ` · ${plugin.version}` : ""}`,
+          description: [
+            plugin.description,
+            plugin.plugin_name,
+            plugin.source,
+            plugin.version,
+          ].filter(Boolean).join(" · "),
           value: `plugin:${plugin.plugin_name}`,
         })),
         { title: "操作", disabled: true },
@@ -78,9 +83,12 @@ export async function run_interactive_agent_plugin_manager(agent_id: string): Pr
       choices: [
         ...catalog.map((plugin) => {
           const binding = get_agent_plugin_binding(agent_id, plugin.plugin_name);
+          const binding_status = binding
+            ? (binding.enabled ? "enabled" : "disabled")
+            : "not bound";
           return {
             title: `${binding?.enabled ? "●" : "○"} ${plugin.title}`,
-            description: `${plugin.plugin_name} · ${binding ? (binding.enabled ? "enabled" : "disabled") : "not bound"}`,
+            description: `${plugin.description} · ${plugin.plugin_name} · ${binding_status}`,
             value: plugin.plugin_name,
           };
         }),

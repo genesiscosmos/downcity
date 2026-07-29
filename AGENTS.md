@@ -1,3 +1,8 @@
+# 工程设计规范
+
+1. 所有架构设计、代码重构、公开 API 与跨平台实现必须遵循 [`docs/engineering-design-standard.md`](docs/engineering-design-standard.md)。
+2. 设计决策依次从产品意图、领域职责、所有权与生命周期、依赖方向、最小公开 API 推导，不能从现有目录或最少改动倒推架构。
+
 # Package
 
 1. 如果 package 更新新特性和用户使用相关， 则需要 更新 homepage 当中的 docs。

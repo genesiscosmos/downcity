@@ -17,7 +17,7 @@ import type {
 export const PLUGIN_INSTALLATION_MANIFEST_FILE_NAME = "downcity.plugin.json";
 
 /** 当前支持的静态安装清单协议版本。 */
-export const PLUGIN_INSTALLATION_MANIFEST_VERSION = 2;
+export const PLUGIN_INSTALLATION_MANIFEST_VERSION = 3;
 
 /** 安装器解析后的 Plugin 来源。 */
 export interface ResolvedPluginSource {
@@ -60,11 +60,8 @@ export interface PluginManifest {
   /** 面向用户展示的标题。 */
   title?: string;
 
-  /** 面向用户展示的用途说明。 */
-  description?: string;
-
-  /** Plugin 对外提供的稳定 Action 名称，仅用于静态展示。 */
-  actions: string[];
+  /** 面向用户展示的非空用途说明。 */
+  description: string;
 
   /** 可选配置协议与默认值。 */
   config?: PluginConfigManifest;

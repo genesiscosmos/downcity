@@ -161,7 +161,7 @@ function read_plugin_manifest(value: unknown, index: number): PluginManifest {
   if (!is_json_object(value)) throw new Error(`Plugin manifest must be an object: ${index}`);
   assert_known_fields(
     value,
-    ["name", "version", "title", "description", "actions", "config", "resources"],
+    ["name", "version", "title", "description", "config", "resources"],
     `Plugin manifest ${index}`,
   );
   const name = normalize_plugin_name(String(value.name || ""));
@@ -173,20 +173,9 @@ function read_plugin_manifest(value: unknown, index: number): PluginManifest {
   if (value.title !== undefined && typeof value.title !== "string") {
     throw new Error(`Plugin title must be a string: ${name}`);
   }
-  if (value.description !== undefined && typeof value.description !== "string") {
-    throw new Error(`Plugin description must be a string: ${name}`);
+  if (typeof value.description !== "string" || !value.description.trim()) {
+    throw new Error(`Plugin description is required: ${name}`);
   }
-  const actions_value = value.actions;
-  if (actions_value !== undefined && (
-    !Array.isArray(actions_value)
-    || actions_value.some((action) => typeof action !== "string" || !action.trim())
-  )) {
-    throw new Error(`Plugin actions must be non-empty strings: ${name}`);
-  }
-  const actions = actions_value
-    ? [...new Set(actions_value.map((action) => String(action).trim()))]
-    : [];
-
   let config: PluginManifest["config"];
   if (value.config !== undefined) {
     if (!is_json_object(value.config)) throw new Error(`Plugin config must be an object: ${name}`);
@@ -221,13 +210,12 @@ function read_plugin_manifest(value: unknown, index: number): PluginManifest {
   }
 
   const title = typeof value.title === "string" ? value.title.trim() : "";
-  const description = typeof value.description === "string" ? value.description.trim() : "";
+  const description = value.description.trim();
   return {
     name,
     ...(version ? { version } : {}),
     ...(title ? { title } : {}),
-    ...(description ? { description } : {}),
-    actions,
+    description,
     ...(config ? { config } : {}),
     ...(resources ? { resources } : {}),
   };

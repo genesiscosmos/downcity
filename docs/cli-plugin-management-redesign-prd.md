@@ -41,7 +41,7 @@ export class GithubPlugin extends BasePlugin {
     name: "github",
     version: "1.0.0",
     title: "GitHub",
-    actions: [],
+    description: "GitHub integration",
     config: {
       schema: GITHUB_CONFIG_JSON_SCHEMA,
       defaults: {},
@@ -78,14 +78,14 @@ new plugin_type({ config, resources });
 
 ```json
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "entry": "dist/index.js",
   "plugins": [
     {
       "name": "github",
       "version": "1.0.0",
       "title": "GitHub",
-      "actions": [],
+      "description": "GitHub integration",
       "config": {
         "schema": { "type": "object" },
         "defaults": {}
@@ -100,7 +100,11 @@ new plugin_type({ config, resources });
 
 JSON Schema 直接内嵌，不再维护额外 Schema 路径协议。作者可以用 Zod 维护源码 Schema，并在构建时通过 `z.toJSONSchema()` 写入静态 Manifest 和安装清单。
 
+每个 Plugin 必须提供非空 `description`，供安装后 Catalog、普通 CLI 列表和交互式列表统一展示用途。
+
 CLI 安装时校验静态 JSON；运行时再比较 constructor 的静态 Manifest 与安装快照，防止两者漂移。
+
+Action 不进入静态 Manifest。运行时 `Plugin.actions` 是 Action 的唯一事实源，避免静态名称数组与实际执行对象产生漂移。
 
 ## 5. Resource 生命周期
 
