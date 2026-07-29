@@ -29,7 +29,7 @@ my-project/
 └── .downcity/
 ```
 
-全局数据库保存 Agent ID、模型绑定、启动参数和 Plugin 配置。项目 `.env` 会覆盖平台全局环境和当前 CLI 进程环境。
+全局数据库保存 Agent ID、模型绑定、启动参数和 Plugin 配置。项目 `.env` 会覆盖 `~/.downcity/.env` 中的 Global Env；启动进程显式环境变量拥有最高优先级。
 
 ```bash
 # 允许覆盖全局数据库中的现有 Agent 配置

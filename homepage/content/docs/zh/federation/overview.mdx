@@ -38,9 +38,10 @@ Service 和 Action 向 City 注册，可被任何已连接的 Agent 发现和调
 
 Federation 首次启动会自动生成 Ed25519 Key Ring，并通过 `/.well-known/jwks.json` 发布公开验签密钥。City 可以直接访问 Federation；产品需要自有后端能力时，再使用 Bureau 本地验证用户 Token。Federation 启动不会默认创建 Bureau Token。
 
-Bureau Token 由 `fed bureau token` 在 CLI 本地生成并登记，Federation 数据库只保存
-hash。明文只输出一次，由运维写入 Bureau 服务器的 `DOWNCITY_BUREAU_TOKEN`；
-Federation 和 Bureau 不需要部署在同一台服务器。
+`fed bureau token` 会打开交互式管理界面；选择创建或运行 `fed bureau token create`
+后，CLI 会要求输入用途，在本地生成 Bureau Token 并登记。Federation 数据库保存用途、
+hash 与生命周期状态。明文只输出一次，由运维写入 Bureau 服务器的
+`DOWNCITY_BUREAU_TOKEN`；Federation 和 Bureau 不需要部署在同一台服务器。
 
 ## 继续阅读
 

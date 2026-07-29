@@ -30,7 +30,7 @@ The default database is `~/.downcity/downcity.db`. With `DC_PLATFORM_ROOT`, it b
 - Agent IDs, project paths, and startup options
 - Model bindings and Plugin config
 - Plugin Resources and Agent Plugin Bindings
-- City sessions, global env, and other platform management state
+- City sessions and other platform management state
 
 The CLI, interactive manager, and Agent daemon all read this database. There is no project config copy.
 
@@ -38,7 +38,7 @@ The CLI, interactive manager, and Agent daemon all read this database. There is 
 
 ## Project assets
 
-Project `.env` overrides platform global env and the current CLI process env, and is added to `.gitignore` by default. `.agents/skills` is the only user-managed Agent capability asset intended for version control.
+Global Env is stored separately in `~/.downcity/.env`. Project `.env` overrides Global Env, while explicit process environment variables have the highest priority. Project `.env` is added to `.gitignore` by default. `.agents/skills` is the only user-managed Agent capability asset intended for version control.
 
 ## Runtime data
 

@@ -33,6 +33,7 @@ import {
   list_federation_bureaus,
   revoke_federation_bureau,
 } from "@/federation/bureau/commands/bureau.js";
+import { run_interactive_bureau_token_manager } from "@/federation/bureau/InteractiveBureauTokenManager.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -214,24 +215,30 @@ function register_bureau_commands(program: Command): void {
     }))
     .helpOption("--help", helpText());
 
-  bureau_program
+  const token_program = bureau_program
     .command("token")
     .description(t({
-      zh: "生成并登记 Bureau Token",
-      en: "generate and register a Bureau token",
+      zh: "交互式管理 Bureau Token",
+      en: "interactively manage Bureau tokens",
     }))
     .helpOption("--help", helpText())
     .action(createVersionBanner(packageJson.version, async () => {
-      await create_federation_bureau_token();
+      await run_interactive_bureau_token_manager();
     }));
 
-  bureau_program
+  token_program
+    .command("create")
+    .description(t({ zh: "创建并登记 Bureau Token", en: "create and register a Bureau token" }))
+    .helpOption("--help", helpText())
+    .action(createVersionBanner(packageJson.version, create_federation_bureau_token));
+
+  token_program
     .command("list")
     .description(t({ zh: "列出 Bureau 注册记录", en: "list Bureau registrations" }))
     .helpOption("--help", helpText())
     .action(createVersionBanner(packageJson.version, list_federation_bureaus));
 
-  bureau_program
+  token_program
     .command("revoke <token_id>")
     .description(t({ zh: "撤销 Bureau Token", en: "revoke a Bureau token" }))
     .helpOption("--help", helpText())

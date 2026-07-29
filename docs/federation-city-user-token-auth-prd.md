@@ -165,7 +165,7 @@ fb_<token_id>.<secret>
 flowchart LR
     FPK["Federation 私钥"] -->|"Ed25519 签名"| UT["user_token JWT"]
     JWKS["Federation JWKS 公钥"] -->|"验签"| UT
-    CLI["fed bureau token"] -->|"生成明文 + hash"| BT["bureau_token"]
+    CLI["fed bureau token create"] -->|"生成明文 + hash"| BT["bureau_token"]
     BT -->|"只提交 hash"| DB[("Federation 数据库")]
     B["Bureau"] -->|"Bearer bureau_token"| DB
 ```
@@ -176,11 +176,11 @@ Federation 启动后注册表为空。Bureau Token 不是 Federation 在线签�
 而是由 `fed` CLI 在运维侧生成的部署凭证：
 
 ```bash
-fed bureau token
+fed bureau token create
 ```
 
 CLI 在本地生成明文和 hash，通过 Federation Admin 控制面登记。Federation
-数据库只保存 `token_id`、`token_hash` 和生命周期状态，明文只显示一次：
+创建时必须输入 Token 用途。数据库只保存 `token_id`、`purpose`、`token_hash` 和生命周期状态，明文只显示一次：
 
 ```env
 DOWNCITY_FEDERATION_URL=https://fed.example.com
@@ -190,8 +190,9 @@ DOWNCITY_BUREAU_TOKEN=fb_br_xxx.secret
 CLI 也提供注册表管理：
 
 ```bash
-fed bureau list
-fed bureau revoke br_xxx
+fed bureau token
+fed bureau token list
+fed bureau token revoke br_xxx
 ```
 
 Federation 和 Bureau 可以在不同服务器。Bureau 不调用注册接口，也不需要访问
@@ -209,6 +210,7 @@ Bureau 管理接口只接收 CLI 生成的 hash：
 ```ts
 await bureau.bureaus.register({
   token_id,
+  purpose,
   token_hash,
 });
 ```
@@ -326,7 +328,7 @@ Bureau Token 被撤销后，新的 Federation 管理请求会失败；JWKS 本�
 ## 11. 验收标准
 
 - `new Federation({ db })` 不默认创建 Bureau Token。
-- `fed bureau token` 是 Bureau Token 的部署登记入口。
+- `fed bureau token` 是 Bureau Token 的交互式管理入口，`fed bureau token create` 是部署登记入口。
 - Federation 数据库只保存 Bureau Token hash，不保存明文。
 - `Bureau.bureaus.register/list/revoke()` 使用管理凭证调用控制面。
 - Bureau Token 不绑定 City，也不保存 capability 列表。

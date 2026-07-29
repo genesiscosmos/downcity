@@ -42,8 +42,9 @@ Register the Bureau from the Federation control plane first:
 fed bureau token
 ```
 
-The CLI displays the plaintext `DOWNCITY_BUREAU_TOKEN` once. Federation stores
-only its hash, so Federation and Bureau can run on different servers.
+This opens the interactive manager. Choose Create and enter a purpose; the CLI displays the
+plaintext `DOWNCITY_BUREAU_TOKEN` once. You can also run `fed bureau token create` directly.
+Federation stores the purpose and hash, so Federation and Bureau can run on different servers.
 
 ```ts
 const bureau = new Bureau({
@@ -102,12 +103,13 @@ tokens must therefore have a finite lifetime and only travel over HTTPS.
 
 ### Bureau Token
 
-`bureau_token` is not a JWT and has no public/private key pair. `fed bureau token` generates
-the plaintext and hash locally, then registers only `token_id + token_hash` with Federation.
+`bureau_token` is not a JWT and has no public/private key pair. `fed bureau token create`
+requires a purpose, generates the plaintext and hash locally, then registers only
+`token_id + purpose + token_hash` with Federation.
 
 ```mermaid
 flowchart LR
-    CLI["fed bureau token"] -->|"generate plaintext"| T["bureau_token"]
+    CLI["fed bureau token create"] -->|"generate plaintext"| T["bureau_token"]
     CLI -->|"submit SHA-256 hash"| F["Federation registry"]
     T -->|"environment variable"| B["Bureau server"]
     B -->|"Bearer bureau_token"| F
@@ -120,7 +122,7 @@ stores the plaintext token.
 
 A leaked `bureau_token` lets an attacker impersonate that Bureau to call Federation management
 APIs, but cannot create or forge a `user_token`. Revoke a leaked credential with
-`fed bureau revoke <token_id>`. Revocation does not retroactively revoke issued `user_token`
+`fed bureau token revoke <token_id>`, or select it in the `fed bureau token` manager. Revocation does not retroactively revoke issued `user_token`
 values; user tokens remain controlled by expiry and Federation key policy.
 
 Federation still publishes Ed25519 public keys for its own token validation and other protocols:
@@ -131,8 +133,8 @@ Federation still publishes Ed25519 public keys for its own token validation and 
 ```
 
 `Bureau` includes the Federation control-plane API. `bureau.cities`, `bureau.env`, and
-`bureau.bureaus` use `bureau_token` to call Federation; `fed bureau token` still generates the
-plaintext locally and writes only the registry hash.
+`bureau.bureaus` use `bureau_token` to call Federation; `fed bureau token create` still generates
+the plaintext locally and writes the purpose and registry hash.
 
 ## Plugin Resources
 

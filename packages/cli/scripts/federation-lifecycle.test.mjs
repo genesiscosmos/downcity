@@ -7,6 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 /** 创建隔离临时目录。 */
@@ -48,6 +49,36 @@ test("Bureau 部署凭证由 CLI 本地生成且 hash 可复算", async () => {
     createHash("sha256").update(credential.bureau_token, "utf8").digest("base64url"),
   );
   assert.notEqual(credential.token_hash, credential.bureau_token);
+});
+
+test("Bureau Token 使用独立管理命令树", () => {
+  const cli_path = fileURLToPath(new URL("../bin/downfed.js", import.meta.url));
+  const platform_root = create_temp_dir("downcity-bureau-command-");
+  const options = {
+    encoding: "utf8",
+    env: { ...process.env, DC_PLATFORM_ROOT: platform_root },
+  };
+  try {
+    const token_help = execFileSync(
+      process.execPath,
+      [cli_path, "--lang", "en", "bureau", "token", "--help"],
+      options,
+    );
+    assert.match(token_help, /interactively manage Bureau tokens/u);
+    assert.match(token_help, /create/u);
+    assert.match(token_help, /list/u);
+    assert.match(token_help, /revoke/u);
+
+    const bureau_help = execFileSync(
+      process.execPath,
+      [cli_path, "--lang", "en", "bureau", "--help"],
+      options,
+    );
+    assert.match(bureau_help, /token/u);
+    assert.doesNotMatch(bureau_help, /^\s+(list|revoke)\b/mu);
+  } finally {
+    fs.rmSync(platform_root, { recursive: true, force: true });
+  }
 });
 
 test("内置模板生成严格的新 Federation 配置", async () => {

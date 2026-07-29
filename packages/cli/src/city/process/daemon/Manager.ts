@@ -28,7 +28,6 @@ import {
   type DaemonStaleReason,
 } from "@/city/process/daemon/Types.js";
 import { signalDetachedProcess } from "@/city/process/registry/ProcessSweep.js";
-import { mergeProcessEnvWithPlatformGlobalEnv } from "@/city/env/ProcessEnv.js";
 
 /**
  * 异步睡眠工具。
@@ -517,7 +516,7 @@ export const startDaemonProcess = async (params: {
   const log_fd = fs.openSync(log_path, "a");
 
   const childEnv: NodeJS.ProcessEnv = {
-    ...mergeProcessEnvWithPlatformGlobalEnv(process.env),
+    ...process.env,
     DOWNCITY_DAEMON: "1",
     DOWNCITY_DAEMON_INSTANCE_ID: instance_id,
   };

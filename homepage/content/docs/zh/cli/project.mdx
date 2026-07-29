@@ -30,7 +30,7 @@ my-project/
 - Agent ID、项目路径和启动参数
 - 模型绑定与 Plugin 配置
 - Plugin Resource 与 Agent Plugin Binding
-- City 登录态、全局环境变量和其他平台管理状态
+- City 登录态和其他平台管理状态
 
 CLI、交互管理器和 Agent daemon 都读取同一份数据库，不维护项目配置副本。
 
@@ -38,7 +38,7 @@ CLI、交互管理器和 Agent daemon 都读取同一份数据库，不维护项
 
 ## 项目资产
 
-`.env` 的优先级高于平台全局环境和当前 CLI 进程环境，并默认加入 `.gitignore`。`.agents/skills` 是项目中唯一由用户管理并进入版本控制的 Agent 能力资产。
+Global Env 单独保存在 `~/.downcity/.env`。项目 `.env` 覆盖 Global Env，启动进程显式环境变量拥有最高优先级；项目 `.env` 默认加入 `.gitignore`。`.agents/skills` 是项目中唯一由用户管理并进入版本控制的 Agent 能力资产。
 
 ## 运行数据
 

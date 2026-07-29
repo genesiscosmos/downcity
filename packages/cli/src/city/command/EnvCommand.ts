@@ -1,376 +1,195 @@
 /**
  * `city env` 命令树。
  *
- * 关键点（中文）
- * - `env` 是平台 Env 的资源命令，支持 list/set/delete。
- * - 默认不输出任何 secret value；只在显式 set 时写入值。
- * - 当前只保留平台全局 env，不再区分 agent 私有层。
+ * Env 直接写入平台 Global 或 Agent Workspace 的 `.env` 文件；修改完成后同步运行中的 Agent。
  */
 
 import type { Command } from "commander";
-import { PlatformStore } from "@/city/runtime/store/index.js";
-import type { StoredEnvEntry } from "@/city/types/platform/PlatformStore.js";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import { parseBoolean } from "@/shared/IndexSupport.js";
 import { helpText, t } from "@/shared/CliLocale.js";
+import {
+  delete_env_target_value,
+  read_env_target,
+  resolve_agent_env_target,
+  resolve_global_env_target,
+  set_env_target_value,
+} from "@/city/env/EnvService.js";
+import { format_env_value } from "@/city/env/EnvFileStore.js";
+import { run_interactive_env_manager } from "@/city/env/InteractiveEnvManager.js";
+import type { EnvMutationResult, EnvTarget } from "@/city/types/env/EnvTarget.js";
 
-/**
- * 规范化 env key。
- */
-function normalizeEnvKey(value: string): string {
-  const key = String(value || "").trim().toUpperCase();
-  if (!/^[A-Z_][A-Z0-9_]*$/.test(key)) {
-    throw new Error(`Invalid env key: ${value}`);
+/** Env 命令作用域参数。 */
+interface EnvScopeOptions {
+  /** 使用平台 Global Env。 */
+  global?: boolean;
+  /** 使用指定 Agent 的 Workspace Env。 */
+  agent?: string;
+  /** 是否输出 JSON。 */
+  json?: boolean;
+}
+
+/** 解析并校验脚本命令的唯一 Env 目标。 */
+async function resolve_env_target(options: EnvScopeOptions): Promise<EnvTarget> {
+  if (options.global && String(options.agent || "").trim()) {
+    throw new Error("Use either --global or --agent, not both");
   }
-  return key;
+  if (options.global) return resolve_global_env_target();
+  if (String(options.agent || "").trim()) return await resolve_agent_env_target(options.agent);
+  throw new Error("Env scope is required: use --global or --agent <agent_id>");
 }
 
-/**
- * 把 env value 格式化成 `.env` 可解析的值。
- *
- * 关键点（中文）
- * - 简单值保持裸值，便于用户直接阅读。
- * - 包含空白、引号、换行等特殊字符时使用双引号并转义。
- * - 空字符串输出为空值：`KEY=`。
- */
-function formatDotenvValue(value: string): string {
-  const text = String(value ?? "");
-  if (!text) return "";
-  if (/^[A-Za-z0-9_./:@+-]+$/.test(text)) {
-    return text;
-  }
-  return `"${text
-    .replace(/\\/g, "\\\\")
-    .replace(/\n/g, "\\n")
-    .replace(/\r/g, "\\r")
-    .replace(/\t/g, "\\t")
-    .replace(/"/g, "\\\"")}"`;
-}
-
-/**
- * 把平台 Env 条目输出为 dotenv 文件内容。
- */
-function formatDotenvEntries(entries: StoredEnvEntry[]): string {
-  if (entries.length === 0) return "";
-  return `${entries
-    .map((item) => `${item.key}=${formatDotenvValue(item.value)}`)
-    .join("\n")}\n`;
-}
-
-/**
- * 判断当前命令是否处在 agent shell 执行上下文。
- *
- * 关键点（中文）
- * - agent shell 会注入 `DC_AGENT_PATH/DC_AGENT_ID`，用于嵌套 City CLI 定位当前 agent。
- * - `env copy` 会导出 secret 明文，不能允许 agent 自己调用。
- */
-function isAgentShellExecution(): boolean {
-  return Boolean(
-    String(process.env.DC_AGENT_PATH || "").trim() ||
-      String(process.env.DC_AGENT_ID || "").trim(),
-  );
-}
-
-/**
- * 限制 `city env copy` 只能由本机 CLI 执行。
- */
-function assertEnvCopyAllowedFromLocalCli(): void {
-  if (!isAgentShellExecution()) return;
-  throw new Error("city env copy can only be run from the local CLI, not from an agent shell.");
-}
-
-async function listKeysEntries(): Promise<StoredEnvEntry[]> {
-  const store = new PlatformStore();
-  try {
-    return await store.listEnvEntries();
-  } finally {
-    store.close();
-  }
-}
-
-/**
- * 输出 env 列表。
- */
-async function emitKeysList(params: {
-  /**
-   * 是否以 JSON 输出。
-   */
-  asJson?: boolean;
-}): Promise<void> {
-  const entries = await listKeysEntries();
-
-  if (params.asJson === true) {
+/** 输出 Env key 列表，不显示 value。 */
+async function emit_env_list(target: EnvTarget, as_json: boolean): Promise<void> {
+  const env = await read_env_target(target);
+  const keys = Object.keys(env).sort();
+  if (as_json) {
     printResult({
       asJson: true,
       success: true,
       title: "env list",
       payload: {
-        count: entries.length,
-        keys: entries.map((item) => ({
-          key: item.key,
-          description: item.description || "",
-          scope: item.scope,
-          created_at: item.created_at,
-          updated_at: item.updated_at,
-        })),
+        scope: target.scope,
+        agent_id: target.agent_id,
+        file_path: target.file_path,
+        count: keys.length,
+        keys,
       },
     });
     return;
   }
-
-  if (entries.length === 0) {
+  if (keys.length === 0) {
     emitCliBlock({
       tone: "info",
       title: "Env",
       summary: "0 configured",
-      note: "No platform env entry matched the current filter.",
+      facts: [{ label: "File", value: target.file_path }],
     });
     return;
   }
-
   emitCliList({
     tone: "accent",
     title: "Env",
-    summary: `${entries.length} configured`,
-    items: entries.map((item) => ({
+    summary: `${keys.length} configured`,
+    items: keys.map((key) => ({
       tone: "info",
-      title: item.key,
-      facts: [
-        {
-          label: "Scope",
-          value: "global",
-        },
-        ...(item.description
-          ? [
-              {
-                label: "Description",
-                value: item.description,
-              },
-            ]
-          : []),
-      ],
+      title: key,
+      facts: [{ label: "Scope", value: target.scope }],
     })),
   });
 }
 
-/**
- * 输出 dotenv 格式的 env 内容。
- */
-async function emitDotenvCopy(): Promise<void> {
-  const entries = await listKeysEntries();
-  process.stdout.write(formatDotenvEntries(entries));
+/** 按 dotenv 格式输出目标 Env 明文。 */
+async function emit_env_copy(target: EnvTarget): Promise<void> {
+  assert_env_copy_allowed();
+  const env = await read_env_target(target);
+  const content = Object.keys(env)
+    .sort()
+    .map((key) => `${key}=${format_env_value(env[key])}`)
+    .join("\n");
+  process.stdout.write(content ? `${content}\n` : "");
 }
 
-/**
- * 写入单个 env 条目。
- */
-async function setKeyEntry(params: {
-  /**
-   * env key。
-   */
-  key: string;
-  /**
-   * env value。
-   */
-  value: string;
-  /**
-   * 描述。
-   */
-  description?: string;
-  /**
-   * 是否以 JSON 输出。
-   */
-  asJson?: boolean;
-}): Promise<void> {
-  const store = new PlatformStore();
-  try {
-    await store.upsertEnvEntry({
-      scope: "global",
-      key: params.key,
-      value: params.value,
-      description: String(params.description || "").trim(),
-    });
-  } finally {
-    store.close();
-  }
-
-  if (params.asJson === true) {
+/** 输出 Env 修改结果和在线广播状态。 */
+function emit_mutation_result(result: EnvMutationResult, as_json: boolean): void {
+  const payload = {
+    scope: result.target.scope,
+    agent_id: result.target.agent_id,
+    file_path: result.target.file_path,
+    key: result.key,
+    changed: result.changed,
+    broadcast: result.broadcast,
+  };
+  if (as_json) {
     printResult({
       asJson: true,
-      success: true,
-      title: "env set",
-      payload: {
-        action: "set",
-        scope: "global",
-        key: params.key,
-      },
+      success: result.broadcast.failed_agents.length === 0,
+      title: "env update",
+      payload,
     });
     return;
   }
-
   emitCliBlock({
-    tone: "success",
-    title: "Key saved",
-    summary: params.key,
+    tone: result.broadcast.failed_agents.length > 0 ? "warning" : "success",
+    title: result.changed ? "Env saved" : "Env unchanged",
+    summary: result.key,
     facts: [
-      {
-        label: "Scope",
-        value: "global",
-      },
-      ...(params.description
-        ? [
-            {
-              label: "Description",
-              value: params.description,
-            },
-          ]
-        : []),
+      { label: "File", value: result.target.file_path },
+      { label: "Agents updated", value: String(result.broadcast.updated_agent_ids.length) },
+      { label: "Agents stopped", value: String(result.broadcast.stopped_agent_ids.length) },
+      { label: "Sync failures", value: String(result.broadcast.failed_agents.length) },
     ],
+    note: result.broadcast.failed_agents.length > 0
+      ? result.broadcast.failed_agents.map((item) => `${item.agent_id}: ${item.error}`).join("\n")
+      : undefined,
   });
 }
 
-/**
- * 删除单个 env 条目。
- */
-function deleteKeyEntry(params: {
-  /**
-   * env key。
-   */
-  key: string;
-  /**
-   * 是否以 JSON 输出。
-   */
-  asJson?: boolean;
-}): void {
-  const store = new PlatformStore();
-  try {
-    store.removeEnvEntry(params.key);
-  } finally {
-    store.close();
-  }
-
-  if (params.asJson === true) {
-    printResult({
-      asJson: true,
-      success: true,
-      title: "env delete",
-      payload: {
-        action: "delete",
-        scope: "global",
-        key: params.key,
-      },
-    });
-    return;
-  }
-
-  emitCliBlock({
-    tone: "success",
-    title: "Key deleted",
-    summary: params.key,
-    facts: [
-      {
-        label: "Scope",
-        value: "global",
-      },
-    ],
-  });
+/** 禁止 Agent Shell 读取 Env 明文。 */
+function assert_env_copy_allowed(): void {
+  if (!String(process.env.DC_AGENT_PATH || "").trim() && !String(process.env.DC_AGENT_ID || "").trim()) return;
+  throw new Error("city env copy can only be run from the local CLI, not from an agent shell");
 }
 
-/**
- * 注册 `city env` 命令组。
- */
+/** 为子命令注册统一作用域参数。 */
+function add_scope_options(command: Command): Command {
+  return command
+    .option("--global", t({ zh: "使用 ~/.downcity/.env", en: "use ~/.downcity/.env" }))
+    .option("--agent <agent_id>", t({ zh: "使用 Agent Workspace 的 .env", en: "use an Agent Workspace .env" }));
+}
+
+/** 注册 `city env` 命令组。 */
 export function registerEnvCommand(program: Command): void {
   const env = program
     .command("env")
-    .description(t({
-      zh: "管理平台 Env 中的 key",
-      en: "manage keys in the platform Env store",
-    }))
+    .description(t({ zh: "管理 Global 或 Agent Workspace Env", en: "manage Global or Agent Workspace Env" }))
     .helpOption("--help", helpText());
 
-  env
-    .command("list")
-    .description(t({
-      zh: "列出平台 Env 中已配置的 key",
-      en: "list configured keys in the platform Env store",
-    }))
-    .option("--json [enabled]", t({
-      zh: "以 JSON 输出",
-      en: "output as JSON",
-    }), parseBoolean)
+  add_scope_options(env.command("list"))
+    .description(t({ zh: "列出已配置的 Env key", en: "list configured Env keys" }))
+    .option("--json [enabled]", t({ zh: "以 JSON 输出", en: "output as JSON" }), parseBoolean)
     .helpOption("--help", helpText())
-    .action(async (options: { json?: boolean }) => {
-      await emitKeysList({
-        asJson: options.json === true,
-      });
+    .action(async (options: EnvScopeOptions) => {
+      await emit_env_list(await resolve_env_target(options), options.json === true);
     });
 
-  env
-    .command("set <key> <value>")
-    .description(t({
-      zh: "新增或更新平台 Env 中的 key",
-      en: "create or update a key in the platform Env store",
-    }))
-    .option("-d, --description <description>", t({
-      zh: "设置 key 描述",
-      en: "set a description for the key",
-    }))
-    .option("--json [enabled]", t({
-      zh: "以 JSON 输出",
-      en: "output as JSON",
-    }), parseBoolean)
+  add_scope_options(env.command("set <key> <value>"))
+    .description(t({ zh: "新增或更新 Env key", en: "create or update an Env key" }))
+    .option("--json [enabled]", t({ zh: "以 JSON 输出", en: "output as JSON" }), parseBoolean)
     .helpOption("--help", helpText())
-    .action(async (
-      keyInput: string,
-      valueInput: string,
-      options: { description?: string; json?: boolean },
-    ) => {
-      await setKeyEntry({
-        key: normalizeEnvKey(keyInput),
-        value: String(valueInput ?? ""),
-        description: String(options.description || "").trim(),
-        asJson: options.json === true,
-      });
+    .action(async (key: string, value: string, options: EnvScopeOptions) => {
+      emit_mutation_result(
+        await set_env_target_value(await resolve_env_target(options), key, value),
+        options.json === true,
+      );
     });
 
-  env
-    .command("copy")
-    .description(t({
-      zh: "按 .env 文件格式输出平台 Env 的明文值",
-      en: "print platform Env values in .env file format",
-    }))
+  add_scope_options(env.command("delete <key>"))
+    .description(t({ zh: "删除 Env key", en: "delete an Env key" }))
+    .option("--json [enabled]", t({ zh: "以 JSON 输出", en: "output as JSON" }), parseBoolean)
     .helpOption("--help", helpText())
-    .action(async () => {
-      assertEnvCopyAllowedFromLocalCli();
-      await emitDotenvCopy();
+    .action(async (key: string, options: EnvScopeOptions) => {
+      emit_mutation_result(
+        await delete_env_target_value(await resolve_env_target(options), key),
+        options.json === true,
+      );
     });
 
-  env
-    .command("delete <key>")
-    .description(t({
-      zh: "删除平台 Env 中的 key",
-      en: "delete a key from the platform Env store",
-    }))
-    .option("--json [enabled]", t({
-      zh: "以 JSON 输出",
-      en: "output as JSON",
-    }), parseBoolean)
+  add_scope_options(env.command("copy"))
+    .description(t({ zh: "按 dotenv 格式输出 Env 明文", en: "print Env values in dotenv format" }))
     .helpOption("--help", helpText())
-    .action(async (
-      keyInput: string,
-      options: { json?: boolean },
-    ) => {
-      deleteKeyEntry({
-        key: normalizeEnvKey(keyInput),
-        asJson: options.json === true,
-      });
+    .action(async (options: EnvScopeOptions) => {
+      await emit_env_copy(await resolve_env_target(options));
     });
 
   env.action(async () => {
-    await emitKeysList({});
+    if (process.stdin.isTTY && process.stdout.isTTY) {
+      await run_interactive_env_manager();
+      return;
+    }
+    throw new Error("Env scope is required: use --global or --agent <agent_id>");
   });
-
   env.showHelpAfterError();
   env.showSuggestionAfterError();
 }

@@ -8,14 +8,14 @@
  */
 
 import path from "node:path";
-import { Agent, Workspace, resolve_workspace_env } from "@downcity/agent";
+import { Agent, Workspace } from "@downcity/agent";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell } from "@downcity/shell";
 import { AgentHTTP, AgentRPC } from "@downcity/server";
 import { startAgentHttpGateway } from "@/city/agent/AgentHttpGateway.js";
 import { createRuntimeModel } from "@/city/runtime/city-model/CreateRuntimeModel.js";
 import { assemble_plugins } from "@/city/runtime/plugins/PluginAssembler.js";
-import { mergeProcessEnvWithPlatformGlobalEnv } from "@/city/env/ProcessEnv.js";
+import { resolve_managed_agent_env } from "@/city/env/ProcessEnv.js";
 import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
 import {
   ensure_default_agent_plugin_bindings,
@@ -107,10 +107,7 @@ export class ManagedAgentRuntime {
 
     const host = String(input.options.host ?? config.start?.host ?? "127.0.0.1").trim();
     const rpc_host = "127.0.0.1";
-    const env = resolve_workspace_env(
-      workspace_path,
-      mergeProcessEnvWithPlatformGlobalEnv(),
-    );
+    const env = resolve_managed_agent_env(workspace_path);
     ensure_default_agent_plugin_bindings(config.agent_id);
     const plugin_bindings = list_agent_plugin_bindings(config.agent_id);
     const [model, plugins, sandbox] = await Promise.all([
@@ -144,7 +141,13 @@ export class ManagedAgentRuntime {
     process.env.DC_AGENT_PATH = workspace_path;
 
     await agent.ready();
-    const rpc = new AgentRPC(agent);
+    const rpc = new AgentRPC(agent, {
+      reload_workspace_env: () => {
+        const next_env = resolve_managed_agent_env(workspace_path);
+        workspace.set_env(next_env);
+        return next_env;
+      },
+    });
     await rpc.listen({ host: rpc_host, port: rpc_port });
     try {
       const agent_http = new AgentHTTP(agent);

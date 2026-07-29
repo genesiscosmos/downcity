@@ -31,6 +31,15 @@ export function getPlatformStoreDbPath(): string {
 }
 
 /**
+ * 平台全局环境变量文件路径。
+ *
+ * 关键点（中文）：全局 Env 是所有 Workspace 的默认值，使用普通 `.env` 文件保存，便于用户直接维护。
+ */
+export function get_platform_env_file_path(): string {
+  return path.join(getPlatformRootDirPath(), ".env");
+}
+
+/**
  * 全部 Agent 的全局运行状态根目录。
  *
  * 关键点（中文）：运行状态属于受管 Agent，不属于 Workspace，因此不能写入项目目录。

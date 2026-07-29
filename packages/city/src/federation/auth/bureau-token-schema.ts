@@ -13,6 +13,8 @@ const BUREAU_TOKEN_TABLE = "federation_bureau_tokens";
 export const sqlite_bureau_tokens = sqliteTable(BUREAU_TOKEN_TABLE, {
   /** Bureau Token 查找 ID。 */
   token_id: sqliteText("token_id").primaryKey(),
+  /** Token 对应的部署位置或业务用途。 */
+  purpose: sqliteText("purpose").notNull().default(""),
   /** Token SHA-256 Base64URL hash。 */
   token_hash: sqliteText("token_hash").notNull(),
   /** active 或 revoked。 */
@@ -27,6 +29,8 @@ export const sqlite_bureau_tokens = sqliteTable(BUREAU_TOKEN_TABLE, {
 export const pg_bureau_tokens = pgTable(BUREAU_TOKEN_TABLE, {
   /** Bureau Token 查找 ID。 */
   token_id: pgText("token_id").primaryKey(),
+  /** Token 对应的部署位置或业务用途。 */
+  purpose: pgText("purpose").notNull().default(""),
   /** Token SHA-256 Base64URL hash。 */
   token_hash: pgText("token_hash").notNull(),
   /** active 或 revoked。 */

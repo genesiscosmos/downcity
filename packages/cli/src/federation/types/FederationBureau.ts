@@ -16,3 +16,12 @@ export interface BureauDeploymentCredential {
   /** 提交给 Federation 保存的 SHA-256 Base64URL hash。 */
   token_hash: string;
 }
+
+/** CLI 完成登记后返回给命令层的一次性 Bureau Token。 */
+export interface CreatedFederationBureauToken extends BureauDeploymentCredential {
+  /** Token 所登记到的 Federation HTTP 入口。 */
+  federation_url: string;
+
+  /** Token 对应的部署位置或业务用途。 */
+  purpose: string;
+}

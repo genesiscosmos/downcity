@@ -126,6 +126,7 @@ const adminInstructionContract: Promise<string> = adminInstruction;
 
 const bureau_registration_input: RegisterBureauTokenInput = {
   token_id: "br_1234567890abcdef",
+  purpose: "type contract test",
   token_hash: "1234567890123456789012345678901234567890123",
 };
 const bureau_registration: Promise<BureauTokenSummary> = admin.bureaus.register(

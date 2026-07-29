@@ -41,8 +41,9 @@ const profile = await city.user().profile();
 fed bureau token
 ```
 
-CLI 只显示一次明文 `DOWNCITY_BUREAU_TOKEN`。Federation 数据库只保存 hash，
-因此 Federation 和 Bureau 可以部署在不同服务器。
+该命令打开交互式管理界面。选择“创建 Bureau Token”，输入用途后，CLI 只显示一次明文
+`DOWNCITY_BUREAU_TOKEN`。也可以直接运行 `fed bureau token create`。Federation 数据库
+保存用途和 hash，因此 Federation 和 Bureau 可以部署在不同服务器。
 
 ```ts
 const bureau = new Bureau({
@@ -100,12 +101,12 @@ flowchart LR
 
 ### Bureau Token
 
-`bureau_token` 不是 JWT，也没有公钥私钥关系。`fed bureau token` 在 CLI 本地
-生成明文和 hash，只将 `token_id + token_hash` 登记到 Federation。
+`bureau_token` 不是 JWT，也没有公钥私钥关系。`fed bureau token create` 要求输入用途，
+在 CLI 本地生成明文和 hash，只将 `token_id + purpose + token_hash` 登记到 Federation。
 
 ```mermaid
 flowchart LR
-    CLI["fed bureau token"] -->|"生成明文"| T["bureau_token"]
+    CLI["fed bureau token create"] -->|"生成明文"| T["bureau_token"]
     CLI -->|"提交 SHA-256 hash"| F["Federation 注册表"]
     T -->|"环境变量"| B["Bureau 服务器"]
     B -->|"Bearer bureau_token"| F
@@ -116,7 +117,8 @@ flowchart LR
 `token_id`、计算 SHA-256，并与数据库记录比较。数据库不保存明文。
 
 泄露 `bureau_token` 会让攻击者冒充该 Bureau 调用 Federation 管理 API，但不能生成
-或伪造 `user_token`。发生泄露时使用 `fed bureau revoke <token_id>` 立即撤销注册记录。
+或伪造 `user_token`。发生泄露时使用 `fed bureau token revoke <token_id>` 立即撤销注册记录，
+也可以在 `fed bureau token` 交互界面中选择对应 Token 撤销。
 撤销不会回溯已经签发的 `user_token`；用户 Token 仍由有效期和 Federation 密钥策略控制。
 
 Federation 仍会发布 Ed25519 公钥，供 Federation 自身和其他协议验证用户 Token：
@@ -127,8 +129,8 @@ Federation 仍会发布 Ed25519 公钥，供 Federation 自身和其他协议验
 ```
 
 `Bureau` 集合了 Federation 管理控制面能力。`bureau.cities`、`bureau.env`、
-`bureau.bureaus` 等入口使用 `bureau_token` 调用 Federation；`fed bureau token` 仍由
-CLI 生成明文并写入 Federation 注册表。
+`bureau.bureaus` 等入口使用 `bureau_token` 调用 Federation；`fed bureau token create`
+仍由 CLI 生成明文并将用途与 hash 写入 Federation 注册表。
 
 ## Plugin Resources
 

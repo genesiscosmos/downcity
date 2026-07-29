@@ -40,6 +40,17 @@ export async function handleInternalRpcRequest(params: {
       });
       return true;
     }
+    case "internal.workspace.reload_env": {
+      if (!options.reload_workspace_env) {
+        throw new Error("Agent RPC host does not provide Workspace Env reload");
+      }
+      const env = await options.reload_workspace_env();
+      write_success(request.id, {
+        reloaded: true,
+        key_count: Object.keys(env).length,
+      });
+      return true;
+    }
     case "internal.sessions.clear_messages": {
       const context = requireAgent(options);
       const session_id = String(request.params.session_id || "").trim();

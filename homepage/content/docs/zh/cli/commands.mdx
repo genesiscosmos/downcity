@@ -73,9 +73,24 @@ CLI、Agent `plugin_call`、HTTP 与定时任务统一调用 Plugin Action。不
 ## Env 与 Federation
 
 ```bash
-city env
+city env                                      # 打开 Env TUI
+city env list --global
+city env list --agent <agent_id>
+city env set <key> <value> --global
+city env set <key> <value> --agent <agent_id>
+city env delete <key> --global
+city env delete <key> --agent <agent_id>
 city federation
 ```
+
+Global Env 写入 `~/.downcity/.env`；Agent Env 写入其 Workspace 根目录的 `.env`。也可以从
+`city agent` 的“配置 Env”入口管理选中 Agent。修改完成后，City 会通知受影响的运行中
+Agent 重新加载 Env，并通过 Workspace 将新快照广播给已有 Session；已停止 Agent 会在下次
+启动时加载。
+
+多个 Agent 绑定同一 Workspace 时共享同一个项目 `.env`。运行时优先级为：Global `.env`
+低于 Workspace `.env`，启动进程显式环境变量最高。`list` 不显示明文值；`copy` 只允许从
+本机 CLI 显式执行。
 
 ## Fed
 
@@ -83,6 +98,10 @@ city federation
 fed                              # Federation Server 管理 TUI
 fed server add
 fed server manage
+fed bureau token                 # 打开 Bureau Token 管理 TUI
+fed bureau token create          # 输入用途并创建 Token
+fed bureau token list
+fed bureau token revoke <token_id>
 fed query GET /health
 fed create [dir]
 fed deploy [source]

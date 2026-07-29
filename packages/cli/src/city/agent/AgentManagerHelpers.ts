@@ -28,6 +28,7 @@ import type {
   AgentManagerAgentSummary,
 } from "@/city/agent/AgentManagerTypes.js";
 import { run_interactive_agent_plugin_manager } from "@/city/process/plugin/InteractivePluginManager.js";
+import { run_interactive_env_manager } from "@/city/env/InteractiveEnvManager.js";
 
 export function isInteractiveTerminal(): boolean {
   return process.stdin.isTTY === true && process.stdout.isTTY === true;
@@ -197,11 +198,11 @@ export function formatAgentConfigPanelDescription(agent: AgentManagerAgentSummar
   return t({
     zh: [
       `Agent ${agent.id} · 模型 ${agent.execution_binding || "未配置"}`,
-      "配置默认模型，以及内建或第三方 Plugin Binding。",
+      "配置默认模型、Env，以及内建或第三方 Plugin Binding。",
     ].join("\n"),
     en: [
       `Agent ${agent.id} · Model ${agent.execution_binding || "not configured"}`,
-      "Configure the default model and built-in or installed Plugin bindings.",
+      "Configure the default model, Env, and built-in or installed Plugin bindings.",
     ].join("\n"),
   });
 }
@@ -296,6 +297,14 @@ export async function promptAgentConfigAction(
           en: "Enable, disable, and configure built-in or installed Plugins for this Agent.",
         }),
         value: "configurePlugins",
+      },
+      {
+        title: t({ zh: "配置 Env", en: "Configure Env" }),
+        description: t({
+          zh: "编辑当前 Agent Workspace 的 .env，并同步运行中的 Agent。",
+          en: "Edit this Agent Workspace .env and synchronize the running Agent.",
+        }),
+        value: "configureEnv",
       },
       {
         title: t({ zh: "导航", en: "Navigation" }),
@@ -419,6 +428,15 @@ export async function runSelectedAgentManager(agent_input: AgentManagerAgentSumm
           last_message = t({
             zh: "Plugin Binding 已更新",
             en: "Plugin bindings updated",
+          });
+          continue;
+        }
+        if (config_action === "configureEnv") {
+          await run_interactive_env_manager(agent.id);
+          agent = await reloadAgentSummary(agent.id, agent);
+          last_message = t({
+            zh: "Workspace Env 已更新",
+            en: "Workspace Env updated",
           });
           continue;
         }

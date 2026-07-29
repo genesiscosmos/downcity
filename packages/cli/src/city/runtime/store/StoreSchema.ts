@@ -23,18 +23,6 @@ export function ensurePlatformStoreSchema(context: PlatformStoreContext): void {
     );
   `);
   context.sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS env_entries (
-      scope TEXT NOT NULL,
-      agent_id TEXT NOT NULL DEFAULT '',
-      key TEXT NOT NULL,
-      description TEXT,
-      value_encrypted TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (scope, agent_id, key)
-    );
-  `);
-  context.sqlite.exec(`
     CREATE TABLE IF NOT EXISTS managed_agents (
       agent_id TEXT PRIMARY KEY NOT NULL,
       workspace_path TEXT NOT NULL,
@@ -51,15 +39,6 @@ export function ensurePlatformStoreSchema(context: PlatformStoreContext): void {
     CREATE INDEX IF NOT EXISTS managed_agents_updated_at_idx
     ON managed_agents(updated_at);
   `);
-  context.sqlite.exec(`
-    CREATE INDEX IF NOT EXISTS env_entries_scope_idx
-    ON env_entries(scope);
-  `);
-  context.sqlite.exec(`
-    CREATE INDEX IF NOT EXISTS env_entries_agent_id_idx
-    ON env_entries(agent_id);
-  `);
-  ensureEnvEntriesColumns(context);
   ensureAgentTokenSchema(context);
   ensurePluginSchema(context);
   migrate_chat_plugin_resources(context);
@@ -368,19 +347,4 @@ function as_record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null;
-}
-
-/**
- * 补齐 env_entries 表的增量列。
- */
-function ensureEnvEntriesColumns(context: PlatformStoreContext): void {
-  const envEntryColumns = context.sqlite
-    .prepare("PRAGMA table_info(env_entries)")
-    .all() as Array<{ name?: unknown }>;
-  const envEntryColumnNames = new Set(
-    envEntryColumns.map((row) => String(row.name || "").trim()).filter(Boolean),
-  );
-  if (!envEntryColumnNames.has("description")) {
-    context.sqlite.exec("ALTER TABLE env_entries ADD COLUMN description TEXT;");
-  }
 }

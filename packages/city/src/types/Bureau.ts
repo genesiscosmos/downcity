@@ -16,6 +16,9 @@ export interface BureauTokenRecord extends Record<string, unknown> {
   /** Bureau Token 的公开查找 ID。 */
   token_id: string;
 
+  /** Token 对应的部署位置或业务用途，供管理员识别凭证。 */
+  purpose: string;
+
   /** Bureau Token 完整明文的 SHA-256 Base64URL hash。 */
   token_hash: string;
 
@@ -34,6 +37,9 @@ export interface RegisterBureauTokenInput {
   /** CLI 生成的 Bureau Token 查找 ID。 */
   token_id: string;
 
+  /** Token 对应的部署位置或业务用途。 */
+  purpose: string;
+
   /** CLI 对完整 Bureau Token 计算的 SHA-256 Base64URL hash。 */
   token_hash: string;
 }
@@ -42,6 +48,9 @@ export interface RegisterBureauTokenInput {
 export interface BureauTokenSummary {
   /** Bureau Token 的公开查找 ID。 */
   token_id: string;
+
+  /** Token 对应的部署位置或业务用途。 */
+  purpose: string;
 
   /** Token 当前状态。 */
   status: "active" | "revoked";

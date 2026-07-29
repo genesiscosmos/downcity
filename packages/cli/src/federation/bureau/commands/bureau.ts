@@ -1,35 +1,66 @@
 /**
  * Federation Bureau 注册表命令。
  *
- * `token` 在 CLI 本地生成部署凭证，并通过当前 active Federation 的 Admin
- * 控制面登记 hash。`list` 和 `revoke` 只管理 Federation 数据库记录。
+ * `token create` 在 CLI 本地生成部署凭证，并通过当前 active Federation 的 Admin
+ * 控制面登记用途和 hash。`token list` 与 `token revoke` 管理数据库注册记录。
  */
 
-import { Bureau } from "@downcity/city";
+import { Bureau, type BureauTokenSummary } from "@downcity/city";
 import { create_bureau_deployment_credential } from "@/federation/bureau/BureauCredential.js";
+import type { CreatedFederationBureauToken } from "@/federation/types/FederationBureau.js";
 import { readActiveServer, type ServerProfile } from "@/federation/core/session.js";
+import { isCancel, text } from "@/federation/tui/Prompts.js";
 import { CliError } from "@/shared/CliError.js";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { t } from "@/shared/CliLocale.js";
 
 /** 为当前 active Federation 创建并登记 Bureau Token。 */
 export async function create_federation_bureau_token(): Promise<void> {
+  const purpose_input = await text({
+    message: t({ zh: "Token 用途", en: "Token purpose" }),
+    placeholder: t({ zh: "例如：生产环境支付服务", en: "For example: production payments service" }),
+    validate: validate_bureau_token_purpose,
+  });
+  if (isCancel(purpose_input)) return;
+
+  const created = await create_federation_bureau_token_record(String(purpose_input));
+  render_created_federation_bureau_token(created);
+}
+
+/** 创建并登记 Bureau Token，返回仅供当前进程展示的一次性明文。 */
+export async function create_federation_bureau_token_record(
+  purpose_input: string,
+): Promise<CreatedFederationBureauToken> {
   const server = require_active_admin_server();
+  const purpose = require_bureau_token_purpose(purpose_input);
   const credential = create_bureau_deployment_credential();
   const admin = create_federation_bureau(server);
 
   await admin.bureaus.register({
     token_id: credential.token_id,
+    purpose,
     token_hash: credential.token_hash,
   });
 
+  return {
+    ...credential,
+    federation_url: server.base_url,
+    purpose,
+  };
+}
+
+/** 输出刚创建的 Bureau Token；明文不会再次从 Federation 读取。 */
+function render_created_federation_bureau_token(
+  created: CreatedFederationBureauToken,
+): void {
   emitCliBlock({
     tone: "success",
     title: t({ zh: "Bureau Token 已登记", en: "Bureau token registered" }),
     facts: [
-      { label: "DOWNCITY_FEDERATION_URL", value: server.base_url },
-      { label: "Token ID", value: credential.token_id },
-      { label: "DOWNCITY_BUREAU_TOKEN", value: credential.bureau_token },
+      { label: "DOWNCITY_FEDERATION_URL", value: created.federation_url },
+      { label: t({ zh: "用途", en: "Purpose" }), value: created.purpose },
+      { label: "Token ID", value: created.token_id },
+      { label: "DOWNCITY_BUREAU_TOKEN", value: created.bureau_token },
     ],
     note: t({
       zh: "Token 明文只显示这一次，请立即写入 Bureau 的部署环境变量。",
@@ -40,8 +71,7 @@ export async function create_federation_bureau_token(): Promise<void> {
 
 /** 列出当前 active Federation 的 Bureau 注册记录。 */
 export async function list_federation_bureaus(): Promise<void> {
-  const server = require_active_admin_server();
-  const items = await create_federation_bureau(server).bureaus.list();
+  const items = await read_federation_bureau_tokens();
   emitCliList({
     title: t({ zh: "Bureau 注册表", en: "Bureau registry" }),
     summary: t({ zh: `${items.length} 条`, en: `${items.length} items` }),
@@ -49,7 +79,12 @@ export async function list_federation_bureaus(): Promise<void> {
       title: item.token_id,
       tone: item.status === "active" ? "success" : "warning",
       facts: [
+        {
+          label: t({ zh: "用途", en: "Purpose" }),
+          value: item.purpose || t({ zh: "未说明", en: "Unspecified" }),
+        },
         { label: t({ zh: "状态", en: "Status" }), value: item.status },
+        { label: t({ zh: "创建时间", en: "Created" }), value: item.created_at },
       ],
     })),
   });
@@ -57,14 +92,26 @@ export async function list_federation_bureaus(): Promise<void> {
 
 /** 撤销当前 active Federation 中的 Bureau 注册记录。 */
 export async function revoke_federation_bureau(token_id_input: string): Promise<void> {
-  const server = require_active_admin_server();
   const token_id = require_value(token_id_input, "token_id");
-  await create_federation_bureau(server).bureaus.revoke(token_id);
+  await revoke_federation_bureau_token_record(token_id);
   emitCliBlock({
     tone: "success",
     title: t({ zh: "Bureau 已撤销", en: "Bureau revoked" }),
     facts: [{ label: "Token ID", value: token_id }],
   });
+}
+
+/** 读取当前 active Federation 的 Bureau Token 元数据。 */
+export async function read_federation_bureau_tokens(): Promise<BureauTokenSummary[]> {
+  const server = require_active_admin_server();
+  return await create_federation_bureau(server).bureaus.list();
+}
+
+/** 撤销当前 active Federation 中的 Bureau Token 记录。 */
+export async function revoke_federation_bureau_token_record(token_id_input: string): Promise<void> {
+  const server = require_active_admin_server();
+  const token_id = require_value(token_id_input, "token_id");
+  await create_federation_bureau(server).bureaus.revoke(token_id);
 }
 
 function require_active_admin_server(): ServerProfile {
@@ -100,4 +147,31 @@ function require_value(value: unknown, name: string): string {
     throw new CliError({ title: `${name} is required` });
   }
   return normalized;
+}
+
+function validate_bureau_token_purpose(value: string): string | true {
+  const purpose = value.trim();
+  if (!purpose) {
+    return t({ zh: "请输入 Token 用途", en: "Enter a token purpose" });
+  }
+  if (purpose.length > 200) {
+    return t({
+      zh: "Token 用途不能超过 200 个字符",
+      en: "Token purpose must be at most 200 characters",
+    });
+  }
+  return true;
+}
+
+function require_bureau_token_purpose(value: unknown): string {
+  const purpose = require_value(value, "purpose");
+  if (purpose.length > 200) {
+    throw new CliError({
+      title: t({
+        zh: "Token 用途不能超过 200 个字符。",
+        en: "Token purpose must be at most 200 characters.",
+      }),
+    });
+  }
+  return purpose;
 }

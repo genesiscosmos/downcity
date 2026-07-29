@@ -22,6 +22,8 @@ export interface RpcServerStartOptions {
   sessions: AgentSessions;
   /** Agent 上下文访问口。 */
   get_agent?: () => Agent;
+  /** 由宿主重新加载并提交 Workspace Env 的能力。 */
+  reload_workspace_env?: () => Record<string, string> | Promise<Record<string, string>>;
 }
 
 /**
@@ -32,6 +34,8 @@ export interface RpcRequestHandlerOptions {
   sessions: AgentSessions;
   /** Agent 上下文访问口。 */
   get_agent?: () => Agent;
+  /** 由宿主重新加载并提交 Workspace Env 的能力。 */
+  reload_workspace_env?: () => Record<string, string> | Promise<Record<string, string>>;
 }
 
 /**

@@ -12,6 +12,42 @@ import test from "node:test"
 import { Bureau, Federation } from "../bin/index.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
 
+test("Federation 为旧 Bureau Token 表补充 purpose 字段", async () => {
+  const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-bureau-migration-"))
+  try {
+    const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
+    db.raw.exec(`
+      CREATE TABLE federation_bureau_tokens (
+        token_id TEXT PRIMARY KEY,
+        token_hash TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      INSERT INTO federation_bureau_tokens (
+        token_id, token_hash, status, created_at, updated_at
+      ) VALUES (
+        'br_1234567890abcdef',
+        '1234567890123456789012345678901234567890123',
+        'revoked',
+        '2026-01-01T00:00:00.000Z',
+        '2026-01-01T00:00:00.000Z'
+      );
+    `)
+
+    const federation = new Federation({ db })
+    await federation.health()
+    const columns = db.raw.prepare("PRAGMA table_info(federation_bureau_tokens)").all()
+    assert.equal(columns.some((column) => column.name === "purpose"), true)
+
+    const admin = await create_admin(federation)
+    const items = await admin.bureaus.list()
+    assert.equal(items[0].purpose, "")
+  } finally {
+    await fs.rm(temp_dir, { recursive: true, force: true })
+  }
+})
+
 test("Federation 不默认创建 Bureau Token，Bureau 使用 JWKS 本地验签", async () => {
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-bureau-local-"))
   try {
@@ -27,6 +63,7 @@ test("Federation 不默认创建 Bureau Token，Bureau 使用 JWKS 本地验签"
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         token_id: "br_1234567890abcdef",
+        purpose: "unauthorized test",
         token_hash: "1234567890123456789012345678901234567890123",
       }),
     }))
@@ -66,6 +103,7 @@ test("Federation 不默认创建 Bureau Token，Bureau 使用 JWKS 本地验签"
 
     const items = await admin.bureaus.list()
     assert.equal(items.length, 1)
+    assert.equal(items[0].purpose, "federation auth test")
     assert.equal("name" in items[0], false)
     assert.equal("token_hash" in items[0], false)
     assert.equal("bureau_token" in items[0], false)
@@ -263,6 +301,7 @@ async function register_bureau(admin) {
   const token_hash = createHash("sha256").update(bureau_token, "utf8").digest("base64url")
   const registered = await admin.bureaus.register({
     token_id,
+    purpose: "federation auth test",
     token_hash,
   })
   assert.equal(registered.token_id, token_id)

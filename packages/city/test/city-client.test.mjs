@@ -566,6 +566,7 @@ test("Bureau bureaus register / list / revoke", async () => {
   const requests = []
   const bureau = {
     token_id: "br_1234567890abcdef",
+    purpose: "city client test",
     status: "active",
     created_at: "t",
     updated_at: "t",
@@ -582,12 +583,14 @@ test("Bureau bureaus register / list / revoke", async () => {
   })
   const input = {
     token_id: bureau.token_id,
+    purpose: bureau.purpose,
     token_hash: "1234567890123456789012345678901234567890123",
   }
   assert.deepEqual(await admin.bureaus.register(input), bureau)
   assert.deepEqual(await admin.bureaus.list(), [bureau])
   await admin.bureaus.revoke(bureau.token_id)
   assert.equal(requests[0].url, "http://localhost:3001/v1/bureaus/register")
+  assert.deepEqual(JSON.parse(requests[0].init.body), input)
   assert.equal(requests[1].url, "http://localhost:3001/v1/bureaus/list")
   assert.equal(requests[2].url, "http://localhost:3001/v1/bureaus/revoke")
 })

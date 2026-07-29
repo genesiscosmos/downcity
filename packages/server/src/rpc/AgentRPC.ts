@@ -13,6 +13,7 @@ import type {
   AgentRpcBinding,
   AgentRpcListenOptions,
 } from "@/types/AgentRpcBinding.js";
+import type { AgentRpcRuntimeOptions } from "@/types/AgentRpcRuntime.js";
 
 const DEFAULT_RPC_HOST = "127.0.0.1";
 const DEFAULT_RPC_PORT = 15314;
@@ -22,12 +23,14 @@ const DEFAULT_RPC_PORT = 15314;
  */
 export class AgentRPC {
   private readonly agent: Agent;
+  private readonly runtime_options: AgentRpcRuntimeOptions;
   private rpc_instance: RpcServerInstance | null = null;
   private current_binding: AgentRpcBinding | null = null;
   private start_promise: Promise<AgentRpcBinding> | null = null;
 
-  constructor(agent: Agent) {
+  constructor(agent: Agent, runtime_options: AgentRpcRuntimeOptions = {}) {
     this.agent = agent;
+    this.runtime_options = runtime_options;
   }
 
   /**
@@ -52,6 +55,7 @@ export class AgentRPC {
         port,
         sessions: this.agent.sessions,
         get_agent: () => this.agent,
+        reload_workspace_env: this.runtime_options.reload_workspace_env,
       });
       this.rpc_instance = instance;
       this.current_binding = {

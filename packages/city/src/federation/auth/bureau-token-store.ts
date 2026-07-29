@@ -20,6 +20,7 @@ export class BureauTokenStore {
   /** 登记 CLI 生成的 Bureau Token hash，不接触 Token 明文。 */
   async register(input: RegisterBureauTokenInput): Promise<BureauTokenSummary> {
     const token_id = read_token_id_value(input.token_id);
+    const purpose = read_token_purpose(input.purpose);
     const token_hash = read_token_hash(input.token_hash);
     if ((await this.table.select({ token_id }))[0]) {
       throw new TypeError(`Bureau token already registered: ${token_id}`);
@@ -27,6 +28,7 @@ export class BureauTokenStore {
     const now = new Date().toISOString();
     await this.table.insert({
       token_id,
+      purpose,
       token_hash,
       status: "active",
       created_at: now,
@@ -34,6 +36,7 @@ export class BureauTokenStore {
     });
     return {
       token_id,
+      purpose,
       status: "active",
       created_at: now,
       updated_at: now,
@@ -53,6 +56,7 @@ export class BureauTokenStore {
   async list(): Promise<BureauTokenSummary[]> {
     return (await this.table.select()).map((record) => ({
       token_id: record.token_id,
+      purpose: record.purpose,
       status: record.status,
       created_at: record.created_at,
       updated_at: record.updated_at,
@@ -86,6 +90,14 @@ function read_token_hash(value: unknown): string {
     throw new TypeError("token_hash must be a SHA-256 Base64URL value");
   }
   return token_hash;
+}
+
+function read_token_purpose(value: unknown): string {
+  const purpose = read_required_string(value, "purpose");
+  if (purpose.length > 200) {
+    throw new TypeError("purpose must be at most 200 characters");
+  }
+  return purpose;
 }
 
 function read_token_id(token: string): string | undefined {

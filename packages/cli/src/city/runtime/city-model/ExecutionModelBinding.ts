@@ -12,7 +12,7 @@ import {
   listCityAiModelChoices,
   type CityAiModelChoice,
 } from "@/city/runtime/city-model/CityAiServiceBinding.js";
-import { mergeProcessEnvWithPlatformGlobalEnv } from "@/city/env/ProcessEnv.js";
+import { merge_process_env_with_platform_global_env } from "@/city/env/ProcessEnv.js";
 
 /**
  * City AIService 模型下拉候选项。
@@ -23,12 +23,12 @@ export type PlatformModelChoice = CityAiModelChoice;
  * 读取 City AIService 模型候选列表。
  */
 export async function listPlatformModelChoices(): Promise<PlatformModelChoice[]> {
-  return await listCityAiModelChoices(mergeProcessEnvWithPlatformGlobalEnv());
+  return await listCityAiModelChoices(merge_process_env_with_platform_global_env());
 }
 
 /**
  * 断言指定模型可用于 agent execution。
  */
 export async function assertPlatformModelReady(modelId: string): Promise<void> {
-  await assertCityAiModelReady(modelId, mergeProcessEnvWithPlatformGlobalEnv());
+  await assertCityAiModelReady(modelId, merge_process_env_with_platform_global_env());
 }

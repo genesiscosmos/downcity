@@ -22,6 +22,7 @@ export class BureausService extends Service {
     this.action("register", async (ctx) => {
       return await this.store.register({
         token_id: String(ctx.input.token_id ?? ""),
+        purpose: String(ctx.input.purpose ?? ""),
         token_hash: String(ctx.input.token_hash ?? ""),
       });
     }, { auth: ["admin"] });

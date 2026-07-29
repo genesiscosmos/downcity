@@ -12,7 +12,7 @@ The Downcity package installs two independent tools:
 
 ## City data model
 
-An Agent is a global entity identified by `agent_id`; its Workspace path is only a mutable binding. Agents, plugin bindings, tokens, and environment variables live in `~/.downcity/downcity.db`. Daemon files live in `~/.downcity/runtimes/<agent_id>/`.
+An Agent is a global entity identified by `agent_id`; its Workspace path is only a mutable binding. Agents, plugin bindings, and tokens live in `~/.downcity/downcity.db`. Global Env lives in `~/.downcity/.env`, Workspace Env lives in the project `.env`, and daemon files live in `~/.downcity/runtimes/<agent_id>/`.
 
 Plugin artifacts are installed globally under `~/.downcity/plugins/`. Plugin configuration is not stored on the Agent SDK runtime Plugin object. It is stored per `agent_id + plugin_name` in an Agent Plugin Binding.
 

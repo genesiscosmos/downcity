@@ -15,6 +15,11 @@ Local CLI state uses encrypted SQLite stores:
 
 Provider `apiKey`, channel credentials, user sessions, and Federation admin keys are not stored in plaintext. They are encrypted before being written to the local SQLite stores.
 
+`city env` is an explicit file-based configuration feature. Global Env is stored in plaintext at
+`~/.downcity/.env`, and Workspace Env is stored in plaintext in the project `.env`. The Global file
+is restricted to the current user, and project `.env` is added to `.gitignore` by default. Use the
+launch environment or a secret manager when stronger secret protection is required.
+
 Key source priority:
 
 1. `DC_MODEL_DB_KEY`
@@ -25,6 +30,7 @@ Key source priority:
 1. Never commit `~/.downcity` or any key material.
 2. Use a secret manager to inject `DC_MODEL_DB_KEY` in team/production environments.
 3. After key rotation, validate model connectivity through CLI and one real invocation.
+4. Never commit Workspace `.env`, and keep `~/.downcity/.env` accessible only to your user account.
 
 ## Related docs
 

@@ -554,7 +554,7 @@ async function register_bureau(admin) {
   const token_id = `br_${randomBytes(12).toString("base64url")}`
   const bureau_token = `fb_${token_id}.${randomBytes(32).toString("base64url")}`
   const token_hash = createHash("sha256").update(bureau_token, "utf8").digest("base64url")
-  await admin.bureaus.register({ token_id, token_hash })
+  await admin.bureaus.register({ token_id, purpose: "accounts auth test", token_hash })
   return { token_id, bureau_token }
 }
 

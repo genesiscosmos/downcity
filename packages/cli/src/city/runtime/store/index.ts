@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 对外仍然只暴露一个 `PlatformStore` 类，保持调用入口稳定。
- * - 内部已经按职责拆成 schema、secure settings、env 与 Plugin Resource 等模块。
+ * - 内部已经按职责拆成 schema、secure settings 与 Plugin Resource 等模块。
  * - 这样既能保持外部 API 简洁，也能把通用存储层控制在可维护的模块粒度内。
  */
 
@@ -15,12 +15,6 @@ import {
 } from "@/city/process/registry/CityPaths.js";
 import { ensurePlatformStoreSchema } from "@/city/runtime/store/StoreSchema.js";
 import type { PlatformStoreContext } from "@/city/runtime/store/StoreShared.js";
-import type {
-  StoredEnvEntry,
-  StoredGlobalEnvEntry,
-  UpsertEnvEntryInput,
-  UpsertGlobalEnvEntryInput,
-} from "@/city/types/platform/PlatformStore.js";
 import {
   getPlatformRootDirPath,
 } from "@/city/process/registry/CityPaths.js";
@@ -32,19 +26,6 @@ import {
   setSecureSettingJson,
   setSecureSettingJsonSync,
 } from "@/city/runtime/store/StoreSecureSettings.js";
-import {
-  clearGlobalEnvEntries,
-  getGlobalEnvMap,
-  getGlobalEnvMapSync,
-  listEnvEntries,
-  listEnvEntriesSync,
-  listGlobalEnvEntries,
-  listGlobalEnvEntriesSync,
-  removeEnvEntry,
-  removeGlobalEnvEntry,
-  upsertEnvEntry,
-  upsertGlobalEnvEntry,
-} from "@/city/runtime/store/StoreEnvRepository.js";
 
 /**
  * 平台控制面全局存储门面。
@@ -82,7 +63,6 @@ export class PlatformStore {
    */
   clearAll(): void {
     this.sqlite.exec("DELETE FROM platform_secure_settings;");
-    this.sqlite.exec("DELETE FROM env_entries;");
     this.sqlite.exec("DELETE FROM managed_agents;");
     this.sqlite.exec("DELETE FROM plugin_resources;");
     this.sqlite.exec("DELETE FROM agent_tokens;");
@@ -175,83 +155,6 @@ export class PlatformStore {
       buildAgentSecureSettingKey(agentIdInput, keyInput),
       value,
     );
-  }
-
-  /**
-   * 查询 env 条目（同步）。
-   */
-  listEnvEntriesSync(): StoredEnvEntry[] {
-    return listEnvEntriesSync(this.context);
-  }
-
-  /**
-   * 查询 env 条目（异步）。
-   */
-  async listEnvEntries(): Promise<StoredEnvEntry[]> {
-    return await listEnvEntries(this.context);
-  }
-
-  /**
-   * 新增或更新 env 条目。
-   */
-  async upsertEnvEntry(input: UpsertEnvEntryInput): Promise<void> {
-    await upsertEnvEntry(this.context, input);
-  }
-
-  /**
-   * 删除单个 env 条目。
-   */
-  removeEnvEntry(keyInput: string): void {
-    removeEnvEntry(this.context, keyInput);
-  }
-
-  /**
-   * 列出全局环境变量（同步解密）。
-   */
-  listGlobalEnvEntriesSync(): StoredGlobalEnvEntry[] {
-    return listGlobalEnvEntriesSync(this.context);
-  }
-
-  /**
-   * 读取环境变量映射（同步解密）。
-   */
-  getEnvMapSync(): Record<string, string> {
-    return getGlobalEnvMapSync(this.context);
-  }
-
-  /**
-   * 列出环境变量（解密后）。
-   */
-  async listGlobalEnvEntries(): Promise<StoredGlobalEnvEntry[]> {
-    return await listGlobalEnvEntries(this.context);
-  }
-
-  /**
-   * 读取环境变量映射（解密后）。
-   */
-  async getEnvMap(): Promise<Record<string, string>> {
-    return await getGlobalEnvMap(this.context);
-  }
-
-  /**
-   * 新增或更新全局环境变量。
-   */
-  async upsertGlobalEnvEntry(input: UpsertGlobalEnvEntryInput): Promise<void> {
-    await upsertGlobalEnvEntry(this.context, input);
-  }
-
-  /**
-   * 删除单个全局环境变量。
-   */
-  removeGlobalEnvEntry(keyInput: string): void {
-    removeGlobalEnvEntry(this.context, keyInput);
-  }
-
-  /**
-   * 清空全局环境变量。
-   */
-  clearGlobalEnvEntries(): void {
-    clearGlobalEnvEntries(this.context);
   }
 
 }

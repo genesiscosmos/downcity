@@ -38,9 +38,11 @@ Services and Actions are registered with City and can be discovered and called b
 
 Federation generates an Ed25519 Key Ring on first startup and publishes verification keys through `/.well-known/jwks.json`. City can connect to Federation directly; a product deploys Bureau only when it needs its own backend capabilities. Bureau verifies user tokens locally and applies its own service policy. Federation does not create Bureau Tokens on startup.
 
-`fed bureau token` generates and registers the Bureau deployment credential from the CLI.
-Federation stores only the token hash; the plaintext is shown once and configured as
-`DOWNCITY_BUREAU_TOKEN` on the Bureau server. Federation and Bureau can run on different servers.
+`fed bureau token` opens the interactive token manager. Choose Create, or run
+`fed bureau token create`, to enter a purpose and register a locally generated deployment
+credential. Federation stores the purpose, hash, and lifecycle state; the plaintext is shown
+once and configured as `DOWNCITY_BUREAU_TOKEN` on the Bureau server. Federation and Bureau can
+run on different servers.
 
 ## Where to learn more
 

@@ -33,6 +33,7 @@ export type AgentManagerAgentAction =
 export type AgentManagerConfigAction =
   | "configureModel"
   | "configurePlugins"
+  | "configureEnv"
   | "back";
 
 export interface AgentManagerAgentSummary {

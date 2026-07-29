@@ -75,6 +75,7 @@ export async function initialize_federation(params: {
     const ddl = buildCreateUserTableSQL(table.schema);
     if (ddl) await executeDDL(db_client, ddl);
   }
+  await ensure_bureau_token_purpose_column(db_client);
 
   const env_table = table_map.get("env");
   if (!env_table) throw new Error("Federation env table is not initialized");
@@ -138,6 +139,37 @@ export async function initialize_federation(params: {
     city_store,
     authenticator,
   };
+}
+
+/**
+ * 为旧 Federation 数据库补充 Bureau Token 用途字段。
+ *
+ * 关键点（中文）
+ * - PostgreSQL 原生支持 `IF NOT EXISTS`，可直接幂等执行。
+ * - SQLite / D1 不支持该列级语法，因此只忽略明确的重复列错误。
+ * - 空字符串只用于标识升级前的旧记录；新登记入口仍要求用途非空。
+ */
+async function ensure_bureau_token_purpose_column(
+  db_client: { $client: DbClient },
+): Promise<void> {
+  if (typeof db_client.$client.unsafe === "function") {
+    await executeDDL(
+      db_client,
+      'ALTER TABLE "federation_bureau_tokens" ADD COLUMN IF NOT EXISTS "purpose" TEXT NOT NULL DEFAULT \'\'',
+    );
+    return;
+  }
+
+  try {
+    await executeDDL(
+      db_client,
+      'ALTER TABLE "federation_bureau_tokens" ADD COLUMN "purpose" TEXT NOT NULL DEFAULT \'\'',
+    );
+  } catch (error) {
+    if (!/duplicate column|already exists/iu.test(String(error))) {
+      throw error;
+    }
+  }
 }
 
 /**

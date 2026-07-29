@@ -12,7 +12,7 @@ Downcity 安装包提供两个独立工具：
 
 ## City 数据模型
 
-Agent 是全局实体，`agent_id` 是唯一身份，Workspace 路径只是可变绑定。Agent、Plugin Binding、Token 与环境变量统一保存在 `~/.downcity/downcity.db`；daemon 文件位于 `~/.downcity/runtimes/<agent_id>/`。
+Agent 是全局实体，`agent_id` 是唯一身份，Workspace 路径只是可变绑定。Agent、Plugin Binding 与 Token 保存在 `~/.downcity/downcity.db`；Global Env 保存在 `~/.downcity/.env`，Workspace Env 保存在项目 `.env`；daemon 文件位于 `~/.downcity/runtimes/<agent_id>/`。
 
 Plugin 制品全局安装到 `~/.downcity/plugins/`。Plugin 配置不属于 Agent SDK 的运行时 Plugin 对象，而是按 `agent_id + plugin_name` 保存在 Agent Plugin Binding 中。
 

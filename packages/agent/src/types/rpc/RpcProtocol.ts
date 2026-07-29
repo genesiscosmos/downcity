@@ -220,6 +220,12 @@ export type RpcRequest =
   | {
       /** 请求 id，用于匹配响应。 */
       id: string;
+      /** 让宿主从事实源重新加载 Workspace Env。 */
+      method: "internal.workspace.reload_env";
+    }
+  | {
+      /** 请求 id，用于匹配响应。 */
+      id: string;
       /** 清空 session messages。 */
       method: "internal.sessions.clear_messages";
       /** 目标 session 参数。 */

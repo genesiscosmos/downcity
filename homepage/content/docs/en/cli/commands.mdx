@@ -74,9 +74,24 @@ The CLI, Agent `plugin_call`, HTTP, and scheduled jobs all invoke Plugin Actions
 ## Env and Federation
 
 ```bash
-city env
+city env                                      # open the Env TUI
+city env list --global
+city env list --agent <agent_id>
+city env set <key> <value> --global
+city env set <key> <value> --agent <agent_id>
+city env delete <key> --global
+city env delete <key> --agent <agent_id>
 city federation
 ```
+
+Global Env is stored in `~/.downcity/.env`; Agent Env is stored in `.env` at the root of its
+Workspace. You can also use “Configure Env” in `city agent`. After a change, City asks affected
+running Agents to reload Env and Workspace broadcasts the new snapshot to existing Sessions.
+Stopped Agents load it on their next start.
+
+Agents bound to the same Workspace share one project `.env`. Runtime precedence is Global `.env`,
+then Workspace `.env`, then explicit process environment variables. `list` never prints plaintext
+values; `copy` requires an explicit local CLI invocation.
 
 ## Fed
 
@@ -84,6 +99,10 @@ city federation
 fed                              # Federation Server manager TUI
 fed server add
 fed server manage
+fed bureau token                 # open the Bureau Token manager TUI
+fed bureau token create          # enter a purpose and create a token
+fed bureau token list
+fed bureau token revoke <token_id>
 fed query GET /health
 fed create [dir]
 fed deploy [source]

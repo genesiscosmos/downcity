@@ -13,6 +13,7 @@ export type {
   AgentRpcBinding,
   AgentRpcListenOptions,
 } from "./types/AgentRpcBinding.js";
+export type { AgentRpcRuntimeOptions } from "./types/AgentRpcRuntime.js";
 export type {
   AgentHttpBinding,
   AgentHttpListenOptions,

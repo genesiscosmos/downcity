@@ -29,7 +29,7 @@ my-project/
 └── .downcity/
 ```
 
-The global database stores the Agent ID, model binding, startup options, and Plugin config. Project `.env` overrides platform global env and the current CLI process env.
+The global database stores the Agent ID, model binding, startup options, and Plugin config. Project `.env` overrides Global Env from `~/.downcity/.env`; explicit process environment variables have the highest priority.
 
 ```bash
 # Allow replacing existing Agent config in the global database

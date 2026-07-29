@@ -233,13 +233,15 @@ const profile = await city.user().profile();
 `city_id` 由 Federation 验签后从 token 中读取，客户端不再重复传入。
 
 City 直接访问 Federation，不依赖 Bureau。只有产品需要自己的后端能力时，才通过
-`fed bureau token` 登记并部署 Bureau：
+`fed bureau token` 打开交互式管理界面；选择创建，或直接运行
+`fed bureau token create`，登记并部署 Bureau：
 
 ```bash
 fed bureau token
 ```
 
-命令生成的高熵 `bureau_token` 只显示一次，Federation 数据库只保存 hash。将明文
+创建时必须输入用途。命令生成的高熵 `bureau_token` 只显示一次，Federation 数据库保存
+用途和 hash。将明文
 配置到 Bureau 所在服务器：
 
 ```env
