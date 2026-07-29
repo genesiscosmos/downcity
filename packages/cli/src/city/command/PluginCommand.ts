@@ -30,6 +30,17 @@ import { parsePort } from "@/shared/IndexSupport.js";
 import { get_plugin_catalog_item, list_plugin_catalog } from "@/city/process/plugin/PluginCatalog.js";
 import { run_interactive_plugin_manager } from "@/city/process/plugin/InteractivePluginManager.js";
 import { prompt_and_save_plugin_binding } from "@/city/process/plugin/PluginBindingConfiguration.js";
+import {
+  create_plugin_resource,
+  refresh_plugin_resource,
+  update_plugin_resource,
+} from "@/city/process/plugin/PluginResourceService.js";
+import {
+  list_plugin_resources,
+  remove_plugin_resource,
+} from "@/city/process/registry/PluginResourceRepository.js";
+import { prompt_plugin_resource_fields } from "@/city/process/plugin/PluginConfigForm.js";
+import { redact_plugin_schema_value } from "@/city/process/plugin/PluginResourceSchema.js";
 
 /** Plugin Action HTTP 返回结构。 */
 interface PluginActionHttpResponse {
@@ -160,6 +171,7 @@ export function registerPluginsCommand(program: Command): void {
     });
 
   register_binding_commands(plugin);
+  register_resource_commands(plugin);
   register_action_command(plugin);
 }
 
@@ -182,6 +194,7 @@ function register_binding_commands(plugin: Command): void {
         plugin_name,
         enabled: true,
         config,
+        resource_ids: existing?.resource_ids ?? [],
       });
       emitCliBlock({
         tone: "success",
@@ -212,12 +225,19 @@ function register_binding_commands(plugin: Command): void {
     .option("--set <json>", t({ zh: "替换完整配置 JSON", en: "replace complete config JSON" }))
     .option("--interactive", t({ zh: "打开 Schema 配置表单", en: "open Schema configuration form" }))
     .option("--remove", t({ zh: "删除该 Agent Binding", en: "remove this Agent binding" }))
+    .option("--resources <json>", t({ zh: "替换 Resource ID 数组", en: "replace Resource ID array" }))
     .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
     .helpOption("--help", helpText())
     .action(async (
       plugin_name: string,
       agent_id: string | undefined,
-      options: { set?: string; interactive?: boolean; remove?: boolean; json?: boolean },
+      options: {
+        set?: string;
+        interactive?: boolean;
+        remove?: boolean;
+        resources?: string;
+        json?: boolean;
+      },
     ) => {
       const target = await resolve_cli_agent_target(agent_id);
       const existing = get_agent_plugin_binding(target.agent_id, plugin_name);
@@ -232,6 +252,18 @@ function register_binding_commands(plugin: Command): void {
           plugin_name,
           enabled: existing?.enabled ?? true,
           config: parse_json_object(options.set, "config"),
+          resource_ids: options.resources
+            ? parse_json_string_array(options.resources, "resources")
+            : existing?.resource_ids ?? [],
+        });
+        print_binding(binding, options.json === true);
+        return;
+      }
+      if (options.resources) {
+        if (!existing) throw new Error(`Plugin is not bound to agent: ${plugin_name}`);
+        const binding = set_agent_plugin_binding({
+          ...existing,
+          resource_ids: parse_json_string_array(options.resources, "resources"),
         });
         print_binding(binding, options.json === true);
         return;
@@ -249,6 +281,121 @@ function register_binding_commands(plugin: Command): void {
       }
       if (!existing) throw new Error(`Plugin is not bound to agent: ${plugin_name}`);
       print_binding(existing, options.json === true);
+    });
+}
+
+/** 注册通用 Plugin Resource 命令。 */
+function register_resource_commands(plugin: Command): void {
+  const resource = plugin
+    .command("resource")
+    .description(t({ zh: "管理完整 Plugin Resource", en: "manage complete Plugin Resources" }))
+    .helpOption("--help", helpText())
+    .action(() => resource.outputHelp());
+
+  resource
+    .command("list <plugin_name>")
+    .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
+    .helpOption("--help", helpText())
+    .action((plugin_name: string, options: { json?: boolean }) => {
+      const catalog_item = get_plugin_catalog_item(plugin_name);
+      if (!catalog_item?.resource_schema) {
+        throw new Error(`Plugin does not declare Resources: ${plugin_name}`);
+      }
+      const resources = list_plugin_resources(plugin_name).map((item) => ({
+        ...item,
+        item: redact_plugin_schema_value(item.item, catalog_item.resource_schema),
+      }));
+      printResult({
+        asJson: options.json === true,
+        success: true,
+        title: "plugin resources",
+        payload: { plugin_name: catalog_item.plugin_name, resources },
+      });
+    });
+
+  resource
+    .command("create <plugin_name>")
+    .option("--set <json>", t({ zh: "Resource 用户字段 JSON", en: "Resource user fields JSON" }))
+    .option("--interactive", t({ zh: "打开 Schema 表单", en: "open Schema form" }))
+    .helpOption("--help", helpText())
+    .action(async (
+      plugin_name: string,
+      options: { set?: string; interactive?: boolean },
+    ) => {
+      const catalog_item = get_plugin_catalog_item(plugin_name);
+      if (!catalog_item?.resource_schema) {
+        throw new Error(`Plugin does not declare Resources: ${plugin_name}`);
+      }
+      const fields = options.set
+        ? parse_json_object(options.set, "resource")
+        : options.interactive
+          ? await prompt_plugin_resource_fields({
+              plugin_name: catalog_item.plugin_name,
+              schema: catalog_item.resource_schema,
+            })
+          : null;
+      if (!fields) {
+        throw new Error("Use --set <json> or --interactive to create a Plugin Resource");
+      }
+      const created = await create_plugin_resource({ plugin_name, fields });
+      emitCliBlock({
+        tone: "success",
+        title: "Plugin Resource created",
+        summary: `${created.item.name} · ${created.resource_id}`,
+        facts: [{ label: "Type", value: created.item.type }],
+      });
+    });
+
+  resource
+    .command("update <plugin_name> <resource_id>")
+    .option(
+      "--set <json>",
+      t({ zh: "替换完整 Resource 用户字段 JSON", en: "replace complete Resource user fields JSON" }),
+    )
+    .helpOption("--help", helpText())
+    .action(async (
+      plugin_name: string,
+      resource_id: string,
+      options: { set?: string },
+    ) => {
+      if (!options.set) {
+        throw new Error("Use --set <json> to update a Plugin Resource");
+      }
+      const updated = await update_plugin_resource({
+        plugin_name,
+        resource_id,
+        fields: parse_json_object(options.set, "resource"),
+      });
+      emitCliBlock({
+        tone: "success",
+        title: "Plugin Resource updated",
+        summary: `${updated.item.name} · ${updated.resource_id}`,
+        facts: [{ label: "Type", value: updated.item.type }],
+      });
+    });
+
+  resource
+    .command("refresh <plugin_name> <resource_id>")
+    .helpOption("--help", helpText())
+    .action(async (plugin_name: string, resource_id: string) => {
+      const refreshed = await refresh_plugin_resource(plugin_name, resource_id);
+      emitCliBlock({
+        tone: "success",
+        title: "Plugin Resource refreshed",
+        summary: `${refreshed.item.name} · ${refreshed.resource_id}`,
+      });
+    });
+
+  resource
+    .command("remove <plugin_name> <resource_id>")
+    .helpOption("--help", helpText())
+    .action((plugin_name: string, resource_id: string) => {
+      remove_plugin_resource(plugin_name, resource_id);
+      emitCliBlock({
+        tone: "success",
+        title: "Plugin Resource removed",
+        summary: `${plugin_name} · ${resource_id}`,
+      });
     });
 }
 
@@ -302,12 +449,27 @@ function register_action_command(plugin: Command): void {
 
 /** 输出一个 Agent Plugin Binding。 */
 function print_binding(binding: ReturnType<typeof list_agent_plugin_bindings>[number], as_json: boolean): void {
+  const schema = get_plugin_catalog_item(binding.plugin_name)?.config_schema;
   printResult({
     asJson: as_json,
     success: true,
     title: "plugin binding",
-    payload: { binding: { ...binding } },
+    payload: {
+      binding: {
+        ...binding,
+        config: redact_plugin_schema_value(binding.config, schema) as JsonObject,
+      },
+    },
   });
+}
+
+/** 解析并要求 JSON 字符串数组。 */
+function parse_json_string_array(input: string, label: string): string[] {
+  const value = JSON.parse(input) as unknown;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new Error(`${label} must be a JSON string array`);
+  }
+  return value.map((item) => item.trim()).filter(Boolean);
 }
 
 /** 解析并要求 JSON 对象。 */

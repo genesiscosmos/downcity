@@ -37,5 +37,6 @@ export async function prompt_and_save_plugin_binding(input: {
     plugin_name: input.plugin.plugin_name,
     enabled: input.enabled,
     config,
+    resource_ids: existing?.resource_ids ?? [],
   });
 }

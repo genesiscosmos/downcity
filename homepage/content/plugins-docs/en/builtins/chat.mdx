@@ -35,10 +35,11 @@ Use `chat` when you need:
 
 ## How users use it
 
-The CLI does not have a separate Chat configuration command. Use the shared Plugin manager to select accounts, enable channels, and save the current Agent Binding:
+The CLI does not have a separate Chat configuration command. Use the shared Plugin Resource manager to create a channel Resource, then save its Resource ID in the current Agent Binding:
 
 ```bash
-city plugin config chat <agent_id> --interactive
+city plugin resource create chat --interactive
+city plugin config chat <agent_id> --resources '["telegram-a1b2c3"]'
 ```
 
 Use the generic Plugin Action command when you need to invoke a Chat Action from the terminal:
@@ -49,7 +50,7 @@ city plugin action chat send <agent_id> --input '{"chat_key":"telegram:123456","
 
 ## SDK Assembly
 
-In embedded SDK scenarios, `ChatPlugin` receives channel objects. Each channel owns its env or account binding details:
+In embedded SDK scenarios, `ChatPlugin` receives already constructed channel objects. The SDK host directly provides the ID, display name, and runtime credentials; it does not read City Plugin Resources:
 
 ```ts
 import {
@@ -62,9 +63,9 @@ import {
 const plugin = new ChatPlugin({
   channels: [
     new TelegramChannel({
-      env: {
-        TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
-      },
+      id: "telegram-sdk",
+      name: "SDK Telegram Bot",
+      bot_token: process.env.TELEGRAM_BOT_TOKEN,
     }),
     new FeishuChannel({
       env: {
@@ -84,24 +85,7 @@ const plugin = new ChatPlugin({
 });
 ```
 
-`channel_account_id` can bind an account from a shared pool, but the host must explicitly inject an `account_store`. Chat Plugin depends only on the storage contract and never reads the CLI's `~/.downcity`, SQLite database, or key files:
-
-```ts
-import type { ChatChannelAccountStore } from "@downcity/plugins/chat";
-
-const account_store: ChatChannelAccountStore = create_my_account_store();
-
-const plugin = new ChatPlugin({
-  account_store,
-  channels: [
-    new TelegramChannel({
-      channel_account_id: "telegram-main",
-    }),
-  ],
-});
-```
-
-When no shared account pool is needed, the SDK-first path remains passing channel-specific env directly to the channel object.
+Plugin Resource Schema, Resolver, encrypted storage, and Binding ID resolution belong to the CLI control plane. They do not enter `@downcity/agent` or become a Store dependency of `ChatPlugin`.
 
 ## Feishu dependency
 

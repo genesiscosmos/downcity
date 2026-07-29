@@ -14,7 +14,8 @@ example-plugin/
 ├── downcity.plugin.json
 └── dist/
     ├── index.js
-    └── config.schema.json
+    ├── config.schema.json
+    └── resource.schema.json
 ```
 
 `downcity.plugin.json`:
@@ -32,11 +33,14 @@ example-plugin/
     "defaults": {
       "endpoint": "https://example.com"
     }
+  },
+  "resources": {
+    "schema": "dist/resource.schema.json"
   }
 }
 ```
 
-The manifest must be static JSON. `entry` and `config.schema` are paths relative to the repository root and cannot escape that root or point through symbolic links.
+The manifest must be static JSON. `entry`, `config.schema`, and `resources.schema` are paths relative to the repository root and cannot escape that root or point through symbolic links. Plugins without Resources omit `resources`.
 
 ## Configuration contract
 
@@ -56,19 +60,53 @@ const json_schema = z.toJSONSchema(config_schema, {
 
 Your build script must write `json_schema` to `dist/config.schema.json`. City uses Ajv to validate the schema and defaults during installation, then validates every Agent Binding against the same schema. Zod is not the runtime protocol and does not belong in the manifest.
 
+## Resource Schema and Resolver
+
+A Resource Schema describes one complete Item and requires `id`, `type`, and `name`. `id` must be `readOnly`; the Resolver writes other top-level `readOnly` fields, while users enter `writeOnly` fields securely and the CLI redacts them from output.
+
+```json
+{
+  "title": "API Account",
+  "type": "object",
+  "required": ["id", "type", "name", "api_key"],
+  "properties": {
+    "id": { "type": "string", "readOnly": true },
+    "type": { "type": "string", "const": "api" },
+    "name": { "type": "string", "readOnly": true },
+    "api_key": { "type": "string", "writeOnly": true }
+  },
+  "additionalProperties": false
+}
+```
+
+The Resolver returns the complete dynamic-field projection. It cannot modify `id`, `type`, or user-owned fields:
+
+```ts
+resolve_resource({ resource }) {
+  return { name: inspect_name(String(resource.api_key)) };
+}
+```
+
 ## Runtime Factory
 
-The entry must export `plugin_factory`; a default export is also accepted. The Factory receives only the current Agent's validated `config`:
+The entry must export `plugin_factory`; a default export is also accepted. The Factory receives the validated Agent `config` and complete `resources` resolved from Resource IDs:
 
 ```ts
 import type { JsonObject, Plugin } from "@downcity/agent";
 
 export const plugin_factory = {
-  create({ config }: { config: JsonObject }): Plugin {
+  async resolve_resource({ resource }: { resource: JsonObject }) {
+    return { name: await resolve_name(resource) };
+  },
+
+  create({ config, resources }: {
+    config: JsonObject;
+    resources: JsonObject[];
+  }): Plugin {
     return {
       name: "example",
       title: "Example",
-      description: `Endpoint: ${String(config.endpoint)}`,
+      description: `${String(config.endpoint)} · ${resources.length} resources`,
       actions: {},
     };
   },
@@ -90,7 +128,10 @@ city plugin install https://github.com/acme/example-plugin.git#v1.0.0
 city plugin install github:acme/example-plugin#main
 
 city plugin update example
+city plugin resource create example --interactive
+city plugin resource list example
 city plugin config example my-agent --interactive
+city plugin config example my-agent --resources '["api-a1b2c3"]'
 city plugin enable example my-agent
 ```
 
@@ -100,7 +141,7 @@ You can also open `city plugin` to install, update, select an Agent, configure, 
 
 Installation reads only the manifest, JSON Schema, and static files. It does not run `npm install`, build scripts, lifecycle scripts, or the Plugin entry. City records the resolved Git commit for Git sources and a SHA-256 digest of the complete artifact.
 
-The Plugin entry executes when an Agent starts, so install only trusted sources. Static installation checks are not a substitute for reviewing third-party runtime code.
+The Plugin entry executes while creating, editing, or refreshing Resources and when an Agent starts, so install only trusted sources. Static installation checks are not a substitute for reviewing third-party runtime code.
 
 Continue with:
 

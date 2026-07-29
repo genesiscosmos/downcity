@@ -21,6 +21,10 @@ import { install_plugin, update_plugin } from "@/city/process/plugin/PluginInsta
 import { prompt_and_save_plugin_binding } from "@/city/process/plugin/PluginBindingConfiguration.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import type { PluginCatalogItem } from "@/city/types/plugin/PluginCatalog.js";
+import {
+  run_interactive_binding_resources,
+  run_interactive_plugin_resource_manager,
+} from "@/city/process/plugin/InteractivePluginResourceManager.js";
 
 /** 打开 City 全局 Plugin 管理器。 */
 export async function run_interactive_plugin_manager(): Promise<void> {
@@ -93,6 +97,13 @@ async function run_interactive_plugin_actions(plugin: PluginCatalogItem): Promis
     subtitle: plugin.description || plugin.plugin_name,
     choices: [
       { title: "绑定或配置 Agent", description: "选择 Agent 并进入统一配置表单", value: "bind" },
+      ...(plugin.resource_schema
+        ? [{
+            title: "管理 Resources",
+            description: "创建、编辑、刷新或删除完整 Plugin Resource",
+            value: "resources",
+          }]
+        : []),
       ...(plugin.source === "installed"
         ? [
             { title: "更新", description: "从已保存来源重新安装", value: "update" },
@@ -105,6 +116,10 @@ async function run_interactive_plugin_actions(plugin: PluginCatalogItem): Promis
   if (response.action === "bind") {
     const agent_id = await prompt_agent_id();
     if (agent_id) await run_agent_binding_actions(plugin, agent_id);
+    return;
+  }
+  if (response.action === "resources") {
+    await run_interactive_plugin_resource_manager(plugin);
     return;
   }
   if (response.action === "update") {
@@ -144,6 +159,13 @@ async function run_agent_binding_actions(plugin: PluginCatalogItem, agent_id: st
         description: plugin.config_schema ? "使用 Plugin Schema 编辑完整配置" : "该 Plugin 没有配置字段",
         value: "configure",
       },
+      ...(plugin.resource_schema
+        ? [{
+            title: "Resources",
+            description: "创建并选择该 Plugin 实例使用的 Resource",
+            value: "resources",
+          }]
+        : []),
       ...(binding
         ? [{
             title: binding.enabled ? "禁用" : "启用",
@@ -164,6 +186,10 @@ async function run_agent_binding_actions(plugin: PluginCatalogItem, agent_id: st
       enabled: binding?.enabled ?? true,
     });
     if (saved) emit_binding_saved(saved.plugin_name, saved.agent_id, saved.enabled);
+    return;
+  }
+  if (response.action === "resources") {
+    await run_interactive_binding_resources(plugin, agent_id);
     return;
   }
   if (response.action === "toggle" && binding) {

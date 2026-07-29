@@ -27,7 +27,7 @@
 - `downcity`
   - 多 Agent registry
   - control plane / gateway
-  - 平台 CLI、共享模型目录接入、模型运行时绑定、全局 env、channel account store
+  - 平台 CLI、共享模型目录接入、模型运行时绑定、全局 env、Plugin Resource Store
   - agent daemon 进程管理
 - `@downcity/ui`
   - React UI 组件与展示层

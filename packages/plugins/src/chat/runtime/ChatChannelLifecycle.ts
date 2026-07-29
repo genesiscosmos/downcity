@@ -57,7 +57,7 @@ async function startTelegramChannel(
   if (!isChatChannelEnabled(context, "telegram")) return;
   context.logger.info("Telegram channel enabled");
   const account = resolveChannelAccount(context, "telegram");
-  const token = String(account?.botToken || "").trim();
+  const token = String(account?.bot_token || "").trim();
   if (!token) return;
   state.telegram = createTelegramBot(
     {
@@ -78,8 +78,8 @@ async function startFeishuChannel(
   if (!isChatChannelEnabled(context, "feishu")) return;
   context.logger.info("Feishu channel enabled");
   const account = resolveChannelAccount(context, "feishu");
-  const appId = String(account?.appId || "").trim();
-  const appSecret = String(account?.appSecret || "").trim();
+  const appId = String(account?.app_id || "").trim();
+  const appSecret = String(account?.app_secret || "").trim();
   if (!appId || !appSecret) return;
   state.feishu = await createFeishuBotLazy(
     {
@@ -102,8 +102,8 @@ async function startQQChannel(
   if (!isChatChannelEnabled(context, "qq")) return;
   context.logger.info("QQ chat platform enabled");
   const account = resolveChannelAccount(context, "qq");
-  const appId = String(account?.appId || "").trim();
-  const appSecret = String(account?.appSecret || "").trim();
+  const appId = String(account?.app_id || "").trim();
+  const appSecret = String(account?.app_secret || "").trim();
   if (!appId || !appSecret) return;
   state.qq = await createQQBot(
     {

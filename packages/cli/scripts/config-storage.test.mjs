@@ -170,6 +170,9 @@ test("Plugin 安装与 Agent Binding 配置使用全局数据库", async () => {
       config: {
         schema: "config.schema.json",
       },
+      resources: {
+        schema: "resource.schema.json",
+      },
     }));
     fs.writeFileSync(path.join(plugin_source, "config.schema.json"), JSON.stringify({
         type: "object",
@@ -177,13 +180,28 @@ test("Plugin 安装与 Agent Binding 配置使用全局数据库", async () => {
         properties: { endpoint: { type: "string" } },
         additionalProperties: false,
     }));
+    fs.writeFileSync(path.join(plugin_source, "resource.schema.json"), JSON.stringify({
+      title: "Example API",
+      type: "object",
+      required: ["id", "type", "name", "api_key"],
+      properties: {
+        id: { type: "string", readOnly: true },
+        type: { type: "string", const: "api" },
+        name: { type: "string", readOnly: true },
+        api_key: { type: "string", writeOnly: true },
+      },
+      additionalProperties: false,
+    }));
     fs.writeFileSync(path.join(plugin_source, "index.js"), `
 export const plugin_factory = {
-  create({ config }) {
+  resolve_resource({ resource }) {
+    return { name: \`API \${resource.api_key.slice(-4)}\` };
+  },
+  create({ config, resources }) {
     return {
       name: "example",
       title: "Example",
-      description: config.endpoint,
+      description: \`\${config.endpoint} · \${resources[0]?.name || "none"}\`,
       actions: {},
     };
   },
@@ -211,13 +229,55 @@ export const plugin_factory = {
       plugin_name: "example",
       enabled: true,
       config: { endpoint: "https://example.com" },
+      resource_ids: [],
+    });
+    const resource_service = await import(
+      "../bin/city/process/plugin/PluginResourceService.js"
+    );
+    const resource = await resource_service.create_plugin_resource({
+      plugin_name: "example",
+      fields: { type: "api", api_key: "secret-key" },
+    });
+    const resolved_binding = plugins.set_agent_plugin_binding({
+      agent_id: "plugin_agent",
+      plugin_name: "example",
+      enabled: true,
+      config: { endpoint: "https://example.com" },
+      resource_ids: [resource.resource_id],
     });
     assert.equal(binding.config.endpoint, "https://example.com");
+    assert.equal(resource.item.name, "API -key");
     const runtime = await import("../bin/city/runtime/plugins/CityExternalPlugins.js");
-    const runtime_plugins = await runtime.create_external_plugins({ bindings: [binding] });
+    const runtime_plugins = await runtime.create_external_plugins({ bindings: [resolved_binding] });
     assert.equal(runtime_plugins.length, 1);
     assert.equal(runtime_plugins[0].name, "example");
-    assert.equal(runtime_plugins[0].description, "https://example.com");
+    assert.equal(runtime_plugins[0].description, "https://example.com · API -key");
+
+    fs.writeFileSync(path.join(plugin_source, "resource.schema.json"), JSON.stringify({
+      title: "Example API",
+      type: "object",
+      required: ["id", "type", "name", "api_key", "region"],
+      properties: {
+        id: { type: "string", readOnly: true },
+        type: { type: "string", const: "api" },
+        name: { type: "string", readOnly: true },
+        api_key: { type: "string", writeOnly: true },
+        region: { type: "string" },
+      },
+      additionalProperties: false,
+    }));
+    await assert.rejects(
+      () => installer.update_plugin("example"),
+      /Resource schema is incompatible with.*region/,
+    );
+    assert.equal(plugins.get_installed_plugin("example").version, "1.0.0");
+
+    plugins.remove_agent_plugin_binding("plugin_agent", "example");
+    assert.throws(
+      () => plugins.remove_installed_plugin("example"),
+      /still owns Resource/,
+    );
+
     const renamed_manifest = JSON.parse(
       fs.readFileSync(path.join(plugin_source, "downcity.plugin.json"), "utf8"),
     );
@@ -249,15 +309,14 @@ test("内建与外部 Plugin 使用统一 Catalog 配置协议", async () => {
     assert.ok(chat);
     assert.equal(chat.source, "builtin");
     assert.equal(
-      chat.config_schema.properties.channels.properties.telegram
-        .properties.channel_account_id.type,
-      "string",
+      chat.resource_schema.oneOf[0].properties.id.readOnly,
+      true,
     );
     assert.equal(
-      chat.config_schema.properties.channels.properties.telegram
-        .properties.channel_account_id.x_downcity.resource_type,
-      "channel_account",
+      chat.resource_schema.oneOf[0].properties.bot_token.writeOnly,
+      true,
     );
+    assert.equal(chat.resource_schema.oneOf[0].properties.type.const, "telegram");
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });
@@ -479,57 +538,210 @@ test("Chat 装配严格使用当前 Agent 绑定与 queue 配置", async () => {
   const plugins = createCityStaticBuiltinPlugins({
     chat_config: {
       queue: { max_concurrency: 5 },
-      channels: {
-        telegram: {
-          enabled: true,
-          channel_account_id: "telegram_bound",
-        },
-      },
     },
+    chat_resources: [{
+      id: "telegram-bound",
+      type: "telegram",
+      name: "Bound Bot",
+      bot_token: "token",
+    }],
   });
   const chat = plugins.find((plugin) => plugin.name === "chat");
   assert.ok(chat);
-  assert.equal(chat.getChannelAccountId({}, "telegram"), "telegram_bound");
+  assert.equal(chat.getResourceId({}, "telegram"), "telegram-bound");
   assert.equal(chat.isChannelEnabled({}, "telegram"), true);
   assert.equal(chat.isChannelEnabled({}, "feishu"), false);
   assert.deepEqual(chat.getQueueWorkerConfig({}), { max_concurrency: 5 });
 
   const unbound = createCityStaticBuiltinPlugins().find((plugin) => plugin.name === "chat");
   assert.equal(unbound.isChannelEnabled({}, "telegram"), false);
-  assert.equal(unbound.getChannelAccountId({}, "telegram"), "");
+  assert.equal(unbound.getResourceId({}, "telegram"), "");
 });
 
-test("CLI 通过 City Store Adapter 向 ChatPlugin 注入共享账号", async () => {
+test("Plugin Resource Resolver 写入动态字段并通过 ID 绑定", async () => {
   const platform_root = create_temp_root();
+  const workspace_root = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
+  const original_fetch = globalThis.fetch;
   try {
-    const { CityChatAccountStore } = await import(
-      "../bin/city/runtime/plugins/CityChatAccountStore.js"
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      ok: true,
+      result: {
+        id: 778899,
+        username: "downcity_bot",
+        first_name: "Downcity",
+        last_name: "Assistant",
+      },
+    }), { status: 200 });
+    const agents = await import("../bin/city/process/registry/ManagedAgentRepository.js");
+    const resource_service = await import(
+      "../bin/city/process/plugin/PluginResourceService.js"
     );
-    const account_store = new CityChatAccountStore();
-    await account_store.upsert({
-      id: "telegram-main",
-      channel: "telegram",
-      name: "main bot",
+    const plugins_repository = await import(
+      "../bin/city/process/registry/PluginRepository.js"
+    );
+    agents.create_managed_agent({
+      agent_id: "resource_agent",
+      workspace_path: workspace_root,
     });
+    const resource = await resource_service.create_plugin_resource({
+      plugin_name: "chat",
+      fields: { type: "telegram", bot_token: "token" },
+    });
+    assert.equal(resource.item.name, "Downcity Assistant");
+    assert.equal(resource.item.username, "@downcity_bot");
+    assert.equal(resource.item.bot_user_id, "778899");
+    const schema_tools = await import(
+      "../bin/city/process/plugin/PluginResourceSchema.js"
+    );
+    const chat_catalog = (await import(
+      "../bin/city/process/plugin/PluginCatalog.js"
+    )).get_plugin_catalog_item("chat");
+    const safe_item = schema_tools.redact_plugin_schema_value(
+      resource.item,
+      chat_catalog.resource_schema,
+    );
+    assert.equal(safe_item.bot_token, "[REDACTED]");
+    assert.equal(safe_item.name, "Downcity Assistant");
+    const binding = plugins_repository.set_agent_plugin_binding({
+      agent_id: "resource_agent",
+      plugin_name: "chat",
+      enabled: true,
+      config: { queue: { max_concurrency: 3 } },
+      resource_ids: [resource.resource_id],
+    });
+    const resolved = resource_service.resolve_plugin_binding_resources(
+      binding,
+      (await import("@downcity/plugins/chat")).CHAT_PLUGIN_RESOURCE_JSON_SCHEMA,
+    );
+    assert.equal(Object.isFrozen(resolved), true);
+    assert.equal(Object.isFrozen(resolved[0]), true);
 
     const { createCityStaticBuiltinPlugins } = await import(
       "../bin/city/runtime/plugins/CityBuiltinPlugins.js"
     );
     const plugins = createCityStaticBuiltinPlugins({
-      chat_config: {
+      chat_config: binding.config,
+      chat_resources: resolved,
+    });
+    const chat = plugins.find((plugin) => plugin.name === "chat");
+    assert.equal(chat.getResourceId({}, "telegram"), resource.resource_id);
+    assert.equal(chat.resolveChannelAccount({}, "telegram")?.name, "Downcity Assistant");
+    assert.equal(chat.resolveChannelAccount({}, "telegram")?.bot_token, "token");
+  } finally {
+    globalThis.fetch = original_fetch;
+    delete process.env.DC_PLATFORM_ROOT;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+    fs.rmSync(workspace_root, { recursive: true, force: true });
+  }
+});
+
+test("旧 Chat Account 与 Binding 原子迁移为 Plugin Resource", async () => {
+  const platform_root = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  process.env.DC_MODEL_DB_KEY = "plugin-resource-migration-test";
+  let reset_key_cache = () => {};
+  try {
+    const crypto = await import("../bin/city/runtime/store/crypto.js");
+    reset_key_cache = crypto.resetModelDbKeyCache;
+    reset_key_cache();
+    const database_path = path.join(platform_root, "downcity.db");
+    const database = new Database(database_path);
+    database.exec(`
+      CREATE TABLE channel_accounts (
+        id TEXT PRIMARY KEY NOT NULL,
+        channel TEXT NOT NULL,
+        name TEXT NOT NULL,
+        identity TEXT,
+        bot_token_encrypted TEXT,
+        app_id_encrypted TEXT,
+        app_secret_encrypted TEXT,
+        domain TEXT,
+        sandbox INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE agent_plugins (
+        agent_id TEXT NOT NULL,
+        plugin_name TEXT NOT NULL,
+        enabled INTEGER NOT NULL,
+        config_encrypted TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (agent_id, plugin_name)
+      );
+    `);
+    database.prepare(`
+      INSERT INTO channel_accounts (
+        id, channel, name, identity, bot_token_encrypted,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?);
+    `).run(
+      "telegram-legacy",
+      "telegram",
+      "Legacy Bot",
+      "@legacy_bot",
+      crypto.encryptTextSync("legacy-token"),
+      "2026-01-01T00:00:00.000Z",
+      "2026-01-01T00:00:00.000Z",
+    );
+    database.prepare(`
+      INSERT INTO agent_plugins (
+        agent_id, plugin_name, enabled, config_encrypted, created_at, updated_at
+      ) VALUES (?, 'chat', 1, ?, ?, ?);
+    `).run(
+      "legacy-agent",
+      crypto.encryptTextSync(JSON.stringify({
+        queue: { maxConcurrency: 3 },
         channels: {
           telegram: {
             enabled: true,
-            channel_account_id: "telegram-main",
+            channelAccountId: "telegram-legacy",
           },
         },
-      },
+      })),
+      "2026-01-01T00:00:00.000Z",
+      "2026-01-01T00:00:00.000Z",
+    );
+    database.close();
+
+    const { PlatformStore } = await import("../bin/city/runtime/store/index.js");
+    const store = new PlatformStore(database_path);
+    store.close();
+    const reopened_store = new PlatformStore(database_path);
+    reopened_store.close();
+
+    const migrated = new Database(database_path);
+    const resource_row = migrated.prepare(`
+      SELECT resource_id, item_encrypted FROM plugin_resources
+      WHERE plugin_name = 'chat';
+    `).get();
+    const binding_row = migrated.prepare(`
+      SELECT config_encrypted, resource_ids_json FROM agent_plugins
+      WHERE agent_id = 'legacy-agent' AND plugin_name = 'chat';
+    `).get();
+    const legacy_table = migrated.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'table' AND name = 'channel_accounts';
+    `).get();
+    migrated.close();
+    assert.equal(resource_row.resource_id, "telegram-legacy");
+    assert.deepEqual(JSON.parse(crypto.decryptTextSync(resource_row.item_encrypted)), {
+      id: "telegram-legacy",
+      type: "telegram",
+      name: "Legacy Bot",
+      bot_token: "legacy-token",
+      username: "@legacy_bot",
     });
-    const chat = plugins.find((plugin) => plugin.name === "chat");
-    assert.equal(chat.resolveChannelAccount({}, "telegram")?.name, "main bot");
+    assert.deepEqual(JSON.parse(binding_row.resource_ids_json), ["telegram-legacy"]);
+    assert.deepEqual(JSON.parse(crypto.decryptTextSync(binding_row.config_encrypted)), {
+      queue: { max_concurrency: 3 },
+    });
+    assert.equal(legacy_table, undefined);
   } finally {
+    reset_key_cache();
     delete process.env.DC_PLATFORM_ROOT;
+    delete process.env.DC_MODEL_DB_KEY;
     fs.rmSync(platform_root, { recursive: true, force: true });
   }
 });

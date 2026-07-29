@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 对外仍然只暴露一个 `PlatformStore` 类，保持调用入口稳定。
- * - 内部已经按职责拆成 schema、secure settings、env、chat accounts 多个模块。
+ * - 内部已经按职责拆成 schema、secure settings、env 与 Plugin Resource 等模块。
  * - 这样既能保持外部 API 简洁，也能把通用存储层控制在可维护的模块粒度内。
  */
 
@@ -21,10 +21,6 @@ import type {
   UpsertEnvEntryInput,
   UpsertGlobalEnvEntryInput,
 } from "@/city/types/platform/PlatformStore.js";
-import type {
-  StoredChannelAccount,
-  UpsertChannelAccountInput,
-} from "@downcity/plugins/chat";
 import {
   getPlatformRootDirPath,
 } from "@/city/process/registry/CityPaths.js";
@@ -49,14 +45,6 @@ import {
   upsertEnvEntry,
   upsertGlobalEnvEntry,
 } from "@/city/runtime/store/StoreEnvRepository.js";
-import {
-  getChannelAccount,
-  getChannelAccountSync,
-  listChannelAccounts,
-  listChannelAccountsSync,
-  removeChannelAccount,
-  upsertChannelAccount,
-} from "@/city/runtime/store/StoreChannelAccountRepository.js";
 
 /**
  * 平台控制面全局存储门面。
@@ -96,7 +84,7 @@ export class PlatformStore {
     this.sqlite.exec("DELETE FROM platform_secure_settings;");
     this.sqlite.exec("DELETE FROM env_entries;");
     this.sqlite.exec("DELETE FROM managed_agents;");
-    this.sqlite.exec("DELETE FROM channel_accounts;");
+    this.sqlite.exec("DELETE FROM plugin_resources;");
     this.sqlite.exec("DELETE FROM agent_tokens;");
     this.sqlite.exec("DELETE FROM agent_plugins;");
     this.sqlite.exec("DELETE FROM installed_plugins;");
@@ -264,48 +252,6 @@ export class PlatformStore {
    */
   clearGlobalEnvEntries(): void {
     clearGlobalEnvEntries(this.context);
-  }
-
-  /**
-   * 列出 chat accounts（同步解密）。
-   */
-  listChannelAccountsSync(channelInput?: string): StoredChannelAccount[] {
-    return listChannelAccountsSync(this.context, channelInput);
-  }
-
-  /**
-   * 按 ID 获取 chat account（同步解密）。
-   */
-  getChannelAccountSync(accountIdInput: string): StoredChannelAccount | null {
-    return getChannelAccountSync(this.context, accountIdInput);
-  }
-
-  /**
-   * 列出 chat accounts（解密后）。
-   */
-  async listChannelAccounts(channelInput?: string): Promise<StoredChannelAccount[]> {
-    return await listChannelAccounts(this.context, channelInput);
-  }
-
-  /**
-   * 按 ID 获取 chat account（解密后）。
-   */
-  async getChannelAccount(accountIdInput: string): Promise<StoredChannelAccount | null> {
-    return await getChannelAccount(this.context, accountIdInput);
-  }
-
-  /**
-   * 新增或更新 chat account。
-   */
-  async upsertChannelAccount(input: UpsertChannelAccountInput): Promise<void> {
-    await upsertChannelAccount(this.context, input);
-  }
-
-  /**
-   * 删除 chat account。
-   */
-  removeChannelAccount(accountIdInput: string): void {
-    removeChannelAccount(this.context, accountIdInput);
   }
 
 }

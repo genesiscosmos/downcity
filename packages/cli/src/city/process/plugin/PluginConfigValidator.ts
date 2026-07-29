@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - JSON Schema 2020-12 是内建与第三方 Plugin 的统一配置协议。
  * - Ajv 是唯一协议校验实现，不再维护会静默忽略��束的手写子集。
- * - `x_downcity` 只承载可信宿主理解的 UI 注解，不参与配置值判断。
+ * - 表单提示只使用标准 Schema 注解，不注册宿主私有配置关键字。
  */
 
 import { Ajv2020, type ErrorObject, type ValidateFunction } from "ajv/dist/2020.js";
@@ -18,11 +18,6 @@ const plugin_config_ajv = new Ajv2020({
 });
 
 (formats_plugin as unknown as (ajv: Ajv2020) => Ajv2020)(plugin_config_ajv);
-plugin_config_ajv.addKeyword({
-  keyword: "x_downcity",
-  schemaType: "object",
-  valid: true,
-});
 
 /** 校验 Plugin 声明的 JSON Schema 本身是否合法。 */
 export function validate_plugin_config_schema(schema: JsonObject): void {

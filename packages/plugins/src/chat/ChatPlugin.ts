@@ -169,11 +169,11 @@ export class ChatPlugin extends BasePlugin {
   /**
    * 读取指定渠道的显式账户 ID。
    */
-  getChannelAccountId(
+  getResourceId(
     context: PluginContext,
     channel: ChatChannelName,
   ): string {
-    return String(this.getChannel(channel)?.getChannelAccountId(context) || "").trim();
+    return String(this.getChannel(channel)?.getResourceId(context) || "").trim();
   }
 
   /**
@@ -183,10 +183,7 @@ export class ChatPlugin extends BasePlugin {
     context: PluginContext,
     channel: ChatChannelName,
   ) {
-    return this.getChannel(channel)?.getAccount(
-      context,
-      this.options.account_store,
-    ) || null;
+    return this.getChannel(channel)?.getAccount(context) || null;
   }
 
   private getChannel(channel: ChatChannelName): ChatChannel | null {

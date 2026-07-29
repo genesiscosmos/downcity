@@ -130,17 +130,13 @@ Federation 仍会发布 Ed25519 公钥，供 Federation 自身和其他协议验
 `bureau.bureaus` 等入口使用 `bureau_token` 调用 Federation；`fed bureau token` 仍由
 CLI 生成明文并写入 Federation 注册表。
 
-## 渠道账号
+## Plugin Resources
 
-聊天平台的机器人凭证存储在 `~/.downcity/downcity.db` 中，并通过 ID 从 Chat Plugin Binding 引用：
+Chat Resource 完整 Item 加密存储在 `~/.downcity/downcity.db` 中，并通过稳定 ID 从 Chat Plugin Binding 引用：
 
 ```json
 {
-  "channels": {
-    "telegram": {
-      "channel_account_id": "telegram-main"
-    }
-  }
+  "resource_ids": ["telegram-a1b2c3"]
 }
 ```
 

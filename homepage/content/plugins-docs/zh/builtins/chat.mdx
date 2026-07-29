@@ -35,10 +35,11 @@ description: 渠道 runtime、queue worker、chat 授权、chat system text 和 
 
 ## 用户怎么使用
 
-CLI 不再为 Chat 建立单独的配置命令。使用统一 Plugin 管理器选择账号、启用渠道并保存当前 Agent 的 Binding：
+CLI 不再为 Chat 建立单独的配置命令。使用统一 Plugin Resource 管理器创建渠道 Resource，再把 Resource ID 保存到当前 Agent 的 Binding：
 
 ```bash
-city plugin config chat <agent_id> --interactive
+city plugin resource create chat --interactive
+city plugin config chat <agent_id> --resources '["telegram-a1b2c3"]'
 ```
 
 需要从终端调用 Chat Action 时，也使用通用 Plugin Action 命令：
@@ -49,7 +50,7 @@ city plugin action chat send <agent_id> --input '{"chat_key":"telegram:123456","
 
 ## SDK 装配
 
-本地嵌入 SDK 场景里，`ChatPlugin` 接收 channel 对象。每个 channel 自己携带 env 或账号池绑定信息：
+本地嵌入 SDK 场景里，`ChatPlugin` 接收已经构造好的 channel 对象。SDK 宿主直接提供 ID、展示名称和运行凭据，不读取 City Plugin Resource：
 
 ```ts
 import {
@@ -62,9 +63,9 @@ import {
 const plugin = new ChatPlugin({
   channels: [
     new TelegramChannel({
-      env: {
-        TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
-      },
+      id: "telegram-sdk",
+      name: "SDK Telegram Bot",
+      bot_token: process.env.TELEGRAM_BOT_TOKEN,
     }),
     new FeishuChannel({
       env: {
@@ -84,24 +85,7 @@ const plugin = new ChatPlugin({
 });
 ```
 
-`channel_account_id` 可作为账号池绑定能力使用，但必须由宿主显式注入 `account_store`。Chat Plugin 只依赖存储契约，不读取 CLI 的 `~/.downcity`、SQLite 或密钥文件：
-
-```ts
-import type { ChatChannelAccountStore } from "@downcity/plugins/chat";
-
-const account_store: ChatChannelAccountStore = create_my_account_store();
-
-const plugin = new ChatPlugin({
-  account_store,
-  channels: [
-    new TelegramChannel({
-      channel_account_id: "telegram-main",
-    }),
-  ],
-});
-```
-
-如果不使用共享账号池，SDK 主路径仍推荐直接把 channel 需要的 env 传给对应 channel 对象。
+Plugin Resource 的 Schema、Resolver、加密存储和 Binding ID 解析属于 CLI 控制面，不进入 `@downcity/agent`，也不作为 `ChatPlugin` 的 Store 依赖。
 
 ## 飞书依赖
 

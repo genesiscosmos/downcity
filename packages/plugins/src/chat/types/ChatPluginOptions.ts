@@ -10,10 +10,7 @@
 import type { PluginContext } from "@downcity/agent";
 import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 import type { ChatQueueWorkerConfig } from "@/chat/types/ChatQueueWorker.js";
-import type {
-  ChatChannelAccountStore,
-  StoredChannelAccount,
-} from "@/chat/types/ChannelAccountStore.js";
+import type { ChatRuntimeAccount } from "@/chat/types/ChatRuntimeAccount.js";
 
 /**
  * Chat channel 对象协议。
@@ -28,30 +25,19 @@ export interface ChatChannel {
    */
   isEnabled(context: PluginContext): boolean;
   /**
-   * 当前 channel 绑定的账号池记录 ID。
+   * 当前 channel 来源 Resource 的稳定 ID。
    */
-  getChannelAccountId(context: PluginContext): string;
+  getResourceId(context: PluginContext): string;
   /**
    * 解析当前 channel 的运行态账号。
    */
-  getAccount(
-    context: PluginContext,
-    account_store?: ChatChannelAccountStore,
-  ): StoredChannelAccount | null;
+  getAccount(context: PluginContext): ChatRuntimeAccount | null;
 }
 
 /**
  * ChatPlugin 显式构造参数。
  */
 export interface ChatPluginOptions {
-  /**
-   * 宿主显式注入的共享 Chat Account 存储。
-   *
-   * 说明（中文）
-   * - Plugin 不感知该存储使用 SQLite、内存还是远程服务。
-   * - 未提供时仍可通过 Channel 构造参数或 Workspace env 直接提供凭据。
-   */
-  account_store?: ChatChannelAccountStore;
   /**
    * Chat queue worker 运行配置。
    *

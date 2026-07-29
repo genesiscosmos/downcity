@@ -1,4 +1,4 @@
 {
   "title": "City",
-  "pages": ["overview", "model-pool", "identity", "usage-billing", "channel-accounts"]
+  "pages": ["overview", "model-pool", "identity", "usage-billing", "plugin-resources"]
 }

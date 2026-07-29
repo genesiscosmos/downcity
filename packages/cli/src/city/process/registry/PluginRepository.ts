@@ -26,6 +26,8 @@ import {
   CITY_BUILTIN_PLUGIN_CATALOG,
   get_builtin_plugin_catalog_definition,
 } from "@/city/process/plugin/BuiltinPluginCatalog.js";
+import { get_plugin_resource_row } from "@/city/runtime/store/StorePluginResourceRepository.js";
+import { validate_plugin_resource_item } from "@/city/process/plugin/PluginResourceSchema.js";
 
 /** City 默认向新 Agent 启用的内建 Plugin 名称。 */
 export const DEFAULT_BUILTIN_PLUGIN_NAMES = CITY_BUILTIN_PLUGIN_CATALOG
@@ -84,6 +86,14 @@ export function remove_installed_plugin(plugin_name_input: string): void {
         `Plugin is still bound to agent ${binding.agent_id}: ${plugin_name}`,
       );
     }
+    const resource = context.sqlite.prepare(
+      "SELECT resource_id FROM plugin_resources WHERE plugin_name = ? LIMIT 1;",
+    ).get(plugin_name) as { resource_id: string } | undefined;
+    if (resource) {
+      throw new Error(
+        `Plugin still owns Resource ${resource.resource_id}: ${plugin_name}`,
+      );
+    }
     remove_installed_plugin_row(context, plugin_name);
   });
 }
@@ -122,6 +132,23 @@ export function set_agent_plugin_binding(
     input.config,
     builtin_config?.config_schema ?? installed_plugin?.manifest.config?.schema,
   );
+  const resource_schema = builtin_config?.resource_schema
+    ?? installed_plugin?.manifest.resources?.schema;
+  const resource_ids = normalize_resource_ids(input.resource_ids ?? []);
+  if (!resource_schema && resource_ids.length > 0) {
+    throw new Error(`Plugin does not declare Resources: ${plugin_name}`);
+  }
+  if (resource_schema) {
+    withPlatformStore((context) => {
+      for (const resource_id of resource_ids) {
+        const resource = get_plugin_resource_row(context, plugin_name, resource_id);
+        if (!resource) {
+          throw new Error(`Plugin Resource not found: ${plugin_name}/${resource_id}`);
+        }
+        validate_plugin_resource_item(resource.item, resource_schema);
+      }
+    });
+  }
   const existing = withPlatformStore((context) =>
     get_agent_plugin_row(context, agent_id, plugin_name)
   );
@@ -131,6 +158,7 @@ export function set_agent_plugin_binding(
     plugin_name,
     enabled: input.enabled,
     config: input.config,
+    resource_ids,
     created_at: existing?.created_at ?? current_time,
     updated_at: current_time,
   };
@@ -162,6 +190,22 @@ export function ensure_default_agent_plugin_bindings(
       config: initial_configs[plugin_name]
         ?? get_builtin_plugin_catalog_definition(plugin_name)?.default_config
         ?? {},
+      resource_ids: [],
     });
   }
+}
+
+/** 规范化并去重 Binding Resource ID。 */
+function normalize_resource_ids(input: string[]): string[] {
+  const resource_ids = input.map((item) => String(item || "").trim()).filter(Boolean);
+  const unique_ids = [...new Set(resource_ids)];
+  if (unique_ids.length !== resource_ids.length) {
+    throw new Error("Plugin Binding resource_ids must be unique");
+  }
+  for (const resource_id of unique_ids) {
+    if (!/^[a-z0-9][a-z0-9_-]{0,79}$/u.test(resource_id)) {
+      throw new Error(`Invalid Plugin Resource id: ${resource_id}`);
+    }
+  }
+  return unique_ids;
 }

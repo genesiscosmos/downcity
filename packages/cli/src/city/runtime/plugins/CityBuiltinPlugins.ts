@@ -10,11 +10,14 @@
 import type { BasePlugin } from "@downcity/agent";
 import {
   ChatPlugin,
+  CHAT_PLUGIN_RESOURCE_JSON_SCHEMA,
   FeishuChannel,
   QqChannel,
   TelegramChannel,
   parse_chat_plugin_config,
+  parse_chat_plugin_resource,
   type ChatPluginConfig,
+  type ChatPluginResource,
 } from "@downcity/plugins/chat";
 import { ContactPlugin } from "@downcity/plugins/contact";
 import { ImagePlugin } from "@downcity/plugins/image";
@@ -34,8 +37,8 @@ import type {
   SoundPluginTtsInput,
 } from "@downcity/plugins/sound";
 import { CityUserManager } from "@/city/shared/CityUserManager.js";
-import { CityChatAccountStore } from "@/city/runtime/plugins/CityChatAccountStore.js";
 import type { AgentPluginBinding } from "@/city/types/plugin/AgentPluginBinding.js";
+import { resolve_plugin_binding_resources } from "@/city/process/plugin/PluginResourceService.js";
 
 const city_user_manager = new CityUserManager();
 
@@ -56,26 +59,37 @@ function require_model_id(input: unknown, capability: string): string {
 /**
  * 创建 City 注入给 ChatPlugin 的 channel 实例。
  */
-function create_city_chat_channels(config?: ChatPluginConfig) {
-  const channels = config?.channels;
-  const telegram = channels?.telegram;
-  const feishu = channels?.feishu;
-  const qq = channels?.qq;
-
-  return [
-    new TelegramChannel({
-      enabled: telegram?.enabled === true,
-      channel_account_id: telegram?.channel_account_id,
-    }),
-    new FeishuChannel({
-      enabled: feishu?.enabled === true,
-      channel_account_id: feishu?.channel_account_id,
-    }),
-    new QqChannel({
-      enabled: qq?.enabled === true,
-      channel_account_id: qq?.channel_account_id,
-    }),
-  ];
+function create_city_chat_channels(resources: ChatPluginResource[]) {
+  const resource_types = new Set<string>();
+  return resources.map((resource) => {
+    if (resource_types.has(resource.type)) {
+      throw new Error(`Chat Plugin Resource type is duplicated: ${resource.type}`);
+    }
+    resource_types.add(resource.type);
+    if (resource.type === "telegram") {
+      return new TelegramChannel({
+        id: resource.id,
+        name: resource.name,
+        bot_token: resource.bot_token,
+      });
+    }
+    if (resource.type === "feishu") {
+      return new FeishuChannel({
+        id: resource.id,
+        name: resource.name,
+        app_id: resource.app_id,
+        app_secret: resource.app_secret,
+        domain: resource.domain,
+      });
+    }
+    return new QqChannel({
+      id: resource.id,
+      name: resource.name,
+      app_id: resource.app_id,
+      app_secret: resource.app_secret,
+      sandbox: resource.sandbox,
+    });
+  });
 }
 
 /**
@@ -88,6 +102,8 @@ export function createCityStaticBuiltinPlugins(input: {
    * 当前 Chat Plugin Binding 配置；未提供时所有 channel 保持禁用。
    */
   chat_config?: ChatPluginConfig;
+  /** Chat Plugin 已解析的完整 Resource Items。 */
+  chat_resources?: ChatPluginResource[];
   /** 当前 Agent HTTP runtime 的监听 host。 */
   host?: string;
   /** 当前 Agent HTTP runtime 的监听 port。 */
@@ -98,9 +114,8 @@ export function createCityStaticBuiltinPlugins(input: {
     new WebPlugin(),
     new WorkboardPlugin(),
     new ChatPlugin({
-      account_store: new CityChatAccountStore(),
       queue: input.chat_config?.queue,
-      channels: create_city_chat_channels(input.chat_config),
+      channels: create_city_chat_channels(input.chat_resources ?? []),
     }),
     new ContactPlugin({
       host: input.host,
@@ -135,6 +150,12 @@ export async function createCityBuiltinPlugins(input: {
   const chat_config = chat_binding
     ? parse_chat_plugin_config(chat_binding.config)
     : undefined;
+  const chat_resources = chat_binding
+    ? resolve_plugin_binding_resources(
+        chat_binding,
+        CHAT_PLUGIN_RESOURCE_JSON_SCHEMA,
+      ).map(parse_chat_plugin_resource)
+    : [];
   const { city } = await city_user_manager.createUserClient({
     env: input.env ?? process.env,
   });
@@ -142,6 +163,7 @@ export async function createCityBuiltinPlugins(input: {
   const plugins: BasePlugin[] = [];
   const static_plugins = createCityStaticBuiltinPlugins({
     chat_config,
+    chat_resources,
     host: input.host,
     port: input.port,
   });

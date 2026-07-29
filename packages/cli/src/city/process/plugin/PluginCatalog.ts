@@ -20,6 +20,7 @@ export function list_plugin_catalog(): PluginCatalogItem[] {
       source: "builtin",
       actions: [...definition.actions],
       config_schema: definition.config_schema,
+      resource_schema: definition.resource_schema,
       default_config: definition.default_config,
     }));
   const installed_items: PluginCatalogItem[] = list_installed_plugins()
@@ -32,6 +33,7 @@ export function list_plugin_catalog(): PluginCatalogItem[] {
       source_label: installed.source,
       actions: [],
       config_schema: installed.manifest.config?.schema,
+      resource_schema: installed.manifest.resources?.schema,
       default_config: installed.manifest.config?.defaults ?? {},
     }));
   return [...builtin_items, ...installed_items]

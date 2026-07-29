@@ -42,23 +42,20 @@ CLI 使用独立控制面协议：
 
 ```text
 Plugin Catalog
-  → Agent Plugin Binding（enabled + config）
+  → Plugin Resource（完整 Item）
+  → Agent Plugin Binding（enabled + config + resource_ids）
   → CLI Runtime Factory
   → Agent Runtime Plugin
 ```
 
-内建与外部 Plugin 都使用标准 JSON Schema 描述 Binding 配置。City 统一校验并保存配置；Agent 启动时，CLI 读取 Binding 并构造 Runtime Plugin。
+内建与外部 Plugin 都使用标准 JSON Schema 描述 Binding 配置与可选 Resource Item。City 统一校验并保存；Agent 启动时，CLI 把 Binding 中的 Resource ID 解析为完整 Item，再构造 Runtime Plugin。
 
 Chat Binding 示例：
 
 ```json
 {
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "channel_account_id": "telegram-main"
-    }
-  }
+  "config": {},
+  "resource_ids": ["telegram-a1b2c3"]
 }
 ```
 

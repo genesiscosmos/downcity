@@ -17,30 +17,24 @@ Chat 插件将 Agent 连接到 Telegram、飞书、QQ 等聊天渠道。它处�
 
 ## 配置
 
-Chat 与其他 Plugin 一样，通过 Agent Plugin Binding 配置。CLI 使用 JSON Schema 生成统一表单，并把 Binding 保存在全局 DB 中：
+Chat 与其他 Plugin 一样，通过 Agent Plugin Binding 配置行为，并通过 Plugin Resource 连接渠道。创建 Resource 时，CLI 根据 Schema 收集凭据，Resolver 再写入 `name` 等动态字段：
 
 ```json
 {
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "channel_account_id": "telegram-main"
-    },
-    "feishu": {
-      "enabled": true,
-      "channel_account_id": "feishu-work"
-    }
-  }
+  "plugin_name": "chat",
+  "config": {},
+  "resource_ids": ["telegram-a1b2c3", "feishu-d4e5f6"]
 }
 ```
 
 ```bash
-city plugin config chat <agent_id> --interactive
+city plugin resource create chat --interactive
+city plugin config chat <agent_id> --resources '["telegram-a1b2c3"]'
 ```
 
-## 渠道账号
+## Chat Resources
 
-实际的机器人凭证存储在 CLI 全局 DB 中（由 City 管理）。Chat Binding 只通过 `channel_account_id` 引用它们。
+完整 Resource Item 加密存储在 CLI 全局 DB 中。每个 Item 都有稳定 `id`、类型和展示 `name`；Binding 只保存 Resource ID。Resource 可以被多个 Agent 复用，运行时 Plugin 接收的是 ID 解析后的完整 Item 快照。
 
 ## Chat Access
 
@@ -51,7 +45,7 @@ city plugin action chat access-snapshot <agent_id> --input '{}' --token <token>
 city plugin action chat access-approve <agent_id> --input '{"request_id":"<request_id>"}' --token <token>
 ```
 
-身份由渠道、当前 Chat 账号和平台用户 ID 共同确定。批准只对目标 Agent 生效，不会成为 City 全局权限，也不会传播到其他 Plugin。
+身份由渠道、当前 Chat Resource ID 和平台用户 ID 共同确定。批准只对目标 Agent 生效，不会成为 City 全局权限，也不会传播到其他 Plugin。
 
 ## 支持的渠道
 

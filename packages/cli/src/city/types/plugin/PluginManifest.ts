@@ -8,6 +8,10 @@
  */
 
 import type { JsonObject } from "@downcity/agent";
+import type {
+  PluginResourceItem,
+  PluginResourceResolver,
+} from "@/city/types/plugin/PluginResource.js";
 
 /** Plugin 仓库根目录中的清单文件名。 */
 export const PLUGIN_MANIFEST_FILE_NAME = "downcity.plugin.json";
@@ -39,6 +43,12 @@ export interface PluginManifestFileConfig {
   defaults?: JsonObject;
 }
 
+/** Plugin 仓库 Manifest 中的 Resource Schema 制品引用。 */
+export interface PluginManifestFileResources {
+  /** 相对 Plugin 根目录的完整 Resource Item JSON Schema 文件路径。 */
+  schema: string;
+}
+
 /** Plugin 仓库根目录中的原始静态 Manifest。 */
 export interface PluginManifestFile {
   /** Manifest 协议版本，当前固定为 1。 */
@@ -61,6 +71,9 @@ export interface PluginManifestFile {
 
   /** 可选配置协议与默认值。 */
   config?: PluginManifestFileConfig;
+
+  /** 可选 Plugin Resource Item 协议。 */
+  resources?: PluginManifestFileResources;
 }
 
 /** 安装后解析完成的 Plugin 配置协议快照。 */
@@ -73,6 +86,15 @@ export interface InstalledPluginConfigManifest {
 
   /** 已通过 Schema 校验的完整默认配置；必填配置无法默认时可省略。 */
   defaults?: JsonObject;
+}
+
+/** 安装后解析完成的 Plugin Resource 协议快照。 */
+export interface InstalledPluginResourcesManifest {
+  /** Resource Schema 在 Plugin 制品内的相对路径。 */
+  schema_path: string;
+
+  /** 安装时读取并验证的完整 Resource Item JSON Schema。 */
+  schema: JsonObject;
 }
 
 /** 安装后保存到全局数据库的 Plugin Manifest 快照。 */
@@ -97,6 +119,9 @@ export interface PluginManifest {
 
   /** 安装时固化的配置协议快照。 */
   config?: InstalledPluginConfigManifest;
+
+  /** 安装时固化的 Resource Item 协议快照。 */
+  resources?: InstalledPluginResourcesManifest;
 }
 
 /** 全局数据库中的已安装 Plugin 记录。 */
@@ -131,9 +156,19 @@ export interface InstalledPlugin {
 
 /** 第三方 Plugin ESM 入口必须导出的 CLI 内部 Factory 契约。 */
 export interface ExternalPluginFactory {
+  /**
+   * 解析 Resource 的动态只读字段。
+   *
+   * 说明（中文）：声明 Resource Schema 的第三方 Plugin 在包含 Resolver 字段时实现该方法。
+   */
+  resolve_resource?: PluginResourceResolver;
+
   /** 使用 CLI 已校验配置创建一个 Agent Runtime Plugin。 */
   create(input: {
     /** 当前 Agent 对该 Plugin 的完整配置。 */
     config: JsonObject;
+
+    /** Resource ID 已解析成的完整、不可变 Resource Item 快照。 */
+    resources: PluginResourceItem[];
   }): Promise<import("@downcity/agent").Plugin> | import("@downcity/agent").Plugin;
 }

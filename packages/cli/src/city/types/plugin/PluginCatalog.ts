@@ -33,16 +33,7 @@ export interface PluginCatalogItem {
 
   /** 首次启用时使用且已通过 Schema 校验的默认配置。 */
   default_config: JsonObject;
-}
 
-/** 通用 Plugin 配置资源选项。 */
-export interface PluginConfigResourceOption {
-  /** 写入 Plugin 配置的稳定资源 ID。 */
-  value: string;
-
-  /** TUI 主标题。 */
-  label: string;
-
-  /** TUI 辅助说明。 */
-  description: string;
+  /** 可选完整 Resource Item JSON Schema。 */
+  resource_schema?: JsonObject;
 }

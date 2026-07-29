@@ -14,7 +14,8 @@ example-plugin/
 ├── downcity.plugin.json
 └── dist/
     ├── index.js
-    └── config.schema.json
+    ├── config.schema.json
+    └── resource.schema.json
 ```
 
 `downcity.plugin.json`：
@@ -32,11 +33,14 @@ example-plugin/
     "defaults": {
       "endpoint": "https://example.com"
     }
+  },
+  "resources": {
+    "schema": "dist/resource.schema.json"
   }
 }
 ```
 
-Manifest 必须是静态 JSON。`entry` 和 `config.schema` 都是相对仓库根目录的路径，且不能指向目录外或符号链接。
+Manifest 必须是静态 JSON。`entry`、`config.schema` 和 `resources.schema` 都是相对仓库根目录的路径，且不能指向目录外或符号链接。没有 Resource 的 Plugin 可以省略 `resources`。
 
 ## 配置协议
 
@@ -56,19 +60,53 @@ const json_schema = z.toJSONSchema(config_schema, {
 
 构建脚本需要将 `json_schema` 写入 `dist/config.schema.json`。City 安装时使用 Ajv 校验 Schema 和默认值，配置时再用同一 Schema 校验 Agent Binding。Zod 不是运行期协议，也不应写进 Manifest。
 
+## Resource Schema 与 Resolver
+
+Resource Schema 描述一个完整 Item，并要求 `id`、`type`、`name`。`id` 必须是 `readOnly`；其他 `readOnly` 顶层字段由 Resolver 写入，`writeOnly` 字段由用户安全输入并在 CLI 输出时脱敏。
+
+```json
+{
+  "title": "API Account",
+  "type": "object",
+  "required": ["id", "type", "name", "api_key"],
+  "properties": {
+    "id": { "type": "string", "readOnly": true },
+    "type": { "type": "string", "const": "api" },
+    "name": { "type": "string", "readOnly": true },
+    "api_key": { "type": "string", "writeOnly": true }
+  },
+  "additionalProperties": false
+}
+```
+
+Resolver 返回全部动态字段投影，不能修改 `id`、`type` 或用户字段：
+
+```ts
+resolve_resource({ resource }) {
+  return { name: inspect_name(String(resource.api_key)) };
+}
+```
+
 ## Runtime Factory
 
-入口必须导出 `plugin_factory`，也可以使用默认导出。Factory 只接收当前 Agent 已通过校验的 `config`：
+入口必须导出 `plugin_factory`，也可以使用默认导出。Factory 接收已校验的 Agent `config` 和 Resource ID 解析出的完整 `resources`：
 
 ```ts
 import type { JsonObject, Plugin } from "@downcity/agent";
 
 export const plugin_factory = {
-  create({ config }: { config: JsonObject }): Plugin {
+  async resolve_resource({ resource }: { resource: JsonObject }) {
+    return { name: await resolve_name(resource) };
+  },
+
+  create({ config, resources }: {
+    config: JsonObject;
+    resources: JsonObject[];
+  }): Plugin {
     return {
       name: "example",
       title: "Example",
-      description: `Endpoint: ${String(config.endpoint)}`,
+      description: `${String(config.endpoint)} · ${resources.length} resources`,
       actions: {},
     };
   },
@@ -90,7 +128,10 @@ city plugin install https://github.com/acme/example-plugin.git#v1.0.0
 city plugin install github:acme/example-plugin#main
 
 city plugin update example
+city plugin resource create example --interactive
+city plugin resource list example
 city plugin config example my-agent --interactive
+city plugin config example my-agent --resources '["api-a1b2c3"]'
 city plugin enable example my-agent
 ```
 
@@ -100,7 +141,7 @@ city plugin enable example my-agent
 
 安装过程只读取 Manifest、JSON Schema 和静态文件，不执行 `npm install`、构建脚本、生命周期脚本或 Plugin entry。City 会记录 Git commit（Git 来源）和完整制品的 SHA-256 摘要。
 
-Plugin entry 会在 Agent 启动时执行，因此只应安装可信来源。安装期静态检查不能替代对第三方运行时代码的审查。
+Plugin entry 会在创建、编辑或刷新 Resource，以及 Agent 启动时执行，因此只应安装可信来源。安装期静态检查不能替代对第三方运行时代码的审查。
 
 继续阅读：
 

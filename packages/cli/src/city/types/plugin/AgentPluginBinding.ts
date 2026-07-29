@@ -20,6 +20,9 @@ export interface AgentPluginBinding {
   /** 已通过 Manifest Schema 校验的完整配置。 */
   config: JsonObject;
 
+  /** 当前 Plugin 实例需要解析的全局 Resource ID 列表。 */
+  resource_ids: string[];
+
   /** 首次绑定时间，使用 ISO 8601 字符串。 */
   created_at: string;
 
@@ -40,4 +43,7 @@ export interface SetAgentPluginBindingInput {
 
   /** 需要持久化的完整结构化配置。 */
   config: JsonObject;
+
+  /** 当前 Plugin 实例绑定的 Resource ID 列表。 */
+  resource_ids: string[];
 }

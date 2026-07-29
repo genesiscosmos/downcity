@@ -252,7 +252,7 @@ feishu-work
 qq-official
 ```
 
-Standalone SDK 未绑定 Channel Account 时，使用平台 Bot/App 的稳定公开身份：
+Standalone SDK 未绑定 Chat Resource 时，使用平台 Bot/App 的稳定公开身份：
 
 - Telegram Bot ID。
 - 飞书 App ID。
@@ -398,7 +398,7 @@ telegram:user_id -> 全局允许所有 Agent
 | 数据 | 存储位置 |
 |---|---|
 | Chat Account、Bot Token、App Secret | `~/.downcity/downcity.db` |
-| Agent 绑定的 Channel Account | City Agent 配置 |
+| Agent 绑定的 Chat Resource | City Agent 配置 |
 | Chat Principal | `<agent>/.downcity/chat/access.db` |
 | Access Request | `<agent>/.downcity/chat/access.db` |
 | Allow/Deny Grant | `<agent>/.downcity/chat/access.db` |
@@ -656,7 +656,7 @@ subject_id  = message.from.id
 display_name = username / first_name / last_name
 chat_id     = message.chat.id
 chat_type   = message.chat.type
-issuer      = channelAccountId，回退到 Telegram Bot ID
+issuer      = Plugin Resource ID，回退到 Telegram Bot ID
 ```
 
 示例：
@@ -680,7 +680,7 @@ subject_id = sender.open_id
 必要时回退到当前 Adapter 已支持的 `user_id`。
 
 ```text
-issuer = channelAccountId，回退到 App ID
+issuer = Plugin Resource ID，回退到 App ID
 ```
 
 不同 App 下的相同 `open_id` 不得视为同一 Principal。
@@ -691,7 +691,7 @@ issuer = channelAccountId，回退到 App ID
 
 ```text
 subject_id = user_openid / member_openid / author_id
-issuer     = channelAccountId，回退到 App ID
+issuer     = Plugin Resource ID，回退到 App ID
 ```
 
 ### 15.4 缺失身份
@@ -930,7 +930,7 @@ Chat 管理
 保留“按平台身份手动添加”作为高级入口，必须同时选择：
 
 - Agent。
-- Channel Account/Issuer。
+- Chat Resource/Issuer。
 - Channel。
 - Subject ID。
 - Scope。
@@ -1064,7 +1064,7 @@ chat.authorization.manage.roles
 ### 25.3 State 迁移
 
 - 已观测用户迁移为 `chat_access_principals`。
-- 使用 Agent 当前 Channel Account ID 作为 Issuer。
+- 使用 Agent 当前 Chat Resource ID 作为 Issuer。
 - 无法确定 Issuer 时不猜测，记录迁移诊断。
 - 未授权且最近出现的用户可迁移为 pending request。
 

@@ -1,6 +1,7 @@
 /** City 内建 Plugin 目录类型。 */
 
 import type { JsonObject } from "@downcity/agent";
+import type { PluginResourceResolver } from "@/city/types/plugin/PluginResource.js";
 
 /** 内建 Plugin 的 Agent Binding 配置定义。 */
 export interface CityBuiltinPluginCatalogDefinition {
@@ -21,4 +22,10 @@ export interface CityBuiltinPluginCatalogDefinition {
 
   /** 可选配置 JSON Schema。 */
   config_schema?: JsonObject;
+
+  /** 可选完整 Resource Item JSON Schema。 */
+  resource_schema?: JsonObject;
+
+  /** 可选动态只读字段 Resolver。 */
+  resolve_resource?: PluginResourceResolver;
 }

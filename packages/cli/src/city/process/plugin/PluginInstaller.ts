@@ -33,6 +33,8 @@ import {
   validate_plugin_config,
   validate_plugin_config_schema,
 } from "@/city/process/plugin/PluginConfigValidator.js";
+import { validate_plugin_resource_schema } from "@/city/process/plugin/PluginResourceSchema.js";
+import { assert_plugin_resources_compatible } from "@/city/process/registry/PluginResourceRepository.js";
 import type { JsonObject } from "@downcity/agent";
 
 /** 从本地目录、Git 或 GitHub shorthand 安装一个 Plugin。 */
@@ -84,6 +86,9 @@ export async function install_plugin(
     const integrity = await calculate_plugin_integrity(staging_dir);
     const target_dir = get_installed_plugin_dir_path(plugin_name);
     const existing = get_installed_plugin(plugin_name);
+    if (existing) {
+      assert_plugin_resources_compatible(plugin_name, manifest.resources?.schema);
+    }
     if (await fs.pathExists(target_dir)) await fs.move(target_dir, backup_dir);
 
     try {
@@ -163,6 +168,29 @@ export async function read_plugin_manifest(plugin_dir: string): Promise<PluginMa
     config = { schema_path, schema: schema_value, ...(defaults ? { defaults } : {}) };
   }
 
+  let resources: PluginManifest["resources"];
+  if (raw.resources !== undefined) {
+    if (!is_json_object(raw.resources)) {
+      throw new Error("Plugin manifest resources must be an object");
+    }
+    const schema_path = String(raw.resources.schema || "").trim();
+    if (!schema_path) throw new Error("Plugin manifest resources.schema is required");
+    const absolute_schema_path = resolve_plugin_artifact_path(
+      plugin_dir,
+      schema_path,
+      "resource schema",
+    );
+    if (path.extname(absolute_schema_path).toLowerCase() !== ".json") {
+      throw new Error("Plugin resource schema must be a JSON file");
+    }
+    const schema_value = await fs.readJson(absolute_schema_path) as unknown;
+    if (!is_json_object(schema_value)) {
+      throw new Error("Plugin resource schema must be an object");
+    }
+    validate_plugin_resource_schema(schema_value);
+    resources = { schema_path, schema: schema_value };
+  }
+
   return {
     manifest_version: PLUGIN_MANIFEST_VERSION,
     name,
@@ -173,6 +201,7 @@ export async function read_plugin_manifest(plugin_dir: string): Promise<PluginMa
       ? { description: raw.description.trim() }
       : {}),
     ...(config ? { config } : {}),
+    ...(resources ? { resources } : {}),
   };
 }
 

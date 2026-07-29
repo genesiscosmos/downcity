@@ -9,7 +9,7 @@ function create_channel(name) {
   return {
     name,
     isEnabled: () => false,
-    getChannelAccountId: () => "",
+    getResourceId: () => "",
     getAccount: () => null,
   };
 }
@@ -32,30 +32,24 @@ test("ChatPlugin 不提供配置修改 action", () => {
   assert.equal("configure" in plugin.actions, false);
 });
 
-test("ChatPlugin 只通过宿主注入的 account_store 解析共享账号", () => {
-  const account = {
+test("ChatPlugin 只消费宿主已经解析的 Resource 构造参数", () => {
+  const plugin = new ChatPlugin({
+    channels: [new TelegramChannel({
+      id: "telegram-main",
+      name: "main bot",
+      bot_token: "token",
+    })],
+  });
+
+  assert.equal(plugin.getResourceId({}, "telegram"), "telegram-main");
+  const account = plugin.resolveChannelAccount({}, "telegram");
+  assert.ok(account);
+  assert.deepEqual(account, {
     id: "telegram-main",
     channel: "telegram",
     name: "main bot",
-    botToken: "token",
-    created_at: "2026-01-01T00:00:00.000Z",
-    updated_at: "2026-01-01T00:00:00.000Z",
-  };
-  const reads = [];
-  const account_store = {
-    list: () => [account],
-    get: (account_id) => {
-      reads.push(account_id);
-      return account_id === account.id ? account : null;
-    },
-    upsert: async () => {},
-    remove: async () => {},
-  };
-  const plugin = new ChatPlugin({
-    account_store,
-    channels: [new TelegramChannel({ channel_account_id: account.id })],
+    bot_token: "token",
+    created_at: account.created_at,
+    updated_at: account.updated_at,
   });
-
-  assert.equal(plugin.resolveChannelAccount({}, "telegram"), account);
-  assert.deepEqual(reads, [account.id]);
 });

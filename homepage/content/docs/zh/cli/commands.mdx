@@ -48,12 +48,23 @@ city plugin disable <plugin_name> [agent_id]
 city plugin config <plugin_name> [agent_id]
 city plugin config <plugin_name> [agent_id] --set '{"key":"value"}'
 city plugin config <plugin_name> [agent_id] --interactive
+city plugin config <plugin_name> [agent_id] --resources '["resource-id"]'
+city plugin resource list <plugin_name>
+city plugin resource create <plugin_name> --set '{"type":"api","api_key":"secret"}'
+city plugin resource create <plugin_name> --interactive
+city plugin resource update <plugin_name> <resource_id> --set '{"type":"api","api_key":"new-secret"}'
+city plugin resource refresh <plugin_name> <resource_id>
+city plugin resource remove <plugin_name> <resource_id>
 city plugin action <plugin_name> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
-第三方仓库必须包含 `downcity.plugin.json`、JSON Schema 和已经构建好的自包含 ESM entry。安装过程不会执行 `npm install`、构建脚本、任何生命周期脚本或 Plugin entry。Manifest 声明 schema/default；实际配置由全局数据库中的 Agent Plugin Binding 持有，Runtime Factory 只接收校验后的配置并创建 Plugin。
+第三方仓库必须包含 `downcity.plugin.json`、配置所需的 JSON Schema 和已经构建好的自包含 ESM entry。安装过程不会执行 `npm install`、构建脚本、任何生命周期脚本或 Plugin entry。Manifest 声明配置 schema/default，并可通过 `resources.schema` 声明完整 Resource Item Schema。
 
-修改 enable、disable 或 config 后，正在运行的 Agent 需要重启，新的 Runtime 装配才会生效。
+Plugin 配置由 Agent Binding 持有；Plugin Resource 由全局 Resource Store 持有，Binding 只保存 `resource_ids`。CLI 根据 Schema 安全收集用户字段，由可选 Resolver 写入 `readOnly` 动态字段，并在实例化前把 ID 解析成完整 Item。Runtime Factory 最终接收 `{ config, resources }`。`writeOnly` 字段会加密保存，且不会在 CLI 输出中回显。
+
+`resource update --set` 替换全部用户可写字段；`resource refresh` 保留用户字段，只重新计算 Resolver 字段。已被 Binding 引用的 Resource 不能删除；仍拥有 Resource 的第三方 Plugin 不能卸载。
+
+修改 enable、disable、config 或 Resource Binding 后，正在运行的 Agent 需要重启，新的 Runtime 装配才会生效。
 
 CLI、Agent `plugin_call`、HTTP 与定时任务统一调用 Plugin Action。不存在 `plugin command`，Chat 也不再是顶层命令特例。
 

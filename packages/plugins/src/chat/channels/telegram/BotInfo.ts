@@ -70,8 +70,8 @@ export class TelegramBotInfoProvider implements ChatChannelBotInfoProvider {
     const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
 
     const name = pickFirstNonEmpty([
-      username ? `@${username.replace(/^@+/, "")}` : "",
       fullName,
+      username ? `@${username.replace(/^@+/, "")}` : "",
       botUserId ? `Telegram Bot ${botUserId.slice(-6)}` : "",
       "Telegram Bot",
     ]);

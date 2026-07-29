@@ -134,17 +134,13 @@ Federation still publishes Ed25519 public keys for its own token validation and 
 `bureau.bureaus` use `bureau_token` to call Federation; `fed bureau token` still generates the
 plaintext locally and writes only the registry hash.
 
-## Channel accounts
+## Plugin Resources
 
-Bot credentials for messaging platforms are stored in `~/.downcity/downcity.db` and referenced by ID from the Chat Plugin Binding:
+Complete Chat Resource Items are encrypted in `~/.downcity/downcity.db` and referenced by stable ID from the Chat Plugin Binding:
 
 ```json
 {
-  "channels": {
-    "telegram": {
-      "channel_account_id": "telegram-main"
-    }
-  }
+  "resource_ids": ["telegram-a1b2c3"]
 }
 ```
 

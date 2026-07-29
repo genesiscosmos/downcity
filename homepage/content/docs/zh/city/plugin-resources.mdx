@@ -1,0 +1,34 @@
+---
+title: Plugin Resources
+description: City 如何创建、解析和复用 Plugin Resource
+---
+
+# Plugin Resources
+
+Plugin Resource 是 Plugin 可复用的完整配置对象。Resource Item 由 Plugin JSON Schema 约束，至少包含稳定 `id`、`type` 和可展示的 `name`。
+
+Schema 中的普通字段由用户填写，`writeOnly` 字段使用安全输入并在输出时脱敏，除 `id` 外的 `readOnly` 字段由 Plugin Resource Resolver 写入。创建、编辑和刷新都先得到完整 Item 并通过 Schema 校验，然后才原子保存。
+
+```bash
+city plugin resource create chat --interactive
+city plugin resource list chat
+city plugin resource update chat <resource_id> --set '{"type":"telegram","bot_token":"new-token"}'
+city plugin resource refresh chat <resource_id>
+city plugin resource remove chat <resource_id>
+```
+
+`update --set` 替换全部用户可写字段；`refresh` 保留用户字段，只让 Resolver 重新计算动态字段。
+
+Agent Plugin Binding 不复制 Resource 内容，只保存 ID：
+
+```json
+{
+  "plugin_name": "chat",
+  "config": {},
+  "resource_ids": ["telegram-a1b2c3"]
+}
+```
+
+Agent 启动时，CLI 解析并校验完整 Resource Item，再把不可变快照传给 Plugin Factory。运行中的 Plugin 不读取 Resource Store；Resource 更新在下一次 Agent 装配时生效。
+
+Resource Item 整体加密落盘。CLI 的 Resource 输出会根据 Schema 递归脱敏全部 `writeOnly` 字段。被任何 Binding 引用的 Resource 不能删除；仍拥有 Resource 的第三方 Plugin 不能卸载。Plugin 更新前，City 也会使用新 Schema 校验全部既有 Resource，避免更新后产生不可解析数据。

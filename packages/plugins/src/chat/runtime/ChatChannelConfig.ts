@@ -8,13 +8,13 @@
 
 import type { JsonObject } from "@downcity/agent";
 import type { PluginContext } from "@downcity/agent";
-import type { StoredChannelAccount } from "@/chat/types/ChannelAccountStore.js";
+import type { ChatRuntimeAccount } from "@/chat/types/ChatRuntimeAccount.js";
 import type {
   ChatChannelName,
   ChatChannelStateSnapshot,
 } from "@/chat/types/ChannelStatus.js";
 import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
-import { get_chat_channel_config_json_schema } from "@/chat/config/ChatPluginConfig.js";
+import { get_chat_plugin_resource_json_schema } from "@/chat/config/ChatPluginConfig.js";
 import {
   getChatChannelBot,
   isChatChannelEnabled,
@@ -37,29 +37,29 @@ function toJsonObject(input: unknown): JsonObject {
 export function buildChatChannelConfigSummary(
   context: PluginContext,
   channel: ChatChannelName,
-  accountInput?: StoredChannelAccount | null,
+  accountInput?: ChatRuntimeAccount | null,
 ): Record<string, string | number | boolean | null> {
   const account = accountInput ?? resolveChannelAccount(context, channel);
-  const channel_account_id = resolveChannelAccountId(context, channel);
+  const resource_id = resolveChannelAccountId(context, channel);
   const configured = isChannelAccountConfigured(channel, account);
   if (channel === "telegram") {
     return {
       enabled: isChatChannelEnabled(context, channel),
-      channel_account_id: channel_account_id || null,
-      channel_account_configured: configured,
+      resource_id: resource_id || null,
+      resource_configured: configured,
     };
   }
   if (channel === "feishu") {
     return {
       enabled: isChatChannelEnabled(context, channel),
-      channel_account_id: channel_account_id || null,
-      channel_account_configured: configured,
+      resource_id: resource_id || null,
+      resource_configured: configured,
     };
   }
   return {
     enabled: isChatChannelEnabled(context, channel),
-    channel_account_id: channel_account_id || null,
-    channel_account_configured: configured,
+    resource_id: resource_id || null,
+    resource_configured: configured,
   };
 }
 
@@ -97,7 +97,7 @@ export function getChatChannelStatus(
     detail: {
       ...(runtime?.detail || {}),
       config: buildChatChannelConfigSummary(context, channel, channelAccount),
-      configuration: toJsonObject(get_chat_channel_config_json_schema(channel)),
+      resource_schema: toJsonObject(get_chat_plugin_resource_json_schema(channel)),
     },
   };
 }

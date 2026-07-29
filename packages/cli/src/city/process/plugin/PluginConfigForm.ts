@@ -3,15 +3,15 @@
  *
  * 关键点（中文）
  * - 递归处理 object、boolean、number、string、enum 与 array。
- * - 动态选项只通过可信资源 Provider 查询，配置层不包含 Chat 分支。
+ * - `readOnly`、`writeOnly` 和 `const` 直接遵循标准 JSON Schema 语义。
  * - 全部编辑先写入草稿，最终 Schema 校验通过后才由调用方持久化。
  */
 
 import prompts from "@/city/tui/Prompts.js";
 import { validate_plugin_config } from "@/city/process/plugin/PluginConfigValidator.js";
-import { list_plugin_config_resource_options } from "@/city/process/plugin/PluginConfigOptionSources.js";
 import type { JsonObject, JsonValue } from "@downcity/agent";
 import type { PromptPluginConfigInput } from "@/city/types/plugin/PluginConfigForm.js";
+import { list_plugin_resource_schema_variants } from "@/city/process/plugin/PluginResourceSchema.js";
 
 /** 交互编辑 Plugin 完整配置；取消时返回 null。 */
 export async function prompt_plugin_config(
@@ -26,6 +26,46 @@ export async function prompt_plugin_config(
   if (!edited) return null;
   validate_plugin_config(edited, input.schema);
   return edited;
+}
+
+/** 使用同一套 Schema 表单编辑一个 Resource 的全部用户可写字段。 */
+export async function prompt_plugin_resource_fields(input: {
+  /** 面向用户展示的 Plugin 名称。 */
+  plugin_name: string;
+
+  /** Plugin 的完整 Resource Item Schema。 */
+  schema: JsonObject;
+
+  /** 编辑时使用的现有完整 Resource Item。 */
+  current_resource?: JsonObject;
+}): Promise<JsonObject | null> {
+  const variants = list_plugin_resource_schema_variants(input.schema);
+  const current_type = String(input.current_resource?.type || "").trim();
+  let resource_type = current_type;
+  if (!resource_type) {
+    const response = await prompts({
+      type: "select",
+      name: "resource_type",
+      message: `${input.plugin_name} Resource 类型`,
+      choices: variants.map((variant) => ({
+        title: variant.title,
+        description: variant.type,
+        value: variant.type,
+      })),
+    });
+    resource_type = String(response.resource_type || "").trim();
+  }
+  const variant = variants.find((item) => item.type === resource_type);
+  if (!variant) return null;
+  const current_value = clone_json_object(input.current_resource ?? {});
+  current_value.type = resource_type;
+  const edited = await prompt_object_fields({
+    schema: variant.schema,
+    value: current_value,
+    path: `${input.plugin_name}.${resource_type}`,
+  });
+  if (!edited) return null;
+  return pick_schema_writable_fields(edited, variant.schema);
 }
 
 /** 递归编辑一个 JSON object。 */
@@ -48,6 +88,12 @@ async function prompt_object_fields(input: {
     const field_path = `${input.path}.${key}`;
     const field_type = resolve_schema_type(field_schema);
     const current_value = result[key];
+
+    if (field_schema.readOnly === true) continue;
+    if (field_schema.const !== undefined) {
+      result[key] = field_schema.const as JsonValue;
+      continue;
+    }
 
     if (field_type === "object") {
       const action = await prompt_object_action(
@@ -127,48 +173,12 @@ async function prompt_scalar_field(input: {
   path: string;
   required: boolean;
 }): Promise<{ cancelled: boolean; unset?: boolean; value?: JsonValue }> {
-  const extension = as_json_object(input.schema.x_downcity);
-  if (extension?.control === "resource_select") {
-    return await prompt_resource_field(input, extension);
-  }
   if (Array.isArray(input.schema.enum)) return await prompt_enum_field(input);
   const type = resolve_schema_type(input.schema);
   if (type === "boolean") return await prompt_boolean_field(input);
   if (type === "number" || type === "integer") return await prompt_number_field(input);
   if (type === "array") return await prompt_json_field(input);
   return await prompt_text_field(input);
-}
-
-/** 编辑动态 City 资源引用。 */
-async function prompt_resource_field(
-  input: Parameters<typeof prompt_scalar_field>[0],
-  extension: JsonObject,
-): Promise<{ cancelled: boolean; unset?: boolean; value?: JsonValue }> {
-  const resource_type = typeof extension.resource_type === "string" ? extension.resource_type : "";
-  const options = list_plugin_config_resource_options({
-    resource_type,
-    filter: as_json_object(extension.filter) ?? undefined,
-  });
-  const response = await prompts({
-    type: "select",
-    name: "value",
-    message: schema_title(input.schema, input.path),
-    subtitle: schema_description(input.schema),
-    choices: [
-      ...(!input.required
-        ? [{ title: "不设置", description: "删除当前资源引用", value: "" }]
-        : []),
-      ...options.map((option) => ({
-        title: option.label,
-        description: option.description,
-        value: option.value,
-      })),
-    ],
-    initial: typeof input.current_value === "string" ? input.current_value : "",
-  });
-  if (response.value === undefined) return { cancelled: true };
-  const value = String(response.value || "").trim();
-  return value ? { cancelled: false, value } : { cancelled: false, unset: true };
 }
 
 /** 编辑枚举字段。 */
@@ -257,12 +267,55 @@ async function prompt_number_field(
 async function prompt_text_field(
   input: Parameters<typeof prompt_scalar_field>[0],
 ): Promise<{ cancelled: boolean; unset?: boolean; value?: JsonValue }> {
+  if (input.schema.writeOnly === true) return await prompt_secret_field(input);
   const response = await prompts({
     type: "text",
     name: "value",
     message: schema_title(input.schema, input.path),
     subtitle: schema_description(input.schema),
     initial: typeof input.current_value === "string" ? input.current_value : "",
+    validate: (value) => String(value).trim() || !input.required ? true : "该字段不能为空",
+  });
+  if (response.value === undefined) return { cancelled: true };
+  const value = String(response.value).trim();
+  return value ? { cancelled: false, value } : { cancelled: false, unset: true };
+}
+
+/** 编辑敏感字符串；已有值默认保留且永不回显。 */
+async function prompt_secret_field(
+  input: Parameters<typeof prompt_scalar_field>[0],
+): Promise<{ cancelled: boolean; unset?: boolean; value?: JsonValue }> {
+  const current_value = typeof input.current_value === "string"
+    ? input.current_value
+    : "";
+  if (current_value) {
+    const action_response = await prompts({
+      type: "select",
+      name: "action",
+      message: schema_title(input.schema, input.path),
+      subtitle: "该字段已配置，当前值不会显示。",
+      choices: [
+        { title: "保持不变", description: "保留当前敏感值", value: "keep" },
+        { title: "替换", description: "输入新的敏感值", value: "replace" },
+        ...(!input.required
+          ? [{ title: "清空", description: "删除当前敏感值", value: "clear" }]
+          : []),
+      ],
+      initial: "keep",
+    });
+    if (action_response.action === undefined) return { cancelled: true };
+    if (action_response.action === "keep") {
+      return { cancelled: false, value: current_value };
+    }
+    if (action_response.action === "clear") {
+      return { cancelled: false, unset: true };
+    }
+  }
+  const response = await prompts({
+    type: "password",
+    name: "value",
+    message: schema_title(input.schema, input.path),
+    subtitle: schema_description(input.schema),
     validate: (value) => String(value).trim() || !input.required ? true : "该字段不能为空",
   });
   if (response.value === undefined) return { cancelled: true };
@@ -329,4 +382,15 @@ function as_json_object(value: unknown): JsonObject | null {
 /** 深拷贝 JSON object，保证取消表单时不污染事实源。 */
 function clone_json_object(value: JsonObject): JsonObject {
   return JSON.parse(JSON.stringify(value)) as JsonObject;
+}
+
+/** 从完整 Resource 中只提取用户可写字段。 */
+function pick_schema_writable_fields(
+  value: JsonObject,
+  schema: JsonObject,
+): JsonObject {
+  const properties = as_json_object(schema.properties) ?? {};
+  return Object.fromEntries(
+    Object.entries(value).filter(([key]) => as_json_object(properties[key])?.readOnly !== true),
+  ) as JsonObject;
 }

@@ -7,7 +7,11 @@
  */
 
 import type { CityBuiltinPluginCatalogDefinition } from "@/city/types/plugin/CityBuiltinPlugin.js";
-import { CHAT_PLUGIN_CONFIG_JSON_SCHEMA } from "@downcity/plugins/chat";
+import {
+  CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
+  CHAT_PLUGIN_RESOURCE_JSON_SCHEMA,
+  resolve_chat_plugin_resource,
+} from "@downcity/plugins/chat";
 
 /** 全部 City 内建 Plugin 的 Binding 协议。 */
 export const CITY_BUILTIN_PLUGIN_CATALOG: readonly CityBuiltinPluginCatalogDefinition[] = [
@@ -56,6 +60,9 @@ export const CITY_BUILTIN_PLUGIN_CATALOG: readonly CityBuiltinPluginCatalogDefin
     ],
     default_config: {},
     config_schema: CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
+    resource_schema: CHAT_PLUGIN_RESOURCE_JSON_SCHEMA,
+    resolve_resource: async ({ resource }) =>
+      await resolve_chat_plugin_resource(resource),
   },
   {
     plugin_name: "contact",

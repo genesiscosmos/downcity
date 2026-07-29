@@ -42,23 +42,20 @@ The CLI uses a separate control-plane protocol:
 
 ```text
 Plugin Catalog
-  → Agent Plugin Binding (enabled + config)
+  → Plugin Resource (complete Item)
+  → Agent Plugin Binding (enabled + config + resource_ids)
   → CLI Runtime Factory
   → Agent Runtime Plugin
 ```
 
-Built-in and external Plugins both describe Binding configuration with standard JSON Schema. City validates and persists configuration through one path; when an Agent starts, the CLI reads its Bindings and constructs Runtime Plugins.
+Built-in and external Plugins describe Binding configuration and optional Resource Items with standard JSON Schema. City validates and persists them through one path; when an Agent starts, the CLI resolves Resource IDs into complete Items before constructing Runtime Plugins.
 
 Example Chat Binding:
 
 ```json
 {
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "channel_account_id": "telegram-main"
-    }
-  }
+  "config": {},
+  "resource_ids": ["telegram-a1b2c3"]
 }
 ```
 

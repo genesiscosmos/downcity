@@ -13,9 +13,13 @@ export {
 } from "./channels/RuntimeChannel.js";
 export {
   CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
+  CHAT_PLUGIN_RESOURCE_JSON_SCHEMA,
   chat_plugin_config_schema,
-  get_chat_channel_config_json_schema,
+  chat_plugin_resource_schema,
+  get_chat_plugin_resource_json_schema,
   parse_chat_plugin_config,
+  parse_chat_plugin_resource,
+  resolve_chat_plugin_resource,
 } from "./config/ChatPluginConfig.js";
 export type {
   BaseChatChannelOptions,
@@ -29,9 +33,4 @@ export type {
   ChatPluginOptions,
 } from "./types/ChatPluginOptions.js";
 export type { ChatPluginConfig } from "./config/ChatPluginConfig.js";
-export type {
-  ChatChannelAccountStore,
-  StoredChannelAccount,
-  StoredChannelAccountChannel,
-  UpsertChannelAccountInput,
-} from "./types/ChannelAccountStore.js";
+export type { ChatPluginResource } from "./types/ChatPluginResource.js";

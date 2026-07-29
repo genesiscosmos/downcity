@@ -7,7 +7,6 @@
  */
 
 import Database from "better-sqlite3";
-import type { StoredChannelAccountChannel } from "@downcity/plugins/chat";
 
 /**
  * PlatformStore 子模块上下文。
@@ -41,17 +40,4 @@ export function normalizeNonEmptyText(value: string, fieldName: string): string 
 export function optionalTrimmedText(value: string | undefined): string | undefined {
   const normalized = String(value || "").trim();
   return normalized || undefined;
-}
-
-/**
- * 规范化 chat account 的平台字段。
- */
-export function normalizeChannelAccountChannel(
-  input: string,
-): StoredChannelAccountChannel {
-  const channel = String(input || "").trim().toLowerCase();
-  if (channel === "telegram" || channel === "feishu" || channel === "qq") {
-    return channel;
-  }
-  throw new Error(`Unsupported chat account platform: ${input}`);
 }

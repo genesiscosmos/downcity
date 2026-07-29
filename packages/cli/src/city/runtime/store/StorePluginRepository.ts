@@ -28,6 +28,7 @@ type AgentPluginRow = {
   plugin_name: string;
   enabled: number;
   config_encrypted: string;
+  resource_ids_json: string;
   created_at: string;
   updated_at: string;
 };
@@ -54,6 +55,7 @@ function decode_agent_plugin(row: AgentPluginRow): AgentPluginBinding {
     plugin_name: row.plugin_name,
     enabled: row.enabled === 1,
     config: JSON.parse(decryptTextSync(row.config_encrypted)),
+    resource_ids: parse_resource_ids(row.resource_ids_json),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -151,20 +153,34 @@ export function set_agent_plugin_row(
 ): void {
   context.sqlite.prepare(`
     INSERT INTO agent_plugins (
-      agent_id, plugin_name, enabled, config_encrypted, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?)
+      agent_id, plugin_name, enabled, config_encrypted, resource_ids_json,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(agent_id, plugin_name) DO UPDATE SET
       enabled = excluded.enabled,
       config_encrypted = excluded.config_encrypted,
+      resource_ids_json = excluded.resource_ids_json,
       updated_at = excluded.updated_at;
   `).run(
     binding.agent_id,
     binding.plugin_name,
     binding.enabled ? 1 : 0,
     encryptTextSync(JSON.stringify(binding.config)),
+    JSON.stringify(binding.resource_ids),
     binding.created_at,
     binding.updated_at,
   );
+}
+
+/** 把持久化 JSON 收窄为唯一、非空 Resource ID 数组。 */
+function parse_resource_ids(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return [...new Set(parsed.map((item) => String(item || "").trim()).filter(Boolean))];
+  } catch {
+    return [];
+  }
 }
 
 /** 删除 Agent Plugin Binding。 */

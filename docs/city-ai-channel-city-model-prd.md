@@ -226,7 +226,7 @@ Channel 必须同时支持：
 
 ### 6.2 为什么使用 AIChannel
 
-不使用裸 `Channel`，因为仓库中已经存在 Chat Channel 和 Channel Account。
+不使用裸 `Channel`，因为仓库中已经存在 Chat Channel 和 Plugin Resource。
 
 `AIChannel` 明确表示：
 

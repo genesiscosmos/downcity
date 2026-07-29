@@ -8,18 +8,18 @@
  */
 
 import type { PluginContext } from "@downcity/agent";
-import type { StoredChannelAccount } from "@/chat/types/ChannelAccountStore.js";
+import type { ChatRuntimeAccount } from "@/chat/types/ChatRuntimeAccount.js";
 import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
 
 const CHAT_CHANNEL_NAMES: ChatChannelName[] = ["telegram", "feishu", "qq"];
 
 export type ChatRuntimeBindings = {
-  getChannelAccountId?(context: PluginContext, channel: ChatChannelName): string;
+  getResourceId?(context: PluginContext, channel: ChatChannelName): string;
   resolveChannelAccount?(
     context: PluginContext,
     channel: ChatChannelName,
-  ): StoredChannelAccount | null;
+  ): ChatRuntimeAccount | null;
   isChannelEnabled?(context: PluginContext, channel: ChatChannelName): boolean;
 };
 
@@ -75,7 +75,7 @@ export function resolveChannelAccountId(
   channel: ChatChannelName,
 ): string {
   const plugin = resolveChatPluginBindings(context);
-  const explicit = String(plugin?.getChannelAccountId?.(context, channel) || "").trim();
+  const explicit = String(plugin?.getResourceId?.(context, channel) || "").trim();
   if (explicit) return explicit;
   return "";
 }
@@ -90,7 +90,7 @@ export function resolveChannelAccountId(
 export function resolveChannelAccount(
   context: PluginContext,
   channel: ChatChannelName,
-): StoredChannelAccount | null {
+): ChatRuntimeAccount | null {
   const plugin = resolveChatPluginBindings(context);
   const explicit = plugin?.resolveChannelAccount?.(context, channel);
   return explicit?.channel === channel ? explicit : null;
@@ -101,13 +101,13 @@ export function resolveChannelAccount(
  */
 export function isChannelAccountConfigured(
   channel: ChatChannelName,
-  account: StoredChannelAccount | null,
+  account: ChatRuntimeAccount | null,
 ): boolean {
   if (!account) return false;
   if (channel === "telegram") {
-    return !!String(account.botToken || "").trim();
+    return !!String(account.bot_token || "").trim();
   }
-  return !!String(account.appId || "").trim() && !!String(account.appSecret || "").trim();
+  return !!String(account.app_id || "").trim() && !!String(account.app_secret || "").trim();
 }
 
 /**

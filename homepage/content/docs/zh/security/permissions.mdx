@@ -41,7 +41,7 @@ city plugin action chat access-snapshot assistant --input '{}' --token <token>
 <agent_project>/.downcity/chat/access.db
 ```
 
-数据库包含 Principal、Request、Allow/Deny Grant 和审计事件，不包含 Bot Token、App Secret 或消息正文。Chat 账号和密钥仍保存在 City 全局数据库 `~/.downcity/downcity.db`，Chat Plugin Binding 只保存绑定的 `channel_account_id`。
+Chat Access 数据库包含 Principal、Request、Allow/Deny Grant 和审计事件，不包含 Bot Token、App Secret 或消息正文。Chat Resource 完整 Item 单独加密保存在 City 全局数据库 `~/.downcity/downcity.db`，Chat Plugin Binding 只保存 `resource_ids`。
 
 ## 与 City Auth 的区别
 

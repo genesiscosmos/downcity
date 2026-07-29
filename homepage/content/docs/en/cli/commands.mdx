@@ -49,12 +49,23 @@ city plugin disable <plugin_name> [agent_id]
 city plugin config <plugin_name> [agent_id]
 city plugin config <plugin_name> [agent_id] --set '{"key":"value"}'
 city plugin config <plugin_name> [agent_id] --interactive
+city plugin config <plugin_name> [agent_id] --resources '["resource-id"]'
+city plugin resource list <plugin_name>
+city plugin resource create <plugin_name> --set '{"type":"api","api_key":"secret"}'
+city plugin resource create <plugin_name> --interactive
+city plugin resource update <plugin_name> <resource_id> --set '{"type":"api","api_key":"new-secret"}'
+city plugin resource refresh <plugin_name> <resource_id>
+city plugin resource remove <plugin_name> <resource_id>
 city plugin action <plugin_name> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
-A third-party repository must contain `downcity.plugin.json`, a JSON Schema, and a prebuilt self-contained ESM entry. Installation never runs `npm install`, build scripts, lifecycle scripts, or the Plugin entry. The manifest declares schema/defaults; actual configuration belongs to the Agent Plugin Binding in the global database. The Runtime Factory receives only validated config and creates the Plugin.
+A third-party repository must contain `downcity.plugin.json`, any required configuration JSON Schema, and a prebuilt self-contained ESM entry. Installation never runs `npm install`, build scripts, lifecycle scripts, or the Plugin entry. The manifest declares configuration schema/defaults and can declare a complete Resource Item Schema through `resources.schema`.
 
-After changing enable, disable, or config state, restart a running Agent to apply the new Runtime assembly.
+Plugin configuration belongs to the Agent Binding. Plugin Resources belong to the global Resource Store, while a Binding stores only `resource_ids`. The CLI collects user fields from the Schema, lets an optional Resolver write dynamic `readOnly` fields, and resolves IDs into complete Items before instantiation. The Runtime Factory receives `{ config, resources }`. `writeOnly` fields are stored encrypted and never echoed by CLI output.
+
+`resource update --set` replaces all user-writable fields. `resource refresh` preserves user fields and only recomputes Resolver fields. A bound Resource cannot be removed, and a third-party Plugin that still owns Resources cannot be uninstalled.
+
+After changing enable, disable, config, or Resource Binding state, restart a running Agent to apply the new Runtime assembly.
 
 The CLI, Agent `plugin_call`, HTTP, and scheduled jobs all invoke Plugin Actions. There is no `plugin command`, and Chat is not a top-level CLI special case.
 
