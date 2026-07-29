@@ -59,9 +59,9 @@ city plugin resource remove <plugin_name> <resource_id>
 city plugin action <plugin_name> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
-A third-party repository must contain `downcity.plugin.json`, any required configuration JSON Schema, and a prebuilt self-contained ESM entry. Installation never runs `npm install`, build scripts, lifecycle scripts, or the Plugin entry. The manifest declares configuration schema/defaults and can declare a complete Resource Item Schema through `resources.schema`.
+A third-party entry provides a named `plugins` constructor array export. Each Plugin declares its name, configuration, and Resource Schema through `static manifest`, and may resolve dynamic Resource fields through `static resolve_resource`. The artifact must contain a v2 `downcity.plugin.json` and a self-contained ESM entry. Installation never runs `npm install`, build scripts, lifecycle scripts, or the Plugin entry.
 
-Plugin configuration belongs to the Agent Binding. Plugin Resources belong to the global Resource Store, while a Binding stores only `resource_ids`. The CLI collects user fields from the Schema, lets an optional Resolver write dynamic `readOnly` fields, and resolves IDs into complete Items before instantiation. The Runtime Factory receives `{ config, resources }`. `writeOnly` fields are stored encrypted and never echoed by CLI output.
+Plugin configuration belongs to the Agent Binding. Plugin Resources belong to the global Resource Store, while a Binding stores only `resource_ids`. The CLI collects user fields from the Schema, invokes the Plugin constructor static Resolver for dynamic `readOnly` fields, and resolves IDs into complete Items before instantiation. The CLI then executes `new PluginType({ config, resources })`. `writeOnly` fields are stored encrypted and never echoed by CLI output.
 
 `resource update --set` replaces all user-writable fields. `resource refresh` preserves user fields and only recomputes Resolver fields. A bound Resource cannot be removed, and a third-party Plugin that still owns Resources cannot be uninstalled.
 

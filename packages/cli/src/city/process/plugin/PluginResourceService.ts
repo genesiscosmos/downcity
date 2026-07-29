@@ -9,7 +9,6 @@
 
 import { randomBytes } from "node:crypto";
 import type { JsonObject, JsonValue } from "@downcity/agent";
-import { get_builtin_plugin_catalog_definition } from "@/city/process/plugin/BuiltinPluginCatalog.js";
 import { get_plugin_catalog_item } from "@/city/process/plugin/PluginCatalog.js";
 import {
   get_plugin_resource,
@@ -22,7 +21,7 @@ import {
   list_plugin_resource_resolver_fields,
   validate_plugin_resource_item,
 } from "@/city/process/plugin/PluginResourceSchema.js";
-import { load_external_plugin_factory } from "@/city/runtime/plugins/PluginModuleLoader.js";
+import { load_plugin_type } from "@/city/runtime/plugins/PluginTypeLoader.js";
 import type { AgentPluginBinding } from "@/city/types/plugin/AgentPluginBinding.js";
 import type {
   PluginResourceItem,
@@ -161,14 +160,12 @@ async function resolve_complete_resource(input: {
   });
 }
 
-/** 读取内建或第三方 Plugin 声明的 Resource Resolver。 */
+/** 从 Plugin constructor 读取可选静态 Resource Resolver。 */
 async function get_plugin_resource_resolver(
   plugin_name: string,
 ): Promise<PluginResourceResolver | undefined> {
-  const builtin = get_builtin_plugin_catalog_definition(plugin_name);
-  if (builtin) return builtin.resolve_resource;
-  const factory = await load_external_plugin_factory(plugin_name);
-  return factory.resolve_resource;
+  const plugin_type = await load_plugin_type(plugin_name);
+  return plugin_type.resolve_resource;
 }
 
 /** 生成不依赖可变 name 的稳定 Resource ID。 */
@@ -186,7 +183,7 @@ function generate_unique_resource_id(plugin_name: string, resource_type: string)
   throw new Error(`Unable to allocate Plugin Resource id: ${plugin_name}/${resource_type}`);
 }
 
-/** 递归冻结 Resource JSON 快照，避免 Factory 修改同一次装配中的共享值。 */
+/** 递归冻结 Resource JSON 快照，避免 Plugin constructor 修改共享值。 */
 function freeze_json_value<T extends JsonValue>(value: T): T {
   if (Array.isArray(value)) {
     for (const item of value) freeze_json_value(item);

@@ -129,16 +129,17 @@ function ensureAgentTokenSchema(context: PlatformStoreContext): void {
  * 初始化 Plugin 安装目录与 Agent 绑定表。
  *
  * 关键点（中文）
- * - installed_plugins 只描述全局已安装制品。
+ * - plugin_installations 只描述多个 Plugin 共享的来源、入口和文件生命周期。
  * - agent_plugins 保存 Agent 与 Plugin 的启用关系及结构化配置。
  */
 function ensurePluginSchema(context: PlatformStoreContext): void {
   context.sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS installed_plugins (
-      plugin_name TEXT PRIMARY KEY NOT NULL,
+    DROP TABLE IF EXISTS installed_plugins;
+    DROP TABLE IF EXISTS installed_plugin_projects;
+    CREATE TABLE IF NOT EXISTS plugin_installations (
+      installation_id TEXT PRIMARY KEY NOT NULL,
       source TEXT NOT NULL,
       resolved_commit TEXT,
-      version TEXT NOT NULL,
       entry_path TEXT NOT NULL,
       manifest_json TEXT NOT NULL,
       integrity TEXT,
@@ -147,10 +148,9 @@ function ensurePluginSchema(context: PlatformStoreContext): void {
     );
   `);
   context.sqlite.exec(`
-    CREATE INDEX IF NOT EXISTS installed_plugins_updated_at_idx
-    ON installed_plugins(updated_at);
+    CREATE INDEX IF NOT EXISTS plugin_installations_updated_at_idx
+    ON plugin_installations(updated_at);
   `);
-  ensure_installed_plugin_columns(context);
 
   context.sqlite.exec(`
     CREATE TABLE IF NOT EXISTS agent_plugins (
@@ -202,19 +202,6 @@ function ensure_agent_plugin_columns(context: PlatformStoreContext): void {
     context.sqlite.exec(
       "ALTER TABLE agent_plugins ADD COLUMN resource_ids_json TEXT NOT NULL DEFAULT '[]';",
     );
-  }
-}
-
-/** 补齐 installed_plugins 表的增量制品来源字段。 */
-function ensure_installed_plugin_columns(context: PlatformStoreContext): void {
-  const rows = context.sqlite
-    .prepare("PRAGMA table_info(installed_plugins)")
-    .all() as Array<{ name?: unknown }>;
-  const columns = new Set(
-    rows.map((row) => String(row.name || "").trim()).filter(Boolean),
-  );
-  if (!columns.has("resolved_commit")) {
-    context.sqlite.exec("ALTER TABLE installed_plugins ADD COLUMN resolved_commit TEXT;");
   }
 }
 

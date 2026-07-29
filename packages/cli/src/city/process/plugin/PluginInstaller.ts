@@ -1,52 +1,58 @@
 /**
- * 第三方 Plugin 静态制品安装器。
+ * 第三方 Plugin 数组静态制品安装器。
  *
  * 关键点（中文）
- * - 支持本地目录、Git URL 与 `github:owner/repo#ref`。
+ * - 入口模块只需导出 `plugins` constructor 数组。
+ * - installation 是来源、入口与文件原子替换的内部实现，不进入公开 Plugin 模型。
  * - 安装检查只读取静态 JSON，不执行 npm、生命周期脚本或 Plugin 入口。
- * - 制品必须提交构建后的自包含 ESM，并通过原子目录替换完成更新。
  */
 
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "fs-extra";
 import { execa } from "execa";
+import type { JsonObject } from "@downcity/agent";
 import {
-  get_installed_plugin_dir_path,
-  get_installed_plugins_dir_path,
+  get_plugin_installation_dir_path,
+  get_plugin_installations_dir_path,
 } from "@/city/process/registry/CityPaths.js";
 import {
   get_installed_plugin,
-  is_builtin_plugin,
+  get_plugin_installation,
   normalize_plugin_name,
-  save_installed_plugin,
+  save_plugin_installation,
 } from "@/city/process/registry/PluginRepository.js";
+import { list_plugin_catalog } from "@/city/process/plugin/PluginCatalog.js";
 import {
-  PLUGIN_MANIFEST_FILE_NAME,
-  PLUGIN_MANIFEST_VERSION,
-  type InstalledPlugin,
+  PLUGIN_INSTALLATION_MANIFEST_FILE_NAME,
+  PLUGIN_INSTALLATION_MANIFEST_VERSION,
+  type InstalledPluginInstallation,
+  type PluginInstallationManifest,
   type PluginManifest,
-  type PluginManifestFile,
   type ResolvedPluginSource,
-} from "@/city/types/plugin/PluginManifest.js";
+} from "@/city/types/plugin/PluginInstallation.js";
 import {
   validate_plugin_config,
   validate_plugin_config_schema,
 } from "@/city/process/plugin/PluginConfigValidator.js";
 import { validate_plugin_resource_schema } from "@/city/process/plugin/PluginResourceSchema.js";
 import { assert_plugin_resources_compatible } from "@/city/process/registry/PluginResourceRepository.js";
-import type { JsonObject } from "@downcity/agent";
+import { withPlatformStore } from "@/city/runtime/store/index.js";
 
-/** 从本地目录、Git 或 GitHub shorthand 安装一个 Plugin。 */
-export async function install_plugin(
+/** 从本地目录、Git 或 GitHub shorthand 安装一个 Plugin 数组制品。 */
+export async function install_plugins(
   source_input: string,
-  expected_plugin_name?: string,
-): Promise<InstalledPlugin> {
+  expected_installation_id?: string,
+): Promise<InstalledPluginInstallation> {
   const source = await resolve_plugin_source(source_input);
-  const plugins_dir = get_installed_plugins_dir_path();
-  await fs.ensureDir(plugins_dir);
-  const staging_dir = path.join(plugins_dir, `.install-${randomUUID()}`);
-  const backup_dir = path.join(plugins_dir, `.backup-${randomUUID()}`);
+  const installation_id = create_installation_id(source.normalized_source);
+  if (expected_installation_id && installation_id !== expected_installation_id) {
+    throw new Error("Plugin update source changed its internal installation identity");
+  }
+  const installations_dir = get_plugin_installations_dir_path();
+  await fs.ensureDir(installations_dir);
+  const staging_dir = path.join(installations_dir, `.install-${randomUUID()}`);
+  const backup_dir = path.join(installations_dir, `.backup-${randomUUID()}`);
   let resolved_commit: string | undefined;
 
   try {
@@ -68,37 +74,26 @@ export async function install_plugin(
     }
 
     await assert_plugin_artifact_has_no_symlinks(staging_dir);
-    const manifest = await read_plugin_manifest(staging_dir);
-    const plugin_name = normalize_plugin_name(manifest.name);
-    if (is_builtin_plugin(plugin_name)) {
-      throw new Error(`Plugin name is reserved by a built-in Plugin: ${plugin_name}`);
-    }
-    if (expected_plugin_name && plugin_name !== expected_plugin_name) {
-      throw new Error(
-        `Plugin update name mismatch: expected ${expected_plugin_name}, received ${plugin_name}`,
-      );
-    }
+    const manifest = await read_plugin_installation_manifest(staging_dir);
+    assert_plugin_names_available(manifest, installation_id);
     const entry_path = resolve_plugin_artifact_path(staging_dir, manifest.entry, "entry");
     if (!await fs.pathExists(entry_path) || !(await fs.stat(entry_path)).isFile()) {
       throw new Error(`Plugin entry not found: ${manifest.entry}`);
     }
 
+    const existing = get_plugin_installation(installation_id);
+    if (existing) assert_installation_update_compatible(existing, manifest);
     const integrity = await calculate_plugin_integrity(staging_dir);
-    const target_dir = get_installed_plugin_dir_path(plugin_name);
-    const existing = get_installed_plugin(plugin_name);
-    if (existing) {
-      assert_plugin_resources_compatible(plugin_name, manifest.resources?.schema);
-    }
+    const target_dir = get_plugin_installation_dir_path(installation_id);
     if (await fs.pathExists(target_dir)) await fs.move(target_dir, backup_dir);
 
     try {
       await fs.move(staging_dir, target_dir);
       const current_time = new Date().toISOString();
-      return save_installed_plugin({
-        plugin_name,
+      return save_plugin_installation({
+        installation_id,
         source: source.normalized_source,
         ...(resolved_commit ? { resolved_commit } : {}),
-        version: manifest.version,
         entry_path: resolve_plugin_artifact_path(target_dir, manifest.entry, "entry"),
         manifest,
         integrity,
@@ -116,114 +111,194 @@ export async function install_plugin(
   }
 }
 
-/** 使用已保存来源更新一个已安装 Plugin。 */
-export async function update_plugin(plugin_name_input: string): Promise<InstalledPlugin> {
+/** 使用 Plugin 所属 installation 的已保存来源更新整个共享入口。 */
+export async function update_plugin(plugin_name_input: string): Promise<InstalledPluginInstallation> {
   const plugin_name = normalize_plugin_name(plugin_name_input);
-  const installed = get_installed_plugin(plugin_name);
-  if (!installed) throw new Error(`Plugin is not installed: ${plugin_name}`);
-  return await install_plugin(installed.source, plugin_name);
+  const reference = get_installed_plugin(plugin_name);
+  if (!reference) throw new Error(`Plugin is not installed: ${plugin_name}`);
+  return await install_plugins(
+    reference.installation.source,
+    reference.installation.installation_id,
+  );
 }
 
-/** 读取并验证仓库 Manifest、配置 Schema 和默认配置。 */
-export async function read_plugin_manifest(plugin_dir: string): Promise<PluginManifest> {
-  const manifest_path = path.join(plugin_dir, PLUGIN_MANIFEST_FILE_NAME);
+/** 读取并验证静态安装清单以及内嵌的全部 Plugin Manifest。 */
+export async function read_plugin_installation_manifest(
+  installation_dir: string,
+): Promise<PluginInstallationManifest> {
+  const manifest_path = path.join(installation_dir, PLUGIN_INSTALLATION_MANIFEST_FILE_NAME);
   if (!await fs.pathExists(manifest_path)) {
-    throw new Error(`Missing ${PLUGIN_MANIFEST_FILE_NAME}`);
+    throw new Error(`Missing ${PLUGIN_INSTALLATION_MANIFEST_FILE_NAME}`);
   }
-  const raw = await fs.readJson(manifest_path) as Partial<PluginManifestFile>;
-  if (raw.manifest_version !== PLUGIN_MANIFEST_VERSION) {
-    throw new Error(`Plugin manifest_version must be ${PLUGIN_MANIFEST_VERSION}`);
+  const raw = await fs.readJson(manifest_path) as Record<string, unknown>;
+  assert_known_fields(raw, ["manifest_version", "entry", "plugins"], "manifest");
+  if (raw.manifest_version !== PLUGIN_INSTALLATION_MANIFEST_VERSION) {
+    throw new Error(`Plugin manifest_version must be ${PLUGIN_INSTALLATION_MANIFEST_VERSION}`);
   }
-  const name = normalize_plugin_name(String(raw.name || ""));
-  const version = String(raw.version || "").trim();
   const entry = String(raw.entry || "").trim();
-  if (!version) throw new Error("Plugin manifest version is required");
-  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(version)) {
-    throw new Error(`Plugin manifest version must be semantic: ${version}`);
-  }
   if (!entry) throw new Error("Plugin manifest entry is required");
-  resolve_plugin_artifact_path(plugin_dir, entry, "entry");
+  resolve_plugin_artifact_path(installation_dir, entry, "entry");
+  if (!Array.isArray(raw.plugins) || raw.plugins.length === 0) {
+    throw new Error("Plugin manifest plugins must be a non-empty array");
+  }
+
+  const plugins = raw.plugins.map((plugin, index) =>
+    read_plugin_manifest(plugin, index)
+  );
+  const plugin_names = plugins.map((plugin) => plugin.name);
+  if (new Set(plugin_names).size !== plugin_names.length) {
+    throw new Error("Plugin manifest names must be unique");
+  }
+  return {
+    manifest_version: PLUGIN_INSTALLATION_MANIFEST_VERSION,
+    entry,
+    plugins,
+  };
+}
+
+/** 读取并验证一个 Plugin 的静态 Manifest。 */
+function read_plugin_manifest(value: unknown, index: number): PluginManifest {
+  if (!is_json_object(value)) throw new Error(`Plugin manifest must be an object: ${index}`);
+  assert_known_fields(
+    value,
+    ["name", "version", "title", "description", "actions", "config", "resources"],
+    `Plugin manifest ${index}`,
+  );
+  const name = normalize_plugin_name(String(value.name || ""));
+  if (name !== value.name) throw new Error(`Plugin manifest name must be normalized: ${value.name}`);
+  const version = value.version === undefined ? "" : String(value.version).trim();
+  if (version && !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(version)) {
+    throw new Error(`Plugin version must be semantic: ${version}`);
+  }
+  if (value.title !== undefined && typeof value.title !== "string") {
+    throw new Error(`Plugin title must be a string: ${name}`);
+  }
+  if (value.description !== undefined && typeof value.description !== "string") {
+    throw new Error(`Plugin description must be a string: ${name}`);
+  }
+  const actions_value = value.actions;
+  if (actions_value !== undefined && (
+    !Array.isArray(actions_value)
+    || actions_value.some((action) => typeof action !== "string" || !action.trim())
+  )) {
+    throw new Error(`Plugin actions must be non-empty strings: ${name}`);
+  }
+  const actions = actions_value
+    ? [...new Set(actions_value.map((action) => String(action).trim()))]
+    : [];
 
   let config: PluginManifest["config"];
-  if (raw.config !== undefined) {
-    if (!is_json_object(raw.config)) throw new Error("Plugin manifest config must be an object");
-    const schema_path = String(raw.config.schema || "").trim();
-    if (!schema_path) throw new Error("Plugin manifest config.schema is required");
-    const absolute_schema_path = resolve_plugin_artifact_path(
-      plugin_dir,
-      schema_path,
-      "config schema",
-    );
-    if (path.extname(absolute_schema_path).toLowerCase() !== ".json") {
-      throw new Error("Plugin config schema must be a JSON file");
+  if (value.config !== undefined) {
+    if (!is_json_object(value.config)) throw new Error(`Plugin config must be an object: ${name}`);
+    assert_known_fields(value.config, ["schema", "defaults"], `Plugin config ${name}`);
+    if (!is_json_object(value.config.schema)) {
+      throw new Error(`Plugin config.schema must be an object: ${name}`);
     }
-    const schema_value = await fs.readJson(absolute_schema_path) as unknown;
-    if (!is_json_object(schema_value)) throw new Error("Plugin config schema must be an object");
-    validate_plugin_config_schema(schema_value);
-    if (raw.config.defaults !== undefined && !is_json_object(raw.config.defaults)) {
-      throw new Error("Plugin manifest config.defaults must be an object");
+    validate_plugin_config_schema(value.config.schema);
+    if (value.config.defaults !== undefined && !is_json_object(value.config.defaults)) {
+      throw new Error(`Plugin config.defaults must be an object: ${name}`);
     }
-    const defaults = raw.config.defaults;
-    if (defaults) validate_plugin_config(defaults, schema_value);
-    config = { schema_path, schema: schema_value, ...(defaults ? { defaults } : {}) };
+    if (value.config.defaults !== undefined) {
+      validate_plugin_config(value.config.defaults, value.config.schema);
+    }
+    config = {
+      schema: value.config.schema,
+      ...(value.config.defaults !== undefined ? { defaults: value.config.defaults } : {}),
+    };
   }
 
   let resources: PluginManifest["resources"];
-  if (raw.resources !== undefined) {
-    if (!is_json_object(raw.resources)) {
-      throw new Error("Plugin manifest resources must be an object");
+  if (value.resources !== undefined) {
+    if (!is_json_object(value.resources)) {
+      throw new Error(`Plugin resources must be an object: ${name}`);
     }
-    const schema_path = String(raw.resources.schema || "").trim();
-    if (!schema_path) throw new Error("Plugin manifest resources.schema is required");
-    const absolute_schema_path = resolve_plugin_artifact_path(
-      plugin_dir,
-      schema_path,
-      "resource schema",
-    );
-    if (path.extname(absolute_schema_path).toLowerCase() !== ".json") {
-      throw new Error("Plugin resource schema must be a JSON file");
+    assert_known_fields(value.resources, ["schema"], `Plugin resources ${name}`);
+    if (!is_json_object(value.resources.schema)) {
+      throw new Error(`Plugin resources.schema must be an object: ${name}`);
     }
-    const schema_value = await fs.readJson(absolute_schema_path) as unknown;
-    if (!is_json_object(schema_value)) {
-      throw new Error("Plugin resource schema must be an object");
-    }
-    validate_plugin_resource_schema(schema_value);
-    resources = { schema_path, schema: schema_value };
+    validate_plugin_resource_schema(value.resources.schema);
+    resources = { schema: value.resources.schema };
   }
 
+  const title = typeof value.title === "string" ? value.title.trim() : "";
+  const description = typeof value.description === "string" ? value.description.trim() : "";
   return {
-    manifest_version: PLUGIN_MANIFEST_VERSION,
     name,
-    version,
-    entry,
-    ...(typeof raw.title === "string" && raw.title.trim() ? { title: raw.title.trim() } : {}),
-    ...(typeof raw.description === "string" && raw.description.trim()
-      ? { description: raw.description.trim() }
-      : {}),
+    ...(version ? { version } : {}),
+    ...(title ? { title } : {}),
+    ...(description ? { description } : {}),
+    actions,
     ...(config ? { config } : {}),
     ...(resources ? { resources } : {}),
   };
 }
 
-/** 安全解析 Plugin 根目录内的静态制品路径。 */
+/** 确认新数组中的 Plugin 名称不与其他安装或内建 Plugin 冲突。 */
+function assert_plugin_names_available(
+  manifest: PluginInstallationManifest,
+  current_installation_id: string,
+): void {
+  const catalog = list_plugin_catalog();
+  for (const plugin of manifest.plugins) {
+    const conflict = catalog.find((item) =>
+      item.plugin_name === plugin.name
+      && item.installation_id !== current_installation_id
+    );
+    if (conflict) throw new Error(`Plugin name is already installed: ${plugin.name}`);
+  }
+}
+
+/** 校验共享入口更新不会破坏已有 Binding 与 Resource。 */
+function assert_installation_update_compatible(
+  existing: InstalledPluginInstallation,
+  next_manifest: PluginInstallationManifest,
+): void {
+  for (const plugin of existing.manifest.plugins) {
+    const next_plugin = next_manifest.plugins.find((item) => item.name === plugin.name);
+    if (!next_plugin) assert_plugin_unused(plugin.name);
+    if (next_plugin) {
+      assert_plugin_resources_compatible(plugin.name, next_plugin.resources?.schema);
+    }
+  }
+}
+
+/** 确认 Plugin 不再被任何 Binding 或 Resource 使用。 */
+function assert_plugin_unused(plugin_name: string): void {
+  withPlatformStore((context) => {
+    const binding = context.sqlite.prepare(
+      "SELECT agent_id FROM agent_plugins WHERE plugin_name = ? LIMIT 1;",
+    ).get(plugin_name) as { agent_id: string } | undefined;
+    if (binding) throw new Error(`Plugin is still bound to agent ${binding.agent_id}: ${plugin_name}`);
+    const resource = context.sqlite.prepare(
+      "SELECT resource_id FROM plugin_resources WHERE plugin_name = ? LIMIT 1;",
+    ).get(plugin_name) as { resource_id: string } | undefined;
+    if (resource) throw new Error(`Plugin still owns Resource ${resource.resource_id}: ${plugin_name}`);
+  });
+}
+
+/** 安全解析 Plugin 安装根目录内的静态制品路径。 */
 export function resolve_plugin_artifact_path(
-  plugin_dir: string,
+  installation_dir: string,
   relative_path: string,
   label: string,
 ): string {
-  const root = path.resolve(plugin_dir);
+  const root = path.resolve(installation_dir);
   const resolved = path.resolve(root, relative_path);
   if (resolved === root || !resolved.startsWith(`${root}${path.sep}`)) {
-    throw new Error(`Plugin ${label} must stay inside the plugin directory`);
+    throw new Error(`Plugin ${label} must stay inside the installation directory`);
   }
   return resolved;
+}
+
+/** 根据规范化来源稳定派生内部 installation ID。 */
+function create_installation_id(normalized_source: string): string {
+  return `source_${createHash("sha256").update(normalized_source).digest("hex").slice(0, 24)}`;
 }
 
 /** 解析 local、Git URL 与 GitHub shorthand。 */
 async function resolve_plugin_source(source_input: string): Promise<ResolvedPluginSource> {
   const source = String(source_input || "").trim();
   if (!source) throw new Error("Plugin source is required");
-
   const local_path = path.resolve(source);
   if (await fs.pathExists(local_path)) {
     if (!(await fs.stat(local_path)).isDirectory()) {
@@ -231,7 +306,6 @@ async function resolve_plugin_source(source_input: string): Promise<ResolvedPlug
     }
     return { normalized_source: local_path, local_path };
   }
-
   const github_match = /^github:([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:#(.+))?$/u.exec(source);
   if (github_match) {
     const owner = github_match[1]!;
@@ -243,7 +317,6 @@ async function resolve_plugin_source(source_input: string): Promise<ResolvedPlug
       ...(git_ref ? { git_ref } : {}),
     };
   }
-
   const fragment_index = source.lastIndexOf("#");
   const git_url = fragment_index > 0 ? source.slice(0, fragment_index) : source;
   const git_ref = fragment_index > 0 ? source.slice(fragment_index + 1).trim() : "";
@@ -262,7 +335,9 @@ async function assert_plugin_artifact_has_no_symlinks(root: string): Promise<voi
   const entries = await fs.readdir(root, { withFileTypes: true });
   for (const entry of entries) {
     const absolute_path = path.join(root, entry.name);
-    if (entry.isSymbolicLink()) throw new Error(`Plugin artifact cannot contain symlinks: ${entry.name}`);
+    if (entry.isSymbolicLink()) {
+      throw new Error(`Plugin artifact cannot contain symlinks: ${entry.name}`);
+    }
     if (entry.isDirectory()) await assert_plugin_artifact_has_no_symlinks(absolute_path);
   }
 }
@@ -280,7 +355,7 @@ async function calculate_plugin_integrity(root: string): Promise<string> {
   return `sha256-${hash.digest("hex")}`;
 }
 
-/** 按相对路径稳定排序枚举制品文件。 */
+/** 按相对路径稳定排序枚举 Plugin 制品文件。 */
 async function list_plugin_files(root: string, current = ""): Promise<string[]> {
   const directory = path.join(root, current);
   const entries = (await fs.readdir(directory, { withFileTypes: true }))
@@ -295,6 +370,17 @@ async function list_plugin_files(root: string, current = ""): Promise<string[]> 
 }
 
 /** 判断未知值是否为 JSON 对象。 */
-function is_json_object(value: unknown): value is JsonObject {
+function is_json_object(value: unknown): value is Record<string, unknown> & JsonObject {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+/** 拒绝静态 Manifest 中无法识别的字段，避免拼写错误被静默忽略。 */
+function assert_known_fields(
+  value: Record<string, unknown>,
+  allowed_fields: string[],
+  label: string,
+): void {
+  const allowed = new Set(allowed_fields);
+  const unknown_field = Object.keys(value).find((field) => !allowed.has(field));
+  if (unknown_field) throw new Error(`${label} contains unknown field: ${unknown_field}`);
 }

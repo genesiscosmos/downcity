@@ -9,7 +9,7 @@
 
 import type { JsonObject } from "@downcity/agent";
 
-/** 一个完整、已解析并可直接传给 Plugin Factory 的 Resource Item。 */
+/** 一个完整、已解析并可直接传给 Plugin constructor 的 Resource Item。 */
 export interface PluginResourceItem extends JsonObject {
   /** CLI 生成且在 Plugin 范围内唯一的稳定 ID。 */
   id: string;

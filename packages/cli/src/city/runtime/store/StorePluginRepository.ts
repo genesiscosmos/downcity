@@ -8,14 +8,16 @@
 
 import type { PlatformStoreContext } from "@/city/runtime/store/StoreShared.js";
 import { decryptTextSync, encryptTextSync } from "@/city/runtime/store/crypto.js";
-import type { InstalledPlugin, PluginManifest } from "@/city/types/plugin/PluginManifest.js";
+import type {
+  InstalledPluginInstallation,
+  PluginInstallationManifest,
+} from "@/city/types/plugin/PluginInstallation.js";
 import type { AgentPluginBinding } from "@/city/types/plugin/AgentPluginBinding.js";
 
-type InstalledPluginRow = {
-  plugin_name: string;
+type InstalledPluginInstallationRow = {
+  installation_id: string;
   source: string;
   resolved_commit: string | null;
-  version: string;
   entry_path: string;
   manifest_json: string;
   integrity: string | null;
@@ -34,14 +36,15 @@ type AgentPluginRow = {
 };
 
 /** 把已安装 Plugin 数据库行转换为领域记录。 */
-function decode_installed_plugin(row: InstalledPluginRow): InstalledPlugin {
+function decode_plugin_installation(
+  row: InstalledPluginInstallationRow,
+): InstalledPluginInstallation {
   return {
-    plugin_name: row.plugin_name,
+    installation_id: row.installation_id,
     source: row.source,
     ...(row.resolved_commit ? { resolved_commit: row.resolved_commit } : {}),
-    version: row.version,
     entry_path: row.entry_path,
-    manifest: JSON.parse(row.manifest_json) as PluginManifest,
+    manifest: JSON.parse(row.manifest_json) as PluginInstallationManifest,
     integrity: row.integrity ?? "",
     installed_at: row.installed_at,
     updated_at: row.updated_at,
@@ -61,64 +64,64 @@ function decode_agent_plugin(row: AgentPluginRow): AgentPluginBinding {
   };
 }
 
-/** 列出全部第三方已安装 Plugin。 */
-export function list_installed_plugin_rows(context: PlatformStoreContext): InstalledPlugin[] {
+/** 列出全部第三方 Plugin 内部安装记录。 */
+export function list_plugin_installation_rows(
+  context: PlatformStoreContext,
+): InstalledPluginInstallation[] {
   const rows = context.sqlite.prepare(`
-    SELECT * FROM installed_plugins ORDER BY plugin_name ASC;
-  `).all() as InstalledPluginRow[];
-  return rows.map(decode_installed_plugin);
+    SELECT * FROM plugin_installations ORDER BY installation_id ASC;
+  `).all() as InstalledPluginInstallationRow[];
+  return rows.map(decode_plugin_installation);
 }
 
-/** 按名称读取第三方已安装 Plugin。 */
-export function get_installed_plugin_row(
+/** 按内部 ID 读取 Plugin 安装记录。 */
+export function get_plugin_installation_row(
   context: PlatformStoreContext,
-  plugin_name: string,
-): InstalledPlugin | null {
+  installation_id: string,
+): InstalledPluginInstallation | null {
   const row = context.sqlite.prepare(`
-    SELECT * FROM installed_plugins WHERE plugin_name = ? LIMIT 1;
-  `).get(plugin_name) as InstalledPluginRow | undefined;
-  return row ? decode_installed_plugin(row) : null;
+    SELECT * FROM plugin_installations WHERE installation_id = ? LIMIT 1;
+  `).get(installation_id) as InstalledPluginInstallationRow | undefined;
+  return row ? decode_plugin_installation(row) : null;
 }
 
-/** 原子写入第三方已安装 Plugin。 */
-export function set_installed_plugin_row(
+/** 原子写入 Plugin 安装记录。 */
+export function set_plugin_installation_row(
   context: PlatformStoreContext,
-  plugin: InstalledPlugin,
+  installation: InstalledPluginInstallation,
 ): void {
   context.sqlite.prepare(`
-    INSERT INTO installed_plugins (
-      plugin_name, source, resolved_commit, version, entry_path, manifest_json,
+    INSERT INTO plugin_installations (
+      installation_id, source, resolved_commit, entry_path, manifest_json,
       integrity, installed_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(plugin_name) DO UPDATE SET
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(installation_id) DO UPDATE SET
       source = excluded.source,
       resolved_commit = excluded.resolved_commit,
-      version = excluded.version,
       entry_path = excluded.entry_path,
       manifest_json = excluded.manifest_json,
       integrity = excluded.integrity,
       updated_at = excluded.updated_at;
   `).run(
-    plugin.plugin_name,
-    plugin.source,
-    plugin.resolved_commit ?? null,
-    plugin.version,
-    plugin.entry_path,
-    JSON.stringify(plugin.manifest),
-    plugin.integrity ?? null,
-    plugin.installed_at,
-    plugin.updated_at,
+    installation.installation_id,
+    installation.source,
+    installation.resolved_commit ?? null,
+    installation.entry_path,
+    JSON.stringify(installation.manifest),
+    installation.integrity ?? null,
+    installation.installed_at,
+    installation.updated_at,
   );
 }
 
-/** 删除第三方已安装 Plugin。 */
-export function remove_installed_plugin_row(
+/** 删除 Plugin 安装记录。 */
+export function remove_plugin_installation_row(
   context: PlatformStoreContext,
-  plugin_name: string,
+  installation_id: string,
 ): void {
   context.sqlite.prepare(
-    "DELETE FROM installed_plugins WHERE plugin_name = ?;",
-  ).run(plugin_name);
+    "DELETE FROM plugin_installations WHERE installation_id = ?;",
+  ).run(installation_id);
 }
 
 /** 列出指定 Agent 的全部 Plugin Binding。 */

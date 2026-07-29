@@ -14,8 +14,7 @@ import { Shell } from "@downcity/shell";
 import { AgentHTTP, AgentRPC } from "@downcity/server";
 import { startAgentHttpGateway } from "@/city/agent/AgentHttpGateway.js";
 import { createRuntimeModel } from "@/city/runtime/city-model/CreateRuntimeModel.js";
-import { createCityBuiltinPlugins } from "@/city/runtime/plugins/CityBuiltinPlugins.js";
-import { create_external_plugins } from "@/city/runtime/plugins/CityExternalPlugins.js";
+import { assemble_plugins } from "@/city/runtime/plugins/PluginAssembler.js";
 import { mergeProcessEnvWithPlatformGlobalEnv } from "@/city/env/ProcessEnv.js";
 import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
 import {
@@ -114,20 +113,14 @@ export class ManagedAgentRuntime {
     );
     ensure_default_agent_plugin_bindings(config.agent_id);
     const plugin_bindings = list_agent_plugin_bindings(config.agent_id);
-    const [model, builtin_plugins, external_plugins, sandbox] = await Promise.all([
+    const [model, plugins, sandbox] = await Promise.all([
       createRuntimeModel({ config, env }),
-      createCityBuiltinPlugins({
-        env,
-        host,
-        port,
+      assemble_plugins({
         bindings: plugin_bindings,
-      }),
-      create_external_plugins({
-        bindings: plugin_bindings,
+        context: { env, host, port },
       }),
       create_platform_sandbox(),
     ]);
-    const plugins = [...builtin_plugins, ...external_plugins];
     const workspace = new Workspace({
       path: workspace_path,
       shell: new Shell({ sandbox }),

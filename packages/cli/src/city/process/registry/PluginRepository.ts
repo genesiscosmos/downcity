@@ -1,101 +1,128 @@
 /**
- * City Plugin 仓储业务层。
+ * City Plugin 内部安装记录与 Agent Plugin Binding 业务仓储。
  *
  * 关键点（中文）
- * - 全局安装记录描述 Plugin 制品，Agent Binding 描述启用状态与配置。
- * - 所有写入都校验 Agent 与 Plugin 是否存在，避免产生孤立配置。
- * - 内建 Plugin 不需要安装记录，但与第三方 Plugin 使用相同 Binding 模型。
+ * - Plugin 是 Catalog、Binding、Config 与 Resource 的唯一公开单位。
+ * - installation 只管理多个 Plugin 共享的来源、入口和文件生命周期。
+ * - 所有写入都校验 Agent、Plugin、配置与 Resource，避免产生孤立状态。
  */
 
 import { withPlatformStore } from "@/city/runtime/store/index.js";
 import {
   get_agent_plugin_row,
-  get_installed_plugin_row,
+  get_plugin_installation_row,
   list_agent_plugin_rows,
-  list_installed_plugin_rows,
+  list_plugin_installation_rows,
   remove_agent_plugin_row,
-  remove_installed_plugin_row,
+  remove_plugin_installation_row,
   set_agent_plugin_row,
-  set_installed_plugin_row,
+  set_plugin_installation_row,
 } from "@/city/runtime/store/StorePluginRepository.js";
 import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
-import type { AgentPluginBinding, SetAgentPluginBindingInput } from "@/city/types/plugin/AgentPluginBinding.js";
-import type { InstalledPlugin } from "@/city/types/plugin/PluginManifest.js";
+import { get_plugin_catalog_item } from "@/city/process/plugin/PluginCatalog.js";
+import { create_downcity_plugin_types } from "@/city/runtime/plugins/DowncityPlugins.js";
+import type {
+  AgentPluginBinding,
+  SetAgentPluginBindingInput,
+} from "@/city/types/plugin/AgentPluginBinding.js";
+import type {
+  InstalledPluginInstallation,
+  InstalledPluginReference,
+} from "@/city/types/plugin/PluginInstallation.js";
 import { validate_plugin_config } from "@/city/process/plugin/PluginConfigValidator.js";
-import {
-  CITY_BUILTIN_PLUGIN_CATALOG,
-  get_builtin_plugin_catalog_definition,
-} from "@/city/process/plugin/BuiltinPluginCatalog.js";
 import { get_plugin_resource_row } from "@/city/runtime/store/StorePluginResourceRepository.js";
 import { validate_plugin_resource_item } from "@/city/process/plugin/PluginResourceSchema.js";
 
 /** City 默认向新 Agent 启用的内建 Plugin 名称。 */
-export const DEFAULT_BUILTIN_PLUGIN_NAMES = CITY_BUILTIN_PLUGIN_CATALOG
-  .map((item) => item.plugin_name);
+export const DEFAULT_BUILTIN_PLUGIN_NAMES = Object.freeze(
+  create_downcity_plugin_types().map((plugin_type) => plugin_type.manifest.name),
+);
 
 /** 规范化 Plugin 稳定名称。 */
 export function normalize_plugin_name(input: string): string {
   const plugin_name = String(input || "").trim().toLowerCase();
   if (!/^[a-z0-9][a-z0-9_-]*$/u.test(plugin_name)) {
-    throw new Error(`Invalid plugin name: ${input}`);
+    throw new Error(`Invalid Plugin name: ${input}`);
   }
   return plugin_name;
 }
 
-/** 判断名称是否属于 City 内建 Plugin。 */
-export function is_builtin_plugin(plugin_name_input: string): boolean {
-  const plugin_name = normalize_plugin_name(plugin_name_input);
-  return DEFAULT_BUILTIN_PLUGIN_NAMES.includes(plugin_name);
-}
-
-/** 列出全部第三方已安装 Plugin。 */
-export function list_installed_plugins(): InstalledPlugin[] {
-  return withPlatformStore((context) => list_installed_plugin_rows(context));
-}
-
-/** 读取一个第三方已安装 Plugin。 */
-export function get_installed_plugin(plugin_name_input: string): InstalledPlugin | null {
-  const plugin_name = normalize_plugin_name(plugin_name_input);
-  return withPlatformStore((context) => get_installed_plugin_row(context, plugin_name));
-}
-
-/** 写入完整的第三方 Plugin 安装记录。 */
-export function save_installed_plugin(plugin: InstalledPlugin): InstalledPlugin {
-  const plugin_name = normalize_plugin_name(plugin.plugin_name);
-  if (is_builtin_plugin(plugin_name)) {
-    throw new Error(`Plugin name is reserved by a built-in Plugin: ${plugin_name}`);
+/** 规范化内部 installation ID。 */
+export function normalize_plugin_installation_id(input: string): string {
+  const installation_id = String(input || "").trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]*$/u.test(installation_id)) {
+    throw new Error(`Invalid Plugin installation id: ${input}`);
   }
-  const normalized: InstalledPlugin = {
-    ...plugin,
-    plugin_name,
-    manifest: { ...plugin.manifest, name: plugin_name },
-  };
-  withPlatformStore((context) => set_installed_plugin_row(context, normalized));
+  return installation_id;
+}
+
+/** 判断 Plugin 是否由 City 内建数组导出。 */
+export function is_builtin_plugin(plugin_name_input: string): boolean {
+  return DEFAULT_BUILTIN_PLUGIN_NAMES.includes(normalize_plugin_name(plugin_name_input));
+}
+
+/** 列出全部第三方 Plugin 内部安装记录。 */
+export function list_plugin_installations(): InstalledPluginInstallation[] {
+  return withPlatformStore((context) => list_plugin_installation_rows(context));
+}
+
+/** 按内部 ID 读取一个 Plugin 安装记录。 */
+export function get_plugin_installation(
+  installation_id_input: string,
+): InstalledPluginInstallation | null {
+  const installation_id = normalize_plugin_installation_id(installation_id_input);
+  return withPlatformStore((context) =>
+    get_plugin_installation_row(context, installation_id)
+  );
+}
+
+/** 按公开 Plugin 名称定位第三方安装记录与 Manifest。 */
+export function get_installed_plugin(
+  plugin_name_input: string,
+): InstalledPluginReference | null {
+  const plugin_name = normalize_plugin_name(plugin_name_input);
+  for (const installation of list_plugin_installations()) {
+    const manifest = installation.manifest.plugins
+      .find((plugin) => plugin.name === plugin_name);
+    if (manifest) return { installation, manifest };
+  }
+  return null;
+}
+
+/** 写入完整的内部 Plugin 安装记录。 */
+export function save_plugin_installation(
+  installation: InstalledPluginInstallation,
+): InstalledPluginInstallation {
+  const installation_id = normalize_plugin_installation_id(installation.installation_id);
+  const normalized = { ...installation, installation_id };
+  withPlatformStore((context) => set_plugin_installation_row(context, normalized));
   return normalized;
 }
 
-/** 删除未被任何 Agent 绑定的第三方 Plugin 安装记录。 */
-export function remove_installed_plugin(plugin_name_input: string): void {
+/** 删除 Plugin 所属的共享 installation；任一兄弟 Plugin 被使用时拒绝。 */
+export function remove_plugin_installation(plugin_name_input: string): InstalledPluginInstallation {
   const plugin_name = normalize_plugin_name(plugin_name_input);
+  const reference = get_installed_plugin(plugin_name);
+  if (!reference) throw new Error(`Plugin is not installed: ${plugin_name}`);
+  const { installation } = reference;
   withPlatformStore((context) => {
-    const binding = context.sqlite.prepare(
-      "SELECT agent_id FROM agent_plugins WHERE plugin_name = ? LIMIT 1;",
-    ).get(plugin_name) as { agent_id: string } | undefined;
-    if (binding) {
-      throw new Error(
-        `Plugin is still bound to agent ${binding.agent_id}: ${plugin_name}`,
-      );
+    for (const manifest of installation.manifest.plugins) {
+      const binding = context.sqlite.prepare(
+        "SELECT agent_id FROM agent_plugins WHERE plugin_name = ? LIMIT 1;",
+      ).get(manifest.name) as { agent_id: string } | undefined;
+      if (binding) {
+        throw new Error(`Plugin is still bound to agent ${binding.agent_id}: ${manifest.name}`);
+      }
+      const resource = context.sqlite.prepare(
+        "SELECT resource_id FROM plugin_resources WHERE plugin_name = ? LIMIT 1;",
+      ).get(manifest.name) as { resource_id: string } | undefined;
+      if (resource) {
+        throw new Error(`Plugin still owns Resource ${resource.resource_id}: ${manifest.name}`);
+      }
     }
-    const resource = context.sqlite.prepare(
-      "SELECT resource_id FROM plugin_resources WHERE plugin_name = ? LIMIT 1;",
-    ).get(plugin_name) as { resource_id: string } | undefined;
-    if (resource) {
-      throw new Error(
-        `Plugin still owns Resource ${resource.resource_id}: ${plugin_name}`,
-      );
-    }
-    remove_installed_plugin_row(context, plugin_name);
+    remove_plugin_installation_row(context, installation.installation_id);
   });
+  return installation;
 }
 
 /** 列出一个 Agent 的全部 Plugin Binding。 */
@@ -123,32 +150,25 @@ export function set_agent_plugin_binding(
   const agent_id = String(input.agent_id || "").trim();
   const plugin_name = normalize_plugin_name(input.plugin_name);
   if (!get_managed_agent(agent_id)) throw new Error(`Agent not found: ${agent_id}`);
-  if (!is_builtin_plugin(plugin_name) && !get_installed_plugin(plugin_name)) {
-    throw new Error(`Plugin is not installed: ${plugin_name}`);
-  }
-  const builtin_config = get_builtin_plugin_catalog_definition(plugin_name);
-  const installed_plugin = builtin_config ? null : get_installed_plugin(plugin_name);
-  validate_plugin_config(
-    input.config,
-    builtin_config?.config_schema ?? installed_plugin?.manifest.config?.schema,
-  );
-  const resource_schema = builtin_config?.resource_schema
-    ?? installed_plugin?.manifest.resources?.schema;
+  const plugin = get_plugin_catalog_item(plugin_name);
+  if (!plugin) throw new Error(`Plugin is not installed: ${plugin_name}`);
+  validate_plugin_config(input.config, plugin.config_schema);
+
   const resource_ids = normalize_resource_ids(input.resource_ids ?? []);
-  if (!resource_schema && resource_ids.length > 0) {
+  if (!plugin.resource_schema && resource_ids.length > 0) {
     throw new Error(`Plugin does not declare Resources: ${plugin_name}`);
   }
-  if (resource_schema) {
+  if (plugin.resource_schema) {
+    const resource_schema = plugin.resource_schema;
     withPlatformStore((context) => {
       for (const resource_id of resource_ids) {
         const resource = get_plugin_resource_row(context, plugin_name, resource_id);
-        if (!resource) {
-          throw new Error(`Plugin Resource not found: ${plugin_name}/${resource_id}`);
-        }
+        if (!resource) throw new Error(`Plugin Resource not found: ${plugin_name}/${resource_id}`);
         validate_plugin_resource_item(resource.item, resource_schema);
       }
     });
   }
+
   const existing = withPlatformStore((context) =>
     get_agent_plugin_row(context, agent_id, plugin_name)
   );
@@ -188,7 +208,7 @@ export function ensure_default_agent_plugin_bindings(
       plugin_name,
       enabled: true,
       config: initial_configs[plugin_name]
-        ?? get_builtin_plugin_catalog_definition(plugin_name)?.default_config
+        ?? get_plugin_catalog_item(plugin_name)?.default_config
         ?? {},
       resource_ids: [],
     });

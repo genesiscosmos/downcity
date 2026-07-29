@@ -87,7 +87,7 @@ export class PlatformStore {
     this.sqlite.exec("DELETE FROM plugin_resources;");
     this.sqlite.exec("DELETE FROM agent_tokens;");
     this.sqlite.exec("DELETE FROM agent_plugins;");
-    this.sqlite.exec("DELETE FROM installed_plugins;");
+    this.sqlite.exec("DELETE FROM plugin_installations;");
   }
 
   /**

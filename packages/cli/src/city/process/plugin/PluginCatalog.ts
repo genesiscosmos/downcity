@@ -2,40 +2,32 @@
  * City 全局 Plugin Catalog。
  *
  * 关键点（中文）
- * - 内建与用户安装 Plugin 在这里归一化，调用方不判断来源。
- * - Catalog 只描述可用制品，Agent 启用状态仍由 Plugin Binding 持有。
+ * - Catalog 直接由内建 Plugin constructor 数组和安装快照中的 Plugin 数组组成。
+ * - installation ID 只用于定位共享入口，不形成公开 Project 层级。
+ * - Agent 启用状态仍由 Plugin Binding 持有。
  */
 
-import { CITY_BUILTIN_PLUGIN_CATALOG } from "@/city/process/plugin/BuiltinPluginCatalog.js";
-import { list_installed_plugins } from "@/city/process/registry/PluginRepository.js";
+import { withPlatformStore } from "@/city/runtime/store/index.js";
+import { list_plugin_installation_rows } from "@/city/runtime/store/StorePluginRepository.js";
+import { create_downcity_plugin_types } from "@/city/runtime/plugins/DowncityPlugins.js";
 import type { PluginCatalogItem } from "@/city/types/plugin/PluginCatalog.js";
+import type { PluginManifest } from "@/city/types/plugin/PluginInstallation.js";
 
-/** 列出全部内建与已安装 Plugin。 */
+/** 列出全部内建与用户安装 Plugin。 */
 export function list_plugin_catalog(): PluginCatalogItem[] {
-  const builtin_items: PluginCatalogItem[] = CITY_BUILTIN_PLUGIN_CATALOG
-    .map((definition) => ({
-      plugin_name: definition.plugin_name,
-      title: definition.title,
-      description: definition.description,
-      source: "builtin",
-      actions: [...definition.actions],
-      config_schema: definition.config_schema,
-      resource_schema: definition.resource_schema,
-      default_config: definition.default_config,
-    }));
-  const installed_items: PluginCatalogItem[] = list_installed_plugins()
-    .map((installed) => ({
-      plugin_name: installed.plugin_name,
-      title: installed.manifest.title || installed.plugin_name,
-      description: installed.manifest.description || "",
-      version: installed.version,
-      source: "installed",
-      source_label: installed.source,
-      actions: [],
-      config_schema: installed.manifest.config?.schema,
-      resource_schema: installed.manifest.resources?.schema,
-      default_config: installed.manifest.config?.defaults ?? {},
-    }));
+  const builtin_items = create_downcity_plugin_types().map((plugin_type) =>
+    to_catalog_item(plugin_type.manifest, "builtin")
+  );
+  const installed_items = withPlatformStore((context) =>
+    list_plugin_installation_rows(context)
+  ).flatMap((installation) => installation.manifest.plugins.map((manifest) =>
+    to_catalog_item(
+      manifest,
+      "installed",
+      installation.installation_id,
+      installation.source,
+    )
+  ));
   return [...builtin_items, ...installed_items]
     .sort((left, right) => left.plugin_name.localeCompare(right.plugin_name));
 }
@@ -43,4 +35,26 @@ export function list_plugin_catalog(): PluginCatalogItem[] {
 /** 按名称读取一个归一化 Plugin 目录项。 */
 export function get_plugin_catalog_item(plugin_name: string): PluginCatalogItem | null {
   return list_plugin_catalog().find((item) => item.plugin_name === plugin_name) ?? null;
+}
+
+/** 把 Plugin 静态 Manifest 投影为 Catalog Item。 */
+function to_catalog_item(
+  manifest: PluginManifest,
+  source: PluginCatalogItem["source"],
+  installation_id?: string,
+  source_label?: string,
+): PluginCatalogItem {
+  return {
+    ...(installation_id ? { installation_id } : {}),
+    plugin_name: manifest.name,
+    title: manifest.title || manifest.name,
+    description: manifest.description || "",
+    ...(manifest.version ? { version: manifest.version } : {}),
+    source,
+    ...(source_label ? { source_label } : {}),
+    actions: [...manifest.actions],
+    ...(manifest.config?.schema ? { config_schema: manifest.config.schema } : {}),
+    default_config: manifest.config?.defaults ?? {},
+    ...(manifest.resources?.schema ? { resource_schema: manifest.resources.schema } : {}),
+  };
 }

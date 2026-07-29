@@ -40,21 +40,21 @@ export function get_agent_runtimes_dir_path(): string {
 }
 
 /** 全局安装的第三方 Plugin 制品目录。 */
-export function get_installed_plugins_dir_path(): string {
+export function get_plugin_installations_dir_path(): string {
   return path.join(getPlatformRootDirPath(), "plugins");
 }
 
 /**
- * 单个全局 Plugin 的安装目录。
+ * 单个内部 Plugin installation 的制品目录。
  *
- * @param plugin_name Plugin 稳定名称。
+ * @param installation_id 内部安装记录 ID。
  */
-export function get_installed_plugin_dir_path(plugin_name: string): string {
-  const normalized_plugin_name = String(plugin_name || "").trim().toLowerCase();
-  if (!/^[a-z0-9][a-z0-9_-]*$/u.test(normalized_plugin_name)) {
-    throw new Error(`Invalid plugin name: ${plugin_name}`);
+export function get_plugin_installation_dir_path(installation_id: string): string {
+  const normalized_installation_id = String(installation_id || "").trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]*$/u.test(normalized_installation_id)) {
+    throw new Error(`Invalid Plugin installation id: ${installation_id}`);
   }
-  return path.join(get_installed_plugins_dir_path(), normalized_plugin_name);
+  return path.join(get_plugin_installations_dir_path(), normalized_installation_id);
 }
 
 /**

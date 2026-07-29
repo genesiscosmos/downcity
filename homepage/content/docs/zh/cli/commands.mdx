@@ -58,9 +58,9 @@ city plugin resource remove <plugin_name> <resource_id>
 city plugin action <plugin_name> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
-第三方仓库必须包含 `downcity.plugin.json`、配置所需的 JSON Schema 和已经构建好的自包含 ESM entry。安装过程不会执行 `npm install`、构建脚本、任何生命周期脚本或 Plugin entry。Manifest 声明配置 schema/default，并可通过 `resources.schema` 声明完整 Resource Item Schema。
+第三方入口命名导出 `plugins` constructor 数组。每个 Plugin 通过 `static manifest` 声明名称、配置和 Resource Schema，并可通过 `static resolve_resource` 补全动态 Resource 字段。构建产物必须包含 Manifest v2 `downcity.plugin.json` 和自包含 ESM entry。安装过程不会执行 `npm install`、构建脚本、生命周期脚本或 Plugin entry。
 
-Plugin 配置由 Agent Binding 持有；Plugin Resource 由全局 Resource Store 持有，Binding 只保存 `resource_ids`。CLI 根据 Schema 安全收集用户字段，由可选 Resolver 写入 `readOnly` 动态字段，并在实例化前把 ID 解析成完整 Item。Runtime Factory 最终接收 `{ config, resources }`。`writeOnly` 字段会加密保存，且不会在 CLI 输出中回显。
+Plugin 配置由 Agent Binding 持有；Plugin Resource 由全局 Resource Store 持有，Binding 只保存 `resource_ids`。CLI 根据 Schema 安全收集用户字段，调用 Plugin constructor 的静态 Resolver 写入 `readOnly` 动态字段，并在实例化前把 ID 解析成完整 Item。CLI 最终执行 `new PluginType({ config, resources })`。`writeOnly` 字段会加密保存，且不会在 CLI 输出中回显。
 
 `resource update --set` 替换全部用户可写字段；`resource refresh` 保留用户字段，只重新计算 Resolver 字段。已被 Binding 引用的 Resource 不能删除；仍拥有 Resource 的第三方 Plugin 不能卸载。
 

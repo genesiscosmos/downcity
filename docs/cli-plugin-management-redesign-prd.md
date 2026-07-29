@@ -2,110 +2,145 @@
 
 > 状态：已实施
 >
-> 更新时间：2026-07-28
+> 更新时间：2026-07-29
 
 ## 1. 产品意图
 
 City Plugin 管理解决三个问题：
 
-- 用户如何从可信来源安装一个可执行 Plugin 制品。
-- 一个 Agent 如何启用并配置全局可用 Plugin。
+- 用户如何从可信来源安装一个或多个 Plugin。
+- 一个 Agent 如何独立启用和配置 Plugin。
 - Plugin 如何声明、解析和复用完整 Resource Item。
 
-Plugin 的运行时能力仍由 `@downcity/agent` 定义。安装来源、配置表单、全局制品目录、Plugin Resource 和 Agent Binding 属于 CLI/City 控制面，不进入 Agent SDK。
+公开领域只有 Plugin。来源、共享入口、文件完整性和安装目录属于 CLI 内部生命周期，不形成 Project、Package 或 Factory 公开抽象。
 
-## 2. 目标模型
-
-```text
-静态 Plugin Manifest / 内建 Plugin 定义
-  → Plugin Catalog
-  → Plugin Resource（完整 Item）
-  → Agent Plugin Binding（enabled + config + resource_ids）
-  → Resource ID 解析
-  → Plugin Factory
-  → Agent Runtime Plugin
-```
-
-单一事实源：
-
-- Plugin Catalog 持有全局可用制品的统一视图。
-- Agent Plugin Binding 持有 Agent 的启用状态和完整配置。
-- Plugin Resource Store 持有完整 Resource Item，Binding 不复制其内容。
-- 内建 Chat Plugin 的 Zod Schema 是 Chat 配置与 Resource 协议源码。
-- 外部 Plugin 的静态 JSON Schema 是安装制品配置协议。
-
-## 3. 配置协议
-
-外部 Plugin 仓库必须提交：
+## 2. 最终模型
 
 ```text
-plugin-repository/
-├── downcity.plugin.json
-└── dist/
-    ├── index.js
-    ├── config.schema.json
-    └── resource.schema.json
+plugins[]
+  └── Plugin constructor
+        ├── static manifest
+        ├── static resolve_resource?()
+        └── new Plugin({ config, resources })
 ```
 
-Manifest 示例：
+职责：
+
+- `Plugin.manifest`：Plugin 名称、展示信息、Config Schema 和 Resource Schema。
+- `Plugin.resolve_resource`：创建或刷新 Resource 时补全动态字段。
+- CLI：安装、校验、按名称索引、解析 Resource ID 并实例化 Plugin。
+- Agent SDK：只接收已经创建的 `Plugin[]`。
+
+`PluginFactory`、`PluginProjectRuntime` 和 `plugin_project.plugins[name].create()` 均不存在。
+
+## 3. Plugin constructor 协议
+
+```ts
+export class GithubPlugin extends BasePlugin {
+  static readonly manifest = {
+    name: "github",
+    version: "1.0.0",
+    title: "GitHub",
+    actions: [],
+    config: {
+      schema: GITHUB_CONFIG_JSON_SCHEMA,
+      defaults: {},
+    },
+    resources: {
+      schema: GITHUB_RESOURCE_JSON_SCHEMA,
+    },
+  };
+
+  static async resolve_resource({ resource }) {
+    const user = await github_get_user(resource.token);
+    return { name: user.name, login: user.login };
+  }
+
+  constructor({ config, resources }) {
+    super();
+  }
+}
+
+export const plugins = [GithubPlugin, LinearPlugin];
+```
+
+入口只导出 constructor 数组。CLI 用 `Plugin.manifest.name` 建立索引，并统一执行：
+
+```ts
+new plugin_type({ config, resources });
+```
+
+实例 `name` 必须与静态 Manifest `name` 一致。
+
+## 4. 静态安装清单
+
+安装阶段不能执行第三方入口，因此仓库必须提交由 Plugin 静态 Manifest 生成的 `downcity.plugin.json`：
 
 ```json
 {
-  "manifest_version": 1,
-  "name": "example",
-  "version": "1.0.0",
+  "manifest_version": 2,
   "entry": "dist/index.js",
-  "config": {
-    "schema": "dist/config.schema.json",
-    "defaults": {}
-  },
-  "resources": {
-    "schema": "dist/resource.schema.json"
-  }
+  "plugins": [
+    {
+      "name": "github",
+      "version": "1.0.0",
+      "title": "GitHub",
+      "actions": [],
+      "config": {
+        "schema": { "type": "object" },
+        "defaults": {}
+      },
+      "resources": {
+        "schema": { "type": "object" }
+      }
+    }
+  ]
 }
 ```
 
-安装器只读取静态 JSON。Plugin 作者可以在源码中使用 Zod，并在构建时通过 `z.toJSONSchema()` 生成 Schema 文件；CLI 使用 Ajv 按 JSON Schema 2020-12 校验安装默认值、Agent Binding 和完整 Resource Item。
+JSON Schema 直接内嵌，不再维护额外 Schema 路径协议。作者可以用 Zod 维护源码 Schema，并在构建时通过 `z.toJSONSchema()` 写入静态 Manifest 和安装清单。
 
-Resource Schema 必须要求 `id`、`type` 和 `name`。`id` 是 City 写入的 `readOnly` 字段；其他 `readOnly` 顶层字段只能由 Resource Resolver 写入；`writeOnly` 字段由通用表单安全采集并在输出时脱敏。Resolver 输出合并后必须重新通过完整 Schema 校验。
+CLI 安装时校验静态 JSON；运行时再比较 constructor 的静态 Manifest 与安装快照，防止两者漂移。
 
-## 4. Chat 配置迁移
+## 5. Resource 生命周期
 
-Chat 不再拥有 CLI 专用配置入口或账号池。queue 行为通过普通 Plugin Binding 保存，渠道凭据与动态名称作为完整 Plugin Resource Item 保存。
+```text
+用户字段
+  → CLI 生成 id
+  → PluginType.resolve_resource?()
+  → 完整 Schema 校验
+  → 加密保存 Resource Item
+```
 
-Binding 只保存：
+Resolver 是 Plugin constructor 的静态能力，不属于 Plugin 实例。Agent 启动不执行 Resolver，只按 Binding 中的 `resource_ids` 读取已保存 Item，然后传给 constructor。
 
-- `config`
-- `resource_ids`
+## 6. 安装生命周期
 
-Store 启动时一次性把旧 `channel_accounts` 转换为 `chat` Plugin Resource，并把旧 Chat Binding 引用转换为 `resource_ids`。运行时只读取新协议，不保留双协议。
+一个入口可以导出多个 Plugin。CLI 内部使用 installation 记录共同管理来源、入口路径、Git commit、完整性摘要和安装目录，但 installation 不进入 Catalog、Binding、Resource 或 Runtime API。
 
-## 5. 安装与信任边界
+```text
+公开模型：Plugin
+内部实现：installation → plugins[]
+```
 
-支持来源：
+安装支持本地目录、Git URL 和 `github:owner/repository#ref`。更新任一 Plugin 会原子更新其共享入口中的全部 Plugin；卸载任一 Plugin 会卸载同一入口中的全部 Plugin，并在操作前检查所有兄弟 Plugin 的 Binding 和 Resource。
 
-- 本地目录。
-- HTTPS、SSH Git URL，可带 `#branch` 或 `#tag`。
-- `github:owner/repository#ref` shorthand。
+```bash
+city plugin install <source>
+city plugin update <plugin_name>
+city plugin uninstall <plugin_name>
+city plugin config <plugin_name> [agent_id]
+city plugin resource create <plugin_name>
+```
 
-安装过程：
+## 7. Built-in
 
-1. 复制本地目录或 shallow clone Git 来源。
-2. 读取 Manifest 和 JSON Schema。
-3. 拒绝路径逃逸和符号链接。
-4. 校验默认配置和构建后 ESM entry。
-5. 计算全部静态文件的 SHA-256 完整性摘要。
-6. 原子替换全局安装目录并保存 commit、来源和 Manifest 快照。
+内建 Chat、Image、Sound 等也被转换为同一种 Plugin constructor 数组。City 专属依赖只在 Loader 边界通过 constructor adapter 注入；Catalog、Resource Service 和 Agent 装配器不包含 built-in/external 或 Chat 分支。
 
-安装过程不执行 `npm install`、`postinstall`、构建脚本或 Plugin entry。Plugin 必须提交自包含 ESM 制品。Plugin entry 会在 Resource 创建、编辑、刷新以及 Agent 启动时执行，因此 TUI 安装前必须提示用户确认来源可信。
+## 8. 生效与信任边界
 
-## 6. 生效检查点
+安装过程不执行 `npm install`、构建脚本、生命周期脚本或 Plugin 入口。Plugin 必须提交自包含 ESM 制品。
 
-Resource 创建、编辑和刷新先得到完整候选 Item，Resolver 与 Schema 校验全部成功后才原子保存。Binding 或 Resource 修改不会热替换运行中 Plugin；下一次 Agent 装配按 ID 读取不可变 Resource Item 快照。
+Resource 创建、编辑和刷新在完整校验后原子保存。Binding 或 Resource 修改不会热替换运行中的 Plugin，下一次 Agent 装配时生效。
 
-## 7. 明确不做
-
-- 不把安装 Factory 放进 `@downcity/agent`。
-- 不执行第三方仓库依赖安装或构建脚本。
-- 不提供运行中 Plugin 热更新。
-- 不在本阶段建设在线 Plugin 商店或第三方 Plugin 进程隔离。
+旧 Project Runtime 和旧单 Plugin Factory 不保留兼容加载器；旧安装记录会被删除，Binding 与 Resource 保留。

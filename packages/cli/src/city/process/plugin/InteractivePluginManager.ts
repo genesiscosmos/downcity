@@ -12,12 +12,18 @@ import { list_managed_agents } from "@/city/process/registry/ManagedAgentReposit
 import {
   get_agent_plugin_binding,
   remove_agent_plugin_binding,
-  remove_installed_plugin,
+  remove_plugin_installation,
   set_agent_plugin_binding,
 } from "@/city/process/registry/PluginRepository.js";
-import { get_installed_plugin_dir_path } from "@/city/process/registry/CityPaths.js";
-import { get_plugin_catalog_item, list_plugin_catalog } from "@/city/process/plugin/PluginCatalog.js";
-import { install_plugin, update_plugin } from "@/city/process/plugin/PluginInstaller.js";
+import { get_plugin_installation_dir_path } from "@/city/process/registry/CityPaths.js";
+import {
+  get_plugin_catalog_item,
+  list_plugin_catalog,
+} from "@/city/process/plugin/PluginCatalog.js";
+import {
+  install_plugins,
+  update_plugin,
+} from "@/city/process/plugin/PluginInstaller.js";
 import { prompt_and_save_plugin_binding } from "@/city/process/plugin/PluginBindingConfiguration.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import type { PluginCatalogItem } from "@/city/types/plugin/PluginCatalog.js";
@@ -123,11 +129,11 @@ async function run_interactive_plugin_actions(plugin: PluginCatalogItem): Promis
     return;
   }
   if (response.action === "update") {
-    const installed = await update_plugin(plugin.plugin_name);
+    const installation = await update_plugin(plugin.plugin_name);
     emitCliBlock({
       tone: "success",
-      title: "Plugin updated",
-      summary: `${installed.plugin_name} · ${installed.version}`,
+      title: "Plugins updated",
+      summary: installation.manifest.plugins.map((item) => item.name).join(", "),
     });
     return;
   }
@@ -135,13 +141,17 @@ async function run_interactive_plugin_actions(plugin: PluginCatalogItem): Promis
     const confirmed = await prompts({
       type: "confirm",
       name: "confirmed",
-      message: `卸载 Plugin ${plugin.plugin_name}？`,
+      message: `卸载与 ${plugin.plugin_name} 共享入口的全部 Plugin？`,
       initial: false,
     });
     if (confirmed.confirmed !== true) return;
-    remove_installed_plugin(plugin.plugin_name);
-    await fs.remove(get_installed_plugin_dir_path(plugin.plugin_name));
-    emitCliBlock({ tone: "success", title: "Plugin uninstalled", summary: plugin.plugin_name });
+    const installation = remove_plugin_installation(plugin.plugin_name);
+    await fs.remove(get_plugin_installation_dir_path(installation.installation_id));
+    emitCliBlock({
+      tone: "success",
+      title: "Plugins uninstalled",
+      summary: installation.manifest.plugins.map((item) => item.name).join(", "),
+    });
   }
 }
 
@@ -220,15 +230,15 @@ async function run_interactive_install(): Promise<void> {
     initial: false,
   });
   if (trust_response.trusted !== true) return;
-  const installed = await install_plugin(source);
+  const installation = await install_plugins(source);
   emitCliBlock({
     tone: "success",
-    title: "Plugin installed",
-    summary: `${installed.plugin_name} · ${installed.version}`,
+    title: "Plugins installed",
+    summary: installation.manifest.plugins.map((item) => item.name).join(", "),
     facts: [
-      { label: "Integrity", value: installed.integrity },
-      ...(installed.resolved_commit
-        ? [{ label: "Commit", value: installed.resolved_commit }]
+      { label: "Integrity", value: installation.integrity },
+      ...(installation.resolved_commit
+        ? [{ label: "Commit", value: installation.resolved_commit }]
         : []),
     ],
   });

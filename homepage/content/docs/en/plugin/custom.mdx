@@ -1,150 +1,160 @@
 ---
 title: Custom Plugin
-description: Build, publish, and configure an installable Downcity Plugin
+description: Build, publish, and configure installable Downcity Plugins
 ---
 
 # Custom Plugin
 
-A CLI Plugin is a prebuilt static artifact. Its repository uses a JSON manifest to describe the entry and configuration contract. After installation, City adds the Plugin to the shared Catalog and stores enablement and configuration separately for each Agent.
+One CLI entry can export multiple Plugin constructors. Each Plugin owns its static manifest and optional Resource Resolver. The CLI installs, validates, indexes, and instantiates them uniformly.
 
 ## Artifact structure
 
 ```text
-example-plugin/
+example-connectors/
 ├── downcity.plugin.json
 └── dist/
-    ├── index.js
-    ├── config.schema.json
-    └── resource.schema.json
+    └── index.js
 ```
 
-`downcity.plugin.json`:
+The entry exports only an array:
 
-```json
-{
-  "manifest_version": 1,
-  "name": "example",
-  "version": "1.0.0",
-  "entry": "dist/index.js",
-  "title": "Example",
-  "description": "An example Plugin",
-  "config": {
-    "schema": "dist/config.schema.json",
-    "defaults": {
-      "endpoint": "https://example.com"
-    }
-  },
-  "resources": {
-    "schema": "dist/resource.schema.json"
+```ts
+export const plugins = [GithubPlugin, LinearPlugin];
+```
+
+There is no Plugin Project or per-Plugin Factory.
+
+## Plugin constructor
+
+```ts
+import type { JsonObject } from "@downcity/agent";
+
+export class GithubPlugin {
+  static readonly manifest = {
+    name: "github",
+    version: "1.0.0",
+    title: "GitHub",
+    description: "GitHub integration",
+    actions: [],
+    config: {
+      schema: GITHUB_CONFIG_JSON_SCHEMA,
+      defaults: {
+        api_url: "https://api.github.com",
+      },
+    },
+    resources: {
+      schema: GITHUB_RESOURCE_JSON_SCHEMA,
+    },
+  };
+
+  static async resolve_resource({ resource }: { resource: JsonObject }) {
+    const user = await get_github_user(String(resource.token));
+    return { name: user.name, login: user.login };
+  }
+
+  readonly name = "github";
+  readonly actions = {};
+
+  constructor({ config, resources }: {
+    config: JsonObject;
+    resources: JsonObject[];
+  }) {
+    // The CLI has already validated config and resolved Resources.
   }
 }
 ```
 
-The manifest must be static JSON. `entry`, `config.schema`, and `resources.schema` are paths relative to the repository root and cannot escape that root or point through symbolic links. Plugins without Resources omit `resources`.
+The CLI uniformly executes:
 
-## Configuration contract
+```ts
+new GithubPlugin({ config, resources });
+```
 
-The configuration contract uses JSON Schema 2020-12. You can define it with Zod in source code and emit JSON Schema during the build:
+The instance `name` must match `static manifest.name`.
+
+## Config and Resource Schema
+
+Schemas use JSON Schema 2020-12 and live directly in the Plugin static manifest. Zod can be the source definition:
 
 ```ts
 import { z } from "zod";
 
-export const config_schema = z.object({
-  endpoint: z.url(),
+const config_schema = z.object({
+  api_url: z.url(),
 }).strict();
 
-const json_schema = z.toJSONSchema(config_schema, {
+export const GITHUB_CONFIG_JSON_SCHEMA = z.toJSONSchema(config_schema, {
   target: "draft-2020-12",
 });
 ```
 
-Your build script must write `json_schema` to `dist/config.schema.json`. City uses Ajv to validate the schema and defaults during installation, then validates every Agent Binding against the same schema. Zod is not the runtime protocol and does not belong in the manifest.
+A Resource Schema describes a complete Item and requires `id`, `type`, and `name`. City writes `id`; users provide ordinary and `writeOnly` fields; `static resolve_resource` returns the remaining `readOnly` fields.
 
-## Resource Schema and Resolver
+The Resolver runs only while creating, editing, or refreshing a Resource. Agent startup reads the saved complete Item and never performs an implicit network refresh.
 
-A Resource Schema describes one complete Item and requires `id`, `type`, and `name`. `id` must be `readOnly`; the Resolver writes other top-level `readOnly` fields, while users enter `writeOnly` fields securely and the CLI redacts them from output.
+## Static installation manifest
+
+Installation cannot execute a third-party entry. The build must therefore generate and commit `downcity.plugin.json` from the Plugin static manifests:
 
 ```json
 {
-  "title": "API Account",
-  "type": "object",
-  "required": ["id", "type", "name", "api_key"],
-  "properties": {
-    "id": { "type": "string", "readOnly": true },
-    "type": { "type": "string", "const": "api" },
-    "name": { "type": "string", "readOnly": true },
-    "api_key": { "type": "string", "writeOnly": true }
-  },
-  "additionalProperties": false
+  "manifest_version": 2,
+  "entry": "dist/index.js",
+  "plugins": [
+    {
+      "name": "github",
+      "version": "1.0.0",
+      "title": "GitHub",
+      "actions": [],
+      "config": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "api_url": { "type": "string", "format": "uri" }
+          },
+          "additionalProperties": false
+        },
+        "defaults": {
+          "api_url": "https://api.github.com"
+        }
+      }
+    },
+    {
+      "name": "linear",
+      "version": "1.0.0",
+      "title": "Linear",
+      "actions": []
+    }
+  ]
 }
 ```
 
-The Resolver returns the complete dynamic-field projection. It cannot modify `id`, `type`, or user-owned fields:
-
-```ts
-resolve_resource({ resource }) {
-  return { name: inspect_name(String(resource.api_key)) };
-}
-```
-
-## Runtime Factory
-
-The entry must export `plugin_factory`; a default export is also accepted. The Factory receives the validated Agent `config` and complete `resources` resolved from Resource IDs:
-
-```ts
-import type { JsonObject, Plugin } from "@downcity/agent";
-
-export const plugin_factory = {
-  async resolve_resource({ resource }: { resource: JsonObject }) {
-    return { name: await resolve_name(resource) };
-  },
-
-  create({ config, resources }: {
-    config: JsonObject;
-    resources: JsonObject[];
-  }): Plugin {
-    return {
-      name: "example",
-      title: "Example",
-      description: `${String(config.endpoint)} · ${resources.length} resources`,
-      actions: {},
-    };
-  },
-};
-```
-
-The returned `name` must match the manifest `name`. `dist/index.js` must be self-contained ESM: bundle runtime dependencies into the artifact and use `@downcity/agent` only as a type-only build dependency.
+At runtime, the CLI verifies that every constructor static manifest in `plugins[]` matches this installed snapshot.
 
 ## Install and configure
 
 ```bash
-# Local directory
-city plugin install ./example-plugin
+city plugin install ./example-connectors
+city plugin install github:acme/example-connectors#main
 
-# Git URL with an optional branch or tag
-city plugin install https://github.com/acme/example-plugin.git#v1.0.0
+city plugin resource create github --interactive
+city plugin config github my-agent --interactive
+city plugin enable github my-agent
 
-# GitHub shorthand
-city plugin install github:acme/example-plugin#main
-
-city plugin update example
-city plugin resource create example --interactive
-city plugin resource list example
-city plugin config example my-agent --interactive
-city plugin config example my-agent --resources '["api-a1b2c3"]'
-city plugin enable example my-agent
+city plugin update github
+city plugin uninstall github
 ```
 
-You can also open `city plugin` to install, update, select an Agent, configure, enable, or disable Plugins interactively. Restart a running Agent after a configuration change to assemble a new Runtime.
+If one entry exports both `github` and `linear`, updating either updates the complete shared entry. Uninstalling either removes every Plugin from that entry. The CLI refuses removal while any sibling Plugin still has a Binding or Resource.
 
 ## Trust boundary
 
-Installation reads only the manifest, JSON Schema, and static files. It does not run `npm install`, build scripts, lifecycle scripts, or the Plugin entry. City records the resolved Git commit for Git sources and a SHA-256 digest of the complete artifact.
+Installation reads only the static manifest and artifact files. It never runs `npm install`, build scripts, lifecycle scripts, or the Plugin entry. City records the resolved Git commit and a SHA-256 digest of the complete artifact.
 
-The Plugin entry executes while creating, editing, or refreshing Resources and when an Agent starts, so install only trusted sources. Static installation checks are not a substitute for reviewing third-party runtime code.
+The Plugin entry executes while creating or refreshing Resources and when an Agent starts, so install only trusted sources.
 
 Continue with:
 
-- [Chat Plugin](/en/docs/plugin/chat)
+- [Plugin Resources](/en/docs/city/plugin-resources)
 - [CLI Commands](/en/docs/cli/commands)
 - [Agent Plugins Docs](/en/plugins-docs)

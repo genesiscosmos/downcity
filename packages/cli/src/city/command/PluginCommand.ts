@@ -2,7 +2,7 @@
  * `city plugin` 命令树。
  *
  * 关键点（中文）
- * - Plugin 制品全局安装，启用状态与配置按 Agent Binding 保存。
+ * - Plugin 数组制品全局安装，启用状态与配置按 Agent Binding 保存。
  * - CLI、HTTP 与 Agent 工具调用统一执行 Plugin Action。
  * - 未传 Agent ID 时只使用全局 Agent Selector，不根据当前目录推断。
  */
@@ -12,22 +12,28 @@ import type { Command } from "commander";
 import type { JsonObject, JsonValue } from "@downcity/agent";
 import { resolve_cli_agent_target } from "@/city/agent/AgentSelection.js";
 import { callServer } from "@/city/process/daemon/Client.js";
-import { get_installed_plugin_dir_path } from "@/city/process/registry/CityPaths.js";
+import { get_plugin_installation_dir_path } from "@/city/process/registry/CityPaths.js";
 import {
   get_agent_plugin_binding,
   get_installed_plugin,
   is_builtin_plugin,
   list_agent_plugin_bindings,
   remove_agent_plugin_binding,
-  remove_installed_plugin,
+  remove_plugin_installation,
   set_agent_plugin_binding,
 } from "@/city/process/registry/PluginRepository.js";
-import { install_plugin, update_plugin } from "@/city/process/plugin/PluginInstaller.js";
+import {
+  install_plugins,
+  update_plugin,
+} from "@/city/process/plugin/PluginInstaller.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { helpText, t } from "@/shared/CliLocale.js";
 import { parsePort } from "@/shared/IndexSupport.js";
-import { get_plugin_catalog_item, list_plugin_catalog } from "@/city/process/plugin/PluginCatalog.js";
+import {
+  get_plugin_catalog_item,
+  list_plugin_catalog,
+} from "@/city/process/plugin/PluginCatalog.js";
 import { run_interactive_plugin_manager } from "@/city/process/plugin/InteractivePluginManager.js";
 import { prompt_and_save_plugin_binding } from "@/city/process/plugin/PluginBindingConfiguration.js";
 import {
@@ -63,7 +69,7 @@ export async function runInteractivePluginManager(): Promise<void> {
 export function registerPluginsCommand(program: Command): void {
   const plugin = program
     .command("plugin")
-    .description(t({ zh: "管理全局 Plugin 与 Agent Binding", en: "manage global plugins and Agent bindings" }))
+    .description(t({ zh: "管理 Plugin 与 Agent Binding", en: "manage Plugins and Agent bindings" }))
     .helpOption("--help", helpText())
     .action(() => plugin.outputHelp());
 
@@ -85,7 +91,7 @@ export function registerPluginsCommand(program: Command): void {
       emitCliList({
         tone: "accent",
         title: "Plugins",
-        summary: `${catalog.length} available`,
+        summary: `${catalog.length} plugins`,
         items: catalog.map((item) => ({
           title: item.plugin_name,
           facts: [
@@ -100,15 +106,15 @@ export function registerPluginsCommand(program: Command): void {
     .command("update <plugin_name>")
     .helpOption("--help", helpText())
     .action(async (plugin_name: string) => {
-      const installed = await update_plugin(plugin_name);
+      const installation = await update_plugin(plugin_name);
       emitCliBlock({
         tone: "success",
-        title: "Plugin updated",
-        summary: `${installed.plugin_name} · ${installed.version}`,
+        title: "Plugins updated",
+        summary: installation.manifest.plugins.map((plugin) => plugin.name).join(", "),
         facts: [
-          { label: "Integrity", value: installed.integrity },
-          ...(installed.resolved_commit
-            ? [{ label: "Commit", value: installed.resolved_commit }]
+          { label: "Integrity", value: installation.integrity },
+          ...(installation.resolved_commit
+            ? [{ label: "Commit", value: installation.resolved_commit }]
             : []),
         ],
       });
@@ -118,14 +124,13 @@ export function registerPluginsCommand(program: Command): void {
     .command("install <source>")
     .helpOption("--help", helpText())
     .action(async (source: string) => {
-      const installed = await install_plugin(source);
+      const installation = await install_plugins(source);
       emitCliBlock({
         tone: "success",
-        title: "Plugin installed",
-        summary: installed.plugin_name,
+        title: "Plugins installed",
+        summary: installation.manifest.plugins.map((plugin) => plugin.name).join(", "),
         facts: [
-          { label: "Version", value: installed.version },
-          { label: "Entry", value: installed.entry_path },
+          { label: "Entry", value: installation.entry_path },
         ],
       });
     });
@@ -134,12 +139,14 @@ export function registerPluginsCommand(program: Command): void {
     .command("uninstall <plugin_name>")
     .helpOption("--help", helpText())
     .action(async (plugin_name: string) => {
-      if (is_builtin_plugin(plugin_name)) throw new Error("Builtin plugins cannot be uninstalled");
-      const installed = get_installed_plugin(plugin_name);
-      if (!installed) throw new Error(`Plugin is not installed: ${plugin_name}`);
-      remove_installed_plugin(plugin_name);
-      await fs.remove(get_installed_plugin_dir_path(plugin_name));
-      emitCliBlock({ tone: "success", title: "Plugin uninstalled", summary: plugin_name });
+      if (is_builtin_plugin(plugin_name)) throw new Error("Builtin Plugins cannot be uninstalled");
+      const installation = remove_plugin_installation(plugin_name);
+      await fs.remove(get_plugin_installation_dir_path(installation.installation_id));
+      emitCliBlock({
+        tone: "success",
+        title: "Plugins uninstalled",
+        summary: installation.manifest.plugins.map((plugin) => plugin.name).join(", "),
+      });
     });
 
   plugin
@@ -149,7 +156,7 @@ export function registerPluginsCommand(program: Command): void {
     .action((plugin_name: string, options: { json?: boolean }) => {
       const catalog_item = get_plugin_catalog_item(plugin_name);
       if (!catalog_item) throw new Error(`Plugin not found: ${plugin_name}`);
-      const installed = get_installed_plugin(plugin_name);
+      const installed = get_installed_plugin(plugin_name)?.installation;
       printResult({
         asJson: options.json === true,
         success: true,

@@ -7,7 +7,7 @@ description: How City creates, resolves, and reuses Plugin Resources
 
 A Plugin Resource is a reusable complete configuration object owned by a Plugin. Its JSON Schema requires a stable `id`, a `type`, and a displayable `name`.
 
-Users edit ordinary fields, `writeOnly` fields use secure input and are redacted from output, and a Plugin Resource Resolver writes every `readOnly` field except the City-managed `id`. Create, edit, and refresh operations assemble and validate a complete Item before saving it atomically.
+Users edit ordinary fields, `writeOnly` fields use secure input and are redacted from output, and the Plugin constructor `static resolve_resource` writes every `readOnly` field except the City-managed `id`. Create, edit, and refresh operations assemble and validate a complete Item before saving it atomically. Agent startup reads saved Items and never performs an implicit network refresh.
 
 ```bash
 city plugin resource create chat --interactive
@@ -29,6 +29,6 @@ An Agent Plugin Binding stores IDs rather than copying Resource contents:
 }
 ```
 
-When an Agent starts, the CLI resolves and validates complete Resource Items, then gives immutable snapshots to the Plugin Factory. A running Plugin never reads the Resource Store; updates take effect at the next Agent assembly checkpoint.
+When an Agent starts, the CLI resolves and validates complete Resource Items, then gives immutable snapshots to the Plugin constructor. A running Plugin never reads the Resource Store; updates take effect at the next Agent assembly checkpoint.
 
 Complete Resource Items are encrypted at rest. CLI Resource output recursively redacts every `writeOnly` field according to the Schema. A Resource referenced by any Binding cannot be removed, and a third-party Plugin that still owns Resources cannot be uninstalled. Before a Plugin update, City also validates every existing Resource against the new Schema so the update cannot leave unreadable data behind.

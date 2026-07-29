@@ -156,31 +156,19 @@ test("Agent HTTP 路由默认拒绝未认证请求", async () => {
   }
 });
 
-test("Plugin 安装与 Agent Binding 配置使用全局数据库", async () => {
+test("一个入口安装多个 Plugin constructor 并使用统一 CLI Factory", async () => {
   const platform_root = create_temp_root();
   const workspace_root = create_temp_root();
   const plugin_source = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
-    fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
-      manifest_version: 1,
-      name: "example",
-      version: "1.0.0",
-      entry: "index.js",
-      config: {
-        schema: "config.schema.json",
-      },
-      resources: {
-        schema: "resource.schema.json",
-      },
-    }));
-    fs.writeFileSync(path.join(plugin_source, "config.schema.json"), JSON.stringify({
-        type: "object",
-        required: ["endpoint"],
-        properties: { endpoint: { type: "string" } },
-        additionalProperties: false,
-    }));
-    fs.writeFileSync(path.join(plugin_source, "resource.schema.json"), JSON.stringify({
+    const config_schema = {
+      type: "object",
+      required: ["endpoint"],
+      properties: { endpoint: { type: "string" } },
+      additionalProperties: false,
+    };
+    const resource_schema = {
       title: "Example API",
       type: "object",
       required: ["id", "type", "name", "api_key"],
@@ -191,30 +179,79 @@ test("Plugin 安装与 Agent Binding 配置使用全局数据库", async () => {
         api_key: { type: "string", writeOnly: true },
       },
       additionalProperties: false,
-    }));
-    fs.writeFileSync(path.join(plugin_source, "index.js"), `
-export const plugin_factory = {
-  resolve_resource({ resource }) {
-    return { name: \`API \${resource.api_key.slice(-4)}\` };
-  },
-  create({ config, resources }) {
-    return {
-      name: "example",
-      title: "Example",
-      description: \`\${config.endpoint} · \${resources[0]?.name || "none"}\`,
-      actions: {},
     };
-  },
-};
+    const installation_manifest = {
+      manifest_version: 2,
+      entry: "index.js",
+      plugins: [
+        {
+          name: "example",
+          version: "1.0.0",
+          actions: [],
+          config: { schema: config_schema },
+          resources: { schema: structuredClone(resource_schema) },
+        },
+        {
+          name: "companion",
+          version: "1.0.0",
+          title: "Companion",
+          actions: [],
+        },
+      ],
+    };
+    fs.writeFileSync(
+      path.join(plugin_source, "downcity.plugin.json"),
+      JSON.stringify(installation_manifest),
+    );
+    fs.writeFileSync(path.join(plugin_source, "index.js"), `
+globalThis.__example_project_loads = (globalThis.__example_project_loads || 0) + 1;
+const config_schema = ${JSON.stringify(config_schema)};
+const resource_schema = ${JSON.stringify(resource_schema)};
+class ExamplePlugin {
+  static manifest = {
+    name: "example",
+    version: "1.0.0",
+    actions: [],
+    config: { schema: config_schema },
+    resources: { schema: resource_schema },
+  };
+  static resolve_resource({ resource }) {
+    return { name: \`API \${resource.api_key.slice(-4)}\` };
+  }
+  constructor({ config, resources }) {
+    this.name = "example";
+    this.title = "Example";
+    this.description = \`\${config.endpoint} · \${resources[0]?.name || "none"}\`;
+    this.actions = {};
+  }
+}
+class CompanionPlugin {
+  static manifest = {
+    name: "companion",
+    version: "1.0.0",
+    title: "Companion",
+    actions: [],
+  };
+  constructor() {
+    this.name = "companion";
+    this.title = "Companion";
+    this.description = \`loads=\${globalThis.__example_project_loads}\`;
+    this.actions = {};
+  }
+}
+export const plugins = [ExamplePlugin, CompanionPlugin];
 `);
     const agents = await import("../bin/city/process/registry/ManagedAgentRepository.js");
     const plugins = await import("../bin/city/process/registry/PluginRepository.js");
     const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
     agents.create_managed_agent({ agent_id: "plugin_agent", workspace_path: workspace_root });
-    const installed = await installer.install_plugin(plugin_source);
-    assert.equal(installed.plugin_name, "example");
-    assert.equal(fs.existsSync(installed.entry_path), true);
-    assert.match(installed.integrity, /^sha256-[a-f0-9]{64}$/u);
+    const installation = await installer.install_plugins(plugin_source);
+    assert.deepEqual(
+      installation.manifest.plugins.map((plugin) => plugin.name),
+      ["example", "companion"],
+    );
+    assert.equal(fs.existsSync(installation.entry_path), true);
+    assert.match(installation.integrity, /^sha256-[a-f0-9]{64}$/u);
     assert.throws(
       () => plugins.set_agent_plugin_binding({
         agent_id: "plugin_agent",
@@ -245,52 +282,75 @@ export const plugin_factory = {
       config: { endpoint: "https://example.com" },
       resource_ids: [resource.resource_id],
     });
+    const companion_binding = plugins.set_agent_plugin_binding({
+      agent_id: "plugin_agent",
+      plugin_name: "companion",
+      enabled: true,
+      config: {},
+      resource_ids: [],
+    });
     assert.equal(binding.config.endpoint, "https://example.com");
     assert.equal(resource.item.name, "API -key");
-    const runtime = await import("../bin/city/runtime/plugins/CityExternalPlugins.js");
-    const runtime_plugins = await runtime.create_external_plugins({ bindings: [resolved_binding] });
-    assert.equal(runtime_plugins.length, 1);
+    const runtime = await import("../bin/city/runtime/plugins/PluginAssembler.js");
+    const runtime_plugins = await runtime.assemble_plugins({
+      bindings: [resolved_binding, companion_binding],
+    });
+    assert.equal(runtime_plugins.length, 2);
     assert.equal(runtime_plugins[0].name, "example");
     assert.equal(runtime_plugins[0].description, "https://example.com · API -key");
+    assert.equal(runtime_plugins[1].name, "companion");
+    assert.equal(runtime_plugins[1].description, "loads=1");
 
-    fs.writeFileSync(path.join(plugin_source, "resource.schema.json"), JSON.stringify({
-      title: "Example API",
-      type: "object",
-      required: ["id", "type", "name", "api_key", "region"],
-      properties: {
-        id: { type: "string", readOnly: true },
-        type: { type: "string", const: "api" },
-        name: { type: "string", readOnly: true },
-        api_key: { type: "string", writeOnly: true },
-        region: { type: "string" },
-      },
-      additionalProperties: false,
-    }));
+    installation_manifest.plugins[0].resources.schema.required.push("region");
+    installation_manifest.plugins[0].resources.schema.properties.region = { type: "string" };
+    fs.writeFileSync(
+      path.join(plugin_source, "downcity.plugin.json"),
+      JSON.stringify(installation_manifest),
+    );
     await assert.rejects(
       () => installer.update_plugin("example"),
       /Resource schema is incompatible with.*region/,
     );
-    assert.equal(plugins.get_installed_plugin("example").version, "1.0.0");
+    assert.equal(plugins.get_installed_plugin("example").manifest.version, "1.0.0");
 
-    plugins.remove_agent_plugin_binding("plugin_agent", "example");
-    assert.throws(
-      () => plugins.remove_installed_plugin("example"),
-      /still owns Resource/,
-    );
-
-    const renamed_manifest = JSON.parse(
-      fs.readFileSync(path.join(plugin_source, "downcity.plugin.json"), "utf8"),
-    );
-    renamed_manifest.name = "renamed-example";
+    installation_manifest.plugins[0].resources.schema = resource_schema;
+    const removing_manifest = structuredClone(installation_manifest);
+    removing_manifest.plugins = removing_manifest.plugins
+      .filter((plugin) => plugin.name !== "companion");
     fs.writeFileSync(
       path.join(plugin_source, "downcity.plugin.json"),
-      JSON.stringify(renamed_manifest),
+      JSON.stringify(removing_manifest),
     );
     await assert.rejects(
       () => installer.update_plugin("example"),
-      /Plugin update name mismatch/,
+      /Plugin is still bound to agent plugin_agent: companion/,
     );
-    assert.equal(plugins.get_installed_plugin("example").version, "1.0.0");
+    fs.writeFileSync(
+      path.join(plugin_source, "downcity.plugin.json"),
+      JSON.stringify(installation_manifest),
+    );
+
+    plugins.remove_agent_plugin_binding("plugin_agent", "example");
+    assert.throws(
+      () => plugins.remove_plugin_installation("example"),
+      /still owns Resource/,
+    );
+    const resource_repository = await import(
+      "../bin/city/process/registry/PluginResourceRepository.js"
+    );
+    resource_repository.remove_plugin_resource("example", resource.resource_id);
+    assert.throws(
+      () => plugins.remove_plugin_installation("example"),
+      /Plugin is still bound to agent plugin_agent: companion/,
+    );
+    plugins.remove_agent_plugin_binding("plugin_agent", "companion");
+    const removed_installation = plugins.remove_plugin_installation("example");
+    assert.deepEqual(
+      removed_installation.manifest.plugins.map((plugin) => plugin.name),
+      ["example", "companion"],
+    );
+    assert.equal(plugins.get_installed_plugin("example"), null);
+    assert.equal(plugins.get_installed_plugin("companion"), null);
     assert.equal(agents.get_managed_agent("plugin_agent").plugins, undefined);
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
@@ -323,15 +383,19 @@ test("内建与外部 Plugin 使用统一 Catalog 配置协议", async () => {
   }
 });
 
-test("内建 Plugin 静态 Catalog 的 Action 与 Runtime 保持一致", async () => {
+test("内建 Plugin 静态 Manifest 的 Action 与实例保持一致", async () => {
   const platform_root = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
     const catalog = await import("../bin/city/process/plugin/PluginCatalog.js");
-    const runtime = await import("../bin/city/runtime/plugins/CityBuiltinPlugins.js");
-    for (const plugin of runtime.createCityStaticBuiltinPlugins()) {
-      const item = catalog.get_plugin_catalog_item(plugin.name);
-      assert.ok(item, `Missing Catalog item: ${plugin.name}`);
+    const loader = await import("../bin/city/runtime/plugins/PluginTypeLoader.js");
+    const plugin_types = await loader.load_plugin_types("chat");
+    for (const plugin_type of plugin_types) {
+      const plugin = new plugin_type({ config: {}, resources: [] });
+      const plugin_name = plugin_type.manifest.name;
+      const item = catalog.get_plugin_catalog_item(plugin_name);
+      assert.ok(item, `Missing Catalog item: ${plugin_name}`);
+      assert.equal(plugin.name, plugin_name);
       assert.deepEqual(item.actions, Object.keys(plugin.actions || {}).sort());
     }
   } finally {
@@ -340,64 +404,87 @@ test("内建 Plugin 静态 Catalog 的 Action 与 Runtime 保持一致", async (
   }
 });
 
-test("Plugin 安装拒绝保留名称与非法 Manifest 默认配置", async () => {
+test("Plugin 数组安装拒绝名称冲突与非法 Manifest", async () => {
   const platform_root = create_temp_root();
   const plugin_source = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
     const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
-    fs.writeFileSync(path.join(plugin_source, "index.js"), "export const plugin_factory = {};\n");
-    fs.writeFileSync(path.join(plugin_source, "config.schema.json"), JSON.stringify({
-      type: "object",
-      properties: {},
-    }));
+    fs.writeFileSync(path.join(plugin_source, "index.js"), "export const plugins = [];\n");
     fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
-      manifest_version: 1,
-      name: "chat",
-      version: "1.0.0",
+      manifest_version: 2,
       entry: "index.js",
+      plugins: [{ name: "chat", actions: [] }],
     }));
     await assert.rejects(
-      () => installer.install_plugin(plugin_source),
-      /name is reserved by a built-in Plugin/,
+      () => installer.install_plugins(plugin_source),
+      /Plugin name is already installed: chat/,
     );
 
     fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
-      manifest_version: 1,
-      name: "invalid-defaults",
-      version: "1.0.0",
+      manifest_version: 2,
       entry: "index.js",
-      config: {
-        schema: "config.schema.json",
-        defaults: [],
-      },
+      plugins: [{
+        name: "invalid-defaults",
+        actions: [],
+        config: { schema: { type: "object", properties: {} }, defaults: [] },
+      }],
     }));
     await assert.rejects(
-      () => installer.install_plugin(plugin_source),
+      () => installer.install_plugins(plugin_source),
       /config.defaults must be an object/,
     );
 
     fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
-      manifest_version: 1,
-      name: "escaped-entry",
-      version: "1.0.0",
+      manifest_version: 2,
       entry: "../outside.js",
+      plugins: [{ name: "escaped-entry", actions: [] }],
     }));
     await assert.rejects(
-      () => installer.install_plugin(plugin_source),
-      /entry must stay inside the plugin directory/,
+      () => installer.install_plugins(plugin_source),
+      /entry must stay inside the installation directory/,
     );
 
     fs.symlinkSync("index.js", path.join(plugin_source, "linked-entry.js"));
     fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
-      manifest_version: 1,
-      name: "linked-entry",
-      version: "1.0.0",
+      manifest_version: 2,
       entry: "linked-entry.js",
+      plugins: [{ name: "linked-entry", actions: [] }],
     }));
     await assert.rejects(
-      () => installer.install_plugin(plugin_source),
+      () => installer.install_plugins(plugin_source),
       /artifact cannot contain symlinks/,
+    );
+  } finally {
+    delete process.env.DC_PLATFORM_ROOT;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+    fs.rmSync(plugin_source, { recursive: true, force: true });
+  }
+});
+
+test("Plugin constructor 静态 Manifest 必须与安装快照一致", async () => {
+  const platform_root = create_temp_root();
+  const plugin_source = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  try {
+    fs.writeFileSync(path.join(plugin_source, "downcity.plugin.json"), JSON.stringify({
+      manifest_version: 2,
+      entry: "index.js",
+      plugins: [{ name: "declared", actions: [] }],
+    }));
+    fs.writeFileSync(path.join(plugin_source, "index.js"), `
+class UnexpectedPlugin {
+  static manifest = { name: "unexpected", actions: [] };
+  constructor() { this.name = "unexpected"; this.actions = {}; }
+}
+export const plugins = [UnexpectedPlugin];
+`);
+    const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
+    const loader = await import("../bin/city/runtime/plugins/PluginTypeLoader.js");
+    await installer.install_plugins(plugin_source);
+    await assert.rejects(
+      () => loader.load_plugin_types("declared"),
+      /static manifests do not match installed snapshot/,
     );
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
@@ -532,28 +619,26 @@ test("Agent 模型选择只接受对话执行模型", async () => {
 });
 
 test("Chat 装配严格使用当前 Agent 绑定与 queue 配置", async () => {
-  const { createCityStaticBuiltinPlugins } = await import(
-    "../bin/city/runtime/plugins/CityBuiltinPlugins.js"
+  const { load_plugin_type } = await import(
+    "../bin/city/runtime/plugins/PluginTypeLoader.js"
   );
-  const plugins = createCityStaticBuiltinPlugins({
-    chat_config: {
-      queue: { max_concurrency: 5 },
-    },
-    chat_resources: [{
+  const chat_type = await load_plugin_type("chat");
+  const chat = new chat_type({
+    config: { queue: { max_concurrency: 5 } },
+    resources: [{
       id: "telegram-bound",
       type: "telegram",
       name: "Bound Bot",
       bot_token: "token",
     }],
   });
-  const chat = plugins.find((plugin) => plugin.name === "chat");
   assert.ok(chat);
   assert.equal(chat.getResourceId({}, "telegram"), "telegram-bound");
   assert.equal(chat.isChannelEnabled({}, "telegram"), true);
   assert.equal(chat.isChannelEnabled({}, "feishu"), false);
   assert.deepEqual(chat.getQueueWorkerConfig({}), { max_concurrency: 5 });
 
-  const unbound = createCityStaticBuiltinPlugins().find((plugin) => plugin.name === "chat");
+  const unbound = new chat_type({ config: {}, resources: [] });
   assert.equal(unbound.isChannelEnabled({}, "telegram"), false);
   assert.equal(unbound.getResourceId({}, "telegram"), "");
 });
@@ -617,14 +702,14 @@ test("Plugin Resource Resolver 写入动态字段并通过 ID 绑定", async () 
     assert.equal(Object.isFrozen(resolved), true);
     assert.equal(Object.isFrozen(resolved[0]), true);
 
-    const { createCityStaticBuiltinPlugins } = await import(
-      "../bin/city/runtime/plugins/CityBuiltinPlugins.js"
+    const { load_plugin_type } = await import(
+      "../bin/city/runtime/plugins/PluginTypeLoader.js"
     );
-    const plugins = createCityStaticBuiltinPlugins({
-      chat_config: binding.config,
-      chat_resources: resolved,
+    const chat_type = await load_plugin_type("chat");
+    const chat = new chat_type({
+      config: binding.config,
+      resources: resolved,
     });
-    const chat = plugins.find((plugin) => plugin.name === "chat");
     assert.equal(chat.getResourceId({}, "telegram"), resource.resource_id);
     assert.equal(chat.resolveChannelAccount({}, "telegram")?.name, "Downcity Assistant");
     assert.equal(chat.resolveChannelAccount({}, "telegram")?.bot_token, "token");

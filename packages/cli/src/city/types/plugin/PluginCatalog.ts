@@ -7,6 +7,9 @@ export type PluginCatalogSource = "builtin" | "installed";
 
 /** 内建与外部 Plugin 归一化后的目录项。 */
 export interface PluginCatalogItem {
+  /** 用户安装 Plugin 的内部 installation ID；内建 Plugin 不提供。 */
+  installation_id?: string;
+
   /** Plugin 稳定名称。 */
   plugin_name: string;
 
