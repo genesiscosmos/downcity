@@ -25,9 +25,13 @@ export async function updateCli(cwd = process.cwd()): Promise<{
   const workspaceRoot = findDowncityWorkspaceRoot(cwd);
 
   if (workspaceRoot) {
-    await run(commandOf("pnpm"), ["-C", "packages/cli", "build"], workspaceRoot);
+    await run(resolve_command_name("pnpm"), ["-C", "packages/cli", "build"], workspaceRoot);
     const deploy_dir = path.join(os.tmpdir(), `downcity-cli-deploy-${Date.now()}`);
-    await run(commandOf("pnpm"), ["--filter", CLI_PACKAGE_NAME, "deploy", "--legacy", deploy_dir], workspaceRoot);
+    await run(
+      resolve_command_name("pnpm"),
+      ["--filter", CLI_PACKAGE_NAME, "deploy", "--legacy", deploy_dir],
+      workspaceRoot,
+    );
     await installCliDeployGlobally(deploy_dir, workspaceRoot);
     await rm(deploy_dir, { recursive: true, force: true });
     return {
@@ -36,7 +40,7 @@ export async function updateCli(cwd = process.cwd()): Promise<{
     };
   }
 
-  await run(commandOf("npm"), ["install", "-g", `${CLI_PACKAGE_NAME}@latest`], cwd);
+  await run(resolve_command_name("npm"), ["install", "-g", `${CLI_PACKAGE_NAME}@latest`], cwd);
   return {
     mode: "npm",
     version: await readInstalledCliVersion(),
@@ -87,7 +91,7 @@ async function resolveGlobalCliPaths(cwd: string): Promise<{
  city_entry: string;
  city_bin: string;
 }> {
-  const npm_prefix = (await capture(commandOf("npm"), ["prefix", "-g"], cwd)).trim();
+  const npm_prefix = (await capture(resolve_command_name("npm"), ["prefix", "-g"], cwd)).trim();
   const global_modules = path.join(npm_prefix, "lib", "node_modules");
   const global_bin = path.join(npm_prefix, "bin");
   const package_dir = path.join(global_modules, "downcity");
@@ -216,10 +220,15 @@ function capture(command: string, args: string[], cwd: string): Promise<string> 
 }
 
 /**
- * 根据平台选择可执行文件名。
+ * 根据目标平台解析可执行文件名。
+ *
+ * Windows 调用 npm 与 pnpm 时必须使用 `.cmd` shim；Node.js 可执行文件不需要后缀。
  */
-function commandOf(name: "npm" | "pnpm" | "node"): string {
-  if (process.platform === "win32" && name !== "node") {
+export function resolve_command_name(
+  name: "npm" | "pnpm" | "node",
+  platform: NodeJS.Platform = process.platform,
+): string {
+  if (platform === "win32" && name !== "node") {
     return `${name}.cmd`;
   }
   return name;

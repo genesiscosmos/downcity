@@ -9,7 +9,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildGlobalUpdateInvocation } from "../bin/city/shared/Update.js";
+import { resolve_command_name } from "../bin/federation/core/update.js";
 import { buildDetachedProcessSignalTargets } from "../bin/city/process/registry/ProcessSweep.js";
 import { resolve_windows_sandbox_selection } from "../bin/city/sandbox/PlatformSandbox.js";
 
@@ -23,15 +23,11 @@ async function with_platform(platform, callback) {
   }
 }
 
-test("Windows package manager invocations use cmd shims", () => {
-  assert.deepEqual(buildGlobalUpdateInvocation("npm", "downcity", "win32"), {
-    command: "npm.cmd",
-    args: ["install", "-g", "downcity@latest"],
-  });
-  assert.deepEqual(buildGlobalUpdateInvocation("pnpm", "downcity", "win32"), {
-    command: "pnpm.cmd",
-    args: ["add", "-g", "downcity@latest"],
-  });
+test("Windows package manager commands use cmd shims", () => {
+  assert.equal(resolve_command_name("npm", "win32"), "npm.cmd");
+  assert.equal(resolve_command_name("pnpm", "win32"), "pnpm.cmd");
+  assert.equal(resolve_command_name("node", "win32"), "node");
+  assert.equal(resolve_command_name("npm", "darwin"), "npm");
 });
 
 test("Windows detached processes use one positive PID target", async () => {
