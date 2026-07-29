@@ -10,7 +10,7 @@ async function verify_credits_service_contract(): Promise<void> {
   const credits = new CreditsService();
   federation.use(credits);
 
-  await credits.read("user_1");
+  await credits.read_account("user_1");
   const card = await credits.cards.create_ephemeral({
     user_id: "user_1",
     name: "7 day trial",

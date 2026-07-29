@@ -7,13 +7,14 @@
 
 import type { RequestInitLike } from "../../http.js";
 import type {
+  CreditsAccount,
   CreditsChargeInput,
   CreditsEphemeralCard,
   CreditsEphemeralCardCreateInput,
   CreditsEphemeralCardQuery,
   CreditsHistoryQuery,
   CreditsPrimaryCard,
-  CreditsSummary,
+  CreditsUserSummary,
   CreditsTopupInput,
   CreditsTransaction,
   CreditsTransactionEntry,
@@ -39,14 +40,14 @@ export class CreditsInvoker {
     this.history = new CreditsHistoryInvoker(request_json);
   }
 
-  /** 读取一个用户的 Credits 汇总。 */
-  get_user(user_id: string): Promise<CreditsSummary> {
+  /** 读取一个用户的当前 Credits 账户与 Card。 */
+  get_user(user_id: string): Promise<CreditsAccount> {
     return this.request_json(with_query(`${PREFIX}/users/get`, { user_id }), { method: "GET" });
   }
 
   /** 查询 Credits 用户。 */
-  async list_users(query: CreditsUserQuery = {}): Promise<CreditsSummary[]> {
-    const body = await this.request_json<{ items: CreditsSummary[] }>(with_query(`${PREFIX}/users`, query), { method: "GET" });
+  async list_users(query: CreditsUserQuery = {}): Promise<CreditsUserSummary[]> {
+    const body = await this.request_json<{ items: CreditsUserSummary[] }>(with_query(`${PREFIX}/users`, query), { method: "GET" });
     return body.items;
   }
 

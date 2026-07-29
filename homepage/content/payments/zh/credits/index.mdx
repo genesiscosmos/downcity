@@ -14,12 +14,45 @@ const credits = new CreditsService();
 federation.use(credits);
 ```
 
-用户读取自己的总可用额度：
+用户读取自己的当前 Credits 账户：
 
 ```ts
-const summary = await city.service("credits").get("me");
+const account = await city.service("credits").get("me");
 ```
 
-服务会返回 `primary_credits`、`ephemeral_credits`、`available_credits`、下一到期时间和有效临时 Card 数量。
+响应以 Card 为事实源，同时提供总可用额度：
+
+```json
+{
+  "user_id": "user_123",
+  "available_credits": 1200000,
+  "cards": {
+    "primary": {
+      "kind": "primary",
+      "user_id": "user_123",
+      "credits": 1000000,
+      "created_at": "2026-07-01T00:00:00.000Z",
+      "updated_at": "2026-07-29T10:00:00.000Z"
+    },
+    "ephemeral": [
+      {
+        "kind": "ephemeral",
+        "card_id": "card_welcome",
+        "user_id": "user_123",
+        "name": "新用户奖励",
+        "credits": 200000,
+        "expires_at": "2026-08-05T12:00:00.000Z",
+        "source": "welcome",
+        "ref": "",
+        "created_at": "2026-07-29T00:00:00.000Z",
+        "updated_at": "2026-07-29T00:00:00.000Z",
+        "status": "active"
+      }
+    ]
+  }
+}
+```
+
+`ephemeral` 只包含当前有效且有余额的 Card，并按到期时间升序排列。已耗尽或已过期额度通过 Transaction 与 Card 流水查询。
 
 管理端使用 `bureau.credits` typed invoker。第一版不支持匿名主体、转账、负余额、Card 延期或关闭。

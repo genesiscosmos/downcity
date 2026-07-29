@@ -101,14 +101,16 @@ export type {
 } from "./types/AI.js";
 
 export type {
+  CreditsAccount,
   CreditsCardReference,
+  CreditsCardsView,
   CreditsChargeInput,
   CreditsEphemeralCard,
   CreditsEphemeralCardCreateInput,
   CreditsEphemeralCardQuery,
   CreditsHistoryQuery,
   CreditsPrimaryCard,
-  CreditsSummary,
+  CreditsUserSummary,
   CreditsTopupInput,
   CreditsTransaction,
   CreditsTransactionEntry,

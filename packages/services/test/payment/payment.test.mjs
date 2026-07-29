@@ -57,7 +57,7 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
       idempotency_key: "checkout:legacy",
     }))
     assert.equal(rejected_legacy.ok, false)
-    assert.equal((await credits.read("user_1")).available_credits, 0)
+    assert.equal((await credits.read_account("user_1")).available_credits, 0)
 
     const request = user_request(token.user_token, "/v1/payment/checkout/create", {
       method_id: "test",
@@ -113,9 +113,9 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
       body: JSON.stringify({ event_id: "event_1", payment_id: checkout.payment_id }),
     })
     assert.equal((await federation.fetch(webhook())).status, 200)
-    assert.equal((await credits.read("user_1")).primary_credits, 990)
+    assert.equal((await credits.read_account("user_1")).cards.primary.credits, 990)
     assert.equal((await federation.fetch(webhook())).status, 200)
-    assert.equal((await credits.read("user_1")).primary_credits, 990)
+    assert.equal((await credits.read_account("user_1")).cards.primary.credits, 990)
   } finally {
     process.chdir(cwd)
     await fs.rm(temp_dir, { recursive: true, force: true })

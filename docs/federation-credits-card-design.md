@@ -339,27 +339,32 @@ export type CreditsCardReference =
     };
 ```
 
-## 6. Credits 汇总视图
+## 6. Credits 账户视图
 
 ```ts
 /**
- * 用户当前 Credits 汇总。
+ * 用户全部当前 Credits Card。
  */
-export interface CreditsSummary extends Record<string, unknown> {
+export interface CreditsCardsView extends Record<string, unknown> {
+  /**
+   * 用户唯一的 Primary Card。
+   */
+  primary: CreditsPrimaryCard;
+
+  /**
+   * 当前有效且有余额的 Ephemeral Cards，按到期时间升序排列。
+   */
+  ephemeral: CreditsEphemeralCard[];
+}
+
+/**
+ * 用户当前 Credits 账户视图。
+ */
+export interface CreditsAccount extends Record<string, unknown> {
   /**
    * 用户 ID。
    */
   user_id: string;
-
-  /**
-   * Primary Card 当前余额。
-   */
-  primary_credits: number;
-
-  /**
-   * 所有未过期 Ephemeral Card 余额之和。
-   */
-  ephemeral_credits: number;
 
   /**
    * 当前总可用额度。
@@ -367,14 +372,9 @@ export interface CreditsSummary extends Record<string, unknown> {
   available_credits: number;
 
   /**
-   * 最近一张仍有余额的 Ephemeral Card 到期时间。
+   * 按 Card 生命周期组织的当前额度。
    */
-  next_expiration_at: string | null;
-
-  /**
-   * 当前仍然有效且有余额的 Ephemeral Card 数量。
-   */
-  active_ephemeral_cards: number;
+  cards: CreditsCardsView;
 }
 ```
 
@@ -386,14 +386,14 @@ available_credits
   + SUM(未过期 ephemeral_card.credits)
 ```
 
-`CreditsSummary` 只作为查询投影，不持久化另一份总余额。
+Card 是额度的权威事实源。`available_credits` 仅在读取时由当前 Cards 推导，不持久化第二份总余额；其余按类型汇总、Card 数量和下一到期时间由调用方按展示需要计算。
 
 用户读取示例：
 
 ```ts
-const summary = await city
+const account = await city
   .service("credits")
-  .get<CreditsSummary>("me");
+  .get<CreditsAccount>("me");
 ```
 
 ## 7. Transaction 模型
@@ -950,29 +950,21 @@ credits:charge
 
 ```text
 GET /v1/credits/me
-GET /v1/credits/cards/me
 GET /v1/credits/history/me
 GET /v1/credits/transactions/me
 ```
 
-读取 Cards：
+读取当前账户与 Cards：
 
 ```ts
-const result = await city
+const account = await city
   .service("credits")
-  .get<{
-    primary: CreditsPrimaryCard;
-    ephemeral: CreditsEphemeralCard[];
-  }>("cards/me");
+  .get<CreditsAccount>("me");
 ```
 
-Ephemeral Cards 默认排序：
+`cards.ephemeral` 只返回有效且有余额的 Card，越早过期越靠前，与自动扣费顺序一致。Primary Card 始终返回，即使余额为零。
 
-1. 有效且有余额，越早过期越靠前。
-2. 已耗尽。
-3. 已过期 Card 不再保留在 Card 表中。
-
-每个用户最多拥有 100 张未过期且余额大于零的 Ephemeral Cards。默认只返回有效 Card；显式传入 `include_history = true` 时返回尚未过期但已经耗尽的 Card。过期 Card 在下一次 Credits 访问时惰性删除，历史事实继续保留在 Transaction Entries 中。
+每个用户最多拥有 100 张未过期且余额大于零的 Ephemeral Cards。已耗尽 Card 不进入当前账户视图；过期 Card 在下一次 Credits 访问时惰性删除，历史事实继续保留在 Transaction Entries 中。
 
 ## 14. PaymentService 边界
 

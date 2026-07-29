@@ -32,16 +32,7 @@ export function register_credits_routes(service: CreditsService, ctx: ServiceIns
     method: "GET",
     path: "/me",
     auth: ["user"],
-    handler: async (c) => c.jsonResponse(await service.read(read_user_id(c))),
-  });
-  ctx.route({
-    method: "GET",
-    path: "/cards/me",
-    auth: ["user"],
-    handler: async (c) => {
-      const query = read_query(c);
-      return c.jsonResponse(await service.read_cards(read_user_id(c), read_boolean(query.include_history)));
-    },
+    handler: async (c) => c.jsonResponse(await service.read_account(read_user_id(c))),
   });
   ctx.route({
     method: "GET",
@@ -74,15 +65,15 @@ export function register_credits_routes(service: CreditsService, ctx: ServiceIns
     method: "GET",
     path: "/users/get",
     auth: ["admin"],
-    handler: async (c) => c.jsonResponse(await service.read(read_required_text(read_query(c).user_id, "user_id"))),
+    handler: async (c) => c.jsonResponse(await service.read_account(read_required_text(read_query(c).user_id, "user_id"))),
   });
   ctx.route({
     method: "GET",
     path: "/cards/primary",
     auth: ["admin"],
-    handler: async (c) => c.jsonResponse((await service.read_cards(
+    handler: async (c) => c.jsonResponse(await service.cards.get_primary(
       read_required_text(read_query(c).user_id, "user_id"),
-    )).primary),
+    )),
   });
   ctx.route({
     method: "GET",

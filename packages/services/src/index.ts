@@ -54,6 +54,7 @@ export {
   creditsTransactions,
 } from "./credits/index.js";
 export type {
+  CreditsAccount,
   CreditsCardReference,
   CreditsCardsView,
   CreditsChargeInput,
@@ -63,7 +64,7 @@ export type {
   CreditsEphemeralCardStatus,
   CreditsHistoryQuery,
   CreditsPrimaryCard,
-  CreditsSummary,
+  CreditsUserSummary,
   CreditsTopupInput,
   CreditsUserQuery,
   CreditsTransaction,

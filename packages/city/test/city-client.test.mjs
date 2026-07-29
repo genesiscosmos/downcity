@@ -479,6 +479,11 @@ test("Bureau credits exposes typed Card and Transaction invokers", async () => {
     bureau_token: "sk",
     fetch: async (url, init) => {
       requests.push({ url, init })
+      if (url.includes("/users/get?")) return json({
+        user_id: "user_1",
+        available_credits: 100,
+        cards: { primary: { kind: "primary", user_id: "user_1", credits: 100 }, ephemeral: [] },
+      })
       if (url.includes("/users?")) return json({ items: [{ user_id: "user_1" }] })
       if (url.includes("/cards/ephemeral?")) return json({ items: [{ card_id: "card_1" }] })
       if (url.includes("/transactions?")) return json({ items: [{ transaction_id: "ctx_1" }] })
@@ -487,6 +492,7 @@ test("Bureau credits exposes typed Card and Transaction invokers", async () => {
     },
   })
 
+  assert.equal((await bureau.credits.get_user("user_1")).cards.primary.credits, 100)
   assert.equal((await bureau.credits.list_users({ limit: 5 }))[0].user_id, "user_1")
   assert.equal((await bureau.credits.cards.list_ephemeral({ user_id: "user_1" }))[0].card_id, "card_1")
   assert.equal((await bureau.credits.transactions.list({ user_id: "user_1" }))[0].transaction_id, "ctx_1")
@@ -497,8 +503,8 @@ test("Bureau credits exposes typed Card and Transaction invokers", async () => {
     source: "test",
     idempotency_key: "test:1",
   })
-  assert.equal(requests[4].url, "http://localhost:3001/v1/credits/topups/create")
-  assert.equal(requests[4].init.headers.authorization, "Bearer sk")
+  assert.equal(requests[5].url, "http://localhost:3001/v1/credits/topups/create")
+  assert.equal(requests[5].init.headers.authorization, "Bearer sk")
 })
 
 test("Bureau env list / catalog / upsert / remove", async () => {

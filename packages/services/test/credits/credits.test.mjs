@@ -24,7 +24,6 @@ test("CreditsService manages primary and ephemeral cards atomically", async () =
 
     for (const route_path of [
       "/v1/credits/me",
-      "/v1/credits/cards/me",
       "/v1/credits/transactions/me",
     ]) {
       const response = await federation.fetch(new Request(`http://localhost${route_path}`, {
@@ -35,7 +34,7 @@ test("CreditsService manages primary and ephemeral cards atomically", async () =
       assert.equal(response.status, 401, `${route_path} should be registered and require authentication`)
     }
 
-    await credits.read("user_without_transactions")
+    await credits.read_account("user_without_transactions")
     assert.deepEqual(
       (await credits.list_users()).map((item) => item.user_id),
       ["user_without_transactions"],
@@ -53,14 +52,14 @@ test("CreditsService manages primary and ephemeral cards atomically", async () =
     ])
     assert.equal(concurrent_primary_topup.transaction_id, primary_topup.transaction_id)
     assert.equal(primary_topup.kind, "topup")
-    assert.equal((await credits.read("user_1")).primary_credits, 1_000)
+    assert.equal((await credits.read_account("user_1")).cards.primary.credits, 1_000)
     assert.throws(
       () => db.$client.prepare(
         "UPDATE service_credits_primary_cards SET credits = -1 WHERE user_id = ?",
       ).run("user_1"),
       /primary card credits cannot be negative/,
     )
-    assert.equal((await credits.read("user_1")).primary_credits, 1_000)
+    assert.equal((await credits.read_account("user_1")).cards.primary.credits, 1_000)
 
     const later_card = await credits.cards.create_ephemeral({
       user_id: "user_1",
@@ -88,6 +87,14 @@ test("CreditsService manages primary and ephemeral cards atomically", async () =
     })
     assert.equal(duplicate_card.card_id, earlier_card.card_id)
 
+    const account_before_charge = await credits.read_account("user_1")
+    assert.equal(account_before_charge.available_credits, 1_500)
+    assert.equal(account_before_charge.cards.primary.credits, 1_000)
+    assert.deepEqual(
+      account_before_charge.cards.ephemeral.map((card) => card.card_id),
+      [earlier_card.card_id, later_card.card_id],
+    )
+
     const charge = await credits.charge({
       user_id: "user_1",
       credits: 600,
@@ -101,10 +108,10 @@ test("CreditsService manages primary and ephemeral cards atomically", async () =
       [later_card.card_id, -300],
       ["user_1", -100],
     ].reverse())
-    const summary = await credits.read("user_1")
-    assert.equal(summary.primary_credits, 900)
-    assert.equal(summary.ephemeral_credits, 0)
-    assert.equal(summary.available_credits, 900)
+    const account = await credits.read_account("user_1")
+    assert.equal(account.cards.primary.credits, 900)
+    assert.deepEqual(account.cards.ephemeral, [])
+    assert.equal(account.available_credits, 900)
 
     const expiring_card = await credits.cards.create_ephemeral({
       user_id: "user_1",
@@ -139,7 +146,7 @@ test("CreditsService manages primary and ephemeral cards atomically", async () =
       }),
       /insufficient credits/,
     )
-    assert.equal((await credits.read("user_1")).primary_credits, 900)
+    assert.equal((await credits.read_account("user_1")).cards.primary.credits, 900)
 
     await assert.rejects(
       credits.topup({
@@ -190,7 +197,7 @@ test("CreditsService enforces expiration, active card, safe total, and full idem
     db.$client.prepare(
       "UPDATE service_credits_ephemeral_cards SET expires_at = ? WHERE card_id = ?",
     ).run(new Date(Date.now() - 1_000).toISOString(), expiring.card_id)
-    assert.equal((await credits.read("date_user")).available_credits, 0)
+    assert.equal((await credits.read_account("date_user")).available_credits, 0)
     await assert.rejects(credits.cards.get_ephemeral(expiring.card_id), /not found/)
 
     const expires_at = new Date(Date.now() + 86_400_000).toISOString()
@@ -221,7 +228,7 @@ test("CreditsService enforces expiration, active card, safe total, and full idem
       source: "test",
       idempotency_key: "card_limit:charge",
     })
-    assert.equal((await credits.read("card_limit_user")).available_credits, 0)
+    assert.equal((await credits.read_account("card_limit_user")).available_credits, 0)
 
     const maximum_topup = await credits.topup({
       card: { kind: "primary", user_id: "safe_user" },
@@ -249,7 +256,7 @@ test("CreditsService enforces expiration, active card, safe total, and full idem
       }),
       /user credits limit exceeded/,
     )
-    assert.equal(Number.isSafeInteger((await credits.read("safe_user")).available_credits), true)
+    assert.equal(Number.isSafeInteger((await credits.read_account("safe_user")).available_credits), true)
     await assert.rejects(
       credits.topup({
         card: { kind: "primary", user_id: "safe_user" },

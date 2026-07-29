@@ -10,12 +10,13 @@ export {
   creditsTransactions,
 } from "./schema.js";
 export type {
+  CreditsAccount,
   CreditsCardReference,
   CreditsCardsView,
   CreditsEphemeralCard,
   CreditsEphemeralCardStatus,
   CreditsPrimaryCard,
-  CreditsSummary,
+  CreditsUserSummary,
 } from "./types/Card.js";
 export type {
   CreditsChargeInput,

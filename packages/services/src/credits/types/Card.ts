@@ -62,26 +62,34 @@ export type CreditsCardReference =
       card_id: string;
     };
 
-/** 用户当前 Credits 汇总。 */
-export interface CreditsSummary extends Record<string, unknown> {
-  /** 用户 ID。 */
-  user_id: string;
-  /** Primary Card 当前余额。 */
-  primary_credits: number;
-  /** 所有未过期 Ephemeral Card 余额之和。 */
-  ephemeral_credits: number;
-  /** 当前总可用额度。 */
-  available_credits: number;
-  /** 最近一张仍有余额的 Ephemeral Card 到期时间。 */
-  next_expiration_at: string | null;
-  /** 当前仍有效且有余额的 Ephemeral Card 数量。 */
-  active_ephemeral_cards: number;
-}
-
-/** 用户全部 Credits Card 的读取结果。 */
+/** 用户全部当前 Credits Card。 */
 export interface CreditsCardsView extends Record<string, unknown> {
   /** 用户唯一的 Primary Card。 */
   primary: CreditsPrimaryCard;
-  /** 用户的 Ephemeral Cards。 */
+  /** 当前仍有效且有余额的 Ephemeral Cards，按到期时间升序排列。 */
   ephemeral: CreditsEphemeralCard[];
+}
+
+/** 用户当前 Credits 账户视图。 */
+export interface CreditsAccount extends Record<string, unknown> {
+  /** 用户 ID。 */
+  user_id: string;
+  /** 当前总可用额度。 */
+  available_credits: number;
+  /** 按 Card 生命周期组织的当前额度。 */
+  cards: CreditsCardsView;
+}
+
+/** 管理端 Credits 用户列表项。 */
+export interface CreditsUserSummary extends Record<string, unknown> {
+  /** 用户 ID。 */
+  user_id: string;
+  /** 当前总可用额度。 */
+  available_credits: number;
+  /** Primary Card 当前余额。 */
+  primary_credits: number;
+  /** 当前有效 Ephemeral Cards 的余额总和。 */
+  ephemeral_credits: number;
+  /** 当前有效且有余额的 Ephemeral Card 数量。 */
+  active_ephemeral_cards: number;
 }

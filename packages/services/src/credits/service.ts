@@ -18,11 +18,12 @@ import {
   creditsTransactions,
 } from "./schema.js";
 import type {
+  CreditsAccount,
   CreditsCardsView,
   CreditsCardReference,
   CreditsEphemeralCard,
   CreditsPrimaryCard,
-  CreditsSummary,
+  CreditsUserSummary,
 } from "./types/Card.js";
 import type {
   CreditsChargeInput,
@@ -157,58 +158,35 @@ export class CreditsService extends InstallableService {
     await this.assert_existing_data_limits();
   }
 
-  /** 读取用户 Credits 汇总。 */
-  async read(user_id: string): Promise<CreditsSummary> {
+  /** 读取用户当前 Credits 账户及其 Card。 */
+  async read_account(user_id: string): Promise<CreditsAccount> {
     const normalized_user_id = read_required_text(user_id, "user_id");
-    await this.cleanup_expired_cards(normalized_user_id);
-    const primary = await this.get_primary_card(normalized_user_id);
-    const current_time = new Date().toISOString();
-    const row = await raw_first<Record<string, unknown>>(this.resolve_raw(), [
-      "SELECT COALESCE(SUM(credits), 0) AS ephemeral_credits,",
-      "MIN(CASE WHEN credits > 0 THEN expires_at END) AS next_expiration_at,",
-      "SUM(CASE WHEN credits > 0 THEN 1 ELSE 0 END) AS active_ephemeral_cards",
-      `FROM ${EPHEMERAL_CARD_TABLE}`,
-      "WHERE user_id = ? AND expires_at > ?",
-    ].join(" "), [normalized_user_id, current_time]);
-    const ephemeral_credits = Number(row?.ephemeral_credits ?? 0);
+    const cards = await this.read_current_cards(normalized_user_id);
     return {
       user_id: normalized_user_id,
-      primary_credits: primary.credits,
-      ephemeral_credits,
-      available_credits: primary.credits + ephemeral_credits,
-      next_expiration_at: row?.next_expiration_at ? String(row.next_expiration_at) : null,
-      active_ephemeral_cards: Number(row?.active_ephemeral_cards ?? 0),
+      available_credits: this.sum_available_credits(cards),
+      cards,
     };
   }
 
-  /** 读取用户全部 Card。 */
-  async read_cards(user_id: string, include_history = false): Promise<CreditsCardsView> {
-    const normalized_user_id = read_required_text(user_id, "user_id");
-    await this.cleanup_expired_cards(normalized_user_id);
-    const [primary, ephemeral] = await Promise.all([
-      this.get_primary_card(normalized_user_id),
-      this.list_ephemeral_cards({ user_id: normalized_user_id, include_history }),
-    ]);
-    return { primary, ephemeral };
-  }
-
   /** 检查用户是否具有最低可用额度。 */
-  async precheck(user_id: string, needed_credits = 1): Promise<CreditsSummary> {
+  async precheck(user_id: string, needed_credits = 1): Promise<{ available_credits: number }> {
+    const normalized_user_id = read_required_text(user_id, "user_id");
     const needed = read_credits(needed_credits, "needed_credits");
-    const summary = await this.read(user_id);
-    if (summary.available_credits < needed) {
-      throw httpError(402, `insufficient credits: need ${needed}, current ${summary.available_credits}`);
+    const available_credits = await this.read_available_credits(normalized_user_id);
+    if (available_credits < needed) {
+      throw httpError(402, `insufficient credits: need ${needed}, current ${available_credits}`);
     }
-    return summary;
+    return { available_credits };
   }
 
-  /** 查询已建立 Primary Card 的 Credits 用户。 */
-  async list_users(query: CreditsUserQuery = {}): Promise<CreditsSummary[]> {
+  /** 查询已建立 Primary Card 的管理端 Credits 用户摘要。 */
+  async list_users(query: CreditsUserQuery = {}): Promise<CreditsUserSummary[]> {
     const rows = await raw_all<Record<string, unknown>>(this.resolve_raw(), [
       `SELECT user_id FROM ${PRIMARY_CARD_TABLE}`,
       "ORDER BY created_at DESC, rowid DESC LIMIT ?",
     ].join(" "), [read_limit(query.limit)]);
-    return await Promise.all(rows.map((row) => this.read(String(row.user_id))));
+    return await Promise.all(rows.map((row) => this.read_user_summary(String(row.user_id))));
   }
 
   /** 创建 Ephemeral Card，并原子写入初始 Topup。 */
@@ -282,8 +260,8 @@ export class CreditsService extends InstallableService {
       if (active_count >= MAX_ACTIVE_EPHEMERAL_CARDS) {
         throw httpError(409, `active ephemeral card limit exceeded: ${MAX_ACTIVE_EPHEMERAL_CARDS}`);
       }
-      const summary = await this.read(user_id);
-      if (summary.available_credits > MAX_USER_CREDITS - credits) {
+      const available_credits = await this.read_available_credits(user_id);
+      if (available_credits > MAX_USER_CREDITS - credits) {
         throw httpError(409, `user credits limit exceeded: ${MAX_USER_CREDITS}`);
       }
       throw httpError(409, "ephemeral card creation could not be applied");
@@ -330,8 +308,8 @@ export class CreditsService extends InstallableService {
           throw httpError(409, `active ephemeral card limit exceeded: ${MAX_ACTIVE_EPHEMERAL_CARDS}`);
         }
       }
-      const summary = await this.read(card.user_id);
-      if (summary.available_credits > MAX_USER_CREDITS - credits) {
+      const available_credits = await this.read_available_credits(card.user_id);
+      if (available_credits > MAX_USER_CREDITS - credits) {
         throw httpError(409, `user credits limit exceeded: ${MAX_USER_CREDITS}`);
       }
       throw httpError(409, "target card is expired or changed concurrently");
@@ -411,8 +389,8 @@ export class CreditsService extends InstallableService {
     await raw_atomic(this.resolve_raw(), commands);
     const transaction = await this.read_idempotent_transaction(request);
     if (!transaction) {
-      const summary = await this.read(user_id);
-      if (summary.available_credits < credits) throw httpError(402, "insufficient credits");
+      const available_credits = await this.read_available_credits(user_id);
+      if (available_credits < credits) throw httpError(402, "insufficient credits");
       throw httpError(409, "credits changed concurrently; retry the charge");
     }
     return transaction;
@@ -466,6 +444,53 @@ export class CreditsService extends InstallableService {
       "ORDER BY created_at DESC, rowid DESC LIMIT ?",
     ].join(" "), [...params, read_limit(query.limit)]);
     return rows.map(parse_transaction_entry);
+  }
+
+  /** 读取当前 Card 事实，用户账户响应只由这一个视图派生。 */
+  private async read_current_cards(user_id: string): Promise<CreditsCardsView> {
+    const normalized_user_id = read_required_text(user_id, "user_id");
+    await this.cleanup_expired_cards(normalized_user_id);
+    const [primary, ephemeral] = await Promise.all([
+      this.get_primary_card(normalized_user_id),
+      this.list_ephemeral_cards({ user_id: normalized_user_id, include_history: false }),
+    ]);
+    return { primary, ephemeral };
+  }
+
+  /** 从当前 Card 视图计算总可用额度，不维护第二份余额状态。 */
+  private sum_available_credits(cards: CreditsCardsView): number {
+    return cards.primary.credits
+      + cards.ephemeral.reduce((total, card) => total + card.credits, 0);
+  }
+
+  /** 读取额度校验所需的最小投影，避免构造公开账户响应。 */
+  private async read_available_credits(user_id: string): Promise<number> {
+    const normalized_user_id = read_required_text(user_id, "user_id");
+    await this.cleanup_expired_cards(normalized_user_id);
+    const primary = await this.get_primary_card(normalized_user_id);
+    const row = await raw_first<Record<string, unknown>>(this.resolve_raw(), [
+      "SELECT COALESCE(SUM(credits), 0) AS ephemeral_credits",
+      `FROM ${EPHEMERAL_CARD_TABLE}`,
+      "WHERE user_id = ? AND expires_at > ? AND credits > 0",
+    ].join(" "), [normalized_user_id, new Date().toISOString()]);
+    return primary.credits + Number(row?.ephemeral_credits ?? 0);
+  }
+
+  /** 构造管理端列表所需摘要，不暴露为用户账户模型。 */
+  private async read_user_summary(user_id: string): Promise<CreditsUserSummary> {
+    const normalized_user_id = read_required_text(user_id, "user_id");
+    const cards = await this.read_current_cards(normalized_user_id);
+    const ephemeral_credits = cards.ephemeral.reduce(
+      (total, card) => total + card.credits,
+      0,
+    );
+    return {
+      user_id: normalized_user_id,
+      available_credits: cards.primary.credits + ephemeral_credits,
+      primary_credits: cards.primary.credits,
+      ephemeral_credits,
+      active_ephemeral_cards: cards.ephemeral.length,
+    };
   }
 
   private async get_primary_card(user_id: string): Promise<CreditsPrimaryCard> {

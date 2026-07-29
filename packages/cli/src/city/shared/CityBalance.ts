@@ -10,6 +10,7 @@
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { open_system_browser } from "@/shared/SystemBrowser.js";
 import { CityUserManager } from "@/city/shared/CityUserManager.js";
+import type { CreditsAccount } from "@downcity/city";
 import type {
   CityBalanceAccount,
   CityCheckoutResult,
@@ -25,14 +26,11 @@ const cityUserManager = new CityUserManager();
  */
 export async function readCurrentCityBalance(): Promise<CityBalanceAccount> {
   const { user, city } = await cityUserManager.createUserClient();
-  const summary = await city.service("credits").get<{
-    user_id: string;
-    available_credits: number;
-  }>("me");
+  const account_view = await city.service("credits").get<CreditsAccount>("me");
   const account: CityBalanceAccount = {
-    user_id: summary.user_id,
-    credits: summary.available_credits,
-    display: `${summary.available_credits} Credits`,
+    user_id: account_view.user_id,
+    credits: account_view.available_credits,
+    display: `${account_view.available_credits} Credits`,
     created_at: "",
     updated_at: new Date().toISOString(),
   };
