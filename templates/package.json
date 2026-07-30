@@ -7,6 +7,7 @@
     "dev:localfed": "pnpm -C localfed dev",
     "dev:edgefed": "pnpm -C edgefed dev",
     "dev:agent": "pnpm -C agent dev",
-    "typecheck": "pnpm -C localfed typecheck && pnpm -C edgefed typecheck && pnpm -C agent typecheck"
+    "dev:ui": "pnpm -C ui dev",
+    "typecheck": "pnpm -C localfed typecheck && pnpm -C edgefed typecheck && pnpm -C agent typecheck && pnpm -C ui typecheck"
   }
 }

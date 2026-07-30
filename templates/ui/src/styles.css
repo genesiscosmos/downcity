@@ -1,0 +1,30 @@
+/**
+ * UI 展示应用的 Tailwind 与 Downcity UI 样式入口。
+ *
+ * source.css 负责扫描 UI 包产物，styles.css 负责注入设计令牌与基础样式。
+ */
+
+@import "tailwindcss";
+@import "@downcity/ui/source.css";
+@import "@downcity/ui/styles.css";
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% 0%, rgb(255 255 255 / 96%) 0, transparent 34rem),
+    #f4f4f1;
+}
+
+::selection {
+  background: rgb(17 17 19 / 12%);
+}

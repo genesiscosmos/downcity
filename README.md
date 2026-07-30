@@ -29,7 +29,7 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 | `@downcity/type` | Shared protocol types used across packages, including City model descriptors returned by City. |
 | `@downcity/services` | Public services for accounts, balance, usage, payment, and Stripe payment flows. |
 | `@downcity/ui` | React + Tailwind UI SDK for reusable Console and host-application components. |
-| `templates/*` | Developer-friendly City starter compositions for Node or edge runtimes; official private deployments live outside this repository. |
+| `templates/*` | Developer-friendly Agent, City, edge-runtime, and React UI starter applications. |
 | `homepage` | Official website and end-user documentation site. |
 
 ## Core Capabilities
@@ -198,15 +198,17 @@ downcity/
 │   ├── type/
 │   └── ui/
 ├── templates/
-│   ├── edge/
-│   └── node/
+│   ├── agent/
+│   ├── edgefed/
+│   ├── localfed/
+│   └── ui/
 ├── homepage/
 ├── scripts/
 ├── package.json
 └── pnpm-workspace.yaml
 ```
 
-The `templates/*` projects are kept as convenient developer starters. They are not the private official production deployments.
+The `templates/*` projects are convenient developer starters and showcases. The `ui` template is a standalone React + Vite application for previewing the public `@downcity/ui` components.
 
 ## Documentation
 
@@ -248,6 +250,7 @@ Run in development mode:
 pnpm dev:city
 pnpm dev:agent
 pnpm dev:ui-sdk
+pnpm dev:ui-template
 pnpm dev:homepage
 ```
 
