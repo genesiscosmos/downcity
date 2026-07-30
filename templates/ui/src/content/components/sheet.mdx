@@ -1,0 +1,19 @@
+# Sheet
+
+从页面边缘承载较长工作流。
+
+## Preview
+
+<ComponentDemo component_id="sheet" />
+
+## Usage
+
+```tsx
+import { Button, Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@downcity/ui";
+
+export function Example() {
+  return <Sheet><SheetTrigger render={<Button />}>Settings</SheetTrigger><SheetContent side="right"><SheetTitle>Settings</SheetTitle><SheetDescription>Update preferences.</SheetDescription></SheetContent></Sheet>;
+}
+```
+
+`SheetContent` 必须包含 `SheetTitle`。

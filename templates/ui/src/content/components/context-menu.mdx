@@ -1,0 +1,19 @@
+# ContextMenu
+
+为目标区域提供右键操作。
+
+## Preview
+
+<ComponentDemo component_id="context-menu" />
+
+## Usage
+
+```tsx
+import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuTrigger } from "@downcity/ui";
+
+export function Example() {
+  return <ContextMenu><ContextMenuTrigger render={<div tabIndex={0} />}>Right click</ContextMenuTrigger><ContextMenuContent><ContextMenuGroup><ContextMenuItem>Open</ContextMenuItem></ContextMenuGroup></ContextMenuContent></ContextMenu>;
+}
+```
+
+触发区域应可聚焦，菜单项必须放在 Group 中。

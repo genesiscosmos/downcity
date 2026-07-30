@@ -1,0 +1,27 @@
+# Button
+
+触发主要、次要或危险操作。
+
+## Preview
+
+<ComponentDemo component_id="button" />
+
+## Usage
+
+```tsx
+import { Button } from "@downcity/ui";
+
+export function Example() {
+  return <Button variant="outline">Open project</Button>;
+}
+```
+
+## API
+
+| Prop | Type | Default |
+| --- | --- | --- |
+| `variant` | `default \| outline \| secondary \| ghost \| destructive \| link` | `default` |
+| `size` | `default \| xs \| sm \| lg \| icon-*` | `default` |
+| `render` | `ReactElement` | — |
+
+异步状态通过 `Spinner`、`disabled` 与 Button 组合。

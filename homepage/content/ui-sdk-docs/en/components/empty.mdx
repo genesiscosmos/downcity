@@ -1,0 +1,27 @@
+---
+title: Empty
+description: Present first-use, no-data, and no-results states
+---
+
+# Empty
+
+`Empty` provides media, title, description, and action regions so empty states stay consistent across screens.
+
+```tsx
+import { Button, Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@downcity/ui";
+
+export function EmptyProjects() {
+  return (
+    <Empty>
+      <EmptyMedia>+</EmptyMedia>
+      <EmptyHeader>
+        <EmptyTitle>No projects yet</EmptyTitle>
+        <EmptyDescription>Your projects will appear here after creation.</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent><Button>Create project</Button></EmptyContent>
+    </Empty>
+  );
+}
+```
+
+The host owns action behavior, loading, and product copy.

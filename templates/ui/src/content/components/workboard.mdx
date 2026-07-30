@@ -1,0 +1,19 @@
+# Workboard
+
+通过公开快照展示 Agent 工作世界。
+
+## Preview
+
+<ComponentDemo component_id="workboard" />
+
+## Usage
+
+```tsx
+import { Workboard, type DowncityWorkboardBoardSnapshot } from "@downcity/ui";
+
+export function Example({ board }: { board: DowncityWorkboardBoardSnapshot }) {
+  return <Workboard board={board} selectedAgentId="ui-builder" onSelectAgent={console.log} onRefresh={() => undefined} />;
+}
+```
+
+Workboard 不读取 Agent runtime，只消费宿主提供的公开快照。

@@ -1,0 +1,23 @@
+---
+title: Switch
+description: 用于切换单个布尔配置
+---
+
+# Switch
+
+`Switch` 适合启用或关闭一个立即生效的配置。
+
+```tsx
+import { Label, Switch } from "@downcity/ui";
+
+export function PreviewSwitch() {
+  return (
+    <Label>
+      实时预览
+      <Switch defaultChecked aria-label="启用实时预览" />
+    </Label>
+  );
+}
+```
+
+宿主负责保存状态；组件只提供受控、非受控、表单和键盘交互能力。

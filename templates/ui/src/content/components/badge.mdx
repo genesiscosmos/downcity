@@ -1,0 +1,26 @@
+# Badge
+
+展示状态、分类和轻量统计。
+
+## Preview
+
+<ComponentDemo component_id="badge" />
+
+## Usage
+
+```tsx
+import { Badge } from "@downcity/ui";
+
+export function Example() {
+  return <Badge variant="secondary">Queued</Badge>;
+}
+```
+
+## API
+
+| Prop | Type | Default |
+| --- | --- | --- |
+| `variant` | `default \| secondary \| destructive \| outline \| ghost \| link` | `default` |
+| `render` | `ReactElement` | — |
+
+Badge 适合简短状态，不用于承载主要操作。

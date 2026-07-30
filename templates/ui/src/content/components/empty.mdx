@@ -1,0 +1,19 @@
+# Empty
+
+展示无数据与首次使用状态。
+
+## Preview
+
+<ComponentDemo component_id="empty" />
+
+## Usage
+
+```tsx
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@downcity/ui";
+
+export function Example() {
+  return <Empty><EmptyHeader><EmptyTitle>No projects</EmptyTitle><EmptyDescription>Create your first project.</EmptyDescription></EmptyHeader></Empty>;
+}
+```
+
+操作行为、加载和业务文案均由宿主管理。

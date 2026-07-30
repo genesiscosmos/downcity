@@ -61,8 +61,10 @@ src
   - 组件实现目录。
   - 基础原语组件：
     - `button`、`card`、`input`、`label`、`checkbox`
-    - `dialog`、`dropdown-menu`、`popover`、`sheet`
+    - `dialog`、`dropdown-menu`、`context-menu`、`popover`、`sheet`
+    - `command`、`item`、`empty`、`spinner`、`kbd`、`code-block`
     - `tabs`、`toggle`、`toggle-group`
+    - `select`、`slider`、`switch`、`settings`
     - `tooltip`、`separator`、`skeleton`、`sonner`
   - 业务复合组件：
     - `workboard.tsx`
@@ -85,8 +87,11 @@ src
 
 - 基础组件
   - `Button`、`Badge`、`Card`、`Dialog`、`Input`、`Label`
-  - `DropdownMenu`、`Popover`、`Sheet`
+  - `DropdownMenu`、`ContextMenu`、`Popover`、`Sheet`、`Command`
+  - `Item`、`Empty`、`Spinner`、`Kbd`、`CodeBlock`
   - `Tabs`、`Toggle`、`ToggleGroup`
+  - `Select`、`Slider`、`Switch`
+  - `SettingsContainer`、`SettingSection`、`SettingGroup`、`SettingItem`、`InfoRow`
   - `Tooltip`、`Separator`、`Skeleton`、`Toaster`
 
 - 复合组件

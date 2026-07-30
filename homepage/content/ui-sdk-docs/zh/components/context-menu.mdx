@@ -1,0 +1,37 @@
+---
+title: ContextMenu
+description: 为目标区域提供可访问的右键操作菜单
+---
+
+# ContextMenu
+
+`ContextMenu` 提供右键触发、键盘导航、分组、勾选项和子菜单能力。
+
+```tsx
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from "@downcity/ui";
+
+export function FileActions() {
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger render={<div tabIndex={0} />}>右键查看操作</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuGroup>
+          <ContextMenuItem>打开</ContextMenuItem>
+          <ContextMenuItem>
+            重命名 <ContextMenuShortcut>F2</ContextMenuShortcut>
+          </ContextMenuItem>
+        </ContextMenuGroup>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+```
+
+`ContextMenuItem` 应放在 `ContextMenuGroup` 中。触发区域需要能够接收焦点，操作名称由宿主提供。

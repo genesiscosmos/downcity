@@ -1,0 +1,23 @@
+# Spinner
+
+表达进行中的异步状态。
+
+## Preview
+
+<ComponentDemo component_id="spinner" />
+
+## Usage
+
+```tsx
+import { Button, Spinner } from "@downcity/ui";
+
+export function Example() {
+  return <Button disabled><Spinner /> Saving</Button>;
+}
+```
+
+| Prop | Type | Default |
+| --- | --- | --- |
+| `size` | `sm \| default \| lg` | `default` |
+
+Spinner 只表达视觉状态，异步生命周期由宿主管理。

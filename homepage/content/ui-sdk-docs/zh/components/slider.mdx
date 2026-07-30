@@ -1,0 +1,30 @@
+---
+title: Slider
+description: 用于在连续或分步范围内选择数值
+---
+
+# Slider
+
+`Slider` 支持单值和范围值，并保留拖拽、键盘与表单语义。
+
+```tsx
+import { useState } from "react";
+import { Slider } from "@downcity/ui";
+
+export function WidthSlider() {
+  const [width, setWidth] = useState(72);
+
+  return (
+    <Slider
+      value={width}
+      min={48}
+      max={100}
+      onValueChange={(value) => {
+        if (typeof value === "number") setWidth(value);
+      }}
+    />
+  );
+}
+```
+
+范围模式向 `value` 或 `defaultValue` 传入两个数值，并为每个值渲染一个可访问 Thumb。

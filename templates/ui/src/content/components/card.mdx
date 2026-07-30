@@ -1,0 +1,19 @@
+# Card
+
+组织标题、内容和操作区域。
+
+## Preview
+
+<ComponentDemo component_id="card" />
+
+## Usage
+
+```tsx
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@downcity/ui";
+
+export function Example() {
+  return <Card><CardHeader><CardTitle>Status</CardTitle><CardDescription>Ready</CardDescription></CardHeader><CardContent>All checks passed.</CardContent></Card>;
+}
+```
+
+优先使用完整 Card 组合，不要把所有内容堆进 `CardContent`。

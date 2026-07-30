@@ -1,0 +1,47 @@
+---
+title: Select
+description: Choose one value from a grouped set of options
+---
+
+# Select
+
+`Select` provides a compact trigger, keyboard navigation, and grouped popup options.
+
+## Example
+
+```tsx
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@downcity/ui";
+
+export function ModelSelect() {
+  return (
+    <Select defaultValue="balanced">
+      <SelectTrigger>
+        <SelectValue placeholder="Select a mode" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          <SelectLabel>Response mode</SelectLabel>
+          <SelectItem value="concise">Concise</SelectItem>
+          <SelectItem value="balanced" description="Balance speed and context">
+            Balanced
+          </SelectItem>
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
+}
+```
+
+## Composition Rules
+
+- Keep every `SelectItem` inside a `SelectGroup`.
+- `SelectTrigger` supports `default` and `sm` sizes.
+- Use a Combobox for searchable or very large option sets.

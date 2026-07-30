@@ -1,0 +1,19 @@
+# Popover
+
+展示轻量上下文与辅助设置。
+
+## Preview
+
+<ComponentDemo component_id="popover" />
+
+## Usage
+
+```tsx
+import { Button, Popover, PopoverContent, PopoverTrigger } from "@downcity/ui";
+
+export function Example() {
+  return <Popover><PopoverTrigger render={<Button />}>Filters</PopoverTrigger><PopoverContent>Filter controls</PopoverContent></Popover>;
+}
+```
+
+阻断式任务使用 `Dialog`。

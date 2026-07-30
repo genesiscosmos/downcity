@@ -12,7 +12,26 @@ export type {
   DowncityButtonSize,
   DowncityButtonVariant,
   DowncityCardSize,
+  DowncityCodeBlockProps,
+  DowncityCommandInputProps,
+  DowncityContextMenuContentProps,
+  DowncityContextMenuItemProps,
+  DowncityContextMenuItemVariant,
   DowncityDropdownMenuItemVariant,
+  DowncityInfoRowProps,
+  DowncityItemMediaVariant,
+  DowncityItemSize,
+  DowncityItemVariant,
+  DowncitySelectContentProps,
+  DowncitySelectItemProps,
+  DowncitySelectTriggerProps,
+  DowncitySelectTriggerSize,
+  DowncitySettingGroupProps,
+  DowncitySettingItemProps,
+  DowncitySettingSectionProps,
+  DowncitySettingsContainerProps,
+  DowncitySliderProps,
+  DowncitySpinnerSize,
   DowncityToasterTheme,
 } from "./types/components";
 export type {
@@ -52,6 +71,34 @@ export {
   CardTitle,
 } from "./components/card";
 export { Checkbox } from "./components/checkbox";
+export { CodeBlock } from "./components/code-block";
+export {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+  CommandShortcut,
+} from "./components/command";
+export {
+  ContextMenu,
+  ContextMenuCheckboxItem,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuPortal,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "./components/context-menu";
 export {
   Dialog,
   DialogTrigger,
@@ -65,6 +112,25 @@ export {
   DialogDescription,
 } from "./components/dialog";
 export { Input } from "./components/input";
+export {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "./components/empty";
+export {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+  item_variants,
+} from "./components/item";
+export { Kbd, KbdGroup } from "./components/kbd";
 export { Label } from "./components/label";
 export {
   DropdownMenu,
@@ -90,6 +156,23 @@ export {
 } from "./components/popover";
 export { Separator } from "./components/separator";
 export {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "./components/select";
+export {
+  InfoRow,
+  SettingGroup,
+  SettingItem,
+  SettingSection,
+  SettingsContainer,
+} from "./components/settings";
+export {
   Sheet,
   SheetTrigger,
   SheetClose,
@@ -102,6 +185,9 @@ export {
   SheetDescription,
 } from "./components/sheet";
 export { Skeleton } from "./components/skeleton";
+export { Slider } from "./components/slider";
+export { Spinner } from "./components/spinner";
+export { Switch } from "./components/switch";
 export { Tabs, TabsList, TabsTrigger, TabsContent, tabsListVariants } from "./components/tabs";
 export { Textarea, type TextareaProps } from "./components/textarea";
 export { Toaster } from "./components/sonner";

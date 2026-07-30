@@ -1,0 +1,24 @@
+# Toggle
+
+切换单个状态或一组选项。
+
+## Preview
+
+<ComponentDemo component_id="toggle" />
+
+## Usage
+
+```tsx
+import { ToggleGroup, ToggleGroupItem } from "@downcity/ui";
+
+export function Example() {
+  return (
+    <ToggleGroup defaultValue={["grid"]}>
+      <ToggleGroupItem value="list">List</ToggleGroupItem>
+      <ToggleGroupItem value="grid">Grid</ToggleGroupItem>
+    </ToggleGroup>
+  );
+}
+```
+
+`ToggleGroupItem` 必须放在 `ToggleGroup` 中。

@@ -1,0 +1,18 @@
+---
+title: CodeBlock
+description: 展示普通源码或构建期语法高亮结果
+---
+
+# CodeBlock
+
+`CodeBlock` 提供语言标签、深色代码表面、横向滚动和复制操作。语法高亮应由 MDX、Markdown 或宿主构建流程提前完成，组件本身不会在浏览器加载 Shiki。
+
+```tsx
+import { CodeBlock } from "@downcity/ui";
+
+export function Example() {
+  return <CodeBlock language="tsx" code={'import { Button } from "@downcity/ui";'} />;
+}
+```
+
+构建工具也可以把高亮后的 `children`、`data-raw` 和 `data-language` 直接传给组件。

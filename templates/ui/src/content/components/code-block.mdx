@@ -1,0 +1,19 @@
+# CodeBlock
+
+展示语法高亮代码、语言标签与复制操作。
+
+## Preview
+
+<ComponentDemo component_id="code-block" />
+
+## Usage
+
+```tsx
+import { CodeBlock } from "@downcity/ui";
+
+export function Example() {
+  return <CodeBlock language="tsx" code={'import { Button } from "@downcity/ui";'} />;
+}
+```
+
+MDX fenced code 会在构建期由 Shiki 高亮，然后通过同一个 CodeBlock 组件渲染。

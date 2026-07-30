@@ -1,0 +1,18 @@
+---
+title: Spinner
+description: Represent lightweight in-progress loading states
+---
+
+# Spinner
+
+`Spinner` inherits the current text color and composes into buttons, items, menus, and empty states.
+
+```tsx
+import { Button, Spinner } from "@downcity/ui";
+
+export function SavingButton() {
+  return <Button disabled><Spinner /> Saving</Button>;
+}
+```
+
+Available sizes are `sm`, `default`, and `lg`. The component provides visual feedback only; the host owns the asynchronous task lifecycle.

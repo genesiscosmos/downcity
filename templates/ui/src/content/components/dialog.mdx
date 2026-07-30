@@ -1,0 +1,19 @@
+# Dialog
+
+承载需要确认的阻断式任务。
+
+## Preview
+
+<ComponentDemo component_id="dialog" />
+
+## Usage
+
+```tsx
+import { Button, Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@downcity/ui";
+
+export function Example() {
+  return <Dialog><DialogTrigger render={<Button />}>Publish</DialogTrigger><DialogContent><DialogTitle>Publish?</DialogTitle><DialogDescription>This action is public.</DialogDescription></DialogContent></Dialog>;
+}
+```
+
+`DialogContent` 必须包含 `DialogTitle`。

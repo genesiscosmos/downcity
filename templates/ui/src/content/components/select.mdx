@@ -1,0 +1,24 @@
+# Select
+
+从分组选项中选择单个值。
+
+## Preview
+
+<ComponentDemo component_id="select" />
+
+## Usage
+
+```tsx
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@downcity/ui";
+
+export function Example() {
+  return (
+    <Select defaultValue="balanced">
+      <SelectTrigger><SelectValue placeholder="Select mode" /></SelectTrigger>
+      <SelectContent><SelectGroup><SelectItem value="balanced">Balanced</SelectItem></SelectGroup></SelectContent>
+    </Select>
+  );
+}
+```
+
+`SelectItem` 必须放在 `SelectGroup` 中。

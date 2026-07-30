@@ -1,0 +1,151 @@
+"use client";
+
+/**
+ * Downcity Command 命令与搜索选择组件组。
+ *
+ * 关键说明（中文）
+ * - 基于 cmdk 提供筛选、键盘导航与选择语义。
+ * - `CommandItem` 必须放在 `CommandGroup` 中，保持清晰的结果分组。
+ */
+
+import { SearchIcon } from "lucide-react";
+import { Command as CommandPrimitive } from "cmdk";
+import * as React from "react";
+
+import type { DowncityCommandInputProps } from "../types/components";
+import { cn } from "../lib/utils";
+
+function Command({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive>) {
+  return (
+    <CommandPrimitive
+      data-slot="command"
+      className={cn(
+        "flex h-full w-full flex-col overflow-hidden rounded-floating-surface bg-popover text-popover-foreground",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function CommandInput({
+  className,
+  leading,
+  ...props
+}: DowncityCommandInputProps) {
+  return (
+    <div
+      data-slot="command-input-wrapper"
+      className="flex items-center gap-2 border-b border-divider px-3"
+      cmdk-input-wrapper=""
+    >
+      {leading ?? <SearchIcon className="size-4 shrink-0 text-muted-foreground" />}
+      <CommandPrimitive.Input
+        data-slot="command-input"
+        className={cn(
+          "h-11 min-w-0 flex-1 bg-transparent py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+          className,
+        )}
+        {...props}
+      />
+    </div>
+  );
+}
+
+function CommandList({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.List>) {
+  return (
+    <CommandPrimitive.List
+      data-slot="command-list"
+      className={cn("max-h-80 overflow-x-hidden overflow-y-auto p-1.5", className)}
+      {...props}
+    />
+  );
+}
+
+function CommandEmpty({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>) {
+  return (
+    <CommandPrimitive.Empty
+      data-slot="command-empty"
+      className={cn("px-3 py-8 text-center text-sm text-muted-foreground", className)}
+      {...props}
+    />
+  );
+}
+
+function CommandGroup({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Group>) {
+  return (
+    <CommandPrimitive.Group
+      data-slot="command-group"
+      className={cn(
+        "overflow-hidden py-1 text-foreground [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[0.65rem] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:tracking-wide [&_[cmdk-group-heading]]:text-muted-foreground",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function CommandItem({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item>) {
+  return (
+    <CommandPrimitive.Item
+      data-slot="command-item"
+      className={cn(
+        "group/command-item relative flex min-h-10 cursor-default items-center gap-2 rounded-xl px-3 py-2 text-sm outline-none select-none data-[selected=true]:bg-interaction-selected data-[selected=true]:text-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function CommandSeparator({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Separator>) {
+  return (
+    <CommandPrimitive.Separator
+      data-slot="command-separator"
+      className={cn("-mx-0.5 my-1 h-px bg-divider", className)}
+      {...props}
+    />
+  );
+}
+
+function CommandShortcut({ className, ...props }: React.ComponentProps<"span">) {
+  return (
+    <span
+      data-slot="command-shortcut"
+      className={cn(
+        "ml-auto text-xs tracking-widest text-muted-foreground group-data-[selected=true]/command-item:text-foreground",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+  CommandShortcut,
+};

@@ -1,0 +1,47 @@
+---
+title: Select
+description: 用于从一组选项中选择单个值
+---
+
+# Select
+
+`Select` 提供紧凑的选择器触发器、键盘导航和分组选项浮层。
+
+## 示例
+
+```tsx
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@downcity/ui";
+
+export function ModelSelect() {
+  return (
+    <Select defaultValue="balanced">
+      <SelectTrigger>
+        <SelectValue placeholder="选择模式" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          <SelectLabel>响应模式</SelectLabel>
+          <SelectItem value="concise">精简</SelectItem>
+          <SelectItem value="balanced" description="兼顾速度与上下文">
+            平衡
+          </SelectItem>
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
+}
+```
+
+## 组合约束
+
+- `SelectItem` 必须放在 `SelectGroup` 中。
+- `SelectTrigger` 支持 `default` 和 `sm` 两种尺寸。
+- 复杂搜索和大量选项应使用 Combobox，而不是继续扩展 Select。

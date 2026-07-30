@@ -1,0 +1,19 @@
+# DropdownMenu
+
+通过按钮打开操作菜单。
+
+## Preview
+
+<ComponentDemo component_id="dropdown-menu" />
+
+## Usage
+
+```tsx
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@downcity/ui";
+
+export function Example() {
+  return <DropdownMenu><DropdownMenuTrigger>Actions</DropdownMenuTrigger><DropdownMenuContent><DropdownMenuGroup><DropdownMenuItem>Open</DropdownMenuItem></DropdownMenuGroup></DropdownMenuContent></DropdownMenu>;
+}
+```
+
+`DropdownMenuItem` 必须放在 `DropdownMenuGroup` 中。

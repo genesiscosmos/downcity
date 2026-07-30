@@ -1,0 +1,19 @@
+# Kbd
+
+展示快捷键和键位组合。
+
+## Preview
+
+<ComponentDemo component_id="kbd" />
+
+## Usage
+
+```tsx
+import { Kbd, KbdGroup } from "@downcity/ui";
+
+export function Example() {
+  return <KbdGroup><Kbd>⌘</Kbd><Kbd>K</Kbd></KbdGroup>;
+}
+```
+
+`Kbd` 不注册键盘事件，只负责展示快捷键。

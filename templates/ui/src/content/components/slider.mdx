@@ -1,0 +1,22 @@
+# Slider
+
+选择数值或数值范围。
+
+## Preview
+
+<ComponentDemo component_id="slider" />
+
+## Usage
+
+```tsx
+import { Slider } from "@downcity/ui";
+
+export function Example() {
+  return <Slider defaultValue={72} min={48} max={100} />;
+}
+```
+
+| Prop | Type | Default |
+| --- | --- | --- |
+| `value` | `number \| readonly number[]` | — |
+| `step` | `number` | `1` |

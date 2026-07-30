@@ -1,0 +1,37 @@
+---
+title: ContextMenu
+description: Provide an accessible right-click action menu for a target region
+---
+
+# ContextMenu
+
+`ContextMenu` provides right-click triggering, keyboard navigation, groups, checked items, and submenus.
+
+```tsx
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from "@downcity/ui";
+
+export function FileActions() {
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger render={<div tabIndex={0} />}>Right-click for actions</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuGroup>
+          <ContextMenuItem>Open</ContextMenuItem>
+          <ContextMenuItem>
+            Rename <ContextMenuShortcut>F2</ContextMenuShortcut>
+          </ContextMenuItem>
+        </ContextMenuGroup>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+```
+
+Keep `ContextMenuItem` inside `ContextMenuGroup`. The trigger region should be focusable, while the host owns action labels and behavior.

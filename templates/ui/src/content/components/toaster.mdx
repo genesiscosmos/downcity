@@ -1,0 +1,20 @@
+# Toaster
+
+承载非阻断式全局反馈。
+
+## Preview
+
+<ComponentDemo component_id="toaster" />
+
+## Usage
+
+```tsx
+import { Toaster } from "@downcity/ui";
+import { toast } from "sonner";
+
+export function App() {
+  return <><button onClick={() => toast.success("Saved")}>Save</button><Toaster theme="light" /></>;
+}
+```
+
+每个应用根节点只挂载一个 Toaster；调用 `toast` 时宿主需要安装 `sonner`。

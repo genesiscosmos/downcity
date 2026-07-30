@@ -29,6 +29,19 @@ This page lists the full public module surface of `@downcity/ui`.
 
 - Values: `default`, `destructive`
 
+### `DowncityContextMenuItemVariant`
+
+- Values: `default`, `destructive`
+
+### `DowncityItemVariant`, `DowncityItemSize`
+
+- Item variants: `default`, `outline`, `muted`
+- Item sizes: `default`, `sm`
+
+### `DowncitySpinnerSize`
+
+- Values: `sm`, `default`, `lg`
+
 ### `DowncityToasterTheme`
 
 - Values: `light`, `dark`, `system`
@@ -61,6 +74,22 @@ This page lists the full public module surface of `@downcity/ui`.
 
 - Exports: `ToggleGroup`, `ToggleGroupItem`
 
+### `Spinner`
+
+- Exports: `Spinner`
+- Purpose: loading feedback in buttons, items, and asynchronous regions
+
+### `Kbd`
+
+- Exports: `Kbd`, `KbdGroup`
+- Purpose: display shortcuts and key combinations
+
+### `CodeBlock`
+
+- Exports: `CodeBlock`
+- Exported type: `DowncityCodeBlockProps`
+- Purpose: render plain source or build-time highlighted code with copy behavior
+
 ## Form Modules
 
 ### `Input`
@@ -79,6 +108,21 @@ This page lists the full public module surface of `@downcity/ui`.
 ### `Label`
 
 - Exports: `Label`
+
+### `Select`
+
+- Exports: `Select`, `SelectTrigger`, `SelectValue`, `SelectContent`, `SelectGroup`, `SelectLabel`, `SelectItem`, `SelectSeparator`
+- Purpose: single-value selection with grouped options
+
+### `Slider`
+
+- Exports: `Slider`
+- Purpose: scalar or range value selection
+
+### `Switch`
+
+- Exports: `Switch`
+- Purpose: toggle one boolean setting
 
 ## Containers and Display Modules
 
@@ -109,6 +153,21 @@ This page lists the full public module surface of `@downcity/ui`.
   - `TabsTrigger`
   - `TabsContent`
   - `tabsListVariants`
+
+### `Settings`
+
+- Exports: `SettingsContainer`, `SettingSection`, `SettingGroup`, `SettingItem`, `InfoRow`
+- Purpose: compact settings screens and grouped detail rows
+
+### `Item`
+
+- Exports: `Item`, `ItemMedia`, `ItemContent`, `ItemTitle`, `ItemDescription`, `ItemActions`, `ItemGroup`, `item_variants`
+- Purpose: compose resource lists, search results, and settings entries
+
+### `Empty`
+
+- Exports: `Empty`, `EmptyHeader`, `EmptyMedia`, `EmptyTitle`, `EmptyDescription`, `EmptyContent`
+- Purpose: first-use, no-data, and no-results states
 
 ### `Workboard`
 
@@ -184,6 +243,16 @@ This page lists the full public module surface of `@downcity/ui`.
   - `DropdownMenuSub`
   - `DropdownMenuSubTrigger`
   - `DropdownMenuSubContent`
+
+### `ContextMenu`
+
+- Exports: `ContextMenu`, `ContextMenuTrigger`, `ContextMenuContent`, `ContextMenuGroup`, `ContextMenuLabel`, `ContextMenuItem`, `ContextMenuCheckboxItem`, `ContextMenuRadioGroup`, `ContextMenuRadioItem`, `ContextMenuSeparator`, `ContextMenuShortcut`, `ContextMenuSub`, `ContextMenuSubTrigger`, `ContextMenuSubContent`
+- Purpose: provide right-click actions for a target region
+
+### `Command`
+
+- Exports: `Command`, `CommandInput`, `CommandList`, `CommandEmpty`, `CommandGroup`, `CommandItem`, `CommandSeparator`, `CommandShortcut`
+- Purpose: command palettes, resource search, and quick navigation
 
 ### `Popover`
 

@@ -1,0 +1,27 @@
+---
+title: Item
+description: 组合资源、搜索结果和设置入口的通用内容项
+---
+
+# Item
+
+`Item` 统一图形区域、标题、说明和尾部操作的布局，但不绑定菜单或路由语义。
+
+```tsx
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle, Kbd } from "@downcity/ui";
+
+export function SearchResult() {
+  return (
+    <Item variant="outline">
+      <ItemMedia variant="icon">UI</ItemMedia>
+      <ItemContent>
+        <ItemTitle>组件文档</ItemTitle>
+        <ItemDescription>浏览公开组件和组合示例。</ItemDescription>
+      </ItemContent>
+      <ItemActions><Kbd>Enter</Kbd></ItemActions>
+    </Item>
+  );
+}
+```
+
+支持 `default`、`outline`、`muted` 变体以及 `default`、`sm` 尺寸。需要交互语义时，通过 `render={<button />}` 或 `render={<a />}` 让 Item 自身获得正确语义。

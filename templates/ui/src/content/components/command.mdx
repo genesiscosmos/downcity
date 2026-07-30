@@ -1,0 +1,19 @@
+# Command
+
+提供搜索、键盘导航与快速执行。
+
+## Preview
+
+<ComponentDemo component_id="command" />
+
+## Usage
+
+```tsx
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@downcity/ui";
+
+export function Example() {
+  return <Command><CommandInput placeholder="Search..." /><CommandList><CommandEmpty>No results.</CommandEmpty><CommandGroup heading="Project"><CommandItem value="open">Open</CommandItem></CommandGroup></CommandList></Command>;
+}
+```
+
+`CommandItem` 必须放在 `CommandGroup` 中。

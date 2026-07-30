@@ -1,0 +1,18 @@
+---
+title: Kbd
+description: 展示快捷键与单个键位提示
+---
+
+# Kbd
+
+`Kbd` 使用语义化键盘元素；多个键位可通过 `KbdGroup` 排列。
+
+```tsx
+import { Kbd, KbdGroup } from "@downcity/ui";
+
+export function SearchShortcut() {
+  return <KbdGroup><Kbd>⌘</Kbd><Kbd>K</Kbd></KbdGroup>;
+}
+```
+
+它只展示快捷键，不注册或处理键盘事件。

@@ -1,0 +1,29 @@
+---
+title: Command
+description: 构建支持搜索与键盘导航的命令列表
+---
+
+# Command
+
+`Command` 适合命令面板、资源搜索和快速跳转。它负责筛选与键盘选择，打开方式和业务执行仍由宿主管理。
+
+```tsx
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@downcity/ui";
+
+export function CommandSearch() {
+  return (
+    <Command>
+      <CommandInput placeholder="搜索命令..." />
+      <CommandList>
+        <CommandEmpty>没有匹配项</CommandEmpty>
+        <CommandGroup heading="项目">
+          <CommandItem value="open">打开项目</CommandItem>
+          <CommandItem value="settings">打开设置</CommandItem>
+        </CommandGroup>
+      </CommandList>
+    </Command>
+  );
+}
+```
+
+`CommandItem` 必须放在 `CommandGroup` 中。需要模态命令面板时，将完整 `Command` 组合进 `Dialog`。

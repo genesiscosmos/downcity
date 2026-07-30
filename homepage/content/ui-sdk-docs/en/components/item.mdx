@@ -1,0 +1,27 @@
+---
+title: Item
+description: Compose reusable rows for resources, search results, and settings entries
+---
+
+# Item
+
+`Item` standardizes media, title, description, and trailing actions without binding the layout to menu or routing semantics.
+
+```tsx
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle, Kbd } from "@downcity/ui";
+
+export function SearchResult() {
+  return (
+    <Item variant="outline">
+      <ItemMedia variant="icon">UI</ItemMedia>
+      <ItemContent>
+        <ItemTitle>Component docs</ItemTitle>
+        <ItemDescription>Browse public components and composition examples.</ItemDescription>
+      </ItemContent>
+      <ItemActions><Kbd>Enter</Kbd></ItemActions>
+    </Item>
+  );
+}
+```
+
+Variants are `default`, `outline`, and `muted`; sizes are `default` and `sm`. When interaction semantics are required, use `render={<button />}` or `render={<a />}` so the Item itself receives the correct semantics.

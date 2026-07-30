@@ -1,0 +1,42 @@
+---
+title: Settings
+description: 用于组合紧凑、一致的设置页面
+---
+
+# Settings
+
+Settings 组件组只定义设置页的信息层级，不持有配置值或保存生命周期。
+
+```tsx
+import {
+  SettingGroup,
+  SettingItem,
+  SettingSection,
+  SettingsContainer,
+  Switch,
+} from "@downcity/ui";
+
+export function AppearanceSettings() {
+  return (
+    <SettingsContainer>
+      <SettingSection title="外观" description="控制宿主应用的显示方式">
+        <SettingGroup>
+          <SettingItem label="实时预览" description="编辑时同步更新预览区域">
+            <Switch defaultChecked aria-label="启用实时预览" />
+          </SettingItem>
+        </SettingGroup>
+      </SettingSection>
+    </SettingsContainer>
+  );
+}
+```
+
+## 导出
+
+- `SettingsContainer`
+- `SettingSection`
+- `SettingGroup`
+- `SettingItem`
+- `InfoRow`
+
+表单状态、校验、保存和失败恢复仍由宿主负责。

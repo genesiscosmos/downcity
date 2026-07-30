@@ -1,0 +1,29 @@
+---
+title: Command
+description: Build searchable command lists with keyboard navigation
+---
+
+# Command
+
+`Command` works well for command palettes, resource search, and quick navigation. It owns filtering and keyboard selection while the host owns opening and executing actions.
+
+```tsx
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@downcity/ui";
+
+export function CommandSearch() {
+  return (
+    <Command>
+      <CommandInput placeholder="Search commands..." />
+      <CommandList>
+        <CommandEmpty>No matching commands</CommandEmpty>
+        <CommandGroup heading="Project">
+          <CommandItem value="open">Open project</CommandItem>
+          <CommandItem value="settings">Open settings</CommandItem>
+        </CommandGroup>
+      </CommandList>
+    </Command>
+  );
+}
+```
+
+Keep every `CommandItem` inside a `CommandGroup`. Compose the full `Command` inside a `Dialog` when you need a modal command palette.

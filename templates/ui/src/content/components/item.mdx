@@ -1,0 +1,19 @@
+# Item
+
+组合资源、搜索结果和设置入口。
+
+## Preview
+
+<ComponentDemo component_id="item" />
+
+## Usage
+
+```tsx
+import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@downcity/ui";
+
+export function Example() {
+  return <Item variant="outline" render={<button type="button" />}><ItemMedia variant="icon">UI</ItemMedia><ItemContent><ItemTitle>Docs</ItemTitle><ItemDescription>Browse examples.</ItemDescription></ItemContent></Item>;
+}
+```
+
+交互语义通过 `render` 明确提供。

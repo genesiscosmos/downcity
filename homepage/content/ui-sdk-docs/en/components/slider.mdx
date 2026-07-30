@@ -1,0 +1,30 @@
+---
+title: Slider
+description: Select a value from a continuous or stepped range
+---
+
+# Slider
+
+`Slider` supports scalar and range values with pointer, keyboard, and form semantics.
+
+```tsx
+import { useState } from "react";
+import { Slider } from "@downcity/ui";
+
+export function WidthSlider() {
+  const [width, setWidth] = useState(72);
+
+  return (
+    <Slider
+      value={width}
+      min={48}
+      max={100}
+      onValueChange={(value) => {
+        if (typeof value === "number") setWidth(value);
+      }}
+    />
+  );
+}
+```
+
+Pass two numbers through `value` or `defaultValue` for a range slider with two accessible thumbs.

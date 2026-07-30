@@ -1,0 +1,18 @@
+---
+title: CodeBlock
+description: Render plain source or build-time syntax-highlighted output
+---
+
+# CodeBlock
+
+`CodeBlock` provides a language label, dark code surface, horizontal scrolling, and copy behavior. Syntax highlighting belongs in the MDX, Markdown, or host build pipeline, so the component does not load Shiki in the browser.
+
+```tsx
+import { CodeBlock } from "@downcity/ui";
+
+export function Example() {
+  return <CodeBlock language="tsx" code={'import { Button } from "@downcity/ui";'} />;
+}
+```
+
+Build tooling can also pass highlighted `children`, `data-raw`, and `data-language` directly to the component.

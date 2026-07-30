@@ -1,0 +1,19 @@
+# Settings
+
+组合紧凑设置页与信息分组。
+
+## Preview
+
+<ComponentDemo component_id="settings" />
+
+## Usage
+
+```tsx
+import { SettingGroup, SettingItem, SettingSection, SettingsContainer, Switch } from "@downcity/ui";
+
+export function Example() {
+  return <SettingsContainer><SettingSection title="Editor"><SettingGroup><SettingItem label="Live preview"><Switch aria-label="Live preview" /></SettingItem></SettingGroup></SettingSection></SettingsContainer>;
+}
+```
+
+Settings 只负责结构，所有设置状态仍由宿主拥有。

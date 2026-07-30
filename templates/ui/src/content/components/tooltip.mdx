@@ -1,0 +1,19 @@
+# Tooltip
+
+提供简短的悬停或聚焦提示。
+
+## Preview
+
+<ComponentDemo component_id="tooltip" />
+
+## Usage
+
+```tsx
+import { Button, Tooltip, TooltipContent, TooltipTrigger } from "@downcity/ui";
+
+export function Example() {
+  return <Tooltip><TooltipTrigger render={<Button />}>Hover</TooltipTrigger><TooltipContent>Short hint</TooltipContent></Tooltip>;
+}
+```
+
+Tooltip 不承载必须阅读的内容。

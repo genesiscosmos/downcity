@@ -1,0 +1,19 @@
+# Input
+
+接收单行文本与短配置。
+
+## Preview
+
+<ComponentDemo component_id="input" />
+
+## Usage
+
+```tsx
+import { Input, Label } from "@downcity/ui";
+
+export function Example() {
+  return <><Label htmlFor="name">Project name</Label><Input id="name" /></>;
+}
+```
+
+`Label.htmlFor` 应与 `Input.id` 对应，错误状态同时设置 `aria-invalid`。

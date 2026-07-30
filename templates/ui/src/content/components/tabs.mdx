@@ -1,0 +1,19 @@
+# Tabs
+
+在同一层级切换内容面板。
+
+## Preview
+
+<ComponentDemo component_id="tabs" />
+
+## Usage
+
+```tsx
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@downcity/ui";
+
+export function Example() {
+  return <Tabs defaultValue="overview"><TabsList><TabsTrigger value="overview">Overview</TabsTrigger></TabsList><TabsContent value="overview">Content</TabsContent></Tabs>;
+}
+```
+
+`TabsTrigger` 必须放在 `TabsList` 中。

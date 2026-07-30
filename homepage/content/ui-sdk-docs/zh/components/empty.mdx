@@ -1,0 +1,27 @@
+---
+title: Empty
+description: 展示首次使用、无数据和无搜索结果状态
+---
+
+# Empty
+
+`Empty` 提供图形、标题、说明和操作区域，让不同页面的空状态保持一致。
+
+```tsx
+import { Button, Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@downcity/ui";
+
+export function EmptyProjects() {
+  return (
+    <Empty>
+      <EmptyMedia>+</EmptyMedia>
+      <EmptyHeader>
+        <EmptyTitle>还没有项目</EmptyTitle>
+        <EmptyDescription>创建项目后，它会显示在这里。</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent><Button>创建项目</Button></EmptyContent>
+    </Empty>
+  );
+}
+```
+
+操作行为、加载过程和业务文案均由宿主负责。
