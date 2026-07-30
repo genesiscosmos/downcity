@@ -23,7 +23,7 @@ export default function Roadmap() {
   const repoUrl =
     product.homepage?.includes("github.com") === true
       ? product.homepage
-      : "https://github.com/wangenius/downcity";
+      : "https://github.com/genesiscosmos/downcity";
   const issuesUrl = `${repoUrl}/issues`;
 
   return (

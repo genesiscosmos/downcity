@@ -37,7 +37,7 @@ export default function Examples() {
   const repoUrl =
     product.homepage?.includes("github.com") === true
       ? product.homepage
-      : "https://github.com/wangenius/downcity";
+      : "https://github.com/genesiscosmos/downcity";
 
   return (
     <div className={marketingTheme.pageNarrow}>

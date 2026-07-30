@@ -76,7 +76,7 @@ test("中英文首页输出相互关联的品牌实体", async () => {
   assert.equal(website.publisher["@id"], organization["@id"]);
   assert.equal(website.about["@id"], software["@id"]);
   assert.equal(software.publisher["@id"], organization["@id"]);
-  assert.equal(software.codeRepository, "https://github.com/wangenius/downcity");
+  assert.equal(software.codeRepository, "https://github.com/genesiscosmos/downcity");
   assert.equal(software.applicationSubCategory, "Agentic Product Environment");
   assert.ok(software.sameAs.includes("https://x.com/downcity_ai"));
   assert.match(software.description, /agentic product environment/);
@@ -125,7 +125,7 @@ test("中英文首页稳定输出核心产品入口", async () => {
     for (const core_path of core_paths) {
       assert.ok(html.includes(`href="${core_path}"`), `${relative_path} 缺少核心入口 ${core_path}`);
     }
-    assert.ok(html.includes('href="https://github.com/wangenius/downcity"'));
+    assert.ok(html.includes('href="https://github.com/genesiscosmos/downcity"'));
   }
 });
 

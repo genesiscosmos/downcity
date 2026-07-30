@@ -11,7 +11,7 @@ import type { SeoHomeStructuredData } from "@/types/seo";
 const organization_id = "https://genesiscosmos.com/#organization";
 const website_id = `${create_site_url("/")}#website`;
 const software_id = `${create_site_url("/")}#software`;
-const github_url = "https://github.com/wangenius/downcity";
+const github_url = "https://github.com/genesiscosmos/downcity";
 const twitter_url = "https://x.com/downcity_ai";
 const genesis_product_url = "https://genesiscosmos.com/products/downcity/";
 

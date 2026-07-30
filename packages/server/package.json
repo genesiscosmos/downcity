@@ -13,12 +13,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wangenius/downcity.git",
+    "url": "git+https://github.com/genesiscosmos/downcity.git",
     "directory": "packages/server"
   },
   "homepage": "https://downcity.ai",
   "bugs": {
-    "url": "https://github.com/wangenius/downcity/issues"
+    "url": "https://github.com/genesiscosmos/downcity/issues"
   },
   "keywords": [
     "downcity",

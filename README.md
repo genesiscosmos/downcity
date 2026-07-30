@@ -1,9 +1,9 @@
 # Downcity
 
-[![Publish packages](https://github.com/wangenius/downcity/actions/workflows/publish-packages.yml/badge.svg)](https://github.com/wangenius/downcity/actions/workflows/publish-packages.yml)
-[![Publish CLI](https://github.com/wangenius/downcity/actions/workflows/publish-downcity.yml/badge.svg)](https://github.com/wangenius/downcity/actions/workflows/publish-downcity.yml)
+[![Publish packages](https://github.com/genesiscosmos/downcity/actions/workflows/publish-packages.yml/badge.svg)](https://github.com/genesiscosmos/downcity/actions/workflows/publish-packages.yml)
+[![Publish CLI](https://github.com/genesiscosmos/downcity/actions/workflows/publish-downcity.yml/badge.svg)](https://github.com/genesiscosmos/downcity/actions/workflows/publish-downcity.yml)
 [![npm version](https://img.shields.io/npm/v/downcity.svg)](https://www.npmjs.com/package/downcity)
-[![License](https://img.shields.io/github/license/wangenius/downcity.svg)](./LICENSE)
+[![License](https://img.shields.io/github/license/genesiscosmos/downcity.svg)](./LICENSE)
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 

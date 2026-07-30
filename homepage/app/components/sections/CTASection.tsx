@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { IconArrowRight } from "@tabler/icons-react";
 
-const GITHUB_URL = "https://github.com/wangenius/downcity";
+const GITHUB_URL = "https://github.com/genesiscosmos/downcity";
 
 /**
  * 功能页收尾 CTA 模块（Vibecape 风格）。

@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { IconPlayerPlayFilled, IconBrandGithub } from "@tabler/icons-react";
 import { resolve_interface_locale } from "@/lib/interface-locale";
 
-const GITHUB_URL = "https://github.com/wangenius/downcity";
+const GITHUB_URL = "https://github.com/genesiscosmos/downcity";
 
 /**
  * 首页收尾 CTA 模块。

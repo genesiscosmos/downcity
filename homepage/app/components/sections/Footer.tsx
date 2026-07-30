@@ -5,7 +5,7 @@ import { homepage_positioning } from "@/lib/homepage-positioning";
 import { resolve_interface_locale } from "@/lib/interface-locale";
 import { product } from "@/lib/product";
 
-const GITHUB_URL = "https://github.com/wangenius/downcity";
+const GITHUB_URL = "https://github.com/genesiscosmos/downcity";
 const TWITTER_URL = "https://x.com/downcity_ai";
 
 /**

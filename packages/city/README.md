@@ -323,5 +323,5 @@ OpenAI-compatible 请求体只需要标准 `model/messages/stream/tools` 字段�
 
 ## 文档
 
-- 仓库首页：[downcity](https://github.com/wangenius/downcity)
-- 文档目录：[homepage/content/docs](https://github.com/wangenius/downcity/tree/main/homepage/content/docs)
+- 仓库首页：[downcity](https://github.com/genesiscosmos/downcity)
+- 文档目录：[homepage/content/docs](https://github.com/genesiscosmos/downcity/tree/main/homepage/content/docs)

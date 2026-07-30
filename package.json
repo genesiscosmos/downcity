@@ -46,7 +46,7 @@
   "dependencies": {},
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wangenius/downcity.git"
+    "url": "git+https://github.com/genesiscosmos/downcity.git"
   },
   "homepage": "https://downcity.ai"
 }

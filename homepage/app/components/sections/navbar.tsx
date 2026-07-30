@@ -56,7 +56,7 @@ type NavGroup = {
   items: readonly NavLinkItem[];
 };
 
-const GITHUB_URL = "https://github.com/wangenius/downcity";
+const GITHUB_URL = "https://github.com/genesiscosmos/downcity";
 const TWITTER_URL = "https://x.com/downcity_ai";
 
 export function Navbar() {
