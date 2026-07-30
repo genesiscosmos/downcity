@@ -195,8 +195,8 @@ function PreviewCanvas({
     <div
       className={
         compact
-          ? "flex min-h-64 items-center justify-center rounded-2xl border border-border-subtle bg-surface-subtle p-6"
-          : "flex min-h-[420px] items-center justify-center rounded-2xl border border-border-subtle bg-surface-subtle p-6 sm:p-10"
+          ? "flex min-h-64 items-center justify-center rounded-xl border border-divider bg-surface-emphasis p-6"
+          : "flex min-h-[420px] items-center justify-center rounded-xl border border-divider bg-surface-emphasis p-6 sm:p-10"
       }
     >
       <div className="w-full max-w-2xl">{children}</div>
@@ -388,7 +388,7 @@ function render_component_example(
     case "dropdown-menu":
       return (
         <PreviewCanvas compact>
-          <div className="flex justify-center"><DropdownMenu><DropdownMenuTrigger render={<Button variant="outline" />}>Open menu</DropdownMenuTrigger><DropdownMenuContent><DropdownMenuLabel>Project</DropdownMenuLabel><DropdownMenuGroup><DropdownMenuItem>Open preview<DropdownMenuShortcut>⌘O</DropdownMenuShortcut></DropdownMenuItem><DropdownMenuItem>Duplicate</DropdownMenuItem></DropdownMenuGroup><DropdownMenuSeparator /><DropdownMenuGroup><DropdownMenuItem variant="destructive">Delete</DropdownMenuItem></DropdownMenuGroup></DropdownMenuContent></DropdownMenu></div>
+          <div className="flex justify-center"><DropdownMenu><DropdownMenuTrigger render={<Button variant="outline" />}>Open menu</DropdownMenuTrigger><DropdownMenuContent><DropdownMenuGroup><DropdownMenuLabel>Project</DropdownMenuLabel><DropdownMenuItem>Open preview<DropdownMenuShortcut>⌘O</DropdownMenuShortcut></DropdownMenuItem><DropdownMenuItem>Duplicate</DropdownMenuItem></DropdownMenuGroup><DropdownMenuSeparator /><DropdownMenuGroup><DropdownMenuItem variant="destructive">Delete</DropdownMenuItem></DropdownMenuGroup></DropdownMenuContent></DropdownMenu></div>
         </PreviewCanvas>
       );
     case "context-menu":
