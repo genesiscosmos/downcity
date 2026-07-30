@@ -17,9 +17,10 @@ import type { Route } from "./+types/root";
 import stylesheet from "./app.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { Navbar } from "@/components/sections/navbar";
+import { homepage_positioning } from "@/lib/homepage-positioning";
 import i18next from "@/lib/locales"; // naming conflict with fumadocs i18n
 import { i18n } from "@/lib/i18n";
-import { create_page_meta } from "@/lib/seo";
+import { create_page_meta, get_path_locale } from "@/lib/seo";
 
 const favicon_version = "20260626";
 
@@ -71,16 +72,14 @@ export const links: Route.LinksFunction = () => [
 ];
 
 export const meta: Route.MetaFunction = ({ location }) => {
-  const title = "Downcity - Agent Infrastructure for AI Builders";
-  const description =
-    "Downcity gives AI builders one reusable runtime for agents, models, tools, tasks, memory, services, permissions, usage, billing, and control surfaces.";
+  const positioning = homepage_positioning[get_path_locale(location.pathname)];
 
   return create_page_meta({
-    title,
-    description,
+    title: positioning.meta_title,
+    description: positioning.meta_description,
     pathname: location.pathname,
     keywords:
-      "AI agent infrastructure, agent runtime, AI builders, agent products, agent operations, AI workflow automation, developer tools",
+      "agentic product environment, agent creators, AI agents, agent runtime, agent product platform, developer tools",
   });
 };
 

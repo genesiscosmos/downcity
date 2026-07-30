@@ -1,6 +1,8 @@
 import type { FC } from "react";
 import { Link, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
+import { homepage_positioning } from "@/lib/homepage-positioning";
+import { resolve_interface_locale } from "@/lib/interface-locale";
 import { product } from "@/lib/product";
 
 const GITHUB_URL = "https://github.com/wangenius/downcity";
@@ -14,10 +16,13 @@ const TWITTER_URL = "https://x.com/downcity_ai";
  * 3. 底部社交链接与法律链接。
  */
 export const Footer: FC = () => {
-  const { t } = useTranslation("home");
+  const { i18n } = useTranslation("home");
   const location = useLocation();
   const currentYear = new Date().getFullYear();
-  const isZh = location.pathname === "/zh" || location.pathname.startsWith("/zh/");
+  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const t = i18n.getFixedT(locale, "home");
+  const isZh = locale === "zh";
+  const positioning = homepage_positioning[locale];
 
   const homePath = isZh ? "/zh" : "/";
   const productPath = isZh ? "/zh/product" : "/product";
@@ -95,7 +100,9 @@ export const Footer: FC = () => {
               <img src="/icon.svg" alt="Downcity" className="brand-logo block h-6 w-6 object-contain" />
               <span className="text-[0.9375rem] font-semibold text-foreground">{product.productName}</span>
             </Link>
-            <p className="max-w-sm text-sm leading-relaxed text-text-soft">{t("footer.tagline")}</p>
+            <p className="max-w-sm text-sm leading-relaxed text-text-soft">
+              {positioning.footer_tagline}
+            </p>
             <p className="text-xs text-text-subtle">
               {t("footer.copyright", { year: currentYear })}
             </p>

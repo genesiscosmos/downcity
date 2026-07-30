@@ -1,7 +1,8 @@
 import type { FC } from "react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import { IconPlayerPlayFilled, IconBrandGithub } from "@tabler/icons-react";
+import { resolve_interface_locale } from "@/lib/interface-locale";
 
 const GITHUB_URL = "https://github.com/wangenius/downcity";
 
@@ -13,8 +14,11 @@ const GITHUB_URL = "https://github.com/wangenius/downcity";
  * 3. 使用 home 命名空间文案。
  */
 export const HomeCTASection: FC = () => {
-  const { i18n, t } = useTranslation("home");
-  const isZh = i18n.language.toLowerCase().startsWith("zh");
+  const { i18n } = useTranslation("home");
+  const location = useLocation();
+  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const t = i18n.getFixedT(locale, "home");
+  const isZh = locale === "zh";
   const startPath = isZh ? "/zh/start" : "/start";
 
   return (

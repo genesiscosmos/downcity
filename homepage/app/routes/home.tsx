@@ -6,7 +6,7 @@ import { HomeUseCasesSection } from "@/components/sections/HomeUseCasesSection";
 import { HomeCTASection } from "@/components/sections/HomeCTASection";
 import { Footer } from "@/components/sections/Footer";
 import { HomeStructuredData } from "@/components/seo/home-structured-data";
-import { product } from "@/lib/product";
+import { homepage_positioning } from "@/lib/homepage-positioning";
 import { create_page_meta, get_path_locale } from "@/lib/seo";
 import type { Route } from "./+types/home";
 
@@ -18,20 +18,14 @@ import type { Route } from "./+types/home";
  * 3. 所有行动路径收敛到安装命令、Quick Start 与 GitHub。
  */
 export function meta({ location }: Route.MetaArgs) {
-  const is_chinese = get_path_locale(location.pathname) === "zh";
-  const title = is_chinese
-    ? `${product.productName} — 面向 AI 开发者的 Agent 基础设施`
-    : `${product.productName} — Agent Infrastructure for AI Builders`;
-  const description = is_chinese
-    ? "Downcity 为多个 Agent 产品和工作流提供可复用的运行时、模型、工具、任务、记忆、权限、用量和服务基础设施。"
-    : product.description;
+  const positioning = homepage_positioning[get_path_locale(location.pathname)];
 
   return create_page_meta({
-    title,
-    description,
+    title: positioning.meta_title,
+    description: positioning.meta_description,
     pathname: location.pathname,
     keywords:
-      "AI agents, agent collaboration, agent management, multi-agent workflow, task automation, chat-driven execution, Downcity",
+      "agentic product environment, agent creators, AI agents, agent collaboration, agent runtime, agent product platform, Downcity",
     localized: true,
   });
 }

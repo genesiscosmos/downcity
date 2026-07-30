@@ -1,6 +1,8 @@
 import type { FC } from "react";
+import { useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import { IconTerminal2, IconBrowser, IconCode, IconBuildingSkyscraper } from "@tabler/icons-react";
+import { resolve_interface_locale } from "@/lib/interface-locale";
 
 const cases = [
   { key: "cli", icon: IconTerminal2 },
@@ -17,7 +19,10 @@ const cases = [
  * 3. 两列编号卡片，与 Features 区块保持同构。
  */
 export const HomeUseCasesSection: FC = () => {
-  const { t } = useTranslation("home");
+  const { i18n } = useTranslation("home");
+  const location = useLocation();
+  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const t = i18n.getFixedT(locale, "home");
 
   return (
     <section className="border-t border-line bg-background py-20 md:py-28">

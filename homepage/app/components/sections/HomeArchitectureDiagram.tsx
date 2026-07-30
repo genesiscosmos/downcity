@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useLocation } from "react-router";
 import { motion, useReducedMotion } from "framer-motion";
 import { useTranslation } from "react-i18next";
+import { resolve_interface_locale } from "@/lib/interface-locale";
 
 const city_cells = [
   { q: 0, row: 0, kind: "building" },
@@ -54,7 +56,10 @@ function hex_center(origin_x: number, origin_y: number, radius: number, q: numbe
  * 关系通过空间层级、柔和曲线和聚焦反馈表达，不使用传统流程图容器与箭头。
  */
 export function HomeArchitectureDiagram() {
-  const { t } = useTranslation("home");
+  const { i18n } = useTranslation("home");
+  const location = useLocation();
+  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const t = i18n.getFixedT(locale, "home");
   const reduce_motion = useReducedMotion();
   const [focused_node, set_focused_node] = useState<string | null>(null);
 

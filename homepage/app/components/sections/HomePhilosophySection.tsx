@@ -1,5 +1,7 @@
 import type { FC } from "react";
+import { useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
+import { resolve_interface_locale } from "@/lib/interface-locale";
 
 const principles = [
   { key: "runtime" },
@@ -15,7 +17,10 @@ const principles = [
  * 3. 使用 1px 细线分隔的 grid，与首页功能区块保持同构。
  */
 export const HomePhilosophySection: FC = () => {
-  const { t } = useTranslation("home");
+  const { i18n } = useTranslation("home");
+  const location = useLocation();
+  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const t = i18n.getFixedT(locale, "home");
 
   return (
     <section className="border-t border-line bg-background py-20 md:py-28">

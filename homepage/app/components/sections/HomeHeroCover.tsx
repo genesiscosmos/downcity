@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useLocation } from "react-router";
 import { motion, useReducedMotion } from "framer-motion";
 import { useTranslation } from "react-i18next";
+import { resolve_interface_locale } from "@/lib/interface-locale";
 
 const city_tiles = [
   {
@@ -129,7 +131,10 @@ function hex_center(origin_x: number, origin_y: number, radius: number, q: numbe
  * 同步提亮，不产生循环动画或几何位移。
  */
 export function HomeHeroCover() {
-  const { t } = useTranslation("home");
+  const { i18n } = useTranslation("home");
+  const location = useLocation();
+  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const t = i18n.getFixedT(locale, "home");
   const reduce_motion = useReducedMotion();
   const [focused_city, set_focused_city] = useState<string | null>(null);
 

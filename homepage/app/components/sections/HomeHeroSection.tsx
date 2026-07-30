@@ -1,7 +1,9 @@
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import { IconArrowRight, IconBook } from "@tabler/icons-react";
 import { HomeHeroCover } from "@/components/sections/HomeHeroCover";
+import { homepage_positioning } from "@/lib/homepage-positioning";
+import { resolve_interface_locale } from "@/lib/interface-locale";
 
 /**
  * 首页主视觉模块。
@@ -11,8 +13,12 @@ import { HomeHeroCover } from "@/components/sections/HomeHeroCover";
  * 后续独立区块承接，避免在首屏重复展示终端或 SDK 操作细节。
  */
 export function HomeHeroSection() {
-  const { i18n, t } = useTranslation("home");
-  const is_zh = i18n.language.toLowerCase().startsWith("zh");
+  const { i18n } = useTranslation("home");
+  const location = useLocation();
+  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const t = i18n.getFixedT(locale, "home");
+  const is_zh = locale === "zh";
+  const positioning = homepage_positioning[locale];
   const start_path = is_zh ? "/zh/start" : "/start";
   const docs_path = is_zh ? "/zh/docs" : "/en/docs";
 
@@ -25,11 +31,11 @@ export function HomeHeroSection() {
           </h1>
 
           <p className="mx-auto mt-6 max-w-3xl text-[clamp(1.05rem,2vw,1.45rem)] font-medium leading-snug text-foreground">
-            {t("hero.headline")}
+            {positioning.hero_headline}
           </p>
 
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-[1.75] text-text-soft md:text-base">
-            {t("hero.description")}
+            {positioning.hero_description}
           </p>
 
           <div className="mt-7 flex flex-wrap items-center justify-center gap-3">

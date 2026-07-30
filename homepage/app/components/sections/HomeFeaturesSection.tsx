@@ -1,4 +1,5 @@
 import type { FC } from "react";
+import { useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import {
   IconArrowUpRight,
@@ -9,6 +10,8 @@ import {
   IconGauge,
   IconAppWindow,
 } from "@tabler/icons-react";
+import { homepage_positioning } from "@/lib/homepage-positioning";
+import { resolve_interface_locale } from "@/lib/interface-locale";
 
 const features = [
   {
@@ -45,7 +48,11 @@ const features = [
  * 3. 1px 细线分隔的网格，hover 背景变化。
  */
 export const HomeFeaturesSection: FC = () => {
-  const { t } = useTranslation("home");
+  const { i18n } = useTranslation("home");
+  const location = useLocation();
+  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const t = i18n.getFixedT(locale, "home");
+  const positioning = homepage_positioning[locale];
 
   return (
     <section className="border-t border-line bg-background py-20 md:py-28">
@@ -55,10 +62,12 @@ export const HomeFeaturesSection: FC = () => {
             {t("features.sectionLabel")}
           </p>
           <h2 className="font-serif text-[clamp(1.625rem,3vw,2.25rem)] font-bold leading-[1.12] tracking-[-0.02em] text-foreground">
-            {t("features.title")}{" "}
-            <span className="text-foreground/70">{t("features.titleItalic")}</span>
+            {positioning.features_title}{" "}
+            <span className="text-foreground/70">{positioning.features_title_emphasis}</span>
           </h2>
-          <p className="mt-5 text-base leading-[1.65] text-text-soft">{t("features.description")}</p>
+          <p className="mt-5 text-base leading-[1.65] text-text-soft">
+            {positioning.features_description}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 gap-px overflow-hidden rounded-[14px] bg-line sm:grid-cols-2 lg:grid-cols-3">

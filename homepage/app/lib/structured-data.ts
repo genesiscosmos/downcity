@@ -5,6 +5,7 @@
  * 让搜索引擎能够把 Genesis Cosmos、Downcity 官网和 Downcity 软件识别为同一产品体系。
  */
 import { create_site_url } from "@/lib/seo";
+import { homepage_positioning } from "@/lib/homepage-positioning";
 import type { SeoHomeStructuredData } from "@/types/seo";
 
 const organization_id = "https://genesiscosmos.com/#organization";
@@ -20,6 +21,8 @@ const genesis_product_url = "https://genesiscosmos.com/products/downcity/";
  * 页面语言只影响用户可见的软件说明；实体标识和关系在中英文首页保持一致。
  */
 export function create_home_structured_data(is_chinese: boolean): SeoHomeStructuredData {
+  const positioning = homepage_positioning[is_chinese ? "zh" : "en"];
+
   return {
     "@context": "https://schema.org",
     "@graph": [
@@ -44,13 +47,11 @@ export function create_home_structured_data(is_chinese: boolean): SeoHomeStructu
         "@id": software_id,
         name: "Downcity",
         alternateName: "Downcity AI",
-        description: is_chinese
-          ? "Downcity 是面向 AI 开发者的 Agent 基础设施，为多个 Agent 产品和工作流提供一套可复用运行层。"
-          : "Downcity is agent infrastructure for AI builders shipping many agent-powered products and workflows on one reusable runtime.",
+        description: positioning.meta_description,
         url: create_site_url("/product/"),
         image: create_site_url("/icon-512.png"),
         applicationCategory: "DeveloperApplication",
-        applicationSubCategory: "AI Agent Infrastructure",
+        applicationSubCategory: "Agentic Product Environment",
         operatingSystem: "macOS, Linux, Windows",
         isAccessibleForFree: true,
         license: "https://www.apache.org/licenses/LICENSE-2.0",

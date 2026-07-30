@@ -1,8 +1,6 @@
 {
   "hero": {
     "title": "Downcity",
-    "headline": "Scalable Agent Harness & Agentic Product Infrastructure for Builders.",
-    "description": "一个产品就是一座 City，Agent 在其中入驻和工作。每座 City 都由 Federation 提供共享的模型与服务。",
     "start": "快速开始",
     "docs": "查看文档",
     "coverLabel": "一个 Agent 生态：Agent 居住在不同的产品 City 内，多座 City 通过 Federation 共享能力。",
@@ -49,9 +47,6 @@
   },
   "features": {
     "sectionLabel": "核心能力",
-    "title": "真实 Agent 产品的",
-    "titleItalic": "基础设施",
-    "description": "每个 AI 产品都在重复建设的后端能力，被组织到一套可复用的运行层中。",
     "cards": {
       "repo": {
         "title": "仓库原生边界",
@@ -163,7 +158,6 @@
     "github": "在 GitHub 上 Star"
   },
   "footer": {
-    "tagline": "面向 AI builders 的 Agent 基础设施，用一套可复用运行层承载多个 Agent 产品和工作流。",
     "columns": {
       "product": "产品",
       "docs": "文档",

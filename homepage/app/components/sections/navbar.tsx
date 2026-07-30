@@ -1,11 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { useTheme } from "fumadocs-ui/provider/base";
-import { setLang } from "@/lib/locales";
+import { create_interface_locale_path, resolve_interface_locale } from "@/lib/interface-locale";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,9 +41,9 @@ import {
  * 顶部导航模块（Vibecape 式极简）。
  * 说明：
  * 1. 粘性毛玻璃导航，60px 高度，信息密度低。
- * 2. Product / Quick Start / Agent SDK / City SDK / Docs / GitHub 使用稳定直链。
- * 3. 其余产品和社区入口收纳到一个次级菜单，保持核心路径权重清晰。
- * 4. 移动端同样先展示核心入口，再展示完整次级入口。
+ * 2. 桌面端使用 Product / Docs / Community 三个分类下拉，并保留 Features 与 GitHub 直达。
+ * 3. Docs 内继续按 Overview、City、Agent 与 UI 分组，维持清晰的信息架构。
+ * 4. 移动端按照相同分类合并到一个菜单中。
  */
 
 type NavLinkItem =
@@ -60,9 +60,22 @@ const GITHUB_URL = "https://github.com/wangenius/downcity";
 const TWITTER_URL = "https://x.com/downcity_ai";
 
 export function Navbar() {
-  const { t } = useTranslation("common");
+  const { i18n } = useTranslation("common");
   const location = useLocation();
-  const isZh = location.pathname === "/zh" || location.pathname.startsWith("/zh/");
+  const navigate = useNavigate();
+  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const t = i18n.getFixedT(locale, "common");
+  const isZh = locale === "zh";
+
+  const change_language = (next_locale: "en" | "zh") => {
+    void i18n.changeLanguage(next_locale);
+    localStorage.setItem("downcity-lang", next_locale);
+    const next_path = create_interface_locale_path(location.pathname, next_locale);
+
+    if (next_path !== location.pathname) {
+      navigate({ pathname: next_path, search: location.search, hash: location.hash });
+    }
+  };
 
   const [scrolled, set_scrolled] = useState(false);
   useEffect(() => {
@@ -74,6 +87,8 @@ export function Navbar() {
 
   const homePath = isZh ? "/zh" : "/";
   const productPath = isZh ? "/zh/product" : "/product";
+  const productSdkPath = isZh ? "/zh/product/sdk" : "/product/sdk";
+  const productAgentSdkPath = isZh ? "/zh/product/agent-sdk" : "/product/agent-sdk";
   const productUiSdkPath = isZh ? "/zh/product/ui-sdk" : "/product/ui-sdk";
   const startPath = isZh ? "/zh/start" : "/start";
   const featuresPath = isZh ? "/zh/features" : "/features";
@@ -89,22 +104,47 @@ export function Navbar() {
   const roadmapPath = isZh ? "/zh/community/roadmap" : "/community/roadmap";
   const showcasePath = isZh ? "/zh/community/showcase" : "/community/showcase";
 
-  const moreGroup: NavGroup = {
-    label: isZh ? "更多" : "More",
-    activePaths: [featuresPath, productUiSdkPath, cliDocsPath, pluginsDocsPath, uiSdkDocsPath, paymentsPath, communityPath, faqPath, roadmapPath, showcasePath],
+  const productGroup: NavGroup = {
+    label: t("nav.product"),
+    activePaths: [productPath, startPath, productSdkPath, productAgentSdkPath, productUiSdkPath, pluginsDocsPath, paymentsPath],
     items: [
-      { label: t("nav.features"), description: isZh ? "完整能力总览" : "Complete capability overview", path: featuresPath, icon: IconLayoutDashboard },
-      { label: "CLI Docs", description: isZh ? "CLI 使用文档" : "CLI documentation", path: cliDocsPath, icon: IconTerminal },
-      { label: "UI SDK", description: isZh ? "UI 组件与文档" : "UI components and docs", path: uiSdkDocsPath, icon: IconLayoutDashboard },
-      { label: "Plugins", description: isZh ? "插件系统文档" : "Plugin system docs", path: pluginsDocsPath, icon: IconPuzzle },
-      { label: "Services", description: isZh ? "服务与支付基础设施" : "Services and payment infrastructure", path: paymentsPath, icon: IconServer },
-      { label: t("nav.community"), description: isZh ? "社区入口" : "Community overview", path: communityPath, icon: IconBox },
+      { label: t("nav.productOverview"), description: isZh ? "完整产品矩阵" : "Full product index", path: productPath, icon: IconLayoutDashboard },
+      { label: "CLI", description: isZh ? "命令行工具" : "Command-line interface", path: startPath, icon: IconTerminal },
+      { label: "City SDK", description: isZh ? "城市运行时 SDK" : "City runtime SDK", path: productSdkPath, icon: IconServer },
+      { label: "Agent SDK", description: isZh ? "Agent 嵌入 SDK" : "Agent embedding SDK", path: productAgentSdkPath, icon: IconRobot },
+      { label: "UI SDK", description: isZh ? "UI 组件 SDK" : "UI component SDK", path: productUiSdkPath, icon: IconLayoutDashboard },
+      { label: "Plugins", description: isZh ? "插件系统" : "Plugin system", path: pluginsDocsPath, icon: IconPuzzle },
+      { label: "Services", description: isZh ? "服务与支付基础设施" : "Services & payment infrastructure", path: paymentsPath, icon: IconServer },
+    ],
+  };
+
+  const docsGroup: NavGroup = {
+    label: t("nav.docs"),
+    activePaths: [docsPath, cliDocsPath, citySdkDocsPath, agentSdkDocsPath, pluginsDocsPath, uiSdkDocsPath, paymentsPath],
+    items: [
+      { label: "Overview", description: isZh ? "核心文档" : "Core docs", path: docsPath, icon: IconBook },
+      { label: "CLI Docs", description: isZh ? "CLI 文档" : "CLI docs", path: cliDocsPath, icon: IconTerminal },
+      { label: "City SDK", description: isZh ? "City SDK 文档" : "City SDK docs", path: citySdkDocsPath, icon: IconServer },
+      { label: "Agent SDK", description: isZh ? "Agent SDK 文档" : "Agent SDK docs", path: agentSdkDocsPath, icon: IconRobot },
+      { label: "Plugins", description: isZh ? "Plugins 文档" : "Plugins docs", path: pluginsDocsPath, icon: IconPuzzle },
+      { label: "UI SDK", description: isZh ? "UI SDK 文档" : "UI SDK docs", path: uiSdkDocsPath, icon: IconLayoutDashboard },
+      { label: "Services Docs", description: isZh ? "Services 文档" : "Services docs", path: paymentsPath, icon: IconLayoutDashboard },
+    ],
+  };
+
+  const communityGroup: NavGroup = {
+    label: t("nav.community"),
+    activePaths: [communityPath, faqPath, roadmapPath, showcasePath],
+    items: [
       { label: t("nav.faq"), description: isZh ? "常见问题" : "Frequently asked questions", path: faqPath, icon: IconBook },
       { label: t("nav.roadmap"), description: isZh ? "产品路线图" : "Product roadmap", path: roadmapPath, icon: IconBook },
       { label: isZh ? "案例" : "Showcase", description: isZh ? "使用 Downcity 构建的产品" : "Products built with Downcity", path: showcasePath, icon: IconBox },
+      { label: "GitHub", description: isZh ? "源码与 Issues" : "Source & issues", href: GITHUB_URL, external: true, icon: IconBrandGithub },
       { label: "X", description: isZh ? "官方账号" : "Official account", href: TWITTER_URL, external: true, icon: IconBrandX },
     ],
   };
+
+  const groups = [productGroup, docsGroup, communityGroup] as const;
 
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(`${path}/`);
@@ -141,96 +181,97 @@ export function Navbar() {
         </Link>
 
         <nav className="hidden items-center gap-0.5 lg:flex">
-          <Link
-            to={productPath}
-            className={cn(linkBaseClass, isActive(productPath) ? linkActiveClass : linkInactiveClass)}
-          >
-            {t("nav.product")}
-          </Link>
-          <Link
-            to={startPath}
-            className={cn(linkBaseClass, isActive(startPath) ? linkActiveClass : linkInactiveClass)}
-          >
-            {isZh ? "快速开始" : "Quick Start"}
-          </Link>
-          <Link
-            to={agentSdkDocsPath}
-            className={cn(linkBaseClass, isActive(agentSdkDocsPath) ? linkActiveClass : linkInactiveClass)}
-          >
-            Agent SDK
-          </Link>
-          <Link
-            to={citySdkDocsPath}
-            className={cn(linkBaseClass, isActive(citySdkDocsPath) ? linkActiveClass : linkInactiveClass)}
-          >
-            City SDK
-          </Link>
-          <Link
-            to={docsPath}
-            className={cn(linkBaseClass, isActive(docsPath) ? linkActiveClass : linkInactiveClass)}
-          >
-            {t("nav.docs")}
-          </Link>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              className={cn(
-                "group inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-[0.8125rem] font-medium outline-none transition-colors",
-                isAnyActive(moreGroup.activePaths) ? linkActiveClass : linkInactiveClass,
-              )}
-            >
-              <span>{moreGroup.label}</span>
-              <IconChevronDown className="size-3.5 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              sideOffset={8}
-              className={cn(dropdownContentClass, "w-[22rem]")}
-            >
-              <DropdownMenuGroup className="grid gap-1">
-                {moreGroup.items.map((item) => {
-                  const Icon = item.icon;
-                  return "path" in item ? (
-                    <DropdownMenuItem
-                      key={item.path}
-                      className={dropdownItemClass}
-                      render={(itemProps: React.ComponentPropsWithoutRef<"a">) => (
-                        <Link {...itemProps} to={item.path} className={cn("flex items-start gap-3", itemProps.className)}>
-                          <span className={dropdownItemIconClass}>
-                            <Icon className="size-4" strokeWidth={1.5} />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className={dropdownItemTitleClass}>{item.label}</span>
-                            </div>
-                            <p className={dropdownItemDescClass}>{item.description}</p>
-                          </div>
-                        </Link>
-                      )}
-                    />
-                  ) : (
-                    <DropdownMenuItem
-                      key={item.href}
-                      className={dropdownItemClass}
-                      render={(itemProps: React.ComponentPropsWithoutRef<"a">) => (
-                        <a {...itemProps} href={item.href} target="_blank" rel="noreferrer" className={cn("flex items-start gap-3", itemProps.className)}>
-                          <span className={dropdownItemIconClass}>
-                            <Icon className="size-4" strokeWidth={1.5} />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className={dropdownItemTitleClass}>{item.label}</span>
-                              <IconArrowUpRight className="size-3.5 text-text-subtle" />
-                            </div>
-                            <p className={dropdownItemDescClass}>{item.description}</p>
-                          </div>
-                        </a>
-                      )}
-                    />
-                  );
-                })}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {groups.map((group) => {
+            const active = isAnyActive(group.activePaths);
+            return (
+              <React.Fragment key={group.label}>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    className={cn(
+                      "group inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-[0.8125rem] font-medium outline-none transition-colors",
+                      active ? linkActiveClass : linkInactiveClass,
+                    )}
+                  >
+                    <span>{group.label}</span>
+                    <IconChevronDown className="size-3.5 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="start"
+                    sideOffset={8}
+                    className={cn(dropdownContentClass, group.items.length > 4 ? "w-[22rem]" : "w-[18rem]")}
+                  >
+                    {group === docsGroup ? (
+                      <DocsDropdownGroups
+                        is_zh={isZh}
+                        docs_path={docsPath}
+                        cli_docs_path={cliDocsPath}
+                        city_sdk_docs_path={citySdkDocsPath}
+                        services_path={paymentsPath}
+                        agent_sdk_docs_path={agentSdkDocsPath}
+                        plugins_docs_path={pluginsDocsPath}
+                        ui_sdk_docs_path={uiSdkDocsPath}
+                        dropdown_item_class={dropdownItemClass}
+                        dropdown_item_icon_class={dropdownItemIconClass}
+                        dropdown_item_title_class={dropdownItemTitleClass}
+                        dropdown_item_desc_class={dropdownItemDescClass}
+                        dropdown_separator_class={dropdownSeparatorClass}
+                      />
+                    ) : (
+                      <DropdownMenuGroup className="grid gap-1">
+                        {group.items.map((item) => {
+                          const Icon = item.icon;
+                          return "path" in item ? (
+                            <DropdownMenuItem
+                              key={item.path}
+                              className={dropdownItemClass}
+                              render={(itemProps: React.ComponentPropsWithoutRef<"a">) => (
+                                <Link {...itemProps} to={item.path} className={cn("flex items-start gap-3", itemProps.className)}>
+                                  <span className={dropdownItemIconClass}>
+                                    <Icon className="size-4" strokeWidth={1.5} />
+                                  </span>
+                                  <div className="min-w-0 flex-1">
+                                    <span className={dropdownItemTitleClass}>{item.label}</span>
+                                    <p className={dropdownItemDescClass}>{item.description}</p>
+                                  </div>
+                                </Link>
+                              )}
+                            />
+                          ) : (
+                            <DropdownMenuItem
+                              key={item.href}
+                              className={dropdownItemClass}
+                              render={(itemProps: React.ComponentPropsWithoutRef<"a">) => (
+                                <a {...itemProps} href={item.href} target="_blank" rel="noreferrer" className={cn("flex items-start gap-3", itemProps.className)}>
+                                  <span className={dropdownItemIconClass}>
+                                    <Icon className="size-4" strokeWidth={1.5} />
+                                  </span>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className={dropdownItemTitleClass}>{item.label}</span>
+                                      <IconArrowUpRight className="size-3.5 text-text-subtle" />
+                                    </div>
+                                    <p className={dropdownItemDescClass}>{item.description}</p>
+                                  </div>
+                                </a>
+                              )}
+                            />
+                          );
+                        })}
+                      </DropdownMenuGroup>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                {group === productGroup ? (
+                  <Link
+                    to={featuresPath}
+                    className={cn(linkBaseClass, isActive(featuresPath) ? linkActiveClass : linkInactiveClass)}
+                  >
+                    {t("nav.features")}
+                  </Link>
+                ) : null}
+              </React.Fragment>
+            );
+          })}
 
           <a
             href={GITHUB_URL}
@@ -251,24 +292,22 @@ export function Navbar() {
             <IconBrandGithub className="size-4" />
           </a>
           <ThemeSwitcher is_zh={isZh} button_class={iconButtonClass} dropdown_content_class={dropdownContentClass} dropdown_item_class={menuSelectItemClass} />
-          <LanguageSwitcher is_zh={isZh} button_class={iconButtonClass} dropdown_content_class={dropdownContentClass} dropdown_item_class={menuSelectItemClass} />
+          <LanguageSwitcher is_zh={isZh} button_class={iconButtonClass} dropdown_content_class={dropdownContentClass} dropdown_item_class={menuSelectItemClass} on_language_change={change_language} />
         </div>
 
         <div className="flex items-center justify-end lg:hidden">
           <MobileMenu
             is_zh={isZh}
-            product_path={productPath}
-            start_path={startPath}
-            agent_sdk_docs_path={agentSdkDocsPath}
-            city_sdk_docs_path={citySdkDocsPath}
-            docs_path={docsPath}
-            more_group={moreGroup}
+            groups={groups}
+            features_path={featuresPath}
             github_url={GITHUB_URL}
+            twitter_url={TWITTER_URL}
             icon_button_class={iconButtonClass}
             dropdown_content_class={dropdownContentClass}
             dropdown_item_class={dropdownItemClass}
             dropdown_separator_class={dropdownSeparatorClass}
             menu_select_item_class={menuSelectItemClass}
+            on_language_change={change_language}
           />
         </div>
       </div>
@@ -281,11 +320,14 @@ function LanguageSwitcher({
   button_class,
   dropdown_content_class,
   dropdown_item_class,
+  on_language_change,
 }: {
   is_zh: boolean;
   button_class: string;
   dropdown_content_class: string;
   dropdown_item_class: string;
+  /** 用户选择目标语言时同步更新翻译状态与公开页面路径。 */
+  on_language_change: (locale: "en" | "zh") => void;
 }) {
   return (
     <DropdownMenu>
@@ -297,11 +339,11 @@ function LanguageSwitcher({
           <DropdownMenuLabel className="px-3 py-2 text-[0.65rem] uppercase tracking-[0.12em] text-text-soft">
             {is_zh ? "语言" : "Language"}
           </DropdownMenuLabel>
-          <DropdownMenuItem className={dropdown_item_class} onClick={() => setLang("en")}>
+          <DropdownMenuItem className={dropdown_item_class} onClick={() => on_language_change("en")}>
             <span>English</span>
             {!is_zh ? <IconCheck className="size-4 text-text-soft" /> : <span className="size-4" />}
           </DropdownMenuItem>
-          <DropdownMenuItem className={dropdown_item_class} onClick={() => setLang("zh")}>
+          <DropdownMenuItem className={dropdown_item_class} onClick={() => on_language_change("zh")}>
             <span>中文</span>
             {is_zh ? <IconCheck className="size-4 text-text-soft" /> : <span className="size-4" />}
           </DropdownMenuItem>
@@ -392,34 +434,116 @@ function isThemeMode(value: string | undefined): value is ThemeMode {
   return value === "light" || value === "dark" || value === "system";
 }
 
+/**
+ * 文档导航按 Overview、City、Agent 与 UI 四组展示，保留原有信息架构。
+ */
+function DocsDropdownGroups({
+  is_zh,
+  docs_path,
+  cli_docs_path,
+  city_sdk_docs_path,
+  services_path,
+  agent_sdk_docs_path,
+  plugins_docs_path,
+  ui_sdk_docs_path,
+  dropdown_item_class,
+  dropdown_item_icon_class,
+  dropdown_item_title_class,
+  dropdown_item_desc_class,
+  dropdown_separator_class,
+}: {
+  is_zh: boolean;
+  docs_path: string;
+  cli_docs_path: string;
+  city_sdk_docs_path: string;
+  services_path: string;
+  agent_sdk_docs_path: string;
+  plugins_docs_path: string;
+  ui_sdk_docs_path: string;
+  dropdown_item_class: string;
+  dropdown_item_icon_class: string;
+  dropdown_item_title_class: string;
+  dropdown_item_desc_class: string;
+  dropdown_separator_class: string;
+}) {
+  type DocsItem = { label: string; description: string; path: string; icon: typeof IconBook };
+
+  const overview_group: readonly DocsItem[] = [
+    { label: "Overview", description: is_zh ? "核心文档" : "Core docs", path: docs_path, icon: IconBook },
+    { label: "CLI Docs", description: is_zh ? "CLI 文档" : "CLI docs", path: cli_docs_path, icon: IconTerminal },
+  ];
+  const city_group: readonly DocsItem[] = [
+    { label: "City SDK", description: is_zh ? "City SDK 文档" : "City SDK docs", path: city_sdk_docs_path, icon: IconServer },
+    { label: "Services Docs", description: is_zh ? "Services 文档" : "Services docs", path: services_path, icon: IconLayoutDashboard },
+  ];
+  const agent_group: readonly DocsItem[] = [
+    { label: "Agent SDK", description: is_zh ? "Agent SDK 文档" : "Agent SDK docs", path: agent_sdk_docs_path, icon: IconRobot },
+    { label: "Plugins", description: is_zh ? "Plugins 文档" : "Plugins docs", path: plugins_docs_path, icon: IconPuzzle },
+  ];
+  const ui_group: readonly DocsItem[] = [
+    { label: "UI SDK", description: is_zh ? "UI SDK 文档" : "UI SDK docs", path: ui_sdk_docs_path, icon: IconLayoutDashboard },
+  ];
+
+  const sections = [overview_group, city_group, agent_group, ui_group] as const;
+
+  return (
+    <>
+      {sections.map((section, index) => (
+        <React.Fragment key={section[0].label}>
+          <DropdownMenuGroup className="grid gap-1">
+            {section.map((item) => {
+              const Icon = item.icon;
+              return (
+                <DropdownMenuItem
+                  key={item.path}
+                  className={dropdown_item_class}
+                  render={(itemProps: React.ComponentPropsWithoutRef<"a">) => (
+                    <Link {...itemProps} to={item.path} className={cn("flex items-start gap-3", itemProps.className)}>
+                      <span className={dropdown_item_icon_class}>
+                        <Icon className="size-4" strokeWidth={1.5} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <span className={dropdown_item_title_class}>{item.label}</span>
+                        <p className={dropdown_item_desc_class}>{item.description}</p>
+                      </div>
+                    </Link>
+                  )}
+                />
+              );
+            })}
+          </DropdownMenuGroup>
+          {index < sections.length - 1 ? <DropdownMenuSeparator className={dropdown_separator_class} /> : null}
+        </React.Fragment>
+      ))}
+    </>
+  );
+}
+
 function MobileMenu({
   is_zh,
-  product_path,
-  start_path,
-  agent_sdk_docs_path,
-  city_sdk_docs_path,
-  docs_path,
-  more_group,
+  groups,
+  features_path,
   github_url,
+  twitter_url,
   icon_button_class,
   dropdown_content_class,
   dropdown_item_class,
   dropdown_separator_class,
   menu_select_item_class,
+  on_language_change,
 }: {
   is_zh: boolean;
-  product_path: string;
-  start_path: string;
-  agent_sdk_docs_path: string;
-  city_sdk_docs_path: string;
-  docs_path: string;
-  more_group: NavGroup;
+  groups: readonly NavGroup[];
+  features_path: string;
   github_url: string;
+  twitter_url: string;
   icon_button_class: string;
   dropdown_content_class: string;
   dropdown_item_class: string;
   dropdown_separator_class: string;
   menu_select_item_class: string;
+  /** 用户选择目标语言时同步更新翻译状态与公开页面路径。 */
+  on_language_change: (locale: "en" | "zh") => void;
 }) {
   return (
     <DropdownMenu>
@@ -427,62 +551,62 @@ function MobileMenu({
         <IconMenu2 className="size-[1.125rem]" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={dropdown_content_class}>
+        {groups.map((group) => (
+          <DropdownMenuGroup key={group.label}>
+            <DropdownMenuLabel className="px-3 pb-1 pt-2 text-[0.65rem] uppercase tracking-[0.1em] text-text-soft">
+              {group.label}
+            </DropdownMenuLabel>
+            {group.items.map((item) =>
+              "path" in item ? (
+                <DropdownMenuItem
+                  key={item.path}
+                  className={dropdown_item_class}
+                  render={(itemProps: React.ComponentPropsWithoutRef<"a">) => (
+                    <Link {...itemProps} to={item.path}>{item.label}</Link>
+                  )}
+                />
+              ) : (
+                <DropdownMenuItem
+                  key={item.href}
+                  className={dropdown_item_class}
+                  render={(itemProps: React.ComponentPropsWithoutRef<"a">) => (
+                    <a {...itemProps} href={item.href} target="_blank" rel="noreferrer" className={cn("flex items-center justify-between gap-2", itemProps.className)}>
+                      <span>{item.label}</span>
+                      <IconArrowUpRight className="size-3 text-text-subtle" />
+                    </a>
+                  )}
+                />
+              )
+            )}
+            <DropdownMenuSeparator className={dropdown_separator_class} />
+          </DropdownMenuGroup>
+        ))}
+        <DropdownMenuItem
+          className={dropdown_item_class}
+          render={(itemProps: React.ComponentPropsWithoutRef<"a">) => (
+            <Link {...itemProps} to={features_path}>{is_zh ? "功能" : "Features"}</Link>
+          )}
+        />
+        <DropdownMenuSeparator className={dropdown_separator_class} />
         <DropdownMenuGroup>
           <DropdownMenuLabel className="px-3 pb-1 pt-2 text-[0.65rem] uppercase tracking-[0.1em] text-text-soft">
-            {is_zh ? "核心入口" : "Core"}
+            {is_zh ? "链接" : "Links"}
           </DropdownMenuLabel>
-          {[
-            { label: is_zh ? "产品" : "Product", path: product_path },
-            { label: is_zh ? "快速开始" : "Quick Start", path: start_path },
-            { label: "Agent SDK", path: agent_sdk_docs_path },
-            { label: "City SDK", path: city_sdk_docs_path },
-            { label: is_zh ? "文档" : "Docs", path: docs_path },
-          ].map((item) => (
-            <DropdownMenuItem
-              key={item.path}
-              className={dropdown_item_class}
-              render={(itemProps: React.ComponentPropsWithoutRef<"a">) => (
-                <Link {...itemProps} to={item.path}>{item.label}</Link>
-              )}
-            />
-          ))}
           <DropdownMenuItem
             className={dropdown_item_class}
             render={(itemProps: React.ComponentPropsWithoutRef<"a">) => (
               <a {...itemProps} href={github_url} target="_blank" rel="noreferrer">GitHub</a>
             )}
           />
+          <DropdownMenuItem
+            className={dropdown_item_class}
+            render={(itemProps: React.ComponentPropsWithoutRef<"a">) => (
+              <a {...itemProps} href={twitter_url} target="_blank" rel="noreferrer">X</a>
+            )}
+          />
         </DropdownMenuGroup>
         <DropdownMenuSeparator className={dropdown_separator_class} />
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="px-3 pb-1 pt-2 text-[0.65rem] uppercase tracking-[0.1em] text-text-soft">
-            {more_group.label}
-          </DropdownMenuLabel>
-          {more_group.items.map((item) =>
-            "path" in item ? (
-              <DropdownMenuItem
-                key={item.path}
-                className={dropdown_item_class}
-                render={(itemProps: React.ComponentPropsWithoutRef<"a">) => (
-                  <Link {...itemProps} to={item.path}>{item.label}</Link>
-                )}
-              />
-            ) : (
-              <DropdownMenuItem
-                key={item.href}
-                className={dropdown_item_class}
-                render={(itemProps: React.ComponentPropsWithoutRef<"a">) => (
-                  <a {...itemProps} href={item.href} target="_blank" rel="noreferrer" className={cn("flex items-center justify-between gap-2", itemProps.className)}>
-                    <span>{item.label}</span>
-                    <IconArrowUpRight className="size-3 text-text-subtle" />
-                  </a>
-                )}
-              />
-            )
-          )}
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator className={dropdown_separator_class} />
-        <DropdownMenuItem className={dropdown_item_class} onClick={() => setLang(is_zh ? "en" : "zh")}>
+        <DropdownMenuItem className={dropdown_item_class} onClick={() => on_language_change(is_zh ? "en" : "zh")}>
           {is_zh ? "Switch to English" : "切换到中文"}
         </DropdownMenuItem>
         <DropdownMenuGroup>

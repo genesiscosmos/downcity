@@ -77,8 +77,23 @@ test("中英文首页输出相互关联的品牌实体", async () => {
   assert.equal(website.about["@id"], software["@id"]);
   assert.equal(software.publisher["@id"], organization["@id"]);
   assert.equal(software.codeRepository, "https://github.com/wangenius/downcity");
+  assert.equal(software.applicationSubCategory, "Agentic Product Environment");
   assert.ok(software.sameAs.includes("https://x.com/downcity_ai"));
-  assert.match(chinese_data["@graph"][2].description, /面向 AI 开发者/);
+  assert.match(software.description, /agentic product environment/);
+  assert.match(chinese_data["@graph"][2].description, /Agentic 产品环境/);
+});
+
+test("中英文首页预渲染各自的核心定位文案", async () => {
+  const english_html = await read_build_file("index.html");
+  const chinese_html = await read_build_file("zh/index.html");
+
+  assert.match(english_html, /Build worlds where agents live, work, and collaborate\./);
+  assert.match(english_html, /The environment for/);
+  assert.doesNotMatch(english_html, /创造 Agent 居住、工作与协作的世界。/);
+
+  assert.match(chinese_html, /创造 Agent 居住、工作与协作的世界。/);
+  assert.match(chinese_html, /Agentic 产品的/);
+  assert.doesNotMatch(chinese_html, /Build worlds where agents live, work, and collaborate\./);
 });
 
 test("中英文首页稳定输出核心产品入口", async () => {

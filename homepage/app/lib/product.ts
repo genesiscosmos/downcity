@@ -1,3 +1,5 @@
+import { homepage_positioning } from "@/lib/homepage-positioning";
+
 export type DowncityProduct = {
   name: string;
   productName: string;
@@ -10,7 +12,6 @@ export const product: DowncityProduct = {
   name: "downcity",
   productName: "Downcity",
   version: "1.0.0",
-  description:
-    "Downcity is agent infrastructure for AI builders shipping many agent-powered products and workflows on one reusable runtime.",
+  description: homepage_positioning.en.meta_description,
   homepage: "https://downcity.ai",
 };

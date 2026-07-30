@@ -1,8 +1,6 @@
 {
   "hero": {
     "title": "Downcity",
-    "headline": "Scalable Agent Harness & Agentic Product Infrastructure for Builders.",
-    "description": "One product is one City, where agents live and work. Every City is powered by shared models and services from the Federation.",
     "start": "Quick Start",
     "docs": "Read Docs",
     "coverLabel": "An Agent ecosystem where residents live inside distinct product Cities that share capabilities through Federation.",
@@ -49,9 +47,6 @@
   },
   "features": {
     "sectionLabel": "Capabilities",
-    "title": "Infrastructure for real",
-    "titleItalic": "agent products",
-    "description": "Everything you keep rebuilding for every new AI product, organized into one reusable runtime layer.",
     "cards": {
       "repo": {
         "title": "Repo-native boundary",
@@ -163,7 +158,6 @@
     "github": "Star on GitHub"
   },
   "footer": {
-    "tagline": "Agent infrastructure for AI builders shipping many agent-powered products and workflows.",
     "columns": {
       "product": "Product",
       "docs": "Docs",
