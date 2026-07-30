@@ -15,8 +15,9 @@
    - 只改 `@downcity/agent`：`pnpm agent:patch:build`
    - 只改 `@downcity/city`：`pnpm city:patch:build`
    - 只改 `downcity`：`pnpm cli:patch:build`
-   - 多 package 联动：`pnpm all:patch:build`
-   - 仅验证不需要 bump 时才允许使用 `pnpm patch:build -- --no-bump ...`
+   - 涉及多个 package：根据实际影响范围显式指定，例如 `pnpm patch:build -- --city --services --database-d1`
+   - 只允许 bump 对外能力实际发生变化的 package；依赖 package 可以参与构建验证，但不能因此自动 bump
+   - 仅验证不需要 bump 时，显式指定验证范围并使用 `pnpm patch:build -- --no-bump --city --services`
 
 # Patch + Commit
 

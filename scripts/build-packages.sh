@@ -3,8 +3,8 @@ set -euo pipefail
 
 # 关键点（中文）：
 # 1) 这个脚本负责"packages 级 patch bump + build"，不承担 homepage / console 的全仓交付链路。
-# 2) 统一入口支持核心包与独立平台 sandbox adapter；默认构建 agent + plugins + cli。
-# 3) bump 只作用于本次显式选中的 package，避免误改无关包版本号。
+# 2) 统一入口支持核心包与独立平台 Adapter，并要求调用方显式指定影响范围。
+# 3) bump 只作用于本次显式选中的 package；依赖 package 只参与构建验证。
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -323,7 +323,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ${#PACKAGES[@]} -eq 0 ]]; then
-  PACKAGES=("agent" "plugins" "cli")
+  echo "Error: 至少需要显式指定一个 package，例如 --city 或 --agent --plugins。" >&2
+  usage
 fi
 normalize_packages
 resolve_build_packages
