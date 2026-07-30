@@ -25,7 +25,7 @@
     "dev:homepage": "pnpm -C homepage dev",
     "homepage": "pnpm -C homepage dev",
     "publish": "./scripts/publish.sh",
-    "typecheck": "pnpm -C packages/type typecheck && pnpm -C packages/shell typecheck && pnpm -C packages/sandbox-macos typecheck && pnpm -C packages/sandbox-linux typecheck && pnpm -C packages/sandbox-windows-mxc typecheck && pnpm -C packages/sandbox-windows-srt typecheck && pnpm -C packages/agent typecheck && pnpm -C packages/server typecheck && pnpm -C packages/city typecheck && pnpm -C packages/services typecheck && pnpm -C packages/plugins typecheck && pnpm -C packages/cli typecheck && pnpm -C templates/node typecheck && pnpm -C templates/edge typecheck && pnpm -C templates/client typecheck",
+    "typecheck": "pnpm -C packages/type typecheck && pnpm -C packages/shell typecheck && pnpm -C packages/sandbox-macos typecheck && pnpm -C packages/sandbox-linux typecheck && pnpm -C packages/sandbox-windows-mxc typecheck && pnpm -C packages/sandbox-windows-srt typecheck && pnpm -C packages/agent typecheck && pnpm -C packages/server typecheck && pnpm -C packages/city typecheck && pnpm -C packages/services typecheck && pnpm -C packages/plugins typecheck && pnpm -C packages/cli typecheck && pnpm -C templates/localfed typecheck && pnpm -C templates/edgefed typecheck && pnpm -C templates/agent typecheck",
     "build:packages": "bash ./scripts/build-packages.sh",
     "patch:build": "bash ./scripts/build-packages.sh",
     "agent:patch:build": "bash ./scripts/build-packages.sh --agent",

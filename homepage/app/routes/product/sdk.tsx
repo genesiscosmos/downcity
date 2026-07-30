@@ -25,7 +25,7 @@ const PAGE: Record<"zh" | "en", ProductDetailContent> = {
     scenes: [
       "多产品复用：让多个 Agent 产品连接同一套 City，复用账户、模型、用量和支付能力。",
       "Service 接入：前端、扩展或后端通过 SDK 调用 City 中的 Service，而不是直接耦合数据库。",
-      "部署组合：用 templates/node 或 templates/edge 组合适配不同运行环境。",
+      "部署组合：用 templates/localfed 或 templates/edgefed 适配不同运行环境。",
     ],
     factsTitle: "事实对齐",
     facts: [
@@ -58,7 +58,7 @@ const PAGE: Record<"zh" | "en", ProductDetailContent> = {
     scenes: [
       "Multi-product reuse: let multiple agent products share accounts, models, usage, and payment services.",
       "Service access: call Service actions in City from frontend, extension, or backend code without coupling to database internals.",
-      "Deployment composition: use templates/node or templates/edge for different runtime targets.",
+      "Deployment composition: use templates/localfed or templates/edgefed for different runtime targets.",
     ],
     factsTitle: "Facts",
     facts: [

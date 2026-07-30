@@ -1,11 +1,9 @@
 ---
 title: Deploy With Dokploy
-description: Deploy the Downcity Node block to Dokploy with a persistent Federation database.
+description: Deploy localfed to Dokploy with persistent SQLite storage.
 ---
 
-The Node block is the standard Docker / Dokploy deployment shape for Downcity Federation Infra.
-
-It runs `templates/node`, exposes the Federation HTTP API, and stores SQLite data in a persistent `/data` volume. Use it when you want a long-running service layer for cities, apps, agents, or internal tools.
+`templates/localfed` defaults to local development. The Compose deployment disables Local Account so its credential-free local login cannot be exposed publicly, and stores SQLite data in a persistent `/data` volume.
 
 ## Dokploy Settings
 
@@ -18,22 +16,16 @@ Create an app in Dokploy from this Git repository:
 | Container port | `43127` |
 | Volume | Compose creates `downcity_infra_data` |
 
-Configure these two stable bootstrap secrets in Dokploy:
-
-```txt
-DOWNCITY_FEDERATION_ADMIN_SECRET_KEY=admin_xxx
-DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY=sign_xxx
-```
-
-`HOST`, `PORT`, and `DOWNCITY_CITY_DATABASE_URL` are already defined in `docker-compose.yml`:
+`HOST`, `PORT`, the database path, and the login mode are already defined in `docker-compose.yml`:
 
 ```txt
 HOST=0.0.0.0
 PORT=43127
-DOWNCITY_CITY_DATABASE_URL=file:/data/downcity.sqlite
+DATABASE_PATH=/data/downcity.sqlite
+LOCAL_LOGIN=false
 ```
 
-`/data` must stay persistent. Cities, models, users, sessions, usage, payments, and Federation env entries are stored in that SQLite database.
+`/data` must stay persistent. Cities, accounts, and Federation env entries are stored in that SQLite database.
 
 ## Domain Path
 
@@ -52,32 +44,13 @@ If your domain is `https://base.example.com`, product-side SDKs and trusted back
 base_url=https://base.example.com
 ```
 
-If Stripe redirect URLs are not configured directly, write `DOWNCITY_CITY_BASE_URL` into Federation env so payment pages can derive default success and cancel URLs:
-
-```bash
-curl -X POST https://base.example.com/v1/env/upsert \
-  -H 'content-type: application/json' \
-  -H 'authorization: Bearer admin_xxx' \
-  -d '{"key":"DOWNCITY_CITY_BASE_URL","value":"https://base.example.com"}'
-```
-
 ## Provider Keys
 
-Provider API keys should not be stored in Dokploy env. After deployment, write them into the Federation database through the Admin API:
+The `localfed` template reads `DEEPSEEK_API_KEY` directly from the process environment. Configure it as a Dokploy secret:
 
-```bash
-curl -X POST https://base.example.com/v1/env/upsert \
-  -H 'content-type: application/json' \
-  -H 'authorization: Bearer admin_xxx' \
-  -d '{"key":"OPENAI_API_KEY","value":"your_api_key"}'
-
-curl -X POST https://base.example.com/v1/env/upsert \
-  -H 'content-type: application/json' \
-  -H 'authorization: Bearer admin_xxx' \
-  -d '{"key":"DEEPSEEK_API_KEY","value":"your_api_key"}'
+```txt
+DEEPSEEK_API_KEY=sk-...
 ```
-
-At runtime, `input.env("OPENAI_API_KEY")` and `input.env("DEEPSEEK_API_KEY")` read from the Federation database first.
 
 ## Verify
 
@@ -98,7 +71,7 @@ Expected shape:
 ```json
 {
   "ok": true,
-  "services": ["env", "cities", "accounts", "credits", "payment", "usage", "ai"]
+  "services": ["env", "cities", "bureaus", "accounts", "ai"]
 }
 ```
 

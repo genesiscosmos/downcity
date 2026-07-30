@@ -1,11 +1,9 @@
 ---
 title: Dokploy 部署
-description: 用持久化 Federation 数据库把 Downcity Node 街区部署到 Dokploy。
+description: 用持久化 SQLite 把 localfed 部署到 Dokploy。
 ---
 
-Node 街区是 Downcity Federation Infra 的标准 Docker / Dokploy 部署形态。
-
-它运行 `templates/node`，暴露 Federation HTTP API，并把 SQLite 数据保存在持久化 `/data` volume 里。适合给产品、应用、Agent 或内部工具提供一套长期运行的服务层。
+`templates/localfed` 默认用于本机开发。通过 Compose 部署时会关闭 Local Account，避免无需凭证的本地登录入口暴露到公网，并把 SQLite 数据保存在持久化 `/data` volume 中。
 
 ## Dokploy 配置
 
@@ -18,22 +16,16 @@ Node 街区是 Downcity Federation Infra 的标准 Docker / Dokploy 部署形态
 | Container port | `43127` |
 | Volume | Compose 自动创建 `downcity_infra_data` |
 
-Dokploy 里必须配置这两个稳定的 bootstrap secret：
-
-```txt
-DOWNCITY_FEDERATION_ADMIN_SECRET_KEY=admin_xxx
-DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY=sign_xxx
-```
-
-`HOST`、`PORT` 和 `DOWNCITY_CITY_DATABASE_URL` 已经写在 `docker-compose.yml` 中：
+`HOST`、`PORT`、数据库路径和登录模式已经写在 `docker-compose.yml` 中：
 
 ```txt
 HOST=0.0.0.0
 PORT=43127
-DOWNCITY_CITY_DATABASE_URL=file:/data/downcity.sqlite
+DATABASE_PATH=/data/downcity.sqlite
+LOCAL_LOGIN=false
 ```
 
-`/data` 必须是持久化 volume。city、model、用户、session、usage、payment 和 Federation env 都会保存在这个 SQLite 数据库里。
+`/data` 必须是持久化 volume。City、账户和 Federation env 都会保存在这个 SQLite 数据库里。
 
 ## 域名路径
 
@@ -52,32 +44,13 @@ POST /v1/ai/text
 base_url=https://base.example.com
 ```
 
-如果 Stripe redirect URL 没有直接配置，可以把 `DOWNCITY_CITY_BASE_URL` 写入 Federation env，让支付页自动推导默认 success / cancel URL：
-
-```bash
-curl -X POST https://base.example.com/v1/env/upsert \
-  -H 'content-type: application/json' \
-  -H 'authorization: Bearer admin_xxx' \
-  -d '{"key":"DOWNCITY_CITY_BASE_URL","value":"https://base.example.com"}'
-```
-
 ## Provider Key
 
-Provider API key 不建议写在 Dokploy env 里。部署完成后，通过 Admin API 写入 Federation 数据库：
+`localfed` 模板直接读取进程环境中的 `DEEPSEEK_API_KEY`。在 Dokploy 中把它配置为 Secret：
 
-```bash
-curl -X POST https://base.example.com/v1/env/upsert \
-  -H 'content-type: application/json' \
-  -H 'authorization: Bearer admin_xxx' \
-  -d '{"key":"OPENAI_API_KEY","value":"your_api_key"}'
-
-curl -X POST https://base.example.com/v1/env/upsert \
-  -H 'content-type: application/json' \
-  -H 'authorization: Bearer admin_xxx' \
-  -d '{"key":"DEEPSEEK_API_KEY","value":"your_api_key"}'
+```txt
+DEEPSEEK_API_KEY=sk-...
 ```
-
-运行时 `input.env("OPENAI_API_KEY")` 和 `input.env("DEEPSEEK_API_KEY")` 会优先从 Federation 数据库读取。
 
 ## 验证
 
@@ -98,7 +71,7 @@ curl http://1.2.3.4:43127/health
 ```json
 {
   "ok": true,
-  "services": ["env", "cities", "accounts", "credits", "payment", "usage", "ai"]
+  "services": ["env", "cities", "bureaus", "accounts", "ai"]
 }
 ```
 

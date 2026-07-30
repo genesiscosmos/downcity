@@ -17,6 +17,7 @@ packages:
   - packages/database-sqlite
   - packages/database-postgresql
   - templates/*
+  - templates/agent/*
   - examples/*
 
 allowBuilds:

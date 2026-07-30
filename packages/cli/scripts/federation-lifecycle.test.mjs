@@ -161,7 +161,7 @@ test("默认 Local 模板自动注入可用的 admin key", async () => {
     name: "admin-injection-test",
   }));
   fs.symlinkSync(
-    fileURLToPath(new URL("../../../templates/node/node_modules", import.meta.url)),
+    fileURLToPath(new URL("../../../templates/localfed/node_modules", import.meta.url)),
     path.join(project_dir, "node_modules"),
     "dir",
   );

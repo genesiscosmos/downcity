@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev:node": "pnpm -C node dev",
-    "dev:client": "pnpm -C client dev",
-    "typecheck": "pnpm -C node typecheck && pnpm -C edge typecheck && pnpm -C client typecheck"
+    "dev:localfed": "pnpm -C localfed dev",
+    "dev:edgefed": "pnpm -C edgefed dev",
+    "dev:agent": "pnpm -C agent dev",
+    "typecheck": "pnpm -C localfed typecheck && pnpm -C edgefed typecheck && pnpm -C agent typecheck"
   }
 }

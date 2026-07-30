@@ -1,0 +1,13 @@
+/**
+ * Agent Web 的 Tailwind 与 Downcity UI 样式入口。
+ */
+
+@import "tailwindcss";
+@import "@downcity/ui/styles.css";
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}

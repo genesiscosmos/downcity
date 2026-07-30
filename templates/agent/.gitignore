@@ -1,0 +1,4 @@
+.env
+.downcity/
+server/.downcity/
+web/dist/

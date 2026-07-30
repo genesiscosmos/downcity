@@ -1,0 +1,12 @@
+{
+  "name": "@downcity/template-agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel --stream --filter @downcity/template-agent-server --filter @downcity/template-agent-web dev",
+    "build": "pnpm -C web build",
+    "start": "pnpm -C server start",
+    "typecheck": "pnpm -C server typecheck && pnpm -C web typecheck"
+  }
+}

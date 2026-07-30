@@ -180,10 +180,10 @@ downfed has no default Federation. A deployed instance appears in the downfed li
 
 ## 6. Developer edge starter
 
-The Downcity repository keeps `templates/edge` as a developer-friendly starter project:
+The Downcity repository keeps `templates/edgefed` as a developer-friendly starter project:
 
 ```bash
-fed deploy templates/edge --verify
+fed deploy templates/edgefed --verify
 ```
 
 This starter is useful for local experiments and custom deployments. Downcity's private official production Worker implementation lives outside the public repository.
@@ -201,7 +201,7 @@ Expected shape:
 ```json
 {
   "ok": true,
-  "services": ["env", "cities", "accounts", "credits", "payment", "usage", "ai"]
+  "services": ["env", "cities", "bureaus"]
 }
 ```
 

@@ -5,7 +5,7 @@ description: 直接用 @downcity/city 在 Cloudflare Workers + D1 中部署 City
 
 如果你准备把 Downcity 部署到 Cloudflare Workers，推荐做法不是等一个单独的 edge package，而是直接把 `@downcity/city` 接到 Workers runtime。
 
-公开仓库里保留了 `templates/edge` 作为开发者快捷示例。Downcity 官方私有 Worker 实现维护在公开仓库之外。
+公开仓库里保留了 `templates/edgefed` 作为开发者快捷示例。Downcity 官方私有 Worker 实现维护在公开仓库之外。
 
 ## 这条路径解决什么
 
@@ -48,16 +48,15 @@ export default {
 - City 和 Service 都不会拿到原始 D1 binding
 - 当前请求 origin 可以在请求前同步给需要 OAuth callback 的 service
 
-## 从 `templates/edge` 快捷示例开始
+## 从 `templates/edgefed` 快捷示例开始
 
-仓库里的 [templates/edge/src/index.ts](/Users/wangenius/Documents/github/downcity/templates/edge/src/index.ts:1) 已经覆盖大多数项目需要的接入细节，包含这些关键点：
+仓库里的 `templates/edgefed/src/index.ts` 只保留 Worker 接入 Federation 必需的边界：
 
-- 用 `@downcity/database-d1` 把 `env.DB` 接成 City 可用数据库
-- City 启动时自动初始化内置 `env` / `cities` 表
-- 在每次请求前同步当前 origin，避免 OAuth callback 或外链使用错误域名
-- 继续像 Node 路线一样注册 `AIService`、accounts、usage、payment 服务
+- 用 `@downcity/database-d1` 把 `env.DB` 接成 Federation 可用数据库
+- 在 Worker isolate 内复用 Federation 实例
+- 把 HTTP request 交给 Federation 处理
 
-如果你要做正式项目，建议从这个示例开始，再按产品调整模型目录、服务和 provider key。
+业务 Service、模型和 provider 应由产品按需组合，不属于 Edge runtime 模板。
 
 ## 和 Node 路线的边界
 
@@ -71,4 +70,4 @@ Worker 和 Node 是同一套心智模型：都创建对应的 Database Adapter�
 
 - 如果你还没搭 City 本体，先读 [Federation](/zh/city-sdk-docs/packages/city/federation)
 - 如果你要管理 provider key，继续读 [provider 环境变量](/zh/city-sdk-docs/guides/provider-env)
-- 如果你需要完整快捷示例，直接看 [templates/edge/src/index.ts](/Users/wangenius/Documents/github/downcity/templates/edge/src/index.ts:1)
+- 如果你需要最小 Worker 接入示例，直接看 `templates/edgefed/src/index.ts`

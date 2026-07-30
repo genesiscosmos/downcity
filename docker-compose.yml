@@ -3,7 +3,7 @@
 # 关键说明（中文）
 # - Dokploy 使用 Compose 模式时，Compose 文件路径填写 ./docker-compose.yml。
 # - 镜像构建逻辑内联在 Compose 里，部署入口只保留这一个文件。
-# - /data 必须持久化，否则 SQLite 数据库、用户、usage、payment 和 City env 会在重建后丢失。
+# - /data 必须持久化，否则 SQLite 数据库、用户和 Federation env 会在重建后丢失。
 services:
   downcity-city:
     build:
@@ -15,7 +15,8 @@ services:
         ENV PATH="/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
         ENV HOST="0.0.0.0"
         ENV PORT="43127"
-        ENV DOWNCITY_CITY_DATABASE_URL="file:/data/downcity.sqlite"
+        ENV DATABASE_PATH="/data/downcity.sqlite"
+        ENV LOCAL_LOGIN="false"
 
         WORKDIR /app
 
@@ -26,18 +27,18 @@ services:
         RUN pnpm install --frozen-lockfile
         RUN pnpm -C packages/city build
         RUN pnpm -C packages/services build
-        RUN pnpm -C templates/node typecheck
+        RUN pnpm -C templates/localfed typecheck
 
         EXPOSE 43127
         VOLUME ["/data"]
 
-        CMD ["pnpm", "-C", "templates/node", "start"]
+        CMD ["pnpm", "-C", "templates/localfed", "start"]
     environment:
       HOST: 0.0.0.0
       PORT: 43127
-      DOWNCITY_CITY_DATABASE_URL: file:/data/downcity.sqlite
-      DOWNCITY_CITY_ADMIN_SECRET_KEY: ${DOWNCITY_CITY_ADMIN_SECRET_KEY:-}
-      DOWNCITY_CITY_TOKEN_SIGNING_KEY: ${DOWNCITY_CITY_TOKEN_SIGNING_KEY:-}
+      DATABASE_PATH: /data/downcity.sqlite
+      LOCAL_LOGIN: "false"
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
     ports:
       - "43127:43127"
     volumes:

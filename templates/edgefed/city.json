@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "type": "city",
+  "name": "edgefed",
+  "target": "cloudflare-workers",
+  "entry": "src/index.ts",
+  "resources": {
+    "d1": {
+      "binding": "DB",
+      "name": "edgefed-db"
+    }
+  }
+}

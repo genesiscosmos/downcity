@@ -180,10 +180,10 @@ downfed 没有默认 Federation。部署完成后，新实例会出现在 downfe
 
 ## 6. 开发者 edge 快捷示例
 
-Downcity 仓库里保留了 `templates/edge` 作为开发者快捷示例：
+Downcity 仓库里保留了 `templates/edgefed` 作为开发者快捷示例：
 
 ```bash
-fed deploy templates/edge --verify
+fed deploy templates/edgefed --verify
 ```
 
 这个示例适合本地实验和自定义部署。Downcity 官方私有生产 Worker 实现维护在公开仓库之外。
@@ -201,7 +201,7 @@ curl https://my-city.<your-subdomain>.workers.dev/health
 ```json
 {
   "ok": true,
-  "services": ["env", "cities", "accounts", "credits", "payment", "usage", "ai"]
+  "services": ["env", "cities", "bureaus"]
 }
 ```
 

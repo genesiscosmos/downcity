@@ -5,7 +5,7 @@ description: Run City directly on Cloudflare Workers and D1 with @downcity/city,
 
 If you want to deploy Downcity on Cloudflare Workers, the recommended path is not a separate edge package. Wire `@downcity/city` directly into the Workers runtime.
 
-The public repository includes `templates/edge` as a developer starter. Downcity's private official Worker implementation lives outside the public repository.
+The public repository includes `templates/edgefed` as a developer starter. Downcity's private official Worker implementation lives outside the public repository.
 
 ## What this path actually solves
 
@@ -48,16 +48,15 @@ The adapter owns the D1 runtime differences:
 - City and services never receive the raw D1 binding
 - the current request origin can be synchronized before calls that need OAuth callback URLs
 
-## Use `templates/edge` as a starter
+## Use `templates/edgefed` as a starter
 
-The starter implementation in [templates/edge/src/index.ts](/Users/wangenius/Documents/github/downcity/templates/edge/src/index.ts:1) covers the integration details most projects need:
+The starter in `templates/edgefed/src/index.ts` keeps only the boundaries required to connect Federation to a Worker:
 
 - wrap `env.DB` with `@downcity/database-d1`
-- let City initialize the built-in `env` and `cities` tables
-- synchronize the current origin before each request so OAuth callbacks and links use the correct domain
-- keep registering `AIService`, accounts, usage, and payment services the same way as the Node path
+- reuse the Federation instance within a Worker isolate
+- delegate the HTTP request to Federation
 
-For a real project, start from that example and adapt the model catalog, services, and provider keys to your product.
+Product services, models, and providers should be composed by the product and do not belong in the Edge runtime template.
 
 ## Boundary with the Node path
 
@@ -71,4 +70,4 @@ Worker and Node use the same mental model: create the appropriate Database Adapt
 
 - If you still need the City mental model first, read [City](/en/city-sdk-docs/packages/city/federation)
 - If you need to manage provider keys, continue with [Provider environment](/en/city-sdk-docs/guides/provider-env)
-- If you want a complete starter implementation, open [templates/edge/src/index.ts](/Users/wangenius/Documents/github/downcity/templates/edge/src/index.ts:1)
+- For the minimal Worker integration, open `templates/edgefed/src/index.ts`

@@ -1,0 +1,23 @@
+{
+  "name": "@downcity/template-localfed",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --import tsx src/index.ts",
+    "start": "node --env-file-if-exists=.env --import tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/deepseek": "^2.0.35",
+    "@downcity/city": "workspace:*",
+    "@downcity/database-sqlite": "workspace:*",
+    "@downcity/services": "workspace:*",
+    "@hono/node-server": "^2.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3"
+  }
+}

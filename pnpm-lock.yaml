@@ -804,14 +804,22 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  templates/client:
+  templates/agent: {}
+
+  templates/agent/server:
     dependencies:
+      '@ai-sdk/deepseek':
+        specifier: ^2.0.35
+        version: 2.0.35(zod@4.4.3)
       '@downcity/agent':
         specifier: workspace:*
-        version: link:../../packages/agent
-      '@downcity/city':
-        specifier: workspace:*
-        version: link:../../packages/city
+        version: link:../../../packages/agent
+      '@hono/node-server':
+        specifier: ^2.0.4
+        version: 2.0.4(hono@4.12.23)
+      hono:
+        specifier: ^4.12.23
+        version: 4.12.23
     devDependencies:
       '@types/node':
         specifier: ^25.9.1
@@ -823,26 +831,45 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  templates/edge:
+  templates/agent/web:
     dependencies:
-      '@ai-sdk/deepseek':
-        specifier: ^2.0.35
-        version: 2.0.35(zod@4.4.3)
-      '@ai-sdk/openai':
-        specifier: ^3.0.67
-        version: 3.0.67(zod@4.4.3)
+      '@downcity/ui':
+        specifier: workspace:*
+        version: link:../../../packages/ui
+      react:
+        specifier: ^19.2.6
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.2.6
+        version: 19.2.6(react@19.2.6)
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.3.0
+        version: 4.3.0(vite@8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3)(yaml@2.9.0))
+      '@types/react':
+        specifier: ^19.2.15
+        version: 19.2.15
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.15)
+      tailwindcss:
+        specifier: ^4.3.0
+        version: 4.3.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vite:
+        specifier: 8.0.14
+        version: 8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3)(yaml@2.9.0)
+
+  templates/edgefed:
+    dependencies:
       '@downcity/city':
         specifier: workspace:*
         version: link:../../packages/city
       '@downcity/database-d1':
         specifier: workspace:*
         version: link:../../packages/database-d1
-      '@downcity/services':
-        specifier: workspace:*
-        version: link:../../packages/services
-      ai:
-        specifier: ^6.0.193
-        version: 6.0.193(zod@4.4.3)
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20260530.1
@@ -854,17 +881,11 @@ importers:
         specifier: ^4.95.0
         version: 4.95.0(@cloudflare/workers-types@4.20260530.1)
 
-  templates/node:
+  templates/localfed:
     dependencies:
-      '@ai-sdk/anthropic':
-        specifier: ^3.0.81
-        version: 3.0.81(zod@4.4.3)
       '@ai-sdk/deepseek':
         specifier: ^2.0.35
         version: 2.0.35(zod@4.4.3)
-      '@ai-sdk/openai':
-        specifier: ^3.0.67
-        version: 3.0.67(zod@4.4.3)
       '@downcity/city':
         specifier: workspace:*
         version: link:../../packages/city
@@ -877,9 +898,6 @@ importers:
       '@hono/node-server':
         specifier: ^2.0.4
         version: 2.0.4(hono@4.12.23)
-      ai:
-        specifier: ^6.0.193
-        version: 6.0.193(zod@4.4.3)
     devDependencies:
       '@types/node':
         specifier: ^25.9.1
