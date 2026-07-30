@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - ".github/scripts/resolve-publish-matrix.mjs"
+      - ".github/scripts/validate-published-dependencies.mjs"
       - ".github/workflows/publish-packages.yml"
       - "packages/**"
       - "pnpm-lock.yaml"
@@ -172,5 +173,10 @@ jobs:
             echo "No tarball generated for ${PACKAGE_NAME}."
             exit 1
           fi
+
+          # 上层包只有在全部 Downcity 运行时依赖已经发布后才能进入 Registry。
+          PACKAGE_MANIFEST="$(mktemp)"
+          tar -xOf "${TARBALL}" package/package.json > "${PACKAGE_MANIFEST}"
+          node .github/scripts/validate-published-dependencies.mjs "${PACKAGE_MANIFEST}"
 
           npm publish "${TARBALL}" --access public
