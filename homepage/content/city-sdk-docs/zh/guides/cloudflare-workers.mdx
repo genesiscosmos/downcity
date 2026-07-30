@@ -20,11 +20,11 @@ Cloudflare Workers 和 Node.js 最大的不同，不是 HTTP 入口，而是 run
 
 ## 最小接法
 
-City 需要的只是一个 Drizzle db 对象：
+Federation 需要一个 D1 Database Adapter：
 
 ```ts
 import { Federation } from "@downcity/city";
-import { drizzle } from "drizzle-orm/d1";
+import { Database } from "@downcity/database-d1";
 
 export interface Env {
   DB: D1Database;
@@ -32,8 +32,8 @@ export interface Env {
 
 export default {
   async fetch(request: Request, env: Env) {
-    const db = drizzle(env.DB);
-    const base = new Federation({ db });
+    const database = new Database({ binding: env.DB });
+    const base = new Federation({ database });
 
     await base.health();
     return base.fetch(request);
@@ -41,18 +41,18 @@ export default {
 };
 ```
 
-这里的重点不是某个 helper 名字，而是你把数据库交给 City：
+这里的重点是 Adapter 明确拥有 D1 的运行时差异：
 
-- D1 通过 `drizzle-orm/d1` 得到 db
-- D1 属于 SQLite 方言，所以显式传 `dialect: "sqlite"`
-- `raw: env.DB` 交给需要底层 D1 对象的服务使用
+- D1 binding 只传给 `@downcity/database-d1`
+- Adapter 内部组合 Drizzle，并负责快照冲突重试与原子提交
+- City 和 Service 都不会拿到原始 D1 binding
 - 当前请求 origin 可以在请求前同步给需要 OAuth callback 的 service
 
 ## 从 `templates/edge` 快捷示例开始
 
 仓库里的 [templates/edge/src/index.ts](/Users/wangenius/Documents/github/downcity/templates/edge/src/index.ts:1) 已经覆盖大多数项目需要的接入细节，包含这些关键点：
 
-- 用 `drizzle-orm/d1` 把 `env.DB` 接成 City 可用数据库
+- 用 `@downcity/database-d1` 把 `env.DB` 接成 City 可用数据库
 - City 启动时自动初始化内置 `env` / `cities` 表
 - 在每次请求前同步当前 origin，避免 OAuth callback 或外链使用错误域名
 - 继续像 Node 路线一样注册 `AIService`、accounts、usage、payment 服务
@@ -61,11 +61,11 @@ export default {
 
 ## 和 Node 路线的边界
 
-Worker 和 Node 现在是同一套心智模型：都创建 Drizzle db，然后传给 `new Federation({ db })`。
+Worker 和 Node 是同一套心智模型：都创建对应的 Database Adapter，然后传给 `new Federation({ database })`。
 
-- Node.js 本地常用 `drizzle-orm/better-sqlite3`
-- Node.js 生产可以用 Drizzle pg
-- Workers / D1 用 `drizzle-orm/d1`
+- Node.js 本地使用 `@downcity/database-sqlite`
+- Node.js 生产可使用 `@downcity/database-postgresql`
+- Workers / D1 使用 `@downcity/database-d1`
 
 ## 下一步
 

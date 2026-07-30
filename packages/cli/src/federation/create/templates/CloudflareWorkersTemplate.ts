@@ -50,8 +50,8 @@ export function create_cloudflare_workers_template_files(
         },
         dependencies: {
           "@downcity/city": "latest",
+          "@downcity/database-d1": "latest",
           "@downcity/services": "latest",
-          "drizzle-orm": "latest",
         },
         devDependencies: {
           "@cloudflare/workers-types": "latest",
@@ -97,8 +97,8 @@ function create_worker_entrypoint(): string {
  * - Federation 实例在 Worker isolate 内复用，第一次请求时完成初始化。
  */
 
-import { drizzle } from "drizzle-orm/d1";
 import { Federation, R2Storage } from "@downcity/city";
+import { Database } from "@downcity/database-d1";
 import {
   AccountsService,
   CreditsService,
@@ -121,7 +121,8 @@ let federation_promise: Promise<Federation> | undefined;
 
 /** 创建并初始化当前 Worker isolate 使用的 Federation。 */
 async function create_federation(env: Env): Promise<Federation> {
-  const federation = new Federation({ db: drizzle(env.DB) });
+  const database = new Database({ binding: env.DB });
+  const federation = new Federation({ database });
   const public_url_prefix = env.DOWNCITY_STORAGE_PUBLIC_URL_PREFIX?.trim();
   if (public_url_prefix) {
     federation.storage(R2Storage({

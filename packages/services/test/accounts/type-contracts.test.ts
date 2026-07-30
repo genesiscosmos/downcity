@@ -5,7 +5,7 @@
 import { Federation } from "@downcity/city";
 import { AccountsService, emailAccountsProvider, githubAccountsProvider } from "../../src/index.js";
 
-const base = new Federation({ db: {} as never });
+const base = new Federation({ database: {} as never });
 
 base.use(new AccountsService({
   token_ttl: "7d",

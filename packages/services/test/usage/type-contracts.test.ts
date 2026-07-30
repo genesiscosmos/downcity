@@ -6,7 +6,7 @@ import { Federation } from "@downcity/city";
 import { UsageService } from "../../src/index.js";
 
 const base = new Federation({
-  db: {} as never,
+  database: {} as never,
 });
 
 base.use(new UsageService({

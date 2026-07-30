@@ -9,7 +9,7 @@ description: 使用永久 Primary Card 与限时 Ephemeral Card 管理用户额�
 import { Federation } from "@downcity/city";
 import { CreditsService } from "@downcity/services";
 
-const federation = new Federation({ db });
+const federation = new Federation({ database });
 const credits = new CreditsService();
 federation.use(credits);
 ```

@@ -13,17 +13,10 @@ import {
   type AIChannelStreamInput,
   type LanguageModelV3StreamResult,
 } from "@downcity/city";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { Database } from "@downcity/database-sqlite";
 
-const sqlite = new Database("./data.sqlite");
-sqlite.pragma("journal_mode = WAL");
-
-const db = Object.assign(drizzle(sqlite), {
-  $client: { exec: (sql: string) => sqlite.exec(sql) },
-});
-
-const base = new Federation({ db });
+const database = new Database({ filename: "./data.sqlite" });
+const base = new Federation({ database });
 
 class EchoChannel extends AIChannel {
   constructor() {

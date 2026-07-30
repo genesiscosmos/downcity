@@ -13,14 +13,12 @@
    "@ai-sdk/openai": "^3.0.67",
    "@ai-sdk/deepseek": "^2.0.35",
    "@downcity/city": "workspace:*",
+    "@downcity/database-sqlite": "workspace:*",
     "@downcity/services": "workspace:*",
     "@hono/node-server": "^2.0.4",
-    "ai": "^6.0.193",
-    "better-sqlite3": "^12.10.0",
-    "drizzle-orm": "^0.45.2"
+    "ai": "^6.0.193"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.9.1",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"

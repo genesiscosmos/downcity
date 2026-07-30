@@ -3,7 +3,7 @@ title: Federation 运行时
 description: "Federation 实例、runtime、serve 和统一入口在 @downcity/city 里的角色。"
 ---
 
-`Federation` 是 Downcity 的服务端长期运行容器（文档里也叫 Federation）。它不是一个零散函数集合，而是把 Drizzle db、service、鉴权和统一 `/v1/*` 路由收在同一个服务端入口里。产品侧访问它用的是 `City` 客户端，区别见 [Federation 与 City](/zh/city-sdk-docs/concepts/federation)。
+`Federation` 是 Downcity 的服务端长期运行容器（文档里也叫 Federation）。它把 Database Adapter、service、鉴权和统一 `/v1/*` 路由收在同一个服务端入口里。产品侧访问它用的是 `City` 客户端，区别见 [Federation 与 City](/zh/city-sdk-docs/concepts/federation)。
 
 ## 这个概念在说什么
 
@@ -11,7 +11,7 @@ description: "Federation 实例、runtime、serve 和统一入口在 @downcity/c
 
 它长期持有这些能力：
 
-- Drizzle 数据库连接
+- Database Adapter
 - service 注册表
 - 服务挂载点
 - HTTP 路由入口
@@ -22,7 +22,7 @@ description: "Federation 实例、runtime、serve 和统一入口在 @downcity/c
 ## 什么时候你需要关心这一页
 
 - 你准备第一次真正把 Federation 跑起来
-- 你想理解为什么 `Federation` 只需要一个 Drizzle db
+- 你想理解为什么 `Federation` 只需要一个 Database Adapter
 - 你已经会写 service，但还不清楚 `fetch()`、`serve()` 各自用在什么地方
 - 你要把 Federation 接到现有 Node 服务、Cloudflare Worker 或别的 HTTP 入口上
 
@@ -38,18 +38,11 @@ description: "Federation 实例、runtime、serve 和统一入口在 @downcity/c
 
 ```ts
 import { AIService, Federation } from "@downcity/city";
+import { Database } from "@downcity/database-sqlite";
 import { serve } from "@hono/node-server";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
 
-const sqlite = new Database("./.base/downcity.sqlite");
-sqlite.pragma("journal_mode = WAL");
-
-const db = Object.assign(drizzle(sqlite), {
-  $client: { exec: (sql: string) => sqlite.exec(sql) },
-});
-
-const base = new Federation({ db });
+const database = new Database({ filename: "./.base/downcity.sqlite" });
+const base = new Federation({ database });
 
 const ai = new AIService();
 
@@ -84,7 +77,7 @@ serve({
 
 这个例子里真正重要的是三件事：
 
-1. `db` 决定 Federation 使用哪一个 Drizzle 数据库
+1. `database` 决定 Federation 使用哪一个数据库 Adapter
 2. `base.use(...)` 决定 Federation 暴露哪些能力
 3. `base.fetch()` 决定你怎么把它接进 HTTP 层
 
@@ -137,7 +130,7 @@ Federation 会在共享数据库中原子初始化系统 env 和 Ed25519 user to
 import { Federation } from "@downcity/city";
 import { serve } from "@hono/node-server";
 
-const base = new Federation({ db });
+const base = new Federation({ database });
 
 serve({
   fetch: (request) => base.fetch(request),
@@ -167,7 +160,7 @@ await admin.listServices();
 
 如果 `AccountsService` 配置了 `local_login: true`，`/v1/accounts/providers` 会只返回本地登录方式。调用 `accounts.login/start` 并传入 `provider: "local"` 与 `city_id` 后会得到 `login_id`，再用 `accounts.login/result` 读取正常 `user_token`，之后用 `city_id + user_token` 创建或更新 User City。
 
-## 为什么只传 db
+## 为什么只传 Database Adapter
 
 `@downcity/city` 负责的是跨运行时都应该稳定的逻辑：
 
@@ -176,10 +169,10 @@ await admin.listServices();
 - token 鉴权
 - city / env / store 基础设施
 
-而具体宿主环境只负责把数据库对象创建好：
+而具体宿主环境只负责创建对应 Adapter：
 
-- Node.js 可以用 `drizzle-orm/better-sqlite3` 或 Drizzle pg
-- Cloudflare Workers 可以用 `drizzle-orm/d1`
+- Node.js 可以用 `@downcity/database-sqlite` 或 `@downcity/database-postgresql`
+- Cloudflare Workers 可以用 `@downcity/database-d1`
 - Federation 启动时会把需要的 env 写入内置 `env` 表
 
 这就是为什么同一套 runtime 模型可以复用到不同宿主环境，而不是每换一个平台就重写一套后端。
@@ -191,7 +184,7 @@ await admin.listServices();
 ```ts
 import { Federation, R2Storage } from "@downcity/city";
 
-const base = new Federation({ db });
+const base = new Federation({ database });
 
 base.storage(R2Storage({
   bucket: env.DOWNCITY_STORAGE,
@@ -205,7 +198,7 @@ base.storage(R2Storage({
 
 这一页最相关的 Federation API 是：
 
-- `new Federation({ db })`：创建 Federation 实例
+- `new Federation({ database })`：创建 Federation 实例
 - `base.use(...)`：挂 service、AIService 和官方服务
 - `base.storage(...)`：注册默认文件存储后端
 - `base.fetch(request)`：处理单次请求

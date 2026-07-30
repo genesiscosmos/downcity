@@ -8,17 +8,16 @@
 import { Service, type Context, type EnvRequirement, type ServiceNativeRouteHandler, type ServiceRouteMethod } from "./service.js";
 import type { Action } from "./action.js";
 import { Hook } from "./hook.js";
-import { TableApi } from "../store/table-api.js";
 import type { CityTableApi } from "../store/table-api.js";
+import type { Database } from "../database/Database.js";
+import type { ServiceDatabaseContext } from "../types/database/Database.js";
 import type { CreateUserTokenInput, UserTokenIssueResult, RuntimeUser } from "../federation/auth/types.js";
 import type { InstructionDefinition } from "./instruction.js";
 import type { FederationRequestTransport } from "../federation/types.js";
-import type { FederationDatabaseDialect } from "../federation/runtime.js";
 import type {
   CreateFederationServiceTokenInput,
   FederationServiceTokenIssueResult,
 } from "../federation/auth/types.js";
-import { run_service_transaction } from "../store/transaction.js";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 import type { AnySQLiteTable } from "drizzle-orm/sqlite-core";
 import type { FederationQueue } from "../federation/queue.js";
@@ -35,6 +34,9 @@ const INSTALL_SERVICE = Symbol("downcity.service.install");
 // ===========================================================================
 
 export interface ServiceInstallContext {
+  /** 当前 Service 可使用的受限数据库能力。 */
+  readonly database: ServiceDatabaseContext;
+
   table<TRow extends Record<string, unknown> = Record<string, unknown>>(name: string): CityTableApi<TRow>;
 
   route(config: ServiceActionRouteConfig): Action;
@@ -80,9 +82,7 @@ export interface ServiceDatabaseSchema {
 }
 
 /** Service 按 Federation 方言提供数据库声明。 */
-export type ServiceDatabaseSchemas = Partial<
-  Record<FederationDatabaseDialect, ServiceDatabaseSchema>
->;
+export type ServiceDatabaseSchemas = Record<string, ServiceDatabaseSchema | undefined>;
 
 export interface ServiceActionRouteConfig {
   method: "GET" | "POST";
@@ -184,7 +184,7 @@ export abstract class InstallableService extends Service {
    * 该入口由 `install_service()` 通过模块私有 Symbol 调用，业务子类只能实现
    * `install(ctx)`，不能跳过框架安装流程。
    */
-  [INSTALL_SERVICE](): void {
+  [INSTALL_SERVICE](database: Database): void {
     if (this.schema && !this.tables) {
       (this as any).tables = this.schema;
     }
@@ -223,11 +223,12 @@ export abstract class InstallableService extends Service {
     }
 
     const ctx: ServiceInstallContext = {
+      database: database.service_context(),
+
       table<TRow extends Record<string, unknown> = Record<string, unknown>>(name: string): CityTableApi<TRow> {
-        if (!self._db) throw new Error("InstallableService database is not ready");
         const table = self.tables?.[name];
         if (!table) throw new Error(`Unknown table: ${name}`);
-        return new TableApi(self._db, table) as unknown as CityTableApi<TRow>;
+        return database.table<TRow>(table);
       },
 
       route,
@@ -249,23 +250,15 @@ export abstract class InstallableService extends Service {
       },
 
       async transaction(handler) {
-        if (!self._db || !self._client || !self._database_dialect) {
-          throw new Error("InstallableService transaction runtime is not ready");
-        }
-        return await run_service_transaction({
-          database: self._db,
-          client: self._client.$client,
-          dialect: self._database_dialect,
-          handler: async (create_table) => handler({
+        return await database.transaction(async (transaction) => handler({
             table<TRow extends Record<string, unknown> = Record<string, unknown>>(
               name: string,
             ): CityTableApi<TRow> {
               const table = self.tables?.[name];
               if (!table) throw new Error(`Unknown table: ${name}`);
-              return create_table<TRow>(table);
+              return transaction.table<TRow>(table);
             },
-          }),
-        });
+          }));
       },
 
       env(key) {
@@ -282,8 +275,8 @@ export abstract class InstallableService extends Service {
  *
  * 该函数仅供 Federation 内部生命周期编排使用，不从 package 公共入口导出。
  */
-export function install_service(service: InstallableService): void {
-  service[INSTALL_SERVICE]();
+export function install_service(service: InstallableService, database: Database): void {
+  service[INSTALL_SERVICE](database);
 }
 
 export type ServiceDefinition = {

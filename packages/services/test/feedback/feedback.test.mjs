@@ -14,7 +14,7 @@ test("feedbackService manages user feedback and admin replies", async () => {
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db })
+    const base = new Federation({ database: db })
     base.use(new FeedbackService())
 
     await base.health()

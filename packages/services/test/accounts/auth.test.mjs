@@ -289,7 +289,7 @@ test("accountsService does not expose email login without an email provider", as
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db })
+    const base = new Federation({ database: db })
     base.use(new AccountsService({ token_ttl: "7d" }))
     await base.health()
 
@@ -486,7 +486,7 @@ test("accountsService completes WeChat website OAuth callback and resolves the s
 
 async function setupBase(tempDir, env = {}, accountsOptions = {}) {
   const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-  const base = new Federation({ db })
+  const base = new Federation({ database: db })
   base.use(new AccountsService({
     token_ttl: "7d",
     ...accountsOptions,

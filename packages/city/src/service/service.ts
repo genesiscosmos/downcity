@@ -11,7 +11,6 @@ import type { AnyPgTable } from "drizzle-orm/pg-core";
 import { Hook } from "./hook.js";
 import { Action, type ActionFn } from "./action.js";
 import type { CityTableApi } from "../store/table-api.js";
-import type { Database, DbClient } from "../store/db.js";
 import type { RuntimeUser } from "../federation/auth/types.js";
 import type { Authenticator } from "../federation/auth/authenticator.js";
 import type { EnvProvider } from "../federation/runtime.js";
@@ -187,16 +186,11 @@ export class Service {
 
   // ========== City 注入 ==========
 
-  _db?: Database;
-  _client?: { $client: DbClient };
   _authenticator?: Authenticator;
   _env?: EnvProvider;
   _cityStore?: CityStore;
   /** Federation Bureau Token 持久化与校验入口。 */
   _bureauTokenStore?: BureauTokenStore;
-
-  /** 原始数据库实例（better-sqlite3 / D1 等） */
-  _raw?: unknown;
 
   /** 服务公网 URL */
   _baseURL?: string;
@@ -206,9 +200,6 @@ export class Service {
 
   /** Federation 默认存储能力 */
   _storage?: FederationStorage;
-
-  /** 当前 Federation 数据库方言。 */
-  _database_dialect?: "sqlite" | "postgresql";
 
   constructor(options: {
     id: string;

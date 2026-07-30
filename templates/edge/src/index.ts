@@ -8,9 +8,9 @@
  * - 装配过程平铺在本文件，不再通过 compose_city 函数包裹。
  */
 
-import { drizzle } from "drizzle-orm/d1";
 import { Federation, AIService } from "@downcity/city";
 import type { AIBillInput } from "@downcity/city";
+import { Database } from "@downcity/database-d1";
 import {
   AccountsService,
   CreditsService,
@@ -56,11 +56,11 @@ function get_federation(env: Env): Promise<Federation> {
 }
 
 async function init_federation(env: Env): Promise<Federation> {
-  const db = drizzle(env.DB);
+  const database = new Database({ binding: env.DB });
 
   // 关键说明（中文）
   // Payment 在 paid 后通过 CreditsService 发放额度，AI 通过 CreditsService 扣费。
-  const federation = new Federation({ db });
+  const federation = new Federation({ database });
 
   federation.use(new AccountsService({
     providers: [

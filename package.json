@@ -31,6 +31,7 @@
     "agent:patch:build": "bash ./scripts/build-packages.sh --agent",
     "server:patch:build": "bash ./scripts/build-packages.sh --server",
     "city:patch:build": "bash ./scripts/build-packages.sh --city --services",
+    "database:patch:build": "bash ./scripts/build-packages.sh --database-d1 --database-sqlite --database-postgresql --city --services",
     "services:patch:build": "bash ./scripts/build-packages.sh --services",
     "plugins:patch:build": "bash ./scripts/build-packages.sh --plugins",
     "type:patch:build": "bash ./scripts/build-packages.sh --type",

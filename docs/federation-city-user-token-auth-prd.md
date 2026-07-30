@@ -51,7 +51,7 @@ Federation 负责：
 业务侧保持最简初始化：
 
 ```ts
-const federation = new Federation({ db });
+const federation = new Federation({ database });
 federation.use(new AccountsService());
 ```
 
@@ -327,7 +327,7 @@ Bureau Token 被撤销后，新的 Federation 管理请求会失败；JWKS 本�
 
 ## 11. 验收标准
 
-- `new Federation({ db })` 不默认创建 Bureau Token。
+- `new Federation({ database })` 不默认创建 Bureau Token。
 - `fed bureau token` 是 Bureau Token 的交互式管理入口，`fed bureau token create` 是部署登记入口。
 - Federation 数据库只保存 Bureau Token hash，不保存明文。
 - `Bureau.bureaus.register/list/revoke()` 使用管理凭证调用控制面。

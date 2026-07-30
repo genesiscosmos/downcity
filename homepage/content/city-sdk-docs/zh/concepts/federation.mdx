@@ -19,12 +19,12 @@ description: 分清服务端运行时 Federation 和客户端访问入口 City�
 
 ## 服务端：`Federation`
 
-服务端永远从 `new Federation({ db })` 开始。它负责把数据库、service、模型目录和统一路由组装成一个能跑的后端：
+服务端永远从 `new Federation({ database })` 开始。它负责把数据库、service、模型目录和统一路由组装成一个能跑的后端：
 
 ```ts
 import { Federation, Service } from "@downcity/city";
 
-const base = new Federation({ db });
+const base = new Federation({ database });
 
 base.use(new Service({ id: "translate" }));
 
@@ -84,7 +84,7 @@ const city = new City({
     <div className="dc-doc-node">
       <strong>服务端 Federation</strong>
       <span>共享后端运行时，承载模型目录、service 路由、token 校验、usage 和 hooks。</span>
-      <code>{'new Federation({ db })'}</code>
+      <code>{'new Federation({ database })'}</code>
     </div>
   </div>
 </div>

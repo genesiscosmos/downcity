@@ -6,7 +6,7 @@ import { Federation } from "@downcity/city";
 import { CreditsService } from "../../src/index.js";
 
 async function verify_credits_service_contract(): Promise<void> {
-  const federation = new Federation({ db: {} as never });
+  const federation = new Federation({ database: {} as never });
   const credits = new CreditsService();
   federation.use(credits);
 

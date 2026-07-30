@@ -12,11 +12,12 @@ import {
   AUTH_USER_TABLE,
   USER_PROFILE_TABLE,
 } from "./schema.js";
+import type { AccountsPreparedStatement } from "./types/DatabaseStatement.js";
 
 /**
  * 原始 statement 创建函数。
  */
-type RawPrepare = (sql: string) => any;
+type RawPrepare = (sql: string) => AccountsPreparedStatement;
 
 /**
  * 读取管理侧用户列表。

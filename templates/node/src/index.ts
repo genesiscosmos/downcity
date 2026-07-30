@@ -9,9 +9,8 @@
  */
 
 import { serve } from "@hono/node-server";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
 import { Federation, AIService } from "@downcity/city";
+import { Database } from "@downcity/database-sqlite";
 import {
   AccountsService,
   CreditsService,
@@ -60,7 +59,7 @@ interface EnvRow {
  * 解析 SQLite 数据库路径。
  *
  * 关键说明（中文）
- * - templates/node 当前使用 better-sqlite3，只支持本地 SQLite 文件。
+ * - templates/node 当前使用 SQLite Adapter，只支持本地 SQLite 文件。
  * - `file:` 前缀便于 Compose / Dokploy 和本地 .env 使用同一套表达。
  * - Postgres 等远端数据库后续应通过独立 adapter 接入，不在这里偷偷兼容。
  */
@@ -88,10 +87,7 @@ if (!Number.isInteger(port) || port <= 0 || port > 65535) {
 }
 
 const sqlite_path = resolve_sqlite_path(process.env.DOWNCITY_FEDERATION_DATABASE_URL);
-const sqlite = new Database(sqlite_path);
-sqlite.pragma("journal_mode = WAL");
-
-const db = drizzle(sqlite);
+const database = new Database({ filename: sqlite_path });
 
 const bootstrap_env_keys = [
   "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY",
@@ -133,7 +129,7 @@ async function sync_local_env(federation: Federation): Promise<void> {
  * - 不再通过 compose_city 函数隐藏装配过程，所有 service 的创建与注册都平铺在这里。
  * - Payment 在 paid 后通过 CreditsService 发放额度，AI 通过 CreditsService 扣费。
  */
-const federation = new Federation({ db });
+const federation = new Federation({ database });
 
 const accounts = new AccountsService({
   token_ttl: "7d",

@@ -28,7 +28,7 @@ If you only want the big picture first, finish this page and then follow the seq
 
 ## What it does not own
 
-- It does not create the concrete database connection. Create a Drizzle ORM db and pass it to `new Federation({ db })`.
+- It does not implement a concrete database driver. Create a Database Adapter and pass it to `new Federation({ database })`.
 - It does not own ready-made auth, usage, or payment business logic. Those come from official services.
 
 ## When this should be your first stop
@@ -48,24 +48,17 @@ If you only want the big picture first, finish this page and then follow the seq
 ## Install
 
 ```bash
-pnpm add @downcity/city drizzle-orm better-sqlite3
+pnpm add @downcity/city @downcity/database-sqlite
 ```
 
 ## Minimal example
 
 ```ts
 import { Federation, AIService } from "@downcity/city";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { Database } from "@downcity/database-sqlite";
 
-const sqlite = new Database("./data.sqlite");
-sqlite.pragma("journal_mode = WAL");
-
-const db = Object.assign(drizzle(sqlite), {
-  $client: { exec: (sql: string) => sqlite.exec(sql) },
-});
-
-const base = new Federation({ db });
+const database = new Database({ filename: "./data.sqlite" });
+const base = new Federation({ database });
 
 const ai = new AIService();
 

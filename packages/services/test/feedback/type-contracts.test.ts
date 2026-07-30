@@ -12,7 +12,7 @@ import {
 } from "../../src/index.js";
 
 const base = new Federation({
-  db: {} as never,
+  database: {} as never,
 });
 
 const service = new FeedbackService();

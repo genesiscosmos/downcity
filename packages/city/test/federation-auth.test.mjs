@@ -16,7 +16,7 @@ test("Federation 为旧 Bureau Token 表补充 purpose 字段", async () => {
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-bureau-migration-"))
   try {
     const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    db.raw.exec(`
+    await db.execute_ddl(`
       CREATE TABLE federation_bureau_tokens (
         token_id TEXT PRIMARY KEY,
         token_hash TEXT NOT NULL,
@@ -35,9 +35,12 @@ test("Federation 为旧 Bureau Token 表补充 purpose 字段", async () => {
       );
     `)
 
-    const federation = new Federation({ db })
+    const federation = new Federation({ database: db })
     await federation.health()
-    const columns = db.raw.prepare("PRAGMA table_info(federation_bureau_tokens)").all()
+    const columns = (await db.query({
+      sql: "PRAGMA table_info(federation_bureau_tokens)",
+      params: [],
+    })).rows
     assert.equal(columns.some((column) => column.name === "purpose"), true)
 
     const admin = await create_admin(federation)
@@ -52,7 +55,7 @@ test("Federation 不默认创建 Bureau Token，Bureau 使用 JWKS 本地验签"
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-bureau-local-"))
   try {
     const federation = new Federation({
-      db: createSqliteDb(path.join(temp_dir, "test.sqlite")),
+      database: createSqliteDb(path.join(temp_dir, "test.sqlite")),
     })
     await federation.health()
     const admin = await create_admin(federation)
@@ -121,7 +124,7 @@ test("Bureau 接受同一 Federation 下不同 City 的有效 user_token", async
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-bureau-city-"))
   try {
     const federation = new Federation({
-      db: createSqliteDb(path.join(temp_dir, "test.sqlite")),
+      database: createSqliteDb(path.join(temp_dir, "test.sqlite")),
     })
     await federation.health()
     const admin = await create_admin(federation)
@@ -145,7 +148,7 @@ test("Bureau 拒绝被修改签名的 user_token", async () => {
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-bureau-signature-"))
   try {
     const federation = new Federation({
-      db: createSqliteDb(path.join(temp_dir, "test.sqlite")),
+      database: createSqliteDb(path.join(temp_dir, "test.sqlite")),
     })
     await federation.health()
     const admin = await create_admin(federation)
@@ -173,7 +176,7 @@ test("Federation issuer 和签名公钥在 runtime 重启后保持不变", async
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-fed-key-restart-"))
   try {
     const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    const first = new Federation({ db })
+    const first = new Federation({ database: db })
     await first.health()
     const first_discovery = await (await first.fetch(new Request(
       "https://fed.example.com/.well-known/downcity.json",
@@ -182,7 +185,7 @@ test("Federation issuer 和签名公钥在 runtime 重启后保持不变", async
       "https://fed.example.com/.well-known/jwks.json",
     ))).json()
 
-    const second = new Federation({ db })
+    const second = new Federation({ database: db })
     await second.health()
     const second_discovery = await (await second.fetch(new Request(
       "https://fed.example.com/.well-known/downcity.json",
@@ -202,7 +205,7 @@ test("多个 Federation 实例并发首次启动时共享唯一 issuer 和 activ
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-fed-concurrent-init-"))
   try {
     const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    const federations = Array.from({ length: 8 }, () => new Federation({ db }))
+    const federations = Array.from({ length: 8 }, () => new Federation({ database: db }))
 
     await Promise.all(federations.map((federation) => federation.health()))
 
@@ -229,14 +232,14 @@ test("Federation 启动时将历史多 active signing key 自动收敛为最早�
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-fed-key-reconcile-"))
   try {
     const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    const first = new Federation({ db })
+    const first = new Federation({ database: db })
     await first.health()
 
     const key_table = await first.table("federation_auth_keys")
     const [original_key] = await key_table.select()
     assert.ok(original_key)
 
-    db.raw.exec('DROP INDEX "federation_auth_keys_one_active"')
+    await db.execute_ddl('DROP INDEX "federation_auth_keys_one_active"')
     await key_table.update({
       where: { key_id: original_key.key_id },
       values: { created_at: "2026-01-03T00:00:00.000Z" },
@@ -246,7 +249,7 @@ test("Federation 启动时将历史多 active signing key 自动收敛为最早�
       clone_auth_key(original_key, "key_legacy_middle", "2026-01-02T00:00:00.000Z"),
     ])
 
-    const recovered = new Federation({ db })
+    const recovered = new Federation({ database: db })
     await recovered.health()
 
     const recovered_rows = await (await recovered.table("federation_auth_keys")).select()

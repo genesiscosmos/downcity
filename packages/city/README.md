@@ -13,24 +13,17 @@
 ## 安装
 
 ```bash
-pnpm add @downcity/city
+pnpm add @downcity/city @downcity/database-sqlite
 ```
 
 ## 最小示例
 
 ```ts
 import { Federation, AIService } from "@downcity/city";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { Database } from "@downcity/database-sqlite";
 
-const sqlite = new Database("./data.sqlite");
-sqlite.pragma("journal_mode = WAL");
-
-const db = Object.assign(drizzle(sqlite), {
-  $client: { exec: (sql: string) => sqlite.exec(sql) },
-});
-
-const base = new Federation({ db, dialect: "sqlite", raw: sqlite });
+const database = new Database({ filename: "./data.sqlite" });
+const base = new Federation({ database });
 
 const ai = new AIService();
 ai.use({

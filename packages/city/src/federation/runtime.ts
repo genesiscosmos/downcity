@@ -6,11 +6,11 @@
  *
  * 使用示例：
  * ```ts
- * const base = new Federation({ db });
+ * const base = new Federation({ database });
  * ```
  */
 
-import type { Database, DbClient } from "../store/db.js";
+import type { Database } from "../database/Database.js";
 import type { EnvEntry, EnvUpsertInput } from "../service/env/types.js";
 import type { EnvStore } from "../service/env/env-store.js";
 import type { AnySQLiteTable } from "drizzle-orm/sqlite-core";
@@ -21,8 +21,6 @@ import type { FederationStorage } from "./storage.js";
 export type TableDef = AnySQLiteTable | AnyPgTable;
 
 /** Federation 当前数据库方言。 */
-export type FederationDatabaseDialect = "sqlite" | "postgresql";
-
 // ===========================================================================
 // EnvProvider — 环境变量提供者接口
 // ===========================================================================
@@ -122,19 +120,8 @@ export interface BuiltinTables {
  * 这是 Federation 内部从 Drizzle db 组装出来的结构，不作为用户主要入口。
  */
 export interface Runtime {
-  /** 当前数据库方言，由 Federation 从 Drizzle 实例推断。 */
-  dialect: FederationDatabaseDialect;
-  /**
-   * 数据库实例（Drizzle Database 接口）。
-   *
-   * 用于 Service 的 CRUD 操作。
-   */
+  /** Federation 唯一主数据库 Adapter。 */
   database: Database;
-
-  /**
-   * 底层数据库客户端（用于 DDL 执行）。
-   */
-  client: DbClient;
 
   /**
    * 环境变量提供者。
@@ -149,12 +136,6 @@ export interface Runtime {
    * 适配器根据数据库类型提供正确的 Drizzle 表定义。
    */
   builtinTables: BuiltinTables;
-
-  /**
-   * 原始数据库实例（better-sqlite3 Database / D1Database 等）。
-   * 供 better-auth 等第三方库直接使用。
-   */
-  raw?: unknown;
 
   /**
    * 服务公网 URL（http://localhost:43127 或 https://xxx.workers.dev）。

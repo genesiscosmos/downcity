@@ -15,7 +15,7 @@ test("usageService records successful service calls", async () => {
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db })
+    const base = new Federation({ database: db })
     base.use(new UsageService())
 
     const ai = new AIService()

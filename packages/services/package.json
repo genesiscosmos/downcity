@@ -1,6 +1,6 @@
 {
   "name": "@downcity/services",
-  "version": "0.1.236",
+  "version": "0.1.237",
   "description": "Downcity public services for accounts, organizations, credits, usage, and provider-based payments.",
   "type": "module",
   "main": "./bin/index.js",
@@ -54,6 +54,8 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@downcity/database-d1": "workspace:*",
+    "@downcity/database-sqlite": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.9.1",
     "better-sqlite3": "^12.10.0",

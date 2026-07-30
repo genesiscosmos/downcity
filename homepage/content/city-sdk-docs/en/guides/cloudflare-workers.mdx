@@ -20,11 +20,11 @@ That is why this is better explained as a guide than as an empty npm package.
 
 ## The minimum shape
 
-City only needs a Drizzle db object:
+Federation needs a D1 Database Adapter:
 
 ```ts
 import { Federation } from "@downcity/city";
-import { drizzle } from "drizzle-orm/d1";
+import { Database } from "@downcity/database-d1";
 
 export interface Env {
   DB: D1Database;
@@ -32,8 +32,8 @@ export interface Env {
 
 export default {
   async fetch(request: Request, env: Env) {
-    const db = drizzle(env.DB);
-    const base = new Federation({ db });
+    const database = new Database({ binding: env.DB });
+    const base = new Federation({ database });
 
     await base.health();
     return base.fetch(request);
@@ -41,18 +41,18 @@ export default {
 };
 ```
 
-The important part is not a helper name. It is that you hand the database to City:
+The adapter owns the D1 runtime differences:
 
-- D1 becomes a db through `drizzle-orm/d1`
-- D1 is a SQLite dialect, so pass `dialect: "sqlite"`
-- `raw: env.DB` is available to services that need the low-level D1 object
+- only `@downcity/database-d1` receives the D1 binding
+- the adapter combines Drizzle with snapshot conflict retries and atomic commits
+- City and services never receive the raw D1 binding
 - the current request origin can be synchronized before calls that need OAuth callback URLs
 
 ## Use `templates/edge` as a starter
 
 The starter implementation in [templates/edge/src/index.ts](/Users/wangenius/Documents/github/downcity/templates/edge/src/index.ts:1) covers the integration details most projects need:
 
-- wrap `env.DB` with `drizzle-orm/d1`
+- wrap `env.DB` with `@downcity/database-d1`
 - let City initialize the built-in `env` and `cities` tables
 - synchronize the current origin before each request so OAuth callbacks and links use the correct domain
 - keep registering `AIService`, accounts, usage, and payment services the same way as the Node path
@@ -61,11 +61,11 @@ For a real project, start from that example and adapt the model catalog, service
 
 ## Boundary with the Node path
 
-Worker and Node now use the same mental model: create a Drizzle db, then pass it to `new Federation({ db })`.
+Worker and Node use the same mental model: create the appropriate Database Adapter, then pass it to `new Federation({ database })`.
 
-- Node.js local projects commonly use `drizzle-orm/better-sqlite3`
-- Node.js production deployments can use Drizzle pg
-- Workers / D1 use `drizzle-orm/d1`
+- Node.js local projects use `@downcity/database-sqlite`
+- Node.js production deployments can use `@downcity/database-postgresql`
+- Workers / D1 use `@downcity/database-d1`
 
 ## Next
 

@@ -1,17 +1,7 @@
-/**
- * 测试专用 SQLite 数据库工厂。
- *
- * 关键说明（中文）
- * - Drizzle 的 better-sqlite3 实例自身就把 sqlite 实例挂在 $client 上。
- * - 这个 $client 同时支持 DDL 用的 exec() 和 balance / accounts 需要的 prepare()。
- * - 因此不需要再额外覆盖 $client 或挂 raw。
- */
+/** Payment 测试使用的 SQLite Database Adapter 工厂。 */
 
-import Database from "better-sqlite3"
-import { drizzle } from "drizzle-orm/better-sqlite3"
+import { Database } from "@downcity/database-sqlite"
 
-export function createSqliteDb(filepath) {
-  const sqlite = new Database(filepath)
-  sqlite.pragma("journal_mode = WAL")
-  return drizzle(sqlite)
+export function createSqliteDb(filename) {
+  return new Database({ filename })
 }

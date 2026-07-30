@@ -21,7 +21,7 @@ description: 使用 Federation 管理 Organization、成员关系和 City Server
 import { Federation } from "@downcity/city";
 import { OrganizationsService } from "@downcity/services";
 
-const federation = new Federation({ db });
+const federation = new Federation({ database });
 
 federation.use(new OrganizationsService({
   max_organizations_per_user: 3,

@@ -18,7 +18,6 @@ export type {
   EnvProvider,
   BuiltinTables,
   TableDef,
-  FederationDatabaseDialect,
 } from "./federation/runtime.js";
 export type { CityQueueAdapter, CityQueueMessage } from "./federation/queue.js";
 export { R2Storage } from "./federation/storage.js";
@@ -194,8 +193,22 @@ export { EnvStore } from "./service/env/env-store.js";
 // 场景 5：数据库工具
 // ===========================================================================
 
-export type { Database, DbClient } from "./store/db.js";
-export { executeDDL } from "./store/db.js";
+export { Database } from "./database/Database.js";
+export {
+  DatabaseClosedError,
+  DatabaseSchemaError,
+  DatabaseTransactionConflictError,
+} from "./types/database/DatabaseError.js";
+export type {
+  DatabaseMutationResult,
+  DatabaseQueryResult,
+  DatabaseStatement,
+  DatabaseTransaction,
+  FederationTableSchema,
+  ServiceDatabaseContext,
+} from "./types/database/Database.js";
+export type { DrizzleDatabase } from "./store/db.js";
+export { TableApi } from "./store/table-api.js";
 export type { CityTableApi } from "./store/table-api.js";
 export type { CityUserSchemaInput } from "./store/types.js";
 

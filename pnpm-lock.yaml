@@ -431,6 +431,60 @@ importers:
         specifier: workspace:^
         version: link:../sandbox-windows-srt
 
+  packages/database-d1:
+    dependencies:
+      '@downcity/city':
+        specifier: workspace:*
+        version: link:../city
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.3.14)(kysely@0.29.2)(postgres@3.4.9)
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20260530.1
+        version: 4.20260530.1
+      miniflare:
+        specifier: ^4.20260526.0
+        version: 4.20260526.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/database-postgresql:
+    dependencies:
+      '@downcity/city':
+        specifier: workspace:*
+        version: link:../city
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.3.14)(kysely@0.29.2)(postgres@3.4.9)
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/database-sqlite:
+    dependencies:
+      '@downcity/city':
+        specifier: workspace:*
+        version: link:../city
+      better-sqlite3:
+        specifier: ^12.10.0
+        version: 12.10.0
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.3.14)(kysely@0.29.2)(postgres@3.4.9)
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/plugins:
     dependencies:
       '@downcity/agent':
@@ -632,6 +686,12 @@ importers:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.3.14)(kysely@0.29.2)(postgres@3.4.9)
     devDependencies:
+      '@downcity/database-d1':
+        specifier: workspace:*
+        version: link:../database-d1
+      '@downcity/database-sqlite':
+        specifier: workspace:*
+        version: link:../database-sqlite
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -774,15 +834,15 @@ importers:
       '@downcity/city':
         specifier: workspace:*
         version: link:../../packages/city
+      '@downcity/database-d1':
+        specifier: workspace:*
+        version: link:../../packages/database-d1
       '@downcity/services':
         specifier: workspace:*
         version: link:../../packages/services
       ai:
         specifier: ^6.0.193
         version: 6.0.193(zod@4.4.3)
-      drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.3.14)(kysely@0.29.2)(postgres@3.4.9)
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20260530.1
@@ -808,6 +868,9 @@ importers:
       '@downcity/city':
         specifier: workspace:*
         version: link:../../packages/city
+      '@downcity/database-sqlite':
+        specifier: workspace:*
+        version: link:../../packages/database-sqlite
       '@downcity/services':
         specifier: workspace:*
         version: link:../../packages/services
@@ -817,16 +880,7 @@ importers:
       ai:
         specifier: ^6.0.193
         version: 6.0.193(zod@4.4.3)
-      better-sqlite3:
-        specifier: ^12.10.0
-        version: 12.10.0
-      drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.3.14)(kysely@0.29.2)(postgres@3.4.9)
     devDependencies:
-      '@types/better-sqlite3':
-        specifier: ^7.6.13
-        version: 7.6.13
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1

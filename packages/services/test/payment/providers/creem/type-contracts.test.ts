@@ -13,7 +13,7 @@ import {
   type PaymentCheckoutCreateResult,
 } from "../../../../src/index.js";
 
-const base = new Federation({ db: {} as any });
+const base = new Federation({ database: {} as any });
 
 base.use(new PaymentService({
   resolve_topup: ({ topup_amount_minor }) => ({ credits: topup_amount_minor * 10_000 }),

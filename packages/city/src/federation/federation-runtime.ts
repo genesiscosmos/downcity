@@ -2,8 +2,8 @@
  * Federation 组装模块。
  *
  * 关键说明（中文）
- * - 用户只需要传入 Drizzle db，方言、底层 client 全部由 City 自己从 db 推断。
- * - 用户既不需要传 `dialect`，也不需要传 `raw`，避免参数语义重复。
+ * - 用户显式传入继承 City Database 基类的 Adapter。
+ * - City 只按 schema_id 选择内置 Schema，不理解具体 Driver。
  */
 
 import { pgEnv, sqliteEnv } from "../service/env/schema.js";
@@ -16,7 +16,6 @@ import { EnvStore } from "../service/env/env-store.js";
 import { pgCities, sqliteCities } from "../service/cities/schema.js";
 import { normalizeEnvKey, parseDotenvEntries } from "../utils/helpers.js";
 import type { FederationOptions } from "./types.js";
-import type { DbClient } from "../store/db.js";
 import type { BuiltinTables, EnvProvider, Runtime } from "./runtime.js";
 import type { EnvEntry, EnvUpsertInput } from "../service/env/types.js";
 
@@ -24,21 +23,16 @@ import type { EnvEntry, EnvUpsertInput } from "../service/env/types.js";
  * 从 FederationOptions 创建 runtime。
  *
  * 关键说明（中文）
- * - 通过 Drizzle 暴露的 `db.dialect` 自动推断 sqlite / pg 方言。
- * - 通过 `db.$client` 提取底层 client，既用于 DDL 也作为 raw 暴露给需要它的 service。
+ * - Database Adapter 显式声明 schema_id。
+ * - Federation 不再读取 Drizzle dialect 或底层 Client。
  */
 export function create_federation_runtime(options: FederationOptions): Runtime {
-  const dialect = infer_dialect(options.db);
-  const builtin_tables = builtin_tables_for(dialect);
-  const client = extract_db_client(options.db);
+  const builtin_tables = builtin_tables_for(options.database.schema_id);
 
   return {
-    dialect: dialect === "pg" ? "postgresql" : "sqlite",
-    database: options.db,
-    client,
+    database: options.database,
     env: new DatabaseEnvProvider(),
     builtinTables: builtin_tables,
-    raw: options.db.$client,
     storage: options.storage,
   };
 }
@@ -46,8 +40,11 @@ export function create_federation_runtime(options: FederationOptions): Runtime {
 /**
  * 推断 Federation 内置表定义。
  */
-function builtin_tables_for(dialect: "pg" | "sqlite"): BuiltinTables {
-  return dialect === "pg"
+function builtin_tables_for(schema_id: string): BuiltinTables {
+  if (schema_id !== "sqlite" && schema_id !== "postgresql") {
+    throw new Error(`Federation built-in schemas do not support ${schema_id}`);
+  }
+  return schema_id === "postgresql"
     ? {
         cities: pgCities,
         env: pgEnv,
@@ -60,40 +57,6 @@ function builtin_tables_for(dialect: "pg" | "sqlite"): BuiltinTables {
         federation_auth_keys: sqlite_federation_auth_keys,
         bureau_tokens: sqlite_bureau_tokens,
       };
-}
-
-/**
- * 从 Drizzle 实例推断方言。
- *
- * 关键说明（中文）
- * - Drizzle v0.30+ 会在 db 上挂一个 `dialect` 实例（SQLiteSyncDialect / SQLiteAsyncDialect / PgDialect）。
- * - 我们直接读 dialect 实例的构造函数名，比读 db 自身名字更稳定，覆盖 better-sqlite3 / d1 / node-sqlite / pg。
- */
-function infer_dialect(db: { dialect?: unknown; constructor?: { name?: string } }): "pg" | "sqlite" {
-  const dialect_name = (db.dialect as { constructor?: { name?: string } } | undefined)?.constructor?.name ?? "";
-  if (/SQLite/i.test(dialect_name)) return "sqlite";
-  if (/Pg/i.test(dialect_name)) return "pg";
-  const ctor_name = db.constructor?.name ?? "";
-  if (/sqlite|d1/i.test(ctor_name)) return "sqlite";
-  if (/pg|postgres/i.test(ctor_name)) return "pg";
-  throw new Error("Unable to infer Drizzle dialect from db. Please pass a Drizzle SQLite or Postgres database.");
-}
-
-/**
- * 提取底层数据库 client。
- */
-function extract_db_client(db: { $client?: unknown }): DbClient {
-  const client = db.$client;
-  if (client && typeof client === "object") {
-    return client as DbClient;
-  }
-  if (typeof client === "function") {
-    return {
-      unsafe: (sql: string, params?: unknown[]) =>
-        (client as (query: string, values?: unknown[]) => Promise<unknown>)(sql, params),
-    };
-  }
-  throw new Error("Drizzle db must expose $client so City can initialize tables.");
 }
 
 /**

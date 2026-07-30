@@ -19,7 +19,7 @@ The default template uses Node.js and SQLite. `fed deploy` allocates a port star
 Install the packages:
 
 ```bash
-pnpm add @downcity/city drizzle-orm better-sqlite3
+pnpm add @downcity/city @downcity/database-sqlite
 ```
 
 The database is the only thing you need before boot. On first boot Federation fills `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`, `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY`, and `BETTER_AUTH_SECRET` automatically. Provider keys are written later through the Admin API or the `fed` admin workspace:
@@ -33,17 +33,10 @@ Create Federation:
 
 ```ts
 import { Federation } from "@downcity/city";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { Database } from "@downcity/database-sqlite";
 
-const sqlite = new Database("./data.sqlite");
-sqlite.pragma("journal_mode = WAL");
-
-const db = Object.assign(drizzle(sqlite), {
-  $client: { exec: (sql: string) => sqlite.exec(sql) },
-});
-
-const base = new Federation({ db });
+const database = new Database({ filename: "./data.sqlite" });
+const base = new Federation({ database });
 ```
 
 The default database is stored at:
@@ -52,15 +45,15 @@ The default database is stored at:
 ./data.sqlite
 ```
 
-For local SQLite, `better-sqlite3` is the recommended path. For production Postgres, create a Drizzle pg db and pass that db to `Federation` the same way.
+Use `@downcity/database-sqlite` locally. For production PostgreSQL, switch to `@downcity/database-postgresql`.
 
-For Cloudflare Workers / D1, pass the D1 Drizzle db:
+For Cloudflare Workers / D1, pass the D1 adapter:
 
 ```ts
-import { drizzle } from "drizzle-orm/d1";
+import { Database } from "@downcity/database-d1";
 
-const db = drizzle(env.DB);
-const base = new Federation({ db });
+const database = new Database({ binding: env.DB });
+const base = new Federation({ database });
 ```
 
 Federation initializes itself automatically on the first `health()`, `fetch()`, `table()`, or similar runtime call.

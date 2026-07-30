@@ -57,7 +57,7 @@ let transaction_release = Promise.withResolvers()
 
 test("service transaction rolls back every table write", async () => {
   const db = createSqliteDb(":memory:")
-  const federation = new Federation({ db })
+  const federation = new Federation({ database: db })
   federation.use(new TransactionTestService())
   await federation.health()
   const secret = (await (await federation.table("env")).select({
@@ -77,7 +77,7 @@ test("ordinary table operations wait for an active SQLite transaction", async ()
   transaction_started = Promise.withResolvers()
   transaction_release = Promise.withResolvers()
   const db = createSqliteDb(":memory:")
-  const federation = new Federation({ db })
+  const federation = new Federation({ database: db })
   federation.use(new TransactionTestService())
   await federation.health()
   const secret = (await (await federation.table("env")).select({

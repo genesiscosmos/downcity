@@ -19,7 +19,7 @@ fed deploy
 安装包：
 
 ```bash
-pnpm add @downcity/city drizzle-orm better-sqlite3
+pnpm add @downcity/city @downcity/database-sqlite
 ```
 
 准备好数据库即可。Federation 首次启动时会自动补齐 `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`、`DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` 和 `BETTER_AUTH_SECRET`。provider key 则在启动后通过 Admin API 或 `fed` 的 admin workspace 写入：
@@ -33,17 +33,10 @@ OPENAI_BASE_URL="https://api.openai.com/v1"
 
 ```ts
 import { Federation } from "@downcity/city";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { Database } from "@downcity/database-sqlite";
 
-const sqlite = new Database("./data.sqlite");
-sqlite.pragma("journal_mode = WAL");
-
-const db = Object.assign(drizzle(sqlite), {
-  $client: { exec: (sql: string) => sqlite.exec(sql) },
-});
-
-const base = new Federation({ db });
+const database = new Database({ filename: "./data.sqlite" });
+const base = new Federation({ database });
 ```
 
 默认数据库会落到：
@@ -52,15 +45,15 @@ const base = new Federation({ db });
 ./data.sqlite
 ```
 
-本地 SQLite 推荐使用 `better-sqlite3`。正式部署如果使用 Postgres，也同样是先创建 Drizzle pg db，再传给 `Federation`。
+本地 SQLite 使用 `@downcity/database-sqlite`。正式部署使用 PostgreSQL 时，改用 `@downcity/database-postgresql`。
 
-如果要使用 Cloudflare Workers / D1，传入 D1 对应的 Drizzle db：
+如果要使用 Cloudflare Workers / D1，传入 D1 Adapter：
 
 ```ts
-import { drizzle } from "drizzle-orm/d1";
+import { Database } from "@downcity/database-d1";
 
-const db = drizzle(env.DB);
-const base = new Federation({ db });
+const database = new Database({ binding: env.DB });
+const base = new Federation({ database });
 ```
 
 Federation 会在第一次 `health()`、`fetch()`、`table()` 等运行时操作时自动初始化。

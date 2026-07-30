@@ -40,7 +40,7 @@ class D1RollbackService extends InstallableService {
 test("D1 transaction rolls back every buffered write when one statement fails", async () => {
   const runtime = await create_d1_db()
   try {
-    const federation = new Federation({ db: runtime.database })
+    const federation = new Federation({ database: runtime.database })
     federation.use(new D1RollbackService())
     await federation.health()
     const secret = await read_env_value(federation, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
@@ -56,7 +56,7 @@ test("D1 transaction rolls back every buffered write when one statement fails", 
 test("Organizations initializes on D1 and concurrent create cannot exceed owner quota", async () => {
   const runtime = await create_d1_db()
   try {
-    const federation = new Federation({ db: runtime.database })
+    const federation = new Federation({ database: runtime.database })
     federation.use(new OrganizationsService({ max_organizations_per_user: 1 }))
     await federation.health()
     const secret = await read_env_value(federation, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")

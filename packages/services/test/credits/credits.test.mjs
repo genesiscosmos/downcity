@@ -17,7 +17,7 @@ test("CreditsService manages primary and ephemeral cards atomically", async () =
   try {
     process.chdir(temp_dir)
     const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    const federation = new Federation({ db })
+    const federation = new Federation({ database: db })
     const credits = new CreditsService()
     federation.use(credits)
     await federation.health()
@@ -53,10 +53,11 @@ test("CreditsService manages primary and ephemeral cards atomically", async () =
     assert.equal(concurrent_primary_topup.transaction_id, primary_topup.transaction_id)
     assert.equal(primary_topup.kind, "topup")
     assert.equal((await credits.read_account("user_1")).cards.primary.credits, 1_000)
-    assert.throws(
-      () => db.$client.prepare(
-        "UPDATE service_credits_primary_cards SET credits = -1 WHERE user_id = ?",
-      ).run("user_1"),
+    await assert.rejects(
+      db.query({
+        sql: "UPDATE service_credits_primary_cards SET credits = -1 WHERE user_id = ?",
+        params: ["user_1"],
+      }),
       /primary card credits cannot be negative/,
     )
     assert.equal((await credits.read_account("user_1")).cards.primary.credits, 1_000)
@@ -127,9 +128,10 @@ test("CreditsService manages primary and ephemeral cards atomically", async () =
       source: "reward",
       idempotency_key: "reward:expiring:topup",
     })
-    db.$client.prepare(
-      "UPDATE service_credits_ephemeral_cards SET expires_at = ? WHERE card_id = ?",
-    ).run(new Date(Date.now() - 1_000).toISOString(), expiring_card.card_id)
+    await db.query({
+      sql: "UPDATE service_credits_ephemeral_cards SET expires_at = ? WHERE card_id = ?",
+      params: [new Date(Date.now() - 1_000).toISOString(), expiring_card.card_id],
+    })
     assert.equal((await credits.topup({
       card: { kind: "ephemeral", card_id: expiring_card.card_id },
       credits: 5,
@@ -169,7 +171,7 @@ test("CreditsService enforces expiration, active card, safe total, and full idem
   try {
     process.chdir(temp_dir)
     const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    const federation = new Federation({ db })
+    const federation = new Federation({ database: db })
     const credits = new CreditsService()
     federation.use(credits)
     await federation.health()
@@ -194,9 +196,10 @@ test("CreditsService enforces expiration, active card, safe total, and full idem
       source: "test",
       idempotency_key: "date:expires",
     })
-    db.$client.prepare(
-      "UPDATE service_credits_ephemeral_cards SET expires_at = ? WHERE card_id = ?",
-    ).run(new Date(Date.now() - 1_000).toISOString(), expiring.card_id)
+    await db.query({
+      sql: "UPDATE service_credits_ephemeral_cards SET expires_at = ? WHERE card_id = ?",
+      params: [new Date(Date.now() - 1_000).toISOString(), expiring.card_id],
+    })
     assert.equal((await credits.read_account("date_user")).available_credits, 0)
     await assert.rejects(credits.cards.get_ephemeral(expiring.card_id), /not found/)
 

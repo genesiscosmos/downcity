@@ -1,0 +1,36 @@
+{
+  "name": "@downcity/database-postgresql",
+  "version": "0.1.1",
+  "description": "Downcity Federation Database adapter for PostgreSQL via postgres-js.",
+  "type": "module",
+  "main": "./bin/index.js",
+  "module": "./bin/index.js",
+  "exports": {
+    ".": {
+      "types": "./bin/index.d.ts",
+      "import": "./bin/index.js"
+    }
+  },
+  "types": "./bin/index.d.ts",
+  "files": [
+    "bin"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node ../../scripts/clean-package.mjs && tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc && node --test test/*.test.mjs",
+    "version:patch": "node ../../scripts/bump-package-version.mjs ./package.json"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@downcity/city": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

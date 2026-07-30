@@ -11,13 +11,13 @@ cd "$ROOT_DIR"
 source "$ROOT_DIR/scripts/lib/build-common.sh"
 
 PACKAGES=()
-ALL_PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "server" "city" "services" "plugins" "ui" "cli")
+ALL_PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "server" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "ui" "cli")
 BUILD_PACKAGES=()
 BUMP=true
 SYNC_GLOBAL_CLI=true
 
 usage() {
-  echo "Usage: npm run patch:build -- [--type] [--shell] [--sandbox-macos] [--sandbox-linux] [--sandbox-windows-mxc] [--sandbox-windows-srt] [--agent] [--server] [--city] [--services] [--plugins] [--cli] [--ui] [--all] [--no-bump] [--no-global-install]"
+  echo "Usage: npm run patch:build -- [--type] [--shell] [--sandbox-macos] [--sandbox-linux] [--sandbox-windows-mxc] [--sandbox-windows-srt] [--agent] [--server] [--city] [--database-d1] [--database-sqlite] [--database-postgresql] [--services] [--plugins] [--cli] [--ui] [--all] [--no-bump] [--no-global-install]"
   echo ""
   echo "  默认构建 agent + plugins + cli，并自增对应 package 的 patch 版本号"
   echo "  --type     构建 @downcity/type"
@@ -29,6 +29,9 @@ usage() {
   echo "  --agent    构建 @downcity/agent"
   echo "  --server   构建 @downcity/server"
   echo "  --city     构建 @downcity/city"
+  echo "  --database-d1 构建 @downcity/database-d1"
+  echo "  --database-sqlite 构建 @downcity/database-sqlite"
+  echo "  --database-postgresql 构建 @downcity/database-postgresql"
   echo "  --services 构建 @downcity/services"
   echo "  --plugins  构建 @downcity/plugins"
   echo "  --cli      构建 downcity CLI 包"
@@ -169,6 +172,17 @@ resolve_build_packages() {
         resolved+=("shell")
       fi
     fi
+    if [[ "$selected" == database-* ]]; then
+      local has_type=false
+      local has_city=false
+      local item
+      for item in "${resolved[@]}"; do
+        if [[ "$item" == "type" ]]; then has_type=true; fi
+        if [[ "$item" == "city" ]]; then has_city=true; fi
+      done
+      if [[ "$has_type" == false ]]; then resolved+=("type"); fi
+      if [[ "$has_city" == false ]]; then resolved+=("city"); fi
+    fi
     if [[ "$selected" == "server" ]]; then
       local has_type=false
       local has_shell=false
@@ -292,11 +306,14 @@ while [[ $# -gt 0 ]]; do
     --agent)    add_package "agent" ;;
     --server)   add_package "server" ;;
     --city)     add_package "city" ;;
+    --database-d1) add_package "database-d1" ;;
+    --database-sqlite) add_package "database-sqlite" ;;
+    --database-postgresql) add_package "database-postgresql" ;;
     --services) add_package "services" ;;
     --plugins)  add_package "plugins" ;;
     --cli)      add_package "cli" ;;
     --ui)       add_package "ui" ;;
-    --all)      PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "server" "city" "services" "plugins" "ui" "cli") ; shift ; continue ;;
+    --all)      PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "server" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "ui" "cli") ; shift ; continue ;;
     --no-bump)  BUMP=false ;;
     --no-global-install) SYNC_GLOBAL_CLI=false ;;
     -h|--help)  usage ;;

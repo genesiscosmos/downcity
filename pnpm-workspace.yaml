@@ -13,6 +13,9 @@ packages:
   - packages/type
   - packages/cli
   - packages/ui
+  - packages/database-d1
+  - packages/database-sqlite
+  - packages/database-postgresql
   - templates/*
   - examples/*
 

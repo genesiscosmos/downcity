@@ -28,7 +28,6 @@ import type { Authenticator } from "./auth/authenticator.js";
 import type { Runtime } from "./runtime.js";
 import type { CityTableApi } from "../store/table-api.js";
 import type { CityStore } from "../service/cities/city-store.js";
-import type { Database, DbClient } from "../store/db.js";
 import type { FederationMiddleware, FederationMiddlewareContext } from "../types/FederationMiddleware.js";
 
 export class Federation {
@@ -37,8 +36,6 @@ export class Federation {
   private readonly services = new Map<string, Service>();
   private readonly middlewares: FederationMiddleware[] = [];
 
-  private database?: Database;
-  private client?: { $client: DbClient };
   private table_map?: Map<string, CityTableApi>;
   private init_promise?: Promise<void>;
   private hono?: Hono;
@@ -189,8 +186,6 @@ export class Federation {
       queue: this.queue,
     });
 
-    this.database = state.database;
-    this.client = state.client;
     this.table_map = state.table_map;
     this.city_store = state.city_store;
     this.authenticator = state.authenticator;
@@ -210,6 +205,11 @@ export class Federation {
       this.init_promise = this.initialize();
     }
     await this.init_promise;
+  }
+
+  /** 幂等释放 Federation 主数据库。 */
+  async dispose(): Promise<void> {
+    await this.runtime.database.dispose();
   }
 
   /**

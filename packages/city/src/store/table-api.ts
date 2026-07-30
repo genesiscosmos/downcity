@@ -14,9 +14,8 @@ import {
   and,
   type SQL,
 } from "drizzle-orm";
-import type { Database } from "./db.js";
+import type { DrizzleDatabase } from "./db.js";
 import { quoteIdent } from "../utils/helpers.js";
-import { run_coordinated_database_operation } from "./transaction.js";
 
 // ===========================================================================
 // CityTableApi 类型
@@ -47,18 +46,20 @@ export class TableApi implements CityTableApi {
   readonly name: string;
   readonly schema: AnySQLiteTable | AnyPgTable;
 
-  private readonly db: Database;
-  private readonly coordinated: boolean;
+  private readonly db: DrizzleDatabase;
+  private readonly execute: <TResult>(handler: () => Promise<TResult>) => Promise<TResult>;
 
   constructor(
-    db: Database,
+    db: DrizzleDatabase,
     schema: AnySQLiteTable | AnyPgTable,
-    options: { coordinated?: boolean } = {},
+    options: {
+      execute?: <TResult>(handler: () => Promise<TResult>) => Promise<TResult>;
+    } = {},
   ) {
     this.db = db;
     this.schema = schema;
     this.name = getTableName(schema);
-    this.coordinated = options.coordinated ?? true;
+    this.execute = options.execute ?? (async (handler) => await handler());
   }
 
   async select(where: Record<string, unknown> = {}): Promise<Record<string, unknown>[]> {
@@ -115,10 +116,9 @@ export class TableApi implements CityTableApi {
     return read_mutation_count(result);
   }
 
-  /** 执行普通协调操作，或在事务 Context 中直接使用绑定连接。 */
+  /** 通过 Adapter 注入的执行器运行数据库操作。 */
   private async run<TResult>(handler: () => Promise<TResult>): Promise<TResult> {
-    if (!this.coordinated) return await handler();
-    return await run_coordinated_database_operation(this.db as object, handler);
+    return await this.execute(handler);
   }
 }
 
@@ -140,41 +140,6 @@ function read_mutation_count(result: unknown): number {
   const value = record.changes ?? record.count ?? record.rowCount ?? record.meta?.changes;
   if (typeof value === "number" && Number.isFinite(value)) return value;
   return Array.isArray(result) ? result.length : 0;
-}
-
-// ===========================================================================
-// DDL 生成（仅在 store init 时使用）
-// ===========================================================================
-
-/** 用户表建表 DDL */
-export function buildCreateUserTableSQL(table: AnySQLiteTable | AnyPgTable): string {
-  const tableName = getTableName(table);
-  const colDefs: string[] = [];
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const key of Object.keys(table)) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const col = (table as any)[key] as Record<string, unknown> | undefined;
-    if (!col || typeof col.name !== "string") continue;
-
-    const name = String(col.name);
-    const dataType = String(col.dataType ?? "string");
-    const isPrimary = Boolean(col.primary ?? false);
-    const isNotNull = Boolean(col.notNull ?? false);
-
-    const sqlType = dataType === "number" || dataType === "date" ? "INTEGER"
-      : dataType === "boolean" ? "INTEGER"
-      : dataType === "json" ? "TEXT"
-      : "TEXT";
-
-    const parts = [`"${name}"`, sqlType];
-    if (isPrimary) parts.push("PRIMARY KEY");
-    if (isNotNull && !isPrimary) parts.push("NOT NULL");
-    colDefs.push(parts.join(" "));
-  }
-
-  if (colDefs.length === 0) return "";
-  return `CREATE TABLE IF NOT EXISTS "${tableName}" (${colDefs.join(", ")})`;
 }
 
 // ===========================================================================

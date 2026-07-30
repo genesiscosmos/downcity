@@ -96,7 +96,7 @@ test("InstallableService always installs routes before custom initialization", a
   }
 
   const db = createSqliteDb(":memory:")
-  const federation = new Federation({ db, dialect: "sqlite", raw: db.raw })
+  const federation = new Federation({ database: db })
   federation.use(new LifecycleService())
 
   await federation.health()
@@ -114,7 +114,7 @@ test("Federation instruction aggregates built-in and service documentation", asy
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const queueMessages = useMemoryQueue(base)
 
     base.use({
@@ -157,7 +157,7 @@ test("Federation instruction endpoint requires admin auth and returns text", asy
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
 
     await base.health()
     const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
@@ -196,7 +196,7 @@ test("Federation trusted identity can access admin endpoints without bearer toke
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
 
     await base.health()
 
@@ -226,7 +226,7 @@ test("Federation bootstraps internal secrets into the env table", async () => {
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
 
     await base.health()
 
@@ -272,7 +272,7 @@ test("InstallableService route supports native Request handlers", async () => {
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
 
     base.use({
       id: "native",
@@ -327,7 +327,7 @@ test("Federation fetch runs middleware in order and remains bindable", async () 
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const events = []
 
     base.middle(async (ctx, next) => {
@@ -365,7 +365,7 @@ test("Federation middleware can short-circuit before action body read", async ()
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     let action_called = false
 
     base.middle((ctx, next) => {
@@ -426,7 +426,7 @@ test("Federation middleware reports duplicate next calls as middleware errors", 
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
 
     base.middle(async (_ctx, next) => {
       await next()
@@ -455,7 +455,7 @@ test("Federation rejects mismatched city_id for authenticated user requests", as
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
 
     const ai = new AIService()
     ai.use({
@@ -526,7 +526,7 @@ test("AIService requires explicit model id for executable AI calls", async () =>
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const ai = new AIService()
     ai.use({
       id: "required-model",
@@ -590,7 +590,7 @@ test("AIService charges explicit provider charge lines", async () => {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
     const charges = []
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
 
     const ai = new AIService({
       credits: {
@@ -678,7 +678,7 @@ test("AIService /stream keeps the model stream open until deferred charge settle
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
     const charges = []
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const ai = new AIService({
       credits: {
         async charge(input) {
@@ -772,7 +772,7 @@ test("AIService runs Credits precheck before provider actions", async () => {
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
     let providerCalls = 0
     let precheckCalls = 0
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
 
     const ai = new AIService({
       credits: {
@@ -868,7 +868,7 @@ test("AIService uses provider bill when model bill is not set", async () => {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
     const charges = []
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
 
     const ai = new AIService({
       credits: {
@@ -941,7 +941,7 @@ test("AIService falls back to image-capable model for UIMessage image parts", as
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const calls = []
 
     const ai = new AIService()
@@ -1046,7 +1046,7 @@ test("AIService selects fallback rule by UIMessage file media type", async () =>
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const calls = []
 
     const ai = new AIService()
@@ -1179,7 +1179,7 @@ test("AIService falls back for OpenAI chat completions with image_url parts", as
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const calls = []
 
     const ai = new AIService()
@@ -1291,7 +1291,7 @@ test("AIService lets model bill override provider bill", async () => {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
     const charges = []
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
 
     const ai = new AIService({
       credits: {
@@ -1362,7 +1362,7 @@ test("Federation AI image jobs advance and finish through provider result", asyn
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const queueMessages = useMemoryQueue(base)
     const message = {
       id: "msg_image_1",
@@ -1464,7 +1464,7 @@ test("Federation AI image jobs require provider create and result actions", asyn
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const queueMessages = useMemoryQueue(base)
     const message = {
       id: "msg_image_charged",
@@ -1547,7 +1547,7 @@ test("Federation AI image jobs return provider result as-is", async () => {
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const queueMessages = useMemoryQueue(base)
     const message = {
       id: "msg_image_remote",
@@ -1624,7 +1624,7 @@ test("Federation AI image jobs store remote file parts through federation storag
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const queueMessages = useMemoryQueue(base)
     const stored = []
     base.storage({
@@ -1715,7 +1715,7 @@ test("Federation AI image jobs keep source URL when storage fails", async () => 
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const queueMessages = useMemoryQueue(base)
     base.storage({
       id: "mock",
@@ -1794,7 +1794,7 @@ test("Federation AI image direct endpoint is not exposed", async () => {
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     useMemoryQueue(base)
     const ai = new AIService()
     ai.use({
@@ -1840,7 +1840,7 @@ test("Federation AI image jobs reject incomplete provider actions", async () => 
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const ai = new AIService()
     ai.use({
       id: "incomplete-image",
@@ -1890,7 +1890,7 @@ test("AIService charges image jobs only after provider result succeeds", async (
     const charges = []
     let charge_attempts = 0
     let fetch_calls = 0
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const queueMessages = useMemoryQueue(base)
 
     const ai = new AIService({
@@ -2041,7 +2041,7 @@ test("AIService prefers action charge over model bill", async () => {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
     const charges = []
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
 
     const ai = new AIService({
       credits: {
@@ -2127,7 +2127,7 @@ test("Federation AI image jobs can advance through result polling", async () => 
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const queueMessages = useMemoryQueue(base)
     const message = {
       id: "msg_image_1",
@@ -2264,7 +2264,7 @@ test("Federation AI image jobs fail after max pending duration", async () => {
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
     const queueMessages = useMemoryQueue(base)
     let fetchCalls = 0
 
@@ -2313,9 +2313,10 @@ test("Federation AI image jobs fail after max pending duration", async () => {
     assert.equal(created.status, "running")
 
     const oldIso = new Date(Date.now() - 60_000).toISOString()
-    db.raw
-      .prepare("UPDATE async_jobs SET created_at = ?, updated_at = ? WHERE job_id = ? AND job_type = ?")
-      .run(oldIso, oldIso, created.job_id, "ai.image.generate")
+    await db.query({
+      sql: "UPDATE async_jobs SET created_at = ?, updated_at = ? WHERE job_id = ? AND job_type = ?",
+      params: [oldIso, oldIso, created.job_id, "ai.image.generate"],
+    })
 
     await base.queue.call(queueMessages.shift())
     assert.equal(fetchCalls, 0)
@@ -2354,7 +2355,7 @@ test("Federation exposes service env requirements and env catalog", async () => 
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
 
     base.use({
       id: "payment.stripe",
@@ -2446,7 +2447,7 @@ test("Federation refreshes runtime env only after explicit env refresh", async (
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ db, dialect: "sqlite", raw: db.raw })
+    const base = new Federation({ database: db })
 
     base.use({
       id: "demo.env",

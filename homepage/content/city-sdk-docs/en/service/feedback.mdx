@@ -11,7 +11,7 @@ description: Collect product feedback from signed-in users and let admins reply 
 import { Federation } from "@downcity/city";
 import { FeedbackService } from "@downcity/services";
 
-const fed = new Federation({ db });
+const fed = new Federation({ database });
 
 fed.use(new FeedbackService());
 ```

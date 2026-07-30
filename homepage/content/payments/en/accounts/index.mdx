@@ -61,7 +61,7 @@ pnpm add @downcity/services
 import { Federation } from "@downcity/city";
 import { AccountsService } from "@downcity/services";
 
-const base = new Federation({ db });
+const base = new Federation({ database });
 
 base.use(new AccountsService({
   token_ttl: "7d",

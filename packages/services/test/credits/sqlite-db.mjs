@@ -1,12 +1,7 @@
-/**
- * Credits 测试专用 SQLite 数据库工厂。
- */
+/** Credits 测试使用的 SQLite Database Adapter 工厂。 */
 
-import Database from "better-sqlite3"
-import { drizzle } from "drizzle-orm/better-sqlite3"
+import { Database } from "@downcity/database-sqlite"
 
-export function createSqliteDb(filepath) {
-  const sqlite = new Database(filepath)
-  sqlite.pragma("journal_mode = WAL")
-  return drizzle(sqlite)
+export function createSqliteDb(filename) {
+  return new Database({ filename })
 }

@@ -16,7 +16,7 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-payment-"))
   try {
     process.chdir(temp_dir)
-    const federation = new Federation({ db: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
+    const federation = new Federation({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
     const credits = new CreditsService()
     const provider = create_test_provider()
     let resolved_topup

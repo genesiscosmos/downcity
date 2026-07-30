@@ -8,7 +8,11 @@
  */
 
 import { InstallableService } from "@downcity/city";
-import type { EnvRequirement, ServiceInstallContext } from "@downcity/city";
+import type {
+  EnvRequirement,
+  ServiceDatabaseContext,
+  ServiceInstallContext,
+} from "@downcity/city";
 import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { readPreparedFirst, runPrepared } from "./db.js";
@@ -60,6 +64,7 @@ import type {
   AccountsServiceOptions,
   AccountsOAuthProvider,
 } from "./types.js";
+import type { AccountsPreparedStatement } from "./types/DatabaseStatement.js";
 
 export {
   emailAccountsProvider,
@@ -105,6 +110,7 @@ export class AccountsService extends InstallableService {
 
   private auth!: ReturnType<typeof betterAuth>;
   private readonly providers: AccountsProvider[];
+  private database?: ServiceDatabaseContext;
 
   constructor(private readonly options: AccountsServiceOptions = {}) {
     const providers = normalizeAccountsProviders(options.providers ?? []);
@@ -125,7 +131,7 @@ export class AccountsService extends InstallableService {
   protected override async on_init(): Promise<void> {
     this.auth = betterAuth({
       secret: this._env?.get("BETTER_AUTH_SECRET"),
-      database: drizzleAdapter(this.readDrizzleDb(), {
+      database: drizzleAdapter(this.readDrizzleDb() as never, {
         provider: "sqlite",
         schema: {
           [AUTH_USER_TABLE]: authUsers,
@@ -167,6 +173,7 @@ export class AccountsService extends InstallableService {
   }
 
   install(ctx: ServiceInstallContext): void {
+    this.database = ctx.database;
     ctx.route({
       method: "POST",
       path: "/login/start",
@@ -893,14 +900,23 @@ export class AccountsService extends InstallableService {
     );
   }
 
-  private rawPrepare(sql: string): any {
-    return (this._raw as any).prepare(sql);
+  private rawPrepare(sql: string): AccountsPreparedStatement {
+    const database = this.require_database();
+    return {
+      bind: (...params: unknown[]) => ({
+        first: async () => (await database.query({ sql, params })).rows[0] ?? null,
+        all: async () => ({ results: (await database.query({ sql, params })).rows }),
+        run: async () => await database.query({ sql, params }),
+      }),
+    };
   }
 
-  private readDrizzleDb(): NonNullable<typeof this._db> {
-    if (!this._db) {
-      throw new Error("Accounts service database is not ready");
-    }
-    return this._db;
+  private readDrizzleDb(): ServiceDatabaseContext["drizzle"] {
+    return this.require_database().drizzle;
+  }
+
+  private require_database(): ServiceDatabaseContext {
+    if (!this.database) throw new Error("Accounts service database is not ready");
+    return this.database;
   }
 }

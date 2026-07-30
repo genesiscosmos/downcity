@@ -5,6 +5,7 @@
     "client",
     "city",
     "federation",
+    "database-adapters",
     "service-and-action",
     "hooks-and-service",
     "store-and-table"

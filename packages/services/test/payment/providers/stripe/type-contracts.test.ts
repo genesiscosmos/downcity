@@ -9,7 +9,7 @@ import {
 } from "../../../../src/index.js";
 
 const base = new Federation({
-  db: {} as never,
+  database: {} as never,
 });
 
 base.use(new PaymentService({

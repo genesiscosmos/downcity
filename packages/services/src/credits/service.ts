@@ -5,7 +5,12 @@
  * 记录不可变账务事实。所有多表变更都在 SQLite/D1 原子事务中提交。
  */
 
-import { InstallableService, httpError, type ServiceInstallContext } from "@downcity/city";
+import {
+  InstallableService,
+  httpError,
+  type ServiceDatabaseContext,
+  type ServiceInstallContext,
+} from "@downcity/city";
 import { raw_all, raw_atomic, raw_first } from "./raw.js";
 import {
   EPHEMERAL_CARD_TABLE,
@@ -102,6 +107,7 @@ export class CreditsService extends InstallableService {
     transactions: creditsTransactions,
     transaction_entries: creditsTransactionEntries,
   };
+  private database?: ServiceDatabaseContext;
 
   /** Card 管理 facade。 */
   readonly cards = {
@@ -125,6 +131,7 @@ export class CreditsService extends InstallableService {
   }
 
   install(ctx: ServiceInstallContext): void {
+    this.database = ctx.database;
     register_credits_routes(this, ctx);
   }
 
@@ -973,8 +980,8 @@ export class CreditsService extends InstallableService {
     }
   }
 
-  private resolve_raw(): unknown {
-    if (!this._raw) throw new Error("credits service raw database is not ready");
-    return this._raw;
+  private resolve_raw(): ServiceDatabaseContext {
+    if (!this.database) throw new Error("credits service database is not ready");
+    return this.database;
   }
 }

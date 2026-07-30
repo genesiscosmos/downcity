@@ -3,7 +3,7 @@ title: Federation
 description: "The role of the Federation instance, runtime and serve inside @downcity/city."
 ---
 
-`@downcity/city`'s `Federation` is the long-running server container of Downcity (also called the Federation in these docs). It is where the Drizzle db, services, auth, and the shared `/v1/*` route space come together. Product-side access uses the `City` client; see [Federation and City](/en/city-sdk-docs/concepts/federation) for the distinction.
+`@downcity/city`'s `Federation` is the long-running server container of Downcity. It is where a Database Adapter, services, auth, and the shared `/v1/*` route space come together. Product-side access uses the `City` client; see [Federation and City](/en/city-sdk-docs/concepts/federation) for the distinction.
 
 ## What this concept means
 
@@ -13,7 +13,7 @@ A simple way to think about Federation is:
 
 That process owns:
 
-- the Drizzle database connection
+- the Database Adapter
 - the service registry
 - service mounting
 - the HTTP route surface
@@ -22,7 +22,7 @@ That process owns:
 ## When this page matters
 
 - you are about to run a real Federation for the first time
-- you want to understand why `Federation` only needs a Drizzle db
+- you want to understand why `Federation` only needs a Database Adapter
 - you want clarity on `fetch()`, and `serve()`
 - you want to mount Federation into Node, Workers, or another HTTP host
 
@@ -30,18 +30,11 @@ That process owns:
 
 ```ts
 import { AIService, Federation } from "@downcity/city";
+import { Database } from "@downcity/database-sqlite";
 import { serve } from "@hono/node-server";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
 
-const sqlite = new Database("./.base/downcity.sqlite");
-sqlite.pragma("journal_mode = WAL");
-
-const db = Object.assign(drizzle(sqlite), {
-  $client: { exec: (sql: string) => sqlite.exec(sql) },
-});
-
-const base = new Federation({ db });
+const database = new Database({ filename: "./.base/downcity.sqlite" });
+const base = new Federation({ database });
 
 const ai = new AIService();
 
@@ -76,7 +69,7 @@ serve({
 
 The important ideas in that example are:
 
-1. `db` decides which Drizzle database Federation uses.
+1. `database` decides which Database Adapter Federation uses.
 2. `base.use(...)` decides which capabilities Federation exposes.
 3. `base.fetch()` decides how Federation enters your HTTP layer.
 
@@ -117,7 +110,7 @@ When Federation only needs to be called by trusted processes on the same machine
 import { Federation } from "@downcity/city";
 import { serve } from "@hono/node-server";
 
-const base = new Federation({ db });
+const base = new Federation({ database });
 
 serve({
   fetch: (request) => base.fetch(request),
@@ -147,7 +140,7 @@ Local HTTP uses the same product-side model as remote HTTP: `Admin City` uses `a
 
 If `AccountsService` is configured with `local_login: true`, `/v1/accounts/providers` only returns the local login method. Call `accounts.login/start` with `provider: "local"` and `city_id` to receive a `login_id`, then read the normal `user_token` from `accounts.login/result` and recreate or update User City with `city_id + user_token`.
 
-## Why Federation only takes db
+## Why Federation only takes a Database Adapter
 
 `@downcity/city` owns the logic that should stay stable across runtimes:
 
@@ -156,10 +149,10 @@ If `AccountsService` is configured with `local_login: true`, `/v1/accounts/provi
 - token auth
 - city / env / store infrastructure
 
-The host runtime only needs to create the database object:
+The host runtime only needs to create the appropriate adapter:
 
-- Node.js can use `drizzle-orm/better-sqlite3` or Drizzle pg
-- Cloudflare Workers can use `drizzle-orm/d1`
+- Node.js can use `@downcity/database-sqlite` or `@downcity/database-postgresql`
+- Cloudflare Workers can use `@downcity/database-d1`
 - Federation writes required runtime env into the built-in `env` table on boot
 
 ## Default Storage
@@ -169,7 +162,7 @@ When a Federation needs to move runtime files into first-party storage, register
 ```ts
 import { Federation, R2Storage } from "@downcity/city";
 
-const base = new Federation({ db });
+const base = new Federation({ database });
 
 base.storage(R2Storage({
   bucket: env.DOWNCITY_STORAGE,
@@ -181,7 +174,7 @@ Services can then access it through `ctx.storage`. Built-in AI image jobs use th
 
 ## Common API surface
 
-- `new Federation({ db })`
+- `new Federation({ database })`
 - `base.use(...)`
 - `base.storage(...)`
 - `base.fetch(request)`

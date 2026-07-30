@@ -21,7 +21,7 @@ For client and product-backend calls, see the complete
 import { Federation } from "@downcity/city";
 import { OrganizationsService } from "@downcity/services";
 
-const federation = new Federation({ db });
+const federation = new Federation({ database });
 
 federation.use(new OrganizationsService({
   max_organizations_per_user: 3,

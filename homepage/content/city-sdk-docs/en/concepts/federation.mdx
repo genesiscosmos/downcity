@@ -19,12 +19,12 @@ In short: you deploy one `Federation`, then use `City` to connect to it.
 
 ## Server side: `Federation`
 
-The server always starts from `new Federation({ db })`. It assembles the database, services, model catalog, and unified routing into a runnable backend:
+The server always starts from `new Federation({ database })`. It assembles the database, services, model catalog, and unified routing into a runnable backend:
 
 ```ts
 import { Federation, Service } from "@downcity/city";
 
-const base = new Federation({ db });
+const base = new Federation({ database });
 
 base.use(new Service({ id: "translate" }));
 
@@ -82,7 +82,7 @@ The client never receives provider keys, and `User City` never receives the `adm
     <div className="dc-doc-node">
       <strong>Server Federation</strong>
       <span>Shared backend runtime that owns the model catalog, service routing, token verification, usage, and hooks.</span>
-      <code>{'new Federation({ db })'}</code>
+      <code>{'new Federation({ database })'}</code>
     </div>
   </div>
 </div>

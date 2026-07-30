@@ -14,7 +14,7 @@ test("organizations service manages membership, tokens, revocation and owner quo
   const deliveries = []
   let delivery_available = false
   try {
-    const federation = new Federation({ db: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
+    const federation = new Federation({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
     federation.use(new OrganizationsService({
       max_organizations_per_user: 1,
       fetch: async (url, init) => {
@@ -158,7 +158,7 @@ test("organizations service manages membership, tokens, revocation and owner quo
 test("concurrent organization creation cannot exceed the owner quota", async () => {
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-organizations-quota-"))
   try {
-    const federation = new Federation({ db: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
+    const federation = new Federation({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
     federation.use(new OrganizationsService({ max_organizations_per_user: 1 }))
     await federation.health()
     const admin_secret = await read_env_value(federation, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")

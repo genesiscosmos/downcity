@@ -28,7 +28,7 @@ description: "Downcity 的 Federation 内核与 City 客户端，负责 service�
 
 ## 它不负责什么
 
-- 不负责创建具体数据库连接；你用 Drizzle ORM 创建 db 后传给 `new Federation({ db })`
+- 不负责实现具体数据库 Driver；你创建独立 Database Adapter 后传给 `new Federation({ database })`
 - 不负责现成账号、usage、支付业务，这些通过官方服务接入
 
 ## 什么时候应该先看它
@@ -41,31 +41,24 @@ description: "Downcity 的 Federation 内核与 City 客户端，负责 service�
 
 | 目标 | 组合方式 |
 | --- | --- |
-| 本地或常规 Node 部署 | `@downcity/city` + Drizzle SQLite / Postgres |
+| 本地或常规 Node 部署 | `@downcity/city` + SQLite / PostgreSQL Database Adapter |
 | 产品前端或 App 调用 | `@downcity/city` 导出的 `City` 客户端 |
 | 账号、usage、支付 | `@downcity/city` + 对应官方服务 |
 
 ## 安装
 
 ```bash
-pnpm add @downcity/city drizzle-orm better-sqlite3
+pnpm add @downcity/city @downcity/database-sqlite
 ```
 
 ## 最小示例
 
 ```ts
 import { Federation, AIService } from "@downcity/city";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { Database } from "@downcity/database-sqlite";
 
-const sqlite = new Database("./data.sqlite");
-sqlite.pragma("journal_mode = WAL");
-
-const db = Object.assign(drizzle(sqlite), {
-  $client: { exec: (sql: string) => sqlite.exec(sql) },
-});
-
-const base = new Federation({ db });
+const database = new Database({ filename: "./data.sqlite" });
+const base = new Federation({ database });
 
 const ai = new AIService();
 

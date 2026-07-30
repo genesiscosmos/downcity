@@ -5,8 +5,9 @@
  * 并把 runtime 依赖注入到各个 service。
  */
 
-import { executeDDL } from "../store/db.js";
-import { TableApi, buildCreateUserTableSQL, type CityTableApi } from "../store/table-api.js";
+import type { CityTableApi } from "../store/table-api.js";
+import type { Database } from "../database/Database.js";
+import { DatabaseSchemaError } from "../types/database/DatabaseError.js";
 import { EnvStore } from "../service/env/env-store.js";
 import { CityStore } from "../service/cities/city-store.js";
 import { Authenticator } from "./auth/authenticator.js";
@@ -27,7 +28,6 @@ import type { CityRecord } from "../service/cities/types.js";
 import type { EnvEntry } from "../service/env/types.js";
 import type { FederationAuthKeyRecord } from "./auth/types.js";
 import type { BureauTokenRecord } from "../types/Bureau.js";
-import type { Database, DbClient } from "../store/db.js";
 
 /**
  * Federation 初始化后的内部状态。
@@ -35,8 +35,6 @@ import type { Database, DbClient } from "../store/db.js";
 export interface FederationInitState {
   /** 初始化后的 database */
   database: Database;
-  /** 初始化后的底层 client */
-  client: { $client: DbClient };
   /** 所有表 API 映射 */
   table_map: Map<string, CityTableApi>;
   /** city store */
@@ -59,34 +57,32 @@ export async function initialize_federation(params: {
   queue?: unknown;
 }): Promise<FederationInitState> {
   const { runtime, services, require_ready } = params;
-  const { database, client, env, builtinTables } = runtime;
+  const { database, env, builtinTables } = runtime;
 
-  const service_databases = resolve_service_databases(services, runtime.dialect);
+  const service_databases = resolve_service_databases(services, database.schema_id);
   const user_schema = collect_service_schemas(services);
   const table_map = new Map<string, CityTableApi>();
-  table_map.set("cities", new TableApi(database, builtinTables.cities));
-  table_map.set("env", new TableApi(database, builtinTables.env));
+  table_map.set("cities", database.table(builtinTables.cities));
+  table_map.set("env", database.table(builtinTables.env));
   table_map.set(
     "federation_auth_keys",
-    new TableApi(database, builtinTables.federation_auth_keys),
+    database.table(builtinTables.federation_auth_keys),
   );
-  table_map.set("bureau_tokens", new TableApi(database, builtinTables.bureau_tokens));
+  table_map.set("bureau_tokens", database.table(builtinTables.bureau_tokens));
 
   for (const [name, table] of Object.entries(user_schema)) {
-    table_map.set(name, new TableApi(database, table));
+    table_map.set(name, database.table(table));
   }
 
-  const db_client = { $client: client };
   for (const schema of service_databases) {
     for (const ddl of schema.ddl ?? []) {
-      await executeDDL(db_client, ddl);
+      await database.execute_ddl(ddl);
     }
   }
   for (const table of table_map.values()) {
-    const ddl = buildCreateUserTableSQL(table.schema);
-    if (ddl) await executeDDL(db_client, ddl);
+    await database.ensure_table(table.schema);
   }
-  await ensure_bureau_token_purpose_column(db_client);
+  await ensure_bureau_token_purpose_column(database);
 
   const env_table = table_map.get("env");
   if (!env_table) throw new Error("Federation env table is not initialized");
@@ -111,7 +107,7 @@ export async function initialize_federation(params: {
   const key_store = new FederationKeyStore(
     auth_key_table as CityTableApi<FederationAuthKeyRecord>,
   );
-  await initialize_federation_auth_keys(key_store, db_client);
+  await initialize_federation_auth_keys(key_store, database);
   const token_authority = new UserTokenAuthority(
     key_store,
     `urn:downcity:federation:${federation_id}`,
@@ -130,26 +126,21 @@ export async function initialize_federation(params: {
   );
 
   for (const service of services) {
-    service._db = database;
-    service._client = db_client;
     service._authenticator = authenticator;
     service._env = env;
     service._cityStore = city_store;
     service._bureauTokenStore = bureau_token_store;
-    service._raw = runtime.raw;
     service._baseURL = configured_base_url ?? runtime.baseURL;
     service._queue = params.queue as never;
     service._storage = runtime.storage;
-    service._database_dialect = runtime.dialect;
     if (service instanceof InstallableService) {
-      install_service(service);
+      install_service(service, database);
     }
     await initialize_service(service);
   }
 
   return {
     database,
-    client: db_client,
     table_map,
     city_store,
     authenticator,
@@ -164,14 +155,14 @@ export async function initialize_federation(params: {
  */
 function resolve_service_databases(
   services: Service[],
-  dialect: Runtime["dialect"],
+  schema_id: string,
 ): ServiceDatabaseSchema[] {
   const resolved: ServiceDatabaseSchema[] = [];
   for (const service of services) {
     if (!(service instanceof InstallableService) || !service.database_schemas) continue;
-    const schema = service.database_schemas[dialect];
+    const schema = service.database_schemas[schema_id];
     if (!schema) {
-      throw new Error(`${service.id} service does not support ${dialect}`);
+      throw new DatabaseSchemaError(service.id, schema_id);
     }
     service.tables = schema.tables;
     resolved.push(schema);
@@ -188,19 +179,17 @@ function resolve_service_databases(
  * - 空字符串只用于标识升级前的旧记录；新登记入口仍要求用途非空。
  */
 async function ensure_bureau_token_purpose_column(
-  db_client: { $client: DbClient },
+  database: Database,
 ): Promise<void> {
-  if (typeof db_client.$client.unsafe === "function") {
-    await executeDDL(
-      db_client,
+  if (database.schema_id === "postgresql") {
+    await database.execute_ddl(
       'ALTER TABLE "federation_bureau_tokens" ADD COLUMN IF NOT EXISTS "purpose" TEXT NOT NULL DEFAULT \'\'',
     );
     return;
   }
 
   try {
-    await executeDDL(
-      db_client,
+    await database.execute_ddl(
       'ALTER TABLE "federation_bureau_tokens" ADD COLUMN "purpose" TEXT NOT NULL DEFAULT \'\'',
     );
   } catch (error) {
@@ -268,14 +257,14 @@ async function bootstrap_default_keys(
  */
 async function initialize_federation_auth_keys(
   key_store: FederationKeyStore,
-  db_client: { $client: DbClient },
+  database: Database,
 ): Promise<void> {
   const max_attempts = 3;
   let last_error: unknown;
   for (let attempt = 1; attempt <= max_attempts; attempt += 1) {
     await key_store.reconcile_active_keys();
     try {
-      await executeDDL(db_client, CREATE_FEDERATION_ACTIVE_AUTH_KEY_INDEX_SQL);
+      await database.execute_ddl(CREATE_FEDERATION_ACTIVE_AUTH_KEY_INDEX_SQL);
       await key_store.ensure_active_key();
       return;
     } catch (error) {

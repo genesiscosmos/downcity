@@ -2,7 +2,7 @@
  * Local Node.js Federation 内置模板。
  *
  * 关键说明（中文）
- * - 使用 better-sqlite3 保存本地数据。
+ * - 使用独立 SQLite Database Adapter 保存本地数据。
  * - 监听地址和端口由 `fed deploy` 通过 HOST / PORT 注入。
  * - 只装配本地账号、余额和 usage，保持模板最小且可直接扩展。
  */
@@ -45,13 +45,11 @@ export function create_local_node_template_files(
         },
         dependencies: {
           "@downcity/city": "latest",
+          "@downcity/database-sqlite": "latest",
           "@downcity/services": "latest",
           "@hono/node-server": "latest",
-          "better-sqlite3": "latest",
-          "drizzle-orm": "latest",
         },
         devDependencies: {
-          "@types/better-sqlite3": "latest",
           "@types/node": "latest",
           tsx: "latest",
           typescript: "latest",
@@ -107,9 +105,8 @@ function create_local_entrypoint(): string {
  */
 
 import { serve } from "@hono/node-server";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
 import { Federation } from "@downcity/city";
+import { Database } from "@downcity/database-sqlite";
 import {
   AccountsService,
   CreditsService,
@@ -184,9 +181,10 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error("PORT must be an integer between 1 and 65535.");
 }
 
-const sqlite = new Database(resolve_sqlite_path(process.env.DOWNCITY_FEDERATION_DATABASE_URL));
-sqlite.pragma("journal_mode = WAL");
-const federation = new Federation({ db: drizzle(sqlite) });
+const database = new Database({
+  filename: resolve_sqlite_path(process.env.DOWNCITY_FEDERATION_DATABASE_URL),
+});
+const federation = new Federation({ database });
 
 federation.use(new AccountsService({ local_login: true }));
 federation.use(new CreditsService());
