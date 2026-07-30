@@ -58,20 +58,20 @@ export function App() {
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen bg-background text-foreground lg:flex lg:h-screen lg:overflow-hidden">
+      <div className="min-h-screen bg-background text-primary lg:flex lg:h-screen lg:overflow-hidden">
         <ShowcaseSidebar
           selected_component_id={selected_component_id}
           on_select_component={select_component}
         />
 
         <div className="min-w-0 flex-1 lg:h-screen lg:overflow-y-auto">
-          <header className="sticky top-0 z-30 border-b border-border-subtle bg-background/90 px-5 py-4 backdrop-blur-xl sm:px-8 lg:hidden">
+          <header className="sticky top-0 z-30 border-b border-border bg-background px-4 py-3 lg:hidden">
             <div className="flex items-center gap-4">
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                <p className="text-xs font-medium text-muted-foreground">
                   @downcity/ui
                 </p>
-                <p className="mt-1 truncate text-sm font-medium">Component showcase</p>
+                <p className="mt-1 truncate text-xs text-foreground">Component showcase</p>
               </div>
               <Select
                 value={selected_component_id}

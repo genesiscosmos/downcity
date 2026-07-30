@@ -27,7 +27,7 @@ function Slider({
   return (
     <SliderPrimitive.Root
       data-slot="slider"
-      className={cn("relative flex w-full touch-none select-none items-center", className)}
+      className={cn("relative flex w-48 touch-none select-none items-center", className)}
       defaultValue={defaultValue}
       value={value}
       min={min}
@@ -42,7 +42,7 @@ function Slider({
           <SliderPrimitive.Thumb
             key={index}
             index={index}
-            className="size-4 rounded-full border border-border bg-background shadow-sm outline-none transition-shadow focus-visible:ring-3 focus-visible:ring-ring/35 disabled:pointer-events-none disabled:opacity-50"
+            className="size-4 rounded-full border border-border bg-background disabled:pointer-events-none disabled:opacity-50"
           />
         ))}
       </SliderPrimitive.Control>

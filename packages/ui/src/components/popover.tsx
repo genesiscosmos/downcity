@@ -23,7 +23,7 @@ function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
 function PopoverContent({
   className,
   side = "bottom",
-  sideOffset = 6,
+  sideOffset = 4,
   align = "center",
   alignOffset = 0,
   ...props
@@ -39,12 +39,12 @@ function PopoverContent({
         sideOffset={sideOffset}
         align={align}
         alignOffset={alignOffset}
-        className="isolate z-50"
+        className="z-50 outline-none"
       >
         <PopoverPrimitive.Popup
           data-slot="popover-content"
           className={cn(
-            "z-50 origin-(--transform-origin) rounded-[18px] border border-border/70 bg-popover/98 text-popover-foreground shadow-[0_10px_24px_rgba(24,24,27,0.045)] outline-none backdrop-blur-xl data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            "z-50 w-72 overflow-hidden rounded-floating-surface border border-border bg-background p-1 text-popover-foreground outline-none data-[side=bottom]:slide-in-from-top-1 data-[side=left]:slide-in-from-right-1 data-[side=right]:slide-in-from-left-1 data-[side=top]:slide-in-from-bottom-1 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 duration-150",
             className,
           )}
           {...props}

@@ -35,7 +35,7 @@ function SelectTrigger({
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "inline-flex min-w-36 items-center justify-between gap-2 rounded-[12px] bg-control-surface px-3 text-sm text-foreground outline-none transition-colors hover:bg-control-hover focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-9 data-[size=sm]:h-8 data-[size=sm]:px-2.5 data-[size=sm]:text-xs [&_svg]:size-4",
+        "inline-flex min-w-36 items-center justify-between gap-1.5 rounded-xl bg-control-surface px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-8 data-[size=sm]:h-6 data-[size=sm]:px-2 data-[size=sm]:text-xs [&_svg]:size-5",
         className,
       )}
       {...props}
@@ -54,7 +54,7 @@ function SelectContent({
   align = "start",
   alignOffset = 0,
   side = "bottom",
-  sideOffset = 6,
+  sideOffset = 4,
   ...props
 }: DowncitySelectContentProps) {
   return (
@@ -65,12 +65,12 @@ function SelectContent({
         side={side}
         sideOffset={sideOffset}
         alignItemWithTrigger={false}
-        className="isolate outline-none"
+        className="z-50 outline-none"
       >
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(
-            "min-w-[var(--anchor-width)] origin-[var(--transform-origin)] overflow-hidden rounded-[18px] border border-border/70 bg-popover/98 text-popover-foreground shadow-[0_10px_24px_rgba(24,24,27,0.045)] outline-none backdrop-blur-xl data-ending-style:opacity-0 data-starting-style:opacity-0 data-ending-style:scale-95 data-starting-style:scale-95",
+            "min-w-[8rem] overflow-hidden rounded-floating-surface border border-border bg-background text-foreground outline-none data-open:animate-in data-open:fade-in data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0 duration-150",
             className,
           )}
           {...props}
@@ -78,7 +78,7 @@ function SelectContent({
           <SelectPrimitive.ScrollUpArrow className="flex h-7 cursor-default items-center justify-center bg-popover text-muted-foreground [&_svg]:size-4">
             <ChevronUpIcon />
           </SelectPrimitive.ScrollUpArrow>
-          <SelectPrimitive.List className="max-h-80 overflow-y-auto p-1.5">
+          <SelectPrimitive.List className="max-h-80 overflow-y-auto p-1">
             {children}
           </SelectPrimitive.List>
           <SelectPrimitive.ScrollDownArrow className="flex h-7 cursor-default items-center justify-center bg-popover text-muted-foreground [&_svg]:size-4">
@@ -104,7 +104,7 @@ function SelectLabel({ className, ...props }: SelectPrimitive.GroupLabel.Props) 
   return (
     <SelectPrimitive.GroupLabel
       data-slot="select-label"
-      className={cn("px-2 py-2 text-[11px] font-medium text-muted-foreground/70", className)}
+      className={cn("px-2 py-1.5 text-xs font-medium text-muted-foreground/70", className)}
       {...props}
     />
   );
@@ -120,21 +120,21 @@ function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex min-h-9 w-full cursor-default select-none items-center gap-2 rounded-[12px] py-2 pr-2 pl-8 text-sm text-foreground/85 outline-none transition-colors data-highlighted:bg-interaction-hover data-selected:bg-interaction-selected data-disabled:pointer-events-none data-disabled:opacity-50",
+        "relative flex w-full cursor-default select-none items-center gap-2.5 rounded-floating-item py-1.5 pr-2 pl-7 text-xs text-foreground outline-none transition-all duration-100 data-highlighted:bg-interaction-hover data-highlighted:text-foreground data-selected:bg-interaction-selected data-selected:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
         description && "items-start",
         className,
       )}
       {...props}
     >
-      <SelectPrimitive.ItemIndicator className="absolute left-2 flex size-4 items-center justify-center [&_svg]:size-3.5">
+      <SelectPrimitive.ItemIndicator className="absolute left-1.5 flex size-4 items-center justify-center [&_svg]:size-3.5">
         <CheckIcon />
       </SelectPrimitive.ItemIndicator>
       <div className="min-w-0 flex-1">
-        <SelectPrimitive.ItemText className="block truncate leading-5">
+        <SelectPrimitive.ItemText className="block truncate leading-tight">
           {children}
         </SelectPrimitive.ItemText>
         {description ? (
-          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+          <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
             {description}
           </span>
         ) : null}

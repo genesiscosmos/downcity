@@ -68,7 +68,7 @@ function SettingGroup({ children, className }: DowncitySettingGroupProps) {
     <div
       data-slot="setting-group"
       className={cn(
-        "min-w-0 divide-y divide-divider overflow-hidden rounded-[16px] bg-surface-subtle",
+        "min-w-0 divide-y divide-divider overflow-hidden rounded-xl bg-surface-subtle",
         className,
       )}
     >

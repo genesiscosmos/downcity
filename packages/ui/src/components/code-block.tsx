@@ -37,17 +37,17 @@ function CodeBlock({
   return (
     <div
       data-slot="code-block"
-      className="overflow-hidden rounded-floating-surface border border-white/10 bg-neutral-950 text-neutral-100 shadow-sm"
+      className="overflow-hidden rounded-lg border border-border bg-muted text-foreground"
     >
-      <div className="flex min-h-10 items-center justify-between gap-3 border-b border-white/10 px-4">
-        <span className="truncate text-[0.65rem] font-medium uppercase tracking-[0.16em] text-neutral-400">
+      <div className="flex min-h-8 items-center justify-between gap-3 border-b border-divider px-2">
+        <span className="truncate text-[11px] font-medium text-muted-foreground/60">
           {label ?? resolved_language ?? "code"}
         </span>
         {raw_code ? (
           <button
             type="button"
             onClick={() => void copy_code()}
-            className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs text-neutral-400 outline-none transition-colors hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/30"
+            className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground"
           >
             {is_copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
             {is_copied ? "Copied" : "Copy"}
@@ -57,7 +57,7 @@ function CodeBlock({
       <pre
         data-language={resolved_language}
         className={cn(
-          "overflow-x-auto bg-transparent p-4 font-mono text-[0.78rem] leading-6 [tab-size:2] [&_code]:font-inherit",
+          "overflow-x-auto bg-transparent p-3 font-mono text-xs leading-5 [tab-size:2] [&_code]:font-inherit",
           className,
         )}
         {...props}

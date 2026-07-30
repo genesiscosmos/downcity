@@ -19,11 +19,7 @@ html {
   scroll-behavior: smooth;
 }
 
-body {
-  background:
-    radial-gradient(circle at 12% 0%, rgb(255 255 255 / 96%) 0, transparent 34rem),
-    #f4f4f1;
-}
+body { background: var(--background); }
 
 ::selection {
   background: rgb(17 17 19 / 12%);
@@ -33,10 +29,9 @@ body {
   margin: 0;
   padding-bottom: 1.75rem;
   border-bottom: 1px solid var(--divider);
-  font-size: clamp(2rem, 4vw, 2.5rem);
-  font-weight: 650;
-  letter-spacing: -0.05em;
-  line-height: 1.1;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .mdx-content > h1 + p {
@@ -44,12 +39,12 @@ body {
   padding-bottom: 1.75rem;
   border-bottom: 1px solid var(--divider);
   color: var(--muted-foreground);
-  font-size: 0.875rem;
-  line-height: 1.5rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 .mdx-content h2 {
-  margin: 3rem 0 1rem;
+  margin: 2rem 0 0.75rem;
   font-size: 1.125rem;
   font-weight: 600;
   letter-spacing: -0.015em;
@@ -59,7 +54,7 @@ body {
 .mdx-content li {
   color: var(--muted-foreground);
   font-size: 0.875rem;
-  line-height: 1.65;
+  line-height: 1.5;
 }
 
 .mdx-content ul,
@@ -97,7 +92,7 @@ body {
 .mdx-table-scroll {
   overflow-x: auto;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-floating-surface);
+  border-radius: var(--radius-xl);
 }
 
 .mdx-table-scroll table {
