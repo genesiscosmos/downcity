@@ -5,6 +5,7 @@ import { HomePhilosophySection } from "@/components/sections/HomePhilosophySecti
 import { HomeUseCasesSection } from "@/components/sections/HomeUseCasesSection";
 import { HomeCTASection } from "@/components/sections/HomeCTASection";
 import { Footer } from "@/components/sections/Footer";
+import { HomeStructuredData } from "@/components/seo/home-structured-data";
 import { product } from "@/lib/product";
 import { create_page_meta, get_path_locale } from "@/lib/seo";
 import type { Route } from "./+types/home";
@@ -38,6 +39,7 @@ export function meta({ location }: Route.MetaArgs) {
 export default function Home() {
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <HomeStructuredData />
       <main>
         <HomeHeroSection />
         <HomeFeaturesSection />

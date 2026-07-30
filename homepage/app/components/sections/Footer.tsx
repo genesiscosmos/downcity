@@ -1,5 +1,5 @@
 import type { FC } from "react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import { product } from "@/lib/product";
 
@@ -14,15 +14,17 @@ const TWITTER_URL = "https://x.com/downcity_ai";
  * 3. 底部社交链接与法律链接。
  */
 export const Footer: FC = () => {
-  const { i18n, t } = useTranslation("home");
+  const { t } = useTranslation("home");
+  const location = useLocation();
   const currentYear = new Date().getFullYear();
-  const isZh = i18n.language.toLowerCase().startsWith("zh");
+  const isZh = location.pathname === "/zh" || location.pathname.startsWith("/zh/");
 
   const homePath = isZh ? "/zh" : "/";
   const productPath = isZh ? "/zh/product" : "/product";
   const productSdkPath = isZh ? "/zh/product/sdk" : "/product/sdk";
   const productAgentSdkPath = isZh ? "/zh/product/agent-sdk" : "/product/agent-sdk";
   const productUiSdkPath = isZh ? "/zh/product/ui-sdk" : "/product/ui-sdk";
+  const startPath = isZh ? "/zh/start" : "/start";
   const featuresPath = isZh ? "/zh/features" : "/features";
   const docsPath = isZh ? "/zh/docs" : "/en/docs";
   const citySdkDocsPath = isZh ? "/zh/city-sdk-docs" : "/en/city-sdk-docs";
@@ -46,18 +48,19 @@ export const Footer: FC = () => {
       title: t("footer.columns.product"),
       links: [
         { label: t("footer.links.overview"), path: productPath },
-        { label: t("footer.links.features"), path: featuresPath },
-        { label: "City SDK", path: productSdkPath },
+        { label: isZh ? "快速开始" : "Quick Start", path: startPath },
         { label: "Agent SDK", path: productAgentSdkPath },
+        { label: "City SDK", path: productSdkPath },
         { label: "UI SDK", path: productUiSdkPath },
+        { label: t("footer.links.features"), path: featuresPath },
       ],
     },
     {
       title: t("footer.columns.docs"),
       links: [
         { label: t("footer.links.docs"), path: docsPath },
-        { label: t("footer.links.cityDocs"), path: citySdkDocsPath },
         { label: t("footer.links.agentDocs"), path: agentSdkDocsPath },
+        { label: t("footer.links.cityDocs"), path: citySdkDocsPath },
         { label: t("footer.links.plugins"), path: pluginsDocsPath },
         { label: t("footer.links.payments"), path: paymentsPath },
       ],

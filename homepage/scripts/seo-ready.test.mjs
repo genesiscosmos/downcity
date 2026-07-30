@@ -15,6 +15,16 @@ async function read_build_file(relative_path) {
   return readFile(new URL(relative_path, build_root), "utf8");
 }
 
+/** 从首页构建产物中读取 Downcity 实体 JSON-LD。 */
+function read_home_structured_data(html) {
+  const match = html.match(
+    /<script type="application\/ld\+json" data-downcity-structured-data="home">([^<]+)<\/script>/,
+  );
+
+  assert.ok(match, "首页必须输出 Downcity 实体 JSON-LD");
+  return JSON.parse(match[1]);
+}
+
 test("sitemap 输出规范 XML 和公开 URL", async () => {
   const sitemap = await read_build_file("sitemap.xml");
 
@@ -43,6 +53,64 @@ test("营销页与文档页输出 self canonical 和双向 hreflang", async () =
     assert.match(html, new RegExp(`<link rel="canonical" href="${canonical_url}"`));
     assert.ok(html.includes(`href="${alternate_url}"`));
     assert.match(html, /<meta name="robots" content="index, follow"/);
+  }
+});
+
+test("中英文首页输出相互关联的品牌实体", async () => {
+  const english_html = await read_build_file("index.html");
+  const chinese_html = await read_build_file("zh/index.html");
+  const english_data = read_home_structured_data(english_html);
+  const chinese_data = read_home_structured_data(chinese_html);
+
+  assert.equal(english_data["@context"], "https://schema.org");
+  assert.deepEqual(
+    english_data["@graph"].map((entry) => entry["@type"]),
+    ["Organization", "WebSite", "SoftwareApplication"],
+  );
+
+  const organization = english_data["@graph"][0];
+  const website = english_data["@graph"][1];
+  const software = english_data["@graph"][2];
+
+  assert.equal(organization["@id"], "https://genesiscosmos.com/#organization");
+  assert.equal(website.publisher["@id"], organization["@id"]);
+  assert.equal(website.about["@id"], software["@id"]);
+  assert.equal(software.publisher["@id"], organization["@id"]);
+  assert.equal(software.codeRepository, "https://github.com/wangenius/downcity");
+  assert.ok(software.sameAs.includes("https://x.com/downcity_ai"));
+  assert.match(chinese_data["@graph"][2].description, /面向 AI 开发者/);
+});
+
+test("中英文首页稳定输出核心产品入口", async () => {
+  const cases = [
+    [
+      "index.html",
+      [
+        "/product",
+        "/start",
+        "/en/agent-sdk-docs",
+        "/en/city-sdk-docs",
+        "/en/docs",
+      ],
+    ],
+    [
+      "zh/index.html",
+      [
+        "/zh/product",
+        "/zh/start",
+        "/zh/agent-sdk-docs",
+        "/zh/city-sdk-docs",
+        "/zh/docs",
+      ],
+    ],
+  ];
+
+  for (const [relative_path, core_paths] of cases) {
+    const html = await read_build_file(relative_path);
+    for (const core_path of core_paths) {
+      assert.ok(html.includes(`href="${core_path}"`), `${relative_path} 缺少核心入口 ${core_path}`);
+    }
+    assert.ok(html.includes('href="https://github.com/wangenius/downcity"'));
   }
 });
 
