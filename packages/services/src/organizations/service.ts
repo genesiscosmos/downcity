@@ -107,14 +107,6 @@ export class OrganizationsService extends InstallableService {
     register_organization_routes(this, context);
   }
 
-  /** 在 Service ready 前拒绝不具备交互式事务的 SQLite 运行时。 */
-  protected override async on_init(): Promise<void> {
-    if (this._database_dialect === "sqlite"
-      && typeof this._client?.$client.transaction !== "function") {
-      throw new Error("OrganizationsService requires interactive SQLite transactions; D1 is not supported");
-    }
-  }
-
   /** 创建 Organization 并让当前用户成为唯一 Owner。 */
   async create(user_id: string, city_id: string, input: OrganizationCreateInput) {
     const name = read_organization_name(input.name);

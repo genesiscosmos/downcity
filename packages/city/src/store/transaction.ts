@@ -4,11 +4,16 @@
  * 关键说明（中文）：
  * - PostgreSQL 使用 Drizzle 原生异步事务并绑定同一连接；
  * - better-sqlite3 使用同一连接的显式事务，并在进程内串行化事务；
- * - D1 不提供等价的交互式事务，调用时明确拒绝。
+ * - D1 使用读快照守卫与 batch 实现可重试的乐观事务。
  */
 
 import type { FederationDatabaseDialect } from "../federation/runtime.js";
+import type { AnyPgTable } from "drizzle-orm/pg-core";
+import type { AnySQLiteTable } from "drizzle-orm/sqlite-core";
+import type { CityTableApi } from "./table-api.js";
 import type { Database, DbClient } from "./db.js";
+import { TableApi } from "./table-api.js";
+import { run_d1_service_transaction } from "./d1-transaction.js";
 
 /** Federation Service 事务运行输入。 */
 export interface RunServiceTransactionInput<TResult> {
@@ -18,8 +23,12 @@ export interface RunServiceTransactionInput<TResult> {
   client: DbClient;
   /** 当前数据库方言。 */
   dialect: FederationDatabaseDialect;
-  /** 在同一事务连接上执行的业务函数。 */
-  handler(database: Database): Promise<TResult>;
+  /** 使用事务绑定 Table API 执行的业务函数。 */
+  handler(
+    table: <TRow extends Record<string, unknown>>(
+      schema: AnySQLiteTable | AnyPgTable,
+    ) => CityTableApi<TRow>,
+  ): Promise<TResult>;
 }
 
 const database_operation_tails = new WeakMap<object, Promise<void>>();
@@ -32,17 +41,31 @@ export async function run_service_transaction<TResult>(
     if (typeof input.database.transaction !== "function") {
       throw new Error("PostgreSQL database does not expose transaction()");
     }
-    return await input.database.transaction((database) => input.handler(database));
+    return await input.database.transaction((database) => input.handler(
+      <TRow extends Record<string, unknown>>(schema: AnySQLiteTable | AnyPgTable) =>
+        new TableApi(database, schema, { coordinated: false }) as unknown as CityTableApi<TRow>,
+    ));
+  }
+
+  if (typeof input.client.batch === "function") {
+    return await run_d1_service_transaction({
+      database: input.database,
+      client: input.client,
+      handler: input.handler,
+    });
   }
 
   if (typeof input.client.transaction !== "function" || typeof input.client.exec !== "function") {
-    throw new Error("Interactive SQLite service transactions are required; D1 is not supported");
+    throw new Error("SQLite service transactions require better-sqlite3 or D1 atomic capabilities");
   }
 
   return await with_database_operation_lock(input.database as object, async () => {
     await input.client.exec!("BEGIN IMMEDIATE");
     try {
-      const result = await input.handler(input.database);
+      const result = await input.handler(
+        <TRow extends Record<string, unknown>>(schema: AnySQLiteTable | AnyPgTable) =>
+          new TableApi(input.database, schema, { coordinated: false }) as unknown as CityTableApi<TRow>,
+      );
       await input.client.exec!("COMMIT");
       return result;
     } catch (error) {

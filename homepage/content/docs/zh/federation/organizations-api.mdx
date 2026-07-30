@@ -29,8 +29,9 @@ federation.use(new OrganizationsService({
 | `organization_token_ttl` | 否 | `7d` | Organization Token 有效期；支持秒数或 `s/m/h/d` 字符串，最大 `30d` |
 | `fetch` | 否 | `globalThis.fetch` | 撤权事件投递函数，主要用于自定义 Runtime 或测试 |
 
-当前支持 better-sqlite3 与 PostgreSQL。D1 缺少交互式多表事务，因此 Service 初始化时
-会明确拒绝 D1。生产环境应配置 Federation Queue Adapter 来重试 Outbox 事件。
+当前支持 better-sqlite3、PostgreSQL 与 Cloudflare D1。它们对 Service 使用相同的
+`context.transaction` 接口；D1 的乐观并发控制与原子批处理由 City Runtime 封装。
+生产环境应配置 Federation Queue Adapter 来重试 Outbox 事件。
 
 ## Base URL 与认证
 

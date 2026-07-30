@@ -6,6 +6,11 @@
  */
 
 import type { SQL } from "drizzle-orm";
+import type {
+  CompiledQuery,
+  D1BatchResult,
+  D1PreparedStatement,
+} from "./types/D1Transaction.js";
 
 // ===========================================================================
 // DbClient — 底层驱动
@@ -30,6 +35,10 @@ export interface DbClient {
   transaction?<TArgs extends unknown[], TResult>(
     callback: (...args: TArgs) => TResult,
   ): (...args: TArgs) => TResult;
+  /** D1 创建预编译语句。 */
+  prepare?(query: string): D1PreparedStatement;
+  /** D1 原子执行预编译语句列表。 */
+  batch?(statements: D1PreparedStatement[]): Promise<D1BatchResult[]>;
 }
 
 // ===========================================================================
@@ -48,9 +57,15 @@ interface Query extends Promise<Record<string, unknown>[]> {
  * SQLite、D1 与 Postgres 的 insert builder 都实现该公共子集，供系统初始化执行
  * 原子的“仅在不存在时插入”，避免跨 Worker isolate 的查询后写入竞态。
  */
-interface InsertQuery extends PromiseLike<unknown> {
+/** 可编译为底层 SQL 的 Drizzle 查询。 */
+interface CompilableQuery {
+  /** 生成当前方言的 SQL 与参数。 */
+  toSQL(): CompiledQuery;
+}
+
+interface InsertQuery extends PromiseLike<unknown>, CompilableQuery {
   /** 唯一约束冲突时不写入，也不抛出冲突错误。 */
-  onConflictDoNothing(): PromiseLike<unknown>;
+  onConflictDoNothing(): InsertQuery;
 }
 
 // ===========================================================================
@@ -67,8 +82,8 @@ interface InsertQuery extends PromiseLike<unknown> {
 export interface Database {
   select(): { from(t: unknown): Promise<Record<string, unknown>[]> | { where(c: SQL | undefined): Promise<Record<string, unknown>[]> } };
   insert(t: unknown): { values(v: Record<string, unknown> | Record<string, unknown>[]): InsertQuery };
-  update(t: unknown): { set(v: Record<string, unknown>): { where(c: SQL | undefined): Promise<unknown> } };
-  delete(t: unknown): { where(c: SQL | undefined): Promise<unknown> };
+  update(t: unknown): { set(v: Record<string, unknown>): { where(c: SQL | undefined): Promise<unknown> & CompilableQuery } };
+  delete(t: unknown): { where(c: SQL | undefined): Promise<unknown> & CompilableQuery };
   /** PostgreSQL 等异步方言提供的原生事务入口。 */
   transaction?<TResult>(
     callback: (database: Database) => Promise<TResult>,
@@ -90,6 +105,12 @@ export interface Database {
  */
 export async function executeDDL(db: { $client: DbClient }, ddl: string): Promise<void> {
   const c = db.$client;
+  if (typeof c?.batch === "function" && typeof c?.prepare === "function") {
+    const statement = c.prepare(ddl);
+    if (typeof statement.run !== "function") throw new Error("D1 prepared statement does not expose run()");
+    await statement.run();
+    return;
+  }
   if (typeof c?.exec === "function") { await c.exec(ddl); return; }
   if (typeof c?.unsafe === "function") { await c.unsafe(ddl); }
 }

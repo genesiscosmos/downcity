@@ -88,9 +88,9 @@ Production deployments should configure a Federation Queue adapter so failed del
 retrying. Without a Queue adapter, events remain in the Outbox and can be replayed through the
 protected delivery action.
 
-Organizations Service supports better-sqlite3 and PostgreSQL. D1 does not currently provide the
-interactive multi-table transactions this service requires, so initialization explicitly rejects
-a D1 runtime.
+Organizations Service supports better-sqlite3, PostgreSQL, and Cloudflare D1. Every runtime exposes
+the same `context.transaction` API to services. City Runtime encapsulates D1 snapshot-conflict
+detection, retries, and atomic `batch()` commits, so Organizations does not branch on database type.
 
 ## Archive
 

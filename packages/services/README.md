@@ -44,8 +44,9 @@ federation.use(new OrganizationsService({
 用户加入 Organization 后，通过当前 `user_token` 换取只允许目标 City Server
 使用的 `organization_token`。原始 `user_token` 不会发送给 Organization Server。
 Token 默认有效期为 7 天；Organizations Service 当前支持 better-sqlite3 与 PostgreSQL，
-不支持缺少交互式多表事务的 D1 runtime。生产环境应配置 Federation Queue Adapter
-持续重试 Outbox 中暂时投递失败的撤权事件。
+也支持 Cloudflare D1。三种数据库对 Service 统一暴露 `context.transaction`；D1 的
+快照冲突检测、自动重试和原子 `batch()` 提交由 City Runtime 内部完成。生产环境应配置
+Federation Queue Adapter 持续重试 Outbox 中暂时投递失败的撤权事件。
 
 产品侧通常先这样读取支付方式：
 

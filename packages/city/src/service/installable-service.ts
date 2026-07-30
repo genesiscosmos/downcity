@@ -51,7 +51,12 @@ export interface ServiceInstallContext {
   create_service_token(
     input: CreateFederationServiceTokenInput,
   ): Promise<FederationServiceTokenIssueResult>;
-  /** 在同一数据库事务中执行多表领域命令。 */
+  /**
+   * 在同一数据库事务中执行多表领域命令。
+   *
+   * handler 在乐观并发冲突时可能重跑，因此只能包含可重试的数据库领域逻辑，
+   * 外部网络请求等不可回滚副作用必须在事务成功后执行。
+   */
   transaction<TResult>(
     handler: (context: ServiceTransactionContext) => Promise<TResult>,
   ): Promise<TResult>;
@@ -251,13 +256,13 @@ export abstract class InstallableService extends Service {
           database: self._db,
           client: self._client.$client,
           dialect: self._database_dialect,
-          handler: async (database) => handler({
+          handler: async (create_table) => handler({
             table<TRow extends Record<string, unknown> = Record<string, unknown>>(
               name: string,
             ): CityTableApi<TRow> {
               const table = self.tables?.[name];
               if (!table) throw new Error(`Unknown table: ${name}`);
-              return new TableApi(database, table, { coordinated: false }) as unknown as CityTableApi<TRow>;
+              return create_table<TRow>(table);
             },
           }),
         });

@@ -651,7 +651,16 @@ organization_events
 
 Federation 承载 Organizations Service，并负责提供数据库连接。Organizations Service 不直接创建数据库连接，也不依赖具体 SQLite 或 PostgreSQL Driver。
 
-当前实现支持 better-sqlite3 与 PostgreSQL。D1 不提供 Organizations 多表命令所需的交互式事务，因此初始化时会明确拒绝；在具备等价原子事务能力前不做降级执行。
+当前实现支持 better-sqlite3、PostgreSQL 与 Cloudflare D1。三种 Runtime 对上层统一提供
+`context.transaction`，Organizations Service 不判断数据库类型：
+
+- PostgreSQL 使用 Drizzle 原生事务；
+- better-sqlite3 使用同连接的 `BEGIN IMMEDIATE`、`COMMIT` 与 `ROLLBACK`；
+- D1 在 handler 执行期间记录读取快照并缓存写命令，提交时先校验快照，再通过原子
+  `batch()` 一次提交全部守卫和写入；快照冲突由 City Runtime 自动重跑 handler。
+
+D1 不能把跨 JavaScript 检查点的 handler 直接交给数据库执行，因此这里采用乐观事务，
+而不是用进程锁模拟全局事务。唯一约束、快照守卫和 batch 回滚共同维护并发不变量。
 
 `ServiceInstallContext` 需要增加通用事务能力：
 

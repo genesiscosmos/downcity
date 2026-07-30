@@ -1,6 +1,6 @@
 {
   "name": "@downcity/sandbox-windows-mxc",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "type": "module",
   "description": "Downcity experimental Microsoft MXC Windows sandbox adapter",
   "main": "./bin/index.js",

@@ -29,9 +29,9 @@ federation.use(new OrganizationsService({
 | `organization_token_ttl` | no | `7d` | Token TTL as seconds or an `s/m/h/d` string; maximum `30d` |
 | `fetch` | no | `globalThis.fetch` | Revocation-event transport override for custom runtimes and tests |
 
-The service supports better-sqlite3 and PostgreSQL. It rejects D1 because D1 does not provide the
-required interactive multi-table transactions. Production deployments should configure a
-Federation Queue adapter for Outbox retries.
+The service supports better-sqlite3, PostgreSQL, and Cloudflare D1 through the same
+`context.transaction` API. City Runtime encapsulates D1 optimistic concurrency control and atomic
+batch commits. Production deployments should configure a Federation Queue adapter for Outbox retries.
 
 ## Base URL and authentication
 
