@@ -33,7 +33,12 @@ export type ShowcaseComponentId =
   | "tooltip"
   | "command"
   | "toaster"
-  | "workboard";
+  | "workboard"
+  | "image-preview"
+  | "menu"
+  | "typography"
+  | "sidebar-layout"
+  | "form-field";
 
 /** Sidebar 中的单个组件入口。 */
 export interface ShowcaseComponentEntry {

@@ -20,6 +20,7 @@ export const component_groups: readonly ShowcaseComponentGroup[] = [
       { id: "spinner", label: "Spinner", description: "表达进行中的异步状态。" },
       { id: "kbd", label: "Kbd", description: "展示快捷键和键位组合。" },
       { id: "code-block", label: "CodeBlock", description: "展示语法高亮代码与复制操作。" },
+      { id: "typography", label: "Typography", description: "提供与 Vibecape 一致的文本层级。" },
     ],
   },
   {
@@ -31,6 +32,7 @@ export const component_groups: readonly ShowcaseComponentGroup[] = [
       { id: "select", label: "Select", description: "从分组选项中选择单个值。" },
       { id: "slider", label: "Slider", description: "选择数值或数值范围。" },
       { id: "switch", label: "Switch", description: "切换一个布尔配置。" },
+      { id: "form-field", label: "FormField", description: "组合字段标签、说明、错误与控件。" },
     ],
   },
   {
@@ -43,6 +45,7 @@ export const component_groups: readonly ShowcaseComponentGroup[] = [
       { id: "skeleton", label: "Skeleton", description: "保持异步内容加载时的结构稳定。" },
       { id: "separator", label: "Separator", description: "分隔相邻内容区域。" },
       { id: "settings", label: "Settings", description: "组合紧凑设置页与信息分组。" },
+      { id: "sidebar-layout", label: "SidebarLayout", description: "组织固定头尾与独立滚动的侧栏主体。" },
     ],
   },
   {
@@ -56,6 +59,8 @@ export const component_groups: readonly ShowcaseComponentGroup[] = [
       { id: "tooltip", label: "Tooltip", description: "提供简短的悬停或聚焦提示。" },
       { id: "command", label: "Command", description: "提供搜索、键盘导航与快速执行。" },
       { id: "toaster", label: "Toaster", description: "承载非阻断式全局反馈。" },
+      { id: "menu", label: "Menu", description: "提供无需行为依赖的菜单展示原语。" },
+      { id: "image-preview", label: "ImagePreview", description: "使用任意 URL 或 data URL 预览图片。" },
     ],
   },
   {

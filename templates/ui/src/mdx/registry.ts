@@ -15,19 +15,24 @@ import DialogDocument from "../content/components/dialog.mdx";
 import DropdownMenuDocument from "../content/components/dropdown-menu.mdx";
 import EmptyDocument from "../content/components/empty.mdx";
 import InputDocument from "../content/components/input.mdx";
+import FormFieldDocument from "../content/components/form-field.mdx";
+import ImagePreviewDocument from "../content/components/image-preview.mdx";
 import ItemDocument from "../content/components/item.mdx";
 import KbdDocument from "../content/components/kbd.mdx";
+import MenuDocument from "../content/components/menu.mdx";
 import PopoverDocument from "../content/components/popover.mdx";
 import SelectDocument from "../content/components/select.mdx";
 import SeparatorDocument from "../content/components/separator.mdx";
 import SettingsDocument from "../content/components/settings.mdx";
 import SheetDocument from "../content/components/sheet.mdx";
 import SkeletonDocument from "../content/components/skeleton.mdx";
+import SidebarLayoutDocument from "../content/components/sidebar-layout.mdx";
 import SliderDocument from "../content/components/slider.mdx";
 import SpinnerDocument from "../content/components/spinner.mdx";
 import SwitchDocument from "../content/components/switch.mdx";
 import TabsDocument from "../content/components/tabs.mdx";
 import TextareaDocument from "../content/components/textarea.mdx";
+import TypographyDocument from "../content/components/typography.mdx";
 import ToasterDocument from "../content/components/toaster.mdx";
 import ToggleDocument from "../content/components/toggle.mdx";
 import TooltipDocument from "../content/components/tooltip.mdx";
@@ -46,14 +51,18 @@ export const mdx_document_registry: Record<ShowcaseComponentId, MdxDocumentCompo
   dialog: DialogDocument,
   "dropdown-menu": DropdownMenuDocument,
   empty: EmptyDocument,
+  "form-field": FormFieldDocument,
+  "image-preview": ImagePreviewDocument,
   input: InputDocument,
   item: ItemDocument,
   kbd: KbdDocument,
+  menu: MenuDocument,
   popover: PopoverDocument,
   select: SelectDocument,
   separator: SeparatorDocument,
   settings: SettingsDocument,
   sheet: SheetDocument,
+  "sidebar-layout": SidebarLayoutDocument,
   skeleton: SkeletonDocument,
   slider: SliderDocument,
   spinner: SpinnerDocument,
@@ -63,5 +72,6 @@ export const mdx_document_registry: Record<ShowcaseComponentId, MdxDocumentCompo
   toaster: ToasterDocument,
   toggle: ToggleDocument,
   tooltip: TooltipDocument,
+  typography: TypographyDocument,
   workboard: WorkboardDocument,
 };

@@ -13,6 +13,9 @@ export type {
   DowncityButtonVariant,
   DowncityCardSize,
   DowncityCodeBlockProps,
+  DowncityCollapsibleSettingGroupProps,
+  DowncityFormFieldProps,
+  DowncityImagePreviewProps,
   DowncityCommandInputProps,
   DowncityContextMenuContentProps,
   DowncityContextMenuItemProps,
@@ -27,11 +30,13 @@ export type {
   DowncitySelectTriggerProps,
   DowncitySelectTriggerSize,
   DowncitySettingGroupProps,
+  DowncitySettingListProps,
   DowncitySettingItemProps,
   DowncitySettingSectionProps,
   DowncitySettingsContainerProps,
   DowncitySliderProps,
   DowncitySpinnerSize,
+  DowncitySidebarLayoutProps,
   DowncityToasterTheme,
 } from "./types/components";
 export type {
@@ -72,6 +77,9 @@ export {
 } from "./components/card";
 export { Checkbox } from "./components/checkbox";
 export { CodeBlock } from "./components/code-block";
+export { FormField } from "./components/form-field";
+export { ImagePreview } from "./components/image-preview";
+export { MenuEmpty, MenuGroup, MenuLabel, MenuSeparator, MenuSurface } from "./components/menu";
 export {
   Command,
   CommandEmpty,
@@ -166,12 +174,15 @@ export {
   SelectValue,
 } from "./components/select";
 export {
+  CollapsibleSettingGroup,
   InfoRow,
   SettingGroup,
   SettingItem,
+  SettingList,
   SettingSection,
   SettingsContainer,
 } from "./components/settings";
+export { SidebarLayout } from "./components/sidebar";
 export {
   Sheet,
   SheetTrigger,
@@ -194,5 +205,6 @@ export { Toaster } from "./components/sonner";
 export { Toggle, toggleVariants } from "./components/toggle";
 export { ToggleGroup, ToggleGroupItem } from "./components/toggle-group";
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./components/tooltip";
+export { Anchor, H1, H2, H3, H4, Hr } from "./components/typography";
 export { Workboard } from "./components/workboard";
 export { buildWorkboardGameMapConfig } from "./components/workboard-game-map";

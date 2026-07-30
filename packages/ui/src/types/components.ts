@@ -192,3 +192,75 @@ export interface DowncityInfoRowProps {
   /** 宿主用于扩展信息行布局的类名。 */
   className?: string;
 }
+
+/** ImagePreview 属性。 */
+export interface DowncityImagePreviewProps {
+  /** 是否展示全屏预览。 */
+  open: boolean;
+  /** 请求关闭预览时触发。 */
+  onOpenChange: (open: boolean) => void;
+  /** 要预览的图片地址，可以是 data URL、Blob URL 或远程地址。 */
+  src: string;
+  /** 图片的替代文字。 */
+  alt?: string;
+  /** 宿主用于扩展预览根节点的类名。 */
+  className?: string;
+}
+
+/** SidebarLayout 属性。 */
+export interface DowncitySidebarLayoutProps {
+  /** 固定在顶部的可选区域。 */
+  header?: React.ReactNode;
+  /** 可独立滚动的主体内容。 */
+  children: React.ReactNode;
+  /** 固定在底部的可选区域。 */
+  footer?: React.ReactNode;
+  /** 宿主用于扩展外层布局的类名。 */
+  className?: string;
+}
+
+/** FormField 属性。 */
+export interface DowncityFormFieldProps {
+  /** 字段名称。 */
+  label: React.ReactNode;
+  /** 字段的可选说明。 */
+  description?: React.ReactNode;
+  /** 字段校验失败时展示的错误内容。 */
+  error?: React.ReactNode;
+  /** 是否显示必填标识。 */
+  required?: boolean;
+  /** 字段控件。 */
+  children: React.ReactNode;
+  /** 是否使用标签与控件横向排列的紧凑布局。 */
+  horizontal?: boolean;
+  /** 宿主用于扩展字段布局的类名。 */
+  className?: string;
+}
+
+/** CollapsibleSettingGroup 属性。 */
+export interface DowncityCollapsibleSettingGroupProps {
+  /** 分组标题。 */
+  title: React.ReactNode;
+  /** 标题左侧的可选内容。 */
+  leading?: React.ReactNode;
+  /** 标题右侧的可选数量。 */
+  count?: number;
+  /** 展开的分组内容。 */
+  children: React.ReactNode;
+  /** 初始展开状态。 */
+  defaultOpen?: boolean;
+  /** 宿主用于扩展分组布局的类名。 */
+  className?: string;
+}
+
+/** SettingList 属性。 */
+export interface DowncitySettingListProps {
+  /** 列表内容。 */
+  children?: React.ReactNode;
+  /** 没有内容时展示的空状态。 */
+  empty?: React.ReactNode;
+  /** 是否展示加载状态。 */
+  loading?: boolean;
+  /** 宿主用于扩展列表布局的类名。 */
+  className?: string;
+}

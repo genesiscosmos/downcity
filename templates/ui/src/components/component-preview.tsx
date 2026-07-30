@@ -54,6 +54,10 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
+  FormField,
+  H2,
+  H3,
+  ImagePreview,
   InfoRow,
   Input,
   Item,
@@ -66,6 +70,11 @@ import {
   Kbd,
   KbdGroup,
   Label,
+  MenuEmpty,
+  MenuGroup,
+  MenuLabel,
+  MenuSeparator,
+  MenuSurface,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -79,6 +88,7 @@ import {
   Separator,
   SettingGroup,
   SettingItem,
+  SidebarLayout,
   SettingSection,
   SettingsContainer,
   Sheet,
@@ -204,6 +214,13 @@ function PreviewCanvas({
   );
 }
 
+/** ImagePreview 的本地受控示例。 */
+function ImagePreviewDemo() {
+  const [is_open, set_is_open] = useState(false);
+  const image_src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='720' height='480' viewBox='0 0 720 480'%3E%3Crect width='720' height='480' fill='%23262626'/%3E%3Cpath d='M0 350 180 170l130 130 110-105 300 245v40H0Z' fill='%23606060'/%3E%3Ccircle cx='555' cy='120' r='45' fill='%23dedede'/%3E%3C/svg%3E";
+  return <div className="flex flex-col items-center gap-3"><img className="h-24 w-36 rounded-lg object-cover" src={image_src} alt="Mountain landscape" /><Button onClick={() => set_is_open(true)}>Open image</Button><ImagePreview open={is_open} onOpenChange={set_is_open} src={image_src} alt="Mountain landscape" /></div>;
+}
+
 /** 根据当前标识渲染对应组件的交互示例。 */
 function render_component_example(
   component_id: ShowcaseComponentId,
@@ -273,6 +290,8 @@ function render_component_example(
           </div>
         </PreviewCanvas>
       );
+    case "form-field":
+      return <PreviewCanvas compact><div className="mx-auto max-w-sm"><FormField label="Project name" description="Used in navigation and shared links." required><Input defaultValue="downcity-ui" /></FormField></div></PreviewCanvas>;
     case "textarea":
       return (
         <PreviewCanvas compact>
@@ -339,6 +358,8 @@ function render_component_example(
           </Card>
         </PreviewCanvas>
       );
+    case "typography":
+      return <PreviewCanvas compact><div className="mx-auto max-w-lg space-y-3"><H2>Project overview</H2><H3>Release status</H3><p className="text-sm text-muted-foreground">Typography primitives provide stable UI hierarchy without deciding page spacing.</p></div></PreviewCanvas>;
     case "tabs":
       return (
         <PreviewCanvas compact>
@@ -385,6 +406,8 @@ function render_component_example(
           <SettingsContainer className="mx-auto max-w-xl"><SettingSection title="Editor" description="State remains owned by the host."><SettingGroup><SettingItem label="Live preview" description="Update the preview while editing."><Switch defaultChecked aria-label="Enable live preview" /></SettingItem><InfoRow label="UI package">@downcity/ui</InfoRow></SettingGroup></SettingSection></SettingsContainer>
         </PreviewCanvas>
       );
+    case "sidebar-layout":
+      return <PreviewCanvas compact><div className="mx-auto h-52 w-64 overflow-hidden rounded-lg border border-border"><SidebarLayout header={<div className="border-b border-divider px-3 py-2 text-xs font-medium">Workspace</div>} footer={<div className="border-t border-divider px-3 py-2 text-xs text-muted-foreground">Settings</div>}><div className="p-2 text-xs text-muted-foreground">Scrollable sidebar content</div></SidebarLayout></div></PreviewCanvas>;
     case "dropdown-menu":
       return (
         <PreviewCanvas compact>
@@ -433,6 +456,10 @@ function render_component_example(
           <Card className="mx-auto max-w-md"><CardHeader><CardTitle>Application feedback</CardTitle><CardDescription>The Toaster is mounted once at the showcase root and inherits the shared theme tokens.</CardDescription></CardHeader><CardContent><Badge variant="outline">Mounted globally</Badge></CardContent></Card>
         </PreviewCanvas>
       );
+    case "menu":
+      return <PreviewCanvas compact><MenuSurface className="mx-auto w-56"><MenuGroup><MenuLabel>Project</MenuLabel><button type="button" className="w-full rounded-lg px-2 py-1.5 text-left text-xs hover:bg-interaction-hover">Open preview</button><button type="button" className="w-full rounded-lg px-2 py-1.5 text-left text-xs hover:bg-interaction-hover">Duplicate</button></MenuGroup><MenuSeparator /><MenuEmpty>More actions appear here.</MenuEmpty></MenuSurface></PreviewCanvas>;
+    case "image-preview":
+      return <PreviewCanvas compact><ImagePreviewDemo /></PreviewCanvas>;
     case "workboard":
       return (
         <div className="overflow-hidden rounded-2xl border border-border-subtle"><Workboard board={demo_board} selectedAgentId={selected_agent_id} onSelectAgent={set_selected_agent_id} onRefresh={() => undefined} /></div>

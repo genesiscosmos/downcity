@@ -6,13 +6,18 @@
  * - 宿主通过组合具体控件决定业务语义，UI 包只负责结构和视觉一致性。
  */
 
+import { ChevronDownIcon } from "lucide-react";
+import { useState } from "react";
+
 import { cn } from "../lib/utils";
 import type {
+  DowncityCollapsibleSettingGroupProps,
   DowncityInfoRowProps,
   DowncitySettingGroupProps,
   DowncitySettingItemProps,
   DowncitySettingSectionProps,
   DowncitySettingsContainerProps,
+  DowncitySettingListProps,
 } from "../types/components";
 
 function SettingsContainer({
@@ -119,4 +124,17 @@ function InfoRow({ label, children, className }: DowncityInfoRowProps) {
   );
 }
 
-export { InfoRow, SettingGroup, SettingItem, SettingSection, SettingsContainer };
+/** 可折叠设置分组，适合低频或进阶配置。 */
+function CollapsibleSettingGroup({ title, leading, count, children, defaultOpen = true, className }: DowncityCollapsibleSettingGroupProps) {
+  const [is_open, set_is_open] = useState(defaultOpen);
+  return <SettingGroup className={className}><button type="button" aria-expanded={is_open} className="flex min-h-10 w-full items-center gap-2 px-3.5 text-left text-xs text-muted-foreground transition-colors hover:bg-interaction-hover hover:text-foreground" onClick={() => set_is_open((current_value) => !current_value)}>{leading ? <span className="shrink-0">{leading}</span> : null}<span className="min-w-0 flex-1 truncate">{title}</span>{typeof count === "number" ? <span className="shrink-0 tabular-nums text-muted-foreground/65">{count}</span> : null}<ChevronDownIcon className={cn("size-3.5 shrink-0 transition-transform", !is_open && "-rotate-90")} /></button>{is_open ? <div className="p-2">{children}</div> : null}</SettingGroup>;
+}
+
+/** 设置列表的加载与空状态容器。 */
+function SettingList({ children, empty, loading = false, className }: DowncitySettingListProps) {
+  if (loading) return <div className={cn("py-8 text-center text-sm text-muted-foreground", className)}>Loading…</div>;
+  if (!children && empty) return <div className={cn("py-8 text-center text-sm text-muted-foreground", className)}>{empty}</div>;
+  return <div className={cn("flex flex-col gap-1", className)}>{children}</div>;
+}
+
+export { CollapsibleSettingGroup, InfoRow, SettingGroup, SettingItem, SettingList, SettingSection, SettingsContainer };
