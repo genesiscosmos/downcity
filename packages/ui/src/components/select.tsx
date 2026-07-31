@@ -70,7 +70,7 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(
-            "min-w-[var(--anchor-width)] overflow-hidden rounded-xl border border-divider bg-surface-subtle text-foreground outline-none data-open:animate-in data-open:fade-in data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0 duration-150",
+            "min-w-[var(--anchor-width)] overflow-hidden rounded-xl border border-divider bg-popover text-foreground outline-none data-open:animate-in data-open:fade-in data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0 duration-150",
             className,
           )}
           {...props}
