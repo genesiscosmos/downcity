@@ -1,0 +1,17 @@
+# Pagination
+
+在分页资源的相邻页面之间导航。
+
+## Preview
+
+<ComponentDemo component_id="pagination" />
+
+## Usage
+
+```tsx
+import { Pagination, PaginationContent, PaginationItem, PaginationLink } from "@downcity/ui";
+
+export function Example() {
+  return <Pagination><PaginationContent><PaginationItem><PaginationLink href="?page=1" isActive>1</PaginationLink></PaginationItem></PaginationContent></Pagination>;
+}
+```

@@ -120,6 +120,7 @@ import {
 } from "@downcity/ui";
 
 import type { ComponentDemoProps, ShowcaseComponentId } from "../types/components.js";
+import { FoundationPreview } from "./foundation-preview.js";
 
 const button_variants = [
   "default",
@@ -230,6 +231,19 @@ function render_component_example(
   set_selected_agent_id: (value: string) => void,
 ) {
   switch (component_id) {
+    case "accordion":
+    case "alert":
+    case "alert-dialog":
+    case "avatar":
+    case "breadcrumb":
+    case "drawer":
+    case "input-group":
+    case "pagination":
+    case "progress":
+    case "radio-group":
+    case "scroll-area":
+    case "table":
+      return <FoundationPreview component_id={component_id} />;
     case "button":
       return (
         <PreviewCanvas compact>

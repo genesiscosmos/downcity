@@ -1,0 +1,18 @@
+---
+title: 基础原语
+description: 从 shadcn 组件模式中筛选并采用 Vibecape 视觉的基础 UI 原语
+---
+
+# 基础原语
+
+这些组件使用现有 Base UI 运行时与 Vibecape 设计 token，不引入 Shadcn 视觉样式或运行时依赖。
+
+```tsx
+<Accordion><AccordionItem value="details"><AccordionTrigger>详情</AccordionTrigger><AccordionContent>内容</AccordionContent></AccordionItem></Accordion>
+<Alert variant="destructive"><AlertTitle>删除项目</AlertTitle></Alert>
+<Progress value={60}><ProgressTrack><ProgressIndicator /></ProgressTrack></Progress>
+<Avatar><AvatarImage src={avatar_url} /><AvatarFallback>DC</AvatarFallback></Avatar>
+<InputGroup><InputGroupAddon>⌕</InputGroupAddon><InputGroupInput placeholder="搜索" /></InputGroup>
+```
+
+同时提供 `AlertDialog`、`Breadcrumb`、`Drawer`、`Pagination`、`RadioGroup`、`ScrollArea` 和 `Table`。

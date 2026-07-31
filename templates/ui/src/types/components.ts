@@ -38,7 +38,19 @@ export type ShowcaseComponentId =
   | "menu"
   | "typography"
   | "sidebar-layout"
-  | "form-field";
+  | "form-field"
+  | "accordion"
+  | "alert"
+  | "alert-dialog"
+  | "avatar"
+  | "breadcrumb"
+  | "drawer"
+  | "input-group"
+  | "pagination"
+  | "progress"
+  | "radio-group"
+  | "scroll-area"
+  | "table";
 
 /** Sidebar 中的单个组件入口。 */
 export interface ShowcaseComponentEntry {

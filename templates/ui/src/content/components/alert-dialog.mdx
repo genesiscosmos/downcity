@@ -1,0 +1,17 @@
+# AlertDialog
+
+在不可逆或高风险操作前请求明确确认。
+
+## Preview
+
+<ComponentDemo component_id="alert-dialog" />
+
+## Usage
+
+```tsx
+import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogTrigger, Button } from "@downcity/ui";
+
+export function Example() {
+  return <AlertDialog><AlertDialogTrigger render={<Button variant="destructive" />}>Delete</AlertDialogTrigger><AlertDialogContent><AlertDialogTitle>Delete draft?</AlertDialogTitle></AlertDialogContent></AlertDialog>;
+}
+```

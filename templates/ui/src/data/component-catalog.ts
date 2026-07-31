@@ -33,6 +33,8 @@ export const component_groups: readonly ShowcaseComponentGroup[] = [
       { id: "slider", label: "Slider", description: "选择数值或数值范围。" },
       { id: "switch", label: "Switch", description: "切换一个布尔配置。" },
       { id: "form-field", label: "FormField", description: "组合字段标签、说明、错误与控件。" },
+      { id: "input-group", label: "InputGroup", description: "将输入框、前后缀和快捷键提示组合为一个控件。" },
+      { id: "radio-group", label: "RadioGroup", description: "在互斥选项中选择一个值。" },
     ],
   },
   {
@@ -46,6 +48,14 @@ export const component_groups: readonly ShowcaseComponentGroup[] = [
       { id: "separator", label: "Separator", description: "分隔相邻内容区域。" },
       { id: "settings", label: "Settings", description: "组合紧凑设置页与信息分组。" },
       { id: "sidebar-layout", label: "SidebarLayout", description: "组织固定头尾与独立滚动的侧栏主体。" },
+      { id: "accordion", label: "Accordion", description: "按需展开相关内容，保持页面密度。" },
+      { id: "alert", label: "Alert", description: "呈现内联状态、提醒和阻断信息。" },
+      { id: "avatar", label: "Avatar", description: "展示用户、项目或实体的紧凑身份标识。" },
+      { id: "breadcrumb", label: "Breadcrumb", description: "展示当前页面在信息层级中的位置。" },
+      { id: "pagination", label: "Pagination", description: "在分页资源的相邻页面之间导航。" },
+      { id: "progress", label: "Progress", description: "展示确定性任务或上传的完成进度。" },
+      { id: "scroll-area", label: "ScrollArea", description: "提供与宿主样式一致的独立滚动区域。" },
+      { id: "table", label: "Table", description: "以紧凑行列布局展示结构化数据。" },
     ],
   },
   {
@@ -61,6 +71,8 @@ export const component_groups: readonly ShowcaseComponentGroup[] = [
       { id: "toaster", label: "Toaster", description: "承载非阻断式全局反馈。" },
       { id: "menu", label: "Menu", description: "提供无需行为依赖的菜单展示原语。" },
       { id: "image-preview", label: "ImagePreview", description: "使用任意 URL 或 data URL 预览图片。" },
+      { id: "alert-dialog", label: "AlertDialog", description: "在高风险操作前请求明确确认。" },
+      { id: "drawer", label: "Drawer", description: "以底部抽屉承载移动端的轻量操作。" },
     ],
   },
   {

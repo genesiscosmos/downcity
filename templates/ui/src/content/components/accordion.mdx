@@ -1,0 +1,17 @@
+# Accordion
+
+按需展开相关内容，保持页面紧凑。
+
+## Preview
+
+<ComponentDemo component_id="accordion" />
+
+## Usage
+
+```tsx
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@downcity/ui";
+
+export function Example() {
+  return <Accordion defaultValue={["item"]}><AccordionItem value="item"><AccordionTrigger>Details</AccordionTrigger><AccordionContent>Content</AccordionContent></AccordionItem></Accordion>;
+}
+```

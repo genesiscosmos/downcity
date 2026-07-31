@@ -1,0 +1,17 @@
+# Drawer
+
+以底部抽屉承载移动端的轻量操作。
+
+## Preview
+
+<ComponentDemo component_id="drawer" />
+
+## Usage
+
+```tsx
+import { Button, Drawer, DrawerContent, DrawerTitle, DrawerTrigger } from "@downcity/ui";
+
+export function Example() {
+  return <Drawer><DrawerTrigger render={<Button />}>Open</DrawerTrigger><DrawerContent><DrawerTitle>Settings</DrawerTitle></DrawerContent></Drawer>;
+}
+```

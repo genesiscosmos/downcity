@@ -65,6 +65,10 @@ export type {
 } from "./types/workboard-game-ui";
 
 export { Button, buttonVariants } from "./components/button";
+export { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./components/accordion";
+export { Alert, AlertDescription, AlertTitle } from "./components/alert";
+export { AlertDialog, AlertDialogClose, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "./components/alert-dialog";
+export { Avatar, AvatarFallback, AvatarImage } from "./components/avatar";
 export { Badge, badgeVariants } from "./components/badge";
 export {
   Card,
@@ -77,6 +81,7 @@ export {
 } from "./components/card";
 export { Checkbox } from "./components/checkbox";
 export { CodeBlock } from "./components/code-block";
+export { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "./components/breadcrumb";
 export { FormField } from "./components/form-field";
 export { ImagePreview } from "./components/image-preview";
 export { MenuEmpty, MenuGroup, MenuLabel, MenuSeparator, MenuSurface } from "./components/menu";
@@ -119,7 +124,9 @@ export {
   DialogTitle,
   DialogDescription,
 } from "./components/dialog";
+export { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from "./components/drawer";
 export { Input } from "./components/input";
+export { InputGroup, InputGroupAddon, InputGroupInput, InputGroupTextarea } from "./components/input-group";
 export {
   Empty,
   EmptyContent,
@@ -162,6 +169,10 @@ export {
   PopoverContent,
   PopoverTrigger,
 } from "./components/popover";
+export { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "./components/pagination";
+export { Progress, ProgressIndicator, ProgressLabel, ProgressTrack, ProgressValue } from "./components/progress";
+export { RadioGroup, RadioGroupItem } from "./components/radio-group";
+export { ScrollArea, ScrollAreaContent, ScrollAreaScrollbar, ScrollAreaViewport } from "./components/scroll-area";
 export { Separator } from "./components/separator";
 export {
   Select,
@@ -196,6 +207,7 @@ export {
   SheetDescription,
 } from "./components/sheet";
 export { Skeleton } from "./components/skeleton";
+export { Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "./components/table";
 export { Slider } from "./components/slider";
 export { Spinner } from "./components/spinner";
 export { Switch } from "./components/switch";

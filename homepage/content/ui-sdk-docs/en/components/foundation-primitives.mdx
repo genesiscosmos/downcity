@@ -1,0 +1,18 @@
+---
+title: Foundation Primitives
+description: Vibecape-styled UI primitives selected from shadcn component patterns
+---
+
+# Foundation Primitives
+
+These components use the existing Base UI runtime and Vibecape design tokens. No Shadcn visual styles or runtime dependencies are required.
+
+```tsx
+<Accordion><AccordionItem value="details"><AccordionTrigger>Details</AccordionTrigger><AccordionContent>Content</AccordionContent></AccordionItem></Accordion>
+<Alert variant="destructive"><AlertTitle>Delete project</AlertTitle></Alert>
+<Progress value={60}><ProgressTrack><ProgressIndicator /></ProgressTrack></Progress>
+<Avatar><AvatarImage src={avatar_url} /><AvatarFallback>DC</AvatarFallback></Avatar>
+<InputGroup><InputGroupAddon>⌕</InputGroupAddon><InputGroupInput placeholder="Search" /></InputGroup>
+```
+
+Also available: `AlertDialog`, `Breadcrumb`, `Drawer`, `Pagination`, `RadioGroup`, `ScrollArea`, and `Table`.

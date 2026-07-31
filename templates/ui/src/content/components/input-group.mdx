@@ -1,0 +1,17 @@
+# InputGroup
+
+将输入框、前后缀和快捷键提示组合为一个控件。
+
+## Preview
+
+<ComponentDemo component_id="input-group" />
+
+## Usage
+
+```tsx
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@downcity/ui";
+
+export function Example() {
+  return <InputGroup><InputGroupAddon>https://</InputGroupAddon><InputGroupInput aria-label="URL" /></InputGroup>;
+}
+```
