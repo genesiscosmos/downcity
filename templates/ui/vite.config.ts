@@ -42,7 +42,7 @@ function create_rehype_shiki(highlighter: Highlighter) {
           : "text";
         const highlighted_root = highlighter.codeToHast(raw_code, {
           lang: supported_language,
-          theme: "github-dark",
+          theme: "github-light",
         }) as MdxHastNode;
         const highlighted_pre = highlighted_root.children?.[0];
         if (highlighted_pre) {
@@ -82,7 +82,7 @@ function create_mdx_plugin(highlighter: Highlighter): Plugin {
 
 export default defineConfig(async () => {
   const highlighter = await createHighlighter({
-    themes: ["github-dark"],
+    themes: ["github-light"],
     langs: ["text", "tsx", "typescript", "jsx", "javascript", "css", "json", "bash", "html", "markdown"],
   });
 
