@@ -14,10 +14,10 @@ import { useState } from "react";
 import type { DowncityCodeBlockProps } from "../types/components";
 import { cn } from "../lib/utils";
 
-/** 为未经过构建期 Shiki 处理的短代码提供轻量语法着色。 */
+/** 为未经过构建期 Shiki 处理的短代码提供 GitHub Light 风格的轻量语法着色。 */
 function render_fallback_highlight(code: string) {
   const token_pattern = /(\/\/[^\n]*|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\b(?:import|from|export|return|function|const|let|type|interface|if|else|async|await|true|false|null|undefined)\b|\b\d+(?:\.\d+)?\b)/g;
-  return code.split("\n").map((line, line_index) => <span key={line_index} className="block min-h-5">{line.split(token_pattern).filter(Boolean).map((token, token_index) => <span key={token_index} className={token.startsWith("//") ? "text-muted-foreground" : /^("|'|`)/.test(token) ? "text-primary" : /^(import|from|export|return|function|const|let|type|interface|if|else|async|await|true|false|null|undefined)$/.test(token) ? "text-foreground font-medium" : /^\d/.test(token) ? "text-primary/75" : undefined}>{token}</span>)}</span>);
+  return code.split("\n").map((line, line_index) => <span key={line_index} className="block min-h-5">{line.split(token_pattern).filter(Boolean).map((token, token_index) => <span key={token_index} className={token.startsWith("//") ? "text-[color:var(--code-comment)]" : /^("|'|`)/.test(token) ? "text-[color:var(--code-string)]" : /^(import|from|export|return|function|const|let|type|interface|if|else|async|await|true|false|null|undefined)$/.test(token) ? "text-[color:var(--code-keyword)]" : /^\d/.test(token) ? "text-[color:var(--code-number)]" : undefined}>{token}</span>)}</span>);
 }
 
 function CodeBlock({
@@ -46,7 +46,7 @@ function CodeBlock({
       data-slot="code-block"
       className="overflow-hidden rounded-md border border-divider bg-card text-foreground"
     >
-      <div className="flex h-9 items-center justify-between gap-3 px-3">
+      <div className="relative flex h-9 items-center px-3">
         <span className="truncate font-mono text-[11px] font-medium text-muted-foreground">
           {label ?? resolved_language ?? "code"}
         </span>
@@ -56,7 +56,7 @@ function CodeBlock({
             onClick={() => void copy_code()}
             aria-label={is_copied ? "Copied" : "Copy code"}
             title={is_copied ? "Copied" : "Copy code"}
-            className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground"
+            className="absolute top-2 right-2 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground"
           >
             {is_copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
           </button>

@@ -192,18 +192,21 @@ function SearchIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="curr
 function PreviewCanvas({
   children,
   compact = false,
+  align = "center",
 }: {
   /** 画布中展示的组件示例。 */
   children: ReactNode;
   /** 是否使用更紧凑的最小高度。 */
   compact?: boolean;
+  /** 示例在画布纵向方向的布局方式。 */
+  align?: "center" | "start";
 }) {
   return (
     <div
       className={
         compact
-          ? "flex min-h-64 items-center justify-center rounded-xl border border-divider p-6"
-          : "flex min-h-[420px] items-center justify-center rounded-xl border border-divider p-6 sm:p-10"
+          ? `flex min-h-64 ${align === "start" ? "items-start" : "items-center"} justify-center rounded-xl border border-divider p-6`
+          : `flex min-h-[420px] ${align === "start" ? "items-start" : "items-center"} justify-center rounded-xl border border-divider p-6 sm:p-10`
       }
     >
       <div className="w-full max-w-2xl">{children}</div>
@@ -325,9 +328,8 @@ function render_component_example(
       );
     case "code-block":
       return (
-        <PreviewCanvas compact>
+        <PreviewCanvas compact align="start">
           <CodeBlock
-            className="mx-auto max-w-xl"
             language="tsx"
             code={'import { Button } from "@downcity/ui";\n\nexport function Example() {\n  return <Button>Open project</Button>;\n}'}
           />
