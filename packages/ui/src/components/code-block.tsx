@@ -28,6 +28,7 @@ function CodeBlock({
   label,
   "data-raw": data_raw,
   "data-language": data_language,
+  style,
   ...props
 }: DowncityCodeBlockProps) {
   const [is_copied, set_is_copied] = useState(false);
@@ -43,29 +44,31 @@ function CodeBlock({
   return (
     <div
       data-slot="code-block"
-      className="overflow-hidden rounded-xl bg-surface-subtle text-foreground"
+      className="overflow-hidden rounded-md border border-divider bg-card text-foreground"
     >
-      <div className="flex min-h-8 items-center justify-between gap-3 border-b border-divider px-3">
-        <span className="truncate text-[11px] font-medium text-muted-foreground/60">
+      <div className="flex h-9 items-center justify-between gap-3 px-3">
+        <span className="truncate font-mono text-[11px] font-medium text-muted-foreground">
           {label ?? resolved_language ?? "code"}
         </span>
         {raw_code ? (
           <button
             type="button"
             onClick={() => void copy_code()}
-            className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground"
+            aria-label={is_copied ? "Copied" : "Copy code"}
+            title={is_copied ? "Copied" : "Copy code"}
+            className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground"
           >
             {is_copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
-            {is_copied ? "Copied" : "Copy"}
           </button>
         ) : null}
       </div>
       <pre
         data-language={resolved_language}
         className={cn(
-          "overflow-x-auto bg-transparent p-3 font-mono text-xs leading-5 [tab-size:2] [&_code]:font-inherit",
+          "overflow-x-auto bg-transparent px-3 pb-3 font-mono text-xs leading-5 [tab-size:2] [&_code]:font-inherit",
           className,
         )}
+        style={{ ...style, backgroundColor: "transparent" }}
         {...props}
       >
         {children ?? <code>{render_fallback_highlight(raw_code)}</code>}
