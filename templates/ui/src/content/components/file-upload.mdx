@@ -1,0 +1,19 @@
+# FileUpload
+
+受控的文件选择与拖拽界面；上传、校验和持久化都由宿主负责。
+
+## Preview
+
+<ComponentDemo component_id="file-upload" />
+
+## Usage
+
+```tsx
+import { useState } from "react";
+import { FileUpload } from "@downcity/ui";
+
+export function Example() {
+  const [files, set_files] = useState<File[]>([]);
+  return <FileUpload files={files} onFilesChange={set_files} accept="image/*" />;
+}
+```

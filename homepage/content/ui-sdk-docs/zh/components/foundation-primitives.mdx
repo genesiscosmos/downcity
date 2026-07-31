@@ -16,3 +16,17 @@ description: 从 shadcn 组件模式中筛选并采用 Vibecape 视觉的基础 
 ```
 
 同时提供 `AlertDialog`、`Breadcrumb`、`Drawer`、`Pagination`、`RadioGroup`、`ScrollArea` 和 `Table`。
+
+## 高复用交互原语
+
+`Combobox` 用于筛选预定义选项；`FileUpload` 只将浏览器 `File` 对象回传给宿主。`DataTable` 接收数据与列定义，排序、请求和选择状态仍由应用管理。`HoverCard` 提供延迟展示的紧凑摘要，`ResizablePanelGroup` 用于组合可调整的工作区。
+
+```tsx
+<FileUpload files={files} onFilesChange={set_files} accept="image/*" />
+<DataTable data={rows} columns={columns} getRowId={(row) => row.id} />
+<ResizablePanelGroup orientation="horizontal">
+  <ResizablePanel defaultSize="30%">导航</ResizablePanel>
+  <ResizableHandle withHandle />
+  <ResizablePanel>内容</ResizablePanel>
+</ResizablePanelGroup>
+```

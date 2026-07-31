@@ -121,6 +121,7 @@ import {
 
 import type { ComponentDemoProps, ShowcaseComponentId } from "../types/components.js";
 import { FoundationPreview } from "./foundation-preview.js";
+import { AdvancedPreview } from "./advanced-preview.js";
 
 const button_variants = [
   "default",
@@ -231,6 +232,12 @@ function render_component_example(
   set_selected_agent_id: (value: string) => void,
 ) {
   switch (component_id) {
+    case "combobox":
+    case "file-upload":
+    case "data-table":
+    case "resizable":
+    case "hover-card":
+      return <AdvancedPreview component_id={component_id} />;
     case "accordion":
     case "alert":
     case "alert-dialog":

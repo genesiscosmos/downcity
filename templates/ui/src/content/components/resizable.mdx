@@ -1,0 +1,17 @@
+# Resizable
+
+将编辑器、导航和检查器组合为可拖拽调整的面板。
+
+## Preview
+
+<ComponentDemo component_id="resizable" />
+
+## Usage
+
+```tsx
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@downcity/ui";
+
+export function Example() {
+  return <ResizablePanelGroup orientation="horizontal"><ResizablePanel defaultSize="30%">Navigation</ResizablePanel><ResizableHandle withHandle /><ResizablePanel>Content</ResizablePanel></ResizablePanelGroup>;
+}
+```

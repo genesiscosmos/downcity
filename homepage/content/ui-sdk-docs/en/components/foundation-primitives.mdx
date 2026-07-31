@@ -16,3 +16,17 @@ These components use the existing Base UI runtime and Vibecape design tokens. No
 ```
 
 Also available: `AlertDialog`, `Breadcrumb`, `Drawer`, `Pagination`, `RadioGroup`, `ScrollArea`, and `Table`.
+
+## Advanced interaction primitives
+
+`Combobox` filters a predefined option set, while `FileUpload` only reports browser `File` objects to the host. `DataTable` receives data and column definitions, keeping sorting, data fetching, and selection ownership in the application. `HoverCard` provides a compact delayed summary, and `ResizablePanelGroup` composes adjustable work areas.
+
+```tsx
+<FileUpload files={files} onFilesChange={set_files} accept="image/*" />
+<DataTable data={rows} columns={columns} getRowId={(row) => row.id} />
+<ResizablePanelGroup orientation="horizontal">
+  <ResizablePanel defaultSize="30%">Navigation</ResizablePanel>
+  <ResizableHandle withHandle />
+  <ResizablePanel>Content</ResizablePanel>
+</ResizablePanelGroup>
+```

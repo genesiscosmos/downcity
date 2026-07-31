@@ -50,7 +50,12 @@ export type ShowcaseComponentId =
   | "progress"
   | "radio-group"
   | "scroll-area"
-  | "table";
+  | "table"
+  | "combobox"
+  | "file-upload"
+  | "data-table"
+  | "resizable"
+  | "hover-card";
 
 /** Sidebar 中的单个组件入口。 */
 export interface ShowcaseComponentEntry {

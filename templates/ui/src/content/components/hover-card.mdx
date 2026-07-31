@@ -1,0 +1,17 @@
+# HoverCard
+
+在悬停或聚焦时展示简短的上下文摘要，不阻断当前任务。
+
+## Preview
+
+<ComponentDemo component_id="hover-card" />
+
+## Usage
+
+```tsx
+import { Button, HoverCard, HoverCardContent, HoverCardTrigger } from "@downcity/ui";
+
+export function Example() {
+  return <HoverCard><HoverCardTrigger render={<Button variant="outline" />}>Profile</HoverCardTrigger><HoverCardContent>Team member summary</HoverCardContent></HoverCard>;
+}
+```

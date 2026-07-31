@@ -1,0 +1,20 @@
+# DataTable
+
+由宿主提供数据、稳定行 ID 和列定义的业务表格。
+
+## Preview
+
+<ComponentDemo component_id="data-table" />
+
+## Usage
+
+```tsx
+import { DataTable } from "@downcity/ui";
+
+const data = [{ id: "button", status: "Ready" }];
+const columns = [{ id: "name", header: "Name", cell: (row: typeof data[number]) => row.id }];
+
+export function Example() {
+  return <DataTable data={data} columns={columns} getRowId={(row) => row.id} />;
+}
+```

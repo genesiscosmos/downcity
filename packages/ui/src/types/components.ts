@@ -207,6 +207,58 @@ export interface DowncityImagePreviewProps {
   className?: string;
 }
 
+/** 文件上传组件属性。 */
+export interface DowncityFileUploadProps {
+  /** 当前已选择的文件；由宿主保存并回传，组件不持久化文件。 */
+  files?: readonly File[];
+  /** 用户选择或拖入文件后触发，返回完整的新文件列表。 */
+  onFilesChange: (files: File[]) => void;
+  /** 原生文件输入允许的 MIME 类型或扩展名规则。 */
+  accept?: string;
+  /** 是否允许一次选择多个文件。 */
+  multiple?: boolean;
+  /** 是否禁用选择与拖拽交互。 */
+  disabled?: boolean;
+  /** 可选择文件的最大数量；未提供时不限制。 */
+  maxFiles?: number;
+  /** 空状态中展示的主要说明。 */
+  label?: React.ReactNode;
+  /** 空状态中展示的补充说明。 */
+  description?: React.ReactNode;
+  /** 宿主用于扩展上传区域布局的类名。 */
+  className?: string;
+}
+
+/** DataTable 列定义。 */
+export interface DowncityDataTableColumn<Row> {
+  /** 用于 React key 和列语义的稳定标识。 */
+  id: string;
+  /** 表头中展示的列标题。 */
+  header: React.ReactNode;
+  /** 根据当前行数据渲染单元格内容。 */
+  cell: (row: Row) => React.ReactNode;
+  /** 表头与单元格的可选对齐方式。 */
+  align?: "left" | "center" | "right";
+  /** 宿主用于扩展该列单元格样式的类名。 */
+  className?: string;
+}
+
+/** DataTable 组件属性。 */
+export interface DowncityDataTableProps<Row> {
+  /** 需要展示的行数据。 */
+  data: readonly Row[];
+  /** 表格的列定义，决定展示顺序与单元格渲染方式。 */
+  columns: readonly DowncityDataTableColumn<Row>[];
+  /** 返回行的稳定标识，用于 React key 与交互回调。 */
+  getRowId: (row: Row, index: number) => React.Key;
+  /** 数据为空时展示的可选内容。 */
+  empty?: React.ReactNode;
+  /** 用户点击某行时触发；未提供时行不可点击。 */
+  onRowClick?: (row: Row) => void;
+  /** 宿主用于扩展表格布局的类名。 */
+  className?: string;
+}
+
 /** SidebarLayout 属性。 */
 export interface DowncitySidebarLayoutProps {
   /** 固定在顶部的可选区域。 */

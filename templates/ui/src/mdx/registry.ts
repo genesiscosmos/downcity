@@ -13,16 +13,20 @@ import BreadcrumbDocument from "../content/components/breadcrumb.mdx";
 import ButtonDocument from "../content/components/button.mdx";
 import CardDocument from "../content/components/card.mdx";
 import CheckboxDocument from "../content/components/checkbox.mdx";
+import ComboboxDocument from "../content/components/combobox.mdx";
 import CodeBlockDocument from "../content/components/code-block.mdx";
 import CommandDocument from "../content/components/command.mdx";
 import ContextMenuDocument from "../content/components/context-menu.mdx";
 import DialogDocument from "../content/components/dialog.mdx";
+import DataTableDocument from "../content/components/data-table.mdx";
 import DrawerDocument from "../content/components/drawer.mdx";
 import DropdownMenuDocument from "../content/components/dropdown-menu.mdx";
 import EmptyDocument from "../content/components/empty.mdx";
 import InputDocument from "../content/components/input.mdx";
 import InputGroupDocument from "../content/components/input-group.mdx";
 import FormFieldDocument from "../content/components/form-field.mdx";
+import FileUploadDocument from "../content/components/file-upload.mdx";
+import HoverCardDocument from "../content/components/hover-card.mdx";
 import ImagePreviewDocument from "../content/components/image-preview.mdx";
 import ItemDocument from "../content/components/item.mdx";
 import KbdDocument from "../content/components/kbd.mdx";
@@ -31,6 +35,7 @@ import PopoverDocument from "../content/components/popover.mdx";
 import PaginationDocument from "../content/components/pagination.mdx";
 import ProgressDocument from "../content/components/progress.mdx";
 import RadioGroupDocument from "../content/components/radio-group.mdx";
+import ResizableDocument from "../content/components/resizable.mdx";
 import ScrollAreaDocument from "../content/components/scroll-area.mdx";
 import SelectDocument from "../content/components/select.mdx";
 import SeparatorDocument from "../content/components/separator.mdx";
@@ -62,14 +67,18 @@ export const mdx_document_registry: Record<ShowcaseComponentId, MdxDocumentCompo
   button: ButtonDocument,
   card: CardDocument,
   checkbox: CheckboxDocument,
+  combobox: ComboboxDocument,
   "code-block": CodeBlockDocument,
   command: CommandDocument,
   "context-menu": ContextMenuDocument,
   dialog: DialogDocument,
+  "data-table": DataTableDocument,
   drawer: DrawerDocument,
   "dropdown-menu": DropdownMenuDocument,
   empty: EmptyDocument,
   "form-field": FormFieldDocument,
+  "file-upload": FileUploadDocument,
+  "hover-card": HoverCardDocument,
   "image-preview": ImagePreviewDocument,
   input: InputDocument,
   "input-group": InputGroupDocument,
@@ -80,6 +89,7 @@ export const mdx_document_registry: Record<ShowcaseComponentId, MdxDocumentCompo
   pagination: PaginationDocument,
   progress: ProgressDocument,
   "radio-group": RadioGroupDocument,
+  resizable: ResizableDocument,
   "scroll-area": ScrollAreaDocument,
   select: SelectDocument,
   separator: SeparatorDocument,

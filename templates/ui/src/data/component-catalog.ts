@@ -35,6 +35,8 @@ export const component_groups: readonly ShowcaseComponentGroup[] = [
       { id: "form-field", label: "FormField", description: "组合字段标签、说明、错误与控件。" },
       { id: "input-group", label: "InputGroup", description: "将输入框、前后缀和快捷键提示组合为一个控件。" },
       { id: "radio-group", label: "RadioGroup", description: "在互斥选项中选择一个值。" },
+      { id: "combobox", label: "Combobox", description: "在较多预定义选项中搜索并选择。" },
+      { id: "file-upload", label: "FileUpload", description: "以受控 File 列表接收点击或拖拽上传。" },
     ],
   },
   {
@@ -56,6 +58,8 @@ export const component_groups: readonly ShowcaseComponentGroup[] = [
       { id: "progress", label: "Progress", description: "展示确定性任务或上传的完成进度。" },
       { id: "scroll-area", label: "ScrollArea", description: "提供与宿主样式一致的独立滚动区域。" },
       { id: "table", label: "Table", description: "以紧凑行列布局展示结构化数据。" },
+      { id: "data-table", label: "DataTable", description: "通过受控列定义渲染可交互的业务表格。" },
+      { id: "resizable", label: "Resizable", description: "将工作区分为可拖拽调整的面板。" },
     ],
   },
   {
@@ -73,6 +77,7 @@ export const component_groups: readonly ShowcaseComponentGroup[] = [
       { id: "image-preview", label: "ImagePreview", description: "使用任意 URL 或 data URL 预览图片。" },
       { id: "alert-dialog", label: "AlertDialog", description: "在高风险操作前请求明确确认。" },
       { id: "drawer", label: "Drawer", description: "以底部抽屉承载移动端的轻量操作。" },
+      { id: "hover-card", label: "HoverCard", description: "在悬停时展示非阻断式的上下文摘要。" },
     ],
   },
   {

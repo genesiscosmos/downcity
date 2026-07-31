@@ -15,6 +15,9 @@ export type {
   DowncityCodeBlockProps,
   DowncityCollapsibleSettingGroupProps,
   DowncityFormFieldProps,
+  DowncityFileUploadProps,
+  DowncityDataTableColumn,
+  DowncityDataTableProps,
   DowncityImagePreviewProps,
   DowncityCommandInputProps,
   DowncityContextMenuContentProps,
@@ -80,9 +83,13 @@ export {
   CardTitle,
 } from "./components/card";
 export { Checkbox } from "./components/checkbox";
+export { Combobox, ComboboxClear, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxInputGroup, ComboboxItem, ComboboxList, ComboboxTrigger } from "./components/combobox";
 export { CodeBlock } from "./components/code-block";
 export { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "./components/breadcrumb";
 export { FormField } from "./components/form-field";
+export { DataTable } from "./components/data-table";
+export { FileUpload } from "./components/file-upload";
+export { HoverCard, HoverCardContent, HoverCardTrigger } from "./components/hover-card";
 export { ImagePreview } from "./components/image-preview";
 export { MenuEmpty, MenuGroup, MenuLabel, MenuSeparator, MenuSurface } from "./components/menu";
 export {
@@ -172,6 +179,7 @@ export {
 export { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "./components/pagination";
 export { Progress, ProgressIndicator, ProgressLabel, ProgressTrack, ProgressValue } from "./components/progress";
 export { RadioGroup, RadioGroupItem } from "./components/radio-group";
+export { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./components/resizable";
 export { ScrollArea, ScrollAreaContent, ScrollAreaScrollbar, ScrollAreaViewport } from "./components/scroll-area";
 export { Separator } from "./components/separator";
 export {
