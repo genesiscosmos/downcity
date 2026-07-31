@@ -10,7 +10,7 @@ description: Use for global toast notifications, styled through a sonner wrapper
 ## Import
 
 ```tsx
-import { Toaster } from "@downcity/ui";
+import { ThemeContainer, Toaster } from "@downcity/ui";
 import { toast } from "sonner";
 ```
 
@@ -21,13 +21,15 @@ import { Toaster } from "@downcity/ui";
 
 export function AppShell() {
   return (
-    <>
-      <Toaster theme="light" position="top-center" richColors />
+    <ThemeContainer variant="neutral" mode="light">
+      <Toaster position="top-center" richColors />
       <main>...</main>
-    </>
+    </ThemeContainer>
   );
 }
 ```
+
+`Toaster` does not accept a separate theme prop. Notifications inherit `ThemeContainer` like every other component.
 
 ## Trigger A Toast
 

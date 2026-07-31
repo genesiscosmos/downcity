@@ -1,8 +1,12 @@
 import { useState } from "react";
-import { useLocation } from "react-router";
 import { motion, useReducedMotion } from "framer-motion";
 import { useTranslation } from "react-i18next";
-import { resolve_interface_locale } from "@/lib/interface-locale";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
+import {
+  home_world_agent_path,
+  home_world_hex_center,
+  home_world_hex_path,
+} from "@/lib/home-world-geometry";
 
 const city_tiles = [
   {
@@ -97,33 +101,6 @@ const mobile_city_tiles = [
 ] as const;
 
 /**
- * 生成平顶六边形地块路径。
- */
-function hex_path(center_x: number, center_y: number, radius: number) {
-  const height = radius * 0.866;
-
-  return [
-    `M${center_x - radius} ${center_y}`,
-    `L${center_x - radius / 2} ${center_y - height}`,
-    `L${center_x + radius / 2} ${center_y - height}`,
-    `L${center_x + radius} ${center_y}`,
-    `L${center_x + radius / 2} ${center_y + height}`,
-    `L${center_x - radius / 2} ${center_y + height}`,
-    "Z",
-  ].join(" ");
-}
-
-/**
- * 根据 flat-top axial 坐标计算六边形中心点，确保相邻地块只共享完整边。
- */
-function hex_center(origin_x: number, origin_y: number, radius: number, q: number, row: number) {
-  return {
-    x: origin_x + radius * 1.5 * q,
-    y: origin_y + radius * Math.sqrt(3) * (row + q / 2),
-  };
-}
-
-/**
  * 首页 Agent 六边形社区封面。
  *
  * 相邻地块自然形成 City，building、forest、空地与 ghost 居民共同建立社区语义。
@@ -132,8 +109,7 @@ function hex_center(origin_x: number, origin_y: number, radius: number, q: numbe
  */
 export function HomeHeroCover() {
   const { i18n } = useTranslation("home");
-  const location = useLocation();
-  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const locale = use_interface_locale();
   const t = i18n.getFixedT(locale, "home");
   const reduce_motion = useReducedMotion();
   const [focused_city, set_focused_city] = useState<string | null>(null);
@@ -198,7 +174,7 @@ export function HomeHeroCover() {
                 </motion.text>
 
                 {city_node.cells.map((cell, cell_index) => {
-                  const cell_center = hex_center(city_node.origin.x, city_node.origin.y, 32, cell.q, cell.row);
+                  const cell_center = home_world_hex_center(city_node.origin.x, city_node.origin.y, 32, cell.q, cell.row);
 
                   return (
                     <motion.g
@@ -208,7 +184,7 @@ export function HomeHeroCover() {
                       transition={{ duration: reduce_motion ? 0 : 0.25, delay: reduce_motion ? 0 : cell_index * 0.015 }}
                     >
                       <path
-                        d={hex_path(cell_center.x, cell_center.y, 32)}
+                        d={home_world_hex_path(cell_center.x, cell_center.y, 32)}
                         fill={is_focused ? `${city_node.accent}0D` : "transparent"}
                         stroke={is_focused ? city_node.accent : "currentColor"}
                         className="text-line-strong"
@@ -231,7 +207,7 @@ export function HomeHeroCover() {
                       {cell.kind === "agent" && (
                         <g aria-hidden="true">
                           <path
-                            d={`M${cell_center.x - 13} ${cell_center.y + 18} V${cell_center.y} C${cell_center.x - 13} ${cell_center.y - 10} ${cell_center.x - 7} ${cell_center.y - 16} ${cell_center.x} ${cell_center.y - 16} C${cell_center.x + 7} ${cell_center.y - 16} ${cell_center.x + 13} ${cell_center.y - 10} ${cell_center.x + 13} ${cell_center.y} V${cell_center.y + 18} L${cell_center.x + 7} ${cell_center.y + 13} L${cell_center.x} ${cell_center.y + 18} L${cell_center.x - 7} ${cell_center.y + 13} Z`}
+                            d={home_world_agent_path(cell_center.x, cell_center.y, 32)}
                             fill={city_node.accent}
                           />
                           <circle cx={cell_center.x - 4.5} cy={cell_center.y - 2.5} r="1.6" className="fill-background" />
@@ -263,15 +239,15 @@ export function HomeHeroCover() {
           {mobile_city_tiles.map((city_node) => (
             <g key={city_node.key}>
               {city_node.cells.map((cell) => {
-                const cell_center = hex_center(city_node.origin.x, city_node.origin.y, 18, cell.q, cell.row);
+                const cell_center = home_world_hex_center(city_node.origin.x, city_node.origin.y, 18, cell.q, cell.row);
 
                 return (
                   <g key={`${cell.q}-${cell.row}`}>
-                    <path d={hex_path(cell_center.x, cell_center.y, 18)} fill="transparent" className="stroke-line-strong opacity-75" />
+                    <path d={home_world_hex_path(cell_center.x, cell_center.y, 18)} fill="transparent" className="stroke-line-strong opacity-75" />
                     {cell.kind === "agent" && (
                       <>
                         <path
-                          d={`M${cell_center.x - 7} ${cell_center.y + 10} V${cell_center.y} C${cell_center.x - 7} ${cell_center.y - 6} ${cell_center.x - 4} ${cell_center.y - 9} ${cell_center.x} ${cell_center.y - 9} C${cell_center.x + 4} ${cell_center.y - 9} ${cell_center.x + 7} ${cell_center.y - 6} ${cell_center.x + 7} ${cell_center.y} V${cell_center.y + 10} L${cell_center.x + 4} ${cell_center.y + 7} L${cell_center.x} ${cell_center.y + 10} L${cell_center.x - 4} ${cell_center.y + 7} Z`}
+                          d={home_world_agent_path(cell_center.x, cell_center.y, 18)}
                           fill={city_node.accent}
                         />
                         <circle cx={cell_center.x - 2.4} cy={cell_center.y - 1.5} r="0.9" className="fill-background" />

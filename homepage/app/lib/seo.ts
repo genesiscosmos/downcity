@@ -8,7 +8,8 @@
  */
 import type { MetaDescriptor } from "react-router";
 import { product } from "@/lib/product";
-import type { SeoLocale, SeoPageMetaOptions } from "@/types/seo";
+import type { InterfaceLocale } from "@/types/interface-locale";
+import type { SeoPageMetaOptions } from "@/types/seo";
 
 export const site_origin = product.homepage ?? "https://downcity.ai";
 
@@ -38,7 +39,7 @@ export function create_site_url(pathname: string) {
 /**
  * 判断公开路径使用的页面语言。
  */
-export function get_path_locale(pathname: string): SeoLocale {
+export function get_path_locale(pathname: string): InterfaceLocale {
   return pathname === "/zh/" || pathname.startsWith("/zh/") ? "zh" : "en";
 }
 

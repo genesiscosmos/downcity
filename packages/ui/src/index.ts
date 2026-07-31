@@ -9,10 +9,20 @@
 
 export { cn } from "./lib/utils";
 export type {
+  DowncityAnnotationProps,
+  DowncityAnnotationTone,
   DowncityButtonSize,
   DowncityButtonVariant,
   DowncityCardSize,
   DowncityCodeBlockProps,
+  DowncityDefinitionDescriptionProps,
+  DowncityDefinitionListProps,
+  DowncityDefinitionTermProps,
+  DowncityFootnoteItemProps,
+  DowncityFootnoteReferenceProps,
+  DowncityFootnotesProps,
+  DowncityButtonGroupOrientation,
+  DowncityButtonGroupProps,
   DowncityCollapsibleSettingGroupProps,
   DowncityFormFieldProps,
   DowncityFileUploadProps,
@@ -40,10 +50,22 @@ export type {
   DowncitySliderProps,
   DowncitySpinnerSize,
   DowncitySidebarLayoutProps,
-  DowncityToasterTheme,
+  DowncityToasterProps,
   DowncityThemeContainerProps,
   DowncityThemeMode,
   DowncityThemeVariant,
+  DowncityToggleGroupProps,
+  DowncityToggleGroupSize,
+  DowncityToggleGroupVariant,
+  DowncityTaskListItemProps,
+  DowncityTypographyBlockquoteProps,
+  DowncityTypographyHeadingProps,
+  DowncityTypographyInlineCodeProps,
+  DowncityTypographyListItemProps,
+  DowncityTypographyOrderedListProps,
+  DowncityTypographyParagraphProps,
+  DowncityTypographySpanProps,
+  DowncityTypographyUnorderedListProps,
 } from "./types/components";
 export type {
   DowncityWorkboardActivityItem,
@@ -71,6 +93,7 @@ export type {
 } from "./types/workboard-game-ui";
 
 export { Button, buttonVariants } from "./components/button";
+export { ButtonGroup } from "./components/button-group";
 export { ThemeContainer } from "./components/theme-container";
 export { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./components/accordion";
 export { Alert, AlertDescription, AlertTitle } from "./components/alert";
@@ -227,6 +250,34 @@ export { Toaster } from "./components/sonner";
 export { Toggle, toggleVariants } from "./components/toggle";
 export { ToggleGroup, ToggleGroupItem } from "./components/toggle-group";
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "./components/tooltip";
-export { Anchor, H1, H2, H3, H4, Hr } from "./components/typography";
+export {
+  Anchor,
+  Annotation,
+  Blockquote,
+  DefinitionDescription,
+  DefinitionList,
+  DefinitionTerm,
+  Emphasis,
+  FootnoteItem,
+  FootnoteReference,
+  Footnotes,
+  H1,
+  H2,
+  H3,
+  H4,
+  H5,
+  H6,
+  Hr,
+  InlineCode,
+  Lead,
+  ListItem,
+  Muted,
+  OrderedList,
+  Paragraph,
+  Small,
+  Strong,
+  TaskListItem,
+  UnorderedList,
+} from "./components/typography";
 export { Workboard } from "./components/workboard";
 export { buildWorkboardGameMapConfig } from "./components/workboard-game-map";

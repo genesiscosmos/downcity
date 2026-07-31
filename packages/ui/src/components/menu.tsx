@@ -19,7 +19,7 @@ function MenuGroup({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function MenuLabel({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("px-2 py-2 text-[11px] font-medium text-muted-foreground select-none", className)} {...props} />;
+  return <div data-slot="menu-label" className={cn("px-2 py-2 text-[11px] font-medium text-muted-foreground", className)} {...props} />;
 }
 
 function MenuSeparator({ className, ...props }: React.ComponentProps<"div">) {

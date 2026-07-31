@@ -1,9 +1,9 @@
-import { Link, useLocation } from "react-router";
+import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { IconArrowRight, IconBook } from "@tabler/icons-react";
 import { HomeHeroCover } from "@/components/sections/HomeHeroCover";
 import { homepage_positioning } from "@/lib/homepage-positioning";
-import { resolve_interface_locale } from "@/lib/interface-locale";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 
 /**
  * 首页主视觉模块。
@@ -14,8 +14,7 @@ import { resolve_interface_locale } from "@/lib/interface-locale";
  */
 export function HomeHeroSection() {
   const { i18n } = useTranslation("home");
-  const location = useLocation();
-  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const locale = use_interface_locale();
   const t = i18n.getFixedT(locale, "home");
   const is_zh = locale === "zh";
   const positioning = homepage_positioning[locale];

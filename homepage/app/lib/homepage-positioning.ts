@@ -9,10 +9,10 @@ export const homepage_positioning = {
     hero_headline: "Build worlds where agents live, work, and collaborate.",
     hero_description:
       "Downcity is the agentic product environment for creators, bringing agents, tools, memory, models, services, and product surfaces together in one place to create and run agentic products.",
-    features_title: "The environment for",
-    features_title_emphasis: "agentic products",
+    features_title: "Organize agents, capabilities, and interfaces",
+    features_title_emphasis: "into a City.",
     features_description:
-      "From local agents and plugins to shared models, services, and product surfaces, Downcity brings creation, runtime, and operations into one environment.",
+      "Give each agent a workspace, continuous context, and a clear role, then bring them together with shared capabilities and product interfaces.",
     footer_tagline:
       "The agentic product environment where creators build the worlds agents live, work, and collaborate in.",
     meta_title: "Downcity — Agentic Product Environment for Creators",
@@ -23,10 +23,10 @@ export const homepage_positioning = {
     hero_headline: "创造 Agent 居住、工作与协作的世界。",
     hero_description:
       "Downcity 是为创作者打造的 Agentic 产品环境，将 Agent、工具、记忆、模型、服务与产品界面组织成一个完整的创作与运行空间。",
-    features_title: "Agentic 产品的",
-    features_title_emphasis: "创作与运行环境",
+    features_title: "组织 Agent、能力与界面，",
+    features_title_emphasis: "构建一座 City。",
     features_description:
-      "从本地 Agent 与插件，到共享模型、服务和产品界面，Downcity 将创作、运行与运营所需能力组织在同一环境中。",
+      "为每个 Agent 配置工作空间、连续上下文与明确角色，再通过共享能力和产品界面将它们组织成一个完整产品。",
     footer_tagline: "为创作者打造的 Agentic 产品环境，承载 Agent 的创造、运行与协作。",
     meta_title: "Downcity — 为创作者打造的 Agentic 产品环境",
     meta_description:

@@ -25,6 +25,7 @@
   --accent-foreground: rgb(23, 23, 23);
   --destructive: rgb(231, 0, 11);
   --destructive-foreground: rgb(255, 255, 255);
+  --warning: rgb(154, 103, 0);
   --border: rgb(229, 229, 229);
   --input: rgb(229, 229, 229);
   --ring: rgb(161, 161, 161);
@@ -43,10 +44,15 @@
   --border-subtle: color-mix(in srgb, var(--border) 55%, transparent);
   --control-surface: var(--muted);
   --control-hover: color-mix(in srgb, var(--foreground) 10%, transparent);
-  --code-comment: rgb(101, 109, 118);
-  --code-keyword: rgb(207, 34, 46);
-  --code-string: rgb(10, 48, 105);
-  --code-number: rgb(5, 80, 174);
+  --code-background: rgb(246, 248, 250);
+  --code-foreground: rgb(36, 41, 46);
+  --code-border: rgb(208, 215, 222);
+  --code-comment: rgb(106, 115, 125);
+  --code-keyword: rgb(215, 58, 73);
+  --code-string: rgb(3, 47, 98);
+  --code-number: rgb(0, 92, 197);
+  --code-function: rgb(111, 66, 193);
+  --code-type: rgb(0, 92, 197);
   --sidebar: var(--background);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
@@ -63,6 +69,12 @@
   --control-primary: color-mix(in srgb, var(--foreground) 90%, transparent);
   --control-primary-hover: var(--foreground);
   --control-primary-foreground: var(--background);
+  --overlay: color-mix(in srgb, rgb(0, 0, 0) 72%, transparent);
+  --floating-surface: var(--popover);
+  --floating-foreground: var(--popover-foreground);
+  --selection-surface: var(--control-primary);
+  --selection-foreground: var(--control-primary-foreground);
+  --text-selection-background: color-mix(in srgb, var(--foreground) 14%, transparent);
 }
 
 /* ThemeContainer 是组件树唯一的主题事实源。 */
@@ -221,6 +233,12 @@
 }
 
 .dc-theme-container {
+  --card-foreground: var(--foreground);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--muted);
+  --secondary-foreground: var(--foreground);
+  --accent: var(--muted);
+  --accent-foreground: var(--foreground);
   --surface-subtle: color-mix(in srgb, var(--foreground) 4%, transparent);
   --surface-emphasis: color-mix(in srgb, var(--foreground) 7%, transparent);
   --interaction-hover: color-mix(in srgb, var(--foreground) 7%, transparent);
@@ -233,6 +251,17 @@
   --control-primary: color-mix(in srgb, var(--foreground) 90%, transparent);
   --control-primary-hover: var(--foreground);
   --control-primary-foreground: var(--background);
+  --overlay: color-mix(in srgb, rgb(0, 0, 0) 72%, transparent);
+  --floating-surface: var(--popover);
+  --floating-foreground: var(--popover-foreground);
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
 .dc-theme-container[data-ui-mode="dark"] {
@@ -240,6 +269,19 @@
   --surface-emphasis: color-mix(in srgb, var(--foreground) 12%, transparent);
   --control-surface: color-mix(in srgb, var(--foreground) 14%, transparent);
   --control-hover: color-mix(in srgb, var(--foreground) 20%, transparent);
+  --code-background: rgb(40, 44, 52);
+  --code-foreground: rgb(171, 178, 191);
+  --code-border: rgb(62, 68, 81);
+  --code-comment: rgb(92, 99, 112);
+  --code-keyword: rgb(198, 120, 221);
+  --code-string: rgb(152, 195, 121);
+  --code-number: rgb(209, 154, 102);
+  --code-function: rgb(97, 175, 239);
+  --code-type: rgb(229, 192, 123);
+  --selection-surface: color-mix(in srgb, var(--foreground) 92%, transparent);
+  --selection-foreground: var(--background);
+  --text-selection-background: color-mix(in srgb, var(--foreground) 18%, transparent);
+  --warning: rgb(229, 192, 123);
 }
 
 @theme inline {
@@ -255,10 +297,20 @@
   --color-control-primary: var(--control-primary);
   --color-control-primary-hover: var(--control-primary-hover);
   --color-control-primary-foreground: var(--control-primary-foreground);
+  --color-overlay: var(--overlay);
+  --color-floating-surface: var(--floating-surface);
+  --color-floating-foreground: var(--floating-foreground);
+  --color-selection-surface: var(--selection-surface);
+  --color-selection-foreground: var(--selection-foreground);
   --color-code-comment: var(--code-comment);
   --color-code-keyword: var(--code-keyword);
   --color-code-string: var(--code-string);
   --color-code-number: var(--code-number);
+  --color-code-background: var(--code-background);
+  --color-code-foreground: var(--code-foreground);
+  --color-code-border: var(--code-border);
+  --color-code-function: var(--code-function);
+  --color-code-type: var(--code-type);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -277,6 +329,7 @@
   --color-border: var(--border);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-warning: var(--warning);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -300,6 +353,71 @@
   --radius-4xl: calc(var(--radius) * 2.6);
   --radius-floating-surface: var(--radius-xl);
   --radius-floating-item: var(--radius-lg);
+}
+
+/* Shiki 双主题输出在 ThemeContainer 暗色模式下切换为 One Dark Pro。 */
+.dc-theme-container[data-ui-mode="dark"] [data-slot="code-block"] .shiki span {
+  color: var(--shiki-dark) !important;
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+  text-decoration: var(--shiki-dark-text-decoration) !important;
+}
+
+/* 所有 ThemeContainer 后代统一使用可感知的文字选区颜色。 */
+.dc-theme-container ::selection {
+  background: var(--text-selection-background);
+}
+
+/* 原子操作与状态标签不参与正文文字选择。 */
+:where(
+  [data-slot="button"],
+  [data-slot="button-group"],
+  [data-slot="badge"],
+  [data-slot="toggle"],
+  [data-slot="toggle-group-item"],
+  [data-slot="spinner"],
+  [data-slot="kbd"],
+  [data-slot="kbd-group"],
+  [data-slot="input-group-addon"],
+  [data-slot="accordion-trigger"],
+  [data-slot="alert-dialog-trigger"],
+  [data-slot="alert-dialog-close"],
+  [data-slot="dialog-trigger"],
+  [data-slot="dialog-close"],
+  [data-slot="drawer-trigger"],
+  [data-slot="drawer-close"],
+  [data-slot="sheet-trigger"],
+  [data-slot="sheet-close"],
+  [data-slot="popover-trigger"],
+  [data-slot="hover-card-trigger"],
+  [data-slot="tooltip-trigger"],
+  [data-slot="dropdown-menu-trigger"],
+  [data-slot="context-menu-trigger"],
+  [data-slot="select-trigger"],
+  [data-slot="tabs-trigger"],
+  [data-slot="pagination-link"],
+  [data-slot="pagination-ellipsis"],
+  [data-slot="checkbox"],
+  [data-slot="radio-group-item"],
+  [data-slot="switch"],
+  [data-slot="dropdown-menu-item"],
+  [data-slot="dropdown-menu-checkbox-item"],
+  [data-slot="dropdown-menu-radio-item"],
+  [data-slot="dropdown-menu-sub-trigger"],
+  [data-slot="dropdown-menu-label"],
+  [data-slot="dropdown-menu-shortcut"],
+  [data-slot="context-menu-item"],
+  [data-slot="context-menu-checkbox-item"],
+  [data-slot="context-menu-radio-item"],
+  [data-slot="context-menu-sub-trigger"],
+  [data-slot="context-menu-label"],
+  [data-slot="context-menu-shortcut"],
+  [data-slot="command-item"],
+  [data-slot="command-shortcut"],
+  [data-slot="menu-label"],
+  [data-slot="tooltip-content"]
+) {
+  user-select: none;
 }
 
 @layer base {

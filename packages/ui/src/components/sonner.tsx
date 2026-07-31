@@ -5,14 +5,16 @@
  *
  * 关键说明（中文）
  * - 提供统一的通知图标、边框圆角和色板映射。
- * - 主题模式由宿主显式传入，避免绑定特定主题库实现。
+ * - 颜色与明暗模式统一继承 ThemeContainer，不暴露独立主题参数。
  */
 
 import type { CSSProperties } from "react";
 import { CircleCheckIcon, InfoIcon, Loader2Icon, OctagonXIcon, TriangleAlertIcon } from "lucide-react";
-import { Toaster as Sonner, type ToasterProps } from "sonner";
+import { Toaster as Sonner } from "sonner";
 
-function Toaster({ ...props }: ToasterProps) {
+import type { DowncityToasterProps } from "../types/components";
+
+function Toaster({ theme: _legacy_theme, ...props }: DowncityToasterProps) {
   return (
     <Sonner
       className="toaster group"

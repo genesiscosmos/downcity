@@ -1,11 +1,11 @@
 ---
 title: ToggleGroup
-description: 用于多个切换按钮的单选或多选组合
+description: 使用共享移动激活层的互斥单选控件
 ---
 
 # ToggleGroup
 
-`ToggleGroup` 用于把多个 `Toggle` 组合成一个切换栏。
+`ToggleGroup` 用于把多个互斥选项组合成一个切换栏。所有选项共享同一个移动激活层。
 
 ## 导入
 
@@ -13,7 +13,7 @@ description: 用于多个切换按钮的单选或多选组合
 import { ToggleGroup, ToggleGroupItem } from "@downcity/ui";
 ```
 
-## 单选示例
+## 示例
 
 ```tsx
 import { ToggleGroup, ToggleGroupItem } from "@downcity/ui";
@@ -28,25 +28,8 @@ export function ViewModeToggle() {
 }
 ```
 
-## 多选示例
-
-```tsx
-import { ToggleGroup, ToggleGroupItem } from "@downcity/ui";
-
-export function FilterToggleGroup() {
-  return (
-    <ToggleGroup multiple defaultValue={["task", "memory"]}>
-      <ToggleGroupItem value="task">Task</ToggleGroupItem>
-      <ToggleGroupItem value="memory">Memory</ToggleGroupItem>
-      <ToggleGroupItem value="skill">Skill</ToggleGroupItem>
-    </ToggleGroup>
-  );
-}
-```
-
 ## 可用附加能力
 
-- `multiple`
 - `orientation`
 - `spacing`
 - `variant`
@@ -55,7 +38,7 @@ export function FilterToggleGroup() {
 ## 使用建议
 
 - 2 到 5 个清晰选项很适合 `ToggleGroup`
-- 单选和多选都可以，但都建议保持短标签
+- ToggleGroup 固定为互斥单选；并行状态请使用多个独立的 `Toggle`
 - 如果是面板切换，优先考虑 [Tabs](/zh/ui-sdk-docs/components/tabs)
 
 ## 继续阅读

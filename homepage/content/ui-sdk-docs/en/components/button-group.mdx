@@ -1,0 +1,24 @@
+---
+title: ButtonGroup
+description: Group related buttons with shared adjacent boundaries
+---
+
+# ButtonGroup
+
+`ButtonGroup` owns only layout, merged boundaries, and outer corner radii. Each `Button` keeps its own `variant` and action hierarchy.
+
+```tsx
+import { Button, ButtonGroup } from "@downcity/ui";
+
+export function PaginationActions() {
+  return (
+    <ButtonGroup>
+      <Button variant="outline">Previous</Button>
+      <Button variant="outline">Current</Button>
+      <Button variant="outline">Next</Button>
+    </ButtonGroup>
+  );
+}
+```
+
+`orientation` accepts `horizontal` and `vertical`; the default is `horizontal`.

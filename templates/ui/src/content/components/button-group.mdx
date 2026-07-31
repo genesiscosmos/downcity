@@ -1,0 +1,25 @@
+# ButtonGroup
+
+把一组相关操作组合成连续控件，同时保持每个 Button 自己的 variant 与行为。
+
+## Preview
+
+<ComponentDemo component_id="button-group" />
+
+## Usage
+
+```tsx
+import { Button, ButtonGroup } from "@downcity/ui";
+
+export function Example() {
+  return (
+    <ButtonGroup>
+      <Button variant="outline">Previous</Button>
+      <Button variant="outline">Current</Button>
+      <Button variant="outline">Next</Button>
+    </ButtonGroup>
+  );
+}
+```
+
+`orientation` 支持 `horizontal` 与 `vertical`。ButtonGroup 只处理布局和相邻边界，不覆盖 Button variant。

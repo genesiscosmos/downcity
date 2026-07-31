@@ -5,9 +5,6 @@
  * 各自拼接站点 URL 后产生域名、尾斜杠和语言路径不一致。
  */
 
-/** 页面支持的公开语言。 */
-export type SeoLocale = "en" | "zh";
-
 /** 页面级 SEO 元信息生成参数。 */
 export type SeoPageMetaOptions = {
   /** 浏览器标题以及 Open Graph、Twitter 使用的页面标题。 */

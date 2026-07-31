@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { useLocation } from "react-router";
 import { motion, useReducedMotion } from "framer-motion";
 import { useTranslation } from "react-i18next";
-import { resolve_interface_locale } from "@/lib/interface-locale";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 
 const city_cells = [
   { q: 0, row: 0, kind: "building" },
@@ -57,8 +56,7 @@ function hex_center(origin_x: number, origin_y: number, radius: number, q: numbe
  */
 export function HomeArchitectureDiagram() {
   const { i18n } = useTranslation("home");
-  const location = useLocation();
-  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const locale = use_interface_locale();
   const t = i18n.getFixedT(locale, "home");
   const reduce_motion = useReducedMotion();
   const [focused_node, set_focused_node] = useState<string | null>(null);

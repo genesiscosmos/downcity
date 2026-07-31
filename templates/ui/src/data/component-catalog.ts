@@ -15,6 +15,7 @@ export const component_groups: readonly ShowcaseComponentGroup[] = [
     label: "Actions",
     items: [
       { id: "button", label: "Button", description: "触发主要、次要或危险操作。" },
+      { id: "button-group", label: "ButtonGroup", description: "组合相关按钮并合并相邻边界。" },
       { id: "badge", label: "Badge", description: "展示状态、分类和轻量统计。" },
       { id: "toggle", label: "Toggle", description: "切换单个状态或一组选项。" },
       { id: "spinner", label: "Spinner", description: "表达进行中的异步状态。" },

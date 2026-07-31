@@ -1,41 +1,40 @@
 import type { FC } from "react";
-import { useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import {
   IconArrowUpRight,
   IconGitBranch,
-  IconLayersLinked,
-  IconPuzzle,
-  IconServer,
-  IconGauge,
+  IconMessages,
+  IconTools,
+  IconClockPlay,
+  IconUsersGroup,
   IconAppWindow,
 } from "@tabler/icons-react";
 import { homepage_positioning } from "@/lib/homepage-positioning";
-import { resolve_interface_locale } from "@/lib/interface-locale";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 
 const features = [
   {
-    key: "repo",
+    key: "workspace",
     icon: IconGitBranch,
   },
   {
-    key: "runtime",
-    icon: IconLayersLinked,
+    key: "session",
+    icon: IconMessages,
   },
   {
-    key: "plugins",
-    icon: IconPuzzle,
+    key: "actions",
+    icon: IconTools,
   },
   {
-    key: "city",
-    icon: IconServer,
+    key: "continuity",
+    icon: IconClockPlay,
   },
   {
-    key: "ops",
-    icon: IconGauge,
+    key: "collaboration",
+    icon: IconUsersGroup,
   },
   {
-    key: "surface",
+    key: "control",
     icon: IconAppWindow,
   },
 ] as const;
@@ -43,14 +42,13 @@ const features = [
 /**
  * 首页功能预览模块（Vibecape 编号卡片风格）。
  * 说明：
- * 1. 6 张卡片对应 Downcity 的真实卖点，每张带编号、图标、标题、描述。
+ * 1. 6 张卡片描述创作者构建 Agent 产品所需的完整能力闭环。
  * 2. 使用 home 命名空间文案，与 features 页面解耦。
  * 3. 1px 细线分隔的网格，hover 背景变化。
  */
 export const HomeFeaturesSection: FC = () => {
   const { i18n } = useTranslation("home");
-  const location = useLocation();
-  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const locale = use_interface_locale();
   const t = i18n.getFixedT(locale, "home");
   const positioning = homepage_positioning[locale];
 

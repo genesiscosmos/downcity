@@ -60,4 +60,4 @@ export function ThemedApplication() {
 }
 ```
 
-`variant` 支持 `neutral`、`zinc`、`slate`、`stone` 和 `blue`，`mode` 支持 `light` 与 `dark`。Dropdown、Select、Popover 与 ContextMenu 的 Portal 会自动挂载到 ThemeContainer 内部，无需额外同步主题。
+`variant` 支持 `neutral`、`zinc`、`slate`、`stone` 和 `blue`，`mode` 支持 `light` 与 `dark`。Dropdown、ContextMenu、Select、Popover、Tooltip、HoverCard、Dialog、AlertDialog、Sheet、Drawer 与 ImagePreview 的浮层都会自动挂载到 ThemeContainer 内部，无需额外同步主题。Showcase 中每个组件使用 Neutral Light、Neutral Dark、Blue Light、Blue Dark 四个 ThemeContainer 对照块验证同一调用在不同环境中的表现。

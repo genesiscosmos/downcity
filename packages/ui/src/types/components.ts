@@ -9,8 +9,109 @@
 import type { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu";
 import type { Select as SelectPrimitive } from "@base-ui/react/select";
 import type { Slider as SliderPrimitive } from "@base-ui/react/slider";
+import type { ToggleGroup as ToggleGroupPrimitive } from "@base-ui/react/toggle-group";
 import type { Command as CommandPrimitive } from "cmdk";
 import type * as React from "react";
+import type { ToasterProps } from "sonner";
+
+/** ToggleGroup 支持的视觉尺寸。 */
+export type DowncityToggleGroupSize = "default" | "sm" | "lg";
+
+/** ToggleGroup 保留的视觉变体；两种变体共享同一套主题表面。 */
+export type DowncityToggleGroupVariant = "default" | "outline";
+
+/** ToggleGroup 属性；组件固定为互斥单选，以支持唯一的移动激活层。 */
+export interface DowncityToggleGroupProps extends Omit<ToggleGroupPrimitive.Props<string>, "multiple"> {
+  /** 根元素引用，用于宿主应用读取布局或控制焦点。 */
+  ref?: React.Ref<HTMLDivElement>;
+  /** 组内项目之间的像素间距，默认无间距。 */
+  spacing?: number;
+  /** 组内项目的统一视觉尺寸。 */
+  size?: DowncityToggleGroupSize;
+  /** 组内项目的统一视觉变体。 */
+  variant?: DowncityToggleGroupVariant;
+}
+
+/** Annotation 支持的语义强度。 */
+export type DowncityAnnotationTone = "note" | "info" | "warning" | "danger";
+
+/** Annotation 注释块属性。 */
+export interface DowncityAnnotationProps extends Omit<React.ComponentPropsWithoutRef<"aside">, "title"> {
+  /** 注释块顶部展示的可选标题。 */
+  title?: React.ReactNode;
+  /** 注释块的语义强度，只影响由主题变量派生的边界与表面。 */
+  tone?: DowncityAnnotationTone;
+}
+
+/** Typography 标题组件属性。 */
+export type DowncityTypographyHeadingProps = React.ComponentPropsWithoutRef<"h1">;
+
+/** Typography 段落组件属性。 */
+export type DowncityTypographyParagraphProps = React.ComponentPropsWithoutRef<"p">;
+
+/** Typography 行内文本组件属性。 */
+export type DowncityTypographySpanProps = React.ComponentPropsWithoutRef<"span">;
+
+/** Typography 引用组件属性。 */
+export type DowncityTypographyBlockquoteProps = React.ComponentPropsWithoutRef<"blockquote">;
+
+/** Typography 无序列表组件属性。 */
+export type DowncityTypographyUnorderedListProps = React.ComponentPropsWithoutRef<"ul">;
+
+/** Typography 有序列表组件属性。 */
+export type DowncityTypographyOrderedListProps = React.ComponentPropsWithoutRef<"ol">;
+
+/** Typography 列表项组件属性。 */
+export type DowncityTypographyListItemProps = React.ComponentPropsWithoutRef<"li">;
+
+/** Typography 行内代码组件属性。 */
+export type DowncityTypographyInlineCodeProps = React.ComponentPropsWithoutRef<"code">;
+
+/** FootnoteReference 正文脚注引用属性。 */
+export interface DowncityFootnoteReferenceProps extends React.ComponentPropsWithoutRef<"a"> {
+  /** 引用展示的脚注序号或短标签。 */
+  label: React.ReactNode;
+}
+
+/** Footnotes 脚注区域属性。 */
+export interface DowncityFootnotesProps extends Omit<React.ComponentPropsWithoutRef<"section">, "title"> {
+  /** 脚注区域的可选标题。 */
+  title?: React.ReactNode;
+}
+
+/** FootnoteItem 单条脚注属性。 */
+export interface DowncityFootnoteItemProps extends React.ComponentPropsWithoutRef<"li"> {
+  /** 返回正文引用位置的可选链接。 */
+  back_href?: string;
+  /** 返回正文链接的无障碍标签。 */
+  back_label?: string;
+}
+
+/** TaskListItem 任务列表项属性。 */
+export interface DowncityTaskListItemProps extends Omit<React.ComponentPropsWithoutRef<"li">, "children"> {
+  /** 当前任务是否完成。 */
+  checked?: boolean;
+  /** 任务项展示的正文内容。 */
+  children: React.ReactNode;
+}
+
+/** DefinitionList 定义列表属性。 */
+export type DowncityDefinitionListProps = React.ComponentPropsWithoutRef<"dl">;
+
+/** DefinitionTerm 定义名称属性。 */
+export type DowncityDefinitionTermProps = React.ComponentPropsWithoutRef<"dt">;
+
+/** DefinitionDescription 定义说明属性。 */
+export type DowncityDefinitionDescriptionProps = React.ComponentPropsWithoutRef<"dd">;
+
+/** ButtonGroup 支持的排列方向。 */
+export type DowncityButtonGroupOrientation = "horizontal" | "vertical";
+
+/** ButtonGroup 组合容器属性。 */
+export interface DowncityButtonGroupProps extends React.ComponentPropsWithoutRef<"div"> {
+  /** 相邻按钮的排列方向。 */
+  orientation?: DowncityButtonGroupOrientation;
+}
 
 /** ThemeContainer 支持的主题预设。 */
 export type DowncityThemeVariant =
@@ -131,10 +232,8 @@ export interface DowncityContextMenuItemProps
   variant?: DowncityContextMenuItemVariant;
 }
 
-/**
- * Toaster 支持的主题模式。
- */
-export type DowncityToasterTheme = "light" | "dark" | "system";
+/** Toaster 属性；实现会忽略 Sonner 的旧 theme 输入并继承 ThemeContainer。 */
+export type DowncityToasterProps = ToasterProps;
 
 /** Select 触发器支持的尺寸。 */
 export type DowncitySelectTriggerSize = "default" | "sm";

@@ -9,12 +9,12 @@
 ## Usage
 
 ```tsx
-import { Toaster } from "@downcity/ui";
+import { ThemeContainer, Toaster } from "@downcity/ui";
 import { toast } from "sonner";
 
 export function App() {
-  return <><button onClick={() => toast.success("Saved")}>Save</button><Toaster theme="light" /></>;
+  return <ThemeContainer variant="neutral" mode="light"><button onClick={() => toast.success("Saved")}>Save</button><Toaster /></ThemeContainer>;
 }
 ```
 
-每个应用根节点只挂载一个 Toaster；调用 `toast` 时宿主需要安装 `sonner`。
+每个应用根节点只挂载一个 Toaster；它与其他组件一样继承 ThemeContainer，不接收独立主题参数。调用 `toast` 时宿主需要安装 `sonner`。

@@ -7,8 +7,12 @@
 
 import { useState, type ReactNode } from "react";
 import {
+  Anchor,
   Badge,
+  Annotation,
+  Blockquote,
   Button,
+  ButtonGroup,
   Card,
   CardAction,
   CardContent,
@@ -40,6 +44,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DefinitionDescription,
+  DefinitionList,
+  DefinitionTerm,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -54,9 +61,16 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
+  Emphasis,
   FormField,
+  FootnoteItem,
+  FootnoteReference,
+  Footnotes,
+  H1,
   H2,
   H3,
+  H4,
+  Hr,
   ImagePreview,
   InfoRow,
   Input,
@@ -70,11 +84,17 @@ import {
   Kbd,
   KbdGroup,
   Label,
+  InlineCode,
+  Lead,
+  ListItem,
   MenuEmpty,
   MenuGroup,
   MenuLabel,
   MenuSeparator,
   MenuSurface,
+  Muted,
+  OrderedList,
+  Paragraph,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -102,11 +122,14 @@ import {
   Skeleton,
   Slider,
   Spinner,
+  Small,
+  Strong,
   Switch,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
+  TaskListItem,
   Textarea,
   Toggle,
   ToggleGroup,
@@ -115,6 +138,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   ThemeContainer,
+  UnorderedList,
   Workboard,
   type DowncityWorkboardBoardSnapshot,
 } from "@downcity/ui";
@@ -206,8 +230,8 @@ function PreviewCanvas({
     <div
       className={
         compact
-          ? `flex min-h-64 ${align === "start" ? "items-start" : "items-center"} justify-center rounded-xl border border-divider p-6`
-          : `flex min-h-[420px] ${align === "start" ? "items-start" : "items-center"} justify-center rounded-xl border border-divider p-6 sm:p-10`
+          ? `flex min-h-64 ${align === "start" ? "items-start" : "items-center"} justify-center p-6`
+          : `flex min-h-[420px] ${align === "start" ? "items-start" : "items-center"} justify-center p-6 sm:p-10`
       }
     >
       <div className="w-full max-w-2xl">{children}</div>
@@ -220,6 +244,103 @@ function ImagePreviewDemo() {
   const [is_open, set_is_open] = useState(false);
   const image_src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='720' height='480' viewBox='0 0 720 480'%3E%3Crect width='720' height='480' fill='%23262626'/%3E%3Cpath d='M0 350 180 170l130 130 110-105 300 245v40H0Z' fill='%23606060'/%3E%3Ccircle cx='555' cy='120' r='45' fill='%23dedede'/%3E%3C/svg%3E";
   return <div className="flex flex-col items-center gap-3"><img className="h-24 w-36 rounded-lg object-cover" src={image_src} alt="Mountain landscape" /><Button onClick={() => set_is_open(true)}>Open image</Button><ImagePreview open={is_open} onOpenChange={set_is_open} src={image_src} alt="Mountain landscape" /></div>;
+}
+
+/** 以完整文章展示 Typography，并允许独立检查明暗主题。 */
+function TypographyArticlePreview() {
+  const [article_mode, set_article_mode] = useState<"light" | "dark">("light");
+
+  return (
+    <ThemeContainer mode={article_mode} variant="neutral" className="overflow-hidden rounded-xl border border-divider">
+      <header className="flex items-center justify-between gap-4 px-5 py-3">
+        <Muted>Typography article</Muted>
+        <ToggleGroup value={[article_mode]} onValueChange={(value) => {
+          const next_mode = value[0];
+          if (next_mode === "light" || next_mode === "dark") set_article_mode(next_mode);
+        }}>
+          <ToggleGroupItem value="light">Light</ToggleGroupItem>
+          <ToggleGroupItem value="dark">Dark</ToggleGroupItem>
+        </ToggleGroup>
+      </header>
+
+      <article className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-10 sm:px-10 sm:py-12">
+        <div className="flex flex-col gap-3">
+          <Muted>Design systems · 8 min read</Muted>
+          <H1>Coherence is a product feature</H1>
+          <Lead>A coherent interface does not ask every component to make its own visual decisions. It gives the whole component tree one shared environment.</Lead>
+        </div>
+
+        <Paragraph>When controls define colors, borders, and interaction states independently, a product slowly becomes a collection of unrelated screens.<FootnoteReference id="reference-1" href="#footnote-1" label="1" /> The individual pieces may look acceptable, but the system no longer communicates a recognizable point of view.</Paragraph>
+
+        <Blockquote>Consistency is not repetition. It is the confidence that the same decision will produce the same visual result wherever it appears.</Blockquote>
+
+        <section className="flex flex-col gap-3">
+          <H2>Start with one source of truth</H2>
+          <Paragraph>A theme boundary should own the environment for the complete component tree. In Downcity UI, <InlineCode>ThemeContainer</InlineCode> provides semantic surfaces, foregrounds, borders, selection colors, and floating layers without requiring theme props on individual components.</Paragraph>
+          <Annotation title="Note">A theme is an environment contract, not a collection of component-specific class names.</Annotation>
+          <CodeBlock
+            language="tsx"
+            label="app-shell.tsx"
+            code={'import { Button, ThemeContainer } from "@downcity/ui";\n\nexport function AppShell() {\n  return (\n    <ThemeContainer variant="neutral" mode="dark">\n      <Button>Open project</Button>\n    </ThemeContainer>\n  );\n}'}
+          />
+          <Annotation title="Implementation note" tone="info">Portal content is mounted inside the same theme boundary, so a menu or dialog receives exactly the environment seen by its trigger.</Annotation>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <H2>Design relationships, not isolated values</H2>
+          <Paragraph>A useful system describes how elements relate to one another. A control surface is quieter than a primary action. A divider is visible enough to explain structure without becoming the structure itself.</Paragraph>
+          <H3>Three practical checks</H3>
+          <OrderedList className="flex flex-col gap-2">
+            <ListItem><Strong>Hierarchy:</Strong> can a reader identify the primary action without reading every label?</ListItem>
+            <ListItem><Strong>Continuity:</Strong> does the same component remain recognizable across light and dark environments?</ListItem>
+            <ListItem><Strong>Restraint:</Strong> can a border, shadow, or color be removed without losing meaning?</ListItem>
+          </OrderedList>
+        </section>
+
+        <Annotation title="A common failure" tone="warning">Wrapping every preview in several decorative surfaces makes it difficult to judge the component itself. One clear boundary is usually enough.</Annotation>
+
+        <section className="flex flex-col gap-3">
+          <H2>Let content prove the system</H2>
+          <Paragraph>A typography layer should be tested as an article, not as a list of font specimens. Headings need paragraphs beneath them; annotations need a reason to interrupt the flow; links should appear inside real sentences.</Paragraph>
+          <UnorderedList className="flex flex-col gap-2">
+            <ListItem>Use <Anchor href="#typography">semantic components</Anchor> instead of page-specific text classes.</ListItem>
+            <ListItem>Keep <Emphasis>emphasis</Emphasis> distinct from <Strong>importance</Strong>.
+              <UnorderedList className="mt-1"><ListItem>Emphasis changes voice.</ListItem><ListItem>Strong marks importance.</ListItem></UnorderedList>
+            </ListItem>
+            <ListItem>Reserve <InlineCode>CodeBlock</InlineCode> for fenced code and use InlineCode within prose.</ListItem>
+          </UnorderedList>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <H3>Operational checklist</H3>
+          <UnorderedList className="flex list-none flex-col gap-2 pl-0">
+            <TaskListItem checked>Define one theme boundary</TaskListItem>
+            <TaskListItem checked>Move floating layers into that boundary</TaskListItem>
+            <TaskListItem>Review the complete article in both modes</TaskListItem>
+          </UnorderedList>
+          <DefinitionList>
+            <DefinitionTerm>Surface</DefinitionTerm><DefinitionDescription>The visual plane occupied by a component.</DefinitionDescription>
+            <DefinitionTerm>State</DefinitionTerm><DefinitionDescription>The visible result of hover, focus, selection, or disabled behavior.</DefinitionDescription>
+            <DefinitionTerm>Boundary</DefinitionTerm><DefinitionDescription>The owner of theme variables and Portal inheritance.</DefinitionDescription>
+          </DefinitionList>
+        </section>
+
+        <Annotation title="Do not bypass the contract" tone="danger">A component with fixed light or dark colors cannot adapt safely when it is moved into another environment.</Annotation>
+
+        <Hr />
+
+        <footer className="flex flex-col gap-2">
+          <H4>The quiet test</H4>
+          <Paragraph>If the article remains calm, readable, and structurally clear in both modes, the typography system is doing its job.</Paragraph>
+          <Small>Written as a live specimen for the Downcity UI theme system.</Small>
+        </footer>
+
+        <Footnotes>
+          <FootnoteItem id="footnote-1" back_href="#reference-1">A recognizable point of view emerges from repeated relationships between surfaces, borders, type, and interaction states.</FootnoteItem>
+        </Footnotes>
+      </article>
+    </ThemeContainer>
+  );
 }
 
 /** 根据当前标识渲染对应组件的交互示例。 */
@@ -250,38 +371,40 @@ function render_component_example(
       return <FoundationPreview component_id={component_id} />;
     case "button":
       return (
-        <PreviewCanvas>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {([
-              { label: "Neutral light", variant: "neutral", mode: "light" },
-              { label: "Neutral dark", variant: "neutral", mode: "dark" },
-              { label: "Blue light", variant: "blue", mode: "light" },
-              { label: "Blue dark", variant: "blue", mode: "dark" },
-            ] as const).map((theme) => (
-              <ThemeContainer key={theme.label} variant={theme.variant} mode={theme.mode} className="rounded-xl p-4">
-                <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {theme.label}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="primary"><PlusIcon />Create</Button>
-                  <Button variant="default"><SearchIcon />Inspect</Button>
-                  <Button variant="outline">Outline</Button>
-                  <Button variant="secondary">Secondary</Button>
-                  <Button variant="ghost" aria-label="Continue"><ArrowRightIcon /></Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger render={<Button variant="outline" aria-label={`${theme.label} actions`} />}>
-                      Actions
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      <DropdownMenuGroup>
-                        <DropdownMenuLabel>Environment</DropdownMenuLabel>
-                        <DropdownMenuItem>Open details</DropdownMenuItem>
-                      </DropdownMenuGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </ThemeContainer>
-            ))}
+        <PreviewCanvas compact>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button variant="primary"><PlusIcon />Create</Button>
+            <Button variant="default"><SearchIcon />Inspect</Button>
+            <Button variant="outline">Outline</Button>
+            <Button variant="secondary">Secondary</Button>
+            <Button variant="ghost" aria-label="Continue"><ArrowRightIcon /></Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="outline" aria-label="Theme actions" />}>
+                Actions
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Environment</DropdownMenuLabel>
+                  <DropdownMenuItem>Open details</DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </PreviewCanvas>
+      );
+    case "button-group":
+      return (
+        <PreviewCanvas compact>
+          <div className="flex flex-col items-center gap-4">
+            <ButtonGroup>
+              <Button variant="outline">Previous</Button>
+              <Button variant="outline">Current</Button>
+              <Button variant="outline">Next</Button>
+            </ButtonGroup>
+            <ButtonGroup>
+              <Button variant="secondary"><SearchIcon />Inspect</Button>
+              <Button variant="primary">Create<ArrowRightIcon /></Button>
+            </ButtonGroup>
           </div>
         </PreviewCanvas>
       );
@@ -299,9 +422,12 @@ function render_component_example(
     case "toggle":
       return (
         <PreviewCanvas compact>
-          <div className="flex flex-col items-center gap-4">
-            <Toggle variant="outline" defaultPressed>Inspect</Toggle>
-            <ToggleGroup variant="outline" defaultValue={["grid"]}>
+          <div className="flex flex-col items-center gap-5">
+            <div className="flex items-center gap-2">
+              <Toggle defaultPressed><SearchIcon />Inspect</Toggle>
+              <Toggle aria-label="Add item"><PlusIcon /></Toggle>
+            </div>
+            <ToggleGroup defaultValue={["grid"]}>
               <ToggleGroupItem value="list">List</ToggleGroupItem>
               <ToggleGroupItem value="grid">Grid</ToggleGroupItem>
               <ToggleGroupItem value="map">Map</ToggleGroupItem>
@@ -403,7 +529,7 @@ function render_component_example(
         </PreviewCanvas>
       );
     case "typography":
-      return <PreviewCanvas compact><div className="mx-auto max-w-lg space-y-3"><H2>Project overview</H2><H3>Release status</H3><p className="text-sm text-muted-foreground">Typography primitives provide stable UI hierarchy without deciding page spacing.</p></div></PreviewCanvas>;
+      return <TypographyArticlePreview />;
     case "tabs":
       return (
         <PreviewCanvas compact>
@@ -491,7 +617,7 @@ function render_component_example(
     case "command":
       return (
         <PreviewCanvas>
-          <Command className="mx-auto max-w-xl border border-border-subtle shadow-sm"><CommandInput placeholder="Search components..." /><CommandList><CommandEmpty>No components found.</CommandEmpty><CommandGroup heading="Components"><CommandItem value="command">Command<CommandShortcut>⌘K</CommandShortcut></CommandItem><CommandItem value="context-menu">Context menu</CommandItem><CommandItem value="empty">Empty state</CommandItem></CommandGroup></CommandList></Command>
+          <Command className="mx-auto max-w-xl border border-border-subtle"><CommandInput placeholder="Search components..." /><CommandList><CommandEmpty>No components found.</CommandEmpty><CommandGroup heading="Components"><CommandItem value="command">Command<CommandShortcut>⌘K</CommandShortcut></CommandItem><CommandItem value="context-menu">Context menu</CommandItem><CommandItem value="empty">Empty state</CommandItem></CommandGroup></CommandList></Command>
         </PreviewCanvas>
       );
     case "toaster":
@@ -516,15 +642,46 @@ export function ComponentDemo({ component_id }: ComponentDemoProps) {
   const [editor_width, set_editor_width] = useState(72);
   const [selected_agent_id, set_selected_agent_id] = useState("ui-builder");
 
+  if (component_id === "typography") {
+    return (
+      <div className="not-prose">
+        {render_component_example(
+          component_id,
+          editor_width,
+          set_editor_width,
+          selected_agent_id,
+          set_selected_agent_id,
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="not-prose">
-      {render_component_example(
-        component_id,
-        editor_width,
-        set_editor_width,
-        selected_agent_id,
-        set_selected_agent_id,
-      )}
+    <div className="not-prose grid gap-3 xl:grid-cols-2">
+      {([
+        { label: "Neutral light", variant: "neutral", mode: "light" },
+        { label: "Neutral dark", variant: "neutral", mode: "dark" },
+        { label: "Blue light", variant: "blue", mode: "light" },
+        { label: "Blue dark", variant: "blue", mode: "dark" },
+      ] as const).map((theme) => (
+        <ThemeContainer
+          key={theme.label}
+          variant={theme.variant}
+          mode={theme.mode}
+          className="overflow-hidden rounded-xl border border-divider"
+        >
+          <div className="border-b border-divider px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {theme.label}
+          </div>
+          {render_component_example(
+            component_id,
+            editor_width,
+            set_editor_width,
+            selected_agent_id,
+            set_selected_agent_id,
+          )}
+        </ThemeContainer>
+      ))}
     </div>
   );
 }

@@ -6,12 +6,10 @@
  */
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import { uiSdkDocsSource } from "@/lib/ui-sdk-docs-source";
-import { Outlet, useLocation, useNavigate } from "react-router";
-import { useEffect } from "react";
+import { Outlet, useLocation } from "react-router";
 import type { Route } from "./+types/layout";
 import type { Root as PageTreeRoot } from "fumadocs-core/page-tree";
 import { i18n } from "@/lib/i18n";
-import i18next from "@/lib/locales";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
@@ -25,26 +23,8 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export default function Layout({ loaderData }: Route.ComponentProps) {
-  const navigate = useNavigate();
   const location = useLocation();
   const { lang } = loaderData;
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedLang = localStorage.getItem("downcity-lang") as "en" | "zh" | null;
-      if (savedLang && i18next.language !== savedLang) {
-        i18next.changeLanguage(savedLang);
-      } else if (i18next.language !== lang) {
-        i18next.changeLanguage(lang);
-        localStorage.setItem("downcity-lang", lang);
-      }
-    }
-
-    if (location.pathname === "/ui-sdk-docs" || location.pathname === "/ui-sdk-docs/") {
-      navigate("/en/ui-sdk-docs", { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   return (
     <DocsLayout

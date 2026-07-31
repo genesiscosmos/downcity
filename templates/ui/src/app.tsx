@@ -109,11 +109,10 @@ export function App() {
           <main className="min-h-full">
             <ThemeContainer variant={theme_id} mode={resolved_color_mode} className="min-h-full">
               <MarkdownDocument document={mdx_document_registry[selected_component_id]} />
+              <Toaster />
             </ThemeContainer>
           </main>
         </div>
-
-        <Toaster theme={resolved_color_mode} />
       </div>
     </TooltipProvider>
   );

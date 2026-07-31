@@ -11,15 +11,22 @@ import {
 import { RootProvider } from "fumadocs-ui/provider/react-router";
 import { I18nextProvider } from "react-i18next";
 import { defineI18nUI } from "fumadocs-ui/i18n";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import type { Route } from "./+types/root";
 import stylesheet from "./app.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { Navbar } from "@/components/sections/navbar";
+import { InterfaceLocaleProvider } from "@/components/providers/InterfaceLocaleProvider";
 import { homepage_positioning } from "@/lib/homepage-positioning";
 import i18next from "@/lib/locales"; // naming conflict with fumadocs i18n
 import { i18n } from "@/lib/i18n";
+import {
+  get_path_interface_locale,
+  interface_locale_bootstrap_script,
+  persist_interface_locale,
+  should_persist_interface_locale,
+} from "@/lib/interface-locale";
 import { create_page_meta, get_path_locale } from "@/lib/seo";
 
 const favicon_version = "20260626";
@@ -86,16 +93,7 @@ export const meta: Route.MetaFunction = ({ location }) => {
 export function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const path = location.pathname;
-
-  // 根据路径判断语言前缀；无前缀路径（如 /）将跟随本地语言偏好。
-  const pathLang: "en" | "zh" =
-    path.includes("/zh/") || path.endsWith("/zh") ? "zh" : "en";
-  const hasLangPrefix =
-    path === "/zh" ||
-    path === "/en" ||
-    path.startsWith("/zh/") ||
-    path.startsWith("/en/");
-  const [lang, setLang] = useState<"en" | "zh">(pathLang);
+  const locale = get_path_interface_locale(path);
 
   // 文档页使用 fumadocs 自身导航，不展示站点全局 Header。
   const isDocsPath =
@@ -160,39 +158,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return () => observer.disconnect();
   }, []);
 
-  // Sync i18n language with localStorage (only on client side)
+  // URL 是当前语言的唯一事实源；i18next 与持久化偏好都只跟随 URL 更新。
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      // 语言优先级：显式路径前缀 > 本地保存偏好 > 路径推导默认值。
-      const savedLang = localStorage.getItem("downcity-lang") as "en" | "zh" | null;
-      const resolvedLang: "en" | "zh" = hasLangPrefix ? pathLang : (savedLang ?? pathLang);
-
-      if (i18next.language !== resolvedLang) {
-        i18next.changeLanguage(resolvedLang);
-      }
-      localStorage.setItem("downcity-lang", resolvedLang);
-      setLang(resolvedLang);
-
-      const handleLanguageChanged = (next: string) => {
-        const normalized: "en" | "zh" = next.startsWith("zh") ? "zh" : "en";
-        setLang(normalized);
-        localStorage.setItem("downcity-lang", normalized);
-        document.documentElement.lang = normalized;
-      };
-
-      i18next.on("languageChanged", handleLanguageChanged);
-      return () => {
-        i18next.off("languageChanged", handleLanguageChanged);
-      };
+    if (i18next.language !== locale) {
+      void i18next.changeLanguage(locale);
     }
-    return undefined;
-  }, [hasLangPrefix, pathLang]);
+
+    if (should_persist_interface_locale(path)) {
+      persist_interface_locale(locale);
+    }
+    document.documentElement.lang = locale;
+  }, [locale, path]);
 
   return (
-    <html lang={lang} suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <head>
         <Meta />
         <Links />
+        <script dangerouslySetInnerHTML={{ __html: interface_locale_bootstrap_script }} />
         <script
           defer
           src="https://vibeloft.ai/telemetry/v1.js"
@@ -201,15 +184,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
         />
       </head>
       <body className="flex min-h-screen flex-col antialiased">
-        <I18nextProvider i18n={i18next}>
-          <RootProvider i18n={provider(lang)}>
-            <div className="relative flex min-h-screen flex-col">
-              <Toaster theme="system" richColors position="top-center" />
-              {showGlobalChrome ? <Navbar /> : null}
-              <div className="relative flex-1">{children}</div>
-            </div>
-          </RootProvider>
-        </I18nextProvider>
+        <InterfaceLocaleProvider locale={locale}>
+          <I18nextProvider i18n={i18next}>
+            <RootProvider i18n={provider(locale)}>
+              <div className="relative flex min-h-screen flex-col">
+                <Toaster theme="system" richColors position="top-center" />
+                {showGlobalChrome ? <Navbar /> : null}
+                <div className="relative flex-1">{children}</div>
+              </div>
+            </RootProvider>
+          </I18nextProvider>
+        </InterfaceLocaleProvider>
         <ScrollRestoration />
         <Scripts />
       </body>

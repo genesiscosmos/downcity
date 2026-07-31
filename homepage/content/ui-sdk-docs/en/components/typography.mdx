@@ -1,8 +1,44 @@
 ---
 title: Typography
-description: Vibecape-aligned text hierarchy primitives
+description: A complete semantic rendering layer for headings, prose, quotes, lists, and annotations
 ---
 
 # Typography
 
-Use `H1` through `H4`, `Anchor`, and `Hr` for shared UI text hierarchy.
+Typography provides a complete set of semantic content components that inherit `ThemeContainer`:
+
+- Headings: `H1`–`H6`
+- Prose: `Paragraph`, `Lead`, `Small`, `Muted`
+- Inline semantics: `Strong`, `Emphasis`, `InlineCode`, `Anchor`
+- Content structure: `Blockquote`, `UnorderedList`, `OrderedList`, `ListItem`, `Hr`
+- Annotation block: `Annotation`
+- Footnotes: `FootnoteReference`, `Footnotes`, `FootnoteItem`
+- Extended lists: `TaskListItem`, `DefinitionList`, `DefinitionTerm`, `DefinitionDescription`
+
+```tsx
+import {
+  Annotation,
+  Blockquote,
+  H2,
+  InlineCode,
+  Paragraph,
+  Strong,
+} from "@downcity/ui";
+
+export function ArticleSection() {
+  return (
+    <section>
+      <H2>Theme boundary</H2>
+      <Paragraph>
+        Use <InlineCode>ThemeContainer</InlineCode> for the complete component tree.
+      </Paragraph>
+      <Blockquote>Individual components do not receive theme props.</Blockquote>
+      <Annotation title="Note" tone="info">
+        <Strong>Portal</Strong> overlays inherit the same theme container.
+      </Annotation>
+    </section>
+  );
+}
+```
+
+`Annotation` uses a low-contrast note card and supports `note`, `info`, `warning`, and `danger`. Every tone uses shared semantic variables rather than fixed brand colors. Stable `id` and `href` values connect references to footnotes, while `FootnoteItem.back_href` provides the return link.

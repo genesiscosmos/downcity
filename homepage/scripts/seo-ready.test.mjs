@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 
 const build_root = new URL("../build/client/", import.meta.url);
 
@@ -23,6 +24,35 @@ function read_home_structured_data(html) {
 
   assert.ok(match, "首页必须输出 Downcity 实体 JSON-LD");
   return JSON.parse(match[1]);
+}
+
+/** 从预渲染 HTML 中读取语言偏好引导脚本。 */
+function read_locale_bootstrap_script(html) {
+  const scripts = Array.from(html.matchAll(/<script>([\s\S]*?)<\/script>/g));
+  const match = scripts.find((entry) => entry[1]?.includes("downcity-locale"));
+
+  assert.ok(match?.[1], "首页必须在 React 渲染前输出语言偏好引导脚本");
+  return match[1];
+}
+
+/** 在隔离上下文中执行构建产物的语言引导脚本。 */
+function run_locale_bootstrap(script, cookie, pathname) {
+  let redirect_target = null;
+  const location = {
+    pathname,
+    search: "?source=test",
+    hash: "#locale",
+    replace(target) {
+      redirect_target = target;
+    },
+  };
+
+  runInNewContext(script, {
+    document: { cookie },
+    window: { location },
+  });
+
+  return redirect_target;
 }
 
 test("sitemap 输出规范 XML 和公开 URL", async () => {
@@ -88,12 +118,42 @@ test("中英文首页预渲染各自的核心定位文案", async () => {
   const chinese_html = await read_build_file("zh/index.html");
 
   assert.match(english_html, /Build worlds where agents live, work, and collaborate\./);
-  assert.match(english_html, /The environment for/);
+  assert.match(english_html, /Organize agents, capabilities, and interfaces/);
+  assert.match(english_html, /into a City\./);
   assert.doesNotMatch(english_html, /创造 Agent 居住、工作与协作的世界。/);
 
   assert.match(chinese_html, /创造 Agent 居住、工作与协作的世界。/);
-  assert.match(chinese_html, /Agentic 产品的/);
+  assert.match(chinese_html, /组织 Agent、能力与界面，/);
+  assert.match(chinese_html, /构建一座 City。/);
   assert.doesNotMatch(chinese_html, /Build worlds where agents live, work, and collaborate\./);
+});
+
+test("首页构建产物包含语言偏好引导且不再依赖旧本地状态", async () => {
+  const english_html = await read_build_file("index.html");
+  const chinese_html = await read_build_file("zh/index.html");
+
+  for (const html of [english_html, chinese_html]) {
+    assert.match(html, /downcity-locale/);
+    assert.match(html, /window\.location\.replace/);
+    assert.doesNotMatch(html, /downcity-lang/);
+  }
+});
+
+test("语言偏好只引导无前缀营销入口且保留查询参数与哈希", async () => {
+  const english_html = await read_build_file("index.html");
+  const script = read_locale_bootstrap_script(english_html);
+
+  assert.equal(
+    run_locale_bootstrap(script, "downcity-locale=zh", "/"),
+    "/zh?source=test#locale",
+  );
+  assert.equal(
+    run_locale_bootstrap(script, "downcity-locale=zh", "/features"),
+    "/zh/features?source=test#locale",
+  );
+  assert.equal(run_locale_bootstrap(script, "downcity-locale=en", "/"), null);
+  assert.equal(run_locale_bootstrap(script, "downcity-locale=zh", "/en/docs"), null);
+  assert.equal(run_locale_bootstrap(script, "downcity-locale=zh", "/zh"), null);
 });
 
 test("中英文首页稳定输出核心产品入口", async () => {

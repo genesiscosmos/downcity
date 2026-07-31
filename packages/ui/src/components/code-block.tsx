@@ -16,8 +16,8 @@ import { cn } from "../lib/utils";
 
 /** 为未经过构建期 Shiki 处理的短代码提供 GitHub Light 风格的轻量语法着色。 */
 function render_fallback_highlight(code: string) {
-  const token_pattern = /(\/\/[^\n]*|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\b(?:import|from|export|return|function|const|let|type|interface|if|else|async|await|true|false|null|undefined)\b|\b\d+(?:\.\d+)?\b)/g;
-  return code.split("\n").map((line, line_index) => <span key={line_index} className="block min-h-5">{line.split(token_pattern).filter(Boolean).map((token, token_index) => <span key={token_index} className={token.startsWith("//") ? "text-[color:var(--code-comment)]" : /^("|'|`)/.test(token) ? "text-[color:var(--code-string)]" : /^(import|from|export|return|function|const|let|type|interface|if|else|async|await|true|false|null|undefined)$/.test(token) ? "text-[color:var(--code-keyword)]" : /^\d/.test(token) ? "text-[color:var(--code-number)]" : undefined}>{token}</span>)}</span>);
+  const token_pattern = /(\/\/[^\n]*|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\b(?:import|from|export|return|function|const|let|type|interface|extends|if|else|async|await|true|false|null|undefined)\b|\b\d+(?:\.\d+)?\b|\b[A-Z][A-Za-z0-9_$]*\b|\b[A-Za-z_$][A-Za-z0-9_$]*(?=\s*\())/g;
+  return code.split("\n").map((line, line_index) => <span key={line_index} className="block min-h-5">{line.split(token_pattern).filter(Boolean).map((token, token_index) => <span key={token_index} className={token.startsWith("//") ? "text-code-comment italic" : /^("|'|`)/.test(token) ? "text-code-string" : /^(import|from|export|return|function|const|let|type|interface|extends|if|else|async|await|true|false|null|undefined)$/.test(token) ? "text-code-keyword" : /^\d/.test(token) ? "text-code-number" : /^[A-Z]/.test(token) ? "text-code-type" : /^[A-Za-z_$]/.test(token) ? "text-code-function" : undefined}>{token}</span>)}</span>);
 }
 
 function CodeBlock({
@@ -44,7 +44,7 @@ function CodeBlock({
   return (
     <div
       data-slot="code-block"
-      className="overflow-hidden rounded-md border border-divider bg-card text-foreground"
+      className="group/code-block overflow-hidden rounded-lg border border-code-border bg-code-background text-code-foreground"
     >
       <div className="relative flex h-9 items-center px-3">
         <span className="truncate font-mono text-[11px] font-medium text-muted-foreground">
@@ -56,7 +56,7 @@ function CodeBlock({
             onClick={() => void copy_code()}
             aria-label={is_copied ? "Copied" : "Copy code"}
             title={is_copied ? "Copied" : "Copy code"}
-            className="absolute top-2 right-2 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground"
+            className="absolute inset-y-1 right-1 inline-flex size-7 items-center justify-center rounded-md text-code-foreground/60 opacity-0 outline-none transition-[color,background-color,opacity] group-hover/code-block:opacity-100 focus-visible:opacity-100 hover:bg-code-foreground/8 hover:text-code-foreground"
           >
             {is_copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
           </button>

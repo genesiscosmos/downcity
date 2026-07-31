@@ -1,8 +1,8 @@
 import type { FC } from "react";
-import { Link, useLocation } from "react-router";
+import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
 import { homepage_positioning } from "@/lib/homepage-positioning";
-import { resolve_interface_locale } from "@/lib/interface-locale";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 import { product } from "@/lib/product";
 
 const GITHUB_URL = "https://github.com/genesiscosmos/downcity";
@@ -17,9 +17,8 @@ const TWITTER_URL = "https://x.com/downcity_ai";
  */
 export const Footer: FC = () => {
   const { i18n } = useTranslation("home");
-  const location = useLocation();
   const currentYear = new Date().getFullYear();
-  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const locale = use_interface_locale();
   const t = i18n.getFixedT(locale, "home");
   const isZh = locale === "zh";
   const positioning = homepage_positioning[locale];

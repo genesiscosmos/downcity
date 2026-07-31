@@ -10,6 +10,7 @@ import AlertDocument from "../content/components/alert.mdx";
 import AlertDialogDocument from "../content/components/alert-dialog.mdx";
 import AvatarDocument from "../content/components/avatar.mdx";
 import ButtonDocument from "../content/components/button.mdx";
+import ButtonGroupDocument from "../content/components/button-group.mdx";
 import CardDocument from "../content/components/card.mdx";
 import CheckboxDocument from "../content/components/checkbox.mdx";
 import CodeBlockDocument from "../content/components/code-block.mdx";
@@ -62,6 +63,7 @@ export const mdx_document_registry: Record<ShowcaseComponentId, MdxDocumentCompo
   avatar: AvatarDocument,
   badge: BadgeDocument,
   button: ButtonDocument,
+  "button-group": ButtonGroupDocument,
   card: CardDocument,
   checkbox: CheckboxDocument,
   "code-block": CodeBlockDocument,

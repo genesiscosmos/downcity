@@ -1,8 +1,44 @@
 ---
 title: Typography
-description: 与 Vibecape 对齐的文本层级原语
+description: 标题、正文、引用、列表与注释的完整语义渲染层
 ---
 
 # Typography
 
-使用 `H1` 到 `H4`、`Anchor` 和 `Hr` 建立统一的 UI 文本层级。
+Typography 提供完整的内容语义组件，并统一继承 `ThemeContainer`：
+
+- 标题：`H1`–`H6`
+- 正文：`Paragraph`、`Lead`、`Small`、`Muted`
+- 行内语义：`Strong`、`Emphasis`、`InlineCode`、`Anchor`
+- 内容结构：`Blockquote`、`UnorderedList`、`OrderedList`、`ListItem`、`Hr`
+- 注释块：`Annotation`
+- 脚注：`FootnoteReference`、`Footnotes`、`FootnoteItem`
+- 扩展列表：`TaskListItem`、`DefinitionList`、`DefinitionTerm`、`DefinitionDescription`
+
+```tsx
+import {
+  Annotation,
+  Blockquote,
+  H2,
+  InlineCode,
+  Paragraph,
+  Strong,
+} from "@downcity/ui";
+
+export function ArticleSection() {
+  return (
+    <section>
+      <H2>主题边界</H2>
+      <Paragraph>
+        使用 <InlineCode>ThemeContainer</InlineCode> 为整棵组件树提供主题。
+      </Paragraph>
+      <Blockquote>具体组件不需要接收主题参数。</Blockquote>
+      <Annotation title="注意" tone="info">
+        <Strong>Portal</Strong> 浮层也会继承同一个主题容器。
+      </Annotation>
+    </section>
+  );
+}
+```
+
+`Annotation` 采用低对比注释卡片，支持 `note`、`info`、`warning` 和 `danger`。这些 tone 只使用共享语义变量，不创建固定品牌色。脚注引用与脚注条目通过稳定的 `id` 和 `href` 关联，返回链接由 `FootnoteItem.back_href` 提供。

@@ -46,55 +46,55 @@
     }
   },
   "features": {
-    "sectionLabel": "Capabilities",
+    "sectionLabel": "Features",
     "cards": {
-      "repo": {
-        "title": "Repo-native boundary",
-        "description": "Every agent runs inside a real repository or folder. Skills are versioned, management config lives in one global DB, and runtime data stays in .downcity/."
+      "workspace": {
+        "title": "Define the agent's workspace",
+        "description": "Set the boundaries for files, tools, and permissions so the agent knows where it works, what it can do, and where its output belongs."
       },
-      "runtime": {
-        "title": "Reusable runtime layer",
-        "description": "Models, tools, tasks, memory, and services are configured once and reused across CLI, SDK, Console, and browser surfaces."
+      "session": {
+        "title": "Keep work continuous",
+        "description": "Sessions preserve conversations, tool calls, task state, and results so agents can continue from existing context."
       },
-      "plugins": {
-        "title": "Plugin-native capabilities",
-        "description": "Chat, Task, Memory, Shell, Web, Skill, Schedule, and Contact are all unified plugins that extend the agent without forking the core."
+      "actions": {
+        "title": "Give agents the ability to act",
+        "description": "Use tools, skills, and plugins so agents can search, write, execute, record, and connect to the services a product needs."
       },
-      "city": {
-        "title": "City-shared backend",
-        "description": "Federation centralizes models, services, auth, and usage. Multiple Cities define product boundaries with distinct city IDs while their agents share the same runtime capabilities."
+      "continuity": {
+        "title": "Keep work moving",
+        "description": "Use tasks, memory, and schedules so agents can follow up, check progress, and complete long-running work beyond a single conversation."
       },
-      "ops": {
-        "title": "Operable agents",
-        "description": "Run agents as managed daemons. Inspect status, review history, schedule tasks, and approve sensitive actions through CLI or Console."
+      "collaboration": {
+        "title": "Organize agents by role",
+        "description": "Configure agents with different roles inside one City. They share a product boundary and services while handling creation, analysis, review, or operations."
       },
-      "surface": {
-        "title": "Multi-surface deployment",
-        "description": "Embed the same runtime into local CLI workflows, Node servers, Edge runtimes, or host applications with the Agent SDK and UI SDK."
+      "control": {
+        "title": "Connect interfaces and stay in control",
+        "description": "Interact through CLI, Console, SDKs, or product interfaces while inspecting status, approving actions, and managing the runtime."
       }
     }
   },
   "architecture": {
     "sectionLabel": "Architecture",
-    "title": "Creators build Cities. Users run them. Federation powers them.",
-    "description": "A creator sets up shared services in Federation and ships a product as a City with its agents. The user runs that City locally and connects it back to Federation when shared capabilities are needed.",
-    "diagramLabel": "A creator sets up Federation and offers a City with agents to a user. The user runs the City on their computer and connects it to Federation for shared services.",
+    "title": "Products run in the user's environment. Federation provides shared capabilities.",
+    "description": "A creator organizes agent roles, tools, skills, and product interfaces into a City. The City runs on the user's computer or server and stores sessions, tasks, and work artifacts. When an agent needs models, accounts, usage, or other shared services, it connects to Federation.",
+    "diagramLabel": "The creator designs the product and agents. The City runs and stores work data in the user's environment, connecting to Federation for models, authentication, service routing, and usage management.",
     "creator": "Creator",
-    "creatorCaption": "Builds agent products",
-    "creatorLabel": "Creator who sets up Federation and offers a product City with agents",
+    "creatorCaption": "Designs products and agents",
+    "creatorLabel": "Creator who designs the product, agent roles, and ways of working",
     "user": "User",
-    "userEnvironment": "User's Terminal / Computer",
-    "userEnvironmentLabel": "The user's computer contains a product City and its agents",
-    "productCity": "Product = City",
-    "productBoundary": "Product boundary",
+    "userEnvironment": "User's environment",
+    "userEnvironmentLabel": "The user's computer or server runs the City and stores sessions, tasks, and work artifacts",
+    "productCity": "City",
+    "productBoundary": "Product, agents, and runtime data",
     "agentsInCity": "Agents live and work here",
     "localRuntime": "Local runtime",
     "memoryAndTools": "Memory and tools",
     "userControl": "User control",
     "federation": "Federation",
-    "federationCaption": "Shared service foundation",
-    "federationLabel": "Federation provides shared models, services, authentication, and usage",
-    "mobileCaption": "One product is one City. Its agents run with the user and connect to Federation.",
+    "federationCaption": "Models and shared services",
+    "federationLabel": "Federation provides models, authentication, service routing, and usage management",
+    "mobileCaption": "A City runs in the user's environment and connects to Federation when it needs shared capabilities.",
     "paths": {
       "setup": "sets up services",
       "offer": "offers City + Agents",
@@ -108,51 +108,59 @@
       "usage": "Usage"
     }
   },
-  "philosophy": {
-    "sectionLabel": "Philosophy",
-    "title": "Runtime, not framework.",
-    "description": "Downcity does not replace your stack. It gives agents a stable place to run, remember, and act—while products, tools, and humans stay in control.",
-    "items": {
-      "runtime": {
-        "title": "Runtime as the reusable layer",
-        "description": "Stop rebuilding model routing, auth, usage, and billing for every product. Configure them once in City and ship many surfaces."
-      },
-      "repo": {
-        "title": "Repo as the execution boundary",
-        "description": "Agent behavior is grounded in the repository. Prompts, permissions, and artifacts travel with the code, not a distant platform."
-      },
-      "city": {
-        "title": "City pays for the boring backend",
-        "description": "Let City own accounts, balance, payment, model catalogs, and service routing so your product can focus on user experience."
-      }
+  "productWorld": {
+    "sectionLabel": "Product world",
+    "title": "When agents begin to work, the world takes shape.",
+    "description": "A role gathers capabilities and claims a place to work. More agents and product structures join, the City expands, and Cities connect through Federation.",
+    "scrollHint": "Keep scrolling",
+    "story": {
+      "awaken": "A task arrives. A role awakens.",
+      "gather": "Everything it needs begins to gather.",
+      "settle": "Work leaves a trace—and claims its first piece of ground.",
+      "expand": "New roles move in. The City grows through collaboration.",
+      "connect": "Distant Cities light up. The world begins to connect."
+    },
+    "labels": {
+      "agent": "Agent",
+      "city": "City",
+      "federation": "Federation",
+      "tool": "Tool",
+      "skill": "Skill",
+      "memory": "Memory",
+      "task": "Task",
+      "service": "Service",
+      "model": "Model"
     }
   },
   "useCases": {
     "sectionLabel": "Product shapes",
-    "title": "One runtime. Many surfaces.",
-    "description": "The same Downcity backend can power very different product experiences.",
+    "title": "Build a City around the work.",
+    "description": "Organize agents, capabilities, and product interfaces around a clear field of work, turning each City into a product that keeps running.",
     "cases": {
-      "cli": {
-        "title": "CLI productivity tool",
-        "description": "A repo-local agent that summarizes code, runs tests, and manages tasks from the terminal."
+      "software": {
+        "title": "Software creation City",
+        "description": "Agents take on development, review, testing, and release roles to move software from idea to delivery."
       },
-      "browser": {
-        "title": "Browser extension agent",
-        "description": "An agent that reads the current page, takes notes, and acts on behalf of the user through web tools."
+      "research": {
+        "title": "Research and knowledge City",
+        "description": "Agents continuously gather information, analyze material, organize knowledge, and turn research into useful outcomes."
       },
-      "sdk": {
-        "title": "Embedded SDK workflow",
-        "description": "Drop the Agent SDK into an existing app to add long-running sessions, memory, and plugin-driven actions."
+      "operations": {
+        "title": "Team operations City",
+        "description": "Agents handle monitoring, support, coordination, and recurring work to keep teams running smoothly."
       },
-      "backend": {
-        "title": "Multi-tenant product backend",
-        "description": "Use City to share auth, usage, and billing across customer-facing agents deployed on Node or Edge."
+      "personal": {
+        "title": "Personal work City",
+        "description": "Agents are organized around a person's files, tools, and daily workflows while the user controls data and runtime."
       }
     }
   },
   "cta": {
-    "title": "Start building with Downcity",
-    "description": "Install the CLI, create your first agent project, and connect to City in minutes.",
+    "title": "Create a City. Put agents to work.",
+    "description": "Install Downcity, create an agent product, and start its runtime.",
+    "codeLabel": "Create and start",
+    "copyCode": "Copy commands",
+    "copiedCode": "Copied",
     "install": "Choose your system",
     "start": "Quick Start",
     "github": "Star on GitHub"

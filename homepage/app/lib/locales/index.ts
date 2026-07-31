@@ -95,12 +95,3 @@ i18n.use(initReactI18next).init({
 
 export { I18nextProvider };
 export default i18n;
-
-// Language setter
-export const setLang = (language: "en" | "zh") => {
-  i18n.changeLanguage(language);
-  // Save to localStorage for persistence (no URL redirect needed)
-  if (typeof window !== "undefined") {
-    localStorage.setItem("downcity-lang", language);
-  }
-};

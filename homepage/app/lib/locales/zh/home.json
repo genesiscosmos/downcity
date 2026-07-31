@@ -46,55 +46,55 @@
     }
   },
   "features": {
-    "sectionLabel": "核心能力",
+    "sectionLabel": "功能特性",
     "cards": {
-      "repo": {
-        "title": "仓库原生边界",
-        "description": "每个 Agent 都在真实仓库或文件夹边界内运行。Skills 可进入版本控制，管理配置统一进入全局 DB，运行数据留在 .downcity/。"
+      "workspace": {
+        "title": "定义 Agent 的工作空间",
+        "description": "为 Agent 指定文件、工具与权限边界，让它知道在哪里工作、可以执行什么，以及产物应该保存在哪里。"
       },
-      "runtime": {
-        "title": "可复用运行层",
-        "description": "模型、工具、任务、记忆与服务只需配置一次，即可在 CLI、SDK、Console 与浏览器入口之间复用。"
+      "session": {
+        "title": "保持工作的连续性",
+        "description": "Session 保存对话、工具调用、任务状态与执行结果，让 Agent 可以沿着已有上下文继续工作。"
       },
-      "plugins": {
-        "title": "插件化能力",
-        "description": "Chat、Task、Memory、Shell、Web、Skill、Schedule、Contact 等能力统一为 Plugin，无需分叉核心即可扩展 Agent。"
+      "actions": {
+        "title": "赋予 Agent 行动能力",
+        "description": "通过 Tool、Skill 与 Plugin，让 Agent 能够搜索、编写、执行、记录，并连接产品需要的外部服务。"
       },
-      "city": {
-        "title": "City 共享后端",
-        "description": "Federation 集中承载模型、服务、鉴权与用量；多个 City 以独立 city_id 形成产品边界，并让各自的 Agent 共享这些能力。"
+      "continuity": {
+        "title": "让工作持续发生",
+        "description": "使用任务、记忆与调度能力，让 Agent 在一次对话结束后继续跟进、检查并完成长期工作。"
       },
-      "ops": {
-        "title": "可运营 Agent",
-        "description": "将 Agent 作为托管 daemon 运行。通过 CLI 或 Console 检查状态、回顾历史、调度任务、审批敏感操作。"
+      "collaboration": {
+        "title": "组织多个 Agent 分工",
+        "description": "在一座 City 中配置不同角色的 Agent，共享产品边界与服务，分别承担创建、分析、审查或运营任务。"
       },
-      "surface": {
-        "title": "多产品表面部署",
-        "description": "同一套运行层可嵌入本地 CLI 工作流、Node 服务端、Edge 运行环境，或通过 Agent SDK 与 UI SDK 接入宿主应用。"
+      "control": {
+        "title": "连接界面并保持控制",
+        "description": "通过 CLI、Console、SDK 或产品界面与 Agent 交互，同时查看状态、审批操作并管理运行过程。"
       }
     }
   },
   "architecture": {
     "sectionLabel": "架构",
-    "title": "Creator 构建 City，用户运行 City，Federation 提供能力。",
-    "description": "Creator 在 Federation 中配置共享服务，并将产品作为一座带有 Agent 的 City 交付给用户。用户在本地运行这座 City，并在需要时连接 Federation 使用共享能力。",
-    "diagramLabel": "Creator 建立 Federation 并向用户提供带有 Agent 的 City。用户在自己的电脑中运行 City，并连接 Federation 使用共享服务。",
+    "title": "产品运行在用户的环境里，共享能力来自 Federation。",
+    "description": "Creator 把 Agent 的角色、工具、技能和产品界面组织成一座 City。City 在用户的电脑或服务器上运行，并保存会话、任务和工作产物；当 Agent 需要模型、账号、用量或其他共享服务时，再连接 Federation。",
+    "diagramLabel": "Creator 设计产品与 Agent。City 在用户环境中运行并保存工作数据，需要模型、鉴权、服务路由或用量管理时连接 Federation。",
     "creator": "Creator",
-    "creatorCaption": "构建 Agent 产品",
-    "creatorLabel": "建立 Federation 并提供带有 Agent 的产品 City 的 Creator",
+    "creatorCaption": "设计产品与 Agent",
+    "creatorLabel": "设计产品、Agent 角色与工作方式的 Creator",
     "user": "用户",
-    "userEnvironment": "用户的终端 / 电脑",
-    "userEnvironmentLabel": "用户的电脑中运行产品 City 与其中的 Agent",
-    "productCity": "产品 = City",
-    "productBoundary": "产品边界",
+    "userEnvironment": "用户的运行环境",
+    "userEnvironmentLabel": "用户的电脑或服务器运行 City，并保存会话、任务与工作产物",
+    "productCity": "City",
+    "productBoundary": "产品、Agent 与运行数据",
     "agentsInCity": "Agent 在这里入驻与工作",
     "localRuntime": "本地运行时",
     "memoryAndTools": "记忆与工具",
     "userControl": "用户控制",
     "federation": "Federation",
-    "federationCaption": "共享服务基础层",
-    "federationLabel": "Federation 提供共享的模型、服务、鉴权与用量能力",
-    "mobileCaption": "一个产品就是一座 City；Agent 随用户运行，并连接 Federation。",
+    "federationCaption": "模型与共享服务",
+    "federationLabel": "Federation 提供模型、鉴权、服务路由与用量管理",
+    "mobileCaption": "City 在用户环境中运行，需要共享能力时连接 Federation。",
     "paths": {
       "setup": "配置共享服务",
       "offer": "提供 City + Agent",
@@ -108,51 +108,59 @@
       "usage": "用量"
     }
   },
-  "philosophy": {
-    "sectionLabel": "产品哲学",
-    "title": "运行层，而非框架。",
-    "description": "Downcity 不是要替代你的技术栈，而是给 Agent 一个稳定的运行、记忆与行动场所，同时让产品、工具和人保持控制。",
-    "items": {
-      "runtime": {
-        "title": "运行层作为可复用层",
-        "description": "不用再为每个产品重复搭建模型路由、鉴权、用量与计费。在 City 中配置一次，即可支撑多个产品表面。"
-      },
-      "repo": {
-        "title": "仓库作为执行边界",
-        "description": "Agent 行为扎根于仓库。提示词、权限与产物随代码一起移动，而不是锁在某个遥远的平台里。"
-      },
-      "city": {
-        "title": "City 承担重复后端",
-        "description": "让 City 管理账户、余额、支付、模型目录与服务路由，你的产品只需专注于用户体验。"
-      }
+  "productWorld": {
+    "sectionLabel": "产品世界",
+    "title": "当 Agent 开始工作，世界便有了形状。",
+    "description": "角色获得能力，在持续工作中形成自己的地块；更多 Agent 与产品结构加入，City 随之扩张，并最终连接到 Federation。",
+    "scrollHint": "继续滚动",
+    "story": {
+      "awaken": "任务来到，一个角色被唤醒。",
+      "gather": "完成它所需要的一切，开始向这里汇聚。",
+      "settle": "工作留下痕迹，也划出第一块地。",
+      "expand": "新的角色陆续迁入，City 沿着协作生长。",
+      "connect": "远方的 City 逐一亮起，世界开始连接。"
+    },
+    "labels": {
+      "agent": "Agent",
+      "city": "City",
+      "federation": "Federation",
+      "tool": "Tool",
+      "skill": "Skill",
+      "memory": "Memory",
+      "task": "Task",
+      "service": "Service",
+      "model": "Model"
     }
   },
   "useCases": {
     "sectionLabel": "产品形态",
-    "title": "一套运行层，多种产品表面。",
-    "description": "同一套 Downcity 后端可以支撑截然不同的产品体验。",
+    "title": "为一种工作，建造一座 City。",
+    "description": "围绕明确的工作场景组织 Agent、能力与产品界面，让每座 City 成为可以持续运行的产品。",
     "cases": {
-      "cli": {
-        "title": "CLI 效率工具",
-        "description": "仓库本地的 Agent，可在终端总结代码、运行测试、管理任务。"
+      "software": {
+        "title": "软件创造 City",
+        "description": "让不同 Agent 承担开发、审查、测试与发布工作，共同推进软件从想法走向交付。"
       },
-      "browser": {
-        "title": "浏览器扩展 Agent",
-        "description": "读取当前页面、记录笔记，并通过 Web 工具代表用户执行操作。"
+      "research": {
+        "title": "研究与知识 City",
+        "description": "让 Agent 持续收集信息、分析材料、组织知识，并把研究转化为可用成果。"
       },
-      "sdk": {
-        "title": "嵌入式 SDK 工作流",
-        "description": "将 Agent SDK 接入现有应用，获得长会话、记忆与插件驱动的行动能力。"
+      "operations": {
+        "title": "团队运营 City",
+        "description": "让 Agent 负责监控、支持、任务协调与周期性工作，帮助团队保持稳定运转。"
       },
-      "backend": {
-        "title": "多租户产品后端",
-        "description": "借助 City 在 Node 或 Edge 上共享鉴权、用量与计费，支撑面向客户的 Agent。"
+      "personal": {
+        "title": "个人工作 City",
+        "description": "围绕个人的文件、工具与日常流程组织 Agent，并由用户掌握数据和运行控制权。"
       }
     }
   },
   "cta": {
-    "title": "开始使用 Downcity",
-    "description": "安装 CLI、创建第一个 Agent 项目、连接 City，只需几分钟。",
+    "title": "创建一座 City，让 Agent 开始工作。",
+    "description": "安装 Downcity，创建 Agent 产品并启动它的运行环境。",
+    "codeLabel": "创建并启动",
+    "copyCode": "复制命令",
+    "copiedCode": "已复制",
     "install": "选择你的系统",
     "start": "快速开始",
     "github": "在 GitHub 上 Star"

@@ -36,13 +36,13 @@ function SelectTrigger({
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "inline-flex min-w-36 items-center justify-between gap-1.5 rounded-lg border border-transparent bg-control-surface px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-control-hover focus:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-8 data-[size=sm]:h-6 data-[size=sm]:px-2 data-[size=sm]:text-xs [&_svg]:size-5",
+        "inline-flex min-w-36 items-center justify-between gap-1.5 rounded-lg border border-transparent bg-control-surface px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-control-hover hover:text-foreground focus:bg-control-hover focus:text-foreground disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-8 data-[size=sm]:h-6 data-[size=sm]:px-2 data-[size=sm]:text-xs [&_svg]:size-5",
         className,
       )}
       {...props}
     >
       {children}
-      <SelectPrimitive.Icon className="shrink-0 text-muted-foreground">
+      <SelectPrimitive.Icon className="shrink-0 text-current opacity-60">
         <ChevronDownIcon />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
@@ -122,7 +122,7 @@ function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex w-full cursor-default select-none items-center gap-2.5 rounded-floating-item py-1.5 pr-2 pl-7 text-xs text-foreground outline-none transition-all duration-100 data-highlighted:bg-interaction-hover data-highlighted:text-foreground data-selected:bg-interaction-selected data-selected:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
+        "group/select-item relative flex w-full cursor-default select-none items-center gap-2.5 rounded-floating-item py-1.5 pr-2 pl-7 text-xs text-foreground outline-none transition-colors duration-100 data-highlighted:bg-interaction-hover data-highlighted:text-foreground data-selected:bg-interaction-selected data-selected:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
         description && "items-start",
         className,
       )}

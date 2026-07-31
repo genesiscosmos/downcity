@@ -1,13 +1,22 @@
 # Typography
 
-提供与 Vibecape 一致的标题、链接与分隔线排版原语。
+提供完整的文章渲染层，包括六级标题、正文层级、引用、Annotation、脚注、任务列表、嵌套列表、定义列表和行内代码。
 
 <ComponentDemo component_id="typography" />
 
 ## Usage
 
 ```tsx
-import { H2, Anchor } from "@downcity/ui";
+import { Annotation, Blockquote, H2, Paragraph } from "@downcity/ui";
 
-<H2>Project overview</H2>
+export function Content() {
+  return (
+    <>
+      <H2>Project overview</H2>
+      <Paragraph>Stable semantic hierarchy for product content.</Paragraph>
+      <Blockquote>Structure should remain predictable.</Blockquote>
+      <Annotation title="Note">ThemeContainer supplies the complete visual context.</Annotation>
+    </>
+  );
+}
 ```

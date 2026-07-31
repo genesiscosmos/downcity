@@ -5,7 +5,8 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { useTheme } from "fumadocs-ui/provider/base";
-import { create_interface_locale_path, resolve_interface_locale } from "@/lib/interface-locale";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
+import { create_interface_locale_path, persist_interface_locale } from "@/lib/interface-locale";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,13 +64,12 @@ export function Navbar() {
   const { i18n } = useTranslation("common");
   const location = useLocation();
   const navigate = useNavigate();
-  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const locale = use_interface_locale();
   const t = i18n.getFixedT(locale, "common");
   const isZh = locale === "zh";
 
   const change_language = (next_locale: "en" | "zh") => {
-    void i18n.changeLanguage(next_locale);
-    localStorage.setItem("downcity-lang", next_locale);
+    persist_interface_locale(next_locale);
     const next_path = create_interface_locale_path(location.pathname, next_locale);
 
     if (next_path !== location.pathname) {

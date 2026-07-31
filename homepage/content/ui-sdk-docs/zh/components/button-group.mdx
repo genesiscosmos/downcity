@@ -1,0 +1,24 @@
+---
+title: ButtonGroup
+description: 组合相关按钮并统一相邻边界
+---
+
+# ButtonGroup
+
+`ButtonGroup` 只负责相关按钮的排列、边界合并与首尾圆角。每个 `Button` 继续通过自己的 `variant` 表达操作层级。
+
+```tsx
+import { Button, ButtonGroup } from "@downcity/ui";
+
+export function PaginationActions() {
+  return (
+    <ButtonGroup>
+      <Button variant="outline">上一页</Button>
+      <Button variant="outline">当前页</Button>
+      <Button variant="outline">下一页</Button>
+    </ButtonGroup>
+  );
+}
+```
+
+`orientation` 支持 `horizontal` 和 `vertical`，默认是 `horizontal`。

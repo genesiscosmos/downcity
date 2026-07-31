@@ -1,27 +1,25 @@
 import type { FC } from "react";
-import { useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
-import { IconTerminal2, IconBrowser, IconCode, IconBuildingSkyscraper } from "@tabler/icons-react";
-import { resolve_interface_locale } from "@/lib/interface-locale";
+import { IconCode, IconMicroscope, IconActivity, IconUser } from "@tabler/icons-react";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 
 const cases = [
-  { key: "cli", icon: IconTerminal2 },
-  { key: "browser", icon: IconBrowser },
-  { key: "sdk", icon: IconCode },
-  { key: "backend", icon: IconBuildingSkyscraper },
+  { key: "software", icon: IconCode },
+  { key: "research", icon: IconMicroscope },
+  { key: "operations", icon: IconActivity },
+  { key: "personal", icon: IconUser },
 ] as const;
 
 /**
  * 首页产品形态模块。
  * 说明：
- * 1. 展示同一套 Downcity 后端可以支撑的四种产品表面。
+ * 1. 展示创作者可以用 Downcity 构建的四类 Agent 产品。
  * 2. 使用 home 命名空间文案。
  * 3. 两列编号卡片，与 Features 区块保持同构。
  */
 export const HomeUseCasesSection: FC = () => {
   const { i18n } = useTranslation("home");
-  const location = useLocation();
-  const locale = resolve_interface_locale(location.pathname, i18n.resolvedLanguage ?? i18n.language);
+  const locale = use_interface_locale();
   const t = i18n.getFixedT(locale, "home");
 
   return (

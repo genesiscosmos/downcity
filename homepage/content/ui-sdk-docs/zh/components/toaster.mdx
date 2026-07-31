@@ -10,7 +10,7 @@ description: 用于全局通知展示，视觉层基于 sonner 封装
 ## 导入
 
 ```tsx
-import { Toaster } from "@downcity/ui";
+import { ThemeContainer, Toaster } from "@downcity/ui";
 import { toast } from "sonner";
 ```
 
@@ -21,13 +21,15 @@ import { Toaster } from "@downcity/ui";
 
 export function AppShell() {
   return (
-    <>
-      <Toaster theme="light" position="top-center" richColors />
+    <ThemeContainer variant="neutral" mode="light">
+      <Toaster position="top-center" richColors />
       <main>...</main>
-    </>
+    </ThemeContainer>
   );
 }
 ```
+
+`Toaster` 不接收独立主题参数，通知样式与其他组件一样继承 `ThemeContainer`。
 
 ## 触发通知
 

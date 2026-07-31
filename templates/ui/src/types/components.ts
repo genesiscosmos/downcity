@@ -7,6 +7,7 @@
 /** 展示页支持选择的组件标识。 */
 export type ShowcaseComponentId =
   | "button"
+  | "button-group"
   | "badge"
   | "toggle"
   | "spinner"

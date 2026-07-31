@@ -14,9 +14,11 @@ import { createPortal } from "react-dom";
 
 import { cn } from "../lib/utils";
 import type { DowncityImagePreviewProps } from "../types/components";
+import { use_theme_portal_container } from "./theme-container";
 
 function ImagePreview({ open, onOpenChange, src, alt = "", className }: DowncityImagePreviewProps) {
   const [mounted, set_mounted] = useState(false);
+  const theme_container = use_theme_portal_container();
 
   useEffect(() => {
     set_mounted(true);
@@ -35,11 +37,11 @@ function ImagePreview({ open, onOpenChange, src, alt = "", className }: Downcity
 
   return createPortal(
     <div className={cn("fixed inset-0 z-[9999] flex items-center justify-center", className)} role="dialog" aria-modal="true" aria-label={alt || "Image preview"}>
-      <button type="button" aria-label="Close image preview" className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={() => onOpenChange(false)} />
-      <button type="button" aria-label="Close" className="absolute top-4 right-4 z-10 p-2 text-white/60 transition-colors hover:text-white" onClick={() => onOpenChange(false)}><XIcon className="size-5" /></button>
+      <button type="button" aria-label="Close image preview" className="absolute inset-0 bg-overlay" onClick={() => onOpenChange(false)} />
+      <button type="button" aria-label="Close" className="absolute top-4 right-4 z-10 p-2 text-floating-foreground/60 transition-colors hover:text-floating-foreground" onClick={() => onOpenChange(false)}><XIcon className="size-5" /></button>
       <img src={src} alt={alt} draggable={false} className="relative z-10 max-h-[90vh] max-w-[90vw] select-none object-contain" />
     </div>,
-    document.body,
+    theme_container?.current ?? document.body,
   );
 }
 
