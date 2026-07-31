@@ -17,7 +17,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-primary text-primary-foreground hover:bg-primary/85",
+        primary: "bg-primary/90 text-primary-foreground/80 hover:bg-primary hover:text-primary-foreground data-[popup-open]:bg-primary data-[popup-open]:text-primary-foreground data-[state=open]:bg-primary data-[state=open]:text-primary-foreground [&_svg]:text-primary-foreground",
         default: "bg-transparent text-muted-foreground hover:bg-interaction-hover hover:text-foreground data-[popup-open]:bg-interaction-selected data-[state=open]:bg-interaction-selected",
         outline: "border-divider bg-transparent text-foreground hover:bg-interaction-hover",
         secondary: "bg-control-surface text-foreground hover:bg-control-hover",
