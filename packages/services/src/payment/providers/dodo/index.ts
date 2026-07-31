@@ -9,18 +9,16 @@
 import {
   normalizeCurrency,
   normalizeOptionalText,
-  normalizeRequired,
   paymentMethodItem,
-  randomId,
 } from "../../helpers.js";
 import type { DodoPaymentProviderOptions, PaymentProvider } from "../../types.js";
 import {
   createDodoCheckoutSession,
   createDodoClient,
   normalizeDodoEnvironment,
-  parseDodoWebhookEvent,
-  readMetadata,
+  unwrap_dodo_webhook,
 } from "./client.js";
+import type { DodoPaymentWebhookEvent, DodoWebhookEvent } from "./types.js";
 
 /**
  * 创建 Dodo Payments provider。
@@ -86,39 +84,46 @@ export function dodoPaymentProvider(options: DodoPaymentProviderOptions = {}): P
         environment: normalizeDodoEnvironment(input.ctx.env("DODO_ENVIRONMENT") || options.environment),
         api_base_url: options.api_base_url ?? input.ctx.env("DODO_API_BASE_URL"),
       });
-      const event = parseDodoWebhookEvent({
+      const verified_webhook = unwrap_dodo_webhook({
         client,
         raw: input.raw,
         headers: input.request.headers,
-        verify: true,
       });
-      const object = readMetadata(event.data || event.object);
-      const metadata = readMetadata(object.metadata);
-      const type = normalizeOptionalText(event.type) || normalizeOptionalText(event.eventType) || "unknown";
-      const provider_payment_id = normalizeOptionalText(object.payment_id) || normalizeOptionalText(object.id);
-      const checkout_session_id = normalizeOptionalText(object.checkout_session_id);
+      const event = verified_webhook.event;
+      const payment_event = is_dodo_payment_event(event) ? event : undefined;
+      const type = event.type;
+      const provider_payment_id = normalizeOptionalText(payment_event?.data.payment_id);
+      const checkout_session_id = normalizeOptionalText(payment_event?.data.checkout_session_id);
       return {
-        event_id: normalizeRequired(event.id || event.event_id || provider_payment_id || `evt_${randomId()}`, "dodo event id"),
+        event_id: verified_webhook.webhook_id,
         type,
-        payload: event,
+        payload: event as unknown as Record<string, unknown>,
         status: type === "payment.succeeded"
           ? "paid"
           : type === "payment.failed"
             ? "failed"
-            : type === "payment.cancelled" || type === "payment.canceled"
+            : type === "payment.cancelled"
               ? "canceled"
               : "ignored",
-        payment_id: normalizeOptionalText(metadata.payment_id),
+        payment_id: normalizeOptionalText(payment_event?.data.metadata.payment_id),
         provider_session_id: checkout_session_id,
         provider_payment_id,
         ref: provider_payment_id || checkout_session_id,
         meta: {
           provider: "dodo",
-          dodo_event_id: normalizeOptionalText(event.id || event.event_id),
+          dodo_webhook_id: verified_webhook.webhook_id,
           dodo_checkout_session_id: checkout_session_id,
           dodo_payment_id: provider_payment_id,
         },
       };
     },
   };
+}
+
+/** 判断官方 SDK 事件是否属于 PaymentService 负责的支付生命周期。 */
+function is_dodo_payment_event(event: DodoWebhookEvent): event is DodoPaymentWebhookEvent {
+  return event.type === "payment.processing"
+    || event.type === "payment.succeeded"
+    || event.type === "payment.failed"
+    || event.type === "payment.cancelled";
 }

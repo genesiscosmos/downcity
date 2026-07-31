@@ -9,3 +9,16 @@ await city.payment.method("dodo").invoke({ topup_amount_minor: 500, idempotency_
 ```
 
 PaymentService 保存订单与事件，Credits 只在 `on_paid` 中接收已确认额度。
+
+## Webhook
+
+将 Dodo Dashboard 的 webhook 地址设置为 `/v1/payment/webhook?provider=dodo`，并至少订阅支付生命周期事件：
+
+- `payment.processing`
+- `payment.succeeded`
+- `payment.failed`
+- `payment.cancelled`
+
+Dodo 遵循 Standard Webhooks。Provider 使用官方 SDK 和原始请求 body 校验 `webhook-id`、`webhook-timestamp`、`webhook-signature`，并严格以唯一的 `webhook-id` 处理幂等。缺少任一协议 Header 或签名无效时，请求都会被拒绝。
+
+同一支付可能产生多个生命周期事件，也可能因网络重试而乱序到达。PaymentService 会分别保存不同的 `webhook-id`，忽略 `processing`，在 `succeeded` 到达时确认支付并确保 `on_paid` 只成功应用一次。

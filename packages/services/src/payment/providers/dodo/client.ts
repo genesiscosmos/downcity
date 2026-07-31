@@ -12,7 +12,7 @@ import type {
   DodoCheckoutSessionResult,
   DodoCreateCheckoutSessionInput,
   DodoPaymentEnvironment,
-  DodoWebhookEvent,
+  DodoVerifiedWebhook,
 } from "./types.js";
 
 /**
@@ -70,31 +70,38 @@ export async function createDodoCheckoutSession(
 }
 
 /**
- * 解析并可选校验 Dodo webhook。
+ * 使用 Dodo 官方 SDK 验签并解析 webhook 信封。
+ *
+ * 关键说明（中文）
+ * - Dodo 遵循 Standard Webhooks，三个协议 Header 都是必需字段。
+ * - `webhook-id` 是事件唯一身份；官方 SDK 的 unwrap 返回值只包含 body。
+ * - 必须使用未经改写的原始 body 完成签名校验。
  */
-export function parseDodoWebhookEvent(input: {
+export function unwrap_dodo_webhook(input: {
   /** Dodo SDK client。 */
   client: DodoPayments;
   /** 原始请求 body。 */
   raw: string;
   /** 请求头。 */
   headers: Headers;
-  /** 是否执行验签。 */
-  verify: boolean;
-}): DodoWebhookEvent {
-  const event = input.verify
-    ? input.client.webhooks.unwrap(input.raw, { headers: Object.fromEntries(input.headers.entries()) })
-    : input.client.webhooks.unsafeUnwrap(input.raw);
-  return event && typeof event === "object" ? event as unknown as DodoWebhookEvent : {};
-}
-
-/**
- * 读取 metadata 对象。
- */
-export function readMetadata(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
+}): DodoVerifiedWebhook {
+  const webhook_id = normalizeRequired(input.headers.get("webhook-id"), "Dodo webhook-id header");
+  const webhook_timestamp = normalizeRequired(
+    input.headers.get("webhook-timestamp"),
+    "Dodo webhook-timestamp header",
+  );
+  const webhook_signature = normalizeRequired(
+    input.headers.get("webhook-signature"),
+    "Dodo webhook-signature header",
+  );
+  const event = input.client.webhooks.unwrap(input.raw, {
+    headers: {
+      "webhook-id": webhook_id,
+      "webhook-timestamp": webhook_timestamp,
+      "webhook-signature": webhook_signature,
+    },
+  });
+  return { webhook_id, event };
 }
 
 /**

@@ -6,6 +6,7 @@
  * - 对外可见类型（如 DodoPaymentProviderOptions）放在 payment/types.ts
  */
 
+import type { UnwrapWebhookEvent } from "dodopayments/resources/webhooks";
 import type { PaymentOrderSnapshot } from "../../types.js";
 
 /**
@@ -43,20 +44,30 @@ export interface DodoCheckoutSessionResult {
   checkout_url: string;
 }
 
+/** Dodo 官方 SDK 验签后返回的 webhook 事件联合类型。 */
+export type DodoWebhookEvent = UnwrapWebhookEvent;
+
+/** Dodo 支付生命周期 webhook 事件。 */
+export type DodoPaymentWebhookEvent = Extract<
+  DodoWebhookEvent,
+  {
+    type:
+      | "payment.processing"
+      | "payment.succeeded"
+      | "payment.failed"
+      | "payment.cancelled";
+  }
+>;
+
 /**
- * Dodo webhook 事件。
+ * 已通过 Dodo 官方 SDK 验签的 webhook 信封。
+ *
+ * Dodo 遵循 Standard Webhooks：事件身份属于 `webhook-id` 请求头，
+ * 不属于 webhook body，也不等同于 payment ID。
  */
-export interface DodoWebhookEvent extends Record<string, unknown> {
-  /** Dodo 事件 ID。 */
-  id?: unknown;
-  /** Dodo 事件 ID 备用字段。 */
-  event_id?: unknown;
-  /** Dodo 事件类型。 */
-  type?: unknown;
-  /** Dodo 事件类型备用字段。 */
-  eventType?: unknown;
-  /** Dodo 事件数据。 */
-  data?: unknown;
-  /** Dodo 事件主体备用字段。 */
-  object?: unknown;
+export interface DodoVerifiedWebhook {
+  /** Dodo 为本次逻辑事件分配的唯一 `webhook-id`，用于幂等处理。 */
+  webhook_id: string;
+  /** Dodo 官方 SDK 从原始 body 解析得到的强类型事件。 */
+  event: DodoWebhookEvent;
 }

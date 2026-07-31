@@ -9,3 +9,16 @@ await city.payment.method("dodo").invoke({ topup_amount_minor: 500, idempotency_
 ```
 
 PaymentService stores orders and events; Credits receives confirmed credits only from `on_paid`.
+
+## Webhooks
+
+Set the webhook URL in the Dodo Dashboard to `/v1/payment/webhook?provider=dodo` and subscribe to at least these payment lifecycle events:
+
+- `payment.processing`
+- `payment.succeeded`
+- `payment.failed`
+- `payment.cancelled`
+
+Dodo follows Standard Webhooks. The provider uses the official SDK and the exact raw request body to verify `webhook-id`, `webhook-timestamp`, and `webhook-signature`, and uses the unique `webhook-id` strictly for idempotency. Requests with a missing protocol header or an invalid signature are rejected.
+
+One payment can emit several lifecycle events, and retries can arrive out of order. PaymentService stores each distinct `webhook-id`, ignores `processing`, confirms the payment when `succeeded` arrives, and ensures `on_paid` is successfully applied only once.
