@@ -41,6 +41,9 @@ export type {
   DowncitySpinnerSize,
   DowncitySidebarLayoutProps,
   DowncityToasterTheme,
+  DowncityThemeContainerProps,
+  DowncityThemeMode,
+  DowncityThemeVariant,
 } from "./types/components";
 export type {
   DowncityWorkboardActivityItem,
@@ -68,6 +71,7 @@ export type {
 } from "./types/workboard-game-ui";
 
 export { Button, buttonVariants } from "./components/button";
+export { ThemeContainer } from "./components/theme-container";
 export { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./components/accordion";
 export { Alert, AlertDescription, AlertTitle } from "./components/alert";
 export { AlertDialog, AlertDialogClose, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "./components/alert-dialog";

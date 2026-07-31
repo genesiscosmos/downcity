@@ -16,6 +16,7 @@ import {
   SelectValue,
   Toaster,
   TooltipProvider,
+  ThemeContainer,
 } from "@downcity/ui";
 
 import { MarkdownDocument } from "./components/markdown-document.js";
@@ -105,8 +106,10 @@ export function App() {
             <ThemeSelector theme_id={theme_id} on_theme_change={set_theme_id} color_mode={color_mode} on_color_mode_change={set_color_mode} />
           </header>
 
-          <main>
-            <MarkdownDocument document={mdx_document_registry[selected_component_id]} />
+          <main className="min-h-full">
+            <ThemeContainer variant={theme_id} mode={resolved_color_mode} className="min-h-full">
+              <MarkdownDocument document={mdx_document_registry[selected_component_id]} />
+            </ThemeContainer>
           </main>
         </div>
 

@@ -17,13 +17,15 @@ import type {
   DowncityContextMenuItemProps,
 } from "../types/components";
 import { cn } from "../lib/utils";
+import { use_theme_portal_container } from "./theme-container";
 
 function ContextMenu({ ...props }: ContextMenuPrimitive.Root.Props) {
   return <ContextMenuPrimitive.Root data-slot="context-menu" {...props} />;
 }
 
-function ContextMenuPortal({ ...props }: ContextMenuPrimitive.Portal.Props) {
-  return <ContextMenuPrimitive.Portal data-slot="context-menu-portal" {...props} />;
+function ContextMenuPortal({ container, ...props }: ContextMenuPrimitive.Portal.Props) {
+  const theme_container = use_theme_portal_container();
+  return <ContextMenuPrimitive.Portal data-slot="context-menu-portal" container={container ?? theme_container} {...props} />;
 }
 
 function ContextMenuTrigger({ ...props }: ContextMenuPrimitive.Trigger.Props) {
@@ -39,7 +41,7 @@ function ContextMenuContent({
   ...props
 }: DowncityContextMenuContentProps) {
   return (
-    <ContextMenuPrimitive.Portal>
+    <ContextMenuPortal>
       <ContextMenuPrimitive.Positioner
         className="isolate z-50 outline-none"
         align={align}
@@ -56,7 +58,7 @@ function ContextMenuContent({
           {...props}
         />
       </ContextMenuPrimitive.Positioner>
-    </ContextMenuPrimitive.Portal>
+    </ContextMenuPortal>
   );
 }
 
@@ -72,7 +74,7 @@ function ContextMenuLabel({
     <ContextMenuPrimitive.GroupLabel
       data-slot="context-menu-label"
       className={cn(
-        "px-2 py-2 text-[11px] font-medium text-muted-foreground/60",
+        "px-2 py-2 text-[11px] font-medium text-muted-foreground",
         className,
       )}
       {...props}
@@ -110,7 +112,7 @@ function ContextMenuCheckboxItem({
     <ContextMenuPrimitive.CheckboxItem
       data-slot="context-menu-checkbox-item"
       className={cn(
-        "relative flex min-h-10 cursor-default items-center gap-2 rounded-xl py-2 pr-8 pl-3 text-sm outline-none select-none focus:bg-interaction-hover focus:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
+        "relative flex min-h-10 cursor-default items-center gap-2 rounded-lg py-2 pr-8 pl-3 text-sm text-foreground outline-none select-none focus:bg-interaction-hover data-disabled:pointer-events-none data-disabled:opacity-50",
         className,
       )}
       checked={checked}
@@ -139,7 +141,7 @@ function ContextMenuRadioItem({
     <ContextMenuPrimitive.RadioItem
       data-slot="context-menu-radio-item"
       className={cn(
-        "relative flex min-h-10 cursor-default items-center gap-2 rounded-xl py-2 pr-8 pl-3 text-sm outline-none select-none focus:bg-interaction-hover focus:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
+        "relative flex min-h-10 cursor-default items-center gap-2 rounded-lg py-2 pr-8 pl-3 text-sm text-foreground outline-none select-none focus:bg-interaction-hover data-disabled:pointer-events-none data-disabled:opacity-50",
         className,
       )}
       {...props}
@@ -193,7 +195,7 @@ function ContextMenuSubTrigger({
     <ContextMenuPrimitive.SubmenuTrigger
       data-slot="context-menu-sub-trigger"
       className={cn(
-        "flex min-h-10 cursor-default items-center gap-2 rounded-xl px-3 py-2 text-sm outline-none select-none focus:bg-interaction-hover focus:text-foreground data-popup-open:bg-interaction-hover data-popup-open:text-foreground",
+        "flex min-h-10 cursor-default items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground outline-none select-none focus:bg-interaction-hover data-popup-open:bg-interaction-selected",
         className,
       )}
       {...props}

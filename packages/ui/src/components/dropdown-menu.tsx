@@ -13,13 +13,15 @@ import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { CheckIcon, ChevronRightIcon } from "lucide-react";
 
 import { cn } from "../lib/utils";
+import { use_theme_portal_container } from "./theme-container";
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
   return <MenuPrimitive.Root data-slot="dropdown-menu" {...props} />;
 }
 
-function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {
-  return <MenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />;
+function DropdownMenuPortal({ container, ...props }: MenuPrimitive.Portal.Props) {
+  const theme_container = use_theme_portal_container();
+  return <MenuPrimitive.Portal data-slot="dropdown-menu-portal" container={container ?? theme_container} {...props} />;
 }
 
 function DropdownMenuTrigger({ ...props }: MenuPrimitive.Trigger.Props) {
@@ -39,7 +41,7 @@ function DropdownMenuContent({
     "align" | "alignOffset" | "side" | "sideOffset"
   >) {
   return (
-    <MenuPrimitive.Portal>
+    <DropdownMenuPortal>
       <MenuPrimitive.Positioner
         className="isolate z-50 outline-none"
         align={align}
@@ -56,7 +58,7 @@ function DropdownMenuContent({
           {...props}
         />
       </MenuPrimitive.Positioner>
-    </MenuPrimitive.Portal>
+    </DropdownMenuPortal>
   );
 }
 
@@ -76,7 +78,7 @@ function DropdownMenuLabel({
       data-slot="dropdown-menu-label"
       data-inset={inset}
       className={cn(
-        "px-2 py-2 text-[11px] font-medium text-muted-foreground/60 data-inset:pl-8",
+        "px-2 py-2 text-[11px] font-medium text-muted-foreground data-inset:pl-8",
         className,
       )}
       {...props}
@@ -124,7 +126,7 @@ function DropdownMenuSubTrigger({
       data-slot="dropdown-menu-sub-trigger"
       data-inset={inset}
       className={cn(
-        "flex min-h-10 cursor-default items-center gap-1.5 rounded-[12px] px-3 py-2 text-sm outline-hidden select-none focus:bg-secondary focus:text-foreground not-data-[variant=destructive]:focus:**:text-foreground data-inset:pl-7 data-popup-open:bg-secondary data-popup-open:text-foreground data-open:bg-secondary data-open:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "flex min-h-10 cursor-default items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-foreground outline-hidden select-none focus:bg-interaction-hover data-inset:pl-7 data-popup-open:bg-interaction-selected data-open:bg-interaction-selected [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       {...props}
@@ -173,7 +175,7 @@ function DropdownMenuCheckboxItem({
       data-slot="dropdown-menu-checkbox-item"
       data-inset={inset}
       className={cn(
-        "relative flex min-h-10 cursor-default items-center gap-1.5 rounded-[12px] py-2 pr-8 pl-3 text-sm outline-hidden select-none focus:bg-secondary focus:text-foreground focus:**:text-foreground data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "relative flex min-h-10 cursor-default items-center gap-1.5 rounded-lg py-2 pr-8 pl-3 text-sm text-foreground outline-hidden select-none focus:bg-interaction-hover data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       checked={checked}
@@ -209,7 +211,7 @@ function DropdownMenuRadioItem({
       data-slot="dropdown-menu-radio-item"
       data-inset={inset}
       className={cn(
-        "relative flex min-h-10 cursor-default items-center gap-1.5 rounded-[12px] py-2 pr-8 pl-3 text-sm outline-hidden select-none focus:bg-secondary focus:text-foreground focus:**:text-foreground data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "relative flex min-h-10 cursor-default items-center gap-1.5 rounded-lg py-2 pr-8 pl-3 text-sm text-foreground outline-hidden select-none focus:bg-interaction-hover data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       {...props}

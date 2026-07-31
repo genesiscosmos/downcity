@@ -15,7 +15,7 @@ These components use the existing Base UI runtime and Vibecape design tokens. No
 <InputGroup><InputGroupAddon>⌕</InputGroupAddon><InputGroupInput placeholder="Search" /></InputGroup>
 ```
 
-Also available: `AlertDialog`, `Breadcrumb`, `Drawer`, `Pagination`, `RadioGroup`, `ScrollArea`, and `Table`.
+Also available: `AlertDialog`, `Drawer`, `Pagination`, `RadioGroup`, `ScrollArea`, and `Table`.
 
 ## Advanced interaction primitives
 
@@ -33,11 +33,31 @@ Also available: `AlertDialog`, `Breadcrumb`, `Drawer`, `Pagination`, `RadioGroup
 
 ## Color themes
 
-Every primitive consumes the same semantic variables: `background`, `foreground`, `surface-subtle`, `control-surface`, `divider`, `interaction-hover`, `interaction-selected`, and `primary`. Host applications can define color themes by setting `data-theme` on the root element, without changing component classes.
+Every primitive consumes the same semantic variables: `background`, `foreground`, `surface-subtle`, `control-surface`, `divider`, `interaction-hover`, `interaction-selected`, and `primary`. Host applications set the theme through `ThemeContainer`, without changing component classes.
 
 ```tsx
-document.body.dataset.componentTheme = "slate";
-document.body.classList.toggle("dark", prefers_dark);
+<ThemeContainer variant="slate" mode="dark">
+  <Application />
+</ThemeContainer>
 ```
 
-The showcase keeps its page chrome fixed and applies this choice only to the component display surface. It includes `neutral`, `zinc`, `slate`, `stone`, and `blue` presets, each compatible with light and dark appearance.
+The showcase keeps its page chrome fixed and wraps only the component display area in ThemeContainer. It includes `neutral`, `zinc`, `slate`, `stone`, and `blue` presets, each compatible with light and dark appearance.
+
+## Theme container
+
+`ThemeContainer` is the theme boundary for the complete component tree. It provides colors, control surfaces, borders, interaction states, and floating tokens together. Individual components do not receive theme props or theme-specific classes.
+
+```tsx
+import { Button, Input, ThemeContainer } from "@downcity/ui";
+
+export function ThemedApplication() {
+  return (
+    <ThemeContainer variant="slate" mode="dark">
+      <Input placeholder="Project name" />
+      <Button variant="primary">Save</Button>
+    </ThemeContainer>
+  );
+}
+```
+
+`variant` supports `neutral`, `zinc`, `slate`, `stone`, and `blue`; `mode` supports `light` and `dark`. Dropdown, Select, Popover, and ContextMenu portals automatically mount inside ThemeContainer, so no separate theme synchronization is required.

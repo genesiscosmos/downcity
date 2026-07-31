@@ -12,6 +12,32 @@ import type { Slider as SliderPrimitive } from "@base-ui/react/slider";
 import type { Command as CommandPrimitive } from "cmdk";
 import type * as React from "react";
 
+/** ThemeContainer 支持的主题预设。 */
+export type DowncityThemeVariant =
+  | "neutral"
+  | "zinc"
+  | "slate"
+  | "stone"
+  | "blue";
+
+/** ThemeContainer 支持的明暗模式。 */
+export type DowncityThemeMode = "light" | "dark";
+
+/** ThemeContainer 主题容器属性。 */
+export interface DowncityThemeContainerProps
+  extends React.ComponentPropsWithoutRef<"div"> {
+  /** 当前组件树使用的颜色主题预设。 */
+  variant?: DowncityThemeVariant;
+  /** 当前组件树使用的明确明暗模式。 */
+  mode?: DowncityThemeMode;
+}
+
+/** 主题内部上下文，仅供组件 Portal 继承唯一主题容器。 */
+export interface DowncityThemeContextValue {
+  /** 当前主题容器拥有的 Portal 挂载节点引用。 */
+  portal_container: React.RefObject<HTMLDivElement | null>;
+}
+
 /**
  * Button 组件支持的视觉变体。
  */

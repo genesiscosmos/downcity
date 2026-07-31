@@ -114,6 +114,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  ThemeContainer,
   Workboard,
   type DowncityWorkboardBoardSnapshot,
 } from "@downcity/ui";
@@ -249,13 +250,38 @@ function render_component_example(
       return <FoundationPreview component_id={component_id} />;
     case "button":
       return (
-        <PreviewCanvas compact>
-          <div className="flex flex-wrap justify-center gap-3">
-            <Button variant="primary"><PlusIcon />Create<ArrowRightIcon /></Button>
-            <Button variant="default"><SearchIcon />Inspect</Button>
-            <Button variant="outline">Outline</Button>
-            <Button variant="secondary">Secondary</Button>
-            <Button aria-label="Search"><SearchIcon /></Button>
+        <PreviewCanvas>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {([
+              { label: "Neutral light", variant: "neutral", mode: "light" },
+              { label: "Neutral dark", variant: "neutral", mode: "dark" },
+              { label: "Blue light", variant: "blue", mode: "light" },
+              { label: "Blue dark", variant: "blue", mode: "dark" },
+            ] as const).map((theme) => (
+              <ThemeContainer key={theme.label} variant={theme.variant} mode={theme.mode} className="rounded-xl p-4">
+                <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {theme.label}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="primary"><PlusIcon />Create</Button>
+                  <Button variant="default"><SearchIcon />Inspect</Button>
+                  <Button variant="outline">Outline</Button>
+                  <Button variant="secondary">Secondary</Button>
+                  <Button variant="ghost" aria-label="Continue"><ArrowRightIcon /></Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger render={<Button variant="outline" aria-label={`${theme.label} actions`} />}>
+                      Actions
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel>Environment</DropdownMenuLabel>
+                        <DropdownMenuItem>Open details</DropdownMenuItem>
+                      </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </ThemeContainer>
+            ))}
           </div>
         </PreviewCanvas>
       );

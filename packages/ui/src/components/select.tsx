@@ -17,6 +17,7 @@ import type {
   DowncitySelectItemProps,
   DowncitySelectTriggerProps,
 } from "../types/components";
+import { use_theme_portal_container } from "./theme-container";
 
 const Select = SelectPrimitive.Root;
 
@@ -57,8 +58,9 @@ function SelectContent({
   sideOffset = 4,
   ...props
 }: DowncitySelectContentProps) {
+  const theme_container = use_theme_portal_container();
   return (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal container={theme_container}>
       <SelectPrimitive.Positioner
         align={align}
         alignOffset={alignOffset}
@@ -70,7 +72,7 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(
-            "min-w-[var(--anchor-width)] overflow-hidden rounded-xl border border-divider bg-popover text-foreground outline-none data-open:animate-in data-open:fade-in data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0 duration-150",
+            "min-w-[var(--anchor-width)] overflow-hidden rounded-xl border border-divider bg-popover text-popover-foreground outline-none data-open:animate-in data-open:fade-in data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0 duration-150",
             className,
           )}
           {...props}
@@ -104,7 +106,7 @@ function SelectLabel({ className, ...props }: SelectPrimitive.GroupLabel.Props) 
   return (
     <SelectPrimitive.GroupLabel
       data-slot="select-label"
-      className={cn("px-2 py-1.5 text-xs font-medium text-muted-foreground/70", className)}
+      className={cn("px-2 py-1.5 text-xs font-medium text-muted-foreground", className)}
       {...props}
     />
   );

@@ -40,7 +40,7 @@ function resolve_color_mode(color_mode: ShowcaseColorMode): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-/** 维护并持久化主题选择，同时同步 html 根节点。 */
+/** 维护并持久化主题选择，具体主题由 ThemeContainer 应用。 */
 export function use_theme() {
   const [theme_id, set_theme_id] = useState<ShowcaseThemeId>(() => read_theme_id());
   const [color_mode, set_color_mode] = useState<ShowcaseColorMode>(() => read_color_mode());
@@ -55,8 +55,6 @@ export function use_theme() {
   }, [color_mode]);
 
   useEffect(() => {
-    document.body.dataset.componentTheme = theme_id;
-    document.body.classList.toggle("dark", resolved_color_mode === "dark");
     window.localStorage.setItem(theme_storage_key, theme_id);
     window.localStorage.setItem(color_mode_storage_key, color_mode);
   }, [theme_id, color_mode, resolved_color_mode]);

@@ -60,11 +60,93 @@
   --theme-preview-slate: rgb(71, 85, 105);
   --theme-preview-stone: rgb(87, 83, 78);
   --theme-preview-blue: rgb(37, 99, 235);
+  --control-primary: color-mix(in srgb, var(--foreground) 90%, transparent);
+  --control-primary-hover: var(--foreground);
+  --control-primary-foreground: var(--background);
 }
 
-body.dark {
+/* ThemeContainer 是组件树唯一的主题事实源。 */
+.dc-theme-container {
+  --background: rgb(255, 255, 255);
+  --foreground: rgb(10, 10, 10);
+  --card: rgb(255, 255, 255);
+  --card-foreground: rgb(10, 10, 10);
+  --popover: rgb(255, 255, 255);
+  --popover-foreground: rgb(10, 10, 10);
+  --primary: rgb(23, 23, 23);
+  --primary-foreground: rgb(250, 250, 250);
+  --secondary: rgb(245, 245, 245);
+  --secondary-foreground: rgb(23, 23, 23);
+  --muted: rgb(245, 245, 245);
+  --muted-foreground: rgb(115, 115, 115);
+  --accent: rgb(245, 245, 245);
+  --accent-foreground: rgb(23, 23, 23);
+  --border: rgb(229, 229, 229);
+  --input: rgb(229, 229, 229);
+  --ring: rgb(161, 161, 161);
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+.dc-theme-container[data-ui-theme="zinc"] {
+  --background: rgb(250, 250, 250);
+  --foreground: rgb(39, 39, 42);
+  --card: rgb(250, 250, 250);
+  --popover: rgb(255, 255, 255);
+  --primary: rgb(39, 39, 42);
+  --primary-foreground: rgb(250, 250, 250);
+  --muted: rgb(244, 244, 245);
+  --muted-foreground: rgb(113, 113, 122);
+  --border: rgb(228, 228, 231);
+  --input: rgb(228, 228, 231);
+  --ring: rgb(161, 161, 170);
+}
+
+.dc-theme-container[data-ui-theme="slate"] {
+  --background: rgb(248, 250, 252);
+  --foreground: rgb(15, 23, 42);
+  --card: rgb(248, 250, 252);
+  --popover: rgb(255, 255, 255);
+  --primary: rgb(30, 41, 59);
+  --primary-foreground: rgb(248, 250, 252);
+  --muted: rgb(241, 245, 249);
+  --muted-foreground: rgb(100, 116, 139);
+  --border: rgb(226, 232, 240);
+  --input: rgb(226, 232, 240);
+  --ring: rgb(148, 163, 184);
+}
+
+.dc-theme-container[data-ui-theme="stone"] {
+  --background: rgb(250, 250, 249);
+  --foreground: rgb(41, 37, 36);
+  --card: rgb(250, 250, 249);
+  --popover: rgb(255, 255, 255);
+  --primary: rgb(41, 37, 36);
+  --primary-foreground: rgb(250, 250, 249);
+  --muted: rgb(245, 245, 244);
+  --muted-foreground: rgb(120, 113, 108);
+  --border: rgb(231, 229, 228);
+  --input: rgb(231, 229, 228);
+  --ring: rgb(168, 162, 158);
+}
+
+.dc-theme-container[data-ui-theme="blue"] {
+  --background: rgb(248, 250, 255);
+  --foreground: rgb(23, 37, 84);
+  --card: rgb(248, 250, 255);
+  --popover: rgb(255, 255, 255);
+  --primary: rgb(37, 99, 235);
+  --primary-foreground: rgb(255, 255, 255);
+  --muted: rgb(239, 246, 255);
+  --muted-foreground: rgb(82, 109, 160);
+  --border: rgb(219, 234, 254);
+  --input: rgb(191, 219, 254);
+  --ring: rgb(96, 165, 250);
+}
+
+.dc-theme-container[data-ui-mode="dark"] {
   --background: rgb(10, 10, 10);
-  --foreground: rgb(188, 188, 188);
+  --foreground: rgb(229, 229, 229);
   --card: rgb(23, 23, 23);
   --card-foreground: rgb(250, 250, 250);
   --popover: rgb(38, 38, 38);
@@ -77,97 +159,12 @@ body.dark {
   --muted-foreground: rgb(161, 161, 161);
   --accent: rgb(64, 64, 64);
   --accent-foreground: rgb(250, 250, 250);
-  --destructive: rgb(255, 100, 103);
-  --destructive-foreground: rgb(250, 250, 250);
-  --border: rgb(40, 40, 40);
-  --input: rgb(52, 52, 52);
+  --border: rgb(52, 52, 52);
+  --input: rgb(64, 64, 64);
   --ring: rgb(115, 115, 115);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
-  --surface-subtle: color-mix(in srgb, var(--foreground) 8%, transparent);
-  --surface-emphasis: color-mix(in srgb, var(--foreground) 11%, transparent);
-  --code-comment: rgb(139, 148, 158);
-  --code-keyword: rgb(255, 123, 114);
-  --code-string: rgb(165, 214, 255);
-  --code-number: rgb(121, 192, 255);
-  --sidebar: var(--background);
-  --sidebar-foreground: var(--foreground);
-  --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: var(--accent);
-  --sidebar-accent-foreground: var(--accent-foreground);
-  --sidebar-border: var(--border);
-  --sidebar-ring: var(--ring);
 }
 
-/*
- * 主题预设只覆盖语义 token；所有组件必须通过这些 token 获得颜色、边框和交互状态。
- * 明暗由 `.dark` 独立控制，色板由 `data-theme` 独立控制，二者可以自由组合。
- */
-body[data-component-theme="zinc"] {
-  --background: rgb(250, 250, 250);
-  --foreground: rgb(39, 39, 42);
-  --card: rgb(250, 250, 250);
-  --popover: rgb(255, 255, 255);
-  --primary: rgb(39, 39, 42);
-  --primary-foreground: rgb(250, 250, 250);
-  --muted: rgb(244, 244, 245);
-  --muted-foreground: rgb(113, 113, 122);
-  --accent: rgb(244, 244, 245);
-  --border: rgb(228, 228, 231);
-  --input: rgb(228, 228, 231);
-  --ring: rgb(161, 161, 170);
-}
-
-body[data-component-theme="slate"] {
-  --background: rgb(248, 250, 252);
-  --foreground: rgb(15, 23, 42);
-  --card: rgb(248, 250, 252);
-  --popover: rgb(255, 255, 255);
-  --primary: rgb(30, 41, 59);
-  --primary-foreground: rgb(248, 250, 252);
-  --muted: rgb(241, 245, 249);
-  --muted-foreground: rgb(100, 116, 139);
-  --accent: rgb(241, 245, 249);
-  --border: rgb(226, 232, 240);
-  --input: rgb(226, 232, 240);
-  --ring: rgb(148, 163, 184);
-}
-
-body[data-component-theme="stone"] {
-  --background: rgb(250, 250, 249);
-  --foreground: rgb(41, 37, 36);
-  --card: rgb(250, 250, 249);
-  --popover: rgb(255, 255, 255);
-  --primary: rgb(41, 37, 36);
-  --primary-foreground: rgb(250, 250, 249);
-  --muted: rgb(245, 245, 244);
-  --muted-foreground: rgb(120, 113, 108);
-  --accent: rgb(245, 245, 244);
-  --border: rgb(231, 229, 228);
-  --input: rgb(231, 229, 228);
-  --ring: rgb(168, 162, 158);
-}
-
-body[data-component-theme="blue"] {
-  --background: rgb(248, 250, 255);
-  --foreground: rgb(23, 37, 84);
-  --card: rgb(248, 250, 255);
-  --popover: rgb(255, 255, 255);
-  --primary: rgb(37, 99, 235);
-  --primary-foreground: rgb(255, 255, 255);
-  --muted: rgb(239, 246, 255);
-  --muted-foreground: rgb(82, 109, 160);
-  --accent: rgb(239, 246, 255);
-  --border: rgb(219, 234, 254);
-  --input: rgb(191, 219, 254);
-  --ring: rgb(96, 165, 250);
-}
-
-body.dark[data-component-theme="zinc"] {
+.dc-theme-container[data-ui-theme="zinc"][data-ui-mode="dark"] {
   --background: rgb(24, 24, 27);
   --foreground: rgb(228, 228, 231);
   --card: rgb(39, 39, 42);
@@ -176,13 +173,12 @@ body.dark[data-component-theme="zinc"] {
   --primary-foreground: rgb(39, 39, 42);
   --muted: rgb(39, 39, 42);
   --muted-foreground: rgb(161, 161, 170);
-  --accent: rgb(63, 63, 70);
   --border: rgb(63, 63, 70);
   --input: rgb(63, 63, 70);
   --ring: rgb(113, 113, 122);
 }
 
-body.dark[data-component-theme="slate"] {
+.dc-theme-container[data-ui-theme="slate"][data-ui-mode="dark"] {
   --background: rgb(15, 23, 42);
   --foreground: rgb(226, 232, 240);
   --card: rgb(30, 41, 59);
@@ -191,13 +187,12 @@ body.dark[data-component-theme="slate"] {
   --primary-foreground: rgb(30, 41, 59);
   --muted: rgb(30, 41, 59);
   --muted-foreground: rgb(148, 163, 184);
-  --accent: rgb(51, 65, 85);
   --border: rgb(51, 65, 85);
   --input: rgb(51, 65, 85);
   --ring: rgb(100, 116, 139);
 }
 
-body.dark[data-component-theme="stone"] {
+.dc-theme-container[data-ui-theme="stone"][data-ui-mode="dark"] {
   --background: rgb(28, 25, 23);
   --foreground: rgb(231, 229, 228);
   --card: rgb(41, 37, 36);
@@ -206,13 +201,12 @@ body.dark[data-component-theme="stone"] {
   --primary-foreground: rgb(41, 37, 36);
   --muted: rgb(41, 37, 36);
   --muted-foreground: rgb(168, 162, 158);
-  --accent: rgb(68, 64, 60);
   --border: rgb(68, 64, 60);
   --input: rgb(68, 64, 60);
   --ring: rgb(120, 113, 108);
 }
 
-body.dark[data-component-theme="blue"] {
+.dc-theme-container[data-ui-theme="blue"][data-ui-mode="dark"] {
   --background: rgb(15, 23, 42);
   --foreground: rgb(219, 234, 254);
   --card: rgb(23, 37, 84);
@@ -221,10 +215,31 @@ body.dark[data-component-theme="blue"] {
   --primary-foreground: rgb(23, 37, 84);
   --muted: rgb(30, 58, 138);
   --muted-foreground: rgb(147, 197, 253);
-  --accent: rgb(30, 64, 175);
   --border: rgb(30, 58, 138);
   --input: rgb(30, 64, 175);
   --ring: rgb(96, 165, 250);
+}
+
+.dc-theme-container {
+  --surface-subtle: color-mix(in srgb, var(--foreground) 4%, transparent);
+  --surface-emphasis: color-mix(in srgb, var(--foreground) 7%, transparent);
+  --interaction-hover: color-mix(in srgb, var(--foreground) 7%, transparent);
+  --interaction-active: color-mix(in srgb, var(--foreground) 11%, transparent);
+  --interaction-selected: color-mix(in srgb, var(--foreground) 11%, transparent);
+  --divider: color-mix(in srgb, var(--foreground) 9%, transparent);
+  --border-subtle: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --control-surface: color-mix(in srgb, var(--foreground) 6%, transparent);
+  --control-hover: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --control-primary: color-mix(in srgb, var(--foreground) 90%, transparent);
+  --control-primary-hover: var(--foreground);
+  --control-primary-foreground: var(--background);
+}
+
+.dc-theme-container[data-ui-mode="dark"] {
+  --surface-subtle: color-mix(in srgb, var(--foreground) 8%, transparent);
+  --surface-emphasis: color-mix(in srgb, var(--foreground) 12%, transparent);
+  --control-surface: color-mix(in srgb, var(--foreground) 14%, transparent);
+  --control-hover: color-mix(in srgb, var(--foreground) 20%, transparent);
 }
 
 @theme inline {
@@ -237,6 +252,9 @@ body.dark[data-component-theme="blue"] {
   --color-border-subtle: var(--border-subtle);
   --color-control-surface: var(--control-surface);
   --color-control-hover: var(--control-hover);
+  --color-control-primary: var(--control-primary);
+  --color-control-primary-hover: var(--control-primary-hover);
+  --color-control-primary-foreground: var(--control-primary-foreground);
   --color-code-comment: var(--code-comment);
   --color-code-keyword: var(--code-keyword);
   --color-code-string: var(--code-string);

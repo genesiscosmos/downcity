@@ -11,6 +11,7 @@
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 
 import { cn } from "../lib/utils";
+import { use_theme_portal_container } from "./theme-container";
 
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />;
@@ -32,8 +33,9 @@ function PopoverContent({
     PopoverPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
   >) {
+  const theme_container = use_theme_portal_container();
   return (
-    <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Portal container={theme_container}>
       <PopoverPrimitive.Positioner
         side={side}
         sideOffset={sideOffset}
