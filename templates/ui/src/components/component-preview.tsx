@@ -115,22 +115,12 @@ import {
   TooltipContent,
   TooltipTrigger,
   Workboard,
-  type DowncityButtonVariant,
   type DowncityWorkboardBoardSnapshot,
 } from "@downcity/ui";
 
 import type { ComponentDemoProps, ShowcaseComponentId } from "../types/components.js";
 import { FoundationPreview } from "./foundation-preview.js";
 import { AdvancedPreview } from "./advanced-preview.js";
-
-const button_variants = [
-  "default",
-  "outline",
-  "secondary",
-  "ghost",
-  "destructive",
-  "link",
-] as const satisfies readonly DowncityButtonVariant[];
 
 const demo_board: DowncityWorkboardBoardSnapshot = {
   summary: {
@@ -193,6 +183,11 @@ const demo_board: DowncityWorkboardBoardSnapshot = {
   ],
 };
 
+/** Showcase 内联图标，避免模板直接依赖图标库。 */
+function PlusIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>; }
+function ArrowRightIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" /></svg>; }
+function SearchIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="7" cy="7" r="3.5" /><path d="m10 10 3 3" /></svg>; }
+
 /** 为所有组件示例提供一致的演示画布。 */
 function PreviewCanvas({
   children,
@@ -207,8 +202,8 @@ function PreviewCanvas({
     <div
       className={
         compact
-          ? "flex min-h-64 items-center justify-center rounded-xl border border-divider bg-surface-emphasis p-6"
-          : "flex min-h-[420px] items-center justify-center rounded-xl border border-divider bg-surface-emphasis p-6 sm:p-10"
+          ? "flex min-h-64 items-center justify-center rounded-xl border border-divider p-6"
+          : "flex min-h-[420px] items-center justify-center rounded-xl border border-divider p-6 sm:p-10"
       }
     >
       <div className="w-full max-w-2xl">{children}</div>
@@ -232,7 +227,6 @@ function render_component_example(
   set_selected_agent_id: (value: string) => void,
 ) {
   switch (component_id) {
-    case "combobox":
     case "file-upload":
     case "data-table":
     case "resizable":
@@ -242,7 +236,6 @@ function render_component_example(
     case "alert":
     case "alert-dialog":
     case "avatar":
-    case "breadcrumb":
     case "drawer":
     case "input-group":
     case "pagination":
@@ -255,9 +248,11 @@ function render_component_example(
       return (
         <PreviewCanvas compact>
           <div className="flex flex-wrap justify-center gap-3">
-            {button_variants.map((variant) => (
-              <Button key={variant} variant={variant}>{variant}</Button>
-            ))}
+            <Button variant="primary"><PlusIcon />Create<ArrowRightIcon /></Button>
+            <Button variant="default"><SearchIcon />Inspect</Button>
+            <Button variant="outline">Outline</Button>
+            <Button variant="secondary">Secondary</Button>
+            <Button aria-label="Search"><SearchIcon /></Button>
           </div>
         </PreviewCanvas>
       );

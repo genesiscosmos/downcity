@@ -83,9 +83,7 @@ export {
   CardTitle,
 } from "./components/card";
 export { Checkbox } from "./components/checkbox";
-export { Combobox, ComboboxClear, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxInputGroup, ComboboxItem, ComboboxList, ComboboxTrigger } from "./components/combobox";
 export { CodeBlock } from "./components/code-block";
-export { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "./components/breadcrumb";
 export { FormField } from "./components/form-field";
 export { DataTable } from "./components/data-table";
 export { FileUpload } from "./components/file-upload";

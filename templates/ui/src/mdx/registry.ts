@@ -9,11 +9,9 @@ import AccordionDocument from "../content/components/accordion.mdx";
 import AlertDocument from "../content/components/alert.mdx";
 import AlertDialogDocument from "../content/components/alert-dialog.mdx";
 import AvatarDocument from "../content/components/avatar.mdx";
-import BreadcrumbDocument from "../content/components/breadcrumb.mdx";
 import ButtonDocument from "../content/components/button.mdx";
 import CardDocument from "../content/components/card.mdx";
 import CheckboxDocument from "../content/components/checkbox.mdx";
-import ComboboxDocument from "../content/components/combobox.mdx";
 import CodeBlockDocument from "../content/components/code-block.mdx";
 import CommandDocument from "../content/components/command.mdx";
 import ContextMenuDocument from "../content/components/context-menu.mdx";
@@ -63,11 +61,9 @@ export const mdx_document_registry: Record<ShowcaseComponentId, MdxDocumentCompo
   "alert-dialog": AlertDialogDocument,
   avatar: AvatarDocument,
   badge: BadgeDocument,
-  breadcrumb: BreadcrumbDocument,
   button: ButtonDocument,
   card: CardDocument,
   checkbox: CheckboxDocument,
-  combobox: ComboboxDocument,
   "code-block": CodeBlockDocument,
   command: CommandDocument,
   "context-menu": ContextMenuDocument,

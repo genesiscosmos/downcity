@@ -12,7 +12,7 @@
 import { Button } from "@downcity/ui";
 
 export function Example() {
-  return <Button variant="outline">Open project</Button>;
+  return <Button variant="primary"><PlusIcon />Create<ArrowRightIcon /></Button>;
 }
 ```
 
@@ -20,8 +20,10 @@ export function Example() {
 
 | Prop | Type | Default |
 | --- | --- | --- |
-| `variant` | `default \| outline \| secondary \| ghost \| destructive \| link` | `default` |
+| `variant` | `primary \| default \| outline \| secondary \| ghost \| destructive \| link` | `default` |
 | `size` | `default \| xs \| sm \| lg \| icon-*` | `default` |
 | `render` | `ReactElement` | — |
 
 异步状态通过 `Spinner`、`disabled` 与 Button 组合。
+
+`default` 与 `ghost` 是 Vibecape 风格的轻量文本操作；`primary` 用于每个区域的主要动作。仅传入一个 SVG 图标时，Button 会自动采用 24px 图标尺寸。

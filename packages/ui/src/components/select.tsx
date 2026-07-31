@@ -35,7 +35,7 @@ function SelectTrigger({
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "inline-flex min-w-36 items-center justify-between gap-1.5 rounded-xl bg-control-surface px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-8 data-[size=sm]:h-6 data-[size=sm]:px-2 data-[size=sm]:text-xs [&_svg]:size-5",
+        "inline-flex min-w-36 items-center justify-between gap-1.5 rounded-lg border border-transparent bg-control-surface px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-control-hover focus:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-8 data-[size=sm]:h-6 data-[size=sm]:px-2 data-[size=sm]:text-xs [&_svg]:size-5",
         className,
       )}
       {...props}
@@ -70,7 +70,7 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(
-            "min-w-[8rem] overflow-hidden rounded-floating-surface border border-border bg-background text-foreground outline-none data-open:animate-in data-open:fade-in data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0 duration-150",
+            "min-w-[var(--anchor-width)] overflow-hidden rounded-xl border border-divider bg-surface-subtle text-foreground outline-none data-open:animate-in data-open:fade-in data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0 duration-150",
             className,
           )}
           {...props}

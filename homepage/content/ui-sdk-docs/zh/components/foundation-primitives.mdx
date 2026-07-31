@@ -19,7 +19,7 @@ description: 从 shadcn 组件模式中筛选并采用 Vibecape 视觉的基础 
 
 ## 高复用交互原语
 
-`Combobox` 用于筛选预定义选项；`FileUpload` 只将浏览器 `File` 对象回传给宿主。`DataTable` 接收数据与列定义，排序、请求和选择状态仍由应用管理。`HoverCard` 提供延迟展示的紧凑摘要，`ResizablePanelGroup` 用于组合可调整的工作区。
+`FileUpload` 只将浏览器 `File` 对象回传给宿主。`DataTable` 接收数据与列定义，排序、请求和选择状态仍由应用管理。`HoverCard` 提供延迟展示的紧凑摘要，`ResizablePanelGroup` 用于组合可调整的工作区。
 
 ```tsx
 <FileUpload files={files} onFilesChange={set_files} accept="image/*" />
@@ -30,3 +30,14 @@ description: 从 shadcn 组件模式中筛选并采用 Vibecape 视觉的基础 
   <ResizablePanel>内容</ResizablePanel>
 </ResizablePanelGroup>
 ```
+
+## 颜色主题
+
+所有原语共用同一组语义变量：`background`、`foreground`、`surface-subtle`、`control-surface`、`divider`、`interaction-hover`、`interaction-selected` 和 `primary`。宿主只需在根节点设置 `data-theme` 即可定义颜色主题，不需要修改任何组件 class。
+
+```tsx
+document.body.dataset.componentTheme = "slate";
+document.body.classList.toggle("dark", prefers_dark);
+```
+
+展示站保持页面框架不变，只将该选择应用到组件展示区域。内置 `neutral`、`zinc`、`slate`、`stone`、`blue` 五套预设，且每套都同时支持浅色与深色外观。

@@ -51,9 +51,14 @@
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
+  --theme-preview-neutral: rgb(82, 82, 82);
+  --theme-preview-zinc: rgb(63, 63, 70);
+  --theme-preview-slate: rgb(71, 85, 105);
+  --theme-preview-stone: rgb(87, 83, 78);
+  --theme-preview-blue: rgb(37, 99, 235);
 }
 
-.dark {
+body.dark {
   --background: rgb(10, 10, 10);
   --foreground: rgb(188, 188, 188);
   --card: rgb(23, 23, 23);
@@ -88,6 +93,130 @@
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
+}
+
+/*
+ * 主题预设只覆盖语义 token；所有组件必须通过这些 token 获得颜色、边框和交互状态。
+ * 明暗由 `.dark` 独立控制，色板由 `data-theme` 独立控制，二者可以自由组合。
+ */
+body[data-component-theme="zinc"] {
+  --background: rgb(250, 250, 250);
+  --foreground: rgb(39, 39, 42);
+  --card: rgb(250, 250, 250);
+  --popover: rgb(250, 250, 250);
+  --primary: rgb(39, 39, 42);
+  --primary-foreground: rgb(250, 250, 250);
+  --muted: rgb(244, 244, 245);
+  --muted-foreground: rgb(113, 113, 122);
+  --accent: rgb(244, 244, 245);
+  --border: rgb(228, 228, 231);
+  --input: rgb(228, 228, 231);
+  --ring: rgb(161, 161, 170);
+}
+
+body[data-component-theme="slate"] {
+  --background: rgb(248, 250, 252);
+  --foreground: rgb(15, 23, 42);
+  --card: rgb(248, 250, 252);
+  --popover: rgb(248, 250, 252);
+  --primary: rgb(30, 41, 59);
+  --primary-foreground: rgb(248, 250, 252);
+  --muted: rgb(241, 245, 249);
+  --muted-foreground: rgb(100, 116, 139);
+  --accent: rgb(241, 245, 249);
+  --border: rgb(226, 232, 240);
+  --input: rgb(226, 232, 240);
+  --ring: rgb(148, 163, 184);
+}
+
+body[data-component-theme="stone"] {
+  --background: rgb(250, 250, 249);
+  --foreground: rgb(41, 37, 36);
+  --card: rgb(250, 250, 249);
+  --popover: rgb(250, 250, 249);
+  --primary: rgb(41, 37, 36);
+  --primary-foreground: rgb(250, 250, 249);
+  --muted: rgb(245, 245, 244);
+  --muted-foreground: rgb(120, 113, 108);
+  --accent: rgb(245, 245, 244);
+  --border: rgb(231, 229, 228);
+  --input: rgb(231, 229, 228);
+  --ring: rgb(168, 162, 158);
+}
+
+body[data-component-theme="blue"] {
+  --background: rgb(248, 250, 255);
+  --foreground: rgb(23, 37, 84);
+  --card: rgb(248, 250, 255);
+  --popover: rgb(248, 250, 255);
+  --primary: rgb(37, 99, 235);
+  --primary-foreground: rgb(255, 255, 255);
+  --muted: rgb(239, 246, 255);
+  --muted-foreground: rgb(82, 109, 160);
+  --accent: rgb(239, 246, 255);
+  --border: rgb(219, 234, 254);
+  --input: rgb(191, 219, 254);
+  --ring: rgb(96, 165, 250);
+}
+
+body.dark[data-component-theme="zinc"] {
+  --background: rgb(24, 24, 27);
+  --foreground: rgb(228, 228, 231);
+  --card: rgb(39, 39, 42);
+  --popover: rgb(39, 39, 42);
+  --primary: rgb(244, 244, 245);
+  --primary-foreground: rgb(39, 39, 42);
+  --muted: rgb(39, 39, 42);
+  --muted-foreground: rgb(161, 161, 170);
+  --accent: rgb(63, 63, 70);
+  --border: rgb(63, 63, 70);
+  --input: rgb(63, 63, 70);
+  --ring: rgb(113, 113, 122);
+}
+
+body.dark[data-component-theme="slate"] {
+  --background: rgb(15, 23, 42);
+  --foreground: rgb(226, 232, 240);
+  --card: rgb(30, 41, 59);
+  --popover: rgb(30, 41, 59);
+  --primary: rgb(226, 232, 240);
+  --primary-foreground: rgb(30, 41, 59);
+  --muted: rgb(30, 41, 59);
+  --muted-foreground: rgb(148, 163, 184);
+  --accent: rgb(51, 65, 85);
+  --border: rgb(51, 65, 85);
+  --input: rgb(51, 65, 85);
+  --ring: rgb(100, 116, 139);
+}
+
+body.dark[data-component-theme="stone"] {
+  --background: rgb(28, 25, 23);
+  --foreground: rgb(231, 229, 228);
+  --card: rgb(41, 37, 36);
+  --popover: rgb(41, 37, 36);
+  --primary: rgb(231, 229, 228);
+  --primary-foreground: rgb(41, 37, 36);
+  --muted: rgb(41, 37, 36);
+  --muted-foreground: rgb(168, 162, 158);
+  --accent: rgb(68, 64, 60);
+  --border: rgb(68, 64, 60);
+  --input: rgb(68, 64, 60);
+  --ring: rgb(120, 113, 108);
+}
+
+body.dark[data-component-theme="blue"] {
+  --background: rgb(15, 23, 42);
+  --foreground: rgb(219, 234, 254);
+  --card: rgb(23, 37, 84);
+  --popover: rgb(30, 58, 138);
+  --primary: rgb(147, 197, 253);
+  --primary-foreground: rgb(23, 37, 84);
+  --muted: rgb(30, 58, 138);
+  --muted-foreground: rgb(147, 197, 253);
+  --accent: rgb(30, 64, 175);
+  --border: rgb(30, 58, 138);
+  --input: rgb(30, 64, 175);
+  --ring: rgb(96, 165, 250);
 }
 
 @theme inline {
@@ -156,4 +285,9 @@
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "ss01" 1, "cv01" 1, "cv11" 1;
   }
+}
+
+@keyframes downcity-progress-shimmer {
+  from { transform: translateX(-160%); }
+  to { transform: translateX(320%); }
 }

@@ -11,7 +11,7 @@ import type * as React from "react";
 import { cn } from "../lib/utils";
 
 function MenuSurface({ className, children, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("min-w-32 overflow-hidden rounded-floating-surface border border-border bg-background p-1 text-popover-foreground outline-none", className)} {...props}>{children}</div>;
+  return <div className={cn("min-w-48 overflow-hidden rounded-xl border border-divider bg-surface-subtle p-1 text-popover-foreground outline-none", className)} {...props}>{children}</div>;
 }
 
 function MenuGroup({ className, ...props }: React.ComponentProps<"div">) {

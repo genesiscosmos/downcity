@@ -19,7 +19,7 @@ Also available: `AlertDialog`, `Breadcrumb`, `Drawer`, `Pagination`, `RadioGroup
 
 ## Advanced interaction primitives
 
-`Combobox` filters a predefined option set, while `FileUpload` only reports browser `File` objects to the host. `DataTable` receives data and column definitions, keeping sorting, data fetching, and selection ownership in the application. `HoverCard` provides a compact delayed summary, and `ResizablePanelGroup` composes adjustable work areas.
+`FileUpload` only reports browser `File` objects to the host. `DataTable` receives data and column definitions, keeping sorting, data fetching, and selection ownership in the application. `HoverCard` provides a compact delayed summary, and `ResizablePanelGroup` composes adjustable work areas.
 
 ```tsx
 <FileUpload files={files} onFilesChange={set_files} accept="image/*" />
@@ -30,3 +30,14 @@ Also available: `AlertDialog`, `Breadcrumb`, `Drawer`, `Pagination`, `RadioGroup
   <ResizablePanel>Content</ResizablePanel>
 </ResizablePanelGroup>
 ```
+
+## Color themes
+
+Every primitive consumes the same semantic variables: `background`, `foreground`, `surface-subtle`, `control-surface`, `divider`, `interaction-hover`, `interaction-selected`, and `primary`. Host applications can define color themes by setting `data-theme` on the root element, without changing component classes.
+
+```tsx
+document.body.dataset.componentTheme = "slate";
+document.body.classList.toggle("dark", prefers_dark);
+```
+
+The showcase keeps its page chrome fixed and applies this choice only to the component display surface. It includes `neutral`, `zinc`, `slate`, `stone`, and `blue` presets, each compatible with light and dark appearance.

@@ -1,7 +1,7 @@
 /** Vibecape 风格 Table 组件组。 */
 import type * as React from "react";
 import { cn } from "../lib/utils";
-const Table = ({ className, ...props }: React.ComponentProps<"table">) => <div className="w-full overflow-x-auto"><table className={cn("w-full caption-bottom text-sm", className)} {...props} /></div>;
+const Table = ({ className, ...props }: React.ComponentProps<"table">) => <div className="w-full overflow-hidden rounded-xl bg-surface-subtle"><div className="overflow-x-auto"><table className={cn("w-full caption-bottom text-sm", className)} {...props} /></div></div>;
 const TableHeader = ({ className, ...props }: React.ComponentProps<"thead">) => <thead className={cn("border-b border-divider text-muted-foreground", className)} {...props} />;
 const TableBody = ({ className, ...props }: React.ComponentProps<"tbody">) => <tbody className={cn("[&_tr:last-child]:border-0", className)} {...props} />;
 const TableFooter = ({ className, ...props }: React.ComponentProps<"tfoot">) => <tfoot className={cn("border-t border-divider bg-surface-subtle font-medium", className)} {...props} />;

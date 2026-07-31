@@ -8,22 +8,20 @@
 
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
+import * as React from "react";
 
 import { cn } from "../lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex flex-none items-center justify-center whitespace-nowrap rounded-md border-none bg-transparent text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground data-[popup-open]:bg-interaction-selected data-[popup-open]:text-foreground data-[state=open]:bg-interaction-selected data-[state=open]:text-foreground disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  "inline-flex flex-none items-center justify-center whitespace-nowrap rounded-lg border border-transparent outline-none transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default:
-          "",
-        outline:
-          "",
-        secondary:
-          "",
-        ghost:
-          "",
+        primary: "bg-primary text-primary-foreground hover:bg-primary/85",
+        default: "bg-transparent text-muted-foreground hover:bg-interaction-hover hover:text-foreground data-[popup-open]:bg-interaction-selected data-[state=open]:bg-interaction-selected",
+        outline: "border-divider bg-transparent text-foreground hover:bg-interaction-hover",
+        secondary: "bg-control-surface text-foreground hover:bg-control-hover",
+        ghost: "bg-transparent text-muted-foreground hover:bg-interaction-hover hover:text-foreground",
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive",
         link: "text-primary underline-offset-4 hover:underline",
@@ -50,14 +48,17 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  children,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  const visible_children = React.Children.toArray(children).filter(Boolean);
+  const resolved_size = visible_children.length === 1 && React.isValidElement(visible_children[0]) && typeof visible_children[0].type !== "string" ? "icon" : size;
   return (
     <ButtonPrimitive
       data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={cn(buttonVariants({ variant, size: resolved_size, className }))}
       {...props}
-    />
+    >{children}</ButtonPrimitive>
   );
 }
 

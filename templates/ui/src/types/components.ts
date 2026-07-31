@@ -43,7 +43,6 @@ export type ShowcaseComponentId =
   | "alert"
   | "alert-dialog"
   | "avatar"
-  | "breadcrumb"
   | "drawer"
   | "input-group"
   | "pagination"
@@ -51,7 +50,6 @@ export type ShowcaseComponentId =
   | "radio-group"
   | "scroll-area"
   | "table"
-  | "combobox"
   | "file-upload"
   | "data-table"
   | "resizable"
@@ -81,7 +79,21 @@ export interface ShowcaseSidebarProps {
   selected_component_id: ShowcaseComponentId;
   /** 用户从目录选择组件时触发的回调。 */
   on_select_component: (component_id: ShowcaseComponentId) => void;
+  /** 当前应用使用的颜色主题标识。 */
+  theme_id: ShowcaseThemeId;
+  /** 用户切换颜色主题时触发的回调。 */
+  on_theme_change: (theme_id: ShowcaseThemeId) => void;
+  /** 当前外观偏好，决定浅色、深色或跟随系统。 */
+  color_mode: ShowcaseColorMode;
+  /** 用户切换外观偏好时触发的回调。 */
+  on_color_mode_change: (color_mode: ShowcaseColorMode) => void;
 }
+
+/** 展示站支持的 Shadcn 风格颜色主题。 */
+export type ShowcaseThemeId = "neutral" | "zinc" | "slate" | "stone" | "blue";
+
+/** 展示站支持的外观偏好。 */
+export type ShowcaseColorMode = "system" | "light" | "dark";
 
 /** ComponentDemo 组件属性。 */
 export interface ComponentDemoProps {

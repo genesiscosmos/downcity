@@ -16,6 +16,7 @@ import type * as React from "react";
  * Button 组件支持的视觉变体。
  */
 export type DowncityButtonVariant =
+  | "primary"
   | "default"
   | "outline"
   | "secondary"

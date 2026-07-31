@@ -24,12 +24,6 @@ import {
   Avatar,
   AvatarFallback,
   AvatarImage,
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
   Button,
   Drawer,
   DrawerClose,
@@ -73,7 +67,7 @@ import type { ShowcaseComponentId } from "../types/components.js";
 /** 基础组件示例统一使用的画布容器。 */
 function PreviewCanvas({ children, compact = false }: { children: ReactNode; compact?: boolean }) {
   return (
-    <div className={compact ? "flex min-h-64 items-center justify-center rounded-xl border border-divider bg-surface-emphasis p-6" : "flex min-h-[420px] items-center justify-center rounded-xl border border-divider bg-surface-emphasis p-6 sm:p-10"}>
+    <div className={compact ? "flex min-h-64 items-center justify-center rounded-xl border border-divider p-6" : "flex min-h-[420px] items-center justify-center rounded-xl border border-divider p-6 sm:p-10"}>
       <div className="w-full max-w-2xl">{children}</div>
     </div>
   );
@@ -92,8 +86,6 @@ export function FoundationPreview({ component_id }: { component_id: ShowcaseComp
       return <PreviewCanvas compact><div className="flex justify-center"><AlertDialog><AlertDialogTrigger render={<Button variant="destructive" />}>Delete draft</AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this draft?</AlertDialogTitle><AlertDialogDescription>This cannot be undone after confirmation.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogClose render={<Button variant="ghost" />}>Cancel</AlertDialogClose><AlertDialogClose render={<Button variant="destructive" />}>Delete</AlertDialogClose></AlertDialogFooter></AlertDialogContent></AlertDialog></div></PreviewCanvas>;
     case "avatar":
       return <PreviewCanvas compact><div className="flex justify-center gap-3"><Avatar><AvatarImage src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=96&q=80" alt="Avery Stone" /><AvatarFallback>AS</AvatarFallback></Avatar><Avatar className="size-10"><AvatarFallback>DC</AvatarFallback></Avatar><Avatar className="size-12"><AvatarFallback>UI</AvatarFallback></Avatar></div></PreviewCanvas>;
-    case "breadcrumb":
-      return <PreviewCanvas compact><Breadcrumb className="mx-auto w-fit"><BreadcrumbList><BreadcrumbItem><BreadcrumbLink href="#components">Components</BreadcrumbLink></BreadcrumbItem><BreadcrumbSeparator /><BreadcrumbItem><BreadcrumbLink href="#forms">Forms</BreadcrumbLink></BreadcrumbItem><BreadcrumbSeparator /><BreadcrumbItem><BreadcrumbPage>Input group</BreadcrumbPage></BreadcrumbItem></BreadcrumbList></Breadcrumb></PreviewCanvas>;
     case "drawer":
       return <PreviewCanvas compact><div className="flex justify-center"><Drawer><DrawerTrigger render={<Button variant="outline" />}>Open drawer</DrawerTrigger><DrawerContent><DrawerHeader><DrawerTitle>Quick settings</DrawerTitle><DrawerDescription>Drawers keep lightweight mobile actions close to the viewport.</DrawerDescription></DrawerHeader><DrawerFooter><DrawerClose render={<Button />}>Done</DrawerClose></DrawerFooter></DrawerContent></Drawer></div></PreviewCanvas>;
     case "input-group":

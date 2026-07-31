@@ -19,13 +19,14 @@ import {
 } from "@downcity/ui";
 
 import { MarkdownDocument } from "./components/markdown-document.js";
-import { ShowcaseSidebar } from "./components/showcase-sidebar.js";
+import { ShowcaseSidebar, ThemeSelector } from "./components/showcase-sidebar.js";
 import {
   component_groups,
   is_showcase_component_id,
 } from "./data/component-catalog.js";
 import type { ShowcaseComponentId } from "./types/components.js";
 import { mdx_document_registry } from "./mdx/registry.js";
+import { use_theme } from "./lib/theme.js";
 
 const default_component_id: ShowcaseComponentId = "button";
 
@@ -38,6 +39,7 @@ function read_component_from_hash(): ShowcaseComponentId {
 
 /** UI SDK 独立展示应用。 */
 export function App() {
+  const { theme_id, set_theme_id, color_mode, set_color_mode, resolved_color_mode } = use_theme();
   const [selected_component_id, set_selected_component_id] =
     useState<ShowcaseComponentId>(read_component_from_hash);
 
@@ -58,14 +60,18 @@ export function App() {
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen bg-background text-primary lg:flex lg:h-screen lg:overflow-hidden">
+      <div className="showcase-page min-h-screen lg:flex lg:h-screen lg:overflow-hidden">
         <ShowcaseSidebar
           selected_component_id={selected_component_id}
           on_select_component={select_component}
+          theme_id={theme_id}
+          on_theme_change={set_theme_id}
+          color_mode={color_mode}
+          on_color_mode_change={set_color_mode}
         />
 
         <div className="min-w-0 flex-1 lg:h-screen lg:overflow-y-auto">
-          <header className="sticky top-0 z-30 border-b border-border bg-background px-4 py-3 lg:hidden">
+          <header className="showcase-chrome sticky top-0 z-30 border-b border-border bg-background px-4 py-3 lg:hidden">
             <div className="flex items-center gap-4">
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium text-muted-foreground">
@@ -96,6 +102,7 @@ export function App() {
                 </SelectContent>
               </Select>
             </div>
+            <ThemeSelector theme_id={theme_id} on_theme_change={set_theme_id} color_mode={color_mode} on_color_mode_change={set_color_mode} />
           </header>
 
           <main>
@@ -103,7 +110,7 @@ export function App() {
           </main>
         </div>
 
-        <Toaster theme="light" />
+        <Toaster theme={resolved_color_mode} />
       </div>
     </TooltipProvider>
   );

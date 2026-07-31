@@ -14,6 +14,12 @@ import { useState } from "react";
 import type { DowncityCodeBlockProps } from "../types/components";
 import { cn } from "../lib/utils";
 
+/** 为未经过构建期 Shiki 处理的短代码提供轻量语法着色。 */
+function render_fallback_highlight(code: string) {
+  const token_pattern = /(\/\/[^\n]*|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\b(?:import|from|export|return|function|const|let|type|interface|if|else|async|await|true|false|null|undefined)\b|\b\d+(?:\.\d+)?\b)/g;
+  return code.split("\n").map((line, line_index) => <span key={line_index} className="block min-h-5">{line.split(token_pattern).filter(Boolean).map((token, token_index) => <span key={token_index} className={token.startsWith("//") ? "text-muted-foreground" : /^("|'|`)/.test(token) ? "text-primary" : /^(import|from|export|return|function|const|let|type|interface|if|else|async|await|true|false|null|undefined)$/.test(token) ? "text-foreground font-medium" : /^\d/.test(token) ? "text-primary/75" : undefined}>{token}</span>)}</span>);
+}
+
 function CodeBlock({
   children,
   className,
@@ -37,9 +43,9 @@ function CodeBlock({
   return (
     <div
       data-slot="code-block"
-      className="overflow-hidden rounded-lg border border-border bg-muted text-foreground"
+      className="overflow-hidden rounded-xl bg-surface-subtle text-foreground"
     >
-      <div className="flex min-h-8 items-center justify-between gap-3 border-b border-divider px-2">
+      <div className="flex min-h-8 items-center justify-between gap-3 border-b border-divider px-3">
         <span className="truncate text-[11px] font-medium text-muted-foreground/60">
           {label ?? resolved_language ?? "code"}
         </span>
@@ -62,7 +68,7 @@ function CodeBlock({
         )}
         {...props}
       >
-        {children ?? <code>{raw_code}</code>}
+        {children ?? <code>{render_fallback_highlight(raw_code)}</code>}
       </pre>
     </div>
   );

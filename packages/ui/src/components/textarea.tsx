@@ -26,7 +26,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         ref={ref}
         data-slot="textarea"
         className={cn(
-          "w-full rounded-lg border border-transparent bg-control-surface p-2 text-left text-sm leading-6 text-foreground transition-colors placeholder:text-muted-foreground/50 hover:bg-control-hover focus:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50 resize-none",
+          "w-full rounded-lg border border-transparent bg-control-surface p-2 text-left text-sm leading-6 text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 hover:bg-control-hover focus:bg-control-hover disabled:cursor-not-allowed disabled:opacity-50 resize-none",
           className,
         )}
         {...props}

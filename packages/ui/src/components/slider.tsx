@@ -27,7 +27,7 @@ function Slider({
   return (
     <SliderPrimitive.Root
       data-slot="slider"
-      className={cn("relative flex w-48 touch-none select-none items-center", className)}
+      className={cn("relative flex h-5 w-48 touch-none select-none items-center", className)}
       defaultValue={defaultValue}
       value={value}
       min={min}
@@ -35,14 +35,14 @@ function Slider({
       {...props}
     >
       <SliderPrimitive.Control className="flex h-5 w-full items-center">
-        <SliderPrimitive.Track className="relative h-2 w-full overflow-hidden rounded-full bg-foreground/12">
+        <SliderPrimitive.Track className="relative h-2.5 w-full overflow-hidden rounded-full bg-muted-foreground/15">
           <SliderPrimitive.Indicator className="rounded-full bg-foreground/85" />
         </SliderPrimitive.Track>
         {values.map((_, index) => (
           <SliderPrimitive.Thumb
             key={index}
             index={index}
-            className="size-4 rounded-full border border-border bg-background disabled:pointer-events-none disabled:opacity-50"
+            className="size-px opacity-0 disabled:pointer-events-none disabled:opacity-50"
           />
         ))}
       </SliderPrimitive.Control>

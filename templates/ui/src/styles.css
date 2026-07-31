@@ -19,7 +19,38 @@ html {
   scroll-behavior: smooth;
 }
 
-body { background: var(--background); }
+body { background: rgb(255, 255, 255); }
+
+/* 页面框架使用固定的中性外观；颜色主题仅作用于右侧组件展示及其 Portal 浮层。 */
+.showcase-page {
+  background: rgb(255, 255, 255);
+  color: rgb(10, 10, 10);
+}
+
+.showcase-chrome {
+  --background: rgb(255, 255, 255);
+  --foreground: rgb(10, 10, 10);
+  --primary: rgb(23, 23, 23);
+  --primary-foreground: rgb(250, 250, 250);
+  --muted: rgb(245, 245, 245);
+  --muted-foreground: rgb(115, 115, 115);
+  --accent: rgb(245, 245, 245);
+  --accent-foreground: rgb(23, 23, 23);
+  --border: rgb(229, 229, 229);
+  --input: rgb(229, 229, 229);
+  --ring: rgb(161, 161, 161);
+  --surface-subtle: color-mix(in srgb, var(--foreground) 4%, transparent);
+  --surface-emphasis: color-mix(in srgb, var(--foreground) 7%, transparent);
+  --interaction-hover: color-mix(in srgb, var(--foreground) 6%, transparent);
+  --interaction-selected: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --divider: color-mix(in srgb, var(--foreground) 6%, transparent);
+  --border-subtle: color-mix(in srgb, var(--border) 55%, transparent);
+  --control-surface: var(--muted);
+  --control-hover: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+}
 
 ::selection {
   background: rgb(17 17 19 / 12%);

@@ -24,7 +24,7 @@ const item_variants = cva(
     variants: {
       variant: {
         default: "hover:bg-interaction-hover",
-        outline: "border border-border-subtle bg-card hover:bg-interaction-hover",
+        outline: "bg-surface-subtle hover:bg-interaction-hover",
         muted: "bg-surface-subtle hover:bg-interaction-hover",
       } satisfies Record<DowncityItemVariant, string>,
       size: {

@@ -25,15 +25,15 @@ function Toaster({ ...props }: ToasterProps) {
       }}
       style={
         {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
+          "--normal-bg": "var(--surface-subtle)",
+          "--normal-text": "var(--foreground)",
+          "--normal-border": "var(--divider)",
+          "--border-radius": "var(--radius-xl)",
         } as CSSProperties
       }
       toastOptions={{
         classNames: {
-          toast: "cn-toast",
+          toast: "cn-toast !rounded-xl !border !border-divider !bg-surface-subtle !shadow-none",
         },
       }}
       {...props}
