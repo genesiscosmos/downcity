@@ -54,7 +54,7 @@ set_turn_status(turn.id, result.success ? "completed" : "failed");
 unsubscribe();
 ```
 
-`apply_mutation_to_ui()` should merge snapshots by `message_id + revision` and append only the incremental text of a `delta`. See [Live subscriptions](/en/agent-sdk-docs/sessions/subscribe) and [Reconnect and sync](/en/agent-sdk-docs/sessions/reconnect-and-sync).
+`apply_mutation_to_ui()` should merge snapshots by `message_id + revision` and append each `delta` only to its matching text or Tool input. See [Live subscriptions](/en/agent-sdk-docs/sessions/subscribe) and [Reconnect and sync](/en/agent-sdk-docs/sessions/reconnect-and-sync).
 
 On failure, the canonical `error` Message carries the user-visible error. Use `turn.finished.error` for control flow, logging, or interfaces that do not render Messages; a chat UI that already renders Session Messages must not append it as a second error.
 

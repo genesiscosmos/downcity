@@ -133,6 +133,30 @@ export class MessageListComponent implements Component {
     }, revision, updated_at);
   }
 
+  /** 把 Tool 输入增量追加到所属 canonical Assistant Tool Part。 */
+  append_tool_input_delta(
+    message_id: string,
+    part_id: string,
+    tool_call_id: string,
+    delta: string,
+    revision: number,
+    updated_at: number,
+  ): void {
+    const message = this.get_assistant_message(message_id);
+    if (!message || revision < message.revision) return;
+    const current_part = message.parts.find((part) => part.part_id === part_id);
+    if (
+      !current_part ||
+      current_part.type !== "tool" ||
+      current_part.tool_call_id !== tool_call_id ||
+      current_part.state !== "input-streaming"
+    ) return;
+    this.upsert_assistant_part(message_id, {
+      ...current_part,
+      input_text: `${current_part.input_text || ""}${delta}`,
+    }, revision, updated_at);
+  }
+
   /** 添加一个只属于本地 TUI 生命周期的提示。 */
   add_notice(notice: TranscriptNotice): void {
     this.append_item({ ...notice });

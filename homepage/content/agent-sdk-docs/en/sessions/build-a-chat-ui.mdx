@@ -66,7 +66,7 @@ Disable Send for empty input. Drive the Stop button from Turn Mutations or `get_
 - Render the conversation by top-level Message `sequence`.
 - Render text, tool, then text inside an Assistant by Part `sequence`.
 - Render one role heading per Assistant Message. Parts from Tool Loops and Provider continuations stay in that same role container.
-- Append a `delta` only to its current text/reasoning Part.
+- Append `text` / `reasoning` Deltas to the current text Part and `tool_input` Deltas to the current Tool Part's `input_text`.
 - Replace complete Part state by stable `part_id`.
 - Replace complete Message state by `message_id + revision`.
 - Treat the top-level `error` Message as the single user-visible error for one failure.

@@ -54,7 +54,7 @@ set_turn_status(turn.id, result.success ? "completed" : "failed");
 unsubscribe();
 ```
 
-`apply_mutation_to_ui()` 应按 `message_id + revision` 合并完整快照；对 `delta` 只追加增量文本。完整做法见 [实时订阅](/zh/agent-sdk-docs/sessions/subscribe) 和 [重连与同步](/zh/agent-sdk-docs/sessions/reconnect-and-sync)。
+`apply_mutation_to_ui()` 应按 `message_id + revision` 合并完整快照；对 `delta` 只向对应文本或 Tool 输入追加增量。完整做法见 [实时订阅](/zh/agent-sdk-docs/sessions/subscribe) 和 [重连与同步](/zh/agent-sdk-docs/sessions/reconnect-and-sync)。
 
 失败时，用户可见错误由 canonical `error` Message 提供。`turn.finished.error` 用于控制流、日志或非 Message 界面；已经渲染 Session Message 的聊天界面不要再把它追加成第二条错误。
 

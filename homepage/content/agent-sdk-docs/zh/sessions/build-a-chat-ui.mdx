@@ -66,7 +66,7 @@ async function stop(): Promise<void> {
 - 按顶层 Message 的 `sequence` 渲染对话。
 - Assistant 内按 Part 的 `sequence` 渲染文本、工具、再文本。
 - 一个 Assistant Message 只渲染一次角色标题；Tool Loop 和 Provider continuation 产生的新 Part 继续留在同一角色容器中。
-- `delta` 只追加到当前 text/reasoning Part。
+- `text` / `reasoning` Delta 追加到当前文本 Part，`tool_input` Delta 追加到当前 Tool Part 的 `input_text`。
 - `part` 用稳定 `part_id` 覆盖完整状态。
 - `message` 用 `message_id + revision` 覆盖完整 Message。
 - 顶层 `error` Message 是一次失败唯一的用户可见错误提示。

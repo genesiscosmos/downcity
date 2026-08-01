@@ -26,7 +26,7 @@ unsubscribe();
 | --- | --- | --- | --- |
 | `message` | `user | assistant | action | error` | 顶层 Message 的完整快照 | 是 |
 | `part` | `text | reasoning | tool | interaction | file | data | source | step-start` | Assistant Part 的完整快照 | 是 |
-| `delta` | `text | reasoning` | 新增的原始文本片段 | 是 |
+| `delta` | `text | reasoning | tool_input` | 新增的原始文本或 Tool 输入片段 | 是 |
 | `turn` | `start | finish` | Turn 执行生命周期 | 否 |
 | `compact` | `start | finish` | 显式 Compact Command 生命周期 | 否 |
 | `session` | `title` | Session 自身属性变化 | 否 |
@@ -47,7 +47,7 @@ session.subscribe((mutation) => {
 });
 ```
 
-Delta 是新增片段，不是累计全文。不要把 `delta` 当成完整 Part 覆盖 UI；也不要根据文本内容推断顺序，使用 `message_id`、`part_id` 与 `revision`。
+Delta 是新增片段，不是累计全文。不要把 `delta` 当成完整 Part 覆盖 UI；也不要根据文本内容推断顺序，使用 `message_id`、`part_id` 与 `revision`。`tool_input` Delta 还会携带对应的 `tool_call_id`。
 
 ## 用完整快照纠正状态
 
@@ -66,7 +66,16 @@ function apply_mutation(mutation: SessionMutation): void {
   }
 
   if (mutation.variant === "delta") {
-    append_part_delta(mutation.message_id, mutation.part_id, mutation.delta);
+    if (mutation.type === "tool_input") {
+      append_tool_input_delta(
+        mutation.message_id,
+        mutation.part_id,
+        mutation.tool_call_id,
+        mutation.delta,
+      );
+    } else {
+      append_text_delta(mutation.message_id, mutation.part_id, mutation.delta);
+    }
   }
 }
 ```
@@ -109,7 +118,7 @@ input-streaming -> ready -> waiting-user -> running -> completed
 ready ----------------------------------------------> running
 ```
 
-`input-streaming` 表示模型仍在输出工具参数；`ready` 表示输入完整但工具尚未执行。UI 应以 `tool_call_id` 或 `part_id` 做稳定 key，不要每次收到 Part 就新增一项。
+`input-streaming` 表示模型仍在输出工具参数。此阶段参数原文通过 `tool_input` Delta 追加到 Tool Part 的 `input_text`；`ready` Part 是输入完整后的校准快照，并携带解析完成的 `input`。UI 应以 `tool_call_id` 或 `part_id` 做稳定 key，不要为每个 Delta 新增一项。
 
 审批的处理方式见 [工具审批](/zh/agent-sdk-docs/sessions/approvals)。
 

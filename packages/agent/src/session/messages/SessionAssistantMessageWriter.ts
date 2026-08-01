@@ -217,13 +217,20 @@ export class SessionAssistantMessageWriter {
         return;
       }
       case "tool-input-delta": {
+        if (chunk.inputTextDelta.length === 0) return;
         const tool = this.find_tool(chunk.toolCallId);
-        if (tool && tool.state !== "input-streaming") return;
-        await this.upsert_tool(chunk.toolCallId, {
-          tool_name: tool?.tool_name || "unknown",
-          state: "input-streaming",
-          input_text: `${tool?.input_text || ""}${chunk.inputTextDelta}`,
-        });
+        if (!tool) {
+          throw new Error(
+            `Assistant canonical Tool Part not found: ${chunk.toolCallId}`,
+          );
+        }
+        if (tool.state !== "input-streaming") return;
+        await this.recorder.append_assistant_tool_input_delta(
+          this.message_id,
+          tool.part_id,
+          chunk.toolCallId,
+          chunk.inputTextDelta,
+        );
         return;
       }
       case "tool-input-available": {

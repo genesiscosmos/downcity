@@ -26,7 +26,7 @@ Every Mutation has `mutation_id`, `session_id`, and `created_at`.
 | --- | --- | --- | --- |
 | `message` | `user | assistant | action | error` | Complete top-level Message snapshot | Yes |
 | `part` | `text | reasoning | tool | interaction | file | data | source | step-start` | Complete Assistant Part snapshot | Yes |
-| `delta` | `text | reasoning` | New raw text fragment | Yes |
+| `delta` | `text | reasoning | tool_input` | New raw text or Tool input fragment | Yes |
 | `turn` | `start | finish` | Turn execution lifecycle | No |
 | `compact` | `start | finish` | Explicit Compact Command lifecycle | No |
 | `session` | `title` | Session property change | No |
@@ -47,7 +47,7 @@ session.subscribe((mutation) => {
 });
 ```
 
-A Delta is an appended fragment, not cumulative text. Do not use it as a complete Part snapshot and do not infer order from text content; use `message_id`, `part_id`, and `revision`.
+A Delta is an appended fragment, not cumulative text. Do not use it as a complete Part snapshot and do not infer order from text content; use `message_id`, `part_id`, and `revision`. A `tool_input` Delta also carries the matching `tool_call_id`.
 
 ## Correct state with complete snapshots
 
@@ -66,7 +66,16 @@ function apply_mutation(mutation: SessionMutation): void {
   }
 
   if (mutation.variant === "delta") {
-    append_part_delta(mutation.message_id, mutation.part_id, mutation.delta);
+    if (mutation.type === "tool_input") {
+      append_tool_input_delta(
+        mutation.message_id,
+        mutation.part_id,
+        mutation.tool_call_id,
+        mutation.delta,
+      );
+    } else {
+      append_text_delta(mutation.message_id, mutation.part_id, mutation.delta);
+    }
   }
 }
 ```
@@ -109,7 +118,7 @@ input-streaming -> ready -> waiting-user -> running -> completed
 ready ----------------------------------------------> running
 ```
 
-`input-streaming` means the model is still producing tool arguments; `ready` means input is complete but execution has not started. Key UI elements by `tool_call_id` or `part_id`; do not append a new item for every Part update.
+`input-streaming` means the model is still producing tool arguments. During this phase, append `tool_input` Deltas to the Tool Part's `input_text`; the `ready` Part is the corrective snapshot after input completes and carries the parsed `input`. Key UI elements by `tool_call_id` or `part_id`; do not append a new item for every Delta.
 
 See [Tool approvals](/en/agent-sdk-docs/sessions/approvals) for approval handling.
 

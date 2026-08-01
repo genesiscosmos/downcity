@@ -56,12 +56,10 @@ export type SessionPartMutation = {
   };
 }[SessionAssistantMessagePart["type"]];
 
-/** Assistant 文本或推理的原始增量 Mutation。 */
-export interface SessionDeltaMutation extends SessionMutationBase {
+/** Assistant Part 原始增量 Mutation 的公共字段。 */
+interface SessionDeltaMutationBase extends SessionMutationBase {
   /** Mutation 层级固定为 delta。 */
   variant: "delta";
-  /** Delta 只允许可见文本或推理文本。 */
-  type: "text" | "reasoning";
   /** 当前 Delta 所属 Message 标识。 */
   message_id: string;
   /** 当前 Mutation 所属 Turn 标识。 */
@@ -73,6 +71,25 @@ export interface SessionDeltaMutation extends SessionMutationBase {
   /** 本次新增的原始文本，不是累计全文。 */
   delta: string;
 }
+
+/** Assistant 文本或推理的原始增量 Mutation。 */
+interface SessionTextDeltaMutation extends SessionDeltaMutationBase {
+  /** Delta 属于可见文本或推理文本。 */
+  type: "text" | "reasoning";
+}
+
+/** Assistant Tool 输入的原始增量 Mutation。 */
+interface SessionToolInputDeltaMutation extends SessionDeltaMutationBase {
+  /** Delta 属于 Tool 输入参数原文。 */
+  type: "tool_input";
+  /** 当前 Delta 所属 Tool Call 标识。 */
+  tool_call_id: string;
+}
+
+/** Assistant 文本、推理或 Tool 输入的原始增量 Mutation。 */
+export type SessionDeltaMutation =
+  | SessionTextDeltaMutation
+  | SessionToolInputDeltaMutation;
 
 /** Turn 生命周期 Mutation。 */
 export type SessionTurnMutation = SessionMutationBase & {

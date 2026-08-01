@@ -576,6 +576,59 @@ export class SessionMessages {
     }, message);
   }
 
+  /** @internal 写入 Assistant Tool 输入原始 delta。 */
+  async append_assistant_tool_input_delta(
+    message_id: string,
+    part_id: string,
+    tool_call_id: string,
+    delta: string,
+  ): Promise<void> {
+    if (!delta) return;
+    await this.enqueue_assistant_write(message_id, async () => {
+      const current = require_message(
+        [...this.messages_by_id.values()],
+        message_id,
+        "assistant",
+      );
+      require_streaming_assistant(current);
+      const part = current.parts.find((item) => item.part_id === part_id);
+      if (!part || part.type !== "tool") {
+        throw new Error(`Tool input Delta target Part does not exist: ${part_id}`);
+      }
+      if (part.tool_call_id !== tool_call_id) {
+        throw new Error(`Tool input Delta tool_call_id changed for Part: ${part_id}`);
+      }
+      if (part.state !== "input-streaming") {
+        throw new Error(`Tool input Delta cannot update ${part.state} Part: ${part_id}`);
+      }
+      const created_at = Date.now();
+      const message: SessionAssistantMessage = {
+        ...current,
+        revision: current.revision + 1,
+        updated_at: created_at,
+        parts: current.parts.map((item) =>
+          item.part_id === part_id && item.type === "tool"
+            ? { ...item, input_text: `${item.input_text || ""}${delta}` }
+            : item,
+        ),
+      };
+      await this.store.write_assistant_message(message);
+      this.accept_mutation({
+        mutation_id: generate_id(),
+        variant: "delta",
+        type: "tool_input",
+        message_id,
+        revision: message.revision,
+        session_id: this.session_id,
+        turn_id: message.turn_id,
+        created_at,
+        part_id,
+        tool_call_id,
+        delta,
+      }, message);
+    });
+  }
+
   /** @internal 写入 Assistant 完整 part。 */
   async update_assistant_part(
     message_id: string,

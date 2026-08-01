@@ -131,7 +131,7 @@ while (page.has_more && page.next_before_sequence !== undefined) {
 
 1. Use `messages()` to establish the Active state.
 2. Replace the targeted snapshot for a `message` or `part` Mutation.
-3. Append new text for a `delta` Mutation.
+3. Append new text or raw Tool input for a `delta` Mutation.
 4. Load older Segments one at a time with `next_before_sequence`.
 5. On disconnect, reload Active and merge by `message_id + revision`.
 

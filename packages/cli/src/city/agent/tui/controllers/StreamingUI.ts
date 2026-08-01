@@ -57,14 +57,26 @@ export class StreamingUIController {
     }
 
     if (event.variant === "delta") {
-      if (event.type !== "text") return;
-      this.message_list.append_assistant_delta(
-        event.message_id,
-        event.part_id,
-        event.delta,
-        event.revision,
-        event.created_at,
-      );
+      if (event.type === "text") {
+        this.message_list.append_assistant_delta(
+          event.message_id,
+          event.part_id,
+          event.delta,
+          event.revision,
+          event.created_at,
+        );
+      } else if (event.type === "tool_input") {
+        this.message_list.append_tool_input_delta(
+          event.message_id,
+          event.part_id,
+          event.tool_call_id,
+          event.delta,
+          event.revision,
+          event.created_at,
+        );
+      } else {
+        return;
+      }
       this.schedule_render();
       return;
     }

@@ -46,7 +46,7 @@ snapshot_ready = true;
 | --- | --- |
 | `message` | 按 `message_id` upsert，仅应用更高 `revision` |
 | `part` | 在对应 Assistant Message 内按 `part_id` upsert，仅应用更高 `revision` |
-| `delta` | 只向对应 text/reasoning Part 追加 `delta` |
+| `delta` | 向对应 text/reasoning 的 `text` 或 Tool 的 `input_text` 追加 `delta` |
 | `turn` | 按 `turn_id` 更新运行状态 |
 | `session` | 更新当前 Session 元数据，例如标题 |
 
@@ -74,7 +74,7 @@ snapshot_ready = true;
 
 - 用 `message_id + revision` 排除旧快照。
 - 对 Part 使用所属 Message 的 revision。
-- 对 Delta 只在流仍连续时追加；重连后以快照为准。
+- 对 Delta 只在流仍连续时追加；`tool_input` 通过 `tool_call_id` 校验目标 Tool；重连后以快照为准。
 - 可用 `mutation_id` 去重同一个事件的重复投递。
 
 这套方式适用于本地与远程 Session。区别仅在远程 transport 可能断开，本地回调通常不会。

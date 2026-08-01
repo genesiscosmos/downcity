@@ -69,7 +69,7 @@ export class AgentChatInteractiveRenderer implements AgentChatInteractiveRendere
 
     if (event.variant === "delta") {
       if (event.type === "text") this.print_text_delta(event.delta);
-      else this.set_spinner_text("Thinking...");
+      else if (event.type === "reasoning") this.set_spinner_text("Thinking...");
       return;
     }
     if (event.variant === "message") {

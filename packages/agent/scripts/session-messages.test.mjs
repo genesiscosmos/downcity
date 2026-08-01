@@ -204,6 +204,16 @@ test("Tool Runtime 在文本中间保持输入、审批和输出的确定顺序"
   await writer.apply_chunk({ type: "text-end", id: "text-1" });
   await writer.apply_chunk({ type: "tool-input-start", toolCallId: "call-1", toolName: "shell_exec" });
   await writer.apply_chunk({
+    type: "tool-input-delta",
+    toolCallId: "call-1",
+    inputTextDelta: '{"cmd":"',
+  });
+  await writer.apply_chunk({
+    type: "tool-input-delta",
+    toolCallId: "call-1",
+    inputTextDelta: 'pwd"}',
+  });
+  await writer.apply_chunk({
     type: "tool-input-available",
     toolCallId: "call-1",
     toolName: "shell_exec",
@@ -238,7 +248,17 @@ test("Tool Runtime 在文本中间保持输入、审批和输出的确定顺序"
   assert.deepEqual(assistant.parts.map((part) => part.type), ["text", "tool", "interaction", "text"]);
   assert.deepEqual(assistant.parts.map((part) => part.sequence), [1, 2, 3, 4]);
   assert.equal(assistant.parts[1].state, "completed");
+  assert.equal(assistant.parts[1].input_text, '{"cmd":"pwd"}');
   assert.deepEqual(assistant.parts[1].output, { count: 1 });
+  assert.deepEqual(
+    events
+      .filter((event) => event.variant === "delta" && event.type === "tool_input")
+      .map((event) => [event.tool_call_id, event.delta]),
+    [
+      ["call-1", '{"cmd":"'],
+      ["call-1", 'pwd"}'],
+    ],
+  );
   assert.deepEqual(
     events
       .filter((event) => event.variant === "part" && event.type === "tool")

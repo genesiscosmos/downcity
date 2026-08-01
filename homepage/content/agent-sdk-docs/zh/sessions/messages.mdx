@@ -129,7 +129,7 @@ while (page.has_more && page.next_before_sequence !== undefined) {
 
 1. 用 `messages()` 建立 Active 初始状态。
 2. 用 `message` / `part` Mutation 替换对应快照。
-3. 用 `delta` 追加当前 Part 的新文本。
+3. 用 `delta` 追加当前文本 Part 的新文本或 Tool Part 的输入原文。
 4. 向上滚动时按 `next_before_sequence` 逐个加载 Segment。
 5. 断线后重新读取 Active，并按 `message_id + revision` 合并。
 

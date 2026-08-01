@@ -389,9 +389,26 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
   assert.match(preparing, /Tool · shell_exec · Preparing input/);
 
   renderer.render_event({
+    message_id: "assistant-streaming-input",
+    session_id: "session-1",
+    turn_id: "turn-streaming-input",
+    created_at: 1,
+    variant: "delta",
+    type: "tool_input",
+    mutation_id: "mutation-input-delta",
+    revision: 3,
+    part_id: "tool:call-streaming-input",
+    tool_call_id: "call-streaming-input",
+    delta: '{"cmd":"ls -la ~/Desktop"}',
+  });
+
+  const input_streaming = plain(message_list.render(80)).join("\n");
+  assert.match(input_streaming, /Tool · shell_exec · Preparing input/);
+
+  renderer.render_event({
     ...base_event,
     mutation_id: "mutation-input-ready",
-    revision: 3,
+    revision: 4,
     part: {
       part_id: "tool:call-streaming-input",
       type: "tool",
@@ -416,7 +433,7 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
   renderer.render_event({
     ...base_event,
     mutation_id: "mutation-waiting-user",
-    revision: 4,
+    revision: 5,
     part: {
       part_id: "tool:call-streaming-input",
       type: "tool",

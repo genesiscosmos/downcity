@@ -46,7 +46,7 @@ A real UI should process `buffered` and set `snapshot_ready = true` in one seria
 | --- | --- |
 | `message` | Upsert by `message_id`; apply only a greater `revision` |
 | `part` | Upsert by `part_id` in its Assistant Message; apply only a greater `revision` |
-| `delta` | Append `delta` only to the matching text/reasoning Part |
+| `delta` | Append `delta` to matching text/reasoning `text` or Tool `input_text` |
 | `turn` | Update runtime state by `turn_id` |
 | `session` | Update Session metadata such as the title |
 
@@ -74,7 +74,7 @@ Events from one connection are normally ordered, but a client should still be id
 
 - Use `message_id + revision` to reject old snapshots.
 - Use the parent Message revision for Parts.
-- Append Deltas only while the stream is continuous; after reconnect, prefer the snapshot.
+- Append Deltas only while the stream is continuous; validate `tool_input` against its `tool_call_id`; after reconnect, prefer the snapshot.
 - `mutation_id` can deduplicate repeated delivery of the same event.
 
 This approach works for local and remote Sessions. Only the remote transport commonly disconnects.
