@@ -1,6 +1,6 @@
 {
   "name": "@downcity/database-postgresql",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Downcity Federation Database adapter for PostgreSQL via postgres-js.",
   "type": "module",
   "main": "./bin/index.js",
