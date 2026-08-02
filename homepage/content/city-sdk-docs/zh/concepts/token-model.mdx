@@ -9,7 +9,7 @@ Downcity 使用 `admin_secret_key` 管理 Federation，并使用 `user_token` �
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>可信后端</strong>
-      <span>你的后端使用 Admin City，并持有 `admin_secret_key`。</span>
+      <span>你的后端使用 FederationAdmin，并持有 `admin_secret_key`。</span>
       <code>创建 city / 申请 user_token</code>
     </div>
   </div>
@@ -24,7 +24,7 @@ Downcity 使用 `admin_secret_key` 管理 Federation，并使用 `user_token` �
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>终端 client</strong>
-      <span>前端、扩展或 App 只拿 `user_token + city_id`，使用 User City 调 service。</span>
+      <span>前端、扩展或 App 只拿 `user_token + bureau_id`，使用 User City 调 service。</span>
       <code>拿不到 admin_secret_key</code>
     </div>
   </div>
@@ -32,38 +32,38 @@ Downcity 使用 `admin_secret_key` 管理 Federation，并使用 `user_token` �
 
 ## user_token
 
-`user_token` 是给终端用户或产品 client 使用的调用凭证。它由 `Admin City` 基于 `city_id + user_id` 向 Federation 申请。
+`user_token` 是给终端用户或产品 client 使用的调用凭证。它由 `FederationAdmin` 基于 `bureau_id + user_id` 向 Federation 申请。
 
-- `city_id`
+- `bureau_id`
 - `user_id`
 - `metadata`
 - `ttl`
 
-client 只携带 `user_token` 和 `city_id`，不接触 provider key，也不接触 `admin_secret_key`。
+client 只携带 `user_token` 和 `bureau_id`，不接触 provider key，也不接触 `admin_secret_key`。
 
 ## admin_secret_key
 
 `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` 用于管理 Federation：创建 city、管理 env、为某个 city 下的用户签发 `user_token`。Federation 首次启动时会自动生成并写入 Federation env。
 
 ```ts
-const admin = new City({
-  role: "admin",
-  federation_url: "https://base.example.com",
-  admin_secret_key: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+const admin = new FederationAdmin({
+  base_url: "https://base.example.com",
+  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
 });
 
-const city = await admin.cities.create({
+const bureau = await admin.bureaus.create({
   name: "Chrome Extension",
+  server_url: "https://bureau.example.com",
 });
 ```
 
 ## 多产品复用
 
-多个 client 可以归属同一个 city。签发 token 时明确写入 `city_id`：
+多个 client 可以归属同一个 city。签发 token 时明确写入 `bureau_id`：
 
 ```ts
-const user = await admin.cities.tokens.apply({
-  city_id: city.city_id,
+const user = await admin.service("accounts").action("tokens/issue").invoke({
+  bureau_id: bureau.bureau_id,
   user_id: "user_123",
   metadata: {
     plan: "pro",

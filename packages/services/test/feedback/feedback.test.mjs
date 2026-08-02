@@ -29,17 +29,17 @@ test("feedbackService manages user feedback and admin replies", async () => {
     assert.ok(services.items.some((item) => item.id === "feedback"))
 
     const cityOne = await (await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/cities/create",
-      body: { name: "City One" },
+      path: "/v1/bureaus/create",
+      body: { name: "City One", server_url: "https://city-one.example.com" },
     }))).json()
     const cityTwo = await (await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/cities/create",
-      body: { name: "City Two" },
+      path: "/v1/bureaus/create",
+      body: { name: "City Two", server_url: "https://city-two.example.com" },
     }))).json()
 
-    const userOneToken = await issueUserToken(base, adminSecret, cityOne.city_id, "user_1")
-    const userTwoToken = await issueUserToken(base, adminSecret, cityOne.city_id, "user_2")
-    const userOtherCityToken = await issueUserToken(base, adminSecret, cityTwo.city_id, "user_1")
+    const userOneToken = await issueUserToken(base, adminSecret, cityOne.bureau_id, "user_1")
+    const userTwoToken = await issueUserToken(base, adminSecret, cityOne.bureau_id, "user_2")
+    const userOtherCityToken = await issueUserToken(base, adminSecret, cityTwo.bureau_id, "user_1")
 
     const emptyResponse = await base.fetch(userRequest({
       token: userOneToken,
@@ -87,7 +87,7 @@ test("feedbackService manages user feedback and admin replies", async () => {
     const me = await meResponse.json()
     assert.equal(me.items.length, 1)
     assert.equal(me.items[0].feedback_id, createdOne.feedback_id)
-    assert.equal(me.items[0].city_id, cityOne.city_id)
+    assert.equal(me.items[0].bureau_id, cityOne.bureau_id)
     assert.equal(me.items[0].user_id, "user_1")
     assert.equal(me.items[0].status, "open")
     assert.equal(me.items[0].reply, "")
@@ -96,7 +96,7 @@ test("feedbackService manages user feedback and admin replies", async () => {
     assert.equal(me.items[0].metadata_json, JSON.stringify({ page: "/billing", client_version: "1.2.3" }))
 
     const queryStatusResponse = await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/feedback/messages?status=open&city_id=" + encodeURIComponent(cityOne.city_id),
+      path: "/v1/feedback/messages?status=open&bureau_id=" + encodeURIComponent(cityOne.bureau_id),
       method: "GET",
     }))
     assert.equal(queryStatusResponse.status, 200)
@@ -218,10 +218,11 @@ function userRequest({ token, path: pathname, method = "POST", body }) {
 }
 
 async function issueUserToken(base, adminSecret, cityId, userId) {
-  const tokenBody = await (await base.fetch(adminRequest(adminSecret, {
-    path: "/v1/cities/tokens/apply",
-    body: { city_id: cityId, user_id: userId },
-  }))).json()
+  void adminSecret
+  const tokenBody = await (await base.getAuthenticator()).createToken({
+    bureau_id: cityId,
+    user_id: userId,
+  })
   return tokenBody.user_token
 }
 

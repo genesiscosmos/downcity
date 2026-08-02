@@ -7,7 +7,7 @@ Downcity's City SDK is the way AI builders create, deploy, and call City. A Fede
 
 City exposes a stable **product-facing service boundary** instead of a raw provider API. Inside City, capabilities are organized as `Service`, `Action`, and `AIService`.
 
-- the product client holds `city_id + user_token`
+- the product client holds `user_token` (which contains `bureau_id`)
 - it calls `text()`, `stream()`, `image()`, and other services through `User City`
 - City keeps the model catalog, provider routing, hooks, usage, and env behind the boundary
 
@@ -39,7 +39,7 @@ The server-side runtime class is `Federation` (also called the Federation here);
   <a className="dc-doc-card" href="/en/city-sdk-docs/reference">
     <em>API</em>
     <strong>I only need the interfaces</strong>
-    <p>Jump straight to City, User City, Admin City, HTTP API, and environment variables.</p>
+    <p>Jump straight to City, User City, FederationAdmin, HTTP API, and environment variables.</p>
   </a>
 </div>
 
@@ -50,7 +50,7 @@ The server-side runtime class is `Federation` (also called the Federation here);
     <div className="dc-doc-node">
       <strong>Many product clients</strong>
       <span>Web apps, extensions, apps, desktop tools, client demos, and internal tools.</span>
-      <code>User City + city_id + user_token</code>
+      <code>User City + user_token (which contains bureau_id)</code>
     </div>
   </div>
   <div className="dc-doc-arrow" aria-hidden="true">→</div>

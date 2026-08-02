@@ -20,6 +20,7 @@ export class BureauTokenStore {
   /** 登记 CLI 生成的 Bureau Token hash，不接触 Token 明文。 */
   async register(input: RegisterBureauTokenInput): Promise<BureauTokenSummary> {
     const token_id = read_token_id_value(input.token_id);
+    const bureau_id = read_required_string(input.bureau_id, "bureau_id");
     const purpose = read_token_purpose(input.purpose);
     const token_hash = read_token_hash(input.token_hash);
     if ((await this.table.select({ token_id }))[0]) {
@@ -28,6 +29,7 @@ export class BureauTokenStore {
     const now = new Date().toISOString();
     await this.table.insert({
       token_id,
+      bureau_id,
       purpose,
       token_hash,
       status: "active",
@@ -36,6 +38,7 @@ export class BureauTokenStore {
     });
     return {
       token_id,
+      bureau_id,
       purpose,
       status: "active",
       created_at: now,
@@ -44,23 +47,21 @@ export class BureauTokenStore {
   }
 
   /** 验证 Bureau Token 是否属于当前 Federation 的 active 管理凭证。 */
-  async resolve(bureau_token: string): Promise<boolean> {
+  async resolve(bureau_token: string): Promise<BureauTokenSummary | undefined> {
     const token_id = read_token_id(bureau_token);
-    if (!token_id) return false;
+    if (!token_id) return undefined;
     const record = (await this.table.select({ token_id }))[0];
-    if (!record || record.status !== "active") return false;
-    return record.token_hash === await hash_token(bureau_token);
+    if (!record || record.status !== "active") return undefined;
+    if (record.token_hash !== await hash_token(bureau_token)) return undefined;
+    return summarize(record);
   }
 
   /** 列出 Bureau Token 元数据，不返回 token hash。 */
-  async list(): Promise<BureauTokenSummary[]> {
-    return (await this.table.select()).map((record) => ({
-      token_id: record.token_id,
-      purpose: record.purpose,
-      status: record.status,
-      created_at: record.created_at,
-      updated_at: record.updated_at,
-    }));
+  async list(bureau_id?: string): Promise<BureauTokenSummary[]> {
+    const rows = bureau_id
+      ? await this.table.select({ bureau_id: read_required_string(bureau_id, "bureau_id") })
+      : await this.table.select();
+    return rows.map(summarize);
   }
 
   /** 立即撤销 Bureau Token。 */
@@ -74,6 +75,30 @@ export class BureauTokenStore {
       values: { status: "revoked", updated_at: new Date().toISOString() },
     });
   }
+
+  /** 撤销一个 Bureau 的全部 active 机器凭证。 */
+  async revoke_for_bureau(bureau_id: string): Promise<void> {
+    const id = read_required_string(bureau_id, "bureau_id");
+    const now = new Date().toISOString();
+    for (const record of await this.table.select({ bureau_id: id })) {
+      if (record.status !== "active") continue;
+      await this.table.update({
+        where: { token_id: record.token_id },
+        values: { status: "revoked", updated_at: now },
+      });
+    }
+  }
+}
+
+function summarize(record: BureauTokenRecord): BureauTokenSummary {
+  return {
+    token_id: record.token_id,
+    bureau_id: record.bureau_id,
+    purpose: record.purpose,
+    status: record.status,
+    created_at: record.created_at,
+    updated_at: record.updated_at,
+  };
 }
 
 function read_token_id_value(value: unknown): string {

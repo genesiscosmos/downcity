@@ -7,7 +7,7 @@
  * - 直接管理：list / upsert / remove 裸 key-value
  */
 
-import { Bureau } from "@downcity/city";
+import { FederationAdmin } from "@downcity/city";
 import { t } from "@/shared/CliLocale.js";
 import { adminErrorMessage, isAdminNotFoundError, rethrowAdminAuthError } from "@/federation/admin/auth-error.js";
 import type { admin_tui_runtime, admin_tui_select_option } from "@/federation/types/AdminTui.js";
@@ -34,7 +34,7 @@ interface ServiceEnv {
   env: EnvRequirement[];
 }
 
-export async function manageEnv(a: Bureau, _baseUrl: string, runtime: admin_tui_runtime): Promise<void> {
+export async function manageEnv(a: FederationAdmin, _baseUrl: string, runtime: admin_tui_runtime): Promise<void> {
   while (true) {
     const services = await fetchEnvScopes(a, runtime);
 
@@ -113,7 +113,7 @@ export async function manageEnv(a: Bureau, _baseUrl: string, runtime: admin_tui_
 // ============================================================
 
 async function initAllEnv(
-  a: Bureau,
+  a: FederationAdmin,
   services: ServiceEnv[],
   runtime: admin_tui_runtime,
 ): Promise<void> {
@@ -166,7 +166,7 @@ async function initAllEnv(
 // 直接管理模式
 // ============================================================
 
-async function listAllEnv(a: Bureau, runtime: admin_tui_runtime): Promise<void> {
+async function listAllEnv(a: FederationAdmin, runtime: admin_tui_runtime): Promise<void> {
   try {
     const items = await runtime.with_loading("Env", async () => await a.env.list());
     await runtime.show_table({
@@ -183,7 +183,7 @@ async function listAllEnv(a: Bureau, runtime: admin_tui_runtime): Promise<void> 
   }
 }
 
-async function upsertEnv(a: Bureau, runtime: admin_tui_runtime): Promise<void> {
+async function upsertEnv(a: FederationAdmin, runtime: admin_tui_runtime): Promise<void> {
   const key = await runtime.text(t({ zh: "key", en: "key" }));
   if (!key) return;
   const value = await runtime.text(t({ zh: "值", en: "value" }));
@@ -197,7 +197,7 @@ async function upsertEnv(a: Bureau, runtime: admin_tui_runtime): Promise<void> {
   }
 }
 
-async function updateEnv(a: Bureau, runtime: admin_tui_runtime): Promise<void> {
+async function updateEnv(a: FederationAdmin, runtime: admin_tui_runtime): Promise<void> {
   const items = await fetchCurrentEnv(a);
   if (items.length === 0) {
     await runtime.show_message("info", t({ zh: "没有可更新的环境变量。", en: "No env variables to update." }));
@@ -234,7 +234,7 @@ async function updateEnv(a: Bureau, runtime: admin_tui_runtime): Promise<void> {
   }
 }
 
-async function removeEnv(a: Bureau, runtime: admin_tui_runtime): Promise<void> {
+async function removeEnv(a: FederationAdmin, runtime: admin_tui_runtime): Promise<void> {
   const key = await runtime.text(t({ zh: "key", en: "key" }));
   if (!key) return;
   try {
@@ -246,7 +246,7 @@ async function removeEnv(a: Bureau, runtime: admin_tui_runtime): Promise<void> {
   }
 }
 
-async function refreshEnv(a: Bureau, runtime: admin_tui_runtime): Promise<void> {
+async function refreshEnv(a: FederationAdmin, runtime: admin_tui_runtime): Promise<void> {
   try {
     const result = await runtime.with_loading(t({ zh: "刷新 Env", en: "Refresh Env" }), async () => await a.env.refresh());
     await runtime.show_message("success", t({
@@ -264,7 +264,7 @@ async function refreshEnv(a: Bureau, runtime: admin_tui_runtime): Promise<void> 
 // ============================================================
 
 async function configureServiceEnv(
-  a: Bureau,
+  a: FederationAdmin,
   svc: ServiceEnv,
   runtime: admin_tui_runtime,
 ): Promise<void> {
@@ -314,7 +314,7 @@ async function configureServiceEnv(
 // ============================================================
 
 async function fetchEnvScopes(
-  a: Bureau,
+  a: FederationAdmin,
   runtime: admin_tui_runtime,
 ): Promise<ServiceEnv[] | undefined> {
   try {
@@ -344,7 +344,7 @@ async function fetchEnvScopes(
   }
 }
 
-async function fetchCurrentEnv(a: Bureau): Promise<{ key: string; value: string }[]> {
+async function fetchCurrentEnv(a: FederationAdmin): Promise<{ key: string; value: string }[]> {
   try {
     return await a.env.list();
   } catch (e) {

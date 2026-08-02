@@ -1,15 +1,15 @@
 ---
 title: SDK Overview
-description: "The Downcity SDK is split by role: User City owns Federation calls, while Admin City owns trusted-side management calls."
+description: "The Downcity SDK is split by role: User City owns Federation calls, while FederationAdmin owns trusted-side management calls."
 ---
 
 This page does one job: it pulls the calling model of `@downcity/city` into one reference overview.
 
-If you want the integration story first, start with [@downcity/city](/en/city-sdk-docs/packages/city/federation). If you need concrete method details, continue to [User City](/en/city-sdk-docs/reference/city-user) and [Admin City](/en/city-sdk-docs/reference/city-admin).
+If you want the integration story first, start with [@downcity/city](/en/city-sdk-docs/packages/city/federation). If you need concrete method details, continue to [User City](/en/city-sdk-docs/reference/city-user) and [FederationAdmin](/en/city-sdk-docs/reference/city-admin).
 
 ## Two roles
 
-| | User City | Admin City |
+| | User City | FederationAdmin |
 |---|---|---|
 | Used by | frontend, app, extension, desktop client | city backend, ops scripts, internal tools |
 | Owns | AI services, custom services, public services | cities, tokens, runtime env, admin-side services |
@@ -30,9 +30,7 @@ When you expose Federation from your own local HTTP server, products still use n
 ```ts
 // City side
 const city = new City({
-  role: "user",
   federation_url,
-  city_id,
   user_token,
 });
 
@@ -58,8 +56,6 @@ await city.service("accounts").action("login/continue").invoke({
 const session = await city.service("accounts").get("login/result", { login_id: login.login_id });
 
 // GET action
-const items = await city.service("cities").get("list");
-
 // Payment methods
 const methods = await city.payment.methods();
 const checkout = await city.payment.method("stripe").invoke({
@@ -68,12 +64,14 @@ const checkout = await city.payment.method("stripe").invoke({
 });
 
 // Admin side
-const admin = new City({
-  role: "admin",
-  federation_url,
-  admin_secret_key,
+const admin = new FederationAdmin({
+  base_url: federation_url,
+  credential: admin_secret_key,
 });
-await admin.service("cities").action("create").invoke({ name: "My App" });
+await admin.bureaus.create({
+  name: "My App",
+  server_url: "https://bureau.example.com",
+});
 ```
 
 ## AI Model Path Selection
@@ -107,14 +105,14 @@ From the caller's point of view, they all live in the same City route space.
 
 The two most common paths are:
 
-1. your backend finishes login first, then uses `Admin City` to request `user_token`
+1. your backend finishes login first, then uses `FederationAdmin` to request `user_token`
 2. the frontend uses a guest `User City` to run `accounts.login/start -> login/continue -> login/result` or the registration flow, and the accounts service returns `user_token`
 
 Both paths end in the same user context:
 
 ```txt
-federation_url + city_id + user_token
-  -> new City({ role: "user", ... })
+federation_url + user_token
+  -> new City({ federation_url, user_token })
   -> city.ai.* or city.service(...)
 ```
 
@@ -123,5 +121,5 @@ federation_url + city_id + user_token
 1. To understand package composition, read [Packages](/en/city-sdk-docs/packages)
 2. To understand city integration, read [@downcity/city](/en/city-sdk-docs/packages/city/federation)
 3. For detailed product-side calls, read [User City](/en/city-sdk-docs/reference/city-user)
-4. For trusted-side management, read [Admin City](/en/city-sdk-docs/reference/city-admin)
+4. For trusted-side management, read [FederationAdmin](/en/city-sdk-docs/reference/city-admin)
 5. For minimal auth, read [Federation Services Docs / Accounts](/en/payments/accounts)

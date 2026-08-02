@@ -1,0 +1,88 @@
+---
+title: Bureau 接入 Organizations
+description: 在产品后端验证 user_token、查询 Membership 并执行资源权限
+---
+
+# Bureau 接入 Organizations
+
+Bureau 是可信产品后端。Bureau 向产品预先配置的 HTTPS Bureau 发送 Federation `user_token`，Bureau 先验证用户和 Bureau，再查询 Organization Membership。
+
+## 授权顺序
+
+```text
+Bureau
+  -> user_token + 产品请求
+  -> Bureau 验证 Federation JWT 和 bureau_id
+  -> Bureau 从资源记录读取 organization_id
+  -> Bureau 查询 Federation Membership
+  -> Bureau 执行产品角色与资源权限
+```
+
+Membership 通过只代表用户属于 Organization。它不代表用户可以访问 Organization 下的每个产品资源。
+
+## 验证 `user_token`
+
+Bureau 使用预先配置的 Federation issuer 和 JWKS 校验：
+
+- JWT 算法与签名；
+- `iss` 和 `aud`；
+- `exp`、`nbf`；
+- `user_id` 和 `bureau_id`；
+- `bureau_id` 是否属于当前产品允许的范围。
+
+Bureau 不应记录 Authorization Header，也不能把 Token 转发给产品配置之外的服务。
+
+## 查询 Membership
+
+Bureau 可以携带用户提交的同一个 Token 查询 Federation：
+
+```http
+GET /v1/organizations/membership/get?organization_id=org_01J...
+Authorization: Bearer ub_...
+```
+
+成功响应包含当前 Organization 与 active Membership。用户退出或被移除后，接口返回 `403 NOT_AN_ORGANIZATION_MEMBER`。
+
+## 检查资源归属
+
+产品资源表保存 `organization_id`：
+
+```sql
+CREATE TABLE projects (
+  project_id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL
+);
+```
+
+处理 `/v1/projects/:project_id` 时，Bureau 先读取 Project，再用 `project.organization_id` 查询 Membership。不能相信客户端额外提交的 Organization ID 来决定资源归属。
+
+## 产品权限
+
+Bureau 在 Membership 通过后执行自己的权限模型：
+
+```text
+Federation Membership
+  -> 用户属于 Organization
+
+Product Role / ACL
+  -> 用户能否读取、编辑或管理具体资源
+```
+
+Organization Owner/Admin/Member 只负责 Federation 中的组织治理。产品需要的 editor、viewer、billing_admin 等角色由 Bureau 保存。
+
+## 缓存与撤权
+
+要求即时撤权的写入、管理或敏感读取应在线查询 Federation。低风险读取可以使用短时缓存，最长撤权延迟等于缓存 TTL。
+
+缓存键至少包含 Federation issuer、`user_id` 和 `organization_id`。Bureau 必须为缓存 TTL 做出明确选择，Organizations Service 不再维护跨服务器撤权 Outbox。
+
+## 检查清单
+
+- [ ] Bureau URL 来自可信产品配置
+- [ ] 只通过 HTTPS 接收 `user_token`
+- [ ] 校验 issuer、audience、签名、时间和 `bureau_id`
+- [ ] 不记录或转发 Authorization Header
+- [ ] 从资源记录读取 `organization_id`
+- [ ] 对敏感操作在线查询 Membership
+- [ ] Membership 通过后继续执行产品权限

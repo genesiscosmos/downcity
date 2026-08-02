@@ -553,7 +553,7 @@ export class AIService extends Service {
       error: created.error ?? null,
       message: created.message ?? null,
       poll_after_ms: created.poll_after_ms ? String(created.poll_after_ms) : null,
-      city_id: ctx.city?.city_id ?? null,
+      bureau_id: ctx.bureau?.bureau_id ?? null,
       user_id: ctx.user?.user_id ?? null,
       service_id: "ai",
       model_id: ctx.metering?.model_id ?? null,
@@ -744,7 +744,7 @@ export class AIService extends Service {
       },
       ...(ctx.metering ? { metering: ctx.metering } : {}),
       ...(ctx.user?.user_id ? { user_id: ctx.user.user_id } : {}),
-      ...(ctx.city?.city_id ? { city_id: ctx.city.city_id } : {}),
+      ...(ctx.bureau?.bureau_id ? { bureau_id: ctx.bureau.bureau_id } : {}),
     };
   }
 
@@ -832,7 +832,7 @@ export class AIService extends Service {
 
   static listModels(aiService: AIService, options: {
     env: EnvReader;
-    identity: "guest" | "user" | "admin";
+    identity: "guest" | "user" | "bureau" | "admin";
   }): CityModelDescriptor[] {
     return aiService.models.list_public({
       ...options,

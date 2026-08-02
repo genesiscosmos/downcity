@@ -19,8 +19,11 @@ import type {
   CreateFederationServiceTokenInput,
   FederationServiceTokenIssueResult,
 } from "./types.js";
+import {
+  FEDERATION_USER_TOKEN_AUDIENCE,
+  bureau_user_token_audience,
+} from "./audience.js";
 
-const USER_TOKEN_AUDIENCE = "downcity:user" as const;
 const DEFAULT_USER_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 const MAX_USER_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 
@@ -42,7 +45,7 @@ export class UserTokenAuthority {
 
     const jwt = await new SignJWT({
       user_id: input.user_id,
-      city_id: input.city_id,
+      bureau_id: input.bureau_id,
       metadata: input.metadata ?? {},
     })
       .setProtectedHeader({
@@ -51,7 +54,10 @@ export class UserTokenAuthority {
         kid: signing_key.key_id,
       })
       .setIssuer(this.issuer)
-      .setAudience(USER_TOKEN_AUDIENCE)
+      .setAudience([
+        FEDERATION_USER_TOKEN_AUDIENCE,
+        bureau_user_token_audience(input.bureau_id),
+      ])
       .setSubject(input.user_id)
       .setIssuedAt(now)
       .setExpirationTime(now + ttl_seconds)
@@ -79,7 +85,7 @@ export class UserTokenAuthority {
       const public_key = await importJWK(public_jwk, USER_TOKEN_ALGORITHM);
       const result = await jwtVerify(jwt, public_key, {
         algorithms: [USER_TOKEN_ALGORITHM],
-        audience: USER_TOKEN_AUDIENCE,
+        audience: FEDERATION_USER_TOKEN_AUDIENCE,
         issuer: this.issuer,
       });
       return read_user_token_payload(result.payload);
@@ -169,10 +175,15 @@ export function normalize_user_token(token: string): string {
 export function read_user_token_payload(payload: JWTPayload): UserTokenPayload {
   const user_id = read_required_claim(payload.user_id ?? payload.sub, "user_id");
   const subject = read_required_claim(payload.sub, "sub");
-  const city_id = read_required_claim(payload.city_id, "city_id");
+  const bureau_id = read_required_claim(payload.bureau_id, "bureau_id");
   const issuer = read_required_claim(payload.iss, "iss");
   const token_id = read_required_claim(payload.jti, "jti");
   if (user_id !== subject) throw httpError(401, "Invalid user token subject");
+  const audiences = read_user_token_audiences(payload.aud);
+  const bureau_audience = bureau_user_token_audience(bureau_id);
+  if (!audiences.includes(FEDERATION_USER_TOKEN_AUDIENCE) || !audiences.includes(bureau_audience)) {
+    throw httpError(401, "Invalid user token audience");
+  }
   if (typeof payload.iat !== "number" || typeof payload.exp !== "number") {
     throw httpError(401, "Invalid user token timestamps");
   }
@@ -181,9 +192,9 @@ export function read_user_token_payload(payload: JWTPayload): UserTokenPayload {
     throw httpError(401, "Invalid user token metadata");
   }
   return {
-    aud: USER_TOKEN_AUDIENCE,
+    aud: audiences,
     iss: issuer,
-    city_id,
+    bureau_id,
     user_id,
     sub: subject,
     metadata: (metadata as Record<string, unknown> | undefined) ?? {},
@@ -194,12 +205,23 @@ export function read_user_token_payload(payload: JWTPayload): UserTokenPayload {
 }
 
 function validate_sign_input(input: CreateUserTokenInput): void {
-  if (!input || typeof input.city_id !== "string" || !input.city_id.trim()) {
-    throw new TypeError("city_id is required");
+  if (!input || typeof input.bureau_id !== "string" || !input.bureau_id.trim()) {
+    throw new TypeError("bureau_id is required");
   }
   if (typeof input.user_id !== "string" || !input.user_id.trim()) {
     throw new TypeError("user_id is required");
   }
+}
+
+function read_user_token_audiences(value: JWTPayload["aud"]): string[] {
+  const audiences = typeof value === "string" ? [value] : value;
+  if (!Array.isArray(audiences) || audiences.length !== 2) {
+    throw httpError(401, "Invalid user token audience");
+  }
+  if (audiences.some((audience) => typeof audience !== "string" || !audience)) {
+    throw httpError(401, "Invalid user token audience");
+  }
+  return [...audiences];
 }
 
 /** 读取签发输入中的必填文本。 */

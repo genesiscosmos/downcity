@@ -21,7 +21,7 @@ import type {
 import type { CityUserSession } from "@/city/types/CitySession.js";
 import {
   DEFAULT_FEDERATION_URL,
-  DEFAULT_CITY_ID,
+  DEFAULT_BUREAU_ID,
   list_federations,
   normalizeCityUrl,
   read_city_admin_secret_for_url,
@@ -61,7 +61,7 @@ export function read_federation_membership_state(): FederationMembershipState {
   if (session?.user_token) {
     return {
       federation_url,
-      city_id: session.city_id || DEFAULT_CITY_ID,
+      bureau_id: session.bureau_id || DEFAULT_BUREAU_ID,
       has_user_token: true,
       source: "city-session",
       user_id: session.user_id,
@@ -72,7 +72,7 @@ export function read_federation_membership_state(): FederationMembershipState {
   const server = list_federations().find((item) => item.federation_url === federation_url);
   return {
     federation_url,
-    city_id: DEFAULT_CITY_ID,
+    bureau_id: DEFAULT_BUREAU_ID,
     has_user_token: false,
     source: server?.source === "city-admin"
       ? "city-admin"
@@ -103,7 +103,7 @@ export function emit_federation_status(options?: { as_json?: boolean }): void {
     summary: state.has_user_token ? "signed in" : "federation selected",
     facts: [
       { label: "url", value: state.federation_url },
-      { label: "city", value: state.city_id },
+      { label: "city", value: state.bureau_id },
       { label: "user token", value: state.has_user_token ? "configured" : "missing" },
       { label: "source", value: state.source },
       ...(state.user_id ? [{ label: "user", value: state.user_id }] : []),
@@ -124,7 +124,7 @@ export async function emitCityUserWhoami(options?: { as_json?: boolean }): Promi
         title: "city user",
         payload: {
           federation_url: user.federation_url,
-          city_id: user.city_id,
+          bureau_id: user.bureau_id,
           user_id: user.user_id,
           user_label: user.user_label,
           source: user.source,
@@ -141,12 +141,12 @@ export async function emitCityUserWhoami(options?: { as_json?: boolean }): Promi
       summary: user.source,
       facts: [
         { label: "url", value: user.federation_url },
-        { label: "city", value: user.city_id },
+        { label: "city", value: user.bureau_id },
         { label: "user", value: user.user_id || "unknown" },
         ...(user.user_label ? [{ label: "label", value: user.user_label }] : []),
         { label: "source", value: user.source },
         { label: "env url", value: user.env_overrides.federation_url ? "yes" : "no" },
-        { label: "env city", value: user.env_overrides.city_id ? "yes" : "no" },
+        { label: "env city", value: user.env_overrides.bureau_id ? "yes" : "no" },
         { label: "env token", value: user.env_overrides.user_token ? "yes" : "no" },
       ],
       note: user.warnings.join(" ") || undefined,
@@ -290,7 +290,7 @@ function save_federation_user_session(session: CityUserSession): void {
 
 export async function run_federation_login_command(params: {
   url?: string;
-  city_id?: string;
+  bureau_id?: string;
   as_json?: boolean;
 }): Promise<void> {
   if (params.url) {
@@ -301,10 +301,10 @@ export async function run_federation_login_command(params: {
   }
   const state = readCityState();
   const federation_url = resolve_selected_federation_url(state);
-  const city_id = readString(params.city_id) || read_current_city_session()?.city_id || DEFAULT_CITY_ID;
+  const bureau_id = readString(params.bureau_id) || read_current_city_session()?.bureau_id || DEFAULT_BUREAU_ID;
   const session = await performCityUserLogin({
     federation_url,
-    city_id,
+    bureau_id,
   });
   if (!session) {
     printResult({
@@ -323,7 +323,7 @@ export async function run_federation_login_command(params: {
     title: "federation user signed in",
     payload: {
       federation_url: session.federation_url,
-      city_id: session.city_id,
+      bureau_id: session.bureau_id,
       user_id: session.user_id,
       user_label: session.user_label,
     },

@@ -6,14 +6,14 @@
  * - City 连接配置、admin key 更新等低频操作通过 `更多` 回调交给 workspace 层处理。
  */
 
-import { Bureau } from "@downcity/city";
+import { FederationAdmin } from "@downcity/city";
 import { type AdminSession } from "@/federation/core/session.js";
 import { adminErrorMessage, isAdminAuthError } from "@/federation/admin/auth-error.js";
 import { create_admin_tui_runtime } from "@/federation/tui/AdminTuiRuntime.js";
 import type { admin_tui_runtime } from "@/federation/types/AdminTui.js";
 import { manageEnv } from "@/federation/admin/commands/service-env.js";
 import { manageDashboard } from "@/federation/admin/commands/dashboard.js";
-import { manageCities } from "@/federation/admin/commands/cities.js";
+import { manage_bureaus } from "@/federation/admin/commands/bureaus.js";
 import { manageAccounts } from "@/federation/admin/commands/accounts.js";
 import { manage_credits } from "@/federation/admin/commands/credits.js";
 import { manageUsage } from "@/federation/admin/commands/usage.js";
@@ -23,12 +23,12 @@ import { manageModels } from "@/federation/admin/commands/models.js";
 import { manageInstruction } from "@/federation/admin/commands/instruction.js";
 import { t } from "@/shared/CliLocale.js";
 
-const commands: Record<string, (a: Bureau, baseUrl: string, runtime: admin_tui_runtime) => Promise<void>> = {
+const commands: Record<string, (a: FederationAdmin, baseUrl: string, runtime: admin_tui_runtime) => Promise<void>> = {
   dashboard: manageDashboard,
   env: manageEnv,
   instruction: manageInstruction,
   models: manageModels,
-  cities: manageCities,
+  bureaus: manage_bureaus,
   accounts: manageAccounts,
   credits: manage_credits,
   usage: manageUsage,
@@ -45,9 +45,9 @@ export async function adminLoop(
     runtime?: admin_tui_runtime;
   },
 ): Promise<"logout" | "quit" | "switch_identity" | "back"> {
-  const admin = new Bureau({
-    federation_url: session.base_url,
-    bureau_token: session.admin_secret_key,
+  const admin = new FederationAdmin({
+    base_url: session.base_url,
+    credential: session.admin_secret_key,
   });
   const embedded = options?.embedded !== false;
   const runtime = options?.runtime ?? create_admin_tui_runtime(options?.title ?? "Admin");
@@ -111,10 +111,10 @@ export async function adminLoop(
             zh: "产品管理",
             en: "Products",
           }),
-          value: "cities",
+          value: "bureaus",
           hint: t({
-            zh: "管理产品/App 入口；City 是 agent 活动空间，用于划分 user token、服务调用边界和运行状态。",
-            en: "Manage product/App entries. A City is where agents operate and scopes user tokens, service calls, and runtime status.",
+            zh: "管理 Bureau 产品身份、授权域和生命周期；City 仅作为 Agent 终端连接 Bureau。",
+            en: "Manage Bureau product identities, authorization domains, and lifecycle. City is an Agent terminal that connects to a Bureau.",
           }),
         },
         {
@@ -124,8 +124,8 @@ export async function adminLoop(
           }),
           value: "accounts",
           hint: t({
-            zh: "查看 City 用户与登录会话，确认用户身份、邮箱和会话状态。",
-            en: "Inspect City users and login sessions, including identity, email, and session status.",
+            zh: "查看 Federation 用户与登录会话，确认用户身份、邮箱和会话状态。",
+            en: "Inspect Federation users and login sessions, including identity, email, and session status.",
           }),
         },
         {
@@ -146,8 +146,8 @@ export async function adminLoop(
           }),
           value: "usage",
           hint: t({
-            zh: "查看 City/产品维度的 service 调用事件与聚合统计，用于排查消耗、成功失败状态和使用趋势。",
-            en: "View service-call events and summaries by City/product to audit consumption, status, and usage trends.",
+            zh: "查看 Bureau/产品维度的 service 调用事件与聚合统计。",
+            en: "View service-call events and summaries by Bureau/product.",
           }),
         },
         {

@@ -1,9 +1,9 @@
 ---
-title: Admin City
-description: How trusted environments manage cities, issue user tokens, and maintain runtime env.
+title: FederationAdmin
+description: How trusted environments manage Bureaus, issue user tokens, and maintain Federation env.
 ---
 
-`Admin City` should only run in trusted environments.
+`FederationAdmin` should only run in trusted environments.
 
 Typical cases:
 
@@ -16,35 +16,33 @@ Do not expose `admin_secret_key` to browsers, public frontends, or uncontrolled 
 
 ## What it owns in the full system
 
-The most accurate mental model is: `Admin City` is the trusted-side bridge into City management.
+The most accurate mental model is: `FederationAdmin` is the trusted-side bridge into City management.
 
 It usually owns three things:
 
-- managing `city`
+- managing Bureau product identities and machine credentials
 - issuing `user_token`
 - maintaining runtime env
 - running trusted-side Credits Card and Transaction administration
 
-If `User City` owns "how a user-context city call reaches City," then `Admin City` owns "how the trusted side prepares that call environment."
+If `User City` owns "how a user-context city call reaches City," then `FederationAdmin` owns "how the trusted side prepares that call environment."
 
 ## Minimal example
 
 ```ts
-import { City } from "@downcity/city";
+import { FederationAdmin } from "@downcity/city";
 
-const admin = new City({
-  role: "admin",
-  federation_url: "https://base.example.com",
-  city_id: "city_demo",
-  admin_secret_key: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+const admin = new FederationAdmin({
+  base_url: "https://base.example.com",
+  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
 });
 ```
 
-If `admin_secret_key` is omitted, the SDK tries to read `process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`.
+`credential` must explicitly receive the Federation Root Secret.
 
 ## Typical call chain
 
-<div className="dc-doc-flow" aria-label="Admin City call flow">
+<div className="dc-doc-flow" aria-label="FederationAdmin call flow">
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>Trusted backend</strong>
@@ -54,8 +52,8 @@ If `admin_secret_key` is omitted, the SDK tries to read `process.env.DOWNCITY_FE
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
-      <strong>Admin City</strong>
-      <span>Calls `/v1/cities/*`, `/v1/cities/tokens/apply`, `/v1/env/*`, `/v1/ai/models`, and `/v1/base/instruction`.</span>
+      <strong>FederationAdmin</strong>
+      <span>Calls `/v1/bureaus/*`, `/v1/accounts/tokens/issue`, `/v1/env/*`, `/v1/ai/models`, and `/v1/base/instruction`.</span>
     </div>
   </div>
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
@@ -67,14 +65,15 @@ If `admin_secret_key` is omitted, the SDK tries to read `process.env.DOWNCITY_FE
   </div>
 </div>
 
-## `tokens.apply()`
+## `accounts/tokens/issue`
 
 This is the most common trusted-side action: issue a `user_token` for a user under the target city.
 
-`city_id` is automatically injected from the `City` constructor. You only need to pass `user_id`.
+`bureau_id` is automatically injected from the `City` constructor. You only need to pass `user_id`.
 
 ```ts
-const issued = await admin.tokens.apply({
+const issued = await admin.service("accounts").action("tokens/issue").invoke({
+  bureau_id: "bureau_my_app",
   user_id: "user_123",
   metadata: {
     plan: "pro",
@@ -87,7 +86,7 @@ const issued = await admin.tokens.apply({
 The response includes:
 
 - `user_token`
-- `city_id`
+- `bureau_id`
 - `user_id`
 - `expires_at`
 
@@ -104,13 +103,14 @@ The response includes:
 router.post("/login", async (c) => {
   const user_id = await login(c);
 
-  const issued = await admin.tokens.apply({
+  const issued = await admin.service("accounts").action("tokens/issue").invoke({
+    bureau_id: "bureau_my_app",
     user_id,
     ttl: "7d",
   });
 
   return c.json({
-    city_id: issued.city_id,
+    bureau_id: issued.bureau_id,
     user_token: issued.user_token,
   });
 });
@@ -120,20 +120,20 @@ That means:
 
 1. your backend handles user login first
 2. the trusted backend asks City for `user_token`
-3. it returns `city_id + user_token` to the client
+3. it returns `user_token` (which contains `bureau_id`) to the client
 4. the client calls City through `User City`
 
 ## Relationship with the accounts service
 
-`Admin City` does not replace the accounts service, and the service does not replace `Admin City`.
+`FederationAdmin` does not replace the accounts service, and the service does not replace `FederationAdmin`.
 
 The two common patterns are:
 
 ### Pattern A: your backend owns login
 
 - your backend validates user credentials or session
-- your backend uses `Admin City` to request `user_token`
-- the frontend receives `city_id + user_token`
+- your backend uses `FederationAdmin` to request `user_token`
+- the frontend receives `user_token` (which contains `bureau_id`)
 
 ### Pattern B: the accounts service owns login
 
@@ -143,7 +143,7 @@ The two common patterns are:
 
 So:
 
-- `Admin City` owns trusted-side management actions
+- `FederationAdmin` owns trusted-side management actions
 - the accounts service owns the minimal auth capability
 - they are not replacements for each other, but two different login patterns
 
@@ -199,34 +199,35 @@ If you bypass the Admin API and edit the database `env` table directly, call `ad
 
 These changes are written to the `env` table in the Federation database. Both business env values and system-level secrets are managed from this Federation-owned table, so you no longer need to patch Worker or Node host env manually.
 
-## `cities`
+## `bureaus`
 
-`admin.cities` manages product boundaries inside the same Federation.
+`admin.bureaus` manages product boundaries inside the same Federation.
 
 ```ts
-const cities = await admin.cities.list();
+const bureaus = await admin.bureaus.list();
 
-const city = await admin.cities.create({
+const bureau = await admin.bureaus.create({
   name: "My App",
-  city_id: "city_my_app",
+  server_url: "https://bureau.example.com",
+  bureau_id: "bureau_my_app",
 });
 
-await admin.cities.pause(city.city_id);
-await admin.cities.activate(city.city_id);
-await admin.cities.remove(city.city_id);
+await admin.bureaus.pause(bureau.bureau_id);
+await admin.bureaus.activate(bureau.bureau_id);
+await admin.bureaus.archive(bureau.bureau_id);
 ```
 
-If you want to issue a token for an arbitrary city in one call, use the lower-level token manager under `admin.cities`:
+If you want to issue a token for an arbitrary city in one call, use the lower-level token manager under `admin.bureaus`:
 
 ```ts
-const issued = await admin.cities.tokens.apply({
-  city_id: "city_my_app",
+const issued = await admin.service("accounts").action("tokens/issue").invoke({
+  bureau_id: "bureau_my_app",
   user_id: "user_123",
   ttl: "7d",
 });
 ```
 
-For the common case where one `Admin City` instance manages a single target city, prefer `admin.tokens.apply()`. It injects the constructor `city_id` automatically.
+`FederationAdmin` is not bound to one Bureau; every issuance must provide `bureau_id` explicitly.
 
 ## `listServices()` / `listModels()` / `instruction()`
 
@@ -264,9 +265,9 @@ It maps to `GET /v1/base/instruction` and returns the aggregated plain-text City
 - checking which env keys each module declares
 - feeding runtime guidance into a CLI or agent
 
-## Admin City can also call service-provided admin services
+## FederationAdmin can also call service-provided admin services
 
-Besides `tokens` and `env`, `Admin City` can call admin-side services exposed by official packages.
+Besides `tokens` and `env`, `FederationAdmin` can call admin-side services exposed by official packages.
 
 For example:
 
@@ -297,18 +298,19 @@ await admin.credits.topup({
 });
 ```
 
-In other words, `Admin City` is not only for built-in token/env endpoints. It is also the trusted-side entry into the same unified service route space.
+In other words, `FederationAdmin` is not only for built-in token/env endpoints. It is also the trusted-side entry into the same unified service route space.
 
 ## Error handling
 
-When `Admin City` receives a non-2xx HTTP response, it throws an `Error` with two extra fields:
+When `FederationAdmin` receives a non-2xx HTTP response, it throws an `Error` with two extra fields:
 
 - `status`: the HTTP status code.
 - `body`: the raw response body from City, usually `{"error":"..."}`.
 
 ```ts
 try {
-  await admin.tokens.apply({
+  await admin.service("accounts").action("tokens/issue").invoke({
+    bureau_id: "bureau_my_app",
     user_id: "user_123",
   });
 } catch (error) {
@@ -322,13 +324,13 @@ try {
 Common statuses:
 
 - `401`: `admin_secret_key` is missing or wrong.
-- `403`: the target city is paused, so no token can be issued.
-- `404`: the target city does not exist.
+- `403`: the target Bureau is paused, so no token can be issued.
+- `404`: the target Bureau does not exist.
 - `500`: City is missing required config, or the admin action failed internally.
 
-## What `Admin City` does not manage right now
+## What `FederationAdmin` does not manage right now
 
-These do not belong to `Admin City` yet:
+These do not belong to `FederationAdmin` yet:
 
 - model configuration
 - direct edits to the `models` table
@@ -341,4 +343,4 @@ Those belong to:
 - the database layer
 - the `City` runtime layer
 
-In other words, `Admin City` owns env maintenance; runtime model definitions and mounting still belong to the `City` runtime layer.
+In other words, `FederationAdmin` owns env maintenance; runtime model definitions and mounting still belong to the `City` runtime layer.

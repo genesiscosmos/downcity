@@ -1,12 +1,13 @@
 /**
- * City 配置类型模块。
+ * Federation 配置类型模块。
  *
- * 包含创建 City 实例和健康检查所需的所有类型定义。
+ * 包含创建 Federation 实例和健康检查所需的类型定义。
  */
 
 import type { Database } from "../database/Database.js";
 import type { FederationStorage } from "./storage.js";
 import type { RuntimeUser } from "./auth/types.js";
+import type { BureauRecord, RuntimeBureauToken } from "../types/Bureau.js";
 
 /**
  * Federation 进程内可信身份。
@@ -25,8 +26,16 @@ export type FederationTrustedIdentity =
       level: "user";
       /** 当前用户信息，会注入到 `ctx.user`。 */
       user: RuntimeUser;
-      /** 当前用户所属 City。 */
-      city: { city_id: string; status: string };
+      /** 当前用户所属 Bureau。 */
+      bureau: BureauRecord;
+    }
+  | {
+      /** 以可信 Bureau 机器身份访问当前 Federation。 */
+      level: "bureau";
+      /** 当前机器身份所属 Bureau。 */
+      bureau: BureauRecord;
+      /** 当前机器凭证元数据。 */
+      bureau_token: RuntimeBureauToken;
     };
 
 /**
@@ -66,7 +75,7 @@ export interface FederationFetchOptions {
 }
 
 /**
- * City 健康检查结果。
+ * Federation 健康检查结果。
  */
 export interface FederationHealthStatus {
   /** 当前 Runtime 是否已经完成初始化并可处理请求 */
@@ -82,7 +91,7 @@ export interface FederationHealthStatus {
 }
 
 /**
- * 创建 City 实例时传入的顶层配置。
+ * 创建 Federation 实例时传入的顶层配置。
  *
  * 关键说明（中文）
  * - 只接收一个继承 City Database 基类的 Adapter 实例。

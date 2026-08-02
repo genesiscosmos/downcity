@@ -1,6 +1,6 @@
 ---
 title: Try It Now
-description: Run a complete call chain with the default database, Admin City, and User City.
+description: Run a complete call chain with the default database, FederationAdmin, and User City.
 ---
 
 ## 1. Start City
@@ -66,13 +66,12 @@ serve({ fetch: (request) => base.fetch(request), port: 43127, hostname: "127.0.0
 ## 2. Create City & Token
 
 ```ts
-const admin = new City({
-  role: "admin",
-  federation_url: "http://127.0.0.1:43127",
-  city_id: "city_demo",
-  admin_secret_key: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+const admin = new FederationAdmin({
+  base_url: "http://127.0.0.1:43127",
+  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
 });
-const token = await admin.tokens.apply({
+const token = await admin.service("accounts").action("tokens/issue").invoke({
+  bureau_id: "bureau_demo",
   user_id: "user_123",
   ttl: "7d",
 });
@@ -82,9 +81,7 @@ const token = await admin.tokens.apply({
 
 ```ts
 const city = new City({
-  role: "user",
   federation_url: "http://127.0.0.1:43127",
-  city_id: token.city_id,
   user_token: token.user_token,
 });
 

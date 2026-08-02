@@ -3,19 +3,18 @@ title: Issue `user_token`
 description: Give the product client a user-scoped credential that can call the Federation.
 ---
 
-`user_token` must be issued by a trusted environment. Your backend uses `Admin City` and asks City for a token based on `city_id + user_id`.
+`user_token` must be issued by a trusted environment. Your backend uses `FederationAdmin` and asks City for a token based on `bureau_id + user_id`.
 
 ```ts
-import { City } from "@downcity/city";
+import { City, FederationAdmin } from "@downcity/city";
 
-const admin = new City({
-  role: "admin",
-  federation_url: "https://base.example.com",
-  city_id: "city_demo",
-  admin_secret_key: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+const admin = new FederationAdmin({
+  base_url: "https://base.example.com",
+  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
 });
 
-const user = await admin.tokens.apply({
+const user = await admin.service("accounts").action("tokens/issue").invoke({
+  bureau_id: "bureau_demo",
   user_id: "user_123",
   metadata: {
     plan: "pro",
@@ -24,7 +23,7 @@ const user = await admin.tokens.apply({
 });
 ```
 
-Return `user.user_token` and `user.city_id` to the product.
+Return `user.user_token` and `user.bureau_id` to the product.
 
 ## What `metadata` is for
 
@@ -37,7 +36,7 @@ const action = service.action("generate", async (ctx) => {
 
 action.before(async (ctx) => {
   await quotaService.check({
-    city_id: ctx.city?.city_id,
+    bureau_id: ctx.bureau?.bureau_id,
     user_id: ctx.user?.user_id,
     plan: ctx.user?.metadata?.plan,
   });

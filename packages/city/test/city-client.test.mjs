@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { City, Bureau } from "../bin/index.js"
+import { City, FederationAdmin } from "../bin/index.js"
 
 test("City rejects Federation rpc URLs", async () => {
   assert.throws(
@@ -9,7 +9,7 @@ test("City rejects Federation rpc URLs", async () => {
       federation_url: "rpc://127.0.0.1:15315",
       user_token: "ub_test",
     }),
-    /http:\/\/ or https:\/\//,
+    /must use http or https/,
   )
 })
 
@@ -193,7 +193,7 @@ test("User City delegates AI calls", async () => {
 test("AIInvoker.catalog() returns ModelCatalog", async () => {
   const city = new City({
     federation_url: "https://api.example.com/base/",
-    city_id: "city_demo", user_token: "ub_test",
+    user_token: "ub_test",
     fetch: async () => json({ items: [
       { id: "gpt-5.4", name: "GPT-5.4", description: "P", modalities: ["text", "stream"], tags: [], price: ["输入：1 credit / 1K tokens"], meta: {}, env: {} },
       { id: "claude", name: "Claude", description: "A", modalities: ["text"], tags: [], meta: {}, env: {} },
@@ -223,7 +223,7 @@ test("AIInvoker.stream() converts CityModel parts into UIMessage chunks", async 
     },
   ]
   const city = new City({
-    federation_url: "https://api.example.com/base/", city_id: "city_demo", user_token: "ub_test",
+    federation_url: "https://api.example.com/base/", user_token: "ub_test",
     fetch: async (url, init) => {
       requests.push({ url, init })
       return streamResponse(model_parts.map((part) => ({
@@ -297,22 +297,66 @@ test("City get() / post() use JSON and forward the current user_token", async ()
     user_token: "ub_user_token",
     fetch: async (url, init) => {
       requests.push({ url, init })
+      if (url === "https://fed.example.com/v1/bureaus/current") {
+        return json({
+          bureau: {
+            bureau_id: "bureau_demo",
+            name: "Demo",
+            server_url: "https://bureau.example.com",
+            state: "active",
+            created_at: "t",
+            updated_at: "t",
+            archived_at: "",
+          },
+        })
+      }
       return json({ ok: true })
     },
   })
-  const result = await city.post("https://bureau.example.com/reports/summary", {
+  const result = await city.post("/reports/summary", {
     range: "today",
   })
   assert.deepEqual(result, { ok: true })
-  await city.get("https://bureau.example.com/reports/status")
-  assert.equal(requests[0].url, "https://bureau.example.com/reports/summary")
-  assert.equal(requests[0].init.method, "POST")
-  assert.equal(requests[0].init.body, JSON.stringify({ range: "today" }))
-  assert.equal(requests[0].init.headers.accept, "application/json")
-  assert.equal(requests[0].init.headers["content-type"], "application/json")
-  assert.equal(requests[0].init.headers.authorization, "Bearer ub_user_token")
-  assert.equal(requests[1].url, "https://bureau.example.com/reports/status")
-  assert.equal(requests[1].init.method, "GET")
+  await city.get("/reports/status")
+  assert.equal(requests[0].url, "https://fed.example.com/v1/bureaus/current")
+  assert.equal(requests[1].url, "https://bureau.example.com/reports/summary")
+  assert.equal(requests[1].init.method, "POST")
+  assert.equal(requests[1].init.body, JSON.stringify({ range: "today" }))
+  assert.equal(requests[1].init.headers.accept, "application/json")
+  assert.equal(requests[1].init.headers["content-type"], "application/json")
+  assert.equal(requests[1].init.headers.authorization, "Bearer ub_user_token")
+  assert.equal(requests[2].url, "https://bureau.example.com/reports/status")
+  assert.equal(requests[2].init.method, "GET")
+})
+
+test("City allows login without a token but requires one for Bureau requests", async () => {
+  const city = new City({ federation_url: "https://fed.example.com" })
+  await assert.rejects(
+    city.get("/reports/status"),
+    /user_token is required to resolve the current Bureau/,
+  )
+})
+
+test("City never forwards a user_token outside the current Bureau origin", async () => {
+  const city = new City({
+    federation_url: "https://fed.example.com",
+    user_token: "ub_user_token",
+    fetch: async () => json({
+      bureau: {
+        bureau_id: "bureau_demo",
+        name: "Demo",
+        server_url: "https://bureau.example.com",
+        state: "active",
+        created_at: "t",
+        updated_at: "t",
+        archived_at: "",
+      },
+    }),
+  })
+  await assert.rejects(
+    city.get("https://attacker.example.com/collect"),
+    /url must use the current Bureau server origin/,
+  )
 })
 
 test("ServiceClient.get() appends query params for GET actions", async () => {
@@ -459,11 +503,11 @@ test("User City payment.method(id).invoke() rejects disabled or user-required me
   )
 })
 
-test("Bureau service() uses the shared /v1 route prefix", async () => {
+test("FederationAdmin service() uses the shared /v1 route prefix", async () => {
   const requests = []
-  const admin = new Bureau({
-    federation_url: "http://localhost:3001/",
-    bureau_token: "sk",
+  const admin = new FederationAdmin({
+    base_url: "http://localhost:3001/",
+    credential: "sk",
     fetch: async (url, init) => { requests.push({ url, init }); return json({ ok: true }) },
   })
   const result = await admin.service("usage").action("report").invoke({ range: "today" })
@@ -472,11 +516,11 @@ test("Bureau service() uses the shared /v1 route prefix", async () => {
   assert.equal(requests[0].init.headers.authorization, "Bearer sk")
 })
 
-test("Bureau credits exposes typed Card and Transaction invokers", async () => {
+test("FederationAdmin credits exposes typed Card and Transaction invokers", async () => {
   const requests = []
-  const bureau = new Bureau({
-    federation_url: "http://localhost:3001",
-    bureau_token: "sk",
+  const bureau = new FederationAdmin({
+    base_url: "http://localhost:3001",
+    credential: "sk",
     fetch: async (url, init) => {
       requests.push({ url, init })
       if (url.includes("/users/get?")) return json({
@@ -507,11 +551,11 @@ test("Bureau credits exposes typed Card and Transaction invokers", async () => {
   assert.equal(requests[5].init.headers.authorization, "Bearer sk")
 })
 
-test("Bureau env list / catalog / upsert / remove", async () => {
+test("FederationAdmin env list / catalog / upsert / remove", async () => {
   const requests = []
-  const admin = new Bureau({
-    federation_url: "http://localhost:3001/",
-    bureau_token: "sk",
+  const admin = new FederationAdmin({
+    base_url: "http://localhost:3001/",
+    credential: "sk",
     fetch: async (url, init) => {
     requests.push({ url, init })
     if (url.endsWith("/v1/env/list")) return json({ items: [{ key: "K", value: "V", source: "database" }] })
@@ -544,68 +588,70 @@ test("Bureau env list / catalog / upsert / remove", async () => {
   assert.equal(requests[3].url, "http://localhost:3001/v1/env/remove")
 })
 
-test("Bureau cities CRUD + tokens.apply", async () => {
-  const requests = []; const p = { city_id: "p1", name: "Demo", status: "active", created_at: "t", updated_at: "t" }
-  const admin = new Bureau({
-    federation_url: "http://localhost:3001/",
-    bureau_token: "sk",
+test("FederationAdmin manages Bureau entities and issues seed user tokens", async () => {
+  const requests = []; const p = { bureau_id: "bureau_p1", name: "Demo", server_url: "https://bureau.example.com", state: "active", created_at: "t", updated_at: "t", archived_at: "" }
+  const admin = new FederationAdmin({
+    base_url: "http://localhost:3001/",
+    credential: "sk",
     fetch: async (url, init) => {
     requests.push({ url, init })
-    if (url.endsWith("/v1/cities/list")) return json({ items: [p] })
-    if (url.endsWith("/v1/cities/create")) return json(p)
-    if (url.endsWith("/v1/cities/tokens/apply")) return json({ user_token: "ub_test", city_id: "p1", user_id: "u1", expires_at: "2026-01-01T00:00:00.000Z" })
+    if (url.endsWith("/v1/bureaus/list")) return json({ items: [p] })
+    if (url.endsWith("/v1/bureaus/create")) return json(p)
+    if (url.endsWith("/v1/accounts/tokens/issue")) return json({ user_token: "ub_test", bureau_id: "bureau_p1", user_id: "u1", expires_at: "2026-01-01T00:00:00.000Z" })
     return json({ success: true })
   }})
-  assert.deepEqual(await admin.cities.list(), [p])
-  assert.equal((await admin.cities.create({ name: "Demo" })).city_id, "p1")
-  await admin.cities.pause("p1")
-  assert.equal(requests[2].url, "http://localhost:3001/v1/cities/pause")
-  assert.deepEqual(await admin.cities.tokens.apply({ city_id: "p1", user_id: "u1" }), {
+  assert.deepEqual(await admin.bureaus.list(), [p])
+  assert.equal((await admin.bureaus.create({ name: "Demo", server_url: p.server_url })).bureau_id, "bureau_p1")
+  await admin.bureaus.pause("bureau_p1")
+  assert.equal(requests[2].url, "http://localhost:3001/v1/bureaus/pause")
+  assert.deepEqual(await admin.service("accounts").action("tokens/issue").invoke({ bureau_id: "bureau_p1", user_id: "u1" }), {
     user_token: "ub_test",
-    city_id: "p1",
+    bureau_id: "bureau_p1",
     user_id: "u1",
     expires_at: "2026-01-01T00:00:00.000Z",
   })
 })
 
-test("Bureau bureaus register / list / revoke", async () => {
+test("FederationAdmin manages Bureau Token records", async () => {
   const requests = []
   const bureau = {
     token_id: "br_1234567890abcdef",
-    purpose: "city client test",
+    bureau_id: "bureau_demo",
+    purpose: "Bureau client test",
     status: "active",
     created_at: "t",
     updated_at: "t",
   }
-  const admin = new Bureau({
-    federation_url: "http://localhost:3001/",
-    bureau_token: "sk",
+  const admin = new FederationAdmin({
+    base_url: "http://localhost:3001/",
+    credential: "sk",
     fetch: async (url, init) => {
       requests.push({ url, init })
-      if (url.endsWith("/v1/bureaus/register")) return json(bureau)
-      if (url.endsWith("/v1/bureaus/list")) return json({ items: [bureau] })
+      if (url.endsWith("/v1/bureaus/tokens/register")) return json(bureau)
+      if (url.includes("/v1/bureaus/tokens/list")) return json({ items: [bureau] })
       return json({ success: true })
     },
   })
   const input = {
+    bureau_id: bureau.bureau_id,
     token_id: bureau.token_id,
     purpose: bureau.purpose,
     token_hash: "1234567890123456789012345678901234567890123",
   }
-  assert.deepEqual(await admin.bureaus.register(input), bureau)
-  assert.deepEqual(await admin.bureaus.list(), [bureau])
-  await admin.bureaus.revoke(bureau.token_id)
-  assert.equal(requests[0].url, "http://localhost:3001/v1/bureaus/register")
+  assert.deepEqual(await admin.bureaus.tokens.register(input), bureau)
+  assert.deepEqual(await admin.bureaus.tokens.list(bureau.bureau_id), [bureau])
+  await admin.bureaus.tokens.revoke(bureau.token_id)
+  assert.equal(requests[0].url, "http://localhost:3001/v1/bureaus/tokens/register")
   assert.deepEqual(JSON.parse(requests[0].init.body), input)
-  assert.equal(requests[1].url, "http://localhost:3001/v1/bureaus/list")
-  assert.equal(requests[2].url, "http://localhost:3001/v1/bureaus/revoke")
+  assert.equal(requests[1].url, "http://localhost:3001/v1/bureaus/tokens/list?bureau_id=bureau_demo")
+  assert.equal(requests[2].url, "http://localhost:3001/v1/bureaus/tokens/revoke")
 })
 
-test("Bureau listServices() / listModels() / instruction()", async () => {
+test("FederationAdmin listServices() / listModels() / instruction()", async () => {
   const requests = []
-  const admin = new Bureau({
-    federation_url: "http://localhost:3001/",
-    bureau_token: "sk",
+  const admin = new FederationAdmin({
+    base_url: "http://localhost:3001/",
+    credential: "sk",
     fetch: async (url, init) => {
       requests.push({ url, init })
       if (url.endsWith("/v1/services")) {

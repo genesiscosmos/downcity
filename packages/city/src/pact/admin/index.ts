@@ -1,13 +1,12 @@
 /**
- * Federation 控制面 HTTP 访问层。
+ * Federation Root Admin 控制面 HTTP 访问层。
  *
- * 统一使用 Federation Root Secret 或 Bureau Token 调用管理接口。
+ * 只使用 Federation Root Secret 调用全局管理接口。
  */
 
 import { ServiceClient } from "../invoker/invoker.js";
 import { CreditsInvoker } from "../invoker/credits/index.js";
 import { EnvInvoker } from "../invoker/env/index.js";
-import { CitiesInvoker } from "../invoker/cities/index.js";
 import { BureausInvoker } from "../invoker/bureaus/index.js";
 import {
   requiredString,
@@ -18,14 +17,13 @@ import {
   type CityRequester,
 } from "../requester.js";
 import type {
-  AdminPactAccessOptions,
+  FederationAdminOptions,
   AdminModelRecord,
   AdminServiceSummary,
 } from "./types.js";
 
-export class AdminPactAccess {
+export class FederationAdmin {
   readonly credits: CreditsInvoker;
-  readonly cities: CitiesInvoker;
   readonly bureaus: BureausInvoker;
   readonly env: EnvInvoker;
 
@@ -33,9 +31,9 @@ export class AdminPactAccess {
   private readonly secret: string | undefined;
   private readonly requester: CityRequester;
 
-  constructor(options: AdminPactAccessOptions) {
+  constructor(options: FederationAdminOptions) {
     if (!options || typeof options !== "object") {
-      throw new TypeError("Bureau options are required");
+      throw new TypeError("FederationAdmin options are required");
     }
 
     this.base_url = requiredString(options.base_url, "base_url").replace(/\/+$/, "");
@@ -48,7 +46,6 @@ export class AdminPactAccess {
 
     const req = <T>(path: string, init: RequestInitLike) => this.json<T>(path, init);
     this.credits = new CreditsInvoker(req);
-    this.cities = new CitiesInvoker({ requestJSON: req });
     this.bureaus = new BureausInvoker({ requestJSON: req });
     this.env = new EnvInvoker({ requestJSON: req });
   }

@@ -19,7 +19,7 @@ const providers = await guest.service("accounts").get("providers");
 const session = await guest.service("accounts").action("register").invoke({
   email: "user@example.com",
   password: "password123",
-  city_id: "city_demo",
+  bureau_id: "bureau_demo",
 });
 ```
 
@@ -28,7 +28,7 @@ const session = await guest.service("accounts").action("register").invoke({
 ```ts
 const start = await guest.service("accounts").action("login/start").invoke({
   provider: "email",
-  city_id: "city_demo",
+  bureau_id: "bureau_demo",
 });
 
 await guest.service("accounts").action("login/continue").invoke({
@@ -44,7 +44,7 @@ const session = await guest.service("accounts").get("login/result", {
 });
 ```
 
-## 为什么这里要带 `city_id`
+## 为什么这里要带 `bureau_id`
 
 因为 service 在登录或注册成功后，通常会顺手向 City 申请该 downcity 下的 `user_token`。
 
@@ -61,7 +61,6 @@ const session = await guest.service("accounts").get("login/result", {
 const user = new City({
   role: "user",
   city_url,
-  city_id: "city_demo",
   user_token: session.user_token,
 });
 ```

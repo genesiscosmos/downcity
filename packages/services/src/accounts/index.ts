@@ -7,7 +7,7 @@
  * - OAuth 使用自定义 callback 外壳，最终统一回填到 login state
  */
 
-import { InstallableService } from "@downcity/city";
+import { httpError, InstallableService } from "@downcity/city";
 import type {
   EnvRequirement,
   ServiceDatabaseContext,
@@ -122,8 +122,8 @@ export class AccountsService extends InstallableService {
     this.instruction = ({ actions }) => [
       "提供 Downcity 的统一账号服务容器，具体登录方式由 email / phone / OAuth 等 provider 决定。",
       "provider 满足 required env 或 runtime 配置后，才会出现在 /providers 中供客户端使用。",
-      "登录成功时传入 city_id 后，通过 login/result 读取绑定该 city 的 City user_token。",
-      "OAuth 回调地址固定为 /v1/accounts/oauth/callback，服务会根据 City 公网地址生成完整回调 URL。",
+      "登录开始时传入 bureau_id，认证成功后通过 login/result 读取绑定该 Bureau 的 user_token。",
+      "OAuth 回调地址固定为 /v1/accounts/oauth/callback，服务会根据 Federation 公网地址生成完整回调 URL。",
       `当前暴露 ${actions.length} 个动作，常用流程由 /providers 返回的 provider 决定。`,
     ].join("\n");
   }
@@ -181,22 +181,23 @@ export class AccountsService extends InstallableService {
       handler: async (c) => {
         const body = await c.json<AccountsLoginStartRequest>();
         const provider = String(body.provider ?? "").trim();
-        const city_id = String(body.city_id ?? "").trim() || "city_downcity";
+        const bureau_id = String(body.bureau_id ?? "").trim();
 
         if (!provider) {
           return c.jsonResponse({ error: "provider required" }, 400);
         }
+        await this.require_active_bureau(bureau_id);
 
         if (provider === "local") {
           if (!this.options.local_login) {
             return c.jsonResponse({ error: "local login is not enabled" }, 404);
           }
-          const result = await this.startLocalLogin(ctx, city_id);
+          const result = await this.startLocalLogin(ctx, bureau_id);
           return c.jsonResponse(result);
         }
 
         if (provider === "email") {
-          const result = await this.startEmailLogin(city_id);
+          const result = await this.startEmailLogin(bureau_id);
           if ("error" in result) {
             return c.jsonResponse({ error: result.error }, result.status);
           }
@@ -208,7 +209,7 @@ export class AccountsService extends InstallableService {
           return c.jsonResponse({ error: "provider not supported" }, 400);
         }
 
-        const result = await this.createOAuthStartResult(city_id, oauth_provider);
+        const result = await this.createOAuthStartResult(bureau_id, oauth_provider);
         if ("error" in result) {
           return c.jsonResponse({ error: result.error }, result.status);
         }
@@ -233,7 +234,7 @@ export class AccountsService extends InstallableService {
           const result = await this.createEmailLoginToken(ctx, {
             email: input ? String(input.email ?? "") : "",
             password: input ? String(input.password ?? "") : "",
-            city_id: entry.city_id,
+            bureau_id: entry.bureau_id,
           });
           if ("error" in result) {
             return c.jsonResponse({ error: result.error }, result.status);
@@ -356,7 +357,7 @@ export class AccountsService extends InstallableService {
           return c.jsonResponse({ error: "email provider not configured" }, 400);
         }
 
-        const body = await c.json<{ token?: string; city_id?: string }>();
+        const body = await c.json<{ token?: string; bureau_id?: string }>();
         const token = String(body.token ?? "").trim();
         if (!token) return c.jsonResponse({ error: "verification token required" }, 400);
 
@@ -378,7 +379,7 @@ export class AccountsService extends InstallableService {
           }
 
           const userToken = await ctx.createUserToken({
-            city_id: String(body.city_id ?? ""),
+            bureau_id: String(body.bureau_id ?? ""),
             user_id,
             ttl: this.options.token_ttl,
           });
@@ -407,6 +408,25 @@ export class AccountsService extends InstallableService {
           user: c.user,
           profile: user_id ? await this.readProfile(user_id) : null,
         });
+      },
+    });
+
+    ctx.route({
+      method: "POST",
+      path: "/tokens/issue",
+      auth: ["admin"],
+      handler: async (c) => {
+        const body = await c.json<{ bureau_id?: string; user_id?: string; metadata?: Record<string, unknown>; ttl?: string | number }>();
+        const bureau_id = String(body.bureau_id ?? "").trim();
+        const user_id = String(body.user_id ?? "").trim();
+        if (!user_id) return c.jsonResponse({ error: "user_id required" }, 400);
+        await this.require_active_bureau(bureau_id);
+        return c.jsonResponse(await ctx.createUserToken({
+          bureau_id,
+          user_id,
+          metadata: body.metadata,
+          ttl: body.ttl ?? this.options.token_ttl,
+        }));
       },
     });
 
@@ -479,7 +499,7 @@ export class AccountsService extends InstallableService {
       );
       const authUserId = await this.ensureOAuthAuthUser(profile, request);
       const result = await this._authenticator!.createToken({
-        city_id: entry.city_id,
+        bureau_id: entry.bureau_id,
         user_id: authUserId,
         ttl: this.options.token_ttl,
       });
@@ -492,7 +512,7 @@ export class AccountsService extends InstallableService {
   }
 
   private async createOAuthStartResult(
-    city_id: string,
+    bureau_id: string,
     provider: OAuthProviderId,
   ): Promise<{ data: AccountsLoginRedirectRequiredResult } | { error: string; status: number }> {
     const config = this.getEnabledOAuthProviderConfig(provider);
@@ -501,7 +521,7 @@ export class AccountsService extends InstallableService {
     }
 
     const login_id = randomToken(24);
-    await this.createLoginState(city_id, provider, login_id);
+    await this.createLoginState(bureau_id, provider, login_id);
     return {
       data: {
         status: "redirect_required",
@@ -513,14 +533,14 @@ export class AccountsService extends InstallableService {
     };
   }
 
-  private async startEmailLogin(city_id: string): Promise<{ data: AccountsLoginInputRequiredResult } | { error: string; status: number }> {
+  private async startEmailLogin(bureau_id: string): Promise<{ data: AccountsLoginInputRequiredResult } | { error: string; status: number }> {
     const email_provider = this.getEnabledEmailProvider();
     if (!email_provider) {
       return { error: "email provider not configured", status: 400 };
     }
 
     const login_id = randomToken(24);
-    await this.createLoginState(city_id, "email", login_id);
+    await this.createLoginState(bureau_id, "email", login_id);
     return {
       data: {
         status: "input_required",
@@ -536,7 +556,7 @@ export class AccountsService extends InstallableService {
     input: {
       email?: unknown;
       password?: unknown;
-      city_id?: unknown;
+      bureau_id?: unknown;
     },
   ): Promise<{ provider: "email"; user_token: string; user_id?: string; email?: string } | { error: string; status: number }> {
     const email_provider = this.getEnabledEmailProvider();
@@ -574,7 +594,7 @@ export class AccountsService extends InstallableService {
       }
 
       const userToken = await ctx.createUserToken({
-        city_id: String(input.city_id ?? ""),
+        bureau_id: String(input.bureau_id ?? ""),
         user_id,
         ttl: this.options.token_ttl,
       });
@@ -592,11 +612,11 @@ export class AccountsService extends InstallableService {
 
   private async startLocalLogin(
     ctx: ServiceInstallContext,
-    city_id: string,
+    bureau_id: string,
   ): Promise<AccountsLoginDoneResult> {
     const login_id = randomToken(24);
-    const result = await this.createLocalLoginToken(ctx, city_id);
-    await this.createLoginState(city_id, "local", login_id, result.user_token);
+    const result = await this.createLocalLoginToken(ctx, bureau_id);
+    await this.createLoginState(bureau_id, "local", login_id, result.user_token);
 
     return {
       status: "done",
@@ -607,10 +627,10 @@ export class AccountsService extends InstallableService {
 
   private async createLocalLoginToken(
     ctx: ServiceInstallContext,
-    city_id: string,
+    bureau_id: string,
   ): Promise<{ provider: "local"; user_token: string; user_id: string }> {
     const userToken = await ctx.createUserToken({
-      city_id,
+      bureau_id,
       user_id: LOCAL_USER_ID,
       ttl: this.options.token_ttl,
     });
@@ -806,10 +826,10 @@ export class AccountsService extends InstallableService {
   /**
    * 创建登录 state。
    */
-  private async createLoginState(city_id: string, provider: string, state: string, user_token = ""): Promise<void> {
+  private async createLoginState(bureau_id: string, provider: string, state: string, user_token = ""): Promise<void> {
     await runPrepared(
-      this.rawPrepare(`INSERT INTO ${ACCOUNTS_LOGIN_STATE_TABLE} (state, city_id, provider, user_token, created_at) VALUES (?, ?, ?, ?, ?)`),
-      [state, city_id, provider, user_token, Date.now()],
+      this.rawPrepare(`INSERT INTO ${ACCOUNTS_LOGIN_STATE_TABLE} (state, bureau_id, provider, user_token, created_at) VALUES (?, ?, ?, ?, ?)`),
+      [state, bureau_id, provider, user_token, Date.now()],
     );
   }
 
@@ -818,7 +838,7 @@ export class AccountsService extends InstallableService {
    */
   private async readLoginState(state: string): Promise<LoginStateRow | null> {
     const row = await readPreparedFirst(
-      this.rawPrepare(`SELECT state, city_id, provider, user_token, created_at FROM ${ACCOUNTS_LOGIN_STATE_TABLE} WHERE state = ?`),
+      this.rawPrepare(`SELECT state, bureau_id, provider, user_token, created_at FROM ${ACCOUNTS_LOGIN_STATE_TABLE} WHERE state = ?`),
       [state],
     ) as LoginStateRow | null;
     if (!row) return null;
@@ -830,13 +850,21 @@ export class AccountsService extends InstallableService {
   }
 
   /**
-   * 回填登录 state 的 City token。
+   * 回填登录 state 的 User Token。
    */
   private async resolveLoginState(state: string, user_token: string): Promise<void> {
     await runPrepared(
       this.rawPrepare(`UPDATE ${ACCOUNTS_LOGIN_STATE_TABLE} SET user_token = ? WHERE state = ?`),
       [user_token, state],
     );
+  }
+
+  /** 在登录流程开始和 Token 签发前确认 Bureau 可用。 */
+  private async require_active_bureau(bureau_id: string): Promise<void> {
+    if (!bureau_id) throw httpError(400, "bureau_id required");
+    const bureau = await this._bureauStore?.get(bureau_id);
+    if (!bureau) throw httpError(404, `Unknown Bureau: ${bureau_id}`);
+    if (bureau.state !== "active") throw httpError(403, `Bureau is not active: ${bureau_id}`);
   }
 
   /**

@@ -5,7 +5,7 @@ description: Federation 常见环境变量。
 
 | 变量 | 用途 |
 | --- | --- |
-| `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` | `Admin City` 管理 Federation |
+| `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` | `FederationAdmin` 管理 Federation |
 | `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` | Federation 内部签发和校验 `user_token` |
 | `DOWNCITY_CITY_DATABASE_URL` | 可选。指定 Federation 使用的数据库 URL |
 | `OPENAI_API_KEY` | 示例 provider key，建议通过 Admin env 写入 Federation 数据库 |
@@ -66,7 +66,7 @@ const deepseek = new DeepSeekChannel();
 
 ## 写入数据库
 
-可信后端可以用 `Admin City` 写入 provider key：
+可信后端可以用 `FederationAdmin` 写入 provider key：
 
 ```ts
 await admin.env.upsert({

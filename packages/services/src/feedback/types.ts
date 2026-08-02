@@ -22,8 +22,8 @@ export type FeedbackStatus =
 export interface FeedbackMessage extends Record<string, unknown> {
   /** 反馈 ID。 */
   feedback_id: string;
-  /** 反馈来源 city。 */
-  city_id: string;
+  /** 反馈来源 Bureau。 */
+  bureau_id: string;
   /** 反馈提交用户。 */
   user_id: string;
   /** 用户反馈正文。 */
@@ -62,8 +62,8 @@ export interface FeedbackCreateInput extends Record<string, unknown> {
  * 反馈查询入参。
  */
 export interface FeedbackQueryInput extends Record<string, unknown> {
-  /** 按 city 过滤。 */
-  city_id?: unknown;
+  /** 按 Bureau 过滤。 */
+  bureau_id?: unknown;
   /** 按用户过滤。 */
   user_id?: unknown;
   /** 按状态过滤。 */

@@ -118,7 +118,7 @@ export function rowToAsyncJobRecord(row: Record<string, unknown>): AsyncJobRecor
     error: readNullableString(row.error),
     message: readNullableString(row.message),
     poll_after_ms: readNullableNumberString(row.poll_after_ms),
-    city_id: readNullableString(row.city_id),
+    bureau_id: readNullableString(row.bureau_id),
     user_id: readNullableString(row.user_id),
     service_id: readNullableString(row.service_id),
     model_id: readNullableString(row.model_id),

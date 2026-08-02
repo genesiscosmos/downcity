@@ -34,7 +34,7 @@ ai.hook
   .after(async (ctx) => {
     await usageService.record({
       user_id: ctx.user?.user_id,
-      city_id: ctx.city?.city_id,
+      bureau_id: ctx.bureau?.bureau_id,
       model: ctx.variant?.id,
       output: ctx.output,
     });

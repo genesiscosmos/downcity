@@ -27,17 +27,17 @@ description: 一套 Federation 如何同时服务多个产品，而不把产品�
     <div className="dc-doc-node">
       <strong>产品 A</strong>
       <span>例如网页工具。</span>
-      <code>city_id = city_web</code>
+      <code>bureau_id = city_web</code>
     </div>
     <div className="dc-doc-node">
       <strong>产品 B</strong>
       <span>例如 Chrome 扩展。</span>
-      <code>city_id = city_extension</code>
+      <code>bureau_id = city_extension</code>
     </div>
     <div className="dc-doc-node">
       <strong>产品 C</strong>
       <span>例如客户 Demo 或内部工具。</span>
-      <code>city_id = city_demo</code>
+      <code>bureau_id = city_demo</code>
     </div>
   </div>
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
@@ -49,9 +49,9 @@ description: 一套 Federation 如何同时服务多个产品，而不把产品�
   </div>
 </div>
 
-## `city_id` 应该怎么用
+## `bureau_id` 应该怎么用
 
-`city_id` 是产品边界，而不是模型边界。
+`bureau_id` 是产品边界，而不是模型边界。
 
 它适合用来表达：
 
@@ -60,10 +60,11 @@ description: 一套 Federation 如何同时服务多个产品，而不把产品�
 - hooks 应该把 usage 记到哪个产品
 - 某个用户在不同产品里的调用是否要区分
 
-一个常见做法是给每个产品一个稳定的 `city_id`：
+一个常见做法是给每个产品一个稳定的 `bureau_id`：
 
 ```ts
-const issued = await admin.tokens.apply({
+const issued = await admin.service("accounts").action("tokens/issue").invoke({
+  bureau_id: "bureau_demo",
   user_id: "user_123",
   metadata: {
     plan: "starter",
@@ -74,7 +75,7 @@ const issued = await admin.tokens.apply({
 
 ## token metadata 适合放什么
 
-`city_id` 负责“这是哪个产品”，而 token metadata 更适合表达“这个用户在这个产品里的业务状态”。
+`bureau_id` 负责“这是哪个产品”，而 token metadata 更适合表达“这个用户在这个产品里的业务状态”。
 
 常见字段：
 
@@ -84,7 +85,7 @@ const issued = await admin.tokens.apply({
 - `feature_flag`
 - `team_id`
 
-这样 hooks 就可以基于 `ctx.city` 和 `ctx.user.metadata` 做差异化处理，而不需要为每个产品单独复制一套 City。
+这样 hooks 就可以基于 `ctx.bureau` 和 `ctx.user.metadata` 做差异化处理，而不需要为每个产品单独复制一套 City。
 
 ## 多产品共享时的推荐分层
 
@@ -92,12 +93,12 @@ const issued = await admin.tokens.apply({
 
 - 保存自己的路由、界面和业务体验
 - 用 `User City` 调 City
-- 只持有 `city_id + user_token`
+- 只持有 `user_token`（其中包含 `bureau_id`）
 
 ### 业务后端
 
 - 负责登录、订单、余额、订阅和业务数据
-- 在可信环境里使用 `Admin City`
+- 在可信环境里使用 `FederationAdmin`
 - 在登录成功后申请 `user_token`
 
 ### City

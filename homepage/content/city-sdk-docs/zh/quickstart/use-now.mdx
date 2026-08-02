@@ -1,6 +1,6 @@
 ---
 title: 现在怎么用
-description: 用默认数据库、Admin City 和 User City 跑通一条完整调用链。
+description: 用默认数据库、FederationAdmin 和 User City 跑通一条完整调用链。
 ---
 
 如果你想先按仓库里的现成产品体验，入口是：
@@ -12,9 +12,9 @@ description: 用默认数据库、Admin City 和 User City 跑通一条完整调
 
 ```plaintext
 City Client
-    ↓ Admin City 创建 city / 签发 user_token
+    ↓ FederationAdmin 创建 city / 签发 user_token
 Downcity City
-    ↓ User City 携带 user_token + city_id 调用 service
+    ↓ User City 携带 user_token + bureau_id 调用 service
 AIChannel → AIService → handler
 ```
 
@@ -84,16 +84,15 @@ serve({ fetch: (request) => base.fetch(request), port: 43127, hostname: "127.0.0
 ## 2. 创建 city 并签发 token
 
 ```ts
-import { City } from "@downcity/city";
+import { City, FederationAdmin } from "@downcity/city";
 
-const admin = new City({
-  role: "admin",
-  federation_url: "http://127.0.0.1:43127",
-  city_id: "city_demo",
-  admin_secret_key: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+const admin = new FederationAdmin({
+  base_url: "http://127.0.0.1:43127",
+  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
 });
 
-const token = await admin.tokens.apply({
+const token = await admin.service("accounts").action("tokens/issue").invoke({
+  bureau_id: "bureau_demo",
   user_id: "user_123",
   metadata: { plan: "pro" },
   ttl: "7d",
@@ -103,12 +102,10 @@ const token = await admin.tokens.apply({
 ## 3. 产品侧调用
 
 ```ts
-import { City } from "@downcity/city";
+import { City, FederationAdmin } from "@downcity/city";
 
 const city = new City({
-  role: "user",
   federation_url: "http://127.0.0.1:43127",
-  city_id: token.city_id,
   user_token: token.user_token,
 });
 

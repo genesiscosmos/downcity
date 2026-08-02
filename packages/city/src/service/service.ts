@@ -14,7 +14,8 @@ import type { CityTableApi } from "../store/table-api.js";
 import type { RuntimeUser } from "../federation/auth/types.js";
 import type { Authenticator } from "../federation/auth/authenticator.js";
 import type { EnvProvider } from "../federation/runtime.js";
-import type { CityStore } from "./cities/city-store.js";
+import type { BureauStore } from "./bureaus/bureau-store.js";
+import type { BureauRecord, RuntimeBureauToken } from "../types/Bureau.js";
 import type { InstructionActionDefinition, InstructionCapable, InstructionDefinition } from "./instruction.js";
 import type { RuntimeMetering } from "../types/Metering.js";
 import type { FederationQueue } from "../federation/queue.js";
@@ -35,7 +36,7 @@ const SERVICE_INITIALIZE = Symbol("downcity.service.initialize");
 // ===========================================================================
 
 /** 当前请求最终解析出的身份。 */
-export type RouteIdentity = "guest" | "user" | "admin";
+export type RouteIdentity = "guest" | "user" | "bureau" | "admin";
 /** Action 可声明的可访问身份。空数组表示免登录。 */
 export type RouteAuth = Array<Exclude<RouteIdentity, "guest">>;
 
@@ -60,8 +61,10 @@ export interface Context {
   user?: RuntimeUser;
   /** 当前请求身份 */
   identity?: { kind: RouteIdentity };
-  /** 所属 city */
-  city?: { city_id: string; status: string };
+  /** 当前用户或机器凭证所属的稳定 Bureau。 */
+  bureau?: BureauRecord;
+  /** bureau 身份使用的机器凭证元数据。 */
+  bureau_token?: RuntimeBureauToken;
   /** 当前解析的 variant（如 AI model、翻译语言对等）。由 Service 自行注入 */
   variant?: {
     /** variant 唯一 ID。 */
@@ -184,11 +187,12 @@ export class Service {
   /** 原生 HTTP route 注册表 */
   private nativeRouteMap = new Map<string, ServiceNativeRouteDefinition>();
 
-  // ========== City 注入 ==========
+  // ========== Federation 注入 ==========
 
   _authenticator?: Authenticator;
   _env?: EnvProvider;
-  _cityStore?: CityStore;
+  /** Federation Bureau 身份持久化入口。 */
+  _bureauStore?: BureauStore;
   /** Federation Bureau Token 持久化与校验入口。 */
   _bureauTokenStore?: BureauTokenStore;
 

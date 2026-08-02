@@ -21,6 +21,7 @@ import type {
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 import type { AnySQLiteTable } from "drizzle-orm/sqlite-core";
 import type { FederationQueue } from "../federation/queue.js";
+import type { BureauRecord, RuntimeBureauToken } from "../types/Bureau.js";
 
 /**
  * 框架内部安装入口。
@@ -87,7 +88,7 @@ export type ServiceDatabaseSchemas = Record<string, ServiceDatabaseSchema | unde
 export interface ServiceActionRouteConfig {
   method: "GET" | "POST";
   path: string;
-  auth?: Array<"user" | "admin">;
+  auth?: Array<"user" | "bureau" | "admin">;
   /**
    * 是否公开访问。
    *
@@ -110,7 +111,7 @@ export interface ServiceNativeRouteConfig {
    * - native HTTP route 不进入 action/hook 管线，但仍可声明 route 级鉴权
    */
   public?: boolean;
-  auth?: Array<"user" | "admin">;
+  auth?: Array<"user" | "bureau" | "admin">;
   handler: {
     /**
      * 原生 HTTP 请求处理器。
@@ -125,8 +126,10 @@ export interface ServiceNativeRouteConfig {
 export interface ServiceRouteContext {
   /** 当前 user_token 解析出的用户；免登录或 admin 请求时可能为空 */
   user?: RuntimeUser;
-  /** 当前 user_token 对应的 city；免登录或 admin 请求时可能为空 */
-  city?: { city_id: string; status: string };
+  /** 当前用户或机器凭证所属的 Bureau。 */
+  bureau?: BureauRecord;
+  /** bureau 身份使用的机器凭证元数据。 */
+  bureau_token?: RuntimeBureauToken;
   /** 原始 HTTP 请求 */
   request: Request;
   /** 当前请求来源 transport。 */
@@ -150,8 +153,8 @@ function is_native_route_config(
 }
 
 function resolve_route_auth(
-  config: { auth?: Array<"user" | "admin">; public?: boolean },
-): Array<"user" | "admin"> | undefined {
+  config: { auth?: Array<"user" | "bureau" | "admin">; public?: boolean },
+): Array<"user" | "bureau" | "admin"> | undefined {
   if (config.public === true) return [];
   return config.auth;
 }
@@ -208,7 +211,8 @@ export abstract class InstallableService extends Service {
       return self.action(actionId, async (svcCtx: Context) => {
         return await config.handler({
           user: svcCtx.user,
-          city: svcCtx.city,
+          bureau: svcCtx.bureau,
+          bureau_token: svcCtx.bureau_token,
           request: svcCtx.request ?? new Request("http://local"),
           transport: svcCtx.transport,
           waitUntil: svcCtx.waitUntil,

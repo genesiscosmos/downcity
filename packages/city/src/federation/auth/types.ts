@@ -24,9 +24,9 @@ export interface RuntimeUser {
  */
 export interface CreateUserTokenInput {
   /**
-   * token 所属的 City ID。
+   * token 所属的稳定 Bureau ID。
    */
-  city_id: string;
+  bureau_id: string;
 
   /**
    * token 所属的终端用户 ID。
@@ -51,9 +51,9 @@ export interface CreateUserTokenInput {
  */
 export interface UserTokenPayload {
   /**
-   * token 受众。
+   * token 的 Federation 与目标 Bureau 受众。
    */
-  aud: "downcity:user";
+  aud: string[];
 
   /**
    * 签发该 token 的 Federation 稳定 issuer。
@@ -61,9 +61,9 @@ export interface UserTokenPayload {
   iss: string;
 
   /**
-   * token 所属 City ID。
+   * token 所属 Bureau ID。
    */
-  city_id: string;
+  bureau_id: string;
 
   /**
    * token 所属用户 ID。
@@ -158,23 +158,26 @@ export interface FederationDiscovery {
   /** 当前 Federation 的公开 JWKS 地址。 */
   jwks_uri: string;
 
-  /** user_token 必须包含的 audience。 */
-  user_token_audience: "downcity:user";
+  /** Federation 接收 user_token 时校验的 audience。 */
+  federation_user_token_audience: "downcity:federation";
+
+  /** Bureau audience 的固定 URN 前缀。 */
+  bureau_user_token_audience_prefix: "urn:downcity:bureau:";
 }
 
 /**
- * City 返回给管理端的发 token 结果。
+ * Federation 返回的 User Token 签发结果。
  */
 export interface UserTokenIssueResult {
   /**
-   * 可交给 User City 使用的 token。
+   * 可交给 City 终端使用的 token。
    */
   user_token: string;
 
   /**
-   * token 所属 City ID。
+   * token 所属 Bureau ID。
    */
-  city_id: string;
+  bureau_id: string;
 
   /**
    * token 所属用户 ID。

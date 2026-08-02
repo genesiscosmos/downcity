@@ -82,26 +82,23 @@ If the request times out, the Dokploy service is not exposed publicly, the VPS f
 City frontends and apps should call the Node block through `@downcity/city`:
 
 ```ts
-import { City } from "@downcity/city";
+import { City, FederationAdmin } from "@downcity/city";
 
 const city = new City({
-  role: "user",
   federation_url: "https://base.example.com",
-  city_id: "my-city",
   user_token: "user_token",
 });
 ```
 
-Trusted backends should use `Admin City` with `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`:
+Trusted backends should use `FederationAdmin` with `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`:
 
 ```ts
-import { City } from "@downcity/city";
+import { City, FederationAdmin } from "@downcity/city";
 
-const admin = new City({
-  role: "admin",
-  federation_url: "https://base.example.com",
-  admin_secret_key: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+const admin = new FederationAdmin({
+  base_url: "https://base.example.com",
+  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
 });
 ```
 
-See [User City](/en/city-sdk-docs/reference/city-user) and [Admin City](/en/city-sdk-docs/reference/city-admin) for the full SDK surface.
+See [User City](/en/city-sdk-docs/reference/city-user) and [FederationAdmin](/en/city-sdk-docs/reference/city-admin) for the full SDK surface.

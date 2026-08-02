@@ -109,7 +109,7 @@ Once mounted, services still look like normal services from the product side:
 ```ts
 const login = await guest.service("accounts").action("login/start").invoke({
   provider: "email",
-  city_id: "city_demo",
+  bureau_id: "bureau_demo",
 });
 
 await guest.service("accounts").action("login/continue").invoke({

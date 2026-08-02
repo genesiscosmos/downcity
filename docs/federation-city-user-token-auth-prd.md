@@ -1,8 +1,12 @@
 # Federation、City 与 Bureau 鉴权 PRD
 
+> 状态：已被 [`federation-bureau-city-identity-redesign.md`](./federation-bureau-city-identity-redesign.md) 取代。
+>
+> 本文保留为历史设计记录。其中以 `city_id` 表示产品身份、Bureau Token 不绑定产品、Bureau 拥有 Federation 管理能力等结论均已失效，不应作为实现依据。
+
 ## 1. 文档状态
 
-- 状态：已确认并实现
+- 状态：历史版本，已取代
 - 范围：`@downcity/city`、Federation Accounts、CLI 与用户文档
 - 核心模型：City 直连 Federation；Bureau 是可选产品后端
 

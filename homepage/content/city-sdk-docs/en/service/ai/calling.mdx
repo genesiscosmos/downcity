@@ -7,9 +7,7 @@ description: SDK pathway (User City) and OpenAI-compatible pathway (curl / OpenA
 
 ```ts
 const city = new City({
-  role: "user",
   federation_url: "http://127.0.0.1:43127",
-  city_id: "city_downcity",
   user_token: "ub_xxx",
 });
 
@@ -79,7 +77,7 @@ const model = provider.languageModel("deepseek-v4-flash");
 ```
 
 The request body stays standard OpenAI-compatible JSON. The `model` field comes
-from `languageModel(model_id)`, and `city_id` is resolved from the bearer
+from `languageModel(model_id)`, and `bureau_id` is resolved from the bearer
 `user_token` on the server.
 
 The request is routed by Federation AIService:
@@ -87,7 +85,7 @@ The request is routed by Federation AIService:
 ```txt
 POST /v1/ai/chat/completions
   -> verify user_token
-  -> resolve city_id / user_id from the token
+  -> resolve bureau_id / user_id from the token
   -> read body.model
   -> find the provider bound to that model
   -> let the provider call the real upstream model

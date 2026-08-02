@@ -1,0 +1,88 @@
+---
+title: Integrate Organizations into Bureau
+description: Verify user_token, check Membership, and enforce product resource permissions
+---
+
+# Integrate Organizations into Bureau
+
+Bureau is the trusted product backend. Bureau sends the Federation `user_token` to the HTTPS Bureau configured by the product. Bureau verifies the user and Bureau before checking Organization Membership.
+
+## Authorization order
+
+```text
+Bureau
+  -> user_token + product request
+  -> Bureau verifies Federation JWT and bureau_id
+  -> Bureau reads organization_id from the resource record
+  -> Bureau checks Federation Membership
+  -> Bureau enforces product roles and resource permissions
+```
+
+A valid Membership means that the user belongs to the Organization. It does not grant access to every product resource owned by that Organization.
+
+## Verify `user_token`
+
+Bureau uses its configured Federation issuer and JWKS to validate:
+
+- JWT algorithm and signature;
+- `iss` and `aud`;
+- `exp` and `nbf`;
+- `user_id` and `bureau_id`;
+- whether `bureau_id` is allowed by the current product.
+
+Do not log the Authorization header or forward the token to services outside product configuration.
+
+## Check Membership
+
+Bureau can forward the same user Token to Federation:
+
+```http
+GET /v1/organizations/membership/get?organization_id=org_01J...
+Authorization: Bearer ub_...
+```
+
+A successful response contains the Organization and active Membership. Federation returns `403 NOT_AN_ORGANIZATION_MEMBER` after the user leaves or is removed.
+
+## Verify resource ownership
+
+Product resource tables store `organization_id`:
+
+```sql
+CREATE TABLE projects (
+  project_id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL
+);
+```
+
+For `/v1/projects/:project_id`, Bureau reads the Project first and checks Membership against `project.organization_id`. Never use a client-supplied Organization ID as the resource authority.
+
+## Product permissions
+
+Bureau applies its own permission model after Membership succeeds:
+
+```text
+Federation Membership
+  -> user belongs to Organization
+
+Product Role / ACL
+  -> user may read, edit, or manage a resource
+```
+
+Organization Owner, Admin, and Member govern the Federation relationship only. Bureau stores product roles such as editor, viewer, or billing_admin.
+
+## Cache and revocation
+
+Check Federation online for writes, administration, and sensitive reads that require immediate revocation. Low-risk reads may use a short-lived cache; the maximum revocation delay equals the cache TTL.
+
+At minimum, include Federation issuer, `user_id`, and `organization_id` in the cache key. Bureau owns the TTL decision. Organizations Service maintains no cross-server revocation Outbox.
+
+## Checklist
+
+- [ ] Read the Bureau URL from trusted product configuration
+- [ ] Receive `user_token` only over HTTPS
+- [ ] Verify issuer, audience, signature, time, and `bureau_id`
+- [ ] Do not log or forward the Authorization header
+- [ ] Read `organization_id` from the resource record
+- [ ] Check Membership online for sensitive operations
+- [ ] Apply product permissions after Membership

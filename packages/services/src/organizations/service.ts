@@ -3,8 +3,8 @@
  *
  * 设计边界：
  * - Federation 是 Organization 与 Membership 的唯一权威事实源；
- * - City Server 只接收受众绑定的 organization_token；
- * - 项目资源和项目权限不属于本 Service。
+ * - Organization 可以属于 Federation 全局，也可以限定在当前 Token Bureau；
+ * - 产品后端、部署路由、项目资源和产品权限不属于本 Service。
  */
 
 import {
@@ -17,43 +17,35 @@ import { organization_database_schemas } from "./schema/index.js";
 import {
   new_join_request_id,
   new_membership_id,
-  new_organization_event_id,
   new_organization_id,
 } from "./domain/OrganizationId.js";
 import {
+  read_include_archived,
   read_assignable_role,
   read_join_decision,
   read_membership_id,
   read_organization_id,
   read_organization_name,
   read_request_id,
-  read_server_url,
+  read_scope_type,
   require_role,
 } from "./domain/OrganizationPolicy.js";
 import { OrganizationRepository, type OrganizationTableSource } from "./infrastructure/OrganizationRepository.js";
-import {
-  OrganizationEventDispatcher,
-  type OrganizationEventDeliveryResult,
-} from "./infrastructure/OrganizationEventDispatcher.js";
 import { register_organization_routes } from "./routes.js";
 import type {
   OrganizationCreateInput,
-  OrganizationEventRecord,
-  OrganizationEventType,
   OrganizationIdInput,
   OrganizationJoinRequestDecisionInput,
   OrganizationJoinRequestIdInput,
   OrganizationJoinRequestRecord,
+  OrganizationListMyInput,
   OrganizationMemberRemoveInput,
   OrganizationMemberRoleInput,
   OrganizationMembershipRecord,
   OrganizationOwnerSlotRecord,
   OrganizationOwnerTransferInput,
   OrganizationRecord,
-  OrganizationRevocationEvent,
   OrganizationsServiceOptions,
-  OrganizationServerUpdateInput,
-  OrganizationTokenIssueResult,
   OrganizationUpdateInput,
   UserOrganization,
 } from "./types/index.js";
@@ -62,18 +54,14 @@ import type {
 export class OrganizationsService extends InstallableService {
   readonly id = "organizations";
   readonly name = "Organizations";
-  readonly version = "1.0.0";
+  readonly version = "2.0.0";
   readonly database_schemas = organization_database_schemas;
 
   private readonly max_organizations_per_user: number;
-  private readonly organization_token_ttl: string | number;
-  private readonly fetcher: typeof fetch;
   private repository?: OrganizationRepository;
-  private dispatcher?: OrganizationEventDispatcher;
   private transaction_runner?: <TResult>(
     handler: (context: ServiceTransactionContext) => Promise<TResult>,
   ) => Promise<TResult>;
-  private create_service_token?: ServiceInstallContext["create_service_token"];
 
   constructor(options: OrganizationsServiceOptions) {
     super();
@@ -82,12 +70,10 @@ export class OrganizationsService extends InstallableService {
       throw new TypeError("max_organizations_per_user must be a positive integer");
     }
     this.max_organizations_per_user = options.max_organizations_per_user;
-    this.organization_token_ttl = options.organization_token_ttl ?? "7d";
-    this.fetcher = options.fetch ?? globalThis.fetch;
     this.instruction = [
-      "管理当前 City 下的 Organization、Membership 与用户主动 Join Request。",
-      "Organization 不拥有项目资源；项目资源和产品权限由 server_url 指向的 City Server 管理。",
-      "City Server 使用 Federation 签发的 organization_token，并通过撤权事件同步失效状态。",
+      "管理 Federation 全局或当前 Bureau 作用域的 Organization、Membership 与用户主动 Join Request。",
+      "Organization 只表达组织身份、成员关系和治理角色。",
+      "产品后端、部署路由、项目资源和产品权限由 Bureau、Product 与 Bureau 管理。",
     ].join("\n");
   }
 
@@ -98,28 +84,22 @@ export class OrganizationsService extends InstallableService {
     };
     this.repository = new OrganizationRepository(source);
     this.transaction_runner = (handler) => context.transaction(handler);
-    this.create_service_token = (input) => context.create_service_token(input);
-    this.dispatcher = new OrganizationEventDispatcher(
-      this.repository,
-      this.create_service_token,
-      this.fetcher,
-    );
     register_organization_routes(this, context);
   }
 
   /** 创建 Organization 并让当前用户成为唯一 Owner。 */
-  async create(user_id: string, city_id: string, input: OrganizationCreateInput) {
+  async create(user_id: string, bureau_id: string, input: OrganizationCreateInput) {
     const name = read_organization_name(input.name);
-    const server_url = read_server_url(input.server_url);
+    const scope_type = read_scope_type(input.scope_type);
     return await this.with_owner_slot_retry(async () => this.transaction(async (repository) => {
       const now = new Date().toISOString();
       const organization_id = new_organization_id();
-      const slot = await this.reserve_owner_slot(repository, city_id, user_id, organization_id, now);
+      const slot = await this.reserve_owner_slot(repository, user_id, organization_id, now);
       const organization: OrganizationRecord = {
         organization_id,
-        city_id,
         name,
-        server_url,
+        scope_type,
+        scope_bureau_id: scope_type === "bureau" ? bureau_id : "",
         state: "active",
         created_by: user_id,
         created_at: now,
@@ -144,13 +124,19 @@ export class OrganizationsService extends InstallableService {
     }));
   }
 
-  /** 列出当前 City 下用户仍然有效的 Membership 与 Organization。 */
-  async list_my(user_id: string, city_id: string): Promise<UserOrganization[]> {
+  /** 列出当前 Token Bureau 可见且用户仍有 active Membership 的 Organization。 */
+  async list_my(
+    user_id: string,
+    bureau_id: string,
+    input: OrganizationListMyInput = {},
+  ): Promise<UserOrganization[]> {
+    const include_archived = read_include_archived(input.include_archived);
     const memberships = await this.repo().list_user_active_memberships(user_id);
     const items: UserOrganization[] = [];
     for (const membership of memberships) {
       const organization = await this.repo().get_organization(membership.organization_id);
-      if (!organization || organization.city_id !== city_id) continue;
+      if (!organization || !this.is_visible_in_bureau(organization, bureau_id)) continue;
+      if (!include_archived && organization.state === "archived") continue;
       items.push({
         ...organization,
         role: membership.role,
@@ -162,9 +148,9 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** 读取当前用户已加入的 Organization。 */
-  async get_organization(user_id: string, city_id: string, input: OrganizationIdInput) {
+  async get_organization(user_id: string, bureau_id: string, input: OrganizationIdInput) {
     const organization_id = read_organization_id(input.organization_id);
-    const organization = await this.require_city_organization(this.repo(), organization_id, city_id);
+    const organization = await this.require_visible_organization(this.repo(), organization_id, bureau_id);
     const membership = require_role(
       await this.repo().get_active_membership(organization_id, user_id),
       ["owner", "admin", "member"],
@@ -173,11 +159,11 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** 修改 Organization 名称。 */
-  async update(user_id: string, city_id: string, input: OrganizationUpdateInput) {
+  async update(user_id: string, bureau_id: string, input: OrganizationUpdateInput) {
     const organization_id = read_organization_id(input.organization_id);
     const name = read_organization_name(input.name);
     return await this.transaction(async (repository) => {
-      const organization = await this.require_active_city_organization(repository, organization_id, city_id);
+      const organization = await this.require_active_visible_organization(repository, organization_id, bureau_id);
       require_role(await repository.get_active_membership(organization_id, user_id), ["owner", "admin"]);
       const updated_at = new Date().toISOString();
       await repository.update_organization(organization_id, { name, updated_at });
@@ -185,31 +171,11 @@ export class OrganizationsService extends InstallableService {
     });
   }
 
-  /** 修改 City Server URL，并为旧 Server 写入 Organization 级撤权事件。 */
-  async update_server(user_id: string, city_id: string, input: OrganizationServerUpdateInput) {
-    const organization_id = read_organization_id(input.organization_id);
-    const server_url = read_server_url(input.server_url);
-    return await this.transaction(async (repository) => {
-      const organization = await this.require_active_city_organization(repository, organization_id, city_id);
-      require_role(await repository.get_active_membership(organization_id, user_id), ["owner"]);
-      if (organization.server_url === server_url) return organization;
-      const updated_at = new Date().toISOString();
-      await repository.update_organization(organization_id, { server_url, updated_at });
-      await repository.insert_event(this.create_event({
-        event_type: "organization.server_url.changed",
-        organization,
-        target_url: organization.server_url,
-        created_at: updated_at,
-      }));
-      return { ...organization, server_url, updated_at };
-    });
-  }
-
   /** 将 Organization 归档为不可恢复终态。 */
-  async archive(user_id: string, city_id: string, input: OrganizationIdInput) {
+  async archive(user_id: string, bureau_id: string, input: OrganizationIdInput) {
     const organization_id = read_organization_id(input.organization_id);
     return await this.transaction(async (repository) => {
-      const organization = await this.require_active_city_organization(repository, organization_id, city_id);
+      const organization = await this.require_active_visible_organization(repository, organization_id, bureau_id);
       require_role(await repository.get_active_membership(organization_id, user_id), ["owner"]);
       const archived_at = new Date().toISOString();
       await repository.update_organization(organization_id, {
@@ -218,20 +184,14 @@ export class OrganizationsService extends InstallableService {
         updated_at: archived_at,
       });
       await repository.delete_owner_slot(organization_id);
-      await repository.insert_event(this.create_event({
-        event_type: "organization.archived",
-        organization,
-        target_url: organization.server_url,
-        created_at: archived_at,
-      }));
       return { ...organization, state: "archived" as const, archived_at, updated_at: archived_at };
     });
   }
 
   /** 读取当前用户 Membership。 */
-  async get_membership(user_id: string, city_id: string, input: OrganizationIdInput) {
+  async get_membership(user_id: string, bureau_id: string, input: OrganizationIdInput) {
     const organization_id = read_organization_id(input.organization_id);
-    const organization = await this.require_city_organization(this.repo(), organization_id, city_id);
+    const organization = await this.require_visible_organization(this.repo(), organization_id, bureau_id);
     const membership = require_role(
       await this.repo().get_active_membership(organization_id, user_id),
       ["owner", "admin", "member"],
@@ -240,20 +200,20 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** 列出 active Membership。 */
-  async list_members(user_id: string, city_id: string, input: OrganizationIdInput) {
+  async list_members(user_id: string, bureau_id: string, input: OrganizationIdInput) {
     const organization_id = read_organization_id(input.organization_id);
-    await this.require_active_city_organization(this.repo(), organization_id, city_id);
+    await this.require_active_visible_organization(this.repo(), organization_id, bureau_id);
     require_role(await this.repo().get_active_membership(organization_id, user_id), ["owner", "admin", "member"]);
     return await this.repo().list_active_memberships(organization_id);
   }
 
   /** Owner 任命或撤销 Admin。 */
-  async update_member_role(user_id: string, city_id: string, input: OrganizationMemberRoleInput) {
+  async update_member_role(user_id: string, bureau_id: string, input: OrganizationMemberRoleInput) {
     const organization_id = read_organization_id(input.organization_id);
     const membership_id = read_membership_id(input.membership_id);
     const role = read_assignable_role(input.role);
     return await this.transaction(async (repository) => {
-      await this.require_active_city_organization(repository, organization_id, city_id);
+      await this.require_active_visible_organization(repository, organization_id, bureau_id);
       require_role(await repository.get_active_membership(organization_id, user_id), ["owner"]);
       const target = await repository.get_membership(membership_id);
       if (!target || target.organization_id !== organization_id || target.state !== "active") {
@@ -267,11 +227,11 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** Owner/Admin 移除允许其管理的 Membership。 */
-  async remove_member(user_id: string, city_id: string, input: OrganizationMemberRemoveInput) {
+  async remove_member(user_id: string, bureau_id: string, input: OrganizationMemberRemoveInput) {
     const organization_id = read_organization_id(input.organization_id);
     const membership_id = read_membership_id(input.membership_id);
     return await this.transaction(async (repository) => {
-      const organization = await this.require_active_city_organization(repository, organization_id, city_id);
+      await this.require_active_visible_organization(repository, organization_id, bureau_id);
       const actor = require_role(
         await repository.get_active_membership(organization_id, user_id),
         ["owner", "admin"],
@@ -284,30 +244,30 @@ export class OrganizationsService extends InstallableService {
       if (actor.role === "admin" && target.role !== "member") {
         throw httpError(403, "ORGANIZATION_ROLE_DENIED");
       }
-      return await this.remove_membership(repository, organization, target, user_id);
+      return await this.remove_membership(repository, target, user_id);
     });
   }
 
   /** Member/Admin 主动退出 Organization。 */
-  async leave(user_id: string, city_id: string, input: OrganizationIdInput) {
+  async leave(user_id: string, bureau_id: string, input: OrganizationIdInput) {
     const organization_id = read_organization_id(input.organization_id);
     return await this.transaction(async (repository) => {
-      const organization = await this.require_active_city_organization(repository, organization_id, city_id);
+      await this.require_active_visible_organization(repository, organization_id, bureau_id);
       const membership = require_role(
         await repository.get_active_membership(organization_id, user_id),
         ["owner", "admin", "member"],
       );
       if (membership.role === "owner") throw httpError(409, "OWNER_TRANSFER_REQUIRED");
-      return await this.remove_membership(repository, organization, membership, user_id);
+      return await this.remove_membership(repository, membership, user_id);
     });
   }
 
   /** 原子转移唯一 Owner 和额度槽位。 */
-  async transfer_owner(user_id: string, city_id: string, input: OrganizationOwnerTransferInput) {
+  async transfer_owner(user_id: string, bureau_id: string, input: OrganizationOwnerTransferInput) {
     const organization_id = read_organization_id(input.organization_id);
     const membership_id = read_membership_id(input.membership_id);
     return await this.with_owner_slot_retry(async () => this.transaction(async (repository) => {
-      const organization = await this.require_active_city_organization(repository, organization_id, city_id);
+      await this.require_active_visible_organization(repository, organization_id, bureau_id);
       const current_owner = require_role(
         await repository.get_active_membership(organization_id, user_id),
         ["owner"],
@@ -318,7 +278,7 @@ export class OrganizationsService extends InstallableService {
       }
       if (target.role === "owner") return { previous_owner: current_owner, owner: target };
       const now = new Date().toISOString();
-      const slot = await this.create_owner_slot(repository, city_id, target.user_id, organization_id, now);
+      const slot = await this.create_owner_slot(repository, target.user_id, organization_id, now);
       await repository.delete_owner_slot(organization_id);
       await repository.insert_owner_slot(slot);
       await repository.update_membership(current_owner.membership_id, { role: "admin", updated_at: now });
@@ -331,10 +291,10 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** 用户主动申请加入 Organization。 */
-  async create_join_request(user_id: string, city_id: string, input: OrganizationIdInput) {
+  async create_join_request(user_id: string, bureau_id: string, input: OrganizationIdInput) {
     const organization_id = read_organization_id(input.organization_id);
     return await this.transaction(async (repository) => {
-      const organization = await this.require_active_city_organization(repository, organization_id, city_id);
+      const organization = await this.require_active_visible_organization(repository, organization_id, bureau_id);
       const membership = await repository.get_active_membership(organization_id, user_id);
       if (membership) return { state: "joined" as const, organization, membership };
       const pending = await repository.get_pending_join_request(organization_id, user_id);
@@ -354,14 +314,14 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** 用户取消自己的 pending Join Request。 */
-  async cancel_join_request(user_id: string, city_id: string, input: OrganizationJoinRequestIdInput) {
+  async cancel_join_request(user_id: string, bureau_id: string, input: OrganizationJoinRequestIdInput) {
     const request_id = read_request_id(input.request_id);
     return await this.transaction(async (repository) => {
       const request = await repository.get_join_request(request_id);
       if (!request || request.user_id !== user_id || request.state !== "pending") {
         throw httpError(404, "JOIN_REQUEST_NOT_FOUND");
       }
-      await this.require_city_organization(repository, request.organization_id, city_id);
+      await this.require_visible_organization(repository, request.organization_id, bureau_id);
       const decided_at = new Date().toISOString();
       await repository.update_join_request(request_id, {
         state: "canceled",
@@ -373,9 +333,9 @@ export class OrganizationsService extends InstallableService {
   }
 
   /** Owner/Admin 列出 pending Join Request。 */
-  async list_join_requests(user_id: string, city_id: string, input: OrganizationIdInput) {
+  async list_join_requests(user_id: string, bureau_id: string, input: OrganizationIdInput) {
     const organization_id = read_organization_id(input.organization_id);
-    await this.require_active_city_organization(this.repo(), organization_id, city_id);
+    await this.require_active_visible_organization(this.repo(), organization_id, bureau_id);
     require_role(await this.repo().get_active_membership(organization_id, user_id), ["owner", "admin"]);
     return await this.repo().list_pending_join_requests(organization_id);
   }
@@ -383,7 +343,7 @@ export class OrganizationsService extends InstallableService {
   /** Owner/Admin 批准或拒绝 Join Request。 */
   async decide_join_request(
     user_id: string,
-    city_id: string,
+    bureau_id: string,
     input: OrganizationJoinRequestDecisionInput,
   ) {
     const request_id = read_request_id(input.request_id);
@@ -391,7 +351,7 @@ export class OrganizationsService extends InstallableService {
     return await this.transaction(async (repository) => {
       const request = await repository.get_join_request(request_id);
       if (!request || request.state !== "pending") throw httpError(404, "JOIN_REQUEST_NOT_FOUND");
-      await this.require_active_city_organization(repository, request.organization_id, city_id);
+      await this.require_active_visible_organization(repository, request.organization_id, bureau_id);
       require_role(
         await repository.get_active_membership(request.organization_id, user_id),
         ["owner", "admin"],
@@ -427,44 +387,8 @@ export class OrganizationsService extends InstallableService {
     });
   }
 
-  /** 为 active Membership 签发受众绑定的长期 Organization Token。 */
-  async issue_token(user_id: string, city_id: string, input: OrganizationIdInput): Promise<OrganizationTokenIssueResult> {
-    const organization_id = read_organization_id(input.organization_id);
-    const organization = await this.require_active_city_organization(this.repo(), organization_id, city_id);
-    const membership = require_role(
-      await this.repo().get_active_membership(organization_id, user_id),
-      ["owner", "admin", "member"],
-    );
-    if (!this.create_service_token) throw new Error("OrganizationsService token signer is not ready");
-    const result = await this.create_service_token({
-      audience: organization.server_url,
-      subject: user_id,
-      prefix: "ot_",
-      ttl: this.organization_token_ttl,
-      claims: {
-        user_id,
-        city_id,
-        organization_id,
-        membership_id: membership.membership_id,
-      },
-    });
-    return {
-      organization_token: result.token,
-      organization_id,
-      server_url: organization.server_url,
-      expires_at: result.expires_at,
-    };
-  }
-
-  /** 投递一批 pending 撤权事件。 */
-  async deliver_pending_events(): Promise<OrganizationEventDeliveryResult> {
-    if (!this.dispatcher) throw new Error("OrganizationsService event dispatcher is not ready");
-    return await this.dispatcher.deliver_pending();
-  }
-
   private async remove_membership(
     repository: OrganizationRepository,
-    organization: OrganizationRecord,
     membership: OrganizationMembershipRecord,
     removed_by: string,
   ) {
@@ -475,64 +399,27 @@ export class OrganizationsService extends InstallableService {
       removed_by,
       updated_at: removed_at,
     });
-    await repository.insert_event(this.create_event({
-      event_type: "organization.membership.removed",
-      organization,
-      target_url: organization.server_url,
-      membership,
-      created_at: removed_at,
-    }));
     return { ...membership, state: "removed" as const, removed_at, removed_by, updated_at: removed_at };
-  }
-
-  private create_event(input: {
-    event_type: OrganizationEventType;
-    organization: OrganizationRecord;
-    target_url: string;
-    membership?: OrganizationMembershipRecord;
-    created_at: string;
-  }): OrganizationEventRecord {
-    const event_id = new_organization_event_id();
-    const payload: OrganizationRevocationEvent = {
-      event_id,
-      event_type: input.event_type,
-      city_id: input.organization.city_id,
-      organization_id: input.organization.organization_id,
-      membership_id: input.membership?.membership_id ?? "",
-      user_id: input.membership?.user_id ?? "",
-      created_at: input.created_at,
-    };
-    return {
-      ...payload,
-      target_url: input.target_url,
-      payload_json: JSON.stringify(payload),
-      delivery_state: "pending",
-      delivery_attempts: 0,
-      last_error: "",
-      delivered_at: "",
-    };
   }
 
   private async reserve_owner_slot(
     repository: OrganizationRepository,
-    city_id: string,
     user_id: string,
     organization_id: string,
     created_at: string,
   ): Promise<OrganizationOwnerSlotRecord> {
-    return await this.create_owner_slot(repository, city_id, user_id, organization_id, created_at);
+    return await this.create_owner_slot(repository, user_id, organization_id, created_at);
   }
 
   private async create_owner_slot(
     repository: OrganizationRepository,
-    city_id: string,
     user_id: string,
     organization_id: string,
     created_at: string,
   ): Promise<OrganizationOwnerSlotRecord> {
-    const used = new Set((await repository.list_owner_slots(city_id, user_id)).map((item) => item.slot));
+    const used = new Set((await repository.list_owner_slots(user_id)).map((item) => item.slot));
     for (let slot = 1; slot <= this.max_organizations_per_user; slot += 1) {
-      if (!used.has(slot)) return { city_id, user_id, slot, organization_id, created_at };
+      if (!used.has(slot)) return { user_id, slot, organization_id, created_at };
     }
     throw httpError(409, "ORGANIZATION_LIMIT_REACHED");
   }
@@ -553,24 +440,31 @@ export class OrganizationsService extends InstallableService {
     throw new Error("OrganizationsService owner slot retry exhausted");
   }
 
-  private async require_city_organization(
+  private async require_visible_organization(
     repository: OrganizationRepository,
     organization_id: string,
-    city_id: string,
+    bureau_id: string,
   ): Promise<OrganizationRecord> {
     const organization = await repository.require_organization(organization_id);
-    if (organization.city_id !== city_id) throw httpError(403, "ORGANIZATION_CITY_MISMATCH");
+    if (!this.is_visible_in_bureau(organization, bureau_id)) {
+      throw httpError(403, "ORGANIZATION_BUREAU_MISMATCH");
+    }
     return organization;
   }
 
-  private async require_active_city_organization(
+  private async require_active_visible_organization(
     repository: OrganizationRepository,
     organization_id: string,
-    city_id: string,
+    bureau_id: string,
   ): Promise<OrganizationRecord> {
-    const organization = await this.require_city_organization(repository, organization_id, city_id);
+    const organization = await this.require_visible_organization(repository, organization_id, bureau_id);
     if (organization.state !== "active") throw httpError(410, "ORGANIZATION_ARCHIVED");
     return organization;
+  }
+
+  /** 判断 Organization 是否对当前 Token Bureau 可见。 */
+  private is_visible_in_bureau(organization: OrganizationRecord, bureau_id: string): boolean {
+    return organization.scope_type === "federation" || organization.scope_bureau_id === bureau_id;
   }
 
   private async transaction<TResult>(

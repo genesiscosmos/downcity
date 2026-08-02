@@ -30,8 +30,8 @@ export interface AsyncJobRecord {
   message?: string | null;
   /** 建议下一次轮询或后台抓取的间隔毫秒数。 */
   poll_after_ms?: string | null;
-  /** 当前 user_token 绑定的 City ID。 */
-  city_id?: string | null;
+  /** 当前 User Token 绑定的 Bureau ID。 */
+  bureau_id?: string | null;
   /** 当前终端用户 ID。 */
   user_id?: string | null;
   /** 创建该任务的 Service ID。 */

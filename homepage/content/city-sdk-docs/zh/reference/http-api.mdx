@@ -42,12 +42,14 @@ Admin GET                GET  /v1/{service}/{action}
 
 | 路由 | 方法 | 用途 |
 | --- | --- | --- |
-| `/v1/cities/list` | `GET` | City 列表 |
-| `/v1/cities/create` | `POST` | 创建 City |
-| `/v1/cities/pause` | `POST` | 暂停 City |
-| `/v1/cities/activate` | `POST` | 启用 City |
-| `/v1/cities/remove` | `POST` | 删除 City |
-| `/v1/cities/tokens/apply` | `POST` | 签发 user_token |
+| `/v1/bureaus/list` | `GET` | Bureau 列表 |
+| `/v1/bureaus/create` | `POST` | 创建 Bureau，必须提供 `server_url` |
+| `/v1/bureaus/pause` | `POST` | 暂停 Bureau |
+| `/v1/bureaus/activate` | `POST` | 启用 Bureau |
+| `/v1/bureaus/archive` | `POST` | 归档 Bureau |
+| `/v1/bureaus/server-url/update` | `POST` | 更新 Bureau 服务入口 |
+| `/v1/bureaus/current` | `GET` | 按 User Token 解析当前 Bureau |
+| `/v1/accounts/tokens/issue` | `POST` | 签发 user_token |
 | `/v1/env/list` | `GET` | 环境变量列表 |
 | `/v1/env/upsert` | `POST` | 写入环境变量 |
 | `/v1/env/remove` | `POST` | 删除环境变量 |
@@ -175,7 +177,7 @@ transport 请求：把模型目录返回的 `CityModel` 交给 Agent / AI SDK，
 `city.ai.stream()`。后者在客户端将同一模型流转换成 `UIMessageChunk`。
 
 AI 请求的用户和 city 上下文由 bearer `user_token` 解析。请求体里可以不传
-`city_id`；如果传了，必须与 token 绑定的 city 一致。
+`bureau_id`；如果传了，必须与 token 绑定的 city 一致。
 
 ### `POST /v1/ai/chat/completions`
 
@@ -240,21 +242,21 @@ Authorization: Bearer <admin_secret_key>
 Content-Type: application/json
 ```
 
-### `POST /v1/cities/create`
+### `POST /v1/bureaus/create`
 
 ```json
-{ "name": "Chrome Extension" }
+{ "name": "Chrome Extension", "server_url": "https://bureau.example.com" }
 ```
 
 ```json
-{ "city_id": "city_xxx", "name": "Chrome Extension", "status": "active", ... }
+{ "bureau_id": "bureau_xxx", "name": "Chrome Extension", "server_url": "https://bureau.example.com", "state": "active", ... }
 ```
 
-### `POST /v1/cities/tokens/apply`
+### `POST /v1/accounts/tokens/issue`
 
 ```json
 {
-  "city_id": "city_xxx",
+  "bureau_id": "bureau_xxx",
   "user_id": "user_123",
   "metadata": { "plan": "pro" },
   "ttl": "7d"
@@ -262,7 +264,7 @@ Content-Type: application/json
 ```
 
 ```json
-{ "user_token": "ub_xxx", "city_id": "city_xxx", "user_id": "user_123", ... }
+{ "user_token": "ub_xxx", "bureau_id": "bureau_xxx", "user_id": "user_123", ... }
 ```
 
 ### `POST /v1/env/upsert`
@@ -277,7 +279,7 @@ Content-Type: application/json
 | --- | --- |
 | `200` | 请求成功 |
 | `401` | token 缺失、过期、签名无效 |
-| `403` | city_id 不匹配、city 已暂停 |
+| `403` | bureau_id 不匹配、city 已暂停 |
 | `404` | 路由不存在、service 未注册 |
 | `422` | model 不存在、action 未命中 |
 | `500` | action 逻辑抛出未指定 statusCode 的错误 |

@@ -57,12 +57,12 @@ export interface FederationProfile {
   has_user_session: boolean;
 
   /**
-   * City user session 中绑定的 city_id。
+   * City user session 中绑定的 bureau_id。
    *
    * 说明（中文）
    * - 为空表示未登录或 session 文件不可用。
    */
-  city_id?: string;
+  bureau_id?: string;
 
   /**
    * City user session 中的用户 ID。
@@ -83,9 +83,9 @@ export interface FederationMembershipState {
   federation_url: string;
 
   /**
-   * 当前 City user session 使用的 city_id。
+   * 当前 City user session 使用的 bureau_id。
    */
-  city_id: string;
+  bureau_id: string;
 
   /**
    * 是否已保存 user token。

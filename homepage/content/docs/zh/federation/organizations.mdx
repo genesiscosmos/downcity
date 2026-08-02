@@ -1,98 +1,82 @@
 ---
 title: Organizations
-description: 使用 Federation 管理 Organization、成员关系和 City Server 访问凭证
+description: 使用 Federation 管理全局或 Bureau 作用域的 Organization 与成员关系
 ---
 
 # Organizations
 
-`OrganizationsService` 管理某个 City 下的 Organization 和成员关系。Federation
-是 Membership 的唯一权威来源，Space、文档、Git Repository 等项目资源仍由各自
-的 City Server 管理。
+`OrganizationsService` 管理 Organization、Membership、Join Request 和组织治理角色。Federation 是这些关系的唯一权威来源。
 
-如果你正在实现接收 Token 和撤权事件的后端，请直接阅读
-[City Server 接入 Organizations](./organizations-city-server)。
+Organization 不保存产品后端地址，也不管理 Space、文档、Repository 等产品资源。Bureau 从产品可信配置取得 Bureau 地址，并携带当前 `user_token` 请求 Bureau。Bureau 验证用户身份、查询 Membership，再执行自己的资源权限。
 
-如果你正在开发客户端或产品后端，请阅读
-[Organizations Federation API](./organizations-api)。
+- 客户端和产品后端 API：[Organizations Federation API](./organizations-api)
+- 产品后端接入：[Bureau 接入 Organizations](./organizations-bureau)
 
 ## 安装
 
 ```ts
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/bureau";
 import { OrganizationsService } from "@downcity/services";
 
 const federation = new Federation({ database });
 
 federation.use(new OrganizationsService({
   max_organizations_per_user: 3,
-  organization_token_ttl: "7d",
 }));
 ```
 
-额度统计用户当前作为 Owner 持有的 active Organization。归档会释放额度，Owner
-转移会把额度移动给新 Owner。
+额度统计用户作为 Owner 持有的全部 active Organization，不按 Bureau 重复计算。归档会释放额度，Owner 转移会把额度交给新 Owner。
+
+## Organization 作用域
+
+创建 Federation 全局 Organization：
+
+```ts
+await bureau.service("organizations").action("create").invoke({
+  name: "Genesis Research",
+  scope_type: "federation",
+});
+```
+
+创建当前 Bureau Organization：
+
+```ts
+await bureau.service("organizations").action("create").invoke({
+  name: "Genesis Research",
+  scope_type: "bureau",
+});
+```
+
+`federation` Organization 可以由同一 Federation 下任意 Bureau Token 中的成员访问。`bureau` Organization 只接受 `user_token.bureau_id` 与 `scope_bureau_id` 相同的请求。Bureau 作用域从已验证 Token 写入，客户端不能提交或覆盖 `scope_bureau_id`。
+
+全局不等于公开。Organizations Service 不提供公开搜索；用户仍需通过邀请链接、二维码或产品流程取得 `organization_id`。
 
 ## Membership
 
-Membership 表示一个 User 属于一个 Organization。每次成功加入都会创建新的
-`membership_id`；退出或被移除后，旧 Membership 永久失效。用户以后重新加入时
-会得到新的 `membership_id`，旧 Token 不会恢复。
-
-用户只能主动申请加入：
+Membership 表示一个 User 与 Organization 之间的一段成员关系。每次成功加入都会生成新的 `membership_id`。退出或被移除后，旧记录永久保持 `removed`；重新加入会创建另一条 Membership。
 
 ```ts
-await city.service("organizations").action("join-requests/create").invoke({
+await bureau.service("organizations").action("join-requests/create").invoke({
   organization_id: "org_01J...",
 });
 ```
 
-Organizations Service 不提供公开 Organization 搜索。产品可以通过邀请链接、二维码
-或自己的业务流程分享 `organization_id`。
+Owner、Admin、Member 只表达 Organization 治理角色，不代表产品中的 editor、viewer 或 repository push 权限。
 
-## Organization Token
+## 调用产品 Bureau
 
-成员通过 Federation 换取受众绑定的长期 Token：
+Bureau 把同一个 `user_token` 发送给产品预先配置的 HTTPS Bureau：
 
 ```ts
-const result = await city.service("organizations").action("token/create").invoke({
+await bureau.post("https://bureau.example.com/v1/projects", {
   organization_id: "org_01J...",
 });
-
-await fetch(`${result.server_url}/v1/spaces`, {
-  headers: {
-    authorization: `Bearer ${result.organization_token}`,
-  },
-});
 ```
 
-Organization Token 精确绑定 Organization 当前 `server_url`，并包含 `user_id`、
-`city_id`、`organization_id` 和 `membership_id`。City Server 必须使用 Federation
-JWKS 本地验签。原始 `user_token` 不应发送给 City Server。
+Bureau 使用 Federation JWKS 验证 Token，并通过 `membership/get` 查询当前 Membership。Organizations Service 不再签发 `organization_token`，也不向用户提供的 URL 投递撤权事件。
 
-`organization_token_ttl` 默认为 `7d`，最大为 `30d`。Token 的及时撤权依赖下面的可靠事件链路，
-而不是等待 Token 自然过期。
+## 数据库与归档
 
-## 撤权
+Organizations Service 支持 better-sqlite3、PostgreSQL 与 Cloudflare D1。三种 Runtime 统一使用 `context.transaction()`；Service 不判断数据库类型。
 
-Member 退出、被移除，Organization 归档或 Server URL 更新时，Federation 会向旧
-City Server 的固定端点投递签名撤权事件：
-
-```http
-POST /v1/downcity/organization-events
-```
-
-City Server 先持久化撤权状态，再返回成功。正常项目请求只执行本地 Token 验证和
-撤权检查，不需要在线访问 Federation。
-
-生产部署应为 Federation Queue 配置 Adapter，以便持续重试暂时失败的撤权事件。
-未配置 Queue 时，Event 仍保存在 Outbox，可通过管理 Action 手动重放。
-
-Organizations Service 支持 better-sqlite3、PostgreSQL 与 Cloudflare D1。三种 Runtime
-对 Service 统一提供 `context.transaction`。D1 的读快照冲突检测、自动重试与原子
-`batch()` 提交由 City Runtime 内部完成，Organizations 不需要判断数据库类型。
-
-## 归档
-
-Organization 归档不可恢复。归档会停止治理写入、停止签发 Token，并注销已签发的
-Organization Token。City Server 如何处理自己的 Space、文档或 Repository 不属于
-Organizations Service 的职责。
+Organization 归档不可恢复。归档会停止治理写入并释放 Owner 额度。产品资源是否保留、归档或删除，由 Bureau 决定。

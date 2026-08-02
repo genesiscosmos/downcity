@@ -1,21 +1,24 @@
 ---
-title: Federation 与 City
-description: 分清服务端运行时 Federation 和客户端访问入口 City，避免把两个名字混在一起。
+title: Federation、Bureau 与 City
+description: 分清全局服务、产品身份、产品后端和 Agent 终端的边界。
 ---
 
 在 `@downcity/city` 里，服务端和客户端是两个不同的类，名字也不同。最容易踩的坑，就是把它们都当成“City”。
 
-- 服务端运行时是 `Federation`
-- 客户端访问入口是 `City`
+- 全局服务与信任根是 `Federation`
+- 稳定产品身份与授权域是 `Bureau`
+- Agent 终端客户端是 `City`
 
 这一页只解决一件事：**让你看代码时立刻知道自己在写哪一端。**
 
 ## 一句话区分
 
-- `Federation`：部署在服务端的共享后端运行时，承载模型目录、service/action 路由、token 校验、usage 和 hooks。多个产品（`city_id`）共用同一个 `Federation`。
-- `City`：产品侧或可信后端用来访问 `Federation` 的客户端，按 `role` 分成 `User City` 和 `Admin City`。
+- `Federation`：共享后端运行时、账户事实源和信任根，维护 Bureau 注册表与 Organization 关系。
+- `Bureau`：稳定的产品身份和授权域；每个机器凭证绑定一个 `bureau_id`。
+- `City`：Agent 终端客户端，连接预配置的 Bureau 产品域，不在 Federation 注册。
+- `FederationAdmin`：独立的 Root 控制面客户端，不属于任何 Bureau。
 
-换句话说：你部署一个 `Federation`，然后用 `City` 去连它。
+换句话说：Federation 信任 Bureau；City 只是连接某个 Bureau 产品域的终端。
 
 ## 服务端：`Federation`
 
@@ -41,31 +44,28 @@ serve({ fetch: (request) => base.fetch(request), port: 3001 });
 
 > 文档里出现的“Federation”指的就是这个 `Federation` 实例，不是客户端 `City`。
 
-## 客户端：`City`
+## 控制面与终端
 
-产品端和可信后端都用 `City` 去访问 `Federation`，区别只在 `role`：
+可信控制面和 Agent 终端使用两个独立客户端：
 
 ```ts
-import { City } from "@downcity/city";
+import { City, FederationAdmin } from "@downcity/city";
 
-// 可信后端：持有 admin_secret_key，管理 city、签发 user_token
-const admin = new City({
-  role: "admin",
-  federation_url: "https://base.example.com",
-  admin_secret_key: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+// Federation Root 控制面：管理 Bureau、env，并代签 User Token
+const admin = new FederationAdmin({
+  base_url: "https://base.example.com",
+  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
 });
 
-// 产品前端：只拿 city_id + user_token，调用 service
+// 产品前端：只拿 user_token (which contains bureau_id)，调用 service
 const city = new City({
-  role: "user",
   federation_url: "https://base.example.com",
-  city_id,
   user_token,
 });
 ```
 
-- `Admin City`：运行在可信后端，负责创建 city、管理 env、签发 `user_token`。
-- `User City`：运行在产品 client，只持有 `city_id + user_token`，调用 `ai.text()`、`ai.stream()`、`ai.image_create()` / `ai.image_result()` 和 Service action。
+- `FederationAdmin`：运行在可信后端，负责管理 Bureau 身份与 env，并签发 `user_token`。
+- `City`：运行在 Agent 终端，只持有 `user_token`（其中包含 `bureau_id`），调用 AI 与 Service action。
 
 客户端永远拿不到 provider key，`User City` 也永远拿不到 `admin_secret_key`。
 
@@ -74,9 +74,9 @@ const city = new City({
 <div className="dc-doc-flow" aria-label="Federation 与 City 的边界">
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
-      <strong>客户端 City</strong>
-      <span>`User City` 在产品前端，`Admin City` 在可信后端。</span>
-      <code>{'new City({ role })'}</code>
+      <strong>Agent 终端 City</strong>
+      <span>连接预配置的 Bureau 产品域，不拥有服务端身份。</span>
+      <code>{'new City({ federation_url })'}</code>
     </div>
   </div>
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
@@ -93,7 +93,7 @@ const city = new City({
 
 CLI 也是按这条边界拆的：
 
-- `downfed`：管理 `Federation`（创建、部署、City 实体、服务资源、env）。
+- `downfed`：管理 `Federation`、Bureau 身份、机器凭证、服务资源和 env。
 - `downcity`：本机 Agent 宿主与管理入口。
 
 ## 接下来读什么

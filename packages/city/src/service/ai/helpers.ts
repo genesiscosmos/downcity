@@ -175,7 +175,7 @@
        parts,
        metadata: {
          model: ctx.variant?.id,
-         city_id: ctx.city?.city_id,
+         bureau_id: ctx.bureau?.bureau_id,
          user_id: ctx.user?.user_id,
          finishReason: result.finishReason,
          usage: result.usage,
@@ -221,7 +221,7 @@
      parts,
      metadata: stripUndefined({
        model: input.model.id,
-       city_id: input.city_id,
+       bureau_id: input.bureau_id,
        user_id: input.user_id,
        ...metadata,
      }),

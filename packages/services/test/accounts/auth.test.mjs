@@ -4,7 +4,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { Bureau, City, Federation } from "@downcity/city"
+import { Bureau, City, Federation, FederationAdmin } from "@downcity/city"
 import { createSqliteDb } from "./sqlite-db.mjs"
 import {
   AccountsService,
@@ -23,8 +23,8 @@ test("accountsService registers users, logs in, and issues Federation tokens", a
     const { base, adminSecret } = await setupBase(tempDir)
 
     const city = await (await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/cities/create",
-      body: { name: "Demo" },
+      path: "/v1/bureaus/create",
+      body: { name: "Demo", server_url: "https://bureau.example.com" },
     }))).json()
 
     const registerResponse = await base.fetch(jsonRequest("/v1/accounts/register", {
@@ -39,7 +39,7 @@ test("accountsService registers users, logs in, and issues Federation tokens", a
     if (registered.verification_token) {
       const verifyResponse = await base.fetch(jsonRequest("/v1/accounts/verify-email", {
         token: registered.verification_token,
-        city_id: city.city_id,
+        bureau_id: city.bureau_id,
       }))
       assert.equal(verifyResponse.status, 200)
       const verified = await verifyResponse.json()
@@ -48,7 +48,7 @@ test("accountsService registers users, logs in, and issues Federation tokens", a
 
     const authStartResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
       provider: "email",
-      city_id: city.city_id,
+      bureau_id: city.bureau_id,
     }))
     assert.equal(authStartResponse.status, 200)
     const authStarted = await authStartResponse.json()
@@ -98,17 +98,17 @@ test("City 直读 Profile，Bureau 本地验签后按需读取同一 Federation 
     process.chdir(tempDir)
     const { base, adminSecret } = await setupBase(tempDir)
     const admin = create_admin(base, adminSecret)
-    const city_a = await admin.cities.create({ name: "Product A" })
-    const city_b = await admin.cities.create({ name: "Product B" })
-    const token_a = await register_bureau(admin)
-    const token_b = await register_bureau(admin)
+    const bureau_a_record = await admin.bureaus.create({ name: "Product A", server_url: "https://bureau-a.example.com" })
+    const bureau_b_record = await admin.bureaus.create({ name: "Product B", server_url: "https://bureau-b.example.com" })
+    const token_a = await register_bureau(admin, bureau_a_record.bureau_id)
+    const token_b = await register_bureau(admin, bureau_b_record.bureau_id)
 
     const registered = await (await base.fetch(jsonRequest("/v1/accounts/register", {
       email: "bureau@example.com",
       password: "password123",
     }))).json()
-    const user_token = await admin.cities.tokens.apply({
-      city_id: city_a.city_id,
+    const user_token = await admin.service("accounts").action("tokens/issue").invoke({
+      bureau_id: bureau_a_record.bureau_id,
       user_id: registered.user_id,
       ttl: "1h",
     })
@@ -120,13 +120,15 @@ test("City 直读 Profile，Bureau 本地验签后按需读取同一 Federation 
     const bureau_a = create_bureau(base, token_a.bureau_token)
     const bureau_user = await bureau_a.user(user_request(user_token.user_token))
     assert.equal(bureau_user.identity.user_id, registered.user_id)
-    assert.equal(bureau_user.identity.city_id, city_a.city_id)
+    assert.equal(bureau_user.identity.bureau_id, bureau_a_record.bureau_id)
     const bureau_profile = await bureau_user.profile()
     assert.deepEqual(bureau_profile, city_profile)
 
     const bureau_b = create_bureau(base, token_b.bureau_token)
-    const bureau_b_identity = await bureau_b.identify(user_request(user_token.user_token))
-    assert.equal(bureau_b_identity.city_id, city_a.city_id)
+    await assert.rejects(
+      bureau_b.identify(user_request(user_token.user_token)),
+      (error) => error?.statusCode === 401,
+    )
     await assert.rejects(
       bureau_a.identify(user_request(`${user_token.user_token}invalid`)),
       (error) => error?.statusCode === 401,
@@ -207,8 +209,8 @@ test("accountsService exposes local login when enabled", async () => {
     const { base, adminSecret } = await setupBase(tempDir, {}, { local_login: true })
 
     const city = await (await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/cities/create",
-      body: { name: "Local Demo" },
+      path: "/v1/bureaus/create",
+      body: { name: "Local Demo", server_url: "https://bureau.example.com" },
     }))).json()
 
     const localProvidersResponse = await base.fetch(new Request("http://localhost/v1/accounts/providers"))
@@ -228,7 +230,7 @@ test("accountsService exposes local login when enabled", async () => {
 
     const authStartResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
       provider: "local",
-      city_id: city.city_id,
+      bureau_id: city.bureau_id,
     }))
     assert.equal(authStartResponse.status, 200)
     const authStarted = await authStartResponse.json()
@@ -293,13 +295,19 @@ test("accountsService does not expose email login without an email provider", as
     base.use(new AccountsService({ token_ttl: "7d" }))
     await base.health()
 
+    const admin_secret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const bureau = await (await base.fetch(adminRequest(admin_secret, {
+      path: "/v1/bureaus/create",
+      body: { name: "Demo", server_url: "https://bureau.example.com" },
+    }))).json()
+
     const providersResponse = await base.fetch(new Request("http://localhost/v1/accounts/providers"))
     assert.equal(providersResponse.status, 200)
     assert.deepEqual(await providersResponse.json(), { items: [] })
 
     const loginResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
       provider: "email",
-      city_id: "city_demo",
+      bureau_id: bureau.bureau_id,
     }))
     assert.equal(loginResponse.status, 400)
     assert.deepEqual(await loginResponse.json(), { error: "email provider not configured" })
@@ -322,13 +330,13 @@ test("accountsService completes Google OAuth callback and resolves the state tok
     })
 
     const city = await (await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/cities/create",
-      body: { name: "Demo" },
+      path: "/v1/bureaus/create",
+      body: { name: "Demo", server_url: "https://bureau.example.com" },
     }))).json()
 
     const startResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
       provider: "google",
-      city_id: city.city_id,
+      bureau_id: city.bureau_id,
     }))
     assert.equal(startResponse.status, 200)
     const start = await startResponse.json()
@@ -403,13 +411,13 @@ test("accountsService completes WeChat website OAuth callback and resolves the s
     })
 
     const city = await (await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/cities/create",
-      body: { name: "Demo" },
+      path: "/v1/bureaus/create",
+      body: { name: "Demo", server_url: "https://bureau.example.com" },
     }))).json()
 
     const startResponse = await base.fetch(jsonRequest("/v1/accounts/login/start", {
       provider: "wechat",
-      city_id: city.city_id,
+      bureau_id: city.bureau_id,
     }))
     assert.equal(startResponse.status, 200)
     const start = await startResponse.json()
@@ -543,18 +551,18 @@ function create_bureau(base, bureau_token) {
 }
 
 function create_admin(base, admin_secret_key) {
-  return new Bureau({
-    federation_url: "http://localhost",
-    bureau_token: admin_secret_key,
+  return new FederationAdmin({
+    base_url: "http://localhost",
+    credential: admin_secret_key,
     fetch: (input, init) => base.fetch(new Request(input, init)),
   })
 }
 
-async function register_bureau(admin) {
+async function register_bureau(admin, bureau_id) {
   const token_id = `br_${randomBytes(12).toString("base64url")}`
   const bureau_token = `fb_${token_id}.${randomBytes(32).toString("base64url")}`
   const token_hash = createHash("sha256").update(bureau_token, "utf8").digest("base64url")
-  await admin.bureaus.register({ token_id, purpose: "accounts auth test", token_hash })
+  await admin.bureaus.tokens.register({ bureau_id, token_id, purpose: "accounts auth test", token_hash })
   return { token_id, bureau_token }
 }
 

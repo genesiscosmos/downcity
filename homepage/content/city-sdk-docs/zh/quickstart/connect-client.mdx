@@ -12,9 +12,7 @@ description: 用 User City 从产品侧调用 Federation 的 Service 和 Action�
 import { City } from "@downcity/city";
 
 const city = new City({
-  role: "user",
   federation_url: "http://127.0.0.1:43127",
-  city_id: "city_downcity",
   user_token: "ub_xxx",
 });
 
@@ -34,4 +32,4 @@ const result = await city.service("translate").action("zh2en").invoke({ text: "�
 const login = await city.service("accounts").get("login/result", { login_id: "login_xxx" });
 ```
 
-创建 city、暂停 city、签发 `user_token` 和维护 Runtime env 都属于可信环境动作，用 `Admin City` 完成，不放到产品前端。
+创建 city、暂停 city、签发 `user_token` 和维护 Runtime env 都属于可信环境动作，用 `FederationAdmin` 完成，不放到产品前端。

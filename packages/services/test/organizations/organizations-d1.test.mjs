@@ -60,18 +60,19 @@ test("Organizations initializes on D1 and concurrent create cannot exceed owner 
     federation.use(new OrganizationsService({ max_organizations_per_user: 1 }))
     await federation.health()
     const secret = await read_env_value(federation, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
-    const city = await json_request(federation, admin_request(secret, "/v1/cities/create", {
-      name: "D1 City",
+    const bureau = await json_request(federation, admin_request(secret, "/v1/bureaus/create", {
+      name: "D1 Bureau",
+      server_url: "https://d1.example.com",
     }))
-    const token = await issue_user_token(federation, secret, city.city_id, "d1_owner")
+    const token = await issue_user_token(federation, secret, bureau.bureau_id, "d1_owner")
     const responses = await Promise.all([
       federation.fetch(user_request(token, "/v1/organizations/create", {
         name: "First",
-        server_url: "https://first.example.com",
+        scope_type: "bureau",
       })),
       federation.fetch(user_request(token, "/v1/organizations/create", {
         name: "Second",
-        server_url: "https://second.example.com",
+        scope_type: "federation",
       })),
     ])
     const response_bodies = await Promise.all(responses.map((response) => response.clone().text()))
@@ -81,7 +82,8 @@ test("Organizations initializes on D1 and concurrent create cannot exceed owner 
       JSON.stringify(response_bodies),
     )
     const created = response_bodies.map((body) => JSON.parse(body)).find((body) => body.organization)
-    const member_token = await issue_user_token(federation, secret, city.city_id, "d1_member")
+    assert.equal(created.organization.scope_bureau_id, bureau.bureau_id)
+    const member_token = await issue_user_token(federation, secret, bureau.bureau_id, "d1_member")
     const pending = await json_request(federation, user_request(
       member_token,
       "/v1/organizations/join-requests/create",
@@ -137,11 +139,9 @@ async function json_request(federation, request) {
   return body
 }
 
-async function issue_user_token(federation, secret, city_id, user_id) {
-  const result = await json_request(
-    federation,
-    admin_request(secret, "/v1/cities/tokens/apply", { city_id, user_id }),
-  )
+async function issue_user_token(federation, secret, bureau_id, user_id) {
+  void secret
+  const result = await (await federation.getAuthenticator()).createToken({ bureau_id, user_id })
   return result.user_token
 }
 

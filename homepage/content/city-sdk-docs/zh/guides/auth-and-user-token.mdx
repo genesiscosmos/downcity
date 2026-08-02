@@ -7,10 +7,11 @@ Downcity 不替你托管用户系统。它只要求 client 请求携带可校验
 
 ## 已有登录系统
 
-如果你已经有登录系统，可以在登录后用 `Admin City` 签发 Downcity token：
+如果你已经有登录系统，可以在登录后用 `FederationAdmin` 签发 Downcity token：
 
 ```ts
-const user = await admin.tokens.apply({
+const user = await admin.service("accounts").action("tokens/issue").invoke({
+  bureau_id: "bureau_demo",
   user_id: session.user.id,
   metadata: {
     plan: session.user.plan,
@@ -21,7 +22,7 @@ const user = await admin.tokens.apply({
 
 然后把两样东西交给产品侧：
 
-- `city_id`
+- `bureau_id`
 - `user_token`
 
 ## 没有复杂后端

@@ -20,12 +20,14 @@ import type { RuntimeUser } from "./auth/types.js";
 import { build_federation_instruction } from "./federation-instruction.js";
 import { collect_federation_env_catalog } from "./federation-env-catalog.js";
 import type { FederationRequestTransport, FederationTrustedIdentity } from "./types.js";
+import type { BureauRecord, RuntimeBureauToken } from "../types/Bureau.js";
 
 declare module "hono" {
   interface ContextVariableMap {
-    identity?: { kind: "guest" | "user" | "admin" };
+    identity?: { kind: "guest" | "user" | "bureau" | "admin" };
     user?: RuntimeUser;
-    city?: { city_id: string; status: string };
+    bureau?: BureauRecord;
+    bureau_token?: RuntimeBureauToken;
   }
 }
 
@@ -185,8 +187,9 @@ export function build_federation_router(params: {
           const identity = await authorize_request(authenticator, trusted_identity_from_env(c.env), c.req.raw, def.auth);
           ctx.identity = { kind: identity.level };
           ctx.user = identity.user;
-          ctx.city = identity.city;
-          ensure_city_identity_match(ctx);
+          ctx.bureau = identity.bureau;
+          ctx.bureau_token = identity.bureau_token;
+          ensure_bureau_identity_match(ctx);
 
           for (const hook of global_service_hooks(services)) {
             await hook.runBefore(ctx);
@@ -228,7 +231,7 @@ export function build_federation_router(params: {
  *
  * 关键说明（中文）
  * - `trusted_identity` 来自 `Federation.fetch()` 的进程内 options。
- * - 外部 HTTP 请求仍然只能通过 bearer token 进入 admin/user 身份。
+ * - 外部 HTTP 请求仍然只能通过 bearer token 进入 admin/bureau/user 身份。
  */
 async function authorize_request(
   authenticator: Authenticator,
@@ -329,18 +332,18 @@ function search_params_to_object(search_params: URLSearchParams): Record<string,
 }
 
 /**
- * 校验 input.city_id 与 token 绑定产品一致。
+ * 校验 input.bureau_id 与 token 绑定产品一致。
  */
-function ensure_city_identity_match(ctx: Context): void {
-  if (ctx.identity?.kind !== "user") return;
-  const request_city_id = typeof ctx.input.city_id === "string"
-    ? ctx.input.city_id.trim()
+function ensure_bureau_identity_match(ctx: Context): void {
+  if (ctx.identity?.kind !== "user" && ctx.identity?.kind !== "bureau") return;
+  const request_bureau_id = typeof ctx.input.bureau_id === "string"
+    ? ctx.input.bureau_id.trim()
     : "";
-  if (!request_city_id) return;
+  if (!request_bureau_id) return;
 
-  const token_city_id = ctx.city?.city_id ?? "";
-  if (request_city_id !== token_city_id) {
-    throw httpError(403, "city_id does not match the authenticated token");
+  const token_bureau_id = ctx.bureau?.bureau_id ?? "";
+  if (request_bureau_id !== token_bureau_id) {
+    throw httpError(403, "bureau_id does not match the authenticated token");
   }
 }
 

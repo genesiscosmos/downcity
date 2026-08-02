@@ -44,12 +44,14 @@ Each action declares which identities it allows. The default is `["user"]`; `[]`
 
 | Route | Method | Purpose |
 | --- | --- | --- |
-| `/v1/cities/list` | `GET` | List cities |
-| `/v1/cities/create` | `POST` | Create city |
-| `/v1/cities/pause` | `POST` | Pause city |
-| `/v1/cities/activate` | `POST` | Activate city |
-| `/v1/cities/remove` | `POST` | Remove city |
-| `/v1/cities/tokens/apply` | `POST` | Issue user_token |
+| `/v1/bureaus/list` | `GET` | List Bureaus |
+| `/v1/bureaus/create` | `POST` | Create a Bureau with required `server_url` |
+| `/v1/bureaus/pause` | `POST` | Pause a Bureau |
+| `/v1/bureaus/activate` | `POST` | Activate a Bureau |
+| `/v1/bureaus/archive` | `POST` | Archive a Bureau |
+| `/v1/bureaus/server-url/update` | `POST` | Update a Bureau server entrypoint |
+| `/v1/bureaus/current` | `GET` | Resolve the current Bureau from a User Token |
+| `/v1/accounts/tokens/issue` | `POST` | Issue user_token |
 | `/v1/env/list` | `GET` | View runtime env |
 | `/v1/env/upsert` | `POST` | Write env variable |
 | `/v1/env/remove` | `POST` | Delete env variable |
@@ -113,7 +115,7 @@ Response:
 { "id": "msg_xxx", "role": "assistant", "parts": [{ "type": "text", "text": "Hi!" }] }
 ```
 
-City resolves the user and city from the bearer `user_token`. If the request body includes `city_id`, it must match the city bound to the token; otherwise City returns `403`.
+City resolves the user and city from the bearer `user_token`. If the request body includes `bureau_id`, it must match the city bound to the token; otherwise City returns `403`.
 
 ## `GET /v1/services`
 

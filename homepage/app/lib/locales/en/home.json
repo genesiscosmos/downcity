@@ -110,18 +110,12 @@
   },
   "productWorld": {
     "sectionLabel": "Product world",
-    "title": "When agents begin to work, the world takes shape.",
-    "description": "A role gathers capabilities and claims a place to work. More agents and product structures join, the City expands, and Cities connect through Federation.",
+    "title": "A product world centered on agents",
+    "description": "An Agent integrates capabilities as connected terrain grows into Cities. Neighboring Cities form Federations across one continuous continent.",
     "scrollHint": "Keep scrolling",
-    "story": {
-      "awaken": "A task arrives. A role awakens.",
-      "gather": "Everything it needs begins to gather.",
-      "settle": "Work leaves a trace—and claims its first piece of ground.",
-      "expand": "New roles move in. The City grows through collaboration.",
-      "connect": "Distant Cities light up. The world begins to connect."
-    },
     "labels": {
       "agent": "Agent",
+      "capabilities": "Capabilities",
       "city": "City",
       "federation": "Federation",
       "tool": "Tool",

@@ -22,7 +22,7 @@ client 负责：
 
 - UI 和交互
 - 调用 `User City`
-- 持有 `city_id`
+- 持有 `bureau_id`
 - 保存或刷新 `user_token`
 
 Federation 负责：
@@ -47,8 +47,8 @@ Federation
 这里的“产品后端”可以一开始非常薄，只做：
 
 - 用户登录
-- `Admin City.tokens.apply()`
-- 把 `user_token` 和 `city_id` 返回给前端
+- `FederationAdmin.tokens.apply()`
+- 把 `user_token` 和 `bureau_id` 返回给前端
 
 ## 为什么这样更适合早期产品
 

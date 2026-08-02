@@ -26,7 +26,7 @@ description: "City 在真实产品里的常见组合，以及 token、model、se
 
 - `user_token` 没传
 - token 已过期
-- token 对应的 `city_id` 不匹配
+- token 对应的 `bureau_id` 不匹配
 - city 已暂停
 
 ## 404 最常见原因
@@ -45,4 +45,4 @@ description: "City 在真实产品里的常见组合，以及 token、model、se
 
 1. 先确认当前调用是 AI service、custom service，还是 service
 2. 再确认当前阶段是 guest 调用还是用户态调用
-3. 再看 `city_id`、`user_token`、service id、action id、model id 是否一致
+3. 再看 `bureau_id`、`user_token`、service id、action id、model id 是否一致

@@ -92,7 +92,7 @@ export interface AccountsLoginStateRow extends Record<string, unknown> {
   /**
    * 登录成功后要签发到哪个 city。
    */
-  city_id: string;
+  bureau_id: string;
 
   /**
    * 第三方 provider 标识。
@@ -159,7 +159,7 @@ export const accountsLoginStates = sqliteTable(ACCOUNTS_LOGIN_STATE_TABLE, {
   /**
    * 登录成功后要签发到哪个 city。
    */
-  city_id: text("city_id").notNull(),
+  bureau_id: text("bureau_id").notNull(),
 
   /**
    * provider 标识。

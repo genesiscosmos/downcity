@@ -144,7 +144,7 @@ export function formatInstructionDocument(input: {
   lines.push("# Downcity Federation Instruction");
   lines.push("");
   lines.push("## Federation");
-  lines.push("Federation 是 Downcity 的服务端基础设施运行容器，负责挂载 Service、初始化内置 env/cities 能力、统一处理 /v1/* HTTP 路由，以及校验 user_token 与 bureau_token。");
+  lines.push("Federation 是 Downcity 的服务端基础设施运行容器，负责挂载 Service、初始化内置 env/bureaus 能力、统一处理 /v1/* HTTP 路由，以及校验 user_token 与 bureau_token。");
   lines.push("");
   lines.push("基础使用：");
   lines.push("1. 创建 Federation 实例。");

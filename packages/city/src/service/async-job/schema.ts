@@ -32,8 +32,8 @@ export const sqliteAsyncJobs = sqliteTable(DEFAULT_ASYNC_JOBS_TABLE, {
   message: sqliteText("message"),
   /** 建议下一次轮询或后台抓取的间隔毫秒数。 */
   poll_after_ms: sqliteText("poll_after_ms"),
-  /** 当前 user_token 绑定的 City ID。 */
-  city_id: sqliteText("city_id"),
+  /** 当前 User Token 绑定的 Bureau ID。 */
+  bureau_id: sqliteText("bureau_id"),
   /** 当前终端用户 ID。 */
   user_id: sqliteText("user_id"),
   /** 创建该任务的 Service ID。 */
@@ -68,8 +68,8 @@ export const pgAsyncJobs = pgTable(DEFAULT_ASYNC_JOBS_TABLE, {
   message: pgText("message"),
   /** 建议下一次轮询或后台抓取的间隔毫秒数。 */
   poll_after_ms: pgText("poll_after_ms"),
-  /** 当前 user_token 绑定的 City ID。 */
-  city_id: pgText("city_id"),
+  /** 当前 User Token 绑定的 Bureau ID。 */
+  bureau_id: pgText("bureau_id"),
   /** 当前终端用户 ID。 */
   user_id: pgText("user_id"),
   /** 创建该任务的 Service ID。 */

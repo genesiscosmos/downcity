@@ -149,7 +149,7 @@ async function emailLogin(input: CityLoginInput): Promise<CityUserSession | null
   const accounts = city.service("accounts");
   const started = await accounts.action("login/start").invoke<AuthStartResult>({
     provider: "email",
-    city_id: input.city_id,
+    bureau_id: input.bureau_id,
   });
   if (started.error || started.status !== "input_required" || !started.login_id) {
     throw new Error(started.error || "failed to start email login");
@@ -219,7 +219,7 @@ async function emailRegister(input: CityLoginInput): Promise<CityUserSession | n
 
   const verified = await accounts.action("verify-email").invoke<VerifyResult>({
     token: verification_token,
-    city_id: input.city_id,
+    bureau_id: input.bureau_id,
   });
   if (verified.error || !verified.user_token) {
     throw new Error(verified.error || "verification failed: no token");
@@ -240,7 +240,7 @@ async function oauthAuth(
   const accounts = city.service("accounts");
   const started = await accounts.action("login/start").invoke<AuthStartResult>({
     provider,
-    city_id: input.city_id,
+    bureau_id: input.bureau_id,
   });
   if (started.error || started.status !== "redirect_required" || !started.url || !started.login_id) {
     throw new Error(started.error || "failed to start OAuth");
@@ -279,7 +279,7 @@ async function inputAuth(
   const city = new City({ federation_url: input.federation_url });
   const started = await city.service("accounts").action("login/start").invoke<AuthStartResult>({
     provider,
-    city_id: input.city_id,
+    bureau_id: input.bureau_id,
   });
   if (started.error || started.status !== "done" || !started.login_id) {
     throw new Error(started.error || "login failed");
@@ -321,7 +321,7 @@ function buildUserSession(input: CityLoginInput & {
 }): CityUserSession {
   return {
     federation_url: input.federation_url,
-    city_id: readString(input.city_id) || "city_downcity",
+    bureau_id: readString(input.bureau_id) || "bureau_downcity",
     user_token: input.user_token,
     user_id: readString(input.user_id) || undefined,
     user_label: readString(input.user_label) || undefined,

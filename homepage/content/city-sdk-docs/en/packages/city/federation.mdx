@@ -124,21 +124,19 @@ const federation_url = "http://127.0.0.1:15315";
 Then point `City` at that HTTP URL:
 
 ```ts
-import { City } from "@downcity/city";
+import { FederationAdmin } from "@downcity/city";
 
-const admin = new City({
-  role: "admin",
-  federation_url,
-  city_id: "city_demo",
-  admin_secret_key,
+const admin = new FederationAdmin({
+  base_url: federation_url,
+  credential: admin_secret_key,
 });
 
 await admin.listServices();
 ```
 
-Local HTTP uses the same product-side model as remote HTTP: `Admin City` uses `admin_secret_key`, public actions can be called as guest, and authenticated user actions require a normal `user_token`.
+Local HTTP uses the same product-side model as remote HTTP: `FederationAdmin` uses `admin_secret_key`, public actions can be called as guest, and authenticated user actions require a normal `user_token`.
 
-If `AccountsService` is configured with `local_login: true`, `/v1/accounts/providers` only returns the local login method. Call `accounts.login/start` with `provider: "local"` and `city_id` to receive a `login_id`, then read the normal `user_token` from `accounts.login/result` and recreate or update User City with `city_id + user_token`.
+If `AccountsService` is configured with `local_login: true`, `/v1/accounts/providers` only returns the local login method. Call `accounts.login/start` with `provider: "local"` and `bureau_id` to receive a `login_id`, then read the normal `user_token` from `accounts.login/result` and recreate or update User City with `user_token` (which contains `bureau_id`).
 
 ## Why Federation only takes a Database Adapter
 

@@ -14,7 +14,7 @@ description: 先建立 Federation 的心智，再去接入真实产品。
     <div className="dc-doc-node">
       <strong>多个产品 client</strong>
       <span>网页、扩展、App、桌面工具、客户 Demo 都可以是独立产品。</span>
-      <code>city_id + user_token + User City</code>
+      <code>user_token (which contains bureau_id) + User City</code>
     </div>
   </div>
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
@@ -75,7 +75,7 @@ description: 先建立 Federation 的心智，再去接入真实产品。
 ## 什么时候应该先读概念页
 
 - 你准备让多个 AI 产品共用一套底层能力
-- 你想知道 `city_id`、`user_token` 和模型目录各自扮演什么角色
+- 你想知道 `bureau_id`、`user_token` 和模型目录各自扮演什么角色
 - 你不确定 Federation、业务后端、AI Gateway 的边界应该怎么划
 
 如果你现在只想先跑通一条调用链，直接去 [快速开始](/zh/city-sdk-docs/quickstart) 更合适。

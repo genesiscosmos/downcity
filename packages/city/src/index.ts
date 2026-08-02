@@ -2,8 +2,10 @@
  * @downcity/city 公共入口。
  *
  * City 包同时提供服务端 Federation 与客户端 City：
- * - `Federation` 用来创建和部署城市服务端
- * - `City` 用来以 user 或 admin 角色访问城市
+ * - `Federation` 提供全局服务、账户事实源与信任根
+ * - `FederationAdmin` 提供独立 Root 控制面
+ * - `Bureau` 表示绑定稳定产品身份的服务端节点
+ * - `City` 表示连接 Bureau 产品域的 Agent 终端
  */
 
 // ===========================================================================
@@ -152,6 +154,8 @@ export type {
 // ===========================================================================
 
 export { Bureau, BureauUser } from "./client/bureau.js";
+export { FederationAdmin } from "./pact/admin/index.js";
+export type { FederationAdminOptions } from "./pact/admin/types.js";
 
 export type {
   RuntimeUser,
@@ -278,7 +282,7 @@ export {
   CreditsInvoker,
   CreditsTransactionsInvoker,
 } from "./pact/invoker/credits/index.js";
-export { CitiesInvoker } from "./pact/invoker/cities/index.js";
+export { BureausInvoker, BureauTokensInvoker } from "./pact/invoker/bureaus/index.js";
 export { EnvInvoker } from "./pact/invoker/env/index.js";
 
 export type {
@@ -288,11 +292,13 @@ export type {
 } from "./pact/admin/types.js";
 
 export type {
-  CityCreateInput,
-  CityRecord,
-  TokenApplyInput,
-  TokenApplyResult,
-} from "./pact/invoker/cities/types.js";
+  BureauCreateInput,
+  BureauMachineIdentity,
+  BureauServerUrlUpdateInput,
+  BureauRecord,
+  BureauState,
+  BureauTokenRecord,
+} from "./types/Bureau.js";
 
 // ===========================================================================
 // 场景 7：内置表 Schema

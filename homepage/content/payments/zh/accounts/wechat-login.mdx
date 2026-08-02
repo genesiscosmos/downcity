@@ -92,7 +92,7 @@ const providers = await guest.service("accounts").get("providers");
 ```ts
 const start = await guest.service("accounts").action("login/start").invoke({
   provider: "wechat",
-  city_id: "city_demo",
+  bureau_id: "bureau_demo",
 });
 ```
 
@@ -114,7 +114,6 @@ const result = await guest.service("accounts").get("login/result", {
 const user = new City({
   role: "user",
   city_url: "https://base.example.com",
-  city_id: "city_demo",
   user_token: result.user_token,
 });
 ```

@@ -2,7 +2,7 @@
  * Downcity 官方 Feedback 服务实现。
  *
  * 设计边界：
- * - 用户反馈是 city 内用户提交给官方/管理员的单条消息
+ * - 用户反馈按 Bureau 产品作用域记录
  * - 服务只负责落库、查询、答复与状态更新，不做通知推送
  * - official edge-worker 只需要显式注册本服务，不需要实现私有反馈逻辑
  */
@@ -13,7 +13,7 @@ import {
   type CityTableApi,
   type ServiceInstallContext,
 } from "@downcity/city";
-import { registerFeedbackRoutes } from "./routes.js";
+import { register_feedback_routes } from "./routes.js";
 import { feedbackMessages } from "./schema.js";
 import type {
   FeedbackCreateInput,
@@ -57,26 +57,26 @@ export class FeedbackService extends InstallableService {
     this.instruction = [
       "允许已登录用户提交产品反馈、问题报告和建议。",
       "管理员可查询反馈、写入官方答复，并更新 open / reviewing / replied / closed 状态。",
-      "用户可查看自己在当前 city 提交过的反馈和官方答复。",
+      "用户可查看自己在当前 Bureau 提交过的反馈和官方答复。",
       "反馈默认只保存在 Downcity 数据库，不会自动发送到邮件、Slack 或其它外部渠道。",
     ].join("\n");
   }
 
   install(ctx: ServiceInstallContext): void {
     this.messages_table = ctx.table<FeedbackMessage>("messages");
-    registerFeedbackRoutes(this, ctx);
+    register_feedback_routes(this, ctx);
   }
 
   /**
    * 创建用户反馈。
    */
-  async create(user_id: string, city_id: string, input: FeedbackCreateInput): Promise<FeedbackCreateResult> {
+  async create(user_id: string, bureau_id: string, input: FeedbackCreateInput): Promise<FeedbackCreateResult> {
     const message = readRequiredText(input.message, "message", 10_000);
     const contact = readOptionalText(input.contact, "contact", 500);
     const now = new Date().toISOString();
     const item: FeedbackMessage = {
       feedback_id: randomFeedbackId(),
-      city_id: readRequiredText(city_id, "city_id", 500),
+      bureau_id: readRequiredText(bureau_id, "bureau_id", 500),
       user_id: readRequiredText(user_id, "user_id", 500),
       message,
       contact,
@@ -102,13 +102,13 @@ export class FeedbackService extends InstallableService {
    * 管理员查询反馈。
    */
   async listMessages(input: FeedbackQueryInput): Promise<FeedbackMessage[]> {
-    const city_id = normalizeOptionalFilter(input.city_id, "city_id");
+    const bureau_id = normalizeOptionalFilter(input.bureau_id, "bureau_id");
     const user_id = normalizeOptionalFilter(input.user_id, "user_id");
     const status = normalizeOptionalFeedbackStatus(input.status);
     const limit = normalizeLimit(input.limit, 100, 500);
     const where: Partial<FeedbackMessage> = {};
 
-    if (city_id) where.city_id = city_id;
+    if (bureau_id) where.bureau_id = bureau_id;
     if (user_id) where.user_id = user_id;
     if (status) where.status = status;
 
@@ -116,14 +116,14 @@ export class FeedbackService extends InstallableService {
   }
 
   /**
-   * 查询当前用户在当前 city 下提交的反馈。
+   * 查询当前用户在当前 Bureau 下提交的反馈。
    */
-  async listUserMessages(user_id: string, city_id: string, input: FeedbackQueryInput): Promise<FeedbackMessage[]> {
+  async listUserMessages(user_id: string, bureau_id: string, input: FeedbackQueryInput): Promise<FeedbackMessage[]> {
     const status = normalizeOptionalFeedbackStatus(input.status);
     const limit = normalizeLimit(input.limit, 100, 200);
     const where: Partial<FeedbackMessage> = {
       user_id: readRequiredText(user_id, "user_id", 500),
-      city_id: readRequiredText(city_id, "city_id", 500),
+      bureau_id: readRequiredText(bureau_id, "bureau_id", 500),
     };
 
     if (status) where.status = status;

@@ -14,7 +14,7 @@ If you start by treating Downcity as “just another backend framework” or “
     <div className="dc-doc-node">
       <strong>Many product clients</strong>
       <span>Web apps, extensions, desktop tools, and client demos can all be separate products.</span>
-      <code>city_id + user_token + User City</code>
+      <code>user_token (which contains bureau_id) + User City</code>
     </div>
   </div>
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
@@ -75,7 +75,7 @@ If you start by treating Downcity as “just another backend framework” or “
 ## When this section is the right starting point
 
 - you want multiple AI products to share the same AI infrastructure
-- you need to understand the role of `city_id`, `user_token`, and the model directory
+- you need to understand the role of `bureau_id`, `user_token`, and the model directory
 - you are still deciding where the Federation, your business backend, and an AI Gateway should stop
 
 If you only want one working call chain first, go straight to [Quickstart](/en/city-sdk-docs/quickstart).

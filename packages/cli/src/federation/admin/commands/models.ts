@@ -7,7 +7,7 @@
  * - 如果模型缺少 provider key，会在这里直接显示缺失项。
  */
 
-import { Bureau } from "@downcity/city";
+import { FederationAdmin } from "@downcity/city";
 import { adminErrorMessage, isAdminNotFoundError, rethrowAdminAuthError } from "@/federation/admin/auth-error.js";
 import { t } from "@/shared/CliLocale.js";
 import type { admin_tui_runtime } from "@/federation/types/AdminTui.js";
@@ -15,7 +15,7 @@ import type { admin_tui_runtime } from "@/federation/types/AdminTui.js";
 /**
  * 展示全部代码注册模型及其运行状态。
  */
-export async function manageModels(a: Bureau, _baseUrl: string, runtime: admin_tui_runtime): Promise<void> {
+export async function manageModels(a: FederationAdmin, _baseUrl: string, runtime: admin_tui_runtime): Promise<void> {
   try {
     const model_title = t({ zh: "模型", en: "Models" });
     const [modelResp, envCatalog] = await runtime.with_loading(model_title, async () => await Promise.all([

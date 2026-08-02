@@ -92,7 +92,7 @@ Start login through the unified `login/start` entry:
 ```ts
 const start = await guest.service("accounts").action("login/start").invoke({
   provider: "google",
-  city_id: "city_demo",
+  bureau_id: "bureau_demo",
 });
 ```
 
@@ -120,7 +120,6 @@ So the downcity does not need a different post-login client flow just because th
 const user = new City({
   role: "user",
   city_url: "https://base.example.com",
-  city_id: "city_demo",
   user_token: result.user_token,
 });
 ```

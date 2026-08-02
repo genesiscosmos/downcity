@@ -144,21 +144,19 @@ const federation_url = "http://127.0.0.1:15315";
 然后 `City` 可以直接连接这个 HTTP 地址：
 
 ```ts
-import { City } from "@downcity/city";
+import { FederationAdmin } from "@downcity/city";
 
-const admin = new City({
-  role: "admin",
-  federation_url,
-  city_id: "city_demo",
-  admin_secret_key,
+const admin = new FederationAdmin({
+  base_url: federation_url,
+  credential: admin_secret_key,
 });
 
 await admin.listServices();
 ```
 
-本机 HTTP 和远程 HTTP 使用同一套产品侧模型：`Admin City` 使用 `admin_secret_key`，公开 action 可以作为 guest 调用，需要用户身份的 action 仍然必须携带正常的 `user_token`。
+本机 HTTP 和远程 HTTP 使用同一套产品侧模型：`FederationAdmin` 使用 `admin_secret_key`，公开 action 可以作为 guest 调用，需要用户身份的 action 仍然必须携带正常的 `user_token`。
 
-如果 `AccountsService` 配置了 `local_login: true`，`/v1/accounts/providers` 会只返回本地登录方式。调用 `accounts.login/start` 并传入 `provider: "local"` 与 `city_id` 后会得到 `login_id`，再用 `accounts.login/result` 读取正常 `user_token`，之后用 `city_id + user_token` 创建或更新 User City。
+如果 `AccountsService` 配置了 `local_login: true`，`/v1/accounts/providers` 会只返回本地登录方式。调用 `accounts.login/start` 并传入 `provider: "local"` 与 `bureau_id` 后会得到 `login_id`，再用 `accounts.login/result` 读取正常 `user_token`，之后用 `user_token`（其中包含 `bureau_id`） 创建或更新 User City。
 
 ## 为什么只传 Database Adapter
 

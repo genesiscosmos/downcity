@@ -96,12 +96,12 @@ export interface EnvProvider {
 /**
  * Federation 内置表定义。
  *
- * 包含 cities 和 env 两个内置表。
+ * 包含 Bureau、Env、签名密钥和 Bureau Token 内置表。
  * 适配器根据数据库类型（SQLite / Postgres）提供对应的表定义。
  */
 export interface BuiltinTables {
-  /** 产品表 */
-  cities: TableDef;
+  /** Federation 稳定 Bureau 身份表。 */
+  bureaus: TableDef;
   /** 环境变量表 */
   env: TableDef;
   /** Federation 用户 token Ed25519 Key Ring 表。 */
@@ -131,7 +131,7 @@ export interface Runtime {
   env: EnvProvider;
 
   /**
-   * Federation 内置表定义（cities + env）。
+   * Federation 内置表定义。
    *
    * 适配器根据数据库类型提供正确的 Drizzle 表定义。
    */

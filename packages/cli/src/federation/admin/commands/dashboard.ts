@@ -7,7 +7,7 @@
  * - 命令层只负责 TUI 交互，数据读取、指标计算和展示格式分别放在 dashboard 模块中。
  */
 
-import { Bureau } from "@downcity/city";
+import { FederationAdmin } from "@downcity/city";
 import { fetch_dashboard_raw_data } from "@/federation/admin/dashboard/dashboard-data.js";
 import { dashboard_rows, dashboard_view_title, range_label } from "@/federation/admin/dashboard/dashboard-format.js";
 import { build_dashboard_snapshot } from "@/federation/admin/dashboard/dashboard-metrics.js";
@@ -19,7 +19,7 @@ import type { dashboard_range, dashboard_raw_data, dashboard_snapshot, dashboard
 /**
  * 打开用户系统 Dashboard。
  */
-export async function manageDashboard(a: Bureau, _base_url: string, runtime: admin_tui_runtime): Promise<void> {
+export async function manageDashboard(a: FederationAdmin, _base_url: string, runtime: admin_tui_runtime): Promise<void> {
   let raw_data: dashboard_raw_data | undefined;
   let snapshot: dashboard_snapshot | undefined;
   let range: dashboard_range = "30d";

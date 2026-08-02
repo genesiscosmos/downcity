@@ -1,7 +1,11 @@
 /** Organizations Service 的输入与权限策略。 */
 
 import { httpError } from "@downcity/city";
-import type { OrganizationMembershipRecord, OrganizationRole } from "../types/index.js";
+import type {
+  OrganizationMembershipRecord,
+  OrganizationRole,
+  OrganizationScopeType,
+} from "../types/index.js";
 
 /** 读取并校验 Organization ID。 */
 export function read_organization_id(value: unknown): string {
@@ -35,22 +39,17 @@ export function read_organization_name(value: unknown): string {
   return read_required_text(value, "name", 120);
 }
 
-/** 读取并标准化 City Server 根 URL。 */
-export function read_server_url(value: unknown): string {
-  const input = read_required_text(value, "server_url", 2_048);
-  let url: URL;
-  try {
-    url = new URL(input);
-  } catch {
-    throw httpError(400, "ORGANIZATION_SERVER_URL_INVALID: server_url must be absolute");
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw httpError(400, "ORGANIZATION_SERVER_URL_INVALID: only http and https are allowed");
-  }
-  if (url.username || url.password || url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) {
-    throw httpError(400, "ORGANIZATION_SERVER_URL_INVALID: credentials, path, query and fragment are not allowed");
-  }
-  return url.origin;
+/** 读取 Organization 作用域类型。 */
+export function read_scope_type(value: unknown): OrganizationScopeType {
+  if (value === "federation" || value === "bureau") return value;
+  throw httpError(400, "ORGANIZATION_SCOPE_INVALID: scope_type must be federation or bureau");
+}
+
+/** 读取是否包含归档 Organization 的查询参数。 */
+export function read_include_archived(value: unknown): boolean {
+  if (value === undefined || value === false || value === "false") return false;
+  if (value === true || value === "true") return true;
+  throw httpError(400, "ORGANIZATION_INPUT_INVALID: include_archived must be true or false");
 }
 
 /** 读取 Join Request 决策。 */

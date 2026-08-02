@@ -1,15 +1,15 @@
 ---
 title: SDK 概览
-description: Downcity SDK 按角色拆分：User City 负责产品运行时调用，Admin City 负责可信侧管理调用。
+description: Downcity SDK 按角色拆分：User City 负责产品运行时调用，FederationAdmin 负责可信侧管理调用。
 ---
 
 这一页只做一件事：把 `@downcity/city` 里的调用方式总览收口到一张图里。
 
-如果你想先看接入场景，优先读 [@downcity/city](/zh/city-sdk-docs/packages/city/federation)。如果你要查具体方法签名，再往下读 [User City](/zh/city-sdk-docs/reference/city-user) 和 [Admin City](/zh/city-sdk-docs/reference/city-admin)。
+如果你想先看接入场景，优先读 [@downcity/city](/zh/city-sdk-docs/packages/city/federation)。如果你要查具体方法签名，再往下读 [User City](/zh/city-sdk-docs/reference/city-user) 和 [FederationAdmin](/zh/city-sdk-docs/reference/city-admin)。
 
 ## 两个角色
 
-| | User City | Admin City |
+| | User City | FederationAdmin |
 |---|---|---|
 | 面向谁 | 前端、App、扩展、桌面端 | 产品后端、运维脚本、内部工具 |
 | 负责什么 | AI service、custom service、公开 service | city、token、runtime env、管理侧 service |
@@ -30,9 +30,7 @@ description: Downcity SDK 按角色拆分：User City 负责产品运行时调�
 ```ts
 // 产品侧
 const city = new City({
-  role: "user",
   federation_url,
-  city_id,
   user_token,
 });
 
@@ -57,9 +55,6 @@ await city.service("accounts").action("login/continue").invoke({
 });
 const session = await city.service("accounts").get("login/result", { login_id: login.login_id });
 
-// GET action
-const items = await city.service("cities").get("list");
-
 // 支付方式
 const methods = await city.payment.methods();
 const checkout = await city.payment.method("stripe").invoke({
@@ -68,12 +63,14 @@ const checkout = await city.payment.method("stripe").invoke({
 });
 
 // 管理端
-const admin = new City({
-  role: "admin",
-  federation_url,
-  admin_secret_key,
+const admin = new FederationAdmin({
+  base_url: federation_url,
+  credential: admin_secret_key,
 });
-await admin.service("cities").action("create").invoke({ name: "My App" });
+await admin.bureaus.create({
+  name: "My App",
+  server_url: "https://bureau.example.com",
+});
 ```
 
 ## AI 模型调用选择
@@ -107,14 +104,14 @@ Federation 决定。
 
 最常见的两种方式：
 
-1. 你的业务后端完成登录，再用 `Admin City` 申请 `user_token`
+1. 你的业务后端完成登录，再用 `FederationAdmin` 申请 `user_token`
 2. 前端直接用 guest `User City` 走 `accounts.login/start -> login/continue -> login/result` 或注册流程，由 accounts service 返回 `user_token`
 
 这两条路最终都会进入同一个用户态：
 
 ```txt
-federation_url + city_id + user_token
-  -> new City({ role: "user", ... })
+federation_url + user_token
+  -> new City({ federation_url, user_token })
   -> city.ai.* 或 city.service(...)
 ```
 
@@ -123,5 +120,5 @@ federation_url + city_id + user_token
 1. 想理解 package 组合方式，读 [Packages 包](/zh/city-sdk-docs/packages)
 2. 想理解产品接入路径，读 [@downcity/city](/zh/city-sdk-docs/packages/city/federation)
 3. 想看产品侧细节，读 [User City](/zh/city-sdk-docs/reference/city-user)
-4. 想看可信侧细节，读 [Admin City](/zh/city-sdk-docs/reference/city-admin)
+4. 想看可信侧细节，读 [FederationAdmin](/zh/city-sdk-docs/reference/city-admin)
 5. 想看最小注册登录，读 [Federation Services Docs / Accounts](/zh/payments/accounts)

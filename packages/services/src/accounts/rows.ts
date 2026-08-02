@@ -42,8 +42,8 @@ export interface AuthAccountRow extends Record<string, unknown> {
 export interface LoginStateRow extends Record<string, unknown> {
   /** 登录流程 ID；OAuth 流程中也作为 OAuth state。 */
   state: string;
-  /** 目标 city_id。 */
-  city_id: string;
+  /** 目标 bureau_id。 */
+  bureau_id: string;
   /** provider 标识。 */
   provider: string;
   /** 完成后回填的 City user_token。 */

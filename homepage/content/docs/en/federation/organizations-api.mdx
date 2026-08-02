@@ -1,81 +1,53 @@
 ---
 title: Organizations Federation API
-description: Complete HTTP and SDK API reference for Organizations Service
+description: HTTP and SDK reference for Organizations Service
 ---
 
 # Organizations Federation API
 
-This reference is for clients and product backends that call Federation. For the backend that
-consumes Organization Tokens and revocation events, see
-[Integrate Organizations into a City Server](./organizations-city-server).
+This reference covers Organizations Actions for clients and Bureau. See [Integrate Organizations into Bureau](./organizations-bureau) for product authorization.
 
-## Install and configure
+## Install
 
 ```ts
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/bureau";
 import { OrganizationsService } from "@downcity/services";
 
 const federation = new Federation({ database });
 
 federation.use(new OrganizationsService({
   max_organizations_per_user: 3,
-  organization_token_ttl: "7d",
 }));
 ```
 
-| Option | Required | Default | Meaning |
-| --- | --- | --- | --- |
-| `max_organizations_per_user` | yes | none | Maximum active Organizations a user may own in one City |
-| `organization_token_ttl` | no | `7d` | Token TTL as seconds or an `s/m/h/d` string; maximum `30d` |
-| `fetch` | no | `globalThis.fetch` | Revocation-event transport override for custom runtimes and tests |
+| Option | Required | Meaning |
+| --- | --- | --- |
+| `max_organizations_per_user` | yes | Maximum active Organizations a user may own across Federation |
 
-The service supports better-sqlite3, PostgreSQL, and Cloudflare D1 through the same
-`context.transaction` API. City Runtime encapsulates D1 optimistic concurrency control and atomic
-batch commits. Production deployments should configure a Federation Queue adapter for Outbox retries.
+The service supports better-sqlite3, PostgreSQL, and Cloudflare D1 through `context.transaction()`.
 
-## Base URL and authentication
-
-Every Action is exposed under:
+## Endpoint and authentication
 
 ```text
 {federation_origin}/v1/organizations/{action}
 ```
 
-Except for `events/deliver`, all Actions require a Federation user token:
+Every Action requires a Federation `user_token`:
 
 ```http
 Authorization: Bearer ub_<JWT>
 ```
 
-Federation derives `user_id` and `city_id` from the verified token. Body or query values cannot
-override either identity. `events/deliver` accepts only Federation Admin credentials or an internal
-trusted runtime identity.
+Federation reads `user_id` and `bureau_id` from the verified Token. GET Actions use query parameters; POST Actions use JSON.
 
-GET Actions read query parameters; POST Actions read JSON. Successful responses are JSON with
-status 200. Timestamps are ISO 8601 strings, and unset timestamps currently use `""`.
-
-```http
-GET /v1/organizations/get?organization_id=org_01J...
-Authorization: Bearer ub_...
-```
-
-```ts
-const organizations = city.service("organizations");
-const my = await organizations.get("my");
-const created = await organizations.action("create").invoke({
-  name: "Research Team",
-  server_url: "https://city.example.com",
-});
-```
-
-## Data types
+## Types
 
 ```ts
 type Organization = {
   organization_id: string;
-  city_id: string;
   name: string;
-  server_url: string;
+  scope_type: "federation" | "bureau";
+  scope_bureau_id: string;
   state: "active" | "archived";
   created_by: string;
   created_at: string;
@@ -106,48 +78,41 @@ type JoinRequest = {
 };
 ```
 
-`server_url` is a normalized HTTP or HTTPS origin with no credentials, path, query, or fragment.
-A removed Membership is never restored; rejoining creates a new `membership_id`.
+For `scope_type = federation`, `scope_bureau_id` is empty. For `scope_type = bureau`, Federation derives `scope_bureau_id` from the creator's verified `user_token.bureau_id`.
 
-## Role permissions
+## Permissions
 
 | Operation | Owner | Admin | Member |
 | --- | --- | --- | --- |
-| Read Organization and active members | yes | yes | yes |
-| Rename Organization | yes | yes | no |
-| Change `server_url` or archive | yes | no | no |
+| Read Organization and members | yes | yes | yes |
+| Rename | yes | yes | no |
 | Decide Join Requests | yes | yes | no |
-| Assign or revoke Admin | yes | no | no |
 | Remove Member | yes | yes | no |
 | Remove Admin | yes | no | no |
+| Assign or revoke Admin | yes | no | no |
 | Transfer ownership | yes | no | no |
+| Archive | yes | no | no |
 | Leave | transfer first | yes | yes |
-| Issue own Organization Token | yes | yes | yes |
 
-Owners and Admins cannot add users directly. Every user must create their own Join Request.
-
-## Action summary
+## Actions
 
 | Method | Action | Authorization | Purpose |
 | --- | --- | --- | --- |
-| `GET` | `my` | User | List the caller's Organizations |
-| `GET` | `get` | Member | Read one joined Organization |
+| `GET` | `my` | User | List visible Organizations for the caller |
+| `GET` | `get` | Member | Read Organization and current Membership |
 | `POST` | `create` | User | Create an Organization as Owner |
-| `POST` | `update` | Owner/Admin | Rename an Organization |
-| `POST` | `server/update` | Owner | Change the City Server origin |
-| `POST` | `archive` | Owner | Terminally archive an Organization |
-| `GET` | `membership/get` | Member | Read the caller's Membership |
+| `POST` | `update` | Owner/Admin | Rename |
+| `POST` | `archive` | Owner | Archive terminally |
+| `GET` | `membership/get` | Member | Read current Membership |
 | `GET` | `members/list` | Member | List active Memberships |
-| `POST` | `members/role` | Owner | Set an Admin or Member role |
+| `POST` | `members/role` | Owner | Set Admin or Member |
 | `POST` | `members/remove` | Owner/Admin | Remove a manageable member |
-| `POST` | `members/leave` | Admin/Member | Leave the Organization |
-| `POST` | `owner/transfer` | Owner | Transfer the unique Owner role |
+| `POST` | `members/leave` | Admin/Member | Leave |
+| `POST` | `owner/transfer` | Owner | Transfer the unique Owner |
 | `POST` | `join-requests/create` | User | Apply to join |
 | `POST` | `join-requests/cancel` | Applicant | Cancel a pending request |
 | `GET` | `join-requests/list` | Owner/Admin | List pending requests |
-| `POST` | `join-requests/decide` | Owner/Admin | Approve or reject a request |
-| `POST` | `token/create` | Member | Issue an Organization Token |
-| `POST` | `events/deliver` | Federation Admin | Manually advance the Outbox |
+| `POST` | `join-requests/decide` | Owner/Admin | Approve or reject |
 
 ## Organization Actions
 
@@ -155,12 +120,10 @@ Owners and Admins cannot add users directly. Every user must create their own Jo
 
 ```http
 GET /v1/organizations/my
-Authorization: Bearer ub_...
+GET /v1/organizations/my?include_archived=true
 ```
 
-Returns `{ "items": UserOrganization[] }`. Each item combines Organization fields with `role`,
-`membership_id`, and `membership_state`. Only active Memberships are listed. An archived
-Organization remains visible while the caller's Membership remains active.
+The default response contains active Organizations only. Each item includes `role`, `membership_id`, and `membership_state`. Federation Organizations are visible across Token Cities; Bureau Organizations require a matching Token Bureau.
 
 ### `GET get`
 
@@ -168,21 +131,23 @@ Organization remains visible while the caller's Membership remains active.
 GET /v1/organizations/get?organization_id=org_01J...
 ```
 
-Returns `{ organization, membership }` for the caller's active Membership. It can read an archived
-Organization but cannot restore or mutate it.
+Requires an active Membership and returns `{ organization, membership }`. Members may read an archived Organization but cannot mutate it.
 
 ### `POST create`
 
+Federation-wide:
+
 ```json
-{
-  "name": "Research Team",
-  "server_url": "https://city.example.com/"
-}
+{ "name": "Genesis Research", "scope_type": "federation" }
 ```
 
-Any authenticated user can create within their Owner quota. Federation derives the City from the
-token, normalizes the URL, and returns `{ organization, membership }`; the Membership is the unique
-Owner. Archiving releases a slot, and an ownership transfer moves the slot to the new Owner.
+Current Bureau:
+
+```json
+{ "name": "Genesis Research", "scope_type": "bureau" }
+```
+
+Returns `{ organization, membership }`, with the caller as the unique Owner. The trimmed name must contain 1–120 characters.
 
 ### `POST update`
 
@@ -190,20 +155,7 @@ Owner. Archiving releases a slot, and an ownership transfer moves the slot to th
 { "organization_id": "org_01J...", "name": "New Name" }
 ```
 
-Owner/Admin only. The trimmed name must contain 1–120 characters. Returns the updated Organization.
-
-### `POST server/update`
-
-```json
-{
-  "organization_id": "org_01J...",
-  "server_url": "https://new-city.example.com"
-}
-```
-
-Owner only. The update and `organization.server_url.changed` Outbox event commit atomically. The
-event targets the old Server, while newly issued tokens target only the new Server. Repeating the
-same URL is idempotent and creates no event.
+Owner/Admin only. Scope is immutable after creation.
 
 ### `POST archive`
 
@@ -211,9 +163,7 @@ same URL is idempotent and creates no event.
 { "organization_id": "org_01J..." }
 ```
 
-Owner only and irreversible. Archiving stops governance writes, Join Requests, and token issuance;
-releases the Owner quota slot; and writes an `organization.archived` event. Records remain for
-history. Repeating the operation returns `410 ORGANIZATION_ARCHIVED`.
+Owner only and irreversible. Archive stops governance writes and releases the Owner quota. Membership and Join Request history remains.
 
 ## Membership Actions
 
@@ -223,7 +173,7 @@ history. Repeating the operation returns `410 ORGANIZATION_ARCHIVED`.
 GET /v1/organizations/membership/get?organization_id=org_01J...
 ```
 
-Returns `{ organization, membership }`, where Membership belongs to the caller and is active.
+Returns `{ organization, membership }`. Bureau may forward the same user Token to this endpoint. Removed users receive `403 NOT_AN_ORGANIZATION_MEMBER`.
 
 ### `GET members/list`
 
@@ -231,7 +181,7 @@ Returns `{ organization, membership }`, where Membership belongs to the caller a
 GET /v1/organizations/members/list?organization_id=org_01J...
 ```
 
-Any active Member may call it. Returns `{ "items": Membership[] }` containing only active records.
+Returns active Memberships in `{ "items": Membership[] }`.
 
 ### `POST members/role`
 
@@ -243,20 +193,15 @@ Any active Member may call it. Returns `{ "items": Membership[] }` containing on
 }
 ```
 
-Owner only. `role` accepts `admin` or `member`. Use `owner/transfer`, not this Action, for ownership.
+Owner only. `role` accepts `admin` or `member`. Use `owner/transfer` for ownership.
 
 ### `POST members/remove`
 
 ```json
-{
-  "organization_id": "org_01J...",
-  "membership_id": "mem_01J..."
-}
+{ "organization_id": "org_01J...", "membership_id": "mem_01J..." }
 ```
 
-An Owner can remove Admins or Members; an Admin can remove Members only. Owner removal is rejected.
-The returned Membership has `state: "removed"`, and its update commits atomically with a signed
-revocation event.
+Owners may remove Admins or Members. Admins may remove Members. The unique Owner cannot be removed.
 
 ### `POST members/leave`
 
@@ -264,19 +209,15 @@ revocation event.
 { "organization_id": "org_01J..." }
 ```
 
-Admins and Members can leave. The response is the removed Membership. An Owner must transfer first.
+Admins and Members may leave. The Owner transfers ownership first.
 
 ### `POST owner/transfer`
 
 ```json
-{
-  "organization_id": "org_01J...",
-  "membership_id": "mem_new_owner"
-}
+{ "organization_id": "org_01J...", "membership_id": "mem_new_owner" }
 ```
 
-The target must be active and have an available Owner quota slot. Returns
-`{ previous_owner, owner }`; the previous Owner becomes Admin.
+The target must have an active Membership and an available Owner quota. The previous Owner becomes Admin.
 
 ## Join Request Actions
 
@@ -286,9 +227,7 @@ The target must be active and have an available Owner quota slot. Returns
 { "organization_id": "org_01J..." }
 ```
 
-The service has no public Organization search. Products distribute `organization_id` through their
-own invitation flow. The first call returns a pending Join Request; a duplicate returns the same
-record. An existing active Member receives `{ state: "joined", organization, membership }`.
+Users apply with a known ID. A duplicate returns the same pending request. Existing members receive `{ state: "joined", organization, membership }`.
 
 ### `POST join-requests/cancel`
 
@@ -296,7 +235,7 @@ record. An existing active Member receives `{ state: "joined", organization, mem
 { "request_id": "join_01J..." }
 ```
 
-The applicant can cancel their own pending request. Returns the request with `state: "canceled"`.
+The applicant may cancel their pending request.
 
 ### `GET join-requests/list`
 
@@ -304,7 +243,7 @@ The applicant can cancel their own pending request. Returns the request with `st
 GET /v1/organizations/join-requests/list?organization_id=org_01J...
 ```
 
-Owner/Admin only. Returns `{ "items": JoinRequest[] }` with pending requests only.
+Owner/Admin only. Returns pending requests.
 
 ### `POST join-requests/decide`
 
@@ -312,73 +251,23 @@ Owner/Admin only. Returns `{ "items": JoinRequest[] }` with pending requests onl
 { "request_id": "join_01J...", "decision": "approved" }
 ```
 
-Owner/Admin only. `decision` is `approved` or `rejected`. Approval creates a new Member Membership
-in the same transaction and returns `{ request, membership }`. Rejection returns the updated
-`request` without `membership`. Rejected or canceled users may apply again with a new request ID.
-
-## Token Action
-
-### `POST token/create`
-
-```json
-{ "organization_id": "org_01J..." }
-```
-
-Returns:
-
-```json
-{
-  "organization_token": "ot_eyJ...",
-  "organization_id": "org_01J...",
-  "server_url": "https://city.example.com",
-  "expires_at": "2026-08-05T10:00:00.000Z"
-}
-```
-
-The caller must have an active Membership in an active Organization. The token defaults to 7 days,
-binds `aud` to `server_url`, and contains user, City, Organization, and Membership IDs. It contains
-no governance role or project permission and cannot authenticate to Federation APIs.
-
-## Outbox administration
-
-### `POST events/deliver`
-
-```http
-POST /v1/organizations/events/deliver
-Authorization: Bearer <federation-admin-secret>
-Content-Type: application/json
-
-{}
-```
-
-Returns `{ "delivered": number, "pending": number }`. `pending` is the total remaining Outbox count
-after the delivery attempt. Prefer automatic Queue retries; use this Action for operational replay.
+`decision` accepts `approved` or `rejected`. Approval creates a new Member Membership in the same transaction.
 
 ## Errors
-
-```json
-{
-  "error": {
-    "code": "ORGANIZATION_ROLE_DENIED",
-    "message": "ORGANIZATION_ROLE_DENIED",
-    "type": "server_error"
-  }
-}
-```
 
 | HTTP | Code | Meaning |
 | --- | --- | --- |
 | `400` | `ORGANIZATION_INPUT_INVALID` | Invalid name, ID, role, or decision |
-| `400` | `ORGANIZATION_SERVER_URL_INVALID` | Invalid Server origin |
-| `401` | `AUTH_REQUIRED` or absent | User credential is missing, expired, or invalid |
-| `403` | `ORGANIZATION_CITY_MISMATCH` | Token City does not own the Organization |
-| `403` | `NOT_AN_ORGANIZATION_MEMBER` | Caller has no active Membership |
-| `403` | `ORGANIZATION_ROLE_DENIED` | Governance role cannot perform the operation |
+| `400` | `ORGANIZATION_SCOPE_INVALID` | Invalid `scope_type` |
+| `401` | `AUTH_REQUIRED` | Missing valid user identity |
+| `403` | `ORGANIZATION_BUREAU_MISMATCH` | Token Bureau cannot access the Bureau Organization |
+| `403` | `NOT_AN_ORGANIZATION_MEMBER` | No active Membership |
+| `403` | `ORGANIZATION_ROLE_DENIED` | Governance role denies the operation |
 | `404` | `ORGANIZATION_NOT_FOUND` | Organization does not exist |
-| `404` | `ORGANIZATION_MEMBERSHIP_NOT_FOUND` | Target Membership is absent or inactive |
-| `404` | `JOIN_REQUEST_NOT_FOUND` | Request is absent or no longer pending |
+| `404` | `ORGANIZATION_MEMBERSHIP_NOT_FOUND` | Membership is absent or inactive |
+| `404` | `JOIN_REQUEST_NOT_FOUND` | Join Request is absent or unavailable |
 | `409` | `ORGANIZATION_LIMIT_REACHED` | Owner quota is full |
-| `409` | `OWNER_TRANSFER_REQUIRED` | Transfer ownership before the operation |
+| `409` | `OWNER_TRANSFER_REQUIRED` | Transfer ownership first |
 | `410` | `ORGANIZATION_ARCHIVED` | Organization is archived |
 
-Branch on `error.code`, never on the human-readable message.
+Branch on `error.code`, not the message text.

@@ -49,11 +49,14 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
     await federation.health()
 
     const admin_secret = await read_env_value(federation, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
-    const city = await (await federation.fetch(admin_request(admin_secret, "/v1/cities/create", { name: "Test" }))).json()
-    const token = await (await federation.fetch(admin_request(admin_secret, "/v1/cities/tokens/apply", {
-      city_id: city.city_id,
-      user_id: "user_1",
+    const city = await (await federation.fetch(admin_request(admin_secret, "/v1/bureaus/create", {
+      name: "Test",
+      server_url: "https://bureau.example.com",
     }))).json()
+    const token = await (await federation.getAuthenticator()).createToken({
+      bureau_id: city.bureau_id,
+      user_id: "user_1",
+    })
     const rejected_legacy = await federation.fetch(user_request(token.user_token, "/v1/payment/checkout/create", {
       method_id: "test",
       credits: 999_999_999,

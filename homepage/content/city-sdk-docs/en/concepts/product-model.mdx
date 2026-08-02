@@ -24,17 +24,17 @@ Once you ship a second or third AI product, these capabilities repeat everywhere
     <div className="dc-doc-node">
       <strong>Product A</strong>
       <span>Web tools, content products, workflow utilities.</span>
-      <code>city_id = city_a</code>
+      <code>bureau_id = bureau_a</code>
     </div>
     <div className="dc-doc-node">
       <strong>Product B</strong>
       <span>Chrome extensions, desktop tools, mobile entry points.</span>
-      <code>city_id = city_b</code>
+      <code>bureau_id = bureau_b</code>
     </div>
     <div className="dc-doc-node">
       <strong>Product C</strong>
       <span>Client demos, internal tools, vertical sites.</span>
-      <code>city_id = city_c</code>
+      <code>bureau_id = bureau_c</code>
     </div>
   </div>
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
@@ -74,12 +74,12 @@ If every new product copies a separate AI backend, the same issues appear quickl
 
 Once the AI call layer is centralized into the Federation, a new product usually only needs two steps:
 
-1. create a new `city_id`
+1. create a new `bureau_id`
 2. connect `User City` in the product client
 
-## What `city_id` means in this model
+## What `bureau_id` means in this model
 
-`city_id` is not a model name, and it is not the full abstraction of your tenant system.
+`bureau_id` is not a model name, and it is not the full abstraction of your tenant system.
 
 It is the runtime's stable primary key for the product boundary. It answers questions like:
 
@@ -88,7 +88,7 @@ It is the runtime's stable primary key for the product boundary. It answers ques
 - which product dimension hooks and usage should record against
 - whether a user's calls should be separated across different products
 
-If you are building a multi-product portfolio, `city_id` is the most stable boundary.
+If you are building a multi-product portfolio, `bureau_id` is the most stable boundary.
 
 ## The role of model at the city layer
 

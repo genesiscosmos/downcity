@@ -66,7 +66,7 @@ interface Context {
   input: Record<string, unknown>    // request payload
   output?: unknown                  // Action result, available in after
   user?: { user_id, metadata }      // current user
-  city?: { city_id, status }  // current city
+  city?: { bureau_id, status }  // current city
   service?: { id, name }            // current Service
   action?: { id }                   // current Action
 }

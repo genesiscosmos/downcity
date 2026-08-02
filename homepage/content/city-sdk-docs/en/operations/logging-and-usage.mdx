@@ -8,7 +8,7 @@ Downcity does not decide where your logs live, but hooks give you one consistent
 ## Recommended fields
 
 - user_id
-- city_id
+- bureau_id
 - model
 - started_at
 - ended_at
@@ -21,7 +21,7 @@ Downcity does not decide where your logs live, but hooks give you one consistent
 ai.hook.after(async (ctx) => {
   await logService.write({
     user_id: ctx.user?.user_id,
-    city_id: ctx.city?.city_id,
+    bureau_id: ctx.bureau?.bureau_id,
     model: ctx.variant?.id,
     model_meta: ctx.variant?.meta,
     started_at: ctx.started_at,

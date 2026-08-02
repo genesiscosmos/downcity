@@ -12,7 +12,7 @@ export class EnvService extends Service {
   constructor() {
     super({ id: "env", name: "Env" });
     this.instruction = [
-      "管理 City 运行时环境变量。",
+      "管理 Federation 运行时环境变量。",
       "适用于导入、列出、更新和删除 Federation 内部使用的 env 配置。",
       "不要把真实密钥暴露给产品前端；应只在可信管理端调用这些接口。",
     ].join("\n");

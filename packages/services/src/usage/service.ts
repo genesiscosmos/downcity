@@ -25,7 +25,7 @@ export interface UsageServiceOptions {
  */
 export const usageEvents = sqliteTable("service_usage_events", {
   event_id: text("event_id").primaryKey(),
-  city_id: text("city_id").notNull(),
+  bureau_id: text("bureau_id").notNull(),
   user_id: text("user_id").notNull(),
   service: text("service").notNull(),
   model_id: text("model_id").notNull(),
@@ -95,7 +95,7 @@ export class UsageService extends InstallableService {
         return requestCtx.jsonResponse({
           items: await events.select({
             user_id: requestCtx.user?.user_id ?? "",
-            city_id: requestCtx.city?.city_id ?? "",
+            bureau_id: requestCtx.bureau?.bureau_id ?? "",
           }),
         });
       },
@@ -106,11 +106,11 @@ export class UsageService extends InstallableService {
 /**
  * 只记录真实用户侧调用。
  *
- * 管理端操作没有 user/city 上下文，usage 服务自己的查询也不应反过来
+ * 管理端操作没有 user/bureau 上下文，usage 服务自己的查询也不应反过来
  * 产生 usage 事件，否则统计接口会污染自身结果。
  */
 function shouldRecordUsage(ctx: Context): boolean {
-  return Boolean(ctx.user?.user_id && ctx.city?.city_id && ctx.service?.id !== "usage");
+  return Boolean(ctx.user?.user_id && ctx.bureau?.bureau_id && ctx.service?.id !== "usage");
 }
 
 /**
@@ -118,7 +118,7 @@ function shouldRecordUsage(ctx: Context): boolean {
  */
 interface UsageEventRow extends Record<string, unknown> {
   event_id: string;
-  city_id: string;
+  bureau_id: string;
   user_id: string;
   service: string;
   model_id: string;
@@ -133,7 +133,7 @@ interface UsageEventRow extends Record<string, unknown> {
 function createUsageEvent(ctx: Context, status: "success" | "error"): UsageEventRow {
   return {
     event_id: `usage_${randomId()}`,
-    city_id: ctx.city?.city_id ?? "",
+    bureau_id: ctx.bureau?.bureau_id ?? "",
     user_id: ctx.user?.user_id ?? "",
     service: ctx.service?.id ?? "",
     model_id: ctx.variant?.id ?? "",
@@ -152,15 +152,15 @@ function createUsageEvent(ctx: Context, status: "success" | "error"): UsageEvent
  * 汇总 usage 事件。
  */
 function summarizeUsage(rows: UsageEventRow[]) {
-  const byKey = new Map<string, { city_id: string; service: string; status: string; count: number }>();
+  const byKey = new Map<string, { bureau_id: string; service: string; status: string; count: number }>();
   for (const row of rows) {
-    const key = `${row.city_id}\u0000${row.service}\u0000${row.status}`;
-    const current = byKey.get(key) ?? { city_id: row.city_id, service: row.service, status: row.status, count: 0 };
+    const key = `${row.bureau_id}\u0000${row.service}\u0000${row.status}`;
+    const current = byKey.get(key) ?? { bureau_id: row.bureau_id, service: row.service, status: row.status, count: 0 };
     current.count += 1;
     byKey.set(key, current);
   }
   return [...byKey.values()].sort((a, b) =>
-    `${a.city_id}:${a.service}:${a.status}`.localeCompare(`${b.city_id}:${b.service}:${b.status}`),
+    `${a.bureau_id}:${a.service}:${a.status}`.localeCompare(`${b.bureau_id}:${b.service}:${b.status}`),
   );
 }
 

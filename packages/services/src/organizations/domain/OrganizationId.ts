@@ -17,11 +17,6 @@ export function new_join_request_id(): string {
   return `join_${new_ulid()}`;
 }
 
-/** 生成撤权 Event ID。 */
-export function new_organization_event_id(): string {
-  return `orgevt_${new_ulid()}`;
-}
-
 /** 生成按时间大致有序的 26 位 Crockford Base32 ID。 */
 function new_ulid(): string {
   let time = Date.now();

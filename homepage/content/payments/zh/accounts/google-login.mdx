@@ -92,7 +92,7 @@ const providers = await guest.service("accounts").get("providers");
 ```ts
 const start = await guest.service("accounts").action("login/start").invoke({
   provider: "google",
-  city_id: "city_demo",
+  bureau_id: "bureau_demo",
 });
 ```
 
@@ -120,7 +120,6 @@ Google 登录完成后，accounts service 仍然会按统一方式返回 City `u
 const user = new City({
   role: "user",
   city_url: "https://base.example.com",
-  city_id: "city_demo",
   user_token: result.user_token,
 });
 ```

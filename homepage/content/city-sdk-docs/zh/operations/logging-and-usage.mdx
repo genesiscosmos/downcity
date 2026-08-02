@@ -8,7 +8,7 @@ Downcity 不决定日志存哪里，但 hook 会给你统一入口。
 ## 推荐字段
 
 - user_id
-- city_id
+- bureau_id
 - model
 - started_at
 - ended_at
@@ -21,7 +21,7 @@ Downcity 不决定日志存哪里，但 hook 会给你统一入口。
 ai.hook.after(async (ctx) => {
   await logService.write({
     user_id: ctx.user?.user_id,
-    city_id: ctx.city?.city_id,
+    bureau_id: ctx.bureau?.bureau_id,
     model: ctx.variant?.id,
     model_meta: ctx.variant?.meta,
     started_at: ctx.started_at,

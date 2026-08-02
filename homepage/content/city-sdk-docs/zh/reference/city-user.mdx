@@ -8,7 +8,7 @@ description: 产品侧如何读取模型目录，并调用 AIService 或自定�
 它绑定的是一个用户在某个产品下的调用上下文：
 
 - `federation_url`
-- `city_id`，调用普通 user service action 时会自动注入
+- `bureau_id`，调用普通 user service action 时会自动注入
 - `user_token`，调用 AI service 或用户鉴权 action 时需要
 
 只调用登录、注册、webhook 这类免登录 action 时，可以只传 `federation_url`。
@@ -32,9 +32,7 @@ import { City } from "@downcity/city";
 import type { UIMessageChunk } from "ai";
 
 const city = new City({
-  role: "user",
   federation_url: "https://base.example.com",
-  city_id: "city_xxx",
   user_token: "ub_xxx",
 });
 
@@ -52,13 +50,12 @@ const result = await city.ai.text({
 
 ```ts
 const guest = new City({
-  role: "user",
   federation_url: "https://base.example.com",
 });
 
 const login = await guest.service("accounts").action("login/start").invoke({
   provider: "email",
-  city_id: "city_xxx",
+  bureau_id: "bureau_xxx",
 });
 
 await guest.service("accounts").action("login/continue").invoke({
@@ -74,7 +71,7 @@ const session = await guest.service("accounts").get("login/result", {
 });
 ```
 
-拿到 `session.user_token` 后，AI service 可以直接用 `user_token` 调用。需要让 User City 自动给普通 service action 注入 `city_id` 时，再同时传入 `city_id`。
+拿到 `session.user_token` 后，AI service 可以直接用 `user_token` 调用。需要让 User City 自动给普通 service action 注入 `bureau_id` 时，再同时传入 `bureau_id`。
 
 ## guest 调用和用户态调用的区别
 
@@ -91,7 +88,7 @@ const session = await guest.service("accounts").get("login/result", {
 
 ### 用户态阶段
 
-传 `federation_url + city_id + user_token`，适合：
+传 `federation_url + user_token`，适合：
 
 - AI service
 - 需要用户身份的 custom service
@@ -101,13 +98,12 @@ const session = await guest.service("accounts").get("login/result", {
 
 ```ts
 const guest = new City({
-  role: "user",
   federation_url,
 });
 
 const login = await guest.service("accounts").action("login/start").invoke({
   provider: "email",
-  city_id: "city_xxx",
+  bureau_id: "bureau_xxx",
 });
 
 await guest.service("accounts").action("login/continue").invoke({
@@ -123,9 +119,7 @@ const session = await guest.service("accounts").get("login/result", {
 });
 
 const user = new City({
-  role: "user",
   federation_url,
-  city_id: "city_xxx",
   user_token: session.user_token,
 });
 ```
@@ -365,7 +359,7 @@ const checkout = await city.payment.method("stripe").invoke({
 ```ts
 const login = await guest.service("accounts").action("login/start").invoke({
   provider: "email",
-  city_id: "city_xxx",
+  bureau_id: "bureau_xxx",
 });
 
 await guest.service("accounts").action("login/continue").invoke({
@@ -471,7 +465,7 @@ LanguageModelV3 stream，模型流解析阶段会抛普通错误。
 - `user_token` 缺失
 - token 已过期
 - token 签名无效
-- 请求里的 `city_id` 与 `user_token` 绑定的 city 不一致
+- 请求里的 `bureau_id` 与 `user_token` 绑定的 city 不一致
 
 ### 422
 
@@ -491,4 +485,4 @@ LanguageModelV3 stream，模型流解析阶段会抛普通错误。
 - 维护生产环境 provider key
 - 暂停或恢复 city
 
-这些都属于可信环境动作，应该交给 [Admin City](/zh/city-sdk-docs/reference/city-admin) 或你自己的后端。
+这些都属于可信环境动作，应该交给 [FederationAdmin](/zh/city-sdk-docs/reference/city-admin) 或你自己的后端。

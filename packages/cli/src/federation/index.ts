@@ -4,7 +4,7 @@
  * downfed CLI 根命令装配模块。
  *
  * 关键点（中文）
- * - `downfed` 是 Federation 管理器，负责部署、City 实体、服务资源等 admin 能力。
+ * - `downfed` 是 Federation 管理器，负责部署、Bureau 身份、机器凭证与服务资源。
  * - 默认无参数时打开交互式 Federation 管理界面。
  * - 本模块承载 Federation commander 根命令，`src/index.ts` 只负责按命令名分发。
  */
@@ -57,8 +57,8 @@ export async function runDownfedCli(): Promise<void> {
   program
     .name("downfed")
     .description(t({
-      zh: "Downcity Federation CLI — 管理 Federation、City 实体与服务资源",
-      en: "Downcity Federation CLI — manage Federation, City entities, and service resources",
+      zh: "Downcity Federation CLI — 管理 Federation、Bureau 身份与服务资源",
+      en: "Downcity Federation CLI — manage Federation, Bureau identities, and service resources",
     }))
     .version(packageJson.version, "-v, --version");
 
@@ -227,7 +227,7 @@ function register_bureau_commands(program: Command): void {
     }));
 
   token_program
-    .command("create")
+    .command("create <bureau_id>")
     .description(t({ zh: "创建并登记 Bureau Token", en: "create and register a Bureau token" }))
     .helpOption("--help", helpText())
     .action(createVersionBanner(packageJson.version, create_federation_bureau_token));

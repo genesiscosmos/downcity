@@ -1,22 +1,27 @@
 /**
- * 首页产品世界连续滚动叙事。
+ * 首页产品世界的连续蜂巢大陆动画。
  *
- * 动画始终围绕同一个 Agent 展开：Agent 被唤醒、吸收工作能力、落入第一块
- * City 地块，随后蜂巢扩张并迎来更多 Agent，最后镜头拉远形成 Federation。
- * 页面滚动是唯一进度源，不维护独立场景状态，也不使用说明面板或切换控件。
+ * Agent 集成能力后让地块从中心连续生长；大陆内部形成多座 City，最后通过
+ * 加粗真实蜂巢边缘表达 Federation，全程不引入独立容器或外部轮廓。
  */
 
-import { useRef, useState, type FC } from "react";
+import { useRef, type FC } from "react";
 import {
-  AnimatePresence,
   motion,
-  useMotionValueEvent,
   useReducedMotion,
   useScroll,
+  useSpring,
   useTransform,
+  type MotionValue,
 } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
+import {
+  home_product_world_city_edges,
+  home_product_world_federation_edges,
+  home_product_world_growth_groups,
+  home_product_world_origin,
+} from "@/lib/home-product-world-layout";
 import {
   home_world_agent_path,
   home_world_hex_center,
@@ -32,121 +37,170 @@ const capability_nodes = [
   { key: "model", x: 790, y: 515 },
 ] as const;
 
-const ring_one_cells = [
-  { q: 1, row: 0, kind: "building" },
-  { q: 0, row: 1, kind: "agent" },
-  { q: -1, row: 1, kind: "forest" },
-  { q: -1, row: 0, kind: "agent" },
-  { q: 0, row: -1, kind: "empty" },
-  { q: 1, row: -1, kind: "interface" },
-] as const;
+/** 渲染大陆地块中的 Agent、建筑与自然环境。 */
+function render_cell_content(
+  content: string,
+  center_x: number,
+  center_y: number,
+  radius: number,
+  accent: string,
+) {
+  if (content === "agent") {
+    return (
+      <g>
+        <path d={home_world_agent_path(center_x, center_y, radius * 0.78)} fill={accent} />
+        <circle cx={center_x - radius * 0.1} cy={center_y - radius * 0.06} r={radius * 0.032} className="fill-background" />
+        <circle cx={center_x + radius * 0.1} cy={center_y - radius * 0.06} r={radius * 0.032} className="fill-background" />
+      </g>
+    );
+  }
 
-const ring_two_cells = [
-  { q: 2, row: 0, kind: "empty" },
-  { q: 1, row: 1, kind: "agent" },
-  { q: 0, row: 2, kind: "building" },
-  { q: -1, row: 2, kind: "empty" },
-  { q: -2, row: 2, kind: "forest" },
-  { q: -2, row: 1, kind: "agent" },
-  { q: -2, row: 0, kind: "empty" },
-  { q: -1, row: -1, kind: "building" },
-  { q: 0, row: -2, kind: "empty" },
-  { q: 1, row: -2, kind: "agent" },
-  { q: 2, row: -2, kind: "forest" },
-  { q: 2, row: -1, kind: "empty" },
-] as const;
+  if (content === "forest") {
+    return (
+      <g className="fill-none stroke-foreground" strokeOpacity="0.48">
+        <path d={`M${center_x - radius * 0.3} ${center_y + radius * 0.24} L${center_x - radius * 0.08} ${center_y - radius * 0.3} L${center_x + radius * 0.12} ${center_y + radius * 0.24} Z`} />
+        <path d={`M${center_x + radius * 0.04} ${center_y + radius * 0.24} L${center_x + radius * 0.27} ${center_y - radius * 0.36} L${center_x + radius * 0.48} ${center_y + radius * 0.24} Z`} />
+      </g>
+    );
+  }
 
-const remote_city_cells = [
-  { q: 0, row: 0 },
-  { q: 1, row: 0 },
-  { q: 0, row: 1 },
-  { q: -1, row: 1 },
-  { q: -1, row: 0 },
-  { q: 0, row: -1 },
-  { q: 1, row: -1 },
-] as const;
+  if (content === "building") {
+    return (
+      <g className="fill-none stroke-foreground" strokeOpacity="0.48">
+        <path d={`M${center_x - radius * 0.34} ${center_y + radius * 0.3} V${center_y - radius * 0.26} H${center_x + radius * 0.02} V${center_y + radius * 0.3}`} />
+        <path d={`M${center_x + radius * 0.02} ${center_y + radius * 0.3} V${center_y - radius * 0.06} H${center_x + radius * 0.34} V${center_y + radius * 0.3}`} />
+      </g>
+    );
+  }
 
-const story_keys = ["awaken", "gather", "settle", "expand", "connect"] as const;
+  if (content === "workshop") {
+    return (
+      <g className="fill-none stroke-foreground" strokeOpacity="0.52">
+        <path d={`M${center_x - radius * 0.36} ${center_y - radius * 0.22} H${center_x + radius * 0.2} V${center_y + radius * 0.28} H${center_x - radius * 0.36} Z`} />
+        <path d={`M${center_x - radius * 0.18} ${center_y - radius * 0.38} H${center_x + radius * 0.38} V${center_y + radius * 0.12}`} />
+        <path d={`M${center_x - radius * 0.08} ${center_y - radius * 0.08} H${center_x + radius * 0.08} M${center_x - radius * 0.08} ${center_y + radius * 0.08} H${center_x + radius * 0.08}`} />
+      </g>
+    );
+  }
 
-/** Product World 通过空间尺度的连续变化解释 Downcity 的产品世界。 */
+  if (content === "plaza") {
+    return (
+      <g className="fill-none stroke-foreground" strokeOpacity="0.48">
+        <path d={`M${center_x} ${center_y - radius * 0.3} L${center_x + radius * 0.3} ${center_y} L${center_x} ${center_y + radius * 0.3} L${center_x - radius * 0.3} ${center_y} Z`} />
+        <path d={`M${center_x} ${center_y - radius * 0.3} V${center_y - radius * 0.46} M${center_x + radius * 0.3} ${center_y} H${center_x + radius * 0.46} M${center_x} ${center_y + radius * 0.3} V${center_y + radius * 0.46} M${center_x - radius * 0.3} ${center_y} H${center_x - radius * 0.46}`} />
+      </g>
+    );
+  }
+
+  return null;
+}
+
+/** 渲染同一扩散阶段中的连续大陆地块。 */
+function render_growth_group(
+  cells: (typeof home_product_world_growth_groups)[number],
+  opacity: number | MotionValue<number>,
+) {
+  return (
+    <motion.g style={{ opacity }}>
+      {cells.map((cell) => {
+        const center = home_world_hex_center(
+          home_product_world_origin.x,
+          home_product_world_origin.y,
+          home_product_world_origin.radius,
+          cell.q,
+          cell.row,
+        );
+
+        return (
+          <g key={cell.key}>
+            <path
+              d={home_world_hex_path(center.x, center.y, home_product_world_origin.radius)}
+              fill={cell.accent}
+              fillOpacity={cell.fill_opacity}
+              className="stroke-line-strong"
+              strokeWidth="0.85"
+            />
+            {cell.q === 0 && cell.row === 0
+              ? null
+              : render_cell_content(
+                  cell.content,
+                  center.x,
+                  center.y,
+                  home_product_world_origin.radius,
+                  cell.accent,
+                )}
+          </g>
+        );
+      })}
+    </motion.g>
+  );
+}
+
+/** Product World 通过大陆连续生长解释 Downcity 的组织尺度。 */
 export const HomeProductWorldSection: FC = () => {
   const { i18n } = useTranslation("home");
   const locale = use_interface_locale();
   const t = i18n.getFixedT(locale, "home");
   const reduce_motion = useReducedMotion();
   const section_ref = useRef<HTMLElement>(null);
-  const [active_story_index, set_active_story_index] = useState(-1);
   const { scrollYProgress: scroll_y_progress } = useScroll({
     target: section_ref,
     offset: ["start start", "end end"],
   });
-
-  const agent_opacity = useTransform(scroll_y_progress, [0.08, 0.16], [0, 1]);
-  const agent_scale = useTransform(scroll_y_progress, [0.08, 0.18, 0.35, 0.42], [0.62, 1, 1.06, 1]);
-  const agent_y = useTransform(scroll_y_progress, [0.38, 0.5], [-42, 0]);
-  const agent_glow_opacity = useTransform(scroll_y_progress, [0.12, 0.2, 0.34, 0.44], [0, 0.22, 0.14, 0]);
-
-  const capability_opacity = useTransform(scroll_y_progress, [0.19, 0.25, 0.36, 0.42], [0, 1, 1, 0]);
-  const capability_scale = useTransform(scroll_y_progress, [0.24, 0.41], [1, 0.12]);
-  const capability_rotate = useTransform(scroll_y_progress, [0.24, 0.41], [0, 24]);
-  const absorption_pulse_opacity = useTransform(scroll_y_progress, [0.33, 0.37, 0.44], [0, 0.6, 0]);
-  const absorption_pulse_scale = useTransform(scroll_y_progress, [0.33, 0.44], [0.65, 1.65]);
-
-  const center_cell_opacity = useTransform(scroll_y_progress, [0.38, 0.47], [0, 1]);
-  const center_cell_path = useTransform(scroll_y_progress, [0.38, 0.49], [0, 1]);
-  const ring_one_opacity = useTransform(scroll_y_progress, [0.49, 0.58], [0, 1]);
-  const ring_one_scale = useTransform(scroll_y_progress, [0.49, 0.6], [0.72, 1]);
-  const ring_two_opacity = useTransform(scroll_y_progress, [0.58, 0.7], [0, 1]);
-  const ring_two_scale = useTransform(scroll_y_progress, [0.58, 0.72], [0.78, 1]);
-  const city_content_opacity = useTransform(scroll_y_progress, [0.57, 0.69], [0, 1]);
-
-  const current_city_scale = useTransform(scroll_y_progress, [0.72, 0.88], [1, 0.52]);
-  const current_city_x = useTransform(scroll_y_progress, [0.72, 0.88], [0, -210]);
-  const current_city_y = useTransform(scroll_y_progress, [0.72, 0.88], [0, 44]);
-  const remote_cities_opacity = useTransform(scroll_y_progress, [0.76, 0.88], [0, 1]);
-  const remote_cities_scale = useTransform(scroll_y_progress, [0.76, 0.9], [0.72, 1]);
-  const federation_opacity = useTransform(scroll_y_progress, [0.78, 0.88], [0, 1]);
-  const federation_path = useTransform(scroll_y_progress, [0.82, 0.96], [0, 1]);
-
-  const current_city_origin = { x: 600, y: 360 };
-  const current_city_radius = 52;
-
-  useMotionValueEvent(scroll_y_progress, "change", (latest_progress) => {
-    if (reduce_motion) return;
-
-    let next_story_index = -1;
-    if (latest_progress >= 0.12) next_story_index = 0;
-    if (latest_progress >= 0.24) next_story_index = 1;
-    if (latest_progress >= 0.41) next_story_index = 2;
-    if (latest_progress >= 0.56) next_story_index = 3;
-    if (latest_progress >= 0.78) next_story_index = 4;
-
-    set_active_story_index((current_story_index) =>
-      current_story_index === next_story_index ? current_story_index : next_story_index,
-    );
+  const smooth_progress = useSpring(scroll_y_progress, {
+    stiffness: 88,
+    damping: 30,
+    mass: 0.4,
+    restDelta: 0.0005,
   });
 
-  const active_story_key = active_story_index >= 0 ? story_keys[active_story_index] : null;
+  const capability_opacity = useTransform(smooth_progress, [0, 0.045, 0.25, 0.35], [0, 1, 1, 0]);
+  const capability_scale = useTransform(smooth_progress, [0, 0.08, 0.3, 0.36], [1.12, 1, 0.3, 0.12]);
+  const capability_rotate = useTransform(smooth_progress, [0, 0.36], [-7, 13]);
+  const capability_path = useTransform(smooth_progress, [0.015, 0.15, 0.3], [0, 1, 1]);
+  const integration_ring_opacity = useTransform(smooth_progress, [0.04, 0.13, 0.29, 0.38], [0, 0.8, 0.55, 0]);
+  const integration_ring_scale = useTransform(smooth_progress, [0.04, 0.36], [0.76, 1.42]);
+
+  const center_city_opacity = useTransform(smooth_progress, [0.27, 0.39], [0, 1]);
+  const inner_land_opacity = useTransform(smooth_progress, [0.38, 0.5], [0, 1]);
+  const middle_land_opacity = useTransform(smooth_progress, [0.48, 0.62], [0, 1]);
+  const outer_land_opacity = useTransform(smooth_progress, [0.58, 0.74], [0, 1]);
+  const continent_opacity = useTransform(smooth_progress, [0.68, 0.84], [0, 1]);
+  const city_boundary_opacity = useTransform(smooth_progress, [0.46, 0.68], [0, 0.72]);
+  const federation_boundary_opacity = useTransform(smooth_progress, [0.7, 0.9], [0, 1]);
+  const federation_boundary_path = useTransform(smooth_progress, [0.7, 0.96], [0, 1]);
+  const world_camera_scale = useTransform(
+    smooth_progress,
+    [0, 0.34, 0.62, 0.8, 1],
+    [1.12, 1.12, 1, 0.88, 0.78],
+  );
+
+  const agent_scale = useTransform(smooth_progress, [0, 0.18, 0.4, 0.72, 1], [1, 1.04, 0.82, 0.68, 0.62]);
+  const agent_glow_opacity = useTransform(smooth_progress, [0, 0.1, 0.38, 0.72, 1], [0.12, 0.28, 0.14, 0.08, 0.1]);
+  const agent_stage_opacity = useTransform(smooth_progress, [0, 0.04, 0.12], [1, 1, 0]);
+  const capabilities_stage_opacity = useTransform(smooth_progress, [0.05, 0.12, 0.29, 0.37], [0, 1, 1, 0]);
+  const city_stage_opacity = useTransform(smooth_progress, [0.31, 0.4, 0.62, 0.72], [0, 1, 1, 0]);
+  const federation_stage_opacity = useTransform(smooth_progress, [0.68, 0.78, 1], [0, 1, 1]);
+  const growth_opacities = reduce_motion
+    ? [1, 1, 1, 1, 1]
+    : [center_city_opacity, inner_land_opacity, middle_land_opacity, outer_land_opacity, continent_opacity];
 
   return (
     <section
       ref={section_ref}
-      className={`relative border-t border-line bg-background ${reduce_motion ? "h-svh min-h-[760px]" : "h-[520vh] md:h-[560vh]"}`}
+      className={`relative bg-background ${reduce_motion ? "h-svh min-h-[760px]" : "h-[540vh] md:h-[570vh]"}`}
     >
       <div className="sticky top-0 h-svh min-h-[680px] overflow-hidden">
         <div
-          className="pointer-events-none absolute inset-0 opacity-45"
+          className="pointer-events-none absolute inset-0 opacity-35"
           style={{
-            backgroundImage:
-              "linear-gradient(to right, var(--color-line) 1px, transparent 1px), linear-gradient(to bottom, var(--color-line) 1px, transparent 1px)",
+            backgroundImage: "linear-gradient(to right, var(--color-line) 1px, transparent 1px), linear-gradient(to bottom, var(--color-line) 1px, transparent 1px)",
             backgroundSize: "56px 56px",
-            maskImage: "radial-gradient(circle at center, black, transparent 74%)",
+            maskImage: "radial-gradient(circle at center, black, transparent 76%)",
           }}
         />
         <div className="absolute inset-x-5 top-20 z-20 flex items-center justify-between md:inset-x-8 lg:inset-x-20">
-          <p className="text-[0.68rem] font-medium uppercase tracking-[0.08em] text-text-subtle">
-            {t("productWorld.sectionLabel")}
-          </p>
+          <p className="text-[0.68rem] font-medium uppercase tracking-[0.08em] text-text-subtle">{t("productWorld.sectionLabel")}</p>
           {!reduce_motion ? (
             <p className="flex items-center gap-2 text-[0.64rem] uppercase tracking-[0.08em] text-text-subtle">
               <span className="h-px w-8 bg-line-strong" />
@@ -155,273 +209,98 @@ export const HomeProductWorldSection: FC = () => {
           ) : null}
         </div>
 
-        <AnimatePresence initial={false}>
-          {active_story_index < 0 ? (
-            <motion.header
-              key="product-world-intro"
-              initial={reduce_motion ? false : { opacity: 0, scale: 0.97, y: 24 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={reduce_motion ? undefined : { opacity: 0, scale: 0.94, y: -56 }}
-              transition={{ duration: reduce_motion ? 0 : 0.7, ease: [0.16, 1, 0.3, 1] }}
-              className="pointer-events-none absolute inset-x-5 top-[18vh] z-20 mx-auto max-w-5xl text-center md:inset-x-8 md:top-[16vh]"
-            >
-              <h2 className="font-serif text-[clamp(2.2rem,6vw,5.4rem)] font-bold leading-[0.98] tracking-[-0.045em] text-foreground">
-                {t("productWorld.title")}
-              </h2>
-              <p className="mx-auto mt-6 max-w-2xl text-sm leading-[1.75] text-text-soft md:text-base">
-                {t("productWorld.description")}
-              </p>
-            </motion.header>
-          ) : null}
-        </AnimatePresence>
+        <h2 className="sr-only">{t("productWorld.title")}</h2>
+        <p className="sr-only">{t("productWorld.description")}</p>
 
         <div className="absolute inset-0 flex items-center justify-center pt-10 md:pt-16">
-          <svg
-            viewBox="0 0 1200 720"
-            className="h-full w-[170vw] max-w-none shrink-0 md:w-full"
-            role="img"
-            aria-label={t("productWorld.description")}
-          >
+          <svg viewBox="0 0 1200 720" className="h-full w-[190vw] max-w-none shrink-0 md:w-full" role="img" aria-label={t("productWorld.description")}>
             <motion.g
               style={{
-                opacity: reduce_motion ? 1 : capability_opacity,
+                opacity: reduce_motion ? 0 : capability_opacity,
                 scale: reduce_motion ? 0.12 : capability_scale,
                 rotate: reduce_motion ? 24 : capability_rotate,
-                transformOrigin: "600px 320px",
+                transformOrigin: "600px 360px",
+                willChange: "transform, opacity",
               }}
             >
-              <ellipse cx="600" cy="345" rx="300" ry="220" className="fill-none stroke-[#b45d4c]" strokeDasharray="3 8" opacity="0.3" />
+              <ellipse cx="600" cy="360" rx="300" ry="220" className="fill-none stroke-[#b45d4c]" strokeDasharray="3 8" opacity="0.3" />
               {capability_nodes.map((node) => (
                 <g key={node.key}>
-                  <path d={`M${node.x} ${node.y} Q600 345 600 320`} className="fill-none stroke-[#b45d4c]" opacity="0.45" />
+                  <motion.path d={`M${node.x} ${node.y} Q600 360 600 360`} className="fill-none stroke-[#b45d4c]" opacity="0.45" style={{ pathLength: reduce_motion ? 1 : capability_path }} />
                   <circle cx={node.x} cy={node.y} r="34" className="fill-background stroke-[#b45d4c]" strokeWidth="1.2" />
                   <circle cx={node.x} cy={node.y} r="25" fill="#b45d4c" fillOpacity="0.05" />
-                  <text x={node.x} y={node.y + 4} textAnchor="middle" className="fill-text-soft text-[11px] font-medium">
-                    {t(`productWorld.labels.${node.key}`)}
-                  </text>
+                  <text x={node.x} y={node.y + 4} textAnchor="middle" className="fill-text-soft text-[11px] font-medium">{t(`productWorld.labels.${node.key}`)}</text>
                 </g>
               ))}
             </motion.g>
 
             <motion.circle
               cx="600"
-              cy="320"
+              cy="360"
               r="82"
               fill="none"
               stroke="#4f6f9f"
               strokeWidth="1.5"
               style={{
-                opacity: reduce_motion ? 0 : absorption_pulse_opacity,
-                scale: absorption_pulse_scale,
-                transformOrigin: "600px 320px",
+                opacity: reduce_motion ? 0 : integration_ring_opacity,
+                scale: integration_ring_scale,
+                transformOrigin: "600px 360px",
               }}
             />
 
             <motion.g
               style={{
-                scale: reduce_motion ? 0.52 : current_city_scale,
-                x: reduce_motion ? -210 : current_city_x,
-                y: reduce_motion ? 44 : current_city_y,
-                transformOrigin: `${current_city_origin.x}px ${current_city_origin.y}px`,
+                scale: reduce_motion ? 0.78 : world_camera_scale,
+                transformOrigin: "600px 360px",
+                willChange: "transform",
               }}
             >
-              <motion.path
-                d={home_world_hex_path(current_city_origin.x, current_city_origin.y, current_city_radius)}
-                fill="#4f6f9f"
-                stroke="#4f6f9f"
-                strokeWidth="1.4"
-                style={{
-                  opacity: reduce_motion ? 1 : center_cell_opacity,
-                  pathLength: reduce_motion ? 1 : center_cell_path,
-                  fillOpacity: 0.06,
-                }}
-              />
+              {home_product_world_growth_groups.map((cells, index) => (
+                <g key={`growth-${index}`}>
+                  {render_growth_group(cells, growth_opacities[index])}
+                </g>
+              ))}
 
-              <motion.g
-                style={{
-                  opacity: reduce_motion ? 1 : ring_one_opacity,
-                  scale: reduce_motion ? 1 : ring_one_scale,
-                  transformOrigin: `${current_city_origin.x}px ${current_city_origin.y}px`,
-                }}
-              >
-                {ring_one_cells.map((cell) => {
-                  const center = home_world_hex_center(
-                    current_city_origin.x,
-                    current_city_origin.y,
-                    current_city_radius,
-                    cell.q,
-                    cell.row,
-                  );
-
-                  return (
-                    <path
-                      key={`${cell.q}-${cell.row}`}
-                      d={home_world_hex_path(center.x, center.y, current_city_radius)}
-                      fill="transparent"
-                      className="stroke-line-strong"
-                    />
-                  );
-                })}
+              <motion.g style={{ opacity: reduce_motion ? 0.72 : city_boundary_opacity }}>
+                {home_product_world_city_edges.map((path, index) => (
+                  <path key={`city-edge-${index}`} d={path} className="fill-none stroke-foreground" strokeOpacity="0.34" strokeWidth="1.7" strokeLinecap="round" />
+                ))}
               </motion.g>
 
-              <motion.g
-                style={{
-                  opacity: reduce_motion ? 1 : ring_two_opacity,
-                  scale: reduce_motion ? 1 : ring_two_scale,
-                  transformOrigin: `${current_city_origin.x}px ${current_city_origin.y}px`,
-                }}
-              >
-                {ring_two_cells.map((cell) => {
-                  const center = home_world_hex_center(
-                    current_city_origin.x,
-                    current_city_origin.y,
-                    current_city_radius,
-                    cell.q,
-                    cell.row,
-                  );
-
-                  return (
-                    <path
-                      key={`${cell.q}-${cell.row}`}
-                      d={home_world_hex_path(center.x, center.y, current_city_radius)}
-                      fill="transparent"
-                      className="stroke-line-strong"
-                    />
-                  );
-                })}
-              </motion.g>
-
-              <motion.g style={{ opacity: reduce_motion ? 1 : city_content_opacity }}>
-                {[...ring_one_cells, ...ring_two_cells].map((cell) => {
-                  if (cell.kind === "empty") return null;
-
-                  const center = home_world_hex_center(
-                    current_city_origin.x,
-                    current_city_origin.y,
-                    current_city_radius,
-                    cell.q,
-                    cell.row,
-                  );
-
-                  if (cell.kind === "agent") {
-                    return (
-                      <g key={`content-${cell.q}-${cell.row}`}>
-                        <path d={home_world_agent_path(center.x, center.y, 38)} fill="#3f7d5b" />
-                        <circle cx={center.x - 5} cy={center.y - 3} r="1.8" className="fill-background" />
-                        <circle cx={center.x + 5} cy={center.y - 3} r="1.8" className="fill-background" />
-                      </g>
-                    );
-                  }
-
-                  if (cell.kind === "forest") {
-                    return (
-                      <g key={`content-${cell.q}-${cell.row}`} className="fill-none stroke-foreground">
-                        <path d={`M${center.x - 18} ${center.y + 13} L${center.x - 7} ${center.y - 15} L${center.x + 4} ${center.y + 13} Z`} />
-                        <path d={`M${center.x} ${center.y + 13} L${center.x + 13} ${center.y - 20} L${center.x + 25} ${center.y + 13} Z`} />
-                      </g>
-                    );
-                  }
-
-                  return (
-                    <g key={`content-${cell.q}-${cell.row}`} className="fill-none stroke-foreground">
-                      <path d={`M${center.x - 19} ${center.y + 17} V${center.y - 12} H${center.x + 2} V${center.y + 17}`} />
-                      <path d={`M${center.x + 2} ${center.y + 17} V${center.y - 3} H${center.x + 19} V${center.y + 17}`} />
-                      <path d={`M${center.x - 13} ${center.y - 4} H${center.x - 6} M${center.x - 13} ${center.y + 5} H${center.x - 6}`} />
-                    </g>
-                  );
-                })}
-              </motion.g>
-
-              <motion.g
-                style={{
-                  opacity: reduce_motion ? 1 : agent_opacity,
-                  scale: reduce_motion ? 1 : agent_scale,
-                  y: reduce_motion ? 0 : agent_y,
-                  transformOrigin: `${current_city_origin.x}px ${current_city_origin.y}px`,
-                }}
-              >
-                <motion.circle
-                  cx={current_city_origin.x}
-                  cy={current_city_origin.y}
-                  r="78"
-                  fill="#4f6f9f"
-                  style={{ opacity: reduce_motion ? 0.1 : agent_glow_opacity }}
-                />
-                <path d={home_world_agent_path(current_city_origin.x, current_city_origin.y, 72)} fill="#4f6f9f" />
-                <circle cx={current_city_origin.x - 10} cy={current_city_origin.y - 6} r="3" className="fill-background" />
-                <circle cx={current_city_origin.x + 10} cy={current_city_origin.y - 6} r="3" className="fill-background" />
-                <text x={current_city_origin.x} y={current_city_origin.y + 70} textAnchor="middle" className="fill-foreground text-[13px] font-semibold">
-                  {t("productWorld.labels.agent")}
-                </text>
+              <motion.g style={{ opacity: reduce_motion ? 1 : federation_boundary_opacity }}>
+                {home_product_world_federation_edges.map((path, index) => (
+                  <motion.path
+                    key={`federation-edge-${index}`}
+                    d={path}
+                    className="fill-none stroke-foreground"
+                    strokeWidth="4.6"
+                    strokeLinecap="round"
+                    style={{ pathLength: reduce_motion ? 1 : federation_boundary_path }}
+                  />
+                ))}
               </motion.g>
             </motion.g>
 
             <motion.g
               style={{
-                opacity: reduce_motion ? 1 : remote_cities_opacity,
-                scale: reduce_motion ? 1 : remote_cities_scale,
-                transformOrigin: "750px 380px",
+                scale: reduce_motion ? 0.62 : agent_scale,
+                transformOrigin: "600px 360px",
               }}
             >
-              {[
-                { x: 600, y: 404, accent: "#b45d4c" },
-                { x: 810, y: 404, accent: "#3f7d5b" },
-              ].map((city) => (
-                <g key={city.x}>
-                  {remote_city_cells.map((cell) => {
-                    const center = home_world_hex_center(city.x, city.y, 34, cell.q, cell.row);
-                    return (
-                      <path
-                        key={`${cell.q}-${cell.row}`}
-                        d={home_world_hex_path(center.x, center.y, 34)}
-                        fill="transparent"
-                        stroke={city.accent}
-                        strokeOpacity="0.72"
-                      />
-                    );
-                  })}
-                  <path d={home_world_agent_path(city.x, city.y, 28)} fill={city.accent} />
-                  <circle cx={city.x - 3.6} cy={city.y - 2.2} r="1.2" className="fill-background" />
-                  <circle cx={city.x + 3.6} cy={city.y - 2.2} r="1.2" className="fill-background" />
-                  <text x={city.x} y={city.y + 105} textAnchor="middle" className="fill-text-soft text-[12px]">
-                    {t("productWorld.labels.city")}
-                  </text>
-                </g>
-              ))}
-            </motion.g>
-
-            <motion.g style={{ opacity: reduce_motion ? 1 : federation_opacity }}>
-              <motion.path
-                d="M600 120 C500 160 430 220 390 300 M600 120 C600 190 600 240 600 300 M600 120 C680 160 750 220 810 300"
-                className="fill-none stroke-foreground"
-                strokeWidth="1.3"
-                style={{ pathLength: reduce_motion ? 1 : federation_path }}
-              />
-              <circle cx="580" cy="96" r="14" className="fill-background stroke-foreground" />
-              <circle cx="600" cy="88" r="14" className="fill-background stroke-foreground" />
-              <circle cx="620" cy="96" r="14" className="fill-background stroke-foreground" />
-              <text x="600" y="145" textAnchor="middle" className="fill-foreground text-[15px] font-semibold">
-                {t("productWorld.labels.federation")}
-              </text>
+              <motion.circle cx="600" cy="360" r="72" fill="#4f6f9f" style={{ opacity: reduce_motion ? 0.1 : agent_glow_opacity }} />
+              <path d={home_world_agent_path(600, 360, 68)} fill="#4f6f9f" />
+              <circle cx="591" cy="354.5" r="2.8" className="fill-background" />
+              <circle cx="609" cy="354.5" r="2.8" className="fill-background" />
+              <text x="600" y="425" textAnchor="middle" className="fill-foreground text-[13px] font-semibold">{t("productWorld.labels.agent")}</text>
             </motion.g>
           </svg>
         </div>
 
-        <div className="pointer-events-none absolute inset-x-5 bottom-[9vh] z-20 mx-auto max-w-5xl text-center md:inset-x-8 md:bottom-[7vh]">
-          <AnimatePresence initial={false} mode="sync">
-            {active_story_key ? (
-              <motion.p
-                key={active_story_key}
-                initial={{ opacity: 0, y: 30, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -24, scale: 0.985 }}
-                transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
-                className="absolute inset-x-0 bottom-0 font-serif text-[clamp(1.35rem,3.5vw,3.2rem)] font-semibold leading-[1.08] tracking-[-0.03em] text-foreground"
-              >
-                {t(`productWorld.story.${active_story_key}`)}
-              </motion.p>
-            ) : null}
-          </AnimatePresence>
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-5 bottom-[9vh] z-20 mx-auto h-8 max-w-5xl text-center md:inset-x-8 md:bottom-[7vh]">
+          <motion.p style={{ opacity: reduce_motion ? 0 : agent_stage_opacity }} className="absolute inset-x-0 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-text-soft">{t("productWorld.labels.agent")}</motion.p>
+          <motion.p style={{ opacity: reduce_motion ? 0 : capabilities_stage_opacity }} className="absolute inset-x-0 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-text-soft">{t("productWorld.labels.capabilities")}</motion.p>
+          <motion.p style={{ opacity: reduce_motion ? 0 : city_stage_opacity }} className="absolute inset-x-0 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-text-soft">{t("productWorld.labels.city")}</motion.p>
+          <motion.p style={{ opacity: reduce_motion ? 1 : federation_stage_opacity }} className="absolute inset-x-0 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-text-soft">{t("productWorld.labels.federation")}</motion.p>
         </div>
       </div>
     </section>

@@ -96,6 +96,17 @@ function build_manager_options(items: BureauTokenSummary[]): tui_prompt_option[]
 
 async function create_token_interactively(runtime: ManagedTuiRuntime): Promise<void> {
   while (true) {
+    const bureau_id_input = await runtime.text({
+      title: "Bureau ID",
+      placeholder: "bureau_xxx",
+    });
+    if (bureau_id_input === undefined) return;
+    const bureau_id = bureau_id_input.trim();
+    if (!bureau_id) {
+      await runtime.show_message("error", "bureau_id is required");
+      continue;
+    }
+
     const purpose_input = await runtime.text({
       title: t({ zh: "Token 用途", en: "Token purpose" }),
       placeholder: t({ zh: "例如：生产环境支付服务", en: "For example: production payments service" }),
@@ -120,12 +131,13 @@ async function create_token_interactively(runtime: ManagedTuiRuntime): Promise<v
 
     const created = await runtime.with_loading(
       t({ zh: "登记 Bureau Token", en: "Registering Bureau token" }),
-      async () => await create_federation_bureau_token_record(purpose),
+      async () => await create_federation_bureau_token_record(bureau_id, purpose),
     );
     await runtime.show_text(
       t({ zh: "Bureau Token 已登记", en: "Bureau token registered" }),
       [
         `${t({ zh: "用途", en: "Purpose" })}: ${created.purpose}`,
+        `Bureau ID: ${created.bureau_id}`,
         `Token ID: ${created.token_id}`,
         `DOWNCITY_FEDERATION_URL: ${created.federation_url}`,
         `DOWNCITY_BUREAU_TOKEN: ${created.bureau_token}`,

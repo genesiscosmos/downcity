@@ -10,7 +10,7 @@
 import { City } from "@downcity/city";
 import {
   DEFAULT_FEDERATION_URL,
-  DEFAULT_CITY_ID,
+  DEFAULT_BUREAU_ID,
   normalizeCityUrl,
   read_city_admin_secret_for_url,
   read_current_city_session,
@@ -38,7 +38,7 @@ export class CityUserManager {
     const env_federation_url = allow_env_override
       ? readFirstEnv(env, ["DOWNCITY_CITY_URL", "CITY_URL"])
       : "";
-    const env_city_id = allow_env_override
+    const env_bureau_id = allow_env_override
       ? readFirstEnv(env, ["DOWNCITY_CITY_ID", "CITY_ID"])
       : "";
     const env_user_token = allow_env_override
@@ -52,10 +52,10 @@ export class CityUserManager {
 
     const env_overrides: CityUserEnvOverrides = {
       federation_url: Boolean(env_federation_url),
-      city_id: Boolean(env_city_id),
+      bureau_id: Boolean(env_bureau_id),
       user_token: Boolean(env_user_token),
     };
-    const city_id = env_city_id || session?.city_id || DEFAULT_CITY_ID;
+    const bureau_id = env_bureau_id || session?.bureau_id || DEFAULT_BUREAU_ID;
     const user_token = env_user_token || session?.user_token || "";
     const source = env_user_token ? "env" : "city-session";
     const warnings: string[] = [];
@@ -75,7 +75,7 @@ export class CityUserManager {
 
     const resolved: ResolvedCityUser = {
       federation_url,
-      city_id,
+      bureau_id,
       user_token,
       user_id: env_user_token ? undefined : session?.user_id,
       user_label: env_user_token ? undefined : session?.user_label,

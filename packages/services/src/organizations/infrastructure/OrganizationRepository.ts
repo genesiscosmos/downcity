@@ -2,7 +2,6 @@
 
 import { httpError, type CityTableApi, type ServiceTransactionContext } from "@downcity/city";
 import type {
-  OrganizationEventRecord,
   OrganizationJoinRequestRecord,
   OrganizationMembershipRecord,
   OrganizationOwnerSlotRecord,
@@ -81,8 +80,8 @@ export class OrganizationRepository {
   }
 
   /** 读取用户当前 Owner 额度槽位。 */
-  list_owner_slots(city_id: string, user_id: string): Promise<OrganizationOwnerSlotRecord[]> {
-    return this.owner_slots().select({ city_id, user_id });
+  list_owner_slots(user_id: string): Promise<OrganizationOwnerSlotRecord[]> {
+    return this.owner_slots().select({ user_id });
   }
 
   /** 按 Organization 读取 Owner 额度槽位。 */
@@ -131,21 +130,6 @@ export class OrganizationRepository {
     return this.join_requests().update({ where: { request_id }, values });
   }
 
-  /** 插入领域 Event。 */
-  insert_event(event: OrganizationEventRecord): Promise<void> {
-    return this.events().insert(event);
-  }
-
-  /** 读取待投递 Event。 */
-  list_pending_events(): Promise<OrganizationEventRecord[]> {
-    return this.events().select({ delivery_state: "pending" });
-  }
-
-  /** 更新 Event 投递状态。 */
-  update_event(event_id: string, values: Partial<OrganizationEventRecord>): Promise<number> {
-    return this.events().update({ where: { event_id }, values });
-  }
-
   private organizations(): CityTableApi<OrganizationRecord> {
     return this.source.table<OrganizationRecord>("organizations");
   }
@@ -162,7 +146,4 @@ export class OrganizationRepository {
     return this.source.table<OrganizationJoinRequestRecord>("join_requests");
   }
 
-  private events(): CityTableApi<OrganizationEventRecord> {
-    return this.source.table<OrganizationEventRecord>("events");
-  }
 }

@@ -10,8 +10,6 @@
 
 export const DEFAULT_HOST = "127.0.0.1";
 export const DEFAULT_PORT = 43127;
-export const DEFAULT_BAY_ID = "city_downcity";
-
 // ============================================================
 // CLI 参数解析
 // ============================================================

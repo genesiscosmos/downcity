@@ -9,9 +9,7 @@ description: 通过 User City 和第三方工具调用 AIService。
 import { City } from "@downcity/city";
 
 const city = new City({
-  role: "user",
   federation_url,
-  city_id,
   user_token,
 });
 
@@ -80,7 +78,7 @@ const model = provider.languageModel("deepseek-v4-flash");
 ```
 
 请求体保持标准 OpenAI-compatible JSON。`model` 来自
-`languageModel(model_id)`，`city_id` 由服务端从 bearer `user_token` 中解析，
+`languageModel(model_id)`，`bureau_id` 由服务端从 bearer `user_token` 中解析，
 不需要放进请求体。
 
 请求会进入 Federation 的 AIService：
@@ -88,7 +86,7 @@ const model = provider.languageModel("deepseek-v4-flash");
 ```txt
 POST /v1/ai/chat/completions
   -> 校验 user_token
-  -> 从 token 解析 city_id / user_id
+  -> 从 token 解析 bureau_id / user_id
   -> 读取 body.model
   -> 找到模型绑定的 provider
   -> 由 provider 调用真实上游模型

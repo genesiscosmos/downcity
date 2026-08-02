@@ -28,8 +28,10 @@ import type {
   CityModelDescriptor,
   City,
   Bureau,
+  BureauRecord,
   BureauTokenSummary,
   Federation,
+  FederationAdmin,
   ModelCatalog,
   PaymentMethodHandle,
   UserImageJobCreateResult,
@@ -82,11 +84,10 @@ void provider_stream_call;
 void provider_stream_result;
 
 declare const city: City;
-declare const admin: Bureau;
+declare const admin: FederationAdmin;
 declare const bureau: Bureau;
 declare const federation: Federation;
 declare const user_city: City;
-declare const admin_city: Bureau;
 
 const ai: AIInvoker = city.ai;
 
@@ -125,31 +126,28 @@ const adminInstruction = admin.instruction();
 const adminInstructionContract: Promise<string> = adminInstruction;
 
 const bureau_registration_input: RegisterBureauTokenInput = {
+  bureau_id: "bureau_demo",
   token_id: "br_1234567890abcdef",
   purpose: "type contract test",
   token_hash: "1234567890123456789012345678901234567890123",
 };
-const bureau_registration: Promise<BureauTokenSummary> = admin.bureaus.register(
+const bureau_registration: Promise<BureauTokenSummary> = admin.bureaus.tokens.register(
   bureau_registration_input,
 );
 void bureau_registration;
 
-const federation_bureaus = admin.bureaus.list();
+const federation_bureaus: Promise<BureauRecord[]> = admin.bureaus.list();
 void federation_bureaus;
 
 const bureau_identity = bureau.identify("ub_header.payload.signature");
 void bureau_identity;
 
-const bureau_cities = bureau.cities.list();
-const bureau_env = bureau.env.list();
-const bureau_tokens = bureau.bureaus.list();
-void bureau_cities;
-void bureau_env;
-void bureau_tokens;
+const bureau_me = bureau.me();
+void bureau_me;
 
-const bureau_get_result: Promise<{ status: string }> = city.get("https://bureau.example.com/reports/status");
+const bureau_get_result: Promise<{ status: string }> = city.get("/reports/status");
 const bureau_post_result: Promise<{ report_id: string }> = city.post(
-  "https://bureau.example.com/reports/summary",
+  "/reports/summary",
   { range: "today" },
 );
 void bureau_get_result;
@@ -162,11 +160,7 @@ const paymentMethods = city.payment.methods();
 const paymentMethodsContract: Promise<UserPaymentMethod[]> = paymentMethods;
 
 const cityPaymentMethodsContract: Promise<UserPaymentMethod[]> = user_city.payment.methods();
-const cityAdminServicesContract: Promise<UserServiceSummary[]> = admin_city.listServices();
-const cityInstructionContract: Promise<string> = admin_city.instruction();
 void cityPaymentMethodsContract;
-void cityAdminServicesContract;
-void cityInstructionContract;
 
 const paymentMethod: PaymentMethodHandle = city.payment.method("stripe");
 const paymentMethodDescribeContract: Promise<UserPaymentMethod> = paymentMethod.describe();

@@ -9,7 +9,7 @@
 
 import type { Command } from "commander";
 import { parseBoolean } from "@/shared/IndexSupport.js";
-import { DEFAULT_CITY_ID } from "@/city/shared/CityStateStore.js";
+import { DEFAULT_BUREAU_ID } from "@/city/shared/CityStateStore.js";
 import {
   emit_federation_status,
   emitCityUserWhoami,
@@ -30,8 +30,8 @@ export function register_federation_command(program: Command): void {
   const federation = program
     .command("federation")
     .description(t({
-      zh: "管理 City 的 Federation 成员资格与账号登录态",
-      en: "manage City Federation membership and account login state",
+      zh: "管理 City 终端连接的 Federation、Bureau 与账号登录态",
+      en: "manage the City terminal's Federation, Bureau, and account login state",
     }))
     .helpOption("--help", helpText())
     .action(async () => {
@@ -125,9 +125,9 @@ export function register_federation_command(program: Command): void {
       en: "sign in to the current or specified Federation",
     }))
     .option("--city-id <cityId>", t({
-      zh: "当前 City 在该 Federation 中的 city_id",
-      en: "city_id of the current City within this Federation",
-    }), DEFAULT_CITY_ID)
+      zh: "当前 City 在该 Federation 中的 bureau_id",
+      en: "bureau_id of the current City within this Federation",
+    }), DEFAULT_BUREAU_ID)
     .option("--json [enabled]", t({
       zh: "以 JSON 输出",
       en: "output as JSON",
@@ -138,7 +138,7 @@ export function register_federation_command(program: Command): void {
     ) => {
       await run_federation_login_command({
         url,
-        city_id: options.cityId,
+        bureau_id: options.cityId,
         as_json: options.json === true,
       });
     });

@@ -1,4 +1,10 @@
-# Downcity Organizations Service 设计文档
+# Downcity Organizations Service 设计文档（历史实现）
+
+> 本文记录当前已实现的 `server_url + organization_token + 撤权事件` 方案，不再作为后续实现依据。
+>
+> 新设计见 [`federation-organizations-service-redesign.md`](./federation-organizations-service-redesign.md)。新方案让 Organization 只维护组织身份、Membership 和治理关系，并把产品后端、部署路由与资源权限交还 City/Product/Bureau。
+>
+> 最新身份边界见 [`federation-bureau-city-identity-redesign.md`](./federation-bureau-city-identity-redesign.md)：产品身份统一为 Bureau，City 仅表示 Agent 终端。
 
 ## 1. 文档信息
 

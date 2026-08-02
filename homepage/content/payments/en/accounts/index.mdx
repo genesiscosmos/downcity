@@ -5,7 +5,7 @@ description: "Use the official accounts service for registration, login, OAuth e
 
 `@downcity/services` is a good fit when you do not want to build a full account system first. It packages the common registration, login, session, and OAuth entry flows into one official service.
 
-The important point is not "another SDK." It adds a ready-made `accounts` service into the Federation, so product-side callers can use it through `User City` and `Admin City`.
+The important point is not "another SDK." It adds a ready-made `accounts` service into the Federation, so product-side callers can use it through `User City` and `FederationAdmin`.
 
 ## How to read this section
 
@@ -117,7 +117,7 @@ Then render email, GitHub, Google, or WeChat only from the server response. Do n
 const session = await guest.service("accounts").action("login").invoke({
   email: "user@example.com",
   password: "password123",
-  city_id: "city_demo",
+  bureau_id: "bureau_demo",
 });
 ```
 
@@ -138,13 +138,12 @@ const session = await guest.service("accounts").action("login").invoke<{
 }>({
   email: "user@example.com",
   password: "password123",
-  city_id: "city_demo",
+  bureau_id: "bureau_demo",
 });
 
 const user = new City({
   role: "user",
   city_url: "https://base.example.com",
-  city_id: "city_demo",
   user_token: session.user_token,
 });
 

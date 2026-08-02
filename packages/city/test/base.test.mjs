@@ -140,7 +140,7 @@ test("Federation instruction aggregates built-in and service documentation", asy
 
     assert.match(text, /# Downcity Federation Instruction/)
     assert.match(text, /## Env \(env\)/)
-    assert.match(text, /## Cities \(cities\)/)
+    assert.match(text, /## Bureaus \(bureaus\)/)
     assert.match(text, /## Demo InstallableService \(demo\)/)
     assert.match(text, /这是一个测试服务说明。/)
     assert.match(text, /GET \/v1\/demo\/ping \| auth: admin/)
@@ -448,7 +448,7 @@ test("Federation middleware reports duplicate next calls as middleware errors", 
   }
 })
 
-test("Federation rejects mismatched city_id for authenticated user requests", async () => {
+test("Federation rejects mismatched bureau_id for authenticated user requests", async () => {
   const cwd = process.cwd()
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-city-"))
 
@@ -476,7 +476,7 @@ test("Federation rejects mismatched city_id for authenticated user requests", as
     await base.health()
     const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
 
-    const bay_response = await base.fetch(new Request("http://localhost/v1/cities/create", {
+    const bay_response = await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -484,13 +484,14 @@ test("Federation rejects mismatched city_id for authenticated user requests", as
       },
       body: JSON.stringify({
         name: "Demo",
+        server_url: "https://bureau.example.com",
       }),
     }))
     const city = await bay_response.json()
 
     const authenticator = await base.getAuthenticator()
     const issued = await authenticator.createToken({
-      city_id: city.city_id,
+      bureau_id: city.bureau_id,
       user_id: "user_1",
     })
 
@@ -501,7 +502,7 @@ test("Federation rejects mismatched city_id for authenticated user requests", as
         authorization: `Bearer ${issued.user_token}`,
       },
       body: JSON.stringify({
-        city_id: "city_other",
+        bureau_id: "bureau_other",
         prompt: "hi",
       }),
     }))
@@ -509,7 +510,7 @@ test("Federation rejects mismatched city_id for authenticated user requests", as
     assert.equal(response.status, 403)
     assert.deepEqual(await response.json(), {
       error: {
-        message: "city_id does not match the authenticated token",
+        message: "bureau_id does not match the authenticated token",
         type: "server_error",
       },
     })
@@ -630,22 +631,18 @@ test("AIService charges explicit provider charge lines", async () => {
     await base.health()
     const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
 
-    const city = await (await base.fetch(new Request("http://localhost/v1/cities/create", {
+    const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${adminSecret}`,
       },
-      body: JSON.stringify({ name: "Demo" }),
+      body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
-    const tokenBody = await (await base.fetch(new Request("http://localhost/v1/cities/tokens/apply", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
-      },
-      body: JSON.stringify({ city_id: city.city_id, user_id: "user_1" }),
-    }))).json()
+    const tokenBody = await (await base.getAuthenticator()).createToken({
+      bureau_id: city.bureau_id,
+      user_id: "user_1",
+    })
 
     const response = await base.fetch(new Request("http://localhost/v1/ai/text", {
       method: "POST",
@@ -724,16 +721,15 @@ test("AIService /stream keeps the model stream open until deferred charge settle
 
     await base.health()
     const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
-    const city = await (await base.fetch(new Request("http://localhost/v1/cities/create", {
+    const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${adminSecret}` },
-      body: JSON.stringify({ name: "Demo" }),
+      body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
-    const tokenBody = await (await base.fetch(new Request("http://localhost/v1/cities/tokens/apply", {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${adminSecret}` },
-      body: JSON.stringify({ city_id: city.city_id, user_id: "user_1" }),
-    }))).json()
+    const tokenBody = await (await base.getAuthenticator()).createToken({
+      bureau_id: city.bureau_id,
+      user_id: "user_1",
+    })
 
     const response = await base.fetch(new Request("http://localhost/v1/ai/stream", {
       method: "POST",
@@ -807,22 +803,18 @@ test("AIService runs Credits precheck before provider actions", async () => {
     await base.health()
     const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
 
-    const city = await (await base.fetch(new Request("http://localhost/v1/cities/create", {
+    const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${adminSecret}`,
       },
-      body: JSON.stringify({ name: "Demo" }),
+      body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
-    const tokenBody = await (await base.fetch(new Request("http://localhost/v1/cities/tokens/apply", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
-      },
-      body: JSON.stringify({ city_id: city.city_id, user_id: "user_1" }),
-    }))).json()
+    const tokenBody = await (await base.getAuthenticator()).createToken({
+      bureau_id: city.bureau_id,
+      user_id: "user_1",
+    })
 
     const response = await base.fetch(new Request("http://localhost/v1/ai/text", {
       method: "POST",
@@ -892,22 +884,18 @@ test("AIService uses provider bill when model bill is not set", async () => {
 
     await base.health()
     const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
-    const city = await (await base.fetch(new Request("http://localhost/v1/cities/create", {
+    const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${adminSecret}`,
       },
-      body: JSON.stringify({ name: "Demo" }),
+      body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
-    const tokenBody = await (await base.fetch(new Request("http://localhost/v1/cities/tokens/apply", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
-      },
-      body: JSON.stringify({ city_id: city.city_id, user_id: "user_1" }),
-    }))).json()
+    const tokenBody = await (await base.getAuthenticator()).createToken({
+      bureau_id: city.bureau_id,
+      user_id: "user_1",
+    })
     const response = await base.fetch(new Request("http://localhost/v1/ai/text", {
       method: "POST",
       headers: {
@@ -993,22 +981,18 @@ test("AIService falls back to image-capable model for UIMessage image parts", as
 
     await base.health()
     const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
-    const city = await (await base.fetch(new Request("http://localhost/v1/cities/create", {
+    const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${adminSecret}`,
       },
-      body: JSON.stringify({ name: "Demo" }),
+      body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
-    const tokenBody = await (await base.fetch(new Request("http://localhost/v1/cities/tokens/apply", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
-      },
-      body: JSON.stringify({ city_id: city.city_id, user_id: "user_1" }),
-    }))).json()
+    const tokenBody = await (await base.getAuthenticator()).createToken({
+      bureau_id: city.bureau_id,
+      user_id: "user_1",
+    })
 
     const response = await base.fetch(new Request("http://localhost/v1/ai/text", {
       method: "POST",
@@ -1122,22 +1106,18 @@ test("AIService selects fallback rule by UIMessage file media type", async () =>
 
     await base.health()
     const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
-    const city = await (await base.fetch(new Request("http://localhost/v1/cities/create", {
+    const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${adminSecret}`,
       },
-      body: JSON.stringify({ name: "Demo" }),
+      body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
-    const tokenBody = await (await base.fetch(new Request("http://localhost/v1/cities/tokens/apply", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
-      },
-      body: JSON.stringify({ city_id: city.city_id, user_id: "user_1" }),
-    }))).json()
+    const tokenBody = await (await base.getAuthenticator()).createToken({
+      bureau_id: city.bureau_id,
+      user_id: "user_1",
+    })
 
     const response = await base.fetch(new Request("http://localhost/v1/ai/text", {
       method: "POST",
@@ -1222,22 +1202,18 @@ test("AIService falls back for OpenAI chat completions with image_url parts", as
 
     await base.health()
     const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
-    const city = await (await base.fetch(new Request("http://localhost/v1/cities/create", {
+    const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${adminSecret}`,
       },
-      body: JSON.stringify({ name: "Demo" }),
+      body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
-    const tokenBody = await (await base.fetch(new Request("http://localhost/v1/cities/tokens/apply", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
-      },
-      body: JSON.stringify({ city_id: city.city_id, user_id: "user_1" }),
-    }))).json()
+    const tokenBody = await (await base.getAuthenticator()).createToken({
+      bureau_id: city.bureau_id,
+      user_id: "user_1",
+    })
 
     const response = await base.fetch(new Request("http://localhost/v1/ai/chat/completions", {
       method: "POST",
@@ -1319,22 +1295,18 @@ test("AIService lets model bill override provider bill", async () => {
 
     await base.health()
     const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
-    const city = await (await base.fetch(new Request("http://localhost/v1/cities/create", {
+    const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${adminSecret}`,
       },
-      body: JSON.stringify({ name: "Demo" }),
+      body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
-    const tokenBody = await (await base.fetch(new Request("http://localhost/v1/cities/tokens/apply", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
-      },
-      body: JSON.stringify({ city_id: city.city_id, user_id: "user_1" }),
-    }))).json()
+    const tokenBody = await (await base.getAuthenticator()).createToken({
+      bureau_id: city.bureau_id,
+      user_id: "user_1",
+    })
     const response = await base.fetch(new Request("http://localhost/v1/ai/text", {
       method: "POST",
       headers: {
@@ -1950,22 +1922,18 @@ test("AIService charges image jobs only after provider result succeeds", async (
     await base.health()
     const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
 
-    const city = await (await base.fetch(new Request("http://localhost/v1/cities/create", {
+    const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${adminSecret}`,
       },
-      body: JSON.stringify({ name: "Demo" }),
+      body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
-    const tokenBody = await (await base.fetch(new Request("http://localhost/v1/cities/tokens/apply", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
-      },
-      body: JSON.stringify({ city_id: city.city_id, user_id: "user_1" }),
-    }))).json()
+    const tokenBody = await (await base.getAuthenticator()).createToken({
+      bureau_id: city.bureau_id,
+      user_id: "user_1",
+    })
 
     const response = await base.fetch(new Request("http://localhost/v1/ai/image/create", {
       method: "POST",
@@ -2083,22 +2051,18 @@ test("AIService prefers action charge over model bill", async () => {
 
     await base.health()
     const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
-    const city = await (await base.fetch(new Request("http://localhost/v1/cities/create", {
+    const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${adminSecret}`,
       },
-      body: JSON.stringify({ name: "Demo" }),
+      body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
-    const tokenBody = await (await base.fetch(new Request("http://localhost/v1/cities/tokens/apply", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
-      },
-      body: JSON.stringify({ city_id: city.city_id, user_id: "user_1" }),
-    }))).json()
+    const tokenBody = await (await base.getAuthenticator()).createToken({
+      bureau_id: city.bureau_id,
+      user_id: "user_1",
+    })
 
     const response = await base.fetch(new Request("http://localhost/v1/ai/text", {
       method: "POST",

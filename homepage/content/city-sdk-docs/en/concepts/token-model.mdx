@@ -9,7 +9,7 @@ Downcity uses `admin_secret_key` to manage Federation, and `user_token` to let e
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>Trusted backend</strong>
-      <span>Your backend uses Admin City and holds `admin_secret_key`.</span>
+      <span>Your backend uses FederationAdmin and holds `admin_secret_key`.</span>
       <code>Create city / request user_token</code>
     </div>
   </div>
@@ -24,7 +24,7 @@ Downcity uses `admin_secret_key` to manage Federation, and `user_token` to let e
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>End-user client</strong>
-      <span>The frontend, extension, or app only gets `user_token + city_id` and uses User City to call services.</span>
+      <span>The frontend, extension, or app only gets `user_token + bureau_id` and uses User City to call services.</span>
       <code>No access to admin_secret_key</code>
     </div>
   </div>
@@ -32,38 +32,38 @@ Downcity uses `admin_secret_key` to manage Federation, and `user_token` to let e
 
 ## user_token
 
-`user_token` is the call credential used by the end user or product. `Admin City` requests it from Federation using `city_id + user_id`.
+`user_token` is the call credential used by the end user or product. `FederationAdmin` requests it from Federation using `bureau_id + user_id`.
 
-- `city_id`
+- `bureau_id`
 - `user_id`
 - `metadata`
 - `ttl`
 
-The client only carries `user_token` and `city_id`. It never touches provider keys or `admin_secret_key`.
+The client only carries `user_token` and `bureau_id`. It never touches provider keys or `admin_secret_key`.
 
 ## admin_secret_key
 
 `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` is used to manage Federation: create cities, manage env, and issue `user_token` for users under a given city. Federation generates it automatically and writes it into Federation env on first startup.
 
 ```ts
-const admin = new City({
-  role: "admin",
-  federation_url: "https://base.example.com",
-  admin_secret_key: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+const admin = new FederationAdmin({
+  base_url: "https://base.example.com",
+  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
 });
 
-const city = await admin.cities.create({
+const bureau = await admin.bureaus.create({
   name: "Chrome Extension",
+  server_url: "https://bureau.example.com",
 });
 ```
 
 ## Multi-city reuse
 
-Many clients can belong to the same city. When issuing a token, write `city_id` explicitly:
+Many clients can belong to the same city. When issuing a token, write `bureau_id` explicitly:
 
 ```ts
-const user = await admin.cities.tokens.apply({
-  city_id: city.city_id,
+const user = await admin.service("accounts").action("tokens/issue").invoke({
+  bureau_id: bureau.bureau_id,
   user_id: "user_123",
   metadata: {
     plan: "pro",

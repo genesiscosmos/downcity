@@ -19,6 +19,9 @@ export interface BureauDeploymentCredential {
 
 /** CLI 完成登记后返回给命令层的一次性 Bureau Token。 */
 export interface CreatedFederationBureauToken extends BureauDeploymentCredential {
+  /** Token 所属的稳定 Bureau ID。 */
+  bureau_id: string;
+
   /** Token 所登记到的 Federation HTTP 入口。 */
   federation_url: string;
 

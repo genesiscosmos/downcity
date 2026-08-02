@@ -241,9 +241,9 @@ export interface AccountsLoginStartRequest extends Record<string, unknown> {
   provider?: string;
 
   /**
-   * 需要签发 `user_token` 的 City ID。
+   * 需要签发 `user_token` 的稳定 Bureau ID。
    */
-  city_id?: string;
+  bureau_id?: string;
 }
 
 /**

@@ -24,8 +24,8 @@ import type {
 /** 默认 Federation 地址。 */
 export const DEFAULT_FEDERATION_URL = "https://base.downcity.ai";
 
-/** 默认 City 标识。 */
-export const DEFAULT_CITY_ID = "city_downcity";
+/** 默认产品身份；仅作为 CLI 的显式预配置 Bureau。 */
+export const DEFAULT_BUREAU_ID = "bureau_downcity";
 
 const CITY_STATE_KEY = "city.city.state";
 const FEDERATION_CONFIG_KEY = "federation.config";
@@ -181,7 +181,7 @@ export function list_federations(): FederationProfile[] {
       source: existing.source === "city" ? "city" : profile.source,
       has_admin_secret_key: existing.has_admin_secret_key || profile.has_admin_secret_key,
       has_user_session: existing.has_user_session || profile.has_user_session,
-      city_id: existing.city_id || profile.city_id,
+      bureau_id: existing.bureau_id || profile.bureau_id,
       user_id: existing.user_id || profile.user_id,
     });
   };
@@ -195,7 +195,7 @@ export function list_federations(): FederationProfile[] {
       source: "city",
       has_admin_secret_key: Boolean(read_city_admin_secret_for_url(profile.federation_url)),
       has_user_session: Boolean(session?.user_token),
-      city_id: session?.city_id,
+      bureau_id: session?.bureau_id,
       user_id: session?.user_id,
     });
   }
@@ -287,7 +287,7 @@ function read_city_admin_federations(): FederationProfile[] {
       source: "city-admin",
       has_admin_secret_key: Boolean(readCityString(item.admin_secret_key)),
       has_user_session: Boolean(session?.user_token),
-      city_id: session?.city_id,
+      bureau_id: session?.bureau_id,
       user_id: session?.user_id,
     });
   }
@@ -320,7 +320,7 @@ function normalizeLocalState(value: CityLocalState | null | undefined): CityLoca
     if (!federation_url || !user_token) continue;
     sessions[federation_url] = {
       federation_url,
-      city_id: readCityString(session?.city_id) || DEFAULT_CITY_ID,
+      bureau_id: readCityString(session?.bureau_id) || DEFAULT_BUREAU_ID,
       user_id: readCityString(session?.user_id) || undefined,
       user_label: readCityString(session?.user_label) || undefined,
       user_token,

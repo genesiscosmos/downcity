@@ -19,7 +19,7 @@ Render email registration or login only when the response contains an enabled `e
 const session = await guest.service("accounts").action("register").invoke({
   email: "user@example.com",
   password: "password123",
-  city_id: "city_demo",
+  bureau_id: "bureau_demo",
 });
 ```
 
@@ -28,7 +28,7 @@ const session = await guest.service("accounts").action("register").invoke({
 ```ts
 const start = await guest.service("accounts").action("login/start").invoke({
   provider: "email",
-  city_id: "city_demo",
+  bureau_id: "bureau_demo",
 });
 
 await guest.service("accounts").action("login/continue").invoke({
@@ -44,7 +44,7 @@ const session = await guest.service("accounts").get("login/result", {
 });
 ```
 
-## Why `city_id` is included here
+## Why `bureau_id` is included here
 
 Because after successful login or registration, the service will usually request a `user_token` for that downcity context from City.
 
@@ -61,7 +61,6 @@ Do not keep using the guest client forever. Switch into a normal user-context cl
 const user = new City({
   role: "user",
   city_url,
-  city_id: "city_demo",
   user_token: session.user_token,
 });
 ```

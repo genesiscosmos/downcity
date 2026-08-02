@@ -82,26 +82,23 @@ curl http://1.2.3.4:43127/health
 产品前端和应用应该通过 `@downcity/city` 调用 Node 街区：
 
 ```ts
-import { City } from "@downcity/city";
+import { City, FederationAdmin } from "@downcity/city";
 
 const city = new City({
-  role: "user",
   federation_url: "https://base.example.com",
-  city_id: "my-city",
   user_token: "user_token",
 });
 ```
 
-可信后端应该用 `Admin City` 携带 `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`：
+可信后端应该用 `FederationAdmin` 携带 `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`：
 
 ```ts
-import { City } from "@downcity/city";
+import { City, FederationAdmin } from "@downcity/city";
 
-const admin = new City({
-  role: "admin",
-  federation_url: "https://base.example.com",
-  admin_secret_key: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+const admin = new FederationAdmin({
+  base_url: "https://base.example.com",
+  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
 });
 ```
 
-完整 SDK 能力继续看 [User City](/zh/city-sdk-docs/reference/city-user) 和 [Admin City](/zh/city-sdk-docs/reference/city-admin)。
+完整 SDK 能力继续看 [User City](/zh/city-sdk-docs/reference/city-user) 和 [FederationAdmin](/zh/city-sdk-docs/reference/city-admin)。

@@ -23,7 +23,7 @@ export interface CityUserEnvOverrides {
   /**
    * City city id 是否来自环境变量。
    */
-  city_id: boolean;
+  bureau_id: boolean;
 
   /**
    * City user token 是否来自环境变量。
@@ -43,7 +43,7 @@ export interface ResolvedCityUser {
   /**
    * City city id。
    */
-  city_id: string;
+  bureau_id: string;
 
   /**
    * City user token。

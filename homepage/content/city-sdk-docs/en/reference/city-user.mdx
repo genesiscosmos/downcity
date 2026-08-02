@@ -8,7 +8,7 @@ description: How product clients read the model directory and call AIService or 
 It binds one user inside one city:
 
 - `federation_url`
-- `city_id`, automatically injected into user service action calls
+- `bureau_id`, automatically injected into user service action calls
 - `user_token`, required for AI service calls and authenticated actions
 
 For guest-access actions such as login, registration, or webhooks, you can pass `federation_url` only.
@@ -32,9 +32,7 @@ import { City } from "@downcity/city";
 import type { UIMessageChunk } from "ai";
 
 const city = new City({
-  role: "user",
   federation_url: "https://base.example.com",
-  city_id: "city_xxx",
   user_token: "ub_xxx",
 });
 
@@ -52,13 +50,12 @@ const result = await city.ai.text({
 
 ```ts
 const guest = new City({
-  role: "user",
   federation_url: "https://base.example.com",
 });
 
 const login = await guest.service("accounts").action("login/start").invoke({
   provider: "email",
-  city_id: "city_xxx",
+  bureau_id: "bureau_xxx",
 });
 
 await guest.service("accounts").action("login/continue").invoke({
@@ -74,7 +71,7 @@ const session = await guest.service("accounts").get("login/result", {
 });
 ```
 
-After receiving `session.user_token`, create a User City with `user_token` for AI service calls. Keep `city_id` when you want User City to inject it into ordinary service actions.
+After receiving `session.user_token`, create a User City with `user_token` for AI service calls. Keep `bureau_id` when you want User City to inject it into ordinary service actions.
 
 ## Guest calls vs logged-in user calls
 
@@ -91,7 +88,7 @@ Pass `federation_url` only. This is for guest-access Actions such as:
 
 ### Logged-in user phase
 
-Pass `federation_url + city_id + user_token`. This is for:
+Pass `federation_url + user_token`. This is for:
 
 - AI services
 - custom services that require user context
@@ -101,13 +98,12 @@ The most common transition looks like this:
 
 ```ts
 const guest = new City({
-  role: "user",
   federation_url,
 });
 
 const login = await guest.service("accounts").action("login/start").invoke({
   provider: "email",
-  city_id: "city_xxx",
+  bureau_id: "bureau_xxx",
 });
 
 await guest.service("accounts").action("login/continue").invoke({
@@ -123,9 +119,7 @@ const session = await guest.service("accounts").get("login/result", {
 });
 
 const user = new City({
-  role: "user",
   federation_url,
-  city_id: "city_xxx",
   user_token: session.user_token,
 });
 ```
@@ -366,7 +360,7 @@ You do not need a second protocol for services. Just remember:
 ```ts
 const login = await guest.service("accounts").action("login/start").invoke({
   provider: "email",
-  city_id: "city_xxx",
+  bureau_id: "bureau_xxx",
 });
 
 await guest.service("accounts").action("login/continue").invoke({
@@ -473,7 +467,7 @@ Usually one of these:
 - `user_token` is missing
 - the token expired
 - the token signature is invalid
-- the request `city_id` does not match the city bound to the token
+- the request `bureau_id` does not match the city bound to the token
 
 ### 422
 
@@ -493,4 +487,4 @@ Do not use `User City` for:
 - maintaining production provider keys
 - pausing or re-activating cities
 
-Those are trusted-side actions and belong in [Admin City](/en/city-sdk-docs/reference/city-admin) or your own backend.
+Those are trusted-side actions and belong in [FederationAdmin](/en/city-sdk-docs/reference/city-admin) or your own backend.

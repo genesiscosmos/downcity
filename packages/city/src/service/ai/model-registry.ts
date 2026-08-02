@@ -21,7 +21,7 @@ interface ModelCatalogOptions {
   /** 当前请求可读取的环境变量。 */
   env: EnvReader;
   /** 当前请求身份，决定是否返回管理字段。 */
-  identity: "guest" | "user" | "admin";
+  identity: "guest" | "user" | "bureau" | "admin";
   /** 根据运行时 action 计算模型公开模态。 */
   get_modalities: (model: AIModelDefinition) => string[];
 }

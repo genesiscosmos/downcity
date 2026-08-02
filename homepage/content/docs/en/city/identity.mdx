@@ -6,19 +6,19 @@ description: How City manages user identity, authentication, and permissions
 
 # City User Identity
 
-Federation owns user identity and account data, and the City client connects to Federation directly. A product only deploys a Bureau when it needs its own backend capabilities. One Federation can serve multiple products, isolated by `city_id`.
+Federation owns user identity and account data, and the City client connects to Federation directly. A product only deploys a Bureau when it needs its own backend capabilities. One Federation can serve multiple products, isolated by `bureau_id`.
 
 ## Identity boundaries
 
 - **Federation** — stores the Ed25519 private key and issues `user_token` values
 - **City** — stores `federation_url + user_token` and makes user requests
-- **Bureau** — a trusted server node that uses `bureau_token` for Federation management and
-  Federation's public key to verify users for independent services
+- **Bureau** — the product backend; it proves machine identity with a `bureau_token` bound to
+  `bureau_id` and verifies users for independent services with Federation's public key
 
 ## Authentication flow
 
-1. The user selects a product `city_id` during login
-2. Federation signs a `user_token` bound to that `city_id`
+1. The user selects a product `bureau_id` during login
+2. Federation signs a `user_token` bound to that `bureau_id`
 3. The user calls Federation through `new City({ federation_url, user_token })`
 4. The user sends the same Bearer Token to the product backend
 5. City sends `user_token` directly to Federation for Profile, balance, and standard Services
@@ -36,14 +36,14 @@ const profile = await city.user().profile();
 
 Optional product backend:
 
-Register the Bureau from the Federation control plane first:
+Create the Bureau with a required `server_url` in the Federation control plane, then register its machine token:
 
 ```bash
 fed bureau token
 ```
 
 This opens the interactive manager. Choose Create and enter a purpose; the CLI displays the
-plaintext `DOWNCITY_BUREAU_TOKEN` once. You can also run `fed bureau token create` directly.
+plaintext `DOWNCITY_BUREAU_TOKEN` once. You can also run `fed bureau token create <bureau_id>` directly.
 Federation stores the purpose and hash, so Federation and Bureau can run on different servers.
 
 ```ts
@@ -56,16 +56,17 @@ const identity = await bureau.identify(request);
 const profile = await (await bureau.user(request)).profile();
 ```
 
-`Bureau` is optional and is also the trusted server entry point for Federation management. It is
-not bound to a `city_id`: `identify()` returns the `city_id` from `user_token`, and each Bureau
-service applies its own product authorization policy. `identify()` only reads discovery and JWKS;
+`Bureau` is an optional product backend. Its token is already bound to a stable `bureau_id`, so the
+constructor does not repeat that value. It represents only that
+Bureau's machine identity and has no Federation Root privileges. `identify()` rejects User Tokens
+whose audience belongs to another Bureau. `identify()` only reads discovery and JWKS;
 Bureau requests Federation only when it needs current Profile, balance, or other shared data.
 
-City does not need to understand Bureau's Service directory. It sends a normal HTTP request:
+City resolves the current Bureau `server_url` from Federation, so callers only provide a relative path:
 
 ```ts
 const result = await city.post(
-  "https://bureau.example.com/reports/summary",
+  "/reports/summary",
   { range: "today" },
 );
 ```
@@ -80,14 +81,14 @@ Both tokens use the Bearer header, but they represent different principals and u
 | Format | `ub_<JWT>` | `fb_<token_id>.<secret>` |
 | Implementation | Ed25519 asymmetric signature | Random opaque credential and SHA-256 hash |
 | Verification | Verify with Federation's JWKS public key | Federation hashes the token and queries its registry |
-| Identity data | Contains `user_id`, `city_id`, `iss`, `aud`, `exp`, and `jti` | Contains no user identity; maps to a Federation registry record |
+| Identity data | Contains `user_id`, `bureau_id`, `iss`, `aud`, `exp`, and `jti` | Contains no user identity; maps to a Federation registry record |
 | Local verification | Bureau verifies with Federation JWKS | Federation checks the registry for management requests |
 | Revocation | Primarily bounded by expiry and current Federation state | Federation marks the registration as `revoked` |
 
 ### User Token
 
 Federation signs the user JWT with its private key and publishes only public verification keys
-through JWKS. Bureau can verify the signature, issuer, audience, expiry, and `city_id`, but a
+through JWKS. Bureau can verify the signature, issuer, audience, expiry, and `bureau_id`, but a
 public key cannot sign or modify user tokens.
 
 ```mermaid
@@ -116,7 +117,7 @@ flowchart LR
     F -->|"compare hash"| X["allow management request"]
 ```
 
-At runtime, Bureau sends the plaintext token to Federation management APIs over HTTPS. Federation extracts
+At runtime, Bureau sends the plaintext token to its Federation machine-identity endpoint over HTTPS. Federation extracts
 `token_id`, computes SHA-256, and compares it with the database record. The database never
 stores the plaintext token.
 
@@ -132,9 +133,9 @@ Federation still publishes Ed25519 public keys for its own token validation and 
 /.well-known/jwks.json
 ```
 
-`Bureau` includes the Federation control-plane API. `bureau.cities`, `bureau.env`, and
-`bureau.bureaus` use `bureau_token` to call Federation; `fed bureau token create` still generates
-the plaintext locally and writes the purpose and registry hash.
+The Federation Root control plane belongs to `FederationAdmin`. `Bureau` only reads its bound machine
+identity and validates targeted User Tokens locally. `fed bureau token create <bureau_id>` generates
+plaintext locally and stores ownership, purpose, and hash in the Federation registry.
 
 ## Plugin Resources
 

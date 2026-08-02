@@ -14,7 +14,6 @@ import type { Hono, ExecutionContext as HonoExecutionContext } from "hono";
 import { Service } from "../service/service.js";
 import { asInstallableService, type ServiceDefinition } from "../service/installable-service.js";
 import { EnvService } from "../service/env/env-service.js";
-import { CitiesService } from "../service/cities/cities-service.js";
 import { BureausService } from "../service/bureaus/bureaus-service.js";
 import { build_federation_instruction } from "./federation-instruction.js";
 import { initialize_federation } from "./federation-init.js";
@@ -27,7 +26,8 @@ import type { FederationStorage } from "./storage.js";
 import type { Authenticator } from "./auth/authenticator.js";
 import type { Runtime } from "./runtime.js";
 import type { CityTableApi } from "../store/table-api.js";
-import type { CityStore } from "../service/cities/city-store.js";
+import type { BureauStore } from "../service/bureaus/bureau-store.js";
+import type { BureauRecord } from "../types/Bureau.js";
 import type { FederationMiddleware, FederationMiddlewareContext } from "../types/FederationMiddleware.js";
 
 export class Federation {
@@ -40,7 +40,7 @@ export class Federation {
   private init_promise?: Promise<void>;
   private hono?: Hono;
   private authenticator?: Authenticator;
-  private city_store?: CityStore;
+  private bureau_store?: BureauStore;
 
   constructor(options: FederationOptions) {
     this.runtime = create_federation_runtime(options);
@@ -56,7 +56,6 @@ export class Federation {
       get_storage: () => this.runtime.storage,
     });
     this.use(new EnvService());
-    this.use(new CitiesService());
     this.use(new BureausService());
   }
 
@@ -85,7 +84,7 @@ export class Federation {
    * 关键说明（中文）
    * - middleware 在内部 Hono router 之前执行。
    * - 适合 CORS、body limit、rate limit、request id、timeout 等 HTTP 横切能力。
-   * - 不用于依赖 `ctx.user` / `ctx.city` 的业务生命周期逻辑。
+   * - 不用于依赖 `ctx.user` / `ctx.bureau` 的业务生命周期逻辑。
    */
   middle(...middlewares: FederationMiddleware[]): this {
     this.middlewares.push(...middlewares);
@@ -187,7 +186,7 @@ export class Federation {
     });
 
     this.table_map = state.table_map;
-    this.city_store = state.city_store;
+    this.bureau_store = state.bureau_store;
     this.authenticator = state.authenticator;
     this.hono = build_federation_router({
       runtime: this.runtime,
@@ -213,14 +212,14 @@ export class Federation {
   }
 
   /**
-   * 给 Authenticator 延迟访问 city store。
+   * 给 Authenticator 延迟访问 Bureau Store。
    */
   private async require_ready(): Promise<{
-    city: { get(id: string): Promise<{ city_id: string; status: string } | undefined> };
+    bureau: { get(id: string): Promise<BureauRecord | undefined> };
   }> {
     await this.ensure_ready();
     return {
-      city: this.city_store ?? { get: () => Promise.resolve(undefined) },
+      bureau: this.bureau_store ?? { get: () => Promise.resolve(undefined) },
     };
   }
 }

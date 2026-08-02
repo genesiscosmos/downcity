@@ -1,17 +1,17 @@
 /**
  * Federation Credits 管理命令。
  *
- * 本模块只通过 Bureau Credits typed invoker 管理 Card 与账务记录，不直接理解
+ * 本模块只通过 FederationAdmin Credits typed invoker 管理 Card 与账务记录，不直接理解
  * 支付订单、奖励活动或模型计费策略。
  */
 
-import { Bureau } from "@downcity/city";
+import { FederationAdmin } from "@downcity/city";
 import { t } from "@/shared/CliLocale.js";
 import { adminErrorMessage, rethrowAdminAuthError } from "@/federation/admin/auth-error.js";
 import type { admin_tui_runtime } from "@/federation/types/AdminTui.js";
 
 /** 打开 Credits 管理循环。 */
-export async function manage_credits(a: Bureau, _base_url: string, runtime: admin_tui_runtime): Promise<void> {
+export async function manage_credits(a: FederationAdmin, _base_url: string, runtime: admin_tui_runtime): Promise<void> {
   while (true) {
     const action = await runtime.select("Credits", [
       { label: t({ zh: "用户额度", en: "User credits" }), value: "users" },
@@ -42,7 +42,7 @@ export async function manage_credits(a: Bureau, _base_url: string, runtime: admi
 }
 
 /** 展示用户 Credits 汇总。 */
-async function show_users(a: Bureau, runtime: admin_tui_runtime): Promise<void> {
+async function show_users(a: FederationAdmin, runtime: admin_tui_runtime): Promise<void> {
   const items = await runtime.with_loading("Credits", () => a.credits.list_users({ limit: 30 }));
   await runtime.show_table({
     title: t({ zh: `${items.length} 个 Credits 用户`, en: `${items.length} Credits users` }),
@@ -55,7 +55,7 @@ async function show_users(a: Bureau, runtime: admin_tui_runtime): Promise<void> 
 }
 
 /** 展示限时 Cards。 */
-async function show_cards(a: Bureau, runtime: admin_tui_runtime): Promise<void> {
+async function show_cards(a: FederationAdmin, runtime: admin_tui_runtime): Promise<void> {
   const user_id = await runtime.text(t({ zh: "user_id（可选）", en: "user_id (optional)" }));
   const items = await runtime.with_loading("Ephemeral Cards", () => a.credits.cards.list_ephemeral({
     user_id: user_id || undefined,
@@ -71,7 +71,7 @@ async function show_cards(a: Bureau, runtime: admin_tui_runtime): Promise<void> 
 }
 
 /** 展示 Transactions。 */
-async function show_transactions(a: Bureau, runtime: admin_tui_runtime): Promise<void> {
+async function show_transactions(a: FederationAdmin, runtime: admin_tui_runtime): Promise<void> {
   const user_id = await runtime.text(t({ zh: "user_id（可选）", en: "user_id (optional)" }));
   const items = await runtime.with_loading("Transactions", () => a.credits.transactions.list({ user_id: user_id || undefined, limit: 30 }));
   await runtime.show_table({
@@ -83,7 +83,7 @@ async function show_transactions(a: Bureau, runtime: admin_tui_runtime): Promise
 }
 
 /** 展示 Card Entries。 */
-async function show_history(a: Bureau, runtime: admin_tui_runtime): Promise<void> {
+async function show_history(a: FederationAdmin, runtime: admin_tui_runtime): Promise<void> {
   const user_id = await runtime.text(t({ zh: "user_id（可选）", en: "user_id (optional)" }));
   const items = await runtime.with_loading("Credits History", () => a.credits.history.list({ user_id: user_id || undefined, limit: 30 }));
   await runtime.show_table({
@@ -95,7 +95,7 @@ async function show_history(a: Bureau, runtime: admin_tui_runtime): Promise<void
 }
 
 /** 给用户 Primary Card 墺加额度。 */
-async function topup_primary(a: Bureau, runtime: admin_tui_runtime): Promise<void> {
+async function topup_primary(a: FederationAdmin, runtime: admin_tui_runtime): Promise<void> {
   const user_id = await required_text(runtime, "user_id");
   if (!user_id) return;
   const credits = await required_credits(runtime);
@@ -114,7 +114,7 @@ async function topup_primary(a: Bureau, runtime: admin_tui_runtime): Promise<voi
 }
 
 /** 创建限时 Card 并写入初始额度。 */
-async function create_ephemeral_card(a: Bureau, runtime: admin_tui_runtime): Promise<void> {
+async function create_ephemeral_card(a: FederationAdmin, runtime: admin_tui_runtime): Promise<void> {
   const user_id = await required_text(runtime, "user_id");
   const name = await required_text(runtime, "name");
   const initial_credits = await required_credits(runtime);
@@ -127,7 +127,7 @@ async function create_ephemeral_card(a: Bureau, runtime: admin_tui_runtime): Pro
 }
 
 /** 自动选择 Cards 消费用户额度。 */
-async function charge_credits(a: Bureau, runtime: admin_tui_runtime): Promise<void> {
+async function charge_credits(a: FederationAdmin, runtime: admin_tui_runtime): Promise<void> {
   const user_id = await required_text(runtime, "user_id");
   const credits = await required_credits(runtime);
   const source = await required_text(runtime, "source");

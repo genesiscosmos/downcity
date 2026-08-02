@@ -18,7 +18,7 @@ export interface CityUserSession {
   /**
    * 当前 user token 绑定的 city id。
    */
-  city_id: string;
+  bureau_id: string;
 
   /**
    * City 用户 ID。
@@ -57,5 +57,5 @@ export interface CityLoginInput {
   /**
    * 登录后 session 使用的 city id。
    */
-  city_id: string;
+  bureau_id: string;
 }

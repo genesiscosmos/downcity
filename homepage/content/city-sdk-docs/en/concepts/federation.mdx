@@ -1,21 +1,24 @@
 ---
-title: Federation and City
-description: Separate the server-side runtime Federation from the client-side entry City so the two names stop blurring together.
+title: Federation, Bureau, and City
+description: Separate global services, product identity, product backends, and Agent terminals.
 ---
 
 In `@downcity/city` the server and the client are two different classes with two different names. The most common mistake is treating both of them as "City".
 
-- the server-side runtime is `Federation`
-- the client-side entry is `City`
+- global services and the trust root are the `Federation`
+- stable product identity and authorization domain are the `Bureau`
+- the Agent terminal client is `City`
 
 This page solves one thing: **so that when you read code, you immediately know which side you are writing.**
 
 ## One-line distinction
 
-- `Federation`: the shared backend runtime deployed on the server. It owns the model catalog, service/action routing, token verification, usage, and hooks. Many products (`city_id`) share the same `Federation`.
-- `City`: the client used by a product or a trusted backend to reach the `Federation`. It splits into `User City` and `Admin City` by `role`.
+- `Federation`: shared runtime, account source of truth, and trust root. It owns the Bureau registry and Organization relationships.
+- `Bureau`: stable product identity and authorization domain. Every machine credential is bound to one `bureau_id`.
+- `City`: an Agent terminal client connected to a configured Bureau domain. It is not registered in Federation.
+- `FederationAdmin`: the independent Root control-plane client; it belongs to no Bureau.
 
-In short: you deploy one `Federation`, then use `City` to connect to it.
+In short: Federation trusts Bureaus; City is only a terminal connected to one Bureau product domain.
 
 ## Server side: `Federation`
 
@@ -39,31 +42,28 @@ serve({ fetch: (request) => base.fetch(request), port: 3001 });
 - exposing the unified `/v1/*` routes
 - coordinating runtime env, hooks, usage, and the database
 
-## Client side: `City`
+## Control plane and terminal
 
-Both product clients and trusted backends use `City` to reach the `Federation`; the only difference is `role`:
+Trusted control planes and Agent terminals use separate clients:
 
 ```ts
-import { City } from "@downcity/city";
+import { City, FederationAdmin } from "@downcity/city";
 
-// Trusted backend: holds admin_secret_key, manages cities, issues user_token
-const admin = new City({
-  role: "admin",
-  federation_url: "https://base.example.com",
-  admin_secret_key: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+// Federation Root control plane: manages Bureaus and env, and issues User Tokens
+const admin = new FederationAdmin({
+  base_url: "https://base.example.com",
+  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
 });
 
-// Product frontend: only holds city_id + user_token, calls services
+// Product frontend: only holds user_token (which contains bureau_id), calls services
 const city = new City({
-  role: "user",
   federation_url: "https://base.example.com",
-  city_id,
   user_token,
 });
 ```
 
-- `Admin City`: runs in a trusted backend; creates cities, manages env, issues `user_token`.
-- `User City`: runs in a product client; only holds `city_id + user_token` and calls `ai.text()`, `ai.stream()`, `ai.image_create()` / `ai.image_result()`, and Service actions.
+- `FederationAdmin`: runs in a trusted backend; manages Bureau identities and env, and issues `user_token`.
+- `City`: runs in an Agent terminal, holds `user_token` (which contains `bureau_id`), and calls AI and Service actions.
 
 The client never receives provider keys, and `User City` never receives the `admin_secret_key`.
 
@@ -72,9 +72,9 @@ The client never receives provider keys, and `User City` never receives the `adm
 <div className="dc-doc-flow" aria-label="Boundary between Federation and City">
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
-      <strong>Client City</strong>
-      <span>`User City` in the product frontend, `Admin City` in a trusted backend.</span>
-      <code>{'new City({ role })'}</code>
+      <strong>Agent terminal City</strong>
+      <span>Connects to a configured Bureau product domain and owns no server identity.</span>
+      <code>{'new City({ federation_url })'}</code>
     </div>
   </div>
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
@@ -91,7 +91,7 @@ The client never receives provider keys, and `User City` never receives the `adm
 
 The CLI is split along the same boundary:
 
-- `downfed`: manages the `Federation` (create, deploy, City entities, service resources, env).
+- `downfed`: manages the `Federation`, Bureau identities, machine credentials, service resources, and env.
 - `downcity`: the local Agent host and management entry.
 
 ## What to read next

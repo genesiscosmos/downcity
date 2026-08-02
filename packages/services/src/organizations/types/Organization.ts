@@ -3,16 +3,19 @@
 /** Organization 生命周期状态。 */
 export type OrganizationState = "active" | "archived";
 
+/** Organization 的可用作用域类型。 */
+export type OrganizationScopeType = "federation" | "bureau";
+
 /** Federation 中的 Organization 记录。 */
 export interface OrganizationRecord extends Record<string, unknown> {
   /** Federation 生成的 Organization 稳定主键。 */
   organization_id: string;
-  /** Organization 所属 City。 */
-  city_id: string;
   /** 面向用户展示的 Organization 名称。 */
   name: string;
-  /** Organization 当前唯一 City Server 地址。 */
-  server_url: string;
+  /** Organization 在整个 Federation 可用，或只在一个 Bureau 中可用。 */
+  scope_type: OrganizationScopeType;
+  /** Bureau 作用域对应的 Bureau ID；Federation 作用域时为空字符串。 */
+  scope_bureau_id: string;
   /** Organization 当前生命周期状态。 */
   state: OrganizationState;
   /** 首次创建 Organization 的用户 ID。 */

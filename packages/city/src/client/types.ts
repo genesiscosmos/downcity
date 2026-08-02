@@ -1,8 +1,8 @@
 /**
  * City 用户客户端构造类型模块。
  *
- * City 只表达终端用户访问 Federation。已登录身份和 city_id 均来自 user_token。
- * City 也可以把同一个 user_token 携带到 Bureau 提供的可选独立服务。
+ * City 只表达 Agent 终端。登录前只连接 Federation；登录后由 Federation
+ * 验证 User Token 并解析当前 Bureau 与服务端入口。
  */
 
 import type { FetchLike } from "../pact/http.js";

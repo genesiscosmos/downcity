@@ -17,7 +17,6 @@ export const organization_database_schemas: ServiceDatabaseSchemas = {
 };
 
 export {
-  sqlite_organization_events,
   sqlite_organization_join_requests,
   sqlite_organization_memberships,
   sqlite_organization_owner_slots,
@@ -25,7 +24,6 @@ export {
 } from "./sqlite.js";
 
 export {
-  pg_organization_events,
   pg_organization_join_requests,
   pg_organization_memberships,
   pg_organization_owner_slots,

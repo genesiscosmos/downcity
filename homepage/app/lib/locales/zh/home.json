@@ -110,18 +110,12 @@
   },
   "productWorld": {
     "sectionLabel": "产品世界",
-    "title": "当 Agent 开始工作，世界便有了形状。",
-    "description": "角色获得能力，在持续工作中形成自己的地块；更多 Agent 与产品结构加入，City 随之扩张，并最终连接到 Federation。",
+    "title": "以 Agent 为中心的产品世界",
+    "description": "Agent 集成能力，连续地块生长为 City；相邻 City 在同一片蜂巢大陆上组成 Federation。",
     "scrollHint": "继续滚动",
-    "story": {
-      "awaken": "任务来到，一个角色被唤醒。",
-      "gather": "完成它所需要的一切，开始向这里汇聚。",
-      "settle": "工作留下痕迹，也划出第一块地。",
-      "expand": "新的角色陆续迁入，City 沿着协作生长。",
-      "connect": "远方的 City 逐一亮起，世界开始连接。"
-    },
     "labels": {
       "agent": "Agent",
+      "capabilities": "Capabilities",
       "city": "City",
       "federation": "Federation",
       "tool": "Tool",

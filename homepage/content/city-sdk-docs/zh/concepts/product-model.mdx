@@ -24,17 +24,17 @@ Downcity 最核心的心智不是“一个产品对应一个后端”，而是�
     <div className="dc-doc-node">
       <strong>产品 A</strong>
       <span>网页工具、内容产品、工作流小工具。</span>
-      <code>city_id = city_a</code>
+      <code>bureau_id = bureau_a</code>
     </div>
     <div className="dc-doc-node">
       <strong>产品 B</strong>
       <span>Chrome 扩展、桌面工具、移动端入口。</span>
-      <code>city_id = city_b</code>
+      <code>bureau_id = bureau_b</code>
     </div>
     <div className="dc-doc-node">
       <strong>产品 C</strong>
       <span>客户 Demo、内部工具、行业专题站。</span>
-      <code>city_id = city_c</code>
+      <code>bureau_id = bureau_c</code>
     </div>
   </div>
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
@@ -74,12 +74,12 @@ Downcity 最核心的心智不是“一个产品对应一个后端”，而是�
 
 把 AI 调用层收敛到 Federation 后，新产品通常只需要做两件事：
 
-1. 新建一个 `city_id`
+1. 通过 `FederationAdmin` 创建一个 Bureau
 2. 在产品侧接入 `User City`
 
-## `city_id` 在这个模型里代表什么
+## `bureau_id` 在这个模型里代表什么
 
-`city_id` 不是模型名，也不是租户系统的全部抽象。
+`bureau_id` 不是模型名，也不是租户系统的全部抽象。
 
 它是 runtime 看待“产品边界”的稳定主键，用来回答这些问题：
 
@@ -88,7 +88,7 @@ Downcity 最核心的心智不是“一个产品对应一个后端”，而是�
 - hooks 和 usage 应该按哪个产品维度记录
 - 一个用户在不同产品里的调用是否需要区分
 
-如果你在做多产品组合，`city_id` 是最稳定的边界。
+如果你在做多产品组合，`bureau_id` 是最稳定的边界。
 
 ## model 在产品层里的角色
 

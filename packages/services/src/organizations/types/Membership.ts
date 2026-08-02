@@ -30,8 +30,6 @@ export interface OrganizationMembershipRecord extends Record<string, unknown> {
 
 /** 用户当前拥有 active Organization 的额度槽位。 */
 export interface OrganizationOwnerSlotRecord extends Record<string, unknown> {
-  /** Organization 所属 City。 */
-  city_id: string;
   /** 当前 Owner 用户 ID。 */
   user_id: string;
   /** 从 1 开始的稳定额度槽位编号。 */

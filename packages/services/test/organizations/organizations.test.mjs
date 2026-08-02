@@ -9,40 +9,35 @@ import { Federation } from "@downcity/city"
 import { createSqliteDb } from "../usage/sqlite-db.mjs"
 import { OrganizationsService } from "../../bin/index.js"
 
-test("organizations service manages membership, tokens, revocation and owner quota", async () => {
+test("organizations service manages membership, governance and federation owner quota", async () => {
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-organizations-"))
-  const deliveries = []
-  let delivery_available = false
   try {
     const federation = new Federation({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
-    federation.use(new OrganizationsService({
-      max_organizations_per_user: 1,
-      fetch: async (url, init) => {
-        deliveries.push({ url: String(url), body: JSON.parse(String(init.body)) })
-        return new Response(null, { status: delivery_available ? 204 : 503 })
-      },
-    }))
+    federation.use(new OrganizationsService({ max_organizations_per_user: 1 }))
     await federation.health()
     const admin_secret = await read_env_value(federation, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
-    const city = await json_request(federation, admin_request(admin_secret, "/v1/cities/create", {
+    const bureau = await json_request(federation, admin_request(admin_secret, "/v1/bureaus/create", {
       name: "Vibecape",
+      server_url: "https://vibecape.example.com",
     }))
-    const owner_token = await issue_user_token(federation, admin_secret, city.city_id, "owner_1")
-    const member_token = await issue_user_token(federation, admin_secret, city.city_id, "member_1")
-    const other_token = await issue_user_token(federation, admin_secret, city.city_id, "other_1")
+    const owner_token = await issue_user_token(federation, admin_secret, bureau.bureau_id, "owner_1")
+    const member_token = await issue_user_token(federation, admin_secret, bureau.bureau_id, "member_1")
+    const other_token = await issue_user_token(federation, admin_secret, bureau.bureau_id, "other_1")
 
     const created = await json_request(federation, user_request(owner_token, "/v1/organizations/create", {
       name: "Research Team",
-      server_url: "https://spaces.example.com/",
+      scope_type: "bureau",
     }))
     assert.match(created.organization.organization_id, /^org_[0-9A-HJKMNP-TV-Z]{26}$/)
     assert.match(created.membership.membership_id, /^mem_[0-9A-HJKMNP-TV-Z]{26}$/)
     assert.equal(created.membership.role, "owner")
-    assert.equal(created.organization.server_url, "https://spaces.example.com")
+    assert.equal(created.organization.scope_type, "bureau")
+    assert.equal(created.organization.scope_bureau_id, bureau.bureau_id)
+    assert.equal("server_url" in created.organization, false)
 
     const quota_response = await federation.fetch(user_request(owner_token, "/v1/organizations/create", {
       name: "Second",
-      server_url: "https://second.example.com",
+      scope_type: "federation",
     }))
     assert.equal(quota_response.status, 409)
 
@@ -64,30 +59,19 @@ test("organizations service manages membership, tokens, revocation and owner quo
     const first_membership_id = approved.membership.membership_id
     assert.equal(approved.membership.role, "member")
 
-    const issued = await json_request(federation, user_request(member_token, "/v1/organizations/token/create", {
-      organization_id,
-    }))
-    assert.match(issued.organization_token, /^ot_/)
-    const organization_claims = decode_jwt(issued.organization_token.slice(3))
-    assert.equal(organization_claims.aud, "https://spaces.example.com")
-    assert.equal(organization_claims.organization_id, organization_id)
-    assert.equal(organization_claims.membership_id, first_membership_id)
-    assert.equal(organization_claims.exp - organization_claims.iat, 7 * 24 * 60 * 60)
-
     const removed = await json_request(federation, user_request(owner_token, "/v1/organizations/members/remove", {
       organization_id,
       membership_id: first_membership_id,
     }))
     assert.equal(removed.state, "removed")
-    assert.equal(deliveries.length, 1)
-    const removal_event = decode_jwt(deliveries[0].body.event_token.slice(3))
-    assert.equal(removal_event.event_type, "organization.membership.removed")
-    assert.equal(removal_event.membership_id, first_membership_id)
 
-    const removed_token_response = await federation.fetch(user_request(member_token, "/v1/organizations/token/create", {
-      organization_id,
-    }))
-    assert.equal(removed_token_response.status, 403)
+    const removed_membership_response = await federation.fetch(user_request(
+      member_token,
+      `/v1/organizations/membership/get?organization_id=${organization_id}`,
+      undefined,
+      "GET",
+    ))
+    assert.equal(removed_membership_response.status, 403)
 
     const second_pending = await json_request(federation, user_request(member_token, "/v1/organizations/join-requests/create", {
       organization_id,
@@ -111,19 +95,12 @@ test("organizations service manages membership, tokens, revocation and owner quo
       membership_id: second_approved.membership.membership_id,
       role: "admin",
     }))
-    const admin_server_update = await federation.fetch(user_request(member_token, "/v1/organizations/server/update", {
-      organization_id,
-      server_url: "https://denied.example.com",
-    }))
-    assert.equal(admin_server_update.status, 403)
-
-    delivery_available = true
-    const updated_server = await json_request(federation, user_request(owner_token, "/v1/organizations/server/update", {
-      organization_id,
-      server_url: "https://new-spaces.example.com",
-    }))
-    assert.equal(updated_server.server_url, "https://new-spaces.example.com")
-    assert.ok(deliveries.some((item) => item.url === "https://spaces.example.com/v1/downcity/organization-events"))
+    for (const action of ["server/update", "token/create", "events/deliver"]) {
+      const deleted_action = await federation.fetch(user_request(owner_token, `/v1/organizations/${action}`, {
+        organization_id,
+      }))
+      assert.equal(deleted_action.status, 404)
+    }
 
     const transferred = await json_request(federation, user_request(owner_token, "/v1/organizations/owner/transfer", {
       organization_id,
@@ -136,20 +113,29 @@ test("organizations service manages membership, tokens, revocation and owner quo
       organization_id,
     }))
     assert.equal(archived.state, "archived")
-    const archived_token_response = await federation.fetch(user_request(member_token, "/v1/organizations/token/create", {
+    const archived_update_response = await federation.fetch(user_request(member_token, "/v1/organizations/update", {
       organization_id,
+      name: "Archived Team",
     }))
-    assert.equal(archived_token_response.status, 410)
+    assert.equal(archived_update_response.status, 410)
 
     const owner_can_create_again = await json_request(federation, user_request(member_token, "/v1/organizations/create", {
       name: "Next Organization",
-      server_url: "https://next.example.com",
+      scope_type: "federation",
     }))
     assert.equal(owner_can_create_again.membership.role, "owner")
+    assert.equal(owner_can_create_again.organization.scope_type, "federation")
+    assert.equal(owner_can_create_again.organization.scope_bureau_id, "")
 
     const my = await json_request(federation, user_request(member_token, "/v1/organizations/my", undefined, "GET"))
-    assert.equal(my.items.length, 2)
-    assert.ok(my.items.some((item) => item.organization_id === organization_id && item.state === "archived"))
+    assert.equal(my.items.length, 1)
+    assert.ok(my.items.every((item) => item.state === "active"))
+    const with_archived = await json_request(
+      federation,
+      user_request(member_token, "/v1/organizations/my?include_archived=true", undefined, "GET"),
+    )
+    assert.equal(with_archived.items.length, 2)
+    assert.ok(with_archived.items.some((item) => item.organization_id === organization_id && item.state === "archived"))
   } finally {
     await fs.rm(temp_dir, { recursive: true, force: true })
   }
@@ -162,19 +148,20 @@ test("concurrent organization creation cannot exceed the owner quota", async () 
     federation.use(new OrganizationsService({ max_organizations_per_user: 1 }))
     await federation.health()
     const admin_secret = await read_env_value(federation, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
-    const city = await json_request(federation, admin_request(admin_secret, "/v1/cities/create", {
-      name: "Concurrent City",
+    const bureau = await json_request(federation, admin_request(admin_secret, "/v1/bureaus/create", {
+      name: "Concurrent Bureau",
+      server_url: "https://concurrent.example.com",
     }))
-    const owner_token = await issue_user_token(federation, admin_secret, city.city_id, "owner_concurrent")
+    const owner_token = await issue_user_token(federation, admin_secret, bureau.bureau_id, "owner_concurrent")
 
     const responses = await Promise.all([
       federation.fetch(user_request(owner_token, "/v1/organizations/create", {
         name: "First",
-        server_url: "https://first.example.com",
+        scope_type: "bureau",
       })),
       federation.fetch(user_request(owner_token, "/v1/organizations/create", {
         name: "Second",
-        server_url: "https://second.example.com",
+        scope_type: "federation",
       })),
     ])
     assert.deepEqual(responses.map((response) => response.status).sort(), [200, 409])
@@ -184,6 +171,65 @@ test("concurrent organization creation cannot exceed the owner quota", async () 
       user_request(owner_token, "/v1/organizations/my", undefined, "GET"),
     )
     assert.equal(my.items.filter((item) => item.state === "active").length, 1)
+  } finally {
+    await fs.rm(temp_dir, { recursive: true, force: true })
+  }
+})
+
+test("federation organizations cross bureau boundaries while bureau organizations stay isolated", async () => {
+  const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-organizations-scope-"))
+  try {
+    const federation = new Federation({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
+    federation.use(new OrganizationsService({ max_organizations_per_user: 2 }))
+    await federation.health()
+    const admin_secret = await read_env_value(federation, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const first_bureau = await json_request(federation, admin_request(admin_secret, "/v1/bureaus/create", {
+      name: "First Bureau",
+      server_url: "https://first.example.com",
+    }))
+    const second_bureau = await json_request(federation, admin_request(admin_secret, "/v1/bureaus/create", {
+      name: "Second Bureau",
+      server_url: "https://second.example.com",
+    }))
+    const first_token = await issue_user_token(federation, admin_secret, first_bureau.bureau_id, "shared_owner")
+    const second_token = await issue_user_token(federation, admin_secret, second_bureau.bureau_id, "shared_owner")
+
+    const global = await json_request(federation, user_request(first_token, "/v1/organizations/create", {
+      name: "Global Team",
+      scope_type: "federation",
+    }))
+    const local = await json_request(federation, user_request(first_token, "/v1/organizations/create", {
+      name: "Local Team",
+      scope_type: "bureau",
+    }))
+
+    const cross_bureau_quota = await federation.fetch(user_request(second_token, "/v1/organizations/create", {
+      name: "Second Bureau Team",
+      scope_type: "bureau",
+    }))
+    assert.equal(cross_bureau_quota.status, 409)
+
+    const global_from_second_bureau = await federation.fetch(user_request(
+      second_token,
+      `/v1/organizations/get?organization_id=${global.organization.organization_id}`,
+      undefined,
+      "GET",
+    ))
+    assert.equal(global_from_second_bureau.status, 200)
+
+    const local_from_second_bureau = await federation.fetch(user_request(
+      second_token,
+      `/v1/organizations/get?organization_id=${local.organization.organization_id}`,
+      undefined,
+      "GET",
+    ))
+    assert.equal(local_from_second_bureau.status, 403)
+
+    const second_bureau_my = await json_request(
+      federation,
+      user_request(second_token, "/v1/organizations/my", undefined, "GET"),
+    )
+    assert.deepEqual(second_bureau_my.items.map((item) => item.organization_id), [global.organization.organization_id])
   } finally {
     await fs.rm(temp_dir, { recursive: true, force: true })
   }
@@ -212,17 +258,13 @@ async function json_request(federation, request) {
   return body
 }
 
-async function issue_user_token(federation, secret, city_id, user_id) {
-  const body = await json_request(federation, admin_request(secret, "/v1/cities/tokens/apply", { city_id, user_id }))
+async function issue_user_token(federation, secret, bureau_id, user_id) {
+  void secret
+  const body = await (await federation.getAuthenticator()).createToken({ bureau_id, user_id })
   return body.user_token
 }
 
 async function read_env_value(federation, key) {
   const table = await federation.table("env")
   return (await table.select({ key }))[0]?.value ?? ""
-}
-
-function decode_jwt(jwt) {
-  const payload = jwt.split(".")[1]
-  return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"))
 }

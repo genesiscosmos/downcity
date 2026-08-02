@@ -11,13 +11,13 @@ description: 调试 City、client、token 和 env 的常见路径。
 - token 是否过期。
 - City 是否配置了 `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY`。
 - token 是否由当前 City 签发。
-- `city_id` 是否和 token 里的 city 一致。
+- `bureau_id` 是否和 token 里的 city 一致。
 
 ## client 返回 403
 
 检查：
 
-- 请求体里的 `city_id` 是否和当前 `user_token` 所属 city 一致。
+- 请求体里的 `bureau_id` 是否和当前 `user_token` 所属 city 一致。
 - token 所属 city 是否已经被暂停。
 - 管理端签发 token 时，目标 city 是否是 `active`。
 

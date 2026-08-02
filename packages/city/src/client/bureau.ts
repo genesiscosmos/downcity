@@ -1,9 +1,8 @@
 /**
- * Bureau 管理与独立服务节点客户端。
+ * Bureau 独立服务节点客户端。
  *
- * Bureau 使用 Bureau Token 管理 Federation，并使用 Federation JWKS 在本地
- * 验证独立服务收到的 user_token。Bureau 不绑定 City，一个实例可以服务同一
- * Federation 下的多个 City。
+ * Bureau 使用绑定自身的机器凭证访问 Federation，并使用 Federation JWKS 在本地
+ * 验证目标 audience 与当前 Bureau 一致的 User Token。
  */
 
 import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
@@ -11,11 +10,9 @@ import { httpError } from "../utils/helpers.js";
 import type {
   BureauFetch,
   BureauIdentity,
+  BureauMachineIdentity,
   BureauOptions,
 } from "../types/Bureau.js";
-import { AdminPactAccess } from "../pact/admin/index.js";
-import type { ServiceClient } from "../pact/invoker/invoker.js";
-import type { AdminModelRecord, AdminServiceSummary } from "../pact/admin/types.js";
 import type { UserProfile } from "../types/User.js";
 import type {
   FederationDiscovery,
@@ -24,6 +21,7 @@ import type {
 } from "../federation/auth/types.js";
 import { USER_TOKEN_ALGORITHM } from "../federation/auth/federation-key-store.js";
 import { normalize_user_token, read_user_token_payload } from "../federation/auth/user-token-authority.js";
+import { bureau_user_token_audience } from "../federation/auth/audience.js";
 
 const DEFAULT_CACHE_TTL = 5 * 60 * 1000;
 
@@ -69,69 +67,60 @@ export class Bureau {
   private readonly federation_url: string;
   private readonly fetcher: BureauFetch;
   private readonly cache_ttl: number;
-  private readonly admin_access: AdminPactAccess;
+  private readonly bureau_token: string;
   private cache?: BureauCache;
   private refresh_promise?: Promise<BureauCache>;
+  private machine_identity_promise?: Promise<BureauMachineIdentity>;
 
   constructor(options: BureauOptions) {
     if (!options || typeof options !== "object") {
       throw new TypeError("Bureau options are required");
     }
     this.federation_url = normalize_federation_url(options.federation_url);
-    const bureau_token = read_required_string(options.bureau_token, "bureau_token");
+    this.bureau_token = read_required_string(options.bureau_token, "bureau_token");
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.cache_ttl = read_cache_ttl(options.jwks_cache_ttl);
-    this.admin_access = new AdminPactAccess({
-      base_url: this.federation_url,
-      credential: bureau_token,
-      fetch: options.fetch,
+  }
+
+  /** 使用机器凭证读取 Federation 解析出的当前 Bureau 身份。 */
+  async me(): Promise<BureauMachineIdentity> {
+    if (!this.machine_identity_promise) {
+      this.machine_identity_promise = this.resolve_machine_identity().catch((error) => {
+        this.machine_identity_promise = undefined;
+        throw error;
+      });
+    }
+    return await this.machine_identity_promise;
+  }
+
+  /** 在线验证机器凭证并读取它绑定的完整 Bureau 注册记录。 */
+  private async resolve_machine_identity(): Promise<BureauMachineIdentity> {
+    const response = await this.fetcher(`${this.federation_url}/v1/bureaus/me`, {
+      method: "GET",
+      headers: { authorization: `Bearer ${this.bureau_token}` },
     });
-  }
-
-  /** Federation Credits 管理入口。 */
-  get credits(): AdminPactAccess["credits"] {
-    return this.admin_access.credits;
-  }
-
-  /** Federation City 管理入口。 */
-  get cities(): AdminPactAccess["cities"] {
-    return this.admin_access.cities;
-  }
-
-  /** Federation Bureau Token 注册表管理入口。 */
-  get bureaus(): AdminPactAccess["bureaus"] {
-    return this.admin_access.bureaus;
-  }
-
-  /** Federation 环境变量管理入口。 */
-  get env(): AdminPactAccess["env"] {
-    return this.admin_access.env;
-  }
-
-  /** 获取 Federation 管理身份下的 Service 调用器。 */
-  service(name: string): ServiceClient {
-    return this.admin_access.service(name);
-  }
-
-  /** 列出 Federation 暴露的 Service。 */
-  listServices(): Promise<AdminServiceSummary[]> {
-    return this.admin_access.listServices();
-  }
-
-  /** 列出 Federation 模型目录及管理状态。 */
-  listModels(): Promise<AdminModelRecord[]> {
-    return this.admin_access.listModels();
-  }
-
-  /** 读取 Federation 聚合说明文档。 */
-  instruction(): Promise<string> {
-    return this.admin_access.instruction();
+    if (!response.ok) throw httpError(response.status, "Federation Bureau identity unavailable");
+    const body = await response.json() as {
+      bureau?: Partial<BureauMachineIdentity["bureau"]>;
+      token?: { token_id?: string };
+    };
+    if (!body.bureau?.bureau_id || !body.bureau.name || !body.bureau.server_url
+      || !body.bureau.state || !body.bureau.created_at || !body.bureau.updated_at
+      || body.bureau.archived_at === undefined || !body.token?.token_id) {
+      throw httpError(503, "Federation returned an invalid Bureau machine identity");
+    }
+    return {
+      bureau: body.bureau as BureauMachineIdentity["bureau"],
+      token: { token_id: body.token.token_id },
+    };
   }
 
   /** 从 HTTP Request 或 user_token 中本地识别 Federation 用户。 */
   async identify(input: Request | string): Promise<BureauIdentity> {
     const user_token = typeof input === "string" ? read_token_string(input) : read_request_token(input);
     const normalized_token = normalize_user_token(user_token);
+    const machine_identity = await this.me();
+    const bureau_id = machine_identity.bureau.bureau_id;
     let cache = await this.get_cache(false);
     let key = find_jwk(cache.jwks, normalized_token);
     if (!key) {
@@ -144,13 +133,16 @@ export class Bureau {
       const public_key = await importJWK(key, USER_TOKEN_ALGORITHM);
       const result = await jwtVerify(normalized_token, public_key, {
         algorithms: [USER_TOKEN_ALGORITHM],
-        audience: cache.discovery.user_token_audience,
+        audience: bureau_user_token_audience(bureau_id),
         issuer: cache.discovery.issuer,
       });
       const payload = read_user_token_payload(result.payload);
+      if (payload.bureau_id !== bureau_id) {
+        throw httpError(401, "User token belongs to another Bureau");
+      }
       return {
         user_id: payload.user_id,
-        city_id: payload.city_id,
+        bureau_id: payload.bureau_id,
         metadata: payload.metadata ?? {},
         token_id: payload.jti,
         expires_at: payload.exp,
@@ -234,7 +226,10 @@ function normalize_federation_url(value: unknown): string {
 function validate_discovery(discovery: FederationDiscovery, federation_url: string): void {
   if (!discovery || typeof discovery !== "object") throw httpError(503, "Federation discovery unavailable");
   read_required_string(discovery.issuer, "Federation issuer");
-  if (discovery.user_token_audience !== "downcity:user") throw httpError(503, "Invalid Federation user token audience");
+  if (discovery.federation_user_token_audience !== "downcity:federation"
+    || discovery.bureau_user_token_audience_prefix !== "urn:downcity:bureau:") {
+    throw httpError(503, "Invalid Federation user token audience");
+  }
   const expected = new URL(`${federation_url}/.well-known/jwks.json`);
   const actual = new URL(discovery.jwks_uri);
   if (actual.origin !== expected.origin || actual.pathname !== expected.pathname) {

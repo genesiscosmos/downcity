@@ -20,7 +20,6 @@ export async function adminAuth(server: ServerProfile): Promise<AdminSession | u
 
   return {
     base_url: server.base_url,
-    city_id: server.base_url,
     admin_secret_key: adminSecretKey,
   };
 }

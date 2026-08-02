@@ -9,7 +9,7 @@ import type { CityTableApi } from "../store/table-api.js";
 import type { Database } from "../database/Database.js";
 import { DatabaseSchemaError } from "../types/database/DatabaseError.js";
 import { EnvStore } from "../service/env/env-store.js";
-import { CityStore } from "../service/cities/city-store.js";
+import { BureauStore } from "../service/bureaus/bureau-store.js";
 import { Authenticator } from "./auth/authenticator.js";
 import { FederationKeyStore } from "./auth/federation-key-store.js";
 import { CREATE_FEDERATION_ACTIVE_AUTH_KEY_INDEX_SQL } from "./auth/key-schema.js";
@@ -24,10 +24,11 @@ import {
 } from "../service/installable-service.js";
 import type { CityUserSchemaInput } from "../store/types.js";
 import type { Runtime } from "./runtime.js";
-import type { CityRecord } from "../service/cities/types.js";
+import type { BureauRecord } from "../types/Bureau.js";
 import type { EnvEntry } from "../service/env/types.js";
 import type { FederationAuthKeyRecord } from "./auth/types.js";
 import type { BureauTokenRecord } from "../types/Bureau.js";
+import { assert_federation_identity_schema } from "./schema-compatibility.js";
 
 /**
  * Federation 初始化后的内部状态。
@@ -37,8 +38,8 @@ export interface FederationInitState {
   database: Database;
   /** 所有表 API 映射 */
   table_map: Map<string, CityTableApi>;
-  /** city store */
-  city_store: CityStore;
+  /** Bureau 身份 Store。 */
+  bureau_store: BureauStore;
   /** 鉴权器 */
   authenticator: Authenticator;
 }
@@ -51,18 +52,20 @@ export async function initialize_federation(params: {
   runtime: Runtime;
   /** 已注册服务 */
   services: Service[];
-  /** City ready 回调 */
-  require_ready: () => Promise<{ city: { get(id: string): Promise<{ city_id: string; status: string } | undefined> } }>;
+  /** Federation ready 后读取 Bureau Store 的回调。 */
+  require_ready: () => Promise<{ bureau: { get(id: string): Promise<BureauRecord | undefined> } }>;
   /** Federation queue facade */
   queue?: unknown;
 }): Promise<FederationInitState> {
   const { runtime, services, require_ready } = params;
   const { database, env, builtinTables } = runtime;
 
+  await assert_federation_identity_schema(database);
+
   const service_databases = resolve_service_databases(services, database.schema_id);
   const user_schema = collect_service_schemas(services);
   const table_map = new Map<string, CityTableApi>();
-  table_map.set("cities", database.table(builtinTables.cities));
+  table_map.set("bureaus", database.table(builtinTables.bureaus));
   table_map.set("env", database.table(builtinTables.env));
   table_map.set(
     "federation_auth_keys",
@@ -82,16 +85,15 @@ export async function initialize_federation(params: {
   for (const table of table_map.values()) {
     await database.ensure_table(table.schema);
   }
-  await ensure_bureau_token_purpose_column(database);
 
   const env_table = table_map.get("env");
   if (!env_table) throw new Error("Federation env table is not initialized");
   const env_store = new EnvStore(env_table as CityTableApi<EnvEntry>);
   await env.attachStore(env_store);
 
-  const cities_table = table_map.get("cities");
-  if (!cities_table) throw new Error("City cities table is not initialized");
-  const city_store = new CityStore(cities_table as CityTableApi<CityRecord>);
+  const bureaus_table = table_map.get("bureaus");
+  if (!bureaus_table) throw new Error("Federation Bureau table is not initialized");
+  const bureau_store = new BureauStore(bureaus_table as CityTableApi<BureauRecord>);
 
   const configured_base_url = env.get("DOWNCITY_FEDERATION_BASE_URL")
     ?? env.get("BETTER_AUTH_URL")
@@ -128,7 +130,7 @@ export async function initialize_federation(params: {
   for (const service of services) {
     service._authenticator = authenticator;
     service._env = env;
-    service._cityStore = city_store;
+    service._bureauStore = bureau_store;
     service._bureauTokenStore = bureau_token_store;
     service._baseURL = configured_base_url ?? runtime.baseURL;
     service._queue = params.queue as never;
@@ -142,7 +144,7 @@ export async function initialize_federation(params: {
   return {
     database,
     table_map,
-    city_store,
+    bureau_store,
     authenticator,
   };
 }
@@ -168,35 +170,6 @@ function resolve_service_databases(
     resolved.push(schema);
   }
   return resolved;
-}
-
-/**
- * 为旧 Federation 数据库补充 Bureau Token 用途字段。
- *
- * 关键点（中文）
- * - PostgreSQL 原生支持 `IF NOT EXISTS`，可直接幂等执行。
- * - SQLite / D1 不支持该列级语法，因此只忽略明确的重复列错误。
- * - 空字符串只用于标识升级前的旧记录；新登记入口仍要求用途非空。
- */
-async function ensure_bureau_token_purpose_column(
-  database: Database,
-): Promise<void> {
-  if (database.schema_id === "postgresql") {
-    await database.execute_ddl(
-      'ALTER TABLE "federation_bureau_tokens" ADD COLUMN IF NOT EXISTS "purpose" TEXT NOT NULL DEFAULT \'\'',
-    );
-    return;
-  }
-
-  try {
-    await database.execute_ddl(
-      'ALTER TABLE "federation_bureau_tokens" ADD COLUMN "purpose" TEXT NOT NULL DEFAULT \'\'',
-    );
-  } catch (error) {
-    if (!/duplicate column|already exists/iu.test(String(error))) {
-      throw error;
-    }
-  }
 }
 
 /**

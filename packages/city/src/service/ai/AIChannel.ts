@@ -206,7 +206,7 @@ export abstract class AIChannel {
       model,
       env: (key) => ctx.env(key),
       ...(ctx.user?.user_id ? { user_id: ctx.user.user_id } : {}),
-      ...(ctx.city?.city_id ? { city_id: ctx.city.city_id } : {}),
+      ...(ctx.bureau?.bureau_id ? { bureau_id: ctx.bureau.bureau_id } : {}),
       ...(image_job && typeof image_job === "object"
         ? { image_job: image_job as AIChannelActionInput["image_job"] }
         : {}),

@@ -5,15 +5,15 @@ description: "guest User City、accounts 服务、自有后端、user_token 和�
 
 City 的登录问题，最终都落到一个目标：
 
-> 让产品前端拿到 `city_id + user_token`，然后进入正常 `User City` 调用。
+> 让产品前端拿到 `user_token`（其中包含 `bureau_id`），然后进入正常 `User City` 调用。
 
 ## 方式一：你的后端做登录
 
 ```txt
 前端提交登录信息
   -> 你的后端完成账号校验
-  -> 后端用 Admin City 申请 user_token
-  -> 返回 city_id + user_token
+  -> 后端用 FederationAdmin 申请 user_token
+  -> 返回 user_token (which contains bureau_id)
   -> 前端创建正常 User City
 ```
 
@@ -43,7 +43,6 @@ City 的登录问题，最终都落到一个目标：
 
 ```ts
 const guest = new City({
-  role: "user",
   federation_url: "https://base.example.com",
 });
 ```
@@ -60,9 +59,7 @@ const guest = new City({
 
 ```ts
 const user = new City({
-  role: "user",
   federation_url: "https://base.example.com",
-  city_id: "city_xxx",
   user_token: session.user_token,
 });
 ```

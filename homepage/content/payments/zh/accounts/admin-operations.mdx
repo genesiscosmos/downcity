@@ -1,6 +1,6 @@
 ---
 title: 管理侧操作
-description: "用 Admin City 读取 users、sessions 等管理侧数据时，AccountsService() 在可信环境里如何配合。"
+description: "用 FederationAdmin 读取 users、sessions 等管理侧数据时，AccountsService() 在可信环境里如何配合。"
 ---
 
 accounts service 不只给前端提供注册登录入口，也会暴露管理侧 service。
@@ -20,7 +20,7 @@ const sessions = await admin.service("accounts").get("sessions");
 - 一组管理侧读取或维护入口
 - 一套底层用户 / session 数据事实
 
-## 为什么这和 `Admin City` 有关系
+## 为什么这和 `FederationAdmin` 有关系
 
 因为这类动作不该在浏览器里做。
 

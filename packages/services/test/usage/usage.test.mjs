@@ -29,13 +29,13 @@ test("usageService records successful service calls", async () => {
     const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
 
     const city = await (await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/cities/create",
-      body: { name: "Demo" },
+      path: "/v1/bureaus/create",
+      body: { name: "Demo", server_url: "https://bureau.example.com" },
     }))).json()
-    const tokenBody = await (await base.fetch(adminRequest(adminSecret, {
-      path: "/v1/cities/tokens/apply",
-      body: { city_id: city.city_id, user_id: "user_1" },
-    }))).json()
+    const tokenBody = await (await base.getAuthenticator()).createToken({
+      bureau_id: city.bureau_id,
+      user_id: "user_1",
+    })
 
     const invokeResponse = await base.fetch(new Request("http://localhost/v1/ai/text", {
       method: "POST",
@@ -65,7 +65,7 @@ test("usageService records successful service calls", async () => {
     assert.deepEqual(await summaryResponse.json(), {
       items: [
         {
-          city_id: city.city_id,
+          bureau_id: city.bureau_id,
           service: "ai",
           status: "success",
           count: 1,

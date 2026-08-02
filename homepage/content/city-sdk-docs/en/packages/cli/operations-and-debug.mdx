@@ -1,9 +1,9 @@
 ---
 title: Operations and Debugging
-description: "The boundary between fed, city, Admin City, and direct database inspection, and when the CLI is the better tool."
+description: "The boundary between fed, city, FederationAdmin, and direct database inspection, and when the CLI is the better tool."
 ---
 
-The CLI and `Admin City` can both help you debug Downcity, but they fit different work: `fed/downfed` manages Federation, `city/downcity` manages local Agents and local Federation connections, and `Admin City` is for trusted programmatic management.
+The CLI and `FederationAdmin` can both help you debug Downcity, but they fit different work: `fed/downfed` manages Federation, `city/downcity` manages local Agents and local Federation connections, and `FederationAdmin` is for trusted programmatic management.
 
 ## The simplest rule first
 
@@ -17,9 +17,9 @@ If your thought is:
 
 - "this action should live in the system long term"
 
-move toward `Admin City` or a trusted script.
+move toward `FederationAdmin` or a trusted script.
 
-## CLI, Admin City, and direct DB inspection each fit different work
+## CLI, FederationAdmin, and direct DB inspection each fit different work
 
 ### Better fits for the CLI
 
@@ -28,7 +28,7 @@ move toward `Admin City` or a trusted script.
 - inspecting models, schema, and rows
 - one-off debugging without writing code first
 
-### Better fits for `Admin City`
+### Better fits for `FederationAdmin`
 
 - backend-owned actions
 - automated token issuance
@@ -96,11 +96,11 @@ Check these facts first:
 
 If you operate many products, services, or model configurations, it remains a frequent operations entry.
 
-### `Admin City` is not just a more advanced CLI
+### `FederationAdmin` is not just a more advanced CLI
 
 They are different modes:
 
-- `Admin City`: trusted programmatic management
+- `FederationAdmin`: trusted programmatic management
 - CLI: human terminal inspection
 
 ### Direct SQL should not always be your first instinct

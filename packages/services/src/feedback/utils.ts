@@ -113,7 +113,7 @@ export function randomFeedbackId(): string {
 export function parseFeedbackMessage(row: FeedbackMessage): FeedbackMessage {
   return {
     feedback_id: String(row.feedback_id),
-    city_id: String(row.city_id),
+    bureau_id: String(row.bureau_id),
     user_id: String(row.user_id),
     message: String(row.message),
     contact: String(row.contact ?? ""),

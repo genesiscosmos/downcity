@@ -7,7 +7,7 @@
  * - admin_secret_key 是低频管理凭证，只有进入 admin 工作区时才要求配置。
  */
 
-import { City, Bureau } from "@downcity/city";
+import { FederationAdmin } from "@downcity/city";
 import { isCancel, password, select, text } from "@/federation/tui/Prompts.js";
 import {
   addServer,
@@ -313,9 +313,9 @@ export async function prompt_remove_federation_server(base_url?: string): Promis
 
 async function verify_federation_admin_access(server: ServerProfile): Promise<boolean> {
   try {
-    const admin = new Bureau({
-      federation_url: server.base_url,
-      bureau_token: server.admin_secret_key,
+    const admin = new FederationAdmin({
+      base_url: server.base_url,
+      credential: server.admin_secret_key!,
     });
     await admin.listServices();
     return true;
@@ -326,11 +326,8 @@ async function verify_federation_admin_access(server: ServerProfile): Promise<bo
 
 async function verify_federation_public_access(server: ServerProfile): Promise<boolean> {
   try {
-    const user = new City({
-      federation_url: server.base_url,
-    });
-    await user.listServices();
-    return true;
+    const response = await fetch(`${server.base_url.replace(/\/+$/u, "")}/v1/services`);
+    return response.ok;
   } catch {
     return false;
   }

@@ -7,7 +7,7 @@
  * - 运行时模型通过 City 自己保存的 User City session 构造。
  */
 
-import { Bureau } from "@downcity/city";
+import { FederationAdmin } from "@downcity/city";
 import type { AgentModel } from "@downcity/agent";
 import type { CityModelDescriptor } from "@downcity/type";
 import { CityUserManager } from "@/city/shared/CityUserManager.js";
@@ -52,9 +52,9 @@ export async function listCityAiServiceModelsForAdmin(
       "City admin_secret_key is required to list models. Set DOWNCITY_CITY_ADMIN_SECRET_KEY or configure admin access with `city`.",
     );
   }
-  const admin = new Bureau({
-    federation_url: user.federation_url,
-    bureau_token: admin_secret_key,
+  const admin = new FederationAdmin({
+    base_url: user.federation_url,
+    credential: admin_secret_key,
   });
   return await admin.listModels();
 }

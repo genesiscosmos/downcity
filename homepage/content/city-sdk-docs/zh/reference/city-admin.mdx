@@ -1,9 +1,9 @@
 ---
-title: Admin City
-description: 可信环境如何管理 city、签发 user_token，并维护 Runtime env。
+title: FederationAdmin
+description: 可信环境如何管理 Bureau、签发 user_token，并维护 Federation env。
 ---
 
-`Admin City` 只应该运行在可信环境里。
+`FederationAdmin` 只应该运行在可信环境里。
 
 典型场景：
 
@@ -16,35 +16,33 @@ description: 可信环境如何管理 city、签发 user_token，并维护 Runti
 
 ## 它在整条链路里负责什么
 
-把 `Admin City` 看成“可信侧和 City 的管理桥”最准确。
+把 `FederationAdmin` 看成“可信侧和 City 的管理桥”最准确。
 
 它最常负责三件事：
 
-- 管 `city`
+- 管理 Bureau 产品身份与机器凭证
 - 签 `user_token`
 - 维护 runtime env
 - 执行可信侧 Credits Card 与 Transaction 管理动作
 
-如果 `User City` 负责“用户态怎么调用 City”，那 `Admin City` 负责“可信侧怎么把这个调用环境准备好”。
+如果 `User City` 负责“用户态怎么调用 City”，那 `FederationAdmin` 负责“可信侧怎么把这个调用环境准备好”。
 
 ## 最小示例
 
 ```ts
-import { City } from "@downcity/city";
+import { FederationAdmin } from "@downcity/city";
 
-const admin = new City({
-  role: "admin",
-  federation_url: "https://base.example.com",
-  city_id: "city_demo",
-  admin_secret_key: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+const admin = new FederationAdmin({
+  base_url: "https://base.example.com",
+  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
 });
 ```
 
-如果没有显式传 `admin_secret_key`，SDK 会尝试从 `process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` 读取。
+`credential` 必须显式传入 Federation Root Secret。
 
 ## 典型调用链
 
-<div className="dc-doc-flow" aria-label="Admin City 的调用链">
+<div className="dc-doc-flow" aria-label="FederationAdmin 的调用链">
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>可信后端</strong>
@@ -54,8 +52,8 @@ const admin = new City({
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
-      <strong>Admin City</strong>
-      <span>调用 `/v1/cities/*`、`/v1/cities/tokens/apply`、`/v1/env/*`、`/v1/ai/models`、`/v1/base/instruction`。</span>
+      <strong>FederationAdmin</strong>
+      <span>调用 `/v1/bureaus/*`、`/v1/accounts/tokens/issue`、`/v1/env/*`、`/v1/ai/models`、`/v1/base/instruction`。</span>
     </div>
   </div>
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
@@ -67,14 +65,15 @@ const admin = new City({
   </div>
 </div>
 
-## `tokens.apply()`
+## `accounts/tokens/issue`
 
 这是最常用的管理端能力：为某个用户签发 `user_token`。
 
-`city_id` 在 `City` 构造时传入，会自动注入到请求中。调用方只需传 `user_id`。
+代签接口必须显式传入目标 `bureau_id` 和 `user_id`。
 
 ```ts
-const issued = await admin.tokens.apply({
+const issued = await admin.service("accounts").action("tokens/issue").invoke({
+  bureau_id: "bureau_my_app",
   user_id: "user_123",
   metadata: {
     plan: "pro",
@@ -87,7 +86,7 @@ const issued = await admin.tokens.apply({
 返回值包含：
 
 - `user_token`
-- `city_id`
+- `bureau_id`
 - `user_id`
 - `expires_at`
 
@@ -104,13 +103,14 @@ const issued = await admin.tokens.apply({
 router.post("/login", async (c) => {
   const user_id = await login(c);
 
-  const issued = await admin.tokens.apply({
+  const issued = await admin.service("accounts").action("tokens/issue").invoke({
+    bureau_id: "bureau_my_app",
     user_id,
     ttl: "7d",
   });
 
   return c.json({
-    city_id: issued.city_id,
+    bureau_id: issued.bureau_id,
     user_token: issued.user_token,
   });
 });
@@ -120,20 +120,20 @@ router.post("/login", async (c) => {
 
 1. 你的业务后端先完成用户登录
 2. 再由可信后端向 City 申请 `user_token`
-3. 把 `city_id + user_token` 返回给前端
+3. 把 `user_token`（其中包含 `bureau_id`） 返回给前端
 4. 前端再用 `User City` 调 City
 
 ## 它和 accounts 服务是什么关系
 
-`Admin City` 不会替代 accounts 服务，反过来也一样。
+`FederationAdmin` 不会替代 accounts 服务，反过来也一样。
 
 两种典型模式是：
 
 ### 模式 A：你自己的后端做登录
 
 - 业务后端自己校验用户名密码或 session
-- 业务后端再用 `Admin City` 申请 `user_token`
-- 前端拿到 `city_id + user_token`
+- 业务后端再用 `FederationAdmin` 申请 `user_token`
+- 前端拿到 `user_token`（其中包含 `bureau_id`）
 
 ### 模式 B：accounts 服务做登录
 
@@ -143,7 +143,7 @@ router.post("/login", async (c) => {
 
 所以：
 
-- `Admin City` 负责可信侧管理动作
+- `FederationAdmin` 负责可信侧管理动作
 - accounts 服务负责最小账号能力
 - 两者不是替代关系，而是两种不同的登录接法
 
@@ -199,34 +199,35 @@ await admin.env.refresh();
 
 这些修改会写入 Federation 数据库的 `env` 表。业务 env 和系统级 secret 都以 Federation 这张表为准，不需要再去手动改 Worker / Node 宿主 env。
 
-## `cities`
+## `bureaus`
 
-`admin.cities` 用来管理同一个 Federation 里的产品边界。
+`admin.bureaus` 用来管理同一个 Federation 里的产品边界。
 
 ```ts
-const cities = await admin.cities.list();
+const bureaus = await admin.bureaus.list();
 
-const city = await admin.cities.create({
+const bureau = await admin.bureaus.create({
   name: "My App",
-  city_id: "city_my_app",
+  server_url: "https://bureau.example.com",
+  bureau_id: "bureau_my_app",
 });
 
-await admin.cities.pause(city.city_id);
-await admin.cities.activate(city.city_id);
-await admin.cities.remove(city.city_id);
+await admin.bureaus.pause(bureau.bureau_id);
+await admin.bureaus.activate(bureau.bureau_id);
+await admin.bureaus.archive(bureau.bureau_id);
 ```
 
-如果你想在一次调用里给任意 city 签发 token，可以使用 `admin.cities` 下更底层的 token 管理器：
+如果你想在一次调用里给任意 city 签发 token，可以使用 `admin.bureaus` 下更底层的 token 管理器：
 
 ```ts
-const issued = await admin.cities.tokens.apply({
-  city_id: "city_my_app",
+const issued = await admin.service("accounts").action("tokens/issue").invoke({
+  bureau_id: "bureau_my_app",
   user_id: "user_123",
   ttl: "7d",
 });
 ```
 
-如果一个 `Admin City` 实例只管理一个目标 city，优先使用 `admin.tokens.apply()`。它会自动注入构造时传入的 `city_id`。
+`FederationAdmin` 不绑定单个 Bureau；每次代签都必须显式提供 `bureau_id`。
 
 ## `listServices()` / `listModels()` / `instruction()`
 
@@ -264,9 +265,9 @@ console.log(text);
 - 确认每个模块声明了哪些 env 依赖
 - 给 CLI 或 agent 读取运行时说明
 
-## Admin City 也可以调 service 的管理侧 service
+## FederationAdmin 也可以调 service 的管理侧 service
 
-除了 `tokens` 和 `env`，`Admin City` 也可以调用 service 暴露出来的管理侧 service。
+除了 `tokens` 和 `env`，`FederationAdmin` 也可以调用 service 暴露出来的管理侧 service。
 
 例如：
 
@@ -297,18 +298,19 @@ await admin.credits.topup({
 });
 ```
 
-也就是说，`Admin City` 不只是在调内建 token/env 接口，它同样是可信侧调用统一 service 路由的入口。
+也就是说，`FederationAdmin` 不只是在调内建 token/env 接口，它同样是可信侧调用统一 service 路由的入口。
 
 ## 错误处理
 
-`Admin City` 收到非 2xx HTTP 响应时会抛出 `Error`。这个错误会带两个额外字段：
+`FederationAdmin` 收到非 2xx HTTP 响应时会抛出 `Error`。这个错误会带两个额外字段：
 
 - `status`：HTTP 状态码。
 - `body`：City 返回的原始响应文本，通常是 `{"error":"..."}`。
 
 ```ts
 try {
-  await admin.tokens.apply({
+  await admin.service("accounts").action("tokens/issue").invoke({
+    bureau_id: "bureau_my_app",
     user_id: "user_123",
   });
 } catch (error) {
@@ -322,13 +324,13 @@ try {
 常见状态码：
 
 - `401`：`admin_secret_key` 缺失或错误。
-- `403`：目标 city 已暂停，不能继续签发 token。
-- `404`：目标 city 不存在。
+- `403`：目标 Bureau 已暂停，不能继续签发 token。
+- `404`：目标 Bureau 不存在。
 - `500`：City 缺少必要配置，或管理动作内部执行失败。
 
-## 当前不归 `Admin City` 管的事情
+## 当前不归 `FederationAdmin` 管的事情
 
-这几件事当前不走 `Admin City`：
+这几件事当前不走 `FederationAdmin`：
 
 - 模型配置
 - 注册 service handler
@@ -339,4 +341,4 @@ try {
 
 - `City` 运行时层
 
-也就是说，`Admin City` 负责维护 city、token 和 env；模型定义和 service 挂载方式仍然属于 `City` 运行时层。
+也就是说，`FederationAdmin` 负责维护 city、token 和 env；模型定义和 service 挂载方式仍然属于 `City` 运行时层。

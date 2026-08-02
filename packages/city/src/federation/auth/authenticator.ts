@@ -1,18 +1,18 @@
 /**
- * 统一鉴权模块。
+ * Federation 统一鉴权器。
  *
- * Authenticator 统一处理管理凭证（root secret 或 Bureau Token）和
- * user_token（Ed25519 JWT）两类鉴权方式。
- * 所有鉴权失败统一抛出 httpError（ErrorWithStatus）。
+ * Root Secret、Bureau Token 和 User Token 分别解析为 admin、bureau 和 user，
+ * 避免机器凭证隐式获得 Federation 全局管理权限。
  */
 
 import { bearerToken, httpError } from "../../utils/helpers.js";
 import { normalizeRouteAuth, type RouteAuth, type RouteIdentity } from "../../service/service.js";
+import type { BureauRecord, RuntimeBureauToken } from "../../types/Bureau.js";
 import type { EnvProvider } from "../runtime.js";
 import { parse_user_token_ttl, type UserTokenAuthority } from "./user-token-authority.js";
 import type { FederationKeyStore } from "./federation-key-store.js";
 import type { BureauTokenStore } from "./bureau-token-store.js";
-
+import { FEDERATION_USER_TOKEN_AUDIENCE } from "./audience.js";
 import type {
   CreateUserTokenInput,
   FederationDiscovery,
@@ -25,136 +25,118 @@ import type {
 } from "./types.js";
 import type { FederationTrustedIdentity } from "../types.js";
 
-/** 鉴权级别 */
-/** 鉴权结果 */
+/** Federation 请求的已验证身份。 */
 export interface AuthResult {
-  /** 鉴权后的实际级别 */
+  /** 鉴权后的实际级别。 */
   level: RouteIdentity;
-  /** 解析出的用户信息（user 级别时可用） */
+  /** user 身份对应的 Federation User。 */
   user?: RuntimeUser;
-  /** 解析出的 City 信息（user 级别时可用） */
-  city?: { city_id: string; status: string };
+  /** user 或 bureau 身份对应的稳定 Bureau。 */
+  bureau?: BureauRecord;
+  /** bureau 身份使用的机器凭证元数据。 */
+  bureau_token?: RuntimeBureauToken;
 }
 
-/** 统一鉴权器 */
+interface AuthenticatorStore {
+  /** 按稳定 ID 读取 Bureau。 */
+  bureau: {
+    get(bureau_id: string): Promise<BureauRecord | undefined>;
+  };
+}
+
+/** Federation 统一鉴权器。 */
 export class Authenticator {
   constructor(
-    private env: EnvProvider,
-    private store: () => Promise<{ city: { get(id: string): Promise<{ city_id: string; status: string } | undefined> } }>,
+    private readonly env: EnvProvider,
+    private readonly store: () => Promise<AuthenticatorStore>,
     private readonly token_authority: UserTokenAuthority,
     private readonly key_store: FederationKeyStore,
     private readonly bureau_token_store: BureauTokenStore,
   ) {}
 
-  /**
-   * 解析请求身份。
-   *
-   * @param request - 原始 HTTP Request
-   * @returns 当前请求身份；无 token 或 token 无效时返回 guest
-   */
+  /** 解析 HTTP Bearer 凭证，失败时返回 guest。 */
   async resolve(request: Request): Promise<AuthResult> {
     const token = bearerToken(request);
     if (!token) return { level: "guest" };
 
-    const adminKey = this.env.get("DOWNCITY_FEDERATION_ADMIN_SECRET_KEY");
-    if (adminKey && token === adminKey) {
-      return { level: "admin" };
-    }
+    const admin_key = this.env.get("DOWNCITY_FEDERATION_ADMIN_SECRET_KEY");
+    if (admin_key && token === admin_key) return { level: "admin" };
 
-    if (await this.bureau_token_store.resolve(token)) {
-      return { level: "admin" };
+    const bureau_token = await this.bureau_token_store.resolve(token);
+    if (bureau_token) {
+      const bureau = await this.read_active_bureau(bureau_token.bureau_id);
+      if (!bureau) return { level: "guest" };
+      return {
+        level: "bureau",
+        bureau,
+        bureau_token: { token_id: bureau_token.token_id },
+      };
     }
 
     try {
       const payload = await this.token_authority.verify(token);
-      const store = await this.store();
-      const city = await store.city.get(payload.city_id);
-      if (!city) return { level: "guest" };
-      if (city.status !== "active") return { level: "guest" };
-
+      const bureau = await this.read_active_bureau(payload.bureau_id);
+      if (!bureau) return { level: "guest" };
       return {
         level: "user",
         user: { user_id: payload.user_id, metadata: payload.metadata ?? {} },
-        city,
+        bureau,
       };
     } catch {
       return { level: "guest" };
     }
   }
 
-  /**
-   * 将进程内可信身份转换为统一鉴权结果。
-   *
-   * 关键点（中文）
-   * - 该方法只接受 `Federation.fetch()` options 里的值。
-   * - 不读取 HTTP header，避免外部请求伪造本机可信身份。
-   */
+  /** 将进程内可信身份转换为统一鉴权结果。 */
   resolveTrusted(identity: FederationTrustedIdentity): AuthResult {
-    if (identity.level === "admin") {
-      return { level: "admin" };
+    if (identity.level === "admin") return { level: "admin" };
+    if (identity.level === "bureau") {
+      return {
+        level: "bureau",
+        bureau: identity.bureau,
+        bureau_token: identity.bureau_token,
+      };
     }
     return {
       level: "user",
       user: identity.user,
-      city: identity.city,
+      bureau: identity.bureau,
     };
   }
 
-  /**
-   * 根据 action 的 auth 配置判断当前身份是否允许继续。
-   *
-   * @param result - 当前已解析身份
-   * @param required - action 声明的允许身份集合
-   * @returns 通过授权后的身份结果
-   */
+  /** 根据 Action 声明校验已解析身份。 */
   authorize(result: AuthResult, required?: RouteAuth): AuthResult {
     const allowed = normalizeRouteAuth(required);
     if (allowed.length === 0) return result;
     if (result.level !== "guest" && allowed.includes(result.level)) return result;
-
-    if (result.level === "guest") {
-      throw httpError(401, "Authentication required");
-    }
-
+    if (result.level === "guest") throw httpError(401, "Authentication required");
     throw httpError(403, `Forbidden for identity: ${result.level}`);
   }
 
-  /**
-   * 对请求执行鉴权并强制满足 action 的 auth 配置。
-   */
+  /** 解析并校验 HTTP 请求身份。 */
   async authenticate(request: Request, required?: RouteAuth): Promise<AuthResult> {
     return this.authorize(await this.resolve(request), required);
   }
 
-  /**
-   * 签发 user_token（验证 city 状态后签发）。
-   *
-   * @param input - token 创建参数
-   * @returns 签发结果（含 token 字符串）
-   */
+  /** 验证 Bureau 状态后签发 User Token。 */
   async createToken(input: CreateUserTokenInput): Promise<UserTokenIssueResult> {
-    const store = await this.store();
-    const city = await store.city.get(input.city_id);
-    if (!city) throw httpError(404, `Unknown city: ${input.city_id}`);
-    if (city.status !== "active") throw httpError(403, `City is not active: ${input.city_id}`);
+    const bureau = await (await this.store()).bureau.get(input.bureau_id);
+    if (!bureau) throw httpError(404, `Unknown Bureau: ${input.bureau_id}`);
+    if (bureau.state !== "active") {
+      throw httpError(403, `Bureau is not active: ${input.bureau_id}`);
+    }
 
     const ttl_seconds = parse_user_token_ttl(input.ttl);
-    const user_token = await this.token_authority.sign(input);
     return {
-      user_token,
-      city_id: input.city_id,
+      user_token: await this.token_authority.sign(input),
+      bureau_id: input.bureau_id,
       user_id: input.user_id,
       expires_at: new Date(Date.now() + ttl_seconds * 1000).toISOString(),
     };
   }
 
-  /**
-   * 校验 user_token 并返回载荷。
-   *
-   * @param token - user_token 字符串
-   * @returns 解析出的 token 载荷
-   */
-  async verifyToken(token: string): Promise<UserTokenPayload> {
+  /** 校验 User Token 并返回标准载荷。 */
+  verifyToken(token: string): Promise<UserTokenPayload> {
     return this.token_authority.verify(token);
   }
 
@@ -177,7 +159,13 @@ export class Authenticator {
     return {
       issuer: `urn:downcity:federation:${federation_id}`,
       jwks_uri: `${origin.replace(/\/+$/, "")}/.well-known/jwks.json`,
-      user_token_audience: "downcity:user",
+      federation_user_token_audience: FEDERATION_USER_TOKEN_AUDIENCE,
+      bureau_user_token_audience_prefix: "urn:downcity:bureau:",
     };
+  }
+
+  private async read_active_bureau(bureau_id: string): Promise<BureauRecord | undefined> {
+    const bureau = await (await this.store()).bureau.get(bureau_id);
+    return bureau?.state === "active" ? bureau : undefined;
   }
 }

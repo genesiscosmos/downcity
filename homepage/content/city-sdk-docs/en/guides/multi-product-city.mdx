@@ -27,17 +27,17 @@ What should stay in each product:
     <div className="dc-doc-node">
       <strong>Product A</strong>
       <span>For example, a web tool.</span>
-      <code>city_id = city_web</code>
+      <code>bureau_id = city_web</code>
     </div>
     <div className="dc-doc-node">
       <strong>Product B</strong>
       <span>For example, a Chrome extension.</span>
-      <code>city_id = city_extension</code>
+      <code>bureau_id = city_extension</code>
     </div>
     <div className="dc-doc-node">
       <strong>Product C</strong>
       <span>For example, a client demo or internal tool.</span>
-      <code>city_id = city_demo</code>
+      <code>bureau_id = city_demo</code>
     </div>
   </div>
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
@@ -49,9 +49,9 @@ What should stay in each product:
   </div>
 </div>
 
-## How to think about `city_id`
+## How to think about `bureau_id`
 
-`city_id` is a product boundary, not a model boundary.
+`bureau_id` is a product boundary, not a model boundary.
 
 It is useful for:
 
@@ -60,10 +60,11 @@ It is useful for:
 - telling hooks where usage should be recorded
 - separating one user’s activity across different products
 
-A common pattern is one stable `city_id` per product:
+A common pattern is one stable `bureau_id` per product:
 
 ```ts
-const issued = await admin.tokens.apply({
+const issued = await admin.service("accounts").action("tokens/issue").invoke({
+  bureau_id: "bureau_demo",
   user_id: "user_123",
   metadata: {
     plan: "starter",
@@ -74,7 +75,7 @@ const issued = await admin.tokens.apply({
 
 ## What belongs in token metadata
 
-`city_id` says *which product this is*. Token metadata is better for *the user’s business state inside that product*.
+`bureau_id` says *which product this is*. Token metadata is better for *the user’s business state inside that product*.
 
 Common fields:
 
@@ -84,7 +85,7 @@ Common fields:
 - `feature_flag`
 - `team_id`
 
-That lets hooks differentiate behavior with `ctx.city` and `ctx.user.metadata` instead of cloning City for each city.
+That lets hooks differentiate behavior with `ctx.bureau` and `ctx.user.metadata` instead of cloning City for each city.
 
 ## Recommended layering
 
@@ -92,12 +93,12 @@ That lets hooks differentiate behavior with `ctx.city` and `ctx.user.metadata` i
 
 - keeps routes, UI, and business experience
 - uses `User City`
-- only holds `city_id + user_token`
+- only holds `user_token` (which contains `bureau_id`)
 
 ### Business backend
 
 - owns login, orders, balance, subscriptions, and business data
-- uses `Admin City` in a trusted environment
+- uses `FederationAdmin` in a trusted environment
 - issues `user_token` after a successful login
 
 ### City

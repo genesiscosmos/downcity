@@ -223,11 +223,11 @@ const city = new City({
 const profile = await city.user().profile();
 ```
 
-`city_id` 由 Federation 验签后从 token 中读取，客户端不再重复传入。
+`bureau_id` 由 Federation 验签后从 token 中读取，客户端不再重复传入。
 
-City 直接访问 Federation，不依赖 Bureau。只有产品需要自己的后端能力时，才通过
+City 的标准 Service 直接访问 Federation。只有产品需要自己的后端能力时，才通过
 `fed bureau token` 打开交互式管理界面；选择创建，或直接运行
-`fed bureau token create`，登记并部署 Bureau：
+`fed bureau token create <bureau_id>`，登记并部署 Bureau：
 
 ```bash
 fed bureau token
@@ -254,7 +254,7 @@ const bureau = new Bureau({
 const identity = await bureau.identify(request);
 const profile = await (await bureau.user(request)).profile();
 
-await bureau.cities.list();
+await bureau.me();
 ```
 
 City 访问 Bureau 的独立服务时，使用 JSON `get()` / `post()` 自动注入当前 `user_token`：
@@ -265,14 +265,12 @@ const city = new City({
   user_token,
 });
 
-const result = await city.post(
-  "https://bureau.example.com/reports/summary",
-  { range: "today" },
-);
+const result = await city.post("/reports/summary", { range: "today" });
 ```
 
-`Bureau` 不绑定 `city_id`。`identify()` 返回 `user_token` 中的 `city_id`，由 Bureau 自己
-决定是否允许该产品访问某个独立服务。
+`Bureau Token` 在 Federation 注册时已经绑定 `bureau_id`，因此 `new Bureau()` 不再重复传入。
+`identify()` 只接受 audience 与该 Bureau 一致的 User Token。City 会从 Federation 读取
+当前 Bureau 的 `server_url`，并只向该 origin 转发 `user_token`。
 
 ## 主要导出
 
@@ -285,8 +283,8 @@ const result = await city.post(
 - `CityModel`
 - `CityModelDescriptor`
 - `Bureau`
+- `FederationAdmin`
 - `EnvService`
-- `CitiesService`
 
 ## City 模型目录
 
@@ -319,7 +317,7 @@ const model = provider.languageModel("deepseek-v4-flash");
 ```
 
 OpenAI-compatible 请求体只需要标准 `model/messages/stream/tools` 字段。
-`city_id` 由 `user_token` 在服务端解析，不需要放进请求体。
+`bureau_id` 由 `user_token` 在服务端解析，不需要放进请求体。
 
 ## 文档
 

@@ -13,7 +13,7 @@ import {
 } from "./auth/key-schema.js";
 import { pg_bureau_tokens, sqlite_bureau_tokens } from "./auth/bureau-token-schema.js";
 import { EnvStore } from "../service/env/env-store.js";
-import { pgCities, sqliteCities } from "../service/cities/schema.js";
+import { pg_bureaus, sqlite_bureaus } from "../service/bureaus/schema.js";
 import { normalizeEnvKey, parseDotenvEntries } from "../utils/helpers.js";
 import type { FederationOptions } from "./types.js";
 import type { BuiltinTables, EnvProvider, Runtime } from "./runtime.js";
@@ -46,13 +46,13 @@ function builtin_tables_for(schema_id: string): BuiltinTables {
   }
   return schema_id === "postgresql"
     ? {
-        cities: pgCities,
+        bureaus: pg_bureaus,
         env: pgEnv,
         federation_auth_keys: pg_federation_auth_keys,
         bureau_tokens: pg_bureau_tokens,
       }
     : {
-        cities: sqliteCities,
+        bureaus: sqlite_bureaus,
         env: sqliteEnv,
         federation_auth_keys: sqlite_federation_auth_keys,
         bureau_tokens: sqlite_bureau_tokens,

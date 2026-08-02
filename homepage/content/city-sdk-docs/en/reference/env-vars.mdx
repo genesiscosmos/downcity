@@ -5,7 +5,7 @@ description: Common environment variables used by Federation.
 
 | Variable | Purpose |
 | --- | --- |
-| `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` | Lets `Admin City` manage Federation |
+| `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` | Lets `FederationAdmin` manage Federation |
 | `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` | Lets Federation issue and validate `user_token` internally |
 | `DOWNCITY_CITY_DATABASE_URL` | Optional. Specifies the database URL used by Federation |
 | `OPENAI_API_KEY` | Example provider key; recommended to write it into the Federation database through Admin env |
@@ -66,7 +66,7 @@ So the practical rules are simple:
 
 ## Write values into the database
 
-A trusted backend can write provider keys through `Admin City`:
+A trusted backend can write provider keys through `FederationAdmin`:
 
 ```ts
 await admin.env.upsert({

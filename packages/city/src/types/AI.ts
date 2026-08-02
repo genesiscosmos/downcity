@@ -101,8 +101,8 @@ export interface AIChannelActionInput {
   readonly env: (key: string) => string | undefined;
   /** 当前请求的可选用户 ID。 */
   readonly user_id?: string;
-  /** 当前请求所属的可选 City ID。 */
-  readonly city_id?: string;
+  /** 当前请求所属的可选 Bureau ID。 */
+  readonly bureau_id?: string;
   /** 图片抓取 action 可读取的异步任务上下文。 */
   readonly image_job?: AIImageJobContext;
 }
@@ -254,8 +254,8 @@ export interface AIBillInput {
   readonly metering?: RuntimeMetering;
   /** 当前请求的可选用户 ID。 */
   readonly user_id?: string;
-  /** 当前请求所属的可选 City ID。 */
-  readonly city_id?: string;
+  /** 当前请求所属的可选 Bureau ID。 */
+  readonly bureau_id?: string;
 }
 
 /** Channel 或模型生成扣费行的方法。 */

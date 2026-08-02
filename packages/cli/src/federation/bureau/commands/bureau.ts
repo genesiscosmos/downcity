@@ -5,7 +5,7 @@
  * 控制面登记用途和 hash。`token list` 与 `token revoke` 管理数据库注册记录。
  */
 
-import { Bureau, type BureauTokenSummary } from "@downcity/city";
+import { FederationAdmin, type BureauTokenSummary } from "@downcity/city";
 import { create_bureau_deployment_credential } from "@/federation/bureau/BureauCredential.js";
 import type { CreatedFederationBureauToken } from "@/federation/types/FederationBureau.js";
 import { readActiveServer, type ServerProfile } from "@/federation/core/session.js";
@@ -15,7 +15,8 @@ import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { t } from "@/shared/CliLocale.js";
 
 /** 为当前 active Federation 创建并登记 Bureau Token。 */
-export async function create_federation_bureau_token(): Promise<void> {
+export async function create_federation_bureau_token(bureau_id_input: string): Promise<void> {
+  const bureau_id = require_value(bureau_id_input, "bureau_id");
   const purpose_input = await text({
     message: t({ zh: "Token 用途", en: "Token purpose" }),
     placeholder: t({ zh: "例如：生产环境支付服务", en: "For example: production payments service" }),
@@ -23,20 +24,23 @@ export async function create_federation_bureau_token(): Promise<void> {
   });
   if (isCancel(purpose_input)) return;
 
-  const created = await create_federation_bureau_token_record(String(purpose_input));
+  const created = await create_federation_bureau_token_record(bureau_id, String(purpose_input));
   render_created_federation_bureau_token(created);
 }
 
 /** 创建并登记 Bureau Token，返回仅供当前进程展示的一次性明文。 */
 export async function create_federation_bureau_token_record(
+  bureau_id_input: string,
   purpose_input: string,
 ): Promise<CreatedFederationBureauToken> {
   const server = require_active_admin_server();
+  const bureau_id = require_value(bureau_id_input, "bureau_id");
   const purpose = require_bureau_token_purpose(purpose_input);
   const credential = create_bureau_deployment_credential();
-  const admin = create_federation_bureau(server);
+  const admin = create_federation_admin(server);
 
-  await admin.bureaus.register({
+  await admin.bureaus.tokens.register({
+    bureau_id,
     token_id: credential.token_id,
     purpose,
     token_hash: credential.token_hash,
@@ -44,6 +48,7 @@ export async function create_federation_bureau_token_record(
 
   return {
     ...credential,
+    bureau_id,
     federation_url: server.base_url,
     purpose,
   };
@@ -58,6 +63,7 @@ function render_created_federation_bureau_token(
     title: t({ zh: "Bureau Token 已登记", en: "Bureau token registered" }),
     facts: [
       { label: "DOWNCITY_FEDERATION_URL", value: created.federation_url },
+      { label: "DOWNCITY_BUREAU_ID", value: created.bureau_id },
       { label: t({ zh: "用途", en: "Purpose" }), value: created.purpose },
       { label: "Token ID", value: created.token_id },
       { label: "DOWNCITY_BUREAU_TOKEN", value: created.bureau_token },
@@ -104,14 +110,14 @@ export async function revoke_federation_bureau(token_id_input: string): Promise<
 /** 读取当前 active Federation 的 Bureau Token 元数据。 */
 export async function read_federation_bureau_tokens(): Promise<BureauTokenSummary[]> {
   const server = require_active_admin_server();
-  return await create_federation_bureau(server).bureaus.list();
+  return await create_federation_admin(server).bureaus.tokens.list();
 }
 
 /** 撤销当前 active Federation 中的 Bureau Token 记录。 */
 export async function revoke_federation_bureau_token_record(token_id_input: string): Promise<void> {
   const server = require_active_admin_server();
   const token_id = require_value(token_id_input, "token_id");
-  await create_federation_bureau(server).bureaus.revoke(token_id);
+  await create_federation_admin(server).bureaus.tokens.revoke(token_id);
 }
 
 function require_active_admin_server(): ServerProfile {
@@ -134,10 +140,10 @@ function require_active_admin_server(): ServerProfile {
   return server;
 }
 
-function create_federation_bureau(server: ServerProfile): Bureau {
-  return new Bureau({
-    federation_url: server.base_url,
-    bureau_token: server.admin_secret_key!,
+function create_federation_admin(server: ServerProfile): FederationAdmin {
+  return new FederationAdmin({
+    base_url: server.base_url,
+    credential: server.admin_secret_key!,
   });
 }
 

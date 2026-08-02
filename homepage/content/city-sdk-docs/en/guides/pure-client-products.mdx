@@ -22,7 +22,7 @@ The client owns:
 
 - UI and interaction
 - calling `User City`
-- holding `city_id`
+- holding `bureau_id`
 - storing or refreshing `user_token`
 
 The Federation owns:
@@ -47,8 +47,8 @@ Federation
 That product backend can stay very thin at first:
 
 - user login
-- `Admin City.tokens.apply()`
-- returning `user_token + city_id` to the client
+- `FederationAdmin.tokens.apply()`
+- returning `user_token + bureau_id` to the client
 
 ## Why this fits early products better
 
