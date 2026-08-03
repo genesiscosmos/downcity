@@ -29,6 +29,7 @@ import type {
   City,
   Bureau,
   BureauRecord,
+  BureauServerUpdateInput,
   BureauTokenSummary,
   Federation,
   FederationAdmin,
@@ -138,6 +139,15 @@ void bureau_registration;
 
 const federation_bureaus: Promise<BureauRecord[]> = admin.bureaus.list();
 void federation_bureaus;
+
+const bureau_server_update_input: BureauServerUpdateInput = {
+  bureau_id: "bureau_demo",
+  server_url: "https://new-bureau.example.com",
+};
+const updated_bureau: Promise<BureauRecord> = admin.bureaus.server.update(
+  bureau_server_update_input,
+);
+void updated_bureau;
 
 const bureau_identity = bureau.identify("ub_header.payload.signature");
 void bureau_identity;

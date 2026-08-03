@@ -17,6 +17,7 @@ import type {
   AgentArchiveSessionsResult,
   AgentCleanArchiveResult,
   AgentSessionInfo,
+  AgentSessionSetOptions,
   AgentSessionStatus,
   AgentSessionSummaryPage,
   AgentSessionSystemSnapshot,
@@ -257,10 +258,11 @@ export class RpcClient {
   async set_session(
     session_id: string,
     input: RemoteSessionSetInput,
+    options?: AgentSessionSetOptions,
   ): Promise<void> {
     await this.request<{ queued: true }>({
       method: "sdk.sessions.set",
-      params: { session_id: session_id, input },
+      params: { session_id: session_id, input, ...(options ? { options } : {}) },
     });
   }
 

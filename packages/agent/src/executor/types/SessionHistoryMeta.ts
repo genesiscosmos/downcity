@@ -23,6 +23,8 @@ export type SessionHistoryMetaV1 = {
   title?: string;
   /** 当前 session 绑定模型的可读标签。 */
   model_label?: string;
+  /** 当前 Session 持久化的 Shell 审批模式。 */
+  approval_mode?: "ask" | "always-allow";
   /** 当前 session 已持久化记录数量，用于列表查询避免扫描完整历史。 */
   message_count?: number;
   /** 当前 session 最后一条记录的用户可见摘要，用于列表预览。 */

@@ -21,6 +21,7 @@ import type {
   AgentSessionInfo,
   AgentSessionStatus,
   AgentSessionSetInput,
+  AgentSessionSetOptions,
   AgentSessionSystemBlock,
   AgentSessionSystemSnapshot,
 } from "@/types/agent/SessionTypes.js";
@@ -93,8 +94,6 @@ export class Session implements AgentSession {
   private readonly events: SessionEventHub;
   private readonly session_interactions: SessionInteractions;
   private readonly shell_approval_adapter: SessionShellApprovalAdapter;
-  /** 已被 Session 接受、等待或已经在 Step 检查点提交的审批模式。 */
-  private configured_approval_mode: SessionApprovalMode = "ask";
   private readonly local_state: SessionLocalState;
   private readonly get_workspace_env: SessionOptions["get_workspace_env"];
   private readonly get_agent_model: SessionOptions["get_agent_model"];
@@ -102,6 +101,8 @@ export class Session implements AgentSession {
   private readonly get_instruction_system_blocks:
     SessionOptions["get_instruction_system_blocks"];
   private effective_instruction_system_blocks: AgentSessionSystemBlock[];
+  /** 当前 Session 的一次性初始化任务，避免缓存实例被重复恢复运行时状态。 */
+  private initialize_promise: Promise<void> | null = null;
   private instruction_initialize_promise: Promise<void> | null = null;
   private effective_workspace_env: Record<string, string>;
   private effective_agent_plugins: AgentPluginExecutionRuntime;
@@ -199,11 +200,19 @@ export class Session implements AgentSession {
    * 初始化当前 session。
    */
   async initialize(): Promise<this> {
-    await Promise.all([
-      this.initialize_instruction(),
-      this.session_messages.initialize(),
-      this.state.initialize(),
-    ]);
+    if (!this.initialize_promise) {
+      this.initialize_promise = (async () => {
+        await Promise.all([
+          this.initialize_instruction(),
+          this.session_messages.initialize(),
+          this.state.initialize(),
+        ]);
+        this.shell_approval_adapter.set_effective_mode(
+          this.state.get_approval_mode(),
+        );
+      })();
+    }
+    await this.initialize_promise;
     return this;
   }
 
@@ -257,7 +266,10 @@ export class Session implements AgentSession {
   /**
    * 写入当前 session 默认配置。
    */
-  async set(input: AgentSessionSetInput): Promise<void> {
+  async set(
+    input: AgentSessionSetInput,
+    options?: AgentSessionSetOptions,
+  ): Promise<void> {
     if (!input.model && !input.security) {
       throw new Error("session.set requires model or security");
     }
@@ -269,38 +281,49 @@ export class Session implements AgentSession {
     ) {
       throw new Error("security.approval_mode must be ask or always-allow");
     }
-    const model_config = input.model
+    const persist_action = options?.persist_action !== false;
+    const publish_mutation =
+      options?.publish_mutation === undefined
+        ? persist_action
+        : options.publish_mutation;
+    if (!persist_action && publish_mutation) {
+      throw new Error(
+        "session.set publish_mutation requires persist_action",
+      );
+    }
+    const model_result = input.model
       ? await this.state.set_model(input.model)
       : undefined;
     const next_approval_mode = requested_approval_mode;
-    const security_changed = Boolean(
-      next_approval_mode && next_approval_mode !== this.configured_approval_mode,
-    );
-    if (next_approval_mode !== undefined) {
-      this.configured_approval_mode = next_approval_mode;
-    }
-    if (!model_config && !security_changed) return;
+    const security_changed = next_approval_mode !== undefined
+      ? await this.state.set_approval_mode(next_approval_mode)
+      : false;
+    if (!model_result && !security_changed) return;
     const changed_fields = [
-      ...(model_config
-        ? [`model: ${String(model_config.model_label || "configured")}`]
+      ...(model_result?.changed
+        ? [`model: ${String(model_result.config.model_label || "configured")}`]
         : []),
       ...(security_changed
         ? [`security.approval_mode: ${String(next_approval_mode)}`]
         : []),
     ];
+    const completion = changed_fields.length > 0 && persist_action
+      ? {
+          type: "action" as const,
+          id: `session-config:${this.id}:${Date.now()}:${generate_id()}`,
+          title: "Session configuration updated",
+          description: changed_fields.join("; "),
+          publish_mutation,
+        }
+      : undefined;
     this.enqueue_command({
       execute: async () => {
-        if (model_config) this.state.apply_model_config(model_config);
+        if (model_result) this.state.apply_model_config(model_result.config);
         if (security_changed && next_approval_mode) {
           this.shell_approval_adapter.set_effective_mode(next_approval_mode);
         }
       },
-      completion: {
-        type: "action",
-        id: `session-config:${this.id}:${Date.now()}:${generate_id()}`,
-        title: "Session configuration updated",
-        description: changed_fields.join("; "),
-      },
+      ...(completion ? { completion } : {}),
     });
   }
 
@@ -432,7 +455,7 @@ export class Session implements AgentSession {
       state: active_turn_id || this.executor.is_executing() ? "running" : "idle",
       ...(active_turn_id ? { active_turn_id } : {}),
       security: {
-        approval_mode: this.configured_approval_mode,
+        approval_mode: this.state.get_approval_mode(),
         effective_approval_mode: this.shell_approval_adapter.get_effective_mode(),
       },
     };
@@ -555,9 +578,12 @@ export class Session implements AgentSession {
       await forked.initialize();
       const session_config = this.state.get_config();
       if (session_config.model) {
-        const forked_config = await forked.state.set_model(session_config.model);
-        forked.state.apply_model_config(forked_config);
+        const forked_model = await forked.state.set_model(session_config.model);
+        forked.state.apply_model_config(forked_model.config);
       }
+      const approval_mode = this.state.get_approval_mode();
+      await forked.state.set_approval_mode(approval_mode);
+      forked.shell_approval_adapter.set_effective_mode(approval_mode);
       await forked.session_messages.import_messages(fork_messages);
       await this.emit_action_event({
         id: action_id,
@@ -710,6 +736,7 @@ export class Session implements AgentSession {
     return {
       session_config: {},
       effective_session_config: {},
+      configured_approval_mode: "ask",
       created_at: Date.now(),
       timezone: resolve_system_timezone(),
       initialize_promise: null,

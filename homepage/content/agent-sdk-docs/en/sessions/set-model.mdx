@@ -24,6 +24,24 @@ A successful `session.set()` means the configured value was written and queued f
 
 The config API reports whether the change succeeded. The action message reports the Session turn and step where it became effective for model execution. Timeline persistence is observational: if writing that action fails, the effective configuration is not rolled back and the SDK records a warning.
 
+## Controlling the Action and Mutation
+
+The optional second argument to `set()` controls only the observable result after the configuration commits. It does not change configuration persistence or checkpoint behavior:
+
+```ts
+await session.set(
+  { model },
+  { persist_action: false, publish_mutation: false },
+);
+```
+
+- `persist_action` defaults to `true`. When false, no configuration Action Message is created.
+- `publish_mutation` defaults to the value of `persist_action`. Set it to false to keep the historical Action without publishing its Mutation through `subscribe()`.
+- `publish_mutation=true` is invalid when `persist_action=false`, because every Message Mutation must correspond to a canonical Message.
+- Setting the same model identity again does not create another configuration Action. After restart, passing the same model only rebinds the runtime instance.
+
+Session initialization and restoration can disable both outputs. User-driven model changes normally keep the defaults.
+
 ## When you need it
 
 This is useful when:

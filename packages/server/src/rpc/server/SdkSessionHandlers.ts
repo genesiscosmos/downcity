@@ -83,7 +83,7 @@ export async function handleSdkSessionRpcRequest(params: {
     }
     case "sdk.sessions.set": {
       const session = await options.sessions.get(request.params.session_id);
-      await session.set(request.params.input);
+      await session.set(request.params.input, request.params.options);
       write_success(request.id, { queued: true });
       return true;
     }

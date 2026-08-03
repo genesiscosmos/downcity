@@ -80,6 +80,8 @@ export interface OpenSessionActionMessageInput {
   description?: string;
   /** 当前 Action 附加数据。 */
   data?: JsonObject;
+  /** Action 创建或更新后是否发布对应 Session Mutation。 */
+  publish_mutation?: boolean;
 }
 
 /** Error Message 创建参数。 */

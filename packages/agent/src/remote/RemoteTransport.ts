@@ -16,6 +16,7 @@ import type {
   AgentCleanArchiveResult,
   AgentSessionForkInput,
   AgentSessionInfo,
+  AgentSessionSetOptions,
   AgentSessionStatus,
   AgentSessionSummaryPage,
   AgentSessionSystemSnapshot,
@@ -86,7 +87,11 @@ export type RemoteSessionTransport = {
   /** 读取指定 Session 的运行与安全状态。 */
   status(session_id: string): Promise<AgentSessionStatus>;
   /** 更新指定 Session 的可序列化动态配置。 */
-  set(session_id: string, input: RemoteSessionSetInput): Promise<void>;
+  set(
+    session_id: string,
+    input: RemoteSessionSetInput,
+    options?: AgentSessionSetOptions,
+  ): Promise<void>;
   /** 提交指定 Session 的 Interaction 用户响应。 */
   respond(
     session_id: string,

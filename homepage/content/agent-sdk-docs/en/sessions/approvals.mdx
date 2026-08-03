@@ -151,6 +151,17 @@ Read the projection with `status()`: `security.approval_mode` is the configured 
 queued. After the Command commits, the Session persists a completed `Session configuration updated`
 Action.
 
+Initialization or restoration can suppress that Action and its Mutation through the optional second argument to `set()`. The configuration is still written and committed at the checkpoint:
+
+```ts
+await session.set(
+  { security: { approval_mode: "always-allow" } },
+  { persist_action: false, publish_mutation: false },
+);
+```
+
+Setting the same approval mode is idempotent and does not create another configuration Action. The approval mode is restored from Session metadata.
+
 ## UI implementation details
 
 - Use `interaction_id` as the stable card key.

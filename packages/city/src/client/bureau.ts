@@ -104,7 +104,8 @@ export class Bureau {
       bureau?: Partial<BureauMachineIdentity["bureau"]>;
       token?: { token_id?: string };
     };
-    if (!body.bureau?.bureau_id || !body.bureau.name || !body.bureau.server_url
+    if (!body.bureau?.bureau_id || !body.bureau.name || !body.bureau.server?.server_url
+      || body.bureau.server.bureau_id !== body.bureau.bureau_id
       || !body.bureau.state || !body.bureau.created_at || !body.bureau.updated_at
       || body.bureau.archived_at === undefined || !body.token?.token_id) {
       throw httpError(503, "Federation returned an invalid Bureau machine identity");

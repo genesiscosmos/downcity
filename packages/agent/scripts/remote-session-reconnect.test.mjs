@@ -11,6 +11,31 @@ import assert from "node:assert/strict";
 
 import { RemoteSession } from "../bin/remote/RemoteSession.js";
 
+test("RemoteSession forwards set observability options to its transport", async () => {
+  const calls = [];
+  const transport = {
+    async set(session_id, input, options) {
+      calls.push({ session_id, input, options });
+    },
+  };
+  const session = new RemoteSession(transport, {
+    agent_id: "agent_test",
+    session_id: "session_test",
+    message_count: 0,
+  });
+
+  await session.set(
+    { security: { approval_mode: "ask" } },
+    { persist_action: false, publish_mutation: false },
+  );
+
+  assert.deepEqual(calls, [{
+    session_id: "session_test",
+    input: { security: { approval_mode: "ask" } },
+    options: { persist_action: false, publish_mutation: false },
+  }]);
+});
+
 test("RemoteSession reconnects the event pump after transport close", async () => {
   const subscriptions = [];
   let prompt_count = 0;

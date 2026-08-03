@@ -10,6 +10,7 @@ description: Session 输入输出对象里最重要的字段和语义
 - `AgentSession`
 - `RemoteAgentSession`
 - `AgentSessionSetInput`
+- `AgentSessionSetOptions`
 - `RemoteSessionSetInput`
 - `AgentSessionStatus`
 - `AgentSessionPromptInput`
@@ -35,6 +36,8 @@ description: Session 输入输出对象里最重要的字段和语义
 
 `AgentSessionStatus.security` 同时提供 configured `approval_mode` 与检查点已经提交的
 `effective_approval_mode`。两者不同时，配置仍在 Session Queue 中等待执行。
+
+`AgentSessionSetOptions` 控制真实配置变化提交后的可观测输出：`persist_action` 决定是否写入 Action Message，`publish_mutation` 决定是否通过 Session 订阅发布对应 Mutation。两者均省略时保持默认的持久化与发布行为。
 
 ## `AgentSessionPromptInput`
 

@@ -80,6 +80,28 @@ export interface AgentSessionSetInput {
   security?: AgentSessionSecurityConfig;
 }
 
+/** Session 配置提交后的 Action 可观测性选项。 */
+export interface AgentSessionSetOptions {
+  /**
+   * 是否把真实配置变化持久化为 completed Action Message。
+   *
+   * 关键点（中文）
+   * - 默认值为 true。
+   * - 设为 false 只关闭 Action Message，不影响配置写入与检查点提交。
+   * - 适用于 Session 初始化、恢复与其他不应进入时间线的宿主装配流程。
+   */
+  persist_action?: boolean;
+
+  /**
+   * 是否在 Action Message 持久化成功后发布对应 Session Mutation。
+   *
+   * 关键点（中文）
+   * - 默认跟随 `persist_action`。
+   * - 只有 `persist_action=true` 时才允许设为 true，避免发布不存在于 canonical Message 历史中的事件。
+   */
+  publish_mutation?: boolean;
+}
+
 /** 可通过本地或远程 Session 动态更新的安全策略。 */
 export interface AgentSessionSecurityConfig {
   /** 高风险操作是否需要用户逐次审批。 */

@@ -364,6 +364,10 @@ export function registerSdkSessionRoutes(
       const session = await sessions.get(String(c.req.param("session_id") || "").trim());
       const body = await c.req.json().catch(() => null) as {
         security?: { approval_mode?: unknown };
+        options?: {
+          persist_action?: unknown;
+          publish_mutation?: unknown;
+        };
       } | null;
       const mode = String(body?.security?.approval_mode || "");
       if (mode !== "ask" && mode !== "always-allow") {
@@ -372,7 +376,27 @@ export function registerSdkSessionRoutes(
           error: "security.approval_mode must be ask or always-allow",
         }, 400);
       }
-      await session.set({ security: { approval_mode: mode } });
+      const persist_action = body?.options?.persist_action;
+      const publish_mutation = body?.options?.publish_mutation;
+      if (persist_action !== undefined && typeof persist_action !== "boolean") {
+        return c.json({
+          success: false,
+          error: "options.persist_action must be boolean",
+        }, 400);
+      }
+      if (publish_mutation !== undefined && typeof publish_mutation !== "boolean") {
+        return c.json({
+          success: false,
+          error: "options.publish_mutation must be boolean",
+        }, 400);
+      }
+      await session.set(
+        { security: { approval_mode: mode } },
+        {
+          ...(typeof persist_action === "boolean" ? { persist_action } : {}),
+          ...(typeof publish_mutation === "boolean" ? { publish_mutation } : {}),
+        },
+      );
       return c.json({ success: true, queued: true });
     } catch (error) {
       return c.json({ success: false, error: error instanceof Error ? error.message : String(error) }, 500);

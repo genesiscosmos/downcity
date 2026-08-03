@@ -212,12 +212,19 @@ const bureau = await admin.bureaus.create({
   bureau_id: "bureau_my_app",
 });
 
+await admin.bureaus.server.update({
+  bureau_id: bureau.bureau_id,
+  server_url: "https://new-bureau.example.com",
+});
+
 await admin.bureaus.pause(bureau.bureau_id);
 await admin.bureaus.activate(bureau.bureau_id);
 await admin.bureaus.archive(bureau.bureau_id);
 ```
 
-如果你想在一次调用里给任意 city 签发 token，可以使用 `admin.bureaus` 下更底层的 token 管理器：
+返回的 `bureau.server.server_url` 来自独立的一对一 Server 记录。更新入口不会改变稳定的 `bureau_id`。
+
+如果你想在一次调用里给指定 Bureau 的用户签发 token，可以使用 Accounts Service：
 
 ```ts
 const issued = await admin.service("accounts").action("tokens/issue").invoke({

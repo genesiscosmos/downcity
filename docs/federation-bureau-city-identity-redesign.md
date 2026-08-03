@@ -1,14 +1,14 @@
 # Federation、Bureau、City 身份与服务边界设计
 
 > 状态：已确认并实施
-> 更新时间：2026-08-02
+> 更新时间：2026-08-03
 
 ## 1. 结论
 
 Downcity 使用三个边界清晰的核心概念：
 
 - **Federation** 是全局服务、账户与身份信任根。
-- **Bureau** 是产品及其服务端身份。一个 Bureau 在 Federation 中登记一个必填 `server_url`。
+- **Bureau** 是稳定的产品服务端身份，并一对一拥有独立的 Server 配置。
 - **City** 是 Agent 终端，不是产品、服务端或持久身份。
 
 Organization 只表达成员关系与治理范围，不拥有服务地址。Organization 可以是 Federation 全局组织，也可以通过 `bureau_id` 归属于某个 Bureau。
@@ -18,7 +18,7 @@ flowchart LR
     C["City：Agent 终端"] -->|"登录与全局 Service"| F["Federation：账户、身份、全局服务"]
     F -->|"User Token 内含 bureau_id"| C
     C -->|"解析当前 Bureau"| F
-    F -->|"BureauRecord.server_url"| C
+    F -->|"BureauRecord.server.server_url"| C
     C -->|"User Token"| B["Bureau：产品服务端"]
     B -->|"Bureau Token"| F
 ```
@@ -43,12 +43,12 @@ Federation 不承担产品业务服务端职责，也不把 City 当成数据库
 Bureau 回答“这个产品服务端是谁、它的入口在哪里”。它负责：
 
 - 以稳定的 `bureau_id` 标识产品边界；
-- 拥有一个 `server_url`；
+- 一对一拥有一条 Server 配置；
 - 使用绑定自身的 Bureau Token 向 Federation 证明机器身份；
 - 使用 Federation JWKS 本地验证本 Bureau 的 User Token；
 - 承载产品私有业务、数据与策略。
 
-一个 Bureau 只绑定一个当前服务入口。不同 Bureau 可以使用相同 URL，因此 `server_url` 不设置全局唯一约束。更新域名或迁移部署时，直接更新该 Bureau 的 `server_url`，不改变 `bureau_id`。
+一个 Bureau 只拥有一个当前 Server。Server 配置与 Bureau 身份分表保存，通过 `bureau_id` 一对一关联。不同 Bureau 可以使用相同 URL，因此 `server_url` 不设置全局唯一约束。更新域名或迁移部署时，只更新 Server 记录，不改变 `bureau_id`。
 
 当前产品模型不引入 Deployment 资源。未来只有在确实需要多区域、多实例、健康检查和流量调度时，才另行设计 Deployment 控制面。
 
@@ -76,7 +76,7 @@ Organization 不拥有 server、URL、Token 或部署生命周期。
 
 ## 3. 权威数据模型
 
-### 3.1 BureauRecord
+### 3.1 BureauRecord 与 BureauServerRecord
 
 ```ts
 interface BureauRecord {
@@ -84,8 +84,8 @@ interface BureauRecord {
   bureau_id: string;
   /** 面向管理者展示的产品名称。 */
   name: string;
-  /** 当前 Bureau 唯一的 HTTP(S) 服务入口。 */
-  server_url: string;
+  /** 当前 Bureau 唯一拥有的 Server 配置。 */
+  server: BureauServerRecord;
   /** Bureau 当前生命周期状态。 */
   state: "active" | "paused" | "archived";
   /** 创建时间。 */
@@ -95,11 +95,23 @@ interface BureauRecord {
   /** 归档时间；未归档时为空字符串。 */
   archived_at: string;
 }
+
+interface BureauServerRecord {
+  /** 拥有当前 Server 的稳定 Bureau ID。 */
+  bureau_id: string;
+  /** 当前 Server 的 HTTP(S) 服务入口。 */
+  server_url: string;
+  /** 创建时间。 */
+  created_at: string;
+  /** 最近更新时间。 */
+  updated_at: string;
+}
 ```
 
 约束：
 
-- 创建时 `name` 和 `server_url` 必填；
+- 创建时 `name` 和 `server_url` 必填，Federation 在同一事务创建 Bureau 与 Server；
+- `federation_bureau_servers.bureau_id` 同时是主键与 Bureau 外键，保证一对一；
 - `server_url` 必须是无 credentials 的 HTTP(S) URL，并规范化掉末尾 `/`；
 - 不限制不同 Bureau 使用相同 `server_url`；
 - archived Bureau 不允许再修改 URL。
@@ -152,7 +164,7 @@ const bureau = await city.bureau();
 await city.post("/v1/product/action", input);
 ```
 
-`city.bureau()` 的结果在实例内缓存。`get()` 与 `post()` 使用 `bureau.server_url`，并拒绝把 User Token 发送到不同 origin 的绝对 URL。
+`city.bureau()` 的结果在实例内缓存。`get()` 与 `post()` 使用 `bureau.server.server_url`，并拒绝把 User Token 发送到不同 origin 的绝对 URL。
 
 ### 4.3 Bureau
 
@@ -176,7 +188,7 @@ const created = await admin.bureaus.create({
   server_url: "https://bureau.example.com",
 });
 
-await admin.bureaus.update_server_url({
+await admin.bureaus.server.update({
   bureau_id: created.bureau_id,
   server_url: "https://new-bureau.example.com",
 });
@@ -222,7 +234,7 @@ sequenceDiagram
 管理接口：
 
 - `POST /v1/bureaus/create`：创建 Bureau，`server_url` 必填；
-- `POST /v1/bureaus/server-url/update`：更新一个 Bureau 的唯一入口；
+- `POST /v1/bureaus/server/update`：更新一个 Bureau 的唯一 Server 入口；
 - `POST /v1/bureaus/tokens/register`：把机器凭证绑定到 `bureau_id`；
 - Bureau pause、resume、archive 与 token revoke/list 等既有管理接口。
 
@@ -239,7 +251,7 @@ sequenceDiagram
 - City 相信 Federation 验证后的 `/v1/bureaus/current`，不相信本地 decode 的 claims。
 - Federation 必须校验 User Token claim、audience 与请求上下文的 Bureau 一致。
 - Bureau 必须使用机器 Token 绑定的 `bureau_id` 作为验签 audience，不能相信调用方声明。
-- City 只向 `BureauRecord.server_url` 的同 origin 地址发送 User Token。
+- City 只向 `BureauRecord.server.server_url` 的同 origin 地址发送 User Token。
 - paused 或 archived Bureau 不能作为有效的当前产品入口。
 - Token 明文只在签发时出现，数据库只保存 hash。
 
@@ -249,16 +261,17 @@ sequenceDiagram
 
 - 存在旧 `cities` 表；
 - `federation_bureau_tokens` 缺少 `bureau_id`；
-- `federation_bureaus` 缺少必填 `server_url`。
+- `federation_bureaus` 仍把 `server_url` 保存在身份表；
+- Bureau 身份缺少一对一的 `federation_bureau_servers` 记录。
 
 迁移必须显式完成：删除旧 City 产品身份，为每个 Bureau 填写服务入口，并重新注册能确定归属的 Bureau Token。不能猜测历史 Token 的 Bureau。
 
 ## 9. 最终不变量
 
 1. Federation 是用户身份和 Bureau 注册信息的唯一事实源。
-2. Bureau 是产品服务端边界，一个 Bureau 对应一个当前 `server_url`。
+2. Bureau 是产品服务端边界，一个 Bureau 一对一拥有一个当前 Server。
 3. City 是终端，不拥有 `bureau_id` 或服务部署配置。
 4. Bureau Token 自身绑定 `bureau_id`。
 5. User Token 自身包含 `bureau_id`，但客户端通过 Federation 权威解析。
 6. Organization 只表达关系，不承载 server。
-7. `server_url` 对单个 Bureau 必填且唯一，但不要求跨 Bureau 唯一。
+7. Server 对单个 Bureau 必填且唯一，`server_url` 不要求跨 Bureau 唯一。

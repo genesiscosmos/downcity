@@ -36,7 +36,7 @@ const profile = await city.user().profile();
 
 Optional product backend:
 
-Create the Bureau with a required `server_url` in the Federation control plane, then register its machine token:
+Create the Bureau and its required one-to-one Server configuration in the Federation control plane, then register its machine token. The create input still accepts `server_url` directly:
 
 ```bash
 fed bureau token
@@ -62,7 +62,7 @@ Bureau's machine identity and has no Federation Root privileges. `identify()` re
 whose audience belongs to another Bureau. `identify()` only reads discovery and JWKS;
 Bureau requests Federation only when it needs current Profile, balance, or other shared data.
 
-City resolves the current Bureau `server_url` from Federation, so callers only provide a relative path:
+City resolves the entrypoint from `bureau.server.server_url`, so callers only provide a relative path:
 
 ```ts
 const result = await city.post(

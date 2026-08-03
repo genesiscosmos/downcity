@@ -76,7 +76,7 @@ export async function manage_bureaus(admin: FederationAdmin, _base_url: string, 
           title: t({ zh: `${items.length} 个产品`, en: `${items.length} Products` }),
           columns: ["Bureau ID", t({ zh: "名称", en: "Name" }), "Server URL", t({ zh: "状态", en: "Status" })],
           rows: items.map((item) => ({
-            cells: [item.bureau_id, item.name, item.server_url, item.state],
+            cells: [item.bureau_id, item.name, item.server.server_url, item.state],
           })),
           empty_message: t({ zh: "暂无 Bureau。", en: "No bureaus." }),
         });

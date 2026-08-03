@@ -30,6 +30,7 @@ function create_fake_agent() {
   const subscribers = new Set();
   let compact_count = 0;
   let approval_mode = "ask";
+  const set_calls = [];
   const info = {
     agent_id: "http-test-agent",
     session_id: "http-test-session",
@@ -118,7 +119,8 @@ function create_fake_agent() {
       subscribers.add(subscriber);
       return () => subscribers.delete(subscriber);
     },
-    async set(input) {
+    async set(input, options) {
+      set_calls.push({ input, options });
       if (input.security?.approval_mode) {
         approval_mode = input.security.approval_mode;
       }
@@ -128,6 +130,23 @@ function create_fake_agent() {
     },
     async compact() {
       compact_count += 1;
+      const compact_id = "compact-http-test";
+      queueMicrotask(() => {
+        for (const subscriber of subscribers) {
+          subscriber({
+            mutation_id: "compact-finish-http-test",
+            variant: "compact",
+            type: "finish",
+            session_id: info.session_id,
+            compact_id,
+            status: "completed",
+            compacted: false,
+            reason: "nothing_to_compact",
+            created_at: Date.now(),
+          });
+        }
+      });
+      return { id: compact_id };
     },
     async messages() {
       return { items: [], total: 0, source: "active", has_more: false };
@@ -171,6 +190,9 @@ function create_fake_agent() {
   return {
     read_compact_count() {
       return compact_count;
+    },
+    read_set_calls() {
+      return structuredClone(set_calls);
     },
     sessions: {
       async list() {
@@ -225,7 +247,6 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", async ()
     });
     const turn = await session.prompt({ query: "test" });
     const result = await turn.finished;
-    unsubscribe();
 
     assert.equal(result.success, true);
     assert.equal(result.text, "HTTP transport works");
@@ -238,7 +259,14 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", async ()
     });
 
     assert.equal((await session.interactions())[0].request.interaction_id, "interaction-http-test");
-    await session.set({ security: { approval_mode: "always-allow" } });
+    await session.set(
+      { security: { approval_mode: "always-allow" } },
+      { persist_action: false, publish_mutation: false },
+    );
+    assert.deepEqual(fake_agent.read_set_calls(), [{
+      input: { security: { approval_mode: "always-allow" } },
+      options: { persist_action: false, publish_mutation: false },
+    }]);
     assert.deepEqual((await session.status()).security, {
       approval_mode: "always-allow",
       effective_approval_mode: "ask",
@@ -254,7 +282,13 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", async ()
         response: { kind: "approval", decision: "approved" },
       },
     );
-    await session.compact();
+    const compact = await session.compact();
+    assert.deepEqual(await compact.finished, {
+      compact_id: "compact-http-test",
+      success: true,
+      compacted: false,
+      reason: "nothing_to_compact",
+    });
     assert.equal(fake_agent.read_compact_count(), 1);
 
     const action = await remote_agent.run_plugin_action({
@@ -272,6 +306,7 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", async ()
       plugin_name: "demo",
       action_name: "echo",
     });
+    unsubscribe();
   } finally {
     await remote_agent.close();
     await http.close();

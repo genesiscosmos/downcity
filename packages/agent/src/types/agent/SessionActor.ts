@@ -18,6 +18,7 @@ import type {
   AgentSessionForkInput,
   AgentSessionInfo,
   AgentSessionSetInput,
+  AgentSessionSetOptions,
   AgentSessionStatus,
   AgentSessionSummaryPage,
   AgentSessionSystemSnapshot,
@@ -121,7 +122,7 @@ export interface AgentSession extends AgentSessionActor {
   readonly config: AgentSessionConfigSnapshot;
 
   /** 写入当前 session 默认配置。 */
-  set(input: AgentSessionSetInput): Promise<void>;
+  set(input: AgentSessionSetInput, options?: AgentSessionSetOptions): Promise<void>;
 
   /** 把当前 Session 首次生成后固定的完整 system 显式固化到 instruction.md。 */
   snapshot(): Promise<void>;
@@ -138,7 +139,7 @@ export interface AgentSession extends AgentSessionActor {
  */
 export interface RemoteAgentSession extends AgentSessionActor {
   /** 写入当前远程 Session 的可序列化动态配置。 */
-  set(input: RemoteSessionSetInput): Promise<void>;
+  set(input: RemoteSessionSetInput, options?: AgentSessionSetOptions): Promise<void>;
 
   /** 从当前远程 session 创建一个分叉会话。 */
   fork(input?: AgentSessionForkInput | string): Promise<RemoteAgentSession>;

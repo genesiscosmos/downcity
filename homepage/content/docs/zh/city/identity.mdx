@@ -35,7 +35,7 @@ const profile = await city.user().profile();
 
 可选的产品后端：
 
-先在 Federation 管理侧创建 Bureau 并填写必填 `server_url`，再登记该 Bureau 的机器 Token：
+先在 Federation 管理侧创建 Bureau 及其必填的一对一 Server 配置，再登记该 Bureau 的机器 Token。创建输入仍直接接收 `server_url`：
 
 ```bash
 fed bureau token
@@ -60,7 +60,7 @@ const profile = await (await bureau.user(request)).profile();
 `identify()` 只读取 Federation discovery 和 JWKS，不调用在线 introspection；只有需要当前
 Profile、余额等数据时，Bureau 才请求 Federation。
 
-City 请求 Bureau 独立服务时会从 Federation 解析当前 `server_url`，调用方只需传相对路径：
+City 请求 Bureau 独立服务时会从 Federation 返回的 `bureau.server.server_url` 解析当前入口，调用方只需传相对路径：
 
 ```ts
 const result = await city.post(

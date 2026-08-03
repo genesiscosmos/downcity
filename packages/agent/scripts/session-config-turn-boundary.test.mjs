@@ -600,6 +600,18 @@ test("running session approval mode changes stay queued until the next Session s
       },
     });
 
+    const cached_session = await agent.sessions.get(session.id);
+    assert.equal(cached_session, session);
+    assert.deepEqual(await cached_session.status(), {
+      session_id: session.id,
+      state: "running",
+      active_turn_id: first_turn.id,
+      security: {
+        approval_mode: "always-allow",
+        effective_approval_mode: "ask",
+      },
+    });
+
     release_first_provider_request.resolve();
     assert.equal((await first_turn.finished).success, true);
     assert.deepEqual(await session.status(), {
@@ -635,6 +647,179 @@ test("running session approval mode changes stay queued until the next Session s
   } finally {
     release_first_provider_request.resolve();
     await agent.dispose();
+    await fs.rm(agent_path, { recursive: true, force: true });
+  }
+});
+
+test("session set options independently control Action persistence and Mutation publication", async () => {
+  const agent_path = await fs.mkdtemp(
+    path.join(os.tmpdir(), "downcity-session-set-options-"),
+  );
+  const first_model = new MockLanguageModelV3({
+    modelId: "set-options-first-model",
+    doStream: async () => create_stream_text_result("first"),
+  });
+  const second_model = new MockLanguageModelV3({
+    modelId: "set-options-second-model",
+    doStream: async () => create_stream_text_result("second"),
+  });
+  const agent = new Agent({
+    id: "session_set_options_agent",
+    workspace: new Workspace({ path: agent_path }),
+    model: first_model,
+  });
+
+  try {
+    const session = await agent.sessions.create({
+      session_id: "session_set_options_session",
+    });
+    const mutations = [];
+    const unsubscribe = session.subscribe((mutation) => {
+      mutations.push(mutation);
+    });
+
+    await session.set(
+      { model: first_model },
+      { persist_action: false, publish_mutation: false },
+    );
+    assert.equal((await (await session.prompt({ query: "first" })).finished).success, true);
+    assert.equal(
+      (await session.messages()).items.some(
+        (message) =>
+          message.type === "action" &&
+          message.title === "Session configuration updated",
+      ),
+      false,
+    );
+
+    mutations.splice(0, mutations.length);
+    await session.set(
+      { model: second_model },
+      { publish_mutation: false },
+    );
+    assert.equal((await (await session.prompt({ query: "second" })).finished).success, true);
+    assert.equal(
+      (await session.messages()).items.some(
+        (message) =>
+          message.type === "action" &&
+          message.description === "model: set-options-second-model",
+      ),
+      true,
+    );
+    assert.equal(
+      mutations.some(
+        (mutation) =>
+          mutation.variant === "message" &&
+          mutation.type === "action",
+      ),
+      false,
+    );
+
+    const before_duplicate_count = (await session.messages()).items.filter(
+      (message) =>
+        message.type === "action" &&
+        message.title === "Session configuration updated",
+    ).length;
+    await session.set({ model: second_model });
+    assert.equal((await (await session.prompt({ query: "duplicate" })).finished).success, true);
+    assert.equal(
+      (await session.messages()).items.filter(
+        (message) =>
+          message.type === "action" &&
+          message.title === "Session configuration updated",
+      ).length,
+      before_duplicate_count,
+    );
+
+    await assert.rejects(
+      session.set(
+        { security: { approval_mode: "always-allow" } },
+        { persist_action: false, publish_mutation: true },
+      ),
+      /publish_mutation requires persist_action/,
+    );
+    unsubscribe();
+  } finally {
+    await agent.dispose();
+    await fs.rm(agent_path, { recursive: true, force: true });
+  }
+});
+
+test("restored Session rebinds the same model without emitting a configuration Mutation", async () => {
+  const agent_path = await fs.mkdtemp(
+    path.join(os.tmpdir(), "downcity-session-config-restore-"),
+  );
+  const create_model = () => new MockLanguageModelV3({
+    modelId: "restored-session-model",
+    doStream: async () => create_stream_text_result("restored"),
+  });
+  const first_agent = new Agent({
+    id: "session_config_restore_agent",
+    workspace: new Workspace({ path: agent_path }),
+    model: create_model(),
+  });
+
+  try {
+    const session = await first_agent.sessions.create({
+      session_id: "session_config_restore_session",
+    });
+    await session.set({
+      model: create_model(),
+      security: { approval_mode: "always-allow" },
+    });
+    assert.equal((await (await session.prompt({ query: "persist" })).finished).success, true);
+  } finally {
+    await first_agent.dispose();
+  }
+
+  const restored_agent = new Agent({
+    id: "session_config_restore_agent",
+    workspace: new Workspace({ path: agent_path }),
+    model: create_model(),
+  });
+  try {
+    const session = await restored_agent.sessions.get(
+      "session_config_restore_session",
+    );
+    assert.deepEqual((await session.status()).security, {
+      approval_mode: "always-allow",
+      effective_approval_mode: "always-allow",
+    });
+    const before_action_count = (await session.messages()).items.filter(
+      (message) =>
+        message.type === "action" &&
+        message.title === "Session configuration updated",
+    ).length;
+    const mutations = [];
+    const unsubscribe = session.subscribe((mutation) => {
+      mutations.push(mutation);
+    });
+
+    await session.set({
+      model: create_model(),
+      security: { approval_mode: "always-allow" },
+    });
+    assert.equal((await (await session.prompt({ query: "restore" })).finished).success, true);
+    assert.equal(
+      (await session.messages()).items.filter(
+        (message) =>
+          message.type === "action" &&
+          message.title === "Session configuration updated",
+      ).length,
+      before_action_count,
+    );
+    assert.equal(
+      mutations.some(
+        (mutation) =>
+          mutation.variant === "message" &&
+          mutation.type === "action" &&
+          mutation.message.title === "Session configuration updated",
+      ),
+      false,
+    );
+    unsubscribe();
+  } finally {
+    await restored_agent.dispose();
     await fs.rm(agent_path, { recursive: true, force: true });
   }
 });

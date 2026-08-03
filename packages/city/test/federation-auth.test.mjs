@@ -23,12 +23,18 @@ test("Federation 新数据库使用 Bureau 身份与绑定机器凭证表", asyn
       sql: "PRAGMA table_info(federation_bureaus)",
       params: [],
     })).rows
+    const server_columns = (await db.query({
+      sql: "PRAGMA table_info(federation_bureau_servers)",
+      params: [],
+    })).rows
     const token_columns = (await db.query({
       sql: "PRAGMA table_info(federation_bureau_tokens)",
       params: [],
     })).rows
     assert.equal(bureau_columns.some((column) => column.name === "bureau_id"), true)
-    assert.equal(bureau_columns.some((column) => column.name === "server_url"), true)
+    assert.equal(bureau_columns.some((column) => column.name === "server_url"), false)
+    assert.equal(server_columns.some((column) => column.name === "bureau_id"), true)
+    assert.equal(server_columns.some((column) => column.name === "server_url"), true)
     assert.equal(token_columns.some((column) => column.name === "bureau_id"), true)
     assert.equal((await db.query({
       sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'cities'",
@@ -57,10 +63,18 @@ test("Federation 拒绝旧 City 身份表和无法确定归属的 Bureau Token",
     )
 
     const bureau_db = createSqliteDb(path.join(temp_dir, "legacy-bureau.sqlite"))
-    await bureau_db.execute_ddl("CREATE TABLE federation_bureaus (bureau_id TEXT PRIMARY KEY, name TEXT NOT NULL, state TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, archived_at TEXT NOT NULL)")
+    await bureau_db.execute_ddl("CREATE TABLE federation_bureaus (bureau_id TEXT PRIMARY KEY, name TEXT NOT NULL, server_url TEXT NOT NULL, state TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, archived_at TEXT NOT NULL)")
     await assert.rejects(
       new Federation({ database: bureau_db }).health(),
-      /identity schema migration required: legacy Bureau records have no server_url/,
+      /identity schema migration required: legacy Bureau records store server_url on the identity table/,
+    )
+
+    const orphan_bureau_db = createSqliteDb(path.join(temp_dir, "orphan-bureau.sqlite"))
+    await orphan_bureau_db.execute_ddl("CREATE TABLE federation_bureaus (bureau_id TEXT PRIMARY KEY, name TEXT NOT NULL, state TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, archived_at TEXT NOT NULL)")
+    await orphan_bureau_db.execute_ddl("INSERT INTO federation_bureaus (bureau_id, name, state, created_at, updated_at, archived_at) VALUES ('bureau_orphan', 'Orphan', 'active', 't', 't', '')")
+    await assert.rejects(
+      new Federation({ database: orphan_bureau_db }).health(),
+      /identity schema migration required: Bureau Server record is missing for bureau_orphan/,
     )
   } finally {
     await fs.rm(temp_dir, { recursive: true, force: true })
@@ -83,14 +97,15 @@ test("Federation 注册 Bureau 服务入口并按 User Token 解析当前 Bureau
       name: "Product B",
       server_url: "https://bureau.example.com",
     })
-    assert.equal(created.server_url, "https://bureau.example.com")
-    assert.equal(second.server_url, created.server_url)
+    assert.equal(created.server.server_url, "https://bureau.example.com")
+    assert.equal(second.server.server_url, created.server.server_url)
+    assert.equal(created.server.bureau_id, created.bureau_id)
 
-    const updated = await admin.bureaus.update_server_url({
+    const updated = await admin.bureaus.server.update({
       bureau_id: created.bureau_id,
       server_url: "https://new-bureau.example.com/",
     })
-    assert.equal(updated.server_url, "https://new-bureau.example.com")
+    assert.equal(updated.server.server_url, "https://new-bureau.example.com")
 
     const issued = await (await federation.getAuthenticator()).createToken({
       bureau_id: created.bureau_id,
@@ -101,7 +116,7 @@ test("Federation 注册 Bureau 服务入口并按 User Token 解析当前 Bureau
       headers: { authorization: `Bearer ${issued.user_token}` },
     }))
     assert.equal(response.status, 200)
-    assert.equal((await response.json()).bureau.server_url, "https://new-bureau.example.com")
+    assert.equal((await response.json()).bureau.server.server_url, "https://new-bureau.example.com")
   } finally {
     await fs.rm(temp_dir, { recursive: true, force: true })
   }

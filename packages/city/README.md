@@ -270,7 +270,7 @@ const result = await city.post("/reports/summary", { range: "today" });
 
 `Bureau Token` 在 Federation 注册时已经绑定 `bureau_id`，因此 `new Bureau()` 不再重复传入。
 `identify()` 只接受 audience 与该 Bureau 一致的 User Token。City 会从 Federation 读取
-当前 Bureau 的 `server_url`，并只向该 origin 转发 `user_token`。
+当前 Bureau 的 `server.server_url`，并只向该 origin 转发 `user_token`。
 
 ## 主要导出
 

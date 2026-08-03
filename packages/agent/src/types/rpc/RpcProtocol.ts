@@ -15,6 +15,7 @@ import type {
   AgentArchiveSessionResult,
   AgentArchiveSessionsResult,
   AgentCleanArchiveResult,
+  AgentSessionSetOptions,
   RemoteSessionSetInput,
   AgentSessionSystemSnapshot,
 } from "@/types/agent/SessionTypes.js";
@@ -155,7 +156,11 @@ export type RpcRequest =
       /** 更新指定 Session 的可序列化动态配置。 */
       method: "sdk.sessions.set";
       /** Session 与动态配置参数。 */
-      params: { session_id: string; input: RemoteSessionSetInput };
+      params: {
+        session_id: string;
+        input: RemoteSessionSetInput;
+        options?: AgentSessionSetOptions;
+      };
     }
   | {
       /** 请求 id，用于匹配响应。 */

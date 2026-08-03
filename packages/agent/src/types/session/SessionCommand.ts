@@ -24,4 +24,6 @@ export interface SessionCommandCompletion {
   title: string;
   /** Action Message 展示的可选结果说明。 */
   description?: string;
+  /** Action Message 持久化后是否发布对应 Session Mutation。 */
+  publish_mutation?: boolean;
 }

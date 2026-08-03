@@ -14,6 +14,13 @@ function normalizeModelLabel(input: unknown): string | undefined {
   return label || undefined;
 }
 
+/** 归一化 Session Shell 审批模式。 */
+function normalize_approval_mode(
+  input: unknown,
+): "ask" | "always-allow" | undefined {
+  return input === "ask" || input === "always-allow" ? input : undefined;
+}
+
 /**
  * 归一化 session 标题。
  */
@@ -105,6 +112,9 @@ export function normalize_session_metadata(
       : {}),
     ...(normalizeModelLabel(raw.model_label)
       ? { model_label: normalizeModelLabel(raw.model_label) }
+      : {}),
+    ...(normalize_approval_mode(raw.approval_mode)
+      ? { approval_mode: normalize_approval_mode(raw.approval_mode) }
       : {}),
     ...(normalize_message_count(raw.message_count) !== undefined
       ? { message_count: normalize_message_count(raw.message_count) }

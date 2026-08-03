@@ -25,6 +25,15 @@ import { to_executor_history } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
 import type { SessionStateOptions } from "@/types/session/SessionState.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
+import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
+
+/** Session 模型配置写入结果。 */
+export interface SessionModelSetResult {
+  /** 已包含最新运行时模型实例的 configured 快照。 */
+  config: AgentSessionConfigSnapshot;
+  /** 持久化模型身份是否发生真实变化。 */
+  changed: boolean;
+}
 
 /**
  * 本地 Session 配置与 Metadata 状态管理器。
@@ -59,6 +68,11 @@ export class SessionState {
     return {
       ...this.state.session_config,
     };
+  }
+
+  /** 读取当前 Session 已接受的 Shell 审批模式。 */
+  get_approval_mode(): SessionApprovalMode {
+    return this.state.configured_approval_mode;
   }
 
   /**
@@ -99,10 +113,13 @@ export class SessionState {
       });
       this.state.created_at = created_at;
       this.state.timezone = timezone;
-      this.state.session_config = {};
+      this.state.session_config = {
+        ...(metadata.model_label ? { model_label: metadata.model_label } : {}),
+      };
       this.state.effective_session_config = {
         ...this.state.session_config,
       };
+      this.state.configured_approval_mode = metadata.approval_mode || "ask";
     })();
     await this.state.initialize_promise;
   }
@@ -141,23 +158,40 @@ export class SessionState {
   /**
    * 写入当前 session 配置。
    */
-  async set_model(model: AgentModel): Promise<AgentSessionConfigSnapshot> {
+  async set_model(model: AgentModel): Promise<SessionModelSetResult> {
     const next_model_label = infer_agent_model_label(model);
+    const changed = next_model_label !== this.state.session_config.model_label;
     const next_config: AgentSessionConfigSnapshot = {
       ...this.state.session_config,
       model,
       model_label: next_model_label,
       model_context_window: read_agent_model_context_window(model),
     };
+    if (changed) {
+      const metadata = await this.store.read_metadata();
+      await this.store.write_metadata({
+        ...metadata,
+        agent_id: this.agent_id,
+        updated_at: Date.now(),
+        ...(next_model_label ? { model_label: next_model_label } : {}),
+      });
+    }
+    this.state.session_config = next_config;
+    return { config: next_config, changed };
+  }
+
+  /** 接受并持久化当前 Session 的 Shell 审批模式。 */
+  async set_approval_mode(mode: SessionApprovalMode): Promise<boolean> {
+    if (mode === this.state.configured_approval_mode) return false;
     const metadata = await this.store.read_metadata();
     await this.store.write_metadata({
       ...metadata,
       agent_id: this.agent_id,
       updated_at: Date.now(),
-      ...(next_model_label ? { model_label: next_model_label } : {}),
+      approval_mode: mode,
     });
-    this.state.session_config = next_config;
-    return next_config;
+    this.state.configured_approval_mode = mode;
+    return true;
   }
 
   /** 在 Session Step 检查点提交模型配置。 */

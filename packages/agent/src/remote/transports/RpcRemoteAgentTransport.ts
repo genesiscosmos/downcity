@@ -16,6 +16,7 @@ import type {
   AgentCleanArchiveResult,
   AgentSessionForkInput,
   AgentSessionInfo,
+  AgentSessionSetOptions,
   AgentSessionStatus,
   AgentSessionSummaryPage,
   AgentSessionSystemSnapshot,
@@ -167,8 +168,9 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
   async set(
     session_id: string,
     input: RemoteSessionSetInput,
+    options?: AgentSessionSetOptions,
   ): Promise<void> {
-    await this.client.set_session(session_id, input);
+    await this.client.set_session(session_id, input, options);
   }
 
   async respond(

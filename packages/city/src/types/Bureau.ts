@@ -22,8 +22,44 @@ export interface BureauRecord extends Record<string, unknown> {
   /** 面向管理者展示的产品名称。 */
   name: string;
 
-  /** 当前 Bureau 唯一绑定的服务端 HTTP(S) 入口。 */
+  /** 当前 Bureau 唯一拥有的服务端部署配置。 */
+  server: BureauServerRecord;
+
+  /** Bureau 当前生命周期状态。 */
+  state: BureauState;
+
+  /** ISO 8601 创建时间。 */
+  created_at: string;
+
+  /** ISO 8601 最后更新时间。 */
+  updated_at: string;
+
+  /** ISO 8601 归档时间；未归档时为空字符串。 */
+  archived_at: string;
+}
+
+/** Bureau 唯一拥有的服务端部署配置。 */
+export interface BureauServerRecord extends Record<string, unknown> {
+  /** 拥有该 Server 的稳定 Bureau ID，同时也是一对一记录主键。 */
+  bureau_id: string;
+
+  /** 当前 Server 的 HTTP(S) 服务入口。 */
   server_url: string;
+
+  /** ISO 8601 创建时间。 */
+  created_at: string;
+
+  /** ISO 8601 最后更新时间。 */
+  updated_at: string;
+}
+
+/** Federation 数据库中不包含部署配置的 Bureau 身份记录。 */
+export interface BureauIdentityRecord extends Record<string, unknown> {
+  /** Federation 内全局唯一、创建后不变的 Bureau ID。 */
+  bureau_id: string;
+
+  /** 面向管理者展示的产品名称。 */
+  name: string;
 
   /** Bureau 当前生命周期状态。 */
   state: BureauState;
@@ -51,7 +87,7 @@ export interface BureauCreateInput {
 }
 
 /** 更新 Bureau 服务端入口的输入。 */
-export interface BureauServerUrlUpdateInput {
+export interface BureauServerUpdateInput {
   /** 需要更新的稳定 Bureau ID。 */
   bureau_id: string;
 

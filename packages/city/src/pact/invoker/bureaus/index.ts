@@ -8,7 +8,7 @@ import type { RequestInitLike } from "../../http.js";
 import type {
   BureauCreateInput,
   BureauRecord,
-  BureauServerUrlUpdateInput,
+  BureauServerUpdateInput,
   BureauTokenSummary,
   RegisterBureauTokenInput,
 } from "../../../types/Bureau.js";
@@ -48,16 +48,34 @@ export class BureauTokensInvoker {
   }
 }
 
+/** Bureau 唯一 Server 配置调用器。 */
+export class BureauServerInvoker {
+  constructor(
+    private readonly req: <T>(path: string, init: RequestInitLike) => Promise<T>,
+  ) {}
+
+  /** 更新 Bureau 唯一 Server 的 HTTP(S) 入口。 */
+  update(input: BureauServerUpdateInput): Promise<BureauRecord> {
+    return this.req(`${PREFIX}/server/update`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+}
+
 /** Federation Bureau 身份管理调用器。 */
 export class BureausInvoker {
   /** Bureau 机器凭证注册表。 */
   readonly tokens: BureauTokensInvoker;
+  /** Bureau 唯一 Server 配置。 */
+  readonly server: BureauServerInvoker;
 
   constructor(options: {
     /** 发送带 Federation Root Admin 鉴权的 JSON 请求。 */
     requestJSON: <T>(path: string, init: RequestInitLike) => Promise<T>;
   }) {
     this.tokens = new BureauTokensInvoker(options.requestJSON);
+    this.server = new BureauServerInvoker(options.requestJSON);
     this.req = options.requestJSON;
   }
 
@@ -90,14 +108,6 @@ export class BureausInvoker {
   /** 归档 Bureau 并撤销它的机器凭证。 */
   archive(bureau_id: string): Promise<BureauRecord> {
     return this.mutate("archive", bureau_id);
-  }
-
-  /** 更新 Bureau 唯一绑定的服务端入口。 */
-  update_server_url(input: BureauServerUrlUpdateInput): Promise<BureauRecord> {
-    return this.req(`${PREFIX}/server-url/update`, {
-      method: "POST",
-      body: JSON.stringify(input),
-    });
   }
 
   private mutate(action: "pause" | "activate" | "archive", bureau_id: string): Promise<BureauRecord> {

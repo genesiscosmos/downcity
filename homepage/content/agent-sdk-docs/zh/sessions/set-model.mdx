@@ -24,6 +24,24 @@ await session.set({
 
 因此，配置 API 的返回值表达“修改是否成功”，action message 表达“修改在哪个 Session turn 的 step 检查点生效”。Timeline 只承担观测职责：action 写入失败不会回滚已经生效的配置，SDK 会记录 warning。
 
+## 控制 Action 与 Mutation
+
+`set()` 的第二个可选参数只控制配置提交后的可观测结果，不影响配置写入和检查点生效：
+
+```ts
+await session.set(
+  { model },
+  { persist_action: false, publish_mutation: false },
+);
+```
+
+- `persist_action` 默认为 `true`；设为 `false` 时不创建配置 Action Message。
+- `publish_mutation` 默认跟随 `persist_action`；设为 `false` 时可以保留历史 Action，但不向 `subscribe()` 发布对应 Mutation。
+- `persist_action=false` 时不能设置 `publish_mutation=true`，因为 Message Mutation 必须对应 canonical Message。
+- 重复设置相同模型身份不会创建新的配置 Action；重启后传入同一模型只会重新绑定运行时实例。
+
+Session 初始化或恢复可关闭两项可观测输出；用户主动切换模型通常保留默认选项。
+
 ## 什么时候需要它
 
 适用于这些场景：

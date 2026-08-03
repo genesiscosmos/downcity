@@ -302,7 +302,12 @@ test("City get() / post() use JSON and forward the current user_token", async ()
           bureau: {
             bureau_id: "bureau_demo",
             name: "Demo",
-            server_url: "https://bureau.example.com",
+            server: {
+              bureau_id: "bureau_demo",
+              server_url: "https://bureau.example.com",
+              created_at: "t",
+              updated_at: "t",
+            },
             state: "active",
             created_at: "t",
             updated_at: "t",
@@ -345,7 +350,12 @@ test("City never forwards a user_token outside the current Bureau origin", async
       bureau: {
         bureau_id: "bureau_demo",
         name: "Demo",
-        server_url: "https://bureau.example.com",
+        server: {
+          bureau_id: "bureau_demo",
+          server_url: "https://bureau.example.com",
+          created_at: "t",
+          updated_at: "t",
+        },
         state: "active",
         created_at: "t",
         updated_at: "t",
@@ -589,7 +599,7 @@ test("FederationAdmin env list / catalog / upsert / remove", async () => {
 })
 
 test("FederationAdmin manages Bureau entities and issues seed user tokens", async () => {
-  const requests = []; const p = { bureau_id: "bureau_p1", name: "Demo", server_url: "https://bureau.example.com", state: "active", created_at: "t", updated_at: "t", archived_at: "" }
+  const requests = []; const p = { bureau_id: "bureau_p1", name: "Demo", server: { bureau_id: "bureau_p1", server_url: "https://bureau.example.com", created_at: "t", updated_at: "t" }, state: "active", created_at: "t", updated_at: "t", archived_at: "" }
   const admin = new FederationAdmin({
     base_url: "http://localhost:3001/",
     credential: "sk",
@@ -601,7 +611,7 @@ test("FederationAdmin manages Bureau entities and issues seed user tokens", asyn
     return json({ success: true })
   }})
   assert.deepEqual(await admin.bureaus.list(), [p])
-  assert.equal((await admin.bureaus.create({ name: "Demo", server_url: p.server_url })).bureau_id, "bureau_p1")
+  assert.equal((await admin.bureaus.create({ name: "Demo", server_url: p.server.server_url })).bureau_id, "bureau_p1")
   await admin.bureaus.pause("bureau_p1")
   assert.equal(requests[2].url, "http://localhost:3001/v1/bureaus/pause")
   assert.deepEqual(await admin.service("accounts").action("tokens/issue").invoke({ bureau_id: "bureau_p1", user_id: "u1" }), {

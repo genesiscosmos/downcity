@@ -16,6 +16,7 @@ import type {
   AgentCleanArchiveResult,
   AgentSessionForkInput,
   AgentSessionInfo,
+  AgentSessionSetOptions,
   AgentSessionStatus,
   AgentSessionSummaryPage,
   AgentSessionSystemSnapshot,
@@ -427,6 +428,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
   async set(
     session_id: string,
     input: RemoteSessionSetInput,
+    options?: AgentSessionSetOptions,
   ): Promise<void> {
     const payload = await read_http_json<{
       success?: boolean;
@@ -437,7 +439,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       headers: this.headers({
         "Content-Type": "application/json",
       }),
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, ...(options ? { options } : {}) }),
     });
     if (payload.success !== true || payload.queued !== true) {
       throw new Error(String(payload.error || "Remote session set failed"));

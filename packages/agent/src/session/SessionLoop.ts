@@ -279,6 +279,8 @@ export class SessionLoop {
           session_id: this.session_id,
           turn_id,
         },
+      }, {
+        publish_mutation: completion.publish_mutation !== false,
       });
     } catch (error) {
       try {
@@ -599,8 +601,9 @@ export class SessionLoop {
   /** 持久化 Executor Action，并同步刷新 Session metadata。 */
   private async persist_action_event(
     event: SessionActionRecordV1,
+    options?: { publish_mutation?: boolean },
   ): Promise<void> {
-    await this.messages.persist_action_record(event);
+    await this.messages.persist_action_record(event, options);
     await this.state.touch_metadata();
   }
 

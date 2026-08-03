@@ -41,17 +41,28 @@ async function assert_sqlite_identity_schema(database: Database): Promise<void> 
     }
   }
 
-  const bureau_table = await database.query<{ name: string }>({
-    sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'federation_bureaus'",
+  const bureau_tables = await database.query<{ name: string }>({
+    sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('federation_bureaus', 'federation_bureau_servers')",
     params: [],
   });
-  if (bureau_table.rows.length > 0) {
+  const has_bureaus = bureau_tables.rows.some((row) => row.name === "federation_bureaus");
+  const has_bureau_servers = bureau_tables.rows.some((row) => row.name === "federation_bureau_servers");
+  if (has_bureaus) {
     const columns = await database.query<{ name: string }>({
       sql: "PRAGMA table_info(federation_bureaus)",
       params: [],
     });
+    if (columns.rows.some((column) => column.name === "server_url")) {
+      throw_migration_required("legacy Bureau records store server_url on the identity table");
+    }
+  }
+  if (has_bureau_servers) {
+    const columns = await database.query<{ name: string }>({
+      sql: "PRAGMA table_info(federation_bureau_servers)",
+      params: [],
+    });
     if (!columns.rows.some((column) => column.name === "server_url")) {
-      throw_migration_required("legacy Bureau records have no server_url");
+      throw_migration_required("Bureau Server records have no server_url");
     }
   }
 }
@@ -59,7 +70,7 @@ async function assert_sqlite_identity_schema(database: Database): Promise<void> 
 /** 检查 PostgreSQL 使用的身份表结构。 */
 async function assert_postgresql_identity_schema(database: Database): Promise<void> {
   const tables = await database.query<{ table_name: string }>({
-    sql: "SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('cities', 'federation_bureaus', 'federation_bureau_tokens')",
+    sql: "SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() AND table_name IN ('cities', 'federation_bureaus', 'federation_bureau_servers', 'federation_bureau_tokens')",
     params: [],
   });
   if (tables.rows.some((row) => row.table_name === "cities")) {
@@ -75,14 +86,43 @@ async function assert_postgresql_identity_schema(database: Database): Promise<vo
     }
   }
 
-  if (tables.rows.some((row) => row.table_name === "federation_bureaus")) {
+  const has_bureaus = tables.rows.some((row) => row.table_name === "federation_bureaus");
+  const has_bureau_servers = tables.rows.some((row) => row.table_name === "federation_bureau_servers");
+  if (has_bureaus) {
     const columns = await database.query<{ column_name: string }>({
       sql: "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'federation_bureaus'",
       params: [],
     });
-    if (!columns.rows.some((column) => column.column_name === "server_url")) {
-      throw_migration_required("legacy Bureau records have no server_url");
+    if (columns.rows.some((column) => column.column_name === "server_url")) {
+      throw_migration_required("legacy Bureau records store server_url on the identity table");
     }
+  }
+  if (has_bureau_servers) {
+    const columns = await database.query<{ column_name: string }>({
+      sql: "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'federation_bureau_servers'",
+      params: [],
+    });
+    if (!columns.rows.some((column) => column.column_name === "server_url")) {
+      throw_migration_required("Bureau Server records have no server_url");
+    }
+  }
+}
+
+/** 在两张表完成创建后拒绝缺少一对一 Server 配置的历史 Bureau 数据。 */
+export async function assert_bureau_server_records(database: Database): Promise<void> {
+  const orphan_bureaus = await database.query<{ bureau_id: string }>({
+    sql: "SELECT b.bureau_id FROM federation_bureaus b LEFT JOIN federation_bureau_servers s ON s.bureau_id = b.bureau_id WHERE s.bureau_id IS NULL LIMIT 1",
+    params: [],
+  });
+  if (orphan_bureaus.rows.length > 0) {
+    throw_migration_required(`Bureau Server record is missing for ${orphan_bureaus.rows[0].bureau_id}`);
+  }
+  const orphan_servers = await database.query<{ bureau_id: string }>({
+    sql: "SELECT s.bureau_id FROM federation_bureau_servers s LEFT JOIN federation_bureaus b ON b.bureau_id = s.bureau_id WHERE b.bureau_id IS NULL LIMIT 1",
+    params: [],
+  });
+  if (orphan_servers.rows.length > 0) {
+    throw_migration_required(`Bureau identity is missing for Server ${orphan_servers.rows[0].bureau_id}`);
   }
 }
 
@@ -90,7 +130,7 @@ async function assert_postgresql_identity_schema(database: Database): Promise<vo
 function throw_migration_required(reason: string): never {
   throw new Error(
     `Federation identity schema migration required: ${reason}. `
-    + "Migrate City product identities to Bureaus, fill every Bureau server_url, and re-register "
+    + "Migrate Bureau identities and their required Server records, then re-register "
     + "any Bureau Token whose ownership cannot be established before startup.",
   );
 }

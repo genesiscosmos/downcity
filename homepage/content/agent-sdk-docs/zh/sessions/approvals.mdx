@@ -149,6 +149,17 @@ await session.set({
 `security.effective_approval_mode` 是执行面当前值；两者不同时表示修改仍在排队。Command
 成功提交后，Session 会持久化一条 `Session configuration updated` completed Action。
 
+初始化或恢复审批模式时，可以通过 `set()` 的第二个参数关闭 Action 和 Mutation；配置仍会正常写入并在检查点生效：
+
+```ts
+await session.set(
+  { security: { approval_mode: "always-allow" } },
+  { persist_action: false, publish_mutation: false },
+);
+```
+
+相同审批模式的幂等设置不会生成新的配置 Action。审批模式会随 Session metadata 恢复。
+
 ## UI 实现要点
 
 - 使用 `interaction_id` 作为交互卡片稳定 key。

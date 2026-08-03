@@ -1,6 +1,6 @@
 {
   "name": "@downcity/database-d1",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Downcity Federation Database adapter for Cloudflare D1.",
   "type": "module",
   "main": "./bin/index.js",

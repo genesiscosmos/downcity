@@ -282,7 +282,10 @@ export {
   CreditsInvoker,
   CreditsTransactionsInvoker,
 } from "./pact/invoker/credits/index.js";
-export { BureausInvoker, BureauTokensInvoker } from "./pact/invoker/bureaus/index.js";
+export {
+  BureausInvoker,
+  BureauTokensInvoker,
+} from "./pact/invoker/bureaus/index.js";
 export { EnvInvoker } from "./pact/invoker/env/index.js";
 
 export type {
@@ -294,8 +297,9 @@ export type {
 export type {
   BureauCreateInput,
   BureauMachineIdentity,
-  BureauServerUrlUpdateInput,
   BureauRecord,
+  BureauServerRecord,
+  BureauServerUpdateInput,
   BureauState,
   BureauTokenRecord,
 } from "./types/Bureau.js";

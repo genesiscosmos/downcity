@@ -53,6 +53,7 @@ export type {
   AgentSessionSecurityConfig,
   AgentSessionSecurityStatus,
   AgentSessionSetInput,
+  AgentSessionSetOptions,
   AgentSessionStatus,
   AgentSessionSummary,
   AgentSessionSummaryPage,

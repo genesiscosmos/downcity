@@ -1,29 +1,64 @@
 /**
  * Bureau 领域存储。
  *
- * Store 维护 Bureau 身份、唯一服务端入口和生命周期不变量。
+ * Store 维护 Bureau 身份、唯一 Server 配置和生命周期不变量。创建操作通过
+ * 跨表事务保证一对一关系完整，读取操作统一返回组合后的领域记录。
  */
 
 import { randomSecret } from "../../utils/helpers.js";
 import type { CityTableApi } from "../../store/table-api.js";
+import type { Database } from "../../database/Database.js";
+import type { FederationTableSchema } from "../../types/database/Database.js";
 import type {
   BureauCreateInput,
+  BureauIdentityRecord,
   BureauRecord,
+  BureauServerRecord,
   BureauState,
 } from "../../types/Bureau.js";
 
 /** Bureau 持久化与生命周期入口。 */
 export class BureauStore {
-  constructor(private readonly table: CityTableApi<BureauRecord>) {}
+  private readonly database: Database;
+  private readonly bureau_schema: FederationTableSchema;
+  private readonly server_schema: FederationTableSchema;
+  private readonly bureau_table: CityTableApi<BureauIdentityRecord>;
+  private readonly server_table: CityTableApi<BureauServerRecord>;
+
+  constructor(input: {
+    /** Federation 主数据库，用于执行 Bureau 与 Server 跨表事务。 */
+    database: Database;
+    /** Bureau 身份物理表定义。 */
+    bureau_schema: FederationTableSchema;
+    /** Bureau Server 物理表定义。 */
+    server_schema: FederationTableSchema;
+    /** Bureau 身份表操作入口。 */
+    bureau_table: CityTableApi<BureauIdentityRecord>;
+    /** Bureau Server 表操作入口。 */
+    server_table: CityTableApi<BureauServerRecord>;
+  }) {
+    this.database = input.database;
+    this.bureau_schema = input.bureau_schema;
+    this.server_schema = input.server_schema;
+    this.bureau_table = input.bureau_table;
+    this.server_table = input.server_table;
+  }
 
   /** 列出全部 Bureau。 */
-  list(): Promise<BureauRecord[]> {
-    return this.table.select();
+  async list(): Promise<BureauRecord[]> {
+    const identities = await this.bureau_table.select();
+    const servers = await this.server_table.select();
+    const servers_by_bureau = new Map(servers.map((server) => [server.bureau_id, server]));
+    return identities.map((identity) => compose_bureau(identity, servers_by_bureau.get(identity.bureau_id)));
   }
 
   /** 按稳定 ID 读取 Bureau。 */
   async get(bureau_id: string): Promise<BureauRecord | undefined> {
-    return (await this.table.select({ bureau_id: read_bureau_id(bureau_id) }))[0];
+    const id = read_bureau_id(bureau_id);
+    const identity = (await this.bureau_table.select({ bureau_id: id }))[0];
+    if (!identity) return undefined;
+    const server = (await this.server_table.select({ bureau_id: id }))[0];
+    return compose_bureau(identity, server);
   }
 
   /** 创建 active Bureau。 */
@@ -37,26 +72,43 @@ export class BureauStore {
       throw new TypeError(`Bureau already exists: ${bureau_id}`);
     }
     const now = new Date().toISOString();
-    const bureau: BureauRecord = {
+    const identity: BureauIdentityRecord = {
       bureau_id,
       name,
-      server_url,
       state: "active",
       created_at: now,
       updated_at: now,
       archived_at: "",
     };
-    await this.table.insert(bureau);
-    return bureau;
+    const server: BureauServerRecord = {
+      bureau_id,
+      server_url,
+      created_at: now,
+      updated_at: now,
+    };
+    await this.database.transaction(async (transaction) => {
+      await transaction.table<BureauIdentityRecord>(this.bureau_schema).insert(identity);
+      await transaction.table<BureauServerRecord>(this.server_schema).insert(server);
+    });
+    return compose_bureau(identity, server);
   }
 
   /** 替换 Bureau 唯一绑定的服务端入口。 */
-  async update_server_url(bureau_id: string, server_url: string): Promise<BureauRecord> {
+  async update_server(bureau_id: string, server_url: string): Promise<BureauRecord> {
     const current = await this.require(bureau_id);
     if (current.state === "archived") {
       throw new TypeError(`Archived Bureau cannot update server_url: ${current.bureau_id}`);
     }
-    return await this.update(current, { server_url: read_server_url(server_url) });
+    const next_server: BureauServerRecord = {
+      ...current.server,
+      server_url: read_server_url(server_url),
+      updated_at: new Date().toISOString(),
+    };
+    await this.server_table.update({
+      where: { bureau_id: current.bureau_id },
+      values: next_server,
+    });
+    return { ...current, server: next_server };
   }
 
   /** 在 active 与 paused 之间切换，归档后不能恢复。 */
@@ -65,7 +117,7 @@ export class BureauStore {
     if (current.state === "archived") {
       throw new TypeError(`Archived Bureau cannot change state: ${current.bureau_id}`);
     }
-    return await this.update(current, { state });
+    return await this.update_identity(current, { state });
   }
 
   /** 把 Bureau 归档为终态。 */
@@ -73,7 +125,7 @@ export class BureauStore {
     const current = await this.require(bureau_id);
     if (current.state === "archived") return current;
     const now = new Date().toISOString();
-    return await this.update(current, {
+    return await this.update_identity(current, {
       state: "archived",
       archived_at: now,
       updated_at: now,
@@ -88,18 +140,36 @@ export class BureauStore {
     return bureau;
   }
 
-  private async update(current: BureauRecord, values: Partial<BureauRecord>): Promise<BureauRecord> {
-    const next: BureauRecord = {
-      ...current,
+  private async update_identity(
+    current: BureauRecord,
+    values: Partial<BureauIdentityRecord>,
+  ): Promise<BureauRecord> {
+    const next_identity: BureauIdentityRecord = {
+      bureau_id: current.bureau_id,
+      name: current.name,
+      state: current.state,
+      created_at: current.created_at,
+      archived_at: current.archived_at,
       ...values,
       updated_at: values.updated_at ?? new Date().toISOString(),
     };
-    await this.table.update({
+    await this.bureau_table.update({
       where: { bureau_id: current.bureau_id },
-      values: next,
+      values: next_identity,
     });
-    return next;
+    return { ...next_identity, server: current.server };
   }
+}
+
+/** 把分表存储记录组合为完整 Bureau 领域对象。 */
+function compose_bureau(
+  identity: BureauIdentityRecord,
+  server: BureauServerRecord | undefined,
+): BureauRecord {
+  if (!server) {
+    throw new Error(`Bureau Server record is missing: ${identity.bureau_id}`);
+  }
+  return { ...identity, server };
 }
 
 /** 校验 Bureau ID。 */

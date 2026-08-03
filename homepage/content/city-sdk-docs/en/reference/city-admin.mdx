@@ -212,12 +212,19 @@ const bureau = await admin.bureaus.create({
   bureau_id: "bureau_my_app",
 });
 
+await admin.bureaus.server.update({
+  bureau_id: bureau.bureau_id,
+  server_url: "https://new-bureau.example.com",
+});
+
 await admin.bureaus.pause(bureau.bureau_id);
 await admin.bureaus.activate(bureau.bureau_id);
 await admin.bureaus.archive(bureau.bureau_id);
 ```
 
-If you want to issue a token for an arbitrary city in one call, use the lower-level token manager under `admin.bureaus`:
+The returned `bureau.server.server_url` comes from the separate one-to-one Server record. Updating it does not change the stable `bureau_id`.
+
+To issue a user token for a specific Bureau, use the Accounts Service:
 
 ```ts
 const issued = await admin.service("accounts").action("tokens/issue").invoke({

@@ -315,7 +315,11 @@ export class SessionMessages {
   }
 
   /** 按稳定 Action ID 创建或更新 canonical Action Message。 */
-  async persist_action_record(event: SessionActionRecordV1): Promise<void> {
+  async persist_action_record(
+    event: SessionActionRecordV1,
+    options?: { publish_mutation?: boolean },
+  ): Promise<void> {
+    const publish_mutation = options?.publish_mutation !== false;
     const existing = this.get_message(event.id);
     if (!existing) {
       const writer = await this.open_action_message({
@@ -324,6 +328,7 @@ export class SessionMessages {
         action_type: infer_action_type(event.id),
         title: event.title,
         description: event.description,
+        publish_mutation,
       });
       if (event.state === "completed") await writer.complete();
       if (event.state === "failed") {
@@ -335,7 +340,7 @@ export class SessionMessages {
       await this.update_action_message(event.id, event.state, {
         title: event.title,
         description: event.description,
-      });
+      }, { publish_mutation });
     }
   }
 
@@ -360,8 +365,12 @@ export class SessionMessages {
       title: input.title,
       ...(input.description ? { description: input.description } : {}),
       ...(input.data ? { data: structuredClone(input.data) } : {}),
-    }))) as SessionActionMessage;
-    return new SessionActionMessageWriter(this, message.message_id);
+    }), false, input.publish_mutation !== false)) as SessionActionMessage;
+    return new SessionActionMessageWriter(
+      this,
+      message.message_id,
+      input.publish_mutation !== false,
+    );
   }
 
   /** 更新 Action 状态，同时保持 message_id 与 sequence 不变。 */
@@ -369,6 +378,7 @@ export class SessionMessages {
     message_id: string,
     status: "running" | "completed" | "failed",
     changes?: { title?: string; description?: string; data?: JsonObject },
+    options?: { publish_mutation?: boolean },
   ): Promise<SessionActionMessage> {
     const message = await this.store.append_message((state) => {
       const current = require_message(state.messages, message_id, "action");
@@ -385,7 +395,7 @@ export class SessionMessages {
         updated_at: created_at,
       } satisfies SessionActionMessage;
     });
-    this.accept_message(message);
+    this.accept_message(message, options?.publish_mutation !== false);
     return message as SessionActionMessage;
   }
 
@@ -776,6 +786,7 @@ export class SessionMessages {
   private async create_message(
     factory: (sequence: number, created_at: number) => SessionMessage,
     draft = false,
+    publish_mutation = true,
   ): Promise<SessionMessage> {
     await this.ensure_initialized();
     if (draft) {
@@ -786,13 +797,13 @@ export class SessionMessages {
         }
         return candidate;
       });
-      this.accept_message(message);
+      this.accept_message(message, publish_mutation);
       return message;
     }
     const message = await this.store.append_message((state) =>
       factory(state.message_sequence, Date.now()),
     );
-    this.accept_message(message);
+    this.accept_message(message, publish_mutation);
     return message;
   }
 
@@ -923,7 +934,11 @@ export class SessionMessages {
     } as SessionMessageSnapshotMutation;
   }
 
-  private accept_message(message: SessionMessage): void {
+  private accept_message(message: SessionMessage, publish_mutation = true): void {
+    if (!publish_mutation) {
+      this.messages_by_id.set(message.message_id, structuredClone(message));
+      return;
+    }
     this.accept_mutation(this.build_message_mutation(message), message);
   }
 
@@ -941,26 +956,42 @@ export class SessionMessages {
 export class SessionActionMessageWriter {
   readonly message_id: string;
   private readonly messages: SessionMessages;
+  private readonly publish_mutation: boolean;
   private closed = false;
 
-  constructor(messages: SessionMessages, message_id: string) {
+  constructor(
+    messages: SessionMessages,
+    message_id: string,
+    publish_mutation = true,
+  ) {
     this.messages = messages;
     this.message_id = message_id;
+    this.publish_mutation = publish_mutation;
   }
 
   /** 把 Action 更新为 completed。 */
   async complete(input?: { title?: string; description?: string; data?: JsonObject }): Promise<void> {
     if (this.closed) return;
-    await this.messages.update_action_message(this.message_id, "completed", input);
+    await this.messages.update_action_message(
+      this.message_id,
+      "completed",
+      input,
+      { publish_mutation: this.publish_mutation },
+    );
     this.closed = true;
   }
 
   /** 把 Action 更新为 failed。 */
   async fail(error: unknown): Promise<void> {
     if (this.closed) return;
-    await this.messages.update_action_message(this.message_id, "failed", {
-      description: error instanceof Error ? error.message : String(error),
-    });
+    await this.messages.update_action_message(
+      this.message_id,
+      "failed",
+      {
+        description: error instanceof Error ? error.message : String(error),
+      },
+      { publish_mutation: this.publish_mutation },
+    );
     this.closed = true;
   }
 }

@@ -47,7 +47,7 @@ Admin GET                GET  /v1/{service}/{action}
 | `/v1/bureaus/pause` | `POST` | 暂停 Bureau |
 | `/v1/bureaus/activate` | `POST` | 启用 Bureau |
 | `/v1/bureaus/archive` | `POST` | 归档 Bureau |
-| `/v1/bureaus/server-url/update` | `POST` | 更新 Bureau 服务入口 |
+| `/v1/bureaus/server/update` | `POST` | 更新 Bureau 唯一 Server 的服务入口 |
 | `/v1/bureaus/current` | `GET` | 按 User Token 解析当前 Bureau |
 | `/v1/accounts/tokens/issue` | `POST` | 签发 user_token |
 | `/v1/env/list` | `GET` | 环境变量列表 |
@@ -249,7 +249,7 @@ Content-Type: application/json
 ```
 
 ```json
-{ "bureau_id": "bureau_xxx", "name": "Chrome Extension", "server_url": "https://bureau.example.com", "state": "active", ... }
+{ "bureau_id": "bureau_xxx", "name": "Chrome Extension", "server": { "bureau_id": "bureau_xxx", "server_url": "https://bureau.example.com", ... }, "state": "active", ... }
 ```
 
 ### `POST /v1/accounts/tokens/issue`

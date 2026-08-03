@@ -19,7 +19,7 @@ export class BureausService extends Service {
     this.instruction = [
       "管理 Federation 中稳定的 Bureau 产品身份。",
       "Bureau Token 必须绑定 Bureau，且只代表当前 Bureau 的机器身份。",
-      "每个 Bureau 注册一个服务端 URL；URL 不要求跨 Bureau 唯一。",
+      "每个 Bureau 拥有一条独立 Server 配置；URL 不要求跨 Bureau 唯一。",
     ].join("\n");
 
     this.action("list", async () => ({ items: await this.bureau_store.list() }), {
@@ -41,8 +41,8 @@ export class BureausService extends Service {
       await this.bureau_store.set_state(String(ctx.input.bureau_id ?? ""), "active")
     ), { auth: ["admin"] });
 
-    this.action("server-url/update", async (ctx) => (
-      await this.bureau_store.update_server_url(
+    this.action("server/update", async (ctx) => (
+      await this.bureau_store.update_server(
         String(ctx.input.bureau_id ?? ""),
         String(ctx.input.server_url ?? ""),
       )

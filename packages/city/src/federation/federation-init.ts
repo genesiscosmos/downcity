@@ -24,11 +24,18 @@ import {
 } from "../service/installable-service.js";
 import type { CityUserSchemaInput } from "../store/types.js";
 import type { Runtime } from "./runtime.js";
-import type { BureauRecord } from "../types/Bureau.js";
+import type {
+  BureauIdentityRecord,
+  BureauRecord,
+  BureauServerRecord,
+} from "../types/Bureau.js";
 import type { EnvEntry } from "../service/env/types.js";
 import type { FederationAuthKeyRecord } from "./auth/types.js";
 import type { BureauTokenRecord } from "../types/Bureau.js";
-import { assert_federation_identity_schema } from "./schema-compatibility.js";
+import {
+  assert_bureau_server_records,
+  assert_federation_identity_schema,
+} from "./schema-compatibility.js";
 
 /**
  * Federation 初始化后的内部状态。
@@ -66,6 +73,7 @@ export async function initialize_federation(params: {
   const user_schema = collect_service_schemas(services);
   const table_map = new Map<string, CityTableApi>();
   table_map.set("bureaus", database.table(builtinTables.bureaus));
+  table_map.set("bureau_servers", database.table(builtinTables.bureau_servers));
   table_map.set("env", database.table(builtinTables.env));
   table_map.set(
     "federation_auth_keys",
@@ -85,6 +93,7 @@ export async function initialize_federation(params: {
   for (const table of table_map.values()) {
     await database.ensure_table(table.schema);
   }
+  await assert_bureau_server_records(database);
 
   const env_table = table_map.get("env");
   if (!env_table) throw new Error("Federation env table is not initialized");
@@ -93,7 +102,15 @@ export async function initialize_federation(params: {
 
   const bureaus_table = table_map.get("bureaus");
   if (!bureaus_table) throw new Error("Federation Bureau table is not initialized");
-  const bureau_store = new BureauStore(bureaus_table as CityTableApi<BureauRecord>);
+  const bureau_servers_table = table_map.get("bureau_servers");
+  if (!bureau_servers_table) throw new Error("Federation Bureau Server table is not initialized");
+  const bureau_store = new BureauStore({
+    database,
+    bureau_schema: builtinTables.bureaus,
+    server_schema: builtinTables.bureau_servers,
+    bureau_table: bureaus_table as CityTableApi<BureauIdentityRecord>,
+    server_table: bureau_servers_table as CityTableApi<BureauServerRecord>,
+  });
 
   const configured_base_url = env.get("DOWNCITY_FEDERATION_BASE_URL")
     ?? env.get("BETTER_AUTH_URL")

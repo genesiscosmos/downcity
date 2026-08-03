@@ -93,7 +93,7 @@ export class City {
     if (this.user_token) headers.authorization = `Bearer ${this.user_token}`;
     return requestJSON<T>({
       fetch: this.fetcher,
-      url: resolve_request_url(path, bureau.server_url),
+      url: resolve_request_url(path, bureau.server.server_url),
       init: { ...init, headers },
     });
   }
@@ -111,7 +111,9 @@ export class City {
         },
       },
     });
-    if (!body.bureau?.bureau_id || !body.bureau.server_url || body.bureau.state !== "active") {
+    if (!body.bureau?.bureau_id || !body.bureau.server?.server_url
+      || body.bureau.server.bureau_id !== body.bureau.bureau_id
+      || body.bureau.state !== "active") {
       throw new TypeError("Federation returned an invalid current Bureau");
     }
     return body.bureau;

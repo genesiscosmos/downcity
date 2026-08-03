@@ -6,6 +6,7 @@
 
 import type {
   AgentSessionConfigSnapshot,
+  AgentSessionSetOptions,
   AgentSessionForkInput,
   AgentSessionInfo,
   AgentSessionStatus,
@@ -159,8 +160,11 @@ export class RemoteSession implements RemoteAgentSession {
   }
 
   /** 更新当前远程 Session 的可序列化动态配置。 */
-  async set(input: RemoteSessionSetInput): Promise<void> {
-    await this.transport.set(this.id, input);
+  async set(
+    input: RemoteSessionSetInput,
+    options?: AgentSessionSetOptions,
+  ): Promise<void> {
+    await this.transport.set(this.id, input, options);
   }
 
   /** 提交当前远程 Session 的 Interaction 用户响应。 */

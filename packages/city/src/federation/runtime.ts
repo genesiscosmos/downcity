@@ -96,12 +96,14 @@ export interface EnvProvider {
 /**
  * Federation 内置表定义。
  *
- * 包含 Bureau、Env、签名密钥和 Bureau Token 内置表。
+ * 包含 Bureau 身份、Bureau Server、Env、签名密钥和 Bureau Token 内置表。
  * 适配器根据数据库类型（SQLite / Postgres）提供对应的表定义。
  */
 export interface BuiltinTables {
   /** Federation 稳定 Bureau 身份表。 */
   bureaus: TableDef;
+  /** Federation Bureau 唯一 Server 配置表。 */
+  bureau_servers: TableDef;
   /** 环境变量表 */
   env: TableDef;
   /** Federation 用户 token Ed25519 Key Ring 表。 */

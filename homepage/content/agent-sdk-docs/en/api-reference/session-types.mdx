@@ -10,6 +10,7 @@ The most common input and output objects are:
 - `AgentSession`
 - `RemoteAgentSession`
 - `AgentSessionSetInput`
+- `AgentSessionSetOptions`
 - `RemoteSessionSetInput`
 - `AgentSessionStatus`
 - `AgentSessionPromptInput`
@@ -34,6 +35,8 @@ The most common input and output objects are:
 
 `AgentSessionStatus.security` exposes both the configured `approval_mode` and the checkpoint-committed
 `effective_approval_mode`. When they differ, the configuration is still waiting in the Session Queue.
+
+`AgentSessionSetOptions` controls observability after a real configuration change commits. `persist_action` decides whether to write an Action Message, while `publish_mutation` decides whether to publish its Mutation to Session subscribers. Omitting both preserves the default persistence and publication behavior.
 
 ## `AgentSessionPromptInput`
 
