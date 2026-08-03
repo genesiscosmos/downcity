@@ -30,24 +30,23 @@ const ToggleGroupContext = React.createContext<
   orientation: "horizontal",
 });
 
-function ToggleGroup({
+const ToggleGroup = React.forwardRef<HTMLDivElement, Omit<DowncityToggleGroupProps, "ref">>(function ToggleGroup({
   className,
   variant,
   size,
   spacing = 0,
   orientation = "horizontal",
   children,
-  ref,
   ...props
-}: DowncityToggleGroupProps) {
-  const group_ref = React.useRef<HTMLDivElement>(null);
+}, ref) {
+  const group_ref = React.useRef<HTMLDivElement | null>(null);
   const indicator_ref = React.useRef<HTMLSpanElement>(null);
 
   /** 同步外部引用，避免布局测量侵入宿主应用的 ref 所有权。 */
   const set_group_ref = React.useCallback((element: HTMLDivElement | null) => {
     group_ref.current = element;
     if (typeof ref === "function") ref(element);
-    else if (ref) ref.current = element;
+    else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = element;
   }, [ref]);
 
   /** 将唯一激活层移动到当前按下的项目位置。 */
@@ -118,7 +117,7 @@ function ToggleGroup({
       </ToggleGroupContext.Provider>
     </ToggleGroupPrimitive>
   );
-}
+});
 
 function ToggleGroupItem({
   className,
