@@ -1,8 +1,8 @@
 /**
  * @file 校验 npm tarball 中引用的 Downcity 运行时依赖已经发布。
  *
- * 发布任务并行运行时，上层包必须等待其 Downcity 依赖出现在 Registry；如果依赖
- * 最终没有发布，本包必须失败而不能留下不可安装版本。
+ * 发布 workflow 已通过拓扑层级保证先后顺序。本脚本只为 npm Registry 的短暂传播
+ * 延迟提供有限重试，并拒绝留下引用未发布版本的不可安装 package。
  */
 
 import { execFileSync } from "node:child_process";
@@ -26,10 +26,10 @@ for (const field_name of dependency_fields) {
   }
 }
 
-const max_attempts = read_positive_integer(process.env.DOWNCITY_DEPENDENCY_CHECK_ATTEMPTS, 30);
+const max_attempts = read_positive_integer(process.env.DOWNCITY_DEPENDENCY_CHECK_ATTEMPTS, 5);
 const retry_interval_ms = read_positive_integer(
   process.env.DOWNCITY_DEPENDENCY_CHECK_INTERVAL_MS,
-  5_000,
+  2_000,
 );
 
 for (const [dependency_name, dependency_range] of dependencies) {

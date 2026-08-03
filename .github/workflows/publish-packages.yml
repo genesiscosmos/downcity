@@ -6,7 +6,9 @@ on:
       - main
     paths:
       - ".github/scripts/resolve-publish-matrix.mjs"
+      - ".github/scripts/resolve-publish-matrix.test.mjs"
       - ".github/scripts/validate-published-dependencies.mjs"
+      - ".github/workflows/publish-package-layer.yml"
       - ".github/workflows/publish-packages.yml"
       - "packages/**"
       - "pnpm-lock.yaml"
@@ -18,11 +20,17 @@ concurrency:
 
 jobs:
   detect:
-    name: Resolve publish candidates
+    name: Resolve topological publish layers
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.detect.outputs.matrix }}
       has_packages: ${{ steps.detect.outputs.has_packages }}
+      layer_count: ${{ steps.detect.outputs.layer_count }}
+      has_layer_0: ${{ steps.detect.outputs.has_layer_0 }}
+      has_layer_1: ${{ steps.detect.outputs.has_layer_1 }}
+      has_layer_2: ${{ steps.detect.outputs.has_layer_2 }}
+      layer_0_matrix: ${{ steps.detect.outputs.layer_0_matrix }}
+      layer_1_matrix: ${{ steps.detect.outputs.layer_1_matrix }}
+      layer_2_matrix: ${{ steps.detect.outputs.layer_2_matrix }}
     permissions:
       contents: read
     steps:
@@ -34,149 +42,68 @@ jobs:
         with:
           node-version: "22.13.1"
 
-      - name: Resolve publish matrix
+      - name: Test publish graph resolver
+        run: node --test .github/scripts/resolve-publish-matrix.test.mjs
+
+      - name: Resolve publish matrices
         id: detect
         run: node .github/scripts/resolve-publish-matrix.mjs
 
-  publish:
-    name: Publish ${{ matrix.name }}
-    runs-on: ubuntu-latest
+  publish_layer_0:
+    name: Layer 0 · ${{ matrix.name }}
     needs: detect
-    if: needs.detect.outputs.has_packages == 'true'
-    permissions:
-      contents: read
+    if: needs.detect.outputs.has_layer_0 == 'true'
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      matrix: ${{ fromJson(needs.detect.outputs.layer_0_matrix) }}
+    uses: ./.github/workflows/publish-package-layer.yml
+    with:
+      package_name: ${{ matrix.name }}
+      package_path: ${{ matrix.path }}
+      package_version: ${{ matrix.version }}
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.22.0
+  publish_layer_1:
+    name: Layer 1 · ${{ matrix.name }}
+    needs:
+      - detect
+      - publish_layer_0
+    if: >-
+      always() &&
+      needs.detect.result == 'success' &&
+      needs.detect.outputs.has_layer_1 == 'true' &&
+      (needs.detect.outputs.has_layer_0 != 'true' || needs.publish_layer_0.result == 'success')
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect.outputs.layer_1_matrix) }}
+    uses: ./.github/workflows/publish-package-layer.yml
+    with:
+      package_name: ${{ matrix.name }}
+      package_path: ${{ matrix.path }}
+      package_version: ${{ matrix.version }}
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.13.1"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Check published version
-        id: version
-        env:
-          PACKAGE_NAME: ${{ matrix.name }}
-          PACKAGE_VERSION: ${{ matrix.version }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
-            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} already exists, skipping publish"
-            echo "should_publish=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "${PACKAGE_NAME}@${PACKAGE_VERSION} is not published yet"
-          echo "should_publish=true" >> "$GITHUB_OUTPUT"
-
-      - name: Install Linux sandbox dependencies
-        if: steps.version.outputs.should_publish == 'true' && matrix.name == '@downcity/sandbox-linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes bubblewrap
-          sudo sysctl --write kernel.apparmor_restrict_unprivileged_userns=0
-          bwrap --ro-bind / / /usr/bin/true
-
-      - name: Install workspace dependencies
-        if: steps.version.outputs.should_publish == 'true'
-        run: pnpm install --frozen-lockfile
-
-      - name: Validate npm token and package ownership
-        if: steps.version.outputs.should_publish == 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          PACKAGE_NAME: ${{ matrix.name }}
-        run: |
-          set -euo pipefail
-          WHOAMI="$(npm whoami)"
-          echo "Authenticated npm user: ${WHOAMI}"
-
-          if npm view "${PACKAGE_NAME}" version >/dev/null 2>&1; then
-            npm owner ls "${PACKAGE_NAME}"
-            if ! npm owner ls "${PACKAGE_NAME}" | awk '{print $1}' | grep -qx "${WHOAMI}"; then
-              echo "NPM_TOKEN user '${WHOAMI}' is not an owner of '${PACKAGE_NAME}'."
-              exit 1
-            fi
-          else
-            echo "${PACKAGE_NAME} is not published yet. Skipping owner check for first publish."
-          fi
-
-      - name: Build package dependency closure
-        if: steps.version.outputs.should_publish == 'true'
-        env:
-          PACKAGE_NAME: ${{ matrix.name }}
-        run: |
-          set -euo pipefail
-
-          # 关键点：只构建当前待发布包及其依赖，避免其他包的临时构建错误阻断本包发布。
-          pnpm -r --filter "${PACKAGE_NAME}..." build
-
-      - name: Run package tests
-        if: steps.version.outputs.should_publish == 'true'
-        env:
-          PACKAGE_PATH: ${{ matrix.path }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          has_test_script="$(node -e "const p=require('./${PACKAGE_PATH}/package.json'); console.log(p.scripts && p.scripts.test ? 'true' : 'false')")"
-
-          if [ "$has_test_script" = "true" ]; then
-            pnpm -C "${PACKAGE_PATH}" test
-          else
-            pnpm -C "${PACKAGE_PATH}" build
-          fi
-
-      - name: Check version and publish
-        if: steps.version.outputs.should_publish == 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          PACKAGE_NAME: ${{ matrix.name }}
-          PACKAGE_PATH: ${{ matrix.path }}
-          PACKAGE_VERSION: ${{ matrix.version }}
-        run: |
-          set -euo pipefail
-
-          has_published_version() {
-            local package_name="$1"
-            local version="$2"
-
-            if npm view "${package_name}" versions --json >/tmp/downcity-versions.json 2>/dev/null; then
-              if grep -q "\"${version}\"" /tmp/downcity-versions.json; then
-                return 0
-              fi
-            fi
-            return 1
-          }
-
-          if has_published_version "${PACKAGE_NAME}" "${PACKAGE_VERSION}"; then
-            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} already exists, skipping publish"
-            exit 0
-          fi
-
-          PACK_DIR="$(mktemp -d)"
-          pnpm -C "${PACKAGE_PATH}" pack --pack-destination "${PACK_DIR}"
-          TARBALL="$(find "${PACK_DIR}" -maxdepth 1 -name "*.tgz" -print -quit)"
-          if [[ -z "${TARBALL}" ]]; then
-            echo "No tarball generated for ${PACKAGE_NAME}."
-            exit 1
-          fi
-
-          # 上层包只有在全部 Downcity 运行时依赖已经发布后才能进入 Registry。
-          PACKAGE_MANIFEST="$(mktemp)"
-          tar -xOf "${TARBALL}" package/package.json > "${PACKAGE_MANIFEST}"
-          node .github/scripts/validate-published-dependencies.mjs "${PACKAGE_MANIFEST}"
-
-          npm publish "${TARBALL}" --access public
+  publish_layer_2:
+    name: Layer 2 · ${{ matrix.name }}
+    needs:
+      - detect
+      - publish_layer_0
+      - publish_layer_1
+    if: >-
+      always() &&
+      needs.detect.result == 'success' &&
+      needs.detect.outputs.has_layer_2 == 'true' &&
+      (needs.detect.outputs.has_layer_0 != 'true' || needs.publish_layer_0.result == 'success') &&
+      (needs.detect.outputs.has_layer_1 != 'true' || needs.publish_layer_1.result == 'success')
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect.outputs.layer_2_matrix) }}
+    uses: ./.github/workflows/publish-package-layer.yml
+    with:
+      package_name: ${{ matrix.name }}
+      package_path: ${{ matrix.path }}
+      package_version: ${{ matrix.version }}
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

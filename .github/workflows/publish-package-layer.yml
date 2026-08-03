@@ -1,0 +1,148 @@
+name: Publish one Downcity scoped package
+
+on:
+  workflow_call:
+    inputs:
+      package_name:
+        description: Public npm package name.
+        required: true
+        type: string
+      package_path:
+        description: Package directory relative to the repository root.
+        required: true
+        type: string
+      package_version:
+        description: Package version from the committed manifest.
+        required: true
+        type: string
+    secrets:
+      NPM_TOKEN:
+        description: npm token that owns the @downcity scope.
+        required: true
+
+jobs:
+  publish:
+    name: Publish ${{ inputs.package_name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.22.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.13.1"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Check published version
+        id: version
+        env:
+          PACKAGE_NAME: ${{ inputs.package_name }}
+          PACKAGE_VERSION: ${{ inputs.package_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
+            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} already exists, skipping publish"
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "${PACKAGE_NAME}@${PACKAGE_VERSION} is not published yet"
+          echo "should_publish=true" >> "$GITHUB_OUTPUT"
+
+      - name: Install Linux sandbox dependencies
+        if: steps.version.outputs.should_publish == 'true' && inputs.package_name == '@downcity/sandbox-linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap
+          sudo sysctl --write kernel.apparmor_restrict_unprivileged_userns=0
+          bwrap --ro-bind / / /usr/bin/true
+
+      - name: Install workspace dependencies
+        if: steps.version.outputs.should_publish == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate npm token and package ownership
+        if: steps.version.outputs.should_publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PACKAGE_NAME: ${{ inputs.package_name }}
+        run: |
+          set -euo pipefail
+          WHOAMI="$(npm whoami)"
+          echo "Authenticated npm user: ${WHOAMI}"
+
+          if npm view "${PACKAGE_NAME}" version >/dev/null 2>&1; then
+            npm owner ls "${PACKAGE_NAME}"
+            if ! npm owner ls "${PACKAGE_NAME}" | awk '{print $1}' | grep -qx "${WHOAMI}"; then
+              echo "NPM_TOKEN user '${WHOAMI}' is not an owner of '${PACKAGE_NAME}'."
+              exit 1
+            fi
+          else
+            echo "${PACKAGE_NAME} is not published yet. Skipping owner check for first publish."
+          fi
+
+      - name: Build package dependency closure
+        if: steps.version.outputs.should_publish == 'true'
+        env:
+          PACKAGE_NAME: ${{ inputs.package_name }}
+        run: |
+          set -euo pipefail
+
+          # 只构建当前待发布包及其依赖，避免无关 package 阻断本包发布。
+          pnpm -r --filter "${PACKAGE_NAME}..." build
+
+      - name: Run package tests
+        if: steps.version.outputs.should_publish == 'true'
+        env:
+          PACKAGE_PATH: ${{ inputs.package_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          has_test_script="$(node -e "const p=require('./${PACKAGE_PATH}/package.json'); console.log(p.scripts && p.scripts.test ? 'true' : 'false')")"
+
+          if [ "$has_test_script" = "true" ]; then
+            pnpm -C "${PACKAGE_PATH}" test
+          else
+            pnpm -C "${PACKAGE_PATH}" build
+          fi
+
+      - name: Check dependencies and publish
+        if: steps.version.outputs.should_publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PACKAGE_NAME: ${{ inputs.package_name }}
+          PACKAGE_PATH: ${{ inputs.package_path }}
+          PACKAGE_VERSION: ${{ inputs.package_version }}
+        run: |
+          set -euo pipefail
+
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
+            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} already exists, skipping publish"
+            exit 0
+          fi
+
+          PACK_DIR="$(mktemp -d)"
+          pnpm -C "${PACKAGE_PATH}" pack --pack-destination "${PACK_DIR}"
+          TARBALL="$(find "${PACK_DIR}" -maxdepth 1 -name "*.tgz" -print -quit)"
+          if [[ -z "${TARBALL}" ]]; then
+            echo "No tarball generated for ${PACKAGE_NAME}."
+            exit 1
+          fi
+
+          # needs 已保证拓扑顺序；此检查只负责防止不可安装的 tarball 进入 Registry。
+          PACKAGE_MANIFEST="$(mktemp)"
+          tar -xOf "${TARBALL}" package/package.json > "${PACKAGE_MANIFEST}"
+          node .github/scripts/validate-published-dependencies.mjs "${PACKAGE_MANIFEST}"
+
+          npm publish "${TARBALL}" --access public
