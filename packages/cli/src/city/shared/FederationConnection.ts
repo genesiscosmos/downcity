@@ -25,9 +25,8 @@ import {
   list_federations,
   normalizeCityUrl,
   read_city_admin_secret_for_url,
-  read_city_bureau_id,
- read_current_city_session,
- readCityState,
+  read_current_city_session,
+  readCityState,
   resolve_selected_federation_url,
   upsert_federation_profile,
   writeCityState,
@@ -57,7 +56,7 @@ export function read_federation_membership_state(): FederationMembershipState {
   if (session?.user_token) {
     return {
       federation_url,
-      bureau_id: session.bureau_id || DEFAULT_BUREAU_ID,
+      bureau_id: session.bureau_id,
       has_user_token: true,
       source: "city-session",
       user_id: session.user_id,
@@ -99,7 +98,7 @@ export function emit_federation_status(options?: { as_json?: boolean }): void {
     summary: state.has_user_token ? "signed in" : "federation selected",
     facts: [
       { label: "url", value: state.federation_url },
-      { label: "city", value: state.bureau_id },
+      { label: "Bureau ID", value: state.bureau_id },
       { label: "user token", value: state.has_user_token ? "configured" : "missing" },
       { label: "source", value: state.source },
       ...(state.user_id ? [{ label: "user", value: state.user_id }] : []),
@@ -137,12 +136,11 @@ export async function emitCityUserWhoami(options?: { as_json?: boolean }): Promi
       summary: user.source,
       facts: [
         { label: "url", value: user.federation_url },
-        { label: "city", value: user.bureau_id },
+        { label: "Bureau ID", value: user.bureau_id },
         { label: "user", value: user.user_id || "unknown" },
         ...(user.user_label ? [{ label: "label", value: user.user_label }] : []),
         { label: "source", value: user.source },
         { label: "env url", value: user.env_overrides.federation_url ? "yes" : "no" },
-        { label: "env city", value: user.env_overrides.bureau_id ? "yes" : "no" },
         { label: "env token", value: user.env_overrides.user_token ? "yes" : "no" },
       ],
       note: user.warnings.join(" ") || undefined,
@@ -297,9 +295,9 @@ export async function run_federation_login_command(params: {
   }
   const state = readCityState();
   const federation_url = resolve_selected_federation_url(state);
-  const bureau_id = read_city_bureau_id(params.bureau_id)
-    || read_current_city_session()?.bureau_id
-    || DEFAULT_BUREAU_ID;
+  const bureau_id = params.bureau_id
+    ?? read_current_city_session()?.bureau_id
+    ?? DEFAULT_BUREAU_ID;
   const session = await performCityUserLogin({
     federation_url,
     bureau_id,

@@ -56,11 +56,6 @@ export function readOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-/** 读取可选 opaque 字符串，不对值做 trim 或其它改写。 */
-export function read_optional_opaque_string(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
 /** 读取可空字符串字段。 */
 function readNullableString(value: unknown): string | null {
   return typeof value === "string" ? value : null;

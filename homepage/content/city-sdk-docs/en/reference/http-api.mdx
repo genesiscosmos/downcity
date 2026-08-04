@@ -115,7 +115,8 @@ Response:
 { "id": "msg_xxx", "role": "assistant", "parts": [{ "type": "text", "text": "Hi!" }] }
 ```
 
-City resolves the user and city from the bearer `user_token`. If the request body includes `bureau_id`, it must match the city bound to the token; otherwise City returns `403`.
+Federation resolves both the user and Bureau identity from the bearer `user_token`. The request body
+does not participate in identity resolution.
 
 ## `GET /v1/services`
 

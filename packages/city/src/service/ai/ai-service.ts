@@ -18,6 +18,7 @@
 
 import { Service, type Context } from "../service.js";
 import { httpError } from "../../utils/helpers.js";
+import { is_bureau_id } from "../../federation/identity/bureau-id.js";
 import type { ActionFn } from "../action.js";
 import { sqliteAsyncJobs } from "../async-job/schema.js";
 import type { AsyncJobRecord } from "../../types/AsyncJob.js";
@@ -92,7 +93,6 @@ import {
   readFilePartMediaType,
   readOptionalNumber,
   readOptionalString,
-  read_optional_opaque_string,
   rowToAsyncJobRecord,
   type ResolvedChannelOutput,
 } from "./ai-service-values.js";
@@ -966,8 +966,7 @@ export class AIService extends Service {
       usage_id,
       user_id: ctx.user?.user_id ?? readOptionalString(ctx.locals.ai_usage_user_id) ?? null,
       bureau_id: ctx.bureau?.bureau_id
-        ?? read_optional_opaque_string(ctx.locals.ai_usage_bureau_id)
-        ?? null,
+        ?? (is_bureau_id(ctx.locals.ai_usage_bureau_id) ? ctx.locals.ai_usage_bureau_id : null),
       action_id: ctx.action?.id ?? "",
       model_id: metering?.model_id ?? ctx.variant?.id ?? "",
       channel_id: metering?.channel_id ?? ctx.variant?.channel_id ?? null,

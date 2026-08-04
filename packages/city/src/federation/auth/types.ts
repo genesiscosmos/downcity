@@ -160,9 +160,6 @@ export interface FederationDiscovery {
 
   /** Federation 接收 user_token 时校验的 audience。 */
   federation_user_token_audience: "downcity:federation";
-
-  /** Bureau audience 的固定 URN 前缀。 */
-  bureau_user_token_audience_prefix: "urn:downcity:bureau:";
 }
 
 /**

@@ -82,21 +82,6 @@ export function normalizeOptionalFilter(value: unknown, label: string): string |
   return normalized;
 }
 
-/** 读取必填 opaque Bureau ID，不对值做 trim 或其它改写。 */
-export function read_bureau_id(value: unknown): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw httpError(400, "bureau_id is required");
-  }
-  if (value.length > 500) throw httpError(400, "bureau_id is too long");
-  return value;
-}
-
-/** 读取可选 Bureau ID 等值过滤条件，并原样保留其值。 */
-export function read_optional_bureau_id_filter(value: unknown): string | undefined {
-  if (value === undefined || value === null || value === "") return undefined;
-  return read_bureau_id(value);
-}
-
 /**
  * 安全序列化反馈上下文。
  */

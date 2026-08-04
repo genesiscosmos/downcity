@@ -60,7 +60,7 @@ const bureau = await admin.bureaus.create({
 
 ## 多产品复用
 
-多个 client 可以归属同一个 city。签发 token 时明确写入 `bureau_id`：
+多个 client 可以归属同一个 Bureau。签发 token 时明确写入 `bureau_id`：
 
 ```ts
 const user = await admin.service("accounts").action("tokens/issue").invoke({

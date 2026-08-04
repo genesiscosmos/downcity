@@ -10,10 +10,6 @@ import prompts from "@/city/tui/Prompts.js";
 import { City } from "@downcity/city";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { open_system_browser } from "@/shared/SystemBrowser.js";
-import {
-  DEFAULT_BUREAU_ID,
-  read_city_bureau_id,
-} from "@/city/shared/CityStateStore.js";
 import type {
   CityLoginInput,
   CityUserSession,
@@ -28,33 +24,7 @@ import type {
   CityAuthMethod,
   VerifyResult,
 } from "@/city/types/CityAuth.js";
-
-interface AccountsMeResult {
-  /**
-   * 当前 token 解析出的 user。
-   */
-  user?: {
-    /**
-     * City 用户 ID。
-     */
-    user_id?: string;
-  };
-
-  /**
-   * 当前用户资料。
-   */
-  profile?: {
-    /**
-     * 用户 email。
-     */
-    email?: string;
-
-    /**
-     * 用户展示名称。
-     */
-    display_name?: string;
-  } | null;
-}
+import type { CityAccountsMeResult } from "@/city/types/CityUser.js";
 
 function readString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -325,7 +295,7 @@ function buildUserSession(input: CityLoginInput & {
 }): CityUserSession {
   return {
     federation_url: input.federation_url,
-    bureau_id: read_city_bureau_id(input.bureau_id) || DEFAULT_BUREAU_ID,
+    bureau_id: input.bureau_id,
     user_token: input.user_token,
     user_id: readString(input.user_id) || undefined,
     user_label: readString(input.user_label) || undefined,
@@ -341,6 +311,7 @@ async function buildVerifiedUserSession(input: CityLoginInput & {
   const verified = await readUserSessionFromToken(input);
   return buildUserSession({
     ...input,
+    bureau_id: verified.bureau_id,
     user_id: verified.user_id || input.user_id,
     user_label: verified.user_label || input.user_label,
   });
@@ -349,6 +320,7 @@ async function buildVerifiedUserSession(input: CityLoginInput & {
 async function readUserSessionFromToken(input: CityLoginInput & {
   user_token: string;
 }): Promise<{
+  bureau_id: string;
   user_id?: string;
   user_label?: string;
 }> {
@@ -356,11 +328,18 @@ async function readUserSessionFromToken(input: CityLoginInput & {
     federation_url: input.federation_url,
     user_token: input.user_token,
   });
-  const result = await city.service("accounts").get<AccountsMeResult>("me");
+  const result = await city.service("accounts").get<CityAccountsMeResult>("me");
+  const bureau_id = typeof result.user?.bureau_id === "string"
+    ? result.user.bureau_id
+    : "";
   const user_id = readString(result.user?.user_id);
+  if (!bureau_id) {
+    throw new Error("City user token resolved without a bureau_id.");
+  }
   const email = readString(result.profile?.email);
   const display_name = readString(result.profile?.display_name);
   return {
+    bureau_id,
     user_id: user_id || undefined,
     user_label: email || display_name || user_id || undefined,
   };
@@ -389,6 +368,9 @@ function formatProviderLabel(provider: string): string {
 export async function performCityUserLogin(
   input: CityLoginInput,
 ): Promise<CityUserSession | null> {
+  if (typeof input.bureau_id !== "string" || input.bureau_id.length === 0) {
+    throw new TypeError("bureau_id is required");
+  }
   const method = await promptAuthMethod(input.federation_url);
   if (!method) return null;
   if (method.startsWith("oauth:")) {

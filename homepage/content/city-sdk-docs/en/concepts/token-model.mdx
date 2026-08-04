@@ -45,7 +45,7 @@ keys or `admin_secret_key`.
 
 ## admin_secret_key
 
-`DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` is used to manage Federation: create cities, manage env, and issue `user_token` for users under a given city. Federation generates it automatically and writes it into Federation env on first startup.
+`DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` is used to manage Federation: create Bureaus, manage env, and issue `user_token` for users under a given Bureau. Federation generates it automatically and writes it into Federation env on first startup.
 
 ```ts
 const admin = new FederationAdmin({
@@ -61,7 +61,7 @@ const bureau = await admin.bureaus.create({
 
 ## Multi-city reuse
 
-Many clients can belong to the same city. When issuing a token, write `bureau_id` explicitly:
+Many clients can belong to the same Bureau. When issuing a token, write `bureau_id` explicitly:
 
 ```ts
 const user = await admin.service("accounts").action("tokens/issue").invoke({

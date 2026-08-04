@@ -33,16 +33,6 @@ export interface CityAdminConfig {
     base_url?: unknown;
 
     /**
-     * Federation URL。
-     */
-    federation_url?: unknown;
-
-    /**
-     * 旧结构中的 Federation URL 字段。
-     */
-    url?: unknown;
-
-    /**
      * admin secret key。
      */
     admin_secret_key?: unknown;

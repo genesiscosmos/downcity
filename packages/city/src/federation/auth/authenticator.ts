@@ -160,7 +160,6 @@ export class Authenticator {
       issuer: `urn:downcity:federation:${federation_id}`,
       jwks_uri: `${origin.replace(/\/+$/, "")}/.well-known/jwks.json`,
       federation_user_token_audience: FEDERATION_USER_TOKEN_AUDIENCE,
-      bureau_user_token_audience_prefix: "urn:downcity:bureau:",
     };
   }
 

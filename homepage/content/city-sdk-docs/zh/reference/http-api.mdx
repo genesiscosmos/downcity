@@ -176,8 +176,7 @@ Federation 通过 SSE 返回版本化 `LanguageModelV3StreamPart`。产品代码
 transport 请求：把模型目录返回的 `CityModel` 交给 Agent / AI SDK，或者调用
 `city.ai.stream()`。后者在客户端将同一模型流转换成 `UIMessageChunk`。
 
-AI 请求的用户和 city 上下文由 bearer `user_token` 解析。请求体里可以不传
-`bureau_id`；如果传了，必须与 token 绑定的 city 一致。
+AI 请求的用户和 Bureau 身份完全由 bearer `user_token` 解析，请求体不参与身份判断。
 
 ### `POST /v1/ai/chat/completions`
 
@@ -279,7 +278,7 @@ Content-Type: application/json
 | --- | --- |
 | `200` | 请求成功 |
 | `401` | token 缺失、过期、签名无效 |
-| `403` | bureau_id 不匹配、city 已暂停 |
+| `403` | Token 所属 Bureau 已暂停或没有调用权限 |
 | `404` | 路由不存在、service 未注册 |
 | `422` | model 不存在、action 未命中 |
 | `500` | action 逻辑抛出未指定 statusCode 的错误 |

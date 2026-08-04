@@ -51,10 +51,15 @@ test("Bureau 部署凭证由 CLI 本地生成且 hash 可复算", async () => {
   assert.notEqual(credential.token_hash, credential.bureau_token);
 });
 
-test("City CLI 原样保留 opaque Bureau ID", async () => {
-  const state_store = await import("../bin/city/shared/CityStateStore.js");
-  assert.equal(state_store.read_city_bureau_id(" legacy:city/id "), " legacy:city/id ");
-  assert.equal(state_store.read_city_bureau_id(""), "");
+test("City 登录只公开 Bureau ID 参数", () => {
+  const cli_path = fileURLToPath(new URL("../bin/downcity.js", import.meta.url));
+  const output = execFileSync(
+    process.execPath,
+    [cli_path, "--lang", "en", "federation", "login", "--help"],
+    { encoding: "utf8" },
+  );
+  assert.match(output, /--bureau-id <bureau_id>/u);
+  assert.doesNotMatch(output, /--city-id/u);
 });
 
 test("Bureau Token 使用独立管理命令树", () => {

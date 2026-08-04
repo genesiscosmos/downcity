@@ -7,6 +7,7 @@
 
 import { Service } from "../service.js";
 import type { BureauTokenStore } from "../../federation/auth/bureau-token-store.js";
+import { read_optional_bureau_id } from "../../federation/identity/bureau-id.js";
 import { BureauStore } from "./bureau-store.js";
 
 /** Federation 内置 Bureau 管理服务。 */
@@ -91,9 +92,4 @@ export class BureausService extends Service {
     this.bureau_store = this._bureauStore!;
     this.token_store = this._bureauTokenStore!;
   }
-}
-
-/** 读取可选 opaque Bureau ID，不对值做规范化或改写。 */
-function read_optional_bureau_id(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
 }

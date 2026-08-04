@@ -42,9 +42,9 @@ test("feedbackService manages user feedback and admin replies", async () => {
       body: { name: "City Two", server_url: "https://city-two.example.com" },
     }))).json()
 
-    const userOneToken = await issueUserToken(base, adminSecret, cityOne.bureau_id, "user_1")
-    const userTwoToken = await issueUserToken(base, adminSecret, cityOne.bureau_id, "user_2")
-    const userOtherCityToken = await issueUserToken(base, adminSecret, cityTwo.bureau_id, "user_1")
+    const userOneToken = await issue_user_token(base, cityOne.bureau_id, "user_1")
+    const userTwoToken = await issue_user_token(base, cityOne.bureau_id, "user_2")
+    const userOtherCityToken = await issue_user_token(base, cityTwo.bureau_id, "user_1")
 
     const emptyResponse = await base.fetch(userRequest({
       token: userOneToken,
@@ -222,13 +222,12 @@ function userRequest({ token, path: pathname, method = "POST", body }) {
   })
 }
 
-async function issueUserToken(base, adminSecret, cityId, userId) {
-  void adminSecret
-  const tokenBody = await (await base.getAuthenticator()).createToken({
-    bureau_id: cityId,
-    user_id: userId,
+async function issue_user_token(base, bureau_id, user_id) {
+  const token_body = await (await base.getAuthenticator()).createToken({
+    bureau_id,
+    user_id,
   })
-  return tokenBody.user_token
+  return token_body.user_token
 }
 
 async function readEnvValue(base, key) {

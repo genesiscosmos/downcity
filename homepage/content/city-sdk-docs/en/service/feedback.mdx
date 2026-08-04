@@ -3,7 +3,7 @@ title: Feedback Service
 description: Collect product feedback from signed-in users and let admins reply inside Downcity.
 ---
 
-`FeedbackService` adds a simple feedback inbox to a federation. Signed-in users can submit feedback for the current city, admins can review and reply, and users can later read the official reply through the API.
+`FeedbackService` adds a simple feedback inbox to a Federation. Signed-in users can submit feedback for the Bureau bound to their Token, admins can review and reply, and users can later read the official reply through the API.
 
 ## Register
 
@@ -46,7 +46,7 @@ Response:
 }
 ```
 
-Read the current user's feedback for the current city:
+Read the current user's feedback for the Bureau bound to the Token:
 
 ```bash
 curl "http://127.0.0.1:43127/v1/feedback/me?status=replied&limit=50" \

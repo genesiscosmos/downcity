@@ -6,7 +6,8 @@
  * - 反馈创建、查询、答复和状态更新全部收敛在 FeedbackService 内部
  */
 
-import { httpError, type ServiceInstallContext, type ServiceRouteContext } from "@downcity/city";
+import type { ServiceInstallContext } from "@downcity/city";
+import { require_service_user_identity } from "../shared/service-identity.js";
 import type { FeedbackService } from "./service.js";
 import type {
   FeedbackCreateInput,
@@ -24,8 +25,9 @@ export function register_feedback_routes(service: FeedbackService, ctx: ServiceI
     path: "/send",
     auth: ["user"],
     handler: async (c) => {
+      const identity = require_service_user_identity(c);
       const body = await c.json<FeedbackCreateInput>();
-      return c.jsonResponse(await service.create(read_user_id(c), read_bureau_id(c), body));
+      return c.jsonResponse(await service.create(identity.user_id, identity.bureau_id, body));
     },
   });
 
@@ -34,9 +36,10 @@ export function register_feedback_routes(service: FeedbackService, ctx: ServiceI
     path: "/me",
     auth: ["user"],
     handler: async (c) => {
+      const identity = require_service_user_identity(c);
       const input = await c.json<FeedbackQueryInput>();
       return c.jsonResponse({
-        items: await service.listUserMessages(read_user_id(c), read_bureau_id(c), input),
+        items: await service.listUserMessages(identity.user_id, identity.bureau_id, input),
       });
     },
   });
@@ -70,22 +73,4 @@ export function register_feedback_routes(service: FeedbackService, ctx: ServiceI
       return c.jsonResponse(await service.updateStatus(body));
     },
   });
-}
-
-/**
- * 读取当前用户 ID。
- */
-function read_user_id(ctx: ServiceRouteContext): string {
-  const user_id = ctx.user?.user_id ?? "";
-  if (!user_id) throw httpError(401, "user token required");
-  return user_id;
-}
-
-/**
- * 读取当前 Bureau ID。
- */
-function read_bureau_id(ctx: ServiceRouteContext): string {
-  const bureau_id = ctx.bureau?.bureau_id ?? "";
-  if (!bureau_id) throw httpError(401, "Bureau user token required");
-  return bureau_id;
 }

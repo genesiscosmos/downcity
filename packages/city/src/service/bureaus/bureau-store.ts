@@ -6,6 +6,7 @@
  */
 
 import { randomSecret } from "../../utils/helpers.js";
+import { require_bureau_id } from "../../federation/identity/bureau-id.js";
 import type { CityTableApi } from "../../store/table-api.js";
 import type { Database } from "../../database/Database.js";
 import type { FederationTableSchema } from "../../types/database/Database.js";
@@ -54,7 +55,7 @@ export class BureauStore {
 
   /** 按稳定 ID 读取 Bureau。 */
   async get(bureau_id: string): Promise<BureauRecord | undefined> {
-    const id = read_bureau_id(bureau_id);
+    const id = require_bureau_id(bureau_id);
     const identity = (await this.bureau_table.select({ bureau_id: id }))[0];
     if (!identity) return undefined;
     const server = (await this.server_table.select({ bureau_id: id }))[0];
@@ -65,9 +66,9 @@ export class BureauStore {
   async create(input: BureauCreateInput): Promise<BureauRecord> {
     const name = read_required_text(input.name, "name");
     const server_url = read_server_url(input.server_url);
-    const bureau_id = input.bureau_id
-      ? read_bureau_id(input.bureau_id)
-      : randomSecret(12);
+    const bureau_id = input.bureau_id === undefined
+      ? randomSecret(12)
+      : require_bureau_id(input.bureau_id);
     if (await this.get(bureau_id)) {
       throw new TypeError(`Bureau already exists: ${bureau_id}`);
     }
@@ -134,7 +135,7 @@ export class BureauStore {
 
   /** 读取 Bureau，不存在时返回明确领域错误。 */
   async require(bureau_id: string): Promise<BureauRecord> {
-    const id = read_bureau_id(bureau_id);
+    const id = require_bureau_id(bureau_id);
     const bureau = await this.get(id);
     if (!bureau) throw new TypeError(`Unknown Bureau: ${id}`);
     return bureau;
@@ -170,14 +171,6 @@ function compose_bureau(
     throw new Error(`Bureau Server record is missing: ${identity.bureau_id}`);
   }
   return { ...identity, server };
-}
-
-/** 校验 Bureau ID。 */
-export function read_bureau_id(value: unknown): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new TypeError("bureau_id is required");
-  }
-  return value;
 }
 
 /** 规范化并验证 Bureau 服务端 HTTP(S) 入口。 */

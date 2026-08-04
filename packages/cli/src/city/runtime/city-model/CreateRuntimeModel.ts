@@ -26,7 +26,7 @@ type RuntimeModelFactoryInput = {
    * 宿主显式注入的运行时 env。
    *
    * 关键点（中文）
-   * - 用于读取 DOWNCITY_CITY_URL / DOWNCITY_CITY_USER_TOKEN / DOWNCITY_CITY_ID 覆盖项。
+   * - 用于读取 DOWNCITY_CITY_URL / DOWNCITY_CITY_USER_TOKEN 覆盖项。
    * - 未显式覆盖时回退到 `city city login` 保存的 user session。
    * - 不再读取 provider API Key。
    */

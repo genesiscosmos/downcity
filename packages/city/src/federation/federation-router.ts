@@ -189,7 +189,6 @@ export function build_federation_router(params: {
           ctx.user = identity.user;
           ctx.bureau = identity.bureau;
           ctx.bureau_token = identity.bureau_token;
-          ensure_bureau_identity_match(ctx);
 
           for (const hook of global_service_hooks(services)) {
             await hook.runBefore(ctx);
@@ -329,22 +328,6 @@ function search_params_to_object(search_params: URLSearchParams): Record<string,
     result[key] = value;
   });
   return result;
-}
-
-/**
- * 校验 input.bureau_id 与 token 绑定产品一致。
- */
-function ensure_bureau_identity_match(ctx: Context): void {
-  if (ctx.identity?.kind !== "user" && ctx.identity?.kind !== "bureau") return;
-  const request_bureau_id = typeof ctx.input.bureau_id === "string"
-    ? ctx.input.bureau_id
-    : "";
-  if (!request_bureau_id) return;
-
-  const token_bureau_id = ctx.bureau?.bureau_id ?? "";
-  if (request_bureau_id !== token_bureau_id) {
-    throw httpError(403, "bureau_id does not match the authenticated token");
-  }
 }
 
 /**

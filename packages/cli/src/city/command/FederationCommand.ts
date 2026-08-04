@@ -9,7 +9,6 @@
 
 import type { Command } from "commander";
 import { parseBoolean } from "@/shared/IndexSupport.js";
-import { DEFAULT_BUREAU_ID } from "@/city/shared/CityStateStore.js";
 import {
   emit_federation_status,
   emitCityUserWhoami,
@@ -124,21 +123,21 @@ export function register_federation_command(program: Command): void {
       zh: "登录当前或指定 Federation",
       en: "sign in to the current or specified Federation",
     }))
-    .option("--city-id <cityId>", t({
-      zh: "当前 City 在该 Federation 中的 bureau_id",
-      en: "bureau_id of the current City within this Federation",
-    }), DEFAULT_BUREAU_ID)
+    .option("--bureau-id <bureau_id>", t({
+      zh: "登录用户所属产品的 Bureau ID",
+      en: "Bureau ID of the product being signed in",
+    }))
     .option("--json [enabled]", t({
       zh: "以 JSON 输出",
       en: "output as JSON",
     }), parseBoolean)
     .action(async (
       url: string | undefined,
-      options: { cityId?: string; json?: boolean },
+      options: { bureauId?: string; json?: boolean },
     ) => {
       await run_federation_login_command({
         url,
-        bureau_id: options.cityId,
+        bureau_id: options.bureauId,
         as_json: options.json === true,
       });
     });

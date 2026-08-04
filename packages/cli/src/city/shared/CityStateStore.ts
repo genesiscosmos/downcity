@@ -5,7 +5,6 @@
  * - 只负责读取/写入 City 自己保存的 Federation 与 user session。
  * - 同时提供只读发现 `downfed` admin Federation 配置的能力。
  * - 不包含交互菜单、输出渲染或用户身份校验逻辑。
- * - 向后兼容旧状态字段 `base_url` / `selected_base_url`，迁移时自动改写为 federation_url。
  */
 
 import {
@@ -35,15 +34,6 @@ const FEDERATION_CONFIG_KEY = "federation.config";
  */
 export function readCityString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-/**
- * 读取 opaque Bureau ID。
- *
- * Bureau ID 只校验是否为非空字符串，不做 trim、前缀补全或其它规范化。
- */
-export function read_city_bureau_id(value: unknown): string {
-  return typeof value === "string" && value.length > 0 ? value : "";
 }
 
 /**
@@ -226,7 +216,7 @@ export function read_city_admin_secret_for_url(federation_url: string): string |
   const raw = readCityAdminConfig();
   const servers = Array.isArray(raw.servers) ? raw.servers : [];
   const matched = servers.find((item) =>
-    read_admin_federation_url(item) === target_url,
+    normalizeCityUrl(readCityString(item.base_url)) === target_url,
   );
   return readCityString(matched?.admin_secret_key) || undefined;
 }
@@ -265,18 +255,6 @@ function readCityAdminConfig(): CityAdminConfig {
   }
 }
 
-function read_admin_federation_url(item: {
-  base_url?: unknown;
-  federation_url?: unknown;
-  url?: unknown;
-}): string {
-  return normalizeCityUrl(
-    readCityString(item.base_url) ||
-    readCityString(item.federation_url) ||
-    readCityString(item.url),
-  );
-}
-
 function read_city_admin_federations(): FederationProfile[] {
   const raw = readCityAdminConfig();
   const servers = Array.isArray(raw.servers) ? raw.servers : [];
@@ -286,7 +264,7 @@ function read_city_admin_federations(): FederationProfile[] {
   const selected_url = resolve_selected_federation_url(state);
 
   for (const item of servers) {
-    const federation_url = read_admin_federation_url(item);
+    const federation_url = normalizeCityUrl(readCityString(item.base_url));
     if (!federation_url || out.some((server) => server.federation_url === federation_url)) continue;
     const session = state.sessions?.[federation_url];
     out.push({
@@ -325,11 +303,17 @@ function normalizeLocalState(value: CityLocalState | null | undefined): CityLoca
     : {};
   for (const [key, session] of Object.entries(input_sessions)) {
     const federation_url = normalizeCityUrl(readCityString(session?.federation_url) || key);
+    const bureau_id = session?.bureau_id;
     const user_token = readCityString(session?.user_token);
-    if (!federation_url || !user_token) continue;
+    if (
+      !federation_url
+      || typeof bureau_id !== "string"
+      || bureau_id.length === 0
+      || !user_token
+    ) continue;
     sessions[federation_url] = {
       federation_url,
-      bureau_id: read_city_bureau_id(session?.bureau_id) || DEFAULT_BUREAU_ID,
+      bureau_id,
       user_id: readCityString(session?.user_id) || undefined,
       user_label: readCityString(session?.user_label) || undefined,
       user_token,

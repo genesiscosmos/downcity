@@ -21,11 +21,6 @@ export interface CityUserEnvOverrides {
   federation_url: boolean;
 
   /**
-   * City city id 是否来自环境变量。
-   */
-  bureau_id: boolean;
-
-  /**
    * City user token 是否来自环境变量。
    */
   user_token: boolean;
@@ -41,7 +36,7 @@ export interface ResolvedCityUser {
   federation_url: string;
 
   /**
-   * City city id。
+   * 当前产品的 Bureau ID。
    */
   bureau_id: string;
 
@@ -113,6 +108,11 @@ export interface CityAccountsMeResult {
      * City 用户 ID。
      */
     user_id?: string;
+
+    /**
+     * Token 中已经验证的 Bureau ID。
+     */
+    bureau_id?: string;
   };
 
   /**

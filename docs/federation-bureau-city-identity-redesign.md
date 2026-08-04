@@ -136,7 +136,7 @@ User Token 至少包含：
 - `user_id`；
 - `bureau_id`；
 - Federation issuer；
-- `urn:downcity:bureau:<bureau_id>` audience；
+- 原始 `bureau_id` audience；
 - `jti`、签发时间和过期时间。
 
 `bureau_id` 在登录开始时确定，签入 Token 后成为请求身份的一部分。City 不通过未验证的本地 JWT decode 建立信任，而是调用 Federation `/v1/bureaus/current` 获取权威 BureauRecord。

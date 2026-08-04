@@ -30,8 +30,6 @@ import {
   normalizeLimit,
   normalizeOptionalFeedbackStatus,
   normalizeOptionalFilter,
-  read_bureau_id,
-  read_optional_bureau_id_filter,
   parseFeedbackMessage,
   randomFeedbackId,
   readFeedbackId,
@@ -78,7 +76,7 @@ export class FeedbackService extends InstallableService {
     const now = new Date().toISOString();
     const item: FeedbackMessage = {
       feedback_id: randomFeedbackId(),
-      bureau_id: read_bureau_id(bureau_id),
+      bureau_id,
       user_id: readRequiredText(user_id, "user_id", 500),
       message,
       contact,
@@ -104,7 +102,14 @@ export class FeedbackService extends InstallableService {
    * 管理员查询反馈。
    */
   async listMessages(input: FeedbackQueryInput): Promise<FeedbackMessage[]> {
-    const bureau_id = read_optional_bureau_id_filter(input.bureau_id);
+    const bureau_id = input.bureau_id;
+    if (bureau_id !== undefined && (
+      typeof bureau_id !== "string"
+      || bureau_id.length === 0
+      || bureau_id.length > 500
+    )) {
+      throw httpError(400, "bureau_id must contain between 1 and 500 characters");
+    }
     const user_id = normalizeOptionalFilter(input.user_id, "user_id");
     const status = normalizeOptionalFeedbackStatus(input.status);
     const limit = normalizeLimit(input.limit, 100, 500);
@@ -125,7 +130,7 @@ export class FeedbackService extends InstallableService {
     const limit = normalizeLimit(input.limit, 100, 200);
     const where: Partial<FeedbackMessage> = {
       user_id: readRequiredText(user_id, "user_id", 500),
-      bureau_id: read_bureau_id(bureau_id),
+      bureau_id,
     };
 
     if (status) where.status = status;

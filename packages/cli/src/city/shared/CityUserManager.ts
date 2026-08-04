@@ -38,9 +38,6 @@ export class CityUserManager {
     const env_federation_url = allow_env_override
       ? readFirstEnv(env, ["DOWNCITY_CITY_URL", "CITY_URL"])
       : "";
-    const env_bureau_id = allow_env_override
-      ? read_first_opaque_env(env, ["DOWNCITY_CITY_ID", "CITY_ID"])
-      : "";
     const env_user_token = allow_env_override
       ? readFirstEnv(env, ["DOWNCITY_CITY_USER_TOKEN", "CITY_USER_TOKEN"])
       : "";
@@ -52,10 +49,9 @@ export class CityUserManager {
 
     const env_overrides: CityUserEnvOverrides = {
       federation_url: Boolean(env_federation_url),
-      bureau_id: Boolean(env_bureau_id),
       user_token: Boolean(env_user_token),
     };
-    const bureau_id = env_bureau_id || session?.bureau_id || DEFAULT_BUREAU_ID;
+    const bureau_id = session?.bureau_id ?? DEFAULT_BUREAU_ID;
     const user_token = env_user_token || session?.user_token || "";
     const source = env_user_token ? "env" : "city-session";
     const warnings: string[] = [];
@@ -139,8 +135,14 @@ export class CityUserManager {
     });
     const result = await city.service("accounts").get<CityAccountsMeResult>("me");
     const token_user_id = readString(result.user?.user_id);
+    const token_bureau_id = typeof result.user?.bureau_id === "string"
+      ? result.user.bureau_id
+      : "";
     if (!token_user_id) {
       throw new Error("City user token resolved without a user_id. Run `city city login` again.");
+    }
+    if (!token_bureau_id) {
+      throw new Error("City user token resolved without a bureau_id. Run `city city login` again.");
     }
     if (session_user_id && !user.env_overrides.user_token && session_user_id !== token_user_id) {
       throw new Error([
@@ -155,6 +157,7 @@ export class CityUserManager {
     const display_name = readString(result.profile?.display_name);
     return {
       ...user,
+      bureau_id: token_bureau_id,
       user_id: token_user_id,
       user_label: email || display_name || token_user_id,
     };
@@ -172,18 +175,6 @@ function readFirstEnv(
   for (const key of keys) {
     const value = readString(env[key]);
     if (value) return value;
-  }
-  return "";
-}
-
-/** 从环境变量读取第一个非空 opaque 值，不改变其内容。 */
-function read_first_opaque_env(
-  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
-  keys: string[],
-): string {
-  for (const key of keys) {
-    const value = env[key];
-    if (typeof value === "string" && value.length > 0) return value;
   }
   return "";
 }

@@ -96,7 +96,7 @@ export function read_federation_membership_state(): FederationMembershipState {
   if (session?.user_token) {
     return {
       federation_url,
-      bureau_id: session.bureau_id || DEFAULT_BUREAU_ID,
+      bureau_id: session.bureau_id,
       has_user_token: true,
       source: "city-session",
       user_id: session.user_id,
@@ -425,7 +425,7 @@ export async function handle_city_prompt_action(
     const membership = read_federation_membership_state();
     const session = await performCityUserLogin({
       federation_url: membership.federation_url,
-      bureau_id: read_current_city_session()?.bureau_id || DEFAULT_BUREAU_ID,
+      bureau_id: read_current_city_session()?.bureau_id ?? DEFAULT_BUREAU_ID,
     });
     if (!session) {
       return {

@@ -13,16 +13,17 @@ import {
   type JWTPayload,
 } from "jose";
 import { httpError, randomSecret } from "../../utils/helpers.js";
+import {
+  is_bureau_id,
+  require_bureau_id,
+} from "../identity/bureau-id.js";
 import { FederationKeyStore, USER_TOKEN_ALGORITHM } from "./federation-key-store.js";
 import type { CreateUserTokenInput, UserTokenPayload } from "./types.js";
 import type {
   CreateFederationServiceTokenInput,
   FederationServiceTokenIssueResult,
 } from "./types.js";
-import {
-  FEDERATION_USER_TOKEN_AUDIENCE,
-  bureau_user_token_audience,
-} from "./audience.js";
+import { FEDERATION_USER_TOKEN_AUDIENCE } from "./audience.js";
 
 const DEFAULT_USER_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 const MAX_USER_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -56,7 +57,7 @@ export class UserTokenAuthority {
       .setIssuer(this.issuer)
       .setAudience([
         FEDERATION_USER_TOKEN_AUDIENCE,
-        bureau_user_token_audience(input.bureau_id),
+        input.bureau_id,
       ])
       .setSubject(input.user_id)
       .setIssuedAt(now)
@@ -175,13 +176,15 @@ export function normalize_user_token(token: string): string {
 export function read_user_token_payload(payload: JWTPayload): UserTokenPayload {
   const user_id = read_required_claim(payload.user_id ?? payload.sub, "user_id");
   const subject = read_required_claim(payload.sub, "sub");
-  const bureau_id = read_opaque_bureau_id_claim(payload.bureau_id);
+  if (!is_bureau_id(payload.bureau_id)) {
+    throw httpError(401, "Invalid user token bureau_id");
+  }
+  const bureau_id = payload.bureau_id;
   const issuer = read_required_claim(payload.iss, "iss");
   const token_id = read_required_claim(payload.jti, "jti");
   if (user_id !== subject) throw httpError(401, "Invalid user token subject");
   const audiences = read_user_token_audiences(payload.aud);
-  const bureau_audience = bureau_user_token_audience(bureau_id);
-  if (!audiences.includes(FEDERATION_USER_TOKEN_AUDIENCE) || !audiences.includes(bureau_audience)) {
+  if (!audiences.includes(FEDERATION_USER_TOKEN_AUDIENCE) || !audiences.includes(bureau_id)) {
     throw httpError(401, "Invalid user token audience");
   }
   if (typeof payload.iat !== "number" || typeof payload.exp !== "number") {
@@ -205,9 +208,7 @@ export function read_user_token_payload(payload: JWTPayload): UserTokenPayload {
 }
 
 function validate_sign_input(input: CreateUserTokenInput): void {
-  if (!input || typeof input.bureau_id !== "string" || input.bureau_id.length === 0) {
-    throw new TypeError("bureau_id is required");
-  }
+  require_bureau_id(input?.bureau_id);
   if (typeof input.user_id !== "string" || !input.user_id.trim()) {
     throw new TypeError("user_id is required");
   }
@@ -257,14 +258,6 @@ function read_required_claim(value: unknown, claim: string): string {
     throw httpError(401, `Invalid user token ${claim}`);
   }
   return value.trim();
-}
-
-/** 读取 opaque Bureau ID claim，不对已签名的身份值做任何改写。 */
-function read_opaque_bureau_id_claim(value: unknown): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw httpError(401, "Invalid user token bureau_id");
-  }
-  return value;
 }
 
 function is_http_error(error: unknown): error is Error & { statusCode: number } {

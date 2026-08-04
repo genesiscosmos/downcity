@@ -6,6 +6,7 @@
  */
 
 import { base64UrlEncodeBytes } from "../../utils/helpers.js";
+import { require_bureau_id } from "../identity/bureau-id.js";
 import type { CityTableApi } from "../../store/table-api.js";
 import type {
   BureauTokenRecord,
@@ -20,7 +21,7 @@ export class BureauTokenStore {
   /** 登记 CLI 生成的 Bureau Token hash，不接触 Token 明文。 */
   async register(input: RegisterBureauTokenInput): Promise<BureauTokenSummary> {
     const token_id = read_token_id_value(input.token_id);
-    const bureau_id = read_opaque_bureau_id(input.bureau_id);
+    const bureau_id = require_bureau_id(input.bureau_id);
     const purpose = read_token_purpose(input.purpose);
     const token_hash = read_token_hash(input.token_hash);
     if ((await this.table.select({ token_id }))[0]) {
@@ -58,9 +59,9 @@ export class BureauTokenStore {
 
   /** 列出 Bureau Token 元数据，不返回 token hash。 */
   async list(bureau_id?: string): Promise<BureauTokenSummary[]> {
-    const rows = bureau_id
-      ? await this.table.select({ bureau_id: read_opaque_bureau_id(bureau_id) })
-      : await this.table.select();
+    const rows = bureau_id === undefined
+      ? await this.table.select()
+      : await this.table.select({ bureau_id: require_bureau_id(bureau_id) });
     return rows.map(summarize);
   }
 
@@ -78,7 +79,7 @@ export class BureauTokenStore {
 
   /** 撤销一个 Bureau 的全部 active 机器凭证。 */
   async revoke_for_bureau(bureau_id: string): Promise<void> {
-    const id = read_opaque_bureau_id(bureau_id);
+    const id = require_bureau_id(bureau_id);
     const now = new Date().toISOString();
     for (const record of await this.table.select({ bureau_id: id })) {
       if (record.status !== "active") continue;
@@ -140,12 +141,4 @@ function read_required_string(value: unknown, name: string): string {
     throw new TypeError(`${name} must be a non-empty string`);
   }
   return value.trim();
-}
-
-/** 读取 opaque Bureau ID，不添加前缀，也不执行 trim 等值转换。 */
-function read_opaque_bureau_id(value: unknown): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new TypeError("bureau_id must be a non-empty string");
-  }
-  return value;
 }
