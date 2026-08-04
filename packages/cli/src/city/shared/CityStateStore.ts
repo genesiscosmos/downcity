@@ -25,7 +25,7 @@ import type {
 export const DEFAULT_FEDERATION_URL = "https://base.downcity.ai";
 
 /** 默认产品身份；仅作为 CLI 的显式预配置 Bureau。 */
-export const DEFAULT_BUREAU_ID = "bureau_downcity";
+export const DEFAULT_BUREAU_ID = "downcity";
 
 const CITY_STATE_KEY = "city.city.state";
 const FEDERATION_CONFIG_KEY = "federation.config";
@@ -35,6 +35,15 @@ const FEDERATION_CONFIG_KEY = "federation.config";
  */
 export function readCityString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * 读取 opaque Bureau ID。
+ *
+ * Bureau ID 只校验是否为非空字符串，不做 trim、前缀补全或其它规范化。
+ */
+export function read_city_bureau_id(value: unknown): string {
+  return typeof value === "string" && value.length > 0 ? value : "";
 }
 
 /**
@@ -320,7 +329,7 @@ function normalizeLocalState(value: CityLocalState | null | undefined): CityLoca
     if (!federation_url || !user_token) continue;
     sessions[federation_url] = {
       federation_url,
-      bureau_id: readCityString(session?.bureau_id) || DEFAULT_BUREAU_ID,
+      bureau_id: read_city_bureau_id(session?.bureau_id) || DEFAULT_BUREAU_ID,
       user_id: readCityString(session?.user_id) || undefined,
       user_label: readCityString(session?.user_label) || undefined,
       user_token,

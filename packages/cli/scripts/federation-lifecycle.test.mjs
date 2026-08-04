@@ -51,6 +51,12 @@ test("Bureau 部署凭证由 CLI 本地生成且 hash 可复算", async () => {
   assert.notEqual(credential.token_hash, credential.bureau_token);
 });
 
+test("City CLI 原样保留 opaque Bureau ID", async () => {
+  const state_store = await import("../bin/city/shared/CityStateStore.js");
+  assert.equal(state_store.read_city_bureau_id(" legacy:city/id "), " legacy:city/id ");
+  assert.equal(state_store.read_city_bureau_id(""), "");
+});
+
 test("Bureau Token 使用独立管理命令树", () => {
   const cli_path = fileURLToPath(new URL("../bin/downfed.js", import.meta.url));
   const platform_root = create_temp_dir("downcity-bureau-command-");

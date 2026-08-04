@@ -98,11 +98,11 @@ async function create_token_interactively(runtime: ManagedTuiRuntime): Promise<v
   while (true) {
     const bureau_id_input = await runtime.text({
       title: "Bureau ID",
-      placeholder: "bureau_xxx",
+      placeholder: "product-web",
     });
     if (bureau_id_input === undefined) return;
-    const bureau_id = bureau_id_input.trim();
-    if (!bureau_id) {
+    const bureau_id = bureau_id_input;
+    if (bureau_id.length === 0) {
       await runtime.show_message("error", "bureau_id is required");
       continue;
     }

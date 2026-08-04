@@ -127,7 +127,7 @@ const adminInstruction = admin.instruction();
 const adminInstructionContract: Promise<string> = adminInstruction;
 
 const bureau_registration_input: RegisterBureauTokenInput = {
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
   token_id: "br_1234567890abcdef",
   purpose: "type contract test",
   token_hash: "1234567890123456789012345678901234567890123",
@@ -141,7 +141,7 @@ const federation_bureaus: Promise<BureauRecord[]> = admin.bureaus.list();
 void federation_bureaus;
 
 const bureau_server_update_input: BureauServerUpdateInput = {
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
   server_url: "https://new-bureau.example.com",
 };
 const updated_bureau: Promise<BureauRecord> = admin.bureaus.server.update(

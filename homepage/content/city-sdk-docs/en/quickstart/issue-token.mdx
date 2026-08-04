@@ -14,7 +14,7 @@ const admin = new FederationAdmin({
 });
 
 const user = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
   user_id: "user_123",
   metadata: {
     plan: "pro",
@@ -23,7 +23,8 @@ const user = await admin.service("accounts").action("tokens/issue").invoke({
 });
 ```
 
-Return `user.user_token` and `user.bureau_id` to the product.
+Return `user.user_token` to the product. The Token already contains `bureau_id`, so normal service
+requests do not submit it again.
 
 ## What `metadata` is for
 

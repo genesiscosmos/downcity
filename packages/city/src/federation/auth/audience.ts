@@ -9,7 +9,8 @@ export const FEDERATION_USER_TOKEN_AUDIENCE = "downcity:federation" as const;
 
 /** 构造指定 Bureau 的 User Token audience。 */
 export function bureau_user_token_audience(bureau_id: string): string {
-  const id = String(bureau_id ?? "").trim();
-  if (!id) throw new TypeError("bureau_id is required");
-  return `urn:downcity:bureau:${id}`;
+  if (typeof bureau_id !== "string" || bureau_id.length === 0) {
+    throw new TypeError("bureau_id is required");
+  }
+  return `urn:downcity:bureau:${bureau_id}`;
 }

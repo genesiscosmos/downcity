@@ -30,7 +30,7 @@ export class BureausService extends Service {
     this.action("create", async (ctx) => await this.bureau_store.create({
       name: String(ctx.input.name ?? ""),
       server_url: String(ctx.input.server_url ?? ""),
-      bureau_id: String(ctx.input.bureau_id ?? "").trim() || undefined,
+      bureau_id: read_optional_bureau_id(ctx.input.bureau_id),
     }), { auth: ["admin"] });
 
     this.action("pause", async (ctx) => (
@@ -68,7 +68,7 @@ export class BureausService extends Service {
     }, { auth: ["admin"] });
 
     this.action("tokens/list", async (ctx) => ({
-      items: await this.token_store.list(String(ctx.input.bureau_id ?? "").trim() || undefined),
+      items: await this.token_store.list(read_optional_bureau_id(ctx.input.bureau_id)),
     }), { method: "GET", auth: ["admin"] });
 
     this.action("tokens/revoke", async (ctx) => {
@@ -91,4 +91,9 @@ export class BureausService extends Service {
     this.bureau_store = this._bureauStore!;
     this.token_store = this._bureauTokenStore!;
   }
+}
+
+/** 读取可选 opaque Bureau ID，不对值做规范化或改写。 */
+function read_optional_bureau_id(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }

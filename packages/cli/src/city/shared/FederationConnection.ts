@@ -25,7 +25,7 @@ import {
   list_federations,
   normalizeCityUrl,
   read_city_admin_secret_for_url,
-  readCityString,
+  read_city_bureau_id,
  read_current_city_session,
  readCityState,
   resolve_selected_federation_url,
@@ -33,10 +33,6 @@ import {
   writeCityState,
 } from "@/city/shared/CityStateStore.js";
 const cityUserManager = new CityUserManager();
-
-function readString(value: unknown): string {
-  return readCityString(value);
-}
 
 export function read_city_admin_secret_for_federation(federation_url: string): string | undefined {
   return read_city_admin_secret_for_url(federation_url);
@@ -301,7 +297,9 @@ export async function run_federation_login_command(params: {
   }
   const state = readCityState();
   const federation_url = resolve_selected_federation_url(state);
-  const bureau_id = readString(params.bureau_id) || read_current_city_session()?.bureau_id || DEFAULT_BUREAU_ID;
+  const bureau_id = read_city_bureau_id(params.bureau_id)
+    || read_current_city_session()?.bureau_id
+    || DEFAULT_BUREAU_ID;
   const session = await performCityUserLogin({
     federation_url,
     bureau_id,

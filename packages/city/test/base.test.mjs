@@ -502,7 +502,7 @@ test("Federation rejects mismatched bureau_id for authenticated user requests", 
         authorization: `Bearer ${issued.user_token}`,
       },
       body: JSON.stringify({
-        bureau_id: "bureau_other",
+        bureau_id: "other",
         prompt: "hi",
       }),
     }))

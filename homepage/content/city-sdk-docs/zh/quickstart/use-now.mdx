@@ -14,7 +14,7 @@ description: 用默认数据库、FederationAdmin 和 User City 跑通一条完�
 City Client
     ↓ FederationAdmin 创建 city / 签发 user_token
 Downcity City
-    ↓ User City 携带 user_token + bureau_id 调用 service
+    ↓ User City 携带 user_token 调用 service
 AIChannel → AIService → handler
 ```
 
@@ -92,7 +92,7 @@ const admin = new FederationAdmin({
 });
 
 const token = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
   user_id: "user_123",
   metadata: { plan: "pro" },
   ttl: "7d",

@@ -11,7 +11,7 @@ After a user logs in, issue a Downcity token through `FederationAdmin`:
 
 ```ts
 const user = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
   user_id: session.user.id,
   metadata: {
     plan: session.user.plan,

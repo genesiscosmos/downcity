@@ -22,7 +22,7 @@ The client owns:
 
 - UI and interaction
 - calling `User City`
-- holding `bureau_id`
+- using the product-configured `bureau_id` when login starts
 - storing or refreshing `user_token`
 
 The Federation owns:
@@ -48,7 +48,10 @@ That product backend can stay very thin at first:
 
 - user login
 - `FederationAdmin.tokens.apply()`
-- returning `user_token + bureau_id` to the client
+- returning `user_token` to the client
+
+Normal service requests do not submit `bureau_id` again; Federation reads it from the verified
+`user_token`.
 
 ## Why this fits early products better
 

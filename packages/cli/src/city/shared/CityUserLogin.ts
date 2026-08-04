@@ -10,6 +10,10 @@ import prompts from "@/city/tui/Prompts.js";
 import { City } from "@downcity/city";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { open_system_browser } from "@/shared/SystemBrowser.js";
+import {
+  DEFAULT_BUREAU_ID,
+  read_city_bureau_id,
+} from "@/city/shared/CityStateStore.js";
 import type {
   CityLoginInput,
   CityUserSession,
@@ -321,7 +325,7 @@ function buildUserSession(input: CityLoginInput & {
 }): CityUserSession {
   return {
     federation_url: input.federation_url,
-    bureau_id: readString(input.bureau_id) || "bureau_downcity",
+    bureau_id: read_city_bureau_id(input.bureau_id) || DEFAULT_BUREAU_ID,
     user_token: input.user_token,
     user_id: readString(input.user_id) || undefined,
     user_label: readString(input.user_label) || undefined,

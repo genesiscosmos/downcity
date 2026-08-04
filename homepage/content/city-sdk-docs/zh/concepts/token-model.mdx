@@ -24,7 +24,7 @@ Downcity 使用 `admin_secret_key` 管理 Federation，并使用 `user_token` �
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>终端 client</strong>
-      <span>前端、扩展或 App 只拿 `user_token + bureau_id`，使用 User City 调 service。</span>
+      <span>前端、扩展或 App 使用 `user_token` 创建 User City 并调用 service。</span>
       <code>拿不到 admin_secret_key</code>
     </div>
   </div>
@@ -39,7 +39,8 @@ Downcity 使用 `admin_secret_key` 管理 Federation，并使用 `user_token` �
 - `metadata`
 - `ttl`
 
-client 只携带 `user_token` 和 `bureau_id`，不接触 provider key，也不接触 `admin_secret_key`。
+登录开始时由产品配置明确 `bureau_id`；登录完成后，client 调用 service 只携带 `user_token`，
+`bureau_id` 由 Federation 从已验证 Token 中读取。client 不接触 provider key，也不接触 `admin_secret_key`。
 
 ## admin_secret_key
 

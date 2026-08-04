@@ -71,7 +71,7 @@ const admin = new FederationAdmin({
   credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
 });
 const token = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
   user_id: "user_123",
   ttl: "7d",
 });

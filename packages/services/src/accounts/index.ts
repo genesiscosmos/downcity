@@ -181,7 +181,7 @@ export class AccountsService extends InstallableService {
       handler: async (c) => {
         const body = await c.json<AccountsLoginStartRequest>();
         const provider = String(body.provider ?? "").trim();
-        const bureau_id = String(body.bureau_id ?? "").trim();
+        const bureau_id = typeof body.bureau_id === "string" ? body.bureau_id : "";
 
         if (!provider) {
           return c.jsonResponse({ error: "provider required" }, 400);
@@ -417,7 +417,7 @@ export class AccountsService extends InstallableService {
       auth: ["admin"],
       handler: async (c) => {
         const body = await c.json<{ bureau_id?: string; user_id?: string; metadata?: Record<string, unknown>; ttl?: string | number }>();
-        const bureau_id = String(body.bureau_id ?? "").trim();
+        const bureau_id = typeof body.bureau_id === "string" ? body.bureau_id : "";
         const user_id = String(body.user_id ?? "").trim();
         if (!user_id) return c.jsonResponse({ error: "user_id required" }, 400);
         await this.require_active_bureau(bureau_id);

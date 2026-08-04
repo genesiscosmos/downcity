@@ -22,7 +22,7 @@ client 负责：
 
 - UI 和交互
 - 调用 `User City`
-- 持有 `bureau_id`
+- 登录开始时使用产品配置中的 `bureau_id`
 - 保存或刷新 `user_token`
 
 Federation 负责：
@@ -48,7 +48,9 @@ Federation
 
 - 用户登录
 - `FederationAdmin.tokens.apply()`
-- 把 `user_token` 和 `bureau_id` 返回给前端
+- 把 `user_token` 返回给前端
+
+普通 service 请求不再重复提交 `bureau_id`；Federation 从已验证的 `user_token` 中读取。
 
 ## 为什么这样更适合早期产品
 

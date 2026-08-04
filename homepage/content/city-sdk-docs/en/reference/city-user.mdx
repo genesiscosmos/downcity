@@ -8,7 +8,7 @@ description: How product clients read the model directory and call AIService or 
 It binds one user inside one city:
 
 - `federation_url`
-- `bureau_id`, automatically injected into user service action calls
+- `bureau_id`, resolved by Federation from `user_token` rather than repeated in service action input
 - `user_token`, required for AI service calls and authenticated actions
 
 For guest-access actions such as login, registration, or webhooks, you can pass `federation_url` only.
@@ -55,7 +55,7 @@ const guest = new City({
 
 const login = await guest.service("accounts").action("login/start").invoke({
   provider: "email",
-  bureau_id: "bureau_xxx",
+  bureau_id: "product_id",
 });
 
 await guest.service("accounts").action("login/continue").invoke({
@@ -71,7 +71,7 @@ const session = await guest.service("accounts").get("login/result", {
 });
 ```
 
-After receiving `session.user_token`, create a User City with `user_token` for AI service calls. Keep `bureau_id` when you want User City to inject it into ordinary service actions.
+After receiving `session.user_token`, create User City with that token only. Federation verifies the token and resolves `bureau_id`; ordinary service actions do not repeat it in their input.
 
 ## Guest calls vs logged-in user calls
 
@@ -103,7 +103,7 @@ const guest = new City({
 
 const login = await guest.service("accounts").action("login/start").invoke({
   provider: "email",
-  bureau_id: "bureau_xxx",
+  bureau_id: "product_id",
 });
 
 await guest.service("accounts").action("login/continue").invoke({
@@ -360,7 +360,7 @@ You do not need a second protocol for services. Just remember:
 ```ts
 const login = await guest.service("accounts").action("login/start").invoke({
   provider: "email",
-  bureau_id: "bureau_xxx",
+  bureau_id: "product_id",
 });
 
 await guest.service("accounts").action("login/continue").invoke({
@@ -467,7 +467,7 @@ Usually one of these:
 - `user_token` is missing
 - the token expired
 - the token signature is invalid
-- the request `bureau_id` does not match the city bound to the token
+- the Token's `bureau_id` does not belong to the target product
 
 ### 422
 

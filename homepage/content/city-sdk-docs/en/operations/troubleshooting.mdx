@@ -11,15 +11,14 @@ Check:
 - whether the token has expired
 - whether City has `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` configured
 - whether the token was issued by the current City
-- whether `bureau_id` matches the city embedded in the token
+- whether the Token's `bureau_id` belongs to the current product
 
 ## client returns 403
 
 Check:
 
-- whether the `bureau_id` in the request matches the city bound to the current `user_token`
-- whether the city bound to the token has been paused
-- whether the target city was `active` when the admin side issued the token
+- whether the Bureau bound to the token has been paused
+- whether the target Bureau was `active` when the admin side issued the token
 
 ## client returns 404
 

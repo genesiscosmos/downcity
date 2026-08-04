@@ -300,10 +300,10 @@ test("City get() / post() use JSON and forward the current user_token", async ()
       if (url === "https://fed.example.com/v1/bureaus/current") {
         return json({
           bureau: {
-            bureau_id: "bureau_demo",
+            bureau_id: "demo",
             name: "Demo",
             server: {
-              bureau_id: "bureau_demo",
+              bureau_id: "demo",
               server_url: "https://bureau.example.com",
               created_at: "t",
               updated_at: "t",
@@ -348,10 +348,10 @@ test("City never forwards a user_token outside the current Bureau origin", async
     user_token: "ub_user_token",
     fetch: async () => json({
       bureau: {
-        bureau_id: "bureau_demo",
+        bureau_id: "demo",
         name: "Demo",
         server: {
-          bureau_id: "bureau_demo",
+          bureau_id: "demo",
           server_url: "https://bureau.example.com",
           created_at: "t",
           updated_at: "t",
@@ -599,7 +599,7 @@ test("FederationAdmin env list / catalog / upsert / remove", async () => {
 })
 
 test("FederationAdmin manages Bureau entities and issues seed user tokens", async () => {
-  const requests = []; const p = { bureau_id: "bureau_p1", name: "Demo", server: { bureau_id: "bureau_p1", server_url: "https://bureau.example.com", created_at: "t", updated_at: "t" }, state: "active", created_at: "t", updated_at: "t", archived_at: "" }
+  const requests = []; const p = { bureau_id: "product_p1", name: "Demo", server: { bureau_id: "product_p1", server_url: "https://bureau.example.com", created_at: "t", updated_at: "t" }, state: "active", created_at: "t", updated_at: "t", archived_at: "" }
   const admin = new FederationAdmin({
     base_url: "http://localhost:3001/",
     credential: "sk",
@@ -607,16 +607,16 @@ test("FederationAdmin manages Bureau entities and issues seed user tokens", asyn
     requests.push({ url, init })
     if (url.endsWith("/v1/bureaus/list")) return json({ items: [p] })
     if (url.endsWith("/v1/bureaus/create")) return json(p)
-    if (url.endsWith("/v1/accounts/tokens/issue")) return json({ user_token: "ub_test", bureau_id: "bureau_p1", user_id: "u1", expires_at: "2026-01-01T00:00:00.000Z" })
+    if (url.endsWith("/v1/accounts/tokens/issue")) return json({ user_token: "ub_test", bureau_id: "product_p1", user_id: "u1", expires_at: "2026-01-01T00:00:00.000Z" })
     return json({ success: true })
   }})
   assert.deepEqual(await admin.bureaus.list(), [p])
-  assert.equal((await admin.bureaus.create({ name: "Demo", server_url: p.server.server_url })).bureau_id, "bureau_p1")
-  await admin.bureaus.pause("bureau_p1")
+  assert.equal((await admin.bureaus.create({ name: "Demo", server_url: p.server.server_url })).bureau_id, "product_p1")
+  await admin.bureaus.pause("product_p1")
   assert.equal(requests[2].url, "http://localhost:3001/v1/bureaus/pause")
-  assert.deepEqual(await admin.service("accounts").action("tokens/issue").invoke({ bureau_id: "bureau_p1", user_id: "u1" }), {
+  assert.deepEqual(await admin.service("accounts").action("tokens/issue").invoke({ bureau_id: "product_p1", user_id: "u1" }), {
     user_token: "ub_test",
-    bureau_id: "bureau_p1",
+    bureau_id: "product_p1",
     user_id: "u1",
     expires_at: "2026-01-01T00:00:00.000Z",
   })
@@ -626,7 +626,7 @@ test("FederationAdmin manages Bureau Token records", async () => {
   const requests = []
   const bureau = {
     token_id: "br_1234567890abcdef",
-    bureau_id: "bureau_demo",
+    bureau_id: "demo",
     purpose: "Bureau client test",
     status: "active",
     created_at: "t",
@@ -653,7 +653,7 @@ test("FederationAdmin manages Bureau Token records", async () => {
   await admin.bureaus.tokens.revoke(bureau.token_id)
   assert.equal(requests[0].url, "http://localhost:3001/v1/bureaus/tokens/register")
   assert.deepEqual(JSON.parse(requests[0].init.body), input)
-  assert.equal(requests[1].url, "http://localhost:3001/v1/bureaus/tokens/list?bureau_id=bureau_demo")
+  assert.equal(requests[1].url, "http://localhost:3001/v1/bureaus/tokens/list?bureau_id=demo")
   assert.equal(requests[2].url, "http://localhost:3001/v1/bureaus/tokens/revoke")
 })
 

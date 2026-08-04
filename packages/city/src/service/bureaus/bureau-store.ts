@@ -67,7 +67,7 @@ export class BureauStore {
     const server_url = read_server_url(input.server_url);
     const bureau_id = input.bureau_id
       ? read_bureau_id(input.bureau_id)
-      : `bureau_${randomSecret(12)}`;
+      : randomSecret(12);
     if (await this.get(bureau_id)) {
       throw new TypeError(`Bureau already exists: ${bureau_id}`);
     }
@@ -174,11 +174,10 @@ function compose_bureau(
 
 /** 校验 Bureau ID。 */
 export function read_bureau_id(value: unknown): string {
-  const bureau_id = read_required_text(value, "bureau_id");
-  if (!/^bureau_[A-Za-z0-9_-]+$/u.test(bureau_id)) {
-    throw new TypeError("bureau_id must use the bureau_<id> format");
+  if (typeof value !== "string" || value.length === 0) {
+    throw new TypeError("bureau_id is required");
   }
-  return bureau_id;
+  return value;
 }
 
 /** 规范化并验证 Bureau 服务端 HTTP(S) 入口。 */

@@ -120,7 +120,7 @@ base.use(new UsageService({
 ```ts
 const login = await guest.service("accounts").action("login/start").invoke({
   provider: "email",
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
 });
 
 await guest.service("accounts").action("login/continue").invoke({

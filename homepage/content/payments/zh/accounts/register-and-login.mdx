@@ -19,7 +19,7 @@ const providers = await guest.service("accounts").get("providers");
 const session = await guest.service("accounts").action("register").invoke({
   email: "user@example.com",
   password: "password123",
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
 });
 ```
 
@@ -28,7 +28,7 @@ const session = await guest.service("accounts").action("register").invoke({
 ```ts
 const start = await guest.service("accounts").action("login/start").invoke({
   provider: "email",
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
 });
 
 await guest.service("accounts").action("login/continue").invoke({

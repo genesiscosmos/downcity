@@ -16,7 +16,7 @@ import { t } from "@/shared/CliLocale.js";
 
 /** 为当前 active Federation 创建并登记 Bureau Token。 */
 export async function create_federation_bureau_token(bureau_id_input: string): Promise<void> {
-  const bureau_id = require_value(bureau_id_input, "bureau_id");
+  const bureau_id = require_bureau_id(bureau_id_input);
   const purpose_input = await text({
     message: t({ zh: "Token 用途", en: "Token purpose" }),
     placeholder: t({ zh: "例如：生产环境支付服务", en: "For example: production payments service" }),
@@ -34,7 +34,7 @@ export async function create_federation_bureau_token_record(
   purpose_input: string,
 ): Promise<CreatedFederationBureauToken> {
   const server = require_active_admin_server();
-  const bureau_id = require_value(bureau_id_input, "bureau_id");
+  const bureau_id = require_bureau_id(bureau_id_input);
   const purpose = require_bureau_token_purpose(purpose_input);
   const credential = create_bureau_deployment_credential();
   const admin = create_federation_admin(server);
@@ -153,6 +153,14 @@ function require_value(value: unknown, name: string): string {
     throw new CliError({ title: `${name} is required` });
   }
   return normalized;
+}
+
+/** 读取 opaque Bureau ID，不对调用方提供的值做任何改写。 */
+function require_bureau_id(value: unknown): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new CliError({ title: "bureau_id is required" });
+  }
+  return value;
 }
 
 function validate_bureau_token_purpose(value: string): string | true {

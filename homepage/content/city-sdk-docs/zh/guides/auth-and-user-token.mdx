@@ -11,7 +11,7 @@ Downcity 不替你托管用户系统。它只要求 client 请求携带可校验
 
 ```ts
 const user = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
   user_id: session.user.id,
   metadata: {
     plan: session.user.plan,

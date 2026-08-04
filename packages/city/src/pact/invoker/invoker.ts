@@ -4,8 +4,8 @@
  * city.service("ai").action("text").invoke({ prompt: "hello" })
  *   → POST /v1/ai/text
  *
- * 如果设置了 bureau_id，自动注入到 POST body。
- * GET Action 则支持通过第二个参数传 query。
+ * 用户身份与 Bureau 身份只来自请求凭证，不向业务输入重复注入。
+ * GET Action 支持通过第二个参数传 query。
  */
 
 import type { RequestInitLike } from "../http.js";
@@ -19,16 +19,13 @@ export class ActionClient {
   constructor(
     private readonly req: Requester,
     private readonly url: string,
-    /** 当前 Bureau ID，自动注入到 POST body。 */
-    private readonly bureau_id?: string,
   ) {}
 
   /** POST 执行 Action */
   invoke<T = unknown>(input: Record<string, unknown> = {}): Promise<T> {
-    const body = this.bureau_id ? { ...input, bureau_id: this.bureau_id } : input;
     return this.req<T>(this.url, {
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify(input),
     });
   }
 }
@@ -41,15 +38,13 @@ export class ServiceClient {
     private readonly req: Requester,
     private readonly prefix: string,
     private readonly serviceId: string,
-    /** 当前 Bureau ID，透传给 ActionClient。 */
-    private readonly bureau_id?: string,
   ) {}
 
   /** 获取 Action 调用器 */
   action(name: string): ActionClient {
     const id = normalizeName(name);
     const url = `${this.prefix}/${encodeURIComponent(this.serviceId)}/${id}`;
-    return new ActionClient(this.req, url, this.bureau_id);
+    return new ActionClient(this.req, url);
   }
 
   /** GET 调用 Action（用于 method="GET" 的 action） */

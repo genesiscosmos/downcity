@@ -30,8 +30,13 @@ test("feedbackService manages user feedback and admin replies", async () => {
 
     const cityOne = await (await base.fetch(adminRequest(adminSecret, {
       path: "/v1/bureaus/create",
-      body: { name: "City One", server_url: "https://city-one.example.com" },
+      body: {
+        bureau_id: " legacy:city/id ",
+        name: "City One",
+        server_url: "https://city-one.example.com",
+      },
     }))).json()
+    assert.equal(cityOne.bureau_id, " legacy:city/id ")
     const cityTwo = await (await base.fetch(adminRequest(adminSecret, {
       path: "/v1/bureaus/create",
       body: { name: "City Two", server_url: "https://city-two.example.com" },

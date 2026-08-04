@@ -18,7 +18,7 @@ function create_context(input) {
     env: (key) => key === "UPSTREAM_API_KEY" ? "secret" : undefined,
     user: { user_id: "user_1" },
     bureau: {
-      bureau_id: "bureau_1",
+      bureau_id: "product_1",
       name: "Test Bureau",
       state: "active",
       created_at: "2026-01-01T00:00:00.000Z",
@@ -151,7 +151,7 @@ test("AIChannel action receives a scoped input instead of Federation Context", a
     upstream_model: "vendor-image-model",
   })
   assert.equal(received_input.user_id, "user_1")
-  assert.equal(received_input.bureau_id, "bureau_1")
+  assert.equal(received_input.bureau_id, "product_1")
   assert.equal("db" in received_input, false)
   assert.equal("locals" in received_input, false)
 })

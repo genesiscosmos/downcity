@@ -39,7 +39,7 @@ export class CityUserManager {
       ? readFirstEnv(env, ["DOWNCITY_CITY_URL", "CITY_URL"])
       : "";
     const env_bureau_id = allow_env_override
-      ? readFirstEnv(env, ["DOWNCITY_CITY_ID", "CITY_ID"])
+      ? read_first_opaque_env(env, ["DOWNCITY_CITY_ID", "CITY_ID"])
       : "";
     const env_user_token = allow_env_override
       ? readFirstEnv(env, ["DOWNCITY_CITY_USER_TOKEN", "CITY_USER_TOKEN"])
@@ -172,6 +172,18 @@ function readFirstEnv(
   for (const key of keys) {
     const value = readString(env[key]);
     if (value) return value;
+  }
+  return "";
+}
+
+/** 从环境变量读取第一个非空 opaque 值，不改变其内容。 */
+function read_first_opaque_env(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
+  keys: string[],
+): string {
+  for (const key of keys) {
+    const value = env[key];
+    if (typeof value === "string" && value.length > 0) return value;
   }
   return "";
 }

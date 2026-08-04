@@ -14,7 +14,7 @@ const admin = new FederationAdmin({
 });
 
 const user = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
   user_id: "user_123",
   metadata: {
     plan: "pro",
@@ -23,7 +23,7 @@ const user = await admin.service("accounts").action("tokens/issue").invoke({
 });
 ```
 
-把 `user.user_token` 和 `user.bureau_id` 返回给产品 client。
+把 `user.user_token` 返回给产品 client。`bureau_id` 已写入 Token，普通 service 请求不再重复传入。
 
 ## metadata 的作用
 

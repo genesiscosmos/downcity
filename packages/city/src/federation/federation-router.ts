@@ -337,7 +337,7 @@ function search_params_to_object(search_params: URLSearchParams): Record<string,
 function ensure_bureau_identity_match(ctx: Context): void {
   if (ctx.identity?.kind !== "user" && ctx.identity?.kind !== "bureau") return;
   const request_bureau_id = typeof ctx.input.bureau_id === "string"
-    ? ctx.input.bureau_id.trim()
+    ? ctx.input.bureau_id
     : "";
   if (!request_bureau_id) return;
 

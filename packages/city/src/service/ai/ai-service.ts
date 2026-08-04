@@ -92,6 +92,7 @@ import {
   readFilePartMediaType,
   readOptionalNumber,
   readOptionalString,
+  read_optional_opaque_string,
   rowToAsyncJobRecord,
   type ResolvedChannelOutput,
 } from "./ai-service-values.js";
@@ -964,7 +965,9 @@ export class AIService extends Service {
     return {
       usage_id,
       user_id: ctx.user?.user_id ?? readOptionalString(ctx.locals.ai_usage_user_id) ?? null,
-      bureau_id: ctx.bureau?.bureau_id ?? readOptionalString(ctx.locals.ai_usage_bureau_id) ?? null,
+      bureau_id: ctx.bureau?.bureau_id
+        ?? read_optional_opaque_string(ctx.locals.ai_usage_bureau_id)
+        ?? null,
       action_id: ctx.action?.id ?? "",
       model_id: metering?.model_id ?? ctx.variant?.id ?? "",
       channel_id: metering?.channel_id ?? ctx.variant?.channel_id ?? null,

@@ -249,14 +249,14 @@ Content-Type: application/json
 ```
 
 ```json
-{ "bureau_id": "bureau_xxx", "name": "Chrome Extension", "server": { "bureau_id": "bureau_xxx", "server_url": "https://bureau.example.com", ... }, "state": "active", ... }
+{ "bureau_id": "product_id", "name": "Chrome Extension", "server": { "bureau_id": "product_id", "server_url": "https://bureau.example.com", ... }, "state": "active", ... }
 ```
 
 ### `POST /v1/accounts/tokens/issue`
 
 ```json
 {
-  "bureau_id": "bureau_xxx",
+  "bureau_id": "product_id",
   "user_id": "user_123",
   "metadata": { "plan": "pro" },
   "ttl": "7d"
@@ -264,7 +264,7 @@ Content-Type: application/json
 ```
 
 ```json
-{ "user_token": "ub_xxx", "bureau_id": "bureau_xxx", "user_id": "user_123", ... }
+{ "user_token": "ub_xxx", "bureau_id": "product_id", "user_id": "user_123", ... }
 ```
 
 ### `POST /v1/env/upsert`

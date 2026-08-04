@@ -117,7 +117,7 @@ Then render email, GitHub, Google, or WeChat only from the server response. Do n
 const session = await guest.service("accounts").action("login").invoke({
   email: "user@example.com",
   password: "password123",
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
 });
 ```
 
@@ -138,7 +138,7 @@ const session = await guest.service("accounts").action("login").invoke<{
 }>({
   email: "user@example.com",
   password: "password123",
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
 });
 
 const user = new City({

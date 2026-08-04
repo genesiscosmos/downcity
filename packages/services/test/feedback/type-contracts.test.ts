@@ -26,7 +26,7 @@ const input: FeedbackCreateInput = {
 };
 const message: FeedbackMessage = {
   feedback_id: "fb_1",
-  bureau_id: "bureau_1",
+  bureau_id: "product_1",
   user_id: "user_1",
   message: String(input.message),
   contact: "user@example.com",

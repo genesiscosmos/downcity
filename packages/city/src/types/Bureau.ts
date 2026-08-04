@@ -82,7 +82,7 @@ export interface BureauCreateInput {
   /** 当前 Bureau 唯一绑定的服务端 HTTP(S) 入口。 */
   server_url: string;
 
-  /** 自定义 Bureau ID；未传入时由 Federation 生成。 */
+  /** 自定义 Bureau ID；不要求语义前缀，迁移时应原样保留历史 ID；未传入时由 Federation 生成。 */
   bureau_id?: string;
 }
 

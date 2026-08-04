@@ -64,7 +64,7 @@ A common pattern is one stable `bureau_id` per product:
 
 ```ts
 const issued = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
   user_id: "user_123",
   metadata: {
     plan: "starter",

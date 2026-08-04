@@ -43,6 +43,7 @@ Federation 不承担产品业务服务端职责，也不把 City 当成数据库
 Bureau 回答“这个产品服务端是谁、它的入口在哪里”。它负责：
 
 - 以稳定的 `bureau_id` 标识产品边界；
+- `bureau_id` 不要求 `bureau_` 等语义前缀；从历史身份迁移时必须原样保留 ID，不能拼接或改写；
 - 一对一拥有一条 Server 配置；
 - 使用绑定自身的 Bureau Token 向 Federation 证明机器身份；
 - 使用 Federation JWKS 本地验证本 Bureau 的 User Token；

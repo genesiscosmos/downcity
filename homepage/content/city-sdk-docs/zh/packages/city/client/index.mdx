@@ -83,7 +83,7 @@ const rewritten = await client
 const session = await guest.service("accounts").action("login").invoke({
   email: "user@example.com",
   password: "password123",
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
 });
 
 const usage = await user.service("usage").get("me");
@@ -95,7 +95,7 @@ const usage = await user.service("usage").get("me");
 
 ```ts
 const issued = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
   user_id: "user_123",
   ttl: "7d",
 });
@@ -158,7 +158,7 @@ const admin = new FederationAdmin({
 });
 
 const token = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
   user_id: "user_123",
   ttl: "30m",
 });
@@ -207,7 +207,7 @@ const session = await guest.service("accounts").action("login").invoke<{
 }>({
   email: "user@example.com",
   password: "password123",
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
 });
 
 const user = new City({
@@ -234,7 +234,7 @@ const reply = await user.ai.text({
 const session = await city.service("accounts").action("login").invoke({
   email: "user@example.com",
   password: "password123",
-  bureau_id: "bureau_demo",
+  bureau_id: "demo",
 });
 ```
 

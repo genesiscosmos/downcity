@@ -73,7 +73,7 @@ const admin = new FederationAdmin({
 
 ```ts
 const issued = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "bureau_my_app",
+  bureau_id: "my_app",
   user_id: "user_123",
   metadata: {
     plan: "pro",
@@ -104,7 +104,7 @@ router.post("/login", async (c) => {
   const user_id = await login(c);
 
   const issued = await admin.service("accounts").action("tokens/issue").invoke({
-    bureau_id: "bureau_my_app",
+    bureau_id: "my_app",
     user_id,
     ttl: "7d",
   });
@@ -209,7 +209,7 @@ const bureaus = await admin.bureaus.list();
 const bureau = await admin.bureaus.create({
   name: "My App",
   server_url: "https://bureau.example.com",
-  bureau_id: "bureau_my_app",
+  bureau_id: "my_app",
 });
 
 await admin.bureaus.server.update({
@@ -228,7 +228,7 @@ await admin.bureaus.archive(bureau.bureau_id);
 
 ```ts
 const issued = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "bureau_my_app",
+  bureau_id: "my_app",
   user_id: "user_123",
   ttl: "7d",
 });
@@ -317,7 +317,7 @@ await admin.credits.topup({
 ```ts
 try {
   await admin.service("accounts").action("tokens/issue").invoke({
-    bureau_id: "bureau_my_app",
+    bureau_id: "my_app",
     user_id: "user_123",
   });
 } catch (error) {

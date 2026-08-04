@@ -175,7 +175,7 @@ export function normalize_user_token(token: string): string {
 export function read_user_token_payload(payload: JWTPayload): UserTokenPayload {
   const user_id = read_required_claim(payload.user_id ?? payload.sub, "user_id");
   const subject = read_required_claim(payload.sub, "sub");
-  const bureau_id = read_required_claim(payload.bureau_id, "bureau_id");
+  const bureau_id = read_opaque_bureau_id_claim(payload.bureau_id);
   const issuer = read_required_claim(payload.iss, "iss");
   const token_id = read_required_claim(payload.jti, "jti");
   if (user_id !== subject) throw httpError(401, "Invalid user token subject");
@@ -205,7 +205,7 @@ export function read_user_token_payload(payload: JWTPayload): UserTokenPayload {
 }
 
 function validate_sign_input(input: CreateUserTokenInput): void {
-  if (!input || typeof input.bureau_id !== "string" || !input.bureau_id.trim()) {
+  if (!input || typeof input.bureau_id !== "string" || input.bureau_id.length === 0) {
     throw new TypeError("bureau_id is required");
   }
   if (typeof input.user_id !== "string" || !input.user_id.trim()) {
@@ -255,6 +255,14 @@ function validate_service_claims(claims: Record<string, unknown>): void {
 function read_required_claim(value: unknown, claim: string): string {
   if (typeof value !== "string" || !value.trim()) {
     throw httpError(401, `Invalid user token ${claim}`);
+  }
+  return value.trim();
+}
+
+/** 读取 opaque Bureau ID claim，不对已签名的身份值做任何改写。 */
+function read_opaque_bureau_id_claim(value: unknown): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw httpError(401, "Invalid user token bureau_id");
   }
   return value;
 }

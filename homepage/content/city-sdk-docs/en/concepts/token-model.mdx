@@ -24,7 +24,7 @@ Downcity uses `admin_secret_key` to manage Federation, and `user_token` to let e
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>End-user client</strong>
-      <span>The frontend, extension, or app only gets `user_token + bureau_id` and uses User City to call services.</span>
+      <span>The frontend, extension, or app creates User City with `user_token` and calls services.</span>
       <code>No access to admin_secret_key</code>
     </div>
   </div>
@@ -39,7 +39,9 @@ Downcity uses `admin_secret_key` to manage Federation, and `user_token` to let e
 - `metadata`
 - `ttl`
 
-The client only carries `user_token` and `bureau_id`. It never touches provider keys or `admin_secret_key`.
+Product configuration supplies `bureau_id` when login starts. After login, service calls only carry
+`user_token`; Federation reads `bureau_id` from the verified Token. The client never touches provider
+keys or `admin_secret_key`.
 
 ## admin_secret_key
 
