@@ -8,9 +8,7 @@
     "exploreArchitecture": "查看架构",
     "cityStage": {
       "label": "一张 Downcity 城市立面图：Agent Harness 运行在由 Workspace、Files、Shell 与 Services 组成的 City Environment Context 中。",
-      "selectLabel": "选择一个进入产品世界的 Agent",
-      "cityLabel": "Downcity · Agent City",
-      "selectHint": "选择一位居民"
+      "cityLabel": "Downcity · Agent City"
     },
     "coverLabel": "一个 Agent 生态：Agent 居住在不同的产品 City 内，多座 City 通过 Federation 共享能力。",
     "ecosystem": {

@@ -8,9 +8,7 @@
     "exploreArchitecture": "Explore the architecture",
     "cityStage": {
       "label": "A Downcity elevation showing an Agent Harness operating within a City Environment Context made of workspace, files, shell, and services.",
-      "selectLabel": "Choose an Agent to enter the product world",
-      "cityLabel": "Downcity · Agent City",
-      "selectHint": "Choose a resident"
+      "cityLabel": "Downcity · Agent City"
     },
     "coverLabel": "An Agent ecosystem where residents live inside distinct product Cities that share capabilities through Federation.",
     "ecosystem": {

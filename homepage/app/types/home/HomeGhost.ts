@@ -8,16 +8,6 @@
 import type { MotionValue } from "framer-motion";
 import type { InterfaceLocale } from "@/types/interface-locale";
 
-/** 首页中可被选择并贯穿完整滚动动画的 Ghost 定义。 */
-export interface HomeGhostDefinition {
-  /** Ghost 的稳定标识，用于保存当前选择。 */
-  key: string;
-  /** Ghost 成为当前主角后，在 Hero 与产品世界中使用的强调色。 */
-  accent: string;
-  /** 提供给屏幕阅读器的可访问名称。 */
-  aria_label: string;
-}
-
 /** 可复用 Ghost SVG 图形的输入参数。 */
 export interface HomeGhostGlyphProps {
   /** Ghost 在当前 SVG 坐标系中的水平中心。 */
@@ -36,10 +26,6 @@ export interface HomeGhostGlyphProps {
 export interface HomeHeroCityStageProps {
   /** 用于生成对应中英文产品文档入口的当前界面语言。 */
   locale: InterfaceLocale;
-  /** 当前作为滚动主角的 Ghost 标识。 */
-  selected_ghost_key: string;
-  /** 用户选择城市居民时触发的状态更新函数。 */
-  on_select_ghost: (ghost_key: string) => void;
   /** 整个城市立面随共享滚动进度变化的透明度。 */
   city_opacity: MotionValue<number> | number;
   /** 整个城市立面随共享滚动进度变化的垂直位移。 */
@@ -50,9 +36,7 @@ export interface HomeHeroCityStageProps {
 
 /** Hero 舞台中独立于城市和 Product World 的主角 Ghost 参数。 */
 export interface HomeHeroAgentActorProps {
-  /** 当前主角 Ghost 的稳定标识，用于选择与建筑匹配的城市生活轨迹。 */
-  ghost_key: string;
-  /** 当前主角 Ghost 的身份色。 */
+  /** 主角 Ghost 贯穿 Hero 与产品世界的强调色。 */
   accent: string;
   /** 主角随滚动进度变化的水平坐标。 */
   agent_x: MotionValue<number> | number;
@@ -70,8 +54,8 @@ export interface HomeHeroAgentActorProps {
 
 /** Product World SVG 绘图层参数。 */
 export interface HomeProductWorldSectionProps {
-  /** 当前主角 Agent 的身份色。 */
-  selected_ghost_accent: string;
+  /** 唯一主角 Agent 贯穿产品世界的强调色。 */
+  agent_accent: string;
   /** Capabilities 节点组的透明度。 */
   capability_opacity: MotionValue<number> | number;
   /** Capabilities 节点组的缩放值。 */

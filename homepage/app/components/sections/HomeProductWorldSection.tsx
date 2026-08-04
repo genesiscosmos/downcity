@@ -69,7 +69,7 @@ function render_growth_group(
 
 /** 绘制能力集成与完整蜂巢大陆。 */
 export function HomeProductWorldSection({
-  selected_ghost_accent,
+  agent_accent,
   capability_opacity,
   capability_scale,
   capability_rotate,
@@ -89,18 +89,18 @@ export function HomeProductWorldSection({
   return (
     <>
       <motion.g style={{ opacity: capability_opacity, scale: capability_scale, rotate: capability_rotate, transformOrigin: "600px 360px", willChange: "transform, opacity" }}>
-        <ellipse cx="600" cy="360" rx="292" ry="214" fill="none" stroke={selected_ghost_accent} strokeDasharray="3 9" opacity="0.28" />
+        <ellipse cx="600" cy="360" rx="292" ry="214" fill="none" stroke={agent_accent} strokeDasharray="3 9" opacity="0.28" />
         {capability_nodes.map((node) => (
           <g key={node.key}>
-            <motion.path d={`M${node.x} ${node.y} Q600 360 600 360`} fill="none" stroke={selected_ghost_accent} strokeOpacity="0.4" style={{ pathLength: capability_path }} />
-            <circle cx={node.x} cy={node.y} r="34" className="fill-background" stroke={selected_ghost_accent} strokeWidth="1.2" />
-            <circle cx={node.x} cy={node.y} r="25" fill={selected_ghost_accent} fillOpacity="0.06" />
+            <motion.path d={`M${node.x} ${node.y} Q600 360 600 360`} fill="none" stroke={agent_accent} strokeOpacity="0.4" style={{ pathLength: capability_path }} />
+            <circle cx={node.x} cy={node.y} r="34" className="fill-background" stroke={agent_accent} strokeWidth="1.2" />
+            <circle cx={node.x} cy={node.y} r="25" fill={agent_accent} fillOpacity="0.06" />
             <text x={node.x} y={node.y + 4} textAnchor="middle" className="fill-text-soft text-[11px] font-medium">{t(`productWorld.labels.${node.key}`)}</text>
           </g>
         ))}
       </motion.g>
 
-      <motion.circle cx="600" cy="360" r="78" fill="none" stroke={selected_ghost_accent} strokeWidth="1.5" style={{ opacity: integration_ring_opacity, scale: integration_ring_scale, transformOrigin: "600px 360px" }} />
+      <motion.circle cx="600" cy="360" r="78" fill="none" stroke={agent_accent} strokeWidth="1.5" style={{ opacity: integration_ring_opacity, scale: integration_ring_scale, transformOrigin: "600px 360px" }} />
 
       <g>
         {home_product_world_growth_groups.map((cells, index) => (

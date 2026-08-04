@@ -5,22 +5,14 @@
  * 轮廓，通过低饱和色块、窗光、植物与街道设施形成一座有居民的 Agent 城市。
  */
 
-import type { KeyboardEvent } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Link } from "react-router";
 import { HomeGhostGlyph } from "@/components/shared/HomeGhostGlyph";
-import { home_ghosts } from "@/lib/home-ghosts";
 import type { InterfaceLocale } from "@/types/interface-locale";
 import type { HomeHeroCityStageProps } from "@/types/home/HomeGhost";
 
-/** 五位可选 Agent 在统一 1200×720 坐标系中的城市位置。 */
-export const home_hero_agent_positions = {
-  blue: { x: 238, y: 633 },
-  green: { x: 468, y: 633 },
-  rust: { x: 642, y: 633 },
-  violet: { x: 866, y: 633 },
-  red: { x: 1052, y: 633 },
-} as const;
+/** 唯一主角 Agent 在统一 1200×720 坐标系中的城市起点。 */
+export const home_hero_agent_position = { x: 238, y: 633 } as const;
 
 /** 将道路基线从 646 下移到 720，使 City 立面贴住共享 SVG 舞台底部。 */
 export const home_hero_city_floor_offset = 74;
@@ -44,12 +36,16 @@ const ambient_agents = [
   { key: "a02", x: 132, y: 633 },
   { key: "a03", x: 316, y: 633 },
   { key: "a04", x: 404, y: 633 },
-  { key: "a05", x: 566, y: 633 },
-  { key: "a06", x: 716, y: 633 },
-  { key: "a07", x: 804, y: 633 },
-  { key: "a08", x: 934, y: 633 },
-  { key: "a09", x: 1118, y: 633 },
-  { key: "a10", x: 1180, y: 633 },
+  { key: "a05", x: 468, y: 633 },
+  { key: "a06", x: 566, y: 633 },
+  { key: "a07", x: 642, y: 633 },
+  { key: "a08", x: 716, y: 633 },
+  { key: "a09", x: 804, y: 633 },
+  { key: "a10", x: 866, y: 633 },
+  { key: "a11", x: 934, y: 633 },
+  { key: "a12", x: 1052, y: 633 },
+  { key: "a13", x: 1118, y: 633 },
+  { key: "a14", x: 1180, y: 633 },
 ] as const;
 
 const city_agent_size = 22;
@@ -109,16 +105,6 @@ function get_ambient_agent_motion(agent_index: number) {
   };
 }
 
-/** 为可切换居民生成道路上的轻量活动轨迹。 */
-function get_selectable_agent_motion(agent_index: number) {
-  const direction = agent_index % 2 === 0 ? 1 : -1;
-  return {
-    x: [0, direction * 12, direction * 12, direction * -6, 0],
-    duration: 11 + agent_index * 0.8,
-    delay: agent_index * -1.1,
-  };
-}
-
 /** 生成不同建筑类型的正面屋顶轮廓。 */
 function get_building_path(building: (typeof facade_buildings)[number]) {
   const right_x = building.x + building.width;
@@ -163,12 +149,6 @@ function render_building(building: (typeof facade_buildings)[number]) {
         </g>
       ))}
       <path d={`M${building.x + building.width / 2 - 11} 646 V620 Q${building.x + building.width / 2} 608 ${building.x + building.width / 2 + 11} 620 V646`} fill={building.accent} fillOpacity="0.08" stroke={building.accent} strokeOpacity="0.34" />
-      {building.kind === "tower" ? (
-        <g stroke={building.accent} strokeOpacity="0.5">
-          <path d={`M${building.x + building.width / 2} ${building.top_y} V${building.top_y - 42}`} />
-          <circle cx={building.x + building.width / 2} cy={building.top_y - 47} r="3.5" fill={building.accent} />
-        </g>
-      ) : null}
       {building.kind === "garden" ? (
         <g fill="#557b70" fillOpacity="0.2" stroke="#557b70" strokeOpacity="0.42">
           <circle cx={building.x + 14} cy={building.top_y - 5} r="9" />
@@ -191,15 +171,8 @@ function render_street_detail(x: number, variant: number) {
   return <g key={x} fill="none" stroke="currentColor" strokeOpacity="0.25"><path d={`M${x - 18} 632 H${x + 18} V640 H${x - 18} Z M${x - 13} 640 V648 M${x + 13} 640 V648`} /></g>;
 }
 
-/** 支持键盘选择城市居民。 */
-function handle_agent_key_down(event: KeyboardEvent<SVGGElement>, ghost_key: string, on_select_ghost: (ghost_key: string) => void) {
-  if (event.key !== "Enter" && event.key !== " ") return;
-  event.preventDefault();
-  on_select_ghost(ghost_key);
-}
-
 /** 渲染与产品世界共享坐标系的城市正立面。 */
-export function HomeHeroCityStage({ locale, selected_ghost_key, on_select_ghost, city_opacity, city_y, city_scale }: HomeHeroCityStageProps) {
+export function HomeHeroCityStage({ locale, city_opacity, city_y, city_scale }: HomeHeroCityStageProps) {
   const reduce_motion = useReducedMotion();
 
   return (
@@ -244,37 +217,6 @@ export function HomeHeroCityStage({ locale, selected_ghost_key, on_select_ghost,
           })}
         </g>
 
-        <g role="group" aria-label="Choose an Agent">
-          {home_ghosts.filter((ghost) => ghost.key !== selected_ghost_key).map((ghost, agent_index) => {
-            const position = home_hero_agent_positions[ghost.key as keyof typeof home_hero_agent_positions];
-            const agent_motion = get_selectable_agent_motion(agent_index);
-            return (
-              <motion.g
-                key={ghost.key}
-                animate={reduce_motion ? undefined : { x: agent_motion.x }}
-                transition={reduce_motion ? undefined : { duration: agent_motion.duration, delay: agent_motion.delay, ease: "easeInOut", repeat: Infinity }}
-              >
-                <motion.g
-                  role="button"
-                  tabIndex={0}
-                  aria-label={ghost.aria_label}
-                  aria-pressed="false"
-                  className="cursor-pointer outline-none"
-                  opacity="0.54"
-                  onClick={() => on_select_ghost(ghost.key)}
-                  onKeyDown={(event: KeyboardEvent<SVGGElement>) => handle_agent_key_down(event, ghost.key, on_select_ghost)}
-                  style={{ transformOrigin: `${position.x}px ${position.y}px` }}
-                  whileHover={reduce_motion ? undefined : { opacity: 0.82 }}
-                  whileFocus={reduce_motion ? undefined : { opacity: 0.82 }}
-                  transition={{ duration: reduce_motion ? 0 : 0.2, ease: [0.16, 1, 0.3, 1] }}
-                >
-                  <ellipse cx={position.x} cy={position.y + 13} rx="15" ry="4" fill={secondary_agent_accent} fillOpacity="0.08" />
-                  <HomeGhostGlyph center_x={position.x} center_y={position.y} size={city_agent_size} accent={secondary_agent_accent} />
-                </motion.g>
-              </motion.g>
-            );
-          })}
-        </g>
       </g>
     </motion.g>
   );
