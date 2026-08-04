@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { useTheme } from "fumadocs-ui/provider/base";
 import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
+import { use_auto_hide_header } from "@/hooks/use-auto-hide-header";
 import { create_interface_locale_path, persist_interface_locale } from "@/lib/interface-locale";
 import {
   DropdownMenu,
@@ -77,13 +78,7 @@ export function Navbar() {
     }
   };
 
-  const [scrolled, set_scrolled] = useState(false);
-  useEffect(() => {
-    const handle_scroll = () => set_scrolled(window.scrollY > 0);
-    handle_scroll();
-    window.addEventListener("scroll", handle_scroll, { passive: true });
-    return () => window.removeEventListener("scroll", handle_scroll);
-  }, []);
+  const { header_visible, scrolled } = use_auto_hide_header();
 
   const homePath = isZh ? "/zh" : "/";
   const productPath = isZh ? "/zh/product" : "/product";
@@ -173,10 +168,18 @@ export function Navbar() {
     "flex h-9 items-center justify-between rounded-lg px-2.5 text-[0.8125rem] font-medium text-text-soft outline-none transition-colors hover:!bg-surface-muted hover:text-foreground focus:!bg-surface-muted focus:text-foreground data-[highlighted]:!bg-surface-muted";
 
   return (
-    <header className={cn("sticky top-0 z-50 w-full bg-background/[0.86] backdrop-blur-[16px]", scrolled && "border-b border-line/60")}>
+    <header
+      className={cn(
+        "sticky top-0 z-50 w-full bg-background/[0.86] backdrop-blur-[16px] transition-transform focus-within:translate-y-0 motion-reduce:transition-none",
+        header_visible
+          ? "translate-y-0 duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
+          : "-translate-y-full duration-150 ease-[cubic-bezier(0.55,0,1,0.45)]",
+        scrolled && "border-b border-line/60",
+      )}
+    >
       <div className="mx-auto flex h-[60px] max-w-[1320px] items-center justify-between gap-4 px-5 md:px-8 lg:px-20">
         <Link to={homePath} className="inline-flex items-center gap-2.5 text-[0.9375rem] font-semibold text-foreground">
-          <img src="/icon.svg" alt="Downcity" className="brand-logo block h-6 w-6 shrink-0 object-contain" />
+          <img src="/icon-512.png" alt="Downcity" className="brand-logo block h-7 w-7 shrink-0 object-contain" />
           <span>Downcity</span>
         </Link>
 

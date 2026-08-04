@@ -1,7 +1,6 @@
-import { HomeHeroSection } from "@/components/sections/HomeHeroSection";
+import { HomeHeroWorldSection } from "@/components/sections/HomeHeroWorldSection";
 import { HomeFeaturesSection } from "@/components/sections/HomeFeaturesSection";
 import { HomeArchitectureDiagram } from "@/components/sections/HomeArchitectureDiagram";
-import { HomeProductWorldSection } from "@/components/sections/HomeProductWorldSection";
 import { HomeUseCasesSection } from "@/components/sections/HomeUseCasesSection";
 import { HomeCTASection } from "@/components/sections/HomeCTASection";
 import { Footer } from "@/components/sections/Footer";
@@ -35,8 +34,7 @@ export default function Home() {
     <div className="min-h-screen bg-background text-foreground">
       <HomeStructuredData />
       <main>
-        <HomeHeroSection />
-        <HomeProductWorldSection />
+        <HomeHeroWorldSection />
         <HomeArchitectureDiagram />
         <HomeFeaturesSection />
         <HomeUseCasesSection />

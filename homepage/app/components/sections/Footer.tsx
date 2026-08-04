@@ -96,7 +96,7 @@ export const Footer: FC = () => {
           {/* Brand column */}
           <div className="space-y-5">
             <Link to={homePath} className="inline-flex items-center gap-2.5">
-              <img src="/icon.svg" alt="Downcity" className="brand-logo block h-6 w-6 object-contain" />
+              <img src="/icon-512.png" alt="Downcity" className="brand-logo block h-6 w-6 object-contain" />
               <span className="text-[0.9375rem] font-semibold text-foreground">{product.productName}</span>
             </Link>
             <p className="max-w-sm text-sm leading-relaxed text-text-soft">

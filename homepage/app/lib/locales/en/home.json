@@ -3,6 +3,12 @@
     "title": "Downcity",
     "start": "Quick Start",
     "docs": "Read Docs",
+    "cityStage": {
+      "label": "A living Downcity elevation made of building facades, windows, bridges, and Agent residents. Choose one Agent to continue.",
+      "selectLabel": "Choose an Agent to enter the product world",
+      "cityLabel": "Downcity · Agent City",
+      "selectHint": "Choose a resident"
+    },
     "coverLabel": "An Agent ecosystem where residents live inside distinct product Cities that share capabilities through Federation.",
     "ecosystem": {
       "caption": "Agents live in product Cities connected through the same Federation",

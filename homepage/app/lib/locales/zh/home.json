@@ -3,6 +3,12 @@
     "title": "Downcity",
     "start": "快速开始",
     "docs": "查看文档",
+    "cityStage": {
+      "label": "一座由建筑正立面、窗口、连廊与 Agent 居民组成的 Downcity 城市，选择其中一个 Agent 继续探索。",
+      "selectLabel": "选择一个进入产品世界的 Agent",
+      "cityLabel": "Downcity · Agent City",
+      "selectHint": "选择一位居民"
+    },
     "coverLabel": "一个 Agent 生态：Agent 居住在不同的产品 City 内，多座 City 通过 Federation 共享能力。",
     "ecosystem": {
       "caption": "Agent 居住在产品 City 中，多座 City 连接同一个 Federation",

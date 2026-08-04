@@ -12,7 +12,7 @@ export function baseOptions(): BaseLayoutProps {
       title: (
         <div className="flex h-10 w-10 items-center justify-center">
           <img
-            src="/icon.svg"
+            src="/icon-512.png"
             width={32}
             height={32}
             alt="Downcity"

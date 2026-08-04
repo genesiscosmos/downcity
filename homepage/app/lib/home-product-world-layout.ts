@@ -242,12 +242,12 @@ export const home_product_world_cells = assigned_cells.map((cell, index) => {
     federation: cell.city_seed.federation,
     accent: cell.city_seed.accent,
     fill_opacity: cell.city_seed.fill_opacity,
-    growth_stage: Math.min(4, Math.floor(distance / 3)),
+    growth_stage: distance === 0 ? 0 : Math.min(4, Math.ceil(distance / 3)),
     content: get_cell_content(cell, index),
   };
 });
 
-/** 大陆从中心向外扩散的五层地块。 */
+/** 大陆从主角脚下的单个中心地块向外扩散为五层连续地块。 */
 export const home_product_world_growth_groups = Array.from({ length: 5 }, (_, stage) =>
   home_product_world_cells.filter((cell) => cell.growth_stage === stage),
 );

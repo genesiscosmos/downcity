@@ -29,7 +29,7 @@ import {
 } from "@/lib/interface-locale";
 import { create_page_meta, get_path_locale } from "@/lib/seo";
 
-const favicon_version = "20260626";
+const favicon_version = "20260804";
 
 const { provider } = defineI18nUI(i18n, {
   translations: {
@@ -54,12 +54,12 @@ const { provider } = defineI18nUI(i18n, {
 
 export const links: Route.LinksFunction = () => [
   { rel: "stylesheet", href: stylesheet },
-  // favicon 使用固定高对比资源，避免浏览器 tab 在深浅主题里出现看不见的问题。
+  // favicon 使用固定品牌资源，避免浏览器缓存旧版图标。
   {
     rel: "icon",
-    href: `/favicon.svg?v=${favicon_version}`,
-    type: "image/svg+xml",
-    sizes: "any",
+    href: `/icon-512.png?v=${favicon_version}`,
+    type: "image/png",
+    sizes: "512x512",
   },
   { rel: "icon", href: `/favicon-32x32.png?v=${favicon_version}`, type: "image/png", sizes: "32x32" },
   { rel: "icon", href: `/favicon-16x16.png?v=${favicon_version}`, type: "image/png", sizes: "16x16" },
@@ -128,9 +128,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
       return undefined;
     }
 
-    // favicon 保持高对比固定资源，不再跟随主题切换。
+    // favicon 保持固定品牌资源，不再跟随主题切换。
     const update_favicon = () => {
-      const favicon_href = `/favicon.svg?v=${favicon_version}`;
+      const favicon_href = `/favicon-32x32.png?v=${favicon_version}`;
       let theme_favicon = document.querySelector<HTMLLinkElement>(
         'link[data-theme-favicon="true"]',
       );
@@ -138,8 +138,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       if (!theme_favicon) {
         theme_favicon = document.createElement("link");
         theme_favicon.rel = "icon";
-        theme_favicon.type = "image/svg+xml";
-        theme_favicon.sizes = "any";
+        theme_favicon.type = "image/png";
+        theme_favicon.sizes = "32x32";
         theme_favicon.dataset.themeFavicon = "true";
         document.head.appendChild(theme_favicon);
       }
