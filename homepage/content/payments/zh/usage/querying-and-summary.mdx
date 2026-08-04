@@ -1,106 +1,37 @@
 ---
 title: 查询与汇总
-description: "@downcity/services 暴露出来的 usage 查询入口，以及产品侧和管理侧怎么读这些数据。"
+description: "查询当前用户的 Credits 和 AI 每日用量。"
 ---
 
-usage 这组服务的 service ID 通常就是 `usage`。
-
-## 这页最重要的心智
-
-同一份 usage 事实，会被两种角色从不同角度读取：
-
-- 用户侧：我自己用了多少
-- 管理侧：哪些产品、哪些模型、哪些用户在消耗资源
-
-所以 Downcity 不只是记录 usage，还把它整理成不同读取入口。
-
-## 管理侧常见读取
+Usage 只公开当前用户入口：`GET /v1/usage/me`。身份来自 `user_token`，不能通过参数查询其他用户。
 
 ```ts
-const events = await admin.service("usage").get("events");
-const summary = await admin.service("usage").get("summary");
+const usage = await city.service("usage").get("me", {
+  from: "2026-03-01",
+  to: "2026-03-31",
+  timezone: "America/Los_Angeles",
+});
 ```
 
-这两个读取入口常见用途分别是：
+日期按传入时区的当地自然日划分，包括夏令时切换日。参数必须是真实的 `YYYY-MM-DD` 日期，范围必须有序且不超过 400 天。
 
-- `events`：排查具体调用、做细粒度审计
-- `summary`：做 dashboard、运营看板、成本概览
-
-## 用户侧常见读取
+## 响应结构
 
 ```ts
-const me = await user.service("usage").get("me");
+{
+  timezone: "America/Los_Angeles",
+  from: "2026-03-01",
+  to: "2026-03-31",
+  credits_per_usd: 1_000_000,
+  data_available_from: { credits: "2026-03-02", ai: "2026-03-02" },
+  summary: {
+    credits: { used: 2500, charge_count: 3 },
+    ai: { execution_count: 3, metered_request_count: 3, total_tokens: 12400 }
+  },
+  days: [/* 仅包含有 Credits 或 AI 活动的日期 */]
+}
 ```
 
-适合产品里的这些界面：
+产品中的热力图和趋势图应优先使用 `days[].credits.used`。Token 和媒体字段用于解释实际 AI 消耗，不应被换算成 Credits，也不能从 Credits 反推。
 
-- 用量页
-- 账户中心
-- 套餐额度展示
-
-## 一个常见管理端示例
-
-```ts
-const summary = await admin.service("usage").get("summary");
-
-return {
-  usageSummary: summary,
-};
-```
-
-这类模式很适合：
-
-- 管理后台
-- 内部运营看板
-- 周期性汇总脚本
-
-## 一个常见用户端示例
-
-```ts
-const me = await user.service("usage").get("me");
-
-return {
-  currentUsage: me,
-};
-```
-
-这类模式很适合：
-
-- 在产品里告诉用户“你已经用了多少”
-- 让用户知道为什么某些额度或套餐状态发生变化
-
-## 为什么不直接只开放一个 events 接口
-
-因为绝大多数使用场景并不想每次都自己重新聚合：
-
-- 管理侧通常想直接看汇总结果
-- 用户侧通常只想看自己的数据
-
-所以把不同视角分成不同读取入口，会比“所有人都自己拿原始 events 再处理”更实用。
-
-## 常用 API / 入口
-
-这一页最相关的调用入口是：
-
-- `admin.service("usage").get("events")`
-- `admin.service("usage").get("summary")`
-- `user.service("usage").get("me")`
-
-## 常见误解
-
-### `summary` 不是“可有可无的糖”
-
-很多后台和报表最需要的就是聚合结果，而不是原始事件列表。
-
-### 用户侧也可以直接看 usage
-
-usage 不只是内部运维数据，也可以是用户产品体验的一部分。
-
-### 原始事件和汇总不应该混成一个概念
-
-排查、运营、产品展示，关注点完全不同。
-
-## 继续阅读
-
-- 想理解 usage 本身记录什么，读 [Usage 事实模型](/zh/payments/usage/event-model)
-- 想把 usage 接到套餐和收费规则，读 [和计费逻辑怎么配](/zh/payments/usage/billing-integration)
+`data_available_from` 分别表示两个事实源最早可用的当地日期；无数据时为 `null`。

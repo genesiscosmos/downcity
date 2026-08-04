@@ -1,86 +1,37 @@
 ---
 title: Querying and Summary
-description: "The usage query surface exposed by @downcity/services, and how product-side and admin-side callers read it."
+description: "Query the current user's daily Credits and AI usage."
 ---
 
-The service exposed by the usage service is usually just `usage`.
-
-## The core idea on this page
-
-The same usage facts are read from two different points of view:
-
-- user-side: how much did I use?
-- admin-side: which cities, models, and users are consuming resources?
-
-## Common admin-side reads
+Usage exposes one user endpoint: `GET /v1/usage/me`. Identity comes from the `user_token`; callers cannot select another user with a parameter.
 
 ```ts
-const events = await admin.service("usage").get("events");
-const summary = await admin.service("usage").get("summary");
+const usage = await city.service("usage").get("me", {
+  from: "2026-03-01",
+  to: "2026-03-31",
+  timezone: "America/Los_Angeles",
+});
 ```
 
-Typical roles:
+Days are grouped as local calendar days in the supplied time zone, including daylight-saving transitions. Dates must be real `YYYY-MM-DD` values in ascending order, and the range cannot exceed 400 days.
 
-- `events`: detailed debugging or auditing
-- `summary`: dashboards, operations overviews, cost snapshots
-
-## Common user-side reads
+## Response shape
 
 ```ts
-const me = await user.service("usage").get("me");
+{
+  timezone: "America/Los_Angeles",
+  from: "2026-03-01",
+  to: "2026-03-31",
+  credits_per_usd: 1_000_000,
+  data_available_from: { credits: "2026-03-02", ai: "2026-03-02" },
+  summary: {
+    credits: { used: 2500, charge_count: 3 },
+    ai: { execution_count: 3, metered_request_count: 3, total_tokens: 12400 }
+  },
+  days: [/* dates with Credits or AI activity only */]
+}
 ```
 
-Typical uses:
+Use `days[].credits.used` for product heatmaps and trends. Token and media fields explain actual AI consumption; they are not converted into Credits, and Credits cannot be used to infer them.
 
-- usage pages
-- account settings
-- plan quota displays
-
-## A common admin-side pattern
-
-```ts
-const summary = await admin.service("usage").get("summary");
-
-return {
-  usageSummary: summary,
-};
-```
-
-## A common user-side pattern
-
-```ts
-const me = await user.service("usage").get("me");
-
-return {
-  currentUsage: me,
-};
-```
-
-## Why not only expose raw events
-
-Most consumers do not want to aggregate everything themselves. Admin tools often want summary first, and end users usually only want their own usage view.
-
-## Common API surface
-
-- `admin.service("usage").get("events")`
-- `admin.service("usage").get("summary")`
-- `user.service("usage").get("me")`
-
-## Common misunderstandings
-
-### `summary` is not optional sugar
-
-Aggregated answers are exactly what many dashboards and operations tools need.
-
-### Downcity-side callers can read usage too
-
-Usage is not only internal operational data. It can be part of the downcity experience.
-
-### Raw events and summary should not be treated as the same thing
-
-Debugging, operations, and end-user UX care about different shapes of the same facts.
-
-## Read next
-
-- For what usage actually records, read [Usage Event Model](/en/payments/usage/event-model)
-- For how usage combines with charging logic, read [Billing Integration](/en/payments/usage/billing-integration)
+Each `data_available_from` value is the earliest local date available from that fact owner, or `null` when no data exists.

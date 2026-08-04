@@ -8,10 +8,11 @@ description: Official Downcity identity, credits, payment, and usage services.
 - `AccountsService` owns login and user identity.
 - `CreditsService` owns Primary / Ephemeral Cards and accounting records.
 - `PaymentService` owns payment orders, Checkout, and webhooks.
-- `UsageService` records service usage.
+- `UsageService` aggregates user Credits consumption and AI technical usage.
 
 ```ts
 const credits = new CreditsService();
+const ai = new AIService({ credits });
 const payment = new PaymentService({
   providers: [stripePaymentProvider()],
   resolve_topup: ({ topup_amount_minor }) => ({
@@ -30,8 +31,12 @@ const payment = new PaymentService({
 
 federation.use(new AccountsService());
 federation.use(credits);
+federation.use(ai);
 federation.use(payment);
-federation.use(new UsageService());
+federation.use(new UsageService({
+  ai_usage_reader: ai,
+  credits_usage_reader: credits,
+}));
 ```
 
 Start with [Credits Cards](/en/payments/credits) for the credit model, then choose a payment provider.

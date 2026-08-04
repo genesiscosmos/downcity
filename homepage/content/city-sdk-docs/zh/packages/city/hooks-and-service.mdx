@@ -58,7 +58,7 @@ global
 ## 最常见的 service 挂载示例
 
 ```ts
-import { Federation } from "@downcity/city";
+import { AIService, Federation } from "@downcity/city";
 import {
   AccountsService,
   CreditsService,
@@ -70,6 +70,7 @@ import {
 
 const base = new Federation({ database });
 const credits = new CreditsService();
+const ai = new AIService({ credits });
 
 base.use(new AccountsService({
   token_ttl: "7d",
@@ -79,6 +80,7 @@ base.use(new AccountsService({
 }));
 
 base.use(credits);
+base.use(ai);
 base.use(new PaymentService({
   resolve_topup: ({ topup_amount_minor }) => ({ credits: topup_amount_minor * 10_000 }),
   on_paid: async (record) => {
@@ -98,7 +100,8 @@ base.use(new PaymentService({
   ],
 }));
 base.use(new UsageService({
-  record_errors: true,
+  ai_usage_reader: ai,
+  credits_usage_reader: credits,
 }));
 ```
 
@@ -107,7 +110,7 @@ base.use(new UsageService({
 - `new AccountsService()` 给 City 增加 `accounts` service 容器
 - `AccountsService` 会自动挂载 `/providers`、统一登录入口、`me`、管理侧读取、better-auth passthrough 与 OAuth callback 入口；具体登录方式只有在对应 provider 挂载且配置满足后才会开放
 - `new PaymentService()` 给 City 增加统一支付入口，用来暴露当前可用的支付方式
-- `new UsageService()` 给 City 增加 usage 记录能力和相关查询入口
+- `new UsageService(...)` 聚合 `AIService` 技术用量与 `CreditsService` 已入账消费，并提供当前用户查询入口
 - `stripePaymentProvider()` 给统一 Payment 服务增加 Stripe Checkout、webhook 和支付结果同步
 
 ## service 挂进来后产品端怎么调
@@ -132,7 +135,11 @@ const session = await guest.service("accounts").get("login/result", {
   login_id: login.login_id,
 });
 
-const usage = await admin.service("usage").get("summary");
+const usage = await user.service("usage").get("me", {
+  from: "2026-08-01",
+  to: "2026-08-31",
+  timezone: "Asia/Shanghai",
+});
 
 const methods = await guest.service("payment").get("methods");
 

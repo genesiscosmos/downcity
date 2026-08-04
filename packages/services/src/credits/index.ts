@@ -33,3 +33,8 @@ export type {
   CreditsTransactionQuery,
   CreditsTransactionStatus,
 } from "./types/Transaction.js";
+export type {
+  CreditsDailyUsageBucket,
+  CreditsDailyUsageResult,
+  CreditsUsageReader,
+} from "./types/Usage.js";

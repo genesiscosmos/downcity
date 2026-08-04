@@ -246,6 +246,8 @@ export interface AICreditsBridge {
 
 /** Channel 或模型生成账单时可读取的显式输入。 */
 export interface AIBillInput {
+  /** 一次真实 AI 执行及其结算的稳定标识。 */
+  readonly usage_id: string;
   /** 本次模型执行的最终输出。 */
   readonly output: unknown;
   /** AIService 已解析完成的最终模型。 */

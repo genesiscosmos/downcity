@@ -97,7 +97,7 @@ function create_worker_entrypoint(): string {
  * - Federation 实例在 Worker isolate 内复用，第一次请求时完成初始化。
  */
 
-import { Federation, R2Storage } from "@downcity/city";
+import { AIService, Federation, R2Storage, type CityQueueMessage } from "@downcity/city";
 import { Database } from "@downcity/database-d1";
 import {
   AccountsService,
@@ -113,6 +113,8 @@ export interface Env {
   DB: D1Database;
   /** Federation 默认 R2 存储。 */
   DOWNCITY_STORAGE: R2Bucket;
+  /** Federation 异步任务 Queue。 */
+  DOWNCITY_QUEUE: Queue<CityQueueMessage>;
   /** R2 文件公开 URL 前缀。 */
   DOWNCITY_STORAGE_PUBLIC_URL_PREFIX?: string;
 }
@@ -123,6 +125,11 @@ let federation_promise: Promise<Federation> | undefined;
 async function create_federation(env: Env): Promise<Federation> {
   const database = new Database({ binding: env.DB });
   const federation = new Federation({ database });
+  federation.queue.use({
+    send: (message) => env.DOWNCITY_QUEUE.send(message, message.delay_ms
+      ? { delaySeconds: Math.ceil(message.delay_ms / 1000) }
+      : undefined),
+  });
   const public_url_prefix = env.DOWNCITY_STORAGE_PUBLIC_URL_PREFIX?.trim();
   if (public_url_prefix) {
     federation.storage(R2Storage({
@@ -137,8 +144,14 @@ async function create_federation(env: Env): Promise<Federation> {
       wechatAccountsProvider(),
     ],
   }));
-  federation.use(new CreditsService());
-  federation.use(new UsageService({ record_errors: true }));
+  const credits_service = new CreditsService();
+  const ai_service = new AIService({ credits: credits_service });
+  federation.use(credits_service);
+  federation.use(ai_service);
+  federation.use(new UsageService({
+    ai_usage_reader: ai_service,
+    credits_usage_reader: credits_service,
+  }));
   await federation.health();
   return federation;
 }
@@ -157,6 +170,17 @@ export default {
       return Response.json(await federation.health());
     }
     return federation.fetch(request);
+  },
+  async queue(batch: MessageBatch<CityQueueMessage>, env: Env): Promise<void> {
+    const federation = await get_federation(env);
+    for (const message of batch.messages) {
+      try {
+        await federation.queue.call(message.body);
+        message.ack();
+      } catch {
+        message.retry();
+      }
+    }
   },
 };
 `;

@@ -1,71 +1,43 @@
 ---
 title: "Usage Service"
-description: "Automatically records service-call facts for analytics, metering, and billing input data."
+description: "Aggregate the current user's Credits consumption and AI metering by local calendar day."
 ---
 
-`@downcity/services` records which service calls happened inside City. It records facts only. It does not decide your prices, plans, or charging logic.
+`UsageService` provides a daily usage view for the current user. Credits are the primary metric for trends and heatmaps. Tokens, images, video, and audio come from the final metering returned by `AIService`.
 
-Its value is that you can persist "what happened" first, then decide later whether those facts should feed reports, quotas, or billing.
+Usage does not store a third copy of either fact. `CreditsService` owns accounting, `AIService` owns technical usage, and `UsageService` combines both through readers.
 
-## How to read this section
-
-The recommended order is:
-
-1. Start with [Event model](/en/payments/usage/event-model) to understand what a usage event records.
-2. Continue with [Querying and summary](/en/payments/usage/querying-and-summary) to understand how trusted-side readers fetch raw events and aggregates.
-3. Finish with [Billing integration](/en/payments/usage/billing-integration) to understand the boundary between usage facts and payment logic.
-
-## What it records
-
-- downcity
-- user
-- service
-- model
-- call status
-
-## What it does not do for you
-
-- It does not charge users by itself.
-- It does not define your pricing or plan system.
-- It does not automatically decide which calls should become billable.
-
-## Use it when
-
-- you need usage analytics
-- you want to feed usage into billing logic
-- you want call facts first and pricing logic later
-
-## Install
-
-```bash
-pnpm add @downcity/services
-```
-
-## Enable it
+## Install and enable
 
 ```ts
-import { UsageService } from "@downcity/services";
+import { AIService } from "@downcity/city";
+import { CreditsService, UsageService } from "@downcity/services";
 
-base.use(new UsageService({
-  record_errors: true,
+const credits_service = new CreditsService();
+const ai_service = new AIService({ credits: credits_service });
+
+federation.use(credits_service);
+federation.use(ai_service);
+federation.use(new UsageService({
+  ai_usage_reader: ai_service,
+  credits_usage_reader: credits_service,
 }));
 ```
 
-## Common queries
+## Query the current user
 
 ```ts
-const events = await admin.service("usage").get("events");
-const summary = await admin.service("usage").get("summary");
+const usage = await city.service("usage").get("me", {
+  from: "2026-08-01",
+  to: "2026-08-31",
+  timezone: "America/Los_Angeles",
+});
 ```
 
-## Most common combinations
+`from`, `to`, and the IANA `timezone` are required. A query can cover at most 400 local calendar days. The response contains a range summary and sparse daily buckets; inactive days are omitted.
 
-- Use it with [@downcity/city](/en/city-sdk-docs/packages/city/federation) for trusted-side usage reads
-- Use it with [@downcity/services](/en/payments) when you want usage to inform entitlement or billing logic
-- Use it with your own downcity database or BI system for richer reporting
+## Read next
 
-## Related docs
-
-- For step-by-step detail, continue with the three subpages in this section
-- For the full usage capability, continue in [Usage Service](/en/payments/usage)
-- For trusted-side access patterns, read [@downcity/city](/en/city-sdk-docs/packages/city/federation)
+- [Querying and Summary](/en/payments/usage/querying-and-summary)
+- [Facts and Metering Model](/en/payments/usage/event-model)
+- [Usage and Credits Billing](/en/payments/usage/billing-integration)

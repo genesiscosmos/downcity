@@ -12,6 +12,7 @@ import type {
   LanguageModelV3StreamResult,
 } from "../../types/AI.js";
 import type {
+  AIStreamCompletion,
   OpenAIChatCompletionRequest,
   OpenAIChatContentPart,
   OpenAIChatMessage,
@@ -81,7 +82,7 @@ export async function create_openai_chat_completion_response(input: {
   stream: boolean;
   /** AIChannel 返回的标准 V3 流。 */
   result: LanguageModelV3StreamResult;
-}): Promise<{ response: Response; completion: Promise<LanguageModelV3GenerateResult | undefined> }> {
+}): Promise<{ response: Response; completion: Promise<AIStreamCompletion<LanguageModelV3GenerateResult>> }> {
   if (input.stream) return create_stream_response(input.model_id, input.result);
   const completion = collect_city_language_model_stream(
     input.result.stream,
@@ -90,7 +91,7 @@ export async function create_openai_chat_completion_response(input: {
   const result = await completion;
   return {
     response: Response.json(create_json_response(input.model_id, result)),
-    completion: Promise.resolve(result),
+    completion: Promise.resolve({ outcome: "succeeded", result }),
   };
 }
 
@@ -141,14 +142,14 @@ function create_json_response(
 function create_stream_response(
   model_id: string,
   result: LanguageModelV3StreamResult,
-): { response: Response; completion: Promise<LanguageModelV3GenerateResult | undefined> } {
+): { response: Response; completion: Promise<AIStreamCompletion<LanguageModelV3GenerateResult>> } {
   const reader = result.stream.getReader();
   const encoder = new TextEncoder();
   const response_id = `chatcmpl_${crypto.randomUUID()}`;
   let resolved_response_id = response_id;
   let created = Math.floor(Date.now() / 1000);
-  let resolve_completion: (value: LanguageModelV3GenerateResult | undefined) => void = () => undefined;
-  const completion = new Promise<LanguageModelV3GenerateResult | undefined>((resolve) => {
+  let resolve_completion: (value: AIStreamCompletion<LanguageModelV3GenerateResult>) => void = () => undefined;
+  const completion = new Promise<AIStreamCompletion<LanguageModelV3GenerateResult>>((resolve) => {
     resolve_completion = resolve;
   });
   const collected_parts: LanguageModelV3StreamPart[] = [];
@@ -211,13 +212,13 @@ function create_stream_response(
           return;
         }
       } catch (error) {
-        complete(undefined);
+        complete({ outcome: "failed", error });
         controller.error(error);
       }
     },
     async cancel(reason) {
       await reader.cancel(reason);
-      complete(undefined);
+      complete({ outcome: "cancelled" });
     },
   });
 
@@ -255,14 +256,17 @@ function create_stream_response(
       },
     });
     try {
-      complete(await collect_city_language_model_stream(replay, result.request?.body));
-    } catch {
-      complete(undefined);
+      complete({
+        outcome: "succeeded",
+        result: await collect_city_language_model_stream(replay, result.request?.body),
+      });
+    } catch (error) {
+      complete({ outcome: "failed", error });
     }
   }
 
   /** 只结算一次 completion。 */
-  function complete(value: LanguageModelV3GenerateResult | undefined): void {
+  function complete(value: AIStreamCompletion<LanguageModelV3GenerateResult>): void {
     if (completed) return;
     completed = true;
     resolve_completion(value);

@@ -1,86 +1,29 @@
 ---
-title: Usage Event Model
-description: "@downcity/services records service-call facts, not prices or plans directly."
+title: Usage Facts and Metering Model
+description: "Understand the boundary between AI technical usage, Credits accounting, and usage_id."
 ---
 
-`@downcity/services` is not mainly about billing. It is about persisting service-call facts.
+The usage view combines two independent fact sources:
 
-## What this concept really means
+- `AIService` stores final technical metering for an AI execution, including tokens, image count, video seconds, and audio seconds.
+- `CreditsService` stores applied Credits charges.
 
-The usage service records:
+A stable `usage_id` links the facts, but neither is derived from the other. An execution may have technical usage without a charge, and token counts cannot be used to reconstruct Credits.
 
-- which downcity made the call
-- which user made the call
-- which service or model was used
-- whether the call succeeded or failed
+## Daily AI fields
 
-It does not directly decide pricing, plan structure, or balance deduction.
+- `execution_count`: AI executions, including failed or cancelled executions without final metering.
+- `metered_request_count`: requests with trusted final metering.
+- `input_tokens`, `output_tokens`, `reasoning_tokens`, and `total_tokens`: token details returned by the AI service.
+- `image_count`, `video_seconds`, and `audio_seconds`: media usage.
 
-## Why that boundary matters
+A stream is finalized only after it succeeds, fails, or is cancelled. If final metering is unavailable, the execution is still counted without inventing token or media values.
 
-If usage, plans, balances, and pricing are fused too early, it becomes harder to change business rules later. As a fact layer, usage can feed analytics, metering, billing, and plan analysis.
+## Daily Credits fields
 
-## Enable it
+The query includes only accounting records where `kind = charge`, `status = applied`, and Credits are positive:
 
-```ts
-import { UsageService } from "@downcity/services";
+- `used`: Credits consumed.
+- `charge_count`: applied charge count.
 
-base.use(new UsageService({
-  record_errors: true,
-}));
-```
-
-## How trusted-side readers consume those facts
-
-```ts
-const events = await admin.service("usage").get("events");
-const summary = await admin.service("usage").get("summary");
-```
-
-## How product-side users read their own usage
-
-```ts
-const me = await user.service("usage").get("me");
-```
-
-Useful for:
-
-- account usage pages
-- plan consumption displays
-- self-serve usage awareness inside the downcity
-
-## Common scenarios
-
-### Scenario 1: track first, price later
-
-First persist the facts, then later decide which models are billable, which calls count toward quotas, and which cities or flows are exempt.
-
-### Scenario 2: debugging and operations
-
-If you need to know whether calls really happened, whether one downcity is consuming abnormally, or whether one model is being hit far more than expected, the usage fact layer is often the first place to look.
-
-## Common API surface
-
-- `UsageService({ record_errors })`
-- `admin.service("usage").get("events")`
-- `admin.service("usage").get("summary")`
-- `user.service("usage").get("me")`
-
-## Common misunderstandings
-
-### The usage service is not a full billing system
-
-It is a common input layer for billing, not the whole charging system.
-
-### Recording failed calls is not redundant
-
-Many operational questions depend on whether failed calls happened and how often.
-
-### Usage is not only for operators
-
-User-facing "you have used X" experiences are often direct consumers of usage data.
-
-## Read next
-
-- For read surfaces, read [Querying and Summary](/en/payments/usage/querying-and-summary)
-- For how usage combines with billing logic, read [Billing Integration](/en/payments/usage/billing-integration)
+Top-ups, refunds, pending transactions, and failed transactions do not appear in the consumption heatmap.

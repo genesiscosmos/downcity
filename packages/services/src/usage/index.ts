@@ -2,5 +2,11 @@
  * Usage 服务子模块公共入口。
  */
 
-export { UsageService, usageEvents } from "./service.js";
-export type { UsageServiceOptions } from "./service.js";
+export { UsageService } from "./service.js";
+export type {
+  UsageServiceOptions,
+  UserAIUsageBucket,
+  UserCreditsUsageBucket,
+  UserUsageBucket,
+  UserUsageResponse,
+} from "./types/Usage.js";

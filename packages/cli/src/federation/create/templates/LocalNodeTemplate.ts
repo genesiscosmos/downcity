@@ -105,7 +105,7 @@ function create_local_entrypoint(): string {
  */
 
 import { serve } from "@hono/node-server";
-import { Federation } from "@downcity/city";
+import { AIService, Federation } from "@downcity/city";
 import { Database } from "@downcity/database-sqlite";
 import {
   AccountsService,
@@ -187,8 +187,14 @@ const database = new Database({
 const federation = new Federation({ database });
 
 federation.use(new AccountsService({ local_login: true }));
-federation.use(new CreditsService());
-federation.use(new UsageService({ record_errors: true }));
+const credits_service = new CreditsService();
+const ai_service = new AIService({ credits: credits_service });
+federation.use(credits_service);
+federation.use(ai_service);
+federation.use(new UsageService({
+  ai_usage_reader: ai_service,
+  credits_usage_reader: credits_service,
+}));
 
 await federation.health();
 await sync_deployed_admin_key(federation);

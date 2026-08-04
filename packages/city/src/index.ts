@@ -111,6 +111,17 @@ export type {
 } from "./types/AI.js";
 
 export type {
+  AIMeteringStatus,
+  AIUsageOutcome,
+  AISettlementStatus,
+  AIUsageRecord,
+  AIDailyUsageBucket,
+  AIDailyUsageResult,
+  AIUsageReader,
+  UserDailyUsageQuery,
+} from "./types/AIUsage.js";
+
+export type {
   CreditsAccount,
   CreditsCardReference,
   CreditsCardsView,
@@ -327,3 +338,10 @@ export {
   bearerToken,
   parseDotenvEntries,
 } from "./utils/helpers.js";
+
+export {
+  create_usage_utc_envelope,
+  create_usage_date_formatter,
+  format_usage_local_date,
+  read_usage_integer,
+} from "./utils/UsageDate.js";

@@ -1,21 +1,24 @@
 ---
-title: Usage and Credits billing
-description: Record usage facts, calculate prices in the product, and charge through Credits.
+title: Usage and Credits Billing
+description: AIService produces technical usage and reliably writes Credits charges.
 ---
 
-`UsageService` records model and service-call facts. It does not own pricing. Product logic calculates Credits from real usage and calls `credits.charge()`.
+A model or channel `bill` creates a Credits bill from the final output. `AIService` persists AI Usage with one `usage_id` and calls `CreditsService` with `ai:${usage_id}` as the idempotency key.
 
 ```ts
-const ai = new AIService({ credits });
+const credits_service = new CreditsService();
+const ai_service = new AIService({ credits: credits_service });
 
-await credits.charge({
-  user_id: "user_123",
-  credits: calculate_credits(usage),
-  source: "model_usage",
-  ref: usage.request_id,
-  idempotency_key: `model_usage:${usage.request_id}`,
-  metadata: { model_id: usage.model_id },
+ai_service.use({
+  id: "example-model",
+  channel_id: "example-provider",
+  name: "Example Model",
+  bill: ({ output }) => ({
+    credits: calculate_credits(output),
+    note: "AI model usage",
+  }),
+  runtime: provider_runtime,
 });
 ```
 
-The AIService Credits bridge checks minimum availability before execution and charges real usage afterward. Payment orders credit the Primary Card through `PaymentService.on_paid`; the lifecycles stay separate.
+Insufficient balance rejects settlement. Database or Credits infrastructure errors become retryable. Retries neither duplicate AI Usage nor double-charge Credits. Usage queries include only `applied` Credits charges, so accounting trends always follow the Credits ledger.

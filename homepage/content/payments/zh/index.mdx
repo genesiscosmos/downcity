@@ -8,10 +8,11 @@ description: Downcity 官方身份、额度、支付和用量服务。
 - `AccountsService` 拥有登录与用户身份。
 - `CreditsService` 拥有 Primary / Ephemeral Cards 和账务记录。
 - `PaymentService` 拥有支付订单、Checkout 与 webhook。
-- `UsageService` 记录服务调用用量。
+- `UsageService` 聚合用户的 Credits 消费与 AI 技术用量。
 
 ```ts
 const credits = new CreditsService();
+const ai = new AIService({ credits });
 const payment = new PaymentService({
   providers: [stripePaymentProvider()],
   resolve_topup: ({ topup_amount_minor }) => ({
@@ -30,8 +31,12 @@ const payment = new PaymentService({
 
 federation.use(new AccountsService());
 federation.use(credits);
+federation.use(ai);
 federation.use(payment);
-federation.use(new UsageService());
+federation.use(new UsageService({
+  ai_usage_reader: ai,
+  credits_usage_reader: credits,
+}));
 ```
 
 从 [Credits Cards](/zh/payments/credits) 开始了解额度模型，支付接入见各 Provider 页面。

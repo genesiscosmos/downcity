@@ -57,6 +57,15 @@ import {
   release_image_job_claim,
 } from "./image-job-store.js";
 import { settle_response_charge } from "./charge-runtime.js";
+import { AIUsageRepository } from "./AIUsageRepository.js";
+import { ai_settlement_jobs, ai_usage_records } from "./ai-usage-schema.js";
+import type {
+  AIDailyUsageResult,
+  AISettlementPayload,
+  AIUsageOutcome,
+  AIUsageRecord,
+  UserDailyUsageQuery,
+} from "../../types/AIUsage.js";
 import {
   create_city_language_model_stream,
   decode_city_language_model_request,
@@ -72,7 +81,6 @@ import {
   imageActionError,
   isImageChannelCreateResult,
   isImageChannelResult,
-  isPromiseLike,
   isChannelChargedOutput,
   isResponse,
   isStorableRemoteFilePart,
@@ -128,9 +136,19 @@ export class AIService extends Service {
   private readonly credits?: AICreditsBridge;
   /** 图片异步任务允许保持 queued/running 的最长时间。 */
   private readonly image_max_pending_duration_ms: number;
+  /** AI Usage 与可靠结算 Repository。 */
+  private usage_repository?: AIUsageRepository;
 
   constructor(options: AIServiceOptions = {}) {
-    super({ id: "ai", name: "AI", tables: { async_jobs: sqliteAsyncJobs } });
+    super({
+      id: "ai",
+      name: "AI",
+      tables: {
+        async_jobs: sqliteAsyncJobs,
+        usage_records: ai_usage_records,
+        settlement_jobs: ai_settlement_jobs,
+      },
+    });
     this.credits = options.credits;
     this.image_max_pending_duration_ms = normalizePositiveNumber(
       options.image_max_pending_duration_ms,
@@ -165,6 +183,17 @@ export class AIService extends Service {
       auth: ["user", "admin"],
     }).before((ctx) => this.precheck(ctx));
 
+    // Queue 只负责唤醒；数据库 Settlement Job 才是可靠结算事实源。
+    this.action("settlement/process", async (ctx) => {
+      const usage_id = readOptionalString(ctx.input.usage_id);
+      if (!usage_id) throw httpError(422, "usage_id is required");
+      const result = await this.require_usage_repository().process_settlement(usage_id);
+      if (result.status === "retryable") {
+        await this.enqueue_settlement_retry(ctx, usage_id, result.next_attempt_at);
+      }
+      return result;
+    }, { auth: ["admin"] });
+
     // 模型列表走同一路径，根据身份决定可见范围。
     this.action("models", (ctx) => ({
       items: AIService.listModels(this, {
@@ -187,6 +216,35 @@ export class AIService extends Service {
 
   hasAction(): boolean {
     return this.models.size > 0;
+  }
+
+  /** 初始化 AI Usage Repository 与查询索引。 */
+  protected override async on_init(): Promise<void> {
+    const database = this.require_service_database();
+    this.usage_repository = new AIUsageRepository(
+      database,
+      this.require_service_table<AIUsageRecord>("usage_records"),
+      this.require_service_table("settlement_jobs"),
+      this.credits,
+    );
+    await database.query({
+      sql: "CREATE INDEX IF NOT EXISTS service_ai_usage_records_user_completed_idx ON service_ai_usage_records (user_id, completed_at)",
+      params: [],
+    });
+    await database.query({
+      sql: "CREATE INDEX IF NOT EXISTS service_ai_usage_records_user_metering_completed_idx ON service_ai_usage_records (user_id, metering_status, completed_at)",
+      params: [],
+    });
+    await database.query({
+      sql: "CREATE INDEX IF NOT EXISTS service_ai_settlement_jobs_status_next_attempt_idx ON service_ai_settlement_jobs (status, next_attempt_at)",
+      params: [],
+    });
+    await this.recover_due_settlements();
+  }
+
+  /** UsageService 使用的 AI 技术用量只读入口。 */
+  async aggregate_user_daily_usage(input: UserDailyUsageQuery): Promise<AIDailyUsageResult> {
+    return await this.require_usage_repository().aggregate_user_daily_usage(input);
   }
 
   // ========== 模型匹配 ==========
@@ -264,6 +322,7 @@ export class AIService extends Service {
     this.attachResolvedModel(ctx, resolved.model, modality, { fallback_from, fallback_reason, fallback_media_type });
     attach_resolved_reasoning(ctx, reasoning);
     const started_at = Date.now();
+    this.ensure_usage_id(ctx);
 
     try {
       const channel_output = await resolved.action(ctx);
@@ -272,18 +331,23 @@ export class AIService extends Service {
       const resolved_charge = charge ?? (resolved.model
         ? resolved.model.bill?.(this.build_bill_input(ctx, resolved.model, output))
         : undefined);
-      const defer_charge = isResponse(output) || isPromiseLike(resolved_charge);
-      const charged_response = await this.handleCharge(
+      const settlement = this.settle_execution({
         ctx,
-        resolved_charge,
-        defer_charge,
-        undefined,
-        undefined,
-        isResponse(output) ? output : undefined,
-      );
-      if (isResponse(output)) return charged_response ?? output;
+        output,
+        outcome: "succeeded",
+        started_at,
+        charge: resolved_charge,
+      });
+      if (isResponse(output)) return await this.bind_settlement_response(ctx, output, settlement);
+      await settlement;
       return output;
     } catch (error) {
+      await this.settle_execution({
+        ctx,
+        output: undefined,
+        outcome: "failed",
+        started_at,
+      });
       const message = error instanceof Error ? error.message : String(error);
       const status = (error as { statusCode?: number }).statusCode ?? 500;
       return new Response(JSON.stringify({ error: message }), { status, headers: { "content-type": "application/json" } });
@@ -312,6 +376,7 @@ export class AIService extends Service {
     this.attachResolvedModel(ctx, resolved.model, LANGUAGE_MODEL_MODE, routing);
     attach_resolved_reasoning(ctx, reasoning);
     const started_at = Date.now();
+    this.ensure_usage_id(ctx);
 
     const output = await resolved.action(ctx);
     if (!is_language_model_stream_result(output)) {
@@ -320,24 +385,21 @@ export class AIService extends Service {
     const execution = create_city_language_model_stream({
       result: output,
     });
-    const completion = execution.completion.then((part) => {
+    const settlement = execution.completion.then(async (completion) => {
+      const part = completion.result;
       if (part) this.attachOutputMetering(ctx, part, LANGUAGE_MODEL_MODE, started_at);
-      return part;
+      const charge = part && resolved.model?.bill
+        ? resolved.model.bill(this.build_bill_input(ctx, resolved.model, part))
+        : undefined;
+      await this.settle_execution({
+        ctx,
+        output: part,
+        outcome: completion.outcome,
+        started_at,
+        charge,
+      });
     });
-    const charge = resolved.model?.bill
-      ? completion.then((part) => part && resolved.model
-        ? resolved.model.bill?.(this.build_bill_input(ctx, resolved.model, part))
-        : undefined)
-      : undefined;
-    const charged_response = await this.handleCharge(
-      ctx,
-      charge,
-      true,
-      undefined,
-      undefined,
-      execution.response,
-    );
-    return charged_response ?? execution.response;
+    return await this.bind_settlement_response(ctx, execution.response, settlement);
   }
 
   // ========== 图片任务通路 ==========
@@ -345,6 +407,8 @@ export class AIService extends Service {
   private async createImageJob(ctx: Context): Promise<UserImageJobCreateResult> {
     const resolved = this.resolve({ model: this.normalizeModelId(ctx.input.model), mode: "image_create" }, ctx.env);
     this.attachResolvedModel(ctx, resolved.model, "image/create");
+    const started_at = Date.now();
+    this.ensure_usage_id(ctx);
     try {
       const created = await resolved.action(ctx);
       if (!isImageChannelCreateResult(created)) {
@@ -354,6 +418,12 @@ export class AIService extends Service {
       await this.enqueueImageFetch(ctx, created.job_id, created.poll_after_ms);
       return created;
     } catch (error) {
+      await this.settle_execution({
+        ctx,
+        output: undefined,
+        outcome: "failed",
+        started_at,
+      });
       throw imageActionError(error, "image_create action failed");
     }
   }
@@ -373,6 +443,11 @@ export class AIService extends Service {
   private async fetchImageJob(ctx: Context): Promise<AIImageResult> {
     let claim: Awaited<ReturnType<typeof claim_image_job>> = null;
     const initial_job = await this.requireImageJob(ctx);
+    const initial_state = parseRecordJson(initial_job.state_json);
+    ctx.locals.ai_usage_id = readOptionalString(initial_state.downcity_usage_id)
+      ?? `aiu_image_${initial_job.job_id}`;
+    ctx.locals.ai_usage_user_id = initial_job.user_id;
+    ctx.locals.ai_usage_bureau_id = initial_job.bureau_id;
     try {
       if (this.isTerminalImageJob(initial_job)) return this.imageJobToResult(initial_job);
       const table = ctx.db.async_jobs;
@@ -382,6 +457,12 @@ export class AIService extends Service {
       const job = claim.record;
       if (this.isImageJobPendingTimedOut(job)) {
         const output = this.createImageJobPendingTimeoutResult(job);
+        await this.settle_execution({
+          ctx,
+          output,
+          outcome: "failed",
+          started_at: Date.parse(job.created_at),
+        });
         await finish_image_job_fetch(table, claim, output);
         return output;
       }
@@ -404,14 +485,22 @@ export class AIService extends Service {
       const should_charge = output.status === "succeeded" && Boolean(output.result) && !job.result_json;
       if (should_charge) {
         this.attachOutputMetering(ctx, stored_output.result, "image", started_at);
-        const charge = model.bill?.(this.build_bill_input(ctx, model, stored_output));
-        await this.handleCharge(
+        const charge = Promise.resolve(model.bill?.(this.build_bill_input(ctx, model, stored_output)))
+          .then((line) => line ? { ...line, user_id: line.user_id ?? job.user_id ?? undefined } : undefined);
+        await this.settle_execution({
           ctx,
+          output: stored_output,
+          outcome: "succeeded",
+          started_at: Date.parse(job.created_at),
           charge,
-          false,
-          `ai_image:${job.job_id}`,
-          job.user_id ?? undefined,
-        );
+        });
+      } else if (stored_output.status === "failed") {
+        await this.settle_execution({
+          ctx,
+          output: stored_output,
+          outcome: "failed",
+          started_at: Date.parse(job.created_at),
+        });
       }
       await finish_image_job_fetch(table, claim, stored_output);
       if (stored_output.status === "queued" || stored_output.status === "running") {
@@ -452,7 +541,7 @@ export class AIService extends Service {
       message: IMAGE_PENDING_TIMEOUT_ERROR,
       error: IMAGE_PENDING_TIMEOUT_ERROR,
       metadata: {
-        ...parseRecordJson(job.state_json),
+        ...this.read_image_job_state(job),
         timeout_reason: IMAGE_PENDING_TIMEOUT_ERROR,
         max_pending_duration_ms: this.image_max_pending_duration_ms,
       },
@@ -548,7 +637,10 @@ export class AIService extends Service {
       job_type: IMAGE_GENERATE_JOB_TYPE,
       status: created.status,
       input_json: JSON.stringify(ctx.input ?? {}),
-      state_json: JSON.stringify(created.metadata ?? {}),
+      state_json: JSON.stringify({
+        ...(created.metadata ?? {}),
+        downcity_usage_id: this.ensure_usage_id(ctx),
+      }),
       result_json: null,
       error: created.error ?? null,
       message: created.message ?? null,
@@ -583,7 +675,7 @@ export class AIService extends Service {
     const image_job: AIImageJobContext = {
       record: job,
       input: parseRecordJson(job.input_json),
-      state: parseRecordJson(job.state_json),
+      state: this.read_image_job_state(job),
     };
     ctx.locals.ai_image_job = image_job;
     ctx.input = {
@@ -604,8 +696,15 @@ export class AIService extends Service {
       error: job.error ?? undefined,
       message: job.message ?? undefined,
       poll_after_ms: readOptionalNumber(job.poll_after_ms),
-      metadata: parseRecordJson(job.state_json),
+      metadata: this.read_image_job_state(job),
     };
+  }
+
+  /** 读取不会向 Provider 或客户端泄漏内部 usage_id 的图片任务状态。 */
+  private read_image_job_state(job: AsyncJobRecord): Record<string, unknown> {
+    const state = parseRecordJson(job.state_json);
+    const { downcity_usage_id: _usage_id, ...public_state } = state;
+    return public_state;
   }
 
   // ========== OpenAI 兼容通路 ==========
@@ -629,6 +728,7 @@ export class AIService extends Service {
       this.attachResolvedModel(ctx, resolved.model, "openai", routing);
       attach_resolved_reasoning(ctx, reasoning);
       const started_at = Date.now();
+      this.ensure_usage_id(ctx);
 
       const output = await resolved.action(ctx);
       if (!is_language_model_stream_result(output)) {
@@ -639,25 +739,30 @@ export class AIService extends Service {
         stream: body.stream === true,
         result: output as LanguageModelV3StreamResult,
       });
-      const completion = execution.completion.then((result) => {
+      const settlement = execution.completion.then(async (completion) => {
+        const result = completion.result;
         if (result) this.attachOutputMetering(ctx, result, "openai", started_at);
-        return result;
+        const charge = result && resolved.model?.bill
+          ? resolved.model.bill(this.build_bill_input(ctx, resolved.model, result))
+          : undefined;
+        await this.settle_execution({
+          ctx,
+          output: result,
+          outcome: completion.outcome,
+          started_at,
+          charge,
+        });
       });
-      const charge = resolved.model?.bill
-      ? completion.then((result) => result && resolved.model
-        ? resolved.model.bill?.(this.build_bill_input(ctx, resolved.model, result))
-        : undefined)
-        : undefined;
-      const charged_response = await this.handleCharge(
-        ctx,
-        charge,
-        true,
-        undefined,
-        undefined,
-        execution.response,
-      );
-      return charged_response ?? execution.response;
+      return await this.bind_settlement_response(ctx, execution.response, settlement);
     } catch (error) {
+      if (ctx.locals.ai_usage_id) {
+        await this.settle_execution({
+          ctx,
+          output: undefined,
+          outcome: "failed",
+          started_at: ctx.started_at?.getTime() ?? Date.now(),
+        });
+      }
       const message = error instanceof Error ? error.message : String(error);
       const status = (error as { statusCode?: number }).statusCode ?? 500;
       return new Response(JSON.stringify({ error: { message, type: "server_error" } }), { status, headers: { "content-type": "application/json" } });
@@ -737,6 +842,7 @@ export class AIService extends Service {
     output: unknown,
   ): AIBillInput {
     return {
+      usage_id: this.ensure_usage_id(ctx),
       output,
       model: {
         id: model.id,
@@ -766,66 +872,165 @@ export class AIService extends Service {
   }
 
   /**
-   * 安排 AI 专用扣费。
+   * 把一次完成的 AI 执行交给统一可靠结算入口。
+   *
+   * 关键说明（中文）
+   * - 先持久化 Settlement Job，再保存 Usage 和执行 Charge
+   * - 结算失败不覆盖已经成功生成的模型响应
+   * - Charge Draft 在此处固化，重试时不重新执行价格规则
    */
-  private async handleCharge(
-    ctx: Context,
-    charge: AICharge | Promise<AICharge | undefined> | undefined,
-    defer: boolean,
-    idempotency_key?: string,
-    fallback_user_id?: string,
-    response?: Response,
-  ): Promise<Response | undefined> {
-    if (!charge || !this.credits) return response;
-    ctx.locals.ai_charge_handled = true;
-    let charge_line: AICharge | undefined;
-    let charge_user_id: string | undefined;
-    const promise = Promise.resolve(charge)
-      .then(async (line) => {
-        charge_line = line;
-        if (!line || line.credits <= 0) return;
-        // 图片队列没有请求用户上下文时，必须回退到任务创建者，不能静默跳过扣费。
-        const user_id = line.user_id ?? fallback_user_id ?? ctx.user?.user_id;
-        charge_user_id = user_id;
-        if (!user_id) return;
-        const resolved_idempotency_key = idempotency_key
-          ?? ctx.request?.headers.get("idempotency-key")?.trim()
-          ?? `ai:${crypto.randomUUID()}`;
-        await this.credits?.charge({
-          ...line,
+  private async settle_execution(input: {
+    ctx: Context;
+    output: unknown;
+    outcome: AIUsageOutcome;
+    started_at: number;
+    charge?: AICharge | Promise<AICharge | undefined>;
+  }): Promise<void> {
+    const usage_id = this.ensure_usage_id(input.ctx);
+    let charge: AICharge | null = null;
+    try {
+      charge = (await input.charge) ?? null;
+    } catch (error) {
+      console.error("[AIService] billing build failed", {
+        usage_id,
+        model_id: input.ctx.metering?.model_id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    const repository = this.usage_repository;
+    if (!repository) {
+      // 嵌入式单元调用没有 Federation Repository 时仍保留显式 Credits bridge 语义。
+      const user_id = charge?.user_id ?? input.ctx.user?.user_id;
+      if (charge && charge.credits > 0 && user_id && this.credits) {
+        await this.credits.charge({
+          ...charge,
           user_id,
-          idempotency_key: resolved_idempotency_key,
+          ref: usage_id,
+          idempotency_key: `ai:${usage_id}`,
           source: "model_usage",
         });
-      })
-      .catch((error) => {
-        console.error("[AIService] credits charge failed", {
-          user_id: charge_user_id,
-          service_id: ctx.service?.id,
-          action_id: ctx.action?.id,
-          model_id: ctx.metering?.model_id,
-          channel_id: ctx.metering?.channel_id,
-          credits: charge_line?.credits,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      });
-    if (!defer) {
-      await promise;
-      return response;
+      }
+      return;
     }
+    const payload: AISettlementPayload = {
+      record: this.create_usage_record(
+        input.ctx,
+        usage_id,
+        input.outcome,
+        input.started_at,
+      ),
+      charge,
+    };
+    try {
+      await repository.create_settlement(payload);
+      const result = await repository.process_settlement(usage_id);
+      if (result.status === "retryable") await this.enqueue_settlement_retry(input.ctx, usage_id, result.next_attempt_at);
+    } catch (error) {
+      console.error("[AIService] settlement handoff failed", {
+        usage_id,
+        model_id: input.ctx.metering?.model_id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /** 为流式响应绑定结算任务，保证 Node 与 Worker 都覆盖请求生命周期。 */
+  private async bind_settlement_response(
+    ctx: Context,
+    response: Response,
+    settlement: Promise<void>,
+  ): Promise<Response> {
     if (ctx.waitUntil) {
       try {
-        ctx.waitUntil(promise);
+        ctx.waitUntil(settlement);
         return response;
       } catch {
-        // 非 Worker 测试环境可能没有真实 ExecutionContext，继续走普通异步结算。
+        // 测试 Runtime 可能暴露不可用的 ExecutionContext，继续使用 Response 绑定。
       }
     }
-    if (response) return await settle_response_charge(response, promise);
-    // Node 等无 ExecutionContext 环境下，普通异步计费必须在请求结束前可靠完成。
-    await promise;
-    return response;
+    return await settle_response_charge(response, settlement);
+  }
+
+  /** 创建最终 AI Usage Record 快照。 */
+  private create_usage_record(
+    ctx: Context,
+    usage_id: string,
+    outcome: AIUsageOutcome,
+    started_at: number,
+  ): AIUsageRecord {
+    const metering = ctx.metering;
+    const settled = has_final_metering(metering);
+    const completed_at = new Date().toISOString();
+    return {
+      usage_id,
+      user_id: ctx.user?.user_id ?? readOptionalString(ctx.locals.ai_usage_user_id) ?? null,
+      bureau_id: ctx.bureau?.bureau_id ?? readOptionalString(ctx.locals.ai_usage_bureau_id) ?? null,
+      action_id: ctx.action?.id ?? "",
+      model_id: metering?.model_id ?? ctx.variant?.id ?? "",
+      channel_id: metering?.channel_id ?? ctx.variant?.channel_id ?? null,
+      upstream_model: metering?.upstream_model ?? ctx.variant?.upstream_model ?? null,
+      metering_status: settled ? "settled" : "unavailable",
+      outcome,
+      uncached_input_tokens: settled ? read_optional_usage_integer(metering?.input_tokens) : null,
+      cached_input_tokens: settled ? read_optional_usage_integer(metering?.cached_tokens) : null,
+      output_tokens: settled ? read_optional_usage_integer(metering?.output_tokens) : null,
+      reasoning_tokens: settled ? read_optional_usage_integer(metering?.reasoning_tokens) : null,
+      image_count: settled ? read_optional_usage_integer(metering?.image_count) : null,
+      video_seconds: settled ? read_optional_usage_integer(metering?.video_seconds) : null,
+      audio_seconds: settled ? read_optional_usage_integer(metering?.audio_seconds) : null,
+      request_count: settled ? read_optional_usage_integer(metering?.request_count) : null,
+      duration_ms: settled
+        ? read_optional_usage_integer(metering?.duration_ms ?? Date.now() - started_at)
+        : null,
+      started_at: new Date(started_at).toISOString(),
+      completed_at,
+      created_at: completed_at,
+    };
+  }
+
+  /** 为当前 AI 执行创建并复用 usage_id。 */
+  private ensure_usage_id(ctx: Context): string {
+    const existing = readOptionalString(ctx.locals.ai_usage_id);
+    if (existing) return existing;
+    const usage_id = `aiu_${crypto.randomUUID()}`;
+    ctx.locals.ai_usage_id = usage_id;
+    return usage_id;
+  }
+
+  /** 投递结算重试；没有 Queue Adapter 时保留数据库任务等待后续恢复。 */
+  private async enqueue_settlement_retry(
+    ctx: Context,
+    usage_id: string,
+    next_attempt_at?: string,
+  ): Promise<void> {
+    if (!ctx.queue) return;
+    const delay_ms = next_attempt_at
+      ? Math.max(0, Date.parse(next_attempt_at) - Date.now())
+      : undefined;
+    try {
+      await ctx.queue.send({
+        service: "ai",
+        action: "settlement/process",
+        input: { usage_id },
+        ...(delay_ms !== undefined ? { delay_ms } : {}),
+      });
+    } catch {
+      // Queue 是唤醒优化；数据库任务会在启动或后续 AI 请求时恢复。
+    }
+  }
+
+  /** Federation 初始化时恢复少量到期任务，避免 Node 重启后永久遗留。 */
+  private async recover_due_settlements(): Promise<void> {
+    const repository = this.require_usage_repository();
+    for (const usage_id of await repository.list_due_settlements()) {
+      await repository.process_settlement(usage_id);
+    }
+  }
+
+  /** 读取已初始化的 AI Usage Repository。 */
+  private require_usage_repository(): AIUsageRepository {
+    if (!this.usage_repository) throw new Error("AI Usage Repository is not initialized");
+    return this.usage_repository;
   }
 
   // ========== 模型列表 ==========
@@ -839,4 +1044,24 @@ export class AIService extends Service {
       get_modalities: (model) => aiService.getModelModalities(model),
     });
   }
+}
+
+/** 判断当前 Metering 是否包含可信的最终技术用量。 */
+function has_final_metering(metering: Context["metering"]): boolean {
+  return Boolean(metering && [
+    metering.input_tokens,
+    metering.cached_tokens,
+    metering.output_tokens,
+    metering.reasoning_tokens,
+    metering.image_count,
+    metering.video_seconds,
+    metering.audio_seconds,
+  ].some((value) => value !== undefined));
+}
+
+/** 读取可选非负安全整数；缺失或非法值保持 null。 */
+function read_optional_usage_integer(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : null;
 }

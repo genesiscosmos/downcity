@@ -72,6 +72,9 @@ export type {
   CreditsTransactionKind,
   CreditsTransactionQuery,
   CreditsTransactionStatus,
+  CreditsDailyUsageBucket,
+  CreditsDailyUsageResult,
+  CreditsUsageReader,
 } from "./credits/index.js";
 export {
   CREDITS_PER_USD,
@@ -129,8 +132,14 @@ export type {
   FeedbackStatusUpdateResult,
 } from "./feedback/index.js";
 
-export { usageEvents, UsageService } from "./usage/index.js";
-export type { UsageServiceOptions } from "./usage/index.js";
+export { UsageService } from "./usage/index.js";
+export type {
+  UsageServiceOptions,
+  UserAIUsageBucket,
+  UserCreditsUsageBucket,
+  UserUsageBucket,
+  UserUsageResponse,
+} from "./usage/index.js";
 
 export {
   OrganizationsService,

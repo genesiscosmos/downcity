@@ -1,71 +1,44 @@
 ---
 title: "Usage 服务"
-description: "自动记录 service 调用事实，适合做统计、计量和账单数据入口。"
+description: "按当地自然日聚合当前用户的 Credits 消费与 AI 技术用量。"
 ---
 
-`@downcity/services` 用来记录 City 里发生过哪些 service 调用。它只记录事实，不替你定义价格、套餐或扣费规则。
+`UsageService` 提供用户自己的每日用量视图。Credits 是消费趋势和热力图的主指标；Token、图片、视频与音频用量来自 `AIService` 的最终计量结果。
 
-它的价值在于先把“发生了什么”沉淀下来，再由你决定这些事实后面要接报表、额度还是计费。
+Usage 不保存第三份事实：Credits 账务由 `CreditsService` 拥有，AI 技术用量由 `AIService` 拥有，`UsageService` 只通过两个 Reader 聚合结果。
 
-## 这组文档怎么读
-
-建议按下面顺序读：
-
-1. 先读 [事件模型](/zh/payments/usage/event-model)，理解一条 usage event 里会记录哪些字段。
-2. 再读 [查询与汇总](/zh/payments/usage/querying-and-summary)，理解管理侧如何读取事件和聚合结果。
-3. 最后读 [与计费集成](/zh/payments/usage/billing-integration)，理解 usage 和支付、套餐、额度之间的关系边界。
-
-## 它记录什么
-
-- downcity
-- user
-- service
-- model
-- 调用状态
-
-## 它不替你做什么
-
-- 不直接扣费
-- 不定义价格和套餐
-- 不自动决定哪些调用应该收费
-
-## 什么时候用它
-
-- 你要统计调用量
-- 你要把 usage 送进计费系统
-- 你要先把调用事实沉淀下来，再决定产品怎么收费
-
-## 安装
-
-```bash
-pnpm add @downcity/services
-```
-
-## 启用方式
+## 安装与启用
 
 ```ts
-import { UsageService } from "@downcity/services";
+import { AIService } from "@downcity/city";
+import { CreditsService, UsageService } from "@downcity/services";
 
-base.use(new UsageService({
-  record_errors: true,
+const credits_service = new CreditsService();
+const ai_service = new AIService({ credits: credits_service });
+
+federation.use(credits_service);
+federation.use(ai_service);
+federation.use(new UsageService({
+  ai_usage_reader: ai_service,
+  credits_usage_reader: credits_service,
 }));
 ```
 
-## 常见查询
+## 查询当前用户
 
 ```ts
-const events = await admin.service("usage").get("events");
-const summary = await admin.service("usage").get("summary");
+const usage = await city.service("usage").get("me", {
+  from: "2026-08-01",
+  to: "2026-08-31",
+  timezone: "Asia/Shanghai",
+});
 ```
 
-## 最常见的组合方式
+`from`、`to` 和 IANA `timezone` 都是必填参数，单次最多查询 400 个当地自然日。响应包含区间汇总和稀疏的每日 Bucket；没有活动的日期不会返回。
 
-- 和 [@downcity/city](/zh/city-sdk-docs/packages/city/federation) 配合，在可信环境查询 usage
-- 和 [@downcity/services](/zh/payments) 配合，把 usage 与权益或账单逻辑衔接起来
-- 和你自己的产品数据库或 BI 系统配合，做更细的报表
+## 继续阅读
 
-## 相关文档
-
-- 想按主题深入，继续读本节的三个子页面
-- 想看完整 usage 能力，继续读 [Usage 服务](/zh/payments/usage)
-- 想在可信环境里读这些数据，看 [@downcity/city](/zh/city-sdk-docs/packages/city/federation)
+- [接入与调用](/zh/payments/usage/calling)
+- [查询与汇总](/zh/payments/usage/querying-and-summary)
+- [事实与计量模型](/zh/payments/usage/event-model)
+- [Usage 与 Credits 计费](/zh/payments/usage/billing-integration)

@@ -749,6 +749,7 @@ test("AIService /stream keeps the model stream open until deferred charge settle
       user_id: "user_1",
       credits: 321,
       note: "stream charge",
+      ref: charges[0].ref,
       idempotency_key: charges[0].idempotency_key,
       source: "model_usage",
     })
@@ -915,7 +916,7 @@ test("AIService uses provider bill when model bill is not set", async () => {
         channel_id: "test-provider",
       },
     }])
-    assert.match(charges[0].ref, /^msg_/)
+    assert.match(charges[0].ref, /^aiu_/)
   } finally {
     process.chdir(cwd)
     await fs.rm(tempDir, { recursive: true, force: true })
@@ -1869,7 +1870,7 @@ test("AIService charges image jobs only after provider result succeeds", async (
       credits: {
         async charge(input) {
           charge_attempts += 1
-          if (charge_attempts === 1) throw new Error("temporary credits failure")
+          if (charge_attempts <= 2) throw new Error("temporary credits failure")
           charges.push(input)
         },
       },
@@ -1949,11 +1950,24 @@ test("AIService charges image jobs only after provider result succeeds", async (
     assert.equal(body.job_id, "img_priced_1")
     assert.deepEqual(charges, [])
     const fetch_message = queueMessages.shift()
-    await assert.rejects(base.queue.call(fetch_message), /temporary credits failure/)
+    await base.queue.call(fetch_message)
+    const settlement_message = queueMessages.shift()
+    const settlement_table = await base.table("ai.settlement_jobs")
+    await settlement_table.update({
+      where: { usage_id: settlement_message.input.usage_id },
+      values: { next_attempt_at: new Date(0).toISOString() },
+    })
     await Promise.all([
-      base.queue.call(fetch_message),
-      base.queue.call(fetch_message),
+      base.queue.call(settlement_message),
+      base.queue.call(settlement_message),
     ])
+    const second_settlement_message = queueMessages.shift()
+    assert.equal(second_settlement_message.action, "settlement/process")
+    await settlement_table.update({
+      where: { usage_id: second_settlement_message.input.usage_id },
+      values: { next_attempt_at: new Date(0).toISOString() },
+    })
+    await base.queue.call(second_settlement_message)
 
     const resultResponse = await base.fetch(new Request("http://localhost/v1/ai/image/result", {
       method: "POST",
@@ -1965,13 +1979,15 @@ test("AIService charges image jobs only after provider result succeeds", async (
     }))
 
     assert.equal(resultResponse.status, 200)
+    const usage_id = charges[0].ref
+    assert.match(usage_id, /^aiu_/)
     assert.deepEqual(charges, [{
       user_id: "user_1",
-      idempotency_key: `ai_image:${body.job_id}`,
+      idempotency_key: `ai:${usage_id}`,
       source: "model_usage",
       credits: 777,
       note: "AI image result",
-      ref: body.job_id,
+      ref: usage_id,
       metadata: {
         service_id: "ai",
         action_id: "image/fetch",
@@ -1980,8 +1996,8 @@ test("AIService charges image jobs only after provider result succeeds", async (
         image_count: 1,
       },
     }])
-    assert.equal(charge_attempts, 2)
-    assert.equal(fetch_calls, 2)
+    assert.equal(charge_attempts, 3)
+    assert.equal(fetch_calls, 1)
 
     const cachedResponse = await base.fetch(new Request("http://localhost/v1/ai/image/result", {
       method: "POST",

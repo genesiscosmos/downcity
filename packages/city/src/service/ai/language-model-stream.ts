@@ -12,6 +12,7 @@ import {
   type CityTransportJsonValue,
 } from "../../types/AITransport.js";
 import type {
+  AIStreamCompletion,
   CityLanguageModelStreamExecution,
   CreateCityLanguageModelStreamInput,
   DecodedCityLanguageModelRequest,
@@ -89,26 +90,29 @@ export function create_city_language_model_stream(
 ): CityLanguageModelStreamExecution {
   const reader = input.result.stream.getReader();
   const encoder = new TextEncoder();
-  let resolve_completion: (part: LanguageModelV3StreamPart | undefined) => void = () => undefined;
-  const completion = new Promise<LanguageModelV3StreamPart | undefined>((resolve) => {
+  let resolve_completion: (result: AIStreamCompletion<LanguageModelV3StreamPart>) => void = () => undefined;
+  const completion = new Promise<AIStreamCompletion<LanguageModelV3StreamPart>>((resolve) => {
     resolve_completion = resolve;
   });
   let completed = false;
+  let finish_part: LanguageModelV3StreamPart | undefined;
 
   const body = new ReadableStream<Uint8Array>({
     async pull(controller) {
       try {
         const chunk = await reader.read();
         if (chunk.done) {
-          complete(undefined);
+          complete(finish_part
+            ? { outcome: "succeeded", result: finish_part }
+            : { outcome: "failed", error: new Error("AI stream ended without final usage") });
           controller.close();
           return;
         }
-        if (is_finish_part(chunk.value)) complete(chunk.value);
+        if (is_finish_part(chunk.value)) finish_part = chunk.value;
         controller.enqueue(encoder.encode(serialize_stream_part(chunk.value)));
       } catch (error) {
         controller.enqueue(encoder.encode(serialize_stream_part({ type: "error", error } as LanguageModelV3StreamPart)));
-        complete(undefined);
+        complete({ outcome: "failed", ...(finish_part ? { result: finish_part } : {}), error });
         controller.close();
       }
     },
@@ -116,7 +120,7 @@ export function create_city_language_model_stream(
       try {
         await reader.cancel(reason);
       } finally {
-        complete(undefined);
+        complete({ outcome: "cancelled", ...(finish_part ? { result: finish_part } : {}) });
       }
     },
   });
@@ -127,10 +131,10 @@ export function create_city_language_model_stream(
   };
 
   /** 只完成一次 completion promise。 */
-  function complete(part: LanguageModelV3StreamPart | undefined): void {
+  function complete(result: AIStreamCompletion<LanguageModelV3StreamPart>): void {
     if (completed) return;
     completed = true;
-    resolve_completion(part);
+    resolve_completion(result);
   }
 }
 

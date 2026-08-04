@@ -22,6 +22,7 @@ import type { FederationQueue } from "../federation/queue.js";
 import type { FederationStorage } from "../federation/storage.js";
 import type { FederationRequestTransport } from "../federation/types.js";
 import type { BureauTokenStore } from "../federation/auth/bureau-token-store.js";
+import type { ServiceDatabaseContext } from "../types/database/Database.js";
 
 /**
  * 框架内部初始化入口。
@@ -205,6 +206,12 @@ export class Service {
   /** Federation 默认存储能力 */
   _storage?: FederationStorage;
 
+  /** 当前 Service 可使用的受限数据库能力；仅由 Federation 初始化阶段注入。 */
+  _database?: ServiceDatabaseContext;
+
+  /** 当前 Service 声明的数据表；仅由 Federation 初始化阶段注入。 */
+  _tables?: Record<string, CityTableApi>;
+
   constructor(options: {
     id: string;
     name?: string;
@@ -234,6 +241,25 @@ export class Service {
    * 子类只应覆盖该方法处理自身状态，框架级安装流程由 Federation 独立保证。
    */
   protected async on_init(): Promise<void> {}
+
+  /**
+   * 读取当前 Service 的受限数据库能力。
+   *
+   * 关键说明（中文）
+   * - Service 只能访问 Federation 投影给自己的数据库能力
+   * - 该入口用于 Repository 等跨请求长期对象，Action 内仍优先使用 ctx.db
+   */
+  protected require_service_database(): ServiceDatabaseContext {
+    if (!this._database) throw new Error(`Service database is not initialized: ${this.id}`);
+    return this._database;
+  }
+
+  /** 读取当前 Service 自己声明的数据表。 */
+  protected require_service_table<TRow extends Record<string, unknown>>(name: string): CityTableApi<TRow> {
+    const table = this._tables?.[name];
+    if (!table) throw new Error(`Service table is not initialized: ${this.id}.${name}`);
+    return table as CityTableApi<TRow>;
+  }
 
   // ========== Action 注册 ==========
 

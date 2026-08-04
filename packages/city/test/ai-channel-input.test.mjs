@@ -102,6 +102,7 @@ test("AIChannel stream receives explicit model, env, reasoning, and prepared cal
     "metering",
     "model",
     "output",
+    "usage_id",
     "user_id",
   ])
   assert.deepEqual(received_bill_input.model, received_input.model)

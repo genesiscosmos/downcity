@@ -1,0 +1,264 @@
+---
+title: 接入与调用
+description: 从 Federation 服务装配、AI 计费到用户查询每日 Credits 与 Token 用量的完整示例。
+---
+
+这篇文档展示一条完整链路：用户调用 AI 后，`AIService` 保存技术用量并可靠提交 Credits 扣费；产品再通过 `UsageService` 查询当前用户的每日数据。
+
+```text
+用户调用 AI
+  → AIService 获取最终 RuntimeMetering
+  → 保存 AI Usage
+  → CreditsService 幂等扣费
+  → UsageService 按当地自然日聚合两类事实
+  → GET /v1/usage/me
+```
+
+## 1. 安装依赖
+
+```bash
+pnpm add @downcity/city @downcity/services
+```
+
+数据库 package 根据部署环境选择，例如本地 Node 使用 `@downcity/database-sqlite`，Cloudflare Workers 使用对应的 D1 Adapter。
+
+## 2. 在 Federation 装配服务
+
+`UsageService` 必须显式接收两个 Reader。推荐按 Credits、AI、Usage 的顺序挂载：
+
+```ts
+import { AIService, Federation } from "@downcity/city";
+import { Database } from "@downcity/database-sqlite";
+import { CreditsService, UsageService } from "@downcity/services";
+
+const database = new Database({ filename: "./data.sqlite" });
+const federation = new Federation({ database });
+
+const credits_service = new CreditsService();
+const ai_service = new AIService({ credits: credits_service });
+
+federation.use(credits_service);
+federation.use(ai_service);
+federation.use(new UsageService({
+  ai_usage_reader: ai_service,
+  credits_usage_reader: credits_service,
+}));
+
+await federation.health();
+```
+
+职责边界如下：
+
+- `AIService` 拥有 Token、图片、视频和音频等技术用量。
+- `CreditsService` 拥有已经入账的 Credits 交易。
+- `UsageService` 不创建事实表，只合并两个 Reader 的每日结果。
+
+不要单独使用 `new UsageService()`；两个 Reader 都是必填依赖。
+
+## 3. 给模型配置 Credits 账单
+
+模型的 `bill` 在执行结束后接收最终 `metering`。下面只是示例价格，实际 Credits 规则由产品定义：
+
+```ts
+ai_service.use(ai_channel.model({
+  id: "example-chat",
+  upstream_model: "provider-model-id",
+  name: "Example Chat",
+  bill: ({ usage_id, metering }) => {
+    if (!metering) return;
+
+    const input_credits = (metering.input_tokens ?? 0) * 2;
+    const output_credits = (metering.output_tokens ?? 0) * 8;
+
+    return {
+      credits: input_credits + output_credits,
+      note: "Example Chat usage",
+      metadata: {
+        usage_id,
+        model_id: metering.model_id,
+        channel_id: metering.channel_id,
+      },
+    };
+  },
+}));
+```
+
+语言模型的 Token 来自 AI SDK 标准流的最终 `finish.usage`。其他模态由 Channel 返回的最终 `RuntimeMetering` 提供，例如 `image_count`、`video_seconds` 和 `audio_seconds`。
+
+AI Usage 和 Credits Charge 使用同一个 `usage_id` 关联。Credits 扣费使用 `ai:${usage_id}` 作为幂等键，因此 Queue 重投递不会重复扣费。
+
+## 4. 先产生一笔 AI 用量
+
+终端用户使用自己的 `user_token` 调用 AI：
+
+```ts
+import { City } from "@downcity/city";
+
+const city = new City({
+  federation_url: "https://federation.example.com",
+  user_token,
+});
+
+const catalog = await city.ai.catalog();
+const model = catalog.get("example-chat");
+if (!model) throw new Error("example-chat is unavailable");
+
+await city.ai.text({
+  model,
+  prompt: "请总结今天的项目进度",
+});
+```
+
+非流式调用在返回前完成结算。流式调用会在流成功结束、失败或取消后固化执行结果；只有 Provider 返回可信最终计量时才会累计 Token 或媒体用量。
+
+## 5. 使用 SDK 查询当前用户
+
+```ts
+import type { UserUsageResponse } from "@downcity/services";
+
+const usage = await city.service("usage").get<UserUsageResponse>("me", {
+  from: "2026-08-01",
+  to: "2026-08-31",
+  timezone: "Asia/Shanghai",
+});
+
+console.log(usage.summary.credits.used);
+console.log(usage.summary.ai.total_tokens);
+console.log(usage.days);
+```
+
+查询参数：
+
+| 参数 | 必填 | 说明 |
+| --- | --- | --- |
+| `from` | 是 | 起始当地自然日，格式 `YYYY-MM-DD`，包含当天 |
+| `to` | 是 | 结束当地自然日，格式 `YYYY-MM-DD`，包含当天 |
+| `timezone` | 是 | IANA 时区，例如 `Asia/Shanghai`、`America/Los_Angeles` |
+
+单次查询最多覆盖 400 个当地自然日。用户身份只从 `user_token` 获取，API 不接受 `user_id` 参数，也不能查询其他用户。
+
+## 6. 直接使用 HTTP API
+
+```bash
+curl --get "https://federation.example.com/v1/usage/me" \
+  --header "Authorization: Bearer $USER_TOKEN" \
+  --data-urlencode "from=2026-08-01" \
+  --data-urlencode "to=2026-08-31" \
+  --data-urlencode "timezone=Asia/Shanghai"
+```
+
+接口固定为：
+
+```http
+GET /v1/usage/me?from=2026-08-01&to=2026-08-31&timezone=Asia%2FShanghai
+Authorization: Bearer <user_token>
+```
+
+旧的 `/v1/usage/events` 和 `/v1/usage/summary` 不再提供。
+
+## 7. 响应示例
+
+```json
+{
+  "timezone": "Asia/Shanghai",
+  "from": "2026-08-01",
+  "to": "2026-08-31",
+  "credits_per_usd": 1000000,
+  "data_available_from": {
+    "credits": "2026-08-02",
+    "ai": "2026-08-02"
+  },
+  "summary": {
+    "credits": {
+      "used": 3500,
+      "charge_count": 3
+    },
+    "ai": {
+      "execution_count": 3,
+      "metered_request_count": 3,
+      "uncached_input_tokens": 900,
+      "cached_input_tokens": 100,
+      "input_tokens": 1000,
+      "output_tokens": 400,
+      "reasoning_tokens": 120,
+      "total_tokens": 1400,
+      "image_count": 0,
+      "video_seconds": 0,
+      "audio_seconds": 0
+    }
+  },
+  "days": [
+    {
+      "date": "2026-08-02",
+      "credits": {
+        "used": 2500,
+        "charge_count": 2
+      },
+      "ai": {
+        "execution_count": 2,
+        "metered_request_count": 2,
+        "uncached_input_tokens": 700,
+        "cached_input_tokens": 100,
+        "input_tokens": 800,
+        "output_tokens": 300,
+        "reasoning_tokens": 100,
+        "total_tokens": 1100,
+        "image_count": 0,
+        "video_seconds": 0,
+        "audio_seconds": 0
+      }
+    }
+  ]
+}
+```
+
+`days` 是稀疏数组：只有 Credits 或 AI 任一侧存在活动的日期才会返回。如果当天只有一侧有数据，另一侧会返回完整的零值 Bucket。
+
+字段使用建议：
+
+- 消费总览：`summary.credits.used`
+- Credits 热力图：`days[].credits.used`
+- 总 Token：`summary.ai.total_tokens`
+- 每日 Token 趋势：`days[].ai.total_tokens`
+- 调用次数：`summary.ai.execution_count`
+- 有最终计量的请求数：`summary.ai.metered_request_count`
+
+`execution_count` 可能大于 `metered_request_count`。例如流被取消、Provider 失败或没有返回最终计量时，系统仍记录一次执行，但不会虚构 Token 数。
+
+## 8. 转换成热力图数据
+
+Credits 是产品用量图的主指标：
+
+```ts
+const heatmap_data = usage.days.map((day) => ({
+  date: day.date,
+  value: day.credits.used,
+  charge_count: day.credits.charge_count,
+}));
+```
+
+如果组件要求连续日期，需要由前端补齐查询区间中的空白日期：
+
+```ts
+const credits_by_date = new Map(
+  usage.days.map((day) => [day.date, day.credits.used]),
+);
+
+const value_for_date = (date: string) => credits_by_date.get(date) ?? 0;
+```
+
+不要根据 Token 推算 Credits，也不要根据 Credits 反推 Token。它们来自两个独立事实源，价格调整、免费调用或非 Token 模态都会让两者不再线性对应。
+
+## 9. 常见错误
+
+| HTTP 状态 | 原因 | 处理方式 |
+| --- | --- | --- |
+| `400` | 日期不存在、`from > to`、超过 400 天或时区无效 | 修正查询参数 |
+| `401` | 缺少或无法验证 `user_token` | 重新登录或刷新 Token |
+| `500` | AI Usage 或 Credits Reader 查询失败 | 检查数据库和 Federation 日志后重试 |
+
+若 Credits 已扣除但短时间内没有出现在查询中，先确认交易状态是否为 `applied`。Usage 不统计充值、退款、待处理或失败的 Credits 交易。
+
+## 10. Worker 部署注意事项
+
+可靠结算任务以数据库为事实源。Cloudflare Workers 应配置 Queue Adapter，并把消息交回 `federation.queue.call(message.body)`；这样 Credits 或数据库发生短暂技术错误时可以继续唤醒重试。使用 Downcity Worker 模板创建项目时，这部分装配已经包含在模板中。

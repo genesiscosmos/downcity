@@ -152,6 +152,13 @@ export async function initialize_federation(params: {
     service._baseURL = configured_base_url ?? runtime.baseURL;
     service._queue = params.queue as never;
     service._storage = runtime.storage;
+    service._database = database.service_context();
+    service._tables = Object.fromEntries(
+      Object.keys(service.tables ?? {}).map((name) => [
+        name,
+        table_map.get(`${service.id}.${name}`)!,
+      ]),
+    );
     if (service instanceof InstallableService) {
       install_service(service, database);
     }

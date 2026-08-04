@@ -1,21 +1,24 @@
 ---
 title: Usage 与 Credits 计费
-description: Usage 记录事实，业务计算价格，Credits 执行扣费。
+description: AIService 生成技术用量并可靠写入 Credits Charge。
 ---
 
-`UsageService` 保存模型或 Service 调用事实，不拥有价格策略。业务层根据真实 usage 计算 Credits，再调用 `credits.charge()`。
+模型或 Channel 的 `bill` 根据最终输出生成 Credits 账单。`AIService` 使用同一个 `usage_id` 持久化 AI Usage，并以 `ai:${usage_id}` 作为幂等键调用 `CreditsService`。
 
 ```ts
-const ai = new AIService({ credits });
+const credits_service = new CreditsService();
+const ai_service = new AIService({ credits: credits_service });
 
-const transaction = await credits.charge({
-  user_id: "user_123",
-  credits: calculate_credits(usage),
-  source: "model_usage",
-  ref: usage.request_id,
-  idempotency_key: `model_usage:${usage.request_id}`,
-  metadata: { model_id: usage.model_id },
+ai_service.use({
+  id: "example-model",
+  channel_id: "example-provider",
+  name: "Example Model",
+  bill: ({ output }) => ({
+    credits: calculate_credits(output),
+    note: "AI model usage",
+  }),
+  runtime: provider_runtime,
 });
 ```
 
-AIService 的 Credits bridge 会在调用前检查最小可用额度，并在得到真实 usage 后扣费。支付订单通过 `PaymentService.on_paid` 给 Primary Card 入账，两条链路不会混合生命周期。
+余额不足会拒绝结算；数据库或 Credits 技术错误会进入可重试状态。重试不会重复写 AI Usage，也不会重复扣费。Usage 查询只展示已经 `applied` 的 Credits Charge，因此账务趋势始终以 Credits Ledger 为准。

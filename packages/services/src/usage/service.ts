@@ -1,177 +1,68 @@
 /**
- * Downcity 官方 Usage 服务。
+ * Downcity 用户用量聚合服务。
  *
- * 通过全局 hook 记录 service 调用事件。
- * 兼容 Node.js 和 Cloudflare Workers（使用 Web Crypto API）。
+ * UsageService 不拥有事实表。它并行读取 AIService 的技术用量和 CreditsService
+ * 的账务消费，合并为当前 Federation 用户的每日用量响应。
  */
 
-import { sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { InstallableService, type ServiceInstallContext, type Context } from "@downcity/city";
+import { InstallableService, httpError, type ServiceInstallContext } from "@downcity/city";
+import { CREDITS_PER_USD } from "../types/Amount.js";
+import { merge_daily_usage } from "./aggregation.js";
+import type { UsageServiceOptions } from "./types/Usage.js";
+import { validate_usage_query } from "./validation.js";
 
-/**
- * Usage 服务配置。
- */
-export interface UsageServiceOptions {
-  /**
-   * 是否记录失败的用户侧 service 调用。
-   *
-   * 默认只记录成功调用；开启后会通过 error hook 记录失败事件。
-   */
-  record_errors?: boolean;
-}
-
-/**
- * Usage 事件表。
- */
-export const usageEvents = sqliteTable("service_usage_events", {
-  event_id: text("event_id").primaryKey(),
-  bureau_id: text("bureau_id").notNull(),
-  user_id: text("user_id").notNull(),
-  service: text("service").notNull(),
-  model_id: text("model_id").notNull(),
-  status: text("status").notNull(),
-  metadata_json: text("metadata_json").notNull(),
-  created_at: text("created_at").notNull(),
-});
-
-/**
- * Usage 服务实例。
- */
+/** 当前用户 Credits 与 AI 技术用量聚合服务。 */
 export class UsageService extends InstallableService {
   readonly id = "usage";
   readonly name = "Usage";
-  readonly version = "0.1.0";
-  readonly schema = { events: usageEvents };
+  readonly version = "0.2.0";
 
-  constructor(private readonly options: UsageServiceOptions = {}) {
+  constructor(private readonly options: UsageServiceOptions) {
     super();
+    if (!options?.ai_usage_reader || !options?.credits_usage_reader) {
+      throw new TypeError("UsageService requires ai_usage_reader and credits_usage_reader");
+    }
     this.instruction = [
-      "通过全局 hook 记录真实用户侧 service 调用事件。",
-      "默认只记录成功调用；record_errors=true 时也会记录失败调用。",
-      "常用读取方式是管理端查看 events/summary，用户侧查看 me。",
+      "聚合当前用户的已入账 Credits 消费与 AI 技术用量。",
+      "Credits 与 AI Usage 是独立事实，不能互相反推。",
+      "用户通过 me 查询最长 400 个当地自然日的每日数据。",
     ].join("\n");
   }
 
   install(ctx: ServiceInstallContext): void {
-    const events = ctx.table<UsageEventRow>("events");
-
-    ctx.hook.after(async (serviceCtx) => {
-      if (!shouldRecordUsage(serviceCtx)) return;
-      await events.insert(createUsageEvent(serviceCtx, "success"));
-    });
-
-    if (this.options.record_errors) {
-      ctx.hook.onError(async (serviceCtx) => {
-        if (!shouldRecordUsage(serviceCtx)) return;
-        await events.insert(createUsageEvent(serviceCtx, "error"));
-      });
-    }
-
-    ctx.route({
-      method: "GET",
-      path: "/events",
-      auth: ["admin"],
-      async handler(requestCtx) {
-        return requestCtx.jsonResponse({ items: await events.select() });
-      },
-    });
-
-    ctx.route({
-      method: "GET",
-      path: "/summary",
-      auth: ["admin"],
-      async handler(requestCtx) {
-        return requestCtx.jsonResponse({
-          items: summarizeUsage(await events.select()),
-        });
-      },
-    });
-
     ctx.route({
       method: "GET",
       path: "/me",
       auth: ["user"],
-      async handler(requestCtx) {
-        return requestCtx.jsonResponse({
-          items: await events.select({
-            user_id: requestCtx.user?.user_id ?? "",
-            bureau_id: requestCtx.bureau?.bureau_id ?? "",
-          }),
+      handler: async (request_ctx) => {
+        const user_id = request_ctx.user?.user_id;
+        if (!user_id) throw httpError(401, "Unauthorized");
+        const url = new URL(request_ctx.request.url);
+        const query = validate_usage_query({
+          user_id,
+          from: url.searchParams.get("from"),
+          to: url.searchParams.get("to"),
+          timezone: url.searchParams.get("timezone"),
         });
+        const [ai, credits] = await Promise.all([
+          this.options.ai_usage_reader.aggregate_user_daily_usage(query)
+            .catch(() => { throw httpError(500, "AI_USAGE_QUERY_FAILED: AI usage query failed"); }),
+          this.options.credits_usage_reader.aggregate_user_daily_charges(query)
+            .catch(() => { throw httpError(500, "CREDITS_USAGE_QUERY_FAILED: Credits usage query failed"); }),
+        ]);
+        try {
+          return request_ctx.jsonResponse(merge_daily_usage({
+            timezone: query.timezone,
+            from: query.from,
+            to: query.to,
+            credits_per_usd: CREDITS_PER_USD,
+            ai,
+            credits,
+          }));
+        } catch {
+          throw httpError(500, "USAGE_QUERY_FAILED: usage response could not be constructed");
+        }
       },
     });
   }
-}
-
-/**
- * 只记录真实用户侧调用。
- *
- * 管理端操作没有 user/bureau 上下文，usage 服务自己的查询也不应反过来
- * 产生 usage 事件，否则统计接口会污染自身结果。
- */
-function shouldRecordUsage(ctx: Context): boolean {
-  return Boolean(ctx.user?.user_id && ctx.bureau?.bureau_id && ctx.service?.id !== "usage");
-}
-
-/**
- * Usage 事件行类型。
- */
-interface UsageEventRow extends Record<string, unknown> {
-  event_id: string;
-  bureau_id: string;
-  user_id: string;
-  service: string;
-  model_id: string;
-  status: string;
-  metadata_json: string;
-  created_at: string;
-}
-
-/**
- * 创建 usage 事件记录。
- */
-function createUsageEvent(ctx: Context, status: "success" | "error"): UsageEventRow {
-  return {
-    event_id: `usage_${randomId()}`,
-    bureau_id: ctx.bureau?.bureau_id ?? "",
-    user_id: ctx.user?.user_id ?? "",
-    service: ctx.service?.id ?? "",
-    model_id: ctx.variant?.id ?? "",
-    status,
-    metadata_json: JSON.stringify({
-      variant: ctx.variant?.id,
-      started_at: ctx.started_at?.toISOString(),
-      ended_at: ctx.ended_at?.toISOString(),
-      error: ctx.error?.message,
-    }),
-    created_at: new Date().toISOString(),
-  };
-}
-
-/**
- * 汇总 usage 事件。
- */
-function summarizeUsage(rows: UsageEventRow[]) {
-  const byKey = new Map<string, { bureau_id: string; service: string; status: string; count: number }>();
-  for (const row of rows) {
-    const key = `${row.bureau_id}\u0000${row.service}\u0000${row.status}`;
-    const current = byKey.get(key) ?? { bureau_id: row.bureau_id, service: row.service, status: row.status, count: 0 };
-    current.count += 1;
-    byKey.set(key, current);
-  }
-  return [...byKey.values()].sort((a, b) =>
-    `${a.bureau_id}:${a.service}:${a.status}`.localeCompare(`${b.bureau_id}:${b.service}:${b.status}`),
-  );
-}
-
-/**
- * 生成随机 ID（兼容 Node 和 Workers）。
- */
-function randomId(): string {
-  const buf = new Uint8Array(12);
-  crypto.getRandomValues(buf);
-  return btoa(String.fromCharCode(...buf))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/u, "");
 }

@@ -1,125 +1,29 @@
 ---
-title: Usage 事实模型
-description: "@downcity/services 记录的不是价格，而是 service 调用事实本身。"
+title: Usage 事实与计量模型
+description: "理解 AI 技术用量、Credits 账务与 usage_id 的边界。"
 ---
 
-`@downcity/services` 的核心不是计费，而是把调用事实沉淀下来。
+Usage 页面由两个独立事实源组成：
 
-## 这个概念到底在说什么
+- `AIService` 保存一次 AI 执行的最终技术计量，包括 Token、图片数、视频秒数和音频秒数。
+- `CreditsService` 保存已经入账的 Credits Charge。
 
-usage service 记录的是：
+两者通过稳定的 `usage_id` 关联，但不互相派生。一次执行可以有 AI 技术记录而没有扣费，也不能根据 Token 数反推出 Credits。
 
-- 哪个 downcity 发起了调用
-- 哪个 user 发起了调用
-- 调用了哪个 service / model
-- 最终是成功还是失败
+## AI 每日字段
 
-它不直接决定：
+- `execution_count`：AI 执行次数，包括没有最终计量的失败或取消执行。
+- `metered_request_count`：取得可信最终计量的请求数。
+- `input_tokens`、`output_tokens`、`reasoning_tokens`、`total_tokens`：AI Service 最终返回的 Token 明细。
+- `image_count`、`video_seconds`、`audio_seconds`：媒体用量。
 
-- 多少钱
-- 是哪个套餐
-- 余额要怎么扣
+流式请求只有在流成功结束、失败或取消后才固化最终状态。没有可信最终计量时仍计入执行次数，但不会虚构 Token 或媒体用量。
 
-也就是说，它先回答“发生了什么”，而不是“这次应该收多少钱”。
+## Credits 每日字段
 
-## 为什么这种边界很重要
+只聚合 `kind = charge`、`status = applied` 且 Credits 大于零的账务记录：
 
-如果一开始就把 usage、价格、套餐、余额全绑死在一起，后面你很难：
+- `used`：已消费 Credits。
+- `charge_count`：已入账扣费次数。
 
-- 调整商业规则
-- 比较不同套餐
-- 重做计费逻辑
-- 拆分统计和收费
-
-而把 usage 先当成事实层，你后面就可以自由决定它拿去做：
-
-- 统计
-- 计量
-- 账单
-- 套餐分析
-
-## 启用示例
-
-```ts
-import { UsageService } from "@downcity/services";
-
-base.use(new UsageService({
-  record_errors: true,
-}));
-```
-
-这个配置的重点是：即使失败调用，你也可以选择记录下来，方便后续排查和分析。
-
-## 管理侧如何读取这些事实
-
-```ts
-const events = await admin.service("usage").get("events");
-const summary = await admin.service("usage").get("summary");
-```
-
-这两个入口通常分别回答：
-
-- `events`：具体发生了哪些调用
-- `summary`：这些调用聚合起来是什么样
-
-## 用户侧如何读自己的 usage
-
-```ts
-const me = await user.service("usage").get("me");
-```
-
-这适合产品里做：
-
-- 用户自己的使用概览
-- 套餐页中的“已使用”展示
-- 简单自助查看
-
-## 最常见场景
-
-### 场景一：先统计，后收费
-
-这是最适合 usage service 的典型模式。
-
-先把调用事实记录下来，后面再决定：
-
-- 哪些模型要收费
-- 哪些调用算额度
-- 哪些产品策略要免单
-
-### 场景二：排查问题
-
-当你怀疑：
-
-- 调用是否真的发生
-- 某个 downcity 是否在异常消耗
-- 某个模型是不是被频繁调用
-
-usage 事实层是最先该看的地方。
-
-## 常用 API / 入口
-
-这一页最相关的公共入口是：
-
-- `UsageService({ record_errors })`
-- `admin.service("usage").get("events")`
-- `admin.service("usage").get("summary")`
-- `user.service("usage").get("me")`
-
-## 常见误解
-
-### usage service 不等于计费系统
-
-它是计费系统常见的输入层，但不是完整收费逻辑本身。
-
-### 记录失败调用不是多余
-
-很多运营和排查问题，恰恰需要知道失败调用有没有发生、发生了多少。
-
-### usage 不是只有管理端才关心
-
-用户自己的“已使用多少”也经常需要直接来自 usage 数据。
-
-## 继续阅读
-
-- 想知道怎么读这些数据，读 [查询与汇总](/zh/payments/usage/querying-and-summary)
-- 想知道怎么把 usage 接到账单和套餐，读 [和计费逻辑怎么配](/zh/payments/usage/billing-integration)
+充值、退款、待处理或失败交易不会进入消费热力图。

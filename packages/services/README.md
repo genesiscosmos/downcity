@@ -78,7 +78,7 @@ const checkout = await user.service("payment").action("checkout/create").invoke(
 - `emailAccountsProvider()` / `githubAccountsProvider()` / `googleAccountsProvider()` / `wechatAccountsProvider()`：作为 provider 挂到统一 `AccountsService`
 - `CreditsService`：永久 Primary Card、限时 Ephemeral Card、Transaction 与不可变 Entries
 - `PaymentService`：拥有支付订单并统一暴露支付方式、checkout、webhook 与 payments；paid 后通过 `on_paid` 接入 Credits
-- `UsageService`：记录真实用户侧 service 调用事件
+- `UsageService`：通过 `AIService` 与 `CreditsService` Reader 聚合当前用户的每日 Credits 消费和 AI 技术用量
 - `OrganizationsService`：管理 Federation 全局或 City 作用域的 Organization、Membership、加入申请与治理角色
 - `stripePaymentProvider()` / `creemPaymentProvider()` / `dodoPaymentProvider()` / `waffoPaymentProvider()`：作为 provider 挂到统一 `PaymentService`
 

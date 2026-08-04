@@ -61,6 +61,7 @@ Check:
 
 Check:
 
-- whether the `after` hook is registered on the target service, or whether `new UsageService()` is enabled
-- whether the record logic depends on an output field that the handler did not return
-- whether the logging service swallowed an exception
+- whether `AIService` and `CreditsService` are mounted before `UsageService` and supplied as its readers
+- whether the AI provider returned final `RuntimeMetering`; executions without final metering only increase the execution count
+- whether the Credits transaction is an applied positive charge; top-ups, failed, and pending transactions are excluded
+- whether the query supplies real ordered `from` and `to` dates plus a valid IANA `timezone`

@@ -82,9 +82,32 @@ export interface CreateCityLanguageModelStreamInput {
 export interface CityLanguageModelStreamExecution {
   /** 返回给 CityModel 客户端的 SSE Response。 */
   response: Response;
-  /** 流结束后的 finish 事件；异常或取消时为空。 */
-  completion: Promise<LanguageModelV3StreamPart | undefined>;
+  /** 流结束后的明确完成结果。 */
+  completion: Promise<AIStreamCompletion<LanguageModelV3StreamPart>>;
 }
+
+/** 流式 AI 响应的明确完成结果。 */
+export type AIStreamCompletion<TResult> =
+  | {
+      /** 上游流正常结束并提供最终可信 usage。 */
+      outcome: "succeeded";
+      /** 最终标准化结果。 */
+      result: TResult;
+    }
+  | {
+      /** 上游执行或传输失败。 */
+      outcome: "failed";
+      /** finish 后失败时仍可携带可信最终结果。 */
+      result?: TResult;
+      /** 原始错误，仅供运行时判断和日志使用。 */
+      error: unknown;
+    }
+  | {
+      /** 客户端主动取消流。 */
+      outcome: "cancelled";
+      /** 取消前已经获得的可选最终结果。 */
+      result?: TResult;
+    };
 
 /** CityModel 客户端构造参数。 */
 export interface CityModelOptions {

@@ -61,6 +61,7 @@ description: 调试 City、client、token 和 env 的常见路径。
 
 检查：
 
-- `after` hook 是否注册到目标 service，或是否启用了 `new UsageService()`。
-- 记录逻辑是否依赖某个 output 字段但 handler 没有返回。
-- 日志服务是否吞掉了异常。
+- `AIService` 和 `CreditsService` 是否先于 `UsageService` 挂载，并作为对应 Reader 传入。
+- AI Provider 是否返回了最终 `RuntimeMetering`；没有最终计量时只增加执行次数。
+- Credits 交易是否为已入账的正数 Charge；充值、失败或待处理交易不会计入消费。
+- 查询是否传入真实、有序的 `from`、`to` 和有效 IANA `timezone`。

@@ -7,9 +7,14 @@
 
 import {
   InstallableService,
+  create_usage_date_formatter,
+  create_usage_utc_envelope,
+  format_usage_local_date,
   httpError,
+  read_usage_integer,
   type ServiceDatabaseContext,
   type ServiceInstallContext,
+  type UserDailyUsageQuery,
 } from "@downcity/city";
 import { raw_all, raw_atomic, raw_first } from "./raw.js";
 import {
@@ -62,6 +67,10 @@ import {
   stable_id,
   stringify_json,
 } from "./utils.js";
+import type {
+  CreditsDailyUsageBucket,
+  CreditsDailyUsageResult,
+} from "./types/Usage.js";
 import { register_credits_routes } from "./routes.js";
 
 interface CardAllocation {
@@ -140,6 +149,7 @@ export class CreditsService extends InstallableService {
     await raw_atomic(this.resolve_raw(), [
       { sql: `CREATE UNIQUE INDEX IF NOT EXISTS service_credits_transactions_kind_idempotency_idx ON ${TRANSACTION_TABLE} (kind, idempotency_key)`, params: [] },
       { sql: `CREATE INDEX IF NOT EXISTS service_credits_transactions_user_created_idx ON ${TRANSACTION_TABLE} (user_id, created_at)`, params: [] },
+      { sql: `CREATE INDEX IF NOT EXISTS service_credits_transactions_user_kind_status_applied_idx ON ${TRANSACTION_TABLE} (user_id, kind, status, applied_at)`, params: [] },
       { sql: `CREATE INDEX IF NOT EXISTS service_credits_ephemeral_cards_user_expires_idx ON ${EPHEMERAL_CARD_TABLE} (user_id, expires_at)`, params: [] },
       { sql: `CREATE INDEX IF NOT EXISTS service_credits_transaction_entries_transaction_idx ON ${TRANSACTION_ENTRY_TABLE} (transaction_id)`, params: [] },
       { sql: `CREATE INDEX IF NOT EXISTS service_credits_transaction_entries_user_created_idx ON ${TRANSACTION_ENTRY_TABLE} (user_id, created_at)`, params: [] },
@@ -401,6 +411,38 @@ export class CreditsService extends InstallableService {
       throw httpError(409, "credits changed concurrently; retry the charge");
     }
     return transaction;
+  }
+
+  /** 按用户、当地日期范围与 IANA 时区聚合已入账 Credits 消费。 */
+  async aggregate_user_daily_charges(input: UserDailyUsageQuery): Promise<CreditsDailyUsageResult> {
+    const database = this.resolve_raw();
+    const envelope = create_usage_utc_envelope(input.from, input.to);
+    const rows = await raw_all<{ credits: unknown; applied_at: string }>(database, [
+      `SELECT credits, applied_at FROM ${TRANSACTION_TABLE}`,
+      "WHERE user_id = ? AND kind = 'charge' AND status = 'applied' AND credits > 0",
+      "AND applied_at >= ? AND applied_at < ? ORDER BY applied_at ASC",
+    ].join(" "), [input.user_id, envelope.from_utc, envelope.to_utc_exclusive]);
+    const first = await raw_first<{ applied_at: string }>(database, [
+      `SELECT applied_at FROM ${TRANSACTION_TABLE}`,
+      "WHERE user_id = ? AND kind = 'charge' AND status = 'applied' AND credits > 0",
+      "ORDER BY applied_at ASC LIMIT 1",
+    ].join(" "), [input.user_id]);
+    const formatter = create_usage_date_formatter(input.timezone);
+    const by_date = new Map<string, CreditsDailyUsageBucket>();
+    for (const row of rows) {
+      const date = format_usage_local_date(formatter, row.applied_at);
+      if (date < input.from || date > input.to) continue;
+      const bucket = by_date.get(date) ?? { date, used: 0, charge_count: 0 };
+      bucket.used += read_usage_integer(row.credits);
+      bucket.charge_count += 1;
+      by_date.set(date, bucket);
+    }
+    return {
+      data_available_from: first
+        ? format_usage_local_date(formatter, first.applied_at)
+        : null,
+      days: [...by_date.values()].sort((left, right) => left.date.localeCompare(right.date)),
+    };
   }
 
   /** 按条件查询 Transactions。 */
