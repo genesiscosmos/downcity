@@ -62,10 +62,12 @@ import { AIUsageRepository } from "./AIUsageRepository.js";
 import { ai_settlement_jobs, ai_usage_records } from "./ai-usage-schema.js";
 import type {
   AIDailyUsageResult,
+  AIRecentUsageResult,
   AISettlementPayload,
   AIUsageOutcome,
   AIUsageRecord,
   UserDailyUsageQuery,
+  UserRecentAIUsageQuery,
 } from "../../types/AIUsage.js";
 import {
   create_city_language_model_stream,
@@ -246,6 +248,11 @@ export class AIService extends Service {
   /** UsageService 使用的 AI 技术用量只读入口。 */
   async aggregate_user_daily_usage(input: UserDailyUsageQuery): Promise<AIDailyUsageResult> {
     return await this.require_usage_repository().aggregate_user_daily_usage(input);
+  }
+
+  /** UsageService 使用的最近 AI Token 用量只读入口。 */
+  async list_user_recent_usage(input: UserRecentAIUsageQuery): Promise<AIRecentUsageResult> {
+    return await this.require_usage_repository().list_user_recent_usage(input);
   }
 
   // ========== 模型匹配 ==========

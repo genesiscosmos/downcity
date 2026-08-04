@@ -378,8 +378,34 @@ const session = await guest.service("accounts").get("login/result", {
 ### usage
 
 ```ts
-const usage = await city.service("usage").get("me");
+import type {
+  UserRecentTokenUsageResponse,
+  UserUsageResponse,
+} from "@downcity/services";
+
+const usage = await city.service("usage").get<UserUsageResponse>("me", {
+  from: "2026-08-01",
+  to: "2026-08-31",
+  timezone: "Asia/Shanghai",
+});
+
+const recent = await city
+  .service("usage")
+  .get<UserRecentTokenUsageResponse>("me/recent", { limit: 20 });
+
+const next_page = recent.next_cursor
+  ? await city.service("usage").get<UserRecentTokenUsageResponse>("me/recent", {
+      limit: 20,
+      cursor: recent.next_cursor,
+    })
+  : null;
 ```
+
+- `me` 返回按当地自然日聚合的 Credits 和 AI 技术用量。
+- `me/recent` 返回当前用户最近的单次 AI Token 用量，默认 20 条，最多 50 条。
+- `next_cursor` 是不透明分页 Cursor；为 `null` 时表示没有下一页。
+- `metering_status` 为 `unavailable` 时，该记录的 Token 字段为 `null`，不能从 Credits 反推。
+- 两个入口的用户身份都只来自当前 `user_token`，请求参数不接受 `user_id` 或 `bureau_id`。
 
 ### payment
 

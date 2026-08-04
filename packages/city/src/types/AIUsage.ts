@@ -118,8 +118,78 @@ export interface AIDailyUsageResult {
   days: AIDailyUsageBucket[];
 }
 
+/** 最近 AI Usage 查询的稳定分页边界。 */
+export interface AIRecentUsageCursor {
+  /** 上一页最后一条记录的 UTC 完成时间。 */
+  completed_at: string;
+  /** 上一页最后一条记录的稳定 Usage ID，用于解决相同完成时间的排序冲突。 */
+  usage_id: string;
+}
+
+/** 用户最近 AI Usage 查询条件。 */
+export interface UserRecentAIUsageQuery {
+  /** Federation 内全局用户 ID。 */
+  user_id: string;
+  /** 本页最多返回的记录数，范围为 1–50。 */
+  limit: number;
+  /** 上一页的稳定分页边界；首屏查询时不提供。 */
+  cursor?: AIRecentUsageCursor;
+}
+
+/** 用户可见的单次 AI Token 用量投影。 */
+export interface AIRecentUsageItem {
+  /** 一次真实 AI 执行的稳定标识。 */
+  usage_id: string;
+  /** AI 执行或计量生命周期完成时间，UTC ISO 字符串。 */
+  completed_at: string;
+  /** Federation 对外模型 ID。 */
+  model_id: string;
+  /** AIService Action ID，例如 text、stream 或 image/fetch。 */
+  action_id: string;
+  /** AI 执行最终结果。 */
+  outcome: AIUsageOutcome;
+  /** 最终计量是否完整可用。 */
+  metering_status: AIMeteringStatus;
+  /** 未命中缓存的输入 Token；计量不可用时为空。 */
+  uncached_input_tokens: number | null;
+  /** 命中缓存的输入 Token；计量不可用时为空。 */
+  cached_input_tokens: number | null;
+  /** 全部输入 Token；计量不可用时为空。 */
+  input_tokens: number | null;
+  /** 输出 Token；计量不可用时为空。 */
+  output_tokens: number | null;
+  /** 输出 Token 中的推理 Token 子集；计量不可用时为空。 */
+  reasoning_tokens: number | null;
+  /** 输入与输出 Token 总量；计量不可用时为空。 */
+  total_tokens: number | null;
+}
+
+/** 最近 AI Usage SQL 查询所需的最小数据行。 */
+export type AIRecentUsageRow = Pick<AIUsageRecord,
+  | "usage_id"
+  | "completed_at"
+  | "model_id"
+  | "action_id"
+  | "outcome"
+  | "metering_status"
+  | "uncached_input_tokens"
+  | "cached_input_tokens"
+  | "output_tokens"
+  | "reasoning_tokens"
+>;
+
+/** AI Usage Reader 返回的最近记录页。 */
+export interface AIRecentUsageResult {
+  /** 按完成时间与 Usage ID 降序排列的用户安全投影。 */
+  items: AIRecentUsageItem[];
+  /** 当前页之后是否仍有记录。 */
+  has_more: boolean;
+}
+
 /** UsageService 依赖的最小 AI Usage 只读接口。 */
 export interface AIUsageReader {
   /** 按用户、当地日期范围与 IANA 时区聚合技术用量。 */
   aggregate_user_daily_usage(input: UserDailyUsageQuery): Promise<AIDailyUsageResult>;
+  /** 按用户读取最近的单次 AI Token 用量。 */
+  list_user_recent_usage(input: UserRecentAIUsageQuery): Promise<AIRecentUsageResult>;
 }

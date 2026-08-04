@@ -7,6 +7,7 @@ export type {
   UsageServiceOptions,
   UserAIUsageBucket,
   UserCreditsUsageBucket,
+  UserRecentTokenUsageResponse,
   UserUsageBucket,
   UserUsageResponse,
 } from "./types/Usage.js";

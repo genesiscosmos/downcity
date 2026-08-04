@@ -11,10 +11,14 @@ import type { AICreditsBridge } from "../../types/AI.js";
 import type {
   AIDailyUsageBucket,
   AIDailyUsageResult,
+  AIRecentUsageItem,
+  AIRecentUsageResult,
+  AIRecentUsageRow,
   AISettlementPayload,
   AISettlementStatus,
   AIUsageRecord,
   UserDailyUsageQuery,
+  UserRecentAIUsageQuery,
 } from "../../types/AIUsage.js";
 import {
   create_usage_date_formatter,
@@ -205,6 +209,38 @@ export class AIUsageRepository {
     };
   }
 
+  /** 按稳定游标读取当前用户最近的单次 AI Token 用量。 */
+  async list_user_recent_usage(input: UserRecentAIUsageQuery): Promise<AIRecentUsageResult> {
+    if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 50) {
+      throw new TypeError("Recent AI usage limit must be between 1 and 50");
+    }
+    const cursor = input.cursor;
+    const result = await this.database.query<AIRecentUsageRow>({
+      sql: cursor
+        ? [
+          "SELECT usage_id, completed_at, model_id, action_id, outcome, metering_status,",
+          "uncached_input_tokens, cached_input_tokens, output_tokens, reasoning_tokens",
+          "FROM service_ai_usage_records",
+          "WHERE user_id = ? AND (completed_at < ? OR (completed_at = ? AND usage_id < ?))",
+          "ORDER BY completed_at DESC, usage_id DESC LIMIT ?",
+        ].join(" ")
+        : [
+          "SELECT usage_id, completed_at, model_id, action_id, outcome, metering_status,",
+          "uncached_input_tokens, cached_input_tokens, output_tokens, reasoning_tokens",
+          "FROM service_ai_usage_records",
+          "WHERE user_id = ?",
+          "ORDER BY completed_at DESC, usage_id DESC LIMIT ?",
+        ].join(" "),
+      params: cursor
+        ? [input.user_id, cursor.completed_at, cursor.completed_at, cursor.usage_id, input.limit + 1]
+        : [input.user_id, input.limit + 1],
+    });
+    return {
+      items: result.rows.slice(0, input.limit).map(to_recent_usage_item),
+      has_more: result.rows.length > input.limit,
+    };
+  }
+
   /** 使用 compare-and-set 领取任务租约。 */
   private async claim_job(
     job: AISettlementJobRow,
@@ -240,6 +276,44 @@ export class AIUsageRepository {
       source: "model_usage",
     });
   }
+}
+
+/** 将 AI Usage 数据行转换为不泄漏内部字段的用户投影。 */
+function to_recent_usage_item(row: AIRecentUsageRow): AIRecentUsageItem {
+  if (row.metering_status === "unavailable") {
+    return {
+      usage_id: row.usage_id,
+      completed_at: row.completed_at,
+      model_id: row.model_id,
+      action_id: row.action_id,
+      outcome: row.outcome,
+      metering_status: row.metering_status,
+      uncached_input_tokens: null,
+      cached_input_tokens: null,
+      input_tokens: null,
+      output_tokens: null,
+      reasoning_tokens: null,
+      total_tokens: null,
+    };
+  }
+  const uncached_input_tokens = read_usage_integer(row.uncached_input_tokens);
+  const cached_input_tokens = read_usage_integer(row.cached_input_tokens);
+  const input_tokens = uncached_input_tokens + cached_input_tokens;
+  const output_tokens = read_usage_integer(row.output_tokens);
+  return {
+    usage_id: row.usage_id,
+    completed_at: row.completed_at,
+    model_id: row.model_id,
+    action_id: row.action_id,
+    outcome: row.outcome,
+    metering_status: row.metering_status,
+    uncached_input_tokens,
+    cached_input_tokens,
+    input_tokens,
+    output_tokens,
+    reasoning_tokens: Math.min(read_usage_integer(row.reasoning_tokens), output_tokens),
+    total_tokens: input_tokens + output_tokens,
+  };
 }
 
 /** 创建零值 AI Bucket。 */

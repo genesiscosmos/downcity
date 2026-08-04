@@ -5,7 +5,7 @@
  * 合并成一个用户响应，不拥有事实副本。
  */
 
-import type { AIUsageReader } from "@downcity/city";
+import type { AIRecentUsageItem, AIUsageReader } from "@downcity/city";
 import type { CreditsUsageReader } from "../../credits/types/Usage.js";
 
 /** UsageService 显式 Reader 依赖。 */
@@ -82,4 +82,12 @@ export interface UserUsageResponse {
     /** 当地自然日，格式为 YYYY-MM-DD。 */
     date: string;
   }>;
+}
+
+/** 当前用户最近单次 AI Token 用量响应。 */
+export interface UserRecentTokenUsageResponse {
+  /** 按完成时间与 Usage ID 降序排列的单次 AI 用量。 */
+  items: AIRecentUsageItem[];
+  /** 下一页不透明 Cursor；没有更多记录时为空。 */
+  next_cursor: string | null;
 }

@@ -137,6 +137,7 @@ export type {
   UsageServiceOptions,
   UserAIUsageBucket,
   UserCreditsUsageBucket,
+  UserRecentTokenUsageResponse,
   UserUsageBucket,
   UserUsageResponse,
 } from "./usage/index.js";

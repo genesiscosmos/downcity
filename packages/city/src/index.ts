@@ -117,8 +117,12 @@ export type {
   AIUsageRecord,
   AIDailyUsageBucket,
   AIDailyUsageResult,
+  AIRecentUsageCursor,
+  AIRecentUsageItem,
+  AIRecentUsageResult,
   AIUsageReader,
   UserDailyUsageQuery,
+  UserRecentAIUsageQuery,
 } from "./types/AIUsage.js";
 
 export type {

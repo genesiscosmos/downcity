@@ -9,13 +9,17 @@ import { InstallableService, httpError, type ServiceInstallContext } from "@down
 import { CREDITS_PER_USD } from "../types/Amount.js";
 import { merge_daily_usage } from "./aggregation.js";
 import type { UsageServiceOptions } from "./types/Usage.js";
-import { validate_usage_query } from "./validation.js";
+import {
+  create_recent_usage_cursor,
+  validate_recent_usage_query,
+  validate_usage_query,
+} from "./validation.js";
 
 /** 当前用户 Credits 与 AI 技术用量聚合服务。 */
 export class UsageService extends InstallableService {
   readonly id = "usage";
   readonly name = "Usage";
-  readonly version = "0.2.0";
+  readonly version = "0.3.0";
 
   constructor(private readonly options: UsageServiceOptions) {
     super();
@@ -26,6 +30,7 @@ export class UsageService extends InstallableService {
       "聚合当前用户的已入账 Credits 消费与 AI 技术用量。",
       "Credits 与 AI Usage 是独立事实，不能互相反推。",
       "用户通过 me 查询最长 400 个当地自然日的每日数据。",
+      "用户通过 me/recent 分页查询最近的单次 AI Token 用量。",
     ].join("\n");
   }
 
@@ -62,6 +67,34 @@ export class UsageService extends InstallableService {
         } catch {
           throw httpError(500, "USAGE_QUERY_FAILED: usage response could not be constructed");
         }
+      },
+    });
+
+    ctx.route({
+      method: "GET",
+      path: "/me/recent",
+      auth: ["user"],
+      handler: async (request_ctx) => {
+        const user_id = request_ctx.user?.user_id;
+        if (!user_id) throw httpError(401, "Unauthorized");
+        const url = new URL(request_ctx.request.url);
+        const query = validate_recent_usage_query({
+          user_id,
+          limit: url.searchParams.get("limit"),
+          cursor: url.searchParams.get("cursor"),
+        });
+        const result = await this.options.ai_usage_reader.list_user_recent_usage(query)
+          .catch(() => { throw httpError(500, "RECENT_AI_USAGE_QUERY_FAILED: recent AI usage query failed"); });
+        const last_item = result.items.at(-1);
+        if (result.has_more && !last_item) {
+          throw httpError(500, "RECENT_AI_USAGE_QUERY_FAILED: recent AI usage page is invalid");
+        }
+        return request_ctx.jsonResponse({
+          items: result.items,
+          next_cursor: result.has_more && last_item
+            ? create_recent_usage_cursor(last_item)
+            : null,
+        });
       },
     });
   }

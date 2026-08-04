@@ -31,6 +31,11 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
       name: "GPT-5.4",
       bill: () => ({ credits: 25, note: "test usage" }),
     }))
+    ai_service.use(create_test_text_model({
+      id: "gpt-failed",
+      name: "GPT Failed",
+      fail: true,
+    }))
     federation.use(credits_service)
     federation.use(ai_service)
     federation.use(new UsageService({
@@ -48,11 +53,21 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
       bureau_id: bureau.bureau_id,
       user_id: "user_1",
     })
+    const other_user_token = await (await federation.getAuthenticator()).createToken({
+      bureau_id: bureau.bureau_id,
+      user_id: "user_2",
+    })
     await credits_service.topup({
       card: { kind: "primary", user_id: "user_1" },
       credits: 100,
       source: "test",
       idempotency_key: "test:topup",
+    })
+    await credits_service.topup({
+      card: { kind: "primary", user_id: "user_2" },
+      credits: 50,
+      source: "test",
+      idempotency_key: "test:topup:user_2",
     })
 
     const invoke_response = await federation.fetch(new Request("http://localhost/v1/ai/text", {
@@ -82,6 +97,86 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
     assert.equal(usage.summary.ai.total_tokens, 2)
     assert.equal(usage.days.length, 1)
     assert.equal(usage.days[0].date, today)
+
+    for (const model of ["gpt-5.4", "gpt-5.4"]) {
+      assert.equal(await invoke_ai(federation, token.user_token, model), 200, model)
+    }
+    assert.equal(await invoke_ai(federation, token.user_token, "gpt-failed"), 500)
+    assert.equal(await invoke_ai(federation, other_user_token.user_token, "gpt-5.4"), 200)
+
+    const recent_response = await get_recent_usage(federation, token.user_token, "limit=20")
+    assert.equal(recent_response.status, 200)
+    const recent = await recent_response.json()
+    assert.equal(recent.items.length, 4)
+    assert.equal(recent.next_cursor, null)
+    assert.deepEqual(Object.keys(recent.items[0]).sort(), [
+      "action_id",
+      "cached_input_tokens",
+      "completed_at",
+      "input_tokens",
+      "metering_status",
+      "model_id",
+      "outcome",
+      "output_tokens",
+      "reasoning_tokens",
+      "total_tokens",
+      "uncached_input_tokens",
+      "usage_id",
+    ])
+    for (let index = 1; index < recent.items.length; index += 1) {
+      const previous = recent.items[index - 1]
+      const current = recent.items[index]
+      assert.ok(
+        previous.completed_at > current.completed_at
+        || (previous.completed_at === current.completed_at && previous.usage_id > current.usage_id),
+      )
+    }
+    const unavailable = recent.items.find((item) => item.metering_status === "unavailable")
+    assert.ok(unavailable)
+    assert.equal(unavailable.input_tokens, null)
+    assert.equal(unavailable.total_tokens, null)
+    const settled = recent.items.find((item) => item.metering_status === "settled")
+    assert.ok(settled)
+    assert.equal(settled.uncached_input_tokens, 1)
+    assert.equal(settled.cached_input_tokens, 0)
+    assert.equal(settled.input_tokens, 1)
+    assert.equal(settled.output_tokens, 1)
+    assert.equal(settled.reasoning_tokens, 0)
+    assert.equal(settled.total_tokens, 2)
+
+    const first_page_response = await get_recent_usage(federation, token.user_token, "limit=2")
+    assert.equal(first_page_response.status, 200)
+    const first_page = await first_page_response.json()
+    assert.equal(first_page.items.length, 2)
+    assert.equal(typeof first_page.next_cursor, "string")
+    const second_page_response = await get_recent_usage(
+      federation,
+      token.user_token,
+      `limit=2&cursor=${encodeURIComponent(first_page.next_cursor)}`,
+    )
+    assert.equal(second_page_response.status, 200)
+    const second_page = await second_page_response.json()
+    assert.equal(second_page.items.length, 2)
+    assert.equal(second_page.next_cursor, null)
+    assert.deepEqual(
+      [...first_page.items, ...second_page.items].map((item) => item.usage_id),
+      recent.items.map((item) => item.usage_id),
+    )
+
+    const other_user_response = await get_recent_usage(federation, other_user_token.user_token, "")
+    assert.equal(other_user_response.status, 200)
+    const other_user_recent = await other_user_response.json()
+    assert.equal(other_user_recent.items.length, 1)
+    assert.ok(!recent.items.some((item) => item.usage_id === other_user_recent.items[0].usage_id))
+
+    for (const query of ["limit=0", "limit=51", "limit=1.5", "cursor=invalid"]) {
+      const invalid_recent_response = await get_recent_usage(federation, token.user_token, query)
+      assert.equal(invalid_recent_response.status, 400)
+    }
+    const unauthorized_recent_response = await federation.fetch(
+      new Request("http://localhost/v1/usage/me/recent"),
+    )
+    assert.equal(unauthorized_recent_response.status, 401)
 
     for (const query of [
       "from=2026-02-30&to=2026-03-01&timezone=UTC",
@@ -168,4 +263,23 @@ async function read_env_value(federation, key) {
   const env_table = await federation.table("env")
   const rows = await env_table.select({ key })
   return rows[0]?.value ?? ""
+}
+
+async function invoke_ai(federation, user_token, model) {
+  const response = await federation.fetch(new Request("http://localhost/v1/ai/text", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${user_token}`,
+    },
+    body: JSON.stringify({ model, prompt: "hi" }),
+  }))
+  return response.status
+}
+
+async function get_recent_usage(federation, user_token, query) {
+  const suffix = query ? `?${query}` : ""
+  return await federation.fetch(new Request(`http://localhost/v1/usage/me/recent${suffix}`, {
+    headers: { authorization: `Bearer ${user_token}` },
+  }))
 }

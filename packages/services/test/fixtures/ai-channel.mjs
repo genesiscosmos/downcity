@@ -16,6 +16,7 @@ import { AIChannel } from "@downcity/city"
  * @param {string} [options.text] 模型输出文本。
  * @param {Function} [options.bill] 模型账单函数。
  * @param {Function} [options.on_stream] 每次调用模型流时执行的观察函数。
+ * @param {boolean} [options.fail] 是否模拟模型执行失败。
  * @returns {import("@downcity/city").AIModelDefinition} 可注册到 AIService 的模型定义。
  */
 export function create_test_text_model({
@@ -24,10 +25,12 @@ export function create_test_text_model({
   text = "ok",
   bill,
   on_stream,
+  fail = false,
 }) {
   class TestTextChannel extends AIChannel {
     async stream(input) {
       on_stream?.(input)
+      if (fail) throw new Error("test model failure")
       return create_text_stream(text)
     }
   }

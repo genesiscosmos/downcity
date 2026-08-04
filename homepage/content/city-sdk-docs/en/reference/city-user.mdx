@@ -379,8 +379,34 @@ const session = await guest.service("accounts").get("login/result", {
 ### usage
 
 ```ts
-const usage = await city.service("usage").get("me");
+import type {
+  UserRecentTokenUsageResponse,
+  UserUsageResponse,
+} from "@downcity/services";
+
+const usage = await city.service("usage").get<UserUsageResponse>("me", {
+  from: "2026-08-01",
+  to: "2026-08-31",
+  timezone: "America/Los_Angeles",
+});
+
+const recent = await city
+  .service("usage")
+  .get<UserRecentTokenUsageResponse>("me/recent", { limit: 20 });
+
+const next_page = recent.next_cursor
+  ? await city.service("usage").get<UserRecentTokenUsageResponse>("me/recent", {
+      limit: 20,
+      cursor: recent.next_cursor,
+    })
+  : null;
 ```
+
+- `me` returns Credits and technical AI usage aggregated by local calendar day.
+- `me/recent` returns the current user's latest individual AI Token usage records, with 20 items by default and at most 50.
+- `next_cursor` is opaque. A `null` value means there is no next page.
+- When `metering_status` is `unavailable`, Token fields are `null` and cannot be inferred from Credits.
+- Both endpoints derive identity only from the current `user_token`; query parameters do not accept `user_id` or `bureau_id`.
 
 ### payment
 

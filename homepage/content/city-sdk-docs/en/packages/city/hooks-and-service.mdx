@@ -135,6 +135,10 @@ const usage = await user.service("usage").get("me", {
   timezone: "America/Los_Angeles",
 });
 
+const recent_usage = await user.service("usage").get("me/recent", {
+  limit: 20,
+});
+
 const methods = await guest.service("payment").get("methods");
 
 const checkout = await user.service("payment").action("checkout/create").invoke({
