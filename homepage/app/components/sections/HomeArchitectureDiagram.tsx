@@ -86,7 +86,7 @@ export function HomeArchitectureDiagram() {
   });
 
   return (
-    <section className="border-t border-line bg-background py-20 md:py-28">
+    <section id="architecture" className="scroll-mt-16 border-t border-line bg-background py-20 md:py-28">
       <div className="mx-auto max-w-[1600px] px-5 md:px-8 lg:px-20">
         <div className="mb-12 max-w-3xl md:mb-16">
           <p className="mb-4 text-[0.78rem] font-medium uppercase text-text-soft">

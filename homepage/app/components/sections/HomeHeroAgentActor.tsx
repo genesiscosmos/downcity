@@ -1,7 +1,7 @@
 /**
  * Hero 舞台中独立于场景的主角 Ghost 演员层。
  *
- * 页面静止在 Hero 顶部时，内层 Ghost 沿与建筑立面匹配的折线路径活动；滚动开始后，
+ * 页面静止在 Hero 顶部时，内层 Ghost 沿道路水平活动；滚动开始后，
  * 自主位移立即收束到原点，由外层共享滚动坐标完整接管。城市与 Product World 因此
  * 只负责绘制环境，不拥有主角的生命周期。
  */
@@ -12,23 +12,15 @@ import { HomeGhostGlyph } from "@/components/shared/HomeGhostGlyph";
 import type { HomeHeroAgentActorProps } from "@/types/home/HomeGhost";
 
 const idle_progress_threshold = 0.001;
+const city_agent_size = 22;
 
-/** 不同居民与所在建筑匹配的水平活动路径。 */
+/** 不同居民在道路上的水平活动路径。 */
 const agent_idle_x_routes: Record<string, number[]> = {
-  blue: [0, 24, 24, 24, 24, 24, -18, -18, 0, 0],
-  green: [0, 0, 0, 54, 54, 0, 0, 0, 0, 0],
-  rust: [0, 34, 34, 34, 34, -28, -28, 0, 0, 0],
-  violet: [0, 34, 34, 34, 34, -16, -16, 0, 0, 0],
-  red: [0, -4, -4, -4, -4, -38, -38, 0, 0, 0],
-};
-
-/** 不同居民与所在建筑匹配的上下楼活动路径。 */
-const agent_idle_y_routes: Record<string, number[]> = {
-  blue: [0, 0, -54, -74, -74, -74, 0, 0, 0, 0],
-  green: [0, 46, 118, 118, 118, 118, 46, 0, 0, 0],
-  rust: [0, 0, -30, -30, -30, 0, 0, 0, 0, 0],
-  violet: [0, 0, -34, -54, -54, 0, 0, 0, 0, 0],
-  red: [0, 0, -44, -68, -68, 0, 0, 0, 0, 0],
+  blue: [0, 18, 18, 18, 18, -12, -12, -12, 0, 0],
+  green: [0, -16, -16, -16, 20, 20, 20, 0, 0, 0],
+  rust: [0, 22, 22, 22, 22, -14, -14, 0, 0, 0],
+  violet: [0, 16, 16, 16, -18, -18, -18, 0, 0, 0],
+  red: [0, -18, -18, -18, 14, 14, 14, 0, 0, 0],
 };
 
 const idle_keyframe_times = [0, 0.12, 0.27, 0.36, 0.44, 0.58, 0.68, 0.79, 0.9, 1];
@@ -62,7 +54,6 @@ export function HomeHeroAgentActor({
 
   const can_roam_city = is_city_idle && !reduce_motion;
   const idle_x_route = get_idle_route(agent_idle_x_routes, ghost_key);
-  const idle_y_route = get_idle_route(agent_idle_y_routes, ghost_key);
 
   return (
     <motion.g
@@ -78,7 +69,7 @@ export function HomeHeroAgentActor({
     >
       <motion.g
         data-home-hero-agent-roaming=""
-        animate={can_roam_city ? { x: idle_x_route, y: idle_y_route } : { x: 0, y: 0 }}
+        animate={can_roam_city ? { x: idle_x_route } : { x: 0 }}
         transition={can_roam_city
           ? {
               duration: 13.5,
@@ -94,12 +85,12 @@ export function HomeHeroAgentActor({
         <motion.ellipse
           cx="0"
           cy="15"
-          rx="18"
-          ry="5"
+          rx="15"
+          ry="4"
           fill={accent}
           style={{ opacity: shadow_opacity }}
         />
-        <HomeGhostGlyph center_x={0} center_y={0} size={28} accent={accent} />
+        <HomeGhostGlyph center_x={0} center_y={0} size={city_agent_size} accent={accent} />
       </motion.g>
     </motion.g>
   );

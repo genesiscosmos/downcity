@@ -3,8 +3,11 @@
     "title": "Downcity",
     "start": "快速开始",
     "docs": "查看文档",
+    "startAgent": "启动一个 Agent",
+    "createCity": "创建一座 City",
+    "exploreArchitecture": "查看架构",
     "cityStage": {
-      "label": "一座由建筑正立面、窗口、连廊与 Agent 居民组成的 Downcity 城市，选择其中一个 Agent 继续探索。",
+      "label": "一张 Downcity 城市立面图：Agent Harness 运行在由 Workspace、Files、Shell 与 Services 组成的 City Environment Context 中。",
       "selectLabel": "选择一个进入产品世界的 Agent",
       "cityLabel": "Downcity · Agent City",
       "selectHint": "选择一位居民"

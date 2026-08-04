@@ -68,6 +68,7 @@ export function Navbar() {
   const locale = use_interface_locale();
   const t = i18n.getFixedT(locale, "common");
   const isZh = locale === "zh";
+  const is_home_page = location.pathname === "/" || location.pathname === "/zh";
 
   const change_language = (next_locale: "en" | "zh") => {
     persist_interface_locale(next_locale);
@@ -154,7 +155,7 @@ export function Navbar() {
     "inline-flex size-8 items-center justify-center rounded-md text-text-soft transition-colors hover:bg-foreground/[0.04] hover:text-foreground";
 
   const dropdownContentClass =
-    "rounded-[18px] border border-line bg-surface-overlay p-1 shadow-none backdrop-blur-xl";
+    "max-h-[calc(100svh-5rem)] rounded-[18px] border border-line bg-surface-overlay p-1 shadow-none backdrop-blur-xl";
   const dropdownItemClass =
     "group/dropdown-menu-item relative flex items-start gap-3 rounded-lg px-3 py-2 text-[0.8125rem] font-medium text-foreground outline-none transition-colors hover:!bg-surface-muted focus:!bg-surface-muted data-[highlighted]:!bg-surface-muted";
   const dropdownItemIconClass =
@@ -170,7 +171,8 @@ export function Navbar() {
   return (
     <header
       className={cn(
-        "sticky top-0 z-50 w-full bg-background/[0.86] backdrop-blur-[16px] transition-transform focus-within:translate-y-0 motion-reduce:transition-none",
+        "top-0 z-50 w-full bg-background/[0.86] backdrop-blur-[16px] transition-transform focus-within:translate-y-0 motion-reduce:transition-none",
+        is_home_page ? "fixed inset-x-0" : "sticky",
         header_visible
           ? "translate-y-0 duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
           : "-translate-y-full duration-150 ease-[cubic-bezier(0.55,0,1,0.45)]",

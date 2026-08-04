@@ -7,21 +7,26 @@
 
 import type { KeyboardEvent } from "react";
 import { motion, useReducedMotion } from "framer-motion";
+import { Link } from "react-router";
 import { HomeGhostGlyph } from "@/components/shared/HomeGhostGlyph";
 import { home_ghosts } from "@/lib/home-ghosts";
+import type { InterfaceLocale } from "@/types/interface-locale";
 import type { HomeHeroCityStageProps } from "@/types/home/HomeGhost";
 
 /** 五位可选 Agent 在统一 1200×720 坐标系中的城市位置。 */
 export const home_hero_agent_positions = {
-  blue: { x: 238, y: 610 },
-  green: { x: 468, y: 502 },
-  rust: { x: 642, y: 620 },
-  violet: { x: 866, y: 610 },
-  red: { x: 1052, y: 610 },
+  blue: { x: 238, y: 633 },
+  green: { x: 468, y: 633 },
+  rust: { x: 642, y: 633 },
+  violet: { x: 866, y: 633 },
+  red: { x: 1052, y: 633 },
 } as const;
 
+/** 将道路基线从 646 下移到 720，使 City 立面贴住共享 SVG 舞台底部。 */
+export const home_hero_city_floor_offset = 74;
+
 const facade_buildings = [
-  { key: "west_home", x: -12, width: 76, top_y: 574, accent: "#557b70", kind: "house", rows: 1, columns: 2 },
+  { key: "west_home", x: -82, width: 146, top_y: 574, accent: "#557b70", kind: "house", rows: 1, columns: 3 },
   { key: "west_greenhouse", x: 78, width: 66, top_y: 592, accent: "#557b70", kind: "greenhouse", rows: 1, columns: 2 },
   { key: "studio", x: 194, width: 86, top_y: 520, accent: "#4f6f9f", kind: "studio", rows: 3, columns: 2 },
   { key: "studio_annex", x: 292, width: 58, top_y: 578, accent: "#716a9f", kind: "workshop", rows: 1, columns: 2 },
@@ -31,21 +36,88 @@ const facade_buildings = [
   { key: "greenhouse", x: 780, width: 66, top_y: 590, accent: "#557b70", kind: "greenhouse", rows: 1, columns: 2 },
   { key: "workshop", x: 858, width: 96, top_y: 548, accent: "#b45d4c", kind: "workshop", rows: 2, columns: 3 },
   { key: "east_studio", x: 1010, width: 76, top_y: 526, accent: "#716a9f", kind: "studio", rows: 3, columns: 2 },
-  { key: "east_home", x: 1122, width: 90, top_y: 572, accent: "#557b70", kind: "house", rows: 1, columns: 2 },
+  { key: "east_home", x: 1122, width: 160, top_y: 572, accent: "#557b70", kind: "house", rows: 1, columns: 3 },
 ] as const;
 
 const ambient_agents = [
-  { key: "a01", x: 44, y: 616, size: 15, accent: "#557b70" },
-  { key: "a02", x: 118, y: 616, size: 13, accent: "#9a6b5d" },
-  { key: "a03", x: 246, y: 556, size: 13, accent: "#4f6f9f" },
-  { key: "a04", x: 332, y: 616, size: 14, accent: "#716a9f" },
-  { key: "a05", x: 474, y: 516, size: 13, accent: "#557b70" },
-  { key: "a06", x: 550, y: 616, size: 13, accent: "#9a6b5d" },
-  { key: "a07", x: 744, y: 616, size: 14, accent: "#4f6f9f" },
-  { key: "a08", x: 910, y: 584, size: 13, accent: "#b45d4c" },
-  { key: "a09", x: 1048, y: 566, size: 13, accent: "#716a9f" },
-  { key: "a10", x: 1172, y: 616, size: 14, accent: "#557b70" },
+  { key: "a01", x: 70, y: 633 },
+  { key: "a02", x: 132, y: 633 },
+  { key: "a03", x: 316, y: 633 },
+  { key: "a04", x: 404, y: 633 },
+  { key: "a05", x: 566, y: 633 },
+  { key: "a06", x: 716, y: 633 },
+  { key: "a07", x: 804, y: 633 },
+  { key: "a08", x: 934, y: 633 },
+  { key: "a09", x: 1118, y: 633 },
+  { key: "a10", x: 1180, y: 633 },
 ] as const;
+
+const city_agent_size = 22;
+const secondary_agent_accent = "var(--color-text-subtle)";
+const agent_tag_background = "#e2b9af";
+const environment_tag_background = "#e6c596";
+const facade_tag_foreground = "#422e39";
+
+/** 按建筑位置映射到真实产品与 Service Plugin 文档入口。 */
+const facade_tags = [
+  { key: "agent_harness", label: "AGENT HARNESS", x: 150, y: 430, width: 132, kind: "agent", path: "agent-sdk-docs" },
+  { key: "cli", label: "CLI", x: 300, y: 430, width: 54, kind: "agent", path: "city-sdk-docs/packages/cli" },
+  { key: "city", label: "CITY", x: 439, y: 430, width: 60, kind: "environment", path: "city-sdk-docs" },
+  { key: "memory", label: "MEMORY", x: 512, y: 430, width: 76, kind: "environment", path: "plugins-docs/builtins/memory" },
+  { key: "task", label: "TASK", x: 709, y: 430, width: 56, kind: "environment", path: "plugins-docs/builtins/task" },
+  { key: "skill", label: "SKILL", x: 784, y: 430, width: 58, kind: "environment", path: "plugins-docs/builtins/skill" },
+  { key: "shell", label: "SHELL", x: 873, y: 430, width: 66, kind: "environment", path: "plugins-docs/builtins/shell" },
+  { key: "chat", label: "CHAT", x: 1019, y: 430, width: 58, kind: "environment", path: "plugins-docs/builtins/chat" },
+] as const;
+
+/** 绘制贴合单栋建筑位置、可键盘访问的产品链接。 */
+function render_facade_tag(tag: (typeof facade_tags)[number], locale: InterfaceLocale) {
+  const background = tag.kind === "agent" ? agent_tag_background : environment_tag_background;
+  return (
+    <Link key={tag.key} to={`/${locale}/${tag.path}`} className="group outline-none">
+      <g transform={`translate(${tag.x} ${tag.y})`} className="cursor-pointer opacity-90 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">
+        <title>{tag.label}</title>
+        <rect width={tag.width} height="18" rx="9" fill={background} />
+        <rect width={tag.width} height="18" rx="9" fill="none" stroke={facade_tag_foreground} strokeWidth="1.5" vectorEffect="non-scaling-stroke" className="opacity-0 transition-opacity duration-150 group-focus-visible:opacity-100" />
+        <text x={(tag.width - 14) / 2} y="12" textAnchor="middle" fill={facade_tag_foreground} className="pointer-events-none text-[7px] font-semibold" style={{ letterSpacing: "0.06em" }}>
+          {tag.label}
+        </text>
+        <g transform={`translate(${tag.width - 12} 9)`} className="pointer-events-none">
+          <path
+            d="M0 0 H6 M3 -3 L6 0 L3 3"
+            fill="none"
+            stroke={facade_tag_foreground}
+            strokeWidth="1.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="-translate-x-0.5 opacity-0 transition-[opacity,transform] duration-150 ease-out group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 motion-reduce:translate-x-0 motion-reduce:transition-none"
+          />
+        </g>
+      </g>
+    </Link>
+  );
+}
+
+/** 为背景居民生成错开的缓慢活动轨迹，避免整齐同步。 */
+function get_ambient_agent_motion(agent_index: number) {
+  const direction = agent_index % 2 === 0 ? 1 : -1;
+  const distance = 7 + (agent_index % 3) * 3;
+  return {
+    x: [0, direction * distance, direction * distance, direction * -4, 0],
+    duration: 9.5 + (agent_index % 4) * 1.4,
+    delay: agent_index * -0.72,
+  };
+}
+
+/** 为可切换居民生成道路上的轻量活动轨迹。 */
+function get_selectable_agent_motion(agent_index: number) {
+  const direction = agent_index % 2 === 0 ? 1 : -1;
+  return {
+    x: [0, direction * 12, direction * 12, direction * -6, 0],
+    duration: 11 + agent_index * 0.8,
+    delay: agent_index * -1.1,
+  };
+}
 
 /** 生成不同建筑类型的正面屋顶轮廓。 */
 function get_building_path(building: (typeof facade_buildings)[number]) {
@@ -127,64 +199,82 @@ function handle_agent_key_down(event: KeyboardEvent<SVGGElement>, ghost_key: str
 }
 
 /** 渲染与产品世界共享坐标系的城市正立面。 */
-export function HomeHeroCityStage({ selected_ghost_key, on_select_ghost, city_opacity, city_y, city_scale }: HomeHeroCityStageProps) {
+export function HomeHeroCityStage({ locale, selected_ghost_key, on_select_ghost, city_opacity, city_y, city_scale }: HomeHeroCityStageProps) {
   const reduce_motion = useReducedMotion();
 
   return (
-    <motion.g style={{ opacity: city_opacity, y: city_y, scale: city_scale, transformOrigin: "600px 646px", willChange: "transform, opacity" }}>
-      <g aria-hidden="true" className="pointer-events-none">
-        <ellipse cx="600" cy="668" rx="650" ry="42" fill="#4f6f9f" fillOpacity="0.018" />
-        {facade_buildings.map(render_building)}
-        <path d="M-40 646 H1240 M-40 660 H1240" className="stroke-line-strong" strokeWidth="1.2" />
-        <path d="M-30 681 H1230" className="stroke-line" strokeDasharray="24 20" />
-        <path d="M280 574 H322 V584 H280 M954 578 H1010 V588 H954" fill="var(--color-background)" className="stroke-line" />
-        <g className="fill-none stroke-line-strong" strokeOpacity="0.55">
-          <path d="M596 646 V608 H688 V646" />
-          <path d="M612 608 Q642 586 672 608" />
-          <path d="M620 629 H664 M628 629 V638 M656 629 V638" />
-        </g>
-        <g fill="#557b70" fillOpacity="0.08" stroke="#557b70" strokeOpacity="0.28">
-          <circle cx="376" cy="631" r="12" /><circle cx="394" cy="634" r="9" />
-          <circle cx="972" cy="633" r="11" /><circle cx="990" cy="636" r="8" />
-        </g>
-        {[34, 166, 372, 548, 684, 752, 974, 1102, 1192].map(render_street_detail)}
-        <g fill="#557b70" fillOpacity="0.12" stroke="#557b70" strokeOpacity="0.3">
-          {[188, 206, 1016, 1040].map((x) => <circle key={x} cx={x} cy="638" r={x % 2 === 0 ? 10 : 7} />)}
-        </g>
-      </g>
-
-      <g aria-hidden="true" className="pointer-events-none">
-        {ambient_agents.map((agent) => (
-          <g key={agent.key} opacity="0.46">
-            <HomeGhostGlyph center_x={agent.x} center_y={agent.y} size={agent.size} accent={agent.accent} />
+    <motion.g style={{ opacity: city_opacity, y: city_y, scale: city_scale, transformOrigin: "600px 720px", willChange: "transform, opacity" }}>
+      <g transform={`translate(0 ${home_hero_city_floor_offset})`}>
+        <g aria-hidden="true" className="pointer-events-none">
+          {facade_buildings.map(render_building)}
+          <path d="M-180 645.5 H1380" className="stroke-line-strong" strokeWidth="1.2" />
+          <path d="M280 574 H322 V584 H280 M954 578 H1010 V588 H954" fill="var(--color-background)" className="stroke-line" />
+          <g className="fill-none stroke-line-strong" strokeOpacity="0.55">
+            <path d="M596 646 V608 H688 V646" />
+            <path d="M612 608 Q642 586 672 608" />
+            <path d="M620 629 H664 M628 629 V638 M656 629 V638" />
           </g>
-        ))}
-      </g>
+          <g fill="#557b70" fillOpacity="0.08" stroke="#557b70" strokeOpacity="0.28">
+            <circle cx="376" cy="631" r="12" /><circle cx="394" cy="634" r="9" />
+            <circle cx="972" cy="633" r="11" /><circle cx="990" cy="636" r="8" />
+          </g>
+          {[34, 166, 372, 548, 684, 752, 974, 1102, 1192].map(render_street_detail)}
+          <g fill="#557b70" fillOpacity="0.12" stroke="#557b70" strokeOpacity="0.3">
+            {[188, 206, 1016, 1040].map((x) => <circle key={x} cx={x} cy="638" r={x % 2 === 0 ? 10 : 7} />)}
+          </g>
+        </g>
 
-      <g role="group" aria-label="Choose an Agent">
-        {home_ghosts.filter((ghost) => ghost.key !== selected_ghost_key).map((ghost) => {
-          const position = home_hero_agent_positions[ghost.key as keyof typeof home_hero_agent_positions];
-          return (
-            <motion.g
-              key={ghost.key}
-              role="button"
-              tabIndex={0}
-              aria-label={ghost.aria_label}
-              aria-pressed="false"
-              className="cursor-pointer outline-none"
-              onClick={() => on_select_ghost(ghost.key)}
-              onKeyDown={(event: KeyboardEvent<SVGGElement>) => handle_agent_key_down(event, ghost.key, on_select_ghost)}
-              style={{ transformOrigin: `${position.x}px ${position.y}px` }}
-              initial={{ opacity: 0.48 }}
-              whileHover={reduce_motion ? undefined : { scale: 1.15, y: -4, opacity: 1 }}
-              whileFocus={reduce_motion ? undefined : { scale: 1.15, y: -4, opacity: 1 }}
-              transition={{ duration: reduce_motion ? 0 : 0.2, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <ellipse cx={position.x} cy={position.y + 13} rx="16" ry="4" fill={ghost.accent} fillOpacity="0.08" />
-              <HomeGhostGlyph center_x={position.x} center_y={position.y} size={26} accent={ghost.accent} />
-            </motion.g>
-          );
-        })}
+        <g role="group" aria-label={locale === "zh" ? "Downcity 产品文档" : "Downcity product documentation"}>
+          {facade_tags.map((tag) => render_facade_tag(tag, locale))}
+        </g>
+
+        <g aria-hidden="true" className="pointer-events-none">
+          {ambient_agents.map((agent, agent_index) => {
+            const agent_motion = get_ambient_agent_motion(agent_index);
+            return (
+              <motion.g
+                key={agent.key}
+                opacity="0.48"
+                animate={reduce_motion ? undefined : { x: agent_motion.x }}
+                transition={reduce_motion ? undefined : { duration: agent_motion.duration, delay: agent_motion.delay, ease: "easeInOut", repeat: Infinity }}
+              >
+                <HomeGhostGlyph center_x={agent.x} center_y={agent.y} size={city_agent_size} accent={secondary_agent_accent} />
+              </motion.g>
+            );
+          })}
+        </g>
+
+        <g role="group" aria-label="Choose an Agent">
+          {home_ghosts.filter((ghost) => ghost.key !== selected_ghost_key).map((ghost, agent_index) => {
+            const position = home_hero_agent_positions[ghost.key as keyof typeof home_hero_agent_positions];
+            const agent_motion = get_selectable_agent_motion(agent_index);
+            return (
+              <motion.g
+                key={ghost.key}
+                animate={reduce_motion ? undefined : { x: agent_motion.x }}
+                transition={reduce_motion ? undefined : { duration: agent_motion.duration, delay: agent_motion.delay, ease: "easeInOut", repeat: Infinity }}
+              >
+                <motion.g
+                  role="button"
+                  tabIndex={0}
+                  aria-label={ghost.aria_label}
+                  aria-pressed="false"
+                  className="cursor-pointer outline-none"
+                  opacity="0.54"
+                  onClick={() => on_select_ghost(ghost.key)}
+                  onKeyDown={(event: KeyboardEvent<SVGGElement>) => handle_agent_key_down(event, ghost.key, on_select_ghost)}
+                  style={{ transformOrigin: `${position.x}px ${position.y}px` }}
+                  whileHover={reduce_motion ? undefined : { opacity: 0.82 }}
+                  whileFocus={reduce_motion ? undefined : { opacity: 0.82 }}
+                  transition={{ duration: reduce_motion ? 0 : 0.2, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <ellipse cx={position.x} cy={position.y + 13} rx="15" ry="4" fill={secondary_agent_accent} fillOpacity="0.08" />
+                  <HomeGhostGlyph center_x={position.x} center_y={position.y} size={city_agent_size} accent={secondary_agent_accent} />
+                </motion.g>
+              </motion.g>
+            );
+          })}
+        </g>
       </g>
     </motion.g>
   );

@@ -6,12 +6,13 @@
  */
 
 import type { MotionValue } from "framer-motion";
+import type { InterfaceLocale } from "@/types/interface-locale";
 
 /** 首页中可被选择并贯穿完整滚动动画的 Ghost 定义。 */
 export interface HomeGhostDefinition {
   /** Ghost 的稳定标识，用于保存当前选择。 */
   key: string;
-  /** Ghost 的身份色，在城市与产品世界中保持一致。 */
+  /** Ghost 成为当前主角后，在 Hero 与产品世界中使用的强调色。 */
   accent: string;
   /** 提供给屏幕阅读器的可访问名称。 */
   aria_label: string;
@@ -33,6 +34,8 @@ export interface HomeGhostGlyphProps {
 
 /** Hero 城市正立面绘图层参数。 */
 export interface HomeHeroCityStageProps {
+  /** 用于生成对应中英文产品文档入口的当前界面语言。 */
+  locale: InterfaceLocale;
   /** 当前作为滚动主角的 Ghost 标识。 */
   selected_ghost_key: string;
   /** 用户选择城市居民时触发的状态更新函数。 */

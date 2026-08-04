@@ -3,8 +3,11 @@
     "title": "Downcity",
     "start": "Quick Start",
     "docs": "Read Docs",
+    "startAgent": "Start an Agent",
+    "createCity": "Create a City",
+    "exploreArchitecture": "Explore the architecture",
     "cityStage": {
-      "label": "A living Downcity elevation made of building facades, windows, bridges, and Agent residents. Choose one Agent to continue.",
+      "label": "A Downcity elevation showing an Agent Harness operating within a City Environment Context made of workspace, files, shell, and services.",
       "selectLabel": "Choose an Agent to enter the product world",
       "cityLabel": "Downcity · Agent City",
       "selectHint": "Choose a resident"

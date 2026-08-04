@@ -8,12 +8,12 @@
 
 import { useRef, useState } from "react";
 import { Link } from "react-router";
-import { IconArrowRight, IconBook } from "@tabler/icons-react";
+import { IconArrowRight } from "@tabler/icons-react";
 import { motion, useReducedMotion, useTransform } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 import { HomeHeroAgentActor } from "@/components/sections/HomeHeroAgentActor";
-import { HomeHeroCityStage, home_hero_agent_positions } from "@/components/sections/HomeHeroCityStage";
+import { HomeHeroCityStage, home_hero_agent_positions, home_hero_city_floor_offset } from "@/components/sections/HomeHeroCityStage";
 import { HomeProductWorldSection } from "@/components/sections/HomeProductWorldSection";
 import { default_home_ghost, home_ghosts } from "@/lib/home-ghosts";
 import { homepage_positioning } from "@/lib/homepage-positioning";
@@ -32,15 +32,20 @@ export function HomeHeroWorldSection() {
 
   const selected_ghost = home_ghosts.find((ghost) => ghost.key === selected_ghost_key) ?? default_home_ghost;
   const start_position = home_hero_agent_positions[selected_ghost.key as keyof typeof home_hero_agent_positions];
+  const start_position_y = start_position.y + home_hero_city_floor_offset;
   const is_zh = locale === "zh";
-  const start_path = is_zh ? "/zh/start" : "/start";
-  const docs_path = is_zh ? "/zh/docs" : "/en/docs";
+  const agent_start_path = is_zh
+    ? "/zh/agent-sdk-docs/local-agent/quickstart"
+    : "/en/agent-sdk-docs/local-agent/quickstart";
+  const city_start_path = is_zh
+    ? "/zh/city-sdk-docs/quickstart/create-city"
+    : "/en/city-sdk-docs/quickstart/create-city";
 
   const hero_dom_track_y = useTransform(world_progress, [0, 0.34], ["0svh", "-100svh"]);
   const hero_scene_track_y = useTransform(world_progress, [0, 0.34], [0, -720]);
 
   const agent_x = useTransform(world_progress, [0, 0.34], [start_position.x, 600]);
-  const agent_y = useTransform(world_progress, [0, 0.34], [start_position.y - 720, 360]);
+  const agent_y = useTransform(world_progress, [0, 0.34], [start_position_y - 720, 360]);
   const agent_scale = useTransform(world_progress, [0, 0.34, 0.43, 0.56, 0.68, 0.82, 1], [1, 1, 2.18, 2.24, 1.35, 0.7, 0.45]);
   const agent_shadow_opacity = useTransform(world_progress, [0, 0.34, 0.44, 0.62, 0.82, 1], [0.12, 0.12, 0.22, 0.18, 0.12, 0.08]);
 
@@ -88,16 +93,15 @@ export function HomeHeroWorldSection() {
             className="pointer-events-none absolute inset-x-0 top-0 z-20 h-[200svh]"
             style={{ y: reduce_motion ? "0svh" : hero_dom_track_y, willChange: reduce_motion ? undefined : "transform" }}
           >
-            <div className="pointer-events-none absolute inset-0 opacity-30" style={{ backgroundImage: "linear-gradient(to right, var(--color-line) 1px, transparent 1px), linear-gradient(to bottom, var(--color-line) 1px, transparent 1px)", backgroundSize: "56px 56px", maskImage: "linear-gradient(to bottom, transparent, black 8%, black 92%, transparent)" }} />
-
             <div className="pointer-events-auto absolute inset-x-5 top-[9svh] mx-auto max-w-4xl text-center md:inset-x-8 md:top-[10svh]">
               <h1 className="font-serif text-[clamp(2.75rem,7vw,5.5rem)] font-bold leading-none text-foreground">{t("hero.title")}</h1>
               <p className="mx-auto mt-5 max-w-3xl text-[clamp(1.05rem,2vw,1.45rem)] font-medium leading-snug text-foreground">{positioning.hero_headline}</p>
               <p className="mx-auto mt-3 max-w-2xl text-sm leading-[1.75] text-text-soft md:text-base">{positioning.hero_description}</p>
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                <Link to={start_path} className="inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity duration-200 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("hero.start")}<IconArrowRight className="size-4" strokeWidth={1.7} /></Link>
-                <Link to={docs_path} className="inline-flex h-11 items-center gap-2 rounded-lg border border-line bg-background px-5 text-sm font-semibold text-foreground transition-colors duration-200 hover:border-line-strong hover:bg-surface-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><IconBook className="size-4" strokeWidth={1.6} />{t("hero.docs")}</Link>
+                <Link to={agent_start_path} className="inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity duration-200 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("hero.startAgent")}<IconArrowRight className="size-4" strokeWidth={1.7} /></Link>
+                <Link to={city_start_path} className="inline-flex h-11 items-center gap-2 rounded-lg border border-line bg-background px-5 text-sm font-semibold text-foreground transition-colors duration-200 hover:border-line-strong hover:bg-surface-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("hero.createCity")}<IconArrowRight className="size-4" strokeWidth={1.6} /></Link>
               </div>
+              <a href="#architecture" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-text-soft transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("hero.exploreArchitecture")}<IconArrowRight className="size-3.5" strokeWidth={1.6} /></a>
             </div>
 
             <p className="pointer-events-none absolute inset-x-5 top-[calc(100svh-2.75rem)] z-20 text-center text-[0.65rem] font-medium uppercase tracking-[0.16em] text-text-subtle md:inset-x-8">{t("hero.cityStage.selectHint")}</p>
@@ -107,9 +111,9 @@ export function HomeHeroWorldSection() {
           <p className="sr-only">{t("productWorld.description")}</p>
 
           <div className="absolute inset-0 z-10 flex items-center justify-center">
-            <svg viewBox="0 0 1200 720" preserveAspectRatio="xMidYMid meet" className="h-full w-[190vw] max-w-none shrink-0 md:w-full" role="img" aria-label={`${t("hero.cityStage.label")} ${t("productWorld.description")}`}>
+            <svg viewBox="0 0 1200 720" preserveAspectRatio="xMidYMax meet" overflow="visible" className="h-full w-[190vw] max-w-none shrink-0 md:w-full" role="img" aria-label={`${t("hero.cityStage.label")} ${t("productWorld.description")}`}>
               <motion.g style={{ y: reduce_motion ? 0 : hero_scene_track_y, willChange: reduce_motion ? undefined : "transform" }}>
-                <HomeHeroCityStage selected_ghost_key={selected_ghost_key} on_select_ghost={set_selected_ghost_key} city_opacity={1} city_y={0} city_scale={1} />
+                <HomeHeroCityStage locale={locale} selected_ghost_key={selected_ghost_key} on_select_ghost={set_selected_ghost_key} city_opacity={1} city_y={0} city_scale={1} />
 
                 <g transform={reduce_motion ? "translate(0 0)" : "translate(0 720)"}>
                   <motion.g className="pointer-events-none" style={{ scale: reduce_motion ? 1 : world_camera_scale, transformOrigin: "600px 360px", willChange: "transform" }}>
@@ -136,7 +140,7 @@ export function HomeHeroWorldSection() {
                     ghost_key={selected_ghost.key}
                     accent={selected_ghost.accent}
                     agent_x={reduce_motion ? start_position.x : agent_x}
-                    agent_y={reduce_motion ? start_position.y : agent_y}
+                    agent_y={reduce_motion ? start_position_y : agent_y}
                     agent_scale={reduce_motion ? 1 : agent_scale}
                     shadow_opacity={reduce_motion ? 0.12 : agent_shadow_opacity}
                     scroll_progress={world_progress}
