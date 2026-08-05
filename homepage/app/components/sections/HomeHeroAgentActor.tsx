@@ -15,8 +15,8 @@ const idle_progress_threshold = 0.001;
 const city_agent_size = 22;
 
 /** 主角在城市道路上的固定生活轨迹。 */
-const agent_idle_x_route = [0, 18, 18, 18, 18, -12, -12, -12, 0, 0];
-const idle_keyframe_times = [0, 0.12, 0.27, 0.36, 0.44, 0.58, 0.68, 0.79, 0.9, 1];
+const agent_idle_x_route = [0, 160, 160, 160, -100, -100, -100, 0, 0];
+const idle_keyframe_times = [0, 0.2, 0.28, 0.34, 0.64, 0.72, 0.78, 0.94, 1];
 
 /** 渲染可在城市生活状态和滚动叙事状态间连续切换的主角。 */
 export function HomeHeroAgentActor({
@@ -57,7 +57,7 @@ export function HomeHeroAgentActor({
         animate={can_roam_city ? { x: agent_idle_x_route } : { x: 0 }}
         transition={can_roam_city
           ? {
-              duration: 13.5,
+              duration: 16,
               ease: "easeInOut",
               repeat: Infinity,
               times: idle_keyframe_times,
