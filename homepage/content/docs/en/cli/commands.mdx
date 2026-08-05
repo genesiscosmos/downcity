@@ -120,8 +120,9 @@ per-user detail views.
 
 The Usage Dashboard uses the browser's IANA timezone. DAU counts unique users with at least one
 AI Usage record today; WAU and MAU use rolling 7-day and 30-day windows. The user-usage view lists
-all registered users, including users with zero usage, and supports sorting by calls, tokens,
-Credits, P95 duration, and last activity. Each row includes input, output, and total tokens, success
+all registered users, including users with zero usage. It defaults to descending Total Tokens—the
+same metric as the overview's token-consumption ranking—and also supports sorting by calls, Credits,
+P95 duration, and last activity. Each row includes input, output, and total tokens, success
 rate, top model, duration, and applied Credits consumption. Charts cover DAU/WAU/MAU, local-hour
 activity, stacked token composition, model/action distribution, outcomes, latency, and
 D1/D3/D7/D14/D30 cohort retention.

@@ -106,8 +106,8 @@ async function render_overview() {
   ]);
   const calls_chart = mixed_daily_chart(usage.days);
   const top_users = await api(analytics_url("users"));
-  const ranking = top_users.items.slice(0, 6).map((item, index) => `<div class="ranking-row"><span class="rank">${index + 1}</span><div class="ranking-user"><strong>${escape_html(item.email || item.user_id)}</strong><small>${escape_html(item.top_model_id || "暂无模型")}</small></div><div class="ranking-value"><strong>${compact_number(item.total_tokens)}</strong><small>${number(item.execution_count)} calls</small></div></div>`).join("") || `<div class="empty compact-empty">暂无活跃用户</div>`;
-  content.innerHTML = `${metric_cards(metrics)}<div class="analytics-grid wide-left">${panel("活跃用户趋势", activity_chart, usage.timezone)}${panel("高消耗用户", ranking, "TOP 6")}</div><div class="analytics-grid">${panel("调用与成功率", calls_chart, range.options[range.selectedIndex].text)}${panel("Token 构成", stacked_chart(usage.days, [["未缓存输入", "uncached_input_tokens", "#2563eb"], ["缓存输入", "cached_input_tokens", "#60a5fa"], ["输出", "output_tokens", "#8b5cf6"], ["推理", "reasoning_tokens", "#c4b5fd"]]), "STACKED")}</div>`;
+  const ranking = sort_usage_users(top_users.items, "total_tokens").slice(0, 6).map((item, index) => `<div class="ranking-row"><span class="rank">${index + 1}</span><div class="ranking-user"><strong>${escape_html(item.email || item.user_id)}</strong><small>${escape_html(item.top_model_id || "暂无模型")}</small></div><div class="ranking-value"><strong>${compact_number(item.total_tokens)}</strong><small>${number(item.execution_count)} calls</small></div></div>`).join("") || `<div class="empty compact-empty">暂无活跃用户</div>`;
+  content.innerHTML = `${metric_cards(metrics)}<div class="analytics-grid wide-left">${panel("活跃用户趋势", activity_chart, usage.timezone)}${panel("Token 消耗排行", ranking, "TOTAL TOKENS · TOP 6")}</div><div class="analytics-grid">${panel("调用与成功率", calls_chart, range.options[range.selectedIndex].text)}${panel("Token 构成", stacked_chart(usage.days, [["未缓存输入", "uncached_input_tokens", "#2563eb"], ["缓存输入", "cached_input_tokens", "#60a5fa"], ["输出", "output_tokens", "#8b5cf6"], ["推理", "reasoning_tokens", "#c4b5fd"]]), "STACKED")}</div>`;
 }
 
 async function render_activity() {
@@ -215,7 +215,7 @@ async function render_usage_users() {
   const data = await api(analytics_url("users"));
   state.usage_users = data.items;
   state.usage_page = 1;
-  content.innerHTML = `<div class="toolbar"><div class="search-field"><span>⌕</span><input id="usage-search" placeholder="搜索邮箱或 user_id"></div><select id="usage-sort"><option value="execution_count">按调用量</option><option value="total_tokens">按 Token</option><option value="credits_used">按 Credits</option><option value="p95_duration_ms">按 P95 耗时</option><option value="last_active_at">按最后活跃</option></select><span class="badge">${data.items.length} USERS</span></div><div id="usage-table"></div><div id="usage-drawer"></div>`;
+  content.innerHTML = `<div class="toolbar"><div class="search-field"><span>⌕</span><input id="usage-search" placeholder="搜索邮箱或 user_id"></div><select id="usage-sort"><option value="total_tokens">按 Token 消耗</option><option value="credits_used">按 Credits 消耗</option><option value="execution_count">按调用量</option><option value="p95_duration_ms">按 P95 耗时</option><option value="last_active_at">按最后活跃</option></select><span class="badge">${data.items.length} USERS</span></div><div id="usage-table"></div><div id="usage-drawer"></div>`;
   document.querySelector("#usage-search").addEventListener("input", () => { state.usage_page = 1; render_usage_table(); });
   document.querySelector("#usage-sort").addEventListener("change", () => { state.usage_page = 1; render_usage_table(); });
   render_usage_table();
@@ -223,8 +223,11 @@ async function render_usage_users() {
 
 function render_usage_table() {
   const query = value("usage-search").toLowerCase();
-  const sort_key = value("usage-sort") || "execution_count";
-  const items = state.usage_users.filter((item) => `${item.user_id} ${item.email}`.toLowerCase().includes(query)).sort((left, right) => sort_key === "last_active_at" ? String(right.last_active_at).localeCompare(String(left.last_active_at)) : Number(right[sort_key] || 0) - Number(left[sort_key] || 0));
+  const sort_key = value("usage-sort") || "total_tokens";
+  const items = sort_usage_users(
+    state.usage_users.filter((item) => `${item.user_id} ${item.email}`.toLowerCase().includes(query)),
+    sort_key,
+  );
   const page_size = 25;
   const page_count = Math.max(1, Math.ceil(items.length / page_size));
   state.usage_page = Math.min(state.usage_page, page_count);
@@ -233,6 +236,15 @@ function render_usage_table() {
   document.querySelector("#usage-prev")?.addEventListener("click", () => { state.usage_page -= 1; render_usage_table(); });
   document.querySelector("#usage-next")?.addEventListener("click", () => { state.usage_page += 1; render_usage_table(); });
   document.querySelectorAll("[data-usage-user]").forEach((button) => button.addEventListener("click", () => show_usage_detail(decodeURIComponent(button.dataset.usageUser))));
+}
+
+function sort_usage_users(items, sort_key) {
+  return [...items].sort((left, right) => {
+    const difference = sort_key === "last_active_at"
+      ? String(right.last_active_at || "").localeCompare(String(left.last_active_at || ""))
+      : Number(right[sort_key] || 0) - Number(left[sort_key] || 0);
+    return difference || String(left.user_id || "").localeCompare(String(right.user_id || ""));
+  });
 }
 
 function usage_table(items) {

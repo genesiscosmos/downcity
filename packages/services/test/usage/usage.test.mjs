@@ -14,7 +14,56 @@ import {
 import { create_test_text_model } from "../fixtures/ai-channel.mjs"
 import { createSqliteDb } from "./sqlite-db.mjs"
 import { CreditsService, UsageService } from "../../bin/index.js"
+import { build_admin_usage_users } from "../../bin/usage/admin-aggregation.js"
 import { merge_daily_usage } from "../../bin/usage/aggregation.js"
+
+test("Admin user ranking uses Total Tokens as the primary consumption metric", () => {
+  const create_user = (user_id, execution_count, total_tokens) => ({
+    user_id,
+    execution_count,
+    succeeded_count: execution_count,
+    failed_count: 0,
+    cancelled_count: 0,
+    metered_request_count: execution_count,
+    uncached_input_tokens: total_tokens,
+    cached_input_tokens: 0,
+    input_tokens: total_tokens,
+    output_tokens: 0,
+    reasoning_tokens: 0,
+    total_tokens,
+    image_count: 0,
+    video_seconds: 0,
+    audio_seconds: 0,
+    last_active_at: "2026-08-05T00:00:00.000Z",
+    active_dates: ["2026-08-05"],
+    top_model_id: "gpt-5.4",
+    metering_unavailable_count: 0,
+    average_duration_ms: 100,
+    p95_duration_ms: 100,
+  })
+  const result = build_admin_usage_users({
+    timezone: "UTC",
+    from: "2026-08-05",
+    to: "2026-08-05",
+    ai: {
+      users: [create_user("more_calls", 10, 100), create_user("more_tokens", 2, 1_000)],
+      days: [],
+      models: [],
+      actions: [],
+      hours: [],
+      performance: {
+        sample_count: 0,
+        average_duration_ms: null,
+        p50_duration_ms: null,
+        p95_duration_ms: null,
+        max_duration_ms: null,
+        metering_unavailable_count: 0,
+      },
+    },
+    credits: { users: [], days: [] },
+  })
+  assert.deepEqual(result.items.map((item) => item.user_id), ["more_tokens", "more_calls"])
+})
 
 test("UsageService merges applied Credits and final AI usage by local day", async () => {
   const cwd = process.cwd()
@@ -211,6 +260,7 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
     assert.equal(admin_users_response.status, 200)
     const admin_users = await admin_users_response.json()
     assert.equal(admin_users.items.length, 2)
+    assert.deepEqual(admin_users.items.map((item) => item.user_id), ["user_1", "user_2"])
     const admin_user_1 = admin_users.items.find((item) => item.user_id === "user_1")
     assert.equal(admin_user_1.execution_count, 4)
     assert.equal(admin_user_1.succeeded_count, 3)

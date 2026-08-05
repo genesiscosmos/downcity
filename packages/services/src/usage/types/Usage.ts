@@ -302,6 +302,6 @@ export interface AdminUsageUsersResponse {
   from: string;
   /** 查询范围结束当地自然日，包含。 */
   to: string;
-  /** 按调用次数和用户 ID 稳定排序的用户 Usage。 */
+  /** 按 Total Tokens、Credits、调用次数和用户 ID 依次稳定排序的用户 Usage。 */
   items: AdminUserUsageItem[];
 }

@@ -171,7 +171,12 @@ function merge_admin_usage_users(ai: AdminAIUsageResult, credits: AdminCreditsUs
     item.charge_count = credit.charge_count;
     items.set(credit.user_id, item);
   }
-  return [...items.values()].sort((left, right) => right.execution_count - left.execution_count || right.total_tokens - left.total_tokens || left.user_id.localeCompare(right.user_id));
+  return [...items.values()].sort((left, right) =>
+    right.total_tokens - left.total_tokens
+    || right.credits_used - left.credits_used
+    || right.execution_count - left.execution_count
+    || left.user_id.localeCompare(right.user_id)
+  );
 }
 
 function merge_admin_usage_days(
