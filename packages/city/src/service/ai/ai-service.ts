@@ -61,6 +61,8 @@ import { settle_response_charge } from "./charge-runtime.js";
 import { AIUsageRepository } from "./AIUsageRepository.js";
 import { ai_settlement_jobs, ai_usage_records } from "./ai-usage-schema.js";
 import type {
+  AdminAIUsageResult,
+  AdminUsageQuery,
   AIDailyUsageResult,
   AIRecentUsageResult,
   AISettlementPayload,
@@ -253,6 +255,11 @@ export class AIService extends Service {
   /** UsageService 使用的最近 AI Token 用量只读入口。 */
   async list_user_recent_usage(input: UserRecentAIUsageQuery): Promise<AIRecentUsageResult> {
     return await this.require_usage_repository().list_user_recent_usage(input);
+  }
+
+  /** 按日期范围聚合 Federation 全部用户的 AI 技术用量。 */
+  async aggregate_admin_usage(input: AdminUsageQuery): Promise<AdminAIUsageResult> {
+    return await this.require_usage_repository().aggregate_admin_usage(input);
   }
 
   // ========== 模型匹配 ==========

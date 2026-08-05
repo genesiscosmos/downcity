@@ -13,6 +13,7 @@ import {
   USER_PROFILE_TABLE,
 } from "./schema.js";
 import type { AccountsPreparedStatement } from "./types/DatabaseStatement.js";
+import type { AccountsUsageRegistration } from "./types.js";
 
 /**
  * 原始 statement 创建函数。
@@ -45,6 +46,21 @@ export async function listAccountUsers(raw_prepare: RawPrepare): Promise<Record<
     ),
     [],
   );
+}
+
+/** 读取 Usage 分析所需的注册用户最小事实。 */
+export async function listAccountUsageRegistrations(raw_prepare: RawPrepare): Promise<AccountsUsageRegistration[]> {
+  const rows = await readPreparedAll(
+    raw_prepare(`SELECT id as user_id, createdAt as created_at FROM ${AUTH_USER_TABLE} ORDER BY createdAt ASC`),
+    [],
+  );
+  return rows.flatMap((row) => {
+    const timestamp = read_time(row.created_at);
+    const user_id = String(row.user_id ?? "").trim();
+    return user_id && Number.isFinite(timestamp)
+      ? [{ user_id, created_at: new Date(timestamp).toISOString() }]
+      : [];
+  });
 }
 
 /**

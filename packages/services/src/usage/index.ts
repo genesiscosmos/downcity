@@ -4,7 +4,15 @@
 
 export { UsageService } from "./service.js";
 export type {
+  AdminUsageActivityMetrics,
+  AdminUsageDay,
+  AdminUsageOverviewResponse,
+  AdminUsageRetentionResponse,
+  AdminUsageUsersResponse,
+  AdminUserUsageItem,
   UsageServiceOptions,
+  UsageAccountReader,
+  UsageAccountRegistration,
   UserAIUsageBucket,
   UserCreditsUsageBucket,
   UserRecentTokenUsageResponse,

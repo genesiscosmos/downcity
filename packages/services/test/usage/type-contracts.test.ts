@@ -21,6 +21,9 @@ base.use(credits_service);
 base.use(new UsageService({
   ai_usage_reader: ai_service,
   credits_usage_reader: credits_service,
+  account_usage_reader: {
+    list_usage_account_registrations: async () => [],
+  },
 }));
 
 const recent_usage_response: UserRecentTokenUsageResponse = {

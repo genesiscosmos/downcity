@@ -186,7 +186,8 @@ const database = new Database({
 });
 const federation = new Federation({ database });
 
-federation.use(new AccountsService({ local_login: true }));
+const accounts_service = new AccountsService({ local_login: true });
+federation.use(accounts_service);
 const credits_service = new CreditsService();
 const ai_service = new AIService({ credits: credits_service });
 federation.use(credits_service);
@@ -194,6 +195,7 @@ federation.use(ai_service);
 federation.use(new UsageService({
   ai_usage_reader: ai_service,
   credits_usage_reader: credits_service,
+  account_usage_reader: accounts_service,
 }));
 
 await federation.health();

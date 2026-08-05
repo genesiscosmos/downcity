@@ -34,6 +34,8 @@ export type {
   CreditsTransactionStatus,
 } from "./types/Transaction.js";
 export type {
+  AdminCreditsUsageResult,
+  AdminCreditsUsageUserBucket,
   CreditsDailyUsageBucket,
   CreditsDailyUsageResult,
   CreditsUsageReader,

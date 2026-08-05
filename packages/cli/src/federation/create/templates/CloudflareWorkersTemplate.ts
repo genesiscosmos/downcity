@@ -137,13 +137,14 @@ async function create_federation(env: Env): Promise<Federation> {
       public_url_prefix,
     }));
   }
-  federation.use(new AccountsService({
+  const accounts_service = new AccountsService({
     providers: [
       githubAccountsProvider(),
       googleAccountsProvider(),
       wechatAccountsProvider(),
     ],
-  }));
+  });
+  federation.use(accounts_service);
   const credits_service = new CreditsService();
   const ai_service = new AIService({ credits: credits_service });
   federation.use(credits_service);
@@ -151,6 +152,7 @@ async function create_federation(env: Env): Promise<Federation> {
   federation.use(new UsageService({
     ai_usage_reader: ai_service,
     credits_usage_reader: credits_service,
+    account_usage_reader: accounts_service,
   }));
   await federation.health();
   return federation;

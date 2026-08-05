@@ -26,12 +26,14 @@ export function build_dashboard_snapshot(raw_data: dashboard_raw_data, range: da
   const paid_payments_with_amount = paid_payments.filter((item) => has_amount_minor(item));
   const range_paid_payments = paid_payments.filter((item) => in_range(item, window));
   const range_paid_payments_with_amount = range_paid_payments.filter((item) => has_amount_minor(item));
-  const range_usage_events = raw_data.usage_events.filter((item) => in_range(item, window));
+  const usage_activity = read_record(raw_data.usage_overview.activity);
+  const usage_summary = read_record(raw_data.usage_overview.summary);
   const first_paid_times = read_first_paid_times(paid_payments);
-  const active_in_range = count_unique(range_usage_events.map((item) => read_string(item.user_id)));
+  const active_in_range = read_number(usage_activity.range_active_users);
   const paying_users_range = count_unique(range_paid_payments.map((item) => read_string(item.user_id)));
-  const error_events_range = range_usage_events.filter((item) => read_string(item.status) === "error").length;
-  const usage_error_rate_range = safe_rate(error_events_range, range_usage_events.length);
+  const usage_event_count = read_number(usage_summary.execution_count);
+  const error_events_range = read_number(usage_summary.failed_count);
+  const usage_error_rate_range = safe_rate(error_events_range, usage_event_count);
 
   const users = {
     total_registered: raw_data.accounts_users.length,
@@ -48,15 +50,15 @@ export function build_dashboard_snapshot(raw_data: dashboard_raw_data, range: da
   };
 
   const activity = {
-    active_today: count_usage_users_since(raw_data.usage_events, window.today_start),
-    active_7d: count_usage_users_since(raw_data.usage_events, window.seven_days_start),
-    active_30d: count_usage_users_since(raw_data.usage_events, window.thirty_days_start),
+    active_today: read_number(usage_activity.daily_active_users),
+    active_7d: read_number(usage_activity.weekly_active_users),
+    active_30d: read_number(usage_activity.monthly_active_users),
     active_in_range,
-    stickiness_today_over_30d: safe_rate(
-      count_usage_users_since(raw_data.usage_events, window.today_start),
-      count_usage_users_since(raw_data.usage_events, window.thirty_days_start),
-    ),
-    recent_events: sort_recent(raw_data.usage_events).slice(0, 20),
+    stickiness_today_over_30d: read_nullable_number(usage_activity.daily_monthly_stickiness),
+    recent_events: [...raw_data.usage_users]
+      .sort((left, right) => read_time(right.last_active_at) - read_time(left.last_active_at))
+      .slice(0, 20)
+      .map((item) => ({ ...item, created_at: item.last_active_at, service: "ai", status: `${read_number(item.execution_count)} calls` })),
   };
 
   return {
@@ -92,13 +94,13 @@ export function build_dashboard_snapshot(raw_data: dashboard_raw_data, range: da
       pending_topups: raw_data.payment_payments.filter((item) => read_string(item.status) === "pending").length,
     },
     usage: {
-      total_events: raw_data.usage_events.length,
-      events_range: range_usage_events.length,
-      success_events_range: range_usage_events.filter((item) => read_string(item.status) === "success").length,
+      total_events: usage_event_count,
+      events_range: usage_event_count,
+      success_events_range: read_number(usage_summary.succeeded_count),
       error_events_range,
       error_rate_range: usage_error_rate_range,
-      top_services: read_top_services(range_usage_events),
-      top_models: read_top_models(range_usage_events),
+      top_services: usage_event_count > 0 ? [{ service: "ai", count: usage_event_count }] : [],
+      top_models: read_top_usage_models(raw_data.usage_users),
     },
     health: {
       missing_revenue_amount_count: paid_payments.length - paid_payments_with_amount.length,
@@ -156,10 +158,6 @@ function count_records_since(rows: dashboard_record[], start_time: number): numb
   return rows.filter((row) => is_since(read_row_created_at(row), start_time)).length;
 }
 
-function count_usage_users_since(rows: dashboard_record[], start_time: number): number {
-  return count_unique(rows.filter((row) => is_since(row.created_at, start_time)).map((row) => read_string(row.user_id)));
-}
-
 function read_first_paid_times(rows: dashboard_record[]): Map<string, number> {
   const first_paid_times = new Map<string, number>();
   for (const row of rows) {
@@ -191,24 +189,16 @@ function read_revenue(rows: dashboard_record[]): dashboard_money_group[] {
     }));
 }
 
-function read_top_services(rows: dashboard_record[]): Array<{ service: string; count: number }> {
-  return read_top_counts(rows, "service").map((item) => ({ service: item.key, count: item.count }));
-}
-
-function read_top_models(rows: dashboard_record[]): Array<{ model_id: string; count: number }> {
-  return read_top_counts(rows, "model_id").map((item) => ({ model_id: item.key, count: item.count }));
-}
-
-function read_top_counts(rows: dashboard_record[], key: string): Array<{ key: string; count: number }> {
+function read_top_usage_models(rows: dashboard_record[]): Array<{ model_id: string; count: number }> {
   const counts = new Map<string, number>();
   for (const row of rows) {
-    const value = read_string(row[key]);
+    const value = read_string(row.top_model_id);
     if (!value) continue;
-    counts.set(value, (counts.get(value) ?? 0) + 1);
+    counts.set(value, (counts.get(value) ?? 0) + read_number(row.execution_count));
   }
   return [...counts.entries()]
-    .map(([item_key, count]) => ({ key: item_key, count }))
-    .sort((left, right) => right.count - left.count || left.key.localeCompare(right.key))
+    .map(([model_id, count]) => ({ model_id, count }))
+    .sort((left, right) => right.count - left.count || left.model_id.localeCompare(right.model_id))
     .slice(0, 5);
 }
 
@@ -270,6 +260,18 @@ function read_string(value: unknown): string {
 function read_number(value: unknown): number {
   const normalized = Number(value ?? 0);
   return Number.isFinite(normalized) ? normalized : 0;
+}
+
+function read_nullable_number(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const normalized = Number(value);
+  return Number.isFinite(normalized) ? normalized : null;
+}
+
+function read_record(value: unknown): dashboard_record {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as dashboard_record
+    : {};
 }
 
 function format_money(currency: string, amount_minor: number): string {

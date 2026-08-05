@@ -96,6 +96,8 @@ Agent 重新加载 Env，并通过 Workspace 将新快照广播给已有 Session
 
 ```bash
 fed                              # Federation Server 管理 TUI
+fed web                         # 启动当前 Federation 的本地 Web 管理 UI
+fed web --no-open --port 43128  # 启动但不自动打开浏览器
 fed server add
 fed server manage
 fed bureau token                 # 打开 Bureau Token 管理 TUI
@@ -106,3 +108,17 @@ fed query GET /health
 fed create [dir]
 fed deploy [source]
 ```
+
+`fed web` 默认在 `http://127.0.0.1:43128` 启动本地控制面。它读取当前 active
+Federation，也可以用 `--federation <name-or-url>` 显式选择。Admin Key 只由本地 CLI
+进程持有，不会发送到浏览器；为避免把 Root Admin 控制面暴露到网络，该命令只允许监听
+`127.0.0.1`、`localhost` 或 `::1`。页面包含 Dashboard、用户、Bureau、模型、Env、
+Credits、Usage、支付、Service 目录与调试器。分析区进一步分为数据概览、用户活跃、
+Usage 消耗、用户留存、调用质量和用户明细。
+
+Usage Dashboard 以浏览器所在 IANA 时区统计：日活是今日产生至少一次 AI Usage 的去重
+用户，周活和月活分别是滚动 7 天与 30 天去重用户。用户用量页展示所有注册用户，包括
+零用量用户，并可按调用数、Token、Credits 与最后活跃时间排序。每个用户同时展示 Input、
+Output、Total Token、成功率、Top Model、平均/P95 耗时和已入账 Credits 消耗。图表包含
+DAU/WAU/MAU 折线、24 小时活跃柱状图、Token 堆叠图、模型与 Action 分布、执行结果与
+耗时趋势，以及 D1/D3/D7/D14/D30 Cohort 留存表和漏斗。

@@ -34,6 +34,7 @@ import {
   revoke_federation_bureau,
 } from "@/federation/bureau/commands/bureau.js";
 import { run_interactive_bureau_token_manager } from "@/federation/bureau/InteractiveBureauTokenManager.js";
+import { run_federation_web } from "@/federation/web/FederationWebCommand.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -107,6 +108,44 @@ export async function runDownfedCli(): Promise<void> {
     }));
 
   register_bureau_commands(program);
+
+  program
+    .command("web")
+    .description(t({
+      zh: "启动当前 Federation 的本地 Web 管理 UI",
+      en: "start the local Web admin UI for a Federation",
+    }))
+    .option("--host <host>", t({ zh: "本地监听地址（仅 loopback）", en: "local listen host (loopback only)" }), "127.0.0.1")
+    .option("--port <port>", t({ zh: "本地监听端口", en: "local listen port" }), "43128")
+    .option("--no-open", t({ zh: "不自动打开浏览器", en: "do not open the browser automatically" }))
+    .option("--federation <name-or-url>", t({ zh: "指定 Federation 名称或 URL", en: "select a Federation by name or URL" }))
+    .helpOption("--help", helpText())
+    .action(createVersionBanner(packageJson.version, async (options: {
+      host: string;
+      port: string;
+      open: boolean;
+      federation?: string;
+    }) => {
+      const port = Number(options.port);
+      if (!Number.isInteger(port) || port < 0 || port > 65535) {
+        throw new CliError({ title: "--port 必须是 0 到 65535 之间的整数。" });
+      }
+      try {
+        await run_federation_web({
+          host: options.host.trim(),
+          port,
+          open: options.open,
+          federation: options.federation,
+        });
+      } catch (error) {
+        if (error instanceof CliError) throw error;
+        throw new CliError({
+          title: "无法启动 Federation Web UI。",
+          note: error instanceof Error ? error.message : String(error),
+          fix: "确认当前 Federation、admin_secret_key 与本地监听端口可用。",
+        });
+      }
+    }));
 
   server_program
     .command("add")

@@ -41,6 +41,12 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
     federation.use(new UsageService({
       ai_usage_reader: ai_service,
       credits_usage_reader: credits_service,
+      account_usage_reader: {
+        list_usage_account_registrations: async () => [
+          { user_id: "user_1", created_at: new Date().toISOString() },
+          { user_id: "user_2", created_at: new Date().toISOString() },
+        ],
+      },
     }))
 
     await federation.health()
@@ -168,6 +174,67 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
     const other_user_recent = await other_user_response.json()
     assert.equal(other_user_recent.items.length, 1)
     assert.ok(!recent.items.some((item) => item.usage_id === other_user_recent.items[0].usage_id))
+
+    const admin_query = `from=${today}&to=${today}&timezone=UTC`
+    const admin_overview_response = await federation.fetch(admin_request(admin_secret, {
+      path: `/v1/usage/admin/overview?${admin_query}`,
+      method: "GET",
+    }))
+    assert.equal(admin_overview_response.status, 200)
+    const admin_overview = await admin_overview_response.json()
+    assert.deepEqual(admin_overview.activity, {
+      range_active_users: 2,
+      daily_active_users: 2,
+      weekly_active_users: 2,
+      monthly_active_users: 2,
+      daily_monthly_stickiness: 1,
+    })
+    assert.equal(admin_overview.summary.execution_count, 5)
+    assert.equal(admin_overview.summary.total_tokens, 8)
+    assert.equal(admin_overview.summary.credits_used, 100)
+    assert.equal(admin_overview.days.length, 1)
+    assert.equal(admin_overview.days[0].active_user_count, 2)
+    assert.equal(admin_overview.days[0].weekly_active_user_count, 2)
+    assert.equal(admin_overview.days[0].monthly_active_user_count, 2)
+    assert.equal(admin_overview.days[0].succeeded_count, 4)
+    assert.equal(admin_overview.days[0].failed_count, 1)
+    assert.equal(admin_overview.hours.length, 24)
+    assert.ok(admin_overview.models.some((item) => item.key === "gpt-5.4" && item.execution_count === 4))
+    assert.ok(admin_overview.actions.some((item) => item.key === "text" && item.execution_count === 5))
+    assert.ok(admin_overview.performance.sample_count > 0)
+    assert.equal(typeof admin_overview.performance.p95_duration_ms, "number")
+
+    const admin_users_response = await federation.fetch(admin_request(admin_secret, {
+      path: `/v1/usage/admin/users?${admin_query}`,
+      method: "GET",
+    }))
+    assert.equal(admin_users_response.status, 200)
+    const admin_users = await admin_users_response.json()
+    assert.equal(admin_users.items.length, 2)
+    const admin_user_1 = admin_users.items.find((item) => item.user_id === "user_1")
+    assert.equal(admin_user_1.execution_count, 4)
+    assert.equal(admin_user_1.succeeded_count, 3)
+    assert.equal(admin_user_1.failed_count, 1)
+    assert.equal(admin_user_1.total_tokens, 6)
+    assert.equal(admin_user_1.credits_used, 75)
+    assert.equal(admin_user_1.success_rate, 0.75)
+    assert.ok(!Object.hasOwn(admin_user_1, "active_dates"))
+
+    const retention_response = await federation.fetch(admin_request(admin_secret, {
+      path: `/v1/usage/admin/retention?${admin_query}`,
+      method: "GET",
+    }))
+    assert.equal(retention_response.status, 200)
+    const retention = await retention_response.json()
+    assert.equal(retention.total_registered_users, 2)
+    assert.equal(retention.cohorts.length, 1)
+    assert.equal(retention.cohorts[0].new_user_count, 2)
+    assert.equal(retention.cohorts[0].rates.day_1, null)
+
+    const unauthorized_admin_response = await federation.fetch(new Request(
+      `http://localhost/v1/usage/admin/overview?${admin_query}`,
+    ))
+    assert.equal(unauthorized_admin_response.status, 401)
 
     for (const query of ["limit=0", "limit=51", "limit=1.5", "cursor=invalid"]) {
       const invalid_recent_response = await get_recent_usage(federation, token.user_token, query)

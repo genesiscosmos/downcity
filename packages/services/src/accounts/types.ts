@@ -141,6 +141,14 @@ export interface AccountsServiceOptions {
   local_login?: boolean;
 }
 
+/** Usage 分析可读取的注册用户最小事实。 */
+export interface AccountsUsageRegistration {
+  /** Federation 内全局用户 ID。 */
+  user_id: string;
+  /** 用户首次注册时间，UTC ISO 字符串。 */
+  created_at: string;
+}
+
 /**
  * Accounts provider 基础定义。
  */

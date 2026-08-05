@@ -48,8 +48,12 @@ export async function manageDashboard(a: FederationAdmin, _base_url: string, run
         const next_range = await select_range(runtime, range);
         if (next_range) {
           range = next_range;
-          snapshot = raw_data ? build_dashboard_snapshot(raw_data, range) : undefined;
-          if (snapshot) await show_dashboard_view(runtime, "overview", snapshot);
+          raw_data = await runtime.with_loading(
+            t({ zh: "读取用户系统 Dashboard", en: "Loading user system dashboard" }),
+            async () => await fetch_dashboard_raw_data(a, range),
+          );
+          snapshot = build_dashboard_snapshot(raw_data, range);
+          await show_dashboard_view(runtime, "overview", snapshot);
         }
         continue;
       }
@@ -57,7 +61,7 @@ export async function manageDashboard(a: FederationAdmin, _base_url: string, run
       if (action === "refresh" || !raw_data || !snapshot) {
         raw_data = await runtime.with_loading(
           t({ zh: "读取用户系统 Dashboard", en: "Loading user system dashboard" }),
-          async () => await fetch_dashboard_raw_data(a),
+          async () => await fetch_dashboard_raw_data(a, range),
         );
         snapshot = build_dashboard_snapshot(raw_data, range);
       }

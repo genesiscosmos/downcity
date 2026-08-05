@@ -14,6 +14,21 @@ City meters every model call and tracks usage across all connected Agents and pr
 - Usage is aggregated per user, per project, and per model
 - Real-time usage dashboards are available in the Console
 
+Federation Root Admins can read server-side aggregates:
+
+```text
+GET /v1/usage/admin/overview?from=2026-07-07&to=2026-08-05&timezone=Asia/Shanghai
+GET /v1/usage/admin/users?from=2026-07-07&to=2026-08-05&timezone=Asia/Shanghai
+GET /v1/usage/admin/retention?from=2026-07-07&to=2026-08-05&timezone=Asia/Shanghai
+```
+
+`overview` returns range-active users, true de-duplicated daily DAU/WAU/MAU series, outcomes, token
+composition, Credits, model and action distributions, local-hour activity, and average/P50/P95
+duration. `users` returns calls, input/output/total tokens, success rate, top model, Credits, duration,
+and last activity per user. `retention` combines Accounts registration time with real AI Usage active
+dates to calculate D1, D3, D7, D14, and D30 registration-cohort retention. Failed and cancelled calls
+still represent real product activity, so they count toward activity and remain visible in outcomes.
+
 ## Balance
 
 - Users maintain a balance account in City

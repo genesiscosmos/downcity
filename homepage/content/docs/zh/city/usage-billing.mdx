@@ -13,6 +13,21 @@ City 计量每次模型调用并追踪所有已连接 Agent 和产品的用量�
 - 用量按用户、按项目和按模型聚合
 - 控制台中提供实时用量仪表板
 
+Federation Root Admin 可以读取服务端聚合结果：
+
+```text
+GET /v1/usage/admin/overview?from=2026-07-07&to=2026-08-05&timezone=Asia/Shanghai
+GET /v1/usage/admin/users?from=2026-07-07&to=2026-08-05&timezone=Asia/Shanghai
+GET /v1/usage/admin/retention?from=2026-07-07&to=2026-08-05&timezone=Asia/Shanghai
+```
+
+`overview` 返回范围活跃、真实去重的 DAU/WAU/MAU 日序列、调用结果、Token 构成、
+Credits、模型与 Action 分布、当地小时分布，以及平均/P50/P95 执行耗时。`users` 按用户
+返回调用次数、Input/Output/Total Token、成功率、Top Model、Credits、耗时与最后活跃时间。
+`retention` 使用 Accounts 注册时间和真实 AI Usage 活跃日计算 D1、D3、D7、D14、D30
+注册 Cohort 留存。活跃用户定义为统计窗口内至少产生一次 AI Usage Record 的用户；失败和
+取消调用仍表达真实产品使用，因此计入活跃，并单独进入结果与成功率。
+
 ## 余额
 
 - 用户在 City 中维护余额账户

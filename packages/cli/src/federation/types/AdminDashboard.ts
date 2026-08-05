@@ -77,6 +77,12 @@ export interface dashboard_raw_data {
   /** usage event 记录。 */
   usage_events: dashboard_record[];
 
+  /** Usage Admin Overview 聚合。 */
+  usage_overview: dashboard_record;
+
+  /** Usage Admin 按用户聚合。 */
+  usage_users: dashboard_record[];
+
   /** Credits 用户汇总记录。 */
   credits_users: dashboard_record[];
 

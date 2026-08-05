@@ -82,6 +82,136 @@ export interface UserDailyUsageQuery {
   timezone: string;
 }
 
+/** Federation Admin 跨用户用量查询条件。 */
+export interface AdminUsageQuery {
+  /** 查询时区中的起始自然日，包含。 */
+  from: string;
+  /** 查询时区中的结束自然日，包含。 */
+  to: string;
+  /** IANA 时区名称。 */
+  timezone: string;
+}
+
+/** Admin 视角下单个用户的 AI 技术用量聚合。 */
+export interface AdminAIUsageUserBucket {
+  /** Federation 内全局用户 ID。 */
+  user_id: string;
+  /** 统计区间内 AI 执行次数。 */
+  execution_count: number;
+  /** 成功执行次数。 */
+  succeeded_count: number;
+  /** 失败执行次数。 */
+  failed_count: number;
+  /** 取消执行次数。 */
+  cancelled_count: number;
+  /** Settled Metering 中的上游请求数量。 */
+  metered_request_count: number;
+  /** 未命中缓存的输入 Token。 */
+  uncached_input_tokens: number;
+  /** 命中缓存的输入 Token。 */
+  cached_input_tokens: number;
+  /** 全部输入 Token。 */
+  input_tokens: number;
+  /** 输出 Token。 */
+  output_tokens: number;
+  /** 推理 Token。 */
+  reasoning_tokens: number;
+  /** 输入与输出 Token 总量。 */
+  total_tokens: number;
+  /** 生成图片数量。 */
+  image_count: number;
+  /** 视频用量秒数。 */
+  video_seconds: number;
+  /** 音频用量秒数。 */
+  audio_seconds: number;
+  /** 统计区间内最后一次活跃时间。 */
+  last_active_at: string;
+  /** 统计区间内出现过 Usage 的当地日期，用于计算 DAU/WAU/MAU。 */
+  active_dates: string[];
+  /** 调用次数最多的 Federation 模型 ID。 */
+  top_model_id: string;
+  /** 计量不可用的执行次数。 */
+  metering_unavailable_count: number;
+  /** 有效执行耗时的平均值，单位毫秒；无耗时样本时为空。 */
+  average_duration_ms: number | null;
+  /** 有效执行耗时的 P95，单位毫秒；无耗时样本时为空。 */
+  p95_duration_ms: number | null;
+}
+
+/** Admin 视角下单日 AI 技术用量。 */
+export interface AdminAIDailyUsageBucket extends AIDailyUsageBucket {
+  /** 当日去重活跃用户数。 */
+  active_user_count: number;
+  /** 当日成功执行次数。 */
+  succeeded_count: number;
+  /** 当日失败执行次数。 */
+  failed_count: number;
+  /** 当日取消执行次数。 */
+  cancelled_count: number;
+  /** 当日计量不可用执行次数。 */
+  metering_unavailable_count: number;
+  /** 当日有效执行耗时平均值，单位毫秒；无样本时为空。 */
+  average_duration_ms: number | null;
+  /** 当日有效执行耗时 P95，单位毫秒；无样本时为空。 */
+  p95_duration_ms: number | null;
+}
+
+/** Admin 分析中的模型或 Action 聚合项。 */
+export interface AdminAIUsageDimensionBucket {
+  /** 维度稳定标识，例如模型 ID 或 Action ID。 */
+  key: string;
+  /** 当前维度的执行次数。 */
+  execution_count: number;
+  /** 当前维度的成功执行次数。 */
+  succeeded_count: number;
+  /** 当前维度已结算 Token 总量。 */
+  total_tokens: number;
+  /** 当前维度有效执行耗时平均值，单位毫秒；无样本时为空。 */
+  average_duration_ms: number | null;
+}
+
+/** Admin 分析中的当地小时活跃分布。 */
+export interface AdminAIHourlyUsageBucket {
+  /** 当地小时，范围 0–23。 */
+  hour: number;
+  /** 在该小时发生过执行的去重用户数。 */
+  active_user_count: number;
+  /** 该小时的执行次数。 */
+  execution_count: number;
+}
+
+/** Admin 全局执行性能摘要。 */
+export interface AdminAIPerformanceMetrics {
+  /** 有效耗时样本数量。 */
+  sample_count: number;
+  /** 平均执行耗时，单位毫秒；无样本时为空。 */
+  average_duration_ms: number | null;
+  /** 执行耗时 P50，单位毫秒；无样本时为空。 */
+  p50_duration_ms: number | null;
+  /** 执行耗时 P95，单位毫秒；无样本时为空。 */
+  p95_duration_ms: number | null;
+  /** 最大执行耗时，单位毫秒；无样本时为空。 */
+  max_duration_ms: number | null;
+  /** 计量不可用的执行次数。 */
+  metering_unavailable_count: number;
+}
+
+/** Admin 跨用户 AI 技术用量聚合结果。 */
+export interface AdminAIUsageResult {
+  /** 按用户聚合并按调用量降序排列。 */
+  users: AdminAIUsageUserBucket[];
+  /** 按当地日期升序排列的稀疏每日聚合。 */
+  days: AdminAIDailyUsageBucket[];
+  /** 按执行次数降序排列的模型维度聚合。 */
+  models: AdminAIUsageDimensionBucket[];
+  /** 按执行次数降序排列的 Action 维度聚合。 */
+  actions: AdminAIUsageDimensionBucket[];
+  /** 固定包含 0–23 点的当地小时活跃分布。 */
+  hours: AdminAIHourlyUsageBucket[];
+  /** 查询范围内全局执行性能摘要。 */
+  performance: AdminAIPerformanceMetrics;
+}
+
 /** AI 每日聚合 Bucket。 */
 export interface AIDailyUsageBucket {
   /** 当地自然日，格式为 YYYY-MM-DD。 */
@@ -192,4 +322,6 @@ export interface AIUsageReader {
   aggregate_user_daily_usage(input: UserDailyUsageQuery): Promise<AIDailyUsageResult>;
   /** 按用户读取最近的单次 AI Token 用量。 */
   list_user_recent_usage(input: UserRecentAIUsageQuery): Promise<AIRecentUsageResult>;
+  /** 按日期范围聚合 Federation 全部用户的 AI 技术用量。 */
+  aggregate_admin_usage(input: AdminUsageQuery): Promise<AdminAIUsageResult>;
 }

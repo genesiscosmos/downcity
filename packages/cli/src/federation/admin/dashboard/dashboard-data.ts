@@ -9,6 +9,7 @@
 import { FederationAdmin } from "@downcity/city";
 import type {
   dashboard_raw_data,
+  dashboard_range,
   dashboard_record,
   dashboard_service_id,
   dashboard_service_state,
@@ -18,16 +19,20 @@ import type {
 /**
  * 读取 Dashboard 原始数据。
  */
-export async function fetch_dashboard_raw_data(a: FederationAdmin): Promise<dashboard_raw_data> {
+export async function fetch_dashboard_raw_data(a: FederationAdmin, range: dashboard_range): Promise<dashboard_raw_data> {
   const services = create_initial_service_state();
+  const usage_query = build_usage_query(range);
   const accounts_users = await read_endpoint(services, "accounts", "users", async () =>
     (await a.service("accounts").get<{ items: dashboard_record[] }>("users")).items
   );
   const accounts_sessions = await read_endpoint(services, "accounts", "sessions", async () =>
     (await a.service("accounts").get<{ items: dashboard_record[] }>("sessions")).items
   );
-  const usage_events = await read_endpoint(services, "usage", "events", async () =>
-    (await a.service("usage").get<{ items: dashboard_record[] }>("events")).items
+  const usage_overviews = await read_endpoint(services, "usage", "admin/overview", async () => [
+    await a.service("usage").get<dashboard_record>(`admin/overview?${usage_query}`),
+  ]);
+  const usage_users = await read_endpoint(services, "usage", "admin/users", async () =>
+    (await a.service("usage").get<{ items: dashboard_record[] }>(`admin/users?${usage_query}`)).items
   );
   const credits_users = await read_endpoint(services, "credits", "users", async () =>
     await a.credits.list_users({ limit: 200 }) as unknown as dashboard_record[]
@@ -47,12 +52,37 @@ export async function fetch_dashboard_raw_data(a: FederationAdmin): Promise<dash
     services,
     accounts_users,
     accounts_sessions,
-    usage_events,
+    usage_events: [],
+    usage_overview: usage_overviews[0] ?? {},
+    usage_users,
     credits_users,
     credits_topups,
     payment_payments,
     payment_events,
   };
+}
+
+function build_usage_query(range: dashboard_range): string {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const to = format_local_date(new Date(), timezone);
+  const days = range === "today" ? 1 : range === "7d" ? 7 : range === "30d" ? 30 : 400;
+  const from_date = new Date(`${to}T00:00:00.000Z`);
+  from_date.setUTCDate(from_date.getUTCDate() - (days - 1));
+  return new URLSearchParams({ from: from_date.toISOString().slice(0, 10), to, timezone }).toString();
+}
+
+function format_local_date(date: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((item) => item.type === "year")?.value;
+  const month = parts.find((item) => item.type === "month")?.value;
+  const day = parts.find((item) => item.type === "day")?.value;
+  if (!year || !month || !day) throw new Error("Unable to resolve local Usage date.");
+  return `${year}-${month}-${day}`;
 }
 
 /**

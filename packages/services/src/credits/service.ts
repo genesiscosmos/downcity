@@ -14,6 +14,7 @@ import {
   read_usage_integer,
   type ServiceDatabaseContext,
   type ServiceInstallContext,
+  type AdminUsageQuery,
   type UserDailyUsageQuery,
 } from "@downcity/city";
 import { raw_all, raw_atomic, raw_first } from "./raw.js";
@@ -68,6 +69,7 @@ import {
   stringify_json,
 } from "./utils.js";
 import type {
+  AdminCreditsUsageResult,
   CreditsDailyUsageBucket,
   CreditsDailyUsageResult,
 } from "./types/Usage.js";
@@ -442,6 +444,37 @@ export class CreditsService extends InstallableService {
         ? format_usage_local_date(formatter, first.applied_at)
         : null,
       days: [...by_date.values()].sort((left, right) => left.date.localeCompare(right.date)),
+    };
+  }
+
+  /** 按日期范围聚合 Federation 全部用户的已入账 Credits 消费。 */
+  async aggregate_admin_charges(input: AdminUsageQuery): Promise<AdminCreditsUsageResult> {
+    const database = this.resolve_raw();
+    const envelope = create_usage_utc_envelope(input.from, input.to);
+    const rows = await raw_all<{ user_id: string; credits: unknown; applied_at: string }>(database, [
+      `SELECT user_id, credits, applied_at FROM ${TRANSACTION_TABLE}`,
+      "WHERE kind = 'charge' AND status = 'applied' AND credits > 0",
+      "AND applied_at >= ? AND applied_at < ? ORDER BY applied_at ASC",
+    ].join(" "), [envelope.from_utc, envelope.to_utc_exclusive]);
+    const formatter = create_usage_date_formatter(input.timezone);
+    const users = new Map<string, { user_id: string; credits_used: number; charge_count: number }>();
+    const days = new Map<string, CreditsDailyUsageBucket>();
+    for (const row of rows) {
+      const date = format_usage_local_date(formatter, row.applied_at);
+      if (date < input.from || date > input.to) continue;
+      const credits = read_usage_integer(row.credits);
+      const user = users.get(row.user_id) ?? { user_id: row.user_id, credits_used: 0, charge_count: 0 };
+      user.credits_used += credits;
+      user.charge_count += 1;
+      users.set(row.user_id, user);
+      const day = days.get(date) ?? { date, used: 0, charge_count: 0 };
+      day.used += credits;
+      day.charge_count += 1;
+      days.set(date, day);
+    }
+    return {
+      users: [...users.values()].sort((left, right) => right.credits_used - left.credits_used || left.user_id.localeCompare(right.user_id)),
+      days: [...days.values()].sort((left, right) => left.date.localeCompare(right.date)),
     };
   }
 

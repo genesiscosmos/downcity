@@ -18,7 +18,7 @@ export {
   oauthAccountsProvider,
   wechatAccountsProvider,
 } from "./accounts/index.js";
-export type { AccountsServiceOptions } from "./accounts/index.js";
+export type { AccountsServiceOptions, AccountsUsageRegistration } from "./accounts/index.js";
 export type {
   AccountsAuthFlow,
   AccountsAuthInputField,
@@ -75,6 +75,8 @@ export type {
   CreditsDailyUsageBucket,
   CreditsDailyUsageResult,
   CreditsUsageReader,
+  AdminCreditsUsageResult,
+  AdminCreditsUsageUserBucket,
 } from "./credits/index.js";
 export {
   CREDITS_PER_USD,
@@ -134,7 +136,15 @@ export type {
 
 export { UsageService } from "./usage/index.js";
 export type {
+  AdminUsageActivityMetrics,
+  AdminUsageDay,
+  AdminUsageOverviewResponse,
+  AdminUsageRetentionResponse,
+  AdminUsageUsersResponse,
+  AdminUserUsageItem,
   UsageServiceOptions,
+  UsageAccountReader,
+  UsageAccountRegistration,
   UserAIUsageBucket,
   UserCreditsUsageBucket,
   UserRecentTokenUsageResponse,

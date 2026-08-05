@@ -17,7 +17,7 @@ import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { readPreparedFirst, runPrepared } from "./db.js";
 import { mergeAccountsEnvRequirements, normalizeAccountsProviders } from "./helpers.js";
-import { listAccountSessions, listAccountUsers } from "./admin-queries.js";
+import { listAccountSessions, listAccountUsageRegistrations, listAccountUsers } from "./admin-queries.js";
 import { oauthErrorResponse, oauthSuccessResponse } from "./oauth-pages.js";
 import {
   normalizeBool,
@@ -63,6 +63,7 @@ import type {
   AccountsProviderItem,
   AccountsServiceOptions,
   AccountsOAuthProvider,
+  AccountsUsageRegistration,
 } from "./types.js";
 import type { AccountsPreparedStatement } from "./types/DatabaseStatement.js";
 
@@ -93,7 +94,7 @@ const accountsEnv: EnvRequirement[] = [
   { key: "BETTER_AUTH_SECRET", description: "better-auth signing secret", required: true },
 ];
 
-export type { AccountsServiceOptions } from "./types.js";
+export type { AccountsServiceOptions, AccountsUsageRegistration } from "./types.js";
 
 export class AccountsService extends InstallableService {
   readonly id = "accounts";
@@ -126,6 +127,11 @@ export class AccountsService extends InstallableService {
       "OAuth 回调地址固定为 /v1/accounts/oauth/callback，服务会根据 Federation 公网地址生成完整回调 URL。",
       `当前暴露 ${actions.length} 个动作，常用流程由 /providers 返回的 provider 决定。`,
     ].join("\n");
+  }
+
+  /** 向 UsageService 投影注册用户及首次创建时间。 */
+  async list_usage_account_registrations(): Promise<AccountsUsageRegistration[]> {
+    return await listAccountUsageRegistrations((sql) => this.rawPrepare(sql));
   }
 
   protected override async on_init(): Promise<void> {

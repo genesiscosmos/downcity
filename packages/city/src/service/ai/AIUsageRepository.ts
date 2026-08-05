@@ -9,6 +9,12 @@ import type { CityTableApi } from "../../store/table-api.js";
 import type { ServiceDatabaseContext } from "../../types/database/Database.js";
 import type { AICreditsBridge } from "../../types/AI.js";
 import type {
+  AdminAIDailyUsageBucket,
+  AdminAIHourlyUsageBucket,
+  AdminAIUsageResult,
+  AdminAIUsageDimensionBucket,
+  AdminAIUsageUserBucket,
+  AdminUsageQuery,
   AIDailyUsageBucket,
   AIDailyUsageResult,
   AIRecentUsageItem,
@@ -209,6 +215,131 @@ export class AIUsageRepository {
     };
   }
 
+  /** 按日期范围聚合 Federation 全部用户的 AI 技术用量。 */
+  async aggregate_admin_usage(input: AdminUsageQuery): Promise<AdminAIUsageResult> {
+    const envelope = create_usage_utc_envelope(input.from, input.to);
+    const rows = (await this.database.query<AIUsageRecord>({
+      sql: [
+        "SELECT * FROM service_ai_usage_records",
+        "WHERE user_id IS NOT NULL AND completed_at >= ? AND completed_at < ?",
+        "ORDER BY completed_at ASC",
+      ].join(" "),
+      params: [envelope.from_utc, envelope.to_utc_exclusive],
+    })).rows;
+    const formatter = create_usage_date_formatter(input.timezone);
+    const users = new Map<string, AdminAIUsageUserBucket>();
+    const model_counts = new Map<string, Map<string, number>>();
+    const user_durations = new Map<string, number[]>();
+    const days = new Map<string, { bucket: AdminAIDailyUsageBucket; users: Set<string>; durations: number[] }>();
+    const models = new Map<string, UsageDimensionState>();
+    const actions = new Map<string, UsageDimensionState>();
+    const hours = new Map<number, { execution_count: number; users: Set<string> }>();
+    const durations: number[] = [];
+    let metering_unavailable_count = 0;
+    const hour_formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: input.timezone,
+      hour: "2-digit",
+      hourCycle: "h23",
+    });
+
+    for (const row of rows) {
+      const user_id = String(row.user_id ?? "").trim();
+      if (!user_id) continue;
+      const date = format_usage_local_date(formatter, row.completed_at);
+      if (date < input.from || date > input.to) continue;
+
+      const user = users.get(user_id) ?? empty_admin_user_bucket(user_id);
+      user.execution_count += 1;
+      if (row.outcome === "succeeded") user.succeeded_count += 1;
+      else if (row.outcome === "failed") user.failed_count += 1;
+      else user.cancelled_count += 1;
+      user.last_active_at = row.completed_at > user.last_active_at ? row.completed_at : user.last_active_at;
+      if (!user.active_dates.includes(date)) user.active_dates.push(date);
+      if (row.metering_status === "settled") add_admin_user_metering(user, row);
+      else user.metering_unavailable_count += 1;
+      users.set(user_id, user);
+
+      const duration_ms = read_optional_duration(row.duration_ms);
+      if (duration_ms !== null) {
+        durations.push(duration_ms);
+        const values = user_durations.get(user_id) ?? [];
+        values.push(duration_ms);
+        user_durations.set(user_id, values);
+      }
+      if (row.metering_status === "unavailable") metering_unavailable_count += 1;
+
+      add_dimension(models, String(row.model_id ?? "").trim(), row, duration_ms);
+      add_dimension(actions, String(row.action_id ?? "").trim(), row, duration_ms);
+
+      const hour = Number(hour_formatter.format(new Date(row.completed_at)));
+      const hour_state = hours.get(hour) ?? { execution_count: 0, users: new Set<string>() };
+      hour_state.execution_count += 1;
+      hour_state.users.add(user_id);
+      hours.set(hour, hour_state);
+
+      const user_model_counts = model_counts.get(user_id) ?? new Map<string, number>();
+      const model_id = String(row.model_id ?? "").trim();
+      if (model_id) user_model_counts.set(model_id, (user_model_counts.get(model_id) ?? 0) + 1);
+      model_counts.set(user_id, user_model_counts);
+
+      const day_state = days.get(date) ?? {
+        bucket: {
+          ...empty_ai_bucket(date),
+          active_user_count: 0,
+          succeeded_count: 0,
+          failed_count: 0,
+          cancelled_count: 0,
+          metering_unavailable_count: 0,
+          average_duration_ms: null,
+          p95_duration_ms: null,
+        },
+        users: new Set<string>(),
+        durations: [],
+      };
+      day_state.bucket.execution_count += 1;
+      if (row.outcome === "succeeded") day_state.bucket.succeeded_count += 1;
+      else if (row.outcome === "failed") day_state.bucket.failed_count += 1;
+      else day_state.bucket.cancelled_count += 1;
+      if (row.metering_status === "unavailable") day_state.bucket.metering_unavailable_count += 1;
+      if (row.metering_status === "settled") add_metering(day_state.bucket, row);
+      if (duration_ms !== null) day_state.durations.push(duration_ms);
+      day_state.users.add(user_id);
+      days.set(date, day_state);
+    }
+
+    const user_items = [...users.values()].map((user) => ({
+      ...user,
+      active_dates: user.active_dates.sort(),
+      top_model_id: read_top_model(model_counts.get(user.user_id)),
+      average_duration_ms: average(user_durations.get(user.user_id) ?? []),
+      p95_duration_ms: percentile(user_durations.get(user.user_id) ?? [], 0.95),
+    })).sort((left, right) => right.execution_count - left.execution_count || left.user_id.localeCompare(right.user_id));
+    return {
+      users: user_items,
+      days: [...days.values()].map((state) => ({
+        ...state.bucket,
+        active_user_count: state.users.size,
+        average_duration_ms: average(state.durations),
+        p95_duration_ms: percentile(state.durations, 0.95),
+      })).sort((left, right) => left.date.localeCompare(right.date)),
+      models: dimension_items(models),
+      actions: dimension_items(actions),
+      hours: Array.from({ length: 24 }, (_, hour): AdminAIHourlyUsageBucket => ({
+        hour,
+        active_user_count: hours.get(hour)?.users.size ?? 0,
+        execution_count: hours.get(hour)?.execution_count ?? 0,
+      })),
+      performance: {
+        sample_count: durations.length,
+        average_duration_ms: average(durations),
+        p50_duration_ms: percentile(durations, 0.5),
+        p95_duration_ms: percentile(durations, 0.95),
+        max_duration_ms: durations.length > 0 ? Math.max(...durations) : null,
+        metering_unavailable_count,
+      },
+    };
+  }
+
   /** 按稳定游标读取当前用户最近的单次 AI Token 用量。 */
   async list_user_recent_usage(input: UserRecentAIUsageQuery): Promise<AIRecentUsageResult> {
     if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 50) {
@@ -332,6 +463,125 @@ function empty_ai_bucket(date: string): AIDailyUsageBucket {
     video_seconds: 0,
     audio_seconds: 0,
   };
+}
+
+/** 创建 Admin 用户 AI 用量零值。 */
+function empty_admin_user_bucket(user_id: string): AdminAIUsageUserBucket {
+  return {
+    user_id,
+    execution_count: 0,
+    succeeded_count: 0,
+    failed_count: 0,
+    cancelled_count: 0,
+    metered_request_count: 0,
+    uncached_input_tokens: 0,
+    cached_input_tokens: 0,
+    input_tokens: 0,
+    output_tokens: 0,
+    reasoning_tokens: 0,
+    total_tokens: 0,
+    image_count: 0,
+    video_seconds: 0,
+    audio_seconds: 0,
+    last_active_at: "",
+    active_dates: [],
+    top_model_id: "",
+    metering_unavailable_count: 0,
+    average_duration_ms: null,
+    p95_duration_ms: null,
+  };
+}
+
+/** 模型或 Action 维度的内部可变聚合状态。 */
+interface UsageDimensionState {
+  /** 执行次数。 */
+  execution_count: number;
+  /** 成功次数。 */
+  succeeded_count: number;
+  /** 已结算 Token 总量。 */
+  total_tokens: number;
+  /** 有效耗时样本。 */
+  durations: number[];
+}
+
+/** 累加模型或 Action 维度。 */
+function add_dimension(
+  dimensions: Map<string, UsageDimensionState>,
+  key: string,
+  row: AIUsageRecord,
+  duration_ms: number | null,
+): void {
+  if (!key) return;
+  const state = dimensions.get(key) ?? {
+    execution_count: 0,
+    succeeded_count: 0,
+    total_tokens: 0,
+    durations: [],
+  };
+  state.execution_count += 1;
+  if (row.outcome === "succeeded") state.succeeded_count += 1;
+  if (row.metering_status === "settled") {
+    state.total_tokens += read_usage_integer(row.uncached_input_tokens)
+      + read_usage_integer(row.cached_input_tokens)
+      + read_usage_integer(row.output_tokens);
+  }
+  if (duration_ms !== null) state.durations.push(duration_ms);
+  dimensions.set(key, state);
+}
+
+/** 生成稳定排序的公开维度列表。 */
+function dimension_items(dimensions: Map<string, UsageDimensionState>): AdminAIUsageDimensionBucket[] {
+  return [...dimensions.entries()].map(([key, state]) => ({
+    key,
+    execution_count: state.execution_count,
+    succeeded_count: state.succeeded_count,
+    total_tokens: state.total_tokens,
+    average_duration_ms: average(state.durations),
+  })).sort((left, right) => right.execution_count - left.execution_count || left.key.localeCompare(right.key));
+}
+
+/** 读取合法的执行耗时。 */
+function read_optional_duration(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const duration = Number(value);
+  return Number.isFinite(duration) && duration >= 0 ? duration : null;
+}
+
+/** 计算耗时平均值。 */
+function average(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
+/** 使用 nearest-rank 计算百分位。 */
+function percentile(values: number[], ratio: number): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.max(0, Math.ceil(sorted.length * ratio) - 1)] ?? null;
+}
+
+/** 累加用户维度的 settled AI Metering。 */
+function add_admin_user_metering(bucket: AdminAIUsageUserBucket, row: AIUsageRecord): void {
+  const uncached = read_usage_integer(row.uncached_input_tokens);
+  const cached = read_usage_integer(row.cached_input_tokens);
+  const output = read_usage_integer(row.output_tokens);
+  bucket.metered_request_count += read_usage_integer(row.request_count);
+  bucket.uncached_input_tokens += uncached;
+  bucket.cached_input_tokens += cached;
+  bucket.input_tokens += uncached + cached;
+  bucket.output_tokens += output;
+  bucket.reasoning_tokens += Math.min(read_usage_integer(row.reasoning_tokens), output);
+  bucket.total_tokens += uncached + cached + output;
+  bucket.image_count += read_usage_integer(row.image_count);
+  bucket.video_seconds += read_usage_integer(row.video_seconds);
+  bucket.audio_seconds += read_usage_integer(row.audio_seconds);
+}
+
+/** 读取调用次数最多的模型；次数相同时按模型 ID 稳定排序。 */
+function read_top_model(counts: Map<string, number> | undefined): string {
+  if (!counts) return "";
+  return [...counts.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]?.[0] ?? "";
 }
 
 /** 把一条 settled metering 累加到每日 Bucket。 */

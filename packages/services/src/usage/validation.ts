@@ -6,6 +6,7 @@ import {
   httpError,
   type AIRecentUsageCursor,
   type AIRecentUsageItem,
+  type AdminUsageQuery,
   type UserDailyUsageQuery,
   type UserRecentAIUsageQuery,
 } from "@downcity/city";
@@ -41,6 +42,24 @@ export function validate_usage_query(input: {
     throw httpError(400, "INVALID_USAGE_TIMEZONE: timezone must be a valid IANA timezone");
   }
   return { user_id: input.user_id, from, to, timezone };
+}
+
+/** 校验 Admin 跨用户用量查询。 */
+export function validate_admin_usage_query(input: {
+  /** 起始当地自然日。 */
+  from: unknown;
+  /** 结束当地自然日。 */
+  to: unknown;
+  /** IANA 时区。 */
+  timezone: unknown;
+}): AdminUsageQuery {
+  const query = validate_usage_query({
+    user_id: "__admin__",
+    from: input.from,
+    to: input.to,
+    timezone: input.timezone,
+  });
+  return { from: query.from, to: query.to, timezone: query.timezone };
 }
 
 /** 校验最近单次 AI Usage 查询，并把不透明 Cursor 还原为稳定排序边界。 */

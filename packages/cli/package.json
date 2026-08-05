@@ -1,6 +1,6 @@
 {
   "name": "downcity",
-  "version": "1.1.407",
+  "version": "1.1.410",
   "type": "module",
   "description": "Downcity CLI — local City container and Federation Server management",
   "bin": {
@@ -15,7 +15,7 @@
     "package.json"
   ],
   "scripts": {
-    "build": "node ../../scripts/clean-package.mjs && tsc && node scripts/rewrite-build-aliases.mjs && node scripts/verify-build-aliases.mjs && node scripts/ensure-cli-executable.mjs",
+    "build": "node ../../scripts/clean-package.mjs && tsc && node scripts/rewrite-build-aliases.mjs && node scripts/verify-build-aliases.mjs && node scripts/copy-web-assets.mjs && node scripts/ensure-cli-executable.mjs",
     "dev": "tsc --watch",
     "start": "node bin/index.js",
     "typecheck": "tsc --noEmit",
@@ -23,6 +23,7 @@
     "test:config-storage": "pnpm build && node --test scripts/config-storage.test.mjs",
     "test:model-recovery": "pnpm build && node --test scripts/agent-model-recovery.test.mjs",
     "test:federation": "pnpm build && node --test scripts/federation-lifecycle.test.mjs",
+    "test:federation-web": "pnpm build && node --test scripts/federation-web.test.mjs",
     "prepack": "npm run build && node ../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
     "postpack": "node ../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"
   },

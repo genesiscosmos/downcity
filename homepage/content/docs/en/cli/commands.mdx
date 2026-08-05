@@ -97,6 +97,8 @@ values; `copy` requires an explicit local CLI invocation.
 
 ```bash
 fed                              # Federation Server manager TUI
+fed web                         # start the local Web admin UI for the active Federation
+fed web --no-open --port 43128  # start without opening the browser
 fed server add
 fed server manage
 fed bureau token                 # open the Bureau Token manager TUI
@@ -107,3 +109,19 @@ fed query GET /health
 fed create [dir]
 fed deploy [source]
 ```
+
+`fed web` starts the local control plane at `http://127.0.0.1:43128` by default. It uses the
+active Federation, or one selected with `--federation <name-or-url>`. The local CLI process keeps
+the Admin Key; it is never sent to the browser. To keep the Root Admin control plane off the
+network, the command only listens on `127.0.0.1`, `localhost`, or `::1`. The UI includes the
+Dashboard, users, Bureaus, models, Env, Credits, Usage, payments, the Service catalog, and a
+debugger. Analytics are organized into overview, activity, consumption, retention, quality, and
+per-user detail views.
+
+The Usage Dashboard uses the browser's IANA timezone. DAU counts unique users with at least one
+AI Usage record today; WAU and MAU use rolling 7-day and 30-day windows. The user-usage view lists
+all registered users, including users with zero usage, and supports sorting by calls, tokens,
+Credits, P95 duration, and last activity. Each row includes input, output, and total tokens, success
+rate, top model, duration, and applied Credits consumption. Charts cover DAU/WAU/MAU, local-hour
+activity, stacked token composition, model/action distribution, outcomes, latency, and
+D1/D3/D7/D14/D30 cohort retention.
