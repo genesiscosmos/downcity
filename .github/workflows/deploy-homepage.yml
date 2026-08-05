@@ -56,6 +56,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: >-
           pnpm dlx wrangler@4.95.0 pages deploy homepage/build/client
-          --project-name downcity-homepage
+          --project-name downcity
           --branch main
           --commit-hash ${{ github.sha }}
