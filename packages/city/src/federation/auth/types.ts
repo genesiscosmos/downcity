@@ -4,6 +4,8 @@
  * 包含 token 相关的用户、载荷和签发结果类型。
  */
 
+import type { USER_TOKEN_AUDIENCE } from "./audience.js";
+
 /**
  * Runtime 中的终端用户信息。
  */
@@ -51,9 +53,9 @@ export interface CreateUserTokenInput {
  */
 export interface UserTokenPayload {
   /**
-   * token 的 Federation 与目标 Bureau 受众。
+   * Federation 与 Bureau 用户服务面的固定受众。
    */
-  aud: string[];
+  aud: typeof USER_TOKEN_AUDIENCE;
 
   /**
    * 签发该 token 的 Federation 稳定 issuer。
@@ -158,8 +160,8 @@ export interface FederationDiscovery {
   /** 当前 Federation 的公开 JWKS 地址。 */
   jwks_uri: string;
 
-  /** Federation 接收 user_token 时校验的 audience。 */
-  federation_user_token_audience: "downcity:federation";
+  /** Federation 与 Bureau 共同接收 user_token 时校验的 audience。 */
+  user_token_audience: typeof USER_TOKEN_AUDIENCE;
 }
 
 /**

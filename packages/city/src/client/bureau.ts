@@ -2,7 +2,7 @@
  * Bureau 独立服务节点客户端。
  *
  * Bureau 使用绑定自身的机器凭证访问 Federation，并使用 Federation JWKS 在本地
- * 验证目标 audience 与当前 Bureau 一致的 User Token。
+ * 验证统一 User Token audience，再校验已签名的 `bureau_id` 与自身身份一致。
  */
 
 import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
@@ -20,6 +20,7 @@ import type {
   FederationPublicJwk,
 } from "../federation/auth/types.js";
 import { USER_TOKEN_ALGORITHM } from "../federation/auth/federation-key-store.js";
+import { USER_TOKEN_AUDIENCE } from "../federation/auth/audience.js";
 import { normalize_user_token, read_user_token_payload } from "../federation/auth/user-token-authority.js";
 
 const DEFAULT_CACHE_TTL = 5 * 60 * 1000;
@@ -133,7 +134,7 @@ export class Bureau {
       const public_key = await importJWK(key, USER_TOKEN_ALGORITHM);
       const result = await jwtVerify(normalized_token, public_key, {
         algorithms: [USER_TOKEN_ALGORITHM],
-        audience: bureau_id,
+        audience: USER_TOKEN_AUDIENCE,
         issuer: cache.discovery.issuer,
       });
       const payload = read_user_token_payload(result.payload);
@@ -226,7 +227,7 @@ function normalize_federation_url(value: unknown): string {
 function validate_discovery(discovery: FederationDiscovery, federation_url: string): void {
   if (!discovery || typeof discovery !== "object") throw httpError(503, "Federation discovery unavailable");
   read_required_string(discovery.issuer, "Federation issuer");
-  if (discovery.federation_user_token_audience !== "downcity:federation") {
+  if (discovery.user_token_audience !== USER_TOKEN_AUDIENCE) {
     throw httpError(503, "Invalid Federation user token audience");
   }
   const expected = new URL(`${federation_url}/.well-known/jwks.json`);

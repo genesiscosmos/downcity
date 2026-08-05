@@ -8,6 +8,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
+import { decodeJwt } from "jose"
 
 import { Bureau, Federation, FederationAdmin } from "../bin/index.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
@@ -172,6 +173,17 @@ test("Federation 不默认创建 Bureau Token，Bureau 使用 JWKS 本地验签"
       metadata: { plan: "pro" },
       ttl: "1h",
     })
+    const token_claims = decodeJwt(user_token.user_token.slice("ub_".length))
+    assert.equal(token_claims.aud, "downcity:user")
+    assert.equal(token_claims.bureau_id, "downcity")
+    assert.equal(token_claims.sub, "user_1")
+
+    const discovery = await (await federation.fetch(new Request(
+      "https://fed.example.com/.well-known/downcity.json",
+    ))).json()
+    assert.equal(discovery.user_token_audience, "downcity:user")
+    assert.equal("federation_user_token_audience" in discovery, false)
+    assert.equal("bureau_user_token_audience_prefix" in discovery, false)
     const requested_paths = []
     const bureau = new Bureau({
       federation_url: "https://fed.example.com",
@@ -197,6 +209,27 @@ test("Federation 不默认创建 Bureau Token，Bureau 使用 JWKS 本地验签"
       "/.well-known/jwks.json",
     ])
     assert.equal(requested_paths.includes("/v1/accounts/identify"), false)
+
+    const legacy_token = await (await federation.getAuthenticator()).create_service_token({
+      audience: "downcity:federation",
+      subject: "user_legacy",
+      prefix: "ub_",
+      ttl: "1h",
+      claims: {
+        bureau_id: "downcity",
+        user_id: "user_legacy",
+        metadata: {},
+      },
+    })
+    await assert.rejects(
+      bureau.identify(legacy_token.token),
+      (error) => error?.statusCode === 401,
+    )
+    const legacy_federation_response = await federation.fetch(new Request(
+      "http://localhost/v1/bureaus/current",
+      { headers: { authorization: `Bearer ${legacy_token.token}` } },
+    ))
+    assert.equal(legacy_federation_response.status, 401)
 
     const items = await admin.bureaus.tokens.list(bureau_record.bureau_id)
     assert.equal(items.length, 1)

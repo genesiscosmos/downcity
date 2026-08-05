@@ -23,7 +23,7 @@ import type {
   CreateFederationServiceTokenInput,
   FederationServiceTokenIssueResult,
 } from "./types.js";
-import { FEDERATION_USER_TOKEN_AUDIENCE } from "./audience.js";
+import { USER_TOKEN_AUDIENCE } from "./audience.js";
 
 const DEFAULT_USER_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 const MAX_USER_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -55,10 +55,7 @@ export class UserTokenAuthority {
         kid: signing_key.key_id,
       })
       .setIssuer(this.issuer)
-      .setAudience([
-        FEDERATION_USER_TOKEN_AUDIENCE,
-        input.bureau_id,
-      ])
+      .setAudience(USER_TOKEN_AUDIENCE)
       .setSubject(input.user_id)
       .setIssuedAt(now)
       .setExpirationTime(now + ttl_seconds)
@@ -86,7 +83,7 @@ export class UserTokenAuthority {
       const public_key = await importJWK(public_jwk, USER_TOKEN_ALGORITHM);
       const result = await jwtVerify(jwt, public_key, {
         algorithms: [USER_TOKEN_ALGORITHM],
-        audience: FEDERATION_USER_TOKEN_AUDIENCE,
+        audience: USER_TOKEN_AUDIENCE,
         issuer: this.issuer,
       });
       return read_user_token_payload(result.payload);
@@ -183,8 +180,7 @@ export function read_user_token_payload(payload: JWTPayload): UserTokenPayload {
   const issuer = read_required_claim(payload.iss, "iss");
   const token_id = read_required_claim(payload.jti, "jti");
   if (user_id !== subject) throw httpError(401, "Invalid user token subject");
-  const audiences = read_user_token_audiences(payload.aud);
-  if (!audiences.includes(FEDERATION_USER_TOKEN_AUDIENCE) || !audiences.includes(bureau_id)) {
+  if (payload.aud !== USER_TOKEN_AUDIENCE) {
     throw httpError(401, "Invalid user token audience");
   }
   if (typeof payload.iat !== "number" || typeof payload.exp !== "number") {
@@ -195,7 +191,7 @@ export function read_user_token_payload(payload: JWTPayload): UserTokenPayload {
     throw httpError(401, "Invalid user token metadata");
   }
   return {
-    aud: audiences,
+    aud: USER_TOKEN_AUDIENCE,
     iss: issuer,
     bureau_id,
     user_id,
@@ -212,17 +208,6 @@ function validate_sign_input(input: CreateUserTokenInput): void {
   if (typeof input.user_id !== "string" || !input.user_id.trim()) {
     throw new TypeError("user_id is required");
   }
-}
-
-function read_user_token_audiences(value: JWTPayload["aud"]): string[] {
-  const audiences = typeof value === "string" ? [value] : value;
-  if (!Array.isArray(audiences) || audiences.length !== 2) {
-    throw httpError(401, "Invalid user token audience");
-  }
-  if (audiences.some((audience) => typeof audience !== "string" || !audience)) {
-    throw httpError(401, "Invalid user token audience");
-  }
-  return [...audiences];
 }
 
 /** 读取签发输入中的必填文本。 */

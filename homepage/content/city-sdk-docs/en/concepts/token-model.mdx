@@ -43,6 +43,11 @@ Product configuration supplies `bureau_id` when login starts. After login, servi
 `user_token`; Federation reads `bureau_id` from the verified Token. The client never touches provider
 keys or `admin_secret_key`.
 
+User Tokens use one `downcity:user` audience. Federation and Bureau Servers validate the same audience;
+a Bureau Server additionally compares the Token's `bureau_id` with its machine-bound Bureau ID.
+`bureau_id` always remains the original product-provided value and is never composed into or normalized
+as an audience.
+
 ## admin_secret_key
 
 `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` is used to manage Federation: create Bureaus, manage env, and issue `user_token` for users under a given Bureau. Federation generates it automatically and writes it into Federation env on first startup.

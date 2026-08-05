@@ -136,10 +136,13 @@ User Token 至少包含：
 - `user_id`；
 - `bureau_id`；
 - Federation issuer；
-- 原始 `bureau_id` audience；
+- 固定 `downcity:user` audience；
 - `jti`、签发时间和过期时间。
 
-`bureau_id` 在登录开始时确定，签入 Token 后成为请求身份的一部分。City 不通过未验证的本地 JWT decode 建立信任，而是调用 Federation `/v1/bureaus/current` 获取权威 BureauRecord。
+`bureau_id` 在登录开始时确定，签入 Token 后成为请求身份的一部分。Federation 与 Bureau
+属于同一用户服务面，共同校验 `downcity:user` audience；Bureau 再强制比较已签名的
+`bureau_id` 与自身身份。City 不通过未验证的本地 JWT decode 建立信任，而是调用
+Federation `/v1/bureaus/current` 获取权威 BureauRecord。
 
 ## 4. SDK 公开 API
 
@@ -179,7 +182,9 @@ const machine_identity = await bureau.me();
 const user = await bureau.identify(request);
 ```
 
-`bureau.me()` 返回 Token 绑定的完整 BureauRecord 与 `token_id`。`identify()` 先确定机器凭证对应的 `bureau_id`，再用该 Bureau 的 audience 本地验签，不能验证其他 Bureau 的 User Token。
+`bureau.me()` 返回 Token 绑定的完整 BureauRecord 与 `token_id`。`identify()` 先校验统一
+User Token audience，再比较机器凭证和 User Token 中的 `bureau_id`，不能验证其他 Bureau
+的 User Token。
 
 ### 4.4 FederationAdmin
 
@@ -250,8 +255,8 @@ sequenceDiagram
 ## 7. 安全边界
 
 - City 相信 Federation 验证后的 `/v1/bureaus/current`，不相信本地 decode 的 claims。
-- Federation 必须校验 User Token claim、audience 与请求上下文的 Bureau 一致。
-- Bureau 必须使用机器 Token 绑定的 `bureau_id` 作为验签 audience，不能相信调用方声明。
+- Federation 必须校验 User Token 的 issuer、`downcity:user` audience 与身份 Claim。
+- Bureau 必须校验相同 audience，并强制比较机器 Token 与 User Token 绑定的 `bureau_id`。
 - City 只向 `BureauRecord.server.server_url` 的同 origin 地址发送 User Token。
 - paused 或 archived Bureau 不能作为有效的当前产品入口。
 - Token 明文只在签发时出现，数据库只保存 hash。

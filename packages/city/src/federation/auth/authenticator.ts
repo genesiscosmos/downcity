@@ -12,7 +12,7 @@ import type { EnvProvider } from "../runtime.js";
 import { parse_user_token_ttl, type UserTokenAuthority } from "./user-token-authority.js";
 import type { FederationKeyStore } from "./federation-key-store.js";
 import type { BureauTokenStore } from "./bureau-token-store.js";
-import { FEDERATION_USER_TOKEN_AUDIENCE } from "./audience.js";
+import { USER_TOKEN_AUDIENCE } from "./audience.js";
 import type {
   CreateUserTokenInput,
   FederationDiscovery,
@@ -159,7 +159,7 @@ export class Authenticator {
     return {
       issuer: `urn:downcity:federation:${federation_id}`,
       jwks_uri: `${origin.replace(/\/+$/, "")}/.well-known/jwks.json`,
-      federation_user_token_audience: FEDERATION_USER_TOKEN_AUDIENCE,
+      user_token_audience: USER_TOKEN_AUDIENCE,
     };
   }
 
