@@ -6,6 +6,12 @@
  */
 
 import { home_world_hex_center } from "@/lib/home-world-geometry";
+import type {
+  HomeProductWorldAnnotation,
+  HomeProductWorldCell,
+  HomeProductWorldFeatureKey,
+  HomeProductWorldTerrainKind,
+} from "@/types/home/HomeProductWorld";
 
 export const home_product_world_origin = {
   x: 600,
@@ -13,14 +19,14 @@ export const home_product_world_origin = {
   radius: 42,
 } as const;
 
-const continent_radius = 15;
+const continent_radius = 23;
 const city_spacing = 4;
 
 const coastline_radii = [
-  15, 14, 14, 13, 15, 15,
-  14, 12, 13, 14, 15, 13,
-  14, 14, 15, 12, 13, 15,
-  14, 13, 15, 14, 12, 14,
+  23, 23, 22, 22, 23, 23,
+  23, 22, 23, 23, 22, 22,
+  23, 23, 23, 22, 23, 23,
+  23, 22, 23, 23, 22, 23,
 ] as const;
 
 const hex_directions = [
@@ -44,10 +50,10 @@ const city_offsets = [
 
 /** 四种 City 性格决定人口密度、主色与内部地块语言。 */
 const city_archetypes = [
-  { key: "studio", accent: "#4f6f9f", agent_count: 5, fill_opacity: 0.055 },
-  { key: "grove", accent: "#557b70", agent_count: 3, fill_opacity: 0.045 },
-  { key: "works", accent: "#9a6b5d", agent_count: 3, fill_opacity: 0.05 },
-  { key: "commons", accent: "#716a9f", agent_count: 4, fill_opacity: 0.04 },
+  { key: "studio", accent: "#4f6f9f", fill_opacity: 0.055 },
+  { key: "grove", accent: "#557b70", fill_opacity: 0.045 },
+  { key: "works", accent: "#9a6b5d", fill_opacity: 0.05 },
+  { key: "commons", accent: "#716a9f", fill_opacity: 0.04 },
 ] as const;
 
 /** 计算两个轴向坐标之间的六边形距离。 */
@@ -110,15 +116,18 @@ function get_coastline_radius(q: number, row: number) {
   return coastline_radii[radius_index];
 }
 
-const macro_city_coordinates = Array.from({ length: 7 }, (_, q_index) => {
-  const q = q_index - 3;
+const macro_city_radius = 4;
+const macro_city_diameter = macro_city_radius * 2 + 1;
 
-  return Array.from({ length: 7 }, (_, row_index) => ({
+const macro_city_coordinates = Array.from({ length: macro_city_diameter }, (_, q_index) => {
+  const q = q_index - macro_city_radius;
+
+  return Array.from({ length: macro_city_diameter }, (_, row_index) => ({
     q,
-    row: row_index - 3,
+    row: row_index - macro_city_radius,
   }));
 }).flat().filter((coordinate) =>
-  get_hex_distance(coordinate.q, coordinate.row, 0, 0) <= 3,
+  get_hex_distance(coordinate.q, coordinate.row, 0, 0) <= macro_city_radius,
 ).sort((coordinate_a, coordinate_b) => {
   const distance_difference = get_hex_distance(
     coordinate_a.q,
@@ -132,10 +141,21 @@ const macro_city_coordinates = Array.from({ length: 7 }, (_, q_index) => {
     || coordinate_a.row - coordinate_b.row;
 });
 
-/** 37 个错位 City 中心让大陆分区具有紧凑、狭长与开放等不同轮廓。 */
+/** 61 个错位 City 中心让扩展后的大陆保持紧凑、狭长与开放等不同轮廓。 */
 export const home_product_world_city_seeds = macro_city_coordinates.map((coordinate, index) => {
   const offset = city_offsets[index % city_offsets.length];
   const archetype = city_archetypes[index % city_archetypes.length];
+  const distance_from_origin = get_hex_distance(coordinate.q, coordinate.row, 0, 0);
+  const population_phase = Math.abs(coordinate.q * 11 + coordinate.row * 17 + index * 5);
+  const agent_count = index === 0
+    ? 3
+    : index % 7 === 0
+      ? 3
+      : index % 3 === 0
+        ? 2
+        : distance_from_origin >= macro_city_radius && population_phase % 3 !== 0
+          ? 0
+          : 1;
 
   return {
     key: index === 0 ? "origin" : `city_${index}`,
@@ -144,7 +164,7 @@ export const home_product_world_city_seeds = macro_city_coordinates.map((coordin
     row: coordinate.row * city_spacing + offset.row,
     city_type: archetype.key,
     accent: archetype.accent,
-    agent_count: archetype.agent_count,
+    agent_count,
     fill_opacity: archetype.fill_opacity,
   };
 });
@@ -185,9 +205,71 @@ const assigned_cells = continent_coordinates.map((coordinate) => {
   };
 });
 
+const assigned_cell_by_key = new Map(assigned_cells.map((cell) => [cell.key, cell]));
+
+const lake_definitions = [
+  { key: "memory_lake", q: -7, row: 5, radius: 2 },
+  { key: "mirror_lake", q: 9, row: -8, radius: 2 },
+] as const;
+
+const wilderness_definitions = [
+  { key: "quiet_wilds", q: 9, row: 5, radius: 2 },
+] as const;
+
+/** 找到覆盖当前坐标的命名湖泊。 */
+function get_lake_key(q: number, row: number): HomeProductWorldFeatureKey | null {
+  return lake_definitions.find((lake) =>
+    get_hex_distance(q, row, lake.q, lake.row) <= lake.radius,
+  )?.key ?? null;
+}
+
+/** 找到覆盖当前坐标的命名中立荒地。 */
+function get_wilderness_key(q: number, row: number): HomeProductWorldFeatureKey | null {
+  return wilderness_definitions.find((wilderness) =>
+    get_hex_distance(q, row, wilderness.q, wilderness.row) <= wilderness.radius,
+  )?.key ?? null;
+}
+
+/** 判断地块是否位于两个 Federation 的接壤带。 */
+function is_federation_separator(cell: (typeof assigned_cells)[number]) {
+  return hex_directions.some((direction) => {
+    const neighbor = assigned_cell_by_key.get(`${cell.q + direction.q}:${cell.row + direction.row}`);
+    return neighbor && neighbor.city_seed.federation !== cell.city_seed.federation;
+  });
+}
+
+/** 将相邻 Federation 的竞争边界转换为水域或中立地带。 */
+function get_geography(cell: (typeof assigned_cells)[number]): {
+  terrain: HomeProductWorldTerrainKind;
+  feature_key: HomeProductWorldFeatureKey | null;
+} {
+  if (cell.q === 0 && cell.row === 0) return { terrain: "land", feature_key: null };
+
+  const lake_key = get_lake_key(cell.q, cell.row);
+  if (lake_key) return { terrain: "water", feature_key: lake_key };
+
+  const wilderness_key = get_wilderness_key(cell.q, cell.row);
+  if (wilderness_key) return { terrain: "wilderness", feature_key: wilderness_key };
+
+  if (is_federation_separator(cell)) {
+    const is_named_strait = get_hex_distance(cell.q, cell.row, 2, -2) <= 5;
+    return {
+      terrain: "water",
+      feature_key: is_named_strait ? "model_strait" : null,
+    };
+  }
+
+  return { terrain: "land", feature_key: null };
+}
+
+const geographic_cells = assigned_cells.map((cell) => ({
+  ...cell,
+  ...get_geography(cell),
+}));
+
 const agent_cell_keys = new Set(home_product_world_city_seeds.flatMap((city_seed) =>
-  assigned_cells
-    .filter((cell) => cell.city_seed.key === city_seed.key)
+  geographic_cells
+    .filter((cell) => cell.terrain === "land" && cell.city_seed.key === city_seed.key)
     .sort((cell_a, cell_b) => {
       const distance_difference = get_hex_distance(
         cell_a.q,
@@ -205,10 +287,13 @@ const agent_cell_keys = new Set(home_product_world_city_seeds.flatMap((city_seed
 ));
 
 /** 根据 City 性格生成具有差异的内部设施与地貌。 */
-function get_cell_content(cell: (typeof assigned_cells)[number], index: number) {
+function get_cell_content(cell: (typeof geographic_cells)[number], index: number) {
+  const residue = Math.abs(cell.q * 17 + cell.row * 31 + index * 7);
+
+  if (cell.terrain === "water") return residue % 6 === 0 ? "water" : "empty";
+  if (cell.terrain === "wilderness") return residue % 3 === 0 ? "forest" : "empty";
   if (agent_cell_keys.has(cell.key)) return "agent";
 
-  const residue = Math.abs(cell.q * 17 + cell.row * 31 + index * 7);
   if (cell.city_seed.city_type === "studio") {
     if (residue % 5 === 0) return "workshop";
     if (residue % 13 === 0) return "forest";
@@ -230,22 +315,71 @@ function get_cell_content(cell: (typeof assigned_cells)[number], index: number) 
 }
 
 /** 一整块连续大陆上的全部地块。 */
-export const home_product_world_cells = assigned_cells.map((cell, index) => {
+export const home_product_world_cells: HomeProductWorldCell[] = geographic_cells.map((cell, index) => {
   const distance = get_hex_distance(cell.q, cell.row, 0, 0);
+  const growth_band_width = continent_radius / 4;
+  const is_land = cell.terrain === "land";
 
   return {
     key: cell.key,
     q: cell.q,
     row: cell.row,
-    city_key: cell.city_seed.key,
-    city_type: cell.city_seed.city_type,
-    federation: cell.city_seed.federation,
-    accent: cell.city_seed.accent,
-    fill_opacity: cell.city_seed.fill_opacity,
-    growth_stage: distance === 0 ? 0 : Math.min(4, Math.ceil(distance / 3)),
+    city_key: is_land ? cell.city_seed.key : null,
+    city_type: is_land ? cell.city_seed.city_type : null,
+    federation: is_land ? cell.city_seed.federation : null,
+    accent: cell.terrain === "water"
+      ? "#7798a8"
+      : cell.terrain === "wilderness"
+        ? "#7f806d"
+        : cell.city_seed.accent,
+    fill_opacity: cell.terrain === "water"
+      ? 0.11
+      : cell.terrain === "wilderness"
+        ? 0.035
+        : cell.city_seed.fill_opacity,
+    growth_stage: distance === 0 ? 0 : Math.min(4, Math.ceil(distance / growth_band_width)),
     content: get_cell_content(cell, index),
+    terrain: cell.terrain,
+    feature_key: cell.feature_key,
   };
 });
+
+/** 地图缩小后仍保持可读的 Federation、City 与地理标注。 */
+export const home_product_world_annotations: HomeProductWorldAnnotation[] = [
+  { key: "atlas", q: 0, row: 2, kind: "federation", label_key: "federations.atlas" },
+  { key: "harbor", q: -11, row: 10, kind: "federation", label_key: "federations.harbor" },
+  { key: "summit", q: -8, row: -6, kind: "federation", label_key: "federations.summit" },
+  { key: "meridian", q: 11, row: -6, kind: "federation", label_key: "federations.meridian" },
+  { key: "memory_lake", q: -7, row: 5, kind: "feature", label_key: "annotations.memory_lake" },
+  { key: "mirror_lake", q: 9, row: -8, kind: "feature", label_key: "annotations.mirror_lake" },
+  { key: "model_strait", q: 2, row: -2, kind: "feature", label_key: "annotations.model_strait" },
+  { key: "quiet_wilds", q: 9, row: 5, kind: "feature", label_key: "annotations.quiet_wilds" },
+  { key: "origin_city", q: 0, row: 0, kind: "city", label_key: "annotations.origin_city" },
+  { key: "workshop_district", q: -5, row: -1, kind: "city", label_key: "annotations.workshop_district" },
+];
+
+const named_location_cell_keys = home_product_world_annotations
+  .filter((annotation) => annotation.kind === "feature")
+  .map((annotation) => `${annotation.q}:${annotation.row}`);
+
+const core_city_cell_keys = home_product_world_city_seeds.flatMap((city_seed, index) => {
+  if (index !== 0 && index % 7 !== 0) return [];
+
+  const representative_cell = home_product_world_cells
+    .filter((cell) => cell.city_key === city_seed.key && cell.content === "agent")
+    .sort((cell_a, cell_b) =>
+      get_hex_distance(cell_a.q, cell_a.row, city_seed.q, city_seed.row)
+      - get_hex_distance(cell_b.q, cell_b.row, city_seed.q, city_seed.row),
+    )[0];
+
+  return representative_cell ? [representative_cell.key] : [];
+});
+
+/** 只有命名地貌和少量核心 City 可以打开地点信息卡。 */
+export const home_product_world_interactive_cell_keys = new Set([
+  ...named_location_cell_keys,
+  ...core_city_cell_keys,
+]);
 
 /** 大陆从主角脚下的单个中心地块向外扩散为五层连续地块。 */
 export const home_product_world_growth_groups = Array.from({ length: 5 }, (_, stage) =>
@@ -282,10 +416,11 @@ function get_hex_edge_path(q: number, row: number, side: number) {
 /** City 的闭合边界直接使用归属发生变化的蜂巢边缘。 */
 export const home_product_world_city_edges = home_product_world_cells.flatMap((cell) =>
   hex_directions.flatMap((direction, side) => {
+    if (cell.terrain !== "land") return [];
     const neighbor = cell_by_key.get(`${cell.q + direction.q}:${cell.row + direction.row}`);
 
-    if (neighbor?.city_key === cell.city_key) return [];
-    if (neighbor && cell.key > neighbor.key) return [];
+    if (neighbor?.terrain === "land" && neighbor.city_key === cell.city_key) return [];
+    if (neighbor?.terrain === "land" && cell.key > neighbor.key) return [];
 
     return [get_hex_edge_path(cell.q, cell.row, side)];
   }),
@@ -294,10 +429,11 @@ export const home_product_world_city_edges = home_product_world_cells.flatMap((c
 /** Federation 的闭合粗边界直接使用归属发生变化的蜂巢边缘。 */
 export const home_product_world_federation_edges = home_product_world_cells.flatMap((cell) =>
   hex_directions.flatMap((direction, side) => {
+    if (cell.terrain !== "land") return [];
     const neighbor = cell_by_key.get(`${cell.q + direction.q}:${cell.row + direction.row}`);
 
-    if (neighbor?.federation === cell.federation) return [];
-    if (neighbor && cell.key > neighbor.key) return [];
+    if (neighbor?.terrain === "land" && neighbor.federation === cell.federation) return [];
+    if (neighbor?.terrain === "land" && cell.key > neighbor.key) return [];
 
     return [get_hex_edge_path(cell.q, cell.row, side)];
   }),

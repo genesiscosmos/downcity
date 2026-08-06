@@ -6,17 +6,19 @@
  * 用户的下一次独立向下输入才会使 Sticky 舞台离场并进入下一 Section。
  */
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { IconArrowRight } from "@tabler/icons-react";
-import { motion, useReducedMotion, useTransform } from "framer-motion";
+import { motion, useMotionValueEvent, useReducedMotion, useTransform } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 import { HomeHeroAgentActor } from "@/components/sections/HomeHeroAgentActor";
 import { HomeHeroCityStage, home_hero_agent_position, home_hero_city_floor_offset } from "@/components/sections/HomeHeroCityStage";
 import { HomeProductWorldSection } from "@/components/sections/HomeProductWorldSection";
+import { HomeProductWorldInspector } from "@/components/sections/HomeProductWorldInspector";
 import { homepage_positioning } from "@/lib/homepage-positioning";
 import { use_home_hero_world_progress } from "@/hooks/use-home-hero-world-progress";
+import type { HomeProductWorldInspection } from "@/types/home/HomeProductWorld";
 
 const home_hero_agent_accent = "#4f6f9f";
 
@@ -29,45 +31,44 @@ export function HomeHeroWorldSection() {
   const reduce_motion = useReducedMotion();
   const section_ref = useRef<HTMLElement>(null);
   const { world_progress, seam_progress } = use_home_hero_world_progress(section_ref, Boolean(reduce_motion));
+  const [map_is_interactive, set_map_is_interactive] = useState(false);
+  const [preview_inspection, set_preview_inspection] = useState<HomeProductWorldInspection | null>(null);
+  const [pinned_inspection, set_pinned_inspection] = useState<HomeProductWorldInspection | null>(null);
+
+  useMotionValueEvent(world_progress, "change", (progress) => set_map_is_interactive(progress >= 0.72));
+
+  useEffect(() => {
+    const handle_key_down = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        set_preview_inspection(null);
+        set_pinned_inspection(null);
+      }
+    };
+    window.addEventListener("keydown", handle_key_down);
+    return () => window.removeEventListener("keydown", handle_key_down);
+  }, []);
 
   const start_position_y = home_hero_agent_position.y + home_hero_city_floor_offset;
-  const is_zh = locale === "zh";
-  const agent_start_path = is_zh
-    ? "/zh/agent-sdk-docs/local-agent/quickstart"
-    : "/en/agent-sdk-docs/local-agent/quickstart";
-  const city_start_path = is_zh
-    ? "/zh/city-sdk-docs/quickstart/create-city"
-    : "/en/city-sdk-docs/quickstart/create-city";
-
+  const learn_more_path = locale === "zh" ? "/zh/product" : "/product";
   const hero_dom_track_y = useTransform(world_progress, [0, 0.34], ["0svh", "-100svh"]);
   const hero_scene_track_y = useTransform(world_progress, [0, 0.34], [0, -720]);
 
   const agent_x = useTransform(world_progress, [0, 0.34], [home_hero_agent_position.x, 600]);
   const agent_y = useTransform(world_progress, [0, 0.34], [start_position_y - 720, 360]);
-  const agent_scale = useTransform(world_progress, [0, 0.34, 0.43, 0.56, 0.68, 0.82, 1], [1, 1, 2.18, 2.24, 1.35, 0.7, 0.45]);
+  const agent_scale = useTransform(world_progress, [0, 0.34, 0.43, 0.58, 0.68, 0.82, 0.9, 1], [1, 1, 2, 2.05, 1.35, 1.18, 1, 0.82]);
   const agent_shadow_opacity = useTransform(world_progress, [0, 0.34, 0.44, 0.62, 0.82, 1], [0.12, 0.12, 0.22, 0.18, 0.12, 0.08]);
 
-  const capability_opacity = useTransform(world_progress, [0.34, 0.42, 0.57, 0.66], [0, 1, 1, 0]);
-  const capability_scale = useTransform(world_progress, [0.34, 0.43, 0.58, 0.66], [1.08, 1, 0.44, 0.16]);
-  const capability_rotate = useTransform(world_progress, [0.36, 0.66], [-4, 8]);
-  const capability_path = useTransform(world_progress, [0.42, 0.55, 0.63], [0, 0.76, 1]);
-  const integration_ring_opacity = useTransform(world_progress, [0.39, 0.46, 0.59, 0.68], [0, 0.72, 0.42, 0]);
-  const integration_ring_scale = useTransform(world_progress, [0.4, 0.68], [0.72, 1.34]);
+  const capability_progress = useTransform(world_progress, [0.34, 0.68], [0, 1]);
 
-  const center_land_opacity = useTransform(world_progress, [0.56, 0.62], [0, 1]);
-  const inner_land_opacity = useTransform(world_progress, [0.6, 0.68], [0, 1]);
-  const middle_land_opacity = useTransform(world_progress, [0.65, 0.74], [0, 1]);
-  const outer_land_opacity = useTransform(world_progress, [0.7, 0.81], [0, 1]);
-  const continent_opacity = useTransform(world_progress, [0.76, 0.89], [0, 1]);
-  const center_land_scale = useTransform(world_progress, [0.55, 0.65], [0.46, 1]);
-  const inner_land_scale = useTransform(world_progress, [0.59, 0.7], [0.68, 1]);
-  const middle_land_scale = useTransform(world_progress, [0.64, 0.77], [0.76, 1]);
-  const outer_land_scale = useTransform(world_progress, [0.69, 0.84], [0.82, 1]);
-  const continent_scale = useTransform(world_progress, [0.75, 0.91], [0.87, 1]);
+  const center_land_opacity = useTransform(world_progress, [0.61, 0.66], [0, 1]);
+  const inner_land_opacity = useTransform(world_progress, [0.65, 0.72], [0, 1]);
+  const middle_land_opacity = useTransform(world_progress, [0.69, 0.78], [0, 1]);
+  const outer_land_opacity = useTransform(world_progress, [0.74, 0.85], [0, 1]);
+  const continent_opacity = useTransform(world_progress, [0.8, 0.91], [0, 1]);
   const city_boundary_opacity = useTransform(world_progress, [0.77, 0.9], [0, 0.74]);
   const federation_boundary_opacity = useTransform(world_progress, [0.9, 0.98], [0, 1]);
   const federation_boundary_path = useTransform(world_progress, [0.9, 1], [0, 1]);
-  const world_camera_scale = useTransform(world_progress, [0, 0.55, 0.66, 0.78, 0.9, 1], [1, 1, 0.98, 0.84, 0.69, 0.62]);
+  const world_camera_scale = useTransform(world_progress, [0, 0.55, 0.66, 0.78, 0.9, 1], [1, 1, 0.96, 0.75, 0.58, 0.5]);
 
   const capabilities_stage_opacity = useTransform(world_progress, [0.35, 0.43, 0.59, 0.68], [0, 1, 1, 0]);
   const city_stage_opacity = useTransform(world_progress, [0.67, 0.75, 0.88, 0.94], [0, 1, 1, 0]);
@@ -79,9 +80,6 @@ export function HomeHeroWorldSection() {
   const growth_opacities = reduce_motion
     ? [0, 0, 0, 0, 0]
     : [center_land_opacity, inner_land_opacity, middle_land_opacity, outer_land_opacity, continent_opacity];
-  const growth_scales = reduce_motion
-    ? [1, 1, 1, 1, 1]
-    : [center_land_scale, inner_land_scale, middle_land_scale, outer_land_scale, continent_scale];
 
   return (
     <section ref={section_ref} className={reduce_motion ? "relative min-h-svh overflow-hidden bg-background" : "relative h-[318svh] bg-background"}>
@@ -96,10 +94,15 @@ export function HomeHeroWorldSection() {
               <p className="mx-auto mt-5 max-w-3xl text-[clamp(1.05rem,2vw,1.45rem)] font-medium leading-snug text-foreground">{positioning.hero_headline}</p>
               <p className="mx-auto mt-3 max-w-2xl text-sm leading-[1.75] text-text-soft md:text-base">{positioning.hero_description}</p>
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                <Link to={agent_start_path} className="inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity duration-200 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("hero.startAgent")}<IconArrowRight className="size-4" strokeWidth={1.7} /></Link>
-                <Link to={city_start_path} className="inline-flex h-11 items-center gap-2 rounded-lg border border-line bg-background px-5 text-sm font-semibold text-foreground transition-colors duration-200 hover:border-line-strong hover:bg-surface-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("hero.createCity")}<IconArrowRight className="size-4" strokeWidth={1.6} /></Link>
+                <a href="#quickstart" className="inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity duration-150 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  {t("hero.quickStart")}
+                  <IconArrowRight className="size-4" strokeWidth={1.7} />
+                </a>
+                <Link to={learn_more_path} className="inline-flex h-11 items-center gap-2 rounded-lg border border-line bg-background px-5 text-sm font-semibold text-foreground transition-colors duration-150 hover:border-line-strong hover:bg-surface-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  {t("hero.learnMore")}
+                  <IconArrowRight className="size-4" strokeWidth={1.6} />
+                </Link>
               </div>
-              <a href="#architecture" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-text-soft transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("hero.exploreArchitecture")}<IconArrowRight className="size-3.5" strokeWidth={1.6} /></a>
             </div>
           </motion.div>
 
@@ -107,7 +110,20 @@ export function HomeHeroWorldSection() {
           <p className="sr-only">{t("productWorld.description")}</p>
 
           <div className="absolute inset-0 z-10 flex items-center justify-center">
-            <svg viewBox="0 0 1200 720" preserveAspectRatio="xMidYMax meet" overflow="visible" className="h-full w-[190vw] max-w-none shrink-0 md:w-full" role="img" aria-label={`${t("hero.cityStage.label")} ${t("productWorld.description")}`}>
+            <svg
+              viewBox="0 0 1200 720"
+              preserveAspectRatio="xMidYMax meet"
+              overflow="visible"
+              className="h-full w-[190vw] max-w-none shrink-0 md:w-full"
+              role="img"
+              aria-label={`${t("hero.cityStage.label")} ${t("productWorld.description")}`}
+              onClick={(event) => {
+                if (event.target === event.currentTarget) {
+                  set_preview_inspection(null);
+                  set_pinned_inspection(null);
+                }
+              }}
+            >
               <motion.g style={{ y: reduce_motion ? 0 : hero_scene_track_y, willChange: reduce_motion ? undefined : "transform" }}>
                 <HomeHeroCityStage locale={locale} city_opacity={1} city_y={0} city_scale={1} />
 
@@ -116,14 +132,28 @@ export function HomeHeroWorldSection() {
                     {!reduce_motion ? (
                       <HomeProductWorldSection
                         agent_accent={home_hero_agent_accent}
-                        capability_opacity={capability_opacity}
-                        capability_scale={capability_scale}
-                        capability_rotate={capability_rotate}
-                        capability_path={capability_path}
-                        integration_ring_opacity={integration_ring_opacity}
-                        integration_ring_scale={integration_ring_scale}
+                        capability_progress={capability_progress}
                         growth_opacities={growth_opacities}
-                        growth_scales={growth_scales}
+                        active_cell_key={pinned_inspection?.cell.key ?? preview_inspection?.cell.key ?? null}
+                        is_interactive={map_is_interactive}
+                        on_cell_preview={(event) => {
+                          if (!pinned_inspection) {
+                            set_preview_inspection({ ...event, is_pinned: false });
+                          }
+                        }}
+                        on_cell_preview_end={() => {
+                          if (!pinned_inspection) set_preview_inspection(null);
+                        }}
+                        on_cell_select={(event) => {
+                          if (pinned_inspection?.cell.key === event.cell.key) {
+                            set_pinned_inspection(null);
+                            set_preview_inspection(null);
+                            return;
+                          }
+                          const next_inspection = { ...event, is_pinned: true };
+                          set_pinned_inspection(next_inspection);
+                          set_preview_inspection(next_inspection);
+                        }}
                         city_boundary_opacity={city_boundary_opacity}
                         federation_boundary_opacity={federation_boundary_opacity}
                         federation_boundary_path={federation_boundary_path}
@@ -139,12 +169,23 @@ export function HomeHeroWorldSection() {
                     agent_scale={reduce_motion ? 1 : agent_scale}
                     shadow_opacity={reduce_motion ? 0.12 : agent_shadow_opacity}
                     scroll_progress={world_progress}
+                    capability_progress={capability_progress}
                     reduce_motion={Boolean(reduce_motion)}
                   />
                 </g>
               </motion.g>
             </svg>
           </div>
+
+          {!reduce_motion ? (
+            <HomeProductWorldInspector
+              inspection={pinned_inspection ?? preview_inspection}
+              on_close={() => {
+                set_preview_inspection(null);
+                set_pinned_inspection(null);
+              }}
+            />
+          ) : null}
 
           <div className="pointer-events-none absolute inset-x-5 bottom-[4svh] z-20 mx-auto h-10 max-w-5xl text-center md:inset-x-8 md:bottom-[5svh]">
             {!reduce_motion ? <>

@@ -1,65 +1,99 @@
 /**
- * 首页统一 Hero World 舞台中的 Capabilities 与蜂巢大陆绘图层。
+ * 首页 Product World 的 SVG 地图绘图层。
  *
- * 本组件不创建 Section，也不监听滚动。所有动画值都来自外层唯一的滚动进度，
- * 从而让能力集成、地块生长、City 与 Federation 保持连续且可逆。
+ * 能力汇聚、地块生长和边界显示都由 Hero 的单一滚动进度驱动；本组件只处理
+ * 地图内容与轻量地点交互，不创建滚动监听，也不拥有固定信息卡状态。
  */
 
 import { motion, type MotionValue } from "framer-motion";
-import { useTranslation } from "react-i18next";
-import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
+import { HomeCapabilityConvergenceLayer } from "@/components/sections/HomeCapabilityConvergenceLayer";
+import { HomeProductWorldAnnotationLayer } from "@/components/sections/HomeProductWorldAnnotationLayer";
 import {
+  home_product_world_annotations,
   home_product_world_city_edges,
   home_product_world_federation_edges,
   home_product_world_growth_groups,
   home_product_world_origin,
+  home_product_world_interactive_cell_keys,
 } from "@/lib/home-product-world-layout";
 import { home_world_agent_path, home_world_hex_center, home_world_hex_path } from "@/lib/home-world-geometry";
+import type { HomeProductWorldCell, HomeProductWorldInspectEvent } from "@/types/home/HomeProductWorld";
 import type { HomeProductWorldSectionProps } from "@/types/home/HomeGhost";
 
-const capability_nodes = [
-  { key: "tool", x: 405, y: 218 },
-  { key: "skill", x: 795, y: 218 },
-  { key: "memory", x: 318, y: 360 },
-  { key: "task", x: 882, y: 360 },
-  { key: "service", x: 410, y: 510 },
-  { key: "model", x: 790, y: 510 },
-] as const;
-
-/** 渲染地块内部的 Agent、建筑、工作室、森林与广场。 */
-function render_cell_content(content: string, center_x: number, center_y: number, radius: number, accent: string) {
-  if (content === "agent") {
+function render_cell_content(cell: HomeProductWorldCell, center_x: number, center_y: number, radius: number) {
+  const accent = cell.accent;
+  if (cell.content === "agent") {
     return <g><path d={home_world_agent_path(center_x, center_y, radius * 0.78)} fill={accent} /><circle cx={center_x - radius * 0.1} cy={center_y - radius * 0.06} r={radius * 0.032} className="fill-background" /><circle cx={center_x + radius * 0.1} cy={center_y - radius * 0.06} r={radius * 0.032} className="fill-background" /></g>;
   }
-  if (content === "forest") {
-    return <g className="fill-none stroke-foreground" strokeOpacity="0.44"><path d={`M${center_x - radius * 0.3} ${center_y + radius * 0.24} L${center_x - radius * 0.08} ${center_y - radius * 0.3} L${center_x + radius * 0.12} ${center_y + radius * 0.24} Z`} /><path d={`M${center_x + radius * 0.04} ${center_y + radius * 0.24} L${center_x + radius * 0.27} ${center_y - radius * 0.36} L${center_x + radius * 0.48} ${center_y + radius * 0.24} Z`} /></g>;
+  if (cell.content === "water") {
+    return <path d={`M${center_x - radius * 0.48} ${center_y} Q${center_x - radius * 0.2} ${center_y - radius * 0.2} ${center_x} ${center_y} T${center_x + radius * 0.48} ${center_y}`} fill="none" stroke={accent} strokeOpacity="0.56" strokeWidth="1.5" />;
   }
-  if (content === "building") {
-    return <g className="fill-none stroke-foreground" strokeOpacity="0.44"><path d={`M${center_x - radius * 0.34} ${center_y + radius * 0.3} V${center_y - radius * 0.26} H${center_x + radius * 0.02} V${center_y + radius * 0.3}`} /><path d={`M${center_x + radius * 0.02} ${center_y + radius * 0.3} V${center_y - radius * 0.06} H${center_x + radius * 0.34} V${center_y + radius * 0.3}`} /></g>;
+  if (cell.content === "forest") {
+    return <g className="fill-none" stroke={accent} strokeOpacity="0.56"><path d={`M${center_x - radius * 0.3} ${center_y + radius * 0.24} L${center_x - radius * 0.08} ${center_y - radius * 0.3} L${center_x + radius * 0.12} ${center_y + radius * 0.24} Z`} /><path d={`M${center_x + radius * 0.04} ${center_y + radius * 0.24} L${center_x + radius * 0.27} ${center_y - radius * 0.36} L${center_x + radius * 0.48} ${center_y + radius * 0.24} Z`} /></g>;
   }
-  if (content === "workshop") {
-    return <g className="fill-none stroke-foreground" strokeOpacity="0.48"><path d={`M${center_x - radius * 0.36} ${center_y - radius * 0.22} H${center_x + radius * 0.2} V${center_y + radius * 0.28} H${center_x - radius * 0.36} Z`} /><path d={`M${center_x - radius * 0.18} ${center_y - radius * 0.38} H${center_x + radius * 0.38} V${center_y + radius * 0.12}`} /></g>;
+  if (cell.content === "building") {
+    return <g className="fill-none" stroke={accent} strokeOpacity="0.54"><path d={`M${center_x - radius * 0.34} ${center_y + radius * 0.3} V${center_y - radius * 0.26} H${center_x + radius * 0.02} V${center_y + radius * 0.3}`} /><path d={`M${center_x + radius * 0.02} ${center_y + radius * 0.3} V${center_y - radius * 0.06} H${center_x + radius * 0.34} V${center_y + radius * 0.3}`} /></g>;
   }
-  if (content === "plaza") {
-    return <g className="fill-none stroke-foreground" strokeOpacity="0.44"><path d={`M${center_x} ${center_y - radius * 0.3} L${center_x + radius * 0.3} ${center_y} L${center_x} ${center_y + radius * 0.3} L${center_x - radius * 0.3} ${center_y} Z`} /><path d={`M${center_x} ${center_y - radius * 0.3} V${center_y - radius * 0.46} M${center_x + radius * 0.3} ${center_y} H${center_x + radius * 0.46}`} /></g>;
+  if (cell.content === "workshop") {
+    return <g className="fill-none" stroke={accent} strokeOpacity="0.56"><path d={`M${center_x - radius * 0.36} ${center_y - radius * 0.22} H${center_x + radius * 0.2} V${center_y + radius * 0.28} H${center_x - radius * 0.36} Z`} /><path d={`M${center_x - radius * 0.18} ${center_y - radius * 0.38} H${center_x + radius * 0.38} V${center_y + radius * 0.12}`} /></g>;
+  }
+  if (cell.content === "plaza") {
+    return <g className="fill-none" stroke={accent} strokeOpacity="0.54"><path d={`M${center_x} ${center_y - radius * 0.3} L${center_x + radius * 0.3} ${center_y} L${center_x} ${center_y + radius * 0.3} L${center_x - radius * 0.3} ${center_y} Z`} /><path d={`M${center_x} ${center_y - radius * 0.3} V${center_y - radius * 0.46} M${center_x + radius * 0.3} ${center_y} H${center_x + radius * 0.46}`} /></g>;
   }
   return null;
 }
 
-/** 渲染同一扩散阶段中的连续大陆地块。 */
 function render_growth_group(
-  cells: (typeof home_product_world_growth_groups)[number],
-  opacity: number | MotionValue<number>,
-  scale: number | MotionValue<number>,
+  cells: readonly HomeProductWorldCell[],
+  opacity: MotionValue<number> | number,
+  active_cell_key: string | null,
+  is_interactive: boolean,
+  on_cell_preview: (event: HomeProductWorldInspectEvent) => void,
+  on_cell_preview_end: HomeProductWorldSectionProps["on_cell_preview_end"],
+  on_cell_select: (event: HomeProductWorldInspectEvent) => void,
 ) {
   return (
-    <motion.g style={{ opacity, scale, transformOrigin: "600px 360px", willChange: "transform, opacity" }}>
+    <motion.g style={{ opacity, willChange: "opacity" }}>
       {cells.map((cell) => {
         const center = home_world_hex_center(home_product_world_origin.x, home_product_world_origin.y, home_product_world_origin.radius, cell.q, cell.row);
+        const is_active = active_cell_key === cell.key;
+        const is_explorable = is_interactive && home_product_world_interactive_cell_keys.has(cell.key);
+        const cell_class_name = is_explorable
+          ? "pointer-events-auto cursor-pointer outline-none transition-[filter] duration-150 hover:brightness-125 focus-visible:brightness-125"
+          : "pointer-events-none";
+        const cell_content = (
+          <>
+            <path d={home_world_hex_path(center.x, center.y, home_product_world_origin.radius)} fill={cell.accent} fillOpacity={is_active ? cell.fill_opacity + 0.08 : cell.fill_opacity} className={is_active ? "stroke-foreground" : "stroke-line-strong"} strokeWidth={is_active ? "1.5" : "0.85"} />
+            {render_cell_content(cell, center.x, center.y, home_product_world_origin.radius)}
+          </>
+        );
+        if (!is_explorable) return <g key={cell.key}>{cell_content}</g>;
         return (
-          <g key={cell.key}>
-            <path d={home_world_hex_path(center.x, center.y, home_product_world_origin.radius)} fill={cell.accent} fillOpacity={cell.fill_opacity} className="stroke-line-strong" strokeWidth="0.85" />
-            {cell.q === 0 && cell.row === 0 ? null : render_cell_content(cell.content, center.x, center.y, home_product_world_origin.radius, cell.accent)}
+          <g
+            key={cell.key}
+            role="button"
+            tabIndex={0}
+            aria-label={cell.feature_key ?? cell.city_key ?? cell.key}
+            data-world-cell-key={cell.key}
+            className={cell_class_name}
+            onPointerEnter={(event) => on_cell_preview({ cell, client_x: event.clientX, client_y: event.clientY })}
+            onMouseLeave={on_cell_preview_end}
+            onFocus={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              on_cell_preview({ cell, client_x: rect.right, client_y: rect.top + rect.height / 2 });
+            }}
+            onBlur={on_cell_preview_end}
+            onClick={(event) => on_cell_select({ cell, client_x: event.clientX, client_y: event.clientY })}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                const rect = event.currentTarget.getBoundingClientRect();
+                on_cell_select({ cell, client_x: rect.right, client_y: rect.top + rect.height / 2 });
+              }
+              if (event.key === "Escape") on_cell_preview_end();
+            }}
+          >
+            {cell_content}
           </g>
         );
       })}
@@ -67,53 +101,32 @@ function render_growth_group(
   );
 }
 
-/** 绘制能力集成与完整蜂巢大陆。 */
+/** 绘制能力、地图、边界与文字标注。 */
 export function HomeProductWorldSection({
   agent_accent,
-  capability_opacity,
-  capability_scale,
-  capability_rotate,
-  capability_path,
-  integration_ring_opacity,
-  integration_ring_scale,
+  capability_progress,
   growth_opacities,
-  growth_scales,
+  active_cell_key,
+  is_interactive,
+  on_cell_preview,
+  on_cell_preview_end,
+  on_cell_select,
   city_boundary_opacity,
   federation_boundary_opacity,
   federation_boundary_path,
 }: HomeProductWorldSectionProps) {
-  const { i18n } = useTranslation("home");
-  const locale = use_interface_locale();
-  const t = i18n.getFixedT(locale, "home");
-
   return (
     <>
-      <motion.g style={{ opacity: capability_opacity, scale: capability_scale, rotate: capability_rotate, transformOrigin: "600px 360px", willChange: "transform, opacity" }}>
-        <ellipse cx="600" cy="360" rx="292" ry="214" fill="none" stroke={agent_accent} strokeDasharray="3 9" opacity="0.28" />
-        {capability_nodes.map((node) => (
-          <g key={node.key}>
-            <motion.path d={`M${node.x} ${node.y} Q600 360 600 360`} fill="none" stroke={agent_accent} strokeOpacity="0.4" style={{ pathLength: capability_path }} />
-            <circle cx={node.x} cy={node.y} r="34" className="fill-background" stroke={agent_accent} strokeWidth="1.2" />
-            <circle cx={node.x} cy={node.y} r="25" fill={agent_accent} fillOpacity="0.06" />
-            <text x={node.x} y={node.y + 4} textAnchor="middle" className="fill-text-soft text-[11px] font-medium">{t(`productWorld.labels.${node.key}`)}</text>
-          </g>
-        ))}
-      </motion.g>
-
-      <motion.circle cx="600" cy="360" r="78" fill="none" stroke={agent_accent} strokeWidth="1.5" style={{ opacity: integration_ring_opacity, scale: integration_ring_scale, transformOrigin: "600px 360px" }} />
-
-      <g>
-        {home_product_world_growth_groups.map((cells, index) => (
-          <g key={`growth-${index}`}>
-            {render_growth_group(cells, growth_opacities[index] ?? 0, growth_scales[index] ?? 1)}
-          </g>
-        ))}
+      <HomeCapabilityConvergenceLayer agent_accent={agent_accent} capability_progress={capability_progress} />
+      <g data-world-map-layer="">
+        {home_product_world_growth_groups.map((cells, index) => render_growth_group(cells, growth_opacities[index] ?? 0, active_cell_key, is_interactive, on_cell_preview, on_cell_preview_end, on_cell_select))}
         <motion.g style={{ opacity: city_boundary_opacity }}>
-          {home_product_world_city_edges.map((path, index) => <path key={`city-edge-${index}`} d={path} className="fill-none stroke-foreground" strokeOpacity="0.38" strokeWidth="1.8" strokeLinecap="round" />)}
+          {home_product_world_city_edges.map((path, index) => <path key={`city-edge-${index}`} d={path} className="fill-none stroke-foreground" strokeOpacity="0.3" strokeWidth="1.5" strokeLinecap="round" />)}
         </motion.g>
         <motion.g style={{ opacity: federation_boundary_opacity }}>
-          {home_product_world_federation_edges.map((path, index) => <motion.path key={`federation-edge-${index}`} d={path} className="fill-none stroke-foreground" strokeWidth="4.8" strokeLinecap="round" style={{ pathLength: federation_boundary_path }} />)}
+          {home_product_world_federation_edges.map((path, index) => <motion.path key={`federation-edge-${index}`} d={path} className="fill-none stroke-foreground" strokeWidth="4.4" strokeLinecap="round" style={{ pathLength: federation_boundary_path }} />)}
         </motion.g>
+        <HomeProductWorldAnnotationLayer annotations={home_product_world_annotations} opacity={federation_boundary_opacity} />
       </g>
     </>
   );

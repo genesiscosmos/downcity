@@ -7,7 +7,7 @@
  */
 
 import { useRef, useState } from "react";
-import { motion, useMotionValueEvent } from "framer-motion";
+import { motion, useMotionValueEvent, useTransform } from "framer-motion";
 import { HomeGhostGlyph } from "@/components/shared/HomeGhostGlyph";
 import type { HomeHeroAgentActorProps } from "@/types/home/HomeGhost";
 
@@ -26,6 +26,7 @@ export function HomeHeroAgentActor({
   agent_scale,
   shadow_opacity,
   scroll_progress,
+  capability_progress,
   reduce_motion,
 }: HomeHeroAgentActorProps) {
   const [is_city_idle, set_is_city_idle] = useState(true);
@@ -39,6 +40,27 @@ export function HomeHeroAgentActor({
   });
 
   const can_roam_city = is_city_idle && !reduce_motion;
+  const reaction_x = useTransform(capability_progress, (progress) => {
+    if (reduce_motion || progress < 0.12 || progress > 0.84) return 0;
+    const reaction_progress = (progress - 0.12) / 0.72;
+    const envelope = Math.sin(reaction_progress * Math.PI) * (0.8 + reaction_progress * 2.8);
+    return Math.sin(reaction_progress * Math.PI * 22) * envelope;
+  });
+  const reaction_y = useTransform(capability_progress, (progress) => {
+    if (reduce_motion || progress < 0.12 || progress > 0.84) return 0;
+    const reaction_progress = (progress - 0.12) / 0.72;
+    const envelope = Math.sin(reaction_progress * Math.PI) * (0.5 + reaction_progress * 1.7);
+    return Math.cos(reaction_progress * Math.PI * 20) * envelope;
+  });
+  const reaction_rotate = useTransform(capability_progress, (progress) => {
+    if (reduce_motion || progress < 0.28 || progress > 0.84) return 0;
+    const reaction_progress = (progress - 0.28) / 0.56;
+    return Math.sin(reaction_progress * Math.PI * 12) * Math.sin(reaction_progress * Math.PI) * 2.2;
+  });
+  const reaction_scale_x = useTransform(capability_progress, [0, 0.32, 0.42, 0.5, 0.58, 0.66, 0.74, 0.82, 0.88, 0.94, 1], [1, 1, 0.96, 1.055, 0.95, 1.06, 0.93, 1.045, 0.8, 1.09, 1]);
+  const reaction_scale_y = useTransform(capability_progress, [0, 0.32, 0.42, 0.5, 0.58, 0.66, 0.74, 0.82, 0.88, 0.94, 1], [1, 1, 1.045, 0.96, 1.06, 0.95, 1.07, 0.96, 0.84, 1.06, 1]);
+  const energy_opacity = useTransform(capability_progress, [0.16, 0.46, 0.76, 0.86, 0.95, 1], [0, 0.05, 0.18, 0.5, 0.1, 0]);
+  const energy_scale = useTransform(capability_progress, [0.16, 0.76, 0.88, 1], [0.7, 0.92, 1.18, 1.42]);
 
   return (
     <motion.g
@@ -67,15 +89,21 @@ export function HomeHeroAgentActor({
               ease: [0.16, 1, 0.3, 1],
             }}
       >
-        <motion.ellipse
-          cx="0"
-          cy="15"
-          rx="15"
-          ry="4"
-          fill={accent}
-          style={{ opacity: shadow_opacity }}
-        />
-        <HomeGhostGlyph center_x={0} center_y={0} size={city_agent_size} accent={accent} />
+        <motion.g
+          style={{
+            x: reaction_x,
+            y: reaction_y,
+            rotate: reaction_rotate,
+            scaleX: reduce_motion ? 1 : reaction_scale_x,
+            scaleY: reduce_motion ? 1 : reaction_scale_y,
+            transformOrigin: "0px 0px",
+            willChange: reduce_motion ? undefined : "transform",
+          }}
+        >
+          <motion.ellipse cx="0" cy="15" rx="15" ry="4" fill={accent} style={{ opacity: shadow_opacity }} />
+          <motion.circle cx="0" cy="0" r="19" fill={accent} style={{ opacity: energy_opacity, scale: energy_scale, transformOrigin: "0px 0px" }} />
+          <HomeGhostGlyph center_x={0} center_y={0} size={city_agent_size} accent={accent} />
+        </motion.g>
       </motion.g>
     </motion.g>
   );

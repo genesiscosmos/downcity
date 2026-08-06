@@ -7,6 +7,7 @@
 
 import type { MotionValue } from "framer-motion";
 import type { InterfaceLocale } from "@/types/interface-locale";
+import type { HomeProductWorldInspectEvent } from "@/types/home/HomeProductWorld";
 
 /** 可复用 Ghost SVG 图形的输入参数。 */
 export interface HomeGhostGlyphProps {
@@ -48,30 +49,72 @@ export interface HomeHeroAgentActorProps {
   shadow_opacity: MotionValue<number> | number;
   /** Hero 与产品世界共享的平滑滚动进度。 */
   scroll_progress: MotionValue<number>;
+  /** 能力向主角汇聚时的局部动画进度。 */
+  capability_progress: MotionValue<number>;
   /** 是否遵循用户的减少动态效果偏好。 */
   reduce_motion: boolean;
+}
+
+/** 单个能力节点的引力汇聚配置。 */
+export interface HomeCapabilityNodeDefinition {
+  /** 能力的翻译键后缀。 */
+  key: string;
+  /** 节点的初始水平坐标。 */
+  x: number;
+  /** 节点的初始垂直坐标。 */
+  y: number;
+  /** 二次贝塞尔曲线控制点的水平坐标。 */
+  curve_x: number;
+  /** 二次贝塞尔曲线控制点的垂直坐标。 */
+  curve_y: number;
+  /** 节点开始被吸引的进度。 */
+  absorb_start: number;
+  /** 节点完成汇聚的进度。 */
+  absorb_end: number;
+  /** 节点震动相位。 */
+  vibration_phase: number;
+  /** 标签相对节点的垂直偏移。 */
+  label_offset_y: number;
+}
+
+/** 单个能力节点绘图层的参数。 */
+export interface HomeCapabilityNodeProps {
+  /** 当前节点配置。 */
+  node: HomeCapabilityNodeDefinition;
+  /** 当前节点显示的中英文标签。 */
+  label: string;
+  /** 能力与主角共享的强调色。 */
+  agent_accent: string;
+  /** 能力汇聚进度。 */
+  capability_progress: MotionValue<number>;
+}
+
+/** 能力汇聚绘图层参数。 */
+export interface HomeCapabilityConvergenceLayerProps {
+  /** 能力与主角共享的强调色。 */
+  agent_accent: string;
+  /** 能力汇聚进度。 */
+  capability_progress: MotionValue<number>;
 }
 
 /** Product World SVG 绘图层参数。 */
 export interface HomeProductWorldSectionProps {
   /** 唯一主角 Agent 贯穿产品世界的强调色。 */
   agent_accent: string;
-  /** Capabilities 节点组的透明度。 */
-  capability_opacity: MotionValue<number> | number;
-  /** Capabilities 节点组的缩放值。 */
-  capability_scale: MotionValue<number> | number;
-  /** Capabilities 节点组的旋转角度。 */
-  capability_rotate: MotionValue<number> | number;
-  /** 能力汇入 Agent 的路径绘制进度。 */
-  capability_path: MotionValue<number> | number;
-  /** 能力集成环的透明度。 */
-  integration_ring_opacity: MotionValue<number> | number;
-  /** 能力集成环的缩放值。 */
-  integration_ring_scale: MotionValue<number> | number;
+  /** 能力汇聚动画的滚动进度。 */
+  capability_progress: MotionValue<number>;
   /** 五组大陆地块依次生长时使用的透明度。 */
   growth_opacities: readonly (MotionValue<number> | number)[];
-  /** 五组大陆地块从中心连续扩张时使用的缩放值。 */
-  growth_scales: readonly (MotionValue<number> | number)[];
+  /** 当前被预览或固定的地块键。 */
+  active_cell_key: string | null;
+  /** 地图是否已展开到可以交互的阶段。 */
+  is_interactive: boolean;
+  /** 鼠标或键盘预览地块。 */
+  on_cell_preview: (event: HomeProductWorldInspectEvent) => void;
+  /** 鼠标离开地块时清除预览。 */
+  on_cell_preview_end: () => void;
+  /** 点击或键盘确认地块。 */
+  on_cell_select: (event: HomeProductWorldInspectEvent) => void;
   /** City 真实蜂巢边缘的透明度。 */
   city_boundary_opacity: MotionValue<number> | number;
   /** Federation 真实蜂巢边缘的透明度。 */
