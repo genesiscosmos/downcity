@@ -6,8 +6,6 @@
  * - 支持横向与纵向组合，Button 在组合外仍保持完全独立。
  */
 
-import type * as React from "react";
-
 import { cn } from "../lib/utils";
 import type { DowncityButtonGroupProps } from "../types/components";
 

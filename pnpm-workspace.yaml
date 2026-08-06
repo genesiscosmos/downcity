@@ -12,6 +12,7 @@ packages:
   - packages/sandbox-windows-srt
   - packages/type
   - packages/cli
+  - packages/fedman
   - packages/ui
   - packages/database-d1
   - packages/database-sqlite

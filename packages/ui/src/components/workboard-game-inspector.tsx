@@ -7,7 +7,6 @@
  * - 组件只消费公开状态，不暴露 agent 内部 session、task、service 等细节。
  */
 
-import * as React from "react";
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import {
   AnimatedPxlKitIcon,

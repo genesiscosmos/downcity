@@ -9,15 +9,7 @@
 import * as React from "react";
 
 import { cn } from "../lib/utils";
-
-/**
- * Textarea 组件属性。
- *
- * 关键说明（中文）
- * - 直接复用原生 `textarea` 属性，保证宿主应用接入成本最低。
- */
-export interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
+import type { TextareaProps } from "../types/components";
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, ...props }, ref) => {

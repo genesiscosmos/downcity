@@ -32,9 +32,20 @@ test("fed web serves UI and keeps admin credential behind the local BFF", async 
   try {
     const index_response = await fetch(binding.url);
     assert.equal(index_response.status, 200);
-    assert.match(await index_response.text(), /Downcity Federation/);
+    const index_html = await index_response.text();
+    assert.match(index_html, /Downcity Federation/);
+    const asset_path = index_html.match(/<script[^>]+src="([^"]+)"/)?.[1];
+    assert.ok(asset_path?.startsWith("./assets/"));
     const cookie = index_response.headers.get("set-cookie")?.split(";")[0];
     assert.ok(cookie?.startsWith("fed_web_session="));
+
+    const asset_response = await fetch(new URL(asset_path, `${binding.url}/`));
+    assert.equal(asset_response.status, 200);
+    assert.match(asset_response.headers.get("content-type") ?? "", /javascript/);
+    const asset_source = await asset_response.text();
+    assert.match(asset_source, /数据概览/);
+    assert.match(asset_source, /Token 消耗排行/);
+    assert.doesNotMatch(asset_source, /test-admin-secret/);
 
     const denied_response = await fetch(`${binding.url}/api/context`);
     assert.equal(denied_response.status, 403);

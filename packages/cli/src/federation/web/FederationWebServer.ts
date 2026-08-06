@@ -23,7 +23,7 @@ import type {
   FederationWebOptions,
 } from "@/federation/types/FederationWeb.js";
 
-const WEB_ASSET_ROOT = fileURLToPath(new URL("../web-ui/", import.meta.url));
+const WEB_ASSET_ROOT = fileURLToPath(new URL("../fedman/", import.meta.url));
 const MAX_BODY_BYTES = 1024 * 1024;
 
 /** 带明确 HTTP 状态的本地控制面错误。 */
@@ -407,6 +407,10 @@ function content_type(path: string): string {
   if (path.endsWith(".html")) return "text/html; charset=utf-8";
   if (path.endsWith(".css")) return "text/css; charset=utf-8";
   if (path.endsWith(".js")) return "text/javascript; charset=utf-8";
+  if (path.endsWith(".json")) return "application/json; charset=utf-8";
   if (path.endsWith(".svg")) return "image/svg+xml";
+  if (path.endsWith(".png")) return "image/png";
+  if (path.endsWith(".webp")) return "image/webp";
+  if (path.endsWith(".woff2")) return "font/woff2";
   return "application/octet-stream";
 }

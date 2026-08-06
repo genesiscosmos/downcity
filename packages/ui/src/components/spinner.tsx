@@ -7,9 +7,8 @@
  */
 
 import { LoaderCircleIcon } from "lucide-react";
-import type * as React from "react";
 
-import type { DowncitySpinnerSize } from "../types/components";
+import type { DowncitySpinnerProps, DowncitySpinnerSize } from "../types/components";
 import { cn } from "../lib/utils";
 
 const spinner_size_class_names: Record<DowncitySpinnerSize, string> = {
@@ -22,9 +21,7 @@ function Spinner({
   className,
   size = "default",
   ...props
-}: React.ComponentProps<typeof LoaderCircleIcon> & {
-  size?: DowncitySpinnerSize;
-}) {
+}: DowncitySpinnerProps) {
   return (
     <LoaderCircleIcon
       data-slot="spinner"

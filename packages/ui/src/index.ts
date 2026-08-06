@@ -49,11 +49,13 @@ export type {
   DowncitySettingsContainerProps,
   DowncitySliderProps,
   DowncitySpinnerSize,
+  DowncitySpinnerProps,
   DowncitySidebarLayoutProps,
   DowncityToasterProps,
   DowncityThemeContainerProps,
   DowncityThemeMode,
   DowncityThemeVariant,
+  TextareaProps,
   DowncityToggleGroupProps,
   DowncityToggleGroupSize,
   DowncityToggleGroupVariant,
@@ -245,7 +247,7 @@ export { Slider } from "./components/slider";
 export { Spinner } from "./components/spinner";
 export { Switch } from "./components/switch";
 export { Tabs, TabsList, TabsTrigger, TabsContent, tabsListVariants } from "./components/tabs";
-export { Textarea, type TextareaProps } from "./components/textarea";
+export { Textarea } from "./components/textarea";
 export { Toaster } from "./components/sonner";
 export { Toggle, toggleVariants } from "./components/toggle";
 export { ToggleGroup, ToggleGroupItem } from "./components/toggle-group";

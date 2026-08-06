@@ -7,7 +7,6 @@
  * - 具体 atlas / room renderer 已拆到独立文件，避免工具层继续混入场景组件。
  */
 
-import * as React from "react";
 import { cn } from "../lib/utils";
 import { WorkboardPixelAgent } from "./workboard-pixel-agent";
 import {

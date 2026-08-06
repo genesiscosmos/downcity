@@ -189,6 +189,16 @@ export type DowncityItemMediaVariant = "default" | "icon" | "image";
 /** Spinner 支持的视觉尺寸。 */
 export type DowncitySpinnerSize = "sm" | "default" | "lg";
 
+/** Spinner 图标属性。 */
+export interface DowncitySpinnerProps
+  extends Omit<React.ComponentPropsWithoutRef<"svg">, "size"> {
+  /** 加载图标使用的预设视觉尺寸。 */
+  size?: DowncitySpinnerSize;
+}
+
+/** Textarea 原生多行输入属性。 */
+export type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>;
+
 /** CodeBlock 组件属性。 */
 export interface DowncityCodeBlockProps extends React.ComponentProps<"pre"> {
   /** 未经语法高亮处理的原始代码，用于复制操作。 */
@@ -204,11 +214,12 @@ export interface DowncityCodeBlockProps extends React.ComponentProps<"pre"> {
 }
 
 /** Command 搜索输入框属性。 */
-export interface DowncityCommandInputProps
-  extends React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input> {
+export type DowncityCommandInputProps = React.ComponentPropsWithoutRef<
+  typeof CommandPrimitive.Input
+> & {
   /** 搜索输入框左侧展示的可选自定义内容。 */
   leading?: React.ReactNode;
-}
+};
 
 /** ContextMenu 浮层属性。 */
 export interface DowncityContextMenuContentProps
