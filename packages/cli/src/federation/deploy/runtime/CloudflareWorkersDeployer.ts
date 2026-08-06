@@ -160,14 +160,14 @@ export async function deploy_cloudflare_workers(
         detail: `${worker_url}/health`,
       }, async () => await wait_for_worker_health(worker_url!, WORKER_INITIALIZATION_TIMEOUT_MS));
       if (admin_credentials) {
-        const database_name = config_file.config.deployment.resources.d1?.name;
-        if (!database_name) {
+        const database_id = d1_result.resolved_database_id;
+        if (!database_id) {
           throw new CliError({ title: "Federation administrator deployment requires a D1 database" });
         }
         const admin_result = await provision_cloudflare_admin_database({
           project_dir: config_file.project_dir,
           account_id,
-          database_name,
+          database_id,
           credentials: admin_credentials,
         });
         provisioned_admin_id = admin_result.admin_id;

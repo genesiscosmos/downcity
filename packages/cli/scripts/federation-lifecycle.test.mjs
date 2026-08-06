@@ -177,6 +177,7 @@ test("Cloudflare 管理员恢复通过 Wrangler 直接写入 D1 SQL", async () =
   const project_dir = create_temp_dir("downcity-fed-admin-d1-");
   const bin_dir = path.join(project_dir, "bin");
   const captured_sql = path.join(project_dir, "captured.sql");
+  const captured_args = path.join(project_dir, "captured-args.json");
   fs.mkdirSync(bin_dir, { recursive: true });
   fs.writeFileSync(path.join(project_dir, "package.json"), JSON.stringify({ type: "module" }));
   fs.writeFileSync(path.join(bin_dir, "pnpm"), `#!/usr/bin/env node
@@ -184,12 +185,14 @@ import fs from "node:fs";
 const args = process.argv.slice(2);
 const command = args[args.indexOf("--command") + 1];
 fs.writeFileSync(process.env.DOWNCITY_TEST_ADMIN_SQL, command);
+fs.writeFileSync(process.env.DOWNCITY_TEST_ADMIN_ARGS, JSON.stringify(args));
 process.stdout.write(JSON.stringify([{ results: [{ admin_id: process.env.DOWNCITY_TEST_ADMIN_ID, provision_id: process.env.DOWNCITY_TEST_PROVISION_ID }] }]));
 `);
   fs.chmodSync(path.join(bin_dir, "pnpm"), 0o755);
   const previous_path = process.env.PATH;
   process.env.PATH = `${bin_dir}:${previous_path}`;
   process.env.DOWNCITY_TEST_ADMIN_SQL = captured_sql;
+  process.env.DOWNCITY_TEST_ADMIN_ARGS = captured_args;
   process.env.DOWNCITY_TEST_ADMIN_ID = "admin_recovered";
   process.env.DOWNCITY_TEST_PROVISION_ID = "fap_cloudflare_reset";
   try {
@@ -197,7 +200,7 @@ process.stdout.write(JSON.stringify([{ results: [{ admin_id: process.env.DOWNCIT
     const result = await provisioner.provision_cloudflare_admin_database({
       project_dir,
       account_id: "account-test",
-      database_name: "downcity-db",
+      database_id: "00000000-0000-0000-0000-000000000001",
       credentials: {
         mode: "reset",
         provision_id: "fap_cloudflare_reset",
@@ -207,6 +210,9 @@ process.stdout.write(JSON.stringify([{ results: [{ admin_id: process.env.DOWNCIT
       },
     });
     assert.deepEqual(result, { admin_id: "admin_recovered", credentials_applied: true });
+    const args = JSON.parse(fs.readFileSync(captured_args, "utf8"));
+    assert.equal(args[4], "00000000-0000-0000-0000-000000000001");
+    assert.equal(args.includes("downcity-db"), false);
     const sql = fs.readFileSync(captured_sql, "utf8");
     assert.match(sql, /UPDATE federation_admin_sessions SET status = 'revoked'/u);
     assert.match(sql, /pbkdf2_sha256\$210000\$salt\$digest/u);
@@ -214,6 +220,7 @@ process.stdout.write(JSON.stringify([{ results: [{ admin_id: process.env.DOWNCIT
   } finally {
     process.env.PATH = previous_path;
     delete process.env.DOWNCITY_TEST_ADMIN_SQL;
+    delete process.env.DOWNCITY_TEST_ADMIN_ARGS;
     delete process.env.DOWNCITY_TEST_ADMIN_ID;
     delete process.env.DOWNCITY_TEST_PROVISION_ID;
     fs.rmSync(project_dir, { recursive: true, force: true });

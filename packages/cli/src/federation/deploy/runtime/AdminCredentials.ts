@@ -10,6 +10,7 @@ import {
   create_federation_admin_password_hash,
 } from "@downcity/city";
 import { randomUUID } from "node:crypto";
+import { CliError } from "@/shared/CliError.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import type {
   FederationAdminDatabaseMode,
@@ -43,10 +44,29 @@ export async function verify_admin_deployment_credentials(
       password: credentials.password,
     }),
   });
-  if (!response.ok) return false;
-  const body = await response.json() as { session_token?: unknown };
+  const response_text = await response.text();
+  if (!response.ok) {
+    throw new CliError({
+      title: "Federation administrator verification failed",
+      note: `Worker returned HTTP ${response.status}: ${response_text.slice(0, 500)}`,
+    });
+  }
+  let body: { session_token?: unknown };
+  try {
+    body = JSON.parse(response_text) as { session_token?: unknown };
+  } catch {
+    throw new CliError({
+      title: "Federation administrator verification failed",
+      note: `Worker returned invalid JSON: ${response_text.slice(0, 500)}`,
+    });
+  }
   const session_token = typeof body.session_token === "string" ? body.session_token : "";
-  if (!session_token) return false;
+  if (!session_token) {
+    throw new CliError({
+      title: "Federation administrator verification failed",
+      note: `Worker response did not include a session token: ${response_text.slice(0, 500)}`,
+    });
+  }
   await fetch(`${base_url.replace(/\/+$/gu, "")}/v1/admin/logout`, {
     method: "POST",
     headers: { authorization: `Bearer ${session_token}` },

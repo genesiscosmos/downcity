@@ -62,8 +62,8 @@ export async function provision_cloudflare_admin_database(params: {
   project_dir: string;
   /** Cloudflare account id。 */
   account_id?: string;
-  /** federation.json 声明的 D1 数据库名。 */
-  database_name: string;
+  /** D1 resolver 返回并绑定给 Worker 的数据库 ID。 */
+  database_id: string;
   /** 本次候选管理员凭证。 */
   credentials: FederationAdminDeploymentCredentials;
 }): Promise<FederationAdminDatabaseResult> {
@@ -73,7 +73,7 @@ export async function provision_cloudflare_admin_database(params: {
       label: params.credentials.mode === "reset"
         ? "Reset Federation administrator"
         : "Initialize Federation administrator",
-      command: `pnpm exec wrangler d1 execute ${shell_quote(params.database_name)} --remote --command ${shell_quote(sql)} --json --yes`,
+      command: `pnpm exec wrangler d1 execute ${shell_quote(params.database_id)} --remote --command ${shell_quote(sql)} --json --yes`,
       display_command: "pnpm exec wrangler d1 execute <database> --remote --command <administrator SQL> --json --yes",
       cwd: params.project_dir,
       env: { CLOUDFLARE_ACCOUNT_ID: params.account_id },
@@ -92,7 +92,7 @@ export async function provision_cloudflare_admin_database(params: {
     throw new CliError({
       title: "Cloudflare administrator database update failed",
       note: error instanceof Error ? error.message : String(error),
-      fix: `Check D1 database ${params.database_name} and the current Cloudflare account permission.`,
+      fix: `Check D1 database ${params.database_id} and the current Cloudflare account permission.`,
     });
   }
 }
