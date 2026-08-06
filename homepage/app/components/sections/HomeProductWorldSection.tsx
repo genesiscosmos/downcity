@@ -46,6 +46,7 @@ function render_cell_content(cell: HomeProductWorldCell, center_x: number, cente
 function render_growth_group(
   cells: readonly HomeProductWorldCell[],
   opacity: MotionValue<number> | number,
+  scale: MotionValue<number> | number,
   active_cell_key: string | null,
   is_interactive: boolean,
   on_cell_preview: (event: HomeProductWorldInspectEvent) => void,
@@ -53,7 +54,7 @@ function render_growth_group(
   on_cell_select: (event: HomeProductWorldInspectEvent) => void,
 ) {
   return (
-    <motion.g style={{ opacity, willChange: "opacity" }}>
+    <motion.g style={{ opacity, scale, transformOrigin: "600px 360px", willChange: "transform, opacity" }}>
       {cells.map((cell) => {
         const center = home_world_hex_center(home_product_world_origin.x, home_product_world_origin.y, home_product_world_origin.radius, cell.q, cell.row);
         const is_active = active_cell_key === cell.key;
@@ -106,6 +107,7 @@ export function HomeProductWorldSection({
   agent_accent,
   capability_progress,
   growth_opacities,
+  growth_scales,
   active_cell_key,
   is_interactive,
   on_cell_preview,
@@ -119,7 +121,7 @@ export function HomeProductWorldSection({
     <>
       <HomeCapabilityConvergenceLayer agent_accent={agent_accent} capability_progress={capability_progress} />
       <g data-world-map-layer="">
-        {home_product_world_growth_groups.map((cells, index) => render_growth_group(cells, growth_opacities[index] ?? 0, active_cell_key, is_interactive, on_cell_preview, on_cell_preview_end, on_cell_select))}
+        {home_product_world_growth_groups.map((cells, index) => render_growth_group(cells, growth_opacities[index] ?? 0, growth_scales[index] ?? 1, active_cell_key, is_interactive, on_cell_preview, on_cell_preview_end, on_cell_select))}
         <motion.g style={{ opacity: city_boundary_opacity }}>
           {home_product_world_city_edges.map((path, index) => <path key={`city-edge-${index}`} d={path} className="fill-none stroke-foreground" strokeOpacity="0.3" strokeWidth="1.5" strokeLinecap="round" />)}
         </motion.g>

@@ -105,6 +105,8 @@ export interface HomeProductWorldSectionProps {
   capability_progress: MotionValue<number>;
   /** 五组大陆地块依次生长时使用的透明度。 */
   growth_opacities: readonly (MotionValue<number> | number)[];
+  /** 五组大陆地块从中心向外展开时使用的逐层缩放值。 */
+  growth_scales: readonly (MotionValue<number> | number)[];
   /** 当前被预览或固定的地块键。 */
   active_cell_key: string | null;
   /** 地图是否已展开到可以交互的阶段。 */

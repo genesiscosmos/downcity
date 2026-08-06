@@ -65,6 +65,11 @@ export function HomeHeroWorldSection() {
   const middle_land_opacity = useTransform(world_progress, [0.69, 0.78], [0, 1]);
   const outer_land_opacity = useTransform(world_progress, [0.74, 0.85], [0, 1]);
   const continent_opacity = useTransform(world_progress, [0.8, 0.91], [0, 1]);
+  const center_land_scale = useTransform(world_progress, [0.55, 0.65], [0.46, 1]);
+  const inner_land_scale = useTransform(world_progress, [0.59, 0.7], [0.68, 1]);
+  const middle_land_scale = useTransform(world_progress, [0.64, 0.77], [0.76, 1]);
+  const outer_land_scale = useTransform(world_progress, [0.69, 0.84], [0.82, 1]);
+  const continent_scale = useTransform(world_progress, [0.75, 0.91], [0.87, 1]);
   const city_boundary_opacity = useTransform(world_progress, [0.77, 0.9], [0, 0.74]);
   const federation_boundary_opacity = useTransform(world_progress, [0.9, 0.98], [0, 1]);
   const federation_boundary_path = useTransform(world_progress, [0.9, 1], [0, 1]);
@@ -80,6 +85,9 @@ export function HomeHeroWorldSection() {
   const growth_opacities = reduce_motion
     ? [0, 0, 0, 0, 0]
     : [center_land_opacity, inner_land_opacity, middle_land_opacity, outer_land_opacity, continent_opacity];
+  const growth_scales = reduce_motion
+    ? [1, 1, 1, 1, 1]
+    : [center_land_scale, inner_land_scale, middle_land_scale, outer_land_scale, continent_scale];
 
   return (
     <section ref={section_ref} className={reduce_motion ? "relative min-h-svh overflow-hidden bg-background" : "relative h-[318svh] bg-background"}>
@@ -134,6 +142,7 @@ export function HomeHeroWorldSection() {
                         agent_accent={home_hero_agent_accent}
                         capability_progress={capability_progress}
                         growth_opacities={growth_opacities}
+                        growth_scales={growth_scales}
                         active_cell_key={pinned_inspection?.cell.key ?? preview_inspection?.cell.key ?? null}
                         is_interactive={map_is_interactive}
                         on_cell_preview={(event) => {
