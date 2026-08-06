@@ -10,9 +10,16 @@ import path from "node:path"
 import test from "node:test"
 import { decodeJwt } from "jose"
 
-import { Bureau, Federation, FederationAdmin } from "../bin/index.js"
+import { Bureau, Federation, FederationAdmin, base64UrlDecode, base64UrlEncode } from "../bin/index.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
 import { create_test_admin_session, create_test_federation } from "./admin-fixture.mjs"
+
+test("Base64URL 解码兼容 Cloudflare atob 的无 padding 摘要", () => {
+  const value = "cloudflare-base64url-padding"
+  const encoded = base64UrlEncode(value)
+  assert.equal(encoded.endsWith("="), false)
+  assert.equal(base64UrlDecode(encoded), value)
+})
 
 test("Federation 新数据库使用 Bureau 身份与绑定机器凭证表", async () => {
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-bureau-schema-"))

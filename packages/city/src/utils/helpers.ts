@@ -199,8 +199,13 @@ export function base64UrlEncodeBytes(bytes: Uint8Array): string {
  * 与 Buffer.from(str, "base64url") 行为一致。
  */
 export function base64UrlDecodeBytes(str: string): Uint8Array {
-  const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
-  const binary = atob(base64);
+  const normalized_base64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  const padding_length = (4 - (normalized_base64.length % 4)) % 4;
+  const padded_base64 = normalized_base64.padEnd(
+    normalized_base64.length + padding_length,
+    "=",
+  );
+  const binary = atob(padded_base64);
   return Uint8Array.from(binary, (c) => c.charCodeAt(0));
 }
 
