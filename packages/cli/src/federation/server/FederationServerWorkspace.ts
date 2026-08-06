@@ -3,12 +3,12 @@
  *
  * 关键说明（中文）
  * - 用户从 downfed 选择一个已部署 Federation 后，直接进入 adminLoop。
- * - 如果本地记录缺少 admin_secret_key，则在进入前即时要求输入并保存。
+ * - 如果本地记录缺少有效管理员 Session，则要求管理员 ID 与密码登录。
  * - 编辑、移除、更新 admin 访问等低频动作挂在 adminLoop 的“更多”里。
  */
 
 import { adminLoop } from "@/federation/admin/loop.js";
-import { adminAuth } from "@/federation/auth/admin.js";
+import { adminAuth, login_federation_admin } from "@/federation/auth/admin.js";
 import { isAdminAuthError } from "@/federation/admin/auth-error.js";
 import {
   readActiveServer,
@@ -89,8 +89,8 @@ export async function open_federation_server_workspace(
       }
 
       await runtime.show_message("error", t({
-        zh: "Admin key 已失效，请重新输入。",
-        en: "Admin key is invalid or expired. Please enter it again.",
+        zh: "管理员会话已失效，请重新登录。",
+        en: "Administrator session expired. Please log in again.",
       }));
       const updated_server = await configure_admin_access_inline(current_base_url, runtime);
       if (!updated_server) {
@@ -111,7 +111,12 @@ async function resolve_admin_session(
     return undefined;
   }
 
-  if (!String(server.admin_secret_key ?? "").trim()) {
+  const has_valid_session = Boolean(
+    server.admin_session_token?.trim()
+    && server.admin_session_expires_at
+    && Date.parse(server.admin_session_expires_at) > Date.now(),
+  );
+  if (!has_valid_session) {
     const updated_server = await configure_admin_access_inline(server.base_url, runtime);
     if (!updated_server) {
       return undefined;
@@ -135,14 +140,28 @@ async function configure_admin_access_inline(
     return undefined;
   }
 
-  const admin_secret_key = await runtime.password("admin_secret_key");
-  if (!admin_secret_key?.trim()) {
+  const admin_id = await runtime.text(t({ zh: "管理员 ID", en: "Administrator ID" }), server.admin_id);
+  if (!admin_id?.trim()) return undefined;
+  const password = await runtime.password(t({ zh: "管理员密码", en: "Administrator password" }));
+  if (!password) {
     return undefined;
   }
-
+  let session;
+  try {
+    session = await login_federation_admin({
+      base_url: server.base_url,
+      admin_id,
+      password,
+    });
+  } catch (error) {
+    await runtime.show_message("error", error instanceof Error ? error.message : String(error));
+    return undefined;
+  }
   const updated_server = updateServer(server.base_url, {
     ...server,
-    admin_secret_key: admin_secret_key.trim(),
+    admin_id: session.admin_id,
+    admin_session_token: session.session_token,
+    admin_session_expires_at: session.expires_at,
   });
   await runtime.show_message("success", t({
     zh: `Admin 访问已配置：${updated_server.name}`,
@@ -173,11 +192,11 @@ async function open_federation_admin_more_actions(
     }),
     [
       {
-        label: t({ zh: "更新 admin 访问", en: "Update admin access" }),
+        label: t({ zh: "管理员重新登录", en: "Administrator login" }),
         value: "update_admin",
         hint: t({
-          zh: "重新输入当前 Federation 的 admin_secret_key",
-          en: "Enter this Federation's admin_secret_key again",
+          zh: "使用管理员 ID 和密码创建新会话",
+          en: "Create a new session with administrator ID and password",
         }),
       },
       {
@@ -227,18 +246,8 @@ async function open_federation_admin_more_actions(
     return { kind: "quit" };
   }
   if (selected === "update_admin") {
-    const admin_secret_key = await runtime.password("admin_secret_key");
-    if (!admin_secret_key?.trim()) {
-      return { kind: "continue" };
-    }
-    const updated_server = updateServer(base_url, {
-      ...server,
-      admin_secret_key: admin_secret_key.trim(),
-    });
-    await runtime.show_message("success", t({
-      zh: `Admin 访问已更新：${updated_server.name}`,
-      en: `Admin access updated: ${updated_server.name}`,
-    }));
+    const updated_server = await configure_admin_access_inline(base_url, runtime);
+    if (!updated_server) return { kind: "continue" };
     return { kind: "updated", base_url: updated_server.base_url };
   }
   if (selected === "edit_federation") {

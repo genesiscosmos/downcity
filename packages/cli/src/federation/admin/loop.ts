@@ -3,7 +3,7 @@
  *
  * 关键说明（中文）
  * - `city` 点开某个 City 后直接进入这个菜单。
- * - City 连接配置、admin key 更新等低频操作通过 `更多` 回调交给 workspace 层处理。
+ * - City 连接配置、管理员重新登录等低频操作通过 `更多` 回调交给 workspace 层处理。
  */
 
 import { FederationAdmin } from "@downcity/city";
@@ -47,7 +47,7 @@ export async function adminLoop(
 ): Promise<"logout" | "quit" | "switch_identity" | "back"> {
   const admin = new FederationAdmin({
     base_url: session.base_url,
-    credential: session.admin_secret_key,
+    credential: session.session_token,
   });
   const embedded = options?.embedded !== false;
   const runtime = options?.runtime ?? create_admin_tui_runtime(options?.title ?? "Admin");

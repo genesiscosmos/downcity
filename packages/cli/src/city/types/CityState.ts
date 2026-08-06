@@ -32,10 +32,10 @@ export interface CityAdminConfig {
      */
     base_url?: unknown;
 
-    /**
-     * admin secret key。
-     */
-    admin_secret_key?: unknown;
+    /** 管理员 Session Token。 */
+    admin_session_token?: unknown;
+    /** 管理员 Session 到期时间。 */
+    admin_session_expires_at?: unknown;
   }>;
 }
 

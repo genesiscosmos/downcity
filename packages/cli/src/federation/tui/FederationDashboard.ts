@@ -55,8 +55,8 @@ function build_federation_dashboard_state(): federation_dashboard_state {
       server.port ? `:${server.port}` : "",
     ].filter(Boolean).join(" · "),
     detail: t({
-      zh: `打开 ${server.name} 的管理工作区。\n\nURL: ${server.base_url}\n状态: ${server.status ?? "unknown"}\n目标: ${server.target ?? "manual"}\n源码: ${server.project_dir ?? "未登记"}\n日志: ${server.log_path ?? "无"}\nadmin: ${server.admin_secret_key ? "已配置" : "未配置"}`,
-      en: `Open management for ${server.name}.\n\nURL: ${server.base_url}\nStatus: ${server.status ?? "unknown"}\nTarget: ${server.target ?? "manual"}\nSource: ${server.project_dir ?? "not registered"}\nLog: ${server.log_path ?? "none"}\nAdmin: ${server.admin_secret_key ? "configured" : "missing"}`,
+      zh: `打开 ${server.name} 的管理工作区。\n\nURL: ${server.base_url}\n状态: ${server.status ?? "unknown"}\n目标: ${server.target ?? "manual"}\n源码: ${server.project_dir ?? "未登记"}\n日志: ${server.log_path ?? "无"}\n管理员: ${server.admin_id ?? "需要登录"}`,
+      en: `Open management for ${server.name}.\n\nURL: ${server.base_url}\nStatus: ${server.status ?? "unknown"}\nTarget: ${server.target ?? "manual"}\nSource: ${server.project_dir ?? "not registered"}\nLog: ${server.log_path ?? "none"}\nAdministrator: ${server.admin_id ?? "login required"}`,
     }),
   }));
 

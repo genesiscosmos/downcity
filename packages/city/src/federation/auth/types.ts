@@ -212,3 +212,69 @@ export interface FederationServiceTokenIssueResult {
   /** ISO 8601 过期时间。 */
   expires_at: string;
 }
+
+/** Federation 管理员生命周期状态。 */
+export type FederationAdministratorStatus = "active" | "disabled";
+
+/** Federation 固定所有者管理员记录。 */
+export interface FederationAdministratorRecord extends Record<string, unknown> {
+  /** 固定所有权槽位，当前恒为 `owner`。 */
+  owner_slot: "owner";
+  /** 管理员登录 ID。 */
+  admin_id: string;
+  /** PBKDF2 编码密码摘要。 */
+  password_hash: string;
+  /** 管理员生命周期状态。 */
+  status: FederationAdministratorStatus;
+  /** 连续登录失败次数的十进制字符串。 */
+  failed_attempts: string;
+  /** 登录锁定结束时间；未锁定时为空字符串。 */
+  locked_until: string;
+  /** 最近一次应用的部署 provisioning ID。 */
+  provision_id: string;
+  /** 管理员创建时间。 */
+  created_at: string;
+  /** 管理员更新时间。 */
+  updated_at: string;
+}
+
+/** Federation 管理员会话生命周期状态。 */
+export type FederationAdminSessionStatus = "active" | "revoked";
+
+/** Federation 管理员会话数据库记录。 */
+export interface FederationAdminSessionRecord extends Record<string, unknown> {
+  /** 会话公开 ID。 */
+  session_id: string;
+  /** 会话所属管理员 ID。 */
+  admin_id: string;
+  /** 高熵 Session Token 的 SHA-256 摘要。 */
+  token_hash: string;
+  /** 会话生命周期状态。 */
+  status: FederationAdminSessionStatus;
+  /** 会话创建时间。 */
+  created_at: string;
+  /** 会话到期时间。 */
+  expires_at: string;
+  /** 最近一次通过鉴权的时间。 */
+  last_seen_at: string;
+  /** 会话撤销时间；仍有效时为空字符串。 */
+  revoked_at: string;
+}
+
+/** Federation 管理员登录输入。 */
+export interface FederationAdminLoginInput {
+  /** 管理员登录 ID。 */
+  admin_id: string;
+  /** 管理员明文密码，仅参与本次校验。 */
+  password: string;
+}
+
+/** Federation 管理员登录结果。 */
+export interface FederationAdminLoginResult {
+  /** 管理员 ID。 */
+  admin_id: string;
+  /** 仅在创建时返回的高熵管理 Session Token。 */
+  session_token: string;
+  /** 管理会话到期时间。 */
+  expires_at: string;
+}

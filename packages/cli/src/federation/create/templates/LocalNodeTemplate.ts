@@ -105,35 +105,13 @@ function create_local_entrypoint(): string {
  */
 
 import { serve } from "@hono/node-server";
-import { AIService, Federation } from "@downcity/city";
+import { AIService, Federation, type FederationAdminProvisioning } from "@downcity/city";
 import { Database } from "@downcity/database-sqlite";
 import {
   AccountsService,
   CreditsService,
   UsageService,
 } from "@downcity/services";
-
-/** Federation env 表中读取 admin key 所需的最小行类型。 */
-interface EnvRow {
-  /** 环境变量名称。 */
-  key: string;
-  /** 环境变量值。 */
-  value: string;
-  /** 允许表 API 返回其他系统字段。 */
-  [key: string]: unknown;
-}
-
-/** 仅用于刷新 Federation env cache 的内部运行时视图。 */
-interface RefreshableFederation {
-  /** Federation 初始化后的内部 runtime。 */
-  runtime?: {
-    /** 数据库 env provider。 */
-    env?: {
-      /** 从 env 表重新加载运行时 cache。 */
-      refresh(): Promise<void>;
-    };
-  };
-}
 
 /** 解析本地 SQLite 文件路径。 */
 function resolve_sqlite_path(database_url: string | undefined): string {
@@ -146,33 +124,17 @@ function resolve_sqlite_path(database_url: string | undefined): string {
   return sqlite_path;
 }
 
-/**
- * 同步 fed deploy 注入的 admin key。
- *
- * 关键说明（中文）
- * - CLI registry 与 Federation 数据库必须持有同一个 key。
- * - 同一 fed_id redeploy 会复用 key，不会无故使已有 admin 会话失效。
- */
-async function sync_deployed_admin_key(federation: Federation): Promise<void> {
-  const admin_secret_key = process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY?.trim();
-  if (!admin_secret_key) return;
-  const env_table = await federation.table<EnvRow>("env");
-  const existing = await env_table.select({ key: "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY" });
-  const now = new Date().toISOString();
-  if (existing.length > 0) {
-    await env_table.update({
-      where: { key: "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY" },
-      values: { value: admin_secret_key, updated_at: now },
-    });
-  } else {
-    await env_table.insert({
-      key: "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY",
-      value: admin_secret_key,
-      created_at: now,
-      updated_at: now,
-    });
+/** 读取仅由 fed deploy 注入的无明文管理员 provisioning。 */
+function read_admin_provisioning(): FederationAdminProvisioning | undefined {
+  const mode = process.env.DOWNCITY_FEDERATION_ADMIN_PROVISION_MODE?.trim();
+  const provision_id = process.env.DOWNCITY_FEDERATION_ADMIN_PROVISION_ID?.trim();
+  const admin_id = process.env.DOWNCITY_FEDERATION_ADMIN_ID?.trim();
+  const password_hash = process.env.DOWNCITY_FEDERATION_ADMIN_PASSWORD_HASH?.trim();
+  if (!mode && !provision_id && !admin_id && !password_hash) return undefined;
+  if ((mode !== "initialize" && mode !== "reset") || !provision_id || !admin_id || !password_hash) {
+    throw new Error("Incomplete Federation administrator provisioning environment.");
   }
-  await (federation as unknown as RefreshableFederation).runtime?.env?.refresh();
+  return { mode, provision_id, admin_id, password_hash };
 }
 
 const host = process.env.HOST?.trim() || "127.0.0.1";
@@ -184,7 +146,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 const database = new Database({
   filename: resolve_sqlite_path(process.env.DOWNCITY_FEDERATION_DATABASE_URL),
 });
-const federation = new Federation({ database });
+const federation = new Federation({ database, admin_provisioning: read_admin_provisioning() });
 
 const accounts_service = new AccountsService({ local_login: true });
 federation.use(accounts_service);
@@ -199,7 +161,6 @@ federation.use(new UsageService({
 }));
 
 await federation.health();
-await sync_deployed_admin_key(federation);
 serve({
   hostname: host,
   port,

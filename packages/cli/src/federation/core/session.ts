@@ -2,7 +2,7 @@
  * Federation 管理端配置持久化模块。
  *
  * 关键说明（中文）
- * - downfed 的 server profile、admin key、Cloudflare account 与语言都写入 `federation.db`。
+ * - downfed 的 server profile、管理员会话、Cloudflare account 与语言写入 `federation.db`。
  * - 配置整体通过 PlatformStore secure setting 加密保存，避免明文 JSON 状态散落。
  * - user session 由 `city` 维护，本模块只负责 Federation admin 管理态。
  */
@@ -31,8 +31,12 @@ const FEDERATION_CONFIG_KEY = "federation.config";
 export interface AdminSession {
   /** 当前 server 的 server URL */
   base_url: string;
-  /** 当前 server 的 admin secret key */
-  admin_secret_key: string;
+  /** 当前 server 的管理员 Session Token。 */
+  session_token: string;
+  /** 当前管理员 ID。 */
+  admin_id: string;
+  /** 当前管理员 Session 到期时间。 */
+  expires_at: string;
 }
 
 export type ClientConfig = FederationClientConfig;
@@ -150,7 +154,9 @@ export function setActiveServer(baseUrl: string): void {
  */
 export function addServer(input: {
   base_url: string;
-  admin_secret_key?: string;
+  admin_id?: string;
+  admin_session_token?: string;
+  admin_session_expires_at?: string;
   name?: string;
   fed_id?: string;
   target?: FederationDeploymentTarget;
@@ -192,7 +198,9 @@ export function updateServer(
   currentBaseUrl: string,
   input: {
     base_url: string;
-    admin_secret_key?: string;
+    admin_id?: string;
+    admin_session_token?: string;
+    admin_session_expires_at?: string;
     name?: string;
     fed_id?: string;
     target?: FederationDeploymentTarget;
@@ -278,7 +286,7 @@ export function read_server_by_fed_id(
  * 登记一次由 `fed deploy` 创建的实例。
  *
  * 关键说明（中文）
- * - deploy 只更新实例元数据与 admin key，不修改用户显式选择的 active server。
+ * - deploy 只更新实例元数据与非敏感管理员 ID，不修改用户显式选择的 active server。
  * - 同一 Fed 的部署 URL 变化时会替换旧记录；若旧记录原本为 active，写入时会清空失效选择。
  */
 export function register_deployed_server(input: {
@@ -298,8 +306,8 @@ export function register_deployed_server(input: {
   log_path?: string;
   /** 部署结果状态。 */
   status: FederationServerStatus;
-  /** 部署器明确注入的 admin key。 */
-  admin_secret_key?: string;
+  /** 部署创建或恢复后确认有效的管理员 ID。 */
+  admin_id?: string;
 }): ServerProfile {
   const config = readConfig();
   const normalized_base_url = normalizeBaseUrl(input.base_url);
@@ -308,14 +316,20 @@ export function register_deployed_server(input: {
     && server.target === input.config.deployment.target
   ));
   const existing_by_url = config.servers.find((server) => server.base_url === normalized_base_url);
-  const preserved_key = input.admin_secret_key?.trim()
-    || existing?.admin_secret_key
-    || existing_by_url?.admin_secret_key
-    || "";
+  const previous_profile = existing ?? existing_by_url;
+  const next_admin_id = input.admin_id ?? previous_profile?.admin_id;
+  const preserve_admin_session = Boolean(
+    next_admin_id
+    && previous_profile?.admin_id === next_admin_id,
+  );
   const normalized = normalizeServer({
     name: input.config.name,
     base_url: normalized_base_url,
-    admin_secret_key: preserved_key,
+    admin_id: next_admin_id,
+    admin_session_token: preserve_admin_session ? previous_profile?.admin_session_token : undefined,
+    admin_session_expires_at: preserve_admin_session
+      ? previous_profile?.admin_session_expires_at
+      : undefined,
     fed_id: input.config.id,
     target: input.config.deployment.target,
     project_dir: input.project_dir,
@@ -358,9 +372,9 @@ function readServersFromConfig(raw: Record<string, unknown>): ServerProfile[] {
     if (!rawBaseUrl.trim()) continue;
 
     const normalizedBaseUrl = normalizeBaseUrl(rawBaseUrl);
-    const adminSecretKey = typeof record.admin_secret_key === "string"
-      ? record.admin_secret_key.trim()
-      : "";
+    const admin_id = normalize_optional_text(record.admin_id);
+    const admin_session_token = normalize_optional_text(record.admin_session_token);
+    const admin_session_expires_at = normalize_optional_text(record.admin_session_expires_at);
     const name = typeof record.name === "string" && record.name.trim()
       ? record.name.trim()
       : deriveServerName(normalizedBaseUrl);
@@ -369,7 +383,9 @@ function readServersFromConfig(raw: Record<string, unknown>): ServerProfile[] {
     const metadata = read_server_metadata(record);
     if (existing) {
       existing.name = name;
-      existing.admin_secret_key = adminSecretKey;
+      existing.admin_id = admin_id;
+      existing.admin_session_token = admin_session_token;
+      existing.admin_session_expires_at = admin_session_expires_at;
       Object.assign(existing, metadata);
       continue;
     }
@@ -377,7 +393,9 @@ function readServersFromConfig(raw: Record<string, unknown>): ServerProfile[] {
     servers.push({
       name,
       base_url: normalizedBaseUrl,
-      admin_secret_key: adminSecretKey,
+      admin_id,
+      admin_session_token,
+      admin_session_expires_at,
       ...metadata,
     });
   }
@@ -423,7 +441,9 @@ function normalizeServers(servers: ServerProfile[]): ServerProfile[] {
 
 function normalizeServer(input: {
   base_url: string;
-  admin_secret_key?: string;
+  admin_id?: string;
+  admin_session_token?: string;
+  admin_session_expires_at?: string;
   name?: string;
   fed_id?: string;
   target?: FederationDeploymentTarget;
@@ -437,13 +457,14 @@ function normalizeServer(input: {
   config_snapshot?: FederationProjectConfig;
 }): ServerProfile {
   const normalizedBaseUrl = normalizeBaseUrl(input.base_url);
-  const normalizedAdminSecretKey = String(input.admin_secret_key ?? "").trim();
   const normalizedName = String(input.name ?? "").trim() || deriveServerName(normalizedBaseUrl);
 
   return {
     name: normalizedName,
     base_url: normalizedBaseUrl,
-    admin_secret_key: normalizedAdminSecretKey,
+    admin_id: normalize_optional_text(input.admin_id),
+    admin_session_token: normalize_optional_text(input.admin_session_token),
+    admin_session_expires_at: normalize_optional_text(input.admin_session_expires_at),
     fed_id: normalize_optional_text(input.fed_id),
     target: normalize_target(input.target),
     project_dir: normalize_optional_text(input.project_dir),
@@ -460,6 +481,9 @@ function normalizeServer(input: {
 /** 读取并刷新旧状态记录中的扩展字段。 */
 function read_server_metadata(record: Record<string, unknown>): Partial<ServerProfile> {
   return {
+    admin_id: normalize_optional_text(record.admin_id),
+    admin_session_token: normalize_optional_text(record.admin_session_token),
+    admin_session_expires_at: normalize_optional_text(record.admin_session_expires_at),
     fed_id: typeof record.fed_id === "string" ? record.fed_id : undefined,
     target: normalize_target(record.target),
     project_dir: typeof record.project_dir === "string" ? record.project_dir : undefined,

@@ -107,7 +107,7 @@ console.log(text);
 GET /v1/federation/instruction
 ```
 
-这个接口只允许携带 Federation `admin_secret_key` 的控制面请求访问，返回 `text/plain`。
+这个接口只允许携带有效 Federation 管理员 Session Token 的控制面请求访问，返回 `text/plain`。
 
 ## Service
 
@@ -201,7 +201,7 @@ base.use(usageService());
 ## 鉴权语义
 
 - 默认 action 需要 `user_token`
-- `auth: ["admin"]` 只允许携带 Federation `admin_secret_key` 的控制面请求
+- `auth: ["admin"]` 只允许携带有效 Federation 管理员 Session Token 的控制面请求
 - `auth: []` 表示免登录
 
 Federation 首次启动会自动生成并持久化 Ed25519 Key Ring。私钥只用于 Federation

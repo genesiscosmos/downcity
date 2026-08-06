@@ -128,11 +128,11 @@ function require_active_admin_server(): ServerProfile {
       fix: "fed server add",
     });
   }
-  if (!String(server.admin_secret_key ?? "").trim()) {
+  if (!server.admin_session_token?.trim() || Date.parse(server.admin_session_expires_at ?? "") <= Date.now()) {
     throw new CliError({
       title: t({
-        zh: "当前 Federation 没有配置 admin_secret_key。",
-        en: "The active Federation has no admin_secret_key configured.",
+        zh: "当前 Federation 需要管理员登录。",
+        en: "Administrator login is required for the active Federation.",
       }),
       fix: "fed server manage",
     });
@@ -143,7 +143,7 @@ function require_active_admin_server(): ServerProfile {
 function create_federation_admin(server: ServerProfile): FederationAdmin {
   return new FederationAdmin({
     base_url: server.base_url,
-    credential: server.admin_secret_key!,
+    credential: server.admin_session_token!,
   });
 }
 

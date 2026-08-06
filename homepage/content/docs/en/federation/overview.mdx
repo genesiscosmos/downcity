@@ -38,6 +38,18 @@ Services and Actions are registered with City and can be discovered and called b
 
 Federation generates an Ed25519 Key Ring on first startup and publishes verification keys through `/.well-known/jwks.json`. City can connect to Federation directly; a product deploys Bureau only when it needs its own backend capabilities. Bureau verifies user tokens locally and applies its own service policy. Federation does not create Bureau Tokens on startup.
 
+## Administrator login and recovery
+
+The first `fed deploy` creates a Federation administrator ID and a high-entropy random password. The complete credential is shown once; Federation stores only a salted password digest. After starting `fed web`, enter that credential on the login page. The browser never receives the remote administration Session Token, which remains in the local BFF process.
+
+An ordinary deployment never changes the administrator. If the password is lost, only an operator with Local host authority or Cloudflare Worker/D1 deployment authority can run:
+
+```bash
+fed deploy --admin-reset
+```
+
+Non-interactive environments must also pass `--yes`. A successful recovery revokes every previous administrator session and shows the new password once. Federation exposes no anonymous password-reset API.
+
 `fed bureau token` opens the interactive token manager. Choose Create, or run
 `fed bureau token create`, to enter a purpose and register a locally generated deployment
 credential. Federation stores the purpose, hash, and lifecycle state; the plaintext is shown

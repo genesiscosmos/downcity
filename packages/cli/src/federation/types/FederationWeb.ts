@@ -23,8 +23,8 @@ export interface FederationWebContext {
   federation_name: string;
   /** Federation Server 基础 URL。 */
   federation_url: string;
-  /** 仅保存在本地 BFF 进程中的 Root Admin 凭证。 */
-  admin_secret_key: string;
+  /** registry 中保存的非敏感管理员 ID，用于登录页预填。 */
+  admin_id?: string;
 }
 
 /** 本地 Web Server 启动后的绑定信息。 */
@@ -41,4 +41,12 @@ export interface FederationWebActionRequest {
   action: string;
   /** 动作输入；由每个动作独立校验。 */
   payload?: Record<string, unknown>;
+}
+
+/** 浏览器提交给本地 BFF 的管理员登录输入。 */
+export interface FederationWebLoginRequest {
+  /** 管理员登录 ID。 */
+  admin_id: string;
+  /** 管理员密码，仅在本次请求内存中使用。 */
+  password: string;
 }

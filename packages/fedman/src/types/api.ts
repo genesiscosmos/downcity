@@ -4,6 +4,22 @@ export interface FederationContext {
   federation_name: string;
   /** 当前 Federation 的公开服务地址。 */
   federation_url: string;
+  /** registry 或当前会话中的管理员 ID。 */
+  admin_id?: string;
+  /** 本地 BFF 当前是否持有有效远端管理员 Session。 */
+  authenticated: boolean;
+  /** 当前管理员 Session 到期时间。 */
+  expires_at?: string;
+}
+
+/** Fedman 管理员登录响应。 */
+export interface FederationLoginResponse {
+  /** 登录是否成功。 */
+  authenticated: true;
+  /** 当前管理员 ID。 */
+  admin_id: string;
+  /** 当前管理员 Session 到期时间。 */
+  expires_at: string;
 }
 
 /** Usage Analytics 活跃指标。 */

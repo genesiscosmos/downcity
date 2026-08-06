@@ -1,7 +1,7 @@
 /**
  * Federation 统一鉴权器。
  *
- * Root Secret、Bureau Token 和 User Token 分别解析为 admin、bureau 和 user，
+ * 管理员 Session、Bureau Token 和 User Token 分别解析为 admin、bureau 和 user，
  * 避免机器凭证隐式获得 Federation 全局管理权限。
  */
 
@@ -12,6 +12,7 @@ import type { EnvProvider } from "../runtime.js";
 import { parse_user_token_ttl, type UserTokenAuthority } from "./user-token-authority.js";
 import type { FederationKeyStore } from "./federation-key-store.js";
 import type { BureauTokenStore } from "./bureau-token-store.js";
+import type { FederationAdminStore } from "./admin-store.js";
 import { USER_TOKEN_AUDIENCE } from "./audience.js";
 import type {
   CreateUserTokenInput,
@@ -35,6 +36,10 @@ export interface AuthResult {
   bureau?: BureauRecord;
   /** bureau 身份使用的机器凭证元数据。 */
   bureau_token?: RuntimeBureauToken;
+  /** admin 身份对应的管理员 ID。 */
+  admin_id?: string;
+  /** admin 身份对应的管理会话 ID。 */
+  admin_session_id?: string;
 }
 
 interface AuthenticatorStore {
@@ -52,6 +57,7 @@ export class Authenticator {
     private readonly token_authority: UserTokenAuthority,
     private readonly key_store: FederationKeyStore,
     private readonly bureau_token_store: BureauTokenStore,
+    private readonly admin_store: FederationAdminStore,
   ) {}
 
   /** 解析 HTTP Bearer 凭证，失败时返回 guest。 */
@@ -59,8 +65,14 @@ export class Authenticator {
     const token = bearerToken(request);
     if (!token) return { level: "guest" };
 
-    const admin_key = this.env.get("DOWNCITY_FEDERATION_ADMIN_SECRET_KEY");
-    if (admin_key && token === admin_key) return { level: "admin" };
+    const admin_session = await this.admin_store.resolve_session(token);
+    if (admin_session) {
+      return {
+        level: "admin",
+        admin_id: admin_session.admin_id,
+        admin_session_id: admin_session.session_id,
+      };
+    }
 
     const bureau_token = await this.bureau_token_store.resolve(token);
     if (bureau_token) {

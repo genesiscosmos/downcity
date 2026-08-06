@@ -7,7 +7,7 @@
  * - 端口默认从 12314 开始分配，运行状态写入系统级 Federation registry。
  */
 
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { closeSync, mkdirSync, openSync } from "node:fs";
 import { spawn, execFileSync } from "node:child_process";
 import { join } from "node:path";
@@ -27,6 +27,12 @@ import type {
 } from "@/federation/types/FederationProjectConfig.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { CliError } from "@/shared/CliError.js";
+import {
+  create_admin_provisioning,
+  show_admin_credentials_once,
+  verify_admin_provisioning,
+  type AdminProvisioningContext,
+} from "@/federation/deploy/runtime/AdminProvisioning.js";
 
 const LOCAL_PORT_START = 12314;
 const LOCAL_PORT_END = 13313;
@@ -73,7 +79,9 @@ export async function deploy_local_federation(
   const port = await resolve_local_port(deployment.port, previous?.port, host);
   const base_url = deployment.url?.trim() || `http://${url_host(host)}:${port}`;
   const instance_id = `fed_instance_${randomUUID().replace(/-/gu, "")}`;
-  const admin_secret_key = previous?.admin_secret_key?.trim() || create_local_admin_key();
+  const admin_context = options.admin_reset || !previous?.admin_id
+    ? await create_admin_provisioning(options.admin_reset ? "reset" : "initialize")
+    : undefined;
   const log_path = resolve_local_log_path(config.id);
   const command = deployment.scripts?.deploy?.trim() || "pnpm start";
   const pid = start_local_process({
@@ -84,7 +92,7 @@ export async function deploy_local_federation(
     host,
     port,
     base_url,
-    admin_secret_key,
+    admin_context,
     log_path,
   });
 
@@ -97,7 +105,7 @@ export async function deploy_local_federation(
     port,
     log_path,
     status: "starting",
-    admin_secret_key,
+    admin_id: previous?.admin_id,
   });
 
   try {
@@ -112,13 +120,29 @@ export async function deploy_local_federation(
       port,
       log_path,
       status: "failed",
-      admin_secret_key,
+      admin_id: previous?.admin_id,
     });
     throw new CliError({
       title: "Local Federation failed to start",
       note: error instanceof Error ? error.message : String(error),
       fix: `Inspect ${log_path}`,
     });
+  }
+
+  let provisioned_admin_id = previous?.admin_id;
+  if (admin_context) {
+    const provisioned = await verify_admin_provisioning(base_url, admin_context);
+    if (options.admin_reset && !provisioned) {
+      stop_local_process(pid);
+      throw new CliError({
+        title: "Federation administrator reset was not applied",
+        note: "The deployed server rejected the generated recovery credentials.",
+      });
+    }
+    if (provisioned) {
+      provisioned_admin_id = admin_context.provisioning.admin_id;
+      show_admin_credentials_once(admin_context);
+    }
   }
 
   register_deployed_server({
@@ -130,7 +154,7 @@ export async function deploy_local_federation(
     port,
     log_path,
     status: "running",
-    admin_secret_key,
+    admin_id: provisioned_admin_id,
   });
   emitCliBlock({
     tone: "success",
@@ -140,7 +164,7 @@ export async function deploy_local_federation(
       { label: "pid", value: String(pid) },
       { label: "port", value: String(port) },
       { label: "status", value: "running" },
-      { label: "admin", value: "configured" },
+      { label: "admin", value: provisioned_admin_id ?? "existing credentials required" },
     ],
     note: `Log: ${log_path}`,
   });
@@ -240,7 +264,7 @@ function start_local_process(input: {
   host: string;
   port: number;
   base_url: string;
-  admin_secret_key: string;
+  admin_context?: AdminProvisioningContext;
   log_path: string;
 }): number {
   mkdirSync(join(getPlatformRootDirPath(), "federation", "logs"), { recursive: true });
@@ -260,7 +284,12 @@ function start_local_process(input: {
       HOST: input.host,
       PORT: String(input.port),
       DOWNCITY_FEDERATION_BASE_URL: input.base_url,
-      DOWNCITY_FEDERATION_ADMIN_SECRET_KEY: input.admin_secret_key,
+      ...(input.admin_context ? {
+        DOWNCITY_FEDERATION_ADMIN_PROVISION_MODE: input.admin_context.provisioning.mode,
+        DOWNCITY_FEDERATION_ADMIN_PROVISION_ID: input.admin_context.provisioning.provision_id,
+        DOWNCITY_FEDERATION_ADMIN_ID: input.admin_context.provisioning.admin_id,
+        DOWNCITY_FEDERATION_ADMIN_PASSWORD_HASH: input.admin_context.provisioning.password_hash,
+      } : {}),
       DOWNCITY_FED_INSTANCE_ID: input.instance_id,
     },
     stdio: ["ignore", log_fd, log_fd],
@@ -269,11 +298,6 @@ function start_local_process(input: {
   closeSync(log_fd);
   if (!child.pid) throw new Error("Unable to read Local Federation PID.");
   return child.pid;
-}
-
-/** 创建首次 Local deploy 使用的高熵 admin key。 */
-function create_local_admin_key(): string {
-  return `admin_${randomBytes(32).toString("hex")}`;
 }
 
 /** 请求标准 `/health`，直到成功或超时。 */

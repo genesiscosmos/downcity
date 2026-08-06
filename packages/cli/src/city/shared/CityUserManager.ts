@@ -12,7 +12,7 @@ import {
   DEFAULT_FEDERATION_URL,
   DEFAULT_BUREAU_ID,
   normalizeCityUrl,
-  read_city_admin_secret_for_url,
+  read_city_admin_session_for_url,
   read_current_city_session,
   read_city_session_for_federation,
 } from "@/city/shared/CityStateStore.js";
@@ -116,13 +116,9 @@ export class CityUserManager {
     };
   }
 
-  /**
-   * 读取当前 City base 的 admin secret。
-   */
-  readAdminSecret(federation_url: string, env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env): string | undefined {
-    return readFirstEnv(env, ["DOWNCITY_CITY_ADMIN_SECRET_KEY", "CITY_ADMIN_SECRET_KEY"])
-      || read_city_admin_secret_for_url(federation_url)
-      || undefined;
+  /** 读取 downfed 为当前 Federation 保存的有效管理员 Session。 */
+  readAdminSession(federation_url: string): string | undefined {
+    return read_city_admin_session_for_url(federation_url);
   }
 
   private async verifyCurrentUser(

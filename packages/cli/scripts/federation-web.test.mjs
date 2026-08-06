@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import test from "node:test";
 import { start_federation_web_server } from "../bin/federation/web/FederationWebServer.js";
 
-test("fed web serves UI and keeps admin credential behind the local BFF", async () => {
+test("fed web serves login UI and keeps the administrator session behind the local BFF", async () => {
   const remote_requests = [];
   const remote_server = createServer((request, response) => {
     const chunks = [];
@@ -26,7 +26,7 @@ test("fed web serves UI and keeps admin credential behind the local BFF", async 
   const binding = await start_federation_web_server({
     federation_name: "Test Federation",
     federation_url: `http://127.0.0.1:${remote_address.port}`,
-    admin_secret_key: "test-admin-secret",
+    admin_id: "admin_test",
   }, { host: "127.0.0.1", port: 0 });
 
   try {
@@ -45,7 +45,7 @@ test("fed web serves UI and keeps admin credential behind the local BFF", async 
     const asset_source = await asset_response.text();
     assert.match(asset_source, /数据概览/);
     assert.match(asset_source, /Token 消耗排行/);
-    assert.doesNotMatch(asset_source, /test-admin-secret/);
+    assert.match(asset_source, /管理员登录/);
 
     const denied_response = await fetch(`${binding.url}/api/context`);
     assert.equal(denied_response.status, 403);
@@ -54,7 +54,20 @@ test("fed web serves UI and keeps admin credential behind the local BFF", async 
     assert.deepEqual(await context_response.json(), {
       federation_name: "Test Federation",
       federation_url: `http://127.0.0.1:${remote_address.port}`,
+      admin_id: "admin_test",
+      authenticated: false,
     });
+
+    const unauthenticated_dashboard = await fetch(`${binding.url}/api/dashboard?range=7d`, { headers: { cookie } });
+    assert.equal(unauthenticated_dashboard.status, 401);
+
+    const login_response = await fetch(`${binding.url}/api/auth/login`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ admin_id: "admin_test", password: "one-time-password" }),
+    });
+    assert.equal(login_response.status, 200);
+    assert.equal((await login_response.json()).admin_id, "admin_test");
 
     const dashboard_response = await fetch(`${binding.url}/api/dashboard?range=7d`, { headers: { cookie } });
     assert.equal(dashboard_response.status, 200);
@@ -87,7 +100,7 @@ test("fed web serves UI and keeps admin credential behind the local BFF", async 
     });
     assert.equal(action_response.status, 200);
     const env_request = remote_requests.find((item) => item.url === "/v1/env/upsert");
-    assert.equal(env_request?.authorization, "Bearer test-admin-secret");
+    assert.equal(env_request?.authorization, "Bearer fadm_test_session");
     assert.equal(env_request?.body, JSON.stringify({ key: "DEMO", value: "value" }));
   } finally {
     await binding.close();
@@ -96,6 +109,14 @@ test("fed web serves UI and keeps admin credential behind the local BFF", async 
 });
 
 function mock_federation_response(url) {
+  if (url === "/v1/admin/login") {
+    return {
+      admin_id: "admin_test",
+      session_token: "fadm_test_session",
+      expires_at: "2099-01-01T00:00:00.000Z",
+    };
+  }
+  if (url === "/v1/admin/logout") return { ok: true };
   if (url === "/v1/env/upsert") return { success: true };
   if (url === "/v1/accounts/users") {
     return { items: [{ user_id: "user_1", email: "user@example.com", created_at: new Date().toISOString() }] };
@@ -145,7 +166,7 @@ test("fed web rejects non-loopback listeners", async () => {
     start_federation_web_server({
       federation_name: "Unsafe",
       federation_url: "http://127.0.0.1:1",
-      admin_secret_key: "secret",
+      admin_id: "admin_unsafe",
     }, { host: "0.0.0.0", port: 0 }),
     /只允许监听/,
   );

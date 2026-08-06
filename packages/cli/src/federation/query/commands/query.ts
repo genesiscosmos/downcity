@@ -3,7 +3,7 @@
  *
  * 关键说明（中文）
  * - 该命令直接请求当前 active Federation，便于排查 auth、env、模型解析与上游错误。
- * - 当前实例已配置 admin key 时自动带 Authorization，否则按公开请求发送。
+ * - 当前实例存在有效管理员 Session 时自动带 Authorization，否则按公开请求发送。
  * - 非 2xx 响应仍完整打印 status、headers、body，避免吞掉服务端真实错误。
  */
 
@@ -113,7 +113,7 @@ async function resolve_query_request(params: {
   }
 
   const headers = resolve_query_headers({
-    admin_secret_key: params.server.admin_secret_key,
+    admin_session_token: params.server.admin_session_token,
     header_inputs: params.options.header ?? [],
   });
 
@@ -249,13 +249,13 @@ function normalize_json_body(body_input: string, source: string): string {
 }
 
 function resolve_query_headers(params: {
-  admin_secret_key?: string;
+  admin_session_token?: string;
   header_inputs: string[];
 }): Headers {
   const headers = new Headers();
-  const admin_secret_key = params.admin_secret_key?.trim();
-  if (admin_secret_key) {
-    headers.set("authorization", `Bearer ${admin_secret_key}`);
+  const admin_session_token = params.admin_session_token?.trim();
+  if (admin_session_token) {
+    headers.set("authorization", `Bearer ${admin_session_token}`);
   }
   headers.set("content-type", "application/json");
 

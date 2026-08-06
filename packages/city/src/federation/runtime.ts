@@ -16,6 +16,7 @@ import type { EnvStore } from "../service/env/env-store.js";
 import type { AnySQLiteTable } from "drizzle-orm/sqlite-core";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 import type { FederationStorage } from "./storage.js";
+import type { FederationAdminProvisioning } from "./types.js";
 
 /** 表定义类型（SQLite 或 Postgres） */
 export type TableDef = AnySQLiteTable | AnyPgTable;
@@ -110,6 +111,10 @@ export interface BuiltinTables {
   federation_auth_keys: TableDef;
   /** Federation Bureau Token 表。 */
   bureau_tokens: TableDef;
+  /** Federation 固定所有者管理员表。 */
+  federation_administrators: TableDef;
+  /** Federation 管理员会话表。 */
+  federation_admin_sessions: TableDef;
 }
 
 // ===========================================================================
@@ -153,4 +158,6 @@ export interface Runtime {
    * - 未配置时相关 Service 保持原始 URL 行为。
    */
   storage?: FederationStorage;
+  /** 可信部署宿主注入的管理员初始化或恢复输入。 */
+  admin_provisioning?: FederationAdminProvisioning;
 }

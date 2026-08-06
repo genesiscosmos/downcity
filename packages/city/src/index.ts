@@ -13,7 +13,19 @@
 // ===========================================================================
 
 export { Federation } from "./federation/federation.js";
-export type { FederationOptions, FederationHealthStatus } from "./federation/types.js";
+export type {
+  FederationOptions,
+  FederationHealthStatus,
+  FederationAdminProvisioning,
+} from "./federation/types.js";
+export {
+  create_federation_admin_credentials,
+  create_federation_admin_password_hash,
+} from "./federation/auth/admin-password.js";
+export type {
+  FederationAdminLoginInput,
+  FederationAdminLoginResult,
+} from "./federation/auth/types.js";
 export type { FederationFetchOptions, FederationRequestExecutionContext } from "./federation/types.js";
 export type {
   Runtime,

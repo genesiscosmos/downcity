@@ -11,6 +11,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { FederationProjectConfigFile } from "@/federation/types/FederationProjectConfig.js";
+import type { FederationAdminProvisioning } from "@downcity/city";
 
 /** 写入 wrangler.toml 的结果。 */
 export interface WranglerConfigWriteResult {
@@ -24,6 +25,7 @@ export interface WranglerConfigWriteResult {
 export function writeWranglerConfig(
   config_file: FederationProjectConfigFile,
   database_id?: string,
+  admin_provisioning?: FederationAdminProvisioning,
 ): WranglerConfigWriteResult {
   const config = config_file.config;
   const config_dir = mkdtempSync(join(tmpdir(), "downcity-wrangler-"));
@@ -69,11 +71,21 @@ export function writeWranglerConfig(
     );
   }
 
+  const runtime_vars: Record<string, string> = {};
   if (config.deployment.resources.storage?.public_url_prefix) {
+    runtime_vars.DOWNCITY_STORAGE_PUBLIC_URL_PREFIX = config.deployment.resources.storage.public_url_prefix;
+  }
+  if (admin_provisioning) {
+    runtime_vars.DOWNCITY_FEDERATION_ADMIN_PROVISION_MODE = admin_provisioning.mode;
+    runtime_vars.DOWNCITY_FEDERATION_ADMIN_PROVISION_ID = admin_provisioning.provision_id;
+    runtime_vars.DOWNCITY_FEDERATION_ADMIN_ID = admin_provisioning.admin_id;
+    runtime_vars.DOWNCITY_FEDERATION_ADMIN_PASSWORD_HASH = admin_provisioning.password_hash;
+  }
+  if (Object.keys(runtime_vars).length > 0) {
     lines.push(
       "",
       "[vars]",
-      `DOWNCITY_STORAGE_PUBLIC_URL_PREFIX = ${tomlString(config.deployment.resources.storage.public_url_prefix)}`,
+      ...Object.entries(runtime_vars).map(([key, value]) => `${key} = ${tomlString(value)}`),
     );
   }
 

@@ -24,7 +24,7 @@ import {
   DEFAULT_BUREAU_ID,
   list_federations,
   normalizeCityUrl,
-  read_city_admin_secret_for_url,
+  read_city_admin_session_for_url,
   read_current_city_session,
   readCityState,
   resolve_selected_federation_url,
@@ -33,8 +33,8 @@ import {
 } from "@/city/shared/CityStateStore.js";
 const cityUserManager = new CityUserManager();
 
-export function read_city_admin_secret_for_federation(federation_url: string): string | undefined {
-  return read_city_admin_secret_for_url(federation_url);
+export function read_city_admin_session_for_federation(federation_url: string): string | undefined {
+  return read_city_admin_session_for_url(federation_url);
 }
 
 function find_federation(input?: string): FederationProfile | null {
@@ -192,7 +192,7 @@ export function emit_federation_list(options?: { as_json?: boolean }): void {
         { label: "selected", value: server.selected ? "yes" : "no" },
         { label: "source", value: server.source },
         { label: "user session", value: server.has_user_session ? "yes" : "no" },
-        { label: "admin profile", value: server.has_admin_secret_key ? "yes" : "no" },
+        { label: "admin profile", value: server.has_admin_session ? "yes" : "no" },
       ],
     })),
   });

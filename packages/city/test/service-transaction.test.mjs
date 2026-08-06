@@ -5,6 +5,7 @@ import test from "node:test"
 import { sqliteTable, text } from "drizzle-orm/sqlite-core"
 import { Federation, InstallableService } from "../bin/index.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
+import { create_test_admin_session, create_test_federation } from "./admin-fixture.mjs"
 
 const first_table = sqliteTable("test_service_transaction_first", {
   item_id: text("item_id").primaryKey(),
@@ -57,15 +58,13 @@ let transaction_release = Promise.withResolvers()
 
 test("service transaction rolls back every table write", async () => {
   const db = createSqliteDb(":memory:")
-  const federation = new Federation({ database: db })
+  const federation = create_test_federation({ database: db })
   federation.use(new TransactionTestService())
   await federation.health()
-  const secret = (await (await federation.table("env")).select({
-    key: "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY",
-  }))[0].value
+  const session_token = await create_test_admin_session(federation)
   const response = await federation.fetch(new Request("http://localhost/v1/transaction-test/rollback", {
     method: "POST",
-    headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+    headers: { authorization: `Bearer ${session_token}`, "content-type": "application/json" },
     body: "{}",
   }))
   assert.equal(response.status, 500)
@@ -77,16 +76,14 @@ test("ordinary table operations wait for an active SQLite transaction", async ()
   transaction_started = Promise.withResolvers()
   transaction_release = Promise.withResolvers()
   const db = createSqliteDb(":memory:")
-  const federation = new Federation({ database: db })
+  const federation = create_test_federation({ database: db })
   federation.use(new TransactionTestService())
   await federation.health()
-  const secret = (await (await federation.table("env")).select({
-    key: "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY",
-  }))[0].value
+  const session_token = await create_test_admin_session(federation)
 
   const rollback_request = federation.fetch(new Request("http://localhost/v1/transaction-test/rollback-delayed", {
     method: "POST",
-    headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+    headers: { authorization: `Bearer ${session_token}`, "content-type": "application/json" },
     body: "{}",
   }))
   await transaction_started.promise

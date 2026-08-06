@@ -12,7 +12,12 @@ export async function request_json<T>(path: string, init?: RequestInit): Promise
     },
   });
   const body = await response.json().catch(() => ({})) as T & { error?: string };
-  if (!response.ok) throw new Error(body.error || `${response.status} ${response.statusText}`);
+  if (!response.ok) {
+    if (response.status === 401 && path !== "/api/auth/login") {
+      window.dispatchEvent(new Event("fedman:unauthorized"));
+    }
+    throw new Error(body.error || `${response.status} ${response.statusText}`);
+  }
   return body;
 }
 

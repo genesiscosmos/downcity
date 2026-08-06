@@ -1,7 +1,7 @@
 /**
  * Federation Bureau 身份与机器凭证服务。
  *
- * Root Admin 管理 Bureau 生命周期和 Token 注册表。Bureau Token 只能读取
+ * Federation 管理员管理 Bureau 生命周期和 Token 注册表。Bureau Token 只能读取
  * 自身身份，不能获得 Federation 全局管理权限。
  */
 

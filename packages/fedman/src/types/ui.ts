@@ -22,8 +22,18 @@ export interface LayoutProps {
   on_range_change: (range: AnalyticsRange) => void;
   /** 请求当前页面重新加载的回调。 */
   on_refresh: () => void;
+  /** 退出当前管理员 Session。 */
+  on_logout: () => void;
   /** 当前页面主体。 */
   children: ReactNode;
+}
+
+/** 管理员登录页输入。 */
+export interface LoginPageProps {
+  /** 当前 Federation 连接信息。 */
+  context: FederationContext;
+  /** 登录成功后的回调。 */
+  on_login: () => void;
 }
 
 /** 单张指标卡内容。 */

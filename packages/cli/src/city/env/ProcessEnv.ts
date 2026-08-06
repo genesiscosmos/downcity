@@ -16,12 +16,10 @@ import { get_platform_env_file_path } from "@/city/process/registry/CityPaths.js
 import { read_env_file_sync } from "@/city/env/EnvFileStore.js";
 
 const PLATFORM_SESSION_ENV_KEYS = new Set([
-  "CITY_ADMIN_SECRET_KEY",
   "CITY_URL",
   "CITY_USER_TOKEN",
   "DC_AUTH_TOKEN",
   "DC_AGENT_TOKEN",
-  "DOWNCITY_CITY_ADMIN_SECRET_KEY",
   "DOWNCITY_CITY_URL",
   "DOWNCITY_CITY_USER_TOKEN",
 ]);

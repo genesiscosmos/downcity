@@ -12,12 +12,13 @@ import { decodeJwt } from "jose"
 
 import { Bureau, Federation, FederationAdmin } from "../bin/index.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
+import { create_test_admin_session, create_test_federation } from "./admin-fixture.mjs"
 
 test("Federation 新数据库使用 Bureau 身份与绑定机器凭证表", async () => {
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-bureau-schema-"))
   try {
     const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    const federation = new Federation({ database: db })
+    const federation = create_test_federation({ database: db })
     await federation.health()
 
     const bureau_columns = (await db.query({
@@ -52,21 +53,21 @@ test("Federation 拒绝旧 City 身份表和无法确定归属的 Bureau Token",
     const city_db = createSqliteDb(path.join(temp_dir, "legacy-city.sqlite"))
     await city_db.execute_ddl("CREATE TABLE cities (city_id TEXT PRIMARY KEY, name TEXT NOT NULL)")
     await assert.rejects(
-      new Federation({ database: city_db }).health(),
+      create_test_federation({ database: city_db }).health(),
       /identity schema migration required: legacy cities table exists/,
     )
 
     const token_db = createSqliteDb(path.join(temp_dir, "legacy-token.sqlite"))
     await token_db.execute_ddl("CREATE TABLE federation_bureau_tokens (token_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, status TEXT NOT NULL)")
     await assert.rejects(
-      new Federation({ database: token_db }).health(),
+      create_test_federation({ database: token_db }).health(),
       /identity schema migration required: legacy Bureau Token records have no bureau_id/,
     )
 
     const bureau_db = createSqliteDb(path.join(temp_dir, "legacy-bureau.sqlite"))
     await bureau_db.execute_ddl("CREATE TABLE federation_bureaus (bureau_id TEXT PRIMARY KEY, name TEXT NOT NULL, server_url TEXT NOT NULL, state TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, archived_at TEXT NOT NULL)")
     await assert.rejects(
-      new Federation({ database: bureau_db }).health(),
+      create_test_federation({ database: bureau_db }).health(),
       /identity schema migration required: legacy Bureau records store server_url on the identity table/,
     )
 
@@ -74,7 +75,7 @@ test("Federation 拒绝旧 City 身份表和无法确定归属的 Bureau Token",
     await orphan_bureau_db.execute_ddl("CREATE TABLE federation_bureaus (bureau_id TEXT PRIMARY KEY, name TEXT NOT NULL, state TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, archived_at TEXT NOT NULL)")
     await orphan_bureau_db.execute_ddl("INSERT INTO federation_bureaus (bureau_id, name, state, created_at, updated_at, archived_at) VALUES ('orphan', 'Orphan', 'active', 't', 't', '')")
     await assert.rejects(
-      new Federation({ database: orphan_bureau_db }).health(),
+      create_test_federation({ database: orphan_bureau_db }).health(),
       /identity schema migration required: Bureau Server record is missing for orphan/,
     )
   } finally {
@@ -85,7 +86,7 @@ test("Federation 拒绝旧 City 身份表和无法确定归属的 Bureau Token",
 test("Federation 注册 Bureau 服务入口并按 User Token 解析当前 Bureau", async () => {
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-current-bureau-"))
   try {
-    const federation = new Federation({
+    const federation = create_test_federation({
       database: createSqliteDb(path.join(temp_dir, "test.sqlite")),
     })
     await federation.health()
@@ -142,7 +143,7 @@ test("Federation 注册 Bureau 服务入口并按 User Token 解析当前 Bureau
 test("Federation 不默认创建 Bureau Token，Bureau 使用 JWKS 本地验签", async () => {
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-bureau-local-"))
   try {
-    const federation = new Federation({
+    const federation = create_test_federation({
       database: createSqliteDb(path.join(temp_dir, "test.sqlite")),
     })
     await federation.health()
@@ -250,7 +251,7 @@ test("Federation 不默认创建 Bureau Token，Bureau 使用 JWKS 本地验签"
 test("Bureau 拒绝签给另一个 Bureau 的有效 user_token", async () => {
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-bureau-city-"))
   try {
-    const federation = new Federation({
+    const federation = create_test_federation({
       database: createSqliteDb(path.join(temp_dir, "test.sqlite")),
     })
     await federation.health()
@@ -276,7 +277,7 @@ test("Bureau 拒绝签给另一个 Bureau 的有效 user_token", async () => {
 test("Bureau 拒绝被修改签名的 user_token", async () => {
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-bureau-signature-"))
   try {
-    const federation = new Federation({
+    const federation = create_test_federation({
       database: createSqliteDb(path.join(temp_dir, "test.sqlite")),
     })
     await federation.health()
@@ -306,7 +307,7 @@ test("Federation issuer 和签名公钥在 runtime 重启后保持不变", async
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-fed-key-restart-"))
   try {
     const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    const first = new Federation({ database: db })
+    const first = create_test_federation({ database: db })
     await first.health()
     const first_discovery = await (await first.fetch(new Request(
       "https://fed.example.com/.well-known/downcity.json",
@@ -315,7 +316,7 @@ test("Federation issuer 和签名公钥在 runtime 重启后保持不变", async
       "https://fed.example.com/.well-known/jwks.json",
     ))).json()
 
-    const second = new Federation({ database: db })
+    const second = create_test_federation({ database: db })
     await second.health()
     const second_discovery = await (await second.fetch(new Request(
       "https://fed.example.com/.well-known/downcity.json",
@@ -335,7 +336,7 @@ test("多个 Federation 实例并发首次启动时共享唯一 issuer 和 activ
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-fed-concurrent-init-"))
   try {
     const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    const federations = Array.from({ length: 8 }, () => new Federation({ database: db }))
+    const federations = Array.from({ length: 8 }, () => create_test_federation({ database: db }))
 
     await Promise.all(federations.map((federation) => federation.health()))
 
@@ -344,8 +345,8 @@ test("多个 Federation 实例并发首次启动时共享唯一 issuer 和 activ
     assert.equal(key_rows.length, 1)
 
     const env_rows = await (await federations[0].table("env")).select()
-    assert.equal(env_rows.length, 3)
-    assert.equal(new Set(env_rows.map((row) => row.key)).size, 3)
+    assert.equal(env_rows.length, 2)
+    assert.equal(new Set(env_rows.map((row) => row.key)).size, 2)
 
     const discoveries = await Promise.all(federations.map(async (federation) => (
       await (await federation.fetch(new Request(
@@ -362,7 +363,7 @@ test("Federation 启动时将历史多 active signing key 自动收敛为最早�
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-fed-key-reconcile-"))
   try {
     const db = createSqliteDb(path.join(temp_dir, "test.sqlite"))
-    const first = new Federation({ database: db })
+    const first = create_test_federation({ database: db })
     await first.health()
 
     const key_table = await first.table("federation_auth_keys")
@@ -379,7 +380,7 @@ test("Federation 启动时将历史多 active signing key 自动收敛为最早�
       clone_auth_key(original_key, "key_legacy_middle", "2026-01-02T00:00:00.000Z"),
     ])
 
-    const recovered = new Federation({ database: db })
+    const recovered = create_test_federation({ database: db })
     await recovered.health()
 
     const recovered_rows = await (await recovered.table("federation_auth_keys")).select()
@@ -420,12 +421,9 @@ function create_bureau(federation, bureau_token) {
 }
 
 async function create_admin(federation) {
-  const rows = await (await federation.table("env")).select({
-    key: "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY",
-  })
   return new FederationAdmin({
     base_url: "http://localhost",
-    credential: rows[0]?.value ?? "",
+    credential: await create_test_admin_session(federation),
     fetch: (input, init) => federation.fetch(new Request(input, init)),
   })
 }

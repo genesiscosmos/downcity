@@ -13,6 +13,7 @@ import { read_federation_project_config } from "@/federation/deploy/config/Feder
 import { deploy_cloudflare_workers } from "@/federation/deploy/runtime/CloudflareWorkersDeployer.js";
 import { deploy_local_federation } from "@/federation/deploy/runtime/LocalFederationDeployer.js";
 import { resolve_federation_deploy_source } from "@/federation/deploy/config/FederationDeployTargetResolver.js";
+import { confirm, isCancel } from "@/federation/tui/Prompts.js";
 
 /** Commander 传入的原始 deploy 选项。 */
 export interface FederationDeployCommandOptions {
@@ -28,6 +29,10 @@ export interface FederationDeployCommandOptions {
   skipTypecheck?: boolean;
   /** 本次部署使用的 Cloudflare account id。 */
   accountId?: string;
+  /** 是否通过部署权限恢复管理员。 */
+  adminReset?: boolean;
+  /** 是否跳过管理员恢复确认。 */
+  yes?: boolean;
 }
 
 /**
@@ -45,9 +50,12 @@ export async function deploy_federation_project(
     skip_build: raw_options.skipBuild === true,
     skip_typecheck: raw_options.skipTypecheck === true,
     account_id: raw_options.accountId,
+    admin_reset: raw_options.adminReset === true,
+    yes: raw_options.yes === true,
   };
   const target = await resolve_federation_deploy_source(options.source);
   const config_file = read_federation_project_config(target.project_dir);
+  await confirm_admin_reset(config_file.config.name, config_file.config.deployment.target, options);
 
   switch (config_file.config.deployment.target) {
     case "local":
@@ -61,5 +69,25 @@ export async function deploy_federation_project(
         title: "Unsupported Federation target",
         note: `fed deploy does not support ${config_file.config.deployment.target}.`,
       });
+  }
+}
+
+/** 对灾难恢复执行第二道显式确认，普通部署不进入该分支。 */
+async function confirm_admin_reset(
+  federation_name: string,
+  target: string,
+  options: FederationDeployOptions,
+): Promise<void> {
+  if (!options.admin_reset) return;
+  if (options.dry_run || options.verify_only) {
+    throw new CliError({ title: "--admin-reset 不能与 --dry-run 或 --verify-only 同时使用。" });
+  }
+  if (options.yes) return;
+  const accepted = await confirm({
+    message: `确认重置 ${federation_name} (${target}) 的管理员？全部现有管理会话将失效。`,
+    initialValue: false,
+  });
+  if (isCancel(accepted) || accepted !== true) {
+    throw new CliError({ title: "已取消 Federation 管理员重置。" });
   }
 }

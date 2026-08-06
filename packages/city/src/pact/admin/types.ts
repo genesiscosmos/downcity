@@ -6,12 +6,12 @@ import type { FetchLike } from "../http.js";
 import type { CityModelDescriptor } from "@downcity/type";
 import type { UserServiceSummary } from "../user/types.js";
 
-/** Federation Root Admin 访问层构造参数。 */
+/** Federation 管理员访问层构造参数。 */
 export interface FederationAdminOptions {
   /** Federation 管理端入口地址，支持 `http(s)://`。 */
   base_url: string;
 
-  /** Federation Root Secret。 */
+  /** Federation 管理员 Session Token。 */
   credential: string;
   /** 自定义 fetch 实现 */
   fetch?: FetchLike;

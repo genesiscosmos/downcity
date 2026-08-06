@@ -1,7 +1,7 @@
 /**
  * Federation Bureau 控制面调用器。
  *
- * 该调用器只供 Root Admin 客户端使用，Bureau 机器凭证不能调用这些接口。
+ * 该调用器只供管理员客户端使用，Bureau 机器凭证不能调用这些接口。
  */
 
 import type { RequestInitLike } from "../../http.js";
@@ -71,7 +71,7 @@ export class BureausInvoker {
   readonly server: BureauServerInvoker;
 
   constructor(options: {
-    /** 发送带 Federation Root Admin 鉴权的 JSON 请求。 */
+    /** 发送带 Federation 管理员会话鉴权的 JSON 请求。 */
     requestJSON: <T>(path: string, init: RequestInitLike) => Promise<T>;
   }) {
     this.tokens = new BureauTokensInvoker(options.requestJSON);

@@ -4,11 +4,11 @@
  * 关键说明（中文）
  * - downfed 需要管理已经部署好的 Federation，而不只是 create / deploy。
  * - 本模块负责添加、选择、编辑、移除本地保存的 Federation 连接。
- * - admin_secret_key 是低频管理凭证，只有进入 admin 工作区时才要求配置。
+ * - 管理员密码只用于登录，registry 仅保存有期限 Session Token。
  */
 
-import { FederationAdmin } from "@downcity/city";
 import { isCancel, password, select, text } from "@/federation/tui/Prompts.js";
+import { login_federation_admin } from "@/federation/auth/admin.js";
 import {
   addServer,
   readActiveServer,
@@ -222,33 +222,41 @@ export async function prompt_configure_federation_admin_access(
     return undefined;
   }
 
-  const admin_secret_key = await password({
+  const admin_id = await text({
     message: t({
-      zh: "admin_secret_key",
-      en: "admin_secret_key",
+      zh: "管理员 ID",
+      en: "Administrator ID",
     }),
+    initialValue: current.admin_id,
   });
-  if (!admin_secret_key || isCancel(admin_secret_key) || !String(admin_secret_key).trim()) {
+  if (!admin_id || isCancel(admin_id) || !String(admin_id).trim()) return undefined;
+  const admin_password = await password({
+    message: t({ zh: "管理员密码", en: "Administrator password" }),
+  });
+  if (!admin_password || isCancel(admin_password) || !String(admin_password)) {
     return undefined;
   }
-
+  let session;
+  try {
+    session = await login_federation_admin({
+      base_url: current.base_url,
+      admin_id: String(admin_id),
+      password: String(admin_password),
+    });
+  } catch (error) {
+    showError(error instanceof Error ? error.message : String(error));
+    return undefined;
+  }
   const updated = updateServer(current.base_url, {
     ...current,
-    admin_secret_key: String(admin_secret_key).trim(),
+    admin_id: session.admin_id,
+    admin_session_token: session.session_token,
+    admin_session_expires_at: session.expires_at,
   });
-
-  const verified = await verify_federation_admin_access(updated);
-  if (verified) {
-    showSuccess(t({
-      zh: `Admin 访问已配置：${updated.name}`,
-      en: `Admin access configured: ${updated.name}`,
-    }));
-  } else {
-    showError(t({
-      zh: `Federation 已保存，但 admin 校验失败：${updated.name}`,
-      en: `Federation saved, but admin verification failed: ${updated.name}`,
-    }));
-  }
+  showSuccess(t({
+    zh: `管理员已登录：${updated.name}`,
+    en: `Administrator signed in: ${updated.name}`,
+  }));
 
   return updated;
 }
@@ -309,19 +317,6 @@ export async function prompt_remove_federation_server(base_url?: string): Promis
       }),
   );
   return true;
-}
-
-async function verify_federation_admin_access(server: ServerProfile): Promise<boolean> {
-  try {
-    const admin = new FederationAdmin({
-      base_url: server.base_url,
-      credential: server.admin_secret_key!,
-    });
-    await admin.listServices();
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 async function verify_federation_public_access(server: ServerProfile): Promise<boolean> {

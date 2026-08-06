@@ -192,6 +192,7 @@ export class Federation {
       runtime: this.runtime,
       services: this.getServices(),
       authenticator: state.authenticator,
+      admin_store: state.admin_store,
       table_map: state.table_map,
     });
   }

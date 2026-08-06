@@ -178,7 +178,7 @@ export function list_federations(): FederationProfile[] {
       ...existing,
       selected: existing.selected || profile.selected,
       source: existing.source === "city" ? "city" : profile.source,
-      has_admin_secret_key: existing.has_admin_secret_key || profile.has_admin_secret_key,
+      has_admin_session: existing.has_admin_session || profile.has_admin_session,
       has_user_session: existing.has_user_session || profile.has_user_session,
       bureau_id: existing.bureau_id || profile.bureau_id,
       user_id: existing.user_id || profile.user_id,
@@ -192,7 +192,7 @@ export function list_federations(): FederationProfile[] {
       federation_url: profile.federation_url,
       selected: profile.federation_url === selected_url,
       source: "city",
-      has_admin_secret_key: Boolean(read_city_admin_secret_for_url(profile.federation_url)),
+      has_admin_session: Boolean(read_city_admin_session_for_url(profile.federation_url)),
       has_user_session: Boolean(session?.user_token),
       bureau_id: session?.bureau_id,
       user_id: session?.user_id,
@@ -209,16 +209,18 @@ export function list_federations(): FederationProfile[] {
 }
 
 /**
- * 读取指定 Federation 的 admin secret。
+ * 读取指定 Federation 尚未到期的管理员 Session Token。
  */
-export function read_city_admin_secret_for_url(federation_url: string): string | undefined {
+export function read_city_admin_session_for_url(federation_url: string): string | undefined {
   const target_url = normalizeCityUrl(federation_url);
   const raw = readCityAdminConfig();
   const servers = Array.isArray(raw.servers) ? raw.servers : [];
   const matched = servers.find((item) =>
     normalizeCityUrl(readCityString(item.base_url)) === target_url,
   );
-  return readCityString(matched?.admin_secret_key) || undefined;
+  const expires_at = readCityString(matched?.admin_session_expires_at);
+  if (!expires_at || Date.parse(expires_at) <= Date.now()) return undefined;
+  return readCityString(matched?.admin_session_token) || undefined;
 }
 
 function defaultProtocol(value: string): "http" | "https" {
@@ -272,7 +274,10 @@ function read_city_admin_federations(): FederationProfile[] {
       federation_url,
       selected: federation_url === selected_url,
       source: "city-admin",
-      has_admin_secret_key: Boolean(readCityString(item.admin_secret_key)),
+      has_admin_session: Boolean(
+        readCityString(item.admin_session_token)
+        && Date.parse(readCityString(item.admin_session_expires_at)) > Date.now(),
+      ),
       has_user_session: Boolean(session?.user_token),
       bureau_id: session?.bureau_id,
       user_id: session?.user_id,

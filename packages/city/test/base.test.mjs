@@ -14,6 +14,7 @@ import {
 } from "../bin/index.js"
 import { TableApi } from "../bin/store/table-api.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
+import { create_test_admin_session, create_test_federation } from "./admin-fixture.mjs"
 
 function useMemoryQueue(base) {
   const messages = []
@@ -96,7 +97,7 @@ test("InstallableService always installs routes before custom initialization", a
   }
 
   const db = createSqliteDb(":memory:")
-  const federation = new Federation({ database: db })
+  const federation = create_test_federation({ database: db })
   federation.use(new LifecycleService())
 
   await federation.health()
@@ -114,7 +115,7 @@ test("Federation instruction aggregates built-in and service documentation", asy
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const queueMessages = useMemoryQueue(base)
 
     base.use({
@@ -157,10 +158,10 @@ test("Federation instruction endpoint requires admin auth and returns text", asy
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
 
     const guestResponse = await base.fetch(new Request("http://localhost/v1/federation/instruction", {
       method: "GET",
@@ -176,7 +177,7 @@ test("Federation instruction endpoint requires admin auth and returns text", asy
     const adminResponse = await base.fetch(new Request("http://localhost/v1/federation/instruction", {
       method: "GET",
       headers: {
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
     }))
 
@@ -196,7 +197,7 @@ test("Federation trusted identity can access admin endpoints without bearer toke
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
 
     await base.health()
 
@@ -226,25 +227,24 @@ test("Federation bootstraps internal secrets into the env table", async () => {
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
 
     await base.health()
 
     const envProvider = base.getService("env")._env
-    assert.match(envProvider.get("DOWNCITY_FEDERATION_ADMIN_SECRET_KEY"), /^admin_/)
+    assert.equal(envProvider.get("DOWNCITY_FEDERATION_ADMIN_SECRET_KEY"), undefined)
     assert.match(envProvider.get("DOWNCITY_FEDERATION_ID"), /^fed_/)
     assert.match(envProvider.get("BETTER_AUTH_SECRET"), /^better_auth_/)
 
     const items = await envProvider.list()
     assert.deepEqual(items.map((item) => item.key).sort(), [
       "BETTER_AUTH_SECRET",
-      "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY",
       "DOWNCITY_FEDERATION_ID",
     ])
 
     const envTable = await base.table("env")
     const rows = await envTable.select()
-    assert.equal(rows.length, 3)
+    assert.equal(rows.length, 2)
     for (const row of rows) {
       assert.equal(typeof row.key, "string")
       assert.equal(typeof row.value, "string")
@@ -272,7 +272,7 @@ test("InstallableService route supports native Request handlers", async () => {
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
 
     base.use({
       id: "native",
@@ -327,7 +327,7 @@ test("Federation fetch runs middleware in order and remains bindable", async () 
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const events = []
 
     base.middle(async (ctx, next) => {
@@ -365,7 +365,7 @@ test("Federation middleware can short-circuit before action body read", async ()
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     let action_called = false
 
     base.middle((ctx, next) => {
@@ -426,7 +426,7 @@ test("Federation middleware reports duplicate next calls as middleware errors", 
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
 
     base.middle(async (_ctx, next) => {
       await next()
@@ -455,7 +455,7 @@ test("AIService requires explicit model id for executable AI calls", async () =>
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const ai = new AIService()
     ai.use({
       id: "required-model",
@@ -481,10 +481,10 @@ test("AIService requires explicit model id for executable AI calls", async () =>
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const headers = {
       "content-type": "application/json",
-      authorization: `Bearer ${adminSecret}`,
+      authorization: `Bearer ${adminSession}`,
     }
 
     for (const input of [
@@ -519,7 +519,7 @@ test("AIService charges explicit provider charge lines", async () => {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
     const charges = []
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
 
     const ai = new AIService({
       credits: {
@@ -557,13 +557,13 @@ test("AIService charges explicit provider charge lines", async () => {
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
 
     const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
@@ -603,7 +603,7 @@ test("AIService /stream keeps the model stream open until deferred charge settle
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
     const charges = []
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const ai = new AIService({
       credits: {
         async charge(input) {
@@ -648,10 +648,10 @@ test("AIService /stream keeps the model stream open until deferred charge settle
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${adminSecret}` },
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminSession}` },
       body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
     const tokenBody = await (await base.getAuthenticator()).createToken({
@@ -697,7 +697,7 @@ test("AIService runs Credits precheck before provider actions", async () => {
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
     let providerCalls = 0
     let precheckCalls = 0
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
 
     const ai = new AIService({
       credits: {
@@ -730,13 +730,13 @@ test("AIService runs Credits precheck before provider actions", async () => {
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
 
     const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
@@ -789,7 +789,7 @@ test("AIService uses provider bill when model bill is not set", async () => {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
     const charges = []
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
 
     const ai = new AIService({
       credits: {
@@ -812,12 +812,12 @@ test("AIService uses provider bill when model bill is not set", async () => {
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
@@ -858,7 +858,7 @@ test("AIService falls back to image-capable model for UIMessage image parts", as
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const calls = []
 
     const ai = new AIService()
@@ -909,12 +909,12 @@ test("AIService falls back to image-capable model for UIMessage image parts", as
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
@@ -959,7 +959,7 @@ test("AIService selects fallback rule by UIMessage file media type", async () =>
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const calls = []
 
     const ai = new AIService()
@@ -1034,12 +1034,12 @@ test("AIService selects fallback rule by UIMessage file media type", async () =>
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
@@ -1088,7 +1088,7 @@ test("AIService falls back for OpenAI chat completions with image_url parts", as
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const calls = []
 
     const ai = new AIService()
@@ -1130,12 +1130,12 @@ test("AIService falls back for OpenAI chat completions with image_url parts", as
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
@@ -1196,7 +1196,7 @@ test("AIService lets model bill override provider bill", async () => {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
     const charges = []
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
 
     const ai = new AIService({
       credits: {
@@ -1223,12 +1223,12 @@ test("AIService lets model bill override provider bill", async () => {
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
@@ -1263,7 +1263,7 @@ test("Federation AI image jobs advance and finish through provider result", asyn
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const queueMessages = useMemoryQueue(base)
     const message = {
       id: "msg_image_1",
@@ -1311,12 +1311,12 @@ test("Federation AI image jobs advance and finish through provider result", asyn
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const createResponse = await base.fetch(new Request("http://localhost/v1/ai/image/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ model: "echo-image", prompt: "draw" }),
     }))
@@ -1338,7 +1338,7 @@ test("Federation AI image jobs advance and finish through provider result", asyn
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ job_id: created.job_id }),
     }))
@@ -1365,7 +1365,7 @@ test("Federation AI image jobs require provider create and result actions", asyn
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const queueMessages = useMemoryQueue(base)
     const message = {
       id: "msg_image_charged",
@@ -1402,12 +1402,12 @@ test("Federation AI image jobs require provider create and result actions", asyn
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const createResponse = await base.fetch(new Request("http://localhost/v1/ai/image/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ model: "wrapped-image", prompt: "draw" }),
     }))
@@ -1421,7 +1421,7 @@ test("Federation AI image jobs require provider create and result actions", asyn
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ job_id: created.job_id }),
     }))
@@ -1448,7 +1448,7 @@ test("Federation AI image jobs return provider result as-is", async () => {
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const queueMessages = useMemoryQueue(base)
     const message = {
       id: "msg_image_remote",
@@ -1485,12 +1485,12 @@ test("Federation AI image jobs return provider result as-is", async () => {
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const createResponse = await base.fetch(new Request("http://localhost/v1/ai/image/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ model: "remote-image", prompt: "draw" }),
     }))
@@ -1503,7 +1503,7 @@ test("Federation AI image jobs return provider result as-is", async () => {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ job_id: created.job_id }),
     }))
@@ -1525,7 +1525,7 @@ test("Federation AI image jobs store remote file parts through federation storag
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const queueMessages = useMemoryQueue(base)
     const stored = []
     base.storage({
@@ -1571,12 +1571,12 @@ test("Federation AI image jobs store remote file parts through federation storag
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const createResponse = await base.fetch(new Request("http://localhost/v1/ai/image/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ model: "stored-image", prompt: "draw" }),
     }))
@@ -1589,7 +1589,7 @@ test("Federation AI image jobs store remote file parts through federation storag
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ job_id: created.job_id }),
     }))
@@ -1616,7 +1616,7 @@ test("Federation AI image jobs keep source URL when storage fails", async () => 
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const queueMessages = useMemoryQueue(base)
     base.storage({
       id: "mock",
@@ -1656,12 +1656,12 @@ test("Federation AI image jobs keep source URL when storage fails", async () => 
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const createResponse = await base.fetch(new Request("http://localhost/v1/ai/image/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ model: "storage-fail-image", prompt: "draw" }),
     }))
@@ -1674,7 +1674,7 @@ test("Federation AI image jobs keep source URL when storage fails", async () => 
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ job_id: created.job_id }),
     }))
@@ -1695,7 +1695,7 @@ test("Federation AI image direct endpoint is not exposed", async () => {
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     useMemoryQueue(base)
     const ai = new AIService()
     ai.use({
@@ -1717,12 +1717,12 @@ test("Federation AI image direct endpoint is not exposed", async () => {
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const response = await base.fetch(new Request("http://localhost/v1/ai/image", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ model: "image-only", prompt: "draw" }),
     }))
@@ -1741,7 +1741,7 @@ test("Federation AI image jobs reject incomplete provider actions", async () => 
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const ai = new AIService()
     ai.use({
       id: "incomplete-image",
@@ -1758,12 +1758,12 @@ test("Federation AI image jobs reject incomplete provider actions", async () => 
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const response = await base.fetch(new Request("http://localhost/v1/ai/image/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ model: "incomplete-image", prompt: "draw" }),
     }))
@@ -1791,7 +1791,7 @@ test("AIService charges image jobs only after provider result succeeds", async (
     const charges = []
     let charge_attempts = 0
     let fetch_calls = 0
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const queueMessages = useMemoryQueue(base)
 
     const ai = new AIService({
@@ -1849,13 +1849,13 @@ test("AIService charges image jobs only after provider result succeeds", async (
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
 
     const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
@@ -1953,7 +1953,7 @@ test("AIService prefers action charge over model bill", async () => {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
     const charges = []
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
 
     const ai = new AIService({
       credits: {
@@ -1994,12 +1994,12 @@ test("AIService prefers action charge over model bill", async () => {
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const city = await (await base.fetch(new Request("http://localhost/v1/bureaus/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ name: "Demo", server_url: "https://bureau.example.com" }),
     }))).json()
@@ -2035,7 +2035,7 @@ test("Federation AI image jobs can advance through result polling", async () => 
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const queueMessages = useMemoryQueue(base)
     const message = {
       id: "msg_image_1",
@@ -2096,12 +2096,12 @@ test("Federation AI image jobs can advance through result polling", async () => 
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const createResponse = await base.fetch(new Request("http://localhost/v1/ai/image/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ model: "step-image", prompt: "draw" }),
     }))
@@ -2114,7 +2114,7 @@ test("Federation AI image jobs can advance through result polling", async () => 
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ job_id: created.job_id }),
     }))
@@ -2133,7 +2133,7 @@ test("Federation AI image jobs can advance through result polling", async () => 
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ job_id: created.job_id }),
     }))
@@ -2152,7 +2152,7 @@ test("Federation AI image jobs can advance through result polling", async () => 
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ job_id: created.job_id }),
     }))
@@ -2172,7 +2172,7 @@ test("Federation AI image jobs fail after max pending duration", async () => {
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
     const queueMessages = useMemoryQueue(base)
     let fetchCalls = 0
 
@@ -2207,12 +2207,12 @@ test("Federation AI image jobs fail after max pending duration", async () => {
     base.use(ai)
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
     const createResponse = await base.fetch(new Request("http://localhost/v1/ai/image/create", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ model: "timeout-image", prompt: "draw" }),
     }))
@@ -2233,7 +2233,7 @@ test("Federation AI image jobs fail after max pending duration", async () => {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
       body: JSON.stringify({ job_id: created.job_id }),
     }))
@@ -2263,7 +2263,7 @@ test("Federation exposes service env requirements and env catalog", async () => 
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
 
     base.use({
       id: "payment.stripe",
@@ -2309,12 +2309,12 @@ test("Federation exposes service env requirements and env catalog", async () => 
     })
 
     await base.getService("env")._env.upsert({ key: "STRIPE_SECRET_KEY", value: "sk_test" })
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
 
     const catalogResponse = await base.fetch(new Request("http://localhost/v1/env/catalog", {
       method: "GET",
       headers: {
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
     }))
     assert.equal(catalogResponse.status, 200)
@@ -2355,7 +2355,7 @@ test("Federation refreshes runtime env only after explicit env refresh", async (
   try {
     process.chdir(tempDir)
     const db = createSqliteDb(path.join(tempDir, "test.sqlite"))
-    const base = new Federation({ database: db })
+    const base = create_test_federation({ database: db })
 
     base.use({
       id: "demo.env",
@@ -2377,7 +2377,7 @@ test("Federation refreshes runtime env only after explicit env refresh", async (
     })
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSession = await create_test_admin_session(base)
 
     const beforeResponse = await base.fetch(new Request("http://localhost/v1/demo.env/value", {
       method: "GET",
@@ -2404,7 +2404,7 @@ test("Federation refreshes runtime env only after explicit env refresh", async (
     const refreshResponse = await base.fetch(new Request("http://localhost/v1/env/refresh", {
       method: "POST",
       headers: {
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
     }))
     assert.equal(refreshResponse.status, 200)
@@ -2422,7 +2422,7 @@ test("Federation refreshes runtime env only after explicit env refresh", async (
     const catalogResponse = await base.fetch(new Request("http://localhost/v1/env/catalog", {
       method: "GET",
       headers: {
-        authorization: `Bearer ${adminSecret}`,
+        authorization: `Bearer ${adminSession}`,
       },
     }))
     assert.equal(catalogResponse.status, 200)

@@ -3,7 +3,7 @@
  *
  * 关键说明（中文）
  * - registry 描述已经部署或手动连接的 Fed 实例，与当前 shell 路径无关。
- * - 项目配置保留部署意图，registry 保存 URL、PID、凭证和最近部署状态。
+ * - 项目配置保留部署意图，registry 保存 URL、非敏感管理员 ID 与最近部署状态。
  * - 本地实例用 `fed_id + target` 定位，重复 deploy 会替换旧进程。
  */
 
@@ -27,8 +27,12 @@ export interface ServerProfile {
   name: string;
   /** Federation HTTP 入口地址。 */
   base_url: string;
-  /** Federation admin 管理密钥。 */
-  admin_secret_key: string;
+  /** Federation 管理员登录 ID；该字段不是秘密。 */
+  admin_id?: string;
+  /** 最近一次登录取得的有期限管理员 Session Token。 */
+  admin_session_token?: string;
+  /** 管理员 Session Token 到期时间。 */
+  admin_session_expires_at?: string;
   /** 项目内声明的稳定 Fed ID；手动添加的远程地址可以没有。 */
   fed_id?: string;
   /** 本次实例使用的部署目标。 */

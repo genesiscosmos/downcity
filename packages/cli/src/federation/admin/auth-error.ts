@@ -2,15 +2,15 @@
  * Admin 鉴权错误工具。
  *
  * 关键说明（中文）
- * - 当 admin key 不正确或已失效时，SDK 会把请求失败包装成带 `status` 的 Error。
+ * - 当管理员 Session 不正确或已失效时，SDK 会把请求失败包装成带 `status` 的 Error。
  * - 这里统一把 401 转成可识别的 AdminAuthError，方便外层清理缓存 session 并提示重新输入。
  */
 
 /**
- * admin key 无效时给用户展示的统一提示。
+ * 管理员 Session 无效时给用户展示的统一提示。
  */
 export const ADMIN_AUTH_INVALID_MESSAGE =
-  "Current server admin key is incorrect or expired. Please set it again.";
+  "Current administrator session is invalid or expired. Please log in again.";
 
 interface HttpClientError extends Error {
   /** HTTP 状态码 */

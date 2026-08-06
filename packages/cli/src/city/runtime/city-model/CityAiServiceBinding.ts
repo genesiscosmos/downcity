@@ -46,15 +46,15 @@ export async function listCityAiServiceModelsForAdmin(
     require_user_token: false,
     verify_user: false,
   });
-  const admin_secret_key = cityUserManager.readAdminSecret(user.federation_url, env);
-  if (!admin_secret_key) {
+  const admin_session_token = cityUserManager.readAdminSession(user.federation_url);
+  if (!admin_session_token) {
     throw new Error(
-      "City admin_secret_key is required to list models. Set DOWNCITY_CITY_ADMIN_SECRET_KEY or configure admin access with `city`.",
+      "A valid Federation administrator session is required to list admin models. Log in with `fed manage`.",
     );
   }
   const admin = new FederationAdmin({
     base_url: user.federation_url,
-    credential: admin_secret_key,
+    credential: admin_session_token,
   });
   return await admin.listModels();
 }

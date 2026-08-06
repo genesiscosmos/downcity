@@ -110,7 +110,7 @@ export function format_federation_list_detail(servers: FederationProfile[]): str
       `  URL: ${server.federation_url}`,
       `  source: ${server.source}`,
       `  session: ${server.has_user_session ? "yes" : "no"}`,
-      `  admin: ${server.has_admin_secret_key ? "yes" : "no"}`,
+      `  admin: ${server.has_admin_session ? "yes" : "no"}`,
     ].join("\n")),
   ].join("\n");
 }

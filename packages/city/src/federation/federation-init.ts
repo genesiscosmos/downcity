@@ -15,6 +15,7 @@ import { FederationKeyStore } from "./auth/federation-key-store.js";
 import { CREATE_FEDERATION_ACTIVE_AUTH_KEY_INDEX_SQL } from "./auth/key-schema.js";
 import { UserTokenAuthority } from "./auth/user-token-authority.js";
 import { BureauTokenStore } from "./auth/bureau-token-store.js";
+import { FederationAdminStore } from "./auth/admin-store.js";
 import { randomSecret } from "../utils/helpers.js";
 import { initialize_service, type Service } from "../service/service.js";
 import {
@@ -31,6 +32,10 @@ import type {
 } from "../types/Bureau.js";
 import type { EnvEntry } from "../service/env/types.js";
 import type { FederationAuthKeyRecord } from "./auth/types.js";
+import type {
+  FederationAdministratorRecord,
+  FederationAdminSessionRecord,
+} from "./auth/types.js";
 import type { BureauTokenRecord } from "../types/Bureau.js";
 import {
   assert_bureau_server_records,
@@ -49,6 +54,8 @@ export interface FederationInitState {
   bureau_store: BureauStore;
   /** 鉴权器 */
   authenticator: Authenticator;
+  /** Federation 管理员身份与会话 Store。 */
+  admin_store: FederationAdminStore;
 }
 
 /**
@@ -80,6 +87,14 @@ export async function initialize_federation(params: {
     database.table(builtinTables.federation_auth_keys),
   );
   table_map.set("bureau_tokens", database.table(builtinTables.bureau_tokens));
+  table_map.set(
+    "federation_administrators",
+    database.table(builtinTables.federation_administrators),
+  );
+  table_map.set(
+    "federation_admin_sessions",
+    database.table(builtinTables.federation_admin_sessions),
+  );
 
   for (const [name, table] of Object.entries(user_schema)) {
     table_map.set(name, database.table(table));
@@ -136,12 +151,22 @@ export async function initialize_federation(params: {
   const bureau_token_store = new BureauTokenStore(
     bureau_token_table as CityTableApi<BureauTokenRecord>,
   );
+  const administrator_table = table_map.get("federation_administrators");
+  if (!administrator_table) throw new Error("Federation administrator table is not initialized");
+  const admin_session_table = table_map.get("federation_admin_sessions");
+  if (!admin_session_table) throw new Error("Federation admin session table is not initialized");
+  const admin_store = new FederationAdminStore(
+    administrator_table as CityTableApi<FederationAdministratorRecord>,
+    admin_session_table as CityTableApi<FederationAdminSessionRecord>,
+  );
+  await admin_store.apply_provisioning(runtime.admin_provisioning);
   const authenticator = new Authenticator(
     env,
     require_ready,
     token_authority,
     key_store,
     bureau_token_store,
+    admin_store,
   );
 
   for (const service of services) {
@@ -170,6 +195,7 @@ export async function initialize_federation(params: {
     table_map,
     bureau_store,
     authenticator,
+    admin_store,
   };
 }
 
@@ -228,11 +254,6 @@ async function bootstrap_default_keys(
     ensure(input: { key: string; value: string }): Promise<unknown>;
   },
 ): Promise<void> {
-  const admin_key = env.get("DOWNCITY_FEDERATION_ADMIN_SECRET_KEY") || `admin_${randomSecret()}`;
-  if (!env.get("DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")) {
-    await env.ensure({ key: "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY", value: admin_key });
-  }
-
   const federation_id = env.get("DOWNCITY_FEDERATION_ID") || `fed_${randomSecret(16)}`;
   if (!env.get("DOWNCITY_FEDERATION_ID")) {
     await env.ensure({ key: "DOWNCITY_FEDERATION_ID", value: federation_id });

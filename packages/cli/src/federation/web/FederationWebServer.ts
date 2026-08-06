@@ -2,7 +2,7 @@
  * `fed web` 本地 HTTP Server。
  *
  * 关键说明（中文）
- * - Server 是浏览器与远端 Federation 之间的本地 BFF，Admin Key 永不下发前端。
+ * - Server 是浏览器与远端 Federation 之间的本地 BFF，管理员 Session 永不下发前端。
  * - 只监听 loopback，并用进程级随机 Cookie、Origin 与 Host 三重约束本地 API。
  * - 浏览器只能调用这里显式登记的资源和动作，不能把本地 Server 当成开放代理。
  */
@@ -13,6 +13,7 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { FederationAdmin } from "@downcity/city";
+import { login_federation_admin } from "@/federation/auth/admin.js";
 import { fetch_dashboard_raw_data } from "@/federation/admin/dashboard/dashboard-data.js";
 import { build_dashboard_snapshot } from "@/federation/admin/dashboard/dashboard-metrics.js";
 import type { dashboard_range } from "@/federation/types/AdminDashboard.js";
@@ -21,10 +22,23 @@ import type {
   FederationWebBinding,
   FederationWebContext,
   FederationWebOptions,
+  FederationWebLoginRequest,
 } from "@/federation/types/FederationWeb.js";
 
 const WEB_ASSET_ROOT = fileURLToPath(new URL("../fedman/", import.meta.url));
 const MAX_BODY_BYTES = 1024 * 1024;
+
+/** `fed web` 进程内持有的远端管理员会话。 */
+interface FederationWebAdminState {
+  /** 当前已认证管理 Client。 */
+  admin?: FederationAdmin;
+  /** 仅保存在本地 BFF 内存中的远端 Session Token。 */
+  session_token?: string;
+  /** 当前登录管理员 ID。 */
+  admin_id?: string;
+  /** 当前远端 Session 到期时间。 */
+  expires_at?: string;
+}
 
 /** 带明确 HTTP 状态的本地控制面错误。 */
 class FederationWebHttpError extends Error {
@@ -44,16 +58,17 @@ export async function start_federation_web_server(
 ): Promise<FederationWebBinding> {
   assert_loopback_host(options.host);
   const session_token = randomBytes(32).toString("base64url");
-  const admin = new FederationAdmin({
-    base_url: context.federation_url,
-    credential: context.admin_secret_key,
-  });
+  const admin_state: FederationWebAdminState = {};
 
   const server = createServer(async (request, response) => {
     try {
-      await handle_request(request, response, admin, context, session_token);
+      await handle_request(request, response, admin_state, context, session_token);
     } catch (error) {
-      send_json(response, error instanceof FederationWebHttpError ? error.status : 500, {
+      const status = error instanceof FederationWebHttpError
+        ? error.status
+        : read_http_error_status(error);
+      if (status === 401) clear_admin_state(admin_state);
+      send_json(response, status, {
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -81,10 +96,16 @@ export async function start_federation_web_server(
   };
 }
 
+/** 读取 City HTTP Client 错误携带的状态码。 */
+function read_http_error_status(error: unknown): number {
+  const status = (error as { status?: unknown } | undefined)?.status;
+  return typeof status === "number" && status >= 400 && status <= 599 ? status : 500;
+}
+
 async function handle_request(
   request: IncomingMessage,
   response: ServerResponse,
-  admin: FederationAdmin,
+  admin_state: FederationWebAdminState,
   context: FederationWebContext,
   session_token: string,
 ): Promise<void> {
@@ -97,9 +118,48 @@ async function handle_request(
       send_json(response, 200, {
         federation_name: context.federation_name,
         federation_url: context.federation_url,
+        admin_id: admin_state.admin_id ?? context.admin_id,
+        authenticated: Boolean(admin_state.admin && Date.parse(admin_state.expires_at ?? "") > Date.now()),
+        expires_at: admin_state.expires_at,
       });
       return;
     }
+    if (method === "POST" && request_url.pathname === "/api/auth/login") {
+      const body = await read_json_body<FederationWebLoginRequest>(request);
+      let session;
+      try {
+        session = await login_federation_admin({
+          base_url: context.federation_url,
+          admin_id: required_text(body as unknown as Record<string, unknown>, "admin_id"),
+          password: required_text(body as unknown as Record<string, unknown>, "password"),
+        });
+      } catch (error) {
+        throw new FederationWebHttpError(
+          401,
+          error instanceof Error ? error.message : "管理员登录失败。",
+        );
+      }
+      admin_state.session_token = session.session_token;
+      admin_state.admin_id = session.admin_id;
+      admin_state.expires_at = session.expires_at;
+      admin_state.admin = new FederationAdmin({
+        base_url: context.federation_url,
+        credential: session.session_token,
+      });
+      send_json(response, 200, {
+        authenticated: true,
+        admin_id: session.admin_id,
+        expires_at: session.expires_at,
+      });
+      return;
+    }
+    if (method === "POST" && request_url.pathname === "/api/auth/logout") {
+      await logout_remote_admin(context.federation_url, admin_state.session_token);
+      clear_admin_state(admin_state);
+      send_json(response, 200, { ok: true });
+      return;
+    }
+    const admin = require_admin(admin_state);
     if (method === "GET" && request_url.pathname === "/api/dashboard") {
       const range = parse_dashboard_range(request_url.searchParams.get("range"));
       const raw_data = await fetch_dashboard_raw_data(admin, range);
@@ -165,6 +225,31 @@ async function handle_request(
     return;
   }
   serve_asset(request_url.pathname, response, method === "HEAD", session_token);
+}
+
+/** 返回当前有效管理 Client，未登录或到期时明确返回 401。 */
+function require_admin(admin_state: FederationWebAdminState): FederationAdmin {
+  if (!admin_state.admin || Date.parse(admin_state.expires_at ?? "") <= Date.now()) {
+    clear_admin_state(admin_state);
+    throw new FederationWebHttpError(401, "Administrator login required.");
+  }
+  return admin_state.admin;
+}
+
+/** 尽力撤销远端管理会话，本地退出不因网络失败而被阻塞。 */
+async function logout_remote_admin(base_url: string, session_token?: string): Promise<void> {
+  if (!session_token) return;
+  await fetch(`${base_url.replace(/\/+$/gu, "")}/v1/admin/logout`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${session_token}` },
+  }).catch(() => undefined);
+}
+
+/** 清空 `fed web` 进程内的全部远端管理员会话状态。 */
+function clear_admin_state(admin_state: FederationWebAdminState): void {
+  admin_state.admin = undefined;
+  admin_state.session_token = undefined;
+  admin_state.expires_at = undefined;
 }
 
 async function read_resource(admin: FederationAdmin, resource_id: string): Promise<unknown[]> {

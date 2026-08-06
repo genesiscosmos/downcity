@@ -1,5 +1,5 @@
 /**
- * Federation Root Admin 的 Bureau 身份管理命令。
+ * Federation 管理员的 Bureau 身份管理命令。
  *
  * Bureau 是稳定的产品身份与授权域；City 是 Agent 终端，不进入 Federation 注册表。
  */

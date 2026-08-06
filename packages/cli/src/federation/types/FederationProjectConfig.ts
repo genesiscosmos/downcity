@@ -129,4 +129,8 @@ export interface FederationDeployOptions {
   skip_typecheck: boolean;
   /** Cloudflare 部署显式使用的 account id。 */
   account_id?: string;
+  /** 是否通过基础设施部署权限恢复管理员。 */
+  admin_reset: boolean;
+  /** 是否跳过管理员恢复的交互确认。 */
+  yes: boolean;
 }

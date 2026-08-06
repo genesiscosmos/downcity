@@ -12,6 +12,12 @@ import {
   sqlite_federation_auth_keys,
 } from "./auth/key-schema.js";
 import { pg_bureau_tokens, sqlite_bureau_tokens } from "./auth/bureau-token-schema.js";
+import {
+  pg_federation_administrators,
+  pg_federation_admin_sessions,
+  sqlite_federation_administrators,
+  sqlite_federation_admin_sessions,
+} from "./auth/admin-schema.js";
 import { EnvStore } from "../service/env/env-store.js";
 import {
   pg_bureau_servers,
@@ -39,6 +45,7 @@ export function create_federation_runtime(options: FederationOptions): Runtime {
     env: new DatabaseEnvProvider(),
     builtinTables: builtin_tables,
     storage: options.storage,
+    admin_provisioning: options.admin_provisioning,
   };
 }
 
@@ -56,6 +63,8 @@ function builtin_tables_for(schema_id: string): BuiltinTables {
         env: pgEnv,
         federation_auth_keys: pg_federation_auth_keys,
         bureau_tokens: pg_bureau_tokens,
+        federation_administrators: pg_federation_administrators,
+        federation_admin_sessions: pg_federation_admin_sessions,
       }
     : {
         bureaus: sqlite_bureaus,
@@ -63,6 +72,8 @@ function builtin_tables_for(schema_id: string): BuiltinTables {
         env: sqliteEnv,
         federation_auth_keys: sqlite_federation_auth_keys,
         bureau_tokens: sqlite_bureau_tokens,
+        federation_administrators: sqlite_federation_administrators,
+        federation_admin_sessions: sqlite_federation_admin_sessions,
       };
 }
 

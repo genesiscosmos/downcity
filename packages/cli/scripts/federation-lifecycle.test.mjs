@@ -34,6 +34,28 @@ function is_process_alive(pid) {
   }
 }
 
+/** 捕获一次 CLI 输出，便于验证只显示一次的部署凭证。 */
+async function capture_console_output(handler) {
+  const lines = [];
+  const original_log = console.log;
+  console.log = (...values) => lines.push(values.map(String).join(" "));
+  try {
+    await handler();
+    return lines.join("\n");
+  } finally {
+    console.log = original_log;
+  }
+}
+
+/** 从部署成功块读取一次性管理员凭证。 */
+function parse_admin_credentials(output) {
+  const admin_id = /^\s*admin id\s+(admin_[A-Za-z0-9_-]+)$/mu.exec(output)?.[1];
+  const password = /^\s*password\s+(fed_[A-Za-z0-9_-]+)$/mu.exec(output)?.[1];
+  assert.ok(admin_id);
+  assert.ok(password);
+  return { admin_id, password };
+}
+
 test("Bureau 部署凭证由 CLI 本地生成且 hash 可复算", async () => {
   const { createHash } = await import("node:crypto");
   const credential_module = await import("../bin/federation/bureau/BureauCredential.js");
@@ -53,13 +75,18 @@ test("Bureau 部署凭证由 CLI 本地生成且 hash 可复算", async () => {
 
 test("City 登录只公开 Bureau ID 参数", () => {
   const cli_path = fileURLToPath(new URL("../bin/downcity.js", import.meta.url));
-  const output = execFileSync(
-    process.execPath,
-    [cli_path, "--lang", "en", "federation", "login", "--help"],
-    { encoding: "utf8" },
-  );
-  assert.match(output, /--bureau-id <bureau_id>/u);
-  assert.doesNotMatch(output, /--city-id/u);
+  const platform_root = create_temp_dir("downcity-city-login-help-");
+  try {
+    const output = execFileSync(
+      process.execPath,
+      [cli_path, "--lang", "en", "federation", "login", "--help"],
+      { encoding: "utf8", env: { ...process.env, DC_PLATFORM_ROOT: platform_root } },
+    );
+    assert.match(output, /--bureau-id <bureau_id>/u);
+    assert.doesNotMatch(output, /--city-id/u);
+  } finally {
+    fs.rmSync(platform_root, { recursive: true, force: true });
+  }
 });
 
 test("Bureau Token 使用独立管理命令树", () => {
@@ -133,33 +160,27 @@ test("Cloudflare 模板通过统一 deployment 配置生成 Wrangler binding", a
     const result = writer.writeWranglerConfig(
       config_file,
       "00000000-0000-0000-0000-000000000001",
+      {
+        mode: "reset",
+        provision_id: "fap_cloudflare_test",
+        admin_id: "admin_cloudflare_test",
+        password_hash: "pbkdf2_sha256$210000$salt$digest",
+      },
     );
     const wrangler = fs.readFileSync(result.config_path, "utf8");
     assert.match(wrangler, /binding = "DB"/u);
     assert.match(wrangler, /database_name = "cloudflare-test-db"/u);
     assert.match(wrangler, /queue = "cloudflare-test-queue"/u);
     assert.match(wrangler, /bucket_name = "cloudflare-test-storage"/u);
+    assert.match(wrangler, /DOWNCITY_FEDERATION_ADMIN_PROVISION_MODE = "reset"/u);
+    assert.match(wrangler, /DOWNCITY_FEDERATION_ADMIN_ID = "admin_cloudflare_test"/u);
     fs.rmSync(path.dirname(result.config_path), { recursive: true, force: true });
   } finally {
     fs.rmSync(project_dir, { recursive: true, force: true });
   }
 });
 
-test("Cloudflare D1 JSON 输出可以解析 admin key", async () => {
-  const output_parser = await import("../bin/federation/deploy/runtime/CloudflareAdminKeyOutput.js");
-  const output = JSON.stringify([{
-    results: [{ value: "admin_cloudflare_test" }],
-    success: true,
-  }]);
-  assert.equal(
-    output_parser.extract_cloudflare_admin_key(output),
-    "admin_cloudflare_test",
-  );
-  assert.equal(output_parser.extract_cloudflare_admin_key("invalid"), undefined);
-  assert.equal(output_parser.extract_cloudflare_admin_key('[{"results":[]}]'), undefined);
-});
-
-test("默认 Local 模板自动注入可用的 admin key", async () => {
+test("默认 Local 模板创建一次性管理员身份", async () => {
   const platform_root = create_temp_dir("downcity-fed-admin-state-");
   const project_dir = create_temp_dir("downcity-fed-admin-project-");
   process.env.DC_PLATFORM_ROOT = platform_root;
@@ -180,25 +201,65 @@ test("默认 Local 模板自动注入可用的 admin key", async () => {
   let server;
   try {
     const config_file = reader.read_federation_project_config(project_dir);
-    await deployer.deploy_local_federation(config_file, {
+    const first_output = await capture_console_output(() => deployer.deploy_local_federation(config_file, {
       source: project_dir,
       dry_run: false,
       verify_only: false,
       verify: true,
       skip_build: true,
       skip_typecheck: true,
-    });
+      admin_reset: false,
+      yes: false,
+    }));
+    const first_credentials = parse_admin_credentials(first_output);
     server = session.read_server_by_fed_id(config_file.config.id, "local");
     assert.ok(server);
-    assert.match(server.admin_secret_key, /^admin_[0-9a-f]{64}$/u);
+    assert.match(server.admin_id, /^admin_[A-Za-z0-9_-]+$/u);
     assert.equal(session.readActiveServer(), undefined);
 
     const unauthorized = await fetch(`${server.base_url}/v1/federation/instruction`);
     assert.equal(unauthorized.status, 401);
-    const authorized = await fetch(`${server.base_url}/v1/federation/instruction`, {
-      headers: { authorization: `Bearer ${server.admin_secret_key}` },
+    const { default: Database } = await import("better-sqlite3");
+    const database = new Database(path.join(project_dir, "data.sqlite"));
+    const administrators = database
+      .prepare("SELECT admin_id, password_hash FROM federation_administrators")
+      .all();
+    database.close();
+    assert.equal(administrators[0].admin_id, server.admin_id);
+    assert.match(administrators[0].password_hash, /^pbkdf2_sha256\$/u);
+
+    const old_login = await fetch(`${server.base_url}/v1/admin/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(first_credentials),
     });
-    assert.equal(authorized.status, 200);
+    assert.equal(old_login.status, 200);
+    const old_session_token = (await old_login.json()).session_token;
+
+    const reset_output = await capture_console_output(() => deployer.deploy_local_federation(config_file, {
+      source: project_dir,
+      dry_run: false,
+      verify_only: false,
+      verify: true,
+      skip_build: true,
+      skip_typecheck: true,
+      admin_reset: true,
+      yes: true,
+    }));
+    const reset_credentials = parse_admin_credentials(reset_output);
+    server = session.read_server_by_fed_id(config_file.config.id, "local");
+    assert.notEqual(reset_credentials.admin_id, first_credentials.admin_id);
+    assert.equal(server.admin_id, reset_credentials.admin_id);
+    const old_session_response = await fetch(`${server.base_url}/v1/federation/instruction`, {
+      headers: { authorization: `Bearer ${old_session_token}` },
+    });
+    assert.equal(old_session_response.status, 401);
+    const reset_login = await fetch(`${server.base_url}/v1/admin/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(reset_credentials),
+    });
+    assert.equal(reset_login.status, 200);
   } finally {
     if (server) await deployer.stop_managed_local_server(server);
     fs.rmSync(platform_root, { recursive: true, force: true });
@@ -228,7 +289,7 @@ test("部署 URL 变化时只更新 registry，不自动迁移 active server", a
       project_dir: platform_root,
       base_url: "https://first.example.workers.dev",
       status: "deployed",
-      admin_secret_key: "admin_test_key",
+      admin_id: "admin_test",
     });
     assert.equal(session.readActiveServer(), undefined);
 
@@ -241,7 +302,7 @@ test("部署 URL 变化时只更新 registry，不自动迁移 active server", a
     });
     assert.equal(session.readActiveServer(), undefined);
     assert.equal(session.readConfig().servers.length, 1);
-    assert.equal(second.admin_secret_key, "admin_test_key");
+    assert.equal(second.admin_id, "admin_test");
   } finally {
     fs.rmSync(platform_root, { recursive: true, force: true });
     delete process.env.DC_PLATFORM_ROOT;
@@ -291,6 +352,8 @@ http.createServer((request, response) => {
     verify: true,
     skip_build: true,
     skip_typecheck: true,
+    admin_reset: false,
+    yes: false,
   };
 
   let latest_server;
@@ -300,7 +363,6 @@ http.createServer((request, response) => {
     const first_server = session.read_server_by_fed_id(config.id, "local");
     assert.ok(first_server);
     assert.equal(first_server.status, "running");
-    assert.match(first_server.admin_secret_key, /^admin_[0-9a-f]{64}$/u);
     assert.ok(first_server.port >= 12314);
     assert.ok(is_process_alive(first_server.pid));
 
@@ -326,7 +388,6 @@ http.createServer((request, response) => {
     assert.ok(latest_server);
     assert.notEqual(latest_server.pid, first_server.pid);
     assert.equal(latest_server.port, first_server.port);
-    assert.equal(latest_server.admin_secret_key, first_server.admin_secret_key);
     assert.equal(is_process_alive(first_server.pid), false);
     assert.equal((await fetch(`${latest_server.base_url}/health`)).status, 200);
     assert.equal(session.readActiveServer().base_url, selected_server.base_url);

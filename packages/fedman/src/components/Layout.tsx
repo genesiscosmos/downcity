@@ -17,7 +17,7 @@ import {
   ThemeContainer,
   cn,
 } from "@downcity/ui";
-import { CircleAlertIcon, RefreshCwIcon } from "lucide-react";
+import { CircleAlertIcon, LogOutIcon, RefreshCwIcon } from "lucide-react";
 import { fedman_pages } from "../config/pages.js";
 import type { AnalyticsRange } from "../types/navigation.js";
 import type { LayoutProps } from "../types/ui.js";
@@ -77,6 +77,7 @@ export function Layout(props: LayoutProps) {
                 {context_busy ? <Spinner data-icon="inline-start" /> : <RefreshCwIcon data-icon="inline-start" />}
                 {context_busy ? "刷新中" : "刷新"}
               </Button>
+              <Button variant="ghost" onClick={props.on_logout}><LogOutIcon data-icon="inline-start" />退出</Button>
             </div>
           </header>
           {props.context_state.error && !props.context_state.data ? <Alert variant="destructive"><CircleAlertIcon /><div><AlertTitle>Federation 连接失败</AlertTitle><AlertDescription>{props.context_state.error.message}</AlertDescription></div></Alert> : null}

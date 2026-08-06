@@ -1,7 +1,7 @@
 /**
- * Federation Root Admin 控制面 HTTP 访问层。
+ * Federation 管理员控制面 HTTP 访问层。
  *
- * 只使用 Federation Root Secret 调用全局管理接口。
+ * 只使用 Federation 管理员 Session Token 调用全局管理接口。
  */
 
 import { ServiceClient } from "../invoker/invoker.js";

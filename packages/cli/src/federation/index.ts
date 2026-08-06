@@ -142,7 +142,7 @@ export async function runDownfedCli(): Promise<void> {
         throw new CliError({
           title: "无法启动 Federation Web UI。",
           note: error instanceof Error ? error.message : String(error),
-          fix: "确认当前 Federation、admin_secret_key 与本地监听端口可用。",
+          fix: "确认当前 Federation 与本地监听端口可用。",
         });
       }
     }));
@@ -212,6 +212,14 @@ export async function runDownfedCli(): Promise<void> {
       zh: "本次部署使用的 Cloudflare account id",
       en: "use this Cloudflare account id for the deployment",
     }))
+    .option("--admin-reset", t({
+      zh: "使用基础设施部署权限重置管理员并撤销旧会话",
+      en: "reset the administrator using infrastructure deployment authority",
+    }))
+    .option("--yes", t({
+      zh: "确认具有破坏性的管理员重置（用于非交互环境）",
+      en: "confirm destructive administrator reset in non-interactive environments",
+    }))
     .helpOption("--help", helpText())
     .action(createVersionBanner(packageJson.version, async (
       source: string | undefined,
@@ -222,6 +230,8 @@ export async function runDownfedCli(): Promise<void> {
         skipBuild?: boolean;
         skipTypecheck?: boolean;
         accountId?: string;
+        adminReset?: boolean;
+        yes?: boolean;
       },
     ) => {
       await deploy_federation_project(source ?? ".", options);

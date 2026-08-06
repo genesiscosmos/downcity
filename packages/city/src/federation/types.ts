@@ -108,4 +108,22 @@ export interface FederationOptions {
    * - Service 通过 `ctx.storage` 使用该能力，避免业务模块绑定具体云厂商。
    */
   storage?: FederationStorage;
+  /**
+   * 可信部署宿主提供的管理员初始化或灾难恢复输入。
+   *
+   * 该对象不是 HTTP API。密码必须先转成编码摘要，明文不得进入 Runtime 配置。
+   */
+  admin_provisioning?: FederationAdminProvisioning;
+}
+
+/** Federation 管理员部署 provisioning。 */
+export interface FederationAdminProvisioning {
+  /** 初始化空管理员或显式重置现有管理员。 */
+  mode: "initialize" | "reset";
+  /** 本次部署操作的唯一 ID，用于保证 Worker 重试幂等。 */
+  provision_id: string;
+  /** 本次创建或重置后的管理员 ID。 */
+  admin_id: string;
+  /** 由 City 密码模块生成的 PBKDF2 编码摘要。 */
+  password_hash: string;
 }

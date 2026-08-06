@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - `city` CLI 作为本机 City 容器，必须加入某个 Federation 才能访问共享资源。
  * - 本文件描述 City 可选的 Federation 配置与当前成员资格状态。
- * - City 不读取 Federation admin 密钥或 user token 的明文，只使用 City 自身保存的 session。
+ * - City 只读取 downfed 已保存管理员会话的存在性，不接触管理员密码。
  */
 
 /**
@@ -40,13 +40,13 @@ export interface FederationProfile {
   source: "city" | "city-admin" | "default";
 
   /**
-   * 该 Federation 是否由 `downfed` CLI 保存了 admin secret key。
+   * 该 Federation 是否由 `downfed` CLI 保存了有效管理员会话。
    *
    * 说明（中文）
-   * - 这里只展示存在性，不暴露密钥明文。
-   * - City 不依赖 admin 密钥管理 Federation 资源。
+   * - 这里只展示存在性，不暴露 Session Token。
+   * - 管理员会话到期后该值自动为 false。
    */
-  has_admin_secret_key: boolean;
+  has_admin_session: boolean;
 
   /**
    * 该 Federation 是否已有 City user session。

@@ -1,7 +1,8 @@
 # Fedman
 
 Fedman 是 `fed web` 的 React 管理与数据分析前端。它只调用 CLI 暴露的同源 `/api/*`，
-不读取、不保存 Federation Admin Key。
+管理员通过 Federation 内置身份登录。密码不会保存，远端管理 Session 只存在于本地
+`fed web` BFF 进程内，不会下发给浏览器。
 
 ## 开发
 

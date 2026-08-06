@@ -15,6 +15,9 @@ import type { Service, Context, ServiceRouteMethod } from "../service/service.js
 import { InstallableService } from "../service/installable-service.js";
 import { httpError } from "../utils/helpers.js";
 import type { Authenticator } from "./auth/authenticator.js";
+import type { FederationAdminStore } from "./auth/admin-store.js";
+import { bearerToken } from "../utils/helpers.js";
+import type { FederationAdminLoginInput } from "./auth/types.js";
 import type { Runtime } from "./runtime.js";
 import type { RuntimeUser } from "./auth/types.js";
 import { build_federation_instruction } from "./federation-instruction.js";
@@ -53,8 +56,10 @@ export function build_federation_router(params: {
   authenticator: Authenticator;
   /** 表映射 */
   table_map: Map<string, CityTableApi>;
+  /** Federation 管理员身份与会话 Store。 */
+  admin_store: FederationAdminStore;
 }): Hono {
-  const { runtime, services, authenticator, table_map } = params;
+  const { runtime, services, authenticator, table_map, admin_store } = params;
   const app = new Hono();
 
   app.get("/health", (c) => c.json({
@@ -79,6 +84,44 @@ export function build_federation_router(params: {
       });
     } catch (error) {
       return build_error_response(error);
+    }
+  });
+
+  app.post("/v1/admin/login", async (c) => {
+    try {
+      const input = await c.req.json<FederationAdminLoginInput>();
+      return c.json(await admin_store.login(input), 200, no_store_headers());
+    } catch (error) {
+      return with_no_store(build_error_response(error));
+    }
+  });
+
+  app.get("/v1/admin/session", async (c) => {
+    try {
+      const identity = await authorize_request(
+        authenticator,
+        trusted_identity_from_env(c.env),
+        c.req.raw,
+        ["admin"],
+      );
+      return c.json({
+        authenticated: true,
+        admin_id: identity.admin_id,
+        session_id: identity.admin_session_id,
+      }, 200, no_store_headers());
+    } catch (error) {
+      return with_no_store(build_error_response(error));
+    }
+  });
+
+  app.post("/v1/admin/logout", async (c) => {
+    try {
+      await authorize_request(authenticator, trusted_identity_from_env(c.env), c.req.raw, ["admin"]);
+      const token = bearerToken(c.req.raw);
+      if (token) await admin_store.logout(token);
+      return c.json({ ok: true }, 200, no_store_headers());
+    } catch (error) {
+      return with_no_store(build_error_response(error));
     }
   });
 
@@ -342,4 +385,15 @@ function build_error_response(error: unknown): Response {
     message,
     type: "server_error",
   } }, { status: status as number });
+}
+
+/** 管理员认证响应禁止被浏览器或中间代理缓存。 */
+function no_store_headers(): Record<string, string> {
+  return { "cache-control": "no-store", pragma: "no-cache" };
+}
+
+/** 为错误响应补齐管理员认证端点的禁止缓存语义。 */
+function with_no_store(response: Response): Response {
+  for (const [key, value] of Object.entries(no_store_headers())) response.headers.set(key, value);
+  return response;
 }
