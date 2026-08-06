@@ -182,8 +182,8 @@ test("Cloudflare 管理员恢复通过 Wrangler 直接写入 D1 SQL", async () =
   fs.writeFileSync(path.join(bin_dir, "pnpm"), `#!/usr/bin/env node
 import fs from "node:fs";
 const args = process.argv.slice(2);
-const file = args[args.indexOf("--file") + 1];
-fs.copyFileSync(file, process.env.DOWNCITY_TEST_ADMIN_SQL);
+const command = args[args.indexOf("--command") + 1];
+fs.writeFileSync(process.env.DOWNCITY_TEST_ADMIN_SQL, command);
 process.stdout.write(JSON.stringify([{ results: [{ admin_id: process.env.DOWNCITY_TEST_ADMIN_ID, provision_id: process.env.DOWNCITY_TEST_PROVISION_ID }] }]));
 `);
   fs.chmodSync(path.join(bin_dir, "pnpm"), 0o755);

@@ -7,9 +7,8 @@
 
 import BetterSqlite3 from "better-sqlite3";
 import { parse as parse_dotenv } from "dotenv";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
-import { tmpdir } from "node:os";
 import { runCommand } from "@/federation/deploy/runtime/CommandRunner.js";
 import { CliError } from "@/shared/CliError.js";
 import type {
@@ -68,15 +67,14 @@ export async function provision_cloudflare_admin_database(params: {
   /** 本次候选管理员凭证。 */
   credentials: FederationAdminDeploymentCredentials;
 }): Promise<FederationAdminDatabaseResult> {
-  const sql_dir = mkdtempSync(join(tmpdir(), "downcity-admin-d1-"));
-  const sql_path = join(sql_dir, "administrator.sql");
-  writeFileSync(sql_path, build_remote_admin_sql(params.credentials), { encoding: "utf8", mode: 0o600 });
+  const sql = build_remote_admin_sql(params.credentials);
   try {
     const output = await runCommand({
       label: params.credentials.mode === "reset"
         ? "Reset Federation administrator"
         : "Initialize Federation administrator",
-      command: `pnpm exec wrangler d1 execute ${shell_quote(params.database_name)} --remote --file ${shell_quote(sql_path)} --json --yes`,
+      command: `pnpm exec wrangler d1 execute ${shell_quote(params.database_name)} --remote --command ${shell_quote(sql)} --json --yes`,
+      display_command: "pnpm exec wrangler d1 execute <database> --remote --command <administrator SQL> --json --yes",
       cwd: params.project_dir,
       env: { CLOUDFLARE_ACCOUNT_ID: params.account_id },
       capture: true,
@@ -96,8 +94,6 @@ export async function provision_cloudflare_admin_database(params: {
       note: error instanceof Error ? error.message : String(error),
       fix: `Check D1 database ${params.database_name} and the current Cloudflare account permission.`,
     });
-  } finally {
-    rmSync(sql_dir, { recursive: true, force: true });
   }
 }
 

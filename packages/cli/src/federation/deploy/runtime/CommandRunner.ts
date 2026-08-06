@@ -23,6 +23,8 @@ export interface RunCommandParams {
   env?: Record<string, string | undefined>;
   /** 是否捕获 stdout。 */
   capture?: boolean;
+  /** 进度输出中展示的命令；敏感命令可使用脱敏说明。 */
+  display_command?: string;
 }
 
 /**
@@ -31,7 +33,7 @@ export interface RunCommandParams {
 export async function runCommand(params: RunCommandParams): Promise<string> {
   return await with_cli_progress({
     title: params.label,
-    detail: params.command,
+    detail: params.display_command ?? params.command,
     animate: params.capture !== false,
   }, async () => await new Promise((resolve, reject) => {
     const child = spawn(params.command, {
