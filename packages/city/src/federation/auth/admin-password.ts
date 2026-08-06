@@ -13,7 +13,7 @@ import {
 } from "../../utils/helpers.js";
 
 const PASSWORD_ALGORITHM = "pbkdf2_sha256";
-const PASSWORD_ITERATIONS = 210_000;
+const PASSWORD_ITERATIONS = 100_000;
 const PASSWORD_SALT_BYTES = 24;
 const PASSWORD_HASH_BYTES = 32;
 

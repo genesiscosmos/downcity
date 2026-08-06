@@ -14,6 +14,12 @@ const INITIAL_ADMIN = {
   password_hash: "pbkdf2_sha256$210000$m-wik-AJwXBqFD5AAqctMWDFqQioRh2_$tM1r37AT7NvKTiQyFePgpR7K9EC5tZ487xCV_MZQEtE",
 }
 
+/** 新管理员摘要使用 Cloudflare Workers 可执行的 PBKDF2 迭代次数。 */
+test("Federation administrator password hash uses Worker-compatible PBKDF2 iterations", async () => {
+  const password_hash = await create_federation_admin_password_hash("worker-compatible-password")
+  assert.match(password_hash, /^pbkdf2_sha256\$100000\$/u)
+})
+
 /** 管理员密码只保存摘要，登录返回的 Session 可访问管理接口并支持退出。 */
 test("Federation administrator login stores no plaintext credential and issues revocable sessions", async () => {
   const federation = new Federation({ database: createSqliteDb(":memory:") })
