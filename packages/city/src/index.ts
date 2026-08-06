@@ -16,7 +16,6 @@ export { Federation } from "./federation/federation.js";
 export type {
   FederationOptions,
   FederationHealthStatus,
-  FederationAdminProvisioning,
 } from "./federation/types.js";
 export {
   create_federation_admin_credentials,

@@ -45,7 +45,6 @@ export function create_federation_runtime(options: FederationOptions): Runtime {
     env: new DatabaseEnvProvider(),
     builtinTables: builtin_tables,
     storage: options.storage,
-    admin_provisioning: options.admin_provisioning,
   };
 }
 

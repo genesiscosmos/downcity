@@ -25,7 +25,7 @@ export const sqlite_federation_administrators = sqliteTable(FEDERATION_ADMINISTR
   failed_attempts: sqliteText("failed_attempts").notNull(),
   /** 登录锁定结束时间；未锁定时为空字符串。 */
   locked_until: sqliteText("locked_until").notNull(),
-  /** 最近一次已应用的部署 provisioning ID。 */
+  /** 最近一次已应用的部署操作 ID。 */
   provision_id: sqliteText("provision_id").notNull(),
   /** 管理员创建时间。 */
   created_at: sqliteText("created_at").notNull(),
@@ -47,7 +47,7 @@ export const pg_federation_administrators = pgTable(FEDERATION_ADMINISTRATOR_TAB
   failed_attempts: pgText("failed_attempts").notNull(),
   /** 登录锁定结束时间；未锁定时为空字符串。 */
   locked_until: pgText("locked_until").notNull(),
-  /** 最近一次已应用的部署 provisioning ID。 */
+  /** 最近一次已应用的部署操作 ID。 */
   provision_id: pgText("provision_id").notNull(),
   /** 管理员创建时间。 */
   created_at: pgText("created_at").notNull(),

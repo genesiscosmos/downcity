@@ -55,6 +55,11 @@ export function setCliVerbosity(level: "quiet" | "normal" | "verbose"): void {
   cliVerbosity = level;
 }
 
+/** 当前是否处于禁止非错误输出的 quiet 模式。 */
+export function is_cli_quiet(): boolean {
+  return cliVerbosity === "quiet";
+}
+
 /**
  * CLI 语气对应的视觉调色板。
  */

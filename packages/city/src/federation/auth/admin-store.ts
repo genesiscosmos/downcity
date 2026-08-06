@@ -2,12 +2,11 @@
  * Federation 管理员身份与管理会话 Store。
  *
  * 该 Store 是管理员凭证、失败锁定和 Session 生命周期的唯一事实源。部署
- * provisioning 只允许初始化空管理员或以新 provision ID 执行显式灾难恢复。
+ * 管理员创建与恢复由部署控制面完成；Runtime 只读取数据库中的当前管理员状态。
  */
 
 import type { CityTableApi } from "../../store/table-api.js";
 import { base64UrlEncodeBytes, httpError, randomSecret } from "../../utils/helpers.js";
-import type { FederationAdminProvisioning } from "../types.js";
 import { verify_federation_admin_password } from "./admin-password.js";
 import type {
   FederationAdministratorRecord,
@@ -38,44 +37,6 @@ export class FederationAdminStore {
     private readonly administrator_table: CityTableApi<FederationAdministratorRecord>,
     private readonly session_table: CityTableApi<FederationAdminSessionRecord>,
   ) {}
-
-  /** 应用可信宿主提供的首次初始化或显式恢复 provisioning。 */
-  async apply_provisioning(provisioning?: FederationAdminProvisioning): Promise<void> {
-    if (!provisioning) return;
-    validate_provisioning(provisioning);
-    const current = await this.get_owner();
-    if (!current) {
-      const now = new Date().toISOString();
-      await this.administrator_table.insert_if_absent({
-        owner_slot: OWNER_SLOT,
-        admin_id: provisioning.admin_id,
-        password_hash: provisioning.password_hash,
-        status: "active",
-        failed_attempts: "0",
-        locked_until: "",
-        provision_id: provisioning.provision_id,
-        created_at: now,
-        updated_at: now,
-      });
-      return;
-    }
-    if (provisioning.mode !== "reset" || current.provision_id === provisioning.provision_id) return;
-
-    const now = new Date().toISOString();
-    await this.administrator_table.update({
-      where: { owner_slot: OWNER_SLOT },
-      values: {
-        admin_id: provisioning.admin_id,
-        password_hash: provisioning.password_hash,
-        status: "active",
-        failed_attempts: "0",
-        locked_until: "",
-        provision_id: provisioning.provision_id,
-        updated_at: now,
-      },
-    });
-    await this.revoke_all_sessions(now);
-  }
 
   /** 使用管理员 ID 和密码创建固定期限的管理会话。 */
   async login(input: FederationAdminLoginInput): Promise<FederationAdminLoginResult> {
@@ -184,15 +145,6 @@ export class FederationAdminStore {
     });
   }
 
-  /** 撤销当前管理员的全部活动会话。 */
-  private async revoke_all_sessions(revoked_at: string): Promise<void> {
-    const sessions = await this.session_table.select({ status: "active" });
-    await Promise.all(sessions.map((session) => this.session_table.update({
-      where: { session_id: session.session_id, status: "active" },
-      values: { status: "revoked", revoked_at },
-    })));
-  }
-
   /** 删除已过期或已撤销的历史会话，避免长期运行后无界增长。 */
   private async prune_sessions(now_ms: number): Promise<void> {
     const sessions = await this.session_table.select();
@@ -206,18 +158,4 @@ export class FederationAdminStore {
 async function hash_session_token(token: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   return base64UrlEncodeBytes(new Uint8Array(digest));
-}
-
-/** 校验仅可信宿主可以构造的 provisioning 数据。 */
-function validate_provisioning(provisioning: FederationAdminProvisioning): void {
-  if (provisioning.mode !== "initialize" && provisioning.mode !== "reset") {
-    throw new TypeError("Administrator provisioning mode is invalid");
-  }
-  if (!provisioning.provision_id.trim()) throw new TypeError("Administrator provision_id is required");
-  if (!/^admin_[A-Za-z0-9_-]{4,64}$/u.test(provisioning.admin_id)) {
-    throw new TypeError("Administrator admin_id is invalid");
-  }
-  if (!provisioning.password_hash.startsWith("pbkdf2_sha256$")) {
-    throw new TypeError("Administrator password_hash is invalid");
-  }
 }

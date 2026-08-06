@@ -48,7 +48,9 @@ An ordinary deployment never changes the administrator. If the password is lost,
 fed deploy --admin-reset
 ```
 
-Non-interactive environments must also pass `--yes`. A successful recovery revokes every previous administrator session and shows the new password once. Federation exposes no anonymous password-reset API.
+Non-interactive environments must also pass `--yes`. The CLI applies recovery directly through a local SQLite transaction or Wrangler-authorized remote D1 access; Workers do not receive recovery environment variables, and plaintext passwords never enter the database. A successful recovery revokes every previous administrator session and shows the new password once. Federation exposes no anonymous password-reset API.
+
+`fed deploy` continuously reports the current stage and elapsed time for builds, typechecks, Cloudflare account checks, D1 / Queue / R2 preparation, Worker deployment, health checks, and administrator verification. CI and redirected output receive stable line-based progress logs instead of terminal animation.
 
 `fed bureau token` opens the interactive token manager. Choose Create, or run
 `fed bureau token create`, to enter a purpose and register a locally generated deployment

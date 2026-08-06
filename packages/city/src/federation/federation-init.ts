@@ -159,7 +159,6 @@ export async function initialize_federation(params: {
     administrator_table as CityTableApi<FederationAdministratorRecord>,
     admin_session_table as CityTableApi<FederationAdminSessionRecord>,
   );
-  await admin_store.apply_provisioning(runtime.admin_provisioning);
   const authenticator = new Authenticator(
     env,
     require_ready,

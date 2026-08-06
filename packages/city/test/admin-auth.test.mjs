@@ -9,7 +9,6 @@ import {
 import { createSqliteDb } from "./sqlite-db.mjs"
 
 const INITIAL_ADMIN = {
-  mode: "initialize",
   provision_id: "fap_initial",
   admin_id: "admin_initial",
   password_hash: "pbkdf2_sha256$210000$m-wik-AJwXBqFD5AAqctMWDFqQioRh2_$tM1r37AT7NvKTiQyFePgpR7K9EC5tZ487xCV_MZQEtE",
@@ -17,8 +16,9 @@ const INITIAL_ADMIN = {
 
 /** 管理员密码只保存摘要，登录返回的 Session 可访问管理接口并支持退出。 */
 test("Federation administrator login stores no plaintext credential and issues revocable sessions", async () => {
-  const federation = new Federation({ database: createSqliteDb(":memory:"), admin_provisioning: INITIAL_ADMIN })
+  const federation = new Federation({ database: createSqliteDb(":memory:") })
   await federation.health()
+  await write_administrator(federation, INITIAL_ADMIN)
 
   const administrator = (await (await federation.table("federation_administrators")).select())[0]
   assert.equal(administrator.admin_id, "admin_initial")
@@ -50,21 +50,34 @@ test("Federation administrator login stores no plaintext credential and issues r
   assert.equal(rejected.status, 401)
 })
 
-/** 显式 reset provisioning 更新管理员并立即使全部旧会话失效。 */
-test("Federation administrator reset requires explicit provisioning and revokes previous sessions", async () => {
+/** 部署控制面直接更新管理员数据库并撤销全部旧会话。 */
+test("Federation administrator database reset revokes previous sessions", async () => {
   const database = createSqliteDb(":memory:")
-  const first = new Federation({ database, admin_provisioning: INITIAL_ADMIN })
+  const first = new Federation({ database })
   await first.health()
+  await write_administrator(first, INITIAL_ADMIN)
   const old_login = await login(first, "admin_initial", "test-admin-password")
   assert.equal(old_login.response.status, 200)
 
-  const reset_provisioning = {
-    mode: "reset",
+  const reset_administrator = {
     provision_id: "fap_reset_once",
     admin_id: "admin_recovered",
     password_hash: await create_federation_admin_password_hash("recovered-password"),
   }
-  const recovered = new Federation({ database, admin_provisioning: reset_provisioning })
+  const administrator_table = await first.table("federation_administrators")
+  const session_table = await first.table("federation_admin_sessions")
+  const now = new Date().toISOString()
+  await administrator_table.update({
+    where: { owner_slot: "owner" },
+    values: { ...reset_administrator, status: "active", failed_attempts: "0", locked_until: "", updated_at: now },
+  })
+  for (const session of await session_table.select({ status: "active" })) {
+    await session_table.update({
+      where: { session_id: session.session_id },
+      values: { status: "revoked", revoked_at: now },
+    })
+  }
+  const recovered = new Federation({ database })
   await recovered.health()
 
   const old_session = await recovered.fetch(new Request("http://localhost/v1/federation/instruction", {
@@ -74,10 +87,24 @@ test("Federation administrator reset requires explicit provisioning and revokes 
   assert.equal((await login(recovered, "admin_initial", "test-admin-password")).response.status, 401)
   assert.equal((await login(recovered, "admin_recovered", "recovered-password")).response.status, 200)
 
-  const idempotent = new Federation({ database, admin_provisioning: reset_provisioning })
+  const idempotent = new Federation({ database })
   await idempotent.health()
   assert.equal((await login(idempotent, "admin_recovered", "recovered-password")).response.status, 200)
 })
+
+/** 模拟部署控制面直接写入初始管理员记录。 */
+async function write_administrator(federation, administrator) {
+  const now = new Date().toISOString()
+  await (await federation.table("federation_administrators")).insert({
+    owner_slot: "owner",
+    ...administrator,
+    status: "active",
+    failed_attempts: "0",
+    locked_until: "",
+    created_at: now,
+    updated_at: now,
+  })
+}
 
 /** 调用 Federation 管理员登录端点并解析响应。 */
 async function login(federation, admin_id, password) {

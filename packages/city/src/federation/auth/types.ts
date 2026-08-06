@@ -230,7 +230,7 @@ export interface FederationAdministratorRecord extends Record<string, unknown> {
   failed_attempts: string;
   /** 登录锁定结束时间；未锁定时为空字符串。 */
   locked_until: string;
-  /** 最近一次应用的部署 provisioning ID。 */
+  /** 最近一次应用的部署操作 ID。 */
   provision_id: string;
   /** 管理员创建时间。 */
   created_at: string;

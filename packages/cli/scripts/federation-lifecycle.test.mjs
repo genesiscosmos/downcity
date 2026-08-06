@@ -160,22 +160,62 @@ test("Cloudflare 模板通过统一 deployment 配置生成 Wrangler binding", a
     const result = writer.writeWranglerConfig(
       config_file,
       "00000000-0000-0000-0000-000000000001",
-      {
-        mode: "reset",
-        provision_id: "fap_cloudflare_test",
-        admin_id: "admin_cloudflare_test",
-        password_hash: "pbkdf2_sha256$210000$salt$digest",
-      },
     );
     const wrangler = fs.readFileSync(result.config_path, "utf8");
     assert.match(wrangler, /binding = "DB"/u);
     assert.match(wrangler, /database_name = "cloudflare-test-db"/u);
     assert.match(wrangler, /queue = "cloudflare-test-queue"/u);
     assert.match(wrangler, /bucket_name = "cloudflare-test-storage"/u);
-    assert.match(wrangler, /DOWNCITY_FEDERATION_ADMIN_PROVISION_MODE = "reset"/u);
-    assert.match(wrangler, /DOWNCITY_FEDERATION_ADMIN_ID = "admin_cloudflare_test"/u);
+    assert.doesNotMatch(wrangler, /DOWNCITY_FEDERATION_ADMIN_/u);
     fs.rmSync(path.dirname(result.config_path), { recursive: true, force: true });
   } finally {
+    fs.rmSync(project_dir, { recursive: true, force: true });
+  }
+});
+
+test("Cloudflare 管理员恢复通过 Wrangler 直接写入 D1 SQL", async () => {
+  const project_dir = create_temp_dir("downcity-fed-admin-d1-");
+  const bin_dir = path.join(project_dir, "bin");
+  const captured_sql = path.join(project_dir, "captured.sql");
+  fs.mkdirSync(bin_dir, { recursive: true });
+  fs.writeFileSync(path.join(project_dir, "package.json"), JSON.stringify({ type: "module" }));
+  fs.writeFileSync(path.join(bin_dir, "pnpm"), `#!/usr/bin/env node
+import fs from "node:fs";
+const args = process.argv.slice(2);
+const file = args[args.indexOf("--file") + 1];
+fs.copyFileSync(file, process.env.DOWNCITY_TEST_ADMIN_SQL);
+process.stdout.write(JSON.stringify([{ results: [{ admin_id: process.env.DOWNCITY_TEST_ADMIN_ID, provision_id: process.env.DOWNCITY_TEST_PROVISION_ID }] }]));
+`);
+  fs.chmodSync(path.join(bin_dir, "pnpm"), 0o755);
+  const previous_path = process.env.PATH;
+  process.env.PATH = `${bin_dir}:${previous_path}`;
+  process.env.DOWNCITY_TEST_ADMIN_SQL = captured_sql;
+  process.env.DOWNCITY_TEST_ADMIN_ID = "admin_recovered";
+  process.env.DOWNCITY_TEST_PROVISION_ID = "fap_cloudflare_reset";
+  try {
+    const provisioner = await import("../bin/federation/deploy/runtime/AdminDatabaseProvisioner.js");
+    const result = await provisioner.provision_cloudflare_admin_database({
+      project_dir,
+      account_id: "account-test",
+      database_name: "downcity-db",
+      credentials: {
+        mode: "reset",
+        provision_id: "fap_cloudflare_reset",
+        admin_id: "admin_recovered",
+        password_hash: "pbkdf2_sha256$210000$salt$digest",
+        password: "fed_secret_should_not_enter_sql",
+      },
+    });
+    assert.deepEqual(result, { admin_id: "admin_recovered", credentials_applied: true });
+    const sql = fs.readFileSync(captured_sql, "utf8");
+    assert.match(sql, /UPDATE federation_admin_sessions SET status = 'revoked'/u);
+    assert.match(sql, /pbkdf2_sha256\$210000\$salt\$digest/u);
+    assert.doesNotMatch(sql, /fed_secret_should_not_enter_sql/u);
+  } finally {
+    process.env.PATH = previous_path;
+    delete process.env.DOWNCITY_TEST_ADMIN_SQL;
+    delete process.env.DOWNCITY_TEST_ADMIN_ID;
+    delete process.env.DOWNCITY_TEST_PROVISION_ID;
     fs.rmSync(project_dir, { recursive: true, force: true });
   }
 });
@@ -359,6 +399,13 @@ http.createServer((request, response) => {
   let latest_server;
   try {
     const config_file = reader.read_federation_project_config(project_dir);
+    session.register_deployed_server({
+      config: config_file.config,
+      project_dir,
+      base_url: "http://127.0.0.1:12314",
+      status: "stopped",
+      admin_id: "admin_existing",
+    });
     await deployer.deploy_local_federation(config_file, options);
     const first_server = session.read_server_by_fed_id(config.id, "local");
     assert.ok(first_server);

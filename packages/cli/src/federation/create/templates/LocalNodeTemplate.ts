@@ -105,7 +105,7 @@ function create_local_entrypoint(): string {
  */
 
 import { serve } from "@hono/node-server";
-import { AIService, Federation, type FederationAdminProvisioning } from "@downcity/city";
+import { AIService, Federation } from "@downcity/city";
 import { Database } from "@downcity/database-sqlite";
 import {
   AccountsService,
@@ -124,19 +124,6 @@ function resolve_sqlite_path(database_url: string | undefined): string {
   return sqlite_path;
 }
 
-/** 读取仅由 fed deploy 注入的无明文管理员 provisioning。 */
-function read_admin_provisioning(): FederationAdminProvisioning | undefined {
-  const mode = process.env.DOWNCITY_FEDERATION_ADMIN_PROVISION_MODE?.trim();
-  const provision_id = process.env.DOWNCITY_FEDERATION_ADMIN_PROVISION_ID?.trim();
-  const admin_id = process.env.DOWNCITY_FEDERATION_ADMIN_ID?.trim();
-  const password_hash = process.env.DOWNCITY_FEDERATION_ADMIN_PASSWORD_HASH?.trim();
-  if (!mode && !provision_id && !admin_id && !password_hash) return undefined;
-  if ((mode !== "initialize" && mode !== "reset") || !provision_id || !admin_id || !password_hash) {
-    throw new Error("Incomplete Federation administrator provisioning environment.");
-  }
-  return { mode, provision_id, admin_id, password_hash };
-}
-
 const host = process.env.HOST?.trim() || "127.0.0.1";
 const port = Number.parseInt(process.env.PORT || "12314", 10);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -146,7 +133,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 const database = new Database({
   filename: resolve_sqlite_path(process.env.DOWNCITY_FEDERATION_DATABASE_URL),
 });
-const federation = new Federation({ database, admin_provisioning: read_admin_provisioning() });
+const federation = new Federation({ database });
 
 const accounts_service = new AccountsService({ local_login: true });
 federation.use(accounts_service);

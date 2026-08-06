@@ -9,6 +9,7 @@
 
 import { spawn } from "node:child_process";
 import { CliError } from "@/shared/CliError.js";
+import { with_cli_progress } from "@/shared/CliProgress.js";
 
 /** 本地命令执行参数。 */
 export interface RunCommandParams {
@@ -28,7 +29,11 @@ export interface RunCommandParams {
  * 执行 shell 命令。
  */
 export async function runCommand(params: RunCommandParams): Promise<string> {
-  return await new Promise((resolve, reject) => {
+  return await with_cli_progress({
+    title: params.label,
+    detail: params.command,
+    animate: params.capture !== false,
+  }, async () => await new Promise((resolve, reject) => {
     const child = spawn(params.command, {
       cwd: params.cwd,
       env: {
@@ -70,5 +75,5 @@ export async function runCommand(params: RunCommandParams): Promise<string> {
         fix: params.command,
       }));
     });
-  });
+  }));
 }

@@ -28,11 +28,12 @@ import type {
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { CliError } from "@/shared/CliError.js";
 import {
-  create_admin_provisioning,
+  create_admin_deployment_credentials,
   show_admin_credentials_once,
-  verify_admin_provisioning,
-  type AdminProvisioningContext,
-} from "@/federation/deploy/runtime/AdminProvisioning.js";
+  verify_admin_deployment_credentials,
+} from "@/federation/deploy/runtime/AdminCredentials.js";
+import { provision_local_admin_database } from "@/federation/deploy/runtime/AdminDatabaseProvisioner.js";
+import { with_cli_progress } from "@/shared/CliProgress.js";
 
 const LOCAL_PORT_START = 12314;
 const LOCAL_PORT_END = 13313;
@@ -79,8 +80,16 @@ export async function deploy_local_federation(
   const port = await resolve_local_port(deployment.port, previous?.port, host);
   const base_url = deployment.url?.trim() || `http://${url_host(host)}:${port}`;
   const instance_id = `fed_instance_${randomUUID().replace(/-/gu, "")}`;
-  const admin_context = options.admin_reset || !previous?.admin_id
-    ? await create_admin_provisioning(options.admin_reset ? "reset" : "initialize")
+  const admin_credentials = options.admin_reset || !previous?.admin_id
+    ? await create_admin_deployment_credentials(options.admin_reset ? "reset" : "initialize")
+    : undefined;
+  const admin_result = admin_credentials
+    ? await with_cli_progress({
+        title: options.admin_reset
+          ? "Reset local Federation administrator"
+          : "Initialize local Federation administrator",
+        detail: "SQLite transaction",
+      }, async () => provision_local_admin_database(config_file.project_dir, admin_credentials))
     : undefined;
   const log_path = resolve_local_log_path(config.id);
   const command = deployment.scripts?.deploy?.trim() || "pnpm start";
@@ -92,7 +101,6 @@ export async function deploy_local_federation(
     host,
     port,
     base_url,
-    admin_context,
     log_path,
   });
 
@@ -109,7 +117,10 @@ export async function deploy_local_federation(
   });
 
   try {
-    await wait_for_health(base_url, LOCAL_HEALTH_TIMEOUT_MS);
+    await with_cli_progress({
+      title: "Wait for local Federation",
+      detail: `${base_url}/health`,
+    }, async () => await wait_for_health(base_url, LOCAL_HEALTH_TIMEOUT_MS));
   } catch (error) {
     stop_local_process(pid);
     register_deployed_server({
@@ -129,20 +140,21 @@ export async function deploy_local_federation(
     });
   }
 
-  let provisioned_admin_id = previous?.admin_id;
-  if (admin_context) {
-    const provisioned = await verify_admin_provisioning(base_url, admin_context);
-    if (options.admin_reset && !provisioned) {
+  let provisioned_admin_id = admin_result?.admin_id ?? previous?.admin_id;
+  if (admin_credentials && admin_result?.credentials_applied) {
+    const verified = await with_cli_progress({
+      title: "Verify Federation administrator",
+      detail: `${base_url}/v1/admin/login`,
+    }, async () => await verify_admin_deployment_credentials(base_url, admin_credentials));
+    if (!verified) {
       stop_local_process(pid);
       throw new CliError({
-        title: "Federation administrator reset was not applied",
-        note: "The deployed server rejected the generated recovery credentials.",
+        title: "Federation administrator database update could not be verified",
+        note: "SQLite accepted the administrator update, but the local Federation rejected the new credentials.",
       });
     }
-    if (provisioned) {
-      provisioned_admin_id = admin_context.provisioning.admin_id;
-      show_admin_credentials_once(admin_context);
-    }
+    provisioned_admin_id = admin_credentials.admin_id;
+    show_admin_credentials_once(admin_credentials);
   }
 
   register_deployed_server({
@@ -264,7 +276,6 @@ function start_local_process(input: {
   host: string;
   port: number;
   base_url: string;
-  admin_context?: AdminProvisioningContext;
   log_path: string;
 }): number {
   mkdirSync(join(getPlatformRootDirPath(), "federation", "logs"), { recursive: true });
@@ -284,12 +295,6 @@ function start_local_process(input: {
       HOST: input.host,
       PORT: String(input.port),
       DOWNCITY_FEDERATION_BASE_URL: input.base_url,
-      ...(input.admin_context ? {
-        DOWNCITY_FEDERATION_ADMIN_PROVISION_MODE: input.admin_context.provisioning.mode,
-        DOWNCITY_FEDERATION_ADMIN_PROVISION_ID: input.admin_context.provisioning.provision_id,
-        DOWNCITY_FEDERATION_ADMIN_ID: input.admin_context.provisioning.admin_id,
-        DOWNCITY_FEDERATION_ADMIN_PASSWORD_HASH: input.admin_context.provisioning.password_hash,
-      } : {}),
       DOWNCITY_FED_INSTANCE_ID: input.instance_id,
     },
     stdio: ["ignore", log_fd, log_fd],

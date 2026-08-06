@@ -31,10 +31,12 @@ import { runCommand } from "@/federation/deploy/runtime/CommandRunner.js";
 import { bumpProjectPatchVersion } from "@/federation/deploy/runtime/ProjectVersionManager.js";
 import { runPackageDeployScripts } from "@/federation/deploy/runtime/PackageScriptRunner.js";
 import {
-  create_admin_provisioning,
+  create_admin_deployment_credentials,
   show_admin_credentials_once,
-  verify_admin_provisioning,
-} from "@/federation/deploy/runtime/AdminProvisioning.js";
+  verify_admin_deployment_credentials,
+} from "@/federation/deploy/runtime/AdminCredentials.js";
+import { provision_cloudflare_admin_database } from "@/federation/deploy/runtime/AdminDatabaseProvisioner.js";
+import { with_cli_progress } from "@/shared/CliProgress.js";
 
 const WORKER_INITIALIZATION_TIMEOUT_MS = 30_000;
 const WORKER_HEALTH_RETRY_MS = 500;
@@ -111,14 +113,10 @@ export async function deploy_cloudflare_workers(
     create_if_missing: options.dry_run !== true,
   });
 
-  const admin_context = !options.dry_run && (options.admin_reset || !registered?.admin_id)
-    ? await create_admin_provisioning(options.admin_reset ? "reset" : "initialize")
+  const admin_credentials = !options.dry_run && (options.admin_reset || !registered?.admin_id)
+    ? await create_admin_deployment_credentials(options.admin_reset ? "reset" : "initialize")
     : undefined;
-  const wrangler_result = writeWranglerConfig(
-    config_file,
-    d1_result.resolved_database_id,
-    admin_context?.provisioning,
-  );
+  const wrangler_result = writeWranglerConfig(config_file, d1_result.resolved_database_id);
   emitCliBlock({
     tone: "success",
     title: "D1 Database",
@@ -157,16 +155,39 @@ export async function deploy_cloudflare_workers(
     });
     worker_url = config_file.config.deployment.url ?? extractWorkerUrl(output);
     if (worker_url && !options.dry_run) {
-      await wait_for_worker_health(worker_url, WORKER_INITIALIZATION_TIMEOUT_MS);
-      if (admin_context) {
-        const provisioned = await verify_admin_provisioning(worker_url, admin_context);
-        if (options.admin_reset && !provisioned) {
+      await with_cli_progress({
+        title: "Wait for Federation Worker",
+        detail: `${worker_url}/health`,
+      }, async () => await wait_for_worker_health(worker_url!, WORKER_INITIALIZATION_TIMEOUT_MS));
+      if (admin_credentials) {
+        const database_name = config_file.config.deployment.resources.d1?.name;
+        if (!database_name) {
+          throw new CliError({ title: "Federation administrator deployment requires a D1 database" });
+        }
+        const admin_result = await provision_cloudflare_admin_database({
+          project_dir: config_file.project_dir,
+          account_id,
+          database_name,
+          credentials: admin_credentials,
+        });
+        provisioned_admin_id = admin_result.admin_id;
+        if (admin_result.credentials_applied) {
+          const verified = await with_cli_progress({
+            title: "Verify Federation administrator",
+            detail: `${worker_url}/v1/admin/login`,
+          }, async () => await verify_admin_deployment_credentials(worker_url!, admin_credentials));
+          if (!verified) {
+            throw new CliError({
+              title: "Federation administrator database update could not be verified",
+              note: "D1 accepted the administrator update, but the deployed Worker rejected the new credentials.",
+            });
+          }
+        } else if (options.admin_reset) {
           throw new CliError({
             title: "Federation administrator reset was not applied",
-            note: "The Worker rejected the generated recovery credentials.",
+            note: "D1 did not persist the generated recovery credentials.",
           });
         }
-        if (provisioned) provisioned_admin_id = admin_context.provisioning.admin_id;
       }
     }
   } finally {
@@ -218,8 +239,8 @@ export async function deploy_cloudflare_workers(
         { label: "status", value: "registered" },
       ],
     });
-    if (admin_context && provisioned_admin_id === admin_context.provisioning.admin_id) {
-      show_admin_credentials_once(admin_context);
+    if (admin_credentials && provisioned_admin_id === admin_credentials.admin_id) {
+      show_admin_credentials_once(admin_credentials);
     }
   } else {
     emitCliBlock({
