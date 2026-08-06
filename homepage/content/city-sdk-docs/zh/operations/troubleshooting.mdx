@@ -43,7 +43,7 @@ description: 调试 City、client、token 和 env 的常见路径。
 
 检查：
 
-- City 是否配置了 `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` 和 `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`。
+- City 是否配置了 `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` 并已通过 `fed deploy` 配置管理员账户。
 - 目标 service 是否已经注册 handler。
 - handler 或 provider 调用是否抛出了没有 `statusCode` 的错误。
 - `onError` hook 是否记录了原始错误。

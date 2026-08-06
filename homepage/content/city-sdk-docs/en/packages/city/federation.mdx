@@ -128,13 +128,13 @@ import { FederationAdmin } from "@downcity/city";
 
 const admin = new FederationAdmin({
   base_url: federation_url,
-  credential: admin_secret_key,
+  credential: administrator_session_token,
 });
 
 await admin.listServices();
 ```
 
-Local HTTP uses the same product-side model as remote HTTP: `FederationAdmin` uses `admin_secret_key`, public actions can be called as guest, and authenticated user actions require a normal `user_token`.
+Local HTTP uses the same product-side model as remote HTTP: `FederationAdmin` uses an administrator session token, public actions can be called as guest, and authenticated user actions require a normal `user_token`.
 
 If `AccountsService` is configured with `local_login: true`, `/v1/accounts/providers` only returns the local login method. Call `accounts.login/start` with `provider: "local"` and `bureau_id` to receive a `login_id`, then read the normal `user_token` from `accounts.login/result` and recreate or update User City with `user_token` (which contains `bureau_id`).
 

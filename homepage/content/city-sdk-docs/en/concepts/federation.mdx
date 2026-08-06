@@ -38,7 +38,7 @@ serve({ fetch: (request) => base.fetch(request), port: 3001 });
 `Federation` owns:
 
 - registering `Service`, official services, and `AIService`
-- verifying `user_token` and `admin_secret_key`
+- verifying `user_token` and administrator session tokens
 - exposing the unified `/v1/*` routes
 - coordinating runtime env, hooks, usage, and the database
 
@@ -52,7 +52,7 @@ import { City, FederationAdmin } from "@downcity/city";
 // Federation Root control plane: manages Bureaus and env, and issues User Tokens
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",
-  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+  credential: administrator_session_token,
 });
 
 // Product frontend: only holds user_token (which contains bureau_id), calls services
@@ -65,7 +65,7 @@ const city = new City({
 - `FederationAdmin`: runs in a trusted backend; manages Bureau identities and env, and issues `user_token`.
 - `City`: runs in an Agent terminal, holds `user_token` (which contains `bureau_id`), and calls AI and Service actions.
 
-The client never receives provider keys, and `User City` never receives the `admin_secret_key`.
+The client never receives provider keys, and `User City` never receives administrator credentials or session tokens.
 
 ## One diagram for the boundary
 

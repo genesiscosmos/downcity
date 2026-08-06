@@ -14,7 +14,7 @@ The bearer credential decides the request identity:
 
 - no token: `guest`
 - `user_token`: `user`
-- `admin_secret_key`: `admin`
+- administrator session token: `admin`
 
 Each action declares which identities it allows. The default is `["user"]`; `[]` means guest access is allowed.
 
@@ -69,7 +69,7 @@ Content-Type: application/json
 The same route returns different visibility by identity:
 
 - with `user_token`: only currently callable models
-- with `admin_secret_key`: the full code-registered model list plus `env_requirements`
+- with an administrator session token: the full code-registered model list plus `env_requirements`
 
 ```json
 { "items": [

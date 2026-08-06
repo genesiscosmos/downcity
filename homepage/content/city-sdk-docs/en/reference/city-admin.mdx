@@ -12,7 +12,7 @@ Typical cases:
 - internal tools
 - CI or operations scripts
 
-Do not expose `admin_secret_key` to browsers, public frontends, or uncontrolled clients.
+Do not expose administrator IDs, passwords, or session tokens to browsers, public frontends, or uncontrolled clients.
 
 ## What it owns in the full system
 
@@ -34,11 +34,11 @@ import { FederationAdmin } from "@downcity/city";
 
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",
-  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+  credential: administrator_session_token,
 });
 ```
 
-`credential` must explicitly receive the Federation Root Secret.
+`credential` must explicitly receive a valid administrator session token obtained from `/v1/admin/login`.
 
 ## Typical call chain
 
@@ -60,7 +60,7 @@ const admin = new FederationAdmin({
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>Downcity</strong>
-      <span>Verifies `admin_secret_key`, then executes city, token, and env management actions.</span>
+      <span>Verifies the administrator session token, then executes city, token, and env management actions.</span>
     </div>
   </div>
 </div>
@@ -330,7 +330,7 @@ try {
 
 Common statuses:
 
-- `401`: `admin_secret_key` is missing or wrong.
+- `401`: the administrator session token is missing, expired, revoked, or invalid.
 - `403`: the target Bureau is paused, so no token can be issued.
 - `404`: the target Bureau does not exist.
 - `500`: City is missing required config, or the admin action failed internally.

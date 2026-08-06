@@ -14,7 +14,7 @@ pnpm install
 fed deploy
 ```
 
-默认模板使用 Node.js + SQLite。`fed deploy` 从 `12314` 开始分配端口，把进程登记到系统级 Fed 管理状态，并自动注入和保存 admin key；之后可以在任意路径运行 `fed` 查看并直接进入管理。下文是需要手动嵌入 Federation runtime 时的 SDK 写法。
+默认模板使用 Node.js + SQLite。`fed deploy` 从 `12314` 开始分配端口，把进程登记到系统级 Fed 管理状态，并交互式配置管理员 ID 和密码；之后可以在任意路径运行 `fed` 查看并直接进入管理。下文是需要手动嵌入 Federation runtime 时的 SDK 写法。
 
 安装包：
 
@@ -22,7 +22,7 @@ fed deploy
 pnpm add @downcity/city @downcity/database-sqlite
 ```
 
-准备好数据库即可。Federation 首次启动时会自动补齐 `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`、`DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` 和 `BETTER_AUTH_SECRET`。provider key 则在启动后通过 Admin API 或 `fed` 的 admin workspace 写入：
+准备好数据库即可。`fed deploy` 会交互式配置管理员 ID 和密码；密码只保存为 PBKDF2 摘要，登录后使用管理员会话 Token。Federation 首次启动时会自动补齐 `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` 和 `BETTER_AUTH_SECRET`。provider key 则在启动后通过 Admin API 或 `fed` 的 admin workspace 写入：
 
 ```bash
 OPENAI_API_KEY="..."

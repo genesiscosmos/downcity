@@ -90,14 +90,14 @@ const city = new City({
 });
 ```
 
-可信后端应该用 `FederationAdmin` 携带 `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`：
+可信后端应该用 `FederationAdmin` 携带管理员会话 Token：
 
 ```ts
 import { City, FederationAdmin } from "@downcity/city";
 
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",
-  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+  credential: administrator_session_token,
 });
 ```
 

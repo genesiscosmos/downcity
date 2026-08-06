@@ -8,28 +8,28 @@ export const homepage_positioning = {
   en: {
     hero_headline: "Build worlds where agents live, work, and collaborate.",
     hero_description:
-      "Downcity is the agentic product environment for creators, bringing agents, tools, memory, models, services, and product surfaces together in one place to create and run agentic products.",
-    features_title: "Organize agents, capabilities, and interfaces",
-    features_title_emphasis: "into a City.",
+      "Downcity is a set of open-source kits for running agents and turning them into products. Agent Harness provides the runtime; City, Federation, SDKs, and UI kits make products easy to package, operate, and scale.",
+    features_title: "From agent runtime",
+    features_title_emphasis: "to product.",
     features_description:
-      "Give each agent a workspace, continuous context, and a clear role, then bring them together with shared capabilities and product interfaces.",
+      "Compose the harness and productization kits around your use case: give agents a reliable runtime, then add the product boundary, shared services, and interfaces your users need.",
     footer_tagline:
-      "The agentic product environment where creators build the worlds agents live, work, and collaborate in.",
-    meta_title: "Downcity — Agentic Product Environment for Creators",
+      "Open-source kits for running agents and shipping agent products.",
+    meta_title: "Downcity — Agent Harness + Agent Productization Kits",
     meta_description:
-      "Downcity is the agentic product environment where creators build the worlds agents live, work, and collaborate in.",
+      "Downcity is a set of open-source Agent Harness and Agent Productization Kits for running agents and shipping reliable agent products.",
   },
   zh: {
     hero_headline: "创造 Agent 居住、工作与协作的世界。",
     hero_description:
-      "Downcity 是为创作者打造的 Agentic 产品环境，将 Agent、工具、记忆、模型、服务与产品界面组织成一个完整的创作与运行空间。",
-    features_title: "组织 Agent、能力与界面，",
-    features_title_emphasis: "构建一座 City。",
+      "Downcity 是一套开源 Kit：用 Agent Harness 运行 Agent，再用 City、Federation、SDK 与 UI 等 Agent Productization Kits，把 Agent 变成可交付、可运营、可扩展的产品。",
+    features_title: "从 Agent 运行时",
+    features_title_emphasis: "到产品化交付。",
     features_description:
-      "为每个 Agent 配置工作空间、连续上下文与明确角色，再通过共享能力和产品界面将它们组织成一个完整产品。",
-    footer_tagline: "为创作者打造的 Agentic 产品环境，承载 Agent 的创造、运行与协作。",
-    meta_title: "Downcity — 为创作者打造的 Agentic 产品环境",
+      "按你的场景组合这些 Kit：先给 Agent 一个可靠的运行时，再补上产品边界、共享服务与用户界面，让它真正成为可以交付和持续运营的产品。",
+    footer_tagline: "一套用于运行 Agent、交付 Agent 产品的开源 Kits。",
+    meta_title: "Downcity — Agent Harness + Agent Productization Kits",
     meta_description:
-      "Downcity 是为创作者打造的 Agentic 产品环境，让他们创造 Agent 居住、工作与协作的数字世界。",
+      "Downcity 是一套开源 Agent Harness 与 Agent Productization Kits，用于运行 Agent，并将其产品化交付。",
   },
 } as const;

@@ -31,7 +31,7 @@ while (true) {
 }
 ```
 
-`city.ai.catalog()` 在 `user_token` 身份下只返回当前已经满足运行时 `env` 的模型；同一条路由在 `admin_secret_key` 身份下会返回全部代码注册模型和它们的 `env_requirements`。
+`city.ai.catalog()` 在 `user_token` 身份下只返回当前已经满足运行时 `env` 的模型；同一条路由在管理员会话 Token 身份下会返回全部代码注册模型和它们的 `env_requirements`。
 
 ## CityModel 和 provider 的关系
 

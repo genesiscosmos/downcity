@@ -58,7 +58,7 @@ Admin GET                GET  /v1/{service}/{action}
 
 - 不带 token：`guest`
 - 带 `user_token`：`user`
-- 带 `admin_secret_key`：`admin`
+- 带管理员会话 Token：`admin`
 
 Action 自己声明允许哪些身份访问。默认是 `["user"]`；传 `[]` 表示免登录。
 
@@ -74,7 +74,7 @@ Content-Type: application/json
 同一个 `/v1/ai/models`：
 
 - `user_token` 访问时，只返回当前可调用模型
-- `admin_secret_key` 访问时，返回全部代码注册模型，并附带 `env_requirements`
+- 管理员会话 Token 访问时，返回全部代码注册模型，并附带 `env_requirements`
 
 ### `GET /v1/ai/models`
 
@@ -103,7 +103,7 @@ Content-Type: application/json
 }
 ```
 
-`admin_secret_key` 示例：
+管理员会话 Token 示例：
 
 ```json
 {
@@ -237,7 +237,7 @@ await openai.chat.completions.create({
 ### 认证头
 
 ```http
-Authorization: Bearer <admin_secret_key>
+Authorization: Bearer <admin_session_token>
 Content-Type: application/json
 ```
 

@@ -14,7 +14,7 @@ pnpm install
 fed deploy
 ```
 
-The default template uses Node.js and SQLite. `fed deploy` allocates a port starting at `12314`, registers the process in system-level Fed state, and automatically injects and stores the admin key. `fed` can then inspect and manage it from any directory. The rest of this page shows the SDK path for manually embedding the Federation runtime.
+The default template uses Node.js and SQLite. `fed deploy` allocates a port starting at `12314`, registers the process in system-level Fed state, and interactively asks you to set an administrator ID and password. The password must be at least 12 characters; only its PBKDF2 digest is stored in the database. `fed` then uses a time-limited administrator Session Token to inspect and manage the Federation from any directory. To replace lost credentials, run `fed deploy --admin-reset`; this revokes existing administrator sessions and asks for the new credentials. The rest of this page shows the SDK path for manually embedding the Federation runtime.
 
 Install the packages:
 
@@ -22,7 +22,7 @@ Install the packages:
 pnpm add @downcity/city @downcity/database-sqlite
 ```
 
-The database is the only thing you need before boot. On first boot Federation fills `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`, `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY`, and `BETTER_AUTH_SECRET` automatically. Provider keys are written later through the Admin API or the `fed` admin workspace:
+The database is the only thing you need before boot. `fed deploy` asks for an administrator ID and password; the password is stored as a PBKDF2 digest and later logins receive a session token. `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` and `BETTER_AUTH_SECRET` are generated automatically. Provider keys are written later through the Admin API or the `fed` admin workspace:
 
 ```bash
 OPENAI_API_KEY="..."

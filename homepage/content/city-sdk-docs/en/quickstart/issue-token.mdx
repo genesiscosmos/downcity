@@ -10,7 +10,7 @@ import { City, FederationAdmin } from "@downcity/city";
 
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",
-  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+  credential: administrator_session_token,
 });
 
 const user = await admin.service("accounts").action("tokens/issue").invoke({

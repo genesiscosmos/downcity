@@ -40,7 +40,7 @@ Federation 首次启动会自动生成 Ed25519 Key Ring，并通过 `/.well-know
 
 ## 管理员登录与恢复
 
-首次运行 `fed deploy` 时，CLI 会创建 Federation 管理员 ID 和高强度随机密码。完整凭证只显示一次，Federation 数据库仅保存加盐密码摘要。运行 `fed web` 后，在登录页输入这组凭证；浏览器不会接触远端管理 Session Token，Token 只存在于本机 BFF 进程内。
+首次运行 `fed deploy` 时，CLI 会交互式要求设置 Federation 管理员 ID、密码和确认密码。密码至少 12 个字符，Federation 数据库仅保存加盐密码摘要。运行 `fed web` 后，在登录页输入这组凭证；浏览器不会接触远端管理 Session Token，Token 只存在于本机 BFF 进程内。
 
 普通部署不会修改管理员。密码遗失时，只有拥有 Local 主机权限或 Cloudflare Worker/D1 部署权限的人可以执行：
 
@@ -48,7 +48,7 @@ Federation 首次启动会自动生成 Ed25519 Key Ring，并通过 `/.well-know
 fed deploy --admin-reset
 ```
 
-非交互环境还必须显式添加 `--yes`。恢复由 CLI 使用本地 SQLite 事务或 Wrangler 远程 D1 权限直接写入管理员数据库，不需要在 Worker 中接收恢复环境变量，也不会把明文密码传给数据库。恢复成功会撤销全部旧管理员会话，并再次只显示一次新密码。Federation 不提供匿名密码重置 API。
+非交互环境还必须显式添加 `--yes`；该参数只确认重置，不跳过管理员凭证输入。恢复由 CLI 使用本地 SQLite 事务或 Wrangler 远程 D1 权限直接写入管理员数据库，不需要在 Worker 中接收恢复环境变量，也不会把明文密码传给数据库。恢复成功会撤销全部旧管理员会话。Federation 不提供匿名密码重置 API。
 
 `fed deploy` 会在交互终端持续显示当前步骤与耗时，包括构建、类型检查、Cloudflare 账号检查、D1 / Queue / R2 准备、Worker 发布、健康检查和管理员验证；CI 与重定向输出使用稳定的逐行阶段日志。
 

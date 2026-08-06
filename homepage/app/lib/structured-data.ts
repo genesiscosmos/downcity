@@ -51,7 +51,7 @@ export function create_home_structured_data(is_chinese: boolean): SeoHomeStructu
         url: create_site_url("/product/"),
         image: create_site_url("/icon-512.png"),
         applicationCategory: "DeveloperApplication",
-        applicationSubCategory: "Agentic Product Environment",
+        applicationSubCategory: "Agent Harness and Productization Kits",
         operatingSystem: "macOS, Linux, Windows",
         isAccessibleForFree: true,
         license: "https://www.apache.org/licenses/LICENSE-2.0",

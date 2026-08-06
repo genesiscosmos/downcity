@@ -22,12 +22,11 @@ After rotation, every service handler connected to this runtime reads the new va
 
 Downcity maintains two critical keys of its own:
 
-- `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`
 - `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY`
 
 ### admin secret
 
-`DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` is used by `FederationAdmin` to manage Federation.
+`FederationAdmin` uses a time-limited administrator session token obtained from `/v1/admin/login`.
 
 ### token signing key
 

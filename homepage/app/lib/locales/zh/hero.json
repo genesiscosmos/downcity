@@ -1,6 +1,6 @@
 {
-  "topBadge": "开源 Agent 基础设施",
-  "title": "可扩展的 Agent Harness 与 Agentic Product Base",
+  "topBadge": "开源 Agent Harness + Productization Kits",
+  "title": "Agent Harness + Agent Productization Kits",
   "subtitle": "Downcity 是面向 AI builders 的开源基础设施。CLI、Agent SDK、City 与 UI SDK 共同组成可复用的 Agent 运行层，让你把同一个后端复用到多个产品入口。",
   "tag1": "可复用",
   "tag2": "可运营",

@@ -7,7 +7,7 @@ description: 把 City 用到生产环境前需要确认的事项。
 
 ## 安全
 
-- `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` 只存在可信环境。
+- 管理员 ID、密码和会话 Token 只存在可信环境。
 - client 只拿 `user_token`，不接触 provider key。
 - `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` 已配置到 City。
 - 管理端 env 接口只允许可信请求。

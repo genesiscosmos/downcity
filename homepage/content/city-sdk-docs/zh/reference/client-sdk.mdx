@@ -13,15 +13,15 @@ description: Downcity SDK 按角色拆分：User City 负责产品运行时调�
 |---|---|---|
 | 面向谁 | 前端、App、扩展、桌面端 | 产品后端、运维脚本、内部工具 |
 | 负责什么 | AI service、custom service、公开 service | city、token、runtime env、管理侧 service |
-| 常见鉴权 | `user_token` | `admin_secret_key` |
+| 常见鉴权 | `user_token` | 管理员会话 Token |
 | 是否可放浏览器 | 可以 | 不可以 |
 
 ## HTTP 入口
 
 `federation_url` 远程和本机都统一使用 HTTP(S)：
 
-- `http://` / `https://`：远程 HTTP 入口，按角色携带 `user_token` 或 `admin_secret_key`。
-- `http://127.0.0.1:15315`：本机 loopback HTTP 入口，仍然使用同一套 `user_token` 或 `admin_secret_key` 鉴权模型。
+- `http://` / `https://`：远程 HTTP 入口，按角色携带 `user_token` 或管理员会话 Token。
+- `http://127.0.0.1:15315`：本机 loopback HTTP 入口，仍然使用同一套 Token 鉴权模型。
 
 用你自己的本机 HTTP server 暴露 Federation 时，产品侧仍然只拿到普通 HTTP URL。如果 `AccountsService` 配置了 `local_login: true`，`/v1/accounts/providers` 会只返回本地登录方式，调用 `accounts.login/start` 并传入 `provider: "local"` 后会得到 `login_id`，再从 `accounts.login/result` 读取正常 `user_token`。
 
@@ -65,7 +65,7 @@ const checkout = await city.payment.method("stripe").invoke({
 // 管理端
 const admin = new FederationAdmin({
   base_url: federation_url,
-  credential: admin_secret_key,
+  credential: administrator_session_token,
 });
 await admin.bureaus.create({
   name: "My App",

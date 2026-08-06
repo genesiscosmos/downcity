@@ -107,10 +107,10 @@ test("中英文首页输出相互关联的品牌实体", async () => {
   assert.equal(website.about["@id"], software["@id"]);
   assert.equal(software.publisher["@id"], organization["@id"]);
   assert.equal(software.codeRepository, "https://github.com/genesiscosmos/downcity");
-  assert.equal(software.applicationSubCategory, "Agentic Product Environment");
+  assert.equal(software.applicationSubCategory, "Agent Harness and Productization Kits");
   assert.ok(software.sameAs.includes("https://x.com/downcity_ai"));
-  assert.match(software.description, /agentic product environment/);
-  assert.match(chinese_data["@graph"][2].description, /Agentic 产品环境/);
+  assert.match(software.description, /Agent Harness and Agent Productization Kits/);
+  assert.match(chinese_data["@graph"][2].description, /Agent Harness 与 Agent Productization Kits/);
 });
 
 test("中英文首页预渲染各自的核心定位文案", async () => {
@@ -118,13 +118,13 @@ test("中英文首页预渲染各自的核心定位文案", async () => {
   const chinese_html = await read_build_file("zh/index.html");
 
   assert.match(english_html, /Build worlds where agents live, work, and collaborate\./);
-  assert.match(english_html, /Organize agents, capabilities, and interfaces/);
-  assert.match(english_html, /into a City\./);
+  assert.match(english_html, /From agent runtime/);
+  assert.match(english_html, /to product\./);
   assert.doesNotMatch(english_html, /创造 Agent 居住、工作与协作的世界。/);
 
   assert.match(chinese_html, /创造 Agent 居住、工作与协作的世界。/);
-  assert.match(chinese_html, /组织 Agent、能力与界面，/);
-  assert.match(chinese_html, /构建一座 City。/);
+  assert.match(chinese_html, /从 Agent 运行时/);
+  assert.match(chinese_html, /到产品化交付。/);
   assert.doesNotMatch(chinese_html, /Build worlds where agents live, work, and collaborate\./);
 });
 

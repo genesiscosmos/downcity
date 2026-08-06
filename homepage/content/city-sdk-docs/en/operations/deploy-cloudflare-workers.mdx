@@ -5,7 +5,7 @@ description: Deploy a Federation project to Workers, D1, Queue, and R2 with fed 
 
 This page is the operational path for deploying a Federation project to Cloudflare Workers.
 
-If you only want to understand how Federation is wired to Workers, read [Cloudflare Workers](/en/city-sdk-docs/guides/cloudflare-workers) first. This page focuses on production steps: `federation.json`, local project creation, local deploys, D1 / Queue / R2, admin key retrieval, env setup, OAuth callbacks, and health checks.
+If you only want to understand how Federation is wired to Workers, read [Cloudflare Workers](/en/city-sdk-docs/guides/cloudflare-workers) first. This page focuses on production steps: `federation.json`, local project creation, local deploys, D1 / Queue / R2, interactive administrator setup, env setup, OAuth callbacks, and health checks.
 
 ## Prerequisites
 
@@ -166,11 +166,12 @@ fed deploy ./my-city --dry-run
 - generates Wrangler config temporarily instead of writing it into the project directory
 - runs `wrangler deploy --config <generated-wrangler.toml>`
 - requests Worker `/health` to initialize Federation system tables and default keys
-- reads the actual admin key from remote D1 and encrypts it in the local Federation registry
-- registers the Worker URL, deploy state, and admin key in the local Federation registry without changing the active Federation
+- interactively asks for administrator credentials on first initialization or when `--admin-reset` is used
+- writes only the password digest through deployment-authorized D1 access, then verifies `/v1/admin/login`
+- registers the Worker URL, deploy state, administrator ID, and time-limited Session Token in the local Federation registry without changing the active Federation
 - requests Worker `/health` when `--verify` is passed
 
-Deploy output is grouped by stage: `Project`, `Version`, `Build`, `Typecheck`, `D1 Database`, `Queue`, `Storage`, `Admin Key`, `Wrangler`, `Deployment`, and `Federation Registry`.
+Deploy output is grouped by stage: `Project`, `Version`, `Build`, `Typecheck`, `D1 Database`, `Queue`, `Storage`, `Wrangler`, `Deployment`, and `Federation Registry`.
 
 downfed has no default Federation. A deployed instance appears in the downfed list, but `active_server_url` is written only when the user explicitly opens that Federation.
 
@@ -205,11 +206,11 @@ Expected shape:
 }
 ```
 
-## 8. Admin key
+## 8. Administrator login
 
-Federation generates an admin key on first boot and stores it in the D1 `env` table. `fed deploy` waits for `/health` initialization, reads the actual key from remote D1, and encrypts it in the local Federation registry. The key is never written to `federation.json`.
+On the first `fed deploy`, Downcity asks for an administrator ID, password, and confirmation. Passwords must be at least 12 characters; only a PBKDF2 digest is stored in D1. To replace lost credentials, run `fed deploy --admin-reset`; this requires deployment authority, revokes all existing administrator sessions, and asks for new credentials. `--yes` confirms the destructive reset in non-interactive environments but does not skip credential prompts.
 
-After the user opens that Federation in downfed, the admin workspace and `fed query` use the locally saved key automatically. No manual D1 query is required.
+After deployment, `fed web`, the admin workspace, and `fed query` authenticate through `/v1/admin/login` and use a time-limited administrator Session Token. The browser never receives the remote Session Token; it remains in the local CLI BFF or registry.
 
 ## 9. Write provider and service env
 
@@ -219,7 +220,7 @@ Example:
 
 ```bash
 curl -X POST https://my-city.<your-subdomain>.workers.dev/v1/env/upsert \
-  -H "Authorization: Bearer <admin_secret_key>" \
+  -H "Authorization: Bearer <admin_session_token>" \
   -H "Content-Type: application/json" \
   -d '{"key":"DEEPSEEK_API_KEY","value":"sk-..."}'
 ```

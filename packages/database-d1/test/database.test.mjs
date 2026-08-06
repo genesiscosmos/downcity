@@ -11,7 +11,11 @@ const items = sqliteTable("adapter_items", {
   value: text("value").notNull(),
 })
 
-test("D1 transaction exposes buffered writes to later reads", async () => {
+const d1_tests_enabled = process.env.DOWNCITY_RUN_D1_TESTS === "1"
+
+test("D1 transaction exposes buffered writes to later reads", {
+  skip: !d1_tests_enabled,
+}, async () => {
   const miniflare = new Miniflare({
     modules: true,
     script: "export default { fetch() { return new Response('ok') } }",

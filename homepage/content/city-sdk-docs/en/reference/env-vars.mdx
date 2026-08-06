@@ -5,13 +5,12 @@ description: Common environment variables used by Federation.
 
 | Variable | Purpose |
 | --- | --- |
-| `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` | Lets `FederationAdmin` manage Federation |
 | `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` | Lets Federation issue and validate `user_token` internally |
 | `DOWNCITY_CITY_DATABASE_URL` | Optional. Specifies the database URL used by Federation |
 | `OPENAI_API_KEY` | Example provider key; recommended to write it into the Federation database through Admin env |
 | `OPENAI_BASE_URL` | Example provider base URL; recommended to write it into the Federation database through Admin env |
 
-`DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`, `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY`, and `BETTER_AUTH_SECRET` are generated automatically on first boot and stored in Federation's `env` table. AIChannel API keys should be written into the same table through the Admin API or the `fed` admin workspace.
+`fed deploy` interactively provisions the administrator ID and password. The password is stored as a PBKDF2 digest and administrator sessions are stored server-side; there is no administrator key environment variable. `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` and `BETTER_AUTH_SECRET` are generated automatically on first boot and stored in Federation's `env` table.
 
 If `DOWNCITY_CITY_DATABASE_URL` is omitted, the default database path is:
 

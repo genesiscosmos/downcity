@@ -3,8 +3,10 @@
     "title": "Downcity",
     "start": "Quick Start",
     "docs": "Read Docs",
-    "startAgent": "Start an Agent",
-    "createCity": "Create a City",
+    "startAgent": "Agent",
+    "createCity": "City",
+    "quickStart": "Quick Start",
+    "learnMore": "Learn more",
     "exploreArchitecture": "Explore the architecture",
     "cityStage": {
       "label": "A Downcity elevation showing an Agent Harness operating within a City Environment Context made of workspace, files, shell, and services.",
@@ -51,6 +53,21 @@
         "scheduler": "Scheduler"
       }
     }
+  },
+  "quickstart": {
+    "sectionLabel": "Quick Start",
+    "title": "Choose the layer you want to start from.",
+    "description": "Use the Agent Harness directly, connect a City to Federation, or manage the same runtime from the terminal.",
+    "tabsLabel": "Choose an Agent SDK, City SDK, or CLI quickstart",
+    "agentTitle": "Build with the Agent Harness",
+    "agentDescription": "Create an Agent, open a Session, and run the first Turn directly in your application.",
+    "cityTitle": "Connect City and Federation",
+    "cityDescription": "Run shared product infrastructure in Federation, then connect each product through its City client.",
+    "cliTitle": "Operate from the terminal",
+    "cliDescription": "Create and run a managed Agent without assembling the SDK runtime by hand.",
+    "agentDocs": "Read Agent docs",
+    "cityDocs": "Read City docs",
+    "cliDocs": "Read CLI docs"
   },
   "features": {
     "sectionLabel": "Features",
@@ -131,6 +148,67 @@
       "task": "Task",
       "service": "Service",
       "model": "Model"
+    },
+    "map": {
+      "close": "Close location details",
+      "previewHint": "Click to pin this location",
+      "pinnedHint": "Click the cell again or press Esc to close",
+      "federations": {
+        "atlas": "Atlas Federation",
+        "harbor": "Harbor Federation",
+        "summit": "Summit Federation",
+        "meridian": "Meridian Federation"
+      },
+      "annotations": {
+        "memory_lake": "Memory Lake",
+        "mirror_lake": "Mirror Lake",
+        "model_strait": "Model Strait",
+        "quiet_wilds": "Quiet Wilds",
+        "origin_city": "Origin City",
+        "workshop_district": "Workshop District"
+      },
+      "features": {
+        "memory_lake": "A quiet lake that preserves history, context, and long-term memory.",
+        "mirror_lake": "Open water reflecting the state and outcomes of neighboring Cities.",
+        "model_strait": "A strait that connects shared model services while separating Federations.",
+        "quiet_wilds": "A natural buffer and capability ecology outside every City."
+      },
+      "cityTypes": {
+        "studio": "Studio City",
+        "grove": "Grove City",
+        "works": "Works City",
+        "commons": "Commons City"
+      },
+      "content": {
+        "agent": {
+          "title": "Agent resident",
+          "description": "An agent that keeps working, learning, and collaborating inside this City."
+        },
+        "forest": {
+          "title": "Capability grove",
+          "description": "A neutral ecology formed by shared skills and knowledge resources."
+        },
+        "building": {
+          "title": "Service building",
+          "description": "Infrastructure that hosts models, services, and product runtime capabilities."
+        },
+        "workshop": {
+          "title": "Creation workshop",
+          "description": "A place where agents compose tools, skills, and task workflows."
+        },
+        "plaza": {
+          "title": "Collaboration plaza",
+          "description": "A public space where agents, tasks, and shared services meet."
+        },
+        "water": {
+          "title": "Water",
+          "description": "Lakes, straits, and open water separating neighboring Federations."
+        },
+        "empty": {
+          "title": "Unsettled terrain",
+          "description": "Wild land, shoreline, or a natural buffer outside any City."
+        }
+      }
     }
   },
   "useCases": {

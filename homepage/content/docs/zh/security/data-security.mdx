@@ -8,12 +8,12 @@ description: 模型配置存储、加密机制与用户注意事项
 本地 CLI 状态采用加密 SQLite 存储：
 
 1. City 本地状态与凭证：`~/.downcity/downcity.db`
-2. Federation admin profile 与 admin key：`~/.downcity/federation.db`
+2. Federation admin profile 与会话元数据：`~/.downcity/federation.db`
 3. Agent 绑定保存在 CLI 全局 DB 的 `execution.modelId`
 
 ## secret 如何保护
 
-provider `apiKey`、渠道凭证、user session 与 Federation admin key 都不会明文写入本地存储，会先加密再落入 SQLite。
+provider `apiKey`、渠道凭证、user session 与 Federation 管理员元数据都不会明文写入本地存储；密码保存为 PBKDF2 摘要，会话 Token 以摘要或加密形式写入 SQLite。
 
 `city env` 是显式的文件配置能力：Global Env 以明文写入 `~/.downcity/.env`，Workspace Env
 以明文写入项目 `.env`。Global 文件权限限制为仅当前用户可读写；项目 `.env` 默认加入

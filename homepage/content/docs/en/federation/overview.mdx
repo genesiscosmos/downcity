@@ -40,7 +40,7 @@ Federation generates an Ed25519 Key Ring on first startup and publishes verifica
 
 ## Administrator login and recovery
 
-The first `fed deploy` creates a Federation administrator ID and a high-entropy random password. The complete credential is shown once; Federation stores only a salted password digest. After starting `fed web`, enter that credential on the login page. The browser never receives the remote administration Session Token, which remains in the local BFF process.
+The first `fed deploy` interactively asks you to set a Federation administrator ID, password, and confirmation. The password must be at least 12 characters; Federation stores only a salted password digest. After starting `fed web`, enter those credentials on the login page. The browser never receives the remote administration Session Token, which remains in the local BFF process.
 
 An ordinary deployment never changes the administrator. If the password is lost, only an operator with Local host authority or Cloudflare Worker/D1 deployment authority can run:
 
@@ -48,7 +48,7 @@ An ordinary deployment never changes the administrator. If the password is lost,
 fed deploy --admin-reset
 ```
 
-Non-interactive environments must also pass `--yes`. The CLI applies recovery directly through a local SQLite transaction or Wrangler-authorized remote D1 access; Workers do not receive recovery environment variables, and plaintext passwords never enter the database. A successful recovery revokes every previous administrator session and shows the new password once. Federation exposes no anonymous password-reset API.
+Non-interactive environments must also pass `--yes`; this only confirms the reset and does not skip credential prompts. The CLI applies recovery directly through a local SQLite transaction or Wrangler-authorized remote D1 access; Workers do not receive recovery environment variables, and plaintext passwords never enter the database. A successful recovery revokes every previous administrator session. Federation exposes no anonymous password-reset API.
 
 `fed deploy` continuously reports the current stage and elapsed time for builds, typechecks, Cloudflare account checks, D1 / Queue / R2 preparation, Worker deployment, health checks, and administrator verification. CI and redirected output receive stable line-based progress logs instead of terminal animation.
 

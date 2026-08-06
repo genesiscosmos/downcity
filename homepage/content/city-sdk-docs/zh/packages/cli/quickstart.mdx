@@ -37,7 +37,7 @@ fed deploy --verify
 
 `fed create` 默认生成 Local Node.js + SQLite 项目。`--template` 可以选择 `cloudflare-workers` 或 Git 模板。项目身份和部署方式统一写在 `federation.json` 中。
 
-`fed deploy` 表示部署当前项目，不区分本地与云端。本地目标会从 `12314` 开始分配端口并启动受管进程；CLI 会自动生成或复用 admin key，同时注入 Federation runtime 和系统 registry。重复部署同一 `fed_id` 时会用最新代码替换旧实例并保持原 admin key。Cloudflare Workers 目标会准备 D1、Queue 和 R2，再发布 Worker，并从远程 D1 读取 Federation 初始化生成的 admin key 保存到本地 registry。
+`fed deploy` 表示部署当前项目，不区分本地与云端。本地目标会从 `12314` 开始分配端口并启动受管进程；首次部署时 CLI 交互式设置管理员 ID 和密码，后续普通部署复用现有管理员。重复部署同一 `fed_id` 时会用最新代码替换旧实例，不会修改管理员。Cloudflare Workers 目标会准备 D1、Queue 和 R2，再发布 Worker，并通过管理员登录创建有期限的 Session Token 保存到本地 registry。
 
 管理已部署 Federation：
 
@@ -49,7 +49,7 @@ fed query GET /v1/ai/models
 fed query POST /v1/ai/image/result --data '{"job_id":"..."}'
 ```
 
-所有 Federation URL、active 状态、admin key、本地 PID、端口、日志和部署状态都保存在系统级 Federation registry，不依赖当前路径。downfed 没有默认 Federation；`fed deploy` 只登记或更新实例，不会修改 `active_server_url`。用户在 downfed 界面明确打开 Federation 后，它才成为 active。`fed query` 请求当前 active Federation；已配置 `admin_secret_key` 时自动携带，未配置时发送公开请求。
+所有 Federation URL、active 状态、管理员 ID、管理员 Session Token、本地 PID、端口、日志和部署状态都保存在系统级 Federation registry，不依赖当前路径。downfed 没有默认 Federation；`fed deploy` 只登记或更新实例，不会修改 `active_server_url`。用户在 downfed 界面明确打开 Federation 后，它才成为 active。`fed query` 在存在有效管理员 Session 时自动携带 `Authorization: Bearer`，Session 失效后要求重新登录。
 
 ## federation.json
 

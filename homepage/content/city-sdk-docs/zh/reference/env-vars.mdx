@@ -5,13 +5,12 @@ description: Federation 常见环境变量。
 
 | 变量 | 用途 |
 | --- | --- |
-| `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` | `FederationAdmin` 管理 Federation |
 | `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` | Federation 内部签发和校验 `user_token` |
 | `DOWNCITY_CITY_DATABASE_URL` | 可选。指定 Federation 使用的数据库 URL |
 | `OPENAI_API_KEY` | 示例 provider key，建议通过 Admin env 写入 Federation 数据库 |
 | `OPENAI_BASE_URL` | 示例 provider base URL，建议通过 Admin env 写入 Federation 数据库 |
 
-`DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`、`DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` 和 `BETTER_AUTH_SECRET` 会在 Federation 首次启动时自动写入 Federation 数据库的 `env` 表。provider API key 也统一通过 Admin API 或 `fed` 的 admin workspace 写入同一张表。
+`fed deploy` 会交互式配置管理员 ID 和密码。密码只保存为 PBKDF2 摘要，管理员会话保存在服务端；不再使用管理员 key 环境变量。`DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` 和 `BETTER_AUTH_SECRET` 会在 Federation 首次启动时自动写入数据库的 `env` 表。
 
 `DOWNCITY_CITY_DATABASE_URL` 不填时，默认数据库路径是：
 

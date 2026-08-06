@@ -68,7 +68,7 @@ serve({ fetch: (request) => base.fetch(request), port: 43127, hostname: "127.0.0
 ```ts
 const admin = new FederationAdmin({
   base_url: "http://127.0.0.1:43127",
-  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+  credential: administrator_session_token,
 });
 const token = await admin.service("accounts").action("tokens/issue").invoke({
   bureau_id: "demo",

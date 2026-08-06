@@ -110,7 +110,7 @@ fed deploy [source]
 ```
 
 `fed web` 默认在 `http://127.0.0.1:43128` 启动本地控制面。它读取当前 active
-Federation，也可以用 `--federation <name-or-url>` 显式选择。Admin Key 只由本地 CLI
+Federation，也可以用 `--federation <name-or-url>` 显式选择。管理员会话 Token 只由本地 CLI
 进程持有，不会发送到浏览器；为避免把 Root Admin 控制面暴露到网络，该命令只允许监听
 `127.0.0.1`、`localhost` 或 `::1`。页面包含 Dashboard、用户、Bureau、模型、Env、
 Credits、Usage、支付、Service 目录与调试器。分析区进一步分为数据概览、用户活跃、

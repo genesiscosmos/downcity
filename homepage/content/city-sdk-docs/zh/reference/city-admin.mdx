@@ -12,7 +12,7 @@ description: 可信环境如何管理 Bureau、签发 user_token，并维护 Fed
 - 内网管理工具
 - CI 或运维脚本
 
-不要把 `admin_secret_key` 放到浏览器、公开前端或不受控客户端。
+不要把管理员 ID、密码或会话 Token 放到浏览器、公开前端或不受控客户端。
 
 ## 它在整条链路里负责什么
 
@@ -34,11 +34,11 @@ import { FederationAdmin } from "@downcity/city";
 
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",
-  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+  credential: administrator_session_token,
 });
 ```
 
-`credential` 必须显式传入 Federation Root Secret。
+`credential` 必须显式传入通过 `/v1/admin/login` 获取的有效管理员会话 Token。
 
 ## 典型调用链
 
@@ -60,7 +60,7 @@ const admin = new FederationAdmin({
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>Downcity</strong>
-      <span>校验 `admin_secret_key` 后，再执行 city、token 和 env 管理动作。</span>
+      <span>校验管理员会话 Token 后，再执行 city、token 和 env 管理动作。</span>
     </div>
   </div>
 </div>
@@ -330,7 +330,7 @@ try {
 
 常见状态码：
 
-- `401`：`admin_secret_key` 缺失或错误。
+- `401`：管理员会话 Token 缺失、过期、撤销或无效。
 - `403`：目标 Bureau 已暂停，不能继续签发 token。
 - `404`：目标 Bureau 不存在。
 - `500`：City 缺少必要配置，或管理动作内部执行失败。

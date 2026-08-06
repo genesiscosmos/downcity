@@ -33,6 +33,6 @@ const user = await admin.service("accounts").action("tokens/issue").invoke({
 
 - 不要把 provider key 写进 token。
 - 不要把不可公开的计费规则写进 token。
-- 不要让 client 持有 `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`。
+- 不要让 client 持有管理员 ID、密码或会话 Token。
 
 token 只表达“这个用户是谁”和“这次请求有哪些业务 metadata”。

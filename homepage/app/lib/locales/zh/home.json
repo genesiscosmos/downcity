@@ -3,8 +3,10 @@
     "title": "Downcity",
     "start": "快速开始",
     "docs": "查看文档",
-    "startAgent": "启动一个 Agent",
-    "createCity": "创建一座 City",
+    "startAgent": "Agent",
+    "createCity": "City",
+    "quickStart": "快速开始",
+    "learnMore": "查看更多",
     "exploreArchitecture": "查看架构",
     "cityStage": {
       "label": "一张 Downcity 城市立面图：Agent Harness 运行在由 Workspace、Files、Shell 与 Services 组成的 City Environment Context 中。",
@@ -51,6 +53,21 @@
         "scheduler": "调度者"
       }
     }
+  },
+  "quickstart": {
+    "sectionLabel": "快速开始",
+    "title": "选择你想从哪一层开始。",
+    "description": "直接使用 Agent Harness、把产品 City 连接到 Federation，或通过终端管理同一套运行时。",
+    "tabsLabel": "选择 Agent SDK、City SDK 或 CLI 快速上手路径",
+    "agentTitle": "使用 Agent Harness 构建",
+    "agentDescription": "在应用中创建 Agent、打开 Session，并执行第一个 Turn。",
+    "cityTitle": "连接 City 与 Federation",
+    "cityDescription": "由 Federation 承载共享产品基础，再通过 City 客户端连接每一个产品。",
+    "cliTitle": "通过终端运行",
+    "cliDescription": "无需手动组装 SDK 运行时，直接创建并启动一个受管 Agent。",
+    "agentDocs": "查看 Agent 文档",
+    "cityDocs": "查看 City 文档",
+    "cliDocs": "查看 CLI 文档"
   },
   "features": {
     "sectionLabel": "功能特性",
@@ -131,6 +148,67 @@
       "task": "Task",
       "service": "Service",
       "model": "Model"
+    },
+    "map": {
+      "close": "关闭地点信息",
+      "previewHint": "点击固定地点信息",
+      "pinnedHint": "再次点击地块或按 Esc 关闭",
+      "federations": {
+        "atlas": "Atlas 联邦",
+        "harbor": "Harbor 联邦",
+        "summit": "Summit 联邦",
+        "meridian": "Meridian 联邦"
+      },
+      "annotations": {
+        "memory_lake": "记忆湖",
+        "mirror_lake": "镜湖",
+        "model_strait": "模型海峡",
+        "quiet_wilds": "静默荒原",
+        "origin_city": "原点城",
+        "workshop_district": "工坊区"
+      },
+      "features": {
+        "memory_lake": "保存历史、上下文与长期记忆的安静湖区。",
+        "mirror_lake": "映照不同 City 状态与运行结果的开放水面。",
+        "model_strait": "连接共享模型服务，同时分隔相邻 Federation 的海峡。",
+        "quiet_wilds": "不属于任何 City 的自然缓冲区与能力生态。"
+      },
+      "cityTypes": {
+        "studio": "Studio City",
+        "grove": "Grove City",
+        "works": "Works City",
+        "commons": "Commons City"
+      },
+      "content": {
+        "agent": {
+          "title": "Agent 居民",
+          "description": "在这座 City 中持续工作、学习与协作的 Agent。"
+        },
+        "forest": {
+          "title": "能力森林",
+          "description": "由共享 Skill 与知识资源形成的中立生态地带。"
+        },
+        "building": {
+          "title": "服务建筑",
+          "description": "承载模型、服务与产品运行能力的基础设施。"
+        },
+        "workshop": {
+          "title": "创作工坊",
+          "description": "Agent 组合 Tool、Skill 与任务流程的工作场所。"
+        },
+        "plaza": {
+          "title": "协作广场",
+          "description": "Agent、任务与共享服务交汇的公共空间。"
+        },
+        "water": {
+          "title": "水域",
+          "description": "分隔不同 Federation 的湖泊、海峡与开放水面。"
+        },
+        "empty": {
+          "title": "未开发地带",
+          "description": "不属于任何 City 的荒地、水岸或自然缓冲区。"
+        }
+      }
     }
   },
   "useCases": {

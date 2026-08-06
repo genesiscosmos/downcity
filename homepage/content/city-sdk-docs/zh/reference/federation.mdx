@@ -168,6 +168,6 @@ GET /v1/base/instruction
 
 ## 鉴权
 
-Federation 自动处理 `user_token` 和 `admin_secret_key` 的校验。Action 默认要求 `user_token`；传 `auth: ["admin"]` 时只允许管理端访问，传 `auth: []` 时表示免登录。
+Federation 自动处理 `user_token` 和管理员会话 Token 的校验。Action 默认要求 `user_token`；传 `auth: ["admin"]` 时只允许管理端访问，传 `auth: []` 时表示免登录。
 
 详见 [信任边界](/zh/city-sdk-docs/concepts/trust-boundary)。

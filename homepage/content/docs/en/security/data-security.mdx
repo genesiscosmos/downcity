@@ -8,12 +8,12 @@ description: Model storage, encryption behavior, and key management guidance
 Local CLI state uses encrypted SQLite stores:
 
 1. City-local state and credentials: `~/.downcity/downcity.db`
-2. Federation admin profiles and admin keys: `~/.downcity/federation.db`
+2. Federation admin profiles and session metadata: `~/.downcity/federation.db`
 3. Agent binding is stored in the CLI global DB as `execution.modelId`
 
 ## How secrets are protected
 
-Provider `apiKey`, channel credentials, user sessions, and Federation admin keys are not stored in plaintext. They are encrypted before being written to the local SQLite stores.
+Provider `apiKey`, channel credentials, user sessions, and Federation administrator metadata are not stored in plaintext. Passwords are stored as PBKDF2 digests; session tokens are stored hashed or encrypted before being written to local SQLite stores.
 
 `city env` is an explicit file-based configuration feature. Global Env is stored in plaintext at
 `~/.downcity/.env`, and Workspace Env is stored in plaintext in the project `.env`. The Global file

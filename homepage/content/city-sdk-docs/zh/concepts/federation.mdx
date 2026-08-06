@@ -38,7 +38,7 @@ serve({ fetch: (request) => base.fetch(request), port: 3001 });
 `Federation` 负责：
 
 - 注册 `Service`、官方服务和 `AIService`
-- 校验 `user_token` 和 `admin_secret_key`
+- 校验 `user_token` 和管理员会话 Token
 - 暴露统一的 `/v1/*` 路由
 - 协调 runtime env、hooks、usage 和数据库
 
@@ -54,7 +54,7 @@ import { City, FederationAdmin } from "@downcity/city";
 // Federation Root 控制面：管理 Bureau、env，并代签 User Token
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",
-  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+  credential: administrator_session_token,
 });
 
 // 产品前端：只拿 user_token (which contains bureau_id)，调用 service
@@ -67,7 +67,7 @@ const city = new City({
 - `FederationAdmin`：运行在可信后端，负责管理 Bureau 身份与 env，并签发 `user_token`。
 - `City`：运行在 Agent 终端，只持有 `user_token`（其中包含 `bureau_id`），调用 AI 与 Service action。
 
-客户端永远拿不到 provider key，`User City` 也永远拿不到 `admin_secret_key`。
+客户端永远拿不到 provider key，`User City` 也永远拿不到管理员凭证或会话 Token。
 
 ## 一张图记住边界
 

@@ -1,15 +1,15 @@
 ---
 title: token 模型
-description: admin_secret_key 和 user_token 如何配合。
+description: 管理员会话与 user_token 如何配合。
 ---
 
-Downcity 使用 `admin_secret_key` 管理 Federation，并使用 `user_token` 让终端 client 调用 service。
+Downcity 使用管理员会话 Token 管理 Federation，并使用 `user_token` 让终端 client 调用 service。
 
-<div className="dc-doc-flow" aria-label="admin_secret_key 和 user_token 的边界图">
+<div className="dc-doc-flow" aria-label="管理员会话和 user_token 的边界图">
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>可信后端</strong>
-      <span>你的后端使用 FederationAdmin，并持有 `admin_secret_key`。</span>
+      <span>你的后端使用管理员 ID 和密码登录，然后持有有时限的管理员会话 Token。</span>
       <code>创建 city / 申请 user_token</code>
     </div>
   </div>
@@ -17,7 +17,7 @@ Downcity 使用 `admin_secret_key` 管理 Federation，并使用 `user_token` �
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>Downcity</strong>
-      <span>校验 `admin_secret_key`，签发 `user_token`，并在内部保存 provider key。</span>
+      <span>校验管理员会话 Token，签发 `user_token`，并在内部保存 provider key。</span>
     </div>
   </div>
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
@@ -25,7 +25,7 @@ Downcity 使用 `admin_secret_key` 管理 Federation，并使用 `user_token` �
     <div className="dc-doc-node">
       <strong>终端 client</strong>
       <span>前端、扩展或 App 使用 `user_token` 创建 User City 并调用 service。</span>
-      <code>拿不到 admin_secret_key</code>
+      <code>拿不到管理员凭证</code>
     </div>
   </div>
 </div>
@@ -40,20 +40,20 @@ Downcity 使用 `admin_secret_key` 管理 Federation，并使用 `user_token` �
 - `ttl`
 
 登录开始时由产品配置明确 `bureau_id`；登录完成后，client 调用 service 只携带 `user_token`，
-`bureau_id` 由 Federation 从已验证 Token 中读取。client 不接触 provider key，也不接触 `admin_secret_key`。
+`bureau_id` 由 Federation 从已验证 Token 中读取。client 不接触 provider key，也不接触管理���会话 Token。
 
 User Token 使用单一 `downcity:user` audience。Federation 与 Bureau Server 校验同一个 audience；
 Bureau Server 还会比较 Token 中的 `bureau_id` 与自身绑定的 Bureau ID。`bureau_id` 始终保持
 产品提供的原始值，不参与 audience 拼接或规范化。
 
-## admin_secret_key
+## 管理员会话 Token
 
-`DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` 用于管理 Federation：创建 city、管理 env、为某个 city 下的用户签发 `user_token`。Federation 首次启动时会自动生成并写入 Federation env。
+使用 `fed deploy` 配置的管理员 ID 和密码访问 `/v1/admin/login`。登录响应会返回有时限的管理员会话 Token；可信后端把它传给 `FederationAdmin`，用于创建 city、管理 env、为某个 city 下的用户签发 `user_token`。密码只以 PBKDF2 摘要保存，不再生成或注入管理员 secret key 环境变量。
 
 ```ts
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",
-  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+  credential: administrator_session_token,
 });
 
 const bureau = await admin.bureaus.create({

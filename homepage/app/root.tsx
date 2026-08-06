@@ -86,7 +86,7 @@ export const meta: Route.MetaFunction = ({ location }) => {
     description: positioning.meta_description,
     pathname: location.pathname,
     keywords:
-      "agentic product environment, agent creators, AI agents, agent runtime, agent product platform, developer tools",
+      "agent harness, agent productization, agent product kits, AI agents, agent runtime, developer tools",
   });
 };
 

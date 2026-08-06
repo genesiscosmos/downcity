@@ -118,7 +118,7 @@ Bureau 不负责保存 Federation 私钥，也不通过在线 introspection 验�
 | --- | --- | --- | --- |
 | `user_token` | Federation 用户 | 用户身份与 City 归属 | 是 |
 | `bureau_token` | Bureau 服务端 | 调用 Federation 管理 API | 否 |
-| `admin_secret_key` | CLI bootstrap | 首次生成和登记 Bureau Token | 否 |
+| 管理员会话 Token | `fed` 管理员 | 登录后调用 Federation 管理 API | 否 |
 
 ### 5.1 user_token
 

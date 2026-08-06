@@ -1,4 +1,5 @@
 import { HomeHeroWorldSection } from "@/components/sections/HomeHeroWorldSection";
+import { HomeQuickstartSection } from "@/components/sections/HomeQuickstartSection";
 import { HomeFeaturesSection } from "@/components/sections/HomeFeaturesSection";
 import { HomeArchitectureDiagram } from "@/components/sections/HomeArchitectureDiagram";
 import { HomeUseCasesSection } from "@/components/sections/HomeUseCasesSection";
@@ -12,8 +13,9 @@ import type { Route } from "./+types/home";
 /**
  * 首页营销落地页路由。
  * 说明：
- * 1. 完整首页：Hero / Product World / Architecture / Features / Product Shapes / CTA / Footer。
- * 2. 文案基于对 Downcity 的准确理解：Federation 连接多座 City，每座 City 组织多个 Agent。
+ * 1. 完整首页：Hero / Product World / Quick Start / Architecture / Features / Product Shapes / CTA / Footer。
+ * 2. 文案基于对 Downcity 的准确理解：Agent Harness 负责运行 Agent，Productization Kits
+ *    负责把 Agent 组织成可交付产品；City 与 Federation 是其中的产品化基础。
  * 3. 所有行动路径收敛到安装命令、Quick Start 与 GitHub。
  */
 export function meta({ location }: Route.MetaArgs) {
@@ -24,7 +26,7 @@ export function meta({ location }: Route.MetaArgs) {
     description: positioning.meta_description,
     pathname: location.pathname,
     keywords:
-      "agentic product environment, agent creators, AI agents, agent collaboration, agent runtime, agent product platform, Downcity",
+      "agent harness, agent productization, agent product kits, AI agents, agent runtime, Downcity",
     localized: true,
   });
 }
@@ -35,6 +37,7 @@ export default function Home() {
       <HomeStructuredData />
       <main>
         <HomeHeroWorldSection />
+        <HomeQuickstartSection />
         <HomeArchitectureDiagram />
         <HomeFeaturesSection />
         <HomeUseCasesSection />

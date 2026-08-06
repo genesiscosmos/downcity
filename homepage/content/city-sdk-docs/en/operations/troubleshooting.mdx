@@ -43,7 +43,7 @@ These cases usually return `422`.
 
 Check:
 
-- whether City has both `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` and `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`
+- whether City has `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` and a provisioned administrator account
 - whether the target service has a registered handler
 - whether the handler or provider call threw an error without `statusCode`
 - whether the `onError` hook recorded the original error

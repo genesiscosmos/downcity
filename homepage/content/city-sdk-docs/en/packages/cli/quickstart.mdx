@@ -37,7 +37,7 @@ fed deploy --verify
 
 `fed create` generates a Local Node.js + SQLite project by default. `--template` can select `cloudflare-workers` or a Git template. Project identity and deployment intent live in `federation.json`.
 
-`fed deploy` deploys the current project whether the destination is local or remote. Local deploys allocate a port starting at `12314`, start a managed process, and generate or reuse one admin key for both the Federation runtime and system registry. Redeploying the same `fed_id` replaces the old process while preserving that key. Cloudflare Workers deploys prepare D1, Queue, and R2, publish the Worker, then read the Federation-generated admin key from remote D1 into the local registry.
+`fed deploy` deploys the current project whether the destination is local or remote. Local deploys allocate a port starting at `12314` and start a managed process; the first deploy interactively sets an administrator ID and password, while ordinary redeploys preserve the existing administrator. Redeploying the same `fed_id` replaces the old process without changing administrator credentials. Cloudflare Workers deploys prepare D1, Queue, and R2, publish the Worker, then create a time-limited administrator Session Token for the local registry.
 
 Manage deployed Federations:
 
@@ -49,7 +49,7 @@ fed query GET /v1/ai/models
 fed query POST /v1/ai/image/result --data '{"job_id":"..."}'
 ```
 
-Federation URLs, active state, admin keys, local PIDs, ports, logs, and deployment status are stored in the system-level Federation registry and do not depend on the current directory. downfed has no default Federation. `fed deploy` only registers or updates an instance and never changes `active_server_url`; a Federation becomes active only when the user explicitly opens it in downfed. `fed query` requests the active Federation. It adds the saved `admin_secret_key` when available and otherwise sends a public request.
+Federation URLs, active state, administrator IDs, administrator Session Tokens, local PIDs, ports, logs, and deployment status are stored in the system-level Federation registry and do not depend on the current directory. downfed has no default Federation. `fed deploy` only registers or updates an instance and never changes `active_server_url`; a Federation becomes active only when the user explicitly opens it in downfed. `fed query` adds `Authorization: Bearer` when a valid administrator Session exists and asks you to log in again when it expires.
 
 ## federation.json
 

@@ -1,15 +1,15 @@
 ---
 title: Token Model
-description: How `admin_secret_key` and `user_token` work together.
+description: How administrator sessions and `user_token` work together.
 ---
 
-Downcity uses `admin_secret_key` to manage Federation, and `user_token` to let end-user clients call services.
+Downcity uses an administrator session token to manage Federation, and `user_token` to let end-user clients call services.
 
-<div className="dc-doc-flow" aria-label="Boundary between admin_secret_key and user_token">
+<div className="dc-doc-flow" aria-label="Boundary between administrator session and user_token">
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>Trusted backend</strong>
-      <span>Your backend uses FederationAdmin and holds `admin_secret_key`.</span>
+      <span>Your backend logs in with an administrator ID and password, then holds a short-lived session token.</span>
       <code>Create city / request user_token</code>
     </div>
   </div>
@@ -17,7 +17,7 @@ Downcity uses `admin_secret_key` to manage Federation, and `user_token` to let e
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>Downcity</strong>
-      <span>Validates `admin_secret_key`, issues `user_token`, and stores provider keys internally.</span>
+      <span>Validates the administrator session token, issues `user_token`, and stores provider keys internally.</span>
     </div>
   </div>
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
@@ -25,7 +25,7 @@ Downcity uses `admin_secret_key` to manage Federation, and `user_token` to let e
     <div className="dc-doc-node">
       <strong>End-user client</strong>
       <span>The frontend, extension, or app creates User City with `user_token` and calls services.</span>
-      <code>No access to admin_secret_key</code>
+      <code>No access to administrator credentials</code>
     </div>
   </div>
 </div>
@@ -41,21 +41,21 @@ Downcity uses `admin_secret_key` to manage Federation, and `user_token` to let e
 
 Product configuration supplies `bureau_id` when login starts. After login, service calls only carry
 `user_token`; Federation reads `bureau_id` from the verified Token. The client never touches provider
-keys or `admin_secret_key`.
+keys or administrator session tokens.
 
 User Tokens use one `downcity:user` audience. Federation and Bureau Servers validate the same audience;
 a Bureau Server additionally compares the Token's `bureau_id` with its machine-bound Bureau ID.
 `bureau_id` always remains the original product-provided value and is never composed into or normalized
 as an audience.
 
-## admin_secret_key
+## Administrator session token
 
-`DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` is used to manage Federation: create Bureaus, manage env, and issue `user_token` for users under a given Bureau. Federation generates it automatically and writes it into Federation env on first startup.
+Use the administrator ID and password configured by `fed deploy` to sign in at `/v1/admin/login`. The response contains a time-limited administrator session token. Pass that token to `FederationAdmin` for trusted backend operations such as creating Bureaus, managing env, and issuing `user_token`. Passwords are stored as PBKDF2 digests; no administrator secret key is generated or provisioned as an environment variable.
 
 ```ts
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",
-  credential: process.env.DOWNCITY_FEDERATION_ADMIN_SECRET_KEY,
+  credential: administrator_session_token,
 });
 
 const bureau = await admin.bureaus.create({

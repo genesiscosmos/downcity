@@ -5,7 +5,7 @@ description: 使用 fed deploy 把 Federation 项目部署到 Workers、D1、Que
 
 这页是 Federation 项目部署到 Cloudflare Workers 的正式操作路径。
 
-如果你只是想理解 Federation 怎么接入 Workers，先读 [Cloudflare Workers](/zh/city-sdk-docs/guides/cloudflare-workers)。这一页只讲上线步骤：`federation.json`、本地创建、本地部署、D1 / Queue / R2、admin key、env、OAuth callback 和健康检查。
+如果你只是想理解 Federation 怎么接入 Workers，先读 [Cloudflare Workers](/zh/city-sdk-docs/guides/cloudflare-workers)。这一页只讲上线步骤：`federation.json`、本地创建、本地部署、D1 / Queue / R2、交互式管理员配置、env、OAuth callback 和健康检查。
 
 ## 前置条件
 
@@ -166,11 +166,12 @@ fed deploy ./my-city --dry-run
 - 临时生成 Wrangler 配置，不写入项目目录
 - 执行 `wrangler deploy --config <generated-wrangler.toml>`
 - 请求 Worker `/health` 完成 Federation 系统表和默认 key 初始化
-- 从远程 D1 读取实际 admin key，并加密保存到本地 Federation registry
-- 把 Worker URL、部署状态和 admin key 登记到本地 Federation registry，但不修改当前 active Federation
+- 首次初始化或使用 `--admin-reset` 时交互式要求输入管理员凭证
+- 通过部署权限把密码摘要写入 D1，并请求 `/v1/admin/login` 验证
+- 把 Worker URL、部署状态、管理员 ID 和有期限的 Session Token 登记到本地 Federation registry，但不修改当前 active Federation
 - 在传入 `--verify` 时请求 Worker `/health`
 
-部署输出会按阶段汇总显示：`Project`、`Version`、`Build`、`Typecheck`、`D1 Database`、`Queue`、`Storage`、`Admin Key`、`Wrangler`、`Deployment` 和 `Federation Registry`。
+部署输出会按阶段汇总显示：`Project`、`Version`、`Build`、`Typecheck`、`D1 Database`、`Queue`、`Storage`、`Wrangler`、`Deployment` 和 `Federation Registry`。
 
 downfed 没有默认 Federation。部署完成后，新实例会出现在 downfed 列表中，但只有用户明确打开它时才会写入 `active_server_url`。
 
@@ -205,11 +206,11 @@ curl https://my-city.<your-subdomain>.workers.dev/health
 }
 ```
 
-## 8. Admin key
+## 8. 管理员登录
 
-Federation 首次启动时会生成 admin key 并写入 D1 `env` 表。`fed deploy` 会等待 `/health` 初始化完成，再从远程 D1 读取实际 key，加密保存到本地 Federation registry；key 不会写入 `federation.json`。
+首次 `fed deploy` 时，Downcity 会交互式要求输入管理员 ID、密码和确认密码。密码至少 12 个字符，D1 只保存 PBKDF2 摘要。遗失凭证时运行 `fed deploy --admin-reset`；该操作需要部署权限，会撤销全部旧管理员 Session，并要求输入新凭证。非交互环境中的 `--yes` 只确认破坏性重置，不会跳过凭证输入。
 
-用户在 downfed 中打开该 Federation 后，admin 工作区和 `fed query` 会自动使用本地保存的 key，不再需要手动执行 D1 查询。
+部署后，`fed web`、管理员工作区和 `fed query` 都通过 `/v1/admin/login` 登录，并使用有期限的管理员 Session Token。远端 Session Token 不会下发到浏览器，只保留在本地 CLI BFF 或 registry 中。
 
 ## 9. 写入 provider 和 service env
 
@@ -219,7 +220,7 @@ Provider API key 和服务密钥应该写入 Federation 自己的 env 表，不�
 
 ```bash
 curl -X POST https://my-city.<your-subdomain>.workers.dev/v1/env/upsert \
-  -H "Authorization: Bearer <admin_secret_key>" \
+  -H "Authorization: Bearer <admin_session_token>" \
   -H "Content-Type: application/json" \
   -d '{"key":"DEEPSEEK_API_KEY","value":"sk-..."}'
 ```

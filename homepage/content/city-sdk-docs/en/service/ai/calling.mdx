@@ -27,7 +27,7 @@ const stream = await city.ai.stream({
 });
 ```
 
-With `user_token`, `city.ai.catalog()` returns only models whose required runtime env is already configured. The same route called with `admin_secret_key` returns the full code-registered model list plus `env_requirements`.
+With `user_token`, `city.ai.catalog()` returns only models whose required runtime env is already configured. The same route called with an administrator session token returns the full code-registered model list plus `env_requirements`.
 
 ## CityModel And Providers
 

@@ -13,15 +13,15 @@ If you want the integration story first, start with [@downcity/city](/en/city-sd
 |---|---|---|
 | Used by | frontend, app, extension, desktop client | city backend, ops scripts, internal tools |
 | Owns | AI services, custom services, public services | cities, tokens, runtime env, admin-side services |
-| Common auth | `user_token` | `admin_secret_key` |
+| Common auth | `user_token` | administrator session token |
 | Safe in browser | yes | no |
 
 ## HTTP Entries
 
 `federation_url` uses HTTP(S) for both remote and local Federation:
 
-- `http://` / `https://`: remote HTTP entry, authenticated with `user_token` or `admin_secret_key`.
-- `http://127.0.0.1:15315`: local loopback HTTP entry, authenticated with the same `user_token` or `admin_secret_key` model.
+- `http://` / `https://`: remote HTTP entry, authenticated with `user_token` or an administrator session token.
+- `http://127.0.0.1:15315`: local loopback HTTP entry, authenticated with the same token model.
 
 When you expose Federation from your own local HTTP server, products still use normal HTTP. If `AccountsService` is configured with `local_login: true`, `/v1/accounts/providers` exposes the local login method, and `accounts.login/start` with `provider: "local"` returns a `login_id`; read the normal `user_token` from `accounts.login/result`.
 
@@ -66,7 +66,7 @@ const checkout = await city.payment.method("stripe").invoke({
 // Admin side
 const admin = new FederationAdmin({
   base_url: federation_url,
-  credential: admin_secret_key,
+  credential: administrator_session_token,
 });
 await admin.bureaus.create({
   name: "My App",

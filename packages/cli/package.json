@@ -19,6 +19,7 @@
     "dev": "tsc --watch",
     "start": "node bin/index.js",
     "typecheck": "tsc --noEmit",
+    "test:logic": "pnpm build && node --test scripts/logic.test.mjs",
     "test:tui": "pnpm build && node --test scripts/agent-tui.test.mjs",
     "test:config-storage": "pnpm build && node --test scripts/config-storage.test.mjs",
     "test:model-recovery": "pnpm build && node --test scripts/agent-model-recovery.test.mjs",

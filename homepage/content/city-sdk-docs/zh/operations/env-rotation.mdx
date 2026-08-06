@@ -22,12 +22,11 @@ await admin.env.upsert({
 
 Downcity 自己维护两类关键密钥：
 
-- `DOWNCITY_FEDERATION_ADMIN_SECRET_KEY`
 - `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY`
 
 ### admin secret
 
-`DOWNCITY_FEDERATION_ADMIN_SECRET_KEY` 用于 `FederationAdmin` 管理 Federation。
+`FederationAdmin` 使用通过 `/v1/admin/login` 获取的有时限管理员会话 Token 管理 Federation。
 
 ### token signing key
 

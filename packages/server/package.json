@@ -36,6 +36,7 @@
     "build": "node ../../scripts/clean-package.mjs && tsc && tsc-alias -f",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
+    "test": "pnpm -C ../agent build && pnpm build && node --test scripts/*.test.mjs",
     "test:session-model": "pnpm -C ../agent build && pnpm build && node --test scripts/*.test.mjs",
     "prepack": "npm run build && node ../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
     "postpack": "node ../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"
