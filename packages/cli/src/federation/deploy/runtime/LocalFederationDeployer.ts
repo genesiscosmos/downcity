@@ -29,7 +29,7 @@ import { emitCliBlock } from "@/shared/CliReporter.js";
 import { CliError } from "@/shared/CliError.js";
 import {
   create_admin_deployment_credentials,
-  show_admin_credentials_once,
+  show_admin_credentials_configured,
   verify_admin_deployment_credentials,
 } from "@/federation/deploy/runtime/AdminCredentials.js";
 import { provision_local_admin_database } from "@/federation/deploy/runtime/AdminDatabaseProvisioner.js";
@@ -154,7 +154,7 @@ export async function deploy_local_federation(
       });
     }
     provisioned_admin_id = admin_credentials.admin_id;
-    show_admin_credentials_once(admin_credentials);
+    show_admin_credentials_configured();
   }
 
   register_deployed_server({

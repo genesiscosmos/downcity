@@ -32,7 +32,7 @@ import { bumpProjectPatchVersion } from "@/federation/deploy/runtime/ProjectVers
 import { runPackageDeployScripts } from "@/federation/deploy/runtime/PackageScriptRunner.js";
 import {
   create_admin_deployment_credentials,
-  show_admin_credentials_once,
+  show_admin_credentials_configured,
   verify_admin_deployment_credentials,
 } from "@/federation/deploy/runtime/AdminCredentials.js";
 import { provision_cloudflare_admin_database } from "@/federation/deploy/runtime/AdminDatabaseProvisioner.js";
@@ -243,7 +243,7 @@ export async function deploy_cloudflare_workers(
       ],
     });
     if (admin_credentials && provisioned_admin_id === admin_credentials.admin_id) {
-      show_admin_credentials_once(admin_credentials);
+      show_admin_credentials_configured();
     }
   } else {
     emitCliBlock({
