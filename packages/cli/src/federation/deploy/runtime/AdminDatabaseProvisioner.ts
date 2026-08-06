@@ -62,7 +62,11 @@ export async function provision_cloudflare_admin_database(params: {
   project_dir: string;
   /** Cloudflare account id。 */
   account_id?: string;
-  /** D1 resolver 返回并绑定给 Worker 的数据库 ID。 */
+  /** 本次部署生成、包含精确 D1 database ID 的 Wrangler 配置路径。 */
+  wrangler_config_path: string;
+  /** Wrangler 配置中绑定 D1 database ID 的 Worker binding。 */
+  database_binding: string;
+  /** D1 resolver 返回并绑定给 Worker 的数据库 ID，仅用于错误定位。 */
   database_id: string;
   /** 本次候选管理员凭证。 */
   credentials: FederationAdminDeploymentCredentials;
@@ -73,8 +77,8 @@ export async function provision_cloudflare_admin_database(params: {
       label: params.credentials.mode === "reset"
         ? "Reset Federation administrator"
         : "Initialize Federation administrator",
-      command: `pnpm exec wrangler d1 execute ${shell_quote(params.database_id)} --remote --command ${shell_quote(sql)} --json --yes`,
-      display_command: "pnpm exec wrangler d1 execute <database> --remote --command <administrator SQL> --json --yes",
+      command: `pnpm exec wrangler d1 execute ${shell_quote(params.database_binding)} --config ${shell_quote(params.wrangler_config_path)} --remote --command ${shell_quote(sql)} --json --yes`,
+      display_command: "pnpm exec wrangler d1 execute <binding> --config <generated wrangler config> --remote --command <administrator SQL> --json --yes",
       cwd: params.project_dir,
       env: { CLOUDFLARE_ACCOUNT_ID: params.account_id },
       capture: true,

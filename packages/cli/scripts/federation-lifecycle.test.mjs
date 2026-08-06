@@ -200,6 +200,8 @@ process.stdout.write(JSON.stringify([{ results: [{ admin_id: process.env.DOWNCIT
     const result = await provisioner.provision_cloudflare_admin_database({
       project_dir,
       account_id: "account-test",
+      wrangler_config_path: "/tmp/generated-wrangler.toml",
+      database_binding: "DB",
       database_id: "00000000-0000-0000-0000-000000000001",
       credentials: {
         mode: "reset",
@@ -211,7 +213,9 @@ process.stdout.write(JSON.stringify([{ results: [{ admin_id: process.env.DOWNCIT
     });
     assert.deepEqual(result, { admin_id: "admin_recovered", credentials_applied: true });
     const args = JSON.parse(fs.readFileSync(captured_args, "utf8"));
-    assert.equal(args[4], "00000000-0000-0000-0000-000000000001");
+    assert.equal(args[4], "DB");
+    assert.equal(args[args.indexOf("--config") + 1], "/tmp/generated-wrangler.toml");
+    assert.equal(args.includes("00000000-0000-0000-0000-000000000001"), false);
     assert.equal(args.includes("downcity-db"), false);
     const sql = fs.readFileSync(captured_sql, "utf8");
     assert.match(sql, /UPDATE federation_admin_sessions SET status = 'revoked'/u);
