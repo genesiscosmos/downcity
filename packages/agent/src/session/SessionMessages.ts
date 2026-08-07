@@ -721,9 +721,10 @@ export class SessionMessages {
   async complete_assistant_message(
     message_id: string,
     status: "completed" | "stopped" | "failed",
+    error?: string,
   ): Promise<void> {
     await this.enqueue_assistant_write(message_id, async () => {
-      await this.complete_assistant_message_serialized(message_id, status);
+      await this.complete_assistant_message_serialized(message_id, status, error);
     });
   }
 
@@ -731,6 +732,7 @@ export class SessionMessages {
   private async complete_assistant_message_serialized(
     message_id: string,
     status: "completed" | "stopped" | "failed",
+    error?: string,
   ): Promise<void> {
     const current = require_message([...this.messages_by_id.values()], message_id, "assistant");
     require_streaming_assistant(current);
@@ -767,13 +769,18 @@ export class SessionMessages {
         }
         if (
           part.type === "tool" &&
-          part.state === "waiting-user" &&
-          interrupted_tool_ids.has(part.tool_call_id)
+          part.state !== "completed" &&
+          part.state !== "failed"
         ) {
           return {
             ...part,
             state: "failed" as const,
-            error: "Interaction cancelled",
+            error:
+              status === "stopped" &&
+              part.state === "waiting-user" &&
+              interrupted_tool_ids.has(part.tool_call_id)
+                ? "Interaction cancelled"
+                : error || "Tool did not complete before Assistant Message closed",
           };
         }
         return part;

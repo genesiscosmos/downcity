@@ -559,9 +559,12 @@ export class SessionAssistantMessageWriter {
   }
 
   /** 以失败状态关闭当前 Assistant Message。 */
-  async fail(_error: unknown): Promise<void> {
+  async fail(error: unknown): Promise<void> {
     await this.enqueue_write(async () => {
-      await this.close_serialized("failed");
+      await this.close_serialized(
+        "failed",
+        error instanceof Error ? error.message : String(error || ""),
+      );
     });
   }
 
@@ -786,13 +789,14 @@ export class SessionAssistantMessageWriter {
   /** 在队列内关闭当前 Assistant Message。 */
   private async close_serialized(
     status: "completed" | "stopped" | "failed",
+    error?: string,
   ): Promise<void> {
     if (this.closed) return;
     this.tool_part_gate.close(
       `Assistant Message writer closed with status ${status}`,
     );
     this.reset_step_state();
-    await this.recorder.complete_assistant_message(this.message_id, status);
+    await this.recorder.complete_assistant_message(this.message_id, status, error);
     this.closed = true;
   }
 }

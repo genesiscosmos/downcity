@@ -137,6 +137,38 @@ test("Provider 在部分输出后失败时保留 failed Assistant 并追加 Erro
   assert.equal(page.items[2].message, "stream interrupted");
 });
 
+test("Assistant 失败收口时不会遗留 input-streaming Tool Part", async () => {
+  const { messages, turn } = await create_turn_harness(async (turn_context) => {
+    await turn_context.output.assistant.begin_step();
+    await turn_context.output.assistant.write_chunk({
+      type: "tool-input-start",
+      toolCallId: "call-1",
+      toolName: "shell_exec",
+    });
+    await turn_context.output.assistant.write_chunk({
+      type: "tool-input-delta",
+      toolCallId: "call-1",
+      inputTextDelta: '{"cmd":"pwd"}',
+    });
+    return {
+      success: false,
+      text: "",
+      error: "stream interrupted",
+      deferred_persisted_user_messages: [],
+    };
+  });
+
+  const handle = await turn.prompt({ query: "hello" });
+  await handle.finished;
+  const page = await messages.list_messages();
+  const assistant = page.items.find((message) => message.type === "assistant");
+
+  assert.equal(assistant?.status, "failed");
+  assert.equal(assistant?.parts[0]?.type, "tool");
+  assert.equal(assistant?.parts[0]?.state, "failed");
+  assert.equal(assistant?.parts[0]?.error, "stream interrupted");
+});
+
 test("Turn 使用 step canonical chunks 保持 Tool 与最终正文顺序", async () => {
   const { messages, turn } = await create_turn_harness(async (turn_context) => {
     await turn_context.output.assistant.begin_step();
