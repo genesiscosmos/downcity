@@ -40,7 +40,9 @@ const turn = await session.prompt({
 
 The input API uses the AI SDK name `mediaType`; persisted `SessionMessage` values use `media_type`. They are different boundaries, so do not feed a read Message Part back into `prompt()` unchanged.
 
-A local Session reads local image files before model execution and converts them into a model-consumable representation. For a remote Session, a local file path only works when the server can access it; prefer an accessible URL or a server-readable resource path.
+Data URL attachments are not written directly into Session Messages. The Session decodes each Data URL into the current Session's `.downcity/.../attachments/` directory and stores only a path relative to the Workspace root in the Message. Before model execution, the Session reads the attachment from that path and converts it into a model-consumable representation.
+
+For remote Sessions, Data URLs are stored on the server. A local path supplied by a remote client only works when the server can access it; prefer a Data URL or a URL accessible by the server.
 
 ## Turn handles
 

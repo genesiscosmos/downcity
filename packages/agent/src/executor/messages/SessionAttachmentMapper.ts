@@ -3,8 +3,8 @@
  *
  * 关键点（中文）
  * - 兼容 Telegram / Feishu / TUI 等统一的 `<file>` 协议入口。
- * - 仅在本轮执行的内存消息上追加 file parts，不修改持久化历史。
- * - 当前只为图片与 PDF 注入 file part，保持多模态模型可直接消费。
+ * - Data URL 附件先由 Session Attachment Store 落盘，Message 只保存文件路径。
+ * - 模型执行阶段再读取本地文件，并转换为模型可消费的数据格式。
  * - 历史中的相对路径与旧版 `file://` 会在喂给模型前临时 hydrate。
  */
 
@@ -17,6 +17,7 @@ import {
   type FileUIPart,
 } from "ai";
 import type { SessionUserMessagePart } from "@/types/sdk/AgentSessionPrompt.js";
+import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 import type {
   SessionRecordV1,
   SessionMessageRecordV1,
@@ -106,42 +107,16 @@ async function hydrateFileUrlPart(
   }
 }
 
-async function hydrateFileUrlPartStrict(
-  part: FileUIPart,
-  project_root?: string,
-): Promise<FileUIPart> {
-  const url = String(part.url || "").trim();
-  const file_path = resolveHydratableFilePath(project_root, url);
-  if (!file_path) return part;
-
-  try {
-    const buffer = await fs.readFile(file_path);
-    const media_type =
-      String(part.mediaType || "").trim() ||
-      guessAttachmentMediaTypeFromPath(file_path) ||
-      "application/octet-stream";
-    return {
-      ...part,
-      mediaType: media_type,
-      url: buildDataUrl(media_type, buffer),
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`读取本地附件失败：${file_path}。${message}`);
-  }
-}
-
 /**
- * 在用户 prompt 入库前，将本地图片 file part 转成 data URL。
+ * 在用户 prompt 入库前，将 Data URL file part 保存为 Session 附件路径。
  *
  * 关键点（中文）
- * - 只处理调用侧直接传入的图片 file part。
- * - 已经是 data URL 或远程 URL 的附件保持原样。
- * - 本地文件读取失败时直接报错，避免模型请求拿到不可访问的本地路径。
+ * - 只有 Data URL 会在此处落盘；远程 URL 和本地路径保持引用不变。
+ * - 附件成功落盘后才把 URL 替换为相对 Workspace 根目录的路径。
  */
-export async function hydrate_user_prompt_file_parts(
+export async function persist_user_prompt_file_parts(
   parts: SessionUserMessagePart[],
-  project_root?: string,
+  attachment_store: SessionAttachmentStore,
 ): Promise<SessionUserMessagePart[]> {
   if (!Array.isArray(parts) || parts.length === 0) return [];
 
@@ -153,14 +128,18 @@ export async function hydrate_user_prompt_file_parts(
     }
 
     const file_part = part as FileUIPart;
-    const media_type = String(file_part.mediaType || "").trim();
-    if (!media_type.startsWith("image/")) {
+    const url = String(file_part.url || "").trim();
+    if (!url.startsWith("data:")) {
       out.push(part);
       continue;
     }
 
-    const next_part = await hydrateFileUrlPartStrict(file_part, project_root);
-    out.push(next_part as SessionUserMessagePart);
+    const stored_path = await attachment_store.persist_data_url({
+      data_url: url,
+      media_type: String(file_part.mediaType || "").trim(),
+      ...(file_part.filename ? { filename: file_part.filename } : {}),
+    });
+    out.push({ ...file_part, url: stored_path } as SessionUserMessagePart);
   }
 
   return out;

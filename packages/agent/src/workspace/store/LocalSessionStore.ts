@@ -12,12 +12,14 @@ import {
   get_sdk_agent_session_meta_path,
   get_sdk_agent_session_assistant_message_path,
   get_sdk_agent_session_messages_path,
+  get_sdk_agent_session_attachments_dir_path,
 } from "@/workspace/store/LocalStorePaths.js";
 import { normalize_session_metadata } from "@/session/storage/Metadata.js";
 import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 import type { LocalSessionStoreOptions } from "@/types/store/LocalStore.js";
+import { LocalSessionAttachmentStore } from "@/workspace/store/LocalSessionAttachmentStore.js";
 
 /** 本地 Session Store。 */
 export class LocalSessionStore implements SessionStore {
@@ -26,6 +28,9 @@ export class LocalSessionStore implements SessionStore {
 
   /** 当前 Session 的 JSONL Message Store。 */
   readonly messages: JsonlSessionMessageStore;
+
+  /** 当前 Session 的附件持久化能力。 */
+  readonly attachments: LocalSessionAttachmentStore;
 
   /** 当前 Store 与 WorkspaceTools 共用的 Workspace 文件能力。 */
   private readonly files: FileSystem;
@@ -46,6 +51,14 @@ export class LocalSessionStore implements SessionStore {
         this.session_id,
       ),
       assistant_message_file_path: get_sdk_agent_session_assistant_message_path(
+        this.files.root_path,
+        this.agent_id,
+        this.session_id,
+      ),
+    });
+    this.attachments = new LocalSessionAttachmentStore({
+      files: this.files,
+      attachments_dir_path: get_sdk_agent_session_attachments_dir_path(
         this.files.root_path,
         this.agent_id,
         this.session_id,

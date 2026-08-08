@@ -17,6 +17,7 @@ import type {
   SessionSegmentSnapshot,
   SessionSegmentSummary,
 } from "@/types/session/SessionSegment.js";
+import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
 /** 在 Message Store 写事务中创建新消息所需的稳定状态。 */
 export interface SessionMessageCommitState {
@@ -87,6 +88,9 @@ export interface SessionStore {
 
   /** 当前 Session 的 Message 持久化能力。 */
   readonly messages: SessionMessageStore;
+
+  /** 当前 Session 的附件持久化能力。 */
+  readonly attachments: SessionAttachmentStore;
 
   /** 读取 Session Metadata；不存在时返回规范化的初始值。 */
   read_metadata(): Promise<SessionHistoryMetaV1>;

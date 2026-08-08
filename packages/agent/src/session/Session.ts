@@ -150,6 +150,7 @@ export class Session implements AgentSession {
     this.session_messages = new SessionMessages({
       session_id: this.id,
       store: this.store.messages,
+      attachment_store: this.store.attachments,
       publish: (mutation) => {
         this.events.publish(mutation);
       },

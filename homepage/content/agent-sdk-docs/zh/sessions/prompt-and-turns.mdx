@@ -40,7 +40,9 @@ const turn = await session.prompt({
 
 输入 API 使用 AI SDK 的 `mediaType` 命名；读回的持久化 `SessionMessage` 使用 `media_type`。两者属于不同边界，不应把读回的 Part 原样当作 `prompt()` 输入。
 
-本地 Session 会在调用模型前读取本地图片文件，并转换成模型可消费的数据格式。远程 Session 的本地文件路径是否可用取决于服务端能否访问该路径；远程客户端优先使用可访问 URL 或由服务端可读取的资源路径。
+Data URL 附件不会直接写入 Session Message。Session 会先把 Data URL 解码并保存到当前 Session 的 `.downcity/.../attachments/` 目录，Message 只保存相对 Workspace 根目录的文件路径。模型执行前，Session 再从该路径读取附件并转换成模型可消费的数据格式。
+
+远程 Session 的 Data URL 会在服务端保存；远程客户端传入的本地路径必须能被服务端访问。远程客户端优先使用 Data URL 或服务端可访问的 URL。
 
 ## Turn Handle
 

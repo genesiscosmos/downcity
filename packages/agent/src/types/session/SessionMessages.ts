@@ -7,6 +7,7 @@
 import type { JsonObject } from "@/types/common/Json.js";
 import type { SessionRecordV1 } from "@/executor/types/SessionRecords.js";
 import type { SessionMessageStore } from "@/types/store/SessionStore.js";
+import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type {
   SessionAssistantMessagePart,
@@ -20,6 +21,8 @@ export interface SessionMessagesOptions {
   session_id: string;
   /** Message 快照持久化 Store。 */
   store: SessionMessageStore;
+  /** 当前 Session 的附件持久化能力。 */
+  attachment_store: SessionAttachmentStore;
   /** 持久化成功后的实时 Mutation 发布函数。 */
   publish: (mutation: SessionMutation) => void;
 }

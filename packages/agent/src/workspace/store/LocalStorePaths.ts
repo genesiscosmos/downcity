@@ -162,6 +162,22 @@ export function get_sdk_agent_session_messages_dir_path(
 }
 
 /**
+ * 单个 Session 的附件目录路径。
+ *
+ * 附件与 Session 目录同生命周期，归档或删除 Session 时随目录一起迁移或清理。
+ */
+export function get_sdk_agent_session_attachments_dir_path(
+  workspace_path: string,
+  agent_id: string,
+  session_id: string,
+): string {
+  return path.join(
+    get_sdk_agent_session_dir_path(workspace_path, agent_id, session_id),
+    "attachments",
+  );
+}
+
+/**
  * 单个 session 的 Active JSONL 文件路径。
  */
 export function get_sdk_agent_session_messages_path(

@@ -50,7 +50,7 @@ import {
   from_ui_user_parts,
   to_executor_ui_message,
 } from "@/session/messages/SessionMessageCodec.js";
-import { hydrate_user_prompt_file_parts } from "@executor/messages/SessionAttachmentMapper.js";
+import { persist_user_prompt_file_parts } from "@executor/messages/SessionAttachmentMapper.js";
 import type {
   AppendCompletedAssistantMessageInput,
   AppendExternalSessionAssistantMessageInput,
@@ -63,6 +63,7 @@ import type {
   SessionMessagesOptions,
 } from "@/types/session/SessionMessages.js";
 import type { SessionMessageStore } from "@/types/store/SessionStore.js";
+import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
 export { SessionAssistantMessageWriter } from "@/session/messages/SessionAssistantMessageWriter.js";
 
@@ -70,6 +71,7 @@ export { SessionAssistantMessageWriter } from "@/session/messages/SessionAssista
 export class SessionMessages {
   readonly session_id: string;
   private readonly store: SessionMessageStore;
+  private readonly attachment_store: SessionAttachmentStore;
   private readonly publish: SessionMessagesOptions["publish"];
   private readonly messages_by_id = new Map<string, SessionMessage>();
   /** 按 Assistant Message 隔离的完整写事务链。 */
@@ -81,6 +83,7 @@ export class SessionMessages {
   constructor(options: SessionMessagesOptions) {
     this.session_id = String(options.session_id || "").trim();
     this.store = options.store;
+    this.attachment_store = options.attachment_store;
     this.publish = options.publish;
     if (!this.session_id) throw new Error("SessionMessages requires session_id");
     this.interaction_writer = new SessionMessageInteractionWriter({
@@ -282,9 +285,9 @@ export class SessionMessages {
     const query = input.prompt.query;
     const ui_parts = typeof query === "string"
       ? [{ type: "text" as const, text: query.trim() }]
-      : await hydrate_user_prompt_file_parts(
+      : await persist_user_prompt_file_parts(
           Array.isArray(query) ? query : [],
-          input.project_root,
+          this.attachment_store,
         );
     const canonical = await this.append_user_message({
       turn_id: input.turn_id,

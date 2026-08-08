@@ -18,6 +18,7 @@ export type {
   SessionMessageStore,
   SessionStore,
 } from "./types/store/SessionStore.js";
+export type { SessionAttachmentStore } from "./types/store/SessionAttachmentStore.js";
 export { create_session_message_store } from "./workspace/store/SessionMessageStoreFactory.js";
 export type {
   FileSystem,
