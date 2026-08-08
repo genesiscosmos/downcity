@@ -10,7 +10,7 @@
 
 import path from "node:path";
 import type { LanguageModel, Tool } from "ai";
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext, SessionAttachmentStore } from "@downcity/agent";
 import { Executor } from "@downcity/agent";
 import type { SessionTurnExecutionResult } from "@downcity/agent";
 import type { TaskSessionRuntimePort } from "@/task/runtime/TaskRunnerTypes.js";
@@ -98,6 +98,15 @@ export function createTaskSessionRuntimePort(params: {
     throw new Error("Task agent execution requires Agent to be configured with a Shell.");
   }
   const shell_tools = shell.tools as unknown as Record<string, Tool>;
+  /**
+   * Task runtime 当前只接收已经规范化的文本消息，不支持通过 Prompt 传入 Data URL 附件。
+   * 显式提供适配器，避免把 Task 的临时 run 目录错误地当成普通 Session 附件目录。
+   */
+  const attachment_store: SessionAttachmentStore = {
+    persist_data_url: async () => {
+      throw new Error("Task session runtime does not support Data URL attachments");
+    },
+  };
 
   const resolve_task_messages = (session_id: string): SessionMessages => {
     const existing = messages_by_session_id.get(session_id);
@@ -126,6 +135,7 @@ export function createTaskSessionRuntimePort(params: {
           "assistant_message.json",
         ),
       }),
+      attachment_store,
       publish: () => {},
     });
     messages_by_session_id.set(key, created);
