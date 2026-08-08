@@ -10,8 +10,11 @@ import { z } from "zod";
 const option_schema = z
   .object({
     value: z.string().trim().min(1)
-      .describe("Stable option value returned in the answer."),
-    label: z.string().trim().min(1).describe("User-visible option label."),
+      .describe(
+        "Required machine-readable stable identifier returned in the answer. Never omit this field or use label as its substitute.",
+      ),
+    label: z.string().trim().min(1)
+      .describe("Required user-visible option label; this is not the answer value."),
     description: z.string().trim().min(1).optional()
       .describe("Optional explanation of this option."),
   })
@@ -35,7 +38,9 @@ const select_question_schema = z
       .describe("Complete question shown to the user."),
     response_type: z.enum(["single_select", "multi_select"]),
     options: z.array(option_schema).min(1)
-      .describe("Allowed values presented to the user."),
+      .describe(
+        "Required selectable options. Every option MUST include both value and label, for example { value: 'cn', label: '中国' }.",
+      ),
   })
   .strict();
 

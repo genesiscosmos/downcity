@@ -30,7 +30,7 @@ import type { ActionResult } from "@/types/action/ActionResult.js";
  */
 export const AskQuestionsTool = tool({
   description:
-    "Ask the user one or more questions when missing information would materially change the outcome. The call waits for every answer, then returns them so you can continue the same task. Do not use it for information that can be inferred safely.",
+    "Ask the user one or more questions when missing information would materially change the outcome. The call waits for every answer, then returns them so you can continue the same task. Do not use it for information that can be inferred safely. For single_select and multi_select questions, every option MUST contain both a machine-readable value and a user-visible label; never omit value or use label as value. Example: { value: 'cn', label: '中国' }.",
   inputSchema: ask_questions_input_schema,
   execute: async (
     input: AskQuestionsToolInput,
