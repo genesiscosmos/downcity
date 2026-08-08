@@ -19,6 +19,28 @@ export type SessionUserMessagePart = UIMessagePart<UIDataTypes, UITools>;
 
 /**
  * Session prompt 输入。
+ *
+ * 输入示例（中文）：
+ * ```ts
+ * session.prompt({
+ *   query: [
+ *     { type: "text", text: "请分析这个附件" },
+ *     {
+ *       type: "file",
+ *       mediaType: "image/png",
+ *       url: "data:image/png;base64,...",
+ *       filename: "image.png",
+ *     },
+ *   ],
+ * });
+ * ```
+ *
+ * 生命周期说明（中文）：
+ * - `string` 会直接成为新的文本 User Message。
+ * - `file` part 如果携带 Data URL，会在 Message 入库前解码到 Session 的 attachments 目录。
+ * - 持久化 Message 里的 `url` 变成相对 Workspace 根目录的文件路径，而不是 Base64 内容。
+ * - 模型执行前，Executor 再按该路径读取文件，并转换成 AI SDK / Provider 可消费的 ModelMessage。
+ * - 远程 Session 中，Data URL 在服务端落盘；调用方本地路径必须对服务端可访问。
  */
 export interface AgentSessionPromptInput {
   /**

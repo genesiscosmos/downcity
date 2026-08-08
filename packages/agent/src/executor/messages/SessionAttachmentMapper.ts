@@ -6,6 +6,14 @@
  * - Data URL 附件先由 Session Attachment Store 落盘，Message 只保存文件路径。
  * - 模型执行阶段再读取本地文件，并转换为模型可消费的数据格式。
  * - 历史中的相对路径与旧版 `file://` 会在喂给模型前临时 hydrate。
+ *
+ * 输入到输出（中文）：
+ * `file.url = data:<media-type>;base64,...`
+ *   → Session Attachment Store 解码并写入附件文件
+ *   → `file.url = .downcity/.../attachments/att_<id>.<ext>`
+ *   → Message 持久化路径引用
+ *   → 模型执行前读取文件并恢复为 Data URL
+ *   → `convertToModelMessages()` 生成最终 ModelMessage。
  */
 
 import fs from "fs-extra";
