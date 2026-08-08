@@ -21,8 +21,10 @@ import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import { generate_id } from "@/utils/Id.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import { SessionMessages } from "@/session/SessionMessages.js";
+import { SessionTitleTask } from "@/session/runtime/SessionTitleTask.js";
 import { to_executor_history } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
+import { is_session_message_record } from "@/executor/types/SessionRecords.js";
 import type { SessionStateOptions } from "@/types/session/SessionState.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
@@ -48,6 +50,8 @@ export class SessionState {
   private readonly ensure_configured_hook?: SessionStateOptions["ensure_configured_hook"];
   private readonly get_model: SessionStateOptions["get_model"];
   private readonly publish_event: SessionStateOptions["publish_event"];
+  private readonly title_task: SessionTitleTask;
+  private metadata_mutation_chain: Promise<void> = Promise.resolve();
 
   constructor(options: SessionStateOptions) {
     this.agent_id = options.agent_id;
@@ -59,6 +63,10 @@ export class SessionState {
     this.ensure_configured_hook = options.ensure_configured_hook;
     this.get_model = options.get_model;
     this.publish_event = options.publish_event;
+    this.title_task = new SessionTitleTask({
+      session_id: this.session_id,
+      logger: this.logger,
+    });
   }
 
   /**
@@ -168,12 +176,14 @@ export class SessionState {
       model_context_window: read_agent_model_context_window(model),
     };
     if (changed) {
-      const metadata = await this.store.read_metadata();
-      await this.store.write_metadata({
-        ...metadata,
-        agent_id: this.agent_id,
-        updated_at: Date.now(),
-        ...(next_model_label ? { model_label: next_model_label } : {}),
+      await this.run_metadata_mutation(async () => {
+        const metadata = await this.store.read_metadata();
+        await this.store.write_metadata({
+          ...metadata,
+          agent_id: this.agent_id,
+          updated_at: Date.now(),
+          ...(next_model_label ? { model_label: next_model_label } : {}),
+        });
       });
     }
     this.state.session_config = next_config;
@@ -183,12 +193,14 @@ export class SessionState {
   /** 接受并持久化当前 Session 的 Shell 审批模式。 */
   async set_approval_mode(mode: SessionApprovalMode): Promise<boolean> {
     if (mode === this.state.configured_approval_mode) return false;
-    const metadata = await this.store.read_metadata();
-    await this.store.write_metadata({
-      ...metadata,
-      agent_id: this.agent_id,
-      updated_at: Date.now(),
-      approval_mode: mode,
+    await this.run_metadata_mutation(async () => {
+      const metadata = await this.store.read_metadata();
+      await this.store.write_metadata({
+        ...metadata,
+        agent_id: this.agent_id,
+        updated_at: Date.now(),
+        approval_mode: mode,
+      });
     });
     this.state.configured_approval_mode = mode;
     return true;
@@ -209,60 +221,105 @@ export class SessionState {
     const preview_text = resolve_message_preview(
       stats.latest_message || undefined,
     ).slice(0, 180);
-    const metadata = await this.store.read_metadata();
-    await this.store.write_metadata({
-      ...metadata,
-      agent_id: this.agent_id,
-      updated_at: Date.now(),
-      ...(this.state.session_config.model_label
-        ? { model_label: this.state.session_config.model_label }
-        : {}),
-      message_count: stats.message_count,
-      historyBytes: stats.history_bytes,
-      ...(preview_text ? { preview_text: preview_text } : {}),
+    await this.run_metadata_mutation(async () => {
+      const metadata = await this.store.read_metadata();
+      await this.store.write_metadata({
+        ...metadata,
+        agent_id: this.agent_id,
+        updated_at: Date.now(),
+        ...(this.state.session_config.model_label
+          ? { model_label: this.state.session_config.model_label }
+          : {}),
+        message_count: stats.message_count,
+        historyBytes: stats.history_bytes,
+        ...(preview_text ? { preview_text: preview_text } : {}),
+      });
     });
   }
 
-  /**
-   * 确保当前 session 已持久化 title。
-   */
-  async ensure_title_from_history(input?: {
-    /**
-     * 是否允许调用模型生成标题。
-     */
-    generate?: boolean;
-  }): Promise<void> {
-    const messages = to_executor_history(
-      this.session_id,
-      await this.messages.context_snapshot(),
+  /** 在后台刷新 Session metadata，不阻塞当前 Turn。 */
+  touch_metadata_in_background(): void {
+    void this.touch_metadata().catch(async (error) => {
+      try {
+        await this.logger.log("warn", "[agent] session_metadata.background_update_failed", {
+          session_id: this.session_id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } catch {
+        // metadata 诊断日志失败不能影响当前 Turn。
+      }
+    });
+  }
+
+  /** 异步调度首条用户消息的 Session 标题生成。 */
+  schedule_title_generation(): void {
+    this.title_task.schedule(async (signal) => {
+      const before_metadata = await this.store.read_metadata();
+      if (String(before_metadata.title || "").trim()) return;
+      const records = to_executor_history(
+        this.session_id,
+        await this.messages.context_snapshot(),
+      );
+      const first_user_message = records.find(
+        (record) => is_session_message_record(record) && record.role === "user",
+      );
+      if (!first_user_message) return;
+      const first_user_message_id = first_user_message.id;
+      const before_title = String(before_metadata.title || "").trim();
+      const next_metadata = await ensure_session_title({
+        session_id: this.session_id,
+        store: this.store,
+        messages: records,
+        model: this.get_model(),
+        model_label: this.state.session_config.model_label,
+        logger: this.logger,
+        generate: true,
+        signal,
+        commit_title: async (title) => await this.run_metadata_mutation(async () => {
+          const latest_metadata = await this.store.read_metadata();
+          if (signal.aborted) return latest_metadata;
+          if (String(latest_metadata.title || "").trim()) return latest_metadata;
+          const latest_records = to_executor_history(
+            this.session_id,
+            await this.messages.context_snapshot(),
+          );
+          const source_exists = latest_records.some(
+            (record) =>
+              is_session_message_record(record) &&
+              record.id === first_user_message_id,
+          );
+          if (!source_exists || signal.aborted) return latest_metadata;
+          const next_metadata = { ...latest_metadata, title };
+          await this.store.write_metadata(next_metadata);
+          return next_metadata;
+        }),
+      });
+      const next_title = String(next_metadata.title || "").trim();
+      if (!next_title || next_title === before_title || signal.aborted) return;
+      this.publish_event({
+        mutation_id: generate_id(),
+        variant: "session",
+        type: "title",
+        session_id: this.session_id,
+        created_at: Date.now(),
+        title: next_title,
+      });
+    });
+  }
+
+  /** 取消并释放当前 Session 的标题后台任务。 */
+  dispose_title_generation(): void {
+    this.title_task.dispose();
+  }
+
+  /** 串行提交 Session metadata，避免后台标题覆盖其他字段。 */
+  private async run_metadata_mutation<T>(mutation: () => Promise<T>): Promise<T> {
+    const task = this.metadata_mutation_chain.then(mutation, mutation);
+    this.metadata_mutation_chain = task.then(
+      () => undefined,
+      () => undefined,
     );
-    const before_metadata = await this.store.read_metadata();
-    const before_title = String(before_metadata.title || "").trim();
-    const next_metadata = await ensure_session_title({
-      session_id: this.session_id,
-      store: this.store,
-      messages,
-      ...(input?.generate
-        ? {
-            model: this.get_model(),
-          }
-        : {}),
-      ...(this.state.session_config.model_label
-        ? { model_label: this.state.session_config.model_label }
-        : {}),
-      logger: this.logger,
-      generate: input?.generate === true,
-    });
-    const next_title = String(next_metadata.title || "").trim();
-    if (!next_title || next_title === before_title) return;
-    this.publish_event({
-      mutation_id: generate_id(),
-      variant: "session",
-      type: "title",
-      session_id: this.session_id,
-      created_at: Date.now(),
-      title: next_title,
-    });
+    return await task;
   }
 
 }

@@ -53,6 +53,12 @@ export interface EnsureSessionTitleParams {
    * 是否允许调用模型生成标题。
    */
   generate?: boolean;
+
+  /** 可选的标题请求取消信号。 */
+  signal?: AbortSignal;
+
+  /** 可选的标题提交入口，用于与其他 metadata mutation 串行化。 */
+  commit_title?: (title: string) => Promise<SessionHistoryMetaV1>;
 }
 
 function truncateTitle(input: string, maxChars: number): string {
@@ -192,6 +198,9 @@ async function generateSessionTitle(input: {
    * 当前 session 运行日志器。
    */
   logger?: Logger;
+
+  /** 标题请求取消信号。 */
+  signal?: AbortSignal;
 }): Promise<string | undefined> {
   let observedStreamError: unknown;
   try {
@@ -208,6 +217,7 @@ async function generateSessionTitle(input: {
       onError: ({ error }) => {
         observedStreamError = error;
       },
+      abortSignal: input.signal,
     });
     const text = await result.text;
     const generatedTitle = normalizeGeneratedTitle(text);
@@ -277,11 +287,13 @@ export async function ensure_session_title(
     model_label: input.model_label,
     firstUserText,
     logger: input.logger,
+    signal: input.signal,
   });
   if (!generatedTitle) return current;
 
+  if (input.commit_title) return await input.commit_title(generatedTitle);
   const generatedMeta: SessionHistoryMetaV1 = {
-    ...current,
+    ...(await input.store.read_metadata()),
     title: generatedTitle,
   };
   await input.store.write_metadata(generatedMeta);

@@ -593,8 +593,8 @@ export class SessionLoop {
       turn_id,
       input_type,
     });
-    await this.state.ensure_title_from_history({ generate: true });
-    await this.state.touch_metadata();
+    this.state.touch_metadata_in_background();
+    this.state.schedule_title_generation();
     return message;
   }
 

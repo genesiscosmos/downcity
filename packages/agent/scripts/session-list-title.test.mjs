@@ -72,6 +72,12 @@ async function create_agent_with_titled_session(input) {
   await session.append_user_message({
     text: input.first_user_text,
   });
+  const title_deadline = Date.now() + 1000;
+  while (Date.now() < title_deadline) {
+    if ((await session.get_info()).title === input.title) break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal((await session.get_info()).title, input.title);
 
   return {
     agent,

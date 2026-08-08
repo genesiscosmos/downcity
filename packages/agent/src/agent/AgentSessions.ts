@@ -133,6 +133,13 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return this.list_executing_session_ids().length;
   }
 
+  /** 释放全部缓存 Session 的标题后台任务。 */
+  dispose_title_generation(): void {
+    for (const session of this.sessions_by_id.values()) {
+      session.dispose_title_generation?.();
+    }
+  }
+
   /**
    * 把 Agent env 修改广播到已有 Session 的统一输入队列。
    */
@@ -228,6 +235,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     if (cached?.is_executing()) {
       await cached.stop();
     }
+    cached?.dispose_title_generation?.();
     const existed = await this.store.remove_session(resolved_session_id);
     this.sessions_by_id.delete(resolved_session_id);
     return existed;
@@ -245,6 +253,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     if (cached?.is_executing()) {
       throw new Error(`Session "${resolved_session_id}" is currently executing`);
     }
+    cached?.dispose_title_generation?.();
     const existed = await this.store.clear_session_messages(resolved_session_id);
     this.sessions_by_id.delete(resolved_session_id);
     return existed;
@@ -279,6 +288,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     }
 
     const result = await this.store.archive_session(session_id);
+    this.sessions_by_id.get(session_id)?.dispose_title_generation?.();
     this.sessions_by_id.delete(session_id);
     return result;
   }

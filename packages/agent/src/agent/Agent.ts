@@ -206,6 +206,7 @@ export class Agent {
   async dispose(): Promise<void> {
     this.unsubscribe_workspace_env();
     this.unsubscribe_plugin_change();
+    this.sessions.dispose_title_generation();
     try {
       await this.state.dispose();
     } finally {

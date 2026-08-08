@@ -31,6 +31,9 @@ export interface AgentManagedSession extends AgentSession {
    */
   get_runtime_port(): SessionPort;
 
+  /** 取消并释放当前 Session 的标题后台任务。 */
+  dispose_title_generation?(): void;
+
   /**
    * 返回当前 session 是否正在执行。
    */

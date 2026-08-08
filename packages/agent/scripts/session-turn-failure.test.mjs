@@ -45,8 +45,9 @@ async function create_turn_harness(execute_turn) {
     compact_history: async () => ({ compacted: false, reason: "nothing_to_compact" }),
     state: {
       ensure_runnable: async () => {},
-      ensure_title_from_history: async () => {},
+      schedule_title_generation: () => {},
       touch_metadata: async () => {},
+      touch_metadata_in_background: () => {},
     },
     messages,
     events: new SessionEventHub(),

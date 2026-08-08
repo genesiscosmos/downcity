@@ -477,8 +477,8 @@ export class Session implements AgentSession {
       text: String(input.text || "").trim(),
     });
     if (!appended) return;
-    await this.state.ensure_title_from_history({ generate: true });
-    await this.state.touch_metadata();
+    this.state.touch_metadata_in_background();
+    this.state.schedule_title_generation();
   }
 
   /**
@@ -637,8 +637,8 @@ export class Session implements AgentSession {
           message_params,
         );
         if (!appended) return;
-        await this.state.ensure_title_from_history({ generate: true });
-        await this.state.touch_metadata();
+        this.state.touch_metadata_in_background();
+        this.state.schedule_title_generation();
       },
       append_assistant_message: async (message_params) => {
         const appended = await this.session_messages.append_external_assistant_message({
@@ -654,6 +654,11 @@ export class Session implements AgentSession {
       },
     });
     return this.runtime_port;
+  }
+
+  /** 取消并释放当前 Session 的标题后台任务。 */
+  dispose_title_generation(): void {
+    this.state.dispose_title_generation();
   }
 
   /**

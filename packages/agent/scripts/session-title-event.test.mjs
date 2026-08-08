@@ -79,6 +79,30 @@ function create_failing_title_model() {
   });
 }
 
+function create_delayed_title_model(title_text) {
+  let resolve_started;
+  let resolve_release;
+  const started = new Promise((resolve) => {
+    resolve_started = resolve;
+  });
+  const released = new Promise((resolve) => {
+    resolve_release = resolve;
+  });
+  const model = new MockLanguageModelV3({
+    modelId: "mock-session-title-delayed-model",
+    doStream: async () => {
+      resolve_started();
+      await released;
+      return create_stream_text_result(title_text);
+    },
+  });
+  return {
+    model,
+    started,
+    release: () => resolve_release(),
+  };
+}
+
 async function read_log_lines(agent_path) {
   const logs_path = path.join(agent_path, ".downcity", "logs");
   const entries = await fs.readdir(logs_path);
@@ -89,6 +113,15 @@ async function read_log_lines(agent_path) {
     lines.push(...content.split("\n").filter(Boolean));
   }
   return lines;
+}
+
+async function wait_for_title(session, expected_title) {
+  const deadline = Date.now() + 1000;
+  while (Date.now() < deadline) {
+    if ((await session.get_info()).title === expected_title) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal((await session.get_info()).title, expected_title);
 }
 
 test("Session keeps title empty when no model is available", async () => {
@@ -123,6 +156,29 @@ test("Session keeps title empty when no model is available", async () => {
   }
 });
 
+test("Session title generation does not block user message append", async () => {
+  const agent_path = await fs.mkdtemp(
+    path.join(os.tmpdir(), "downcity-agent-session-title-async-"),
+  );
+  const delayed = create_delayed_title_model("异步标题");
+  const agent = new Agent({
+    id: "title_async_agent",
+    workspace: new Workspace({ path: agent_path }),
+    model: delayed.model,
+  });
+  const session = await agent.sessions.create();
+
+  try {
+    await session.append_user_message({ text: "标题生成不应阻塞消息写入" });
+    await delayed.started;
+    assert.equal((await session.get_info()).title, undefined);
+    delayed.release();
+    await wait_for_title(session, "异步标题");
+  } finally {
+    await agent.dispose();
+  }
+});
+
 test("Session logs title generation failure without blocking the session", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-session-title-log-"),
@@ -142,8 +198,16 @@ test("Session logs title generation failure without blocking the session", async
 
     assert.equal((await session.get_info()).title, undefined);
 
-    await agent.get_logger().save_all_logs();
-    const log_lines = await read_log_lines(agent_path);
+    let log_lines = [];
+    const log_deadline = Date.now() + 1000;
+    while (Date.now() < log_deadline) {
+      await agent.get_logger().save_all_logs();
+      log_lines = await read_log_lines(agent_path);
+      if (log_lines.some((line) => line.includes("session_title.generate_failed"))) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
     const title_failure_log = log_lines
       .map((line) => JSON.parse(line))
       .find((entry) => entry.message.includes("session_title.generate_failed"));
@@ -196,7 +260,7 @@ test("Session retries title generation after model becomes available", async () 
       text: "Need another prompt to trigger the retry path",
     });
 
-    assert.equal((await session.get_info()).title, "排查 session 标题");
+    await wait_for_title(session, "排查 session 标题");
   } finally {
     unsubscribe();
     await agent.dispose();
