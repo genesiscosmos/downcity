@@ -7,6 +7,7 @@
 
 export { AskQuestionsTool } from "./ask/AskQuestionsTool.js";
 export type {
+  AskQuestionsToolQuestion,
   AskQuestionsToolInput,
   AskQuestionsToolOutput,
 } from "../types/tools/ask/AskQuestionsTool.js";

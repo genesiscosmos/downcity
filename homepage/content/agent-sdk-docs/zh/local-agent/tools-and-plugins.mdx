@@ -103,8 +103,8 @@ const agent = new Agent({
 ```
 
 `ask_question` 由模型作为标准 Tool Call 调用，不是 Provider 私有消息类型。它支持
-`text`、`single_select` 和 `multi_select`；用户回答后，答案作为 Tool Result 返回模型，
-模型在同一个 Turn 的下一 Step 继续执行。完整接入方式参见
+`text`、`single_select` 和 `multi_select`，且每个问题都必须显式提供 `type`；用户回答后，
+答案作为 Tool Result 返回模型，模型在同一个 Turn 的下一 Step 继续执行。完整接入方式参见
 [用户异步交互](/zh/agent-sdk-docs/sessions/approvals)。
 
 ## plugin 实例

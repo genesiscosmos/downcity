@@ -101,8 +101,9 @@ const agent = new Agent({
 ```
 
 The model invokes `ask_question` as a standard Tool Call, not as a provider-specific message type.
-It supports `text`, `single_select`, and `multi_select`. Once the user responds, the answers become
-the Tool Result and the model continues in the next Step of the same Turn. See
+It supports `text`, `single_select`, and `multi_select`; every question must explicitly provide
+its `type`. Once the user responds, the answers become the Tool Result and the model continues in
+the next Step of the same Turn. See
 [Asynchronous User Interactions](/en/agent-sdk-docs/sessions/approvals) for the complete host flow.
 
 ## plugins

@@ -59,7 +59,12 @@ export const AskQuestionsTool = tool({
         tool_name: "ask_question",
       },
       title: input.title,
-      questions: input.questions,
+      questions: input.questions.map((question) => ({
+        question_id: `question:${generate_id()}`,
+        prompt: question.question,
+        response_type: question.type,
+        ...(question.options ? { options: question.options } : {}),
+      })),
       created_at: Date.now(),
     });
     const result = await handle.result;

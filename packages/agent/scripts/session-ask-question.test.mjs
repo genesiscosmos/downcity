@@ -30,9 +30,8 @@ function create_question_stream() {
     title: "选择部署区域",
     questions: [
       {
-        question_id: "region",
-        prompt: "需要部署到哪个区域？",
-        response_type: "single_select",
+        question: "需要部署到哪个区域？",
+        type: "single_select",
         options: [
           { value: "cn", label: "中国" },
           { value: "us", label: "美国" },
@@ -164,7 +163,10 @@ test("显式注入的 ask_question 等待回答并继续同一个 Turn", async (
         interaction_id: mutation.part.interaction_id,
         response: {
           kind: "question",
-          answers: [{ question_id: "region", value: "cn" }],
+          answers: [{
+            question_id: pending_interaction.request.questions[0].question_id,
+            value: "cn",
+          }],
         },
       });
     });
@@ -184,7 +186,10 @@ test("显式注入的 ask_question 等待回答并继续同一个 Turn", async (
       interaction_id: pending_interaction.interaction_id,
       response: {
         kind: "question",
-        answers: [{ question_id: "region", value: "cn" }],
+        answers: [{
+          question_id: pending_interaction.request.questions[0].question_id,
+          value: "cn",
+        }],
       },
     });
 
@@ -201,7 +206,10 @@ test("显式注入的 ask_question 等待回答并继续同一个 Turn", async (
     assert.equal(tool_part?.state, "completed");
     assert.deepEqual(tool_part?.output, {
       status: "resolved",
-      answers: [{ question_id: "region", value: "cn" }],
+      answers: [{
+        question_id: pending_interaction.request.questions[0].question_id,
+        value: "cn",
+      }],
     });
     assert.equal(interaction_part?.status, "resolved");
     assert.equal(interaction_part?.request.source.type, "tool");

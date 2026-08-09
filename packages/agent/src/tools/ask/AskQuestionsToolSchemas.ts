@@ -22,21 +22,17 @@ const option_schema = z
 
 const text_question_schema = z
   .object({
-    question_id: z.string().trim().min(1)
-      .describe("Stable question identifier unique within this request."),
-    prompt: z.string().trim().min(1)
+    question: z.string().trim().min(1)
       .describe("Complete question shown to the user."),
-    response_type: z.literal("text"),
+    type: z.literal("text"),
   })
   .strict();
 
 const select_question_schema = z
   .object({
-    question_id: z.string().trim().min(1)
-      .describe("Stable question identifier unique within this request."),
-    prompt: z.string().trim().min(1)
+    question: z.string().trim().min(1)
       .describe("Complete question shown to the user."),
-    response_type: z.enum(["single_select", "multi_select"]),
+    type: z.enum(["single_select", "multi_select"]),
     options: z.array(option_schema).min(1)
       .describe(
         "Required selectable options. Every option MUST include both value and label, for example { value: 'cn', label: '中国' }.",
@@ -50,7 +46,7 @@ export const ask_questions_input_schema = z
     title: z.string().trim().min(1)
       .describe("Short title for the question card."),
     questions: z
-      .array(z.discriminatedUnion("response_type", [
+      .array(z.discriminatedUnion("type", [
         text_question_schema,
         select_question_schema,
       ]))

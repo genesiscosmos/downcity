@@ -95,9 +95,8 @@ When missing information would materially change the outcome, the model returns 
   "title": "Choose a deployment region",
   "questions": [
     {
-      "question_id": "region",
-      "prompt": "Which region should receive the deployment?",
-      "response_type": "single_select",
+      "question": "Which region should receive the deployment?",
+      "type": "single_select",
       "options": [
         { "value": "cn", "label": "China" },
         { "value": "us", "label": "United States" }
@@ -107,13 +106,17 @@ When missing information would materially change the outcome, the model returns 
 }
 ```
 
+Every item in `questions` must explicitly provide `type`: `text`, `single_select`, or
+`multi_select`. The Session generates `question_id` values automatically. Select questions must
+provide at least one option with both `value` and `label`; text questions do not need `options`.
+
 The Session atomically commits the Tool and Question Interaction as `waiting-user` / `pending`.
 After the host submits all answers through `session.respond(...)`, the Tool Result is:
 
 ```json
 {
   "status": "resolved",
-  "answers": [{ "question_id": "region", "value": "cn" }]
+  "answers": [{ "question_id": "question:generated-id", "value": "cn" }]
 }
 ```
 
