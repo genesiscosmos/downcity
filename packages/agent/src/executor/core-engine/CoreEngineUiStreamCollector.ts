@@ -38,6 +38,8 @@ export async function collect_final_assistant_message_from_ui_stream(params: {
    * 构造 fallback assistant 消息的工厂函数。
    */
   buildFallbackAssistantMessage: (text: string) => SessionMessageRecordV1;
+  /** 当前 Turn 已收敛的 Assistant 消息；原生审批恢复时用于重建已有 Tool Part。 */
+  original_messages?: SessionMessageRecordV1[];
   /**
    * UI stream chunk 回调。
    */
@@ -58,7 +60,7 @@ export async function collect_final_assistant_message_from_ui_stream(params: {
 
   const uiStream = params.result.toUIMessageStream<SessionMessageRecordV1>({
     // 关键点（中文）：SDK stream 需要 reasoning 旁路事件时可直接消费；最终落盘仍由 responseMessage 收敛。
-    originalMessages: [],
+    originalMessages: params.original_messages,
     generateMessageId: () => `a:${params.session_id}:${generate_id()}`,
     messageMetadata: ({ part }) => {
       if (part.type !== "start" && part.type !== "finish") return undefined;

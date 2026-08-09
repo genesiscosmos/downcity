@@ -2,7 +2,14 @@
 
 import assert from "node:assert/strict"
 import test from "node:test"
-import { buildWorkboardGameMapConfig, cn } from "../dist/index.js"
+import { buildWorkboardGameMapConfig, ChatPanel, ChatComposer, ChatHistory, ChatMessage, cn } from "../dist/index.js"
+
+test("Chat UI 公开导出保持可用", () => {
+  assert.equal(typeof ChatPanel, "function")
+  assert.equal(typeof ChatComposer, "function")
+  assert.equal(typeof ChatHistory, "function")
+  assert.equal(typeof ChatMessage, "function")
+})
 
 function create_agent(overrides = {}) {
   return {

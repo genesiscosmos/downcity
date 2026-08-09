@@ -149,6 +149,27 @@ description: 完整查看 @downcity/ui 的导出模块、组件分组和可用�
 
 ## 容器与展示模块
 
+### `ChatPanel`
+
+- 导出：`ChatPanel`、`ChatHistory`、`ChatMessage`、`ChatComposer`
+- 导出类型：`DowncityChatPanelProps`、`DowncityChatMessage`、`DowncityChatThread`、`DowncityChatStatus`、`DowncityChatSubmitInput`
+- 用途：提供与运行时无关的 Agent 对话界面，包括标题栏、会话历史、消息列表、空状态、流式状态、停止生成和输入框。
+- 特点：组件是受控的，不读取 Agent、Session、Electron 或网络状态；宿主通过 props 传入数据，并通过回调接管发送、停止、新建、切换和归档。
+
+```tsx
+import { ChatPanel } from "@downcity/ui";
+import "@downcity/ui/styles.css";
+
+<ChatPanel
+  thread={{ id: "session-1", title: "项目助手" }}
+  messages={messages}
+  status={is_streaming ? "streaming" : "ready"}
+  on_submit={({ text }) => send_message(text)}
+  on_stop={() => stop_generation()}
+  render_message={({ message }) => render_markdown(message.content)}
+/>
+```
+
 ### `Card`
 
 - 导出：

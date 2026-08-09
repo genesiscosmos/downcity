@@ -1,8 +1,8 @@
 /**
- * unrestricted sandbox 内联审批面板。
+ * Session 内联审批面板。
  *
  * 关键点（中文）
- * - 当模型请求 unrestricted sandbox 时显示在输入框上方，让用户选择 Approve / Deny。
+ * - 普通 Tool 与 unrestricted sandbox 请求共用决策交互，但展示各自的真实字段。
  * - 上下方向键选择，Enter 确认，Esc / Ctrl+C 按安全语义拒绝请求。
  * - 与 SessionPicker 风格一致：primary 色边框、指针、底部 hint。
  */
@@ -17,6 +17,10 @@ import {
 
 import { SELECT_POINTER } from "@/city/agent/tui/constant/symbols.js";
 import { current_theme } from "@/city/agent/tui/theme/index.js";
+import type {
+  ApprovalPanelDetail,
+  ApprovalPanelOptions,
+} from "@/city/agent/tui/types.js";
 
 const BORDER_HORIZONTAL = "─";
 const ELLIPSIS = "…";
@@ -31,10 +35,9 @@ export type ApprovalDecision = "approve" | "deny";
  */
 export class ApprovalPanelComponent implements Component, Focusable {
   private readonly approval_id: string;
+  private readonly approval_type: "tool" | "shell";
   private readonly tool_name: string;
-  private readonly cmd: string;
-  private readonly cwd: string;
-  private readonly reason: string;
+  private readonly details: ApprovalPanelDetail[];
   private readonly on_decide: (decision: ApprovalDecision) => void;
   private selected_index = 0;
 
@@ -43,19 +46,11 @@ export class ApprovalPanelComponent implements Component, Focusable {
   /**
    * @param params 面板参数。
    */
-  constructor(params: {
-    approval_id: string;
-    tool_name: string;
-    cmd: string;
-    cwd: string;
-    reason: string;
-    on_decide: (decision: ApprovalDecision) => void;
-  }) {
+  constructor(params: ApprovalPanelOptions) {
     this.approval_id = params.approval_id;
+    this.approval_type = params.approval_type;
     this.tool_name = params.tool_name;
-    this.cmd = params.cmd;
-    this.cwd = params.cwd;
-    this.reason = params.reason;
+    this.details = params.details;
     this.on_decide = params.on_decide;
   }
 
@@ -102,9 +97,9 @@ export class ApprovalPanelComponent implements Component, Focusable {
     lines.push(this.render_title(inner_width));
     lines.push("");
     lines.push(this.render_detail(inner_width, "tool", this.tool_name));
-    lines.push(this.render_detail(inner_width, "cmd", this.cmd));
-    lines.push(this.render_detail(inner_width, "cwd", this.cwd));
-    lines.push(this.render_detail(inner_width, "reason", this.reason));
+    for (const detail of this.details) {
+      lines.push(this.render_detail(inner_width, detail.label, detail.value));
+    }
     lines.push("");
     lines.push(this.render_option(inner_width, "Approve", 0));
     lines.push(this.render_option(inner_width, "Deny", 1));
@@ -125,7 +120,7 @@ export class ApprovalPanelComponent implements Component, Focusable {
   private render_title(inner_width: number): string {
     const title = current_theme.bold_fg(
       "accent",
-      ` Unrestricted sandbox approval · ${this.approval_id} `,
+      ` ${this.approval_type === "tool" ? "Tool approval" : "Unrestricted sandbox approval"} · ${this.approval_id} `,
     );
     return " " + truncateToWidth(title, inner_width, ELLIPSIS);
   }

@@ -5,6 +5,8 @@
  * Session 先持久化请求并通知客户端；客户端响应完成持久化后，原执行才会恢复。
  */
 
+import type { JsonValue } from "@/types/common/Json.js";
+
 /** Interaction 当前生命周期状态。 */
 export type SessionInteractionStatus =
   | "pending"
@@ -45,7 +47,7 @@ export interface SessionInteractionRequestBase {
 }
 
 /** 高风险操作审批请求。 */
-export interface SessionApprovalInteractionRequest
+export interface SessionShellApprovalInteractionRequest
   extends SessionInteractionRequestBase {
   /** Interaction 类型固定为 approval。 */
   kind: "approval";
@@ -62,6 +64,30 @@ export interface SessionApprovalInteractionRequest
   /** 当前审批对应的操作类别。 */
   operation: "exec" | "start" | "write";
 }
+
+/** 普通 Tool 在执行前等待用户决定的审批请求。 */
+export interface SessionToolApprovalInteractionRequest
+  extends SessionInteractionRequestBase {
+  /** Interaction 类型固定为 approval。 */
+  kind: "approval";
+
+  /** 审批操作类型固定为普通 Tool。 */
+  operation: "tool";
+
+  /** Tool schema 校验通过后的真实调用输入。 */
+  validated_input: JsonValue;
+
+  /** Tool 定义提供的稳定能力说明。 */
+  tool_description?: string;
+
+  /** 模型为当前调用给出的可选解释；该字段不构成安全依据。 */
+  model_explanation?: string;
+}
+
+/** Session 支持的全部审批请求。 */
+export type SessionApprovalInteractionRequest =
+  | SessionShellApprovalInteractionRequest
+  | SessionToolApprovalInteractionRequest;
 
 /** Question 支持的回答形式。 */
 export type SessionInteractionQuestionResponseType =

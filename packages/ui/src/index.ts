@@ -9,6 +9,17 @@
 
 export { cn } from "./lib/utils";
 export type {
+  DowncityChatAttachment,
+  DowncityChatMessage,
+  DowncityChatMessageRenderProps,
+  DowncityChatMessageRole,
+  DowncityChatPanelProps,
+  DowncityChatStatus,
+  DowncityChatSubmitInput,
+  DowncityChatThread,
+} from "./types/chat";
+export { ChatComposer, ChatHistory, ChatMessage, ChatPanel } from "./components/chat";
+export type {
   DowncityAnnotationProps,
   DowncityAnnotationTone,
   DowncityButtonSize,

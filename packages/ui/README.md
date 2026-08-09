@@ -67,6 +67,7 @@ src
     - `select`、`slider`、`switch`、`settings`
     - `tooltip`、`separator`、`skeleton`、`sonner`
   - 业务复合组件：
+    - `chat.tsx`
     - `workboard.tsx`
     - `workboard-stage.tsx`
     - `workboard-game-*`
@@ -95,6 +96,7 @@ src
   - `Tooltip`、`Separator`、`Skeleton`、`Toaster`
 
 - 复合组件
+  - `ChatPanel`、`ChatHistory`、`ChatMessage`、`ChatComposer`
   - `Workboard`
   - `buildWorkboardGameMapConfig`
 

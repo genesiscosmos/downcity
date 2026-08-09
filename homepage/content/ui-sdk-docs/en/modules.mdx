@@ -137,6 +137,27 @@ This page lists the full public module surface of `@downcity/ui`.
 
 ## Containers and Display Modules
 
+### `ChatPanel`
+
+- Exports: `ChatPanel`, `ChatHistory`, `ChatMessage`, `ChatComposer`
+- Exported types: `DowncityChatPanelProps`, `DowncityChatMessage`, `DowncityChatThread`, `DowncityChatStatus`, `DowncityChatSubmitInput`
+- Purpose: runtime-agnostic Agent chat UI with a header, thread history, messages, empty state, streaming state, stop action, and composer.
+- The components are controlled. Hosts provide data and own Agent, Session, network, and persistence behavior through callbacks.
+
+```tsx
+import { ChatPanel } from "@downcity/ui";
+import "@downcity/ui/styles.css";
+
+<ChatPanel
+  thread={{ id: "session-1", title: "Project helper" }}
+  messages={messages}
+  status={is_streaming ? "streaming" : "ready"}
+  on_submit={({ text }) => send_message(text)}
+  on_stop={() => stop_generation()}
+  render_message={({ message }) => render_markdown(message.content)}
+/>
+```
+
 ### `Card`
 
 - Exports:

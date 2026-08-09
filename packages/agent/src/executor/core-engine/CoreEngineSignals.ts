@@ -236,6 +236,15 @@ export function merge_assistant_ui_messages(
   if (!base) return incoming;
   const baseMetadata = base.metadata;
   const incomingMetadata = incoming.metadata;
+  // 原生审批恢复会把上一条 assistant message 作为 originalMessages 传入，
+  // SDK 返回的是同一条消息的完整快照，此时应整体替换而不是重复拼接。
+  const merged_parts =
+    base.id === incoming.id
+      ? incoming.parts
+      : [
+          ...(Array.isArray(base.parts) ? base.parts : []),
+          ...(Array.isArray(incoming.parts) ? incoming.parts : []),
+        ];
   return {
     ...base,
     metadata: {
@@ -246,10 +255,7 @@ export function merge_assistant_ui_messages(
       ...(baseMetadata || {}),
       ...(incomingMetadata || {}),
     },
-    parts: [
-      ...(Array.isArray(base.parts) ? base.parts : []),
-      ...(Array.isArray(incoming.parts) ? incoming.parts : []),
-    ],
+    parts: merged_parts,
   };
 }
 

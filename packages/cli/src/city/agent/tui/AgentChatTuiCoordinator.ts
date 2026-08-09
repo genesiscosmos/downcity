@@ -306,12 +306,28 @@ export class AgentChatTuiCoordinator {
     const panel = request.kind === "approval"
       ? new ApprovalPanelComponent({
           approval_id: request.interaction_id,
+          approval_type: request.operation === "tool" ? "tool" : "shell",
           tool_name: request.source.type === "tool"
             ? request.source.tool_name
             : "session",
-          cmd: request.command,
-          cwd: request.cwd,
-          reason: request.reason,
+          details: request.operation === "tool"
+            ? [
+                {
+                  label: "input",
+                  value: JSON.stringify(request.validated_input),
+                },
+                ...(request.tool_description
+                  ? [{ label: "description", value: request.tool_description }]
+                  : []),
+                ...(request.model_explanation
+                  ? [{ label: "model", value: request.model_explanation }]
+                  : []),
+              ]
+            : [
+                { label: "cmd", value: request.command },
+                { label: "cwd", value: request.cwd },
+                { label: "reason", value: request.reason },
+              ],
           on_decide: (decision) => {
             this.hide_interaction_panel();
             void this.respond_interaction_panel(pending, {

@@ -465,7 +465,14 @@ export class SessionAssistantMessageWriter {
           `Assistant canonical Tool Part not found: ${input.tool_call_id}`,
         );
       }
-      if (current.state !== "input-streaming" && current.state !== "ready") {
+      // 原生 needsApproval 恢复时，AI SDK 不会重新发送 Tool 输入；沿用已审批并
+      // 已转为 running 的 Part，仅补齐执行前的 canonical 输入屏障。
+      if (
+        current.state !== "input-streaming" &&
+        current.state !== "ready" &&
+        current.state !== "waiting-user" &&
+        current.state !== "running"
+      ) {
         throw new Error(
           `Tool input cannot be prepared from ${current.state}: ${input.tool_call_id}`,
         );

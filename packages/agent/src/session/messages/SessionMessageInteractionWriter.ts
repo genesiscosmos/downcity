@@ -86,16 +86,22 @@ export class SessionMessageInteractionWriter {
             `Tool Assistant Message changed: ${request.source.tool_call_id}`,
           );
         }
-        if (tool.part.state !== "ready") {
+        const native_tool_approval =
+          request.kind === "approval" &&
+          request.operation === "tool" &&
+          tool.part.state === "waiting-user";
+        if (tool.part.state !== "ready" && !native_tool_approval) {
           throw new Error(
             `Tool Interaction requires ready input: ${request.source.tool_call_id} (${tool.part.state})`,
           );
         }
-        parts = parts.map((part) =>
-          part.part_id === tool.part.part_id
-            ? { ...tool.part, state: "waiting-user" as const }
-            : part,
-        );
+        if (!native_tool_approval) {
+          parts = parts.map((part) =>
+            part.part_id === tool.part.part_id
+              ? { ...tool.part, state: "waiting-user" as const }
+              : part,
+          );
+        }
       }
 
       const interaction: SessionAssistantInteractionPart = {

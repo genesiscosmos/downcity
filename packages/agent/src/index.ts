@@ -134,6 +134,8 @@ export type {
   SessionQuestionInteractionRequest,
   SessionQuestionInteractionResponse,
   SessionResolvedInteractionResult,
+  SessionShellApprovalInteractionRequest,
+  SessionToolApprovalInteractionRequest,
 } from "./types/session/SessionInteraction.js";
 export type {
   AgentOptions,

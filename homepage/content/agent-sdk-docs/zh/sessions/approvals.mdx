@@ -107,18 +107,64 @@ const agent = new Agent({
 }
 ```
 
+`questions` 中每个问题都必须显式提供 `type`，可选值为 `text`、`single_select` 和
+`multi_select`。`question_id` 由 Session 自动生成；选择题必须提供至少一个同时包含
+`value` 和 `label` 的 `options`，文本题不需要 `options`。
+
 Session 会把该 Tool 与 Question Interaction 原子提交为 `waiting-user` / `pending`。调用方
 使用上面的 `session.respond(...)` 提交完整回答后，Tool Result 返回：
 
 ```json
 {
   "status": "resolved",
-  "answers": [{ "question_id": "region", "value": "cn" }]
+  "answers": [{ "question_id": "question:generated-id", "value": "cn" }]
 }
 ```
 
 模型随后在同一个 Turn 的下一 Step 继续执行。普通 assistant 文本中的问句不会进入该
 生命周期：它会正常结束当前 Turn，用户的下一条消息会创建新 Turn。
+
+## 普通 Tool 审批
+
+需要在执行前获得用户许可的 Tool，直接使用 AI SDK 原生 `needsApproval` 声明：
+
+```ts
+import { tool } from "ai";
+import { z } from "zod";
+
+const delete_file = tool({
+  description: "删除工作区内的指定文件。",
+  inputSchema: z.object({
+    path: z.string(),
+  }),
+  needsApproval: true,
+  execute: async ({ path }) => {
+    await remove_workspace_file(path);
+    return { deleted: path };
+  },
+});
+
+const agent = new Agent({
+  id: "repo-helper",
+  workspace,
+  model,
+  tools: { delete_file },
+});
+```
+
+审批策略属于 Tool，不属于 Agent。模型产生 Tool Call 后，AI SDK 先完成 schema 校验；
+Session 再创建 `operation: "tool"` 的 Approval Interaction，并等待 `session.respond(...)`。
+批准后执行原 Tool Call，拒绝时 `execute` 不会运行。
+
+普通 Tool 审批请求向 UI 提供真实调用信息：
+
+- `source.tool_name` 与 `source.tool_call_id`：实际 Tool 及调用标识。
+- `validated_input`：schema 校验通过后的结构化输入。
+- `tool_description`：Tool 定义中的稳定能力说明，可选。
+- `model_explanation`：模型在当前调用中生成的解释，可选，不能作为安全判断依据。
+
+调用方不需要配置审批 `title` 或 `reason`。UI 应根据 Tool、已校验输入和可选模型解释
+组织展示内容，不能用客户端生成的摘要替代真实输入。
 
 ## Shell 审批模式
 

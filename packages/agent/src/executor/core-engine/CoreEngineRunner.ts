@@ -11,8 +11,11 @@ import {
   streamText,
   type FileUIPart,
   type LanguageModel,
+  type ModelMessage,
   type StepResult,
   type Tool,
+  type ToolApprovalRequestOutput,
+  type ToolApprovalResponse,
   type UIMessage,
 } from "ai";
 import { log_assistant_message_now } from "@executor/messages/SessionMessageLog.js";
@@ -48,6 +51,7 @@ import {
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { JsonObject } from "@/types/common/Json.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
+import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
 import type {
   SessionStepExecutionInput,
   SessionTurnExecutionResult,
@@ -183,7 +187,8 @@ export class CoreEngineRunner {
       : [];
     let tools = input.execute_input.tools;
     let last_observed_stream_error: unknown = undefined;
-    let final_assistant_ui_message: SessionMessageRecordV1 | null = null;
+      let final_assistant_ui_message: SessionMessageRecordV1 | null = null;
+      let ui_stream_continuation_message: SessionMessageRecordV1 | null = null;
     let compact_required = false;
 
     try {
@@ -202,7 +207,9 @@ export class CoreEngineRunner {
       let step_count = 0;
       let total_tool_call_count = 0;
       let total_tool_result_count = 0;
-      const on_step_finish = async (step_result: unknown): Promise<void> => {
+      const on_step_finish = async (
+        step_result: StepResult<Record<string, Tool>>,
+      ): Promise<void> => {
         step_count += 1;
         const summary = summarize_step_for_debug(step_result);
         total_tool_call_count +=
@@ -279,6 +286,7 @@ export class CoreEngineRunner {
         last_observed_stream_error = undefined;
         let step_assistant_ui_message: SessionMessageRecordV1;
         let executed_steps: StepResult<Record<string, Tool>>[];
+        const observed_steps: StepResult<Record<string, Tool>>[] = [];
         let canonical_step_started = false;
         let canonical_step_finished = false;
         try {
@@ -289,7 +297,10 @@ export class CoreEngineRunner {
           const result = streamText({
             model: step_inputs.model,
             system,
-            onStepFinish: on_step_finish,
+            onStepFinish: async (step_result) => {
+              observed_steps.push(step_result);
+              await on_step_finish(step_result);
+            },
             messages: message_state.modelMessages,
             tools,
             abortSignal: input.turn_context.lifecycle.abort_signal,
@@ -306,6 +317,9 @@ export class CoreEngineRunner {
             await collect_final_assistant_message_from_ui_stream({
               result,
               session_id: session_id,
+              original_messages: ui_stream_continuation_message
+                ? [ui_stream_continuation_message]
+                : undefined,
               logger: this.logger,
               buildFallbackAssistantMessage: (text) =>
                 build_fallback_assistant_message(session_id, text),
@@ -340,10 +354,10 @@ export class CoreEngineRunner {
             step_assistant_ui_message,
           );
 
-          // 关键点（中文）：先保存本 step 已收敛的 assistant 消息，再等待 steps。
-          // stop/abort 时 `result.steps` 可能抛错，但当前已经生成的文本仍应沉淀。
+          // 关键点（中文）：先保存本 step 已收敛的 assistant 消息。
           message_state.appendRuntimeSessionMessage(step_assistant_ui_message);
-          executed_steps = await result.steps;
+          executed_steps = observed_steps;
+          ui_stream_continuation_message = null;
         } catch (error) {
           if (
             canonical_step_started &&
@@ -494,7 +508,19 @@ export class CoreEngineRunner {
         const response_messages = Array.isArray(last_step.response?.messages)
           ? last_step.response.messages
           : [];
+        const approval_responses = await resolve_tool_approval_responses({
+          step: last_step,
+          tools,
+          turn_context: input.turn_context,
+        });
         message_state.appendModelMessages(response_messages);
+        if (approval_responses.length > 0) {
+          message_state.appendModelMessages([
+            { role: "tool", content: approval_responses } as ModelMessage,
+          ]);
+          // 原生审批的下一次 streamText 会先恢复上一条 Tool Part，再继续模型输出。
+          ui_stream_continuation_message = final_assistant_ui_message;
+        }
 
         if (loop_decision.continueForToolCalls) {
           text_only_continuation_count = 0;
@@ -621,6 +647,57 @@ export class CoreEngineRunner {
       };
     }
   }
+}
+
+/** 把 AI SDK Tool Approval 接入 Session 的 canonical Interaction 生命周期。 */
+async function resolve_tool_approval_responses(input: {
+  step: StepResult<Record<string, Tool>>;
+  tools: Record<string, Tool>;
+  turn_context: SessionTurnContext;
+}): Promise<ToolApprovalResponse[]> {
+  const requests = input.step.content.filter(
+    (part): part is ToolApprovalRequestOutput<Record<string, Tool>> =>
+      part.type === "tool-approval-request",
+  );
+  if (requests.length === 0) return [];
+  const interactions = input.turn_context.interactions;
+  if (!interactions) {
+    throw new Error("Tool approval requires a Session Interaction port");
+  }
+
+  return await Promise.all(
+    requests.map(async (request) => {
+      const tool_name = request.toolCall.toolName;
+      const tool_definition = input.tools[tool_name];
+      const model_explanation = String(input.step.text || "").trim();
+      const handle = await interactions.request({
+        interaction_id: `interaction:tool-approval:${request.approvalId}`,
+        turn_id: input.turn_context.session.turn_id,
+        kind: "approval",
+        operation: "tool",
+        source: {
+          type: "tool",
+          tool_call_id: request.toolCall.toolCallId,
+          tool_name,
+        },
+        validated_input: to_session_json_value(request.toolCall.input),
+        ...(tool_definition?.description
+          ? { tool_description: tool_definition.description }
+          : {}),
+        ...(model_explanation ? { model_explanation } : {}),
+        created_at: Date.now(),
+      });
+      const result = await handle.result;
+      const approved = result.status === "resolved" &&
+        result.response.kind === "approval" &&
+        result.response.decision === "approved";
+      return {
+        type: "tool-approval-response",
+        approvalId: request.approvalId,
+        approved,
+      };
+    }),
+  );
 }
 
 /** 构造仅在当前 Turn 内使用的内部 User Message。 */

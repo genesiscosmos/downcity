@@ -8,6 +8,28 @@
 
 import type { AgentSessionSecurityStatus } from "@downcity/agent";
 
+/** 审批面板展示的一条真实请求明细。 */
+export interface ApprovalPanelDetail {
+  /** 明细字段的短标签。 */
+  label: string;
+  /** 明细字段的可读值。 */
+  value: string;
+}
+
+/** 审批面板的内部展示输入。 */
+export interface ApprovalPanelOptions {
+  /** 当前 Approval Interaction 的稳定标识。 */
+  approval_id: string;
+  /** 审批来源类别，用于区分普通 Tool 与 Shell 安全审批。 */
+  approval_type: "tool" | "shell";
+  /** 当前请求的真实 Tool 注册名称。 */
+  tool_name: string;
+  /** 从审批请求直接投影出的展示明细。 */
+  details: ApprovalPanelDetail[];
+  /** 用户完成批准或拒绝选择后的回调。 */
+  on_decide: (decision: "approve" | "deny") => void;
+}
+
 /**
  * 当前 TUI 本地排队的用户输入。
  *

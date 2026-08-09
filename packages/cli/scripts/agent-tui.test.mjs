@@ -705,16 +705,38 @@ test("审批 part 展示请求详情且 Esc 按安全语义拒绝", () => {
   let decision;
   const dialog = new ApprovalPanelComponent({
     approval_id: approval_request.interaction_id,
+    approval_type: "shell",
     tool_name: approval_request.source.tool_name,
-    cmd: approval_request.command,
-    cwd: approval_request.cwd,
-    reason: approval_request.reason,
+    details: [
+      { label: "cmd", value: approval_request.command },
+      { label: "cwd", value: approval_request.cwd },
+      { label: "reason", value: approval_request.reason },
+    ],
     on_decide: (next_decision) => {
       decision = next_decision;
     },
   });
   dialog.handleInput("\u001B");
   assert.equal(decision, "deny");
+});
+
+test("普通 Tool 审批展示真实输入而不依赖 title 和 reason", () => {
+  const dialog = new ApprovalPanelComponent({
+    approval_id: "approval-tool-1",
+    approval_type: "tool",
+    tool_name: "delete_file",
+    details: [
+      { label: "input", value: JSON.stringify({ path: "draft.md" }) },
+      { label: "description", value: "Delete a workspace file." },
+    ],
+    on_decide: () => {},
+  });
+
+  const output = plain(dialog.render(80)).join("\n");
+  assert.match(output, /Tool approval/);
+  assert.match(output, /delete_file/);
+  assert.match(output, /draft\.md/);
+  assert.doesNotMatch(output, /reason:/);
 });
 
 test("Question Interaction 逐项收集文本、单选和多选答案", () => {

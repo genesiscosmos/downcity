@@ -104,8 +104,8 @@ const mobile_city_tiles = [
  * 首页 Agent 六边形社区封面。
  *
  * 相邻地块自然形成 City，building、forest、空地与 ghost 居民共同建立社区语义。
- * Federation 只以弱连接组织多个地块群；悬停命中整个 City 后，所属地块和居民
- * 同步提亮，不产生循环动画或几何位移。
+ * 画面不显示 Federation、连接曲线或文字标签；悬停命中整个 City 后，所属地块和
+ * 居民同步提亮，不产生循环动画或几何位移。
  */
 export function HomeHeroCover() {
   const { i18n } = useTranslation("home");
@@ -121,14 +121,6 @@ export function HomeHeroCover() {
     >
       <div className="mx-auto max-w-[1320px] px-3 py-2 sm:px-8 sm:py-4">
         <svg viewBox="0 0 1200 390" className="hidden h-auto w-full sm:block">
-          <g aria-label={t("hero.ecosystem.federationLabel")} role="img">
-            <circle cx="580" cy="36" r="10" className="fill-background stroke-foreground" />
-            <circle cx="600" cy="29" r="10" className="fill-background stroke-foreground" />
-            <circle cx="620" cy="36" r="10" className="fill-background stroke-foreground" />
-            <text x="600" y="70" textAnchor="middle" className="fill-foreground text-[14px] font-semibold">Federation</text>
-            <text x="600" y="89" textAnchor="middle" className="fill-text-subtle text-[8px]">{t("hero.ecosystem.federationCaption")}</text>
-          </g>
-
           {city_tiles.map((city_node) => {
             const is_focused = focused_city === city_node.key;
             const is_dimmed = focused_city !== null && !is_focused;
@@ -153,26 +145,6 @@ export function HomeHeroCover() {
                   fill="transparent"
                   pointerEvents="all"
                 />
-                <motion.path
-                  d={city_node.connector}
-                  fill="none"
-                  stroke={is_focused ? city_node.accent : "currentColor"}
-                  className="text-line-strong"
-                  initial={false}
-                  animate={{ opacity: is_dimmed ? 0.1 : is_focused ? 0.8 : 0.28 }}
-                  transition={{ duration: reduce_motion ? 0 : 0.25 }}
-                />
-                <motion.text
-                  x={city_node.label.x}
-                  y={city_node.label.y}
-                  className="fill-text-soft text-[9px] font-medium"
-                  initial={false}
-                  animate={{ opacity: is_dimmed ? 0.28 : is_focused ? 1 : 0.66 }}
-                  transition={{ duration: reduce_motion ? 0 : 0.25 }}
-                >
-                  {t(`hero.ecosystem.cities.${city_node.key}.name`)}
-                </motion.text>
-
                 {city_node.cells.map((cell, cell_index) => {
                   const cell_center = home_world_hex_center(city_node.origin.x, city_node.origin.y, 32, cell.q, cell.row);
 
@@ -221,21 +193,9 @@ export function HomeHeroCover() {
             );
           })}
 
-          <text x="600" y="386" textAnchor="middle" className="fill-text-subtle text-[8px]">
-            {t("hero.ecosystem.caption")}
-          </text>
         </svg>
 
         <svg viewBox="0 0 360 300" className="h-auto w-full sm:hidden" aria-hidden="true">
-          <circle cx="170" cy="18" r="7" className="fill-background stroke-foreground" />
-          <circle cx="180" cy="14" r="7" className="fill-background stroke-foreground" />
-          <circle cx="190" cy="18" r="7" className="fill-background stroke-foreground" />
-          <text x="180" y="43" textAnchor="middle" className="fill-foreground text-[9px] font-semibold">Federation</text>
-
-          <path d="M173 52 C142 72 106 67 78 93" className="fill-none stroke-line-strong opacity-35" />
-          <path d="M187 52 C218 72 254 67 282 93" className="fill-none stroke-line-strong opacity-35" />
-          <path d="M180 54 C180 120 186 166 188 207" className="fill-none stroke-line-strong opacity-25" />
-
           {mobile_city_tiles.map((city_node) => (
             <g key={city_node.key}>
               {city_node.cells.map((cell) => {
@@ -263,18 +223,8 @@ export function HomeHeroCover() {
                   </g>
                 );
               })}
-              <text
-                x={city_node.label.x}
-                y={city_node.label.y}
-                textAnchor={city_node.key === "research" ? "end" : "start"}
-                className="fill-text-soft text-[6px]"
-              >
-                {t(`hero.ecosystem.cities.${city_node.key}.name`)}
-              </text>
             </g>
           ))}
-
-          <text x="180" y="294" textAnchor="middle" className="fill-text-subtle text-[6px]">{t("hero.ecosystem.caption")}</text>
         </svg>
       </div>
 
