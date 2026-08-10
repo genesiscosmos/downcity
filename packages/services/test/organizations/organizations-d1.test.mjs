@@ -5,6 +5,7 @@ import test from "node:test"
 import { Federation, InstallableService } from "@downcity/city"
 import { sqliteTable, text } from "drizzle-orm/sqlite-core"
 import { OrganizationsService } from "../../bin/index.js"
+import { create_test_admin_session } from "../admin-fixture.mjs"
 import { create_d1_db } from "./d1-db.mjs"
 
 const rollback_first = sqliteTable("service_d1_rollback_first", {
@@ -43,7 +44,7 @@ test("D1 transaction rolls back every buffered write when one statement fails", 
     const federation = new Federation({ database: runtime.database })
     federation.use(new D1RollbackService())
     await federation.health()
-    const secret = await read_env_value(federation, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const secret = await create_test_admin_session(federation)
     const response = await federation.fetch(admin_request(secret, "/v1/d1-rollback/run", {}))
     assert.equal(response.status, 500)
     assert.deepEqual(await (await federation.table("d1-rollback.first")).select(), [])
@@ -59,7 +60,7 @@ test("Organizations initializes on D1 and concurrent create cannot exceed owner 
     const federation = new Federation({ database: runtime.database })
     federation.use(new OrganizationsService({ max_organizations_per_user: 1 }))
     await federation.health()
-    const secret = await read_env_value(federation, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const secret = await create_test_admin_session(federation)
     const bureau = await json_request(federation, admin_request(secret, "/v1/bureaus/create", {
       name: "D1 Bureau",
       server_url: "https://d1.example.com",
@@ -143,8 +144,4 @@ async function issue_user_token(federation, secret, bureau_id, user_id) {
   void secret
   const result = await (await federation.getAuthenticator()).createToken({ bureau_id, user_id })
   return result.user_token
-}
-
-async function read_env_value(federation, key) {
-  return (await (await federation.table("env")).select({ key }))[0]?.value ?? ""
 }

@@ -8,6 +8,7 @@ import test from "node:test"
 import { Federation } from "@downcity/city"
 import { createSqliteDb } from "../usage/sqlite-db.mjs"
 import { OrganizationsService } from "../../bin/index.js"
+import { create_test_admin_session } from "../admin-fixture.mjs"
 
 test("organizations service manages membership, governance and federation owner quota", async () => {
   const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-organizations-"))
@@ -15,7 +16,7 @@ test("organizations service manages membership, governance and federation owner 
     const federation = new Federation({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
     federation.use(new OrganizationsService({ max_organizations_per_user: 1 }))
     await federation.health()
-    const admin_secret = await read_env_value(federation, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const admin_secret = await create_test_admin_session(federation)
     const bureau = await json_request(federation, admin_request(admin_secret, "/v1/bureaus/create", {
       name: "Vibecape",
       server_url: "https://vibecape.example.com",
@@ -147,7 +148,7 @@ test("concurrent organization creation cannot exceed the owner quota", async () 
     const federation = new Federation({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
     federation.use(new OrganizationsService({ max_organizations_per_user: 1 }))
     await federation.health()
-    const admin_secret = await read_env_value(federation, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const admin_secret = await create_test_admin_session(federation)
     const bureau = await json_request(federation, admin_request(admin_secret, "/v1/bureaus/create", {
       name: "Concurrent Bureau",
       server_url: "https://concurrent.example.com",
@@ -182,7 +183,7 @@ test("federation organizations cross bureau boundaries while bureau organization
     const federation = new Federation({ database: createSqliteDb(path.join(temp_dir, "test.sqlite")) })
     federation.use(new OrganizationsService({ max_organizations_per_user: 2 }))
     await federation.health()
-    const admin_secret = await read_env_value(federation, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const admin_secret = await create_test_admin_session(federation)
     const first_bureau = await json_request(federation, admin_request(admin_secret, "/v1/bureaus/create", {
       name: "First Bureau",
       server_url: "https://first.example.com",
@@ -262,9 +263,4 @@ async function issue_user_token(federation, secret, bureau_id, user_id) {
   void secret
   const body = await (await federation.getAuthenticator()).createToken({ bureau_id, user_id })
   return body.user_token
-}
-
-async function read_env_value(federation, key) {
-  const table = await federation.table("env")
-  return (await table.select({ key }))[0]?.value ?? ""
 }

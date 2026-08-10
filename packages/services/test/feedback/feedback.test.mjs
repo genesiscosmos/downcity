@@ -6,6 +6,7 @@ import test from "node:test"
 import { Federation } from "@downcity/city"
 import { createSqliteDb } from "../usage/sqlite-db.mjs"
 import { FeedbackService } from "../../bin/index.js"
+import { create_test_admin_session } from "../admin-fixture.mjs"
 
 test("feedbackService manages user feedback and admin replies", async () => {
   const cwd = process.cwd()
@@ -18,7 +19,7 @@ test("feedbackService manages user feedback and admin replies", async () => {
     base.use(new FeedbackService())
 
     await base.health()
-    const adminSecret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const adminSecret = await create_test_admin_session(base)
 
     const servicesResponse = await base.fetch(adminRequest(adminSecret, {
       path: "/v1/services",
@@ -228,10 +229,4 @@ async function issue_user_token(base, bureau_id, user_id) {
     user_id,
   })
   return token_body.user_token
-}
-
-async function readEnvValue(base, key) {
-  const envTable = await base.table("env")
-  const rows = await envTable.select({ key })
-  return rows[0]?.value ?? ""
 }

@@ -10,6 +10,7 @@ import test from "node:test"
 import { Federation } from "@downcity/city"
 import { CreditsService, PaymentService } from "../../bin/index.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
+import { create_test_admin_session } from "../admin-fixture.mjs"
 
 test("PaymentService owns orders and tops up Credits after paid webhook", async () => {
   const cwd = process.cwd()
@@ -48,7 +49,7 @@ test("PaymentService owns orders and tops up Credits after paid webhook", async 
     federation.use(payment)
     await federation.health()
 
-    const admin_secret = await read_env_value(federation, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const admin_secret = await create_test_admin_session(federation)
     const city = await (await federation.fetch(admin_request(admin_secret, "/v1/bureaus/create", {
       name: "Test",
       server_url: "https://bureau.example.com",
@@ -272,10 +273,4 @@ function user_request(token, pathname, body) {
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify(body),
   })
-}
-
-async function read_env_value(federation, key) {
-  const env_table = await federation.table("env")
-  const rows = await env_table.select({ key })
-  return rows[0]?.value ?? ""
 }

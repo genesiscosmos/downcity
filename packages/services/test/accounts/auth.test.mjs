@@ -6,6 +6,7 @@ import path from "node:path"
 import test from "node:test"
 import { Bureau, City, Federation, FederationAdmin } from "@downcity/city"
 import { createSqliteDb } from "./sqlite-db.mjs"
+import { create_test_admin_session } from "../admin-fixture.mjs"
 import {
   AccountsService,
   emailAccountsProvider,
@@ -297,7 +298,7 @@ test("accountsService does not expose email login without an email provider", as
     base.use(new AccountsService({ token_ttl: "7d" }))
     await base.health()
 
-    const admin_secret = await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const admin_secret = await create_test_admin_session(base)
     const bureau = await (await base.fetch(adminRequest(admin_secret, {
       path: "/v1/bureaus/create",
       body: { name: "Demo", server_url: "https://bureau.example.com" },
@@ -518,14 +519,8 @@ async function setupBase(tempDir, env = {}, accountsOptions = {}) {
 
   return {
     base,
-    adminSecret: await readEnvValue(base, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY"),
+    adminSecret: await create_test_admin_session(base),
   }
-}
-
-async function readEnvValue(base, key) {
-  const envTable = await base.table("env")
-  const rows = await envTable.select({ key })
-  return rows[0]?.value ?? ""
 }
 
 function jsonRequest(pathname, body) {

@@ -16,6 +16,7 @@ import { createSqliteDb } from "./sqlite-db.mjs"
 import { CreditsService, UsageService } from "../../bin/index.js"
 import { build_admin_usage_users } from "../../bin/usage/admin-aggregation.js"
 import { merge_daily_usage } from "../../bin/usage/aggregation.js"
+import { create_test_admin_session } from "../admin-fixture.mjs"
 
 test("Admin user ranking uses Total Tokens as the primary consumption metric", () => {
   const create_user = (user_id, execution_count, total_tokens) => ({
@@ -99,7 +100,7 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
     }))
 
     await federation.health()
-    const admin_secret = await read_env_value(federation, "DOWNCITY_FEDERATION_ADMIN_SECRET_KEY")
+    const admin_secret = await create_test_admin_session(federation)
     const bureau = await (await federation.fetch(admin_request(admin_secret, {
       path: "/v1/bureaus/create",
       body: { name: "Demo", server_url: "https://bureau.example.com" },
@@ -374,12 +375,6 @@ function admin_request(admin_secret, { path: pathname, method = "POST", body }) 
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
-}
-
-async function read_env_value(federation, key) {
-  const env_table = await federation.table("env")
-  const rows = await env_table.select({ key })
-  return rows[0]?.value ?? ""
 }
 
 async function invoke_ai(federation, user_token, model) {
