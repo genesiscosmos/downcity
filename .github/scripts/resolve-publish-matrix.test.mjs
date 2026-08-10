@@ -34,6 +34,7 @@ test("当前 workspace 被解析为三个稳定发布层", () => {
       "@downcity/plugins",
       "@downcity/server",
       "@downcity/services",
+      "@downcity/workspace-cloudflare-computer",
     ],
   ]);
 
