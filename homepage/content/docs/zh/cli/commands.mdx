@@ -24,6 +24,15 @@ city agent chat [agent_id]
 `city agent chat` 中，模型需要关键补充信息时会显示文本、单选或多选面板；CLI 将完整答案
 提交给当前 Session，并继续同一个 Turn。按 Esc 可停止当前 Turn。
 
+在输入框中可以使用 slash command 添加本地附件：
+
+```text
+/attach ./diagram.png
+/attach "./design notes.pdf" ./data.csv
+```
+
+附件会加入下一条消息；也可以使用 `/file` 别名。Unix 终端的 `Ctrl-V`（Windows 为 `Alt-V`）会优先尝试粘贴剪贴板中的图片或文件，无法识别时仍按普通文本粘贴处理。
+
 ## 单 Agent Token
 
 Token 只属于一个 Agent，并可访问该 Agent 的全部非公开 HTTP API。没有 User、Role 或 Permission 层。

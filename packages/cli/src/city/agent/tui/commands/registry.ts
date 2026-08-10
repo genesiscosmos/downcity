@@ -45,6 +45,12 @@ export const BUILTIN_SLASH_COMMANDS: readonly SlashCommand[] = [
     availability: "always",
   },
   {
+    name: "attach",
+    aliases: ["file"],
+    description: "Attach a local file to the next message (/attach <path>)",
+    availability: "always",
+  },
+  {
     name: "approve",
     aliases: ["a"],
     description: "Approve an unrestricted sandbox request (/approve <approval_id>)",

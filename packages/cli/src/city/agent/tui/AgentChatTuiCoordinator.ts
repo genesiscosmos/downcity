@@ -50,6 +50,8 @@ import {
   type SlashCommandHost,
 } from "@/city/agent/tui/commands/index.js";
 import { resolve_transcript_scroll_delta } from "@/city/agent/tui/controllers/TranscriptNavigation.js";
+import { build_attachment_tags } from "@/city/agent/tui/attachments/AttachmentInput.js";
+import { read_clipboard_attachment_paths } from "@/city/agent/tui/attachments/ClipboardAttachment.js";
 
 /**
  * 协调器构造选项。
@@ -154,6 +156,9 @@ export class AgentChatTuiCoordinator {
       show_help: () => {
         this.show_command_help();
       },
+      attach_files: (paths: string) => {
+        return this.attach_files(paths);
+      },
       clear_transcript: () => {
         this.message_list.clear();
       },
@@ -214,6 +219,12 @@ export class AgentChatTuiCoordinator {
 
     this.editor.on_submit = (text) => {
       void this.handle_user_input(text);
+    };
+    this.editor.on_paste_image = async () => {
+      const paths = await read_clipboard_attachment_paths();
+      if (paths.length === 0) return false;
+      await this.attach_files(paths.map((value) => JSON.stringify(value)).join(" "));
+      return true;
     };
     this.editor.on_ctrl_c = () => {
       void this.stop();
@@ -549,6 +560,20 @@ export class AgentChatTuiCoordinator {
     }
 
     await this.run_message_sequence(text);
+  }
+
+  /** 将 slash command 指定的文件标签加入编辑器，不立即发送。 */
+  private async attach_files(paths: string): Promise<void> {
+    const result = await build_attachment_tags(paths);
+    for (const error of result.errors) this.add_error_message(error);
+    if (result.tags.length === 0) {
+      this.request_render();
+      return;
+    }
+    const current_text = this.editor.getText().trim();
+    this.editor.set_text([...result.tags, current_text].filter(Boolean).join("\n\n"));
+    this.add_status_message(`Attached ${result.tags.length} file${result.tags.length === 1 ? "" : "s"}.`);
+    this.request_render();
   }
 
   /**

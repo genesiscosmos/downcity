@@ -29,6 +29,9 @@ export interface SlashCommandHost {
   /** 展示帮助信息。 */
   show_help(): void;
 
+  /** 将本地文件加入当前待发送消息。 */
+  attach_files(paths: string): Promise<void>;
+
   /** 清空消息流。 */
   clear_transcript(): void;
 

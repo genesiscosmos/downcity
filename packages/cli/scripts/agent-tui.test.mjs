@@ -24,6 +24,7 @@ import { QuestionPanelComponent } from "../bin/city/agent/tui/dialogs/QuestionDi
 import { SecurityPolicyPanelComponent } from "../bin/city/agent/tui/dialogs/SecurityPolicyDialog.js";
 import { SessionPickerComponent } from "../bin/city/agent/tui/dialogs/SessionPicker.js";
 import { resolveSlashCommandInput } from "../bin/city/agent/tui/commands/resolve.js";
+import { parse_attachment_paths } from "../bin/city/agent/tui/attachments/AttachmentInput.js";
 
 // oxlint-disable-next-line no-control-regex -- 测试需要移除 ANSI SGR 颜色序列。
 const ANSI_SGR = /\u001B\[[0-9;]*m/g;
@@ -71,6 +72,15 @@ test("transcript 导航使用键盘且不消费终端鼠标事件", () => {
   assert.equal(resolve_transcript_scroll_delta("\u001B[<64;20;8M", 12), null);
   assert.equal(resolve_transcript_scroll_delta("\u001B[<65;20;8M", 12), null);
   assert.equal(resolve_transcript_scroll_delta("a", 12), null);
+});
+
+test("attach slash command 支持文件别名和带空格路径", () => {
+  assert.deepEqual(parse_attachment_paths('./a.png "./design notes.pdf"'), [
+    "./a.png",
+    "./design notes.pdf",
+  ]);
+  assert.equal(resolveSlashCommandInput({ input: "/attach ./a.png", is_streaming: false }).kind, "builtin");
+  assert.equal(resolveSlashCommandInput({ input: "/file ./a.png", is_streaming: false }).kind, "builtin");
 });
 
 test("执行中输入队列按 FIFO 消费，并允许用 ↑ 召回最新消息", () => {

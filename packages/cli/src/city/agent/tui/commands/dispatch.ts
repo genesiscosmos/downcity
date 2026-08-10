@@ -65,6 +65,10 @@ async function handle_built_in_slash_command(
     case "security":
       host.show_security_policy_picker();
       return;
+    case "attach":
+    case "file":
+      await host.attach_files(_args.trim());
+      return;
     case "approve":
       await host.approve(_args.trim());
       return;
