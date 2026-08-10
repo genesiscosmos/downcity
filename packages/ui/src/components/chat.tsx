@@ -202,7 +202,7 @@ export function ChatHistory({ threads, current_thread_id, loading, has_more, on_
 }
 
 /** 组合顶部栏、对话滚动区、消息和输入区的通用 Chat Panel。 */
-function ChatPanel({ className, runtime, thread, threads = [], messages: provided_messages = [], status: provided_status = "ready", history_open = false, history_loading, has_more_threads, title, empty_title = "开始一段新对话", empty_description = "输入消息，与 Agent 开始交流。", input_placeholder, model_options: provided_model_options, model_id: provided_model_id, on_model_change, approval_mode: provided_approval_mode, on_approval_mode_change, on_submit, on_stop, on_attach, on_create_thread, on_select_thread, on_archive_thread, on_load_more_threads, render_message, render_header_actions, render_footer, ...props }: DowncityChatPanelProps) {
+export function ChatPanel({ className, runtime, thread, threads = [], messages: provided_messages = [], status: provided_status = "ready", history_open = false, history_loading, has_more_threads, title, empty_title = "开始一段新对话", empty_description = "输入消息，与 Agent 开始交流。", input_placeholder, model_options: provided_model_options, model_id: provided_model_id, on_model_change, approval_mode: provided_approval_mode, on_approval_mode_change, on_submit, on_stop, on_attach, on_create_thread, on_select_thread, on_archive_thread, on_load_more_threads, render_message, render_header_actions, render_footer, ...props }: DowncityChatPanelProps) {
   const runtime_snapshot = runtime ? useSyncExternalStore(runtime.subscribe.bind(runtime), () => runtime.get_snapshot(), () => runtime.get_snapshot()) : null;
   const messages = runtime_snapshot?.messages ?? provided_messages;
   const status = runtime_snapshot?.status ?? provided_status;
