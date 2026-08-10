@@ -29,7 +29,7 @@ async function create_harness() {
   return { root_path, store, messages };
 }
 
-test("Data URL 先保存为 Session 附件，Message 只保存相对路径", async () => {
+test("Data URL 落盘后使用相对路径和真实文件名保存 Message", async () => {
   const harness = await create_harness();
   const result = await harness.messages.append_prompt_message({
     turn_id: "turn-1",
@@ -49,6 +49,8 @@ test("Data URL 先保存为 Session 附件，Message 只保存相对路径", asy
   assert.equal(part.type, "file");
   assert.match(part.url, /^\.downcity\/agents\/attachment-test-agent\/sessions\/attachment-test-session\/attachments\/att_/);
   assert.equal(part.url.endsWith(".png"), true);
+  assert.equal(part.filename, path.basename(part.url));
+  assert.notEqual(part.filename, "diagram.png");
   assert.equal(
     (await fs.readFile(path.join(harness.root_path, part.url))).toString(),
     "hello",
