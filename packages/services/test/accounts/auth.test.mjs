@@ -83,7 +83,9 @@ test("accountsService registers users, logs in, and issues Federation tokens", a
       },
     }))
     assert.equal(meResponse.status, 200)
-    assert.equal((await meResponse.json()).user.user_id, registered.user_id)
+    const me = await meResponse.json()
+    assert.equal(me.user.user_id, registered.user_id)
+    assert.equal(me.user.bureau_id, city.bureau_id)
   } finally {
     process.chdir(cwd)
     await fs.rm(tempDir, { recursive: true, force: true })

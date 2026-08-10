@@ -34,6 +34,7 @@ Each action declares which identities it allows. The default is `["user"]`; `[]`
 | `/v1/accounts/login/start` | `POST` | Create a login attempt; returns input, redirect, or done | — |
 | `/v1/accounts/login/continue` | `POST` | Submit an input login step | — |
 | `/v1/accounts/login/result` | `GET` | Read the login result and `user_token` | — |
+| `/v1/accounts/me` | `GET` | Read the current user and its verified Bureau | — |
 | `/v1/accounts/oauth/callback` | `GET` | Third-party OAuth callback entry | — |
 | `/v1/services` | `GET` | Registered service list | — |
 | `/v1/{service}/{action}` | `POST` | Generic action call | — |

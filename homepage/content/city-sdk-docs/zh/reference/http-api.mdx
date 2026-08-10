@@ -32,6 +32,7 @@ Admin GET                GET  /v1/{service}/{action}
 | `/v1/accounts/login/start` | `POST` | 创建登录流程；返回 input、redirect 或 done |
 | `/v1/accounts/login/continue` | `POST` | 提交 input 登录步骤 |
 | `/v1/accounts/login/result` | `GET` | 读取登录结果和 `user_token` |
+| `/v1/accounts/me` | `GET` | 读取当前用户及其已验证的 Bureau |
 | `/v1/accounts/oauth/callback` | `GET` | 第三方 OAuth 回调入口 |
 | `/v1/{service}/{action}` | `POST` | 通用 Action 调用 |
 | `/v1/services` | `GET` | Service 列表 |

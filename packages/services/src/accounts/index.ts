@@ -411,7 +411,10 @@ export class AccountsService extends InstallableService {
       handler: async (c) => {
         const user_id = String(c.user?.user_id ?? "");
         return c.jsonResponse({
-          user: c.user,
+          user: {
+            ...c.user,
+            bureau_id: c.bureau?.bureau_id,
+          },
           profile: user_id ? await this.readProfile(user_id) : null,
         });
       },
