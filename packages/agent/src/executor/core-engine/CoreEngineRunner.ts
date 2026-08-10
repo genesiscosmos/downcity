@@ -354,9 +354,10 @@ export class CoreEngineRunner {
             step_assistant_ui_message,
           );
 
-          // 关键点（中文）：先保存本 step 已收敛的 assistant 消息。
+          // 关键点（中文）：先保存本 step 已收敛的 assistant 消息，再等待 Provider 终态。
+          // stop / error 时已经生成的部分内容仍会保留，但 `result.steps` 必须作为错误传播边界。
           message_state.appendRuntimeSessionMessage(step_assistant_ui_message);
-          executed_steps = observed_steps;
+          executed_steps = await result.steps;
           ui_stream_continuation_message = null;
         } catch (error) {
           if (

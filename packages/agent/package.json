@@ -1,6 +1,6 @@
 {
   "name": "@downcity/agent",
-  "version": "1.1.327",
+  "version": "1.1.328",
   "type": "module",
   "description": "Downcity Agent 运行时 — 单 Agent 执行壳与本机 RPC 能力",
   "main": "./bin/index.js",
