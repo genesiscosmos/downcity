@@ -121,7 +121,7 @@ async function hydrateFileUrlPart(
  * 关键点（中文）
  * - 只有 Data URL 会在此处落盘；远程 URL 和本地路径保持引用不变。
  * - 附件成功落盘后才把 URL 替换为相对 Workspace 根目录的路径。
- * - canonical filename 始终使用落盘路径的 basename，避免展示名与真实文件名不一致。
+ * - canonical filename 保留调用侧传入的用户可见文件名；真实落盘路径只写入 url。
  */
 export async function persist_user_prompt_file_parts(
   parts: SessionUserMessagePart[],
@@ -148,11 +148,7 @@ export async function persist_user_prompt_file_parts(
       media_type: String(file_part.mediaType || "").trim(),
       ...(file_part.filename ? { filename: file_part.filename } : {}),
     });
-    out.push({
-      ...file_part,
-      url: stored_path,
-      filename: path.basename(stored_path),
-    } as SessionUserMessagePart);
+    out.push({ ...file_part, url: stored_path } as SessionUserMessagePart);
   }
 
   return out;

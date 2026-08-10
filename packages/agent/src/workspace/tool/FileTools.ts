@@ -29,7 +29,7 @@ import {
 export function create_file_tools(runner: FileToolRunner): FileToolSet {
   const read = tool({
     description:
-      "Read a project file instead of using cat or sed. Images and PDFs are attached to the next model step as local file parts. Text output is limited to 500 lines and 256KB by default; use offset and limit to continue. Other binary files return metadata only.",
+      "Read a project file instead of using cat or sed. For a chat attachment, use the file part's url (the .downcity/... storage path) as path; filename is only the user's display name and is not a project path. Images and PDFs are attached to the next model step as local file parts. Text output is limited to 500 lines and 256KB by default; use offset and limit to continue. Other binary files return metadata only.",
     inputSchema: read_file_tool_input_schema,
     execute: async (
       input: ReadFileToolInput,
