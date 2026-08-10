@@ -11,14 +11,26 @@ export { cn } from "./lib/utils";
 export type {
   DowncityChatAttachment,
   DowncityChatMessage,
+  DowncityChatMessagePart,
+  DowncityChatMessagePartType,
   DowncityChatMessageRenderProps,
+  DowncityChatQuestion,
+  DowncityChatQuestionOption,
+  DowncityChatOperation,
+  DowncityChatChangedFile,
+  DowncityChatChangedFileSummary,
+  DowncityChatModelOption,
+  DowncityChatApprovalMode,
   DowncityChatMessageRole,
   DowncityChatPanelProps,
   DowncityChatStatus,
   DowncityChatSubmitInput,
   DowncityChatThread,
 } from "./types/chat";
-export { ChatComposer, ChatHistory, ChatMessage, ChatPanel } from "./components/chat";
+export { ChatComposer, ChatHistory, ChatInputEditor, ChatMessage, ChatMessageList } from "./components/chat";
+export { session_jsonl_to_chat_messages, session_message_to_chat_message, session_part_to_chat_part } from "./lib/session-message";
+export { DowncityChatRuntime, create_chat_runtime } from "./lib/chat-runtime";
+export type { DowncityChatRuntimeListener, DowncityChatRuntimeOptions, DowncityChatRuntimeSnapshot } from "./types/chat-runtime";
 export type {
   DowncityAnnotationProps,
   DowncityAnnotationTone,

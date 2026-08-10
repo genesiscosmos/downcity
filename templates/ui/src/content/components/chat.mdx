@@ -1,0 +1,29 @@
+# Chat
+
+组合会话标题、历史记录、消息列表、运行状态与输入操作的受控 Agent Chat UI。
+
+## Preview
+
+<ComponentDemo component_id="chat" />
+
+## Usage
+
+```tsx
+import {
+  ChatPanel,
+  session_message_to_chat_message,
+} from "@downcity/ui";
+
+export function AgentChat({ session_messages }) {
+  return (
+    <ChatPanel
+      thread={{ id: "session-1", title: "项目助手" }}
+      messages={session_messages.map(session_message_to_chat_message)}
+      on_submit={({ text }, mode) => send_message(text, mode)}
+      on_stop={() => stop_generation()}
+    />
+  );
+}
+```
+
+`ChatPanel` 负责与 Duobox 一致的消息、工具活动、Interaction、Changed Files、历史和输入区展示。Agent、Session、请求、持久化、文件读取及 Interaction 响应仍由宿主拥有。

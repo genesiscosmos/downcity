@@ -75,7 +75,7 @@ src
 
 - `src/lib/`
   - 组件内部共享工具。
-  - 目前主要是样式类名辅助函数。
+  - `session-message.ts`：将 Session SDK canonical message 投影为 Chat 展示消息。
 
 - `src/types/`
   - UI 组件和 workboard 的类型定义。
@@ -102,6 +102,7 @@ src
 
 - 类型与工具
   - `cn`
+  - `session_message_to_chat_message`、`session_part_to_chat_part`
   - 按钮、卡片、toast 等基础类型
   - workboard 相关展示与地图类型
 

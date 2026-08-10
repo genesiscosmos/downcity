@@ -151,7 +151,7 @@ description: 完整查看 @downcity/ui 的导出模块、组件分组和可用�
 
 ### `ChatPanel`
 
-- 导出：`ChatPanel`、`ChatHistory`、`ChatMessage`、`ChatComposer`
+- 导出：`ChatPanel`、`ChatHistory`、`ChatMessage`、`ChatComposer`、`session_message_to_chat_message`
 - 导出类型：`DowncityChatPanelProps`、`DowncityChatMessage`、`DowncityChatThread`、`DowncityChatStatus`、`DowncityChatSubmitInput`
 - 用途：提供与运行时无关的 Agent 对话界面，包括标题栏、会话历史、消息列表、空状态、流式状态、停止生成和输入框。
 - 特点：组件是受控的，不读取 Agent、Session、Electron 或网络状态；宿主通过 props 传入数据，并通过回调接管发送、停止、新建、切换和归档。
@@ -169,6 +169,8 @@ import "@downcity/ui/styles.css";
   render_message={({ message }) => render_markdown(message.content)}
 />
 ```
+
+`session_message_to_chat_message` 可直接把 Session SDK canonical message 转成 Chat 展示消息。Chat UI 内置 Duobox 风格的消息、工具活动、Interaction、Changed Files、历史列表和输入区；Session 生命周期与响应操作由宿主负责。
 
 ### `Card`
 

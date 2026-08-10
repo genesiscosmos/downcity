@@ -12,6 +12,7 @@ import AvatarDocument from "../content/components/avatar.mdx";
 import ButtonDocument from "../content/components/button.mdx";
 import ButtonGroupDocument from "../content/components/button-group.mdx";
 import CardDocument from "../content/components/card.mdx";
+import ChatDocument from "../content/components/chat.mdx";
 import CheckboxDocument from "../content/components/checkbox.mdx";
 import CodeBlockDocument from "../content/components/code-block.mdx";
 import CommandDocument from "../content/components/command.mdx";
@@ -65,6 +66,7 @@ export const mdx_document_registry: Record<ShowcaseComponentId, MdxDocumentCompo
   button: ButtonDocument,
   "button-group": ButtonGroupDocument,
   card: CardDocument,
+  chat: ChatDocument,
   checkbox: CheckboxDocument,
   "code-block": CodeBlockDocument,
   command: CommandDocument,

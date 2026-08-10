@@ -5,7 +5,7 @@
  * 不依赖 Agent、City 或其他业务运行时。
  */
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Anchor,
   Badge,
@@ -21,6 +21,8 @@ import {
   CardHeader,
   CardTitle,
   Checkbox,
+  ChatInputEditor,
+  ChatMessageList,
   CodeBlock,
   Command,
   CommandEmpty,
@@ -140,10 +142,13 @@ import {
   ThemeContainer,
   UnorderedList,
   Workboard,
+  type DowncityChatMessage,
+  type DowncityChatStatus,
   type DowncityWorkboardBoardSnapshot,
 } from "@downcity/ui";
 
 import type { ComponentDemoProps, ShowcaseComponentId } from "../types/components.js";
+import { create_chat_session_fixture_messages } from "../data/chat-session-fixture.js";
 import { FoundationPreview } from "./foundation-preview.js";
 import { AdvancedPreview } from "./advanced-preview.js";
 
@@ -244,6 +249,49 @@ function ImagePreviewDemo() {
   const [is_open, set_is_open] = useState(false);
   const image_src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='720' height='480' viewBox='0 0 720 480'%3E%3Crect width='720' height='480' fill='%23262626'/%3E%3Cpath d='M0 350 180 170l130 130 110-105 300 245v40H0Z' fill='%23606060'/%3E%3Ccircle cx='555' cy='120' r='45' fill='%23dedede'/%3E%3C/svg%3E";
   return <div className="flex flex-col items-center gap-3"><img className="h-24 w-36 rounded-lg object-cover" src={image_src} alt="Mountain landscape" /><Button onClick={() => set_is_open(true)}>Open image</Button><ImagePreview open={is_open} onOpenChange={set_is_open} src={image_src} alt="Mountain landscape" /></div>;
+}
+
+/** ChatPanel 的纯本地受控示例。 */
+function ChatPreviewDemo() {
+  const [messages, set_messages] = useState<DowncityChatMessage[]>(create_chat_session_fixture_messages);
+  const [status, set_status] = useState<DowncityChatStatus>("ready");
+  const reply_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (reply_timer_ref.current) clearTimeout(reply_timer_ref.current);
+  }, []);
+
+  const stop_generation = () => {
+    if (reply_timer_ref.current) clearTimeout(reply_timer_ref.current);
+    reply_timer_ref.current = null;
+    set_status("ready");
+  };
+
+  return (
+    <div className="h-[620px] overflow-hidden rounded-xl border border-border-subtle">
+      <div className="dc-chat-panel">
+        <header className="dc-chat-header"><button type="button" title="历史会话">◷</button><div className="dc-chat-header-title"><span>Agent SDK 对比</span></div><div className="dc-chat-header-drag" /><button type="button" title="新建会话">+</button></header>
+        <div className="dc-chat-conversation" role="log"><ChatMessageList messages={messages} /></div>
+        <ChatInputEditor
+          status={status}
+          model_options={[{ id: "default", label: "Default model" }]}
+          model_id="default"
+          approval_mode="ask"
+          on_submit={({ text }) => {
+            const message_id = `message-${Date.now()}`;
+            set_messages((current_messages) => [...current_messages, { id: message_id, role: "user", parts: [{ id: `${message_id}-text`, type: "text", text, state: "done" }] }]);
+            set_status("streaming");
+            reply_timer_ref.current = setTimeout(() => {
+              set_messages((current_messages) => [...current_messages, { id: `${message_id}-reply`, role: "assistant", parts: [{ id: `${message_id}-reasoning`, type: "reasoning", text: "正在根据 Session JSONL parts 组织回复。", state: "done" }, { id: `${message_id}-reply-text`, type: "text", text: `这是本地模拟回复：${text}`, state: "done" }] }]);
+              set_status("ready");
+              reply_timer_ref.current = null;
+            }, 700);
+          }}
+          on_stop={stop_generation}
+        />
+      </div>
+    </div>
+  );
 }
 
 /** 以完整文章展示 Typography，并允许独立检查明暗主题。 */
@@ -630,6 +678,8 @@ function render_component_example(
       return <PreviewCanvas compact><MenuSurface className="mx-auto w-56"><MenuGroup><MenuLabel>Project</MenuLabel><button type="button" className="w-full rounded-lg px-2 py-1.5 text-left text-xs hover:bg-interaction-hover">Open preview</button><button type="button" className="w-full rounded-lg px-2 py-1.5 text-left text-xs hover:bg-interaction-hover">Duplicate</button></MenuGroup><MenuSeparator /><MenuEmpty>More actions appear here.</MenuEmpty></MenuSurface></PreviewCanvas>;
     case "image-preview":
       return <PreviewCanvas compact><ImagePreviewDemo /></PreviewCanvas>;
+    case "chat":
+      return <ChatPreviewDemo />;
     case "workboard":
       return (
         <div className="overflow-hidden rounded-2xl border border-border-subtle"><Workboard board={demo_board} selectedAgentId={selected_agent_id} onSelectAgent={set_selected_agent_id} onRefresh={() => undefined} /></div>
@@ -642,7 +692,7 @@ export function ComponentDemo({ component_id }: ComponentDemoProps) {
   const [editor_width, set_editor_width] = useState(72);
   const [selected_agent_id, set_selected_agent_id] = useState("ui-builder");
 
-  if (component_id === "typography") {
+  if (component_id === "typography" || component_id === "chat") {
     return (
       <div className="not-prose">
         {render_component_example(

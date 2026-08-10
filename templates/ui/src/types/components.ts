@@ -34,6 +34,7 @@ export type ShowcaseComponentId =
   | "tooltip"
   | "command"
   | "toaster"
+  | "chat"
   | "workboard"
   | "image-preview"
   | "menu"

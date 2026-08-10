@@ -82,6 +82,7 @@ export const component_groups: readonly ShowcaseComponentGroup[] = [
   {
     label: "Composed",
     items: [
+      { id: "chat", label: "Chat", description: "组合会话历史、消息列表和受控输入区。" },
       { id: "workboard", label: "Workboard", description: "通过公开快照展示 Agent 工作世界。" },
     ],
   },

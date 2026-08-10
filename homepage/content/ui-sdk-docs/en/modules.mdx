@@ -139,7 +139,7 @@ This page lists the full public module surface of `@downcity/ui`.
 
 ### `ChatPanel`
 
-- Exports: `ChatPanel`, `ChatHistory`, `ChatMessage`, `ChatComposer`
+- Exports: `ChatPanel`, `ChatHistory`, `ChatMessage`, `ChatComposer`, `session_message_to_chat_message`
 - Exported types: `DowncityChatPanelProps`, `DowncityChatMessage`, `DowncityChatThread`, `DowncityChatStatus`, `DowncityChatSubmitInput`
 - Purpose: runtime-agnostic Agent chat UI with a header, thread history, messages, empty state, streaming state, stop action, and composer.
 - The components are controlled. Hosts provide data and own Agent, Session, network, and persistence behavior through callbacks.
@@ -157,6 +157,8 @@ import "@downcity/ui/styles.css";
   render_message={({ message }) => render_markdown(message.content)}
 />
 ```
+
+`session_message_to_chat_message` converts Session SDK canonical messages into the Chat presentation model. The UI includes Duobox-style messages, tool activities, interactions, changed files, history, and composer surfaces, while the host owns the Session lifecycle and response actions.
 
 ### `Card`
 
