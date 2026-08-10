@@ -1,0 +1,35 @@
+{
+  "name": "@downcity/workspace-cloudflare-computer",
+  "version": "0.1.5",
+  "type": "module",
+  "description": "Cloudflare Computer Workspace adapter for Downcity Agent",
+  "main": "./bin/index.js",
+  "types": "./bin/index.d.ts",
+  "files": [
+    "bin"
+  ],
+  "exports": {
+    ".": {
+      "types": "./bin/index.d.ts",
+      "import": "./bin/index.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/clean-package.mjs && tsc && tsc-alias -f",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm build && node --test scripts/*.test.mjs"
+  },
+  "dependencies": {
+    "@cloudflare/computer": "0.1.0-alpha.1",
+    "@downcity/agent": "workspace:*",
+    "@downcity/shell": "workspace:*",
+    "ai": "^6.0.196",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "tsc-alias": "^1.8.16",
+    "typescript": "^6.0.3"
+  },
+  "license": "MIT"
+}

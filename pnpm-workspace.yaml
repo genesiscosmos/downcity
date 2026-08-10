@@ -1,6 +1,7 @@
 packages:
   - homepage
   - packages/agent
+  - packages/workspace-cloudflare-computer
   - packages/city
   - packages/services
   - packages/plugins

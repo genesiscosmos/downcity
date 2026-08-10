@@ -8,7 +8,7 @@
 
 import type { Tool } from "ai";
 import type { AgentModel } from "@/agent/AgentModel.js";
-import type { Workspace } from "@/workspace/Workspace.js";
+import type { WorkspaceBase } from "@/workspace/WorkspaceBase.js";
 import type { Plugin } from "@/types/plugin/PluginDefinition.js";
 import type {
   AgentManagedSession,
@@ -47,7 +47,7 @@ export interface AgentOptions {
    * - 每个 Workspace 实例只能绑定一个 Agent，并由 Agent dispose 统一释放。
    * - 多个 Agent 可以指向同一物理目录，但必须分别创建 Workspace 实例。
    */
-  workspace: Workspace;
+  workspace: WorkspaceBase;
 
   /**
    * 当前 agent 默认可用的工具集合。

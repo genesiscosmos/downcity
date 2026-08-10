@@ -26,6 +26,7 @@ if [[ "$BUILD_SCOPE" == "all" ]]; then
   run_project_build "$ROOT_DIR/packages/sandbox-windows-mxc"
   run_project_build "$ROOT_DIR/packages/sandbox-windows-srt"
   run_project_build "$ROOT_DIR/packages/agent"
+  run_project_build "$ROOT_DIR/packages/workspace-cloudflare-computer"
   run_project_build "$ROOT_DIR/packages/server"
   run_project_build "$ROOT_DIR/packages/city"
   run_project_build "$ROOT_DIR/packages/services"

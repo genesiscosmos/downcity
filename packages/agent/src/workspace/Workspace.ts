@@ -13,7 +13,6 @@ import type { FileSystem } from "@/types/workspace/FileSystem.js";
 import { LocalFileSystem } from "@/workspace/LocalFileSystem.js";
 import type { WorkspaceOptions } from "@/types/workspace/Workspace.js";
 import type { AgentStore } from "@/types/store/AgentStore.js";
-import { LocalAgentStore } from "@/workspace/store/LocalAgentStore.js";
 import type { WorkspaceTools } from "@/types/workspace/WorkspaceTools.js";
 import type {
   WorkspaceEnvPatch,
@@ -22,6 +21,7 @@ import type {
 } from "@/types/workspace/WorkspaceEnv.js";
 import { resolve_workspace_env } from "@/workspace/WorkspaceEnv.js";
 import { create_workspace_tools } from "@/workspace/tool/WorkspaceTools.js";
+import { WorkspaceBase } from "@/workspace/WorkspaceBase.js";
 
 /** 将调用方路径解析为稳定、真实的本地目录。 */
 function resolve_workspace_path(input: string): string {
@@ -37,7 +37,7 @@ function resolve_workspace_path(input: string): string {
 }
 
 /** 本地 Workspace。 */
-export class Workspace {
+export class Workspace extends WorkspaceBase {
   /** 已解析且不可变的项目根目录。 */
   readonly path: string;
 
@@ -66,6 +66,7 @@ export class Workspace {
   private readonly env_subscribers = new Set<WorkspaceEnvSubscriber>();
 
   constructor(options: WorkspaceOptions) {
+    super();
     this.path = resolve_workspace_path(options.path);
     this.files = new LocalFileSystem(this.path);
     this.env = resolve_workspace_env(this.path, options.env);
@@ -121,10 +122,7 @@ export class Workspace {
       );
     }
     this.bound_agent_id = resolved_agent_id;
-    this.bound_store = new LocalAgentStore({
-      files: this.files,
-      agent_id: resolved_agent_id,
-    });
+    this.bound_store = this.create_agent_store(resolved_agent_id);
     return this.bound_store;
   }
 

@@ -1,6 +1,6 @@
 {
   "name": "@downcity/database-sqlite",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Downcity Federation Database adapter for local SQLite via better-sqlite3.",
   "type": "module",
   "main": "./bin/index.js",

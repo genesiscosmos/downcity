@@ -609,9 +609,24 @@ ActionSchedule 是 Agent 内部的延迟 Plugin Action 调度能力，不是独�
 - Agent 重启时把遗留 running 恢复为 pending。
 - 它不提供 lease owner、分布式选主或跨机器一致性。
 
-## 13. Shell、安全与跨平台
+## 13. Workspace 基类与 Cloudflare Computer
 
-### 13.1 Node.js 负责常规跨平台能力
+`WorkspaceBase` 定义 Agent 所需的 Workspace 资源契约；`Workspace` 仍是本地文件系统实现。
+`@downcity/workspace-cloudflare-computer` 通过继承 `WorkspaceBase` 接入 Cloudflare Computer 的
+Durable Object 虚拟文件系统，并复用 AgentStore 的领域接口。
+
+Cloudflare Computer 的文件、目录与发布 Tool 由适配器内部调用官方 `createAITools()` 创建，Shell 则由适配器包装为 `exec` Tool。
+适配器不把 Worker RPC、Container 或 Dynamic Worker 的实现细节引入 `@downcity/agent`。
+
+```text
+WorkspaceBase
+├── Workspace                         本地 Node.js Workspace
+└── CloudflareComputerWorkspace       Durable Object 虚拟 Workspace
+```
+
+## 14. Shell、安全与跨平台
+
+### 14.1 Node.js 负责常规跨平台能力
 
 以下能力直接使用 Node.js：
 
@@ -624,7 +639,7 @@ ActionSchedule 是 Agent 内部的延迟 Plugin Action 调度能力，不是独�
 
 因此 macOS、Linux 和 Windows 使用同一个 `Workspace`、`Agent`、`Session`、Store 与 Executor。
 
-### 13.2 平台差异只进入进程安全边界
+### 14.2 平台差异只进入进程安全边界
 
 真正需要平台 Adapter 的部分包括：
 
@@ -655,7 +670,7 @@ Agent SDK 不根据 `process.platform` 自动导入平台包。平台选择属�
 - Agent 核心包体积随平台实现增长。
 - 平台故障污染 Agent/Session 领域代码。
 
-### 13.3 Safe Sandbox
+### 14.3 Safe Sandbox
 
 Safe 模式的核心策略：
 
@@ -667,7 +682,7 @@ Safe 模式的核心策略：
 
 unrestricted 模式是 Shell 专属的显式能力升级，需要审批网关。它不是 File/Search、Plugin 或自定义 Tool 的通用参数，也不会隐式改变 Workspace FileSystem。Plugin 使用自己的业务授权，自定义 Tool 的权限由注册它的宿主负责。
 
-### 13.4 附件是显式输入，不等同于模型文件工具
+### 14.4 附件是显式输入，不等同于模型文件工具
 
 Session Prompt 可以携带 AI SDK file part，也允许宿主显式提供绝对附件路径。附件映射层会读取该明确输入并转成模型内容。
 
@@ -677,9 +692,9 @@ Session Prompt 可以携带 AI SDK file part，也允许宿主显式提供绝对
 - 模型文件工具仍然只能主动遍历和修改 Workspace。
 - Assistant 文件由生成它的 Tool 或 Plugin 决定本地保存位置，Session 只持久化其 File Part。
 
-## 14. 本地与远程 SDK
+## 15. 本地与远程 SDK
 
-### 14.1 本地 Agent
+### 15.1 本地 Agent
 
 本地 `Agent` 持有真实 Workspace、Store、Plugin、Session 和模型执行器。
 
@@ -689,7 +704,7 @@ const turn = await session.prompt({ query: "hello" });
 const result = await turn.finished;
 ```
 
-### 14.2 RemoteAgent
+### 15.2 RemoteAgent
 
 `RemoteAgent` 是客户端 facade：
 
@@ -706,7 +721,7 @@ const agent = new RemoteAgent({
 - 远程客户端不复制本地 Session 编排、Store 或 Tool Loop。
 - Server 和 transport 生命周期由 `@downcity/server` 或上层宿主管理。
 
-## 15. 生命周期与资源释放
+## 16. 生命周期与资源释放
 
 ```mermaid
 flowchart LR
@@ -730,9 +745,9 @@ await agent.dispose();
 
 Agent 与 Workspace 一对一，因此 Agent dispose 同时关闭 Workspace。HTTP/RPC Server 不属于 Agent，必须由其拥有者独立关闭。
 
-## 16. 推荐用法
+## 17. 推荐用法
 
-### 16.1 只有文件与模型
+### 17.1 只有文件与模型
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
@@ -758,7 +773,7 @@ try {
 }
 ```
 
-### 16.2 带平台 Shell
+### 17.2 带平台 Shell
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
@@ -781,7 +796,7 @@ const agent = new Agent({
 
 Windows 或 Linux 只替换 Sandbox Adapter，Agent SDK 代码保持一致。
 
-### 16.3 带 Plugin 与自定义 Tool
+### 17.3 带 Plugin 与自定义 Tool
 
 ```ts
 const agent = new Agent({
@@ -797,9 +812,9 @@ const agent = new Agent({
 
 Plugin 是 Agent 能力，自定义 Tool 与 Workspace Tools 合并后供所有 Session 共享。
 
-## 17. 核心设计原则
+## 18. 核心设计原则
 
-### 17.1 一个对象只表达一种意图
+### 18.1 一个对象只表达一种意图
 
 - Workspace：项目资源。
 - Agent：单 Agent 运行时。
@@ -810,23 +825,23 @@ Plugin 是 Agent 能力，自定义 Tool 与 Workspace Tools 合并后供所有 
 - Shell：命令与进程。
 - Sandbox Adapter：平台原生隔离。
 
-### 17.2 能力组合，不做万能抽象
+### 18.2 能力组合，不做万能抽象
 
 不引入 Host、SystemHandler 或全局 Service Container。上层组合明确对象，下层通过最小接口工作。
 
-### 17.3 平台差异推迟到最底层
+### 18.3 平台差异推迟到最底层
 
 常规逻辑使用 Node.js；只有进程隔离和终端语义进入平台 Adapter。Agent、Session、Message 和 Store 不出现平台分支。
 
-### 17.4 状态变化必须有检查点
+### 18.4 状态变化必须有检查点
 
 Env、Plugin、Model 和 compact 等变化通过 Session Queue 在 Step 边界提交，避免运行中的上下文发生隐式漂移。
 
-### 17.5 持久化服务于恢复和观察
+### 18.5 持久化服务于恢复和观察
 
 历史不是 Executor 内存的副产品。Message、Metadata、System Snapshot、草稿和 Segment 都是可恢复、可检查的明确状态。
 
-## 18. 当前明确不做的事情
+## 19. 当前明确不做的事情
 
 - 不提供第二套 Host 抽象。
 - 不把 FileSystem 放进 Shell。
@@ -838,7 +853,7 @@ Env、Plugin、Model 和 compact 等变化通过 Session Queue 在 Step 边界�
 - 不让 RemoteAgent 复制本地 Runtime 实现。
 - 不为假设中的远程 Workspace 提前设计复杂协议。
 
-## 19. 最终心智模型
+## 20. 最终心智模型
 
 可以用下面这句话理解整个 SDK：
 

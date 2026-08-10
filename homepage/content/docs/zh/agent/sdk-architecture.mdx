@@ -156,6 +156,23 @@ SDK 不修改 `process.env`，也不把运行时修改写回 `.env`。`set_env()
 
 ## Shell 与平台 Sandbox
 
+### Cloudflare Computer Workspace
+
+`@downcity/workspace-cloudflare-computer` 将 Cloudflare Durable Object 中的
+`@cloudflare/computer` Workspace 接入同一套 Agent Workspace 基类。它负责把远程虚拟文件系统提供给
+AgentStore 和 Workspace 生命周期；适配器内部调用 Cloudflare 官方 `createAITools()` 提供文件、目录和发布工具，并包装 Computer Shell 为 `exec`
+Tool。Agent 仍然运行模型、Session、Plugin 和 Tool Loop。
+
+```ts
+const computer_workspace = await getWorkspace(agent_stub);
+const workspace = new CloudflareComputerWorkspace({
+  computer: computer_workspace,
+});
+```
+
+在 Cloudflare 部署中，通常一个 Durable Object 实例对应一个 Agent 和一个 Workspace。Worker 负责入口
+与连接，Worker Shell 或 Cloudflare Container 负责实际命令执行。
+
 Agent 核心包不捆绑全部操作系统的原生 Sandbox。调用方只安装当前系统需要的平台包，并在应用组合根注入：
 
 ```ts

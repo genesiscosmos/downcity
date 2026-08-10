@@ -13,7 +13,7 @@ import { create_plugin_context } from "@/plugin/core/PluginContext.js";
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { AgentOptions } from "@/types/agent/AgentOptions.js";
 import type { Shell } from "@downcity/shell";
-import type { Workspace } from "@/workspace/Workspace.js";
+import type { WorkspaceBase } from "@/workspace/WorkspaceBase.js";
 import { Logger } from "@/utils/logger/Logger.js";
 import { normalize_instruction_input } from "@/agent/AgentInstructions.js";
 import { AgentSessions } from "@/agent/AgentSessions.js";
@@ -58,7 +58,7 @@ export class Agent {
   readonly id: string;
 
   /** 当前 Agent 引用的项目资源与安全边界。 */
-  readonly workspace: Workspace;
+  readonly workspace: WorkspaceBase;
 
   /** 当前 Agent 向所有 Session 提供的工具集合。 */
   readonly tools: Record<string, Tool>;

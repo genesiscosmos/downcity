@@ -10,6 +10,7 @@
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
 export { Workspace } from "./workspace/Workspace.js";
+export { WorkspaceBase } from "./workspace/WorkspaceBase.js";
 export type { AgentStore } from "./types/store/AgentStore.js";
 export type {
   CompactActiveMessagesInput,
@@ -24,6 +25,14 @@ export type {
   FileSystem,
   WorkspaceDirectoryEntry,
 } from "./types/workspace/FileSystem.js";
+export type {
+  FileToolActionRequest,
+  FileToolActionResult,
+} from "./types/workspace/FileTool.js";
+export type {
+  SearchToolActionRequest,
+  SearchToolActionResult,
+} from "./types/workspace/SearchTool.js";
 export type { WorkspaceOptions } from "./types/workspace/Workspace.js";
 export type {
   WorkspaceEnvPatch,

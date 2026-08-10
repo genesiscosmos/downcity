@@ -156,6 +156,25 @@ The SDK does not mutate `process.env` or write runtime changes back to `.env`. `
 
 ## Shell and platform Sandboxes
 
+### Cloudflare Computer Workspace
+
+`@downcity/workspace-cloudflare-computer` connects a Cloudflare Durable Object
+`@cloudflare/computer` Workspace to the same Agent Workspace base contract. It
+provides the remote virtual filesystem to AgentStore and owns the Workspace
+lifecycle; the adapter calls Cloudflare's `createAITools()` for file, directory, and publish tools, and wraps the
+Computer Shell as `exec`. The Agent still owns the model, Sessions, Plugins, and Tool Loop.
+
+```ts
+const computer_workspace = await getWorkspace(agent_stub);
+const workspace = new CloudflareComputerWorkspace({
+  computer: computer_workspace,
+});
+```
+
+In a Cloudflare deployment, one Durable Object instance normally owns one Agent
+and one Workspace. The Worker handles ingress and connections; Worker Shell or
+a Cloudflare Container performs command execution.
+
 The Agent core package does not bundle native Sandboxes for every operating system. The host installs only the package for the current platform and injects it at the application composition root:
 
 ```ts
