@@ -47,7 +47,7 @@ export const BUILTIN_SLASH_COMMANDS: readonly SlashCommand[] = [
   {
     name: "attach",
     aliases: ["file"],
-    description: "Attach a local file to the next message (/attach <path>)",
+    description: "Open the system file picker and attach files to the next message",
     availability: "always",
   },
   {

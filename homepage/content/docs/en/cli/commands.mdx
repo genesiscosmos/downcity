@@ -25,11 +25,10 @@ In `city agent chat`, the model can present text, single-select, or multi-select
 questions when key information is missing. The CLI submits the complete answer set
 to the current Session and continues the same Turn. Press Esc to stop that Turn.
 
-Use slash commands to attach local files to the next message:
+Use the slash command to open the system file picker and attach local files to the next message:
 
 ```text
-/attach ./diagram.png
-/attach "./design notes.pdf" ./data.csv
+/attach
 ```
 
 `/file` is an alias. On Unix, `Ctrl-V` (or `Alt-V` on Windows) also tries to paste clipboard images or files first, and falls back to normal text paste when no supported attachment is available.

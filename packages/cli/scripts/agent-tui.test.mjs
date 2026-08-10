@@ -74,13 +74,13 @@ test("transcript 导航使用键盘且不消费终端鼠标事件", () => {
   assert.equal(resolve_transcript_scroll_delta("a", 12), null);
 });
 
-test("attach slash command 支持文件别名和带空格路径", () => {
+test("attach slash command 打开选择器且支持文件别名", () => {
   assert.deepEqual(parse_attachment_paths('./a.png "./design notes.pdf"'), [
     "./a.png",
     "./design notes.pdf",
   ]);
-  assert.equal(resolveSlashCommandInput({ input: "/attach ./a.png", is_streaming: false }).kind, "builtin");
-  assert.equal(resolveSlashCommandInput({ input: "/file ./a.png", is_streaming: false }).kind, "builtin");
+  assert.equal(resolveSlashCommandInput({ input: "/attach", is_streaming: false }).kind, "builtin");
+  assert.equal(resolveSlashCommandInput({ input: "/file", is_streaming: false }).kind, "builtin");
 });
 
 test("执行中输入队列按 FIFO 消费，并允许用 ↑ 召回最新消息", () => {

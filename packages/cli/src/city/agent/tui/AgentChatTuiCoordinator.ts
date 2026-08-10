@@ -52,6 +52,7 @@ import {
 import { resolve_transcript_scroll_delta } from "@/city/agent/tui/controllers/TranscriptNavigation.js";
 import { build_attachment_tags } from "@/city/agent/tui/attachments/AttachmentInput.js";
 import { read_clipboard_attachment_paths } from "@/city/agent/tui/attachments/ClipboardAttachment.js";
+import { pick_native_files } from "@/city/agent/tui/attachments/NativeFilePicker.js";
 
 /**
  * 协调器构造选项。
@@ -156,8 +157,8 @@ export class AgentChatTuiCoordinator {
       show_help: () => {
         this.show_command_help();
       },
-      attach_files: (paths: string) => {
-        return this.attach_files(paths);
+      attach_files: () => {
+        return this.attach_files();
       },
       clear_transcript: () => {
         this.message_list.clear();
@@ -563,8 +564,19 @@ export class AgentChatTuiCoordinator {
   }
 
   /** 将 slash command 指定的文件标签加入编辑器，不立即发送。 */
-  private async attach_files(paths: string): Promise<void> {
-    const result = await build_attachment_tags(paths);
+  private async attach_files(paths?: string): Promise<void> {
+    let selected_paths: string[];
+    try {
+      selected_paths = paths
+        ? [paths]
+        : await pick_native_files(process.cwd());
+    } catch (error) {
+      this.add_error_message(error instanceof Error ? error.message : String(error));
+      this.request_render();
+      return;
+    }
+    if (selected_paths.length === 0) return;
+    const result = await build_attachment_tags(selected_paths.map((value) => JSON.stringify(value)).join(" "));
     for (const error of result.errors) this.add_error_message(error);
     if (result.tags.length === 0) {
       this.request_render();

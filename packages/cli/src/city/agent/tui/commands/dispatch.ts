@@ -67,7 +67,7 @@ async function handle_built_in_slash_command(
       return;
     case "attach":
     case "file":
-      await host.attach_files(_args.trim());
+      await host.attach_files();
       return;
     case "approve":
       await host.approve(_args.trim());
