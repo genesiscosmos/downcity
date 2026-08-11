@@ -7,7 +7,7 @@
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
+import { promisify, stripVTControlCharacters } from "node:util";
 import { RemoteAgent } from "@downcity/agent";
 import { get_agent_registry_root_path, list_agent_registry_records, create_agent_registry_record, type AgentRegistryRecord } from "@downcity/agent-registry";
 import type { DesktopChatResult, DesktopSessionSummary } from "../../common/types/DesktopApi.js";
@@ -35,7 +35,11 @@ export class AgentController {
 
   /** 启动指定 Agent 的 CLI daemon，并返回本机 RPC 地址。 */
   async start_agent(agent_id: string): Promise<string> {
-    await exec_file("downcity", ["agent", "start", agent_id]);
+    try {
+      await exec_file("downcity", ["agent", "start", agent_id]);
+    } catch (error) {
+      throw new Error(format_agent_start_error(agent_id, error), { cause: error });
+    }
     const daemon_path = path.join(get_agent_registry_root_path(), "runtimes", agent_id, "daemon.json");
     const daemon = JSON.parse(await fs.readFile(daemon_path, "utf8")) as { args?: unknown };
     const args = Array.isArray(daemon.args) ? daemon.args.map(String) : [];
@@ -93,4 +97,38 @@ export class AgentController {
     for (const remote_agent of this.remote_agents.values()) await remote_agent.close();
     this.remote_agents.clear();
   }
+}
+
+/**
+ * 把 CLI 子进程异常转换为 Desktop 可直接展示的启动错误。
+ *
+ * CLI 的业务失败摘要输出到 stdout，而 Node warning 输出到 stderr；不能直接使用
+ * `execFile` 的默认错误消息，否则 warning 会遮蔽真正的失败原因。
+ */
+function format_agent_start_error(agent_id: string, error: unknown): string {
+  const stdout = clean_cli_error_output(read_process_output(error, "stdout"));
+  const stderr = clean_cli_error_output(read_process_output(error, "stderr"));
+  const outputs = [...new Set([stdout, stderr].filter(Boolean))];
+  const detail = outputs.join("\n\n")
+    || (error instanceof Error ? error.message : String(error));
+  return `Agent ${agent_id} 启动失败\n${detail}`;
+}
+
+/** 从未知子进程异常中读取指定输出字段。 */
+function read_process_output(error: unknown, field: "stdout" | "stderr"): string {
+  if (!error || typeof error !== "object" || !(field in error)) return "";
+  const value = Reflect.get(error, field);
+  if (typeof value === "string") return value;
+  return Buffer.isBuffer(value) ? value.toString("utf8") : "";
+}
+
+/** 清理不应作为业务错误展示的 CLI 装饰与 Node 实验性警告。 */
+function clean_cli_error_output(output: string): string {
+  return stripVTControlCharacters(output)
+    .split(/\r?\n/u)
+    .filter((line) => !/^downcity v\d/iu.test(line.trim()))
+    .filter((line) => !/^\(node:\d+\) ExperimentalWarning:/u.test(line.trim()))
+    .filter((line) => !/^\(Use `node --trace-warnings/u.test(line.trim()))
+    .join("\n")
+    .trim();
 }
