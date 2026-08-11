@@ -18,7 +18,7 @@ import { ToolActivityComponent } from "../bin/city/agent/tui/components/ToolActi
 import { UserMessageComponent } from "../bin/city/agent/tui/components/UserMessage.js";
 import { resolve_transcript_scroll_delta } from "../bin/city/agent/tui/controllers/TranscriptNavigation.js";
 import { QueuedInputQueue } from "../bin/city/agent/tui/controllers/QueuedInputQueue.js";
-import { PiTuiChatRenderer } from "../bin/city/agent/tui/PiTuiChatRenderer.js";
+import { StreamingUIController } from "../bin/city/agent/tui/controllers/StreamingUI.js";
 import { ApprovalPanelComponent } from "../bin/city/agent/tui/dialogs/ApprovalDialog.js";
 import { QuestionPanelComponent } from "../bin/city/agent/tui/dialogs/QuestionDialog.js";
 import { SecurityPolicyPanelComponent } from "../bin/city/agent/tui/dialogs/SecurityPolicyDialog.js";
@@ -197,11 +197,14 @@ test("canonical Assistant Message 的完整快照直接驱动 working 与终态"
   const message_list = new MessageListComponent({
     get_viewport_height: () => 30,
   });
-  const renderer = new PiTuiChatRenderer(message_list, () => {});
+  const streaming_ui = new StreamingUIController({
+    message_list,
+    request_render: () => {},
+  });
 
-  renderer.start_turn();
+  streaming_ui.set_executing(true);
   assert.equal(plain(message_list.render(80)).join("\n"), "");
-  renderer.render_event({
+  streaming_ui.handle_event({
     mutation_id: "user-start",
     session_id: "session-start",
     turn_id: "turn-start",
@@ -238,16 +241,16 @@ test("canonical Assistant Message 的完整快照直接驱动 working 与终态"
     sequence: 2,
     revision: 1,
   });
-  renderer.render_event(create_assistant_message_event(streaming_message));
+  streaming_ui.handle_event(create_assistant_message_event(streaming_message));
   assert.match(plain(message_list.render(80)).join("\n"), /Assistant · .* working/);
 
-  renderer.render_event(create_assistant_message_event({
+  streaming_ui.handle_event(create_assistant_message_event({
     ...streaming_message,
     revision: 2,
     updated_at: 2,
     status: "completed",
   }, "assistant-completed"));
-  renderer.finish_turn();
+  streaming_ui.set_executing(false);
   assert.doesNotMatch(plain(message_list.render(80)).join("\n"), /working/);
 });
 
@@ -361,10 +364,12 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
   const message_list = new MessageListComponent({
     get_viewport_height: () => 30,
   });
-  const renderer = new PiTuiChatRenderer(message_list, () => {});
-  renderer.start_turn();
-  renderer.attach_turn_id("turn-streaming-input");
-  renderer.render_event(create_assistant_message_event(create_assistant_message({
+  const streaming_ui = new StreamingUIController({
+    message_list,
+    request_render: () => {},
+  });
+  streaming_ui.set_executing(true);
+  streaming_ui.handle_event(create_assistant_message_event(create_assistant_message({
     message_id: "assistant-streaming-input",
     session_id: "session-1",
     turn_id: "turn-streaming-input",
@@ -379,7 +384,7 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
     type: "tool",
     part_id: "tool:call-streaming-input",
   };
-  renderer.render_event({
+  streaming_ui.handle_event({
     ...base_event,
     mutation_id: "mutation-input-start",
     revision: 2,
@@ -398,7 +403,7 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
   assert.match(preparing, /Assistant · .* working/);
   assert.match(preparing, /Tool · shell_exec · Preparing input/);
 
-  renderer.render_event({
+  streaming_ui.handle_event({
     message_id: "assistant-streaming-input",
     session_id: "session-1",
     turn_id: "turn-streaming-input",
@@ -415,7 +420,7 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
   const input_streaming = plain(message_list.render(80)).join("\n");
   assert.match(input_streaming, /Tool · shell_exec · Preparing input/);
 
-  renderer.render_event({
+  streaming_ui.handle_event({
     ...base_event,
     mutation_id: "mutation-input-ready",
     revision: 4,
@@ -440,7 +445,7 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
   assert.doesNotMatch(ready, /sandbox/);
   assert.doesNotMatch(ready, /Inspect the requested desktop files/);
 
-  renderer.render_event({
+  streaming_ui.handle_event({
     ...base_event,
     mutation_id: "mutation-waiting-user",
     revision: 5,
@@ -457,7 +462,7 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
       },
     },
   });
-  renderer.render_event({
+  streaming_ui.handle_event({
     ...base_event,
     mutation_id: "mutation-interaction",
     revision: 5,
@@ -497,7 +502,7 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
   assert.match(approval_required, /command\s+ls -la ~\/Desktop/);
   assert.doesNotMatch(approval_required, /approval-streaming-input/);
 
-  renderer.render_event({
+  streaming_ui.handle_event({
     ...base_event,
     mutation_id: "mutation-running",
     revision: 6,
@@ -516,7 +521,7 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
     /Tool · shell_exec · Running[\s\S]*command\s+ls -la ~\/Desktop/,
   );
 
-  renderer.render_event({
+  streaming_ui.handle_event({
     ...base_event,
     mutation_id: "mutation-completed",
     revision: 7,
@@ -537,7 +542,7 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
   assert.match(completed, /command\s+ls -la ~\/Desktop/);
   assert.doesNotMatch(completed, /THIS OUTPUT MUST STAY HIDDEN/);
 
-  renderer.render_event({
+  streaming_ui.handle_event({
     ...base_event,
     mutation_id: "mutation-stale-running",
     revision: 6,
@@ -555,7 +560,7 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
   assert.match(after_stale_mutation, /Tool · shell_exec · Completed/);
   assert.doesNotMatch(after_stale_mutation, /stale command/);
 
-  renderer.render_event({
+  streaming_ui.handle_event({
     ...base_event,
     mutation_id: "mutation-failed",
     revision: 8,
@@ -628,22 +633,34 @@ test("审批 part 展示请求详情且 Esc 按安全语义拒绝", () => {
   const message_list = new MessageListComponent({
     get_viewport_height: () => 20,
   });
-  let approval_request;
-  const renderer = new PiTuiChatRenderer(
-    message_list,
-    () => {},
-    (request) => {
-      approval_request = request;
+  const approval_request = {
+    interaction_id: "approval-1",
+    turn_id: "turn-1",
+    kind: "approval",
+    source: {
+      type: "tool",
+      tool_call_id: "call-1",
+      tool_name: "shell_exec",
     },
-  );
-  renderer.start_turn();
-  renderer.attach_turn_id("turn-1");
-  renderer.render_event(create_assistant_message_event(create_assistant_message({
+    title: "Approve shell_exec",
+    command: "rm -rf build",
+    cwd: "/workspace",
+    reason: "Clean generated output",
+    operation: "exec",
+    created_at: 1,
+    expires_at: 60_001,
+  };
+  const streaming_ui = new StreamingUIController({
+    message_list,
+    request_render: () => {},
+  });
+  streaming_ui.set_executing(true);
+  streaming_ui.handle_event(create_assistant_message_event(create_assistant_message({
     message_id: "assistant-1",
     session_id: "session-1",
     turn_id: "turn-1",
   }), "mutation-assistant-1"));
-  renderer.render_event({
+  streaming_ui.handle_event({
     mutation_id: "mutation-tool-1",
     message_id: "assistant-1",
     revision: 2,
@@ -667,7 +684,7 @@ test("审批 part 展示请求详情且 Esc 按安全语义拒绝", () => {
       },
     },
   });
-  renderer.render_event({
+  streaming_ui.handle_event({
     mutation_id: "mutation-1",
     message_id: "assistant-1",
     revision: 3,
@@ -684,23 +701,7 @@ test("审批 part 展示请求详情且 Esc 按安全语义拒绝", () => {
       interaction_id: "approval-1",
       interaction_type: "approval",
       status: "pending",
-      request: {
-        interaction_id: "approval-1",
-        turn_id: "turn-1",
-        kind: "approval",
-        source: {
-          type: "tool",
-          tool_call_id: "call-1",
-          tool_name: "shell_exec",
-        },
-        title: "Approve shell_exec",
-        command: "rm -rf build",
-        cwd: "/workspace",
-        reason: "Clean generated output",
-        operation: "exec",
-        created_at: 1,
-        expires_at: 60_001,
-      },
+      request: approval_request,
     },
   });
 
@@ -819,58 +820,54 @@ test("Question Interaction 逐项收集文本、单选和多选答案", () => {
   assert.ok(panel.render(32).every((line) => visibleWidth(line) <= 32));
 });
 
-test("Question Interaction 由 Renderer 原样转交通用回调", () => {
+test("reasoning Part 与 Delta 按 canonical 顺序实时渲染", () => {
   const message_list = new MessageListComponent({
     get_viewport_height: () => 20,
   });
-  let received_request;
-  const renderer = new PiTuiChatRenderer(
+  const streaming_ui = new StreamingUIController({
     message_list,
-    () => {},
-    (request) => {
-      received_request = request;
-    },
-  );
-  const request = {
-    interaction_id: "question-2",
-    turn_id: "turn-2",
-    kind: "question",
-    source: {
-      type: "tool",
-      tool_call_id: "call-question-2",
-      tool_name: "ask_question",
-    },
-    title: "Confirm target",
-    questions: [{
-      question_id: "target",
-      prompt: "Which target?",
-      response_type: "text",
-    }],
-    created_at: 1,
-  };
-
-  renderer.render_event({
-    mutation_id: "mutation-question-2",
-    message_id: "assistant-2",
-    revision: 1,
-    session_id: "session-2",
-    turn_id: "turn-2",
+    request_render: () => {},
+  });
+  streaming_ui.set_executing(true);
+  streaming_ui.handle_event(create_assistant_message_event(create_assistant_message({
+    message_id: "assistant-reasoning",
+    session_id: "session-reasoning",
+    turn_id: "turn-reasoning",
+  }), "mutation-reasoning-message"));
+  streaming_ui.handle_event({
+    mutation_id: "mutation-reasoning-part",
+    message_id: "assistant-reasoning",
+    revision: 2,
+    session_id: "session-reasoning",
+    turn_id: "turn-reasoning",
     created_at: 1,
     variant: "part",
-    type: "interaction",
-    part_id: "interaction:question-2",
+    type: "reasoning",
+    part_id: "reasoning-1",
     part: {
-      part_id: "interaction:question-2",
+      part_id: "reasoning-1",
       sequence: 1,
-      type: "interaction",
-      interaction_id: "question-2",
-      interaction_type: "question",
-      status: "pending",
-      request,
+      type: "reasoning",
+      text: "",
+      state: "streaming",
     },
   });
+  streaming_ui.handle_event({
+    mutation_id: "mutation-reasoning-delta",
+    message_id: "assistant-reasoning",
+    revision: 3,
+    session_id: "session-reasoning",
+    turn_id: "turn-reasoning",
+    created_at: 2,
+    variant: "delta",
+    type: "reasoning",
+    part_id: "reasoning-1",
+    delta: "先确认 Session 的事实来源。",
+  });
 
-  assert.deepEqual(received_request, request);
+  const rendered = plain(message_list.render(80)).join("\n");
+  assert.match(rendered, /Reasoning/);
+  assert.match(rendered, /先确认 Session 的事实来源。/);
 });
 
 test("执行期间允许审批与安全策略命令并阻止破坏性 Slash 命令", () => {

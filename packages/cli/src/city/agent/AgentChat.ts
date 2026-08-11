@@ -10,10 +10,6 @@
  */
 
 import { emitCliBlock } from "@/shared/CliReporter.js";
-import {
-  createRemoteChatSession,
-  listRemoteChatSessions,
-} from "@/city/agent/AgentChatRemote.js";
 import { run_agent_chat_tui } from "@/city/agent/AgentChatTui.js";
 import type { AgentChatCliOptions } from "@/city/agent/AgentChatTypes.js";
 import {
@@ -22,7 +18,6 @@ import {
   resolveChatTargetAgentId,
   resolveInteractiveChatSession,
   runOneShotChat,
-  runSdkPromptTurn,
 } from "@/city/agent/AgentChatHelpers.js";
 
 /**
@@ -93,71 +88,7 @@ export async function chatCommand(options: AgentChatCliOptions): Promise<void> {
     await run_agent_chat_tui({
       agent_id: agent_id,
       session_id: interactive.target.session_id,
-      list_sessions: async () =>
-        await listRemoteChatSessions({
-          remote_agent: interactive.remote_agent,
-        }),
-      create_session: async () =>
-        await createRemoteChatSession({
-          remote_agent: interactive.remote_agent,
-        }),
-      load_session_context: async (session_id) => {
-        const session = await interactive.remote_agent.sessions.get(session_id);
-        const [info, messages, status, interactions] = await Promise.all([
-          session.get_info(),
-          session.messages(),
-          session.status(),
-          session.interactions(),
-        ]);
-        const title = info.title?.trim() || "Untitled";
-        return {
-          title,
-          messages: messages.items,
-          security: status.security,
-          interactions,
-        };
-      },
-      get_session_status: async (session_id) => {
-        const session = await interactive.remote_agent.sessions.get(session_id);
-        return await session.status();
-      },
-      set_session_security: async (session_id, mode) => {
-        const session = await interactive.remote_agent.sessions.get(session_id);
-        await session.set({ security: { approval_mode: mode } });
-      },
-      stop_session: async (session_id) => {
-        const session = await interactive.remote_agent.sessions.get(session_id);
-        return await session.stop();
-      },
-      respond_interaction: async (session_id, interaction_id, response) => {
-        const session = await interactive.remote_agent.sessions.get(session_id);
-        return await session.respond({
-          interaction_id,
-          response,
-        });
-      },
-      run_turn: async ({ session_id, message, interactive_renderer }) => {
-        const outcome = await runSdkPromptTurn({
-          agent_id,
-          message,
-          sessionOptions: {
-            session_id: session_id,
-            newSession: false,
-          },
-          transport: {
-            host: options.host,
-            port: options.port,
-          },
-          interactiveRenderer: interactive_renderer,
-        });
-
-        return {
-          success: outcome.success,
-          error: outcome.error,
-          emitted_visible_text: outcome.emittedVisibleText,
-          text: outcome.text,
-        };
-      },
+      remote_agent: interactive.remote_agent,
     });
   } finally {
     await interactive.remote_agent.close();

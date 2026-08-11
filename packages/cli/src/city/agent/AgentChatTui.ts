@@ -7,82 +7,20 @@
  */
 
 import { AgentChatTuiCoordinator } from "@/city/agent/tui/AgentChatTuiCoordinator.js";
-import type { AgentChatInteractiveRendererPort } from "@/city/types/AgentChatInteractive.js";
-import type { AgentChatSessionSummaryView } from "@/city/agent/AgentChatTypes.js";
-import type {
-  AgentSessionSecurityStatus,
-  AgentSessionStatus,
-  SessionInteractionResponse,
-  SessionPendingInteraction,
-  SessionApprovalMode,
-  SessionMessage,
-} from "@downcity/agent";
+import type { AgentChatTuiCoordinatorOptions } from "@/city/types/AgentChatTui.js";
 
 /**
  * 启动 city agent chat 的交互式 TUI。
  *
  * @param params 启动参数。
  */
-export async function run_agent_chat_tui(params: {
-  /** 目标 agent id。 */
-  agent_id: string;
-  /** 初始 session id。 */
-  session_id: string;
-  /** 列出远程 session。 */
-  list_sessions: () => Promise<AgentChatSessionSummaryView[]>;
-  /** 创建新 session。 */
-  create_session: () => Promise<{ session_id: string }>;
-  /** 加载指定 Session 的完整 Chat 上下文。 */
-  load_session_context: (session_id: string) => Promise<{
-    title: string;
-    messages: SessionMessage[];
-    security: AgentSessionSecurityStatus;
-    /** 当前 Session 尚未处理的 Interaction。 */
-    interactions: SessionPendingInteraction[];
-  }>;
-  /** 读取指定 Session 的运行与安全状态。 */
-  get_session_status: (
-    session_id: string,
-  ) => Promise<AgentSessionStatus>;
-  /** 更新指定 Session 后续高风险操作使用的审批模式。 */
-  set_session_security: (
-    session_id: string,
-    mode: SessionApprovalMode,
-  ) => Promise<void>;
-  /** 执行一轮对话。 */
-  run_turn: (input: {
-    session_id: string;
-    message: string;
-    interactive_renderer: AgentChatInteractiveRendererPort;
-  }) => Promise<{
-    success: boolean;
-    error?: string;
-    emitted_visible_text: boolean;
-    text?: string;
-  }>;
-
-  /** 停止指定 Session 当前正在执行的 Turn。 */
-  stop_session: (session_id: string) => Promise<unknown>;
-
-  /** 处理指定 Session 的 pending Interaction。 */
-  respond_interaction: (
-    session_id: string,
-    interaction_id: string,
-    response: SessionInteractionResponse,
-  ) => Promise<{ status: "resolved" | "expired" | "cancelled" }>;
-
-}): Promise<void> {
+export async function run_agent_chat_tui(
+  params: AgentChatTuiCoordinatorOptions,
+): Promise<void> {
   const coordinator = new AgentChatTuiCoordinator({
     agent_id: params.agent_id,
     session_id: params.session_id,
-    list_sessions: params.list_sessions,
-    create_session: params.create_session,
-    load_session_context: params.load_session_context,
-    get_session_status: params.get_session_status,
-    set_session_security: params.set_session_security,
-    run_turn: params.run_turn,
-    stop_session: params.stop_session,
-    respond_interaction: params.respond_interaction,
+    remote_agent: params.remote_agent,
   });
 
   await coordinator.run();

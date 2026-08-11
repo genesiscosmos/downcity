@@ -13,7 +13,6 @@ import {
   TUI,
   type Component,
 } from "@earendil-works/pi-tui";
-
 import {
   AgentHeaderComponent,
   ChatEditorComponent,
@@ -24,25 +23,28 @@ import {
 } from "@/city/agent/tui/components/index.js";
 import { MessageListComponent } from "@/city/agent/tui/components/MessageList.js";
 import { QueuedInputQueue } from "@/city/agent/tui/controllers/QueuedInputQueue.js";
+import { StreamingUIController } from "@/city/agent/tui/controllers/StreamingUI.js";
+import { ChatSessionSubscription } from "@/city/agent/tui/controllers/ChatSessionSubscription.js";
 import { SessionPickerComponent } from "@/city/agent/tui/dialogs/SessionPicker.js";
 import { ApprovalPanelComponent } from "@/city/agent/tui/dialogs/ApprovalDialog.js";
 import { QuestionPanelComponent } from "@/city/agent/tui/dialogs/QuestionDialog.js";
 import { SecurityPolicyPanelComponent } from "@/city/agent/tui/dialogs/SecurityPolicyDialog.js";
-import { PiTuiChatRenderer } from "@/city/agent/tui/PiTuiChatRenderer.js";
-import type { AgentChatSessionSummaryView } from "@/city/agent/AgentChatTypes.js";
 import type {
-  AgentChatInteractiveRendererPort,
   AgentChatPendingInteractionView,
-} from "@/city/types/AgentChatInteractive.js";
+  AgentChatSessionSummaryView,
+} from "@/city/agent/AgentChatTypes.js";
+import {
+  createRemoteChatSession,
+  listRemoteChatSessions,
+} from "@/city/agent/AgentChatRemote.js";
 import type {
-  AgentSessionSecurityStatus,
-  AgentSessionStatus,
   SessionApprovalMode,
   SessionInteractionRequest,
   SessionInteractionResponse,
-  SessionMessage,
-  SessionPendingInteraction,
+  SessionMutation,
 } from "@downcity/agent";
+import type { ChatSessionSnapshot } from "@/city/types/ChatSessionSubscription.js";
+import type { AgentChatTuiCoordinatorOptions } from "@/city/types/AgentChatTui.js";
 import type { AppState } from "@/city/agent/tui/types.js";
 import {
   dispatchSlashCommand,
@@ -55,63 +57,6 @@ import { read_clipboard_attachment_paths } from "@/city/agent/tui/attachments/Cl
 import { pick_native_files } from "@/city/agent/tui/attachments/NativeFilePicker.js";
 
 /**
- * 协调器构造选项。
- */
-export interface AgentChatTuiCoordinatorOptions {
-  /** 目标 agent id。 */
-  agent_id: string;
-  /** 初始 session id。 */
-  session_id: string;
-  /** 列出远程 session。 */
-  list_sessions: () => Promise<AgentChatSessionSummaryView[]>;
-  /** 创建新 session。 */
-  create_session: () => Promise<{ session_id: string }>;
-  /**
-   * 加载指定 session 的历史记录。
-   *
-   * 关键点（中文）
-   * - 返回可读标题、canonical Session Message 与真实审批模式快照。
-   * - coordinator 在进入或切换 session 时调用。
-   */
-  load_session_context: (session_id: string) => Promise<{
-    title: string;
-    messages: SessionMessage[];
-    security: AgentSessionSecurityStatus;
-    /** 当前 Session 尚未处理的 Interaction。 */
-    interactions: SessionPendingInteraction[];
-  }>;
-  /** 读取指定 Session 的运行与安全状态。 */
-  get_session_status: (
-    session_id: string,
-  ) => Promise<AgentSessionStatus>;
-  /** 更新指定 Session 后续高风险操作使用的审批模式。 */
-  set_session_security: (
-    session_id: string,
-    mode: SessionApprovalMode,
-  ) => Promise<void>;
-  /** 执行一轮对话。 */
-  run_turn: (input: {
-    session_id: string;
-    message: string;
-    interactive_renderer: AgentChatInteractiveRendererPort;
-  }) => Promise<{
-    success: boolean;
-    error?: string;
-    emitted_visible_text: boolean;
-    text?: string;
-  }>;
-
-  /** 停止指定 Session 当前正在执行的 Turn。 */
-  stop_session: (session_id: string) => Promise<unknown>;
-  /** 响应指定 Session 的 pending Interaction。 */
-  respond_interaction: (
-    session_id: string,
-    interaction_id: string,
-    response: SessionInteractionResponse,
-  ) => Promise<{ status: "resolved" | "expired" | "cancelled" }>;
-}
-
-/**
  * Agent chat TUI 协调器。
  */
 export class AgentChatTuiCoordinator {
@@ -121,6 +66,8 @@ export class AgentChatTuiCoordinator {
   private readonly header: AgentHeaderComponent;
   private readonly footer: ChatFooterComponent;
   private readonly message_list: MessageListComponent;
+  private readonly streaming_ui: StreamingUIController;
+  private readonly session_subscription: ChatSessionSubscription;
   private readonly editor: ChatEditorComponent;
   private readonly queued_messages: QueuedMessagesComponent;
   private readonly interaction_panel: InlinePanelSlotComponent;
@@ -135,6 +82,7 @@ export class AgentChatTuiCoordinator {
   private command_panel_loading = false;
   private draining_input_queue = false;
   private approval_mode_update_promise: Promise<boolean> | null = null;
+  private prompt_pending = false;
 
   /** 待处理的 Session Interaction 队列；并行请求按到达顺序依次展示。 */
   private interaction_queue: AgentChatPendingInteractionView[] = [];
@@ -147,7 +95,7 @@ export class AgentChatTuiCoordinator {
    */
   private get slash_command_host(): SlashCommandHost {
     return {
-      is_streaming: this.app_state.is_executing,
+      is_streaming: this.app_state.is_executing || this.prompt_pending,
       send_normal_user_input: async (text: string) => {
         await this.run_message_sequence(text);
       },
@@ -217,6 +165,15 @@ export class AgentChatTuiCoordinator {
         this.app_state.transcript_scroll_offset = scroll_offset;
       },
     });
+    this.streaming_ui = new StreamingUIController({
+      message_list: this.message_list,
+      request_render: () => this.request_render(),
+    });
+    this.session_subscription = new ChatSessionSubscription({
+      remote_agent: options.remote_agent,
+      on_snapshot: (snapshot) => this.apply_session_snapshot(snapshot),
+      on_mutation: (mutation) => this.apply_session_mutation(mutation),
+    });
 
     this.editor.on_submit = (text) => {
       void this.handle_user_input(text);
@@ -279,8 +236,8 @@ export class AgentChatTuiCoordinator {
       this.handle_global_input(data),
     );
 
-    // 先加载当前 session 历史，再启动 TUI；帮助提示已下沉到 footer，不再占用 transcript。
-    await this.load_history(this.current_session_id);
+    // 先建立订阅并合并快照，再启动 TUI，避免启动期间遗漏 Session Mutation。
+    await this.activate_session(this.current_session_id);
 
     this.tui.start();
 
@@ -433,7 +390,11 @@ export class AgentChatTuiCoordinator {
     pending: AgentChatPendingInteractionView,
   ): Promise<void> {
     try {
-      await this.options.stop_session(pending.session_id);
+      const session = this.session_subscription.session;
+      if (pending.session_id !== this.current_session_id || !session) {
+        throw new Error("Question no longer belongs to the active Session.");
+      }
+      await session.stop();
     } catch (error) {
       this.add_error_message(this.format_error(error));
       if (!this.stopped) this.interaction_queue.unshift(pending);
@@ -449,11 +410,14 @@ export class AgentChatTuiCoordinator {
     session_id = this.current_session_id,
   ): Promise<boolean> {
     try {
-      const result = await this.options.respond_interaction(
-        session_id,
+      const session = this.session_subscription.session;
+      if (session_id !== this.current_session_id || !session) {
+        throw new Error("Interaction no longer belongs to the active Session.");
+      }
+      const result = await session.respond({
         interaction_id,
         response,
-      );
+      });
       if (result.status === "resolved") return true;
       this.add_status_message(
         `Interaction ${interaction_id} is already ${result.status}.`,
@@ -473,6 +437,8 @@ export class AgentChatTuiCoordinator {
       return;
     }
     this.stopped = true;
+    this.session_subscription.dispose();
+    this.streaming_ui.dispose();
     this.hide_session_picker();
     this.hide_interaction_panel();
     this.remove_input_listener?.();
@@ -535,10 +501,13 @@ export class AgentChatTuiCoordinator {
 
     const intent = resolveSlashCommandInput({
       input: text,
-      is_streaming: this.app_state.is_executing,
+      is_streaming: this.app_state.is_executing || this.prompt_pending,
     });
 
-    if (this.app_state.is_executing && (intent.kind === "not-command" || intent.kind === "message")) {
+    if (
+      (this.app_state.is_executing || this.prompt_pending) &&
+      (intent.kind === "not-command" || intent.kind === "message")
+    ) {
       this.input_queue.enqueue(intent.input);
       this.sync_input_queue_state();
       this.request_render();
@@ -612,39 +581,29 @@ export class AgentChatTuiCoordinator {
       const policy_updated = await this.approval_mode_update_promise;
       if (!policy_updated) return false;
     }
-    this.app_state.is_executing = true;
-    this.header.set_state(this.app_state);
-    this.footer.set_state(this.app_state);
+    const session = this.session_subscription.session;
+    if (!session) {
+      this.add_error_message("Active Session is not available.");
+      this.request_render();
+      return false;
+    }
+    this.prompt_pending = true;
     this.message_list.scroll_to_bottom();
     this.request_render();
-
-    const renderer = new PiTuiChatRenderer(
-      this.message_list,
-      () => this.request_render(),
-      (request) => {
-        this.show_interaction_panel(request);
-      },
-    );
-    const outcome = await this.options.run_turn({
-      session_id: this.current_session_id,
-      message,
-      interactive_renderer: renderer,
-    });
-
-    await this.refresh_approval_mode();
-
-    this.app_state.is_executing = false;
-    this.header.set_state(this.app_state);
-    this.footer.set_state(this.app_state);
-
-    if (!outcome.success) {
-      this.add_error_message(outcome.error || "agent chat failed");
-    } else if (!outcome.emitted_visible_text) {
-      this.add_status_message("[no visible reply]");
+    try {
+      const turn = await session.prompt({ query: message });
+      const result = await turn.finished;
+      if (!(await this.refresh_session_status())) this.set_session_executing(false);
+      return result.success;
+    } catch (error) {
+      // 传输失败可能没有 canonical Error Message，需要保留本地可见错误。
+      this.add_error_message(this.format_error(error));
+      if (!(await this.refresh_session_status())) this.set_session_executing(false);
+      return false;
+    } finally {
+      this.prompt_pending = false;
+      this.request_render();
     }
-
-    this.request_render();
-    return outcome.success;
   }
 
   /**
@@ -700,7 +659,9 @@ export class AgentChatTuiCoordinator {
 
     let sessions: AgentChatSessionSummaryView[] = [];
     try {
-      sessions = await this.options.list_sessions();
+      sessions = await listRemoteChatSessions({
+        remote_agent: this.options.remote_agent,
+      });
     } catch (error) {
       this.add_error_message(this.format_error(error));
       this.request_render();
@@ -785,11 +746,10 @@ export class AgentChatTuiCoordinator {
   private async update_approval_mode(mode: SessionApprovalMode): Promise<boolean> {
     if (mode === this.app_state.security?.approval_mode) return true;
     try {
-      await this.options.set_session_security(
-        this.current_session_id,
-        mode,
-      );
-      const status = await this.options.get_session_status(this.current_session_id);
+      const session = this.session_subscription.session;
+      if (!session) return false;
+      await session.set({ security: { approval_mode: mode } });
+      const status = await session.status();
       if (status.session_id !== this.current_session_id) return false;
       this.app_state.security = status.security;
       this.header.set_state(this.app_state);
@@ -803,16 +763,21 @@ export class AgentChatTuiCoordinator {
     }
   }
 
-  /** 刷新一次 configured/effective 审批模式，呈现队列是否已经提交。 */
-  private async refresh_approval_mode(): Promise<void> {
+  /** 刷新当前 Session 状态，校准执行指示与审批模式。 */
+  private async refresh_session_status(): Promise<boolean> {
     try {
-      const status = await this.options.get_session_status(this.current_session_id);
-      if (status.session_id !== this.current_session_id) return;
+      const session = this.session_subscription.session;
+      if (!session) return false;
+      const status = await session.status();
+      if (status.session_id !== this.current_session_id) return false;
       this.app_state.security = status.security;
+      this.set_session_executing(status.state === "running");
       this.header.set_state(this.app_state);
       this.footer.set_state(this.app_state);
+      return true;
     } catch {
       // Turn 结果已经完成，策略刷新失败不应把一次成功执行改写为失败。
+      return false;
     }
   }
 
@@ -840,7 +805,9 @@ export class AgentChatTuiCoordinator {
     this.request_render();
 
     try {
-      const created = await this.options.create_session();
+      const created = await createRemoteChatSession({
+        remote_agent: this.options.remote_agent,
+      });
       await this.switch_session(created.session_id);
     } catch (error) {
       this.add_error_message(this.format_error(error));
@@ -856,8 +823,8 @@ export class AgentChatTuiCoordinator {
   private async switch_session(session_id: string): Promise<void> {
     this.interaction_panel.clear();
     this.interaction_queue = [];
-    this.current_session_id = session_id;
     this.received_interaction_ids.clear();
+    this.current_session_id = session_id;
     this.app_state.session_id = session_id;
     this.app_state.session_title = undefined;
     this.app_state.security = undefined;
@@ -866,35 +833,93 @@ export class AgentChatTuiCoordinator {
     this.terminal.setTitle(this.build_title());
     this.message_list.clear();
 
-    await this.load_history(session_id);
-
-    this.add_status_message(`Agent chat · ${this.app_state.agent_id} · ${session_id}`);
+    try {
+      await this.activate_session(session_id);
+      this.add_status_message(`Agent chat · ${this.app_state.agent_id} · ${session_id}`);
+    } catch (error) {
+      this.add_error_message(this.format_error(error));
+    }
     this.request_render();
   }
 
-  /**
-   * 加载指定 session 的历史记录并更新标题。
-   *
-   * @param session_id 目标 session id。
-   */
-  private async load_history(session_id: string): Promise<void> {
+  /** 建立当前 Session 的长期订阅，并以快照校准初始化状态。 */
+  private async activate_session(session_id: string): Promise<void> {
     try {
-      const { title, messages, security, interactions } =
-        await this.options.load_session_context(session_id);
-      if (session_id !== this.current_session_id) return;
-      this.app_state.session_title = title;
-      this.app_state.security = security;
-      this.header.set_state(this.app_state);
-      this.footer.set_state(this.app_state);
-      this.terminal.setTitle(this.build_title());
-      this.message_list.set_messages(messages);
-      this.message_list.scroll_to_bottom();
-      for (const pending of interactions) {
-        this.show_interaction_panel(pending.request, session_id);
-      }
+      await this.session_subscription.activate(session_id);
     } catch (error) {
-      this.add_error_message(`Failed to load history: ${this.format_error(error)}`);
+      throw new Error(`Failed to activate Session: ${this.format_error(error)}`);
     }
+  }
+
+  /** 用完整 Session 快照替换 TUI 状态，随后由订阅资源回放缓冲 Mutation。 */
+  private apply_session_snapshot(snapshot: ChatSessionSnapshot): void {
+    if (snapshot.session_id !== this.current_session_id) return;
+    this.app_state.session_title = snapshot.title;
+    this.app_state.security = snapshot.security;
+    this.set_session_executing(snapshot.is_executing);
+    this.header.set_state(this.app_state);
+    this.footer.set_state(this.app_state);
+    this.terminal.setTitle(this.build_title());
+    this.message_list.set_messages(snapshot.messages);
+    this.message_list.scroll_to_bottom();
+    for (const pending of snapshot.interactions) {
+      this.show_interaction_panel(pending.request, snapshot.session_id);
+    }
+  }
+
+  /** 将当前 Session 的全部 Mutation 投影到 transcript 与 TUI 状态。 */
+  private apply_session_mutation(mutation: SessionMutation): void {
+    if (mutation.session_id !== this.current_session_id) return;
+
+    if (
+      mutation.variant === "message" ||
+      mutation.variant === "part" ||
+      mutation.variant === "delta"
+    ) {
+      this.streaming_ui.handle_event(mutation);
+      if (mutation.variant === "part" && mutation.type === "interaction") {
+        if (mutation.part.status === "pending") {
+          this.show_interaction_panel(mutation.part.request, mutation.session_id);
+        } else {
+          this.remove_resolved_interaction(mutation.part.interaction_id);
+        }
+      }
+      return;
+    }
+
+    if (mutation.variant === "turn") {
+      this.set_session_executing(mutation.status === "running");
+      return;
+    }
+
+    if (mutation.variant === "session" && mutation.type === "title") {
+      this.app_state.session_title = mutation.title.trim() || "Untitled";
+      this.header.set_state(this.app_state);
+      this.terminal.setTitle(this.build_title());
+      this.request_render();
+    }
+  }
+
+  /** 以 Session 状态更新执行指示与 working 动画。 */
+  private set_session_executing(is_executing: boolean): void {
+    this.app_state.is_executing = is_executing;
+    this.header.set_state(this.app_state);
+    this.footer.set_state(this.app_state);
+    this.streaming_ui.set_executing(is_executing);
+  }
+
+  /** 从本地展示队列移除已经由 canonical Part 收口的 Interaction。 */
+  private remove_resolved_interaction(interaction_id: string): void {
+    const index = this.interaction_queue.findIndex(
+      (pending) => pending.request.interaction_id === interaction_id,
+    );
+    if (index < 0) return;
+    if (index === 0 && this.interaction_panel.is_active) {
+      this.hide_interaction_panel();
+      this.ensure_interaction_panel();
+      return;
+    }
+    this.interaction_queue.splice(index, 1);
   }
 
   /**

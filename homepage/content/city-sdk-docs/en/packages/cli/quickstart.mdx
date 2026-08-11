@@ -87,6 +87,8 @@ city agent start
 city agent chat
 ```
 
+`city agent chat` keeps one live subscription to the active Session and merges Message, Part, text, reasoning, Tool, and Interaction updates as they arrive. When `/session` switches conversations, the TUI subscribes to the new Session before loading its full snapshot and then merges any buffered events. Visible reasoning text is rendered in Assistant Part order with subdued styling; reasoning metadata alone does not produce invented reasoning content.
+
 `city federation ...` only manages local Federation membership and user login state. It does not deploy Federations.
 
 Each background Agent start has a unique instance ID. `city agent stop` verifies the PID, project path, and instance ID together. If pid/meta files are stale or the PID has been reused by another process, the CLI only removes stale state files and does not signal that unrelated process.

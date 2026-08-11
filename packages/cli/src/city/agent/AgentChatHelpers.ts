@@ -37,7 +37,6 @@ import type {
 import {
   AGENT_CHAT_DEFAULT_SESSION_ID,
 } from "@/city/agent/AgentChatTypes.js";
-import type { AgentChatInteractiveRendererPort } from "@/city/types/AgentChatInteractive.js";
 
 export type ResolvedAgentChatTarget = {
   /** 目标 agent id。 */
@@ -386,7 +385,6 @@ export async function runSdkPromptTurn(params: {
   sessionOptions?: AgentChatSessionOptions;
   transport?: { host?: string; port?: number };
   renderText?: boolean;
-  interactiveRenderer?: AgentChatInteractiveRendererPort;
 }): Promise<{
   success: boolean;
   error?: string;
@@ -438,10 +436,6 @@ export async function runSdkPromptTurn(params: {
   const pending_events: SessionMutation[] = [];
 
   const renderEvent = (event: SessionMutation): void => {
-    if (params.interactiveRenderer) {
-      params.interactiveRenderer.render_event(event);
-      return;
-    }
     if (
       event.variant !== "delta" ||
       event.type !== "text" ||
@@ -470,10 +464,8 @@ export async function runSdkPromptTurn(params: {
   });
 
   try {
-    params.interactiveRenderer?.start_turn();
     const turn = await session.prompt({ query: message });
     target_turn_id = turn.id;
-    params.interactiveRenderer?.attach_turn_id(target_turn_id);
 
     for (const event of pending_events) {
       const event_turn_id = "turn_id" in event ? event.turn_id : undefined;
@@ -484,10 +476,7 @@ export async function runSdkPromptTurn(params: {
     const result = await turn.finished;
     final_text = result.text;
 
-    if (params.interactiveRenderer) {
-      emitted_visible_text =
-        params.interactiveRenderer.finish_turn().emitted_visible_text;
-    } else if (printed_leading_newline) {
+    if (printed_leading_newline) {
       process.stdout.write("\n\n");
     }
 
@@ -500,10 +489,7 @@ export async function runSdkPromptTurn(params: {
       text: final_text,
     };
   } catch (error) {
-    if (params.interactiveRenderer) {
-      emitted_visible_text =
-        params.interactiveRenderer.finish_turn().emitted_visible_text;
-    } else if (printed_leading_newline) {
+    if (printed_leading_newline) {
       process.stdout.write("\n\n");
     }
     return {

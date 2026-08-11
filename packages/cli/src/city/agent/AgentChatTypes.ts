@@ -6,6 +6,8 @@
  * - 默认使用独立的 local-cli 会话，避免与控制面 UI 上下文互相污染。
  */
 
+import type { SessionInteractionRequest } from "@downcity/agent";
+
 /**
  * `city agent chat` 默认使用的 local-cli 会话 ID。
  */
@@ -112,6 +114,14 @@ export interface AgentChatSessionSummaryView {
   updated_at?: number;
   /** 是否正在执行。 */
   executing?: boolean;
+}
+
+/** TUI 当前排队展示的一条 Session Interaction。 */
+export interface AgentChatPendingInteractionView {
+  /** Interaction 所属 Session 标识。 */
+  session_id: string;
+  /** Session 持久化的 canonical Interaction 请求。 */
+  request: SessionInteractionRequest;
 }
 
 /**

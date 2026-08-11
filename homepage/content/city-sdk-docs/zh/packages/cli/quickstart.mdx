@@ -87,6 +87,8 @@ city agent start
 city agent chat
 ```
 
+`city agent chat` 会持续订阅当前 Session，并实时合并 Message、Part、文本、reasoning、Tool 和 Interaction 状态。使用 `/session` 切换会话时，TUI 会先订阅新 Session，再加载完整快照并合并期间收到的事件。模型提供可见 reasoning 文本时，TUI 会按 Assistant Part 顺序弱化展示；只有 reasoning metadata 时不会生成虚假的推理内容。
+
 `city federation ...` 只管理本机的 Federation 成员资格和用户登录态，不负责部署 Federation。
 
 后台 Agent 每次启动都有独立实例 ID。`city agent stop` 会同时校验 PID、项目路径和实例 ID；如果 pid/meta 已过期或 PID 已被其他进程复用，CLI 只清理 stale 状态文件，不会向无关进程发送信号。

@@ -1,8 +1,8 @@
 /**
- * canonical Session Mutation 到 Chat TUI Transcript 的实时控制器。
+ * canonical Session Mutation 到 Chat TUI Transcript 的实时投影器。
  *
  * 控制器按 message_id 定位 canonical Message，按 part_id 更新 Assistant Part。
- * Message 创建 Mutation 必须先于对应 Part/Delta；TUI 不构造缺少领域字段的占位消息。
+ * Session 订阅生命周期由 Coordinator 持有；本模块只合并消息相关 Mutation 并控制重绘节拍。
  */
 
 import type { SessionMutation } from "@downcity/agent";
@@ -23,7 +23,6 @@ export interface StreamingUIOptions {
 export class StreamingUIController {
   private readonly message_list: MessageListComponent;
   private readonly request_render_fn: () => void;
-  private active_turn_id = "";
   private pending_render = false;
   private render_timer: ReturnType<typeof setTimeout> | null = null;
   private last_render_at = 0;
@@ -35,32 +34,14 @@ export class StreamingUIController {
     this.request_render_fn = options.request_render;
   }
 
-  /** 启动新一轮；Assistant 容器在首个 canonical Message/Part/Delta 到达时创建。 */
-  start_turn(): void {
-    this.active_turn_id = "";
-    this.pending_render = false;
-    this.clear_render_timer();
-    this.start_working_spinner();
-    this.request_render_fn();
-  }
-
-  /** @param turn_id 当前 Session Turn 的稳定标识。 */
-  attach_turn_id(turn_id: string): void {
-    this.active_turn_id = String(turn_id || "").trim();
-  }
-
-  /** 按 Mutation 身份更新 Assistant Message 或其他顶层状态条目。 */
+  /** 按 Mutation 身份更新 Message 或 Assistant Part。 */
   handle_event(event: SessionMutation): void {
-    const event_turn_id = "turn_id" in event ? event.turn_id || "" : "";
-    if (event_turn_id && this.active_turn_id && event_turn_id !== this.active_turn_id) {
-      return;
-    }
-
     if (event.variant === "delta") {
-      if (event.type === "text") {
-        this.message_list.append_assistant_delta(
+      if (event.type === "text" || event.type === "reasoning") {
+        this.message_list.append_assistant_text_delta(
           event.message_id,
           event.part_id,
+          event.type,
           event.delta,
           event.revision,
           event.created_at,
@@ -97,10 +78,17 @@ export class StreamingUIController {
     this.schedule_render();
   }
 
-  /** 结束当前轮次并停止动画；终态 Message Mutation 是状态的首选事实来源。 */
-  finish_turn(): void {
+  /** 立即提交尚未绘制的变更并释放动画计时器。 */
+  dispose(): void {
     this.flush_render();
     this.stop_working_spinner();
+  }
+
+  /** 根据当前 Session 是否执行中维护 working 动画。 */
+  set_executing(is_executing: boolean): void {
+    if (is_executing) this.start_working_spinner();
+    else this.stop_working_spinner();
+    this.request_render_fn();
   }
 
   /** 合并高频 Mutation 产生的终端重绘请求。 */

@@ -17,7 +17,7 @@ import { current_theme } from "@/city/agent/tui/theme/index.js";
 import { createMarkdownTheme } from "@/city/agent/tui/theme/pi-tui-theme.js";
 import type { SessionAssistantMessage } from "@downcity/agent";
 
-/** 缓存一个 Text Part 的 Markdown 组件及其源文本。 */
+/** 缓存一个文本类 Part 的 Markdown 组件及其源文本。 */
 interface TextPartView {
   /** 当前缓存对应的完整文本。 */
   text: string;
@@ -56,7 +56,10 @@ export class AssistantMessageComponent implements Component {
 
     const visible_parts = this.message.parts.filter((part) => {
       if (part.type === "tool") return true;
-      return part.type === "text" && part.text.trim().length > 0;
+      return (
+        (part.type === "text" || part.type === "reasoning") &&
+        part.text.trim().length > 0
+      );
     });
     const streaming = this.message.status === "streaming";
     if (visible_parts.length === 0 && !streaming) return [];
@@ -73,12 +76,21 @@ export class AssistantMessageComponent implements Component {
         : "";
     const lines: string[] = ["", `${role}${state}`];
     for (const part of visible_parts) {
-      if (part.type === "text") {
+      if (part.type === "text" || part.type === "reasoning") {
         const view = this.text_views.get(part.part_id);
         if (!view) continue;
         const content_width = Math.max(1, safe_width - MESSAGE_INDENT.length);
+        if (part.type === "reasoning") {
+          lines.push(MESSAGE_INDENT + current_theme.dim_fg("textDim", "Reasoning"));
+        }
         for (const content_line of view.component.render(content_width)) {
-          lines.push(MESSAGE_INDENT + content_line);
+          lines.push(
+            MESSAGE_INDENT + (
+              part.type === "reasoning"
+                ? current_theme.dim_fg("textDim", content_line)
+                : content_line
+            ),
+          );
         }
         continue;
       }
@@ -102,7 +114,7 @@ export class AssistantMessageComponent implements Component {
     }
 
     for (const part of this.message.parts) {
-      if (part.type === "text") {
+      if (part.type === "text" || part.type === "reasoning") {
         const current = this.text_views.get(part.part_id);
         if (current?.text === part.text) continue;
         this.text_views.set(part.part_id, {

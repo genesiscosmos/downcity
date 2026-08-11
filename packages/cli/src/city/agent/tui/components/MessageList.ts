@@ -114,10 +114,11 @@ export class MessageListComponent implements Component {
     });
   }
 
-  /** 把文本增量追加到所属 canonical Assistant Text Part。 */
-  append_assistant_delta(
+  /** 把文本或推理增量追加到所属 canonical Assistant Part。 */
+  append_assistant_text_delta(
     message_id: string,
     part_id: string,
+    part_type: "text" | "reasoning",
     delta: string,
     revision: number,
     updated_at: number,
@@ -125,7 +126,7 @@ export class MessageListComponent implements Component {
     const message = this.get_assistant_message(message_id);
     if (!message || revision < message.revision) return;
     const current_part = message.parts.find((part) => part.part_id === part_id);
-    if (!current_part || current_part.type !== "text") return;
+    if (!current_part || current_part.type !== part_type) return;
     this.upsert_assistant_part(message_id, {
       ...current_part,
       text: current_part.text + delta,
