@@ -330,13 +330,13 @@ const job = await plugin_call({
 
 `default_model` 是插件级默认图片模型，可以是字符串，也可以是同步或异步函数。Agent 调用 `image_create` 时如果没有传 `model`，`ImagePlugin` 会自动把 `default_model` 的字符串值或函数返回值补给下游的 `image_create(input)`；如果 payload 里显式传了 `model`，则以 payload 为准。没有配置 `default_model` 时，Agent 需要先确认模型 ID，可以调用 `models` 查看可用图片模型。
 
-`image_result` 默认只读取一次当前任务状态。如果返回 `queued` 或 `running`，保留 `job_id`，稍后继续调用 `image_result`。如果希望短任务在一次 tool 调用里等到终态，可以传 `until_done: true`，并按需设置 `max_wait_ms` / `poll_interval_ms`。如果返回 `succeeded`，`data` 保留任务摘要，图片 File Parts 直接进入当前 Assistant Message。
+`image_result` 默认只读取一次当前任务状态。如果返回 `queued` 或 `running`，保留 `job_id`，稍后继续调用 `image_result`。如果希望短任务在一次 tool 调用里等到终态，可以传 `until_done: true`，并按需设置 `max_wait_ms` / `poll_interval_ms`。如果返回 `succeeded`，`data` 会保留完整任务结果，图片 File Parts 同时进入当前 Assistant Message。File Part 的 URL 由配置的图片 provider 或 City Storage 返回，也可以是远程 URL。
 
 `ImagePlugin` 不直接绑定 City，也不关心 OpenAI、DeepSeek 等 provider 的具体协议。传入 `image_create` 和 `image_result` 任务函数后，插件只负责把两步式任务 action 暴露给 Agent；默认轮询节奏由产品、Agent 或调用方根据 `poll_after_ms` 决定，`until_done` 只是插件层的简单等待能力。
 
 所谓“provider 输入解析”指的是：Agent 调用 `plugin_call` 时只传简单的 `prompt` 或 `content`；`ImagePlugin` 在内部把本地图片读成 data URL，并把 `content` 转成 `ImagePluginResolvedInput.messages` 后再交给 `image_create(input)`。这只是 ImagePlugin 到 City / provider adapter 的内部边界，不是给 Agent 使用的新协议。
 
-`image_result` 回调必须先把生成图片保存到本地，再在 UIMessage File Part 中返回本地绝对路径或相对 Agent 项目根目录的路径。HTTP URL 和 data URL 不是生成结果格式。Session 会原样持久化该 File Part，不再建立统一 Resource 目录或返回重复的文件摘要。
+`image_result` 回调直接在 UIMessage File Part 中返回 provider 提供的图片 URL。URL 可以是远程 URL、data URL 或本地路径；ImagePlugin 不会下载或搬运生成结果。Session 会原样持久化该 File Part，action 也会在 `data` 中保留完整结果，方便直接调用方读取。
 
 ## plugin HTTP
 

@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 对 Agent 暴露 `image_create` / `image_result` 两步式任务 action。
  * - City / provider 的图片能力通过 image_create / image_result 任务函数注入。
- * - 成功结果返回本地文件 UI Parts，Plugin Action 直接声明应写入的 Assistant Message。
+ * - 成功结果返回 provider / City 已解析的 UI Parts，Plugin Action 同时声明结果数据和 Assistant Message。
  */
 
 import fs from "node:fs/promises";
@@ -386,6 +386,9 @@ function normalize_image_result_payload(
 
 /**
  * 校验 image 函数返回的 UIMessage。
+ *
+ * 图片资源的存储与访问地址由 image provider 或 City Storage 负责；
+ * ImagePlugin 只校验 UIMessage 结构，不接管远程资源的下载和本地化。
  */
 function normalize_image_result(result: ImagePluginResult): ImagePluginResult {
   const record = to_record(result);
@@ -396,11 +399,7 @@ function normalize_image_result(result: ImagePluginResult): ImagePluginResult {
     const part_record = to_record(part);
     if (part_record?.type !== "file") continue;
     const url = String(part_record.url || "").trim();
-    if (!url || url.startsWith("data:") || HTTP_URL_RE.test(url)) {
-      throw new TypeError(
-        "ImagePlugin result file parts must be saved locally before returning",
-      );
-    }
+    if (!url) throw new TypeError("ImagePlugin result file parts must include a url");
   }
   return result;
 }
@@ -804,19 +803,18 @@ export class ImagePlugin extends BasePlugin {
               message: current.error ?? current.message ?? "image job failed",
             };
           }
-          const { result, ...job } = current;
           return {
             success: true,
-            data: job as unknown as JsonObject,
+            data: current as unknown as JsonObject,
             message:
               current.status === "succeeded"
                 ? "image generated"
                 : `image job ${current.status}`,
-            ...(current.status === "succeeded" && result
+            ...(current.status === "succeeded" && current.result
               ? {
                   messages: [{
                     role: "assistant" as const,
-                    parts: result.parts,
+                    parts: current.result.parts,
                   }],
                 }
               : {}),

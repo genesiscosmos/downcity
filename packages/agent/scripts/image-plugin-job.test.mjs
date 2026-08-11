@@ -25,7 +25,7 @@ function create_image_message() {
         type: "file",
         mediaType: "image/png",
         filename: "image.png",
-        url: "/workspace/image.png",
+        url: "https://storage.example.com/image.png",
       },
     ],
   };
@@ -185,7 +185,7 @@ test("ImagePlugin image_result returns final message when succeeded", async () =
   assert.equal(result.success, true);
   assert.equal(result.data.job_id, "img_1");
   assert.equal(result.data.status, "succeeded");
-  assert.equal("result" in result.data, false);
+  assert.deepEqual(result.data.result, message);
   assert.deepEqual(result.messages, [{
     role: "assistant",
     parts: message.parts,
