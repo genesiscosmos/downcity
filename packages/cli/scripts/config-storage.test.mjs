@@ -406,8 +406,11 @@ test("内建 Plugin 静态 Manifest 不复制运行时 Action", async () => {
     const loader = await import("../bin/city/runtime/plugins/PluginTypeLoader.js");
     const plugin_types = await loader.load_plugin_types("chat");
     for (const plugin_type of plugin_types) {
-      const plugin = new plugin_type({ config: {}, resources: [] });
       const plugin_name = plugin_type.manifest.name;
+      const config = plugin_name === "web"
+        ? { cdp_url: "http://127.0.0.1:9222" }
+        : {};
+      const plugin = new plugin_type({ config, resources: [] });
       const item = catalog.get_plugin_catalog_item(plugin_name);
       assert.ok(item, `Missing Catalog item: ${plugin_name}`);
       assert.equal(plugin.name, plugin_name);
@@ -551,7 +554,8 @@ test("CLI 不再注册旧 City 与 Plugin 特例命令", () => {
   });
   fs.rmSync(platform_root, { recursive: true, force: true });
   assert.equal(root_help.status, 0, root_help.stderr);
-  assert.doesNotMatch(root_help.stdout, /^\s+(init|update|config|chat|task|memory|skill|web|contact)\b/m);
+  assert.doesNotMatch(root_help.stdout, /^\s+(init|update|config|chat|task|memory|skill|contact)\b/m);
+  assert.match(root_help.stdout, /^\s+web\b/m);
   assert.doesNotMatch(agent_help.stdout, /^\s+(chat|history)\b/m);
   assert.doesNotMatch(plugin_help.stdout, /^\s+(command|schedule)\b/m);
   assert.match(plugin_help.stdout, /^\s+action\b/m);
