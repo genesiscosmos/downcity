@@ -1,0 +1,49 @@
+/** Cityman 对话工作区样式；视觉结构复制 Duobox Renderer Chat。 */
+
+@import "../../ui/src/styles.css";
+
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; height: 100%; min-height: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground); font: 13px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+button { font: inherit; }
+.city-theme { width: 100%; height: 100%; background: var(--background); color: var(--foreground); }
+.city-app-shell { display: flex; width: 100%; height: 100%; overflow: hidden; background: var(--background); }
+.city-sidebar { display: flex; flex: 0 0 248px; flex-direction: column; height: 100%; overflow: hidden; border-right: 1px solid var(--divider); background: var(--sidebar); }
+.city-sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 18px 16px 20px; }
+.city-brand-mark { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 9px; background: var(--foreground); color: var(--background); font-weight: 800; }
+.city-sidebar-brand strong, .city-sidebar-brand small { display: block; }
+.city-sidebar-brand strong { font-size: 14px; }
+.city-sidebar-brand small, .city-sidebar-label { color: var(--muted-foreground); font-size: 9px; letter-spacing: .12em; }
+.city-sidebar-section { display: grid; gap: 3px; padding: 0 10px; }
+.city-sidebar-label { display: flex; align-items: center; justify-content: space-between; padding: 12px 8px 6px; font-weight: 700; }
+.city-sidebar-label button { width: 22px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-foreground); cursor: pointer; }
+.city-sidebar-label button:hover, .city-sidebar-actions button:hover { background: var(--interaction-hover); color: var(--foreground); }
+.city-agent-item, .city-session-item { display: flex; width: 100%; align-items: center; gap: 9px; min-height: 38px; padding: 7px 9px; border: 0; border-radius: 8px; background: transparent; color: var(--foreground); text-align: left; cursor: pointer; }
+.city-agent-item:hover, .city-session-item:hover, .city-agent-item.is-active, .city-session-item.is-active { background: var(--interaction-selected); }
+.city-status-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--muted-foreground); }
+.city-status-dot.running { background: #22a06b; box-shadow: 0 0 0 3px color-mix(in srgb, #22a06b 14%, transparent); }
+.city-agent-item-body, .city-session-item > span:last-child { min-width: 0; display: grid; }
+.city-agent-item strong, .city-agent-item small, .city-session-item strong, .city-session-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.city-agent-item strong, .city-session-item strong { font-size: 12px; font-weight: 600; }
+.city-agent-item small, .city-session-item small { color: var(--muted-foreground); font-size: 10px; }
+.city-session-section { min-height: 0; overflow: auto; margin-top: 8px; }
+.city-session-icon { width: 17px; color: var(--muted-foreground); text-align: center; }
+.city-sidebar-actions { display: flex; gap: 5px; padding: 9px 18px; }
+.city-sidebar-actions button, .city-chat-header-actions button { flex: 1; min-height: 27px; border: 0; border-radius: 7px; background: var(--surface-emphasis); color: var(--muted-foreground); cursor: pointer; font-size: 10px; }
+.city-chat-view { position: relative; display: flex; min-width: 0; min-height: 0; flex: 1; flex-direction: column; background: var(--background); }
+.city-chat-panel { min-width: 0; min-height: 0; flex: 1; }
+.dc-chat-body { position: relative; display: flex; min-width: 0; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; }
+.dc-chat-body, .dc-chat-conversation, .dc-chat-conversation-content, .dc-chat-message, .dc-chat-message-content, .dc-chat-activity-list, .dc-chat-activity-row, .dc-chat-activity-main { min-width: 0; max-width: 100%; }
+.dc-chat-conversation { overflow-x: hidden; }
+.dc-chat-conversation-content { box-sizing: border-box; overflow-x: hidden; }
+.dc-chat-message-content { overflow: hidden; overflow-wrap: anywhere; }
+.dc-chat-activity-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dc-chat-activity-terminal, .dc-chat-activity-terminal pre, .dc-chat-code-block { box-sizing: border-box; max-width: 100%; overflow-x: auto; }
+.dc-chat-input-root, .dc-chat-input-shell, .dc-chat-input-toolbar { min-width: 0; max-width: 100%; }
+.dc-chat-input-editor, .dc-chat-input-editor.ProseMirror { overflow-wrap: anywhere; }
+.dc-chat-interaction-error { color: var(--destructive); overflow-wrap: anywhere; }
+.city-chat-error { position: absolute; z-index: 10; top: 42px; left: 50%; width: min(640px, calc(100% - 24px)); transform: translateX(-50%); padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--destructive) 20%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--background) 92%, var(--destructive)); color: var(--destructive); box-shadow: 0 8px 30px color-mix(in srgb, var(--foreground) 9%, transparent); font-size: 11px; }
+.city-empty-state { display: grid; flex: 1; place-content: center; padding: 24px; text-align: center; }
+.city-empty-state h1 { margin: 0 0 8px; font-size: 20px; }
+.city-empty-state p { margin: 0; color: var(--muted-foreground); }
+@media (max-width: 760px) { .city-sidebar { flex-basis: 208px; } }

@@ -10,7 +10,7 @@ export class DowncityChatRuntime {
   private snapshot: DowncityChatRuntimeSnapshot;
   private readonly listeners = new Set<DowncityChatRuntimeListener>();
   private readonly options: DowncityChatRuntimeOptions;
-  private queued_inputs: DowncityChatSubmitInput[] = [];
+  private queued_inputs: Array<{ id: string; input: DowncityChatSubmitInput }> = [];
 
   constructor(options: DowncityChatRuntimeOptions = {}) {
     this.options = options;
@@ -20,6 +20,7 @@ export class DowncityChatRuntime {
       model_options: options.model_options ?? [{ id: "default", label: "Default model" }],
       model_id: options.model_id ?? options.model_options?.[0]?.id ?? "default",
       approval_mode: options.approval_mode ?? "ask",
+      queued_inputs: [],
     };
   }
 
@@ -39,9 +40,13 @@ export class DowncityChatRuntime {
   /** 提交输入；streaming 时进入队列。 */
   async submit(input: DowncityChatSubmitInput, mode: "send" | "queue" = "send"): Promise<void> {
     if (!input.text.trim() && input.attachments.length === 0) return;
-    if (mode === "queue" || this.snapshot.status === "streaming" || this.snapshot.status === "submitted" || this.snapshot.status === "building-context") { this.queued_inputs = [...this.queued_inputs, input]; return; }
-    const message_id = create_id("user");
-    this.update({ status: "submitted", messages: [...this.snapshot.messages, { id: message_id, role: "user", parts: [{ id: `${message_id}-text`, type: "text", text: input.text, state: "done" }], attachments: input.attachments }] });
+    if (mode === "queue" || this.snapshot.status === "streaming" || this.snapshot.status === "submitted" || this.snapshot.status === "building-context") {
+      this.queued_inputs = [...this.queued_inputs, { id: create_id("queue"), input }];
+      this.sync_queued_inputs();
+      return;
+    }
+    // 用户消息由 Session 持久化后统一读取，runtime 不再创建第二份 optimistic 消息。
+    this.update({ status: "submitted" });
     await this.options.submit_message?.(input, "send");
   }
   /** 停止当前生成并恢复可输入状态。 */
@@ -55,7 +60,31 @@ export class DowncityChatRuntime {
   /** 修改 approval 模式。 */
   set_approval_mode(approval_mode: DowncityChatApprovalMode): void { this.update({ approval_mode }); }
   /** 取出下一条队列输入。 */
-  dequeue(): DowncityChatSubmitInput | undefined { const [next, ...rest] = this.queued_inputs; this.queued_inputs = rest; return next; }
+  dequeue(): DowncityChatSubmitInput | undefined {
+    const [next, ...rest] = this.queued_inputs;
+    this.queued_inputs = rest;
+    this.sync_queued_inputs();
+    return next?.input;
+  }
+  /** 删除一条尚未执行的队列输入。 */
+  remove_queued_input(input_id: string): void {
+    this.queued_inputs = this.queued_inputs.filter((item) => item.id !== input_id);
+    this.sync_queued_inputs();
+  }
+  /** 调整一条队列输入的相对顺序。 */
+  move_queued_input(input_id: string, direction: "up" | "down"): void {
+    const current_index = this.queued_inputs.findIndex((item) => item.id === input_id);
+    const next_index = direction === "up" ? current_index - 1 : current_index + 1;
+    if (current_index < 0 || next_index < 0 || next_index >= this.queued_inputs.length) return;
+    const next_inputs = [...this.queued_inputs];
+    [next_inputs[current_index], next_inputs[next_index]] = [next_inputs[next_index], next_inputs[current_index]];
+    this.queued_inputs = next_inputs;
+    this.sync_queued_inputs();
+  }
+  /** 将内部队列投影到只读快照。 */
+  private sync_queued_inputs(): void {
+    this.update({ queued_inputs: this.queued_inputs.map((item) => ({ id: item.id, text: item.input.text })) });
+  }
   private update(partial: Partial<DowncityChatRuntimeSnapshot>): void { this.snapshot = { ...this.snapshot, ...partial }; for (const listener of this.listeners) listener(this.snapshot); }
 }
 

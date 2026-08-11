@@ -109,6 +109,7 @@ export interface DowncityChatPanelProps extends Omit<React.ComponentPropsWithout
   /** 审批模式切换回调。 */ on_approval_mode_change?: (mode: DowncityChatApprovalMode) => void | Promise<void>;
   /** 提交消息。 */ on_submit?: (input: DowncityChatSubmitInput, mode?: "send" | "queue") => void | Promise<void>;
   /** 停止生成。 */ on_stop?: () => void | Promise<void>;
+  /** 响应当前 Session 的 approval/question Interaction。 */ on_respond_interaction?: (interaction_id: string, response: unknown) => void | Promise<void>;
   /** 打开附件选择。 */ on_attach?: () => void;
   /** 新建会话。 */ on_create_thread?: () => void | Promise<void>;
   /** 选择会话。 */ on_select_thread?: (thread_id: string) => void | Promise<void>;

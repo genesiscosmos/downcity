@@ -1,6 +1,12 @@
 /** Chat runtime 的可移植状态和宿主回调协议。 */
 import type { DowncityChatApprovalMode, DowncityChatMessage, DowncityChatModelOption, DowncityChatStatus, DowncityChatSubmitInput } from "./chat";
 
+/** 已排队但尚未交给 Agent 执行的输入。 */
+export interface DowncityChatQueuedInput {
+  /** 队列项稳定标识。 */ id: string;
+  /** 队列项正文。 */ text: string;
+}
+
 /** Runtime 初始化和宿主能力。 */
 export interface DowncityChatRuntimeOptions {
   /** 初始 Session JSONL。 */ initial_jsonl?: string;
@@ -20,6 +26,7 @@ export interface DowncityChatRuntimeSnapshot {
   /** 模型列表。 */ model_options: DowncityChatModelOption[];
   /** 当前模型。 */ model_id: string;
   /** approval 模式。 */ approval_mode: DowncityChatApprovalMode;
+  /** 当前等待执行的输入队列。 */ queued_inputs: DowncityChatQueuedInput[];
 }
 
 /** Runtime 状态订阅回调。 */

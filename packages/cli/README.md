@@ -12,6 +12,7 @@ downcity -v
 - `city` 是本机 City 容器，基于 `City()` 与 Agent SDK 管理全局 Agent、运行时、Plugin 与控制台。
 - `fed` 是 Federation Server Manager；TUI 用于注册和管理 Server，项目命令读取当前目录的 `federation.json`。Local Node.js 和 Cloudflare Workers 都通过 `fed deploy` 部署。
 - `fed web` 在 `127.0.0.1:43128` 启动当前 Federation 的本地 Web 管理 UI；管理员登录后的 Session 只保留在 CLI 本地 BFF 内存中。
+- `city web` 启动本机 City Web 控制面，可管理 Agent daemon 并使用 `@downcity/ui` ChatPanel 与 Agent 对话；默认只监听 loopback。
 
 ```bash
 fed create ./my-fed
@@ -28,6 +29,7 @@ City 的主要命令：
 ```bash
 city agent create .
 city agent start <agent_id>
+city web --open
 city agent token create <agent_id> --name local
 city plugin action <plugin_name> <action_name> <agent_id> --input '{}'
 ```

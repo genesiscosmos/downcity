@@ -178,6 +178,7 @@
 
 /* Chat UI：只提供展示层样式，宿主通过组件属性接入自己的运行时。 */
 .dc-chat-panel { display:flex; flex-direction:column; width:100%; height:100%; min-height:0; overflow:hidden; background:var(--background); color:var(--foreground); }
+.dc-chat-body { position:relative; display:flex; flex:1; min-width:0; min-height:0; flex-direction:column; overflow:hidden; }
 .dc-chat-header { display:flex; align-items:center; gap:.5rem; flex:none; min-height:2.75rem; padding:.375rem .625rem; border-bottom:1px solid var(--border-subtle); }
 .dc-chat-header-title { display:flex; align-items:center; gap:.45rem; min-width:0; flex:1; font-size:.8125rem; font-weight:600; }
 .dc-chat-header-title span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -189,10 +190,10 @@
 .dc-chat-icon-button:active, .dc-chat-composer-action:active { transform:scale(.95); }
 .dc-chat-icon-button svg, .dc-chat-thread-archive svg { width:1rem; height:1rem; }
 .dc-chat-body { position:relative; display:flex; flex:1; min-height:0; flex-direction:column; }
-.dc-chat-conversation { flex:1; min-width:0; overflow-y:auto; padding:.5rem; scrollbar-width:thin; }
+.dc-chat-conversation { flex:1; min-width:0; overflow-x:hidden; overflow-y:auto; padding:.5rem; scrollbar-width:thin; }
 .dc-chat-message { display:flex; width:100%; max-width:52.5rem; margin:0 auto; padding:0; animation:dc-chat-message-in 220ms cubic-bezier(.16,1,.3,1); }
 .dc-chat-message-body { min-width:0; width:100%; }
-.dc-chat-message-content { width:100%; padding:.125rem .25rem 0; color:color-mix(in srgb, var(--foreground) 90%, transparent); font-size:.8125rem; line-height:1.54; white-space:pre-wrap; overflow-wrap:anywhere; }
+.dc-chat-message-content { width:100%; min-width:0; max-width:100%; overflow:hidden; padding:.125rem .25rem 0; color:color-mix(in srgb, var(--foreground) 90%, transparent); font-size:.8125rem; line-height:1.54; white-space:pre-wrap; overflow-wrap:anywhere; }
 .dc-chat-message-user { justify-content:flex-end; padding:.5rem 0; }
 .dc-chat-message-user .dc-chat-message-body { display:flex; width:100%; max-width:min(80%, 42rem); flex-direction:column; align-items:flex-end; gap:.125rem; margin-left:auto; }
 .dc-chat-message-user .dc-chat-message-content { width:fit-content; max-width:100%; margin-left:auto; padding:.5rem .75rem; border-radius:1rem 1rem 0 1rem; background:color-mix(in srgb, var(--muted-foreground) 10%, transparent); color:var(--foreground); font-size:.8125rem; line-height:1.34; }
@@ -464,7 +465,7 @@
 .dc-chat-header-title small { margin-left: .5rem; color: var(--muted-foreground); font-size: .625rem; font-weight: 400; }
 .dc-chat-header-drag { min-width: 0; flex: 1; height: 100%; }
 .dc-chat-conversation { position: relative; padding: 0; }
-.dc-chat-conversation-content { width: 100%; max-width: 52.5rem; min-height: 100%; margin: 0 auto; padding: .5rem; }
+.dc-chat-conversation-content { box-sizing: border-box; width: 100%; max-width: 52.5rem; min-height: 100%; margin: 0 auto; overflow-x: hidden; padding: .5rem; }
 .dc-chat-message { max-width: none; padding: .5rem 0; animation: none; }
 .dc-chat-message.is-user { align-items: flex-end; justify-content: flex-end; }
 .dc-chat-message.is-assistant { flex-direction: row-reverse; justify-content: flex-end; }
@@ -495,7 +496,7 @@
 .dc-chat-thinking-dots i:nth-child(2) { animation-delay: .6s; }.dc-chat-thinking-dots i:nth-child(3) { animation-delay: .12s; }.dc-chat-thinking-dots i:nth-child(4) { animation-delay: .48s; }.dc-chat-thinking-dots i:nth-child(5) { animation-delay: .24s; }.dc-chat-thinking-dots i:nth-child(6) { animation-delay: .36s; }
 .dc-chat-activity-row { width: 100%; color: color-mix(in srgb, var(--foreground) 62%, transparent); font-size: .8125rem; line-height: 1.3; }
 .dc-chat-activity-summary { min-height: 1.45rem; padding: .1rem .25rem; cursor: pointer; list-style: none; }.dc-chat-activity-summary::-webkit-details-marker { display: none; }
-.dc-chat-activity-main { display: flex; min-height: 1.25rem; align-items: center; gap: .2rem; }.dc-chat-activity-main > svg { width: .9rem; height: .9rem; color: color-mix(in srgb, var(--foreground) 52%, transparent); }.dc-chat-activity-state { color: color-mix(in srgb, var(--foreground) 58%, transparent); }.dc-chat-activity-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: color-mix(in srgb, var(--muted-foreground) 82%, transparent); }.dc-chat-activity-chevron { margin-left: auto; transition: transform 140ms ease; }.dc-chat-activity-row[open] .dc-chat-activity-chevron { transform: rotate(90deg); }
+.dc-chat-activity-main { display: flex; min-width: 0; min-height: 1.25rem; align-items: center; gap: .2rem; }.dc-chat-activity-main > svg { width: .9rem; height: .9rem; color: color-mix(in srgb, var(--foreground) 52%, transparent); }.dc-chat-activity-state { flex: none; color: color-mix(in srgb, var(--foreground) 58%, transparent); }.dc-chat-activity-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: color-mix(in srgb, var(--muted-foreground) 82%, transparent); }.dc-chat-activity-chevron { flex: none; margin-left: auto; transition: transform 140ms ease; }.dc-chat-activity-row[open] .dc-chat-activity-chevron { transform: rotate(90deg); }
 .dc-chat-activity-row.is-running .dc-chat-activity-main > * { animation: dc-chat-tool-pulse 1.4s ease-in-out infinite; }.dc-chat-activity-row.is-failed .dc-chat-activity-state { color: var(--destructive); }
 .dc-chat-activity-terminal, .dc-chat-reasoning-content { width: calc(100% - 1.4rem); margin-left: 1.4rem; padding: .25rem .45rem; border-radius: .3rem; background: color-mix(in srgb, var(--muted) 24%, transparent); }.dc-chat-activity-terminal pre { margin: 0; overflow: auto; color: color-mix(in srgb, var(--foreground) 78%, transparent); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .7rem; line-height: 1.45; white-space: pre-wrap; }.dc-chat-command-prompt { color: color-mix(in srgb, var(--foreground) 54%, transparent); }.dc-chat-input-caret { display: inline-block; width: 1px; height: 1em; margin-left: 2px; vertical-align: text-bottom; background: var(--primary); animation: dc-chat-caret .9s steps(1,end) infinite; }
 .dc-chat-operation { display: flex; min-height: 1.45rem; align-items: center; gap: .35rem; padding: .1rem .25rem; font-size: .8125rem; color: var(--muted-foreground); }.dc-chat-operation svg { width: .85rem; height: .85rem; }

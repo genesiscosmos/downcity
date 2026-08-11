@@ -13,6 +13,7 @@ import { TbArrowUp, TbCheck, TbChevronDown, TbChevronRight, TbFile as TbFileIcon
 import { cn } from "../lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./dropdown-menu";
 import type { DowncityChatApprovalMode, DowncityChatChangedFile, DowncityChatMessage, DowncityChatMessagePart, DowncityChatModelOption, DowncityChatPanelProps, DowncityChatQuestion, DowncityChatSubmitInput, DowncityChatThread } from "../types/chat";
+import type { DowncityChatQueuedInput } from "../types/chat-runtime";
 
 function format_thread_time(value: DowncityChatThread["updated_at"]): string {
   if (!value) return "";
@@ -63,21 +64,41 @@ function ReasoningActivity({ part }: { part: DowncityChatMessagePart }) {
   </details>;
 }
 
-function InteractionCard({ part }: { part: DowncityChatMessagePart }) {
+function InteractionCard({ part, on_respond_interaction }: { part: DowncityChatMessagePart; on_respond_interaction?: DowncityChatPanelProps["on_respond_interaction"] }) {
   const [submitted, set_submitted] = useState(false);
-  const [value, set_value] = useState("");
+  const [submitting, set_submitting] = useState(false);
+  const [error, set_error] = useState<string | null>(null);
+  const [answers, set_answers] = useState<Record<string, string | string[]>>({});
   if (submitted) return null;
-  const question = part.questions?.[0];
+  const questions = part.questions ?? [];
+  const has_empty_answer = questions.some((question) => {
+    const value = answers[question.id];
+    return Array.isArray(value) ? value.length === 0 : !value?.trim();
+  });
+  const respond = async (response: unknown) => {
+    if (!part.interaction_id) return;
+    set_submitting(true);
+    set_error(null);
+    try {
+      await on_respond_interaction?.(part.interaction_id, response);
+      set_submitted(true);
+    } catch (reason) {
+      set_error(String(reason));
+    } finally {
+      set_submitting(false);
+    }
+  };
   return <section className="dc-chat-interaction-card" aria-label={typeof part.title === "string" ? part.title : "需要操作"}>
-    <header><span>{part.title ?? (part.interaction_type === "approval" ? "需要批准" : "需要输入")}</span><small>{part.interaction_status ?? "等待响应"}</small></header>
-    <div className="dc-chat-interaction-body">{part.description}{question ? <QuestionField question={question} value={value} on_change={set_value} /> : null}</div>
-    <footer>{part.interaction_type === "approval" ? <><button type="button" onClick={() => set_submitted(true)}>拒绝</button><button type="button" className="is-primary" onClick={() => set_submitted(true)}>批准</button><button type="button" className="is-primary" onClick={() => set_submitted(true)}>始终批准</button></> : <button type="button" className="is-primary" disabled={question ? !value.trim() : false} onClick={() => set_submitted(true)}><Send />提交</button>}</footer>
+    <header><span>{part.title ?? (part.interaction_type === "approval" ? "需要批准" : "需要输入")}</span><small>{submitting ? "提交中" : part.interaction_status ?? "等待响应"}</small></header>
+    <div className="dc-chat-interaction-body">{part.description}{questions.map((question) => <QuestionField key={question.id} question={question} value={answers[question.id] ?? (question.response_type === "multi_select" ? [] : "")} on_change={(value) => set_answers((current) => ({ ...current, [question.id]: value }))} />)}{error ? <small className="dc-chat-interaction-error">{error}</small> : null}</div>
+    <footer>{part.interaction_type === "approval" ? <><button type="button" disabled={submitting} onClick={() => void respond({ kind: "approval", decision: "denied" })}>拒绝</button><button type="button" className="is-primary" disabled={submitting} onClick={() => void respond({ kind: "approval", decision: "approved" })}>批准</button></> : <button type="button" className="is-primary" disabled={submitting || questions.length === 0 || has_empty_answer} onClick={() => void respond({ kind: "question", answers: questions.map((question) => ({ question_id: question.id, value: answers[question.id] })) })}><Send />提交</button>}</footer>
   </section>;
 }
 
-function QuestionField({ question, value, on_change }: { question: DowncityChatQuestion; value: string; on_change: (value: string) => void }) {
-  if (question.response_type === "text") return <label className="dc-chat-question"><span>{question.prompt}</span><textarea value={value} onChange={(event) => on_change(event.target.value)} /></label>;
-  return <fieldset className="dc-chat-question"><legend>{question.prompt}</legend>{question.options?.map((option) => <label key={option.value}><input type={question.response_type === "multi_select" ? "checkbox" : "radio"} name={question.id} value={option.value} checked={value.split("\0").includes(option.value)} onChange={() => on_change(question.response_type === "multi_select" ? [value, option.value].filter(Boolean).join("\0") : option.value)} />{option.label}</label>)}</fieldset>;
+function QuestionField({ question, value, on_change }: { question: DowncityChatQuestion; value: string | string[]; on_change: (value: string | string[]) => void }) {
+  if (question.response_type === "text") return <label className="dc-chat-question"><span>{question.prompt}</span><textarea value={String(value)} onChange={(event) => on_change(event.target.value)} /></label>;
+  const selected_values = Array.isArray(value) ? value : value ? [value] : [];
+  return <fieldset className="dc-chat-question"><legend>{question.prompt}</legend>{question.options?.map((option) => <label key={option.value}><input type={question.response_type === "multi_select" ? "checkbox" : "radio"} name={question.id} value={option.value} checked={selected_values.includes(option.value)} onChange={() => on_change(question.response_type === "multi_select" ? selected_values.includes(option.value) ? selected_values.filter((item) => item !== option.value) : [...selected_values, option.value] : option.value)} />{option.label}</label>)}</fieldset>;
 }
 
 function ChangedFiles({ files = [] }: { files?: DowncityChatChangedFile[] }) {
@@ -87,11 +108,11 @@ function ChangedFiles({ files = [] }: { files?: DowncityChatChangedFile[] }) {
   return <details className="dc-chat-changed-files" open><summary><span>已更改 {files.length} 个文件</span><b>+{additions}</b><em>-{deletions}</em><ChevronDown /></summary><div>{files.map((file) => <details key={file.path}><summary><File /><span>{file.path}</span><b>+{file.additions}</b><em>-{file.deletions}</em></summary>{file.diff ? <pre>{file.diff}</pre> : null}</details>)}</div></details>;
 }
 
-function render_part(part: DowncityChatMessagePart): ReactNode {
+function render_part(part: DowncityChatMessagePart, on_respond_interaction?: DowncityChatPanelProps["on_respond_interaction"]): ReactNode {
   if (part.type === "text") return <MarkdownContent text={part.text ?? ""} />;
   if (part.type === "reasoning") return <ReasoningActivity part={part} />;
   if (part.type === "tool") return <ToolActivity part={part} />;
-  if (part.type === "interaction") return <InteractionCard part={part} />;
+  if (part.type === "interaction") return <InteractionCard part={part} on_respond_interaction={on_respond_interaction} />;
   if (part.type === "changed-files") return <ChangedFiles files={part.files} />;
   if (part.type === "operation") return <div className="dc-chat-operation"><LoaderCircle className={part.operation?.status === "running" ? "animate-spin" : ""} /><span>{part.operation?.label ?? part.operation?.name}</span></div>;
   if (part.type === "file") return <span className="dc-chat-attachment"><File />{part.filename ?? "附件"}</span>;
@@ -100,17 +121,17 @@ function render_part(part: DowncityChatMessagePart): ReactNode {
 }
 
 /** 按 Duobox MessageRenderer 的规则，把连续的 reasoning/tool/step-start 合并成一个 activity 区块。 */
-function render_message_parts(parts: DowncityChatMessagePart[]): ReactNode[] {
+function render_message_parts(parts: DowncityChatMessagePart[], on_respond_interaction?: DowncityChatPanelProps["on_respond_interaction"]): ReactNode[] {
   const nodes: ReactNode[] = [];
   let activity: DowncityChatMessagePart[] = [];
   const flush_activity = () => {
     if (!activity.length) return;
-    nodes.push(<div className="dc-chat-activity-list" key={`activity-${nodes.length}`}>{activity.map((part) => <div className="dc-chat-part" key={part.id}>{render_part(part)}</div>)}</div>);
+    nodes.push(<div className="dc-chat-activity-list" key={`activity-${nodes.length}`}>{activity.map((part) => <div className="dc-chat-part" key={part.id}>{render_part(part, on_respond_interaction)}</div>)}</div>);
     activity = [];
   };
   for (const part of parts) {
     if (part.type === "reasoning" || part.type === "tool" || part.type === "step-start") activity.push(part);
-    else { flush_activity(); nodes.push(<div className="dc-chat-part" key={part.id}>{render_part(part)}</div>); }
+    else { flush_activity(); nodes.push(<div className="dc-chat-part" key={part.id}>{render_part(part, on_respond_interaction)}</div>); }
   }
   flush_activity();
   return nodes;
@@ -140,7 +161,7 @@ function MarkdownContent({ text }: { text: string }) {
 }
 
 /** 与 Duobox 消息布局一致的受控消息组件。 */
-export function ChatMessage({ message, render_message }: Pick<DowncityChatPanelProps, "render_message"> & { message: DowncityChatMessage }) {
+export function ChatMessage({ message, render_message, on_respond_interaction }: Pick<DowncityChatPanelProps, "render_message" | "on_respond_interaction"> & { message: DowncityChatMessage }) {
   const [copied, set_copied] = useState(false);
   if (message.role === "system") return null;
   const is_user = message.role === "user";
@@ -149,7 +170,7 @@ export function ChatMessage({ message, render_message }: Pick<DowncityChatPanelP
   const copy = () => { void navigator.clipboard?.writeText(text).then(() => { set_copied(true); setTimeout(() => set_copied(false), 1200); }); };
   return <article className={cn("dc-chat-message", "group", is_user ? "is-user" : "is-assistant", message.role === "error" && "is-error")}>
     <div className={cn("dc-chat-message-content", is_user ? "dc-chat-user-message-content" : "dc-chat-assistant-message-content")}>
-      {rendered ?? (message.parts?.length ? render_message_parts(message.parts) : <div className="dc-chat-markdown">{message.content}</div>)}
+      {rendered ?? (message.parts?.length ? render_message_parts(message.parts, on_respond_interaction) : <div className="dc-chat-markdown">{message.content}</div>)}
       {message.attachments?.map((attachment) => <span className="dc-chat-attachment" key={attachment.id}><Paperclip />{attachment.name}</span>)}
       {!is_user && text ? <div className="dc-chat-message-actions"><button type="button" onClick={copy} title="复制">{copied ? <Check /> : <Copy />}</button><button type="button" title="更多"><MoreHorizontal /></button></div> : null}
     </div>
@@ -157,20 +178,24 @@ export function ChatMessage({ message, render_message }: Pick<DowncityChatPanelP
 }
 
 /** 直接组合消息列表；宿主可在自己的 Chat 页面中使用，不需要 ChatPanel 封装。 */
-export function ChatMessageList({ messages, render_message }: { messages: DowncityChatMessage[]; render_message?: DowncityChatPanelProps["render_message"] }) {
-  return <div className="dc-chat-conversation-content">{messages.filter((message) => message.role !== "system").map((message) => <ChatMessage key={message.id} message={message} render_message={render_message} />)}</div>;
+export function ChatMessageList({ messages, render_message, on_respond_interaction }: { messages: DowncityChatMessage[]; render_message?: DowncityChatPanelProps["render_message"]; on_respond_interaction?: DowncityChatPanelProps["on_respond_interaction"] }) {
+  return <div className="dc-chat-conversation-content">{messages.filter((message) => message.role !== "system").map((message) => <ChatMessage key={message.id} message={message} render_message={render_message} on_respond_interaction={on_respond_interaction} />)}</div>;
 }
 
+type ChatComposerProps = Pick<DowncityChatPanelProps, "status" | "input_placeholder" | "on_submit" | "on_stop" | "on_attach" | "model_options" | "model_id" | "on_model_change" | "approval_mode" | "on_approval_mode_change"> & {
+  /** 当前由 Chat runtime 持有的等待队列。 */ queued_inputs?: DowncityChatQueuedInput[];
+  /** 删除等待队列中的一项。 */ on_remove_queued?: (input_id: string) => void;
+  /** 调整等待队列中一项的顺序。 */ on_move_queued?: (input_id: string, direction: "up" | "down") => void;
+};
+
 /** 与 Duobox 输入壳结构一致的受控 Chat 输入组件。 */
-export function ChatComposer({ status = "ready", input_placeholder, on_submit, on_stop, on_attach, model_options = [{ id: "default", label: "Default model" }], model_id = "default", on_model_change, approval_mode = "ask", on_approval_mode_change }: Pick<DowncityChatPanelProps, "status" | "input_placeholder" | "on_submit" | "on_stop" | "on_attach" | "model_options" | "model_id" | "on_model_change" | "approval_mode" | "on_approval_mode_change">) {
+export function ChatComposer({ status = "ready", input_placeholder, on_submit, on_stop, on_attach, model_options = [{ id: "default", label: "Default model" }], model_id = "default", on_model_change, approval_mode = "ask", on_approval_mode_change, queued_inputs = [], on_remove_queued, on_move_queued }: ChatComposerProps) {
   const [text, set_text] = useState("");
-  const [queued, set_queued] = useState<Array<{ id: string; text: string }>>([]);
   const editor = useEditor({ extensions: [StarterKit.configure({ heading: false, codeBlock: false }), Placeholder.configure({ placeholder: input_placeholder ?? "输入消息…", emptyEditorClass: "is-editor-empty" })], editorProps: { attributes: { class: "chat-input-editor dc-chat-input-editor", "data-chat-input": "true", autocapitalize: "off", autocorrect: "off", spellcheck: "false" } }, onUpdate: ({ editor: current_editor }) => set_text(current_editor.getText()) });
   const is_streaming = status === "submitted" || status === "streaming" || status === "building-context";
   const submit = useCallback(async (mode: "send" | "queue" = "send") => {
     const normalized_text = text.trim();
     if (!normalized_text || !on_submit) return;
-    if (mode === "queue") set_queued((current) => [...current, { id: `${Date.now()}`, text: normalized_text }]);
     const input: DowncityChatSubmitInput = { text: normalized_text, attachments: [] };
     editor?.commands.clearContent();
     set_text("");
@@ -178,15 +203,21 @@ export function ChatComposer({ status = "ready", input_placeholder, on_submit, o
     await on_submit(input, mode);
   }, [editor, on_submit, text]);
   return <div className="dc-chat-input-root">
-    {queued.length ? <div className="dc-chat-queue">{queued.map((item, index) => <div key={item.id}><ArrowDown /><span>{item.text}</span><button disabled={index === 0} onClick={() => set_queued((current) => { const next = [...current]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; })}><ArrowUp /></button><button onClick={() => set_queued((current) => current.filter((entry) => entry.id !== item.id))}><X /></button></div>)}</div> : null}
+    {queued_inputs.length ? <div className="dc-chat-queue">{queued_inputs.map((item, index) => <div key={item.id}><ArrowDown /><span>{item.text}</span><button type="button" title="上移" disabled={index === 0} onClick={() => on_move_queued?.(item.id, "up")}><ArrowUp /></button><button type="button" title="下移" disabled={index === queued_inputs.length - 1} onClick={() => on_move_queued?.(item.id, "down")}><ArrowDown /></button><button type="button" title="取消排队" onClick={() => on_remove_queued?.(item.id)}><X /></button></div>)}</div> : null}
     <div className="dc-chat-input-shell" aria-busy={is_streaming && !text.trim()}>
       <EditorContent editor={editor} onKeyDown={(event) => {
-        if (event.key !== "Enter" || event.shiftKey) return;
+        if (event.key !== "Enter") return;
+        if (event.shiftKey && (event.metaKey || event.ctrlKey)) {
+          event.preventDefault();
+          void submit("queue");
+          return;
+        }
+        if (event.shiftKey) return;
         const content = editor?.getJSON();
         const is_single_paragraph = Boolean(content?.type === "doc" && content.content?.length === 1 && content.content[0]?.type === "paragraph");
         if (!event.metaKey && !event.ctrlKey && (!is_single_paragraph || text.includes("\n"))) return;
         event.preventDefault();
-        void submit(event.metaKey || event.ctrlKey ? "send" : "send");
+        void submit("send");
       }} />
       <div className="dc-chat-input-toolbar"><div><button type="button" onClick={on_attach} title="添加附件"><TbPlus /></button><DropdownMenu><DropdownMenuTrigger render={<button type="button" className="dc-chat-input-chip" />}><TbRobot /><span>{model_options.find((option) => option.id === model_id)?.label ?? "Default model"}</span><TbChevronDown /></DropdownMenuTrigger><DropdownMenuContent side="top" align="start">{model_options.map((option) => <DropdownMenuItem key={option.id} onClick={() => void on_model_change?.(option.id)}>{option.id === model_id ? "✓" : ""}<span>{option.label}</span></DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu><DropdownMenu><DropdownMenuTrigger render={<button type="button" className="dc-chat-input-chip" />}>{approval_mode === "ask" ? <TbLock /> : <TbShieldCheck />}<span>{approval_mode === "ask" ? "Ask" : "Always allow"}</span><TbChevronDown /></DropdownMenuTrigger><DropdownMenuContent side="top" align="start"><DropdownMenuItem onClick={() => void on_approval_mode_change?.("ask")}><TbLock /><span>Ask</span></DropdownMenuItem><DropdownMenuItem onClick={() => void on_approval_mode_change?.("always-allow")}><TbShieldCheck /><span>Always allow</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu></div><button type="button" className="dc-chat-send" disabled={!is_streaming && !text.trim()} onClick={() => is_streaming && !text.trim() ? void on_stop?.() : void submit(is_streaming ? "queue" : "send")} title={is_streaming && !text.trim() ? "停止生成" : "发送消息"}>{is_streaming && !text.trim() ? <TbSquare /> : <TbArrowUp />}</button></div>
     </div>
@@ -202,7 +233,7 @@ export function ChatHistory({ threads, current_thread_id, loading, has_more, on_
 }
 
 /** 组合顶部栏、对话滚动区、消息和输入区的通用 Chat Panel。 */
-export function ChatPanel({ className, runtime, thread, threads = [], messages: provided_messages = [], status: provided_status = "ready", history_open = false, history_loading, has_more_threads, title, empty_title = "开始一段新对话", empty_description = "输入消息，与 Agent 开始交流。", input_placeholder, model_options: provided_model_options, model_id: provided_model_id, on_model_change, approval_mode: provided_approval_mode, on_approval_mode_change, on_submit, on_stop, on_attach, on_create_thread, on_select_thread, on_archive_thread, on_load_more_threads, render_message, render_header_actions, render_footer, ...props }: DowncityChatPanelProps) {
+export function ChatPanel({ className, runtime, thread, threads = [], messages: provided_messages = [], status: provided_status = "ready", history_open = false, history_loading, has_more_threads, title, empty_title = "开始一段新对话", empty_description = "输入消息，与 Agent 开始交流。", input_placeholder, model_options: provided_model_options, model_id: provided_model_id, on_model_change, approval_mode: provided_approval_mode, on_approval_mode_change, on_submit, on_stop, on_respond_interaction, on_attach, on_create_thread, on_select_thread, on_archive_thread, on_load_more_threads, render_message, render_header_actions, render_footer, ...props }: DowncityChatPanelProps) {
   const runtime_snapshot = runtime ? useSyncExternalStore(runtime.subscribe.bind(runtime), () => runtime.get_snapshot(), () => runtime.get_snapshot()) : null;
   const messages = runtime_snapshot?.messages ?? provided_messages;
   const status = runtime_snapshot?.status ?? provided_status;
@@ -217,10 +248,10 @@ export function ChatPanel({ className, runtime, thread, threads = [], messages: 
   const visible_messages = useMemo(() => messages.filter((message: DowncityChatMessage) => message.role !== "system"), [messages]);
   return <div className={cn("dc-chat-panel", className)} {...props}>
     <header className="dc-chat-header"><button type="button" onClick={() => set_show_history((value) => !value)} title="历史会话">{show_history ? <ChevronLeft /> : <History />}</button><div className="dc-chat-header-title"><span>{title ?? thread?.title ?? "新对话"}</span>{thread?.updated_at ? <small>{format_thread_time(thread.updated_at)}</small> : null}</div><div className="dc-chat-header-drag" /><button type="button" onClick={() => void on_create_thread?.()} title="新建会话"><Plus /></button>{render_header_actions?.()}</header>
-    {show_history ? <ChatHistory threads={threads} current_thread_id={thread?.id} loading={history_loading} has_more={has_more_threads} on_select={(thread_id) => { set_show_history(false); return on_select_thread?.(thread_id); }} on_archive={on_archive_thread} on_load_more={on_load_more_threads} /> : <>
-      <div className="dc-chat-conversation" ref={conversation_ref} role="log" onScroll={(event) => { const target = event.currentTarget; set_is_at_bottom(target.scrollHeight - target.scrollTop - target.clientHeight < 24); }}><div className="dc-chat-conversation-content">{visible_messages.length ? visible_messages.map((message: DowncityChatMessage) => <ChatMessage key={message.id} message={message} render_message={render_message} />) : <div className="dc-chat-empty"><MessageCircle /><h2>{empty_title}</h2><p>{empty_description}</p></div>}{render_footer?.()}</div></div>
+    {show_history ? <ChatHistory threads={threads} current_thread_id={thread?.id} loading={history_loading} has_more={has_more_threads} on_select={(thread_id) => { set_show_history(false); return on_select_thread?.(thread_id); }} on_archive={on_archive_thread} on_load_more={on_load_more_threads} /> : <div className="dc-chat-body">
+      <div className="dc-chat-conversation" ref={conversation_ref} role="log" onScroll={(event) => { const target = event.currentTarget; set_is_at_bottom(target.scrollHeight - target.scrollTop - target.clientHeight < 24); }}><div className="dc-chat-conversation-content">{visible_messages.length ? visible_messages.map((message: DowncityChatMessage) => <ChatMessage key={message.id} message={message} render_message={render_message} on_respond_interaction={on_respond_interaction} />) : <div className="dc-chat-empty"><MessageCircle /><h2>{empty_title}</h2><p>{empty_description}</p></div>}{render_footer?.()}</div></div>
       {!is_at_bottom ? <button className="dc-chat-scroll-button" onClick={() => conversation_ref.current?.scrollTo({ top: conversation_ref.current.scrollHeight, behavior: "smooth" })}><ArrowDown /></button> : null}
-      <ChatComposer status={status} input_placeholder={input_placeholder} model_options={model_options} model_id={model_id} on_model_change={(next_model_id) => { runtime?.set_model(next_model_id); return on_model_change?.(next_model_id); }} approval_mode={approval_mode} on_approval_mode_change={(next_mode) => { runtime?.set_approval_mode(next_mode); return on_approval_mode_change?.(next_mode); }} on_submit={(input, mode = "send") => runtime ? runtime.submit(input, mode) : on_submit?.(input, mode)} on_stop={() => runtime ? runtime.stop() : on_stop?.()} on_attach={on_attach} />
-    </>}
+      <ChatComposer status={status} input_placeholder={input_placeholder} model_options={model_options} model_id={model_id} on_model_change={(next_model_id) => { runtime?.set_model(next_model_id); return on_model_change?.(next_model_id); }} approval_mode={approval_mode} on_approval_mode_change={(next_mode) => { runtime?.set_approval_mode(next_mode); return on_approval_mode_change?.(next_mode); }} on_submit={(input, mode = "send") => runtime ? runtime.submit(input, mode) : on_submit?.(input, mode)} on_stop={() => runtime ? runtime.stop() : on_stop?.()} on_attach={on_attach} queued_inputs={runtime_snapshot?.queued_inputs} on_remove_queued={(input_id) => runtime?.remove_queued_input(input_id)} on_move_queued={(input_id, direction) => runtime?.move_queued_input(input_id, direction)} />
+    </div>}
   </div>;
 }
