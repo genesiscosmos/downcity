@@ -5,7 +5,7 @@ type: solution
 quality_score: 4.6
 word_count: 11200
 status: final
-hypothesis: "如果 Downcity 把可追溯证据层作为记忆事实来源，并将提炼、索引、检索和上下文组装定义为可替换协议，那么它会比直接绑定向量库或单一 Memory SaaS 更可靠、更可迁移。"
+hypothesis: "如果 Downcity 让一个 MemoryProvider 成为唯一事实源，由 Provider 独占记忆语义，并将存储与索引下沉为内部 Adapter，那么它会比直接绑定文件目录、向量库或单一 Memory SaaS 更可靠、更可迁移。"
 validation_rate: 80%
 ---
 
@@ -19,9 +19,9 @@ validation_rate: 80%
 
 ## 一、执行摘要
 
-结论先行：**整个 Agent Memory 生态没有一个可以覆盖所有职责的“最佳产品”。Downcity 不应该把 `MemoryPlugin` 直接改造成 Mem0、Zep、Hindsight 或某个向量数据库的薄封装。最适合的底座是“可追溯 Memory Ledger + 可替换 Memory Engine SPI”。**
+结论先行：**整个 Agent Memory 生态没有一个可以覆盖所有职责的“最佳产品”。Downcity 不应该把 `MemoryPlugin` 直接改造成 Mem0、Zep、Hindsight、文件系统或某个向量数据库的薄封装。最适合的底座是“可替换的单一 MemoryProvider + Provider 内部 Adapter”。**
 
-当前 Downcity 的 LLM Wiki 方向是合理的。Markdown `wiki/` 提供人可读、可编辑、可版本控制的整理层，`sources/` 提供原始证据层。这条路线与 Anthropic Memory Tool 的文件式、按需读取设计高度一致，也与 A-MEM 的 Zettelkasten 式动态笔记网络方向相容。真正的问题不是“没有向量库”，而是当前实现仍把存储、提炼、关键词扫描和上下文注入绑在同一个内建实现中，缺少时态、作用域、混合检索、失效规则、权限和评测。
+Downcity 的 LLM Wiki 可以继续作为 Builtin Provider 的一种人类可读投影，但不能成为 MemoryPlugin 的领域协议。Markdown、JSONL、SQLite、向量库和远程服务都只是 Provider 背后的实现。真正的问题不是“没有向量库”，而是过去把文件路径、存储、提炼、关键词扫描和上下文注入直接写进了 Plugin，使第三方 Memory Engine 无法替换整套语义。
 
 建议的目标架构：
 
@@ -43,7 +43,7 @@ Session / Tool Result / Manual Input / External Data
 
 产品选择上：
 
-- **默认本地底座**：保留 Downcity LLM Wiki 与 evidence-first 文件存储，新增 SQLite 元数据、FTS/BM25 和 provider-neutral 协议。它最符合 Downcity 的本地优先、透明、可恢复和不锁定供应商的产品意图。
+- **默认本地 Provider**：由 `BuiltinMemoryProvider` 实现记忆形成、召回、修订和删除；文件、SQLite FTS 或向量索引均作为内部 Adapter。它最符合 Downcity 的本地优先、透明、可恢复和不锁定供应商的产品意图。
 - **第一个通用商业/托管适配器**：优先 Mem0。它的生态、SDK、托管与自部署路径最成熟，适合快速验证用户画像和事实记忆，但不应成为核心数据模型。
 - **第一个高级开源 Memory Engine 适配器**：Hindsight 或 Graphiti 二选一。Hindsight 的 `retain / recall / reflect`、多路检索与 evidence-grounded observation 更完整；Graphiti 的双时态事实、来源追踪和增量知识图谱更适合业务事实持续变化的场景。
 - **Agent 自管理上下文的参考实现**：Letta。它的 always-visible memory blocks、archival memory 和共享 block 很有价值，但 Letta 是完整 stateful-agent runtime，不适合反向成为 Downcity Plugin 的基础依赖。
@@ -140,7 +140,7 @@ Mem0 论文将系统描述为“抽取、合并、检索显著事实”，并报
 - 自动抽取和合并受 LLM 稳定性影响。
 - 作为核心依赖会把 Downcity 的 identity、scope、删除和历史语义映射到 Mem0 模型。
 
-判断：**最适合作为 Downcity 的第一个 SaaS/通用 provider，不适合作为唯一 canonical store。**
+判断：**最适合作为 Downcity 的第一个 SaaS/通用 Provider，但不适合作为全部场景的默认唯一实现。**
 
 截至调研日，[mem0ai/mem0](https://github.com/mem0ai/mem0) 约 6.3 万 stars，Apache-2.0，项目活跃；这是生态成熟度信号，不代表记忆准确率。
 
@@ -243,7 +243,7 @@ Hermes 的共性生命周期是：系统 prompt 注入 provider 上下文、每�
 这些设计值得 Downcity 借鉴，但不应原样复制：
 
 - **值得借鉴**：生命周期 hook、provider 能力声明、配置向导、profile 隔离、压缩前保存和单 provider 的运行时边界。
-- **不应照搬**：把长期 Memory 与内置文件做双写镜像会产生两个事实来源；Downcity 应让 evidence ledger 只有一个 canonical owner，Wiki 和外部 provider 都是可重建 projection。
+- **不应照搬**：把长期 Memory 与内置文件做双写镜像会产生两个事实来源；Downcity 的一个 Plugin 实例只能有一个主 Provider，文件或外部服务不能同时被当作 canonical owner。
 - **对 Downcity 的启示**：SPI 应支持 `prefetch`、`ingest`/`sync_turn`、`on_session_end`、`on_pre_compress` 和工具暴露，但这些 hook 必须由宿主调度并带超时、异步和失败隔离策略；不能让外部 provider 阻塞 Agent 主链路。
 
 Hermes 生态中的具体差异也很有代表性：Honcho 擅长辩证式用户建模，OpenViking 擅长文件系统层级和 L0/L1/L2 分层读取，Holographic 将 SQLite FTS5、信任评分、事实冲突与组合查询放在本地，ByteRover 采用本地优先知识树，RetainDB 提供向量 + BM25 + 重排序及多种记忆类型。这进一步支持 Downcity 的判断：存储、检索、提炼和上下文装配应是独立能力，而不是一个固定数据库接口。
@@ -354,7 +354,7 @@ AWS AgentCore Memory 是托管服务，区分单 session 的 short-term events �
 
 | 方案 | 可追溯 | 时态/冲突 | 混合检索 | 人可编辑 | 本地部署 | TS 接入 | 适合位置 |
 |---|---:|---:|---:|---:|---:|---:|---|
-| Downcity LLM Wiki（当前） | 5 | 2 | 1 | 5 | 5 | 5 | 默认 canonical memory |
+| Downcity LLM Wiki（重构前） | 5 | 2 | 1 | 5 | 5 | 5 | 文件式实现参考 |
 | Mem0 | 3 | 3 | 4 | 3 | 4 | 5 | 通用托管/事实 provider |
 | Zep | 5 | 5 | 5 | 2 | 2 | 5 | 企业托管时态图 provider |
 | Graphiti | 5 | 5 | 5 | 2 | 4 | 2 | 高级开源图 provider |
@@ -418,7 +418,7 @@ Mem0、Zep、Hindsight、Supermemory 都公开了较高 benchmark 结果，但�
 
 当前实现具有这些优势：
 
-1. **证据和知识分层正确**：`sources/` 保存原始输入，`wiki/` 保存整理后的知识，天然支持重建和人工审计。
+1. **证据和知识分层有价值**：`sources/` 保存原始输入，`wiki/` 保存整理后的知识，天然支持重建和人工审计。
 2. **人可读、可编辑、可迁移**：Markdown 不依赖数据库工具，适合代码项目与本地 Agent。
 3. **模型中立**：`digest` 和 `revise` 通过 constructor callback 注入，不锁定 LLM。
 4. **失败时仍可工作**：没有模型时使用确定性落盘与追加，不会让 Memory 完全不可用。
@@ -427,7 +427,7 @@ Mem0、Zep、Hindsight、Supermemory 都公开了较高 benchmark 结果，但�
 主要缺口：
 
 1. **搜索只做 Markdown token scan**：中文分词、同义词、实体、精确词和语义召回能力有限。
-2. **没有稳定 Memory SPI**：存储、索引、提炼和检索仍是内建实现，第三方 Memory 服务无法自然接入。
+2. **没有稳定 Memory SPI**：重构前的存储、索引、提炼和检索都直接依赖文件实现，第三方 Memory 服务无法自然接入。
 3. **没有 scope 模型**：缺少 user、agent、workspace、project、organization、shared/private 等明确作用域。Hermes 的 profile 隔离说明，这项能力必须同时覆盖数据路径、凭证和 provider 配置，不能只做查询标签。
 4. **没有时态事实**：无法表达 valid_from、valid_to、observed_at、supersedes，事实更新依赖整页 LLM revise。
 5. **没有结构化记忆类型**：事实、偏好、事件、经验、规则和画像都落入自由 Markdown。
@@ -435,13 +435,19 @@ Mem0、Zep、Hindsight、Supermemory 都公开了较高 benchmark 结果，但�
 7. **没有遗忘和治理**：缺少 TTL、删除传播、敏感信息策略、来源权限、容量预算和审计事件。
 8. **没有 memory eval harness**：无法量化 recall、precision、temporal correctness、citation correctness 和 token cost。
 
-关键判断：**Downcity 需要演进 LLM Wiki，而不是推翻它。`sources/` 应升级为不可变 Evidence Ledger，`wiki/` 应明确成为可重建 Projection；结构化 facts/profile/episodes 可以作为并列投影，而不是替代文件。**
+关键判断：**Downcity 需要把 LLM Wiki 下沉为 Builtin Provider 的默认投影，而不是让它继续定义 MemoryPlugin。Evidence、Projection 和 citation 是领域概念；JSONL、Markdown 和 SQLite 是可替换实现。**
 
 ## 九、推荐的 MemoryPlugin 底座
 
 ### 9.1 领域边界
 
 `MemoryPlugin` 应负责：
+
+- 暴露稳定 Action 与 system context 入口。
+- 把 Agent、Workspace 和 Session 调用上下文映射为领域 scope。
+- 管理唯一 `MemoryProvider` 的生命周期。
+
+`MemoryProvider` 应负责：
 
 - 接受需要长期保留的 evidence。
 - 把 evidence 提炼为不同类型的 memory projection。
@@ -460,28 +466,20 @@ Mem0、Zep、Hindsight、Supermemory 都公开了较高 benchmark 结果，但�
 ### 9.2 建议的最小 SPI
 
 ```ts
-interface MemoryEvidenceStore {
-  append(input: MemoryEvidenceInput): Promise<MemoryEvidence>;
-  read(input: MemoryEvidenceReadInput): Promise<MemoryEvidence[]>;
-  delete(input: MemoryEvidenceDeleteInput): Promise<void>;
-}
+interface MemoryProvider {
+  readonly name: string;
+  readonly capabilities: MemoryProviderCapabilities;
 
-interface MemoryProjector {
-  project(input: MemoryProjectionInput): Promise<MemoryProjectionResult>;
-  rebuild(input: MemoryRebuildInput): Promise<MemoryProjectionResult>;
-}
-
-interface MemoryIndexProvider {
-  index(input: MemoryIndexInput): Promise<void>;
-  remove(input: MemoryIndexRemoveInput): Promise<void>;
-}
-
-interface MemoryRetriever {
-  search(input: MemorySearchInput): Promise<MemorySearchResult>;
-}
-
-interface MemoryContextAssembler {
-  assemble(input: MemoryContextInput): Promise<MemoryContextResult>;
+  initialize(input: MemoryProviderInitializeInput): Promise<void>;
+  status(): Promise<MemoryStatusResult>;
+  remember(input: MemoryRememberInput): Promise<MemoryRememberResult>;
+  recall(input: MemoryRecallInput): Promise<MemoryRecallResult>;
+  read(input: MemoryReadInput): Promise<MemoryReadResult>;
+  digest(input: MemoryDigestInput): Promise<MemoryDigestResult>;
+  revise(input: MemoryReviseInput): Promise<MemoryReviseResult>;
+  forget(input: MemoryForgetInput): Promise<MemoryForgetResult>;
+  system_context(input: MemorySystemContextInput): Promise<MemorySystemContextResult>;
+  dispose(): Promise<void>;
 }
 ```
 
@@ -501,9 +499,24 @@ confidence
 warnings
 ```
 
-Provider 可以实现多个接口，但 Plugin 不应假设它们来自同一个产品。
+一个 `MemoryPlugin` 实例只绑定一个主 Provider，避免同时写入多个后端后出现多个事实源。需要组合 BM25、vector、graph 或多个远程服务时，应由一个显式 `CompositeMemoryProvider` 统一拥有一致性、融合和失败语义，而不是让 Plugin 自己双写。
 
-除数据接口外，运行时还应定义一组可选生命周期 hook：
+存储、索引和文件能力继续存在，但只作为某个 Provider 的内部 Adapter。例如：
+
+```ts
+interface MemoryStorageAdapter {
+  initialize(): Promise<void>;
+  read(key: string): Promise<string | null>;
+  write(key: string, content: string): Promise<void>;
+  list(prefix: string): Promise<MemoryStorageEntry[]>;
+  delete(key: string): Promise<void>;
+  dispose(): Promise<void>;
+}
+```
+
+`FileMemoryStorageAdapter`、SQLite、对象存储和远程 KV 都可以实现这层协议，但它们不能直接成为 MemoryPlugin 的领域 API，也不能向 Agent 暴露物理路径。
+
+外部 Provider 实现还可以在内部实现生命周期 hook：
 
 ```text
 initialize → prefetch → sync_turn → on_pre_compress → on_session_end → shutdown
@@ -516,14 +529,15 @@ Hermes 已在 8 种 provider 上验证了这类 hook 的实用性。Downcity 需
 推荐默认本地组合：
 
 ```text
-Canonical Evidence  → append-only JSONL/Markdown source files
-Human Projection    → Markdown wiki
-Metadata / State    → SQLite
-Keyword Retrieval   → SQLite FTS5 / BM25
-Semantic Retrieval  → optional embedding provider
-Graph / Temporal    → optional provider, not default dependency
-Context Assembly    → Downcity-owned deterministic budgeter
+MemoryPlugin
+  → BuiltinMemoryProvider
+     → FileMemoryStorageAdapter（当前默认持久化）
+     → SQLite FTS/BM25 Adapter（后续可选索引）
+     → Embedding Adapter（后续可选语义索引）
+     → deterministic context budgeter
 ```
+
+Builtin Provider 可以继续组织 evidence 与 Wiki 投影，但这些结构只属于它自己的实现。接入 Mem0、Hindsight 或 Graphiti 时，对应 Provider 直接把各自的数据模型转换成统一 `MemoryRecord`、`memory_id`、scope 和 citation，不需要模拟文件目录。
 
 为什么不默认上向量数据库：
 
@@ -543,14 +557,14 @@ Context Assembly    → Downcity-owned deterministic budgeter
 
 ### 第一优先级：协议化现有实现
 
-- `BuiltinMemoryEvidenceStore`
-- `WikiMemoryProjector`
-- `SqliteFtsMemoryRetriever`
-- `BuiltinMemoryContextAssembler`
+- `MemoryProvider`
+- `BuiltinMemoryProvider`
+- `MemoryStorageAdapter`
+- `FileMemoryStorageAdapter`
 
-目标是先把 ownership、scope、provenance 和 lifecycle 设计正确，不引入外部服务。
+目标是先把 ownership、scope、provenance 和 lifecycle 设计正确。文件只保留为默认 Adapter，不能再进入 MemoryPlugin 的公开 Action 和结果协议。
 
-### 第二优先级：Mem0 Adapter
+### 第二优先级：Mem0 Provider
 
 映射建议：
 
@@ -558,11 +572,11 @@ Context Assembly    → Downcity-owned deterministic budgeter
 - `remember` → Mem0 `add`
 - `search` → Mem0 search
 - history/expiration → provider capability
-- 原始 evidence 仍保留在 Downcity，不把 Mem0 当唯一数据源
+- evidence 与 provenance 由 Mem0 Provider 自己拥有或映射，Plugin 不做额外双写
 
 用途：快速验证个性化 Agent、用户偏好和托管 Memory。
 
-### 第三优先级：Hindsight 或 Graphiti Adapter
+### 第三优先级：Hindsight 或 Graphiti Provider
 
 Hindsight 更适合“Agent 从经验学习”的完整路径；Graphiti 更适合“业务事实随时间变化”的路径。
 
@@ -571,7 +585,7 @@ Hindsight 更适合“Agent 从经验学习”的完整路径；Graphiti 更适�
 - 如果 episodic learning、reflection、混合搜索表现更重要，优先 Hindsight。
 - 如果 provenance、validity window、企业实体关系更重要，优先 Graphiti/Zep。
 
-### 第四优先级：云托管 Adapter
+### 第四优先级：云托管 Provider
 
 AWS AgentCore Memory、Google Memory Bank、Zep Cloud、Mem0 Platform、Supermemory 都应放在相同 provider 边界后面，由部署环境决定。
 
@@ -660,8 +674,8 @@ Anthropic 官方 Memory Tool 同样强调路径穿越、敏感信息、文件大
 
 ### Phase 3：Provider 验证
 
-- 接 Mem0 adapter 验证通用事实/画像场景。
-- 在 Hindsight 与 Graphiti 中选择一个高级开源 adapter。
+- 接入 Mem0 Provider 验证通用事实/画像场景。
+- 在 Hindsight 与 Graphiti 中选择一个高级开源 Provider。
 - 用 EverOS 对照 Markdown canonical + Wiki，用 RetainDB Local 对照 coding memory/context pack，用 Memvid 对照单文件可移植索引。
 - 参考 Mastra Observational Memory 验证后台 observation buffering，但不允许 observation 替代 evidence。
 - 对 AWS、Google、Zep Cloud、Supermemory 保持部署型可选适配。
@@ -678,9 +692,9 @@ Anthropic 官方 Memory Tool 同样强调路径穿越、敏感信息、文件大
 
 选择：
 
-> **Downcity 自有的 evidence-first LLM Wiki + SQLite hybrid index + provider-neutral Memory SPI。**
+> **Downcity 自有的 provider-neutral MemoryPlugin + 单一 MemoryProvider SPI；Builtin Provider 默认组合本地 Storage 与可替换索引 Adapter。**
 
-它不是市场上功能最多的单体产品，却最符合 Downcity 的所有权边界：原始证据归 Downcity，用户可读的 Wiki 归 Downcity，索引可以删除重建，外部 Memory Engine 可以替换。
+它不是市场上功能最多的单体产品，却最符合 Downcity 的所有权边界：Plugin 不理解文件和环境，Provider 是唯一事实源，Adapter 可以替换，外部 Memory Engine 也能直接映射到同一领域协议。
 
 ### 如果只能接一个外部产品
 
@@ -692,7 +706,7 @@ Anthropic 官方 Memory Tool 同样强调路径穿越、敏感信息、文件大
 
 ### 如果聚焦本地 Coding Agent
 
-优先研究 **EverOS + RetainDB Local + memU**：EverOS 验证 Markdown canonical memory，RetainDB 验证 TypeScript 本地检索和 context router，memU 验证跨宿主 transcript 与 Skill 自演化。三者都应作为设计对照或 Adapter，而不是替换 Downcity 自有 evidence。
+优先研究 **EverOS + RetainDB Local + memU**：EverOS 验证 Markdown canonical memory，RetainDB 验证 TypeScript 本地检索和 context router，memU 验证跨宿主 transcript 与 Skill 自演化。三者都应作为设计对照或 Provider 实现，而不是反向定义 MemoryPlugin。
 
 ### 不建议的选择
 

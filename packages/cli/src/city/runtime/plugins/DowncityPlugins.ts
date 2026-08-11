@@ -25,7 +25,13 @@ import {
   type ImagePluginModel,
   type ImagePluginResolvedInput,
 } from "@downcity/plugins/image";
-import { MemoryPlugin } from "@downcity/plugins/memory";
+import path from "node:path";
+import {
+  BuiltinMemoryProvider,
+  FileMemoryStorageAdapter,
+  MemoryPlugin,
+  get_default_file_memory_root_path,
+} from "@downcity/plugins/memory";
 import { SkillPlugin } from "@downcity/plugins/skill";
 import {
   SoundPlugin,
@@ -46,6 +52,7 @@ import type {
   PluginType,
 } from "@/city/types/plugin/PluginInstallation.js";
 import type { PluginResourceResolver } from "@/city/types/plugin/PluginResource.js";
+import { getPlatformRootDirPath } from "@/city/process/registry/CityPaths.js";
 
 const city_user_manager = new CityUserManager();
 
@@ -121,7 +128,35 @@ const task_manifest: PluginManifest = {
 const memory_manifest: PluginManifest = {
   name: "memory",
   title: "Memory",
-  description: "Stores, searches, and revises Agent memories.",
+  description: "Provides provider-neutral long-term memory, recall, revision, and deletion.",
+  config: {
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["provider", "storage"],
+      properties: {
+        provider: {
+          type: "string",
+          const: "builtin",
+          description: "Memory Provider implementation used by this Agent.",
+        },
+        storage: {
+          type: "string",
+          const: "file",
+          description: "Storage Adapter used by the builtin Memory Provider.",
+        },
+        root_path: {
+          type: "string",
+          minLength: 1,
+          description: "Optional absolute root path for the File Memory Storage Adapter.",
+        },
+      },
+    },
+    defaults: {
+      provider: "builtin",
+      storage: "file",
+    },
+  },
 };
 
 const image_manifest: PluginManifest = {
@@ -186,11 +221,6 @@ class CityTaskPlugin extends TaskPlugin {
   constructor(_input: PluginInitializationInput) { super(); }
 }
 
-class CityMemoryPlugin extends MemoryPlugin {
-  static readonly manifest = memory_manifest;
-  constructor(_input: PluginInitializationInput) { super(); }
-}
-
 /** 创建当前 City Runtime 可直接由 CLI 实例化的内建 Plugin 类型。 */
 export function create_downcity_plugin_types(input: {
   /** 宿主显式注入的环境变量。 */
@@ -212,6 +242,46 @@ export function create_downcity_plugin_types(input: {
     static readonly manifest = contact_manifest;
     constructor(_plugin_input: PluginInitializationInput) {
       super({ host: input.host, port: input.port });
+    }
+  }
+
+  class CityMemoryPlugin extends MemoryPlugin {
+    static readonly manifest = memory_manifest;
+
+    constructor(plugin_input: PluginInitializationInput) {
+      const provider_name = read_required_string(
+        plugin_input.config,
+        "provider",
+        "Memory Plugin",
+      );
+      const storage_name = read_required_string(
+        plugin_input.config,
+        "storage",
+        "Memory Plugin",
+      );
+      if (provider_name !== "builtin") {
+        throw new Error(`Unsupported Memory Provider: ${provider_name}`);
+      }
+      if (storage_name !== "file") {
+        throw new Error(`Unsupported Memory Storage Adapter: ${storage_name}`);
+      }
+      const configured_root_path = read_optional_string(
+        plugin_input.config,
+        "root_path",
+      );
+      if (configured_root_path && !path.isAbsolute(configured_root_path)) {
+        throw new Error("Memory Plugin root_path must be absolute");
+      }
+      super({
+        provider: new BuiltinMemoryProvider({
+          create_storage: ({ agent_id }) => new FileMemoryStorageAdapter({
+            root_path: configured_root_path || get_default_file_memory_root_path({
+              platform_root_path: getPlatformRootDirPath(),
+              agent_id,
+            }),
+          }),
+        }),
+      });
     }
   }
 

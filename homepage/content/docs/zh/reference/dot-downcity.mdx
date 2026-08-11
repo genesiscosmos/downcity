@@ -14,15 +14,12 @@ description: 运行时数据目录结构与用途
 ```text
 .downcity/
   logs/
-  session/
-  memory/
-  channel/
+  agents/
   chat/
   task/
-  config/
-  schema/
+  data/
   public/
-  profile/
+  resources/
   .cache/
 ```
 
@@ -32,15 +29,13 @@ description: 运行时数据目录结构与用途
 
 每日 JSONL 日志：`<YYYY-MM-DD>.jsonl`。
 
-### `.downcity/agents/<agentId>/sessions/<sessionId>/messages/`
+### `.downcity/agents/<agent_id>/sessions/<session_id>/messages/`
 
 会话消息事实源：`active.jsonl`、`assistant_message.json` 与按 sequence 命名的 `segments/*.jsonl`。
 
-### `.downcity/memory/`
+### Agent Memory
 
-Memory V2 存储层：
-- `MEMORY.md`：长期事实/偏好记忆。
-- `daily/<YYYY-MM-DD>.md`：按天追加的记忆流水。
+长期 Memory 不属于 Workspace `.downcity/` 协议。Memory 内容由当前 Agent 启用的 `MemoryProvider` 管理；内建 File Adapter 默认使用 `~/.downcity/agents/<agent_id>/memory/`，其他 Provider 可以使用数据库或远程服务。
 
 ### `.downcity/chat/`
 
@@ -48,7 +43,7 @@ chat 元信息与 history 事件流。`access.db` 保存当前 Agent 的 Chat Pr
 
 ### `.downcity/channel/meta.json`
 
-渠道目标到 `sessionId` 的映射快照（由 chat plugin runtime 维护）。
+渠道目标到 `session_id` 的映射快照（由 chat plugin runtime 维护）。
 
 ### `.downcity/task/`
 
@@ -61,4 +56,4 @@ chat 元信息与 history 事件流。`access.db` 保存当前 Agent 的 Chat Pr
 ## 安全建议
 
 - `.downcity/` 可能含敏感对话与执行痕迹，不建议提交到公开仓库。
-- 需要排障时优先查看 `logs`、`task`、`session` 三处。
+- 需要排障时优先查看 `logs`、`task`、`agents` 三处。

@@ -14,15 +14,12 @@ When Downcity initializes a project, it automatically appends `.downcity` to tha
 ```text
 .downcity/
   logs/
-  session/
-  memory/
-  channel/
+  agents/
   chat/
   task/
-  config/
-  schema/
+  data/
   public/
-  profile/
+  resources/
   .cache/
 ```
 
@@ -32,15 +29,13 @@ When Downcity initializes a project, it automatically appends `.downcity` to tha
 
 Daily JSONL logs: `<YYYY-MM-DD>.jsonl`.
 
-### `.downcity/agents/<agentId>/sessions/<sessionId>/messages/`
+### `.downcity/agents/<agent_id>/sessions/<session_id>/messages/`
 
 Conversation source of truth: `active.jsonl`, `assistant_message.json`, and sequence-named `segments/*.jsonl`.
 
-### `.downcity/memory/`
+### Agent Memory
 
-Memory V2 storage:
-- `MEMORY.md` for long-term facts/preferences.
-- `daily/<YYYY-MM-DD>.md` for append-only daily memory.
+Long-term Memory is not part of the Workspace `.downcity/` contract. Memory content is owned by the Agent's active `MemoryProvider`. The built-in File Adapter defaults to `~/.downcity/agents/<agent_id>/memory/`; other Providers can use databases or remote services.
 
 ### `.downcity/chat/`
 
@@ -48,7 +43,7 @@ Chat metadata and history event streams. `access.db` stores this Agent's Chat pr
 
 ### `.downcity/channel/meta.json`
 
-Channel-target to `sessionId` mapping snapshot (managed by chat plugin runtime).
+Channel-target to `session_id` mapping snapshot (managed by chat plugin runtime).
 
 ### `.downcity/task/`
 
@@ -61,4 +56,4 @@ Task definitions and per-run artifacts (`run.json`, `result.md`, etc.).
 ## Security guidance
 
 - `.downcity/` may contain sensitive conversations and execution traces.
-- For debugging, prioritize `logs`, `task`, and `session`.
+- For debugging, prioritize `logs`, `task`, and `agents`.

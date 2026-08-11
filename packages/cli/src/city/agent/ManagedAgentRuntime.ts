@@ -18,7 +18,6 @@ import { assemble_plugins } from "@/city/runtime/plugins/PluginAssembler.js";
 import { resolve_managed_agent_env } from "@/city/env/ProcessEnv.js";
 import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
 import {
-  ensure_default_agent_plugin_bindings,
   list_agent_plugin_bindings,
 } from "@/city/process/registry/PluginRepository.js";
 import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
@@ -108,7 +107,6 @@ export class ManagedAgentRuntime {
     const host = String(input.options.host ?? config.start?.host ?? "127.0.0.1").trim();
     const rpc_host = "127.0.0.1";
     const env = resolve_managed_agent_env(workspace_path);
-    ensure_default_agent_plugin_bindings(config.agent_id);
     const plugin_bindings = list_agent_plugin_bindings(config.agent_id);
     const [model, plugins, sandbox] = await Promise.all([
       createRuntimeModel({ config, env }),

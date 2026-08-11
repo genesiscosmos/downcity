@@ -1,105 +1,143 @@
 ---
 title: memory Plugin
-description: Agent long-term memory plugin backed by an LLM Wiki structure
+description: Provider-neutral long-term memory, recall, and governance for Agents
 ---
 
 # `memory` Plugin
 
-`memory` is the agent long-term memory plugin. It exposes memory capabilities to the agent while organizing durable knowledge as an LLM Wiki internally.
+`memory` provides long-term memory for an Agent. The Plugin owns stable Actions, scope mapping, and context rules. One `MemoryProvider` owns memory formation, persistence, recall, revision, and deletion.
 
-It provides:
+It exposes these Actions:
 
-- memory wiki search
-- memory wiki reads
-- explicit facts, preferences, and decisions
-- session-to-wiki digest
-- wiki page revision with new evidence
-- memory system text
+- `status`
+- `search`
+- `read`
+- `remember`
+- `digest`
+- `revise`
+- `forget`
 
-## Main Shape
-
-- `lifecycle`
-- `actions`
-- `system`
-
-## Storage Shape
+## Providers and adapters
 
 ```text
-.downcity/memory/
-  wiki/       # curated knowledge layer primarily read by agents
-  sources/    # raw evidence from sessions and manual inputs
+MemoryPlugin
+  -> MemoryProvider
+     -> BuiltinMemoryProvider
+        -> MemoryStorageAdapter
+           -> FileMemoryStorageAdapter
 ```
 
-`wiki/` is the main long-term memory surface. `sources/` is evidence and rebuild material. Search defaults to the wiki layer; include sources only when evidence is needed.
+`MemoryPlugin` does not read Workspace files and does not define a physical Memory location. Files, SQLite, object storage, and remote Memory services are implementations behind a Provider.
 
-## Constructor Injection
+The built-in Provider currently uses `FileMemoryStorageAdapter`. City stores its data here by default:
 
-LLM digest/revise capabilities are passed through the constructor:
+```text
+~/.downcity/agents/<agent_id>/memory/
+```
+
+This is a File Adapter convention, not an `@downcity/agent` contract. Set an absolute `root_path` in the Plugin configuration to override it.
+
+## City configuration
+
+Enable the built-in Provider and File Adapter:
+
+```bash
+downcity plugin enable memory <agent_id> \
+  --config '{"provider":"builtin","storage":"file"}'
+```
+
+Use a custom local root:
+
+```bash
+downcity plugin config memory <agent_id> \
+  --set '{"provider":"builtin","storage":"file","root_path":"/absolute/path/to/memory"}'
+```
+
+Configuration and enabled state are stored in `~/.downcity/downcity.db`. Memory content is owned by the selected Provider.
+
+## SDK usage
 
 ```ts
-import { MemoryPlugin } from "@downcity/plugins/memory";
+import {
+  BuiltinMemoryProvider,
+  FileMemoryStorageAdapter,
+  MemoryPlugin,
+} from "@downcity/plugins/memory";
 
 const memory = new MemoryPlugin({
-  digest: async (input) => {
-    return {
-      pages: [
-        {
-          path: "project-decisions.md",
-          title: "Project Decisions",
-          content: "Compiled wiki markdown",
-        },
-      ],
-      summary: "Updated project decisions.",
-    };
-  },
-  revise: async (input) => {
-    return {
-      path: input.path,
-      content: "Full revised wiki markdown",
-    };
-  },
+  provider: new BuiltinMemoryProvider({
+    storage: new FileMemoryStorageAdapter({
+      root_path: "/absolute/path/to/agent-memory",
+    }),
+  }),
+});
+
+const agent = new Agent({
+  id: "assistant",
+  workspace,
+  plugins: [memory],
 });
 ```
 
-If `digest` or `revise` is not provided, the plugin falls back to deterministic behavior: archive the source and append to wiki pages without calling a model.
+SDK hosts can implement `MemoryProvider` directly to integrate Mem0, Hindsight, Graphiti, or a custom remote Memory service.
 
-## How Users Use It
-
-Use the `downcity memory` shortcut for normal local operation:
-
-```bash
-downcity memory status
-downcity memory search "project decision" --max-results 5
-downcity memory read .downcity/memory/wiki/project-decisions.md --from 1 --lines 20
-downcity memory remember --content "Prefer constructor-based plugin config." --topic "plugin system"
-downcity memory digest --session-id <session_id> --max-messages 30
-downcity memory revise .downcity/memory/wiki/plugin-system.md --instruction "Merge the latest constructor config decision"
-```
-
-## SDK Action Use
+## Action usage
 
 ```ts
 await agent.plugins.run_action({
   plugin: "memory",
   action: "remember",
   payload: {
-    content: "User preference: plugin config is passed through constructors.",
-    topic: "plugin system",
+    content: "The user prefers concise answers.",
+    topic: "user-preferences",
+    memory_type: "preference",
   },
 });
 ```
 
-The action names are `status`, `search`, `read`, `remember`, `digest`, and `revise`.
+Recall and exact reads use logical identifiers:
 
-## Important Semantics
+```ts
+const recalled = await agent.plugins.run_action({
+  plugin: "memory",
+  action: "search",
+  payload: {
+    query: "answer style preference",
+    max_results: 5,
+  },
+});
 
-- MemoryPlugin is LLM Wiki style memory, not a vector database.
-- `wiki/` is the primary durable knowledge layer for agents.
-- `sources/` is evidence and is excluded from search unless `includeSources` is set.
-- LLM capabilities are injected through the constructor, not read from project config files.
-- Memory enablement is separate from whether the plugin exists in code.
+await agent.plugins.run_action({
+  plugin: "memory",
+  action: "read",
+  payload: {
+    memory_id: "wiki/user-preferences",
+  },
+});
+```
 
-## Related Docs
+`memory_id` and `citation` are Provider-owned logical identifiers. Callers must not interpret them as physical file paths.
+
+## CLI Actions
+
+Use the unified Plugin Action command for a running Agent:
+
+```bash
+downcity plugin action memory status <agent_id>
+downcity plugin action memory search <agent_id> --input '{"query":"project decision"}'
+downcity plugin action memory read <agent_id> --input '{"memory_id":"wiki/project-decisions"}'
+downcity plugin action memory forget <agent_id> --input '{"memory_id":"wiki/obsolete"}'
+```
+
+## Key semantics
+
+- Session messages and checkpoints remain in the Workspace and are not long-term Memory.
+- The configured Memory Provider is the single source of truth for the Plugin instance.
+- A Storage Adapter only implements persistence primitives; it does not define recall or memory formation.
+- Providers return structured Memory and logical citations, never physical storage paths.
+- Recalled Memory is untrusted historical data and never gains system-instruction authority.
+
+## Related docs
 
 - [Plugin System](/en/agent-sdk-docs/plugins/plugin-system)
 - [Plugin Actions](/en/agent-sdk-docs/plugins/plugin-actions)

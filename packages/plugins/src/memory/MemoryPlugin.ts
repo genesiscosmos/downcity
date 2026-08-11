@@ -1,422 +1,430 @@
 /**
- * MemoryPlugin：agent 的长期记忆 plugin。
+ * MemoryPlugin：Agent 长期记忆的 provider-neutral facade。
  *
- * 关键点（中文）
- * - 对外仍然是 MemoryPlugin，内部使用 LLM Wiki 方式组织知识。
- * - constructor 注入 digest/revise 能力，plugin 不绑定具体 LLM 服务。
- * - action 面向 agent 语义，而不是暴露底层文件写入细节。
+ * 职责说明（中文）
+ * - 对 Agent 暴露稳定的 Memory actions 与 system 使用约束。
+ * - 把 Agent/Session 上下文映射为结构化 Memory scope。
+ * - 将记忆形成、存储、召回、修订和删除委托给唯一 MemoryProvider。
+ *
+ * 边界说明（中文）
+ * - 不读取或拼接任何物理存储路径。
+ * - 不依赖 Workspace FileSystem，也不规定 Markdown、SQLite 或远程服务。
+ * - Provider 生命周期跟随当前 Plugin 实例，由 Agent 统一启动和释放。
  */
 
 import type { Command } from "commander";
-import type { JsonObject, JsonValue } from "@downcity/agent";
-import type { PluginContext } from "@downcity/agent";
-import type { PluginActions } from "@downcity/agent";
-import { BasePlugin } from "@downcity/agent";
-import { create_action } from "@downcity/agent";
+import { BasePlugin, create_action } from "@downcity/agent";
+import type {
+  JsonObject,
+  JsonValue,
+  PluginActions,
+  PluginContext,
+} from "@downcity/agent";
 import { z } from "zod";
 import {
-  digestMemoryAction,
-  readMemoryAction,
-  rememberMemoryAction,
-  reviseMemoryAction,
-  searchMemoryAction,
-  statusMemoryAction,
-} from "./Action.js";
-import {
-  createMemoryRuntimeState,
-  type MemoryRuntimeState,
-} from "./runtime/Store.js";
-import { buildMemoryPluginSystemText } from "./runtime/SystemProvider.js";
-import { ensureMemoryDirectories } from "./runtime/Writer.js";
-import type { MemoryPluginOptions } from "./types/Memory.js";
+  digest_memory_action,
+  forget_memory_action,
+  read_memory_action,
+  remember_memory_action,
+  revise_memory_action,
+  search_memory_action,
+  status_memory_action,
+} from "@/memory/Action.js";
+import { build_memory_plugin_system_text } from "@/memory/runtime/SystemProvider.js";
+import type {
+  MemoryPluginOptions,
+  MemoryProvider,
+  MemoryType,
+} from "@/memory/types/Memory.js";
 
-function parsePositiveInteger(value: string): number {
+const memory_type_schema = z.enum([
+  "fact",
+  "preference",
+  "decision",
+  "episode",
+  "procedure",
+  "document",
+]);
+
+/** 解析正整数 CLI 参数。 */
+function parse_positive_integer(value: string): number {
   const text = String(value || "").trim();
-  if (!/^\d+$/.test(text)) {
+  if (!/^\d+$/u.test(text)) throw new Error(`Invalid positive integer: ${value}`);
+  const number_value = Number(text);
+  if (!Number.isFinite(number_value) || number_value < 1) {
     throw new Error(`Invalid positive integer: ${value}`);
   }
-  const num = Number(text);
-  if (!Number.isFinite(num) || num < 1) {
-    throw new Error(`Invalid positive integer: ${value}`);
-  }
-  return num;
+  return number_value;
 }
 
-function parseNumber(value: string): number {
-  const text = String(value || "").trim();
-  if (!text) {
-    throw new Error("number is required");
-  }
-  const num = Number(text);
-  if (!Number.isFinite(num)) {
-    throw new Error(`Invalid number: ${value}`);
-  }
-  return num;
+/** 解析任意有限数值 CLI 参数。 */
+function parse_number(value: string): number {
+  const number_value = Number(String(value || "").trim());
+  if (!Number.isFinite(number_value)) throw new Error(`Invalid number: ${value}`);
+  return number_value;
 }
 
-function readBodyObject(rawBody: JsonValue): JsonObject {
-  if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) {
-    return {};
-  }
-  return rawBody as JsonObject;
+/** 把 Action JSON 输入归一化为普通对象。 */
+function read_body_object(raw_body: JsonValue): JsonObject {
+  return raw_body && typeof raw_body === "object" && !Array.isArray(raw_body)
+    ? raw_body as JsonObject
+    : {};
 }
 
-function readString(body: JsonObject, key: string): string {
-  const value = body[key];
-  return typeof value === "string" ? value : "";
+/** 读取必填或可选字符串字段。 */
+function read_string(body: JsonObject, key: string): string {
+  return typeof body[key] === "string" ? String(body[key]) : "";
 }
 
-function readOptionalString(body: JsonObject, key: string): string | undefined {
-  const value = body[key];
-  return typeof value === "string" ? value : undefined;
+/** 读取可选字符串字段。 */
+function read_optional_string(body: JsonObject, key: string): string | undefined {
+  const value = read_string(body, key).trim();
+  return value || undefined;
 }
 
-function readOptionalNumber(body: JsonObject, key: string): number | undefined {
-  const value = body[key];
-  return typeof value === "number" ? value : undefined;
+/** 读取可选数值字段。 */
+function read_optional_number(body: JsonObject, key: string): number | undefined {
+  return typeof body[key] === "number" ? Number(body[key]) : undefined;
 }
 
-function readOptionalBoolean(body: JsonObject, key: string): boolean | undefined {
-  const value = body[key];
-  return typeof value === "boolean" ? value : undefined;
+/** 读取可选布尔字段。 */
+function read_optional_boolean(body: JsonObject, key: string): boolean | undefined {
+  return typeof body[key] === "boolean" ? Boolean(body[key]) : undefined;
 }
 
-/**
- * Memory plugin 类实现。
- */
+/** 读取可选 MemoryType 字段。 */
+function read_optional_memory_type(body: JsonObject): MemoryType | undefined {
+  const result = memory_type_schema.safeParse(body.memory_type);
+  return result.success ? result.data : undefined;
+}
+
+/** Agent 长期记忆 Plugin。 */
 export class MemoryPlugin extends BasePlugin {
-  /**
-   * plugin 名称。
-   */
+  /** Plugin 稳定名称。 */
   readonly name = "memory";
 
-  /**
-   * 当前实例持有的 memory plugin state。
-   */
-  public runtimeState: MemoryRuntimeState | null = null;
+  /** 当前 Plugin 唯一绑定的 Memory Provider。 */
+  readonly provider: MemoryProvider;
 
-  /**
-   * 创建 MemoryPlugin。
-   */
-  constructor(private readonly options: MemoryPluginOptions = {}) {
+  constructor(options: MemoryPluginOptions) {
     super();
+    if (!options?.provider) throw new Error("MemoryPlugin requires provider");
+    const provider_name = String(options.provider.name || "").trim();
+    if (!provider_name) throw new Error("MemoryPlugin provider requires name");
+    this.provider = options.provider;
   }
 
-  /**
-   * 当前 plugin 的 system 文本提供器。
-   */
+  /** 构建 provider-neutral Memory system 内容。 */
   async system(context: PluginContext): Promise<string> {
-    return await buildMemoryPluginSystemText(context);
+    return await build_memory_plugin_system_text(context, this.provider);
   }
 
-  /**
-   * 当前 plugin 生命周期。
-   */
+  /** Provider 生命周期与当前 Agent Plugin 实例保持一致。 */
   readonly lifecycle = {
     start: async (context: PluginContext): Promise<void> => {
-      await ensureMemoryDirectories(context.workspace_path);
-      this.getOrCreateRuntimeState(context);
+      await this.provider.initialize({
+        agent_id: context.agent_id,
+      });
     },
     stop: async (): Promise<void> => {
-      this.runtimeState = null;
+      await this.provider.dispose();
     },
   };
 
-  /**
-   * 当前 plugin action 定义表。
-   */
+  /** Memory 对 Agent 暴露的稳定 Action 集合。 */
   readonly actions: PluginActions = {
     status: create_action({
-      description: "View memory wiki status (wiki/source/working).",
+      description: "Inspect the active Memory Provider and its capabilities.",
       input_schema: {
         zod: z.object({}).passthrough(),
-        json_schema: { type: "object", properties: {} },
+        json_schema: { type: "object", additionalProperties: false, properties: {} },
       },
-      examples: [{ title: "View status", payload: {} }],
+      examples: [{ title: "View Memory Provider status", payload: {} }],
       command: {
-        description: "View memory wiki status (wiki/source/working).",
-        map_input() {
-          return {};
-        },
+        description: "Inspect the active Memory Provider.",
+        map_input: () => ({}),
       },
-      execute: async (params) => {
-        const state = this.getOrCreateRuntimeState(params.context);
-        return await statusMemoryAction(params.context, state);
-      },
+      execute: async () => await status_memory_action(this.provider),
     }),
+
     search: create_action({
-      description: "Search memory wiki, optionally extending into the source layer.",
+      description: "Recall scoped long-term memories for a focused query.",
       input_schema: {
         zod: z.object({
           query: z.string(),
-          maxResults: z.number().optional(),
-          minScore: z.number().optional(),
-          includeSources: z.boolean().optional(),
+          max_results: z.number().optional(),
+          min_score: z.number().optional(),
+          include_evidence: z.boolean().optional(),
         }),
         json_schema: {
           type: "object",
+          additionalProperties: false,
           required: ["query"],
           properties: {
-            query: { type: "string", description: "Search query." },
-            maxResults: { type: "number", description: "Maximum number of results." },
-            minScore: { type: "number", description: "Minimum relevance score." },
-            includeSources: { type: "boolean", description: "Whether to include the source layer." },
+            query: { type: "string", description: "Focused recall query." },
+            max_results: { type: "number", description: "Maximum result count." },
+            min_score: { type: "number", minimum: 0, maximum: 1 },
+            include_evidence: { type: "boolean", description: "Include raw evidence records." },
           },
         },
       },
-      examples: [
-        { title: "Search memory", payload: { query: "user preferences" } },
-      ],
+      examples: [{ title: "Recall preferences", payload: { query: "user preferences" } }],
       command: {
-        description: "Search memory wiki.",
+        description: "Recall scoped long-term memories.",
         configure(command: Command) {
           command
             .argument("<query>")
-            .option("--max-results <number>", "Maximum number of results.", parsePositiveInteger)
-            .option("--min-score <number>", "Minimum relevance score.", parseNumber)
-            .option("--include-sources", "Also search the raw source layer.");
+            .option("--max-results <number>", "Maximum result count.", parse_positive_integer)
+            .option("--min-score <number>", "Minimum relevance score.", parse_number)
+            .option("--include-evidence", "Include raw evidence records.");
         },
         map_input({ args, opts }) {
-          const payload: JsonObject = {
+          return {
             query: String(args[0] || ""),
+            ...(typeof opts.maxResults === "number" ? { max_results: opts.maxResults } : {}),
+            ...(typeof opts.minScore === "number" ? { min_score: opts.minScore } : {}),
+            ...(opts.includeEvidence === true ? { include_evidence: true } : {}),
           };
-          if (typeof opts.maxResults === "number") {
-            payload.maxResults = opts.maxResults;
-          }
-          if (typeof opts.minScore === "number") {
-            payload.minScore = opts.minScore;
-          }
-          if (opts.includeSources === true) {
-            payload.includeSources = true;
-          }
-          return payload;
         },
       },
-      execute: async (params) => {
-        const body = readBodyObject(params.input);
-        const state = this.getOrCreateRuntimeState(params.context);
-        return await searchMemoryAction(params.context, state, {
-          query: readString(body, "query"),
-          maxResults: readOptionalNumber(body, "maxResults"),
-          minScore: readOptionalNumber(body, "minScore"),
-          includeSources: readOptionalBoolean(body, "includeSources"),
+      execute: async ({ context, input }) => {
+        const body = read_body_object(input);
+        return await search_memory_action(context, this.provider, {
+          query: read_string(body, "query"),
+          max_results: read_optional_number(body, "max_results"),
+          min_score: read_optional_number(body, "min_score"),
+          include_evidence: read_optional_boolean(body, "include_evidence"),
         });
       },
     }),
+
     read: create_action({
-      description: "Read a memory wiki/source file excerpt.",
+      description: "Read one exact memory by memory_id.",
       input_schema: {
         zod: z.object({
-          path: z.string(),
-          from: z.number().optional(),
-          lines: z.number().optional(),
+          memory_id: z.string(),
+          from_line: z.number().optional(),
+          line_count: z.number().optional(),
         }),
         json_schema: {
           type: "object",
-          required: ["path"],
+          additionalProperties: false,
+          required: ["memory_id"],
           properties: {
-            path: { type: "string", description: "Memory file path relative to the project root." },
-            from: { type: "number", description: "Starting line, 1-based." },
-            lines: { type: "number", description: "Number of lines to read." },
+            memory_id: { type: "string", description: "Stable logical memory identifier." },
+            from_line: { type: "number", minimum: 1 },
+            line_count: { type: "number", minimum: 1 },
           },
         },
       },
-      examples: [
-        { title: "Read full page", payload: { path: ".downcity/memory/wiki/index.md" } },
-      ],
+      examples: [{ title: "Read a memory", payload: { memory_id: "wiki/user-preferences" } }],
       command: {
-        description: "Read a memory wiki/source file excerpt.",
+        description: "Read one exact memory.",
         configure(command: Command) {
           command
-            .argument("<memoryPath>", "Memory file path relative to the project root.")
-            .option("--from <number>", "Starting line, 1-based.", parsePositiveInteger)
-            .option("--lines <number>", "Number of lines to read.", parsePositiveInteger);
+            .argument("<memory_id>")
+            .option("--from-line <number>", "Starting line, 1-based.", parse_positive_integer)
+            .option("--line-count <number>", "Maximum line count.", parse_positive_integer);
         },
         map_input({ args, opts }) {
-          const payload: JsonObject = {
-            path: String(args[0] || ""),
+          return {
+            memory_id: String(args[0] || ""),
+            ...(typeof opts.fromLine === "number" ? { from_line: opts.fromLine } : {}),
+            ...(typeof opts.lineCount === "number" ? { line_count: opts.lineCount } : {}),
           };
-          if (typeof opts.from === "number") {
-            payload.from = opts.from;
-          }
-          if (typeof opts.lines === "number") {
-            payload.lines = opts.lines;
-          }
-          return payload;
         },
       },
-      execute: async (params) => {
-        const body = readBodyObject(params.input);
-        return await readMemoryAction(params.context, {
-          path: readString(body, "path"),
-          from: readOptionalNumber(body, "from"),
-          lines: readOptionalNumber(body, "lines"),
+      execute: async ({ context, input }) => {
+        const body = read_body_object(input);
+        return await read_memory_action(context, this.provider, {
+          memory_id: read_string(body, "memory_id"),
+          from_line: read_optional_number(body, "from_line"),
+          line_count: read_optional_number(body, "line_count"),
         });
       },
     }),
+
     remember: create_action({
-      description: "Record facts, preferences, or decisions into memory wiki.",
+      description: "Store a durable fact, preference, decision, episode, procedure, or document.",
       input_schema: {
         zod: z.object({
           content: z.string(),
           topic: z.string().optional(),
-          path: z.string().optional(),
+          memory_type: memory_type_schema.optional(),
           source: z.string().optional(),
         }),
         json_schema: {
           type: "object",
+          additionalProperties: false,
           required: ["content"],
           properties: {
             content: { type: "string", description: "Content to remember." },
-            topic: { type: "string", description: "Memory topic." },
-            path: { type: "string", description: "Target wiki page path." },
-            source: { type: "string", description: "Source note." },
+            topic: { type: "string", description: "Optional organization hint." },
+            memory_type: {
+              type: "string",
+              enum: ["fact", "preference", "decision", "episode", "procedure", "document"],
+            },
+            source: { type: "string", description: "Optional evidence label." },
           },
         },
       },
-      examples: [
-        { title: "Remember preference", payload: { content: "User prefers concise answers", topic: "user-prefs" } },
-      ],
+      examples: [{
+        title: "Remember a preference",
+        payload: {
+          content: "User prefers concise answers.",
+          topic: "user-preferences",
+          memory_type: "preference",
+        },
+      }],
       command: {
-        description: "Record facts, preferences, or decisions into memory wiki.",
+        description: "Store a durable memory.",
         configure(command: Command) {
           command
             .requiredOption("--content <text>", "Content to remember.")
-            .option("--topic <topic>", "Memory topic.")
-            .option("--wiki-path <path>", "Target wiki page path.")
-            .option("--source <source>", "Source note.");
+            .option("--topic <topic>", "Optional organization hint.")
+            .option("--memory-type <type>", "Memory type.")
+            .option("--source <source>", "Optional evidence label.");
         },
         map_input({ opts }) {
-          const payload: JsonObject = {
+          return {
             content: String(opts.content || ""),
+            ...(typeof opts.topic === "string" ? { topic: opts.topic } : {}),
+            ...(typeof opts.memoryType === "string" ? { memory_type: opts.memoryType } : {}),
+            ...(typeof opts.source === "string" ? { source: opts.source } : {}),
           };
-          if (typeof opts.topic === "string") {
-            payload.topic = String(opts.topic).trim();
-          }
-          if (typeof opts.wikiPath === "string") {
-            payload.path = String(opts.wikiPath).trim();
-          }
-          if (typeof opts.source === "string") {
-            payload.source = String(opts.source).trim();
-          }
-          return payload;
         },
       },
-      execute: async (params) => {
-        const body = readBodyObject(params.input);
-        return await rememberMemoryAction(params.context, this.options, {
-          content: readString(body, "content"),
-          topic: readOptionalString(body, "topic"),
-          path: readOptionalString(body, "path"),
-          source: readOptionalString(body, "source"),
+      execute: async ({ context, input }) => {
+        const body = read_body_object(input);
+        return await remember_memory_action(context, this.provider, {
+          content: read_string(body, "content"),
+          topic: read_optional_string(body, "topic"),
+          memory_type: read_optional_memory_type(body),
+          source: read_optional_string(body, "source"),
         });
       },
     }),
+
     digest: create_action({
-      description: "Digest a session into memory wiki.",
+      description: "Digest a canonical Session transcript into long-term memory.",
       input_schema: {
         zod: z.object({
           session_id: z.string(),
-          maxMessages: z.number().optional(),
+          max_messages: z.number().optional(),
         }),
         json_schema: {
           type: "object",
+          additionalProperties: false,
           required: ["session_id"],
           properties: {
-            session_id: { type: "string", description: "Session ID." },
-            maxMessages: { type: "number", description: "Message extraction window." },
+            session_id: { type: "string" },
+            max_messages: { type: "number", minimum: 1 },
           },
         },
       },
-      examples: [
-        { title: "Digest session", payload: { session_id: "sess-1" } },
-      ],
+      examples: [{ title: "Digest a Session", payload: { session_id: "sess-1" } }],
       command: {
-        description: "Digest a session into memory wiki.",
+        description: "Digest a canonical Session transcript.",
         configure(command: Command) {
           command
-            .requiredOption("--session-id <session_id>", "Session ID.")
-            .option("--max-messages <number>", "Message extraction window.", parsePositiveInteger);
+            .requiredOption("--session-id <session_id>", "Session identifier.")
+            .option("--max-messages <number>", "Maximum message count.", parse_positive_integer);
         },
         map_input({ opts }) {
-          const payload: JsonObject = {
-            session_id: String(opts.session_id || ""),
+          return {
+            session_id: String(opts.sessionId || ""),
+            ...(typeof opts.maxMessages === "number" ? { max_messages: opts.maxMessages } : {}),
           };
-          if (typeof opts.maxMessages === "number") {
-            payload.maxMessages = opts.maxMessages;
-          }
-          return payload;
         },
       },
-      execute: async (params) => {
-        const body = readBodyObject(params.input);
-        return await digestMemoryAction(params.context, this.options, {
-          session_id: readString(body, "session_id"),
-          maxMessages: readOptionalNumber(body, "maxMessages"),
+      execute: async ({ context, input }) => {
+        const body = read_body_object(input);
+        return await digest_memory_action(context, this.provider, {
+          session_id: read_string(body, "session_id"),
+          max_messages: read_optional_number(body, "max_messages"),
         });
       },
     }),
+
     revise: create_action({
-      description: "Revise a memory wiki page based on new evidence.",
+      description: "Revise one memory using new evidence.",
       input_schema: {
         zod: z.object({
-          path: z.string(),
+          memory_id: z.string(),
           instruction: z.string(),
           evidence: z.string().optional(),
         }),
         json_schema: {
           type: "object",
-          required: ["path", "instruction"],
+          additionalProperties: false,
+          required: ["memory_id", "instruction"],
           properties: {
-            path: { type: "string", description: "Target wiki page path." },
-            instruction: { type: "string", description: "Revision instruction." },
-            evidence: { type: "string", description: "New evidence." },
+            memory_id: { type: "string" },
+            instruction: { type: "string" },
+            evidence: { type: "string" },
           },
         },
       },
-      examples: [
-        {
-          title: "Revise entry",
-          payload: { path: "wiki/preferences.md", instruction: "Replace with latest preference." },
+      examples: [{
+        title: "Revise a preference",
+        payload: {
+          memory_id: "wiki/user-preferences",
+          instruction: "Replace the old preference with the latest one.",
         },
-      ],
+      }],
       command: {
-        description: "Revise a memory wiki page based on new evidence.",
+        description: "Revise one memory using new evidence.",
         configure(command: Command) {
           command
-            .argument("<memoryPath>", "Target wiki page path.")
+            .argument("<memory_id>")
             .requiredOption("--instruction <text>", "Revision instruction.")
             .option("--evidence <text>", "New evidence.");
         },
         map_input({ args, opts }) {
-          const payload: JsonObject = {
-            path: String(args[0] || ""),
+          return {
+            memory_id: String(args[0] || ""),
             instruction: String(opts.instruction || ""),
+            ...(typeof opts.evidence === "string" ? { evidence: opts.evidence } : {}),
           };
-          if (typeof opts.evidence === "string") {
-            payload.evidence = String(opts.evidence).trim();
-          }
-          return payload;
         },
       },
-      execute: async (params) => {
-        const body = readBodyObject(params.input);
-        return await reviseMemoryAction(params.context, this.options, {
-          path: readString(body, "path"),
-          instruction: readString(body, "instruction"),
-          evidence: readOptionalString(body, "evidence"),
+      execute: async ({ context, input }) => {
+        const body = read_body_object(input);
+        return await revise_memory_action(context, this.provider, {
+          memory_id: read_string(body, "memory_id"),
+          instruction: read_string(body, "instruction"),
+          evidence: read_optional_string(body, "evidence"),
+        });
+      },
+    }),
+
+    forget: create_action({
+      description: "Delete or invalidate one memory by memory_id.",
+      input_schema: {
+        zod: z.object({ memory_id: z.string() }),
+        json_schema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["memory_id"],
+          properties: { memory_id: { type: "string" } },
+        },
+      },
+      examples: [{ title: "Forget a memory", payload: { memory_id: "wiki/obsolete" } }],
+      command: {
+        description: "Delete or invalidate one memory.",
+        configure(command: Command) {
+          command.argument("<memory_id>");
+        },
+        map_input({ args }) {
+          return { memory_id: String(args[0] || "") };
+        },
+      },
+      execute: async ({ context, input }) => {
+        const body = read_body_object(input);
+        return await forget_memory_action(context, this.provider, {
+          memory_id: read_string(body, "memory_id"),
         });
       },
     }),
   };
-
-  /**
-   * 获取或创建当前实例绑定的 memory plugin state。
-   */
-  private getOrCreateRuntimeState(context: PluginContext): MemoryRuntimeState {
-    if (!this.runtimeState) {
-      this.runtimeState = createMemoryRuntimeState(context);
-    }
-    return this.runtimeState;
-  }
 }

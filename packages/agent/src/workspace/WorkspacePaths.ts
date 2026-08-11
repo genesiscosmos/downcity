@@ -2,13 +2,13 @@
  * Workspace 项目路径规则模块。
  *
  * 职责说明（中文）
- * - 统一管理单个 agent 项目根目录下的静态文件、`.downcity` 目录与运行时状态文件路径。
+ * - 统一管理 Workspace 根目录下的 `.downcity` 运行时状态路径。
  * - 负责把“路径协议”集中到一个模块，避免各领域模块自行拼接字符串。
  * - 为初始化、日志、任务与调试文件等非 Store 子系统提供一致的路径入口。
  *
  * 边界说明（中文）
  * - 这里只负责路径计算，不负责目录创建、文件读写或存在性校验。
- * - 这里描述的是单项目约定，不涉及平台级全局目录布局。
+ * - 这里描述的是 Workspace 约定，不涉及 Agent Memory 或平台级全局目录布局。
  */
 import path from "path";
 
@@ -34,37 +34,6 @@ export function get_logs_dir_path(cwd: string): string {
  */
 export function get_cache_dir_path(cwd: string): string {
   return path.join(get_downcity_dir_path(cwd), ".cache");
-}
-
-/**
- * 返回 profile 运行态目录路径。
- *
- * 关键点（中文）
- * - 初始化流程会统一创建该目录，并在其中写入 profile 相关文件。
- * - 单独保留目录级 API，避免调用方散落 `path.join(..., "profile")`。
- */
-export function get_downcity_profile_dir_path(cwd: string): string {
-  return path.join(get_downcity_dir_path(cwd), "profile");
-}
-
-/**
- * 返回 profile 主记忆文件路径。
- *
- * 关键点（中文）
- * - 该文件通常承载主画像或核心长期 profile 信息。
- */
-export function get_downcity_profile_primary_path(cwd: string): string {
-  return path.join(get_downcity_profile_dir_path(cwd), "Primary.md");
-}
-
-/**
- * 返回 profile 补充记忆文件路径。
- *
- * 关键点（中文）
- * - 该文件用于存放不适合进入主 profile 的补充材料。
- */
-export function get_downcity_profile_other_path(cwd: string): string {
-  return path.join(get_downcity_profile_dir_path(cwd), "other.md");
 }
 
 /**

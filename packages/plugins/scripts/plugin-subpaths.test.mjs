@@ -48,3 +48,11 @@ test("根入口不再导出默认内建集合工厂", async () => {
   assert.equal("createBuiltinPlugins" in plugin_module, false);
   assert.equal("BUILTIN_PLUGIN_CLASSES" in plugin_module, false);
 });
+
+test("memory 子路径导出 Provider 与 Storage Adapter", async () => {
+  const memory_module = await import("@downcity/plugins/memory");
+  assert.equal(typeof memory_module.MemoryPlugin, "function");
+  assert.equal(typeof memory_module.BuiltinMemoryProvider, "function");
+  assert.equal(typeof memory_module.FileMemoryStorageAdapter, "function");
+  assert.equal(typeof memory_module.get_default_file_memory_root_path, "function");
+});

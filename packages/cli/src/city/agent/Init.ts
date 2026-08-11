@@ -28,7 +28,6 @@ import {
   get_managed_agent,
   save_managed_agent,
 } from "@/city/process/registry/ManagedAgentRepository.js";
-import { ensure_default_agent_plugin_bindings } from "@/city/process/registry/PluginRepository.js";
 import { select_agent_create_workspace } from "@/city/agent/create/AgentCreateWorkspace.js";
 
 type InitPromptResponse = {
@@ -145,8 +144,6 @@ export async function initCommand(
       execution,
     });
   }
-  ensure_default_agent_plugin_bindings(agent_id);
-
   const createdItems = [
     ...initResult.created_files,
     "global managed agent",

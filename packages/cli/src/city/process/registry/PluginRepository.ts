@@ -33,8 +33,8 @@ import { validate_plugin_config } from "@/city/process/plugin/PluginConfigValida
 import { get_plugin_resource_row } from "@/city/runtime/store/StorePluginResourceRepository.js";
 import { validate_plugin_resource_item } from "@/city/process/plugin/PluginResourceSchema.js";
 
-/** City 默认向新 Agent 启用的内建 Plugin 名称。 */
-export const DEFAULT_BUILTIN_PLUGIN_NAMES = Object.freeze(
+/** City 导出的全部内建 Plugin 名称。 */
+export const BUILTIN_PLUGIN_NAMES = Object.freeze(
   create_downcity_plugin_types().map((plugin_type) => plugin_type.manifest.name),
 );
 
@@ -58,7 +58,7 @@ export function normalize_plugin_installation_id(input: string): string {
 
 /** 判断 Plugin 是否由 City 内建数组导出。 */
 export function is_builtin_plugin(plugin_name_input: string): boolean {
-  return DEFAULT_BUILTIN_PLUGIN_NAMES.includes(normalize_plugin_name(plugin_name_input));
+  return BUILTIN_PLUGIN_NAMES.includes(normalize_plugin_name(plugin_name_input));
 }
 
 /** 列出全部第三方 Plugin 内部安装记录。 */
@@ -194,25 +194,6 @@ export function remove_agent_plugin_binding(
   const agent_id = String(agent_id_input || "").trim();
   const plugin_name = normalize_plugin_name(plugin_name_input);
   withPlatformStore((context) => remove_agent_plugin_row(context, agent_id, plugin_name));
-}
-
-/** 为新 Agent 创建默认内建 Plugin Binding。 */
-export function ensure_default_agent_plugin_bindings(
-  agent_id: string,
-  initial_configs: Readonly<Record<string, import("@downcity/agent").JsonObject | undefined>> = {},
-): void {
-  for (const plugin_name of DEFAULT_BUILTIN_PLUGIN_NAMES) {
-    if (get_agent_plugin_binding(agent_id, plugin_name)) continue;
-    set_agent_plugin_binding({
-      agent_id,
-      plugin_name,
-      enabled: true,
-      config: initial_configs[plugin_name]
-        ?? get_plugin_catalog_item(plugin_name)?.default_config
-        ?? {},
-      resource_ids: [],
-    });
-  }
 }
 
 /** 规范化并去重 Binding Resource ID。 */

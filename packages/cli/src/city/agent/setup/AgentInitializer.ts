@@ -3,7 +3,7 @@
  *
  * 职责说明（中文）
  * - CLI `downcity agent create` 与 Console 共用同一套初始化逻辑，避免模板与目录结构分叉。
- * - 负责创建项目运行目录、项目 `.env` 与 Skills 目录。
+ * - 负责创建 Workspace 运行目录、项目 `.env` 与 Skills 目录。
  * - CLI 侧运行配置应写入宿主配置存储，不再由 SDK 初始化器写项目配置文件。
  *
  * 边界说明（中文）
@@ -97,7 +97,6 @@ export async function initialize_agent_project(
     path.join(downcity_dir_path, "task"),
     path.join(downcity_dir_path, "logs"),
     path.join(downcity_dir_path, ".cache"),
-    path.join(downcity_dir_path, "profile"),
     path.join(downcity_dir_path, "data"),
     path.join(downcity_dir_path, "agents"),
     path.join(downcity_dir_path, "public"),
@@ -109,15 +108,6 @@ export async function initialize_agent_project(
   }
   (downcity_dir_exists ? skipped_files : created_files).push(".downcity/");
   (skills_dir_exists ? skipped_files : created_files).push(".agents/skills/");
-
-  try {
-    const profile_directory = path.join(downcity_dir_path, "profile");
-    await fs.ensureDir(profile_directory);
-    await fs.ensureFile(path.join(profile_directory, "Primary.md"));
-    await fs.ensureFile(path.join(profile_directory, "other.md"));
-  } catch {
-    // ignore optional profile memory bootstrap errors
-  }
 
   return {
     project_root,

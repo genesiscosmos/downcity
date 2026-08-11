@@ -1,103 +1,141 @@
 ---
 title: memory Plugin
-description: 基于 LLM Wiki 的 agent 长期记忆 plugin
+description: Provider 可替换的 Agent 长期记忆、召回与治理能力
 ---
 
 # `memory` Plugin
 
-`memory` 是 agent 的长期记忆 plugin。它对 agent 暴露的是 memory 能力，内部使用 LLM Wiki 的方式组织知识。
+`memory` 为 Agent 提供长期记忆能力。Plugin 负责统一 Action、作用域和上下文规则，实际的记忆形成、存储、召回、修订与删除由一个 `MemoryProvider` 完成。
 
-它提供：
+它提供以下 Action：
 
-- memory wiki 检索
-- memory wiki 读取
-- 显式记住事实、偏好、决策
-- 把 session 提炼进 wiki
-- 基于新证据修订 wiki page
-- memory system text
+- `status`
+- `search`
+- `read`
+- `remember`
+- `digest`
+- `revise`
+- `forget`
 
-## 主要形状
-
-- `lifecycle`
-- `actions`
-- `system`
-
-## 存储结构
+## Provider 与 Adapter
 
 ```text
-.downcity/memory/
-  wiki/       # agent 主要读取的整理后知识层
-  sources/    # session/manual input 等原始证据层
+MemoryPlugin
+  -> MemoryProvider
+     -> BuiltinMemoryProvider
+        -> MemoryStorageAdapter
+           -> FileMemoryStorageAdapter
 ```
 
-`wiki/` 是长期记忆的主要形态，`sources/` 只是证据和重建材料。默认检索优先查 `wiki/`，需要追溯证据时才包含 `sources/`。
+`MemoryPlugin` 不读取 Workspace 文件，也不规定 Memory 的物理位置。文件、SQLite、对象存储和远程 Memory 服务都属于 Provider 背后的实现。
 
-## Constructor 注入
+内建 Provider 当前使用 `FileMemoryStorageAdapter`。City 默认把它的数据放在：
 
-LLM digest/revise 能力从 constructor 传入：
+```text
+~/.downcity/agents/<agent_id>/memory/
+```
+
+这个目录是 File Adapter 的实现约定，不是 `@downcity/agent` 的协议。可以通过 Plugin 配置的绝对 `root_path` 覆盖。
+
+## City 配置
+
+启用内建 Provider 和 File Adapter：
+
+```bash
+downcity plugin enable memory <agent_id> \
+  --config '{"provider":"builtin","storage":"file"}'
+```
+
+使用自定义本地根目录：
+
+```bash
+downcity plugin config memory <agent_id> \
+  --set '{"provider":"builtin","storage":"file","root_path":"/absolute/path/to/memory"}'
+```
+
+配置和启用状态保存在 `~/.downcity/downcity.db`，Memory 内容由 Provider 自己管理。
+
+## SDK 使用
 
 ```ts
-import { MemoryPlugin } from "@downcity/plugins/memory";
+import {
+  BuiltinMemoryProvider,
+  FileMemoryStorageAdapter,
+  MemoryPlugin,
+} from "@downcity/plugins/memory";
 
 const memory = new MemoryPlugin({
-  digest: async (input) => {
-    return {
-      pages: [
-        {
-          path: "project-decisions.md",
-          title: "Project Decisions",
-          content: "整理后的 wiki markdown",
-        },
-      ],
-      summary: "Updated project decisions.",
-    };
-  },
-  revise: async (input) => {
-    return {
-      path: input.path,
-      content: "修订后的完整 wiki markdown",
-    };
-  },
+  provider: new BuiltinMemoryProvider({
+    storage: new FileMemoryStorageAdapter({
+      root_path: "/absolute/path/to/agent-memory",
+    }),
+  }),
+});
+
+const agent = new Agent({
+  id: "assistant",
+  workspace,
+  plugins: [memory],
 });
 ```
 
-如果不传 `digest` 或 `revise`，plugin 会使用确定性 fallback：保存 source，并追加写入 wiki page，不会调用模型。
+SDK 调用方也可以直接实现 `MemoryProvider`，接入 Mem0、Hindsight、Graphiti 或自己的远程 Memory 服务。
 
-## 用户怎么使用
-
-普通本地使用直接走 `downcity memory` 快捷命令：
-
-```bash
-downcity memory status
-downcity memory search "project decision" --max-results 5
-downcity memory read .downcity/memory/wiki/project-decisions.md --from 1 --lines 20
-downcity memory remember --content "Prefer constructor-based plugin config." --topic "plugin system"
-downcity memory digest --session-id <session_id> --max-messages 30
-downcity memory revise .downcity/memory/wiki/plugin-system.md --instruction "Merge the latest constructor config decision"
-```
-
-## SDK action 用法
+## Action 调用
 
 ```ts
 await agent.plugins.run_action({
   plugin: "memory",
   action: "remember",
   payload: {
-    content: "用户偏好：Plugin 配置从 constructor 传入。",
-    topic: "plugin system",
+    content: "用户偏好简洁回答。",
+    topic: "user-preferences",
+    memory_type: "preference",
   },
 });
 ```
 
-action 名称是 `status`、`search`、`read`、`remember`、`digest`、`revise`。
+查询与精确读取：
+
+```ts
+const recalled = await agent.plugins.run_action({
+  plugin: "memory",
+  action: "search",
+  payload: {
+    query: "用户回答风格偏好",
+    max_results: 5,
+  },
+});
+
+await agent.plugins.run_action({
+  plugin: "memory",
+  action: "read",
+  payload: {
+    memory_id: "wiki/user-preferences",
+  },
+});
+```
+
+`memory_id` 和 `citation` 都是 Provider 的逻辑标识，调用方不能将它们解释为物理文件路径。
+
+## CLI Action
+
+运行中的 Agent 可以通过统一 Plugin Action 命令调用：
+
+```bash
+downcity plugin action memory status <agent_id>
+downcity plugin action memory search <agent_id> --input '{"query":"project decision"}'
+downcity plugin action memory read <agent_id> --input '{"memory_id":"wiki/project-decisions"}'
+downcity plugin action memory forget <agent_id> --input '{"memory_id":"wiki/obsolete"}'
+```
 
 ## 关键语义
 
-- MemoryPlugin 是 LLM Wiki style memory，不是向量数据库。
-- `wiki/` 是 agent 主要读取的长期知识层。
-- `sources/` 是证据层，默认不参与 search，除非传 `includeSources`。
-- LLM 能力只通过 constructor 注入，不读取项目配置文件。
-- memory 是否启用，和代码里是否存在这个 plugin 不是一回事。
+- Session 消息和 checkpoint 仍保存在 Workspace，不属于长期 Memory。
+- Memory Provider 是当前 Plugin 实例的唯一事实源。
+- Storage Adapter 只处理底层持久化，不定义召回和记忆形成语义。
+- Provider 返回结构化 Memory 和逻辑引用，不返回物理文件路径。
+- Memory 内容作为不可信历史数据进入上下文，不能获得 system instruction 权限。
 
 ## 相关文档
 

@@ -35,6 +35,7 @@ test("Agent 配置只从全局 DB 读取", async () => {
     const plugins = await import(
       "../bin/city/process/registry/PluginRepository.js"
     );
+    assert.deepEqual(plugins.list_agent_plugin_bindings("db_agent"), []);
     plugins.set_agent_plugin_binding({
       agent_id: "db_agent",
       plugin_name: "chat",
@@ -407,12 +408,12 @@ test("内建 Plugin 静态 Manifest 不复制运行时 Action", async () => {
     const plugin_types = await loader.load_plugin_types("chat");
     for (const plugin_type of plugin_types) {
       const plugin_name = plugin_type.manifest.name;
-      const config = plugin_name === "web"
-        ? { cdp_url: "http://127.0.0.1:9222" }
-        : {};
-      const plugin = new plugin_type({ config, resources: [] });
       const item = catalog.get_plugin_catalog_item(plugin_name);
       assert.ok(item, `Missing Catalog item: ${plugin_name}`);
+      const config = plugin_name === "web"
+        ? { cdp_url: "http://127.0.0.1:9222" }
+        : item.default_config;
+      const plugin = new plugin_type({ config, resources: [] });
       assert.equal(plugin.name, plugin_name);
       assert.equal("actions" in plugin_type.manifest, false);
       assert.equal("actions" in item, false);
