@@ -205,16 +205,17 @@ For example:
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
-import { WebPlugin } from "@downcity/plugins/web";
 import { SkillPlugin } from "@downcity/plugins/skill";
 
 const agent = new Agent({
   id: "repo-helper",
   workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
-  plugins: [new SkillPlugin(), new WebPlugin()],
+  plugins: [new SkillPlugin()],
 });
 ```
+
+Web capabilities are opt-in and require an explicit provider; see the [Web Plugin guide](/en/plugins-docs/builtins/web).
 
 The SDK creates an independent plugin registry for the current `Agent`.
 

@@ -207,16 +207,17 @@ const agent = new Agent({
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
-import { WebPlugin } from "@downcity/plugins/web";
 import { SkillPlugin } from "@downcity/plugins/skill";
 
 const agent = new Agent({
   id: "repo-helper",
   workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
-  plugins: [new SkillPlugin(), new WebPlugin()],
+  plugins: [new SkillPlugin()],
 });
 ```
+
+联网能力是显式选择的，并且必须提供 provider，请参阅 [Web Plugin 文档](/zh/plugins-docs/builtins/web)。
 
 SDK 会为当前 `Agent` 创建独立的 plugin registry。
 

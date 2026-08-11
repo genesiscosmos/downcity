@@ -21,10 +21,15 @@ You no longer need a separate start, stop, restart, or project-level enabled swi
 Plugins passed to the Agent constructor are registered automatically:
 
 ```ts
+import { Agent, Workspace } from "@downcity/agent";
+import { PlaywrightBrowserProvider, WebPlugin } from "@downcity/plugins/web";
+
 const agent = new Agent({
   id: "agent",
   workspace: new Workspace({ path: process.cwd() }),
-  plugins: [new WebPlugin()],
+  plugins: [new WebPlugin({
+    browser: new PlaywrightBrowserProvider({ cdp_url: "http://127.0.0.1:9222" }),
+  })],
 });
 
 await agent.ready();

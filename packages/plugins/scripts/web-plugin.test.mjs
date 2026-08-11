@@ -1,85 +1,223 @@
 /**
- * WebPlugin 纯提示 install action 回归测试。
+ * WebPlugin provider-neutral action 回归测试。
  *
  * 关键点（中文）
- * - install action 只返回 Agent 操作提示，不能执行命令或写入文件。
- * - Skill 安装必须委托给 skill.install，避免 WebPlugin 重复维护扫描根规则。
- * - agent-browser CLI 提示需要根据 user / project 作用域生成。
+ * - Plugin 必须显式注入 provider，不能只注册一段方法论。
+ * - 浏览器 action 保持结构化输入输出，并在 lifecycle.stop 时释放 provider。
+ * - 缺少某项 provider 时只让对应 action 返回明确失败。
  */
 
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
 import test from "node:test";
-import { WebPlugin } from "../bin/index.js";
+import {
+  ComputerUseBrowserProviderAdapter,
+  SemanticBrowserProviderAdapter,
+  WebPlugin,
+} from "../bin/index.js";
 
-test("WebPlugin 仅暴露纯提示 install action", () => {
-  const plugin = new WebPlugin();
+function create_browser_provider() {
+  const sessions = new Map();
+  let disposed = false;
+  return {
+    name: "mock-browser",
+    get disposed() { return disposed; },
+    async create_session(input) {
+      const session_id = "browser-session-1";
+      const state = {
+        provider: this.name,
+        session_id,
+        url: input.url || "about:blank",
+        title: "Mock page",
+        text: "Initial page",
+      };
+      sessions.set(session_id, state);
+      return state;
+    },
+    async observe(input) {
+      const state = sessions.get(input.session_id);
+      if (!state) throw new Error(`Browser session not found: ${input.session_id}`);
+      return state;
+    },
+    async act(input) {
+      const state = sessions.get(input.session_id);
+      if (!state) throw new Error(`Browser session not found: ${input.session_id}`);
+      const next = { ...state, text: `acted:${input.action.type}` };
+      sessions.set(input.session_id, next);
+      return next;
+    },
+    async extract(input) {
+      const state = sessions.get(input.session_id);
+      if (!state) throw new Error(`Browser session not found: ${input.session_id}`);
+      return {
+        provider: this.name,
+        session_id: input.session_id,
+        url: state.url,
+        content: state.text,
+      };
+    },
+    async close_session(input) {
+      sessions.delete(input.session_id);
+    },
+    async dispose() {
+      sessions.clear();
+      disposed = true;
+    },
+  };
+}
 
-  assert.deepEqual(Object.keys(plugin.actions), ["install"]);
-  assert.equal(plugin.setup, undefined);
-  assert.match(plugin.actions.install.description, /does not install anything/);
+test("WebPlugin 拒绝没有真实能力的空配置", () => {
+  assert.throws(() => new WebPlugin({}), /requires at least one provider/);
 });
 
-test("install action 默认返回 web-access 安装工作流", async () => {
-  const project_root = path.resolve("fixtures/web-install-instructions");
-  const plugin = new WebPlugin();
+test("WebPlugin 暴露结构化联网与浏览器 actions", () => {
+  const plugin = new WebPlugin({ browser: create_browser_provider() });
+  assert.deepEqual(Object.keys(plugin.actions), [
+    "search",
+    "open",
+    "browser_create_session",
+    "browser_observe",
+    "browser_act",
+    "browser_semantic_act",
+    "browser_extract",
+    "browser_semantic_extract",
+    "browser_close_session",
+  ]);
+  assert.equal(plugin.actions.install, undefined);
+  assert.match(plugin.system(), /deterministic CSS-selector operations/);
+});
 
-  assert.equal(fs.existsSync(project_root), false);
+test("search 与 open 委托给独立 provider", async () => {
+  const plugin = new WebPlugin({
+    search: async (input) => ({
+      provider: "mock-search",
+      items: [{ url: "https://example.com", title: input.query }],
+    }),
+    open: async (input) => ({
+      provider: "mock-reader",
+      url: input.url,
+      title: "Example",
+      content: "Example content",
+    }),
+  });
 
-  const result = await plugin.actions.install.execute({
-    context: { workspace_path: project_root },
-    input: {},
+  const search_result = await plugin.actions.search.execute({
+    context: {},
+    input: { query: "official docs" },
+  });
+  const open_result = await plugin.actions.open.execute({
+    context: {},
+    input: { url: "https://example.com" },
+  });
+
+  assert.equal(search_result.success, true);
+  assert.equal(search_result.data.provider, "mock-search");
+  assert.equal(open_result.success, true);
+  assert.equal(open_result.data.content, "Example content");
+});
+
+test("浏览器 session 完整执行 create、act、extract 与 close", async () => {
+  const browser = create_browser_provider();
+  const plugin = new WebPlugin({ browser });
+  const created = await plugin.actions.browser_create_session.execute({
+    context: {},
+    input: { url: "https://example.com" },
+  });
+  const session_id = created.data.session_id;
+
+  const acted = await plugin.actions.browser_act.execute({
+    context: {},
+    input: { session_id, action: { type: "click", selector: "a" } },
+  });
+  const extracted = await plugin.actions.browser_extract.execute({
+    context: {},
+    input: { session_id },
+  });
+  const closed = await plugin.actions.browser_close_session.execute({
+    context: {},
+    input: { session_id },
+  });
+
+  assert.equal(created.success, true);
+  assert.equal(acted.data.text, "acted:click");
+  assert.equal(extracted.data.content, "acted:click");
+  assert.deepEqual(closed.data, { session_id, closed: true });
+});
+
+test("语义 adapter 复用基础 session 并暴露语义 actions", async () => {
+  const base_browser = create_browser_provider();
+  const browser = new SemanticBrowserProviderAdapter({
+    name: "mock-semantic",
+    browser: base_browser,
+    semantic_act: async (input) => ({
+      ...(await base_browser.observe({ session_id: input.session_id })),
+      text: `semantic:${input.instruction}`,
+    }),
+    semantic_extract: async (input) => ({
+      provider: "mock-semantic",
+      session_id: input.session_id,
+      url: "https://example.com",
+      content: `semantic-extract:${input.instruction}`,
+    }),
+  });
+  const plugin = new WebPlugin({ browser });
+  const created = await plugin.actions.browser_create_session.execute({
+    context: {},
+    input: { url: "https://example.com" },
+  });
+  const session_id = created.data.session_id;
+  const acted = await plugin.actions.browser_semantic_act.execute({
+    context: {},
+    input: { session_id, instruction: "click the login button" },
+  });
+  const extracted = await plugin.actions.browser_semantic_extract.execute({
+    context: {},
+    input: { session_id, instruction: "extract the account name" },
+  });
+
+  assert.equal(acted.success, true);
+  assert.equal(acted.data.text, "semantic:click the login button");
+  assert.equal(extracted.data.content, "semantic-extract:extract the account name");
+});
+
+test("Computer Use adapter 先获取截图观察再委托模型循环", async () => {
+  const base_browser = create_browser_provider();
+  const browser = new ComputerUseBrowserProviderAdapter({
+    name: "mock-computer-use",
+    browser: base_browser,
+    run: async ({ instruction, observation }) => ({
+      ...observation,
+      text: `computer-use:${instruction}`,
+      screenshot_data_url: observation.screenshot_data_url ?? "data:image/png;base64,mock",
+    }),
+  });
+  const plugin = new WebPlugin({ browser });
+  const created = await plugin.actions.browser_create_session.execute({
+    context: {},
+    input: { url: "https://example.com" },
+  });
+  const result = await plugin.actions.browser_semantic_act.execute({
+    context: {},
+    input: {
+      session_id: created.data.session_id,
+      instruction: "drag the map",
+    },
   });
 
   assert.equal(result.success, true);
-  assert.equal(result.data.kind, "instructions");
-  assert.equal(result.data.target, "web-access");
-  assert.equal(result.data.scope, "user");
-  assert.match(result.data.prompt, /plugin: "skill", action: "install"/);
-  assert.match(result.data.prompt, /spec: "web-access"/);
-  assert.match(result.data.prompt, /has not executed commands/);
-  assert.match(result.data.prompt, /action: "list"/);
-  assert.equal(fs.existsSync(project_root), false);
+  assert.equal(result.data.text, "computer-use:drag the map");
+  assert.match(result.data.screenshot_data_url, /^data:image\/png;base64/);
 });
 
-test("agent-browser project 提示包含 Skill 与项目 CLI 安装步骤", async () => {
-  const plugin = new WebPlugin();
-  const result = await plugin.actions.install.execute({
-    context: { workspace_path: path.resolve("fixtures/web-agent-browser-instructions") },
-    input: { target: "agent-browser", scope: "project" },
+test("未配置的 action 返回明确失败，lifecycle.stop 释放浏览器", async () => {
+  const browser = create_browser_provider();
+  const plugin = new WebPlugin({ browser });
+  const search_result = await plugin.actions.search.execute({
+    context: {},
+    input: { query: "test" },
   });
+  assert.equal(search_result.success, false);
+  assert.match(search_result.error, /not configured/);
 
-  assert.equal(result.success, true);
-  assert.equal(result.data.target, "agent-browser");
-  assert.equal(result.data.scope, "project");
-  assert.match(result.data.prompt, /spec: "agent-browser"/);
-  assert.match(result.data.prompt, /pnpm add -D agent-browser/);
-  assert.match(result.data.prompt, /npm install -D agent-browser/);
-  assert.match(result.data.prompt, /yarn add -D agent-browser/);
-  assert.match(result.data.prompt, /skill\.lookup/);
-});
-
-test("all 目标返回两个 Skill 和用户级 CLI 提示", async () => {
-  const plugin = new WebPlugin();
-  const result = await plugin.actions.install.execute({
-    context: { workspace_path: path.resolve("fixtures/web-all-instructions") },
-    input: { target: "all", scope: "user" },
-  });
-
-  assert.equal(result.success, true);
-  assert.match(result.data.prompt, /spec: "web-access"/);
-  assert.match(result.data.prompt, /spec: "agent-browser"/);
-  assert.match(result.data.prompt, /npm install -g agent-browser/);
-  assert.match(result.data.prompt, /no files were changed|changed files/i);
-});
-
-test("system prompt 明确 install 只返回提示", () => {
-  const plugin = new WebPlugin();
-  const prompt = plugin.system({ workspace_path: process.cwd() });
-
-  assert.match(prompt, /return installation instructions/);
-  assert.match(prompt, /never executes commands/);
-  assert.match(prompt, /skill\.install/);
-  assert.match(prompt, /skill\.list/);
+  await plugin.lifecycle.stop({});
+  assert.equal(browser.disposed, true);
 });

@@ -112,15 +112,16 @@ Local Agents can also receive explicit plugin instances:
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
-import { WebPlugin } from "@downcity/plugins/web";
 import { SkillPlugin } from "@downcity/plugins/skill";
 
 const agent = new Agent({
   id: "repo-helper",
   workspace: new Workspace({ path: "/path/to/project" }),
-  plugins: [new SkillPlugin(), new WebPlugin()],
+  plugins: [new SkillPlugin()],
 });
 ```
+
+Add `WebPlugin` only when a search, document, or browser provider is configured. See the [Web Plugin guide](/en/plugins-docs/builtins/web).
 
 Registered plugin actions can be called through `agent.plugins.run_action(...)`, and plugin `system(context, execution_context)` text is injected into session prompts.
 

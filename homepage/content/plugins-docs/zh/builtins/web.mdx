@@ -1,117 +1,104 @@
 ---
 title: web Plugin
-description: 说明 web 内建 plugin 如何注入联网方法论，并向 Agent 返回联网 Skill 与 CLI 的安装指引
+description: 通过可替换 provider 提供结构化搜索、网页读取和 Playwright/CDP 浏览器能力
 ---
 
 # web Plugin
 
-`web` 是联网任务的方法论层。它向 Agent 注入网页搜索、资料核实、网页读取和浏览器操作的通用策略，但不提供真实的联网执行能力。
+`web` 是真实的联网能力插件，不再只是向 Agent 注入方法论或返回安装提示。它只组合宿主显式传入的 provider，不绑定搜索厂商、云浏览器或 Computer Use 模型。
 
-它提供一个 `install` action。这个 action 只返回安装指引，不执行命令、不访问网络，也不会安装依赖或修改文件。Agent 需要读取返回的 `data.prompt`，再使用当前可用的 Plugin 与 Shell 能力完成安装。
-
-## 注册
+## 使用 Playwright/CDP
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
-import { WebPlugin } from "@downcity/plugins/web";
+import {
+  PlaywrightBrowserProvider,
+  WebPlugin,
+} from "@downcity/plugins/web";
 
-const agent = new Agent({
-  id: "research-agent",
-  workspace: new Workspace({ path: "/path/to/project" }),
-  plugins: [new WebPlugin()],
+const web = new WebPlugin({
+  browser: new PlaywrightBrowserProvider({
+    cdp_url: "http://127.0.0.1:9222",
+  }),
 });
 ```
 
-注册后，`WebPlugin.system()` 返回的方法论会自动进入 Agent 的 system prompt。
+`PlaywrightBrowserProvider` 连接已经启动的 Chrome/Chromium CDP 端点，不负责下载浏览器或执行安装命令。云端 Browserbase、Browserless、Kitesurf 等只要提供 CDP，也可以实现同一个 `BrowserProvider` 协议。
 
-## install action
+## Actions
+
+| Action | 用途 |
+|---|---|
+| `search` | 委托配置的搜索 provider |
+| `open` | 委托配置的已知 URL 文档 provider |
+| `browser_create_session` | 创建浏览器 session |
+| `browser_observe` | 读取 URL、标题、可见文本和可选截图 |
+| `browser_act` | 执行 `goto`、`click`、`fill`、`press`、`scroll`、`wait` |
+| `browser_semantic_act` | 通过 Stagehand、Computer Use 或其他语义 adapter 执行自然语言动作 |
+| `browser_extract` | 按 CSS selector 或 body 抽取文本 |
+| `browser_semantic_extract` | 通过语义 adapter 按自然语言要求抽取内容 |
+| `browser_close_session` | 关闭 session 并释放页面 |
+
+浏览器示例：
 
 ```ts
-const result = await agent.plugins.run_action({
-  plugin: "web",
-  action: "install",
-  payload: {
-    target: "agent-browser",
-    scope: "project",
-  },
+const created = await web.actions.browser_create_session.execute({
+  context,
+  input: { url: "https://example.com" },
+});
+
+const session_id = created.data.session_id;
+await web.actions.browser_observe.execute({
+  context,
+  input: { session_id },
+});
+
+await web.actions.browser_close_session.execute({
+  context,
+  input: { session_id },
 });
 ```
 
-返回结果的核心结构为：
+## Provider 组合
+
+`WebPlugin` 可以只配置其中一种能力：
 
 ```ts
-{
-  kind: "instructions",
-  target: "agent-browser",
-  scope: "project",
-  prompt: "...给 Agent 的安装步骤...",
-}
-```
-
-可选 `target`：
-
-- `web-access`：返回 `web-access` Skill 安装工作流，默认值
-- `agent-browser`：返回 `agent-browser` Skill 与 CLI 安装工作流
-- `all`：返回以上全部能力的安装工作流
-
-可选 `scope` 只控制 `agent-browser` CLI 的安装提示：
-
-- `user`：提示使用 npm 全局安装，默认值
-- `project`：提示检查项目锁文件，并使用现有包管理器安装 devDependency
-
-Skill 的安装位置不由 `scope` 决定。它由当前 `SkillPlugin` 的 `use / paths` 扫描配置决定。
-
-## 安装工作流
-
-`web.install` 会告诉 Agent 按以下流程操作：
-
-1. 对每个需要的 Skill 调用 `skill.install`。
-2. 按 `skill.install` 返回的扫描感知 Shell 指引完成安装。
-3. `agent-browser` 还需要 CLI 时，按 `scope` 对应的提示安装并验证命令。
-4. 调用 `skill.list`，确认新 Skill 已进入当前扫描范围。
-5. 调用 `skill.lookup` 读取 `SKILL.md`，然后再使用该能力。
-
-例如，`agent-browser` 的 Skill 安装仍由 Skill Plugin 提供指引：
-
-```ts
-plugin_call({
-  plugin: "skill",
-  action: "install",
-  payload: {
-    spec: "agent-browser",
-  },
+const web = new WebPlugin({
+  search: (input) => search_service.search(input),
+  open: (input) => reader_service.open(input),
+  browser: browser_provider,
 });
 ```
 
-这样可以保证 SkillPlugin 的实际扫描根始终是安装位置的唯一事实源，WebPlugin 不需要复制项目目录、用户目录或自定义目录的规则。
+语义能力通过 adapter 注入，不直接绑定模型厂商：
 
-## 能力边界
+```ts
+import {
+  SemanticBrowserProviderAdapter,
+} from "@downcity/plugins/web";
 
-`web` 不负责：
+const browser = new SemanticBrowserProviderAdapter({
+  name: "stagehand",
+  browser: playwright_browser,
+  semantic_act: (input) => stagehand_service.act(input),
+  semantic_extract: (input) => stagehand_service.extract(input),
+});
+```
 
-- 选择联网 provider
-- 决定运行时默认使用哪个联网实现
-- 执行真实搜索、抓取、点击或浏览器操作
-- 执行 Skill 或 CLI 安装命令
-- 读取或写入项目级 web 配置
+Computer Use 可以使用 `ComputerUseBrowserProviderAdapter`，它会先取得带截图的当前观察，再将目标交给宿主的 OpenAI、Anthropic、Gemini 或自建模型循环。模型不接触 Playwright 对象。
 
-真实联网能力来自当前 Agent 环境中的 tools、skills 或其他 Plugin。例如，搜索或 fetch 工具适合公开网页检索，browser、Chrome、agent-browser 或 computer-use 能力适合动态页面与登录态交互。
+推荐路由：先用搜索或 HTTP 读取解决静态任务；页面需要动态渲染、登录态或交互时再创建浏览器；自然语言动作可在 provider 内接入 Stagehand，视觉页面可在动作失败后回退到 Computer Use。
 
-如果必要能力不存在，Agent 应直接说明，不应假装已经联网。
+## 生命周期与安全
 
-## System Prompt
-
-WebPlugin 注入的方法论会引导 Agent：
-
-- 先检查当前实际可用的 tools 与 skills
-- 根据搜索、读取、结构化抓取或浏览器交互选择路径
-- 优先回到官方页面、原始文档和源码等一手来源核实结论
-- 路径不再产生进展时及时切换方法
-- 达成目标后停止，不为形式完整继续增加无效步骤
+- `WebPlugin` 至少需要注入一种 provider；没有真实能力时不会被构造。
+- 浏览器 session 由 provider 持有，Agent 销毁或 Plugin 卸载时自动调用 `dispose()`。
+- `browser_act` 只提供确定性的浏览器动作；提交、发送、购买、上传、删除等副作用必须由宿主审批。
+- 不要把 Playwright `Browser`、`Page` 或 `Buffer` 直接返回给 Agent；Action 结果始终是 JSON 数据。
+- 安装 Skill、发现 Skill 和读取 `SKILL.md` 仍由 `SkillPlugin` 负责。
 
 ## 相关文档
 
 - [内建 Plugin 总览](/zh/plugins-docs/builtins/overview)
-- [Skill Plugin](/zh/plugins-docs/builtins/skill)
 - [Plugin Actions](/zh/agent-sdk-docs/plugins/plugin-actions)
 - [Plugin System](/zh/agent-sdk-docs/plugins/plugin-system)

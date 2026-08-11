@@ -144,18 +144,19 @@ const agent = new Agent({
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
-import { WebPlugin } from "@downcity/plugins/web";
 import { SkillPlugin } from "@downcity/plugins/skill";
 
 const agent = new Agent({
   id: "repo-helper",
   workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
-  plugins: [new SkillPlugin(), new WebPlugin()],
+  plugins: [new SkillPlugin()],
 });
 
 const plugins = agent.plugins.list();
 ```
+
+只有在显式配置搜索、文档或浏览器 provider 后才注册 `WebPlugin`，请参阅 [Web Plugin 文档](/zh/plugins-docs/builtins/web)。
 
 这些 plugin 会注册到当前 `Agent` 自己的 registry 里。
 

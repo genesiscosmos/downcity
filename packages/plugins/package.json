@@ -1,6 +1,6 @@
 {
   "name": "@downcity/plugins",
-  "version": "1.0.248",
+  "version": "1.0.249",
   "type": "module",
   "description": "Downcity 内建 plugin 集合包",
   "main": "./bin/index.js",
@@ -71,6 +71,7 @@
     "fs-extra": "^11.3.5",
     "js-yaml": "^4.1.1",
     "node-cron": "^4.2.1",
+    "playwright-core": "^1.62.1",
     "ws": "^8.21.0",
     "zod": "^4.4.3"
   },

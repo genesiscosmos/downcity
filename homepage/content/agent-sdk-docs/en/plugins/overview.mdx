@@ -59,18 +59,19 @@ Managed plugins are the reason the old split runtime language is no longer the r
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
-import { WebPlugin } from "@downcity/plugins/web";
 import { SkillPlugin } from "@downcity/plugins/skill";
 
 const agent = new Agent({
   id: "repo-helper",
   workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
-  plugins: [new SkillPlugin(), new WebPlugin()],
+  plugins: [new SkillPlugin()],
 });
 
 const plugins = agent.plugins.list();
 ```
+
+The Web Plugin requires an explicit provider. See the [Web Plugin guide](/en/plugins-docs/builtins/web).
 
 Important points:
 

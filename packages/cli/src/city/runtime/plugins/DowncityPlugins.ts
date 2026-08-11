@@ -34,7 +34,10 @@ import {
   type SoundPluginTtsInput,
 } from "@downcity/plugins/sound";
 import { TaskPlugin } from "@downcity/plugins/task";
-import { WebPlugin } from "@downcity/plugins/web";
+import {
+  PlaywrightBrowserProvider,
+  WebPlugin,
+} from "@downcity/plugins/web";
 import { WorkboardPlugin } from "@downcity/plugins/workboard";
 import { CityUserManager } from "@/city/shared/CityUserManager.js";
 import type {
@@ -54,8 +57,39 @@ const skill_manifest: PluginManifest = {
 
 const web_manifest: PluginManifest = {
   name: "web",
-  title: "Web Methodology",
-  description: "Injects web research and browser-use methodology for Agents.",
+  title: "Web",
+  description: "Provides structured browser sessions through a configured CDP endpoint.",
+  config: {
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["cdp_url"],
+      properties: {
+        cdp_url: {
+          type: "string",
+          minLength: 1,
+          description: "Chrome DevTools Protocol endpoint, for example http://127.0.0.1:9222.",
+        },
+        default_url: {
+          type: "string",
+          description: "Default URL opened when browser_create_session omits url.",
+        },
+        timeout_ms: {
+          type: "integer",
+          minimum: 1000,
+          maximum: 60000,
+          description: "Default browser action timeout in milliseconds.",
+        },
+        max_observation_chars: {
+          type: "integer",
+          minimum: 1,
+          maximum: 100000,
+          description: "Maximum visible-text characters returned by each observation.",
+        },
+      },
+    },
+    defaults: {},
+  },
 };
 
 const workboard_manifest: PluginManifest = {
@@ -109,7 +143,25 @@ class CitySkillPlugin extends SkillPlugin {
 
 class CityWebPlugin extends WebPlugin {
   static readonly manifest = web_manifest;
-  constructor(_input: PluginInitializationInput) { super(); }
+  constructor(input: PluginInitializationInput) {
+    const cdp_url = read_required_string(input.config, "cdp_url", "Web Plugin");
+    const default_url = read_optional_string(input.config, "default_url");
+    const timeout_ms = read_optional_number(input.config, "timeout_ms");
+    const max_observation_chars = read_optional_number(
+      input.config,
+      "max_observation_chars",
+    );
+    super({
+      browser: new PlaywrightBrowserProvider({
+        cdp_url,
+        ...(default_url ? { default_url } : {}),
+        ...(timeout_ms !== undefined ? { timeout_ms } : {}),
+        ...(max_observation_chars !== undefined
+          ? { max_observation_chars }
+          : {}),
+      }),
+    });
+  }
 }
 
 class CityWorkboardPlugin extends WorkboardPlugin {
@@ -283,4 +335,37 @@ function require_model_id(input: unknown, capability: string): string {
   const model_id = typeof record.model === "string" ? record.model.trim() : "";
   if (!model_id) throw new TypeError(`${capability} requires model id`);
   return model_id;
+}
+
+/** 从 Plugin 配置读取必填字符串。 */
+function read_required_string(
+  config: Record<string, unknown>,
+  key: string,
+  owner: string,
+): string {
+  const value = read_optional_string(config, key);
+  if (!value) throw new TypeError(`${owner} requires ${key}`);
+  return value;
+}
+
+/** 从 Plugin 配置读取可选字符串。 */
+function read_optional_string(
+  config: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const value = config[key];
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  return normalized || undefined;
+}
+
+/** 从 Plugin 配置读取可选有限数值。 */
+function read_optional_number(
+  config: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const value = config[key];
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }

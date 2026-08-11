@@ -1,117 +1,80 @@
 ---
 title: web Plugin
-description: How the built-in web plugin injects web methodology and returns installation guidance for web Skills and CLIs
+description: Structured web search, document reading, and Playwright/CDP browser capabilities through replaceable providers
 ---
 
 # web Plugin
 
-`web` is the methodology layer for web tasks. It injects general strategies for search, source verification, page reading, and browser interaction, but it does not provide concrete web execution capability.
+`web` is a real web-capability plugin. It no longer only injects methodology or returns installation prompts. It composes providers explicitly supplied by the host and does not bind the SDK to a search vendor, cloud browser, or Computer Use model.
 
-It exposes an `install` action that only returns instructions. The action does not execute commands, access the network, install dependencies, or change files. The Agent reads `data.prompt` and follows it with the currently available Plugin and Shell capabilities.
-
-## Registration
+## Playwright/CDP
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
-import { WebPlugin } from "@downcity/plugins/web";
+import {
+  PlaywrightBrowserProvider,
+  WebPlugin,
+} from "@downcity/plugins/web";
 
-const agent = new Agent({
-  id: "research-agent",
-  workspace: new Workspace({ path: "/path/to/project" }),
-  plugins: [new WebPlugin()],
+const web = new WebPlugin({
+  browser: new PlaywrightBrowserProvider({
+    cdp_url: "http://127.0.0.1:9222",
+  }),
 });
 ```
 
-After registration, the methodology returned by `WebPlugin.system()` is automatically included in the Agent's system prompt.
+`PlaywrightBrowserProvider` connects to an already-running Chrome/Chromium CDP endpoint. It does not download browsers or execute installation commands. Browserbase, Browserless, Kitesurf, and other CDP-compatible backends can implement the same `BrowserProvider` protocol.
 
-## install Action
+## Actions
+
+| Action | Purpose |
+|---|---|
+| `search` | Delegate to the configured search provider |
+| `open` | Read a known URL through the configured document provider |
+| `browser_create_session` | Create a browser session |
+| `browser_observe` | Read URL, title, visible text, and an optional screenshot |
+| `browser_act` | Run `goto`, `click`, `fill`, `press`, `scroll`, or `wait` |
+| `browser_semantic_act` | Run a natural-language action through a Stagehand, Computer Use, or other semantic adapter |
+| `browser_extract` | Extract text from a CSS selector or the body |
+| `browser_semantic_extract` | Extract content through a semantic provider |
+| `browser_close_session` | Close a session and release its page |
+
+## Provider composition
 
 ```ts
-const result = await agent.plugins.run_action({
-  plugin: "web",
-  action: "install",
-  payload: {
-    target: "agent-browser",
-    scope: "project",
-  },
+const web = new WebPlugin({
+  search: (input) => search_service.search(input),
+  open: (input) => reader_service.open(input),
+  browser: browser_provider,
 });
 ```
 
-The core result shape is:
+Semantic capabilities are injected through an adapter and are not tied to one model vendor:
 
 ```ts
-{
-  kind: "instructions",
-  target: "agent-browser",
-  scope: "project",
-  prompt: "...installation steps for the Agent...",
-}
-```
+import { SemanticBrowserProviderAdapter } from "@downcity/plugins/web";
 
-Available `target` values:
-
-- `web-access`: return the `web-access` Skill installation workflow; this is the default
-- `agent-browser`: return the `agent-browser` Skill and CLI installation workflow
-- `all`: return the workflows for both capabilities
-
-The optional `scope` controls only the `agent-browser` CLI guidance:
-
-- `user`: direct the Agent to use a global npm installation; this is the default
-- `project`: direct the Agent to inspect the lockfile and use the project's existing package manager to add a devDependency
-
-`scope` does not choose where a Skill is installed. Skill placement comes from the active `SkillPlugin` `use / paths` scan configuration.
-
-## Installation Workflow
-
-`web.install` directs the Agent through this workflow:
-
-1. Call `skill.install` for every required Skill.
-2. Follow the scan-aware Shell guidance returned by `skill.install`.
-3. When `agent-browser` also needs its CLI, install and verify it with the commands for the requested `scope`.
-4. Call `skill.list` to confirm that every new Skill is discoverable.
-5. Call `skill.lookup` to read `SKILL.md` before using the capability.
-
-For example, the Skill Plugin remains responsible for the `agent-browser` Skill installation guidance:
-
-```ts
-plugin_call({
-  plugin: "skill",
-  action: "install",
-  payload: {
-    spec: "agent-browser",
-  },
+const browser = new SemanticBrowserProviderAdapter({
+  name: "stagehand",
+  browser: playwright_browser,
+  semantic_act: (input) => stagehand_service.act(input),
+  semantic_extract: (input) => stagehand_service.extract(input),
 });
 ```
 
-This keeps the active SkillPlugin scan roots as the single source of truth. WebPlugin does not duplicate project, home, or custom-root installation rules.
+Computer Use can use `ComputerUseBrowserProviderAdapter`. It captures an observation with a screenshot before handing the goal to an OpenAI, Anthropic, Gemini, or custom model loop. The model never receives Playwright objects.
 
-## Capability Boundary
+Use search or HTTP reading first. Create a browser for dynamic rendering, logged-in state, or interaction. Stagehand can be added inside a provider for semantic actions, while Computer Use should remain a visual fallback for pages that cannot be handled reliably through the DOM.
 
-`web` does not:
+## Lifecycle and safety
 
-- choose a web provider
-- decide which web implementation the Agent must use at runtime
-- perform actual search, fetching, clicking, or browser interaction
-- execute Skill or CLI installation commands
-- read or write project-level web configuration
+- `WebPlugin` requires at least one configured provider.
+- The provider owns browser sessions and is disposed when the Agent or Plugin is disposed.
+- `browser_act` exposes deterministic browser actions. Host approval is required for consequential actions such as submit, send, purchase, upload, or delete.
+- Playwright `Browser`, `Page`, and `Buffer` objects never cross the Plugin action boundary; results are JSON-serializable.
+- Skill installation, discovery, and `SKILL.md` loading remain responsibilities of `SkillPlugin`.
 
-Concrete web capability comes from the tools, Skills, or other Plugins in the current Agent environment. Search and fetch tools can handle public discovery, while browser, Chrome, agent-browser, or computer-use capabilities can handle dynamic pages and logged-in interaction.
+## Related docs
 
-If a required capability is missing, the Agent should state that directly instead of pretending it accessed the web.
-
-## System Prompt
-
-The WebPlugin methodology directs the Agent to:
-
-- inspect the tools and Skills that are actually available
-- choose a path for search, reading, structured extraction, or browser interaction
-- verify conclusions against primary sources such as official pages, original documentation, and source code
-- switch methods when the current path stops making progress
-- stop when the goal is complete instead of adding unnecessary steps
-
-## Related Docs
-
-- [Built-in Plugin Overview](/en/plugins-docs/builtins/overview)
-- [Skill Plugin](/en/plugins-docs/builtins/skill)
+- [Built-in Plugin overview](/en/plugins-docs/builtins/overview)
 - [Plugin Actions](/en/agent-sdk-docs/plugins/plugin-actions)
 - [Plugin System](/en/agent-sdk-docs/plugins/plugin-system)

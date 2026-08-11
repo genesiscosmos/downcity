@@ -21,10 +21,15 @@ Plugin 只属于 Agent。
 Agent 构造时传入的 plugin 会自动注册：
 
 ```ts
+import { Agent, Workspace } from "@downcity/agent";
+import { PlaywrightBrowserProvider, WebPlugin } from "@downcity/plugins/web";
+
 const agent = new Agent({
   id: "agent",
   workspace: new Workspace({ path: process.cwd() }),
-  plugins: [new WebPlugin()],
+  plugins: [new WebPlugin({
+    browser: new PlaywrightBrowserProvider({ cdp_url: "http://127.0.0.1:9222" }),
+  })],
 });
 
 await agent.ready();
