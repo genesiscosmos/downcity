@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 对 Agent 暴露 `image_create` / `image_result` 两步式任务 action。
  * - City / provider 的图片能力通过 image_create / image_result 任务函数注入。
- * - 成功结果返回 provider / City 已解析的 UI Parts，Plugin Action 同时声明结果数据和 Assistant Message。
+ * - 成功结果中的远程图片会写入 Workspace，并同时保留本地引用与在线来源地址。
  */
 
 import fs from "node:fs/promises";
@@ -31,6 +31,7 @@ import type {
   ImagePluginResolvedInput,
   ImagePluginResult,
 } from "@/image/types/ImagePlugin.js";
+import { localize_image_result } from "@/image/runtime/ImageResultStorage.js";
 
 const DEFAULT_IMAGE_PLUGIN_NAME = "image";
 const DEFAULT_IMAGE_PLUGIN_TITLE = "Image";
@@ -387,8 +388,8 @@ function normalize_image_result_payload(
 /**
  * 校验 image 函数返回的 UIMessage。
  *
- * 图片资源的存储与访问地址由 image provider 或 City Storage 负责；
- * ImagePlugin 只校验 UIMessage 结构，不接管远程资源的下载和本地化。
+ * 本函数只校验 provider / City 返回的 UIMessage 结构；
+ * 远程资源下载由 action 成功分支中的 ImageResultStorage 统一处理。
  */
 function normalize_image_result(result: ImagePluginResult): ImagePluginResult {
   const record = to_record(result);
@@ -791,7 +792,7 @@ export class ImagePlugin extends BasePlugin {
           },
         },
       ],
-      execute: async ({ input }: { input: JsonValue }) => {
+      execute: async ({ context, execution_context, input }) => {
         try {
           const normalized_input = normalize_image_result_payload(input);
           const current = await this.read_image_result(normalized_input);
@@ -803,18 +804,32 @@ export class ImagePlugin extends BasePlugin {
               message: current.error ?? current.message ?? "image job failed",
             };
           }
+          const localized = current.status === "succeeded" && current.result
+            ? await localize_image_result({
+                context,
+                job_id: current.job_id,
+                result: current.result,
+                abort_signal: execution_context?.abort_signal,
+              })
+            : undefined;
+          const output = localized
+            ? { ...current, result: localized.result }
+            : current;
+          const localization_warning = localized?.errors.length
+            ? `; ${localized.errors.length} image result(s) kept as remote URLs because local storage failed: ${localized.errors.join("; ")}`
+            : "";
           return {
             success: true,
-            data: current as unknown as JsonObject,
+            data: output as unknown as JsonObject,
             message:
               current.status === "succeeded"
-                ? "image generated"
+                ? `image generated${localization_warning}`
                 : `image job ${current.status}`,
-            ...(current.status === "succeeded" && current.result
+            ...(output.status === "succeeded" && output.result
               ? {
                   messages: [{
                     role: "assistant" as const,
-                    parts: current.result.parts,
+                    parts: output.result.parts,
                   }],
                 }
               : {}),

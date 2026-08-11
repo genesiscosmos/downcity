@@ -142,6 +142,30 @@ export interface ImagePluginResolvedInput {
 export type ImagePluginResult = UIMessage;
 
 /**
+ * 图片结果本地存储输入。
+ */
+export interface ImagePluginResultStorageInput {
+  /** 当前 Agent Plugin Context，用于访问 Workspace 文件能力。 */
+  context: PluginContext;
+  /** 当前图片任务 ID，用于划分稳定的本地结果目录。 */
+  job_id: string;
+  /** City 或 provider 返回的原始图片 UIMessage。 */
+  result: ImagePluginResult;
+  /** 当前 Session Turn 的可选取消信号。 */
+  abort_signal?: AbortSignal;
+}
+
+/**
+ * 图片结果本地存储输出。
+ */
+export interface ImagePluginResultStorageResult {
+  /** 已将可下载远程图片替换为本地 Workspace 路径的 UIMessage。 */
+  result: ImagePluginResult;
+  /** 未能完成本地化的图片错误；对应 File Part 会保留远程 URL。 */
+  errors: string[];
+}
+
+/**
  * 图片生成任务状态。
  */
 export type ImagePluginJobStatus =

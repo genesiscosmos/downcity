@@ -314,13 +314,13 @@ const job = await plugin_call({
 
 `default_model` is the plugin-level default image model. It can be a string, or a sync/async function. When the Agent calls `image_create` without a `model`, `ImagePlugin` injects the string value or function return value before calling the downstream `image_create(input)`. If the payload explicitly includes `model`, that payload value wins. Without `default_model`, call `models` first when the Agent needs to inspect available image model IDs.
 
-`image_result` reads the current job state once by default. If it returns `queued` or `running`, keep the `job_id` and call `image_result` again later. For short jobs, pass `until_done: true` to wait for a terminal state in one tool call, with optional `max_wait_ms` / `poll_interval_ms`. If it returns `succeeded`, `data` contains the job result and image File Parts are also copied into the current Assistant Message. The URL in each File Part is returned by the configured image provider or City Storage and may be a remote URL.
+`image_result` reads the current job state once by default. If it returns `queued` or `running`, keep the `job_id` and call `image_result` again later. For short jobs, pass `until_done: true` to wait for a terminal state in one tool call, with optional `max_wait_ms` / `poll_interval_ms`. If it returns `succeeded`, ImagePlugin downloads remote File Parts into `.downcity/image/results/<job_id>/`, returns the complete job result in `data`, and copies the localized File Parts into the current Assistant Message.
 
 `ImagePlugin` is provider-agnostic. It does not know about City, OpenAI, or DeepSeek directly. Pass `image_create` and `image_result` job functions, and the plugin exposes the two-step job actions to the Agent; by default the product, Agent, or caller decides when to poll again based on `poll_after_ms`, while `until_done` is only a simple plugin-level wait helper.
 
 “Resolved provider input” means this: the Agent only passes simple `prompt` or `content`; `ImagePlugin` reads local files into data URLs and converts `content` into `ImagePluginResolvedInput.messages` before calling `image_create(input)`. This is the internal boundary from ImagePlugin to City / provider adapters, not a third Agent-facing payload format.
 
-The `image_result` callback returns a UIMessage File Part with the provider's image URL. The URL may be remote, a data URL, or a local path; ImagePlugin does not download or relocate the result. Session persists that File Part as returned, and the action also exposes the result in `data` for direct callers.
+The `image_result` callback may return a remote URL or a local path. For a remote URL, ImagePlugin makes the local Workspace path the File Part's primary `url` and preserves the original online address in `providerMetadata.downcity.source_url`. If local storage fails, the remote URL remains usable and `providerMetadata.downcity.localization_error` plus the action message report the failure. Session persists the resulting File Part, while direct callers can read the same localized result from `data`.
 
 ## plugin HTTP
 

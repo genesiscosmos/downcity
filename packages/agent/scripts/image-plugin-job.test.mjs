@@ -25,14 +25,34 @@ function create_image_message() {
         type: "file",
         mediaType: "image/png",
         filename: "image.png",
-        url: "https://storage.example.com/image.png",
+        url: "/workspace/image.png",
       },
     ],
   };
 }
 
+function create_files(workspace_path) {
+  return {
+    root_path: workspace_path,
+    resolve_path: (...segments) => path.resolve(workspace_path, ...segments),
+    path_exists: async (file_path) => {
+      try {
+        await fs.access(file_path);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    ensure_directory: (directory_path) => fs.mkdir(directory_path, { recursive: true }),
+    write_file_atomically: (file_path, content) => fs.writeFile(file_path, content),
+  };
+}
+
 function create_context(workspace_path = process.cwd()) {
-  return { workspace_path };
+  return {
+    workspace_path,
+    files: create_files(workspace_path),
+  };
 }
 
 function create_registry(plugin, workspace_path = process.cwd()) {
@@ -190,6 +210,112 @@ test("ImagePlugin image_result returns final message when succeeded", async () =
     role: "assistant",
     parts: message.parts,
   }]);
+});
+
+test("ImagePlugin image_result stores remote images locally and preserves source URLs", async (t) => {
+  const workspace_path = await fs.mkdtemp(path.join(os.tmpdir(), "image-plugin-result-"));
+  t.after(() => fs.rm(workspace_path, { recursive: true, force: true }));
+  t.mock.method(globalThis, "fetch", async (url) => {
+    const is_webp = String(url).endsWith("/second.webp");
+    return new Response(is_webp ? "webp-bytes" : "png-bytes", {
+      status: 200,
+      headers: {
+        "content-type": is_webp ? "image/webp" : "image/png",
+      },
+    });
+  });
+
+  const remote_message = {
+    id: "msg_remote_images",
+    role: "assistant",
+    parts: [
+      {
+        type: "file",
+        mediaType: "image/png",
+        url: "https://storage.example.com/first.png",
+      },
+      {
+        type: "file",
+        mediaType: "image/webp",
+        url: "https://storage.example.com/second.webp",
+      },
+    ],
+  };
+  const plugin = new ImagePlugin({
+    image_create: () => ({ job_id: "img_remote", status: "queued" }),
+    image_result: () => ({
+      job_id: "img_remote",
+      status: "succeeded",
+      result: remote_message,
+    }),
+  });
+
+  const result = await plugin.actions.image_result.execute({
+    context: create_context(workspace_path),
+    input: { job_id: "img_remote" },
+    plugin_name: "image",
+    action_name: "image_result",
+  });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(result.data.result.parts.map((part) => part.url), [
+    ".downcity/image/results/img_remote/image_01.png",
+    ".downcity/image/results/img_remote/image_02.webp",
+  ]);
+  assert.deepEqual(
+    result.data.result.parts.map((part) => part.providerMetadata.downcity.source_url),
+    remote_message.parts.map((part) => part.url),
+  );
+  assert.equal(
+    await fs.readFile(path.join(workspace_path, result.data.result.parts[0].url), "utf8"),
+    "png-bytes",
+  );
+  assert.equal(
+    await fs.readFile(path.join(workspace_path, result.data.result.parts[1].url), "utf8"),
+    "webp-bytes",
+  );
+  assert.deepEqual(result.messages[0].parts, result.data.result.parts);
+});
+
+test("ImagePlugin image_result keeps remote URL when local storage fails", async (t) => {
+  const workspace_path = await fs.mkdtemp(path.join(os.tmpdir(), "image-plugin-fallback-"));
+  t.after(() => fs.rm(workspace_path, { recursive: true, force: true }));
+  t.mock.method(globalThis, "fetch", async () => {
+    return new Response("unavailable", { status: 503 });
+  });
+  const remote_url = "https://storage.example.com/failed.png";
+  const plugin = new ImagePlugin({
+    image_create: () => ({ job_id: "img_fallback", status: "queued" }),
+    image_result: () => ({
+      job_id: "img_fallback",
+      status: "succeeded",
+      result: {
+        id: "msg_remote_fallback",
+        role: "assistant",
+        parts: [{ type: "file", mediaType: "image/png", url: remote_url }],
+      },
+    }),
+  });
+
+  const result = await plugin.actions.image_result.execute({
+    context: create_context(workspace_path),
+    input: { job_id: "img_fallback" },
+    plugin_name: "image",
+    action_name: "image_result",
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.data.result.parts[0].url, remote_url);
+  assert.equal(
+    result.data.result.parts[0].providerMetadata.downcity.source_url,
+    remote_url,
+  );
+  assert.match(
+    result.data.result.parts[0].providerMetadata.downcity.localization_error,
+    /HTTP 503/,
+  );
+  assert.match(result.message, /kept as remote URLs/);
+  assert.deepEqual(result.messages[0].parts, result.data.result.parts);
 });
 
 test("ImagePlugin image_result reports failed terminal job", async () => {
