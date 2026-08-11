@@ -83,7 +83,7 @@ export async function execShellCommand(
       await closeShellSession(state, context, {
         shellId: current_shell.shellId,
         force: true,
-      });
+      }).catch(() => undefined);
       throw new Error(
         `shell.exec timed out after ${timeoutMs}ms. Use shell_session.start for long-running commands.`,
       );

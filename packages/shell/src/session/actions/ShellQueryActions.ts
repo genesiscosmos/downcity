@@ -25,12 +25,11 @@ import {
   createOutputChunk,
   isInMemorySession,
   isTerminalStatus,
-  nowMs,
   resolveOwnerContextId,
   resolveSession,
   scheduleCleanup,
-  updateSessionSnapshot,
 } from "../ShellActionRuntimeSupport.js";
+import { terminate_shell_session_process } from "../ShellProcessLifecycle.js";
 
 /**
  * 列出当前 runtime 内的 shell sessions。
@@ -207,16 +206,13 @@ export async function closeShellSession(
   }
 
   if (session.snapshot.status === "running" || session.snapshot.status === "starting") {
-    try {
-      session.child.kill(request.force === true ? "SIGKILL" : "SIGTERM");
-    } catch {
-      // ignore
+    const process_exited = await terminate_shell_session_process(
+      session,
+      request.force === true,
+    );
+    if (!process_exited) {
+      throw new Error(`Shell process did not exit after termination: ${shellId}`);
     }
-    await updateSessionSnapshot(session, (snapshot) => {
-      snapshot.status = request.force === true ? "killed" : "failed";
-      snapshot.exitCode = request.force === true ? -9 : -15;
-      snapshot.endedAt = nowMs();
-    });
   }
 
   scheduleCleanup(state, shellId);

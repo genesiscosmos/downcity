@@ -39,6 +39,53 @@ async function create_context() {
   };
 }
 
+/** 创建一个在收到 kill 后延迟上报 exit 的测试 Sandbox。 */
+function create_delayed_exit_sandbox(delay_ms, on_process_exit) {
+  return {
+    backend: "delayed-exit-test-sandbox",
+    async preflight() {
+      return { ok: true, platform: process.platform, backend: this.backend, issues: [] };
+    },
+    async resolve_system_read_only_paths() {
+      return [];
+    },
+    async spawn(request) {
+      let exit_callback = () => {};
+      let kill_requested = false;
+      return {
+        child: {
+          writable: true,
+          onData() {},
+          onExit(callback) {
+            exit_callback = callback;
+          },
+          onError() {},
+          async write() {},
+          close_stdin() {},
+          kill() {
+            if (kill_requested) return;
+            kill_requested = true;
+            setTimeout(() => {
+              on_process_exit();
+              exit_callback(-9);
+            }, delay_ms);
+          },
+        },
+        cwd: request.cwd,
+        sandboxed: true,
+        sandbox_mode: "safe",
+        backend: this.backend,
+        network_mode: request.policy.network_mode,
+        sandbox_dir: request.policy.sandbox_dir,
+        home_dir: request.policy.home_dir,
+        tmp_dir: request.policy.tmp_dir,
+        cache_dir: request.policy.cache_dir,
+        policy_fingerprint: request.policy.fingerprint,
+      };
+    },
+  };
+}
+
 test("Shell only exposes command tools", () => {
   const shell = new Shell({ root_path: process.cwd(), sandbox: test_sandbox });
   assert.deepEqual(Object.keys(shell.tools).sort(), [
@@ -121,6 +168,38 @@ test("shell_exec honors an explicit short total timeout", async () => {
       /shell\.exec timed out after 80ms/,
     );
     assert.ok(Date.now() - started_at < 1500);
+  } finally {
+    await closeAllShellSessions(state, true);
+    await fs.rm(fixture.root_path, { recursive: true, force: true });
+  }
+});
+
+test("shell_exec timeout waits for the process exit event before returning", async () => {
+  const fixture = await create_context();
+  let process_exited = false;
+  fixture.context.sandbox = create_delayed_exit_sandbox(
+    80,
+    () => { process_exited = true; },
+  );
+  const state = createShellRuntimeState({
+    defaultInlineWaitMs: 10,
+    defaultExecTimeoutMs: 20,
+    minWaitMs: 1,
+  });
+  try {
+    await assert.rejects(
+      execShellCommand(state, fixture.context, {
+        cmd: "delayed-exit",
+        cwd: fixture.root_path,
+        shell: "/bin/sh",
+        login: false,
+        timeoutMs: 20,
+        sandbox: "safe",
+      }),
+      /shell\.exec timed out after 20ms/,
+    );
+    assert.equal(process_exited, true);
+    assert.equal([...state.sessions.values()][0]?.snapshot.status, "killed");
   } finally {
     await closeAllShellSessions(state, true);
     await fs.rm(fixture.root_path, { recursive: true, force: true });

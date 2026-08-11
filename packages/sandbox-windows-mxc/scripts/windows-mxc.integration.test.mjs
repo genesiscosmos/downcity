@@ -54,6 +54,11 @@ test("Windows MXC runs cmd and confines writes to the workspace", {
     await assert.rejects(fs.access(outside_path));
   } finally {
     await closeAllShellSessions(state, true);
-    await fs.rm(fixture_root, { recursive: true, force: true });
+    await fs.rm(fixture_root, {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 200,
+    });
   }
 });

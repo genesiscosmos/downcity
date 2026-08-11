@@ -8,10 +8,7 @@
 
 import type { ShellHostContext } from "@/types/ShellHostContext.js";
 import type { ShellRuntimeState } from "@/session/ShellRuntimeTypes.js";
-import {
-  nowMs,
-  updateSessionSnapshot,
-} from "../ShellActionRuntimeSupport.js";
+import { terminate_shell_session_process } from "../ShellProcessLifecycle.js";
 
 /**
  * 绑定当前 shell runtime 实例的 execution runtime。
@@ -30,23 +27,22 @@ export async function closeAllShellSessions(
   state: ShellRuntimeState,
   force = false,
 ): Promise<void> {
-  const closing = Array.from(state.sessions.values()).map(async (session) => {
-    if (
-      session.snapshot.status !== "running" &&
-      session.snapshot.status !== "starting"
-    ) {
-      return;
-    }
-    try {
-      session.child.kill(force ? "SIGKILL" : "SIGTERM");
-    } catch {
-      // ignore
-    }
-    await updateSessionSnapshot(session, (snapshot) => {
-      snapshot.status = force ? "killed" : "failed";
-      snapshot.exitCode = force ? -9 : -15;
-      snapshot.endedAt = nowMs();
-    });
-  });
-  await Promise.all(closing);
+  const active_sessions = Array.from(state.sessions.values()).filter(
+    (session) => session.snapshot.status === "running"
+      || session.snapshot.status === "starting",
+  );
+  const close_results = await Promise.all(
+    active_sessions.map(async (session) => ({
+      shell_id: session.snapshot.shellId,
+      process_exited: await terminate_shell_session_process(session, force),
+    })),
+  );
+  const failed_shell_ids = close_results
+    .filter((result) => !result.process_exited)
+    .map((result) => result.shell_id);
+  if (failed_shell_ids.length > 0) {
+    throw new Error(
+      `Shell processes did not exit after termination: ${failed_shell_ids.join(", ")}`,
+    );
+  }
 }
