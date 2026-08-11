@@ -10,7 +10,8 @@ import path from "node:path";
 import { promisify, stripVTControlCharacters } from "node:util";
 import { RemoteAgent } from "@downcity/agent";
 import { get_agent_registry_root_path, list_agent_registry_records, create_agent_registry_record, type AgentRegistryRecord } from "@downcity/agent-registry";
-import type { DesktopChatResult, DesktopSessionSummary } from "../../common/types/DesktopApi.js";
+import type { SessionMessage } from "@downcity/agent";
+import type { DesktopAgentSummary, DesktopChatMessage, DesktopChatResult, DesktopSessionSummary } from "../../common/types/DesktopApi.js";
 
 const exec_file = promisify(execFile);
 
@@ -19,18 +20,20 @@ export class AgentController {
   private readonly remote_agents = new Map<string, RemoteAgent>();
 
   /** 列出 CLI 与 Desktop 共用的 Agent 注册记录。 */
-  list_agents(): AgentRegistryRecord[] { return list_agent_registry_records(); }
+  list_agents(): DesktopAgentSummary[] {
+    return list_agent_registry_records().map(to_desktop_agent_summary);
+  }
 
   /** 创建一个共享注册的 Agent。 */
-  create_agent(agent_id: string, workspace_path: string, model_id: string): AgentRegistryRecord {
+  create_agent(agent_id: string, workspace_path: string, model_id: string): DesktopAgentSummary {
     const normalized_model_id = String(model_id || "").trim();
     if (!normalized_model_id) throw new Error("model_id is required");
-    return create_agent_registry_record({
+    return to_desktop_agent_summary(create_agent_registry_record({
       agent_id,
       workspace_path,
       version: "1.0.0",
       execution: { type: "api", model_id: normalized_model_id },
-    });
+    }));
   }
 
   /** 启动指定 Agent 的 CLI daemon，并返回本机 RPC 地址。 */
@@ -68,6 +71,16 @@ export class AgentController {
   async create_session(agent_id: string): Promise<DesktopSessionSummary> {
     const session = await this.require_remote_agent(agent_id).sessions.create();
     return { session_id: session.id, title: "新会话" };
+  }
+
+  /** 读取一个远程 Session 的用户可见消息快照。 */
+  async list_messages(agent_id: string, session_id: string): Promise<DesktopChatMessage[]> {
+    const session = await this.require_remote_agent(agent_id).sessions.get(session_id);
+    const page = await session.messages();
+    return page.items
+      .filter((message) => message.visibility === "visible")
+      .map(to_desktop_chat_message)
+      .filter((message): message is DesktopChatMessage => message !== null);
   }
 
   /** 发送聊天输入并等待当前 Turn 完成。 */
@@ -131,4 +144,47 @@ function clean_cli_error_output(output: string): string {
     .filter((line) => !/^\(Use `node --trace-warnings/u.test(line.trim()))
     .join("\n")
     .trim();
+}
+
+/** 把 Registry 记录收敛成 Renderer 所需的最小 Agent 摘要。 */
+function to_desktop_agent_summary(record: AgentRegistryRecord): DesktopAgentSummary {
+  const model_id = typeof record.execution?.model_id === "string"
+    ? record.execution.model_id
+    : "";
+  return {
+    agent_id: record.agent_id,
+    workspace_path: record.workspace_path,
+    model_id,
+    version: record.version,
+  };
+}
+
+/** 把 canonical Session Message 投影为当前 Desktop Chat 的纯文本展示模型。 */
+function to_desktop_chat_message(message: SessionMessage): DesktopChatMessage | null {
+  if (message.type === "user") {
+    const text = message.parts
+      .flatMap((part) => part.type === "text" && "text" in part ? [part.text] : [])
+      .join("\n")
+      .trim();
+    return text ? { message_id: message.message_id, role: "user", text, created_at: message.created_at, pending: false } : null;
+  }
+  if (message.type === "assistant") {
+    const text = message.parts
+      .flatMap((part) => part.type === "text" && "text" in part ? [part.text] : [])
+      .join("\n")
+      .trim();
+    if (!text && message.status !== "streaming") return null;
+    return {
+      message_id: message.message_id,
+      role: "assistant",
+      text,
+      created_at: message.created_at,
+      pending: message.status === "streaming",
+    };
+  }
+  if (message.type === "error") {
+    return { message_id: message.message_id, role: "error", text: message.message, created_at: message.created_at, pending: false };
+  }
+  const text = [message.title, message.description].filter(Boolean).join("\n");
+  return { message_id: message.message_id, role: "system", text, created_at: message.created_at, pending: message.status === "running" };
 }

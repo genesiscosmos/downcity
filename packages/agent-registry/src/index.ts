@@ -9,7 +9,7 @@ import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import type {
   AgentRegistryRecord,
   CreateAgentRegistryInput,
@@ -77,12 +77,12 @@ function decode_record(value: unknown): AgentRegistryRecord | null {
   return JSON.parse(Buffer.concat([decipher.update(packed.subarray(28)), decipher.final()]).toString("utf8")) as AgentRegistryRecord;
 }
 
-function with_database<T>(callback: (database: Database.Database) => T): T {
+function with_database<T>(callback: (database: DatabaseSync) => T): T {
   const db_path = get_agent_registry_db_path();
   fs.mkdirSync(path.dirname(db_path), { recursive: true });
-  const database = new Database(db_path);
-  database.pragma("busy_timeout = 5000");
-  database.pragma("journal_mode = WAL");
+  const database = new DatabaseSync(db_path);
+  database.exec("PRAGMA busy_timeout = 5000;");
+  database.exec("PRAGMA journal_mode = WAL;");
   database.exec("CREATE TABLE IF NOT EXISTS managed_agents (agent_id TEXT PRIMARY KEY NOT NULL, workspace_path TEXT NOT NULL, config_encrypted TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);");
   database.exec("CREATE INDEX IF NOT EXISTS managed_agents_workspace_path_idx ON managed_agents(workspace_path);");
   try { return callback(database); } finally { database.close(); }
@@ -150,13 +150,17 @@ export function save_agent_registry_record(input: AgentRegistryRecord): AgentReg
 export function remove_agent_registry_record(agent_id_input: string): void {
   const agent_id = normalize_agent_registry_id(agent_id_input);
   with_database((database) => {
-    const remove = database.transaction(() => {
+    database.exec("BEGIN IMMEDIATE;");
+    try {
       for (const table_name of ["agent_tokens", "agent_plugins"]) {
         const exists = database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;").get(table_name);
         if (exists) database.prepare(`DELETE FROM ${table_name} WHERE agent_id = ?;`).run(agent_id);
       }
       database.prepare("DELETE FROM managed_agents WHERE agent_id = ?;").run(agent_id);
-    });
-    remove();
+      database.exec("COMMIT;");
+    } catch (error) {
+      database.exec("ROLLBACK;");
+      throw error;
+    }
   });
 }

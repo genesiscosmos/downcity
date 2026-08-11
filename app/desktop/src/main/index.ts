@@ -9,14 +9,20 @@ const agent_controller = new AgentController();
 
 function create_window(): BrowserWindow {
   const window = new BrowserWindow({
-    width: 1280,
-    height: 820,
-    minWidth: 960,
-    minHeight: 640,
-    webPreferences: { preload: path.join(current_directory, "../preload/index.mjs"), contextIsolation: true, nodeIntegration: false },
+    width: 1320,
+    height: 860,
+    minWidth: 760,
+    minHeight: 600,
+    show: false,
+    autoHideMenuBar: true,
+    titleBarStyle: "hidden",
+    ...(process.platform === "darwin" ? { trafficLightPosition: { x: 12, y: 13 } } : {}),
+    backgroundColor: "#f7f7f6",
+    webPreferences: { preload: path.join(current_directory, "../preload/index.cjs"), contextIsolation: true, nodeIntegration: false },
   });
   if (process.env.ELECTRON_RENDERER_URL) window.loadURL(process.env.ELECTRON_RENDERER_URL);
   else window.loadFile(path.join(current_directory, "../renderer/index.html"));
+  window.once("ready-to-show", () => window.show());
   return window;
 }
 
@@ -25,6 +31,7 @@ ipcMain.handle("agent:create", (_event, agent_id: string, workspace_path: string
 ipcMain.handle("agent:start", (_event, agent_id: string) => agent_controller.start_agent(agent_id));
 ipcMain.handle("chat:list-sessions", (_event, agent_id: string) => agent_controller.list_sessions(agent_id));
 ipcMain.handle("chat:create-session", (_event, agent_id: string) => agent_controller.create_session(agent_id));
+ipcMain.handle("chat:list-messages", (_event, agent_id: string, session_id: string) => agent_controller.list_messages(agent_id, session_id));
 ipcMain.handle("chat:send", (_event, agent_id: string, session_id: string, text: string) => agent_controller.send_message(agent_id, session_id, text));
 
 app.whenReady().then(() => { create_window(); app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) create_window(); }); });

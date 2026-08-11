@@ -10,6 +10,10 @@ export interface DesktopAgentSummary {
   agent_id: string;
   /** Agent 当前绑定的 Workspace 绝对路径。 */
   workspace_path: string;
+  /** Agent 使用的 City AIService 模型标识。 */
+  model_id: string;
+  /** Agent 注册配置的结构版本。 */
+  version: string;
 }
 
 /** Renderer 可见的 Session 摘要。 */
@@ -18,6 +22,20 @@ export interface DesktopSessionSummary {
   session_id: string;
   /** Session 的可见标题。 */
   title: string;
+}
+
+/** Renderer 可直接展示的一条 Session 消息。 */
+export interface DesktopChatMessage {
+  /** 消息在 Session 内的稳定标识。 */
+  message_id: string;
+  /** 消息的展示角色。 */
+  role: "user" | "assistant" | "system" | "error";
+  /** 已经归一化的纯文本内容。 */
+  text: string;
+  /** 消息创建时间戳，单位为毫秒。 */
+  created_at: number;
+  /** 消息是否仍在处理中。 */
+  pending: boolean;
 }
 
 /** 一次聊天请求的最终结果。 */
@@ -49,6 +67,8 @@ export interface DesktopApi {
     list_sessions(agent_id: string): Promise<DesktopSessionSummary[]>;
     /** 创建新的 Session。 */
     create_session(agent_id: string): Promise<DesktopSessionSummary>;
+    /** 读取指定 Session 当前可见的消息快照。 */
+    list_messages(agent_id: string, session_id: string): Promise<DesktopChatMessage[]>;
     /** 向指定 Session 发送文本并等待最终结果。 */
     send(agent_id: string, session_id: string, text: string): Promise<DesktopChatResult>;
   };

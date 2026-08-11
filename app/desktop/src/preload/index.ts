@@ -11,6 +11,7 @@ const desktop_api: DesktopApi = {
   chat: {
     list_sessions: (agent_id) => ipcRenderer.invoke("chat:list-sessions", agent_id),
     create_session: (agent_id) => ipcRenderer.invoke("chat:create-session", agent_id),
+    list_messages: (agent_id, session_id) => ipcRenderer.invoke("chat:list-messages", agent_id, session_id),
     send: (agent_id, session_id, text) => ipcRenderer.invoke("chat:send", agent_id, session_id, text),
   },
 };

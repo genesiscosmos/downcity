@@ -1,0 +1,17 @@
+/* Shared renderer surfaces derived from the active theme foundation tokens. */
+:where(:root) {
+  --surface-subtle: color-mix(in srgb, var(--foreground) 4%, transparent);
+  --surface-emphasis: color-mix(in srgb, var(--foreground) 7%, transparent);
+  --interaction-hover: color-mix(in srgb, var(--foreground) 6%, transparent);
+  --interaction-active: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --interaction-selected: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --divider: color-mix(in srgb, var(--foreground) 6%, transparent);
+  --border-subtle: color-mix(in srgb, var(--border) 55%, transparent);
+  --control-surface: var(--muted);
+  --control-hover: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+:where(.dark) {
+  --surface-subtle: color-mix(in srgb, var(--foreground) 8%, transparent);
+  --surface-emphasis: color-mix(in srgb, var(--foreground) 11%, transparent);
+}
