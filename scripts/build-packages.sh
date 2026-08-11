@@ -11,13 +11,13 @@ cd "$ROOT_DIR"
 source "$ROOT_DIR/scripts/lib/build-common.sh"
 
 PACKAGES=()
-ALL_PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "workspace-cloudflare-computer" "server" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "ui" "cli")
+ALL_PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "agent-registry" "workspace-cloudflare-computer" "server" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "ui" "cli")
 BUILD_PACKAGES=()
 BUMP=true
 SYNC_GLOBAL_CLI=true
 
 usage() {
-  echo "Usage: npm run patch:build -- [--type] [--shell] [--sandbox-macos] [--sandbox-linux] [--sandbox-windows-mxc] [--sandbox-windows-srt] [--agent] [--workspace-cloudflare-computer] [--server] [--city] [--database-d1] [--database-sqlite] [--database-postgresql] [--services] [--plugins] [--cli] [--ui] [--all] [--no-bump] [--no-global-install]"
+  echo "Usage: npm run patch:build -- [--type] [--shell] [--sandbox-macos] [--sandbox-linux] [--sandbox-windows-mxc] [--sandbox-windows-srt] [--agent] [--agent-registry] [--workspace-cloudflare-computer] [--server] [--city] [--database-d1] [--database-sqlite] [--database-postgresql] [--services] [--plugins] [--cli] [--ui] [--all] [--no-bump] [--no-global-install]"
   echo ""
   echo "  默认构建 agent + plugins + cli，并自增对应 package 的 patch 版本号"
   echo "  --type     构建 @downcity/type"
@@ -27,6 +27,7 @@ usage() {
   echo "  --sandbox-windows-mxc 构建 @downcity/sandbox-windows-mxc"
   echo "  --sandbox-windows-srt 构建 @downcity/sandbox-windows-srt"
   echo "  --agent    构建 @downcity/agent"
+  echo "  --agent-registry 构建 @downcity/agent-registry"
   echo "  --workspace-cloudflare-computer 构建 @downcity/workspace-cloudflare-computer"
   echo "  --server   构建 @downcity/server"
   echo "  --city     构建 @downcity/city"
@@ -77,6 +78,7 @@ resolve_build_packages() {
       local has_type=false
       local has_shell=false
       local has_agent=false
+      local has_agent_registry=false
       local has_sandbox_macos=false
       local has_sandbox_linux=false
         local has_sandbox_windows_mxc=false
@@ -91,6 +93,9 @@ resolve_build_packages() {
         fi
         if [[ "$item" == "agent" ]]; then
           has_agent=true
+        fi
+        if [[ "$item" == "agent-registry" ]]; then
+          has_agent_registry=true
         fi
         if [[ "$item" == "sandbox-macos" ]]; then has_sandbox_macos=true; fi
         if [[ "$item" == "sandbox-linux" ]]; then has_sandbox_linux=true; fi
@@ -117,6 +122,9 @@ resolve_build_packages() {
       fi
       if [[ "$has_agent" == false ]]; then
         resolved+=("agent")
+      fi
+      if [[ "$has_agent_registry" == false ]]; then
+        resolved+=("agent-registry")
       fi
       if [[ "$has_sandbox_macos" == false ]]; then resolved+=("sandbox-macos"); fi
       if [[ "$has_sandbox_linux" == false ]]; then resolved+=("sandbox-linux"); fi
@@ -312,6 +320,7 @@ while [[ $# -gt 0 ]]; do
     --sandbox-windows-mxc) add_package "sandbox-windows-mxc" ;;
     --sandbox-windows-srt) add_package "sandbox-windows-srt" ;;
     --agent)    add_package "agent" ;;
+    --agent-registry) add_package "agent-registry" ;;
     --workspace-cloudflare-computer) add_package "workspace-cloudflare-computer" ;;
     --server)   add_package "server" ;;
     --city)     add_package "city" ;;
@@ -322,7 +331,7 @@ while [[ $# -gt 0 ]]; do
     --plugins)  add_package "plugins" ;;
     --cli)      add_package "cli" ;;
     --ui)       add_package "ui" ;;
-    --all)      PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "workspace-cloudflare-computer" "server" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "ui" "cli") ; shift ; continue ;;
+    --all)      PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "agent-registry" "workspace-cloudflare-computer" "server" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "ui" "cli") ; shift ; continue ;;
     --no-bump)  BUMP=false ;;
     --no-global-install) SYNC_GLOBAL_CLI=false ;;
     -h|--help)  usage ;;

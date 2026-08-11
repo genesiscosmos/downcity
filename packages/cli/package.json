@@ -1,6 +1,6 @@
 {
   "name": "downcity",
-  "version": "1.1.426",
+  "version": "1.1.427",
   "type": "module",
   "description": "Downcity CLI — local City container and Federation Server management",
   "bin": {
@@ -39,6 +39,7 @@
     "@ai-sdk/openai-compatible": "^2.0.48",
     "@ai-sdk/xai": "^3.0.93",
     "@downcity/agent": "workspace:^",
+    "@downcity/agent-registry": "workspace:^",
     "@downcity/city": "workspace:^",
     "@downcity/plugins": "workspace:^",
     "@downcity/server": "workspace:^",
