@@ -1,6 +1,6 @@
 {
   "name": "@downcity/workspace-cloudflare-computer",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "type": "module",
   "description": "Cloudflare Computer Workspace adapter for Downcity Agent",
   "main": "./bin/index.js",
