@@ -20,6 +20,7 @@ import {
   to_executor_history,
   to_executor_ui_message,
 } from "../bin/session/messages/SessionMessageCodec.js";
+import { to_model_messages } from "../bin/executor/messages/SessionMessageCodec.js";
 import { convertToModelMessages } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 
@@ -1197,6 +1198,103 @@ test("step 最终快照忽略没有 delta 的空 Text 与 Reasoning Part", async
   assert.equal(assistant.status, "completed");
   assert.deepEqual(assistant.parts.map((part) => part.type), ["tool"]);
   assert.equal(assistant.parts[0].tool_call_id, "call-1");
+});
+
+test("空 Reasoning 携带 Provider metadata 时作为跨轮重放协议 Part 保存", async () => {
+  const { recorder, file_path } = await create_recorder("empty-provider-reasoning-test");
+  const writer = await recorder.open_assistant_message({
+    turn_id: "turn-empty-provider-reasoning",
+  });
+  const reasoning_metadata = {
+    openai: { itemId: "rs_required" },
+  };
+  const message_metadata = {
+    openai: { itemId: "msg_required", phase: "final_answer" },
+  };
+
+  await writer.begin_step();
+  await writer.apply_chunk({
+    type: "reasoning-start",
+    id: "reasoning-empty-provider",
+    providerMetadata: reasoning_metadata,
+  });
+  await writer.apply_chunk({
+    type: "reasoning-end",
+    id: "reasoning-empty-provider",
+    providerMetadata: reasoning_metadata,
+  });
+  await writer.apply_chunk({ type: "text-start", id: "text-provider" });
+  await writer.apply_chunk({
+    type: "text-delta",
+    id: "text-provider",
+    delta: "完成",
+  });
+  await writer.apply_chunk({
+    type: "text-end",
+    id: "text-provider",
+    providerMetadata: message_metadata,
+  });
+  const final_parts = from_ui_assistant_parts([
+    {
+      type: "reasoning",
+      text: "",
+      state: "done",
+      providerMetadata: reasoning_metadata,
+    },
+    {
+      type: "text",
+      text: "完成",
+      state: "done",
+      providerMetadata: message_metadata,
+    },
+  ]);
+  assert.deepEqual(final_parts.map((part) => part.type), ["reasoning", "text"]);
+  await writer.finish_step(final_parts);
+  await writer.complete();
+
+  const assistant = (await read_jsonl(file_path))[0];
+  assert.deepEqual(assistant.parts.map((part) => part.type), ["reasoning", "text"]);
+  assert.equal(assistant.parts[0].text, "");
+  assert.deepEqual(assistant.parts[0].provider_metadata, reasoning_metadata);
+  assert.deepEqual(assistant.parts[1].provider_metadata, message_metadata);
+
+  const restored = to_executor_ui_message(assistant);
+  const model_messages = await to_model_messages([restored], {});
+  const model_parts = model_messages.flatMap((message) =>
+    Array.isArray(message.content) ? message.content : []
+  );
+  assert.deepEqual(model_parts.map((part) => part.type), ["reasoning", "text"]);
+  assert.deepEqual(model_parts[0].providerOptions, reasoning_metadata);
+  assert.deepEqual(model_parts[1].providerOptions, message_metadata);
+});
+
+test("旧 Session 缺少 Reasoning 协议 Part 时移除孤立 msg_* 引用", async () => {
+  const model_messages = await to_model_messages([{
+    id: "assistant-legacy",
+    role: "assistant",
+    metadata: {
+      v: 1,
+      ts: 1,
+      session_id: "legacy-session",
+      source: "egress",
+      kind: "normal",
+    },
+    parts: [{
+      type: "text",
+      text: "已持久化的回复",
+      state: "done",
+      providerMetadata: {
+        openai: { itemId: "msg_orphaned", phase: "final_answer" },
+      },
+    }],
+  }], {});
+  const text_part = model_messages
+    .flatMap((message) => Array.isArray(message.content) ? message.content : [])
+    .find((part) => part.type === "text");
+  assert.equal(text_part.text, "已持久化的回复");
+  assert.deepEqual(text_part.providerOptions, {
+    openai: { phase: "final_answer" },
+  });
 });
 
 test("空 Text Start 不会抢占后续 Tool 的真实顺序", async () => {

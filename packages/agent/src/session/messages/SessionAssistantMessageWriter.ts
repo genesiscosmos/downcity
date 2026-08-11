@@ -156,9 +156,21 @@ export class SessionAssistantMessageWriter {
         const source_part_id = this.source_text_part_id(type, chunk.id);
         const part_id = this.active_text_part_ids.get(source_part_id);
         if (!part_id) return;
-        const part = current.parts.find((item) => item.part_id === part_id);
+        const provider_metadata = to_session_provider_metadata(chunk.providerMetadata);
+        const pending = this.pending_text_parts.get(part_id);
+        // 关键点（中文）：Responses API 可能只输出 reasoning start/end 与 itemId，
+        // 却没有可见 reasoning delta。这个空 Part 不是 UI 占位，而是后续 msg_* 重放必需的协议关联。
+        if (
+          type === "reasoning" &&
+          !current.parts.some((item) => item.part_id === part_id) &&
+          (provider_metadata !== undefined || pending?.provider_metadata !== undefined)
+        ) {
+          await this.ensure_text_part(part_id, type, provider_metadata);
+        }
+        const part = this.current_message().parts.find(
+          (item) => item.part_id === part_id,
+        );
         if (part?.type === "text" || part?.type === "reasoning") {
-          const provider_metadata = to_session_provider_metadata(chunk.providerMetadata);
           await this.upsert_part({
             ...part,
             state: "done",

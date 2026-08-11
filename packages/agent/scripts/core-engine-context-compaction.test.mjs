@@ -284,8 +284,18 @@ test("deep compact 删除 reasoning，并完整保留最新并行 tool transacti
     {
       role: "assistant",
       content: [
-        { type: "reasoning", text: "latest reasoning".repeat(2_000) },
-        { type: "text", text: "running tools" },
+        {
+          type: "reasoning",
+          text: "latest reasoning".repeat(2_000),
+          providerOptions: { openai: { itemId: "rs_latest" } },
+        },
+        {
+          type: "text",
+          text: "running tools",
+          providerOptions: {
+            openai: { itemId: "msg_latest", phase: "final_answer" },
+          },
+        },
         {
           type: "tool-call",
           toolCallId: "call-a",
@@ -325,6 +335,9 @@ test("deep compact 删除 reasoning，并完整保留最新并行 tool transacti
   const serialized = JSON.stringify(compacted);
   assert.equal(serialized.includes("old reasoning"), false);
   assert.equal(serialized.includes("latest reasoning"), false);
+  assert.equal(serialized.includes('"itemId":"rs_latest"'), true);
+  assert.equal(serialized.includes('"itemId":"msg_latest"'), false);
+  assert.equal(serialized.includes('"phase":"final_answer"'), true);
   assert.equal(serialized.includes("latest request"), true);
   assert.equal(serialized.includes("call-a"), true);
   assert.equal(serialized.includes("call-b"), true);

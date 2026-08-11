@@ -154,10 +154,14 @@ export function from_ui_assistant_parts(
     const type = String(candidate.type || "");
     if (type === "text" || type === "reasoning") {
       const text = String(candidate.text || "");
-      // 关键点（中文）：AI SDK 会为只有 start/end、没有 delta 的流生成空占位 Part。
-      // canonical history 不保存无内容的协议占位，避免与只按 delta 创建 Part 的 writer 分叉。
-      if (text.length === 0) return [];
       const provider_metadata = to_session_provider_metadata(candidate.providerMetadata);
+      // 关键点（中文）：AI SDK 会为只有 start/end、没有 delta 的流生成空占位 Part。
+      // 纯空占位不保存；但 Responses API 的 reasoning 即使没有可见文本，
+      // 也可能通过 itemId / encrypted content 与后续 message 形成必须原子重放的协议组。
+      if (
+        text.length === 0 &&
+        !(type === "reasoning" && provider_metadata !== undefined)
+      ) return [];
       return [{
         part_id: `${type}:${index + 1}`,
         sequence: index + 1,
