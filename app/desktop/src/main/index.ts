@@ -28,7 +28,7 @@ function create_window(): BrowserWindow {
 
 ipcMain.handle("agent:list", () => agent_controller.list_agents());
 ipcMain.handle("agent:create", (_event, agent_id: string, workspace_path: string, model_id: string) => agent_controller.create_agent(agent_id, workspace_path, model_id));
-ipcMain.handle("agent:start", (_event, agent_id: string) => agent_controller.start_agent(agent_id));
+ipcMain.handle("agent:connect", (_event, agent_id: string) => agent_controller.connect_agent(agent_id));
 ipcMain.handle("chat:list-sessions", (_event, agent_id: string) => agent_controller.list_sessions(agent_id));
 ipcMain.handle("chat:create-session", (_event, agent_id: string) => agent_controller.create_session(agent_id));
 ipcMain.handle("chat:list-messages", (_event, agent_id: string, session_id: string) => agent_controller.list_messages(agent_id, session_id));

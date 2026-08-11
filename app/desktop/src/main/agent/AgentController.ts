@@ -5,13 +5,12 @@
  * 文件系统、子进程或 Agent SDK。
  */
 import { execFile } from "node:child_process";
-import fs from "node:fs/promises";
-import path from "node:path";
 import { promisify, stripVTControlCharacters } from "node:util";
 import { RemoteAgent } from "@downcity/agent";
-import { get_agent_registry_root_path, list_agent_registry_records, create_agent_registry_record, type AgentRegistryRecord } from "@downcity/agent-registry";
+import { get_agent_registry_record, list_agent_registry_records, create_agent_registry_record, type AgentRegistryRecord } from "@downcity/agent-registry";
 import type { SessionMessage } from "@downcity/agent";
 import type { DesktopAgentSummary, DesktopChatMessage, DesktopChatResult, DesktopSessionSummary } from "../../common/types/DesktopApi.js";
+import { resolve_running_agent_rpc_url } from "@/agent/AgentDaemonConnector.js";
 
 const exec_file = promisify(execFile);
 
@@ -36,22 +35,30 @@ export class AgentController {
     }));
   }
 
-  /** 启动指定 Agent 的 CLI daemon，并返回本机 RPC 地址。 */
-  async start_agent(agent_id: string): Promise<string> {
+  /** 连接已有 Agent daemon；未运行时通过 CLI 启动后再连接。 */
+  async connect_agent(agent_id: string): Promise<string> {
+    const config = get_agent_registry_record(agent_id);
+    if (!config) throw new Error(`Agent not found: ${agent_id}`);
+
+    const running_url = await resolve_running_agent_rpc_url(config);
+    if (running_url) return await this.attach_remote_agent(agent_id, running_url);
+
     try {
       await exec_file("downcity", ["agent", "start", agent_id]);
     } catch (error) {
+      // 并发启动或 CLI 已确认 daemon 在线时，连接运行实例而不是向 Renderer 抛错。
+      const concurrent_url = await resolve_running_agent_rpc_url(config);
+      if (concurrent_url) return await this.attach_remote_agent(agent_id, concurrent_url);
       throw new Error(format_agent_start_error(agent_id, error), { cause: error });
     }
-    const daemon_path = path.join(get_agent_registry_root_path(), "runtimes", agent_id, "daemon.json");
-    const daemon = JSON.parse(await fs.readFile(daemon_path, "utf8")) as { args?: unknown };
-    const args = Array.isArray(daemon.args) ? daemon.args.map(String) : [];
-    const port_index = args.indexOf("--rpc-port");
-    const rpc_port = Number(args[port_index + 1]);
-    if (!Number.isInteger(rpc_port) || rpc_port <= 0 || rpc_port > 65535) {
-      throw new Error(`Agent ${agent_id} daemon RPC port is unavailable`);
-    }
-    const remote_url = `rpc://127.0.0.1:${rpc_port}`;
+
+    const started_url = await resolve_running_agent_rpc_url(config);
+    if (!started_url) throw new Error(`Agent ${agent_id} daemon RPC identity is unavailable`);
+    return await this.attach_remote_agent(agent_id, started_url);
+  }
+
+  /** 用已验证的 RPC 地址替换 Desktop 当前持有的远程连接。 */
+  private async attach_remote_agent(agent_id: string, remote_url: string): Promise<string> {
     await this.remote_agents.get(agent_id)?.close();
     this.remote_agents.set(agent_id, new RemoteAgent({ url: remote_url }));
     return remote_url;

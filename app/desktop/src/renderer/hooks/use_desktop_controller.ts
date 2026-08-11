@@ -72,7 +72,7 @@ export function use_desktop_controller(): DesktopViewController {
     set_error("");
     set_runtime_by_agent((current) => ({ ...current, [agent_id]: "connecting" }));
     try {
-      await window.downcity.agent.start(agent_id);
+      await window.downcity.agent.connect(agent_id);
       set_runtime_by_agent((current) => ({ ...current, [agent_id]: "connected" }));
       await refresh_sessions(agent_id);
     } catch (reason) {

@@ -58,8 +58,8 @@ export interface DesktopApi {
     list(): Promise<DesktopAgentSummary[]>;
     /** 创建共享注册记录。 */
     create(agent_id: string, workspace_path: string, model_id: string): Promise<DesktopAgentSummary>;
-    /** 启动 CLI daemon 并建立 RPC 连接。 */
-    start(agent_id: string): Promise<string>;
+    /** 连接已有 daemon；未运行时启动并建立 RPC 连接。 */
+    connect(agent_id: string): Promise<string>;
   };
   /** Agent Session 与聊天能力。 */
   chat: {

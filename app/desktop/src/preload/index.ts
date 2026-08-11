@@ -6,7 +6,7 @@ const desktop_api: DesktopApi = {
   agent: {
     list: (): Promise<DesktopAgentSummary[]> => ipcRenderer.invoke("agent:list"),
     create: (agent_id: string, workspace_path: string, model_id: string): Promise<DesktopAgentSummary> => ipcRenderer.invoke("agent:create", agent_id, workspace_path, model_id),
-    start: (agent_id: string): Promise<string> => ipcRenderer.invoke("agent:start", agent_id),
+    connect: (agent_id: string): Promise<string> => ipcRenderer.invoke("agent:connect", agent_id),
   },
   chat: {
     list_sessions: (agent_id) => ipcRenderer.invoke("chat:list-sessions", agent_id),
