@@ -18,7 +18,7 @@ test("当前 workspace 被解析为三个稳定发布层", () => {
   const graph = resolve_publish_layers(workspace_root);
 
   assert.deepEqual(graph.layers.map((layer) => layer.map((item) => item.name)), [
-    ["@downcity/shell", "@downcity/type", "@downcity/ui"],
+    ["@downcity/agent-registry", "@downcity/shell", "@downcity/type", "@downcity/ui"],
     [
       "@downcity/agent",
       "@downcity/city",
@@ -42,6 +42,7 @@ test("当前 workspace 被解析为三个稳定发布层", () => {
   assert.equal(outputs.has_packages, "true");
   assert.equal(outputs.layer_count, "3");
   assert.equal(outputs.has_layer_2, "true");
+  assert.equal(JSON.parse(outputs.layer_0_matrix).include.length, 4);
   assert.equal(JSON.parse(outputs.layer_1_matrix).include.length, 6);
 });
 
