@@ -110,7 +110,7 @@ test("CityModel directly streams through Federation LanguageModelV3 runtime", as
     id: "mock",
     env: {},
     env_key: "MOCK_API_KEY",
-    ai_sdk_provider_id: "mock",
+    ai_sdk_provider_id: "openai",
   })
   ai.use(channel.model({
     id: "city-model",
@@ -178,14 +178,19 @@ test("CityModel directly streams through Federation LanguageModelV3 runtime", as
   assert.equal(requests[0].reasoning_effort, "high")
   assert.equal("providerOptions" in requests[0].call, false)
   assert.deepEqual(received_options.providerOptions, {
-    mock: { reasoningEffort: "high" },
+    openai: { reasoningEffort: "high" },
   })
   assert.equal(received_options.abortSignal, contexts[0].request.signal)
   assert.equal(received_parts.find((part) => part.type === "reasoning-delta")?.delta, "think")
   assert.equal(received_parts.find((part) => part.type === "tool-call")?.toolName, "ping")
-  assert.deepEqual(received_parts.find((part) => part.type === "tool-call")?.providerMetadata, {
-    openai: { itemId: "fc_1" },
-  })
+  const tool_provider_metadata = received_parts.find(
+    (part) => part.type === "tool-call",
+  )?.providerMetadata
+  assert.deepEqual(tool_provider_metadata.openai, { itemId: "fc_1" })
+  assert.equal(tool_provider_metadata.downcity.replay_scope.channel_id, "mock")
+  assert.equal(tool_provider_metadata.downcity.replay_scope.model_id, "city-model")
+  assert.equal(tool_provider_metadata.downcity.replay_scope.provider_id, "openai")
+  assert.equal(typeof tool_provider_metadata.downcity.replay_scope.group_id, "string")
   assert.deepEqual(received_parts.find((part) => part.type === "finish")?.usage, usage)
   assert.equal(charges.length, 1)
   assert.equal(charges[0].credits, 3)

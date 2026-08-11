@@ -84,9 +84,8 @@ export function deep_compact_model_messages(
   const depth = Math.max(0, Math.min(8, Math.floor(compact_depth)));
   const pruned_messages = pruneMessages({
     messages,
-    // Reasoning 由本模块在确定最新 Tool 事务后再清理，避免先丢失
-    // OpenAI Responses API 中与 Tool item 原子关联的协议 Part。
-    reasoning: "none",
+    // 压缩后只保留语义内容；Provider replay 状态由 Federation 在最终路由后按作用域决定。
+    reasoning: "all",
     // 工具事务由本模块按 toolCallId/approvalId 选择；先让 SDK 保留完整关联，
     // 避免 approval response 作为最后一条消息时 SDK 丢掉更早的 tool-call。
     toolCalls: "none",
@@ -345,8 +344,7 @@ function compact_retained_message(
       content: fold_compacted_text(message.content, message_limit),
     } as ModelMessage;
   }
-  const retained_non_reasoning_parts = message.content.filter((part) => {
-    if (part.type === "reasoning") return false;
+  const relevant_parts = message.content.filter((part) => {
     if (part.type === "tool-call" || part.type === "tool-result") {
       return selected_tool_call_ids.has(part.toolCallId);
     }
@@ -357,26 +355,13 @@ function compact_retained_message(
       const tool_call_id = approval_to_tool_call.get(part.approvalId);
       return Boolean(tool_call_id && selected_tool_call_ids.has(tool_call_id));
     }
-    return true;
+    return part.type !== "reasoning";
   });
-  const requires_provider_reasoning = retained_non_reasoning_parts.some(
-    (part) =>
-      (part.type === "tool-call" || part.type === "tool-result") &&
-      has_openai_item_reference(part as unknown as Record<string, unknown>),
-  );
-  const relevant_parts = message.content.filter((part) =>
-    part.type !== "reasoning" ||
-    (requires_provider_reasoning &&
-      has_openai_reasoning_replay_data(part as unknown as Record<string, unknown>))
-  );
   const part_limit = Math.max(
     MIN_FOLDED_PART_CHARS,
     Math.floor(message_limit / Math.max(1, relevant_parts.length)),
   );
   const content = relevant_parts
-    .filter((part) =>
-      part.type === "reasoning" || retained_non_reasoning_parts.includes(part)
-    )
     .map((part) =>
       compact_model_part(
         part as unknown as Record<string, unknown>,
@@ -391,29 +376,24 @@ function compact_model_part(
   part: Record<string, unknown>,
   part_limit: number,
 ): Record<string, unknown> {
+  const semantic_part = strip_provider_replay_state(part);
   if (part.type === "text") {
     return {
-      ...part,
+      ...semantic_part,
       text: fold_compacted_text(String(part.text || ""), part_limit),
-      ...without_openai_item_reference(part),
     };
-  }
-  if (part.type === "reasoning") {
-    // 压缩不保留可见思维文本，但必须保留与最新 Tool 事务关联的
-    // Responses API itemId / encrypted content，否则 Provider 会拒绝孤立的 Tool item。
-    return { ...part, text: "" };
   }
   if (part.type === "tool-call") {
     return {
-      ...part,
+      ...semantic_part,
       input: fold_compacted_value(part.input, part_limit),
     };
   }
   if (part.type === "tool-result") {
     const serialized_output = safe_stringify(part.output);
-    if (serialized_output.length <= part_limit) return part;
+    if (serialized_output.length <= part_limit) return semantic_part;
     return {
-      ...part,
+      ...semantic_part,
       output: {
         type: "text",
         value: fold_compacted_text(serialized_output, part_limit),
@@ -438,55 +418,19 @@ function compact_model_part(
       };
     }
   }
-  return part;
+  return semantic_part;
 }
 
-/** 判断 Part 是否引用 OpenAI Responses API 中已存储的 item。 */
-function has_openai_item_reference(part: Record<string, unknown>): boolean {
-  const provider_options = read_record(part.providerOptions);
-  const openai_options = read_record(provider_options?.openai);
-  return typeof openai_options?.itemId === "string" && openai_options.itemId.length > 0;
-}
-
-/** 判断空 Reasoning 是否仍携带可用于跨轮重放的 Provider 协议数据。 */
-function has_openai_reasoning_replay_data(part: Record<string, unknown>): boolean {
-  const provider_options = read_record(part.providerOptions);
-  const openai_options = read_record(provider_options?.openai);
-  return (
-    (typeof openai_options?.itemId === "string" && openai_options.itemId.length > 0) ||
-    (typeof openai_options?.reasoningEncryptedContent === "string" &&
-      openai_options.reasoningEncryptedContent.length > 0)
-  );
-}
-
-/**
- * 压缩后的 Text 已经是新的语义投影，不能继续引用 Provider 中的原始 msg_* item。
- */
-function without_openai_item_reference(
+/** 压缩后的模型 Part 只作为语义历史传递，不继续携带任何 Provider replay state。 */
+function strip_provider_replay_state(
   part: Record<string, unknown>,
-): Pick<Record<string, unknown>, "providerOptions"> | Record<string, never> {
-  const provider_options = read_record(part.providerOptions);
-  const openai_options = read_record(provider_options?.openai);
-  if (!provider_options || !openai_options || !("itemId" in openai_options)) {
-    return {};
-  }
-  const { itemId: _item_id, ...remaining_openai_options } = openai_options;
-  const next_provider_options = { ...provider_options };
-  if (Object.keys(remaining_openai_options).length > 0) {
-    next_provider_options.openai = remaining_openai_options;
-  } else {
-    delete next_provider_options.openai;
-  }
-  return Object.keys(next_provider_options).length > 0
-    ? { providerOptions: next_provider_options }
-    : { providerOptions: undefined };
-}
-
-/** 安全读取普通 JSON object。 */
-function read_record(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined;
+): Record<string, unknown> {
+  const {
+    providerOptions: _provider_options,
+    providerMetadata: _provider_metadata,
+    ...semantic_part
+  } = part;
+  return semantic_part;
 }
 
 function fold_compacted_value(value: unknown, max_chars: number): unknown {

@@ -20,7 +20,6 @@ import {
   to_executor_history,
   to_executor_ui_message,
 } from "../bin/session/messages/SessionMessageCodec.js";
-import { to_model_messages } from "../bin/executor/messages/SessionMessageCodec.js";
 import { convertToModelMessages } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 
@@ -1258,43 +1257,6 @@ test("空 Reasoning 携带 Provider metadata 时作为跨轮重放协议 Part �
   assert.deepEqual(assistant.parts[0].provider_metadata, reasoning_metadata);
   assert.deepEqual(assistant.parts[1].provider_metadata, message_metadata);
 
-  const restored = to_executor_ui_message(assistant);
-  const model_messages = await to_model_messages([restored], {});
-  const model_parts = model_messages.flatMap((message) =>
-    Array.isArray(message.content) ? message.content : []
-  );
-  assert.deepEqual(model_parts.map((part) => part.type), ["reasoning", "text"]);
-  assert.deepEqual(model_parts[0].providerOptions, reasoning_metadata);
-  assert.deepEqual(model_parts[1].providerOptions, message_metadata);
-});
-
-test("旧 Session 缺少 Reasoning 协议 Part 时移除孤立 msg_* 引用", async () => {
-  const model_messages = await to_model_messages([{
-    id: "assistant-legacy",
-    role: "assistant",
-    metadata: {
-      v: 1,
-      ts: 1,
-      session_id: "legacy-session",
-      source: "egress",
-      kind: "normal",
-    },
-    parts: [{
-      type: "text",
-      text: "已持久化的回复",
-      state: "done",
-      providerMetadata: {
-        openai: { itemId: "msg_orphaned", phase: "final_answer" },
-      },
-    }],
-  }], {});
-  const text_part = model_messages
-    .flatMap((message) => Array.isArray(message.content) ? message.content : [])
-    .find((part) => part.type === "text");
-  assert.equal(text_part.text, "已持久化的回复");
-  assert.deepEqual(text_part.providerOptions, {
-    openai: { phase: "final_answer" },
-  });
 });
 
 test("空 Text Start 不会抢占后续 Tool 的真实顺序", async () => {

@@ -335,9 +335,9 @@ test("deep compact 删除 reasoning，并完整保留最新并行 tool transacti
   const serialized = JSON.stringify(compacted);
   assert.equal(serialized.includes("old reasoning"), false);
   assert.equal(serialized.includes("latest reasoning"), false);
-  assert.equal(serialized.includes('"itemId":"rs_latest"'), true);
+  assert.equal(serialized.includes('"itemId":"rs_latest"'), false);
   assert.equal(serialized.includes('"itemId":"msg_latest"'), false);
-  assert.equal(serialized.includes('"phase":"final_answer"'), true);
+  assert.equal(serialized.includes('"phase":"final_answer"'), false);
   assert.equal(serialized.includes("latest request"), true);
   assert.equal(serialized.includes("call-a"), true);
   assert.equal(serialized.includes("call-b"), true);
@@ -359,8 +359,8 @@ test("deep compact 删除 reasoning，并完整保留最新并行 tool transacti
   assert.equal(active_tool_text.join("\n").includes("old-call"), false);
   assert.deepEqual([...tool_call_ids].sort(), ["call-a", "call-b"]);
   assert.deepEqual([...tool_result_ids].sort(), ["call-a", "call-b"]);
-  assert.equal(serialized.includes('"itemId":"fc_a"'), true);
-  assert.equal(serialized.includes('"resultId":"result_a"'), true);
+  assert.equal(serialized.includes('"itemId":"fc_a"'), false);
+  assert.equal(serialized.includes('"resultId":"result_a"'), false);
 });
 
 test("单条 assistant 含大量 parts 时也会在消息内部折叠", () => {

@@ -27,6 +27,11 @@ import type { UIMessage } from "ai";
 import type { Context } from "../service.js";
 import { execute_language_model_text } from "./language-model-text.js";
 import { read_resolved_reasoning } from "./reasoning.js";
+import {
+  create_provider_replay_scope,
+  prepare_provider_replay_call,
+  scope_provider_replay_stream,
+} from "./ProviderReplay.js";
 
 /** Federation 服务端 AI 执行渠道。 */
 export abstract class AIChannel {
@@ -92,11 +97,15 @@ export abstract class AIChannel {
     call: LanguageModelV3CallOptions,
     model: AIChannelStreamInput["model"],
     model_provider_options: AISDKProviderOptions | undefined,
+    replay_scope: ReturnType<typeof create_provider_replay_scope>,
   ): AIChannelStreamInput {
     const { providerOptions: _client_provider_options, ...safe_call } = call;
     const reasoning = read_resolved_reasoning(ctx);
     const base_input: AIChannelStreamInput = {
-      call: safe_call as LanguageModelV3CallOptions,
+      call: prepare_provider_replay_call(
+        safe_call as LanguageModelV3CallOptions,
+        replay_scope,
+      ),
       model,
       env: (key) => ctx.env(key),
       ...(reasoning ? { reasoning } : {}),
@@ -109,7 +118,7 @@ export abstract class AIChannel {
     return {
       ...base_input,
       call: {
-        ...safe_call,
+        ...base_input.call,
         ...(provider_options ? { providerOptions: provider_options } : {}),
       } as LanguageModelV3CallOptions,
     };
@@ -165,12 +174,21 @@ export abstract class AIChannel {
     }
 
     const stream: AIModelStream | undefined = this.stream
-      ? (ctx, call) => this.stream!(this.build_stream_input(
-          ctx,
-          call,
-          channel_model,
-          model_provider_options,
-        ))
+      ? async (ctx, call) => {
+          const replay_scope = create_provider_replay_scope({
+            channel_id: this.id,
+            model_id: channel_model.id,
+            provider_id: this.ai_sdk_provider_id,
+          });
+          const result = await this.stream!(this.build_stream_input(
+            ctx,
+            call,
+            channel_model,
+            model_provider_options,
+            replay_scope,
+          ));
+          return scope_provider_replay_stream(result, replay_scope);
+        }
       : undefined;
     if (stream) {
       actions.text = (ctx: Context) =>
