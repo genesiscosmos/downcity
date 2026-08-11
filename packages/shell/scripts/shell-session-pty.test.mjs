@@ -158,7 +158,7 @@ test("shell_exec honors an explicit short total timeout", async () => {
   try {
     await assert.rejects(
       execShellCommand(state, fixture.context, {
-        cmd: "sleep 2",
+        cmd: "sleep 0.2",
         cwd: fixture.root_path,
         shell: "/bin/sh",
         login: false,
