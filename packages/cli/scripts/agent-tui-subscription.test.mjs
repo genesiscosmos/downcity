@@ -28,7 +28,11 @@ function create_session(session_id, messages_promise = Promise.resolve({ items: 
         };
       },
       async get_info() {
-        return { session_id: this.id, title: `Title ${this.id}` };
+        return {
+          session_id: this.id,
+          title: `Title ${this.id}`,
+          model_label: `Model ${this.id}`,
+        };
       },
       async messages() {
         return await messages_promise;
@@ -55,6 +59,16 @@ function create_session(session_id, messages_promise = Promise.resolve({ items: 
         variant: "session",
         type: "title",
         title,
+      });
+    },
+    emit_model(model_label) {
+      subscriber({
+        mutation_id: `config-${session_id}-${model_label}`,
+        session_id,
+        created_at: 1,
+        variant: "session",
+        type: "config",
+        model_label,
       });
     },
     get unsubscribe_count() {
@@ -99,6 +113,28 @@ test("先缓冲 Mutation，再应用快照并持续实时投影", async () => {
   subscription.dispose();
   assert.equal(target.unsubscribe_count, 1);
   assert.equal(subscription.session, null);
+});
+
+test("模型名称来自 Session 快照并通过 config Mutation 持续更新", async () => {
+  const target = create_session("session-model");
+  const model_labels = [];
+  const subscription = new ChatSessionSubscription({
+    remote_agent: { sessions: { get: async () => target.session } },
+    on_snapshot(snapshot) {
+      model_labels.push(snapshot.model_label);
+    },
+    on_mutation(mutation) {
+      if (mutation.variant === "session" && mutation.type === "config") {
+        model_labels.push(mutation.model_label);
+      }
+    },
+  });
+
+  await subscription.activate(target.session.id);
+  target.emit_model("Selected model");
+
+  assert.deepEqual(model_labels, ["Model session-model", "Selected model"]);
+  subscription.dispose();
 });
 
 test("切换 Session 会取消旧订阅并忽略旧快照和后续事件", async () => {

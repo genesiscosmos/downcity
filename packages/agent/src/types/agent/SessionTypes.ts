@@ -110,8 +110,17 @@ export interface AgentSessionSecurityConfig {
 
 /** 远程 Session 可序列化的动态配置输入。 */
 export interface RemoteSessionSetInput {
+  /**
+   * 当前远程 Session 使用的宿主模型 ID。
+   *
+   * 关键点（中文）
+   * - 远程边界只传递稳定、可序列化的模型 ID。
+   * - 服务端宿主负责把模型 ID 解析为运行时 AgentModel。
+   */
+  model_id?: string;
+
   /** 当前远程 Session 的安全策略。 */
-  security: AgentSessionSecurityConfig;
+  security?: AgentSessionSecurityConfig;
 }
 
 /** Session 当前安全状态。 */

@@ -22,6 +22,7 @@ import { StreamingUIController } from "../bin/city/agent/tui/controllers/Streami
 import { ApprovalPanelComponent } from "../bin/city/agent/tui/dialogs/ApprovalDialog.js";
 import { QuestionPanelComponent } from "../bin/city/agent/tui/dialogs/QuestionDialog.js";
 import { SecurityPolicyPanelComponent } from "../bin/city/agent/tui/dialogs/SecurityPolicyDialog.js";
+import { ModelPickerComponent } from "../bin/city/agent/tui/dialogs/ModelPicker.js";
 import { SessionPickerComponent } from "../bin/city/agent/tui/dialogs/SessionPicker.js";
 import { resolveSlashCommandInput } from "../bin/city/agent/tui/commands/resolve.js";
 import { parse_attachment_paths } from "../bin/city/agent/tui/attachments/AttachmentInput.js";
@@ -591,6 +592,7 @@ test("Header 与 Footer 在宽屏和窄屏下保持上下文与操作层级", ()
       effective_approval_mode: "ask",
     },
     session_title: "Build diagnostics",
+    model_label: "GPT-5.6 Codex",
     is_executing: false,
     queued_message_count: 0,
     transcript_scroll_offset: 0,
@@ -605,6 +607,7 @@ test("Header 与 Footer 在宽屏和窄屏下保持上下文与操作层级", ()
     assert.match(plain(header_lines).join("\n"), /DOWNCITY AGENT/);
   }
   assert.match(plain(header.render(96)).join("\n"), /Security: Default/);
+  assert.match(plain(header.render(96)).join("\n"), /Model: GPT-5.6 Codex/);
 
   app_state.security = {
     approval_mode: "always-allow",
@@ -889,7 +892,11 @@ test("执行期间允许审批与安全策略命令并阻止破坏性 Slash 命�
   );
   assert.equal(
     resolveSlashCommandInput({ input: "/model", is_streaming: true }).kind,
-    "message",
+    "blocked",
+  );
+  assert.equal(
+    resolveSlashCommandInput({ input: "/model selected-model", is_streaming: false }).kind,
+    "builtin",
   );
 });
 
@@ -925,6 +932,28 @@ test("Security Policy 选择器直接提交 canonical SessionApprovalMode", () =
   });
   cancel_picker.handleInput("\u001B");
   assert.equal(cancelled, true);
+});
+
+test("Model Picker 支持搜索、当前模型标识和 model_id 提交", () => {
+  let selected_model_id;
+  const picker = new ModelPickerComponent({
+    choices: [
+      { model_id: "fast", name: "Fast", modalities: ["text"] },
+      { model_id: "quality", name: "Quality", modalities: ["text", "stream"] },
+    ],
+    current_model_label: "Fast",
+    on_select: (model_id) => {
+      selected_model_id = model_id;
+    },
+    on_cancel: () => {},
+  });
+
+  assert.match(plain(picker.render(72)).join("\n"), /Fast.*current/);
+  for (const character of "quality") picker.handleInput(character);
+  assert.match(plain(picker.render(72)).join("\n"), /Search: quality/);
+  picker.handleInput("\r");
+  assert.equal(selected_model_id, "quality");
+  assert.ok(picker.render(32).every((line) => visibleWidth(line) <= 32));
 });
 
 test("内联槽位空闲时不占高度并把输入转交给下方面板", () => {

@@ -87,7 +87,7 @@ city agent start
 city agent chat
 ```
 
-`city agent chat` keeps one live subscription to the active Session and merges Message, Part, text, reasoning, Tool, and Interaction updates as they arrive. When `/session` switches conversations, the TUI subscribes to the new Session before loading its full snapshot and then merges any buffered events. Visible reasoning text is rendered in Assistant Part order with subdued styling; reasoning metadata alone does not produce invented reasoning content.
+`city agent chat` keeps one live subscription to the active Session and merges Message, Part, text, reasoning, Tool, Interaction, and configuration updates as they arrive. The header shows the active Session model. Use `/model` to choose from the current user's available model catalog, or `/model <model-id>` to switch directly. A model change affects only the active Session and reaches the UI through a Session Mutation; it does not change the Agent default model. When `/session` switches conversations, the TUI subscribes to the new Session before loading its full snapshot and then merges any buffered events. Visible reasoning text is rendered in Assistant Part order with subdued styling; reasoning metadata alone does not produce invented reasoning content.
 
 `city federation ...` only manages local Federation membership and user login state. It does not deploy Federations.
 

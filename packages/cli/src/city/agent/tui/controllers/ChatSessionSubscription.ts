@@ -67,6 +67,7 @@ export class ChatSessionSubscription {
       const snapshot: ChatSessionSnapshot = {
         session_id,
         title: info.title?.trim() || "Untitled",
+        ...(info.model_label?.trim() ? { model_label: info.model_label.trim() } : {}),
         messages: messages.items,
         security: status.security,
         is_executing: status.state === "running",

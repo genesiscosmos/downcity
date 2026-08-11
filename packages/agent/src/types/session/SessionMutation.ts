@@ -125,8 +125,8 @@ export type SessionCompactMutation = SessionMutationBase & {
   error?: string;
 };
 
-/** Session 自身属性变化 Mutation。 */
-export type SessionStateMutation = SessionMutationBase & {
+/** Session 标题变化 Mutation。 */
+export type SessionTitleMutation = SessionMutationBase & {
   /** Mutation 层级固定为 session。 */
   variant: "session";
   /** 当前 Session 属性变化类型。 */
@@ -134,6 +134,21 @@ export type SessionStateMutation = SessionMutationBase & {
   /** 当前 Session 最新标题。 */
   title: string;
 };
+
+/** Session 模型配置变化 Mutation。 */
+export type SessionConfigMutation = SessionMutationBase & {
+  /** Mutation 层级固定为 session。 */
+  variant: "session";
+  /** 当前 Session 属性变化类型。 */
+  type: "config";
+  /** 当前 Session 已接受的模型可读标签。 */
+  model_label?: string;
+  /** 当前模型支持的总上下文窗口长度，单位为 token。 */
+  model_context_window?: number;
+};
+
+/** Session 自身属性变化 Mutation。 */
+export type SessionStateMutation = SessionTitleMutation | SessionConfigMutation;
 
 /** Session 对外唯一实时 Mutation 联合类型。 */
 export type SessionMutation =

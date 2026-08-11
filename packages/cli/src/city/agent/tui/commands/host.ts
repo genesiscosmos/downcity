@@ -45,6 +45,13 @@ export interface SlashCommandHost {
   show_security_policy_picker(): void;
 
   /**
+   * 打开模型选择器或直接切换当前 Session 模型。
+   *
+   * @param model_id 可选的模型 ID；为空时打开选择器。
+   */
+  select_model(model_id?: string): Promise<void>;
+
+  /**
    * 批准指定 unrestricted sandbox 审批请求。
    *
    * @param approval_id 审批 ID；为空时尝试批准最近一个 pending 请求。

@@ -14,6 +14,7 @@ import { Shell } from "@downcity/shell";
 import { AgentHTTP, AgentRPC } from "@downcity/server";
 import { startAgentHttpGateway } from "@/city/agent/AgentHttpGateway.js";
 import { createRuntimeModel } from "@/city/runtime/city-model/CreateRuntimeModel.js";
+import { createCityAiAgentModel } from "@/city/runtime/city-model/CityAiServiceBinding.js";
 import { assemble_plugins } from "@/city/runtime/plugins/PluginAssembler.js";
 import { resolve_managed_agent_env } from "@/city/env/ProcessEnv.js";
 import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
@@ -139,7 +140,12 @@ export class ManagedAgentRuntime {
     process.env.DC_AGENT_PATH = workspace_path;
 
     await agent.ready();
+    const resolve_session_model = async (model_id: string) => await createCityAiAgentModel({
+      modelId: model_id,
+      env,
+    });
     const rpc = new AgentRPC(agent, {
+      resolve_session_model,
       reload_workspace_env: () => {
         const next_env = resolve_managed_agent_env(workspace_path);
         workspace.set_env(next_env);
@@ -148,7 +154,9 @@ export class ManagedAgentRuntime {
     });
     await rpc.listen({ host: rpc_host, port: rpc_port });
     try {
-      const agent_http = new AgentHTTP(agent);
+      const agent_http = new AgentHTTP(agent, {
+        resolve_session_model,
+      });
       const gateway = await startAgentHttpGateway({
         host,
         port,

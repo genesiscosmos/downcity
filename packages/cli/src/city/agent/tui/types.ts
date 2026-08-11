@@ -66,6 +66,9 @@ export interface AppState {
    */
   session_title?: string;
 
+  /** 当前 Session 已接受的模型可读名称；快照加载前为空。 */
+  model_label?: string;
+
   /** 是否正在等待助手回复。 */
   is_executing: boolean;
 

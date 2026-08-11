@@ -5,7 +5,7 @@
  * 避免把回复状态与对话内容分离到右上角。
  */
 
-import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 
 import { current_theme } from "@/city/agent/tui/theme/index.js";
 import type { AppState } from "@/city/agent/tui/types.js";
@@ -45,8 +45,9 @@ export class AgentHeaderComponent implements Component {
     const brand = current_theme.bold_fg("textStrong", "DOWNCITY AGENT");
     const context = current_theme.dim_fg("textDim", this.build_context());
     const divider = current_theme.fg("border", "─".repeat(safe_width));
+    const left = `${brand}  ${context}`;
 
-    if (safe_width < SINGLE_LINE_MIN_WIDTH) {
+    if (safe_width < SINGLE_LINE_MIN_WIDTH || visibleWidth(left) > safe_width) {
       return [
         truncateToWidth(brand, safe_width, "…"),
         truncateToWidth(context, safe_width, "…"),
@@ -54,13 +55,13 @@ export class AgentHeaderComponent implements Component {
       ];
     }
 
-    const left = `${brand}  ${context}`;
     return [truncateToWidth(left, safe_width, "…"), divider];
   }
 
   /** 构建 Session 与模型上下文。 */
   private build_context(): string {
     const title = this.app_state.session_title?.trim() || "Untitled";
+    const model = this.app_state.model_label?.trim() || "Loading";
     const configured_mode = this.app_state.security?.approval_mode;
     const security_policy = configured_mode === "always-allow"
       ? "Always Allow"
@@ -71,6 +72,6 @@ export class AgentHeaderComponent implements Component {
         this.app_state.security.approval_mode !== this.app_state.security.effective_approval_mode
       ? " (queued)"
       : "";
-    return `${title} · Security: ${security_policy}${pending} · ${this.app_state.session_id}`;
+    return `${title} · Model: ${model} · Security: ${security_policy}${pending} · ${this.app_state.session_id}`;
   }
 }

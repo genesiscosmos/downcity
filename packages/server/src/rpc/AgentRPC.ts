@@ -55,6 +55,7 @@ export class AgentRPC {
         port,
         sessions: this.agent.sessions,
         get_agent: () => this.agent,
+        resolve_session_model: this.runtime_options.resolve_session_model,
         reload_workspace_env: this.runtime_options.reload_workspace_env,
       });
       this.rpc_instance = instance;

@@ -111,6 +111,7 @@ export {
 } from "./types/session/SessionMutation.js";
 export type {
   SessionCompactMutation,
+  SessionConfigMutation,
   SessionDeltaMutation,
   SessionMessageMutation,
   SessionMutation,
@@ -118,6 +119,7 @@ export type {
   SessionMutationUnsubscribe,
   SessionPartMutation,
   SessionStateMutation,
+  SessionTitleMutation,
   SessionTurnMutation,
 } from "./types/session/SessionMutation.js";
 export type {

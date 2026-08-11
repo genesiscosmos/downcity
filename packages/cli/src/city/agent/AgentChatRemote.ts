@@ -19,6 +19,8 @@ import {
   type AgentChatSessionSummaryView,
   type AgentChatTransportOptions,
 } from "@/city/agent/AgentChatTypes.js";
+import { listPlatformModelChoices } from "@/city/runtime/city-model/ExecutionModelBinding.js";
+import type { AgentChatModelChoice } from "@/city/types/AgentChatModel.js";
 
 /**
  * 远端访问目标。
@@ -68,6 +70,16 @@ export async function createRemoteAgent(params: {
   return new RemoteAgent({
     url: target.url,
   });
+}
+
+/** 读取当前用户可用于 Chat Session 的模型目录。 */
+export async function listAgentChatModelChoices(): Promise<AgentChatModelChoice[]> {
+  const choices = await listPlatformModelChoices();
+  return choices.map((choice) => ({
+    model_id: choice.value,
+    name: String(choice.model.name || choice.value).trim() || choice.value,
+    modalities: choice.model.modalities.map((modality) => String(modality)),
+  }));
 }
 
 /**

@@ -18,6 +18,7 @@ import type {
   AgentHttpBinding,
   AgentHttpListenOptions,
 } from "@/types/AgentHttpBinding.js";
+import type { AgentHttpRuntimeOptions } from "@/types/AgentHttpRuntime.js";
 
 const DEFAULT_HTTP_HOST = "127.0.0.1";
 
@@ -38,11 +39,13 @@ export interface AgentHttpServerHandle {
  */
 export class AgentHTTP {
   private readonly agent: Agent;
+  private readonly runtime_options: AgentHttpRuntimeOptions;
   private cached_router: Hono | null = null;
   private cached_server: AgentHttpServerHandle | null = null;
 
-  constructor(agent: Agent) {
+  constructor(agent: Agent, runtime_options: AgentHttpRuntimeOptions = {}) {
     this.agent = agent;
+    this.runtime_options = runtime_options;
   }
 
   /**
@@ -55,7 +58,9 @@ export class AgentHTTP {
   router(): Hono {
     if (this.cached_router) return this.cached_router;
     const router = new Hono();
-    registerSdkSessionRoutes(router, this.agent.sessions);
+    registerSdkSessionRoutes(router, this.agent.sessions, {
+      resolve_session_model: this.runtime_options.resolve_session_model,
+    });
     registerRuntimeRoutes(router, this.agent);
     this.cached_router = router;
     return router;

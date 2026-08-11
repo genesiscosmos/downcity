@@ -528,6 +528,15 @@ test("running session model changes apply with steer at the next Session step", 
     assert.equal(
       mutations.some(
         (mutation) =>
+          mutation.variant === "session" &&
+          mutation.type === "config" &&
+          mutation.model_label === "new-model",
+      ),
+      true,
+    );
+    assert.equal(
+      mutations.some(
+        (mutation) =>
           mutation.variant === "message" &&
           mutation.type === "action" &&
           mutation.message.status === "completed" &&

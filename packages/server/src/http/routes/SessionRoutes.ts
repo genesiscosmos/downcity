@@ -13,9 +13,12 @@ import type {
   AgentSessions,
   AgentArchiveSessionInput,
   AgentArchiveSessionsInput,
+  RemoteSessionSetInput,
 } from "@downcity/agent";
 import type { AgentSessionPromptInput } from "@downcity/agent";
 import type { RespondSessionInteractionInput } from "@downcity/agent";
+import type { AgentHttpRuntimeOptions } from "@/types/AgentHttpRuntime.js";
+import { resolve_remote_session_set_input } from "@/session/RemoteSessionConfig.js";
 
 const NDJSON_CONTENT_TYPE = "application/x-ndjson; charset=utf-8";
 const SDK_EVENTS_READY_FRAME = {
@@ -28,6 +31,7 @@ const SDK_EVENTS_READY_FRAME = {
 export function registerSdkSessionRoutes(
   app: Hono,
   sessions: AgentSessions,
+  runtime_options: AgentHttpRuntimeOptions = {},
 ): void {
   app.get("/api/sdk/sessions", async (c) => {
     try {
@@ -363,17 +367,29 @@ export function registerSdkSessionRoutes(
     try {
       const session = await sessions.get(String(c.req.param("session_id") || "").trim());
       const body = await c.req.json().catch(() => null) as {
+        model_id?: unknown;
         security?: { approval_mode?: unknown };
         options?: {
           persist_action?: unknown;
           publish_mutation?: unknown;
         };
       } | null;
-      const mode = String(body?.security?.approval_mode || "");
-      if (mode !== "ask" && mode !== "always-allow") {
+      const mode = body?.security
+        ? String(body.security.approval_mode || "")
+        : undefined;
+      if (mode !== undefined && mode !== "ask" && mode !== "always-allow") {
         return c.json({
           success: false,
           error: "security.approval_mode must be ask or always-allow",
+        }, 400);
+      }
+      const model_id = body?.model_id === undefined
+        ? undefined
+        : String(body.model_id || "").trim();
+      if (body?.model_id !== undefined && !model_id) {
+        return c.json({
+          success: false,
+          error: "model_id must be a non-empty string",
         }, 400);
       }
       const persist_action = body?.options?.persist_action;
@@ -390,8 +406,16 @@ export function registerSdkSessionRoutes(
           error: "options.publish_mutation must be boolean",
         }, 400);
       }
+      const remote_input: RemoteSessionSetInput = {
+        ...(model_id ? { model_id } : {}),
+        ...(mode ? { security: { approval_mode: mode } } : {}),
+      };
+      const input = await resolve_remote_session_set_input({
+        config: remote_input,
+        resolve_session_model: runtime_options.resolve_session_model,
+      });
       await session.set(
-        { security: { approval_mode: mode } },
+        input,
         {
           ...(typeof persist_action === "boolean" ? { persist_action } : {}),
           ...(typeof publish_mutation === "boolean" ? { publish_mutation } : {}),

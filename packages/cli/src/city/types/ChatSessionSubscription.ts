@@ -18,6 +18,8 @@ export interface ChatSessionSnapshot {
   session_id: string;
   /** 当前 Session 的可读标题。 */
   title: string;
+  /** 当前 Session 已接受的模型可读名称。 */
+  model_label?: string;
   /** 当前 Session 的完整可见与内部 Message 快照。 */
   messages: SessionMessage[];
   /** 当前 Session configured 与 effective 审批模式。 */

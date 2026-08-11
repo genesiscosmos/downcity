@@ -225,7 +225,13 @@ function create_fake_agent() {
 test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", async () => {
   const port = await reserve_port();
   const fake_agent = create_fake_agent();
-  const http = new AgentHTTP(fake_agent);
+  let resolved_model_id = "";
+  const http = new AgentHTTP(fake_agent, {
+    resolve_session_model: (model_id) => {
+      resolved_model_id = model_id;
+      return { modelId: model_id, provider: "test" };
+    },
+  });
   const remote_agent = new RemoteAgent({ url: `http://127.0.0.1:${port}` });
   try {
     await http.server().listen({ host: "127.0.0.1", port });
@@ -263,10 +269,18 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", async ()
       { security: { approval_mode: "always-allow" } },
       { persist_action: false, publish_mutation: false },
     );
-    assert.deepEqual(fake_agent.read_set_calls(), [{
-      input: { security: { approval_mode: "always-allow" } },
-      options: { persist_action: false, publish_mutation: false },
-    }]);
+    await session.set({ model_id: "http-selected-model" });
+    assert.equal(resolved_model_id, "http-selected-model");
+    assert.deepEqual(fake_agent.read_set_calls(), [
+      {
+        input: { security: { approval_mode: "always-allow" } },
+        options: { persist_action: false, publish_mutation: false },
+      },
+      {
+        input: { model: { modelId: "http-selected-model", provider: "test" } },
+        options: {},
+      },
+    ]);
     assert.deepEqual((await session.status()).security, {
       approval_mode: "always-allow",
       effective_approval_mode: "ask",

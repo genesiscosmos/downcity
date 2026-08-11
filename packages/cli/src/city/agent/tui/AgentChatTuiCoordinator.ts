@@ -8,11 +8,7 @@
  * - header 展示 Session 上下文，footer 只展示当前可执行操作与滚动状态。
  */
 
-import {
-  ProcessTerminal,
-  TUI,
-  type Component,
-} from "@earendil-works/pi-tui";
+import { ProcessTerminal, TUI, type Component } from "@earendil-works/pi-tui";
 import {
   AgentHeaderComponent,
   ChatEditorComponent,
@@ -25,6 +21,8 @@ import { MessageListComponent } from "@/city/agent/tui/components/MessageList.js
 import { QueuedInputQueue } from "@/city/agent/tui/controllers/QueuedInputQueue.js";
 import { StreamingUIController } from "@/city/agent/tui/controllers/StreamingUI.js";
 import { ChatSessionSubscription } from "@/city/agent/tui/controllers/ChatSessionSubscription.js";
+import { ChatModelController } from "@/city/agent/tui/controllers/ChatModelController.js";
+import { ChatSecurityController } from "@/city/agent/tui/controllers/ChatSecurityController.js";
 import { SessionPickerComponent } from "@/city/agent/tui/dialogs/SessionPicker.js";
 import { ApprovalPanelComponent } from "@/city/agent/tui/dialogs/ApprovalDialog.js";
 import { QuestionPanelComponent } from "@/city/agent/tui/dialogs/QuestionDialog.js";
@@ -38,7 +36,6 @@ import {
   listRemoteChatSessions,
 } from "@/city/agent/AgentChatRemote.js";
 import type {
-  SessionApprovalMode,
   SessionInteractionRequest,
   SessionInteractionResponse,
   SessionMutation,
@@ -55,7 +52,6 @@ import { resolve_transcript_scroll_delta } from "@/city/agent/tui/controllers/Tr
 import { build_attachment_tags } from "@/city/agent/tui/attachments/AttachmentInput.js";
 import { read_clipboard_attachment_paths } from "@/city/agent/tui/attachments/ClipboardAttachment.js";
 import { pick_native_files } from "@/city/agent/tui/attachments/NativeFilePicker.js";
-
 /**
  * Agent chat TUI 协调器。
  */
@@ -68,6 +64,8 @@ export class AgentChatTuiCoordinator {
   private readonly message_list: MessageListComponent;
   private readonly streaming_ui: StreamingUIController;
   private readonly session_subscription: ChatSessionSubscription;
+  private readonly model_controller: ChatModelController;
+  private readonly security_controller: ChatSecurityController;
   private readonly editor: ChatEditorComponent;
   private readonly queued_messages: QueuedMessagesComponent;
   private readonly interaction_panel: InlinePanelSlotComponent;
@@ -81,7 +79,6 @@ export class AgentChatTuiCoordinator {
   private remove_input_listener: (() => void) | null = null;
   private command_panel_loading = false;
   private draining_input_queue = false;
-  private approval_mode_update_promise: Promise<boolean> | null = null;
   private prompt_pending = false;
 
   /** 待处理的 Session Interaction 队列；并行请求按到达顺序依次展示。 */
@@ -120,6 +117,9 @@ export class AgentChatTuiCoordinator {
       show_security_policy_picker: () => {
         this.show_security_policy_picker();
       },
+      select_model: async (model_id) => {
+        await this.select_model(model_id);
+      },
       approve: async (approval_id) => {
         await this.approve(approval_id);
       },
@@ -143,6 +143,7 @@ export class AgentChatTuiCoordinator {
       session_id: options.session_id,
       security: undefined,
       session_title: undefined,
+      model_label: undefined,
       is_executing: false,
       queued_message_count: 0,
       transcript_scroll_offset: 0,
@@ -173,6 +174,33 @@ export class AgentChatTuiCoordinator {
       remote_agent: options.remote_agent,
       on_snapshot: (snapshot) => this.apply_session_snapshot(snapshot),
       on_mutation: (mutation) => this.apply_session_mutation(mutation),
+    });
+    this.model_controller = new ChatModelController({
+      get_session: () => this.session_subscription.session,
+      get_current_model_label: () => this.app_state.model_label,
+      on_status: (message) => {
+        this.add_status_message(message);
+        this.request_render();
+      },
+      on_error: (message) => {
+        this.add_error_message(message);
+        this.request_render();
+      },
+      on_close: () => this.hide_command_panel(),
+    });
+    this.security_controller = new ChatSecurityController({
+      get_session: () => this.session_subscription.session,
+      get_session_id: () => this.current_session_id,
+      get_approval_mode: () => this.app_state.security?.approval_mode,
+      on_status: ({ is_executing, security }) => {
+        this.app_state.security = security;
+        this.set_session_executing(is_executing);
+        this.request_render();
+      },
+      on_error: (message) => {
+        this.add_error_message(message);
+        this.request_render();
+      },
     });
 
     this.editor.on_submit = (text) => {
@@ -577,10 +605,7 @@ export class AgentChatTuiCoordinator {
    * @param message 用户消息。
    */
   private async run_turn(message: string): Promise<boolean> {
-    if (this.approval_mode_update_promise) {
-      const policy_updated = await this.approval_mode_update_promise;
-      if (!policy_updated) return false;
-    }
+    if (!(await this.security_controller.wait())) return false;
     const session = this.session_subscription.session;
     if (!session) {
       this.add_error_message("Active Session is not available.");
@@ -593,12 +618,12 @@ export class AgentChatTuiCoordinator {
     try {
       const turn = await session.prompt({ query: message });
       const result = await turn.finished;
-      if (!(await this.refresh_session_status())) this.set_session_executing(false);
+      if (!(await this.security_controller.refresh())) this.set_session_executing(false);
       return result.success;
     } catch (error) {
       // 传输失败可能没有 canonical Error Message，需要保留本地可见错误。
       this.add_error_message(this.format_error(error));
-      if (!(await this.refresh_session_status())) this.set_session_executing(false);
+      if (!(await this.security_controller.refresh())) this.set_session_executing(false);
       return false;
     } finally {
       this.prompt_pending = false;
@@ -719,7 +744,7 @@ export class AgentChatTuiCoordinator {
       current_mode: this.app_state.security.approval_mode,
       on_select: (mode) => {
         this.hide_command_panel();
-        this.apply_approval_mode(mode);
+        this.security_controller.apply(mode);
       },
       on_cancel: () => {
         this.hide_command_panel();
@@ -730,62 +755,28 @@ export class AgentChatTuiCoordinator {
     this.request_render();
   }
 
-  /** 启动单一策略更新任务，避免新 Turn 越过尚未生效的权限选择。 */
-  private apply_approval_mode(mode: SessionApprovalMode): void {
-    if (mode === this.app_state.security?.approval_mode || this.approval_mode_update_promise) return;
-    const update_promise = this.update_approval_mode(mode);
-    this.approval_mode_update_promise = update_promise;
-    void update_promise.finally(() => {
-      if (this.approval_mode_update_promise === update_promise) {
-        this.approval_mode_update_promise = null;
-      }
-    });
-  }
-
-  /** 通过 Session API 更新审批模式，并在成功后刷新 Header。 */
-  private async update_approval_mode(mode: SessionApprovalMode): Promise<boolean> {
-    if (mode === this.app_state.security?.approval_mode) return true;
+  /** 打开模型选择器或按显式 ID 切换当前 Session 模型。 */
+  private async select_model(model_id?: string): Promise<void> {
+    if (!this.can_open_command_panel()) return;
+    this.command_panel_loading = true;
     try {
-      const session = this.session_subscription.session;
-      if (!session) return false;
-      await session.set({ security: { approval_mode: mode } });
-      const status = await session.status();
-      if (status.session_id !== this.current_session_id) return false;
-      this.app_state.security = status.security;
-      this.header.set_state(this.app_state);
-      this.footer.set_state(this.app_state);
-      this.request_render();
-      return true;
+      const picker = await this.model_controller.open(model_id);
+      if (!picker || this.stopped || this.interaction_panel.is_active) return;
+      this.command_panel.show(picker);
+      this.tui.setFocus(this.command_panel as Component);
     } catch (error) {
-      this.add_error_message(`Failed to update security policy: ${this.format_error(error)}`);
-      this.request_render();
-      return false;
+      this.add_error_message(`Failed to update Session model: ${this.format_error(error)}`);
+    } finally {
+      this.command_panel_loading = false;
     }
-  }
-
-  /** 刷新当前 Session 状态，校准执行指示与审批模式。 */
-  private async refresh_session_status(): Promise<boolean> {
-    try {
-      const session = this.session_subscription.session;
-      if (!session) return false;
-      const status = await session.status();
-      if (status.session_id !== this.current_session_id) return false;
-      this.app_state.security = status.security;
-      this.set_session_executing(status.state === "running");
-      this.header.set_state(this.app_state);
-      this.footer.set_state(this.app_state);
-      return true;
-    } catch {
-      // Turn 结果已经完成，策略刷新失败不应把一次成功执行改写为失败。
-      return false;
-    }
+    this.request_render();
   }
 
   /** 判断当前是否允许打开输入框下方交互面板。 */
   private can_open_command_panel(): boolean {
     return !this.stopped
       && !this.command_panel_loading
-      && this.approval_mode_update_promise === null
+      && !this.security_controller.is_updating
       && !this.command_panel.is_active
       && !this.interaction_panel.is_active;
   }
@@ -827,6 +818,7 @@ export class AgentChatTuiCoordinator {
     this.current_session_id = session_id;
     this.app_state.session_id = session_id;
     this.app_state.session_title = undefined;
+    this.app_state.model_label = undefined;
     this.app_state.security = undefined;
     this.header.set_state(this.app_state);
     this.footer.set_state(this.app_state);
@@ -855,6 +847,7 @@ export class AgentChatTuiCoordinator {
   private apply_session_snapshot(snapshot: ChatSessionSnapshot): void {
     if (snapshot.session_id !== this.current_session_id) return;
     this.app_state.session_title = snapshot.title;
+    this.app_state.model_label = snapshot.model_label;
     this.app_state.security = snapshot.security;
     this.set_session_executing(snapshot.is_executing);
     this.header.set_state(this.app_state);
@@ -896,6 +889,13 @@ export class AgentChatTuiCoordinator {
       this.app_state.session_title = mutation.title.trim() || "Untitled";
       this.header.set_state(this.app_state);
       this.terminal.setTitle(this.build_title());
+      this.request_render();
+      return;
+    }
+
+    if (mutation.variant === "session" && mutation.type === "config") {
+      this.app_state.model_label = mutation.model_label;
+      this.header.set_state(this.app_state);
       this.request_render();
     }
   }

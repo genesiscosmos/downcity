@@ -10,6 +10,7 @@
 import { Executor } from "@executor/Executor.js";
 import type { LanguageModel, Tool } from "ai";
 import {
+  infer_agent_model_label,
   normalize_agent_model,
   read_agent_model_context_window,
   type AgentModel,
@@ -300,6 +301,21 @@ export class Session implements AgentSession {
       ? await this.state.set_approval_mode(next_approval_mode)
       : false;
     if (!model_result && !security_changed) return;
+    if (model_result?.changed && publish_mutation) {
+      this.events.publish({
+        mutation_id: generate_id(),
+        variant: "session",
+        type: "config",
+        session_id: this.id,
+        created_at: Date.now(),
+        ...(model_result.config.model_label
+          ? { model_label: model_result.config.model_label }
+          : {}),
+        ...(typeof model_result.config.model_context_window === "number"
+          ? { model_context_window: model_result.config.model_context_window }
+          : {}),
+      });
+    }
     const changed_fields = [
       ...(model_result?.changed
         ? [`model: ${String(model_result.config.model_label || "configured")}`]
@@ -510,11 +526,19 @@ export class Session implements AgentSession {
           messages: records,
           logger: this.logger,
         });
+    const model_label = String(
+      metadata_with_title.model_label ||
+      infer_agent_model_label(this.get_selected_model()) ||
+      "",
+    ).trim();
     return build_session_info({
       project_root: this.workspace_path,
       agent_id: this.agent_id,
       session_id: this.id,
-      metadata: metadata_with_title,
+      metadata: {
+        ...metadata_with_title,
+        ...(model_label ? { model_label } : {}),
+      },
       messages: records,
       executing: this.is_executing(),
     });

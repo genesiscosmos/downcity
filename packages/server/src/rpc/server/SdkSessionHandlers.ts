@@ -13,6 +13,7 @@ import type {
   RpcWriteSuccess,
   RpcRequestHandlerOptions,
 } from "@/rpc/server/ServerTypes.js";
+import { resolve_remote_session_set_input } from "@/session/RemoteSessionConfig.js";
 
 /**
  * 处理 SDK session RPC 请求。
@@ -83,7 +84,11 @@ export async function handleSdkSessionRpcRequest(params: {
     }
     case "sdk.sessions.set": {
       const session = await options.sessions.get(request.params.session_id);
-      await session.set(request.params.input, request.params.options);
+      const input = await resolve_remote_session_set_input({
+        config: request.params.input,
+        resolve_session_model: options.resolve_session_model,
+      });
+      await session.set(input, request.params.options);
       write_success(request.id, { queued: true });
       return true;
     }

@@ -14,6 +14,8 @@ export type {
   AgentRpcListenOptions,
 } from "./types/AgentRpcBinding.js";
 export type { AgentRpcRuntimeOptions } from "./types/AgentRpcRuntime.js";
+export type { AgentHttpRuntimeOptions } from "./types/AgentHttpRuntime.js";
+export type { AgentSessionModelResolver } from "./types/AgentSessionModelResolver.js";
 export type {
   AgentHttpBinding,
   AgentHttpListenOptions,

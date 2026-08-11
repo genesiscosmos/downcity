@@ -87,7 +87,7 @@ city agent start
 city agent chat
 ```
 
-`city agent chat` 会持续订阅当前 Session，并实时合并 Message、Part、文本、reasoning、Tool 和 Interaction 状态。使用 `/session` 切换会话时，TUI 会先订阅新 Session，再加载完整快照并合并期间收到的事件。模型提供可见 reasoning 文本时，TUI 会按 Assistant Part 顺序弱化展示；只有 reasoning metadata 时不会生成虚假的推理内容。
+`city agent chat` 会持续订阅当前 Session，并实时合并 Message、Part、文本、reasoning、Tool、Interaction 和配置状态。顶部会显示当前 Session 的模型名称；使用 `/model` 可从当前用户可调用的模型目录中选择模型，也可通过 `/model <model-id>` 直接切换。模型切换只影响当前 Session，并通过 Session Mutation 更新界面，不会修改 Agent 默认模型。使用 `/session` 切换会话时，TUI 会先订阅新 Session，再加载完整快照并合并期间收到的事件。模型提供可见 reasoning 文本时，TUI 会按 Assistant Part 顺序弱化展示；只有 reasoning metadata 时不会生成虚假的推理内容。
 
 `city federation ...` 只管理本机的 Federation 成员资格和用户登录态，不负责部署 Federation。
 

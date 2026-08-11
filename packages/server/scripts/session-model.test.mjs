@@ -2,7 +2,7 @@
  * @file 验证 RemoteAgent 通过 RPC 控制 Session。
  *
  * 关键点（中文）
- * - RemoteAgent 不暴露模型选择协议，模型实例由 Agent 在本地持有。
+ * - RemoteAgent 只传递 model_id，模型实例由 Agent Server 宿主解析。
  * - compact 只验证 command 被远程 Session 接受，不应自行启动 turn。
  */
 
@@ -47,7 +47,7 @@ async function send_rpc_request(port, request) {
   });
 }
 
-test("RPC uses the Agent runtime model and queues compact", async () => {
+test("RPC resolves model_id through the host and queues compact", async () => {
   const project_root = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-server-session-model-"),
   );
@@ -60,7 +60,16 @@ test("RPC uses the Agent runtime model and queues compact", async () => {
     workspace: new Workspace({ path: project_root }),
     model,
   });
-  const rpc = new AgentRPC(agent);
+  let resolved_model_id = "";
+  const rpc = new AgentRPC(agent, {
+    resolve_session_model: (model_id) => {
+      resolved_model_id = model_id;
+      return {
+        modelId: model_id,
+        provider: "test",
+      };
+    },
+  });
   const port = await reserve_port();
   const remote_agent = new RemoteAgent({
     url: `rpc://127.0.0.1:${port}`,
@@ -71,8 +80,41 @@ test("RPC uses the Agent runtime model and queues compact", async () => {
     const session = await remote_agent.sessions.create({
       session_id: "rpc-model-session",
     });
-    assert.equal("modelId" in (await session.get_info()), false);
+    const initial_info = await session.get_info();
+    assert.equal("modelId" in initial_info, false);
+    assert.equal(initial_info.model_label, "host-model");
+    await session.set({ model_id: "selected-model" });
+    assert.equal(resolved_model_id, "selected-model");
+    assert.equal((await session.get_info()).model_label, "selected-model");
     await session.compact();
+  } finally {
+    await remote_agent.close();
+    await rpc.close();
+    await agent.dispose();
+    await fs.rm(project_root, { recursive: true, force: true });
+  }
+});
+
+test("RPC rejects remote model switching when the host has no resolver", async () => {
+  const project_root = await fs.mkdtemp(
+    path.join(os.tmpdir(), "downcity-server-model-resolver-required-"),
+  );
+  const agent = new Agent({
+    id: "rpc_model_resolver_required_agent",
+    workspace: new Workspace({ path: project_root }),
+    model: { modelId: "host-model", provider: "test" },
+  });
+  const rpc = new AgentRPC(agent);
+  const port = await reserve_port();
+  const remote_agent = new RemoteAgent({ url: `rpc://127.0.0.1:${port}` });
+  try {
+    await agent.ready();
+    await rpc.listen({ host: "127.0.0.1", port });
+    const session = await remote_agent.sessions.create({ session_id: "resolver-required" });
+    await assert.rejects(
+      session.set({ model_id: "selected-model" }),
+      /model switching is not configured by the host/,
+    );
   } finally {
     await remote_agent.close();
     await rpc.close();
