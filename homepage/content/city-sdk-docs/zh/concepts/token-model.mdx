@@ -48,7 +48,7 @@ Bureau Server 还会比较 Token 中的 `bureau_id` 与自身绑定的 Bureau ID
 
 ## 管理员会话 Token
 
-使用 `fed deploy` 配置的管理员 ID 和密码访问 `/v1/admin/login`。登录响应会返回有时限的管理员会话 Token；可信后端把它传给 `FederationAdmin`，用于创建 city、管理 env、为某个 city 下的用户签发 `user_token`。密码只以 PBKDF2 摘要保存，不再生成或注入管理员 secret key 环境变量。
+使用 `fed deploy` 配置的管理员 ID 和密码访问 `/v1/admin/login`。登录响应会返回有时限的管理员会话 Token；可信后端把它传给 `FederationAdmin`，用于创建 Bureau、管理 env，以及请求 Federation 为用户签发 `user_token`。密码只以 PBKDF2 摘要保存，不再生成或注入管理员 secret key 环境变量。
 
 ```ts
 const admin = new FederationAdmin({

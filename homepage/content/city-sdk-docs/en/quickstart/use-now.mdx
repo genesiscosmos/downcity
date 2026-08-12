@@ -12,7 +12,7 @@ import {
   AIChannel,
   type AIChannelStreamInput,
   type LanguageModelV3StreamResult,
-} from "@downcity/city";
+} from "@downcity/federation";
 import { Database } from "@downcity/database-sqlite";
 
 const database = new Database({ filename: "./data.sqlite" });
@@ -63,7 +63,7 @@ await base.health();
 serve({ fetch: (request) => base.fetch(request), port: 43127, hostname: "127.0.0.1" });
 ```
 
-## 2. Create City & Token
+## 2. Create Bureau & Request Token
 
 ```ts
 const admin = new FederationAdmin({

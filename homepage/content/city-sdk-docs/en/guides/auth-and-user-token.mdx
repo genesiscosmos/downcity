@@ -7,7 +7,7 @@ Downcity does not host your user system. It only requires a verifiable `user_tok
 
 ## If you already have login
 
-After a user logs in, issue a Downcity token through `FederationAdmin`:
+After a user logs in, use `FederationAdmin` to request a Downcity token from Federation:
 
 ```ts
 const user = await admin.service("accounts").action("tokens/issue").invoke({

@@ -19,7 +19,7 @@ fed deploy
 安装包：
 
 ```bash
-pnpm add @downcity/city @downcity/database-sqlite
+pnpm add @downcity/federation @downcity/database-sqlite
 ```
 
 准备好数据库即可。`fed deploy` 会交互式配置管理员 ID 和密码；密码只保存为 PBKDF2 摘要，登录后使用管理员会话 Token。Federation 首次启动时会自动补齐 `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` 和 `BETTER_AUTH_SECRET`。provider key 则在启动后通过 Admin API 或 `fed` 的 admin workspace 写入：
@@ -32,7 +32,7 @@ OPENAI_BASE_URL="https://api.openai.com/v1"
 创建 Federation：
 
 ```ts
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-sqlite";
 
 const database = new Database({ filename: "./data.sqlite" });
@@ -62,7 +62,7 @@ Federation 会在第一次 `health()`、`fetch()`、`table()` 等运行时操作
 
 ```ts
 import { sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { Service } from "@downcity/city";
+import { Service } from "@downcity/federation";
 
 const notes = sqliteTable("notes", {
   id: text("id").primaryKey(),

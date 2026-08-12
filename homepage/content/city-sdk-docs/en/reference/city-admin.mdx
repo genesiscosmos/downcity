@@ -1,9 +1,12 @@
 ---
 title: FederationAdmin
-description: How trusted environments manage Bureaus, issue user tokens, and maintain Federation env.
+description: How trusted environments manage Bureaus, request user tokens, and maintain Federation env.
 ---
 
 `FederationAdmin` should only run in trusted environments.
+
+> `FederationAdmin` is the legacy low-level client. New code should use `Embassy.admin` from
+> `@downcity/federation`; this page remains as a migration reference for the old method surface.
 
 Typical cases:
 
@@ -30,7 +33,7 @@ If `User City` owns "how a user-context city call reaches City," then `Federatio
 ## Minimal example
 
 ```ts
-import { FederationAdmin } from "@downcity/city";
+import { FederationAdmin } from "@downcity/federation/legacy";
 
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",
@@ -119,7 +122,7 @@ router.post("/login", async (c) => {
 That means:
 
 1. your backend handles user login first
-2. the trusted backend asks City for `user_token`
+2. the trusted backend requests Federation to issue `user_token`
 3. it returns `user_token` (which contains `bureau_id`) to the client
 4. the client calls City through `User City`
 

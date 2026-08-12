@@ -7,7 +7,7 @@ Downcity 不替你托管用户系统。它只要求 client 请求携带可校验
 
 ## 已有登录系统
 
-如果你已经有登录系统，可以在登录后用 `FederationAdmin` 签发 Downcity token：
+如果你已经有登录系统，可以在登录后用 `FederationAdmin` 请求 Federation 签发 Downcity token：
 
 ```ts
 const user = await admin.service("accounts").action("tokens/issue").invoke({
@@ -27,7 +27,7 @@ const user = await admin.service("accounts").action("tokens/issue").invoke({
 
 ## 没有复杂后端
 
-如果新产品是纯客户端项目，可以把 token 签发收敛到统一 City 周边，而不是每个产品写一套服务。
+如果新产品是纯客户端项目，可以把 token 签发收敛到 Federation，而不是每个产品写一套服务。
 
 ## token 不应该做什么
 

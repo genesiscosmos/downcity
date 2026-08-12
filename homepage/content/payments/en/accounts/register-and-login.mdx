@@ -46,7 +46,7 @@ const session = await guest.service("accounts").get("login/result", {
 
 ## Why `bureau_id` is included here
 
-Because after successful login or registration, the service will usually request a `user_token` for that downcity context from City.
+Because after successful login or registration, the service will usually request Federation to issue a `user_token` for that Bureau context.
 
 So it needs to know:
 

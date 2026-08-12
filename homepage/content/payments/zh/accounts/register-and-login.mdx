@@ -46,12 +46,12 @@ const session = await guest.service("accounts").get("login/result", {
 
 ## 为什么这里要带 `bureau_id`
 
-因为 service 在登录或注册成功后，通常会顺手向 City 申请该 downcity 下的 `user_token`。
+因为 service 在登录或注册成功后，通常会请求 Federation 为该 Bureau 上下文签发 `user_token`。
 
 所以它需要知道：
 
 - 当前是哪个产品
-- 当前要给哪个产品上下文签 token
+- 当前要为哪个产品上下文请求签发 token
 
 ## 登录成功后要做什么
 

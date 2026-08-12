@@ -5,6 +5,9 @@ description: 产品侧如何读取模型目录，并调用 AIService 或自定�
 
 `User City` 是给终端产品用的 SDK。
 
+> `City` 是旧的底层用户客户端。新代码应使用 `@downcity/federation` 的
+> `Embassy.user`；本页只保留旧方法面的迁移参考。
+
 它绑定的是一个用户在某个产品下的调用上下文：
 
 - `federation_url`
@@ -28,7 +31,7 @@ description: 产品侧如何读取模型目录，并调用 AIService 或自定�
 ## 最小示例
 
 ```ts
-import { City } from "@downcity/city";
+import { City } from "@downcity/federation/legacy";
 import type { UIMessageChunk } from "ai";
 
 const city = new City({

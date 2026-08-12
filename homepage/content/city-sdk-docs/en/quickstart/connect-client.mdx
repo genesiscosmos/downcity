@@ -6,7 +6,7 @@ description: Call the Federation from a product client with User City.
 Product clients use `User City`. The common paths are `city.ai.*` for AIService and `city.service(id).action(name).invoke()` for custom services.
 
 ```ts
-import { City } from "@downcity/city";
+import { City } from "@downcity/federation/legacy";
 
 const city = new City({
   federation_url: "https://base.example.com",

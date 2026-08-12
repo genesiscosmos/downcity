@@ -598,7 +598,7 @@ test("FederationAdmin env list / catalog / upsert / remove", async () => {
   assert.equal(requests[3].url, "http://localhost:3001/v1/env/remove")
 })
 
-test("FederationAdmin manages Bureau entities and issues seed user tokens", async () => {
+test("FederationAdmin manages Bureau entities and requests seed user tokens", async () => {
   const requests = []; const p = { bureau_id: "product_p1", name: "Demo", server: { bureau_id: "product_p1", server_url: "https://bureau.example.com", created_at: "t", updated_at: "t" }, state: "active", created_at: "t", updated_at: "t", archived_at: "" }
   const admin = new FederationAdmin({
     base_url: "http://localhost:3001/",

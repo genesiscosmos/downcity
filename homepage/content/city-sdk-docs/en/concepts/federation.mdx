@@ -16,7 +16,7 @@ This page solves one thing: **so that when you read code, you immediately know w
 - `Federation`: shared runtime, account source of truth, and trust root. It owns the Bureau registry and Organization relationships.
 - `Bureau`: stable product identity and authorization domain. Every machine credential is bound to one `bureau_id`.
 - `City`: an Agent terminal client connected to a configured Bureau domain. It is not registered in Federation.
-- `FederationAdmin`: the independent Root control-plane client; it belongs to no Bureau.
+- `FederationAdmin`: the legacy administrator client authorized by an Admin Session; it belongs to no Bureau.
 
 In short: Federation trusts Bureaus; City is only a terminal connected to one Bureau product domain.
 
@@ -25,7 +25,7 @@ In short: Federation trusts Bureaus; City is only a terminal connected to one Bu
 The server always starts from `new Federation({ database })`. It assembles the database, services, model catalog, and unified routing into a runnable backend:
 
 ```ts
-import { Federation, Service } from "@downcity/city";
+import { Federation, Service } from "@downcity/federation";
 
 const base = new Federation({ database });
 
@@ -47,9 +47,9 @@ serve({ fetch: (request) => base.fetch(request), port: 3001 });
 Trusted control planes and Agent terminals use separate clients:
 
 ```ts
-import { City, FederationAdmin } from "@downcity/city";
+import { City, FederationAdmin } from "@downcity/federation/legacy";
 
-// Federation Root control plane: manages Bureaus and env, and issues User Tokens
+// Legacy administrator client: requests Bureau, env, and User Token operations from Federation
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",
   credential: administrator_session_token,
@@ -62,7 +62,7 @@ const city = new City({
 });
 ```
 
-- `FederationAdmin`: runs in a trusted backend; manages Bureau identities and env, and issues `user_token`.
+- `FederationAdmin`: runs in a trusted backend; requests Federation to manage Bureau identities and env, and to issue `user_token`.
 - `City`: runs in an Agent terminal, holds `user_token` (which contains `bureau_id`), and calls AI and Service actions.
 
 The client never receives provider keys, and `User City` never receives administrator credentials or session tokens.

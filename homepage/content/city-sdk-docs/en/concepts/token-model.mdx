@@ -50,7 +50,7 @@ as an audience.
 
 ## Administrator session token
 
-Use the administrator ID and password configured by `fed deploy` to sign in at `/v1/admin/login`. The response contains a time-limited administrator session token. Pass that token to `FederationAdmin` for trusted backend operations such as creating Bureaus, managing env, and issuing `user_token`. Passwords are stored as PBKDF2 digests; no administrator secret key is generated or provisioned as an environment variable.
+Use the administrator ID and password configured by `fed deploy` to sign in at `/v1/admin/login`. The response contains a time-limited administrator session token. Pass that token to `FederationAdmin` for trusted backend operations such as creating Bureaus, managing env, and requesting Federation to issue `user_token`. Passwords are stored as PBKDF2 digests; no administrator secret key is generated or provisioned as an environment variable.
 
 ```ts
 const admin = new FederationAdmin({

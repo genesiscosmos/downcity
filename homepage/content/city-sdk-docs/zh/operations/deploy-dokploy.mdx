@@ -82,7 +82,7 @@ curl http://1.2.3.4:43127/health
 产品前端和应用应该通过 `@downcity/city` 调用 Node 街区：
 
 ```ts
-import { City, FederationAdmin } from "@downcity/city";
+import { City } from "@downcity/federation/legacy";
 
 const city = new City({
   federation_url: "https://base.example.com",
@@ -93,7 +93,7 @@ const city = new City({
 可信后端应该用 `FederationAdmin` 携带管理员会话 Token：
 
 ```ts
-import { City, FederationAdmin } from "@downcity/city";
+import { FederationAdmin } from "@downcity/federation/legacy";
 
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",

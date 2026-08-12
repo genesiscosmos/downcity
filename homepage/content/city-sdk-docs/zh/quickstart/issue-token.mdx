@@ -3,10 +3,10 @@ title: 签发 user_token
 description: 给产品侧 client 一个可以调用 City 的用户凭证。
 ---
 
-`user_token` 需要由可信环境签发。开发者后端使用 `FederationAdmin`，基于 `bureau_id + user_id` 向 City 申请 token。
+`user_token` 由 Federation 在可信流程中签发。开发者后端使用 `FederationAdmin`，基于 `bureau_id + user_id` 请求 Federation 签发 token。
 
 ```ts
-import { City, FederationAdmin } from "@downcity/city";
+import { FederationAdmin } from "@downcity/federation/legacy";
 
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",

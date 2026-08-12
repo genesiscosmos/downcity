@@ -3,12 +3,15 @@ title: "City"
 description: "提供 User City 和 FederationAdmin，并把 AI、custom service 的调用边界统一收口。"
 ---
 
-City 是 `@downcity/city` 导出的访问层。产品侧通过它接入 Federation。
+本页描述旧的底层兼容客户端。新代码应使用 `@downcity/federation` 的
+`Embassy.user` 和 `Embassy.admin`。
+
+现有产品仍可通过兼容客户端接入 Federation。
 
 它不只是“调一下 AI”的小工具，而是把这几类调用统一收口到一个产品侧入口里：
 
 - `User City`：终端产品调用 AI service、custom service 和公开 service
-- `FederationAdmin`：可信环境管理 city、签发 `user_token`、维护 runtime env
+- `FederationAdmin`：可信环境管理 Bureau、请求 Federation 签发 `user_token`、维护 runtime env
 - `service(name)`：统一调用你自己注册的 service，或官方服务暴露出来的接口
 
 如果你要做的是“前端产品如何接 City”，这页应该是 package 层的第一入口。
@@ -18,19 +21,19 @@ City 是 `@downcity/city` 导出的访问层。产品侧通过它接入 Federati
 | 客户端 | 给谁用 | 负责什么 |
 | --- | --- | --- |
 | `User City` | 前端、App、扩展、桌面端 | 拿 `user_token`（其中包含 `bureau_id`） 调 AI service、custom service、公开 service |
-| `FederationAdmin` | 产品后端、管理脚本、内部工具 | 签 token、写 runtime env、调管理侧 service |
+| `FederationAdmin` | 产品后端、管理脚本、内部工具 | 请求签发 token、写 runtime env、调管理侧 service |
 
 ## 什么时候该用它
 
 - 你的产品已经拿到了 `user_token`（其中包含 `bureau_id`）
 - 你要让产品前端去调用 `text()`、`stream()`、`image()`、custom service 或 service
-- 你要在可信后端里签发 token 或写 City 的管理数据
+- 你要在可信后端里请求签发 token 或写 Federation 的管理数据
 - 你想把注册、登录、OAuth、usage、payment 这些能力也放到同一套调用模型里
 
 ## 安装
 
 ```bash
-pnpm add @downcity/city
+pnpm add @downcity/federation
 ```
 
 ## 这个包到底管什么
@@ -122,7 +125,7 @@ city.service("service_id").get("path", query)
 ## `User City` 最小示例
 
 ```ts
-import { City, FederationAdmin } from "@downcity/city";
+import { City, FederationAdmin } from "@downcity/federation/legacy";
 
 const city = new City({
   federation_url: "https://base.example.com",
@@ -150,7 +153,7 @@ const result = await city.ai.text({
 ## `FederationAdmin` 最小示例
 
 ```ts
-import { City, FederationAdmin } from "@downcity/city";
+import { City, FederationAdmin } from "@downcity/federation/legacy";
 
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",
@@ -173,7 +176,7 @@ const token = await admin.service("accounts").action("tokens/issue").invoke({
 ```txt
 前端提交登录信息
   -> 你的业务后端完成账号校验
-  -> 业务后端用 FederationAdmin 向 City 申请 user_token
+  -> 业务后端用 FederationAdmin 请求 Federation 签发 user_token
   -> 后端返回 user_token (which contains bureau_id)
   -> 前端创建 User City
   -> 前端开始调用 city.ai.* 或 city.service(...)
@@ -296,7 +299,7 @@ const checkout = await city.payment.method("stripe").invoke({
 
 1. 先看这页，建立 `User City / FederationAdmin / service` 的心智
 2. 再看 [User City](/zh/city-sdk-docs/reference/city-user)，理解产品侧具体调法
-3. 再看 [FederationAdmin](/zh/city-sdk-docs/reference/city-admin)，理解可信后端怎么签 token
+3. 再看 [FederationAdmin](/zh/city-sdk-docs/reference/city-admin)，理解可信后端怎么请求签发 token
 4. 如果你要最小注册登录，继续看 [@downcity/services](/zh/payments)
 5. 如果你要完整登录场景，再看 [Federation Services Docs / Accounts](/zh/payments/accounts)
 

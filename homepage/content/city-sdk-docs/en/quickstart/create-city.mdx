@@ -19,7 +19,7 @@ The default template uses Node.js and SQLite. `fed deploy` allocates a port star
 Install the packages:
 
 ```bash
-pnpm add @downcity/city @downcity/database-sqlite
+pnpm add @downcity/federation @downcity/database-sqlite
 ```
 
 The database is the only thing you need before boot. `fed deploy` asks for an administrator ID and password; the password is stored as a PBKDF2 digest and later logins receive a session token. `DOWNCITY_FEDERATION_TOKEN_SIGNING_KEY` and `BETTER_AUTH_SECRET` are generated automatically. Provider keys are written later through the Admin API or the `fed` admin workspace:
@@ -32,7 +32,7 @@ OPENAI_BASE_URL="https://api.openai.com/v1"
 Create Federation:
 
 ```ts
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-sqlite";
 
 const database = new Database({ filename: "./data.sqlite" });
@@ -62,7 +62,7 @@ If your Federation needs its own business tables, declare them on a Service or s
 
 ```ts
 import { sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { Service } from "@downcity/city";
+import { Service } from "@downcity/federation";
 
 const notes = sqliteTable("notes", {
   id: text("id").primaryKey(),

@@ -37,7 +37,7 @@ description: "Federation 实例、runtime、serve 和统一入口在 @downcity/c
 下面这个例子说明 Federation 运行时最小长什么样：
 
 ```ts
-import { AIService, Federation } from "@downcity/city";
+import { AIService, Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-sqlite";
 import { serve } from "@hono/node-server";
 
@@ -127,7 +127,7 @@ Federation 会在共享数据库中原子初始化系统 env 和 Ed25519 user to
 如果 Federation 只需要被同一台机器上的可信进程访问，可以直接把标准 `fetch` handler 挂到你的本机 HTTP server：
 
 ```ts
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import { serve } from "@hono/node-server";
 
 const base = new Federation({ database });
@@ -144,7 +144,7 @@ const federation_url = "http://127.0.0.1:15315";
 然后 `City` 可以直接连接这个 HTTP 地址：
 
 ```ts
-import { FederationAdmin } from "@downcity/city";
+import { FederationAdmin } from "@downcity/federation/legacy";
 
 const admin = new FederationAdmin({
   base_url: federation_url,
@@ -180,7 +180,7 @@ await admin.listServices();
 如果你的 Federation 需要把运行期产生的外部文件转存到自有存储，可以注册默认 storage：
 
 ```ts
-import { Federation, R2Storage } from "@downcity/city";
+import { Federation, R2Storage } from "@downcity/federation";
 
 const base = new Federation({ database });
 

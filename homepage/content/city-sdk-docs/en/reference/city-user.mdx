@@ -5,6 +5,9 @@ description: How product clients read the model directory and call AIService or 
 
 `User City` is the runtime client for city-facing calls.
 
+> `City` is the legacy low-level user client. New code should use `Embassy.user` from
+> `@downcity/federation`; this page remains as a migration reference for the old method surface.
+
 It binds one user inside one city:
 
 - `federation_url`
@@ -28,7 +31,7 @@ So from the product side, `User City` is not only "the thing that calls models."
 ## Minimal example
 
 ```ts
-import { City } from "@downcity/city";
+import { City } from "@downcity/federation/legacy";
 import type { UIMessageChunk } from "ai";
 
 const city = new City({

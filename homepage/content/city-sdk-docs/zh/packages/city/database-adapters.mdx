@@ -8,11 +8,11 @@ Federation 不接收裸 Drizzle db。它接收一个继承自 `@downcity/city` �
 ## SQLite
 
 ```bash
-pnpm add @downcity/city @downcity/database-sqlite
+pnpm add @downcity/federation @downcity/database-sqlite
 ```
 
 ```ts
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-sqlite";
 
 const database = new Database({ filename: "./federation.sqlite" });
@@ -24,11 +24,11 @@ const federation = new Federation({ database });
 ## Cloudflare D1
 
 ```bash
-pnpm add @downcity/city @downcity/database-d1
+pnpm add @downcity/federation @downcity/database-d1
 ```
 
 ```ts
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-d1";
 
 export interface Env {
@@ -50,11 +50,11 @@ D1 Adapter 使用读取快照、冲突重试和原子 `batch()` 提供与其他�
 ## PostgreSQL
 
 ```bash
-pnpm add @downcity/city @downcity/database-postgresql
+pnpm add @downcity/federation @downcity/database-postgresql
 ```
 
 ```ts
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-postgresql";
 
 const database = new Database({ url: process.env.DATABASE_URL! });

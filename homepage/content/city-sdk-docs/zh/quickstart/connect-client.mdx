@@ -9,7 +9,7 @@ description: 用 User City 从产品侧调用 Federation 的 Service 和 Action�
 - `city.service(id).action(name).invoke()` 调自定义 Service 或服务 Service
 
 ```ts
-import { City } from "@downcity/city";
+import { City } from "@downcity/federation/legacy";
 
 const city = new City({
   federation_url: "http://127.0.0.1:43127",
@@ -32,4 +32,4 @@ const result = await city.service("translate").action("zh2en").invoke({ text: "�
 const login = await city.service("accounts").get("login/result", { login_id: "login_xxx" });
 ```
 
-创建 city、暂停 city、签发 `user_token` 和维护 Runtime env 都属于可信环境动作，用 `FederationAdmin` 完成，不放到产品前端。
+创建 Bureau、暂停 Bureau、请求 Federation 签发 `user_token` 和维护 Runtime env 都属于可信环境动作，用 `FederationAdmin` 发起，不放到产品前端。

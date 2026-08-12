@@ -212,6 +212,7 @@ test("Federation 不默认创建 Bureau Token，Bureau 使用 JWKS 本地验签"
       "/v1/bureaus/me",
       "/.well-known/downcity.json",
       "/.well-known/jwks.json",
+      "/v1/bureaus/me",
     ])
     assert.equal(requested_paths.includes("/v1/accounts/identify"), false)
 
@@ -244,9 +245,8 @@ test("Federation 不默认创建 Bureau Token，Bureau 使用 JWKS 本地验签"
     assert.equal("bureau_token" in items[0], false)
 
     await admin.bureaus.tokens.revoke(credential.token_id)
-    const revoked = create_bureau(federation, credential.bureau_token)
-    await assert.rejects(revoked.identify(request), (error) => error?.message.includes("unavailable"))
-    await assert.rejects(revoked.me(), (error) => error?.message.includes("unavailable"))
+    await assert.rejects(bureau.identify(request), (error) => error?.message.includes("unavailable"))
+    await assert.rejects(bureau.me(), (error) => error?.message.includes("unavailable"))
   } finally {
     await fs.rm(temp_dir, { recursive: true, force: true })
   }

@@ -37,7 +37,7 @@ export class UsageService extends InstallableService {
       "Credits 与 AI Usage 是独立事实，不能互相反推。",
       "用户通过 me 查询最长 400 个当地自然日的每日数据。",
       "用户通过 me/recent 分页查询最近的单次 AI Token 用量。",
-      "Federation Root Admin 通过 admin/overview、admin/users 和 admin/retention 查询跨用户分析。",
+      "持有有效 Admin Session 的 Federation 管理员通过 admin/overview、admin/users 和 admin/retention 查询跨用户分析。",
     ].join("\n");
   }
 

@@ -232,7 +232,7 @@ User App 携带 User Token
   -> 返回 BureauIdentity
 ```
 
-`identify()` 不调用远程 Accounts identify 接口。JWKS 可以短期缓存；未知 `kid` 时强制刷新一次。
+`identify()` 不调用远程 Accounts identify 接口。每次识别前在线验证 Bureau Token，保证撤销对长期运行的 Bureau 实例立即生效；User Token 的签名校验仍在本地完成。JWKS 可以短期缓存，未知 `kid` 时强制刷新一次。
 
 ## 7. server_url 的语义
 

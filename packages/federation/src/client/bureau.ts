@@ -85,9 +85,8 @@ export class Bureau {
   /** 使用机器凭证读取 Federation 解析出的当前 Bureau 身份。 */
   async me(): Promise<BureauMachineIdentity> {
     if (!this.machine_identity_promise) {
-      this.machine_identity_promise = this.resolve_machine_identity().catch((error) => {
+      this.machine_identity_promise = this.resolve_machine_identity().finally(() => {
         this.machine_identity_promise = undefined;
-        throw error;
       });
     }
     return await this.machine_identity_promise;

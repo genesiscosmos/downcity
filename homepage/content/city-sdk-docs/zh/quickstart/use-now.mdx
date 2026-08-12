@@ -12,8 +12,8 @@ description: 用默认数据库、FederationAdmin 和 User City 跑通一条完�
 
 ```plaintext
 City Client
-    ↓ FederationAdmin 创建 city / 签发 user_token
-Downcity City
+    ↓ FederationAdmin 创建 Bureau / 请求 Federation 签发 user_token
+Federation
     ↓ User City 携带 user_token 调用 service
 AIChannel → AIService → handler
 ```
@@ -27,7 +27,7 @@ import {
   AIChannel,
   type AIChannelStreamInput,
   type LanguageModelV3StreamResult,
-} from "@downcity/city";
+} from "@downcity/federation";
 import { Database } from "@downcity/database-sqlite";
 
 const database = new Database({ filename: "./data.sqlite" });
@@ -81,10 +81,10 @@ await base.health();
 serve({ fetch: (request) => base.fetch(request), port: 43127, hostname: "127.0.0.1" });
 ```
 
-## 2. 创建 city 并签发 token
+## 2. 创建 Bureau 并请求签发 token
 
 ```ts
-import { City, FederationAdmin } from "@downcity/city";
+import { FederationAdmin } from "@downcity/federation/legacy";
 
 const admin = new FederationAdmin({
   base_url: "http://127.0.0.1:43127",
@@ -102,7 +102,7 @@ const token = await admin.service("accounts").action("tokens/issue").invoke({
 ## 3. 产品侧调用
 
 ```ts
-import { City, FederationAdmin } from "@downcity/city";
+import { City } from "@downcity/federation/legacy";
 
 const city = new City({
   federation_url: "http://127.0.0.1:43127",

@@ -8,11 +8,11 @@ Federation no longer accepts a raw Drizzle database. It accepts a `Database` ins
 ## SQLite
 
 ```bash
-pnpm add @downcity/city @downcity/database-sqlite
+pnpm add @downcity/federation @downcity/database-sqlite
 ```
 
 ```ts
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-sqlite";
 
 const database = new Database({ filename: "./federation.sqlite" });
@@ -24,7 +24,7 @@ Use `filename: ":memory:"` in tests. File databases enable WAL by default.
 ## Cloudflare D1
 
 ```ts
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-d1";
 
 const database = new Database({ binding: env.DB });
@@ -36,7 +36,7 @@ The D1 adapter provides the same `context.transaction()` contract through snapsh
 ## PostgreSQL
 
 ```ts
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-postgresql";
 
 const database = new Database({ url: process.env.DATABASE_URL! });

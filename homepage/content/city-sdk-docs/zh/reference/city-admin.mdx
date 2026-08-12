@@ -1,9 +1,12 @@
 ---
 title: FederationAdmin
-description: 可信环境如何管理 Bureau、签发 user_token，并维护 Federation env。
+description: 可信环境如何管理 Bureau、请求签发 user_token，并维护 Federation env。
 ---
 
 `FederationAdmin` 只应该运行在可信环境里。
+
+> `FederationAdmin` 是旧的底层客户端。新代码应使用 `@downcity/federation` 的
+> `Embassy.admin`；本页只保留旧方法面的迁移参考。
 
 典型场景：
 
@@ -30,7 +33,7 @@ description: 可信环境如何管理 Bureau、签发 user_token，并维护 Fed
 ## 最小示例
 
 ```ts
-import { FederationAdmin } from "@downcity/city";
+import { FederationAdmin } from "@downcity/federation/legacy";
 
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",
@@ -119,7 +122,7 @@ router.post("/login", async (c) => {
 也就是：
 
 1. 你的业务后端先完成用户登录
-2. 再由可信后端向 City 申请 `user_token`
+2. 再由可信后端请求 Federation 签发 `user_token`
 3. 把 `user_token`（其中包含 `bureau_id`） 返回给前端
 4. 前端再用 `User City` 调 City
 
@@ -234,7 +237,7 @@ const issued = await admin.service("accounts").action("tokens/issue").invoke({
 });
 ```
 
-`FederationAdmin` 不绑定单个 Bureau；每次代签都必须显式提供 `bureau_id`。
+`FederationAdmin` 不绑定单个 Bureau；每次请求签发都必须显式提供 `bureau_id`。
 
 ## `listServices()` / `listModels()` / `instruction()`
 

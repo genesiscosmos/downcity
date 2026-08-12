@@ -29,7 +29,7 @@ That process owns:
 ## Minimal runnable example
 
 ```ts
-import { AIService, Federation } from "@downcity/city";
+import { AIService, Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-sqlite";
 import { serve } from "@hono/node-server";
 
@@ -107,7 +107,7 @@ Federation atomically initializes its system env and Ed25519 user token signing 
 When Federation only needs to be called by trusted processes on the same machine, expose its standard `fetch` handler through your local HTTP server:
 
 ```ts
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import { serve } from "@hono/node-server";
 
 const base = new Federation({ database });
@@ -124,7 +124,7 @@ const federation_url = "http://127.0.0.1:15315";
 Then point `City` at that HTTP URL:
 
 ```ts
-import { FederationAdmin } from "@downcity/city";
+import { FederationAdmin } from "@downcity/federation/legacy";
 
 const admin = new FederationAdmin({
   base_url: federation_url,
@@ -158,7 +158,7 @@ The host runtime only needs to create the appropriate adapter:
 When a Federation needs to move runtime files into first-party storage, register a default storage backend:
 
 ```ts
-import { Federation, R2Storage } from "@downcity/city";
+import { Federation, R2Storage } from "@downcity/federation";
 
 const base = new Federation({ database });
 

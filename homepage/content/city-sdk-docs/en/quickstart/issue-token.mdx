@@ -3,10 +3,10 @@ title: Issue `user_token`
 description: Give the product client a user-scoped credential that can call the Federation.
 ---
 
-`user_token` must be issued by a trusted environment. Your backend uses `FederationAdmin` and asks City for a token based on `bureau_id + user_id`.
+`user_token` is issued by Federation through a trusted flow. Your backend uses `FederationAdmin` to request a token based on `bureau_id + user_id`.
 
 ```ts
-import { City, FederationAdmin } from "@downcity/city";
+import { FederationAdmin } from "@downcity/federation/legacy";
 
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",

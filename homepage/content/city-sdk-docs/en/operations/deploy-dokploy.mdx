@@ -82,7 +82,7 @@ If the request times out, the Dokploy service is not exposed publicly, the VPS f
 City frontends and apps should call the Node block through `@downcity/city`:
 
 ```ts
-import { City, FederationAdmin } from "@downcity/city";
+import { City } from "@downcity/federation/legacy";
 
 const city = new City({
   federation_url: "https://base.example.com",
@@ -93,7 +93,7 @@ const city = new City({
 Trusted backends should use `FederationAdmin` with an administrator session token:
 
 ```ts
-import { City, FederationAdmin } from "@downcity/city";
+import { FederationAdmin } from "@downcity/federation/legacy";
 
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",

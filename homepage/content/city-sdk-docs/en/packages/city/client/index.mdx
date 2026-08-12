@@ -3,7 +3,10 @@ title: "City"
 description: "Provides User City and FederationAdmin, and unifies AI, custom service, and service calls behind one SDK boundary."
 ---
 
-City is the access layer exported by `@downcity/city`. It is how products connect to the Federation.
+This page describes the legacy low-level clients. New code should use `Embassy.user` and
+`Embassy.admin` from `@downcity/federation`.
+
+The compatibility clients are how existing products connect to the Federation.
 
 It is not only a thin wrapper for AI calls. It unifies these city-facing call surfaces into one package:
 
@@ -18,19 +21,19 @@ If your question is "how does a city actually connect to City?", this page shoul
 | Client | Used by | Responsibility |
 | --- | --- | --- |
 | `User City` | Frontends, apps, extensions, desktop clients | Calls AI services, custom services, and public services with `user_token` (which contains `bureau_id`) |
-| `FederationAdmin` | City backends, admin scripts, internal tools | Issues tokens, writes runtime env, and calls admin-side services |
+| `FederationAdmin` | Trusted backends, admin scripts, internal tools | Requests token issuance, writes runtime env, and calls admin-side services |
 
 ## Use it when
 
 - your product client already has `user_token` (which contains `bureau_id`)
 - you want product clients to call `text()`, `stream()`, `image()`, custom services, or services
-- you want a trusted backend to issue tokens or manage City data
+- you want a trusted backend to request tokens or manage Federation data
 - you want registration, login, OAuth, usage, and payment-related capabilities to follow the same call model
 
 ## Install
 
 ```bash
-pnpm add @downcity/city
+pnpm add @downcity/federation
 ```
 
 ## What this package actually owns
@@ -122,7 +125,7 @@ city.service("service_id").get("path", query)
 ## Minimal `User City` example
 
 ```ts
-import { City, FederationAdmin } from "@downcity/city";
+import { City, FederationAdmin } from "@downcity/federation/legacy";
 
 const city = new City({
   federation_url: "https://base.example.com",
@@ -150,7 +153,7 @@ If you do not have `user_token` yet, you normally start with one of the auth flo
 ## Minimal `FederationAdmin` example
 
 ```ts
-import { City, FederationAdmin } from "@downcity/city";
+import { City, FederationAdmin } from "@downcity/federation/legacy";
 
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",
@@ -173,7 +176,7 @@ The two most common flows are:
 ```txt
 frontend submits login data
   -> your backend validates the user
-  -> your backend uses FederationAdmin to request user_token from City
+  -> your backend uses FederationAdmin to request user_token from Federation
   -> backend returns user_token (which contains bureau_id)
   -> frontend creates User City
   -> frontend starts calling city.ai.* or city.service(...)
@@ -292,7 +295,7 @@ If this is your first Downcity city integration, read in this order:
 
 1. Start here to build the mental model for `User City`, `FederationAdmin`, and `service(...)`
 2. Then read [User City](/en/city-sdk-docs/reference/city-user) for detailed product-side calls
-3. Then read [FederationAdmin](/en/city-sdk-docs/reference/city-admin) for trusted-side token issuance
+3. Then read [FederationAdmin](/en/city-sdk-docs/reference/city-admin) for trusted-side token requests
 4. If you want minimal registration/login, continue to [@downcity/services](/en/payments)
 5. If you want the full login scenario, read [Federation Services Docs / Accounts](/en/payments/accounts)
 

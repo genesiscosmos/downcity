@@ -16,7 +16,7 @@ description: 分清全局服务、产品身份、产品后端和 Agent 终端的
 - `Federation`：共享后端运行时、账户事实源和信任根，维护 Bureau 注册表与 Organization 关系。
 - `Bureau`：稳定的产品身份和授权域；每个机器凭证绑定一个 `bureau_id`。
 - `City`：Agent 终端客户端，连接预配置的 Bureau 产品域，不在 Federation 注册。
-- `FederationAdmin`：独立的 Root 控制面客户端，不属于任何 Bureau。
+- `FederationAdmin`：由 Admin Session 授权的旧版管理员客户端，不属于任何 Bureau。
 
 换句话说：Federation 信任 Bureau；City 只是连接某个 Bureau 产品域的终端。
 
@@ -25,7 +25,7 @@ description: 分清全局服务、产品身份、产品后端和 Agent 终端的
 服务端永远从 `new Federation({ database })` 开始。它负责把数据库、service、模型目录和统一路由组装成一个能跑的后端：
 
 ```ts
-import { Federation, Service } from "@downcity/city";
+import { Federation, Service } from "@downcity/federation";
 
 const base = new Federation({ database });
 
@@ -49,9 +49,9 @@ serve({ fetch: (request) => base.fetch(request), port: 3001 });
 可信控制面和 Agent 终端使用两个独立客户端：
 
 ```ts
-import { City, FederationAdmin } from "@downcity/city";
+import { City, FederationAdmin } from "@downcity/federation/legacy";
 
-// Federation Root 控制面：管理 Bureau、env，并代签 User Token
+// 旧版管理员客户端：请求 Federation 管理 Bureau、env，并签发 User Token
 const admin = new FederationAdmin({
   base_url: "https://base.example.com",
   credential: administrator_session_token,
@@ -64,7 +64,7 @@ const city = new City({
 });
 ```
 
-- `FederationAdmin`：运行在可信后端，负责管理 Bureau 身份与 env，并签发 `user_token`。
+- `FederationAdmin`：运行在可信后端，请求 Federation 管理 Bureau 身份与 env，并签发 `user_token`。
 - `City`：运行在 Agent 终端，只持有 `user_token`（其中包含 `bureau_id`），调用 AI 与 Service action。
 
 客户端永远拿不到 provider key，`User City` 也永远拿不到管理员凭证或会话 Token。
