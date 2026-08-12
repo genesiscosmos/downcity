@@ -8,9 +8,37 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { City, MemoryCityStore, Workspace, Agent } from "@downcity/agent";
-import { LocalCityStore } from "../bin/index.js";
+import { get_local_database_path, LocalCityStore } from "../bin/index.js";
+
+test("LocalCityStore 为旧 managed_agents 表补齐 Workspace 关系", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-local-legacy-schema-"));
+  const database_path = get_local_database_path(root_path);
+  const legacy_database = new DatabaseSync(database_path);
+  legacy_database.exec(`
+    CREATE TABLE managed_agents (
+      agent_id TEXT PRIMARY KEY NOT NULL,
+      config_encrypted TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX managed_agents_updated_at_idx ON managed_agents(updated_at);
+  `);
+  legacy_database.close();
+
+  const store = new LocalCityStore({ root_path });
+  store.close();
+
+  const migrated_database = new DatabaseSync(database_path);
+  const columns = migrated_database.prepare("PRAGMA table_info(managed_agents)").all();
+  const indexes = migrated_database.prepare("PRAGMA index_list(managed_agents)").all();
+  assert.equal(columns.some((column) => column.name === "workspace_id"), true);
+  assert.equal(indexes.some((index) => index.name === "managed_agents_workspace_id_idx"), true);
+  migrated_database.close();
+  await fs.rm(root_path, { recursive: true, force: true });
+});
 
 test("LocalCityStore 通过 City.add 持久化并恢复 Agent", async () => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-local-"));

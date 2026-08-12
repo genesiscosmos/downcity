@@ -50,8 +50,6 @@ export class LocalDatabase {
       );
       CREATE INDEX IF NOT EXISTS managed_agents_updated_at_idx
       ON managed_agents(updated_at);
-      CREATE INDEX IF NOT EXISTS managed_agents_workspace_id_idx
-      ON managed_agents(workspace_id);
 
       CREATE TABLE IF NOT EXISTS agent_plugins (
         agent_id TEXT NOT NULL,
@@ -92,6 +90,7 @@ export class LocalDatabase {
       );
     `);
     this.ensure_workspace_id_column();
+    this.ensure_workspace_id_index();
     this.bind_single_legacy_workspace();
   }
 
@@ -103,11 +102,15 @@ export class LocalDatabase {
     }>;
     if (!columns.some((column) => String(column.name || "") === "workspace_id")) {
       this.sqlite.exec("ALTER TABLE managed_agents ADD COLUMN workspace_id TEXT;");
-      this.sqlite.exec(`
-        CREATE INDEX IF NOT EXISTS managed_agents_workspace_id_idx
-        ON managed_agents(workspace_id);
-      `);
     }
+  }
+
+  /** 在新建或迁移 workspace_id 列之后创建查询索引。 */
+  private ensure_workspace_id_index(): void {
+    this.sqlite.exec(`
+      CREATE INDEX IF NOT EXISTS managed_agents_workspace_id_idx
+      ON managed_agents(workspace_id);
+    `);
   }
 
   /** 只有一个 Workspace 时，为上一版已解绑的 Agent 确定性恢复关系。 */
