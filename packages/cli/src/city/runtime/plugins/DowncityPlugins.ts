@@ -45,7 +45,7 @@ import {
   WebPlugin,
 } from "@downcity/plugins/web";
 import { WorkboardPlugin } from "@downcity/plugins/workboard";
-import { CityUserManager } from "@/city/shared/CityUserManager.js";
+import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
 import type {
   PluginInitializationInput,
   PluginManifest,
@@ -54,7 +54,7 @@ import type {
 import type { PluginResourceResolver } from "@/city/types/plugin/PluginResource.js";
 import { getPlatformRootDirPath } from "@/city/process/registry/CityPaths.js";
 
-const city_user_manager = new CityUserManager();
+const embassy_session_resolver = new EmbassySessionResolver();
 
 const skill_manifest: PluginManifest = {
   name: "skill",
@@ -232,9 +232,9 @@ export function create_downcity_plugin_types(input: {
   /** 当前 Agent HTTP runtime 的监听 port。 */
   port?: number;
 } = {}): PluginType[] {
-  let city_promise: ReturnType<CityUserManager["createUserClient"]> | undefined;
+  let city_promise: ReturnType<EmbassySessionResolver["create_user_client"]> | undefined;
   const get_city = async () => {
-    city_promise ??= city_user_manager.createUserClient({ env: input.env ?? process.env });
+    city_promise ??= embassy_session_resolver.create_user_client({ env: input.env ?? process.env });
     return (await city_promise).embassy_user;
   };
 

@@ -102,6 +102,10 @@ Agent 重新加载 Env，并通过 Workspace 将新快照广播给已有 Session
 低于 Workspace `.env`，启动进程显式环境变量最高。`list` 不显示明文值；`copy` 只允许从
 本机 CLI 显式执行。
 
+Federation 用户请求统一通过 Embassy。交互登录态保存在 `~/.downcity/downcity.db`；自动化脚本可以用
+`DOWNCITY_FEDERATION_URL` 与 `DOWNCITY_USER_TOKEN` 显式覆盖当前登录态。这两个身份变量不会从
+Global `.env` 注入 Workspace 进程。
+
 ## Fed
 
 ```bash

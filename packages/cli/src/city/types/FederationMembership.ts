@@ -1,10 +1,10 @@
 /**
- * City 与 Federation 成员资格状态类型。
+ * Downcity Federation 连接状态类型。
  *
  * 关键点（中文）
  * - `city` CLI 作为本机 City 容器，必须加入某个 Federation 才能访问共享资源。
  * - 本文件描述 City 可选的 Federation 配置与当前成员资格状态。
- * - City 只读取 downfed 已保存管理员会话的存在性，不接触管理员密码。
+ * - City 容器只读取 Federation 管理端已保存 Session 的存在性，不接触管理员密码。
  */
 
 /**
@@ -15,7 +15,7 @@ export interface FederationProfile {
    * Federation 展示名称。
    *
    * 说明（中文）
-   * - 可能来自 City 本地配置、默认 base，或 `city` CLI 的 admin base 列表。
+   * - 可能来自 Downcity 本地配置、默认 Federation，或 Federation 管理端保存的列表。
    * - 若未显式设置，通常回退为 URL hostname。
    */
   name: string;
@@ -37,7 +37,7 @@ export interface FederationProfile {
   /**
    * Federation 来源。
    */
-  source: "city" | "city-admin" | "default";
+  source: "downcity-profile" | "federation-admin" | "default";
 
   /**
    * 该 Federation 是否由 `downfed` CLI 保存了有效管理员会话。
@@ -49,15 +49,15 @@ export interface FederationProfile {
   has_admin_session: boolean;
 
   /**
-   * 该 Federation 是否已有 City user session。
+   * 该 Federation 是否已有 Embassy User Session。
    *
    * 说明（中文）
-   * - user session 由 City 自身维护，不从 `downfed` admin 配置导入。
+   * - 用户 Session 由 Embassy 登录流程维护，不从 Federation Admin 配置导入。
    */
   has_user_session: boolean;
 
   /**
-   * City user session 中绑定的 bureau_id。
+   * Embassy User Session 中绑定的 bureau_id。
    *
    * 说明（中文）
    * - 为空表示未登录或 session 文件不可用。
@@ -65,7 +65,7 @@ export interface FederationProfile {
   bureau_id?: string;
 
   /**
-   * City user session 中的用户 ID。
+   * Embassy User Session 中的 Federation User ID。
    *
    * 说明（中文）
    * - 只用于状态展示，不参与权限判断。
@@ -83,7 +83,7 @@ export interface FederationMembershipState {
   federation_url: string;
 
   /**
-   * 当前 City user session 使用的 bureau_id。
+   * 当前 Embassy User Session 使用的 bureau_id。
    */
   bureau_id: string;
 
@@ -92,7 +92,7 @@ export interface FederationMembershipState {
    *
    * 说明（中文）
    * - 只展示存在性，不输出 token 明文。
-   * - Agent runtime 缺少 user token 时无法调用 City 用户态服务。
+   * - Agent runtime 缺少 User Token 时无法调用 Federation 用户态服务。
    */
   has_user_token: boolean;
 
@@ -100,13 +100,13 @@ export interface FederationMembershipState {
    * 连接来源。
    *
    * 说明（中文）
-   * - `city-session` 表示 City 已在当前 Federation 登录 user。
-   * - `city-base` 表示 City 已选择 Federation，但尚未登录 user。
-   * - `city-admin` 表示当前 Federation 来自 `downfed` admin 配置候选。
+   * - `embassy-session` 表示 Downcity 已在当前 Federation 登录用户。
+   * - `downcity-profile` 表示已选择 Federation，但尚未登录用户。
+   * - `federation-admin` 表示当前 Federation 来自 `fed` 管理配置。
    * - `default` 表示使用默认 Federation。
    * - `missing` 表示没有可用成员资格。
    */
-  source: "city-session" | "city-base" | "city-admin" | "default" | "missing";
+  source: "embassy-session" | "downcity-profile" | "federation-admin" | "default" | "missing";
 
   /**
    * 当前登录用户 ID。

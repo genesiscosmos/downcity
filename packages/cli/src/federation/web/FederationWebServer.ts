@@ -12,7 +12,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
-import { EmbassyAdmin } from "@downcity/federation";
+import { Embassy, type EmbassyAdmin } from "@downcity/federation";
 import { login_federation_admin } from "@/federation/auth/admin.js";
 import { fetch_dashboard_raw_data } from "@/federation/admin/dashboard/dashboard-data.js";
 import { build_dashboard_snapshot } from "@/federation/admin/dashboard/dashboard-metrics.js";
@@ -142,10 +142,10 @@ async function handle_request(
       admin_state.session_token = session.session_token;
       admin_state.admin_id = session.admin_id;
       admin_state.expires_at = session.expires_at;
-      admin_state.admin = new EmbassyAdmin({
+      admin_state.admin = new Embassy({
         federation_url: context.federation_url,
         admin_token: session.session_token,
-      });
+      }).admin;
       send_json(response, 200, {
         authenticated: true,
         admin_id: session.admin_id,

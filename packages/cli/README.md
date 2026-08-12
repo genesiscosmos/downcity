@@ -40,6 +40,8 @@ city plugin action <plugin_name> <action_name> <agent_id> --input '{}'
 
 Agent 与 Plugin Binding 统一保存在全局数据库；Plugin 配置不进入 Agent SDK 的运行时 Plugin 对象。未传 `agent_id` 时，TTY 打开全局 Agent 选择器，非交互环境直接报错。
 
+Federation Admin 配置与 Embassy User Session 同样保存在 `~/.downcity/downcity.db`。升级后，CLI 会把旧 `~/.downcity/federation.db` 中的管理配置一次性迁入统一数据库；旧文件保留用于人工恢复，但后续不再读取。脚本可通过 `DOWNCITY_FEDERATION_URL` 和 `DOWNCITY_USER_TOKEN` 显式覆盖当前 Embassy 用户身份。
+
 为独立产品后端登记 Bureau：
 
 ```bash

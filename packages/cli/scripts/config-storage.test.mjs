@@ -87,6 +87,172 @@ test("Agent 配置只从全局 DB 读取", async () => {
   }
 });
 
+test("旧 Federation 管理配置一次性迁入 downcity.db", async () => {
+  const platform_root = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  process.env.DC_MODEL_DB_KEY = "federation-config-migration-test";
+  let reset_key_cache = () => {};
+  try {
+    const crypto = await import("../bin/city/runtime/store/crypto.js");
+    reset_key_cache = crypto.resetModelDbKeyCache;
+    reset_key_cache();
+    const { PlatformStore, create_federation_platform_store } = await import(
+      "../bin/city/runtime/store/index.js"
+    );
+    const legacy_store = new PlatformStore(path.join(platform_root, "federation.db"));
+    legacy_store.setSecureSettingJsonSync("federation.config", {
+      active_server_url: "https://legacy.example.com",
+      servers: [{
+        name: "legacy",
+        base_url: "https://legacy.example.com",
+      }],
+    });
+    legacy_store.close();
+
+    const unified_store = create_federation_platform_store();
+    assert.equal(
+      unified_store.getSecureSettingJsonSync("federation.config").active_server_url,
+      "https://legacy.example.com",
+    );
+    unified_store.setSecureSettingJsonSync("federation.config", {
+      active_server_url: "https://current.example.com",
+      servers: [],
+    });
+    unified_store.close();
+
+    const changed_legacy_store = new PlatformStore(path.join(platform_root, "federation.db"));
+    changed_legacy_store.setSecureSettingJsonSync("federation.config", {
+      active_server_url: "https://stale.example.com",
+      servers: [],
+    });
+    changed_legacy_store.close();
+
+    const reopened_store = create_federation_platform_store();
+    assert.equal(
+      reopened_store.getSecureSettingJsonSync("federation.config").active_server_url,
+      "https://current.example.com",
+    );
+    reopened_store.close();
+    assert.equal(fs.existsSync(path.join(platform_root, "downcity.db")), true);
+  } finally {
+    reset_key_cache();
+    delete process.env.DC_PLATFORM_ROOT;
+    delete process.env.DC_MODEL_DB_KEY;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+  }
+});
+
+test("旧 City 状态 key 一次性迁入 Downcity 配置", async () => {
+  const platform_root = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  process.env.DC_MODEL_DB_KEY = "downcity-config-key-migration-test";
+  let reset_key_cache = () => {};
+  try {
+    const crypto = await import("../bin/city/runtime/store/crypto.js");
+    reset_key_cache = crypto.resetModelDbKeyCache;
+    reset_key_cache();
+    const { create_downcity_platform_store } = await import(
+      "../bin/city/runtime/store/index.js"
+    );
+    const store = create_downcity_platform_store();
+    store.setSecureSettingJsonSync("city.city.state", {
+      selected_federation_url: "https://legacy.example.com",
+      profiles: [{
+        name: "legacy",
+        federation_url: "https://legacy.example.com",
+      }],
+      sessions: {},
+    });
+    store.close();
+
+    const config_store = await import(
+      "../bin/city/shared/DowncityConfigStore.js"
+    );
+    const migrated = config_store.read_downcity_config();
+    assert.equal(migrated.selected_federation_url, "https://legacy.example.com");
+
+    const reopened_store = create_downcity_platform_store();
+    const persisted = reopened_store.getSecureSettingJsonSync("downcity.config");
+    reopened_store.close();
+    assert.equal(persisted.selected_federation_url, "https://legacy.example.com");
+  } finally {
+    reset_key_cache();
+    delete process.env.DC_PLATFORM_ROOT;
+    delete process.env.DC_MODEL_DB_KEY;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+  }
+});
+
+test("Embassy 会话只接受新的 Federation 身份环境变量", async () => {
+  const platform_root = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  process.env.DC_MODEL_DB_KEY = "embassy-session-env-test";
+  let reset_key_cache = () => {};
+  try {
+    const crypto = await import("../bin/city/runtime/store/crypto.js");
+    reset_key_cache = crypto.resetModelDbKeyCache;
+    reset_key_cache();
+    const { EmbassySessionResolver } = await import(
+      "../bin/city/shared/EmbassySessionResolver.js"
+    );
+    const resolver = new EmbassySessionResolver();
+    const current = await resolver.resolve_current_user({
+      env: {
+        DOWNCITY_FEDERATION_URL: "https://federation.example.com/",
+        DOWNCITY_USER_TOKEN: "current-user-token",
+      },
+      verify_user: false,
+    });
+    assert.equal(current.federation_url, "https://federation.example.com");
+    assert.equal(current.user_token, "current-user-token");
+    assert.equal(current.source, "env");
+    assert.deepEqual(current.env_overrides, {
+      federation_url: true,
+      user_token: true,
+    });
+
+    const legacy = await resolver.resolve_current_user({
+      env: {
+        DOWNCITY_CITY_URL: "https://legacy.example.com",
+        DOWNCITY_CITY_USER_TOKEN: "legacy-user-token",
+        CITY_URL: "https://older.example.com",
+        CITY_USER_TOKEN: "older-user-token",
+      },
+      require_user_token: false,
+      verify_user: false,
+    });
+    assert.equal(legacy.federation_url, "https://base.downcity.ai");
+    assert.equal(legacy.user_token, "");
+    assert.equal(legacy.source, "embassy-session");
+    assert.deepEqual(legacy.env_overrides, {
+      federation_url: false,
+      user_token: false,
+    });
+  } finally {
+    reset_key_cache();
+    delete process.env.DC_PLATFORM_ROOT;
+    delete process.env.DC_MODEL_DB_KEY;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+  }
+});
+
+test("平台 Env 不向 Workspace 泄漏新旧身份凭证", async () => {
+  const { strip_platform_session_env } = await import(
+    "../bin/city/env/ProcessEnv.js"
+  );
+  assert.deepEqual(strip_platform_session_env({
+    SAFE_VALUE: "kept",
+    DOWNCITY_FEDERATION_URL: "https://federation.example.com",
+    DOWNCITY_USER_TOKEN: "current-user-token",
+    DOWNCITY_CITY_URL: "https://legacy.example.com",
+    DOWNCITY_CITY_USER_TOKEN: "legacy-user-token",
+    CITY_URL: "https://older.example.com",
+    CITY_USER_TOKEN: "older-user-token",
+  }), {
+    SAFE_VALUE: "kept",
+  });
+});
+
 test("Daemon 状态按 agent_id 隔离在全局 runtime", async () => {
   const platform_root = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;

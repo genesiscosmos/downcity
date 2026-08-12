@@ -6,7 +6,8 @@
  */
 
 import {
-  EmbassyAdmin,
+  Embassy,
+  type EmbassyAdmin,
   type BureauTokenIssueResult,
   type BureauTokenSummary,
 } from "@downcity/federation";
@@ -137,10 +138,10 @@ function require_active_admin_server(): ServerProfile {
 }
 
 function create_federation_admin(server: ServerProfile): EmbassyAdmin {
-  return new EmbassyAdmin({
+  return new Embassy({
     federation_url: server.base_url,
     admin_token: server.admin_session_token!,
-  });
+  }).admin;
 }
 
 function require_value(value: unknown, name: string): string {

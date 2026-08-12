@@ -26,8 +26,8 @@ type RuntimeModelFactoryInput = {
    * 宿主显式注入的运行时 env。
    *
    * 关键点（中文）
-   * - 用于读取 DOWNCITY_CITY_URL / DOWNCITY_CITY_USER_TOKEN 覆盖项。
-   * - 未显式覆盖时回退到 `city city login` 保存的 user session。
+   * - 用于读取 DOWNCITY_FEDERATION_URL / DOWNCITY_USER_TOKEN 覆盖项。
+   * - 未显式覆盖时回退到 `city federation login` 保存的 Embassy Session。
    * - 不再读取 provider API Key。
    */
   env?: Record<string, string> | NodeJS.ProcessEnv;

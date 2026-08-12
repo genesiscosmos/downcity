@@ -9,9 +9,9 @@
 import {
   DEFAULT_FEDERATION_URL,
   list_federations,
-  normalizeCityUrl,
-  readCityString,
-} from "@/city/shared/CityStateStore.js";
+  normalize_federation_url,
+  read_downcity_string,
+} from "@/city/shared/DowncityConfigStore.js";
 import { t } from "@/shared/CliLocale.js";
 import prompts from "@/city/tui/Prompts.js";
 import type { FederationProfile } from "@/city/types/FederationMembership.js";
@@ -23,7 +23,7 @@ export async function prompt_city_url(): Promise<string | null> {
     message: "City URL",
     initial: DEFAULT_FEDERATION_URL,
   })) as { federation_url?: string };
-  const federation_url = normalizeCityUrl(String(response.federation_url || ""));
+  const federation_url = normalize_federation_url(String(response.federation_url || ""));
   return federation_url || null;
 }
 
@@ -44,7 +44,7 @@ export async function prompt_federation(): Promise<FederationProfile | null> {
     })),
     initial: Math.max(0, servers.findIndex((server) => server.selected)),
   })) as { federation_url?: string };
-  const federation_url = readCityString(response.federation_url);
+  const federation_url = read_downcity_string(response.federation_url);
   if (!federation_url) return null;
   return servers.find((server) => server.federation_url === federation_url) ?? null;
 }
@@ -87,7 +87,7 @@ export async function prompt_recharge_input(): Promise<{
   return {
     topup_amount_minor,
     method_id: "stripe",
-    note: readCityString(response.note),
+    note: read_downcity_string(response.note),
     open_checkout: response.open_checkout !== false,
   };
 }

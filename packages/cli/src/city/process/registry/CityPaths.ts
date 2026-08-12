@@ -3,8 +3,8 @@
  *
  * 关键点（中文）
  * - Downcity 的用户级根目录固定在 `~/.downcity/`，测试可用 `DC_PLATFORM_ROOT` 覆盖。
- * - `downcity.db` 保存 City 本地加密状态。
- * - `federation.db` 保存 downfed / Federation 管理端加密状态。
+ * - `downcity.db` 是 CLI 与 Desktop 全部持久化配置的唯一事实源。
+ * - `federation.db` 只作为历史管理端配置迁移源，不再承载运行时写入。
  * - Agent 项目列表等全局索引进入数据库，不再写 `main/agents.json`。
  */
 
@@ -81,7 +81,9 @@ export function get_agent_runtime_dir_path(agent_id: string): string {
 }
 
 /**
- * Federation 管理端 SQLite 数据库路径（用户级）。
+ * 旧 Federation 管理端 SQLite 数据库路径（用户级）。
+ *
+ * 关键点（中文）：该路径只用于一次性迁移历史配置，新配置统一写入 `downcity.db`。
  */
 export function getFederationStoreDbPath(): string {
   return path.join(getPlatformRootDirPath(), "federation.db");

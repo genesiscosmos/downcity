@@ -7,7 +7,7 @@
  * - user session 由 `city` 维护，本模块只负责 Federation admin 管理态。
  */
 
-import { createFederationPlatformStore } from "@/city/runtime/store/index.js";
+import { create_federation_platform_store } from "@/city/runtime/store/index.js";
 import { normalizeBaseUrl } from "@/federation/core/env.js";
 import type { CliLocale } from "@/shared/types/CliLocale.js";
 import type {
@@ -556,7 +556,7 @@ function deriveServerName(baseUrl: string): string {
 }
 
 function readStoredConfig(): Record<string, unknown> | undefined {
-  const store = createFederationPlatformStore();
+  const store = create_federation_platform_store();
   try {
     return store.getSecureSettingJsonSync<Record<string, unknown>>(FEDERATION_CONFIG_KEY) ?? undefined;
   } finally {
@@ -565,7 +565,7 @@ function readStoredConfig(): Record<string, unknown> | undefined {
 }
 
 function writeStoredConfig(config: ClientConfig): void {
-  const store = createFederationPlatformStore();
+  const store = create_federation_platform_store();
   try {
     store.setSecureSettingJsonSync(FEDERATION_CONFIG_KEY, config);
   } finally {

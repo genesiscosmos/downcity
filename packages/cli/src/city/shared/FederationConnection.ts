@@ -10,38 +10,38 @@
 
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
-import { performCityUserLogin } from "@/city/shared/CityUserLogin.js";
+import { perform_embassy_user_login } from "@/city/shared/EmbassyUserLogin.js";
 import { open_city_manager_tui } from "@/city/tui/FederationManagerTui.js";
 import prompts from "@/city/tui/Prompts.js";
-import { CityUserManager } from "@/city/shared/CityUserManager.js";
+import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
 import type {
   FederationMembershipState,
   FederationProfile,
 } from "@/city/types/FederationMembership.js";
-import type { CityUserSession } from "@/city/types/CitySession.js";
+import type { EmbassyUserSession } from "@/city/types/EmbassySession.js";
 import {
   DEFAULT_FEDERATION_URL,
   DEFAULT_BUREAU_ID,
   list_federations,
-  normalizeCityUrl,
-  read_city_admin_session_for_url,
-  read_current_city_session,
-  readCityState,
+  normalize_federation_url,
+  read_federation_admin_session_for_url,
+  read_current_embassy_session,
+  read_downcity_config,
   resolve_selected_federation_url,
   upsert_federation_profile,
-  writeCityState,
-} from "@/city/shared/CityStateStore.js";
-const cityUserManager = new CityUserManager();
+  write_downcity_config,
+} from "@/city/shared/DowncityConfigStore.js";
+const embassy_session_resolver = new EmbassySessionResolver();
 
 export function read_city_admin_session_for_federation(federation_url: string): string | undefined {
-  return read_city_admin_session_for_url(federation_url);
+  return read_federation_admin_session_for_url(federation_url);
 }
 
 function find_federation(input?: string): FederationProfile | null {
   const query = String(input || "").trim();
   const servers = list_federations();
   if (!query) return servers.find((server) => server.selected) ?? servers[0] ?? null;
-  const normalized_query_url = normalizeCityUrl(query);
+  const normalized_query_url = normalize_federation_url(query);
   return servers.find((server) =>
     server.name === query ||
     server.federation_url === normalized_query_url ||
@@ -50,7 +50,7 @@ function find_federation(input?: string): FederationProfile | null {
 }
 
 export function read_federation_membership_state(): FederationMembershipState {
-  const state = readCityState();
+  const state = read_downcity_config();
   const federation_url = resolve_selected_federation_url(state);
   const session = state.sessions?.[federation_url] ?? null;
   if (session?.user_token) {
@@ -58,7 +58,7 @@ export function read_federation_membership_state(): FederationMembershipState {
       federation_url,
       bureau_id: session.bureau_id,
       has_user_token: true,
-      source: "city-session",
+      source: "embassy-session",
       user_id: session.user_id,
       user_label: session.user_label,
     };
@@ -69,10 +69,10 @@ export function read_federation_membership_state(): FederationMembershipState {
     federation_url,
     bureau_id: DEFAULT_BUREAU_ID,
     has_user_token: false,
-    source: server?.source === "city-admin"
-      ? "city-admin"
-      : server?.source === "city"
-        ? "city-base"
+    source: server?.source === "federation-admin"
+      ? "federation-admin"
+      : server?.source === "downcity-profile"
+        ? "downcity-profile"
         : "default",
   };
 }
@@ -111,7 +111,7 @@ export function emit_federation_status(options?: { as_json?: boolean }): void {
 
 export async function emitCityUserWhoami(options?: { as_json?: boolean }): Promise<void> {
   try {
-    const user = await cityUserManager.resolveCurrentUser();
+    const user = await embassy_session_resolver.resolve_current_user();
     if (options?.as_json === true) {
       printResult({
         asJson: true,
@@ -202,7 +202,7 @@ export async function run_federation_join_command(params: {
   url?: string;
   as_json?: boolean;
 }): Promise<void> {
-  let federation_url = normalizeCityUrl(String(params.url || ""));
+  let federation_url = normalize_federation_url(String(params.url || ""));
 
   if (!federation_url && process.stdin.isTTY && process.stdout.isTTY) {
     const response = (await prompts({
@@ -211,13 +211,13 @@ export async function run_federation_join_command(params: {
       message: "Federation URL",
       initial: DEFAULT_FEDERATION_URL,
     })) as { federation_url?: string };
-    federation_url = normalizeCityUrl(String(response.federation_url || ""));
+    federation_url = normalize_federation_url(String(response.federation_url || ""));
   }
 
   if (!federation_url) federation_url = DEFAULT_FEDERATION_URL;
 
-  const state = upsert_federation_profile(readCityState(), { federation_url });
-  writeCityState(state);
+  const state = upsert_federation_profile(read_downcity_config(), { federation_url });
+  write_downcity_config(state);
 
   printResult({
     asJson: params.as_json === true,
@@ -248,11 +248,11 @@ export async function run_federation_use_command(params: {
     return;
   }
 
-  const state = upsert_federation_profile(readCityState(), {
+  const state = upsert_federation_profile(read_downcity_config(), {
     federation_url: server.federation_url,
     name: server.name,
   });
-  writeCityState(state);
+  write_downcity_config(state);
 
   printResult({
     asJson: params.as_json === true,
@@ -267,15 +267,15 @@ export async function run_federation_use_command(params: {
   });
 }
 
-function save_federation_user_session(session: CityUserSession): void {
-  const state = upsert_federation_profile(readCityState(), {
+function save_federation_user_session(session: EmbassyUserSession): void {
+  const state = upsert_federation_profile(read_downcity_config(), {
     federation_url: session.federation_url,
   });
   const sessions = {
     ...(state.sessions ?? {}),
     [session.federation_url]: session,
   };
-  writeCityState({
+  write_downcity_config({
     ...state,
     selected_federation_url: session.federation_url,
     sessions,
@@ -288,17 +288,17 @@ export async function run_federation_login_command(params: {
   as_json?: boolean;
 }): Promise<void> {
   if (params.url) {
-    const federation_url = normalizeCityUrl(params.url);
+    const federation_url = normalize_federation_url(params.url);
     if (federation_url) {
-      writeCityState(upsert_federation_profile(readCityState(), { federation_url }));
+      write_downcity_config(upsert_federation_profile(read_downcity_config(), { federation_url }));
     }
   }
-  const state = readCityState();
+  const state = read_downcity_config();
   const federation_url = resolve_selected_federation_url(state);
   const bureau_id = params.bureau_id
-    ?? read_current_city_session()?.bureau_id
+    ?? read_current_embassy_session()?.bureau_id
     ?? DEFAULT_BUREAU_ID;
-  const session = await performCityUserLogin({
+  const session = await perform_embassy_user_login({
     federation_url,
     bureau_id,
   });
@@ -327,11 +327,11 @@ export async function run_federation_login_command(params: {
 }
 
 export function run_federation_logout_command(options?: { as_json?: boolean }): void {
-  const state = readCityState();
+  const state = read_downcity_config();
   const federation_url = resolve_selected_federation_url(state);
   const sessions = { ...(state.sessions ?? {}) };
   delete sessions[federation_url];
-  writeCityState({
+  write_downcity_config({
     ...state,
     sessions,
   });
@@ -346,12 +346,12 @@ export function run_federation_logout_command(options?: { as_json?: boolean }): 
 }
 
 export function run_federation_leave_command(options?: { as_json?: boolean }): void {
-  const state = readCityState();
+  const state = read_downcity_config();
   const federation_url = resolve_selected_federation_url(state);
   const profiles = (state.profiles ?? []).filter((profile) => profile.federation_url !== federation_url);
   const sessions = { ...(state.sessions ?? {}) };
   delete sessions[federation_url];
-  writeCityState({
+  write_downcity_config({
     ...state,
     selected_federation_url: undefined,
     profiles,

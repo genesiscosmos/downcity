@@ -14,6 +14,8 @@ The Downcity package installs two independent tools:
 
 An Agent is a global entity identified by `agent_id`; its Workspace path is only a mutable binding. Agents, plugin bindings, and tokens live in `~/.downcity/downcity.db`. Global Env lives in `~/.downcity/.env`, Workspace Env lives in the project `.env`, and daemon files live in `~/.downcity/runtimes/<agent_id>/`.
 
+Federation Admin configuration and Embassy User Sessions also live in `~/.downcity/downcity.db`. On upgrade, administration configuration in the legacy `~/.downcity/federation.db` is migrated once. The old file remains available for manual recovery but is no longer read at runtime.
+
 Plugin artifacts are installed globally under `~/.downcity/plugins/`. Plugin configuration is not stored on the Agent SDK runtime Plugin object. It is stored per `agent_id + plugin_name` in an Agent Plugin Binding.
 
 ## City commands
@@ -24,6 +26,8 @@ Plugin artifacts are installed globally under `~/.downcity/plugins/`. Plugin con
 | `city plugin` | Manage plugin artifacts, bindings, config, and actions |
 | `city env` | Manage environment variables injected by City |
 | `city federation` | Manage Federation connections |
+
+Automation can override the current Embassy user identity with `DOWNCITY_FEDERATION_URL` and `DOWNCITY_USER_TOKEN`. The legacy `DOWNCITY_CITY_URL`, `DOWNCITY_CITY_USER_TOKEN`, `CITY_URL`, and `CITY_USER_TOKEN` variables are no longer parsed.
 
 `city init`, `city update`, and `city config` are no longer provided. Upgrade globally with `npm i -g downcity@latest`.
 

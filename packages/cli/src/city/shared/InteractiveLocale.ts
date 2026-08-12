@@ -3,12 +3,12 @@
  *
  * 关键点（中文）
  * - 统一承载 `city` 交互菜单中的语言选择逻辑，避免首页与 City 管理器重复实现。
- * - 写入 City 本地状态后立即更新进程内语言，保证后续菜单即时生效。
+ * - 写入 Downcity 本地配置后立即更新进程内语言，保证后续菜单即时生效。
  */
 
 import prompts from "@/city/tui/Prompts.js";
 import type { CliLocale } from "@/shared/types/CliLocale.js";
-import { writePersistedCityCliLocale } from "@/city/shared/CityStateStore.js";
+import { write_persisted_downcity_cli_locale } from "@/city/shared/DowncityConfigStore.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { getCliLocale, setCliLocale, t } from "@/shared/CliLocale.js";
 
@@ -68,7 +68,7 @@ export async function promptAndPersistCityCliLocale(
   }
 
   setCliLocale(cli_locale);
-  writePersistedCityCliLocale(cli_locale);
+  write_persisted_downcity_cli_locale(cli_locale);
   if (options?.silent !== true) {
     emitCliBlock({
       tone: "success",

@@ -9,15 +9,15 @@
 import {
   DEFAULT_BUREAU_ID,
   list_federations,
-  read_current_city_session,
-  readPersistedCityCliLocale,
-  readCityState,
+  read_current_embassy_session,
+  read_persisted_downcity_cli_locale,
+  read_downcity_config,
   resolve_selected_federation_url,
   upsert_federation_profile,
-  writeCityState,
-} from "@/city/shared/CityStateStore.js";
-import { performCityUserLogin } from "@/city/shared/CityUserLogin.js";
-import { CityUserManager } from "@/city/shared/CityUserManager.js";
+  write_downcity_config,
+} from "@/city/shared/DowncityConfigStore.js";
+import { perform_embassy_user_login } from "@/city/shared/EmbassyUserLogin.js";
+import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
 import {
   readCurrentCityBalance,
   rechargeCurrentCityUser,
@@ -44,7 +44,7 @@ import {
 } from "@/city/tui/FederationManagerFormat.js";
 import type { FederationMembershipState, FederationProfile } from "@/city/types/FederationMembership.js";
 import type { CityBalanceAccount } from "@/city/types/CityBalance.js";
-import type { CityUserSession } from "@/city/types/CitySession.js";
+import type { EmbassyUserSession } from "@/city/types/EmbassySession.js";
 import type { tui_list_item } from "@/city/types/Tui.js";
 
 /** Federation 管理器可选动作。 */
@@ -87,10 +87,10 @@ export interface city_manager_state {
   initial_action?: city_manager_action;
 }
 
-const cityUserManager = new CityUserManager();
+const embassy_session_resolver = new EmbassySessionResolver();
 
 export function read_federation_membership_state(): FederationMembershipState {
-  const state = readCityState();
+  const state = read_downcity_config();
   const federation_url = resolve_selected_federation_url(state);
   const session = state.sessions?.[federation_url] ?? null;
   if (session?.user_token) {
@@ -98,7 +98,7 @@ export function read_federation_membership_state(): FederationMembershipState {
       federation_url,
       bureau_id: session.bureau_id,
       has_user_token: true,
-      source: "city-session",
+      source: "embassy-session",
       user_id: session.user_id,
       user_label: session.user_label,
     };
@@ -109,23 +109,23 @@ export function read_federation_membership_state(): FederationMembershipState {
     federation_url,
     bureau_id: DEFAULT_BUREAU_ID,
     has_user_token: false,
-    source: server?.source === "city-admin"
-      ? "city-admin"
-      : server?.source === "city"
-        ? "city-base"
+    source: server?.source === "federation-admin"
+      ? "federation-admin"
+      : server?.source === "downcity-profile"
+        ? "downcity-profile"
         : "default",
   };
 }
 
-export function save_city_user_session(session: CityUserSession): void {
-  const state = upsert_federation_profile(readCityState(), {
+export function save_city_user_session(session: EmbassyUserSession): void {
+  const state = upsert_federation_profile(read_downcity_config(), {
     federation_url: session.federation_url,
   });
   const sessions = {
     ...(state.sessions ?? {}),
     [session.federation_url]: session,
   };
-  writeCityState({
+  write_downcity_config({
     ...state,
     selected_federation_url: session.federation_url,
     sessions,
@@ -294,7 +294,7 @@ function build_city_items(params: {
     {
       id: "language",
       title: t({ zh: "切换语言", en: "Language" }),
-      subtitle: format_locale_description(readPersistedCityCliLocale() ?? getCliLocale()),
+      subtitle: format_locale_description(read_persisted_downcity_cli_locale() ?? getCliLocale()),
       detail: t({
         zh: "切换 City CLI 的默认语言，并保存到本地。",
         en: "Switch the default City CLI language and persist it locally.",
@@ -344,7 +344,7 @@ export async function handle_city_action(params: {
   if (params.action === "whoami") {
     params.set_detail(loading_text(t({ zh: "正在读取当前账号", en: "Reading current account" })));
     try {
-      const user = await cityUserManager.resolveCurrentUser();
+      const user = await embassy_session_resolver.resolve_current_user();
       await params.refresh_state({
         keep_action: "whoami",
         detail_override: format_current_user_detail(user),
@@ -362,11 +362,11 @@ export async function handle_city_action(params: {
   }
 
   if (params.action === "logout") {
-    const federation_url = resolve_selected_federation_url(readCityState());
-    const state = readCityState();
+    const federation_url = resolve_selected_federation_url(read_downcity_config());
+    const state = read_downcity_config();
     const sessions = { ...(state.sessions ?? {}) };
     delete sessions[federation_url];
-    writeCityState({ ...state, sessions });
+    write_downcity_config({ ...state, sessions });
     await params.refresh_state({
       keep_action: "login",
       detail_override: t({
@@ -393,7 +393,7 @@ export async function handle_city_prompt_action(
         detail_override: t({ zh: "已取消添加 City。", en: "Join Federation cancelled." }),
       };
     }
-    writeCityState(upsert_federation_profile(readCityState(), { federation_url }));
+    write_downcity_config(upsert_federation_profile(read_downcity_config(), { federation_url }));
     return {
       initial_action: "status",
       detail_override: t({
@@ -423,9 +423,9 @@ export async function handle_city_prompt_action(
 
   if (action === "login") {
     const membership = read_federation_membership_state();
-    const session = await performCityUserLogin({
+    const session = await perform_embassy_user_login({
       federation_url: membership.federation_url,
-      bureau_id: read_current_city_session()?.bureau_id ?? DEFAULT_BUREAU_ID,
+      bureau_id: read_current_embassy_session()?.bureau_id ?? DEFAULT_BUREAU_ID,
     });
     if (!session) {
       return {
@@ -493,7 +493,7 @@ export function is_prompt_action(action: city_manager_action): boolean {
     action === "language";
 }
 export function select_federation(server: FederationProfile): void {
-  writeCityState(upsert_federation_profile(readCityState(), {
+  write_downcity_config(upsert_federation_profile(read_downcity_config(), {
     federation_url: server.federation_url,
     name: server.name,
   }));

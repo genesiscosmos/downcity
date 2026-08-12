@@ -27,6 +27,9 @@ import {
   setSecureSettingJsonSync,
 } from "@/city/runtime/store/StoreSecureSettings.js";
 
+const FEDERATION_CONFIG_KEY = "federation.config";
+const FEDERATION_STORE_MIGRATION_KEY = "migration.federation_store_to_downcity_db.v1";
+
 /**
  * 平台控制面全局存储门面。
  */
@@ -160,17 +163,52 @@ export class PlatformStore {
 }
 
 /**
- * 创建 City 本地状态存储。
+ * 创建 Downcity 统一平台存储。
  */
-export function createCityPlatformStore(): PlatformStore {
+export function create_downcity_platform_store(): PlatformStore {
   return new PlatformStore(getPlatformStoreDbPath());
 }
 
 /**
  * 创建 Federation 管理端状态存储。
  */
-export function createFederationPlatformStore(): PlatformStore {
-  return new PlatformStore(getFederationStoreDbPath());
+export function create_federation_platform_store(): PlatformStore {
+  const store = new PlatformStore(getPlatformStoreDbPath());
+  migrate_federation_config(store);
+  return store;
+}
+
+/**
+ * 把旧 `federation.db` 中的管理端配置一次性迁入统一的 `downcity.db`。
+ *
+ * 关键点（中文）
+ * - 迁移只在统一仓储尚未记录完成标记时执行。
+ * - 新仓储已有配置时绝不被旧数据覆盖。
+ * - 旧数据库保留在原处作为人工恢复副本，运行时不再持续读取。
+ */
+function migrate_federation_config(store: PlatformStore): void {
+  if (store.getSecureSettingJsonSync<boolean>(FEDERATION_STORE_MIGRATION_KEY) === true) {
+    return;
+  }
+
+  const legacy_db_path = getFederationStoreDbPath();
+  if (
+    legacy_db_path !== getPlatformStoreDbPath()
+    && fs.existsSync(legacy_db_path)
+    && store.getSecureSettingJsonSync<unknown>(FEDERATION_CONFIG_KEY) === null
+  ) {
+    const legacy_store = new PlatformStore(legacy_db_path);
+    try {
+      const legacy_config = legacy_store.getSecureSettingJsonSync<unknown>(FEDERATION_CONFIG_KEY);
+      if (legacy_config !== null) {
+        store.setSecureSettingJsonSync(FEDERATION_CONFIG_KEY, legacy_config);
+      }
+    } finally {
+      legacy_store.close();
+    }
+  }
+
+  store.setSecureSettingJsonSync(FEDERATION_STORE_MIGRATION_KEY, true);
 }
 
 /**

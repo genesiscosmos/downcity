@@ -6,7 +6,7 @@
  * - City 连接配置、管理员重新登录等低频操作通过 `更多` 回调交给 workspace 层处理。
  */
 
-import { EmbassyAdmin } from "@downcity/federation";
+import { Embassy, type EmbassyAdmin } from "@downcity/federation";
 import { type AdminSession } from "@/federation/core/session.js";
 import { adminErrorMessage, isAdminAuthError } from "@/federation/admin/auth-error.js";
 import { create_admin_tui_runtime } from "@/federation/tui/AdminTuiRuntime.js";
@@ -45,10 +45,10 @@ export async function adminLoop(
     runtime?: admin_tui_runtime;
   },
 ): Promise<"logout" | "quit" | "switch_identity" | "back"> {
-  const admin = new EmbassyAdmin({
+  const admin = new Embassy({
     federation_url: session.base_url,
     admin_token: session.session_token,
-  });
+  }).admin;
   const embedded = options?.embedded !== false;
   const runtime = options?.runtime ?? create_admin_tui_runtime(options?.title ?? "Admin");
 

@@ -1,18 +1,18 @@
 /**
- * City 本地状态类型。
+ * Downcity 本地配置类型。
  *
  * 关键点（中文）
- * - 只描述 City 自己保存的 Federation 与 session 索引。
- * - `city` CLI 的 admin 配置只作为弱发现来源读取。
+ * - 只描述 Downcity 保存的 Federation 与 Embassy Session 索引。
+ * - Federation 管理员配置只作为弱发现来源读取。
  */
 
-import type { CityUserSession } from "@/city/types/CitySession.js";
+import type { EmbassyUserSession } from "@/city/types/EmbassySession.js";
 import type { CliLocale } from "@/shared/types/CliLocale.js";
 
 /**
- * `city` CLI admin 配置文件结构。
+ * Federation 管理员配置结构。
  */
-export interface CityAdminConfig {
+export interface FederationAdminConfig {
   /**
    * `downfed` admin 当前激活的 Federation URL。
    */
@@ -40,9 +40,9 @@ export interface CityAdminConfig {
 }
 
 /**
- * City 本地保存的 Federation。
+ * Downcity 本地保存的 Federation。
  */
-export interface CityLocalProfile {
+export interface DowncityFederationProfile {
   /**
    * base 展示名称。
    */
@@ -55,9 +55,9 @@ export interface CityLocalProfile {
 }
 
 /**
- * City 本地保存的 City user 连接状态。
+ * Downcity 本地配置。
  */
-export interface CityLocalState {
+export interface DowncityConfig {
   /**
    * 当前选择的 Federation URL。
    */
@@ -69,12 +69,12 @@ export interface CityLocalState {
   cli_locale?: CliLocale;
 
   /**
-   * City 本地保存的 Federation 列表。
+   * Downcity 本地保存的 Federation 列表。
    */
-  profiles?: CityLocalProfile[];
+  profiles?: DowncityFederationProfile[];
 
   /**
-   * 按 City base URL 索引的 user session。
+   * 按 Federation URL 索引的 Embassy User Session。
    */
-  sessions?: Record<string, CityUserSession>;
+  sessions?: Record<string, EmbassyUserSession>;
 }

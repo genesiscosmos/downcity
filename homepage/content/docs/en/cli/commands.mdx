@@ -103,6 +103,11 @@ Agents bound to the same Workspace share one project `.env`. Runtime precedence 
 then Workspace `.env`, then explicit process environment variables. `list` never prints plaintext
 values; `copy` requires an explicit local CLI invocation.
 
+Federation user requests go through Embassy. Interactive sessions are stored in
+`~/.downcity/downcity.db`; automation can explicitly override the current session with
+`DOWNCITY_FEDERATION_URL` and `DOWNCITY_USER_TOKEN`. These identity variables are never injected
+from Global `.env` into Workspace processes.
+
 ## Fed
 
 ```bash

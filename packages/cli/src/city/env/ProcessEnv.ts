@@ -16,12 +16,15 @@ import { get_platform_env_file_path } from "@/city/process/registry/CityPaths.js
 import { read_env_file_sync } from "@/city/env/EnvFileStore.js";
 
 const PLATFORM_SESSION_ENV_KEYS = new Set([
-  "CITY_URL",
-  "CITY_USER_TOKEN",
   "DC_AUTH_TOKEN",
   "DC_AGENT_TOKEN",
+  "DOWNCITY_FEDERATION_URL",
+  "DOWNCITY_USER_TOKEN",
+  // 旧身份变量已停止解析，但仍禁止从全局 `.env` 泄漏到 Workspace 进程。
   "DOWNCITY_CITY_URL",
   "DOWNCITY_CITY_USER_TOKEN",
+  "CITY_URL",
+  "CITY_USER_TOKEN",
 ]);
 
 /**

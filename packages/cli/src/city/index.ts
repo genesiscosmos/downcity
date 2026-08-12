@@ -17,7 +17,7 @@ import { registerGatewayCommands } from "@/city/command/GatewayCommand.js";
 import { registerPluginsCommand } from "@/city/command/PluginCommand.js";
 import { register_web_command } from "@/city/command/WebCommand.js";
 import { runInteractiveCityManager } from "@/city/shared/CityManager.js";
-import { readPersistedCityCliLocale } from "@/city/shared/CityStateStore.js";
+import { read_persisted_downcity_cli_locale } from "@/city/shared/DowncityConfigStore.js";
 import { setCliVerbosity } from "@/shared/CliReporter.js";
 import {
   helpText,
@@ -117,7 +117,7 @@ export async function runDowncityCli(): Promise<void> {
   const invoked_name = resolveInvokedName();
   const cli_locale = resolveCliLocale({
     argv,
-    persisted_locale: readPersistedCityCliLocale(),
+    persisted_locale: read_persisted_downcity_cli_locale(),
   });
   setCliLocale(cli_locale);
 

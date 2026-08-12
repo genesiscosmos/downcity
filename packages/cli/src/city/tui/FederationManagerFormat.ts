@@ -7,7 +7,7 @@
  */
 
 import { t } from "@/shared/CliLocale.js";
-import { CityUserManager } from "@/city/shared/CityUserManager.js";
+import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
 import { is_disabled_selectable_item } from "@/city/tui/SelectableList.js";
 import type { city_manager_state } from "@/city/tui/FederationManagerState.js";
 import type { FederationMembershipState, FederationProfile } from "@/city/types/FederationMembership.js";
@@ -145,7 +145,7 @@ export function format_balance_detail(account: CityBalanceAccount): string {
   ].join("\n");
 }
 
-export function format_current_user_detail(user: Awaited<ReturnType<CityUserManager["resolveCurrentUser"]>>): string {
+export function format_current_user_detail(user: Awaited<ReturnType<EmbassySessionResolver["resolve_current_user"]>>): string {
   return [
     `{bold}${t({ zh: "当前账号", en: "Current account" })}{/bold}`,
     `URL: ${user.federation_url}`,
