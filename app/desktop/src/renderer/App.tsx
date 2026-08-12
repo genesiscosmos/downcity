@@ -20,9 +20,12 @@ export function App() {
     if (!controller.selection || !selected_agent) return <WelcomeView />;
     if (controller.selection.kind === "agent") return <AgentView
       agent={selected_agent}
+      workspaces={controller.workspaces}
+      workspace_id={controller.workspace_id_by_agent[selected_agent.agent_id] ?? ""}
       runtime_state={controller.runtime_by_agent[selected_agent.agent_id] ?? "idle"}
       session_count={(controller.sessions_by_agent[selected_agent.agent_id] ?? []).length}
       connect_agent={() => controller.connect_agent(selected_agent.agent_id)}
+      select_workspace={(workspace_id) => controller.select_workspace(selected_agent.agent_id, workspace_id)}
       create_session={() => controller.create_session(selected_agent.agent_id)}
     />;
     const selected_session_id = controller.selection.session_id;

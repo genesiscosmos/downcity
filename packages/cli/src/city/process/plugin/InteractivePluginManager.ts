@@ -265,7 +265,6 @@ async function prompt_agent_id(): Promise<string | null> {
     message: "选择 Agent",
     choices: agents.map((agent) => ({
       title: agent.agent_id,
-      description: agent.workspace_path,
       value: agent.agent_id,
     })),
   });

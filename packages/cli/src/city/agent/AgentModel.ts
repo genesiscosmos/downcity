@@ -119,7 +119,6 @@ export async function configure_agent_model(
   const agent = resolve_agent_target(agent_id_input);
   const config = get_managed_agent(agent.agent_id);
   if (!config) throw new Error(`Agent not found: ${agent.agent_id}`);
-  const project_root = config.workspace_path;
   const previous_model_id = read_agent_default_model_id(agent.agent_id);
   const selected_model_id = await resolve_model_id({
     current_model_id: previous_model_id,
@@ -132,7 +131,6 @@ export async function configure_agent_model(
   if (changed) update_agent_default_model(agent.agent_id, selected_model_id);
 
   const result: AgentModelConfigurationResult = {
-    project_root,
     agent_id: agent.agent_id,
     previous_model_id,
     current_model_id: selected_model_id,

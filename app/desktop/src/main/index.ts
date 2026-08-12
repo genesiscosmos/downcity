@@ -6,6 +6,7 @@ import { AgentController } from "@/agent/AgentController.js";
 
 const current_directory = path.dirname(fileURLToPath(import.meta.url));
 const agent_controller = new AgentController();
+let quitting = false;
 
 function create_window(): BrowserWindow {
   const window = new BrowserWindow({
@@ -28,7 +29,8 @@ function create_window(): BrowserWindow {
 
 ipcMain.handle("agent:list", () => agent_controller.list_agents());
 ipcMain.handle("agent:create", (_event, agent_id: string, workspace_path: string, model_id: string) => agent_controller.create_agent(agent_id, workspace_path, model_id));
-ipcMain.handle("agent:connect", (_event, agent_id: string) => agent_controller.connect_agent(agent_id));
+ipcMain.handle("workspace:list", () => agent_controller.list_workspaces());
+ipcMain.handle("agent:connect", (_event, agent_id: string, workspace_id: string) => agent_controller.connect_agent(agent_id, workspace_id));
 ipcMain.handle("chat:list-sessions", (_event, agent_id: string) => agent_controller.list_sessions(agent_id));
 ipcMain.handle("chat:create-session", (_event, agent_id: string) => agent_controller.create_session(agent_id));
 ipcMain.handle("chat:list-messages", (_event, agent_id: string, session_id: string) => agent_controller.list_messages(agent_id, session_id));
@@ -36,4 +38,9 @@ ipcMain.handle("chat:send", (_event, agent_id: string, session_id: string, text:
 
 app.whenReady().then(() => { create_window(); app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) create_window(); }); });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
-app.on("before-quit", () => { void agent_controller.dispose(); });
+app.on("before-quit", (event) => {
+  if (quitting) return;
+  event.preventDefault();
+  quitting = true;
+  void agent_controller.dispose().finally(() => app.quit());
+});

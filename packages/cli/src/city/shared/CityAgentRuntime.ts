@@ -40,10 +40,11 @@ export async function resolveRunningManagedAgents(_params?: {
       continue;
     }
     const meta = await readDaemonMeta(entry.agent_id);
+    if (!meta) continue;
 
     views.push({
       agent_id: entry.agent_id,
-      workspace_path: entry.workspace_path,
+      workspace_path: meta.workspace_path,
       daemon_pid,
       running: true,
       started_at: meta?.started_at ?? "",

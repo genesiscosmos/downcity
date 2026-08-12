@@ -11,7 +11,7 @@ description: City 与 Fed 的常用命令
 city agent                         # 打开 Agent 面板
 city agent create [path]           # 不传路径：当前目录或系统文件夹选择窗口
 city agent list
-city agent start [agent_id]
+city agent start [agent_id] --workspace <workspace-id-or-path>
 city agent stop [agent_id]
 city agent restart [agent_id]
 city agent status [agent_id]
@@ -25,6 +25,8 @@ city web --no-open --port 43128  # 不自动打开浏览器并指定端口
 `city agent start` 装配的 Agent 默认启用 `ask_question` Tool。在
 `city agent chat` 中，模型需要关键补充信息时会显示文本、单选或多选面板；CLI 将完整答案
 提交给当前 Session，并继续同一个 Turn。按 Esc 可停止当前 Turn。
+
+Agent 与 Workspace 独立登记。省略 `--workspace` 时，CLI 依次尝试当前 daemon 的 Workspace、当前目录对应的已登记 Workspace 和唯一 Workspace；仍有多个候选时在 TTY 中选择。非交互环境存在多个 Workspace 时必须显式传入 `--workspace`。
 
 在输入框中可以使用 slash command 打开系统文件选择器并添加本地附件：
 
@@ -93,12 +95,12 @@ city env delete <key> --agent <agent_id>
 city federation
 ```
 
-Global Env 写入 `~/.downcity/.env`；Agent Env 写入其 Workspace 根目录的 `.env`。也可以从
-`city agent` 的“配置 Env”入口管理选中 Agent。修改完成后，City 会通知受影响的运行中
+Global Env 写入 `~/.downcity/.env`；Workspace Env 写入项目根目录的 `.env`。也可以从
+`city agent` 的“配置 Env”入口选择运行中的 Agent 所使用的 Workspace。修改完成后，City 会通知受影响的运行中
 Agent 重新加载 Env，并通过 Workspace 将新快照广播给已有 Session；已停止 Agent 会在下次
 启动时加载。
 
-多个 Agent 绑定同一 Workspace 时共享同一个项目 `.env`。运行时优先级为：Global `.env`
+多个 Agent 在同一 Workspace 运行时共享同一个项目 `.env`。运行时优先级为：Global `.env`
 低于 Workspace `.env`，启动进程显式环境变量最高。`list` 不显示明文值；`copy` 只允许从
 本机 CLI 显式执行。
 

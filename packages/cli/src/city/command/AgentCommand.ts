@@ -117,6 +117,10 @@ export function registerAgentCommands(
     }))
     .addOption(new context.hiddenPortOption("--port <port>").argParser(parsePort).hideHelp())
     .addOption(new context.hiddenPortOption("--rpc-port <port>").argParser(parsePort).hideHelp())
+    .option("--workspace <id-or-path>", t({
+      zh: "本次运行使用的 Workspace ID 或路径",
+      en: "Workspace ID or path for this runtime",
+    }))
     .option("-h, --host <host>", t({
       zh: "服务主机（默认 127.0.0.1）",
       en: "service host (default: 127.0.0.1)",
@@ -129,8 +133,8 @@ export function registerAgentCommands(
     .action(
       createVersionBanner(
         context.version,
-        async (agent_id: string | undefined, options: AgentStartOptions & { foreground?: boolean }) => {
-          const target = await resolve_cli_agent_target(agent_id);
+        async (agent_id: string | undefined, options: AgentStartOptions & { foreground?: boolean; workspace?: string }) => {
+          const target = await resolve_cli_agent_target(agent_id, options.workspace);
           const prepared = await prepareForegroundAgent(target, options);
           if (prepared.should_foreground) {
             await runCommand(prepared.target, prepared.options);

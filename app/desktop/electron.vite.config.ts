@@ -6,7 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin({ exclude: ["@downcity/agent", "@downcity/agent-registry"] })],
+    plugins: [externalizeDepsPlugin()],
     resolve: { alias: { "@": resolve("src/main") } },
     build: { rollupOptions: { output: { format: "es", entryFileNames: "[name].mjs" } } },
   },
@@ -27,7 +27,7 @@ export default defineConfig({
     server: {
       host: "127.0.0.1",
       port: 6173,
-      strictPort: true,
+      strictPort: false,
     },
   },
 });

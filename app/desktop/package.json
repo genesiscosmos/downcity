@@ -9,17 +9,21 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit && electron-vite build",
-    "build:unpack": "pnpm build && electron-builder --dir",
+    "build:icon": "bash scripts/build-icon.sh",
+    "build:unpack": "pnpm build:icon && pnpm build && electron-builder --dir",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit"
   },
   "dependencies": {
+    "@downcity/agent": "workspace:^",
+    "@downcity/agent-registry": "workspace:^",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "framer-motion": "^11.18.2",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-icons": "^5.5.0",
-    "tailwind-merge": "^2.2.0"
+    "tailwind-merge": "^2.2.0",
+    "downcity": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.17",
@@ -27,8 +31,6 @@
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
-    "@downcity/agent": "workspace:^",
-    "@downcity/agent-registry": "workspace:^",
     "electron": "^40.0.0",
     "electron-builder": "^25.1.8",
     "electron-vite": "^4.0.1",

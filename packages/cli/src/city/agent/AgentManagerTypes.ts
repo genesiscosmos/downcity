@@ -38,7 +38,8 @@ export type AgentManagerConfigAction =
 
 export interface AgentManagerAgentSummary {
   id: string;
-  project_root: string;
+  /** 当前 daemon 使用的 Workspace；停止状态时不存在。 */
+  project_root?: string;
   status: "running" | "stopped";
   execution_binding?: string;
 }

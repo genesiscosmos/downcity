@@ -29,6 +29,7 @@ import {
   save_managed_agent,
 } from "@/city/process/registry/ManagedAgentRepository.js";
 import { select_agent_create_workspace } from "@/city/agent/create/AgentCreateWorkspace.js";
+import { create_workspace } from "@/city/process/registry/WorkspaceRepository.js";
 
 type InitPromptResponse = {
   id?: string;
@@ -109,7 +110,7 @@ export async function initCommand(
     const confirm_response = (await prompts({
       type: "confirm",
       name: "overwrite",
-      message: `Agent "${agent_id}" already exists. Rebind it to this Workspace and replace its configuration?`,
+      message: `Agent "${agent_id}" already exists. Replace its configuration?`,
       initial: false,
     })) as { overwrite?: boolean };
     if (!confirm_response.overwrite) {
@@ -131,7 +132,6 @@ export async function initCommand(
   if (existing_agent && allowOverwrite) {
     save_managed_agent({
       agent_id,
-      workspace_path: project_root,
       version: "1.0.0",
       execution,
       created_at: existing_agent.created_at,
@@ -140,13 +140,14 @@ export async function initCommand(
   } else {
     create_managed_agent({
       agent_id,
-      workspace_path: project_root,
       execution,
     });
   }
+  create_workspace({ workspace_path: project_root });
   const createdItems = [
     ...initResult.created_files,
     "global managed agent",
+    "registered Workspace",
   ];
   const skippedItems = [...initResult.skipped_files];
 

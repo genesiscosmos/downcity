@@ -8,6 +8,8 @@ import path from "node:path";
 import { CliError } from "@/shared/CliError.js";
 import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
 import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
+import { get_workspace_by_path } from "@/city/process/registry/WorkspaceRepository.js";
+import { readDaemonMeta, readDaemonPid, isProcessAlive } from "@/city/process/daemon/Manager.js";
 import { ensure_agent_execution_model_ready } from "@/city/agent/AgentExecutionModelRecovery.js";
 import type { DaemonTarget } from "@/city/process/daemon/Types.js";
 
@@ -33,7 +35,8 @@ export async function checkAgentPreflight(
     }
   }
   const agent = get_managed_agent(target.agent_id);
-  if (!agent || path.resolve(agent.workspace_path) !== path.resolve(target.workspace_path)) {
+  const workspace = get_workspace_by_path(target.workspace_path);
+  if (!agent || !workspace) {
     throw new CliError({
       title: "Agent target is not managed",
       note: `${target.agent_id} → ${target.workspace_path}`,
@@ -43,7 +46,7 @@ export async function checkAgentPreflight(
   await ensure_agent_execution_model_ready(target.agent_id);
 }
 
-/** 通过 Agent ID 读取稳定 Workspace 目标。 */
+/** 通过 Agent ID 读取当前运行 daemon 的 Workspace。 */
 export async function resolveProjectRootByAgentId(agent_id_input: string): Promise<{
   /** Agent ID。 */
   agent_id?: string;
@@ -54,9 +57,16 @@ export async function resolveProjectRootByAgentId(agent_id_input: string): Promi
 }> {
   const agent_id = String(agent_id_input || "").trim().toLowerCase();
   const agent = agent_id ? get_managed_agent(agent_id) : null;
-  return agent
-    ? { agent_id: agent.agent_id, project_root: agent.workspace_path }
-    : { error: `Agent not found: ${agent_id_input}` };
+  if (!agent) return { error: `Agent not found: ${agent_id_input}` };
+  const pid = await readDaemonPid(agent.agent_id);
+  if (!pid || !isProcessAlive(pid)) {
+    return { error: `Agent is not running: ${agent.agent_id}` };
+  }
+  const meta = await readDaemonMeta(agent.agent_id);
+  if (!meta?.workspace_path || !get_workspace_by_path(meta.workspace_path)) {
+    return { error: `Agent runtime Workspace is unavailable: ${agent.agent_id}` };
+  }
+  return { agent_id: agent.agent_id, project_root: path.resolve(meta.workspace_path) };
 }
 
 /** 校验 Workspace 路径非空。 */

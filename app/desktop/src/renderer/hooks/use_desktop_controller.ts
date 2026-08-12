@@ -1,7 +1,7 @@
 /** Downcity Desktop Renderer 的 Agent、Session 与 Chat 状态控制器。 */
 
 import { useCallback, useEffect, useState } from "react";
-import type { DesktopAgentSummary, DesktopChatMessage, DesktopSessionSummary } from "../../common/types/DesktopApi";
+import type { DesktopAgentSummary, DesktopChatMessage, DesktopSessionSummary, DesktopWorkspaceSummary } from "../../common/types/DesktopApi";
 import { get_session_key, type AgentRuntimeState, type CreateAgentFormValue, type DesktopViewController, type NavigationTarget } from "../types/DesktopView";
 
 /** 把未知失败统一转换为用户可见文本。 */
@@ -12,6 +12,8 @@ function to_error_message(reason: unknown): string {
 /** 管理 Renderer 根状态，并把异步 IPC 细节隔离在视图组件之外。 */
 export function use_desktop_controller(): DesktopViewController {
   const [agents, set_agents] = useState<DesktopAgentSummary[]>([]);
+  const [workspaces, set_workspaces] = useState<DesktopWorkspaceSummary[]>([]);
+  const [workspace_id_by_agent, set_workspace_id_by_agent] = useState<Record<string, string>>({});
   const [sessions_by_agent, set_sessions_by_agent] = useState<Record<string, DesktopSessionSummary[]>>({});
   const [messages_by_session, set_messages_by_session] = useState<Record<string, DesktopChatMessage[]>>({});
   const [runtime_by_agent, set_runtime_by_agent] = useState<Record<string, AgentRuntimeState>>({});
@@ -25,12 +27,18 @@ export function use_desktop_controller(): DesktopViewController {
     if (preview_view === "agent" || preview_view === "session") {
       const preview_agent: DesktopAgentSummary = {
         agent_id: "downcity-agent",
-        workspace_path: "/Users/downcity/Workspace",
         model_id: "openai/gpt-5.4",
         version: "1.0.0",
       };
+      const preview_workspace: DesktopWorkspaceSummary = {
+        workspace_id: "workspace-preview",
+        workspace_path: "/Users/downcity/Workspace",
+        name: "Workspace",
+      };
       const preview_session: DesktopSessionSummary = { session_id: "session-preview", title: "构建 Downcity Desktop" };
       set_agents([preview_agent]);
+      set_workspaces([preview_workspace]);
+      set_workspace_id_by_agent({ [preview_agent.agent_id]: preview_workspace.workspace_id });
       set_runtime_by_agent({ [preview_agent.agent_id]: "connected" });
       set_sessions_by_agent({ [preview_agent.agent_id]: [preview_session] });
       if (preview_view === "session") {
@@ -47,9 +55,16 @@ export function use_desktop_controller(): DesktopViewController {
       set_loading(false);
       return;
     }
-    void window.downcity.agent.list()
-      .then((next_agents) => {
+    void Promise.all([window.downcity.agent.list(), window.downcity.workspace.list()])
+      .then(([next_agents, next_workspaces]) => {
         set_agents(next_agents);
+        set_workspaces(next_workspaces);
+        const default_workspace_id = next_workspaces[0]?.workspace_id;
+        if (default_workspace_id) {
+          set_workspace_id_by_agent(Object.fromEntries(
+            next_agents.map((agent) => [agent.agent_id, default_workspace_id]),
+          ));
+        }
         if (next_agents[0]) set_selection({ kind: "agent", agent_id: next_agents[0].agent_id });
       })
       .catch((reason) => set_error(to_error_message(reason)))
@@ -63,7 +78,7 @@ export function use_desktop_controller(): DesktopViewController {
     return sessions;
   }, []);
 
-  /** 建立 Agent 连接；重复调用只刷新 Session，不重复启动 daemon。 */
+  /** 装配 native Agent；同一运行目标重复调用只刷新 Session。 */
   const connect_agent = useCallback(async (agent_id: string): Promise<void> => {
     if (runtime_by_agent[agent_id] === "connected") {
       await refresh_sessions(agent_id);
@@ -72,7 +87,9 @@ export function use_desktop_controller(): DesktopViewController {
     set_error("");
     set_runtime_by_agent((current) => ({ ...current, [agent_id]: "connecting" }));
     try {
-      await window.downcity.agent.connect(agent_id);
+      const workspace_id = workspace_id_by_agent[agent_id];
+      if (!workspace_id) throw new Error("请先选择 Workspace");
+      await window.downcity.agent.connect(agent_id, workspace_id);
       set_runtime_by_agent((current) => ({ ...current, [agent_id]: "connected" }));
       await refresh_sessions(agent_id);
     } catch (reason) {
@@ -81,7 +98,14 @@ export function use_desktop_controller(): DesktopViewController {
       set_error(message);
       throw reason;
     }
-  }, [refresh_sessions, runtime_by_agent]);
+  }, [refresh_sessions, runtime_by_agent, workspace_id_by_agent]);
+
+  /** 修改运行目标时把旧 native Agent 状态标记为未连接。 */
+  const select_workspace = useCallback((agent_id: string, workspace_id: string) => {
+    set_workspace_id_by_agent((current) => ({ ...current, [agent_id]: workspace_id }));
+    set_runtime_by_agent((current) => ({ ...current, [agent_id]: "idle" }));
+    set_sessions_by_agent((current) => ({ ...current, [agent_id]: [] }));
+  }, []);
 
   /** 确保后续 Session 操作前已经建立 Agent 连接。 */
   const ensure_connected = useCallback(async (agent_id: string): Promise<void> => {
@@ -123,9 +147,11 @@ export function use_desktop_controller(): DesktopViewController {
 
   const create_agent = useCallback(async (value: CreateAgentFormValue) => {
     set_error("");
-    const agent = await window.downcity.agent.create(value.agent_id, value.workspace_path, value.model_id);
-    set_agents((current) => [...current.filter((item) => item.agent_id !== agent.agent_id), agent]);
-    set_selection({ kind: "agent", agent_id: agent.agent_id });
+    const result = await window.downcity.agent.create(value.agent_id, value.workspace_path, value.model_id);
+    set_agents((current) => [...current.filter((item) => item.agent_id !== result.agent.agent_id), result.agent]);
+    set_workspaces((current) => [...current.filter((item) => item.workspace_id !== result.workspace.workspace_id), result.workspace]);
+    set_workspace_id_by_agent((current) => ({ ...current, [result.agent.agent_id]: result.workspace.workspace_id }));
+    set_selection({ kind: "agent", agent_id: result.agent.agent_id });
   }, []);
 
   const send_message = useCallback(async (agent_id: string, session_id: string, text: string) => {
@@ -159,6 +185,8 @@ export function use_desktop_controller(): DesktopViewController {
 
   return {
     agents,
+    workspaces,
+    workspace_id_by_agent,
     sessions_by_agent,
     messages_by_session,
     runtime_by_agent,
@@ -168,6 +196,7 @@ export function use_desktop_controller(): DesktopViewController {
     loading,
     select_agent,
     connect_agent,
+    select_workspace,
     create_session,
     select_session,
     create_agent,

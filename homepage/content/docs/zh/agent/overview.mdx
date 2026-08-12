@@ -5,7 +5,7 @@ description: Agent SDK 是什么，以及如何运行 Agent 工作
 
 # Agent
 
-**Agent SDK** (`@downcity/agent`) 是执行 Agent 工作的核心运行时。Agent 实例将项目配置、会话、工具、插件和模型组装成一个执行上下文。
+**Agent SDK** (`@downcity/agent`) 是执行 Agent 工作的核心运行时。Agent 实例将 Workspace、会话、工具、插件和模型组装成一个执行上下文。`City` 是宿主进程内 Agent 实例的生命周期容器。
 
 ## Agent 做什么
 
@@ -36,6 +36,7 @@ const agent = new Agent({
 
 ## 关键概念
 
+- **City** — 持有一个或多个已经实例化的 Agent，并在宿主退出时统一释放。它不读取 Registry，也不决定 Agent 是否应当运行。
 - **Session** — 一个执行线程。Agent 按需创建会话，并通过它们路由消息。
 - **Tool** — Agent 在执行过程中可调用的函数。直接传给构造函数。
 - **Plugin** — 扩展 Agent 能力的模块，如聊天、任务或记忆。也直接传给构造函数。

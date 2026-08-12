@@ -1,10 +1,7 @@
 /**
- * ManagedAgent：Downcity 全局管理的 Agent 实体。
+ * ManagedAgent：Downcity 全局管理的 Agent 配置。
  *
- * 关键点（中文）
- * - `agent_id` 是全局稳定身份，不能由 Workspace 路径推导。
- * - `workspace_path` 只是当前资源绑定，可以由用户重新绑定。
- * - 模型与启动配置由 managed_agents 持有；Plugin 配置只属于 agent_plugins Binding。
+ * Agent 不保存 Workspace；宿主在创建 Runtime 时把 Agent 与 Workspace 显式组合。
  */
 
 import type { DowncityConfig } from "@/city/types/config/DowncityConfig.js";
@@ -14,16 +11,13 @@ export interface ManagedAgent {
   /** Agent 的全局稳定标识，也是数据库主键。 */
   agent_id: string;
 
-  /** 当前 Agent 绑定的 Workspace 绝对路径。 */
-  workspace_path: string;
-
   /** Agent 配置结构版本。 */
   version: string;
 
   /** Agent HTTP Gateway 的宿主启动配置。 */
   start?: DowncityConfig["start"];
 
-  /** City AIService 模型绑定。 */
+  /** Federation AI 模型绑定。 */
   execution?: DowncityConfig["execution"];
 
   /** CLI 宿主侧 LLM 行为配置。 */
@@ -40,9 +34,6 @@ export interface ManagedAgent {
 export interface CreateManagedAgentInput {
   /** Agent 的全局稳定标识。 */
   agent_id: string;
-
-  /** Agent 初始绑定的 Workspace 路径。 */
-  workspace_path: string;
 
   /** 可选 Agent 配置结构版本。 */
   version?: string;
@@ -61,9 +52,6 @@ export interface CreateManagedAgentInput {
 export interface UpdateManagedAgentInput {
   /** 需要更新的 Agent 全局标识。 */
   agent_id: string;
-
-  /** 重新绑定的 Workspace 路径。 */
-  workspace_path?: string;
 
   /** 新的 Gateway 启动配置。 */
   start?: ManagedAgent["start"];

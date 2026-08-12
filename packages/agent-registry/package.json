@@ -1,6 +1,6 @@
 {
   "name": "@downcity/agent-registry",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "description": "Downcity CLI 与桌面客户端共享的 Agent 注册仓储。",
   "main": "./bin/index.js",

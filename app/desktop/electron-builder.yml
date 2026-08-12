@@ -2,19 +2,23 @@ appId: ai.downcity.desktop
 productName: Downcity
 npmRebuild: false
 directories:
+  buildResources: build
   output: dist
 files:
   - out/**/*
   - package.json
+icon: build/icon.icns
+win:
+  icon: build/icon.ico
+  target:
+    - nsis
 mac:
   category: public.app-category.developer-tools
   target:
     - dmg
     - zip
-win:
-  target:
-    - nsis
 linux:
+  icon: build/icons
   category: Development
   target:
     - AppImage

@@ -8,20 +8,12 @@
  */
 
 import path from "node:path";
-import { Agent, Workspace } from "@downcity/agent";
-import { AskQuestionsTool } from "@downcity/agent/tools";
-import { Shell } from "@downcity/shell";
+import { Agent, City } from "@downcity/agent";
 import { AgentHTTP, AgentRPC } from "@downcity/server";
+import { create_platform_agent } from "@/agent-host/index.js";
 import { startAgentHttpGateway } from "@/city/agent/AgentHttpGateway.js";
-import { createRuntimeModel } from "@/city/runtime/city-model/CreateRuntimeModel.js";
-import { createCityAiAgentModel } from "@/city/runtime/city-model/CityAiServiceBinding.js";
-import { assemble_plugins } from "@/city/runtime/plugins/PluginAssembler.js";
-import { resolve_managed_agent_env } from "@/city/env/ProcessEnv.js";
 import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
-import {
-  list_agent_plugin_bindings,
-} from "@/city/process/registry/PluginRepository.js";
-import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
+import { get_workspace_by_path } from "@/city/process/registry/WorkspaceRepository.js";
 import type { CreateManagedAgentRuntimeInput } from "@/city/types/agent/ManagedAgentRuntime.js";
 import { CliError } from "@/shared/CliError.js";
 
@@ -45,16 +37,21 @@ export class ManagedAgentRuntime {
   /** Agent SDK 实例。 */
   readonly agent: Agent;
 
+  /** 当前进程拥有的 City 容器。 */
+  readonly city: City;
+
   private readonly rpc: AgentRPC;
   private readonly gateway: Awaited<ReturnType<typeof startAgentHttpGateway>>;
   private stopped = false;
 
   private constructor(input: {
     agent: Agent;
+    city: City;
     rpc: AgentRPC;
     gateway: Awaited<ReturnType<typeof startAgentHttpGateway>>;
   }) {
     this.agent = input.agent;
+    this.city = input.city;
     this.rpc = input.rpc;
     this.gateway = input.gateway;
   }
@@ -65,7 +62,7 @@ export class ManagedAgentRuntime {
     this.stopped = true;
     await this.gateway.stop();
     await this.rpc.close();
-    await this.agent.dispose();
+    await this.city.dispose();
   }
 
   /** 读取 Agent 日志器，供进程入口输出生命周期日志。 */
@@ -79,9 +76,10 @@ export class ManagedAgentRuntime {
   ): Promise<ManagedAgentRuntime> {
     const config = get_managed_agent(input.target.agent_id);
     const workspace_path = path.resolve(input.target.workspace_path);
-    if (!config || path.resolve(config.workspace_path) !== workspace_path) {
+    const workspace_record = get_workspace_by_path(workspace_path);
+    if (!config || !workspace_record) {
       throw new CliError({
-        title: "Agent target is not managed",
+        title: "Agent or Workspace is not registered",
         note: `${input.target.agent_id} → ${workspace_path}`,
         fix: "city agent list",
       });
@@ -107,30 +105,14 @@ export class ManagedAgentRuntime {
 
     const host = String(input.options.host ?? config.start?.host ?? "127.0.0.1").trim();
     const rpc_host = "127.0.0.1";
-    const env = resolve_managed_agent_env(workspace_path);
-    const plugin_bindings = list_agent_plugin_bindings(config.agent_id);
-    const [model, plugins, sandbox] = await Promise.all([
-      createRuntimeModel({ config, env }),
-      assemble_plugins({
-        bindings: plugin_bindings,
-        context: { env, host, port },
-      }),
-      create_platform_sandbox(),
-    ]);
-    const workspace = new Workspace({
-      path: workspace_path,
-      shell: new Shell({ sandbox }),
-      env,
+    const native_runtime = await create_platform_agent({
+      agent_id: input.target.agent_id,
+      workspace_path,
+      host,
+      port,
     });
-    const agent = new Agent({
-      id: input.target.agent_id,
-      workspace,
-      model,
-      plugins,
-      tools: {
-        ask_question: AskQuestionsTool,
-      },
-    });
+    const agent = native_runtime.agent;
+    const city = new City([agent]);
 
     process.env.DC_BAY_PORT = String(port);
     process.env.DC_BAY_HOST = host;
@@ -139,18 +121,10 @@ export class ManagedAgentRuntime {
     process.env.DC_AGENT_ID = input.target.agent_id;
     process.env.DC_AGENT_PATH = workspace_path;
 
-    await agent.ready();
-    const resolve_session_model = async (model_id: string) => await createCityAiAgentModel({
-      modelId: model_id,
-      env,
-    });
+    const resolve_session_model = native_runtime.create_session_model;
     const rpc = new AgentRPC(agent, {
       resolve_session_model,
-      reload_workspace_env: () => {
-        const next_env = resolve_managed_agent_env(workspace_path);
-        workspace.set_env(next_env);
-        return next_env;
-      },
+      reload_workspace_env: native_runtime.reload_workspace_env,
     });
     await rpc.listen({ host: rpc_host, port: rpc_port });
     try {
@@ -163,10 +137,10 @@ export class ManagedAgentRuntime {
         get_agent: () => agent,
         sdkRouter: agent_http.router(),
       });
-      return new ManagedAgentRuntime({ agent, rpc, gateway });
+      return new ManagedAgentRuntime({ agent, city, rpc, gateway });
     } catch (error) {
       await rpc.close();
-      await agent.dispose();
+      await city.dispose();
       throw error;
     }
   }

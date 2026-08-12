@@ -1,6 +1,6 @@
 {
   "name": "downcity",
-  "version": "1.1.436",
+  "version": "1.1.437",
   "type": "module",
   "description": "Downcity CLI — local City container and Federation Server management",
   "bin": {
@@ -8,6 +8,12 @@
     "downcity": "./bin/downcity.js",
     "downfed": "./bin/downfed.js",
     "fed": "./bin/downfed.js"
+  },
+  "exports": {
+    "./agent-host": {
+      "types": "./bin/agent-host/index.d.ts",
+      "import": "./bin/agent-host/index.js"
+    }
   },
   "files": [
     "bin/",

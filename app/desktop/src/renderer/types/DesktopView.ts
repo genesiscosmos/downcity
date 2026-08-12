@@ -1,8 +1,13 @@
 /** Downcity Desktop Renderer 的页面状态类型。 */
 
-import type { DesktopAgentSummary, DesktopChatMessage, DesktopSessionSummary } from "../../common/types/DesktopApi";
+import type {
+  DesktopAgentSummary,
+  DesktopChatMessage,
+  DesktopSessionSummary,
+  DesktopWorkspaceSummary,
+} from "../../common/types/DesktopApi";
 
-/** Agent daemon 在当前 Desktop 生命周期内的连接状态。 */
+/** native Agent 在当前 Desktop 生命周期内的装配状态。 */
 export type AgentRuntimeState = "idle" | "connecting" | "connected" | "error";
 
 /** 中间主视图当前展示的业务对象。 */
@@ -26,7 +31,7 @@ export type NavigationTarget =
 export interface CreateAgentFormValue {
   /** 新 Agent 的全局标识。 */
   agent_id: string;
-  /** Agent 绑定的 Workspace 绝对路径。 */
+  /** 同时登记为独立记录的 Workspace 绝对路径。 */
   workspace_path: string;
   /** Agent 使用的 City AIService 模型标识。 */
   model_id: string;
@@ -36,6 +41,10 @@ export interface CreateAgentFormValue {
 export interface DesktopViewController {
   /** 共享 Registry 中的全部 Agent。 */
   agents: DesktopAgentSummary[];
+  /** 共享 Registry 中独立登记的全部 Workspace。 */
+  workspaces: DesktopWorkspaceSummary[];
+  /** 每个 Agent 当前选择的运行 Workspace ID。 */
+  workspace_id_by_agent: Record<string, string>;
   /** 按 Agent 标识缓存的 Session 导航数据。 */
   sessions_by_agent: Record<string, DesktopSessionSummary[]>;
   /** 按 Agent 与 Session 组合键缓存的 Chat 消息。 */
@@ -52,8 +61,10 @@ export interface DesktopViewController {
   loading: boolean;
   /** 选择 Agent 管理页。 */
   select_agent(agent_id: string): void;
-  /** 连接 Agent daemon 并刷新 Session。 */
+  /** 在 Desktop main 中装配 native Agent 并刷新 Session。 */
   connect_agent(agent_id: string): Promise<void>;
+  /** 修改 Agent 下次连接时使用的 Workspace。 */
+  select_workspace(agent_id: string, workspace_id: string): void;
   /** 创建 Session 并切换到对应 Chat。 */
   create_session(agent_id: string): Promise<void>;
   /** 切换到 Session Chat 并读取已有消息。 */

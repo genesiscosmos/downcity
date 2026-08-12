@@ -40,7 +40,7 @@ export function list_plugin_resource_rows(
     SELECT * FROM plugin_resources
     WHERE plugin_name = ?
     ORDER BY resource_id ASC;
-  `).all(plugin_name) as PluginResourceRow[];
+  `).all(plugin_name) as unknown as PluginResourceRow[];
   return rows.map(decode_plugin_resource_row);
 }
 

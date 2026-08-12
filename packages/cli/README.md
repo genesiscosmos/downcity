@@ -28,7 +28,7 @@ City 的主要命令：
 
 ```bash
 city agent create .
-city agent start <agent_id>
+city agent start <agent_id> --workspace <workspace-id-or-path>
 city web --open
 city agent token create <agent_id> --name local
 city plugin action <plugin_name> <action_name> <agent_id> --input '{}'
@@ -38,7 +38,9 @@ city plugin action <plugin_name> <action_name> <agent_id> --input '{}'
 `city agent chat <agent_id>` 交互时，模型可以在缺少关键信息时显示文本、单选或多选问题；
 回答会通过 Session Interaction 提交，并在同一轮模型执行中继续处理。
 
-Agent 与 Plugin Binding 统一保存在全局数据库；Plugin 配置不进入 Agent SDK 的运行时 Plugin 对象。未传 `agent_id` 时，TTY 打开全局 Agent 选择器，非交互环境直接报错。
+Agent、Workspace 与 Plugin Binding 统一保存在全局数据库。Agent 和 Workspace 是独立实体，不保存永久绑定；宿主每次运行时显式组合 `agent_id + workspace_path`。`city agent create <path>` 同时创建二者只是便捷工作流。Session 仍保存在实际 Workspace 的 `.downcity/agents/<agent_id>/sessions/` 下。未传 `agent_id` 时，TTY 打开全局 Agent 选择器，非交互环境直接报错。
+
+`city agent start` 的 Workspace 解析顺序是：显式 `--workspace`、当前 daemon 的 Workspace、当前目录对应的已登记 Workspace、唯一 Workspace、TTY 选择。存在多个 Workspace 的非交互调用必须显式传入 `--workspace`。
 
 Federation Admin 配置与 Embassy User Session 同样保存在 `~/.downcity/downcity.db`。升级后，CLI 会把旧 `~/.downcity/federation.db` 中的管理配置一次性迁入统一数据库；旧文件保留用于人工恢复，但后续不再读取。脚本可通过 `DOWNCITY_FEDERATION_URL` 和 `DOWNCITY_USER_TOKEN` 显式覆盖当前 Embassy 用户身份。
 

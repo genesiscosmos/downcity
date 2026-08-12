@@ -15,6 +15,7 @@ import { restartCommand } from "@/city/agent/Restart.js";
 import { chatCommand } from "@/city/agent/AgentChat.js";
 import { configure_agent_model } from "@/city/agent/AgentModel.js";
 import { list_registered_agents_for_cli } from "@/city/agent/AgentSelection.js";
+import { resolve_cli_agent_target } from "@/city/agent/AgentSelection.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { inject_agent_context } from "@/shared/IndexSupport.js";
 import { prepareForegroundAgent } from "@/city/shared/CityAgentRuntime.js";
@@ -327,13 +328,10 @@ export async function promptAgentConfigAction(
 
 export async function startAgentProject(
   agent_id: string,
-  project_root: string,
 ): Promise<void> {
+  const target = await resolve_cli_agent_target(agent_id);
   const options: AgentStartOptions & { foreground?: boolean } = {};
-  const prepared = await prepareForegroundAgent({
-    agent_id,
-    workspace_path: project_root,
-  }, options);
+  const prepared = await prepareForegroundAgent(target, options);
   if (prepared.should_foreground) {
     await runCommand(prepared.target, prepared.options);
     return;
@@ -363,38 +361,31 @@ export async function runSelectedAgentManager(agent_input: AgentManagerAgentSumm
 
     try {
       if (action === "start") {
-        await startAgentProject(agent.id, agent.project_root);
+        await startAgentProject(agent.id);
         const previous_agent = agent;
-    agent = await reloadAgentSummary(agent.id, agent);
+        agent = await reloadAgentSummary(agent.id, agent);
         last_message = format_agent_start_result(previous_agent, agent);
         continue;
       }
       if (action === "stop") {
         const previous_agent = agent;
-        await stopCommand({
-          agent_id: agent.id,
-          workspace_path: agent.project_root,
-        });
-    agent = await reloadAgentSummary(agent.id, agent);
+        const target = await resolve_cli_agent_target(agent.id);
+        await stopCommand(target);
+        agent = await reloadAgentSummary(agent.id, agent);
         last_message = format_agent_stop_result(previous_agent, agent);
         continue;
       }
       if (action === "restart") {
         const previous_agent = agent;
-        inject_agent_context({
-          agent_id: agent.id,
-          workspace_path: agent.project_root,
-        });
-        await restartCommand({
-          agent_id: agent.id,
-          workspace_path: agent.project_root,
-        }, {});
-    agent = await reloadAgentSummary(agent.id, agent);
+        const target = await resolve_cli_agent_target(agent.id);
+        inject_agent_context(target);
+        await restartCommand(target, {});
+        agent = await reloadAgentSummary(agent.id, agent);
         last_message = format_agent_restart_result(previous_agent, agent);
         continue;
       }
       if (action === "chat") {
-    agent = await reloadAgentSummary(agent.id, agent);
+        agent = await reloadAgentSummary(agent.id, agent);
         if (agent.status !== "running") {
           last_message = t({
             zh: "无法聊天：请先启动当前 Agent",
@@ -403,7 +394,7 @@ export async function runSelectedAgentManager(agent_input: AgentManagerAgentSumm
           continue;
         }
         await chatCommand({ to: agent.id });
-    agent = await reloadAgentSummary(agent.id, agent);
+        agent = await reloadAgentSummary(agent.id, agent);
         continue;
       }
       if (action === "configure") {
@@ -413,7 +404,7 @@ export async function runSelectedAgentManager(agent_input: AgentManagerAgentSumm
         }
         if (config_action === "configureModel") {
           const result = await configure_agent_model(agent.id);
-    agent = await reloadAgentSummary(agent.id, agent);
+          agent = await reloadAgentSummary(agent.id, agent);
           last_message = result?.changed
             ? t({
                 zh: `Agent 默认模型已更新：${result.current_model_id}`,

@@ -5,10 +5,12 @@
  */
 
 import path from "node:path";
+import { list_managed_agents } from "@/city/process/registry/ManagedAgentRepository.js";
 import {
-  list_managed_agents,
-  list_managed_agents_by_workspace,
-} from "@/city/process/registry/ManagedAgentRepository.js";
+  isProcessAlive,
+  readDaemonMeta,
+  readDaemonPid,
+} from "@/city/process/daemon/Manager.js";
 import { reload_running_agent_env } from "@/city/process/daemon/DaemonRpcClient.js";
 import type { EnvBroadcastResult } from "@/city/types/env/EnvBroadcast.js";
 
@@ -17,14 +19,21 @@ export async function broadcast_global_env_reload(): Promise<EnvBroadcastResult>
   return await broadcast_agents(list_managed_agents().map((agent) => agent.agent_id));
 }
 
-/** 广播 Workspace Env 变化到所有绑定该 Workspace 的 Agent。 */
+/** 广播 Workspace Env 变化到当前正在该 Workspace 运行的 Agent。 */
 export async function broadcast_workspace_env_reload(
   workspace_path: string,
 ): Promise<EnvBroadcastResult> {
   const normalized_path = path.resolve(workspace_path);
-  return await broadcast_agents(
-    list_managed_agents_by_workspace(normalized_path).map((agent) => agent.agent_id),
-  );
+  const running_agent_ids: string[] = [];
+  for (const agent of list_managed_agents()) {
+    const pid = await readDaemonPid(agent.agent_id);
+    if (!pid || !isProcessAlive(pid)) continue;
+    const meta = await readDaemonMeta(agent.agent_id);
+    if (meta && path.resolve(meta.workspace_path) === normalized_path) {
+      running_agent_ids.push(agent.agent_id);
+    }
+  }
+  return await broadcast_agents(running_agent_ids);
 }
 
 /** 并行通知一组 Agent，并保留每个目标的明确结果。 */

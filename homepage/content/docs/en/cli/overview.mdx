@@ -12,7 +12,7 @@ The Downcity package installs two independent tools:
 
 ## City data model
 
-An Agent is a global entity identified by `agent_id`; its Workspace path is only a mutable binding. Agents, plugin bindings, and tokens live in `~/.downcity/downcity.db`. Global Env lives in `~/.downcity/.env`, Workspace Env lives in the project `.env`, and daemon files live in `~/.downcity/runtimes/<agent_id>/`.
+Agents and Workspaces are independent global entities. An Agent is identified by `agent_id` and owns its model, Plugin Bindings, and tokens. A Workspace is identified by `workspace_id` and points to a project directory. They are combined explicitly for one runtime and are never stored as a permanent binding. Configuration lives in `~/.downcity/downcity.db`; Global Env lives in `~/.downcity/.env`, Workspace Env lives in the project `.env`, and CLI daemon files live in `~/.downcity/runtimes/<agent_id>/`.
 
 Federation Admin configuration and Embassy User Sessions also live in `~/.downcity/downcity.db`. On upgrade, administration configuration in the legacy `~/.downcity/federation.db` is migrated once. The old file remains available for manual recovery but is no longer read at runtime.
 

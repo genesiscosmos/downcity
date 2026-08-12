@@ -13,7 +13,7 @@ function create_temp_root() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "downcity-config-storage-"));
 }
 
-test("Agent 配置只从全局 DB 读取", async () => {
+test("Agent 与 Workspace 在全局 DB 中独立管理", async () => {
   const platform_root = create_temp_root();
   const project_root = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
@@ -25,12 +25,17 @@ test("Agent 配置只从全局 DB 读取", async () => {
     const repository = await import(
       "../bin/city/process/registry/ManagedAgentRepository.js"
     );
-    assert.equal(repository.list_managed_agents_by_workspace(project_root).length, 0);
+    const workspaces = await import(
+      "../bin/city/process/registry/WorkspaceRepository.js"
+    );
 
     repository.create_managed_agent({
       agent_id: "db_agent",
-      workspace_path: project_root,
       execution: { type: "api", model_id: "model_a" },
+    });
+    const workspace = workspaces.create_workspace({
+      workspace_path: project_root,
+      name: "Project",
     });
     const plugins = await import(
       "../bin/city/process/registry/PluginRepository.js"
@@ -45,6 +50,7 @@ test("Agent 配置只从全局 DB 读取", async () => {
     const config = repository.get_managed_agent("db_agent");
     assert.equal(config.agent_id, "db_agent");
     assert.equal(config.execution.model_id, "model_a");
+    assert.equal("workspace_path" in config, false);
     assert.equal("plugins" in config, false);
     assert.equal(
       plugins.get_agent_plugin_binding("db_agent", "chat").config.queue.max_concurrency,
@@ -54,7 +60,6 @@ test("Agent 配置只从全局 DB 读取", async () => {
 
     repository.create_managed_agent({
       agent_id: "second_agent",
-      workspace_path: project_root,
       execution: { type: "api", model_id: "model_b" },
     });
     repository.update_managed_agent({
@@ -64,22 +69,23 @@ test("Agent 配置只从全局 DB 读取", async () => {
     assert.equal(repository.get_managed_agent("second_agent").execution.model_id, "model_b");
     assert.equal(repository.get_managed_agent("db_agent").execution.model_id, "model_a");
     assert.equal(repository.get_managed_agent("db_agent").start.port, 7001);
-    assert.deepEqual(
-      repository.list_managed_agents_by_workspace(project_root)
-        .map((agent) => agent.agent_id),
-      ["db_agent", "second_agent"],
-    );
-    assert.throws(
-      () => repository.get_managed_agent_by_workspace(project_root),
-      /multiple agents/,
-    );
+    assert.equal(workspaces.get_workspace(workspace.workspace_id).workspace_path, project_root);
+    assert.equal(workspaces.get_workspace_by_path(project_root).workspace_id, workspace.workspace_id);
+    assert.equal(workspaces.list_workspaces().length, 1);
 
     const database = new Database(path.join(platform_root, "downcity.db"));
     const row_count = database.prepare(
       "SELECT COUNT(*) AS count FROM managed_agents;",
     ).get().count;
+    const agent_columns = database.prepare("PRAGMA table_info(managed_agents);")
+      .all().map((column) => column.name);
+    const workspace_row_count = database.prepare(
+      "SELECT COUNT(*) AS count FROM workspaces;",
+    ).get().count;
     database.close();
     assert.equal(row_count, 2);
+    assert.equal(agent_columns.includes("workspace_path"), false);
+    assert.equal(workspace_row_count, 1);
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });
@@ -411,7 +417,7 @@ export const plugins = [ExamplePlugin, CompanionPlugin];
     const agents = await import("../bin/city/process/registry/ManagedAgentRepository.js");
     const plugins = await import("../bin/city/process/registry/PluginRepository.js");
     const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
-    agents.create_managed_agent({ agent_id: "plugin_agent", workspace_path: workspace_root });
+    agents.create_managed_agent({ agent_id: "plugin_agent" });
     const installation = await installer.install_plugins(plugin_source);
     assert.deepEqual(
       installation.manifest.plugins.map((plugin) => plugin.name),
@@ -761,9 +767,12 @@ test("非交互 Agent 命令不根据当前 Workspace 推断目标", async () =>
     );
     repository.create_managed_agent({
       agent_id: "workspace_agent",
-      workspace_path: workspace_root,
       execution: { type: "api", model_id: "model_a" },
     });
+    const workspaces = await import(
+      "../bin/city/process/registry/WorkspaceRepository.js"
+    );
+    workspaces.create_workspace({ workspace_path: workspace_root });
 
     const cli_path = path.resolve("bin/downcity.js");
     const environment = {
@@ -879,7 +888,6 @@ test("Plugin Resource Resolver 写入动态字段并通过 ID 绑定", async () 
     );
     agents.create_managed_agent({
       agent_id: "resource_agent",
-      workspace_path: workspace_root,
     });
     const resource = await resource_service.create_plugin_resource({
       plugin_name: "chat",

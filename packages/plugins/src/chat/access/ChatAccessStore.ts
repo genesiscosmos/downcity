@@ -7,7 +7,7 @@
  * - Service 负责业务编排，Store 只负责结构化读写和事务。
  */
 
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import fs from "fs-extra";
 import path from "node:path";
 import { generate_id } from "@downcity/agent";
@@ -126,7 +126,7 @@ function to_request(row: SqlRow | undefined): ChatAccessRequest | null {
  * 当前 Agent 的 Chat Access SQLite Store。
  */
 export class ChatAccessStore {
-  private readonly database: Database.Database;
+  private readonly database: DatabaseSync;
 
   /**
    * 打开当前项目 Chat Access 数据库。
@@ -134,7 +134,7 @@ export class ChatAccessStore {
   constructor(project_root: string) {
     const database_path = get_chat_access_db_path(project_root);
     fs.ensureDirSync(path.dirname(database_path), { mode: 0o700 });
-    this.database = new Database(database_path);
+    this.database = new DatabaseSync(database_path);
     ensure_chat_access_schema(this.database);
     try {
       fs.chmodSync(database_path, 0o600);
@@ -150,7 +150,15 @@ export class ChatAccessStore {
 
   /** 在单个 SQLite 事务中执行操作。 */
   transaction<T>(operation: () => T): T {
-    return this.database.transaction(operation)();
+    this.database.exec("BEGIN IMMEDIATE;");
+    try {
+      const result = operation();
+      this.database.exec("COMMIT;");
+      return result;
+    } catch (error) {
+      this.database.exec("ROLLBACK;");
+      throw error;
+    }
   }
 
   /** 读取 Store 元信息。 */

@@ -5,7 +5,7 @@ description: 使用 CLI 创建 Agent 项目和全局配置
 
 # 项目初始化
 
-`city agent create` 创建 Workspace 运行目录和 Skills 目录，并把 Agent 作为全局实体写入数据库。Workspace 中不生成 Agent 声明文件。
+`city agent create` 是一个便捷工作流：它创建 Workspace 运行目录和 Skills 目录，并把 Agent 与 Workspace 作为两个独立实体写入数据库。二者之间不会保存永久绑定，Workspace 中也不生成 Agent 声明文件。
 
 ```bash
 city agent create
@@ -36,7 +36,7 @@ my-project/
 city agent create ./my-project --force
 ```
 
-初始化后，可在 `.agents/skills` 添加项目 Skills，并通过 `city agent list` 查看生成的 `agent_id`，再运行 `city agent start <agent_id>`。
+初始化后，可在 `.agents/skills` 添加项目 Skills，并通过 `city agent list` 查看生成的 `agent_id`，再运行 `city agent start <agent_id> --workspace <workspace-id-or-path>`。
 
 继续阅读：
 

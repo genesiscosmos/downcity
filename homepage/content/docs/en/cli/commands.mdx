@@ -11,7 +11,7 @@ description: Common City and Fed commands
 city agent                         # Open the Agent panel
 city agent create [path]           # No path: current directory or native folder picker
 city agent list
-city agent start [agent_id]
+city agent start [agent_id] --workspace <workspace-id-or-path>
 city agent stop [agent_id]
 city agent restart [agent_id]
 city agent status [agent_id]
@@ -26,6 +26,8 @@ Agents assembled by `city agent start` enable the `ask_question` tool by default
 In `city agent chat`, the model can present text, single-select, or multi-select
 questions when key information is missing. The CLI submits the complete answer set
 to the current Session and continues the same Turn. Press Esc to stop that Turn.
+
+Agents and Workspaces are registered independently. Without `--workspace`, the CLI tries the current daemon Workspace, the registered Workspace matching the current directory, and then a unique registered Workspace. A TTY presents a selector when multiple candidates remain. Non-interactive calls with multiple Workspaces must pass `--workspace` explicitly.
 
 Use the slash command to open the system file picker and attach local files to the next message:
 
@@ -94,12 +96,12 @@ city env delete <key> --agent <agent_id>
 city federation
 ```
 
-Global Env is stored in `~/.downcity/.env`; Agent Env is stored in `.env` at the root of its
-Workspace. You can also use “Configure Env” in `city agent`. After a change, City asks affected
+Global Env is stored in `~/.downcity/.env`; Workspace Env is stored in `.env` at the project root.
+You can also use “Configure Env” in `city agent` to select the Workspace used by a running Agent. After a change, City asks affected
 running Agents to reload Env and Workspace broadcasts the new snapshot to existing Sessions.
 Stopped Agents load it on their next start.
 
-Agents bound to the same Workspace share one project `.env`. Runtime precedence is Global `.env`,
+Agents running in the same Workspace share one project `.env`. Runtime precedence is Global `.env`,
 then Workspace `.env`, then explicit process environment variables. `list` never prints plaintext
 values; `copy` requires an explicit local CLI invocation.
 

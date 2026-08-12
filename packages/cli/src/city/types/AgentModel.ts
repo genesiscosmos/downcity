@@ -14,9 +14,6 @@ export interface AgentModelCommandOptions {
 
 /** Agent 默认模型配置结果。 */
 export interface AgentModelConfigurationResult {
-  /** Agent 项目绝对路径。 */
-  project_root: string;
-
   /** 目标 Agent 稳定 ID。 */
   agent_id: string;
 

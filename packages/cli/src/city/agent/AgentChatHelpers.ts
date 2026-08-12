@@ -131,7 +131,9 @@ export async function resolveChatTargetAgentId(inputId?: string): Promise<string
     message: "选择要聊天的 Agent",
     choices: registered_agents.map((agent) => ({
       title: agent.agent_id,
-      description: `${agent.status} · ${agent.workspace_path}`,
+      description: agent.workspace_path
+        ? `${agent.status} · ${agent.workspace_path}`
+        : agent.status,
       value: agent.agent_id,
     })),
     initial: 0,

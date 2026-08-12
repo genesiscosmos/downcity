@@ -1,15 +1,15 @@
 # @downcity/agent
 
-`@downcity/agent` 是 Downcity 的单 Agent 运行时包。
+`@downcity/agent` 是 Downcity 的 Agent 运行时包。`Agent` 是单实例组合根，`City` 是宿主进程内多个 Agent 实例的生命周期容器。
 
 它负责把一个 agent 项目目录装配成可执行运行时，包括：
 
-- 本地 SDK：`Agent`、`Session`、`RemoteAgent`
+- 本地 SDK：`Agent`、`City`、`Session`、`RemoteAgent`
 - 内部执行内核：Session Composer、LLM/Tool Loop、增量输出
 - Plugin 框架：registry、action、tool runtime 与执行生命周期
 - 远程访问：`RemoteAgent`、HTTP/RPC transport
 
-`downcity` 负责多 Agent 管理、控制面网关、平台 CLI、共享模型目录接入与 daemon 进程管理；`@downcity/agent` 只负责单 Agent 的执行面。
+`downcity` 负责持久化 Registry、控制面网关、平台装配、CLI 与 daemon 进程管理；`@downcity/agent` 负责 Agent 执行面和进程内 `City` 实例容器。`City` 不读取 Registry，也不赋予 Agent 启动或停止状态。
 
 ## 包定位
 
@@ -22,6 +22,7 @@
 
 - `@downcity/agent`
   - 单 Agent runtime
+  - 进程内 City Agent 实例容器
   - session SDK、executor 内核、plugin 框架、sandbox
   - 本地 SDK facade
 - `downcity`

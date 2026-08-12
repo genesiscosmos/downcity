@@ -22,23 +22,7 @@ export function ensurePlatformStoreSchema(context: PlatformStoreContext): void {
       updated_at TEXT NOT NULL
     );
   `);
-  context.sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS managed_agents (
-      agent_id TEXT PRIMARY KEY NOT NULL,
-      workspace_path TEXT NOT NULL,
-      config_encrypted TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `);
-  context.sqlite.exec(`
-    CREATE INDEX IF NOT EXISTS managed_agents_workspace_path_idx
-    ON managed_agents(workspace_path);
-  `);
-  context.sqlite.exec(`
-    CREATE INDEX IF NOT EXISTS managed_agents_updated_at_idx
-    ON managed_agents(updated_at);
-  `);
+  // Agent 与 Workspace schema 由 @downcity/agent-registry 唯一维护。
   ensureAgentTokenSchema(context);
   ensurePluginSchema(context);
   migrate_chat_plugin_resources(context);
@@ -199,7 +183,7 @@ function migrate_chat_plugin_resources(context: PlatformStoreContext): void {
   `).get() as { name?: string } | undefined;
   if (!legacy_table) return;
 
-  const migrate = context.sqlite.transaction(() => {
+  const migrate = (): void => {
     migrate_channel_accounts_to_plugin_resources(context);
     const rows = context.sqlite.prepare(`
       SELECT agent_id, config_encrypted, resource_ids_json
@@ -261,8 +245,15 @@ function migrate_chat_plugin_resources(context: PlatformStoreContext): void {
       );
     }
     context.sqlite.exec("DROP TABLE channel_accounts;");
-  });
-  migrate();
+  };
+  context.sqlite.exec("BEGIN IMMEDIATE;");
+  try {
+    migrate();
+    context.sqlite.exec("COMMIT;");
+  } catch (error) {
+    context.sqlite.exec("ROLLBACK;");
+    throw error;
+  }
 }
 
 /** 把旧 Chat Account 行转换为完整 Chat Plugin Resource Item。 */

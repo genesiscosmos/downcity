@@ -12,7 +12,7 @@ Downcity 安装包提供两个独立工具：
 
 ## City 数据模型
 
-Agent 是全局实体，`agent_id` 是唯一身份，Workspace 路径只是可变绑定。Agent、Plugin Binding 与 Token 保存在 `~/.downcity/downcity.db`；Global Env 保存在 `~/.downcity/.env`，Workspace Env 保存在项目 `.env`；daemon 文件位于 `~/.downcity/runtimes/<agent_id>/`。
+Agent 与 Workspace 是两个独立的全局实体。Agent 由 `agent_id` 标识并保存模型、Plugin Binding 与 Token；Workspace 由 `workspace_id` 标识并指向项目目录。二者只在一次运行时显式组合，不保存永久绑定。配置统一位于 `~/.downcity/downcity.db`；Global Env 位于 `~/.downcity/.env`，Workspace Env 位于项目 `.env`；CLI daemon 文件位于 `~/.downcity/runtimes/<agent_id>/`。
 
 Federation Admin 配置与 Embassy User Session 也统一保存在 `~/.downcity/downcity.db`。升级后，旧 `~/.downcity/federation.db` 中的管理配置会被一次性迁入；旧文件保留用于人工恢复，但运行时不再读取。
 

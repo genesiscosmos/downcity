@@ -5,8 +5,11 @@ import type { DesktopAgentSummary, DesktopApi } from "../common/types/DesktopApi
 const desktop_api: DesktopApi = {
   agent: {
     list: (): Promise<DesktopAgentSummary[]> => ipcRenderer.invoke("agent:list"),
-    create: (agent_id: string, workspace_path: string, model_id: string): Promise<DesktopAgentSummary> => ipcRenderer.invoke("agent:create", agent_id, workspace_path, model_id),
-    connect: (agent_id: string): Promise<string> => ipcRenderer.invoke("agent:connect", agent_id),
+    create: (agent_id, workspace_path, model_id) => ipcRenderer.invoke("agent:create", agent_id, workspace_path, model_id),
+    connect: (agent_id, workspace_id) => ipcRenderer.invoke("agent:connect", agent_id, workspace_id),
+  },
+  workspace: {
+    list: () => ipcRenderer.invoke("workspace:list"),
   },
   chat: {
     list_sessions: (agent_id) => ipcRenderer.invoke("chat:list-sessions", agent_id),

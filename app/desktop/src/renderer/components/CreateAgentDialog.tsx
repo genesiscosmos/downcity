@@ -43,7 +43,7 @@ export function CreateAgentDialog({ close_dialog, create_agent }: CreateAgentDia
     <form className="w-full max-w-md overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl" onSubmit={(event) => void submit_form(event)}>
       <div className="flex items-start gap-3 px-5 pb-3 pt-5">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><TbCpu className="size-4.5" /></div>
-        <div><h2 className="text-sm font-semibold text-foreground">创建 Agent</h2><p className="mt-1 text-[0.6875rem] leading-4 text-muted-foreground">Agent 将写入与 Downcity CLI 共用的注册表。</p></div>
+        <div><h2 className="text-sm font-semibold text-foreground">创建 Agent</h2><p className="mt-1 text-[0.6875rem] leading-4 text-muted-foreground">Agent 与 Workspace 将作为两条独立记录写入共享注册表。</p></div>
       </div>
       <div className="flex flex-col gap-3 px-5 py-3">
         <Field label="Agent ID" value={agent_id} placeholder="research-agent" auto_focus on_change={set_agent_id} />

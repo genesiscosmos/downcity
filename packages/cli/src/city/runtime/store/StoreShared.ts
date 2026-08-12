@@ -6,7 +6,7 @@
  * - 对外不暴露业务语义，只服务 `utils/store/*` 内部实现。
  */
 
-import Database from "better-sqlite3";
+import type { DatabaseSync } from "node:sqlite";
 
 /**
  * PlatformStore 子模块上下文。
@@ -15,7 +15,7 @@ export interface PlatformStoreContext {
   /**
    * 原始 SQLite 连接。
    */
-  sqlite: Database.Database;
+  sqlite: DatabaseSync;
 }
 
 /**

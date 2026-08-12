@@ -5,7 +5,7 @@ description: What the Agent SDK is and how it runs agent work
 
 # Agent
 
-The **Agent SDK** (`@downcity/agent`) is the core runtime for executing agent work. An Agent instance assembles project config, sessions, tools, plugins, and a model into one execution context.
+The **Agent SDK** (`@downcity/agent`) is the core runtime for executing agent work. An Agent instance assembles a Workspace, sessions, tools, plugins, and a model into one execution context. `City` is the lifecycle container for Agent instances inside one host process.
 
 ## What an Agent does
 
@@ -36,6 +36,7 @@ const agent = new Agent({
 
 ## Key concepts
 
+- **City** — owns one or more instantiated Agents and disposes them when the host exits. It does not read the Registry or decide whether an Agent should run.
 - **Session** — one execution thread. The Agent creates sessions on demand and routes messages through them.
 - **Tool** — a function the Agent can call during execution. Passed directly to the constructor.
 - **Plugin** — a module that extends the Agent with capabilities like chat, tasks, or memory. Also passed directly to the constructor.

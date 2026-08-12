@@ -8,12 +8,36 @@
 export interface DesktopAgentSummary {
   /** Agent 的全局稳定标识。 */
   agent_id: string;
-  /** Agent 当前绑定的 Workspace 绝对路径。 */
-  workspace_path: string;
   /** Agent 使用的 City AIService 模型标识。 */
   model_id: string;
   /** Agent 注册配置的结构版本。 */
   version: string;
+}
+
+/** Renderer 可见的独立 Workspace 摘要。 */
+export interface DesktopWorkspaceSummary {
+  /** Workspace 的稳定 Registry ID。 */
+  workspace_id: string;
+  /** Workspace 当前指向的绝对路径。 */
+  workspace_path: string;
+  /** Workspace 用户可见名称。 */
+  name: string;
+}
+
+/** Desktop main 中一个 native Agent 的当前运行目标。 */
+export interface DesktopAgentRuntime {
+  /** 当前运行 Agent ID。 */
+  agent_id: string;
+  /** 当前 Agent 本次运行使用的 Workspace。 */
+  workspace: DesktopWorkspaceSummary;
+}
+
+/** 创建 Agent 便捷工作流的结果。 */
+export interface DesktopCreateAgentResult {
+  /** 新创建的独立 Agent 记录。 */
+  agent: DesktopAgentSummary;
+  /** 同时登记的独立 Workspace 记录。 */
+  workspace: DesktopWorkspaceSummary;
 }
 
 /** Renderer 可见的 Session 摘要。 */
@@ -57,9 +81,14 @@ export interface DesktopApi {
     /** 列出共享 Registry 中的全部 Agent。 */
     list(): Promise<DesktopAgentSummary[]>;
     /** 创建共享注册记录。 */
-    create(agent_id: string, workspace_path: string, model_id: string): Promise<DesktopAgentSummary>;
-    /** 连接已有 daemon；未运行时启动并建立 RPC 连接。 */
-    connect(agent_id: string): Promise<string>;
+    create(agent_id: string, workspace_path: string, model_id: string): Promise<DesktopCreateAgentResult>;
+    /** 以显式 Agent 与 Workspace 组合创建 Desktop native Agent。 */
+    connect(agent_id: string, workspace_id: string): Promise<DesktopAgentRuntime>;
+  };
+  /** 独立 Workspace Registry 能力。 */
+  workspace: {
+    /** 列出全部已登记 Workspace。 */
+    list(): Promise<DesktopWorkspaceSummary[]>;
   };
   /** Agent Session 与聊天能力。 */
   chat: {

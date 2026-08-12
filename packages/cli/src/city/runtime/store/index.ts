@@ -8,7 +8,7 @@
  */
 
 import fs from "fs-extra";
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import {
   getFederationStoreDbPath,
   getPlatformStoreDbPath,
@@ -34,14 +34,12 @@ const FEDERATION_STORE_MIGRATION_KEY = "migration.federation_store_to_downcity_d
  * 平台控制面全局存储门面。
  */
 export class PlatformStore {
-  private readonly sqlite: Database.Database;
+  private readonly sqlite: DatabaseSync;
 
   constructor(dbPath: string = getPlatformStoreDbPath()) {
     fs.ensureDirSync(getPlatformRootDirPath());
-    this.sqlite = new Database(dbPath);
-    this.sqlite.pragma("busy_timeout = 5000");
-    this.sqlite.pragma("foreign_keys = ON");
-    this.sqlite.pragma("journal_mode = WAL");
+    this.sqlite = new DatabaseSync(dbPath);
+    configure_sqlite(this.sqlite, true);
     ensurePlatformStoreSchema(this.context);
   }
 
@@ -66,7 +64,6 @@ export class PlatformStore {
    */
   clearAll(): void {
     this.sqlite.exec("DELETE FROM platform_secure_settings;");
-    this.sqlite.exec("DELETE FROM managed_agents;");
     this.sqlite.exec("DELETE FROM plugin_resources;");
     this.sqlite.exec("DELETE FROM agent_tokens;");
     this.sqlite.exec("DELETE FROM agent_plugins;");
@@ -221,9 +218,8 @@ function migrate_federation_config(store: PlatformStore): void {
 export function withPlatformStore<T>(callback: (context: PlatformStoreContext) => T): T {
   const dbPath = getPlatformStoreDbPath();
   fs.ensureDirSync(getPlatformRootDirPath());
-  const sqlite = new Database(dbPath);
-  sqlite.pragma("busy_timeout = 5000");
-  sqlite.pragma("journal_mode = WAL");
+  const sqlite = new DatabaseSync(dbPath);
+  configure_sqlite(sqlite, false);
   const context: PlatformStoreContext = {
     sqlite,
   };
@@ -233,4 +229,11 @@ export function withPlatformStore<T>(callback: (context: PlatformStoreContext) =
   } finally {
     sqlite.close();
   }
+}
+
+/** 为 CLI 与 Electron 共用的内置 SQLite 连接设置运行参数。 */
+function configure_sqlite(sqlite: DatabaseSync, foreign_keys: boolean): void {
+  sqlite.exec("PRAGMA busy_timeout = 5000;");
+  if (foreign_keys) sqlite.exec("PRAGMA foreign_keys = ON;");
+  sqlite.exec("PRAGMA journal_mode = WAL;");
 }

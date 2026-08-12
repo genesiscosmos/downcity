@@ -17,7 +17,7 @@ export const DAEMON_META_FILENAME = "daemon.json";
 export interface DaemonTarget {
   /** 受管 Agent 的稳定全局 ID。 */
   agent_id: string;
-  /** Agent 当前绑定的 Workspace 绝对路径。 */
+  /** 本次 Agent Runtime 使用的 Workspace 绝对路径。 */
   workspace_path: string;
 }
 

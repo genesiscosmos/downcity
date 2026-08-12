@@ -7,7 +7,7 @@
  * - WAL 与 busy_timeout 保证 Agent runtime 和 CLI 可以并发读写。
  */
 
-import type Database from "better-sqlite3";
+import type { DatabaseSync } from "node:sqlite";
 
 /** 当前 Chat Access Schema 版本。 */
 export const CHAT_ACCESS_SCHEMA_VERSION = "1";
@@ -15,10 +15,10 @@ export const CHAT_ACCESS_SCHEMA_VERSION = "1";
 /**
  * 初始化 Chat Access Schema。
  */
-export function ensure_chat_access_schema(database: Database.Database): void {
-  database.pragma("journal_mode = WAL");
-  database.pragma("foreign_keys = ON");
-  database.pragma("busy_timeout = 5000");
+export function ensure_chat_access_schema(database: DatabaseSync): void {
+  database.exec("PRAGMA journal_mode = WAL;");
+  database.exec("PRAGMA foreign_keys = ON;");
+  database.exec("PRAGMA busy_timeout = 5000;");
 
   database.exec(`
     CREATE TABLE IF NOT EXISTS chat_access_meta (

@@ -1,8 +1,8 @@
 # Downcity Desktop
 
-Downcity Desktop 是 Downcity CLI 的图形客户端。它与 CLI 共享 `~/.downcity/downcity.db` 中的 Agent Registry，并通过 CLI 启动的本机 daemon RPC 访问 Agent Session。
+Downcity Desktop 与 CLI 共享 `~/.downcity/downcity.db` 中的 Agent、Workspace、Plugin 与 Embassy 配置。Electron main 直接创建 native `Agent`，并由进程内 `City` 统一管理生命周期；它不执行 CLI 命令，也不连接 CLI daemon。
 
-运行 Desktop 前需要确保 `downcity` 命令已经安装并可从当前系统 `PATH` 找到。
+Agent 与 Workspace 是独立记录。Desktop 在装配 Agent 时显式选择 Workspace，Session 继续保存在该 Workspace 的 `.downcity/agents/<agent_id>/sessions/` 下。
 
 ## 开发
 
@@ -18,4 +18,4 @@ pnpm dev:desktop
 pnpm build:desktop
 ```
 
-当前客户端提供 Agent 列表、Agent 创建、daemon 启动、Session 创建和基础聊天能力。Renderer 只能通过 Preload 暴露的最小 IPC API 访问这些能力。
+当前客户端提供 Agent 与 Workspace 列表、Agent 创建、native Agent 装配、Session 创建和基础聊天能力。Renderer 只能通过 Preload 暴露的最小 IPC API 访问这些能力。

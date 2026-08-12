@@ -1,88 +1,125 @@
 /**
- * Desktop Agent 控制器。
+ * Desktop native Agent 控制器。
  *
- * 负责把共享 Registry 和 Downcity CLI daemon 连接起来；Renderer 不直接接触
- * 文件系统、子进程或 Agent SDK。
+ * Electron main 直接持有 City 和本地 Agent。Registry 只保存 Agent 与 Workspace 两类
+ * 独立记录；每次连接显式组合二者，不启动 CLI daemon，也不经过本机 RPC。
  */
-import { execFile } from "node:child_process";
-import { promisify, stripVTControlCharacters } from "node:util";
-import { RemoteAgent } from "@downcity/agent";
-import { get_agent_registry_record, list_agent_registry_records, create_agent_registry_record, type AgentRegistryRecord } from "@downcity/agent-registry";
-import type { SessionMessage } from "@downcity/agent";
-import type { DesktopAgentSummary, DesktopChatMessage, DesktopChatResult, DesktopSessionSummary } from "../../common/types/DesktopApi.js";
-import { resolve_running_agent_rpc_url } from "@/agent/AgentDaemonConnector.js";
 
-const exec_file = promisify(execFile);
+import {
+  City,
+  type Agent,
+  type SessionMessage,
+} from "@downcity/agent";
+import {
+  create_agent_registry_record,
+  create_workspace_registry_record,
+  get_agent_registry_record,
+  get_workspace_registry_record,
+  list_agent_registry_records,
+  list_workspace_registry_records,
+  normalize_agent_registry_workspace,
+  type AgentRegistryRecord,
+  type WorkspaceRegistryRecord,
+} from "@downcity/agent-registry";
+import { create_platform_agent } from "downcity/agent-host";
+import type {
+  DesktopAgentRuntime,
+  DesktopAgentSummary,
+  DesktopChatMessage,
+  DesktopChatResult,
+  DesktopSessionSummary,
+  DesktopWorkspaceSummary,
+} from "../../common/types/DesktopApi.js";
 
-/** 桌面端 Agent 控制器。 */
+/** Electron main 内的 native Agent 生命周期控制器。 */
 export class AgentController {
-  private readonly remote_agents = new Map<string, RemoteAgent>();
+  /** Desktop 进程拥有的全部 native Agent。 */
+  private readonly city = new City();
+
+  /** 当前运行 Agent 实际使用的 Workspace。 */
+  private readonly workspace_by_agent = new Map<string, DesktopWorkspaceSummary>();
 
   /** 列出 CLI 与 Desktop 共用的 Agent 注册记录。 */
   list_agents(): DesktopAgentSummary[] {
     return list_agent_registry_records().map(to_desktop_agent_summary);
   }
 
-  /** 创建一个共享注册的 Agent。 */
-  create_agent(agent_id: string, workspace_path: string, model_id: string): DesktopAgentSummary {
+  /** 列出独立登记的全部 Workspace。 */
+  list_workspaces(): DesktopWorkspaceSummary[] {
+    return list_workspace_registry_records().map(to_desktop_workspace_summary);
+  }
+
+  /** 创建 Agent，并把表单中的项目目录独立登记为 Workspace。 */
+  create_agent(
+    agent_id: string,
+    workspace_path: string,
+    model_id: string,
+  ): { agent: DesktopAgentSummary; workspace: DesktopWorkspaceSummary } {
     const normalized_model_id = String(model_id || "").trim();
     if (!normalized_model_id) throw new Error("model_id is required");
-    return to_desktop_agent_summary(create_agent_registry_record({
+    const normalized_workspace_path = normalize_agent_registry_workspace(workspace_path);
+    const agent = create_agent_registry_record({
       agent_id,
-      workspace_path,
       version: "1.0.0",
       execution: { type: "api", model_id: normalized_model_id },
-    }));
+    });
+    const workspace = create_workspace_registry_record({
+      workspace_path: normalized_workspace_path,
+    });
+    return {
+      agent: to_desktop_agent_summary(agent),
+      workspace: to_desktop_workspace_summary(workspace),
+    };
   }
 
-  /** 连接已有 Agent daemon；未运行时通过 CLI 启动后再连接。 */
-  async connect_agent(agent_id: string): Promise<string> {
+  /** 以显式 Agent 与 Workspace 组合创建或替换 Desktop native Agent。 */
+  async connect_agent(agent_id: string, workspace_id: string): Promise<DesktopAgentRuntime> {
     const config = get_agent_registry_record(agent_id);
     if (!config) throw new Error(`Agent not found: ${agent_id}`);
+    const workspace = get_workspace_registry_record(workspace_id);
+    if (!workspace) throw new Error(`Workspace not found: ${workspace_id}`);
 
-    const running_url = await resolve_running_agent_rpc_url(config);
-    if (running_url) return await this.attach_remote_agent(agent_id, running_url);
-
-    try {
-      await exec_file("downcity", ["agent", "start", agent_id]);
-    } catch (error) {
-      // 并发启动或 CLI 已确认 daemon 在线时，连接运行实例而不是向 Renderer 抛错。
-      const concurrent_url = await resolve_running_agent_rpc_url(config);
-      if (concurrent_url) return await this.attach_remote_agent(agent_id, concurrent_url);
-      throw new Error(format_agent_start_error(agent_id, error), { cause: error });
+    const current_workspace = this.workspace_by_agent.get(config.agent_id);
+    const current_agent = this.city.get(config.agent_id);
+    if (current_agent && current_workspace?.workspace_id === workspace.workspace_id) {
+      return to_desktop_agent_runtime(config.agent_id, current_workspace);
     }
 
-    const started_url = await resolve_running_agent_rpc_url(config);
-    if (!started_url) throw new Error(`Agent ${agent_id} daemon RPC identity is unavailable`);
-    return await this.attach_remote_agent(agent_id, started_url);
+    this.workspace_by_agent.delete(config.agent_id);
+    if (current_agent) await this.city.remove(config.agent_id);
+    const runtime = await create_platform_agent({
+      agent_id: config.agent_id,
+      workspace_path: workspace.workspace_path,
+    });
+    try {
+      this.city.add(runtime.agent);
+    } catch (error) {
+      await runtime.agent.dispose();
+      throw error;
+    }
+    const workspace_summary = to_desktop_workspace_summary(workspace);
+    this.workspace_by_agent.set(config.agent_id, workspace_summary);
+    return to_desktop_agent_runtime(config.agent_id, workspace_summary);
   }
 
-  /** 用已验证的 RPC 地址替换 Desktop 当前持有的远程连接。 */
-  private async attach_remote_agent(agent_id: string, remote_url: string): Promise<string> {
-    await this.remote_agents.get(agent_id)?.close();
-    this.remote_agents.set(agent_id, new RemoteAgent({ url: remote_url }));
-    return remote_url;
-  }
-
-  /** 列出一个运行中 Agent 的 Session。 */
+  /** 列出一个 native Agent 在当前 Workspace 中的 Session。 */
   async list_sessions(agent_id: string): Promise<DesktopSessionSummary[]> {
-    const remote_agent = this.require_remote_agent(agent_id);
-    const page = await remote_agent.sessions.list();
+    const page = await this.require_native_agent(agent_id).sessions.list();
     return page.items.map((session) => ({
       session_id: session.session_id,
       title: session.title || session.session_id,
     }));
   }
 
-  /** 创建一个新的远程 Session。 */
+  /** 在当前 Workspace 创建新的 Session。 */
   async create_session(agent_id: string): Promise<DesktopSessionSummary> {
-    const session = await this.require_remote_agent(agent_id).sessions.create();
+    const session = await this.require_native_agent(agent_id).sessions.create();
     return { session_id: session.id, title: "新会话" };
   }
 
-  /** 读取一个远程 Session 的用户可见消息快照。 */
+  /** 读取一个 native Session 的用户可见消息快照。 */
   async list_messages(agent_id: string, session_id: string): Promise<DesktopChatMessage[]> {
-    const session = await this.require_remote_agent(agent_id).sessions.get(session_id);
+    const session = await this.require_native_agent(agent_id).sessions.get(session_id);
     const page = await session.messages();
     return page.items
       .filter((message) => message.visibility === "visible")
@@ -90,11 +127,15 @@ export class AgentController {
       .filter((message): message is DesktopChatMessage => message !== null);
   }
 
-  /** 发送聊天输入并等待当前 Turn 完成。 */
-  async send_message(agent_id: string, session_id: string, text: string): Promise<DesktopChatResult> {
+  /** 直接向 native Session 发送聊天输入并等待当前 Turn 完成。 */
+  async send_message(
+    agent_id: string,
+    session_id: string,
+    text: string,
+  ): Promise<DesktopChatResult> {
     const query = String(text || "").trim();
     if (!query) throw new Error("message is required");
-    const session = await this.require_remote_agent(agent_id).sessions.get(session_id);
+    const session = await this.require_native_agent(agent_id).sessions.get(session_id);
     const turn = await session.prompt({ query });
     const result = await turn.finished;
     return {
@@ -105,65 +146,47 @@ export class AgentController {
     };
   }
 
-  /** 获取已经启动并连接的 Agent。 */
-  private require_remote_agent(agent_id: string): RemoteAgent {
-    const remote_agent = this.remote_agents.get(agent_id);
-    if (!remote_agent) throw new Error(`Agent ${agent_id} is not connected`);
-    return remote_agent;
+  /** 读取由 Desktop City 持有的本地 Agent。 */
+  private require_native_agent(agent_id: string): Agent {
+    return this.city.require(agent_id);
   }
 
-  /** 释放 Desktop 持有的远程连接。 */
+  /** 释放 Desktop 进程拥有的全部 native Agent。 */
   async dispose(): Promise<void> {
-    for (const remote_agent of this.remote_agents.values()) await remote_agent.close();
-    this.remote_agents.clear();
+    this.workspace_by_agent.clear();
+    await this.city.dispose();
   }
 }
 
-/**
- * 把 CLI 子进程异常转换为 Desktop 可直接展示的启动错误。
- *
- * CLI 的业务失败摘要输出到 stdout，而 Node warning 输出到 stderr；不能直接使用
- * `execFile` 的默认错误消息，否则 warning 会遮蔽真正的失败原因。
- */
-function format_agent_start_error(agent_id: string, error: unknown): string {
-  const stdout = clean_cli_error_output(read_process_output(error, "stdout"));
-  const stderr = clean_cli_error_output(read_process_output(error, "stderr"));
-  const outputs = [...new Set([stdout, stderr].filter(Boolean))];
-  const detail = outputs.join("\n\n")
-    || (error instanceof Error ? error.message : String(error));
-  return `Agent ${agent_id} 启动失败\n${detail}`;
-}
-
-/** 从未知子进程异常中读取指定输出字段。 */
-function read_process_output(error: unknown, field: "stdout" | "stderr"): string {
-  if (!error || typeof error !== "object" || !(field in error)) return "";
-  const value = Reflect.get(error, field);
-  if (typeof value === "string") return value;
-  return Buffer.isBuffer(value) ? value.toString("utf8") : "";
-}
-
-/** 清理不应作为业务错误展示的 CLI 装饰与 Node 实验性警告。 */
-function clean_cli_error_output(output: string): string {
-  return stripVTControlCharacters(output)
-    .split(/\r?\n/u)
-    .filter((line) => !/^downcity v\d/iu.test(line.trim()))
-    .filter((line) => !/^\(node:\d+\) ExperimentalWarning:/u.test(line.trim()))
-    .filter((line) => !/^\(Use `node --trace-warnings/u.test(line.trim()))
-    .join("\n")
-    .trim();
-}
-
-/** 把 Registry 记录收敛成 Renderer 所需的最小 Agent 摘要。 */
+/** 把 Registry Agent 收敛成 Renderer 所需摘要。 */
 function to_desktop_agent_summary(record: AgentRegistryRecord): DesktopAgentSummary {
   const model_id = typeof record.execution?.model_id === "string"
     ? record.execution.model_id
     : "";
   return {
     agent_id: record.agent_id,
-    workspace_path: record.workspace_path,
     model_id,
     version: record.version,
   };
+}
+
+/** 把 Registry Workspace 收敛成 Renderer 所需摘要。 */
+function to_desktop_workspace_summary(
+  record: WorkspaceRegistryRecord,
+): DesktopWorkspaceSummary {
+  return {
+    workspace_id: record.workspace_id,
+    workspace_path: record.workspace_path,
+    name: record.name,
+  };
+}
+
+/** 构造 Desktop 当前 native Agent 运行目标。 */
+function to_desktop_agent_runtime(
+  agent_id: string,
+  workspace: DesktopWorkspaceSummary,
+): DesktopAgentRuntime {
+  return { agent_id, workspace };
 }
 
 /** 把 canonical Session Message 投影为当前 Desktop Chat 的纯文本展示模型。 */
@@ -173,7 +196,9 @@ function to_desktop_chat_message(message: SessionMessage): DesktopChatMessage | 
       .flatMap((part) => part.type === "text" && "text" in part ? [part.text] : [])
       .join("\n")
       .trim();
-    return text ? { message_id: message.message_id, role: "user", text, created_at: message.created_at, pending: false } : null;
+    return text
+      ? { message_id: message.message_id, role: "user", text, created_at: message.created_at, pending: false }
+      : null;
   }
   if (message.type === "assistant") {
     const text = message.parts
@@ -190,8 +215,20 @@ function to_desktop_chat_message(message: SessionMessage): DesktopChatMessage | 
     };
   }
   if (message.type === "error") {
-    return { message_id: message.message_id, role: "error", text: message.message, created_at: message.created_at, pending: false };
+    return {
+      message_id: message.message_id,
+      role: "error",
+      text: message.message,
+      created_at: message.created_at,
+      pending: false,
+    };
   }
   const text = [message.title, message.description].filter(Boolean).join("\n");
-  return { message_id: message.message_id, role: "system", text, created_at: message.created_at, pending: message.status === "running" };
+  return {
+    message_id: message.message_id,
+    role: "system",
+    text,
+    created_at: message.created_at,
+    pending: message.status === "running",
+  };
 }
