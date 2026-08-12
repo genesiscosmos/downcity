@@ -1,6 +1,6 @@
 {
   "name": "@downcity/database-sqlite",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Downcity Federation Database adapter for local SQLite via better-sqlite3.",
   "type": "module",
   "main": "./bin/index.js",
@@ -26,7 +26,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@downcity/city": "workspace:*",
+    "@downcity/federation": "workspace:*",
     "better-sqlite3": "^12.10.0",
     "drizzle-orm": "^0.45.2"
   },

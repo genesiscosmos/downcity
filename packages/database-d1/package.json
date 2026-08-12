@@ -1,6 +1,6 @@
 {
   "name": "@downcity/database-d1",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Downcity Federation Database adapter for Cloudflare D1.",
   "type": "module",
   "main": "./bin/index.js",
@@ -26,7 +26,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@downcity/city": "workspace:*",
+    "@downcity/federation": "workspace:*",
     "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {

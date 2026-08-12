@@ -2,7 +2,7 @@
  * Feedback 服务类型契约测试。
  */
 
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import {
   FeedbackService,
   feedbackMessages,

@@ -1,0 +1,74 @@
+---
+title: Federation SDK
+description: Create a Federation and access user or admin capabilities through Embassy.
+---
+
+@downcity/federation is the canonical package for the Federation, Embassy, and Bureau domains.
+
+## Embassy
+
+~~~ts
+import { Embassy } from "@downcity/federation";
+
+const embassy = new Embassy({
+  federation_url: "https://fed.example.com",
+  bureau_id: "product-web",
+});
+
+const providers = await embassy.user.account.providers();
+~~~
+
+Embassy exposes two identity domains:
+
+- embassy.user for account login, AI, payments, services, and Bureau requests.
+- embassy.admin for admin sessions and Federation management.
+
+~~~ts
+await embassy.user.account.login({
+  provider: "email",
+  input: {
+    email: "user@example.com",
+    password: "password",
+  },
+});
+
+const current_user = await embassy.user.current();
+~~~
+
+Administrators log in with their configured ID and password:
+
+~~~ts
+await embassy.admin.login({
+  admin_id: "owner",
+  password: "password",
+});
+
+const bureaus = await embassy.admin.bureaus.list();
+const issued = await embassy.admin.bureaus.tokens.issue({
+  bureau_id: "product-web",
+  purpose: "production backend",
+});
+const tokens = await embassy.admin.bureaus.tokens.list();
+~~~
+
+## Bureau Token
+
+Federation uses Admin Session authorization to generate a Bureau Token. The plaintext is returned
+once and only its hash is stored. A service consumes it through the independent Bureau client:
+
+~~~ts
+import { Bureau } from "@downcity/federation";
+
+const bureau = new Bureau({
+  federation_url: "https://fed.example.com",
+  bureau_token: process.env.DOWNCITY_BUREAU_TOKEN!,
+});
+
+const identity = await bureau.identify(request);
+~~~
+
+`bureau_token` is a long-lived, revocable machine credential. Bureau exposes `me()`, `identify()`,
+and `user()`, but cannot issue User Tokens. Account login and Admin token APIs ultimately ask
+Federation to perform User Token issuance.
+
+Moving to this package does not change existing HTTP endpoints, request or response bodies, database schemas, or Token claims.

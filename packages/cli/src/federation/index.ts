@@ -29,7 +29,7 @@ import { open_federation_server_workspace } from "@/federation/server/Federation
 import { CliError } from "@/shared/CliError.js";
 import { helpText, langOptionText, resolveCliLocale, setCliLocale, t } from "@/shared/CliLocale.js";
 import {
-  create_federation_bureau_token,
+  issue_federation_bureau_token,
   list_federation_bureaus,
   revoke_federation_bureau,
 } from "@/federation/bureau/commands/bureau.js";
@@ -276,10 +276,10 @@ function register_bureau_commands(program: Command): void {
     }));
 
   token_program
-    .command("create <bureau_id>")
-    .description(t({ zh: "创建并登记 Bureau Token", en: "create and register a Bureau token" }))
+    .command("issue <bureau_id>")
+    .description(t({ zh: "签发 Bureau Token", en: "issue a Bureau token" }))
     .helpOption("--help", helpText())
-    .action(createVersionBanner(packageJson.version, create_federation_bureau_token));
+    .action(createVersionBanner(packageJson.version, issue_federation_bureau_token));
 
   token_program
     .command("list")

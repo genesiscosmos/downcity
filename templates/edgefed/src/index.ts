@@ -4,7 +4,7 @@
  * Worker 只拥有平台入口和 D1 binding，领域能力仍由 Federation 负责。
  */
 
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-d1";
 import type { Env } from "./types/env.js";
 

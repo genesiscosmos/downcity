@@ -6,14 +6,14 @@ import { getTableColumns, getTableName } from "drizzle-orm";
 import {
   Database as CityDatabase,
   TableApi,
-  type CityTableApi,
+  type FederationTableApi,
   type DatabaseMutationResult,
   type DatabaseQueryResult,
   type DatabaseStatement,
   type DatabaseTransaction,
   type DrizzleDatabase,
   type FederationTableSchema,
-} from "@downcity/city";
+} from "@downcity/federation";
 import type { DatabaseOptions } from "./types/DatabaseOptions.js";
 
 /** 使用 postgres-js 的 PostgreSQL Federation Database。 */
@@ -31,8 +31,8 @@ export class Database extends CityDatabase {
 
   protected on_table<TRow extends Record<string, unknown>>(
     schema: FederationTableSchema,
-  ): CityTableApi<TRow> {
-    return new TableApi(this.drizzle, schema) as unknown as CityTableApi<TRow>;
+  ): FederationTableApi<TRow> {
+    return new TableApi(this.drizzle, schema) as unknown as FederationTableApi<TRow>;
   }
 
   protected async on_ensure_table(schema: FederationTableSchema): Promise<void> {
@@ -76,7 +76,7 @@ export class Database extends CityDatabase {
     return await this.drizzle.transaction(async (transaction_database) =>
       await handler({
         table: <TRow extends Record<string, unknown>>(schema: FederationTableSchema) =>
-          new TableApi(transaction_database, schema) as unknown as CityTableApi<TRow>,
+          new TableApi(transaction_database, schema) as unknown as FederationTableApi<TRow>,
       }));
   }
 

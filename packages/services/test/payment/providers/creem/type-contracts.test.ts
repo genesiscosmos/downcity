@@ -6,7 +6,7 @@
  * - 覆盖统一 PaymentService、provider 和主要返回类型
  */
 
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import {
   creemPaymentProvider,
   PaymentService,

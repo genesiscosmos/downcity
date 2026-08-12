@@ -6,7 +6,7 @@
  * - 只放纯工具，避免 provider 和 service 之间产生循环依赖。
  */
 
-import type { EnvRequirement } from "@downcity/city";
+import type { EnvRequirement } from "@downcity/federation";
 import type { AccountsProvider } from "./types.js";
 
 /**

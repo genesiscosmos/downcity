@@ -10,7 +10,7 @@ import {
   Federation,
   create_usage_date_formatter,
   format_usage_local_date,
-} from "@downcity/city"
+} from "@downcity/federation"
 import { create_test_text_model } from "../fixtures/ai-channel.mjs"
 import { createSqliteDb } from "./sqlite-db.mjs"
 import { CreditsService, UsageService } from "../../bin/index.js"

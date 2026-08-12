@@ -2,14 +2,14 @@
  * Federation Bureau Token 交互式管理器。
  *
  * 关键点（中文）
- * - 裸 `fed bureau token` 在一个全屏 TUI 中统一承担创建、查看和撤销。
- * - Token 明文只存在于创建结果页，不会写入列表或再次从 Federation 获取。
+ * - 裸 `fed bureau token` 在一个全屏 TUI 中统一承担签发、查看和撤销。
+ * - Token 明文只存在于签发结果页，不会写入列表或再次从 Federation 获取。
  * - 已撤销 Token 仍保留在注册表中，便于管理员审计用途和生命周期。
  */
 
-import type { BureauTokenSummary } from "@downcity/city";
+import type { BureauTokenSummary } from "@downcity/federation";
 import {
-  create_federation_bureau_token_record,
+  issue_federation_bureau_token_record,
   read_federation_bureau_tokens,
   revoke_federation_bureau_token_record,
 } from "@/federation/bureau/commands/bureau.js";
@@ -41,8 +41,8 @@ export async function run_interactive_bureau_token_manager(): Promise<void> {
 
       if (!selected || selected === "exit") return;
       if (selected === "refresh") continue;
-      if (selected === "create") {
-        await create_token_interactively(runtime);
+      if (selected === "issue") {
+        await issue_token_interactively(runtime);
         continue;
       }
       if (selected.startsWith(TOKEN_ACTION_PREFIX)) {
@@ -65,11 +65,11 @@ function build_manager_options(items: BureauTokenSummary[]): tui_prompt_option[]
 
   return [
     {
-      label: t({ zh: "创建 Bureau Token", en: "Create Bureau Token" }),
-      value: "create",
+      label: t({ zh: "签发 Bureau Token", en: "Issue Bureau Token" }),
+      value: "issue",
       hint: t({
-        zh: "输入用途并登记新的部署凭证",
-        en: "Enter a purpose and register a deployment credential",
+        zh: "输入用途并签发新的部署凭证",
+        en: "Enter a purpose and issue a deployment credential",
       }),
     },
     ...(token_options.length > 0
@@ -94,7 +94,7 @@ function build_manager_options(items: BureauTokenSummary[]): tui_prompt_option[]
   ];
 }
 
-async function create_token_interactively(runtime: ManagedTuiRuntime): Promise<void> {
+async function issue_token_interactively(runtime: ManagedTuiRuntime): Promise<void> {
   while (true) {
     const bureau_id_input = await runtime.text({
       title: "Bureau ID",
@@ -129,18 +129,18 @@ async function create_token_interactively(runtime: ManagedTuiRuntime): Promise<v
       continue;
     }
 
-    const created = await runtime.with_loading(
-      t({ zh: "登记 Bureau Token", en: "Registering Bureau token" }),
-      async () => await create_federation_bureau_token_record(bureau_id, purpose),
+    const issued = await runtime.with_loading(
+      t({ zh: "签发 Bureau Token", en: "Issuing Bureau token" }),
+      async () => await issue_federation_bureau_token_record(bureau_id, purpose),
     );
     await runtime.show_text(
-      t({ zh: "Bureau Token 已登记", en: "Bureau token registered" }),
+      t({ zh: "Bureau Token 已签发", en: "Bureau token issued" }),
       [
-        `${t({ zh: "用途", en: "Purpose" })}: ${created.purpose}`,
-        `Bureau ID: ${created.bureau_id}`,
-        `Token ID: ${created.token_id}`,
-        `DOWNCITY_FEDERATION_URL: ${created.federation_url}`,
-        `DOWNCITY_BUREAU_TOKEN: ${created.bureau_token}`,
+        `${t({ zh: "用途", en: "Purpose" })}: ${issued.purpose}`,
+        `Bureau ID: ${issued.bureau_id}`,
+        `Token ID: ${issued.token_id}`,
+        `DOWNCITY_FEDERATION_URL: ${issued.federation_url}`,
+        `DOWNCITY_BUREAU_TOKEN: ${issued.bureau_token}`,
         "",
         t({
           zh: "Token 明文只显示这一次，请立即写入 Bureau 的部署环境变量。",
@@ -183,8 +183,8 @@ async function manage_token(
         label: t({ zh: "确认撤销", en: "Revoke" }),
         value: "confirm",
         hint: t({
-          zh: "该 Token 将立即失去 Federation 管理权限",
-          en: "The token immediately loses Federation management access",
+          zh: "该 Token 将立即失去 Federation 访问权限",
+          en: "The token immediately loses Federation access",
         }),
       },
       { label: t({ zh: "取消", en: "Cancel" }), value: "cancel" },

@@ -8,7 +8,7 @@
 import {
   httpError,
   type ServiceRouteContext,
-} from "@downcity/city";
+} from "@downcity/federation";
 
 /** 读取当前请求已验证的用户与 Bureau 身份。 */
 export function require_service_user_identity(context: ServiceRouteContext) {

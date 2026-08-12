@@ -1,10 +1,10 @@
 import assert from "node:assert/strict"
-import { createHash, randomBytes } from "node:crypto"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { Bureau, City, Federation, FederationAdmin } from "@downcity/city"
+import { Federation } from "@downcity/federation"
+import { Bureau, City, FederationAdmin } from "@downcity/federation/legacy"
 import { createSqliteDb } from "./sqlite-db.mjs"
 import { create_test_admin_session } from "../admin-fixture.mjs"
 import {
@@ -115,6 +115,20 @@ test("City 直读 Profile，Bureau 本地验签后按需读取同一 Federation 
       user_id: registered.user_id,
       ttl: "1h",
     })
+
+    const bureau_issue_response = await base.fetch(new Request("http://localhost/v1/accounts/tokens/issue", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token_a.bureau_token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        bureau_id: bureau_a_record.bureau_id,
+        user_id: registered.user_id,
+        ttl: "1h",
+      }),
+    }))
+    assert.equal(bureau_issue_response.status, 403)
 
     const city_client = create_city(base, user_token.user_token)
     const city_profile = await city_client.user().profile()
@@ -556,11 +570,7 @@ function create_admin(base, admin_secret_key) {
 }
 
 async function register_bureau(admin, bureau_id) {
-  const token_id = `br_${randomBytes(12).toString("base64url")}`
-  const bureau_token = `fb_${token_id}.${randomBytes(32).toString("base64url")}`
-  const token_hash = createHash("sha256").update(bureau_token, "utf8").digest("base64url")
-  await admin.bureaus.tokens.register({ bureau_id, token_id, purpose: "accounts auth test", token_hash })
-  return { token_id, bureau_token }
+  return await admin.bureaus.tokens.issue({ bureau_id, purpose: "accounts auth test" })
 }
 
 function create_city(base, user_token) {

@@ -11,13 +11,13 @@ cd "$ROOT_DIR"
 source "$ROOT_DIR/scripts/lib/build-common.sh"
 
 PACKAGES=()
-ALL_PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "agent-registry" "workspace-cloudflare-computer" "server" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "ui" "cli")
+ALL_PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "agent-registry" "workspace-cloudflare-computer" "server" "federation" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "ui" "cli")
 BUILD_PACKAGES=()
 BUMP=true
 SYNC_GLOBAL_CLI=true
 
 usage() {
-  echo "Usage: npm run patch:build -- [--type] [--shell] [--sandbox-macos] [--sandbox-linux] [--sandbox-windows-mxc] [--sandbox-windows-srt] [--agent] [--agent-registry] [--workspace-cloudflare-computer] [--server] [--city] [--database-d1] [--database-sqlite] [--database-postgresql] [--services] [--plugins] [--cli] [--ui] [--all] [--no-bump] [--no-global-install]"
+  echo "Usage: npm run patch:build -- [--type] [--shell] [--sandbox-macos] [--sandbox-linux] [--sandbox-windows-mxc] [--sandbox-windows-srt] [--agent] [--agent-registry] [--workspace-cloudflare-computer] [--server] [--federation] [--city] [--database-d1] [--database-sqlite] [--database-postgresql] [--services] [--plugins] [--cli] [--ui] [--all] [--no-bump] [--no-global-install]"
   echo ""
   echo "  默认构建 agent + plugins + cli，并自增对应 package 的 patch 版本号"
   echo "  --type     构建 @downcity/type"
@@ -30,6 +30,7 @@ usage() {
   echo "  --agent-registry 构建 @downcity/agent-registry"
   echo "  --workspace-cloudflare-computer 构建 @downcity/workspace-cloudflare-computer"
   echo "  --server   构建 @downcity/server"
+  echo "  --federation 构建 @downcity/federation"
   echo "  --city     构建 @downcity/city"
   echo "  --database-d1 构建 @downcity/database-d1"
   echo "  --database-sqlite 构建 @downcity/database-sqlite"
@@ -139,7 +140,7 @@ resolve_build_packages() {
       if [[ "$has_ui" == false ]]; then
         resolved+=("ui")
       fi
-      for dep in city services; do
+      for dep in federation city services; do
         local has_dep=false
         local dep_item
         for dep_item in "${resolved[@]}"; do
@@ -162,7 +163,7 @@ resolve_build_packages() {
       done
       if [[ "$has_shell" == false ]]; then resolved+=("shell"); fi
     fi
-    if [[ "$selected" == "agent" || "$selected" == "workspace-cloudflare-computer" || "$selected" == "city" ]]; then
+    if [[ "$selected" == "agent" || "$selected" == "workspace-cloudflare-computer" || "$selected" == "federation" || "$selected" == "city" ]]; then
       local has_type=false
       local has_shell=false
       local has_agent=false
@@ -181,23 +182,30 @@ resolve_build_packages() {
       if [[ "$has_type" == false ]]; then
         resolved+=("type")
       fi
-      if [[ "$selected" != "city" && "$has_shell" == false ]]; then
+      if [[ "$selected" != "city" && "$selected" != "federation" && "$has_shell" == false ]]; then
         resolved+=("shell")
       fi
       if [[ "$selected" == "workspace-cloudflare-computer" && "$has_agent" == false ]]; then
         resolved+=("agent")
       fi
+      if [[ "$selected" == "city" ]]; then
+        local has_federation=false
+        for item in "${resolved[@]}"; do
+          if [[ "$item" == "federation" ]]; then has_federation=true; fi
+        done
+        if [[ "$has_federation" == false ]]; then resolved+=("federation"); fi
+      fi
     fi
     if [[ "$selected" == database-* ]]; then
       local has_type=false
-      local has_city=false
+      local has_federation=false
       local item
       for item in "${resolved[@]}"; do
         if [[ "$item" == "type" ]]; then has_type=true; fi
-        if [[ "$item" == "city" ]]; then has_city=true; fi
+        if [[ "$item" == "federation" ]]; then has_federation=true; fi
       done
       if [[ "$has_type" == false ]]; then resolved+=("type"); fi
-      if [[ "$has_city" == false ]]; then resolved+=("city"); fi
+      if [[ "$has_federation" == false ]]; then resolved+=("federation"); fi
     fi
     if [[ "$selected" == "server" ]]; then
       local has_type=false
@@ -227,21 +235,21 @@ resolve_build_packages() {
     fi
     if [[ "$selected" == "services" ]]; then
       local has_type=false
-      local has_city=false
+      local has_federation=false
       local item
       for item in "${resolved[@]}"; do
         if [[ "$item" == "type" ]]; then
           has_type=true
         fi
-        if [[ "$item" == "city" ]]; then
-          has_city=true
+        if [[ "$item" == "federation" ]]; then
+          has_federation=true
         fi
       done
       if [[ "$has_type" == false ]]; then
         resolved+=("type")
       fi
-      if [[ "$has_city" == false ]]; then
-        resolved+=("city")
+      if [[ "$has_federation" == false ]]; then
+        resolved+=("federation")
       fi
     fi
     if [[ "$selected" == "plugins" ]]; then
@@ -323,6 +331,7 @@ while [[ $# -gt 0 ]]; do
     --agent-registry) add_package "agent-registry" ;;
     --workspace-cloudflare-computer) add_package "workspace-cloudflare-computer" ;;
     --server)   add_package "server" ;;
+    --federation) add_package "federation" ;;
     --city)     add_package "city" ;;
     --database-d1) add_package "database-d1" ;;
     --database-sqlite) add_package "database-sqlite" ;;
@@ -331,7 +340,7 @@ while [[ $# -gt 0 ]]; do
     --plugins)  add_package "plugins" ;;
     --cli)      add_package "cli" ;;
     --ui)       add_package "ui" ;;
-    --all)      PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "agent-registry" "workspace-cloudflare-computer" "server" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "ui" "cli") ; shift ; continue ;;
+    --all)      PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "agent-registry" "workspace-cloudflare-computer" "server" "federation" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "ui" "cli") ; shift ; continue ;;
     --no-bump)  BUMP=false ;;
     --no-global-install) SYNC_GLOBAL_CLI=false ;;
     -h|--help)  usage ;;

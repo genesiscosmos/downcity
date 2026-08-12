@@ -2,6 +2,7 @@
   "title": "Packages",
   "pages": [
     "index",
+    "federation-sdk",
     "city",
     "cli"
   ]

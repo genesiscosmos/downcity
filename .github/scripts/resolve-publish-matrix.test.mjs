@@ -21,13 +21,14 @@ test("当前 workspace 被解析为三个稳定发布层", () => {
     ["@downcity/agent-registry", "@downcity/shell", "@downcity/type", "@downcity/ui"],
     [
       "@downcity/agent",
-      "@downcity/city",
+      "@downcity/federation",
       "@downcity/sandbox-linux",
       "@downcity/sandbox-macos",
       "@downcity/sandbox-windows-mxc",
       "@downcity/sandbox-windows-srt",
     ],
     [
+      "@downcity/city",
       "@downcity/database-d1",
       "@downcity/database-postgresql",
       "@downcity/database-sqlite",

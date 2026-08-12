@@ -111,8 +111,8 @@ fed web                         # start the local Web admin UI for the active Fe
 fed web --no-open --port 43128  # start without opening the browser
 fed server add
 fed server manage
-fed bureau token                 # open the Bureau Token manager TUI
-fed bureau token create          # enter a purpose and create a token
+fed bureau token                          # open the Bureau Token manager TUI
+fed bureau token issue <bureau_id>        # enter a purpose and ask Federation to issue a token
 fed bureau token list
 fed bureau token revoke <token_id>
 fed query GET /health

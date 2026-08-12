@@ -5,11 +5,12 @@ description: 理解City SDK 背后的 package 边界。
 
 # Packages 包
 
-City SDK 文档只保留 `@downcity/city` runtime package，以及管理 Federation / 本机 Agent 时需要的 CLI 入口。
+City SDK 文档以 `@downcity/federation` 和 CLI 为主。City 与 Agent Runtime 属于独立的 Agent 和宿主边界。
 
 ## City SDK 能力面
 
-- [@downcity/city](/zh/city-sdk-docs/packages/city)：City、Federation、service/action 基建、hooks、store、table 和 client 访问层。
+- [Federation SDK](/zh/city-sdk-docs/packages/federation-sdk)：Federation、Embassy、Bureau、service/action、鉴权和数据访问。
+- [@downcity/city](/zh/city-sdk-docs/packages/city)：旧 Federation API 的迁移入口。
 - [CLI](/zh/city-sdk-docs/packages/cli)：`fed/downfed` 管 Federation 部署和 admin 运维，`city/downcity` 管本机 Agent 和用户态连接。
 
 ## 相关 Space

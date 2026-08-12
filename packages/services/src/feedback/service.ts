@@ -10,9 +10,9 @@
 import {
   InstallableService,
   httpError,
-  type CityTableApi,
+  type FederationTableApi,
   type ServiceInstallContext,
-} from "@downcity/city";
+} from "@downcity/federation";
 import { register_feedback_routes } from "./routes.js";
 import { feedbackMessages } from "./schema.js";
 import type {
@@ -50,7 +50,7 @@ export class FeedbackService extends InstallableService {
     messages: feedbackMessages,
   };
 
-  private messages_table?: CityTableApi<FeedbackMessage>;
+  private messages_table?: FederationTableApi<FeedbackMessage>;
 
   constructor() {
     super();
@@ -203,7 +203,7 @@ export class FeedbackService extends InstallableService {
   /**
    * 读取反馈消息表。
    */
-  private messages(): CityTableApi<FeedbackMessage> {
+  private messages(): FederationTableApi<FeedbackMessage> {
     if (!this.messages_table) throw new Error("FeedbackService messages table is not ready");
     return this.messages_table;
   }

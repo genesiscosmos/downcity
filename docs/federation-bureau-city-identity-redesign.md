@@ -1,283 +1,348 @@
-# Federation、Bureau、City 身份与服务边界设计
+# Federation、Embassy 与 Bureau 身份架构
 
-> 状态：已确认并实施
-> 更新时间：2026-08-03
+## 1. 设计目标
 
-## 1. 结论
+本文定义 Downcity Federation 包中的三个核心概念及其身份边界：
 
-Downcity 使用三个边界清晰的核心概念：
+- Federation 是远程权威服务。
+- Embassy 是人类用户或管理员访问 Federation 的客户端入口。
+- Bureau 是产品业务分区；`Bureau` 客户端是该产品后端使用的机器身份入口。
 
-- **Federation** 是全局服务、账户与身份信任根。
-- **Bureau** 是稳定的产品服务端身份，并一对一拥有独立的 Server 配置。
-- **City** 是 Agent 终端，不是产品、服务端或持久身份。
+本次迁移只整理概念归属和公开 API，不改变既有业务能力：账户仍然登录、管理员仍然管理 Federation、产品后端仍然可以识别用户、已有 Service 仍由 Federation 执行。
 
-Organization 只表达成员关系与治理范围，不拥有服务地址。Organization 可以是 Federation 全局组织，也可以通过 `bureau_id` 归属于某个 Bureau。
+City 和 Agent 属于 Agent 运行环境，不在本文和 `@downcity/federation` 的领域范围内。
 
-```mermaid
-flowchart LR
-    C["City：Agent 终端"] -->|"登录与全局 Service"| F["Federation：账户、身份、全局服务"]
-    F -->|"User Token 内含 bureau_id"| C
-    C -->|"解析当前 Bureau"| F
-    F -->|"BureauRecord.server.server_url"| C
-    C -->|"User Token"| B["Bureau：产品服务端"]
-    B -->|"Bureau Token"| F
+## 2. 核心不变量
+
+1. Federation 是所有 Token 的唯一签发权威。
+2. Embassy 只有 `user` 和 `admin` 两个身份子域。
+3. Admin Session 只负责授权管理操作，不是长期业务服务凭证。
+4. Bureau Token 是某个 Bureau 后端的长期机器凭证，由 Federation 生成。
+5. Bureau Token 不能签发 User Token。
+6. `Bureau` 与 `Embassy` 完全解耦，二者不互相持有。
+7. User Token 绑定 `bureau_id`，Bureau 后端只能接受签给自己的 User Token。
+8. Federation 数据库不保存 Bureau Token 明文，只保存 hash；明文仅在签发响应中返回一次。
+
+## 3. 概念与身位
+
+### 3.1 Federation
+
+Federation 是系统的远程权威和服务运行容器，拥有：
+
+- 管理员账号、密码摘要和 Admin Session。
+- 用户账户、登录状态和用户资料。
+- Bureau Record、Bureau Server Record 和 Bureau Token 注册表。
+- User Token 与 Bureau Token 的签发、验证和撤销规则。
+- Ed25519 Key Ring、discovery 和 JWKS。
+- AI、Payment、Credits、Usage 等可安装 Service。
+
+Federation 不代表某个产品，也不运行 Agent。它可以同时服务多个 Bureau。
+
+### 3.2 Embassy
+
+Embassy 是访问 Federation 的客户端门面。它表达“某个自然人身份通过 Federation 办事”，只公开两个身份子域：
+
+- `embassy.user`：用户登录、当前用户、AI、Payment 和 Service 调用。
+- `embassy.admin`：管理员登录、当前管理员和 Federation 控制面。
+
+Embassy 可以带可选 `bureau_id`，用于指定用户登录和业务请求所属的产品分区。该字段只是请求上下文，不把 Embassy 变成 Bureau。
+
+Embassy 不接收 Bureau Token，也不提供 `identify()`。
+
+### 3.3 Bureau
+
+Bureau 是 Federation 中稳定的产品或业务分区，通过 `bureau_id` 标识。Bureau Record 保存：
+
+- 产品身份和展示名称。
+- active、paused、archived 生命周期状态。
+- 可信业务服务 `server_url`。
+- 创建、更新时间和归档时间。
+
+`Bureau` 类是产品后端的客户端。它只接收 `federation_url` 和 `bureau_token`，公开：
+
+- `me()`：向 Federation 验证机器凭证并读取其 Bureau 身份。
+- `identify(request | user_token)`：用 Federation JWKS 本地验证 User Token，并检查 `bureau_id`。
+- `user(request | user_token)`：在已验证身份上创建最小用户会话，以读取允许的 Federation 用户数据。
+
+`Bureau` 不包含管理员能力，不签发任何 Token，也不承载产品业务实现。
+
+## 4. 凭证模型
+
+| 凭证 | 持有者 | 签发或创建方 | 生命周期 | 权限 |
+| --- | --- | --- | --- | --- |
+| 管理员密码 | 管理员 | 部署恢复流程写入摘要 | 人工轮换 | 换取 Admin Session |
+| Admin Session Token | Embassy Admin | Federation | 短期、可撤销 | Federation 控制面 |
+| Bureau Token | 产品后端 | Federation，经 Admin Session 授权 | 长期、可撤销 | Bureau 机器身份、`me()` |
+| User Token | 用户客户端 | Federation | 短期 | 访问指定 Bureau 范围内的用户能力 |
+
+不存在 Root Admin Token。管理员密码遗失时，由拥有基础设施权限的人运行 `fed deploy --admin-reset`。
+
+### 4.1 Bureau Token
+
+Bureau Token 使用以下 wire 格式：
+
+```text
+fb_<token_id>.<secret>
 ```
 
-## 2. 产品意图与职责
+签发流程：
 
-### 2.1 Federation
+1. 管理员通过 Embassy 登录 Federation，获得短期 Admin Session。
+2. 管理员提交 `bureau_id` 和 `purpose`。
+3. Federation 验证 Bureau 存在且未归档。
+4. Federation 使用 Web Crypto 生成 `token_id`、随机 secret 和完整明文。
+5. Federation 计算完整明文的 SHA-256 hash，只持久化 hash 和元数据。
+6. 完整明文仅在本次响应中返回。
+7. 产品后端把明文作为 `DOWNCITY_BUREAU_TOKEN` 安全保存。
 
-Federation 回答“这个用户是谁、当前进入哪个产品、可以调用哪些全局服务”。它负责：
+List 接口只返回 Token 元数据，不返回明文或 hash。撤销后，同一 Token 的 `me()` 和依赖机器身份的 `identify()` 必须立即失败。
 
-- 用户账户与登录流程；
-- 签发和验证 User Token；
-- 注册 Bureau 及其唯一服务入口；
-- 注册与撤销绑定 Bureau 的机器凭证；
-- 提供 Accounts、AI、Credits、Organizations 等全局服务；
-- 作为 User Token 的 issuer 和公钥信任根。
+### 4.2 User Token
 
-Federation 不承担产品业务服务端职责，也不把 City 当成数据库中的产品实体。
+User Token 是 Federation 使用 Ed25519 私钥签发的 JWT，外层使用 `ub_` 前缀。核心 claim 包括：
 
-### 2.2 Bureau
+- `sub` / `user_id`：用户身份。
+- `bureau_id`：Token 可访问的产品分区。
+- `iss`：Federation issuer。
+- `aud`：统一 User Token audience。
+- `exp`、`iat`、`jti`：生命周期和唯一标识。
+- `metadata`：可选业务元数据。
 
-Bureau 回答“这个产品服务端是谁、它的入口在哪里”。它负责：
+User Token 可以由账户登录流程产生，也可以由已授权的 Federation Admin 管理接口产生。无论入口是哪一个，实际签名和签发都发生在 Federation 内部。
 
-- 以稳定的 `bureau_id` 标识产品边界；
-- `bureau_id` 不要求 `bureau_` 等语义前缀；从历史身份迁移时必须原样保留 ID，不能拼接或改写；
-- 一对一拥有一条 Server 配置；
-- 使用绑定自身的 Bureau Token 向 Federation 证明机器身份；
-- 使用 Federation JWKS 本地验证本 Bureau 的 User Token；
-- 承载产品私有业务、数据与策略。
+Bureau Token 对 Accounts `/tokens/issue` 没有权限。它不能代理 Admin，也不能把自己的长期机器身份升级为用户签发权。
 
-一个 Bureau 只拥有一个当前 Server。Server 配置与 Bureau 身份分表保存，通过 `bureau_id` 一对一关联。不同 Bureau 可以使用相同 URL，因此 `server_url` 不设置全局唯一约束。更新域名或迁移部署时，只更新 Server 记录，不改变 `bureau_id`。
+## 5. 公开 API
 
-当前产品模型不引入 Deployment 资源。未来只有在确实需要多区域、多实例、健康检查和流量调度时，才另行设计 Deployment 控制面。
-
-### 2.3 City
-
-City 回答“Agent 终端如何使用 Federation 和当前产品”。它负责：
-
-- 登录前持有 `federation_url`；
-- 在 `login/start` 中显式选择 `bureau_id`；
-- 登录后持有 User Token；
-- 让 Federation 验证 Token 并解析当前 Bureau；
-- 使用返回的 `server_url` 调用 Bureau；
-- 只向当前 Bureau origin 转发 User Token。
-
-City 不持久化产品身份，不在构造时接受 `bureau_id` 或 `bureau_url`。
-
-### 2.4 Organization
-
-Organization 是一组成员关系和治理规则：
-
-- `scope = federation`：跨 Bureau 的全局组织；
-- `scope = bureau`：由 `bureau_id` 隔离的产品组织。
-
-Organization 不拥有 server、URL、Token 或部署生命周期。
-
-## 3. 权威数据模型
-
-### 3.1 BureauRecord 与 BureauServerRecord
+### 5.1 用户 Embassy
 
 ```ts
-interface BureauRecord {
-  /** Federation 内稳定的产品标识。 */
-  bureau_id: string;
-  /** 面向管理者展示的产品名称。 */
-  name: string;
-  /** 当前 Bureau 唯一拥有的 Server 配置。 */
-  server: BureauServerRecord;
-  /** Bureau 当前生命周期状态。 */
-  state: "active" | "paused" | "archived";
-  /** 创建时间。 */
-  created_at: string;
-  /** 最近更新时间。 */
-  updated_at: string;
-  /** 归档时间；未归档时为空字符串。 */
-  archived_at: string;
-}
+import { Embassy } from "@downcity/federation";
 
-interface BureauServerRecord {
-  /** 拥有当前 Server 的稳定 Bureau ID。 */
-  bureau_id: string;
-  /** 当前 Server 的 HTTP(S) 服务入口。 */
-  server_url: string;
-  /** 创建时间。 */
-  created_at: string;
-  /** 最近更新时间。 */
-  updated_at: string;
-}
+const embassy = new Embassy({
+  federation_url: "https://fed.example.com",
+  bureau_id: "product-web",
+});
+
+const providers = await embassy.user.account.providers();
+
+await embassy.user.account.login({
+  provider: "email",
+  input: {
+    email: "user@example.com",
+    password: "password",
+  },
+});
+
+const current_user = await embassy.user.current();
+const user_token = embassy.user.account.token();
 ```
 
-约束：
+账户 API 保持为：
 
-- 创建时 `name` 和 `server_url` 必填，Federation 在同一事务创建 Bureau 与 Server；
-- `federation_bureau_servers.bureau_id` 同时是主键与 Bureau 外键，保证一对一；
-- `server_url` 必须是无 credentials 的 HTTP(S) URL，并规范化掉末尾 `/`；
-- 不限制不同 Bureau 使用相同 `server_url`；
-- archived Bureau 不允许再修改 URL。
+- `embassy.user.account.providers()`
+- `embassy.user.account.login()`
+- `embassy.user.account.continue()`
+- `embassy.user.account.status()`
+- `embassy.user.account.token()`
+- `embassy.user.account.logout()`
 
-### 3.2 Bureau Token
-
-Bureau Token 是机器凭证，不是一个需要调用方重复声明的身份参数。记录必须包含：
-
-- `token_id`；
-- `bureau_id`；
-- `token_hash`；
-- `purpose`；
-- `status` 与时间字段。
-
-Federation 只保存 hash。`new Bureau()` 通过 Token 调用 `/v1/bureaus/me`，由 Federation 返回其绑定的 Bureau，调用方不能另传 `bureau_id` 覆盖归属。
-
-### 3.3 User Token
-
-User Token 至少包含：
-
-- `user_id`；
-- `bureau_id`；
-- Federation issuer；
-- 固定 `downcity:user` audience；
-- `jti`、签发时间和过期时间。
-
-`bureau_id` 在登录开始时确定，签入 Token 后成为请求身份的一部分。Federation 与 Bureau
-属于同一用户服务面，共同校验 `downcity:user` audience；Bureau 再强制比较已签名的
-`bureau_id` 与自身身份。City 不通过未验证的本地 JWT decode 建立信任，而是调用
-Federation `/v1/bureaus/current` 获取权威 BureauRecord。
-
-## 4. SDK 公开 API
-
-### 4.1 登录前 City
+### 5.2 管理员 Embassy
 
 ```ts
-const guest = new City({ federation_url });
+const embassy = new Embassy({
+  federation_url: "https://fed.example.com",
+});
 
-const login = await guest
-  .service("accounts")
-  .action("login/start")
-  .invoke({ provider: "email", bureau_id });
+await embassy.admin.login({
+  admin_id: "owner",
+  password: "password",
+});
+
+const current_admin = await embassy.admin.current();
+const bureaus = await embassy.admin.bureaus.list();
 ```
 
-登录前没有 User Token，因此不可能从 Token 推导 Bureau。`bureau_id` 只在登录意图中显式提交，不进入 City 构造参数。
-
-### 4.2 登录后 City
+管理员通过同一上下文管理 Bureau 和 Bureau Token：
 
 ```ts
-const city = new City({ federation_url, user_token });
-const bureau = await city.bureau();
+const issued = await embassy.admin.bureaus.tokens.issue({
+  bureau_id: "product-web",
+  purpose: "production backend",
+});
 
-await city.post("/v1/product/action", input);
+const tokens = await embassy.admin.bureaus.tokens.list("product-web");
+await embassy.admin.bureaus.tokens.revoke(issued.token_id);
 ```
 
-`city.bureau()` 的结果在实例内缓存。`get()` 与 `post()` 使用 `bureau.server.server_url`，并拒绝把 User Token 发送到不同 origin 的绝对 URL。
+`issue()` 表示管理员授权 Federation 签发，不表示 Embassy 本地生成 Token。
 
-### 4.3 Bureau
+### 5.3 Bureau 后端
 
 ```ts
+import { Bureau } from "@downcity/federation";
+
 const bureau = new Bureau({
-  federation_url,
-  bureau_token,
+  federation_url: "https://fed.example.com",
+  bureau_token: process.env.DOWNCITY_BUREAU_TOKEN!,
 });
 
-const machine_identity = await bureau.me();
-const user = await bureau.identify(request);
+const machine = await bureau.me();
+const identity = await bureau.identify(request);
+const current_user = await bureau.user(request);
+const profile = await current_user.profile();
 ```
 
-`bureau.me()` 返回 Token 绑定的完整 BureauRecord 与 `token_id`。`identify()` 先校验统一
-User Token audience，再比较机器凭证和 User Token 中的 `bureau_id`，不能验证其他 Bureau
-的 User Token。
+业务请求中的 User Token 由用户登录 Federation 获得。Bureau 只验证和消费该 Token。
 
-### 4.4 FederationAdmin
+## 6. 请求流程
 
-```ts
-const created = await admin.bureaus.create({
-  name: "My Product",
-  server_url: "https://bureau.example.com",
-});
+### 6.1 用户登录
 
-await admin.bureaus.server.update({
-  bureau_id: created.bureau_id,
-  server_url: "https://new-bureau.example.com",
-});
+```text
+User App
+  -> Embassy User
+  -> Federation Accounts
+  -> 账户认证
+  -> Federation 签发 User Token(bureau_id)
+  -> Embassy User 保存 Token
 ```
 
-## 5. 请求流程
+### 6.2 Bureau Token 签发
 
-### 5.1 登录与 Bureau 发现
-
-```mermaid
-sequenceDiagram
-    participant C as City
-    participant F as Federation
-    participant B as Bureau
-
-    C->>F: login/start(provider, bureau_id)
-    F->>F: 验证 Bureau active
-    F-->>C: 登录流程
-    C->>F: login/result
-    F-->>C: User Token(user_id, bureau_id, audience)
-    C->>F: GET /v1/bureaus/current + User Token
-    F->>F: 验签并校验 bureau_id
-    F-->>C: BureauRecord(server_url)
-    C->>B: 业务请求 + 同一 User Token
+```text
+Administrator
+  -> Embassy Admin 登录
+  -> Admin Session
+  -> embassy.admin.bureaus.tokens.issue(...)
+  -> Federation 生成明文并保存 hash
+  -> 明文只返回一次
+  -> Bureau 部署环境安全保存
 ```
 
-### 5.2 Bureau 本地验签
+### 6.3 Bureau 识别用户
 
-```mermaid
-sequenceDiagram
-    participant B as Bureau SDK
-    participant F as Federation
-
-    B->>F: GET /v1/bureaus/me + Bureau Token
-    F-->>B: Token 绑定的 BureauRecord
-    B->>F: GET discovery + JWKS
-    F-->>B: issuer + public keys
-    B->>B: 校验签名、issuer、audience 和 bureau_id
+```text
+User App 携带 User Token
+  -> Bureau 后端
+  -> Bureau.me() 验证 Bureau Token
+  -> 获取 Federation discovery / JWKS
+  -> 本地验证签名、issuer、audience、有效期
+  -> 校验 User Token.bureau_id == Bureau.bureau_id
+  -> 返回 BureauIdentity
 ```
 
-## 6. HTTP 接口边界
+`identify()` 不调用远程 Accounts identify 接口。JWKS 可以短期缓存；未知 `kid` 时强制刷新一次。
 
-管理接口：
+## 7. server_url 的语义
 
-- `POST /v1/bureaus/create`：创建 Bureau，`server_url` 必填；
-- `POST /v1/bureaus/server/update`：更新一个 Bureau 的唯一 Server 入口；
-- `POST /v1/bureaus/tokens/register`：把机器凭证绑定到 `bureau_id`；
-- Bureau pause、resume、archive 与 token revoke/list 等既有管理接口。
+`server_url` 是某个 Bureau 的可信产品后端 origin，作用只有两个：
 
-身份接口：
+1. Embassy User 发起 Bureau 业务请求时解析目标地址。
+2. 防止 User Token 被转发到与当前 Bureau 无关的 origin。
 
-- `GET /v1/bureaus/current`：使用 User Token 返回当前 Bureau；
-- `GET /v1/bureaus/me`：使用 Bureau Token 返回绑定的 Bureau 与 Token 身份；
-- `GET /.well-known/downcity.json` 与 `GET /.well-known/jwks.json`：支持本地验签。
+它不是 Federation 地址，不是 Bureau Token 的签发服务，也不要求 Bureau 后端实现通用 Downcity Server。Federation 和 Bureau 后端可以部署在不同机器、网络和运行时。
 
-不再存在 `/v1/cities/*` 或 `CitiesService`。
+## 8. 存储与安全边界
 
-## 7. 安全边界
+Federation 数据库存储：
 
-- City 相信 Federation 验证后的 `/v1/bureaus/current`，不相信本地 decode 的 claims。
-- Federation 必须校验 User Token 的 issuer、`downcity:user` audience 与身份 Claim。
-- Bureau 必须校验相同 audience，并强制比较机器 Token 与 User Token 绑定的 `bureau_id`。
-- City 只向 `BureauRecord.server.server_url` 的同 origin 地址发送 User Token。
-- paused 或 archived Bureau 不能作为有效的当前产品入口。
-- Token 明文只在签发时出现，数据库只保存 hash。
+- Bureau Record 和 Bureau Server Record。
+- Bureau Token 的 `token_id`、`bureau_id`、`purpose`、hash、状态和时间戳。
+- User Token 的签名密钥材料及必要的撤销状态。
+- 管理员密码摘要和 Admin Session。
 
-## 8. Schema 迁移
+Federation 数据库不存储：
 
-这次迭代不保留旧模型兼容层。启动守卫会拒绝：
+- Bureau Token 明文。
+- 管理员明文密码。
+- 产品后端自己的业务数据。
 
-- 存在旧 `cities` 表；
-- `federation_bureau_tokens` 缺少 `bureau_id`；
-- `federation_bureaus` 仍把 `server_url` 保存在身份表；
-- Bureau 身份缺少一对一的 `federation_bureau_servers` 记录。
+部署环境负责安全保存 Bureau Token 明文。泄露时必须撤销旧 Token并签发新 Token；不能通过 list 接口找回旧明文。
 
-迁移必须显式完成：删除旧 City 产品身份，为每个 Bureau 填写服务入口，并重新注册能确定归属的 Bureau Token。不能猜测历史 Token 的 Bureau。
+## 9. 包边界
 
-## 9. 最终不变量
+- `@downcity/federation`：正式拥有 Federation、Embassy、Bureau、Service 和协议类型。
+- `@downcity/city`：只作为旧 Federation SDK 的薄兼容入口，不再拥有实现。
+- `downcity` CLI：管理本机 Agent/City，并通过 `fed` 命令管理 Federation 部署和凭证。
+- Agent package：拥有 City 和 Agent 运行环境概念，不依赖本文的身份客户端组织方式。
 
-1. Federation 是用户身份和 Bureau 注册信息的唯一事实源。
-2. Bureau 是产品服务端边界，一个 Bureau 一对一拥有一个当前 Server。
-3. City 是终端，不拥有 `bureau_id` 或服务部署配置。
-4. Bureau Token 自身绑定 `bureau_id`。
-5. User Token 自身包含 `bureau_id`，但客户端通过 Federation 权威解析。
-6. Organization 只表达关系，不承载 server。
-7. Server 对单个 Bureau 必填且唯一，`server_url` 不要求跨 Bureau 唯一。
+依赖方向是客户端和 Service 依赖 Federation 的最小公开 API；Federation 不依赖 CLI、Desktop、City 或 Agent。
+
+## 10. CLI
+
+```bash
+fed bureau token
+fed bureau token issue <bureau_id>
+fed bureau token list
+fed bureau token revoke <token_id>
+```
+
+CLI 必须先取得有效 Admin Session，然后调用 Federation。CLI 不在本地生成 Bureau Token，也不把 Admin Session 当作 Bureau Token。
+
+签发成功后输出：
+
+```bash
+DOWNCITY_BUREAU_TOKEN=fb_br_xxx.secret
+```
+
+## 11. HTTP 权限
+
+| Endpoint | 身份 | 说明 |
+| --- | --- | --- |
+| `POST /v1/admin/login` | 公开登录入口 | 验证管理员 ID 和密码 |
+| `POST /v1/bureaus/tokens/issue` | admin | Federation 签发 Bureau Token |
+| `GET /v1/bureaus/tokens/list` | admin | 列出 Token 元数据 |
+| `POST /v1/bureaus/tokens/revoke` | admin | 撤销 Bureau Token |
+| `GET /v1/bureaus/me` | bureau | 读取当前机器身份 |
+| `POST /v1/accounts/tokens/issue` | admin | Federation 管理员授权签发 User Token |
+| `GET /v1/accounts/me` | user | 读取当前用户资料 |
+
+关键拒绝规则：
+
+- 无凭证签发 Bureau Token：401。
+- Bureau Token 调用管理员接口：403。
+- Bureau Token 调用 Accounts User Token 签发接口：403。
+- 已撤销 Bureau Token 调用 `me()`：401。
+- Bureau 验证其他 `bureau_id` 的 User Token：401。
+- Embassy 构造参数传入 Bureau Token：类型错误。
+
+## 12. 数据迁移与命名
+
+数据库继续使用 `federation_bureau_tokens` 表和 `token_id`、`token_hash` 字段。凭证格式继续使用 `fb_` 前缀。这里的 Token 是不透明机器凭证，不表示 JWT。
+
+公开概念迁移：
+
+| 迁移前调用方式 | 正式调用方式 |
+| --- | --- |
+| City 用户客户端 | `embassy.user` |
+| FederationAdmin | `embassy.admin` |
+| 管理员与业务身份混合对象 | `EmbassyAdmin` 与独立 `Bureau` |
+| 客户端本地登记机器凭证 | Federation `tokens.issue()` |
+| 业务服务验证用户 | `bureau.identify()` |
+
+不保留两套凭证命名或双轨 API。新代码只使用 `bureau_token`、`BureauTokenRecord`、`BureauTokenSummary`、`IssueBureauTokenInput` 和 `DOWNCITY_BUREAU_TOKEN`。
+
+## 13. 非目标
+
+本次不处理：
+
+- City 和 Agent 的运行生命周期。
+- Desktop 如何实例化 Agent。
+- Bureau 自身产品业务的代码组织。
+- 跨 Federation 的身份互信。
+- Bureau Token 自动轮换协议。
+- User Token 权限模型的进一步细分。
+
+## 14. 验收标准
+
+1. Embassy 构造参数不包含 Bureau Token。
+2. Embassy Admin 不公开 `identify()`。
+3. `Bureau` 可从 package 根入口直接导入。
+4. Bureau 只公开 `me()`、`identify()` 和 `user()` 身份能力。
+5. Bureau Token 只由 Federation 生成，签发结果只返回一次明文。
+6. Token list 和数据库都不暴露 Bureau Token 明文。
+7. Accounts User Token 签发 endpoint 仍只接受 admin。
+8. 测试明确覆盖 Bureau Token 签发 User Token 返回 403。
+9. CLI、README 和 Homepage 统一使用 `fed bureau token` 与 `DOWNCITY_BUREAU_TOKEN`。
+10. Federation、City 兼容入口、Services 和 CLI 的类型检查与测试通过。

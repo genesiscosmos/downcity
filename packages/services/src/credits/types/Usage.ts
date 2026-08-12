@@ -4,7 +4,7 @@
  * Credits 用量只来自已入账 Charge；Topup、Pending 与回滚记录不属于消费事实。
  */
 
-import type { AdminUsageQuery, UserDailyUsageQuery } from "@downcity/city";
+import type { AdminUsageQuery, UserDailyUsageQuery } from "@downcity/federation";
 
 /** Credits 每日消费 Bucket。 */
 export interface CreditsDailyUsageBucket {

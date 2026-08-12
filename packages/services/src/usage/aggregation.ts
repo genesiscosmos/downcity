@@ -1,6 +1,6 @@
 /** Credits 与 AI Usage 每日结果合并模块。 */
 
-import type { AIDailyUsageResult } from "@downcity/city";
+import type { AIDailyUsageResult } from "@downcity/federation";
 import type { CreditsDailyUsageResult } from "../credits/types/Usage.js";
 import type { UserUsageBucket, UserUsageResponse } from "./types/Usage.js";
 

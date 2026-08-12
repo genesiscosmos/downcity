@@ -9,7 +9,7 @@ import {
   type AdminUsageQuery,
   type UserDailyUsageQuery,
   type UserRecentAIUsageQuery,
-} from "@downcity/city";
+} from "@downcity/federation";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 const MAX_USAGE_DAYS = 400;

@@ -1,153 +1,141 @@
 ---
 title: Identity
-
-description: How City manages user identity, authentication, and permissions
+description: How Embassy accesses Federation user and administrator identities
 ---
 
-# City User Identity
+# Embassy Identity
 
-Federation owns user identity and account data, and the City client connects to Federation directly. A product only deploys a Bureau when it needs its own backend capabilities. One Federation can serve multiple products, isolated by `bureau_id`.
+Federation issues user identities and stores account data. Clients access Federation directly
+through Embassy. A product configures its trusted Bureau business endpoint only when it needs a
+backend of its own.
 
-## Identity boundaries
+## Identity Boundaries
 
-- **Federation** — stores the Ed25519 private key and issues `user_token` values
-- **City** — stores `federation_url + user_token` and makes user requests
-- **Bureau** — the product backend; it proves machine identity with a `bureau_token` bound to
-  `bureau_id` and verifies users for independent services with Federation's public key
+- **Federation**: the server runtime that issues `user_token` credentials and manages accounts, Services, and Bureau records.
+- **Embassy User**: holds the current `user_token` and performs user login and business requests.
+- **Embassy Admin**: manages Federation with an Admin Session, including authorizing Federation to issue Bureau Tokens.
+- **Bureau**: a product partition selected by `bureau_id`; its backend uses an independent Bureau client as its machine identity.
 
-## Authentication flow
-
-1. The user selects a product `bureau_id` during login
-2. Federation signs a `user_token` bound to that `bureau_id`
-3. The user calls Federation through `new City({ federation_url, user_token })`
-4. The user sends the same Bearer Token to the product backend
-5. City sends `user_token` directly to Federation for Profile, balance, and standard Services
-6. If the product has its own backend, City uses `city.get()` / `city.post()` to call Bureau services
-7. Bureau verifies `user_token` locally with Federation's public key and only calls Federation when it needs current data
+Embassy exposes only `user` and `admin` identity domains:
 
 ```ts
-const city = new City({
+import { Embassy } from "@downcity/federation";
+
+const embassy = new Embassy({
   federation_url: "https://fed.example.com",
-  user_token,
+  bureau_id: "product-web",
+});
+```
+
+## User Identity
+
+Account flows live under `embassy.user.account`. After login, the same Embassy instance starts
+using the new User Token immediately:
+
+```ts
+const providers = await embassy.user.account.providers();
+
+await embassy.user.account.login({
+  provider: "email",
+  input: {
+    email: "user@example.com",
+    password: "password",
+  },
 });
 
-const profile = await city.user().profile();
+const current_user = await embassy.user.current();
+const user_token = embassy.user.account.token();
 ```
 
-Optional product backend:
-
-Create the Bureau and its required one-to-one Server configuration in the Federation control plane, then register its machine token. The create input still accepts `server_url` directly:
-
-```bash
-fed bureau token
-```
-
-This opens the interactive manager. Choose Create and enter a purpose; the CLI displays the
-plaintext `DOWNCITY_BUREAU_TOKEN` once. You can also run `fed bureau token create <bureau_id>` directly.
-Federation stores the purpose and hash, so Federation and Bureau can run on different servers.
-
-```ts
-const bureau = new Bureau({
-  federation_url: "https://fed.example.com",
-  bureau_token: process.env.DOWNCITY_BUREAU_TOKEN!,
-});
-
-const identity = await bureau.identify(request);
-const profile = await (await bureau.user(request)).profile();
-```
-
-`Bureau` is an optional product backend. Its token is already bound to a stable `bureau_id`, so the
-constructor does not repeat that value. It represents only that
-Bureau's machine identity and has no Federation Root privileges. `identify()` rejects User Tokens
-whose audience belongs to another Bureau. `identify()` only reads discovery and JWKS;
-Bureau requests Federation only when it needs current Profile, balance, or other shared data.
-
-City resolves the entrypoint from `bureau.server.server_url`, so callers only provide a relative path:
-
-```ts
-const result = await city.post(
-  "/reports/summary",
-  { range: "today" },
-);
-```
-
-## User Token and Bureau Token
-
-Both tokens use the Bearer header, but they represent different principals and use different verification mechanisms:
-
-| Property | `user_token` | `bureau_token` |
-| --- | --- | --- |
-| Principal | Federation user | Federation management and Bureau server |
-| Format | `ub_<JWT>` | `fb_<token_id>.<secret>` |
-| Implementation | Ed25519 asymmetric signature | Random opaque credential and SHA-256 hash |
-| Verification | Verify with Federation's JWKS public key | Federation hashes the token and queries its registry |
-| Identity data | Contains `user_id`, `bureau_id`, `iss`, `aud`, `exp`, and `jti` | Contains no user identity; maps to a Federation registry record |
-| Local verification | Bureau verifies with Federation JWKS | Federation checks the registry for management requests |
-| Revocation | Primarily bounded by expiry and current Federation state | Federation marks the registration as `revoked` |
-
-### User Token
-
-Federation signs the user JWT with its private key and publishes only public verification keys
-through JWKS. Bureau can verify the signature, issuer, audience, expiry, and `bureau_id`, but a
-public key cannot sign or modify user tokens.
-
-```mermaid
-flowchart LR
-    F["Federation private key"] -->|"Ed25519 signature"| U["user_token"]
-    U --> C["City calls Federation"]
-    U --> B["Bureau verifies locally"]
-    J["Federation JWKS public key"] --> B
-```
-
-Anyone who obtains a valid `user_token` can act as that user until the token expires. User
-tokens must therefore have a finite lifetime and only travel over HTTPS.
-
-### Bureau Token
-
-`bureau_token` is not a JWT and has no public/private key pair. `fed bureau token create`
-requires a purpose, generates the plaintext and hash locally, then registers only
-`token_id + purpose + token_hash` with Federation.
-
-```mermaid
-flowchart LR
-    CLI["fed bureau token create"] -->|"generate plaintext"| T["bureau_token"]
-    CLI -->|"submit SHA-256 hash"| F["Federation registry"]
-    T -->|"environment variable"| B["Bureau server"]
-    B -->|"Bearer bureau_token"| F
-    F -->|"compare hash"| X["allow management request"]
-```
-
-At runtime, Bureau sends the plaintext token to its Federation machine-identity endpoint over HTTPS. Federation extracts
-`token_id`, computes SHA-256, and compares it with the database record. The database never
-stores the plaintext token.
-
-A leaked `bureau_token` lets an attacker impersonate that Bureau to call Federation management
-APIs, but cannot create or forge a `user_token`. Revoke a leaked credential with
-`fed bureau token revoke <token_id>`, or select it in the `fed bureau token` manager. Revocation does not retroactively revoke issued `user_token`
-values; user tokens remain controlled by expiry and Federation key policy.
-
-Federation still publishes Ed25519 public keys for its own token validation and other protocols:
+A User Token is a JWT signed by Federation with Ed25519. It carries `user_id`, `bureau_id`,
+issuer, audience, and expiry claims. Public verification keys are available at:
 
 ```text
 /.well-known/downcity.json
 /.well-known/jwks.json
 ```
 
-The Federation Root control plane belongs to `FederationAdmin`. `Bureau` only reads its bound machine
-identity and validates targeted User Tokens locally. `fed bureau token create <bureau_id>` generates
-plaintext locally and stores ownership, purpose, and hash in the Federation registry.
+User AI, Payment, and regular Service requests go directly to Federation:
 
-## Plugin Resources
-
-Complete Chat Resource Items are encrypted in `~/.downcity/downcity.db` and referenced by stable ID from the Chat Plugin Binding:
-
-```json
-{
-  "resource_ids": ["telegram-a1b2c3"]
-}
+```ts
+const models = await embassy.user.ai.catalog();
+const accounts = embassy.user.service("accounts");
+const services = await embassy.user.list_services();
 ```
 
-Continue with:
+When the current Bureau has a trusted `server_url`, relative-path requests are sent to that origin
+with the current User Token. Embassy does not forward the token to another origin:
 
+```ts
+const result = await embassy.user.post(
+  "/reports/summary",
+  { range: "today" },
+);
+```
+
+## Administrator Identity
+
+An administrator exchanges an ID and password for an expiring Admin Session. There is no Root
+Admin Token:
+
+```ts
+await embassy.admin.login({
+  admin_id: "owner",
+  password: "password",
+});
+
+const current_admin = await embassy.admin.current();
+const bureaus = await embassy.admin.bureaus.list();
+```
+
+If the password is lost, an operator with deployment access resets it with
+`fed deploy --admin-reset`.
+
+## Bureau Token
+
+An authenticated Federation Admin can issue a Bureau Token:
+
+```bash
+fed bureau token
+```
+
+The CLI asks Federation to generate a high-entropy token. Federation stores only its `token_id`,
+purpose, hash, and lifecycle status. The plaintext is returned once and belongs in the service environment:
+
+```bash
+DOWNCITY_FEDERATION_URL=https://fed.example.com
+DOWNCITY_BUREAU_TOKEN=fb_br_xxx.secret
+```
+
+The business service verifies incoming Federation User Tokens through the independent `Bureau` client:
+
+```ts
+import { Bureau } from "@downcity/federation";
+
+const bureau = new Bureau({
+  federation_url: process.env.DOWNCITY_FEDERATION_URL!,
+  bureau_token: process.env.DOWNCITY_BUREAU_TOKEN!,
+});
+
+const identity = await bureau.identify(request);
+```
+
+`bureau_token` is a long-lived, revocable opaque Bearer credential. It is not a JWT and cannot issue
+User Tokens. It is bound to a `bureau_id` when created; `identify()` validates the signature,
+issuer, audience, expiry, and that `bureau_id`. Revoke a leaked token immediately with
+`fed bureau token revoke <token_id>`.
+
+Federation remains the sole User Token issuer. Account login and Admin management APIs are only
+entry points into Federation's issuing flow; a Bureau Token cannot call the User Token issuing API.
+
+| Credential | Holder | Purpose | Verification |
+| --- | --- | --- | --- |
+| `user_token` | User client | Access Federation and Bureau business APIs | Federation JWKS signature |
+| `admin_token` | Administrator Embassy | Federation control plane | Federation Admin Session |
+| `bureau_token` | Bureau business service | Prove machine identity and call `identify()` | Federation credential hash |
+
+Continue reading:
+
+- [Federation SDK](/en/city-sdk-docs/packages/federation-sdk)
 - [Model Pool](/en/docs/city/model-pool)
 - [Usage & Billing](/en/docs/city/usage-billing)

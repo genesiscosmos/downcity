@@ -1,114 +1,25 @@
 ---
 title: "@downcity/city"
-description: "Downcity 的 Federation 内核与 City 客户端，负责 service、模型、鉴权和统一路由。"
+description: "@downcity/city 是迁移入口，Federation、Embassy 和 Bureau 的正式实现位于 @downcity/federation。"
 ---
 
-`@downcity/city` 同时提供服务端 `Federation` 运行时和产品侧 `City` 客户端。只要你要部署一个能服务多个产品的 Federation，最后都会落到这个包。
+@downcity/city 不再拥有 Federation、Embassy 或 Bureau 实现。它暂时转发旧 Federation API，避免既有应用在 package 迁移期间改变运行结果。
 
-这不是“某个 AI SDK 的补充包”，而是整个 server-side Federation 的核心运行时。你注册的 AI service、自定义 service、官方服务，以及统一的 `/v1/*` 调用边界，都会在这里汇合。
+新项目和新代码应直接使用：
 
-## 这组文档怎么读
+~~~bash
+pnpm add @downcity/federation
+~~~
 
-建议按下面顺序读：
+~~~ts
+import { Embassy, Federation } from "@downcity/federation";
+~~~
 
-1. 先读 [Federation 运行时与启动方式](/zh/city-sdk-docs/packages/city/federation)，理解 `Federation` 服务端实例到底承载什么。
-2. 再读 [Service 与 Action 设计](/zh/city-sdk-docs/packages/city/service-and-action)，理解为什么 AI service、custom service 最后都能走统一路由。
-3. 需要扩展能力时读 [Hooks 与服务挂载机制](/zh/city-sdk-docs/packages/city/hooks-and-service)，理解服务和钩子怎么接入。
-4. 需要理解持久化与表结构时读 [Store 与 Table 数据模型](/zh/city-sdk-docs/packages/city/store-and-table)。
+## 当前边界
 
-如果你只想先建立总体印象，可以先看完本页，再按顺序读上面四页。
+- Federation 服务端运行时属于 @downcity/federation。
+- 用户与管理员客户端统一从 Embassy 进入。
+- Bureau 只表示产品或业务分区。
+- @downcity/city 不再维护独立实现，也不继续增加新的 Federation API。
 
-## 这个包真正负责什么
-
-- 创建 `Federation` 服务端实例
-- 注册 `Service`、官方服务和 `AIService`
-- 管理内置的 city、env 和 token 相关能力
-- 暴露统一的 `/v1/*` 路由与调用边界
-- 通过 `User City` 和 `FederationAdmin`（均为 `City` 客户端）提供访问入口
-
-## 它不负责什么
-
-- 不负责实现具体数据库 Driver；你创建独立 Database Adapter 后传给 `new Federation({ database })`
-- 不负责现成账号、usage、支付业务，这些通过官方服务接入
-
-## 什么时候应该先看它
-
-- 你要搭一个真正可运行的 Federation
-- 你要声明自己的 AI service 或自定义 service
-- 你要把多产品共用的鉴权、hooks、模型目录放进同一个 Federation 后端
-
-## 最常见的组合关系
-
-| 目标 | 组合方式 |
-| --- | --- |
-| 本地或常规 Node 部署 | `@downcity/city` + SQLite / PostgreSQL Database Adapter |
-| 产品前端或 App 调用 | `@downcity/city` 导出的 `City` 客户端 |
-| 账号、usage、支付 | `@downcity/city` + 对应官方服务 |
-
-## 安装
-
-```bash
-pnpm add @downcity/city @downcity/database-sqlite
-```
-
-## 最小示例
-
-```ts
-import { Federation, AIService } from "@downcity/city";
-import { Database } from "@downcity/database-sqlite";
-
-const database = new Database({ filename: "./data.sqlite" });
-const base = new Federation({ database });
-
-const ai = new AIService();
-
-ai.use({
-  id: "local-echo",
-  name: "Local Echo",
-  default: ["text"],
-  actions: {
-    text: async (ctx) => ({
-      id: crypto.randomUUID(),
-      role: "assistant",
-      parts: [
-        {
-          type: "text",
-          text: String(ctx.input.prompt ?? ""),
-          state: "done",
-        },
-      ],
-    }),
-  },
-});
-
-base.use(ai);
-```
-
-这个示例展示的是 `@downcity/city` 的运行时侧：它负责把数据库和服务挂到同一套 Federation 上。产品侧调用则使用同一个包导出的 City 能力。
-
-## 典型理解路径
-
-### 如果你要自己写业务 service
-
-- 先看 [Service 与 Action 设计](/zh/city-sdk-docs/packages/city/service-and-action)
-- 再看 [City](/zh/city-sdk-docs/packages/city/federation)，理解产品怎么调用你写的 service
-
-### 如果你要接官方服务
-
-- 先看 [Hooks 与服务挂载机制](/zh/city-sdk-docs/packages/city/hooks-and-service)
-- 再看对应服务页：
-  - [Accounts 服务](/zh/payments/accounts)
-  - [Credits Cards](/zh/payments/credits)
-  - [Usage 服务](/zh/payments/usage)
-
-### 如果你要部署上线
-
-- 先看 [Federation与启动方式](/zh/city-sdk-docs/packages/city/federation)
-- 再看 [CLI](/zh/city-sdk-docs/packages/cli) 了解 `fed` 部署入口与 `city` 本机连接工具
-
-## 下一步读什么
-
-- 想按主题深入，直接进入上面的四个子页面
-- 想看产品怎么调用它，继续读 [User City](/zh/city-sdk-docs/reference/city-user)
-- 想看 Worker 怎么接进来，继续读 [Cloudflare Workers](/zh/city-sdk-docs/guides/cloudflare-workers)
-- 想直接查接口，再去 [Federation API](/zh/city-sdk-docs/reference/federation)
+旧导出仍由 @downcity/city 转发，但不会形成第二套实现。请阅读 [Federation SDK](/zh/city-sdk-docs/packages/federation-sdk) 了解正式 API。

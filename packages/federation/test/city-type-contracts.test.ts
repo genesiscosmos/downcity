@@ -1,0 +1,213 @@
+/**
+ * @downcity/city City 客户端类型契约测试。
+ */
+
+import type { UIMessage, UIMessageChunk } from "ai";
+import type {
+  AIBill,
+  AIBillInput,
+  AIChannelActionInput,
+  AIChannelModel,
+  AIChannelOptions,
+  AIChannelStreamInput,
+  AICharge,
+  AIChargedResult,
+  AIInvoker,
+  AIImageCreateResult,
+  AIImageResult,
+  AIModelDefinition,
+  AIModelFallbackMedia,
+  AIModelFallbackRule,
+  AIModelSpec,
+  AIResolvedReasoning,
+  AISDKProviderOptions,
+  AIServiceOptions,
+  LanguageModelV3,
+  LanguageModelV3CallOptions,
+  LanguageModelV3StreamResult,
+  CityModelDescriptor,
+  City,
+  Bureau,
+  BureauRecord,
+  BureauServerUpdateInput,
+  BureauTokenIssueResult,
+  BureauTokenSummary,
+  Federation,
+  FederationAdmin,
+  ModelCatalog,
+  PaymentMethodHandle,
+  UserImageJobCreateResult,
+  UserImageJobResult,
+  UserModelRef,
+  UserPaymentMethod,
+  UserProfile,
+  UserServiceSummary,
+  IssueBureauTokenInput,
+} from "../src/legacy.js";
+
+// @ts-expect-error 旧计费类型不再从公共入口导出
+import type { AIChannelChargeLine } from "../src/legacy.js";
+// @ts-expect-error 语言运行时已经收进 AIModelDefinition.runtime
+import type { AIModelLanguageRuntime } from "../src/legacy.js";
+// @ts-expect-error 图片 Channel 结果已统一为 AIImageResult
+import type { AIImageChannelResult } from "../src/legacy.js";
+// @ts-expect-error OpenAI Chat 细粒度协议只属于内部 transport
+import type { OpenAIChatCompletionRequest } from "../src/legacy.js";
+// @ts-expect-error 上游模型通过 AIChannel 输入显式传递
+import { resolve_upstream_model } from "../src/legacy.js";
+
+/** 公共 AI 类型必须从单一 SDK 入口稳定导出。 */
+type PublicAITypeContract = [
+  AIChannelOptions,
+  AIChannelModel,
+  AIChannelStreamInput,
+  AIChannelActionInput,
+  AIModelSpec,
+  AIModelDefinition,
+  AIModelFallbackMedia,
+  AIModelFallbackRule,
+  AIServiceOptions,
+  LanguageModelV3,
+  AISDKProviderOptions,
+  AIResolvedReasoning,
+  AICharge,
+  AIBill,
+  AIBillInput,
+  AIChargedResult,
+  AIImageCreateResult,
+  AIImageResult,
+];
+declare const public_ai_type_contract: PublicAITypeContract;
+void public_ai_type_contract;
+
+declare const provider_stream_call: LanguageModelV3CallOptions;
+declare const provider_stream_result: LanguageModelV3StreamResult;
+void provider_stream_call;
+void provider_stream_result;
+
+declare const city: City;
+declare const admin: FederationAdmin;
+declare const bureau: Bureau;
+declare const federation: Federation;
+declare const user_city: City;
+
+const ai: AIInvoker = city.ai;
+
+const textResult = ai.text({ model: "gpt-5.4", prompt: "hello" });
+const textContract: Promise<UIMessage> = textResult;
+
+const reasoningTextResult = ai.text({
+  model: "gpt-5.4",
+  prompt: "hello",
+  reasoning_effort: "high",
+});
+const reasoningTextContract: Promise<UIMessage> = reasoningTextResult;
+void reasoningTextContract;
+
+const streamResult = ai.stream({ model: "gpt-5.4", prompt: "hello" });
+const streamContract: Promise<ReadableStream<UIMessageChunk>> = streamResult;
+
+const imageJobCreateResult = ai.image_create({ model: "image-basic", prompt: "draw" });
+const imageJobCreateContract: Promise<UserImageJobCreateResult> = imageJobCreateResult;
+void imageJobCreateContract;
+
+const imageJobResult = ai.image_result({ job_id: "img_1" });
+const imageJobResultContract: Promise<UserImageJobResult> = imageJobResult;
+void imageJobResultContract;
+
+const videoResult = ai.video({ model: "video-basic", prompt: "demo" });
+const videoContract: Promise<UIMessage> = videoResult;
+
+const adminServices = admin.listServices();
+const adminServicesContract: Promise<UserServiceSummary[]> = adminServices;
+
+const adminModels = admin.listModels();
+const adminModelsContract: Promise<CityModelDescriptor[]> = adminModels;
+
+const adminInstruction = admin.instruction();
+const adminInstructionContract: Promise<string> = adminInstruction;
+
+const bureau_token_issue_input: IssueBureauTokenInput = {
+  bureau_id: "demo",
+  purpose: "type contract test",
+};
+const bureau_token_issue: Promise<BureauTokenIssueResult> = admin.bureaus.tokens.issue(
+  bureau_token_issue_input,
+);
+const bureau_tokens: Promise<BureauTokenSummary[]> = admin.bureaus.tokens.list("demo");
+void bureau_token_issue;
+void bureau_tokens;
+
+// @ts-expect-error Bureau 只消费 Federation 身份，不能签发 User Token
+void bureau.issue_user_token;
+
+const federation_bureaus: Promise<BureauRecord[]> = admin.bureaus.list();
+void federation_bureaus;
+
+const bureau_server_update_input: BureauServerUpdateInput = {
+  bureau_id: "demo",
+  server_url: "https://new-bureau.example.com",
+};
+const updated_bureau: Promise<BureauRecord> = admin.bureaus.server.update(
+  bureau_server_update_input,
+);
+void updated_bureau;
+
+const bureau_identity = bureau.identify("ub_header.payload.signature");
+void bureau_identity;
+
+const bureau_me = bureau.me();
+void bureau_me;
+
+const bureau_get_result: Promise<{ status: string }> = city.get("/reports/status");
+const bureau_post_result: Promise<{ report_id: string }> = city.post(
+  "/reports/summary",
+  { range: "today" },
+);
+void bureau_get_result;
+void bureau_post_result;
+
+const user_profile: Promise<UserProfile | null> = city.user().profile();
+void user_profile;
+
+const paymentMethods = city.payment.methods();
+const paymentMethodsContract: Promise<UserPaymentMethod[]> = paymentMethods;
+
+const cityPaymentMethodsContract: Promise<UserPaymentMethod[]> = user_city.payment.methods();
+void cityPaymentMethodsContract;
+
+const paymentMethod: PaymentMethodHandle = city.payment.method("stripe");
+const paymentMethodDescribeContract: Promise<UserPaymentMethod> = paymentMethod.describe();
+const paymentMethodInvokeContract: Promise<{ checkout_url: string }> = paymentMethod.invoke<{
+  checkout_url: string;
+}>({
+  topup_amount_minor: 500,
+  idempotency_key: "order_123",
+});
+void paymentMethodDescribeContract;
+void paymentMethodInvokeContract;
+
+async function testCatalog() {
+  const catalog: ModelCatalog = await ai.catalog();
+  const m = catalog.get("gpt-5.4");
+  const all = catalog.all();
+  const t = catalog.forModality("text");
+  const reasoning_efforts = m?.reasoning?.efforts;
+  const default_reasoning_effort = m?.reasoning?.default_effort;
+  const context_window = m?.context_window;
+  const price = m?.price;
+  void m; void all; void t; void reasoning_efforts; void default_reasoning_effort; void context_window; void price;
+}
+void testCatalog();
+
+// @ts-expect-error text 返回类型固定为 UIMessage
+ai.text<{ text: string }>({ prompt: "hello" });
+
+// @ts-expect-error stream 返回类型固定为 UIMessageChunk stream
+ai.stream<ReadableStream<string>>({ prompt: "hello" });
+
+// @ts-expect-error image 已移除，图片生成请使用 image_create / image_result
+ai.image({ prompt: "draw" });
+
+// @ts-expect-error video 返回类型固定为 UIMessage
+ai.video<{ url: string }>({ prompt: "demo" });

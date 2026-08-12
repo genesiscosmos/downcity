@@ -2,12 +2,12 @@
  * Admin Usage 管理命令。
  */
 
-import { FederationAdmin } from "@downcity/city";
+import { EmbassyAdmin } from "@downcity/federation";
 import { t } from "@/shared/CliLocale.js";
 import { adminErrorMessage, rethrowAdminAuthError } from "@/federation/admin/auth-error.js";
 import type { admin_tui_runtime } from "@/federation/types/AdminTui.js";
 
-export async function manageUsage(a: FederationAdmin, _baseUrl: string, runtime: admin_tui_runtime): Promise<void> {
+export async function manageUsage(a: EmbassyAdmin, _baseUrl: string, runtime: admin_tui_runtime): Promise<void> {
   const svc = a.service("usage");
   while (true) {
     const act = await runtime.select(t({ zh: "用量统计", en: "Usage analytics" }), [

@@ -8,7 +8,7 @@
  */
 
 import { serve } from "@hono/node-server";
-import { AIService, Federation } from "@downcity/city";
+import { AIService, Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-sqlite";
 import { AccountsService } from "@downcity/services";
 import { DeepSeekChannel } from "./deepseek_channel.js";

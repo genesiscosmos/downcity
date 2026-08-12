@@ -5,7 +5,7 @@
  * 的账务消费，合并为当前 Federation 用户的每日用量响应。
  */
 
-import { InstallableService, httpError, type ServiceInstallContext } from "@downcity/city";
+import { InstallableService, httpError, type ServiceInstallContext } from "@downcity/federation";
 import { CREDITS_PER_USD } from "../types/Amount.js";
 import { merge_daily_usage } from "./aggregation.js";
 import {

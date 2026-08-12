@@ -11,7 +11,7 @@ import type {
   AdminAIUsageDimensionBucket,
   AIRecentUsageItem,
   AIUsageReader,
-} from "@downcity/city";
+} from "@downcity/federation";
 import type { CreditsUsageReader } from "../../credits/types/Usage.js";
 
 /** UsageService 显式 Reader 依赖。 */

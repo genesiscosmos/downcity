@@ -7,7 +7,7 @@
  * - 运行时模型通过 City 自己保存的 User City session 构造。
  */
 
-import { FederationAdmin } from "@downcity/city";
+import { EmbassyAdmin } from "@downcity/federation";
 import type { AgentModel } from "@downcity/agent";
 import type { CityModelDescriptor } from "@downcity/type";
 import { CityUserManager } from "@/city/shared/CityUserManager.js";
@@ -52,11 +52,11 @@ export async function listCityAiServiceModelsForAdmin(
       "A valid Federation administrator session is required to list admin models. Log in with `fed manage`.",
     );
   }
-  const admin = new FederationAdmin({
-    base_url: user.federation_url,
-    credential: admin_session_token,
+  const admin = new EmbassyAdmin({
+    federation_url: user.federation_url,
+    admin_token: admin_session_token,
   });
-  return await admin.listModels();
+  return await admin.list_models();
 }
 
 /**
@@ -65,10 +65,10 @@ export async function listCityAiServiceModelsForAdmin(
 export async function listCityAiServiceModelsForUser(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<CityModelDescriptor[]> {
-  const { city } = await cityUserManager.createUserClient({
+  const { embassy_user } = await cityUserManager.createUserClient({
     env,
   });
-  const catalog = await city.ai.catalog();
+  const catalog = await embassy_user.ai.catalog();
   return catalog.all();
 }
 
@@ -135,10 +135,10 @@ export async function createCityAiAgentModel(input: {
 }): Promise<AgentModel> {
   const modelId = String(input.modelId || "").trim();
   if (!modelId) throw new Error("modelId cannot be empty");
-  const { city } = await cityUserManager.createUserClient({
+  const { embassy_user } = await cityUserManager.createUserClient({
     env: input.env ?? process.env,
   });
-  const catalog = await city.ai.catalog();
+  const catalog = await embassy_user.ai.catalog();
   const model = catalog.get(modelId);
   if (!model || !is_city_ai_execution_model(model)) {
     throw new Error(`Agent execution model not found in Federation: ${modelId}`);

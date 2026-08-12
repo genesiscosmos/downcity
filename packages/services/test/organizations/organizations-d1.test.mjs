@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict"
 import test from "node:test"
-import { Federation, InstallableService } from "@downcity/city"
+import { Federation, InstallableService } from "@downcity/federation"
 import { sqliteTable, text } from "drizzle-orm/sqlite-core"
 import { OrganizationsService } from "../../bin/index.js"
 import { create_test_admin_session } from "../admin-fixture.mjs"

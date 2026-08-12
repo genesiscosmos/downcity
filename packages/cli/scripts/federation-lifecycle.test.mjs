@@ -56,23 +56,6 @@ function parse_admin_credentials(output) {
   return { admin_id, password };
 }
 
-test("Bureau 部署凭证由 CLI 本地生成且 hash 可复算", async () => {
-  const { createHash } = await import("node:crypto");
-  const credential_module = await import("../bin/federation/bureau/BureauCredential.js");
-  const credential = credential_module.create_bureau_deployment_credential();
-
-  assert.match(credential.token_id, /^br_[A-Za-z0-9_-]{16}$/u);
-  assert.match(
-    credential.bureau_token,
-    new RegExp(`^fb_${credential.token_id}\\.[A-Za-z0-9_-]{43}$`, "u"),
-  );
-  assert.equal(
-    credential.token_hash,
-    createHash("sha256").update(credential.bureau_token, "utf8").digest("base64url"),
-  );
-  assert.notEqual(credential.token_hash, credential.bureau_token);
-});
-
 test("City 登录只公开 Bureau ID 参数", () => {
   const cli_path = fileURLToPath(new URL("../bin/downcity.js", import.meta.url));
   const platform_root = create_temp_dir("downcity-city-login-help-");
@@ -103,7 +86,7 @@ test("Bureau Token 使用独立管理命令树", () => {
       options,
     );
     assert.match(token_help, /interactively manage Bureau tokens/u);
-    assert.match(token_help, /create/u);
+    assert.match(token_help, /issue/u);
     assert.match(token_help, /list/u);
     assert.match(token_help, /revoke/u);
 

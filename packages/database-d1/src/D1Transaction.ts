@@ -3,11 +3,11 @@
 import { and, eq, getTableColumns, getTableName, type SQL } from "drizzle-orm";
 import {
   DatabaseTransactionConflictError,
-  type CityTableApi,
+  type FederationTableApi,
   type DatabaseTransaction,
   type DrizzleDatabase,
   type FederationTableSchema,
-} from "@downcity/city";
+} from "@downcity/federation";
 import type {
   CompiledQuery,
   ReadSnapshot,
@@ -32,7 +32,7 @@ class TransactionUnit {
   /** 创建 D1 事务绑定的 Table API。 */
   table<TRow extends Record<string, unknown>>(
     schema: FederationTableSchema,
-  ): CityTableApi<TRow> {
+  ): FederationTableApi<TRow> {
     return new TransactionTableApi<TRow>(this, this.database, schema);
   }
 
@@ -105,7 +105,7 @@ class TransactionUnit {
 }
 
 /** D1 事务 Table API。 */
-class TransactionTableApi<TRow extends Record<string, unknown>> implements CityTableApi<TRow> {
+class TransactionTableApi<TRow extends Record<string, unknown>> implements FederationTableApi<TRow> {
   readonly name: string;
   readonly schema: FederationTableSchema;
 

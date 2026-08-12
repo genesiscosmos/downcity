@@ -6,7 +6,7 @@
  * - 反馈创建、查询、答复和状态更新全部收敛在 FeedbackService 内部
  */
 
-import type { ServiceInstallContext } from "@downcity/city";
+import type { ServiceInstallContext } from "@downcity/federation";
 import { require_service_user_identity } from "../shared/service-identity.js";
 import type { FeedbackService } from "./service.js";
 import type {

@@ -49,7 +49,7 @@ export function create_cloudflare_workers_template_files(
           typecheck: "tsc -p tsconfig.json --noEmit",
         },
         dependencies: {
-          "@downcity/city": "latest",
+          "@downcity/federation": "latest",
           "@downcity/database-d1": "latest",
           "@downcity/services": "latest",
         },
@@ -101,8 +101,8 @@ import {
   AIService,
   Federation,
   R2Storage,
-  type CityQueueMessage,
-} from "@downcity/city";
+  type FederationQueueMessage,
+} from "@downcity/federation";
 import { Database } from "@downcity/database-d1";
 import {
   AccountsService,
@@ -119,7 +119,7 @@ export interface Env {
   /** Federation 默认 R2 存储。 */
   DOWNCITY_STORAGE: R2Bucket;
   /** Federation 异步任务 Queue。 */
-  DOWNCITY_QUEUE: Queue<CityQueueMessage>;
+  DOWNCITY_QUEUE: Queue<FederationQueueMessage>;
   /** R2 文件公开 URL 前缀。 */
   DOWNCITY_STORAGE_PUBLIC_URL_PREFIX?: string;
 }
@@ -178,7 +178,7 @@ export default {
     }
     return federation.fetch(request);
   },
-  async queue(batch: MessageBatch<CityQueueMessage>, env: Env): Promise<void> {
+  async queue(batch: MessageBatch<FederationQueueMessage>, env: Env): Promise<void> {
     const federation = await get_federation(env);
     for (const message of batch.messages) {
       try {

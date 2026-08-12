@@ -7,7 +7,7 @@
  * - 业务模块只消费解析后的身份，避免余额、Agent、模型目录各自拼接身份。
  */
 
-import { City } from "@downcity/city";
+import { Embassy, type EmbassyUser } from "@downcity/federation";
 import {
   DEFAULT_FEDERATION_URL,
   DEFAULT_BUREAU_ID,
@@ -87,7 +87,7 @@ export class CityUserManager {
   }
 
   /**
-   * 创建当前有效 User City。
+   * 创建当前有效 Embassy user 子域。
    */
   async createUserClient(input: ResolveCityUserInput = {}): Promise<{
     /**
@@ -96,9 +96,9 @@ export class CityUserManager {
     user: ResolvedCityUser;
 
     /**
-     * 绑定当前用户身份的 City SDK 实例。
+     * 绑定当前用户身份的 Federation 用户访问器。
      */
-    city: City;
+    embassy_user: EmbassyUser;
   }> {
     const user = await this.resolveCurrentUser({
       ...input,
@@ -109,10 +109,10 @@ export class CityUserManager {
     }
     return {
       user,
-      city: new City({
+      embassy_user: new Embassy({
         federation_url: user.federation_url,
         user_token: user.user_token,
-      }),
+      }).user,
     };
   }
 
@@ -125,11 +125,11 @@ export class CityUserManager {
     user: ResolvedCityUser,
     session_user_id?: string,
   ): Promise<ResolvedCityUser> {
-    const city = new City({
+    const embassy = new Embassy({
       federation_url: user.federation_url,
       user_token: user.user_token,
     });
-    const result = await city.service("accounts").get<CityAccountsMeResult>("me");
+    const result = await embassy.user.service("accounts").get<CityAccountsMeResult>("me");
     const token_user_id = readString(result.user?.user_id);
     const token_bureau_id = typeof result.user?.bureau_id === "string"
       ? result.user.bureau_id

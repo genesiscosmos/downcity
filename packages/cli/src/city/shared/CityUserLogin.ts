@@ -7,7 +7,7 @@
  */
 
 import prompts from "@/city/tui/Prompts.js";
-import { City } from "@downcity/city";
+import { Embassy } from "@downcity/federation";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { open_system_browser } from "@/shared/SystemBrowser.js";
 import type {
@@ -73,8 +73,8 @@ function mapProvidersToOptions(items: AccountsProviderItem[]): AuthOption[] {
 }
 
 async function loadAuthOptions(federation_url: string): Promise<AuthOption[]> {
-  const city = new City({ federation_url });
-  const accounts = city.service("accounts");
+  const embassy = new Embassy({ federation_url });
+  const accounts = embassy.user.service("accounts");
   const result = await accounts.get<{ items?: AccountsProviderItem[] }>("providers");
   return mapProvidersToOptions(result.items ?? []);
 }
@@ -119,8 +119,8 @@ async function emailLogin(input: CityLoginInput): Promise<CityUserSession | null
   const password = String(response.password || "");
   if (!email || !email.includes("@") || !password) return null;
 
-  const city = new City({ federation_url: input.federation_url });
-  const accounts = city.service("accounts");
+  const embassy = new Embassy({ federation_url: input.federation_url });
+  const accounts = embassy.user.service("accounts");
   const started = await accounts.action("login/start").invoke<AuthStartResult>({
     provider: "email",
     bureau_id: input.bureau_id,
@@ -137,7 +137,7 @@ async function emailLogin(input: CityLoginInput): Promise<CityUserSession | null
     throw new Error(continued.error || "login failed");
   }
 
-  const result = await readLoginResult(city, started.login_id);
+  const result = await readLoginResult(embassy, started.login_id);
   if (!result || result.error || !result.user_token) {
     throw new Error(result?.error || "login failed: no token");
   }
@@ -167,8 +167,8 @@ async function emailRegister(input: CityLoginInput): Promise<CityUserSession | n
   if (!email || !email.includes("@")) throw new Error("invalid email");
   if (password.length < 8) throw new Error("password must be at least 8 characters");
 
-  const city = new City({ federation_url: input.federation_url });
-  const accounts = city.service("accounts");
+  const embassy = new Embassy({ federation_url: input.federation_url });
+  const accounts = embassy.user.service("accounts");
   const registered = await accounts.action("register").invoke<RegisterResult>({
     email,
     password,
@@ -210,8 +210,8 @@ async function oauthAuth(
   input: CityLoginInput,
   provider: string,
 ): Promise<CityUserSession | null> {
-  const city = new City({ federation_url: input.federation_url });
-  const accounts = city.service("accounts");
+  const embassy = new Embassy({ federation_url: input.federation_url });
+  const accounts = embassy.user.service("accounts");
   const started = await accounts.action("login/start").invoke<AuthStartResult>({
     provider,
     bureau_id: input.bureau_id,
@@ -234,7 +234,7 @@ async function oauthAuth(
     note: "Waiting for browser authorization...",
   });
 
-  const result = await pollLoginResult(city, started.login_id);
+  const result = await pollLoginResult(embassy, started.login_id);
   if (!result || result.error || !result.user_token) {
     throw new Error(result?.error || "OAuth failed");
   }
@@ -250,15 +250,15 @@ async function inputAuth(
   input: CityLoginInput,
   provider: string,
 ): Promise<CityUserSession | null> {
-  const city = new City({ federation_url: input.federation_url });
-  const started = await city.service("accounts").action("login/start").invoke<AuthStartResult>({
+  const embassy = new Embassy({ federation_url: input.federation_url });
+  const started = await embassy.user.service("accounts").action("login/start").invoke<AuthStartResult>({
     provider,
     bureau_id: input.bureau_id,
   });
   if (started.error || started.status !== "done" || !started.login_id) {
     throw new Error(started.error || "login failed");
   }
-  const result = await readLoginResult(city, started.login_id);
+  const result = await readLoginResult(embassy, started.login_id);
   if (!result || result.error || !result.user_token) {
     throw new Error(result?.error || "login failed: no token");
   }
@@ -270,10 +270,10 @@ async function inputAuth(
   });
 }
 
-async function pollLoginResult(city: City, login_id: string): Promise<LoginPollResult | null> {
+async function pollLoginResult(embassy: Embassy, login_id: string): Promise<LoginPollResult | null> {
   for (let index = 0; index < 180; index += 1) {
     try {
-      const result = await readLoginResult(city, login_id);
+      const result = await readLoginResult(embassy, login_id);
       if (result.error) return result;
       if (result.status === "done") return result;
     } catch {
@@ -284,8 +284,8 @@ async function pollLoginResult(city: City, login_id: string): Promise<LoginPollR
   return { error: "login timed out" };
 }
 
-async function readLoginResult(city: City, login_id: string): Promise<LoginPollResult> {
-  return await city.service("accounts").get<LoginPollResult>("login/result", { login_id });
+async function readLoginResult(embassy: Embassy, login_id: string): Promise<LoginPollResult> {
+  return await embassy.user.service("accounts").get<LoginPollResult>("login/result", { login_id });
 }
 
 function buildUserSession(input: CityLoginInput & {
@@ -324,11 +324,11 @@ async function readUserSessionFromToken(input: CityLoginInput & {
   user_id?: string;
   user_label?: string;
 }> {
-  const city = new City({
+  const embassy = new Embassy({
     federation_url: input.federation_url,
     user_token: input.user_token,
   });
-  const result = await city.service("accounts").get<CityAccountsMeResult>("me");
+  const result = await embassy.user.service("accounts").get<CityAccountsMeResult>("me");
   const bureau_id = typeof result.user?.bureau_id === "string"
     ? result.user.bureau_id
     : "";

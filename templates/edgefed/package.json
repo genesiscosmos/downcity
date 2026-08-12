@@ -9,7 +9,7 @@
     "deploy": "city deploy"
   },
   "dependencies": {
-    "@downcity/city": "workspace:*",
+    "@downcity/federation": "workspace:*",
     "@downcity/database-d1": "workspace:*"
   },
   "devDependencies": {

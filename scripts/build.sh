@@ -18,7 +18,7 @@ case "$BUILD_SCOPE" in
 esac
 
 if [[ "$BUILD_SCOPE" == "all" ]]; then
-  # 构建顺序：city/services 先于 cli，cli 依赖这些城市基础包。
+  # 构建顺序：federation 先于 city/services/cli，后者只消费其公开产物。
   run_project_build "$ROOT_DIR/packages/type"
   run_project_build "$ROOT_DIR/packages/shell"
   run_project_build "$ROOT_DIR/packages/sandbox-macos"
@@ -28,6 +28,7 @@ if [[ "$BUILD_SCOPE" == "all" ]]; then
   run_project_build "$ROOT_DIR/packages/agent"
   run_project_build "$ROOT_DIR/packages/workspace-cloudflare-computer"
   run_project_build "$ROOT_DIR/packages/server"
+  run_project_build "$ROOT_DIR/packages/federation"
   run_project_build "$ROOT_DIR/packages/city"
   run_project_build "$ROOT_DIR/packages/services"
   run_project_build "$ROOT_DIR/packages/plugins"
@@ -47,6 +48,7 @@ run_project_build "$ROOT_DIR/packages/sandbox-windows-mxc"
 run_project_build "$ROOT_DIR/packages/sandbox-windows-srt"
 run_project_build "$ROOT_DIR/packages/agent"
 run_project_build "$ROOT_DIR/packages/server"
+run_project_build "$ROOT_DIR/packages/federation"
 run_project_build "$ROOT_DIR/packages/city"
 run_project_build "$ROOT_DIR/packages/services"
 run_project_build "$ROOT_DIR/packages/plugins"

@@ -6,7 +6,7 @@
  * - 不包含任何路由或 provider 特定逻辑。
  */
 
-import type { EnvRequirement } from "@downcity/city";
+import type { EnvRequirement } from "@downcity/federation";
 import type { PaymentMethodItem, PaymentProvider } from "./types.js";
 
 /**

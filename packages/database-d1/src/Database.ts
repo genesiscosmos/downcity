@@ -5,14 +5,14 @@ import { getTableColumns, getTableName } from "drizzle-orm";
 import {
   Database as CityDatabase,
   TableApi,
-  type CityTableApi,
+  type FederationTableApi,
   type DatabaseMutationResult,
   type DatabaseQueryResult,
   type DatabaseStatement,
   type DatabaseTransaction,
   type DrizzleDatabase,
   type FederationTableSchema,
-} from "@downcity/city";
+} from "@downcity/federation";
 import { run_transaction } from "./D1Transaction.js";
 import type { DatabaseOptions } from "./types/DatabaseOptions.js";
 
@@ -35,8 +35,8 @@ export class Database extends CityDatabase {
 
   protected on_table<TRow extends Record<string, unknown>>(
     schema: FederationTableSchema,
-  ): CityTableApi<TRow> {
-    return new TableApi(this.drizzle, schema) as unknown as CityTableApi<TRow>;
+  ): FederationTableApi<TRow> {
+    return new TableApi(this.drizzle, schema) as unknown as FederationTableApi<TRow>;
   }
 
   protected async on_ensure_table(schema: FederationTableSchema): Promise<void> {

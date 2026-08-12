@@ -41,9 +41,14 @@ const HELP_ITEMS = [
     detail: "先构建 `@downcity/shell`，再执行 `pnpm -C packages/plugins build`，不会修改 package version。",
   },
   {
+    name: "build:federation",
+    summary: "只构建 @downcity/federation 包。",
+    detail: "先构建 @downcity/type，再构建 Federation runtime 与 Embassy SDK。",
+  },
+  {
     name: "build:city",
-    summary: "只构建 @downcity/city runtime 包。",
-    detail: "执行 `pnpm -C packages/city build`，不会修改 package version。",
+    summary: "构建 @downcity/city 迁移入口。",
+    detail: "先构建 @downcity/federation，再构建 city 转发 package。",
   },
   {
     name: "build:cli",
@@ -70,6 +75,11 @@ const HELP_ITEMS = [
     name: "plugins:patch:build",
     summary: "只对 @downcity/plugins 执行 patch bump + build。",
     detail: "等价于 `npm run patch:build -- --plugins`，会先构建 shell 和 agent 作为依赖。",
+  },
+  {
+    name: "federation:patch:build",
+    summary: "只对 @downcity/federation 执行 patch bump + build。",
+    detail: "等价于 `npm run patch:build -- --federation`。",
   },
   {
     name: "city:patch:build",

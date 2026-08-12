@@ -4,7 +4,7 @@
  * 用户只能读取自己的 Credits；Card 创建、Topup 与 Charge 由可信管理端执行。
  */
 
-import type { ServiceInstallContext, ServiceRouteContext } from "@downcity/city";
+import type { ServiceInstallContext, ServiceRouteContext } from "@downcity/federation";
 import type { CreditsService } from "./service.js";
 import type {
   CreditsChargeInput,

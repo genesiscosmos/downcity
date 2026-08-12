@@ -3,11 +3,11 @@
  *
  * 关键说明（中文）
  * - HTTP 边界传入 unknown，所有字段必须先经过这里标准化
- * - 查询阶段使用 CityTableApi 的等值能力读取候选集，再在内存排序截断
+ * - 查询阶段使用 FederationTableApi 的等值能力读取候选集，再在内存排序截断
  * - JSON 上下文序列化失败时退化为 `{}`，避免用户反馈因为 meta 异常丢失
  */
 
-import { httpError } from "@downcity/city";
+import { httpError } from "@downcity/federation";
 import type { FeedbackMessage, FeedbackStatus } from "./types.js";
 
 const FEEDBACK_STATUSES: readonly FeedbackStatus[] = [

@@ -12,7 +12,7 @@ import {
   httpError,
   type ServiceInstallContext,
   type ServiceTransactionContext,
-} from "@downcity/city";
+} from "@downcity/federation";
 import { organization_database_schemas } from "./schema/index.js";
 import {
   new_join_request_id,

@@ -7,7 +7,7 @@
  * - 所有 provider 共用 `/v1/payment/*` 路由和统一 payments/events 表。
  */
 
-import { InstallableService, type EnvRequirement, type ServiceInstallContext } from "@downcity/city";
+import { InstallableService, type EnvRequirement, type ServiceInstallContext } from "@downcity/federation";
 import { paymentEvents, paymentPayments } from "./schema.js";
 import { mergeEnvRequirements, normalizeProviders } from "./helpers.js";
 import { installPaymentRoutes } from "./routes.js";

@@ -1,114 +1,25 @@
 ---
 title: "@downcity/city"
-description: "The Federation core and City client: services, models, auth, and the unified route surface."
+description: "@downcity/city is a migration entry; Federation, Embassy, and Bureau are owned by @downcity/federation."
 ---
 
-`@downcity/city` provides both the server-side `Federation` runtime and the product-side `City` SDK. If you are deploying a real Federation that serves one or more products, this is the package everything rests on.
+@downcity/city no longer owns the Federation, Embassy, or Bureau implementation. It temporarily forwards the previous Federation API so existing applications keep the same runtime behavior during the package migration.
 
-This is not a small helper around an AI SDK. It is the core server-side Federation where your AI services, custom services, official services, and shared `/v1/*` route surface come together.
+New projects and new code should use:
 
-## How to read this section
+~~~bash
+pnpm add @downcity/federation
+~~~
 
-The best reading order is:
+~~~ts
+import { Embassy, Federation } from "@downcity/federation";
+~~~
 
-1. Start with [Federation and bootstrapping](/en/city-sdk-docs/packages/city/federation) to understand what a `Federation` server-side instance actually owns.
-2. Continue with [Service and Action design](/en/city-sdk-docs/packages/city/service-and-action) to see why AI services, custom services, and services all end up behind one route model.
-3. Read [Hooks and service integration](/en/city-sdk-docs/packages/city/hooks-and-service) when you need extension points.
-4. Read [Store and table data model](/en/city-sdk-docs/packages/city/store-and-table) when you need to understand persistence and table layout.
+## Current boundary
 
-If you only want the big picture first, finish this page and then follow the sequence above.
+- The Federation server runtime belongs to @downcity/federation.
+- User and admin access starts from Embassy.
+- Bureau only represents a product or business partition.
+- @downcity/city does not maintain a separate implementation or accept new Federation APIs.
 
-## What this package actually owns
-
-- creating the `Federation` server-side instance
-- registering `Service`, official services, and `AIService`
-- city, env, and token-related built-in capabilities
-- the unified `/v1/*` route boundary
-- access through `User City` and `FederationAdmin` (both are the `City` client)
-
-## What it does not own
-
-- It does not implement a concrete database driver. Create a Database Adapter and pass it to `new Federation({ database })`.
-- It does not own ready-made auth, usage, or payment business logic. Those come from official services.
-
-## When this should be your first stop
-
-- you are building a real Federation deployment
-- you need your own AI services or custom services
-- you want shared auth, hooks, and model catalogs behind one Federation backend
-
-## Most common package combinations
-
-| Goal | Package combination |
-| --- | --- |
-| Local or standard Node deployment | `@downcity/city` + Drizzle SQLite / Postgres |
-| Product frontend or app calls | the `City` client exported by `@downcity/city` |
-| Accounts, usage, or payments | `@downcity/city` + the matching official service |
-
-## Install
-
-```bash
-pnpm add @downcity/city @downcity/database-sqlite
-```
-
-## Minimal example
-
-```ts
-import { Federation, AIService } from "@downcity/city";
-import { Database } from "@downcity/database-sqlite";
-
-const database = new Database({ filename: "./data.sqlite" });
-const base = new Federation({ database });
-
-const ai = new AIService();
-
-ai.use({
-  id: "local-echo",
-  name: "Local Echo",
-  default: ["text"],
-  actions: {
-    text: async (ctx) => ({
-      id: crypto.randomUUID(),
-      role: "assistant",
-      parts: [
-        {
-          type: "text",
-          text: String(ctx.input.prompt ?? ""),
-          state: "done",
-        },
-      ],
-    }),
-  },
-});
-
-base.use(ai);
-```
-
-This example shows the runtime side of `@downcity/city`: it is where the database and services are mounted into the Federation. For product-side calls, use the City exports from the same package.
-
-## Typical reading paths
-
-### If you want to write your own business service
-
-- Read [Service and Action design](/en/city-sdk-docs/packages/city/service-and-action)
-- Then read [City](/en/city-sdk-docs/packages/city/federation) to understand how products will call that service
-
-### If you want to add official services
-
-- Read [Hooks and service integration](/en/city-sdk-docs/packages/city/hooks-and-service)
-- Then continue with the matching service pages:
-  - [Accounts](/en/payments/accounts)
-  - [Credits Cards](/en/payments/credits)
-  - [Usage](/en/payments/usage)
-
-### If you want to deploy and operate it
-
-- Read [Federation and bootstrapping](/en/city-sdk-docs/packages/city/federation)
-- Then read [CLI](/en/city-sdk-docs/packages/cli) for the `fed` deployment entry and the `city` local connection tools
-
-## Read next
-
-- For the topic-specific deep dives, go straight into the four subpages above
-- For product-side calls, continue with [User City](/en/city-sdk-docs/reference/city-user)
-- For Worker deployment, continue with [Cloudflare Workers](/en/city-sdk-docs/guides/cloudflare-workers)
-- For concrete interfaces, jump to [Federation API](/en/city-sdk-docs/reference/federation)
+The previous exports remain available through @downcity/city without creating a second implementation. Read [Federation SDK](/en/city-sdk-docs/packages/federation-sdk) for the canonical API.

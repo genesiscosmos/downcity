@@ -10,7 +10,7 @@ import {
   AIChannel,
   type AIChannelStreamInput,
   type LanguageModelV3StreamResult,
-} from "@downcity/city";
+} from "@downcity/federation";
 
 /** 将 DeepSeek 的 AI SDK 模型接入 Federation 标准流。 */
 export class DeepSeekChannel extends AIChannel {

@@ -5,11 +5,12 @@ description: Understand the package surface behind the City SDK.
 
 # Packages
 
-City SDK docs focus on the `@downcity/city` runtime package and the CLI entry points around Federations and local Agents.
+City SDK docs focus on `@downcity/federation` and the CLI. City and Agent runtime concerns belong to the separate Agent and host boundary.
 
 ## City SDK Surface
 
-- [@downcity/city](/en/city-sdk-docs/packages/city): City, Federation, service/action infrastructure, hooks, store, table, and the client access layer.
+- [Federation SDK](/en/city-sdk-docs/packages/federation-sdk): Federation, Embassy, Bureau, services, auth, and data access.
+- [@downcity/city](/en/city-sdk-docs/packages/city): migration entry for the previous Federation API.
 - [CLI](/en/city-sdk-docs/packages/cli): `fed/downfed` manages Federation deploys and admin operations; `city/downcity` manages local Agents and user-side connections.
 
 ## Related Spaces

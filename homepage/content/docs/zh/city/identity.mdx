@@ -1,148 +1,137 @@
 ---
 title: 身份
-description: City 如何管理用户身份、认证和权限
+description: Embassy 如何访问 Federation 的用户与管理员身份
 ---
 
-# City 用户身份
+# Embassy 身份
 
-Federation 统一签发用户身份和账户数据，City 客户端直接访问 Federation。产品需要自己的后端能力时，再部署可选的 Bureau。一个 Federation 可以服务多个产品，每个产品由 `bureau_id` 隔离。
+Federation 统一签发用户身份并保存账户数据。客户端通过 Embassy 直接访问
+Federation；产品需要自己的后端能力时，再配置对应 Bureau 的可信业务入口。
 
 ## 身份边界
 
-- **Federation** — 保存 Ed25519 私钥并签发 `user_token`
-- **City** — 保存 `federation_url + user_token` 并发起用户请求
-- **Bureau** — 产品服务端，使用绑定 `bureau_id` 的 `bureau_token` 证明机器身份，
-  并使用 Federation 公钥本地验证独立服务收到的用户
+- **Federation**：服务端运行容器，签发 `user_token`，管理账户、Service 和 Bureau 记录。
+- **Embassy User**：保存当前 `user_token`，执行用户登录和业务请求。
+- **Embassy Admin**：使用管理员 Session 管理 Federation，包括授权 Federation 签发 Bureau Token。
+- **Bureau**：由 `bureau_id` 区分的产品业务分区；产品后端使用独立 Bureau 客户端证明机器身份。
 
-## 认证流程
-
-1. 用户登录时选择产品 `bureau_id`
-2. Federation 使用私钥签发绑定该 `bureau_id` 的 `user_token`
-3. 用户通过 `new City({ federation_url, user_token })` 调用 Federation
-4. 用户携带同一个 Bearer Token 调用产品后端
-5. City 直接携带 `user_token` 调用 Federation 的 Profile、余额和标准 Service
-6. 如果产品有自己的后端，City 使用 `city.get()` / `city.post()` 请求 Bureau 独立服务
-7. Bureau 使用 Federation 公钥本地验证 `user_token`，需要当前数据时再携带同一个 Token 请求 Federation
+Embassy 只有 `user` 和 `admin` 两个身份子域：
 
 ```ts
-const city = new City({
+import { Embassy } from "@downcity/federation";
+
+const embassy = new Embassy({
   federation_url: "https://fed.example.com",
-  user_token,
+  bureau_id: "product-web",
+});
+```
+
+## 用户身份
+
+账户流程统一位于 `embassy.user.account`。登录成功后，同一个 Embassy 实例会立即使用
+新的 User Token：
+
+```ts
+const providers = await embassy.user.account.providers();
+
+await embassy.user.account.login({
+  provider: "email",
+  input: {
+    email: "user@example.com",
+    password: "password",
+  },
 });
 
-const profile = await city.user().profile();
+const current_user = await embassy.user.current();
+const user_token = embassy.user.account.token();
 ```
 
-可选的产品后端：
-
-先在 Federation 管理侧创建 Bureau 及其必填的一对一 Server 配置，再登记该 Bureau 的机器 Token。创建输入仍直接接收 `server_url`：
-
-```bash
-fed bureau token
-```
-
-该命令打开交互式管理界面。选择“创建 Bureau Token”，输入用途后，CLI 只显示一次明文
-`DOWNCITY_BUREAU_TOKEN`。也可以直接运行 `fed bureau token create <bureau_id>`。Federation 数据库
-保存用途和 hash，因此 Federation 和 Bureau 可以部署在不同服务器。
-
-```ts
-const bureau = new Bureau({
-  federation_url: "https://fed.example.com",
-  bureau_token: process.env.DOWNCITY_BUREAU_TOKEN!,
-});
-
-const identity = await bureau.identify(request);
-const profile = await (await bureau.user(request)).profile();
-```
-
-`Bureau` 是可选的产品后端；它的 Token 在注册时已经绑定稳定的 `bureau_id`，构造时无需重复传入。它只代表该 Bureau 的机器身份，
-不拥有 Federation Root 管理权限。`identify()` 会拒绝 audience 属于其他 Bureau 的 User Token。
-`identify()` 只读取 Federation discovery 和 JWKS，不调用在线 introspection；只有需要当前
-Profile、余额等数据时，Bureau 才请求 Federation。
-
-City 请求 Bureau 独立服务时会从 Federation 返回的 `bureau.server.server_url` 解析当前入口，调用方只需传相对路径：
-
-```ts
-const result = await city.post(
-  "/reports/summary",
-  { range: "today" },
-);
-```
-
-## User Token 与 Bureau Token
-
-两种 Token 都放在 Bearer Header 中，但底层实现和信任对象不同：
-
-| 项目 | `user_token` | `bureau_token` |
-| --- | --- | --- |
-| 服务对象 | Federation 用户 | Federation 管理端与 Bureau 服务端 |
-| 格式 | `ub_<JWT>` | `fb_<token_id>.<secret>` |
-| 实现 | Ed25519 非对称签名 | 随机不透明凭证与 SHA-256 hash |
-| 验证 | 使用 Federation JWKS 公钥验签 | Federation 计算 hash 并查询注册表 |
-| 携带身份 | `user_id`、`bureau_id`、`iss`、`aud`、`exp`、`jti` | 不携带用户身份，只映射到 Federation 注册表记录 |
-| 本地验证 | Bureau 使用 Federation JWKS 验证 | 管理请求由 Federation 查询注册表 |
-| 撤销 | 主要依赖有效期和 Federation 当前状态 | Federation 将注册记录设为 `revoked` |
-
-### User Token
-
-Federation 使用私钥签发用户 JWT，只通过 JWKS 发布公钥。Bureau 可以验证签名、
-issuer、audience、过期时间以及 `bureau_id`，但公钥不能用于签发或篡改用户 Token。
-
-```mermaid
-flowchart LR
-    F["Federation 私钥"] -->|"Ed25519 签名"| U["user_token"]
-    U --> C["City 请求 Federation"]
-    U --> B["Bureau 本地验签"]
-    J["Federation JWKS 公钥"] --> B
-```
-
-`user_token` 泄露后，持有者可以在 Token 有效期内冒充该用户，因此用户 Token
-必须设置有限有效期，并只通过 HTTPS 传输。
-
-### Bureau Token
-
-`bureau_token` 不是 JWT，也没有公钥私钥关系。`fed bureau token create` 要求输入用途，
-在 CLI 本地生成明文和 hash，只将 `token_id + purpose + token_hash` 登记到 Federation。
-
-```mermaid
-flowchart LR
-    CLI["fed bureau token create"] -->|"生成明文"| T["bureau_token"]
-    CLI -->|"提交 SHA-256 hash"| F["Federation 注册表"]
-    T -->|"环境变量"| B["Bureau 服务器"]
-    B -->|"Bearer bureau_token"| F
-    F -->|"hash 比较"| X["允许管理请求"]
-```
-
-运行时 Bureau 会通过 HTTPS 把明文 Token 发给 Federation 的机器身份端点。Federation 从中提取
-`token_id`、计算 SHA-256，并与数据库记录比较。数据库不保存明文。
-
-泄露 `bureau_token` 会让攻击者冒充该 Bureau 调用 Federation 管理 API，但不能生成
-或伪造 `user_token`。发生泄露时使用 `fed bureau token revoke <token_id>` 立即撤销注册记录，
-也可以在 `fed bureau token` 交互界面中选择对应 Token 撤销。
-撤销不会回溯已经签发的 `user_token`；用户 Token 仍由有效期和 Federation 密钥策略控制。
-
-Federation 仍会发布 Ed25519 公钥，供 Federation 自身和其他协议验证用户 Token：
+User Token 是 Federation 使用 Ed25519 私钥签发的 JWT。它包含 `user_id`、
+`bureau_id`、issuer、audience 和有效期；公开验签密钥由以下接口发布：
 
 ```text
 /.well-known/downcity.json
 /.well-known/jwks.json
 ```
 
-Federation Root 控制面由 `FederationAdmin` 持有。`Bureau` 只使用绑定自身的机器凭证读取
-机器身份，并在本地验证目标 User Token；`fed bureau token create <bureau_id>` 由 CLI
-生成明文并将归属、用途与 hash 写入 Federation 注册表。
+用户侧 AI、Payment 和普通 Service 请求直接发送到 Federation：
 
-## Plugin Resources
-
-Chat Resource 完整 Item 加密存储在 `~/.downcity/downcity.db` 中，并通过稳定 ID 从 Chat Plugin Binding 引用：
-
-```json
-{
-  "resource_ids": ["telegram-a1b2c3"]
-}
+```ts
+const models = await embassy.user.ai.catalog();
+const accounts = embassy.user.service("accounts");
+const services = await embassy.user.list_services();
 ```
+
+当当前 Bureau 配置了可信 `server_url` 时，相对路径请求会发送到该 origin，并自动携带
+当前 User Token。Embassy 不会把 Token 转发到其他 origin：
+
+```ts
+const result = await embassy.user.post(
+  "/reports/summary",
+  { range: "today" },
+);
+```
+
+## 管理员身份
+
+管理员使用 ID 和密码换取有期限的 Admin Session。不存在 Root Admin Token：
+
+```ts
+await embassy.admin.login({
+  admin_id: "owner",
+  password: "password",
+});
+
+const current_admin = await embassy.admin.current();
+const bureaus = await embassy.admin.bureaus.list();
+```
+
+密码遗失时，由拥有部署权限的人运行 `fed deploy --admin-reset` 重设管理员凭证。
+
+## Bureau Token
+
+登录后的 Federation Admin 可以签发 Bureau Token：
+
+```bash
+fed bureau token
+```
+
+CLI 请求 Federation 生成高熵 Token。Federation 只保存 `token_id`、用途、hash 和生命周期状态，
+明文只返回一次，应写入业务服务的部署环境：
+
+```bash
+DOWNCITY_FEDERATION_URL=https://fed.example.com
+DOWNCITY_BUREAU_TOKEN=fb_br_xxx.secret
+```
+
+业务服务通过独立的 `Bureau` 客户端验证收到的 Federation User Token：
+
+```ts
+import { Bureau } from "@downcity/federation";
+
+const bureau = new Bureau({
+  federation_url: process.env.DOWNCITY_FEDERATION_URL!,
+  bureau_token: process.env.DOWNCITY_BUREAU_TOKEN!,
+});
+
+const identity = await bureau.identify(request);
+```
+
+`bureau_token` 是长期、可撤销的不透明 Bearer 凭证，不是 JWT，也不能签发 User Token。
+它在创建时绑定 `bureau_id`；`identify()` 会验证签名、issuer、audience、有效期和该
+`bureau_id`。发生泄露时，使用 `fed bureau token revoke <token_id>` 立即撤销。
+
+User Token 的签发权威始终是 Federation。账户登录或 Admin 管理接口都只是进入 Federation
+签发流程的入口，Bureau Token 无权调用 User Token 签发接口。
+
+| 凭证 | 持有者 | 用途 | 验证方式 |
+| --- | --- | --- | --- |
+| `user_token` | 用户客户端 | 访问 Federation 与 Bureau 业务 | Federation JWKS 验签 |
+| `admin_token` | 管理员 Embassy | Federation 控制面 | Federation Admin Session |
+| `bureau_token` | Bureau 业务服务 | 证明机器身份并执行 `identify()` | Federation 比较凭证 hash |
 
 继续阅读：
 
+- [Federation SDK](/zh/city-sdk-docs/packages/federation-sdk)
 - [模型池](/zh/docs/city/model-pool)
 - [用量与计费](/zh/docs/city/usage-billing)

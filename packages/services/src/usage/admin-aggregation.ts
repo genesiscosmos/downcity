@@ -5,7 +5,7 @@
  * 合并只读结果，并统一计算 DAU、WAU、MAU 与用户 Usage。
  */
 
-import type { AdminAIUsageResult } from "@downcity/city";
+import type { AdminAIUsageResult } from "@downcity/federation";
 import type { AdminCreditsUsageResult } from "../credits/types/Usage.js";
 import type {
   AdminUsageActivityMetrics,

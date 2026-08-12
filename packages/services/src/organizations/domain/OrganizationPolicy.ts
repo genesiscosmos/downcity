@@ -1,6 +1,6 @@
 /** Organizations Service 的输入与权限策略。 */
 
-import { httpError } from "@downcity/city";
+import { httpError } from "@downcity/federation";
 import type {
   OrganizationMembershipRecord,
   OrganizationRole,

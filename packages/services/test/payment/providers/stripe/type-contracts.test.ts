@@ -2,7 +2,7 @@
  * Stripe payment provider 类型契约测试。
  */
 
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import {
   PaymentService,
   stripePaymentProvider,

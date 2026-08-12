@@ -110,8 +110,8 @@ fed web                         # 启动当前 Federation 的本地 Web 管理 U
 fed web --no-open --port 43128  # 启动但不自动打开浏览器
 fed server add
 fed server manage
-fed bureau token                 # 打开 Bureau Token 管理 TUI
-fed bureau token create          # 输入用途并创建 Token
+fed bureau token                          # 打开 Bureau Token 管理 TUI
+fed bureau token issue <bureau_id>        # 输入用途并请求 Federation 签发 Token
 fed bureau token list
 fed bureau token revoke <token_id>
 fed query GET /health

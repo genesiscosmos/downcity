@@ -6,7 +6,7 @@
  * - provider 负责声明 env、判断是否可用，并提供必要的发送或 OAuth 配置能力。
  */
 
-import type { EnvRequirement } from "@downcity/city";
+import type { EnvRequirement } from "@downcity/federation";
 import type { OAuthProviderConfig, OAuthProviderId } from "./oauth.js";
 
 /**

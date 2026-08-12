@@ -7,7 +7,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { Federation } from "@downcity/city"
+import { Federation } from "@downcity/federation"
 import { CreditsService } from "../../bin/index.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
 

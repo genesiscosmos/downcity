@@ -16,7 +16,7 @@ import {
   type ServiceInstallContext,
   type AdminUsageQuery,
   type UserDailyUsageQuery,
-} from "@downcity/city";
+} from "@downcity/federation";
 import { raw_all, raw_atomic, raw_first } from "./raw.js";
 import {
   EPHEMERAL_CARD_TABLE,

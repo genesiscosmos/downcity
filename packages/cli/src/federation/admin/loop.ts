@@ -6,7 +6,7 @@
  * - City 连接配置、管理员重新登录等低频操作通过 `更多` 回调交给 workspace 层处理。
  */
 
-import { FederationAdmin } from "@downcity/city";
+import { EmbassyAdmin } from "@downcity/federation";
 import { type AdminSession } from "@/federation/core/session.js";
 import { adminErrorMessage, isAdminAuthError } from "@/federation/admin/auth-error.js";
 import { create_admin_tui_runtime } from "@/federation/tui/AdminTuiRuntime.js";
@@ -23,7 +23,7 @@ import { manageModels } from "@/federation/admin/commands/models.js";
 import { manageInstruction } from "@/federation/admin/commands/instruction.js";
 import { t } from "@/shared/CliLocale.js";
 
-const commands: Record<string, (a: FederationAdmin, baseUrl: string, runtime: admin_tui_runtime) => Promise<void>> = {
+const commands: Record<string, (a: EmbassyAdmin, baseUrl: string, runtime: admin_tui_runtime) => Promise<void>> = {
   dashboard: manageDashboard,
   env: manageEnv,
   instruction: manageInstruction,
@@ -45,9 +45,9 @@ export async function adminLoop(
     runtime?: admin_tui_runtime;
   },
 ): Promise<"logout" | "quit" | "switch_identity" | "back"> {
-  const admin = new FederationAdmin({
-    base_url: session.base_url,
-    credential: session.session_token,
+  const admin = new EmbassyAdmin({
+    federation_url: session.base_url,
+    admin_token: session.session_token,
   });
   const embedded = options?.embedded !== false;
   const runtime = options?.runtime ?? create_admin_tui_runtime(options?.title ?? "Admin");

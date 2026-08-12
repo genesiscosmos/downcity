@@ -6,7 +6,7 @@
  * - PaymentService 自己拥有支付订单；paid 后通过 on_paid 通知接入方发放 Credits。
  */
 
-import type { ServiceInstallContext } from "@downcity/city";
+import type { ServiceInstallContext } from "@downcity/federation";
 import { resolvePaymentRedirectURL } from "./redirect.js";
 import {
   errorMessage,

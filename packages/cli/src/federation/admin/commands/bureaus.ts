@@ -4,12 +4,12 @@
  * Bureau 是稳定的产品身份与授权域；City 是 Agent 终端，不进入 Federation 注册表。
  */
 
-import { FederationAdmin } from "@downcity/city";
+import { EmbassyAdmin } from "@downcity/federation";
 import { t } from "@/shared/CliLocale.js";
 import { adminErrorMessage, rethrowAdminAuthError } from "@/federation/admin/auth-error.js";
 import type { admin_tui_runtime } from "@/federation/types/AdminTui.js";
 
-export async function manage_bureaus(admin: FederationAdmin, _base_url: string, runtime: admin_tui_runtime): Promise<void> {
+export async function manage_bureaus(admin: EmbassyAdmin, _base_url: string, runtime: admin_tui_runtime): Promise<void> {
   while (true) {
     const act = await runtime.select(t({ zh: "产品管理", en: "Products" }), [
         {

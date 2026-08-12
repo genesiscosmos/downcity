@@ -1,0 +1,75 @@
+---
+title: Federation SDK
+description: 使用 @downcity/federation 创建 Federation，并通过 Embassy 访问用户和管理员能力。
+---
+
+@downcity/federation 是 Federation、Embassy 和 Bureau 领域的正式 package。
+
+## Embassy
+
+~~~ts
+import { Embassy } from "@downcity/federation";
+
+const embassy = new Embassy({
+  federation_url: "https://fed.example.com",
+  bureau_id: "product-web",
+});
+
+const providers = await embassy.user.account.providers();
+~~~
+
+Embassy 只有 user 和 admin 两个身份子域：
+
+- embassy.user 负责用户登录、AI、Payment、Service 和 Bureau 业务请求。
+- embassy.admin 负责管理员 Session 和 Federation 管理。
+
+账户登录统一位于 embassy.user.account：
+
+~~~ts
+await embassy.user.account.login({
+  provider: "email",
+  input: {
+    email: "user@example.com",
+    password: "password",
+  },
+});
+
+const current_user = await embassy.user.current();
+~~~
+
+管理员使用用户名和密码登录：
+
+~~~ts
+await embassy.admin.login({
+  admin_id: "owner",
+  password: "password",
+});
+
+const bureaus = await embassy.admin.bureaus.list();
+const issued = await embassy.admin.bureaus.tokens.issue({
+  bureau_id: "product-web",
+  purpose: "production backend",
+});
+const tokens = await embassy.admin.bureaus.tokens.list();
+~~~
+
+## Bureau Token
+
+Federation 根据 Admin Session 的授权生成 Bureau Token，明文只返回一次，数据库只保存 hash。
+业务服务通过与 Embassy 解耦的 Bureau 客户端消费该 Token：
+
+~~~ts
+import { Bureau } from "@downcity/federation";
+
+const bureau = new Bureau({
+  federation_url: "https://fed.example.com",
+  bureau_token: process.env.DOWNCITY_BUREAU_TOKEN!,
+});
+
+const identity = await bureau.identify(request);
+~~~
+
+`bureau_token` 是长期、可撤销的机器凭证。Bureau 可以调用 `me()`、`identify()` 和 `user()`，
+但不能签发 User Token。账户登录和管理员 Token 接口最终都由 Federation 执行 User Token 签发。
+
+package 迁移不会改变现有 HTTP endpoint、请求体、响应体、数据库结构或 Token claim。

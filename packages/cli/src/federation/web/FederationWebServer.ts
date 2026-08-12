@@ -12,7 +12,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
-import { FederationAdmin } from "@downcity/city";
+import { EmbassyAdmin } from "@downcity/federation";
 import { login_federation_admin } from "@/federation/auth/admin.js";
 import { fetch_dashboard_raw_data } from "@/federation/admin/dashboard/dashboard-data.js";
 import { build_dashboard_snapshot } from "@/federation/admin/dashboard/dashboard-metrics.js";
@@ -31,7 +31,7 @@ const MAX_BODY_BYTES = 1024 * 1024;
 /** `fed web` 进程内持有的远端管理员会话。 */
 interface FederationWebAdminState {
   /** 当前已认证管理 Client。 */
-  admin?: FederationAdmin;
+  admin?: EmbassyAdmin;
   /** 仅保存在本地 BFF 内存中的远端 Session Token。 */
   session_token?: string;
   /** 当前登录管理员 ID。 */
@@ -142,9 +142,9 @@ async function handle_request(
       admin_state.session_token = session.session_token;
       admin_state.admin_id = session.admin_id;
       admin_state.expires_at = session.expires_at;
-      admin_state.admin = new FederationAdmin({
-        base_url: context.federation_url,
-        credential: session.session_token,
+      admin_state.admin = new EmbassyAdmin({
+        federation_url: context.federation_url,
+        admin_token: session.session_token,
       });
       send_json(response, 200, {
         authenticated: true,
@@ -228,7 +228,7 @@ async function handle_request(
 }
 
 /** 返回当前有效管理 Client，未登录或到期时明确返回 401。 */
-function require_admin(admin_state: FederationWebAdminState): FederationAdmin {
+function require_admin(admin_state: FederationWebAdminState): EmbassyAdmin {
   if (!admin_state.admin || Date.parse(admin_state.expires_at ?? "") <= Date.now()) {
     clear_admin_state(admin_state);
     throw new FederationWebHttpError(401, "Administrator login required.");
@@ -252,9 +252,9 @@ function clear_admin_state(admin_state: FederationWebAdminState): void {
   admin_state.expires_at = undefined;
 }
 
-async function read_resource(admin: FederationAdmin, resource_id: string): Promise<unknown[]> {
-  if (resource_id === "services") return await admin.listServices() as unknown[];
-  if (resource_id === "models") return await admin.listModels() as unknown[];
+async function read_resource(admin: EmbassyAdmin, resource_id: string): Promise<unknown[]> {
+  if (resource_id === "services") return await admin.list_services() as unknown[];
+  if (resource_id === "models") return await admin.list_models() as unknown[];
   if (resource_id === "env") return await admin.env.list() as unknown[];
   if (resource_id === "env_catalog") return await admin.env.catalog() as unknown[];
   if (resource_id === "bureaus") return await admin.bureaus.list() as unknown[];
@@ -269,7 +269,7 @@ async function read_resource(admin: FederationAdmin, resource_id: string): Promi
   throw new FederationWebHttpError(404, `不支持的 Web UI 资源：${resource_id}`);
 }
 
-async function run_action(admin: FederationAdmin, request: FederationWebActionRequest): Promise<unknown> {
+async function run_action(admin: EmbassyAdmin, request: FederationWebActionRequest): Promise<unknown> {
   const payload = request.payload ?? {};
   if (request.action === "env_upsert") {
     return await admin.env.upsert({ key: required_text(payload, "key"), value: required_text(payload, "value") });

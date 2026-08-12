@@ -7,7 +7,7 @@
  * - 支付记录与 webhook 事件由 PaymentService 负责，Credits 入账通过 on_paid 边界交给接入方。
  */
 
-import type { EnvRequirement } from "@downcity/city";
+import type { EnvRequirement } from "@downcity/federation";
 
 /**
  * 支付方式展示模式。

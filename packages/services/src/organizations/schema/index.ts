@@ -1,6 +1,6 @@
 /** Organizations Service 数据库声明统一出口。 */
 
-import type { ServiceDatabaseSchemas } from "@downcity/city";
+import type { ServiceDatabaseSchemas } from "@downcity/federation";
 import { pg_organization_tables, pg_organizations_ddl } from "./postgres.js";
 import { sqlite_organization_tables, sqlite_organizations_ddl } from "./sqlite.js";
 

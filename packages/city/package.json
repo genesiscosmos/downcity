@@ -1,7 +1,7 @@
 {
   "name": "@downcity/city",
-  "version": "0.2.268",
-  "description": "Downcity Federation runtime and SDK for Bureau identities, Agent terminals, services, auth, and env.",
+  "version": "0.2.270",
+  "description": "Compatibility entry for Federation APIs now owned by @downcity/federation.",
   "type": "module",
   "main": "./bin/index.js",
   "module": "./bin/index.js",
@@ -37,23 +37,17 @@
   "scripts": {
     "build": "node ../../scripts/clean-package.mjs && tsc",
     "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
-    "test": "tsc && tsc -p tsconfig.test.json && node --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc && node --test test/*.test.mjs",
     "prepack": "npm run build && node ../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
     "postpack": "node ../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json",
     "version:patch": "node ../../scripts/bump-package-version.mjs ./package.json"
   },
   "license": "MIT",
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
-    "better-sqlite3": "^12.10.0",
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@downcity/type": "workspace:*",
-    "ai": "^6.0.193",
-    "drizzle-orm": "^0.45.2",
-    "hono": "^4.12.23",
-    "jose": "^6.2.3"
+    "@downcity/federation": "workspace:*"
   }
 }

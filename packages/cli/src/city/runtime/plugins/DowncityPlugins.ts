@@ -235,7 +235,7 @@ export function create_downcity_plugin_types(input: {
   let city_promise: ReturnType<CityUserManager["createUserClient"]> | undefined;
   const get_city = async () => {
     city_promise ??= city_user_manager.createUserClient({ env: input.env ?? process.env });
-    return (await city_promise).city;
+    return (await city_promise).embassy_user;
   };
 
   class CityContactPlugin extends ContactPlugin {

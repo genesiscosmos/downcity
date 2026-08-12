@@ -36,7 +36,7 @@ Services and Actions are registered with City and can be discovered and called b
 - Service/Action infrastructure (backend capabilities)
 - Usage, balance, and billing (City Services)
 
-Federation generates an Ed25519 Key Ring on first startup and publishes verification keys through `/.well-known/jwks.json`. City can connect to Federation directly; a product deploys Bureau only when it needs its own backend capabilities. Bureau verifies user tokens locally and applies its own service policy. Federation does not create Bureau Tokens on startup.
+Federation generates an Ed25519 Key Ring on first startup and publishes verification keys through `/.well-known/jwks.json`. Embassy can connect to Federation directly; a product deploys Bureau only when it needs its own backend capabilities. A Bureau Token and the independent Bureau client let that service verify User Tokens locally. Federation does not create Bureau Tokens on startup.
 
 ## Administrator login and recovery
 
@@ -52,11 +52,12 @@ Non-interactive environments must also pass `--yes`; this only confirms the rese
 
 `fed deploy` continuously reports the current stage and elapsed time for builds, typechecks, Cloudflare account checks, D1 / Queue / R2 preparation, Worker deployment, health checks, and administrator verification. CI and redirected output receive stable line-based progress logs instead of terminal animation.
 
-`fed bureau token` opens the interactive token manager. Choose Create, or run
-`fed bureau token create`, to enter a purpose and register a locally generated deployment
-credential. Federation stores the purpose, hash, and lifecycle state; the plaintext is shown
-once and configured as `DOWNCITY_BUREAU_TOKEN` on the Bureau server. Federation and Bureau can
-run on different servers.
+`fed bureau token` opens the interactive token manager. Choose Issue, or run
+`fed bureau token issue <bureau_id>`, to enter a purpose and use an Admin Session to ask Federation
+to issue the credential. Federation generates the plaintext and stores only its purpose, hash, and
+lifecycle state. The plaintext is returned once and configured as `DOWNCITY_BUREAU_TOKEN` on the
+Bureau server. Federation and Bureau can run on different servers. A Bureau Token proves machine
+identity and cannot issue User Tokens.
 
 ## Where to learn more
 

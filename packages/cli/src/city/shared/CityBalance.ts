@@ -10,7 +10,7 @@
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { open_system_browser } from "@/shared/SystemBrowser.js";
 import { CityUserManager } from "@/city/shared/CityUserManager.js";
-import type { CreditsAccount } from "@downcity/city";
+import type { CreditsAccount } from "@downcity/federation";
 import type {
   CityBalanceAccount,
   CityCheckoutResult,
@@ -25,8 +25,8 @@ const cityUserManager = new CityUserManager();
  * 读取当前 City user 的余额。
  */
 export async function readCurrentCityBalance(): Promise<CityBalanceAccount> {
-  const { user, city } = await cityUserManager.createUserClient();
-  const account_view = await city.service("credits").get<CreditsAccount>("me");
+  const { user, embassy_user } = await cityUserManager.createUserClient();
+  const account_view = await embassy_user.service("credits").get<CreditsAccount>("me");
   const account: CityBalanceAccount = {
     user_id: account_view.user_id,
     credits: account_view.available_credits,
@@ -44,10 +44,10 @@ export async function readCurrentCityBalance(): Promise<CityBalanceAccount> {
 export async function rechargeCurrentCityUser(
   input: CityRechargeInput,
 ): Promise<CityRechargeResult> {
-  const { city } = await cityUserManager.createUserClient();
+  const { embassy_user } = await cityUserManager.createUserClient();
   const topup_amount_minor = normalizePositiveInteger(input.topup_amount_minor, "topup_amount_minor");
   const method_id = normalizeText(input.method_id) || DEFAULT_PAYMENT_METHOD_ID;
-  const checkout = await city.payment.method(method_id).invoke<CityCheckoutResult>({
+  const checkout = await embassy_user.payment.method(method_id).invoke<CityCheckoutResult>({
     topup_amount_minor,
     idempotency_key: normalizeText(input.ref) || `city_cli:${crypto.randomUUID()}`,
     note: normalizeText(input.note) || "City user recharge",

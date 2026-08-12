@@ -2,7 +2,7 @@
  * Credits Service 公开类型契约测试。
  */
 
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import { CreditsService } from "../../src/index.js";
 
 async function verify_credits_service_contract(): Promise<void> {

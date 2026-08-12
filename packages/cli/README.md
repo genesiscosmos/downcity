@@ -46,4 +46,4 @@ Agent 与 Plugin Binding 统一保存在全局数据库；Plugin 配置不进入
 fed bureau token
 ```
 
-命令打开 Bureau Token 交互式管理界面，可创建、查看和撤销 Token。创建时必须输入用途，也可以直接运行 `fed bureau token create`。CLI 在本地生成 `bureau_token`，Federation 保存用途和 hash，并将明文输出一次。把明文写入 Bureau 服务器的 `DOWNCITY_BUREAU_TOKEN` 环境变量；Federation 与 Bureau 不需要部署在同一台服务器。脚本中可用 `fed bureau token list` 查看，使用 `fed bureau token revoke <token_id>` 撤销。
+命令打开 Bureau Token 交互式管理界面，可签发、查看和撤销 Token。签发时必须先登录 Federation Admin 并输入用途，也可以直接运行 `fed bureau token issue <bureau_id>`。CLI 不生成凭证；它请求 Federation 生成明文、保存 hash，并将明文返回一次。把明文写入 Bureau 业务服务的 `DOWNCITY_BUREAU_TOKEN` 环境变量。脚本中可用 `fed bureau token list` 查看元数据，使用 `fed bureau token revoke <token_id>` 撤销。Bureau Token 不能签发 User Token。

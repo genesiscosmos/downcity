@@ -5,7 +5,7 @@
  * City AI 的 runtime 结构与 LanguageModelV3 执行边界。
  */
 
-import { AIChannel } from "@downcity/city"
+import { AIChannel } from "@downcity/federation"
 
 /**
  * 创建输出固定文本的标准 AIChannel 模型定义。
@@ -17,7 +17,7 @@ import { AIChannel } from "@downcity/city"
  * @param {Function} [options.bill] 模型账单函数。
  * @param {Function} [options.on_stream] 每次调用模型流时执行的观察函数。
  * @param {boolean} [options.fail] 是否模拟模型执行失败。
- * @returns {import("@downcity/city").AIModelDefinition} 可注册到 AIService 的模型定义。
+ * @returns {import("@downcity/federation").AIModelDefinition} 可注册到 AIService 的模型定义。
  */
 export function create_test_text_model({
   id,

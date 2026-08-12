@@ -5,14 +5,14 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import {
   Database as CityDatabase,
   TableApi,
-  type CityTableApi,
+  type FederationTableApi,
   type DatabaseMutationResult,
   type DatabaseQueryResult,
   type DatabaseStatement,
   type DatabaseTransaction,
   type DrizzleDatabase,
   type FederationTableSchema,
-} from "@downcity/city";
+} from "@downcity/federation";
 import { getTableColumns, getTableName } from "drizzle-orm";
 import { SQLiteCoordinator } from "./SQLiteCoordinator.js";
 import type { DatabaseOptions } from "./types/DatabaseOptions.js";
@@ -34,10 +34,10 @@ export class Database extends CityDatabase {
 
   protected on_table<TRow extends Record<string, unknown>>(
     schema: FederationTableSchema,
-  ): CityTableApi<TRow> {
+  ): FederationTableApi<TRow> {
     return new TableApi(this.drizzle, schema, {
       execute: (handler) => this.coordinator.run(handler),
-    }) as unknown as CityTableApi<TRow>;
+    }) as unknown as FederationTableApi<TRow>;
   }
 
   protected async on_ensure_table(schema: FederationTableSchema): Promise<void> {
@@ -84,7 +84,7 @@ export class Database extends CityDatabase {
       try {
         const result = await handler({
           table: <TRow extends Record<string, unknown>>(schema: FederationTableSchema) =>
-            new TableApi(this.drizzle, schema) as unknown as CityTableApi<TRow>,
+            new TableApi(this.drizzle, schema) as unknown as FederationTableApi<TRow>,
         });
         this.client.exec("COMMIT");
         return result;

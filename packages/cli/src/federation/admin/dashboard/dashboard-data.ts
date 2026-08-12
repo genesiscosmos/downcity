@@ -6,7 +6,7 @@
  * - 每个 endpoint 独立容错，方便 Dashboard 在 service 缺失时仍可展示。
  */
 
-import { FederationAdmin } from "@downcity/city";
+import { EmbassyAdmin } from "@downcity/federation";
 import type {
   dashboard_raw_data,
   dashboard_range,
@@ -19,7 +19,7 @@ import type {
 /**
  * 读取 Dashboard 原始数据。
  */
-export async function fetch_dashboard_raw_data(a: FederationAdmin, range: dashboard_range): Promise<dashboard_raw_data> {
+export async function fetch_dashboard_raw_data(a: EmbassyAdmin, range: dashboard_range): Promise<dashboard_raw_data> {
   const services = create_initial_service_state();
   const usage_query = build_usage_query(range);
   const accounts_users = await read_endpoint(services, "accounts", "users", async () =>

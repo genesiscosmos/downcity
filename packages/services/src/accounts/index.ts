@@ -7,12 +7,12 @@
  * - OAuth 使用自定义 callback 外壳，最终统一回填到 login state
  */
 
-import { httpError, InstallableService } from "@downcity/city";
+import { httpError, InstallableService } from "@downcity/federation";
 import type {
   EnvRequirement,
   ServiceDatabaseContext,
   ServiceInstallContext,
-} from "@downcity/city";
+} from "@downcity/federation";
 import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { readPreparedFirst, runPrepared } from "./db.js";

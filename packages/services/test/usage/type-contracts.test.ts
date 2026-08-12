@@ -2,7 +2,7 @@
  * Usage 服务类型契约测试。
  */
 
-import { AIService, Federation } from "@downcity/city";
+import { AIService, Federation } from "@downcity/federation";
 import {
   CreditsService,
   UsageService,

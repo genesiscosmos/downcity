@@ -44,7 +44,7 @@ export function create_local_node_template_files(
           typecheck: "tsc -p tsconfig.json --noEmit",
         },
         dependencies: {
-          "@downcity/city": "latest",
+          "@downcity/federation": "latest",
           "@downcity/database-sqlite": "latest",
           "@downcity/services": "latest",
           "@hono/node-server": "latest",
@@ -105,7 +105,7 @@ function create_local_entrypoint(): string {
  */
 
 import { serve } from "@hono/node-server";
-import { AIService, Federation } from "@downcity/city";
+import { AIService, Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-sqlite";
 import {
   AccountsService,
