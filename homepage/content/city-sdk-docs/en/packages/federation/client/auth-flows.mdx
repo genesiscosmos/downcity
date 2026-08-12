@@ -1,0 +1,25 @@
+---
+title: Account Login
+description: Start, continue, inspect, and close a Federation user session.
+---
+
+Account operations live under `embassy.user.account`.
+
+```ts
+const providers = await embassy.user.account.providers();
+
+const login = await embassy.user.account.login({
+  provider: "email",
+  bureau_id: "product-web",
+  input: {
+    email: "user@example.com",
+    password: "password",
+  },
+});
+```
+
+For multi-step providers, use `continue()` with the returned `login_id`. Read the current login
+with `status()`. `token()` returns the User Token currently held by the Embassy instance, and
+`logout()` clears it.
+
+After login, use the same `embassy.user` object for `current()`, AI, payment, and Services.

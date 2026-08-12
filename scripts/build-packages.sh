@@ -1,348 +1,162 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 关键点（中文）：
-# 1) 这个脚本负责"packages 级 patch bump + build"，不承担 homepage / console 的全仓交付链路。
-# 2) 统一入口支持核心包与独立平台 Adapter，并要求调用方显式指定影响范围。
-# 3) bump 只作用于本次显式选中的 package；依赖 package 只参与构建验证。
+# Package 级 patch bump 与构建入口。
+#
+# 显式选择的 package 才会 bump；构建阶段会递归补齐依赖，并按照稳定拓扑顺序执行。
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 source "$ROOT_DIR/scripts/lib/build-common.sh"
 
 PACKAGES=()
-ALL_PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "workspace-cloudflare-computer" "server" "federation" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "local" "ui" "cli")
 BUILD_PACKAGES=()
+ALL_PACKAGES=(
+  "type"
+  "shell"
+  "sandbox-macos"
+  "sandbox-linux"
+  "sandbox-windows-mxc"
+  "sandbox-windows-srt"
+  "agent"
+  "workspace-cloudflare-computer"
+  "federation"
+  "database-d1"
+  "database-sqlite"
+  "database-postgresql"
+  "services"
+  "plugins"
+  "city"
+  "ui"
+  "cli"
+)
 BUMP=true
 SYNC_GLOBAL_CLI=true
 
 usage() {
-  echo "Usage: npm run patch:build -- [--type] [--shell] [--sandbox-macos] [--sandbox-linux] [--sandbox-windows-mxc] [--sandbox-windows-srt] [--agent] [--local] [--workspace-cloudflare-computer] [--server] [--federation] [--city] [--database-d1] [--database-sqlite] [--database-postgresql] [--services] [--plugins] [--cli] [--ui] [--all] [--no-bump] [--no-global-install]"
+  echo "Usage: pnpm patch:build -- [packages] [--no-bump] [--no-global-install]"
   echo ""
-  echo "  默认构建 agent + plugins + cli，并自增对应 package 的 patch 版本号"
-  echo "  --type     构建 @downcity/type"
-  echo "  --shell    构建 @downcity/shell"
-  echo "  --sandbox-macos 构建 @downcity/sandbox-macos"
-  echo "  --sandbox-linux 构建 @downcity/sandbox-linux"
-  echo "  --sandbox-windows-mxc 构建 @downcity/sandbox-windows-mxc"
-  echo "  --sandbox-windows-srt 构建 @downcity/sandbox-windows-srt"
-  echo "  --agent    构建 @downcity/agent"
-  echo "  --local 构建 @downcity/local"
-  echo "  --workspace-cloudflare-computer 构建 @downcity/workspace-cloudflare-computer"
-  echo "  --server   构建 @downcity/server"
-  echo "  --federation 构建 @downcity/federation"
-  echo "  --city     构建 @downcity/city"
-  echo "  --database-d1 构建 @downcity/database-d1"
-  echo "  --database-sqlite 构建 @downcity/database-sqlite"
-  echo "  --database-postgresql 构建 @downcity/database-postgresql"
-  echo "  --services 构建 @downcity/services"
-  echo "  --plugins  构建 @downcity/plugins"
-  echo "  --cli      构建 downcity CLI 包"
-  echo "  --ui       构建 @downcity/ui"
-  echo "  --all      构建全部 packages（type + shell + agent + server + city + services + plugins + ui + cli）"
-  echo "  --no-bump  跳过 patch 版本号自增"
-  echo "  --no-global-install 跳过本机全局 Downcity CLI 同步"
+  echo "Package options:"
+  echo "  --type --shell --sandbox-macos --sandbox-linux"
+  echo "  --sandbox-windows-mxc --sandbox-windows-srt"
+  echo "  --agent --workspace-cloudflare-computer --federation"
+  echo "  --database-d1 --database-sqlite --database-postgresql"
+  echo "  --services --plugins --city --ui --cli --all"
+  echo ""
+  echo "  --no-bump           只构建，不修改 package version"
+  echo "  --no-global-install 不同步本机全局 Downcity CLI"
   exit 1
 }
 
-add_package() {
-  local pkg="$1"
+contains() {
+  local expected="$1"
+  shift
   local item
-  for item in "${PACKAGES[@]}"; do
-    if [[ "$item" == "$pkg" ]]; then
-      return 0
-    fi
+  for item in "$@"; do
+    if [[ "$item" == "$expected" ]]; then return 0; fi
   done
-  PACKAGES+=("$pkg")
+  return 1
 }
 
-normalize_packages() {
-  local ordered=()
-  local pkg
-  for pkg in "${ALL_PACKAGES[@]}"; do
-    local selected
-    for selected in "${PACKAGES[@]}"; do
-      if [[ "$selected" == "$pkg" ]]; then
-        ordered+=("$pkg")
-        break
+add_package() {
+  local package_name="$1"
+  if ! contains "$package_name" "${PACKAGES[@]}"; then
+    PACKAGES+=("$package_name")
+  fi
+}
+
+add_build_package() {
+  local package_name="$1"
+  if contains "$package_name" "${BUILD_PACKAGES[@]}"; then return 0; fi
+  BUILD_PACKAGES+=("$package_name")
+
+  case "$package_name" in
+    shell)
+      add_build_package "type"
+      ;;
+    sandbox-*)
+      add_build_package "shell"
+      ;;
+    agent)
+      add_build_package "type"
+      add_build_package "shell"
+      ;;
+    workspace-cloudflare-computer)
+      add_build_package "agent"
+      ;;
+    federation|database-*)
+      add_build_package "type"
+      if [[ "$package_name" == database-* ]]; then
+        add_build_package "federation"
       fi
-    done
+      ;;
+    services)
+      add_build_package "type"
+      add_build_package "federation"
+      ;;
+    plugins)
+      add_build_package "type"
+      add_build_package "shell"
+      add_build_package "agent"
+      ;;
+    city)
+      add_build_package "type"
+      add_build_package "shell"
+      add_build_package "sandbox-macos"
+      add_build_package "sandbox-linux"
+      add_build_package "sandbox-windows-mxc"
+      add_build_package "sandbox-windows-srt"
+      add_build_package "agent"
+      add_build_package "federation"
+      add_build_package "plugins"
+      ;;
+    cli)
+      add_build_package "city"
+      add_build_package "services"
+      add_build_package "ui"
+      ;;
+  esac
+}
+
+normalize_selected_packages() {
+  local ordered=()
+  local package_name
+  for package_name in "${ALL_PACKAGES[@]}"; do
+    if contains "$package_name" "${PACKAGES[@]}"; then
+      ordered+=("$package_name")
+    fi
   done
   PACKAGES=("${ordered[@]}")
 }
 
-resolve_build_packages() {
-  local resolved=("${PACKAGES[@]}")
-  local selected
-  for selected in "${PACKAGES[@]}"; do
-    if [[ "$selected" == "cli" ]]; then
-      local has_type=false
-      local has_shell=false
-      local has_agent=false
-      local has_local=false
-      local has_sandbox_macos=false
-      local has_sandbox_linux=false
-        local has_sandbox_windows_mxc=false
-        local has_sandbox_windows_srt=false
-      local has_plugins=false
-      local has_ui=false
-      local has_server=false
-      local item
-      for item in "${resolved[@]}"; do
-        if [[ "$item" == "type" ]]; then
-          has_type=true
-        fi
-        if [[ "$item" == "agent" ]]; then
-          has_agent=true
-        fi
-        if [[ "$item" == "local" ]]; then
-          has_local=true
-        fi
-        if [[ "$item" == "sandbox-macos" ]]; then has_sandbox_macos=true; fi
-        if [[ "$item" == "sandbox-linux" ]]; then has_sandbox_linux=true; fi
-        if [[ "$item" == "sandbox-windows-mxc" ]]; then has_sandbox_windows_mxc=true; fi
-        if [[ "$item" == "sandbox-windows-srt" ]]; then has_sandbox_windows_srt=true; fi
-        if [[ "$item" == "shell" ]]; then
-          has_shell=true
-        fi
-        if [[ "$item" == "plugins" ]]; then
-          has_plugins=true
-        fi
-        if [[ "$item" == "ui" ]]; then
-          has_ui=true
-        fi
-        if [[ "$item" == "server" ]]; then
-          has_server=true
-        fi
-      done
-      if [[ "$has_type" == false ]]; then
-        resolved+=("type")
-      fi
-      if [[ "$has_shell" == false ]]; then
-        resolved+=("shell")
-      fi
-      if [[ "$has_agent" == false ]]; then
-        resolved+=("agent")
-      fi
-      if [[ "$has_local" == false ]]; then
-        resolved+=("local")
-      fi
-      if [[ "$has_sandbox_macos" == false ]]; then resolved+=("sandbox-macos"); fi
-      if [[ "$has_sandbox_linux" == false ]]; then resolved+=("sandbox-linux"); fi
-      if [[ "$has_sandbox_windows_mxc" == false ]]; then resolved+=("sandbox-windows-mxc"); fi
-      if [[ "$has_sandbox_windows_srt" == false ]]; then resolved+=("sandbox-windows-srt"); fi
-      if [[ "$has_server" == false ]]; then
-        resolved+=("server")
-      fi
-      if [[ "$has_plugins" == false ]]; then
-        resolved+=("plugins")
-      fi
-      if [[ "$has_ui" == false ]]; then
-        resolved+=("ui")
-      fi
-      for dep in federation city services; do
-        local has_dep=false
-        local dep_item
-        for dep_item in "${resolved[@]}"; do
-          if [[ "$dep_item" == "$dep" ]]; then
-            has_dep=true
-            break
-          fi
-        done
-        if [[ "$has_dep" == false ]]; then
-          resolved+=("$dep")
-        fi
-      done
-      break
-    fi
-    if [[ "$selected" == sandbox-* ]]; then
-      local has_shell=false
-      local item
-      for item in "${resolved[@]}"; do
-        if [[ "$item" == "shell" ]]; then has_shell=true; fi
-      done
-      if [[ "$has_shell" == false ]]; then resolved+=("shell"); fi
-    fi
-    if [[ "$selected" == "agent" || "$selected" == "workspace-cloudflare-computer" || "$selected" == "federation" || "$selected" == "city" ]]; then
-      local has_type=false
-      local has_shell=false
-      local has_agent=false
-      local item
-      for item in "${resolved[@]}"; do
-        if [[ "$item" == "type" ]]; then
-          has_type=true
-        fi
-        if [[ "$item" == "shell" ]]; then
-          has_shell=true
-        fi
-        if [[ "$item" == "agent" ]]; then
-          has_agent=true
-        fi
-      done
-      if [[ "$has_type" == false ]]; then
-        resolved+=("type")
-      fi
-      if [[ "$selected" != "city" && "$selected" != "federation" && "$has_shell" == false ]]; then
-        resolved+=("shell")
-      fi
-      if [[ "$selected" == "workspace-cloudflare-computer" && "$has_agent" == false ]]; then
-        resolved+=("agent")
-      fi
-      if [[ "$selected" == "city" ]]; then
-        local has_federation=false
-        for item in "${resolved[@]}"; do
-          if [[ "$item" == "federation" ]]; then has_federation=true; fi
-        done
-        if [[ "$has_federation" == false ]]; then resolved+=("federation"); fi
-      fi
-    fi
-    if [[ "$selected" == "local" ]]; then
-      local has_type=false
-      local has_shell=false
-      local has_agent=false
-      local has_federation=false
-      local has_plugins=false
-      local has_sandbox_macos=false
-      local has_sandbox_linux=false
-      local has_sandbox_windows_mxc=false
-      local has_sandbox_windows_srt=false
-      local item
-      for item in "${resolved[@]}"; do
-        if [[ "$item" == "type" ]]; then has_type=true; fi
-        if [[ "$item" == "shell" ]]; then has_shell=true; fi
-        if [[ "$item" == "agent" ]]; then has_agent=true; fi
-        if [[ "$item" == "federation" ]]; then has_federation=true; fi
-        if [[ "$item" == "plugins" ]]; then has_plugins=true; fi
-        if [[ "$item" == "sandbox-macos" ]]; then has_sandbox_macos=true; fi
-        if [[ "$item" == "sandbox-linux" ]]; then has_sandbox_linux=true; fi
-        if [[ "$item" == "sandbox-windows-mxc" ]]; then has_sandbox_windows_mxc=true; fi
-        if [[ "$item" == "sandbox-windows-srt" ]]; then has_sandbox_windows_srt=true; fi
-      done
-      if [[ "$has_type" == false ]]; then resolved+=("type"); fi
-      if [[ "$has_shell" == false ]]; then resolved+=("shell"); fi
-      if [[ "$has_agent" == false ]]; then resolved+=("agent"); fi
-      if [[ "$has_federation" == false ]]; then resolved+=("federation"); fi
-      if [[ "$has_plugins" == false ]]; then resolved+=("plugins"); fi
-      if [[ "$has_sandbox_macos" == false ]]; then resolved+=("sandbox-macos"); fi
-      if [[ "$has_sandbox_linux" == false ]]; then resolved+=("sandbox-linux"); fi
-      if [[ "$has_sandbox_windows_mxc" == false ]]; then resolved+=("sandbox-windows-mxc"); fi
-      if [[ "$has_sandbox_windows_srt" == false ]]; then resolved+=("sandbox-windows-srt"); fi
-    fi
-    if [[ "$selected" == database-* ]]; then
-      local has_type=false
-      local has_federation=false
-      local item
-      for item in "${resolved[@]}"; do
-        if [[ "$item" == "type" ]]; then has_type=true; fi
-        if [[ "$item" == "federation" ]]; then has_federation=true; fi
-      done
-      if [[ "$has_type" == false ]]; then resolved+=("type"); fi
-      if [[ "$has_federation" == false ]]; then resolved+=("federation"); fi
-    fi
-    if [[ "$selected" == "server" ]]; then
-      local has_type=false
-      local has_shell=false
-      local has_agent=false
-      local item
-      for item in "${resolved[@]}"; do
-        if [[ "$item" == "type" ]]; then
-          has_type=true
-        fi
-        if [[ "$item" == "shell" ]]; then
-          has_shell=true
-        fi
-        if [[ "$item" == "agent" ]]; then
-          has_agent=true
-        fi
-      done
-      if [[ "$has_type" == false ]]; then
-        resolved+=("type")
-      fi
-      if [[ "$has_shell" == false ]]; then
-        resolved+=("shell")
-      fi
-      if [[ "$has_agent" == false ]]; then
-        resolved+=("agent")
-      fi
-    fi
-    if [[ "$selected" == "services" ]]; then
-      local has_type=false
-      local has_federation=false
-      local item
-      for item in "${resolved[@]}"; do
-        if [[ "$item" == "type" ]]; then
-          has_type=true
-        fi
-        if [[ "$item" == "federation" ]]; then
-          has_federation=true
-        fi
-      done
-      if [[ "$has_type" == false ]]; then
-        resolved+=("type")
-      fi
-      if [[ "$has_federation" == false ]]; then
-        resolved+=("federation")
-      fi
-    fi
-    if [[ "$selected" == "plugins" ]]; then
-      local has_type=false
-      local has_shell=false
-      local has_agent=false
-      local item
-      for item in "${resolved[@]}"; do
-        if [[ "$item" == "type" ]]; then
-          has_type=true
-        fi
-        if [[ "$item" == "shell" ]]; then
-          has_shell=true
-        fi
-        if [[ "$item" == "agent" ]]; then
-          has_agent=true
-        fi
-      done
-      if [[ "$has_type" == false ]]; then
-        resolved+=("type")
-      fi
-      if [[ "$has_shell" == false ]]; then
-        resolved+=("shell")
-      fi
-      if [[ "$has_agent" == false ]]; then
-        resolved+=("agent")
-      fi
-    fi
-  done
-
+normalize_build_packages() {
   local ordered=()
-  local pkg
-  for pkg in "${ALL_PACKAGES[@]}"; do
-    local item
-    for item in "${resolved[@]}"; do
-      if [[ "$item" == "$pkg" ]]; then
-        ordered+=("$pkg")
-        break
-      fi
-    done
+  local package_name
+  for package_name in "${ALL_PACKAGES[@]}"; do
+    if contains "$package_name" "${BUILD_PACKAGES[@]}"; then
+      ordered+=("$package_name")
+    fi
   done
   BUILD_PACKAGES=("${ordered[@]}")
 }
 
 run_build() {
-  local pkg="$1"
+  local package_name="$1"
   echo ""
-  if [[ "$pkg" == "cli" ]]; then
+  if [[ "$package_name" == "cli" ]]; then
     echo "--- Downcity CLI ---"
     run_project_build "$ROOT_DIR/packages/cli"
     return 0
   fi
-  echo "--- @downcity/$pkg ---"
-  run_project_build "$ROOT_DIR/packages/$pkg"
+  echo "--- @downcity/$package_name ---"
+  run_project_build "$ROOT_DIR/packages/$package_name"
 }
 
 should_sync_global_cli() {
-  local pkg
-  for pkg in "${PACKAGES[@]}"; do
-    case "$pkg" in
-      agent|city|plugins|ui|cli|server)
+  local package_name
+  for package_name in "${PACKAGES[@]}"; do
+    case "$package_name" in
+      agent|federation|plugins|city|ui|cli)
         return 0
         ;;
     esac
@@ -352,31 +166,29 @@ should_sync_global_cli() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --)         shift ; continue ;;
-    --type)     add_package "type" ;;
-    --shell)    add_package "shell" ;;
+    --) shift; continue ;;
+    --type) add_package "type" ;;
+    --shell) add_package "shell" ;;
     --sandbox-macos) add_package "sandbox-macos" ;;
     --sandbox-linux) add_package "sandbox-linux" ;;
     --sandbox-windows-mxc) add_package "sandbox-windows-mxc" ;;
     --sandbox-windows-srt) add_package "sandbox-windows-srt" ;;
-    --agent)    add_package "agent" ;;
-    --local) add_package "local" ;;
+    --agent) add_package "agent" ;;
     --workspace-cloudflare-computer) add_package "workspace-cloudflare-computer" ;;
-    --server)   add_package "server" ;;
     --federation) add_package "federation" ;;
-    --city)     add_package "city" ;;
     --database-d1) add_package "database-d1" ;;
     --database-sqlite) add_package "database-sqlite" ;;
     --database-postgresql) add_package "database-postgresql" ;;
     --services) add_package "services" ;;
-    --plugins)  add_package "plugins" ;;
-    --cli)      add_package "cli" ;;
-    --ui)       add_package "ui" ;;
-    --all)      PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "workspace-cloudflare-computer" "server" "federation" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "local" "ui" "cli") ; shift ; continue ;;
-    --no-bump)  BUMP=false ;;
+    --plugins) add_package "plugins" ;;
+    --city) add_package "city" ;;
+    --ui) add_package "ui" ;;
+    --cli) add_package "cli" ;;
+    --all) PACKAGES=("${ALL_PACKAGES[@]}") ;;
+    --no-bump) BUMP=false ;;
     --no-global-install) SYNC_GLOBAL_CLI=false ;;
-    -h|--help)  usage ;;
-    *)          usage ;;
+    -h|--help) usage ;;
+    *) usage ;;
   esac
   shift
 done
@@ -385,16 +197,20 @@ if [[ ${#PACKAGES[@]} -eq 0 ]]; then
   echo "Error: 至少需要显式指定一个 package，例如 --city 或 --agent --plugins。" >&2
   usage
 fi
-normalize_packages
-resolve_build_packages
+
+normalize_selected_packages
+for package_name in "${PACKAGES[@]}"; do
+  add_build_package "$package_name"
+done
+normalize_build_packages
 
 if $BUMP; then
   echo "==> patch bump: ${PACKAGES[*]}"
-  for pkg in "${PACKAGES[@]}"; do
-    if [[ "$pkg" == "cli" ]]; then
+  for package_name in "${PACKAGES[@]}"; do
+    if [[ "$package_name" == "cli" ]]; then
       node "$ROOT_DIR/scripts/bump-package-version.mjs" "$ROOT_DIR/packages/cli/package.json"
     else
-      node "$ROOT_DIR/scripts/bump-package-version.mjs" "$ROOT_DIR/packages/$pkg/package.json"
+      node "$ROOT_DIR/scripts/bump-package-version.mjs" "$ROOT_DIR/packages/$package_name/package.json"
     fi
   done
 else
@@ -402,16 +218,15 @@ else
 fi
 
 echo "==> 构建 ${BUILD_PACKAGES[*]} ..."
-for pkg in "${BUILD_PACKAGES[@]}"; do
-  run_build "$pkg"
+for package_name in "${BUILD_PACKAGES[@]}"; do
+  run_build "$package_name"
 done
 
 echo ""
 echo "==> 完成"
 
-# patch build 后，只要本次改动会影响全局 downcity 的交付，就先补齐 CLI 产物，再同步全局安装。
 if $SYNC_GLOBAL_CLI && should_sync_global_cli; then
-  if [[ ! " ${BUILD_PACKAGES[*]} " =~ " cli " ]]; then
+  if ! contains "cli" "${BUILD_PACKAGES[@]}"; then
     echo ""
     echo "==> 刷新 Downcity CLI 交付产物 ..."
     run_build "cli"

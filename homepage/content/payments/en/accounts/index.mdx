@@ -5,7 +5,7 @@ description: "Use the official accounts service for registration, login, OAuth e
 
 `@downcity/services` is a good fit when you do not want to build a full account system first. It packages the common registration, login, session, and OAuth entry flows into one official service.
 
-The important point is not "another SDK." It adds a ready-made `accounts` service into the Federation, so product-side callers can use it through `User City` and `FederationAdmin`.
+The important point is not "another SDK." It adds a ready-made `accounts` service into the Federation, so product-side callers can use it through `Embassy User` and `Embassy Admin`.
 
 ## How to read this section
 
@@ -121,7 +121,7 @@ const session = await guest.service("accounts").action("login").invoke({
 });
 ```
 
-Successful registration or login returns `user_token`. After that, the product client can switch to a normal `User City` for AI calls.
+Successful registration or login returns `user_token`. After that, the product client can switch to a normal `Embassy User` for AI calls.
 
 `GET /v1/accounts/me` also returns the current `profile`, so product-side callers can render account data directly from one endpoint.
 
@@ -158,5 +158,5 @@ This is why `AccountsService()` and `@downcity/city` are usually read together: 
 
 - For the step-by-step flows, continue with the three subpages in this section
 - For the full account capability, continue in [Accounts Service](/en/payments/accounts)
-- For the downcity SDK, read [@downcity/city](/en/city-sdk-docs/packages/city/federation)
-- For more detailed product-side calling patterns, read [User City](/en/city-sdk-docs/reference/city-user)
+- For the downcity SDK, read [@downcity/city](/en/city-sdk-docs/packages/federation/federation)
+- For more detailed product-side calling patterns, read [Embassy User](/en/city-sdk-docs/reference/city-user)

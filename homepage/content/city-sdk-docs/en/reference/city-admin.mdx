@@ -1,356 +1,48 @@
 ---
-title: FederationAdmin
-description: How trusted environments manage Bureaus, request user tokens, and maintain Federation env.
+title: Embassy Admin
+description: Administrator sessions and Federation management APIs.
 ---
 
-`FederationAdmin` should only run in trusted environments.
-
-> `FederationAdmin` is the legacy low-level client. New code should use `Embassy.admin` from
-> `@downcity/federation`; this page remains as a migration reference for the old method surface.
-
-Typical cases:
-
-- your own city backend
-- local admin scripts
-- internal tools
-- CI or operations scripts
-
-Do not expose administrator IDs, passwords, or session tokens to browsers, public frontends, or uncontrolled clients.
-
-## What it owns in the full system
-
-The most accurate mental model is: `FederationAdmin` is the trusted-side bridge into City management.
-
-It usually owns three things:
-
-- managing Bureau product identities and machine credentials
-- issuing `user_token`
-- maintaining runtime env
-- running trusted-side Credits Card and Transaction administration
-
-If `User City` owns "how a user-context city call reaches City," then `FederationAdmin` owns "how the trusted side prepares that call environment."
-
-## Minimal example
+Administrator access is the `admin` identity domain of Embassy.
 
 ```ts
-import { FederationAdmin } from "@downcity/federation/legacy";
+import { Embassy } from "@downcity/federation";
 
-const admin = new FederationAdmin({
-  base_url: "https://base.example.com",
-  credential: administrator_session_token,
-});
+const embassy = new Embassy({ federation_url: "https://fed.example.com" });
+await embassy.admin.login({ admin_id: "owner", password: "password" });
 ```
 
-`credential` must explicitly receive a valid administrator session token obtained from `/v1/admin/login`.
+The Federation returns a time-limited Admin Session Token. Embassy keeps it in the current
+instance; `token()` reads it and `logout()` revokes it.
 
-## Typical call chain
-
-<div className="dc-doc-flow" aria-label="FederationAdmin call flow">
-  <div className="dc-doc-lane">
-    <div className="dc-doc-node">
-      <strong>Trusted backend</strong>
-      <span>Completes login, auth, and business checks first.</span>
-    </div>
-  </div>
-  <div className="dc-doc-arrow" aria-hidden="true">→</div>
-  <div className="dc-doc-lane">
-    <div className="dc-doc-node">
-      <strong>FederationAdmin</strong>
-      <span>Calls `/v1/bureaus/*`, `/v1/accounts/tokens/issue`, `/v1/env/*`, `/v1/ai/models`, and `/v1/base/instruction`.</span>
-    </div>
-  </div>
-  <div className="dc-doc-arrow" aria-hidden="true">→</div>
-  <div className="dc-doc-lane">
-    <div className="dc-doc-node">
-      <strong>Downcity</strong>
-      <span>Verifies the administrator session token, then executes city, token, and env management actions.</span>
-    </div>
-  </div>
-</div>
-
-## `accounts/tokens/issue`
-
-This is the most common trusted-side action: issue a `user_token` for a user under the target Bureau.
-
-The trusted backend must pass the target `bureau_id` and `user_id` explicitly when issuing a token.
+## Bureau management
 
 ```ts
-const issued = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "my_app",
-  user_id: "user_123",
-  metadata: {
-    plan: "pro",
-    org_id: "org_001",
-  },
-  ttl: "7d",
-});
-```
-
-The response includes:
-
-- `user_token`
-- `bureau_id`
-- `user_id`
-- `expires_at`
-
-`ttl` supports:
-
-- `30m`
-- `1h`
-- `7d`
-- raw seconds
-
-## Recommended login flow
-
-```ts
-router.post("/login", async (c) => {
-  const user_id = await login(c);
-
-  const issued = await admin.service("accounts").action("tokens/issue").invoke({
-    bureau_id: "my_app",
-    user_id,
-    ttl: "7d",
-  });
-
-  return c.json({
-    bureau_id: issued.bureau_id,
-    user_token: issued.user_token,
-  });
-});
-```
-
-That means:
-
-1. your backend handles user login first
-2. the trusted backend requests Federation to issue `user_token`
-3. it returns `user_token` (which contains `bureau_id`) to the client
-4. the client calls City through `User City`
-
-## Relationship with the accounts service
-
-`FederationAdmin` does not replace the accounts service, and the service does not replace `FederationAdmin`.
-
-The two common patterns are:
-
-### Pattern A: your backend owns login
-
-- your backend validates user credentials or session
-- your backend uses `FederationAdmin` to request `user_token`
-- the frontend receives `user_token` (which contains `bureau_id`)
-
-### Pattern B: the accounts service owns login
-
-- the frontend uses a guest `User City` to run `accounts.login/start -> login/continue -> login/result` or the registration flow
-- the accounts service returns `user_token` through `login/result`
-- the frontend switches to a normal `User City`
-
-So:
-
-- `FederationAdmin` owns trusted-side management actions
-- the accounts service owns the minimal auth capability
-- they are not replacements for each other, but two different login patterns
-
-## `env`
-
-`admin.env` manages runtime env values. Provider keys written here are stored in the Federation database and take priority at runtime.
-
-If you need to inspect which provider env keys a code-registered model depends on, read the same model catalog directly through `admin.listModels()`, then compare it with `admin.env.list()`:
-
-```ts
-const models = await admin.listModels();
-```
-
-### `list()`
-
-```ts
-const envs = await admin.env.list();
-```
-
-### `upsert()`
-
-```ts
-await admin.env.upsert({
-  key: "OPENAI_API_KEY",
-  value: "sk-xxx",
-});
-```
-
-### `remove()`
-
-```ts
-await admin.env.remove("OPENAI_API_KEY");
-```
-
-### `import()`
-
-```ts
-await admin.env.import(`
-OPENAI_API_KEY=sk-xxx
-OPENAI_BASE_URL=https://api.openai.com/v1
-`);
-```
-
-### `refresh()`
-
-```ts
-await admin.env.refresh();
-```
-
-When env values are changed through `admin.env.upsert()`, `remove()`, `import()`, or the fed admin workspace, the current Runtime cache is updated automatically.
-
-If you bypass the Admin API and edit the database `env` table directly, call `admin.env.refresh()` or run `Refresh runtime cache` from the fed admin workspace Env menu.
-
-These changes are written to the `env` table in the Federation database. Both business env values and system-level secrets are managed from this Federation-owned table, so you no longer need to patch Worker or Node host env manually.
-
-## `bureaus`
-
-`admin.bureaus` manages product boundaries inside the same Federation.
-
-```ts
-const bureaus = await admin.bureaus.list();
-
-const bureau = await admin.bureaus.create({
-  name: "My App",
-  server_url: "https://bureau.example.com",
-  bureau_id: "my_app",
+const bureaus = await embassy.admin.bureaus.list();
+const bureau = await embassy.admin.bureaus.create({
+  bureau_id: "product-web",
+  name: "Product Web",
+  server_url: "https://product.example.com",
 });
 
-await admin.bureaus.server.update({
+await embassy.admin.bureaus.route.update({
   bureau_id: bureau.bureau_id,
-  server_url: "https://new-bureau.example.com",
-});
-
-await admin.bureaus.pause(bureau.bureau_id);
-await admin.bureaus.activate(bureau.bureau_id);
-await admin.bureaus.archive(bureau.bureau_id);
-```
-
-The returned `bureau.server.server_url` comes from the separate one-to-one Server record. Updating it does not change the stable `bureau_id`.
-
-To issue a user token for a specific Bureau, use the Accounts Service:
-
-```ts
-const issued = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "my_app",
-  user_id: "user_123",
-  ttl: "7d",
+  server_url: "https://new-product.example.com",
 });
 ```
 
-`FederationAdmin` is not bound to one Bureau; every issuance must provide `bureau_id` explicitly.
-
-## `listServices()` / `listModels()` / `instruction()`
-
-Besides `tokens` and `env`, the admin side can also read the current capability catalog exposed by City.
-
-### `listServices()`
+## Bureau Tokens
 
 ```ts
-const services = await admin.listServices();
-```
-
-This returns the registered service list together with each module's declared `env` requirements.
-
-### `listModels()`
-
-```ts
-const models = await admin.listModels();
-```
-
-This returns the full model catalog from the admin view. Compared with the user-side model catalog, it also includes:
-
-- `env_requirements`
-
-### `instruction()`
-
-```ts
-const text = await admin.instruction();
-console.log(text);
-```
-
-It maps to `GET /v1/base/instruction` and returns the aggregated plain-text City instruction document. It is useful for:
-
-- checking which modules are currently mounted
-- checking which routes each module exposes
-- checking which env keys each module declares
-- feeding runtime guidance into a CLI or agent
-
-## FederationAdmin can also call service-provided admin services
-
-Besides `tokens` and `env`, `FederationAdmin` can call admin-side services exposed by official packages.
-
-For example:
-
-```ts
-const users = await admin.service("accounts").get("users");
-const sessions = await admin.service("accounts").get("sessions");
-
-const payments = await admin.service("payment").get("payments");
-```
-
-`credits` exposes a typed invoker for Cards and accounting changes:
-
-```ts
-const card = await admin.credits.cards.create_ephemeral({
-  user_id: "user_123",
-  name: "Campaign reward",
-  initial_credits: 300_000_000,
-  expires_at: "2026-08-31T00:00:00.000Z",
-  source: "campaign",
-  idempotency_key: "campaign:user_123",
+const issued = await embassy.admin.bureaus.tokens.issue({
+  bureau_id: "product-web",
+  purpose: "production backend",
 });
 
-await admin.credits.topup({
-  card: { kind: "ephemeral", card_id: card.card_id },
-  credits: 10_000_000,
-  source: "campaign_bonus",
-  idempotency_key: "campaign_bonus:user_123",
-});
+const tokens = await embassy.admin.bureaus.tokens.list("product-web");
+await embassy.admin.bureaus.tokens.revoke(issued.token_id);
 ```
 
-In other words, `FederationAdmin` is not only for built-in token/env endpoints. It is also the trusted-side entry into the same unified service route space.
-
-## Error handling
-
-When `FederationAdmin` receives a non-2xx HTTP response, it throws an `Error` with two extra fields:
-
-- `status`: the HTTP status code.
-- `body`: the raw response body from City, usually `{"error":"..."}`.
-
-```ts
-try {
-  await admin.service("accounts").action("tokens/issue").invoke({
-    bureau_id: "my_app",
-    user_id: "user_123",
-  });
-} catch (error) {
-  const status = error instanceof Error && "status" in error ? error.status : undefined;
-  const body = error instanceof Error && "body" in error ? error.body : undefined;
-
-  console.log(status, body);
-}
-```
-
-Common statuses:
-
-- `401`: the administrator session token is missing, expired, revoked, or invalid.
-- `403`: the target Bureau is paused, so no token can be issued.
-- `404`: the target Bureau does not exist.
-- `500`: City is missing required config, or the admin action failed internally.
-
-## What `FederationAdmin` does not manage right now
-
-These do not belong to `FederationAdmin` yet:
-
-- model configuration
-- direct edits to the `models` table
-- service handler registration
-- direct frontend login interaction
-- browser-side user-context calls
-
-Those belong to:
-
-- the database layer
-- the `City` runtime layer
-
-In other words, `FederationAdmin` owns env maintenance; runtime model definitions and mounting still belong to the `City` runtime layer.
+Federation returns the plaintext Bureau Token only when it is issued. Store it in the trusted
+backend and use the independent `Bureau` client for `identify()`; Embassy Admin does not identify
+end-user requests.

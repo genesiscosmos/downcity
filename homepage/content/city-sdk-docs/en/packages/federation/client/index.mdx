@@ -1,0 +1,49 @@
+---
+title: Embassy Client
+description: Access Federation through explicit user and admin identity domains.
+---
+
+`Embassy` is the client entry to a Federation. It has exactly two identity domains:
+
+- `embassy.user` for account login, AI, payment, and user-authorized Services.
+- `embassy.admin` for administrator sessions and Federation management.
+
+```ts
+import { Embassy } from "@downcity/federation";
+
+const embassy = new Embassy({
+  federation_url: "https://fed.example.com",
+});
+```
+
+Embassy is not bound to a Bureau. Pass `bureau_id` only in login requests that need a product
+partition. A successful login updates the User Token held by the same Embassy instance.
+
+```ts
+await embassy.user.account.login({
+  provider: "email",
+  bureau_id: "product-web",
+  input: {
+    email: "user@example.com",
+    password: "password",
+  },
+});
+
+const current_user = await embassy.user.current();
+const catalog = await embassy.user.ai.catalog();
+```
+
+Trusted environments can either provide an existing Admin Session Token or log in with the
+configured administrator ID and password.
+
+```ts
+await embassy.admin.login({
+  admin_id: "owner",
+  password: "password",
+});
+
+const bureaus = await embassy.admin.bureaus.list();
+```
+
+Use the independent `Bureau` client for a long-lived Bureau Token and local User Token
+verification. Bureau is not an Embassy subdomain.

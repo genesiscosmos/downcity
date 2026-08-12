@@ -7,16 +7,16 @@ description: Agent 的 RPC 传输层 — 跨进程会话访问
 
 `AgentRPC` 是本地 Agent 的 RPC 传输层，让其他进程或服务可以通过 Unix socket 或 TCP 端口访问 agent 的会话，无需走 HTTP。
 
-需要额外安装 `@downcity/server`：
+需要额外安装 `@downcity/city`：
 
 ```bash
-pnpm add @downcity/server
+pnpm add @downcity/city
 ```
 
 ## 最小示例
 
 ```ts
-import { AgentRPC } from "@downcity/server";
+import { AgentRPC } from "@downcity/city";
 import { Agent, Workspace } from "@downcity/agent";
 
 const agent = new Agent({

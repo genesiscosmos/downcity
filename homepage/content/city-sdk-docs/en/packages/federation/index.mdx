@@ -1,0 +1,25 @@
+---
+title: "@downcity/federation"
+description: Federation runtime and Embassy SDK for user, admin, and Bureau access.
+---
+
+`@downcity/federation` is the canonical package for Federation, Embassy, Bureau, Service, auth,
+and data access.
+
+```bash
+pnpm add @downcity/federation
+```
+
+```ts
+import { Bureau, Embassy, Federation } from "@downcity/federation";
+```
+
+## Public domains
+
+- `Federation`: the authority backend and Service runtime.
+- `Embassy.user`: account login, AI, payment, and user Services.
+- `Embassy.admin`: Admin Sessions and Federation management.
+- `Bureau`: long-lived product backend identity and local User Token verification.
+
+The package does not own local Agent instances, Workspace assembly, or Agent HTTP/RPC serving.
+Those host responsibilities belong to `@downcity/city`.

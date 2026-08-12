@@ -1,35 +1,25 @@
 ---
-title: 连接 Client
-description: 用 User City 从产品侧调用 Federation 的 Service 和 Action。
+title: 连接 Embassy
+description: 通过 Embassy User 调用 Federation AI 与 Service。
 ---
 
-`User City` 有两条常用通路：
-
-- `city.ai.*` 调内置 AIService
-- `city.service(id).action(name).invoke()` 调自定义 Service 或服务 Service
-
 ```ts
-import { City } from "@downcity/federation/legacy";
+import { Embassy } from "@downcity/federation";
 
-const city = new City({
-  federation_url: "http://127.0.0.1:43127",
+const embassy = new Embassy({
+  federation_url: "https://fed.example.com",
   user_token: "ub_xxx",
 });
 
-// AI Service — SDK 通路
-const msg = await city.ai.text({ prompt: "hello", model: "deepseek-v4-flash" });
-const stream = await city.ai.stream({ prompt: "hello", model: "deepseek-v4-flash" });
+const catalog = await embassy.user.ai.catalog();
+const model = catalog.get("gpt-5.4");
+if (!model) throw new Error("model not found");
 
-// AI Service — OpenAI 通路（用 OpenAI SDK 直接调）
-import OpenAI from "openai";
-const openai = new OpenAI({ baseURL: "http://127.0.0.1:43127/v1/ai", apiKey: "ub_xxx" });
-await openai.chat.completions.create({ model: "deepseek-v4-flash", messages: [...] });
-
-// 自定义 Service
-const result = await city.service("translate").action("zh2en").invoke({ text: "你好" });
-
-// GET action（如读取登录结果）
-const login = await city.service("accounts").get("login/result", { login_id: "login_xxx" });
+const result = await embassy.user.ai.text({
+  model,
+  prompt: "写一段欢迎语",
+});
 ```
 
-创建 Bureau、暂停 Bureau、请求 Federation 签发 `user_token` 和维护 Runtime env 都属于可信环境动作，用 `FederationAdmin` 发起，不放到产品前端。
+自定义或官方 Service 使用 `embassy.user.service(name)`。Provider Key、模型路由和 Usage
+记账都留在 Federation 内部。

@@ -1,0 +1,153 @@
+---
+title: Service and Action
+description: "How Service, Action, the unified route space, and AIService relate inside @downcity/federation."
+---
+
+`Service` and `Action` are the main business organization units inside `@downcity/federation`.
+
+Keep one sentence in mind:
+
+> a Service is a long-lived group of capabilities, and an Action is the concrete callable entry.
+
+## What this concept means
+
+Every Action is simultaneously:
+
+- a business entry point
+- an HTTP route node
+- a hook target
+- an auth boundary
+
+## When you should write a custom service
+
+- you want city business actions, not raw model inference only
+- you want one business entry shared across frontend, app, and internal tools
+- you want that capability to participate in hooks, auth, usage, and service governance
+
+Typical examples:
+
+- rewriting content
+- generating reports
+- running workflows
+- processing business data
+
+## When AIService is the better starting point
+
+If you mainly want to expose `text`, `stream`, `image`, or `video`, then `AIService` is usually the cleaner first mental model.
+
+## Minimal custom service example
+
+```ts
+import { Federation, Service } from "@downcity/federation";
+
+const base = new Federation({ database });
+
+const translate = new Service({
+  id: "translate",
+  name: "Translate",
+});
+
+translate.action("zh2en", async (ctx) => {
+  return {
+    text: await runTranslate(String(ctx.input.text ?? ""), "en"),
+  };
+});
+
+translate.action("list", async () => {
+  return {
+    items: ["zh2en"],
+  };
+}, {
+  method: "GET",
+});
+
+base.use(translate);
+```
+
+## How routes are exposed
+
+Those Actions automatically enter the shared route space:
+
+```txt
+POST /v1/translate/zh2en
+GET  /v1/translate/list
+```
+
+That is why the product side can stay unified:
+
+```ts
+const result = await client
+  .service("translate")
+  .action("zh2en")
+  .invoke<{ text: string }>({
+    text: "Hello Downcity",
+  });
+
+const list = await city.service("translate").get("list");
+```
+
+## Common scenarios
+
+### Scenario 1: city business action
+
+```ts
+const writer = new Service({ id: "writer", name: "Writer" });
+
+writer.action("draft", async (ctx) => {
+  return {
+    title: "Draft",
+    topic: ctx.input.topic,
+  };
+});
+```
+
+### Scenario 2: admin-only action
+
+```ts
+writer.action("remove", async (ctx) => {
+  await removeDraft(String(ctx.input.id));
+  return { ok: true };
+}, {
+  auth: ["admin"],
+});
+```
+
+### Scenario 3: guest entry
+
+```ts
+writer.action("webhook", async () => {
+  return { accepted: true };
+}, {
+  auth: [],
+});
+```
+
+## Common API surface
+
+- `new Service({ id, name })`
+- `service.action(name, handler, options?)`
+- `options.method: "GET" | "POST"`
+- `options.auth: ["user"] | ["admin"] | []`
+- `base.use(service)`
+- `city.service(id).action(name).invoke(input)`
+- `city.service(id).get(path, query?)`
+
+## Common misunderstandings
+
+### An Action is not just a function
+
+It eventually becomes a route, an auth boundary, a hook target, and a usage recording point.
+
+### Official services and custom services do not need separate call patterns
+
+From the product side, both still go through `city.service("service_id").action("action_id").invoke(...)`.
+
+### GET and POST are not cosmetic
+
+Read-oriented operations fit GET better. Execution and mutation fit POST better.
+
+## Read next
+
+- For hooks and extension around actions, read [Hooks and Service Mounting](/en/city-sdk-docs/packages/federation/hooks-and-service)
+- For product-side calling, read [@downcity/federation](/en/city-sdk-docs/packages/federation/federation)
+- For lower-level method details, read [City API](/en/city-sdk-docs/reference/federation)

@@ -12,7 +12,7 @@ import {
   AIService,
   AIChannel,
   read_resolved_reasoning,
-} from "../bin/legacy.js"
+} from "../bin/index.js"
 
 /** 创建直接执行 AIService action 所需的最小 Context。 */
 function create_context(input, env = () => undefined) {

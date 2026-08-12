@@ -7,7 +7,7 @@
  * - 被 Agent Binding 引用的 Resource 不允许删除，避免产生悬空引用。
  */
 
-import { LocalCityStore, normalize_resource_id as normalize_local_resource_id } from "@downcity/local";
+import { LocalCityStore, normalize_resource_id as normalize_local_resource_id } from "@downcity/city";
 import { get_plugin_catalog_item } from "@/city/process/plugin/PluginCatalog.js";
 import { normalize_plugin_name } from "@/city/process/registry/PluginRepository.js";
 import { validate_plugin_resource_item } from "@/city/process/plugin/PluginResourceSchema.js";

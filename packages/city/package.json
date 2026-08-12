@@ -1,17 +1,17 @@
 {
   "name": "@downcity/city",
-  "version": "0.2.270",
-  "description": "Compatibility entry for Federation APIs now owned by @downcity/federation.",
+  "version": "0.2.271",
+  "description": "Downcity Agent 宿主环境，提供 City、本地持久化装配与 HTTP/RPC transport。",
   "type": "module",
   "main": "./bin/index.js",
   "module": "./bin/index.js",
+  "types": "./bin/index.d.ts",
   "exports": {
     ".": {
       "types": "./bin/index.d.ts",
       "import": "./bin/index.js"
     }
   },
-  "types": "./bin/index.d.ts",
   "files": [
     "bin"
   ],
@@ -29,25 +29,44 @@
   },
   "keywords": [
     "downcity",
-    "city",
-    "ai",
+    "agent",
     "runtime",
-    "services"
+    "rpc",
+    "http"
   ],
   "scripts": {
-    "build": "node ../../scripts/clean-package.mjs && tsc",
+    "build": "node ../../scripts/clean-package.mjs && tsc && tsc-alias -f",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
-    "test": "tsc && node --test test/*.test.mjs",
+    "test": "pnpm -C ../agent build && pnpm build && node --test test/*.test.mjs",
     "prepack": "npm run build && node ../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
     "postpack": "node ../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json",
     "version:patch": "node ../../scripts/bump-package-version.mjs ./package.json"
   },
   "license": "MIT",
-  "devDependencies": {
-    "typescript": "^6.0.3"
-  },
   "dependencies": {
-    "@downcity/federation": "workspace:*"
+    "@downcity/agent": "workspace:^",
+    "@downcity/federation": "workspace:^",
+    "@downcity/plugins": "workspace:^",
+    "@downcity/shell": "workspace:^",
+    "@downcity/type": "workspace:*",
+    "ai": "^6.0.193",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "dotenv": "^17.4.2",
+    "fs-extra": "^11.3.5",
+    "hono": "^4.12.23"
+  },
+  "optionalDependencies": {
+    "@downcity/sandbox-linux": "workspace:^",
+    "@downcity/sandbox-macos": "workspace:^",
+    "@downcity/sandbox-windows-mxc": "workspace:^",
+    "@downcity/sandbox-windows-srt": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^25.9.1",
+    "tsc-alias": "^1.8.17",
+    "typescript": "^6.0.3"
   }
 }

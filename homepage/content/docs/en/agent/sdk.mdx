@@ -37,7 +37,7 @@ await agent.dispose();
 
 Each Workspace instance binds to exactly one Agent and is released by `agent.dispose()`. Multiple Agents may operate on the same physical directory by using separate Workspace instances.
 
-Construction starts plugin lifecycle and background work. Use `await agent.ready()` when an explicit readiness barrier is needed, and `await agent.dispose()` to release resources. HTTP and RPC are supplied by `AgentHTTP` and `AgentRPC` from `@downcity/server`.
+Construction starts plugin lifecycle and background work. Use `await agent.ready()` when an explicit readiness barrier is needed, and `await agent.dispose()` to release resources. HTTP and RPC are supplied by `AgentHTTP` and `AgentRPC` from `@downcity/city`.
 
 ## Streaming messages
 

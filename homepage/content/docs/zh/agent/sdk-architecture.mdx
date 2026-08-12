@@ -206,7 +206,7 @@ macOS、Linux 和 Windows 使用同一个 Workspace、Agent、Session 和 Store�
 | `@downcity/agent` | Agent、Workspace、Session、Store、模型 Tool Loop、Plugin runtime | 平台 Sandbox 实现、多 Agent 控制面 |
 | `@downcity/shell` | 命令、长期 Shell Session、输出、审批和 Sandbox 协议 | Session 历史、Agent 配置和模型调用 |
 | Sandbox packages | 将统一 Policy 映射为当前 OS 的进程隔离 | Agent、Session 和 Store 业务 |
-| `@downcity/server` | HTTP/RPC 服务端与 transport | 本地 Agent 的领域状态 |
+| `@downcity/city` | HTTP/RPC 服务端与 transport | 本地 Agent 的领域状态 |
 
 用户级 `~/.downcity`、全局数据库和密钥由 CLI/City 宿主管理。需要全局账号等资源的 Plugin 通过自身构造参数接收最小 Store 接口，不反向依赖 CLI，也不把全局资源塞入 Workspace。
 

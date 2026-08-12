@@ -86,7 +86,7 @@ Workspace + Shell → Agent → Session → Turn
 - `new Agent(...)` 后，Plugin lifecycle 与 ActionSchedule 会立即开始启动。
 - Session 入口会等待 Agent runtime 就绪；只有需要显式启动检查点时才调用 `await agent.ready()`。
 - `agent.dispose()` 会同时释放独占 Workspace、Shell 进程、PTY 和 Sandbox，不需要再次调用 `workspace.dispose()`。
-- HTTP/RPC transport 不属于 Agent；需要网络服务时使用 `@downcity/server`。
+- HTTP/RPC transport 不属于 Agent；需要网络服务时使用 `@downcity/city`。
 
 ## 模型如何解析
 

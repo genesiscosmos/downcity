@@ -1,6 +1,6 @@
 ---
 title: Try It Now
-description: Run a complete call chain with the default database, FederationAdmin, and User City.
+description: Run a complete call chain with Federation and Embassy.
 ---
 
 ## 1. Start City
@@ -66,11 +66,13 @@ serve({ fetch: (request) => base.fetch(request), port: 43127, hostname: "127.0.0
 ## 2. Create Bureau & Request Token
 
 ```ts
-const admin = new FederationAdmin({
-  base_url: "http://127.0.0.1:43127",
-  credential: administrator_session_token,
+import { Embassy } from "@downcity/federation";
+
+const embassy = new Embassy({
+  federation_url: "http://127.0.0.1:43127",
+  admin_token: administrator_session_token,
 });
-const token = await admin.service("accounts").action("tokens/issue").invoke({
+const token = await embassy.admin.service("accounts").action("tokens/issue").invoke({
   bureau_id: "demo",
   user_id: "user_123",
   ttl: "7d",
@@ -80,13 +82,13 @@ const token = await admin.service("accounts").action("tokens/issue").invoke({
 ## 3. Client Call
 
 ```ts
-const city = new City({
+const user_embassy = new Embassy({
   federation_url: "http://127.0.0.1:43127",
   user_token: token.user_token,
 });
 
 // SDK pathway
-const result = await city.ai.text({ model: "local-echo", prompt: "Hello" });
+const result = await user_embassy.user.ai.text({ model: "local-echo", prompt: "Hello" });
 
 ```
 

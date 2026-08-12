@@ -2,7 +2,7 @@
 
 ## 1. 文档目的
 
-本文档定义 `@downcity/city` 中 AI 模型体系的下一版统一架构。
+本文档定义 `@downcity/federation` 中 AI 模型体系的下一版统一架构。
 
 本次设计解决以下问题：
 
@@ -462,7 +462,7 @@ interface AIModelRuntime {
 ```
 
 `AIModelStream`、`AIModelActions` 和 `AIModelRuntime` 是 Federation 内部类型，
-不从 `@downcity/city` 根入口导出。语言执行和其它 modality 统一收在一个
+不从 `@downcity/federation` 根入口导出。语言执行和其它 modality 统一收在一个
 `runtime` 字段中，避免 Definition 同时出现两套运行时入口。
 
 ### 8.7 AIModelDefinition
@@ -487,7 +487,7 @@ export interface AIModelDefinition
 
 ### 8.8 公共类型收敛结果
 
-`@downcity/city` 根入口只导出以下 AI 类型：
+`@downcity/federation` 根入口只导出以下 AI 类型：
 
 ```text
 AIChannel
@@ -653,7 +653,7 @@ import {
   AIService,
   read_required_env,
   type AIChannelStreamInput,
-} from "@downcity/city";
+} from "@downcity/federation";
 import type {
   LanguageModelV3StreamResult,
 } from "@ai-sdk/provider";

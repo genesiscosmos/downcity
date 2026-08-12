@@ -11,7 +11,7 @@ What you end up with is not just a demo page. It is the smallest city-shaped sys
 - one model record
 - one `bureau_id`
 - one `user_token` that an end user can actually use
-- one `User City` that successfully calls City
+- one `Embassy User` that successfully calls City
 
 You do not need a separate AI backend for every new city. A new project can start as a client first and connect to an already deployed City.
 
@@ -27,7 +27,7 @@ You do not need a separate AI backend for every new city. A new project can star
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
-      <strong>User City</strong>
+      <strong>Embassy User</strong>
       <span>Reads `ai.catalog()` and then calls `ai.text()`, `ai.stream()`, `ai.image()`, or another service.</span>
     </div>
   </div>
@@ -53,14 +53,14 @@ You do not need a separate AI backend for every new city. A new project can star
 2. [Create City](/en/city-sdk-docs/quickstart/create-city): create City and let the first startup initialize the default database automatically
 3. [Add model](/en/city-sdk-docs/quickstart/add-model): register models with AIChannel and AIService
 4. [Issue `user_token`](/en/city-sdk-docs/quickstart/issue-token): give a city user a valid call credential
-5. [Connect City](/en/city-sdk-docs/quickstart/connect-client): call Federation from the product with `User City`
+5. [Connect City](/en/city-sdk-docs/quickstart/connect-client): call Federation from the product with `Embassy User`
 
 ## Which path should you choose
 
 <div className="dc-doc-grid">
   <a className="dc-doc-card" href="/en/city-sdk-docs/quickstart/use-now">
     <strong>I only want one working flow first</strong>
-    <p>Starting from the templates is the fastest option. Verify City, city, token, and User City first, then come back for the details.</p>
+    <p>Starting from the templates is the fastest option. Verify City, city, token, and Embassy User first, then come back for the details.</p>
   </a>
   <a className="dc-doc-card" href="/en/city-sdk-docs/quickstart/create-city">
     <strong>I want to start in my own project</strong>

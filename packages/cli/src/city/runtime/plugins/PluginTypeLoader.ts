@@ -2,10 +2,10 @@
  * CLI Plugin constructor 加载入口。
  *
  * 内建类型、第三方制品路径、静态 Manifest 快照和入口导出校验全部由
- * `@downcity/local` 负责；CLI 只投影自己的 Plugin 类型协议。
+ * `@downcity/city` 负责；CLI 只投影自己的 Plugin 类型协议。
  */
 
-import { LocalCityStore } from "@downcity/local";
+import { LocalCityStore } from "@downcity/city";
 import type { PluginType } from "@/city/types/plugin/PluginInstallation.js";
 
 /** 加载内建 Plugin 时可用的 CLI 宿主依赖。 */

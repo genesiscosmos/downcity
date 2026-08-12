@@ -55,7 +55,7 @@ description: 本地 Agent SDK 的核心公开接口
 - `Agent` 是本地运行时状态与长期对象的唯一所有者
 - 真正的执行对象是它创建出来的 session
 
-从 API 设计上看，它更像一个“session 工厂 + 运行时生命周期入口”。Transport（RPC、HTTP）由 [`@downcity/server`](/zh/agent-sdk-docs/local-agent/http-and-rpc) 单独提供。
+从 API 设计上看，它更像一个“session 工厂 + 运行时生命周期入口”。Transport（RPC、HTTP）由 [`@downcity/city`](/zh/agent-sdk-docs/local-agent/http-and-rpc) 单独提供。
 
 ## Workspace Env
 
@@ -87,10 +87,10 @@ workspace.patch_env({
 
 ## RPC / HTTP 暴露
 
-Agent 自身不再启动任何 transport。需要 RPC 或 HTTP 时，使用 [`@downcity/server`](/zh/agent-sdk-docs/local-agent/http-and-rpc)：
+Agent 自身不再启动任何 transport。需要 RPC 或 HTTP 时，使用 [`@downcity/city`](/zh/agent-sdk-docs/local-agent/http-and-rpc)：
 
 ```ts
-import { AgentRPC, AgentHTTP } from "@downcity/server";
+import { AgentRPC, AgentHTTP } from "@downcity/city";
 
 const rpc = new AgentRPC(agent);
 await rpc.listen({ host: "127.0.0.1", port: 15314 });

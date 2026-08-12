@@ -1,125 +1,22 @@
 ---
-title: SDK Overview
-description: "The Downcity SDK is split by role: User City owns Federation calls, while FederationAdmin owns trusted-side management calls."
+title: Federation Client SDK
+description: Choose Embassy User, Embassy Admin, or Bureau by identity.
 ---
 
-This page does one job: it pulls the calling model of `@downcity/city` into one reference overview.
+The client API follows three explicit identities:
 
-If you want the integration story first, start with [@downcity/city](/en/city-sdk-docs/packages/city/federation). If you need concrete method details, continue to [User City](/en/city-sdk-docs/reference/city-user) and [FederationAdmin](/en/city-sdk-docs/reference/city-admin).
-
-## Two roles
-
-| | User City | FederationAdmin |
-|---|---|---|
-| Used by | frontend, app, extension, desktop client | city backend, ops scripts, internal tools |
-| Owns | AI services, custom services, public services | cities, tokens, runtime env, admin-side services |
-| Common auth | `user_token` | administrator session token |
-| Safe in browser | yes | no |
-
-## HTTP Entries
-
-`federation_url` uses HTTP(S) for both remote and local Federation:
-
-- `http://` / `https://`: remote HTTP entry, authenticated with `user_token` or an administrator session token.
-- `http://127.0.0.1:15315`: local loopback HTTP entry, authenticated with the same token model.
-
-When you expose Federation from your own local HTTP server, products still use normal HTTP. If `AccountsService` is configured with `local_login: true`, `/v1/accounts/providers` exposes the local login method, and `accounts.login/start` with `provider: "local"` returns a `login_id`; read the normal `user_token` from `accounts.login/result`.
-
-## Four common call types
+| API | Credential | Purpose |
+| --- | --- | --- |
+| `embassy.user` | User Token | Login, AI, payment, and user Services |
+| `embassy.admin` | Admin Session Token | Federation administration |
+| `Bureau` | Bureau Token | Trusted product backend and local User Token verification |
 
 ```ts
-// City side
-const city = new City({
-  federation_url,
-  user_token,
-});
+import { Bureau, Embassy } from "@downcity/federation";
 
-// AI Service
-await city.ai.text({ prompt: "hello", model: "deepseek-v4-flash" });
-await city.ai.stream({ prompt: "hello", model: "deepseek-v4-flash" });
-
-// Native AI SDK LanguageModelV3
-const catalog = await city.ai.catalog();
-const language_model = catalog.get("deepseek-v4-flash");
-if (!language_model) throw new Error("model not found");
-await streamText({ model: language_model, prompt: "hello" });
-
-// Custom Service
-await city.service("translate").action("zh2en").invoke({ text: "hello" });
-const login = await city.service("accounts").action("login/start").invoke({
-  provider: "email",
-});
-await city.service("accounts").action("login/continue").invoke({
-  login_id: login.login_id,
-  input: { email: "a@b.com", password: "..." },
-});
-const session = await city.service("accounts").get("login/result", { login_id: login.login_id });
-
-// GET action
-// Payment methods
-const methods = await city.payment.methods();
-const checkout = await city.payment.method("stripe").invoke({
-  topup_amount_minor: 500,
-  idempotency_key: "order_123",
-});
-
-// Admin side
-const admin = new FederationAdmin({
-  base_url: federation_url,
-  credential: administrator_session_token,
-});
-await admin.bureaus.create({
-  name: "My App",
-  server_url: "https://bureau.example.com",
-});
+const embassy = new Embassy({ federation_url });
+const bureau = new Bureau({ federation_url, bureau_token });
 ```
 
-## AI Model Path Selection
-
-| Scenario | Recommended path |
-|---|---|
-| Product code calls Fed AIService directly | `city.ai.text()` / `city.ai.stream()` |
-| Downcity Agent uses a Fed model | get a `CityModel` from `city.ai.catalog()` and pass it to Agent |
-| AI SDK ecosystem needs `LanguageModel` | use the `CityModel` returned by the catalog directly |
-| OpenAI SDK, curl, or compatible clients | `/v1/ai/chat/completions` |
-| Non-Fed model APIs | create the provider in product code |
-
-`CityModel` implements AI SDK `LanguageModelV3` itself and carries text,
-reasoning, tool calls, usage, and finish reasons through Federation's native
-model pathway. Federation still chooses the real upstream AIChannel protocol.
-
-## Relationship between service, service, and AI service
-
-- AI service: called through `city.ai.*`
-- custom service: called through `city.service(name)...`
-- service: still called through `city.service(name)...`, but the service comes from a service
-
-Examples:
-
-- `rewrite`, `translate`: custom services you registered yourself
-- `accounts`, `usage`, `payment`: services exposed by official packages; payment providers such as Stripe and Creem are selected inside `payment`
-
-From the caller's point of view, they all live in the same City route space.
-
-## Where registration and login fit in the SDK model
-
-The two most common paths are:
-
-1. your backend finishes login first, then uses `FederationAdmin` to request `user_token`
-2. the frontend uses a guest `User City` to run `accounts.login/start -> login/continue -> login/result` or the registration flow, and the accounts service returns `user_token`
-
-Both paths end in the same user context:
-
-```txt
-federation_url + user_token
-  -> new City({ federation_url, user_token })
-  -> city.ai.* or city.service(...)
-```
-
-## Which page to read next
-
-1. To understand package composition, read [Packages](/en/city-sdk-docs/packages)
-2. To understand city integration, read [@downcity/city](/en/city-sdk-docs/packages/city/federation)
-3. For detailed product-side calls, read [User City](/en/city-sdk-docs/reference/city-user)
-4. For trusted-side management, read [FederationAdmin](/en/city-sdk-docs/reference/city-admin)
-5. For minimal auth, read [Federation Services Docs / Accounts](/en/payments/accounts)
+Do not place User Tokens, Admin Session Tokens, and Bureau Tokens in one shared client object.
+Their owners, lifetimes, and trust boundaries are different.

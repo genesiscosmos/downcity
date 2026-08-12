@@ -4,7 +4,7 @@
  * 所有配置统一读写 LocalCityStore；本模块只投影 CLI 控制面类型，不拥有数据库 Schema。
  */
 
-import { LocalCityStore, type LocalAgentConfig } from "@downcity/local";
+import { LocalCityStore, type LocalAgentConfig } from "@downcity/city";
 import type { JsonObject } from "@downcity/agent";
 import type {
   CreateManagedAgentInput,

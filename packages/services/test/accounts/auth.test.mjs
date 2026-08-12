@@ -3,8 +3,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { Federation } from "@downcity/federation"
-import { Bureau, City, FederationAdmin } from "@downcity/federation/legacy"
+import { Bureau, Embassy, Federation } from "@downcity/federation"
 import { createSqliteDb } from "./sqlite-db.mjs"
 import { create_test_admin_session } from "../admin-fixture.mjs"
 import {
@@ -130,16 +129,17 @@ test("City 直读 Profile，Bureau 本地验签后按需读取同一 Federation 
     }))
     assert.equal(bureau_issue_response.status, 403)
 
-    const city_client = create_city(base, user_token.user_token)
-    const city_profile = await city_client.user().profile()
-    assert.equal(city_profile.user_id, registered.user_id)
+    const embassy = create_embassy(base, { user_token: user_token.user_token })
+    const current_user = await embassy.user.current()
+    const federation_profile = current_user.profile
+    assert.equal(current_user.user.user_id, registered.user_id)
 
     const bureau_a = create_bureau(base, token_a.bureau_token)
     const bureau_user = await bureau_a.user(user_request(user_token.user_token))
     assert.equal(bureau_user.identity.user_id, registered.user_id)
     assert.equal(bureau_user.identity.bureau_id, bureau_a_record.bureau_id)
     const bureau_profile = await bureau_user.profile()
-    assert.deepEqual(bureau_profile, city_profile)
+    assert.deepEqual(bureau_profile, federation_profile)
 
     const bureau_b = create_bureau(base, token_b.bureau_token)
     await assert.rejects(
@@ -562,21 +562,17 @@ function create_bureau(base, bureau_token) {
 }
 
 function create_admin(base, admin_secret_key) {
-  return new FederationAdmin({
-    base_url: "http://localhost",
-    credential: admin_secret_key,
-    fetch: (input, init) => base.fetch(new Request(input, init)),
-  })
+  return create_embassy(base, { admin_token: admin_secret_key }).admin
 }
 
 async function register_bureau(admin, bureau_id) {
   return await admin.bureaus.tokens.issue({ bureau_id, purpose: "accounts auth test" })
 }
 
-function create_city(base, user_token) {
-  return new City({
+function create_embassy(base, credentials = {}) {
+  return new Embassy({
     federation_url: "http://localhost",
-    user_token,
+    ...credentials,
     fetch: (input, init) => base.fetch(new Request(input, init)),
   })
 }

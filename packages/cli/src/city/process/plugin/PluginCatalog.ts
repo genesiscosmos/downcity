@@ -8,7 +8,7 @@
  */
 
 import { list_plugin_installations } from "@/city/process/registry/PluginRepository.js";
-import { LocalCityStore } from "@downcity/local";
+import { LocalCityStore } from "@downcity/city";
 import type { PluginCatalogItem } from "@/city/types/plugin/PluginCatalog.js";
 import type { PluginManifest } from "@/city/types/plugin/PluginInstallation.js";
 

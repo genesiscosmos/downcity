@@ -1,9 +1,9 @@
 ---
 title: 运维与排查
-description: "fed、city、FederationAdmin、数据库直查之间的边界，以及什么时候更适合用 CLI。"
+description: "fed、city、Embassy Admin、数据库直查之间的边界，以及什么时候更适合用 CLI。"
 ---
 
-CLI 和 `FederationAdmin` 都能帮你排查 Downcity，但它们适合的工作不一样：`fed/downfed` 面向 Federation 管理，`city/downcity` 面向本机 Agent 与本机连接，`FederationAdmin` 面向可信程序调用。
+CLI 和 `Embassy Admin` 都能帮你排查 Downcity，但它们适合的工作不一样：`fed/downfed` 面向 Federation 管理，`city/downcity` 面向本机 Agent 与本机连接，`Embassy Admin` 面向可信程序调用。
 
 ## 先给一个最简单的判断标准
 
@@ -17,9 +17,9 @@ CLI 和 `FederationAdmin` 都能帮你排查 Downcity，但它们适合的工作
 
 - “这个动作以后要长期存在于系统里”
 
-优先脚本化或 `FederationAdmin`。
+优先脚本化或 `Embassy Admin`。
 
-## CLI、FederationAdmin、数据库直查各自适合什么
+## CLI、Embassy Admin、数据库直查各自适合什么
 
 ### 更适合 CLI 的情况
 
@@ -28,7 +28,7 @@ CLI 和 `FederationAdmin` 都能帮你排查 Downcity，但它们适合的工作
 - 想看模型记录、schema、rows
 - 不想为了一个一次性问题先写脚本
 
-### 更适合 `FederationAdmin` 的情况
+### 更适合 `Embassy Admin` 的情况
 
 - 要把动作放进业务后端
 - 要自动化签 token
@@ -107,11 +107,11 @@ CLI 正适合这一步。
 
 只要你管理多个产品、多个 service、多个模型，CLI 都会是高频运维入口。
 
-### `FederationAdmin` 不是“更高级的 CLI”
+### `Embassy Admin` 不是“更高级的 CLI”
 
 两者不是上下位关系，而是两种不同形态：
 
-- `FederationAdmin`：可信程序调用
+- `Embassy Admin`：可信程序调用
 - CLI：人工终端排查
 
 ### 直接查数据库不应成为第一反应
@@ -122,4 +122,4 @@ CLI 正适合这一步。
 
 - 想知道 `fed` / `city` 的基础入口，读 [CLI 快速开始](/zh/city-sdk-docs/packages/cli/quickstart)
 - 想重点看模型和表，读 [Models 与 Tables](/zh/city-sdk-docs/packages/cli/models-and-tables)
-- 想理解背后的数据层，读 [Store 与 Table](/zh/city-sdk-docs/packages/city/store-and-table)
+- 想理解背后的数据层，读 [Store 与 Table](/zh/city-sdk-docs/packages/federation/store-and-table)

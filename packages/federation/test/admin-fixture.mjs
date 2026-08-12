@@ -1,6 +1,6 @@
 /** Federation 管理员测试 fixture。 */
 
-import { Federation } from "../bin/legacy.js"
+import { Federation } from "../bin/index.js"
 
 const TEST_ADMIN_ID = "admin_test"
 const TEST_ADMIN_PASSWORD = "test-admin-password"

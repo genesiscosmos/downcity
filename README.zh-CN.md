@@ -15,7 +15,7 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 
 - 面向 AI builders：下一个 Agent 产品不应该再重复搭模型路由、工具、记忆、任务、权限、usage、计费和运维面。
 - 可复用运行层：repo 或 folder 可以成为 Agent 的运行边界，Downcity 负责更完整的长期运行基础设施。
-- City 能力：集中管理模型目录、运行时 env、service routing、accounts、balance、usage、payment 和 HTTP 访问。
+- Federation 能力：集中管理模型目录、运行时 env、Service routing、accounts、balance、usage 和 payment。
 - 可运营 Agent：支持 daemon 化运行、状态检查、历史追踪，并通过 CLI、Console、浏览器扩展或 SDK 操作。
 - 可扩展架构：plugins、services、SDK API 和 UI 组件都作为明确边界对产品和团队开放。
 
@@ -24,8 +24,9 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 | 包 / 目录 | 作用 |
 | --- | --- |
 | `downcity` | 公共 CLI 聚合包：`city`/`downcity` 是管理 Agent、运行时与控制台的本机 City 容器；`fed`/`downfed` 是 Federation Server Manager。 |
-| `@downcity/agent` | 单 Agent runtime 与 SDK，负责 session、tool loop、service、plugin、HTTP/RPC、sandbox 与宿主接入。 |
-| `@downcity/city` | City runtime 与访问 SDK，负责 service 注册、action、auth、env、city 访问边界与 HTTP 调用。 |
+| `@downcity/agent` | 单 Agent runtime，负责 Workspace、Session、Plugin SDK、Tool 与 RemoteAgent。 |
+| `@downcity/city` | Agent 宿主，负责多 Agent 所有权、本地持久化装配与 Agent HTTP/RPC transport。 |
+| `@downcity/federation` | Federation 运行时与 Embassy SDK，负责 Service、鉴权、Env、Bureau、User 与 Admin 访问。 |
 | `@downcity/type` | 跨 package 共享协议类型，包含 City 返回的 City 模型描述等核心类型。 |
 | `@downcity/services` | 公共服务集合，负责 accounts、balance、usage、payment 与 Stripe 支付闭环。 |
 | `@downcity/ui` | React + Tailwind UI SDK，提供 Console 与宿主应用可复用的界面组件。 |
@@ -37,8 +38,8 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 - 全局 Agent 管理：Agent 身份与配置保存在 `~/.downcity/downcity.db`，每个 Agent 可绑定任意 Workspace 路径。
 - 本机 Agent 运维：通过 `downcity agent start`、`downcity agent status`、`downcity agent list` 托管和查看本机 Agent。
 - Agent 生命周期管理：创建、启动、停止、重启、诊断、对话、查看历史。
-- City 连接：通过 `downcity federation` 让本机 Agent 连接当前 City server；模型和 Service 资源由 `city` 管理。
-- City 后端能力：让多个 Agent 和产品复用 accounts、balance、usage、payment、env、auth 和 Service routing。
+- Federation 连接：通过 `downcity federation` 让本机 Agent 连接当前 Federation。
+- Federation 后端能力：让多个 Agent 和产品复用 accounts、balance、usage、payment、env、auth 和 Service routing。
 - 内建 Agent 能力：`chat`、`task`、`memory`、`shell`、`contact`、`skill`、`web`、`sound`、`workboard`。
 - 产品表层：Downcity CLI、Agent SDK、City SDK 和 UI SDK。
 

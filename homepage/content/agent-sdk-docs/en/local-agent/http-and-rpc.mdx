@@ -1,14 +1,14 @@
 ---
 title: Expose Agent over RPC and HTTP
-description: Use AgentRPC and AgentHTTP from @downcity/server to expose a local Agent as a network service
+description: Use AgentRPC and AgentHTTP from @downcity/city to expose a local Agent as a network service
 ---
 
 # Expose Agent over RPC and HTTP
 
-`@downcity/agent` only constructs Agents and runs sessions. Network exposure lives in a separate package, `@downcity/server`. Install and start it on demand.
+`@downcity/agent` only constructs Agents and runs sessions. Network exposure lives in a separate package, `@downcity/city`. Install and start it on demand.
 
 ```bash
-pnpm add @downcity/agent @downcity/server
+pnpm add @downcity/agent @downcity/city
 ```
 
 ## Agent has no `start()` anymore
@@ -26,7 +26,7 @@ RPC and HTTP are no longer Agent responsibilities.
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
-import { AgentRPC } from "@downcity/server";
+import { AgentRPC } from "@downcity/city";
 
 const workspace = new Workspace({ path });
 const agent = new Agent({
@@ -55,7 +55,7 @@ await agent.dispose();
 
 ```ts
 import { Agent, Workspace } from "@downcity/agent";
-import { AgentHTTP } from "@downcity/server";
+import { AgentHTTP } from "@downcity/city";
 
 const workspace = new Workspace({ path });
 const agent = new Agent({
@@ -80,7 +80,7 @@ await agent.dispose();
 
 ```ts
 import { Hono } from "hono";
-import { AgentHTTP } from "@downcity/server";
+import { AgentHTTP } from "@downcity/city";
 
 const app = new Hono();
 const http = new AgentHTTP(agent);

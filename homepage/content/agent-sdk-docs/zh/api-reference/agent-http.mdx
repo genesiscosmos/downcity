@@ -7,16 +7,16 @@ description: Agent 的 HTTP 传输层 — 通过 HTTP 暴露会话访问
 
 `AgentHTTP` 是本地 Agent 的 HTTP 传输层，暴露 RemoteAgent 所需的 Session API、plugin action 和 Shell 审批端点。
 
-需要额外安装 `@downcity/server`：
+需要额外安装 `@downcity/city`：
 
 ```bash
-pnpm add @downcity/server
+pnpm add @downcity/city
 ```
 
 ## 最小示例
 
 ```ts
-import { AgentHTTP } from "@downcity/server";
+import { AgentHTTP } from "@downcity/city";
 import { Agent, Workspace } from "@downcity/agent";
 
 const agent = new Agent({

@@ -1,14 +1,12 @@
 packages:
   - homepage
   - packages/agent
-  - packages/local
   - app/desktop
   - packages/workspace-cloudflare-computer
   - packages/city
   - packages/federation
   - packages/services
   - packages/plugins
-  - packages/server
   - packages/shell
   - packages/sandbox-macos
   - packages/sandbox-linux

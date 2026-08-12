@@ -7,16 +7,16 @@ description: HTTP transport layer for local Agent — exposes session access ove
 
 `AgentHTTP` is the HTTP transport for a local `Agent`. It exposes the RemoteAgent session API, remote plugin actions, and Shell approval operations over HTTP.
 
-Only available when you install `@downcity/server`:
+Only available when you install `@downcity/city`:
 
 ```bash
-pnpm add @downcity/server
+pnpm add @downcity/city
 ```
 
 ## Minimal usage
 
 ```ts
-import { AgentHTTP } from "@downcity/server";
+import { AgentHTTP } from "@downcity/city";
 import { Agent, Workspace } from "@downcity/agent";
 
 const agent = new Agent({

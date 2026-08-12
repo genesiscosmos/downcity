@@ -1,47 +1,24 @@
 ---
-title: Issue `user_token`
-description: Give the product client a user-scoped credential that can call the Federation.
+title: Issue a User Token
+description: Ask Federation to issue a user credential through Embassy Admin.
 ---
 
-`user_token` is issued by Federation through a trusted flow. Your backend uses `FederationAdmin` to request a token based on `bureau_id + user_id`.
-
 ```ts
-import { FederationAdmin } from "@downcity/federation/legacy";
+import { Embassy } from "@downcity/federation";
 
-const admin = new FederationAdmin({
-  base_url: "https://base.example.com",
-  credential: administrator_session_token,
+const embassy = new Embassy({
+  federation_url: "https://fed.example.com",
+  admin_token: administrator_session_token,
 });
 
-const user = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "demo",
-  user_id: "user_123",
-  metadata: {
-    plan: "pro",
-  },
-  ttl: "7d",
-});
-```
-
-Return `user.user_token` to the product. The Token already contains `bureau_id`, so normal service
-requests do not submit it again.
-
-## What `metadata` is for
-
-`metadata` carries business context such as plan or organization into hooks:
-
-```ts
-const action = service.action("generate", async (ctx) => {
-  return generateSomething(ctx.input);
-});
-
-action.before(async (ctx) => {
-  await quotaService.check({
-    bureau_id: ctx.bureau?.bureau_id,
-    user_id: ctx.user?.user_id,
-    plan: ctx.user?.metadata?.plan,
+const issued = await embassy.admin.service("accounts")
+  .action("tokens/issue")
+  .invoke({
+    bureau_id: "product-web",
+    user_id: "user_123",
+    metadata: { plan: "pro" },
+    ttl: "7d",
   });
-});
 ```
 
-This is how multiple product clients share one auth and quota layer cleanly.
+Federation performs the issuance. Bureau verifies User Tokens but does not issue them.

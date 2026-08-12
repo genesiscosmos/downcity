@@ -65,10 +65,10 @@ So the practical rules are simple:
 
 ## Write values into the database
 
-A trusted backend can write provider keys through `FederationAdmin`:
+A trusted backend can write provider keys through Embassy Admin:
 
 ```ts
-await admin.env.upsert({
+await embassy.admin.env.upsert({
   key: "DEEPSEEK_API_KEY",
   value: "sk-xxx",
 });

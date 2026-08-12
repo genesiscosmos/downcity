@@ -1,7 +1,7 @@
 /** CLI Workspace 配置适配层。 */
 
-import { LocalCityStore } from "@downcity/local";
-import type { LocalWorkspaceConfig } from "@downcity/local";
+import { LocalCityStore } from "@downcity/city";
+import type { LocalWorkspaceConfig } from "@downcity/city";
 
 export type WorkspaceRegistryRecord = LocalWorkspaceConfig;
 

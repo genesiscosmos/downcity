@@ -208,7 +208,7 @@ macOS, Linux, and Windows share the same Workspace, Agent, Session, and Store. O
 | `@downcity/agent` | Agent, Workspace, Session, Store, model Tool Loop, Plugin runtime | Native Sandbox implementations, multi-Agent control plane |
 | `@downcity/shell` | Commands, long-lived Shell Sessions, output, approvals, Sandbox protocol | Session history, Agent configuration, model calls |
 | Sandbox packages | Mapping unified policy to OS process isolation | Agent, Session, or Store behavior |
-| `@downcity/server` | HTTP/RPC server and transports | Local Agent domain state |
+| `@downcity/city` | HTTP/RPC server and transports | Local Agent domain state |
 
 The CLI/City host owns user-level `~/.downcity`, global databases, and key files. A Plugin that needs global accounts receives a minimal Store interface through its own constructor. It does not depend back on the CLI or place global resources in Workspace.
 

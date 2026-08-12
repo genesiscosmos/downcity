@@ -1,46 +1,24 @@
 ---
-title: 签发 user_token
-description: 给产品侧 client 一个可以调用 City 的用户凭证。
+title: 签发 User Token
+description: 通过 Embassy Admin 请求 Federation 签发用户凭证。
 ---
 
-`user_token` 由 Federation 在可信流程中签发。开发者后端使用 `FederationAdmin`，基于 `bureau_id + user_id` 请求 Federation 签发 token。
-
 ```ts
-import { FederationAdmin } from "@downcity/federation/legacy";
+import { Embassy } from "@downcity/federation";
 
-const admin = new FederationAdmin({
-  base_url: "https://base.example.com",
-  credential: administrator_session_token,
+const embassy = new Embassy({
+  federation_url: "https://fed.example.com",
+  admin_token: administrator_session_token,
 });
 
-const user = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "demo",
-  user_id: "user_123",
-  metadata: {
-    plan: "pro",
-  },
-  ttl: "7d",
-});
-```
-
-把 `user.user_token` 返回给产品 client。`bureau_id` 已写入 Token，普通 service 请求不再重复传入。
-
-## metadata 的作用
-
-metadata 可以把套餐、组织 ID 等业务信息带进 hook。
-
-```ts
-const action = service.action("generate", async (ctx) => {
-  return generateSomething(ctx.input);
-});
-
-action.before(async (ctx) => {
-  await quotaService.check({
-    bureau_id: ctx.bureau?.bureau_id,
-    user_id: ctx.user?.user_id,
-    plan: ctx.user?.metadata?.plan,
+const issued = await embassy.admin.service("accounts")
+  .action("tokens/issue")
+  .invoke({
+    bureau_id: "product-web",
+    user_id: "user_123",
+    metadata: { plan: "pro" },
+    ttl: "7d",
   });
-});
 ```
 
-这样多个 client 可以共享一套鉴权和限额判断。
+Token 签发由 Federation 执行。Bureau 负责验证 User Token，但不签发它。

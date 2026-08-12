@@ -1,20 +1,18 @@
 ---
 title: Packages
-description: Understand the package surface behind the City SDK.
+description: Understand the Federation, Agent host, and single-Agent package boundaries.
 ---
 
-# Packages
+## Runtime packages
 
-City SDK docs focus on `@downcity/federation` and the CLI. City and Agent runtime concerns belong to the separate Agent and host boundary.
+- [@downcity/federation](/en/city-sdk-docs/packages/federation): Federation, Embassy, Bureau,
+  Services, auth, and data access.
+- [@downcity/city](/en/city-sdk-docs/packages/city): multi-Agent host, local persistent assembly,
+  and Agent HTTP/RPC transport.
+- [@downcity/agent](/en/city-sdk-docs/packages/agent): single-Agent execution, Workspace,
+  Session, Plugin SDK, and RemoteAgent.
+- [CLI](/en/city-sdk-docs/packages/cli): `fed/downfed` manages Federation;
+  `city/downcity` manages the local Agent host.
 
-## City SDK Surface
-
-- [Federation SDK](/en/city-sdk-docs/packages/federation-sdk): Federation, Embassy, Bureau, services, auth, and data access.
-- [@downcity/city](/en/city-sdk-docs/packages/city): migration entry for the previous Federation API.
-- [CLI](/en/city-sdk-docs/packages/cli): `fed/downfed` manages Federation deploys and admin operations; `city/downcity` manages local Agents and user-side connections.
-
-## Related Spaces
-
-- [Federation Services Docs](/en/payments): official Accounts, Credits Cards, Usage, and Payment services.
-- [Products Docs](/en/products-docs): Downcity CLI, Console, and Chrome Extension product manuals.
-- [Agent SDK](/en/agent-sdk-docs): programmable agents, sessions, local/remote agent, and plugin APIs.
+Official Accounts, Credits, Usage, and Payment Services are documented in
+[Federation Services](/en/payments).

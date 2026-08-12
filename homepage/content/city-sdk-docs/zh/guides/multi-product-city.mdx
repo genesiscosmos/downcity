@@ -92,13 +92,13 @@ const issued = await admin.service("accounts").action("tokens/issue").invoke({
 ### 产品侧
 
 - 保存自己的路由、界面和业务体验
-- 用 `User City` 调 City
+- 用 `Embassy User` 调 City
 - 只持有 `user_token`（其中包含 `bureau_id`）
 
 ### 业务后端
 
 - 负责登录、订单、余额、订阅和业务数据
-- 在可信环境里使用 `FederationAdmin`
+- 在可信环境里使用 `Embassy Admin`
 - 在登录成功后申请 `user_token`
 
 ### City

@@ -9,7 +9,11 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { MockLanguageModelV3 } from "ai/test"
 
-import { AIChannel, AIService, CityModel } from "../bin/legacy.js"
+import {
+  AIChannel,
+  AIService,
+  FederationModel as CityModel,
+} from "../bin/index.js"
 import { prepare_city_language_model_call } from "../bin/service/ai/language-model-stream.js"
 
 const usage = {

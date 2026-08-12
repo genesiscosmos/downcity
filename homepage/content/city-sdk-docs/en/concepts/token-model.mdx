@@ -24,7 +24,7 @@ Downcity uses an administrator session token to manage Federation, and `user_tok
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>End-user client</strong>
-      <span>The frontend, extension, or app creates User City with `user_token` and calls services.</span>
+      <span>The frontend, extension, or app uses Embassy User with `user_token` and calls services.</span>
       <code>No access to administrator credentials</code>
     </div>
   </div>
@@ -32,7 +32,7 @@ Downcity uses an administrator session token to manage Federation, and `user_tok
 
 ## user_token
 
-`user_token` is the call credential used by the end user or product. `FederationAdmin` requests it from Federation using `bureau_id + user_id`.
+`user_token` is the call credential used by the end user or product. Embassy Admin can request it from Federation using `bureau_id + user_id`.
 
 - `bureau_id`
 - `user_id`
@@ -50,15 +50,15 @@ as an audience.
 
 ## Administrator session token
 
-Use the administrator ID and password configured by `fed deploy` to sign in at `/v1/admin/login`. The response contains a time-limited administrator session token. Pass that token to `FederationAdmin` for trusted backend operations such as creating Bureaus, managing env, and requesting Federation to issue `user_token`. Passwords are stored as PBKDF2 digests; no administrator secret key is generated or provisioned as an environment variable.
+Use the administrator ID and password configured by `fed deploy` to sign in through Embassy Admin. The response contains a time-limited administrator session token for creating Bureaus, managing env, and requesting Federation to issue `user_token`.
 
 ```ts
-const admin = new FederationAdmin({
-  base_url: "https://base.example.com",
-  credential: administrator_session_token,
+const embassy = new Embassy({
+  federation_url: "https://base.example.com",
+  admin_token: administrator_session_token,
 });
 
-const bureau = await admin.bureaus.create({
+const bureau = await embassy.admin.bureaus.create({
   name: "Chrome Extension",
   server_url: "https://bureau.example.com",
 });
@@ -69,7 +69,7 @@ const bureau = await admin.bureaus.create({
 Many clients can belong to the same Bureau. When issuing a token, write `bureau_id` explicitly:
 
 ```ts
-const user = await admin.service("accounts").action("tokens/issue").invoke({
+const user = await embassy.admin.service("accounts").action("tokens/issue").invoke({
   bureau_id: bureau.bureau_id,
   user_id: "user_123",
   metadata: {

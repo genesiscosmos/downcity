@@ -9,7 +9,13 @@ import path from "node:path"
 import test from "node:test"
 import { decodeJwt } from "jose"
 
-import { Bureau, Federation, FederationAdmin, base64UrlDecode, base64UrlEncode } from "../bin/legacy.js"
+import {
+  Bureau,
+  Embassy,
+  Federation,
+  base64UrlDecode,
+  base64UrlEncode,
+} from "../bin/index.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
 import { create_test_admin_session, create_test_federation } from "./admin-fixture.mjs"
 
@@ -114,7 +120,7 @@ test("Federation 注册 Bureau 服务入口并按 User Token 解析当前 Bureau
     assert.equal(second.server.server_url, created.server.server_url)
     assert.equal(created.server.bureau_id, created.bureau_id)
 
-    const updated = await admin.bureaus.server.update({
+    const updated = await admin.bureaus.route.update({
       bureau_id: created.bureau_id,
       server_url: "https://new-bureau.example.com/",
     })
@@ -425,11 +431,11 @@ function create_bureau(federation, bureau_token) {
 }
 
 async function create_admin(federation) {
-  return new FederationAdmin({
-    base_url: "http://localhost",
-    credential: await create_test_admin_session(federation),
+  return new Embassy({
+    federation_url: "http://localhost",
+    admin_token: await create_test_admin_session(federation),
     fetch: (input, init) => federation.fetch(new Request(input, init)),
-  })
+  }).admin
 }
 
 async function register_bureau(admin, bureau_id) {

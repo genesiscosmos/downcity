@@ -1,0 +1,22 @@
+---
+title: HTTP 与 RPC
+description: 通过 City 宿主的 transport Adapter 暴露 Agent。
+---
+
+`AgentHTTP` 和 `AgentRPC` 属于宿主边界，因为它们拥有网络资源与 listen/close 生命周期。
+它们不会给 Agent 增加运行中状态。
+
+```ts
+import { AgentHTTP, AgentRPC } from "@downcity/city";
+
+const rpc = new AgentRPC(agent);
+await rpc.listen({ host: "127.0.0.1", port: 15314 });
+
+const http = new AgentHTTP(agent);
+await http.server().listen({ host: "127.0.0.1", port: 43127 });
+
+await http.close();
+await rpc.close();
+```
+
+当外层 Hono server 自己管理 HTTP 生命周期时，使用 `AgentHTTP.router()`。

@@ -21,7 +21,7 @@ Downcity lets a new product start from the frontend, extension, or app and conne
 The client owns:
 
 - UI and interaction
-- calling `User City`
+- calling Embassy User
 - using the product-configured `bureau_id` when login starts
 - storing or refreshing `user_token`
 
@@ -47,7 +47,7 @@ Federation
 That product backend can stay very thin at first:
 
 - user login
-- `FederationAdmin.tokens.apply()`
+- requesting a User Token through Embassy Admin
 - returning `user_token` to the client
 
 Normal service requests do not submit `bureau_id` again; Federation reads it from the verified

@@ -1,101 +1,41 @@
 ---
-title: Federation, Bureau, and City
-description: Separate global services, product identity, product backends, and Agent terminals.
+title: Federation, Bureau, Embassy, and City
+description: Separate the authority backend, product partition, access window, and Agent host.
 ---
 
-In `@downcity/city` the server and the client are two different classes with two different names. The most common mistake is treating both of them as "City".
+These four concepts have independent responsibilities:
 
-- global services and the trust root are the `Federation`
-- stable product identity and authorization domain are the `Bureau`
-- the Agent terminal client is `City`
-
-This page solves one thing: **so that when you read code, you immediately know which side you are writing.**
-
-## One-line distinction
-
-- `Federation`: shared runtime, account source of truth, and trust root. It owns the Bureau registry and Organization relationships.
-- `Bureau`: stable product identity and authorization domain. Every machine credential is bound to one `bureau_id`.
-- `City`: an Agent terminal client connected to a configured Bureau domain. It is not registered in Federation.
-- `FederationAdmin`: the legacy administrator client authorized by an Admin Session; it belongs to no Bureau.
-
-In short: Federation trusts Bureaus; City is only a terminal connected to one Bureau product domain.
-
-## Server side: `Federation`
-
-The server always starts from `new Federation({ database })`. It assembles the database, services, model catalog, and unified routing into a runnable backend:
+- `Federation` is the authority backend and trust root. It owns accounts, Bureau records,
+  Services, model catalogs, usage, env, and Token issuance.
+- `Bureau` is a product or business partition inside Federation. A Bureau Token identifies a
+  trusted product backend.
+- `Embassy` is the window through which users and administrators access Federation. It has only
+  `user` and `admin` identity domains.
+- `City` is an Agent host from `@downcity/city`. It owns Agent instances and is not a Federation
+  client or a registered Federation identity.
 
 ```ts
-import { Federation, Service } from "@downcity/federation";
+import { Embassy, Federation } from "@downcity/federation";
+import { City, LocalCityStore } from "@downcity/city";
 
-const base = new Federation({ database });
-
-base.use(new Service({ id: "translate" }));
-
-await base.health();
-serve({ fetch: (request) => base.fetch(request), port: 3001 });
+const federation = new Federation({ database });
+const embassy = new Embassy({ federation_url: "https://fed.example.com" });
+const city = new City(new LocalCityStore());
 ```
 
-`Federation` owns:
+## Identity boundaries
 
-- registering `Service`, official services, and `AIService`
-- verifying `user_token` and administrator session tokens
-- exposing the unified `/v1/*` routes
-- coordinating runtime env, hooks, usage, and the database
+User Token, Admin Session Token, and Bureau Token are not interchangeable:
 
-## Control plane and terminal
+- `embassy.user` holds or obtains a User Token.
+- `embassy.admin` holds or obtains an Admin Session Token.
+- `new Bureau({ bureau_token })` holds a long-lived Bureau machine credential.
+- City does not become one of those identities. An Agent running inside City may use an Embassy
+  or another client as an ordinary dependency.
 
-Trusted control planes and Agent terminals use separate clients:
+## CLI mapping
 
-```ts
-import { City, FederationAdmin } from "@downcity/federation/legacy";
+- `fed` / `downfed` deploys and manages Federation.
+- `city` / `downcity` manages the local Agent host.
 
-// Legacy administrator client: requests Bureau, env, and User Token operations from Federation
-const admin = new FederationAdmin({
-  base_url: "https://base.example.com",
-  credential: administrator_session_token,
-});
-
-// Product frontend: only holds user_token (which contains bureau_id), calls services
-const city = new City({
-  federation_url: "https://base.example.com",
-  user_token,
-});
-```
-
-- `FederationAdmin`: runs in a trusted backend; requests Federation to manage Bureau identities and env, and to issue `user_token`.
-- `City`: runs in an Agent terminal, holds `user_token` (which contains `bureau_id`), and calls AI and Service actions.
-
-The client never receives provider keys, and `User City` never receives administrator credentials or session tokens.
-
-## One diagram for the boundary
-
-<div className="dc-doc-flow" aria-label="Boundary between Federation and City">
-  <div className="dc-doc-lane">
-    <div className="dc-doc-node">
-      <strong>Agent terminal City</strong>
-      <span>Connects to a configured Bureau product domain and owns no server identity.</span>
-      <code>{'new City({ federation_url })'}</code>
-    </div>
-  </div>
-  <div className="dc-doc-arrow" aria-hidden="true">→</div>
-  <div className="dc-doc-lane">
-    <div className="dc-doc-node">
-      <strong>Server Federation</strong>
-      <span>Shared backend runtime that owns the model catalog, service routing, token verification, usage, and hooks.</span>
-      <code>{'new Federation({ database })'}</code>
-    </div>
-  </div>
-</div>
-
-## How the CLI maps to this
-
-The CLI is split along the same boundary:
-
-- `downfed`: manages the `Federation`, Bureau identities, machine credentials, service resources, and env.
-- `downcity`: the local Agent host and management entry.
-
-## What to read next
-
-- For the full request chain, read [Architecture](/en/city-sdk-docs/concepts/architecture)
-- To separate the two kinds of keys, read [Token model](/en/city-sdk-docs/concepts/token-model)
-- To deploy hands-on, read [Create Federation](/en/city-sdk-docs/quickstart/create-city)
+The two commands may share one distribution, but they own different runtimes and lifecycle state.

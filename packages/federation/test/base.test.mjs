@@ -11,7 +11,7 @@ import {
   AIService,
   AIChannel,
   InstallableService,
-} from "../bin/legacy.js"
+} from "../bin/index.js"
 import { TableApi } from "../bin/store/table-api.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
 import { create_test_admin_session, create_test_federation } from "./admin-fixture.mjs"

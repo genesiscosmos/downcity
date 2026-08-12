@@ -77,28 +77,28 @@ Expected shape:
 
 If the request times out, the Dokploy service is not exposed publicly, the VPS firewall does not allow `43127`, or a reachable domain has not been bound yet.
 
-## Call From Cities
+## Call From Embassy
 
-City frontends and apps should call the Node block through `@downcity/city`:
+Product frontends and apps call Federation through Embassy:
 
 ```ts
-import { City } from "@downcity/federation/legacy";
+import { Embassy } from "@downcity/federation";
 
-const city = new City({
+const embassy = new Embassy({
   federation_url: "https://base.example.com",
   user_token: "user_token",
 });
 ```
 
-Trusted backends should use `FederationAdmin` with an administrator session token:
+Trusted backends use the Embassy Admin domain with an administrator session token:
 
 ```ts
-import { FederationAdmin } from "@downcity/federation/legacy";
+import { Embassy } from "@downcity/federation";
 
-const admin = new FederationAdmin({
-  base_url: "https://base.example.com",
-  credential: administrator_session_token,
+const embassy = new Embassy({
+  federation_url: "https://base.example.com",
+  admin_token: administrator_session_token,
 });
 ```
 
-See [User City](/en/city-sdk-docs/reference/city-user) and [FederationAdmin](/en/city-sdk-docs/reference/city-admin) for the full SDK surface.
+See [Embassy User](/en/city-sdk-docs/reference/city-user) and [Embassy Admin](/en/city-sdk-docs/reference/city-admin) for the full SDK surface.

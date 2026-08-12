@@ -13,6 +13,7 @@
       "@/*": ["*"],
       "@downcity/agent": ["../../../packages/agent/bin/index.d.ts"],
       "@downcity/agent/internal/*": ["../../../packages/agent/bin/*"],
+      "@downcity/city": ["../../../packages/city/bin/index.d.ts"],
       "@downcity/type": ["../../../packages/type/bin/index.d.ts"]
     },
     "strict": true,

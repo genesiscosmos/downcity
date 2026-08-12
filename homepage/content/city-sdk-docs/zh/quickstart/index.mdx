@@ -11,7 +11,7 @@ description: 部署一个可复用的 City，让新 AI 产品直接接入。
 - 一条模型记录
 - 一个 `bureau_id`
 - 一个可给终端用户使用的 `user_token`
-- 一个能成功调到 City 的 `User City`
+- 一个能成功调到 City 的 `Embassy User`
 
 你不需要为每个新产品单独创建后端。新项目完全可以先只写 client，再接入已经部署好的 City。
 
@@ -29,7 +29,7 @@ description: 部署一个可复用的 City，让新 AI 产品直接接入。
   <div className="dc-doc-arrow" aria-hidden="true">→</div>
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
-      <strong>User City</strong>
+      <strong>Embassy User</strong>
       <span>读取 `ai.catalog()`，再调用 `ai.text()`、`ai.stream()`、`ai.image()` 等 service。</span>
     </div>
   </div>
@@ -55,14 +55,14 @@ description: 部署一个可复用的 City，让新 AI 产品直接接入。
 2. [创建 City](/zh/city-sdk-docs/quickstart/create-city)：创建 City，并在启动服务时自动初始化默认数据库
 3. [添加模型](/zh/city-sdk-docs/quickstart/add-model)：用 AIChannel 和 AIService 注册模型
 4. [签发 user_token](/zh/city-sdk-docs/quickstart/issue-token)：给产品用户一个调用凭证
-5. [连接 client](/zh/city-sdk-docs/quickstart/connect-client)：在产品侧用 `User City` 调 City
+5. [连接 client](/zh/city-sdk-docs/quickstart/connect-client)：在产品侧用 `Embassy User` 调 City
 
 ## 你应该按哪条线走
 
 <div className="dc-doc-grid">
   <a className="dc-doc-card" href="/zh/city-sdk-docs/quickstart/use-now">
     <strong>只想先体验一次完整调用</strong>
-    <p>从模板开始最快。你可以先确认 City、city、token 和 User City 的链路都通了，再回过头看细节。</p>
+    <p>从模板开始最快。你可以先确认 City、city、token 和 Embassy User 的链路都通了，再回过头看细节。</p>
   </a>
   <a className="dc-doc-card" href="/zh/city-sdk-docs/quickstart/create-city">
     <strong>准备从自己的项目开始</strong>

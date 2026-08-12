@@ -3,10 +3,10 @@ import { ProductDetailSection, type ProductDetailContent } from "@/components/se
 
 const PAGE: Record<"zh" | "en", ProductDetailContent> = {
   zh: {
-    title: "Product · City SDK",
-    subtitle: "用 City SDK 把模型目录、Service 路由、身份、环境变量、用量、余额和支付接入你的产品体系。",
-    docsCtaLabel: "查看 City SDK 文档",
-    docsCtaHint: "City 是产品和 SDK 名称；Service 是 City 里的能力组织单位。",
+    title: "Product · Federation SDK",
+    subtitle: "用 Federation SDK 把模型目录、Service 路由、身份、环境变量、用量、余额和支付接入你的产品体系。",
+    docsCtaLabel: "查看 Federation SDK 文档",
+    docsCtaHint: "Federation 是业务后端；Embassy 是 user 与 admin 的统一客户端入口。",
     highlights: [
       {
         title: "复用 Agent 产品后端能力",
@@ -29,17 +29,17 @@ const PAGE: Record<"zh" | "en", ProductDetailContent> = {
     ],
     factsTitle: "事实对齐",
     facts: [
-      "核心包名：@downcity/city",
-      "核心源码目录：packages/city/",
-      "管理入口：city manage",
+      "核心包名：@downcity/federation",
+      "核心源码目录：packages/federation/",
+      "管理入口：fed / downfed",
     ],
   },
   en: {
-    title: "Product · City SDK",
+    title: "Product · Federation SDK",
     subtitle:
       "Bring model catalogs, service routing, auth, runtime env, usage, balance, and payment capabilities into your agent product stack.",
-    docsCtaLabel: "Open City SDK Docs",
-    docsCtaHint: "City remains the current SDK and package name, so implementation docs keep that name.",
+    docsCtaLabel: "Open Federation SDK Docs",
+    docsCtaHint: "Federation owns the backend runtime; Embassy is the user and admin client entry.",
     highlights: [
       {
         title: "Reuse the agent product backend layer",
@@ -62,9 +62,9 @@ const PAGE: Record<"zh" | "en", ProductDetailContent> = {
     ],
     factsTitle: "Facts",
     facts: [
-      "Core package: @downcity/city",
-      "Core source directory: packages/city/",
-      "Management entry: city manage",
+      "Core package: @downcity/federation",
+      "Core source directory: packages/federation/",
+      "Management entry: fed / downfed",
     ],
   },
 };

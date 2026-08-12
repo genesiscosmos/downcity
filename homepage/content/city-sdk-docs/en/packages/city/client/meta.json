@@ -1,9 +1,0 @@
-{
-  "title": "City",
-  "pages": [
-    "index",
-    "service-calls",
-    "auth-flows",
-    "patterns-and-errors"
-  ]
-}

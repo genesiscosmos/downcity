@@ -37,7 +37,7 @@ import {
 } from "@/city/process/plugin/PluginConfigValidator.js";
 import { validate_plugin_resource_schema } from "@/city/process/plugin/PluginResourceSchema.js";
 import { assert_plugin_resources_compatible } from "@/city/process/registry/PluginResourceRepository.js";
-import { LocalCityStore } from "@downcity/local";
+import { LocalCityStore } from "@downcity/city";
 
 /** 从本地目录、Git 或 GitHub shorthand 安装一个 Plugin 数组制品。 */
 export async function install_plugins(

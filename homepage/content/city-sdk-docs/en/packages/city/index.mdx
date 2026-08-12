@@ -1,25 +1,33 @@
 ---
 title: "@downcity/city"
-description: "@downcity/city is a migration entry; Federation, Embassy, and Bureau are owned by @downcity/federation."
+description: Host one or more Agents with persistent configuration and an explicit lifecycle.
 ---
 
-@downcity/city no longer owns the Federation, Embassy, or Bureau implementation. It temporarily forwards the previous Federation API so existing applications keep the same runtime behavior during the package migration.
+`@downcity/city` is the Agent host package used by the CLI, Desktop, and custom Node hosts.
+It owns the Agent collection, local configuration assembly, and optional HTTP/RPC transports.
 
-New projects and new code should use:
+```bash
+pnpm add @downcity/city @downcity/agent
+```
 
-~~~bash
-pnpm add @downcity/federation
-~~~
+```ts
+import { City, LocalCityStore } from "@downcity/city";
 
-~~~ts
-import { Embassy, Federation } from "@downcity/federation";
-~~~
+const city = new City(new LocalCityStore());
+await city.ready();
 
-## Current boundary
+const agents = city.agents();
+const agent = city.agent("lucas_whitman");
 
-- The Federation server runtime belongs to @downcity/federation.
-- User and admin access starts from Embassy.
-- Bureau only represents a product or business partition.
-- @downcity/city does not maintain a separate implementation or accept new Federation APIs.
+await city.dispose();
+```
 
-The previous exports remain available through @downcity/city without creating a second implementation. Read [Federation SDK](/en/city-sdk-docs/packages/federation-sdk) for the canonical API.
+## Ownership
+
+- `City` owns the Agent instances restored by its `CityStore`.
+- `LocalCityStore` owns the local database connection and Agent/Workspace/Plugin assembly.
+- The CLI and Desktop create independent City instances but read the same `~/.downcity` data.
+- An Agent has no started or stopped state. A long-running CLI daemon or Desktop window is host state.
+
+Single-Agent execution, Workspace, Session, Plugin SDK, and RemoteAgent remain in
+`@downcity/agent`. Federation, Embassy, and Bureau belong to `@downcity/federation`.

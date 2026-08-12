@@ -1,6 +1,6 @@
 ---
 title: 现在怎么用
-description: 用默认数据库、FederationAdmin 和 User City 跑通一条完整调用链。
+description: 用 Federation 和 Embassy 跑通一条完整调用链。
 ---
 
 如果你想先按仓库里的现成产品体验，入口是：
@@ -12,9 +12,9 @@ description: 用默认数据库、FederationAdmin 和 User City 跑通一条完�
 
 ```plaintext
 City Client
-    ↓ FederationAdmin 创建 Bureau / 请求 Federation 签发 user_token
+    ↓ Embassy Admin 创建 Bureau / 请求 Federation 签发 user_token
 Federation
-    ↓ User City 携带 user_token 调用 service
+    ↓ Embassy User 携带 user_token 调用 service
 AIChannel → AIService → handler
 ```
 
@@ -84,14 +84,14 @@ serve({ fetch: (request) => base.fetch(request), port: 43127, hostname: "127.0.0
 ## 2. 创建 Bureau 并请求签发 token
 
 ```ts
-import { FederationAdmin } from "@downcity/federation/legacy";
+import { Embassy } from "@downcity/federation";
 
-const admin = new FederationAdmin({
-  base_url: "http://127.0.0.1:43127",
-  credential: administrator_session_token,
+const embassy = new Embassy({
+  federation_url: "http://127.0.0.1:43127",
+  admin_token: administrator_session_token,
 });
 
-const token = await admin.service("accounts").action("tokens/issue").invoke({
+const token = await embassy.admin.service("accounts").action("tokens/issue").invoke({
   bureau_id: "demo",
   user_id: "user_123",
   metadata: { plan: "pro" },
@@ -102,19 +102,17 @@ const token = await admin.service("accounts").action("tokens/issue").invoke({
 ## 3. 产品侧调用
 
 ```ts
-import { City } from "@downcity/federation/legacy";
-
-const city = new City({
+const user_embassy = new Embassy({
   federation_url: "http://127.0.0.1:43127",
   user_token: token.user_token,
 });
 
-const catalog = await city.ai.catalog();
+const catalog = await user_embassy.user.ai.catalog();
 const model = catalog.get("local-echo");
 if (!model) throw new Error("model not found");
 
 // SDK 通路
-const result = await city.ai.text({
+const result = await user_embassy.user.ai.text({
   model,
   prompt: "你好 Downcity",
 });

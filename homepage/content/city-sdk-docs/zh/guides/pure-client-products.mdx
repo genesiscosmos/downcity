@@ -21,7 +21,7 @@ Downcity 让新项目可以先只写前端，直接接入已经部署好的 Fede
 client 负责：
 
 - UI 和交互
-- 调用 `User City`
+- 调用 Embassy User
 - 登录开始时使用产品配置中的 `bureau_id`
 - 保存或刷新 `user_token`
 
@@ -47,7 +47,7 @@ Federation
 这里的“产品后端”可以一开始非常薄，只做：
 
 - 用户登录
-- `FederationAdmin.tokens.apply()`
+- 通过 Embassy Admin 请求 User Token
 - 把 `user_token` 返回给前端
 
 普通 service 请求不再重复提交 `bureau_id`；Federation 从已验证的 `user_token` 中读取。

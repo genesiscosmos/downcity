@@ -1,13 +1,13 @@
-/** City Core 测试专用 SQLite Database。
+/** Federation 测试专用 SQLite Database。
  *
- * 该 Fixture 只验证 City Database 基类与 Federation 行为，不依赖任何下游
- * Database Adapter Package，避免形成 `city -> database-sqlite -> city` 的测试环。
+ * 该 Fixture 只验证 Database 基类与 Federation 行为，不依赖任何下游
+ * Database Adapter Package，避免形成测试依赖环。
  */
 
 import BetterSqlite3 from "better-sqlite3"
 import { getTableColumns, getTableName } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/better-sqlite3"
-import { Database, TableApi } from "../bin/legacy.js"
+import { Database, TableApi } from "../bin/index.js"
 
 /** 串行协调普通操作与同连接事务。 */
 class TestSQLiteCoordinator {
@@ -29,7 +29,7 @@ class TestSQLiteCoordinator {
   }
 }
 
-/** City 测试使用的最小 SQLite Database 子类。 */
+/** Federation 测试使用的最小 SQLite Database 子类。 */
 class TestSQLiteDatabase extends Database {
   constructor(filename) {
     const client = new BetterSqlite3(filename)

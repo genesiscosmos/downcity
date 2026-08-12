@@ -1,9 +1,9 @@
 ---
 title: Operations and Debugging
-description: "The boundary between fed, city, FederationAdmin, and direct database inspection, and when the CLI is the better tool."
+description: "The boundary between fed, city, Embassy Admin, and direct database inspection, and when the CLI is the better tool."
 ---
 
-The CLI and `FederationAdmin` can both help you debug Downcity, but they fit different work: `fed/downfed` manages Federation, `city/downcity` manages local Agents and local Federation connections, and `FederationAdmin` is for trusted programmatic management.
+The CLI and `Embassy Admin` can both help you debug Downcity, but they fit different work: `fed/downfed` manages Federation, `city/downcity` manages local Agents and local Federation connections, and `Embassy Admin` is for trusted programmatic management.
 
 ## The simplest rule first
 
@@ -17,9 +17,9 @@ If your thought is:
 
 - "this action should live in the system long term"
 
-move toward `FederationAdmin` or a trusted script.
+move toward `Embassy Admin` or a trusted script.
 
-## CLI, FederationAdmin, and direct DB inspection each fit different work
+## CLI, Embassy Admin, and direct DB inspection each fit different work
 
 ### Better fits for the CLI
 
@@ -28,7 +28,7 @@ move toward `FederationAdmin` or a trusted script.
 - inspecting models, schema, and rows
 - one-off debugging without writing code first
 
-### Better fits for `FederationAdmin`
+### Better fits for `Embassy Admin`
 
 - backend-owned actions
 - automated token issuance
@@ -96,11 +96,11 @@ Check these facts first:
 
 If you operate many products, services, or model configurations, it remains a frequent operations entry.
 
-### `FederationAdmin` is not just a more advanced CLI
+### `Embassy Admin` is not just a more advanced CLI
 
 They are different modes:
 
-- `FederationAdmin`: trusted programmatic management
+- `Embassy Admin`: trusted programmatic management
 - CLI: human terminal inspection
 
 ### Direct SQL should not always be your first instinct
@@ -111,4 +111,4 @@ In many cases the CLI is already enough to narrow the problem sharply.
 
 - For the basic `fed` / `city` entries, read [CLI Quickstart](/en/city-sdk-docs/packages/cli/quickstart)
 - For model and table inspection, read [Models and Tables](/en/city-sdk-docs/packages/cli/models-and-tables)
-- For the data layer behind those facts, read [Store and Table](/en/city-sdk-docs/packages/city/store-and-table)
+- For the data layer behind those facts, read [Store and Table](/en/city-sdk-docs/packages/federation/store-and-table)

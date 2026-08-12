@@ -1,0 +1,52 @@
+---
+title: Database Adapters
+description: Connect Federation to SQLite, Cloudflare D1, or PostgreSQL through the shared Database base class.
+---
+
+Federation no longer accepts a raw Drizzle database. It accepts a `Database` instance derived from `@downcity/federation`; the adapter owns the driver, transactions, DDL, and connection lifecycle.
+
+## SQLite
+
+```bash
+pnpm add @downcity/federation @downcity/database-sqlite
+```
+
+```ts
+import { Federation } from "@downcity/federation";
+import { Database } from "@downcity/database-sqlite";
+
+const database = new Database({ filename: "./federation.sqlite" });
+const federation = new Federation({ database });
+```
+
+Use `filename: ":memory:"` in tests. File databases enable WAL by default.
+
+## Cloudflare D1
+
+```ts
+import { Federation } from "@downcity/federation";
+import { Database } from "@downcity/database-d1";
+
+const database = new Database({ binding: env.DB });
+const federation = new Federation({ database });
+```
+
+The D1 adapter provides the same `context.transaction()` contract through snapshots, conflict retries, and atomic `batch()` commits. Reads inside a transaction observe its buffered writes.
+
+## PostgreSQL
+
+```ts
+import { Federation } from "@downcity/federation";
+import { Database } from "@downcity/database-postgresql";
+
+const database = new Database({ url: process.env.DATABASE_URL! });
+const federation = new Federation({ database });
+```
+
+The PostgreSQL adapter uses postgres-js and native Drizzle transactions.
+
+## Service boundary and lifecycle
+
+Services use `context.table()` and `context.transaction()`. Selected official integrations can use the restricted `context.database.query()` / `atomic()` surface, but never receive the underlying driver client.
+
+`Federation` owns the supplied database. Call `await federation.dispose()` during shutdown to release adapter resources. Disposal is idempotent, and operations after disposal fail.

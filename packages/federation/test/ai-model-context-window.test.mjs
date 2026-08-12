@@ -10,7 +10,7 @@ import test from "node:test"
 import {
   AIService,
   AIChannel,
-} from "../bin/legacy.js"
+} from "../bin/index.js"
 
 test("AIService exposes AIChannel model context_window in the public catalog", () => {
   const channel = new (class extends AIChannel {})({ id: "catalog" })

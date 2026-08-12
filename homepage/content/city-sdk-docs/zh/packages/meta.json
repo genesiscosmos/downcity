@@ -2,10 +2,9 @@
   "title": "Packages 包",
   "pages": [
     "index",
-    "federation-sdk",
+    "federation",
     "city",
     "cli",
-    "agent",
-    "local"
+    "agent"
   ]
 }

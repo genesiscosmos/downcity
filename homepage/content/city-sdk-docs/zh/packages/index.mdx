@@ -1,20 +1,18 @@
 ---
 title: Packages 包
-description: 理解City SDK 背后的 package 边界。
+description: 理解 Federation、Agent 宿主与单 Agent package 边界。
 ---
 
-# Packages 包
+## 运行时 package
 
-City SDK 文档以 `@downcity/federation` 和 CLI 为主。City 与 Agent Runtime 属于独立的 Agent 和宿主边界。
+- [@downcity/federation](/zh/city-sdk-docs/packages/federation)：Federation、Embassy、
+  Bureau、Service、鉴权与数据访问。
+- [@downcity/city](/zh/city-sdk-docs/packages/city)：多 Agent 宿主、本地持久化装配与
+  Agent HTTP/RPC transport。
+- [@downcity/agent](/zh/city-sdk-docs/packages/agent)：单 Agent 执行、Workspace、Session、
+  Plugin SDK 与 RemoteAgent。
+- [CLI](/zh/city-sdk-docs/packages/cli)：`fed/downfed` 管理 Federation，`city/downcity`
+  管理本地 Agent 宿主。
 
-## City SDK 能力面
-
-- [Federation SDK](/zh/city-sdk-docs/packages/federation-sdk)：Federation、Embassy、Bureau、service/action、鉴权和数据访问。
-- [@downcity/city](/zh/city-sdk-docs/packages/city)：旧 Federation API 的迁移入口。
-- [CLI](/zh/city-sdk-docs/packages/cli)：`fed/downfed` 管 Federation 部署和 admin 运维，`city/downcity` 管本机 Agent 和用户态连接。
-
-## 相关 Space
-
-- [Federation Services Docs](/zh/payments)：Accounts、Credits Cards、Usage 与 Payment 等官方 service。
-- [Products Docs](/zh/products-docs)：Downcity CLI、Console、Chrome Extension 产品手册。
-- [Agent SDK](/zh/agent-sdk-docs)：可编程 Agent、Session、Local/Remote Agent 和 Plugin API。
+官方 Accounts、Credits、Usage 与 Payment Service 位于
+[Federation Services](/zh/payments)。

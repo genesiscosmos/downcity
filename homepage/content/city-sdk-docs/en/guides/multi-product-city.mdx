@@ -92,13 +92,13 @@ That lets hooks differentiate behavior with `ctx.bureau` and `ctx.user.metadata`
 ### City side
 
 - keeps routes, UI, and business experience
-- uses `User City`
+- uses `Embassy User`
 - only holds `user_token` (which contains `bureau_id`)
 
 ### Business backend
 
 - owns login, orders, balance, subscriptions, and business data
-- uses `FederationAdmin` in a trusted environment
+- uses `Embassy Admin` in a trusted environment
 - issues `user_token` after a successful login
 
 ### City

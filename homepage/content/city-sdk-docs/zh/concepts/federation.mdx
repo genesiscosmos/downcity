@@ -1,103 +1,39 @@
 ---
-title: Federation、Bureau 与 City
-description: 分清全局服务、产品身份、产品后端和 Agent 终端的边界。
+title: Federation、Bureau、Embassy 与 City
+description: 分清权威后端、业务分区、访问窗口与 Agent 宿主。
 ---
 
-在 `@downcity/city` 里，服务端和客户端是两个不同的类，名字也不同。最容易踩的坑，就是把它们都当成“City”。
+四个概念拥有独立职责：
 
-- 全局服务与信任根是 `Federation`
-- 稳定产品身份与授权域是 `Bureau`
-- Agent 终端客户端是 `City`
-
-这一页只解决一件事：**让你看代码时立刻知道自己在写哪一端。**
-
-## 一句话区分
-
-- `Federation`：共享后端运行时、账户事实源和信任根，维护 Bureau 注册表与 Organization 关系。
-- `Bureau`：稳定的产品身份和授权域；每个机器凭证绑定一个 `bureau_id`。
-- `City`：Agent 终端客户端，连接预配置的 Bureau 产品域，不在 Federation 注册。
-- `FederationAdmin`：由 Admin Session 授权的旧版管理员客户端，不属于任何 Bureau。
-
-换句话说：Federation 信任 Bureau；City 只是连接某个 Bureau 产品域的终端。
-
-## 服务端：`Federation`
-
-服务端永远从 `new Federation({ database })` 开始。它负责把数据库、service、模型目录和统一路由组装成一个能跑的后端：
+- `Federation` 是权威后端和信任根，拥有账户、Bureau 记录、Service、模型目录、Usage、
+  Env 和 Token 签发。
+- `Bureau` 是 Federation 内的产品或业务分区。Bureau Token 表示可信产品后端身份。
+- `Embassy` 是 user 与 admin 访问 Federation 的窗口，只有 `user` 和 `admin` 两个身份子域。
+- `City` 是 `@downcity/city` 提供的 Agent 宿主，拥有 Agent 实例；它不是 Federation
+  客户端，也不是 Federation 中需要注册的身份。
 
 ```ts
-import { Federation, Service } from "@downcity/federation";
+import { Embassy, Federation } from "@downcity/federation";
+import { City, LocalCityStore } from "@downcity/city";
 
-const base = new Federation({ database });
-
-base.use(new Service({ id: "translate" }));
-
-await base.health();
-serve({ fetch: (request) => base.fetch(request), port: 3001 });
+const federation = new Federation({ database });
+const embassy = new Embassy({ federation_url: "https://fed.example.com" });
+const city = new City(new LocalCityStore());
 ```
 
-`Federation` 负责：
+## 身份边界
 
-- 注册 `Service`、官方服务和 `AIService`
-- 校验 `user_token` 和管理员会话 Token
-- 暴露统一的 `/v1/*` 路由
-- 协调 runtime env、hooks、usage 和数据库
+User Token、Admin Session Token 和 Bureau Token 不能混用：
 
-> 文档里出现的“Federation”指的就是这个 `Federation` 实例，不是客户端 `City`。
+- `embassy.user` 持有或获取 User Token。
+- `embassy.admin` 持有或获取 Admin Session Token。
+- `new Bureau({ bureau_token })` 持有长期 Bureau 机器凭证。
+- City 不会成为上述任何一种身份。City 中运行的 Agent 可以把 Embassy 或其他客户端当作
+  普通依赖使用。
 
-## 控制面与终端
+## CLI 对应关系
 
-可信控制面和 Agent 终端使用两个独立客户端：
+- `fed` / `downfed` 部署和管理 Federation。
+- `city` / `downcity` 管理本地 Agent 宿主。
 
-```ts
-import { City, FederationAdmin } from "@downcity/federation/legacy";
-
-// 旧版管理员客户端：请求 Federation 管理 Bureau、env，并签发 User Token
-const admin = new FederationAdmin({
-  base_url: "https://base.example.com",
-  credential: administrator_session_token,
-});
-
-// 产品前端：只拿 user_token (which contains bureau_id)，调用 service
-const city = new City({
-  federation_url: "https://base.example.com",
-  user_token,
-});
-```
-
-- `FederationAdmin`：运行在可信后端，请求 Federation 管理 Bureau 身份与 env，并签发 `user_token`。
-- `City`：运行在 Agent 终端，只持有 `user_token`（其中包含 `bureau_id`），调用 AI 与 Service action。
-
-客户端永远拿不到 provider key，`User City` 也永远拿不到管理员凭证或会话 Token。
-
-## 一张图记住边界
-
-<div className="dc-doc-flow" aria-label="Federation 与 City 的边界">
-  <div className="dc-doc-lane">
-    <div className="dc-doc-node">
-      <strong>Agent 终端 City</strong>
-      <span>连接预配置的 Bureau 产品域，不拥有服务端身份。</span>
-      <code>{'new City({ federation_url })'}</code>
-    </div>
-  </div>
-  <div className="dc-doc-arrow" aria-hidden="true">→</div>
-  <div className="dc-doc-lane">
-    <div className="dc-doc-node">
-      <strong>服务端 Federation</strong>
-      <span>共享后端运行时，承载模型目录、service 路由、token 校验、usage 和 hooks。</span>
-      <code>{'new Federation({ database })'}</code>
-    </div>
-  </div>
-</div>
-
-## 和 CLI 的对应关系
-
-CLI 也是按这条边界拆的：
-
-- `downfed`：管理 `Federation`、Bureau 身份、机器凭证、服务资源和 env。
-- `downcity`：本机 Agent 宿主与管理入口。
-
-## 接下来读什么
-
-- 想看完整调用链，读 [架构总览](/zh/city-sdk-docs/concepts/architecture)
-- 想分清两类密钥，读 [token 模型](/zh/city-sdk-docs/concepts/token-model)
-- 想直接上手部署，读 [创建 Federation](/zh/city-sdk-docs/quickstart/create-city)
+两个命令可以来自同一个发行包，但它们拥有不同的运行时和生命周期状态。

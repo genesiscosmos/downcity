@@ -1,6 +1,6 @@
 ---
 title: Admin Operations
-description: "How AccountsService() works with FederationAdmin in trusted environments for users, sessions, and related admin-side reads."
+description: "How AccountsService() works with Embassy Admin in trusted environments for users, sessions, and related admin-side reads."
 ---
 
 The accounts service does not only expose registration and login to frontends. It also exposes admin-side services.
@@ -20,7 +20,7 @@ It means the service is not just a frontend auth feature. It is:
 - a set of admin-side reads or maintenance routes
 - a consistent set of user and session facts underneath
 
-## Why this is tied to `FederationAdmin`
+## Why this is tied to `Embassy Admin`
 
 Because these actions should not be executed in the browser.
 

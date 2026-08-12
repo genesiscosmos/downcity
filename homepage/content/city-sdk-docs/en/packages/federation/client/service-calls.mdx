@@ -1,0 +1,21 @@
+---
+title: User and Admin Services
+description: Call Federation services through the identity that owns the authorization.
+---
+
+User and admin calls share the same Service protocol but use separate identity domains.
+
+```ts
+const user_services = await embassy.user.list_services();
+const profile = await embassy.user.current();
+const result = await embassy.user.service("rewrite")
+  .action("formal")
+  .invoke({ text: "hello" });
+
+const admin_services = await embassy.admin.list_services();
+const env = await embassy.admin.env.list();
+```
+
+Use `embassy.user.ai` for the Federation model catalog and AI execution, and
+`embassy.user.payment` for payment methods. Admin-only management stays under
+`embassy.admin`; do not pass administrator credentials through the user domain.

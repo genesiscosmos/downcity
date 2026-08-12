@@ -3,16 +3,12 @@
  *
  * 关键点（中文）
  * - 这是 agent 包核心运行时的稳定公开入口；可选 Tool 通过 `@downcity/agent/tools` 导出。
- * - 只导出 Agent、plugin 作者 API、city 运行集成 API 与跨包协议类型。
+ * - 只导出 Agent、plugin 作者 API 与跨包协议类型。
  * - HTTP router、sandbox runner、内部 plugin runtime runner 等实现细节不从根入口暴露。
  */
 
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
-export { City } from "./city/City.js";
-export { MemoryCityStore } from "./city/MemoryCityStore.js";
-export type { CityState } from "./types/city/City.js";
-export type { CityStore } from "./types/city/CityStore.js";
 export { Workspace } from "./workspace/Workspace.js";
 export { WorkspaceBase } from "./workspace/WorkspaceBase.js";
 export type { AgentStore } from "./types/store/AgentStore.js";

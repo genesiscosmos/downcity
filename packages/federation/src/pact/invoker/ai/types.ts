@@ -2,7 +2,7 @@
  * AI 模型类型（公开目录统一使用 CityModelDescriptor）。
  *
  * 关键点（中文）
- * - CityModel 是 @downcity/city 提供的原生 LanguageModelV3 class。
+ * - CityModel 是 Federation 内部实现并以 FederationModel 名称公开的原生 LanguageModelV3 class。
  * - UserModelRef 保留为 Federation 内部语义别名，避免一次性扩大改名范围。
  */
 

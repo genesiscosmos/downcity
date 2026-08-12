@@ -5,7 +5,7 @@ import test from "node:test"
 import {
   Federation,
   create_federation_admin_password_hash,
-} from "../bin/legacy.js"
+} from "../bin/index.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
 
 const INITIAL_ADMIN = {

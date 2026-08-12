@@ -1,0 +1,201 @@
+---
+title: Federation
+description: "The role of the Federation instance, runtime and serve inside @downcity/federation."
+---
+
+`@downcity/federation`'s `Federation` is the long-running server container of Downcity. It is where a Database Adapter, services, auth, and the shared `/v1/*` route space come together. Product-side access uses the `City` client; see [Federation and City](/en/city-sdk-docs/concepts/federation) for the distinction.
+
+## What this concept means
+
+A simple way to think about Federation is:
+
+> one reusable AI infrastructure runtime process that many products can keep calling over time.
+
+That process owns:
+
+- the Database Adapter
+- the service registry
+- service mounting
+- the HTTP route surface
+- city, token, and env infrastructure
+
+## When this page matters
+
+- you are about to run a real Federation for the first time
+- you want to understand why `Federation` only needs a Database Adapter
+- you want clarity on `fetch()`, and `serve()`
+- you want to mount Federation into Node, Workers, or another HTTP host
+
+## Minimal runnable example
+
+```ts
+import { AIService, Federation } from "@downcity/federation";
+import { Database } from "@downcity/database-sqlite";
+import { serve } from "@hono/node-server";
+
+const database = new Database({ filename: "./.base/downcity.sqlite" });
+const base = new Federation({ database });
+
+const ai = new AIService();
+
+ai.use({
+  id: "local-echo",
+  name: "Local Echo",
+  actions: {
+    text: async (ctx) => ({
+      id: crypto.randomUUID(),
+      role: "assistant",
+      parts: [
+        {
+          type: "text",
+          text: String(ctx.input.prompt ?? ""),
+          state: "done",
+        },
+      ],
+    }),
+  },
+});
+
+base.use(ai);
+
+await base.health();
+
+serve({
+  fetch: (request) => base.fetch(request),
+  port: 43127,
+  hostname: "127.0.0.1",
+});
+```
+
+The important ideas in that example are:
+
+1. `database` decides which Database Adapter Federation uses.
+2. `base.use(...)` decides which capabilities Federation exposes.
+3. `base.fetch()` decides how Federation enters your HTTP layer.
+
+## Scenario 1: Federation is the main service
+
+If you want Federation itself to be the main HTTP entry, `serve()` is the clearest mental model:
+
+```ts
+import { serve } from "@hono/node-server";
+
+await base.health();
+serve({ fetch: (request) => base.fetch(request), port: 3001, hostname: "127.0.0.1" });
+```
+
+## Scenario 2: Federation is mounted into your existing server
+
+If you already have a server framework, handing requests into Federation is often the cleaner pattern:
+
+```ts
+export default {
+  async fetch(request: Request) {
+    return base.fetch(request);
+  },
+};
+```
+
+### Concurrent Cloudflare Worker cold starts
+
+A single Worker deployment can start multiple isolates at the same time. Each isolate has independent memory while sharing the same D1 database, so a module-level Promise only prevents duplicate initialization inside one isolate and is not a global lock.
+
+Federation atomically initializes its system env and Ed25519 user token signing key in the shared database, with a unique constraint that allows only one active signing key. If an older SDK left multiple active keys behind, startup keeps the earliest key and changes the others to retired. Retired keys remain in JWKS so existing tokens can still be verified.
+
+## Scenario 3: Local HTTP
+
+When Federation only needs to be called by trusted processes on the same machine, expose its standard `fetch` handler through your local HTTP server:
+
+```ts
+import { Federation } from "@downcity/federation";
+import { serve } from "@hono/node-server";
+
+const base = new Federation({ database });
+
+serve({
+  fetch: (request) => base.fetch(request),
+  hostname: "127.0.0.1",
+  port: 15315,
+});
+
+const federation_url = "http://127.0.0.1:15315";
+```
+
+Then point Embassy at that HTTP URL:
+
+```ts
+import { Embassy } from "@downcity/federation";
+
+const embassy = new Embassy({
+  federation_url,
+  admin_token: administrator_session_token,
+});
+
+await embassy.admin.list_services();
+```
+
+Local HTTP uses the same identity model as remote HTTP: Embassy Admin uses an administrator session token, while authenticated user actions require a normal `user_token`.
+
+If `AccountsService` is configured with `local_login: true`, `/v1/accounts/providers` only returns the local login method. Call `accounts.login/start` with `provider: "local"` and `bureau_id` to receive a `login_id`, then read the normal `user_token` from `accounts.login/result` and recreate or update Embassy User with `user_token` (which contains `bureau_id`).
+
+## Why Federation only takes a Database Adapter
+
+`@downcity/federation` owns the logic that should stay stable across runtimes:
+
+- service lifecycle
+- action routes
+- token auth
+- city / env / store infrastructure
+
+The host runtime only needs to create the appropriate adapter:
+
+- Node.js can use `@downcity/database-sqlite` or `@downcity/database-postgresql`
+- Cloudflare Workers can use `@downcity/database-d1`
+- Federation writes required runtime env into the built-in `env` table on boot
+
+## Default Storage
+
+When a Federation needs to move runtime files into first-party storage, register a default storage backend:
+
+```ts
+import { Federation, R2Storage } from "@downcity/federation";
+
+const base = new Federation({ database });
+
+base.storage(R2Storage({
+  bucket: env.DOWNCITY_STORAGE,
+  public_url_prefix: env.DOWNCITY_STORAGE_PUBLIC_URL_PREFIX,
+}));
+```
+
+Services can then access it through `ctx.storage`. Built-in AI image jobs use this storage after `image_fetch` succeeds to move remote file part URLs into your own bucket. If storage fails, the original upstream URL is kept and the image job still succeeds.
+
+## Common API surface
+
+- `new Federation({ database })`
+- `base.use(...)`
+- `base.storage(...)`
+- `base.fetch(request)`
+- `base.health()`
+- `base.table(name)`
+
+## Common misunderstandings
+
+### Federation is the runtime, not the whole SDK
+
+Federation is the long-running server runtime. Product-side calling uses the `City` client; see [Client SDK](/en/city-sdk-docs/packages/federation/client).
+
+### Federation is not only an HTTP proxy
+
+It also owns built-in tables, token and env infrastructure, service data layers, and hook lifecycle.
+
+### Federation is not one provider
+
+Providers, models, services, and custom services are capabilities mounted into Federation, not the Federation itself.
+
+## Read next
+
+- For what actually gets mounted into Federation, read [Service and Action](/en/city-sdk-docs/packages/federation/service-and-action)
+- For hooks and extension points, read [Hooks and Service Mounting](/en/city-sdk-docs/packages/federation/hooks-and-service)
+- For persistence and tables, read [Store and Table](/en/city-sdk-docs/packages/federation/store-and-table)
+- For lower-level method details, read [Federation API](/en/city-sdk-docs/reference/federation)

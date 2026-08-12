@@ -1,0 +1,232 @@
+---
+title: Federation 运行时
+description: "Federation 实例、runtime、serve 和统一入口在 @downcity/federation 里的角色。"
+---
+
+`Federation` 是 Downcity 的服务端长期运行容器（文档里也叫 Federation）。它把 Database Adapter、service、鉴权和统一 `/v1/*` 路由收在同一个服务端入口里。产品侧访问它用的是 `City` 客户端，区别见 [Federation 与 City](/zh/city-sdk-docs/concepts/federation)。
+
+## 这个概念在说什么
+
+可以先把 Federation 理解成“多个产品共用的 AI infrastructure runtime 进程”。
+
+它长期持有这些能力：
+
+- Database Adapter
+- service 注册表
+- 服务挂载点
+- HTTP 路由入口
+- token、city、env 等基础设施
+
+所以你通常不是“调用一下 Federation”，而是“启动一套 Federation runtime，然后让多个产品 client 长期连接它”。
+
+## 什么时候你需要关心这一页
+
+- 你准备第一次真正把 Federation 跑起来
+- 你想理解为什么 `Federation` 只需要一个 Database Adapter
+- 你已经会写 service，但还不清楚 `fetch()`、`serve()` 各自用在什么地方
+- 你要把 Federation 接到现有 Node 服务、Cloudflare Worker 或别的 HTTP 入口上
+
+## 什么时候这页不是重点
+
+- 你只想知道产品前端怎么用 `City` 客户端调用：优先读 [Client SDK](/zh/city-sdk-docs/packages/federation/client)
+- 你只想知道账号登录怎么跑通：优先读 [@downcity/services](/zh/payments)
+- 你只想看某个 custom service 怎么写：优先读 [Service 与 Action](/zh/city-sdk-docs/packages/federation/service-and-action)
+
+## 最小可运行示例
+
+下面这个例子说明 Federation 运行时最小长什么样：
+
+```ts
+import { AIService, Federation } from "@downcity/federation";
+import { Database } from "@downcity/database-sqlite";
+import { serve } from "@hono/node-server";
+
+const database = new Database({ filename: "./.base/downcity.sqlite" });
+const base = new Federation({ database });
+
+const ai = new AIService();
+
+ai.use({
+  id: "local-echo",
+  name: "Local Echo",
+  actions: {
+    text: async (ctx) => ({
+      id: crypto.randomUUID(),
+      role: "assistant",
+      parts: [
+        {
+          type: "text",
+          text: String(ctx.input.prompt ?? ""),
+          state: "done",
+        },
+      ],
+    }),
+  },
+});
+
+base.use(ai);
+
+await base.health();
+
+serve({
+  fetch: (request) => base.fetch(request),
+  port: 43127,
+  hostname: "127.0.0.1",
+});
+```
+
+这个例子里真正重要的是三件事：
+
+1. `database` 决定 Federation 使用哪一个数据库 Adapter
+2. `base.use(...)` 决定 Federation 暴露哪些能力
+3. `base.fetch()` 决定你怎么把它接进 HTTP 层
+
+## 场景一：Federation 自己就是主服务
+
+如果你想让 Federation 自己作为主 HTTP 入口，最直接的理解方式就是上面的 `serve()`：
+
+```ts
+import { serve } from "@hono/node-server";
+
+await base.health();
+serve({ fetch: (request) => base.fetch(request), port: 3001, hostname: "127.0.0.1" });
+```
+
+这种方式适合：
+
+- 先快速跑起一个独立 Federation
+- 单独部署一个可复用的 AI backend
+- 小团队先把 Federation 和业务后端拆成两个清晰边界
+
+## 场景二：接进你自己的服务框架
+
+如果你已经有现成的 HTTP 框架，更常见的是按请求转给 Federation：
+
+```ts
+export default {
+  async fetch(request: Request) {
+    return base.fetch(request);
+  },
+};
+```
+
+这种方式适合：
+
+- Cloudflare Workers
+- 你已经有现成网关或 API server
+- 想把 Federation 当成内部运行时，而不是单独开一个端口
+
+### Cloudflare Workers 并发冷启动
+
+同一个 Worker 部署可能同时启动多个 isolate。它们拥有独立内存，但共享同一个 D1，因此模块级 Promise 只能避免单个 isolate 重复初始化，不能充当全局锁。
+
+Federation 会在共享数据库中原子初始化系统 env 和 Ed25519 user token signing key，并通过唯一约束保证全局只有一把 active signing key。如果数据库中存在旧版本并发启动遗留的多把 active key，启动时会保留创建时间最早的一把，并把其余 key 转为 retired。retired key 仍会发布到 JWKS，用于验证已经签发的 token。
+
+## 场景三：本机 HTTP
+
+如果 Federation 只需要被同一台机器上的可信进程访问，可以直接把标准 `fetch` handler 挂到你的本机 HTTP server：
+
+```ts
+import { Federation } from "@downcity/federation";
+import { serve } from "@hono/node-server";
+
+const base = new Federation({ database });
+
+serve({
+  fetch: (request) => base.fetch(request),
+  hostname: "127.0.0.1",
+  port: 15315,
+});
+
+const federation_url = "http://127.0.0.1:15315";
+```
+
+然后 Embassy 可以直接连接这个 HTTP 地址：
+
+```ts
+import { Embassy } from "@downcity/federation";
+
+const embassy = new Embassy({
+  federation_url,
+  admin_token: administrator_session_token,
+});
+
+await embassy.admin.list_services();
+```
+
+本机 HTTP 和远程 HTTP 使用同一套身份模型：Embassy Admin 使用管理员会话 Token，需要用户身份的 Action 仍然必须携带正常 `user_token`。
+
+如果 `AccountsService` 配置了 `local_login: true`，`/v1/accounts/providers` 会只返回本地登录方式。调用 `accounts.login/start` 并传入 `provider: "local"` 与 `bureau_id` 后会得到 `login_id`，再用 `accounts.login/result` 读取正常 `user_token`，之后用 `user_token`（其中包含 `bureau_id`） 创建或更新 Embassy User。
+
+## 为什么只传 Database Adapter
+
+`@downcity/federation` 负责的是跨运行时都应该稳定的逻辑：
+
+- service 生命周期
+- action 路由
+- token 鉴权
+- city / env / store 基础设施
+
+而具体宿主环境只负责创建对应 Adapter：
+
+- Node.js 可以用 `@downcity/database-sqlite` 或 `@downcity/database-postgresql`
+- Cloudflare Workers 可以用 `@downcity/database-d1`
+- Federation 启动时会把需要的 env 写入内置 `env` 表
+
+这就是为什么同一套 runtime 模型可以复用到不同宿主环境，而不是每换一个平台就重写一套后端。
+
+## 默认 Storage
+
+如果你的 Federation 需要把运行期产生的外部文件转存到自有存储，可以注册默认 storage：
+
+```ts
+import { Federation, R2Storage } from "@downcity/federation";
+
+const base = new Federation({ database });
+
+base.storage(R2Storage({
+  bucket: env.DOWNCITY_STORAGE,
+  public_url_prefix: env.DOWNCITY_STORAGE_PUBLIC_URL_PREFIX,
+}));
+```
+
+注册后，service 可以通过 `ctx.storage` 访问这套能力。内置 AI 图片任务会在 `image_fetch` 成功后自动把远程 file part URL 转存到默认 storage；如果转存失败，会保留上游原始 URL，不会让图片任务失败。
+
+## 常用 API / 入口
+
+这一页最相关的 Federation API 是：
+
+- `new Federation({ database })`：创建 Federation 实例
+- `base.use(...)`：挂 service、AIService 和官方服务
+- `base.storage(...)`：注册默认文件存储后端
+- `base.fetch(request)`：处理单次请求
+- `base.health()`：触发初始化并返回健康信息
+- `base.table(name)`：拿某张表的受控数据接口
+
+如果你是从“怎么写能力”进入，下一页更关键的是 [Service 与 Action](/zh/city-sdk-docs/packages/federation/service-and-action)。
+
+## 常见误解
+
+### Federation 是 runtime，不是整个 SDK
+
+Federation 是服务端长期运行容器。产品侧真正调用它用的是 `City` 客户端，见 [Client SDK](/zh/city-sdk-docs/packages/federation/client)。
+
+### Federation 不是纯 HTTP 代理
+
+它背后还持有：
+
+- 内置表
+- token / city / env 基础设施
+- service 数据层
+- hook 生命周期
+
+### Federation 不等于某一个 AI provider
+
+provider、model、service、custom service 都只是 Federation 上挂载的能力，不是 Federation 本身。
+
+## 继续阅读
+
+- 想知道 Federation 里到底挂的是什么，读 [Service 与 Action](/zh/city-sdk-docs/packages/federation/service-and-action)
+- 想知道服务和扩展点怎么进去，读 [Hook 与服务挂载](/zh/city-sdk-docs/packages/federation/hooks-and-service)
+- 想知道数据层怎么落地，读 [Store 与 Table](/zh/city-sdk-docs/packages/federation/store-and-table)
+- 想看更底层 API，再读 [Federation API](/zh/city-sdk-docs/reference/federation)

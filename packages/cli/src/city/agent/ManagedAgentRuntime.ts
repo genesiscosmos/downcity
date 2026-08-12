@@ -7,9 +7,8 @@
  * - 以幂等顺序释放 Gateway、RPC 与 Agent，避免调用方重复管理内部资源。
  */
 
-import { Agent, City } from "@downcity/agent";
-import { LocalCityStore } from "@downcity/local";
-import { AgentHTTP, AgentRPC } from "@downcity/server";
+import type { Agent } from "@downcity/agent";
+import { AgentHTTP, AgentRPC, City, LocalCityStore } from "@downcity/city";
 import { startAgentHttpGateway } from "@/city/agent/AgentHttpGateway.js";
 import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
 import type { CreateManagedAgentRuntimeInput } from "@/city/types/agent/ManagedAgentRuntime.js";

@@ -1,25 +1,33 @@
 ---
 title: "@downcity/city"
-description: "@downcity/city 是迁移入口，Federation、Embassy 和 Bureau 的正式实现位于 @downcity/federation。"
+description: 以明确的生命周期宿主一个或多个 Agent，并统一使用持久化配置。
 ---
 
-@downcity/city 不再拥有 Federation、Embassy 或 Bureau 实现。它暂时转发旧 Federation API，避免既有应用在 package 迁移期间改变运行结果。
+`@downcity/city` 是 CLI、Desktop 和自定义 Node 宿主共用的 Agent 宿主包。它拥有
+Agent 集合、本地配置装配和可选 HTTP/RPC transport。
 
-新项目和新代码应直接使用：
+```bash
+pnpm add @downcity/city @downcity/agent
+```
 
-~~~bash
-pnpm add @downcity/federation
-~~~
+```ts
+import { City, LocalCityStore } from "@downcity/city";
 
-~~~ts
-import { Embassy, Federation } from "@downcity/federation";
-~~~
+const city = new City(new LocalCityStore());
+await city.ready();
 
-## 当前边界
+const agents = city.agents();
+const agent = city.agent("lucas_whitman");
 
-- Federation 服务端运行时属于 @downcity/federation。
-- 用户与管理员客户端统一从 Embassy 进入。
-- Bureau 只表示产品或业务分区。
-- @downcity/city 不再维护独立实现，也不继续增加新的 Federation API。
+await city.dispose();
+```
 
-旧导出仍由 @downcity/city 转发，但不会形成第二套实现。请阅读 [Federation SDK](/zh/city-sdk-docs/packages/federation-sdk) 了解正式 API。
+## 所有权
+
+- `City` 拥有 `CityStore` 恢复出来的 Agent 实例。
+- `LocalCityStore` 拥有本地数据库连接，以及 Agent、Workspace、Plugin 的装配。
+- CLI 和 Desktop 创建各自独立的 City 实例，但读取同一份 `~/.downcity` 数据。
+- Agent 没有启动或停止状态；CLI daemon 或 Desktop 窗口的长期运行属于宿主状态。
+
+单 Agent 执行、Workspace、Session、Plugin SDK 和 RemoteAgent 位于
+`@downcity/agent`。Federation、Embassy 和 Bureau 位于 `@downcity/federation`。

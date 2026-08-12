@@ -1,17 +1,16 @@
 ---
 title: "@downcity/agent"
-description: "Agent 运行时与 City Store 协议。"
+description: "单 Agent 运行时、Workspace、Session、Plugin SDK 与 RemoteAgent。"
 ---
 
-`@downcity/agent` 提供单 Agent 执行面以及进程内 `City` 容器。`City` 不读取 SQLite，
-也不管理 daemon 或 Electron 生命周期。
+`@downcity/agent` 提供单 Agent 执行面，拥有 Agent、Workspace、Session、Plugin SDK 和
+RemoteAgent，但不拥有多 Agent 宿主或网络 Server。
 
 ```ts
-const city = new City(store);
-await city.ready();
-const agents = city.agents();
-const agent = city.agent(agent_id);
+const session = await agent.sessions.create();
+const turn = await session.prompt({ query: "你好" });
+const result = await turn.finished;
 ```
 
-`CityStore` 从持久化配置恢复可直接使用的 Agent，并保存 `city.add(agent)` 注册的
-Agent。一个 Agent 绑定一个 Workspace，一个 Workspace 可以被多个 Agent 使用。
+CLI、Desktop 或 Node 进程需要持有多个 Agent、恢复本地配置或暴露 HTTP/RPC 时，使用
+`@downcity/city`。

@@ -1,0 +1,48 @@
+---
+title: Embassy 客户端
+description: 通过明确的 user 与 admin 身份子域访问 Federation。
+---
+
+`Embassy` 是访问 Federation 的客户端入口，只有两个身份子域：
+
+- `embassy.user`：账户登录、AI、Payment 和用户授权的 Service。
+- `embassy.admin`：管理员 Session 和 Federation 管理。
+
+```ts
+import { Embassy } from "@downcity/federation";
+
+const embassy = new Embassy({
+  federation_url: "https://fed.example.com",
+});
+```
+
+Embassy 本身不绑定 Bureau。只有登录需要选择产品分区时，才在登录请求中传入
+`bureau_id`。登录成功后，同一个 Embassy 实例会持有新的 User Token。
+
+```ts
+await embassy.user.account.login({
+  provider: "email",
+  bureau_id: "product-web",
+  input: {
+    email: "user@example.com",
+    password: "password",
+  },
+});
+
+const current_user = await embassy.user.current();
+const catalog = await embassy.user.ai.catalog();
+```
+
+可信环境可以传入既有 Admin Session Token，也可以使用配置好的管理员 ID 和密码登录。
+
+```ts
+await embassy.admin.login({
+  admin_id: "owner",
+  password: "password",
+});
+
+const bureaus = await embassy.admin.bureaus.list();
+```
+
+长期 Bureau Token 和本地 User Token 验签使用独立的 `Bureau` 客户端。Bureau 不是
+Embassy 的子域。

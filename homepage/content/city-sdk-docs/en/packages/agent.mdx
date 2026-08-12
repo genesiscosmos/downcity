@@ -1,18 +1,16 @@
 ---
 title: "@downcity/agent"
-description: "Agent runtime and the City Store protocol."
+description: "Single-Agent runtime, Workspace, Session, Plugin SDK, and RemoteAgent."
 ---
 
-`@downcity/agent` provides the single-Agent execution surface and the in-process `City`
-container. `City` does not read SQLite or own daemon and Electron lifecycles.
+`@downcity/agent` provides the single-Agent execution surface. It owns Agent, Workspace,
+Session, Plugin SDK, and RemoteAgent, but does not own a multi-Agent host or network server.
 
 ```ts
-const city = new City(store);
-await city.ready();
-const agents = city.agents();
-const agent = city.agent(agent_id);
+const session = await agent.sessions.create();
+const turn = await session.prompt({ query: "Hello" });
+const result = await turn.finished;
 ```
 
-`CityStore` restores usable Agents from persistence and saves Agents registered through
-`city.add(agent)`. Each Agent is bound to one Workspace, while a Workspace may be reused by
-multiple Agents.
+Use `@downcity/city` when a CLI, Desktop application, or Node process needs to own multiple
+Agent instances, restore local configuration, or expose HTTP/RPC transports.

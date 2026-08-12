@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 /** GitHub workflow 当前显式支持的最大拓扑层数。 */
-export const MAX_PUBLISH_LAYERS = 3;
+export const MAX_PUBLISH_LAYERS = 5;
 
 /** 会进入 npm tarball、需要参与发布排序的依赖字段。 */
 const RUNTIME_DEPENDENCY_FIELDS = [

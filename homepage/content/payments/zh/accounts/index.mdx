@@ -5,7 +5,7 @@ description: "用官方账号服务提供注册、登录、OAuth 入口、会话
 
 `@downcity/services` 适合还不想单独维护完整账号系统的产品。它把账号表、会话、profile、OAuth callback 和 `user_token` 签发打包成一个官方服务，具体登录方式由 provider 决定。
 
-它的重点不是“多一个 SDK”，而是给 City 增加一个现成的 `accounts` service，让产品可以直接通过 `User City` / `FederationAdmin` 去调用。
+它的重点不是“多一个 SDK”，而是给 City 增加一个现成的 `accounts` service，让产品可以直接通过 `Embassy User` / `Embassy Admin` 去调用。
 
 ## 这组文档怎么读
 
@@ -131,7 +131,7 @@ const session = await guest.service("accounts").action("login").invoke({
 });
 ```
 
-登录或注册成功后，返回结果里会包含 `user_token`。产品 client 拿到 token 之后，再用常规 `User City` 去调 AI service。
+登录或注册成功后，返回结果里会包含 `user_token`。产品 client 拿到 token 之后，再用常规 `Embassy User` 去调 AI service。
 
 `GET /v1/accounts/me` 返回的不只是 `user_token` 解出来的运行时用户，还会附带：
 
@@ -170,5 +170,5 @@ const reply = await user.ai.text({
 
 - 想按流程深入，继续读本节的三个子页面
 - 想看完整账号能力，继续读 [Accounts 服务](/zh/payments/accounts)
-- 想看产品调用 SDK，用 [@downcity/city](/zh/city-sdk-docs/packages/city/federation)
-- 想看更细的产品侧调法，读 [User City](/zh/city-sdk-docs/reference/city-user)
+- 想看产品调用 SDK，用 [@downcity/city](/zh/city-sdk-docs/packages/federation/federation)
+- 想看更细的产品侧调法，读 [Embassy User](/zh/city-sdk-docs/reference/city-user)

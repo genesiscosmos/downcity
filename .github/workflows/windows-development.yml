@@ -5,10 +5,8 @@ on:
     paths:
       - ".github/workflows/windows-development.yml"
       - "packages/agent/**"
-      - "packages/agent-registry/**"
       - "packages/city/**"
       - "packages/federation/**"
-      - "packages/cityman/**"
       - "packages/cli/**"
       - "packages/fedman/**"
       - "packages/plugins/**"
@@ -17,7 +15,6 @@ on:
       - "packages/shell/**"
       - "packages/sandbox-windows-mxc/**"
       - "packages/sandbox-windows-srt/**"
-      - "packages/server/**"
       - "packages/type/**"
       - "packages/ui/**"
       - "scripts/clean-package.mjs"
@@ -28,10 +25,8 @@ on:
     paths:
       - ".github/workflows/windows-development.yml"
       - "packages/agent/**"
-      - "packages/agent-registry/**"
       - "packages/city/**"
       - "packages/federation/**"
-      - "packages/cityman/**"
       - "packages/cli/**"
       - "packages/fedman/**"
       - "packages/plugins/**"
@@ -40,7 +35,6 @@ on:
       - "packages/shell/**"
       - "packages/sandbox-windows-mxc/**"
       - "packages/sandbox-windows-srt/**"
-      - "packages/server/**"
       - "packages/type/**"
       - "packages/ui/**"
       - "scripts/clean-package.mjs"
@@ -107,6 +101,8 @@ jobs:
           pnpm -C packages/sandbox-windows-srt typecheck
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           pnpm -C packages/agent typecheck
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          pnpm -C packages/city typecheck
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           pnpm -C packages/cli typecheck
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

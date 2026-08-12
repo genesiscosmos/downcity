@@ -92,18 +92,18 @@ AI Usage 和 Credits Charge 使用同一个 `usage_id` 关联。Credits 扣费�
 终端用户使用自己的 `user_token` 调用 AI：
 
 ```ts
-import { City } from "@downcity/federation/legacy";
+import { Embassy } from "@downcity/federation";
 
-const city = new City({
+const embassy = new Embassy({
   federation_url: "https://federation.example.com",
   user_token,
 });
 
-const catalog = await city.ai.catalog();
+const catalog = await embassy.user.ai.catalog();
 const model = catalog.get("example-chat");
 if (!model) throw new Error("example-chat is unavailable");
 
-await city.ai.text({
+await embassy.user.ai.text({
   model,
   prompt: "请总结今天的项目进度",
 });
@@ -116,7 +116,7 @@ await city.ai.text({
 ```ts
 import type { UserUsageResponse } from "@downcity/services";
 
-const usage = await city.service("usage").get<UserUsageResponse>("me", {
+const usage = await embassy.user.service("usage").get<UserUsageResponse>("me", {
   from: "2026-08-01",
   to: "2026-08-31",
   timezone: "Asia/Shanghai",

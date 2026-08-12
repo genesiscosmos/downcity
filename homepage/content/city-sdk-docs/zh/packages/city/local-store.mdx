@@ -1,0 +1,21 @@
+---
+title: 本地 Store
+description: 从 ~/.downcity 恢复 Agent、Workspace 和 Plugin 配置。
+---
+
+`LocalCityStore` 是 CLI 和 Desktop 的标准本地 Adapter。它读写
+`~/.downcity/downcity.db`，解析 Workspace 环境变量，加载已启用的 Plugin，选择当前
+平台的 Sandbox，并恢复可直接使用的 Agent 实例。
+
+```ts
+import { City, LocalCityStore } from "@downcity/city";
+
+const store = new LocalCityStore();
+const city = new City(store);
+await city.ready();
+```
+
+使用 `store.new_agent(...)` 创建尚未注册的 native Agent，再通过 `city.add(agent)`
+持久化并注册。`city.remove(agent_id)` 只删除注册关系，不删除 Workspace 或 Session 数据。
+
+测试或临时宿主可以使用 `MemoryCityStore`。

@@ -208,7 +208,7 @@ export class Agent {
    * 关键点（中文）
    * - 关闭 plugin lifecycle 与 ActionSchedule 等 Agent 自有资源。
    * - Workspace 与 Agent 一对一绑定，因此这里同时关闭 Shell 与 Sandbox。
-   * - 不负责任何 transport（RPC / HTTP）；transport 由 `@downcity/server` 自行管理。
+   * - 不负责任何 transport（RPC / HTTP）；transport 由 `@downcity/city` 宿主管理。
    */
   async dispose(): Promise<void> {
     this.unsubscribe_workspace_env();

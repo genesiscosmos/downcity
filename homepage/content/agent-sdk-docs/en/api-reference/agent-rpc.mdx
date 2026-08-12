@@ -7,16 +7,16 @@ description: RPC transport layer for local Agent — for inter-process session a
 
 `AgentRPC` is the RPC transport for a locally running `Agent`. It lets other processes or services access the agent's sessions over a Unix socket or TCP port without going through HTTP.
 
-Only available when you install `@downcity/server`:
+Only available when you install `@downcity/city`:
 
 ```bash
-pnpm add @downcity/server
+pnpm add @downcity/city
 ```
 
 ## Minimal usage
 
 ```ts
-import { AgentRPC } from "@downcity/server";
+import { AgentRPC } from "@downcity/city";
 import { Agent, Workspace } from "@downcity/agent";
 
 const agent = new Agent({

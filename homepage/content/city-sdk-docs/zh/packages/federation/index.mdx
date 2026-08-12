@@ -1,0 +1,25 @@
+---
+title: "@downcity/federation"
+description: Federation 运行时与 Embassy SDK，提供 user、admin 和 Bureau 访问能力。
+---
+
+`@downcity/federation` 是 Federation、Embassy、Bureau、Service、鉴权与数据访问的正式
+package。
+
+```bash
+pnpm add @downcity/federation
+```
+
+```ts
+import { Bureau, Embassy, Federation } from "@downcity/federation";
+```
+
+## 公开领域
+
+- `Federation`：权威后端与 Service 运行时。
+- `Embassy.user`：账户登录、AI、Payment 和用户 Service。
+- `Embassy.admin`：Admin Session 与 Federation 管理。
+- `Bureau`：长期产品后端身份与本地 User Token 验签。
+
+本包不拥有本地 Agent 实例、Workspace 装配或 Agent HTTP/RPC 服务，这些宿主职责属于
+`@downcity/city`。

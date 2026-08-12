@@ -11,7 +11,7 @@
     "paths": {
       "@/*": ["src/main/*"],
       "@downcity/agent": ["../../packages/agent/bin/index.d.ts"],
-      "@downcity/local": ["../../packages/local/bin/index.d.ts"]
+      "@downcity/city": ["../../packages/city/bin/index.d.ts"]
     }
   },
   "include": ["src/main/**/*.ts", "src/preload/**/*.ts", "src/common/**/*.ts", "electron.vite.config.ts"]

@@ -1,354 +1,47 @@
 ---
-title: FederationAdmin
-description: 可信环境如何管理 Bureau、请求签发 user_token，并维护 Federation env。
+title: Embassy Admin
+description: 管理员 Session 与 Federation 管理 API。
 ---
 
-`FederationAdmin` 只应该运行在可信环境里。
-
-> `FederationAdmin` 是旧的底层客户端。新代码应使用 `@downcity/federation` 的
-> `Embassy.admin`；本页只保留旧方法面的迁移参考。
-
-典型场景：
-
-- 你自己的产品后端
-- 本地管理脚本
-- 内网管理工具
-- CI 或运维脚本
-
-不要把管理员 ID、密码或会话 Token 放到浏览器、公开前端或不受控客户端。
-
-## 它在整条链路里负责什么
-
-把 `FederationAdmin` 看成“可信侧和 City 的管理桥”最准确。
-
-它最常负责三件事：
-
-- 管理 Bureau 产品身份与机器凭证
-- 签 `user_token`
-- 维护 runtime env
-- 执行可信侧 Credits Card 与 Transaction 管理动作
-
-如果 `User City` 负责“用户态怎么调用 City”，那 `FederationAdmin` 负责“可信侧怎么把这个调用环境准备好”。
-
-## 最小示例
+管理员访问是 Embassy 的 `admin` 身份子域。
 
 ```ts
-import { FederationAdmin } from "@downcity/federation/legacy";
+import { Embassy } from "@downcity/federation";
 
-const admin = new FederationAdmin({
-  base_url: "https://base.example.com",
-  credential: administrator_session_token,
-});
+const embassy = new Embassy({ federation_url: "https://fed.example.com" });
+await embassy.admin.login({ admin_id: "owner", password: "password" });
 ```
 
-`credential` 必须显式传入通过 `/v1/admin/login` 获取的有效管理员会话 Token。
+Federation 返回有时限的 Admin Session Token。Embassy 在当前实例中持有它；`token()`
+读取 Token，`logout()` 撤销它。
 
-## 典型调用链
-
-<div className="dc-doc-flow" aria-label="FederationAdmin 的调用链">
-  <div className="dc-doc-lane">
-    <div className="dc-doc-node">
-      <strong>可信后端</strong>
-      <span>完成登录、鉴权和业务判断。</span>
-    </div>
-  </div>
-  <div className="dc-doc-arrow" aria-hidden="true">→</div>
-  <div className="dc-doc-lane">
-    <div className="dc-doc-node">
-      <strong>FederationAdmin</strong>
-      <span>调用 `/v1/bureaus/*`、`/v1/accounts/tokens/issue`、`/v1/env/*`、`/v1/ai/models`、`/v1/base/instruction`。</span>
-    </div>
-  </div>
-  <div className="dc-doc-arrow" aria-hidden="true">→</div>
-  <div className="dc-doc-lane">
-    <div className="dc-doc-node">
-      <strong>Downcity</strong>
-      <span>校验管理员会话 Token 后，再执行 city、token 和 env 管理动作。</span>
-    </div>
-  </div>
-</div>
-
-## `accounts/tokens/issue`
-
-这是最常用的管理端能力：为某个用户签发 `user_token`。
-
-代签接口必须显式传入目标 `bureau_id` 和 `user_id`。
+## Bureau 管理
 
 ```ts
-const issued = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "my_app",
-  user_id: "user_123",
-  metadata: {
-    plan: "pro",
-    org_id: "org_001",
-  },
-  ttl: "7d",
-});
-```
-
-返回值包含：
-
-- `user_token`
-- `bureau_id`
-- `user_id`
-- `expires_at`
-
-`ttl` 支持：
-
-- `30m`
-- `1h`
-- `7d`
-- 秒数
-
-## 推荐登录链路
-
-```ts
-router.post("/login", async (c) => {
-  const user_id = await login(c);
-
-  const issued = await admin.service("accounts").action("tokens/issue").invoke({
-    bureau_id: "my_app",
-    user_id,
-    ttl: "7d",
-  });
-
-  return c.json({
-    bureau_id: issued.bureau_id,
-    user_token: issued.user_token,
-  });
-});
-```
-
-也就是：
-
-1. 你的业务后端先完成用户登录
-2. 再由可信后端请求 Federation 签发 `user_token`
-3. 把 `user_token`（其中包含 `bureau_id`） 返回给前端
-4. 前端再用 `User City` 调 City
-
-## 它和 accounts 服务是什么关系
-
-`FederationAdmin` 不会替代 accounts 服务，反过来也一样。
-
-两种典型模式是：
-
-### 模式 A：你自己的后端做登录
-
-- 业务后端自己校验用户名密码或 session
-- 业务后端再用 `FederationAdmin` 申请 `user_token`
-- 前端拿到 `user_token`（其中包含 `bureau_id`）
-
-### 模式 B：accounts 服务做登录
-
-- 前端先用 guest `User City` 走 `accounts.login/start -> login/continue -> login/result` 或注册流程
-- accounts service 通过 `login/result` 返回 `user_token`
-- 前端切换到正常 `User City`
-
-所以：
-
-- `FederationAdmin` 负责可信侧管理动作
-- accounts 服务负责最小账号能力
-- 两者不是替代关系，而是两种不同的登录接法
-
-## `env`
-
-`admin.env` 负责 Runtime env 管理。写入的 provider key 会保存到 Federation 数据库，Runtime 读取时优先使用数据库值。
-
-如果你想确认某个代码注册模型依赖哪些 provider env，可以直接通过 `admin.listModels()` 读取同一份模型目录，再和 `admin.env.list()` 对照：
-
-```ts
-const models = await admin.listModels();
-```
-
-### `list()`
-
-```ts
-const envs = await admin.env.list();
-```
-
-### `upsert()`
-
-```ts
-await admin.env.upsert({
-  key: "OPENAI_API_KEY",
-  value: "sk-xxx",
-});
-```
-
-### `remove()`
-
-```ts
-await admin.env.remove("OPENAI_API_KEY");
-```
-
-### `import()`
-
-```ts
-await admin.env.import(`
-OPENAI_API_KEY=sk-xxx
-OPENAI_BASE_URL=https://api.openai.com/v1
-`);
-```
-
-### `refresh()`
-
-```ts
-await admin.env.refresh();
-```
-
-通过 `admin.env.upsert()`、`remove()`、`import()` 或 fed admin 工作区修改 env 时，当前 Runtime cache 会自动更新。
-
-如果你绕过 Admin API 直接修改数据库里的 `env` 表，需要调用 `admin.env.refresh()`，或在 fed admin 工作区的 Env 菜单执行 `Refresh runtime cache`。
-
-这些修改会写入 Federation 数据库的 `env` 表。业务 env 和系统级 secret 都以 Federation 这张表为准，不需要再去手动改 Worker / Node 宿主 env。
-
-## `bureaus`
-
-`admin.bureaus` 用来管理同一个 Federation 里的产品边界。
-
-```ts
-const bureaus = await admin.bureaus.list();
-
-const bureau = await admin.bureaus.create({
-  name: "My App",
-  server_url: "https://bureau.example.com",
-  bureau_id: "my_app",
+const bureaus = await embassy.admin.bureaus.list();
+const bureau = await embassy.admin.bureaus.create({
+  bureau_id: "product-web",
+  name: "Product Web",
+  server_url: "https://product.example.com",
 });
 
-await admin.bureaus.server.update({
+await embassy.admin.bureaus.route.update({
   bureau_id: bureau.bureau_id,
-  server_url: "https://new-bureau.example.com",
-});
-
-await admin.bureaus.pause(bureau.bureau_id);
-await admin.bureaus.activate(bureau.bureau_id);
-await admin.bureaus.archive(bureau.bureau_id);
-```
-
-返回的 `bureau.server.server_url` 来自独立的一对一 Server 记录。更新入口不会改变稳定的 `bureau_id`。
-
-如果你想在一次调用里给指定 Bureau 的用户签发 token，可以使用 Accounts Service：
-
-```ts
-const issued = await admin.service("accounts").action("tokens/issue").invoke({
-  bureau_id: "my_app",
-  user_id: "user_123",
-  ttl: "7d",
+  server_url: "https://new-product.example.com",
 });
 ```
 
-`FederationAdmin` 不绑定单个 Bureau；每次请求签发都必须显式提供 `bureau_id`。
-
-## `listServices()` / `listModels()` / `instruction()`
-
-除了 `tokens` 和 `env`，管理端还可以读取 City 当前暴露的能力目录。
-
-### `listServices()`
+## Bureau Token
 
 ```ts
-const services = await admin.listServices();
-```
-
-返回当前 City 已注册的 service 列表，以及每个模块声明的 `env` 需求。
-
-### `listModels()`
-
-```ts
-const models = await admin.listModels();
-```
-
-这会返回 admin 视角的完整模型目录。相比用户态模型目录，它还会包含：
-
-- `env_requirements`
-
-### `instruction()`
-
-```ts
-const text = await admin.instruction();
-console.log(text);
-```
-
-它对应 `GET /v1/base/instruction`，返回 City 聚合后的纯文本说明文档，适合：
-
-- 远程管理端查看当前 City 挂了哪些模块
-- 确认每个模块暴露了哪些路由
-- 确认每个模块声明了哪些 env 依赖
-- 给 CLI 或 agent 读取运行时说明
-
-## FederationAdmin 也可以调 service 的管理侧 service
-
-除了 `tokens` 和 `env`，`FederationAdmin` 也可以调用 service 暴露出来的管理侧 service。
-
-例如：
-
-```ts
-const users = await admin.service("accounts").get("users");
-const sessions = await admin.service("accounts").get("sessions");
-
-const payments = await admin.service("payment").get("payments");
-```
-
-`credits` 提供 typed invoker，用于管理 Cards 与账务变动：
-
-```ts
-const card = await admin.credits.cards.create_ephemeral({
-  user_id: "user_123",
-  name: "活动奖励",
-  initial_credits: 300_000_000,
-  expires_at: "2026-08-31T00:00:00.000Z",
-  source: "campaign",
-  idempotency_key: "campaign:user_123",
+const issued = await embassy.admin.bureaus.tokens.issue({
+  bureau_id: "product-web",
+  purpose: "production backend",
 });
 
-await admin.credits.topup({
-  card: { kind: "ephemeral", card_id: card.card_id },
-  credits: 10_000_000,
-  source: "campaign_bonus",
-  idempotency_key: "campaign_bonus:user_123",
-});
+const tokens = await embassy.admin.bureaus.tokens.list("product-web");
+await embassy.admin.bureaus.tokens.revoke(issued.token_id);
 ```
 
-也就是说，`FederationAdmin` 不只是在调内建 token/env 接口，它同样是可信侧调用统一 service 路由的入口。
-
-## 错误处理
-
-`FederationAdmin` 收到非 2xx HTTP 响应时会抛出 `Error`。这个错误会带两个额外字段：
-
-- `status`：HTTP 状态码。
-- `body`：City 返回的原始响应文本，通常是 `{"error":"..."}`。
-
-```ts
-try {
-  await admin.service("accounts").action("tokens/issue").invoke({
-    bureau_id: "my_app",
-    user_id: "user_123",
-  });
-} catch (error) {
-  const status = error instanceof Error && "status" in error ? error.status : undefined;
-  const body = error instanceof Error && "body" in error ? error.body : undefined;
-
-  console.log(status, body);
-}
-```
-
-常见状态码：
-
-- `401`：管理员会话 Token 缺失、过期、撤销或无效。
-- `403`：目标 Bureau 已暂停，不能继续签发 token。
-- `404`：目标 Bureau 不存在。
-- `500`：City 缺少必要配置，或管理动作内部执行失败。
-
-## 当前不归 `FederationAdmin` 管的事情
-
-这几件事当前不走 `FederationAdmin`：
-
-- 模型配置
-- 注册 service handler
-- 用户前端直接登录交互
-- 浏览器里的用户态调用
-
-它们分别属于：
-
-- `City` 运行时层
-
-也就是说，`FederationAdmin` 负责维护 city、token 和 env；模型定义和 service 挂载方式仍然属于 `City` 运行时层。
+Federation 只在签发时返回 Bureau Token 明文。可信后端保存它并使用独立 `Bureau` 客户端
+执行 `identify()`；Embassy Admin 不负责识别终端用户请求。

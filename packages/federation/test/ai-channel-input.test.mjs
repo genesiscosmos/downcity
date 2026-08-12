@@ -7,7 +7,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { AIChannel, AIService } from "../bin/legacy.js"
+import { AIChannel, AIService } from "../bin/index.js"
 
 /** 创建直接执行 AIService action 所需的最小 Context。 */
 function create_context(input) {

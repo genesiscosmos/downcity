@@ -28,9 +28,13 @@ jobs:
       has_layer_0: ${{ steps.detect.outputs.has_layer_0 }}
       has_layer_1: ${{ steps.detect.outputs.has_layer_1 }}
       has_layer_2: ${{ steps.detect.outputs.has_layer_2 }}
+      has_layer_3: ${{ steps.detect.outputs.has_layer_3 }}
+      has_layer_4: ${{ steps.detect.outputs.has_layer_4 }}
       layer_0_matrix: ${{ steps.detect.outputs.layer_0_matrix }}
       layer_1_matrix: ${{ steps.detect.outputs.layer_1_matrix }}
       layer_2_matrix: ${{ steps.detect.outputs.layer_2_matrix }}
+      layer_3_matrix: ${{ steps.detect.outputs.layer_3_matrix }}
+      layer_4_matrix: ${{ steps.detect.outputs.layer_4_matrix }}
     permissions:
       contents: read
     steps:
@@ -100,6 +104,58 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect.outputs.layer_2_matrix) }}
+    uses: ./.github/workflows/publish-package-layer.yml
+    with:
+      package_name: ${{ matrix.name }}
+      package_path: ${{ matrix.path }}
+      package_version: ${{ matrix.version }}
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish_layer_3:
+    name: Layer 3 · ${{ matrix.name }}
+    needs:
+      - detect
+      - publish_layer_0
+      - publish_layer_1
+      - publish_layer_2
+    if: >-
+      always() &&
+      needs.detect.result == 'success' &&
+      needs.detect.outputs.has_layer_3 == 'true' &&
+      (needs.detect.outputs.has_layer_0 != 'true' || needs.publish_layer_0.result == 'success') &&
+      (needs.detect.outputs.has_layer_1 != 'true' || needs.publish_layer_1.result == 'success') &&
+      (needs.detect.outputs.has_layer_2 != 'true' || needs.publish_layer_2.result == 'success')
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect.outputs.layer_3_matrix) }}
+    uses: ./.github/workflows/publish-package-layer.yml
+    with:
+      package_name: ${{ matrix.name }}
+      package_path: ${{ matrix.path }}
+      package_version: ${{ matrix.version }}
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish_layer_4:
+    name: Layer 4 · ${{ matrix.name }}
+    needs:
+      - detect
+      - publish_layer_0
+      - publish_layer_1
+      - publish_layer_2
+      - publish_layer_3
+    if: >-
+      always() &&
+      needs.detect.result == 'success' &&
+      needs.detect.outputs.has_layer_4 == 'true' &&
+      (needs.detect.outputs.has_layer_0 != 'true' || needs.publish_layer_0.result == 'success') &&
+      (needs.detect.outputs.has_layer_1 != 'true' || needs.publish_layer_1.result == 'success') &&
+      (needs.detect.outputs.has_layer_2 != 'true' || needs.publish_layer_2.result == 'success') &&
+      (needs.detect.outputs.has_layer_3 != 'true' || needs.publish_layer_3.result == 'success')
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect.outputs.layer_4_matrix) }}
     uses: ./.github/workflows/publish-package-layer.yml
     with:
       package_name: ${{ matrix.name }}

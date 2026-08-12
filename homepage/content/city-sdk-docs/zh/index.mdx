@@ -8,7 +8,7 @@ Downcity 的 City SDK 用来创建、部署和调用 City。一个 Federation �
 City 对外暴露的不是 provider API，而是稳定的**产品调用边界**。在 City 内部，能力通过 `Service`、`Action` 和 `AIService` 组织：
 
 - 产品侧拿到 `user_token`（其中包含 `bureau_id`）
-- 用 `User City` 调 `text()`、`stream()`、`image()` 这类 service
+- 用 `Embassy User` 调 `text()`、`stream()`、`image()` 这类 service
 - City 内部自己决定模型目录、provider 路由、hooks、usage 和 env
 
 服务端运行时的类叫 `Federation`（本文里也称 Federation），产品侧用 `City` 客户端去访问它。两者的边界见 [Federation 与 City](/zh/city-sdk-docs/concepts/federation)。
@@ -39,7 +39,7 @@ City 对外暴露的不是 provider API，而是稳定的**产品调用边界**�
   <a className="dc-doc-card" href="/zh/city-sdk-docs/reference">
     <em>API</em>
     <strong>我只想查接口</strong>
-    <p>按角色直接看 City、User City、FederationAdmin、HTTP API 和环境变量说明。</p>
+    <p>按角色直接看 City、Embassy User、Embassy Admin、HTTP API 和环境变量说明。</p>
   </a>
 </div>
 
@@ -50,7 +50,7 @@ City 对外暴露的不是 provider API，而是稳定的**产品调用边界**�
     <div className="dc-doc-node">
       <strong>多个产品 client</strong>
       <span>网页、扩展、App、桌面工具、客户 Demo、内部工具。</span>
-      <code>User City + user_token (which contains bureau_id)</code>
+      <code>Embassy User + user_token (which contains bureau_id)</code>
     </div>
   </div>
   <div className="dc-doc-arrow" aria-hidden="true">→</div>

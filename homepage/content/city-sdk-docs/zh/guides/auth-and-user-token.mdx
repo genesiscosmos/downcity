@@ -7,10 +7,10 @@ Downcity 不替你托管用户系统。它只要求 client 请求携带可校验
 
 ## 已有登录系统
 
-如果你已经有登录系统，可以在登录后用 `FederationAdmin` 请求 Federation 签发 Downcity token：
+如果你已经有登录系统，可以在登录后用 Embassy Admin 请求 Federation 签发 Downcity Token：
 
 ```ts
-const user = await admin.service("accounts").action("tokens/issue").invoke({
+const user = await embassy.admin.service("accounts").action("tokens/issue").invoke({
   bureau_id: "demo",
   user_id: session.user.id,
   metadata: {

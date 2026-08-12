@@ -63,10 +63,10 @@ After `new Agent(...)`, plugin lifecycle and ActionSchedule start automatically.
 
 ## RPC and HTTP exposure
 
-The Agent itself no longer starts any transport. Use [`@downcity/server`](/en/agent-sdk-docs/local-agent/http-and-rpc) when you need RPC or HTTP:
+The Agent itself no longer starts any transport. Use [`@downcity/city`](/en/agent-sdk-docs/local-agent/http-and-rpc) when you need RPC or HTTP:
 
 ```ts
-import { AgentRPC, AgentHTTP } from "@downcity/server";
+import { AgentRPC, AgentHTTP } from "@downcity/city";
 
 const rpc = new AgentRPC(agent);
 await rpc.listen({ host: "127.0.0.1", port: 15314 });

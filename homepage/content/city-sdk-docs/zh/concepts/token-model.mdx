@@ -24,7 +24,7 @@ Downcity 使用管理员会话 Token 管理 Federation，并使用 `user_token` 
   <div className="dc-doc-lane">
     <div className="dc-doc-node">
       <strong>终端 client</strong>
-      <span>前端、扩展或 App 使用 `user_token` 创建 User City 并调用 service。</span>
+      <span>前端、扩展或 App 使用 Embassy User 携带 `user_token` 调用 Service。</span>
       <code>拿不到管理员凭证</code>
     </div>
   </div>
@@ -32,7 +32,7 @@ Downcity 使用管理员会话 Token 管理 Federation，并使用 `user_token` 
 
 ## user_token
 
-`user_token` 是给终端用户或产品 client 使用的调用凭证。它由 `FederationAdmin` 基于 `bureau_id + user_id` 向 Federation 申请。
+`user_token` 是给终端用户或产品 client 使用的调用凭证。Embassy Admin 可以基于 `bureau_id + user_id` 向 Federation 申请。
 
 - `bureau_id`
 - `user_id`
@@ -48,15 +48,15 @@ Bureau Server 还会比较 Token 中的 `bureau_id` 与自身绑定的 Bureau ID
 
 ## 管理员会话 Token
 
-使用 `fed deploy` 配置的管理员 ID 和密码访问 `/v1/admin/login`。登录响应会返回有时限的管理员会话 Token；可信后端把它传给 `FederationAdmin`，用于创建 Bureau、管理 env，以及请求 Federation 为用户签发 `user_token`。密码只以 PBKDF2 摘要保存，不再生成或注入管理员 secret key 环境变量。
+使用 `fed deploy` 配置的管理员 ID 和密码登录 Embassy Admin。登录响应会返回有时限的管理员会话 Token，用于创建 Bureau、管理 env，以及请求 Federation 为用户签发 `user_token`。
 
 ```ts
-const admin = new FederationAdmin({
-  base_url: "https://base.example.com",
-  credential: administrator_session_token,
+const embassy = new Embassy({
+  federation_url: "https://base.example.com",
+  admin_token: administrator_session_token,
 });
 
-const bureau = await admin.bureaus.create({
+const bureau = await embassy.admin.bureaus.create({
   name: "Chrome Extension",
   server_url: "https://bureau.example.com",
 });
@@ -67,7 +67,7 @@ const bureau = await admin.bureaus.create({
 多个 client 可以归属同一个 Bureau。签发 token 时明确写入 `bureau_id`：
 
 ```ts
-const user = await admin.service("accounts").action("tokens/issue").invoke({
+const user = await embassy.admin.service("accounts").action("tokens/issue").invoke({
   bureau_id: bureau.bureau_id,
   user_id: "user_123",
   metadata: {

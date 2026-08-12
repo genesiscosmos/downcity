@@ -1,47 +1,25 @@
 ---
-title: Connect Client
-description: Call the Federation from a product client with User City.
+title: Connect Embassy
+description: Call Federation AI and Services through Embassy User.
 ---
 
-Product clients use `User City`. The common paths are `city.ai.*` for AIService and `city.service(id).action(name).invoke()` for custom services.
-
 ```ts
-import { City } from "@downcity/federation/legacy";
+import { Embassy } from "@downcity/federation";
 
-const city = new City({
-  federation_url: "https://base.example.com",
+const embassy = new Embassy({
+  federation_url: "https://fed.example.com",
   user_token: "ub_xxx",
 });
 
-const catalog = await city.ai.catalog();
+const catalog = await embassy.user.ai.catalog();
 const model = catalog.get("gpt-5.4");
 if (!model) throw new Error("model not found");
 
-const result = await city.ai.text({
+const result = await embassy.user.ai.text({
   model,
-  prompt: "Write a welcome message for the product",
+  prompt: "Write a welcome message",
 });
 ```
 
-If you already know the target model, select it directly from the directory:
-
-```ts
-const body = await city.ai.stream({
-  model: catalog.get("gpt-5.4"),
-  prompt: "Stream a short paragraph",
-});
-```
-
-`ai.text()` returns an AI SDK `UIMessage`. `ai.stream()` uses CityModel's
-LanguageModelV3 transport and converts it client-side into a
-`ReadableStream<UIMessageChunk>`.
-
-One Federation can serve many client surfaces:
-
-- `https://app.example.com`
-- a Chrome extension
-- a desktop tool
-- a mobile app
-- an internal operations tool
-
-Those clients do not need to manage provider keys, model routing, or usage tracking on their own.
+Use `embassy.user.service(name)` for custom or official Services. Provider keys, model routing,
+and usage accounting remain inside Federation.

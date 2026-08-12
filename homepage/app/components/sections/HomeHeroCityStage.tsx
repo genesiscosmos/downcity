@@ -56,7 +56,7 @@ const facade_tag_foreground = "var(--color-text)";
 /** 按建筑位置映射到真实产品与 Service Plugin 文档入口。 */
 const facade_tags = [
   { key: "federation", building_key: "west_home", label: "FEDERATION", y: 430, width: 92, path: "city-sdk-docs/reference/federation", description_zh: ["管理 Service 生命周期、鉴权", "HTTP 路由与运行时资源"], description_en: ["Runtime for services, auth", "HTTP routing and resources"] },
-  { key: "services", building_key: "west_greenhouse", label: "SERVICES", y: 430, width: 78, path: "city-sdk-docs/packages/city/service-and-action", description_zh: ["用 Service 与 Action 组织", "可复用的后端能力"], description_en: ["Reusable backend capabilities", "built with Service and Action"] },
+  { key: "services", building_key: "west_greenhouse", label: "SERVICES", y: 430, width: 78, path: "city-sdk-docs/packages/federation/service-and-action", description_zh: ["用 Service 与 Action 组织", "可复用的后端能力"], description_en: ["Reusable backend capabilities", "built with Service and Action"] },
   { key: "agent_harness", building_key: "studio", label: "AGENT HARNESS", y: 430, width: 132, path: "agent-sdk-docs", description_zh: ["运行 Agent 的核心框架", "组合模型、工具与会话"], description_en: ["Core runtime for agents", "Models, tools and sessions"] },
   { key: "cli", building_key: "studio_annex", label: "CLI", y: 430, width: 54, path: "city-sdk-docs/packages/cli", description_zh: ["从终端创建与管理", "Downcity 项目"], description_en: ["Create and manage", "Downcity from the terminal"] },
   { key: "city", building_key: "landmark", label: "CITY", y: 430, width: 60, path: "city-sdk-docs", description_zh: ["承载 Agent 与服务的", "产品运行环境"], description_en: ["Product environment for", "agents and services"] },

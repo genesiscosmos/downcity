@@ -1,0 +1,22 @@
+---
+title: Local Store
+description: Restore Agent, Workspace, and Plugin configuration from ~/.downcity.
+---
+
+`LocalCityStore` is the standard local adapter for CLI and Desktop hosts. It reads and writes
+`~/.downcity/downcity.db`, resolves Workspace environment, loads enabled Plugins, selects the
+platform Sandbox, and restores ready-to-use Agent instances.
+
+```ts
+import { City, LocalCityStore } from "@downcity/city";
+
+const store = new LocalCityStore();
+const city = new City(store);
+await city.ready();
+```
+
+Use `store.new_agent(...)` to construct an unregistered native Agent and `city.add(agent)` to
+persist and register it. `city.remove(agent_id)` removes the registration but does not delete
+Workspace or Session data.
+
+For tests or temporary hosts, use `MemoryCityStore` instead.

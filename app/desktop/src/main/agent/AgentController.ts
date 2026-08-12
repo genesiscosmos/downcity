@@ -5,12 +5,13 @@
  * 独立记录；连接时读取 Agent 的持久化绑定，不启动 CLI daemon，也不经过本机 RPC。
  */
 
+import type { Agent, SessionMessage } from "@downcity/agent";
 import {
   City,
-  type Agent,
-  type SessionMessage,
-} from "@downcity/agent";
-import { LocalCityStore, type LocalAgentConfig, type LocalWorkspaceConfig } from "@downcity/local";
+  LocalCityStore,
+  type LocalAgentConfig,
+  type LocalWorkspaceConfig,
+} from "@downcity/city";
 import type {
   DesktopAgentRuntime,
   DesktopAgentSummary,

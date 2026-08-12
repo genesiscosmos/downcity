@@ -65,10 +65,10 @@ const deepseek = new DeepSeekChannel();
 
 ## 写入数据库
 
-可信后端可以用 `FederationAdmin` 写入 provider key：
+可信后端可以用 Embassy Admin 写入 Provider Key：
 
 ```ts
-await admin.env.upsert({
+await embassy.admin.env.upsert({
   key: "DEEPSEEK_API_KEY",
   value: "sk-xxx",
 });

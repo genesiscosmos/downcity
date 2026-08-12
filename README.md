@@ -15,7 +15,7 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 
 - Built for AI builders: create the next agent product without rebuilding model routing, tools, memory, tasks, auth, usage, billing, and operations again.
 - Reusable runtime layer: a repo or folder can become an agent boundary, while Downcity owns the broader infrastructure for long-running agents.
-- City: centralize model catalogs, runtime env, service routing, accounts, balance, usage, payment, and HTTP access.
+- Federation: centralize model catalogs, runtime env, service routing, accounts, balance, usage, and payment.
 - Operable agents: run agents as managed daemons, inspect status, review history, and interact through CLI or SDK.
 - Extensible architecture: plugins, services, SDK APIs, and UI components are explicit integration surfaces for products and teams.
 
@@ -24,8 +24,9 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 | Package | Purpose |
 | --- | --- |
 | `downcity` | Public CLI bundle: `city`/`downcity` is the local City container for Agent management, runtime, and console workflows; `fed`/`downfed` is the Federation Server Manager. |
-| `@downcity/agent` | Single-agent runtime and SDK for sessions, tool loops, services, plugins, HTTP/RPC, sandboxing, and host integration. |
-| `@downcity/city` | City runtime and access SDK for Service registration, Actions, auth, env, city-scoped access, and HTTP calling. |
+| `@downcity/agent` | Single-Agent runtime for Workspace, Session, Plugin SDK, tools, and RemoteAgent. |
+| `@downcity/city` | Agent host for multi-Agent ownership, local persistent assembly, and Agent HTTP/RPC transport. |
+| `@downcity/federation` | Federation runtime and Embassy SDK for Services, auth, env, Bureau, user, and admin access. |
 | `@downcity/type` | Shared protocol types used across packages, including City model descriptors returned by City. |
 | `@downcity/services` | Public services for accounts, balance, usage, payment, and Stripe payment flows. |
 | `@downcity/ui` | React + Tailwind UI SDK for reusable Console and host-application components. |
@@ -37,8 +38,8 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 - Global Agent management: store Agent identity and config in `~/.downcity/downcity.db`, while binding each Agent to any Workspace path.
 - Local agent operations: run `downcity agent start`, `downcity agent status`, and `downcity agent list` to host and inspect local agents.
 - Agent lifecycle: create, start, stop, restart, inspect, chat with, diagnose, and observe globally managed Agents.
-- City connection: use `downcity federation` to connect local Agents to the active City server; manage City models and Service resources with `city`.
-- City backend capabilities: reuse accounts, balance, usage, payment, env, auth, and Service routing across agents and products.
+- Federation connection: use `downcity federation` to connect local Agents to the active Federation.
+- Federation backend capabilities: reuse accounts, balance, usage, payment, env, auth, and Service routing across agents and products.
 - Built-in agent capabilities: `chat`, `task`, `memory`, `shell`, `contact`, `skill`, `web`, `sound`, and `workboard`.
 - Product surfaces: Downcity CLI, Agent SDK, City SDK, and UI SDK.
 

@@ -86,7 +86,7 @@ Workspace + Shell → Agent → Session → Turn
 - Plugin lifecycle and ActionSchedule begin starting immediately after `new Agent(...)`.
 - Session entry points wait for the Agent runtime; call `await agent.ready()` only when you need an explicit startup checkpoint.
 - `agent.dispose()` also releases the exclusive Workspace, Shell processes, PTYs, and Sandbox. Do not call `workspace.dispose()` again.
-- HTTP/RPC transports do not belong to Agent; use `@downcity/server` when you need network serving.
+- HTTP/RPC transports do not belong to Agent; use `@downcity/city` when you need network serving.
 
 ## Model resolution
 

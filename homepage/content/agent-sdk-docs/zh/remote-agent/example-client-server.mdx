@@ -8,7 +8,7 @@ description: 一个进程提供 Agent 服务，另一个进程通过 RemoteAgent
 这种模式通常是：
 
 - 服务端进程持有本地 `Agent`
-- 服务端通过 Downcity 暴露 HTTP，或通过 `@downcity/server` 提供的 `AgentRPC` / `AgentHTTP` 暴露 RPC / HTTP
+- 服务端通过 Downcity 暴露 HTTP，或通过 `@downcity/city` 提供的 `AgentRPC` / `AgentHTTP` 暴露 RPC / HTTP
 - 客户端进程创建 `RemoteAgent`
 
 这种结构的最大优点是职责清晰：

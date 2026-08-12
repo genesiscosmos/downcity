@@ -1,0 +1,224 @@
+---
+title: Service 与 Action
+description: "Service、Action、统一路由和 AIService 在 @downcity/federation 里的关系。"
+---
+
+`Service` 和 `Action` 是 `@downcity/federation` 里最重要的业务组织单位。
+
+先记一句话就够了：
+
+> Service 是一组长期存在的业务能力，Action 是真正被调用的具体入口。
+
+## 这个概念在说什么
+
+你最终给产品暴露的，不是一个“随便写的 handler”，而是 City 里统一管理的一组 action。
+
+每个 Action 同时承担四个角色：
+
+- 业务入口
+- HTTP 路由节点
+- hook 作用点
+- 权限边界
+
+所以理解 Service / Action，本质上就是理解 Downcity City 如何组织业务能力。
+
+## 什么时候应该写 custom service
+
+- 你要表达的是产品业务动作，而不是单纯模型推理
+- 你要让前端、App、服务都走统一的业务入口
+- 你希望一个能力能被 hook、鉴权、usage 和服务治理
+
+典型例子：
+
+- 改写内容
+- 生成报告
+- 执行工作流
+- 处理上传后的业务逻辑
+
+## 什么时候更适合先用 AIService
+
+如果你只是想提供这些 AI 能力：
+
+- `text`
+- `stream`
+- `image`
+- `video`
+
+优先从 `AIService` 开始会更自然，因为它已经替你处理了模型目录和 AI 输出约定。
+
+## 最小 custom service 示例
+
+```ts
+import { Federation, Service } from "@downcity/federation";
+
+const base = new Federation({ database });
+
+const translate = new Service({
+  id: "translate",
+  name: "翻译",
+});
+
+translate.action("zh2en", async (ctx) => {
+  return {
+    text: await runTranslate(String(ctx.input.text ?? ""), "en"),
+  };
+});
+
+translate.action("list", async () => {
+  return {
+    items: ["zh2en"],
+  };
+}, {
+  method: "GET",
+});
+
+base.use(translate);
+```
+
+这里你做了三件事：
+
+1. 创建一个 service
+2. 往里面注册多个 action
+3. 把整个 service 挂到 City
+
+## 路由会怎么暴露
+
+上面的 Action 会自动进入统一路由空间：
+
+```txt
+POST /v1/translate/zh2en
+GET  /v1/translate/list
+```
+
+这也是为什么产品端最后统一都能通过 `@downcity/federation` 调：
+
+```ts
+const result = await client
+  .service("translate")
+  .action("zh2en")
+  .invoke<{ text: string }>({
+    text: "你好 Downcity",
+  });
+
+const list = await city.service("translate").get("list");
+```
+
+## 常见场景
+
+### 场景一：产品业务 Action
+
+```ts
+const writer = new Service({ id: "writer", name: "内容写作" });
+
+writer.action("draft", async (ctx) => {
+  return {
+    title: "Draft",
+    topic: ctx.input.topic,
+  };
+});
+```
+
+适合：
+
+- 业务工作流
+- 自定义生成结果
+- 你自己的 SaaS 能力
+
+### 场景二：管理侧 Action
+
+```ts
+writer.action("remove", async (ctx) => {
+  await removeDraft(String(ctx.input.id));
+  return { ok: true };
+}, {
+  auth: ["admin"],
+});
+```
+
+适合：
+
+- 只能由可信后端执行的动作
+- 运维、删除、配置变更
+
+### 场景三：guest 入口
+
+```ts
+writer.action("webhook", async (ctx) => {
+  return { accepted: true };
+}, {
+  auth: [],
+});
+```
+
+适合：
+
+- 第三方 webhook
+- 登录前入口
+- 回调型 Action
+
+## AIService 和普通 Service 的关系
+
+AIService 不是另一套协议，而是 City 里一类更偏 AI 的 service。
+
+它额外提供：
+
+- 模型目录
+- 多 modality 调用
+- OpenAI 兼容入口
+- 更适合 `UIMessage` / stream 的返回约定
+
+所以你可以这样区分：
+
+- 直接模型推理：优先 `AIService`
+- 业务动作或服务动作：优先 `Service`
+
+## 常用 API / 入口
+
+这一页最相关的调用入口有：
+
+- `new Service({ id, name })`
+- `service.action(name, handler, options?)`
+- `options.method: "GET" | "POST"`
+- `options.auth: ["user"] | ["admin"] | []`
+- `base.use(service)`
+- `city.service(id).action(name).invoke(input)`
+- `city.service(id).get(path, query?)`
+
+## 常见误解
+
+### Action 不只是一个函数
+
+它最终会成为：
+
+- HTTP 路由
+- 鉴权边界
+- hook 作用点
+- usage 记录点
+
+### service 和 custom service 不需要两套调用方式
+
+对产品端来说，它们最终都统一走：
+
+```ts
+city.service("service_id").action("action_id").invoke(...)
+```
+
+### GET / POST 的差别不是语法装饰
+
+读操作更适合 GET，例如：
+
+- `me`
+- `list`
+- `summary`
+
+写操作、执行动作更适合 POST，例如：
+
+- `login`
+- `draft`
+- `checkout/create`
+
+## 继续阅读
+
+- 想知道 hook 和 service 怎么围绕 Action 工作，读 [Hook 与服务挂载](/zh/city-sdk-docs/packages/federation/hooks-and-service)
+- 想知道产品端怎么调用这些能力，读 [@downcity/federation](/zh/city-sdk-docs/packages/federation/federation)
+- 想看更底层 API 选项，读 [City API](/zh/city-sdk-docs/reference/federation)

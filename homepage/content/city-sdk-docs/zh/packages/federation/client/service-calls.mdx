@@ -1,0 +1,21 @@
+---
+title: User 与 Admin Service
+description: 通过拥有对应授权的身份子域调用 Federation Service。
+---
+
+User 与 Admin 使用同一套 Service 协议，但属于两个独立身份子域。
+
+```ts
+const user_services = await embassy.user.list_services();
+const profile = await embassy.user.current();
+const result = await embassy.user.service("rewrite")
+  .action("formal")
+  .invoke({ text: "hello" });
+
+const admin_services = await embassy.admin.list_services();
+const env = await embassy.admin.env.list();
+```
+
+Federation 模型目录与 AI 执行使用 `embassy.user.ai`，Payment 使用
+`embassy.user.payment`。Admin-only 管理能力始终留在 `embassy.admin`，不要把管理员凭证
+传入 user 子域。

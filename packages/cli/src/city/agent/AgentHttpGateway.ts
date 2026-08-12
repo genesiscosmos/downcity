@@ -35,7 +35,7 @@ export interface AgentHttpGatewayStartOptions {
   host: string;
   /** 当前 agent context 读取函数。 */
   get_agent: () => Agent;
-  /** 可选 SDK transport 子路由（来自 `@downcity/server` 的 `AgentHTTP.router()`）。 */
+  /** 可选 SDK transport 子路由（来自 `@downcity/city` 的 `AgentHTTP.router()`）。 */
   sdkRouter?: HonoType;
   /** 可复用的全局鉴权服务；省略时由网关创建并负责关闭。 */
   auth_service?: AuthService;

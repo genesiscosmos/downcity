@@ -1,0 +1,24 @@
+---
+title: 账户登录
+description: 启动、继续、查询和结束 Federation 用户会话。
+---
+
+账户操作统一位于 `embassy.user.account`。
+
+```ts
+const providers = await embassy.user.account.providers();
+
+const login = await embassy.user.account.login({
+  provider: "email",
+  bureau_id: "product-web",
+  input: {
+    email: "user@example.com",
+    password: "password",
+  },
+});
+```
+
+多步骤 Provider 使用返回的 `login_id` 调用 `continue()`。使用 `status()` 查询当前登录，
+`token()` 读取 Embassy 当前持有的 User Token，`logout()` 清理它。
+
+登录后继续使用同一个 `embassy.user` 调用 `current()`、AI、Payment 和 Service。

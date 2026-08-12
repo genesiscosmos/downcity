@@ -1,124 +1,22 @@
 ---
-title: SDK 概览
-description: Downcity SDK 按角色拆分：User City 负责产品运行时调用，FederationAdmin 负责可信侧管理调用。
+title: Federation Client SDK
+description: 按身份选择 Embassy User、Embassy Admin 或 Bureau。
 ---
 
-这一页只做一件事：把 `@downcity/city` 里的调用方式总览收口到一张图里。
+客户端 API 对应三个明确身份：
 
-如果你想先看接入场景，优先读 [@downcity/city](/zh/city-sdk-docs/packages/city/federation)。如果你要查具体方法签名，再往下读 [User City](/zh/city-sdk-docs/reference/city-user) 和 [FederationAdmin](/zh/city-sdk-docs/reference/city-admin)。
-
-## 两个角色
-
-| | User City | FederationAdmin |
-|---|---|---|
-| 面向谁 | 前端、App、扩展、桌面端 | 产品后端、运维脚本、内部工具 |
-| 负责什么 | AI service、custom service、公开 service | city、token、runtime env、管理侧 service |
-| 常见鉴权 | `user_token` | 管理员会话 Token |
-| 是否可放浏览器 | 可以 | 不可以 |
-
-## HTTP 入口
-
-`federation_url` 远程和本机都统一使用 HTTP(S)：
-
-- `http://` / `https://`：远程 HTTP 入口，按角色携带 `user_token` 或管理员会话 Token。
-- `http://127.0.0.1:15315`：本机 loopback HTTP 入口，仍然使用同一套 Token 鉴权模型。
-
-用你自己的本机 HTTP server 暴露 Federation 时，产品侧仍然只拿到普通 HTTP URL。如果 `AccountsService` 配置了 `local_login: true`，`/v1/accounts/providers` 会只返回本地登录方式，调用 `accounts.login/start` 并传入 `provider: "local"` 后会得到 `login_id`，再从 `accounts.login/result` 读取正常 `user_token`。
-
-## 四类常见调用
+| API | 凭证 | 用途 |
+| --- | --- | --- |
+| `embassy.user` | User Token | 登录、AI、Payment 与用户 Service |
+| `embassy.admin` | Admin Session Token | Federation 管理 |
+| `Bureau` | Bureau Token | 可信产品后端与本地 User Token 验签 |
 
 ```ts
-// 产品侧
-const city = new City({
-  federation_url,
-  user_token,
-});
+import { Bureau, Embassy } from "@downcity/federation";
 
-// AI Service
-await city.ai.text({ prompt: "hello", model: "deepseek-v4-flash" });
-await city.ai.stream({ prompt: "hello", model: "deepseek-v4-flash" });
-
-// 原生 AI SDK LanguageModelV3
-const catalog = await city.ai.catalog();
-const language_model = catalog.get("deepseek-v4-flash");
-if (!language_model) throw new Error("model not found");
-await streamText({ model: language_model, prompt: "hello" });
-
-// 自定义 Service
-await city.service("translate").action("zh2en").invoke({ text: "hello" });
-const login = await city.service("accounts").action("login/start").invoke({
-  provider: "email",
-});
-await city.service("accounts").action("login/continue").invoke({
-  login_id: login.login_id,
-  input: { email: "a@b.com", password: "..." },
-});
-const session = await city.service("accounts").get("login/result", { login_id: login.login_id });
-
-// 支付方式
-const methods = await city.payment.methods();
-const checkout = await city.payment.method("stripe").invoke({
-  topup_amount_minor: 500,
-  idempotency_key: "order_123",
-});
-
-// 管理端
-const admin = new FederationAdmin({
-  base_url: federation_url,
-  credential: administrator_session_token,
-});
-await admin.bureaus.create({
-  name: "My App",
-  server_url: "https://bureau.example.com",
-});
+const embassy = new Embassy({ federation_url });
+const bureau = new Bureau({ federation_url, bureau_token });
 ```
 
-## AI 模型调用选择
-
-| 场景 | 推荐方式 |
-|---|---|
-| 产品代码直接请求 Fed AIService | `city.ai.text()` / `city.ai.stream()` |
-| Downcity Agent 使用 Fed 模型 | 从 `city.ai.catalog()` 取 `CityModel`，直接传给 Agent |
-| AI SDK 生态需要 `LanguageModel` | 直接使用模型目录返回的 `CityModel` |
-| OpenAI SDK、curl 或兼容客户端 | `/v1/ai/chat/completions` |
-| 非 Fed 模型 API | 产品侧自己创建对应 provider |
-
-`CityModel` 自身实现 AI SDK `LanguageModelV3`，并通过 Federation 原生模型通路
-传输 text、reasoning、tool call、usage 和 finish reason。AIChannel 的上游协议仍由
-Federation 决定。
-
-## service、AI service 的关系
-
-- AI service：走 `city.ai.*`
-- custom service：走 `city.service(name)...`
-- service：本质上还是 `city.service(name)...`，只是 service 来源于 service
-
-例如：
-
-- `rewrite`、`translate` 是你自己注册的 custom service
-- `accounts`、`usage`、`payment` 是官方 service；Stripe、Creem 这类支付能力作为 `payment` 里的 provider 选择
-
-对调用方来说，统一都是 City 的 service 路由空间。
-
-## 注册登录链路在 SDK 里的位置
-
-最常见的两种方式：
-
-1. 你的业务后端完成登录，再用 `FederationAdmin` 申请 `user_token`
-2. 前端直接用 guest `User City` 走 `accounts.login/start -> login/continue -> login/result` 或注册流程，由 accounts service 返回 `user_token`
-
-这两条路最终都会进入同一个用户态：
-
-```txt
-federation_url + user_token
-  -> new City({ federation_url, user_token })
-  -> city.ai.* 或 city.service(...)
-```
-
-## 什么时候看哪一页
-
-1. 想理解 package 组合方式，读 [Packages 包](/zh/city-sdk-docs/packages)
-2. 想理解产品接入路径，读 [@downcity/city](/zh/city-sdk-docs/packages/city/federation)
-3. 想看产品侧细节，读 [User City](/zh/city-sdk-docs/reference/city-user)
-4. 想看可信侧细节，读 [FederationAdmin](/zh/city-sdk-docs/reference/city-admin)
-5. 想看最小注册登录，读 [Federation Services Docs / Accounts](/zh/payments/accounts)
+不要把 User Token、Admin Session Token 和 Bureau Token 放进同一个共享客户端对象。它们的
+所有者、生命周期和信任边界不同。

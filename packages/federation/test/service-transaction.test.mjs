@@ -3,7 +3,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { sqliteTable, text } from "drizzle-orm/sqlite-core"
-import { Federation, InstallableService } from "../bin/legacy.js"
+import { Federation, InstallableService } from "../bin/index.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
 import { create_test_admin_session, create_test_federation } from "./admin-fixture.mjs"
 

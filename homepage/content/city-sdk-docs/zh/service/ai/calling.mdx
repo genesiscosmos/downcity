@@ -1,28 +1,28 @@
 ---
 title: 调用 AI
-description: 通过 User City 和第三方工具调用 AIService。
+description: 通过 Embassy User 和第三方工具调用 AIService。
 ---
 
 ## SDK 通路
 
 ```ts
-import { City } from "@downcity/federation/legacy";
+import { Embassy } from "@downcity/federation";
 
-const city = new City({
+const embassy = new Embassy({
   federation_url,
   user_token,
 });
 
 // 获取模型目录
-const catalog = await city.ai.catalog();
+const catalog = await embassy.user.ai.catalog();
 const model = catalog.get("deepseek-v4-flash");
 
 // 文本生成
-const msg = await city.ai.text({ prompt: "hello", model });
+const msg = await embassy.user.ai.text({ prompt: "hello", model });
 console.log(msg.parts[0].text);
 
 // 流式生成
-const stream = await city.ai.stream({ prompt: "hello", model });
+const stream = await embassy.user.ai.stream({ prompt: "hello", model });
 const reader = stream.getReader();
 while (true) {
   const { done, value } = await reader.read();

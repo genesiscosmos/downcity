@@ -11,7 +11,7 @@ import {
   LocalCityStore,
   normalize_installation_id,
   normalize_plugin_name as normalize_local_plugin_name,
-} from "@downcity/local";
+} from "@downcity/city";
 import { get_plugin_catalog_item } from "@/city/process/plugin/PluginCatalog.js";
 import type {
   AgentPluginBinding,

@@ -263,9 +263,9 @@ Federation 数据库不存储：
 ## 9. 包边界
 
 - `@downcity/federation`：正式拥有 Federation、Embassy、Bureau、Service 和协议类型。
-- `@downcity/city`：只作为旧 Federation SDK 的薄兼容入口，不再拥有实现。
+- `@downcity/city`：拥有 Agent 宿主、多 Agent 集合、本地持久化装配与 HTTP/RPC transport。
 - `downcity` CLI：管理本机 Agent/City，并通过 `fed` 命令管理 Federation 部署和凭证。
-- Agent package：拥有 City 和 Agent 运行环境概念，不依赖本文的身份客户端组织方式。
+- Agent package：拥有单 Agent、Workspace、Session 和 Plugin SDK，不依赖本文的身份客户端组织方式。
 
 依赖方向是客户端和 Service 依赖 Federation 的最小公开 API；Federation 不依赖 CLI、Desktop、City 或 Agent。
 
@@ -345,4 +345,4 @@ DOWNCITY_BUREAU_TOKEN=fb_br_xxx.secret
 7. Accounts User Token 签发 endpoint 仍只接受 admin。
 8. 测试明确覆盖 Bureau Token 签发 User Token 返回 403。
 9. CLI、README 和 Homepage 统一使用 `fed bureau token` 与 `DOWNCITY_BUREAU_TOKEN`。
-10. Federation、City 兼容入口、Services 和 CLI 的类型检查与测试通过。
+10. Federation、Services 和 CLI 的类型检查与测试通过。

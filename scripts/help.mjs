@@ -47,8 +47,8 @@ const HELP_ITEMS = [
   },
   {
     name: "build:city",
-    summary: "构建 @downcity/city 迁移入口。",
-    detail: "先构建 @downcity/federation，再构建 city 转发 package。",
+    summary: "构建 @downcity/city Agent 宿主包。",
+    detail: "先构建 Agent、Federation、Plugins 与平台 Adapter，再构建 City。",
   },
   {
     name: "build:cli",
@@ -90,7 +90,7 @@ const HELP_ITEMS = [
     name: "cli:patch:build",
     summary: "只对 downcity 执行 patch bump + build。",
     detail:
-      "等价于 `npm run patch:build -- --cli`，会构建 shell、city、services、agent、plugins 与 ui 作为依赖，再构建 packages/cli 并全局安装 downcity 命令。",
+      "等价于 `npm run patch:build -- --cli`，会构建 Agent、Federation、Plugins、City、Services 与 UI 等依赖，再构建 packages/cli 并全局安装 downcity 命令。",
   },
   {
     name: "all:patch:build",

@@ -1,7 +1,7 @@
 /**
  * CLI 专属 PlatformStore Schema 管理。
  *
- * Agent、Workspace、Plugin 与 Resource 表全部由 `@downcity/local` 初始化；本模块只
+ * Agent、Workspace、Plugin 与 Resource 表全部由 `@downcity/city` 初始化；本模块只
  * 维护 CLI HTTP/RPC 宿主需要的 Token 表和历史鉴权表清理。
  */
 

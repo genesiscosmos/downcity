@@ -1,0 +1,191 @@
+---
+title: Hooks and Service Mounting
+description: "The three hook layers, service mounting, and why they are the shared extension points of City."
+---
+
+A lot of shared capability in Downcity is not created by copying logic into every action. It enters City through hooks and services.
+
+## What each concept solves
+
+The easiest split is:
+
+- hooks: insert rules into an existing call lifecycle
+- services: add a full reusable capability set into City
+
+That is why auth, usage, and payment do not become separate systems. They become extension points inside the same Federation.
+
+## When to think hook first
+
+- you want logic before or after existing calls
+- the logic is cross-cutting and should not live in every action
+- the capability is local to your project and does not need to be its own package
+
+Typical examples:
+
+- quotas
+- logging
+- risk checks
+- charging after a successful call
+
+## When to think service first
+
+- the capability should be reused across many products
+- it is more than before or after logic and needs its own service or tables
+- you want product-side callers to reach it through a stable service boundary
+
+Typical examples:
+
+- `@downcity/services`
+- `@downcity/services`
+- `@downcity/services`
+
+## First understand the three hook positions
+
+```txt
+global
+  -> service
+    -> action
+```
+
+Their meanings are:
+
+- global: shared by all services and actions
+- service: shared by all actions in one service
+- action: only affects one concrete action
+
+## Common service mounting example
+
+```ts
+import { AIService, Federation } from "@downcity/federation";
+import {
+  AccountsService,
+  CreditsService,
+  PaymentService,
+  googleAccountsProvider,
+  stripePaymentProvider,
+  UsageService,
+} from "@downcity/services";
+
+const base = new Federation({ database });
+const credits = new CreditsService();
+const ai = new AIService({ credits });
+
+base.use(new AccountsService({
+  token_ttl: "7d",
+  providers: [
+    googleAccountsProvider(),
+  ],
+}));
+
+base.use(credits);
+base.use(ai);
+base.use(new PaymentService({
+  resolve_topup: ({ topup_amount_minor }) => ({ credits: topup_amount_minor * 10_000 }),
+  on_paid: async (record) => {
+    await credits.topup({
+      card: { kind: "primary", user_id: record.user_id },
+      credits: record.credits,
+      source: "payment",
+      ref: record.payment_id,
+      idempotency_key: `payment:${record.payment_id}`,
+    });
+  },
+  providers: [
+    stripePaymentProvider({
+      secret_key: process.env.STRIPE_SECRET_KEY,
+      webhook_secret: process.env.STRIPE_WEBHOOK_SECRET,
+    }),
+  ],
+}));
+base.use(new UsageService({
+  ai_usage_reader: ai,
+  credits_usage_reader: credits,
+}));
+```
+
+In this setup, `AccountsService` owns the accounts HTTP surface. Mounting it once exposes `/providers`, the unified login entry, `me`, admin reads, the better-auth passthrough route, and the OAuth callback route. Concrete login methods appear only when the matching provider is mounted and configured.
+
+`UsageService` combines technical AI usage from `AIService` with applied charges from `CreditsService`; it does not record global service-hook events.
+
+## How product-side callers reach services
+
+Once mounted, services still look like normal services from the product side:
+
+```ts
+const login = await guest.service("accounts").action("login/start").invoke({
+  provider: "email",
+  bureau_id: "demo",
+});
+
+await guest.service("accounts").action("login/continue").invoke({
+  login_id: login.login_id,
+  input: {
+    email: "user@example.com",
+    password: "password123",
+  },
+});
+
+const session = await guest.service("accounts").get("login/result", {
+  login_id: login.login_id,
+});
+
+const usage = await user.service("usage").get("me", {
+  from: "2026-08-01",
+  to: "2026-08-31",
+  timezone: "America/Los_Angeles",
+});
+
+const recent_usage = await user.service("usage").get("me/recent", {
+  limit: 20,
+});
+
+const methods = await guest.service("payment").get("methods");
+
+const checkout = await user.service("payment").action("checkout/create").invoke({
+  method_id: "stripe",
+  topup_amount_minor: 500,
+  idempotency_key: "order_123",
+});
+```
+
+That means `payment` is both the discovery entry and the execution entry; Stripe is selected as a provider.
+
+## Relationship between hooks, services, and services
+
+A useful chain is:
+
+```txt
+service / action
+  -> hooks add lifecycle rules
+  -> services add reusable services, tables, and management capability
+  -> clients still call everything through /v1/*
+```
+
+## Common API surface
+
+- `base.use(service)`
+- `guest.service("accounts")...`
+- `guest.service("payment").get("methods")`
+- `user.service("usage")...`
+- `admin.service("payment").get("payments")`
+
+## Common misunderstandings
+
+### A service is not just another npm package
+
+It often represents a whole boundary of services, tables, admin surfaces, and optional hook behavior.
+
+### Hooks are not a place to hide full business features
+
+Hooks are best for cross-cutting governance logic, not for turning every feature into middleware.
+
+### Services do not replace City
+
+Services add capability into the Federation. The product-side calling surface is still [@downcity/federation](/en/city-sdk-docs/packages/federation/federation).
+
+## Read next
+
+- For unified product-side service calls, read [@downcity/federation](/en/city-sdk-docs/packages/federation/federation)
+- For auth capability, read [@downcity/services](/en/payments)
+- For usage recording, read [@downcity/services](/en/payments)
+- For one-time Stripe topups, read [@downcity/services](/en/payments)

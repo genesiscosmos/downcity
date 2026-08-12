@@ -2,9 +2,9 @@
 
 > 状态：已实现
 >
-> 适用范围：`@downcity/city`、Database Adapter、Federation Service、Node 与 Edge Runtime
+> 适用范围：`@downcity/federation`、Database Adapter、Federation Service、Node 与 Edge Runtime
 >
-> 核心决策：City SDK 导出抽象 `Database` 基类；每个数据库 Package 导出继承该基类的 `Database` 实现
+> 核心决策：Federation SDK 导出抽象 `Database` 基类；每个数据库 Package 导出继承该基类的 `Database` 实现
 
 ## 1. 问题
 
@@ -14,7 +14,7 @@
 const federation = new Federation({ db });
 ```
 
-City 再从 `db.dialect` 和 `db.$client` 推断运行时，并在 Core 中处理：
+Federation 再从 `db.dialect` 和 `db.$client` 推断运行时，并在 Core 中处理：
 
 - PostgreSQL 原生事务；
 - better-sqlite3 显式事务和连接锁；
@@ -22,17 +22,17 @@ City 再从 `db.dialect` 和 `db.$client` 推断运行时，并在 Core 中处�
 - Driver 之间不同的 DDL 执行方式；
 - Service `_db`、`_client`、`_raw` 注入。
 
-这让 City Core 同时承担了数据库协议和数据库实现。每增加一种数据库，都需要继续修改 Core，最终会扩大包体积、条件分支和测试矩阵。
+这让 Federation Core 同时承担了数据库协议和数据库实现。每增加一种数据库，都需要继续修改 Core，最终会扩大包体积、条件分支和测试矩阵。
 
 以上为重构前状态。当前公开入口已经切换为 `new Federation({ database })`，具体 Driver 能力由独立 Adapter Package 持有。
 
-根本问题不是 D1 代码放在哪个文件，而是 City 没有一个真正拥有数据库行为与生命周期的对象。
+根本问题不是 D1 代码放在哪个文件，而是 Federation 没有一个真正拥有数据库行为与生命周期的对象。
 
 ## 2. 产品意图与职责
 
-### 2.1 City Database
+### 2.1 Federation Database
 
-City `Database` 回答：
+Federation `Database` 回答：
 
 > Federation 可以依赖哪些稳定的数据库行为，以及这些行为共享哪些生命周期和失败规则。
 
@@ -77,16 +77,16 @@ Service 不负责：
 
 ## 3. 设计目标
 
-1. `@downcity/city` 导出抽象 `Database` 基类。
+1. `@downcity/federation` 导出抽象 `Database` 基类。
 2. 不创建额外的数据库协议 Package。
 3. 每个 Adapter Package 都导出同名 `Database` 子类。
 4. Federation 显式接收 `Database` 实例，不再接收裸 Drizzle db。
 5. Drizzle 是 Downcity 数据库层明确选择的 Schema 与 Query 基础。
-6. City Core 可以依赖 Drizzle 公共能力，但不能依赖任何具体 Driver。
-7. D1、SQLite、PostgreSQL 的实现代码全部离开 City Core。
+6. Federation Core 可以依赖 Drizzle 公共能力，但不能依赖任何具体 Driver。
+7. D1、SQLite、PostgreSQL 的实现代码全部离开 Federation Core。
 8. `context.transaction()` 在所有 Adapter 上保持一致。
 9. Service 不再访问 `_db`、`_client` 或 `_raw`。
-10. 新增同类数据库 Runtime 时，通过增加子类完成，不给 City 增加数据库分支。
+10. 新增同类数据库 Runtime 时，通过增加子类完成，不给 Federation 增加数据库分支。
 
 ## 4. 非目标
 
@@ -107,7 +107,7 @@ Drizzle 是数据库层的基础依赖，但不是完整的 Federation Database�
 Drizzle
   = Schema 定义 + Query Builder + Driver ORM
 
-City Database 基类
+Federation Database 基类
   = 生命周期 + 统一行为 + Service 能力边界
 
 Database 子类
@@ -125,17 +125,17 @@ Database 子类
 - Service 可以看到哪些数据库能力；
 - 关闭后是否仍允许调用。
 
-因此 Federation 接收的必须是 City `Database`，而不是某个 Drizzle Driver 的返回值。
+因此 Federation 接收的必须是 Federation `Database`，而不是某个 Drizzle Driver 的返回值。
 
-### 5.2 City 可以知道什么
+### 5.2 Federation 可以知道什么
 
-City 可以知道：
+Federation 可以知道：
 
 - Drizzle Table Schema；
 - Drizzle select/insert/update/delete 公共 Query 能力；
 - Adapter 提供了一个只读 Drizzle 集成句柄。
 
-City 不可以知道：
+Federation 不可以知道：
 
 - `D1Database`；
 - better-sqlite3 `Database`；
@@ -152,11 +152,11 @@ context.table("memberships");
 context.transaction(...);
 ```
 
-Accounts 的 better-auth Drizzle Adapter 是明确的第三方集成需求。City 通过受限的 Service Database Context 提供只读 `drizzle`，但不暴露 Driver Client。
+Accounts 的 better-auth Drizzle Adapter 是明确的第三方集成需求。Federation 通过受限的 Service Database Context 提供只读 `drizzle`，但不暴露 Driver Client。
 
 ## 6. Package 结构
 
-### 6.1 `@downcity/city`
+### 6.1 `@downcity/federation`
 
 包含：
 
@@ -208,13 +208,13 @@ export class Database extends CityDatabase {}
 
 ```text
 database-d1 ──────────┐
-database-sqlite ──────┼──> @downcity/city
+database-sqlite ──────┼──> @downcity/federation
 database-postgresql ──┘
 
-@downcity/services ──────> @downcity/city
+@downcity/services ──────> @downcity/federation
 ```
 
-City 不依赖任何具体 Adapter。
+Federation 不依赖任何具体 Adapter。
 
 ## 7. 公开使用方式
 
@@ -223,7 +223,7 @@ City 不依赖任何具体 Adapter。
 ### 7.1 PostgreSQL
 
 ```ts
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-postgresql";
 
 const database = new Database({
@@ -236,7 +236,7 @@ const federation = new Federation({ database });
 ### 7.2 SQLite
 
 ```ts
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-sqlite";
 
 const database = new Database({
@@ -255,7 +255,7 @@ const database = new Database({ filename: ":memory:" });
 ### 7.3 Cloudflare D1
 
 ```ts
-import { Federation } from "@downcity/city";
+import { Federation } from "@downcity/federation";
 import { Database } from "@downcity/database-d1";
 
 export default {
@@ -286,7 +286,7 @@ new Federation({ db });
 new Federation({ db, dialect, raw });
 ```
 
-## 8. City `Database` 基类
+## 8. Federation `Database` 基类
 
 基类使用 Template Method：公开方法统一维护生命周期和不变量，子类只实现受保护的运行时 Hook。
 
@@ -433,11 +433,11 @@ if (client.unsafe) { ... }
 PostgreSQL Package 内部使用别名避免类名冲突：
 
 ```ts
-import { Database as CityDatabase } from "@downcity/city";
+import { Database as FederationDatabase } from "@downcity/federation";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 
-export class Database extends CityDatabase {
+export class Database extends FederationDatabase {
   private readonly client;
 
   constructor(options: DatabaseOptions) {
@@ -484,7 +484,7 @@ interface CityTableApi<TRow> {
 }
 ```
 
-City 可以保留基于 Drizzle 公共 Query Builder 的 `DrizzleTableApi`，供子类组合使用。
+Federation 可以保留基于 Drizzle 公共 Query Builder 的 `DrizzleTableApi`，供子类组合使用。
 
 具体差异仍由子类负责：
 
@@ -607,14 +607,14 @@ const database_schemas = {
 
 ```text
 database.schema_id
-  → City 选择 Service Schema
+  → Federation 选择 Service Schema
   → database.execute_ddl(service ddl)
   → database.ensure_table(table schema)
   → database.table(table schema)
   → Service install
 ```
 
-`schema_id` 使用字符串，不在 City 中维护封闭联合类型。未来 MySQL Adapter 可以使用 `mysql`，只有需要支持 MySQL 的 Service 才增加 `mysql` Schema。
+`schema_id` 使用字符串，不在 Federation 中维护封闭联合类型。未来 MySQL Adapter 可以使用 `mysql`，只有需要支持 MySQL 的 Service 才增加 `mysql` Schema。
 
 ## 14. 事务统一语义
 
@@ -672,9 +672,9 @@ D1 子类负责：
 - read-your-writes；
 - `batch()` 原子提交；
 - 冲突识别和有限重试；
-- D1 错误到 City 错误的转换。
+- D1 错误到 Federation 错误的转换。
 
-City 基类和 Organizations 都不包含 D1 分支。
+Federation 基类和 Organizations 都不包含 D1 分支。
 
 ## 15. `atomic()` 与 `transaction()` 的区别
 
@@ -718,7 +718,7 @@ Database 是数据库资源拥有者：
 
 ## 17. 错误模型
 
-City 定义稳定错误类：
+Federation 定义稳定错误类：
 
 | 错误 | 含义 |
 | --- | --- |
@@ -727,7 +727,7 @@ City 定义稳定错误类：
 | `DatabaseTransactionConflictError` | 乐观事务超过最大重试次数 |
 | `DatabaseCapabilityError` | 子类没有正确实现要求的能力 |
 
-Driver 原始错误放在 `cause`。City 和 Service 不根据 Driver Client 类型或文案判断数据库类型。
+Driver 原始错误放在 `cause`。Federation 和 Service 不根据 Driver Client 类型或文案判断数据库类型。
 
 领域冲突仍由 Service 转换，例如：
 
@@ -827,7 +827,7 @@ packages/
 
 ### 阶段一：建立基类
 
-1. City 新增抽象 `Database`；
+1. Federation 新增抽象 `Database`；
 2. 建立受保护 Hook 和公共类型；
 3. `FederationOptions` 改为 `{ database }`；
 4. Federation 初始化只调用 Database 公共方法。
@@ -856,7 +856,7 @@ packages/
 
 ### 阶段五：删除旧实现
 
-City 删除：
+Federation 删除：
 
 - D1 transaction；
 - 数据库事务分派；
@@ -871,7 +871,7 @@ City 删除：
 1. 三个 Adapter 契约测试通过；
 2. Organizations 在 D1、SQLite、PostgreSQL 运行相同测试；
 3. Accounts 和 Credits 回归通过；
-4. City、Services、CLI、Node Template、Edge Template typecheck；
+4. Federation、Services、CLI、Node Template、Edge Template typecheck；
 5. Homepage 构建通过；
 6. 执行多 Package patch build；
 7. 验证 Edge Worker D1 和 Local Node SQLite；
@@ -881,7 +881,7 @@ City 删除：
 
 | 决策 | 结果 |
 | --- | --- |
-| 核心抽象 | City `Database` 抽象基类 |
+| 核心抽象 | Federation `Database` 抽象基类 |
 | Adapter 实现方式 | 类继承 |
 | 独立协议 Package | 不创建 |
 | ORM | 明确使用 Drizzle |
