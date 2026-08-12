@@ -25,8 +25,8 @@ from PIL import Image
 source_path, iconset_path, linux_path, ico_path, icns_path = map(Path, sys.argv[1:])
 source = Image.open(source_path).convert("RGBA")
 
-if source.size != (512, 512):
-    raise SystemExit("Desktop icon source must be 512x512")
+if source.size != (1024, 1024):
+    raise SystemExit("Desktop icon source must be 1024x1024")
 
 # macOS 会以更大的视觉占比展示图标，因此将内容缩放到 82% 并保持透明留白。
 macos_content_scale = 0.82

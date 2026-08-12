@@ -7,7 +7,7 @@
   "type": "module",
   "main": "./out/main/index.mjs",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "pnpm build:icon && electron-vite dev",
     "build": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit && electron-vite build",
     "build:icon": "bash scripts/build-icon.sh",
     "build:unpack": "pnpm build:icon && pnpm build && electron-builder --dir",
