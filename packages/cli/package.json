@@ -1,6 +1,6 @@
 {
   "name": "downcity",
-  "version": "1.1.439",
+  "version": "1.1.440",
   "type": "module",
   "description": "Downcity CLI — local City container and Federation Server management",
   "bin": {
@@ -15,7 +15,7 @@
     "package.json"
   ],
   "scripts": {
-    "build": "pnpm -C ../ui build && pnpm -C ../fedman build && pnpm -C ../cityman build && node ../../scripts/clean-package.mjs && tsc && node scripts/rewrite-build-aliases.mjs && node scripts/verify-build-aliases.mjs && node scripts/copy-web-assets.mjs && node scripts/ensure-cli-executable.mjs",
+    "build": "pnpm -C ../ui build && pnpm -C ../fedman build && node ../../scripts/clean-package.mjs && tsc && node scripts/rewrite-build-aliases.mjs && node scripts/verify-build-aliases.mjs && node scripts/copy-fedman-assets.mjs && node scripts/ensure-cli-executable.mjs",
     "dev": "tsc --watch",
     "start": "node bin/index.js",
     "typecheck": "tsc --noEmit",
@@ -25,7 +25,6 @@
     "test:model-recovery": "pnpm build && node --test scripts/agent-model-recovery.test.mjs",
     "test:federation": "pnpm build && node --test scripts/federation-lifecycle.test.mjs",
     "test:federation-web": "pnpm build && node --test scripts/federation-web.test.mjs",
-    "test:city-web": "pnpm build && node --test scripts/city-web.test.mjs",
     "prepack": "npm run build && node ../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
     "postpack": "node ../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"
   },
@@ -44,7 +43,6 @@
     "@downcity/plugins": "workspace:^",
     "@downcity/shell": "workspace:^",
     "@downcity/type": "workspace:*",
-    "@downcity/ui": "workspace:*",
     "@earendil-works/pi-tui": "^0.74.2",
     "@larksuiteoapi/node-sdk": "^1.66.0",
     "@openrouter/ai-sdk-provider": "^2.9.0",

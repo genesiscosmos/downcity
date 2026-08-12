@@ -421,9 +421,6 @@ importers:
       '@downcity/type':
         specifier: workspace:*
         version: link:../type
-      '@downcity/ui':
-        specifier: workspace:*
-        version: link:../ui
       '@earendil-works/pi-tui':
         specifier: ^0.74.2
         version: 0.74.2

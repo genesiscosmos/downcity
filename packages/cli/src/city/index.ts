@@ -15,7 +15,6 @@ import { Command, Option } from "commander";
 import { registerAgentCommands } from "@/city/command/AgentCommand.js";
 import { registerGatewayCommands } from "@/city/command/GatewayCommand.js";
 import { registerPluginsCommand } from "@/city/command/PluginCommand.js";
-import { register_web_command } from "@/city/command/WebCommand.js";
 import { runInteractiveCityManager } from "@/city/shared/CityManager.js";
 import { read_persisted_downcity_cli_locale } from "@/city/shared/DowncityConfigStore.js";
 import { setCliVerbosity } from "@/shared/CliReporter.js";
@@ -98,7 +97,6 @@ export function registerCityCommands(program: Command): void {
     hiddenPortOption: Option,
   });
   registerPluginsCommand(program);
-  register_web_command(program);
 
   program.showHelpAfterError();
   program.showSuggestionAfterError();
