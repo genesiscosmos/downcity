@@ -15,7 +15,6 @@ import { Embassy } from "@downcity/federation";
 
 const embassy = new Embassy({
   federation_url: "https://fed.example.com",
-  bureau_id: "product-web",
 });
 
 const providers = await embassy.user.account.providers();
@@ -31,6 +30,7 @@ Embassy 只有两个身份子域：
 ~~~ts
 await embassy.user.account.login({
   provider: "email",
+  bureau_id: "product-web",
   input: {
     email: "user@example.com",
     password: "password",

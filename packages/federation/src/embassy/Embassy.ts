@@ -1,8 +1,8 @@
 /**
  * Federation Embassy 客户端入口。
  *
- * Embassy 只有 user 和 admin 两个身份子域。bureau_id 只是当前产品分区的
- * 默认作用域，不会创建第三个公开子域。
+ * Embassy 只表达 Federation 入口，并公开 user 和 admin 两个身份子域。
+ * 产品分区属于具体登录请求，不进入 Embassy 生命周期。
  */
 
 import { EmbassyAdmin } from "./EmbassyAdmin.js";
@@ -23,7 +23,6 @@ export class Embassy {
     }
     this.user = new EmbassyUser({
       federation_url: options.federation_url,
-      bureau_id: options.bureau_id,
       user_token: options.user_token,
       fetch: options.fetch,
     });

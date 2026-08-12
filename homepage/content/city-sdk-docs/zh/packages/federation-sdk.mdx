@@ -12,7 +12,6 @@ import { Embassy } from "@downcity/federation";
 
 const embassy = new Embassy({
   federation_url: "https://fed.example.com",
-  bureau_id: "product-web",
 });
 
 const providers = await embassy.user.account.providers();
@@ -23,11 +22,14 @@ Embassy 只有 user 和 admin 两个身份子域：
 - embassy.user 负责用户登录、AI、Payment、Service 和 Bureau 业务请求。
 - embassy.admin 负责管理员 Session 和 Federation 管理。
 
+Embassy 本身不绑定 Bureau。只有登录流程需要产品分区时，才在该次登录中传入：
+
 账户登录统一位于 embassy.user.account：
 
 ~~~ts
 await embassy.user.account.login({
   provider: "email",
+  bureau_id: "product-web",
   input: {
     email: "user@example.com",
     password: "password",

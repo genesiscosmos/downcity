@@ -15,18 +15,12 @@ export interface EmbassyAccountOptions {
 
   /** 更新当前 Embassy User Token。 */
   update_user_token: (user_token: string | undefined) => void;
-
-  /** 当前 Embassy 默认 Bureau ID。 */
-  bureau_id?: string;
 }
 
 /** EmbassyUser 内部构造参数。 */
 export interface EmbassyUserOptions {
   /** Federation HTTP(S) 入口。 */
   federation_url: string;
-
-  /** 当前默认 Bureau ID。 */
-  bureau_id?: string;
 
   /** 当前 User Token。 */
   user_token?: string;

@@ -19,10 +19,15 @@ import { Bureau, Embassy, Federation } from "@downcity/federation";
 
 const embassy = new Embassy({
   federation_url: "https://fed.example.com",
-  bureau_id: "product-web",
 });
 
 const providers = await embassy.user.account.providers();
+
+await embassy.user.account.login({
+  provider: "email",
+  bureau_id: "product-web",
+  input: { email, password },
+});
 
 const federation = new Federation({
   database,

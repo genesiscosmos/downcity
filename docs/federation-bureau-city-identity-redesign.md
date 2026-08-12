@@ -45,7 +45,7 @@ Embassy 是访问 Federation 的客户端门面。它表达“某个自然人身
 - `embassy.user`：用户登录、当前用户、AI、Payment 和 Service 调用。
 - `embassy.admin`：管理员登录、当前管理员和 Federation 控制面。
 
-Embassy 可以带可选 `bureau_id`，用于指定用户登录和业务请求所属的产品分区。该字段只是请求上下文，不把 Embassy 变成 Bureau。
+Embassy 只接收 Federation 连接与身份恢复信息，不保存 `bureau_id`。产品分区属于具体的用户登录请求；登录完成后，业务请求从 Federation 签发的 User Token 读取 `bureau_id`。
 
 Embassy 不接收 Bureau Token，也不提供 `identify()`。
 
@@ -121,13 +121,13 @@ import { Embassy } from "@downcity/federation";
 
 const embassy = new Embassy({
   federation_url: "https://fed.example.com",
-  bureau_id: "product-web",
 });
 
 const providers = await embassy.user.account.providers();
 
 await embassy.user.account.login({
   provider: "email",
+  bureau_id: "product-web",
   input: {
     email: "user@example.com",
     password: "password",

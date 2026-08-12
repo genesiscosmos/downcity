@@ -22,7 +22,6 @@ test("Embassy account 登录成功后更新当前 User Token", async () => {
   const requests = []
   const embassy = new Embassy({
     federation_url: "https://fed.example.com",
-    bureau_id: "bureau_product",
     fetch: async (url, init) => {
       requests.push({ url, init })
       return json({
@@ -35,7 +34,10 @@ test("Embassy account 登录成功后更新当前 User Token", async () => {
     },
   })
 
-  const result = await embassy.user.account.login_start({ provider: "local" })
+  const result = await embassy.user.account.login_start({
+    provider: "local",
+    bureau_id: "bureau_product",
+  })
 
   assert.equal(result.status, "done")
   assert.equal(embassy.user.account.token(), "user_token_1")

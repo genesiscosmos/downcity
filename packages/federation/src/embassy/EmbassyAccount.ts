@@ -40,10 +40,7 @@ export class EmbassyAccount {
   ): Promise<EmbassyAccountLoginResult> {
     const result = await this.options.accounts()
       .action("login/start")
-      .invoke<EmbassyAccountLoginResult>({
-        ...input,
-        bureau_id: input.bureau_id ?? this.options.bureau_id,
-      });
+      .invoke<EmbassyAccountLoginResult>(input);
     this.login_id = read_login_id(result);
     this.accept_user_token(result);
     return result;

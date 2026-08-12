@@ -7,6 +7,7 @@ import type {
   BureauTokenSummary,
   BureauRecord,
   Embassy,
+  EmbassyOptions,
   EmbassyAccountProvider,
   EmbassyAdminSession,
   EmbassyCurrentUser,
@@ -27,12 +28,19 @@ const issued_token: Promise<BureauTokenIssueResult> = embassy.admin.bureaus.toke
 });
 const tokens: Promise<BureauTokenSummary[]> = embassy.admin.bureaus.tokens.list();
 
+const invalid_options: EmbassyOptions = {
+  federation_url: "https://fed.example.com",
+  // @ts-expect-error bureau_id 属于登录请求，不属于 Embassy 构造参数
+  bureau_id: "product-web",
+};
+
 void providers;
 void current_user;
 void admin_session;
 void bureaus;
 void issued_token;
 void tokens;
+void invalid_options;
 
 // @ts-expect-error Embassy 只有 user 和 admin 两个身份子域
 void embassy.bureau;

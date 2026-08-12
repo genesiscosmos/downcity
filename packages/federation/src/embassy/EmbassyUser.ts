@@ -26,7 +26,6 @@ export class EmbassyUser {
   readonly account: EmbassyAccount;
 
   private readonly federation_url: string;
-  private readonly bureau_id?: string;
   private readonly fetcher: FetchLike;
   private user_token?: string;
   private user_access: UserPactAccess;
@@ -34,7 +33,6 @@ export class EmbassyUser {
 
   constructor(options: EmbassyUserOptions) {
     this.federation_url = normalize_http_url(options.federation_url, "federation_url");
-    this.bureau_id = read_optional_string(options.bureau_id);
     this.user_token = read_optional_string(options.user_token);
     this.fetcher = options.fetch ?? defaultFetch();
     this.user_access = this.create_user_access();
@@ -42,7 +40,6 @@ export class EmbassyUser {
       accounts: () => this.service("accounts"),
       read_user_token: () => this.user_token,
       update_user_token: (user_token) => this.update_user_token(user_token),
-      bureau_id: this.bureau_id,
     });
   }
 
@@ -157,8 +154,7 @@ export class EmbassyUser {
     const bureau = body.bureau;
     if (!bureau?.bureau_id || !bureau.server?.server_url
       || bureau.server.bureau_id !== bureau.bureau_id
-      || bureau.state !== "active"
-      || (this.bureau_id && bureau.bureau_id !== this.bureau_id)) {
+      || bureau.state !== "active") {
       throw new TypeError("Federation returned an invalid current Bureau");
     }
     return bureau;

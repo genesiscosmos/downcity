@@ -11,9 +11,6 @@ export interface EmbassyOptions {
   /** 预先信任的 Federation HTTP(S) 入口。 */
   federation_url: string;
 
-  /** 当前客户端默认访问的产品或业务分区 ID。 */
-  bureau_id?: string;
-
   /** Federation 签发的终端用户 Token。 */
   user_token?: string;
 
