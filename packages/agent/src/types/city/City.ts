@@ -1,20 +1,9 @@
 /**
- * City Agent 环境容器类型。
+ * City 生命周期类型。
  *
- * City 只拥有已实例化 Agent 的集合与释放策略，不负责 Registry、Workspace 选择、
- * 模型构建或进程生命周期。
+ * City 是一个 Store 下持久化 Agent 的运行时集合。查询方法返回可直接使用的 Agent，
+ * 不向调用方暴露数据库记录或运行时装配细节。
  */
 
-import type { Agent } from "@/agent/Agent.js";
-
-/** City 构造参数。 */
-export interface CityOptions {
-  /** City 初始拥有的 Agent 实例。 */
-  agents?: Iterable<Agent>;
-}
-
-/** 从 City 移除 Agent 的选项。 */
-export interface CityRemoveAgentOptions {
-  /** 是否同时释放 Agent；默认释放。 */
-  dispose?: boolean;
-}
+/** City 当前生命周期阶段。 */
+export type CityState = "idle" | "loading" | "ready" | "disposed";

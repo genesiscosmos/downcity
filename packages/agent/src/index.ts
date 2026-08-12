@@ -10,12 +10,9 @@
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
 export { City } from "./city/City.js";
-export { create_city_agent } from "./city/CityAgentFactory.js";
-export type {
-  CityOptions,
-  CityRemoveAgentOptions,
-} from "./types/city/City.js";
-export type { CreateCityAgentInput } from "./types/city/CityAgentFactory.js";
+export { MemoryCityStore } from "./city/MemoryCityStore.js";
+export type { CityState } from "./types/city/City.js";
+export type { CityStore } from "./types/city/CityStore.js";
 export { Workspace } from "./workspace/Workspace.js";
 export { WorkspaceBase } from "./workspace/WorkspaceBase.js";
 export type { AgentStore } from "./types/store/AgentStore.js";
@@ -159,6 +156,10 @@ export type {
   AgentOptions,
   AgentSessionConstructor,
 } from "./types/agent/AgentOptions.js";
+export type {
+  AgentDefinition,
+  AgentPluginDefinition,
+} from "./types/agent/AgentDefinition.js";
 export type {
   AgentSession,
   AgentSessionActor,

@@ -60,17 +60,6 @@ export class PlatformStore {
   }
 
   /**
-   * 清空所有存储数据。
-   */
-  clearAll(): void {
-    this.sqlite.exec("DELETE FROM platform_secure_settings;");
-    this.sqlite.exec("DELETE FROM plugin_resources;");
-    this.sqlite.exec("DELETE FROM agent_tokens;");
-    this.sqlite.exec("DELETE FROM agent_plugins;");
-    this.sqlite.exec("DELETE FROM plugin_installations;");
-  }
-
-  /**
    * 同步读取 console 加密配置项（JSON）。
    */
   getSecureSettingJsonSync<T>(key: string): T | null {

@@ -4,6 +4,8 @@
     "index",
     "federation-sdk",
     "city",
-    "cli"
+    "cli",
+    "agent",
+    "local"
   ]
 }

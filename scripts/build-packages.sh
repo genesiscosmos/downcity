@@ -11,13 +11,13 @@ cd "$ROOT_DIR"
 source "$ROOT_DIR/scripts/lib/build-common.sh"
 
 PACKAGES=()
-ALL_PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "agent-registry" "workspace-cloudflare-computer" "server" "federation" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "ui" "cli")
+ALL_PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "workspace-cloudflare-computer" "server" "federation" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "local" "ui" "cli")
 BUILD_PACKAGES=()
 BUMP=true
 SYNC_GLOBAL_CLI=true
 
 usage() {
-  echo "Usage: npm run patch:build -- [--type] [--shell] [--sandbox-macos] [--sandbox-linux] [--sandbox-windows-mxc] [--sandbox-windows-srt] [--agent] [--agent-registry] [--workspace-cloudflare-computer] [--server] [--federation] [--city] [--database-d1] [--database-sqlite] [--database-postgresql] [--services] [--plugins] [--cli] [--ui] [--all] [--no-bump] [--no-global-install]"
+  echo "Usage: npm run patch:build -- [--type] [--shell] [--sandbox-macos] [--sandbox-linux] [--sandbox-windows-mxc] [--sandbox-windows-srt] [--agent] [--local] [--workspace-cloudflare-computer] [--server] [--federation] [--city] [--database-d1] [--database-sqlite] [--database-postgresql] [--services] [--plugins] [--cli] [--ui] [--all] [--no-bump] [--no-global-install]"
   echo ""
   echo "  默认构建 agent + plugins + cli，并自增对应 package 的 patch 版本号"
   echo "  --type     构建 @downcity/type"
@@ -27,7 +27,7 @@ usage() {
   echo "  --sandbox-windows-mxc 构建 @downcity/sandbox-windows-mxc"
   echo "  --sandbox-windows-srt 构建 @downcity/sandbox-windows-srt"
   echo "  --agent    构建 @downcity/agent"
-  echo "  --agent-registry 构建 @downcity/agent-registry"
+  echo "  --local 构建 @downcity/local"
   echo "  --workspace-cloudflare-computer 构建 @downcity/workspace-cloudflare-computer"
   echo "  --server   构建 @downcity/server"
   echo "  --federation 构建 @downcity/federation"
@@ -79,7 +79,7 @@ resolve_build_packages() {
       local has_type=false
       local has_shell=false
       local has_agent=false
-      local has_agent_registry=false
+      local has_local=false
       local has_sandbox_macos=false
       local has_sandbox_linux=false
         local has_sandbox_windows_mxc=false
@@ -95,8 +95,8 @@ resolve_build_packages() {
         if [[ "$item" == "agent" ]]; then
           has_agent=true
         fi
-        if [[ "$item" == "agent-registry" ]]; then
-          has_agent_registry=true
+        if [[ "$item" == "local" ]]; then
+          has_local=true
         fi
         if [[ "$item" == "sandbox-macos" ]]; then has_sandbox_macos=true; fi
         if [[ "$item" == "sandbox-linux" ]]; then has_sandbox_linux=true; fi
@@ -124,8 +124,8 @@ resolve_build_packages() {
       if [[ "$has_agent" == false ]]; then
         resolved+=("agent")
       fi
-      if [[ "$has_agent_registry" == false ]]; then
-        resolved+=("agent-registry")
+      if [[ "$has_local" == false ]]; then
+        resolved+=("local")
       fi
       if [[ "$has_sandbox_macos" == false ]]; then resolved+=("sandbox-macos"); fi
       if [[ "$has_sandbox_linux" == false ]]; then resolved+=("sandbox-linux"); fi
@@ -195,6 +195,38 @@ resolve_build_packages() {
         done
         if [[ "$has_federation" == false ]]; then resolved+=("federation"); fi
       fi
+    fi
+    if [[ "$selected" == "local" ]]; then
+      local has_type=false
+      local has_shell=false
+      local has_agent=false
+      local has_federation=false
+      local has_plugins=false
+      local has_sandbox_macos=false
+      local has_sandbox_linux=false
+      local has_sandbox_windows_mxc=false
+      local has_sandbox_windows_srt=false
+      local item
+      for item in "${resolved[@]}"; do
+        if [[ "$item" == "type" ]]; then has_type=true; fi
+        if [[ "$item" == "shell" ]]; then has_shell=true; fi
+        if [[ "$item" == "agent" ]]; then has_agent=true; fi
+        if [[ "$item" == "federation" ]]; then has_federation=true; fi
+        if [[ "$item" == "plugins" ]]; then has_plugins=true; fi
+        if [[ "$item" == "sandbox-macos" ]]; then has_sandbox_macos=true; fi
+        if [[ "$item" == "sandbox-linux" ]]; then has_sandbox_linux=true; fi
+        if [[ "$item" == "sandbox-windows-mxc" ]]; then has_sandbox_windows_mxc=true; fi
+        if [[ "$item" == "sandbox-windows-srt" ]]; then has_sandbox_windows_srt=true; fi
+      done
+      if [[ "$has_type" == false ]]; then resolved+=("type"); fi
+      if [[ "$has_shell" == false ]]; then resolved+=("shell"); fi
+      if [[ "$has_agent" == false ]]; then resolved+=("agent"); fi
+      if [[ "$has_federation" == false ]]; then resolved+=("federation"); fi
+      if [[ "$has_plugins" == false ]]; then resolved+=("plugins"); fi
+      if [[ "$has_sandbox_macos" == false ]]; then resolved+=("sandbox-macos"); fi
+      if [[ "$has_sandbox_linux" == false ]]; then resolved+=("sandbox-linux"); fi
+      if [[ "$has_sandbox_windows_mxc" == false ]]; then resolved+=("sandbox-windows-mxc"); fi
+      if [[ "$has_sandbox_windows_srt" == false ]]; then resolved+=("sandbox-windows-srt"); fi
     fi
     if [[ "$selected" == database-* ]]; then
       local has_type=false
@@ -328,7 +360,7 @@ while [[ $# -gt 0 ]]; do
     --sandbox-windows-mxc) add_package "sandbox-windows-mxc" ;;
     --sandbox-windows-srt) add_package "sandbox-windows-srt" ;;
     --agent)    add_package "agent" ;;
-    --agent-registry) add_package "agent-registry" ;;
+    --local) add_package "local" ;;
     --workspace-cloudflare-computer) add_package "workspace-cloudflare-computer" ;;
     --server)   add_package "server" ;;
     --federation) add_package "federation" ;;
@@ -340,7 +372,7 @@ while [[ $# -gt 0 ]]; do
     --plugins)  add_package "plugins" ;;
     --cli)      add_package "cli" ;;
     --ui)       add_package "ui" ;;
-    --all)      PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "agent-registry" "workspace-cloudflare-computer" "server" "federation" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "ui" "cli") ; shift ; continue ;;
+    --all)      PACKAGES=("type" "shell" "sandbox-macos" "sandbox-linux" "sandbox-windows-mxc" "sandbox-windows-srt" "agent" "workspace-cloudflare-computer" "server" "federation" "city" "database-d1" "database-sqlite" "database-postgresql" "services" "plugins" "local" "ui" "cli") ; shift ; continue ;;
     --no-bump)  BUMP=false ;;
     --no-global-install) SYNC_GLOBAL_CLI=false ;;
     -h|--help)  usage ;;

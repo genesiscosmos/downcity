@@ -1,0 +1,15 @@
+---
+title: "@downcity/local"
+description: "The shared local City Store for CLI and Desktop."
+---
+
+`@downcity/local` reads and writes `~/.downcity/downcity.db` and restores Agents, Workspaces,
+Plugin Bindings, Plugin Resources, and the local Embassy User Session.
+
+```ts
+const city = new City(new LocalCityStore());
+await city.ready();
+```
+
+CLI and Desktop create independent City instances and host lifecycles while sharing the same
+persistent data.

@@ -118,8 +118,8 @@ export function registerAgentCommands(
     .addOption(new context.hiddenPortOption("--port <port>").argParser(parsePort).hideHelp())
     .addOption(new context.hiddenPortOption("--rpc-port <port>").argParser(parsePort).hideHelp())
     .option("--workspace <id-or-path>", t({
-      zh: "本次运行使用的 Workspace ID 或路径",
-      en: "Workspace ID or path for this runtime",
+      zh: "校验 Agent 绑定的 Workspace ID 或路径",
+      en: "verify the Workspace ID or path bound to the Agent",
     }))
     .option("-h, --host <host>", t({
       zh: "服务主机（默认 127.0.0.1）",

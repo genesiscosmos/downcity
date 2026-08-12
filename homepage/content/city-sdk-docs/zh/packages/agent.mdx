@@ -1,0 +1,17 @@
+---
+title: "@downcity/agent"
+description: "Agent 运行时与 City Store 协议。"
+---
+
+`@downcity/agent` 提供单 Agent 执行面以及进程内 `City` 容器。`City` 不读取 SQLite，
+也不管理 daemon 或 Electron 生命周期。
+
+```ts
+const city = new City(store);
+await city.ready();
+const agents = city.agents();
+const agent = city.agent(agent_id);
+```
+
+`CityStore` 从持久化配置恢复可直接使用的 Agent，并保存 `city.add(agent)` 注册的
+Agent。一个 Agent 绑定一个 Workspace，一个 Workspace 可以被多个 Agent 使用。

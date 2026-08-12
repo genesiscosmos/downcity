@@ -1,0 +1,18 @@
+---
+title: "@downcity/agent"
+description: "Agent runtime and the City Store protocol."
+---
+
+`@downcity/agent` provides the single-Agent execution surface and the in-process `City`
+container. `City` does not read SQLite or own daemon and Electron lifecycles.
+
+```ts
+const city = new City(store);
+await city.ready();
+const agents = city.agents();
+const agent = city.agent(agent_id);
+```
+
+`CityStore` restores usable Agents from persistence and saves Agents registered through
+`city.add(agent)`. Each Agent is bound to one Workspace, while a Workspace may be reused by
+multiple Agents.

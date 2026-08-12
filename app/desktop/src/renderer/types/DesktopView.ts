@@ -43,7 +43,7 @@ export interface DesktopViewController {
   agents: DesktopAgentSummary[];
   /** 共享 Registry 中独立登记的全部 Workspace。 */
   workspaces: DesktopWorkspaceSummary[];
-  /** 每个 Agent 当前选择的运行 Workspace ID。 */
+  /** 每个 Agent 持久化绑定的 Workspace ID。 */
   workspace_id_by_agent: Record<string, string>;
   /** 按 Agent 标识缓存的 Session 导航数据。 */
   sessions_by_agent: Record<string, DesktopSessionSummary[]>;
@@ -63,8 +63,6 @@ export interface DesktopViewController {
   select_agent(agent_id: string): void;
   /** 在 Desktop main 中装配 native Agent 并刷新 Session。 */
   connect_agent(agent_id: string): Promise<void>;
-  /** 修改 Agent 下次连接时使用的 Workspace。 */
-  select_workspace(agent_id: string, workspace_id: string): void;
   /** 创建 Session 并切换到对应 Chat。 */
   create_session(agent_id: string): Promise<void>;
   /** 切换到 Session Chat 并读取已有消息。 */

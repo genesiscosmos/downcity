@@ -1,6 +1,6 @@
 {
   "name": "downcity",
-  "version": "1.1.437",
+  "version": "1.1.438",
   "type": "module",
   "description": "Downcity CLI — local City container and Federation Server management",
   "bin": {
@@ -8,12 +8,6 @@
     "downcity": "./bin/downcity.js",
     "downfed": "./bin/downfed.js",
     "fed": "./bin/downfed.js"
-  },
-  "exports": {
-    "./agent-host": {
-      "types": "./bin/agent-host/index.d.ts",
-      "import": "./bin/agent-host/index.js"
-    }
   },
   "files": [
     "bin/",
@@ -45,7 +39,7 @@
     "@ai-sdk/openai-compatible": "^2.0.48",
     "@ai-sdk/xai": "^3.0.93",
     "@downcity/agent": "workspace:^",
-    "@downcity/agent-registry": "workspace:^",
+    "@downcity/local": "workspace:^",
     "@downcity/federation": "workspace:^",
     "@downcity/plugins": "workspace:^",
     "@downcity/server": "workspace:^",

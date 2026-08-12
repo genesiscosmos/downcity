@@ -8,6 +8,8 @@
 export interface DesktopAgentSummary {
   /** Agent 的全局稳定标识。 */
   agent_id: string;
+  /** Agent 持久化绑定的 Workspace ID；历史异常记录可能不存在。 */
+  workspace_id?: string;
   /** Agent 使用的 City AIService 模型标识。 */
   model_id: string;
   /** Agent 注册配置的结构版本。 */
@@ -28,7 +30,7 @@ export interface DesktopWorkspaceSummary {
 export interface DesktopAgentRuntime {
   /** 当前运行 Agent ID。 */
   agent_id: string;
-  /** 当前 Agent 本次运行使用的 Workspace。 */
+  /** 当前 Agent 持久化绑定的 Workspace。 */
   workspace: DesktopWorkspaceSummary;
 }
 
@@ -82,8 +84,8 @@ export interface DesktopApi {
     list(): Promise<DesktopAgentSummary[]>;
     /** 创建共享注册记录。 */
     create(agent_id: string, workspace_path: string, model_id: string): Promise<DesktopCreateAgentResult>;
-    /** 以显式 Agent 与 Workspace 组合创建 Desktop native Agent。 */
-    connect(agent_id: string, workspace_id: string): Promise<DesktopAgentRuntime>;
+    /** 按 Agent 持久化绑定的 Workspace 创建 Desktop native Agent。 */
+    connect(agent_id: string): Promise<DesktopAgentRuntime>;
   };
   /** 独立 Workspace Registry 能力。 */
   workspace: {

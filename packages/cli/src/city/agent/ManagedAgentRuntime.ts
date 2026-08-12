@@ -7,13 +7,11 @@
  * - 以幂等顺序释放 Gateway、RPC 与 Agent，避免调用方重复管理内部资源。
  */
 
-import path from "node:path";
 import { Agent, City } from "@downcity/agent";
+import { LocalCityStore } from "@downcity/local";
 import { AgentHTTP, AgentRPC } from "@downcity/server";
-import { create_platform_agent } from "@/agent-host/index.js";
 import { startAgentHttpGateway } from "@/city/agent/AgentHttpGateway.js";
 import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
-import { get_workspace_by_path } from "@/city/process/registry/WorkspaceRepository.js";
 import type { CreateManagedAgentRuntimeInput } from "@/city/types/agent/ManagedAgentRuntime.js";
 import { CliError } from "@/shared/CliError.js";
 
@@ -75,12 +73,10 @@ export class ManagedAgentRuntime {
     input: CreateManagedAgentRuntimeInput,
   ): Promise<ManagedAgentRuntime> {
     const config = get_managed_agent(input.target.agent_id);
-    const workspace_path = path.resolve(input.target.workspace_path);
-    const workspace_record = get_workspace_by_path(workspace_path);
-    if (!config || !workspace_record) {
+    if (!config?.workspace_id) {
       throw new CliError({
-        title: "Agent or Workspace is not registered",
-        note: `${input.target.agent_id} → ${workspace_path}`,
+        title: "Agent is not registered or has no Workspace",
+        note: input.target.agent_id,
         fix: "city agent list",
       });
     }
@@ -105,14 +101,37 @@ export class ManagedAgentRuntime {
 
     const host = String(input.options.host ?? config.start?.host ?? "127.0.0.1").trim();
     const rpc_host = "127.0.0.1";
-    const native_runtime = await create_platform_agent({
-      agent_id: input.target.agent_id,
-      workspace_path,
+    const store = new LocalCityStore({
+      agent_ids: [input.target.agent_id],
       host,
       port,
     });
-    const agent = native_runtime.agent;
-    const city = new City([agent]);
+    const workspace = store.get_workspace_config(config.workspace_id);
+    if (!workspace) {
+      store.close();
+      throw new CliError({
+        title: "Agent Workspace is not registered",
+        note: `${input.target.agent_id} → ${config.workspace_id}`,
+        fix: "city agent list",
+      });
+    }
+    const workspace_path = workspace.workspace_path;
+    const city = new City(store);
+    try {
+      await city.ready();
+    } catch (error) {
+      await city.dispose().catch(() => undefined);
+      throw error;
+    }
+    const agent = city.agent(input.target.agent_id);
+    if (!agent) {
+      await city.dispose();
+      throw new CliError({
+        title: "Agent is not available in City",
+        note: input.target.agent_id,
+        fix: "city agent list",
+      });
+    }
 
     process.env.DC_BAY_PORT = String(port);
     process.env.DC_BAY_HOST = host;
@@ -121,10 +140,14 @@ export class ManagedAgentRuntime {
     process.env.DC_AGENT_ID = input.target.agent_id;
     process.env.DC_AGENT_PATH = workspace_path;
 
-    const resolve_session_model = native_runtime.create_session_model;
+    const resolve_session_model = async (model_id: string) => await store.create_model(model_id);
     const rpc = new AgentRPC(agent, {
       resolve_session_model,
-      reload_workspace_env: native_runtime.reload_workspace_env,
+      reload_workspace_env: () => {
+        const env = store.reload_agent_env(agent.id);
+        agent.workspace.set_env(env);
+        return env;
+      },
     });
     await rpc.listen({ host: rpc_host, port: rpc_port });
     try {

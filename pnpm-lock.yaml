@@ -20,18 +20,15 @@ importers:
       '@downcity/agent':
         specifier: workspace:^
         version: link:../../packages/agent
-      '@downcity/agent-registry':
+      '@downcity/local':
         specifier: workspace:^
-        version: link:../../packages/agent-registry
+        version: link:../../packages/local
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.1
       clsx:
         specifier: ^2.1.0
         version: 2.1.1
-      downcity:
-        specifier: workspace:*
-        version: link:../../packages/cli
       framer-motion:
         specifier: ^11.18.2
         version: 11.18.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -318,15 +315,6 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/agent-registry:
-    devDependencies:
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
   packages/city:
     dependencies:
       '@downcity/federation':
@@ -366,12 +354,12 @@ importers:
       '@downcity/agent':
         specifier: workspace:^
         version: link:../agent
-      '@downcity/agent-registry':
-        specifier: workspace:^
-        version: link:../agent-registry
       '@downcity/federation':
         specifier: workspace:^
         version: link:../federation
+      '@downcity/local':
+        specifier: workspace:^
+        version: link:../local
       '@downcity/plugins':
         specifier: workspace:^
         version: link:../plugins
@@ -610,6 +598,62 @@ importers:
       vite:
         specifier: 8.0.14
         version: 8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3)(yaml@2.9.0)
+
+  packages/local:
+    dependencies:
+      '@downcity/agent':
+        specifier: workspace:^
+        version: link:../agent
+      '@downcity/federation':
+        specifier: workspace:^
+        version: link:../federation
+      '@downcity/plugins':
+        specifier: workspace:^
+        version: link:../plugins
+      '@downcity/shell':
+        specifier: workspace:^
+        version: link:../shell
+      '@downcity/type':
+        specifier: workspace:*
+        version: link:../type
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
+      ajv-formats:
+        specifier: ^3.0.1
+        version: 3.0.1(ajv@8.20.0)
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      fs-extra:
+        specifier: ^11.3.5
+        version: 11.3.5
+    devDependencies:
+      '@types/fs-extra':
+        specifier: ^11.0.4
+        version: 11.0.4
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      tsc-alias:
+        specifier: ^1.8.17
+        version: 1.8.17
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+    optionalDependencies:
+      '@downcity/sandbox-linux':
+        specifier: workspace:^
+        version: link:../sandbox-linux
+      '@downcity/sandbox-macos':
+        specifier: workspace:^
+        version: link:../sandbox-macos
+      '@downcity/sandbox-windows-mxc':
+        specifier: workspace:^
+        version: link:../sandbox-windows-mxc
+      '@downcity/sandbox-windows-srt':
+        specifier: workspace:^
+        version: link:../sandbox-windows-srt
 
   packages/plugins:
     dependencies:

@@ -9,7 +9,7 @@ downcity -v
 
 安装后会得到 `city` / `downcity` 与 `fed` / `downfed` 两个相互独立的工具：
 
-- `city` 是本机 City 容器，基于 `City()` 与 Agent SDK 管理全局 Agent、运行时、Plugin 与控制台。
+- `city` 是本机 Agent 宿主，通过 `new City(new LocalCityStore())` 管理本进程内 Agent、运行时、Plugin 与控制台。
 - `fed` 是 Federation Server Manager；TUI 用于注册和管理 Server，项目命令读取当前目录的 `federation.json`。Local Node.js 和 Cloudflare Workers 都通过 `fed deploy` 部署。
 - `fed web` 在 `127.0.0.1:43128` 启动当前 Federation 的本地 Web 管理 UI；管理员登录后的 Session 只保留在 CLI 本地 BFF 内存中。
 - `city web` 启动本机 City Web 控制面，可管理 Agent daemon 并使用 `@downcity/ui` ChatPanel 与 Agent 对话；默认只监听 loopback。
@@ -28,7 +28,7 @@ City 的主要命令：
 
 ```bash
 city agent create .
-city agent start <agent_id> --workspace <workspace-id-or-path>
+city agent start <agent_id>
 city web --open
 city agent token create <agent_id> --name local
 city plugin action <plugin_name> <action_name> <agent_id> --input '{}'
@@ -38,9 +38,9 @@ city plugin action <plugin_name> <action_name> <agent_id> --input '{}'
 `city agent chat <agent_id>` 交互时，模型可以在缺少关键信息时显示文本、单选或多选问题；
 回答会通过 Session Interaction 提交，并在同一轮模型执行中继续处理。
 
-Agent、Workspace 与 Plugin Binding 统一保存在全局数据库。Agent 和 Workspace 是独立实体，不保存永久绑定；宿主每次运行时显式组合 `agent_id + workspace_path`。`city agent create <path>` 同时创建二者只是便捷工作流。Session 仍保存在实际 Workspace 的 `.downcity/agents/<agent_id>/sessions/` 下。未传 `agent_id` 时，TTY 打开全局 Agent 选择器，非交互环境直接报错。
+Agent、Workspace 与 Plugin Binding 统一保存在 `~/.downcity/downcity.db`。每个持久化 Agent 对应一个 Workspace；一个 Workspace 可以被多个 Agent 使用。CLI daemon 和 Desktop 各自创建独立的 City 实例，启动、停止和 HTTP/RPC 生命周期互不共享。Session 仍保存在实际 Workspace 的 `.downcity/agents/<agent_id>/sessions/` 下。未传 `agent_id` 时，TTY 打开全局 Agent 选择器，非交互环境直接报错。
 
-`city agent start` 的 Workspace 解析顺序是：显式 `--workspace`、当前 daemon 的 Workspace、当前目录对应的已登记 Workspace、唯一 Workspace、TTY 选择。存在多个 Workspace 的非交互调用必须显式传入 `--workspace`。
+`city agent start` 始终使用 Agent 持久化绑定的 Workspace。可选的 `--workspace <workspace-id-or-path>` 只用于校验调用方预期；如果它与 Agent 的绑定不一致，命令会明确报错，不会临时改绑。
 
 Federation Admin 配置与 Embassy User Session 同样保存在 `~/.downcity/downcity.db`。升级后，CLI 会把旧 `~/.downcity/federation.db` 中的管理配置一次性迁入统一数据库；旧文件保留用于人工恢复，但后续不再读取。脚本可通过 `DOWNCITY_FEDERATION_URL` 和 `DOWNCITY_USER_TOKEN` 显式覆盖当前 Embassy 用户身份。
 

@@ -10,9 +10,9 @@ import type { AgentRuntimeState } from "@/types/DesktopView";
 interface AgentViewProps {
   /** 当前管理的 Agent 摘要。 */
   agent: DesktopAgentSummary;
-  /** 可供本次运行选择的独立 Workspace。 */
+  /** 共享 Registry 中的 Workspace，用于展示 Agent 绑定目标。 */
   workspaces: DesktopWorkspaceSummary[];
-  /** 当前选择的 Workspace ID。 */
+  /** Agent 持久化绑定的 Workspace ID。 */
   workspace_id: string;
   /** Agent 当前连接状态。 */
   runtime_state: AgentRuntimeState;
@@ -20,8 +20,6 @@ interface AgentViewProps {
   session_count: number;
   /** 在 Electron main 中装配 native Agent。 */
   connect_agent(): Promise<void>;
-  /** 选择本次运行使用的 Workspace。 */
-  select_workspace(workspace_id: string): void;
   /** 创建并进入一个 Session。 */
   create_session(): Promise<void>;
 }
@@ -35,7 +33,7 @@ function get_runtime_text(state: AgentRuntimeState): string {
 }
 
 /** Agent 配置与运行管理主视图。 */
-export function AgentView({ agent, workspaces, workspace_id, runtime_state, session_count, connect_agent, select_workspace, create_session }: AgentViewProps) {
+export function AgentView({ agent, workspaces, workspace_id, runtime_state, session_count, connect_agent, create_session }: AgentViewProps) {
   const workspace = workspaces.find((item) => item.workspace_id === workspace_id);
   return <MainViewLayout>
     <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2">
@@ -43,16 +41,6 @@ export function AgentView({ agent, workspaces, workspace_id, runtime_state, sess
         <TbCpu className="size-3.5" />
         <span className="truncate font-medium text-foreground/80">{agent.agent_id}</span>
       </div>
-      <select
-        aria-label="运行 Workspace"
-        className="h-6 max-w-52 rounded-md border border-border bg-background px-1.5 text-[0.6875rem] text-foreground"
-        value={workspace_id}
-        disabled={runtime_state === "connecting"}
-        onChange={(event) => select_workspace(event.target.value)}
-      >
-        <option value="" disabled>选择 Workspace</option>
-        {workspaces.map((item) => <option key={item.workspace_id} value={item.workspace_id}>{item.name}</option>)}
-      </select>
       <Button disabled={runtime_state === "connecting" || !workspace_id} onClick={() => void connect_agent()}>
         {runtime_state === "connecting" ? <TbLoader2 className="animate-spin" /> : <TbRefresh />}
         <span>{runtime_state === "connected" ? "刷新" : "连接"}</span>
@@ -77,7 +65,7 @@ export function AgentView({ agent, workspaces, workspace_id, runtime_state, sess
           <section className="mb-7">
             <h2 className="mb-2 px-1 text-xs font-semibold text-foreground">概览</h2>
             <div className="grid grid-cols-3 gap-2">
-              <SummaryCard icon={<TbFolder />} label="Workspace" value={workspace?.name || "未选择"} />
+              <SummaryCard icon={<TbFolder />} label="Workspace" value={workspace?.name || "未绑定"} />
               <SummaryCard icon={<TbSparkles />} label="Model" value={agent.model_id || "未配置"} />
               <SummaryCard icon={<TbMessageCircle />} label="Sessions" value={String(session_count)} />
             </div>

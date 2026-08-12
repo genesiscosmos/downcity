@@ -129,9 +129,11 @@ export async function initCommand(
       execution,
     },
   );
+  const workspace_record = create_workspace({ workspace_path: project_root });
   if (existing_agent && allowOverwrite) {
     save_managed_agent({
       agent_id,
+      workspace_id: workspace_record.workspace_id,
       version: "1.0.0",
       execution,
       created_at: existing_agent.created_at,
@@ -140,10 +142,10 @@ export async function initCommand(
   } else {
     create_managed_agent({
       agent_id,
+      workspace_id: workspace_record.workspace_id,
       execution,
     });
   }
-  create_workspace({ workspace_path: project_root });
   const createdItems = [
     ...initResult.created_files,
     "global managed agent",

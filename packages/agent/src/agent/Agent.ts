@@ -31,6 +31,7 @@ import {
   type SystemProfile,
 } from "@/executor/composer/system/default/SystemDomain.js";
 import type { SystemModelMessage } from "ai";
+import type { AgentDefinition } from "@/types/agent/AgentDefinition.js";
 
 const RESERVED_PLUGIN_TOOL_NAMES = new Set(["plugin_read", "plugin_call"]);
 
@@ -56,6 +57,9 @@ function register_agent_tools(
 export class Agent {
   /** 当前 Agent 的稳定标识，用于区分 Session 存储目录与运行时归属。 */
   readonly id: string;
+
+  /** Store 可以用于重新创建当前 Agent 的只读定义；临时 SDK Agent 可以省略。 */
+  readonly definition?: Readonly<AgentDefinition>;
 
   /** 当前 Agent 引用的项目资源与安全边界。 */
   readonly workspace: WorkspaceBase;
@@ -105,6 +109,9 @@ export class Agent {
   constructor(options: AgentOptions) {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Agent requires a non-empty id");
+    this.definition = options.definition
+      ? freeze_agent_definition(options.definition)
+      : undefined;
     if (!options.workspace) throw new Error("Agent requires a Workspace");
     this.workspace = options.workspace;
 
@@ -289,4 +296,30 @@ export class Agent {
       this.plugin_tool_names.add(tool_name);
     }
   }
+}
+
+/** 复制并冻结 Agent 定义，避免运行时对象与持久化事实发生漂移。 */
+function freeze_agent_definition(
+  input: AgentDefinition,
+): Readonly<AgentDefinition> {
+  const workspace_id = String(input.workspace_id || "").trim();
+  if (!workspace_id) throw new Error("Agent definition requires workspace_id");
+  const plugins = input.plugins.map((plugin) => Object.freeze({
+    plugin_name: String(plugin.plugin_name || "").trim(),
+    enabled: plugin.enabled === true,
+    config: structuredClone(plugin.config),
+    resource_ids: Object.freeze([...plugin.resource_ids]),
+  }));
+  return Object.freeze({
+    version: String(input.version || "1.0.0").trim() || "1.0.0",
+    workspace_id,
+    ...(input.workspace_name
+      ? { workspace_name: String(input.workspace_name).trim() }
+      : {}),
+    ...(input.execution
+      ? { execution: Object.freeze(structuredClone(input.execution)) }
+      : {}),
+    ...(input.llm ? { llm: Object.freeze(structuredClone(input.llm)) } : {}),
+    plugins: Object.freeze(plugins),
+  });
 }

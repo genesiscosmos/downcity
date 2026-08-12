@@ -37,7 +37,7 @@ import {
 } from "@/city/process/plugin/PluginConfigValidator.js";
 import { validate_plugin_resource_schema } from "@/city/process/plugin/PluginResourceSchema.js";
 import { assert_plugin_resources_compatible } from "@/city/process/registry/PluginResourceRepository.js";
-import { withPlatformStore } from "@/city/runtime/store/index.js";
+import { LocalCityStore } from "@downcity/local";
 
 /** 从本地目录、Git 或 GitHub shorthand 安装一个 Plugin 数组制品。 */
 export async function install_plugins(
@@ -252,16 +252,12 @@ function assert_installation_update_compatible(
 
 /** 确认 Plugin 不再被任何 Binding 或 Resource 使用。 */
 function assert_plugin_unused(plugin_name: string): void {
-  withPlatformStore((context) => {
-    const binding = context.sqlite.prepare(
-      "SELECT agent_id FROM agent_plugins WHERE plugin_name = ? LIMIT 1;",
-    ).get(plugin_name) as { agent_id: string } | undefined;
-    if (binding) throw new Error(`Plugin is still bound to agent ${binding.agent_id}: ${plugin_name}`);
-    const resource = context.sqlite.prepare(
-      "SELECT resource_id FROM plugin_resources WHERE plugin_name = ? LIMIT 1;",
-    ).get(plugin_name) as { resource_id: string } | undefined;
-    if (resource) throw new Error(`Plugin still owns Resource ${resource.resource_id}: ${plugin_name}`);
-  });
+  const store = new LocalCityStore();
+  try {
+    store.assert_plugin_unused(plugin_name);
+  } finally {
+    store.close();
+  }
 }
 
 /** 安全解析 Plugin 安装根目录内的静态制品路径。 */

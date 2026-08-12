@@ -14,6 +14,7 @@ import type {
   AgentManagedSession,
   SessionOptions,
 } from "@/types/session/SessionOptions.js";
+import type { AgentDefinition } from "@/types/agent/AgentDefinition.js";
 
 /**
  * Agent 可使用的 Session 类。
@@ -38,6 +39,16 @@ export interface AgentOptions {
    * - 应保持稳定、可 URL 编码、尽量不要依赖展示名称。
    */
   id: string;
+
+  /**
+   * Store 用于持久化和恢复当前 Agent 的稳定定义。
+   *
+   * 关键点（中文）
+   * - 普通 SDK Agent 可以省略并作为当前进程中的临时实例使用。
+   * - 加入持久化 City 时，具体 CityStore 可以要求必须提供该定义。
+   * - 定义不包含运行时对象，不能从 model 或 Plugin 实例反向推导。
+   */
+  definition?: AgentDefinition;
 
   /**
    * 当前 Agent 可以访问的项目资源与安全边界。

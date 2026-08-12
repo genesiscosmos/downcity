@@ -18,7 +18,7 @@ case "$BUILD_SCOPE" in
 esac
 
 if [[ "$BUILD_SCOPE" == "all" ]]; then
-  # 构建顺序：federation 先于 city/services/cli，后者只消费其公开产物。
+  # 构建顺序：Local 在 Agent、Federation 与 Plugins 之后，CLI 只消费其公开产物。
   run_project_build "$ROOT_DIR/packages/type"
   run_project_build "$ROOT_DIR/packages/shell"
   run_project_build "$ROOT_DIR/packages/sandbox-macos"
@@ -32,6 +32,7 @@ if [[ "$BUILD_SCOPE" == "all" ]]; then
   run_project_build "$ROOT_DIR/packages/city"
   run_project_build "$ROOT_DIR/packages/services"
   run_project_build "$ROOT_DIR/packages/plugins"
+  run_project_build "$ROOT_DIR/packages/local"
   run_project_build "$ROOT_DIR/packages/ui"
   run_project_build "$ROOT_DIR/homepage"
   run_project_build "$ROOT_DIR/packages/cli"
@@ -52,6 +53,7 @@ run_project_build "$ROOT_DIR/packages/federation"
 run_project_build "$ROOT_DIR/packages/city"
 run_project_build "$ROOT_DIR/packages/services"
 run_project_build "$ROOT_DIR/packages/plugins"
+run_project_build "$ROOT_DIR/packages/local"
 run_project_build "$ROOT_DIR/packages/ui"
 run_project_build "$ROOT_DIR/packages/cli"
 install_downcity_cli_globally "$ROOT_DIR"

@@ -2,7 +2,7 @@
  * Desktop native Agent 控制器。
  *
  * Electron main 直接持有 City 和本地 Agent。Registry 只保存 Agent 与 Workspace 两类
- * 独立记录；每次连接显式组合二者，不启动 CLI daemon，也不经过本机 RPC。
+ * 独立记录；连接时读取 Agent 的持久化绑定，不启动 CLI daemon，也不经过本机 RPC。
  */
 
 import {
@@ -10,18 +10,7 @@ import {
   type Agent,
   type SessionMessage,
 } from "@downcity/agent";
-import {
-  create_agent_registry_record,
-  create_workspace_registry_record,
-  get_agent_registry_record,
-  get_workspace_registry_record,
-  list_agent_registry_records,
-  list_workspace_registry_records,
-  normalize_agent_registry_workspace,
-  type AgentRegistryRecord,
-  type WorkspaceRegistryRecord,
-} from "@downcity/agent-registry";
-import { create_platform_agent } from "downcity/agent-host";
+import { LocalCityStore, type LocalAgentConfig, type LocalWorkspaceConfig } from "@downcity/local";
 import type {
   DesktopAgentRuntime,
   DesktopAgentSummary,
@@ -34,69 +23,88 @@ import type {
 /** Electron main 内的 native Agent 生命周期控制器。 */
 export class AgentController {
   /** Desktop 进程拥有的全部 native Agent。 */
-  private readonly city = new City();
+  private readonly store = new LocalCityStore();
+
+  /** Desktop 进程拥有的全部 native Agent。 */
+  private readonly city = new City(this.store);
+
+  /** City 是否已经完成本地 Agent 恢复。 */
+  private ready_promise = this.city.ready();
 
   /** 当前运行 Agent 实际使用的 Workspace。 */
   private readonly workspace_by_agent = new Map<string, DesktopWorkspaceSummary>();
 
   /** 列出 CLI 与 Desktop 共用的 Agent 注册记录。 */
-  list_agents(): DesktopAgentSummary[] {
-    return list_agent_registry_records().map(to_desktop_agent_summary);
+  async list_agents(): Promise<DesktopAgentSummary[]> {
+    await this.ready_promise;
+    return this.store.list_agent_configs()
+      .map(to_desktop_agent_summary);
   }
 
   /** 列出独立登记的全部 Workspace。 */
-  list_workspaces(): DesktopWorkspaceSummary[] {
-    return list_workspace_registry_records().map(to_desktop_workspace_summary);
+  async list_workspaces(): Promise<DesktopWorkspaceSummary[]> {
+    await this.ready_promise;
+    return this.store.list_workspace_configs().map(to_desktop_workspace_summary);
   }
 
   /** 创建 Agent，并把表单中的项目目录独立登记为 Workspace。 */
-  create_agent(
+  async create_agent(
     agent_id: string,
     workspace_path: string,
     model_id: string,
-  ): { agent: DesktopAgentSummary; workspace: DesktopWorkspaceSummary } {
+  ): Promise<{ agent: DesktopAgentSummary; workspace: DesktopWorkspaceSummary }> {
     const normalized_model_id = String(model_id || "").trim();
     if (!normalized_model_id) throw new Error("model_id is required");
-    const normalized_workspace_path = normalize_agent_registry_workspace(workspace_path);
-    const agent = create_agent_registry_record({
+    const normalized_workspace_path = String(workspace_path || "").trim();
+    if (!normalized_workspace_path) throw new Error("workspace_path is required");
+    await this.ready_promise;
+    const workspace = this.store.ensure_workspace({ workspace_path: normalized_workspace_path });
+    const agent = await this.store.new_agent({
       agent_id,
       version: "1.0.0",
+      workspace_id: workspace.workspace_id,
+      workspace_path: workspace.workspace_path,
+      workspace_name: workspace.name,
       execution: { type: "api", model_id: normalized_model_id },
+      plugins: [],
     });
-    const workspace = create_workspace_registry_record({
-      workspace_path: normalized_workspace_path,
-    });
+    await this.city.add(agent);
     return {
-      agent: to_desktop_agent_summary(agent),
+      agent: to_desktop_agent_summary({
+        agent_id: agent.id,
+        workspace_id: workspace.workspace_id,
+        version: agent.definition?.version || "1.0.0",
+        execution: agent.definition?.execution,
+      }),
       workspace: to_desktop_workspace_summary(workspace),
     };
   }
 
-  /** 以显式 Agent 与 Workspace 组合创建或替换 Desktop native Agent。 */
-  async connect_agent(agent_id: string, workspace_id: string): Promise<DesktopAgentRuntime> {
-    const config = get_agent_registry_record(agent_id);
+  /** 按 Agent 的持久化 Workspace 绑定创建或复用 Desktop native Agent。 */
+  async connect_agent(agent_id: string): Promise<DesktopAgentRuntime> {
+    await this.ready_promise;
+    const config = this.store.get_agent_config(agent_id);
     if (!config) throw new Error(`Agent not found: ${agent_id}`);
-    const workspace = get_workspace_registry_record(workspace_id);
-    if (!workspace) throw new Error(`Workspace not found: ${workspace_id}`);
+    if (!config.workspace_id) throw new Error(`Agent has no Workspace binding: ${agent_id}`);
+    const workspace = this.store.get_workspace_config(config.workspace_id);
+    if (!workspace) throw new Error(`Agent Workspace is not registered: ${config.workspace_id}`);
 
-    const current_workspace = this.workspace_by_agent.get(config.agent_id);
-    const current_agent = this.city.get(config.agent_id);
-    if (current_agent && current_workspace?.workspace_id === workspace.workspace_id) {
-      return to_desktop_agent_runtime(config.agent_id, current_workspace);
+    const current_agent = this.city.agent(config.agent_id);
+
+    if (!current_agent) {
+      const restored_agent = await this.store.new_agent({
+        agent_id: config.agent_id,
+        workspace_id: workspace.workspace_id,
+        workspace_path: workspace.workspace_path,
+        workspace_name: workspace.name,
+        version: config.version,
+        execution: config.execution,
+        llm: config.llm,
+        plugins: config.plugins,
+      });
+      await this.city.add(restored_agent);
     }
 
-    this.workspace_by_agent.delete(config.agent_id);
-    if (current_agent) await this.city.remove(config.agent_id);
-    const runtime = await create_platform_agent({
-      agent_id: config.agent_id,
-      workspace_path: workspace.workspace_path,
-    });
-    try {
-      this.city.add(runtime.agent);
-    } catch (error) {
-      await runtime.agent.dispose();
-      throw error;
-    }
     const workspace_summary = to_desktop_workspace_summary(workspace);
     this.workspace_by_agent.set(config.agent_id, workspace_summary);
     return to_desktop_agent_runtime(config.agent_id, workspace_summary);
@@ -148,7 +156,8 @@ export class AgentController {
 
   /** 读取由 Desktop City 持有的本地 Agent。 */
   private require_native_agent(agent_id: string): Agent {
-    return this.city.require(agent_id);
+    if (!this.city.agent(agent_id)) throw new Error(`Agent not found in City: ${agent_id}`);
+    return this.city.require_agent(agent_id);
   }
 
   /** 释放 Desktop 进程拥有的全部 native Agent。 */
@@ -159,12 +168,13 @@ export class AgentController {
 }
 
 /** 把 Registry Agent 收敛成 Renderer 所需摘要。 */
-function to_desktop_agent_summary(record: AgentRegistryRecord): DesktopAgentSummary {
+function to_desktop_agent_summary(record: Pick<LocalAgentConfig, "agent_id" | "workspace_id" | "version" | "execution">): DesktopAgentSummary {
   const model_id = typeof record.execution?.model_id === "string"
     ? record.execution.model_id
     : "";
   return {
     agent_id: record.agent_id,
+    ...(record.workspace_id ? { workspace_id: record.workspace_id } : {}),
     model_id,
     version: record.version,
   };
@@ -172,7 +182,7 @@ function to_desktop_agent_summary(record: AgentRegistryRecord): DesktopAgentSumm
 
 /** 把 Registry Workspace 收敛成 Renderer 所需摘要。 */
 function to_desktop_workspace_summary(
-  record: WorkspaceRegistryRecord,
+  record: LocalWorkspaceConfig,
 ): DesktopWorkspaceSummary {
   return {
     workspace_id: record.workspace_id,

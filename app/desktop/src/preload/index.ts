@@ -6,7 +6,7 @@ const desktop_api: DesktopApi = {
   agent: {
     list: (): Promise<DesktopAgentSummary[]> => ipcRenderer.invoke("agent:list"),
     create: (agent_id, workspace_path, model_id) => ipcRenderer.invoke("agent:create", agent_id, workspace_path, model_id),
-    connect: (agent_id, workspace_id) => ipcRenderer.invoke("agent:connect", agent_id, workspace_id),
+    connect: (agent_id) => ipcRenderer.invoke("agent:connect", agent_id),
   },
   workspace: {
     list: () => ipcRenderer.invoke("workspace:list"),

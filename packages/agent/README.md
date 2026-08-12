@@ -9,11 +9,12 @@
 - Plugin 框架：registry、action、tool runtime 与执行生命周期
 - 远程访问：`RemoteAgent`、HTTP/RPC transport
 
-`downcity` 负责持久化 Registry、控制面网关、平台装配、CLI 与 daemon 进程管理；`@downcity/agent` 负责 Agent 执行面和进程内 `City` 实例容器。`City` 不读取 Registry，也不赋予 Agent 启动或停止状态。
+`@downcity/local` 负责本地配置恢复和平台装配；CLI 与 Desktop 各自创建独立的 `City` 实例并拥有自己的宿主生命周期。`City` 不赋予 Agent 启动或停止状态。
 
 ## 包定位
 
 - 面向单个 Agent 项目的执行面
+- `City` 是一个 `CityStore` 下的 Agent 运行时集合
 - 对外通过 `@downcity/agent` 根入口暴露公共 API
 - 负责 session SDK、executor 内核、plugin runtime、sandbox、SDK 本地 Agent
 - 不负责多 Agent registry、control plane daemon、console UI 聚合和平台级编排
@@ -26,10 +27,11 @@
   - session SDK、executor 内核、plugin 框架、sandbox
   - 本地 SDK facade
 - `downcity`
-  - 多 Agent registry
   - control plane / gateway
-  - 平台 CLI、共享模型目录接入、模型运行时绑定、全局 env、Plugin Resource Store
-  - agent daemon 进程管理
+  - 平台 CLI 与 agent daemon 进程管理
+- `@downcity/local`
+  - CLI 与 Desktop 共用的 `~/.downcity/downcity.db` Store Adapter
+  - Agent、Workspace、Plugin 和本地 Embassy User Session 的恢复与装配
 - `@downcity/ui`
   - React UI 组件与展示层
 
@@ -128,3 +130,19 @@ src/
 
 完整架构、执行链、持久化、Plugin、Shell 与跨平台设计见
 [`docs/agent-sdk-architecture.md`](../../docs/agent-sdk-architecture.md)。
+
+## City 与 Local Store
+
+```ts
+const store = new LocalCityStore();
+const city = new City(store);
+await city.ready();
+
+const agent = city.agent("assistant");
+const agents = city.agents();
+await city.add(new_agent);
+```
+
+`City` 不知道 SQLite、Workspace 路径、模型或 Plugin 如何装配。一个持久化 Agent
+绑定一个 Workspace，一个 Workspace 可以被多个 Agent 使用。CLI 与 Desktop 共享数据库，
+但各自的 City 和宿主启动状态互不共享。

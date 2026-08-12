@@ -27,6 +27,7 @@ export function use_desktop_controller(): DesktopViewController {
     if (preview_view === "agent" || preview_view === "session") {
       const preview_agent: DesktopAgentSummary = {
         agent_id: "downcity-agent",
+        workspace_id: "workspace-preview",
         model_id: "openai/gpt-5.4",
         version: "1.0.0",
       };
@@ -59,12 +60,11 @@ export function use_desktop_controller(): DesktopViewController {
       .then(([next_agents, next_workspaces]) => {
         set_agents(next_agents);
         set_workspaces(next_workspaces);
-        const default_workspace_id = next_workspaces[0]?.workspace_id;
-        if (default_workspace_id) {
-          set_workspace_id_by_agent(Object.fromEntries(
-            next_agents.map((agent) => [agent.agent_id, default_workspace_id]),
-          ));
-        }
+        set_workspace_id_by_agent(Object.fromEntries(
+          next_agents.flatMap((agent) => agent.workspace_id
+            ? [[agent.agent_id, agent.workspace_id] as const]
+            : []),
+        ));
         if (next_agents[0]) set_selection({ kind: "agent", agent_id: next_agents[0].agent_id });
       })
       .catch((reason) => set_error(to_error_message(reason)))
@@ -87,9 +87,8 @@ export function use_desktop_controller(): DesktopViewController {
     set_error("");
     set_runtime_by_agent((current) => ({ ...current, [agent_id]: "connecting" }));
     try {
-      const workspace_id = workspace_id_by_agent[agent_id];
-      if (!workspace_id) throw new Error("请先选择 Workspace");
-      await window.downcity.agent.connect(agent_id, workspace_id);
+      if (!workspace_id_by_agent[agent_id]) throw new Error("Agent 未绑定 Workspace");
+      await window.downcity.agent.connect(agent_id);
       set_runtime_by_agent((current) => ({ ...current, [agent_id]: "connected" }));
       await refresh_sessions(agent_id);
     } catch (reason) {
@@ -99,13 +98,6 @@ export function use_desktop_controller(): DesktopViewController {
       throw reason;
     }
   }, [refresh_sessions, runtime_by_agent, workspace_id_by_agent]);
-
-  /** 修改运行目标时把旧 native Agent 状态标记为未连接。 */
-  const select_workspace = useCallback((agent_id: string, workspace_id: string) => {
-    set_workspace_id_by_agent((current) => ({ ...current, [agent_id]: workspace_id }));
-    set_runtime_by_agent((current) => ({ ...current, [agent_id]: "idle" }));
-    set_sessions_by_agent((current) => ({ ...current, [agent_id]: [] }));
-  }, []);
 
   /** 确保后续 Session 操作前已经建立 Agent 连接。 */
   const ensure_connected = useCallback(async (agent_id: string): Promise<void> => {
@@ -196,7 +188,6 @@ export function use_desktop_controller(): DesktopViewController {
     loading,
     select_agent,
     connect_agent,
-    select_workspace,
     create_session,
     select_session,
     create_agent,

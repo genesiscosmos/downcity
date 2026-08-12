@@ -1,7 +1,7 @@
 packages:
   - homepage
   - packages/agent
-  - packages/agent-registry
+  - packages/local
   - app/desktop
   - packages/workspace-cloudflare-computer
   - packages/city

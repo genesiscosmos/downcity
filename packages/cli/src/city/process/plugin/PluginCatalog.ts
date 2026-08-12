@@ -7,20 +7,18 @@
  * - Agent 启用状态仍由 Plugin Binding 持有。
  */
 
-import { withPlatformStore } from "@/city/runtime/store/index.js";
-import { list_plugin_installation_rows } from "@/city/runtime/store/StorePluginRepository.js";
-import { create_downcity_plugin_types } from "@/city/runtime/plugins/DowncityPlugins.js";
+import { list_plugin_installations } from "@/city/process/registry/PluginRepository.js";
+import { LocalCityStore } from "@downcity/local";
 import type { PluginCatalogItem } from "@/city/types/plugin/PluginCatalog.js";
 import type { PluginManifest } from "@/city/types/plugin/PluginInstallation.js";
 
 /** 列出全部内建与用户安装 Plugin。 */
 export function list_plugin_catalog(): PluginCatalogItem[] {
-  const builtin_items = create_downcity_plugin_types().map((plugin_type) =>
+  const builtin_items = with_local_store((store) => store.plugin_types()).map((plugin_type) =>
     to_catalog_item(plugin_type.manifest, "builtin")
   );
-  const installed_items = withPlatformStore((context) =>
-    list_plugin_installation_rows(context)
-  ).flatMap((installation) => installation.manifest.plugins.map((manifest) =>
+  const installed_items = list_plugin_installations()
+    .flatMap((installation) => installation.manifest.plugins.map((manifest) =>
     to_catalog_item(
       manifest,
       "installed",
@@ -30,6 +28,16 @@ export function list_plugin_catalog(): PluginCatalogItem[] {
   ));
   return [...builtin_items, ...installed_items]
     .sort((left, right) => left.plugin_name.localeCompare(right.plugin_name));
+}
+
+/** 在短连接 LocalCityStore 上读取内建 Plugin 类型。 */
+function with_local_store<T>(action: (store: LocalCityStore) => T): T {
+  const store = new LocalCityStore();
+  try {
+    return action(store);
+  } finally {
+    store.close();
+  }
 }
 
 /** 按名称读取一个归一化 Plugin 目录项。 */

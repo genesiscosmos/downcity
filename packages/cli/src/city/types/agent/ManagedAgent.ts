@@ -1,7 +1,7 @@
 /**
  * ManagedAgent：Downcity 全局管理的 Agent 配置。
  *
- * Agent 不保存 Workspace；宿主在创建 Runtime 时把 Agent 与 Workspace 显式组合。
+ * Agent 与 Workspace 是独立实体；每个 Agent 通过 Workspace ID 持久化唯一绑定。
  */
 
 import type { DowncityConfig } from "@/city/types/config/DowncityConfig.js";
@@ -10,6 +10,9 @@ import type { DowncityConfig } from "@/city/types/config/DowncityConfig.js";
 export interface ManagedAgent {
   /** Agent 的全局稳定标识，也是数据库主键。 */
   agent_id: string;
+
+  /** Agent 唯一对应的 Workspace ID；只有待迁移的历史记录可以为空。 */
+  workspace_id?: string;
 
   /** Agent 配置结构版本。 */
   version: string;
@@ -34,6 +37,9 @@ export interface ManagedAgent {
 export interface CreateManagedAgentInput {
   /** Agent 的全局稳定标识。 */
   agent_id: string;
+
+  /** Agent 唯一对应的 Workspace ID。 */
+  workspace_id: string;
 
   /** 可选 Agent 配置结构版本。 */
   version?: string;
