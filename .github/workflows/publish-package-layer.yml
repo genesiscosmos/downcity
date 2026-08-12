@@ -121,6 +121,9 @@ jobs:
         if: steps.version.outputs.should_publish == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # npm 首次发布的新包可能需要数分钟才能被所有 Registry 节点查询到。
+          DOWNCITY_DEPENDENCY_CHECK_ATTEMPTS: "60"
+          DOWNCITY_DEPENDENCY_CHECK_INTERVAL_MS: "5000"
           PACKAGE_NAME: ${{ inputs.package_name }}
           PACKAGE_PATH: ${{ inputs.package_path }}
           PACKAGE_VERSION: ${{ inputs.package_version }}
