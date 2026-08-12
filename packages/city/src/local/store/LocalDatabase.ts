@@ -91,6 +91,7 @@ export class LocalDatabase {
     `);
     this.ensure_workspace_id_column();
     this.ensure_workspace_id_index();
+    this.ensure_plugin_resource_ids_column();
     this.bind_single_legacy_workspace();
   }
 
@@ -111,6 +112,19 @@ export class LocalDatabase {
       CREATE INDEX IF NOT EXISTS managed_agents_workspace_id_idx
       ON managed_agents(workspace_id);
     `);
+  }
+
+  /** 为旧 Plugin Binding 表补充 Resource ID 集合。 */
+  private ensure_plugin_resource_ids_column(): void {
+    const columns = this.sqlite.prepare("PRAGMA table_info(agent_plugins)").all() as Array<{
+      /** 列名。 */
+      name?: unknown;
+    }>;
+    if (!columns.some((column) => String(column.name || "") === "resource_ids_json")) {
+      this.sqlite.exec(
+        "ALTER TABLE agent_plugins ADD COLUMN resource_ids_json TEXT NOT NULL DEFAULT '[]';",
+      );
+    }
   }
 
   /** 只有一个 Workspace 时，为上一版已解绑的 Agent 确定性恢复关系。 */

@@ -29,6 +29,18 @@ export async function handleInternalRpcRequest(params: {
   const { request, options, write_success } = params;
 
   switch (request.method) {
+    case "internal.city.status": {
+      if (!options.get_city_status) {
+        throw new Error("RPC host does not provide City status");
+      }
+      write_success(request.id, {
+        status: "ok",
+        pid: process.pid,
+        agent_ids: options.get_city_status().agent_ids,
+        instance_id: String(process.env.DOWNCITY_DAEMON_INSTANCE_ID || "").trim(),
+      });
+      return true;
+    }
     case "internal.status.get": {
       const context = requireAgent(options);
       write_success(request.id, {

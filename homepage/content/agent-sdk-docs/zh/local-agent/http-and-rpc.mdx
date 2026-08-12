@@ -91,7 +91,8 @@ CORS / logger / 鉴权等中间件由你自行决定。`AgentHTTP` 不会附带�
 
 ## 与 Downcity、RemoteAgent 的关系
 
-- `downcity agent start` 内部就是把 `Agent + AgentRPC + AgentHTTP.router()` 组装起来，再叠加 Downcity 自己的控制 / 静态资源路由。
+- `downcity on` 创建一个 `City`，恢复全部 Agent，并分别启动一个 City HTTP 端口和一个 City RPC 端口。
+- City HTTP 地址为 `http://127.0.0.1:5314/agents/<agent_id>`；City RPC 地址为 `rpc://127.0.0.1:15314/<agent_id>`。
 - `RemoteAgent` 客户端可以连到 `AgentRPC.listen()` 暴露的 `rpc://` 地址，或 `AgentHTTP` 暴露的 HTTP 表面。
 
 ## 相关文档

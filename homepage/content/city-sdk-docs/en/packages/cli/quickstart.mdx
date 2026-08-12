@@ -83,7 +83,7 @@ city federation join https://your-federation.example.com
 city federation login
 city agent create .
 city agent list
-city agent start
+city on
 city agent chat
 ```
 
@@ -91,7 +91,7 @@ city agent chat
 
 `city federation ...` only manages local Federation membership and user login state. It does not deploy Federations.
 
-Each background Agent start has a unique instance ID. `city agent stop` verifies the PID, project path, and instance ID together. If pid/meta files are stale or the PID has been reused by another process, the CLI only removes stale state files and does not signal that unrelated process.
+Each CLI City start has a unique instance ID. `city off` verifies the PID and instance ID together. If pid/meta files are stale or the PID has been reused by another process, the CLI does not signal that unrelated process.
 
 After selecting an OAuth provider such as GitHub or Google, the CLI always prints the `authorization_url`. In a local graphical session it also attempts to open the default browser. When connected to a VPS over SSH or running headlessly, open that URL in your own browser while the CLI waits for the login result.
 

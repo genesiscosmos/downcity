@@ -13,24 +13,11 @@ import {
 } from "@/city/agent/AgentSelection.js";
 import { runInteractiveAgentManager } from "@/city/agent/AgentManager.js";
 import { run_agent_create_command } from "@/city/agent/Init.js";
-import { restartCommand } from "@/city/agent/Restart.js";
-import { stopCommand } from "@/city/agent/Stop.js";
-import { runCommand } from "@/city/agent/Run.js";
-import { startCommand } from "@/city/agent/Start.js";
-import { statusCommand } from "@/city/agent/Status.js";
 import { configure_agent_model } from "@/city/agent/AgentModel.js";
-import type { AgentStartOptions } from "@/city/types/AgentStartOptions.js";
+import { chatCommand } from "@/city/agent/AgentChat.js";
+import type { AgentChatCliOptions } from "@/city/agent/AgentChatTypes.js";
 import type { AgentModelCommandOptions } from "@/city/types/AgentModel.js";
-import { createVersionBanner, inject_agent_context, parseBoolean, parsePort } from "@/shared/IndexSupport.js";
-import { runWithSpinner } from "@/city/utils/cli/Spinner.js";
-import { emitCliBlock } from "@/shared/CliReporter.js";
-import {
-  cleanupStaleDaemonFiles,
-  diagnoseDaemonStaleReasons,
-  isProcessAlive as isDaemonProcessAlive,
-  readDaemonPid,
-} from "@/city/process/daemon/Manager.js";
-import { prepareForegroundAgent } from "@/city/shared/CityAgentRuntime.js";
+import { createVersionBanner, parseBoolean } from "@/shared/IndexSupport.js";
 import { helpText, t } from "@/shared/CliLocale.js";
 import { registerAgentTokenCommand } from "@/city/command/TokenCommand.js";
 
@@ -56,8 +43,8 @@ export function registerAgentCommands(
   const agent = program
     .command("agent")
     .description(t({
-      zh: "管理 Agent：创建/列出/启停/重启（无参数时启动交互式管理器）",
-      en: "manage agents: create, list, start, stop, and restart (opens the interactive manager when used without arguments)",
+      zh: "管理 Agent：创建、列出与配置（无参数时启动交互式管理器）",
+      en: "manage agents: create, list, and configure (opens the interactive manager when used without arguments)",
     }))
     .version(`city ${context.version} (agent ${context.agentVersion})`, "-v, --version")
     .helpOption("--help", helpText())
@@ -91,8 +78,8 @@ export function registerAgentCommands(
       en: "list global Agents registered in City",
     }))
     .option("--running [enabled]", t({
-      zh: "仅列出当前运行中的 Agent",
-      en: "list only currently running agents",
+      zh: "仅列出当前 CLI City 已加载的 Agent",
+      en: "list only Agents currently loaded by the CLI City",
     }), parseBoolean)
     .option("--json [enabled]", t({
       zh: "以 JSON 输出",
@@ -108,42 +95,6 @@ export function registerAgentCommands(
         });
       },
     ));
-
-  agent
-    .command("start [agent_id]")
-    .description(t({
-      zh: "启动 Agent 进程（后台/前台）",
-      en: "start an Agent process in the background or foreground",
-    }))
-    .addOption(new context.hiddenPortOption("--port <port>").argParser(parsePort).hideHelp())
-    .addOption(new context.hiddenPortOption("--rpc-port <port>").argParser(parsePort).hideHelp())
-    .option("--workspace <id-or-path>", t({
-      zh: "校验 Agent 绑定的 Workspace ID 或路径",
-      en: "verify the Workspace ID or path bound to the Agent",
-    }))
-    .option("-h, --host <host>", t({
-      zh: "服务主机（默认 127.0.0.1）",
-      en: "service host (default: 127.0.0.1)",
-    }))
-    .option("--foreground [enabled]", t({
-      zh: "前台启动（仅当前终端）",
-      en: "run in the foreground for the current terminal only",
-    }), parseBoolean)
-    .helpOption("--help", helpText())
-    .action(
-      createVersionBanner(
-        context.version,
-        async (agent_id: string | undefined, options: AgentStartOptions & { foreground?: boolean; workspace?: string }) => {
-          const target = await resolve_cli_agent_target(agent_id, options.workspace);
-          const prepared = await prepareForegroundAgent(target, options);
-          if (prepared.should_foreground) {
-            await runCommand(prepared.target, prepared.options);
-            return;
-          }
-          await startCommand(prepared.target, prepared.options);
-        },
-      ),
-    );
 
   agent
     .command("model [agent_id]")
@@ -165,140 +116,31 @@ export function registerAgentCommands(
     ));
 
   agent
-    .command("status [agent_id]")
+    .command("chat [agent_id]")
     .description(t({
-      zh: "查看后台 Agent 进程（daemon）状态",
-      en: "show background Agent daemon status",
+      zh: "与 Agent 对话；City 未开启时使用临时本地运行时",
+      en: "chat with an Agent using a temporary local runtime when City is off",
     }))
-    .helpOption("--help", helpText())
-    .action(createVersionBanner(context.version, async (agent_id: string | undefined) => {
-      const target = await resolve_cli_agent_target(agent_id);
-      inject_agent_context(target);
-      await statusCommand(target);
-    }));
-
-  agent
-    .command("doctor [agent_id]")
-    .description(t({
-      zh: "诊断 daemon 状态文件；可选修复僵尸 pid/meta",
-      en: "diagnose daemon state files and optionally clean stale pid/meta data",
+    .option("-m, --message <text>", t({
+      zh: "发送一次性消息",
+      en: "send a one-shot message",
     }))
-    .option("--fix [enabled]", t({
-      zh: "清理僵尸 daemon 状态文件",
-      en: "clean stale daemon state files",
+    .option("--session-id <id>", t({
+      zh: "进入指定 Session",
+      en: "use a specific Session",
+    }))
+    .option("--new-session [enabled]", t({
+      zh: "创建新 Session",
+      en: "create a new Session",
     }), parseBoolean)
+    .option("--json [enabled]", t({ zh: "输出 JSON", en: "output JSON" }), parseBoolean)
     .helpOption("--help", helpText())
     .action(createVersionBanner(
       context.version,
-      async (agent_id: string | undefined, options: { fix?: boolean }) => {
-        const target = await resolve_cli_agent_target(agent_id);
-        inject_agent_context(target);
-        const pid = await readDaemonPid(target.agent_id);
-
-        if (!pid) {
-          emitCliBlock({
-            tone: "success",
-            title: "No daemon state found",
-            facts: [
-              {
-                label: "Agent",
-                value: target.agent_id,
-              },
-            ],
-          });
-          return;
-        }
-
-        if (isDaemonProcessAlive(pid)) {
-          emitCliBlock({
-            tone: "success",
-            title: "Daemon process is alive",
-            facts: [
-              {
-                label: "Agent",
-                value: target.agent_id,
-              },
-            ],
-          });
-          return;
-        }
-
-        const staleReasons = await diagnoseDaemonStaleReasons(target, pid);
-        emitCliBlock({
-          tone: "warning",
-          title: "Stale daemon state detected",
-          facts: [
-            {
-              label: "Agent",
-              value: target.agent_id,
-            },
-            {
-              label: "Reason",
-              value: staleReasons.map((item) => item.message).join("; "),
-            },
-          ],
-        });
-
-        if (options.fix !== true) {
-          emitCliBlock({
-            tone: "info",
-            title: "Suggested fix",
-            facts: [
-              {
-                label: "Command",
-                value: "city agent doctor <agent_id> --fix",
-              },
-            ],
-          });
-          return;
-        }
-
-        await runWithSpinner(
-          () => cleanupStaleDaemonFiles(target.agent_id),
-          { text: "Cleaning stale daemon files..." },
-        );
-        emitCliBlock({
-          tone: "success",
-          title: "Cleaned stale daemon state",
-          facts: [
-            {
-              label: "Agent",
-              value: target.agent_id,
-            },
-          ],
-        });
+      async (agent_id: string | undefined, options: AgentChatCliOptions) => {
+        await chatCommand({ ...options, to: agent_id });
       },
     ));
-
-  agent
-    .command("stop [agent_id]")
-    .description(t({
-      zh: "停止后台 Agent 进程（daemon）",
-      en: "stop the background Agent daemon",
-    }))
-    .helpOption("--help", helpText())
-    .action(createVersionBanner(context.version, async (agent_id: string | undefined) => {
-      const target = await resolve_cli_agent_target(agent_id);
-      inject_agent_context(target);
-      await stopCommand(target);
-    }));
-
-  agent
-    .command("restart [agent_id]")
-    .description(t({
-      zh: "重启后台 Agent 进程（daemon）",
-      en: "restart the background Agent daemon",
-    }))
-    .option("-h, --host <host>", t({
-      zh: "服务主机（默认 127.0.0.1）",
-      en: "service host (default: 127.0.0.1)",
-    }))
-    .helpOption("--help", helpText())
-    .action(createVersionBanner(context.version, async (agent_id: string | undefined, options: AgentStartOptions) => {
-      const target = await resolve_cli_agent_target(agent_id);
-      inject_agent_context(target);
-      await restartCommand(target, options);
-    }));
 
   registerAgentTokenCommand(agent);
 }

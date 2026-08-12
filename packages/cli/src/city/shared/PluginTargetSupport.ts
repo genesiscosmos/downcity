@@ -1,5 +1,5 @@
 /**
- * Agent Workspace 目标与启动预检辅助。
+ * Agent Workspace 目标解析辅助。
  *
  * 关键点（中文）：该模块只服务 Agent 生命周期与内部 TUI，不再承担 Plugin CLI 的 cwd 推断。
  */
@@ -8,10 +8,12 @@ import path from "node:path";
 import { CliError } from "@/shared/CliError.js";
 import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
 import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
-import { get_workspace_by_path } from "@/city/process/registry/WorkspaceRepository.js";
-import { readDaemonMeta, readDaemonPid, isProcessAlive } from "@/city/process/daemon/Manager.js";
+import {
+  get_workspace,
+  get_workspace_by_path,
+} from "@/city/process/registry/WorkspaceRepository.js";
 import { ensure_agent_execution_model_ready } from "@/city/agent/AgentExecutionModelRecovery.js";
-import type { DaemonTarget } from "@/city/process/daemon/Types.js";
+import type { AgentWorkspaceTarget } from "@/city/agent/AgentSelection.js";
 
 /** Agent 启动前预检选项。 */
 export interface AgentPreflightOptions {
@@ -21,7 +23,7 @@ export interface AgentPreflightOptions {
 
 /** 执行 Sandbox、Agent Binding 与模型可用性预检。 */
 export async function checkAgentPreflight(
-  target: DaemonTarget,
+  target: AgentWorkspaceTarget,
   options?: AgentPreflightOptions,
 ): Promise<void> {
   if (options?.requireShellSandbox !== false) {
@@ -46,7 +48,7 @@ export async function checkAgentPreflight(
   await ensure_agent_execution_model_ready(target.agent_id);
 }
 
-/** 通过 Agent ID 读取当前运行 daemon 的 Workspace。 */
+/** 通过 Agent ID 读取其持久化绑定的 Workspace。 */
 export async function resolveProjectRootByAgentId(agent_id_input: string): Promise<{
   /** Agent ID。 */
   agent_id?: string;
@@ -58,15 +60,10 @@ export async function resolveProjectRootByAgentId(agent_id_input: string): Promi
   const agent_id = String(agent_id_input || "").trim().toLowerCase();
   const agent = agent_id ? get_managed_agent(agent_id) : null;
   if (!agent) return { error: `Agent not found: ${agent_id_input}` };
-  const pid = await readDaemonPid(agent.agent_id);
-  if (!pid || !isProcessAlive(pid)) {
-    return { error: `Agent is not running: ${agent.agent_id}` };
-  }
-  const meta = await readDaemonMeta(agent.agent_id);
-  if (!meta?.workspace_path || !get_workspace_by_path(meta.workspace_path)) {
-    return { error: `Agent runtime Workspace is unavailable: ${agent.agent_id}` };
-  }
-  return { agent_id: agent.agent_id, project_root: path.resolve(meta.workspace_path) };
+  if (!agent.workspace_id) return { error: `Agent has no Workspace binding: ${agent.agent_id}` };
+  const workspace = get_workspace(agent.workspace_id);
+  if (!workspace) return { error: `Agent Workspace is unavailable: ${agent.agent_id}` };
+  return { agent_id: agent.agent_id, project_root: path.resolve(workspace.workspace_path) };
 }
 
 /** 校验 Workspace 路径非空。 */

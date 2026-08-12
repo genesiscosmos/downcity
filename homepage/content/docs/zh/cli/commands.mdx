@@ -5,26 +5,33 @@ description: City 与 Fed 的常用命令
 
 # CLI 命令
 
+## City 生命周期
+
+```bash
+city on                         # 启动唯一 CLI City daemon
+city on --port 5314 --rpc-port 15314
+city status
+city restart
+city off
+```
+
+CLI City 使用一个 HTTP 端口和一个原生 TCP RPC 端口，并在两个协议内按 `agent_id` 路由全部 Agent。
+
 ## Agent
 
 ```bash
 city agent                         # 打开 Agent 面板
 city agent create [path]           # 不传路径：当前目录或系统文件夹选择窗口
 city agent list
-city agent start [agent_id] --workspace <workspace-id-or-path>
-city agent stop [agent_id]
-city agent restart [agent_id]
-city agent status [agent_id]
-city agent doctor [agent_id]
 city agent model [agent_id]
 city agent chat [agent_id]
 ```
 
-`city agent start` 装配的 Agent 默认启用 `ask_question` Tool。在
+City 装配的 Agent 默认启用 `ask_question` Tool。在
 `city agent chat` 中，模型需要关键补充信息时会显示文本、单选或多选面板；CLI 将完整答案
 提交给当前 Session，并继续同一个 Turn。按 Esc 可停止当前 Turn。
 
-Agent 与 Workspace 独立登记。省略 `--workspace` 时，CLI 依次尝试当前 daemon 的 Workspace、当前目录对应的已登记 Workspace 和唯一 Workspace；仍有多个候选时在 TTY 中选择。非交互环境存在多个 Workspace 时必须显式传入 `--workspace`。
+Agent 与 Workspace 独立登记，每个 Agent 持久化绑定一个 Workspace。Agent 没有独立启动状态；`city agent chat` 在 City 运行时走 RPC，在 City 停止时直接创建临时本地 City。
 
 在输入框中可以使用 slash command 打开系统文件选择器并添加本地附件：
 
@@ -76,7 +83,7 @@ Plugin 配置由 Agent Binding 持有；Plugin Resource 由全局 Resource Store
 
 `resource update --set` 替换全部用户可写字段；`resource refresh` 保留用户字段，只重新计算 Resolver 字段。已被 Binding 引用的 Resource 不能删除；仍拥有 Resource 的第三方 Plugin 不能卸载。
 
-修改 enable、disable、config 或 Resource Binding 后，正在运行的 Agent 需要重启，新的 Runtime 装配才会生效。
+修改 enable、disable、config 或 Resource Binding 后，运行中的 CLI City 需要执行 `city restart`，新的 Runtime 装配才会生效。
 
 CLI、Agent `plugin_call`、HTTP 与定时任务统一调用 Plugin Action。不存在 `plugin command`，Chat 也不再是顶层命令特例。
 
@@ -94,9 +101,9 @@ city federation
 ```
 
 Global Env 写入 `~/.downcity/.env`；Workspace Env 写入项目根目录的 `.env`。也可以从
-`city agent` 的“配置 Env”入口选择运行中的 Agent 所使用的 Workspace。修改完成后，City 会通知受影响的运行中
-Agent 重新加载 Env，并通过 Workspace 将新快照广播给已有 Session；已停止 Agent 会在下次
-启动时加载。
+`city agent` 的“配置 Env”入口选择 Agent 所使用的 Workspace。修改完成后，CLI City 会通知受影响的已加载
+Agent 重新加载 Env，并通过 Workspace 将新快照广播给已有 Session；未被该 City 加载的 Agent
+会在下一次被 City 装配时读取新配置。
 
 多个 Agent 在同一 Workspace 运行时共享同一个项目 `.env`。运行时优先级为：Global `.env`
 低于 Workspace `.env`，启动进程显式环境变量最高。`list` 不显示明文值；`copy` 只允许从

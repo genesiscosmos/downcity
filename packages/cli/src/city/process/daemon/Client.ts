@@ -16,7 +16,7 @@ import {
   formatCliBearerHeaderValue,
   resolveCliAuthToken,
 } from "@/city/shared/CliAuthToken.js";
-import { getDaemonMetaPath } from "@/city/process/daemon/Manager.js";
+import { get_daemon_meta_path } from "@/city/process/daemon/Manager.js";
 import type { JsonObject, JsonValue } from "@downcity/agent";
 
 /**
@@ -55,13 +55,6 @@ function parseErrorMessageFromPayload(data: JsonValue | null): string | null {
   return null;
 }
 
-function pickArgValue(args: string[], key: string): string | undefined {
-  const idx = args.findIndex((item) => String(item).trim() === key);
-  if (idx < 0) return undefined;
-  const next = String(args[idx + 1] || "").trim();
-  return next || undefined;
-}
-
 type ResolveDaemonEndpointParams = {
   agent_id: string;
   host?: string;
@@ -74,7 +67,7 @@ function resolveDaemonEndpointFromSources(params: {
   explicit_port?: number;
   env_host_name: string;
   env_port_name: string;
-  arg_port_name: string;
+  meta_port_name: "http_port" | "rpc_port";
   default_host: string;
   default_port: number;
   read_daemon_arg_host?: boolean;
@@ -88,17 +81,17 @@ function resolveDaemonEndpointFromSources(params: {
   let daemonArgHost: string | undefined;
   let daemonArgPort: number | undefined;
   try {
-    const metaPath = getDaemonMetaPath(params.agent_id);
+    const metaPath = get_daemon_meta_path();
     if (fs.existsSync(metaPath)) {
-      const raw = fs.readJsonSync(metaPath) as { args?: unknown };
-      const args = Array.isArray(raw?.args)
-        ? raw.args.map((item) => String(item))
-        : [];
-      daemonArgHost =
-        params.read_daemon_arg_host === false
-          ? undefined
-          : normalizeHost(pickArgValue(args, "--host"));
-      daemonArgPort = parsePortLike(pickArgValue(args, params.arg_port_name));
+      const raw = fs.readJsonSync(metaPath) as {
+        host?: unknown;
+        http_port?: unknown;
+        rpc_port?: unknown;
+      };
+      daemonArgHost = params.read_daemon_arg_host === false
+        ? undefined
+        : normalizeHost(String(raw.host || ""));
+      daemonArgPort = parsePortLike(Number(raw[params.meta_port_name]));
     }
   } catch {
     // ignore daemon meta errors, fallback to other sources
@@ -134,7 +127,7 @@ export function resolveDaemonEndpoint(params: {
     explicit_port: params.port,
     env_host_name: "DC_CITY_HOST",
     env_port_name: "DC_CITY_PORT",
-    arg_port_name: "--port",
+    meta_port_name: "http_port",
     default_host: "127.0.0.1",
     default_port: 5314,
     read_daemon_arg_host: true,
@@ -146,7 +139,7 @@ export function resolveDaemonEndpoint(params: {
  *
  * 优先级（中文）
  * 1) 显式入参 `host/port`
- * 2) 环境变量 `DC_AGENT_RPC_HOST/DC_AGENT_RPC_PORT`
+ * 2) 环境变量 `DC_CITY_RPC_HOST/DC_CITY_RPC_PORT`
  * 3) daemon meta args（`downcity.daemon.json`）
  * 4) 默认 `127.0.0.1:15314`
  */
@@ -157,9 +150,9 @@ export function resolveDaemonRpcEndpoint(
     agent_id: params.agent_id,
     explicit_host: params.host,
     explicit_port: params.port,
-    env_host_name: "DC_AGENT_RPC_HOST",
-    env_port_name: "DC_AGENT_RPC_PORT",
-    arg_port_name: "--rpc-port",
+    env_host_name: "DC_CITY_RPC_HOST",
+    env_port_name: "DC_CITY_RPC_PORT",
+    meta_port_name: "rpc_port",
     default_host: "127.0.0.1",
     default_port: 15314,
     // 关键点（中文）：RPC 运行时固定监听本机地址，不能复用 HTTP gateway 的 `--host`。
@@ -183,7 +176,8 @@ export async function callServer<T>(
     port: params.port,
   });
 
-  const url = new URL(params.path, endpoint.baseUrl).toString();
+  const agent_base_url = `${endpoint.baseUrl}/agents/${encodeURIComponent(params.agent_id)}/`;
+  const url = new URL(params.path.replace(/^\//u, ""), agent_base_url).toString();
   const method = params.method || "GET";
   const hasBody = params.body !== undefined && method !== "GET";
   const headers: Record<string, string> = {};

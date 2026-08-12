@@ -48,6 +48,11 @@ export function get_agent_runtimes_dir_path(): string {
   return path.join(getPlatformRootDirPath(), "runtimes");
 }
 
+/** CLI City daemon 的唯一运行状态目录。 */
+export function get_city_daemon_runtime_dir_path(): string {
+  return path.join(get_agent_runtimes_dir_path(), "city");
+}
+
 /** 全局安装的第三方 Plugin 制品目录。 */
 export function get_plugin_installations_dir_path(): string {
   return path.join(getPlatformRootDirPath(), "plugins");
@@ -64,20 +69,6 @@ export function get_plugin_installation_dir_path(installation_id: string): strin
     throw new Error(`Invalid Plugin installation id: ${installation_id}`);
   }
   return path.join(get_plugin_installations_dir_path(), normalized_installation_id);
-}
-
-/**
- * 单个 Agent 的全局运行状态目录。
- *
- * @param agent_id 受管 Agent 的稳定全局 ID。
- */
-export function get_agent_runtime_dir_path(agent_id: string): string {
-  const normalized_agent_id = String(agent_id || "").trim();
-  if (!normalized_agent_id) throw new Error("agent_id is required");
-  if (!/^[a-z0-9_]+$/u.test(normalized_agent_id)) {
-    throw new Error(`Invalid agent_id: ${normalized_agent_id}`);
-  }
-  return path.join(get_agent_runtimes_dir_path(), normalized_agent_id);
 }
 
 /**

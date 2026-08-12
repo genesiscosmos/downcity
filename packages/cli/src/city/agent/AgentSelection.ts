@@ -25,20 +25,29 @@ import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import { CliError } from "@/shared/CliError.js";
 import {
-  isProcessAlive as is_daemon_process_alive,
-  readDaemonPid as read_daemon_pid,
+  is_process_alive,
+  read_daemon_meta,
+  read_daemon_pid,
 } from "@/city/process/daemon/Manager.js";
-import type { DaemonTarget } from "@/city/process/daemon/Types.js";
+
+/** Agent 与其唯一 Workspace 绑定，用于一次性本地调用。 */
+export interface AgentWorkspaceTarget {
+  /** Agent 稳定 ID。 */
+  agent_id: string;
+  /** 绑定的 Workspace 绝对路径。 */
+  workspace_path: string;
+}
 
 /** 将 Agent 配置与当前 daemon 投影成 CLI 状态视图。 */
 async function to_cli_managed_agent_view(agent: ManagedAgent): Promise<CliManagedAgentView> {
   const workspace = agent.workspace_id ? get_workspace(agent.workspace_id) : null;
-  const daemon_pid = await read_daemon_pid(agent.agent_id);
-  const running = Boolean(daemon_pid && is_daemon_process_alive(daemon_pid));
+  const daemon_pid = await read_daemon_pid();
+  const meta = daemon_pid && is_process_alive(daemon_pid) ? await read_daemon_meta() : null;
+  const loaded = meta?.pid === daemon_pid && meta.agent_ids.includes(agent.agent_id);
   return {
     agent_id: agent.agent_id,
     ...(workspace ? { workspace_path: workspace.workspace_path } : {}),
-    status: running ? "running" : "stopped",
+    status: loaded ? "loaded" : "unloaded",
   };
 }
 
@@ -48,7 +57,7 @@ export async function list_registered_agents_for_cli(): Promise<CliManagedAgentV
     list_managed_agents().map(to_cli_managed_agent_view),
   );
   return agents.sort((left, right) => {
-    const status_priority = Number(right.status === "running") - Number(left.status === "running");
+    const status_priority = Number(right.status === "loaded") - Number(left.status === "loaded");
     return status_priority || left.agent_id.localeCompare(right.agent_id);
   });
 }
@@ -80,14 +89,14 @@ async function prompt_managed_agent_id(agents: CliManagedAgentView[]): Promise<s
 
 /** 输出全局受管 Agent 列表。 */
 export async function emit_registered_agent_list_with_options(options?: {
-  /** 是否仅展示运行中的 Agent。 */
+  /** 是否仅展示当前 CLI City 已加载的 Agent。 */
   running_only?: boolean;
   /** 是否输出 JSON。 */
   as_json?: boolean;
 }): Promise<void> {
   const all_agents = await list_registered_agents_for_cli();
   const agents = options?.running_only
-    ? all_agents.filter((agent) => agent.status === "running")
+    ? all_agents.filter((agent) => agent.status === "loaded")
     : all_agents;
   if (options?.as_json) {
     printResult({
@@ -101,24 +110,24 @@ export async function emit_registered_agent_list_with_options(options?: {
   if (agents.length === 0) {
     emitCliBlock({
       tone: "info",
-      title: options?.running_only ? "Running agents" : "Agents",
-      summary: options?.running_only ? "0 running" : "0 managed",
+      title: options?.running_only ? "City-loaded Agents" : "Agents",
+      summary: options?.running_only ? "0 loaded" : "0 managed",
       note: options?.running_only
-        ? "No Agent daemon is currently running."
+        ? "The CLI City has not loaded any Agents."
         : "Run `city agent create <workspace_path>` to create one.",
     });
     return;
   }
   emitCliList({
     tone: "accent",
-    title: options?.running_only ? "Running agents" : "Agents",
+    title: options?.running_only ? "City-loaded Agents" : "Agents",
     summary: `${agents.length} managed`,
     items: agents.map((agent) => ({
-      tone: agent.status === "running" ? "success" : "info",
+      tone: agent.status === "loaded" ? "success" : "info",
       title: agent.agent_id,
       facts: [
         ...(agent.workspace_path ? [{ label: "Workspace", value: agent.workspace_path }] : []),
-        { label: "Status", value: agent.status },
+        { label: "City", value: agent.status },
       ],
     })),
   });
@@ -137,7 +146,7 @@ export async function emit_registered_agent_list(): Promise<void> {
 export async function resolve_cli_agent_target(
   agent_id_input?: string,
   workspace_input?: string,
-): Promise<DaemonTarget> {
+): Promise<AgentWorkspaceTarget> {
   const agent = await resolve_agent(agent_id_input);
   const workspace = resolve_bound_workspace(agent, workspace_input);
   return { agent_id: agent.agent_id, workspace_path: workspace.workspace_path };
@@ -156,7 +165,7 @@ async function resolve_agent(agent_id_input?: string): Promise<ManagedAgent> {
     throw new CliError({ title: "No managed agents", fix: "city agent create <workspace_path>" });
   }
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new CliError({ title: "Agent ID is required", fix: "city agent start <agent_id>" });
+    throw new CliError({ title: "Agent ID is required", fix: "city agent list" });
   }
   const selected_agent_id = await prompt_managed_agent_id(agents);
   if (!selected_agent_id) throw new CliError({ title: "Agent selection cancelled", exitCode: 0 });
@@ -199,7 +208,7 @@ function resolve_bound_workspace(
     throw new CliError({
       title: `Agent is bound to another Workspace: ${agent.agent_id}`,
       note: bound_workspace.workspace_path,
-      fix: `city agent start ${agent.agent_id}`,
+      fix: `city agent list`,
     });
   }
   return bound_workspace;

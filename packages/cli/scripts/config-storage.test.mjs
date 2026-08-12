@@ -29,13 +29,14 @@ test("Agent 与 Workspace 在全局 DB 中独立管理", async () => {
       "../bin/city/process/registry/WorkspaceRepository.js"
     );
 
-    repository.create_managed_agent({
-      agent_id: "db_agent",
-      execution: { type: "api", model_id: "model_a" },
-    });
     const workspace = workspaces.create_workspace({
       workspace_path: project_root,
       name: "Project",
+    });
+    repository.create_managed_agent({
+      agent_id: "db_agent",
+      workspace_id: workspace.workspace_id,
+      execution: { type: "api", model_id: "model_a" },
     });
     const plugins = await import(
       "../bin/city/process/registry/PluginRepository.js"
@@ -60,15 +61,13 @@ test("Agent 与 Workspace 在全局 DB 中独立管理", async () => {
 
     repository.create_managed_agent({
       agent_id: "second_agent",
+      workspace_id: workspace.workspace_id,
       execution: { type: "api", model_id: "model_b" },
-    });
-    repository.update_managed_agent({
-      agent_id: "db_agent",
-      start: { port: 7001 },
     });
     assert.equal(repository.get_managed_agent("second_agent").execution.model_id, "model_b");
     assert.equal(repository.get_managed_agent("db_agent").execution.model_id, "model_a");
-    assert.equal(repository.get_managed_agent("db_agent").start.port, 7001);
+    assert.equal(repository.get_managed_agent("db_agent").workspace_id, workspace.workspace_id);
+    assert.equal(repository.get_managed_agent("second_agent").workspace_id, workspace.workspace_id);
     assert.equal(workspaces.get_workspace(workspace.workspace_id).workspace_path, project_root);
     assert.equal(workspaces.get_workspace_by_path(project_root).workspace_id, workspace.workspace_id);
     assert.equal(workspaces.list_workspaces().length, 1);
@@ -259,29 +258,25 @@ test("平台 Env 不向 Workspace 泄漏新旧身份凭证", async () => {
   });
 });
 
-test("Daemon 状态按 agent_id 隔离在全局 runtime", async () => {
+test("CLI City daemon 使用唯一的全局 runtime", async () => {
   const platform_root = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
     const paths = await import("../bin/city/process/registry/CityPaths.js");
     const daemon = await import("../bin/city/process/daemon/Manager.js");
-    const runtime_dir = paths.get_agent_runtime_dir_path("agent_one");
-    assert.equal(runtime_dir, path.join(platform_root, "runtimes", "agent_one"));
+    const runtime_dir = paths.get_city_daemon_runtime_dir_path();
+    assert.equal(runtime_dir, path.join(platform_root, "runtimes", "city"));
     assert.equal(
-      daemon.getDaemonPidPath("agent_one"),
+      daemon.get_daemon_pid_path(),
       path.join(runtime_dir, "daemon.pid"),
     );
     assert.equal(
-      daemon.getDaemonMetaPath("agent_one"),
+      daemon.get_daemon_meta_path(),
       path.join(runtime_dir, "daemon.json"),
     );
     assert.equal(
-      daemon.getDaemonLogPath("agent_one"),
+      daemon.get_daemon_log_path(),
       path.join(runtime_dir, "daemon.log"),
-    );
-    assert.throws(
-      () => paths.get_agent_runtime_dir_path("../outside"),
-      /Invalid agent_id/,
     );
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
@@ -415,9 +410,14 @@ class CompanionPlugin {
 export const plugins = [ExamplePlugin, CompanionPlugin];
 `);
     const agents = await import("../bin/city/process/registry/ManagedAgentRepository.js");
+    const workspaces = await import("../bin/city/process/registry/WorkspaceRepository.js");
     const plugins = await import("../bin/city/process/registry/PluginRepository.js");
     const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
-    agents.create_managed_agent({ agent_id: "plugin_agent" });
+    const workspace = workspaces.create_workspace({ workspace_path: workspace_root });
+    agents.create_managed_agent({
+      agent_id: "plugin_agent",
+      workspace_id: workspace.workspace_id,
+    });
     const installation = await installer.install_plugins(plugin_source);
     assert.deepEqual(
       installation.manifest.plugins.map((plugin) => plugin.name),
@@ -710,7 +710,7 @@ export const plugins = [UnexpectedPlugin];
   }
 });
 
-test("CLI 不再注册旧 City 与 Plugin 特例命令", () => {
+test("CLI 生命周期只属于 City，Agent 不注册生命周期命令", () => {
   const cli_path = path.resolve("bin/downcity.js");
   const platform_root = create_temp_root();
   const root_help = spawnSync(process.execPath, [cli_path, "--help"], {
@@ -728,8 +728,13 @@ test("CLI 不再注册旧 City 与 Plugin 特例命令", () => {
   fs.rmSync(platform_root, { recursive: true, force: true });
   assert.equal(root_help.status, 0, root_help.stderr);
   assert.doesNotMatch(root_help.stdout, /^\s+(init|update|config|chat|task|memory|skill|contact)\b/m);
-  assert.match(root_help.stdout, /^\s+web\b/m);
-  assert.doesNotMatch(agent_help.stdout, /^\s+(chat|history)\b/m);
+  assert.match(root_help.stdout, /^\s+on\b/m);
+  assert.match(root_help.stdout, /^\s+off\b/m);
+  assert.match(root_help.stdout, /^\s+restart\b/m);
+  assert.match(root_help.stdout, /^\s+status\b/m);
+  assert.doesNotMatch(root_help.stdout, /^\s+web\b/m);
+  assert.match(agent_help.stdout, /^\s+chat\b/m);
+  assert.doesNotMatch(agent_help.stdout, /^\s+(start|stop|restart|status|doctor|history)\b/m);
   assert.doesNotMatch(plugin_help.stdout, /^\s+(command|schedule)\b/m);
   assert.match(plugin_help.stdout, /^\s+action\b/m);
 });
@@ -765,14 +770,15 @@ test("非交互 Agent 命令不根据当前 Workspace 推断目标", async () =>
     const repository = await import(
       "../bin/city/process/registry/ManagedAgentRepository.js"
     );
-    repository.create_managed_agent({
-      agent_id: "workspace_agent",
-      execution: { type: "api", model_id: "model_a" },
-    });
     const workspaces = await import(
       "../bin/city/process/registry/WorkspaceRepository.js"
     );
-    workspaces.create_workspace({ workspace_path: workspace_root });
+    const workspace = workspaces.create_workspace({ workspace_path: workspace_root });
+    repository.create_managed_agent({
+      agent_id: "workspace_agent",
+      workspace_id: workspace.workspace_id,
+      execution: { type: "api", model_id: "model_a" },
+    });
 
     const cli_path = path.resolve("bin/downcity.js");
     const environment = {
@@ -782,7 +788,7 @@ test("非交互 Agent 命令不根据当前 Workspace 推断目标", async () =>
     };
     const implicit_result = spawnSync(
       process.execPath,
-      [cli_path, "agent", "status"],
+      [cli_path, "agent", "token", "list"],
       {
         cwd: workspace_root,
         encoding: "utf8",
@@ -797,7 +803,7 @@ test("非交互 Agent 命令不根据当前 Workspace 推断目标", async () =>
 
     const explicit_result = spawnSync(
       process.execPath,
-      [cli_path, "agent", "status", "workspace_agent"],
+      [cli_path, "agent", "token", "list", "workspace_agent"],
       {
         cwd: workspace_root,
         encoding: "utf8",
@@ -840,28 +846,35 @@ test("Agent 模型选择只接受对话执行模型", async () => {
 });
 
 test("Chat 装配严格使用当前 Agent 绑定与 queue 配置", async () => {
-  const { load_plugin_type } = await import(
-    "../bin/city/runtime/plugins/PluginTypeLoader.js"
-  );
-  const chat_type = await load_plugin_type("chat");
-  const chat = new chat_type({
-    config: { queue: { max_concurrency: 5 } },
-    resources: [{
-      id: "telegram-bound",
-      type: "telegram",
-      name: "Bound Bot",
-      bot_token: "token",
-    }],
-  });
-  assert.ok(chat);
-  assert.equal(chat.getResourceId({}, "telegram"), "telegram-bound");
-  assert.equal(chat.isChannelEnabled({}, "telegram"), true);
-  assert.equal(chat.isChannelEnabled({}, "feishu"), false);
-  assert.deepEqual(chat.getQueueWorkerConfig({}), { max_concurrency: 5 });
+  const platform_root = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  try {
+    const { load_plugin_type } = await import(
+      "../bin/city/runtime/plugins/PluginTypeLoader.js"
+    );
+    const chat_type = await load_plugin_type("chat");
+    const chat = new chat_type({
+      config: { queue: { max_concurrency: 5 } },
+      resources: [{
+        id: "telegram-bound",
+        type: "telegram",
+        name: "Bound Bot",
+        bot_token: "token",
+      }],
+    });
+    assert.ok(chat);
+    assert.equal(chat.getResourceId({}, "telegram"), "telegram-bound");
+    assert.equal(chat.isChannelEnabled({}, "telegram"), true);
+    assert.equal(chat.isChannelEnabled({}, "feishu"), false);
+    assert.deepEqual(chat.getQueueWorkerConfig({}), { max_concurrency: 5 });
 
-  const unbound = new chat_type({ config: {}, resources: [] });
-  assert.equal(unbound.isChannelEnabled({}, "telegram"), false);
-  assert.equal(unbound.getResourceId({}, "telegram"), "");
+    const unbound = new chat_type({ config: {}, resources: [] });
+    assert.equal(unbound.isChannelEnabled({}, "telegram"), false);
+    assert.equal(unbound.getResourceId({}, "telegram"), "");
+  } finally {
+    delete process.env.DC_PLATFORM_ROOT;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+  }
 });
 
 test("Plugin Resource Resolver 写入动态字段并通过 ID 绑定", async () => {
@@ -880,14 +893,17 @@ test("Plugin Resource Resolver 写入动态字段并通过 ID 绑定", async () 
       },
     }), { status: 200 });
     const agents = await import("../bin/city/process/registry/ManagedAgentRepository.js");
+    const workspaces = await import("../bin/city/process/registry/WorkspaceRepository.js");
     const resource_service = await import(
       "../bin/city/process/plugin/PluginResourceService.js"
     );
     const plugins_repository = await import(
       "../bin/city/process/registry/PluginRepository.js"
     );
+    const workspace = workspaces.create_workspace({ workspace_path: workspace_root });
     agents.create_managed_agent({
       agent_id: "resource_agent",
+      workspace_id: workspace.workspace_id,
     });
     const resource = await resource_service.create_plugin_resource({
       plugin_name: "chat",
@@ -1010,10 +1026,10 @@ test("旧 Chat Account 与 Binding 原子迁移为 Plugin Resource", async () =>
     );
     database.close();
 
-    const { PlatformStore } = await import("../bin/city/runtime/store/index.js");
-    const store = new PlatformStore(database_path);
+    const { LocalCityStore } = await import("@downcity/city");
+    const store = new LocalCityStore({ root_path: platform_root });
     store.close();
-    const reopened_store = new PlatformStore(database_path);
+    const reopened_store = new LocalCityStore({ root_path: platform_root });
     reopened_store.close();
 
     const migrated = new Database(database_path);

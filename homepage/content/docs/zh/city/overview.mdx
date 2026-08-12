@@ -24,7 +24,7 @@ description: City 是什么，以及如何为 Agent 提供共享 AI 基础设施
 
 ## Agent 如何连接 City
 
-当你运行 `city agent start` 时，CLI 从全局 DB 读取 Agent 配置，从已连接的 City 实例解析 `execution.modelId`，然后将实时模型实例传给 Agent SDK。
+当你运行 `city on` 时，CLI 创建一个 City，从全局 DB 恢复全部已绑定 Agent，解析各自的 `execution.modelId`，并将实时模型实例传给 Agent SDK。
 
 当你直接使用 SDK 时，你自己提供模型实例 —— 但 City 仍然拥有背后的目录和计费。
 

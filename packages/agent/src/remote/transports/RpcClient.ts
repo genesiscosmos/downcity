@@ -486,6 +486,9 @@ export class RpcClient {
             params: input.params as never,
           }
     ) as RpcRequest;
+    if (this.endpoint.agent_id) {
+      request.agent_id = this.endpoint.agent_id;
+    }
     const result = await new Promise<TData>((resolve, reject) => {
       this.pending_requests.set(id, { resolve, reject });
       socket.write(`${JSON.stringify(request)}\n`, (error) => {
@@ -614,8 +617,16 @@ export function parse_rpc_url(url_input: string): RpcClientEndpoint {
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
     throw new Error("RPC url requires a valid port");
   }
+  const path_segments = url.pathname
+    .split("/")
+    .map((segment) => decodeURIComponent(segment).trim())
+    .filter(Boolean);
+  if (path_segments.length > 1) {
+    throw new Error("RPC url accepts at most one Agent ID path segment");
+  }
   return {
     host,
     port,
+    ...(path_segments[0] ? { agent_id: path_segments[0] } : {}),
   };
 }

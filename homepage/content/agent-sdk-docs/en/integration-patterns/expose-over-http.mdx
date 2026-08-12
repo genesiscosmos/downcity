@@ -10,7 +10,9 @@ If the caller and the executor do not live in the same process, you can expose t
 In Downcity, HTTP exposure is published by Downcity:
 
 ```bash
-downcity agent start
+downcity on
 ```
+
+The CLI City exposes every registered Agent at `http://127.0.0.1:5314/agents/<agent_id>`.
 
 For local process-to-process access, prefer `rpc://`. Use HTTP when an external client needs to call the Agent through the Downcity gateway.

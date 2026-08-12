@@ -83,7 +83,7 @@ city federation join https://your-federation.example.com
 city federation login
 city agent create .
 city agent list
-city agent start
+city on
 city agent chat
 ```
 
@@ -91,7 +91,7 @@ city agent chat
 
 `city federation ...` 只管理本机的 Federation 成员资格和用户登录态，不负责部署 Federation。
 
-后台 Agent 每次启动都有独立实例 ID。`city agent stop` 会同时校验 PID、项目路径和实例 ID；如果 pid/meta 已过期或 PID 已被其他进程复用，CLI 只清理 stale 状态文件，不会向无关进程发送信号。
+CLI City 每次启动都有独立实例 ID。`city off` 会同时校验 PID 和实例 ID；如果 pid/meta 已过期或 PID 已被其他进程复用，CLI 不会向无关进程发送信号。
 
 选择 GitHub、Google 等 OAuth 登录方式后，CLI 会始终输出 `authorization_url`。本地图形环境会同时尝试打开默认浏览器；通过 SSH 登录 VPS 或运行在无图形环境时，请复制该链接到你自己的浏览器中完成授权，CLI 会继续等待登录结果。
 

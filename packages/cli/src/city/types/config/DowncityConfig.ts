@@ -19,14 +19,6 @@ export interface DowncityConfig {
   id: string;
   version: string;
   /**
-   * Runtime startup configuration used by `downcity agent start`.
-   * CLI flags (if provided) take precedence over this config.
-   */
-  start?: {
-    port?: number;
-    host?: string;
-  };
-  /**
    * 项目执行绑定配置。
    *
    * 关键点（中文）

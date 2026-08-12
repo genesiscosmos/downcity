@@ -5,27 +5,34 @@ description: Common City and Fed commands
 
 # CLI Commands
 
+## City lifecycle
+
+```bash
+city on                         # Start the single CLI City daemon
+city on --port 5314 --rpc-port 15314
+city status
+city restart
+city off
+```
+
+The CLI City uses one HTTP port and one native TCP RPC port. Both protocols route all Agents by `agent_id`.
+
 ## Agent
 
 ```bash
 city agent                         # Open the Agent panel
 city agent create [path]           # No path: current directory or native folder picker
 city agent list
-city agent start [agent_id] --workspace <workspace-id-or-path>
-city agent stop [agent_id]
-city agent restart [agent_id]
-city agent status [agent_id]
-city agent doctor [agent_id]
 city agent model [agent_id]
 city agent chat [agent_id]
 ```
 
-Agents assembled by `city agent start` enable the `ask_question` tool by default.
+Agents assembled by City enable the `ask_question` tool by default.
 In `city agent chat`, the model can present text, single-select, or multi-select
 questions when key information is missing. The CLI submits the complete answer set
 to the current Session and continues the same Turn. Press Esc to stop that Turn.
 
-Agents and Workspaces are registered independently. Without `--workspace`, the CLI tries the current daemon Workspace, the registered Workspace matching the current directory, and then a unique registered Workspace. A TTY presents a selector when multiple candidates remain. Non-interactive calls with multiple Workspaces must pass `--workspace` explicitly.
+Agents and Workspaces are registered independently, and each Agent persistently binds one Workspace. Agents have no independent started state. `city agent chat` uses RPC while City is running and creates a temporary local City while it is off.
 
 Use the slash command to open the system file picker and attach local files to the next message:
 
@@ -77,7 +84,7 @@ Plugin configuration belongs to the Agent Binding. Plugin Resources belong to th
 
 `resource update --set` replaces all user-writable fields. `resource refresh` preserves user fields and only recomputes Resolver fields. A bound Resource cannot be removed, and a third-party Plugin that still owns Resources cannot be uninstalled.
 
-After changing enable, disable, config, or Resource Binding state, restart a running Agent to apply the new Runtime assembly.
+After changing enable, disable, config, or Resource Binding state, run `city restart` to apply the new Runtime assembly to a running CLI City.
 
 The CLI, Agent `plugin_call`, HTTP, and scheduled jobs all invoke Plugin Actions. There is no `plugin command`, and Chat is not a top-level CLI special case.
 
@@ -95,9 +102,9 @@ city federation
 ```
 
 Global Env is stored in `~/.downcity/.env`; Workspace Env is stored in `.env` at the project root.
-You can also use “Configure Env” in `city agent` to select the Workspace used by a running Agent. After a change, City asks affected
-running Agents to reload Env and Workspace broadcasts the new snapshot to existing Sessions.
-Stopped Agents load it on their next start.
+You can also use “Configure Env” in `city agent` to select an Agent's Workspace. After a change, the CLI City asks affected
+loaded Agents to reload Env and Workspace broadcasts the new snapshot to existing Sessions.
+Agents not loaded by that City receive the configuration the next time a City assembles them.
 
 Agents running in the same Workspace share one project `.env`. Runtime precedence is Global `.env`,
 then Workspace `.env`, then explicit process environment variables. `list` never prints plaintext

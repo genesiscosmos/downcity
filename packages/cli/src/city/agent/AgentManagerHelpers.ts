@@ -2,25 +2,17 @@
  * `city agent` 交互式管理器辅助函数。
  *
  * 关键点（中文）
- * - 负责 Agent 列表、模型和统一 Plugin Binding 管理，以及运行时操作封装。
- * - 交互式 manager 不能长期持有旧快照，启动/停止后需要重新加载摘要。
+ * - 负责 Agent 列表、聊天、模型与统一 Plugin Binding 管理。
+ * - City 生命周期属于根命令，不在 Agent 管理面板中重复表达。
  */
 
 import prompts from "@/city/tui/Prompts.js";
 import { run_agent_create_command } from "@/city/agent/Init.js";
-import { runCommand } from "@/city/agent/Run.js";
-import { startCommand } from "@/city/agent/Start.js";
-import { stopCommand } from "@/city/agent/Stop.js";
-import { restartCommand } from "@/city/agent/Restart.js";
 import { chatCommand } from "@/city/agent/AgentChat.js";
 import { configure_agent_model } from "@/city/agent/AgentModel.js";
 import { list_registered_agents_for_cli } from "@/city/agent/AgentSelection.js";
-import { resolve_cli_agent_target } from "@/city/agent/AgentSelection.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
-import { inject_agent_context } from "@/shared/IndexSupport.js";
-import { prepareForegroundAgent } from "@/city/shared/CityAgentRuntime.js";
 import { t } from "@/shared/CliLocale.js";
-import type { AgentStartOptions } from "@/city/types/AgentStartOptions.js";
 import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
 import type {
   AgentManagerAgentAction,
@@ -71,7 +63,7 @@ export function formatAgentDetail(agent: AgentManagerAgentSummary): string {
   });
   return t({
     zh: [
-      `状态 ${agent.status === "running" ? "运行中" : "已停止"} · 模型 ${execution_binding}`,
+      `City ${agent.status === "loaded" ? "已加载" : "未加载"} · 模型 ${execution_binding}`,
       "Enter 进入管理面板。",
     ].join("\n"),
     en: [
@@ -96,9 +88,9 @@ export async function promptAgentListSelection(
         disabled: true,
       },
       ...agents.map((agent) => ({
-        title: agent.status === "running"
-          ? t({ zh: `${agent.id} · 运行中`, en: `${agent.id} · running` })
-          : t({ zh: `${agent.id} · 已停止`, en: `${agent.id} · stopped` }),
+        title: agent.status === "loaded"
+          ? t({ zh: `${agent.id} · City 已加载`, en: `${agent.id} · loaded by City` })
+          : t({ zh: `${agent.id} · 可直接使用`, en: `${agent.id} · locally available` }),
         description: formatAgentDetail(agent),
         value: {
           type: "agent" as const,
@@ -161,12 +153,11 @@ export async function promptAgentAction(
         title: t({ zh: "Agent", en: "Agent" }),
         disabled: true,
       },
-      ...startActionChoices(agent),
       {
         title: t({ zh: "聊天", en: "Chat" }),
         description: t({
-          zh: "进入与当前运行中 Agent 的终端对话。",
-          en: "Open a terminal conversation with the currently running agent.",
+          zh: "进入 Agent 对话；City 未启动时使用临时本地运行时。",
+          en: "Open Agent chat; use a temporary local runtime when City is off.",
         }),
         value: "chat",
       },
@@ -175,7 +166,6 @@ export async function promptAgentAction(
         description: formatAgentConfigPanelDescription(agent),
         value: "configure",
       },
-      ...stopAndRestartActionChoices(agent),
       {
         title: t({ zh: "导航", en: "Navigation" }),
         disabled: true,
@@ -206,66 +196,6 @@ export function formatAgentConfigPanelDescription(agent: AgentManagerAgentSummar
       "Configure the default model, Env, and built-in or installed Plugin bindings.",
     ].join("\n"),
   });
-}
-
-export function startActionChoices(
-  agent: AgentManagerAgentSummary,
-): Array<{
-  title: string;
-  description: string;
-  value: AgentManagerAgentAction;
-  disabled?: boolean;
-}> {
-  if (agent.status === "running") {
-    return [];
-  }
-
-  return [
-    {
-      title: t({ zh: "启动", en: "Start" }),
-      description: t({
-        zh: "启动当前 Agent daemon，并刷新运行状态。",
-        en: "Start the current agent daemon and refresh runtime status.",
-      }),
-      value: "start",
-    },
-  ];
-}
-
-export function stopAndRestartActionChoices(
-  agent: AgentManagerAgentSummary,
-): Array<{
-  title: string;
-  description?: string;
-  value?: AgentManagerAgentAction;
-  disabled?: boolean;
-}> {
-  if (agent.status !== "running") {
-    return [];
-  }
-
-  return [
-    {
-      title: t({ zh: "运行操作", en: "Runtime actions" }),
-      disabled: true,
-    },
-    {
-      title: t({ zh: "停止", en: "Stop" }),
-      description: t({
-        zh: "停止当前 Agent daemon，但保留项目配置。",
-        en: "Stop the current agent daemon while keeping project configuration.",
-      }),
-      value: "stop",
-    },
-    {
-      title: t({ zh: "重启", en: "Restart" }),
-      description: t({
-        zh: "重启当前 Agent daemon，适合配置更新后重新加载。",
-        en: "Restart the current agent daemon, useful after configuration changes.",
-      }),
-      value: "restart",
-    },
-  ];
 }
 
 export async function promptAgentConfigAction(
@@ -326,19 +256,6 @@ export async function promptAgentConfigAction(
   return response.action || null;
 }
 
-export async function startAgentProject(
-  agent_id: string,
-): Promise<void> {
-  const target = await resolve_cli_agent_target(agent_id);
-  const options: AgentStartOptions & { foreground?: boolean } = {};
-  const prepared = await prepareForegroundAgent(target, options);
-  if (prepared.should_foreground) {
-    await runCommand(prepared.target, prepared.options);
-    return;
-  }
-  await startCommand(prepared.target, prepared.options);
-}
-
 export async function runCreateFlow(): Promise<void> {
   await run_agent_create_command(undefined, {});
 }
@@ -360,39 +277,7 @@ export async function runSelectedAgentManager(agent_input: AgentManagerAgentSumm
     if (action === "back") return;
 
     try {
-      if (action === "start") {
-        await startAgentProject(agent.id);
-        const previous_agent = agent;
-        agent = await reloadAgentSummary(agent.id, agent);
-        last_message = format_agent_start_result(previous_agent, agent);
-        continue;
-      }
-      if (action === "stop") {
-        const previous_agent = agent;
-        const target = await resolve_cli_agent_target(agent.id);
-        await stopCommand(target);
-        agent = await reloadAgentSummary(agent.id, agent);
-        last_message = format_agent_stop_result(previous_agent, agent);
-        continue;
-      }
-      if (action === "restart") {
-        const previous_agent = agent;
-        const target = await resolve_cli_agent_target(agent.id);
-        inject_agent_context(target);
-        await restartCommand(target, {});
-        agent = await reloadAgentSummary(agent.id, agent);
-        last_message = format_agent_restart_result(previous_agent, agent);
-        continue;
-      }
       if (action === "chat") {
-        agent = await reloadAgentSummary(agent.id, agent);
-        if (agent.status !== "running") {
-          last_message = t({
-            zh: "无法聊天：请先启动当前 Agent",
-            en: "Cannot chat: start this agent first",
-          });
-          continue;
-        }
         await chatCommand({ to: agent.id });
         agent = await reloadAgentSummary(agent.id, agent);
         continue;
@@ -447,57 +332,4 @@ function format_agent_action_error(error: unknown): string {
     if (note) return note;
   }
   return error instanceof Error ? error.message : String(error);
-}
-
-function format_agent_start_result(
-  _previous_agent: AgentManagerAgentSummary,
-  next_agent: AgentManagerAgentSummary,
-): string {
-  if (next_agent.status === "running") {
-    return t({
-      zh: `已启动 ${next_agent.id}`,
-      en: `Started ${next_agent.id}`,
-    });
-  }
-  return t({
-    zh: `启动未生效：${next_agent.id} 仍是已停止`,
-    en: `Start did not take effect: ${next_agent.id} is still stopped`,
-  });
-}
-
-function format_agent_stop_result(
-  previous_agent: AgentManagerAgentSummary,
-  next_agent: AgentManagerAgentSummary,
-): string {
-  if (next_agent.status === "stopped") {
-    return previous_agent.status === "running"
-      ? t({
-        zh: `已停止 ${next_agent.id}`,
-        en: `Stopped ${next_agent.id}`,
-      })
-      : t({
-        zh: `${next_agent.id} 本来就是已停止`,
-        en: `${next_agent.id} was already stopped`,
-      });
-  }
-  return t({
-    zh: `停止未生效：${next_agent.id} 仍在运行`,
-    en: `Stop did not take effect: ${next_agent.id} is still running`,
-  });
-}
-
-function format_agent_restart_result(
-  _previous_agent: AgentManagerAgentSummary,
-  next_agent: AgentManagerAgentSummary,
-): string {
-  if (next_agent.status === "running") {
-    return t({
-      zh: `已重启 ${next_agent.id}`,
-      en: `Restarted ${next_agent.id}`,
-    });
-  }
-  return t({
-    zh: `重启未生效：${next_agent.id} 当前已停止`,
-    en: `Restart did not take effect: ${next_agent.id} is stopped`,
-  });
 }

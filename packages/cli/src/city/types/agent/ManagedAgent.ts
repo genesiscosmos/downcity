@@ -17,9 +17,6 @@ export interface ManagedAgent {
   /** Agent 配置结构版本。 */
   version: string;
 
-  /** Agent HTTP Gateway 的宿主启动配置。 */
-  start?: DowncityConfig["start"];
-
   /** Federation AI 模型绑定。 */
   execution?: DowncityConfig["execution"];
 
@@ -44,9 +41,6 @@ export interface CreateManagedAgentInput {
   /** 可选 Agent 配置结构版本。 */
   version?: string;
 
-  /** 可选 Gateway 启动配置。 */
-  start?: ManagedAgent["start"];
-
   /** 可选模型执行绑定。 */
   execution?: ManagedAgent["execution"];
 
@@ -58,9 +52,6 @@ export interface CreateManagedAgentInput {
 export interface UpdateManagedAgentInput {
   /** 需要更新的 Agent 全局标识。 */
   agent_id: string;
-
-  /** 新的 Gateway 启动配置。 */
-  start?: ManagedAgent["start"];
 
   /** 新的模型执行绑定。 */
   execution?: ManagedAgent["execution"];

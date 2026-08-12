@@ -27,6 +27,10 @@ export interface RpcServerStartOptions {
   resolve_session_model?: AgentSessionModelResolver;
   /** 由宿主重新加载并提交 Workspace Env 的能力。 */
   reload_workspace_env?: () => Record<string, string> | Promise<Record<string, string>>;
+  /** 按请求选择 Agent 级 handler 依赖；CityRPC 使用该入口完成多 Agent 路由。 */
+  resolve_request_options?: (
+    request: import("@/transport/types/RpcProtocol.js").RpcRequest,
+  ) => RpcRequestHandlerOptions;
 }
 
 /**
@@ -41,6 +45,11 @@ export interface RpcRequestHandlerOptions {
   resolve_session_model?: AgentSessionModelResolver;
   /** 由宿主重新加载并提交 Workspace Env 的能力。 */
   reload_workspace_env?: () => Record<string, string> | Promise<Record<string, string>>;
+  /** 返回 City 宿主身份；仅 CityRPC 提供。 */
+  get_city_status?: () => {
+    /** 当前 City 加载的 Agent ID。 */
+    agent_ids: string[];
+  };
 }
 
 /**

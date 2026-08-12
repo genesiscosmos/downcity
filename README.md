@@ -36,8 +36,8 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 ## Core Capabilities
 
 - Global Agent management: store Agent identity and config in `~/.downcity/downcity.db`, while binding each Agent to any Workspace path.
-- Local agent operations: run `downcity agent start`, `downcity agent status`, and `downcity agent list` to host and inspect local agents.
-- Agent lifecycle: create, start, stop, restart, inspect, chat with, diagnose, and observe globally managed Agents.
+- Local City hosting: run `downcity on`, `downcity status`, and `downcity off` to host all configured Agents in one CLI City.
+- Agent operations: create, inspect, configure, and chat with globally managed Agents; Agents do not have an independent started/stopped state.
 - Federation connection: use `downcity federation` to connect local Agents to the active Federation.
 - Federation backend capabilities: reuse accounts, balance, usage, payment, env, auth, and Service routing across agents and products.
 - Built-in agent capabilities: `chat`, `task`, `memory`, `shell`, `contact`, `skill`, `web`, `sound`, and `workboard`.
@@ -101,34 +101,34 @@ your-project/
     └── task/
 ```
 
-### 4. Start the Agent
+### 4. Start the CLI City
 
 ```bash
 downcity agent list
-downcity agent start <agent_id>
-downcity agent status <agent_id>
+downcity on
+downcity status
 downcity agent token create <agent_id> --name local
 ```
 
 Invoke Plugin capabilities through `city plugin action <plugin> <action> [agent_id]`.
 
-To run in the foreground:
+To run the City in the foreground:
 
 ```bash
-downcity agent start --foreground
+downcity on --foreground
 ```
 
-### 5. Inspect running agents
+### 5. Inspect Agents
 
 ```bash
 downcity agent list
 ```
 
-Useful status commands:
+Chat remains available while the CLI City is off; the CLI creates and disposes a temporary local City:
 
 ```bash
 downcity agent list
-downcity agent status <agent_id>
+downcity agent chat <agent_id>
 ```
 
 ## SDK Example

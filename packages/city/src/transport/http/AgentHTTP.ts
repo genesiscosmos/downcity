@@ -71,7 +71,7 @@ export class AgentHTTP {
    */
   server(): AgentHttpServerHandle {
     if (this.cached_server) return this.cached_server;
-    const handle = createAgentHttpServerHandle(this.router());
+    const handle = create_agent_http_server_handle(this.router());
     this.cached_server = handle;
     return handle;
   }
@@ -91,7 +91,8 @@ export class AgentHTTP {
   }
 }
 
-function createAgentHttpServerHandle(app: Hono): AgentHttpServerHandle {
+/** 为已装配完成的 Hono Router 创建独立 Node HTTP Server 句柄。 */
+export function create_agent_http_server_handle(app: Hono): AgentHttpServerHandle {
   let current_server: http.Server | null = null;
   let current_binding: AgentHttpBinding | null = null;
   let start_promise: Promise<AgentHttpBinding> | null = null;

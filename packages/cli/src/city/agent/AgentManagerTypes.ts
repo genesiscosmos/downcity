@@ -23,9 +23,6 @@ export type AgentManagerListSelection =
     };
 
 export type AgentManagerAgentAction =
-  | "start"
-  | "stop"
-  | "restart"
   | "chat"
   | "configure"
   | "back";
@@ -38,8 +35,9 @@ export type AgentManagerConfigAction =
 
 export interface AgentManagerAgentSummary {
   id: string;
-  /** 当前 daemon 使用的 Workspace；停止状态时不存在。 */
+  /** Agent 持久化绑定的 Workspace。 */
   project_root?: string;
-  status: "running" | "stopped";
+  /** 当前 CLI City 是否已加载该 Agent。 */
+  status: "loaded" | "unloaded";
   execution_binding?: string;
 }

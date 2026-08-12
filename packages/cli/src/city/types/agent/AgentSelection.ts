@@ -14,8 +14,8 @@ export interface CliManagedAgentView {
   /** Agent 持久化绑定的 Workspace 路径；历史异常记录可能不存在。 */
   workspace_path?: string;
 
-  /** 当前 Daemon 运行状态。 */
-  status: "running" | "stopped";
+  /** 当前 CLI City daemon 是否已加载该 Agent。 */
+  status: "loaded" | "unloaded";
 }
 
 /** 交互选择器中的 Agent 选项。 */

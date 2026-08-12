@@ -6,11 +6,11 @@
 
 import type {
   AgentSessionSecurityStatus,
-  RemoteAgent,
   SessionMessage,
   SessionMutation,
   SessionPendingInteraction,
 } from "@downcity/agent";
+import type { AgentChatClient } from "@/city/agent/AgentChatRemote.js";
 
 /** 当前 Session 完成初始化时交给 TUI 的 canonical 快照。 */
 export interface ChatSessionSnapshot {
@@ -33,7 +33,7 @@ export interface ChatSessionSnapshot {
 /** ChatSessionSubscription 的构造依赖。 */
 export interface ChatSessionSubscriptionOptions {
   /** TUI 生命周期内唯一的远程 Agent 客户端。 */
-  remote_agent: RemoteAgent;
+  remote_agent: AgentChatClient;
   /** 完整快照已读取且准备替换 TUI 状态时调用。 */
   on_snapshot: (snapshot: ChatSessionSnapshot) => void;
   /** 快照完成后的实时 Mutation 或初始化期间的缓冲 Mutation。 */

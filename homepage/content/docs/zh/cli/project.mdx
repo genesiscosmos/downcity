@@ -27,14 +27,14 @@ my-project/
 
 默认保存在 `~/.downcity/downcity.db`，设置 `DC_PLATFORM_ROOT` 后改为 `$DC_PLATFORM_ROOT/downcity.db`。其中包含：
 
-- 独立的 Agent ID、Workspace ID、项目路径和启动参数
+- 独立的 Agent ID、Workspace ID、项目路径和 Agent 到 Workspace 的绑定
 - 模型绑定与 Plugin 配置
 - Plugin Resource 与 Agent Plugin Binding
 - City 登录态和其他平台管理状态
 
-CLI、交互管理器和 Agent daemon 都读取同一份数据库，不维护项目配置副本。
+CLI、Desktop 和各自的 City 都读取同一份数据库，不维护项目配置副本。
 
-`agent_id` 与 `workspace_id` 分别是 Agent 和 Workspace 的全局主键。Registry 不保存二者的永久绑定；CLI 或 Desktop 在运行时显式组合 `agent_id + workspace_path`。同一个 Agent 可以在不同 Workspace 运行，同一个 Workspace 也可以运行不同 Agent。CLI daemon 的本次实际 Workspace 记录在 `~/.downcity/runtimes/<agent_id>/daemon.json`，Session 保存在实际 Workspace 的 `.downcity/agents/<agent_id>/sessions/` 下。
+`agent_id` 与 `workspace_id` 分别是 Agent 和 Workspace 的全局主键。每个 Agent 持久化绑定一个 Workspace，一个 Workspace 可以被多个 Agent 绑定。CLI City 的 daemon 状态统一记录在 `~/.downcity/runtimes/city/daemon.json`；Session 保存在绑定 Workspace 的 `.downcity/agents/<agent_id>/sessions/` 下。
 
 ## 项目资产
 

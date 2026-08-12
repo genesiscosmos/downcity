@@ -6,10 +6,9 @@
  * - 保持共享工具纯函数化，避免命令装配文件继续膨胀。
  */
 
-import { basename, dirname, resolve } from "path";
+import { basename, dirname } from "path";
 import { emitCliHeader, emitCliBlock, resetCliSectionFlow } from "@/shared/CliReporter.js";
 import { CliError } from "@/shared/CliError.js";
-import type { DaemonTarget } from "@/city/process/daemon/Types.js";
 
 /**
  * 在关键运行命令执行前打印当前终端命令版本。
@@ -120,16 +119,3 @@ export function parseBoolean(value: string | undefined): boolean {
  */
 export const sleep = async (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * 注入当前 agent 执行上下文。
- */
-export function inject_agent_context(target: DaemonTarget): {
-  workspace_path: string;
-  agent_id: string;
-} {
-  const workspace_path = resolve(target.workspace_path);
-  process.env.DC_AGENT_PATH = workspace_path;
-  process.env.DC_AGENT_ID = target.agent_id;
-  return { workspace_path, agent_id: target.agent_id };
-}

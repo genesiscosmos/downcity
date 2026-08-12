@@ -33,7 +33,7 @@ import type { JsonObject, JsonValue } from "@/types/common/Json.js";
  * - `sdk.*` 面向 RemoteAgent 的稳定会话 SDK。
  * - `internal.*` 面向 downcity 本机管理通道。
  */
-export type RpcRequest =
+type RpcRequestPayload =
   | {
       /** 请求 id，用于匹配响应。 */
       id: string;
@@ -219,6 +219,12 @@ export type RpcRequest =
   | {
       /** 请求 id，用于匹配响应。 */
       id: string;
+      /** 读取 City 宿主进程状态，不绑定具体 Agent。 */
+      method: "internal.city.status";
+    }
+  | {
+      /** 请求 id，用于匹配响应。 */
+      id: string;
       /** 读取 Agent 内部状态。 */
       method: "internal.status.get";
     }
@@ -301,6 +307,17 @@ export type RpcRequest =
     };
 
 /**
+ * RPC 请求。
+ *
+ * `agent_id` 由 `RemoteAgent(rpc://host:port/<agent_id>)` 自动附加，供 City 级
+ * RPC Server 在同一端口内选择 Agent。独立 `AgentRPC` 不要求该字段。
+ */
+export type RpcRequest = RpcRequestPayload & {
+  /** 目标 Agent 的稳定 ID；CityRPC 请求必须提供。 */
+  agent_id?: string;
+};
+
+/**
  * RPC 成功响应帧。
  */
 export interface RpcSuccessFrame {
@@ -369,6 +386,8 @@ export interface RpcClientEndpoint {
   host: string;
   /** RPC port。 */
   port: number;
+  /** City RPC 中的目标 Agent ID；独立 AgentRPC 可省略。 */
+  agent_id?: string;
 }
 
 /** Agent 本机 internal.status.get 返回的进程身份。 */
@@ -382,6 +401,18 @@ export interface RpcInternalStatus {
   /** 当前 Agent 绑定的 Workspace 绝对路径。 */
   workspace_path: string;
   /** daemon 启动实例 ID；非 daemon 前台进程返回空字符串。 */
+  instance_id: string;
+}
+
+/** City daemon internal.city.status 返回的宿主身份。 */
+export interface RpcCityInternalStatus {
+  /** RPC 服务健康状态。 */
+  status: string;
+  /** City 宿主进程 ID。 */
+  pid: number;
+  /** 当前 City 加载的 Agent ID。 */
+  agent_ids: string[];
+  /** daemon 启动实例 ID。 */
   instance_id: string;
 }
 

@@ -1,10 +1,10 @@
 # @downcity/agent
 
-`@downcity/agent` 是 Downcity 的 Agent 运行时包。`Agent` 是单实例组合根，`City` 是宿主进程内多个 Agent 实例的生命周期容器。
+`@downcity/agent` 是 Downcity 的单 Agent 运行时包。`Agent` 是单实例组合根；多 Agent 宿主 `City` 位于 `@downcity/city`。
 
 它负责把一个 agent 项目目录装配成可执行运行时，包括：
 
-- 本地 SDK：`Agent`、`City`、`Session`、`RemoteAgent`
+- 本地 SDK：`Agent`、`Workspace`、`Session`、`RemoteAgent`
 - 内部执行内核：Session Composer、LLM/Tool Loop、增量输出
 - Plugin 框架：registry、action、tool runtime 与执行生命周期
 - 远程访问：`RemoteAgent`、HTTP/RPC transport
@@ -14,7 +14,6 @@
 ## 包定位
 
 - 面向单个 Agent 项目的执行面
-- `City` 是一个 `CityStore` 下的 Agent 运行时集合
 - 对外通过 `@downcity/agent` 根入口暴露公共 API
 - 负责 session SDK、executor 内核、plugin runtime、sandbox、SDK 本地 Agent
 - 不负责多 Agent registry、control plane daemon、console UI 聚合和平台级编排
@@ -23,15 +22,14 @@
 
 - `@downcity/agent`
   - 单 Agent runtime
-  - 进程内 City Agent 实例容器
   - session SDK、executor 内核、plugin 框架、sandbox
   - 本地 SDK facade
 - `downcity`
-  - control plane / gateway
-  - 平台 CLI 与 agent daemon 进程管理
+  - CLI City daemon 与平台控制面
 - `@downcity/city`
+  - 多 Agent `City` 容器与 CityStore
   - CLI 与 Desktop 共用的 `~/.downcity/downcity.db` Store Adapter
-  - Agent、Workspace、Plugin 和本地 Embassy User Session 的恢复与装配
+  - Agent、Workspace、Plugin 和本地 Embassy User Session 的恢复与 HTTP/RPC 暴露
 - `@downcity/ui`
   - React UI 组件与展示层
 
@@ -130,19 +128,3 @@ src/
 
 完整架构、执行链、持久化、Plugin、Shell 与跨平台设计见
 [`docs/agent-sdk-architecture.md`](../../docs/agent-sdk-architecture.md)。
-
-## City 与 Local Store
-
-```ts
-const store = new LocalCityStore();
-const city = new City(store);
-await city.ready();
-
-const agent = city.agent("assistant");
-const agents = city.agents();
-await city.add(new_agent);
-```
-
-`City` 不知道 SQLite、Workspace 路径、模型或 Plugin 如何装配。一个持久化 Agent
-绑定一个 Workspace，一个 Workspace 可以被多个 Agent 使用。CLI 与 Desktop 共享数据库，
-但各自的 City 和宿主启动状态互不共享。

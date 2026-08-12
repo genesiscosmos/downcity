@@ -27,18 +27,20 @@ City 的主要命令：
 
 ```bash
 city agent create .
-city agent start <agent_id>
+city on
+city status
+city agent chat <agent_id>
 city agent token create <agent_id> --name local
 city plugin action <plugin_name> <action_name> <agent_id> --input '{}'
 ```
 
-`city agent start` 创建的 Agent 默认启用 `ask_question` Tool。使用
+City 从全局 Store 恢复的 Agent 默认启用 `ask_question` Tool。使用
 `city agent chat <agent_id>` 交互时，模型可以在缺少关键信息时显示文本、单选或多选问题；
 回答会通过 Session Interaction 提交，并在同一轮模型执行中继续处理。
 
-Agent、Workspace 与 Plugin Binding 统一保存在 `~/.downcity/downcity.db`。每个持久化 Agent 对应一个 Workspace；一个 Workspace 可以被多个 Agent 使用。CLI daemon 和 Desktop 各自创建独立的 City 实例，启动、停止和 HTTP/RPC 生命周期互不共享。Session 仍保存在实际 Workspace 的 `.downcity/agents/<agent_id>/sessions/` 下。未传 `agent_id` 时，TTY 打开全局 Agent 选择器，非交互环境直接报错。
+Agent、Workspace 与 Plugin Binding 统一保存在 `~/.downcity/downcity.db`。每个持久化 Agent 对应一个 Workspace；一个 Workspace 可以被多个 Agent 使用。CLI daemon 和 Desktop 各自创建独立的 City 实例，启动、停止和 HTTP/RPC 生命周期互不共享。Session 仍保存在实际 Workspace 的 `.downcity/agents/<agent_id>/sessions/` 下。`city agent chat` 在 CLI City 运行时走 RPC，City 停止时创建临时本地 City，退出后立即释放。
 
-`city agent start` 始终使用 Agent 持久化绑定的 Workspace。可选的 `--workspace <workspace-id-or-path>` 只用于校验调用方预期；如果它与 Agent 的绑定不一致，命令会明确报错，不会临时改绑。
+CLI City 只维护一个 daemon，并分别监听一个 HTTP 端口和一个原生 TCP RPC 端口。两种协议都按 `agent_id` 路由，不为每个 Agent 分配独立端口。
 
 Federation Admin 配置与 Embassy User Session 同样保存在 `~/.downcity/downcity.db`。升级后，CLI 会把旧 `~/.downcity/federation.db` 中的管理配置一次性迁入统一数据库；旧文件保留用于人工恢复，但后续不再读取。脚本可通过 `DOWNCITY_FEDERATION_URL` 和 `DOWNCITY_USER_TOKEN` 显式覆盖当前 Embassy 用户身份。
 

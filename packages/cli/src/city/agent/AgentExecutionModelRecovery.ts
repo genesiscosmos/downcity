@@ -1,9 +1,9 @@
 /**
- * Agent 启动模型恢复。
+ * Agent 装配模型恢复。
  *
  * 关键点（中文）
  * - 已保存模型不在当前 Federation 时，TTY 直接展示当前模型选择器。
- * - 选择完成后更新 Agent 默认模型，并让原 start/restart 流程继续执行。
+ * - 选择完成后更新 Agent 默认模型，并让当前 City 装配流程继续执行。
  * - 非交互模式不做隐式选择，返回包含可用模型和修复命令的 CliError。
  */
 
@@ -120,7 +120,7 @@ export async function ensure_agent_execution_model_ready(
   if (!selected_model_id) {
     throw new CliError({
       title: "Agent model selection cancelled",
-      note: "Agent start was not changed or continued.",
+      note: "City assembly was not changed or continued.",
     });
   }
 

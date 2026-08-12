@@ -11,7 +11,6 @@
 
 import prompts from "@/city/tui/Prompts.js";
 import {
-  RemoteAgent,
   type SessionMutation,
 } from "@downcity/agent";
 import { emitCliBlock } from "@/shared/CliReporter.js";
@@ -28,6 +27,7 @@ import {
   getOrCreateRemoteSession,
   buildAgentChatFailureText,
   listRemoteChatSessions,
+  type AgentChatClient,
 } from "@/city/agent/AgentChatRemote.js";
 import type {
   AgentChatCliOptions,
@@ -218,24 +218,6 @@ export async function resolveAgentChatTarget(
     };
   }
 
-  const registeredAgents = await list_registered_agents_for_cli();
-  const registeredAgent = registeredAgents.find(
-    (item) =>
-      item.workspace_path === resolved.project_root || item.agent_id === agent_id,
-  );
-  if (registeredAgent && registeredAgent.status !== "running") {
-    return {
-      success: false,
-      outcome: {
-        agent_id,
-        project_root: resolved.project_root,
-        session_id,
-        success: false,
-        error: "Agent is not running. Run `city agent start` first.",
-      },
-    };
-  }
-
   return {
     success: true,
     target: {
@@ -288,7 +270,7 @@ export async function resolveInteractiveChatSession(params: {
   | {
       success: true;
       target: ResolvedAgentChatTarget;
-      remote_agent: RemoteAgent;
+      remote_agent: AgentChatClient;
     }
   | {
       success: false;
@@ -361,7 +343,7 @@ export async function resolveInteractiveChatSession(params: {
  * @returns 最近活跃的 session id；无历史会话时为 null。
  */
 async function resolveLatestChatSessionId(params: {
-  remote_agent: RemoteAgent;
+  remote_agent: AgentChatClient;
 }): Promise<string | null> {
   let sessions: Awaited<ReturnType<typeof listRemoteChatSessions>>;
   try {

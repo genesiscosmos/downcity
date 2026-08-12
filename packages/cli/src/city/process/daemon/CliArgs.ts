@@ -1,62 +1,35 @@
 /**
- * 负责把 commander 解析到的 options 转换成子进程 CLI 参数。
+ * City daemon 子进程参数构造器。
  *
- * 关键点
- * - daemon（来自 `agent start` / `agent restart`）会拉起一个前台 `agent start`
- *   进程（显式 `--foreground true`），这里负责拼装其 argv。
- * - City 托管的 HTTP gateway 与 agent 本机 RPC 使用不同端口，避免职责混用。
+ * HTTP 与 RPC 各自使用一个 City 级固定端口，不再为每个 Agent 动态分配端口。
  */
 
-import type { AgentStartOptions } from "@/city/types/AgentStartOptions.js";
-import { allocateAvailablePort } from "@/city/process/daemon/PortAllocator.js";
+import type { CityDaemonOptions } from "@/city/process/daemon/Types.js";
 
-/**
- * 将 daemon 选项转换为 `agent start` 子进程 argv。
- *
- * 关键点（中文）
- * - daemon 始终启动 `agent start` 前台流程，因此参数统一映射到 `agent start` CLI 形态。
- * - 只透传用户显式传入的字段，避免污染默认值决策。
- */
-export const buildRunArgsFromOptions = async (
-  agent_id: string,
-  options: AgentStartOptions,
-): Promise<string[]> => {
-  // 关键点（中文）：daemon 子进程必须强制前台模式，避免再次进入 startCommand 形成递归拉起。
-  const args: string[] = ["agent", "start", agent_id, "--foreground", "true"];
-
-  // 关键点（中文）：默认只监听本机；对外暴露必须由用户显式指定 host。
+/** 把 City 启动选项转换成前台子进程 argv。 */
+export function build_city_run_args(options: CityDaemonOptions): string[] {
   const host = String(options.host || "127.0.0.1").trim() || "127.0.0.1";
+  const http_port = options.http_port ?? 5314;
+  const rpc_port = options.rpc_port ?? 15314;
+  validate_port(http_port, "HTTP");
+  validate_port(rpc_port, "RPC");
+  if (http_port === rpc_port) throw new Error("City HTTP and RPC ports must be different");
+  return [
+    "on",
+    "--foreground",
+    "true",
+    "--host",
+    host,
+    "--port",
+    String(http_port),
+    "--rpc-port",
+    String(rpc_port),
+  ];
+}
 
-  // 关键点（中文）：外层 HTTP gateway 端口统一由 City 分配。
-  const port = await allocateAvailablePort({ host });
-  if (!Number.isFinite(port) || Number.isNaN(port) || port <= 0 || port > 65535) {
-    throw new Error(`Invalid allocated port: ${String(port)}`);
+/** 校验 TCP 端口。 */
+function validate_port(port: number, label: string): void {
+  if (!Number.isInteger(port) || port <= 0 || port > 65_535) {
+    throw new Error(`${label} port must be an integer between 1 and 65535`);
   }
-
-  // 关键点（中文）：本机 RPC 端口独立分配到另一段端口区间，避免和 HTTP gateway 冲突。
-  const rpc_port =
-    typeof options.rpcPort === "number" && Number.isInteger(options.rpcPort)
-      ? options.rpcPort
-      : await allocateAvailablePort({
-          host: "127.0.0.1",
-          start: 15314,
-          end: 16399,
-        });
-  if (
-    !Number.isFinite(rpc_port) ||
-    Number.isNaN(rpc_port) ||
-    rpc_port <= 0 ||
-    rpc_port > 65535
-  ) {
-    throw new Error(`Invalid allocated rpc port: ${String(rpc_port)}`);
-  }
-  if (rpc_port === port) {
-    throw new Error(`HTTP port and RPC port must be different: ${port}`);
-  }
-
-  args.push("--port", String(port));
-  args.push("--rpc-port", String(rpc_port));
-  args.push("--host", host);
-
-  return args;
-};
+}

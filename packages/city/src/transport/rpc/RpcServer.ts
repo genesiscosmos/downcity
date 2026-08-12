@@ -74,18 +74,25 @@ export async function startRpcServer(
     };
 
     const handle_line = (line: string): void => {
+      let request: RpcRequest;
       try {
-        const request = JSON.parse(line) as RpcRequest;
+        request = JSON.parse(line) as RpcRequest;
+      } catch (error) {
+        write_error("parse", error);
+        return;
+      }
+      try {
+        const request_options = options.resolve_request_options?.(request) ?? options;
         void dispatchRpcRequest({
           request,
-          options,
+          options: request_options,
           subscriptions,
           write_success,
           write_error,
           write_event: write_frame,
         });
       } catch (error) {
-        write_error("parse", error);
+        write_error(request.id, error);
       }
     };
 

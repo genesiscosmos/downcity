@@ -1,35 +1,27 @@
 /**
- * 前台 Agent 进程入口。
+ * 前台 CLI City 进程入口。
  *
- * 关键点（中文）：具体依赖装配由 ManagedAgentRuntime 组合根负责，本模块只管理进程信号。
+ * 信号处理只管理 City 宿主。具体 Agent 与 Plugin 资源由 ManagedCityRuntime 释放。
  */
 
-import type { AgentStartOptions } from "@/city/types/AgentStartOptions.js";
-import type { DaemonTarget } from "@/city/process/daemon/Types.js";
-import { create_managed_agent_runtime } from "@/city/agent/ManagedAgentRuntime.js";
+import type { CityDaemonOptions } from "@/city/process/daemon/Types.js";
+import { ManagedCityRuntime } from "@/city/agent/ManagedCityRuntime.js";
 
-/** 启动前台 Agent，并在收到进程信号时统一停止宿主。 */
-export async function runCommand(
-  target: DaemonTarget,
-  options: AgentStartOptions,
-): Promise<void> {
-  const managed_agent_runtime = await create_managed_agent_runtime({
-    target,
-    options,
-  });
-  const logger = managed_agent_runtime.get_logger();
+/** 启动前台 City，并等待进程信号。 */
+export async function run_city_foreground(options: CityDaemonOptions): Promise<void> {
+  const runtime = await ManagedCityRuntime.start(options);
   let shutting_down = false;
-
-  const shutdown = async (signal: string): Promise<void> => {
+  const shutdown = async (): Promise<void> => {
     if (shutting_down) return;
     shutting_down = true;
-    logger.info(`Received ${signal} signal, shutting down...`);
-    await managed_agent_runtime.stop();
-    logger.info("👋 Downcity city stopped");
+    await runtime.stop();
     process.exit(0);
   };
-
-  process.on("SIGINT", () => void shutdown("SIGINT"));
-  process.on("SIGTERM", () => void shutdown("SIGTERM"));
-  logger.info("=== Downcity Started ===");
+  process.on("SIGINT", () => void shutdown());
+  process.on("SIGTERM", () => void shutdown());
+  console.log([
+    `City running with ${runtime.city.agents().length} Agent(s)`,
+    `HTTP: http://${options.host || "127.0.0.1"}:${runtime.http_port}`,
+    `RPC: rpc://127.0.0.1:${runtime.rpc_port}/<agent_id>`,
+  ].join("\n"));
 }

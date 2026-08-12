@@ -5,7 +5,7 @@ description: How to use the CLI to manage Agent projects
 
 # Agent CLI
 
-The `city` CLI is a convenience wrapper around the Agent SDK. It reads agent config from the CLI global DB, passes model, plugin, and startup options to the Agent SDK constructor, then handles lifecycle commands like start, stop, and restart.
+The `city` CLI is a local Agent host. It reads Agent config from the global DB, passes models and Plugins to the Agent SDK, and lets one CLI City own the long-running lifecycle.
 
 ## Project initialization
 
@@ -34,11 +34,11 @@ my-project/
 
 ## Key commands
 
-- `city agent start` — start the agent in the current project
-- `city agent stop` — stop the running agent
-- `city agent restart` — restart the agent
-- `city agent status` — check if the agent is running
-- `city agent logs` — view runtime logs
+- `city on` — start the CLI City and restore all bound Agents
+- `city status` — inspect City, HTTP/RPC ports, and loaded Agents
+- `city restart` — restart City and reload configuration
+- `city off` — stop the CLI City
+- `city agent chat [agent_id]` — chat with an Agent even while City is off
 
 ## Chat TUI security policy
 
@@ -54,8 +54,8 @@ The active policy appears in the Chat header. A policy change affects only futur
 1. Reads agent config from the CLI global DB
 2. Resolves `execution.modelId` through the connected Federation AIService
 3. Passes the resolved config to `new Agent(...)`
-4. Starts the Agent process
-5. Maintains daemon state so you can inspect, stop, or restart later
+4. Restores all Agents through `new City(new LocalCityStore())`
+5. Exposes Agents by `agent_id` over one HTTP port and one RPC port
 
 ## CLI vs SDK
 

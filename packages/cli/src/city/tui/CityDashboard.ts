@@ -11,7 +11,11 @@
 import { readFileSync } from "node:fs";
 import { read_federation_membership_state } from "@/city/shared/FederationConnection.js";
 import { getCliLocale, t } from "@/shared/CliLocale.js";
-import { resolveRunningManagedAgents } from "@/city/shared/CityAgentRuntime.js";
+import {
+  is_process_alive,
+  read_daemon_meta,
+  read_daemon_pid,
+} from "@/city/process/daemon/Manager.js";
 import type { FederationMembershipState } from "@/city/types/FederationMembership.js";
 import type { tui_action_result, tui_list_item } from "@/city/types/Tui.js";
 import { run_managed_dashboard_loop } from "@/shared/tui/ManagedTuiRuntime.js";
@@ -136,7 +140,10 @@ async function build_city_dashboard_state(): Promise<city_dashboard_state> {
 
 async function safe_count_running_agents(): Promise<number> {
   try {
-    return (await resolveRunningManagedAgents({ syncRegistry: false })).length;
+    const pid = await read_daemon_pid();
+    if (!pid || !is_process_alive(pid)) return 0;
+    const meta = await read_daemon_meta();
+    return meta?.pid === pid ? meta.agent_ids.length : 0;
   } catch {
     return 0;
   }

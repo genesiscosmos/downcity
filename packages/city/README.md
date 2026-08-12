@@ -22,7 +22,23 @@ City 不给 Agent 增加启动或停止状态。Agent 即使不处于 CLI daemon
 
 - `City`、`CityStore`、`MemoryCityStore`
 - `LocalCityStore` 与 `~/.downcity/downcity.db` 本地装配
-- `AgentHTTP` 与 `AgentRPC`
+- `AgentHTTP` 与 `AgentRPC`：独立暴露一个 Agent
+- `CityHTTP` 与 `CityRPC`：在两个 City 级端口上按 Agent ID 暴露全部 Agent
+
+```ts
+const http = new CityHTTP(city);
+await http.server().listen({ host: "127.0.0.1", port: 5314 });
+
+const rpc = new CityRPC(city);
+await rpc.listen({ host: "127.0.0.1", port: 15314 });
+```
+
+对应的远程地址是：
+
+```text
+http://127.0.0.1:5314/agents/<agent_id>
+rpc://127.0.0.1:15314/<agent_id>
+```
 
 单 Agent 的 Workspace、Session、Plugin SDK 和 RemoteAgent 位于
 `@downcity/agent`。Federation、Embassy 与 Bureau 位于

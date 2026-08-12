@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - City 管理 CLI 不能再内置 City 命令源码。
- * - 当 City 控制面需要启动 Agent daemon 时，应调用同一个 downcity 安装包里的 `city` 入口。
+ * - 当控制面需要操作 CLI City daemon 时，应调用同一个 downcity 安装包里的 `city` 入口。
  * - 本模块只解析本机入口路径，不承担 City 命令实现。
  */
 

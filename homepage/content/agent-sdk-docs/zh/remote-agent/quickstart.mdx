@@ -18,7 +18,7 @@ description: 连接一个已经由 Downcity 通过 HTTP 暴露，或由 Agent RP
 ### 方式 1：通过 Downcity 发布 HTTP
 
 ```bash
-downcity agent start
+downcity on
 ```
 
 ### 方式 2：服务端启动独立 RPC 或 HTTP
@@ -47,7 +47,7 @@ await rpc.listen({ host: "127.0.0.1", port: 15314 });
 import { RemoteAgent } from "@downcity/agent";
 
 const agent = new RemoteAgent({
-  url: "http://127.0.0.1:5314",
+  url: "http://127.0.0.1:5314/agents/assistant",
 });
 
 const session = await agent.sessions.create();
@@ -64,7 +64,7 @@ const result = await turn.finished;
 import { RemoteAgent } from "@downcity/agent";
 
 const agent = new RemoteAgent({
-  url: "rpc://127.0.0.1:15314",
+  url: "rpc://127.0.0.1:15314/assistant",
 });
 ```
 

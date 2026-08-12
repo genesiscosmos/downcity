@@ -36,8 +36,8 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 ## 核心能力
 
 - 全局 Agent 管理：Agent 身份与配置保存在 `~/.downcity/downcity.db`，每个 Agent 可绑定任意 Workspace 路径。
-- 本机 Agent 运维：通过 `downcity agent start`、`downcity agent status`、`downcity agent list` 托管和查看本机 Agent。
-- Agent 生命周期管理：创建、启动、停止、重启、诊断、对话、查看历史。
+- 本机 City 托管：通过 `downcity on`、`downcity status`、`downcity off` 托管全部本机 Agent。
+- Agent 管理：创建、查看、配置和对话；Agent 没有独立 started/stopped 状态。
 - Federation 连接：通过 `downcity federation` 让本机 Agent 连接当前 Federation。
 - Federation 后端能力：让多个 Agent 和产品复用 accounts、balance、usage、payment、env、auth 和 Service routing。
 - 内建 Agent 能力：`chat`、`task`、`memory`、`shell`、`contact`、`skill`、`web`、`sound`、`workboard`。
@@ -101,12 +101,12 @@ your-project/
     └── task/
 ```
 
-### 4. 启动 Agent
+### 4. 启动 CLI City
 
 ```bash
 downcity agent list
-downcity agent start <agent_id>
-downcity agent status <agent_id>
+downcity on
+downcity status
 downcity agent token create <agent_id> --name local
 ```
 
@@ -115,20 +115,20 @@ Plugin 能力统一通过 `city plugin action <plugin> <action> [agent_id]` 调�
 如果希望在当前终端前台运行：
 
 ```bash
-downcity agent start --foreground
+downcity on --foreground
 ```
 
-### 5. 查看运行中的 Agent
+### 5. 查看和使用 Agent
 
 ```bash
 downcity agent list
 ```
 
-常用状态命令：
+CLI City 停止时仍可聊天，CLI 会创建并释放临时本地 City：
 
 ```bash
 downcity agent list
-downcity agent status <agent_id>
+downcity agent chat <agent_id>
 ```
 
 ## SDK 示例

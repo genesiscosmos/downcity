@@ -8,11 +8,21 @@
 
 import { generate_id } from "@/city/utils/Id.js";
 import {
+  type AgentSessions,
+  type AgentSession,
+  type AgentSessionSetOptions,
   RemoteAgent,
+  type RemoteSessionSetInput,
   type AgentSessionSummary,
   type RemoteAgentSession,
 } from "@downcity/agent";
+import { City, LocalCityStore } from "@downcity/city";
 import { resolveDaemonRpcEndpoint } from "@/city/process/daemon/Client.js";
+import {
+  is_process_alive,
+  read_daemon_meta,
+  read_daemon_pid,
+} from "@/city/process/daemon/Manager.js";
 import {
   AGENT_CHAT_DEFAULT_SESSION_ID,
   AGENT_CHAT_NEW_SESSION_ID_PREFIX,
@@ -29,6 +39,14 @@ export type AgentChatRemoteTarget = {
   /** 远端访问 URL。 */
   url: string;
 };
+
+/** Chat 所需的最小 Agent 客户端，可由远程或临时本地 City 提供。 */
+export interface AgentChatClient {
+  /** 目标 Agent 的 Session 集合。 */
+  sessions: AgentSessions<RemoteAgentSession>;
+  /** 释放远程连接或临时本地 City。 */
+  close(): Promise<void>;
+}
 
 /**
  * 生成 CLI chat 专用的新 session_id。
@@ -55,7 +73,7 @@ export async function resolveAgentChatRemoteTarget(params: {
     port: params.transport?.port,
   });
   return {
-    url: `rpc://${endpoint.host}:${endpoint.port}`,
+    url: `rpc://${endpoint.host}:${endpoint.port}/${encodeURIComponent(params.agent_id)}`,
   };
 }
 
@@ -65,11 +83,64 @@ export async function resolveAgentChatRemoteTarget(params: {
 export async function createRemoteAgent(params: {
   agent_id: string;
   transport?: AgentChatTransportOptions;
-}): Promise<RemoteAgent> {
+}): Promise<AgentChatClient> {
+  const pid = await read_daemon_pid();
+  const meta = pid && is_process_alive(pid) ? await read_daemon_meta() : null;
+  if (!meta?.agent_ids.includes(params.agent_id)) {
+    const store = new LocalCityStore({ agent_ids: [params.agent_id] });
+    const city = new City(store);
+    try {
+      await city.ready();
+      const agent = city.require_agent(params.agent_id);
+      return {
+        sessions: create_local_chat_sessions(agent.sessions, store),
+        close: async () => await city.dispose(),
+      };
+    } catch (error) {
+      await city.dispose().catch(() => undefined);
+      throw error;
+    }
+  }
   const target = await resolveAgentChatRemoteTarget(params);
   return new RemoteAgent({
     url: target.url,
   });
+}
+
+/** 把本地 Session 的模型实例输入适配为 RemoteSession 的 model_id 输入。 */
+function create_local_chat_sessions(
+  sessions: AgentSessions<AgentSession>,
+  store: LocalCityStore,
+): AgentSessions<RemoteAgentSession> {
+  const wrap = (session: AgentSession): RemoteAgentSession => ({
+    id: session.id,
+    get_info: async () => await session.get_info(),
+    prompt: async (input) => await session.prompt(input),
+    stop: async () => await session.stop(),
+    compact: async () => await session.compact(),
+    subscribe: (subscriber) => session.subscribe(subscriber),
+    messages: async (input) => await session.messages(input),
+    system: async () => await session.system(),
+    interactions: async () => await session.interactions(),
+    status: async () => await session.status(),
+    respond: async (input) => await session.respond(input),
+    set: async (
+      input: RemoteSessionSetInput,
+      options?: AgentSessionSetOptions,
+    ) => await session.set({
+      ...(input.model_id ? { model: await store.create_model(input.model_id) } : {}),
+      ...(input.security ? { security: input.security } : {}),
+    }, options),
+    fork: async (input) => wrap(await session.fork(input)),
+  });
+  return {
+    create: async (input) => wrap(await sessions.create(input)),
+    get: async (session_id) => wrap(await sessions.get(session_id)),
+    list: async (input) => await sessions.list(input),
+    archive: async (input) => await sessions.archive(input),
+    archived: async (input) => await sessions.archived(input),
+    clean_archive: async () => await sessions.clean_archive(),
+  };
 }
 
 /** 读取当前用户可用于 Chat Session 的模型目录。 */
@@ -86,7 +157,7 @@ export async function listAgentChatModelChoices(): Promise<AgentChatModelChoice[
  * 列出远程 chat session 摘要。
  */
 export async function listRemoteChatSessions(params: {
-  remote_agent: RemoteAgent;
+  remote_agent: AgentChatClient;
 }): Promise<AgentChatSessionSummaryView[]> {
   const page = await params.remote_agent.sessions.list({ limit: 30 });
   const sessions = page.items.map(toSessionSummaryView);
@@ -103,7 +174,7 @@ export async function listRemoteChatSessions(params: {
  * 创建远程 chat session。
  */
 export async function createRemoteChatSession(params: {
-  remote_agent: RemoteAgent;
+  remote_agent: AgentChatClient;
   session_id?: string;
 }): Promise<{ session_id: string }> {
   const session_id = String(params.session_id || "").trim() || createAgentChatSessionId();
@@ -119,7 +190,7 @@ export async function createRemoteChatSession(params: {
  * 获取或创建远程 session。
  */
 export async function getOrCreateRemoteSession(params: {
-  remote_agent: RemoteAgent;
+  remote_agent: AgentChatClient;
   session_id: string;
   create_new_session?: boolean;
 }): Promise<RemoteAgentSession> {
@@ -172,6 +243,6 @@ export function buildSessionChoiceDescription(summary: AgentChatSessionSummaryVi
 export function buildAgentChatFailureText(error?: string): string {
   return (
     String(error || "").trim() ||
-    "Agent daemon returned empty error (check config with `city agent status`)"
+    "Agent runtime returned an empty error (check `city status`)"
   );
 }

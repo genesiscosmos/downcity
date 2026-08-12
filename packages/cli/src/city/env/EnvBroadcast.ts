@@ -6,11 +6,8 @@
 
 import path from "node:path";
 import { list_managed_agents } from "@/city/process/registry/ManagedAgentRepository.js";
-import {
-  isProcessAlive,
-  readDaemonMeta,
-  readDaemonPid,
-} from "@/city/process/daemon/Manager.js";
+import { get_workspace } from "@/city/process/registry/WorkspaceRepository.js";
+import { read_daemon_meta } from "@/city/process/daemon/Manager.js";
 import { reload_running_agent_env } from "@/city/process/daemon/DaemonRpcClient.js";
 import type { EnvBroadcastResult } from "@/city/types/env/EnvBroadcast.js";
 
@@ -25,11 +22,11 @@ export async function broadcast_workspace_env_reload(
 ): Promise<EnvBroadcastResult> {
   const normalized_path = path.resolve(workspace_path);
   const running_agent_ids: string[] = [];
+  const meta = await read_daemon_meta();
   for (const agent of list_managed_agents()) {
-    const pid = await readDaemonPid(agent.agent_id);
-    if (!pid || !isProcessAlive(pid)) continue;
-    const meta = await readDaemonMeta(agent.agent_id);
-    if (meta && path.resolve(meta.workspace_path) === normalized_path) {
+    if (!meta?.agent_ids.includes(agent.agent_id) || !agent.workspace_id) continue;
+    const workspace = get_workspace(agent.workspace_id);
+    if (workspace && path.resolve(workspace.workspace_path) === normalized_path) {
       running_agent_ids.push(agent.agent_id);
     }
   }

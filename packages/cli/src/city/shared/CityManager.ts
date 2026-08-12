@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 裸 `city` 是本机 Agent 与 Plugin 操作台，不是 City 资源管理器。
- * - City 不再拥有 top-level 常驻 runtime 生命周期；长期运行的只有具体 Agent daemon。
+ * - Agent 管理器只管理配置与调用；CLI City daemon 生命周期由根命令拥有。
  * - City 通过 Federation 成员资格访问共享资源；Federation 管理由 `city federation` 子命令负责。
  */
 

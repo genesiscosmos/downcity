@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 模型候选项唯一来源是当前 Federation User City 的 `ai.catalog()`。
  * - 只维护 Agent 配置中的 `execution.modelId`，不管理 Session 运行时模型。
- * - 配置更新在 Agent 下次启动或重启时解析为运行时模型实例。
+ * - 配置更新在 Agent 下次由 City 装配时解析为运行时模型实例。
  */
 
 import prompts from "@/city/tui/Prompts.js";
@@ -143,7 +143,7 @@ export async function configure_agent_model(
     facts: [
       { label: "previous", value: result.previous_model_id || "(not configured)" },
       { label: "current", value: result.current_model_id },
-      { label: "effective", value: "next start/restart" },
+      { label: "effective", value: "next City assembly" },
     ],
   });
   return result;

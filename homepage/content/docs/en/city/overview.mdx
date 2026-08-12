@@ -24,7 +24,7 @@ These belong to the Agent runtime.
 
 ## How Agents connect to City
 
-When you run `city agent start`, the CLI reads agent config from the global DB, resolves the `execution.modelId` from the connected City instance, and passes the live model instance to the Agent SDK.
+When you run `city on`, the CLI creates one City, restores every bound Agent from the global DB, resolves each `execution.modelId`, and passes the live model instance to the Agent SDK.
 
 When you use the SDK directly, you provide the model instance yourself — but City still owns the catalog and billing behind it.
 

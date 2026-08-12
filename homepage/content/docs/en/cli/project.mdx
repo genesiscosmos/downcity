@@ -27,14 +27,14 @@ my-project/
 
 The default database is `~/.downcity/downcity.db`. With `DC_PLATFORM_ROOT`, it becomes `$DC_PLATFORM_ROOT/downcity.db`. It stores:
 
-- independent Agent IDs, Workspace IDs, project paths, and startup options
+- independent Agent IDs, Workspace IDs, project paths, and Agent-to-Workspace bindings
 - Model bindings and Plugin config
 - Plugin Resources and Agent Plugin Bindings
 - City sessions and other platform management state
 
-The CLI, interactive manager, and Agent daemon all read this database. There is no project config copy.
+The CLI, Desktop, and their independent City instances all read this database. There is no project config copy.
 
-`agent_id` and `workspace_id` are the global primary keys for Agents and Workspaces. The Registry stores no permanent binding between them; the CLI or Desktop explicitly combines `agent_id + workspace_path` for one runtime. One Agent can run in different Workspaces, and one Workspace can run different Agents. A CLI daemon records its actual Workspace in `~/.downcity/runtimes/<agent_id>/daemon.json`, while Sessions remain under `.downcity/agents/<agent_id>/sessions/` in that Workspace.
+`agent_id` and `workspace_id` are the global primary keys for Agents and Workspaces. Each Agent persistently binds one Workspace, while one Workspace may be shared by multiple Agents. CLI City daemon state lives in `~/.downcity/runtimes/city/daemon.json`; Sessions remain under `.downcity/agents/<agent_id>/sessions/` in the bound Workspace.
 
 ## Project assets
 

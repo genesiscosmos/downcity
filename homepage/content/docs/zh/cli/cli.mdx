@@ -5,7 +5,7 @@ description: 如何使用 CLI 管理 Agent 项目
 
 # Agent CLI
 
-`city` CLI 是 Agent SDK 的便利包装器。它从 CLI 全局 DB 读取 Agent 配置，将模型、plugin 和启动参数传给 Agent SDK 构造函数，然后处理启动、停止和重启等生命周期命令。
+`city` CLI 是 Agent SDK 的本地宿主。它从全局 DB 读取 Agent 配置，将模型和 Plugin 传给 Agent SDK，并由唯一 CLI City 管理长期运行生命周期。
 
 ## 项目初始化
 
@@ -34,11 +34,11 @@ my-project/
 
 ## 关键命令
 
-- `city agent start` — 在当前项目启动 Agent
-- `city agent stop` — 停止运行中的 Agent
-- `city agent restart` — 重启 Agent
-- `city agent status` — 检查 Agent 是否正在运行
-- `city agent logs` — 查看运行时日志
+- `city on` — 启动 CLI City，并恢复全部已绑定 Agent
+- `city status` — 查看 City、HTTP/RPC 端口与已加载 Agent
+- `city restart` — 重启 City 并重新加载配置
+- `city off` — 停止 CLI City
+- `city agent chat [agent_id]` — 与 Agent 对话；City 未开启时也可使用
 
 ## Chat TUI 安全策略
 
@@ -54,8 +54,8 @@ my-project/
 1. 从 CLI 全局 DB 读取 Agent 配置
 2. 通过已连接的 Federation AIService 解析 `execution.modelId`
 3. 将解析后的配置传给 `new Agent(...)`
-4. 启动 Agent 进程
-5. 维护守护进程状态，以便后续检查、停止或重启
+4. 由 `new City(new LocalCityStore())` 恢复全部 Agent
+5. 在一个 HTTP 端口和一个 RPC 端口上按 `agent_id` 暴露 Agent
 
 ## CLI vs SDK
 

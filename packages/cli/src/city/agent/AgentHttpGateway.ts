@@ -2,8 +2,8 @@
  * AgentHttpGateway：City 托管的 Agent HTTP 网关。
  *
  * 职责说明（中文）
- * - 由 `city agent start` 启动 HTTP 入口，对外承载控制面、plugin 与 SDK HTTP 路由。
- * - Agent 进程本体只暴露本机 RPC；HTTP server 生命周期归 City CLI 管理。
+ * - 作为 City 多 Agent Gateway 的单 Agent 子应用，承载控制面、Plugin 与 SDK 路由。
+ * - HTTP Server 生命周期归 CLI City 管理。
  * - HTTP route 实现放在 City 内部，Agent 只提供 Agent / sessionCollection。
  */
 
@@ -103,7 +103,7 @@ export async function startAgentHttpGateway(
     agent_id: options.get_agent().id,
   });
   const app = createAgentHttpGatewayApp({ ...options, auth_service });
-  const server = createNodeServer(app, options);
+  const server = create_node_http_server(app, options);
   const server_logger = options.get_agent().get_logger();
 
   try {
@@ -139,9 +139,10 @@ export async function startAgentHttpGateway(
 /**
  * 创建 Node HTTP Server 适配层。
  */
-function createNodeServer(
+/** 把已经装配好的 CLI Gateway Hono 应用接到 Node HTTP Server。 */
+export function create_node_http_server(
   app: Hono,
-  options: AgentHttpGatewayStartOptions,
+  options: Pick<AgentHttpGatewayStartOptions, "host" | "port">,
 ): http.Server {
   return http.createServer(async (req, res) => {
     try {

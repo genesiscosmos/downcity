@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 处理“pid 文件不存在，但旧的 detached 进程还活着”的场景。
- * - 仅匹配 Downcity CLI 自己拉起的 `run` / `console run` / `agent start --foreground true`。
+ * - 仅匹配 Downcity CLI 自己拉起的 City 前台运行进程。
  * - 作为 stop/start 的兜底清理层，避免旧版本进程占住端口却无法被当前 pid 文件追踪。
  * - `run` 指 city runtime，`console run` 只用于清理旧 Console UI 进程。
  */

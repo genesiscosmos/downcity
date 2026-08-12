@@ -91,7 +91,8 @@ CORS / logger / auth middleware are your responsibility. `AgentHTTP` does not at
 
 ## Relationship with Downcity and RemoteAgent
 
-- `downcity agent start` wires `Agent + AgentRPC + AgentHTTP.router()` together and adds Downcity's own control / static routes on top.
+- `downcity on` creates one `City`, restores all Agents, and starts one City HTTP port plus one City RPC port.
+- City HTTP URLs use `http://127.0.0.1:5314/agents/<agent_id>`; City RPC URLs use `rpc://127.0.0.1:15314/<agent_id>`.
 - `RemoteAgent` clients can connect to the `rpc://` URL exposed by `AgentRPC.listen()` or to the HTTP surface exposed by `AgentHTTP`.
 
 ## Related docs

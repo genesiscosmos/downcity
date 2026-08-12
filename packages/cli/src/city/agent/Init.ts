@@ -192,10 +192,10 @@ export async function initCommand(
     "Open Agent Config > Plugins to configure built-in or installed Plugins",
   ];
   if (primaryModelId) {
-    nextSteps.push('Use "city agent start" to confirm the Agent can reach its configured model');
+    nextSteps.push('Use "city agent chat <agent_id>" to confirm the Agent can reach its configured model');
   }
 
-  nextSteps.push('Run "city agent start" to start the agent');
+  nextSteps.push('Run "city on" for long-running Plugin and remote transport lifecycle');
 
   emitCliList({
     tone: "accent",
