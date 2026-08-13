@@ -10,8 +10,6 @@
  * - 不负责 session 级运行时元信息（例如 `DC_SESSION_ID`）。
  */
 
-import path from "node:path";
-import { load_project_dotenv } from "@downcity/agent";
 import { get_platform_env_file_path } from "@/city/process/registry/CityPaths.js";
 import { read_env_file_sync } from "@/city/env/EnvFileStore.js";
 
@@ -20,7 +18,7 @@ const PLATFORM_SESSION_ENV_KEYS = new Set([
   "DC_AGENT_TOKEN",
   "DOWNCITY_FEDERATION_URL",
   "DOWNCITY_USER_TOKEN",
-  // 旧身份变量已停止解析，但仍禁止从全局 `.env` 泄漏到 Workspace 进程。
+  // 旧身份变量不属于 Workspace 环境，但仍禁止从全局 `.env` 泄漏。
   "DOWNCITY_CITY_URL",
   "DOWNCITY_CITY_USER_TOKEN",
   "CITY_URL",
@@ -68,26 +66,5 @@ export function merge_process_env_with_platform_global_env(
   return {
     ...platform_env,
     ...merged,
-  };
-}
-
-/**
- * 解析 Agent Workspace 的最终 Env 快照。
- *
- * 优先级固定为：Global `.env` < Workspace `.env` < daemon 进程显式 Env。
- */
-export function resolve_agent_env(
-  workspace_path: string,
-  process_env: NodeJS.ProcessEnv = process.env,
-): Record<string, string> {
-  const normalized_workspace_path = path.resolve(workspace_path);
-  const explicit_env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process_env)) {
-    if (typeof value === "string") explicit_env[key] = value;
-  }
-  return {
-    ...strip_platform_session_env(read_platform_global_env()),
-    ...load_project_dotenv(normalized_workspace_path),
-    ...explicit_env,
   };
 }

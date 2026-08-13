@@ -12,6 +12,7 @@ import {
 import {
   AgentRepository,
   ensure_local_schema,
+  resolve_local_agent_env,
   SecureSettingRepository,
   WorkspaceRepository,
 } from "../bin/product.js";
@@ -96,6 +97,71 @@ test("LocalDatabase transaction 提交同步写入并回滚异步回调", async 
     );
   } finally {
     database.close();
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
+test("Agent Env 优先级为 Global < Workspace < 显式进程 Env", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-env-priority-"));
+  const workspace_path = path.join(root_path, "workspace");
+  await fs.mkdir(workspace_path);
+  try {
+    await fs.writeFile(
+      path.join(root_path, ".env"),
+      "SHARED=global\nGLOBAL_ONLY=yes\nDOWNCITY_USER_TOKEN=global-token\n",
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(workspace_path, ".env"),
+      "SHARED=workspace\nWORKSPACE_ONLY=yes\n",
+      "utf8",
+    );
+    const env = resolve_local_agent_env({
+      root_path,
+      workspace_path,
+      process_env: {
+        SHARED: "process",
+        PROCESS_ONLY: "yes",
+        DOWNCITY_USER_TOKEN: "process-token",
+      },
+    });
+    assert.equal(env.SHARED, "process");
+    assert.equal(env.GLOBAL_ONLY, "yes");
+    assert.equal(env.WORKSPACE_ONLY, "yes");
+    assert.equal(env.PROCESS_ONLY, "yes");
+    assert.equal(env.DOWNCITY_USER_TOKEN, "process-token");
+  } finally {
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
+test("平台身份凭证不会从全局 Env 泄漏到 Agent Workspace", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-env-isolation-"));
+  const workspace_path = path.join(root_path, "workspace");
+  await fs.mkdir(workspace_path);
+  try {
+    await fs.writeFile(
+      path.join(root_path, ".env"),
+      [
+        "SAFE_VALUE=kept",
+        "DC_AUTH_TOKEN=auth-token",
+        "DC_AGENT_TOKEN=agent-token",
+        "DOWNCITY_FEDERATION_URL=https://federation.example.com",
+        "DOWNCITY_USER_TOKEN=user-token",
+        "DOWNCITY_CITY_URL=https://legacy.example.com",
+        "DOWNCITY_CITY_USER_TOKEN=legacy-user-token",
+        "CITY_URL=https://older.example.com",
+        "CITY_USER_TOKEN=older-user-token",
+      ].join("\n"),
+      "utf8",
+    );
+    const env = resolve_local_agent_env({
+      root_path,
+      workspace_path,
+      process_env: {},
+    });
+    assert.deepEqual(env, { SAFE_VALUE: "kept" });
+  } finally {
     await fs.rm(root_path, { recursive: true, force: true });
   }
 });

@@ -179,7 +179,7 @@ test("Embassy 会话只接受新的 Federation 身份环境变量", async () => 
   }
 });
 
-test("平台 Env 不向 Workspace 泄漏新旧身份凭证", async () => {
+test("平台身份凭证不会向 Workspace 泄漏", async () => {
   const { strip_platform_session_env } = await import(
     "../bin/city/env/ProcessEnv.js"
   );

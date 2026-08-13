@@ -12,7 +12,6 @@ import {
   read_env_file,
   set_env_file_value,
 } from "../bin/city/env/EnvFileStore.js";
-import { resolve_agent_env } from "../bin/city/env/ProcessEnv.js";
 import { create_agent_config } from "../bin/city/process/registry/AgentConfigRepository.js";
 import { create_workspace } from "../bin/city/process/registry/WorkspaceRepository.js";
 import {
@@ -64,30 +63,6 @@ test("Agent Env 写入 Workspace，City 未运行时不产生广播目标", asyn
     else process.env.DC_PLATFORM_ROOT = previous_platform_root;
     if (previous_model_db_key === undefined) delete process.env.DC_MODEL_DB_KEY;
     else process.env.DC_MODEL_DB_KEY = previous_model_db_key;
-    await fs.rm(root, { recursive: true, force: true });
-  }
-});
-
-test("Agent Env 优先级为 Global < Workspace < 显式进程 Env", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-env-priority-"));
-  const workspace_path = path.join(root, "workspace");
-  await fs.mkdir(workspace_path);
-  const previous_platform_root = process.env.DC_PLATFORM_ROOT;
-  process.env.DC_PLATFORM_ROOT = root;
-  try {
-    await fs.writeFile(path.join(root, ".env"), "SHARED=global\nGLOBAL_ONLY=yes\n", "utf8");
-    await fs.writeFile(path.join(workspace_path, ".env"), "SHARED=workspace\nWORKSPACE_ONLY=yes\n", "utf8");
-    const env = resolve_agent_env(workspace_path, {
-      SHARED: "process",
-      PROCESS_ONLY: "yes",
-    });
-    assert.equal(env.SHARED, "process");
-    assert.equal(env.GLOBAL_ONLY, "yes");
-    assert.equal(env.WORKSPACE_ONLY, "yes");
-    assert.equal(env.PROCESS_ONLY, "yes");
-  } finally {
-    if (previous_platform_root === undefined) delete process.env.DC_PLATFORM_ROOT;
-    else process.env.DC_PLATFORM_ROOT = previous_platform_root;
     await fs.rm(root, { recursive: true, force: true });
   }
 });
