@@ -6,7 +6,7 @@
  * - Commander 的公开选项字段保持命令行约定，业务实现内部统一使用 snake_case。
  */
 
-import type { ManagedAgent } from "@/city/types/agent/ManagedAgent.js";
+import type { AgentConfig } from "@/city/types/agent/AgentConfig.js";
 
 /** Chat Access 命令共享选项。 */
 export interface ChatAccessCommandOptions {
@@ -51,5 +51,5 @@ export interface ChatAccessTarget {
   /** Agent 项目根目录绝对路径。 */
   project_root: string;
   /** City 全局配置库中的 Agent 配置。 */
-  config: ManagedAgent;
+  config: AgentConfig;
 }

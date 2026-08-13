@@ -13,7 +13,7 @@ import { configure_agent_model } from "@/city/agent/AgentModel.js";
 import { list_registered_agents_for_cli } from "@/city/agent/AgentSelection.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { t } from "@/shared/CliLocale.js";
-import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
+import { get_agent_config } from "@/city/process/registry/AgentConfigRepository.js";
 import type {
   AgentManagerAgentAction,
   AgentManagerConfigAction,
@@ -30,7 +30,7 @@ export function isInteractiveTerminal(): boolean {
 export async function loadAgentSummaries(): Promise<AgentManagerAgentSummary[]> {
   const agents = await list_registered_agents_for_cli();
   return agents.map((agent) => {
-    const config = get_managed_agent(agent.agent_id);
+    const config = get_agent_config(agent.agent_id);
     return {
       id: agent.agent_id,
       project_root: agent.workspace_path,

@@ -117,7 +117,6 @@ function emit_mutation_result(result: EnvMutationResult, as_json: boolean): void
     facts: [
       { label: "File", value: result.target.file_path },
       { label: "Agents updated", value: String(result.broadcast.updated_agent_ids.length) },
-      { label: "Agents stopped", value: String(result.broadcast.stopped_agent_ids.length) },
       { label: "Sync failures", value: String(result.broadcast.failed_agents.length) },
     ],
     note: result.broadcast.failed_agents.length > 0

@@ -29,13 +29,13 @@ MemoryPlugin
 
 `MemoryPlugin` does not read Workspace files and does not define a physical Memory location. Files, SQLite, object storage, and remote Memory services are implementations behind a Provider.
 
-The built-in Provider currently uses `FileMemoryStorageAdapter`. City stores its data here by default:
+The built-in Provider currently uses `FileMemoryStorageAdapter`. With the default adapter, its data is stored here:
 
 ```text
 ~/.downcity/agents/<agent_id>/memory/
 ```
 
-This is a File Adapter convention, not an `@downcity/agent` contract. Set an absolute `root_path` in the Plugin configuration to override it.
+This is a File Adapter convention, not an `@downcity/agent` or `@downcity/city` contract. Set an absolute `root_path` in the Plugin configuration to override it.
 
 ## City configuration
 

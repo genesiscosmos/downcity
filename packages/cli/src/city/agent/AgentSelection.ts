@@ -1,5 +1,5 @@
 /**
- * 全局受管 Agent 的列表与持久化运行目标解析。
+ * Agent 配置列表与持久化运行目标解析。
  *
  * Agent 与 Workspace 分别持久化，但每个 Agent 通过 `workspace_id` 唯一绑定一个
  * Workspace。CLI 只能使用该绑定创建 Runtime，daemon 元数据仅投影宿主运行状态。
@@ -8,18 +8,18 @@
 import path from "node:path";
 import prompts from "@/city/tui/Prompts.js";
 import {
-  get_managed_agent,
-  list_managed_agents,
-} from "@/city/process/registry/ManagedAgentRepository.js";
+  get_agent_config,
+  list_agent_configs,
+} from "@/city/process/registry/AgentConfigRepository.js";
 import {
   get_workspace,
   get_workspace_by_path,
   type WorkspaceRegistryRecord,
 } from "@/city/process/registry/WorkspaceRepository.js";
-import type { ManagedAgent } from "@/city/types/agent/ManagedAgent.js";
+import type { AgentConfig } from "@/city/types/agent/AgentConfig.js";
 import type {
   CliAgentPromptChoice,
-  CliManagedAgentView,
+  CliAgentView,
 } from "@/city/types/agent/AgentSelection.js";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
@@ -39,7 +39,7 @@ export interface AgentWorkspaceTarget {
 }
 
 /** 将 Agent 配置与当前 daemon 投影成 CLI 状态视图。 */
-async function to_cli_managed_agent_view(agent: ManagedAgent): Promise<CliManagedAgentView> {
+async function to_cli_agent_view(agent: AgentConfig): Promise<CliAgentView> {
   const workspace = agent.workspace_id ? get_workspace(agent.workspace_id) : null;
   const daemon_pid = await read_daemon_pid();
   const meta = daemon_pid && is_process_alive(daemon_pid) ? await read_daemon_meta() : null;
@@ -51,10 +51,10 @@ async function to_cli_managed_agent_view(agent: ManagedAgent): Promise<CliManage
   };
 }
 
-/** 读取全部受管 Agent 的 CLI 视图。 */
-export async function list_registered_agents_for_cli(): Promise<CliManagedAgentView[]> {
+/** 读取全部已登记 Agent 的 CLI 视图。 */
+export async function list_registered_agents_for_cli(): Promise<CliAgentView[]> {
   const agents = await Promise.all(
-    list_managed_agents().map(to_cli_managed_agent_view),
+    list_agent_configs().map(to_cli_agent_view),
   );
   return agents.sort((left, right) => {
     const status_priority = Number(right.status === "loaded") - Number(left.status === "loaded");
@@ -64,7 +64,7 @@ export async function list_registered_agents_for_cli(): Promise<CliManagedAgentV
 
 /** 构建交互式 Agent 选项。 */
 export function build_cli_agent_prompt_choices(
-  agents: CliManagedAgentView[],
+  agents: CliAgentView[],
 ): CliAgentPromptChoice[] {
   return agents.map((agent) => ({
     title: agent.agent_id,
@@ -76,7 +76,7 @@ export function build_cli_agent_prompt_choices(
 }
 
 /** 交互选择一个全局 Agent ID。 */
-async function prompt_managed_agent_id(agents: CliManagedAgentView[]): Promise<string | null> {
+async function prompt_agent_id(agents: CliAgentView[]): Promise<string | null> {
   const response = (await prompts({
     type: "select",
     name: "agent_id",
@@ -87,7 +87,7 @@ async function prompt_managed_agent_id(agents: CliManagedAgentView[]): Promise<s
   return String(response.agent_id || "").trim() || null;
 }
 
-/** 输出全局受管 Agent 列表。 */
+/** 输出全局 Agent 配置列表。 */
 export async function emit_registered_agent_list_with_options(options?: {
   /** 是否仅展示当前 CLI City 已加载的 Agent。 */
   running_only?: boolean;
@@ -111,7 +111,7 @@ export async function emit_registered_agent_list_with_options(options?: {
     emitCliBlock({
       tone: "info",
       title: options?.running_only ? "City-loaded Agents" : "Agents",
-      summary: options?.running_only ? "0 loaded" : "0 managed",
+      summary: options?.running_only ? "0 loaded" : "0 registered",
       note: options?.running_only
         ? "The CLI City has not loaded any Agents."
         : "Run `city agent create <workspace_path>` to create one.",
@@ -121,7 +121,7 @@ export async function emit_registered_agent_list_with_options(options?: {
   emitCliList({
     tone: "accent",
     title: options?.running_only ? "City-loaded Agents" : "Agents",
-    summary: `${agents.length} managed`,
+    summary: `${agents.length} registered`,
     items: agents.map((agent) => ({
       tone: agent.status === "loaded" ? "success" : "info",
       title: agent.agent_id,
@@ -133,7 +133,7 @@ export async function emit_registered_agent_list_with_options(options?: {
   });
 }
 
-/** 输出全部受管 Agent。 */
+/** 输出全部已登记 Agent。 */
 export async function emit_registered_agent_list(): Promise<void> {
   await emit_registered_agent_list_with_options();
 }
@@ -153,30 +153,30 @@ export async function resolve_cli_agent_target(
 }
 
 /** 解析 Agent，省略 ID 时只允许 TTY 选择。 */
-async function resolve_agent(agent_id_input?: string): Promise<ManagedAgent> {
+async function resolve_agent(agent_id_input?: string): Promise<AgentConfig> {
   const explicit_agent_id = String(agent_id_input || "").trim();
   if (explicit_agent_id) {
-    const agent = get_managed_agent(explicit_agent_id);
+    const agent = get_agent_config(explicit_agent_id);
     if (!agent) throw new CliError({ title: `Agent not found: ${explicit_agent_id}`, fix: "city agent list" });
     return agent;
   }
   const agents = await list_registered_agents_for_cli();
   if (agents.length === 0) {
-    throw new CliError({ title: "No managed agents", fix: "city agent create <workspace_path>" });
+    throw new CliError({ title: "No registered agents", fix: "city agent create <workspace_path>" });
   }
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new CliError({ title: "Agent ID is required", fix: "city agent list" });
   }
-  const selected_agent_id = await prompt_managed_agent_id(agents);
+  const selected_agent_id = await prompt_agent_id(agents);
   if (!selected_agent_id) throw new CliError({ title: "Agent selection cancelled", exitCode: 0 });
-  const selected_agent = get_managed_agent(selected_agent_id);
+  const selected_agent = get_agent_config(selected_agent_id);
   if (!selected_agent) throw new Error(`Agent not found: ${selected_agent_id}`);
   return selected_agent;
 }
 
 /** 读取 Agent 唯一绑定的 Workspace，并校验调用方显式传入的 Workspace。 */
 function resolve_bound_workspace(
-  agent: ManagedAgent,
+  agent: AgentConfig,
   workspace_input?: string,
 ): WorkspaceRegistryRecord {
   if (!agent.workspace_id) {

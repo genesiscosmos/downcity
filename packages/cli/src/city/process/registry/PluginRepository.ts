@@ -8,11 +8,11 @@
  */
 
 import {
-  LocalCityStore,
   normalize_installation_id,
   normalize_plugin_name as normalize_local_plugin_name,
-} from "@downcity/city";
-import { create_cli_builtin_plugin_types } from "@/city/runtime/LocalCityEnvironment.js";
+} from "@downcity/local";
+import { with_cli_local_data } from "@/city/runtime/LocalData.js";
+import { create_cli_builtin_plugin_types } from "@/city/runtime/AgentAssembly.js";
 import { get_plugin_catalog_item } from "@/city/process/plugin/PluginCatalog.js";
 import type {
   AgentPluginBinding,
@@ -48,7 +48,7 @@ export function is_builtin_plugin(plugin_name_input: string): boolean {
 
 /** 列出全部第三方 Plugin 内部安装记录。 */
 export function list_plugin_installations(): InstalledPluginInstallation[] {
-  return with_local_store((store) => store.list_plugin_installations());
+  return with_cli_local_data((data) => data.plugins.list_installations());
 }
 
 /** 按内部 ID 读取一个 Plugin 安装记录。 */
@@ -56,7 +56,7 @@ export function get_plugin_installation(
   installation_id_input: string,
 ): InstalledPluginInstallation | null {
   const installation_id = normalize_plugin_installation_id(installation_id_input);
-  return with_local_store((store) => store.get_plugin_installation(installation_id));
+  return with_cli_local_data((data) => data.plugins.get_installation(installation_id));
 }
 
 /** 按公开 Plugin 名称定位第三方安装记录与 Manifest。 */
@@ -78,7 +78,7 @@ export function save_plugin_installation(
 ): InstalledPluginInstallation {
   const installation_id = normalize_plugin_installation_id(installation.installation_id);
   const normalized = { ...installation, installation_id };
-  return with_local_store((store) => store.save_plugin_installation(normalized));
+  return with_cli_local_data((data) => data.plugins.save_installation(normalized));
 }
 
 /** 删除 Plugin 所属的共享 installation；任一兄弟 Plugin 被使用时拒绝。 */
@@ -86,15 +86,15 @@ export function remove_plugin_installation(plugin_name_input: string): Installed
   const plugin_name = normalize_plugin_name(plugin_name_input);
   const reference = get_installed_plugin(plugin_name);
   if (!reference) throw new Error(`Plugin is not installed: ${plugin_name}`);
-  return with_local_store((store) =>
-    store.remove_plugin_installation(reference.installation.installation_id)
+  return with_cli_local_data((data) =>
+    data.plugins.remove_installation(reference.installation.installation_id)
   );
 }
 
 /** 列出一个 Agent 的全部 Plugin Binding。 */
 export function list_agent_plugin_bindings(agent_id_input: string): AgentPluginBinding[] {
   const agent_id = String(agent_id_input || "").trim();
-  return with_local_store((store) => store.list_agent_plugin_bindings(agent_id)) as AgentPluginBinding[];
+  return with_cli_local_data((data) => data.plugins.list_agent_bindings(agent_id)) as AgentPluginBinding[];
 }
 
 /** 读取一个 Agent 的指定 Plugin Binding。 */
@@ -104,7 +104,7 @@ export function get_agent_plugin_binding(
 ): AgentPluginBinding | null {
   const agent_id = String(agent_id_input || "").trim();
   const plugin_name = normalize_plugin_name(plugin_name_input);
-  return with_local_store((store) => store.get_agent_plugin_binding(agent_id, plugin_name)) as AgentPluginBinding | null;
+  return with_cli_local_data((data) => data.plugins.get_agent_binding(agent_id, plugin_name)) as AgentPluginBinding | null;
 }
 
 /** 新建或更新一个 Agent Plugin Binding。 */
@@ -129,7 +129,7 @@ export function set_agent_plugin_binding(
       validate_plugin_resource_item(resource.item, resource_schema);
     }
   }
-  return with_local_store((store) => store.save_agent_plugin_binding({
+  return with_cli_local_data((data) => data.plugins.save_agent_binding({
     agent_id,
     plugin_name,
     enabled: input.enabled,
@@ -145,17 +145,7 @@ export function remove_agent_plugin_binding(
 ): void {
   const agent_id = String(agent_id_input || "").trim();
   const plugin_name = normalize_plugin_name(plugin_name_input);
-  with_local_store((store) => store.remove_agent_plugin_binding(agent_id, plugin_name));
-}
-
-/** 在短连接 LocalCityStore 上执行一次 Plugin 配置操作。 */
-function with_local_store<T>(action: (store: LocalCityStore) => T): T {
-  const store = new LocalCityStore();
-  try {
-    return action(store);
-  } finally {
-    store.close();
-  }
+  with_cli_local_data((data) => data.plugins.remove_agent_binding(agent_id, plugin_name));
 }
 
 /** 规范化并去重 Binding Resource ID。 */

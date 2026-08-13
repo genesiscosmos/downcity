@@ -1,38 +1,36 @@
 ---
 title: "@downcity/city"
-description: Assemble and host one or more Agent instances from product configuration.
+description: Index Agent instances in memory and route HTTP/RPC requests by ID.
 ---
 
-`@downcity/city` is the Agent host package used by the CLI, Desktop, and custom Node hosts.
-It owns the Agent collection, local configuration assembly, and optional HTTP/RPC transports.
+`@downcity/city` is the Agent router shared by the CLI, Desktop, and custom Node hosts. It
+maintains an in-memory Agent index and optional HTTP/RPC transports. It never reads configuration
+or accesses a database.
 
 ```bash
 pnpm add @downcity/city @downcity/agent
 ```
 
 ```ts
-import { City, LocalCityEnvironment, LocalCityStore } from "@downcity/city";
+import { Agent } from "@downcity/agent";
+import { City } from "@downcity/city";
 
-const store = new LocalCityStore();
-const environment = new LocalCityEnvironment({ data_source: store });
-const city = new City(store, environment);
-await city.ready();
+const agent = new Agent({ id: "lucas", workspace, model, plugins });
+const city = new City([agent]);
 
-const agents = city.agents();
-const agent = city.agent("lucas_whitman");
+const current_agent = city.agent("lucas");
 
-await city.dispose();
+await city.close();
+await agent.dispose();
 ```
 
 ## Ownership
 
-- `LocalCityStore` only owns its database connection and supplies `CityAgentConfig` values.
-- `LocalCityEnvironment` converts product configuration into runtime-only `AgentOptions`.
-- `City` calls `new Agent(options)`, owns the resulting instances, and owns HTTP/RPC transports.
-- `city.add/remove` only manage runtime instances; they never read or mutate product configuration.
+- The CLI, Desktop, or custom host creates and disposes Agents.
+- `City` only maintains `agent_id -> Agent` runtime references and HTTP/RPC transports.
+- `city.add/remove` only update in-memory references. They never create, dispose, or persist Agents.
 - Each Agent owns its Plugin lifecycle and ActionSchedule.
-- The CLI and Desktop create independent City instances but read the same `~/.downcity` data.
-- The CLI daemon and Desktop window own independent City lifecycles while reading the same persistent data.
+- The CLI daemon and Desktop window own independent City and Agent lifecycles.
 
 Single-Agent execution, Workspace, Session, Plugin SDK, and RemoteAgent remain in
 `@downcity/agent`. Federation, Embassy, and Bureau belong to `@downcity/federation`.

@@ -14,14 +14,7 @@ import {
   generateAccessToken,
   hashAccessToken,
 } from "@/city/runtime/auth/TokenService.js";
-import { withPlatformStore } from "@/city/runtime/store/index.js";
-import {
-  get_agent_token_row_by_hash,
-  insert_agent_token_row,
-  list_agent_token_rows,
-  remove_agent_token_row,
-  touch_agent_token_row,
-} from "@/city/runtime/store/StoreAgentTokenRepository.js";
+import type { AgentTokenRepository } from "@/city/runtime/auth/AgentTokenRepository.js";
 import type {
   AgentTokenPrincipal,
   AgentTokenSummary,
@@ -32,25 +25,29 @@ import type {
 export interface AuthServiceOptions {
   /** 当前 Gateway 所属 Agent ID。 */
   agent_id: string;
+  /** CLI 组合根注入的 Token 仓储。 */
+  repository: AgentTokenRepository;
 }
 
 /** 单 Agent Token 服务。 */
 export class AuthService {
   private readonly agent_id: string;
+  /** 当前服务使用的唯一 Token 仓储。 */
+  private readonly repository: AgentTokenRepository;
 
   constructor(options: AuthServiceOptions) {
     this.agent_id = String(options.agent_id || "").trim();
     if (!this.agent_id) throw new Error("agent_id is required");
+    this.repository = options.repository;
   }
 
-  /** 服务不持有长连接，保留统一生命周期接口。 */
+  /** AuthService 不拥有连接，仅保留宿主统一关闭协议。 */
   close(): void {}
 
   /** 列出当前 Agent 的全部 Token 摘要。 */
   list_tokens(): AgentTokenSummary[] {
-    return withPlatformStore((context) =>
-      list_agent_token_rows(context, this.agent_id).map(({ token_hash: _hash, ...item }) => item)
-    );
+    return this.repository.list(this.agent_id)
+      .map(({ token_hash: _hash, ...item }) => item);
   }
 
   /** 为当前 Agent 创建新 Token。 */
@@ -69,7 +66,7 @@ export class AuthService {
       created_at: current_time,
       updated_at: current_time,
     };
-    withPlatformStore((context) => insert_agent_token_row(context, record));
+    this.repository.create(record);
     const { token_hash: _hash, ...summary } = record;
     return { ...summary, token };
   }
@@ -78,9 +75,7 @@ export class AuthService {
   delete_token(token_id_input: string): void {
     const token_id = String(token_id_input || "").trim();
     if (!token_id) throw new AuthError("token_id is required", 400);
-    const removed = withPlatformStore((context) =>
-      remove_agent_token_row(context, this.agent_id, token_id)
-    );
+    const removed = this.repository.remove(this.agent_id, token_id);
     if (!removed) throw new AuthError("Token not found", 404);
   }
 
@@ -89,9 +84,7 @@ export class AuthService {
     const token = extractBearerToken(header_value);
     if (!token) throw new AuthError("Missing bearer token", 401);
     const token_hash = hashAccessToken(token);
-    const record = withPlatformStore((context) =>
-      get_agent_token_row_by_hash(context, token_hash)
-    );
+    const record = this.repository.get_by_hash(token_hash);
     if (!record || record.agent_id !== this.agent_id) {
       throw new AuthError("Invalid bearer token", 401);
     }
@@ -99,9 +92,7 @@ export class AuthService {
       throw new AuthError("Token is expired", 401);
     }
     const current_time = new Date().toISOString();
-    withPlatformStore((context) =>
-      touch_agent_token_row(context, record.token_id, current_time)
-    );
+    this.repository.touch(record.token_id, current_time);
     return {
       agent_id: record.agent_id,
       token_id: record.token_id,

@@ -9,7 +9,7 @@ downcity -v
 
 安装后会得到 `city` / `downcity` 与 `fed` / `downfed` 两个相互独立的工具：
 
-- `city` 是本机 Agent 宿主。CLI 创建自己的 `LocalCityStore`、`LocalCityEnvironment` 和 `City`，由 City 恢复并持有本进程 Agent，同时统一管理 HTTP/RPC transport。
+- `city` 是本机 Agent 宿主。CLI 通过数据库 Adapter 和 Repository 读取配置，显式创建 Agent，再由 City 按 ID 统一转发 HTTP/RPC。
 - `fed` 是 Federation Server Manager；TUI 用于注册和管理 Server，项目命令读取当前目录的 `federation.json`。Local Node.js 和 Cloudflare Workers 都通过 `fed deploy` 部署。
 - `fed web` 在 `127.0.0.1:43128` 启动当前 Federation 的本地 Web 管理 UI；管理员登录后的 Session 只保留在 CLI 本地 BFF 内存中。
 
@@ -34,7 +34,7 @@ city agent token create <agent_id> --name local
 city plugin action <plugin_name> <action_name> <agent_id> --input '{}'
 ```
 
-City 从全局 Store 恢复的 Agent 默认启用 `ask_question` Tool。使用
+CLI 从本地产品配置装配的 Agent 默认启用 `ask_question` Tool。使用
 `city agent chat <agent_id>` 交互时，模型可以在缺少关键信息时显示文本、单选或多选问题；
 回答会通过 Session Interaction 提交，并在同一轮模型执行中继续处理。
 

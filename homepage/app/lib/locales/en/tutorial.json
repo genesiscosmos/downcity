@@ -8,8 +8,8 @@
   },
   "step2": {
     "title": "Wake Up Runtime",
-    "description": "Start the Agent Runtime locally. It takes over the repo's read/write capabilities and connects to your chat apps (e.g., Telegram), standing by as a team member.",
-    "command": "downcity agent start"
+    "description": "Start the single City host locally. It assembles the configured Agents and connects their long-running Plugins and channels.",
+    "command": "city on"
   },
   "step3": {
     "title": "Collaborate Naturally",

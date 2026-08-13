@@ -4,6 +4,7 @@ packages:
   - app/desktop
   - packages/workspace-cloudflare-computer
   - packages/city
+  - packages/local
   - packages/federation
   - packages/services
   - packages/plugins

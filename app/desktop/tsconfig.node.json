@@ -13,6 +13,7 @@
       "@downcity/agent": ["../../packages/agent/bin/index.d.ts"],
       "@downcity/city": ["../../packages/city/bin/index.d.ts"],
       "@downcity/federation": ["../../packages/federation/bin/index.d.ts"],
+      "@downcity/local": ["../../packages/local/bin/index.d.ts"],
       "@downcity/plugins": ["../../packages/plugins/bin/index.d.ts"]
     }
   },

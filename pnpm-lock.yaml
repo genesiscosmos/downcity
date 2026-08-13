@@ -26,9 +26,15 @@ importers:
       '@downcity/federation':
         specifier: workspace:^
         version: link:../../packages/federation
+      '@downcity/local':
+        specifier: workspace:^
+        version: link:../../packages/local
       '@downcity/plugins':
         specifier: workspace:^
         version: link:../../packages/plugins
+      '@downcity/shell':
+        specifier: workspace:^
+        version: link:../../packages/shell
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.1
@@ -84,6 +90,19 @@ importers:
       vite:
         specifier: ^7.1.6
         version: 7.3.3(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.3)(yaml@2.9.0)
+    optionalDependencies:
+      '@downcity/sandbox-linux':
+        specifier: workspace:^
+        version: link:../../packages/sandbox-linux
+      '@downcity/sandbox-macos':
+        specifier: workspace:^
+        version: link:../../packages/sandbox-macos
+      '@downcity/sandbox-windows-mxc':
+        specifier: workspace:^
+        version: link:../../packages/sandbox-windows-mxc
+      '@downcity/sandbox-windows-srt':
+        specifier: workspace:^
+        version: link:../../packages/sandbox-windows-srt
 
   homepage:
     dependencies:
@@ -326,34 +345,16 @@ importers:
       '@downcity/agent':
         specifier: workspace:^
         version: link:../agent
-      '@downcity/shell':
-        specifier: workspace:^
-        version: link:../shell
       '@downcity/type':
         specifier: workspace:*
         version: link:../type
       ai:
         specifier: ^6.0.193
         version: 6.0.246(zod@4.4.3)
-      ajv:
-        specifier: ^8.20.0
-        version: 8.20.0
-      ajv-formats:
-        specifier: ^3.0.1
-        version: 3.0.1(ajv@8.20.0)
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
-      fs-extra:
-        specifier: ^11.3.5
-        version: 11.3.5
       hono:
         specifier: ^4.12.23
         version: 4.12.23
     devDependencies:
-      '@types/fs-extra':
-        specifier: ^11.0.4
-        version: 11.0.4
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
@@ -363,19 +364,6 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
-    optionalDependencies:
-      '@downcity/sandbox-linux':
-        specifier: workspace:^
-        version: link:../sandbox-linux
-      '@downcity/sandbox-macos':
-        specifier: workspace:^
-        version: link:../sandbox-macos
-      '@downcity/sandbox-windows-mxc':
-        specifier: workspace:^
-        version: link:../sandbox-windows-mxc
-      '@downcity/sandbox-windows-srt':
-        specifier: workspace:^
-        version: link:../sandbox-windows-srt
 
   packages/cli:
     dependencies:
@@ -412,6 +400,9 @@ importers:
       '@downcity/federation':
         specifier: workspace:^
         version: link:../federation
+      '@downcity/local':
+        specifier: workspace:^
+        version: link:../local
       '@downcity/plugins':
         specifier: workspace:^
         version: link:../plugins
@@ -644,6 +635,37 @@ importers:
       vite:
         specifier: 8.0.14
         version: 8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3)(yaml@2.9.0)
+
+  packages/local:
+    dependencies:
+      '@downcity/agent':
+        specifier: workspace:^
+        version: link:../agent
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
+      ajv-formats:
+        specifier: ^3.0.1
+        version: 3.0.1(ajv@8.20.0)
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      fs-extra:
+        specifier: ^11.3.5
+        version: 11.3.5
+    devDependencies:
+      '@types/fs-extra':
+        specifier: ^11.0.4
+        version: 11.0.4
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      tsc-alias:
+        specifier: ^1.8.17
+        version: 1.8.17
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
 
   packages/plugins:
     dependencies:

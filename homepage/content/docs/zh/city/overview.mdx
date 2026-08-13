@@ -5,28 +5,27 @@ description: City 是什么，以及如何为 Agent 提供共享 AI 基础设施
 
 # City
 
-**City** 是 Downcity Agent 连接的共享 AI 基础设施层。它负责那些不应该存在于每个独立 Agent 项目中的功能：模型目录、身份认证、用量追踪和计费。
+**City** 是 Downcity 的本地 Agent 宿主容器。它在内存中持有多个 Agent，并把 HTTP/RPC 请求转发到指定 Agent。
 
 ## City 负责什么
 
-- **模型目录** — Federation AIService 列出可用模型和提供商。Agent 通过 ID 绑定模型，无需在每个项目里嵌入提供商密钥。
-- **身份与认证** — 全局用户账号、API token 和权限属于 City，不属于每个项目。
-- **用量与余额** — 每次模型调用都会被计量和追踪。City 处理计费、配额和支付（通过 Stripe）。
-- **Agent 与渠道配置** — Agent 配置和 Telegram、飞书、QQ 等机器人凭证统一存储在全局 `downcity.db`，Agent 通过账号 ID 绑定渠道。
+- **Agent 索引** — `city.add(agent)` 注册内存中的 Agent，`city.agent(agent_id)` 按 ID 读取，`city.agents()` 列出全部实例。
+- **HTTP/RPC 转发** — City 统一提供两个端口，通过 `agent_id` 把请求转发到对应 Agent。
+- **宿主生命周期** — CLI/Desktop 负责创建和释放 City、Agent、Workspace 与平台资源；City 负责自己的 Server 生命周期。
 
 ## City 不负责什么
 
-- 项目 `.env` 和 `.agents/skills`
-- Agent 会话和对话状态
-- 插件行为和工具实现
+- 模型目录、身份认证、用量和计费，这些属于 Federation/Embassy。
+- Agent 配置的数据库适配和 Workspace 创建，这些属于宿主的组合根。
+- Plugin 的具体存储实现，这些属于对应 Plugin Provider/Adapter。
 
 这些属于 Agent 运行时。
 
 ## Agent 如何连接 City
 
-当你运行 `city on` 时，CLI 创建一个 City，从全局 DB 恢复全部已绑定 Agent，解析各自的 `execution.modelId`，并将实时模型实例传给 Agent SDK。
+当你运行 `city on` 时，CLI 从全局 DB 读取配置，显式创建全部 Agent，再注册到一个 `City`，最后启动 City 的 HTTP/RPC Server。
 
-当你直接使用 SDK 时，你自己提供模型实例 —— 但 City 仍然拥有背后的目录和计费。
+当你直接使用 SDK 时，可以直接创建 `Agent`；需要统一 HTTP/RPC 转发时，再把 Agent 注册到 `City`。
 
 ## 继续阅读
 

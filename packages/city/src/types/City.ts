@@ -1,12 +1,20 @@
 /**
  * City 生命周期类型。
  *
- * City 是一个 Store 下持久化 Agent 的运行时集合。查询方法返回可直接使用的 Agent，
- * 不向调用方暴露数据库记录或运行时装配细节。
+ * City 只维护 Agent 的内存索引与 transport，不表达持久化或 Agent 生命周期。
  */
 
-/** City 当前生命周期阶段。 */
-export type CityState = "initializing" | "ready" | "disposed";
+import type { CityHttpRuntimeOptions } from "@/transport/types/CityHttpRuntime.js";
+import type { CityRpcRuntimeOptions } from "@/transport/types/CityRpcRuntime.js";
+
+/** City 构造时可注入的 transport 扩展能力。 */
+export interface CityRuntimeOptions {
+  /** HTTP transport 的模型解析和宿主扩展路由。 */
+  http?: CityHttpRuntimeOptions;
+
+  /** RPC transport 的模型解析与环境刷新能力。 */
+  rpc?: CityRpcRuntimeOptions;
+}
 
 /** City 同时启动 HTTP 与 RPC transport 的监听参数。 */
 export interface CityListenOptions {

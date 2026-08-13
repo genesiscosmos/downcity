@@ -54,7 +54,7 @@ my-project/
 1. 从 CLI 全局 DB 读取 Agent 配置
 2. 通过已连接的 Federation AIService 解析 `execution.modelId`
 3. 将解析后的配置传给 `new Agent(...)`
-4. 由 `new City(new LocalCityStore())` 恢复全部 Agent
+4. CLI 从 Repository 读取配置并显式创建 Agent，再注册到 `new City(agents)`
 5. 在一个 HTTP 端口和一个 RPC 端口上按 `agent_id` 暴露 Agent
 
 ## CLI vs SDK

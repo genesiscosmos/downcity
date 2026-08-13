@@ -27,7 +27,7 @@
 - `downcity`
   - CLI City daemon 与平台控制面
 - `@downcity/city`
-  - 多 Agent `City` 容器与 CityStore
+  - 多 Agent `City` 内存索引与 HTTP/RPC 转发
   - CLI 与 Desktop 共用的 `~/.downcity/downcity.db` Store Adapter
   - Agent、Workspace、Plugin 和本地 Embassy User Session 的恢复与 HTTP/RPC 暴露
 - `@downcity/ui`

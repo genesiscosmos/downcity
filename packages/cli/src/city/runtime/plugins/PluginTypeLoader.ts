@@ -1,14 +1,14 @@
 /**
  * CLI Plugin constructor 加载入口。
  *
- * 内建类型、第三方制品路径、静态 Manifest 快照和入口导出校验全部由
- * `@downcity/city` 负责；CLI 只投影自己的 Plugin 类型协议。
+ * 内建类型、第三方制品路径、静态 Manifest 快照和入口导出校验由本地产品层负责；
+ * CLI 只投影自己的 Plugin 类型协议。
  */
 
-import { LocalCityEnvironment, LocalCityStore } from "@downcity/city";
 import type { PluginType } from "@/city/types/plugin/PluginInstallation.js";
-import { create_cli_builtin_plugin_types } from "@/city/runtime/LocalCityEnvironment.js";
+import { create_cli_plugin_loader } from "@/city/runtime/AgentAssembly.js";
 import { getPlatformRootDirPath } from "@/city/process/registry/CityPaths.js";
+import { create_cli_local_data } from "@/city/runtime/LocalData.js";
 
 /** 加载内建 Plugin 时可用的 CLI 宿主依赖。 */
 export interface PluginTypeLoadContext {
@@ -26,24 +26,17 @@ export async function load_plugin_types(
   context: PluginTypeLoadContext = {},
 ): Promise<PluginType[]> {
   const root_path = getPlatformRootDirPath();
-  const store = new LocalCityStore({ root_path });
-  const environment = new LocalCityEnvironment({
+  const data = create_cli_local_data(root_path);
+  const plugin_loader = create_cli_plugin_loader({
     root_path,
-    data_source: store,
-    plugin_types: create_cli_builtin_plugin_types({
-      root_path,
-      host: context.host,
-      port: context.port,
-    }),
+    plugin_repository: data.plugins,
+    host: context.host,
+    port: context.port,
   });
   try {
-    return await environment.load_plugin_types(plugin_name) as PluginType[];
+    return await plugin_loader.load_plugin_types(plugin_name) as PluginType[];
   } finally {
-    try {
-      await environment.dispose();
-    } finally {
-      await store.dispose();
-    }
+    data.database.close();
   }
 }
 

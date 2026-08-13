@@ -1,7 +1,7 @@
 /**
  * City RPC 宿主运行时能力类型。
  *
- * 所有回调都显式接收 Agent ID，使 transport 不依赖 LocalCityStore，也不会把
+ * 所有回调都显式接收 Agent ID，使 transport 不依赖任何持久化层，也不会把
  * 多 Agent 的运行时配置复制成第二份事实源。
  */
 

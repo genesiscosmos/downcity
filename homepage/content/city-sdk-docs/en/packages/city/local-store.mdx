@@ -1,27 +1,23 @@
 ---
-title: Local Store
-description: Read the product configuration needed to assemble Agents from ~/.downcity.
+title: Local Database
+description: Manage local product configuration with a business-neutral database adapter and repositories.
 ---
 
-`LocalCityStore` is the pure-data adapter shared by CLI and Desktop hosts. It reads and writes
-Agent, Workspace, Plugin Binding, Resource, and Installation records in
-`~/.downcity/downcity.db`. It never creates an Agent, Workspace, Model, Plugin, or Embassy.
+`@downcity/local` provides a local SQLite adapter and independent repositories. The database
+adapter only provides query, mutation, transaction, and close operations. It does not know about
+Agents, Workspaces, or Plugins.
 
 ```ts
-import { City, LocalCityEnvironment, LocalCityStore } from "@downcity/city";
+import {
+  AgentRepository,
+  LocalDatabase,
+  WorkspaceRepository,
+} from "@downcity/local";
 
-const store = new LocalCityStore();
-const environment = new LocalCityEnvironment({ data_source: store });
-const city = new City(store, environment);
-await city.ready();
+const database = new LocalDatabase({ filename: database_path });
+const workspaces = new WorkspaceRepository(database, crypto_adapter);
+const agents = new AgentRepository(database, crypto_adapter, workspaces, secure_settings);
 ```
 
-During initialization, City calls `store.load_agent_configs()` and asks the Environment for
-runtime-only `AgentOptions`. This assembles a new instance from configuration; there is no Agent
-serialization or restoration protocol.
-
-The product creates, updates, and deletes configuration through `LocalCityStore` APIs.
-`city.add(agent)` registers an existing instance, while `city.remove(agent_id)` removes and
-disposes it. Neither method changes configuration or Session data.
-
-For tests or temporary hosts, use `MemoryCityStore` instead.
+The CLI and Desktop create databases and repositories in their own composition roots, read
+configuration, and call `new Agent()` explicitly. City never queries, assembles, or persists data.

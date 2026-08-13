@@ -9,17 +9,16 @@ description: 分清权威后端、业务分区、访问窗口与 Agent 宿主。
   Env 和 Token 签发。
 - `Bureau` 是 Federation 内的产品或业务分区。Bureau Token 表示可信产品后端身份。
 - `Embassy` 是 user 与 admin 访问 Federation 的窗口，只有 `user` 和 `admin` 两个身份子域。
-- `City` 是 `@downcity/city` 提供的 Agent 宿主，拥有 Agent 实例；它不是 Federation
+- `City` 是 `@downcity/city` 提供的 Agent 内存索引和转发器；它不是 Federation
   客户端，也不是 Federation 中需要注册的身份。
 
 ```ts
 import { Embassy, Federation } from "@downcity/federation";
-import { City, LocalCityEnvironment, LocalCityStore } from "@downcity/city";
+import { City } from "@downcity/city";
 
 const federation = new Federation({ database });
 const embassy = new Embassy({ federation_url: "https://fed.example.com" });
-const store = new LocalCityStore();
-const city = new City(store, new LocalCityEnvironment({ data_source: store }));
+const city = new City([agent]);
 ```
 
 ## 身份边界

@@ -6,8 +6,8 @@
   "step1Desc": "Create/init an agent project in your repository.",
   "step1Command": "downcity agent create .",
   "step2Title": "Start Service",
-  "step2Desc": "Launch the local agent service.",
-  "step2Command": "downcity agent start",
+  "step2Desc": "Launch the single local City host and assemble configured Agents.",
+  "step2Command": "city on",
   "step3Title": "Start Using",
   "step3Desc": "Interact with your agent immediately.",
   "step3Command": "Open http://localhost:3000"

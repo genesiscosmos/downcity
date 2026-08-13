@@ -10,6 +10,7 @@ import { AuthService } from "@/city/runtime/auth/AuthService.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
 import { helpText, t } from "@/shared/CliLocale.js";
+import { with_cli_local_data } from "@/city/runtime/LocalData.js";
 
 /** 在 `city agent` 下注册 Token 管理命令。 */
 export function registerAgentTokenCommand(agent_command: Command): void {
@@ -27,8 +28,9 @@ export function registerAgentTokenCommand(agent_command: Command): void {
     .helpOption("--help", helpText())
     .action(async (agent_id: string | undefined, options: { json?: boolean }) => {
       const target = await resolve_cli_agent_target(agent_id);
-      const auth_service = new AuthService({ agent_id: target.agent_id });
-      const tokens = auth_service.list_tokens();
+      const tokens = with_cli_local_data((data) =>
+        new AuthService({ agent_id: target.agent_id, repository: data.agent_tokens }).list_tokens()
+      );
       if (options.json) {
         printResult({
           asJson: true,
@@ -63,10 +65,12 @@ export function registerAgentTokenCommand(agent_command: Command): void {
       options: { name: string; expires_at?: string; json?: boolean },
     ) => {
       const target = await resolve_cli_agent_target(agent_id);
-      const issued = new AuthService({ agent_id: target.agent_id }).create_token({
-        name: options.name,
-        expires_at: options.expires_at,
-      });
+      const issued = with_cli_local_data((data) =>
+        new AuthService({ agent_id: target.agent_id, repository: data.agent_tokens }).create_token({
+          name: options.name,
+          expires_at: options.expires_at,
+        })
+      );
       if (options.json) {
         printResult({
           asJson: true,
@@ -99,7 +103,9 @@ export function registerAgentTokenCommand(agent_command: Command): void {
       options: { json?: boolean },
     ) => {
       const target = await resolve_cli_agent_target(agent_id);
-      new AuthService({ agent_id: target.agent_id }).delete_token(token_id);
+      with_cli_local_data((data) =>
+        new AuthService({ agent_id: target.agent_id, repository: data.agent_tokens }).delete_token(token_id)
+      );
       if (options.json) {
         printResult({
           asJson: true,

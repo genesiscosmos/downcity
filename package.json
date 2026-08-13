@@ -35,6 +35,7 @@
     "patch:build": "bash ./scripts/build-packages.sh",
     "agent:patch:build": "bash ./scripts/build-packages.sh --agent",
     "city:patch:build": "bash ./scripts/build-packages.sh --city",
+    "local:patch:build": "bash ./scripts/build-packages.sh --local",
     "federation:patch:build": "bash ./scripts/build-packages.sh --federation",
     "database:patch:build": "bash ./scripts/build-packages.sh --database-d1 --database-sqlite --database-postgresql",
     "services:patch:build": "bash ./scripts/build-packages.sh --services",

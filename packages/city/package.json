@@ -1,7 +1,7 @@
 {
   "name": "@downcity/city",
-  "version": "0.2.273",
-  "description": "Downcity Agent 宿主环境，提供 City、本地持久化装配与 HTTP/RPC transport。",
+  "version": "0.2.274",
+  "description": "Downcity Agent 内存索引与 HTTP/RPC 转发器。",
   "type": "module",
   "main": "./bin/index.js",
   "module": "./bin/index.js",
@@ -46,23 +46,11 @@
   "license": "MIT",
   "dependencies": {
     "@downcity/agent": "workspace:^",
-    "@downcity/shell": "workspace:^",
     "@downcity/type": "workspace:*",
     "ai": "^6.0.193",
-    "ajv": "^8.20.0",
-    "ajv-formats": "^3.0.1",
-    "dotenv": "^17.4.2",
-    "fs-extra": "^11.3.5",
     "hono": "^4.12.23"
   },
-  "optionalDependencies": {
-    "@downcity/sandbox-linux": "workspace:^",
-    "@downcity/sandbox-macos": "workspace:^",
-    "@downcity/sandbox-windows-mxc": "workspace:^",
-    "@downcity/sandbox-windows-srt": "workspace:^"
-  },
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
     "@types/node": "^25.9.1",
     "tsc-alias": "^1.8.17",
     "typescript": "^6.0.3"

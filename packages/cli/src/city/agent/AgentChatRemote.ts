@@ -8,6 +8,7 @@
 
 import { generate_id } from "@/city/utils/Id.js";
 import {
+  Agent,
   type AgentSessions,
   type AgentSession,
   type AgentSessionSetOptions,
@@ -16,7 +17,7 @@ import {
   type AgentSessionSummary,
   type RemoteAgentSession,
 } from "@downcity/agent";
-import { City, LocalCityStore, type LocalCityEnvironment } from "@downcity/city";
+import type { AgentModel } from "@downcity/agent";
 import { resolveDaemonRpcEndpoint } from "@/city/process/daemon/Client.js";
 import {
   is_process_alive,
@@ -31,7 +32,14 @@ import {
 } from "@/city/agent/AgentChatTypes.js";
 import { listPlatformModelChoices } from "@/city/runtime/city-model/ExecutionModelBinding.js";
 import type { AgentChatModelChoice } from "@/city/types/AgentChatModel.js";
-import { create_cli_city_environment } from "@/city/runtime/LocalCityEnvironment.js";
+import {
+  create_cli_agent_model,
+  create_cli_agent_tools,
+  create_cli_plugin_loader,
+  create_cli_workspace,
+  resolve_cli_agent_model,
+} from "@/city/runtime/AgentAssembly.js";
+import { create_cli_local_data } from "@/city/runtime/LocalData.js";
 
 /**
  * 远端访问目标。
@@ -88,18 +96,40 @@ export async function createRemoteAgent(params: {
   const pid = await read_daemon_pid();
   const meta = pid && is_process_alive(pid) ? await read_daemon_meta() : null;
   if (!meta?.agent_ids.includes(params.agent_id)) {
-    const store = new LocalCityStore({ agent_ids: [params.agent_id] });
-    const environment = create_cli_city_environment({ data_source: store });
-    const city = new City(store, environment);
+    const data = create_cli_local_data();
+    const plugin_loader = create_cli_plugin_loader({ plugin_repository: data.plugins });
+    let agent: Agent | undefined;
     try {
-      await city.ready();
-      const agent = city.require_agent(params.agent_id);
+      const config = data.agents.get(params.agent_id);
+      if (!config) throw new Error(`Agent not found: ${params.agent_id}`);
+      if (!config.workspace_id) throw new Error(`Agent has no Workspace binding: ${params.agent_id}`);
+      const workspace_config = data.workspaces.get(config.workspace_id);
+      if (!workspace_config) throw new Error(`Workspace not found: ${config.workspace_id}`);
+      const workspace = await create_cli_workspace(workspace_config, data.root_path);
+      try {
+        const [model, plugins, tools] = await Promise.all([
+          Promise.resolve(create_cli_agent_model(config, workspace.get_env())),
+          plugin_loader.create_plugins(config),
+          Promise.resolve(create_cli_agent_tools()),
+        ]);
+        agent = new Agent({ id: config.agent_id, workspace, model, plugins, tools });
+      } catch (error) {
+        await workspace.dispose().catch(() => undefined);
+        throw error;
+      }
       return {
-        sessions: create_local_chat_sessions(agent.sessions, environment, () => agent.workspace.get_env()),
-        close: async () => await city.dispose(),
+        sessions: create_local_chat_sessions(
+          agent.sessions,
+          async (model_id) => await resolve_cli_agent_model(model_id, agent!.workspace.get_env()),
+        ),
+        close: async () => {
+          await agent!.dispose();
+          data.database.close();
+        },
       };
     } catch (error) {
-      await city.dispose().catch(() => undefined);
+      await agent?.dispose().catch(() => undefined);
+      data.database.close();
       throw error;
     }
   }
@@ -112,8 +142,7 @@ export async function createRemoteAgent(params: {
 /** 把本地 Session 的模型实例输入适配为 RemoteSession 的 model_id 输入。 */
 function create_local_chat_sessions(
   sessions: AgentSessions<AgentSession>,
-  environment: LocalCityEnvironment,
-  get_env: () => Readonly<Record<string, string>>,
+  resolve_model: (model_id: string) => Promise<AgentModel>,
 ): AgentSessions<RemoteAgentSession> {
   const wrap = (session: AgentSession): RemoteAgentSession => ({
     id: session.id,
@@ -132,7 +161,7 @@ function create_local_chat_sessions(
       options?: AgentSessionSetOptions,
     ) => await session.set({
       ...(input.model_id ? {
-        model: await environment.resolve_model(input.model_id, get_env()),
+        model: await resolve_model(input.model_id),
       } : {}),
       ...(input.security ? { security: input.security } : {}),
     }, options),

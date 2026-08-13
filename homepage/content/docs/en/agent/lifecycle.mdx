@@ -5,7 +5,7 @@ description: Construct, ready, execute, and dispose an Agent
 
 # Agent Lifecycle
 
-`new Agent(options)` starts plugin lifecycle and ActionSchedule during construction. There is no `agent.start()` or `agent.stop()`.
+`new Agent(options)` creates and starts the Plugin lifecycle and ActionSchedule during construction. There is no `agent.start()` or `agent.stop()`; the host calls `agent.dispose()` to release resources.
 
 Run only one active runtime for the same Agent ID in the same physical Workspace. ActionSchedule is a local scheduler and does not coordinate duplicate Agent processes.
 

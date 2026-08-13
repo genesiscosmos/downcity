@@ -40,7 +40,7 @@ export interface DaemonMeta {
   rpc_host: string;
   /** City RPC 端口。 */
   rpc_port: number;
-  /** 本次启动从全局 Store 恢复的 Agent ID 快照。 */
+  /** 本次启动从本地产品配置装配的 Agent ID 快照。 */
   agent_ids: string[];
   /** daemon 启动命令。 */
   command: string;

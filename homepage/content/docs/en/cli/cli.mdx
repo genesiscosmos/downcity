@@ -54,7 +54,7 @@ The active policy appears in the Chat header. A policy change affects only futur
 1. Reads agent config from the CLI global DB
 2. Resolves `execution.modelId` through the connected Federation AIService
 3. Passes the resolved config to `new Agent(...)`
-4. Restores all Agents through `new City(new LocalCityStore())`
+4. Reads configuration through repositories, creates Agents explicitly, and registers them with `new City(agents)`
 5. Exposes Agents by `agent_id` over one HTTP port and one RPC port
 
 ## CLI vs SDK

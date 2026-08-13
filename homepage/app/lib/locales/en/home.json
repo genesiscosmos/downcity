@@ -64,7 +64,7 @@
     "cityTitle": "Connect City and Federation",
     "cityDescription": "Run shared product infrastructure in Federation, then connect each product through its City client.",
     "cliTitle": "Operate from the terminal",
-    "cliDescription": "Create and run a managed Agent without assembling the SDK runtime by hand.",
+    "cliDescription": "Create Agent configuration and let the CLI City host assemble it without wiring the SDK by hand.",
     "agentDocs": "Read Agent docs",
     "cityDocs": "Read City docs",
     "cliDocs": "Read CLI docs"

@@ -7,7 +7,7 @@
 import path from "node:path";
 import { CliError } from "@/shared/CliError.js";
 import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
-import { get_managed_agent } from "@/city/process/registry/ManagedAgentRepository.js";
+import { get_agent_config } from "@/city/process/registry/AgentConfigRepository.js";
 import {
   get_workspace,
   get_workspace_by_path,
@@ -36,7 +36,7 @@ export async function checkAgentPreflight(
       });
     }
   }
-  const agent = get_managed_agent(target.agent_id);
+  const agent = get_agent_config(target.agent_id);
   const workspace = get_workspace_by_path(target.workspace_path);
   if (!agent || !workspace) {
     throw new CliError({
@@ -58,7 +58,7 @@ export async function resolveProjectRootByAgentId(agent_id_input: string): Promi
   error?: string;
 }> {
   const agent_id = String(agent_id_input || "").trim().toLowerCase();
-  const agent = agent_id ? get_managed_agent(agent_id) : null;
+  const agent = agent_id ? get_agent_config(agent_id) : null;
   if (!agent) return { error: `Agent not found: ${agent_id_input}` };
   if (!agent.workspace_id) return { error: `Agent has no Workspace binding: ${agent.agent_id}` };
   const workspace = get_workspace(agent.workspace_id);

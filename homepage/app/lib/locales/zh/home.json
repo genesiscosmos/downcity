@@ -64,7 +64,7 @@
     "cityTitle": "连接 City 与 Federation",
     "cityDescription": "由 Federation 承载共享产品基础，再通过 City 客户端连接每一个产品。",
     "cliTitle": "通过终端运行",
-    "cliDescription": "无需手动组装 SDK 运行时，直接创建并启动一个受管 Agent。",
+    "cliDescription": "无需手动组装 SDK 运行时，创建 Agent 配置并由 CLI City 统一托管。",
     "agentDocs": "查看 Agent 文档",
     "cityDocs": "查看 City 文档",
     "cliDocs": "查看 CLI 文档"

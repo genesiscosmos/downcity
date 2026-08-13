@@ -64,7 +64,7 @@ const HELP_ITEMS = [
     name: "patch:build",
     summary: "按 package 执行 patch bump + build。",
     detail:
-      "支持 `npm run patch:build -- --shell --agent --city --services --plugins --cli`、`--ui`、`--all`、`--no-bump`，默认构建 agent + plugins + cli。",
+      "支持 `npm run patch:build -- --shell --agent --city --local --services --plugins --cli`、`--ui`、`--all`、`--no-bump`。",
   },
   {
     name: "agent:patch:build",

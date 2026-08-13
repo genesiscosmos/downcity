@@ -17,7 +17,9 @@
     "@downcity/agent": "workspace:^",
     "@downcity/city": "workspace:^",
     "@downcity/federation": "workspace:^",
+    "@downcity/local": "workspace:^",
     "@downcity/plugins": "workspace:^",
+    "@downcity/shell": "workspace:^",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "framer-motion": "^11.18.2",
@@ -25,6 +27,12 @@
     "react-dom": "^19.2.6",
     "react-icons": "^5.5.0",
     "tailwind-merge": "^2.2.0"
+  },
+  "optionalDependencies": {
+    "@downcity/sandbox-linux": "workspace:^",
+    "@downcity/sandbox-macos": "workspace:^",
+    "@downcity/sandbox-windows-mxc": "workspace:^",
+    "@downcity/sandbox-windows-srt": "workspace:^"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.17",

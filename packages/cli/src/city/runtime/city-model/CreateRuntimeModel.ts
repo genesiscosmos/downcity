@@ -10,7 +10,7 @@
 import { get_logger } from "@downcity/agent";
 import type { AgentModel } from "@downcity/agent";
 import { createCityAiAgentModel } from "@/city/runtime/city-model/CityAiServiceBinding.js";
-import type { ManagedAgent } from "@/city/types/agent/ManagedAgent.js";
+import type { AgentConfig } from "@/city/types/agent/AgentConfig.js";
 
 type RuntimeModelFactoryInput = {
   /**
@@ -20,7 +20,7 @@ type RuntimeModelFactoryInput = {
    * - 这里只读取 `execution.modelId`。
    * - 模型能力目录来自 City AIService。
    */
-  config: ManagedAgent;
+  config: AgentConfig;
 
   /**
    * 宿主显式注入的运行时 env。
@@ -47,7 +47,7 @@ function normalizeRuntimeEnv(
 }
 
 function readProjectExecutionBinding(
-  config: ManagedAgent,
+  config: AgentConfig,
 ): { type: "api"; modelId: string } | null {
   const execution = config.execution;
   if (!execution || typeof execution !== "object") return null;

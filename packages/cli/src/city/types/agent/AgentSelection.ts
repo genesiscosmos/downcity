@@ -6,8 +6,8 @@
  * - Workspace 路径描述 Agent 持久化绑定的 Workspace。
  */
 
-/** CLI 展示的单个受管 Agent。 */
-export interface CliManagedAgentView {
+/** CLI 展示的单个 Agent 运行目标。 */
+export interface CliAgentView {
   /** Agent 全局稳定标识。 */
   agent_id: string;
 

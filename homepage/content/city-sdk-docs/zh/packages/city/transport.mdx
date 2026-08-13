@@ -12,8 +12,7 @@ await city.listen({
   rpc: { host: "127.0.0.1", port: 15314 },
 });
 
-await city.close();   // 只关闭 transport
-await city.dispose(); // transport、Agent、Environment、Store
+await city.close(); // 只关闭 transport；Agent 仍由创建它的宿主释放
 ```
 
 HTTP 地址是 `http://host:port/agents/<agent_id>`，RPC 地址是

@@ -12,8 +12,9 @@ import {
   read_env_file,
   set_env_file_value,
 } from "../bin/city/env/EnvFileStore.js";
-import { resolve_managed_agent_env } from "../bin/city/env/ProcessEnv.js";
-import { create_managed_agent } from "../bin/city/process/registry/ManagedAgentRepository.js";
+import { resolve_agent_env } from "../bin/city/env/ProcessEnv.js";
+import { create_agent_config } from "../bin/city/process/registry/AgentConfigRepository.js";
+import { create_workspace } from "../bin/city/process/registry/WorkspaceRepository.js";
 import {
   resolve_agent_env_target,
   set_env_target_value,
@@ -38,7 +39,7 @@ test("Env 文件修改保留注释并消除目标 key 的重复声明", async ()
   }
 });
 
-test("Agent Env 写入 Workspace 并把停止状态保留到广播结果", async () => {
+test("Agent Env 写入 Workspace，City 未运行时不产生广播目标", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-agent-env-target-"));
   const workspace_path = path.join(root, "workspace");
   await fs.mkdir(workspace_path);
@@ -47,16 +48,16 @@ test("Agent Env 写入 Workspace 并把停止状态保留到广播结果", async
   process.env.DC_PLATFORM_ROOT = path.join(root, "platform");
   process.env.DC_MODEL_DB_KEY = "downcity-agent-env-target-test";
   try {
-    create_managed_agent({
+    const workspace = create_workspace({ workspace_path });
+    create_agent_config({
       agent_id: "env_target_agent",
-      workspace_path,
+      workspace_id: workspace.workspace_id,
       version: "1.0.0",
     });
     const target = await resolve_agent_env_target("env_target_agent");
     const result = await set_env_target_value(target, "agent_key", "agent value");
     assert.equal((await read_env_file(path.join(workspace_path, ".env"))).AGENT_KEY, "agent value");
     assert.deepEqual(result.broadcast.updated_agent_ids, []);
-    assert.deepEqual(result.broadcast.stopped_agent_ids, ["env_target_agent"]);
     assert.deepEqual(result.broadcast.failed_agents, []);
   } finally {
     if (previous_platform_root === undefined) delete process.env.DC_PLATFORM_ROOT;
@@ -67,7 +68,7 @@ test("Agent Env 写入 Workspace 并把停止状态保留到广播结果", async
   }
 });
 
-test("受管 Agent Env 优先级为 Global < Workspace < 显式进程 Env", async () => {
+test("Agent Env 优先级为 Global < Workspace < 显式进程 Env", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-env-priority-"));
   const workspace_path = path.join(root, "workspace");
   await fs.mkdir(workspace_path);
@@ -76,7 +77,7 @@ test("受管 Agent Env 优先级为 Global < Workspace < 显式进程 Env", asyn
   try {
     await fs.writeFile(path.join(root, ".env"), "SHARED=global\nGLOBAL_ONLY=yes\n", "utf8");
     await fs.writeFile(path.join(workspace_path, ".env"), "SHARED=workspace\nWORKSPACE_ONLY=yes\n", "utf8");
-    const env = resolve_managed_agent_env(workspace_path, {
+    const env = resolve_agent_env(workspace_path, {
       SHARED: "process",
       PROCESS_ONLY: "yes",
     });

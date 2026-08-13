@@ -5,7 +5,7 @@ description: Agent 的构造、就绪、执行与关闭
 
 # Agent 生命周期
 
-`new Agent(options)` 完成装配后会立即启动 plugin lifecycle 与 ActionSchedule。不存在 `agent.start()` 或 `agent.stop()`。
+`new Agent(options)` 完成装配后会立即创建并启动 Plugin lifecycle 与 ActionSchedule。不存在 `agent.start()` 或 `agent.stop()`；由宿主负责调用 `agent.dispose()` 释放资源。
 
 同一个 Agent ID 在同一物理 Workspace 中只能运行一个活动 runtime。ActionSchedule 是本地调度器，不负责协调重复启动的 Agent 进程。
 

@@ -2,12 +2,12 @@
  * Federation 管理端配置持久化模块。
  *
  * 关键说明（中文）
- * - downfed 的 server profile、管理员会话、Cloudflare account 与语言写入 `federation.db`。
- * - 配置整体通过 PlatformStore secure setting 加密保存，避免明文 JSON 状态散落。
+ * - downfed 的 server profile、管理员会话、Cloudflare account 与语言写入 `downcity.db`。
+ * - 配置通过共享 SecureSettingRepository 加密保存，避免明文 JSON 状态散落。
  * - user session 由 `city` 维护，本模块只负责 Federation admin 管理态。
  */
 
-import { create_federation_platform_store } from "@/city/runtime/store/index.js";
+import { with_cli_local_data } from "@/city/runtime/LocalData.js";
 import { normalizeBaseUrl } from "@/federation/core/env.js";
 import type { CliLocale } from "@/shared/types/CliLocale.js";
 import type {
@@ -556,19 +556,11 @@ function deriveServerName(baseUrl: string): string {
 }
 
 function readStoredConfig(): Record<string, unknown> | undefined {
-  const store = create_federation_platform_store();
-  try {
-    return store.getSecureSettingJsonSync<Record<string, unknown>>(FEDERATION_CONFIG_KEY) ?? undefined;
-  } finally {
-    store.close();
-  }
+  return with_cli_local_data((data) =>
+    data.secure_settings.get<Record<string, unknown>>(FEDERATION_CONFIG_KEY) ?? undefined
+  );
 }
 
 function writeStoredConfig(config: ClientConfig): void {
-  const store = create_federation_platform_store();
-  try {
-    store.setSecureSettingJsonSync(FEDERATION_CONFIG_KEY, config);
-  } finally {
-    store.close();
-  }
+  with_cli_local_data((data) => data.secure_settings.set(FEDERATION_CONFIG_KEY, config));
 }

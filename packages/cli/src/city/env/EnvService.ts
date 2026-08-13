@@ -95,7 +95,6 @@ async function broadcast_target(target: EnvTarget) {
 function empty_broadcast() {
   return {
     updated_agent_ids: [],
-    stopped_agent_ids: [],
     failed_agents: [],
   };
 }

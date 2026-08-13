@@ -8,9 +8,8 @@ const github_url = "https://github.com/genesiscosmos/downcity";
 const quick_start_commands = `npm install -g downcity
 
 downcity agent create ./my-city
-downcity federation use
-downcity start
-downcity agent start`;
+city federation login
+city on`;
 
 /**
  * 首页收尾 CTA 模块。

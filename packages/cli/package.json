@@ -1,6 +1,6 @@
 {
   "name": "downcity",
-  "version": "1.1.443",
+  "version": "1.1.444",
   "type": "module",
   "description": "Downcity CLI — local City container and Federation Server management",
   "bin": {
@@ -40,6 +40,7 @@
     "@downcity/agent": "workspace:^",
     "@downcity/city": "workspace:^",
     "@downcity/federation": "workspace:^",
+    "@downcity/local": "workspace:^",
     "@downcity/plugins": "workspace:^",
     "@downcity/shell": "workspace:^",
     "@downcity/type": "workspace:*",

@@ -82,13 +82,13 @@ const START_GUIDE: Record<"zh" | "en", StartContent> = {
       },
       {
         title: "连接 City 并启动 Runtime",
-        description: "先把当前 City 会话导入 downcity，再启动 runtime。默认后台运行，需要观察日志时再切前台模式。",
-        command: "downcity federation use\ndowncity start\ndowncity agent start\n# 调试时\ndowncity agent start --foreground",
+        description: "先登录 Federation，再启动唯一的 CLI City 宿主。City 会在启动时装配全部 Agent；Agent 本身没有独立启动命令。",
+        command: "city federation login\ncity on\n# 调试时以前台模式运行\ncity on --foreground",
       },
       {
         title: "选择 Session 模型",
-        description: "Agent 启动后可为当前 Session 选择 Federation 模型。选择结果随 Session 运行数据保存，下一轮立即生效，不需要重启 Agent。",
-        command: "downcity agent model .\n# SSH 或自动化环境\ndowncity agent model . --session-id <session-id> --set <model-id>",
+        description: "City 或直接的 Agent Session 都可以开始对话。Session 模型选择只影响当前会话，不需要重启 City。",
+        command: "city agent chat <agent_id>\n# 选择默认模型\ncity agent model <agent_id> --set <model-id>",
       },
       {
         title: "做一次健康检查",
@@ -182,7 +182,7 @@ const START_GUIDE: Record<"zh" | "en", StartContent> = {
       {
         title: "Connect City and start runtime",
         description: "Import the active City session into downcity, then start the runtime. Use foreground mode only when you need live logs in the current shell.",
-        command: "downcity federation use\ndowncity start\ndowncity agent start\n# for debugging\ndowncity agent start --foreground",
+        command: "city federation login\ncity on\n# for debugging in the foreground\ncity on --foreground",
       },
       {
         title: "Select the Session model",
@@ -191,8 +191,8 @@ const START_GUIDE: Record<"zh" | "en", StartContent> = {
       },
       {
         title: "Run a health check",
-        description: "Verify runtime state first, then add skills, channels, and scheduled tasks. Boundaries before expansion.",
-        command: "curl http://localhost:3000/health\ncurl http://localhost:3000/api/status",
+        description: "先确认 City 宿主状态，再接入 Skills、渠道和定时任务。",
+        command: "city status\ncurl http://localhost:5314/health",
       },
     ],
     notes: [

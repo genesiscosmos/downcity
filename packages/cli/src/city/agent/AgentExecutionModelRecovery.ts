@@ -12,9 +12,9 @@ import { t } from "@/shared/CliLocale.js";
 import { CliError } from "@/shared/CliError.js";
 import { listPlatformModelChoices } from "@/city/runtime/city-model/ExecutionModelBinding.js";
 import {
-  get_managed_agent,
-  update_managed_agent,
-} from "@/city/process/registry/ManagedAgentRepository.js";
+  get_agent_config,
+  update_agent_config,
+} from "@/city/process/registry/AgentConfigRepository.js";
 import type { AgentModelSelectionResponse } from "@/city/types/AgentModel.js";
 import type {
   AgentExecutionModelRecoveryDecision,
@@ -57,12 +57,12 @@ function build_model_recovery_command(
   return `city agent model ${JSON.stringify(agent_id)} --set ${JSON.stringify(model_id)}`;
 }
 
-/** 确保受管 Agent 的默认模型可以在当前 Federation 中解析。 */
+/** 确保 Agent 配置的默认模型可以在当前 Federation 中解析。 */
 export async function ensure_agent_execution_model_ready(
   agent_id_input: string,
 ): Promise<void> {
   const agent_id = String(agent_id_input || "").trim();
-  const config = get_managed_agent(agent_id);
+  const config = get_agent_config(agent_id);
   if (!config) {
     throw new CliError({
       title: "Agent config not found",
@@ -124,7 +124,7 @@ export async function ensure_agent_execution_model_ready(
     });
   }
 
-  update_managed_agent({
+  update_agent_config({
     agent_id: config.agent_id,
     execution: {
       type: "api",

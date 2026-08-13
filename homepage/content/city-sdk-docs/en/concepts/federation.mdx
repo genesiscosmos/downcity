@@ -11,17 +11,16 @@ These four concepts have independent responsibilities:
   trusted product backend.
 - `Embassy` is the window through which users and administrators access Federation. It has only
   `user` and `admin` identity domains.
-- `City` is an Agent host from `@downcity/city`. It owns Agent instances and is not a Federation
+- `City` is an in-memory Agent index and router from `@downcity/city`. It is not a Federation
   client or a registered Federation identity.
 
 ```ts
 import { Embassy, Federation } from "@downcity/federation";
-import { City, LocalCityEnvironment, LocalCityStore } from "@downcity/city";
+import { City } from "@downcity/city";
 
 const federation = new Federation({ database });
 const embassy = new Embassy({ federation_url: "https://fed.example.com" });
-const store = new LocalCityStore();
-const city = new City(store, new LocalCityEnvironment({ data_source: store }));
+const city = new City([agent]);
 ```
 
 ## Identity boundaries

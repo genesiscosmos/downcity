@@ -8,7 +8,7 @@
 
 import fs from "fs-extra";
 import prompts from "@/city/tui/Prompts.js";
-import { list_managed_agents } from "@/city/process/registry/ManagedAgentRepository.js";
+import { list_agent_configs } from "@/city/process/registry/AgentConfigRepository.js";
 import {
   get_agent_plugin_binding,
   remove_agent_plugin_binding,
@@ -252,11 +252,11 @@ async function run_interactive_install(): Promise<void> {
   });
 }
 
-/** 选择一个受管 Agent。 */
+/** 选择一个已登记 Agent。 */
 async function prompt_agent_id(): Promise<string | null> {
-  const agents = list_managed_agents();
+  const agents = list_agent_configs();
   if (agents.length === 0) {
-    emitCliBlock({ tone: "info", title: "No managed Agents" });
+    emitCliBlock({ tone: "info", title: "No registered Agents" });
     return null;
   }
   const response = await prompts({

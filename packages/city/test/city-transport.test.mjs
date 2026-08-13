@@ -9,8 +9,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent, RemoteAgent } from "../../agent/bin/index.js";
-import { City, CityHTTP, CityRPC, MemoryCityStore } from "../bin/index.js";
-import { create_agent_config, TestCityEnvironment } from "./TestCityEnvironment.mjs";
+import { Workspace } from "../../agent/bin/index.js";
+import { City, CityHTTP, CityRPC } from "../bin/index.js";
 
 const network_tests_enabled = process.env.DOWNCITY_RUN_NETWORK_TESTS === "1";
 
@@ -32,17 +32,15 @@ async function create_city() {
     fs.mkdir(path.join(root, "first")),
     fs.mkdir(path.join(root, "second")),
   ]);
-  const configs = [
-    create_agent_config("first_agent", path.join(root, "first")),
-    create_agent_config("second_agent", path.join(root, "second")),
+  const agents = [
+    new Agent({ id: "first_agent", workspace: new Workspace({ path: path.join(root, "first") }) }),
+    new Agent({ id: "second_agent", workspace: new Workspace({ path: path.join(root, "second") }) }),
   ];
-  const city = new City(new MemoryCityStore(configs), new TestCityEnvironment());
-  await city.ready();
-  return { city, root };
+  return { city: new City(agents), agents, root };
 }
 
 test("CityHTTP mounts each Agent below its stable ID", async () => {
-  const { city, root } = await create_city();
+  const { city, agents, root } = await create_city();
   const transport = new CityHTTP(city);
   try {
     const first_create = await transport.router().request(
@@ -70,20 +68,23 @@ test("CityHTTP mounts each Agent below its stable ID", async () => {
     );
   } finally {
     await transport.close();
-    await city.dispose();
+    await city.close();
+    await Promise.all(agents.map((agent) => agent.dispose()));
     await fs.rm(root, { recursive: true, force: true });
   }
 });
 
 test("CityHTTP 动态识别运行中新增和删除的 Agent", async () => {
-  const { city, root } = await create_city();
+  const { city, agents, root } = await create_city();
   const transport = new CityHTTP(city);
   try {
     transport.router();
-    const config = create_agent_config("third_agent", path.join(root, "third"));
-    const environment = new TestCityEnvironment();
-    const agent = new Agent(await environment.create_agent_options(config));
-    await city.add(agent);
+    await fs.mkdir(path.join(root, "third"));
+    const agent = new Agent({
+      id: "third_agent",
+      workspace: new Workspace({ path: path.join(root, "third") }),
+    });
+    city.add(agent);
     const created = await transport.router().request(
       "/agents/third_agent/api/sdk/sessions",
       {
@@ -94,13 +95,15 @@ test("CityHTTP 动态识别运行中新增和删除的 Agent", async () => {
     );
     assert.equal(created.status, 200);
     await city.remove("third_agent");
+    await agent.dispose();
     assert.equal(
       (await transport.router().request("/agents/third_agent/api/sdk/sessions")).status,
       404,
     );
   } finally {
     await transport.close();
-    await city.dispose();
+    await city.close();
+    await Promise.all(agents.map((agent) => agent.dispose()));
     await fs.rm(root, { recursive: true, force: true });
   }
 });
@@ -108,7 +111,7 @@ test("CityHTTP 动态识别运行中新增和删除的 Agent", async () => {
 test("CityRPC routes RemoteAgent by rpc URL Agent ID", {
   skip: !network_tests_enabled,
 }, async () => {
-  const { city, root } = await create_city();
+  const { city, agents, root } = await create_city();
   const transport = new CityRPC(city);
   const port = await reserve_port();
   const first = new RemoteAgent({ url: `rpc://127.0.0.1:${port}/first_agent` });
@@ -125,7 +128,8 @@ test("CityRPC routes RemoteAgent by rpc URL Agent ID", {
     await missing.close();
   } finally {
     await Promise.allSettled([first.close(), second.close(), transport.close()]);
-    await city.dispose();
+    await city.close();
+    await Promise.all(agents.map((agent) => agent.dispose()));
     await fs.rm(root, { recursive: true, force: true });
   }
 });

@@ -19,7 +19,7 @@ import {
   stop_daemon_process,
 } from "@/city/process/daemon/Manager.js";
 import type { CityDaemonOptions } from "@/city/process/daemon/Types.js";
-import { list_managed_agents } from "@/city/process/registry/ManagedAgentRepository.js";
+import { list_agent_configs } from "@/city/process/registry/AgentConfigRepository.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { CliError } from "@/shared/CliError.js";
 import { run_city_foreground } from "@/city/agent/Run.js";
@@ -33,7 +33,7 @@ export async function city_on(options: CityDaemonOptions): Promise<void> {
   const host = String(options.host || "127.0.0.1").trim() || "127.0.0.1";
   const http_port = options.http_port ?? 5314;
   const rpc_port = options.rpc_port ?? 15314;
-  const agent_ids = list_managed_agents()
+  const agent_ids = list_agent_configs()
     .filter((agent) => Boolean(agent.workspace_id))
     .map((agent) => agent.agent_id);
   const args = build_city_run_args({ host, http_port, rpc_port });

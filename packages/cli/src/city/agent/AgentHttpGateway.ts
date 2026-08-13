@@ -37,8 +37,8 @@ export interface AgentHttpGatewayStartOptions {
   get_agent: () => Agent;
   /** 可选 SDK transport 子路由（来自 `@downcity/city` 的 `AgentHTTP.router()`）。 */
   sdkRouter?: HonoType;
-  /** 可复用的全局鉴权服务；省略时由网关创建并负责关闭。 */
-  auth_service?: AuthService;
+  /** CLI 组合根创建并拥有的鉴权服务。 */
+  auth_service: AuthService;
 }
 
 /**
@@ -98,11 +98,7 @@ export function createAgentHttpGatewayApp(
 export async function startAgentHttpGateway(
   options: AgentHttpGatewayStartOptions,
 ): Promise<AgentHttpGatewayInstance> {
-  const owns_auth_service = !options.auth_service;
-  const auth_service = options.auth_service ?? new AuthService({
-    agent_id: options.get_agent().id,
-  });
-  const app = createAgentHttpGatewayApp({ ...options, auth_service });
+  const app = createAgentHttpGatewayApp(options);
   const server = create_node_http_server(app, options);
   const server_logger = options.get_agent().get_logger();
 
@@ -118,7 +114,6 @@ export async function startAgentHttpGateway(
       });
     });
   } catch (error) {
-    if (owns_auth_service) auth_service.close();
     throw error;
   }
 
@@ -130,7 +125,6 @@ export async function startAgentHttpGateway(
       await new Promise<void>((resolve) => {
         server.close(() => resolve());
       });
-      if (owns_auth_service) auth_service.close();
       server_logger.info("City Agent HTTP gateway stopped");
     },
   };

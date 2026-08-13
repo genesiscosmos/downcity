@@ -5,28 +5,27 @@ description: What City is and how it provides shared AI infrastructure to Agents
 
 # City
 
-**City** is the shared AI infrastructure layer that Downcity Agents connect to. It owns the things that should not live inside every individual Agent project: model catalogs, authentication, usage tracking, and billing.
+**City** is Downcity's local Agent host container. It keeps Agent instances in memory and forwards HTTP/RPC requests to the selected Agent.
 
 ## What City owns
 
-- **Model catalog** — the Federation AIService lists available models and providers. Agents bind to models through IDs, not by embedding provider keys.
-- **Identity & auth** — global user accounts, API tokens, and permissions live in City, not in each project.
-- **Usage & balance** — every model call is metered and tracked. City handles billing, quotas, and payment (via Stripe).
-- **Agent and channel config** — Agent config and bot credentials for Telegram, Feishu, QQ, and other channels live in the global `downcity.db`; Agents bind channels by account ID.
+- **Agent index** — `city.add(agent)` registers an in-memory Agent, `city.agent(agent_id)` reads one, and `city.agents()` lists them.
+- **HTTP/RPC forwarding** — City owns two transport ports and forwards requests by `agent_id`.
+- **Host lifecycle** — CLI/Desktop create and dispose City, Agent, Workspace, and platform resources; City owns its server lifecycle.
 
 ## What City does not own
 
-- Project `.env` and `.agents/skills`
-- Agent sessions and conversation state
-- Plugin behavior and tool implementations
+- Model catalogs, identity, usage, and billing, which belong to Federation/Embassy.
+- Database adapters for Agent configuration and Workspace assembly, which belong to the host composition root.
+- Concrete Plugin storage, which belongs to the selected Plugin Provider/Adapter.
 
 These belong to the Agent runtime.
 
 ## How Agents connect to City
 
-When you run `city on`, the CLI creates one City, restores every bound Agent from the global DB, resolves each `execution.modelId`, and passes the live model instance to the Agent SDK.
+When you run `city on`, the CLI reads configuration from the global DB, explicitly creates every Agent, registers them with one `City`, and starts City's HTTP/RPC servers.
 
-When you use the SDK directly, you provide the model instance yourself — but City still owns the catalog and billing behind it.
+When you use the SDK directly, create an `Agent` yourself. Add it to a `City` when you need unified HTTP/RPC forwarding.
 
 ## Where to learn more
 

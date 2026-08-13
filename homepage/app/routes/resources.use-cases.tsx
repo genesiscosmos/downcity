@@ -18,7 +18,7 @@ const useCases = [
   {
     id: "collaborator",
     bulletKeys: ["review", "answer", "onboard", "bugs", "docs"],
-    example: `# Create/init the Agent project\ndowncity agent create .\n\n# Start the Agent (default: daemon)\ndowncity agent start\n\n# In Telegram, chat with your Agent:\n/status          # Check project status\nSuggest refactor auth  # Suggest how to refactor auth module\nRun tests              # Run tests`,
+    example: `# Create/init the Agent project\ncity agent create .\n\n# Start the single City host\ncity on\n\n# In Telegram, chat with your Agent:\n/status          # Check project status\nSuggest refactor auth  # Suggest how to refactor auth module\nRun tests              # Run tests`,
   },
   {
     id: "worker",

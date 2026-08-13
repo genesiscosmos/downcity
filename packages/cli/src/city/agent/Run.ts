@@ -1,15 +1,15 @@
 /**
  * 前台 CLI City 进程入口。
  *
- * 信号处理只管理 City 宿主。具体 Agent 与 Plugin 资源由 ManagedCityRuntime 释放。
+ * 信号处理只管理 City 宿主。具体 Agent 与 Plugin 资源由 CliCityRuntime 释放。
  */
 
 import type { CityDaemonOptions } from "@/city/process/daemon/Types.js";
-import { ManagedCityRuntime } from "@/city/agent/ManagedCityRuntime.js";
+import { CliCityRuntime } from "@/city/agent/CliCityRuntime.js";
 
 /** 启动前台 City，并等待进程信号。 */
 export async function run_city_foreground(options: CityDaemonOptions): Promise<void> {
-  const runtime = await ManagedCityRuntime.start(options);
+  const runtime = await CliCityRuntime.start(options);
   let shutting_down = false;
   const shutdown = async (): Promise<void> => {
     if (shutting_down) return;

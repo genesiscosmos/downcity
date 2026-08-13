@@ -23,7 +23,7 @@ test("Agent 与 Workspace 在全局 DB 中独立管理", async () => {
       version: "1.0.0",
     }));
     const repository = await import(
-      "../bin/city/process/registry/ManagedAgentRepository.js"
+      "../bin/city/process/registry/AgentConfigRepository.js"
     );
     const workspaces = await import(
       "../bin/city/process/registry/WorkspaceRepository.js"
@@ -33,7 +33,7 @@ test("Agent 与 Workspace 在全局 DB 中独立管理", async () => {
       workspace_path: project_root,
       name: "Project",
     });
-    repository.create_managed_agent({
+    repository.create_agent_config({
       agent_id: "db_agent",
       workspace_id: workspace.workspace_id,
       execution: { type: "api", model_id: "model_a" },
@@ -48,7 +48,7 @@ test("Agent 与 Workspace 在全局 DB 中独立管理", async () => {
       enabled: true,
       config: { queue: { max_concurrency: 3 } },
     });
-    const config = repository.get_managed_agent("db_agent");
+    const config = repository.get_agent_config("db_agent");
     assert.equal(config.agent_id, "db_agent");
     assert.equal(config.execution.model_id, "model_a");
     assert.equal("workspace_path" in config, false);
@@ -59,15 +59,15 @@ test("Agent 与 Workspace 在全局 DB 中独立管理", async () => {
     );
     assert.equal(fs.existsSync(path.join(platform_root, "downcity.db")), true);
 
-    repository.create_managed_agent({
+    repository.create_agent_config({
       agent_id: "second_agent",
       workspace_id: workspace.workspace_id,
       execution: { type: "api", model_id: "model_b" },
     });
-    assert.equal(repository.get_managed_agent("second_agent").execution.model_id, "model_b");
-    assert.equal(repository.get_managed_agent("db_agent").execution.model_id, "model_a");
-    assert.equal(repository.get_managed_agent("db_agent").workspace_id, workspace.workspace_id);
-    assert.equal(repository.get_managed_agent("second_agent").workspace_id, workspace.workspace_id);
+    assert.equal(repository.get_agent_config("second_agent").execution.model_id, "model_b");
+    assert.equal(repository.get_agent_config("db_agent").execution.model_id, "model_a");
+    assert.equal(repository.get_agent_config("db_agent").workspace_id, workspace.workspace_id);
+    assert.equal(repository.get_agent_config("second_agent").workspace_id, workspace.workspace_id);
     assert.equal(workspaces.get_workspace(workspace.workspace_id).workspace_path, project_root);
     assert.equal(workspaces.get_workspace_by_path(project_root).workspace_id, workspace.workspace_id);
     assert.equal(workspaces.list_workspaces().length, 1);
@@ -92,111 +92,11 @@ test("Agent 与 Workspace 在全局 DB 中独立管理", async () => {
   }
 });
 
-test("旧 Federation 管理配置一次性迁入 downcity.db", async () => {
-  const platform_root = create_temp_root();
-  process.env.DC_PLATFORM_ROOT = platform_root;
-  process.env.DC_MODEL_DB_KEY = "federation-config-migration-test";
-  let reset_key_cache = () => {};
-  try {
-    const crypto = await import("../bin/city/runtime/store/crypto.js");
-    reset_key_cache = crypto.resetModelDbKeyCache;
-    reset_key_cache();
-    const { PlatformStore, create_federation_platform_store } = await import(
-      "../bin/city/runtime/store/index.js"
-    );
-    const legacy_store = new PlatformStore(path.join(platform_root, "federation.db"));
-    legacy_store.setSecureSettingJsonSync("federation.config", {
-      active_server_url: "https://legacy.example.com",
-      servers: [{
-        name: "legacy",
-        base_url: "https://legacy.example.com",
-      }],
-    });
-    legacy_store.close();
-
-    const unified_store = create_federation_platform_store();
-    assert.equal(
-      unified_store.getSecureSettingJsonSync("federation.config").active_server_url,
-      "https://legacy.example.com",
-    );
-    unified_store.setSecureSettingJsonSync("federation.config", {
-      active_server_url: "https://current.example.com",
-      servers: [],
-    });
-    unified_store.close();
-
-    const changed_legacy_store = new PlatformStore(path.join(platform_root, "federation.db"));
-    changed_legacy_store.setSecureSettingJsonSync("federation.config", {
-      active_server_url: "https://stale.example.com",
-      servers: [],
-    });
-    changed_legacy_store.close();
-
-    const reopened_store = create_federation_platform_store();
-    assert.equal(
-      reopened_store.getSecureSettingJsonSync("federation.config").active_server_url,
-      "https://current.example.com",
-    );
-    reopened_store.close();
-    assert.equal(fs.existsSync(path.join(platform_root, "downcity.db")), true);
-  } finally {
-    reset_key_cache();
-    delete process.env.DC_PLATFORM_ROOT;
-    delete process.env.DC_MODEL_DB_KEY;
-    fs.rmSync(platform_root, { recursive: true, force: true });
-  }
-});
-
-test("旧 City 状态 key 一次性迁入 Downcity 配置", async () => {
-  const platform_root = create_temp_root();
-  process.env.DC_PLATFORM_ROOT = platform_root;
-  process.env.DC_MODEL_DB_KEY = "downcity-config-key-migration-test";
-  let reset_key_cache = () => {};
-  try {
-    const crypto = await import("../bin/city/runtime/store/crypto.js");
-    reset_key_cache = crypto.resetModelDbKeyCache;
-    reset_key_cache();
-    const { create_downcity_platform_store } = await import(
-      "../bin/city/runtime/store/index.js"
-    );
-    const store = create_downcity_platform_store();
-    store.setSecureSettingJsonSync("city.city.state", {
-      selected_federation_url: "https://legacy.example.com",
-      profiles: [{
-        name: "legacy",
-        federation_url: "https://legacy.example.com",
-      }],
-      sessions: {},
-    });
-    store.close();
-
-    const config_store = await import(
-      "../bin/city/shared/DowncityConfigStore.js"
-    );
-    const migrated = config_store.read_downcity_config();
-    assert.equal(migrated.selected_federation_url, "https://legacy.example.com");
-
-    const reopened_store = create_downcity_platform_store();
-    const persisted = reopened_store.getSecureSettingJsonSync("downcity.config");
-    reopened_store.close();
-    assert.equal(persisted.selected_federation_url, "https://legacy.example.com");
-  } finally {
-    reset_key_cache();
-    delete process.env.DC_PLATFORM_ROOT;
-    delete process.env.DC_MODEL_DB_KEY;
-    fs.rmSync(platform_root, { recursive: true, force: true });
-  }
-});
-
 test("Embassy 会话只接受新的 Federation 身份环境变量", async () => {
   const platform_root = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
   process.env.DC_MODEL_DB_KEY = "embassy-session-env-test";
-  let reset_key_cache = () => {};
   try {
-    const crypto = await import("../bin/city/runtime/store/crypto.js");
-    reset_key_cache = crypto.resetModelDbKeyCache;
-    reset_key_cache();
     const { EmbassySessionResolver } = await import(
       "../bin/city/shared/EmbassySessionResolver.js"
     );
@@ -234,7 +134,6 @@ test("Embassy 会话只接受新的 Federation 身份环境变量", async () => 
       user_token: false,
     });
   } finally {
-    reset_key_cache();
     delete process.env.DC_PLATFORM_ROOT;
     delete process.env.DC_MODEL_DB_KEY;
     fs.rmSync(platform_root, { recursive: true, force: true });
@@ -294,7 +193,9 @@ test("Agent HTTP 路由默认拒绝未认证请求", async () => {
       createRouteAuthGuardMiddleware,
       SERVER_AUTH_ROUTE_POLICIES,
     } = await import("../bin/city/runtime/auth/RoutePolicy.js");
-    const auth_service = new AuthService({ agent_id: "agent_one" });
+    const { create_cli_local_data } = await import("../bin/city/runtime/LocalData.js");
+    const data = create_cli_local_data();
+    const auth_service = new AuthService({ agent_id: "agent_one", repository: data.agent_tokens });
     const app = new Hono();
     app.use("*", createRouteAuthGuardMiddleware(
       auth_service,
@@ -312,12 +213,12 @@ test("Agent HTTP 路由默认拒绝未认证请求", async () => {
     });
     assert.equal(authenticated.status, 200);
 
-    const other_agent_service = new AuthService({ agent_id: "agent_two" });
+    const other_agent_service = new AuthService({ agent_id: "agent_two", repository: data.agent_tokens });
     assert.throws(
       () => other_agent_service.authenticate_bearer_header(`Bearer ${issued.token}`),
       /Invalid bearer token/,
     );
-    auth_service.close();
+    data.database.close();
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });
@@ -409,12 +310,12 @@ class CompanionPlugin {
 }
 export const plugins = [ExamplePlugin, CompanionPlugin];
 `);
-    const agents = await import("../bin/city/process/registry/ManagedAgentRepository.js");
+    const agents = await import("../bin/city/process/registry/AgentConfigRepository.js");
     const workspaces = await import("../bin/city/process/registry/WorkspaceRepository.js");
     const plugins = await import("../bin/city/process/registry/PluginRepository.js");
     const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
     const workspace = workspaces.create_workspace({ workspace_path: workspace_root });
-    agents.create_managed_agent({
+    agents.create_agent_config({
       agent_id: "plugin_agent",
       workspace_id: workspace.workspace_id,
     });
@@ -448,14 +349,14 @@ export const plugins = [ExamplePlugin, CompanionPlugin];
       plugin_name: "example",
       fields: { type: "api", api_key: "secret-key" },
     });
-    const resolved_binding = plugins.set_agent_plugin_binding({
+    plugins.set_agent_plugin_binding({
       agent_id: "plugin_agent",
       plugin_name: "example",
       enabled: true,
       config: { endpoint: "https://example.com" },
       resource_ids: [resource.resource_id],
     });
-    const companion_binding = plugins.set_agent_plugin_binding({
+    plugins.set_agent_plugin_binding({
       agent_id: "plugin_agent",
       plugin_name: "companion",
       enabled: true,
@@ -464,15 +365,23 @@ export const plugins = [ExamplePlugin, CompanionPlugin];
     });
     assert.equal(binding.config.endpoint, "https://example.com");
     assert.equal(resource.item.name, "API -key");
-    const runtime = await import("../bin/city/runtime/plugins/PluginAssembler.js");
-    const runtime_plugins = await runtime.assemble_plugins({
-      bindings: [resolved_binding, companion_binding],
-    });
+    const local_data = await import("../bin/city/runtime/LocalData.js");
+    const runtime_factory = await import("../bin/city/runtime/AgentAssembly.js");
+    const data = local_data.create_cli_local_data();
+    let runtime_plugins;
+    try {
+      const plugin_loader = runtime_factory.create_cli_plugin_loader({
+        plugin_repository: data.plugins,
+      });
+      runtime_plugins = await plugin_loader.create_plugins(data.agents.get("plugin_agent"));
+    } finally {
+      data.database.close();
+    }
     assert.equal(runtime_plugins.length, 2);
-    assert.equal(runtime_plugins[0].name, "example");
-    assert.equal(runtime_plugins[0].description, "https://example.com · API -key");
-    assert.equal(runtime_plugins[1].name, "companion");
-    assert.equal(runtime_plugins[1].description, "loads=1");
+    const example_plugin = runtime_plugins.find((plugin) => plugin.name === "example");
+    const companion_plugin = runtime_plugins.find((plugin) => plugin.name === "companion");
+    assert.equal(example_plugin?.description, "https://example.com · API -key");
+    assert.equal(companion_plugin?.description, "loads=1");
 
     installation_manifest.plugins[0].resources.schema.required.push("region");
     installation_manifest.plugins[0].resources.schema.properties.region = { type: "string" };
@@ -524,7 +433,7 @@ export const plugins = [ExamplePlugin, CompanionPlugin];
     );
     assert.equal(plugins.get_installed_plugin("example"), null);
     assert.equal(plugins.get_installed_plugin("companion"), null);
-    assert.equal(agents.get_managed_agent("plugin_agent").plugins, undefined);
+    assert.equal(agents.get_agent_config("plugin_agent").plugins, undefined);
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });
@@ -762,19 +671,15 @@ test("非交互 Agent 命令不根据当前 Workspace 推断目标", async () =>
   const workspace_root = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
   process.env.DC_MODEL_DB_KEY = "config-storage-agent-selection-test";
-  let reset_key_cache = () => {};
   try {
-    const crypto = await import("../bin/city/runtime/store/crypto.js");
-    reset_key_cache = crypto.resetModelDbKeyCache;
-    reset_key_cache();
     const repository = await import(
-      "../bin/city/process/registry/ManagedAgentRepository.js"
+      "../bin/city/process/registry/AgentConfigRepository.js"
     );
     const workspaces = await import(
       "../bin/city/process/registry/WorkspaceRepository.js"
     );
     const workspace = workspaces.create_workspace({ workspace_path: workspace_root });
-    repository.create_managed_agent({
+    repository.create_agent_config({
       agent_id: "workspace_agent",
       workspace_id: workspace.workspace_id,
       execution: { type: "api", model_id: "model_a" },
@@ -816,7 +721,6 @@ test("非交互 Agent 命令不根据当前 Workspace 推断目标", async () =>
       /Agent ID is required/,
     );
   } finally {
-    reset_key_cache();
     delete process.env.DC_PLATFORM_ROOT;
     delete process.env.DC_MODEL_DB_KEY;
     fs.rmSync(platform_root, { recursive: true, force: true });
@@ -892,7 +796,7 @@ test("Plugin Resource Resolver 写入动态字段并通过 ID 绑定", async () 
         last_name: "Assistant",
       },
     }), { status: 200 });
-    const agents = await import("../bin/city/process/registry/ManagedAgentRepository.js");
+    const agents = await import("../bin/city/process/registry/AgentConfigRepository.js");
     const workspaces = await import("../bin/city/process/registry/WorkspaceRepository.js");
     const resource_service = await import(
       "../bin/city/process/plugin/PluginResourceService.js"
@@ -901,7 +805,7 @@ test("Plugin Resource Resolver 写入动态字段并通过 ID 绑定", async () 
       "../bin/city/process/registry/PluginRepository.js"
     );
     const workspace = workspaces.create_workspace({ workspace_path: workspace_root });
-    agents.create_managed_agent({
+    agents.create_agent_config({
       agent_id: "resource_agent",
       workspace_id: workspace.workspace_id,
     });
@@ -954,115 +858,5 @@ test("Plugin Resource Resolver 写入动态字段并通过 ID 绑定", async () 
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });
     fs.rmSync(workspace_root, { recursive: true, force: true });
-  }
-});
-
-test("旧 Chat Account 与 Binding 原子迁移为 Plugin Resource", async () => {
-  const platform_root = create_temp_root();
-  process.env.DC_PLATFORM_ROOT = platform_root;
-  process.env.DC_MODEL_DB_KEY = "plugin-resource-migration-test";
-  let reset_key_cache = () => {};
-  try {
-    const crypto = await import("../bin/city/runtime/store/crypto.js");
-    reset_key_cache = crypto.resetModelDbKeyCache;
-    reset_key_cache();
-    const database_path = path.join(platform_root, "downcity.db");
-    const database = new Database(database_path);
-    database.exec(`
-      CREATE TABLE channel_accounts (
-        id TEXT PRIMARY KEY NOT NULL,
-        channel TEXT NOT NULL,
-        name TEXT NOT NULL,
-        identity TEXT,
-        bot_token_encrypted TEXT,
-        app_id_encrypted TEXT,
-        app_secret_encrypted TEXT,
-        domain TEXT,
-        sandbox INTEGER,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-      CREATE TABLE agent_plugins (
-        agent_id TEXT NOT NULL,
-        plugin_name TEXT NOT NULL,
-        enabled INTEGER NOT NULL,
-        config_encrypted TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        PRIMARY KEY (agent_id, plugin_name)
-      );
-    `);
-    database.prepare(`
-      INSERT INTO channel_accounts (
-        id, channel, name, identity, bot_token_encrypted,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?);
-    `).run(
-      "telegram-legacy",
-      "telegram",
-      "Legacy Bot",
-      "@legacy_bot",
-      crypto.encryptTextSync("legacy-token"),
-      "2026-01-01T00:00:00.000Z",
-      "2026-01-01T00:00:00.000Z",
-    );
-    database.prepare(`
-      INSERT INTO agent_plugins (
-        agent_id, plugin_name, enabled, config_encrypted, created_at, updated_at
-      ) VALUES (?, 'chat', 1, ?, ?, ?);
-    `).run(
-      "legacy-agent",
-      crypto.encryptTextSync(JSON.stringify({
-        queue: { maxConcurrency: 3 },
-        channels: {
-          telegram: {
-            enabled: true,
-            channelAccountId: "telegram-legacy",
-          },
-        },
-      })),
-      "2026-01-01T00:00:00.000Z",
-      "2026-01-01T00:00:00.000Z",
-    );
-    database.close();
-
-    const { LocalCityStore } = await import("@downcity/city");
-    const store = new LocalCityStore({ root_path: platform_root });
-    store.close();
-    const reopened_store = new LocalCityStore({ root_path: platform_root });
-    reopened_store.close();
-
-    const migrated = new Database(database_path);
-    const resource_row = migrated.prepare(`
-      SELECT resource_id, item_encrypted FROM plugin_resources
-      WHERE plugin_name = 'chat';
-    `).get();
-    const binding_row = migrated.prepare(`
-      SELECT config_encrypted, resource_ids_json FROM agent_plugins
-      WHERE agent_id = 'legacy-agent' AND plugin_name = 'chat';
-    `).get();
-    const legacy_table = migrated.prepare(`
-      SELECT name FROM sqlite_master
-      WHERE type = 'table' AND name = 'channel_accounts';
-    `).get();
-    migrated.close();
-    assert.equal(resource_row.resource_id, "telegram-legacy");
-    assert.deepEqual(JSON.parse(crypto.decryptTextSync(resource_row.item_encrypted)), {
-      id: "telegram-legacy",
-      type: "telegram",
-      name: "Legacy Bot",
-      bot_token: "legacy-token",
-      username: "@legacy_bot",
-    });
-    assert.deepEqual(JSON.parse(binding_row.resource_ids_json), ["telegram-legacy"]);
-    assert.deepEqual(JSON.parse(crypto.decryptTextSync(binding_row.config_encrypted)), {
-      queue: { max_concurrency: 3 },
-    });
-    assert.equal(legacy_table, undefined);
-  } finally {
-    reset_key_cache();
-    delete process.env.DC_PLATFORM_ROOT;
-    delete process.env.DC_MODEL_DB_KEY;
-    fs.rmSync(platform_root, { recursive: true, force: true });
   }
 });

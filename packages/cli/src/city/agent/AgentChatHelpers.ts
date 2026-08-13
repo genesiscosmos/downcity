@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 统一覆盖交互式持续对话与一次性消息模式，不再保留独立 `quest` 命令。
- * - 目标 agent 始终按 managed agent registry 名称解析，不依赖当前工作目录。
+ * - 目标 Agent 始终按持久化 Agent 配置解析，不依赖当前工作目录。
  * - 默认使用独立 local-cli 主会话：`local-cli-chat-main`。
  * - 远程访问统一走 `RemoteAgent({ url })`，不再在 CLI 侧维护第二套 HTTP SDK transport。
  * - 远程连接、session 创建/列表等操作委托给 `AgentChatRemote.ts`。
@@ -119,7 +119,7 @@ export async function resolveChatTargetAgentId(inputId?: string): Promise<string
   if (registered_agents.length === 0) {
     emitCliBlock({
       tone: "error",
-      title: "No managed agents",
+      title: "No registered agents",
       note: "Run `city agent create <workspace_path>` first.",
     });
     return null;

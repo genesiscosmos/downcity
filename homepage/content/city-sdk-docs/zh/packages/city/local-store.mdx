@@ -1,25 +1,22 @@
 ---
-title: 本地 Store
-description: 从 ~/.downcity 读取 City 装配 Agent 所需的产品配置。
+title: 本地数据库
+description: 使用无业务语义的数据库 Adapter 和独立 Repository 管理本地产品配置。
 ---
 
-`LocalCityStore` 是 CLI 和 Desktop 共用的纯数据 Adapter。它读写
-`~/.downcity/downcity.db` 中的 Agent、Workspace、Plugin Binding、Resource 和
-Installation record，不创建任何 Agent、Workspace、Model、Plugin 或 Embassy。
+`@downcity/local` 提供本地 SQLite Adapter 和独立 Repository。数据库 Adapter 只提供
+SQL 查询、写入、事务和关闭能力，不知道 Agent、Workspace 或 Plugin。
 
 ```ts
-import { City, LocalCityEnvironment, LocalCityStore } from "@downcity/city";
+import {
+  AgentRepository,
+  LocalDatabase,
+  WorkspaceRepository,
+} from "@downcity/local";
 
-const store = new LocalCityStore();
-const environment = new LocalCityEnvironment({ data_source: store });
-const city = new City(store, environment);
-await city.ready();
+const database = new LocalDatabase({ filename: database_path });
+const workspaces = new WorkspaceRepository(database, crypto_adapter);
+const agents = new AgentRepository(database, crypto_adapter, workspaces, secure_settings);
 ```
 
-City 初始化时调用 `store.load_agent_configs()`，再由 Environment 生成运行时
-`AgentOptions`。这只是基于配置重新装配实例，不存在 Agent 序列化或恢复协议。
-
-产品通过 `LocalCityStore` 的配置 API 新增、修改和删除配置。`city.add(agent)` 注册现成
-实例，`city.remove(agent_id)` 移除并释放当前实例；二者都不会修改配置或 Session 数据。
-
-测试或临时宿主可以使用 `MemoryCityStore`。
+CLI 和 Desktop 在各自组合根中创建数据库与 Repository，读取配置后显式调用
+`new Agent()`。City 不参与查询、装配或持久化。

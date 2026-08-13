@@ -10,9 +10,9 @@
 import prompts from "@/city/tui/Prompts.js";
 import { listPlatformModelChoices } from "@/city/runtime/city-model/ExecutionModelBinding.js";
 import {
-  get_managed_agent,
-  update_managed_agent,
-} from "@/city/process/registry/ManagedAgentRepository.js";
+  get_agent_config,
+  update_agent_config,
+} from "@/city/process/registry/AgentConfigRepository.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { CliError } from "@/shared/CliError.js";
 import type {
@@ -24,7 +24,7 @@ import type {
 
 /** 解析已登记的目标 Agent，不要求 daemon 正在运行。 */
 function resolve_agent_target(agent_id: string): AgentModelAgentTarget {
-  const agent = get_managed_agent(agent_id);
+  const agent = get_agent_config(agent_id);
   if (!agent) {
     throw new CliError({
       title: "Agent is not registered",
@@ -89,7 +89,7 @@ async function resolve_model_id(params: {
 
 /** 读取 Agent 当前默认模型 ID。 */
 function read_agent_default_model_id(agent_id: string): string {
-  const config = get_managed_agent(agent_id);
+  const config = get_agent_config(agent_id);
   return String(
     config?.execution?.type === "api" ? config.execution.model_id || "" : "",
   ).trim();
@@ -100,9 +100,9 @@ function update_agent_default_model(
   agent_id: string,
   model_id: string,
 ): void {
-  const agent = get_managed_agent(agent_id);
+  const agent = get_agent_config(agent_id);
   if (!agent) throw new Error(`Agent not found: ${agent_id}`);
-  update_managed_agent({
+  update_agent_config({
     agent_id: agent.agent_id,
     execution: {
       type: "api",
@@ -117,7 +117,7 @@ export async function configure_agent_model(
   options: AgentModelCommandOptions = {},
 ): Promise<AgentModelConfigurationResult | null> {
   const agent = resolve_agent_target(agent_id_input);
-  const config = get_managed_agent(agent.agent_id);
+  const config = get_agent_config(agent.agent_id);
   if (!config) throw new Error(`Agent not found: ${agent.agent_id}`);
   const previous_model_id = read_agent_default_model_id(agent.agent_id);
   const selected_model_id = await resolve_model_id({

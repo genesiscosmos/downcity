@@ -49,9 +49,9 @@ description: "Downcity 的核心分层：console、agent、execution context、s
 - 通常直接挂到一个 SDK `Agent` 上
 - 例如：`skill`、`web`、`sound`
 
-### 托管 plugin
+### 长期运行 plugin
 
-- 属于 runtime 管理对象，会跟着目标 agent start / stop
+- 由 `Agent` 在构造时装配，并在 `agent.dispose()` 时释放
 - 例如：`chat`、`task`、`memory`、`contact`、`shell`、`schedule`
 
 ## 最重要的结论

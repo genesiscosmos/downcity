@@ -1,31 +1,28 @@
 # @downcity/city
 
-`@downcity/city` 是 Downcity 的 Agent 宿主环境。它管理一个 Store 下的 Agent
-实例集合，并提供 CLI、Desktop 等本地宿主共用的配置装配与可选网络能力。
+`@downcity/city` 是 Agent 内存索引与 HTTP/RPC 转发器。它不读取配置、不创建
+Agent，也不访问数据库。
 
 ```ts
-import { City, LocalCityEnvironment, LocalCityStore } from "@downcity/city";
+import { Agent } from "@downcity/agent";
+import { City } from "@downcity/city";
 
-const store = new LocalCityStore();
-const environment = new LocalCityEnvironment({ data_source: store });
-const city = new City(store, environment);
-await city.ready();
+const agent = new Agent({ id: "lucas", workspace, model, plugins });
+const city = new City([agent]);
 
 const agents = city.agents();
-const agent = city.agent("lucas_whitman");
+const current_agent = city.agent("lucas");
 
-await city.dispose();
+await city.close();
+await agent.dispose();
 ```
 
-`CityStore` 只提供 `CityAgentConfig`，`CityEnvironment` 把配置转换成运行时
-`AgentOptions`，`City` 调用 `new Agent()` 并持有实例。`city.add/remove` 不修改配置，
-Plugin 生命周期归 Agent。
+宿主拥有 Agent 生命周期。`city.add(agent)` 和 `city.remove(agent_id)` 只修改内存索引，
+不会创建、释放或持久化 Agent。Plugin 生命周期归 Agent。
 
 ## 公开能力
 
-- `City`、`CityStore`、`MemoryCityStore`
-- `LocalCityStore`：读写 `~/.downcity/downcity.db` 的纯数据 Adapter
-- `LocalCityEnvironment`：本地 Workspace、Shell、Sandbox、Model 与 Plugin Adapter
+- `City`：Agent 内存索引与 transport 生命周期
 - `AgentHTTP` 与 `AgentRPC`：独立暴露一个 Agent
 - `CityHTTP` 与 `CityRPC`：在两个 City 级端口上按 Agent ID 暴露全部 Agent
 

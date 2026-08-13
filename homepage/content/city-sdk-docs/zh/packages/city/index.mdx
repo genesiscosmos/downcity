@@ -1,38 +1,35 @@
 ---
 title: "@downcity/city"
-description: 根据产品配置装配并宿主一个或多个 Agent 实例。
+description: 在内存中索引 Agent，并通过 HTTP/RPC 按 ID 转发请求。
 ---
 
-`@downcity/city` 是 CLI、Desktop 和自定义 Node 宿主共用的 Agent 宿主包。它拥有
-Agent 集合、本地配置装配和可选 HTTP/RPC transport。
+`@downcity/city` 是 CLI、Desktop 和自定义 Node 宿主共用的 Agent 转发包。它维护
+Agent 的内存索引和可选 HTTP/RPC transport，不读取配置，也不访问数据库。
 
 ```bash
 pnpm add @downcity/city @downcity/agent
 ```
 
 ```ts
-import { City, LocalCityEnvironment, LocalCityStore } from "@downcity/city";
+import { Agent } from "@downcity/agent";
+import { City } from "@downcity/city";
 
-const store = new LocalCityStore();
-const environment = new LocalCityEnvironment({ data_source: store });
-const city = new City(store, environment);
-await city.ready();
+const agent = new Agent({ id: "lucas", workspace, model, plugins });
+const city = new City([agent]);
 
-const agents = city.agents();
-const agent = city.agent("lucas_whitman");
+const current_agent = city.agent("lucas");
 
-await city.dispose();
+await city.close();
+await agent.dispose();
 ```
 
 ## 所有权
 
-- `LocalCityStore` 只拥有数据库连接并提供 `CityAgentConfig`。
-- `LocalCityEnvironment` 把产品配置转换成纯运行时 `AgentOptions`。
-- `City` 调用 `new Agent(options)` 并持有 Agent 实例，也统一拥有 HTTP/RPC transport。
-- `city.add/remove` 只管理运行时实例，不读取或修改产品配置。
+- CLI、Desktop 或自定义宿主创建并释放 Agent。
+- `City` 只维护 `agent_id -> Agent` 的运行时引用和 HTTP/RPC transport。
+- `city.add/remove` 只修改内存引用，不创建、释放或持久化 Agent。
 - Plugin lifecycle 和 ActionSchedule 归各 Agent 自己拥有。
-- CLI 和 Desktop 创建各自独立的 City 实例，但读取同一份 `~/.downcity` 数据。
-- CLI daemon 与 Desktop 窗口分别拥有独立 City 生命周期，但读取同一份持久化数据。
+- CLI daemon 与 Desktop 窗口分别拥有独立的 City 和 Agent 生命周期。
 
 单 Agent 执行、Workspace、Session、Plugin SDK 和 RemoteAgent 位于
 `@downcity/agent`。Federation、Embassy 和 Bureau 位于 `@downcity/federation`。

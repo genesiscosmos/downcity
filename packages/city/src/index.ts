@@ -1,55 +1,12 @@
 /**
- * @downcity/city - Agent 宿主环境公开 API。
+ * @downcity/city - Agent 内存索引与 HTTP/RPC 转发器。
  *
- * City 统一拥有多 Agent 集合、本地持久化装配和可选 HTTP/RPC transport。
+ * City 维护多 Agent 运行时引用并提供可选 HTTP/RPC transport。
  * 单 Agent 的 Workspace、Session 与 Plugin 执行能力仍由 `@downcity/agent` 提供。
  */
 
 export { City } from "./runtime/City.js";
-export type { CityRuntimeOptions } from "./runtime/City.js";
-export { MemoryCityStore } from "./runtime/MemoryCityStore.js";
-export type { CityListenOptions, CityState } from "./types/City.js";
-export type { CityStore } from "./types/CityStore.js";
-export type {
-  CityAgentConfig,
-  CityPluginBindingConfig,
-  CityWorkspaceRecord,
-} from "./types/CityAgentConfig.js";
-export type { CityEnvironment } from "./types/CityEnvironment.js";
-
-export { LocalCityStore } from "./local/LocalCityStore.js";
-export { LocalCityEnvironment } from "./local/LocalCityEnvironment.js";
-export type {
-  LocalCityEnvironmentOptions,
-  LocalModelResolver,
-  LocalPluginType,
-} from "./local/types/LocalRuntime.js";
-export type { LocalCityDataSource } from "./local/types/LocalCityDataSource.js";
-export type {
-  LocalAgentConfig,
-  LocalCityStoreOptions,
-  LocalWorkspaceConfig,
-} from "./local/types/LocalCity.js";
-export type {
-  LocalAgentPluginBinding,
-  LocalPluginInstallation,
-  LocalPluginInstallationManifest,
-  LocalPluginManifest,
-  LocalPluginResource,
-  LocalPluginResourceItem,
-} from "./local/types/LocalPlugin.js";
-export {
-  normalize_installation_id,
-  normalize_plugin_name,
-  normalize_resource_id,
-} from "./local/store/LocalPluginRepository.js";
-export {
-  get_local_database_path,
-  get_local_env_path,
-  get_local_key_path,
-  get_local_plugins_path,
-  resolve_local_root_path,
-} from "./local/store/LocalPaths.js";
+export type { CityListenOptions, CityRuntimeOptions } from "./types/City.js";
 
 export { AgentHTTP } from "./transport/http/AgentHTTP.js";
 export { CityHTTP } from "./transport/http/CityHTTP.js";

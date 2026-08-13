@@ -7,10 +7,7 @@
  * - 不包含交互菜单、输出渲染或用户身份校验逻辑。
  */
 
-import {
-  create_downcity_platform_store,
-  create_federation_platform_store,
-} from "@/city/runtime/store/index.js";
+import { with_cli_local_data } from "@/city/runtime/LocalData.js";
 import type { FederationProfile } from "@/city/types/FederationMembership.js";
 import type { EmbassyUserSession } from "@/city/types/EmbassySession.js";
 import type { CliLocale } from "@/shared/types/CliLocale.js";
@@ -27,7 +24,6 @@ export const DEFAULT_FEDERATION_URL = "https://base.downcity.ai";
 export const DEFAULT_BUREAU_ID = "downcity";
 
 const DOWNCITY_CONFIG_KEY = "downcity.config";
-const LEGACY_CITY_STATE_KEY = "city.city.state";
 const FEDERATION_CONFIG_KEY = "federation.config";
 
 /**
@@ -59,29 +55,18 @@ export function normalize_federation_url(value: string): string {
  * 读取 Downcity 本地配置，并按需迁移旧 `city.city.state` key。
  */
 export function read_downcity_config(): DowncityConfig {
-  const store = create_downcity_platform_store();
-  try {
-    const current = store.getSecureSettingJsonSync<DowncityConfig>(DOWNCITY_CONFIG_KEY);
-    if (current) return normalize_downcity_config(current);
-    const legacy = store.getSecureSettingJsonSync<DowncityConfig>(LEGACY_CITY_STATE_KEY);
-    const migrated = normalize_downcity_config(legacy);
-    store.setSecureSettingJsonSync(DOWNCITY_CONFIG_KEY, migrated);
-    return migrated;
-  } finally {
-    store.close();
-  }
+  return with_cli_local_data((data) =>
+    normalize_downcity_config(data.secure_settings.get<DowncityConfig>(DOWNCITY_CONFIG_KEY))
+  );
 }
 
 /**
  * 写入 Downcity 本地配置。
  */
 export function write_downcity_config(state: DowncityConfig): void {
-  const store = create_downcity_platform_store();
-  try {
-    store.setSecureSettingJsonSync(DOWNCITY_CONFIG_KEY, normalize_downcity_config(state));
-  } finally {
-    store.close();
-  }
+  with_cli_local_data((data) =>
+    data.secure_settings.set(DOWNCITY_CONFIG_KEY, normalize_downcity_config(state))
+  );
 }
 
 /**
@@ -252,13 +237,9 @@ function derive_federation_name(federation_url: string): string {
 }
 
 function read_federation_admin_config(): FederationAdminConfig {
-  const store = create_federation_platform_store();
-  try {
-    const config = store.getSecureSettingJsonSync<FederationAdminConfig>(FEDERATION_CONFIG_KEY);
-    return config ?? {};
-  } finally {
-    store.close();
-  }
+  return with_cli_local_data((data) =>
+    data.secure_settings.get<FederationAdminConfig>(FEDERATION_CONFIG_KEY) ?? {}
+  );
 }
 
 function read_federation_admin_profiles(): FederationProfile[] {

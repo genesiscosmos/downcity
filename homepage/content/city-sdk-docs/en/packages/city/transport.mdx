@@ -12,8 +12,7 @@ await city.listen({
   rpc: { host: "127.0.0.1", port: 15314 },
 });
 
-await city.close();   // transports only
-await city.dispose(); // transports, Agents, Environment, and Store
+await city.close(); // transports only; the creating host still disposes Agents
 ```
 
 HTTP uses `http://host:port/agents/<agent_id>` and RPC uses `rpc://host:port/<agent_id>`.

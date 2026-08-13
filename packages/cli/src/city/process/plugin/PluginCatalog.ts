@@ -8,7 +8,7 @@
  */
 
 import { list_plugin_installations } from "@/city/process/registry/PluginRepository.js";
-import { create_cli_builtin_plugin_types } from "@/city/runtime/LocalCityEnvironment.js";
+import { create_cli_builtin_plugin_types } from "@/city/runtime/AgentAssembly.js";
 import type { PluginCatalogItem } from "@/city/types/plugin/PluginCatalog.js";
 import type { PluginManifest } from "@/city/types/plugin/PluginInstallation.js";
 

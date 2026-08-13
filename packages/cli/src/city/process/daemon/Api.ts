@@ -31,7 +31,7 @@ export type DaemonHttpMethod = "GET" | "POST" | "PUT" | "DELETE";
  * - `host/port` 可显式覆盖自动解析结果。
  */
 export type DaemonJsonApiCallParams = {
-  /** 目标受管 Agent 的稳定全局 ID。 */
+  /** 目标 Agent 的稳定全局 ID。 */
   agent_id: string;
   path: string;
   method?: DaemonHttpMethod;

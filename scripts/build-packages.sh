@@ -27,6 +27,7 @@ ALL_PACKAGES=(
   "services"
   "plugins"
   "city"
+  "local"
   "ui"
   "cli"
 )
@@ -41,7 +42,7 @@ usage() {
   echo "  --sandbox-windows-mxc --sandbox-windows-srt"
   echo "  --agent --workspace-cloudflare-computer --federation"
   echo "  --database-d1 --database-sqlite --database-postgresql"
-  echo "  --services --plugins --city --ui --cli --all"
+  echo "  --services --plugins --city --local --ui --cli --all"
   echo ""
   echo "  --no-bump           只构建，不修改 package version"
   echo "  --no-global-install 不同步本机全局 Downcity CLI"
@@ -101,15 +102,14 @@ add_build_package() {
       ;;
     city)
       add_build_package "type"
-      add_build_package "shell"
-      add_build_package "sandbox-macos"
-      add_build_package "sandbox-linux"
-      add_build_package "sandbox-windows-mxc"
-      add_build_package "sandbox-windows-srt"
+      add_build_package "agent"
+      ;;
+    local)
       add_build_package "agent"
       ;;
     cli)
       add_build_package "city"
+      add_build_package "local"
       add_build_package "services"
       add_build_package "ui"
       ;;
@@ -154,7 +154,7 @@ should_sync_global_cli() {
   local package_name
   for package_name in "${PACKAGES[@]}"; do
     case "$package_name" in
-      agent|federation|plugins|city|ui|cli)
+      agent|federation|plugins|city|local|ui|cli)
         return 0
         ;;
     esac
@@ -180,6 +180,7 @@ while [[ $# -gt 0 ]]; do
     --services) add_package "services" ;;
     --plugins) add_package "plugins" ;;
     --city) add_package "city" ;;
+    --local) add_package "local" ;;
     --ui) add_package "ui" ;;
     --cli) add_package "cli" ;;
     --all) PACKAGES=("${ALL_PACKAGES[@]}") ;;

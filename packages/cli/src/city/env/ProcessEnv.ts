@@ -72,11 +72,11 @@ export function merge_process_env_with_platform_global_env(
 }
 
 /**
- * 解析受管 Agent 的最终 Env 快照。
+ * 解析 Agent Workspace 的最终 Env 快照。
  *
  * 优先级固定为：Global `.env` < Workspace `.env` < daemon 进程显式 Env。
  */
-export function resolve_managed_agent_env(
+export function resolve_agent_env(
   workspace_path: string,
   process_env: NodeJS.ProcessEnv = process.env,
 ): Record<string, string> {

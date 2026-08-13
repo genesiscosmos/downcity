@@ -1,9 +1,9 @@
 /**
- * CLI/City Platform：control plane / managed-agent 类型定义。
+ * CLI/City Platform：control plane 类型定义。
  *
  * 关键点（中文）
  * - control plane runtime 自身的进程状态类型仍保留在这里，因为它属于 city control plane 的公开契约。
- * - 多 agent 平台视图、managed agent registry 结构也集中在这里，避免 city/agent 双侧重复维护。
+ * - 多 Agent 平台视图集中在这里，避免 City 与 Agent 两侧重复维护。
  * - 文件名使用 `Platform`，强调这些类型服务于平台控制面，而不是某个具体 UI 页面实现。
  */
 
@@ -154,7 +154,7 @@ export interface PlatformAgentDirectoryInspection {
    */
   initialized: boolean;
 
-  /** 该目录是否已出现在 managed agent registry 中。 */
+  /** 该目录是否已存在对应的 Agent 配置。 */
   knownAgent: boolean;
 
   /**
@@ -334,38 +334,4 @@ export interface PlatformConfigStatusResponse {
    * 配置文件状态列表。
    */
   items: PlatformConfigFileStatusItem[];
-}
-
-/**
- * `downcity agent list --running` 输出可复用的受管 agent 运行态视图。
- */
-export interface ManagedAgentProcessView {
-  /** Agent 的稳定全局 ID。 */
-  agent_id: string;
-
-  /** Agent 当前绑定的 Workspace 绝对路径。 */
-  workspace_path: string;
-
-  /** 当前实际存活的 daemon pid。 */
-  daemon_pid: number;
-
-  /**
-   * 当前是否运行中。
-   */
-  running: boolean;
-
-  /**
-   * 首次启动时间（ISO8601）。
-   */
-  started_at: string;
-
-  /**
-   * 最近更新时间（ISO8601）。
-   */
-  updated_at: string;
-
-  /**
-   * downcity 托管进程日志文件路径。
-   */
-  log_path: string;
 }

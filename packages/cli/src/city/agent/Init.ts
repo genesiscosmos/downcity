@@ -1,5 +1,5 @@
 /**
- * `city agent create`：创建全局受管 Agent 并绑定一个 Workspace。
+ * `city agent create`：创建 Agent 配置并绑定一个 Workspace。
  *
  * 目标
  * - 生成 `.agents/skills` 与 `.downcity/` 运行目录
@@ -24,10 +24,10 @@ import {
   listPlatformModelChoices,
 } from "@/city/runtime/city-model/ExecutionModelBinding.js";
 import {
-  create_managed_agent,
-  get_managed_agent,
-  save_managed_agent,
-} from "@/city/process/registry/ManagedAgentRepository.js";
+  create_agent_config,
+  get_agent_config,
+  save_agent_config,
+} from "@/city/process/registry/AgentConfigRepository.js";
 import { select_agent_create_workspace } from "@/city/agent/create/AgentCreateWorkspace.js";
 import { create_workspace } from "@/city/process/registry/WorkspaceRepository.js";
 
@@ -105,7 +105,7 @@ export async function initCommand(
     model_id: primaryModelId,
   };
   await assertPlatformModelReady(primaryModelId);
-  const existing_agent = get_managed_agent(agent_id);
+  const existing_agent = get_agent_config(agent_id);
   if (existing_agent && !allowOverwrite) {
     const confirm_response = (await prompts({
       type: "confirm",
@@ -131,7 +131,7 @@ export async function initCommand(
   );
   const workspace_record = create_workspace({ workspace_path: project_root });
   if (existing_agent && allowOverwrite) {
-    save_managed_agent({
+    save_agent_config({
       agent_id,
       workspace_id: workspace_record.workspace_id,
       version: "1.0.0",
@@ -140,7 +140,7 @@ export async function initCommand(
       updated_at: existing_agent.updated_at,
     });
   } else {
-    create_managed_agent({
+    create_agent_config({
       agent_id,
       workspace_id: workspace_record.workspace_id,
       execution,
@@ -148,7 +148,7 @@ export async function initCommand(
   }
   const createdItems = [
     ...initResult.created_files,
-    "global managed agent",
+    "global agent config",
     "registered Workspace",
   ];
   const skippedItems = [...initResult.skipped_files];

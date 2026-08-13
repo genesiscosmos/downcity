@@ -57,7 +57,7 @@ async function build_city_dashboard_state(): Promise<city_dashboard_state> {
   const version = read_city_cli_version();
   const locale = getCliLocale();
   const city_state = read_federation_membership_state();
-  const managed_agents = await safe_count_running_agents();
+  const running_agent_count = await safe_count_running_agents();
 
   const items: tui_list_item[] = [
     section_item("management", t({ zh: "管理", en: "Management" })),
@@ -65,8 +65,8 @@ async function build_city_dashboard_state(): Promise<city_dashboard_state> {
       id: "agent",
       title: t({ zh: "Agent 管理", en: "Agent management" }),
       subtitle: t({
-        zh: `${managed_agents} 个运行中 agent`,
-        en: `${managed_agents} running agents`,
+        zh: `${running_agent_count} 个运行中 agent`,
+        en: `${running_agent_count} running agents`,
       }),
       detail: t({
         zh: "进入 Agent 列表。点进某个 Agent 后可启动、停止、重启、聊天或修改配置。",
@@ -127,8 +127,8 @@ async function build_city_dashboard_state(): Promise<city_dashboard_state> {
   return {
     title: `City v${version}`,
     subtitle: t({
-      zh: `Federation：${build_federation_subtitle(city_state)} · agent：${managed_agents}`,
-      en: `Federation: ${build_federation_subtitle(city_state)} · agents: ${managed_agents}`,
+      zh: `Federation：${build_federation_subtitle(city_state)} · agent：${running_agent_count}`,
+      en: `Federation: ${build_federation_subtitle(city_state)} · agents: ${running_agent_count}`,
     }),
     footer: t({
       zh: "Enter 进入动作 · Esc / q 退出 · ↑↓ 切换 · 当前入口：全屏 TUI",
