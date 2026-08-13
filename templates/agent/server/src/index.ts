@@ -46,8 +46,6 @@ const agent = new Agent({
   instruction: "你是一个简洁、可靠的项目助手。",
 });
 
-await agent.ready();
-
 /** 恢复固定 Web Session，不存在时首次创建。 */
 async function get_session() {
   try {

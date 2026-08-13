@@ -62,7 +62,7 @@ import type {
   OpenSessionAssistantMessageInput,
   SessionMessagesOptions,
 } from "@/types/session/SessionMessages.js";
-import type { SessionMessageStore } from "@/types/store/SessionStore.js";
+import type { SessionMessageStore } from "@/types/store/SessionDataStore.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
 export { SessionAssistantMessageWriter } from "@/session/messages/SessionAssistantMessageWriter.js";

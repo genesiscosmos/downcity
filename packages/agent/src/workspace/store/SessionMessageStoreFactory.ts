@@ -8,7 +8,7 @@
 
 import { JsonlSessionMessageStore } from "@/workspace/store/JsonlSessionMessageStore.js";
 import type { JsonlSessionMessageStoreOptions } from "@/types/store/LocalStore.js";
-import type { SessionMessageStore } from "@/types/store/SessionStore.js";
+import type { SessionMessageStore } from "@/types/store/SessionDataStore.js";
 
 /** 创建当前默认的本地 Session Message Store。 */
 export function create_session_message_store(

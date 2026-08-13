@@ -6,21 +6,29 @@
  */
 
 export { City } from "./runtime/City.js";
+export type { CityRuntimeOptions } from "./runtime/City.js";
 export { MemoryCityStore } from "./runtime/MemoryCityStore.js";
-export type { CityState } from "./types/City.js";
+export type { CityListenOptions, CityState } from "./types/City.js";
 export type { CityStore } from "./types/CityStore.js";
+export type {
+  CityAgentConfig,
+  CityPluginBindingConfig,
+  CityWorkspaceRecord,
+} from "./types/CityAgentConfig.js";
+export type { CityEnvironment } from "./types/CityEnvironment.js";
 
 export { LocalCityStore } from "./local/LocalCityStore.js";
+export { LocalCityEnvironment } from "./local/LocalCityEnvironment.js";
 export type {
-  LocalCityStoreRuntimeOptions,
+  LocalCityEnvironmentOptions,
   LocalModelResolver,
   LocalPluginType,
 } from "./local/types/LocalRuntime.js";
+export type { LocalCityDataSource } from "./local/types/LocalCityDataSource.js";
 export type {
   LocalAgentConfig,
   LocalCityStoreOptions,
   LocalWorkspaceConfig,
-  NewLocalAgentInput,
 } from "./local/types/LocalCity.js";
 export type {
   LocalAgentPluginBinding,
@@ -54,6 +62,7 @@ export type {
 } from "./transport/types/AgentHttpBinding.js";
 export type { AgentHttpRuntimeOptions } from "./transport/types/AgentHttpRuntime.js";
 export type { CityHttpRuntimeOptions } from "./transport/types/CityHttpRuntime.js";
+export type { CityAgentHttpExtension } from "./transport/types/CityHttpRuntime.js";
 export type {
   AgentRpcBinding,
   AgentRpcListenOptions,

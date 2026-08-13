@@ -15,7 +15,7 @@ pnpm add @downcity/agent @downcity/city
 
 After `new Agent(...)`, plugin lifecycle and ActionSchedule start automatically. You do not need to call `start()`.
 
-- `await agent.ready()`: wait for Plugin lifecycle and ActionSchedule startup. Use it before reading plugin state right after construction.
+- Session execution waits for Plugin lifecycle and ActionSchedule startup internally.
 - `await agent.dispose()`: release Agent-owned runtime resources (plugins, ActionSchedule, shell).
 
 RPC and HTTP are no longer Agent responsibilities.
@@ -34,8 +34,6 @@ const agent = new Agent({
   workspace,
   model,
 });
-await agent.ready();
-
 const rpc = new AgentRPC(agent);
 const binding = await rpc.listen({ host: "127.0.0.1", port: 15314 });
 console.log(binding.url); // rpc://127.0.0.1:15314
@@ -63,8 +61,6 @@ const agent = new Agent({
   workspace,
   model,
 });
-await agent.ready();
-
 const http = new AgentHTTP(agent);
 const binding = await http.server().listen({ host: "127.0.0.1", port: 5314 });
 console.log(binding.url); // http://127.0.0.1:5314

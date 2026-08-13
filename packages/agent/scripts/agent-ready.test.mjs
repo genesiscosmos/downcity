@@ -166,7 +166,7 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
   }
 });
 
-test("agent ready isolates plugin lifecycle start failures", async () => {
+test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 启动失败", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-ready-isolation-"),
   );
@@ -194,7 +194,7 @@ test("agent ready isolates plugin lifecycle start failures", async () => {
   });
 
   try {
-    await agent.ready();
+    await agent.sessions.create({ session_id: "initial_barrier" });
 
     assert.equal(healthy_started, true);
     assert.equal(agent.plugins.status("failing")?.status, "error");

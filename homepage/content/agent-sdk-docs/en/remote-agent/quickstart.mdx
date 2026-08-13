@@ -33,8 +33,6 @@ const agent = new Agent({
   workspace,
   model,
 });
-await agent.ready();
-
 const rpc = new AgentRPC(agent);
 await rpc.listen({ host: "127.0.0.1", port: 15314 });
 ```

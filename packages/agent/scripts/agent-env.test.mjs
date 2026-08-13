@@ -50,7 +50,7 @@ test("Agent 运行时只使用显式 id，不读取完整项目 config", async (
     });
     assert.equal(agent.id, "sdk_id");
     assert.equal(agent.workspace.path, fs.realpathSync(project_root));
-    await agent.ready();
+    await agent.sessions.create({ session_id: "env_runtime" });
     await agent.dispose();
   } finally {
     fs.rmSync(project_root, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });

@@ -3,7 +3,7 @@
  *
  * 职责说明（中文）
  * - 只解析一次项目根目录，并将 Store、Tool 与可选 Shell 绑定到同一资源容器。
- * - AgentStore 与 WorkspaceTools 共用同一个 FileSystem 和目录访问范围。
+ * - SessionStore 与 WorkspaceTools 共用同一个 FileSystem 和目录访问范围。
  * - 每个 Workspace 实例只绑定一个 Agent；同一物理目录可创建多个独立实例。
  */
 
@@ -12,7 +12,7 @@ import path from "node:path";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 import { LocalFileSystem } from "@/workspace/LocalFileSystem.js";
 import type { WorkspaceOptions } from "@/types/workspace/Workspace.js";
-import type { AgentStore } from "@/types/store/AgentStore.js";
+import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { WorkspaceTools } from "@/types/workspace/WorkspaceTools.js";
 import type {
   WorkspaceEnvPatch,
@@ -57,7 +57,7 @@ export class Workspace extends WorkspaceBase {
   private bound_agent_id?: string;
 
   /** 当前 Workspace 为唯一 Agent 创建的结构化 Store。 */
-  private bound_store?: AgentStore;
+  private session_store?: SessionStore;
 
   /** 当前 Workspace configured env 的唯一可变状态。 */
   private readonly env: Record<string, string>;
@@ -107,11 +107,11 @@ export class Workspace extends WorkspaceBase {
     };
   }
 
-  /** 将当前 Workspace 唯一绑定到 Agent，并创建结构化状态入口。 */
-  bind_agent(agent_id: string): AgentStore {
+  /** 将当前 Workspace 唯一绑定到 Agent，并创建 Session 集合存储。 */
+  create_session_store(agent_id: string): SessionStore {
     const resolved_agent_id = String(agent_id || "").trim();
     if (!resolved_agent_id) {
-      throw new Error("Workspace.bind_agent requires a non-empty agent_id");
+      throw new Error("Workspace.create_session_store requires a non-empty agent_id");
     }
     if (this.dispose_promise) {
       throw new Error("Cannot bind a disposed Workspace");
@@ -122,15 +122,15 @@ export class Workspace extends WorkspaceBase {
       );
     }
     this.bound_agent_id = resolved_agent_id;
-    this.bound_store = this.create_agent_store(resolved_agent_id);
-    return this.bound_store;
+    this.session_store = this.create_default_session_store(resolved_agent_id);
+    return this.session_store;
   }
 
   /** 关闭 Workspace 持有的 Store、命令进程与平台 Sandbox 资源。 */
   async dispose(): Promise<void> {
     this.dispose_promise ??= (async () => {
       const results = await Promise.allSettled([
-        this.bound_store?.dispose() ?? Promise.resolve(),
+        this.session_store?.dispose() ?? Promise.resolve(),
         this.shell?.dispose() ?? Promise.resolve(),
       ]);
       const errors = results.flatMap((result) =>

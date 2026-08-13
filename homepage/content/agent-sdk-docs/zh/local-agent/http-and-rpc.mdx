@@ -15,7 +15,7 @@ pnpm add @downcity/agent @downcity/city
 
 `new Agent(...)` 之后，plugin lifecycle 和 ActionSchedule 会自动启动。无需再手动调用 `start()`。
 
-- `await agent.ready()`：等待 Plugin lifecycle 与 ActionSchedule 启动完成。在构造之后立刻读取 plugin 状态时使用。
+- Session 执行会在内部等待 Plugin lifecycle 与 ActionSchedule 启动完成。
 - `await agent.dispose()`：释放 Agent 自有运行时资源（plugins、ActionSchedule、shell）。
 
 RPC 与 HTTP 不再是 Agent 的职责。
@@ -34,8 +34,6 @@ const agent = new Agent({
   workspace,
   model,
 });
-await agent.ready();
-
 const rpc = new AgentRPC(agent);
 const binding = await rpc.listen({ host: "127.0.0.1", port: 15314 });
 console.log(binding.url); // rpc://127.0.0.1:15314
@@ -63,8 +61,6 @@ const agent = new Agent({
   workspace,
   model,
 });
-await agent.ready();
-
 const http = new AgentHTTP(agent);
 const binding = await http.server().listen({ host: "127.0.0.1", port: 5314 });
 console.log(binding.url); // http://127.0.0.1:5314

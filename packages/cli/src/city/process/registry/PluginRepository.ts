@@ -12,6 +12,7 @@ import {
   normalize_installation_id,
   normalize_plugin_name as normalize_local_plugin_name,
 } from "@downcity/city";
+import { create_cli_builtin_plugin_types } from "@/city/runtime/LocalCityEnvironment.js";
 import { get_plugin_catalog_item } from "@/city/process/plugin/PluginCatalog.js";
 import type {
   AgentPluginBinding,
@@ -27,7 +28,7 @@ import { validate_plugin_resource_item } from "@/city/process/plugin/PluginResou
 
 /** City 导出的全部内建 Plugin 名称。 */
 export const BUILTIN_PLUGIN_NAMES = Object.freeze(
-  with_local_store((store) => store.plugin_types().map((plugin_type) => plugin_type.manifest.name)),
+  create_cli_builtin_plugin_types().map((plugin_type) => plugin_type.manifest.name),
 );
 
 /** 规范化 Plugin 稳定名称。 */

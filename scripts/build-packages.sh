@@ -107,8 +107,6 @@ add_build_package() {
       add_build_package "sandbox-windows-mxc"
       add_build_package "sandbox-windows-srt"
       add_build_package "agent"
-      add_build_package "federation"
-      add_build_package "plugins"
       ;;
     cli)
       add_build_package "city"

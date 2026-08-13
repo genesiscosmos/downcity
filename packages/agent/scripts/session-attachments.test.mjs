@@ -8,13 +8,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { LocalFileSystem } from "../bin/workspace/LocalFileSystem.js";
-import { LocalSessionStore } from "../bin/workspace/store/LocalSessionStore.js";
+import { LocalSessionDataStore } from "../bin/workspace/store/LocalSessionDataStore.js";
 import { SessionMessages } from "../bin/session/SessionMessages.js";
 
 async function create_harness() {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-attachment-"));
   const files = new LocalFileSystem(root_path);
-  const store = new LocalSessionStore({
+  const store = new LocalSessionDataStore({
     files,
     agent_id: "attachment-test-agent",
     session_id: "attachment-test-session",

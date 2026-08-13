@@ -6,11 +6,8 @@
 
 import crypto from "node:crypto";
 import path from "node:path";
-import type {
-  AgentDefinition,
-  AgentPluginDefinition,
-  JsonObject,
-} from "@downcity/agent";
+import type { JsonObject } from "@downcity/agent";
+import type { CityPluginBindingConfig } from "@/types/CityAgentConfig.js";
 import type { LocalAgentConfig, LocalWorkspaceConfig } from "@/local/types/LocalCity.js";
 import type { LocalDatabase } from "@/local/store/LocalDatabase.js";
 import type { LocalCrypto } from "@/local/store/LocalCrypto.js";
@@ -154,45 +151,6 @@ export class LocalConfigRepository {
     return row ? this.decode_agent(row) : null;
   }
 
-  /** 保存完整 Agent 定义，并原子替换 Plugin 绑定。 */
-  save_agent(agent_id_input: string, definition: AgentDefinition): LocalAgentConfig {
-    const agent_id = normalize_agent_id(agent_id_input);
-    const workspace = this.get_workspace(definition.workspace_id);
-    if (!workspace) throw new Error(`Workspace not found: ${definition.workspace_id}`);
-    const existing = this.get_agent(agent_id);
-    const current_time = new Date().toISOString();
-    const config = {
-      version: String(definition.version || "1.0.0"),
-      ...(definition.execution ? { execution: definition.execution } : {}),
-      ...(definition.llm ? { llm: definition.llm } : {}),
-    };
-    this.database.sqlite.exec("BEGIN IMMEDIATE;");
-    try {
-      this.database.sqlite.prepare(`
-        INSERT INTO managed_agents (
-          agent_id, workspace_id, config_encrypted, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(agent_id) DO UPDATE SET
-          workspace_id = excluded.workspace_id,
-          config_encrypted = excluded.config_encrypted,
-          updated_at = excluded.updated_at;
-      `).run(
-        agent_id,
-        definition.workspace_id,
-        this.crypto_adapter.encrypt(JSON.stringify(config)),
-        existing?.created_at ?? current_time,
-        current_time,
-      );
-      this.database.sqlite.prepare("DELETE FROM agent_plugins WHERE agent_id = ?;").run(agent_id);
-      for (const plugin of definition.plugins) this.save_plugin(agent_id, plugin, current_time);
-      this.database.sqlite.exec("COMMIT;");
-    } catch (error) {
-      this.database.sqlite.exec("ROLLBACK;");
-      throw error;
-    }
-    return this.get_agent(agent_id)!;
-  }
-
   /** 更新 Agent 与 Workspace 的稳定绑定。 */
   bind_agent_workspace(agent_id_input: string, workspace_id_input: string): void {
     const agent_id = normalize_agent_id(agent_id_input);
@@ -290,7 +248,7 @@ export class LocalConfigRepository {
   }
 
   /** 读取指定 Agent 的全部 Plugin 绑定。 */
-  list_plugins(agent_id: string): AgentPluginDefinition[] {
+  list_plugins(agent_id: string): CityPluginBindingConfig[] {
     const rows = this.database.sqlite.prepare(`
       SELECT plugin_name, enabled, config_encrypted, resource_ids_json
       FROM agent_plugins WHERE agent_id = ? ORDER BY plugin_name ASC;
@@ -337,24 +295,6 @@ export class LocalConfigRepository {
       created_at: String(raw.created_at || row.created_at),
       updated_at: String(raw.updated_at || row.updated_at),
     };
-  }
-
-  /** 写入单个 Plugin 绑定。 */
-  private save_plugin(agent_id: string, plugin: AgentPluginDefinition, current_time: string): void {
-    this.database.sqlite.prepare(`
-      INSERT INTO agent_plugins (
-        agent_id, plugin_name, enabled, config_encrypted, resource_ids_json,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?);
-    `).run(
-      agent_id,
-      String(plugin.plugin_name || "").trim(),
-      plugin.enabled ? 1 : 0,
-      this.crypto_adapter.encrypt(JSON.stringify(plugin.config)),
-      JSON.stringify(plugin.resource_ids),
-      current_time,
-      current_time,
-    );
   }
 
   /** 判断兼容表是否存在。 */

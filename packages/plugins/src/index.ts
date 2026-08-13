@@ -16,3 +16,13 @@ export * from "./sound.js";
 export * from "./task.js";
 export * from "./web.js";
 export * from "./workboard.js";
+export {
+  create_builtin_plugin_types,
+} from "./builtin/BuiltinPluginTypes.js";
+export type {
+  BuiltinPluginAi,
+  BuiltinPluginConstructorInput,
+  BuiltinPluginManifest,
+  BuiltinPluginType,
+  BuiltinPluginTypesOptions,
+} from "./builtin/BuiltinPluginTypes.js";

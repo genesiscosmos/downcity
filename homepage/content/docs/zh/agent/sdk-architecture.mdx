@@ -29,7 +29,7 @@ flowchart TD
 
     Workspace --> Files["LocalFileSystem"]
     Workspace --> WorkspaceTools["WorkspaceTools<br/>File / Search / Shell?"]
-    Workspace --> Store["AgentStore"]
+    Workspace --> Store["SessionStore"]
     Workspace --> Env["Env"]
     Workspace --> Shell["Shell（可选）"]
     Shell --> Sandbox["Platform Sandbox Adapter"]
@@ -68,7 +68,7 @@ const workspace = new Workspace({
 - `files`：Workspace 根目录内的文件原子能力。
 - `tools`：File、Search 与可选 Shell Tools。
 - `get_env()`、`set_env()`、`patch_env()`：Workspace 执行环境。
-- `AgentStore`：Session 和 Message 的结构化存储分支。
+- `SessionStore`：Session 集合和单 Session 数据的结构化存储分支。
 - `dispose()`：释放 Store、Shell、进程和 Sandbox 资源。
 
 Workspace 不是 `Host`、`SystemHandler` 或通用 Service Container。Model、Plugin registry、Session 生命周期和网络 transport 都不属于 Workspace。
@@ -97,7 +97,7 @@ Workspace 由调用方创建，但绑定 Agent 后由 Agent 统一管理释放�
 
 ### LocalFileSystem
 
-LocalFileSystem 是基于 Node.js 的 rooted 文件能力，负责安全路径解析、读写移动、原子覆盖、跨进程 lock 和有界搜索。它既是 WorkspaceTools 的底层能力，也是 AgentStore 的文件原语。
+LocalFileSystem 是基于 Node.js 的 rooted 文件能力，负责安全路径解析、读写移动、原子覆盖、跨进程 lock 和有界搜索。它既是 WorkspaceTools 的底层能力，也是 SessionStore 的文件原语。
 
 ### WorkspaceTools
 
@@ -109,9 +109,11 @@ WorkspaceTools 是 Workspace 返回给 Agent 注册的模型工具：
 
 Plugin Tool 和调用方自定义 Tool 不属于 WorkspaceTools。File/Search 始终限制在 Workspace 根目录内，也不提供 unrestricted 模式。
 
-### AgentStore
+### SessionStore
 
-AgentStore 不是第二套权限系统，而是同一 FileSystem 上的领域分支。它负责路径布局、Session 列表、Message sequence、revision、归档、历史压缩和崩溃恢复。
+SessionStore 不是第二套权限系统，而是同一 FileSystem 上的领域分支。集合级
+`SessionStore` 负责 Session 列表和归档，单 Session 的 `SessionDataStore` 负责 Message、
+Metadata、Instruction 和附件。它们都不保存 Agent 配置，也不参与 Agent 实例装配。
 
 Workspace 文件工具仍然可以读写 `.downcity`。Store 的价值是结构化语义和一致性，不是隐藏历史或 Instruction。
 
@@ -160,7 +162,7 @@ SDK 不修改 `process.env`，也不把运行时修改写回 `.env`。`set_env()
 
 `@downcity/workspace-cloudflare-computer` 将 Cloudflare Durable Object 中的
 `@cloudflare/computer` Workspace 接入同一套 Agent Workspace 基类。它负责把远程虚拟文件系统提供给
-AgentStore 和 Workspace 生命周期；适配器内部调用 Cloudflare 官方 `createAITools()` 提供文件、目录和发布工具，并包装 Computer Shell 为 `exec`
+SessionStore 和 Workspace 生命周期；适配器内部调用 Cloudflare 官方 `createAITools()` 提供文件、目录和发布工具，并包装 Computer Shell 为 `exec`
 Tool。Agent 仍然运行模型、Session、Plugin 和 Tool Loop。
 
 ```ts
@@ -236,7 +238,6 @@ const agent = new Agent({
 });
 
 try {
-  await agent.ready();
   const session = await agent.sessions.create();
   const turn = await session.prompt({ query: "理解并检查当前项目" });
   console.log(await turn.finished);

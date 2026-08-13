@@ -26,7 +26,7 @@ import { to_executor_history } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
 import { is_session_message_record } from "@/executor/types/SessionRecords.js";
 import type { SessionStateOptions } from "@/types/session/SessionState.js";
-import type { SessionStore } from "@/types/store/SessionStore.js";
+import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
 
 /** Session 模型配置写入结果。 */
@@ -43,7 +43,7 @@ export interface SessionModelSetResult {
 export class SessionState {
   private readonly agent_id: string;
   private readonly session_id: string;
-  private readonly store: SessionStore;
+  private readonly store: SessionDataStore;
   private readonly messages: SessionMessages;
   private readonly state: SessionLocalState;
   private readonly logger: Logger;

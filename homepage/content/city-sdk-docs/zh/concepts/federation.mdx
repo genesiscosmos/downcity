@@ -14,11 +14,12 @@ description: 分清权威后端、业务分区、访问窗口与 Agent 宿主。
 
 ```ts
 import { Embassy, Federation } from "@downcity/federation";
-import { City, LocalCityStore } from "@downcity/city";
+import { City, LocalCityEnvironment, LocalCityStore } from "@downcity/city";
 
 const federation = new Federation({ database });
 const embassy = new Embassy({ federation_url: "https://fed.example.com" });
-const city = new City(new LocalCityStore());
+const store = new LocalCityStore();
+const city = new City(store, new LocalCityEnvironment({ data_source: store }));
 ```
 
 ## 身份边界

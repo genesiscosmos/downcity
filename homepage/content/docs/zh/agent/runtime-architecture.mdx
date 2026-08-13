@@ -186,13 +186,13 @@ Node.js 已经统一文件、路径、网络、JSON、Timer、AbortController �
 flowchart LR
     Construct["new Agent"] --> Plugins["启动 Plugin lifecycle"]
     Plugins --> Schedule["启动 ActionSchedule"]
-    Schedule --> Ready["agent.ready()"]
-    Ready --> Running["创建或恢复 Session"]
+    Schedule --> Barrier["内部初始化屏障"]
+    Barrier --> Running["执行 Session"]
     Running --> Dispose["agent.dispose()"]
     Dispose --> Workspace["Workspace.dispose()"]
     Workspace --> Shell["关闭进程与 Sandbox"]
 ```
 
-`ready()` 是可选的显式就绪屏障；Session 首次执行前也会等待 Agent ready。`dispose()` 会释放 Agent、Plugin、Schedule、Workspace 和 Shell 资源，但不会关闭由 `@downcity/city` 创建的 HTTP/RPC transport。
+Session 执行前会等待 Agent 的内部初始化屏障。`dispose()` 会释放 Agent、Plugin、Schedule、Workspace 和 Shell 资源，但不会关闭由 `@downcity/city` 创建的 HTTP/RPC transport。
 
 继续阅读：[Agent 生命周期](/zh/docs/agent/lifecycle)。

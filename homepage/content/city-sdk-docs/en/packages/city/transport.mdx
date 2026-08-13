@@ -3,20 +3,18 @@ title: HTTP and RPC
 description: Expose an Agent through the City host transport adapters.
 ---
 
-`AgentHTTP` and `AgentRPC` belong to the host boundary because they own network resources and
-listen/close lifecycles. They do not add a running state to the Agent.
+`City` owns one HTTP transport and one RPC transport. Both route by `agent_id` to the same Agent
+collection. Runtime changes made through `city.add/remove` become visible to both.
 
 ```ts
-import { AgentHTTP, AgentRPC } from "@downcity/city";
+await city.listen({
+  http: { host: "127.0.0.1", port: 5314 },
+  rpc: { host: "127.0.0.1", port: 15314 },
+});
 
-const rpc = new AgentRPC(agent);
-await rpc.listen({ host: "127.0.0.1", port: 15314 });
-
-const http = new AgentHTTP(agent);
-await http.server().listen({ host: "127.0.0.1", port: 43127 });
-
-await http.close();
-await rpc.close();
+await city.close();   // transports only
+await city.dispose(); // transports, Agents, Environment, and Store
 ```
 
-Use `AgentHTTP.router()` when another Hono server owns the outer HTTP lifecycle.
+HTTP uses `http://host:port/agents/<agent_id>` and RPC uses `rpc://host:port/<agent_id>`.
+`AgentHTTP` and `AgentRPC` remain available when a host needs to expose only one SDK Agent.

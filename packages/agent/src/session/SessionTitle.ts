@@ -13,7 +13,7 @@ import type { SessionRecordV1 } from "@/executor/types/SessionRecords.js";
 import { is_session_message_record } from "@/executor/types/SessionRecords.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import { normalize_session_title } from "@/session/storage/Metadata.js";
-import type { SessionStore } from "@/types/store/SessionStore.js";
+import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 
 const GENERATED_SESSION_TITLE_MAX_CHARS = 24;
 
@@ -22,7 +22,7 @@ const GENERATED_SESSION_TITLE_MAX_CHARS = 24;
  */
 export interface EnsureSessionTitleParams {
   /** 当前 Session 的领域持久化入口。 */
-  store: SessionStore;
+  store: SessionDataStore;
 
   /**
    * 当前 session_id。

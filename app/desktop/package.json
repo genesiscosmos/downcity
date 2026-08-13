@@ -16,6 +16,8 @@
   "dependencies": {
     "@downcity/agent": "workspace:^",
     "@downcity/city": "workspace:^",
+    "@downcity/federation": "workspace:^",
+    "@downcity/plugins": "workspace:^",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "framer-motion": "^11.18.2",

@@ -32,7 +32,7 @@ const agent = new Agent({
   })],
 });
 
-await agent.ready();
+const session = await agent.sessions.create();
 ```
 
 After the Agent is instantiated, you can register more plugins:

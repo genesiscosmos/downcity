@@ -37,7 +37,7 @@ try {
 
 ### Agent 与 Workspace
 
-- `agent.ready()`：需要显式启动检查点时等待 Plugin runtime。
+- Agent 构造时启动 Plugin runtime，Session 执行在内部等待初始化完成。
 - `agent.set_instruction()`：更新 Agent 静态指令。
 - `agent.plugins`：查询、控制或调用 Plugin。
 - `workspace.get_env()` / `set_env()` / `patch_env()`：管理项目执行环境。

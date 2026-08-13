@@ -37,7 +37,7 @@ The local SDK is session-first: Agent performs composition, while Session owns i
 
 ### Agent and Workspace
 
-- `agent.ready()`: wait for Plugin runtime when an explicit startup checkpoint is needed.
+- Agent construction starts Plugin runtime; Session execution waits for initialization internally.
 - `agent.set_instruction()`: update static Agent instructions.
 - `agent.plugins`: inspect, control, or call plugins.
 - `workspace.get_env()` / `set_env()` / `patch_env()`: manage the project execution environment.

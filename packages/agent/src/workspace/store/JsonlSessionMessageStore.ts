@@ -17,7 +17,7 @@ import type {
   CompactActiveMessagesInput,
   CompactActiveMessagesResult,
   SessionMessageCommitState,
-} from "@/types/store/SessionStore.js";
+} from "@/types/store/SessionDataStore.js";
 import type { JsonlSessionMessageStoreOptions } from "@/types/store/LocalStore.js";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 

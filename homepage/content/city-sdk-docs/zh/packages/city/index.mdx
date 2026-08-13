@@ -1,6 +1,6 @@
 ---
 title: "@downcity/city"
-description: 以明确的生命周期宿主一个或多个 Agent，并统一使用持久化配置。
+description: 根据产品配置装配并宿主一个或多个 Agent 实例。
 ---
 
 `@downcity/city` 是 CLI、Desktop 和自定义 Node 宿主共用的 Agent 宿主包。它拥有
@@ -11,9 +11,11 @@ pnpm add @downcity/city @downcity/agent
 ```
 
 ```ts
-import { City, LocalCityStore } from "@downcity/city";
+import { City, LocalCityEnvironment, LocalCityStore } from "@downcity/city";
 
-const city = new City(new LocalCityStore());
+const store = new LocalCityStore();
+const environment = new LocalCityEnvironment({ data_source: store });
+const city = new City(store, environment);
 await city.ready();
 
 const agents = city.agents();
@@ -24,10 +26,13 @@ await city.dispose();
 
 ## 所有权
 
-- `City` 拥有 `CityStore` 恢复出来的 Agent 实例。
-- `LocalCityStore` 拥有本地数据库连接，以及 Agent、Workspace、Plugin 的装配。
+- `LocalCityStore` 只拥有数据库连接并提供 `CityAgentConfig`。
+- `LocalCityEnvironment` 把产品配置转换成纯运行时 `AgentOptions`。
+- `City` 调用 `new Agent(options)` 并持有 Agent 实例，也统一拥有 HTTP/RPC transport。
+- `city.add/remove` 只管理运行时实例，不读取或修改产品配置。
+- Plugin lifecycle 和 ActionSchedule 归各 Agent 自己拥有。
 - CLI 和 Desktop 创建各自独立的 City 实例，但读取同一份 `~/.downcity` 数据。
-- Agent 没有启动或停止状态；CLI daemon 或 Desktop 窗口的长期运行属于宿主状态。
+- CLI daemon 与 Desktop 窗口分别拥有独立 City 生命周期，但读取同一份持久化数据。
 
 单 Agent 执行、Workspace、Session、Plugin SDK 和 RemoteAgent 位于
 `@downcity/agent`。Federation、Embassy 和 Bureau 位于 `@downcity/federation`。

@@ -271,17 +271,8 @@ const turn = await session.prompt({
 });
 ```
 
-用户仍然可以显式调用：
-
-```ts
-await agent.ready();
-```
-
-但语义变成：
-
-- `agent.ready()` 是显式检查点。
-- `session.prompt()` 内部也会等待当前 Agent ready。
-- 宿主不再必须用 `await agent.ready()` 规避时序问题。
+当前实现不再暴露显式 `agent.ready()`。`session.prompt()` 和其他首次执行入口会等待
+Agent 内部初始化屏障，宿主不需要管理 Agent 启动状态。
 
 ### 6.2 SDK 内部入口
 
@@ -693,7 +684,7 @@ tools.plugin_call = tools.plugin_call || plugin_tools.plugin_call;
 职责变化：
 
 - 为 `AgentSessionManager` 提供 `ensure_agent_ready`。
-- 保持 `agent.ready()` 公开 API 不变。
+- 删除 `agent.ready()` 公开 API，由 Session 执行入口等待内部初始化屏障。
 
 ### 13.5 `AgentSessionManager.ts`
 
@@ -904,7 +895,7 @@ Vibecape 是多 Agent 宿主，所以更容易触发这个设计缺陷。
 
 合理修复边界是：
 
-- Vibecape 可以临时通过 `await agent.ready()` 降低时序风险。
+- 宿主不再通过公开 ready 状态协调时序。
 - SDK 必须从根上移除全局 plugin runtime。
 - SDK 必须让 `plugin_call` 绑定当前 Agent 自己的 plugin registry。
 - SDK 必须区分 action 业务失败和 plugin lifecycle 失败。

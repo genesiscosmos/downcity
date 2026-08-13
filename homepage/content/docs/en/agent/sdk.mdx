@@ -33,11 +33,11 @@ const result = await turn.finished;
 await agent.dispose();
 ```
 
-`Workspace` is the unified resource container for AgentStore, WorkspaceTools, Env, and an optional Shell. Session history and metadata live in the same project's `.downcity` directory and remain readable and editable through Workspace file tools; Agent construction does not require separate Store configuration.
+`Workspace` is the unified resource container for SessionStore, WorkspaceTools, Env, and an optional Shell. Session history and metadata live in the same project's `.downcity` directory and remain readable and editable through Workspace file tools; SessionStore does not contain Agent configuration.
 
 Each Workspace instance binds to exactly one Agent and is released by `agent.dispose()`. Multiple Agents may operate on the same physical directory by using separate Workspace instances.
 
-Construction starts plugin lifecycle and background work. Use `await agent.ready()` when an explicit readiness barrier is needed, and `await agent.dispose()` to release resources. HTTP and RPC are supplied by `AgentHTTP` and `AgentRPC` from `@downcity/city`.
+Construction starts plugin lifecycle and background work. Session execution waits for initialization automatically; use `await agent.dispose()` to release resources. HTTP and RPC are supplied by `AgentHTTP` and `AgentRPC` from `@downcity/city`.
 
 ## Streaming messages
 

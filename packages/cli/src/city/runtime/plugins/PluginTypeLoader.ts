@@ -5,8 +5,10 @@
  * `@downcity/city` 负责；CLI 只投影自己的 Plugin 类型协议。
  */
 
-import { LocalCityStore } from "@downcity/city";
+import { LocalCityEnvironment, LocalCityStore } from "@downcity/city";
 import type { PluginType } from "@/city/types/plugin/PluginInstallation.js";
+import { create_cli_builtin_plugin_types } from "@/city/runtime/LocalCityEnvironment.js";
+import { getPlatformRootDirPath } from "@/city/process/registry/CityPaths.js";
 
 /** 加载内建 Plugin 时可用的 CLI 宿主依赖。 */
 export interface PluginTypeLoadContext {
@@ -23,11 +25,25 @@ export async function load_plugin_types(
   plugin_name: string,
   context: PluginTypeLoadContext = {},
 ): Promise<PluginType[]> {
-  const store = new LocalCityStore({ host: context.host, port: context.port });
+  const root_path = getPlatformRootDirPath();
+  const store = new LocalCityStore({ root_path });
+  const environment = new LocalCityEnvironment({
+    root_path,
+    data_source: store,
+    plugin_types: create_cli_builtin_plugin_types({
+      root_path,
+      host: context.host,
+      port: context.port,
+    }),
+  });
   try {
-    return await store.load_plugin_types(plugin_name) as PluginType[];
+    return await environment.load_plugin_types(plugin_name) as PluginType[];
   } finally {
-    store.close();
+    try {
+      await environment.dispose();
+    } finally {
+      await store.dispose();
+    }
   }
 }
 

@@ -1,6 +1,6 @@
 ---
 title: "@downcity/city"
-description: Host one or more Agents with persistent configuration and an explicit lifecycle.
+description: Assemble and host one or more Agent instances from product configuration.
 ---
 
 `@downcity/city` is the Agent host package used by the CLI, Desktop, and custom Node hosts.
@@ -11,9 +11,11 @@ pnpm add @downcity/city @downcity/agent
 ```
 
 ```ts
-import { City, LocalCityStore } from "@downcity/city";
+import { City, LocalCityEnvironment, LocalCityStore } from "@downcity/city";
 
-const city = new City(new LocalCityStore());
+const store = new LocalCityStore();
+const environment = new LocalCityEnvironment({ data_source: store });
+const city = new City(store, environment);
 await city.ready();
 
 const agents = city.agents();
@@ -24,10 +26,13 @@ await city.dispose();
 
 ## Ownership
 
-- `City` owns the Agent instances restored by its `CityStore`.
-- `LocalCityStore` owns the local database connection and Agent/Workspace/Plugin assembly.
+- `LocalCityStore` only owns its database connection and supplies `CityAgentConfig` values.
+- `LocalCityEnvironment` converts product configuration into runtime-only `AgentOptions`.
+- `City` calls `new Agent(options)`, owns the resulting instances, and owns HTTP/RPC transports.
+- `city.add/remove` only manage runtime instances; they never read or mutate product configuration.
+- Each Agent owns its Plugin lifecycle and ActionSchedule.
 - The CLI and Desktop create independent City instances but read the same `~/.downcity` data.
-- An Agent has no started or stopped state. A long-running CLI daemon or Desktop window is host state.
+- The CLI daemon and Desktop window own independent City lifecycles while reading the same persistent data.
 
 Single-Agent execution, Workspace, Session, Plugin SDK, and RemoteAgent remain in
 `@downcity/agent`. Federation, Embassy, and Bureau belong to `@downcity/federation`.

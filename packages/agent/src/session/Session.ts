@@ -73,7 +73,7 @@ import { to_executor_history } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
 import type { SessionActionRecordInputV1 } from "@/executor/types/SessionRecords.js";
 import type { SessionCommandOptions } from "@/types/session/SessionCommand.js";
-import type { SessionStore } from "@/types/store/SessionStore.js";
+import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 
 /**
  * SDK 本地 Session。
@@ -83,7 +83,7 @@ export class Session implements AgentSession {
   readonly agent_id: string;
 
   private readonly workspace_path: string;
-  private readonly store: SessionStore;
+  private readonly store: SessionDataStore;
   private readonly get_session_store: SessionOptions["get_session_store"];
   private readonly tools: Record<string, Tool>;
   private readonly logger: SessionOptions["logger"];

@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 文件与搜索共享同一个已解析项目根目录。
- * - WorkspaceTools 与 AgentStore 共用这一文件能力，不建立额外存储根目录。
+ * - WorkspaceTools 与 SessionStore 共用这一文件能力，不建立额外存储根目录。
  */
 
 import type {

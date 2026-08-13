@@ -1,6 +1,6 @@
 {
   "name": "@downcity/city",
-  "version": "0.2.272",
+  "version": "0.2.273",
   "description": "Downcity Agent 宿主环境，提供 City、本地持久化装配与 HTTP/RPC transport。",
   "type": "module",
   "main": "./bin/index.js",
@@ -46,8 +46,6 @@
   "license": "MIT",
   "dependencies": {
     "@downcity/agent": "workspace:^",
-    "@downcity/federation": "workspace:^",
-    "@downcity/plugins": "workspace:^",
     "@downcity/shell": "workspace:^",
     "@downcity/type": "workspace:*",
     "ai": "^6.0.193",

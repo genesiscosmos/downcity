@@ -4,7 +4,7 @@
  * 职责说明（中文）
  * - 对外暴露 `Agent` 这一唯一的本地实例类。
  * - Agent 直接持有自身状态与长期运行时对象，避免额外 Assembly 复制同一批字段。
- * - Session 集合由 `AgentSessions` 管理；长期运行状态由 `AgentState` 管理。
+ * - Session 集合由 `AgentSessions` 管理；长期资源由内部 `AgentRuntime` 管理。
  */
 
 import type { Tool } from "ai";
@@ -17,7 +17,7 @@ import type { WorkspaceBase } from "@/workspace/WorkspaceBase.js";
 import { Logger } from "@/utils/logger/Logger.js";
 import { normalize_instruction_input } from "@/agent/AgentInstructions.js";
 import { AgentSessions } from "@/agent/AgentSessions.js";
-import { AgentState } from "@/agent/AgentState.js";
+import { AgentRuntime } from "@/agent/AgentRuntime.js";
 import { generate_id } from "@/utils/Id.js";
 import { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
 import type { PluginRegistryUnsubscribe } from "@/types/plugin/PluginRegistry.js";
@@ -31,7 +31,6 @@ import {
   type SystemProfile,
 } from "@/executor/composer/system/default/SystemDomain.js";
 import type { SystemModelMessage } from "ai";
-import type { AgentDefinition } from "@/types/agent/AgentDefinition.js";
 
 const RESERVED_PLUGIN_TOOL_NAMES = new Set(["plugin_read", "plugin_call"]);
 
@@ -57,9 +56,6 @@ function register_agent_tools(
 export class Agent {
   /** 当前 Agent 的稳定标识，用于区分 Session 存储目录与运行时归属。 */
   readonly id: string;
-
-  /** Store 可以用于重新创建当前 Agent 的只读定义；临时 SDK Agent 可以省略。 */
-  readonly definition?: Readonly<AgentDefinition>;
 
   /** 当前 Agent 引用的项目资源与安全边界。 */
   readonly workspace: WorkspaceBase;
@@ -91,8 +87,8 @@ export class Agent {
   /** 调用方提供的自定义 Session 类；省略时使用 SDK 默认实现。 */
   private readonly session_class: AgentOptions["session_class"];
 
-  /** 当前 Agent 的长期运行状态与生命周期。 */
-  private readonly state: AgentState;
+  /** 当前 Agent 长期资源的唯一内部运行时。 */
+  private readonly runtime: AgentRuntime;
 
   /** 当前 Agent configured instruction 的可变有序集合。 */
   private instruction: string[];
@@ -109,9 +105,6 @@ export class Agent {
   constructor(options: AgentOptions) {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Agent requires a non-empty id");
-    this.definition = options.definition
-      ? freeze_agent_definition(options.definition)
-      : undefined;
     if (!options.workspace) throw new Error("Agent requires a Workspace");
     this.workspace = options.workspace;
 
@@ -142,7 +135,7 @@ export class Agent {
     this.logger = new Logger();
     this.logger.bind_workspace(this.workspace.files);
     this.instruction = normalize_instruction_input(options.instruction);
-    const store = this.workspace.bind_agent(this.id);
+    const store = this.workspace.create_session_store(this.id);
 
     this.sessions = new AgentSessions({
       agent_id: this.id,
@@ -154,7 +147,7 @@ export class Agent {
       get_workspace_env: () => this.workspace.get_env(),
       get_agent_plugins: () => this.plugins.execution_view(),
       ensure_agent_ready: async () => {
-        await this.ready();
+        await this.runtime.ensure_initial();
       },
       get_agent_model: () => this.model,
       session_class: this.session_class,
@@ -184,22 +177,11 @@ export class Agent {
       });
     });
 
-    // 关键点（中文）：装配完成后创建唯一状态对象，并立即启动长期运行时。
-    this.state = new AgentState({
+    // 关键点（中文）：装配完成后立即初始化唯一运行时，执行入口只等待内部屏障。
+    this.runtime = new AgentRuntime({
       context: this.plugin_context,
       plugins: this.plugins,
     });
-  }
-
-  /**
-   * 等待 Agent 持有的长期运行时启动完成。
-   *
-   * 关键点（中文）
-   * - Agent 构造完成即开始启动 plugin lifecycle 与 ActionSchedule。
-   * - 调用方在需要确认运行时就绪时使用，例如启动后立刻读取 plugin 状态。
-   */
-  async ready(): Promise<void> {
-    await this.state.ready();
   }
 
   /**
@@ -215,7 +197,7 @@ export class Agent {
     this.unsubscribe_plugin_change();
     this.sessions.dispose_title_generation();
     try {
-      await this.state.dispose();
+      await this.runtime.dispose();
     } finally {
       try {
         await this.logger.save_all_logs();
@@ -296,30 +278,4 @@ export class Agent {
       this.plugin_tool_names.add(tool_name);
     }
   }
-}
-
-/** 复制并冻结 Agent 定义，避免运行时对象与持久化事实发生漂移。 */
-function freeze_agent_definition(
-  input: AgentDefinition,
-): Readonly<AgentDefinition> {
-  const workspace_id = String(input.workspace_id || "").trim();
-  if (!workspace_id) throw new Error("Agent definition requires workspace_id");
-  const plugins = input.plugins.map((plugin) => Object.freeze({
-    plugin_name: String(plugin.plugin_name || "").trim(),
-    enabled: plugin.enabled === true,
-    config: structuredClone(plugin.config),
-    resource_ids: Object.freeze([...plugin.resource_ids]),
-  }));
-  return Object.freeze({
-    version: String(input.version || "1.0.0").trim() || "1.0.0",
-    workspace_id,
-    ...(input.workspace_name
-      ? { workspace_name: String(input.workspace_name).trim() }
-      : {}),
-    ...(input.execution
-      ? { execution: Object.freeze(structuredClone(input.execution)) }
-      : {}),
-    ...(input.llm ? { llm: Object.freeze(structuredClone(input.llm)) } : {}),
-    plugins: Object.freeze(plugins),
-  });
 }

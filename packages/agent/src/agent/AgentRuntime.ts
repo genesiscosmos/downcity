@@ -1,17 +1,17 @@
 /**
- * AgentState：本地 Agent 长期运行状态与生命周期。
+ * AgentRuntime：Agent 内部运行时资源的唯一拥有者。
  *
  * 职责说明（中文）
  * - 统一连接 PluginRegistry 与 PluginContext。
  * - 持有 Plugin lifecycle 与 ActionSchedule 的启动状态。
- * - Agent 构造完成后立即开始启动，调用方通过 `ready()` 等待。
+ * - Agent 构造完成后立即开始初始化，执行入口通过内部屏障等待。
  * - Agent 释放时统一停止 ActionSchedule 与 Plugin lifecycle。
- * - RPC / HTTP 等 transport 不属于 AgentState，由上游宿主独立管理。
+ * - RPC / HTTP 等 transport 不属于 AgentRuntime，由上游宿主独立管理。
  */
 
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
-import type { AgentStateOptions } from "@/types/agent/AgentState.js";
+import type { AgentRuntimeOptions } from "@/types/agent/AgentRuntime.js";
 import {
   start_action_schedule_runtime,
   type ActionScheduleRuntimeHandle,
@@ -20,7 +20,7 @@ import {
 /**
  * 本地 Agent 长期运行状态。
  */
-export class AgentState {
+export class AgentRuntime {
   /** 当前 Agent 共用的执行上下文。 */
   private readonly context: PluginContext;
 
@@ -36,7 +36,7 @@ export class AgentState {
   /** 当前 Agent 持有的 ActionSchedule 轮询运行时。 */
   private action_schedule_runtime: ActionScheduleRuntimeHandle | null = null;
 
-  constructor(options: AgentStateOptions) {
+  constructor(options: AgentRuntimeOptions) {
     this.context = options.context;
     this.plugins = options.plugins;
     this.plugins.bind_context(this.context);
@@ -46,7 +46,7 @@ export class AgentState {
   /**
    * 等待当前 Agent 持有的长期运行时启动完成。
    */
-  async ready(): Promise<void> {
+  async ensure_initial(): Promise<void> {
     await this.ready_promise;
   }
 

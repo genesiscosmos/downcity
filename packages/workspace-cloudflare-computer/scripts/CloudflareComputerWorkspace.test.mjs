@@ -46,8 +46,8 @@ test("CloudflareComputerWorkspace 维持单 Agent 绑定和远程释放生命周
     env: { NODE_ENV: "test" },
     dispose: () => { disposed = true; },
   });
-  workspace.bind_agent("agent-one");
-  assert.throws(() => workspace.bind_agent("agent-two"), /already bound/);
+  workspace.create_session_store("agent-one");
+  assert.throws(() => workspace.create_session_store("agent-two"), /already bound/);
   assert.deepEqual(workspace.get_env(), { NODE_ENV: "test" });
   await workspace.dispose();
   assert.equal(disposed, true);

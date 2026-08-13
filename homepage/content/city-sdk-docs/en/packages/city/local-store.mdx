@@ -1,22 +1,27 @@
 ---
 title: Local Store
-description: Restore Agent, Workspace, and Plugin configuration from ~/.downcity.
+description: Read the product configuration needed to assemble Agents from ~/.downcity.
 ---
 
-`LocalCityStore` is the standard local adapter for CLI and Desktop hosts. It reads and writes
-`~/.downcity/downcity.db`, resolves Workspace environment, loads enabled Plugins, selects the
-platform Sandbox, and restores ready-to-use Agent instances.
+`LocalCityStore` is the pure-data adapter shared by CLI and Desktop hosts. It reads and writes
+Agent, Workspace, Plugin Binding, Resource, and Installation records in
+`~/.downcity/downcity.db`. It never creates an Agent, Workspace, Model, Plugin, or Embassy.
 
 ```ts
-import { City, LocalCityStore } from "@downcity/city";
+import { City, LocalCityEnvironment, LocalCityStore } from "@downcity/city";
 
 const store = new LocalCityStore();
-const city = new City(store);
+const environment = new LocalCityEnvironment({ data_source: store });
+const city = new City(store, environment);
 await city.ready();
 ```
 
-Use `store.new_agent(...)` to construct an unregistered native Agent and `city.add(agent)` to
-persist and register it. `city.remove(agent_id)` removes the registration but does not delete
-Workspace or Session data.
+During initialization, City calls `store.load_agent_configs()` and asks the Environment for
+runtime-only `AgentOptions`. This assembles a new instance from configuration; there is no Agent
+serialization or restoration protocol.
+
+The product creates, updates, and deletes configuration through `LocalCityStore` APIs.
+`city.add(agent)` registers an existing instance, while `city.remove(agent_id)` removes and
+disposes it. Neither method changes configuration or Session data.
 
 For tests or temporary hosts, use `MemoryCityStore` instead.

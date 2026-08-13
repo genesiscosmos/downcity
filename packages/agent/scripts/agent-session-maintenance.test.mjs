@@ -31,7 +31,6 @@ test("Agent sessions 负责清空消息和删除 Session 数据", async () => {
     workspace: new Workspace({ path: root_path }),
   });
   try {
-    await agent.ready();
     const session_id = "session_test";
     await agent.sessions.create({ session_id: session_id });
     const session_path = get_session_path(root_path, agent.id, session_id);

@@ -84,7 +84,7 @@ Workspace + Shell → Agent → Session → Turn
 - One Workspace instance can bind to only one Agent.
 - Multiple Workspace instances may point to the same physical directory for different Agents.
 - Plugin lifecycle and ActionSchedule begin starting immediately after `new Agent(...)`.
-- Session entry points wait for the Agent runtime; call `await agent.ready()` only when you need an explicit startup checkpoint.
+- Session execution waits for the Agent runtime automatically; callers do not manage a separate startup state.
 - `agent.dispose()` also releases the exclusive Workspace, Shell processes, PTYs, and Sandbox. Do not call `workspace.dispose()` again.
 - HTTP/RPC transports do not belong to Agent; use `@downcity/city` when you need network serving.
 

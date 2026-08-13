@@ -1,5 +1,5 @@
 /**
- * @file 验证 AgentStore / SessionStore 的领域边界与本地实现契约。
+ * @file 验证 SessionStore / SessionDataStore 的领域边界与本地实现契约。
  */
 
 import assert from "node:assert/strict";
@@ -17,10 +17,10 @@ async function create_test_roots(t) {
   return { workspace_path };
 }
 
-test("Workspace provides AgentStore on the same file resource", async (t) => {
+test("Workspace provides SessionStore on the same file resource", async (t) => {
   const { workspace_path } = await create_test_roots(t);
   const workspace = new Workspace({ path: workspace_path });
-  const store = workspace.bind_agent("store-test");
+  const store = workspace.create_session_store("store-test");
   const session_store = store.session("first");
 
   assert.equal(store.session("first"), session_store);
@@ -57,9 +57,9 @@ test("Workspace provides AgentStore on the same file resource", async (t) => {
   assert.equal(await store.has_session("first"), false);
 });
 
-test("LocalAgentStore archives and cleans sessions", async (t) => {
+test("LocalSessionStore archives and cleans sessions", async (t) => {
   const { workspace_path } = await create_test_roots(t);
-  const store = new Workspace({ path: workspace_path }).bind_agent("archive-test");
+  const store = new Workspace({ path: workspace_path }).create_session_store("archive-test");
   await store.session("archived").messages.initialize();
 
   const archived = await store.archive_session("archived");

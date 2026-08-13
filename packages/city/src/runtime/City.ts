@@ -1,15 +1,28 @@
 /**
- * City：一个持久化 Store 下的 Agent 集合。
+ * City：一个 Store 下的 Agent 集合与统一 transport 宿主。
  *
- * City 统一拥有从 Store 恢复或通过 `add()` 注册的 Agent 实例。它不认识 SQLite、
- * Workspace 路径、模型或 Plugin 的具体配置，只依赖 CityStore 完成持久化与恢复。
+ * City 根据 Store 提供的配置装配 Agent 实例，并统一拥有实例集合与 HTTP/RPC。
  */
 
-import type { Agent } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { CityHTTP } from "@/transport/http/CityHTTP.js";
+import { CityRPC } from "@/transport/rpc/CityRPC.js";
+import type { CityEnvironment } from "@/types/CityEnvironment.js";
 import type { CityStore } from "@/types/CityStore.js";
-import type { CityState } from "@/types/City.js";
+import type { CityListenOptions, CityState } from "@/types/City.js";
+import type { CityHttpRuntimeOptions } from "@/transport/types/CityHttpRuntime.js";
+import type { CityRpcRuntimeOptions } from "@/transport/types/CityRpcRuntime.js";
 
-/** 持久化 Agent 的运行时集合。 */
+/** City 构造时可注入的 transport 扩展能力。 */
+export interface CityRuntimeOptions {
+  /** HTTP transport 的模型解析和宿主扩展路由。 */
+  http?: CityHttpRuntimeOptions;
+
+  /** RPC transport 的模型解析与环境刷新能力。 */
+  rpc?: CityRpcRuntimeOptions;
+}
+
+/** Agent 实例集合与 transport 宿主。 */
 export class City {
   /** 当前 City 持有的 Agent，按稳定 ID 索引。 */
   private readonly agents_by_id = new Map<string, Agent>();
@@ -17,25 +30,41 @@ export class City {
   /** 当前 City 的持久化适配器。 */
   private readonly store: CityStore;
 
-  /** 当前生命周期阶段。 */
-  private state: CityState = "idle";
+  /** 当前平台提供的 Agent 运行环境。 */
+  private readonly environment?: CityEnvironment;
 
-  /** 首次加载产生的稳定 Promise。 */
-  private ready_promise?: Promise<void>;
+  /** 当前 City 唯一的 HTTP transport。 */
+  private readonly http: CityHTTP;
+
+  /** 当前 City 唯一的 RPC transport。 */
+  private readonly rpc: CityRPC;
+
+  /** 当前生命周期阶段。 */
+  private state: CityState = "initializing";
+
+  /** 构造时立即开始的唯一初始化 Promise。 */
+  private readonly initial_promise: Promise<void>;
 
   /** 首次释放产生的稳定 Promise。 */
   private dispose_promise?: Promise<void>;
 
-  constructor(store: CityStore) {
+  constructor(
+    store: CityStore,
+    environment?: CityEnvironment,
+    runtime_options: CityRuntimeOptions = {},
+  ) {
     if (!store) throw new Error("City requires a Store");
     this.store = store;
+    this.environment = environment;
+    this.http = new CityHTTP(this, runtime_options.http);
+    this.rpc = new CityRPC(this, runtime_options.rpc);
+    this.initial_promise = this.initialize();
   }
 
-  /** 从 Store 恢复全部 Agent；恢复失败时释放本次已创建的全部实例。 */
+  /** 等待构造时开始的 Agent 装配完成。 */
   async ready(): Promise<void> {
-    if (this.state === "disposed") throw new Error("Cannot ready a disposed City");
-    this.ready_promise ??= this.load_agents();
-    await this.ready_promise;
+    this.assert_not_disposed();
+    await this.initial_promise;
   }
 
   /** 返回当前 City 持有的 Agent 稳定快照。 */
@@ -59,74 +88,144 @@ export class City {
     return agent;
   }
 
-  /** 持久化并注册一个已实例化 Agent。 */
+  /** 注册一个已实例化 Agent，并接管其运行时生命周期。 */
   async add(agent: Agent): Promise<Agent> {
-    this.assert_ready();
+    await this.ready();
     if (!agent?.id) throw new Error("City.add requires an Agent");
     if (this.agents_by_id.has(agent.id)) {
       throw new Error(`Agent already exists in City: ${agent.id}`);
     }
-    await this.store.save_agent(agent);
     this.agents_by_id.set(agent.id, agent);
     return agent;
   }
 
-  /** 删除持久化注册并释放当前 Agent；Workspace 与 Session 数据保持不变。 */
+  /** 从 City 移除并释放当前 Agent，不修改产品配置或 Session 数据。 */
   async remove(agent_id_input: string): Promise<Agent | null> {
-    this.assert_ready();
+    await this.ready();
     const agent_id = String(agent_id_input || "").trim();
     const agent = this.agents_by_id.get(agent_id) ?? null;
     if (!agent) return null;
-    await this.store.remove_agent(agent_id);
     this.agents_by_id.delete(agent_id);
-    await agent.dispose();
+    const results = await Promise.allSettled([
+      this.http.detach_agent(agent_id),
+      agent.dispose(),
+    ]);
+    const errors = results.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : [],
+    );
+    if (errors.length > 0) {
+      throw new AggregateError(errors, `City Agent remove failed: ${agent_id}`);
+    }
     return agent;
   }
 
-  /** 释放全部运行时实例与 Store，不删除任何持久化配置。 */
+  /** 等待 Agent 装配后启动 City 唯一的 HTTP/RPC transport。 */
+  async listen(options: CityListenOptions): Promise<void> {
+    await this.ready();
+    const started: Array<() => Promise<void>> = [];
+    try {
+      if (options.rpc) {
+        await this.rpc.listen(options.rpc);
+        started.push(async () => await this.rpc.close());
+      }
+      if (options.http) {
+        await this.http.listen(options.http);
+        started.push(async () => await this.http.close());
+      }
+    } catch (error) {
+      await Promise.allSettled(started.reverse().map(async (close) => await close()));
+      throw error;
+    }
+  }
+
+  /** 幂等关闭 HTTP/RPC，不释放 Agent 或 Store。 */
+  async close(): Promise<void> {
+    const results = await Promise.allSettled([
+      this.http.close(),
+      this.rpc.close(),
+    ]);
+    const errors = results.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : [],
+    );
+    if (errors.length > 0) throw new AggregateError(errors, "City transport close failed");
+  }
+
+  /** 关闭 transport，并释放全部 Agent 与 Store。 */
   async dispose(): Promise<void> {
-    this.dispose_promise ??= (async () => {
-      if (this.ready_promise) await this.ready_promise.catch(() => undefined);
-      this.state = "disposed";
-      const agents = [...this.agents_by_id.values()];
-      this.agents_by_id.clear();
-      const results = await Promise.allSettled([
-        ...agents.map(async (agent) => await agent.dispose()),
-        this.store.dispose(),
-      ]);
-      const errors = results.flatMap((result) =>
-        result.status === "rejected" ? [result.reason] : [],
-      );
-      if (errors.length > 0) throw new AggregateError(errors, "City dispose failed");
-    })();
+    this.dispose_promise ??= this.dispose_all();
     await this.dispose_promise;
   }
 
-  /** 执行一次完整恢复并提交内存集合。 */
-  private async load_agents(): Promise<void> {
-    this.state = "loading";
-    const restored_agents: readonly Agent[] = await this.store.load_agents();
-    const next_agents = new Map<string, Agent>();
+  /** 读取 Store 配置，并为当前 City 装配全部 Agent 实例。 */
+  private async initialize(): Promise<void> {
+    const configs = await this.store.load_agent_configs();
+    if (configs.length > 0 && !this.environment) {
+      throw new Error("City requires an Environment to assemble configured Agents");
+    }
+    const assembled_agents: Agent[] = [];
     try {
-      for (const agent of restored_agents) {
-        if (!agent?.id) throw new Error("CityStore restored an invalid Agent");
-        if (next_agents.has(agent.id)) {
-          throw new Error(`CityStore restored duplicate Agent: ${agent.id}`);
+      for (const config of configs) {
+        if (this.agents_by_id.has(config.agent_id)) {
+          throw new Error(`CityStore returned duplicate Agent config: ${config.agent_id}`);
         }
-        next_agents.set(agent.id, agent);
+        const agent = await this.create_agent(config.agent_id, config);
+        assembled_agents.push(agent);
+        this.agents_by_id.set(agent.id, agent);
       }
+      this.state = "ready";
     } catch (error) {
-      await Promise.allSettled(restored_agents.map(async (agent) => await agent.dispose()));
-      this.state = "idle";
+      this.agents_by_id.clear();
+      await Promise.allSettled(assembled_agents.map(async (agent) => await agent.dispose()));
       throw error;
     }
-    for (const [agent_id, agent] of next_agents) this.agents_by_id.set(agent_id, agent);
-    this.state = "ready";
   }
 
-  /** 断言 City 已完成恢复并且尚未释放。 */
+  /** 使用 Environment 生成运行时参数，并由 City 创建 Agent 实例。 */
+  private async create_agent(
+    expected_agent_id: string,
+    config: Parameters<CityEnvironment["create_agent_options"]>[0],
+  ): Promise<Agent> {
+    const environment = this.environment;
+    if (!environment) throw new Error("City requires an Environment to assemble Agents");
+    const options = await environment.create_agent_options(structuredClone(config));
+    if (options.id !== expected_agent_id) {
+      await options.workspace.dispose().catch(() => undefined);
+      throw new Error(`City Environment changed Agent ID: ${expected_agent_id}`);
+    }
+    try {
+      return new Agent(options);
+    } catch (error) {
+      await options.workspace.dispose().catch(() => undefined);
+      throw error;
+    }
+  }
+
+  /** 按资源所有权逆序完成最终释放。 */
+  private async dispose_all(): Promise<void> {
+    await this.initial_promise.catch(() => undefined);
+    this.state = "disposed";
+    const agents = [...this.agents_by_id.values()];
+    this.agents_by_id.clear();
+    const close_result = await Promise.allSettled([
+      this.close(),
+      ...agents.map(async (agent) => await agent.dispose()),
+      this.environment?.dispose?.() ?? Promise.resolve(),
+      this.store.dispose(),
+    ]);
+    const errors = close_result.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : [],
+    );
+    if (errors.length > 0) throw new AggregateError(errors, "City dispose failed");
+  }
+
+  /** 断言 City 已完成装配并且尚未释放。 */
   private assert_ready(): void {
+    this.assert_not_disposed();
+    if (this.state !== "ready") throw new Error("City initialization has not completed");
+  }
+
+  /** 断言 City 尚未被永久释放。 */
+  private assert_not_disposed(): void {
     if (this.state === "disposed") throw new Error("City is disposed");
-    if (this.state !== "ready") throw new Error("City.ready() must complete first");
   }
 }

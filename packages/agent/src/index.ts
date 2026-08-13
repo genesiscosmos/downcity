@@ -11,14 +11,14 @@
 export { Agent } from "./agent/Agent.js";
 export { Workspace } from "./workspace/Workspace.js";
 export { WorkspaceBase } from "./workspace/WorkspaceBase.js";
-export type { AgentStore } from "./types/store/AgentStore.js";
+export type { SessionStore } from "./types/store/SessionStore.js";
 export type {
   CompactActiveMessagesInput,
   CompactActiveMessagesResult,
   SessionMessageCommitState,
   SessionMessageStore,
-  SessionStore,
-} from "./types/store/SessionStore.js";
+  SessionDataStore,
+} from "./types/store/SessionDataStore.js";
 export type { SessionAttachmentStore } from "./types/store/SessionAttachmentStore.js";
 export { create_session_message_store } from "./workspace/store/SessionMessageStoreFactory.js";
 export type {
@@ -152,10 +152,6 @@ export type {
   AgentOptions,
   AgentSessionConstructor,
 } from "./types/agent/AgentOptions.js";
-export type {
-  AgentDefinition,
-  AgentPluginDefinition,
-} from "./types/agent/AgentDefinition.js";
 export type {
   AgentSession,
   AgentSessionActor,

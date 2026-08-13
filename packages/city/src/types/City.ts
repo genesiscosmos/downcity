@@ -6,4 +6,23 @@
  */
 
 /** City 当前生命周期阶段。 */
-export type CityState = "idle" | "loading" | "ready" | "disposed";
+export type CityState = "initializing" | "ready" | "disposed";
+
+/** City 同时启动 HTTP 与 RPC transport 的监听参数。 */
+export interface CityListenOptions {
+  /** HTTP transport 监听参数；省略时不启动 HTTP。 */
+  http?: {
+    /** HTTP 监听地址。 */
+    host?: string;
+    /** HTTP 监听端口。 */
+    port: number;
+  };
+
+  /** RPC transport 监听参数；省略时不启动 RPC。 */
+  rpc?: {
+    /** RPC 监听地址。 */
+    host?: string;
+    /** RPC 监听端口。 */
+    port?: number;
+  };
+}

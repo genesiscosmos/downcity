@@ -13,7 +13,7 @@ export interface LocalAgentPluginBinding {
   agent_id: string;
   /** Plugin 的全局稳定名称。 */
   plugin_name: string;
-  /** 当前宿主恢复 Agent 时是否实例化该 Plugin。 */
+  /** 当前宿主装配 Agent 时是否实例化该 Plugin。 */
   enabled: boolean;
   /** Plugin Manifest 约束的完整配置。 */
   config: JsonObject;

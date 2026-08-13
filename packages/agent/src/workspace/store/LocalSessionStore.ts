@@ -1,127 +1,191 @@
 /**
- * LocalSessionStore：Workspace 内单个 Session 的 JSONL 持久化视图。
+ * LocalSessionStore：Workspace 内一个 Agent 所属 Session 的数据入口。
  *
  * 职责说明（中文）
- * - 集中创建 Message Store，并封装 Metadata 与 Instruction 的物理路径。
- * - Session 领域只持有本对象，不再自行拼接任何存储路径。
+ * - 统一管理 Session 创建判断、删除、列表、归档与清理。
+ * - 缓存稳定的 LocalSessionDataStore，避免同一 Session 重复创建 Message Store。
+ * - 当前阶段沿用既有本地目录布局；调用方和 Session 不感知该约定。
  */
 
-import { JsonlSessionMessageStore } from "@/workspace/store/JsonlSessionMessageStore.js";
-import {
-  get_sdk_agent_session_instruction_path,
-  get_sdk_agent_session_meta_path,
-  get_sdk_agent_session_assistant_message_path,
-  get_sdk_agent_session_messages_path,
-  get_sdk_agent_session_attachments_dir_path,
-} from "@/workspace/store/LocalStorePaths.js";
-import { normalize_session_metadata } from "@/session/storage/Metadata.js";
-import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.js";
+import type {
+  AgentArchiveSessionResult,
+  AgentArchiveSessionsInput,
+  AgentArchiveSessionsResult,
+  AgentCleanArchiveResult,
+  AgentListSessionsInput,
+  AgentSessionSummaryPage,
+} from "@/types/agent/SessionTypes.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
+import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
+import { LocalSessionDataStore } from "@/workspace/store/LocalSessionDataStore.js";
+import {
+  get_sdk_agent_archived_session_dir_path,
+  get_sdk_agent_archived_sessions_dir_path,
+  get_sdk_agent_session_dir_path,
+  get_sdk_agent_session_messages_dir_path,
+} from "@/workspace/store/LocalStorePaths.js";
+import {
+  list_archived_agent_session_summary_page,
+  list_agent_session_summary_page,
+} from "@/session/browse/Browse.js";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 import type { LocalSessionStoreOptions } from "@/types/store/LocalStore.js";
-import { LocalSessionAttachmentStore } from "@/workspace/store/LocalSessionAttachmentStore.js";
 
-/** 本地 Session Store。 */
+/** 解码目录中经过 URL 编码的 Session 标识。 */
+function decode_session_id(input: string): string {
+  try {
+    return decodeURIComponent(input);
+  } catch {
+    return input;
+  }
+}
+
+/** 默认本地 Agent Store。 */
 export class LocalSessionStore implements SessionStore {
-  /** 当前 Session 的稳定标识。 */
-  readonly session_id: string;
-
-  /** 当前 Session 的 JSONL Message Store。 */
-  readonly messages: JsonlSessionMessageStore;
-
-  /** 当前 Session 的附件持久化能力。 */
-  readonly attachments: LocalSessionAttachmentStore;
-
   /** 当前 Store 与 WorkspaceTools 共用的 Workspace 文件能力。 */
   private readonly files: FileSystem;
 
   /** 当前 Agent 的稳定标识。 */
   private readonly agent_id: string;
 
+  /** 已创建的 Session Store 缓存。 */
+  private readonly sessions = new Map<string, LocalSessionDataStore>();
+
   constructor(options: LocalSessionStoreOptions) {
     this.files = options.files;
     this.agent_id = options.agent_id;
-    this.session_id = options.session_id;
-    this.messages = new JsonlSessionMessageStore({
-      files: this.files,
-      session_id: this.session_id,
-      file_path: get_sdk_agent_session_messages_path(
-        this.files.root_path,
-        this.agent_id,
-        this.session_id,
-      ),
-      assistant_message_file_path: get_sdk_agent_session_assistant_message_path(
-        this.files.root_path,
-        this.agent_id,
-        this.session_id,
-      ),
-    });
-    this.attachments = new LocalSessionAttachmentStore({
-      files: this.files,
-      attachments_dir_path: get_sdk_agent_session_attachments_dir_path(
-        this.files.root_path,
-        this.agent_id,
-        this.session_id,
-      ),
-    });
   }
 
-  /** 读取规范化 Session Metadata。 */
-  async read_metadata(): Promise<SessionHistoryMetaV1> {
-    try {
-      const raw = JSON.parse(
-        (await this.files.read_file(this.metadata_path())).toString("utf8"),
-      ) as Partial<SessionHistoryMetaV1>;
-      return normalize_session_metadata(raw, this.session_id, this.agent_id);
-    } catch {
-      return normalize_session_metadata({}, this.session_id, this.agent_id);
+  /** 返回指定 Session 的稳定持久化视图。 */
+  session(session_id: string): SessionDataStore {
+    const resolved_session_id = String(session_id || "").trim();
+    if (!resolved_session_id) {
+      throw new Error("SessionStore.session requires a non-empty session_id");
     }
+    const cached = this.sessions.get(resolved_session_id);
+    if (cached) return cached;
+    const created = new LocalSessionDataStore({
+      files: this.files,
+      agent_id: this.agent_id,
+      session_id: resolved_session_id,
+    });
+    this.sessions.set(resolved_session_id, created);
+    return created;
   }
 
-  /** 写入完整 Session Metadata。 */
-  async write_metadata(metadata: SessionHistoryMetaV1): Promise<void> {
-    await this.files.write_file_atomically(
-      this.metadata_path(),
-      `${JSON.stringify(metadata, null, 2)}\n`,
-    );
+  /** 判断活动 Session 是否存在。 */
+  async has_session(session_id: string): Promise<boolean> {
+    return await this.files.path_exists(this.session_path(session_id));
   }
 
-  /** 判断显式 system 快照是否存在。 */
-  async has_instruction(): Promise<boolean> {
-    return await this.files.path_exists(this.instruction_path());
+  /** 永久删除活动 Session。 */
+  async remove_session(session_id: string): Promise<boolean> {
+    const session_path = this.session_path(session_id);
+    const existed = await this.files.path_exists(session_path);
+    if (existed) await this.files.remove_path(session_path);
+    this.sessions.delete(session_id);
+    return existed;
   }
 
-  /** 读取显式 system 快照。 */
-  async read_instruction(): Promise<string | null> {
-    if (!(await this.has_instruction())) return null;
-    return (await this.files.read_file(this.instruction_path())).toString("utf8");
-  }
-
-  /** 写入显式 system 快照。 */
-  async write_instruction(instruction: string): Promise<void> {
-    const instruction_path = get_sdk_agent_session_instruction_path(
+  /** 清空活动 Session Message 数据。 */
+  async clear_session_messages(session_id: string): Promise<boolean> {
+    const messages_path = get_sdk_agent_session_messages_dir_path(
       this.files.root_path,
       this.agent_id,
-      this.session_id,
+      session_id,
     );
-    await this.files.write_file_atomically(instruction_path, instruction);
+    const existed = await this.files.path_exists(messages_path);
+    if (existed) await this.files.remove_path(messages_path);
+    this.sessions.delete(session_id);
+    return existed;
   }
 
-  /** 返回当前 Session instruction.md 的 Workspace 路径。 */
-  private instruction_path(): string {
-    return get_sdk_agent_session_instruction_path(
-      this.files.root_path,
-      this.agent_id,
-      this.session_id,
-    );
+  /** 返回活动 Session 摘要页。 */
+  async list_sessions(
+    input: AgentListSessionsInput | undefined,
+    executing_session_ids: ReadonlySet<string>,
+  ): Promise<AgentSessionSummaryPage> {
+    return await list_agent_session_summary_page({
+      project_root: this.files.root_path,
+      agent_id: this.agent_id,
+      input,
+      executingSessionIds: new Set(executing_session_ids),
+      files: this.files,
+    });
   }
 
-  /** 返回当前 Session meta.json 的 Workspace 路径。 */
-  private metadata_path(): string {
-    return get_sdk_agent_session_meta_path(
+  /** 将活动 Session 迁入归档区。 */
+  async archive_session(session_id: string): Promise<AgentArchiveSessionResult> {
+    const source_path = this.session_path(session_id);
+    if (!(await this.files.path_exists(source_path))) {
+      throw new Error(`Session "${session_id}" not found`);
+    }
+    const target_path = get_sdk_agent_archived_session_dir_path(
       this.files.root_path,
       this.agent_id,
-      this.session_id,
+      session_id,
+    );
+    if (await this.files.path_exists(target_path)) {
+      throw new Error(`Archived session "${session_id}" already exists`);
+    }
+    await this.files.ensure_directory(get_sdk_agent_archived_sessions_dir_path(
+      this.files.root_path,
+      this.agent_id,
+    ));
+    await this.files.move_path(source_path, target_path);
+    this.sessions.delete(session_id);
+    return {
+      session_id: session_id,
+      archived_at: Date.now(),
+    };
+  }
+
+  /** 返回归档 Session 摘要页。 */
+  async list_archived_sessions(
+    input?: AgentArchiveSessionsInput,
+  ): Promise<AgentArchiveSessionsResult> {
+    return await list_archived_agent_session_summary_page({
+      project_root: this.files.root_path,
+      agent_id: this.agent_id,
+      input,
+      files: this.files,
+    });
+  }
+
+  /** 永久删除全部归档 Session。 */
+  async clean_archive(): Promise<AgentCleanArchiveResult> {
+    const archive_path = get_sdk_agent_archived_sessions_dir_path(
+      this.files.root_path,
+      this.agent_id,
+    );
+    if (!(await this.files.path_exists(archive_path))) {
+      return { removed_session_ids: [] };
+    }
+    const entries = await this.files.read_directory(archive_path);
+    const removed_session_ids: string[] = [];
+    for (const entry of entries) {
+      if (!entry.is_directory) continue;
+      const session_id = decode_session_id(entry.name);
+      if (!session_id) continue;
+      await this.files.remove_path(get_sdk_agent_archived_session_dir_path(
+        this.files.root_path,
+        this.agent_id,
+        session_id,
+      ));
+      removed_session_ids.push(session_id);
+    }
+    return { removed_session_ids: removed_session_ids };
+  }
+
+  /** 本地 JSONL Store 当前没有常驻句柄。 */
+  async dispose(): Promise<void> {}
+
+  /** 返回活动 Session 物理目录，仅供本地实现内部使用。 */
+  private session_path(session_id: string): string {
+    return get_sdk_agent_session_dir_path(
+      this.files.root_path,
+      this.agent_id,
+      session_id,
     );
   }
 }

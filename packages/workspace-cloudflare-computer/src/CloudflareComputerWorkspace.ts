@@ -11,7 +11,7 @@ import {
   WorkspaceBase,
 } from "@downcity/agent";
 import type {
-  AgentStore,
+  SessionStore,
   FileSystem,
   WorkspaceDirectoryEntry,
   WorkspaceEnvPatch,
@@ -141,7 +141,7 @@ export class CloudflareComputerWorkspace extends WorkspaceBase {
   readonly shell: Shell | undefined;
   private readonly env: Record<string, string>;
   private readonly env_subscribers = new Set<WorkspaceEnvSubscriber>();
-  private bound_store?: AgentStore;
+  private session_store?: SessionStore;
   private disposed = false;
   private readonly dispose_computer?: CloudflareComputerWorkspaceOptions["dispose"];
 
@@ -196,22 +196,22 @@ export class CloudflareComputerWorkspace extends WorkspaceBase {
     return () => this.env_subscribers.delete(subscriber);
   }
 
-  bind_agent(agent_id: string): AgentStore {
+  create_session_store(agent_id: string): SessionStore {
     const resolved_agent_id = String(agent_id || "").trim();
     if (!resolved_agent_id) {
-      throw new Error("Workspace.bind_agent requires a non-empty agent_id");
+      throw new Error("Workspace.create_session_store requires a non-empty agent_id");
     }
     if (this.disposed) throw new Error("Cannot bind a disposed Workspace");
-    if (this.bound_store) throw new Error("Workspace is already bound to an Agent");
-    const store = this.create_agent_store(resolved_agent_id);
-    this.bound_store = store;
+    if (this.session_store) throw new Error("Workspace is already bound to an Agent");
+    const store = this.create_default_session_store(resolved_agent_id);
+    this.session_store = store;
     return store;
   }
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
     const results = await Promise.allSettled([
-      this.bound_store?.dispose() ?? Promise.resolve(),
+      this.session_store?.dispose() ?? Promise.resolve(),
       this.dispose_computer?.() ?? Promise.resolve(),
     ]);
     const errors = results.flatMap((result) =>

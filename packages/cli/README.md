@@ -9,7 +9,7 @@ downcity -v
 
 安装后会得到 `city` / `downcity` 与 `fed` / `downfed` 两个相互独立的工具：
 
-- `city` 是本机 Agent 宿主，通过 `new City(new LocalCityStore())` 管理本进程内 Agent、运行时、Plugin 与控制台。
+- `city` 是本机 Agent 宿主。CLI 创建自己的 `LocalCityStore`、`LocalCityEnvironment` 和 `City`，由 City 恢复并持有本进程 Agent，同时统一管理 HTTP/RPC transport。
 - `fed` 是 Federation Server Manager；TUI 用于注册和管理 Server，项目命令读取当前目录的 `federation.json`。Local Node.js 和 Cloudflare Workers 都通过 `fed deploy` 部署。
 - `fed web` 在 `127.0.0.1:43128` 启动当前 Federation 的本地 Web 管理 UI；管理员登录后的 Session 只保留在 CLI 本地 BFF 内存中。
 

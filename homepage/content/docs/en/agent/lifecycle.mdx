@@ -21,8 +21,6 @@ const agent = new Agent({
   model,
 });
 
-await agent.ready();
-
 const session = await agent.sessions.create();
 const turn = await session.prompt({ query: "Start" });
 await turn.finished;
@@ -30,6 +28,6 @@ await turn.finished;
 await agent.dispose();
 ```
 
-Sessions wait for Agent readiness before their first execution, so `ready()` is an optional explicit barrier. It is useful before reading plugin state or exposing a transport. `dispose()` stops plugin lifecycle, ActionSchedule, and Shell resources; callers must separately close transports created by `AgentHTTP` or `AgentRPC`.
+Sessions wait for Agent initialization before execution. `dispose()` stops plugin lifecycle, ActionSchedule, and Shell resources; callers must separately close transports created by `AgentHTTP` or `AgentRPC`.
 
 Continue with the [Agent SDK docs](/en/agent-sdk-docs).

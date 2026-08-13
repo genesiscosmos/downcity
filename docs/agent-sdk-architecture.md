@@ -35,20 +35,20 @@ flowchart TD
 
     Workspace --> Files["LocalFileSystem"]
     Workspace --> WorkspaceTools["File / Search Tools"]
-    Workspace --> AgentStore["LocalAgentStore"]
+    Workspace --> SessionStore["LocalSessionStore"]
     Workspace --> Shell["Shell（可选）"]
 
     Shell --> ShellTools["Shell Tools"]
     Shell --> Sandbox["Platform Sandbox Adapter"]
 
-    Agent --> AgentState["AgentState"]
+    Agent --> AgentRuntime["AgentRuntime（内部）"]
     Agent --> Plugins["PluginRegistry"]
     Agent --> Sessions["AgentSessions"]
     Agent -.-> Context["PluginContext（仅 Plugin 投影）"]
 
     Sessions --> Session["Session"]
-    AgentStore --> SessionStore["LocalSessionStore"]
-    Session --> SessionStore
+    SessionStore --> SessionDataStore["LocalSessionDataStore"]
+    Session --> SessionDataStore
     Session --> Messages["SessionMessages"]
     Session --> Loop["SessionLoop"]
     Session --> Composer["SessionComposer"]
@@ -74,7 +74,7 @@ flowchart TD
 
 Workspace
   → FileSystem
-  → AgentStore
+  → SessionStore
   → Shell（可选）
 ```
 
@@ -82,7 +82,7 @@ Workspace
 
 - `LocalFileSystem` 不知道 Agent、Session 和 Plugin。
 - `Shell` 不知道 Session 历史和模型。
-- `AgentStore` 不知道模型和 Tool Loop。
+- `SessionStore` 不知道模型和 Tool Loop。
 - `Executor` 不知道物理存储路径。
 - Sandbox Adapter 不知道 Agent 业务，只负责启动受限进程。
 
@@ -137,7 +137,7 @@ packages/agent/src/
 ├─ agent/
 │  ├─ Agent.ts                 本地 Agent facade 与组合根
 │  ├─ PluginContext.ts          向 Plugin 和内部运行时投影稳定能力
-│  ├─ AgentState.ts            Plugin 与调度器长期生命周期
+│  ├─ AgentRuntime.ts          Plugin 与调度器的内部生命周期
 │  ├─ AgentSessions.ts         Session 集合、缓存和生命周期
 │  ├─ AgentModel.ts            模型实例规范化
 │  └─ ExecutionBinding.ts      执行目标配置校验
@@ -205,7 +205,7 @@ class Workspace {
   get_env(): Record<string, string>;
   set_env(next: WorkspaceEnvPatch): void;
   patch_env(patch: WorkspaceEnvPatch): void;
-  bind_agent(agent_id: string): AgentStore;
+  create_session_store(agent_id: string): SessionStore;
   dispose(): Promise<void>;
 }
 ```
@@ -215,12 +215,12 @@ class Workspace {
 - `tools`：默认 File/Search Tools，加上可选 Shell Tools。
 - `get_env/set_env/patch_env`：读取和修改 Workspace 执行环境。
 - `shell`：可选命令能力。
-- `bind_agent()`：为唯一 Agent 创建 Store。
+- `create_session_store()`：为唯一 Agent 创建 Store。
 - `dispose()`：统一释放 Store、Shell、进程和 Sandbox 资源。
 
 ### 5.3 一 Workspace 实例绑定一 Agent
 
-Workspace 实例只允许调用一次 `bind_agent()`。原因不是物理目录不能共享，而是生命周期所有权必须唯一：
+Workspace 实例只允许调用一次 `create_session_store()`。原因不是物理目录不能共享，而是生命周期所有权必须唯一：
 
 ```text
 一个 Workspace 实例 → 一个 Agent → 一次 dispose
@@ -254,7 +254,7 @@ Workspace 只持有与项目资源直接相关的能力，不吸收：
 
 因此不需要额外的 `Host` 或 `SystemHandler`。这些对象没有独立领域语义，只会增加转发和耦合。
 
-## 6. FileSystem、WorkspaceTools 与 AgentStore
+## 6. FileSystem、WorkspaceTools 与 SessionStore
 
 这三者共用 Workspace，但职责不同。
 
@@ -268,7 +268,7 @@ Workspace 只持有与项目资源直接相关的能力，不吸收：
 - 跨进程 lock file。
 - 有界文件与搜索操作。
 
-它是 Agent Core 的最低文件能力，也是 AgentStore 的底层原子能力。
+它是 Agent Core 的最低文件能力，也是 SessionStore 的底层原子能力。
 
 ### 6.2 WorkspaceTools
 
@@ -281,12 +281,12 @@ WorkspaceTools 是 Workspace 提供给 Agent 注册的 AI SDK Tools：
 
 结构化 File/Search Tools 始终限制在 Workspace 根目录内。它们不提供 unrestricted 模式。
 
-### 6.3 AgentStore
+### 6.3 SessionStore
 
-AgentStore 不是第二套权限系统，而是 Workspace 文件能力上的领域分支：
+SessionStore 不是第二套权限系统，而是 Workspace 文件能力上的领域分支：
 
 - 负责 Agent/Session 路径布局。
-- 创建稳定的 SessionStore。
+- 创建稳定的 SessionDataStore。
 - 管理 Session 列表、删除、归档和清理。
 - 管理 Message sequence、revision、Segment 和崩溃恢复。
 
@@ -303,29 +303,26 @@ sequenceDiagram
     participant App as 调用方
     participant W as Workspace
     participant A as Agent
-    participant S as AgentStore
+    participant S as SessionStore
     participant P as PluginRegistry
-    participant AS as AgentState
+    participant AR as AgentRuntime
 
     App->>W: new Workspace({ path, shell, env })
     W->>W: 解析目录，创建 FileSystem、Env 和 WorkspaceTools
     App->>A: new Agent({ id, workspace, ... })
     A->>A: 注册 Workspace、Plugin 与自定义 Tools
-    A->>W: bind_agent(id)
-    W-->>A: LocalAgentStore
+    A->>W: create_session_store(id)
+    W-->>A: LocalSessionStore
     A->>A: 装配 instruction、model、logger
     A->>P: 注册 Plugin
     A->>A: 创建 AgentSessions 与 PluginContext
-    A->>AS: 启动长期运行状态
-    AS->>P: 启动 Plugin lifecycle
-    AS->>AS: 启动 ActionSchedule
+    A->>AR: 启动内部长期运行时
+    AR->>P: 启动 Plugin lifecycle
+    AR->>AR: 启动 ActionSchedule
 ```
 
-构造完成后长期运行时立即开始启动。需要确认 Plugin 与 Schedule 已就绪时调用：
-
-```ts
-await agent.ready();
-```
+构造完成后长期运行时立即开始启动。Session 第一次执行会等待内部初始化屏障，调用方
+不需要也不能显式管理 Agent 的启动状态。
 
 ### 7.2 Agent 持有的状态
 
@@ -584,7 +581,7 @@ Plugin 属于 Agent，不属于 Workspace。Workspace 不替 Plugin 管理其全
 ### 12.1 生命周期
 
 - Agent 构造时注册显式传入的 Plugin 实例。
-- AgentState 启动所有 Plugin lifecycle。
+- AgentRuntime 启动所有 Plugin lifecycle。
 - 单个 Plugin 启动失败只隔离自身，不阻断其他 Plugin 和 Agent ready。
 - 动态注册或卸载会广播到现有 Session。
 - 正在执行的 Step 使用稳定 execution view；变化在后续检查点生效。
@@ -613,7 +610,7 @@ ActionSchedule 是 Agent 内部的延迟 Plugin Action 调度能力，不是独�
 
 `WorkspaceBase` 定义 Agent 所需的 Workspace 资源契约；`Workspace` 仍是本地文件系统实现。
 `@downcity/workspace-cloudflare-computer` 通过继承 `WorkspaceBase` 接入 Cloudflare Computer 的
-Durable Object 虚拟文件系统，并复用 AgentStore 的领域接口。
+Durable Object 虚拟文件系统，并复用 SessionStore 的领域接口。
 
 Cloudflare Computer 的文件、目录与发布 Tool 由适配器内部调用官方 `createAITools()` 创建，Shell 则由适配器包装为 `exec` Tool。
 适配器不把 Worker RPC、Container 或 Dynamic Worker 的实现细节引入 `@downcity/agent`。
@@ -727,8 +724,7 @@ const agent = new RemoteAgent({
 flowchart LR
     Construct["new Agent"] --> StartPlugins["启动 Plugin lifecycle"]
     StartPlugins --> StartSchedule["启动 ActionSchedule"]
-    StartSchedule --> Ready["agent.ready()"]
-    Ready --> Running["创建/恢复 Session 并执行"]
+    StartSchedule --> Running["Session 执行等待内部初始化屏障"]
     Running --> Dispose["agent.dispose()"]
     Dispose --> StopSchedule["停止 ActionSchedule"]
     StopSchedule --> StopPlugins["卸载 Plugin"]
@@ -764,7 +760,6 @@ const agent = new Agent({
 });
 
 try {
-  await agent.ready();
   const session = await agent.sessions.create();
   const turn = await session.prompt({ query: "先理解项目结构" });
   console.log(await turn.finished);
@@ -862,7 +857,7 @@ Env、Plugin、Model 和 compact 等变化通过 Session Queue 在 Step 边界�
 对应最简结构：
 
 ```text
-Workspace = Files + Env + WorkspaceTools + AgentStore + Shell?
+Workspace = Files + Env + WorkspaceTools + SessionStore + Shell?
 
 Agent = Workspace + Model + Instruction + Plugins + Sessions
 

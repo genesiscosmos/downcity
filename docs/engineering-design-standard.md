@@ -110,7 +110,7 @@ Downcity 的工程目标不是追求最多的抽象、最强的限制或最通�
 优先组合职责明确的对象：
 
 ```text
-Workspace = Files + Env + WorkspaceTools + AgentStore + Shell?
+Workspace = Files + Env + WorkspaceTools + SessionStore + Shell?
 
 Agent = Workspace + Model + Instruction + Plugins + Sessions
 
@@ -144,7 +144,7 @@ Shell = Command/Process Protocol + Sandbox Adapter
 - SessionMessages 是会话消息的 canonical source。
 - Workspace 持有 Workspace env，Agent 不复制另一份 env。
 - PluginRegistry 持有已注册 Plugin，Agent 只组合和暴露。
-- AgentStore 基于 Workspace FileSystem 实现持久化，不绕开 Workspace 另建文件通道。
+- SessionStore 基于 Workspace FileSystem 实现持久化，不绕开 Workspace 另建文件通道。
 - 运行中状态通过事件或 getter 投影，不能在 Context 中复制后长期漂移。
 
 缓存可以存在，但必须明确：
@@ -194,7 +194,7 @@ Workspace 统一持有一个 Agent 可以使用的项目资源：
 - Rooted FileSystem。
 - 文件与搜索工具。
 - Workspace env。
-- AgentStore。
+- SessionStore。
 - 可选 Shell。
 
 Workspace 不负责：
@@ -263,7 +263,7 @@ Shell 不应该吸收：
 
 - 通用文件系统。
 - Session 历史。
-- AgentStore。
+- SessionStore。
 - 模型、Plugin 或业务配置。
 - 所谓全能 `system_handler`。
 
@@ -413,8 +413,8 @@ Store 基于 Workspace 提供的 FileSystem 原子能力实现 Agent/Session 结
 
 ```text
 Workspace 提供资源与文件原语
-  → AgentStore 定义 Agent 存储语义
-  → SessionStore 定义 Session 存储语义
+  → SessionStore 定义 Session 集合存储语义
+  → SessionDataStore 定义单个 Session 存储语义
   → MessageStore 定义消息提交与恢复语义
 ```
 
@@ -451,7 +451,7 @@ Store 不应绕开 Workspace 自行访问另一套根目录，也不应限制 Ag
 
 - 模型 Provider 错误由 Executor/恢复策略处理。
 - Message 写入失败由 SessionMessages 暴露并阻止伪完成。
-- Plugin lifecycle 失败由 AgentState 隔离和记录。
+- Plugin lifecycle 失败由 Agent 内部运行时隔离和记录。
 - Shell/Sandbox 启动失败由 Shell 返回明确错误，不能静默降级为 unrestricted。
 - daemon 身份不一致由 CLI 拒绝终止进程。
 

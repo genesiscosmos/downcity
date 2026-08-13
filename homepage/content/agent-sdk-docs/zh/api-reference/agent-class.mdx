@@ -8,7 +8,6 @@ description: 本地 Agent SDK 的核心公开接口
 本地 `Agent` 的核心公开使用面包括：
 
 - `new Agent(options)`
-- `agent.ready()`
 - `agent.dispose()`
 - `agent.sessions`
 - `agent.get_logger()`
@@ -78,11 +77,11 @@ workspace.patch_env({
 });
 ```
 
-## `ready()` 和 `dispose()`
+## 构造与 `dispose()`
 
 `new Agent(...)` 之后，plugin lifecycle 与 ActionSchedule 会自动启动。
 
-- `await agent.ready()`：等待 Plugin lifecycle 与 ActionSchedule 启动完成。session 入口在模型执行前会等待当前 Agent 就绪；需要显式检查点时再直接调用。
+- Session 执行会在内部等待 Plugin lifecycle 与 ActionSchedule 启动完成。
 - `await agent.dispose()`：停止 plugin lifecycle、ActionSchedule、shell 等 Agent 自有运行时资源。
 
 ## RPC / HTTP 暴露

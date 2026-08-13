@@ -23,6 +23,12 @@ importers:
       '@downcity/city':
         specifier: workspace:^
         version: link:../../packages/city
+      '@downcity/federation':
+        specifier: workspace:^
+        version: link:../../packages/federation
+      '@downcity/plugins':
+        specifier: workspace:^
+        version: link:../../packages/plugins
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.1
@@ -320,12 +326,6 @@ importers:
       '@downcity/agent':
         specifier: workspace:^
         version: link:../agent
-      '@downcity/federation':
-        specifier: workspace:^
-        version: link:../federation
-      '@downcity/plugins':
-        specifier: workspace:^
-        version: link:../plugins
       '@downcity/shell':
         specifier: workspace:^
         version: link:../shell

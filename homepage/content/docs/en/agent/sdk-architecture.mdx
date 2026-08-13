@@ -29,7 +29,7 @@ flowchart TD
 
     Workspace --> Files["LocalFileSystem"]
     Workspace --> WorkspaceTools["WorkspaceTools<br/>File / Search / Shell?"]
-    Workspace --> Store["AgentStore"]
+    Workspace --> Store["SessionStore"]
     Workspace --> Env["Env"]
     Workspace --> Shell["Shell (optional)"]
     Shell --> Sandbox["Platform Sandbox Adapter"]
@@ -68,7 +68,7 @@ It provides:
 - `files`: atomic file capabilities rooted in the Workspace.
 - `tools`: File, Search, and optional Shell Tools.
 - `get_env()`, `set_env()`, and `patch_env()`: the Workspace execution environment.
-- `AgentStore`: structured Session and Message storage.
+- `SessionStore`: structured storage for the Session collection and individual Session data.
 - `dispose()`: release Store, Shell, process, and Sandbox resources.
 
 Workspace is not a `Host`, `SystemHandler`, or general-purpose service container. Models, the Plugin registry, Session lifecycle, and network transports do not belong to it.
@@ -97,7 +97,7 @@ caller creates Workspace → Agent binds Workspace → agent.dispose() releases 
 
 ### LocalFileSystem
 
-LocalFileSystem is a rooted Node.js file capability. It handles safe path resolution, file operations, atomic replacement, cross-process locks, and bounded search. It is the primitive used by both WorkspaceTools and AgentStore.
+LocalFileSystem is a rooted Node.js file capability. It handles safe path resolution, file operations, atomic replacement, cross-process locks, and bounded search. It is the primitive used by both WorkspaceTools and SessionStore.
 
 ### WorkspaceTools
 
@@ -109,9 +109,12 @@ WorkspaceTools are model-callable tools returned by Workspace and registered by 
 
 Plugin tools and host-defined custom tools do not belong to WorkspaceTools. File/Search always remain rooted in the Workspace and do not expose an unrestricted mode.
 
-### AgentStore
+### SessionStore
 
-AgentStore is not a second permission system. It is a domain-specific branch over the same FileSystem, responsible for path layout, Session lists, Message sequences and revisions, archival, compaction, and crash recovery.
+SessionStore is not a second permission system. It is a domain-specific branch over the same
+FileSystem. The collection-level `SessionStore` manages Session listing and archives, while each
+`SessionDataStore` manages messages, metadata, instructions, and attachments. Neither stores Agent
+configuration nor participates in Agent instance assembly.
 
 Workspace file tools may still read and edit `.downcity`. Store adds structured semantics and consistency; it does not hide history or instructions.
 
@@ -160,7 +163,7 @@ The SDK does not mutate `process.env` or write runtime changes back to `.env`. `
 
 `@downcity/workspace-cloudflare-computer` connects a Cloudflare Durable Object
 `@cloudflare/computer` Workspace to the same Agent Workspace base contract. It
-provides the remote virtual filesystem to AgentStore and owns the Workspace
+provides the remote virtual filesystem to SessionStore and owns the Workspace
 lifecycle; the adapter calls Cloudflare's `createAITools()` for file, directory, and publish tools, and wraps the
 Computer Shell as `exec`. The Agent still owns the model, Sessions, Plugins, and Tool Loop.
 
@@ -238,7 +241,6 @@ const agent = new Agent({
 });
 
 try {
-  await agent.ready();
   const session = await agent.sessions.create();
   const turn = await session.prompt({ query: "Understand and inspect this project" });
   console.log(await turn.finished);

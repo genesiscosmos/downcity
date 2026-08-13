@@ -8,8 +8,9 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { Agent, RemoteAgent, Workspace } from "../../agent/bin/index.js";
+import { Agent, RemoteAgent } from "../../agent/bin/index.js";
 import { City, CityHTTP, CityRPC, MemoryCityStore } from "../bin/index.js";
+import { create_agent_config, TestCityEnvironment } from "./TestCityEnvironment.mjs";
 
 const network_tests_enabled = process.env.DOWNCITY_RUN_NETWORK_TESTS === "1";
 
@@ -31,15 +32,11 @@ async function create_city() {
     fs.mkdir(path.join(root, "first")),
     fs.mkdir(path.join(root, "second")),
   ]);
-  const first = new Agent({
-    id: "first_agent",
-    workspace: new Workspace({ path: path.join(root, "first") }),
-  });
-  const second = new Agent({
-    id: "second_agent",
-    workspace: new Workspace({ path: path.join(root, "second") }),
-  });
-  const city = new City(new MemoryCityStore([first, second]));
+  const configs = [
+    create_agent_config("first_agent", path.join(root, "first")),
+    create_agent_config("second_agent", path.join(root, "second")),
+  ];
+  const city = new City(new MemoryCityStore(configs), new TestCityEnvironment());
   await city.ready();
   return { city, root };
 }
@@ -69,6 +66,36 @@ test("CityHTTP mounts each Agent below its stable ID", async () => {
     assert.deepEqual((await second_list.json()).sessions, []);
     assert.equal(
       (await transport.router().request("/agents/missing/api/sdk/sessions")).status,
+      404,
+    );
+  } finally {
+    await transport.close();
+    await city.dispose();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("CityHTTP 动态识别运行中新增和删除的 Agent", async () => {
+  const { city, root } = await create_city();
+  const transport = new CityHTTP(city);
+  try {
+    transport.router();
+    const config = create_agent_config("third_agent", path.join(root, "third"));
+    const environment = new TestCityEnvironment();
+    const agent = new Agent(await environment.create_agent_options(config));
+    await city.add(agent);
+    const created = await transport.router().request(
+      "/agents/third_agent/api/sdk/sessions",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ session_id: "dynamic-session" }),
+      },
+    );
+    assert.equal(created.status, 200);
+    await city.remove("third_agent");
+    assert.equal(
+      (await transport.router().request("/agents/third_agent/api/sdk/sessions")).status,
       404,
     );
   } finally {

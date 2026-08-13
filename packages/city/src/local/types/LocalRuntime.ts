@@ -1,5 +1,5 @@
 /**
- * LocalCityStore 运行时装配类型。
+ * 本地 CityEnvironment 运行时装配类型。
  *
  * 这些类型描述宿主注入的模型解析能力和本地 Plugin constructor，不包含持久化记录。
  */
@@ -9,20 +9,29 @@ import type {
   LocalPluginManifest,
   LocalPluginResourceItem,
 } from "@/local/types/LocalPlugin.js";
-import type { LocalCityStoreOptions } from "@/local/types/LocalCity.js";
+import type { LocalCityDataSource } from "@/local/types/LocalCityDataSource.js";
 
-/** LocalCityStore 构造参数。 */
-export interface LocalCityStoreRuntimeOptions extends LocalCityStoreOptions {
-  /** 覆盖默认 Embassy AI 模型创建逻辑的宿主模型解析器。 */
+/** LocalCityEnvironment 构造参数。 */
+export interface LocalCityEnvironmentOptions {
+  /** Downcity 用户级数据根目录；默认使用 `~/.downcity`。 */
+  root_path?: string;
+
+  /** Plugin 运行时装配使用的只读持久化数据源。 */
+  data_source?: LocalCityDataSource;
+
+  /** 根据模型 ID 创建运行时模型的宿主能力。 */
   model_resolver?: LocalModelResolver;
+
+  /** 当前宿主提供的官方或应用级 Plugin constructor。 */
+  plugin_types?: readonly LocalPluginType[];
 }
 
-/** 本地 Store 根据模型 ID 和完整环境创建可执行模型的能力。 */
+/** 本地 Environment 根据模型 ID 和完整环境创建可执行模型的能力。 */
 export type LocalModelResolver = (
-  /** Agent 持久化配置中记录的模型 ID。 */
+  /** Agent 产品配置中记录的模型 ID。 */
   model_id: string,
   /** 当前 Agent 与 Workspace 合并后的完整环境变量。 */
-  env: NodeJS.ProcessEnv,
+  env: Readonly<Record<string, string>>,
 ) => Promise<AgentModel>;
 
 /** 本地 Plugin constructor 的统一输入。 */

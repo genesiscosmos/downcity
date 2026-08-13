@@ -6,6 +6,17 @@
  */
 
 import type { AgentSessionModelResolver } from "@/transport/types/AgentSessionModelResolver.js";
+import type { Agent } from "@downcity/agent";
+import type { Hono } from "hono";
+
+/** 宿主为一个 Agent 提供的 HTTP 扩展。 */
+export interface CityAgentHttpExtension {
+  /** 已组合 SDK Router 的 Agent 子路由。 */
+  router: Hono;
+
+  /** CityHTTP 关闭时需要同步释放的宿主资源。 */
+  dispose?(): void | Promise<void>;
+}
 
 /** City HTTP transport 所需的宿主能力。 */
 export interface CityHttpRuntimeOptions {
@@ -14,4 +25,15 @@ export interface CityHttpRuntimeOptions {
     agent_id: string,
     model_id: string,
   ) => ReturnType<AgentSessionModelResolver>;
+
+  /** 为一个 Agent 组合 Auth、控制台和应用专属路由。 */
+  create_agent_extension?: (input: {
+    /** 当前路由对应的本地 Agent。 */
+    agent: Agent;
+    /** City 提供的标准 RemoteAgent SDK Router。 */
+    sdk_router: Hono;
+  }) => CityAgentHttpExtension;
+
+  /** 挂载到 City HTTP 根路径的宿主扩展 Router。 */
+  city_router?: Hono;
 }

@@ -186,13 +186,13 @@ When Downcity is installed on macOS, core packages contain portable TypeScript/J
 flowchart LR
     Construct["new Agent"] --> Plugins["start Plugin lifecycle"]
     Plugins --> Schedule["start ActionSchedule"]
-    Schedule --> Ready["agent.ready()"]
-    Ready --> Running["create or restore Sessions"]
+    Schedule --> Barrier["internal initialization barrier"]
+    Barrier --> Running["execute Sessions"]
     Running --> Dispose["agent.dispose()"]
     Dispose --> Workspace["Workspace.dispose()"]
     Workspace --> Shell["close processes and Sandbox"]
 ```
 
-`ready()` is an optional explicit readiness barrier; Sessions also wait before their first execution. `dispose()` releases Agent, Plugin, Schedule, Workspace, and Shell resources, but it does not close HTTP/RPC transports created by `@downcity/city`.
+Sessions wait on the internal initialization barrier before execution. `dispose()` releases Agent, Plugin, Schedule, Workspace, and Shell resources, but it does not close HTTP/RPC transports created by `@downcity/city`.
 
 Continue with [Agent Lifecycle](/en/docs/agent/lifecycle).

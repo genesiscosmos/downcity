@@ -5,7 +5,7 @@
  * 独立记录；连接时读取 Agent 的持久化绑定，不启动 CLI daemon，也不经过本机 RPC。
  */
 
-import type { Agent, SessionMessage } from "@downcity/agent";
+import { Agent, type SessionMessage } from "@downcity/agent";
 import {
   City,
   LocalCityStore,
@@ -20,16 +20,20 @@ import type {
   DesktopSessionSummary,
   DesktopWorkspaceSummary,
 } from "../../common/types/DesktopApi.js";
+import { create_desktop_city_environment } from "./DesktopCityEnvironment.js";
 
 /** Electron main 内的 native Agent 生命周期控制器。 */
 export class AgentController {
   /** Desktop 进程拥有的全部 native Agent。 */
   private readonly store = new LocalCityStore();
 
-  /** Desktop 进程拥有的全部 native Agent。 */
-  private readonly city = new City(this.store);
+  /** Desktop 进程提供的平台运行环境。 */
+  private readonly environment = create_desktop_city_environment(this.store);
 
-  /** City 是否已经完成本地 Agent 恢复。 */
+  /** Desktop 进程拥有的全部 native Agent。 */
+  private readonly city = new City(this.store, this.environment);
+
+  /** City 是否已经完成本地 Agent 装配。 */
   private ready_promise = this.city.ready();
 
   /** 当前运行 Agent 实际使用的 Workspace。 */
@@ -60,22 +64,25 @@ export class AgentController {
     if (!normalized_workspace_path) throw new Error("workspace_path is required");
     await this.ready_promise;
     const workspace = this.store.ensure_workspace({ workspace_path: normalized_workspace_path });
-    const agent = await this.store.new_agent({
+    const config = this.store.create_agent_config({
       agent_id,
       version: "1.0.0",
-      workspace_id: workspace.workspace_id,
-      workspace_path: workspace.workspace_path,
-      workspace_name: workspace.name,
       execution: { type: "api", model_id: normalized_model_id },
-      plugins: [],
     });
+    this.store.bind_agent_workspace(config.agent_id, workspace.workspace_id);
+    const agent_config = (await this.store.load_agent_configs())
+      .find((item) => item.agent_id === config.agent_id);
+    if (!agent_config) {
+      throw new Error(`Agent config is not available for assembly: ${config.agent_id}`);
+    }
+    const agent = new Agent(await this.environment.create_agent_options(agent_config));
     await this.city.add(agent);
     return {
       agent: to_desktop_agent_summary({
         agent_id: agent.id,
         workspace_id: workspace.workspace_id,
-        version: agent.definition?.version || "1.0.0",
-        execution: agent.definition?.execution,
+        version: config.version,
+        execution: config.execution,
       }),
       workspace: to_desktop_workspace_summary(workspace),
     };
@@ -90,20 +97,8 @@ export class AgentController {
     const workspace = this.store.get_workspace_config(config.workspace_id);
     if (!workspace) throw new Error(`Agent Workspace is not registered: ${config.workspace_id}`);
 
-    const current_agent = this.city.agent(config.agent_id);
-
-    if (!current_agent) {
-      const restored_agent = await this.store.new_agent({
-        agent_id: config.agent_id,
-        workspace_id: workspace.workspace_id,
-        workspace_path: workspace.workspace_path,
-        workspace_name: workspace.name,
-        version: config.version,
-        execution: config.execution,
-        llm: config.llm,
-        plugins: config.plugins,
-      });
-      await this.city.add(restored_agent);
+    if (!this.city.agent(config.agent_id)) {
+      throw new Error(`Agent is not available in Desktop City: ${config.agent_id}`);
     }
 
     const workspace_summary = to_desktop_workspace_summary(workspace);

@@ -16,7 +16,7 @@ import {
   type AgentSessionSummary,
   type RemoteAgentSession,
 } from "@downcity/agent";
-import { City, LocalCityStore } from "@downcity/city";
+import { City, LocalCityStore, type LocalCityEnvironment } from "@downcity/city";
 import { resolveDaemonRpcEndpoint } from "@/city/process/daemon/Client.js";
 import {
   is_process_alive,
@@ -31,6 +31,7 @@ import {
 } from "@/city/agent/AgentChatTypes.js";
 import { listPlatformModelChoices } from "@/city/runtime/city-model/ExecutionModelBinding.js";
 import type { AgentChatModelChoice } from "@/city/types/AgentChatModel.js";
+import { create_cli_city_environment } from "@/city/runtime/LocalCityEnvironment.js";
 
 /**
  * 远端访问目标。
@@ -88,12 +89,13 @@ export async function createRemoteAgent(params: {
   const meta = pid && is_process_alive(pid) ? await read_daemon_meta() : null;
   if (!meta?.agent_ids.includes(params.agent_id)) {
     const store = new LocalCityStore({ agent_ids: [params.agent_id] });
-    const city = new City(store);
+    const environment = create_cli_city_environment({ data_source: store });
+    const city = new City(store, environment);
     try {
       await city.ready();
       const agent = city.require_agent(params.agent_id);
       return {
-        sessions: create_local_chat_sessions(agent.sessions, store),
+        sessions: create_local_chat_sessions(agent.sessions, environment, () => agent.workspace.get_env()),
         close: async () => await city.dispose(),
       };
     } catch (error) {
@@ -110,7 +112,8 @@ export async function createRemoteAgent(params: {
 /** 把本地 Session 的模型实例输入适配为 RemoteSession 的 model_id 输入。 */
 function create_local_chat_sessions(
   sessions: AgentSessions<AgentSession>,
-  store: LocalCityStore,
+  environment: LocalCityEnvironment,
+  get_env: () => Readonly<Record<string, string>>,
 ): AgentSessions<RemoteAgentSession> {
   const wrap = (session: AgentSession): RemoteAgentSession => ({
     id: session.id,
@@ -128,7 +131,9 @@ function create_local_chat_sessions(
       input: RemoteSessionSetInput,
       options?: AgentSessionSetOptions,
     ) => await session.set({
-      ...(input.model_id ? { model: await store.create_model(input.model_id) } : {}),
+      ...(input.model_id ? {
+        model: await environment.resolve_model(input.model_id, get_env()),
+      } : {}),
       ...(input.security ? { security: input.security } : {}),
     }, options),
     fork: async (input) => wrap(await session.fork(input)),

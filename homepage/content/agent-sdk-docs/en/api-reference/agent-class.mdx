@@ -8,7 +8,6 @@ description: The core public API of the local Agent SDK
 The local `Agent` exposes the following main public API:
 
 - `new Agent(options)`
-- `agent.ready()`
 - `agent.dispose()`
 - `agent.sessions`
 - `agent.get_logger()`
@@ -54,11 +53,11 @@ Full project and Plugin configuration belongs to an upstream host such as the CL
 
 Environment belongs to Workspace rather than Agent. Workspace reads the project `.env`, then applies explicit constructor `env` overrides. Use `workspace.get_env()`, `workspace.set_env(next)`, and `workspace.patch_env(patch)` to manage it. Existing Sessions commit changes at the next step checkpoint; an in-flight provider request and its tools keep the already effective snapshot.
 
-## `ready()` and `dispose()`
+## Construction and `dispose()`
 
 After `new Agent(...)`, plugin lifecycle and ActionSchedule start automatically.
 
-- `await agent.ready()` waits for Plugin lifecycle and ActionSchedule startup. Session entry points already wait for the current Agent before model execution; call `ready()` when you need an explicit checkpoint.
+- Session execution waits for Plugin lifecycle and ActionSchedule startup internally.
 - `await agent.dispose()` stops plugin lifecycle, ActionSchedule, and shell.
 
 ## RPC and HTTP exposure

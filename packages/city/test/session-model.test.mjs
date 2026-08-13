@@ -75,7 +75,6 @@ test("RPC resolves model_id through the host and queues compact", async () => {
     url: `rpc://127.0.0.1:${port}`,
   });
   try {
-    await agent.ready();
     await rpc.listen({ host: "127.0.0.1", port });
     const session = await remote_agent.sessions.create({
       session_id: "rpc-model-session",
@@ -108,7 +107,6 @@ test("RPC rejects remote model switching when the host has no resolver", async (
   const port = await reserve_port();
   const remote_agent = new RemoteAgent({ url: `rpc://127.0.0.1:${port}` });
   try {
-    await agent.ready();
     await rpc.listen({ host: "127.0.0.1", port });
     const session = await remote_agent.sessions.create({ session_id: "resolver-required" });
     await assert.rejects(
@@ -138,7 +136,6 @@ test("internal RPC 让宿主重新加载 Workspace Env", async () => {
   });
   const port = await reserve_port();
   try {
-    await agent.ready();
     await rpc.listen({ host: "127.0.0.1", port });
     const frame = await send_rpc_request(port, {
       id: "reload-env",

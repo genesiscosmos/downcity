@@ -32,7 +32,7 @@ import { Session } from "@/session/Session.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import { create_instruction_system_blocks } from "@/agent/AgentInstructions.js";
 import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.js";
-import type { AgentStore } from "@/types/store/AgentStore.js";
+import type { SessionStore } from "@/types/store/SessionStore.js";
 
 type AgentSessionsOptions = {
   /**
@@ -46,7 +46,7 @@ type AgentSessionsOptions = {
   workspace_path: string;
 
   /** 当前 Agent 独享的领域持久化入口。 */
-  store: AgentStore;
+  store: SessionStore;
 
   /**
    * 当前 agent 默认工具集合。
@@ -89,7 +89,7 @@ type AgentSessionsOptions = {
 export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly agent_id: string;
   private readonly workspace_path: string;
-  private readonly store: AgentStore;
+  private readonly store: SessionStore;
   private readonly tools: Record<string, Tool>;
   private readonly logger: Logger;
   private readonly get_instruction: AgentSessionsOptions["get_instruction"];

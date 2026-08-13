@@ -6,7 +6,7 @@
 
 import type { JsonObject } from "@/types/common/Json.js";
 import type { SessionRecordV1 } from "@/executor/types/SessionRecords.js";
-import type { SessionMessageStore } from "@/types/store/SessionStore.js";
+import type { SessionMessageStore } from "@/types/store/SessionDataStore.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type {
