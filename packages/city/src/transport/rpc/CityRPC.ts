@@ -13,6 +13,7 @@ import type {
   AgentRpcListenOptions,
 } from "@/transport/types/AgentRpcBinding.js";
 import type { CityRpcRuntimeOptions } from "@/transport/types/CityRpcRuntime.js";
+import { SerializedTransport } from "@/transport/SerializedTransport.js";
 
 const DEFAULT_RPC_HOST = "127.0.0.1";
 const DEFAULT_RPC_PORT = 15314;
@@ -21,20 +22,34 @@ const DEFAULT_RPC_PORT = 15314;
 export class CityRPC {
   private readonly city: City;
   private readonly runtime_options: CityRpcRuntimeOptions;
-  private rpc_instance: RpcServerInstance | null = null;
-  private current_binding: AgentRpcBinding | null = null;
-  private start_promise: Promise<AgentRpcBinding> | null = null;
+  /** 当前 City RPC Server 的唯一串行生命周期。 */
+  private readonly lifecycle: SerializedTransport<
+    AgentRpcListenOptions | undefined,
+    RpcServerInstance,
+    AgentRpcBinding
+  >;
 
   constructor(city: City, runtime_options: CityRpcRuntimeOptions = {}) {
     this.city = city;
     this.runtime_options = runtime_options;
+    this.lifecycle = new SerializedTransport({
+      start: async (options) => await this.start_server(options),
+      stop: async (instance) => await instance.stop(),
+    });
   }
 
   /** 监听 City 级 RPC 端口。 */
   async listen(options?: AgentRpcListenOptions): Promise<AgentRpcBinding> {
-    if (this.start_promise) return await this.start_promise;
-    if (this.current_binding) return this.current_binding;
-    this.start_promise = (async () => {
+    return await this.lifecycle.listen(options);
+  }
+
+  /** 创建并启动 City RPC Server。 */
+  private async start_server(options?: AgentRpcListenOptions): Promise<{
+    /** 已启动的底层 RPC Server。 */
+    resource: RpcServerInstance;
+    /** 当前 RPC 监听地址。 */
+    binding: AgentRpcBinding;
+  }> {
       const host = String(options?.host || DEFAULT_RPC_HOST).trim() || DEFAULT_RPC_HOST;
       const port = Number.isInteger(options?.port) ? Number(options?.port) : DEFAULT_RPC_PORT;
       const fallback_agent = this.city.agents()[0];
@@ -72,28 +87,20 @@ export class CityRPC {
           };
         },
       });
-      this.rpc_instance = instance;
-      this.current_binding = { url: instance.url, host: instance.host, port: instance.port };
-      return this.current_binding;
-    })();
-    try {
-      return await this.start_promise;
-    } finally {
-      this.start_promise = null;
-    }
+    return {
+      resource: instance,
+      binding: { url: instance.url, host: instance.host, port: instance.port },
+    };
   }
 
   /** 幂等关闭 RPC Server 与全部长连接。 */
   async close(): Promise<void> {
-    const instance = this.rpc_instance;
-    this.rpc_instance = null;
-    this.current_binding = null;
-    if (instance) await instance.stop();
+    await this.lifecycle.close();
   }
 
   /** 返回当前绑定；尚未监听时返回 null。 */
   binding(): AgentRpcBinding | null {
-    return this.current_binding;
+    return this.lifecycle.binding();
   }
 }
 

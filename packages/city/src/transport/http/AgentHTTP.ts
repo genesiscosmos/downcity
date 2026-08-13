@@ -14,6 +14,7 @@ import type { Agent } from "@downcity/agent";
 import { registerSdkSessionRoutes } from "@/transport/http/routes/SessionRoutes.js";
 import { registerRuntimeRoutes } from "@/transport/http/routes/RuntimeRoutes.js";
 import { createNodeHttpServer } from "@/transport/http/NodeHttpAdapter.js";
+import { SerializedTransport } from "@/transport/SerializedTransport.js";
 import type {
   AgentHttpBinding,
   AgentHttpListenOptions,
@@ -85,7 +86,6 @@ export class AgentHTTP {
    */
   async close(): Promise<void> {
     const handle = this.cached_server;
-    this.cached_server = null;
     if (!handle) return;
     await handle.close();
   }
@@ -93,54 +93,56 @@ export class AgentHTTP {
 
 /** 为已装配完成的 Hono Router 创建独立 Node HTTP Server 句柄。 */
 export function create_agent_http_server_handle(app: Hono): AgentHttpServerHandle {
-  let current_server: http.Server | null = null;
-  let current_binding: AgentHttpBinding | null = null;
-  let start_promise: Promise<AgentHttpBinding> | null = null;
-
-  return {
-    async listen(options: AgentHttpListenOptions): Promise<AgentHttpBinding> {
-      if (start_promise) return await start_promise;
-      if (current_binding) return current_binding;
-      const host =
-        String(options.host || DEFAULT_HTTP_HOST).trim() || DEFAULT_HTTP_HOST;
+  const lifecycle = new SerializedTransport<
+    AgentHttpListenOptions,
+    http.Server,
+    AgentHttpBinding
+  >({
+    start: async (options) => {
+      const host = String(options.host || DEFAULT_HTTP_HOST).trim() || DEFAULT_HTTP_HOST;
       const port = options.port;
       if (!Number.isInteger(port) || port <= 0 || port > 65535) {
         throw new Error("AgentHTTP server requires a valid TCP port");
       }
-      start_promise = (async () => {
-        const server = createNodeHttpServer({ app, host, port });
-        await new Promise<void>((resolve, reject) => {
-          server.once("error", reject);
-          server.listen(port, host, () => {
-            server.off("error", reject);
-            resolve();
-          });
-        });
-        current_server = server;
-        current_binding = {
-          url: `http://${host}:${port}`,
-          host,
-          port,
+      const server = createNodeHttpServer({ app, host, port });
+      await new Promise<void>((resolve, reject) => {
+        const on_error = (error: Error): void => {
+          server.off("error", on_error);
+          // listen 失败时该 Server 不会进入生命周期对象，立即清理监听器和句柄。
+          try {
+            server.close();
+          } catch {
+            // 未进入监听态时 close 可能抛出 ERR_SERVER_NOT_RUNNING，可安全忽略。
+          }
+          reject(error);
         };
-        return current_binding;
-      })();
-      try {
-        return await start_promise;
-      } finally {
-        start_promise = null;
-      }
+        server.once("error", on_error);
+        server.listen(port, host, () => {
+          server.off("error", on_error);
+          resolve();
+        });
+      });
+      return {
+        resource: server,
+        binding: { url: `http://${host}:${port}`, host, port },
+      };
     },
-    async close(): Promise<void> {
-      const server = current_server;
-      current_server = null;
-      current_binding = null;
-      if (!server) return;
-      await new Promise<void>((resolve) => {
-        server.close(() => resolve());
+    stop: async (server) => {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => error ? reject(error) : resolve());
       });
     },
+  });
+
+  return {
+    async listen(options: AgentHttpListenOptions): Promise<AgentHttpBinding> {
+      return await lifecycle.listen(options);
+    },
+    async close(): Promise<void> {
+      await lifecycle.close();
+    },
     binding(): AgentHttpBinding | null {
-      return current_binding;
+      return lifecycle.binding();
     },
   };
 }

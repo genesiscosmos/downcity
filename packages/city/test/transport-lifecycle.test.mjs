@@ -102,7 +102,26 @@ test("AgentHTTP listen, binding and close remain idempotent", {
   await http.close()
   await http.close()
   assert.equal(handle.binding(), null)
-  assert.notEqual(http.server(), handle)
+  assert.equal(http.server(), handle)
+})
+
+test("AgentHTTP close queued during listen releases the new server", {
+  skip: !network_tests_enabled,
+}, async () => {
+  const http = new AgentHTTP(create_transport_agent())
+  const handle = http.server()
+  const port = await reserve_port()
+  const listen_promise = handle.listen({ host: "127.0.0.1", port })
+  const close_promise = handle.close()
+  await Promise.all([listen_promise, close_promise])
+  assert.equal(handle.binding(), null)
+
+  const probe = net.createServer()
+  await new Promise((resolve, reject) => {
+    probe.once("error", reject)
+    probe.listen(port, "127.0.0.1", resolve)
+  })
+  await new Promise((resolve) => probe.close(resolve))
 })
 
 test("AgentRPC listen, binding and close remain idempotent", {
@@ -123,4 +142,22 @@ test("AgentRPC listen, binding and close remain idempotent", {
     await rpc.close()
   }
   assert.equal(rpc.binding(), null)
+})
+
+test("AgentRPC close queued during listen releases the new server", {
+  skip: !network_tests_enabled,
+}, async () => {
+  const rpc = new AgentRPC(create_transport_agent())
+  const port = await reserve_port()
+  const listen_promise = rpc.listen({ host: "127.0.0.1", port })
+  const close_promise = rpc.close()
+  await Promise.all([listen_promise, close_promise])
+  assert.equal(rpc.binding(), null)
+
+  const probe = net.createServer()
+  await new Promise((resolve, reject) => {
+    probe.once("error", reject)
+    probe.listen(port, "127.0.0.1", resolve)
+  })
+  await new Promise((resolve) => probe.close(resolve))
 })

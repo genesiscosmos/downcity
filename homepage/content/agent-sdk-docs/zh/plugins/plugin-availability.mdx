@@ -20,6 +20,8 @@ agent.plugins.status("skill");
 agent.plugins.snapshots();
 ```
 
+Plugin 刚注册且 lifecycle 尚未完成时，状态是 `initializing`。action、availability、system block 和 hook 会等待这次初始化完成，不会在 lifecycle 启动前执行。
+
 如果 plugin 已注册且启动成功，状态是 `ready`。
 
 如果 lifecycle 启动失败，状态可能是 `error`，用于诊断。普通 action 业务失败不会把整个 plugin 标成 `error`；例如 `skill.lookup` 查不到某个 skill 时，只返回这次 action 的失败结果，plugin 仍保持可继续调用。

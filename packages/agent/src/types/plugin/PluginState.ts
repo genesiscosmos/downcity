@@ -2,7 +2,7 @@
  * Plugin 注册状态类型。
  *
  * 关键点（中文）
- * - Plugin 只属于 Agent：注册即生效，卸载即不可见。
+ * - Plugin 只属于 Agent：完成 lifecycle.start 后生效，卸载后立即不可见。
  * - 不再暴露 start / stop / restart 这类生命周期状态。
  * - `error` 只表示最近一次注册后运行发生错误，方便开发者诊断。
  */
@@ -12,7 +12,7 @@ import type { Plugin } from "@/types/plugin/PluginDefinition.js";
 /**
  * Plugin 当前可观察状态。
  */
-export type PluginState = "ready" | "error";
+export type PluginState = "initializing" | "ready" | "error";
 
 /**
  * 单个已注册 plugin 的运行时记录。

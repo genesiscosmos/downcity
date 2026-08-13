@@ -86,7 +86,6 @@ export class CliCityRuntime {
     const agents: Agent[] = [];
     try {
       for (const config of data.agents.list()) {
-        if (!config.workspace_id) continue;
         const workspace_config = data.workspaces.get(config.workspace_id);
         if (!workspace_config) throw new Error(`Workspace not found: ${config.workspace_id}`);
         agents.push(await create_cli_agent({

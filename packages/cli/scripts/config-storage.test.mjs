@@ -13,6 +13,45 @@ function create_temp_root() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "downcity-config-storage-"));
 }
 
+test("City reset 只删除 SQLite 数据库文件", async () => {
+  const platform_root = create_temp_root();
+  const database_path = path.join(platform_root, "downcity.db");
+  const preserved_files = [
+    path.join(platform_root, ".env"),
+    path.join(platform_root, "main", "model-db.key"),
+    path.join(platform_root, "plugins", "keep.txt"),
+    path.join(platform_root, "workspace", ".downcity", "sessions", "keep.json"),
+  ];
+  try {
+    fs.mkdirSync(path.join(platform_root, "main"), { recursive: true });
+    fs.mkdirSync(path.join(platform_root, "plugins"), { recursive: true });
+    fs.mkdirSync(path.join(platform_root, "workspace", ".downcity", "sessions"), {
+      recursive: true,
+    });
+    for (const file_path of [
+      database_path,
+      `${database_path}-wal`,
+      `${database_path}-shm`,
+      ...preserved_files,
+    ]) {
+      fs.writeFileSync(file_path, "keep");
+    }
+    const { reset_city_database } = await import("../bin/city/runtime/CityReset.js");
+    const removed_files = await reset_city_database(platform_root);
+    assert.deepEqual(removed_files.sort(), [
+      database_path,
+      `${database_path}-shm`,
+      `${database_path}-wal`,
+    ].sort());
+    assert.equal(fs.existsSync(database_path), false);
+    assert.equal(fs.existsSync(`${database_path}-wal`), false);
+    assert.equal(fs.existsSync(`${database_path}-shm`), false);
+    for (const file_path of preserved_files) assert.equal(fs.existsSync(file_path), true);
+  } finally {
+    fs.rmSync(platform_root, { recursive: true, force: true });
+  }
+});
+
 test("Agent 与 Workspace 在全局 DB 中独立管理", async () => {
   const platform_root = create_temp_root();
   const project_root = create_temp_root();

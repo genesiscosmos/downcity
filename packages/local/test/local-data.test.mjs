@@ -35,6 +35,11 @@ test("LocalDatabase 不会隐式创建产品业务表", async () => {
     });
     assert.equal(after.rows.some((row) => row.name === "managed_agents"), true);
     assert.equal(after.rows.some((row) => row.name === "workspaces"), true);
+    const agent_columns = database.query({ sql: "PRAGMA table_info(managed_agents);" });
+    assert.equal(
+      agent_columns.rows.find((column) => column.name === "workspace_id")?.notnull,
+      1,
+    );
   } finally {
     database.close();
     await fs.rm(root_path, { recursive: true, force: true });
@@ -59,6 +64,34 @@ test("AgentRepository 与 WorkspaceRepository 独立维护产品配置", async (
     assert.equal(agents.get("lucas_whitman")?.workspace_id, workspace.workspace_id);
     assert.equal(workspaces.get(workspace.workspace_id)?.workspace_path, workspace.workspace_path);
     assert.deepEqual(agents.list().map((item) => item.agent_id), ["lucas_whitman"]);
+  } finally {
+    database.close();
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
+test("LocalDatabase transaction 提交同步写入并回滚异步回调", async () => {
+  const { root_path, database } = await create_local_data();
+  try {
+    database.execute_script("CREATE TABLE values_test (value TEXT NOT NULL);");
+    database.transaction((transaction) => {
+      transaction.execute({ sql: "INSERT INTO values_test (value) VALUES (?);", params: ["sync"] });
+    });
+    assert.deepEqual(
+      database.query({ sql: "SELECT value FROM values_test ORDER BY value;" }).rows,
+      [{ value: "sync" }],
+    );
+
+    assert.throws(
+      () => database.transaction(async (transaction) => {
+        transaction.execute({ sql: "INSERT INTO values_test (value) VALUES (?);", params: ["async"] });
+      }),
+      /must be synchronous/u,
+    );
+    assert.deepEqual(
+      database.query({ sql: "SELECT value FROM values_test ORDER BY value;" }).rows,
+      [{ value: "sync" }],
+    );
   } finally {
     database.close();
     await fs.rm(root_path, { recursive: true, force: true });

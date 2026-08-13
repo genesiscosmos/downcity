@@ -43,8 +43,8 @@ export interface LocalAgentConfig {
   /** Agent 的全局稳定 ID。 */
   agent_id: string;
 
-  /** 当前 Agent 对应的 Workspace；历史未绑定记录暂时为空。 */
-  workspace_id?: string;
+  /** 当前 Agent 对应的 Workspace ID。 */
+  workspace_id: string;
 
   /** 当前配置格式版本。 */
   version: string;

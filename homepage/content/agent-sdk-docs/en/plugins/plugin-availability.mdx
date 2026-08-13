@@ -18,6 +18,8 @@ This means:
 
 In snapshots, the legacy `enabled` field means "registered", not a project config switch.
 
+A newly registered plugin remains `initializing` until lifecycle startup finishes. Actions, availability checks, system blocks, and hooks wait for that startup barrier before executing.
+
 If plugin lifecycle startup fails, the plugin state can become `error` for diagnostics. Ordinary action business failures do not mark the whole plugin as `error`; for example, a failed `skill.lookup` returns that action failure while the `skill` plugin remains callable.
 
 ## `available`

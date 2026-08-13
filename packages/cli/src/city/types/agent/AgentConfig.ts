@@ -11,8 +11,8 @@ export interface AgentConfig {
   /** Agent 的全局稳定标识，也是数据库主键。 */
   agent_id: string;
 
-  /** Agent 当前关联的 Workspace ID；未绑定时为空。 */
-  workspace_id?: string;
+  /** Agent 当前关联的 Workspace ID。 */
+  workspace_id: string;
 
   /** Agent 配置结构版本。 */
   version: string;

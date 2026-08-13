@@ -1,12 +1,12 @@
 /**
  * Downcity 本地产品 Schema。
  *
- * Schema 属于本地产品数据模型，不属于数据库 Adapter。这里负责建表和结构迁移，
- * 通过 LocalDatabase 的 SQL 原语工作。
+ * Schema 属于本地产品数据模型，不属于数据库 Adapter。这里仅按当前版本建表，
+ * 不识别或迁移历史结构。
  */
 import type { LocalDatabase } from "@/database/LocalDatabase.js";
 
-/** 初始化本地产品表并执行幂等结构迁移。 */
+/** 初始化当前版本的本地产品表。 */
 export function ensure_local_schema(database: LocalDatabase): void {
     database.execute_script(`
       CREATE TABLE IF NOT EXISTS workspaces (
@@ -21,7 +21,7 @@ export function ensure_local_schema(database: LocalDatabase): void {
 
       CREATE TABLE IF NOT EXISTS managed_agents (
         agent_id TEXT PRIMARY KEY NOT NULL,
-        workspace_id TEXT,
+        workspace_id TEXT NOT NULL,
         config_encrypted TEXT NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,

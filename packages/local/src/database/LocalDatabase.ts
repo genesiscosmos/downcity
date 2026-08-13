@@ -78,12 +78,15 @@ export class LocalDatabase implements LocalDatabaseTransaction {
     this.sqlite.exec(sql);
   }
 
-  /** 在单个立即事务中执行一组业务操作。 */
+  /** 在单个立即事务中同步执行一组业务操作；异步回调会回滚并报错。 */
   transaction<TResult>(handler: (transaction: LocalDatabaseTransaction) => TResult): TResult {
     this.assert_open();
     this.sqlite.exec("BEGIN IMMEDIATE;");
     try {
       const result = handler(this);
+      if (is_promise_like(result)) {
+        throw new TypeError("LocalDatabase.transaction handler must be synchronous");
+      }
       this.sqlite.exec("COMMIT;");
       return result;
     } catch (error) {
@@ -103,4 +106,13 @@ export class LocalDatabase implements LocalDatabaseTransaction {
   private assert_open(): void {
     if (this.closed) throw new Error("LocalDatabase is closed");
   }
+}
+
+/** 判断事务回调是否错误返回了 PromiseLike。 */
+function is_promise_like(value: unknown): value is PromiseLike<unknown> {
+  return Boolean(
+    value
+    && (typeof value === "object" || typeof value === "function")
+    && typeof (value as PromiseLike<unknown>).then === "function",
+  );
 }

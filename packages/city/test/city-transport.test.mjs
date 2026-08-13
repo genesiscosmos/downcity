@@ -74,6 +74,98 @@ test("CityHTTP mounts each Agent below its stable ID", async () => {
   }
 });
 
+test("CityHTTP concurrently creates only one Agent extension", async () => {
+  const { city, agents, root } = await create_city();
+  let extension_count = 0;
+  let dispose_count = 0;
+  const transport = new CityHTTP(city, {
+    create_agent_extension: ({ sdk_router }) => {
+      extension_count += 1;
+      return {
+        router: sdk_router,
+        dispose: () => {
+          dispose_count += 1;
+        },
+      };
+    },
+  });
+  try {
+    const responses = await Promise.all(Array.from({ length: 8 }, () =>
+      transport.router().request("/agents/first_agent/api/sdk/sessions")
+    ));
+    assert.equal(responses.every((response) => response.status === 200), true);
+    assert.equal(extension_count, 1);
+  } finally {
+    await transport.close();
+    await city.close();
+    await Promise.all(agents.map((agent) => agent.dispose()));
+    await fs.rm(root, { recursive: true, force: true });
+  }
+  assert.equal(dispose_count, 1);
+});
+
+test("CityHTTP does not recreate an Agent removed while router resolution is queued", async () => {
+  const { city, agents, root } = await create_city();
+  let release_dispose;
+  let extension_count = 0;
+  const dispose_gate = new Promise((resolve) => {
+    release_dispose = resolve;
+  });
+  const transport = new CityHTTP(city, {
+    create_agent_extension: ({ sdk_router }) => {
+      extension_count += 1;
+      return { router: sdk_router, dispose: async () => await dispose_gate };
+    },
+  });
+  try {
+    assert.equal(
+      (await transport.router().request("/agents/first_agent/api/sdk/sessions")).status,
+      200,
+    );
+    const detach_promise = transport.detach_agent("first_agent");
+    const queued_request = transport.router().request("/agents/first_agent/api/sdk/sessions");
+    const remove_promise = city.remove("first_agent");
+    release_dispose();
+    await Promise.all([detach_promise, remove_promise]);
+    assert.equal((await queued_request).status, 404);
+    assert.equal(extension_count, 1);
+  } finally {
+    release_dispose();
+    await transport.close();
+    await city.close();
+    await Promise.all(agents.map((agent) => agent.dispose()));
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("CityHTTP retries an extension disposer after a failed close", async () => {
+  const { city, agents, root } = await create_city();
+  let dispose_count = 0;
+  const transport = new CityHTTP(city, {
+    create_agent_extension: ({ sdk_router }) => ({
+      router: sdk_router,
+      dispose: () => {
+        dispose_count += 1;
+        if (dispose_count === 1) throw new Error("dispose failed");
+      },
+    }),
+  });
+  try {
+    assert.equal(
+      (await transport.router().request("/agents/first_agent/api/sdk/sessions")).status,
+      200,
+    );
+    await assert.rejects(transport.close(), /CityHTTP extension close failed/);
+    await transport.close();
+    assert.equal(dispose_count, 2);
+  } finally {
+    await transport.close();
+    await city.close();
+    await Promise.all(agents.map((agent) => agent.dispose()));
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("CityHTTP 动态识别运行中新增和删除的 Agent", async () => {
   const { city, agents, root } = await create_city();
   const transport = new CityHTTP(city);

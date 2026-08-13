@@ -40,13 +40,16 @@ export interface AgentWorkspaceTarget {
 
 /** 将 Agent 配置与当前 daemon 投影成 CLI 状态视图。 */
 async function to_cli_agent_view(agent: AgentConfig): Promise<CliAgentView> {
-  const workspace = agent.workspace_id ? get_workspace(agent.workspace_id) : null;
+  const workspace = get_workspace(agent.workspace_id);
+  if (!workspace) {
+    throw new Error(`Workspace not found: ${agent.workspace_id}`);
+  }
   const daemon_pid = await read_daemon_pid();
   const meta = daemon_pid && is_process_alive(daemon_pid) ? await read_daemon_meta() : null;
   const loaded = meta?.pid === daemon_pid && meta.agent_ids.includes(agent.agent_id);
   return {
     agent_id: agent.agent_id,
-    ...(workspace ? { workspace_path: workspace.workspace_path } : {}),
+    workspace_path: workspace.workspace_path,
     status: loaded ? "loaded" : "unloaded",
   };
 }
@@ -69,9 +72,7 @@ export function build_cli_agent_prompt_choices(
   return agents.map((agent) => ({
     title: agent.agent_id,
     value: agent.agent_id,
-    description: agent.workspace_path
-      ? `${agent.status} · ${agent.workspace_path}`
-      : agent.status,
+    description: `${agent.status} · ${agent.workspace_path}`,
   }));
 }
 
@@ -126,7 +127,7 @@ export async function emit_registered_agent_list_with_options(options?: {
       tone: agent.status === "loaded" ? "success" : "info",
       title: agent.agent_id,
       facts: [
-        ...(agent.workspace_path ? [{ label: "Workspace", value: agent.workspace_path }] : []),
+        { label: "Workspace", value: agent.workspace_path },
         { label: "City", value: agent.status },
       ],
     })),
@@ -179,12 +180,6 @@ function resolve_bound_workspace(
   agent: AgentConfig,
   workspace_input?: string,
 ): WorkspaceRegistryRecord {
-  if (!agent.workspace_id) {
-    throw new CliError({
-      title: `Agent has no Workspace binding: ${agent.agent_id}`,
-      fix: "city agent create <workspace_path>",
-    });
-  }
   const bound_workspace = get_workspace(agent.workspace_id);
   if (!bound_workspace) {
     throw new CliError({

@@ -17,7 +17,7 @@ import type {
 function to_agent_config(config: LocalAgentConfig): AgentConfig {
   return {
     agent_id: config.agent_id,
-    ...(config.workspace_id ? { workspace_id: config.workspace_id } : {}),
+    workspace_id: config.workspace_id,
     version: config.version,
     ...(config.execution ? { execution: config.execution as unknown as AgentConfig["execution"] } : {}),
     ...(config.llm ? { llm: config.llm as unknown as AgentConfig["llm"] } : {}),
@@ -75,7 +75,7 @@ export function save_agent_config(input: AgentConfig): AgentConfig {
     const previous = data.agents.get(input.agent_id);
     const saved = to_agent_config(data.agents.save({
       agent_id: input.agent_id,
-      ...(input.workspace_id ? { workspace_id: input.workspace_id } : {}),
+      workspace_id: input.workspace_id,
       version: input.version,
       ...(input.execution ? { execution: input.execution as unknown as JsonObject } : {}),
       ...(input.llm ? { llm: input.llm as unknown as JsonObject } : {}),

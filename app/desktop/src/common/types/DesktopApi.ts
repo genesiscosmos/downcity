@@ -8,8 +8,8 @@
 export interface DesktopAgentSummary {
   /** Agent 的全局稳定标识。 */
   agent_id: string;
-  /** Agent 持久化绑定的 Workspace ID；历史异常记录可能不存在。 */
-  workspace_id?: string;
+  /** Agent 持久化绑定的 Workspace ID。 */
+  workspace_id: string;
   /** Agent 使用的 City AIService 模型标识。 */
   model_id: string;
   /** Agent 注册配置的结构版本。 */

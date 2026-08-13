@@ -11,8 +11,8 @@ export interface CliAgentView {
   /** Agent 全局稳定标识。 */
   agent_id: string;
 
-  /** Agent 持久化绑定的 Workspace 路径；历史异常记录可能不存在。 */
-  workspace_path?: string;
+  /** Agent 持久化绑定的 Workspace 路径。 */
+  workspace_path: string;
 
   /** 当前 CLI City daemon 是否已加载该 Agent。 */
   status: "loaded" | "unloaded";

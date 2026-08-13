@@ -17,7 +17,7 @@ interface AgentRow {
   /** Agent ID。 */
   agent_id: string;
   /** Workspace ID。 */
-  workspace_id: string | null;
+  workspace_id: string;
   /** 加密配置。 */
   config_encrypted: string;
   /** 创建时间。 */
@@ -84,7 +84,6 @@ export class AgentRepository {
   save(input: LocalAgentConfig): LocalAgentConfig {
     const existing = this.get(input.agent_id);
     if (!existing) {
-      if (!input.workspace_id) throw new Error("workspace_id is required");
       return this.create({
         agent_id: input.agent_id,
         workspace_id: input.workspace_id,
@@ -104,7 +103,7 @@ export class AgentRepository {
       SET workspace_id = ?, config_encrypted = ?, updated_at = ?
       WHERE agent_id = ?;
     `).run(
-      input.workspace_id ?? existing.workspace_id ?? null,
+      input.workspace_id,
       this.crypto_adapter.encrypt(JSON.stringify(config)),
       current_time,
       input.agent_id,
@@ -159,7 +158,7 @@ export class AgentRepository {
     const raw = JSON.parse(this.crypto_adapter.decrypt(row.config_encrypted)) as Record<string, unknown>;
     return {
       agent_id: row.agent_id,
-      ...(row.workspace_id ? { workspace_id: row.workspace_id } : {}),
+      workspace_id: row.workspace_id,
       version: String(raw.version || "1.0.0"),
       ...(is_json_object(raw.execution) ? { execution: raw.execution } : {}),
       ...(is_json_object(raw.llm) ? { llm: raw.llm } : {}),

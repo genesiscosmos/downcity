@@ -48,7 +48,7 @@ function create_record(plugin: Plugin): PluginRuntimeRecord {
   const current_time = now_ms();
   return {
     plugin,
-    state: "ready",
+    state: "initializing",
     registered_at: current_time,
     updated_at: current_time,
     chain: Promise.resolve(),
@@ -109,6 +109,9 @@ export class PluginRegistry implements AgentPlugins {
   private readonly hookRegistry: HookRegistry;
 
   private readonly records = new Map<string, PluginRuntimeRecord>();
+
+  /** 初始 Plugin lifecycle 的唯一启动流程。 */
+  private initial_start_promise?: Promise<PluginSnapshot[]>;
 
   private readonly retired_records = new Set<PluginRuntimeRecord>();
 
@@ -258,16 +261,26 @@ export class PluginRegistry implements AgentPlugins {
    * 启动全部已挂载 plugin。
    */
   async start_all(): Promise<PluginSnapshot[]> {
-    const snapshots: PluginSnapshot[] = [];
-    for (const record of this.records.values()) {
+    this.initial_start_promise ??= this.start_initial_records();
+    return await this.initial_start_promise;
+  }
+
+  /** 串行启动构造期挂载的 Plugin，并隔离单个 lifecycle 失败。 */
+  private async start_initial_records(): Promise<PluginSnapshot[]> {
+    const initial_records = [...this.records.values()];
+    for (const record of initial_records) {
       try {
         await this.start_record(record);
       } catch {
-        // 关键点（中文）：单个 plugin 启动失败只影响自身，不能阻断其他 plugin 与 Agent ready。
+        // 关键点（中文）：单个 Plugin 启动失败只影响自身，不能阻断其他 Plugin 与 Agent ready。
       }
-      snapshots.push(to_plugin_snapshot(record));
     }
-    return snapshots;
+    return initial_records.map(to_plugin_snapshot);
+  }
+
+  /** 确保任何异步 Plugin 执行都发生在初始 lifecycle 启动完成后。 */
+  private async ensure_initial_started(): Promise<void> {
+    await this.start_all();
   }
 
   /**
@@ -378,6 +391,7 @@ export class PluginRegistry implements AgentPlugins {
    * 运行 pipeline 点。
    */
   async pipeline<T = JsonValue>(point_name: string, value: T): Promise<T> {
+    await this.ensure_initial_started();
     return this.hookRegistry.pipelineValue(point_name, value);
   }
 
@@ -385,6 +399,7 @@ export class PluginRegistry implements AgentPlugins {
    * 运行 guard 点。
    */
   async guard<T = JsonValue>(point_name: string, value: T): Promise<void> {
+    await this.ensure_initial_started();
     return this.hookRegistry.guardValue(point_name, value);
   }
 
@@ -392,6 +407,7 @@ export class PluginRegistry implements AgentPlugins {
    * 运行 effect 点。
    */
   async effect<T = JsonValue>(point_name: string, value: T): Promise<void> {
+    await this.ensure_initial_started();
     return this.hookRegistry.effectValue(point_name, value);
   }
 
@@ -402,6 +418,7 @@ export class PluginRegistry implements AgentPlugins {
     point_name: string,
     value: TInput,
   ): Promise<TOutput> {
+    await this.ensure_initial_started();
     return this.hookRegistry.resolveValue<TInput, TOutput>(point_name, value);
   }
 
@@ -499,6 +516,7 @@ export class PluginRegistry implements AgentPlugins {
    * 检查 plugin 可用性。
    */
   async availability(plugin_name: string): Promise<PluginAvailability> {
+    await this.ensure_initial_started();
     const key = normalize_plugin_name(plugin_name);
     const record = this.records.get(key);
     if (!record) {
@@ -559,6 +577,7 @@ export class PluginRegistry implements AgentPlugins {
     payload?: JsonValue;
     execution_context?: PluginExecutionContext;
   }): Promise<PluginActionResult<JsonValue>> {
+    await this.ensure_initial_started();
     return await this.run_action_from_records(this.records, params);
   }
 
@@ -645,6 +664,7 @@ export class PluginRegistry implements AgentPlugins {
   async system_blocks(
     execution_context?: PluginExecutionContext,
   ): Promise<AgentSessionSystemBlock[]> {
+    await this.ensure_initial_started();
     return await this.system_blocks_from_records(
       this.records,
       execution_context,

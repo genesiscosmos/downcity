@@ -101,7 +101,6 @@ export async function createRemoteAgent(params: {
     try {
       const config = data.agents.get(params.agent_id);
       if (!config) throw new Error(`Agent not found: ${params.agent_id}`);
-      if (!config.workspace_id) throw new Error(`Agent has no Workspace binding: ${params.agent_id}`);
       const workspace_config = data.workspaces.get(config.workspace_id);
       if (!workspace_config) throw new Error(`Workspace not found: ${config.workspace_id}`);
       agent = await create_cli_agent({

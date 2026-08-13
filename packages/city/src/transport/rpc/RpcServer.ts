@@ -122,9 +122,19 @@ export async function startRpcServer(
   });
 
   await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
+    const on_error = (error: Error): void => {
+      server.off("error", on_error);
+      // 启动失败的 Server 不会交给 RpcServerInstance，必须在这里收口。
+      try {
+        server.close();
+      } catch {
+        // 未进入监听态时 close 可能抛出 ERR_SERVER_NOT_RUNNING，可安全忽略。
+      }
+      reject(error);
+    };
+    server.once("error", on_error);
     server.listen(options.port, options.host, () => {
-      server.off("error", reject);
+      server.off("error", on_error);
       resolve();
     });
   });

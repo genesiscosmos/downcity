@@ -1,6 +1,6 @@
 {
   "name": "@downcity/local",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Downcity CLI 与 Desktop 共用的本地数据库 Adapter 和产品 Repository。",
   "type": "module",
   "main": "./bin/index.js",

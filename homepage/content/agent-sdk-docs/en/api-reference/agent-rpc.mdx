@@ -5,7 +5,7 @@ description: RPC transport layer for local Agent — for inter-process session a
 
 # AgentRPC
 
-`AgentRPC` is the RPC transport for a locally running `Agent`. It lets other processes or services access the agent's sessions over a Unix socket or TCP port without going through HTTP.
+`AgentRPC` is the TCP RPC transport for a locally running `Agent`. It lets other processes or services access the agent's sessions through a host and port without going through HTTP.
 
 Only available when you install `@downcity/city`:
 
@@ -26,8 +26,7 @@ const agent = new Agent({
 });
 const rpc = new AgentRPC(agent);
 
-const binding = await rpc.listen();
-// listening on a random Unix socket or TCP address
+const binding = await rpc.listen({ host: "127.0.0.1", port: 15314 });
 ```
 
 ## Constructor
@@ -48,11 +47,12 @@ Start listening for RPC connections.
 
 ```ts
 const binding = await rpc.listen({
-  // optional: specify port or socket path
+  host: "127.0.0.1",
+  port: 15314,
 });
 ```
 
-Returns `AgentRpcBinding` containing the connection endpoint info.
+Returns `AgentRpcBinding` containing the TCP endpoint information.
 
 ### `close()`
 

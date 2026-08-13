@@ -12,6 +12,7 @@ import {
 import {
   type LocalAgentConfig,
   type LocalWorkspaceConfig,
+  normalize_agent_id,
 } from "@downcity/local";
 import type {
   DesktopAgentRuntime,
@@ -68,16 +69,23 @@ export class AgentController {
     if (!normalized_workspace_path) throw new Error("workspace_path is required");
     await this.ready_promise;
     const workspace = this.data.workspaces.ensure({ workspace_path: normalized_workspace_path });
-    const config = this.data.agents.create({
-      agent_id,
+    const current_time = new Date().toISOString();
+    const candidate: LocalAgentConfig = {
+      agent_id: normalize_agent_id(agent_id),
       workspace_id: workspace.workspace_id,
       version: "1.0.0",
       execution: { type: "api", model_id: normalized_model_id },
-    });
-    const agent = await this.create_native_agent(config, workspace);
+      plugins: [],
+      created_at: current_time,
+      updated_at: current_time,
+    };
+    const agent = await this.create_native_agent(candidate, workspace);
+    let config: LocalAgentConfig | null = null;
     try {
+      config = this.data.agents.create(candidate);
       this.city.add(agent);
     } catch (error) {
+      if (config) this.data.agents.remove(config.agent_id);
       await agent.dispose().catch(() => undefined);
       throw error;
     }
@@ -97,7 +105,6 @@ export class AgentController {
     await this.ready_promise;
     const config = this.data.agents.get(agent_id);
     if (!config) throw new Error(`Agent not found: ${agent_id}`);
-    if (!config.workspace_id) throw new Error(`Agent has no Workspace binding: ${agent_id}`);
     const workspace = this.data.workspaces.get(config.workspace_id);
     if (!workspace) throw new Error(`Agent Workspace is not registered: ${config.workspace_id}`);
 
@@ -178,17 +185,26 @@ export class AgentController {
 
   /** 从本地产品配置显式创建并注册全部 Desktop Agent。 */
   private async initialize_agents(): Promise<void> {
-    for (const config of this.data.agents.list()) {
-      if (!config.workspace_id) continue;
-      const workspace = this.data.workspaces.get(config.workspace_id);
-      if (!workspace) throw new Error(`Workspace not found: ${config.workspace_id}`);
-      const agent = await this.create_native_agent(config, workspace);
-      try {
-        this.city.add(agent);
-      } catch (error) {
-        await agent.dispose().catch(() => undefined);
-        throw error;
+    const initialized_agents: Agent[] = [];
+    try {
+      for (const config of this.data.agents.list()) {
+        const workspace = this.data.workspaces.get(config.workspace_id);
+        if (!workspace) throw new Error(`Workspace not found: ${config.workspace_id}`);
+        const agent = await this.create_native_agent(config, workspace);
+        try {
+          this.city.add(agent);
+          initialized_agents.push(agent);
+        } catch (error) {
+          await agent.dispose().catch(() => undefined);
+          throw error;
+        }
       }
+    } catch (error) {
+      await Promise.allSettled(initialized_agents.map(async (agent) => {
+        await this.city.remove(agent.id);
+        await agent.dispose();
+      }));
+      throw error;
     }
   }
 
@@ -219,7 +235,7 @@ function to_desktop_agent_summary(record: Pick<LocalAgentConfig, "agent_id" | "w
     : "";
   return {
     agent_id: record.agent_id,
-    ...(record.workspace_id ? { workspace_id: record.workspace_id } : {}),
+    workspace_id: record.workspace_id,
     model_id,
     version: record.version,
   };

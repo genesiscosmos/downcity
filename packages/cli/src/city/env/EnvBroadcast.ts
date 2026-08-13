@@ -24,7 +24,7 @@ export async function broadcast_workspace_env_reload(
   const running_agent_ids: string[] = [];
   const meta = await read_daemon_meta();
   for (const agent of list_agent_configs()) {
-    if (!meta?.agent_ids.includes(agent.agent_id) || !agent.workspace_id) continue;
+    if (!meta?.agent_ids.includes(agent.agent_id)) continue;
     const workspace = get_workspace(agent.workspace_id);
     if (workspace && path.resolve(workspace.workspace_path) === normalized_path) {
       running_agent_ids.push(agent.agent_id);

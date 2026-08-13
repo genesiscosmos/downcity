@@ -9,6 +9,7 @@
 import { Command } from "commander";
 import { registerEnvCommand } from "@/city/command/EnvCommand.js";
 import { register_federation_command } from "@/city/command/FederationCommand.js";
+import { city_reset } from "@/city/command/CityResetCommand.js";
 import { city_off, city_on, city_restart, city_status } from "@/city/agent/CityLifecycle.js";
 import { parseBoolean, parsePort } from "@/shared/IndexSupport.js";
 import { createVersionBanner } from "@/shared/IndexSupport.js";
@@ -57,6 +58,11 @@ export function registerGatewayCommands(
   program.command("status").description("查看 CLI City 宿主状态")
     .option("--fix [enabled]", "清理过期的 daemon 状态文件", parseBoolean)
     .action(createVersionBanner(context.version, city_status));
+  program.command("reset").description("重置 Downcity 本地配置数据库")
+    .option("-y, --yes", "跳过重置确认")
+    .action(createVersionBanner(context.version, async (options: { yes?: boolean }) => {
+      await city_reset(options);
+    }));
   registerEnvCommand(program);
   register_federation_command(program);
 }

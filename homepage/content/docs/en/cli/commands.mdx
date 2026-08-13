@@ -13,9 +13,13 @@ city on --port 5314 --rpc-port 15314
 city status
 city restart
 city off
+city reset                       # Confirm and reset the local configuration database
+city reset --yes                 # Skip confirmation
 ```
 
 The CLI City uses one HTTP port and one native TCP RPC port. Both protocols route all Agents by `agent_id`.
+
+`city reset` first stops the CLI City daemon, then removes `downcity.db`, `downcity.db-wal`, and `downcity.db-shm`. It preserves `.env`, encryption keys, Plugin artifacts, and Session files inside Workspaces.
 
 ## Agent
 

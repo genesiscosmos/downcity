@@ -101,8 +101,11 @@ agent.plugins.has("skill");
 
 States are intentionally small:
 
+- `initializing`
 - `ready`
 - `error`
+
+A registered plugin starts in `initializing`. Its first action, availability check, system block, or hook waits for lifecycle startup to finish. Successful startup changes the state to `ready`; startup failure changes it to `error`.
 
 An unregistered plugin does not need a state because it is no longer in the registry.
 

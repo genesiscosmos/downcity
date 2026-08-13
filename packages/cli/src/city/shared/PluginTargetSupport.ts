@@ -60,7 +60,6 @@ export async function resolveProjectRootByAgentId(agent_id_input: string): Promi
   const agent_id = String(agent_id_input || "").trim().toLowerCase();
   const agent = agent_id ? get_agent_config(agent_id) : null;
   if (!agent) return { error: `Agent not found: ${agent_id_input}` };
-  if (!agent.workspace_id) return { error: `Agent has no Workspace binding: ${agent.agent_id}` };
   const workspace = get_workspace(agent.workspace_id);
   if (!workspace) return { error: `Agent Workspace is unavailable: ${agent.agent_id}` };
   return { agent_id: agent.agent_id, project_root: path.resolve(workspace.workspace_path) };

@@ -89,8 +89,11 @@ agent.plugins.has("skill");
 
 状态只保留：
 
+- `initializing`
 - `ready`
 - `error`
+
+Plugin 注册后先进入 `initializing`。首次 action、availability、system block 或 hook 执行会等待 lifecycle 启动完成；成功后进入 `ready`，启动失败则进入 `error`。
 
 未注册的 plugin 不需要状态，因为它已经不在 registry 里。
 

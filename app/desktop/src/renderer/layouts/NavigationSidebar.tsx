@@ -89,7 +89,7 @@ export function NavigationSidebar({ controller, open_create_agent }: NavigationS
             </div>
 
             {selected_agent ? <div className="ml-5 mt-0.5 flex min-w-0 flex-col gap-0.5 border-l border-border/45 pl-2">
-              {runtime_state !== "connected" && sessions.length === 0 ? <Button size="full" className="h-7 text-muted-foreground" disabled={runtime_state === "connecting" || !agent.workspace_id} onClick={() => void controller.connect_agent(agent.agent_id)}>
+              {runtime_state !== "connected" && sessions.length === 0 ? <Button size="full" className="h-7 text-muted-foreground" disabled={runtime_state === "connecting"} onClick={() => void controller.connect_agent(agent.agent_id)}>
                 {runtime_state === "connecting" ? <TbLoader2 className="animate-spin" /> : <TbCpu />}
                 <span className="truncate">{runtime_state === "connecting" ? "正在装配…" : "装配 Agent"}</span>
               </Button> : null}

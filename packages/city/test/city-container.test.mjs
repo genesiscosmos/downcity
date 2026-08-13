@@ -52,3 +52,59 @@ test("City.close 不释放或清空 Agent", async () => {
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+test("City.remove 在 transport 释放失败时恢复 Agent 可见性并允许重试", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-remove-"));
+  const city = new City();
+  const agent = await create_agent(root, "retry_remove");
+  let detach_count = 0;
+  city.http.detach_agent = async () => {
+    detach_count += 1;
+    if (detach_count === 1) throw new Error("detach failed");
+  };
+  try {
+    city.add(agent);
+    await assert.rejects(city.remove(agent.id), /detach failed/u);
+    assert.equal(city.require_agent(agent.id), agent);
+    assert.equal(await city.remove(agent.id), agent);
+    assert.equal(city.agent(agent.id), null);
+    assert.equal(detach_count, 2);
+  } finally {
+    await city.close();
+    await agent.dispose();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("City.listen 失败只回滚本次新启动的 transport", async () => {
+  const city = new City();
+  let rpc_listen_count = 0;
+  let rpc_close_count = 0;
+  let rpc_binding = null;
+  city.rpc.listen = async () => {
+    rpc_listen_count += 1;
+    rpc_binding ??= { url: "rpc://127.0.0.1:15314", host: "127.0.0.1", port: 15314 };
+    return rpc_binding;
+  };
+  city.rpc.binding = () => rpc_binding;
+  city.rpc.close = async () => {
+    rpc_close_count += 1;
+    rpc_binding = null;
+  };
+  city.http.listen = async () => {
+    throw new Error("http unavailable");
+  };
+  city.http.binding = () => null;
+
+  await city.listen({ rpc: { port: 15314 } });
+  await assert.rejects(
+    city.listen({ rpc: { port: 15314 }, http: { port: 5314 } }),
+    /http unavailable/u,
+  );
+  assert.equal(rpc_listen_count, 2);
+  assert.equal(rpc_close_count, 0);
+  assert.notEqual(rpc_binding, null);
+
+  await city.close();
+  assert.equal(rpc_close_count, 1);
+});

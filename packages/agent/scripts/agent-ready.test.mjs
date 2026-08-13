@@ -166,6 +166,59 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
   }
 });
 
+test("agent.plugins waits for lifecycle start before direct action execution", async () => {
+  const agent_path = await fs.mkdtemp(
+    path.join(os.tmpdir(), "downcity-agent-plugin-ready-"),
+  );
+  const lifecycle_ready = create_deferred();
+  let lifecycle_started = false;
+  let action_calls = 0;
+  const plugin = create_plugin({
+    name: "direct-action",
+    title: "Direct Action",
+    description: "Waits for lifecycle before direct calls",
+    lifecycle: {
+      start: async () => {
+        await lifecycle_ready.promise;
+        lifecycle_started = true;
+      },
+    },
+    actions: {
+      status: {
+        description: "Read lifecycle status",
+        execute: async () => {
+          action_calls += 1;
+          return { success: true, data: { lifecycle_started } };
+        },
+      },
+    },
+  });
+  const agent = new Agent({
+    id: "plugin_ready_agent",
+    workspace: new Workspace({ path: agent_path }),
+    plugins: [plugin],
+  });
+
+  try {
+    const action_promise = agent.plugins.run_action({
+      plugin: "direct-action",
+      action: "status",
+    });
+    assert.equal(await is_settled(action_promise), false);
+    assert.equal(action_calls, 0);
+
+    lifecycle_ready.resolve();
+    const result = await action_promise;
+    assert.equal(result.success, true);
+    assert.equal(result.data.lifecycle_started, true);
+    assert.equal(action_calls, 1);
+  } finally {
+    lifecycle_ready.resolve();
+    await agent.dispose();
+    await fs.rm(agent_path, { recursive: true, force: true });
+  }
+});
+
 test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 启动失败", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-ready-isolation-"),
