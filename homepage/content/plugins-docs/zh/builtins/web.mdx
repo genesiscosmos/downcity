@@ -24,6 +24,12 @@ const web = new WebPlugin({
 
 `PlaywrightBrowserProvider` 连接已经启动的 Chrome/Chromium CDP 端点，不负责下载浏览器或执行安装命令。云端 Browserbase、Browserless、Kitesurf 等只要提供 CDP，也可以实现同一个 `BrowserProvider` 协议。
 
+Provider 在 CDP 浏览器已有的默认 context 中为每个 session 创建独立页面，不创建隔离 context，也不接管浏览器中已经打开的页面。关闭 session 只会关闭该 session 创建的页面。
+
+连接默认启用 Playwright 的 `noDefaults` 模式，兼容不支持 Browser Context 管理、但允许在默认 context 创建页面的 CDP 端点。该模式保留浏览器已有的下载、焦点和媒体模拟设置；Provider 不会覆盖 `acceptDownloads`、focus emulation、`colorScheme`、`reducedMotion`、`forcedColors` 或 `contrast`。
+
+目标 CDP 端点仍需支持发现默认 context 和创建新页面。连接、默认 context 解析、页面创建或页面初始化失败时，Provider 会返回带阶段标识的脱敏错误，不会在错误中暴露 endpoint 的认证信息、查询参数或 browser id。
+
 ## Actions
 
 | Action | 用途 |

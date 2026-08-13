@@ -24,6 +24,12 @@ const web = new WebPlugin({
 
 `PlaywrightBrowserProvider` connects to an already-running Chrome/Chromium CDP endpoint. It does not download browsers or execute installation commands. Browserbase, Browserless, Kitesurf, and other CDP-compatible backends can implement the same `BrowserProvider` protocol.
 
+The provider creates one owned page per session in the CDP browser's existing default context. It does not create isolated contexts or take ownership of pages that were already open. Closing a session only closes the page created for that session.
+
+CDP connections enable Playwright's `noDefaults` mode. This supports endpoints that do not implement Browser Context management but can create pages in the default context. The browser's existing download, focus, and media emulation settings remain unchanged; the provider does not override `acceptDownloads`, focus emulation, `colorScheme`, `reducedMotion`, `forcedColors`, or `contrast`.
+
+The endpoint must still expose a default context and support creating a new page. Connection, default-context resolution, page creation, and page initialization failures include a stable stage identifier and a sanitized endpoint without credentials, query parameters, or browser identifiers.
+
 ## Actions
 
 | Action | Purpose |
