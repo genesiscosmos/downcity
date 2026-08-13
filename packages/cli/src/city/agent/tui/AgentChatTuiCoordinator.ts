@@ -8,7 +8,7 @@
  * - header 展示 Session 上下文，footer 只展示当前可执行操作与滚动状态。
  */
 
-import { ProcessTerminal, TUI, type Component } from "@earendil-works/pi-tui";
+import { type Component } from "@earendil-works/pi-tui";
 import {
   AgentHeaderComponent,
   ChatEditorComponent,
@@ -52,13 +52,15 @@ import { resolve_transcript_scroll_delta } from "@/city/agent/tui/controllers/Tr
 import { build_attachment_tags } from "@/city/agent/tui/attachments/AttachmentInput.js";
 import { read_clipboard_attachment_paths } from "@/city/agent/tui/attachments/ClipboardAttachment.js";
 import { pick_native_files } from "@/city/agent/tui/attachments/NativeFilePicker.js";
+import { AlternateScreenTerminal } from "@/shared/tui/AlternateScreenTerminal.js";
+import { FullScreenTui } from "@/shared/tui/FullScreenTui.js";
 /**
  * Agent chat TUI 协调器。
  */
 export class AgentChatTuiCoordinator {
   private readonly options: AgentChatTuiCoordinatorOptions;
-  private readonly terminal: ProcessTerminal;
-  private readonly tui: TUI;
+  private readonly terminal: AlternateScreenTerminal;
+  private readonly tui: FullScreenTui;
   private readonly header: AgentHeaderComponent;
   private readonly footer: ChatFooterComponent;
   private readonly message_list: MessageListComponent;
@@ -149,8 +151,8 @@ export class AgentChatTuiCoordinator {
       transcript_scroll_offset: 0,
     };
 
-    this.terminal = new ProcessTerminal();
-    this.tui = new TUI(this.terminal);
+    this.terminal = new AlternateScreenTerminal();
+    this.tui = new FullScreenTui(this.terminal);
     this.terminal.setTitle(this.build_title());
 
     this.editor = new ChatEditorComponent(this.tui);

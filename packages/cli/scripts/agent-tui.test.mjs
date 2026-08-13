@@ -26,6 +26,8 @@ import { ModelPickerComponent } from "../bin/city/agent/tui/dialogs/ModelPicker.
 import { SessionPickerComponent } from "../bin/city/agent/tui/dialogs/SessionPicker.js";
 import { resolveSlashCommandInput } from "../bin/city/agent/tui/commands/resolve.js";
 import { parse_attachment_paths } from "../bin/city/agent/tui/attachments/AttachmentInput.js";
+import { AlternateScreenTerminal } from "../bin/shared/tui/AlternateScreenTerminal.js";
+import { FullScreenTui } from "../bin/shared/tui/FullScreenTui.js";
 
 // oxlint-disable-next-line no-control-regex -- 测试需要移除 ANSI SGR 颜色序列。
 const ANSI_SGR = /\u001B\[[0-9;]*m/g;
@@ -66,6 +68,84 @@ function create_assistant_message_event(message, mutation_id = "assistant-messag
     message,
   };
 }
+
+function create_terminal_spy(options = {}) {
+  const writes = [];
+  let start_count = 0;
+  let stop_count = 0;
+  return {
+    terminal: {
+      start() {
+        start_count += 1;
+        if (options.fail_start) throw new Error("terminal start failed");
+      },
+      stop() { stop_count += 1; },
+      async drainInput() {},
+      write(data) { writes.push(data); },
+      columns: 80,
+      rows: 24,
+      kittyProtocolActive: false,
+      moveBy() {},
+      hideCursor() {},
+      showCursor() {},
+      clearLine() {},
+      clearFromCursor() {},
+      clearScreen() {},
+      setTitle() {},
+      setProgress() {},
+    },
+    writes,
+    get start_count() { return start_count; },
+    get stop_count() { return stop_count; },
+  };
+}
+
+test("Chat Terminal 在 alternate screen 内渲染并幂等恢复主屏幕", () => {
+  const spy = create_terminal_spy();
+  const terminal = new AlternateScreenTerminal(spy.terminal);
+
+  terminal.start(() => {}, () => {});
+  terminal.stop();
+  terminal.stop();
+
+  assert.deepEqual(spy.writes, ["\u001B[?1049h", "\u001B[?1049l"]);
+  assert.equal(spy.start_count, 1);
+  assert.equal(spy.stop_count, 1);
+});
+
+test("底层 Terminal 启动失败时仍恢复主屏幕", () => {
+  const spy = create_terminal_spy({ fail_start: true });
+  const terminal = new AlternateScreenTerminal(spy.terminal);
+
+  assert.throws(() => terminal.start(() => {}, () => {}), /terminal start failed/);
+  assert.deepEqual(spy.writes, ["\u001B[?1049h", "\u001B[?1049l"]);
+  assert.equal(spy.stop_count, 0);
+});
+
+test("Chat TUI 连续刷新始终清屏并完整绘制当前帧", async () => {
+  const spy = create_terminal_spy();
+  const tui = new FullScreenTui(spy.terminal);
+  let content = "first frame";
+  tui.addChild({
+    render() { return [content]; },
+    invalidate() {},
+  });
+
+  tui.start();
+  tui.requestRender();
+  tui.requestRender();
+  await new Promise((resolve) => setImmediate(resolve));
+  content = "second frame";
+  tui.requestRender();
+  await new Promise((resolve) => setImmediate(resolve));
+  tui.stop();
+
+  const frames = spy.writes.filter((value) => value.includes("\u001B[2J\u001B[H"));
+  assert.equal(frames.length, 2);
+  assert.match(frames[0], /first frame/);
+  assert.match(frames[1], /second frame/);
+  assert.doesNotMatch(frames[1], /first frame/);
+});
 
 test("transcript 导航使用键盘且不消费终端鼠标事件", () => {
   assert.equal(resolve_transcript_scroll_delta("\u001B[5~", 12), 12);
