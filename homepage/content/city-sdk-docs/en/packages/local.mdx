@@ -3,18 +3,20 @@ title: "@downcity/local"
 description: Manage local product configuration with a database adapter and explicit repositories.
 ---
 
-`@downcity/local` provides the local SQLite adapter, configuration repositories, and Plugin loader
-shared by the CLI and Desktop. The database adapter only exposes query, mutation, transaction, and
-close operations; product repositories own the Agent, Workspace, and Plugin schemas.
+The `@downcity/local` root entry provides the SQLite adapter, encryption, and path primitives shared
+by the CLI and Desktop. Agent, Workspace, and Plugin schemas, repositories, and loaders live in the
+explicit `@downcity/local/product` subpath.
 
 ```ts
 import {
-  AgentRepository,
   LocalCrypto,
   LocalDatabase,
+} from "@downcity/local";
+import {
+  AgentRepository,
   WorkspaceRepository,
   ensure_local_schema,
-} from "@downcity/local";
+} from "@downcity/local/product";
 
 const database = new LocalDatabase({ filename: database_path });
 ensure_local_schema(database);

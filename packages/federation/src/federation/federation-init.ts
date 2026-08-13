@@ -37,10 +37,7 @@ import type {
   FederationAdminSessionRecord,
 } from "./auth/types.js";
 import type { BureauTokenRecord } from "../types/Bureau.js";
-import {
-  assert_bureau_server_records,
-  assert_federation_identity_schema,
-} from "./schema-compatibility.js";
+import { assert_bureau_server_records } from "./schema-validation.js";
 
 /**
  * Federation 初始化后的内部状态。
@@ -73,8 +70,6 @@ export async function initialize_federation(params: {
 }): Promise<FederationInitState> {
   const { runtime, services, require_ready } = params;
   const { database, env, builtinTables } = runtime;
-
-  await assert_federation_identity_schema(database);
 
   const service_databases = resolve_service_databases(services, database.schema_id);
   const user_schema = collect_service_schemas(services);
@@ -268,7 +263,7 @@ async function bootstrap_default_keys(
  * 初始化 Federation user token Key Ring 的数据库不变量。
  *
  * 关键说明（中文）
- * - 先收敛旧版本可能留下的多 active 数据，再建立 partial unique index。
+ * - 建立 partial unique index 前统一收敛异常的多 active 数据。
  * - 新数据库建立索引后才生成首把 key，所有 Worker isolate 通过数据库约束竞争唯一胜者。
  * - 重试覆盖滚动发布期间旧实例恰好插入 active key 的极短窗口。
  */

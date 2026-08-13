@@ -49,6 +49,13 @@ city federation status
 city agent list
 ```
 
+## CLI and Desktop City ownership
+
+The CLI and Desktop share the same `~/.downcity` data while owning independent City processes.
+Each City registers its host at startup. If the other host is already running, the new host asks
+whether it should close the existing City and take over. Cancelling leaves the existing host
+untouched. Stopping City does not remove Agent, Plugin, or Session data.
+
 ## User system dashboard
 
 Open `fed`, choose a saved Federation, then select `User system dashboard` in the Admin menu.

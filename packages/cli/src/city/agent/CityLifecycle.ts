@@ -23,9 +23,24 @@ import { list_agent_configs } from "@/city/process/registry/AgentConfigRepositor
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { CliError } from "@/shared/CliError.js";
 import { run_city_foreground } from "@/city/agent/Run.js";
+import { read_city_host_state, request_city_host_shutdown } from "@downcity/city";
+import prompts from "@/city/tui/Prompts.js";
 
 /** 启动 City；foreground=true 时由当前进程直接持有。 */
 export async function city_on(options: CityDaemonOptions): Promise<void> {
+  const existing_host = await read_city_host_state();
+  if (existing_host) {
+    const answer = await prompts({
+      type: "confirm",
+      name: "replace",
+      message: `City is already running in ${existing_host.owner} (pid ${existing_host.pid}). Close it and continue?`,
+      initial: false,
+    });
+    if (answer.replace !== true) {
+      throw new CliError({ title: "City start cancelled", note: "The existing City was left running." });
+    }
+    await request_city_host_shutdown(existing_host);
+  }
   if (options.foreground) {
     await run_city_foreground(options);
     return;
@@ -33,9 +48,7 @@ export async function city_on(options: CityDaemonOptions): Promise<void> {
   const host = String(options.host || "127.0.0.1").trim() || "127.0.0.1";
   const http_port = options.http_port ?? 5314;
   const rpc_port = options.rpc_port ?? 15314;
-  const agent_ids = list_agent_configs()
-    .filter((agent) => Boolean(agent.workspace_id))
-    .map((agent) => agent.agent_id);
+  const agent_ids = list_agent_configs().map((agent) => agent.agent_id);
   const args = build_city_run_args({ host, http_port, rpc_port });
   const current_file = fileURLToPath(import.meta.url);
   const cli_path = path.resolve(path.dirname(current_file), "../../index.js");

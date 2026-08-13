@@ -2,7 +2,7 @@
  * @downcity/federation 公共入口。
  *
  * Federation 是远程权威服务，Embassy 是统一客户端入口，Bureau 是产品或
- * 业务分区。现有低层协议导出暂时保留，便于仓库内调用方分阶段迁移。
+ * 业务分区由 Bureau 表达；低层实现只通过稳定的 Federation、Embassy 和 Bureau API 组合。
  */
 
 export { Embassy } from "./embassy/Embassy.js";

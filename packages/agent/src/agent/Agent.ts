@@ -90,6 +90,9 @@ export class Agent {
   /** 当前 Agent 长期资源的唯一内部运行时。 */
   private readonly runtime: AgentRuntime;
 
+  /** Agent 释放流程的唯一状态。 */
+  private dispose_promise?: Promise<void>;
+
   /** 当前 Agent configured instruction 的可变有序集合。 */
   private instruction: string[];
 
@@ -193,18 +196,21 @@ export class Agent {
    * - 不负责任何 transport（RPC / HTTP）；transport 由 `@downcity/city` 宿主管理。
    */
   async dispose(): Promise<void> {
-    this.unsubscribe_workspace_env();
-    this.unsubscribe_plugin_change();
-    this.sessions.dispose_title_generation();
-    try {
-      await this.runtime.dispose();
-    } finally {
+    this.dispose_promise ??= (async () => {
+      this.unsubscribe_workspace_env();
+      this.unsubscribe_plugin_change();
+      this.sessions.dispose_title_generation();
       try {
-        await this.logger.save_all_logs();
+        await this.runtime.dispose();
       } finally {
-        await this.workspace.dispose();
+        try {
+          await this.logger.save_all_logs();
+        } finally {
+          await this.workspace.dispose();
+        }
       }
-    }
+    })();
+    await this.dispose_promise;
   }
 
   /**

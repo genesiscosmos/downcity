@@ -32,5 +32,12 @@ await agent.dispose();
 - Each Agent owns its Plugin lifecycle and ActionSchedule.
 - The CLI daemon and Desktop window own independent City and Agent lifecycles.
 
+## Host coordination
+
+The CLI and Desktop use one host record when starting City. If the other host is already running,
+the new host asks for confirmation, requests a graceful shutdown, and waits for the existing process
+to release its transports. This protocol only coordinates City listener ownership. It adds no Agent
+started state and never modifies persisted Agent, Plugin, or Session data.
+
 Single-Agent execution, Workspace, Session, Plugin SDK, and RemoteAgent remain in
 `@downcity/agent`. Federation, Embassy, and Bureau belong to `@downcity/federation`.

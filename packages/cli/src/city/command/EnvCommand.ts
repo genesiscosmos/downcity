@@ -46,10 +46,11 @@ async function emit_env_list(target: EnvTarget, as_json: boolean): Promise<void>
   const keys = Object.keys(env).sort();
   if (as_json) {
     printResult({
+      type: "block",
       asJson: true,
       success: true,
       title: "env list",
-      payload: {
+      data: {
         scope: target.scope,
         agent_id: target.agent_id,
         file_path: target.file_path,
@@ -103,10 +104,11 @@ function emit_mutation_result(result: EnvMutationResult, as_json: boolean): void
   };
   if (as_json) {
     printResult({
+      type: "block",
       asJson: true,
       success: result.broadcast.failed_agents.length === 0,
       title: "env update",
-      payload,
+      data: payload,
     });
     return;
   }

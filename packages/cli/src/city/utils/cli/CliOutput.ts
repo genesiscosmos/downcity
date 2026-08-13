@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 所有命令通过 printResult 输出，不再直接调用 emitCliBlock / emitCliList / console.log。
  * - asJson=true → 结构化 JSON（脚本友好）；asJson=false → 委托 CliReporter 渲染人类可读文本。
- * - 支持三种输出类型：block（单段落）、list（列表分组）、payload（旧版键值对，兼容过渡）。
+ * - 支持两种输出类型：block（单段落）和 list（列表分组）。
  */
 
 import {
@@ -21,7 +21,6 @@ import type {
  * printResult 统一参数。
  *
  * 说明（中文）
- * - type 未传时走 payload 模式（key-value → block 转换，兼容旧调用方）。
  * - type="block" 时直接按 CliReportBlock 渲染。
  * - type="list" 时直接按 CliReportList 渲染。
  */
@@ -34,7 +33,7 @@ export type PrintResultParams = {
   title: string;
 
   /** 输出类型。 */
-  type?: "block" | "list";
+  type: "block" | "list";
 
   // --- block / list 共享 ---
   /** 视觉语气。 */
@@ -52,58 +51,19 @@ export type PrintResultParams = {
   /** 列表项。 */
   items?: CliReportListItem[];
 
-  // --- payload 模式（type 未传时使用，兼容过渡） ---
-  /** 键值对 payload。 */
-  payload?: Record<string, unknown>;
+  /** JSON 模式下的结构化业务数据。 */
+  data?: Record<string, unknown>;
+
 };
-
-/**
- * 将 payload 转换为 facts 列表（用于人类可读渲染）。
- */
-function payloadToFacts(payload: Record<string, unknown>): CliReportFact[] {
-  const entries = Object.entries(payload).filter(
-    ([key, value]) => key !== "success" && value !== undefined,
-  );
-  // error 置底，其余按字母序
-  const ordered = [...entries].sort((a, b) => {
-    if (a[0] === "error") return 1;
-    if (b[0] === "error") return -1;
-    return a[0].localeCompare(b[0]);
-  });
-
-  return ordered.map(([key, value]) => {
-    if (value === null || value === undefined) {
-      return { label: key, value: "null" };
-    }
-    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-      return { label: key, value: String(value) };
-    }
-    return { label: key, value: JSON.stringify(value) };
-  });
-}
-
-/**
- * 将 payload 展平为 JSON-safe 对象。
- */
-function payloadToJson(payload: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(payload)) {
-    if (key === "success") continue;
-    if (value === undefined) continue;
-    result[key] = value;
-  }
-  return result;
-}
 
 /**
  * 统一 CLI 输出入口。
  *
  * 行为（中文）
- * - asJson=true：输出 `{ success, data?: {...}, error?: string }` 到 stdout。
+ * - asJson=true：输出 `{ success, title, ... }` 到 stdout。
  * - asJson=false：
  *   - type="block" → emitCliBlock
  *   - type="list" → emitCliList
- *   - 未传 type → 将 payload 转为 facts 后 emitCliBlock
  */
 export function printResult(params: PrintResultParams): void {
   const asJson = params.asJson !== false;
@@ -120,9 +80,8 @@ export function printResult(params: PrintResultParams): void {
       output.title = params.title;
       if (params.summary) output.summary = params.summary;
       if (params.items && params.items.length > 0) output.items = params.items;
-    } else if (params.payload) {
-      Object.assign(output, payloadToJson(params.payload));
     }
+    if (params.data) output.data = params.data;
 
     console.log(JSON.stringify(output, null, 2));
     return;
@@ -150,11 +109,5 @@ export function printResult(params: PrintResultParams): void {
     return;
   }
 
-  // --- payload 兼容模式 ---
-  const facts = payloadToFacts(params.payload || {});
-  emitCliBlock({
-    tone: params.tone || (params.success ? "success" : "error"),
-    title: params.title,
-    facts,
-  });
+  throw new Error(`Unsupported CLI output type: ${params.type}`);
 }

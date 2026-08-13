@@ -15,6 +15,7 @@
       "@downcity/agent/internal/*": ["../../../packages/agent/bin/*"],
       "@downcity/city": ["../../../packages/city/bin/index.d.ts"],
       "@downcity/local": ["../../../packages/local/bin/index.d.ts"],
+      "@downcity/local/product": ["../../../packages/local/bin/product.d.ts"],
       "@downcity/type": ["../../../packages/type/bin/index.d.ts"]
     },
     "strict": true,

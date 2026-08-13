@@ -81,10 +81,11 @@ export function registerPluginsCommand(program: Command): void {
       const catalog = list_plugin_catalog();
       if (options.json) {
         printResult({
+          type: "block",
           asJson: true,
           success: true,
           title: "plugins",
-          payload: { plugins: catalog },
+          data: { plugins: catalog },
         });
         return;
       }
@@ -161,10 +162,11 @@ export function registerPluginsCommand(program: Command): void {
       if (!catalog_item) throw new Error(`Plugin not found: ${plugin_name}`);
       const installed = get_installed_plugin(plugin_name)?.installation;
       printResult({
+        type: "block",
         asJson: options.json === true,
         success: true,
         title: "plugin",
-        payload: {
+        data: {
           plugin: {
             ...catalog_item,
             ...(installed
@@ -316,10 +318,11 @@ function register_resource_commands(plugin: Command): void {
         item: redact_plugin_schema_value(item.item, catalog_item.resource_schema),
       }));
       printResult({
+        type: "block",
         asJson: options.json === true,
         success: true,
         title: "plugin resources",
-        payload: { plugin_name: catalog_item.plugin_name, resources },
+        data: { plugin_name: catalog_item.plugin_name, resources },
       });
     });
 
@@ -442,10 +445,11 @@ function register_action_command(plugin: Command): void {
       });
       const result = remote.data;
       printResult({
+        type: "block",
         asJson: options.json === true,
         success: remote.success && result?.success === true,
         title: remote.success && result?.success ? "plugin action ok" : "plugin action failed",
-        payload: {
+        data: {
           agent_id: target.agent_id,
           plugin_name,
           action_name,
@@ -461,10 +465,11 @@ function register_action_command(plugin: Command): void {
 function print_binding(binding: ReturnType<typeof list_agent_plugin_bindings>[number], as_json: boolean): void {
   const schema = get_plugin_catalog_item(binding.plugin_name)?.config_schema;
   printResult({
+    type: "block",
     asJson: as_json,
     success: true,
     title: "plugin binding",
-    payload: {
+    data: {
       binding: {
         ...binding,
         config: redact_plugin_schema_value(binding.config, schema) as JsonObject,

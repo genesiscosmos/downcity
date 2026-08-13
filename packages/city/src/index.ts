@@ -7,6 +7,17 @@
 
 export { City } from "./runtime/City.js";
 export type { CityListenOptions, CityRuntimeOptions } from "./types/City.js";
+export {
+  create_city_host_instance_id,
+  get_city_host_state_path,
+  is_process_alive,
+  read_city_host_state,
+  register_city_host,
+  request_city_host_shutdown,
+  unregister_city_host,
+  wait_for_city_host_exit,
+} from "./host/CityHostRegistry.js";
+export type { CityHostOwner, CityHostState } from "./host/CityHostRegistry.js";
 
 export { AgentHTTP } from "./transport/http/AgentHTTP.js";
 export { CityHTTP } from "./transport/http/CityHTTP.js";

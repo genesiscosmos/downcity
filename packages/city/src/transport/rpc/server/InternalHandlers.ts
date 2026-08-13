@@ -41,6 +41,12 @@ export async function handleInternalRpcRequest(params: {
       });
       return true;
     }
+    case "internal.city.shutdown": {
+      if (!options.shutdown_city) throw new Error("RPC host does not provide City shutdown");
+      write_success(request.id, { accepted: true });
+      setImmediate(() => void options.shutdown_city?.());
+      return true;
+    }
     case "internal.status.get": {
       const context = requireAgent(options);
       write_success(request.id, {

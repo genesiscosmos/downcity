@@ -101,10 +101,11 @@ export async function emit_registered_agent_list_with_options(options?: {
     : all_agents;
   if (options?.as_json) {
     printResult({
+      type: "block",
       asJson: true,
       success: true,
       title: "agents",
-      payload: { count: agents.length, running_only: options.running_only === true, agents },
+      data: { count: agents.length, running_only: options.running_only === true, agents },
     });
     return;
   }

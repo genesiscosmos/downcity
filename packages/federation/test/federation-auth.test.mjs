@@ -59,36 +59,15 @@ test("Federation 新数据库使用 Bureau 身份与绑定机器凭证表", asyn
   }
 })
 
-test("Federation 拒绝旧 City 身份表和无法确定归属的 Bureau Token", async () => {
-  const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-legacy-identity-schema-"))
+test("Federation 拒绝缺少 Server 配置的 Bureau 记录", async () => {
+  const temp_dir = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-invalid-bureau-schema-"))
   try {
-    const city_db = createSqliteDb(path.join(temp_dir, "legacy-city.sqlite"))
-    await city_db.execute_ddl("CREATE TABLE cities (city_id TEXT PRIMARY KEY, name TEXT NOT NULL)")
-    await assert.rejects(
-      create_test_federation({ database: city_db }).health(),
-      /identity schema migration required: legacy cities table exists/,
-    )
-
-    const token_db = createSqliteDb(path.join(temp_dir, "legacy-token.sqlite"))
-    await token_db.execute_ddl("CREATE TABLE federation_bureau_tokens (token_id TEXT PRIMARY KEY, token_hash TEXT NOT NULL, status TEXT NOT NULL)")
-    await assert.rejects(
-      create_test_federation({ database: token_db }).health(),
-      /identity schema migration required: legacy Bureau Token records have no bureau_id/,
-    )
-
-    const bureau_db = createSqliteDb(path.join(temp_dir, "legacy-bureau.sqlite"))
-    await bureau_db.execute_ddl("CREATE TABLE federation_bureaus (bureau_id TEXT PRIMARY KEY, name TEXT NOT NULL, server_url TEXT NOT NULL, state TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, archived_at TEXT NOT NULL)")
-    await assert.rejects(
-      create_test_federation({ database: bureau_db }).health(),
-      /identity schema migration required: legacy Bureau records store server_url on the identity table/,
-    )
-
     const orphan_bureau_db = createSqliteDb(path.join(temp_dir, "orphan-bureau.sqlite"))
     await orphan_bureau_db.execute_ddl("CREATE TABLE federation_bureaus (bureau_id TEXT PRIMARY KEY, name TEXT NOT NULL, state TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, archived_at TEXT NOT NULL)")
     await orphan_bureau_db.execute_ddl("INSERT INTO federation_bureaus (bureau_id, name, state, created_at, updated_at, archived_at) VALUES ('orphan', 'Orphan', 'active', 't', 't', '')")
     await assert.rejects(
       create_test_federation({ database: orphan_bureau_db }).health(),
-      /identity schema migration required: Bureau Server record is missing for orphan/,
+      /Bureau Server record is missing: orphan/,
     )
   } finally {
     await fs.rm(temp_dir, { recursive: true, force: true })

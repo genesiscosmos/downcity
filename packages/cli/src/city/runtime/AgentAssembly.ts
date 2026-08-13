@@ -10,9 +10,8 @@ import {
   type LocalAgentConfig,
   type LocalWorkspaceConfig,
   type PluginRepository,
-  resolve_local_root_path,
   type LocalPluginType,
-} from "@downcity/local";
+} from "@downcity/local/product";
 import { Agent, type AgentModel, type AgentOptions, Workspace } from "@downcity/agent";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell } from "@downcity/shell";
@@ -22,7 +21,8 @@ import {
 } from "@downcity/plugins";
 import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
 import { createCityAiAgentModel } from "@/city/runtime/city-model/CityAiServiceBinding.js";
-import { resolve_local_agent_env } from "@downcity/local";
+import { resolve_local_agent_env } from "@downcity/local/product";
+import { resolve_local_root_path } from "@downcity/local";
 import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
 
 /** 创建 CLI 与 Desktop 可共享语义的官方 Plugin constructor 集合。 */

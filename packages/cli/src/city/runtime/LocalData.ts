@@ -6,16 +6,18 @@
  */
 
 import {
-  AgentRepository,
   get_local_database_path,
   LocalCrypto,
   LocalDatabase,
-  PluginRepository,
   resolve_local_root_path,
+} from "@downcity/local";
+import {
+  AgentRepository,
+  ensure_local_schema,
+  PluginRepository,
   SecureSettingRepository,
   WorkspaceRepository,
-  ensure_local_schema,
-} from "@downcity/local";
+} from "@downcity/local/product";
 import { AgentTokenRepository } from "@/city/runtime/auth/AgentTokenRepository.js";
 import { ensure_cli_local_schema } from "@/city/runtime/LocalCliSchema.js";
 

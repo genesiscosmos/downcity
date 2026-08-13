@@ -85,6 +85,18 @@ export async function cleanup_stale_daemon_files(): Promise<void> {
   ]);
 }
 
+/** 仅由当前 daemon 实例删除自己的 pid/meta 文件。 */
+export async function unregister_current_daemon_process(): Promise<void> {
+  const instance_id = String(process.env.DOWNCITY_DAEMON_INSTANCE_ID || "").trim();
+  if (!instance_id) return;
+  const [pid, meta] = await Promise.all([read_daemon_pid(), read_daemon_meta()]);
+  if (pid !== process.pid || meta?.pid !== process.pid || meta.instance_id !== instance_id) return;
+  await Promise.all([
+    fs.remove(get_daemon_pid_path()),
+    fs.remove(get_daemon_meta_path()),
+  ]);
+}
+
 /** 诊断 City daemon stale 状态。 */
 export async function diagnose_daemon_stale_reasons(): Promise<DaemonStaleReason[]> {
   const reasons: DaemonStaleReason[] = [];

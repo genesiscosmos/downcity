@@ -6,13 +6,15 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-  AgentRepository,
-  ensure_local_schema,
   LocalCrypto,
   LocalDatabase,
+} from "../bin/index.js";
+import {
+  AgentRepository,
+  ensure_local_schema,
   SecureSettingRepository,
   WorkspaceRepository,
-} from "../bin/index.js";
+} from "../bin/product.js";
 
 /** 创建临时本地数据依赖。 */
 async function create_local_data() {

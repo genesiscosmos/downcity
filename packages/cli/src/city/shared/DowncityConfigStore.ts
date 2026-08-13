@@ -52,7 +52,7 @@ export function normalize_federation_url(value: string): string {
 }
 
 /**
- * 读取 Downcity 本地配置，并按需迁移旧 `city.city.state` key。
+ * 读取当前 Downcity 本地安全配置。
  */
 export function read_downcity_config(): DowncityConfig {
   return with_cli_local_data((data) =>

@@ -6,7 +6,12 @@
  */
 
 import { Agent } from "@downcity/agent";
-import { City } from "@downcity/city";
+import {
+  City,
+  create_city_host_instance_id,
+  register_city_host,
+  unregister_city_host,
+} from "@downcity/city";
 import type { CityDaemonOptions } from "@/city/process/daemon/Types.js";
 import { create_agent_http_gateway_app } from "@/city/agent/AgentHttpGateway.js";
 import { AuthService } from "@/city/runtime/auth/AuthService.js";
@@ -32,6 +37,7 @@ export class CliCityRuntime {
 
   /** CLI 宿主拥有的本地数据库和 Repository。 */
   private readonly data: CliLocalData;
+  private readonly host_instance_id: string;
 
   private stopped = false;
 
@@ -46,12 +52,14 @@ export class CliCityRuntime {
     agents: readonly Agent[];
     /** CLI 宿主使用的本地产品数据。 */
     data: CliLocalData;
+    host_instance_id: string;
   }) {
     this.city = input.city;
     this.http_port = input.http_port;
     this.rpc_port = input.rpc_port;
     this.agents = input.agents;
     this.data = input.data;
+    this.host_instance_id = input.host_instance_id;
   }
 
   /** 按依赖逆序幂等释放全部宿主资源。 */
@@ -63,7 +71,10 @@ export class CliCityRuntime {
     results.push(...await Promise.allSettled(
       this.agents.map(async (agent) => await agent.dispose()),
     ));
-    this.data.database.close();
+    results.push(...await Promise.allSettled([
+      Promise.resolve().then(() => this.data.database.close()),
+      unregister_city_host(this.host_instance_id),
+    ]));
     const errors = results.flatMap((result) =>
       result.status === "rejected" ? [result.reason] : [],
     );
@@ -123,6 +134,7 @@ export class CliCityRuntime {
         },
       },
       rpc: {
+        shutdown: () => { process.kill(process.pid, "SIGTERM"); },
         resolve_session_model: async (agent_id, model_id) =>
           await resolve_cli_agent_model(
             model_id,
@@ -147,7 +159,19 @@ export class CliCityRuntime {
         rpc: { host: "127.0.0.1", port: rpc_port },
         http: { host, port: http_port },
       });
-      return new CliCityRuntime({ city, http_port, rpc_port, agents, data });
+      const host_instance_id = String(process.env.DOWNCITY_DAEMON_INSTANCE_ID || "").trim()
+        || create_city_host_instance_id();
+      await register_city_host({
+        owner: "cli",
+        pid: process.pid,
+        instance_id: host_instance_id,
+        started_at: new Date().toISOString(),
+        http_host: host,
+        http_port,
+        rpc_host: "127.0.0.1",
+        rpc_port,
+      });
+      return new CliCityRuntime({ city, http_port, rpc_port, agents, data, host_instance_id });
     } catch (error) {
       await city.close().catch(() => undefined);
       await Promise.allSettled(agents.map(async (agent) => await agent.dispose()));

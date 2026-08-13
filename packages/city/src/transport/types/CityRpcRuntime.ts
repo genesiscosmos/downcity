@@ -9,6 +9,9 @@ import type { AgentSessionModelResolver } from "@/transport/types/AgentSessionMo
 
 /** City RPC transport 所需的宿主能力。 */
 export interface CityRpcRuntimeOptions {
+  /** 处理宿主关闭请求；调用方负责安排实际进程退出。 */
+  shutdown?: () => void | Promise<void>;
+
   /** 为指定 Agent 创建远程 Session 所需的模型解析器。 */
   resolve_session_model?: (
     agent_id: string,

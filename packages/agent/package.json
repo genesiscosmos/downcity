@@ -1,8 +1,8 @@
 {
   "name": "@downcity/agent",
-  "version": "1.1.344",
+  "version": "1.1.345",
   "type": "module",
-  "description": "Downcity Agent 运行时 — 单 Agent 执行壳与本机 RPC 能力",
+  "description": "Downcity 单 Agent SDK 与执行运行时",
   "main": "./bin/index.js",
   "types": "./bin/index.d.ts",
   "exports": {

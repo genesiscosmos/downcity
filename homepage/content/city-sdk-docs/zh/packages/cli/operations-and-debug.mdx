@@ -52,6 +52,12 @@ city agent list
 
 第一条适合打开交互入口，后两条适合确认 City 连接和本机 Agent 运行状态。
 
+## CLI 与 Desktop 的 City 互斥
+
+CLI 和 Desktop 使用同一组 `~/.downcity` 数据，但各自拥有独立的 City 进程。City
+启动时会登记当前宿主；如果另一端已经运行，启动方会先询问是否关闭已有 City 并接管。
+取消接管不会修改已有宿主。City 关闭后，Agent、Plugin 和 Session 数据仍保留在共享数据目录。
+
 ## 用户系统 Dashboard
 
 打开 `fed`，选择一个已保存的 Federation，然后在 Admin 菜单中进入 `用户系统 Dashboard`。

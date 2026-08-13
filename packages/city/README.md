@@ -43,3 +43,7 @@ rpc://127.0.0.1:15314/<agent_id>
 单 Agent 的 Workspace、Session、Plugin SDK 和 RemoteAgent 位于
 `@downcity/agent`。Federation、Embassy 与 Bureau 位于
 `@downcity/federation`。
+
+CLI 与 Desktop 使用包内的宿主协调 API 登记 City 进程所有权。状态保存在
+`~/.downcity/runtimes/city/host.json`；接管方先获得用户确认，再请求已有宿主优雅退出，
+等待原进程释放 transport 后才能登记新宿主。

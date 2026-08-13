@@ -50,6 +50,8 @@ export interface RpcRequestHandlerOptions {
     /** 当前 City 加载的 Agent ID。 */
     agent_ids: string[];
   };
+  /** 请求当前宿主优雅退出。 */
+  shutdown_city?: () => void | Promise<void>;
 }
 
 /**

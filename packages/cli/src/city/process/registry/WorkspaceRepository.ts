@@ -1,7 +1,7 @@
 /** CLI Workspace 配置适配层。 */
 
 import { with_cli_local_data } from "@/city/runtime/LocalData.js";
-import type { LocalWorkspaceConfig } from "@downcity/local";
+import type { LocalWorkspaceConfig } from "@downcity/local/product";
 
 export type WorkspaceRegistryRecord = LocalWorkspaceConfig;
 

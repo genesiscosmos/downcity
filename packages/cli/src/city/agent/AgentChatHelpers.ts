@@ -560,10 +560,11 @@ export async function runOneShotChat(params: {
       },
     });
     printResult({
+      type: "block",
       asJson: true,
       success: outcome.success,
       title: "agent chat",
-      payload: {
+      data: {
         agent: params.agent_id,
         ...(outcome.project_root ? { project_root: outcome.project_root } : {}),
         session_id: outcome.session_id,

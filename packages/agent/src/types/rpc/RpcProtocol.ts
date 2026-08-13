@@ -219,12 +219,6 @@ type RpcRequestPayload =
   | {
       /** 请求 id，用于匹配响应。 */
       id: string;
-      /** 读取 City 宿主进程状态，不绑定具体 Agent。 */
-      method: "internal.city.status";
-    }
-  | {
-      /** 请求 id，用于匹配响应。 */
-      id: string;
       /** 读取 Agent 内部状态。 */
       method: "internal.status.get";
     }
@@ -401,18 +395,6 @@ export interface RpcInternalStatus {
   /** 当前 Agent 绑定的 Workspace 绝对路径。 */
   workspace_path: string;
   /** daemon 启动实例 ID；非 daemon 前台进程返回空字符串。 */
-  instance_id: string;
-}
-
-/** City daemon internal.city.status 返回的宿主身份。 */
-export interface RpcCityInternalStatus {
-  /** RPC 服务健康状态。 */
-  status: string;
-  /** City 宿主进程 ID。 */
-  pid: number;
-  /** 当前 City 加载的 Agent ID。 */
-  agent_ids: string[];
-  /** daemon 启动实例 ID。 */
   instance_id: string;
 }
 

@@ -1,7 +1,7 @@
 {
   "name": "@downcity/local",
-  "version": "0.2.2",
-  "description": "Downcity CLI 与 Desktop 共用的本地数据库 Adapter 和产品 Repository。",
+  "version": "0.2.3",
+  "description": "Downcity 本地数据库基础设施与显式产品数据组件。",
   "type": "module",
   "main": "./bin/index.js",
   "module": "./bin/index.js",
@@ -10,6 +10,10 @@
     ".": {
       "types": "./bin/index.d.ts",
       "import": "./bin/index.js"
+    },
+    "./product": {
+      "types": "./bin/product.d.ts",
+      "import": "./bin/product.js"
     }
   },
   "files": [

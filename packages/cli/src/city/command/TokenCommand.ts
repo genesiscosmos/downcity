@@ -33,10 +33,11 @@ export function registerAgentTokenCommand(agent_command: Command): void {
       );
       if (options.json) {
         printResult({
+          type: "block",
           asJson: true,
           success: true,
           title: "agent tokens",
-          payload: { agent_id: target.agent_id, tokens },
+          data: { agent_id: target.agent_id, tokens },
         });
         return;
       }
@@ -73,10 +74,11 @@ export function registerAgentTokenCommand(agent_command: Command): void {
       );
       if (options.json) {
         printResult({
+          type: "block",
           asJson: true,
           success: true,
           title: "agent token created",
-          payload: { ...issued },
+          data: { ...issued },
         });
         return;
       }
@@ -108,10 +110,11 @@ export function registerAgentTokenCommand(agent_command: Command): void {
       );
       if (options.json) {
         printResult({
+          type: "block",
           asJson: true,
           success: true,
           title: "agent token deleted",
-          payload: { agent_id: target.agent_id, token_id },
+          data: { agent_id: target.agent_id, token_id },
         });
         return;
       }

@@ -6,6 +6,7 @@
 
 import type { CityDaemonOptions } from "@/city/process/daemon/Types.js";
 import { CliCityRuntime } from "@/city/agent/CliCityRuntime.js";
+import { unregister_current_daemon_process } from "@/city/process/daemon/Manager.js";
 
 /** 启动前台 City，并等待进程信号。 */
 export async function run_city_foreground(options: CityDaemonOptions): Promise<void> {
@@ -14,8 +15,16 @@ export async function run_city_foreground(options: CityDaemonOptions): Promise<v
   const shutdown = async (): Promise<void> => {
     if (shutting_down) return;
     shutting_down = true;
-    await runtime.stop();
-    process.exit(0);
+    let exit_code = 0;
+    try {
+      await runtime.stop();
+    } catch (error) {
+      exit_code = 1;
+      console.error("City shutdown failed", error);
+    } finally {
+      await unregister_current_daemon_process();
+      process.exit(exit_code);
+    }
   };
   process.on("SIGINT", () => void shutdown());
   process.on("SIGTERM", () => void shutdown());

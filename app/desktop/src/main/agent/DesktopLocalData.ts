@@ -5,16 +5,18 @@
  */
 
 import {
-  AgentRepository,
-  ensure_local_schema,
   get_local_database_path,
   LocalCrypto,
   LocalDatabase,
-  PluginRepository,
   resolve_local_root_path,
+} from "@downcity/local";
+import {
+  AgentRepository,
+  ensure_local_schema,
+  PluginRepository,
   SecureSettingRepository,
   WorkspaceRepository,
-} from "@downcity/local";
+} from "@downcity/local/product";
 
 /** Desktop main 使用的一组本地数据依赖。 */
 export interface DesktopLocalData {

@@ -4,7 +4,7 @@
  * 本模块通过 Local AgentRepository 读写配置，只投影 CLI 控制面类型。
  */
 
-import type { LocalAgentConfig } from "@downcity/local";
+import type { LocalAgentConfig } from "@downcity/local/product";
 import { with_cli_local_data } from "@/city/runtime/LocalData.js";
 import type { JsonObject } from "@downcity/agent";
 import type {

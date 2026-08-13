@@ -5,7 +5,7 @@
  * - 兼容 Telegram / Feishu / TUI 等统一的 `<file>` 协议入口。
  * - Data URL 附件先由 Session Attachment Store 落盘，Message 只保存文件路径。
  * - 模型执行阶段再读取本地文件，并转换为模型可消费的数据格式。
- * - 历史中的相对路径与旧版 `file://` 会在喂给模型前临时 hydrate。
+ * - Workspace 相对路径会在喂给模型前临时 hydrate。
  *
  * 输入到输出（中文）：
  * `file.url = data:<media-type>;base64,...`
@@ -18,7 +18,6 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   isFileUIPart,
   isTextUIPart,
@@ -82,7 +81,6 @@ function resolveHydratableFilePath(
 ): string | null {
   const raw = String(rawPath || "").trim();
   if (!raw || raw.startsWith("data:") || /^https?:\/\//i.test(raw)) return null;
-  if (raw.startsWith("file://")) return fileURLToPath(raw);
   if (path.isAbsolute(raw)) return path.resolve(raw);
 
   const root = path.resolve(String(project_root || "").trim() || process.cwd());
@@ -155,11 +153,11 @@ export async function persist_user_prompt_file_parts(
 }
 
 /**
- * 将历史中的本地 file part 临时转换为模型可消费的 data URL。
+ * 将本地 file part 临时转换为模型可消费的 data URL。
  *
  * 关键点（中文）
  * - 该函数只修改本轮内存消息，不回写历史。
- * - 新历史保留 Agent 根目录相对路径，旧历史的 `file://` 仍继续兼容。
+ * - Message 保留 Workspace 根目录相对路径，模型输入阶段才读取文件。
  */
 export async function hydrate_file_url_parts_for_model(
   messages: SessionMessageRecordV1[],

@@ -1,13 +1,14 @@
 /** Downcity Desktop Electron 主进程入口。 */
-import { app, BrowserWindow, ipcMain, nativeImage } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentController } from "@/agent/AgentController.js";
+import { read_city_host_state, request_city_host_shutdown } from "@downcity/city";
 
 const current_directory = path.dirname(fileURLToPath(import.meta.url));
 const development_macos_icon_path = path.join(current_directory, "../../build/icon.iconset/icon_512x512@2x.png");
 const development_window_icon_path = path.join(current_directory, "../../build/icons/512x512.png");
-const agent_controller = new AgentController();
+let agent_controller: AgentController | undefined;
 let quitting = false;
 
 /** 在 Electron 开发进程中设置平台原生图标。 */
@@ -38,24 +39,56 @@ function create_window(): BrowserWindow {
   return window;
 }
 
-ipcMain.handle("agent:list", () => agent_controller.list_agents());
-ipcMain.handle("agent:create", (_event, agent_id: string, workspace_path: string, model_id: string) => agent_controller.create_agent(agent_id, workspace_path, model_id));
-ipcMain.handle("workspace:list", () => agent_controller.list_workspaces());
-ipcMain.handle("agent:connect", (_event, agent_id: string) => agent_controller.connect_agent(agent_id));
-ipcMain.handle("chat:list-sessions", (_event, agent_id: string) => agent_controller.list_sessions(agent_id));
-ipcMain.handle("chat:create-session", (_event, agent_id: string) => agent_controller.create_session(agent_id));
-ipcMain.handle("chat:list-messages", (_event, agent_id: string, session_id: string) => agent_controller.list_messages(agent_id, session_id));
-ipcMain.handle("chat:send", (_event, agent_id: string, session_id: string, text: string) => agent_controller.send_message(agent_id, session_id, text));
+/** 返回已创建的 Desktop Agent 控制器。 */
+function require_agent_controller(): AgentController {
+  if (!agent_controller) throw new Error("Desktop Agent controller is not ready");
+  return agent_controller;
+}
 
-app.whenReady().then(() => {
+ipcMain.handle("agent:list", () => require_agent_controller().list_agents());
+ipcMain.handle("agent:create", (_event, agent_id: string, workspace_path: string, model_id: string) => require_agent_controller().create_agent(agent_id, workspace_path, model_id));
+ipcMain.handle("workspace:list", () => require_agent_controller().list_workspaces());
+ipcMain.handle("agent:connect", (_event, agent_id: string) => require_agent_controller().connect_agent(agent_id));
+ipcMain.handle("chat:list-sessions", (_event, agent_id: string) => require_agent_controller().list_sessions(agent_id));
+ipcMain.handle("chat:create-session", (_event, agent_id: string) => require_agent_controller().create_session(agent_id));
+ipcMain.handle("chat:list-messages", (_event, agent_id: string, session_id: string) => require_agent_controller().list_messages(agent_id, session_id));
+ipcMain.handle("chat:send", (_event, agent_id: string, session_id: string, text: string) => require_agent_controller().send_message(agent_id, session_id, text));
+
+async function prepare_city_host(): Promise<void> {
+  const existing_host = await read_city_host_state();
+  if (!existing_host) return;
+  const result = await dialog.showMessageBox({
+    type: "question",
+    buttons: ["关闭并继续", "取消"],
+    defaultId: 1,
+    cancelId: 1,
+    title: "Downcity City 已在运行",
+    message: `${existing_host.owner === "cli" ? "CLI" : "Desktop"} 正在运行 City（PID ${existing_host.pid}）。`,
+    detail: "是否关闭当前 City 并由 Desktop 接管？",
+  });
+  if (result.response !== 0) throw new Error("Desktop City start cancelled");
+  await request_city_host_shutdown(existing_host);
+}
+
+app.whenReady().then(async () => {
+  await prepare_city_host();
+  const next_agent_controller = new AgentController();
+  agent_controller = next_agent_controller;
+  await next_agent_controller.ready();
   configure_development_icon();
   create_window();
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) create_window(); });
+}).catch((error: unknown) => {
+  if (error instanceof Error && error.message !== "Desktop City start cancelled") {
+    console.error("Downcity Desktop start failed", error);
+  }
+  app.quit();
 });
+process.on("SIGTERM", () => app.quit());
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 app.on("before-quit", (event) => {
   if (quitting) return;
   event.preventDefault();
   quitting = true;
-  void agent_controller.dispose().finally(() => app.quit());
+  void (agent_controller?.dispose() ?? Promise.resolve()).finally(() => app.quit());
 });

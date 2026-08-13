@@ -2,7 +2,7 @@
  * City 交互式 TUI prompt 适配层。
  *
  * 关键点（中文）
- * - 保持原有 prompts 风格的调用协议，减少业务模块改动。
+ * - 使用 CLI 自己定义的 prompt 协议，统一委托 shared pi-tui runtime。
  * - 内部统一委托 shared pi-tui runtime，和其它 CLI TUI 保持同一套框架。
  */
 
@@ -11,7 +11,7 @@ import { t } from "@/shared/CliLocale.js";
 import type { tui_prompt_option } from "@/shared/types/TuiPrompt.js";
 
 /**
- * 单个问题的最小兼容类型。
+ * 单个交互问题。
  */
 export interface PromptObject {
   /** 问题类型。 */
@@ -46,14 +46,8 @@ export interface prompt_choice_option {
   /** 左侧 sidebar 展示标题。 */
   title?: string;
 
-  /** 兼容旧调用方的展示标签。 */
-  label?: string;
-
   /** 当前选项聚焦时展示在 main/footer 的说明。 */
   description?: string;
-
-  /** 兼容旧调用方的说明文本。 */
-  hint?: string;
 
   /** 选中后返回给调用方的业务值。 */
   value?: unknown;
@@ -286,16 +280,13 @@ function to_tui_option(choice: prompt_choice, value: string): tui_prompt_option 
 
 function format_choice_label(choice?: {
   title?: string;
-  label?: string;
 }): string {
-  return String(choice?.title ?? choice?.label ?? "").trim();
+  return String(choice?.title || "").trim();
 }
 
 function choice_description(choice?: {
   title?: string;
-  label?: string;
   description?: string;
-  hint?: string;
   disabled?: boolean;
 }): string {
   if (choice?.disabled === true) {
@@ -304,7 +295,7 @@ function choice_description(choice?: {
       en: "This is a sidebar section heading used to group actions in the current menu.",
     });
   }
-  const hint = String(choice?.description ?? choice?.hint ?? "").trim();
+  const hint = String(choice?.description || "").trim();
   if (hint) return hint;
   const title = format_choice_label(choice);
   return t({

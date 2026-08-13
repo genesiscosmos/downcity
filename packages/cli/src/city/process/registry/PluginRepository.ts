@@ -10,7 +10,7 @@
 import {
   normalize_installation_id,
   normalize_plugin_name as normalize_local_plugin_name,
-} from "@downcity/local";
+} from "@downcity/local/product";
 import { with_cli_local_data } from "@/city/runtime/LocalData.js";
 import { create_cli_builtin_plugin_types } from "@/city/runtime/AgentAssembly.js";
 import { get_plugin_catalog_item } from "@/city/process/plugin/PluginCatalog.js";

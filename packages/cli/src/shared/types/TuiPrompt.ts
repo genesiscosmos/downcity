@@ -10,7 +10,7 @@
  * TUI 列表选项。
  */
 export interface tui_prompt_option {
-  /** 左侧展示文案。 */
+  /** 左侧展示标题。 */
   label: string;
 
   /** 选中后返回给业务层的稳定值。 */

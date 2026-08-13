@@ -81,10 +81,11 @@ export function emit_federation_status(options?: { as_json?: boolean }): void {
   const state = read_federation_membership_state();
   if (options?.as_json === true) {
     printResult({
+      type: "block",
       asJson: true,
       success: state.source !== "missing",
       title: "federation membership",
-      payload: {
+      data: {
         connection: state,
         federations: list_federations(),
       },
@@ -114,10 +115,11 @@ export async function emitCityUserWhoami(options?: { as_json?: boolean }): Promi
     const user = await embassy_session_resolver.resolve_current_user();
     if (options?.as_json === true) {
       printResult({
+        type: "block",
         asJson: true,
         success: true,
         title: "city user",
-        payload: {
+        data: {
           federation_url: user.federation_url,
           bureau_id: user.bureau_id,
           user_id: user.user_id,
@@ -148,10 +150,11 @@ export async function emitCityUserWhoami(options?: { as_json?: boolean }): Promi
   } catch (error) {
     if (options?.as_json === true) {
       printResult({
+        type: "block",
         asJson: true,
         success: false,
         title: "city user",
-        payload: {
+        data: {
           error: error instanceof Error ? error.message : String(error),
         },
       });
@@ -169,10 +172,11 @@ export function emit_federation_list(options?: { as_json?: boolean }): void {
   const servers = list_federations();
   if (options?.as_json === true) {
     printResult({
+      type: "block",
       asJson: true,
       success: true,
       title: "federations",
-      payload: {
+      data: {
         count: servers.length,
         federations: servers,
       },
@@ -220,10 +224,11 @@ export async function run_federation_join_command(params: {
   write_downcity_config(state);
 
   printResult({
+    type: "block",
     asJson: params.as_json === true,
     success: true,
     title: "federation joined",
-    payload: {
+    data: {
       federation_url,
       fix: "Run `city federation login` to sign in as a user.",
     },
@@ -237,10 +242,11 @@ export async function run_federation_use_command(params: {
   const server = find_federation(params.server);
   if (!server) {
     printResult({
+      type: "block",
       asJson: params.as_json === true,
       success: false,
       title: "city use failed",
-      payload: {
+      data: {
         error: "No federation matched the input",
         fix: "Run `city federation list` to inspect available federations.",
       },
@@ -255,10 +261,11 @@ export async function run_federation_use_command(params: {
   write_downcity_config(state);
 
   printResult({
+    type: "block",
     asJson: params.as_json === true,
     success: true,
     title: "federation selected",
-    payload: {
+    data: {
       federation_url: server.federation_url,
       source: server.source,
       has_user_session: server.has_user_session,
@@ -304,20 +311,22 @@ export async function run_federation_login_command(params: {
   });
   if (!session) {
     printResult({
+      type: "block",
       asJson: params.as_json === true,
       success: false,
       title: "federation login cancelled",
-      payload: { federation_url },
+      data: { federation_url },
     });
     return;
   }
 
   save_federation_user_session(session);
   printResult({
+    type: "block",
     asJson: params.as_json === true,
     success: true,
     title: "federation user signed in",
-    payload: {
+    data: {
       federation_url: session.federation_url,
       bureau_id: session.bureau_id,
       user_id: session.user_id,
@@ -336,10 +345,11 @@ export function run_federation_logout_command(options?: { as_json?: boolean }): 
     sessions,
   });
   printResult({
+    type: "block",
     asJson: options?.as_json === true,
     success: true,
     title: "federation user signed out",
-    payload: {
+    data: {
       federation_url,
     },
   });
@@ -358,10 +368,11 @@ export function run_federation_leave_command(options?: { as_json?: boolean }): v
     sessions,
   });
   printResult({
+    type: "block",
     asJson: options?.as_json === true,
     success: true,
     title: "federation left",
-    payload: {
+    data: {
       left: federation_url,
       selected: undefined,
     },

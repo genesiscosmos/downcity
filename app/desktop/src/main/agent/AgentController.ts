@@ -8,12 +8,15 @@
 import { Agent, type SessionMessage } from "@downcity/agent";
 import {
   City,
+  create_city_host_instance_id,
+  register_city_host,
+  unregister_city_host,
 } from "@downcity/city";
 import {
   type LocalAgentConfig,
   type LocalWorkspaceConfig,
   normalize_agent_id,
-} from "@downcity/local";
+} from "@downcity/local/product";
 import type {
   DesktopAgentRuntime,
   DesktopAgentSummary,
@@ -40,9 +43,15 @@ export class AgentController {
 
   /** Desktop 进程内的 Agent 索引与 transport 转发器。 */
   private readonly city = new City();
+  private readonly host_instance_id = create_city_host_instance_id();
 
   /** Desktop 首次访问前完成的本地 Agent 装配。 */
   private readonly ready_promise = this.initialize_agents();
+
+  /** 等待 Desktop City 完成 Agent 装配与宿主登记。 */
+  async ready(): Promise<void> {
+    await this.ready_promise;
+  }
 
   /** 列出 CLI 与 Desktop 共用的 Agent 注册记录。 */
   async list_agents(): Promise<DesktopAgentSummary[]> {
@@ -176,7 +185,10 @@ export class AgentController {
     results.push(...await Promise.allSettled(
       agents.map(async (agent) => await agent.dispose()),
     ));
-    this.data.database.close();
+    results.push(...await Promise.allSettled([
+      Promise.resolve().then(() => this.data.database.close()),
+      unregister_city_host(this.host_instance_id),
+    ]));
     const errors = results.flatMap((result) =>
       result.status === "rejected" ? [result.reason] : [],
     );
@@ -199,6 +211,12 @@ export class AgentController {
           throw error;
         }
       }
+      await register_city_host({
+        owner: "desktop",
+        pid: process.pid,
+        instance_id: this.host_instance_id,
+        started_at: new Date().toISOString(),
+      });
     } catch (error) {
       await Promise.allSettled(initialized_agents.map(async (agent) => {
         await this.city.remove(agent.id);

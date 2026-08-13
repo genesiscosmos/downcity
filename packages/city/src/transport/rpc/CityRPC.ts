@@ -59,12 +59,16 @@ export class CityRPC {
         port,
         sessions: fallback_agent?.sessions ?? unavailable_sessions,
         resolve_request_options: (request) => {
-          if (request.method === "internal.city.status") {
+          if (
+            request.method === "internal.city.status"
+            || request.method === "internal.city.shutdown"
+          ) {
             return {
               sessions: fallback_agent?.sessions ?? unavailable_sessions,
               get_city_status: () => ({
                 agent_ids: this.city.agents().map((agent) => agent.id),
               }),
+              shutdown_city: this.runtime_options.shutdown,
             };
           }
           const agent_id = String(request.agent_id || "").trim();
@@ -84,6 +88,7 @@ export class CityRPC {
             reload_workspace_env: reload_workspace_env
               ? async () => await reload_workspace_env(agent_id)
               : undefined,
+            shutdown_city: this.runtime_options.shutdown,
           };
         },
       });
