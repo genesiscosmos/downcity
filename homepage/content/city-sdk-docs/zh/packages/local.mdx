@@ -1,0 +1,28 @@
+---
+title: "@downcity/local"
+description: 使用数据库 Adapter 和显式 Repository 管理本地产品配置。
+---
+
+`@downcity/local` 提供 CLI 与 Desktop 共用的本地 SQLite Adapter、配置 Repository 和
+Plugin Loader。数据库 Adapter 只暴露查询、写入、事务和关闭能力；Agent、Workspace 与
+Plugin 的数据结构由各自 Repository 持有。
+
+```ts
+import {
+  AgentRepository,
+  LocalCrypto,
+  LocalDatabase,
+  WorkspaceRepository,
+  ensure_local_schema,
+} from "@downcity/local";
+
+const database = new LocalDatabase({ filename: database_path });
+ensure_local_schema(database);
+
+const crypto_adapter = new LocalCrypto(root_path);
+const workspaces = new WorkspaceRepository(database, crypto_adapter);
+const agents = new AgentRepository(database, crypto_adapter, workspaces);
+```
+
+CLI 与 Desktop 在各自组合根中创建这些依赖，读取配置后显式调用 `new Agent()`。
+`@downcity/local` 不创建 Agent、Workspace、Model 或 City，City 也不查询或持久化产品数据。

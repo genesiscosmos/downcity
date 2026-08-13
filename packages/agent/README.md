@@ -9,7 +9,7 @@
 - Plugin 框架：registry、action、tool runtime 与执行生命周期
 - 远程访问：`RemoteAgent`、HTTP/RPC transport
 
-`@downcity/city` 负责本地配置恢复和平台装配；CLI 与 Desktop 各自创建独立的 `City` 实例并拥有自己的宿主生命周期。`City` 不赋予 Agent 启动或停止状态。
+CLI 与 Desktop 负责读取产品配置并显式装配 `Agent`；`@downcity/city` 只索引已经创建的 Agent 并转发 HTTP/RPC。两个产品各自创建独立的 `City` 实例并拥有自己的宿主生命周期，`City` 不赋予 Agent 启动或停止状态。
 
 ## 包定位
 
@@ -28,8 +28,9 @@
   - CLI City daemon 与平台控制面
 - `@downcity/city`
   - 多 Agent `City` 内存索引与 HTTP/RPC 转发
-  - CLI 与 Desktop 共用的 `~/.downcity/downcity.db` Store Adapter
-  - Agent、Workspace、Plugin 和本地 Embassy User Session 的恢复与 HTTP/RPC 暴露
+- `@downcity/local`
+  - CLI 与 Desktop 共用的本地数据库 Adapter、配置 Repository 与 Plugin Loader
+  - 不创建 Agent、Workspace、Model 或 City
 - `@downcity/ui`
   - React UI 组件与展示层
 

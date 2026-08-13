@@ -38,7 +38,7 @@ CLI 从本地产品配置装配的 Agent 默认启用 `ask_question` Tool。使�
 `city agent chat <agent_id>` 交互时，模型可以在缺少关键信息时显示文本、单选或多选问题；
 回答会通过 Session Interaction 提交，并在同一轮模型执行中继续处理。
 
-Agent、Workspace 与 Plugin Binding 统一保存在 `~/.downcity/downcity.db`。每个持久化 Agent 对应一个 Workspace；一个 Workspace 可以被多个 Agent 使用。CLI daemon 和 Desktop 各自创建独立的 City 实例，启动、停止和 HTTP/RPC 生命周期互不共享。Session 仍保存在实际 Workspace 的 `.downcity/agents/<agent_id>/sessions/` 下。`city agent chat` 在 CLI City 运行时走 RPC，City 停止时创建临时本地 City，退出后立即释放。
+Agent、Workspace 与 Plugin Binding 统一保存在 `~/.downcity/downcity.db`。每个持久化 Agent 对应一个 Workspace；一个 Workspace 可以被多个 Agent 使用。CLI daemon 和 Desktop 各自创建独立的 City 实例，启动、停止和 HTTP/RPC 生命周期互不共享。Session 仍保存在实际 Workspace 的 `.downcity/agents/<agent_id>/sessions/` 下。`city agent chat` 在 CLI City 运行时走 RPC，City 停止时创建临时本地 Agent，退出后立即释放。
 
 CLI City 只维护一个 daemon，并分别监听一个 HTTP 端口和一个原生 TCP RPC 端口。两种协议都按 `agent_id` 路由，不为每个 Agent 分配独立端口。
 

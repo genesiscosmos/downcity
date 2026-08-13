@@ -8,13 +8,11 @@
 import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
 import type { CityDaemonOptions } from "@/city/process/daemon/Types.js";
-import { createAgentHttpGatewayApp } from "@/city/agent/AgentHttpGateway.js";
+import { create_agent_http_gateway_app } from "@/city/agent/AgentHttpGateway.js";
 import { AuthService } from "@/city/runtime/auth/AuthService.js";
 import {
-  create_cli_agent_model,
-  create_cli_agent_tools,
+  create_cli_agent,
   create_cli_plugin_loader,
-  create_cli_workspace,
   reload_cli_workspace_env,
   resolve_cli_agent_model,
 } from "@/city/runtime/AgentAssembly.js";
@@ -91,18 +89,12 @@ export class CliCityRuntime {
         if (!config.workspace_id) continue;
         const workspace_config = data.workspaces.get(config.workspace_id);
         if (!workspace_config) throw new Error(`Workspace not found: ${config.workspace_id}`);
-        const workspace = await create_cli_workspace(workspace_config, data.root_path);
-        try {
-          const [model, plugins, tools] = await Promise.all([
-            Promise.resolve(create_cli_agent_model(config, workspace.get_env())),
-            plugin_loader.create_plugins(config),
-            Promise.resolve(create_cli_agent_tools()),
-          ]);
-          agents.push(new Agent({ id: config.agent_id, workspace, model, plugins, tools }));
-        } catch (error) {
-          await workspace.dispose().catch(() => undefined);
-          throw error;
-        }
+        agents.push(await create_cli_agent({
+          config,
+          workspace_config,
+          plugin_loader,
+          root_path: data.root_path,
+        }));
       }
     } catch (error) {
       await Promise.allSettled(agents.map(async (agent) => await agent.dispose()));
@@ -122,9 +114,9 @@ export class CliCityRuntime {
             repository: data.agent_tokens,
           });
           return {
-            router: createAgentHttpGatewayApp({
+            router: create_agent_http_gateway_app({
               get_agent: () => agent,
-              sdkRouter: sdk_router,
+              sdk_router,
               auth_service,
             }),
             dispose: () => auth_service.close(),

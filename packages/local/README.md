@@ -6,6 +6,7 @@ Plugin Loader。它不创建 Agent、Workspace 或 Model，也不管理 City 生
 ```ts
 import {
   AgentRepository,
+  LocalCrypto,
   LocalDatabase,
   WorkspaceRepository,
   ensure_local_schema,
@@ -14,8 +15,9 @@ import {
 const database = new LocalDatabase({ filename: database_path });
 ensure_local_schema(database);
 
-const workspaces = new WorkspaceRepository(database);
-const agents = new AgentRepository({ database, workspaces });
+const crypto_adapter = new LocalCrypto(root_path);
+const workspaces = new WorkspaceRepository(database, crypto_adapter);
+const agents = new AgentRepository(database, crypto_adapter, workspaces);
 ```
 
 ## 边界

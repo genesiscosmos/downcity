@@ -62,10 +62,3 @@ export function get_plugin_installation_dir_path(installation_id: string): strin
   }
   return path.join(get_plugin_installations_dir_path(), normalized_installation_id);
 }
-
-/**
- * City 全局运行目录（平台密钥 / 旧运行态文件）。
- */
-export function getCityRuntimeDirPath(): string {
-  return path.join(getPlatformRootDirPath(), "main");
-}

@@ -31,7 +31,7 @@ City 装配的 Agent 默认启用 `ask_question` Tool。在
 `city agent chat` 中，模型需要关键补充信息时会显示文本、单选或多选面板；CLI 将完整答案
 提交给当前 Session，并继续同一个 Turn。按 Esc 可停止当前 Turn。
 
-Agent 与 Workspace 独立登记，每个 Agent 持久化绑定一个 Workspace。Agent 没有独立启动状态；`city agent chat` 在 City 运行时走 RPC，在 City 停止时直接创建临时本地 City。
+Agent 与 Workspace 独立登记，每个 Agent 持久化绑定一个 Workspace。Agent 没有独立启动状态；`city agent chat` 在 City 运行时走 RPC，在 City 停止时直接创建临时本地 Agent。
 
 在输入框中可以使用 slash command 打开系统文件选择器并添加本地附件：
 

@@ -46,7 +46,6 @@
   "license": "MIT",
   "dependencies": {
     "@downcity/agent": "workspace:^",
-    "@downcity/type": "workspace:*",
     "ai": "^6.0.193",
     "hono": "^4.12.23"
   },

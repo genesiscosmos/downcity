@@ -345,9 +345,6 @@ importers:
       '@downcity/agent':
         specifier: workspace:^
         version: link:../agent
-      '@downcity/type':
-        specifier: workspace:*
-        version: link:../type
       ai:
         specifier: ^6.0.193
         version: 6.0.246(zod@4.4.3)

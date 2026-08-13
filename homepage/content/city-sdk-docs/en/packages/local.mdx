@@ -1,0 +1,29 @@
+---
+title: "@downcity/local"
+description: Manage local product configuration with a database adapter and explicit repositories.
+---
+
+`@downcity/local` provides the local SQLite adapter, configuration repositories, and Plugin loader
+shared by the CLI and Desktop. The database adapter only exposes query, mutation, transaction, and
+close operations; product repositories own the Agent, Workspace, and Plugin schemas.
+
+```ts
+import {
+  AgentRepository,
+  LocalCrypto,
+  LocalDatabase,
+  WorkspaceRepository,
+  ensure_local_schema,
+} from "@downcity/local";
+
+const database = new LocalDatabase({ filename: database_path });
+ensure_local_schema(database);
+
+const crypto_adapter = new LocalCrypto(root_path);
+const workspaces = new WorkspaceRepository(database, crypto_adapter);
+const agents = new AgentRepository(database, crypto_adapter, workspaces);
+```
+
+The CLI and Desktop create these dependencies in their own composition roots, read configuration,
+and explicitly call `new Agent()`. `@downcity/local` never creates an Agent, Workspace, Model, or
+City, and City never queries or persists product data.

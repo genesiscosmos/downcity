@@ -4,6 +4,7 @@
     "index",
     "federation",
     "city",
+    "local",
     "cli",
     "agent"
   ]

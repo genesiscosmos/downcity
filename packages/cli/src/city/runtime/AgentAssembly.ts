@@ -13,7 +13,7 @@ import {
   resolve_local_root_path,
   type LocalPluginType,
 } from "@downcity/local";
-import { type AgentModel, type AgentOptions, Workspace } from "@downcity/agent";
+import { Agent, type AgentModel, type AgentOptions, Workspace } from "@downcity/agent";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell } from "@downcity/shell";
 import {
@@ -59,6 +59,37 @@ export function create_cli_plugin_loader(input: {
     plugin_repository: input.plugin_repository,
     plugin_types: create_cli_builtin_plugin_types(input),
   });
+}
+
+/** 使用产品层读取的配置装配一个由调用方持有的 Agent。 */
+export async function create_cli_agent(input: {
+  /** Agent 的持久化配置。 */
+  config: LocalAgentConfig;
+  /** Agent 绑定的 Workspace 持久化配置。 */
+  workspace_config: LocalWorkspaceConfig;
+  /** 当前产品实例创建的 Plugin Loader。 */
+  plugin_loader: LocalPluginLoader;
+  /** 可选的 Downcity 用户级数据根目录。 */
+  root_path?: string;
+}): Promise<Agent> {
+  const workspace = await create_cli_workspace(input.workspace_config, input.root_path);
+  try {
+    const [model, plugins, tools] = await Promise.all([
+      Promise.resolve(create_cli_agent_model(input.config, workspace.get_env())),
+      input.plugin_loader.create_plugins(input.config),
+      Promise.resolve(create_cli_agent_tools()),
+    ]);
+    return new Agent({
+      id: input.config.agent_id,
+      workspace,
+      model,
+      plugins,
+      tools,
+    });
+  } catch (error) {
+    await workspace.dispose().catch(() => undefined);
+    throw error;
+  }
 }
 
 /** 创建 CLI 当前 Agent 独享的 Workspace、Shell 与 Sandbox。 */

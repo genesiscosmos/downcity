@@ -205,7 +205,7 @@ Workspace 不负责：
 - daemon 和多 Agent 管理。
 - 用户级全局配置。
 
-一个 Workspace 实例绑定一个 Agent。不同 Agent 如果需要使用相同目录，应创建不同 Workspace 实例，让生命周期和运行状态保持独立。
+持久化层允许多个 Agent 配置引用同一个 Workspace 配置。产品装配运行时时，每个 Agent 必须创建独立的 Workspace 实例；即使它们指向同一个项目目录，也不能共享同一个运行时对象，以确保 Session、Shell 和资源释放的生命周期彼此隔离。
 
 ### 4.2 Agent 是单 Agent 组合根
 

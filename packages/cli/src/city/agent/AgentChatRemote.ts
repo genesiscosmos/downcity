@@ -3,7 +3,8 @@
  *
  * 关键点（中文）
  * - 封装 `RemoteAgent` 创建、session 列表、session 创建/获取等远程操作。
- * - 不处理命令行交互与本地 agent 解析，只负责与 daemon RPC 的通信侧逻辑。
+ * - City daemon 不在线时装配临时本地 Agent，保持相同的 Session 调用接口。
+ * - 不处理命令行交互，只负责选择远程或本地访问路径。
  */
 
 import { generate_id } from "@/city/utils/Id.js";
@@ -33,10 +34,8 @@ import {
 import { listPlatformModelChoices } from "@/city/runtime/city-model/ExecutionModelBinding.js";
 import type { AgentChatModelChoice } from "@/city/types/AgentChatModel.js";
 import {
-  create_cli_agent_model,
-  create_cli_agent_tools,
+  create_cli_agent,
   create_cli_plugin_loader,
-  create_cli_workspace,
   resolve_cli_agent_model,
 } from "@/city/runtime/AgentAssembly.js";
 import { create_cli_local_data } from "@/city/runtime/LocalData.js";
@@ -49,11 +48,11 @@ export type AgentChatRemoteTarget = {
   url: string;
 };
 
-/** Chat 所需的最小 Agent 客户端，可由远程或临时本地 City 提供。 */
+/** Chat 所需的最小 Agent 客户端，可由远程 Agent 或临时本地 Agent 提供。 */
 export interface AgentChatClient {
   /** 目标 Agent 的 Session 集合。 */
   sessions: AgentSessions<RemoteAgentSession>;
-  /** 释放远程连接或临时本地 City。 */
+  /** 释放远程连接或临时本地 Agent。 */
   close(): Promise<void>;
 }
 
@@ -105,18 +104,12 @@ export async function createRemoteAgent(params: {
       if (!config.workspace_id) throw new Error(`Agent has no Workspace binding: ${params.agent_id}`);
       const workspace_config = data.workspaces.get(config.workspace_id);
       if (!workspace_config) throw new Error(`Workspace not found: ${config.workspace_id}`);
-      const workspace = await create_cli_workspace(workspace_config, data.root_path);
-      try {
-        const [model, plugins, tools] = await Promise.all([
-          Promise.resolve(create_cli_agent_model(config, workspace.get_env())),
-          plugin_loader.create_plugins(config),
-          Promise.resolve(create_cli_agent_tools()),
-        ]);
-        agent = new Agent({ id: config.agent_id, workspace, model, plugins, tools });
-      } catch (error) {
-        await workspace.dispose().catch(() => undefined);
-        throw error;
-      }
+      agent = await create_cli_agent({
+        config,
+        workspace_config,
+        plugin_loader,
+        root_path: data.root_path,
+      });
       return {
         sessions: create_local_chat_sessions(
           agent.sessions,

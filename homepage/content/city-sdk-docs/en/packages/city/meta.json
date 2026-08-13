@@ -1,4 +1,4 @@
 {
   "title": "@downcity/city",
-  "pages": ["index", "local-store", "transport"]
+  "pages": ["index", "transport"]
 }
