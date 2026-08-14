@@ -142,16 +142,6 @@ export function normalizeTaskWhen(
   return { ok: true, value: canonical };
 }
 
-/**
- * 兼容旧调用名：返回 cron 表达式或 `@manual`。
- */
-export function normalizeTaskCronExpression(raw: string): string | null {
-  const when = normalizeTaskWhen(raw);
-  if (!when.ok) return null;
-  if (isTaskWhenOneShot(when.value)) return null;
-  return normalizeCronExpression(when.value);
-}
-
 export function isTaskWhenManual(input: string): boolean {
   const when = String(input || "").trim().toLowerCase();
   return when === "@manual";

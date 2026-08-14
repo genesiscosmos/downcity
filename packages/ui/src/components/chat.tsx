@@ -224,9 +224,6 @@ export function ChatComposer({ status = "ready", input_placeholder, on_submit, o
   </div>;
 }
 
-/** Duobox 命名兼容：输入编辑器直接作为内部组件使用。 */
-export const ChatInputEditor = ChatComposer;
-
 /** Duobox 风格历史列表。 */
 export function ChatHistory({ threads, current_thread_id, loading, has_more, on_select, on_archive, on_load_more }: { threads: DowncityChatThread[]; current_thread_id?: string; loading?: boolean; has_more?: boolean; on_select?: DowncityChatPanelProps["on_select_thread"]; on_archive?: DowncityChatPanelProps["on_archive_thread"]; on_load_more?: DowncityChatPanelProps["on_load_more_threads"] }) {
   return <aside className="dc-chat-history"><header><div><MessageCircle /><span>Chat</span></div><small>历史会话</small></header><div className="dc-chat-history-list">{threads.map((thread) => <div className={cn("dc-chat-thread", thread.id === current_thread_id && "is-active")} key={thread.id}><button onClick={() => void on_select?.(thread.id)}><span>{thread.title || "未命名会话"}</span><small>{format_thread_time(thread.updated_at)}</small></button>{thread.unread ? <i /> : null}{on_archive ? <button className="dc-chat-thread-menu" onClick={() => void on_archive(thread.id)}><Archive /></button> : null}</div>)}{loading ? <div className="dc-chat-history-state"><LoaderCircle className="animate-spin" />加载中…</div> : null}{has_more ? <button className="dc-chat-history-more" onClick={() => void on_load_more?.()}>加载更多</button> : null}</div></aside>;

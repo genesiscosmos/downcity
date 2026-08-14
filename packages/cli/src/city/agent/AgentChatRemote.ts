@@ -7,9 +7,9 @@
  * - 不处理命令行交互，只负责选择远程或本地访问路径。
  */
 
-import { generate_id } from "@/city/utils/Id.js";
 import {
   Agent,
+  generate_id,
   type AgentSessions,
   type AgentSession,
   type AgentSessionSetOptions,

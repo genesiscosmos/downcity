@@ -179,8 +179,6 @@ export interface LogEntry {
   message: string;
   details?: JsonObject;
   duration?: number;
-  /** Back-compat: kept for older code that expects a `level` field. */
-  level?: string;
 }
 
 /**
@@ -278,7 +276,6 @@ export class Logger {
       type,
       message: normalizeToAllowedMessageLabels(message),
       details: normalizeLogDetails(details),
-      level: type,
     };
 
     this.logs.push(entry);
