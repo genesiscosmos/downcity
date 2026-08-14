@@ -41,7 +41,11 @@ import type {
   SessionMutation,
 } from "@downcity/agent";
 import type { ChatSessionSnapshot } from "@/city/types/ChatSessionSubscription.js";
-import type { AgentChatTuiCoordinatorOptions } from "@/city/types/AgentChatTui.js";
+import type {
+  AgentChatTuiAction,
+  AgentChatTuiCoordinatorOptions,
+  AgentChatTuiResult,
+} from "@/city/types/AgentChatTui.js";
 import type { AppState } from "@/city/agent/tui/types.js";
 import {
   dispatchSlashCommand,
@@ -77,7 +81,7 @@ export class AgentChatTuiCoordinator {
   private current_session_id: string;
   private running = false;
   private stopped = false;
-  private resolve_run: (() => void) | null = null;
+  private resolve_run: ((result: AgentChatTuiResult) => void) | null = null;
   private remove_input_listener: (() => void) | null = null;
   private command_panel_loading = false;
   private draining_input_queue = false;
@@ -116,17 +120,14 @@ export class AgentChatTuiCoordinator {
       show_session_picker: async () => {
         await this.show_session_picker();
       },
+      open_agent_configuration: async () => {
+        await this.stop("configure");
+      },
       show_security_policy_picker: () => {
         this.show_security_policy_picker();
       },
       select_model: async (model_id) => {
         await this.select_model(model_id);
-      },
-      approve: async (approval_id) => {
-        await this.approve(approval_id);
-      },
-      deny: async (approval_id) => {
-        await this.deny(approval_id);
       },
       stop: async () => {
         await this.stop();
@@ -244,11 +245,11 @@ export class AgentChatTuiCoordinator {
    * 启动 TUI 并进入事件循环。
    *
    * @param options 启动选项。
-   * @returns TUI 停止后 resolve。
+   * @returns TUI 停止时的导航动作与当前 Session。
    */
-  async run(): Promise<void> {
+  async run(): Promise<AgentChatTuiResult> {
     if (this.running || this.stopped) {
-      return;
+      return { action: "exit", session_id: this.current_session_id };
     }
     this.running = true;
 
@@ -271,7 +272,7 @@ export class AgentChatTuiCoordinator {
 
     this.tui.start();
 
-    return await new Promise<void>((resolve) => {
+    return await new Promise<AgentChatTuiResult>((resolve) => {
       this.resolve_run = resolve;
     });
   }
@@ -365,40 +366,6 @@ export class AgentChatTuiCoordinator {
   }
 
   /**
-   * 批准指定审批请求。
-   */
-  private async approve(approval_id?: string): Promise<void> {
-    const target_id = String(approval_id || "").trim();
-    if (!target_id) {
-      this.add_error_message("Usage: /approve <approval_id>");
-      this.request_render();
-      return;
-    }
-    await this.submit_interaction_response(target_id, {
-      kind: "approval",
-      decision: "approved",
-    });
-    this.request_render();
-  }
-
-  /**
-   * 拒绝指定审批请求。
-   */
-  private async deny(approval_id?: string): Promise<void> {
-    const target_id = String(approval_id || "").trim();
-    if (!target_id) {
-      this.add_error_message("Usage: /deny <approval_id>");
-      this.request_render();
-      return;
-    }
-    await this.submit_interaction_response(target_id, {
-      kind: "approval",
-      decision: "denied",
-    });
-    this.request_render();
-  }
-
-  /**
    * 提交面板决策；失败时将请求放回队首，避免 Agent 永久等待。
    */
   private async respond_interaction_panel(
@@ -462,7 +429,7 @@ export class AgentChatTuiCoordinator {
   /**
    * 停止 TUI 并清理资源。
    */
-  async stop(): Promise<void> {
+  async stop(action: AgentChatTuiAction = "exit"): Promise<void> {
     if (this.stopped) {
       return;
     }
@@ -473,7 +440,7 @@ export class AgentChatTuiCoordinator {
     this.hide_interaction_panel();
     this.remove_input_listener?.();
     this.tui.stop();
-    this.resolve_run?.();
+    this.resolve_run?.({ action, session_id: this.current_session_id });
   }
 
   /**

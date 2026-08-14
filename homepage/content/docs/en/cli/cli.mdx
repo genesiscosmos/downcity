@@ -34,15 +34,16 @@ my-project/
 
 ## Key commands
 
+- `city` — open the Agent list; Federation and global Plugin actions are in its Settings group
 - `city on` — start the CLI City and restore all bound Agents
-- `city status` — inspect City, HTTP/RPC ports, and loaded Agents
+- `city status` — inspect City, HTTP/RPC ports, and configured Agents
 - `city restart` — restart City and reload configuration
 - `city off` — stop the CLI City
 - `city agent chat [agent_id]` — chat with an Agent even while City is off
 
 ## Chat TUI security policy
 
-After opening Chat from the Agent manager, use `/security` to choose the current Session security policy:
+After selecting an Agent and entering its most recent conversation, use `/security` to choose the current Session security policy:
 
 - `Default` — maps to the Session `ask` mode; every unrestricted Shell action requires an explicit approval.
 - `Always Allow` — maps to `always-allow`; future unrestricted Shell actions in the current Session are approved automatically.

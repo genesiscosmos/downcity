@@ -99,5 +99,5 @@ function format_mutation_result(result: EnvMutationResult): string {
   const failed = result.broadcast.failed_agents.length;
   return failed > 0
     ? t({ zh: `${result.key} 已保存；${updated} 个 Agent 已更新，${failed} 个同步失败`, en: `${result.key} saved; ${updated} Agents updated, ${failed} failed` })
-    : t({ zh: `${result.key} 已保存；${updated} 个已加载 Agent 已更新`, en: `${result.key} saved; ${updated} loaded Agents updated` });
+    : t({ zh: `${result.key} 已保存；${updated} 个 City runtime Agent 已更新`, en: `${result.key} saved; ${updated} City runtime Agents updated` });
 }

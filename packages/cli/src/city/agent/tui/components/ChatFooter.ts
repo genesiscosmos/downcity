@@ -67,7 +67,7 @@ export class ChatFooterComponent implements Component {
         "primary",
         queued_count > 0 ? `Enter queue · ${queued_count} queued` : "Enter queue",
       );
-      const stop = current_theme.bold_fg("warning", "Ctrl+C stop");
+      const stop = current_theme.bold_fg("warning", "Ctrl+C stop turn");
       const rest = width >= MEDIUM_HINT_MIN_WIDTH
         ? "↑ edit queue · ↑/↓ scroll"
         : "↑/↓ scroll";
@@ -76,7 +76,7 @@ export class ChatFooterComponent implements Component {
     if (width >= WIDE_HINT_MIN_WIDTH) {
       return current_theme.dim_fg(
         "textMuted",
-        "Enter send   ↑/↓ scroll   PgUp/PgDn page   / commands",
+        "Enter send   ↑/↓ scroll   PgUp/PgDn page   /help commands",
       );
     }
     if (width >= MEDIUM_HINT_MIN_WIDTH) {

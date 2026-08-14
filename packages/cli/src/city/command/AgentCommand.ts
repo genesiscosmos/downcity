@@ -11,7 +11,7 @@ import {
   emit_registered_agent_list_with_options,
   resolve_cli_agent_target,
 } from "@/city/agent/AgentSelection.js";
-import { runInteractiveAgentManager } from "@/city/agent/AgentManager.js";
+import { runInteractiveCityManager } from "@/city/shared/CityManager.js";
 import { run_agent_create_command } from "@/city/agent/Init.js";
 import { configure_agent_model } from "@/city/agent/AgentModel.js";
 import { chatCommand } from "@/city/agent/AgentChat.js";
@@ -43,14 +43,14 @@ export function registerAgentCommands(
   const agent = program
     .command("agent")
     .description(t({
-      zh: "管理 Agent：创建、列出与配置（无参数时启动交互式管理器）",
-      en: "manage agents: create, list, and configure (opens the interactive manager when used without arguments)",
+      zh: "管理 Agent、Workspace、Sessions 与配置（无参数时打开交互式界面）",
+      en: "manage Agents, Workspaces, Sessions, and configuration (opens the interactive UI without arguments)",
     }))
     .version(`city ${context.version} (agent ${context.agentVersion})`, "-v, --version")
     .helpOption("--help", helpText())
     .action(createVersionBanner(context.version, async () => {
       if (process.stdin.isTTY === true && process.stdout.isTTY === true) {
-        await runInteractiveAgentManager();
+        await runInteractiveCityManager({ program });
         return;
       }
       agent.outputHelp();
@@ -74,12 +74,12 @@ export function registerAgentCommands(
   agent
     .command("list")
     .description(t({
-      zh: "列出已登记到 City 的全局 Agent",
-      en: "list global Agents registered in City",
+      zh: "列出已登记的 Agent",
+      en: "list registered Agents",
     }))
     .option("--running [enabled]", t({
-      zh: "仅列出当前 CLI City 已加载的 Agent",
-      en: "list only Agents currently loaded by the CLI City",
+      zh: "仅列出当前 CLI City 持有的 Agent",
+      en: "list only Agents currently held by the CLI City",
     }), parseBoolean)
     .option("--json [enabled]", t({
       zh: "以 JSON 输出",
@@ -118,8 +118,8 @@ export function registerAgentCommands(
   agent
     .command("chat [agent_id]")
     .description(t({
-      zh: "与 Agent 对话；City 未开启时使用临时本地运行时",
-      en: "chat with an Agent using a temporary local runtime when City is off",
+      zh: "进入 Agent 的 Session 对话",
+      en: "open an Agent Session for chat",
     }))
     .option("-m, --message <text>", t({
       zh: "发送一次性消息",

@@ -24,6 +24,7 @@ import { QuestionPanelComponent } from "../bin/city/agent/tui/dialogs/QuestionDi
 import { SecurityPolicyPanelComponent } from "../bin/city/agent/tui/dialogs/SecurityPolicyDialog.js";
 import { ModelPickerComponent } from "../bin/city/agent/tui/dialogs/ModelPicker.js";
 import { SessionPickerComponent } from "../bin/city/agent/tui/dialogs/SessionPicker.js";
+import { dispatchSlashCommand } from "../bin/city/agent/tui/commands/dispatch.js";
 import { resolveSlashCommandInput } from "../bin/city/agent/tui/commands/resolve.js";
 import { parse_attachment_paths } from "../bin/city/agent/tui/attachments/AttachmentInput.js";
 import { AlternateScreenTerminal } from "../bin/shared/tui/AlternateScreenTerminal.js";
@@ -162,6 +163,33 @@ test("attach slash command 打开选择器且支持文件别名", () => {
   ]);
   assert.equal(resolveSlashCommandInput({ input: "/attach", is_streaming: false }).kind, "builtin");
   assert.equal(resolveSlashCommandInput({ input: "/file", is_streaming: false }).kind, "builtin");
+});
+
+test("Chat 导航 slash command 保留新建、切换与配置入口", () => {
+  for (const input of ["/new", "/session", "/sessions", "/config", "/configuration"]) {
+    assert.equal(resolveSlashCommandInput({ input, is_streaming: false }).kind, "builtin");
+  }
+  assert.equal(resolveSlashCommandInput({ input: "/config", is_streaming: true }).kind, "blocked");
+});
+
+test("config slash command 请求外层打开 Agent 配置", async () => {
+  const calls = [];
+  const intent = resolveSlashCommandInput({ input: "/config", is_streaming: false });
+  await dispatchSlashCommand({
+    is_streaming: false,
+    async send_normal_user_input() {},
+    show_error() {},
+    show_help() {},
+    async attach_files() {},
+    clear_transcript() {},
+    async create_new_session() {},
+    async show_session_picker() {},
+    async open_agent_configuration() { calls.push("configure"); },
+    show_security_policy_picker() {},
+    async select_model() {},
+    async stop() {},
+  }, intent);
+  assert.deepEqual(calls, ["configure"]);
 });
 
 test("执行中输入队列按 FIFO 消费，并允许用 ↑ 召回最新消息", () => {
@@ -684,7 +712,7 @@ test("Header 与 Footer 在宽屏和窄屏下保持上下文与操作层级", ()
     const header_lines = header.render(width);
     const footer_lines = footer.render(width);
     assert.ok([...header_lines, ...footer_lines].every((line) => visibleWidth(line) <= width));
-    assert.match(plain(header_lines).join("\n"), /DOWNCITY AGENT/);
+    assert.match(plain(header_lines).join("\n"), /DOWNCITY · CHAT/);
   }
   assert.match(plain(header.render(96)).join("\n"), /Security: Default/);
   assert.match(plain(header.render(96)).join("\n"), /Model: GPT-5.6 Codex/);
@@ -953,14 +981,14 @@ test("reasoning Part 与 Delta 按 canonical 顺序实时渲染", () => {
   assert.match(rendered, /先确认 Session 的事实来源。/);
 });
 
-test("执行期间允许审批与安全策略命令并阻止破坏性 Slash 命令", () => {
+test("执行期间保留安全策略命令并阻止破坏性 Slash 命令", () => {
   assert.equal(
     resolveSlashCommandInput({ input: "/approve ap_1", is_streaming: true }).kind,
-    "builtin",
+    "message",
   );
   assert.equal(
     resolveSlashCommandInput({ input: "/deny ap_1", is_streaming: true }).kind,
-    "builtin",
+    "message",
   );
   assert.equal(
     resolveSlashCommandInput({ input: "/clear", is_streaming: true }).kind,

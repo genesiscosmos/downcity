@@ -7,21 +7,25 @@
  */
 
 import { AgentChatTuiCoordinator } from "@/city/agent/tui/AgentChatTuiCoordinator.js";
-import type { AgentChatTuiCoordinatorOptions } from "@/city/types/AgentChatTui.js";
+import type {
+  AgentChatTuiCoordinatorOptions,
+  AgentChatTuiResult,
+} from "@/city/types/AgentChatTui.js";
 
 /**
  * 启动 city agent chat 的交互式 TUI。
  *
  * @param params 启动参数。
+ * @returns 用户退出 Chat 时的导航动作与当前 Session。
  */
 export async function run_agent_chat_tui(
   params: AgentChatTuiCoordinatorOptions,
-): Promise<void> {
+): Promise<AgentChatTuiResult> {
   const coordinator = new AgentChatTuiCoordinator({
     agent_id: params.agent_id,
     session_id: params.session_id,
     remote_agent: params.remote_agent,
   });
 
-  await coordinator.run();
+  return await coordinator.run();
 }

@@ -24,18 +24,21 @@ CLI City 使用一个 HTTP 端口和一个原生 TCP RPC 端口，并在两个�
 ## Agent
 
 ```bash
-city agent                         # 打开 Agent 面板
+city                               # 直接打开 Agent 列表
+city agent                         # 打开同一个 Agent 列表
 city agent create [path]           # 不传路径：当前目录或系统文件夹选择窗口
 city agent list
 city agent model [agent_id]
 city agent chat [agent_id]
 ```
 
+裸 `city` 命令直接打开 Agent 列表，不展示 Agent runtime 状态。Federation、全局 Plugins、语言和命令帮助直接位于同一列表末尾的“设置”分组。
+
 City 装配的 Agent 默认启用 `ask_question` Tool。在
-`city agent chat` 中，模型需要关键补充信息时会显示文本、单选或多选面板；CLI 将完整答案
+`city agent` 面板选择 Agent 后会直接进入最近一次对话；没有历史时进入默认 Session。模型需要关键补充信息时会显示文本、单选或多选面板；CLI 将完整答案
 提交给当前 Session，并继续同一个 Turn。按 Esc 可停止当前 Turn。
 
-Agent 与 Workspace 独立登记，每个 Agent 持久化绑定一个 Workspace。Agent 没有独立启动状态；`city agent chat` 在 City 运行时走 RPC，在 City 停止时直接创建临时本地 Agent。
+Agent 与 Workspace 独立登记，每个 Agent 持久化绑定一个 Workspace。Agent 没有独立启动状态；Chat 内使用 `/new` 创建新 Session、`/session` 选择已有 Session 或新建 Session、`/config` 打开 Agent 配置，配置完成后会回到原对话。City 运行时 Chat 走 RPC，脚本化的一次性调用在 City 关闭时仍可使用本地装配路径。
 
 在输入框中可以使用 slash command 打开系统文件选择器并添加本地附件：
 
@@ -44,6 +47,8 @@ Agent 与 Workspace 独立登记，每个 Agent 持久化绑定一个 Workspace�
 ```
 
 附件会加入下一条消息；也可以使用 `/file` 别名。Unix 终端的 `Ctrl-V`（Windows 为 `Alt-V`）会优先尝试粘贴剪贴板中的图片或文件，无法识别时仍按普通文本粘贴处理。
+
+审批请求在专用面板中完成，不再使用 `/approve` 或 `/deny` slash 命令。
 
 ## 单 Agent Token
 
@@ -105,8 +110,8 @@ city federation
 ```
 
 Global Env 写入 `~/.downcity/.env`；Workspace Env 写入项目根目录的 `.env`。也可以从
-`city agent` 的“配置 Env”入口选择 Agent 所使用的 Workspace。修改完成后，CLI City 会通知受影响的已加载
-Agent 重新加载 Env，并通过 Workspace 将新快照广播给已有 Session；未被该 City 加载的 Agent
+`city agent` 的“配置 Env”入口选择 Agent 所使用的 Workspace。修改完成后，CLI City 会更新受影响的 runtime
+Agent，并通过 Workspace 将新快照广播给已有 Session；未被该 City 持有的 Agent
 会在下一次被 City 装配时读取新配置。
 
 多个 Agent 在同一 Workspace 运行时共享同一个项目 `.env`。运行时优先级为：Global `.env`

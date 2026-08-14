@@ -34,15 +34,16 @@ my-project/
 
 ## 关键命令
 
+- `city` — 直接打开 Agent 列表；Federation 与全局 Plugin 操作位于同页的“设置”分组
 - `city on` — 启动 CLI City，并恢复全部已绑定 Agent
-- `city status` — 查看 City、HTTP/RPC 端口与已加载 Agent
+- `city status` — 查看 City、HTTP/RPC 端口与已配置 Agent
 - `city restart` — 重启 City 并重新加载配置
 - `city off` — 停止 CLI City
 - `city agent chat [agent_id]` — 与 Agent 对话；City 未开启时也可使用
 
 ## Chat TUI 安全策略
 
-在 Agent 管理器中进入 Chat 后，使用 `/security` 打开当前 Session 的安全策略选择器：
+从 Agent 列表直接进入最近对话后，使用 `/security` 打开当前 Session 的安全策略选择器：
 
 - `Default` — 对应 Session 的 `ask` 模式；每次 unrestricted Shell 操作都需要明确审批。
 - `Always Allow` — 对应 `always-allow` 模式；当前 Session 后续的 unrestricted Shell 操作会自动批准。

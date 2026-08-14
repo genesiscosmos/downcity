@@ -212,7 +212,7 @@ function register_binding_commands(plugin: Command): void {
         tone: "success",
         title: "Plugin enabled",
         summary: `${binding.plugin_name} · ${binding.agent_id}`,
-        note: "如果 Agent 正在运行，请重启 Agent 以应用新的 Runtime 装配。",
+        note: "新的 Plugin 装配会在下次 City 装配 Agent 时生效。",
       });
     });
 
@@ -228,7 +228,7 @@ function register_binding_commands(plugin: Command): void {
         tone: "success",
         title: "Plugin disabled",
         summary: `${plugin_name} · ${target.agent_id}`,
-        note: "如果 Agent 正在运行，请重启 Agent 以应用新的 Runtime 装配。",
+        note: "新的 Plugin 装配会在下次 City 装配 Agent 时生效。",
       });
     });
 

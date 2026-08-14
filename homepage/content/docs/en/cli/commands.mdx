@@ -24,19 +24,22 @@ The CLI City uses one HTTP port and one native TCP RPC port. Both protocols rout
 ## Agent
 
 ```bash
-city agent                         # Open the Agent panel
+city                               # Open the Agent list directly
+city agent                         # Open the same Agent list
 city agent create [path]           # No path: current directory or native folder picker
 city agent list
 city agent model [agent_id]
 city agent chat [agent_id]
 ```
 
+The bare `city` command opens the Agent list directly. It does not show Agent runtime status. Federation, global Plugins, language, and command help appear in a Settings group at the end of the same list.
+
 Agents assembled by City enable the `ask_question` tool by default.
-In `city agent chat`, the model can present text, single-select, or multi-select
+Selecting an Agent in the `city agent` panel opens its most recent conversation directly, or the default Session when no history exists. The model can present text, single-select, or multi-select
 questions when key information is missing. The CLI submits the complete answer set
 to the current Session and continues the same Turn. Press Esc to stop that Turn.
 
-Agents and Workspaces are registered independently, and each Agent persistently binds one Workspace. Agents have no independent started state. `city agent chat` uses RPC while City is running and creates a temporary local Agent while it is off.
+Agents and Workspaces are registered independently, and each Agent persistently binds one Workspace. Agents have no independent started state. In Chat, use `/new` to create a Session, `/session` to select an existing Session or create one, and `/config` to open Agent configuration. Configuration returns to the same conversation. Chat uses RPC while City is running; scriptable one-shot calls can use the local assembly path while City is off.
 
 Use the slash command to open the system file picker and attach local files to the next message:
 
@@ -45,6 +48,8 @@ Use the slash command to open the system file picker and attach local files to t
 ```
 
 `/file` is an alias. On Unix, `Ctrl-V` (or `Alt-V` on Windows) also tries to paste clipboard images or files first, and falls back to normal text paste when no supported attachment is available.
+
+Approval requests are handled by the dedicated interaction panel; `/approve` and `/deny` are no longer slash commands.
 
 ## Per-Agent tokens
 
@@ -106,9 +111,9 @@ city federation
 ```
 
 Global Env is stored in `~/.downcity/.env`; Workspace Env is stored in `.env` at the project root.
-You can also use “Configure Env” in `city agent` to select an Agent's Workspace. After a change, the CLI City asks affected
-loaded Agents to reload Env and Workspace broadcasts the new snapshot to existing Sessions.
-Agents not loaded by that City receive the configuration the next time a City assembles them.
+You can also use “Configure Env” in `city agent` to select an Agent's Workspace. After a change, the CLI City updates affected
+runtime Agents and Workspace broadcasts the new snapshot to existing Sessions.
+Agents not held by that City receive the configuration the next time a City assembles them.
 
 Agents running in the same Workspace share one project `.env`. Runtime precedence is Global `.env`,
 then Workspace `.env`, then explicit process environment variables. `list` never prints plaintext

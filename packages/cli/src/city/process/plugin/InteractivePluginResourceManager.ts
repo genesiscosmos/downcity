@@ -141,7 +141,7 @@ export async function run_interactive_binding_resources(
         tone: "success",
         title: "Plugin Resources saved",
         summary: `${saved.plugin_name} · ${saved.agent_id} · ${saved.resource_ids.length} selected`,
-        note: "如果 Agent 正在运行，请重启 Agent 以应用新的 Runtime 装配。",
+        note: "新的 Plugin Resource 绑定会在下次 City 装配 Agent 时生效。",
       });
     }
   }

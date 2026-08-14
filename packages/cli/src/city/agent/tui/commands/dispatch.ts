@@ -62,6 +62,10 @@ async function handle_built_in_slash_command(
     case "sessions":
       await host.show_session_picker();
       return;
+    case "config":
+    case "configuration":
+      await host.open_agent_configuration();
+      return;
     case "security":
       host.show_security_policy_picker();
       return;
@@ -72,12 +76,6 @@ async function handle_built_in_slash_command(
     case "attach":
     case "file":
       await host.attach_files();
-      return;
-    case "approve":
-      await host.approve(_args.trim());
-      return;
-    case "deny":
-      await host.deny(_args.trim());
       return;
     default:
       host.show_error(`Unknown slash command: /${name}`);

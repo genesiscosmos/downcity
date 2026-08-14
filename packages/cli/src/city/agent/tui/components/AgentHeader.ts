@@ -42,7 +42,7 @@ export class AgentHeaderComponent implements Component {
    */
   render(width: number): string[] {
     const safe_width = Math.max(1, width);
-    const brand = current_theme.bold_fg("textStrong", "DOWNCITY AGENT");
+    const brand = current_theme.bold_fg("textStrong", "DOWNCITY · CHAT");
     const context = current_theme.dim_fg("textDim", this.build_context());
     const divider = current_theme.fg("border", "─".repeat(safe_width));
     const left = `${brand}  ${context}`;
@@ -72,6 +72,6 @@ export class AgentHeaderComponent implements Component {
         this.app_state.security.approval_mode !== this.app_state.security.effective_approval_mode
       ? " (queued)"
       : "";
-    return `${title} · Model: ${model} · Security: ${security_policy}${pending} · ${this.app_state.session_id}`;
+    return `${this.app_state.agent_id} · ${title} · Model: ${model} · Security: ${security_policy}${pending}`;
   }
 }

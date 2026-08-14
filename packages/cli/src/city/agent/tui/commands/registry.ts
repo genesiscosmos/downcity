@@ -39,6 +39,12 @@ export const BUILTIN_SLASH_COMMANDS: readonly SlashCommand[] = [
     availability: "idle-only",
   },
   {
+    name: "config",
+    aliases: ["configuration"],
+    description: "Open this Agent's configuration",
+    availability: "idle-only",
+  },
+  {
     name: "security",
     aliases: [],
     description: "Choose the current Session security policy",
@@ -54,18 +60,6 @@ export const BUILTIN_SLASH_COMMANDS: readonly SlashCommand[] = [
     name: "attach",
     aliases: ["file"],
     description: "Open the system file picker and attach files to the next message",
-    availability: "always",
-  },
-  {
-    name: "approve",
-    aliases: ["a"],
-    description: "Approve an unrestricted sandbox request (/approve <approval_id>)",
-    availability: "always",
-  },
-  {
-    name: "deny",
-    aliases: ["d"],
-    description: "Deny an unrestricted sandbox request (/deny <approval_id>)",
     availability: "always",
   },
 ];

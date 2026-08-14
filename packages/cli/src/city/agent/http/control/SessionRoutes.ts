@@ -23,7 +23,7 @@ import {
 import { list_control_session_summaries } from "@/city/agent/control/Helpers.js";
 import { executeBySessionId } from "@/city/agent/control/ExecuteBySession.js";
 
-const CITY_CHAT_SESSION_ID = "city-chat-main";
+const DEFAULT_SYSTEM_SESSION_ID = "city-chat-main";
 
 /** 从最新 Active 开始向前读取，返回指定数量的最近可见 Message。 */
 async function read_recent_session_messages(
@@ -112,33 +112,13 @@ export function registerControlSessionRoutes(
       try {
         const runtime = params.get_agent();
         const limit = toLimit(c.req.query("limit"));
-        const executingSessionIds = new Set<string>(
-          runtime.sessions.list_executing_session_ids(),
-        );
         const sessions = await list_control_session_summaries(
           runtime.sessions,
           limit,
         );
-        const hasCityChatSession = sessions.some(
-          (item) => String(item.session_id || "").trim() === CITY_CHAT_SESSION_ID,
-        );
-        const enrichedSessions = hasCityChatSession
-          ? sessions
-          : [
-              {
-                session_id: CITY_CHAT_SESSION_ID,
-                message_count: 0,
-                updated_at: Date.now(),
-                lastRole: "system" as const,
-                lastText: "City chat",
-                channel: "city",
-                ...(executingSessionIds.has(CITY_CHAT_SESSION_ID) ? { executing: true } : {}),
-              },
-              ...sessions,
-            ];
         return c.json({
           success: true,
-          sessions: enrichedSessions,
+          sessions,
         });
       } catch (error) {
         return c.json({ success: false, error: String(error) }, 500);
@@ -230,7 +210,7 @@ export function registerControlSessionRoutes(
         const runtime = params.get_agent();
         const session_id =
           decodeMaybe(String(c.req.query("session_id") || "").trim()) ||
-          CITY_CHAT_SESSION_ID;
+          DEFAULT_SYSTEM_SESSION_ID;
         const systemMessages = await runtime.resolve_system_messages({
           session_id: session_id,
           profile: "chat",

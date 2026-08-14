@@ -1,7 +1,7 @@
 /**
  * City Env 运行时广播模块。
  *
- * 持久化完成后只通知当前 City 已加载的 Agent 重新加载 Env。
+ * 持久化完成后只通知当前 City runtime 持有的 Agent 重新加载 Env。
  */
 
 import path from "node:path";
@@ -11,7 +11,7 @@ import { read_daemon_meta } from "@/city/process/daemon/Manager.js";
 import { reload_running_agent_env } from "@/city/process/daemon/DaemonRpcClient.js";
 import type { EnvBroadcastResult } from "@/city/types/env/EnvBroadcast.js";
 
-/** 广播 Global Env 变化到当前 City 已加载的全部 Agent。 */
+/** 广播 Global Env 变化到当前 City runtime 持有的全部 Agent。 */
 export async function broadcast_global_env_reload(): Promise<EnvBroadcastResult> {
   return await broadcast_agents(list_agent_configs().map((agent) => agent.agent_id));
 }

@@ -124,7 +124,7 @@ async function run_interactive_plugin_actions(plugin: PluginCatalogItem): Promis
             { title: "卸载", description: "删除未被 Agent Binding 使用的制品", value: "uninstall" },
           ]
         : []),
-      { title: "返回", description: "返回 Plugin 列表", value: "back" },
+      { title: "返回", description: "返回 Agent Plugin 列表", value: "back" },
     ],
   });
   if (response.action === "bind") {
@@ -277,6 +277,6 @@ function emit_binding_saved(plugin_name: string, agent_id: string, enabled: bool
     tone: "success",
     title: "Plugin binding saved",
     summary: `${plugin_name} · ${agent_id} · ${enabled ? "enabled" : "disabled"}`,
-    note: "如果 Agent 正在运行，请重启 Agent 以应用新的 Runtime 装配。",
+    note: "新的 Plugin 装配会在下次 City 装配 Agent 时生效。",
   });
 }

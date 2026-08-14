@@ -24,7 +24,6 @@ import { formatRelativeTime } from "@/city/agent/tui/utils/time.js";
 import { singleLine } from "@/city/agent/tui/utils/text.js";
 import { resolve_tui_visible_scroll } from "@/shared/tui/TuiText.js";
 import type { AgentChatSessionSummaryView } from "@/city/agent/AgentChatTypes.js";
-import { AGENT_CHAT_DEFAULT_SESSION_ID } from "@/city/agent/AgentChatTypes.js";
 
 const BORDER_HORIZONTAL = "─";
 const ELLIPSIS = "…";
@@ -196,22 +195,13 @@ export class SessionPickerComponent implements Component, Focusable {
   private build_items(sessions: AgentChatSessionSummaryView[]): SessionItem[] {
     const create_item: SessionItem = {
       value: "__create__",
-      label: "+ Create new session",
-      description: "Start with an empty CLI chat context",
+      label: "+ New session",
+      description: "Start with an empty conversation",
       is_current: false,
       is_create: true,
     };
 
-    const default_item: SessionItem = {
-      value: AGENT_CHAT_DEFAULT_SESSION_ID,
-      label: AGENT_CHAT_DEFAULT_SESSION_ID,
-      description: "Default local CLI chat session",
-      is_current: this.current_session_id === AGENT_CHAT_DEFAULT_SESSION_ID,
-      is_create: false,
-    };
-
     const session_items = sessions
-      .filter((session) => session.session_id !== AGENT_CHAT_DEFAULT_SESSION_ID)
       .map((session) => ({
         value: session.session_id,
         label: session.title || session.session_id,
@@ -220,7 +210,7 @@ export class SessionPickerComponent implements Component, Focusable {
         is_create: false,
       }));
 
-    return [create_item, default_item, ...session_items];
+    return [create_item, ...session_items];
   }
 
   private build_session_description(session: AgentChatSessionSummaryView): string {

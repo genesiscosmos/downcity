@@ -38,7 +38,7 @@ export interface AgentWorkspaceTarget {
   workspace_path: string;
 }
 
-/** 将 Agent 配置与当前 daemon 投影成 CLI 状态视图。 */
+/** 将 Agent 配置与当前 City runtime 投影成 CLI 视图。 */
 async function to_cli_agent_view(agent: AgentConfig): Promise<CliAgentView> {
   const workspace = get_workspace(agent.workspace_id);
   if (!workspace) {
@@ -46,11 +46,11 @@ async function to_cli_agent_view(agent: AgentConfig): Promise<CliAgentView> {
   }
   const daemon_pid = await read_daemon_pid();
   const meta = daemon_pid && is_process_alive(daemon_pid) ? await read_daemon_meta() : null;
-  const loaded = meta?.pid === daemon_pid && meta.agent_ids.includes(agent.agent_id);
+  const active = meta?.pid === daemon_pid && meta.agent_ids.includes(agent.agent_id);
   return {
     agent_id: agent.agent_id,
     workspace_path: workspace.workspace_path,
-    status: loaded ? "loaded" : "unloaded",
+    status: active ? "loaded" : "unloaded",
   };
 }
 
@@ -72,7 +72,7 @@ export function build_cli_agent_prompt_choices(
   return agents.map((agent) => ({
     title: agent.agent_id,
     value: agent.agent_id,
-    description: `${agent.status} · ${agent.workspace_path}`,
+    description: `${agent.status === "loaded" ? "City active" : "City inactive"} · ${agent.workspace_path}`,
   }));
 }
 
@@ -90,7 +90,7 @@ async function prompt_agent_id(agents: CliAgentView[]): Promise<string | null> {
 
 /** 输出全局 Agent 配置列表。 */
 export async function emit_registered_agent_list_with_options(options?: {
-  /** 是否仅展示当前 CLI City 已加载的 Agent。 */
+  /** 是否仅展示当前 CLI City runtime 持有的 Agent。 */
   running_only?: boolean;
   /** 是否输出 JSON。 */
   as_json?: boolean;
@@ -112,24 +112,24 @@ export async function emit_registered_agent_list_with_options(options?: {
   if (agents.length === 0) {
     emitCliBlock({
       tone: "info",
-      title: options?.running_only ? "City-loaded Agents" : "Agents",
-      summary: options?.running_only ? "0 loaded" : "0 registered",
+      title: options?.running_only ? "City-active Agents" : "Agents",
+      summary: options?.running_only ? "0 active" : "0 registered",
       note: options?.running_only
-        ? "The CLI City has not loaded any Agents."
+        ? "The CLI City runtime does not currently hold any Agents."
         : "Run `city agent create <workspace_path>` to create one.",
     });
     return;
   }
   emitCliList({
     tone: "accent",
-    title: options?.running_only ? "City-loaded Agents" : "Agents",
+    title: options?.running_only ? "City-active Agents" : "Agents",
     summary: `${agents.length} registered`,
     items: agents.map((agent) => ({
       tone: agent.status === "loaded" ? "success" : "info",
       title: agent.agent_id,
       facts: [
         { label: "Workspace", value: agent.workspace_path },
-        { label: "City", value: agent.status },
+        { label: "City runtime", value: agent.status === "loaded" ? "active" : "inactive" },
       ],
     })),
   });

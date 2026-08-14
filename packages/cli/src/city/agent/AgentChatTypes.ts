@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 统一覆盖交互式持续对话与一次性消息两种入口。
- * - 默认使用独立的 local-cli 会话，避免与控制面 UI 上下文互相污染。
+ * - CLI 只保留会话选择参数，不向用户暴露额外的运行时状态。
  */
 
 import type { SessionInteractionRequest } from "@downcity/agent";

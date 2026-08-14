@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 封装 `RemoteAgent` 创建、session 列表、session 创建/获取等远程操作。
- * - City daemon 不在线时装配临时本地 Agent，保持相同的 Session 调用接口。
+ * - City daemon 在线时通过 RPC 访问宿主；离线时保留本地装配路径供一次性 CLI 调用。
  * - 不处理命令行交互，只负责选择远程或本地访问路径。
  */
 
@@ -26,7 +26,6 @@ import {
   read_daemon_pid,
 } from "@/city/process/daemon/Manager.js";
 import {
-  AGENT_CHAT_DEFAULT_SESSION_ID,
   AGENT_CHAT_NEW_SESSION_ID_PREFIX,
   type AgentChatSessionSummaryView,
   type AgentChatTransportOptions,
@@ -48,11 +47,11 @@ export type AgentChatRemoteTarget = {
   url: string;
 };
 
-/** Chat 所需的最小 Agent 客户端，可由远程 Agent 或临时本地 Agent 提供。 */
+/** Chat 所需的最小 Agent 客户端，由 City RPC 或本地装配路径提供。 */
 export interface AgentChatClient {
   /** 目标 Agent 的 Session 集合。 */
   sessions: AgentSessions<RemoteAgentSession>;
-  /** 释放远程连接或临时本地 Agent。 */
+  /** 释放远程连接或本地装配的 Agent。 */
   close(): Promise<void>;
 }
 
@@ -186,14 +185,7 @@ export async function listRemoteChatSessions(params: {
   remote_agent: AgentChatClient;
 }): Promise<AgentChatSessionSummaryView[]> {
   const page = await params.remote_agent.sessions.list({ limit: 30 });
-  const sessions = page.items.map(toSessionSummaryView);
-  if (!sessions.some((item) => item.session_id === AGENT_CHAT_DEFAULT_SESSION_ID)) {
-    sessions.unshift({
-      session_id: AGENT_CHAT_DEFAULT_SESSION_ID,
-      message_count: 0,
-    });
-  }
-  return sessions;
+  return page.items.map(toSessionSummaryView);
 }
 
 /**
