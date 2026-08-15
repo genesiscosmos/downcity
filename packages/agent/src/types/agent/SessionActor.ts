@@ -124,6 +124,9 @@ export interface AgentSession extends AgentSessionActor {
   /** 写入当前 session 默认配置。 */
   set(input: AgentSessionSetInput, options?: AgentSessionSetOptions): Promise<void>;
 
+  /** 修改当前 Session 的用户可见标题并发布 canonical mutation。 */
+  rename(title: string): Promise<string>;
+
   /** 把当前 Session 首次生成后固定的完整 system 显式固化到 instruction.md。 */
   snapshot(): Promise<void>;
 

@@ -118,7 +118,11 @@ already applied configuration and does not publish a success event that has no p
 
 Both expose `prompt()`, `stop()`, `compact()`, `subscribe()`, `messages()`, `interactions()`,
 `respond()`, `status()`, `set({ security })`, and `fork()`. Local Sessions additionally provide
-`set({ model })`, `syncshot()`, and `snapshot()`; remote model and system policy belongs to the server host.
+`set({ model })`, `rename()`, `syncshot()`, and `snapshot()`; remote model and system policy belongs to the server host.
+
+Use `await session.rename(title)` to persist a local Session's visible title. The method returns the
+normalized title and publishes the canonical Session title Mutation after metadata commits. Clients
+should update their navigation projection from that Mutation instead of storing a second title.
 
 | Context | Configure a model |
 | --- | --- |
@@ -133,6 +137,7 @@ Remote clients do not participate in model selection. IDs, defaults, and recover
 - Manage local Sessions: `agent.sessions.create/get/list/archive/archived/clean_archive/remove/clear_messages()`
 - Input and completion: `session.prompt()` and `turn.finished`
 - Read and stream: `session.messages()`, `session.get_info()`, and `session.subscribe()`
+- Rename a local Session: `session.rename(title)`
 - Control execution: `session.stop()`, `session.set()`, [`session.compact()`](/en/agent-sdk-docs/sessions/compact), and `session.fork()`
 - Refresh and persist system: [`session.syncshot()`](/en/agent-sdk-docs/sessions/syncshot), [`session.snapshot()`](/en/agent-sdk-docs/sessions/snapshot)
 - Tool approval: `session.interactions()`, `session.respond()`, `session.set({ security })`, and `session.status()`

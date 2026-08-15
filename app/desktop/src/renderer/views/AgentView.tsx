@@ -1,103 +1,42 @@
-/** 使用 Duobox SettingsMainView 结构实现的 Agent 管理页。 */
+/** Agent 身份、运行配置、Plugin 与近期 Session 管理页。 */
 
-import { TbCpu, TbFolder, TbLoader2, TbMessageCircle, TbRefresh, TbSparkles } from "react-icons/tb";
+import { TbComponents, TbFolder, TbMessageCircle, TbRobot } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
+import { LLMModelIcon } from "@/components/model/LLMModelIcon";
 import { MainViewBody, MainViewLayout } from "@/layouts/MainViewLayout";
-import type { DesktopAgentSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
-import type { AgentRuntimeState } from "@/types/DesktopView";
+import type { DesktopAgentSummary, DesktopPluginSummary, DesktopSessionSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 /** Agent 管理页属性。 */
 interface AgentViewProps {
-  /** 当前管理的 Agent 摘要。 */
-  agent: DesktopAgentSummary;
-  /** 共享 Registry 中的 Workspace，用于展示 Agent 绑定目标。 */
-  workspaces: DesktopWorkspaceSummary[];
-  /** Agent 持久化绑定的 Workspace ID。 */
-  workspace_id: string;
-  /** Agent 当前连接状态。 */
-  runtime_state: AgentRuntimeState;
-  /** 当前已加载的 Session 数量。 */
-  session_count: number;
-  /** 在 Electron main 中装配 native Agent。 */
-  connect_agent(): Promise<void>;
-  /** 创建并进入一个 Session。 */
-  create_session(): Promise<void>;
+  /** 当前 Agent。 */ agent: DesktopAgentSummary;
+  /** 全部 Workspace。 */ workspaces: DesktopWorkspaceSummary[];
+  /** 当前 Agent 绑定的 Plugin。 */ plugins: DesktopPluginSummary[];
+  /** 当前 Agent 的 Session。 */ sessions: DesktopSessionSummary[];
+  /** 创建空对话。 */ create_session(): Promise<void>;
+  /** 进入 Session。 */ select_session(session_id: string): Promise<void>;
 }
 
-/** Agent 连接状态对应的可见文案。 */
-function get_runtime_text(state: AgentRuntimeState): string {
-  if (state === "connected") return "Native Agent 已就绪";
-  if (state === "connecting") return "正在装配 Native Agent";
-  if (state === "error") return "Native Agent 装配失败";
-  return "Native Agent 尚未装配";
-}
-
-/** Agent 配置与运行管理主视图。 */
-export function AgentView({ agent, workspaces, workspace_id, runtime_state, session_count, connect_agent, create_session }: AgentViewProps) {
-  const workspace = workspaces.find((item) => item.workspace_id === workspace_id);
+/** 安静、可扫描的 Agent 管理界面。 */
+export function AgentView({ agent, workspaces, plugins, sessions, create_session, select_session }: AgentViewProps) {
+  const workspace = workspaces.find((item) => item.workspace_id === agent.workspace_id);
+  const bound_plugins = plugins.filter((plugin) => plugin.agent_ids.includes(agent.agent_id));
+  const recent_sessions = [...sessions].sort((left, right) => right.updated_at - left.updated_at).slice(0, 5);
   return <MainViewLayout>
-    <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2">
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1 text-xs text-muted-foreground/60">
-        <TbCpu className="size-3.5" />
-        <span className="truncate font-medium text-foreground/80">{agent.agent_id}</span>
-      </div>
-      <Button disabled={runtime_state === "connecting" || !workspace_id} onClick={() => void connect_agent()}>
-        {runtime_state === "connecting" ? <TbLoader2 className="animate-spin" /> : <TbRefresh />}
-        <span>{runtime_state === "connected" ? "刷新" : "连接"}</span>
-      </Button>
-      <Button variant="primary" disabled={runtime_state === "connecting"} onClick={() => void create_session()}><TbMessageCircle /><span>新建 Session</span></Button>
-    </header>
-    <MainViewBody>
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-background">
-        <div className="mx-auto w-full max-w-3xl px-8 pb-12 pt-18">
-          <div className="mb-8 flex items-center gap-4">
-            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-muted text-muted-foreground"><TbCpu className="size-7" /></div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-xl font-semibold text-foreground">{agent.agent_id}</div>
-              <div className="mt-1 text-xs text-muted-foreground">{get_runtime_text(runtime_state)}</div>
-            </div>
-            <div className="flex items-center gap-1.5 rounded-full bg-surface-subtle px-2.5 py-1 text-[0.6875rem] text-muted-foreground">
-              <span className={`size-1.5 rounded-full ${runtime_state === "connected" ? "bg-emerald-500" : runtime_state === "error" ? "bg-destructive" : "bg-muted-foreground/30"}`} />
-              {runtime_state === "connected" ? "Connected" : "Offline"}
-            </div>
-          </div>
-
-          <section className="mb-7">
-            <h2 className="mb-2 px-1 text-xs font-semibold text-foreground">概览</h2>
-            <div className="grid grid-cols-3 gap-2">
-              <SummaryCard icon={<TbFolder />} label="Workspace" value={workspace?.name || "未绑定"} />
-              <SummaryCard icon={<TbSparkles />} label="Model" value={agent.model_id || "未配置"} />
-              <SummaryCard icon={<TbMessageCircle />} label="Sessions" value={String(session_count)} />
-            </div>
-          </section>
-
-          <section>
-            <h2 className="mb-2 px-1 text-xs font-semibold text-foreground">Agent 配置</h2>
-            <div className="overflow-hidden rounded-xl bg-surface-subtle">
-              <PropertyRow label="Agent ID" value={agent.agent_id} />
-              <PropertyRow label="运行 Workspace" value={workspace?.workspace_path || "—"} />
-              <PropertyRow label="Model ID" value={agent.model_id || "—"} />
-              <PropertyRow label="配置版本" value={agent.version} last />
-            </div>
-          </section>
-        </div>
-      </div>
-    </MainViewBody>
+    <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2"><div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1 text-xs text-muted-foreground"><TbRobot /><span className="truncate font-medium text-foreground/80">{agent.agent_id}</span></div><Button variant="primary" onClick={() => void create_session()}><TbMessageCircle /><span>新对话</span></Button></header>
+    <MainViewBody><div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-background"><div className="mx-auto w-full max-w-[42rem] px-6 pb-12 pt-14">
+      <div className="mb-9 flex min-w-0 items-center gap-4"><div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-surface-subtle text-muted-foreground"><TbRobot className="size-6" /></div><div className="min-w-0"><h1 className="truncate text-lg font-semibold text-foreground">{agent.agent_id}</h1><p className="mt-1 truncate text-xs text-muted-foreground" title={workspace?.workspace_path}>{workspace?.workspace_path || "未绑定 Workspace"}</p></div></div>
+      <SettingsGroup title="Runtime"><PropertyRow icon={<TbFolder />} label="Workspace" value={workspace?.workspace_path || "未绑定"} /><PropertyRow icon={<LLMModelIcon model_id={agent.model_id} size_class="size-4" />} label="Model" value={agent.model_id || "未配置"} /><PropertyRow icon={<TbRobot />} label="Version" value={agent.version} last /></SettingsGroup>
+      <SettingsGroup title="Plugins">{bound_plugins.length > 0 ? bound_plugins.map((plugin, index) => <PropertyRow key={plugin.plugin_name} icon={<TbComponents />} label={plugin.title} value={plugin.plugin_name} last={index === bound_plugins.length - 1} />) : <EmptyRow text="尚未绑定 Plugin" />}</SettingsGroup>
+      <SettingsGroup title="Recent Sessions">{recent_sessions.length > 0 ? recent_sessions.map((session, index) => <button key={session.session_id} className={`flex min-h-11 w-full items-center gap-3 px-3.5 text-left hover:bg-foreground/[0.04] ${index === recent_sessions.length - 1 ? "" : "border-b border-border/45"}`} onClick={() => void select_session(session.session_id)}><TbMessageCircle className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate text-xs text-foreground">{session.title || "新对话"}</span><span className="text-[0.625rem] text-muted-foreground">{session.message_count} messages</span></button>) : <EmptyRow text="暂无 Session" />}</SettingsGroup>
+    </div></div></MainViewBody>
   </MainViewLayout>;
 }
 
-/** Agent 概览卡片。 */
-function SummaryCard({ icon, label, value }: { /** 左侧图标。 */ icon: React.ReactNode; /** 指标名称。 */ label: string; /** 指标当前值。 */ value: string }) {
-  return <div className="flex min-w-0 flex-col gap-3 rounded-xl bg-surface-subtle p-3.5">
-    <div className="flex size-7 items-center justify-center rounded-lg bg-control-hover text-muted-foreground [&_svg]:size-3.5">{icon}</div>
-    <div className="min-w-0"><div className="text-[0.625rem] text-muted-foreground">{label}</div><div className="mt-0.5 truncate text-xs font-medium text-foreground" title={value}>{value}</div></div>
-  </div>;
-}
+/** 设置式信息分组。 */
+function SettingsGroup({ title, children }: { /** 分组标题。 */ title: string; /** 分组内容。 */ children: React.ReactNode }) { return <section className="mb-7"><h2 className="mb-2 px-1 text-xs font-semibold text-foreground">{title}</h2><div className="overflow-hidden rounded-lg bg-surface-subtle">{children}</div></section>; }
 
-/** Agent 配置属性行。 */
-function PropertyRow({ label, value, last = false }: { /** 属性名称。 */ label: string; /** 属性值。 */ value: string; /** 是否为最后一行。 */ last?: boolean }) {
-  return <div className={`grid min-h-11 grid-cols-[9rem_minmax(0,1fr)] items-center px-3.5 ${last ? "" : "border-b border-border/45"}`}>
-    <span className="text-[0.6875rem] text-muted-foreground">{label}</span>
-    <span className="truncate font-mono text-[0.6875rem] text-foreground/80" title={value}>{value}</span>
-  </div>;
-}
+/** Agent 属性行。 */
+function PropertyRow({ icon, label, value, last = false }: { /** 属性图标。 */ icon: React.ReactNode; /** 属性名称。 */ label: string; /** 属性值。 */ value: string; /** 是否最后一行。 */ last?: boolean }) { return <div className={`grid min-h-11 grid-cols-[1rem_7rem_minmax(0,1fr)] items-center gap-3 px-3.5 ${last ? "" : "border-b border-border/45"}`}><span className="text-muted-foreground [&_svg]:size-4">{icon}</span><span className="text-[0.6875rem] text-muted-foreground">{label}</span><span className="truncate text-right font-mono text-[0.6875rem] text-foreground/80" title={value}>{value}</span></div>; }
+
+/** 空分组占位。 */
+function EmptyRow({ text }: { /** 空状态文本。 */ text: string }) { return <div className="px-3.5 py-4 text-xs text-muted-foreground">{text}</div>; }

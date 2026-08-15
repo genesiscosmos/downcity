@@ -1,30 +1,44 @@
-/** 使用 Duobox Dialog 视觉结构创建共享 Registry Agent。 */
+/** 使用目录选择器和真实模型目录创建 Agent。 */
 
-import { useState, type FormEvent } from "react";
-import { TbCpu } from "react-icons/tb";
+import { useRef, useState, type FormEvent } from "react";
+import { TbFolderOpen, TbRobot } from "react-icons/tb";
+import { ModelSelector } from "@/components/model/ModelSelector";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { CreateAgentFormValue } from "@/types/DesktopView";
+import type { DesktopModelSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 /** 创建 Agent 对话框属性。 */
 interface CreateAgentDialogProps {
-  /** 关闭对话框。 */
-  close_dialog(): void;
-  /** 提交创建表单。 */
-  create_agent(value: CreateAgentFormValue): Promise<void>;
+  /** 关闭对话框。 */ close_dialog(): void;
+  /** 提交创建。 */ create_agent(value: CreateAgentFormValue): Promise<void>;
+  /** 当前 Federation 模型目录。 */ models: DesktopModelSummary[];
+  /** 模型目录是否加载中。 */ models_loading: boolean;
+  /** 默认文本模型。 */ default_model_id: string;
+  /** 已打开的 Workspace；存在时固定使用其目录。 */ workspace?: DesktopWorkspaceSummary;
 }
 
-/** Duobox 风格创建 Agent 表单。 */
-export function CreateAgentDialog({ close_dialog, create_agent }: CreateAgentDialogProps) {
-  const [agent_id, set_agent_id] = useState("");
-  const [workspace_path, set_workspace_path] = useState("");
-  const [model_id, set_model_id] = useState("");
+/** 正式的 Agent 创建流程。 */
+export function CreateAgentDialog({ close_dialog, create_agent, models, models_loading, default_model_id, workspace }: CreateAgentDialogProps) {
+  const text_models = models.filter((model) => model.modalities.some((modality) => ["text", "stream", "openai"].includes(modality)));
+  const [agent_id, set_agent_id] = useState(() => workspace ? to_agent_id(workspace.workspace_path) : "");
+  const [workspace_path, set_workspace_path] = useState(workspace?.workspace_path || "");
+  const [model_id, set_model_id] = useState(default_model_id || text_models[0]?.model_id || "");
   const [submitting, set_submitting] = useState(false);
   const [form_error, set_form_error] = useState("");
+  const agent_id_edited = useRef(false);
+
+  const choose_workspace = async () => {
+    const next_path = await window.downcity.dialog.open_directory();
+    if (!next_path) return;
+    set_workspace_path(next_path);
+    if (!agent_id_edited.current) set_agent_id(to_agent_id(next_path));
+  };
 
   const submit_form = async (event: FormEvent) => {
     event.preventDefault();
     if (!agent_id.trim() || !workspace_path.trim() || !model_id.trim()) {
-      set_form_error("请填写全部字段");
+      set_form_error("请选择 Workspace、Agent ID 和模型");
       return;
     }
     set_submitting(true);
@@ -39,24 +53,25 @@ export function CreateAgentDialog({ close_dialog, create_agent }: CreateAgentDia
     }
   };
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/15 p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) close_dialog(); }}>
-    <form className="w-full max-w-md overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl" onSubmit={(event) => void submit_form(event)}>
-      <div className="flex items-start gap-3 px-5 pb-3 pt-5">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><TbCpu className="size-4.5" /></div>
-        <div><h2 className="text-sm font-semibold text-foreground">创建 Agent</h2><p className="mt-1 text-[0.6875rem] leading-4 text-muted-foreground">Agent 与 Workspace 将作为两条独立记录写入共享注册表。</p></div>
-      </div>
-      <div className="flex flex-col gap-3 px-5 py-3">
-        <Field label="Agent ID" value={agent_id} placeholder="research-agent" auto_focus on_change={set_agent_id} />
-        <Field label="Workspace 绝对路径" value={workspace_path} placeholder="/Users/name/project" on_change={set_workspace_path} />
-        <Field label="Model ID" value={model_id} placeholder="provider/model" on_change={set_model_id} />
+  return <Dialog open onOpenChange={(open) => { if (!open && !submitting) close_dialog(); }}><DialogContent>
+    <form onSubmit={(event) => void submit_form(event)}>
+      <DialogHeader className="flex items-start gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><TbRobot className="size-4.5" /></div><div><DialogTitle>创建 Agent</DialogTitle><DialogDescription>{workspace ? `Agent 将绑定到 ${workspace.name}；首次发送消息时才创建 Session。` : "选择工作目录和默认模型；首次发送消息时才创建 Session。"}</DialogDescription></div></DialogHeader>
+      <DialogBody className="flex flex-col gap-3">
+        <Field label="Agent ID"><input autoFocus value={agent_id} placeholder="research-agent" className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" onChange={(event) => { agent_id_edited.current = true; set_agent_id(event.target.value); }} /></Field>
+        <Field label="Workspace"><div className="flex gap-1"><input value={workspace_path} readOnly placeholder="选择一个项目目录" className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" />{workspace ? null : <Button type="button" size="icon" className="size-8" title="选择目录" onClick={() => void choose_workspace()}><TbFolderOpen /></Button>}</div></Field>
+        <Field label="默认模型"><ModelSelector current_model_id={model_id} models={text_models} loading={models_loading} trigger_label="选择模型" class_name="h-8 w-full max-w-none justify-start rounded-lg border border-input px-2.5" on_select_model={set_model_id} /></Field>
         {form_error ? <div className="text-[0.6875rem] text-destructive">{form_error}</div> : null}
-      </div>
-      <div className="flex justify-end gap-2 border-t border-border/60 bg-muted/35 px-5 py-3"><Button type="button" onClick={close_dialog}>取消</Button><Button type="submit" variant="primary" disabled={submitting}>{submitting ? "创建中…" : "创建 Agent"}</Button></div>
+      </DialogBody>
+      <DialogFooter><Button type="button" onClick={close_dialog} disabled={submitting}>取消</Button><Button type="submit" variant="primary" disabled={submitting || !agent_id.trim() || !workspace_path || !model_id}>{submitting ? "创建中…" : "创建 Agent"}</Button></DialogFooter>
     </form>
-  </div>;
+  </DialogContent></Dialog>;
 }
 
-/** 创建表单的标准输入字段。 */
-function Field({ label, value, placeholder, auto_focus = false, on_change }: { /** 字段标签。 */ label: string; /** 当前字段值。 */ value: string; /** 空值提示。 */ placeholder: string; /** 是否初始聚焦。 */ auto_focus?: boolean; /** 字段变化回调。 */ on_change(value: string): void }) {
-  return <label className="flex flex-col gap-1.5"><span className="text-[0.6875rem] font-medium text-foreground/75">{label}</span><input autoFocus={auto_focus} value={value} placeholder={placeholder} className="h-8 rounded-lg border border-input bg-background px-2.5 text-xs text-foreground placeholder:text-muted-foreground/45 focus:border-ring" onChange={(event) => on_change(event.target.value)} /></label>;
+/** 创建表单字段。 */
+function Field({ label, children }: { /** 字段标签。 */ label: string; /** 字段控件。 */ children: React.ReactNode }) { return <label className="flex flex-col gap-1.5"><span className="text-[0.6875rem] font-medium text-foreground/75">{label}</span>{children}</label>; }
+
+/** 从 Workspace 最后一段生成 Agent ID 建议值。 */
+function to_agent_id(workspace_path: string): string {
+  const name = workspace_path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || "agent";
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "agent";
 }

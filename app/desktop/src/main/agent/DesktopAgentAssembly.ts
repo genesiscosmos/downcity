@@ -23,6 +23,7 @@ import {
   type BuiltinPluginAi,
 } from "@downcity/plugins";
 import { create_desktop_platform_sandbox } from "./DesktopPlatformSandbox.js";
+import type { DesktopModelSummary, DesktopPluginSummary } from "../../common/types/DesktopApi.js";
 
 const default_federation_url = "https://base.downcity.ai";
 
@@ -102,6 +103,66 @@ export async function resolve_desktop_agent_model(
   return model;
 }
 
+/** 列出当前 Federation 中可见的全部模型；Renderer 按能力分组。 */
+export async function list_desktop_agent_models(
+  data: DesktopLocalData,
+  env: Readonly<Record<string, string | undefined>>,
+): Promise<DesktopModelSummary[]> {
+  const catalog = await create_embassy_user(data, env).ai.catalog();
+  return catalog.all()
+    .map((model) => ({
+      model_id: model.id,
+      name: model.name || model.id,
+      description: model.description || "",
+      modalities: [...model.modalities],
+      ...(typeof model.context_window === "number" ? { context_window: model.context_window } : {}),
+      tags: [...(model.tags ?? [])],
+    }));
+}
+
+/** 合并官方与第三方 Plugin manifest，并附加本地绑定与 Resource 摘要。 */
+export function list_desktop_plugins(data: DesktopLocalData): DesktopPluginSummary[] {
+  const binding_agents = new Map<string, string[]>();
+  for (const agent of data.agents.list()) {
+    for (const plugin of agent.plugins) {
+      const agent_ids = binding_agents.get(plugin.plugin_name) ?? [];
+      agent_ids.push(agent.agent_id);
+      binding_agents.set(plugin.plugin_name, agent_ids);
+    }
+  }
+  const plugins = new Map<string, DesktopPluginSummary>();
+  for (const plugin_type of create_desktop_builtin_plugin_types(data)) {
+    const manifest = plugin_type.manifest;
+    plugins.set(manifest.name, {
+      plugin_name: manifest.name,
+      title: manifest.title || manifest.name,
+      description: manifest.description || "",
+      source: "builtin",
+      agent_ids: binding_agents.get(manifest.name) ?? [],
+      resource_count: data.plugins.list_resources(manifest.name).length,
+      configurable: Boolean(manifest.config),
+      supports_resources: Boolean(manifest.resources),
+    });
+  }
+  for (const installation of data.plugins.list_installations()) {
+    for (const manifest of installation.manifest.plugins) {
+      plugins.set(manifest.name, {
+        plugin_name: manifest.name,
+        title: manifest.title || manifest.name,
+        description: manifest.description || "",
+        ...(manifest.version ? { version: manifest.version } : {}),
+        source: "installed",
+        installation_id: installation.installation_id,
+        agent_ids: binding_agents.get(manifest.name) ?? [],
+        resource_count: data.plugins.list_resources(manifest.name).length,
+        configurable: Boolean(manifest.config),
+        supports_resources: Boolean(manifest.resources),
+      });
+    }
+  }
+  return [...plugins.values()].sort((left, right) => left.title.localeCompare(right.title));
+}
+
 /** 创建 Desktop 默认交互 Tool。 */
 export function create_desktop_agent_tools(): NonNullable<AgentOptions["tools"]> {
   return {
@@ -117,7 +178,6 @@ class LazyDesktopAgentModel implements LanguageModelV3 {
   readonly provider = "downcity";
   readonly supportedUrls: Record<string, RegExp[]> = {};
   readonly modelId: string;
-  private model_promise?: Promise<LanguageModelV3>;
 
   constructor(
     model_id: string,
@@ -135,18 +195,17 @@ class LazyDesktopAgentModel implements LanguageModelV3 {
   }
 
   private async model(): Promise<LanguageModelV3> {
-    this.model_promise ??= this.resolve_model().then((model) => {
-      if (
-        !model
-        || typeof model !== "object"
-        || !("specificationVersion" in model)
-        || model.specificationVersion !== "v3"
-      ) {
-        throw new Error(`Resolved model does not implement LanguageModelV3: ${this.modelId}`);
-      }
-      return model as LanguageModelV3;
-    });
-    return await this.model_promise;
+    const model = await this.resolve_model();
+    if (
+      !model
+      || typeof model !== "object"
+      || !("specificationVersion" in model)
+      || model.specificationVersion !== "v3"
+    ) {
+      throw new Error(`Resolved model does not implement LanguageModelV3: ${this.modelId}`);
+    }
+    // 关键点（中文）：每个 Turn 重新读取共享 Federation Session，登录切换或退出后不能继续复用旧 Token。
+    return model as LanguageModelV3;
   }
 }
 

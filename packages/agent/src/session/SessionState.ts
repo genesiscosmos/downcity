@@ -11,7 +11,10 @@ import {
   infer_agent_model_label,
   read_agent_model_context_window,
 } from "@/agent/AgentModel.js";
-import { resolve_system_timezone } from "@/session/storage/Metadata.js";
+import {
+  normalize_session_title,
+  resolve_system_timezone,
+} from "@/session/storage/Metadata.js";
 import { ensure_session_title } from "@/session/SessionTitle.js";
 import type {
   AgentSessionConfigSnapshot,
@@ -204,6 +207,35 @@ export class SessionState {
     });
     this.state.configured_approval_mode = mode;
     return true;
+  }
+
+  /** 原子修改 Session 标题并发布唯一的标题 mutation。 */
+  async set_title(input: string): Promise<string> {
+    const title = normalize_session_title(input);
+    if (!title) throw new Error("session.rename requires a non-empty title");
+    this.title_task.dispose();
+    const changed = await this.run_metadata_mutation(async () => {
+      const metadata = await this.store.read_metadata();
+      if (normalize_session_title(metadata.title) === title) return false;
+      await this.store.write_metadata({
+        ...metadata,
+        agent_id: this.agent_id,
+        title,
+        updated_at: Date.now(),
+      });
+      return true;
+    });
+    if (changed) {
+      this.publish_event({
+        mutation_id: generate_id(),
+        variant: "session",
+        type: "title",
+        session_id: this.session_id,
+        created_at: Date.now(),
+        title,
+      });
+    }
+    return title;
   }
 
   /** 在 Session Step 检查点提交模型配置。 */

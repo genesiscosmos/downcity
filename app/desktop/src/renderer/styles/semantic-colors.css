@@ -6,6 +6,7 @@
   --interaction-active: color-mix(in srgb, var(--foreground) 10%, transparent);
   --interaction-selected: color-mix(in srgb, var(--foreground) 10%, transparent);
   --divider: color-mix(in srgb, var(--foreground) 6%, transparent);
+  --chart-2: color-mix(in srgb, var(--primary) 70%, var(--foreground));
   --border-subtle: color-mix(in srgb, var(--border) 55%, transparent);
   --control-surface: var(--muted);
   --control-hover: color-mix(in srgb, var(--foreground) 10%, transparent);

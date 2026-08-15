@@ -1,8 +1,10 @@
 /**
  * Downcity Desktop 的 Renderer IPC 类型。
  *
- * 这些类型只描述安全桥接边界，不暴露 Electron、SQLite 或 Agent SDK 实例。
+ * 这些类型只描述可序列化的安全桥接边界，不暴露 Electron、数据库或 SDK 实例。
  */
+
+import type { RespondSessionInteractionInput, SessionApprovalMode, SessionMessage, SessionMutation } from "@downcity/agent";
 
 /** Renderer 可见的 Agent 摘要。 */
 export interface DesktopAgentSummary {
@@ -42,37 +44,290 @@ export interface DesktopCreateAgentResult {
   workspace: DesktopWorkspaceSummary;
 }
 
+/** Renderer 可见的 Plugin 来源。 */
+export type DesktopPluginSource = "builtin" | "installed";
+
+/** Renderer 可见的 Plugin catalog 摘要。 */
+export interface DesktopPluginSummary {
+  /** Plugin 的全局稳定名称。 */
+  plugin_name: string;
+  /** Plugin 的用户可见标题。 */
+  title: string;
+  /** Plugin 的用途说明。 */
+  description: string;
+  /** Plugin 的可选语义化版本。 */
+  version?: string;
+  /** Plugin 来自官方内置集合或第三方安装。 */
+  source: DesktopPluginSource;
+  /** 第三方安装的稳定 ID；官方 Plugin 不存在该字段。 */
+  installation_id?: string;
+  /** 当前绑定该 Plugin 的全部 Agent ID。 */
+  agent_ids: string[];
+  /** 当前 Plugin 拥有的 Resource 数量。 */
+  resource_count: number;
+  /** Plugin 是否声明了可编辑配置。 */
+  configurable: boolean;
+  /** Plugin 是否声明了 Resource 类型。 */
+  supports_resources: boolean;
+}
+
 /** Renderer 可见的 Session 摘要。 */
 export interface DesktopSessionSummary {
   /** Session 的稳定标识。 */
   session_id: string;
   /** Session 的可见标题。 */
   title: string;
-}
-
-/** Renderer 可直接展示的一条 Session 消息。 */
-export interface DesktopChatMessage {
-  /** 消息在 Session 内的稳定标识。 */
-  message_id: string;
-  /** 消息的展示角色。 */
-  role: "user" | "assistant" | "system" | "error";
-  /** 已经归一化的纯文本内容。 */
-  text: string;
-  /** 消息创建时间戳，单位为毫秒。 */
+  /** 最近一条可见消息的摘要。 */
+  preview_text: string;
+  /** Session 创建时间戳，单位为毫秒。 */
   created_at: number;
-  /** 消息是否仍在处理中。 */
-  pending: boolean;
+  /** Session 最近更新时间戳，单位为毫秒。 */
+  updated_at: number;
+  /** 当前已持久化消息数量。 */
+  message_count: number;
+  /** 当前 Session 是否仍在执行。 */
+  executing: boolean;
 }
 
-/** 一次聊天请求的最终结果。 */
-export interface DesktopChatResult {
-  /** 本次请求所属 Session ID。 */
+/** Session 历史消息快照。 */
+export interface DesktopChatSnapshot {
+  /** 当前 Session 的可见 canonical 消息。 */
+  messages: SessionMessage[];
+  /** 当前 Session 的实时运行状态。 */
+  runtime: DesktopChatRuntime;
+  /** 当前结果之前是否还有更早历史 Segment。 */
+  has_more: boolean;
+  /** 读取更早 Segment 时使用的 sequence 游标。 */
+  next_before_sequence?: number;
+}
+
+/** Session 的一页更早历史消息。 */
+export interface DesktopChatHistoryPage {
+  /** 当前历史 Segment 的可见 canonical 消息。 */
+  messages: SessionMessage[];
+  /** 当前结果之前是否还有更早历史 Segment。 */
+  has_more: boolean;
+  /** 继续向前读取时使用的 sequence 游标。 */
+  next_before_sequence?: number;
+}
+
+/** Chat 运行阶段。 */
+export type DesktopChatRuntimeStatus =
+  | "idle"
+  | "submitted"
+  | "streaming"
+  | "waiting_input"
+  | "completed"
+  | "failed"
+  | "stopped";
+
+/** Main 进程维护的一份 Session 运行态投影。 */
+export interface DesktopChatRuntime {
+  /** 运行态所属 Agent。 */
+  agent_id: string;
+  /** 运行态所属 Session。 */
   session_id: string;
-  /** Agent 返回的最终文本。 */
+  /** 当前运行阶段。 */
+  status: DesktopChatRuntimeStatus;
+  /** 当前活跃 Turn 标识。 */
+  turn_id?: string;
+  /** 最近一次失败的用户可见原因。 */
+  error?: string;
+  /** 运行态最近更新时间戳，单位为毫秒。 */
+  updated_at: number;
+}
+
+/** IPC 广播的一条 Session mutation。 */
+export interface DesktopChatMutationEvent {
+  /** Mutation 所属 Agent。 */
+  agent_id: string;
+  /** Mutation 所属 Session。 */
+  session_id: string;
+  /** SDK canonical Session mutation。 */
+  mutation: SessionMutation;
+}
+
+/** IPC 广播的一条 Session 运行态变化。 */
+export interface DesktopChatRuntimeEvent {
+  /** 最新运行态快照。 */
+  runtime: DesktopChatRuntime;
+}
+
+/** Chat 输入被 Session 接受后的结果。 */
+export interface DesktopChatSendResult {
+  /** 新建 Turn 的稳定标识。 */
+  turn_id: string;
+}
+
+/** Renderer 可提交的一份文件输入。 */
+export interface DesktopChatFileInput {
+  /** 文件的原始名称。 */
+  filename: string;
+  /** 文件 MIME 类型；未知类型使用 application/octet-stream。 */
+  media_type: string;
+  /** 文件内容的 Data URL，进入 Session 后由 SDK 落盘。 */
+  data_url: string;
+}
+
+/** Renderer 到 Session 的一次完整用户输入。 */
+export interface DesktopChatInput {
+  /** 用户输入的纯文本；只有附件时允许为空。 */
   text: string;
-  /** Turn 是否成功完成。 */
-  success: boolean;
-  /** Turn 失败时的错误信息。 */
+  /** 当前消息携带的文件列表。 */
+  files: DesktopChatFileInput[];
+}
+
+/** Federation 模型目录中的 Renderer 投影。 */
+export interface DesktopModelSummary {
+  /** Federation 模型稳定标识。 */
+  model_id: string;
+  /** 模型用户可见名称。 */
+  name: string;
+  /** 模型能力说明。 */
+  description: string;
+  /** 模型支持的能力类型。 */
+  modalities: string[];
+  /** 模型上下文窗口，单位为 token。 */
+  context_window?: number;
+  /** Federation 提供的模型标签。 */
+  tags: string[];
+}
+
+/** 当前 Session 可动态切换的配置。 */
+export interface DesktopSessionConfiguration {
+  /** 当前实际使用的模型标识。 */
+  model_id: string;
+  /** 当前安全审批模式。 */
+  approval_mode: SessionApprovalMode;
+}
+
+/** Desktop 外观模式。 */
+export type DesktopAppearanceMode = "light" | "dark" | "system";
+
+/** Desktop 可选颜色主题。 */
+export type DesktopColorTheme = "duobox" | "dim" | "forest" | "graph" | "haze" | "mono" | "ocean" | "sunset" | "vercel";
+
+/** Desktop 用户级偏好设置。 */
+export interface DesktopSettings {
+  /** 是否展示模型推理内容。 */
+  show_reasoning: boolean;
+  /** 流式输出时是否自动跟随到底部。 */
+  auto_scroll: boolean;
+  /** 默认选中的 Agent；为空时使用列表第一项。 */
+  default_agent_id: string;
+  /** 启动后是否直接进入默认 Agent 的空对话。 */
+  open_empty_chat_on_start: boolean;
+  /** Enter 是否发送消息；关闭后使用 Command/Ctrl + Enter。 */
+  send_message_on_enter: boolean;
+  /** Chat 输入框是否启用系统拼写检查。 */
+  spellcheck_enabled: boolean;
+  /** 外观明暗模式。 */
+  appearance_mode: DesktopAppearanceMode;
+  /** 当前颜色主题。 */
+  color_theme: DesktopColorTheme;
+  /** Renderer UI 缩放比例，允许 0.85 到 1.2。 */
+  ui_scale: number;
+  /** 是否为 Electron 网络请求启用显式代理。 */
+  proxy_enabled: boolean;
+  /** Electron 接受的代理地址。 */
+  proxy_url: string;
+  /** 新建 Draft 默认使用的文本模型；为空时回退 Agent 模型。 */
+  default_text_model_id: string;
+  /** 生图能力默认使用的模型；为空时使用目录第一项。 */
+  default_image_model_id: string;
+}
+
+/** Desktop 安全存储中的一个 Federation 账户摘要。 */
+export interface DesktopAccountSummary {
+  /** Desktop 账户稳定标识。 */
+  account_id: string;
+  /** 账户所属 Federation。 */
+  federation_url: string;
+  /** Federation 用户稳定标识。 */
+  user_id: string;
+  /** Token 绑定的 Bureau 标识。 */
+  bureau_id: string;
+  /** 用户展示名称。 */
+  display_name?: string;
+  /** 用户邮箱。 */
+  email?: string;
+  /** 用户头像地址。 */
+  avatar_url?: string;
+  /** 最近切换到该账户的时间戳。 */
+  last_used_at: number;
+  /** 是否为当前账户。 */
+  active: boolean;
+}
+
+/** 当前 Credits Card 的 Renderer 投影。 */
+export interface DesktopCreditCardSummary {
+  /** Card 类型。 */
+  kind: "primary" | "ephemeral";
+  /** Card 稳定标识。 */
+  card_id: string;
+  /** Card 用户可见名称。 */
+  name: string;
+  /** Card 当前余额。 */
+  credits: number;
+  /** 限时 Card 到期时间；永久 Card 为空。 */
+  expires_at?: string;
+  /** Card 当前状态。 */
+  status: "active" | "depleted" | "expired";
+}
+
+/** 当前账户的 Credits 余额。 */
+export interface DesktopCreditsSummary {
+  /** 当前全部 Card 的可用 Credits。 */
+  available_credits: number;
+  /** 当前用户的 Credits Card。 */
+  cards: DesktopCreditCardSummary[];
+}
+
+/** 当前账户某个自然日的用量。 */
+export interface DesktopUsageDay {
+  /** 用户所在时区的日期，格式 YYYY-MM-DD。 */
+  date: string;
+  /** 当日已入账 Credits 消费。 */
+  credits_used: number;
+  /** 当日 Token 总量。 */
+  total_tokens: number;
+  /** 当日 AI 执行次数。 */
+  execution_count: number;
+  /** 当日生成图片数量。 */
+  image_count: number;
+}
+
+/** 当前账户用量与余额快照。 */
+export interface DesktopAccountResources {
+  /** 一美元对应的 Credits 数量。 */
+  credits_per_usd: number;
+  /** 最近 365 个自然日的稀疏用量。 */
+  usage_days: DesktopUsageDay[];
+  /** 当前 Credits 余额；Federation 未安装 CreditsService 时为空。 */
+  credits?: DesktopCreditsSummary;
+  /** 余额读取失败原因。 */
+  credits_error?: string;
+  /** 用量读取失败原因。 */
+  usage_error?: string;
+}
+
+/** Federation 当前用户的 Renderer 投影。 */
+export interface DesktopUserSummary {
+  /** 当前是否存在可用的 Federation Session。 */
+  authenticated: boolean;
+  /** 当前选中的 Federation 服务地址。 */
+  federation_url: string;
+  /** Federation 用户稳定标识。 */
+  user_id?: string;
+  /** Token 绑定的 Bureau 标识。 */
+  bureau_id?: string;
+  /** 用户展示名称。 */
+  display_name?: string;
+  /** 用户邮箱。 */
+  email?: string;
+  /** 用户头像地址。 */
+  avatar_url?: string;
+  /** 无法刷新远端资料时的错误文本。 */
   error?: string;
 }
 
@@ -91,17 +346,81 @@ export interface DesktopApi {
   workspace: {
     /** 列出全部已登记 Workspace。 */
     list(): Promise<DesktopWorkspaceSummary[]>;
+    /** 独立登记一个 Workspace；相同路径返回已有记录。 */
+    create(workspace_path: string, name: string): Promise<DesktopWorkspaceSummary>;
+  };
+  /** 本地 Plugin catalog 能力。 */
+  plugin: {
+    /** 列出官方与第三方 Plugin，并附带当前 Agent 绑定。 */
+    list(): Promise<DesktopPluginSummary[]>;
+  };
+  /** Electron 原生文件选择能力。 */
+  dialog: {
+    /** 选择一个 Workspace 目录；取消时返回 null。 */
+    open_directory(): Promise<string | null>;
   };
   /** Agent Session 与聊天能力。 */
   chat: {
+    /** 读取当前 Federation 中可用于 Agent 对话的模型目录。 */
+    list_models(): Promise<DesktopModelSummary[]>;
     /** 列出指定 Agent 的 Session。 */
     list_sessions(agent_id: string): Promise<DesktopSessionSummary[]>;
     /** 创建新的 Session。 */
     create_session(agent_id: string): Promise<DesktopSessionSummary>;
-    /** 读取指定 Session 当前可见的消息快照。 */
-    list_messages(agent_id: string, session_id: string): Promise<DesktopChatMessage[]>;
-    /** 向指定 Session 发送文本并等待最终结果。 */
-    send(agent_id: string, session_id: string, text: string): Promise<DesktopChatResult>;
+    /** 修改 Session 的用户可见标题。 */
+    rename_session(agent_id: string, session_id: string, title: string): Promise<string>;
+    /** 将 Session 移入归档。 */
+    archive_session(agent_id: string, session_id: string): Promise<void>;
+    /** 永久删除 Session。 */
+    remove_session(agent_id: string, session_id: string): Promise<boolean>;
+    /** 列出指定 Agent 的已归档 Session。 */
+    list_archived_sessions(agent_id: string): Promise<DesktopSessionSummary[]>;
+    /** 读取 Session canonical 消息和当前运行态。 */
+    get_snapshot(agent_id: string, session_id: string): Promise<DesktopChatSnapshot>;
+    /** 读取 Session 的一个更早历史 Segment。 */
+    get_history(agent_id: string, session_id: string, before_sequence: number): Promise<DesktopChatHistoryPage>;
+    /** 提交输入并在 Session 接受后返回。 */
+    send(agent_id: string, session_id: string, input: DesktopChatInput): Promise<DesktopChatSendResult>;
+    /** 停止当前 Session Turn。 */
+    stop(agent_id: string, session_id: string): Promise<void>;
+    /** 响应 Session 当前等待的审批或问题。 */
+    respond(agent_id: string, session_id: string, input: RespondSessionInteractionInput): Promise<void>;
+    /** 读取当前 Session 运行态。 */
+    get_runtime(agent_id: string, session_id: string): Promise<DesktopChatRuntime>;
+    /** 读取当前 Session 的模型与审批配置。 */
+    get_configuration(agent_id: string, session_id: string): Promise<DesktopSessionConfiguration>;
+    /** 切换当前 Session 模型。 */
+    set_model(agent_id: string, session_id: string, model_id: string): Promise<DesktopSessionConfiguration>;
+    /** 切换当前 Session 审批模式。 */
+    set_approval_mode(agent_id: string, session_id: string, approval_mode: SessionApprovalMode): Promise<DesktopSessionConfiguration>;
+    /** 订阅 canonical Session mutation。 */
+    on_mutation(callback: (event: DesktopChatMutationEvent) => void): () => void;
+    /** 订阅 Session 运行态变化。 */
+    on_runtime(callback: (event: DesktopChatRuntimeEvent) => void): () => void;
+  };
+  /** Desktop 用户级设置。 */
+  settings: {
+    /** 读取当前设置。 */
+    get(): Promise<DesktopSettings>;
+    /** 合并并保存设置。 */
+    update(patch: Partial<DesktopSettings>): Promise<DesktopSettings>;
+  };
+  /** Downcity Federation 当前用户。 */
+  user: {
+    /** 读取并尽可能刷新当前用户资料。 */
+    current(): Promise<DesktopUserSummary>;
+    /** 保存 Federation 地址和用户 Token。 */
+    login(federation_url: string, user_token: string): Promise<DesktopUserSummary>;
+    /** 列出 Desktop 保存的全部 Federation 账户。 */
+    list_accounts(): Promise<DesktopAccountSummary[]>;
+    /** 切换当前 Federation 账户。 */
+    switch_account(account_id: string): Promise<DesktopUserSummary>;
+    /** 删除一个已保存账户，并返回新的当前用户。 */
+    remove_account(account_id: string): Promise<DesktopUserSummary>;
+    /** 读取当前用户 Credits 与最近 365 天用量。 */
+    get_resources(): Promise<DesktopAccountResources>;
+    /** 清除当前 Federation Session。 */
+    logout(): Promise<DesktopUserSummary>;
   };
 }
 

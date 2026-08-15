@@ -5,12 +5,12 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const button_variants = cva(
-  "inline-flex flex-none items-center justify-center whitespace-nowrap rounded-md border-none bg-transparent text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  "inline-flex flex-none items-center justify-center whitespace-nowrap rounded-md border-none bg-transparent text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground data-[state=open]:bg-interaction-selected data-[state=open]:text-foreground data-[state=open]:hover:bg-interaction-active focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        primary: "bg-primary/90 text-primary-foreground/80 hover:bg-primary hover:text-primary-foreground [&_svg]:text-primary-foreground",
-        destructive: "bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive",
+        primary: "bg-primary/90 text-primary-foreground/80 hover:bg-primary hover:text-primary-foreground data-[state=open]:bg-primary data-[state=open]:text-primary-foreground [&_svg]:text-primary-foreground",
+        destructive: "bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive data-[state=open]:bg-destructive/20 data-[state=open]:text-destructive",
         default: "",
       },
       size: {

@@ -11,9 +11,11 @@
     "build": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit && electron-vite build",
     "build:icon": "bash scripts/build-icon.sh",
     "build:unpack": "pnpm build:icon && pnpm build && electron-builder --dir",
-    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit"
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "test": "node --test tests/*.test.ts"
   },
   "dependencies": {
+    "@base-ui/react": "^1.5.0",
     "@downcity/agent": "workspace:^",
     "@downcity/city": "workspace:^",
     "@downcity/federation": "workspace:^",
@@ -26,6 +28,7 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-icons": "^5.5.0",
+    "streamdown": "^1.6.11",
     "tailwind-merge": "^2.2.0"
   },
   "optionalDependencies": {

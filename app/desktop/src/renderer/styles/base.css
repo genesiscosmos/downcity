@@ -1,8 +1,10 @@
 /* Downcity Desktop 直接复用 Duobox Renderer 的基础视觉系统。 */
 @import "tailwindcss";
 @import "./theme/default.css";
+@import "./theme/themes.css";
 @import "./semantic-colors.css";
 @import "./tokens.css";
+@import "./chat.css";
 
 @layer base {
   * {
@@ -98,7 +100,12 @@ a,
   color: color-mix(in srgb, var(--muted-foreground) 50%, transparent);
 }
 
-@keyframes thinking-dot-pulse {
-  0%, 100% { opacity: 0.25; transform: translateY(0); }
-  50% { opacity: 0.8; transform: translateY(-1px); }
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

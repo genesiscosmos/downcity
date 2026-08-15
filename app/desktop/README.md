@@ -4,6 +4,12 @@ Downcity Desktop 与 CLI 共享 `~/.downcity/downcity.db` 中的 Agent、Workspa
 
 Agent 与 Workspace 是独立记录。Desktop 在装配 Agent 时显式选择 Workspace，Session 继续保存在该 Workspace 的 `.downcity/agents/<agent_id>/sessions/` 下。
 
+## 对话与用户状态
+
+Desktop 直接订阅 `SessionMutation`，以 canonical `SessionMessage` 展示流式文本、推理、Tool、审批、问题、文件与错误。发送请求只等待 Session 接受输入；Turn 运行态、停止与最终结果通过独立 IPC 事件同步。一个 Session 执行期间的新输入由 Renderer 队列管理，切换 Session 时分别保留草稿与队列。
+
+设置和 Federation 用户 Session 属于 Desktop/CLI 共享的用户级控制面，不写入 Agent 或 Workspace。用户 Token 继续加密保存在 `downcity.config`；如果 Token 来自 `DOWNCITY_USER_TOKEN` 环境变量，Desktop 只读使用该身份，不能在界面中清除环境变量。
+
 ## 开发
 
 先完成根目录依赖安装，然后运行：

@@ -113,7 +113,9 @@ canonical Action Message；Message 提交成功后才发布对应 Mutation。完
 
 ## 本地与远程的差异
 
-两者都有 `prompt()`、`stop()`、`compact()`、`subscribe()`、`messages()`、`interactions()`、`respond()`、`status()`、`set({ security })` 和 `fork()`。本地 Session 还提供 `set({ model })`、`syncshot()` 与 `snapshot()`；远程 Session 的模型和 system 策略由服务端宿主管理。
+两者都有 `prompt()`、`stop()`、`compact()`、`subscribe()`、`messages()`、`interactions()`、`respond()`、`status()`、`set({ security })` 和 `fork()`。本地 Session 还提供 `set({ model })`、`rename()`、`syncshot()` 与 `snapshot()`；远程 Session 的模型和 system 策略由服务端宿主管理。
+
+使用 `await session.rename(title)` 持久化本地 Session 的用户可见标题。该方法返回规范化后的标题，并在 metadata 提交后发布 canonical Session title Mutation。客户端应从 Mutation 更新导航投影，不要保存第二份标题。
 
 | 场景 | 配置模型 |
 | --- | --- |
@@ -128,6 +130,7 @@ canonical Action Message；Message 提交成功后才发布对应 Mutation。完
 - 管理本地会话：`agent.sessions.create/get/list/archive/archived/clean_archive/remove/clear_messages()`
 - 输入与完成：`session.prompt()`、`turn.finished`
 - 读取与实时：`session.messages()`、`session.get_info()`、`session.subscribe()`
+- 重命名本地 Session：`session.rename(title)`
 - 运行控制：`session.stop()`、`session.set()`、[`session.compact()`](/zh/agent-sdk-docs/sessions/compact)、`session.fork()`
 - system 刷新与持久化：[`session.syncshot()`](/zh/agent-sdk-docs/sessions/syncshot)、[`session.snapshot()`](/zh/agent-sdk-docs/sessions/snapshot)
 - 工具审批：`session.interactions()`、`session.respond()`、`session.set({ security })`、`session.status()`

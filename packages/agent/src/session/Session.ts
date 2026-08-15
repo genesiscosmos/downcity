@@ -344,6 +344,11 @@ export class Session implements AgentSession {
     });
   }
 
+  /** 修改当前 Session 的用户可见标题。 */
+  async rename(title: string): Promise<string> {
+    return await this.state.set_title(title);
+  }
+
   /**
    * 追加一条新的 Session prompt。
    */
