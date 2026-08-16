@@ -140,7 +140,7 @@ export function list_desktop_plugins(data: DesktopLocalData): DesktopPluginSumma
       source: "builtin",
       agent_ids: registered_agents.get(definition.id) ?? [],
       profile_count: Object.keys(data.plugins.read_config(definition.id).profiles).length,
-      configurable: Boolean(registration.type?.config),
+      configurable: Boolean(definition.config),
     });
   }
   for (const installed of data.plugins.list_installed()) {

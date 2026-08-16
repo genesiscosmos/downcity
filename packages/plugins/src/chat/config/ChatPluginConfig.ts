@@ -1,138 +1,111 @@
-/** Chat Plugin profile 的结构化配置协议。 */
+/** Chat Plugin profile 的显式 JSON Schema。 */
 
 import type { JsonObject } from "@downcity/agent";
-import { z } from "zod";
 import type { ChatPluginChannelConfig } from "@/chat/types/ChatPluginChannelConfig.js";
 
-const channel_id_schema = z.string()
-  .trim()
-  .min(1)
-  .max(80)
-  .regex(/^[a-z0-9][a-z0-9_-]*$/u)
-  .meta({
-    title: "Channel ID",
-    description: "Stable channel ID inside this Plugin profile.",
-  });
+const telegram_channel_json_schema: JsonObject = {
+  type: "object",
+  title: "Telegram",
+  description: "Telegram Bot channel.",
+  properties: {
+    id: { type: "string", minLength: 1, title: "Channel ID" },
+    type: { type: "string", const: "telegram" },
+    name: { type: "string", minLength: 1, title: "Name" },
+    bot_token: { type: "string", minLength: 1, title: "Bot token", writeOnly: true },
+    username: { type: "string", minLength: 1, title: "Username" },
+    bot_user_id: { type: "string", minLength: 1, title: "Bot user ID" },
+  },
+  required: ["id", "type", "name", "bot_token"],
+  additionalProperties: false,
+};
 
-const channel_name_schema = z.string()
-  .trim()
-  .min(1)
-  .meta({ title: "Name", description: "User-visible channel name." });
+const feishu_channel_json_schema: JsonObject = {
+  type: "object",
+  title: "Feishu",
+  description: "Feishu or Lark Bot channel.",
+  properties: {
+    id: { type: "string", minLength: 1, title: "Channel ID" },
+    type: { type: "string", const: "feishu" },
+    name: { type: "string", minLength: 1, title: "Name" },
+    app_id: { type: "string", minLength: 1, title: "App ID" },
+    app_secret: { type: "string", minLength: 1, title: "App secret", writeOnly: true },
+    domain: { type: "string", minLength: 1, title: "Domain" },
+    identity: { type: "string", minLength: 1, title: "Identity" },
+    bot_user_id: { type: "string", minLength: 1, title: "Bot user ID" },
+  },
+  required: ["id", "type", "name", "app_id", "app_secret"],
+  additionalProperties: false,
+};
 
-const secret_schema = z.string().trim().min(1).meta({ writeOnly: true });
+const qq_channel_json_schema: JsonObject = {
+  type: "object",
+  title: "QQ",
+  description: "QQ Bot channel.",
+  properties: {
+    id: { type: "string", minLength: 1, title: "Channel ID" },
+    type: { type: "string", const: "qq" },
+    name: { type: "string", minLength: 1, title: "Name" },
+    app_id: { type: "string", minLength: 1, title: "App ID" },
+    app_secret: { type: "string", minLength: 1, title: "App secret", writeOnly: true },
+    sandbox: { type: "boolean", title: "Sandbox", default: false },
+    identity: { type: "string", minLength: 1, title: "Identity" },
+    bot_user_id: { type: "string", minLength: 1, title: "Bot user ID" },
+  },
+  required: ["id", "type", "name", "app_id", "app_secret"],
+  additionalProperties: false,
+};
 
-/** Telegram 渠道配置 Schema。 */
-const telegram_channel_schema = z.object({
-  id: channel_id_schema,
-  type: z.literal("telegram").meta({ title: "Type" }),
-  name: channel_name_schema,
-  bot_token: secret_schema.meta({
-    title: "Bot Token",
-    description: "Telegram Bot API Token.",
-    writeOnly: true,
-  }),
-  username: z.string().trim().min(1).optional().meta({ title: "Username" }),
-  bot_user_id: z.string().trim().min(1).optional().meta({ title: "Bot User ID" }),
-}).strict().meta({ title: "Telegram", description: "Telegram Bot channel." });
+/** Chat 渠道联合类型的完整 JSON Schema。 */
+export const CHAT_PLUGIN_CHANNEL_JSON_SCHEMA: JsonObject = {
+  oneOf: [
+    telegram_channel_json_schema,
+    feishu_channel_json_schema,
+    qq_channel_json_schema,
+  ],
+};
 
-/** Feishu / Lark 渠道配置 Schema。 */
-const feishu_channel_schema = z.object({
-  id: channel_id_schema,
-  type: z.literal("feishu").meta({ title: "Type" }),
-  name: channel_name_schema,
-  app_id: z.string().trim().min(1).meta({
-    title: "App ID",
-    description: "Feishu or Lark App ID.",
-  }),
-  app_secret: secret_schema.meta({
-    title: "App Secret",
-    description: "Feishu or Lark App Secret.",
-    writeOnly: true,
-  }),
-  domain: z.url().optional().meta({
-    title: "Open API Domain",
-    description: "Optional Feishu or Lark Open API domain.",
-  }),
-  identity: z.string().trim().min(1).optional().meta({ title: "Identity" }),
-  bot_user_id: z.string().trim().min(1).optional().meta({ title: "Bot User ID" }),
-}).strict().meta({ title: "Feishu / Lark", description: "Feishu or Lark Bot channel." });
-
-/** QQ 渠道配置 Schema。 */
-const qq_channel_schema = z.object({
-  id: channel_id_schema,
-  type: z.literal("qq").meta({ title: "Type" }),
-  name: channel_name_schema,
-  app_id: z.string().trim().min(1).meta({ title: "App ID", description: "QQ Bot App ID." }),
-  app_secret: secret_schema.meta({
-    title: "App Secret",
-    description: "QQ Bot App Secret.",
-    writeOnly: true,
-  }),
-  sandbox: z.boolean().optional().meta({
-    title: "Sandbox",
-    description: "Whether to use the QQ sandbox environment.",
-    default: false,
-  }),
-  identity: z.string().trim().min(1).optional().meta({ title: "Identity" }),
-  bot_user_id: z.string().trim().min(1).optional().meta({ title: "Bot User ID" }),
-}).strict().meta({ title: "QQ", description: "QQ Bot channel." });
-
-/** Chat Plugin profile 中单个渠道的 Schema。 */
-export const chat_plugin_channel_schema = z.discriminatedUnion("type", [
-  telegram_channel_schema,
-  feishu_channel_schema,
-  qq_channel_schema,
-]);
-
-/** Chat Plugin 完整 profile Schema。 */
-export const chat_plugin_config_schema = z.object({
-  queue: z.object({
-    max_concurrency: z.number().int().min(1).max(32).optional().meta({
-      title: "Maximum concurrency",
-      description: "Maximum number of chat lanes executed concurrently.",
-    }),
-    merge_debounce_ms: z.number().int().min(0).max(60_000).optional().meta({
-      title: "Merge debounce",
-      description: "Debounce window used to merge consecutive inbound messages.",
-    }),
-    merge_max_wait_ms: z.number().int().min(0).max(120_000).optional().meta({
-      title: "Maximum merge wait",
-      description: "Maximum time to wait before executing a merged inbound burst.",
-    }),
-  }).strict().optional().meta({
-    title: "Queue",
-    description: "Chat queue scheduling and inbound message merge behavior.",
-  }),
-  channels: z.array(chat_plugin_channel_schema).optional().meta({
-    title: "Channels",
-    description: "Messaging channels owned by this Plugin profile.",
-  }),
-}).strict().meta({ title: "Chat Plugin", description: "Chat queue behavior and channels." });
-
-/** Chat Plugin 完整结构化 profile。 */
-export type ChatPluginConfig = z.infer<typeof chat_plugin_config_schema>;
-
-/** 供 Plugin Catalog 使用的完整 profile JSON Schema。 */
-export const CHAT_PLUGIN_CONFIG_JSON_SCHEMA = z.toJSONSchema(
-  chat_plugin_config_schema,
-  { target: "draft-2020-12" },
-) as JsonObject;
-
-/** Chat 渠道子结构的标准 JSON Schema。 */
-export const CHAT_PLUGIN_CHANNEL_JSON_SCHEMA = z.toJSONSchema(
-  chat_plugin_channel_schema,
-  { target: "draft-2020-12" },
-) as JsonObject;
-
-/** 在运行时装配边界解析并收窄完整 profile。 */
-export function parse_chat_plugin_config(input: unknown): ChatPluginConfig {
-  return chat_plugin_config_schema.parse(input);
-}
-
-/** 解析一个完整渠道配置。 */
-export function parse_chat_plugin_channel(input: unknown): ChatPluginChannelConfig {
-  return chat_plugin_channel_schema.parse(input);
-}
+/** Chat Plugin 完整 profile 的 JSON Schema。 */
+export const CHAT_PLUGIN_CONFIG_JSON_SCHEMA: JsonObject = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  type: "object",
+  title: "Chat Plugin",
+  description: "Chat queue behavior and channels.",
+  properties: {
+    queue: {
+      type: "object",
+      title: "Queue",
+      description: "Chat queue scheduling and inbound message merge behavior.",
+      properties: {
+        max_concurrency: {
+          type: "integer",
+          minimum: 1,
+          maximum: 32,
+          title: "Maximum concurrency",
+        },
+        merge_debounce_ms: {
+          type: "integer",
+          minimum: 0,
+          maximum: 60000,
+          title: "Merge debounce",
+        },
+        merge_max_wait_ms: {
+          type: "integer",
+          minimum: 0,
+          maximum: 120000,
+          title: "Maximum merge wait",
+        },
+      },
+      additionalProperties: false,
+    },
+    channels: {
+      type: "array",
+      title: "Channels",
+      description: "Messaging channels owned by this Plugin profile.",
+      items: CHAT_PLUGIN_CHANNEL_JSON_SCHEMA,
+    },
+  },
+  additionalProperties: false,
+};
 
 /** 读取一个渠道类型分支的标准 JSON Schema。 */
 export function get_chat_plugin_channel_json_schema(
@@ -153,7 +126,7 @@ export function get_chat_plugin_channel_json_schema(
       && !Array.isArray(type_schema)
       && (type_schema as JsonObject).const === channel_type
     ) {
-      return JSON.parse(JSON.stringify(variant)) as JsonObject;
+      return structuredClone(variant);
     }
   }
   throw new Error(`Missing Chat channel schema: ${channel_type}`);

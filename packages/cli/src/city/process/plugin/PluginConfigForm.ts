@@ -8,7 +8,7 @@
  */
 
 import prompts from "@/city/tui/Prompts.js";
-import { validate_plugin_config } from "@/city/process/plugin/PluginConfigValidator.js";
+import { validate_local_plugin_config } from "@downcity/local/product";
 import type { JsonObject, JsonValue } from "@downcity/agent";
 import type { PromptPluginConfigInput } from "@/city/types/plugin/PluginConfigForm.js";
 
@@ -23,7 +23,7 @@ export async function prompt_plugin_config(
     path: input.plugin_name,
   });
   if (!edited) return null;
-  validate_plugin_config(edited, input.schema);
+  validate_local_plugin_config(edited, input.schema);
   return edited;
 }
 

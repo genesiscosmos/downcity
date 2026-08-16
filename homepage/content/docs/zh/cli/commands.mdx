@@ -81,9 +81,9 @@ city plugin enabled [agent_id]
 city plugin action <plugin_id> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
-一个第三方目录只定义一个 Plugin。`plugin.json` 声明 `schema_version: 1`、全局唯一 `id`、版本和自包含 ESM entry；入口通过 `plugin` 命名导出 Plugin constructor，可配置 Plugin 在 `static type.config` 中声明 Zod 类型。最终目录固定为 `~/.downcity/plugins/<plugin_id>/`，代码与资源直接位于其中，不增加 `artifact/` 层级。安装过程不会执行 `npm install`、构建脚本或 Plugin lifecycle，但会导入入口以验证 constructor 和 Zod 类型。
+一个第三方目录只定义一个 Plugin。`plugin.json` 声明 `schema_version: 1`、全局唯一 `id`、版本、自包含 ESM entry，以及可选的 `config.schema/defaults`；入口通过 `plugin` 命名导出 Plugin constructor。最终目录固定为 `~/.downcity/plugins/<plugin_id>/`，代码与资源直接位于其中，不增加 `artifact/` 层级。安装过程不会执行 `npm install`、构建脚本、Plugin lifecycle 或入口模块。
 
-Plugin 配置属于 `plugins/<plugin_id>/config.toml` 中的命名 profile。账号、渠道、端点等结构直接由具体 Plugin 的 Zod 类型定义。配置以 `0600` 权限明文保存；CLI 使用自动生成的 JSON Schema 构建表单并脱敏 `writeOnly` 字段。Loader 执行 Zod `parse()` 后再调用 constructor。
+Plugin 配置属于 `plugins/<plugin_id>/config.toml` 中的命名 profile。账号、渠道、端点等结构由 `plugin.json` JSON Schema 定义，TypeScript 类型由 Plugin 代码独立维护。配置以 `0600` 权限明文保存；CLI 使用同一 Schema 校验、构建表单并脱敏 `writeOnly` 字段。
 
 Agent 的 `agent.json` 只保存 Plugin ID 和可选 profile 引用，移除该条目即禁用 Plugin。仍被 Agent 引用的 profile 或第三方 Plugin 不能删除。
 

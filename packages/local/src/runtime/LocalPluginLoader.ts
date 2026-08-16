@@ -2,17 +2,14 @@
  * 本地 Plugin Loader。
  *
  * Agent 只引用 Plugin ID 与可选 profile。Loader 统一解析内置或第三方注册、读取
- * `config.toml`、执行 Zod 解析并创建 Agent 独享的 Plugin 实例。
+ * `config.toml`、执行 `plugin.json` JSON Schema 校验并创建 Agent 独享的 Plugin 实例。
  */
 
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import fs from "fs-extra";
 import type { Plugin } from "@downcity/agent";
-import {
-  is_zod_plugin_config_type,
-  parse_local_plugin_config,
-} from "@/runtime/LocalPluginConfigType.js";
+import { validate_local_plugin_config } from "@/runtime/LocalPluginConfigSchema.js";
 import type { LocalAgentConfig } from "@/types/LocalConfig.js";
 import type {
   LocalPluginCreateInput,
@@ -40,9 +37,11 @@ export class LocalPluginLoader {
       if (reference.profile && !profile) {
         throw new Error(`Plugin profile not found: ${plugin_id}/${reference.profile}`);
       }
-      const plugin_config = parse_local_plugin_config(
-        registration.type?.config,
-        profile ?? {},
+      const plugin_config = profile
+        ?? structuredClone(registration.definition.config?.defaults ?? {});
+      validate_local_plugin_config(
+        plugin_config,
+        registration.definition.config?.schema,
         `Plugin profile ${plugin_id}`,
       );
       const plugin = registration.create({ config: plugin_config });
@@ -84,13 +83,8 @@ export class LocalPluginLoader {
       throw new Error("Plugin entry must export plugin constructor");
     }
     const plugin_constructor = module.plugin as PluginConstructor;
-    const runtime_type = plugin_constructor.type;
-    if (runtime_type && !is_zod_plugin_config_type(runtime_type.config)) {
-      throw new Error(`Plugin type.config must be a Zod type: ${plugin_id}`);
-    }
     return {
       definition,
-      ...(runtime_type ? { type: runtime_type } : {}),
       create: ({ config }) => new plugin_constructor({ config }),
     };
   }
@@ -98,9 +92,7 @@ export class LocalPluginLoader {
 
 /** 第三方入口导出的 Plugin constructor。 */
 type PluginConstructor = {
-  /** Plugin constructor 暴露的可选运行时类型。 */
-  readonly type?: LocalPluginRegistration["type"];
-  /** 使用已解析配置创建 Agent 独享实例。 */
+  /** 使用已校验配置创建 Agent 独享实例。 */
   new(input: LocalPluginCreateInput): Plugin;
 };
 

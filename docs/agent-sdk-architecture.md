@@ -589,9 +589,9 @@ CLI 与 Desktop 使用同一套用户级文件协议：
    └─ dist/                      第三方 Plugin 代码示例，实际布局由 Plugin 决定
 ```
 
-Agent 的 `plugins` 对象以 Plugin ID 为键，值只包含可选 `profile`。TOML profile 是原始配置值，Loader 通过 Plugin constructor 的 `type.config` Zod 类型完成默认值、校验与收窄，再传给 constructor。账号、渠道与端点等结构由具体 Plugin 自己定义。框架不持久化 Binding、Resource 或 Installation，也不把 Plugin 配置写入 `downcity.db`。
+Agent 的 `plugins` 对象以 Plugin ID 为键，值只包含可选 `profile`。TOML profile 是原始配置值，Loader 通过 Plugin definition 的 `config.schema` 完成 JSON Schema 校验，再传给 constructor。账号、渠道与端点等结构由具体 Plugin 自己定义。框架不持久化 Binding、Resource 或 Installation，也不把 Plugin 配置写入 `downcity.db`。
 
-第三方入口只通过 `plugin` 导出一个 Plugin constructor，不在 constructor 上重复声明静态 Manifest，也不导出工厂函数。可配置 Plugin 通过 `static type.config` 暴露唯一 Zod 类型；安装器自动生成供控制面使用的 JSON Schema 快照。Definition ID、目录名、Agent 引用、实例 `name` 和 Registry key 必须一致；更新原子替换整个 Plugin 目录并保留 `config.toml`。
+第三方入口只通过 `plugin` 导出一个 Plugin constructor，不在 constructor 上重复声明静态 Manifest，也不导出工厂函数。配置 JSON Schema 与默认值直接写在 `plugin.json`，TypeScript 配置类型由 Plugin 代码独立维护。Definition ID、目录名、Agent 引用、实例 `name` 和 Registry key 必须一致；更新原子替换整个 Plugin 目录并保留 `config.toml`。
 
 ### 12.2 生命周期
 

@@ -61,7 +61,14 @@ export class PluginRepository {
       || !value.updated_at
       || (
         value.config !== undefined
-        && (!is_plain_object(value.config) || !is_plain_object(value.config.schema))
+        && (
+          !is_plain_object(value.config)
+          || !is_plain_object(value.config.schema)
+          || (
+            value.config.defaults !== undefined
+            && !is_plain_object(value.config.defaults)
+          )
+        )
       )
     ) {
       throw new Error(`Invalid installed Plugin definition: ${plugin_id}`);

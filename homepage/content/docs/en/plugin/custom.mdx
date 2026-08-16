@@ -26,18 +26,13 @@ export const plugin = GithubPlugin;
 
 ```ts
 import type { Plugin, PluginActions } from "@downcity/agent";
-import { z } from "zod";
 
-const github_config_type = z.object({
-  api_url: z.url().default("https://api.github.com").meta({ title: "API URL" }),
-  token: z.string().min(1).meta({ title: "Token", writeOnly: true }),
-}).strict();
-
-export type GithubPluginConfig = z.infer<typeof github_config_type>;
+export interface GithubPluginConfig {
+  api_url: string;
+  token: string;
+}
 
 export class GithubPlugin implements Plugin {
-  static readonly type = { config: github_config_type };
-
   readonly name = "github";
   readonly title = "GitHub";
   readonly description = "GitHub integration";
@@ -51,13 +46,13 @@ export class GithubPlugin implements Plugin {
 export const plugin = GithubPlugin;
 ```
 
-The instance `name`, `plugin.json` `id`, directory name, and Agent reference must match. The constructor does not repeat a `static manifest`; `type.config` is the only source of truth for profile types, defaults, and validation. Builtin and third-party Plugins resolve to the same runtime registration protocol:
+The instance `name`, `plugin.json` `id`, directory name, and Agent reference must match. The constructor does not repeat a Manifest or runtime Schema. TypeScript types serve Plugin code, while `plugin.json.config.schema` defines the runtime profile protocol:
 
 ```ts
 new PluginConstructor({ config: selected_profile });
 ```
 
-The Loader first runs `PluginConstructor.type.config.parse(raw_profile)` and then passes the complete parsed configuration to the constructor. Accounts, tokens, endpoints, and other structures belong directly to the Zod type. There is no framework-level Binding, Resource, Resolver, or Installation domain.
+The Loader validates the profile against JSON Schema, then passes the complete configuration to the constructor. Accounts, tokens, endpoints, and other structures belong directly to the Plugin profile. There is no framework-level Binding, Resource, Resolver, or Installation domain.
 
 ## Plugin definition
 
@@ -70,13 +65,24 @@ The source directory contains one `plugin.json`:
   "version": "1.0.0",
   "title": "GitHub",
   "description": "GitHub integration",
-  "entry": "dist/index.js"
+  "entry": "dist/index.js",
+  "config": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "api_url": { "type": "string", "format": "uri" },
+        "token": { "type": "string", "minLength": 1, "writeOnly": true }
+      },
+      "required": ["api_url", "token"],
+      "additionalProperties": false
+    }
+  }
 }
 ```
 
-Plugin authors do not write JSON Schema. The installer derives an input JSON Schema and available defaults from `type.config`, then writes that snapshot together with `source`, `revision`, `integrity`, and timestamps into the installed `plugin.json`. It does not generate a second Manifest.
+Plugin authors declare the complete JSON Schema and optional `defaults` directly in `plugin.json`. The installer validates the Schema, defaults, and saved profiles, then writes source, integrity, and timestamps into the same installed file. It does not generate a second Manifest or Schema snapshot.
 
-The `entry` must be a self-contained ESM artifact. Bundle runtime Zod usage into `dist/index.js`; the installer does not install dependencies.
+The `entry` must be a self-contained ESM artifact. The installer does not install dependencies or import the Plugin entry.
 
 The installed layout is deterministic:
 
@@ -88,7 +94,7 @@ The installed layout is deterministic:
 └── dist/index.js
 ```
 
-`config.toml` contains only named plaintext profile values and uses file mode `0600`. CLI and Desktop build forms from the Zod-generated Schema and redact fields marked with `.meta({ writeOnly: true })`. Zod `.default()` fills fields omitted from TOML.
+`config.toml` contains only named plaintext profile values and uses file mode `0600`. CLI and Desktop build forms from the `plugin.json` Schema and redact fields marked `writeOnly`.
 
 ```toml
 schema_version = 1
@@ -98,7 +104,7 @@ api_url = "https://api.github.com"
 token = "plain-local-token"
 ```
 
-An explicitly selected missing profile is an error. Without an explicit selection, Downcity reads the `default` profile and passes `{}` to Zod when that profile does not exist.
+An explicitly selected missing profile is an error. Without an explicit selection, Downcity reads the `default` profile, falls back to `plugin.json.config.defaults` or an empty object, then validates it against the Schema.
 
 ## Install and configure
 
@@ -112,7 +118,7 @@ city plugin uninstall github
 
 Updates atomically replace the complete Plugin directory while preserving `config.toml`. The CLI rejects an update when saved profiles fail the new Schema, and rejects profile or Plugin removal while an Agent still references it.
 
-Installation does not run `npm install`, build scripts, or Plugin lifecycle hooks. The installer imports the entry to validate the `plugin` constructor, so module-level code executes, but the constructor is not called. Static code and resources receive a SHA-256 digest; install only trusted sources.
+Installation does not run `npm install`, build scripts, Plugin lifecycle hooks, or the entry module. The constructor export and instance ID are validated when an Agent actually loads the Plugin. Static code and resources receive a SHA-256 digest; install only trusted sources.
 
 Continue with:
 

@@ -26,18 +26,13 @@ export const plugin = GithubPlugin;
 
 ```ts
 import type { Plugin, PluginActions } from "@downcity/agent";
-import { z } from "zod";
 
-const github_config_type = z.object({
-  api_url: z.url().default("https://api.github.com").meta({ title: "API URL" }),
-  token: z.string().min(1).meta({ title: "Token", writeOnly: true }),
-}).strict();
-
-export type GithubPluginConfig = z.infer<typeof github_config_type>;
+export interface GithubPluginConfig {
+  api_url: string;
+  token: string;
+}
 
 export class GithubPlugin implements Plugin {
-  static readonly type = { config: github_config_type };
-
   readonly name = "github";
   readonly title = "GitHub";
   readonly description = "GitHub 集成";
@@ -51,13 +46,13 @@ export class GithubPlugin implements Plugin {
 export const plugin = GithubPlugin;
 ```
 
-实例 `name`、`plugin.json` 的 `id`、目录名和 Agent 引用必须一致。constructor 不重复声明 `static manifest`；`type.config` 是 profile 类型、默认值和校验的唯一事实源。内置与第三方 Plugin 在运行时都解析为相同的注册协议：
+实例 `name`、`plugin.json` 的 `id`、目录名和 Agent 引用必须一致。constructor 不重复声明 Manifest 或运行时 Schema；TypeScript 类型只服务 Plugin 代码，profile 的运行时协议由 `plugin.json.config.schema` 定义：
 
 ```ts
 new PluginConstructor({ config: selected_profile });
 ```
 
-Loader 先执行 `PluginConstructor.type.config.parse(raw_profile)`，再把解析后的完整配置传入 constructor。账号、Token、端点等结构直接属于 Zod 类型。框架不定义 Binding、Resource、Resolver 或 Installation 持久化领域。
+Loader 先使用 JSON Schema 校验 profile，再把完整配置传入 constructor。账号、Token、端点等结构直接属于 Plugin profile。框架不定义 Binding、Resource、Resolver 或 Installation 持久化领域。
 
 ## Plugin 定义
 
@@ -70,13 +65,24 @@ Loader 先执行 `PluginConstructor.type.config.parse(raw_profile)`，再把解�
   "version": "1.0.0",
   "title": "GitHub",
   "description": "GitHub 集成",
-  "entry": "dist/index.js"
+  "entry": "dist/index.js",
+  "config": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "api_url": { "type": "string", "format": "uri" },
+        "token": { "type": "string", "minLength": 1, "writeOnly": true }
+      },
+      "required": ["api_url", "token"],
+      "additionalProperties": false
+    }
+  }
 }
 ```
 
-Plugin 作者不手写 JSON Schema。安装器从 `type.config` 生成 input JSON Schema 和可用默认值，并与 `source`、`revision`、`integrity`、时间信息一起写入安装后的同一个 `plugin.json`；不会生成第二份 Manifest。
+Plugin 作者直接在 `plugin.json` 中声明完整 JSON Schema 和可选 `defaults`。安装器校验 Schema、默认值与已有 profile，并把来源、完整性和时间信息写回安装后的同一个文件；不会生成第二份 Manifest 或 Schema 快照。
 
-`entry` 必须是自包含 ESM 制品。构建时需要把运行时使用的 Zod 打包进 `dist/index.js`；安装器不会执行依赖安装。
+`entry` 必须是自包含 ESM 制品；安装器不会执行依赖安装，也不会导入 Plugin 入口。
 
 安装后的目录是确定的：
 
@@ -88,7 +94,7 @@ Plugin 作者不手写 JSON Schema。安装器从 `type.config` 生成 input JSO
 └── dist/index.js
 ```
 
-`config.toml` 只保存命名的明文 profile 值，文件权限为 `0600`。CLI 与 Desktop 使用 Zod 生成的 Schema 构建表单，并脱敏 `.meta({ writeOnly: true })` 字段。TOML 中缺省的字段由 Zod `.default()` 补齐。
+`config.toml` 只保存命名的明文 profile 值，文件权限为 `0600`。CLI 与 Desktop 使用 `plugin.json` Schema 构建表单，并脱敏 `writeOnly` 字段。
 
 ```toml
 schema_version = 1
@@ -98,7 +104,7 @@ api_url = "https://api.github.com"
 token = "plain-local-token"
 ```
 
-Agent 显式选择的 profile 不存在时会报错；没有显式选择时读取 `default` profile，不存在则用 `{}` 交给 Zod 解析默认值。
+Agent 显式选择的 profile 不存在时会报错；没有显式选择时读取 `default` profile，不存在则使用 `plugin.json.config.defaults` 或空对象，再执行 Schema 校验。
 
 ## 安装与配置
 
@@ -112,7 +118,7 @@ city plugin uninstall github
 
 更新会原子替换整个 Plugin 目录并保留 `config.toml`。新 Schema 无法校验已有 profile 时更新失败；仍被 Agent 引用的 profile 或 Plugin 不能删除。
 
-安装过程不会执行 `npm install`、构建脚本或 Plugin lifecycle。安装器会导入入口以验证 `plugin` constructor，因此模块顶层代码会执行，但 constructor 不会被调用。静态代码和资源会生成 SHA-256 摘要；只应安装可信来源。
+安装过程不会执行 `npm install`、构建脚本、Plugin lifecycle 或入口模块。constructor 的导出与实例 ID 在 Agent 真正加载 Plugin 时验证。静态代码和资源会生成 SHA-256 摘要；只应安装可信来源。
 
 继续阅读：
 

@@ -7,11 +7,10 @@
 
 import path from "node:path";
 import type { JsonObject, Plugin } from "@downcity/agent";
-import { z, type ZodType } from "zod";
 import {
+  CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
   ChatPlugin,
-  chat_plugin_config_schema,
-  parse_chat_plugin_config,
+  type ChatPluginConfig,
   type ChatPluginChannelConfig,
 } from "@/chat.js";
 import { FeishuChannel, QqChannel, TelegramChannel } from "@/chat.js";
@@ -42,6 +41,10 @@ import {
 import { TaskPlugin } from "@/task.js";
 import { PlaywrightBrowserProvider, WebPlugin } from "@/web.js";
 import { WorkboardPlugin } from "@/workboard.js";
+import type {
+  BuiltinMemoryPluginConfig,
+  BuiltinWebPluginConfig,
+} from "@/builtin/types/BuiltinPluginConfig.js";
 
 /** 官方 Plugin definition 的最小结构协议。 */
 export interface BuiltinPluginDefinition {
@@ -53,12 +56,18 @@ export interface BuiltinPluginDefinition {
 
   /** Plugin 的用途说明。 */
   description: string;
-
+  /** Plugin profile 的可选 JSON Schema 与默认配置。 */
+  config?: {
+    /** 校验 profile 并驱动管理表单的完整 JSON Schema。 */
+    schema: JsonObject;
+    /** `default` profile 不存在时使用的完整默认配置。 */
+    defaults?: JsonObject;
+  };
 }
 
 /** 官方 Plugin factory 的统一输入。 */
 export interface BuiltinPluginCreateInput {
-  /** 当前 Agent 对 Plugin 的完整配置。 */
+  /** 当前 Agent 对 Plugin 的已校验完整配置。 */
   config: JsonObject;
 
 }
@@ -67,11 +76,6 @@ export interface BuiltinPluginCreateInput {
 export interface BuiltinPluginRegistration {
   /** Plugin 的唯一静态定义。 */
   readonly definition: BuiltinPluginDefinition;
-  /** Plugin 的可选运行时类型。 */
-  readonly type?: {
-    /** Plugin profile 的唯一 Zod 类型。 */
-    config: ZodType;
-  };
   /** 创建一个 Agent 独享的 Plugin 实例。 */
   create(input: BuiltinPluginCreateInput): Plugin;
 }
@@ -127,24 +131,32 @@ export interface BuiltinPluginRegistrationsOptions {
   resolve_ai?: () => Promise<BuiltinPluginAi>;
 }
 
-const memory_plugin_config_type = z.object({
-  provider: z.literal("builtin").default("builtin"),
-  storage: z.literal("file").default("file"),
-  root_path: z.string().trim().min(1).optional(),
-}).strict().meta({
+const memory_plugin_config_schema: JsonObject = {
+  type: "object",
   title: "Memory Plugin",
   description: "Long-term memory provider and storage configuration.",
-});
+  properties: {
+    provider: { type: "string", const: "builtin" },
+    storage: { type: "string", const: "file" },
+    root_path: { type: "string", minLength: 1 },
+  },
+  required: ["provider", "storage"],
+  additionalProperties: false,
+};
 
-const web_plugin_config_type = z.object({
-  cdp_url: z.string().trim().min(1),
-  default_url: z.string().trim().optional(),
-  timeout_ms: z.number().int().min(1000).max(60000).optional(),
-  max_observation_chars: z.number().int().min(1).max(100000).optional(),
-}).strict().meta({
+const web_plugin_config_schema: JsonObject = {
+  type: "object",
   title: "Web Plugin",
   description: "Browser connection and observation configuration.",
-});
+  properties: {
+    cdp_url: { type: "string", minLength: 1 },
+    default_url: { type: "string", minLength: 1 },
+    timeout_ms: { type: "integer", minimum: 1000, maximum: 60000 },
+    max_observation_chars: { type: "integer", minimum: 1, maximum: 100000 },
+  },
+  required: ["cdp_url"],
+  additionalProperties: false,
+};
 
 /** 创建 Downcity 官方 Plugin 注册集合。 */
 export function create_builtin_plugin_registrations(
@@ -184,10 +196,13 @@ export function create_builtin_plugin_registrations(
         id: "chat",
         title: "Chat",
         description: "Connects Agents to Telegram, Feishu, and QQ channels.",
+        config: {
+          schema: CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
+          defaults: {},
+        },
       },
-      type: { config: chat_plugin_config_schema },
       create(input) {
-        const config = parse_chat_plugin_config(input.config);
+        const config = input.config as unknown as ChatPluginConfig;
         return new ChatPlugin({
           queue: config.queue,
           channels: create_chat_channels(config.channels ?? []),
@@ -199,10 +214,13 @@ export function create_builtin_plugin_registrations(
         id: "memory",
         title: "Memory",
         description: "Provides provider-neutral long-term memory, recall, revision, and deletion.",
+        config: {
+          schema: memory_plugin_config_schema,
+          defaults: { provider: "builtin", storage: "file" },
+        },
       },
-      type: { config: memory_plugin_config_type },
       create(input) {
-        const config = memory_plugin_config_type.parse(input.config);
+        const config = input.config as unknown as BuiltinMemoryPluginConfig;
         const root_path = config.root_path;
         if (root_path && !path.isAbsolute(root_path)) {
           throw new Error("Memory Plugin root_path must be absolute");
@@ -224,10 +242,10 @@ export function create_builtin_plugin_registrations(
         id: "web",
         title: "Web",
         description: "Provides structured browser sessions through a configured CDP endpoint.",
+        config: { schema: web_plugin_config_schema },
       },
-      type: { config: web_plugin_config_type },
       create(input) {
-        const config = web_plugin_config_type.parse(input.config);
+        const config = input.config as unknown as BuiltinWebPluginConfig;
         return new WebPlugin({
           browser: new PlaywrightBrowserProvider({
             cdp_url: config.cdp_url,

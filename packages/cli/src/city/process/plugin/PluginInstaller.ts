@@ -7,16 +7,13 @@
 
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
-import { pathToFileURL } from "node:url";
 import fs from "fs-extra";
 import { execa } from "execa";
+import type { JsonObject } from "@downcity/agent";
 import { get_local_plugin_path } from "@downcity/local";
 import {
-  create_local_plugin_config_definition,
-  is_zod_plugin_config_type,
-  parse_local_plugin_config,
-  type LocalPluginCreateInput,
-  type LocalPluginRuntimeType,
+  validate_local_plugin_config,
+  validate_local_plugin_config_schema,
 } from "@downcity/local/product";
 import { create_cli_local_data } from "@/city/runtime/LocalData.js";
 import {
@@ -79,12 +76,7 @@ export async function install_plugin(
     if (!await fs.pathExists(entry_path) || !(await fs.stat(entry_path)).isFile()) {
       throw new Error(`Plugin entry not found: ${definition.entry}`);
     }
-    const plugin_constructor = await load_plugin_constructor(entry_path, definition.id);
-    const config_definition = create_local_plugin_config_definition(
-      plugin_constructor.type?.config,
-      `Plugin ${definition.id} type.config`,
-    );
-    validate_existing_profiles(definition.id, plugin_constructor.type?.config);
+    validate_existing_profiles(definition);
 
     const integrity = await calculate_plugin_integrity(staging_dir);
     const existing = get_installed_plugin(definition.id);
@@ -96,7 +88,6 @@ export async function install_plugin(
     const current_time = new Date().toISOString();
     const installed: InstalledPlugin = {
       ...definition,
-      ...(config_definition ? { config: config_definition } : {}),
       source: source.normalized_source,
       ...(revision ? { revision } : {}),
       integrity,
@@ -151,6 +142,7 @@ export async function read_plugin_definition(
       "title",
       "description",
       "entry",
+      "config",
       "source",
       "revision",
       "integrity",
@@ -175,6 +167,29 @@ export async function read_plugin_definition(
   const entry = String(raw.entry || "").trim();
   if (!entry) throw new Error(`Plugin entry is required: ${id}`);
   resolve_plugin_path(plugin_root, entry, "entry");
+  let config: PluginPackageDefinition["config"];
+  if (raw.config !== undefined) {
+    if (!is_json_object(raw.config)) throw new Error(`Plugin config must be an object: ${id}`);
+    assert_known_fields(raw.config, ["schema", "defaults"], `Plugin config ${id}`);
+    if (!is_json_object(raw.config.schema)) {
+      throw new Error(`Plugin config.schema must be an object: ${id}`);
+    }
+    const config_schema = structuredClone(raw.config.schema) as JsonObject;
+    validate_local_plugin_config_schema(config_schema);
+    if (raw.config.defaults !== undefined && !is_json_object(raw.config.defaults)) {
+      throw new Error(`Plugin config.defaults must be an object: ${id}`);
+    }
+    const config_defaults = is_json_object(raw.config.defaults)
+      ? structuredClone(raw.config.defaults) as JsonObject
+      : undefined;
+    if (config_defaults) {
+      validate_local_plugin_config(config_defaults, config_schema);
+    }
+    config = {
+      schema: config_schema,
+      ...(config_defaults ? { defaults: config_defaults } : {}),
+    };
+  }
   const title = typeof raw.title === "string" ? raw.title.trim() : "";
   return {
     schema_version: 1,
@@ -183,30 +198,22 @@ export async function read_plugin_definition(
     ...(title ? { title } : {}),
     description,
     entry: entry.split(path.sep).join("/"),
+    ...(config ? { config } : {}),
   };
 }
 
-/** 更新前用 constructor 的 Zod 类型验证全部已保存 profile。 */
-function validate_existing_profiles(
-  plugin_id: string,
-  config_type: LocalPluginRuntimeType["config"] | undefined,
-): void {
+/** 更新前用 `plugin.json` Schema 验证全部已保存 profile。 */
+function validate_existing_profiles(definition: PluginPackageDefinition): void {
+  if (!definition.config?.schema) return;
   const data = create_cli_local_data();
   try {
-    const profiles = data.plugins.read_config(plugin_id).profiles;
-    if (!config_type && Object.keys(profiles).length > 0) {
-      throw new Error(`Plugin update removed type.config while profiles still exist: ${plugin_id}`);
-    }
+    const profiles = data.plugins.read_config(definition.id).profiles;
     for (const [profile, config] of Object.entries(profiles)) {
       try {
-        parse_local_plugin_config(
-          config_type,
-          config,
-          `Plugin profile ${plugin_id}/${profile}`,
-        );
+        validate_local_plugin_config(config, definition.config.schema);
       } catch (error) {
         throw new Error(
-          `Plugin profile is incompatible with update: ${plugin_id}/${profile}`,
+          `Plugin profile is incompatible with update: ${definition.id}/${profile}`,
           { cause: error },
         );
       }
@@ -278,38 +285,6 @@ async function copy_local_plugin_source(source_root: string, target_root: string
   });
 }
 
-/** 导入入口并解析唯一公开 constructor；安装阶段不创建 Plugin 实例。 */
-async function load_plugin_constructor(
-  entry_path: string,
-  plugin_id: string,
-): Promise<PluginConstructor> {
-  const module = await import(pathToFileURL(entry_path).href) as { plugin?: unknown };
-  if (typeof module.plugin !== "function") {
-    throw new Error("Plugin entry must export plugin constructor");
-  }
-  const plugin_constructor = module.plugin as PluginConstructor;
-  const runtime_type = (plugin_constructor as { type?: unknown }).type;
-  if (runtime_type !== undefined) {
-    if (
-      !runtime_type
-      || typeof runtime_type !== "object"
-      || !("config" in runtime_type)
-      || !is_zod_plugin_config_type(runtime_type.config)
-    ) {
-      throw new Error(`Plugin type.config must be a Zod type: ${plugin_id}`);
-    }
-  }
-  return plugin_constructor;
-}
-
-/** 第三方入口导出的 Plugin constructor。 */
-type PluginConstructor = {
-  /** Plugin constructor 暴露的可选运行时类型。 */
-  readonly type?: LocalPluginRuntimeType;
-  /** 使用已解析配置创建 Plugin 实例。 */
-  new(input: LocalPluginCreateInput): unknown;
-};
-
 /** 拒绝符号链接，避免路径与完整性语义漂移。 */
 async function assert_plugin_has_no_symlinks(root: string): Promise<void> {
   const entries = await fs.readdir(root, { withFileTypes: true });
@@ -363,4 +338,9 @@ function assert_known_fields(
   const allowed = new Set(allowed_fields);
   const unknown_field = Object.keys(value).find((field) => !allowed.has(field));
   if (unknown_field) throw new Error(`${label} contains unknown field: ${unknown_field}`);
+}
+
+/** 判断外部 JSON 值是否为普通对象。 */
+function is_json_object(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }

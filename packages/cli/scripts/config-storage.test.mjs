@@ -8,8 +8,6 @@ import test from "node:test";
 import Database from "better-sqlite3";
 import { spawnSync } from "node:child_process";
 
-const zod_module_url = import.meta.resolve("zod");
-
 function create_temp_root() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "downcity-config-storage-"));
 }
@@ -24,17 +22,26 @@ function write_plugin_source(root, input = {}) {
     version,
     description,
     entry: input.entry ?? "index.js",
+    config: {
+      schema: {
+        type: "object",
+        properties: {
+          endpoint: { type: "string", minLength: 1 },
+          api_key: { type: "string", writeOnly: true },
+          timeout_ms: { type: "integer", minimum: 1000 },
+        },
+        required: ["endpoint", "timeout_ms"],
+        additionalProperties: false,
+      },
+      defaults: {
+        endpoint: "https://example.com",
+        timeout_ms: 10000,
+      },
+    },
     ...(input.extra_manifest ?? {}),
   }));
   fs.writeFileSync(path.join(root, "index.js"), input.module_source ?? `
-import { z } from ${JSON.stringify(zod_module_url)};
-const config_type = z.object({
-  endpoint: z.string().min(1),
-  api_key: z.string().optional().meta({ writeOnly: true }),
-  timeout_ms: z.number().int().min(1000).default(10000),
-}).strict();
 class ExamplePlugin {
-  static type = { config: config_type };
   constructor({ config }) {
     this.name = ${JSON.stringify(input.runtime_id ?? id)};
     this.title = "Example";
@@ -218,7 +225,10 @@ test("第三方 Plugin 使用 definition ID 目录和单 constructor", async () 
     assert.equal(installed.entry, "index.js");
     assert.match(installed.integrity, /^sha256-[a-f0-9]{64}$/u);
     assert.equal(installed.config.schema.properties.api_key.writeOnly, true);
-    assert.deepEqual(installed.config.defaults, undefined);
+    assert.deepEqual(installed.config.defaults, {
+      endpoint: "https://example.com",
+      timeout_ms: 10000,
+    });
     const plugin_dir = path.join(platform_root, "plugins", "example");
     assert.equal(fs.existsSync(path.join(plugin_dir, "plugin.json")), true);
     assert.equal(fs.existsSync(path.join(plugin_dir, "index.js")), true);
@@ -231,6 +241,7 @@ test("第三方 Plugin 使用 definition ID 目录和单 constructor", async () 
     plugins.save_plugin_profile("example", "default", {
       endpoint: "https://example.com",
       api_key: "plain-secret",
+      timeout_ms: 10000,
     });
     plugins.set_agent_plugin_reference({
       agent_id: "plugin_agent",
@@ -280,29 +291,53 @@ test("Plugin 安装拒绝内置 ID、非法清单与逃逸入口", async () => {
     write_plugin_source(plugin_source, { extra_manifest: { actions: [] } });
     await assert.rejects(() => installer.install_plugin(plugin_source), /unknown field: actions/u);
 
-    write_plugin_source(plugin_source, { extra_manifest: { config: { schema: {} } } });
-    await assert.rejects(() => installer.install_plugin(plugin_source), /unknown field: config/u);
+    write_plugin_source(plugin_source, {
+      extra_manifest: { config: { schema: { type: "invalid" } } },
+    });
+    await assert.rejects(() => installer.install_plugin(plugin_source), /Invalid Plugin config schema/u);
 
     write_plugin_source(plugin_source, { entry: "../outside.js" });
     await assert.rejects(() => installer.install_plugin(plugin_source), /stay inside the Plugin directory/u);
 
-    write_plugin_source(plugin_source, { module_source: "export const value = 1;" });
-    await assert.rejects(
-      () => installer.install_plugin(plugin_source),
-      /must export plugin constructor/u,
-    );
-
-    write_plugin_source(plugin_source, {
-      module_source: "export class InvalidPlugin { static type = { config: {} }; }\nexport const plugin = InvalidPlugin;",
-    });
-    await assert.rejects(
-      () => installer.install_plugin(plugin_source),
-      /type\.config must be a Zod type/u,
-    );
-
     write_plugin_source(plugin_source);
     fs.symlinkSync("index.js", path.join(plugin_source, "linked.js"));
     await assert.rejects(() => installer.install_plugin(plugin_source), /cannot contain symlinks/u);
+  } finally {
+    delete process.env.DC_PLATFORM_ROOT;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+    fs.rmSync(plugin_source, { recursive: true, force: true });
+  }
+});
+
+test("Plugin 安装不执行入口模块", async () => {
+  const platform_root = create_temp_root();
+  const plugin_source = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  try {
+    write_plugin_source(plugin_source, {
+      module_source: 'throw new Error("entry executed");',
+    });
+    const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
+    const agents = await import("../bin/city/process/registry/AgentConfigRepository.js");
+    const plugins = await import("../bin/city/process/registry/PluginRepository.js");
+    const local_data = await import("../bin/city/runtime/LocalData.js");
+    const assembly = await import("../bin/city/runtime/AgentAssembly.js");
+    await assert.doesNotReject(() => installer.install_plugin(plugin_source));
+    agents.create_agent_config({ agent_id: "lazy_plugin_agent" });
+    plugins.set_agent_plugin_reference({
+      agent_id: "lazy_plugin_agent",
+      plugin_id: "example",
+    });
+    const data = local_data.create_cli_local_data();
+    try {
+      const loader = assembly.create_cli_plugin_loader({ plugin_repository: data.plugins });
+      await assert.rejects(
+        () => loader.create_plugins(data.agents.get("lazy_plugin_agent")),
+        /entry executed/u,
+      );
+    } finally {
+      data.database.close();
+    }
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });
@@ -323,7 +358,10 @@ test("Plugin 实例 ID 必须匹配 plugin.json", async () => {
     const assembly = await import("../bin/city/runtime/AgentAssembly.js");
     await installer.install_plugin(plugin_source);
     agents.create_agent_config({ agent_id: "mismatch_agent" });
-    plugins.save_plugin_profile("declared", "default", { endpoint: "https://example.com" });
+    plugins.save_plugin_profile("declared", "default", {
+      endpoint: "https://example.com",
+      timeout_ms: 10000,
+    });
     plugins.set_agent_plugin_reference({ agent_id: "mismatch_agent", plugin_id: "declared" });
     const data = local_data.create_cli_local_data();
     try {

@@ -4,7 +4,10 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { parseSlashInput } from "../bin/city/agent/tui/commands/parse.js"
 import { resolveSlashCommandInput } from "../bin/city/agent/tui/commands/resolve.js"
-import { validate_plugin_config } from "../bin/city/process/plugin/PluginConfigValidator.js"
+import {
+  validate_local_plugin_config,
+  validate_local_plugin_config_schema,
+} from "../../local/bin/product.js"
 
 test("slash 输入解析区分命令、参数、普通文本和 URL", () => {
   assert.equal(parseSlashInput("hello"), null)
@@ -32,17 +35,18 @@ test("Plugin JSON Schema 校验成功配置并报告错误路径", () => {
     required: ["endpoint"],
     additionalProperties: false,
   }
-  assert.doesNotThrow(() => validate_plugin_config({ endpoint: "https://example.com" }, schema))
+  assert.doesNotThrow(() => validate_local_plugin_config_schema(schema))
+  assert.doesNotThrow(() => validate_local_plugin_config({ endpoint: "https://example.com" }, schema))
   assert.throws(
-    () => validate_plugin_config({ endpoint: "" }, schema),
+    () => validate_local_plugin_config({ endpoint: "" }, schema),
     /config\/endpoint must NOT have fewer than 1 characters/iu,
   )
   assert.throws(
-    () => validate_plugin_config({ endpoint: "ok", extra: true }, schema),
+    () => validate_local_plugin_config({ endpoint: "ok", extra: true }, schema),
     /config must NOT have additional properties/iu,
   )
   assert.throws(
-    () => validate_plugin_config({}, { type: "not-a-json-schema-type" }),
+    () => validate_local_plugin_config_schema({ type: "not-a-json-schema-type" }),
     /Invalid Plugin config schema/iu,
   )
 })

@@ -5,16 +5,13 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { z } from "zod";
 import {
   LocalCrypto,
   LocalDatabase,
 } from "../bin/index.js";
 import {
   AgentRepository,
-  create_local_plugin_config_definition,
   ensure_local_schema,
-  parse_local_plugin_config,
   PluginRepository,
   resolve_local_agent_env,
   SecureSettingRepository,
@@ -122,42 +119,6 @@ test("PluginRepository 按 Plugin ID 保存明文 TOML profile", async () => {
   } finally {
     await fs.rm(root_path, { recursive: true, force: true });
   }
-});
-
-test("Plugin Zod 类型统一解析默认值并生成 input JSON Schema", () => {
-  const config_type = z.object({
-    endpoint: z.string().min(1),
-    timeout_ms: z.number().int().default(10000),
-    token: z.string().optional().meta({ writeOnly: true }),
-  }).strict();
-  const parsed = parse_local_plugin_config(
-    config_type,
-    { endpoint: "https://example.com" },
-    "Plugin profile example",
-  );
-  assert.deepEqual(parsed, {
-    endpoint: "https://example.com",
-    timeout_ms: 10000,
-  });
-  const definition = create_local_plugin_config_definition(
-    config_type,
-    "Plugin example type.config",
-  );
-  assert.equal(definition.schema.properties.token.writeOnly, true);
-  assert.deepEqual(definition.schema.required, ["endpoint"]);
-  assert.equal(definition.defaults, undefined);
-  assert.throws(
-    () => parse_local_plugin_config(config_type, {}, "Plugin profile example"),
-    /Invalid Plugin profile example/u,
-  );
-  assert.throws(
-    () => parse_local_plugin_config(
-      z.object({ created_at: z.date().default(() => new Date()) }),
-      {},
-      "Plugin profile invalid_output",
-    ),
-    /must contain only JSON values/u,
-  );
 });
 
 test("LocalDatabase transaction 提交同步写入并回滚异步回调", async () => {

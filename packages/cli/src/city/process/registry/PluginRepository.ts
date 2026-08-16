@@ -14,7 +14,7 @@ import type { JsonObject } from "@downcity/agent";
 import { with_cli_local_data } from "@/city/runtime/LocalData.js";
 import { create_cli_builtin_plugin_registrations } from "@/city/runtime/AgentAssembly.js";
 import { get_plugin_catalog_item } from "@/city/process/plugin/PluginCatalog.js";
-import { validate_plugin_config } from "@/city/process/plugin/PluginConfigValidator.js";
+import { validate_local_plugin_config } from "@downcity/local/product";
 import type {
   AgentPluginReference,
   SetAgentPluginReferenceInput,
@@ -142,7 +142,7 @@ export function save_plugin_profile(
   const profile = normalize_profile_id(profile_input);
   const plugin = get_plugin_catalog_item(plugin_id);
   if (!plugin) throw new Error(`Plugin not found: ${plugin_id}`);
-  if (plugin.config_schema) validate_plugin_config(config, plugin.config_schema);
+  if (plugin.config_schema) validate_local_plugin_config(config, plugin.config_schema);
   return with_cli_local_data((data) => data.plugins.save_profile(plugin_id, profile, config));
 }
 

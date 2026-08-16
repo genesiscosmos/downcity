@@ -25,7 +25,7 @@
 └── downcity.db
 ```
 
-第三方 Plugin 的定义、代码与资源直接位于 `<plugin_id>/`；内置 Plugin 的注册由宿主注入，但配置仍使用相同的 `plugins/<plugin_id>/config.toml`。两者进入 Loader 后都按稳定 ID、Zod 配置类型与 Plugin constructor 处理。
+第三方 Plugin 的定义、代码与资源直接位于 `<plugin_id>/`；内置 Plugin 的注册由宿主注入，但配置仍使用相同的 `plugins/<plugin_id>/config.toml`。两者进入 Loader 后都按稳定 ID、JSON Schema 与 Plugin constructor 处理。
 
 ## 3. Agent 定义
 
@@ -64,14 +64,15 @@ name = "Primary Bot"
 bot_token = "123456:token"
 ```
 
-TOML Profile 是原始配置值；Loader 使用 constructor 的 Zod 类型解析后再创建 Plugin：
+TOML Profile 是原始配置值；Loader 使用 definition 的 JSON Schema 校验后再创建 Plugin：
 
 ```ts
-const config = PluginConstructor.type.config.parse(selected_profile ?? {});
+const config = selected_profile ?? definition.config?.defaults ?? {};
+validate_plugin_config(config, definition.config?.schema);
 new PluginConstructor({ config });
 ```
 
-账号、渠道、端点和 Token 等结构由具体 Plugin 的 `type.config` Zod 类型定义。TOML 明文保存，Plugin 目录权限为 `0700`，配置文件权限为 `0600`；宿主从 Zod 生成 input JSON Schema，并按 `writeOnly` metadata 脱敏。
+账号、渠道、端点和 Token 等结构由具体 Plugin 的 `plugin.json.config.schema` 定义。TOML 明文保存，Plugin 目录权限为 `0700`，配置文件权限为 `0600`；宿主按 JSON Schema 的 `writeOnly` 标记脱敏。
 
 ## 5. 第三方 Plugin
 
@@ -83,7 +84,17 @@ new PluginConstructor({ config });
   "id": "github",
   "version": "1.0.0",
   "description": "GitHub integration",
-  "entry": "dist/index.js"
+  "entry": "dist/index.js",
+  "config": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "token": { "type": "string", "writeOnly": true }
+      },
+      "required": ["token"],
+      "additionalProperties": false
+    }
+  }
 }
 ```
 
@@ -93,7 +104,7 @@ ESM 入口命名导出唯一 Plugin constructor：
 export const plugin = GithubPlugin;
 ```
 
-`GithubPlugin.type.config` 使用 Zod 定义 profile 类型、默认值与校验。源 `plugin.json` 不允许手写 `config`；安装器只在安装后的同一个文件中保存自动生成的 Schema 展示快照。
+Plugin 代码单独声明 TypeScript 配置类型，运行时协议以 `plugin.json.config.schema` 为准。安装器校验 Schema 与默认值，但不导入或执行第三方入口。
 
 安装目标固定为 `plugins/<definition.id>/`。随机目录只用于 staging；更新原子替换整个 Plugin 目录并保留 `config.toml`。新 Schema 无法校验已有 profile 时拒绝更新；仍被 Agent 引用时拒绝卸载。
 

@@ -24,11 +24,7 @@ export { clean_chat_storage } from "./chat/runtime/ChatStorage.js";
 export {
   CHAT_PLUGIN_CHANNEL_JSON_SCHEMA,
   CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
-  chat_plugin_channel_schema,
-  chat_plugin_config_schema,
   get_chat_plugin_channel_json_schema,
-  parse_chat_plugin_channel,
-  parse_chat_plugin_config,
 } from "./chat/config/ChatPluginConfig.js";
 
 export type {
@@ -46,7 +42,10 @@ export type {
   ChatChannel,
   ChatPluginOptions,
 } from "./chat/types/ChatPluginOptions.js";
-export type { ChatPluginConfig } from "./chat/config/ChatPluginConfig.js";
+export type {
+  ChatPluginConfig,
+  ChatPluginQueueConfig,
+} from "./chat/types/ChatPluginConfig.js";
 export type { ChatPluginChannelConfig } from "./chat/types/ChatPluginChannelConfig.js";
 export type {
   ApproveChatAccessRequestInput,

@@ -5,24 +5,19 @@ import {
   list_plugin_profiles,
 } from "@/city/process/registry/PluginRepository.js";
 import { create_cli_builtin_plugin_registrations } from "@/city/runtime/AgentAssembly.js";
-import { create_local_plugin_config_definition } from "@downcity/local/product";
 import type { PluginCatalogItem } from "@/city/types/plugin/PluginCatalog.js";
 
 /** 列出全部内置与第三方 Plugin。 */
 export function list_plugin_catalog(): PluginCatalogItem[] {
   const builtin_items = create_cli_builtin_plugin_registrations().map((registration) => {
     const definition = registration.definition;
-    const config = create_local_plugin_config_definition(
-      registration.type?.config,
-      `Plugin ${definition.id} type.config`,
-    );
     return {
       plugin_id: definition.id,
       title: definition.title || definition.id,
       description: definition.description,
       source: "builtin" as const,
-      ...(config?.schema ? { config_schema: config.schema } : {}),
-      default_config: config?.defaults ?? {},
+      ...(definition.config?.schema ? { config_schema: definition.config.schema } : {}),
+      default_config: definition.config?.defaults ?? {},
       profiles: list_plugin_profiles(definition.id),
     };
   });
