@@ -19,15 +19,6 @@ const plugin_config_ajv = new Ajv2020({
 
 (formats_plugin as unknown as (ajv: Ajv2020) => Ajv2020)(plugin_config_ajv);
 
-/** 校验 Plugin 声明的 JSON Schema 本身是否合法。 */
-export function validate_plugin_config_schema(schema: JsonObject): void {
-  const valid = plugin_config_ajv.validateSchema(schema);
-  if (!valid) {
-    throw new Error(`Invalid Plugin config schema: ${format_ajv_errors(plugin_config_ajv.errors)}`);
-  }
-  compile_plugin_config_schema(schema);
-}
-
 /** 按标准 JSON Schema 校验 Plugin 完整配置。 */
 export function validate_plugin_config(
   config: JsonObject,
@@ -39,8 +30,8 @@ export function validate_plugin_config(
   throw new Error(`Invalid Plugin config: ${format_ajv_errors(validate.errors)}`);
 }
 
-/** 编译并返回可复用的 Plugin 配置校验器。 */
-export function compile_plugin_config_schema(schema: JsonObject): ValidateFunction {
+/** 编译 Plugin 配置展示快照。 */
+function compile_plugin_config_schema(schema: JsonObject): ValidateFunction {
   try {
     return plugin_config_ajv.compile(schema);
   } catch (error) {

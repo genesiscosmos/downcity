@@ -54,13 +54,10 @@ export class LocalPluginLoader {
     return plugins;
   }
 
-  /** 返回宿主注入的内置 Plugin 注册快照。 */
-  plugin_registrations(): LocalPluginRegistration[] {
-    return [...this.builtin_registrations];
-  }
-
   /** 按稳定 ID 加载一个 Plugin 注册。 */
-  async load_plugin_registration(plugin_id: string): Promise<LocalPluginRegistration | null> {
+  private async load_plugin_registration(
+    plugin_id: string,
+  ): Promise<LocalPluginRegistration | null> {
     const builtin = this.builtin_registrations
       .find((item) => item.definition.id === plugin_id);
     if (builtin) return builtin;

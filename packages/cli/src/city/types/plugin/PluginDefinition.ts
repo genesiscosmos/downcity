@@ -2,9 +2,7 @@
 
 import type {
   LocalInstalledPluginDefinition,
-  LocalPluginConfigDefinition,
   LocalPluginDefinition,
-  LocalPluginRegistration,
 } from "@downcity/local/product";
 
 /** Plugin 源目录与安装目录共享的清单文件名。 */
@@ -34,12 +32,6 @@ export interface PluginPackageDefinition extends LocalPluginDefinition {
   /** 相对 Plugin 根目录的自包含 ESM 入口。 */
   entry: string;
 }
-
-/** Plugin profile 的公开配置协议。 */
-export type PluginConfigDefinition = LocalPluginConfigDefinition;
-
-/** CLI 可以统一实例化的 Plugin 注册。 */
-export type PluginRegistration = LocalPluginRegistration;
 
 /** 已安装 Plugin 的管理视图。 */
 export type InstalledPlugin = LocalInstalledPluginDefinition;
