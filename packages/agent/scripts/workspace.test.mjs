@@ -12,8 +12,9 @@ import { Agent, Workspace } from "../bin/index.js";
 test("Workspace exposes file tools without requiring Shell", async (t) => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-"));
 
-  const workspace = new Workspace({ path: root_path });
-  const agent = new Agent({ id: "workspace-files", workspace });
+  const workspace = new Workspace({ id: "test_workspace", path: root_path });
+  const agent = new Agent({ id: "workspace-files" });
+  const entry = agent.enter(workspace);
   t.after(async () => {
     await agent.dispose();
     await fs.rm(root_path, { recursive: true, force: true });
@@ -27,11 +28,11 @@ test("Workspace exposes file tools without requiring Shell", async (t) => {
     "read",
     "write",
   ]);
-  assert.equal(agent.workspace, workspace);
-  assert.equal(agent.get_shell(), undefined);
+  assert.equal(entry.workspace, workspace);
+  assert.equal(entry.get_shell(), undefined);
 });
 
-test("Workspace binds one Agent and is disposed with it", async (t) => {
+test("one Workspace instance enters one Agent and is disposed with it", async (t) => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-shared-"));
   t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
   let dispose_count = 0;
@@ -48,14 +49,17 @@ test("Workspace binds one Agent and is disposed with it", async (t) => {
     },
   };
   const workspace_path = await fs.realpath(root_path);
-  const workspace = new Workspace({ path: root_path, shell });
-  const agent = new Agent({ id: "workspace-first", workspace });
+  const workspace = new Workspace({ id: "test_workspace", path: root_path, shell });
+  const agent = new Agent({ id: "workspace-first" });
+  const second_agent = new Agent({ id: "workspace-second" });
+  agent.enter(workspace);
   assert.throws(
-    () => new Agent({ id: "workspace-second", workspace }),
+    () => second_agent.enter(workspace),
     /already bound to Agent "workspace-first"/,
   );
 
   await agent.dispose();
+  await second_agent.dispose();
   await agent.dispose();
   assert.equal(dispose_count, 1);
 });
@@ -63,14 +67,10 @@ test("Workspace binds one Agent and is disposed with it", async (t) => {
 test("separate Workspace instances may use the same directory", async (t) => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-directory-"));
   t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
-  const first_agent = new Agent({
-    id: "workspace-directory-first",
-    workspace: new Workspace({ path: root_path }),
-  });
-  const second_agent = new Agent({
-    id: "workspace-directory-second",
-    workspace: new Workspace({ path: root_path }),
-  });
+  const first_agent = new Agent({ id: "workspace-directory-first" });
+  const second_agent = new Agent({ id: "workspace-directory-second" });
+  first_agent.enter(new Workspace({ id: "test_workspace", path: root_path }));
+  second_agent.enter(new Workspace({ id: "test_workspace", path: root_path }));
 
   await first_agent.dispose();
   await second_agent.dispose();
@@ -90,7 +90,7 @@ test("Workspace owns env and publishes only real changes", async (t) => {
     async dispose() {},
   };
 
-  const workspace = new Workspace({
+  const workspace = new Workspace({ id: "test_workspace",
     path: root_path,
     shell,
     env: { OVERRIDE: "explicit", EXPLICIT: "value" },
@@ -127,20 +127,25 @@ test("Agent rejects Workspace, Plugin and custom Tool name conflicts", async (t)
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-tools-"));
   t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
 
+  const workspace_conflict_agent = new Agent({
+    id: "workspace-tool-conflict",
+    tools: { read: {} },
+  });
   assert.throws(
-    () => new Agent({
-      id: "workspace-tool-conflict",
-      workspace: new Workspace({ path: root_path }),
-      tools: { read: {} },
-    }),
+    () => workspace_conflict_agent.enter(
+      new Workspace({ id: "test_workspace", path: root_path }),
+    ),
     /Agent tool name conflict: "read"/,
   );
+  const plugin_conflict_agent = new Agent({
+    id: "plugin-tool-conflict",
+    tools: { plugin_call: {} },
+  });
   assert.throws(
-    () => new Agent({
-      id: "plugin-tool-conflict",
-      workspace: new Workspace({ path: root_path }),
-      tools: { plugin_call: {} },
-    }),
+    () => plugin_conflict_agent.enter(
+      new Workspace({ id: "test_workspace", path: root_path }),
+    ),
     /reserved for PluginRegistry/,
   );
+  await Promise.all([workspace_conflict_agent.dispose(), plugin_conflict_agent.dispose()]);
 });

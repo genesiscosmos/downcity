@@ -28,9 +28,18 @@ function create_turn_context(project_root) {
 }
 
 function create_registry(plugin) {
-  const registry = new PluginRegistry([plugin]);
-  registry.bind_context({ workspace_path: process.cwd() });
-  return registry;
+  const registry = new PluginRegistry({
+    agent_id: "plugin_tools_agent",
+    instructions: [],
+  }, [plugin]);
+  const context = {
+    agent_id: "plugin_tools_agent",
+    workspace_id: "plugin_tools_workspace",
+    workspace_path: process.cwd(),
+  };
+  return Object.assign(registry.contextual(context), {
+    execution_view: () => registry.execution_view(context),
+  });
 }
 
 test("plugin_call payload schema allows arbitrary object properties", async () => {

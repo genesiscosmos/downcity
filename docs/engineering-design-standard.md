@@ -112,7 +112,9 @@ Downcity 的工程目标不是追求最多的抽象、最强的限制或最通�
 ```text
 Workspace = Files + Env + WorkspaceTools + SessionStore + Shell?
 
-Agent = Workspace + Model + Instruction + Plugins + Sessions
+Agent = Identity + Model + Instruction + Plugins
+
+AgentWorkspace = Agent.enter(Workspace) + Tools + Sessions + Context
 
 Session = State + Queue + Messages + Composer + Executor + Approvals
 
@@ -205,18 +207,19 @@ Workspace 不负责：
 - daemon 和多 Agent 管理。
 - 用户级全局配置。
 
-持久化层允许多个 Agent 配置引用同一个 Workspace 配置。产品装配运行时时，每个 Agent 必须创建独立的 Workspace 实例；即使它们指向同一个项目目录，也不能共享同一个运行时对象，以确保 Session、Shell 和资源释放的生命周期彼此隔离。
+Workspace 必须有稳定 ID。Agent 定义不保存 Workspace 绑定；宿主在一次具体执行开始时创建 Workspace，并通过 `agent.enter(workspace)` 得到 AgentWorkspace。一个 Agent 可以同时进入多个 Workspace，各自的 Session、Shell、env、日志与后台项目资源必须隔离。
 
 ### 4.2 Agent 是单 Agent 组合根
 
 Agent 持有：
 
-- 一个 Workspace。
+- 稳定身份。
 - 模型和 instruction。
-- 全部注册工具。
-- PluginRegistry。
-- AgentSessions。
+- Agent 级自定义工具。
+- 唯一 PluginRegistry。
 - Agent 自身长期运行状态。
+
+Agent 不持有单一 Workspace。`AgentWorkspace` 是 Agent 进入一个 Workspace 后的执行边界，持有该项目的工具、Session、PluginContext 和项目生命周期资源。
 
 Agent 不负责：
 
@@ -252,6 +255,20 @@ Plugin 可以提供：
 - HTTP Route 描述。
 
 Plugin 通过 PluginContext 使用 Agent 内核允许的能力。PluginContext 是内部能力投影，不是宿主控制面，也不是 Agent 全量状态容器。
+
+所有 Plugin 都由 Agent 注册。Action、Hook、System、Availability 调用始终获得当前 Workspace 的 PluginContext；Plugin 自己决定是否读取其中的 Workspace 能力。框架不定义 workspace plugin、scope 或 requirements。
+
+Plugin 生命周期分为 Agent 级 `start/stop` 和可选的 Workspace 级 `enter_workspace/leave_workspace`。实现哪些钩子由 Plugin 自己决定，不构成 Plugin 分类。
+
+### 4.5 Agent 定义的本地事实源
+
+本地 Agent 定义保存在 `~/.downcity/agents/<agent_id>/`：
+
+- `agent.json`：身份、版本和默认执行配置。
+- `instruction.md`：Agent 稳定指令。
+- `plugins.json`：Agent 注册的 Plugin 配置。
+
+`downcity.db` 继续保存 Workspace 索引、Plugin Resource/Installation、敏感设置和 Token，不保存 Agent 定义或 Agent-Workspace 绑定。
 
 Workspace 只保证底层文件和 Shell 安全边界，不为 Plugin 的业务行为负责。Plugin 的业务权限、账号、网络访问与语义校验由 Plugin 或宿主管理。
 

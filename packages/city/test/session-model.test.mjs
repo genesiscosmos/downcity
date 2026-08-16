@@ -15,6 +15,8 @@ import test from "node:test";
 import { Agent, RemoteAgent, Workspace } from "../../agent/bin/index.js";
 import { AgentRPC } from "../bin/index.js";
 
+const network_tests_enabled = process.env.DOWNCITY_RUN_NETWORK_TESTS === "1";
+
 async function reserve_port() {
   const server = net.createServer();
   await new Promise((resolve, reject) => {
@@ -47,7 +49,9 @@ async function send_rpc_request(port, request) {
   });
 }
 
-test("RPC resolves model_id through the host and queues compact", async () => {
+test("RPC resolves model_id through the host and queues compact", {
+  skip: !network_tests_enabled,
+}, async () => {
   const project_root = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-server-session-model-"),
   );
@@ -57,11 +61,11 @@ test("RPC resolves model_id through the host and queues compact", async () => {
   };
   const agent = new Agent({
     id: "rpc_model_agent",
-    workspace: new Workspace({ path: project_root }),
     model,
   });
+  const entry = agent.enter(new Workspace({ id: "rpc_model_workspace", path: project_root }));
   let resolved_model_id = "";
-  const rpc = new AgentRPC(agent, {
+  const rpc = new AgentRPC(entry, {
     resolve_session_model: (model_id) => {
       resolved_model_id = model_id;
       return {
@@ -94,16 +98,18 @@ test("RPC resolves model_id through the host and queues compact", async () => {
   }
 });
 
-test("RPC rejects remote model switching when the host has no resolver", async () => {
+test("RPC rejects remote model switching when the host has no resolver", {
+  skip: !network_tests_enabled,
+}, async () => {
   const project_root = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-server-model-resolver-required-"),
   );
   const agent = new Agent({
     id: "rpc_model_resolver_required_agent",
-    workspace: new Workspace({ path: project_root }),
     model: { modelId: "host-model", provider: "test" },
   });
-  const rpc = new AgentRPC(agent);
+  const entry = agent.enter(new Workspace({ id: "resolver_workspace", path: project_root }));
+  const rpc = new AgentRPC(entry);
   const port = await reserve_port();
   const remote_agent = new RemoteAgent({ url: `rpc://127.0.0.1:${port}` });
   try {
@@ -121,12 +127,19 @@ test("RPC rejects remote model switching when the host has no resolver", async (
   }
 });
 
-test("internal RPC 让宿主重新加载 Workspace Env", async () => {
+test("internal RPC 让宿主重新加载 Workspace Env", {
+  skip: !network_tests_enabled,
+}, async () => {
   const project_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-server-env-reload-"));
-  const workspace = new Workspace({ path: project_root, env: { BEFORE: "value" } });
-  const agent = new Agent({ id: "rpc_env_agent", workspace });
+  const workspace = new Workspace({
+    id: "env_workspace",
+    path: project_root,
+    env: { BEFORE: "value" },
+  });
+  const agent = new Agent({ id: "rpc_env_agent" });
+  const entry = agent.enter(workspace);
   let reload_count = 0;
-  const rpc = new AgentRPC(agent, {
+  const rpc = new AgentRPC(entry, {
     reload_workspace_env: () => {
       reload_count += 1;
       const env = { AFTER: "value" };

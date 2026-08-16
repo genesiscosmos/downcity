@@ -15,7 +15,7 @@ import { healthRouter } from "@/city/agent/http/health/health.js";
 import { createPluginsRouter } from "@/city/agent/http/plugins/plugins.js";
 import { createStaticRouter } from "@/city/agent/http/static/static.js";
 import { createControlRouter } from "@/city/agent/http/control/ControlRouter.js";
-import type { Agent } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent";
 import { AuthService } from "@/city/runtime/auth/AuthService.js";
 import {
   createRouteAuthGuardMiddleware,
@@ -25,7 +25,7 @@ import {
 /** CLI Agent HTTP 子应用的组合参数。 */
 interface AgentHttpGatewayOptions {
   /** 当前 agent context 读取函数。 */
-  get_agent: () => Agent;
+  get_agent: () => AgentWorkspace;
   /** 可选 SDK transport 子路由（来自 `@downcity/city` 的 `AgentHTTP.router()`）。 */
   sdk_router?: HonoType;
   /** CLI 组合根创建并拥有的鉴权服务。 */

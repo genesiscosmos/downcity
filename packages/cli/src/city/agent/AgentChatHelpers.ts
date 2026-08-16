@@ -131,9 +131,7 @@ export async function resolveChatTargetAgentId(inputId?: string): Promise<string
     message: "选择要聊天的 Agent",
     choices: registered_agents.map((agent) => ({
       title: agent.agent_id,
-      description: agent.workspace_path
-        ? `${agent.status === "loaded" ? "City active" : "City inactive"} · ${agent.workspace_path}`
-        : agent.status === "loaded" ? "City active" : "City inactive",
+      description: agent.status === "loaded" ? "City active" : "City inactive",
       value: agent.agent_id,
     })),
     initial: 0,
@@ -299,6 +297,7 @@ export async function resolveInteractiveChatSession(params: {
 
   const remote_agent = await createRemoteAgent({
     agent_id: resolved.target.agent_id,
+    workspace: params.options.workspace,
     transport: params.transport,
   });
 
@@ -365,6 +364,7 @@ async function resolveLatestChatSessionId(params: {
 
 export async function runSdkPromptTurn(params: {
   agent_id: string;
+  workspace?: string;
   message: string;
   sessionOptions?: AgentChatSessionOptions;
   transport?: { host?: string; port?: number };
@@ -405,6 +405,7 @@ export async function runSdkPromptTurn(params: {
 
   const remote_agent = await createRemoteAgent({
     agent_id: resolved.target.agent_id,
+    workspace: params.workspace,
     transport: params.transport,
   });
   const session = await getOrCreateRemoteSession({
@@ -495,6 +496,7 @@ export async function runSdkPromptTurn(params: {
  */
 export async function executeAgentChatTurn(params: {
   agent_id: string;
+  workspace?: string;
   message: string;
   sessionOptions?: AgentChatSessionOptions;
   transport?: { host?: string; port?: number };
@@ -516,6 +518,7 @@ export async function executeAgentChatTurn(params: {
 
   const outcome = await runSdkPromptTurn({
     agent_id: params.agent_id,
+    workspace: params.workspace,
     message,
     sessionOptions: params.sessionOptions,
     transport: params.transport,
@@ -549,6 +552,7 @@ export async function runOneShotChat(params: {
   if (params.options.json === true) {
     const outcome = await executeAgentChatTurn({
       agent_id: params.agent_id,
+      workspace: params.options.workspace,
       message: params.message,
       sessionOptions: {
         session_id: params.options.session_id,
@@ -577,6 +581,7 @@ export async function runOneShotChat(params: {
 
   const outcome = await runSdkPromptTurn({
     agent_id: params.agent_id,
+    workspace: params.options.workspace,
     message: params.message,
     sessionOptions: {
       session_id: params.options.session_id,

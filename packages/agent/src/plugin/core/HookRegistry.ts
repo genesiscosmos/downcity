@@ -39,7 +39,6 @@ type ResolveRecord = {
  * HookRegistry：plugin 点注册与执行实现。
  */
 export class HookRegistry {
-  private readonly get_context: () => PluginContext;
   private readonly is_plugin_ready: (plugin_name: string) => boolean;
 
   private readonly pipelineHooks = new Map<string, PipelineRecord[]>();
@@ -51,10 +50,8 @@ export class HookRegistry {
   private readonly resolveHooks = new Map<string, ResolveRecord>();
 
   constructor(params: {
-    get_context: () => PluginContext;
     is_plugin_ready: (plugin_name: string) => boolean;
   }) {
-    this.get_context = params.get_context;
     this.is_plugin_ready = params.is_plugin_ready;
   }
 
@@ -199,13 +196,16 @@ export class HookRegistry {
   /**
    * 运行 pipeline 扩展点。
    */
-  async pipelineValue<T = JsonValue>(point_name: string, value: T): Promise<T> {
+  async pipelineValue<T = JsonValue>(
+    context: PluginContext,
+    point_name: string,
+    value: T,
+  ): Promise<T> {
     const key = String(point_name || "").trim();
     if (!key) return value;
     const bucket = this.pipelineHooks.get(key) || [];
     if (bucket.length === 0) return value;
 
-    const context = this.get_context();
     let current = value as JsonValue;
     for (const item of bucket) {
       if (!this.is_plugin_ready(item.plugin_name)) continue;
@@ -221,13 +221,16 @@ export class HookRegistry {
   /**
    * 运行 guard 扩展点。
    */
-  async guardValue<T = JsonValue>(point_name: string, value: T): Promise<void> {
+  async guardValue<T = JsonValue>(
+    context: PluginContext,
+    point_name: string,
+    value: T,
+  ): Promise<void> {
     const key = String(point_name || "").trim();
     if (!key) return;
     const bucket = this.guardHooks.get(key) || [];
     if (bucket.length === 0) return;
 
-    const context = this.get_context();
     for (const item of bucket) {
       if (!this.is_plugin_ready(item.plugin_name)) continue;
       await item.handler({
@@ -241,13 +244,16 @@ export class HookRegistry {
   /**
    * 运行 effect 扩展点。
    */
-  async effectValue<T = JsonValue>(point_name: string, value: T): Promise<void> {
+  async effectValue<T = JsonValue>(
+    context: PluginContext,
+    point_name: string,
+    value: T,
+  ): Promise<void> {
     const key = String(point_name || "").trim();
     if (!key) return;
     const bucket = this.effectHooks.get(key) || [];
     if (bucket.length === 0) return;
 
-    const context = this.get_context();
     for (const item of bucket) {
       if (!this.is_plugin_ready(item.plugin_name)) continue;
       await item.handler({
@@ -262,6 +268,7 @@ export class HookRegistry {
    * 运行 resolve 点。
    */
   async resolveValue<TInput = JsonValue, TOutput = JsonValue>(
+    context: PluginContext,
     point_name: string,
     value: TInput,
   ): Promise<TOutput> {
@@ -273,7 +280,6 @@ export class HookRegistry {
     if (!record) {
       throw new Error(`No plugin resolver registered for point: ${key}`);
     }
-    const context = this.get_context();
     if (!this.is_plugin_ready(record.plugin_name)) {
       throw new Error(`No active plugin resolver registered for point: ${key}`);
     }

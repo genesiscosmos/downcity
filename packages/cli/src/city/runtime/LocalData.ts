@@ -48,8 +48,8 @@ export function create_cli_local_data(root_path_input?: string): CliLocalData {
   const crypto_adapter = new LocalCrypto(root_path);
   const secure_settings = new SecureSettingRepository(database, crypto_adapter);
   const workspaces = new WorkspaceRepository(database, crypto_adapter);
-  const agents = new AgentRepository(database, crypto_adapter, workspaces);
-  const plugins = new PluginRepository(database, crypto_adapter);
+  const agents = new AgentRepository(root_path);
+  const plugins = new PluginRepository(database, crypto_adapter, agents);
   const agent_tokens = new AgentTokenRepository(database);
   return { root_path, database, agents, workspaces, plugins, secure_settings, agent_tokens };
 }

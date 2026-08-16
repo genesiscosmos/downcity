@@ -52,6 +52,8 @@ export type CloudflareComputerClient = WorkspaceClient;
 
 /** Cloudflare Computer Workspace 构造参数。 */
 export interface CloudflareComputerWorkspaceOptions {
+  /** 当前 Workspace 的稳定逻辑标识。 */
+  id: string;
   /** 由 `getWorkspace()` 返回的 Cloudflare Computer Workspace client。 */
   computer: CloudflareComputerClient;
   /** 供 Downcity Agent 使用的稳定逻辑根路径。 */

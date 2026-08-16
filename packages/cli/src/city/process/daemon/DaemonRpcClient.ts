@@ -15,7 +15,10 @@ import {
 const RPC_TIMEOUT_MS = 2_000;
 
 /** 请求运行中 City 重新加载指定 Agent 的 Workspace Env。 */
-export async function reload_running_agent_env(agent_id: string): Promise<boolean> {
+export async function reload_running_agent_env(
+  agent_id: string,
+  workspace_id: string,
+): Promise<boolean> {
   const meta = await read_daemon_meta();
   if (!meta || !is_process_alive(meta.pid) || !meta.agent_ids.includes(agent_id)) return false;
   await new Promise<void>((resolve, reject) => {
@@ -63,6 +66,7 @@ export async function reload_running_agent_env(agent_id: string): Promise<boolea
             socket.write(`${JSON.stringify({
               id: reload_request_id,
               agent_id,
+              workspace_id,
               method: "internal.workspace.reload_env",
             })}\n`);
             continue;

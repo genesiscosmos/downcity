@@ -176,8 +176,8 @@ export async function callServer<T>(
     port: params.port,
   });
 
-  const agent_base_url = `${endpoint.baseUrl}/agents/${encodeURIComponent(params.agent_id)}/`;
-  const url = new URL(params.path.replace(/^\//u, ""), agent_base_url).toString();
+  const workspace_base_url = `${endpoint.baseUrl}/agents/${encodeURIComponent(params.agent_id)}/workspaces/${encodeURIComponent(params.workspace_id)}/`;
+  const url = new URL(params.path.replace(/^\//u, ""), workspace_base_url).toString();
   const method = params.method || "GET";
   const hasBody = params.body !== undefined && method !== "GET";
   const headers: Record<string, string> = {};

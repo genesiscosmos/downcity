@@ -9,6 +9,7 @@
 
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
+export { AgentWorkspace } from "./agent/AgentWorkspace.js";
 export { Workspace } from "./workspace/Workspace.js";
 export { WorkspaceBase } from "./workspace/WorkspaceBase.js";
 export type { SessionStore } from "./types/store/SessionStore.js";
@@ -182,6 +183,7 @@ export type {
   AgentSessionCompactResult,
 } from "./types/sdk/AgentSessionCompact.js";
 export type { PluginContext } from "./types/plugin/PluginContext.js";
+export type { AgentPluginContext } from "./types/plugin/AgentPluginContext.js";
 export type { SessionPort } from "./types/session/SessionPort.js";
 
 // Plugin 作者 API

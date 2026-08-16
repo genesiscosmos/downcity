@@ -9,7 +9,7 @@
 import type { Command, Option } from "commander";
 import {
   emit_registered_agent_list_with_options,
-  resolve_cli_agent_target,
+  resolve_cli_agent_id,
 } from "@/city/agent/AgentSelection.js";
 import { runInteractiveCityManager } from "@/city/shared/CityManager.js";
 import { run_agent_create_command } from "@/city/agent/Init.js";
@@ -110,8 +110,7 @@ export function registerAgentCommands(
     .action(createVersionBanner(
       context.version,
       async (agent_id: string | undefined, options: AgentModelCommandOptions) => {
-        const target = await resolve_cli_agent_target(agent_id);
-        await configure_agent_model(target.agent_id, options);
+        await configure_agent_model(await resolve_cli_agent_id(agent_id), options);
       },
     ));
 
@@ -133,6 +132,10 @@ export function registerAgentCommands(
       zh: "创建新 Session",
       en: "create a new Session",
     }), parseBoolean)
+    .option("--workspace <id-or-path>", t({
+      zh: "指定本次对话使用的 Workspace ID 或路径",
+      en: "select the Workspace ID or path for this chat",
+    }))
     .option("--json [enabled]", t({ zh: "输出 JSON", en: "output JSON" }), parseBoolean)
     .helpOption("--help", helpText())
     .action(createVersionBanner(

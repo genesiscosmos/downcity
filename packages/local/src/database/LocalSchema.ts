@@ -19,28 +19,6 @@ export function ensure_local_schema(database: LocalDatabase): void {
       CREATE INDEX IF NOT EXISTS workspaces_updated_at_idx
       ON workspaces(updated_at);
 
-      CREATE TABLE IF NOT EXISTS managed_agents (
-        agent_id TEXT PRIMARY KEY NOT NULL,
-        workspace_id TEXT NOT NULL,
-        config_encrypted TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (workspace_id) REFERENCES workspaces(workspace_id)
-      );
-      CREATE INDEX IF NOT EXISTS managed_agents_updated_at_idx
-      ON managed_agents(updated_at);
-
-      CREATE TABLE IF NOT EXISTS agent_plugins (
-        agent_id TEXT NOT NULL,
-        plugin_name TEXT NOT NULL,
-        enabled INTEGER NOT NULL,
-        config_encrypted TEXT NOT NULL,
-        resource_ids_json TEXT NOT NULL DEFAULT '[]',
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        PRIMARY KEY (agent_id, plugin_name)
-      );
-
       CREATE TABLE IF NOT EXISTS plugin_resources (
         plugin_name TEXT NOT NULL,
         resource_id TEXT NOT NULL,
@@ -67,9 +45,5 @@ export function ensure_local_schema(database: LocalDatabase): void {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
-    `);
-    database.execute_script(`
-      CREATE INDEX IF NOT EXISTS managed_agents_workspace_id_idx
-      ON managed_agents(workspace_id);
     `);
   }

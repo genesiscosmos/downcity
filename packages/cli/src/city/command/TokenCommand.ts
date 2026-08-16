@@ -5,7 +5,7 @@
  */
 
 import type { Command } from "commander";
-import { resolve_cli_agent_target } from "@/city/agent/AgentSelection.js";
+import { resolve_cli_agent_id } from "@/city/agent/AgentSelection.js";
 import { AuthService } from "@/city/runtime/auth/AuthService.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
@@ -27,9 +27,9 @@ export function registerAgentTokenCommand(agent_command: Command): void {
     .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
     .helpOption("--help", helpText())
     .action(async (agent_id: string | undefined, options: { json?: boolean }) => {
-      const target = await resolve_cli_agent_target(agent_id);
+      const resolved_agent_id = await resolve_cli_agent_id(agent_id);
       const tokens = with_cli_local_data((data) =>
-        new AuthService({ agent_id: target.agent_id, repository: data.agent_tokens }).list_tokens()
+        new AuthService({ agent_id: resolved_agent_id, repository: data.agent_tokens }).list_tokens()
       );
       if (options.json) {
         printResult({
@@ -37,13 +37,13 @@ export function registerAgentTokenCommand(agent_command: Command): void {
           asJson: true,
           success: true,
           title: "agent tokens",
-          data: { agent_id: target.agent_id, tokens },
+          data: { agent_id: resolved_agent_id, tokens },
         });
         return;
       }
       emitCliList({
         tone: "accent",
-        title: `Agent tokens · ${target.agent_id}`,
+        title: `Agent tokens · ${resolved_agent_id}`,
         summary: `${tokens.length} token(s)`,
         items: tokens.map((item) => ({
           title: item.name,
@@ -65,9 +65,9 @@ export function registerAgentTokenCommand(agent_command: Command): void {
       agent_id: string | undefined,
       options: { name: string; expires_at?: string; json?: boolean },
     ) => {
-      const target = await resolve_cli_agent_target(agent_id);
+      const resolved_agent_id = await resolve_cli_agent_id(agent_id);
       const issued = with_cli_local_data((data) =>
-        new AuthService({ agent_id: target.agent_id, repository: data.agent_tokens }).create_token({
+        new AuthService({ agent_id: resolved_agent_id, repository: data.agent_tokens }).create_token({
           name: options.name,
           expires_at: options.expires_at,
         })
@@ -104,9 +104,9 @@ export function registerAgentTokenCommand(agent_command: Command): void {
       agent_id: string | undefined,
       options: { json?: boolean },
     ) => {
-      const target = await resolve_cli_agent_target(agent_id);
+      const resolved_agent_id = await resolve_cli_agent_id(agent_id);
       with_cli_local_data((data) =>
-        new AuthService({ agent_id: target.agent_id, repository: data.agent_tokens }).delete_token(token_id)
+        new AuthService({ agent_id: resolved_agent_id, repository: data.agent_tokens }).delete_token(token_id)
       );
       if (options.json) {
         printResult({
@@ -114,7 +114,7 @@ export function registerAgentTokenCommand(agent_command: Command): void {
           asJson: true,
           success: true,
           title: "agent token deleted",
-          data: { agent_id: target.agent_id, token_id },
+          data: { agent_id: resolved_agent_id, token_id },
         });
         return;
       }
@@ -122,7 +122,7 @@ export function registerAgentTokenCommand(agent_command: Command): void {
         tone: "success",
         title: "Agent token deleted",
         facts: [
-          { label: "Agent", value: target.agent_id },
+          { label: "Agent", value: resolved_agent_id },
           { label: "Token ID", value: token_id },
         ],
       });

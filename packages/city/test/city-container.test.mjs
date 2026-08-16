@@ -12,10 +12,9 @@ import { City } from "../bin/index.js";
 async function create_agent(root, agent_id) {
   const workspace_path = path.join(root, agent_id);
   await fs.mkdir(workspace_path, { recursive: true });
-  return new Agent({
-    id: agent_id,
-    workspace: new Workspace({ path: workspace_path }),
-  });
+  const agent = new Agent({ id: agent_id });
+  agent.enter(new Workspace({ id: agent_id, path: workspace_path }));
+  return agent;
 }
 
 test("City.add 注册调用方创建的 Agent 并拒绝重复 ID", async () => {

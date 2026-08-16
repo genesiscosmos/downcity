@@ -87,7 +87,7 @@ function attachCommandHelpText(command: Command, text: string): void {
  * 创建 chat plugin runtime 的 action 定义表。
  */
 export function createChatPluginActions(params: {
-  channelState: ChatChannelState;
+  resolve_channel_state: (context: import("@downcity/agent").PluginContext) => ChatChannelState;
 }): PluginActions {
   return {
     status: create_action({
@@ -105,7 +105,7 @@ export function createChatPluginActions(params: {
       },
       execute: async (actionParams) => {
         return executeChatStatusAction({
-          state: params.channelState,
+          state: params.resolve_channel_state(actionParams.context),
           context: actionParams.context,
           payload: actionParams.input as ChatStatusActionPayload,
         });
@@ -126,7 +126,7 @@ export function createChatPluginActions(params: {
       },
       execute: async (actionParams) => {
         return executeChatTestAction({
-          state: params.channelState,
+          state: params.resolve_channel_state(actionParams.context),
           context: actionParams.context,
           payload: actionParams.input as ChatTestActionPayload,
         });
@@ -147,7 +147,7 @@ export function createChatPluginActions(params: {
       },
       execute: async (actionParams) => {
         return executeChatReconnectAction({
-          state: params.channelState,
+          state: params.resolve_channel_state(actionParams.context),
           context: actionParams.context,
           payload: actionParams.input as ChatReconnectActionPayload,
         });

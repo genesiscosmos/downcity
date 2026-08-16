@@ -128,7 +128,6 @@ test("CityModel uses direct LanguageModel path and sends tool result back", asyn
   });
   const agent = new Agent({
     id: "tool_loop_agent",
-    workspace: new Workspace({ path: agent_path }),
     plugins: [skill_plugin],
     tools: {
       ping: tool({
@@ -163,9 +162,10 @@ test("CityModel uses direct LanguageModel path and sends tool result back", asyn
       }),
     },
   });
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
 
   try {
-    const session = await agent.sessions.create();
+    const session = await entry.sessions.create();
     await session.set({ model: create_city_model(model_requests) });
     const turn = await session.prompt({ query: "please use the ping tool" });
     const result = await turn.finished;

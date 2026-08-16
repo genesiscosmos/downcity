@@ -489,6 +489,9 @@ export class RpcClient {
     if (this.endpoint.agent_id) {
       request.agent_id = this.endpoint.agent_id;
     }
+    if (this.endpoint.workspace_id) {
+      request.workspace_id = this.endpoint.workspace_id;
+    }
     const result = await new Promise<TData>((resolve, reject) => {
       this.pending_requests.set(id, { resolve, reject });
       socket.write(`${JSON.stringify(request)}\n`, (error) => {
@@ -621,12 +624,13 @@ export function parse_rpc_url(url_input: string): RpcClientEndpoint {
     .split("/")
     .map((segment) => decodeURIComponent(segment).trim())
     .filter(Boolean);
-  if (path_segments.length > 1) {
-    throw new Error("RPC url accepts at most one Agent ID path segment");
+  if (path_segments.length > 2) {
+    throw new Error("RPC url accepts at most Agent ID and Workspace ID path segments");
   }
   return {
     host,
     port,
     ...(path_segments[0] ? { agent_id: path_segments[0] } : {}),
+    ...(path_segments[1] ? { workspace_id: path_segments[1] } : {}),
   };
 }

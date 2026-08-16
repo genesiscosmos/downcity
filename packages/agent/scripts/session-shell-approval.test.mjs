@@ -120,15 +120,16 @@ test("unrestricted Shell 审批保留当前 Turn 并等待用户决定", async (
   });
   const agent = new Agent({
     id: "session_shell_approval_agent",
-    workspace: new Workspace({
-      path: project_root,
-      shell: new Shell({ sandbox }),
-    }),
     model,
   });
+  const entry = agent.enter(new Workspace({
+    id: "test_workspace",
+    path: project_root,
+    shell: new Shell({ sandbox }),
+  }));
 
   try {
-    const session = await agent.sessions.create({
+    const session = await entry.sessions.create({
       session_id: "session_shell_approval",
     });
     let interaction_snapshot;

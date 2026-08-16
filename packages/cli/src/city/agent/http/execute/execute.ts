@@ -8,7 +8,7 @@
  */
 
 import { Hono } from "hono";
-import type { Agent } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent";
 
 /**
  * 执行入口路由参数。
@@ -17,7 +17,7 @@ type ExecuteRouterOptions = {
   /**
    * 读取当前 agent runtime。
    */
-  get_agent: () => Agent;
+  get_agent: () => AgentWorkspace;
 };
 
 /**

@@ -24,7 +24,7 @@ async function create_fixture(t) {
   return {
     root_path,
     outside_path,
-    tools: new Workspace({ path: root_path }).tools,
+    tools: new Workspace({ id: "test_workspace", path: root_path }).tools,
   };
 }
 

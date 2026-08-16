@@ -303,12 +303,15 @@ type RpcRequestPayload =
 /**
  * RPC 请求。
  *
- * `agent_id` 由 `RemoteAgent(rpc://host:port/<agent_id>)` 自动附加，供 City 级
+ * `agent_id` 与 `workspace_id` 由 `RemoteAgent(rpc://host:port/<agent_id>/<workspace_id>)`
+ * 自动附加，供 City 级
  * RPC Server 在同一端口内选择 Agent。独立 `AgentRPC` 不要求该字段。
  */
 export type RpcRequest = RpcRequestPayload & {
   /** 目标 Agent 的稳定 ID；CityRPC 请求必须提供。 */
   agent_id?: string;
+  /** 目标 Workspace 的稳定 ID；CityRPC 请求必须提供。 */
+  workspace_id?: string;
 };
 
 /**
@@ -382,6 +385,8 @@ export interface RpcClientEndpoint {
   port: number;
   /** City RPC 中的目标 Agent ID；独立 AgentRPC 可省略。 */
   agent_id?: string;
+  /** City RPC 中的目标 Workspace ID；独立 AgentRPC 可省略。 */
+  workspace_id?: string;
 }
 
 /** Agent 本机 internal.status.get 返回的进程身份。 */
@@ -392,7 +397,9 @@ export interface RpcInternalStatus {
   pid: number;
   /** 当前 Agent 的稳定全局 ID。 */
   agent_id: string;
-  /** 当前 Agent 绑定的 Workspace 绝对路径。 */
+  /** 当前执行使用的 Workspace 稳定 ID。 */
+  workspace_id: string;
+  /** 当前请求执行所在的 Workspace 绝对路径。 */
   workspace_path: string;
   /** daemon 启动实例 ID；非 daemon 前台进程返回空字符串。 */
   instance_id: string;

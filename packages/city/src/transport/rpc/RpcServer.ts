@@ -73,7 +73,7 @@ export async function startRpcServer(
       });
     };
 
-    const handle_line = (line: string): void => {
+    const handle_line = async (line: string): Promise<void> => {
       let request: RpcRequest;
       try {
         request = JSON.parse(line) as RpcRequest;
@@ -82,8 +82,8 @@ export async function startRpcServer(
         return;
       }
       try {
-        const request_options = options.resolve_request_options?.(request) ?? options;
-        void dispatchRpcRequest({
+        const request_options = await options.resolve_request_options?.(request) ?? options;
+        await dispatchRpcRequest({
           request,
           options: request_options,
           subscriptions,
@@ -103,7 +103,7 @@ export async function startRpcServer(
         const line = buffered.slice(0, newline_index).trim();
         buffered = buffered.slice(newline_index + 1);
         if (line) {
-          handle_line(line);
+          void handle_line(line);
         }
         newline_index = buffered.indexOf("\n");
       }

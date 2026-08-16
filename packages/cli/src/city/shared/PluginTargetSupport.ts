@@ -9,8 +9,8 @@ import { CliError } from "@/shared/CliError.js";
 import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
 import { get_agent_config } from "@/city/process/registry/AgentConfigRepository.js";
 import {
-  get_workspace,
   get_workspace_by_path,
+  list_workspaces,
 } from "@/city/process/registry/WorkspaceRepository.js";
 import { ensure_agent_execution_model_ready } from "@/city/agent/AgentExecutionModelRecovery.js";
 import type { AgentWorkspaceTarget } from "@/city/agent/AgentSelection.js";
@@ -48,7 +48,7 @@ export async function checkAgentPreflight(
   await ensure_agent_execution_model_ready(target.agent_id);
 }
 
-/** 通过 Agent ID 读取其持久化绑定的 Workspace。 */
+/** 通过 Agent ID 与当前目录解析一次执行使用的 Workspace。 */
 export async function resolveProjectRootByAgentId(agent_id_input: string): Promise<{
   /** Agent ID。 */
   agent_id?: string;
@@ -60,8 +60,8 @@ export async function resolveProjectRootByAgentId(agent_id_input: string): Promi
   const agent_id = String(agent_id_input || "").trim().toLowerCase();
   const agent = agent_id ? get_agent_config(agent_id) : null;
   if (!agent) return { error: `Agent not found: ${agent_id_input}` };
-  const workspace = get_workspace(agent.workspace_id);
-  if (!workspace) return { error: `Agent Workspace is unavailable: ${agent.agent_id}` };
+  const workspace = get_workspace_by_path(process.cwd()) ?? list_workspaces()[0];
+  if (!workspace) return { error: "No registered Workspace is available" };
   return { agent_id: agent.agent_id, project_root: path.resolve(workspace.workspace_path) };
 }
 

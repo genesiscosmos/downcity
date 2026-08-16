@@ -60,6 +60,7 @@ export async function create_desktop_workspace(
   config: LocalWorkspaceConfig,
 ): Promise<Workspace> {
   return new Workspace({
+    id: config.workspace_id,
     path: config.workspace_path,
     env: resolve_local_agent_env({
       root_path: data.root_path,

@@ -17,10 +17,10 @@ import type {
 function to_agent_config(config: LocalAgentConfig): AgentConfig {
   return {
     agent_id: config.agent_id,
-    workspace_id: config.workspace_id,
     version: config.version,
     ...(config.execution ? { execution: config.execution as unknown as AgentConfig["execution"] } : {}),
     ...(config.llm ? { llm: config.llm as unknown as AgentConfig["llm"] } : {}),
+    instruction: config.instruction,
     created_at: config.created_at,
     updated_at: config.updated_at,
   };
@@ -39,15 +39,15 @@ export function list_agent_configs(): AgentConfig[] {
   return with_cli_local_data((data) => data.agents.list().map(to_agent_config));
 }
 
-/** 创建已绑定 Workspace 的 Agent 配置。 */
+/** 创建独立于 Workspace 的 Agent 配置。 */
 export function create_agent_config(input: CreateAgentConfigInput): AgentConfig {
   return with_cli_local_data((data) => {
     const config = data.agents.create({
       agent_id: input.agent_id,
-      workspace_id: input.workspace_id,
       version: input.version,
       execution: input.execution as unknown as JsonObject | undefined,
       llm: input.llm as unknown as JsonObject | undefined,
+      instruction: input.instruction,
     });
     return to_agent_config(config);
   });
@@ -64,6 +64,7 @@ export function update_agent_config(input: UpdateAgentConfigInput): AgentConfig 
         ? { execution: input.execution as unknown as JsonObject }
         : {}),
       ...(input.llm !== undefined ? { llm: input.llm as unknown as JsonObject } : {}),
+      ...(input.instruction !== undefined ? { instruction: input.instruction } : {}),
     }));
     return saved;
   });
@@ -75,10 +76,10 @@ export function save_agent_config(input: AgentConfig): AgentConfig {
     const previous = data.agents.get(input.agent_id);
     const saved = to_agent_config(data.agents.save({
       agent_id: input.agent_id,
-      workspace_id: input.workspace_id,
       version: input.version,
       ...(input.execution ? { execution: input.execution as unknown as JsonObject } : {}),
       ...(input.llm ? { llm: input.llm as unknown as JsonObject } : {}),
+      instruction: input.instruction,
       plugins: previous?.plugins ?? [],
       created_at: previous?.created_at ?? input.created_at,
       updated_at: input.updated_at,

@@ -8,7 +8,7 @@
  */
 
 import { Hono } from "hono";
-import type { Agent } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent";
 
 /**
  * Plugin 路由参数。
@@ -17,7 +17,7 @@ type PluginsRouterOptions = {
   /**
    * 读取当前 agent 执行上下文。
    */
-  get_agent: () => Agent;
+  get_agent: () => AgentWorkspace;
 };
 
 /**

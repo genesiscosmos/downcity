@@ -1,8 +1,8 @@
 /**
  * CityRPC：在一个原生 TCP RPC Server 上暴露 City 持有的全部 Agent。
  *
- * 请求必须携带 `agent_id`。`RemoteAgent` 会从
- * `rpc://host:port/<agent_id>` 自动解析并附加该字段。
+ * 请求必须携带 `agent_id` 与 `workspace_id`。`RemoteAgent` 会从
+ * `rpc://host:port/<agent_id>/<workspace_id>` 自动解析并附加字段。
  */
 
 import type { AgentSessions } from "@downcity/agent";
@@ -52,19 +52,18 @@ export class CityRPC {
   }> {
       const host = String(options?.host || DEFAULT_RPC_HOST).trim() || DEFAULT_RPC_HOST;
       const port = Number.isInteger(options?.port) ? Number(options?.port) : DEFAULT_RPC_PORT;
-      const fallback_agent = this.city.agents()[0];
       const unavailable_sessions = create_unavailable_sessions();
       const instance = await startRpcServer({
         host,
         port,
-        sessions: fallback_agent?.sessions ?? unavailable_sessions,
-        resolve_request_options: (request) => {
+        sessions: unavailable_sessions,
+        resolve_request_options: async (request) => {
           if (
             request.method === "internal.city.status"
             || request.method === "internal.city.shutdown"
           ) {
             return {
-              sessions: fallback_agent?.sessions ?? unavailable_sessions,
+              sessions: unavailable_sessions,
               get_city_status: () => ({
                 agent_ids: this.city.agents().map((agent) => agent.id),
               }),
@@ -73,20 +72,23 @@ export class CityRPC {
           }
           const agent_id = String(request.agent_id || "").trim();
           if (!agent_id) throw new Error("CityRPC request requires agent_id");
-          const agent = this.city.require_agent(agent_id);
+          const workspace_id = String(request.workspace_id || "").trim();
+          if (!workspace_id) throw new Error("CityRPC request requires workspace_id");
+          const agent_workspace = await this.city.enter_workspace(agent_id, workspace_id);
           const resolve_session_model = this.runtime_options.resolve_session_model;
           const reload_workspace_env = this.runtime_options.reload_workspace_env;
           return {
-            sessions: agent.sessions,
-            get_agent: () => agent,
+            sessions: agent_workspace.sessions,
+            get_workspace: () => agent_workspace,
             resolve_session_model: resolve_session_model
               ? async (model_id) => await resolve_session_model(
                   agent_id,
+                  workspace_id,
                   model_id,
                 )
               : undefined,
             reload_workspace_env: reload_workspace_env
-              ? async () => await reload_workspace_env(agent_id)
+              ? async () => await reload_workspace_env(agent_id, workspace_id)
               : undefined,
             shutdown_city: this.runtime_options.shutdown,
           };

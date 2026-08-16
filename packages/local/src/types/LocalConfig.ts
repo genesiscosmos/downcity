@@ -43,9 +43,6 @@ export interface LocalAgentConfig {
   /** Agent 的全局稳定 ID。 */
   agent_id: string;
 
-  /** 当前 Agent 对应的 Workspace ID。 */
-  workspace_id: string;
-
   /** 当前配置格式版本。 */
   version: string;
 
@@ -54,6 +51,9 @@ export interface LocalAgentConfig {
 
   /** LLM 行为配置。 */
   llm?: JsonObject;
+
+  /** Agent 跨 Workspace 复用的稳定指令。 */
+  instruction: string;
 
   /** 当前 Agent 的 Plugin 启用状态与装配参数。 */
   plugins: readonly LocalAgentPluginConfig[];

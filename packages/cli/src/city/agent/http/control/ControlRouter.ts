@@ -13,7 +13,7 @@
  */
 
 import { Hono } from "hono";
-import type { Agent } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent";
 import { registerControlApiRoutes } from "@/city/agent/http/control/ControlApiRoutes.js";
 
 /**
@@ -23,7 +23,7 @@ type ControlRouterOptions = {
   /**
    * 读取当前 agent 执行上下文。
    */
-  get_agent: () => Agent;
+  get_agent: () => AgentWorkspace;
 };
 
 /**

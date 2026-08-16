@@ -5,7 +5,7 @@
  * Agent；City 只维护运行时引用，并按 Agent ID 转发 HTTP/RPC 请求。
  */
 
-import { Agent } from "@downcity/agent";
+import { Agent, type AgentWorkspace } from "@downcity/agent";
 import { CityHTTP } from "@/transport/http/CityHTTP.js";
 import { CityRPC } from "@/transport/rpc/CityRPC.js";
 import type { CityListenOptions, CityRuntimeOptions } from "@/types/City.js";
@@ -21,6 +21,12 @@ export class City {
   /** 每个 Agent 当前唯一的解除注册流程。 */
   private readonly removal_promises = new Map<string, Promise<Agent | null>>();
 
+  /** 宿主提供的按需 Workspace 创建能力。 */
+  private readonly resolve_workspace?: CityRuntimeOptions["resolve_workspace"];
+
+  /** 相同 Agent/Workspace 目标当前唯一的进入流程。 */
+  private readonly workspace_entry_promises = new Map<string, Promise<AgentWorkspace>>();
+
   /** 当前 City 唯一的 HTTP transport。 */
   private readonly http: CityHTTP;
 
@@ -34,6 +40,7 @@ export class City {
     agents: readonly Agent[] = [],
     runtime_options: CityRuntimeOptions = {},
   ) {
+    this.resolve_workspace = runtime_options.resolve_workspace;
     this.http = new CityHTTP(this, runtime_options.http);
     this.rpc = new CityRPC(this, runtime_options.rpc);
     for (const agent of agents) this.register_agent(agent);
@@ -59,6 +66,54 @@ export class City {
     const agent = this.agent(agent_id);
     if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
     return agent;
+  }
+
+  /** 按 Agent ID 与 Workspace ID 返回明确的执行作用域。 */
+  require_workspace(agent_id_input: string, workspace_id_input: string): AgentWorkspace {
+    const agent = this.require_agent(agent_id_input);
+    const workspace_id = String(workspace_id_input || "").trim();
+    if (!workspace_id) throw new Error("City request requires workspace_id");
+    const entry = agent.workspace(workspace_id);
+    if (!entry) {
+      throw new Error(`Agent "${agent.id}" has not entered Workspace: ${workspace_id}`);
+    }
+    return entry;
+  }
+
+  /** 按需解析并进入 Workspace；相同目标的并发请求共享一次创建流程。 */
+  async enter_workspace(
+    agent_id_input: string,
+    workspace_id_input: string,
+  ): Promise<AgentWorkspace> {
+    const agent = this.require_agent(agent_id_input);
+    const workspace_id = String(workspace_id_input || "").trim();
+    if (!workspace_id) throw new Error("City request requires workspace_id");
+    const existing = agent.workspace(workspace_id);
+    if (existing) return existing;
+    if (!this.resolve_workspace) {
+      throw new Error(`Agent "${agent.id}" has not entered Workspace: ${workspace_id}`);
+    }
+    const target_key = `${agent.id}/${workspace_id}`;
+    const current = this.workspace_entry_promises.get(target_key);
+    if (current) return await current;
+    const entry_promise = (async () => {
+      const workspace = await this.resolve_workspace!(agent, workspace_id);
+      if (workspace.id !== workspace_id) {
+        await workspace.dispose().catch(() => undefined);
+        throw new Error(
+          `Resolved Workspace ID mismatch: expected ${workspace_id}, received ${workspace.id}`,
+        );
+      }
+      return agent.enter(workspace);
+    })();
+    this.workspace_entry_promises.set(target_key, entry_promise);
+    try {
+      return await entry_promise;
+    } finally {
+      if (this.workspace_entry_promises.get(target_key) === entry_promise) {
+        this.workspace_entry_promises.delete(target_key);
+      }
+    }
   }
 
   /** 注册一个已实例化 Agent；City 不接管该实例的生命周期。 */

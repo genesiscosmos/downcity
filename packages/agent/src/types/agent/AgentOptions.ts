@@ -8,7 +8,6 @@
 
 import type { Tool } from "ai";
 import type { AgentModel } from "@/agent/AgentModel.js";
-import type { WorkspaceBase } from "@/workspace/WorkspaceBase.js";
 import type { Plugin } from "@/types/plugin/PluginDefinition.js";
 import type {
   AgentManagedSession,
@@ -38,16 +37,6 @@ export interface AgentOptions {
    * - 应保持稳定、可 URL 编码、尽量不要依赖展示名称。
    */
   id: string;
-
-  /**
-   * 当前 Agent 可以访问的项目资源与安全边界。
-   *
-   * 关键点（中文）
-   * - Workspace 统一持有项目根目录、文件/搜索能力与可选 Shell。
-   * - 每个 Workspace 实例只能绑定一个 Agent，并由 Agent dispose 统一释放。
-   * - 多个 Agent 可以指向同一物理目录，但必须分别创建 Workspace 实例。
-   */
-  workspace: WorkspaceBase;
 
   /**
    * 当前 agent 默认可用的工具集合。

@@ -10,6 +10,15 @@ import type { Shell } from "@downcity/shell";
 
 /** Workspace 构造参数。 */
 export interface WorkspaceOptions {
+  /**
+   * Workspace 的稳定标识。
+   *
+   * 关键点（中文）
+   * - 标识项目资源，而不是物理路径；项目移动后 ID 不应变化。
+   * - Agent 使用该 ID 区分同时进入的多个 Workspace。
+   */
+  id: string;
+
   /** Workspace 绑定的本地项目目录；构造时会解析为真实绝对路径。 */
   path: string;
 

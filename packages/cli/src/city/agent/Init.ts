@@ -1,5 +1,5 @@
 /**
- * `city agent create`：创建 Agent 配置并绑定一个 Workspace。
+ * `city agent create`：创建 Agent 配置并独立登记一个 Workspace。
  *
  * 目标
  * - 生成 `.agents/skills` 与 `.downcity/` 运行目录
@@ -95,7 +95,7 @@ export async function initCommand(
     },
   ])) as InitPromptResponse;
 
-  // 关键点（中文）：agent_id 只写入全局 DB，项目目录不再保存配置副本。
+  // 关键点（中文）：Agent 定义写入文件仓储，项目目录不保存 Agent 配置副本。
   const agent_id =
     String(response.id || "").trim() || default_agent_id;
   const primaryModelId =
@@ -129,26 +129,25 @@ export async function initCommand(
       execution,
     },
   );
-  const workspace_record = create_workspace({ workspace_path: project_root });
+  create_workspace({ workspace_path: project_root });
   if (existing_agent && allowOverwrite) {
     save_agent_config({
       agent_id,
-      workspace_id: workspace_record.workspace_id,
       version: "1.0.0",
       execution,
+      instruction: existing_agent.instruction,
       created_at: existing_agent.created_at,
       updated_at: existing_agent.updated_at,
     });
   } else {
     create_agent_config({
       agent_id,
-      workspace_id: workspace_record.workspace_id,
       execution,
     });
   }
   const createdItems = [
     ...initResult.created_files,
-    "global agent config",
+    `global agent config (~/.downcity/agents/${agent_id})`,
     "registered Workspace",
   ];
   const skippedItems = [...initResult.skipped_files];

@@ -8,13 +8,13 @@
  */
 
 import type { Hono } from "hono";
-import type { Agent } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent";
 import type { JsonValue } from "@downcity/agent";
 
 /**
  * 注册 RemoteAgent 顶层 runtime 路由。
  */
-export function registerRuntimeRoutes(app: Hono, agent: Agent): void {
+export function registerRuntimeRoutes(app: Hono, agent_workspace: AgentWorkspace): void {
   app.post("/api/plugins/action", async (c) => {
     try {
       const body = await c.req.json().catch(() => null) as {
@@ -30,7 +30,7 @@ export function registerRuntimeRoutes(app: Hono, agent: Agent): void {
       if (!action_name) {
         return c.json({ success: false, error: "action_name is required" }, 400);
       }
-      const result = await agent.plugins.run_action({
+      const result = await agent_workspace.plugins.run_action({
         plugin: plugin_name,
         action: action_name,
         ...(body?.payload !== undefined

@@ -6,9 +6,16 @@
 
 import type { CityHttpRuntimeOptions } from "@/transport/types/CityHttpRuntime.js";
 import type { CityRpcRuntimeOptions } from "@/transport/types/CityRpcRuntime.js";
+import type { Agent, WorkspaceBase } from "@downcity/agent";
 
 /** City 构造时可注入的 transport 扩展能力。 */
 export interface CityRuntimeOptions {
+  /** 按需为 Agent 创建指定 Workspace；City 不读取任何持久化配置。 */
+  resolve_workspace?: (
+    agent: Agent,
+    workspace_id: string,
+  ) => WorkspaceBase | Promise<WorkspaceBase>;
+
   /** HTTP transport 的模型解析和宿主扩展路由。 */
   http?: CityHttpRuntimeOptions;
 

@@ -9,7 +9,6 @@
 import { run_agent_create_command } from "@/city/agent/Init.js";
 import { t } from "@/shared/CliLocale.js";
 import { list_agent_configs } from "@/city/process/registry/AgentConfigRepository.js";
-import { get_workspace } from "@/city/process/registry/WorkspaceRepository.js";
 import type { AgentManagerAgentSummary } from "@/city/agent/AgentManagerTypes.js";
 
 export function isInteractiveTerminal(): boolean {
@@ -18,10 +17,8 @@ export function isInteractiveTerminal(): boolean {
 
 export async function loadAgentSummaries(): Promise<AgentManagerAgentSummary[]> {
   return list_agent_configs().map((config) => {
-    const workspace = get_workspace(config.workspace_id);
     return {
       id: config.agent_id,
-      project_root: workspace?.workspace_path,
       execution_binding: String(
         config?.execution?.type === "api" ? config.execution.model_id || "" : "",
       ).trim(),
@@ -36,12 +33,12 @@ export function formatAgentDetail(agent: AgentManagerAgentSummary): string {
   });
   return t({
     zh: [
-      `Workspace ${agent.project_root || "未配置"}`,
+      "Workspace：执行时选择",
       `默认模型：${execution_binding}`,
       "Enter 打开 Agent。",
     ].join("\n"),
     en: [
-      `Workspace ${agent.project_root || "not configured"}`,
+      "Workspace: selected when running",
       `Default model: ${execution_binding}`,
       "Press Enter to open the Agent.",
     ].join("\n"),

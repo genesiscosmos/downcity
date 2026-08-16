@@ -12,7 +12,10 @@ import { BasePlugin } from "@downcity/agent";
 import type { PluginActions } from "@downcity/agent";
 import type { PluginContext } from "@downcity/agent";
 import type { PluginExecutionContext } from "@downcity/agent";
-import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
+import type {
+  ChatChannelState,
+  ChatWorkspaceRuntime,
+} from "@/chat/types/ChatRuntime.js";
 import type { ChatQueueWorkerConfig } from "@/chat/types/ChatQueueWorker.js";
 import type {
   ChatChannel,
@@ -52,28 +55,8 @@ export class ChatPlugin extends BasePlugin {
    */
   readonly name = "chat";
 
-  /**
-   * 当前实例持有的渠道状态。
-   */
-  public readonly channelState: ChatChannelState = createChatChannelState();
-
-  /**
-   * 当前实例持有的 chat queue worker。
-   *
-   * 关键点（中文）
-   * - worker 生命周期与 chat plugin 保持一致。
-   * - 这样 agent 只负责装配，不直接持有 chat 领域长期状态。
-   */
-  public queueWorker: ChatQueueWorker | null = null;
-
-  /**
-   * 当前实例持有的 chat queue store。
-   *
-   * 关键点（中文）
-   * - 这是 chat queue 状态的实例归属起点。
-   * - 迁移完成后，入队路径也会统一走这里，而不是模块级全局 queue。
-   */
-  public readonly queueStore = new ChatQueueStore();
+  /** 各 Workspace 独立持有的渠道与队列运行态。 */
+  private readonly runtimes_by_workspace = new Map<string, ChatWorkspaceRuntime>();
 
   /**
    * 当前实例持有的显式 plugin 配置。
@@ -103,26 +86,41 @@ export class ChatPlugin extends BasePlugin {
   /**
    * 启动当前实例的 queue worker。
    */
-  private startQueueWorker(context: PluginContext): void {
-    if (this.queueWorker) return;
+  private async enter_workspace(context: PluginContext): Promise<void> {
+    if (this.runtimes_by_workspace.has(context.workspace_id)) return;
+    const channel_state = createChatChannelState();
+    const queue_store = new ChatQueueStore();
     const worker = new ChatQueueWorker({
       logger: context.logger,
       context,
-      queueStore: this.queueStore,
+      queueStore: queue_store,
       config: this.getQueueWorkerConfig(context),
     });
     worker.start();
-    this.queueWorker = worker;
+    this.runtimes_by_workspace.set(context.workspace_id, {
+      channel_state,
+      queue_store,
+      queue_worker: worker,
+    });
+    try {
+      await startChatChannels(channel_state, context);
+    } catch (error) {
+      this.runtimes_by_workspace.delete(context.workspace_id);
+      worker.stop();
+      await stopChatChannels(channel_state);
+      throw error;
+    }
   }
 
   /**
    * 停止当前实例的 queue worker。
    */
-  private stopQueueWorker(): void {
-    const worker = this.queueWorker;
-    this.queueWorker = null;
-    if (!worker) return;
-    worker.stop();
+  private async leave_workspace(context: PluginContext): Promise<void> {
+    const runtime = this.runtimes_by_workspace.get(context.workspace_id);
+    if (!runtime) return;
+    this.runtimes_by_workspace.delete(context.workspace_id);
+    runtime.queue_worker.stop();
+    await stopChatChannels(runtime.channel_state);
   }
 
   constructor(options?: ChatPluginOptions) {
@@ -133,20 +131,28 @@ export class ChatPlugin extends BasePlugin {
       : createDefaultChannels();
     this.actions = {
       ...createChatPluginActions({
-        channelState: this.channelState,
+        resolve_channel_state: (context) => this.resolve_channel_state(context),
       }),
       ...create_chat_access_actions(),
     };
     this.lifecycle = {
-      start: async (context) => {
-        this.startQueueWorker(context);
-        await startChatChannels(this.channelState, context);
-      },
-      stop: async () => {
-        this.stopQueueWorker();
-        await stopChatChannels(this.channelState);
-      },
+      enter_workspace: async (context) => await this.enter_workspace(context),
+      leave_workspace: async (context) => await this.leave_workspace(context),
     };
+  }
+
+  /** 读取当前 Workspace 的渠道状态。 */
+  private resolve_channel_state(context: PluginContext): ChatChannelState {
+    const runtime = this.runtimes_by_workspace.get(context.workspace_id);
+    if (!runtime) throw new Error(`ChatPlugin has not entered Workspace: ${context.workspace_id}`);
+    return runtime.channel_state;
+  }
+
+  /** 向 chat 入队路径暴露当前 Workspace 的独立队列。 */
+  queue_store(context: PluginContext): ChatQueueStore {
+    const runtime = this.runtimes_by_workspace.get(context.workspace_id);
+    if (!runtime) throw new Error(`ChatPlugin has not entered Workspace: ${context.workspace_id}`);
+    return runtime.queue_store;
   }
 
   /**

@@ -134,20 +134,20 @@ test("multiple session prompts use only their owning Agent plugin registry", asy
   const root_b = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-plugin-isolation-b-"));
   const agent_a = new Agent({
     id: "agent_a",
-    workspace: new Workspace({ path: root_a }),
     plugins: [create_owner_plugin("agent_a", executed_owners)],
     model: create_test_model("model_a", model_requests),
   });
   const agent_b = new Agent({
     id: "agent_b",
-    workspace: new Workspace({ path: root_b }),
     plugins: [create_owner_plugin("agent_b", executed_owners)],
     model: create_test_model("model_b", model_requests),
   });
+  const entry_a = agent_a.enter(new Workspace({ id: "workspace_a", path: root_a }));
+  const entry_b = agent_b.enter(new Workspace({ id: "workspace_b", path: root_b }));
 
   try {
-    const session_a = await agent_a.sessions.create({ session_id: "session_a" });
-    const session_b = await agent_b.sessions.create({ session_id: "session_b" });
+    const session_a = await entry_a.sessions.create({ session_id: "session_a" });
+    const session_b = await entry_b.sessions.create({ session_id: "session_b" });
     const [turn_a, turn_b] = await Promise.all([
       session_a.prompt({ query: "Call your skill plugin" }),
       session_b.prompt({ query: "Call your skill plugin" }),

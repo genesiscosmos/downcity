@@ -23,6 +23,9 @@ export abstract class WorkspaceBase {
   /** 子类完成自身资源装配前调用的无状态基类构造函数。 */
   protected constructor() {}
 
+  /** Workspace 的稳定标识。 */
+  abstract readonly id: string;
+
   /** Workspace 的稳定逻辑根路径；远程实现可以使用虚拟路径。 */
   abstract readonly path: string;
 

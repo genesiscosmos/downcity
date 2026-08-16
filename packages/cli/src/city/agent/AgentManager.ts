@@ -103,7 +103,7 @@ async function build_agent_options(
     {
       label: t({ zh: "创建 Agent", en: "Create Agent" }),
       value: "create",
-      hint: t({ zh: "创建配置并绑定 Workspace", en: "Create configuration and bind a Workspace" }),
+      hint: t({ zh: "创建 Agent 配置并登记当前 Workspace", en: "Create an Agent and register the current Workspace" }),
     },
     ...(include_settings
       ? [

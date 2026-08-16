@@ -100,20 +100,20 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
       }),
     },
   });
-  const workspace = new Workspace({
+  const workspace = new Workspace({ id: "test_workspace",
     path: agent_path,
     env: { TURN_ENV: "old" },
   });
   const agent = new Agent({
     id: "config_turn_boundary_agent",
-    workspace,
     model,
     instruction: ["instruction:old"],
     plugins: [runtime_plugin],
   });
+  const entry = agent.enter(workspace);
 
   try {
-    const session = await agent.sessions.create({
+    const session = await entry.sessions.create({
       session_id: "config_turn_boundary_session",
     });
     const first_turn = await session.prompt({ query: "first" });
@@ -121,7 +121,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
 
     agent.set_instruction(["instruction:new"]);
     workspace.patch_env({ TURN_ENV: "new" });
-    await agent.plugins.unregister("runtime-config");
+    await entry.plugins.unregister("runtime-config");
     const steer_turn_promise = session.prompt({ query: "steer" });
 
     assert.equal(plugin_stop_count, 0);
@@ -151,8 +151,8 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
     ]);
 
     // 未显式 snapshot 的 Session 重新装载时使用 Agent 当前 instruction。
-    await agent.sessions.clear_messages(session.id);
-    const restored_session = await agent.sessions.get(session.id);
+    await entry.sessions.clear_messages(session.id);
+    const restored_session = await entry.sessions.get(session.id);
     const restored_system = await restored_session.system();
     const restored_system_text = restored_system.blocks
       .map((block) => block.content)
@@ -160,7 +160,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
     assert.match(restored_system_text, /instruction:new/);
     assert.doesNotMatch(restored_system_text, /instruction:old/);
 
-    const new_session = await agent.sessions.create({
+    const new_session = await entry.sessions.create({
       session_id: "config_turn_boundary_new_session",
     });
     const new_system = await new_session.system();
@@ -181,9 +181,9 @@ test("Plugin registry changes do not rewrite an existing Session system", async 
   );
   const agent = new Agent({
     id: "fixed_plugin_system_agent",
-    workspace: new Workspace({ path: agent_path }),
     model: new MockLanguageModelV3({ modelId: "fixed-plugin-system-model" }),
   });
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
   const runtime_plugin = create_plugin({
     name: "runtime-system",
     title: "Runtime System",
@@ -192,16 +192,16 @@ test("Plugin registry changes do not rewrite an existing Session system", async 
   });
 
   try {
-    const existing_session = await agent.sessions.create({
+    const existing_session = await entry.sessions.create({
       session_id: "existing_session",
     });
     const existing_before = await existing_session.system();
 
-    await agent.plugins.register(runtime_plugin);
+    await entry.plugins.register(runtime_plugin);
     const existing_after_register = await existing_session.system();
     assert.deepEqual(existing_after_register, existing_before);
 
-    const registered_session = await agent.sessions.create({
+    const registered_session = await entry.sessions.create({
       session_id: "registered_session",
     });
     const registered_before = await registered_session.system();
@@ -210,11 +210,11 @@ test("Plugin registry changes do not rewrite an existing Session system", async 
       /plugin-system:registered/,
     );
 
-    await agent.plugins.unregister("runtime-system");
+    await entry.plugins.unregister("runtime-system");
     const registered_after_unregister = await registered_session.system();
     assert.deepEqual(registered_after_unregister, registered_before);
 
-    const unregistered_session = await agent.sessions.create({
+    const unregistered_session = await entry.sessions.create({
       session_id: "unregistered_session",
     });
     assert.doesNotMatch(
@@ -252,14 +252,14 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
   const model = new MockLanguageModelV3({ modelId: "syncshot-model" });
   const agent = new Agent({
     id: "syncshot_agent",
-    workspace: new Workspace({ path: agent_path }),
     model,
     instruction: ["instruction:initial"],
     plugins: [create_system_plugin("plugin-system:initial")],
   });
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
 
   try {
-    const session = await agent.sessions.create({ session_id: session_id });
+    const session = await entry.sessions.create({ session_id: session_id });
     const initial_text = (await session.system()).blocks
       .map((block) => block.content)
       .join("\n");
@@ -267,7 +267,7 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
     assert.match(initial_text, /plugin-system:initial/);
 
     agent.set_instruction(["instruction:refreshed"]);
-    await agent.plugins.register(create_system_plugin("plugin-system:refreshed"));
+    await entry.plugins.register(create_system_plugin("plugin-system:refreshed"));
     await session.syncshot();
 
     const refreshed_text = (await session.system()).blocks
@@ -280,7 +280,7 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
 
     await session.snapshot();
     agent.set_instruction(["instruction:latest"]);
-    await agent.plugins.register(create_system_plugin("plugin-system:latest"));
+    await entry.plugins.register(create_system_plugin("plugin-system:latest"));
     await Promise.all([session.snapshot(), session.syncshot()]);
 
     const latest_system = await session.system();
@@ -307,7 +307,6 @@ test("Session snapshot explicitly persists the complete system to instruction.md
   const model = new MockLanguageModelV3({ modelId: "instruction-restart-model" });
   const first_agent = new Agent({
     id: "instruction_restart_agent",
-    workspace: new Workspace({ path: agent_path }),
     model,
     instruction: ["instruction:old"],
     plugins: [create_plugin({
@@ -317,9 +316,10 @@ test("Session snapshot explicitly persists the complete system to instruction.md
       system: () => "plugin-system:persisted",
     })],
   });
+  const first_entry = first_agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
 
   try {
-    const session = await first_agent.sessions.create({
+    const session = await first_entry.sessions.create({
       session_id: "instruction_restart_session",
     });
     const first_system = await session.system();
@@ -353,12 +353,12 @@ test("Session snapshot explicitly persists the complete system to instruction.md
 
   const restarted_agent = new Agent({
     id: "instruction_restart_agent",
-    workspace: new Workspace({ path: agent_path }),
     model,
     instruction: ["instruction:new"],
   });
+  const restarted_entry = restarted_agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
   try {
-    const restored_session = await restarted_agent.sessions.get(
+    const restored_session = await restarted_entry.sessions.get(
       "instruction_restart_session",
     );
     const restored_system = await restored_session.system();
@@ -385,12 +385,12 @@ test("Session snapshot explicitly persists the complete system to instruction.md
 
   const fallback_agent = new Agent({
     id: "instruction_restart_agent",
-    workspace: new Workspace({ path: agent_path }),
     model,
     instruction: ["instruction:new"],
   });
+  const fallback_entry = fallback_agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
   try {
-    const fallback_session = await fallback_agent.sessions.get(
+    const fallback_session = await fallback_entry.sessions.get(
       "instruction_restart_session",
     );
     const fallback_system = await fallback_session.system();
@@ -412,11 +412,11 @@ test("empty Session snapshot suppresses Agent instruction after restart", async 
   const model = new MockLanguageModelV3({ modelId: "empty-snapshot-model" });
   const first_agent = new Agent({
     id: "empty_snapshot_agent",
-    workspace: new Workspace({ path: agent_path }),
     model,
   });
+  const first_entry = first_agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
   try {
-    const session = await first_agent.sessions.create({
+    const session = await first_entry.sessions.create({
       session_id: "empty_snapshot_session",
     });
     await session.snapshot();
@@ -426,12 +426,12 @@ test("empty Session snapshot suppresses Agent instruction after restart", async 
 
   const restarted_agent = new Agent({
     id: "empty_snapshot_agent",
-    workspace: new Workspace({ path: agent_path }),
     model,
     instruction: ["instruction:must-not-appear"],
   });
+  const restarted_entry = restarted_agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
   try {
-    const session = await restarted_agent.sessions.get("empty_snapshot_session");
+    const session = await restarted_entry.sessions.get("empty_snapshot_session");
     const system = await session.system();
     assert.doesNotMatch(
       system.blocks.map((block) => block.content).join("\n"),
@@ -484,13 +484,13 @@ test("running session model changes apply with steer at the next Session step", 
   });
   const agent = new Agent({
     id: "session_step_boundary_agent",
-    workspace: new Workspace({ path: agent_path }),
     model: old_model,
     plugins: [runtime_plugin],
   });
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
 
   try {
-    const session = await agent.sessions.create({
+    const session = await entry.sessions.create({
       session_id: "session_step_boundary_session",
     });
     await session.set({ model: old_model });
@@ -586,13 +586,13 @@ test("running session approval mode changes stay queued until the next Session s
   });
   const agent = new Agent({
     id: "approval_mode_boundary_agent",
-    workspace: new Workspace({ path: agent_path }),
     model,
     plugins: [runtime_plugin],
   });
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
 
   try {
-    const session = await agent.sessions.create({
+    const session = await entry.sessions.create({
       session_id: "approval_mode_boundary_session",
     });
     const first_turn = await session.prompt({ query: "first" });
@@ -609,7 +609,7 @@ test("running session approval mode changes stay queued until the next Session s
       },
     });
 
-    const cached_session = await agent.sessions.get(session.id);
+    const cached_session = await entry.sessions.get(session.id);
     assert.equal(cached_session, session);
     assert.deepEqual(await cached_session.status(), {
       session_id: session.id,
@@ -674,12 +674,12 @@ test("session set options independently control Action persistence and Mutation 
   });
   const agent = new Agent({
     id: "session_set_options_agent",
-    workspace: new Workspace({ path: agent_path }),
     model: first_model,
   });
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
 
   try {
-    const session = await agent.sessions.create({
+    const session = await entry.sessions.create({
       session_id: "session_set_options_session",
     });
     const mutations = [];
@@ -764,12 +764,12 @@ test("restored Session rebinds the same model without emitting a configuration M
   });
   const first_agent = new Agent({
     id: "session_config_restore_agent",
-    workspace: new Workspace({ path: agent_path }),
     model: create_model(),
   });
+  const first_entry = first_agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
 
   try {
-    const session = await first_agent.sessions.create({
+    const session = await first_entry.sessions.create({
       session_id: "session_config_restore_session",
     });
     await session.set({
@@ -783,11 +783,11 @@ test("restored Session rebinds the same model without emitting a configuration M
 
   const restored_agent = new Agent({
     id: "session_config_restore_agent",
-    workspace: new Workspace({ path: agent_path }),
     model: create_model(),
   });
+  const restored_entry = restored_agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
   try {
-    const session = await restored_agent.sessions.get(
+    const session = await restored_entry.sessions.get(
       "session_config_restore_session",
     );
     assert.deepEqual((await session.status()).security, {
@@ -854,12 +854,12 @@ test("config remains effective when its action message cannot be persisted", asy
   });
   const agent = new Agent({
     id: "config_action_observability_agent",
-    workspace: new Workspace({ path: agent_path }),
     model: old_model,
   });
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
 
   try {
-    const session = await agent.sessions.create({
+    const session = await entry.sessions.create({
       session_id: "config_action_observability_session",
     });
     await session.set({ model: old_model });

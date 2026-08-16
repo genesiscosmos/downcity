@@ -102,7 +102,6 @@ async function run_approval_case(decision) {
   });
   const agent = new Agent({
     id: `native_tool_approval_${decision}`,
-    workspace: new Workspace({ path: project_root }),
     model,
     tools: {
       custom_approval: {
@@ -116,9 +115,10 @@ async function run_approval_case(decision) {
       },
     },
   });
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: project_root }));
 
   try {
-    const session = await agent.sessions.create({ session_id: "tool_approval" });
+    const session = await entry.sessions.create({ session_id: "tool_approval" });
     let pending_request;
     let response_promise;
     const unsubscribe = session.subscribe((mutation) => {

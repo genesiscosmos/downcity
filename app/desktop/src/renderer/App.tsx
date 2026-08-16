@@ -37,7 +37,7 @@ export function App() {
       const workspace_id = controller.selection.workspace_id;
       const workspace = controller.workspaces.find((item) => item.workspace_id === workspace_id);
       if (!workspace) return <WelcomeView />;
-      const workspace_agents = controller.agents.filter((agent) => agent.workspace_id === workspace.workspace_id);
+      const workspace_agents = controller.agents;
       return <WorkspaceView
         workspace={workspace}
         agents={workspace_agents}
@@ -58,7 +58,7 @@ export function App() {
     />;
     if (controller.selection.kind === "draft") {
       const draft_id = controller.selection.draft_id;
-      const draft_key = get_session_key(selected_agent.agent_id, draft_id);
+      const draft_key = get_session_key(controller.active_workspace_id, selected_agent.agent_id, draft_id);
       return <SessionView
         agent={selected_agent}
         session={{ session_id: draft_id, title: "新对话", preview_text: "", created_at: 0, updated_at: 0, message_count: 0, executing: false }}
@@ -86,7 +86,11 @@ export function App() {
     const selected_session_id = controller.selection.session_id;
     const session = (controller.sessions_by_agent[selected_agent.agent_id] ?? []).find((item) => item.session_id === selected_session_id);
     if (!session) return <WelcomeView />;
-    const session_key = get_session_key(selected_agent.agent_id, session.session_id);
+    const session_key = get_session_key(
+      controller.active_workspace_id,
+      selected_agent.agent_id,
+      session.session_id,
+    );
     return <SessionView
       agent={selected_agent}
       session={session}

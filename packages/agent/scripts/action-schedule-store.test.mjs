@@ -16,7 +16,7 @@ test("ActionScheduleStore persists through Workspace FileSystem", async (t) => {
   t.after(async () => {
     await fs.rm(workspace_path, { recursive: true, force: true });
   });
-  const workspace = new Workspace({ path: workspace_path });
+  const workspace = new Workspace({ id: "test_workspace", path: workspace_path });
   const store = new ActionScheduleStore(workspace.files);
 
   const created = await store.create_job({
@@ -42,8 +42,8 @@ test("ActionScheduleStore serializes cross-instance pending claims", async (t) =
   t.after(async () => {
     await fs.rm(workspace_path, { recursive: true, force: true });
   });
-  const first_workspace = new Workspace({ path: workspace_path });
-  const second_workspace = new Workspace({ path: workspace_path });
+  const first_workspace = new Workspace({ id: "test_workspace", path: workspace_path });
+  const second_workspace = new Workspace({ id: "test_workspace", path: workspace_path });
   const first_store = new ActionScheduleStore(first_workspace.files);
   const second_store = new ActionScheduleStore(second_workspace.files);
   const created = await first_store.create_job({
@@ -73,7 +73,7 @@ test("ActionScheduleStore only allows running jobs to enter terminal states", as
   t.after(async () => {
     await fs.rm(workspace_path, { recursive: true, force: true });
   });
-  const workspace = new Workspace({ path: workspace_path });
+  const workspace = new Workspace({ id: "test_workspace", path: workspace_path });
   const store = new ActionScheduleStore(workspace.files);
 
   const cancelled = await store.create_job({

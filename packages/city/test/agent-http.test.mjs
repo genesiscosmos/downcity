@@ -12,6 +12,8 @@ import test from "node:test";
 import { RemoteAgent } from "../../agent/bin/index.js";
 import { AgentHTTP } from "../bin/index.js";
 
+const network_tests_enabled = process.env.DOWNCITY_RUN_NETWORK_TESTS === "1";
+
 async function reserve_port() {
   const server = net.createServer();
   await new Promise((resolve, reject) => {
@@ -222,7 +224,9 @@ function create_fake_agent() {
   };
 }
 
-test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", async () => {
+test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", {
+  skip: !network_tests_enabled,
+}, async () => {
   const port = await reserve_port();
   const fake_agent = create_fake_agent();
   let resolved_model_id = "";

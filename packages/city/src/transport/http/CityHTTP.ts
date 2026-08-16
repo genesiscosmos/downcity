@@ -1,7 +1,7 @@
 /**
  * CityHTTP：在一个 HTTP Server 上暴露 City 持有的全部 Agent。
  *
- * 每个 Agent 固定挂载到 `/agents/<agent_id>`。调用方可以直接把该地址交给
+ * 每个执行作用域固定挂载到 `/agents/<agent_id>/workspaces/<workspace_id>`。
  * `RemoteAgent`，transport 只负责路由，不复制 Agent 或 Session 状态。
  */
 
@@ -22,7 +22,7 @@ import type {
 export class CityHTTP {
   private readonly city: City;
   private readonly runtime_options: CityHttpRuntimeOptions;
-  private readonly routers_by_agent = new Map<string, { agent: object; router: Hono }>();
+  private readonly routers_by_workspace = new Map<string, { entry: object; router: Hono }>();
   private readonly extension_disposers = new Map<string, () => void | Promise<void>>();
   /** 每个 Agent 路由装配与释放的独立串行链。 */
   private readonly agent_operation_chains = new Map<string, Promise<void>>();
@@ -38,8 +38,8 @@ export class CityHTTP {
   router(): Hono {
     if (this.cached_router) return this.cached_router;
     const root = new Hono();
-    root.all("/agents/:agent_id", async (context) => await this.dispatch_agent(context));
-    root.all("/agents/:agent_id/*", async (context) => await this.dispatch_agent(context));
+    root.all("/agents/:agent_id/workspaces/:workspace_id", async (context) => await this.dispatch_workspace(context));
+    root.all("/agents/:agent_id/workspaces/:workspace_id/*", async (context) => await this.dispatch_workspace(context));
     if (this.runtime_options.city_router) root.route("/", this.runtime_options.city_router);
     root.get("/internal/status", (context) => context.json({
       success: true,
@@ -74,12 +74,12 @@ export class CityHTTP {
     const server_results = server
       ? await Promise.allSettled([server.close()])
       : [];
-    const agent_ids = new Set([
-      ...this.routers_by_agent.keys(),
+    const route_keys = new Set([
+      ...this.routers_by_workspace.keys(),
       ...this.extension_disposers.keys(),
     ]);
     const results = await Promise.allSettled(
-      [...agent_ids].map(async (agent_id) => await this.detach_agent(agent_id)),
+      [...route_keys].map(async (route_key) => await this.detach_route(route_key)),
     );
     const errors = [...server_results, ...results].flatMap((result) =>
       result.status === "rejected" ? [result.reason] : [],
@@ -91,60 +91,82 @@ export class CityHTTP {
   async detach_agent(agent_id_input: string): Promise<void> {
     const agent_id = String(agent_id_input || "").trim();
     if (!agent_id) return;
-    await this.enqueue_agent_operation(agent_id, async () => {
-      const dispose = this.extension_disposers.get(agent_id);
+    const route_keys = new Set([
+      ...[...this.routers_by_workspace.keys()].filter((key) => key.startsWith(`${agent_id}/`)),
+      ...[...this.extension_disposers.keys()].filter((key) => key.startsWith(`${agent_id}/`)),
+    ]);
+    await Promise.all([...route_keys].map(async (route_key) => await this.detach_route(route_key)));
+  }
+
+  /** 释放一个 AgentWorkspace 路由对应的宿主扩展。 */
+  private async detach_route(route_key: string): Promise<void> {
+    await this.enqueue_agent_operation(route_key, async () => {
+      const dispose = this.extension_disposers.get(route_key);
       if (dispose) await dispose();
-      this.routers_by_agent.delete(agent_id);
-      if (this.extension_disposers.get(agent_id) === dispose) {
-        this.extension_disposers.delete(agent_id);
+      this.routers_by_workspace.delete(route_key);
+      if (this.extension_disposers.get(route_key) === dispose) {
+        this.extension_disposers.delete(route_key);
       }
     });
   }
 
   /** 按请求中的 Agent ID 动态选择子路由，保证运行中新增 Agent 立即可见。 */
-  private async dispatch_agent(context: Context): Promise<Response> {
+  private async dispatch_workspace(context: Context): Promise<Response> {
     const agent_id = decodeURIComponent(String(context.req.param("agent_id") || "")).trim();
+    const workspace_id = decodeURIComponent(String(context.req.param("workspace_id") || "")).trim();
     const agent = this.city.agent(agent_id);
     if (!agent) return context.json({ success: false, error: `Agent not found: ${agent_id}` }, 404);
-    const router = await this.resolve_agent_router(agent_id, agent);
+    const entry = await this.city.enter_workspace(agent_id, workspace_id)
+      .catch(() => null);
+    if (!entry) return context.json({
+      success: false,
+      error: `Workspace not found: ${workspace_id}`,
+    }, 404);
+    const router = await this.resolve_workspace_router(agent_id, workspace_id, entry);
     if (!router) {
       return context.json({ success: false, error: `Agent not found: ${agent_id}` }, 404);
     }
     const url = new URL(context.req.url);
-    const prefix = `/agents/${encodeURIComponent(agent_id)}`;
+    const prefix = `/agents/${encodeURIComponent(agent_id)}/workspaces/${encodeURIComponent(workspace_id)}`;
     url.pathname = url.pathname.slice(prefix.length) || "/";
     return await router.fetch(new Request(url, context.req.raw));
   }
 
   /** 串行解析或创建指定 Agent 的唯一 Router。 */
-  private async resolve_agent_router(
+  private async resolve_workspace_router(
     agent_id: string,
-    agent: NonNullable<ReturnType<City["agent"]>>,
+    workspace_id: string,
+    entry: ReturnType<City["require_workspace"]>,
   ): Promise<Hono | null> {
-    return await this.enqueue_agent_operation(agent_id, async () => {
+    const route_key = `${agent_id}/${workspace_id}`;
+    return await this.enqueue_agent_operation(route_key, async () => {
       // Agent 可能在请求排队期间被 City 删除，装配前必须重新确认所有权。
-      if (this.city.agent(agent_id) !== agent) return null;
-      const cached = this.routers_by_agent.get(agent_id);
-      if (cached?.agent === agent) return cached.router;
+      if (this.city.agent(agent_id)?.workspace(workspace_id) !== entry) return null;
+      const cached = this.routers_by_workspace.get(route_key);
+      if (cached?.entry === entry) return cached.router;
       if (cached) {
-        const dispose = this.extension_disposers.get(agent_id);
+        const dispose = this.extension_disposers.get(route_key);
         if (dispose) await dispose();
-        this.routers_by_agent.delete(agent_id);
-        if (this.extension_disposers.get(agent_id) === dispose) {
-          this.extension_disposers.delete(agent_id);
+        this.routers_by_workspace.delete(route_key);
+        if (this.extension_disposers.get(route_key) === dispose) {
+          this.extension_disposers.delete(route_key);
         }
       }
 
       const resolve_session_model = this.runtime_options.resolve_session_model;
-      const sdk_router = new AgentHTTP(agent, {
+      const sdk_router = new AgentHTTP(entry, {
         resolve_session_model: resolve_session_model
-          ? async (model_id) => await resolve_session_model(agent.id, model_id)
+          ? async (model_id) => await resolve_session_model(agent_id, workspace_id, model_id)
           : undefined,
       }).router();
-      const extension = this.runtime_options.create_agent_extension?.({ agent, sdk_router });
+      const extension = this.runtime_options.create_agent_extension?.({
+        agent: entry.agent,
+        agent_workspace: entry,
+        sdk_router,
+      });
       const router = extension?.router ?? sdk_router;
-      this.routers_by_agent.set(agent_id, { agent, router });
-      if (extension?.dispose) this.extension_disposers.set(agent_id, extension.dispose);
+      this.routers_by_workspace.set(route_key, { entry, router });
+      if (extension?.dispose) this.extension_disposers.set(route_key, extension.dispose);
       return router;
     });
   }

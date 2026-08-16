@@ -28,11 +28,14 @@ export type DaemonHttpMethod = "GET" | "POST" | "PUT" | "DELETE";
  *
  * 关键点（中文）
  * - `agent_id` 用于读取该 Agent 的全局 daemon runtime 元数据。
+ * - `workspace_id` 标识本次 Action 或 Session 请求的执行上下文。
  * - `host/port` 可显式覆盖自动解析结果。
  */
 export type DaemonJsonApiCallParams = {
   /** 目标 Agent 的稳定全局 ID。 */
   agent_id: string;
+  /** 本次请求进入的 Workspace 稳定 ID。 */
+  workspace_id: string;
   path: string;
   method?: DaemonHttpMethod;
   body?: JsonValue;

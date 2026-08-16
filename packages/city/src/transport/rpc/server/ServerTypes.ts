@@ -7,7 +7,7 @@
  */
 
 import type { AgentSessions } from "@downcity/agent";
-import type { Agent } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent";
 import type { RpcEventFrame } from "@/transport/types/RpcProtocol.js";
 import type { AgentSessionModelResolver } from "@/transport/types/AgentSessionModelResolver.js";
 
@@ -21,8 +21,8 @@ export interface RpcServerStartOptions {
   host: string;
   /** Session 集合访问口。 */
   sessions: AgentSessions;
-  /** Agent 上下文访问口。 */
-  get_agent?: () => Agent;
+  /** 当前 AgentWorkspace 执行上下文访问口。 */
+  get_workspace?: () => AgentWorkspace;
   /** 将远程模型 ID 解析为当前宿主可执行的模型实例。 */
   resolve_session_model?: AgentSessionModelResolver;
   /** 由宿主重新加载并提交 Workspace Env 的能力。 */
@@ -30,7 +30,7 @@ export interface RpcServerStartOptions {
   /** 按请求选择 Agent 级 handler 依赖；CityRPC 使用该入口完成多 Agent 路由。 */
   resolve_request_options?: (
     request: import("@/transport/types/RpcProtocol.js").RpcRequest,
-  ) => RpcRequestHandlerOptions;
+  ) => RpcRequestHandlerOptions | Promise<RpcRequestHandlerOptions>;
 }
 
 /**
@@ -39,8 +39,8 @@ export interface RpcServerStartOptions {
 export interface RpcRequestHandlerOptions {
   /** Session 集合访问口。 */
   sessions: AgentSessions;
-  /** Agent 上下文访问口。 */
-  get_agent?: () => Agent;
+  /** 当前 AgentWorkspace 执行上下文访问口。 */
+  get_workspace?: () => AgentWorkspace;
   /** 将远程模型 ID 解析为当前宿主可执行的模型实例。 */
   resolve_session_model?: AgentSessionModelResolver;
   /** 由宿主重新加载并提交 Workspace Env 的能力。 */

@@ -32,10 +32,11 @@ async function create_city() {
     fs.mkdir(path.join(root, "first")),
     fs.mkdir(path.join(root, "second")),
   ]);
-  const agents = [
-    new Agent({ id: "first_agent", workspace: new Workspace({ path: path.join(root, "first") }) }),
-    new Agent({ id: "second_agent", workspace: new Workspace({ path: path.join(root, "second") }) }),
-  ];
+  const first_agent = new Agent({ id: "first_agent" });
+  const second_agent = new Agent({ id: "second_agent" });
+  first_agent.enter(new Workspace({ id: "first", path: path.join(root, "first") }));
+  second_agent.enter(new Workspace({ id: "second", path: path.join(root, "second") }));
+  const agents = [first_agent, second_agent];
   return { city: new City(agents), agents, root };
 }
 
@@ -44,7 +45,7 @@ test("CityHTTP mounts each Agent below its stable ID", async () => {
   const transport = new CityHTTP(city);
   try {
     const first_create = await transport.router().request(
-      "/agents/first_agent/api/sdk/sessions",
+      "/agents/first_agent/workspaces/first/api/sdk/sessions",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -53,17 +54,17 @@ test("CityHTTP mounts each Agent below its stable ID", async () => {
     );
     assert.equal(first_create.status, 200);
     const first_list = await transport.router().request(
-      "/agents/first_agent/api/sdk/sessions",
+      "/agents/first_agent/workspaces/first/api/sdk/sessions",
     );
     const second_list = await transport.router().request(
-      "/agents/second_agent/api/sdk/sessions",
+      "/agents/second_agent/workspaces/second/api/sdk/sessions",
     );
     assert.deepEqual((await first_list.json()).sessions.map((item) => item.session_id), [
       "shared-session",
     ]);
     assert.deepEqual((await second_list.json()).sessions, []);
     assert.equal(
-      (await transport.router().request("/agents/missing/api/sdk/sessions")).status,
+      (await transport.router().request("/agents/missing/workspaces/first/api/sdk/sessions")).status,
       404,
     );
   } finally {
@@ -91,7 +92,7 @@ test("CityHTTP concurrently creates only one Agent extension", async () => {
   });
   try {
     const responses = await Promise.all(Array.from({ length: 8 }, () =>
-      transport.router().request("/agents/first_agent/api/sdk/sessions")
+      transport.router().request("/agents/first_agent/workspaces/first/api/sdk/sessions")
     ));
     assert.equal(responses.every((response) => response.status === 200), true);
     assert.equal(extension_count, 1);
@@ -119,11 +120,11 @@ test("CityHTTP does not recreate an Agent removed while router resolution is que
   });
   try {
     assert.equal(
-      (await transport.router().request("/agents/first_agent/api/sdk/sessions")).status,
+      (await transport.router().request("/agents/first_agent/workspaces/first/api/sdk/sessions")).status,
       200,
     );
     const detach_promise = transport.detach_agent("first_agent");
-    const queued_request = transport.router().request("/agents/first_agent/api/sdk/sessions");
+    const queued_request = transport.router().request("/agents/first_agent/workspaces/first/api/sdk/sessions");
     const remove_promise = city.remove("first_agent");
     release_dispose();
     await Promise.all([detach_promise, remove_promise]);
@@ -152,7 +153,7 @@ test("CityHTTP retries an extension disposer after a failed close", async () => 
   });
   try {
     assert.equal(
-      (await transport.router().request("/agents/first_agent/api/sdk/sessions")).status,
+      (await transport.router().request("/agents/first_agent/workspaces/first/api/sdk/sessions")).status,
       200,
     );
     await assert.rejects(transport.close(), /CityHTTP extension close failed/);
@@ -174,11 +175,11 @@ test("CityHTTP 动态识别运行中新增和删除的 Agent", async () => {
     await fs.mkdir(path.join(root, "third"));
     const agent = new Agent({
       id: "third_agent",
-      workspace: new Workspace({ path: path.join(root, "third") }),
     });
+    agent.enter(new Workspace({ id: "third", path: path.join(root, "third") }));
     city.add(agent);
     const created = await transport.router().request(
-      "/agents/third_agent/api/sdk/sessions",
+      "/agents/third_agent/workspaces/third/api/sdk/sessions",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -189,7 +190,7 @@ test("CityHTTP 动态识别运行中新增和删除的 Agent", async () => {
     await city.remove("third_agent");
     await agent.dispose();
     assert.equal(
-      (await transport.router().request("/agents/third_agent/api/sdk/sessions")).status,
+      (await transport.router().request("/agents/third_agent/workspaces/third/api/sdk/sessions")).status,
       404,
     );
   } finally {
@@ -206,8 +207,8 @@ test("CityRPC routes RemoteAgent by rpc URL Agent ID", {
   const { city, agents, root } = await create_city();
   const transport = new CityRPC(city);
   const port = await reserve_port();
-  const first = new RemoteAgent({ url: `rpc://127.0.0.1:${port}/first_agent` });
-  const second = new RemoteAgent({ url: `rpc://127.0.0.1:${port}/second_agent` });
+  const first = new RemoteAgent({ url: `rpc://127.0.0.1:${port}/first_agent/first` });
+  const second = new RemoteAgent({ url: `rpc://127.0.0.1:${port}/second_agent/second` });
   try {
     await transport.listen({ host: "127.0.0.1", port });
     await first.sessions.create({ session_id: "shared-session" });
@@ -215,7 +216,7 @@ test("CityRPC routes RemoteAgent by rpc URL Agent ID", {
       "shared-session",
     ]);
     assert.deepEqual((await second.sessions.list()).items, []);
-    const missing = new RemoteAgent({ url: `rpc://127.0.0.1:${port}/missing` });
+    const missing = new RemoteAgent({ url: `rpc://127.0.0.1:${port}/missing/first` });
     await assert.rejects(missing.sessions.list(), /Agent not found in City: missing/);
     await missing.close();
   } finally {

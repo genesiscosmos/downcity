@@ -7,7 +7,7 @@
  * - 仅提供 `listen()` / `close()` / `binding()` 三个方法，端口、host 由调用方决定。
  */
 
-import type { Agent } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent";
 import { startRpcServer, type RpcServerInstance } from "@/transport/rpc/RpcServer.js";
 import type {
   AgentRpcBinding,
@@ -23,7 +23,7 @@ const DEFAULT_RPC_PORT = 15314;
  * 把一个 `Agent` 暴露为本机 RPC 服务。
  */
 export class AgentRPC {
-  private readonly agent: Agent;
+  private readonly agent_workspace: AgentWorkspace;
   private readonly runtime_options: AgentRpcRuntimeOptions;
   /** 当前 Agent RPC Server 的唯一串行生命周期。 */
   private readonly lifecycle: SerializedTransport<
@@ -32,8 +32,8 @@ export class AgentRPC {
     AgentRpcBinding
   >;
 
-  constructor(agent: Agent, runtime_options: AgentRpcRuntimeOptions = {}) {
-    this.agent = agent;
+  constructor(agent_workspace: AgentWorkspace, runtime_options: AgentRpcRuntimeOptions = {}) {
+    this.agent_workspace = agent_workspace;
     this.runtime_options = runtime_options;
     this.lifecycle = new SerializedTransport({
       start: async (options) => {
@@ -44,8 +44,8 @@ export class AgentRPC {
         const instance = await startRpcServer({
           host,
           port,
-          sessions: this.agent.sessions,
-          get_agent: () => this.agent,
+          sessions: this.agent_workspace.sessions,
+          get_workspace: () => this.agent_workspace,
           resolve_session_model: this.runtime_options.resolve_session_model,
           reload_workspace_env: this.runtime_options.reload_workspace_env,
         });

@@ -108,7 +108,7 @@ export function use_desktop_controller(): DesktopViewController {
 
   /** 提交队首消息；同一 Session 同时只执行一个提交循环。 */
   const process_next_queue = useCallback(async (agent_id: string, session_id: string): Promise<void> => {
-    const session_key = get_session_key(agent_id, session_id);
+    const session_key = get_session_key(active_workspace_id, agent_id, session_id);
     if (processing_queue_ref.current.has(session_key) || is_chat_busy(chat_runtime_ref.current[session_key])) return;
     const queued = queue_ref.current[session_key]?.[0];
     if (!queued) return;
@@ -119,7 +119,7 @@ export function use_desktop_controller(): DesktopViewController {
     });
     let accepted = false;
     try {
-      await window.downcity.chat.send(agent_id, session_id, queued.input);
+      await window.downcity.chat.send(agent_id, active_workspace_id, session_id, queued.input);
       accepted = true;
       commit_queue({
         ...queue_ref.current,
@@ -137,7 +137,7 @@ export function use_desktop_controller(): DesktopViewController {
         void process_next_queue(agent_id, session_id);
       }
     }
-  }, [commit_queue]);
+  }, [active_workspace_id, commit_queue]);
 
   useEffect(() => {
     void Promise.all([
@@ -150,12 +150,9 @@ export function use_desktop_controller(): DesktopViewController {
       set_workspaces(next_workspaces);
       set_settings(next_settings);
       set_plugins(next_plugins);
-      const session_entries = await Promise.all(next_agents.map(async (agent) => [agent.agent_id, await window.downcity.chat.list_sessions(agent.agent_id)] as const));
-      set_sessions_by_agent(Object.fromEntries(session_entries));
       const initial_agent = next_agents.find((agent) => agent.agent_id === next_settings.default_agent_id) ?? next_agents[0];
       const stored_workspace_id = localStorage.getItem(active_workspace_storage_key) || "";
       const initial_workspace = next_workspaces.find((workspace) => workspace.workspace_id === stored_workspace_id)
-        ?? next_workspaces.find((workspace) => workspace.workspace_id === initial_agent?.workspace_id)
         ?? next_workspaces[0];
       if (initial_workspace) {
         set_active_workspace_id(initial_workspace.workspace_id);
@@ -198,9 +195,28 @@ export function use_desktop_controller(): DesktopViewController {
     return () => media.removeEventListener("change", apply_appearance);
   }, [settings.appearance_mode, settings.color_theme, settings.ui_scale]);
 
+  /** Workspace 切换后读取同一组 Agent 在该 Workspace 下的 Session。 */
   useEffect(() => {
-    const unsubscribe_mutation = window.downcity.chat.on_mutation(({ agent_id, session_id, mutation }) => {
-      const session_key = get_session_key(agent_id, session_id);
+    if (!active_workspace_id || agents.length === 0) return;
+    let cancelled = false;
+    set_sessions_by_agent({});
+    set_archived_sessions_by_agent({});
+    void Promise.all(agents.map(async (agent) => [
+      agent.agent_id,
+      await window.downcity.chat.list_sessions(agent.agent_id, active_workspace_id),
+    ] as const)).then((entries) => {
+      if (cancelled) return;
+      set_sessions_by_agent(Object.fromEntries(entries));
+    }).catch((reason) => {
+      if (!cancelled) set_error(to_error_message(reason));
+    });
+    return () => { cancelled = true; };
+  }, [agents]);
+
+  useEffect(() => {
+    const unsubscribe_mutation = window.downcity.chat.on_mutation(({ agent_id, workspace_id, session_id, mutation }) => {
+      if (workspace_id !== active_workspace_id) return;
+      const session_key = get_session_key(active_workspace_id, agent_id, session_id);
       const batch = mutation_batches_ref.current.get(session_key) ?? [];
       batch.push(mutation);
       mutation_batches_ref.current.set(session_key, batch);
@@ -227,7 +243,8 @@ export function use_desktop_controller(): DesktopViewController {
       });
     });
     const unsubscribe_runtime = window.downcity.chat.on_runtime(({ runtime }) => {
-      const session_key = get_session_key(runtime.agent_id, runtime.session_id);
+      if (runtime.workspace_id !== active_workspace_id) return;
+      const session_key = get_session_key(active_workspace_id, runtime.agent_id, runtime.session_id);
       chat_runtime_ref.current = { ...chat_runtime_ref.current, [session_key]: runtime };
       set_chat_runtime_by_session(chat_runtime_ref.current);
       set_sessions_by_agent((current) => ({
@@ -243,17 +260,12 @@ export function use_desktop_controller(): DesktopViewController {
       unsubscribe_runtime();
       if (mutation_frame_ref.current !== null) cancelAnimationFrame(mutation_frame_ref.current);
     };
-  }, [process_next_queue]);
+  }, [active_workspace_id, process_next_queue]);
 
   const select_agent = useCallback((agent_id: string) => {
     set_error("");
-    const agent = agents.find((item) => item.agent_id === agent_id);
-    if (agent) {
-      set_active_workspace_id(agent.workspace_id);
-      localStorage.setItem(active_workspace_storage_key, agent.workspace_id);
-    }
     set_selection({ kind: "agent", agent_id });
-  }, [agents]);
+  }, []);
 
   const select_plugin = useCallback((plugin_name: string) => {
     set_error("");
@@ -288,35 +300,26 @@ export function use_desktop_controller(): DesktopViewController {
     set_error("");
     set_sidebar_mode_state("chat");
     const draft_id = get_draft_session_id(agent_id);
-    const session_key = get_session_key(agent_id, draft_id);
+    const session_key = get_session_key(active_workspace_id, agent_id, draft_id);
     const agent = agents.find((item) => item.agent_id === agent_id);
-    if (agent) {
-      set_active_workspace_id(agent.workspace_id);
-      localStorage.setItem(active_workspace_storage_key, agent.workspace_id);
-    }
     set_configuration_by_session((current) => ({
       ...current,
       [session_key]: current[session_key] ?? { model_id: agent?.model_id || "", approval_mode: "ask" },
     }));
     set_selection({ kind: "draft", agent_id, draft_id });
-  }, [agents]);
+  }, [active_workspace_id, agents]);
 
   const select_session = useCallback(async (agent_id: string, session_id: string) => {
     set_error("");
     set_sidebar_mode_state("chat");
-    const agent = agents.find((item) => item.agent_id === agent_id);
-    if (agent) {
-      set_active_workspace_id(agent.workspace_id);
-      localStorage.setItem(active_workspace_storage_key, agent.workspace_id);
-    }
     set_selection({ kind: "session", agent_id, session_id });
-    const session_key = get_session_key(agent_id, session_id);
+    const session_key = get_session_key(active_workspace_id, agent_id, session_id);
     const request_id = (snapshot_request_ref.current.get(session_key) ?? 0) + 1;
     snapshot_request_ref.current.set(session_key, request_id);
     try {
       const [snapshot, configuration] = await Promise.all([
-        window.downcity.chat.get_snapshot(agent_id, session_id),
-        window.downcity.chat.get_configuration(agent_id, session_id),
+        window.downcity.chat.get_snapshot(agent_id, active_workspace_id, session_id),
+        window.downcity.chat.get_configuration(agent_id, active_workspace_id, session_id),
       ]);
       if (snapshot_request_ref.current.get(session_key) !== request_id) return;
       set_messages_by_session((current) => ({ ...current, [session_key]: merge_session_snapshot(current[session_key] ?? [], snapshot.messages) }));
@@ -331,11 +334,11 @@ export function use_desktop_controller(): DesktopViewController {
     } catch (reason) {
       set_error(to_error_message(reason));
     }
-  }, [agents]);
+  }, [active_workspace_id]);
 
   const rename_session = useCallback(async (agent_id: string, session_id: string, title: string) => {
     try {
-      const normalized_title = await window.downcity.chat.rename_session(agent_id, session_id, title);
+      const normalized_title = await window.downcity.chat.rename_session(agent_id, active_workspace_id, session_id, title);
       set_sessions_by_agent((current) => ({
         ...current,
         [agent_id]: (current[agent_id] ?? []).map((session) => session.session_id === session_id
@@ -346,11 +349,11 @@ export function use_desktop_controller(): DesktopViewController {
       set_error(to_error_message(reason));
       throw reason;
     }
-  }, []);
+  }, [active_workspace_id]);
 
   const archive_session = useCallback(async (agent_id: string, session_id: string) => {
     try {
-      await window.downcity.chat.archive_session(agent_id, session_id);
+      await window.downcity.chat.archive_session(agent_id, active_workspace_id, session_id);
       set_sessions_by_agent((current) => ({
         ...current,
         [agent_id]: (current[agent_id] ?? []).filter((session) => session.session_id !== session_id),
@@ -362,11 +365,11 @@ export function use_desktop_controller(): DesktopViewController {
       set_error(to_error_message(reason));
       throw reason;
     }
-  }, []);
+  }, [active_workspace_id]);
 
   const remove_session = useCallback(async (agent_id: string, session_id: string) => {
     try {
-      const removed = await window.downcity.chat.remove_session(agent_id, session_id);
+      const removed = await window.downcity.chat.remove_session(agent_id, active_workspace_id, session_id);
       if (!removed) return;
       set_sessions_by_agent((current) => ({
         ...current,
@@ -379,27 +382,27 @@ export function use_desktop_controller(): DesktopViewController {
       set_error(to_error_message(reason));
       throw reason;
     }
-  }, []);
+  }, [active_workspace_id]);
 
   const load_archived_sessions = useCallback(async (agent_id: string) => {
     try {
-      const sessions = await window.downcity.chat.list_archived_sessions(agent_id);
+      const sessions = await window.downcity.chat.list_archived_sessions(agent_id, active_workspace_id);
       set_archived_sessions_by_agent((current) => ({ ...current, [agent_id]: sessions }));
     } catch (reason) {
       set_error(to_error_message(reason));
       throw reason;
     }
-  }, []);
+  }, [active_workspace_id]);
 
   const load_earlier_history = useCallback(async (agent_id: string, session_id: string) => {
-    const session_key = get_session_key(agent_id, session_id);
+    const session_key = get_session_key(active_workspace_id, agent_id, session_id);
     const current_history = history_ref.current[session_key];
     if (!current_history?.has_more || !current_history.next_before_sequence || current_history.loading) return;
     const loading_history = { ...current_history, loading: true };
     history_ref.current = { ...history_ref.current, [session_key]: loading_history };
     set_history_by_session(history_ref.current);
     try {
-      const page = await window.downcity.chat.get_history(agent_id, session_id, current_history.next_before_sequence);
+      const page = await window.downcity.chat.get_history(agent_id, active_workspace_id, session_id, current_history.next_before_sequence);
       set_messages_by_session((current) => ({ ...current, [session_key]: merge_session_snapshot(current[session_key] ?? [], page.messages) }));
       const next_history = { loading: false, has_more: page.has_more, next_before_sequence: page.next_before_sequence };
       history_ref.current = { ...history_ref.current, [session_key]: next_history };
@@ -410,16 +413,13 @@ export function use_desktop_controller(): DesktopViewController {
       set_history_by_session(history_ref.current);
       set_error(to_error_message(reason));
     }
-  }, []);
+  }, [active_workspace_id]);
 
   const create_agent = useCallback(async (value: CreateAgentFormValue) => {
     set_error("");
-    const result = await window.downcity.agent.create(value.agent_id, value.workspace_path, value.model_id);
+    const result = await window.downcity.agent.create(value.agent_id, value.model_id);
     set_agents((current) => [...current.filter((item) => item.agent_id !== result.agent.agent_id), result.agent]);
-    set_workspaces((current) => [...current.filter((item) => item.workspace_id !== result.workspace.workspace_id), result.workspace]);
-    set_sidebar_mode_state("chat");
-    set_active_workspace_id(result.workspace.workspace_id);
-    localStorage.setItem(active_workspace_storage_key, result.workspace.workspace_id);
+    set_sidebar_mode_state("agents");
     set_selection({ kind: "agent", agent_id: result.agent.agent_id });
   }, []);
 
@@ -434,43 +434,49 @@ export function use_desktop_controller(): DesktopViewController {
   }, []);
 
   const update_draft = useCallback((agent_id: string, session_id: string, text: string) => {
-    set_drafts_by_session((current) => ({ ...current, [get_session_key(agent_id, session_id)]: text }));
-  }, []);
+    set_drafts_by_session((current) => ({
+      ...current,
+      [get_session_key(active_workspace_id, agent_id, session_id)]: text,
+    }));
+  }, [active_workspace_id]);
 
   const update_draft_files = useCallback((agent_id: string, session_id: string, files: DesktopChatFileInput[]) => {
-    set_draft_files_by_session((current) => ({ ...current, [get_session_key(agent_id, session_id)]: files }));
-  }, []);
+    set_draft_files_by_session((current) => ({
+      ...current,
+      [get_session_key(active_workspace_id, agent_id, session_id)]: files,
+    }));
+  }, [active_workspace_id]);
 
   const send_message = useCallback(async (agent_id: string, session_id: string, input: DesktopChatInput) => {
     const normalized_input: DesktopChatInput = { text: input.text.trim(), files: input.files };
     if (!normalized_input.text && normalized_input.files.length === 0) return;
-    const session_key = get_session_key(agent_id, session_id);
+    const session_key = get_session_key(active_workspace_id, agent_id, session_id);
     set_error("");
     set_drafts_by_session((current) => ({ ...current, [session_key]: "" }));
     set_draft_files_by_session((current) => ({ ...current, [session_key]: [] }));
     if (is_draft_session_id(session_id)) {
       try {
-        const session = await window.downcity.chat.create_session(agent_id);
+        const session = await window.downcity.chat.create_session(agent_id, active_workspace_id);
         set_sessions_by_agent((current) => ({
           ...current,
           [agent_id]: [session, ...(current[agent_id] ?? []).filter((item) => item.session_id !== session.session_id)],
         }));
-        const actual_key = get_session_key(agent_id, session.session_id);
+        const actual_key = get_session_key(active_workspace_id, agent_id, session.session_id);
         const agent = agents.find((item) => item.agent_id === agent_id);
         const draft_configuration = configuration_by_session[session_key] ?? {
           model_id: settings.default_text_model_id || agent?.model_id || "",
           approval_mode: "ask",
         };
         set_selection({ kind: "session", agent_id, session_id: session.session_id });
-        let actual_configuration = await window.downcity.chat.get_configuration(agent_id, session.session_id);
+        let actual_configuration = await window.downcity.chat.get_configuration(agent_id, active_workspace_id, session.session_id);
         if (draft_configuration.model_id && draft_configuration.model_id !== actual_configuration.model_id) {
-          actual_configuration = await window.downcity.chat.set_model(agent_id, session.session_id, draft_configuration.model_id);
+          actual_configuration = await window.downcity.chat.set_model(agent_id, active_workspace_id, session.session_id, draft_configuration.model_id);
         }
         if (draft_configuration.approval_mode !== actual_configuration.approval_mode) {
-          actual_configuration = await window.downcity.chat.set_approval_mode(agent_id, session.session_id, draft_configuration.approval_mode);
+          actual_configuration = await window.downcity.chat.set_approval_mode(agent_id, active_workspace_id, session.session_id, draft_configuration.approval_mode);
         }
         set_configuration_by_session((current) => ({ ...current, [actual_key]: actual_configuration }));
-        await window.downcity.chat.send(agent_id, session.session_id, normalized_input);
+        await window.downcity.chat.send(agent_id, active_workspace_id, session.session_id, normalized_input);
         set_drafts_by_session((current) => ({ ...current, [actual_key]: "" }));
       } catch (reason) {
         set_drafts_by_session((current) => ({ ...current, [session_key]: normalized_input.text }));
@@ -492,13 +498,13 @@ export function use_desktop_controller(): DesktopViewController {
       return;
     }
     try {
-      await window.downcity.chat.send(agent_id, session_id, normalized_input);
+      await window.downcity.chat.send(agent_id, active_workspace_id, session_id, normalized_input);
     } catch (reason) {
       set_drafts_by_session((current) => ({ ...current, [session_key]: normalized_input.text }));
       set_draft_files_by_session((current) => ({ ...current, [session_key]: normalized_input.files }));
       set_error(to_error_message(reason));
     }
-  }, [agents, commit_queue, configuration_by_session, process_next_queue, settings.default_text_model_id]);
+  }, [active_workspace_id, agents, commit_queue, configuration_by_session, process_next_queue, settings.default_text_model_id]);
 
   const refresh_models = useCallback(async () => {
     set_models_loading(true);
@@ -513,26 +519,26 @@ export function use_desktop_controller(): DesktopViewController {
   }, []);
 
   const set_session_model = useCallback(async (agent_id: string, session_id: string, model_id: string) => {
-    const session_key = get_session_key(agent_id, session_id);
+    const session_key = get_session_key(active_workspace_id, agent_id, session_id);
     try {
       if (is_draft_session_id(session_id)) {
         const current = configuration_by_session[session_key] ?? { model_id, approval_mode: "ask" as const };
         set_configuration_by_session((values) => ({ ...values, [session_key]: { ...current, model_id } }));
         return;
       }
-      const configuration = await window.downcity.chat.set_model(agent_id, session_id, model_id);
+      const configuration = await window.downcity.chat.set_model(agent_id, active_workspace_id, session_id, model_id);
       set_configuration_by_session((current) => ({ ...current, [session_key]: configuration }));
     } catch (reason) {
       set_error(to_error_message(reason));
     }
-  }, [configuration_by_session]);
+  }, [active_workspace_id, configuration_by_session]);
 
   const set_session_approval_mode = useCallback(async (
     agent_id: string,
     session_id: string,
     approval_mode: DesktopSessionConfiguration["approval_mode"],
   ) => {
-    const session_key = get_session_key(agent_id, session_id);
+    const session_key = get_session_key(active_workspace_id, agent_id, session_id);
     try {
       if (is_draft_session_id(session_id)) {
         const agent = agents.find((item) => item.agent_id === agent_id);
@@ -540,20 +546,20 @@ export function use_desktop_controller(): DesktopViewController {
         set_configuration_by_session((values) => ({ ...values, [session_key]: { ...current, approval_mode } }));
         return;
       }
-      const configuration = await window.downcity.chat.set_approval_mode(agent_id, session_id, approval_mode);
+      const configuration = await window.downcity.chat.set_approval_mode(agent_id, active_workspace_id, session_id, approval_mode);
       set_configuration_by_session((current) => ({ ...current, [session_key]: configuration }));
     } catch (reason) {
       set_error(to_error_message(reason));
     }
-  }, [agents, configuration_by_session]);
+  }, [active_workspace_id, agents, configuration_by_session]);
 
   const stop_session = useCallback(async (agent_id: string, session_id: string) => {
     try {
-      await window.downcity.chat.stop(agent_id, session_id);
+      await window.downcity.chat.stop(agent_id, active_workspace_id, session_id);
     } catch (reason) {
       set_error(to_error_message(reason));
     }
-  }, []);
+  }, [active_workspace_id]);
 
   const respond_interaction = useCallback(async (
     agent_id: string,
@@ -561,30 +567,30 @@ export function use_desktop_controller(): DesktopViewController {
     input: RespondSessionInteractionInput,
   ) => {
     try {
-      await window.downcity.chat.respond(agent_id, session_id, input);
+      await window.downcity.chat.respond(agent_id, active_workspace_id, session_id, input);
     } catch (reason) {
       set_error(to_error_message(reason));
       throw reason;
     }
-  }, []);
+  }, [active_workspace_id]);
 
   const remove_queued_message = useCallback((agent_id: string, session_id: string, message_id: string) => {
-    const session_key = get_session_key(agent_id, session_id);
+    const session_key = get_session_key(active_workspace_id, agent_id, session_id);
     commit_queue({
       ...queue_ref.current,
       [session_key]: (queue_ref.current[session_key] ?? []).filter((item) => item.message_id !== message_id || item.sending),
     });
-  }, [commit_queue]);
+  }, [active_workspace_id, commit_queue]);
 
   const move_queued_message = useCallback((agent_id: string, session_id: string, message_id: string, direction: "up" | "down") => {
-    const session_key = get_session_key(agent_id, session_id);
+    const session_key = get_session_key(active_workspace_id, agent_id, session_id);
     const queue = [...(queue_ref.current[session_key] ?? [])];
     const index = queue.findIndex((item) => item.message_id === message_id);
     const target = direction === "up" ? index - 1 : index + 1;
     if (index < 0 || target < 0 || target >= queue.length || queue[index].sending || queue[target].sending) return;
     [queue[index], queue[target]] = [queue[target], queue[index]];
     commit_queue({ ...queue_ref.current, [session_key]: queue });
-  }, [commit_queue]);
+  }, [active_workspace_id, commit_queue]);
 
   const update_settings = useCallback(async (patch: Partial<DesktopSettings>) => {
     try {

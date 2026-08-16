@@ -12,6 +12,8 @@ import type { PluginContext } from "@/types/plugin/PluginContext.js";
 export interface CreatePluginContextInput {
   /** 当前 Agent 稳定标识。 */
   agent_id: PluginContext["agent_id"];
+  /** 当前 Workspace 稳定标识。 */
+  workspace_id: PluginContext["workspace_id"];
   /** 当前 Workspace 绝对根目录。 */
   workspace_path: PluginContext["workspace_path"];
   /** 当前 Workspace 文件能力。 */
@@ -20,10 +22,10 @@ export interface CreatePluginContextInput {
   shell?: PluginContext["shell"];
   /** 当前 Agent 日志器。 */
   logger: PluginContext["logger"];
-  /** 当前 Agent Session 集合。 */
-  sessions: PluginContext["sessions"];
-  /** 当前 Agent Plugin 注册表视图。 */
-  plugins: PluginContext["plugins"];
+  /** 延迟读取当前 AgentWorkspace Session 集合。 */
+  get_sessions: () => PluginContext["sessions"];
+  /** 延迟读取当前 AgentWorkspace 的 Plugin 注册表视图。 */
+  get_plugins: () => PluginContext["plugins"];
   /** 延迟读取 Workspace env。 */
   get_workspace_env: () => PluginContext["workspace_env"];
   /** 延迟读取 Agent instruction。 */
@@ -36,12 +38,17 @@ export function create_plugin_context(
 ): PluginContext {
   return Object.freeze({
     agent_id: input.agent_id,
+    workspace_id: input.workspace_id,
     workspace_path: input.workspace_path,
     files: input.files,
     ...(input.shell ? { shell: input.shell } : {}),
     logger: input.logger,
-    sessions: input.sessions,
-    plugins: input.plugins,
+    get sessions() {
+      return input.get_sessions();
+    },
+    get plugins() {
+      return input.get_plugins();
+    },
     get workspace_env() {
       return input.get_workspace_env();
     },

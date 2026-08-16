@@ -15,11 +15,13 @@ export interface CityRpcRuntimeOptions {
   /** 为指定 Agent 创建远程 Session 所需的模型解析器。 */
   resolve_session_model?: (
     agent_id: string,
+    workspace_id: string,
     model_id: string,
   ) => ReturnType<AgentSessionModelResolver>;
 
   /** 从事实源重新加载指定 Agent 的 Workspace Env。 */
   reload_workspace_env?: (
     agent_id: string,
+    workspace_id: string,
   ) => Record<string, string> | Promise<Record<string, string>>;
 }

@@ -61,35 +61,27 @@ export function create_cli_plugin_loader(input: {
   });
 }
 
-/** 使用产品层读取的配置装配一个由调用方持有的 Agent。 */
+/** 使用文件型定义装配一个不绑定 Workspace 的 Agent。 */
 export async function create_cli_agent(input: {
   /** Agent 的持久化配置。 */
   config: LocalAgentConfig;
-  /** Agent 绑定的 Workspace 持久化配置。 */
-  workspace_config: LocalWorkspaceConfig;
   /** 当前产品实例创建的 Plugin Loader。 */
   plugin_loader: LocalPluginLoader;
   /** 可选的 Downcity 用户级数据根目录。 */
   root_path?: string;
 }): Promise<Agent> {
-  const workspace = await create_cli_workspace(input.workspace_config, input.root_path);
-  try {
-    const [model, plugins, tools] = await Promise.all([
-      Promise.resolve(create_cli_agent_model(input.config, workspace.get_env())),
-      input.plugin_loader.create_plugins(input.config),
-      Promise.resolve(create_cli_agent_tools()),
-    ]);
-    return new Agent({
-      id: input.config.agent_id,
-      workspace,
-      model,
-      plugins,
-      tools,
-    });
-  } catch (error) {
-    await workspace.dispose().catch(() => undefined);
-    throw error;
-  }
+  const [model, plugins, tools] = await Promise.all([
+    Promise.resolve(create_cli_agent_model(input.config, process_environment())),
+    input.plugin_loader.create_plugins(input.config),
+    Promise.resolve(create_cli_agent_tools()),
+  ]);
+  return new Agent({
+    id: input.config.agent_id,
+    instruction: input.config.instruction,
+    model,
+    plugins,
+    tools,
+  });
 }
 
 /** 创建 CLI 当前 Agent 独享的 Workspace、Shell 与 Sandbox。 */
@@ -99,6 +91,7 @@ export async function create_cli_workspace(
 ): Promise<Workspace> {
   const root_path = resolve_local_root_path(root_path_input);
   return new Workspace({
+    id: config.workspace_id,
     path: config.workspace_path,
     env: resolve_local_agent_env({
       root_path,
@@ -107,6 +100,15 @@ export async function create_cli_workspace(
     }),
     shell: new Shell({ sandbox: await create_platform_sandbox() }),
   });
+}
+
+/** 把当前进程环境投影为 Agent 级模型配置，不引入 Workspace 绑定。 */
+function process_environment(): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
 }
 
 /** 根据 Agent 默认模型配置创建延迟解析的模型实例。 */

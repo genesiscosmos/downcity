@@ -24,6 +24,8 @@ export const AGENT_CHAT_NEW_SESSION_ID_PREFIX = "local-cli-chat";
 export interface AgentChatCliOptions {
   /** 目标 agent id。 */
   to?: string;
+  /** 本次对话使用的 Workspace ID 或路径。 */
+  workspace?: string;
   /** 一次性发送的消息文本。 */
   message?: string;
   /**

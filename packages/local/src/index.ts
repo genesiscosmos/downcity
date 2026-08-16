@@ -19,6 +19,8 @@ export type {
 } from "./types/Database.js";
 export {
   get_local_database_path,
+  get_local_agent_path,
+  get_local_agents_path,
   get_local_env_path,
   get_local_key_path,
   get_local_plugins_path,

@@ -43,14 +43,12 @@ test("workspace set_env and patch_env are visible in shell safe sandbox", async 
   const previous_host_value = process.env.HOST_ONLY_ENV_REPRO;
   process.env.HOST_ONLY_ENV_REPRO = "host_secret";
 
-  const workspace = new Workspace({
+  const workspace = new Workspace({ id: "test_workspace",
     path: root_path,
     shell: new Shell({ sandbox }),
   });
-  const agent = new Agent({
-    id: "agent-env-shell-sandbox-test",
-    workspace,
-  });
+  const agent = new Agent({ id: "agent-env-shell-sandbox-test" });
+  const entry = agent.enter(workspace);
 
   try {
     workspace.set_env({
@@ -60,7 +58,7 @@ test("workspace set_env and patch_env are visible in shell safe sandbox", async 
     });
 
     const first_output = await execute_shell(
-      agent,
+      entry,
       'printf "CURRENT=%s\\nDC=%s\\nREMOVED=%s\\nHOST_ONLY=%s\\n" "$DYNAMIC_ENV_REPRO" "$DC_DYNAMIC_REPRO" "$REMOVED_ENV_REPRO" "$HOST_ONLY_ENV_REPRO"',
     );
     assert.match(first_output, /CURRENT=initial_value/);
@@ -75,7 +73,7 @@ test("workspace set_env and patch_env are visible in shell safe sandbox", async 
     });
 
     const second_output = await execute_shell(
-      agent,
+      entry,
       'printf "CURRENT=%s\\nADDED=%s\\nREMOVED=%s\\nHOST_ONLY=%s\\n" "$DYNAMIC_ENV_REPRO" "$ADDED_ENV_REPRO" "$REMOVED_ENV_REPRO" "$HOST_ONLY_ENV_REPRO"',
     );
     assert.match(second_output, /CURRENT=updated_value/);

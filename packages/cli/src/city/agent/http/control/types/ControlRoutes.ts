@@ -7,7 +7,7 @@
  */
 
 import type { Hono } from "hono";
-import type { Agent } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent";
 
 /**
  * Control 路由注册入参。
@@ -21,5 +21,5 @@ export interface ControlRouteRegistrationParams {
   /**
    * 读取当前统一执行上下文。
    */
-  get_agent: () => Agent;
+  get_agent: () => AgentWorkspace;
 }

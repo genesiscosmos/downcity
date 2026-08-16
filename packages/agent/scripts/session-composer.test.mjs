@@ -121,12 +121,12 @@ test("Session system 快照与 Custom Composer 的实际模型输入一致", asy
   );
   const agent = new Agent({
     id: "custom_composer_agent",
-    workspace: new Workspace({ path: project_root }),
     model: new MockLanguageModelV3({ modelId: "custom-composer-model" }),
     session_class: CustomSession,
   });
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: project_root }));
   try {
-    const session = await agent.sessions.create({
+    const session = await entry.sessions.create({
       session_id: "custom_composer_session",
     });
     const snapshot = await session.system();

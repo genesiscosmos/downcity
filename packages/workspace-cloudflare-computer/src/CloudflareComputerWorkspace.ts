@@ -135,6 +135,7 @@ class CloudflareComputerFileSystem implements FileSystem {
 
 /** 将 Cloudflare Computer 虚拟文件系统作为 Downcity Agent Workspace 使用。 */
 export class CloudflareComputerWorkspace extends WorkspaceBase {
+  readonly id: string;
   readonly path: string;
   readonly files: FileSystem;
   readonly tools: WorkspaceTools;
@@ -147,6 +148,8 @@ export class CloudflareComputerWorkspace extends WorkspaceBase {
 
   constructor(options: CloudflareComputerWorkspaceOptions) {
     super();
+    this.id = String(options.id || "").trim();
+    if (!this.id) throw new Error("CloudflareComputerWorkspace requires a stable id");
     this.path = normalize_root_path(options.root_path || "/workspace");
     this.files = new CloudflareComputerFileSystem(
       options.computer.fs as CloudflareComputerFileApi,

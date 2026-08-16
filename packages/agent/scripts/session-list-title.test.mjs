@@ -60,10 +60,10 @@ async function create_agent_with_titled_session(input) {
   );
   const agent = new Agent({
     id: input.agent_id,
-    workspace: new Workspace({ path: agent_path }),
     model: create_mock_title_model(input.title),
   });
-  const collection = agent.sessions;
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const collection = entry.sessions;
   const session = await collection.create({
     session_id: input.session_id,
   });
@@ -81,13 +81,14 @@ async function create_agent_with_titled_session(input) {
 
   return {
     agent,
+    entry,
     collection,
     session,
   };
 }
 
 test("list_sessions returns persisted title from active session metadata", async () => {
-  const { agent, collection, session } = await create_agent_with_titled_session({
+  const { agent, entry, collection, session } = await create_agent_with_titled_session({
     tmp_prefix: "downcity-agent-session-list-title-",
     agent_id: "list_title_agent",
     session_id: "active_session",
@@ -100,7 +101,7 @@ test("list_sessions returns persisted title from active session metadata", async
     const meta = JSON.parse(
       await fs.readFile(
         path.join(
-          agent.workspace.path,
+          entry.workspace.path,
           ".downcity",
           "agents",
           encodeURIComponent(agent.id),
@@ -118,7 +119,7 @@ test("list_sessions returns persisted title from active session metadata", async
     assert.equal(meta.preview_text, "Need the session list to show the generated title");
     const history_stat = await fs.stat(
       path.join(
-        agent.workspace.path,
+        entry.workspace.path,
         ".downcity",
         "agents",
         encodeURIComponent(agent.id),
@@ -149,7 +150,7 @@ test("list_sessions returns persisted title from active session metadata", async
 });
 
 test("list_sessions reflects canonical SessionMessages changes", async () => {
-  const { agent, collection, session } = await create_agent_with_titled_session({
+  const { agent, entry, collection, session } = await create_agent_with_titled_session({
     tmp_prefix: "downcity-agent-session-summary-repair-",
     agent_id: "summary_repair_agent",
     session_id: "summary_repair_session",
@@ -157,7 +158,7 @@ test("list_sessions reflects canonical SessionMessages changes", async () => {
     first_user_text: "Initial history",
   });
   const messages_dir = path.join(
-    agent.workspace.path,
+    entry.workspace.path,
     ".downcity",
     "agents",
     encodeURIComponent(agent.id),

@@ -10,7 +10,7 @@
 
 import http from "node:http";
 import { Hono } from "hono";
-import type { Agent } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent";
 import { registerSdkSessionRoutes } from "@/transport/http/routes/SessionRoutes.js";
 import { registerRuntimeRoutes } from "@/transport/http/routes/RuntimeRoutes.js";
 import { createNodeHttpServer } from "@/transport/http/NodeHttpAdapter.js";
@@ -36,16 +36,16 @@ export interface AgentHttpServerHandle {
 }
 
 /**
- * 把一个 `Agent` 暴露为最小 SDK HTTP 面。
+ * 把一个 `AgentWorkspace` 暴露为最小 SDK HTTP 面。
  */
 export class AgentHTTP {
-  private readonly agent: Agent;
+  private readonly agent_workspace: AgentWorkspace;
   private readonly runtime_options: AgentHttpRuntimeOptions;
   private cached_router: Hono | null = null;
   private cached_server: AgentHttpServerHandle | null = null;
 
-  constructor(agent: Agent, runtime_options: AgentHttpRuntimeOptions = {}) {
-    this.agent = agent;
+  constructor(agent_workspace: AgentWorkspace, runtime_options: AgentHttpRuntimeOptions = {}) {
+    this.agent_workspace = agent_workspace;
     this.runtime_options = runtime_options;
   }
 
@@ -59,10 +59,10 @@ export class AgentHTTP {
   router(): Hono {
     if (this.cached_router) return this.cached_router;
     const router = new Hono();
-    registerSdkSessionRoutes(router, this.agent.sessions, {
+    registerSdkSessionRoutes(router, this.agent_workspace.sessions, {
       resolve_session_model: this.runtime_options.resolve_session_model,
     });
-    registerRuntimeRoutes(router, this.agent);
+    registerRuntimeRoutes(router, this.agent_workspace);
     this.cached_router = router;
     return router;
   }

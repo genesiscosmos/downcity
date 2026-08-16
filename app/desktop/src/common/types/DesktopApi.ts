@@ -10,8 +10,6 @@ import type { RespondSessionInteractionInput, SessionApprovalMode, SessionMessag
 export interface DesktopAgentSummary {
   /** Agent 的全局稳定标识。 */
   agent_id: string;
-  /** Agent 持久化绑定的 Workspace ID。 */
-  workspace_id: string;
   /** Agent 使用的 City AIService 模型标识。 */
   model_id: string;
   /** Agent 注册配置的结构版本。 */
@@ -28,11 +26,13 @@ export interface DesktopWorkspaceSummary {
   name: string;
 }
 
-/** Desktop main 中一个 native Agent 的当前运行目标。 */
-export interface DesktopAgentRuntime {
-  /** 当前运行 Agent ID。 */
+/** Desktop main 中一个 Agent 已进入的 Workspace 执行边界。 */
+export interface DesktopAgentWorkspace {
+  /** 当前 Agent ID。 */
   agent_id: string;
-  /** 当前 Agent 持久化绑定的 Workspace。 */
+  /** 当前进入的 Workspace ID。 */
+  workspace_id: string;
+  /** 当前执行使用的 Workspace。 */
   workspace: DesktopWorkspaceSummary;
 }
 
@@ -40,8 +40,6 @@ export interface DesktopAgentRuntime {
 export interface DesktopCreateAgentResult {
   /** 新创建的独立 Agent 记录。 */
   agent: DesktopAgentSummary;
-  /** 同时登记的独立 Workspace 记录。 */
-  workspace: DesktopWorkspaceSummary;
 }
 
 /** Renderer 可见的 Plugin 来源。 */
@@ -125,6 +123,8 @@ export type DesktopChatRuntimeStatus =
 export interface DesktopChatRuntime {
   /** 运行态所属 Agent。 */
   agent_id: string;
+  /** 运行态所属 Workspace。 */
+  workspace_id: string;
   /** 运行态所属 Session。 */
   session_id: string;
   /** 当前运行阶段。 */
@@ -141,6 +141,8 @@ export interface DesktopChatRuntime {
 export interface DesktopChatMutationEvent {
   /** Mutation 所属 Agent。 */
   agent_id: string;
+  /** Mutation 所属 Workspace。 */
+  workspace_id: string;
   /** Mutation 所属 Session。 */
   session_id: string;
   /** SDK canonical Session mutation。 */
@@ -338,9 +340,9 @@ export interface DesktopApi {
     /** 列出共享 Registry 中的全部 Agent。 */
     list(): Promise<DesktopAgentSummary[]>;
     /** 创建共享注册记录。 */
-    create(agent_id: string, workspace_path: string, model_id: string): Promise<DesktopCreateAgentResult>;
-    /** 按 Agent 持久化绑定的 Workspace 创建 Desktop native Agent。 */
-    connect(agent_id: string): Promise<DesktopAgentRuntime>;
+    create(agent_id: string, model_id: string): Promise<DesktopCreateAgentResult>;
+    /** 让 Agent 进入指定 Workspace。 */
+    connect(agent_id: string, workspace_id: string): Promise<DesktopAgentWorkspace>;
   };
   /** 独立 Workspace Registry 能力。 */
   workspace: {
@@ -364,35 +366,35 @@ export interface DesktopApi {
     /** 读取当前 Federation 中可用于 Agent 对话的模型目录。 */
     list_models(): Promise<DesktopModelSummary[]>;
     /** 列出指定 Agent 的 Session。 */
-    list_sessions(agent_id: string): Promise<DesktopSessionSummary[]>;
+    list_sessions(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary[]>;
     /** 创建新的 Session。 */
-    create_session(agent_id: string): Promise<DesktopSessionSummary>;
+    create_session(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary>;
     /** 修改 Session 的用户可见标题。 */
-    rename_session(agent_id: string, session_id: string, title: string): Promise<string>;
+    rename_session(agent_id: string, workspace_id: string, session_id: string, title: string): Promise<string>;
     /** 将 Session 移入归档。 */
-    archive_session(agent_id: string, session_id: string): Promise<void>;
+    archive_session(agent_id: string, workspace_id: string, session_id: string): Promise<void>;
     /** 永久删除 Session。 */
-    remove_session(agent_id: string, session_id: string): Promise<boolean>;
+    remove_session(agent_id: string, workspace_id: string, session_id: string): Promise<boolean>;
     /** 列出指定 Agent 的已归档 Session。 */
-    list_archived_sessions(agent_id: string): Promise<DesktopSessionSummary[]>;
+    list_archived_sessions(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary[]>;
     /** 读取 Session canonical 消息和当前运行态。 */
-    get_snapshot(agent_id: string, session_id: string): Promise<DesktopChatSnapshot>;
+    get_snapshot(agent_id: string, workspace_id: string, session_id: string): Promise<DesktopChatSnapshot>;
     /** 读取 Session 的一个更早历史 Segment。 */
-    get_history(agent_id: string, session_id: string, before_sequence: number): Promise<DesktopChatHistoryPage>;
+    get_history(agent_id: string, workspace_id: string, session_id: string, before_sequence: number): Promise<DesktopChatHistoryPage>;
     /** 提交输入并在 Session 接受后返回。 */
-    send(agent_id: string, session_id: string, input: DesktopChatInput): Promise<DesktopChatSendResult>;
+    send(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatInput): Promise<DesktopChatSendResult>;
     /** 停止当前 Session Turn。 */
-    stop(agent_id: string, session_id: string): Promise<void>;
+    stop(agent_id: string, workspace_id: string, session_id: string): Promise<void>;
     /** 响应 Session 当前等待的审批或问题。 */
-    respond(agent_id: string, session_id: string, input: RespondSessionInteractionInput): Promise<void>;
+    respond(agent_id: string, workspace_id: string, session_id: string, input: RespondSessionInteractionInput): Promise<void>;
     /** 读取当前 Session 运行态。 */
-    get_runtime(agent_id: string, session_id: string): Promise<DesktopChatRuntime>;
+    get_runtime(agent_id: string, workspace_id: string, session_id: string): Promise<DesktopChatRuntime>;
     /** 读取当前 Session 的模型与审批配置。 */
-    get_configuration(agent_id: string, session_id: string): Promise<DesktopSessionConfiguration>;
+    get_configuration(agent_id: string, workspace_id: string, session_id: string): Promise<DesktopSessionConfiguration>;
     /** 切换当前 Session 模型。 */
-    set_model(agent_id: string, session_id: string, model_id: string): Promise<DesktopSessionConfiguration>;
+    set_model(agent_id: string, workspace_id: string, session_id: string, model_id: string): Promise<DesktopSessionConfiguration>;
     /** 切换当前 Session 审批模式。 */
-    set_approval_mode(agent_id: string, session_id: string, approval_mode: SessionApprovalMode): Promise<DesktopSessionConfiguration>;
+    set_approval_mode(agent_id: string, workspace_id: string, session_id: string, approval_mode: SessionApprovalMode): Promise<DesktopSessionConfiguration>;
     /** 订阅 canonical Session mutation。 */
     on_mutation(callback: (event: DesktopChatMutationEvent) => void): () => void;
     /** 订阅 Session 运行态变化。 */

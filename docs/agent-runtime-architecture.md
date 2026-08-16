@@ -6,6 +6,8 @@
 >
 > 本文基于 2026-07-25 对 Codex、Anthropic Sandbox Runtime、OpenHands 与 VS Code 的公开源码调研形成，同时记录目标设计与实际迁移进度。
 
+> 2026-08-16 更新：Agent 已不再绑定单一 Workspace。当前公开模型以 [`agent-sdk-architecture.md`](./agent-sdk-architecture.md) 为准：`new Agent(...)` 创建主体，`agent.enter(new Workspace({ id, ... }))` 创建执行边界。
+
 实现进度：Workspace 已统一提供 LocalFileSystem、WorkspaceTools、Env、SessionStore 与可选 Shell；Agent 统一注册 Session Interaction、Workspace、Plugin 与自定义 Tools。默认 Store 沿用 Workspace 内 `.downcity` JSONL 布局；SQLite 与 Plugin 进程隔离仍属于后续阶段。
 
 源码按职责直接表达领域边界：
@@ -239,7 +241,7 @@ Downcity 应借鉴：
 ```mermaid
 flowchart TD
     App["SDK 调用方"] --> Workspace["new Workspace({ path, shell })"]
-    App --> Agent["new Agent({ id, workspace })"]
+    App --> Agent["new Agent({ id, plugins })"]
     Agent --> Workspace
     Workspace --> Files["LocalFileSystem"]
     Workspace --> Shell["Shell"]
@@ -764,8 +766,9 @@ JSONL 可以作为导入导出和审计格式，不必永久承担并发数据�
 所有权：
 
 ```text
-Application creates Agent and its exclusive Workspace
-Agent owns one Workspace instance
+Application creates Agent and Workspace independently
+Agent owns identity, model, instruction and one PluginRegistry
+AgentWorkspace owns one execution boundary entered by Agent
 Workspace owns LocalFileSystem, SessionStore and optional Shell
 Shell owns child processes and Sandbox Adapter
 ```
@@ -780,9 +783,9 @@ Shell owns child processes and Sandbox Adapter
 6. Workspace 关闭 Shell 的活动进程与 PTY。
 7. Workspace 释放 Shell Sandbox Adapter。
 
-Workspace 实例与 Agent 严格一对一绑定，`agent.dispose()` 必须同时释放 Store、Shell 与 Sandbox。多个 Agent 可以操作同一物理目录，但必须分别创建 Workspace 实例，避免共享 PTY、审批状态和生命周期。
+Agent 不与 Workspace 一对一绑定。同一个 Agent 可以通过 `agent.enter(workspace)` 同时进入多个 Workspace，每个 AgentWorkspace 分别持有 Session、Shell、env、日志与 Workspace 级 Plugin 生命周期。`agent.dispose()` 会先离开全部 Workspace，再停止 Agent 级 Plugin 生命周期。
 
-同一个 `agent_id` 在同一物理 Workspace 中只允许一个活动 runtime。ActionSchedule 是本地单 runtime 调度器，不提供分布式 owner、lease 或多进程协调；宿主应在进程管理层避免重复启动同一个 Agent。
+同一个 `agent_id + workspace_id` 在同一宿主中只允许一个活动执行边界。ActionSchedule 是本地调度器，不提供分布式 owner、lease 或多进程协调；宿主应在进程管理层避免重复装配同一个执行目标。
 
 所有 dispose 必须幂等。单步失败不能阻止其他资源清理，最终返回聚合错误。
 
@@ -905,7 +908,7 @@ interface WorkspaceBackend {
 
 ## 22. 验收标准
 
-1. 公共 API 使用 `new Workspace({ path, shell? })` 与 `new Agent({ id, workspace })`。
+1. 公共 API 使用 `new Agent({ id, plugins? })` 与 `agent.enter(new Workspace({ id, path, shell? }))`。
 2. 不存在 AgentHost 或通用 SystemHandler。
 3. Agent 与 Session 不包含平台分支。
 4. File/Search Tool 不依赖 Shell command protocol。
@@ -921,7 +924,7 @@ interface WorkspaceBackend {
 ## 23. 最终框架
 
 ```text
-new Agent({ id, workspace })
+new Agent({ id }).enter(workspace)
               │
               ▼
 new Workspace({ path, shell? })

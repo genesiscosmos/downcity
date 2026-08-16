@@ -25,6 +25,7 @@ import {
 } from "@/task/runtime/TaskActionExecution.js";
 import { TASK_PLUGIN_PROMPT } from "@/task/runtime/TaskPluginSystem.js";
 import { resolve_runtime_timezone } from "@downcity/agent";
+import type { TaskWorkspaceRuntime } from "@/task/types/TaskWorkspaceRuntime.js";
 
 const TASK_LOG_PREFIX = "[TASK]";
 
@@ -63,16 +64,7 @@ export class TaskPlugin extends BasePlugin {
    * - 这是 per-plugin-instance 的长期运行态。
    * - 不再复用 module-global 单例。
    */
-  public cronEngine: TaskCronTriggerEngine | null = null;
-
-  /**
-   * 当前实例持有的运行中 task 锁。
-   *
-   * 关键点（中文）
-   * - scheduler reload 会替换 cron engine。
-   * - 锁必须挂在 plugin 实例上，避免 reload 后同一 task 被新旧调度器并发触发。
-   */
-  private readonly runningTaskIds = new Set<string>();
+  private readonly runtimes_by_workspace = new Map<string, TaskWorkspaceRuntime>();
 
   constructor(options?: TaskPluginOptions) {
     super();
@@ -86,7 +78,7 @@ export class TaskPlugin extends BasePlugin {
       reload: create_action({
         description: "Reload the task scheduler from persisted tasks.",
         execute: async ({ context }) => {
-          const result = await this.restartCronRuntime(context);
+          const result = await this.restart_cron_runtime(context);
           context.logger.info(
             formatTaskLogMessage(
               `Task cron trigger reloaded (tasks=${result.tasksFound}, jobs=${result.jobsScheduled})`,
@@ -105,8 +97,8 @@ export class TaskPlugin extends BasePlugin {
     };
 
     this.lifecycle = {
-      start: async (context) => {
-        const result = await this.startCronRuntime(context);
+      enter_workspace: async (context) => {
+        const result = await this.start_cron_runtime(context);
         if (!result) return;
         context.logger.info(
           formatTaskLogMessage(
@@ -114,8 +106,8 @@ export class TaskPlugin extends BasePlugin {
           ),
         );
       },
-      stop: async (context) => {
-        const stopped = await this.stopCronRuntime();
+      leave_workspace: async (context) => {
+        const stopped = await this.stop_cron_runtime(context.workspace_id);
         if (!stopped) return;
         context.logger.info(formatTaskLogMessage("Task cron trigger stopped"));
       },
@@ -125,42 +117,46 @@ export class TaskPlugin extends BasePlugin {
   /**
    * 启动当前实例的 cron runtime。
    */
-  async startCronRuntime(
+  async start_cron_runtime(
     context: PluginContext,
   ): Promise<TaskCronRegisterResult | null> {
-    if (this.cronEngine) return null;
+    if (this.runtimes_by_workspace.has(context.workspace_id)) return null;
 
     const engine = new TaskCronTriggerEngine();
+    const running_task_ids = new Set<string>();
     const registerResult = await registerTaskCronJobs({
       context,
       engine,
       timezone: this.resolveTimezone(),
-      runningTaskIds: this.runningTaskIds,
+      runningTaskIds: running_task_ids,
     });
     await engine.start();
-    this.cronEngine = engine;
+    this.runtimes_by_workspace.set(context.workspace_id, {
+      cron_engine: engine,
+      running_task_ids,
+    });
     return registerResult;
   }
 
   /**
    * 停止当前实例的 cron runtime。
    */
-  async stopCronRuntime(): Promise<boolean> {
-    if (!this.cronEngine) return false;
-    const previous = this.cronEngine;
-    this.cronEngine = null;
-    await previous.stop();
+  async stop_cron_runtime(workspace_id: string): Promise<boolean> {
+    const runtime = this.runtimes_by_workspace.get(workspace_id);
+    if (!runtime) return false;
+    this.runtimes_by_workspace.delete(workspace_id);
+    await runtime.cron_engine.stop();
     return true;
   }
 
   /**
    * 重启当前实例的 cron runtime。
    */
-  async restartCronRuntime(
+  async restart_cron_runtime(
     context: PluginContext,
   ): Promise<TaskCronRegisterResult> {
-    await this.stopCronRuntime();
-    const started = await this.startCronRuntime(context);
+    await this.stop_cron_runtime(context.workspace_id);
+    const started = await this.start_cron_runtime(context);
     return (
       started || {
         tasksFound: 0,
@@ -181,7 +177,7 @@ export class TaskPlugin extends BasePlugin {
       context: params.context,
       action: params.action,
       title: params.title,
-      reloadScheduler: async (context) => this.restartCronRuntime(context),
+      reloadScheduler: async (context) => this.restart_cron_runtime(context),
     });
   }
 

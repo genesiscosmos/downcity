@@ -17,6 +17,9 @@ export interface PluginContext {
   /** 当前 Agent 的稳定标识。 */
   readonly agent_id: string;
 
+  /** 当前 Workspace 的稳定标识。 */
+  readonly workspace_id: string;
+
   /** 当前 Workspace 的绝对根目录。 */
   readonly workspace_path: string;
 
@@ -26,7 +29,7 @@ export interface PluginContext {
   /** 当前 Workspace 显式挂载的 Shell；未启用时为空。 */
   readonly shell?: Shell;
 
-  /** 当前 Agent 独享的统一日志器。 */
+  /** 当前 Agent 在当前 Workspace 中使用的统一日志器。 */
   readonly logger: Logger;
 
   /** 当前 Agent 的 Session 集合入口。 */

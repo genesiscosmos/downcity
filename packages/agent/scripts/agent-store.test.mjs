@@ -19,7 +19,7 @@ async function create_test_roots(t) {
 
 test("Workspace provides SessionStore on the same file resource", async (t) => {
   const { workspace_path } = await create_test_roots(t);
-  const workspace = new Workspace({ path: workspace_path });
+  const workspace = new Workspace({ id: "test_workspace", path: workspace_path });
   const store = workspace.create_session_store("store-test");
   const session_store = store.session("first");
 
@@ -59,7 +59,7 @@ test("Workspace provides SessionStore on the same file resource", async (t) => {
 
 test("LocalSessionStore archives and cleans sessions", async (t) => {
   const { workspace_path } = await create_test_roots(t);
-  const store = new Workspace({ path: workspace_path }).create_session_store("archive-test");
+  const store = new Workspace({ id: "test_workspace", path: workspace_path }).create_session_store("archive-test");
   await store.session("archived").messages.initialize();
 
   const archived = await store.archive_session("archived");
@@ -71,13 +71,11 @@ test("LocalSessionStore archives and cleans sessions", async (t) => {
 
 test("Agent obtains its Store from Workspace", async (t) => {
   const { workspace_path } = await create_test_roots(t);
-  const workspace = new Workspace({ path: workspace_path });
-  const agent = new Agent({
-    id: "dispose-test",
-    workspace,
-  });
+  const workspace = new Workspace({ id: "test_workspace", path: workspace_path });
+  const agent = new Agent({ id: "dispose-test" });
+  const entry = agent.enter(workspace);
 
-  assert.equal(agent.workspace, workspace);
-  assert.equal((await agent.sessions.create({ session_id: "first" })).id, "first");
+  assert.equal(entry.workspace, workspace);
+  assert.equal((await entry.sessions.create({ session_id: "first" })).id, "first");
   await agent.dispose();
 });

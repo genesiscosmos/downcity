@@ -28,3 +28,13 @@ export function get_local_env_path(root_path: string): string {
 export function get_local_plugins_path(root_path: string): string {
   return path.join(root_path, "plugins");
 }
+
+/** 返回全部 Agent 定义的根目录。 */
+export function get_local_agents_path(root_path: string): string {
+  return path.join(root_path, "agents");
+}
+
+/** 返回单个 Agent 的定义目录。 */
+export function get_local_agent_path(root_path: string, agent_id: string): string {
+  return path.join(get_local_agents_path(root_path), agent_id);
+}

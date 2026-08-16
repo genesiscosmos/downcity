@@ -5,8 +5,8 @@ import type { DesktopAgentSummary, DesktopApi } from "../common/types/DesktopApi
 const desktop_api: DesktopApi = {
   agent: {
     list: (): Promise<DesktopAgentSummary[]> => ipcRenderer.invoke("agent:list"),
-    create: (agent_id, workspace_path, model_id) => ipcRenderer.invoke("agent:create", agent_id, workspace_path, model_id),
-    connect: (agent_id) => ipcRenderer.invoke("agent:connect", agent_id),
+    create: (agent_id, model_id) => ipcRenderer.invoke("agent:create", agent_id, model_id),
+    connect: (agent_id, workspace_id) => ipcRenderer.invoke("agent:connect", agent_id, workspace_id),
   },
   workspace: {
     list: () => ipcRenderer.invoke("workspace:list"),
@@ -20,21 +20,21 @@ const desktop_api: DesktopApi = {
   },
   chat: {
     list_models: () => ipcRenderer.invoke("chat:list-models"),
-    list_sessions: (agent_id) => ipcRenderer.invoke("chat:list-sessions", agent_id),
-    create_session: (agent_id) => ipcRenderer.invoke("chat:create-session", agent_id),
-    rename_session: (agent_id, session_id, title) => ipcRenderer.invoke("chat:rename-session", agent_id, session_id, title),
-    archive_session: (agent_id, session_id) => ipcRenderer.invoke("chat:archive-session", agent_id, session_id),
-    remove_session: (agent_id, session_id) => ipcRenderer.invoke("chat:remove-session", agent_id, session_id),
-    list_archived_sessions: (agent_id) => ipcRenderer.invoke("chat:list-archived-sessions", agent_id),
-    get_snapshot: (agent_id, session_id) => ipcRenderer.invoke("chat:get-snapshot", agent_id, session_id),
-    get_history: (agent_id, session_id, before_sequence) => ipcRenderer.invoke("chat:get-history", agent_id, session_id, before_sequence),
-    send: (agent_id, session_id, input) => ipcRenderer.invoke("chat:send", agent_id, session_id, input),
-    stop: (agent_id, session_id) => ipcRenderer.invoke("chat:stop", agent_id, session_id),
-    respond: (agent_id, session_id, input) => ipcRenderer.invoke("chat:respond", agent_id, session_id, input),
-    get_runtime: (agent_id, session_id) => ipcRenderer.invoke("chat:get-runtime", agent_id, session_id),
-    get_configuration: (agent_id, session_id) => ipcRenderer.invoke("chat:get-configuration", agent_id, session_id),
-    set_model: (agent_id, session_id, model_id) => ipcRenderer.invoke("chat:set-model", agent_id, session_id, model_id),
-    set_approval_mode: (agent_id, session_id, approval_mode) => ipcRenderer.invoke("chat:set-approval-mode", agent_id, session_id, approval_mode),
+    list_sessions: (agent_id, workspace_id) => ipcRenderer.invoke("chat:list-sessions", agent_id, workspace_id),
+    create_session: (agent_id, workspace_id) => ipcRenderer.invoke("chat:create-session", agent_id, workspace_id),
+    rename_session: (...args) => ipcRenderer.invoke("chat:rename-session", ...args),
+    archive_session: (...args) => ipcRenderer.invoke("chat:archive-session", ...args),
+    remove_session: (...args) => ipcRenderer.invoke("chat:remove-session", ...args),
+    list_archived_sessions: (...args) => ipcRenderer.invoke("chat:list-archived-sessions", ...args),
+    get_snapshot: (...args) => ipcRenderer.invoke("chat:get-snapshot", ...args),
+    get_history: (...args) => ipcRenderer.invoke("chat:get-history", ...args),
+    send: (...args) => ipcRenderer.invoke("chat:send", ...args),
+    stop: (...args) => ipcRenderer.invoke("chat:stop", ...args),
+    respond: (...args) => ipcRenderer.invoke("chat:respond", ...args),
+    get_runtime: (...args) => ipcRenderer.invoke("chat:get-runtime", ...args),
+    get_configuration: (...args) => ipcRenderer.invoke("chat:get-configuration", ...args),
+    set_model: (...args) => ipcRenderer.invoke("chat:set-model", ...args),
+    set_approval_mode: (...args) => ipcRenderer.invoke("chat:set-approval-mode", ...args),
     on_mutation: (callback) => {
       const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof callback>[0]) => callback(value);
       ipcRenderer.on("chat:mutation", handler);

@@ -74,16 +74,16 @@ test("compact Handle 在队列命令完成后兑现并阻塞后续 Prompt", asyn
   );
   const agent = new Agent({
     id: "compact_handle_agent",
-    workspace: new Workspace({ path: project_root }),
     model: new MockLanguageModelV3({
       modelId: "compact-handle-model",
       doStream: async () => create_stream_text_result("done"),
     }),
     session_class: CompactSession,
   });
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: project_root }));
 
   try {
-    const session = await agent.sessions.create({
+    const session = await entry.sessions.create({
       session_id: "compact_handle_session",
     });
     const compact_handle = await session.compact();

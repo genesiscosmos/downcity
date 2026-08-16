@@ -1,6 +1,6 @@
 {
   "name": "@downcity/city",
-  "version": "0.2.276",
+  "version": "0.2.277",
   "description": "Downcity Agent 内存索引与 HTTP/RPC 转发器。",
   "type": "module",
   "main": "./bin/index.js",

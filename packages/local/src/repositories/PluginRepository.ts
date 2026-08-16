@@ -5,9 +5,9 @@
  * Plugin Manifest 与 Resource Schema 的业务校验由调用方在写入前完成。
  */
 
-import type { JsonObject } from "@downcity/agent";
 import type { LocalCrypto } from "@/database/LocalCrypto.js";
 import type { LocalDatabase } from "@/database/LocalDatabase.js";
+import type { AgentRepository } from "@/repositories/AgentRepository.js";
 import type {
   LocalAgentPluginBinding,
   LocalPluginInstallation,
@@ -19,74 +19,44 @@ export class PluginRepository {
   constructor(
     private readonly database: LocalDatabase,
     private readonly crypto_adapter: LocalCrypto,
+    private readonly agents: AgentRepository,
   ) {}
 
   /** 列出一个 Agent 的全部 Plugin Binding。 */
   list_agent_bindings(agent_id_input: string): LocalAgentPluginBinding[] {
     const agent_id = require_text(agent_id_input, "agent_id");
-    this.require_agent(agent_id);
-    const rows = this.database.prepare(`
-      SELECT * FROM agent_plugins WHERE agent_id = ? ORDER BY plugin_name ASC;
-    `).all(agent_id) as unknown as AgentPluginRow[];
-    return rows.map((row) => this.decode_binding(row));
+    return this.agents.list_plugin_bindings(agent_id);
   }
 
   /** 读取一个 Agent 的指定 Plugin Binding。 */
   get_agent_binding(agent_id_input: string, plugin_name_input: string): LocalAgentPluginBinding | null {
     const agent_id = require_text(agent_id_input, "agent_id");
     const plugin_name = normalize_plugin_name(plugin_name_input);
-    this.require_agent(agent_id);
-    const row = this.database.prepare(`
-      SELECT * FROM agent_plugins WHERE agent_id = ? AND plugin_name = ? LIMIT 1;
-    `).get(agent_id, plugin_name) as AgentPluginRow | undefined;
-    return row ? this.decode_binding(row) : null;
+    return this.agents.get_plugin_binding(agent_id, plugin_name);
   }
 
   /** 原子新建或更新一个 Plugin Binding。 */
   save_agent_binding(input: Omit<LocalAgentPluginBinding, "created_at" | "updated_at">): LocalAgentPluginBinding {
     const agent_id = require_text(input.agent_id, "agent_id");
     const plugin_name = normalize_plugin_name(input.plugin_name);
-    this.require_agent(agent_id);
+    if (!this.agents.get(agent_id)) throw new Error(`Agent not found: ${agent_id}`);
     const resource_ids = normalize_resource_ids(input.resource_ids);
     for (const resource_id of resource_ids) this.require_resource(plugin_name, resource_id);
-    const existing = this.get_agent_binding(agent_id, plugin_name);
-    const current_time = new Date().toISOString();
-    const binding: LocalAgentPluginBinding = {
+    return this.agents.save_plugin_binding({
       agent_id,
       plugin_name,
       enabled: input.enabled,
       config: input.config,
       resource_ids,
-      created_at: existing?.created_at ?? current_time,
-      updated_at: current_time,
-    };
-    this.database.prepare(`
-      INSERT INTO agent_plugins (
-        agent_id, plugin_name, enabled, config_encrypted, resource_ids_json,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(agent_id, plugin_name) DO UPDATE SET
-        enabled = excluded.enabled,
-        config_encrypted = excluded.config_encrypted,
-        resource_ids_json = excluded.resource_ids_json,
-        updated_at = excluded.updated_at;
-    `).run(
-      binding.agent_id,
-      binding.plugin_name,
-      binding.enabled ? 1 : 0,
-      this.crypto_adapter.encrypt(JSON.stringify(binding.config)),
-      JSON.stringify(binding.resource_ids),
-      binding.created_at,
-      binding.updated_at,
-    );
-    return binding;
+    });
   }
 
   /** 删除一个 Agent Plugin Binding。 */
   remove_agent_binding(agent_id_input: string, plugin_name_input: string): void {
-    this.database.prepare(`
-      DELETE FROM agent_plugins WHERE agent_id = ? AND plugin_name = ?;
-    `).run(require_text(agent_id_input, "agent_id"), normalize_plugin_name(plugin_name_input));
+    this.agents.remove_plugin_binding(
+      require_text(agent_id_input, "agent_id"),
+      normalize_plugin_name(plugin_name_input),
+    );
   }
 
   /** 列出一个 Plugin 拥有的全部 Resource。 */
@@ -144,10 +114,11 @@ export class PluginRepository {
   remove_resource(plugin_name_input: string, resource_id_input: string): void {
     const plugin_name = normalize_plugin_name(plugin_name_input);
     const resource_id = normalize_resource_id(resource_id_input);
-    const rows = this.database.prepare(`
-      SELECT agent_id, resource_ids_json FROM agent_plugins WHERE plugin_name = ?;
-    `).all(plugin_name) as Array<{ agent_id: string; resource_ids_json: string }>;
-    const reference = rows.find((row) => parse_string_array(row.resource_ids_json).includes(resource_id));
+    const reference = this.agents.list()
+      .flatMap((agent) => this.agents.list_plugin_bindings(agent.agent_id))
+      .find((binding) =>
+        binding.plugin_name === plugin_name && binding.resource_ids.includes(resource_id)
+      );
     if (reference) {
       throw new Error(`Plugin Resource is still bound to agent ${reference.agent_id}: ${resource_id}`);
     }
@@ -206,9 +177,7 @@ export class PluginRepository {
     const installation = this.get_installation(installation_id_input);
     if (!installation) throw new Error(`Plugin installation not found: ${installation_id_input}`);
     for (const manifest of installation.manifest.plugins) {
-      const binding = this.database.prepare(
-        "SELECT agent_id FROM agent_plugins WHERE plugin_name = ? LIMIT 1;",
-      ).get(manifest.name) as { agent_id: string } | undefined;
+      const binding = this.find_binding(manifest.name);
       if (binding) throw new Error(`Plugin is still bound to agent ${binding.agent_id}: ${manifest.name}`);
       const resource = this.database.prepare(
         "SELECT resource_id FROM plugin_resources WHERE plugin_name = ? LIMIT 1;",
@@ -224,27 +193,12 @@ export class PluginRepository {
   /** 断言一个 Plugin 没有任何 Binding 或 Resource，可用于安装更新兼容检查。 */
   assert_plugin_unused(plugin_name_input: string): void {
     const plugin_name = normalize_plugin_name(plugin_name_input);
-    const binding = this.database.prepare(
-      "SELECT agent_id FROM agent_plugins WHERE plugin_name = ? LIMIT 1;",
-    ).get(plugin_name) as { agent_id: string } | undefined;
+    const binding = this.find_binding(plugin_name);
     if (binding) throw new Error(`Plugin is still bound to agent ${binding.agent_id}: ${plugin_name}`);
     const resource = this.database.prepare(
       "SELECT resource_id FROM plugin_resources WHERE plugin_name = ? LIMIT 1;",
     ).get(plugin_name) as { resource_id: string } | undefined;
     if (resource) throw new Error(`Plugin still owns Resource ${resource.resource_id}: ${plugin_name}`);
-  }
-
-  /** 解密并恢复 Plugin Binding。 */
-  private decode_binding(row: AgentPluginRow): LocalAgentPluginBinding {
-    return {
-      agent_id: row.agent_id,
-      plugin_name: row.plugin_name,
-      enabled: row.enabled === 1,
-      config: JSON.parse(this.crypto_adapter.decrypt(row.config_encrypted)) as JsonObject,
-      resource_ids: parse_string_array(row.resource_ids_json),
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-    };
   }
 
   /** 解密并恢复 Plugin Resource。 */
@@ -256,12 +210,11 @@ export class PluginRepository {
     return { ...row, item };
   }
 
-  /** 断言 Agent 配置存在。 */
-  private require_agent(agent_id: string): void {
-    const found = this.database.prepare(
-      "SELECT 1 FROM managed_agents WHERE agent_id = ? LIMIT 1;",
-    ).get(agent_id);
-    if (!found) throw new Error(`Agent not found: ${agent_id}`);
+  /** 查找引用指定 Plugin 的第一个 Agent Binding。 */
+  private find_binding(plugin_name: string): LocalAgentPluginBinding | undefined {
+    return this.agents.list()
+      .flatMap((agent) => this.agents.list_plugin_bindings(agent.agent_id))
+      .find((binding) => binding.plugin_name === plugin_name);
   }
 
   /** 断言 Binding 引用的 Resource 存在。 */
@@ -271,15 +224,6 @@ export class PluginRepository {
     }
   }
 
-}
-
-interface AgentPluginRow extends Omit<LocalAgentPluginBinding, "enabled" | "config" | "resource_ids"> {
-  /** SQLite 整数布尔值。 */
-  enabled: number;
-  /** 加密后的 Plugin 配置。 */
-  config_encrypted: string;
-  /** Resource ID JSON 数组。 */
-  resource_ids_json: string;
 }
 
 interface PluginResourceRow extends Omit<LocalPluginResource, "item"> {
@@ -336,18 +280,6 @@ function normalize_resource_ids(input: readonly string[]): string[] {
   const values = input.map(normalize_resource_id);
   if (new Set(values).size !== values.length) throw new Error("Plugin Binding resource_ids must be unique");
   return values;
-}
-
-/** 解析持久化字符串数组。 */
-function parse_string_array(value: string): string[] {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed)
-      ? [...new Set(parsed.map((item) => String(item || "").trim()).filter(Boolean))]
-      : [];
-  } catch {
-    return [];
-  }
 }
 
 /** 要求字符串字段非空。 */

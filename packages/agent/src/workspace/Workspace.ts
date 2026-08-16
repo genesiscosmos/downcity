@@ -38,6 +38,9 @@ function resolve_workspace_path(input: string): string {
 
 /** 本地 Workspace。 */
 export class Workspace extends WorkspaceBase {
+  /** Workspace 的稳定标识。 */
+  readonly id: string;
+
   /** 已解析且不可变的项目根目录。 */
   readonly path: string;
 
@@ -67,6 +70,8 @@ export class Workspace extends WorkspaceBase {
 
   constructor(options: WorkspaceOptions) {
     super();
+    this.id = String(options.id || "").trim();
+    if (!this.id) throw new Error("Workspace requires a non-empty id");
     this.path = resolve_workspace_path(options.path);
     this.files = new LocalFileSystem(this.path);
     this.env = resolve_workspace_env(this.path, options.env);

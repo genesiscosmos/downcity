@@ -22,7 +22,7 @@ interface ChatSidebarProps {
 export function ChatSidebar({ controller, open_create_workspace, open_create_agent }: ChatSidebarProps) {
   const [archive_open, set_archive_open] = useState(false);
   const workspace = controller.workspaces.find((item) => item.workspace_id === controller.active_workspace_id) ?? controller.workspaces[0];
-  const workspace_agents = controller.agents.filter((agent) => agent.workspace_id === workspace?.workspace_id);
+  const workspace_agents = controller.agents;
 
   const open_archives = () => {
     set_archive_open(true);

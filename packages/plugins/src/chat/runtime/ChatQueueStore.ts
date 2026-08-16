@@ -176,10 +176,10 @@ export function getSharedChatQueueStore(): ChatQueueStore {
  */
 export function resolveChatQueueStore(context?: PluginContext): ChatQueueStorePort {
   const chatService = context?.plugins.get("chat") as
-    | { queueStore?: ChatQueueStorePort }
+    | { queue_store?: (context: PluginContext) => ChatQueueStorePort }
     | undefined;
-  if (chatService?.queueStore) {
-    return chatService.queueStore;
+  if (chatService?.queue_store && context) {
+    return chatService.queue_store(context);
   }
   return sharedChatQueueStore;
 }

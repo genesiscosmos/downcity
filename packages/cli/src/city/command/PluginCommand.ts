@@ -10,7 +10,10 @@
 import fs from "fs-extra";
 import type { Command } from "commander";
 import type { JsonObject, JsonValue } from "@downcity/agent";
-import { resolve_cli_agent_target } from "@/city/agent/AgentSelection.js";
+import {
+  resolve_cli_agent_id,
+  resolve_cli_agent_target,
+} from "@/city/agent/AgentSelection.js";
 import { callServer } from "@/city/process/daemon/Client.js";
 import { get_plugin_installation_dir_path } from "@/city/process/registry/CityPaths.js";
 import {
@@ -194,15 +197,15 @@ function register_binding_commands(plugin: Command): void {
     .option("--config <json>", t({ zh: "完整配置 JSON", en: "complete config JSON" }))
     .helpOption("--help", helpText())
     .action(async (plugin_name: string, agent_id: string | undefined, options: { config?: string }) => {
-      const target = await resolve_cli_agent_target(agent_id);
+      const resolved_agent_id = await resolve_cli_agent_id(agent_id);
       const catalog_item = get_plugin_catalog_item(plugin_name);
       if (!catalog_item) throw new Error(`Plugin not found: ${plugin_name}`);
-      const existing = get_agent_plugin_binding(target.agent_id, plugin_name);
+      const existing = get_agent_plugin_binding(resolved_agent_id, plugin_name);
       const config = options.config
         ? parse_json_object(options.config, "config")
         : existing?.config ?? catalog_item.default_config;
       const binding = set_agent_plugin_binding({
-        agent_id: target.agent_id,
+        agent_id: resolved_agent_id,
         plugin_name,
         enabled: true,
         config,
@@ -220,14 +223,14 @@ function register_binding_commands(plugin: Command): void {
     .command("disable <plugin_name> [agent_id]")
     .helpOption("--help", helpText())
     .action(async (plugin_name: string, agent_id: string | undefined) => {
-      const target = await resolve_cli_agent_target(agent_id);
-      const existing = get_agent_plugin_binding(target.agent_id, plugin_name);
+      const resolved_agent_id = await resolve_cli_agent_id(agent_id);
+      const existing = get_agent_plugin_binding(resolved_agent_id, plugin_name);
       if (!existing) throw new Error(`Plugin is not bound to agent: ${plugin_name}`);
       set_agent_plugin_binding({ ...existing, enabled: false });
       emitCliBlock({
         tone: "success",
         title: "Plugin disabled",
-        summary: `${plugin_name} · ${target.agent_id}`,
+        summary: `${plugin_name} · ${resolved_agent_id}`,
         note: "新的 Plugin 装配会在下次 City 装配 Agent 时生效。",
       });
     });
@@ -251,16 +254,16 @@ function register_binding_commands(plugin: Command): void {
         json?: boolean;
       },
     ) => {
-      const target = await resolve_cli_agent_target(agent_id);
-      const existing = get_agent_plugin_binding(target.agent_id, plugin_name);
+      const resolved_agent_id = await resolve_cli_agent_id(agent_id);
+      const existing = get_agent_plugin_binding(resolved_agent_id, plugin_name);
       if (options.remove) {
-        remove_agent_plugin_binding(target.agent_id, plugin_name);
+        remove_agent_plugin_binding(resolved_agent_id, plugin_name);
         emitCliBlock({ tone: "success", title: "Plugin binding removed", summary: plugin_name });
         return;
       }
       if (options.set) {
         const binding = set_agent_plugin_binding({
-          agent_id: target.agent_id,
+          agent_id: resolved_agent_id,
           plugin_name,
           enabled: existing?.enabled ?? true,
           config: parse_json_object(options.set, "config"),
@@ -284,7 +287,7 @@ function register_binding_commands(plugin: Command): void {
         const catalog_item = get_plugin_catalog_item(plugin_name);
         if (!catalog_item) throw new Error(`Plugin not found: ${plugin_name}`);
         const binding = await prompt_and_save_plugin_binding({
-          agent_id: target.agent_id,
+          agent_id: resolved_agent_id,
           plugin: catalog_item,
           enabled: existing?.enabled ?? true,
         });
@@ -419,6 +422,10 @@ function register_action_command(plugin: Command): void {
     .option("--input <json>", t({ zh: "Action 输入 JSON", en: "Action input JSON" }))
     .option("--host <host>", t({ zh: "覆盖 Gateway host", en: "override Gateway host" }))
     .option("--port <port>", t({ zh: "覆盖 Gateway port", en: "override Gateway port" }), parsePort)
+    .option("--workspace <id-or-path>", t({
+      zh: "指定 Action 使用的 Workspace ID 或路径",
+      en: "select the Workspace ID or path for this Action",
+    }))
     .option("--token <token>", t({ zh: "Agent Bearer Token", en: "Agent Bearer token" }))
     .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
     .helpOption("--help", helpText())
@@ -426,11 +433,19 @@ function register_action_command(plugin: Command): void {
       plugin_name: string,
       action_name: string,
       agent_id: string | undefined,
-      options: { input?: string; host?: string; port?: number; token?: string; json?: boolean },
+      options: {
+        input?: string;
+        host?: string;
+        port?: number;
+        workspace?: string;
+        token?: string;
+        json?: boolean;
+      },
     ) => {
-      const target = await resolve_cli_agent_target(agent_id);
+      const target = await resolve_cli_agent_target(agent_id, options.workspace);
       const remote = await callServer<PluginActionHttpResponse>({
         agent_id: target.agent_id,
+        workspace_id: target.workspace_id,
         path: "/api/plugins/action",
         method: "POST",
         timeoutMs: 120_000,
@@ -451,6 +466,7 @@ function register_action_command(plugin: Command): void {
         title: remote.success && result?.success ? "plugin action ok" : "plugin action failed",
         data: {
           agent_id: target.agent_id,
+          workspace_id: target.workspace_id,
           plugin_name,
           action_name,
           ...(result?.data !== undefined ? { data: result.data } : {}),

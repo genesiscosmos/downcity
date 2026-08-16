@@ -42,7 +42,7 @@ export function create_desktop_local_data(): DesktopLocalData {
   const crypto_adapter = new LocalCrypto(root_path);
   const secure_settings = new SecureSettingRepository(database, crypto_adapter);
   const workspaces = new WorkspaceRepository(database, crypto_adapter);
-  const agents = new AgentRepository(database, crypto_adapter, workspaces);
-  const plugins = new PluginRepository(database, crypto_adapter);
+  const agents = new AgentRepository(root_path);
+  const plugins = new PluginRepository(database, crypto_adapter, agents);
   return { root_path, database, agents, workspaces, plugins, secure_settings };
 }

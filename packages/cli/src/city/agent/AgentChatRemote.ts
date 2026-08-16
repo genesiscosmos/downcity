@@ -34,10 +34,12 @@ import { listPlatformModelChoices } from "@/city/runtime/city-model/ExecutionMod
 import type { AgentChatModelChoice } from "@/city/types/AgentChatModel.js";
 import {
   create_cli_agent,
+  create_cli_workspace,
   create_cli_plugin_loader,
   resolve_cli_agent_model,
 } from "@/city/runtime/AgentAssembly.js";
 import { create_cli_local_data } from "@/city/runtime/LocalData.js";
+import { resolve_cli_agent_target } from "@/city/agent/AgentSelection.js";
 
 /**
  * 远端访问目标。
@@ -71,6 +73,7 @@ export function createAgentChatSessionId(): string {
  */
 export async function resolveAgentChatRemoteTarget(params: {
   agent_id: string;
+  workspace_id: string;
   transport?: AgentChatTransportOptions;
 }): Promise<AgentChatRemoteTarget> {
   // 关键点（中文）：chat 固定走 Agent 本机 RPC，由 City 负责对外暴露。
@@ -80,7 +83,7 @@ export async function resolveAgentChatRemoteTarget(params: {
     port: params.transport?.port,
   });
   return {
-    url: `rpc://${endpoint.host}:${endpoint.port}/${encodeURIComponent(params.agent_id)}`,
+    url: `rpc://${endpoint.host}:${endpoint.port}/${encodeURIComponent(params.agent_id)}/${encodeURIComponent(params.workspace_id)}`,
   };
 }
 
@@ -89,8 +92,10 @@ export async function resolveAgentChatRemoteTarget(params: {
  */
 export async function createRemoteAgent(params: {
   agent_id: string;
+  workspace?: string;
   transport?: AgentChatTransportOptions;
 }): Promise<AgentChatClient> {
+  const target_config = await resolve_cli_agent_target(params.agent_id, params.workspace);
   const pid = await read_daemon_pid();
   const meta = pid && is_process_alive(pid) ? await read_daemon_meta() : null;
   if (!meta?.agent_ids.includes(params.agent_id)) {
@@ -100,18 +105,17 @@ export async function createRemoteAgent(params: {
     try {
       const config = data.agents.get(params.agent_id);
       if (!config) throw new Error(`Agent not found: ${params.agent_id}`);
-      const workspace_config = data.workspaces.get(config.workspace_id);
-      if (!workspace_config) throw new Error(`Workspace not found: ${config.workspace_id}`);
+      const workspace_config = data.workspaces.get(target_config.workspace_id);
+      if (!workspace_config) throw new Error(`Workspace not found: ${target_config.workspace_id}`);
       agent = await create_cli_agent({
         config,
-        workspace_config,
         plugin_loader,
-        root_path: data.root_path,
       });
+      const entry = agent.enter(await create_cli_workspace(workspace_config, data.root_path));
       return {
         sessions: create_local_chat_sessions(
-          agent.sessions,
-          async (model_id) => await resolve_cli_agent_model(model_id, agent!.workspace.get_env()),
+          entry.sessions,
+          async (model_id) => await resolve_cli_agent_model(model_id, entry.workspace.get_env()),
         ),
         close: async () => {
           await agent!.dispose();
@@ -124,7 +128,10 @@ export async function createRemoteAgent(params: {
       throw error;
     }
   }
-  const target = await resolveAgentChatRemoteTarget(params);
+  const target = await resolveAgentChatRemoteTarget({
+    ...params,
+    workspace_id: target_config.workspace_id,
+  });
   return new RemoteAgent({
     url: target.url,
   });

@@ -36,8 +36,6 @@ export type NavigationTarget =
 export interface CreateAgentFormValue {
   /** 新 Agent 的全局标识。 */
   agent_id: string;
-  /** 同时登记为独立记录的 Workspace 绝对路径。 */
-  workspace_path: string;
   /** Agent 使用的 City AIService 模型标识。 */
   model_id: string;
 }
@@ -184,9 +182,13 @@ export interface DesktopViewController {
   clear_error(): void;
 }
 
-/** 生成不会因不同 Agent 下同名 Session 冲突的缓存键。 */
-export function get_session_key(agent_id: string, session_id: string): string {
-  return `${agent_id}:${session_id}`;
+/** 生成不会因不同 Workspace 或 Agent 下同名 Session 冲突的缓存键。 */
+export function get_session_key(
+  workspace_id: string,
+  agent_id: string,
+  session_id: string,
+): string {
+  return `${workspace_id}:${agent_id}:${session_id}`;
 }
 
 /** 生成一个 Agent 唯一的本地 Draft Chat 标识。 */

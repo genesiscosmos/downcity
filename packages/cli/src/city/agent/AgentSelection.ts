@@ -1,8 +1,7 @@
 /**
  * Agent 配置列表与持久化运行目标解析。
  *
- * Agent 与 Workspace 分别持久化，但每个 Agent 通过 `workspace_id` 唯一绑定一个
- * Workspace。CLI 只能使用该绑定创建 Runtime，daemon 元数据仅投影宿主运行状态。
+ * Agent 与 Workspace 分别持久化。CLI 在每次执行时显式解析二者，不保存绑定。
  */
 
 import path from "node:path";
@@ -14,6 +13,7 @@ import {
 import {
   get_workspace,
   get_workspace_by_path,
+  list_workspaces,
   type WorkspaceRegistryRecord,
 } from "@/city/process/registry/WorkspaceRepository.js";
 import type { AgentConfig } from "@/city/types/agent/AgentConfig.js";
@@ -30,26 +30,32 @@ import {
   read_daemon_pid,
 } from "@/city/process/daemon/Manager.js";
 
-/** Agent 与其唯一 Workspace 绑定，用于一次性本地调用。 */
+/** 一次执行所选的 Agent 与 Workspace 目标。 */
 export interface AgentWorkspaceTarget {
   /** Agent 稳定 ID。 */
   agent_id: string;
-  /** 绑定的 Workspace 绝对路径。 */
+  /** 当前执行使用的 Workspace 稳定 ID。 */
+  workspace_id: string;
+  /** 当前执行所选 Workspace 的绝对路径。 */
   workspace_path: string;
+}
+
+/**
+ * 解析只属于 Agent 的配置目标。
+ *
+ * Plugin 注册、Token 与默认模型等 Agent 级操作不能要求当前目录属于某个 Workspace。
+ */
+export async function resolve_cli_agent_id(agent_id_input?: string): Promise<string> {
+  return (await resolve_agent(agent_id_input)).agent_id;
 }
 
 /** 将 Agent 配置与当前 City runtime 投影成 CLI 视图。 */
 async function to_cli_agent_view(agent: AgentConfig): Promise<CliAgentView> {
-  const workspace = get_workspace(agent.workspace_id);
-  if (!workspace) {
-    throw new Error(`Workspace not found: ${agent.workspace_id}`);
-  }
   const daemon_pid = await read_daemon_pid();
   const meta = daemon_pid && is_process_alive(daemon_pid) ? await read_daemon_meta() : null;
   const active = meta?.pid === daemon_pid && meta.agent_ids.includes(agent.agent_id);
   return {
     agent_id: agent.agent_id,
-    workspace_path: workspace.workspace_path,
     status: active ? "loaded" : "unloaded",
   };
 }
@@ -72,7 +78,7 @@ export function build_cli_agent_prompt_choices(
   return agents.map((agent) => ({
     title: agent.agent_id,
     value: agent.agent_id,
-    description: `${agent.status === "loaded" ? "City active" : "City inactive"} · ${agent.workspace_path}`,
+    description: agent.status === "loaded" ? "City active" : "City inactive",
   }));
 }
 
@@ -128,7 +134,6 @@ export async function emit_registered_agent_list_with_options(options?: {
       tone: agent.status === "loaded" ? "success" : "info",
       title: agent.agent_id,
       facts: [
-        { label: "Workspace", value: agent.workspace_path },
         { label: "City runtime", value: agent.status === "loaded" ? "active" : "inactive" },
       ],
     })),
@@ -141,17 +146,19 @@ export async function emit_registered_agent_list(): Promise<void> {
 }
 
 /**
- * 解析命令目标 Agent 与其持久化绑定的 Workspace。
- *
- * 可选 Workspace 参数只用于校验调用方预期，不允许在启动时临时替换绑定。
+ * 解析命令目标 Agent 与本次执行使用的 Workspace。
  */
 export async function resolve_cli_agent_target(
   agent_id_input?: string,
   workspace_input?: string,
 ): Promise<AgentWorkspaceTarget> {
-  const agent = await resolve_agent(agent_id_input);
-  const workspace = resolve_bound_workspace(agent, workspace_input);
-  return { agent_id: agent.agent_id, workspace_path: workspace.workspace_path };
+  const agent_id = await resolve_cli_agent_id(agent_id_input);
+  const workspace = await resolve_workspace(workspace_input);
+  return {
+    agent_id,
+    workspace_id: workspace.workspace_id,
+    workspace_path: workspace.workspace_path,
+  };
 }
 
 /** 解析 Agent，省略 ID 时只允许 TTY 选择。 */
@@ -176,36 +183,41 @@ async function resolve_agent(agent_id_input?: string): Promise<AgentConfig> {
   return selected_agent;
 }
 
-/** 读取 Agent 唯一绑定的 Workspace，并校验调用方显式传入的 Workspace。 */
-function resolve_bound_workspace(
-  agent: AgentConfig,
-  workspace_input?: string,
-): WorkspaceRegistryRecord {
-  const bound_workspace = get_workspace(agent.workspace_id);
-  if (!bound_workspace) {
-    throw new CliError({
-      title: `Agent Workspace is not registered: ${agent.workspace_id}`,
-      note: agent.agent_id,
-      fix: "city agent list",
-    });
-  }
-
+/** 解析显式 Workspace ID/路径，省略时优先使用当前目录。 */
+async function resolve_workspace(workspace_input?: string): Promise<WorkspaceRegistryRecord> {
   const explicit = String(workspace_input || "").trim();
-  if (!explicit) return bound_workspace;
-  const explicit_workspace = get_workspace(explicit)
-    ?? get_workspace_by_path(path.resolve(explicit));
-  if (!explicit_workspace) {
+  const current_workspace = get_workspace_by_path(path.resolve(explicit || process.cwd()));
+  const resolved = explicit
+    ? get_workspace(explicit) ?? current_workspace
+    : current_workspace;
+  if (resolved) return resolved;
+
+  const workspaces = list_workspaces();
+  if (!explicit && workspaces.length === 1) return workspaces[0];
+  if (!explicit && process.stdin.isTTY && process.stdout.isTTY && workspaces.length > 1) {
+    const response = await prompts({
+      type: "select",
+      name: "workspace_id",
+      message: "选择 Workspace",
+      choices: workspaces.map((workspace) => ({
+        title: workspace.name || workspace.workspace_id,
+        value: workspace.workspace_id,
+        description: workspace.workspace_path,
+      })),
+      initial: 0,
+    }) as { workspace_id?: string };
+    const selected = get_workspace(String(response.workspace_id || ""));
+    if (selected) return selected;
+  }
+  if (explicit) {
     throw new CliError({
       title: `Workspace not registered: ${explicit}`,
       fix: "city agent create <workspace_path>",
     });
   }
-  if (explicit_workspace.workspace_id !== bound_workspace.workspace_id) {
-    throw new CliError({
-      title: `Agent is bound to another Workspace: ${agent.agent_id}`,
-      note: bound_workspace.workspace_path,
-      fix: `city agent list`,
-    });
-  }
-  return bound_workspace;
+  throw new CliError({
+    title: "Workspace is required",
+    note: "Run the command from a registered Workspace or pass --workspace.",
+    fix: "city agent create <workspace_path>",
+  });
 }

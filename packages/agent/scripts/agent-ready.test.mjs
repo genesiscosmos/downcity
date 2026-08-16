@@ -138,13 +138,13 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
   });
   const agent = new Agent({
     id: "ready_agent",
-    workspace: new Workspace({ path: agent_path }),
     plugins: [blocking_plugin],
     model,
   });
+  const entry = agent.enter(new Workspace({ id: "ready_workspace", path: agent_path }));
 
   try {
-    const session = await agent.sessions.create({
+    const session = await entry.sessions.create({
       session_id: "ready_session",
     });
     const prompt_promise = session.prompt({
@@ -195,12 +195,12 @@ test("agent.plugins waits for lifecycle start before direct action execution", a
   });
   const agent = new Agent({
     id: "plugin_ready_agent",
-    workspace: new Workspace({ path: agent_path }),
     plugins: [plugin],
   });
+  const entry = agent.enter(new Workspace({ id: "plugin_ready_workspace", path: agent_path }));
 
   try {
-    const action_promise = agent.plugins.run_action({
+    const action_promise = entry.plugins.run_action({
       plugin: "direct-action",
       action: "status",
     });
@@ -242,12 +242,12 @@ test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 启动失�
   });
   const agent = new Agent({
     id: "ready_isolation_agent",
-    workspace: new Workspace({ path: agent_path }),
     plugins: [failing_plugin, healthy_plugin],
   });
+  const entry = agent.enter(new Workspace({ id: "isolation_workspace", path: agent_path }));
 
   try {
-    await agent.sessions.create({ session_id: "initial_barrier" });
+    await entry.sessions.create({ session_id: "initial_barrier" });
 
     assert.equal(healthy_started, true);
     assert.equal(agent.plugins.status("failing")?.status, "error");
@@ -263,8 +263,8 @@ test("Agent registers PluginRegistry tools and removes them with the last action
   );
   const agent = new Agent({
     id: "state_plugin_tools_agent",
-    workspace: new Workspace({ path: agent_path }),
   });
+  const entry = agent.enter(new Workspace({ id: "plugin_tools_workspace", path: agent_path }));
   const action_plugin = create_plugin({
     name: "dynamic_action",
     actions: {
@@ -276,18 +276,18 @@ test("Agent registers PluginRegistry tools and removes them with the last action
   });
 
   try {
-    assert.equal(agent.tools.plugin_read, undefined);
-    assert.equal(agent.tools.plugin_call, undefined);
+    assert.equal(entry.tools.plugin_read, undefined);
+    assert.equal(entry.tools.plugin_call, undefined);
 
     await agent.plugins.register(action_plugin);
 
-    assert.notEqual(agent.tools.plugin_read, undefined);
-    assert.notEqual(agent.tools.plugin_call, undefined);
+    assert.notEqual(entry.tools.plugin_read, undefined);
+    assert.notEqual(entry.tools.plugin_call, undefined);
 
     await agent.plugins.unregister("dynamic_action");
 
-    assert.equal(agent.tools.plugin_read, undefined);
-    assert.equal(agent.tools.plugin_call, undefined);
+    assert.equal(entry.tools.plugin_read, undefined);
+    assert.equal(entry.tools.plugin_call, undefined);
   } finally {
     await agent.dispose();
   }

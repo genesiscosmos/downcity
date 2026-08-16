@@ -50,15 +50,19 @@ function create_files(workspace_path) {
 
 function create_context(workspace_path = process.cwd()) {
   return {
+    agent_id: "image_test_agent",
+    workspace_id: "image_test_workspace",
     workspace_path,
     files: create_files(workspace_path),
   };
 }
 
 function create_registry(plugin, workspace_path = process.cwd()) {
-  const registry = new PluginRegistry([plugin]);
-  registry.bind_context(create_context(workspace_path));
-  return registry;
+  const registry = new PluginRegistry({
+    agent_id: "image_test_agent",
+    instructions: [],
+  }, [plugin]);
+  return registry.contextual(create_context(workspace_path));
 }
 
 test("ImagePlugin exposes only job-style image actions", async () => {

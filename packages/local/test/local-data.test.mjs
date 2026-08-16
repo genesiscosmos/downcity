@@ -36,13 +36,8 @@ test("LocalDatabase 不会隐式创建产品业务表", async () => {
     const after = database.query({
       sql: "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;",
     });
-    assert.equal(after.rows.some((row) => row.name === "managed_agents"), true);
+    assert.equal(after.rows.some((row) => row.name === "managed_agents"), false);
     assert.equal(after.rows.some((row) => row.name === "workspaces"), true);
-    const agent_columns = database.query({ sql: "PRAGMA table_info(managed_agents);" });
-    assert.equal(
-      agent_columns.rows.find((column) => column.name === "workspace_id")?.notnull,
-      1,
-    );
   } finally {
     database.close();
     await fs.rm(root_path, { recursive: true, force: true });
@@ -55,18 +50,22 @@ test("AgentRepository 与 WorkspaceRepository 独立维护产品配置", async (
     ensure_local_schema(database);
     const crypto_adapter = new LocalCrypto(root_path);
     const workspaces = new WorkspaceRepository(database, crypto_adapter);
-    const agents = new AgentRepository(database, crypto_adapter, workspaces);
+    const agents = new AgentRepository(root_path);
 
     const workspace = workspaces.ensure({ workspace_path: path.join(root_path, "project") });
     const agent = agents.create({
       agent_id: "Lucas Whitman",
-      workspace_id: workspace.workspace_id,
       execution: { type: "api", model_id: "model-test" },
+      instruction: "You are Lucas.",
     });
 
-    assert.equal(agents.get("lucas_whitman")?.workspace_id, workspace.workspace_id);
+    assert.equal(agents.get("lucas_whitman")?.instruction, "You are Lucas.");
     assert.equal(workspaces.get(workspace.workspace_id)?.workspace_path, workspace.workspace_path);
     assert.deepEqual(agents.list().map((item) => item.agent_id), ["lucas_whitman"]);
+    assert.equal(await fs.readFile(
+      path.join(root_path, "agents", "lucas_whitman", "instruction.md"),
+      "utf8",
+    ), "You are Lucas.");
   } finally {
     database.close();
     await fs.rm(root_path, { recursive: true, force: true });

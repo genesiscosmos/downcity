@@ -26,7 +26,7 @@ import {
   normalize_agent_id,
 } from "@downcity/local/product";
 import type {
-  DesktopAgentRuntime,
+  DesktopAgentWorkspace,
   DesktopAgentSummary,
   DesktopChatInput,
   DesktopChatMutationEvent,
@@ -128,26 +128,22 @@ export class AgentController {
   /** 创建 Agent，并把表单中的项目目录独立登记为 Workspace。 */
   async create_agent(
     agent_id: string,
-    workspace_path: string,
     model_id: string,
-  ): Promise<{ agent: DesktopAgentSummary; workspace: DesktopWorkspaceSummary }> {
+  ): Promise<{ agent: DesktopAgentSummary }> {
     const normalized_model_id = String(model_id || "").trim();
     if (!normalized_model_id) throw new Error("model_id is required");
-    const normalized_workspace_path = String(workspace_path || "").trim();
-    if (!normalized_workspace_path) throw new Error("workspace_path is required");
     await this.ready_promise;
-    const workspace = this.data.workspaces.ensure({ workspace_path: normalized_workspace_path });
     const current_time = new Date().toISOString();
     const candidate: LocalAgentConfig = {
       agent_id: normalize_agent_id(agent_id),
-      workspace_id: workspace.workspace_id,
       version: "1.0.0",
       execution: { type: "api", model_id: normalized_model_id },
+      instruction: "",
       plugins: [],
       created_at: current_time,
       updated_at: current_time,
     };
-    const agent = await this.create_native_agent(candidate, workspace);
+    const agent = await this.create_native_agent(candidate);
     let config: LocalAgentConfig | null = null;
     try {
       config = this.data.agents.create(candidate);
@@ -160,28 +156,27 @@ export class AgentController {
     return {
       agent: to_desktop_agent_summary({
         agent_id: agent.id,
-        workspace_id: workspace.workspace_id,
         version: config.version,
         execution: config.execution,
       }),
-      workspace: to_desktop_workspace_summary(workspace),
     };
   }
 
   /** 按 Agent 的持久化 Workspace 绑定检查 Desktop native Agent。 */
-  async connect_agent(agent_id: string): Promise<DesktopAgentRuntime> {
+  async connect_agent(agent_id: string, workspace_id: string): Promise<DesktopAgentWorkspace> {
     await this.ready_promise;
     const config = this.data.agents.get(agent_id);
     if (!config) throw new Error(`Agent not found: ${agent_id}`);
-    const workspace = this.data.workspaces.get(config.workspace_id);
-    if (!workspace) throw new Error(`Agent Workspace is not registered: ${config.workspace_id}`);
+    const workspace = this.data.workspaces.get(workspace_id);
+    if (!workspace) throw new Error(`Workspace is not registered: ${workspace_id}`);
     if (!this.city.agent(config.agent_id)) throw new Error(`Agent is not available in Desktop City: ${config.agent_id}`);
-    return { agent_id: config.agent_id, workspace: to_desktop_workspace_summary(workspace) };
+    await this.require_agent_workspace(config.agent_id, workspace_id);
+    return { agent_id: config.agent_id, workspace_id, workspace: to_desktop_workspace_summary(workspace) };
   }
 
   /** 列出一个 native Agent 在当前 Workspace 中的 Session。 */
-  async list_sessions(agent_id: string): Promise<DesktopSessionSummary[]> {
-    const page = await this.require_native_agent(agent_id).sessions.list();
+  async list_sessions(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary[]> {
+    const page = await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.list();
     return page.items.map(to_desktop_session_summary);
   }
 
@@ -198,47 +193,48 @@ export class AgentController {
   }
 
   /** 在当前 Workspace 创建新的 Session。 */
-  async create_session(agent_id: string): Promise<DesktopSessionSummary> {
-    const session = await this.require_native_agent(agent_id).sessions.create();
-    this.observe_session(agent_id, session);
+  async create_session(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary> {
+    const session = await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.create();
+    this.observe_session(agent_id, workspace_id, session);
     return to_desktop_session_summary(await session.get_info());
   }
 
   /** 更新 Session 的 canonical 标题。 */
   async rename_session(
     agent_id: string,
+    workspace_id: string,
     session_id: string,
     title: string,
   ): Promise<string> {
-    return await (await this.get_session(agent_id, session_id)).rename(title);
+    return await (await this.get_session(agent_id, workspace_id, session_id)).rename(title);
   }
 
   /** 归档 Session，并释放 Desktop 对它的进程内投影。 */
-  async archive_session(agent_id: string, session_id: string): Promise<void> {
-    await this.require_native_agent(agent_id).sessions.archive({ id: session_id });
-    this.release_session_projection(agent_id, session_id);
+  async archive_session(agent_id: string, workspace_id: string, session_id: string): Promise<void> {
+    await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.archive({ id: session_id });
+    this.release_session_projection(agent_id, workspace_id, session_id);
   }
 
   /** 永久删除 Session，并释放 Desktop 对它的进程内投影。 */
-  async remove_session(agent_id: string, session_id: string): Promise<boolean> {
-    const removed = await this.require_native_agent(agent_id).sessions.remove(session_id);
-    if (removed) this.release_session_projection(agent_id, session_id);
+  async remove_session(agent_id: string, workspace_id: string, session_id: string): Promise<boolean> {
+    const removed = await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.remove(session_id);
+    if (removed) this.release_session_projection(agent_id, workspace_id, session_id);
     return removed;
   }
 
   /** 列出一个 Agent 已归档的 Session。 */
-  async list_archived_sessions(agent_id: string): Promise<DesktopSessionSummary[]> {
-    const page = await this.require_native_agent(agent_id).sessions.archived();
+  async list_archived_sessions(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary[]> {
+    const page = await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.archived();
     return page.items.map(to_desktop_session_summary);
   }
 
   /** 读取一个 native Session 的 canonical 消息和运行态。 */
-  async get_chat_snapshot(agent_id: string, session_id: string): Promise<DesktopChatSnapshot> {
-    const session = await this.get_session(agent_id, session_id);
+  async get_chat_snapshot(agent_id: string, workspace_id: string, session_id: string): Promise<DesktopChatSnapshot> {
+    const session = await this.get_session(agent_id, workspace_id, session_id);
     const page = await session.messages();
     return {
       messages: page.items.filter((message) => message.visibility === "visible"),
-      runtime: await this.read_runtime(agent_id, session),
+      runtime: await this.read_runtime(agent_id, workspace_id, session),
       has_more: page.has_more,
       ...(page.next_before_sequence ? { next_before_sequence: page.next_before_sequence } : {}),
     };
@@ -247,10 +243,11 @@ export class AgentController {
   /** 读取 Session 的一个更早历史 Segment。 */
   async get_chat_history(
     agent_id: string,
+    workspace_id: string,
     session_id: string,
     before_sequence: number,
   ): Promise<DesktopChatHistoryPage> {
-    const session = await this.get_session(agent_id, session_id);
+    const session = await this.get_session(agent_id, workspace_id, session_id);
     const page = await session.messages({ before_sequence });
     return {
       messages: page.items.filter((message) => message.visibility === "visible"),
@@ -260,15 +257,16 @@ export class AgentController {
   }
 
   /** 向 Session 提交输入；后续执行结果通过实时事件广播。 */
-  async send_message(agent_id: string, session_id: string, input: DesktopChatInput): Promise<DesktopChatSendResult> {
+  async send_message(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatInput): Promise<DesktopChatSendResult> {
     const query = normalize_chat_input(input);
-    const session = await this.get_session(agent_id, session_id);
-    this.update_runtime({ agent_id, session_id, status: "submitted", updated_at: Date.now() });
+    const session = await this.get_session(agent_id, workspace_id, session_id);
+    this.update_runtime({ agent_id, workspace_id, session_id, status: "submitted", updated_at: Date.now() });
     try {
       const turn = await session.prompt({ query });
       void turn.finished.catch((reason: unknown) => {
         this.update_runtime({
           agent_id,
+          workspace_id,
           session_id,
           status: "failed",
           turn_id: turn.id,
@@ -280,6 +278,7 @@ export class AgentController {
     } catch (reason) {
       this.update_runtime({
         agent_id,
+        workspace_id,
         session_id,
         status: "failed",
         error: to_error_message(reason),
@@ -290,52 +289,54 @@ export class AgentController {
   }
 
   /** 停止当前 Session Turn。 */
-  async stop_session(agent_id: string, session_id: string): Promise<void> {
-    const session = await this.get_session(agent_id, session_id);
+  async stop_session(agent_id: string, workspace_id: string, session_id: string): Promise<void> {
+    const session = await this.get_session(agent_id, workspace_id, session_id);
     await session.stop();
-    this.update_runtime({ agent_id, session_id, status: "stopped", updated_at: Date.now() });
+    this.update_runtime({ agent_id, workspace_id, session_id, status: "stopped", updated_at: Date.now() });
   }
 
   /** 响应当前 Session 等待中的审批或问题。 */
   async respond_interaction(
     agent_id: string,
+    workspace_id: string,
     session_id: string,
     input: RespondSessionInteractionInput,
   ): Promise<void> {
-    const session = await this.get_session(agent_id, session_id);
+    const session = await this.get_session(agent_id, workspace_id, session_id);
     await session.respond(input);
   }
 
   /** 读取 Session 当前运行态。 */
-  async get_runtime(agent_id: string, session_id: string): Promise<DesktopChatRuntime> {
-    return await this.read_runtime(agent_id, await this.get_session(agent_id, session_id));
+  async get_runtime(agent_id: string, workspace_id: string, session_id: string): Promise<DesktopChatRuntime> {
+    return await this.read_runtime(agent_id, workspace_id, await this.get_session(agent_id, workspace_id, session_id));
   }
 
   /** 读取 Session 当前模型与审批模式。 */
-  async get_configuration(agent_id: string, session_id: string): Promise<DesktopSessionConfiguration> {
-    return await this.read_session_configuration(await this.get_session(agent_id, session_id));
+  async get_configuration(agent_id: string, workspace_id: string, session_id: string): Promise<DesktopSessionConfiguration> {
+    return await this.read_session_configuration(workspace_id, await this.get_session(agent_id, workspace_id, session_id));
   }
 
   /** 解析 Federation 模型并切换当前 Session。 */
-  async set_model(agent_id: string, session_id: string, model_id: string): Promise<DesktopSessionConfiguration> {
-    const agent = this.require_native_agent(agent_id);
-    const session = await this.get_session(agent_id, session_id);
-    const model = await resolve_desktop_agent_model(this.data, model_id, agent.workspace.get_env());
+  async set_model(agent_id: string, workspace_id: string, session_id: string, model_id: string): Promise<DesktopSessionConfiguration> {
+    const entry = await this.require_agent_workspace(agent_id, workspace_id);
+    const session = await this.get_session(agent_id, workspace_id, session_id);
+    const model = await resolve_desktop_agent_model(this.data, model_id, entry.workspace.get_env());
     await session.set({ model });
-    this.persist_session_model_id(agent_id, session_id, model_id);
-    this.restored_session_models.set(get_session_key(agent_id, session_id), model_id);
-    return await this.read_session_configuration(session);
+    this.persist_session_model_id(agent_id, workspace_id, session_id, model_id);
+    this.restored_session_models.set(get_session_key(agent_id, workspace_id, session_id), model_id);
+    return await this.read_session_configuration(workspace_id, session);
   }
 
   /** 更新当前 Session 的安全审批模式。 */
   async set_approval_mode(
     agent_id: string,
+    workspace_id: string,
     session_id: string,
     approval_mode: SessionApprovalMode,
   ): Promise<DesktopSessionConfiguration> {
-    const session = await this.get_session(agent_id, session_id);
+    const session = await this.get_session(agent_id, workspace_id, session_id);
     await session.set({ security: { approval_mode } });
-    return await this.read_session_configuration(session);
+    return await this.read_session_configuration(workspace_id, session);
   }
 
   /** 释放 Desktop 进程拥有的全部 native Agent。 */
@@ -361,9 +362,7 @@ export class AgentController {
     const initialized_agents: Agent[] = [];
     try {
       for (const config of this.data.agents.list()) {
-        const workspace = this.data.workspaces.get(config.workspace_id);
-        if (!workspace) throw new Error(`Workspace not found: ${config.workspace_id}`);
-        const agent = await this.create_native_agent(config, workspace);
+        const agent = await this.create_native_agent(config);
         try {
           this.city.add(agent);
           initialized_agents.push(agent);
@@ -388,39 +387,40 @@ export class AgentController {
   }
 
   /** 显式装配一个 Desktop native Agent。 */
-  private async create_native_agent(config: LocalAgentConfig, workspace_config: LocalWorkspaceConfig): Promise<Agent> {
-    const workspace = await create_desktop_workspace(this.data, workspace_config);
-    try {
-      const [model, plugins, tools] = await Promise.all([
-        Promise.resolve(create_desktop_agent_model(this.data, config, workspace.get_env())),
-        this.plugin_loader.create_plugins(config),
-        Promise.resolve(create_desktop_agent_tools()),
-      ]);
-      return new Agent({ id: config.agent_id, workspace, model, plugins, tools });
-    } catch (error) {
-      await workspace.dispose().catch(() => undefined);
-      throw error;
-    }
+  private async create_native_agent(config: LocalAgentConfig): Promise<Agent> {
+    const [model, plugins, tools] = await Promise.all([
+      Promise.resolve(create_desktop_agent_model(this.data, config, process_environment())),
+      this.plugin_loader.create_plugins(config),
+      Promise.resolve(create_desktop_agent_tools()),
+    ]);
+    return new Agent({
+      id: config.agent_id,
+      instruction: config.instruction,
+      model,
+      plugins,
+      tools,
+    });
   }
 
   /** 读取 Session，并确保实时 mutation 只订阅一次。 */
-  private async get_session(agent_id: string, session_id: string): Promise<AgentSession> {
-    const session = await this.require_native_agent(agent_id).sessions.get(session_id);
-    await this.restore_session_model(agent_id, session);
-    this.observe_session(agent_id, session);
+  private async get_session(agent_id: string, workspace_id: string, session_id: string): Promise<AgentSession> {
+    const session = await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.get(session_id);
+    await this.restore_session_model(agent_id, workspace_id, session);
+    this.observe_session(agent_id, workspace_id, session);
     return session;
   }
 
   /** 建立 SDK Session 到 Renderer 的唯一事件桥。 */
-  private observe_session(agent_id: string, session: AgentSession): void {
-    const session_key = get_session_key(agent_id, session.id);
+  private observe_session(agent_id: string, workspace_id: string, session: AgentSession): void {
+    const session_key = get_session_key(agent_id, workspace_id, session.id);
     if (this.session_unsubscribes.has(session_key)) return;
     const unsubscribe = session.subscribe((mutation) => {
-      this.events.mutation({ agent_id, session_id: session.id, mutation });
+      this.events.mutation({ agent_id, workspace_id, session_id: session.id, mutation });
       if (mutation.variant === "part" && mutation.type === "interaction") {
         const current = this.runtimes.get(session_key);
         this.update_runtime({
           agent_id,
+          workspace_id,
           session_id: session.id,
           status: mutation.part.status === "pending" ? "waiting_input" : "streaming",
           ...(mutation.turn_id ? { turn_id: mutation.turn_id } : current?.turn_id ? { turn_id: current.turn_id } : {}),
@@ -430,6 +430,7 @@ export class AgentController {
       if (mutation.variant !== "turn") return;
       this.update_runtime({
         agent_id,
+        workspace_id,
         session_id: session.id,
         status: mutation.type === "start"
           ? "streaming"
@@ -447,8 +448,8 @@ export class AgentController {
   }
 
   /** 释放一个 Session 的订阅、运行态和 Desktop 模型覆盖。 */
-  private release_session_projection(agent_id: string, session_id: string): void {
-    const session_key = get_session_key(agent_id, session_id);
+  private release_session_projection(agent_id: string, workspace_id: string, session_id: string): void {
+    const session_key = get_session_key(agent_id, workspace_id, session_id);
     this.session_unsubscribes.get(session_key)?.();
     this.session_unsubscribes.delete(session_key);
     this.runtimes.delete(session_key);
@@ -460,13 +461,14 @@ export class AgentController {
   }
 
   /** 从 SDK status 恢复应用重启或首次进入时的运行态。 */
-  private async read_runtime(agent_id: string, session: AgentSession): Promise<DesktopChatRuntime> {
-    const session_key = get_session_key(agent_id, session.id);
+  private async read_runtime(agent_id: string, workspace_id: string, session: AgentSession): Promise<DesktopChatRuntime> {
+    const session_key = get_session_key(agent_id, workspace_id, session.id);
     const current = this.runtimes.get(session_key);
     if (current) return current;
     const status = await session.status();
     const runtime: DesktopChatRuntime = {
       agent_id,
+      workspace_id,
       session_id: session.id,
       status: status.state === "running" ? "streaming" : "idle",
       ...(status.active_turn_id ? { turn_id: status.active_turn_id } : {}),
@@ -477,11 +479,11 @@ export class AgentController {
   }
 
   /** 把 SDK Session 配置收敛成可序列化 Renderer 投影。 */
-  private async read_session_configuration(session: AgentSession): Promise<DesktopSessionConfiguration> {
+  private async read_session_configuration(workspace_id: string, session: AgentSession): Promise<DesktopSessionConfiguration> {
     const status = await session.status();
     const agent_config = this.data.agents.get(session.agent_id);
     const default_model_id = typeof agent_config?.execution?.model_id === "string" ? agent_config.execution.model_id : "";
-    const session_key = get_session_key(session.agent_id, session.id);
+    const session_key = get_session_key(session.agent_id, workspace_id, session.id);
     const configured_model = session.config.model as { modelId?: unknown } | undefined;
     const runtime_model_id = typeof configured_model?.modelId === "string" ? configured_model.modelId : "";
     return {
@@ -491,12 +493,12 @@ export class AgentController {
   }
 
   /** 恢复 Desktop 为 Session 单独保存的模型覆盖。 */
-  private async restore_session_model(agent_id: string, session: AgentSession): Promise<void> {
-    const session_key = get_session_key(agent_id, session.id);
+  private async restore_session_model(agent_id: string, workspace_id: string, session: AgentSession): Promise<void> {
+    const session_key = get_session_key(agent_id, workspace_id, session.id);
     const model_id = this.read_session_model_ids()[session_key];
     if (!model_id || this.restored_session_models.get(session_key) === model_id) return;
-    const agent = this.require_native_agent(agent_id);
-    const model = await resolve_desktop_agent_model(this.data, model_id, agent.workspace.get_env());
+    const entry = await this.require_agent_workspace(agent_id, workspace_id);
+    const model = await resolve_desktop_agent_model(this.data, model_id, entry.workspace.get_env());
     await session.set({ model }, { persist_action: false });
     this.restored_session_models.set(session_key, model_id);
   }
@@ -508,17 +510,17 @@ export class AgentController {
   }
 
   /** 保存一个 Session 的稳定模型 ID。 */
-  private persist_session_model_id(agent_id: string, session_id: string, model_id: string): void {
+  private persist_session_model_id(agent_id: string, workspace_id: string, session_id: string, model_id: string): void {
     const current = this.read_session_model_ids();
     this.data.secure_settings.set(session_model_settings_key, {
       ...current,
-      [get_session_key(agent_id, session_id)]: model_id,
+      [get_session_key(agent_id, workspace_id, session_id)]: model_id,
     });
   }
 
   /** 保存并广播 Session 运行态。 */
   private update_runtime(runtime: DesktopChatRuntime): void {
-    this.runtimes.set(get_session_key(runtime.agent_id, runtime.session_id), runtime);
+    this.runtimes.set(get_session_key(runtime.agent_id, runtime.workspace_id, runtime.session_id), runtime);
     this.events.runtime({ runtime });
   }
 
@@ -528,13 +530,22 @@ export class AgentController {
     if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
     return agent;
   }
+
+  /** 按需让 Desktop Agent 进入指定 Workspace。 */
+  private async require_agent_workspace(agent_id: string, workspace_id: string) {
+    const agent = this.require_native_agent(agent_id);
+    const existing = agent.workspace(workspace_id);
+    if (existing) return existing;
+    const config = this.data.workspaces.get(workspace_id);
+    if (!config) throw new Error(`Workspace not found: ${workspace_id}`);
+    return agent.enter(await create_desktop_workspace(this.data, config));
+  }
 }
 
 /** 把 Registry Agent 收敛成 Renderer 所需摘要。 */
-function to_desktop_agent_summary(record: Pick<LocalAgentConfig, "agent_id" | "workspace_id" | "version" | "execution">): DesktopAgentSummary {
+function to_desktop_agent_summary(record: Pick<LocalAgentConfig, "agent_id" | "version" | "execution">): DesktopAgentSummary {
   return {
     agent_id: record.agent_id,
-    workspace_id: record.workspace_id,
     model_id: typeof record.execution?.model_id === "string" ? record.execution.model_id : "",
     version: record.version,
   };
@@ -563,8 +574,17 @@ function to_desktop_session_summary(session: AgentSessionSummary): DesktopSessio
 }
 
 /** 生成不会与其他 Agent Session 冲突的主进程缓存键。 */
-function get_session_key(agent_id: string, session_id: string): string {
-  return `${agent_id}:${session_id}`;
+function get_session_key(agent_id: string, workspace_id: string, session_id: string): string {
+  return `${agent_id}:${workspace_id}:${session_id}`;
+}
+
+/** 把进程环境收敛为不含 undefined 的只读配置。 */
+function process_environment(): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
 }
 
 /** 把未知失败统一转换为可序列化文本。 */

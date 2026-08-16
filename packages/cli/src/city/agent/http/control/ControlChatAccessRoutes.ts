@@ -7,7 +7,7 @@
  */
 
 import type { Hono } from "hono";
-import type { Agent, JsonValue } from "@downcity/agent";
+import type { AgentWorkspace, JsonValue } from "@downcity/agent";
 import type { AgentTokenPrincipal } from "@/city/types/auth/AgentToken.js";
 import { CHAT_ACCESS_ACTIONS } from "@downcity/plugins/chat";
 import { buildControlRouteAliases } from "@/city/agent/control/CommonHelpers.js";
@@ -38,7 +38,7 @@ function normalize_scope(value: unknown): "direct" | "group" | "all" | undefined
 /** 执行当前 Agent 的 Chat Access Action。 */
 async function run_chat_access_action(input: {
   /** 当前 Agent Context。 */
-  context: Agent;
+  context: AgentWorkspace;
   /** Chat Plugin Action 名称。 */
   action: string;
   /** 传给 Action 的 JSON 数据。 */
@@ -60,7 +60,7 @@ export function register_control_chat_access_routes(input: {
   /** Hono 应用实例。 */
   app: Hono;
   /** 获取当前 Agent Context。 */
-  get_agent: () => Agent;
+  get_agent: () => AgentWorkspace;
 }): void {
   const { app, get_agent } = input;
 
