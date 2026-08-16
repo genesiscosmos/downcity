@@ -10,11 +10,8 @@ import type { JsonObject, Plugin } from "@downcity/agent";
 import {
   ChatPlugin,
   CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
-  CHAT_PLUGIN_RESOURCE_JSON_SCHEMA,
   parse_chat_plugin_config,
-  parse_chat_plugin_resource,
-  resolve_chat_plugin_resource,
-  type ChatPluginResource,
+  type ChatPluginChannelConfig,
 } from "@/chat.js";
 import { FeishuChannel, QqChannel, TelegramChannel } from "@/chat.js";
 import { ContactPlugin } from "@/contact.js";
@@ -64,11 +61,6 @@ export interface BuiltinPluginManifest {
     defaults?: JsonObject;
   };
 
-  /** Plugin Resource 配置协议。 */
-  resources?: {
-    /** Resource JSON Schema。 */
-    schema?: JsonObject;
-  };
 }
 
 /** 官方 Plugin constructor 的统一输入。 */
@@ -76,8 +68,6 @@ export interface BuiltinPluginConstructorInput {
   /** 当前 Agent 对 Plugin 的完整配置。 */
   config: JsonObject;
 
-  /** 当前 Binding 引用的完整 Resource。 */
-  resources: JsonObject[];
 }
 
 /** 官方 Plugin constructor 协议。 */
@@ -88,11 +78,6 @@ export interface BuiltinPluginType {
   /** Plugin 的静态 manifest。 */
   readonly manifest: BuiltinPluginManifest;
 
-  /** 创建或刷新 Resource 时使用的可选解析器。 */
-  readonly resolve_resource?: (input: {
-    /** 用户提交的 Resource 配置。 */
-    resource: JsonObject;
-  }) => Promise<JsonObject> | JsonObject;
 }
 
 /** Image 和 Sound Plugin 使用的宿主 AI 能力。 */
@@ -197,16 +182,11 @@ export function create_builtin_plugin_types(
       title: "Chat",
       description: "Connects Agents to Telegram, Feishu, and QQ channels.",
       config: { schema: CHAT_PLUGIN_CONFIG_JSON_SCHEMA, defaults: {} },
-      resources: { schema: CHAT_PLUGIN_RESOURCE_JSON_SCHEMA },
     };
-
-    static readonly resolve_resource = async (input: { resource: JsonObject }) =>
-      await resolve_chat_plugin_resource(input.resource);
 
     constructor(input: BuiltinPluginConstructorInput) {
       const config = parse_chat_plugin_config(input.config);
-      const resources = input.resources.map(parse_chat_plugin_resource);
-      super({ queue: config.queue, channels: create_chat_channels(resources) });
+      super({ queue: config.queue, channels: create_chat_channels(config.channels ?? []) });
     }
   }
 
@@ -344,35 +324,35 @@ function simple_manifest(
 }
 
 /** 创建 Chat Resource 对应的运行渠道。 */
-function create_chat_channels(resources: ChatPluginResource[]) {
-  const resource_types = new Set<string>();
-  return resources.map((resource) => {
-    if (resource_types.has(resource.type)) {
-      throw new Error(`Chat Plugin Resource type is duplicated: ${resource.type}`);
+function create_chat_channels(configs: ChatPluginChannelConfig[]) {
+  const channel_types = new Set<string>();
+  return configs.map((config) => {
+    if (channel_types.has(config.type)) {
+      throw new Error(`Chat Plugin channel type is duplicated: ${config.type}`);
     }
-    resource_types.add(resource.type);
-    if (resource.type === "telegram") {
+    channel_types.add(config.type);
+    if (config.type === "telegram") {
       return new TelegramChannel({
-        id: resource.id,
-        name: resource.name,
-        bot_token: resource.bot_token,
+        id: config.id,
+        name: config.name,
+        bot_token: config.bot_token,
       });
     }
-    if (resource.type === "feishu") {
+    if (config.type === "feishu") {
       return new FeishuChannel({
-        id: resource.id,
-        name: resource.name,
-        app_id: resource.app_id,
-        app_secret: resource.app_secret,
-        domain: resource.domain,
+        id: config.id,
+        name: config.name,
+        app_id: config.app_id,
+        app_secret: config.app_secret,
+        domain: config.domain,
       });
     }
     return new QqChannel({
-      id: resource.id,
-      name: resource.name,
-      app_id: resource.app_id,
-      app_secret: resource.app_secret,
-      sandbox: resource.sandbox,
+      id: config.id,
+      name: config.name,
+      app_id: config.app_id,
+      app_secret: config.app_secret,
+      sandbox: config.sandbox,
     });
   });
 }

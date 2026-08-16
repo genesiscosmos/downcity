@@ -2,7 +2,7 @@
  * `@downcity/plugins/chat` 独立公开入口。
  *
  * 关键点（中文）
- * - 汇总 ChatPlugin、Resource Schema、运行渠道与 Chat Access 公开能力。
+ * - 汇总 ChatPlugin、Channel Schema、运行渠道与 Chat Access 公开能力。
  * - 不加载其他内建 plugin 的入口模块。
  */
 
@@ -22,14 +22,13 @@ export { get_chat_access_db_path } from "./chat/access/ChatAccessStore.js";
 export { CHAT_ACCESS_ACTIONS } from "./chat/types/ChatAccess.js";
 export { clean_chat_storage } from "./chat/runtime/ChatStorage.js";
 export {
+  CHAT_PLUGIN_CHANNEL_JSON_SCHEMA,
   CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
-  CHAT_PLUGIN_RESOURCE_JSON_SCHEMA,
+  chat_plugin_channel_schema,
   chat_plugin_config_schema,
-  chat_plugin_resource_schema,
-  get_chat_plugin_resource_json_schema,
+  get_chat_plugin_channel_json_schema,
+  parse_chat_plugin_channel,
   parse_chat_plugin_config,
-  parse_chat_plugin_resource,
-  resolve_chat_plugin_resource,
 } from "./chat/config/ChatPluginConfig.js";
 
 export type {
@@ -48,7 +47,7 @@ export type {
   ChatPluginOptions,
 } from "./chat/types/ChatPluginOptions.js";
 export type { ChatPluginConfig } from "./chat/config/ChatPluginConfig.js";
-export type { ChatPluginResource } from "./chat/types/ChatPluginResource.js";
+export type { ChatPluginChannelConfig } from "./chat/types/ChatPluginChannelConfig.js";
 export type {
   ApproveChatAccessRequestInput,
   ChatAccessDecision,

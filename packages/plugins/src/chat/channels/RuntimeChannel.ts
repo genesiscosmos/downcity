@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - channel 对象是 ChatPlugin 的运行态配置单元。
  * - env 由 channel 自己读取，ChatPlugin 不理解平台字段。
- * - Resource 已由宿主解析为构造参数，channel 不访问账号池或其他外部 Store。
+ * - 配置已由宿主解析为构造参数，channel 不访问其他外部 Store。
  */
 
 import type { PluginContext } from "@downcity/agent";
@@ -38,7 +38,7 @@ export interface BaseChatChannelOptions {
    */
   env?: ChatChannelEnv;
   /**
-   * Resource 或 SDK 调用方提供的稳定 ID。
+   * Plugin profile 或 SDK 调用方提供的稳定 ID。
    */
   id?: string;
   /**
@@ -55,13 +55,13 @@ abstract class BaseRuntimeChatChannel implements ChatChannel {
 
   protected enabled: boolean;
   protected env: ChatChannelEnv;
-  protected resource_id: string;
+  protected channel_id: string;
   protected display_name: string;
 
   protected constructor(options: BaseChatChannelOptions = {}) {
     this.enabled = options.enabled !== false;
     this.env = options.env || {};
-    this.resource_id = String(options.id || "").trim();
+    this.channel_id = String(options.id || "").trim();
     this.display_name = String(options.name || "").trim();
   }
 
@@ -69,8 +69,8 @@ abstract class BaseRuntimeChatChannel implements ChatChannel {
     return this.enabled;
   }
 
-  getResourceId(_context: PluginContext): string {
-    return this.resource_id;
+  get_channel_id(_context: PluginContext): string {
+    return this.channel_id;
   }
 
   protected nowIso(): string {
@@ -110,7 +110,7 @@ export class TelegramChannel extends BaseRuntimeChatChannel {
     if (!token) return null;
     const now = this.nowIso();
     return {
-      id: this.resource_id || "chat-sdk-telegram",
+      id: this.channel_id || "chat-sdk-telegram",
       channel: "telegram",
       name: this.display_name || "telegram",
       bot_token: token,
@@ -163,7 +163,7 @@ export class FeishuChannel extends BaseRuntimeChatChannel {
     if (!appId || !appSecret) return null;
     const now = this.nowIso();
     return {
-      id: this.resource_id || "chat-sdk-feishu",
+      id: this.channel_id || "chat-sdk-feishu",
       channel: "feishu",
       name: this.display_name || "feishu",
       app_id: appId,
@@ -218,7 +218,7 @@ export class QqChannel extends BaseRuntimeChatChannel {
     if (!appId || !appSecret) return null;
     const now = this.nowIso();
     return {
-      id: this.resource_id || "chat-sdk-qq",
+      id: this.channel_id || "chat-sdk-qq",
       channel: "qq",
       name: this.display_name || "qq",
       app_id: appId,

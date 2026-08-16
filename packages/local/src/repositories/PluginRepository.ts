@@ -1,290 +1,212 @@
 /**
- * 本地 Plugin Binding、Resource 与 Installation 仓储。
+ * 文件型 Plugin 定义与 profile 仓储。
  *
- * 本模块拥有三组共享表的全部 SQL 和加密规则，并维护删除时的引用完整性。具体
- * Plugin Manifest 与 Resource Schema 的业务校验由调用方在写入前完成。
+ * 每个 Plugin 使用自己的稳定 ID 目录。第三方描述保存在 `plugin.json`，全部用户配置
+ * 以明文 TOML 保存在 `config.toml`；数据库不保存 Plugin 的任何副本。
  */
 
-import type { LocalCrypto } from "@/database/LocalCrypto.js";
-import type { LocalDatabase } from "@/database/LocalDatabase.js";
-import type { AgentRepository } from "@/repositories/AgentRepository.js";
+import path from "node:path";
+import fs from "fs-extra";
+import { parse, stringify } from "smol-toml";
+import type { JsonObject, JsonValue } from "@downcity/agent";
+import {
+  get_local_plugin_path,
+  get_local_plugins_path,
+  resolve_local_root_path,
+} from "@/runtime/LocalPaths.js";
+import { normalize_plugin_id } from "@/repositories/AgentRepository.js";
 import type {
-  LocalAgentPluginBinding,
-  LocalPluginInstallation,
-  LocalPluginResource,
+  LocalInstalledPlugin,
+  LocalPluginConfig,
 } from "@/types/LocalPlugin.js";
 
-/** 本地 Plugin 配置仓储。 */
+const PLUGIN_FILE_NAME = "plugin.json";
+const CONFIG_FILE_NAME = "config.toml";
+
+/** 读取和写入用户级 Plugin 定义与配置。 */
 export class PluginRepository {
-  constructor(
-    private readonly database: LocalDatabase,
-    private readonly crypto_adapter: LocalCrypto,
-    private readonly agents: AgentRepository,
-  ) {}
+  /** Downcity 用户级数据根目录。 */
+  readonly root_path: string;
 
-  /** 列出一个 Agent 的全部 Plugin Binding。 */
-  list_agent_bindings(agent_id_input: string): LocalAgentPluginBinding[] {
-    const agent_id = require_text(agent_id_input, "agent_id");
-    return this.agents.list_plugin_bindings(agent_id);
+  constructor(root_path_input?: string) {
+    this.root_path = resolve_local_root_path(root_path_input);
   }
 
-  /** 读取一个 Agent 的指定 Plugin Binding。 */
-  get_agent_binding(agent_id_input: string, plugin_name_input: string): LocalAgentPluginBinding | null {
-    const agent_id = require_text(agent_id_input, "agent_id");
-    const plugin_name = normalize_plugin_name(plugin_name_input);
-    return this.agents.get_plugin_binding(agent_id, plugin_name);
+  /** 列出全部第三方 Plugin 描述。 */
+  list_installed(): LocalInstalledPlugin[] {
+    const plugins_path = get_local_plugins_path(this.root_path);
+    if (!fs.pathExistsSync(plugins_path)) return [];
+    return fs.readdirSync(plugins_path, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+      .map((entry) => this.get_installed(entry.name))
+      .filter((item): item is LocalInstalledPlugin => item !== null)
+      .sort((left, right) => left.id.localeCompare(right.id));
   }
 
-  /** 原子新建或更新一个 Plugin Binding。 */
-  save_agent_binding(input: Omit<LocalAgentPluginBinding, "created_at" | "updated_at">): LocalAgentPluginBinding {
-    const agent_id = require_text(input.agent_id, "agent_id");
-    const plugin_name = normalize_plugin_name(input.plugin_name);
-    if (!this.agents.get(agent_id)) throw new Error(`Agent not found: ${agent_id}`);
-    const resource_ids = normalize_resource_ids(input.resource_ids);
-    for (const resource_id of resource_ids) this.require_resource(plugin_name, resource_id);
-    return this.agents.save_plugin_binding({
-      agent_id,
-      plugin_name,
-      enabled: input.enabled,
-      config: input.config,
-      resource_ids,
-    });
+  /** 按 Plugin ID 读取第三方描述；内置 Plugin 没有该文件。 */
+  get_installed(plugin_id_input: string): LocalInstalledPlugin | null {
+    const plugin_id = normalize_plugin_id(plugin_id_input);
+    const file_path = this.plugin_file_path(plugin_id);
+    if (!fs.pathExistsSync(file_path)) return null;
+    const value = JSON.parse(fs.readFileSync(file_path, "utf8")) as LocalInstalledPlugin;
+    if (
+      value.schema_version !== 1
+      || value.id !== plugin_id
+      || !value.version
+      || !value.description
+      || !value.entry
+    ) {
+      throw new Error(`Invalid installed Plugin definition: ${plugin_id}`);
+    }
+    return structuredClone(value);
   }
 
-  /** 删除一个 Agent Plugin Binding。 */
-  remove_agent_binding(agent_id_input: string, plugin_name_input: string): void {
-    this.agents.remove_plugin_binding(
-      require_text(agent_id_input, "agent_id"),
-      normalize_plugin_name(plugin_name_input),
-    );
-  }
-
-  /** 列出一个 Plugin 拥有的全部 Resource。 */
-  list_resources(plugin_name_input: string): LocalPluginResource[] {
-    const plugin_name = normalize_plugin_name(plugin_name_input);
-    const rows = this.database.prepare(`
-      SELECT * FROM plugin_resources WHERE plugin_name = ? ORDER BY resource_id ASC;
-    `).all(plugin_name) as unknown as PluginResourceRow[];
-    return rows.map((row) => this.decode_resource(row));
-  }
-
-  /** 读取一个 Plugin Resource。 */
-  get_resource(plugin_name_input: string, resource_id_input: string): LocalPluginResource | null {
-    const plugin_name = normalize_plugin_name(plugin_name_input);
-    const resource_id = normalize_resource_id(resource_id_input);
-    const row = this.database.prepare(`
-      SELECT * FROM plugin_resources
-      WHERE plugin_name = ? AND resource_id = ? LIMIT 1;
-    `).get(plugin_name, resource_id) as PluginResourceRow | undefined;
-    return row ? this.decode_resource(row) : null;
-  }
-
-  /** 原子新建或更新一个完整 Plugin Resource。 */
-  save_resource(input: { plugin_name: string; item: LocalPluginResource["item"] }): LocalPluginResource {
-    const plugin_name = normalize_plugin_name(input.plugin_name);
-    const resource_id = normalize_resource_id(input.item.id);
-    if (input.item.id !== resource_id) throw new Error(`Plugin Resource id is not canonical: ${input.item.id}`);
-    const existing = this.get_resource(plugin_name, resource_id);
-    const current_time = new Date().toISOString();
-    const resource: LocalPluginResource = {
-      plugin_name,
-      resource_id,
-      item: input.item,
-      created_at: existing?.created_at ?? current_time,
-      updated_at: current_time,
+  /** 原子保存第三方 Plugin 描述。 */
+  save_installed(input: LocalInstalledPlugin): LocalInstalledPlugin {
+    const plugin_id = normalize_plugin_id(input.id);
+    const descriptor: LocalInstalledPlugin = {
+      ...structuredClone(input),
+      schema_version: 1,
+      id: plugin_id,
     };
-    this.database.prepare(`
-      INSERT INTO plugin_resources (
-        plugin_name, resource_id, item_encrypted, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(plugin_name, resource_id) DO UPDATE SET
-        item_encrypted = excluded.item_encrypted,
-        updated_at = excluded.updated_at;
-    `).run(
-      resource.plugin_name,
-      resource.resource_id,
-      this.crypto_adapter.encrypt(JSON.stringify(resource.item)),
-      resource.created_at,
-      resource.updated_at,
+    this.write_atomic(
+      this.plugin_file_path(plugin_id),
+      `${JSON.stringify(descriptor, null, 2)}\n`,
     );
-    return resource;
+    return descriptor;
   }
 
-  /** 删除一个未被任何 Agent Binding 引用的 Plugin Resource。 */
-  remove_resource(plugin_name_input: string, resource_id_input: string): void {
-    const plugin_name = normalize_plugin_name(plugin_name_input);
-    const resource_id = normalize_resource_id(resource_id_input);
-    const reference = this.agents.list()
-      .flatMap((agent) => this.agents.list_plugin_bindings(agent.agent_id))
-      .find((binding) =>
-        binding.plugin_name === plugin_name && binding.resource_ids.includes(resource_id)
-      );
-    if (reference) {
-      throw new Error(`Plugin Resource is still bound to agent ${reference.agent_id}: ${resource_id}`);
+  /** 删除整个第三方 Plugin；调用方必须先完成 Agent 引用检查。 */
+  remove_installed(plugin_id_input: string): void {
+    const plugin_id = normalize_plugin_id(plugin_id_input);
+    fs.removeSync(get_local_plugin_path(this.root_path, plugin_id));
+  }
+
+  /** 读取 Plugin 的全部 profile；配置文件不存在时返回空集合。 */
+  read_config(plugin_id_input: string): LocalPluginConfig {
+    const plugin_id = normalize_plugin_id(plugin_id_input);
+    const file_path = this.config_file_path(plugin_id);
+    if (!fs.pathExistsSync(file_path)) return { schema_version: 1, profiles: {} };
+    const raw = parse(fs.readFileSync(file_path, "utf8")) as Record<string, unknown>;
+    if (raw.schema_version !== 1 || !is_plain_object(raw.profiles)) {
+      throw new Error(`Invalid Plugin config: ${plugin_id}`);
     }
-    this.database.prepare(`
-      DELETE FROM plugin_resources WHERE plugin_name = ? AND resource_id = ?;
-    `).run(plugin_name, resource_id);
+    return {
+      schema_version: 1,
+      profiles: normalize_profiles(raw.profiles),
+    };
   }
 
-  /** 列出全部第三方 Plugin installation。 */
-  list_installations(): LocalPluginInstallation[] {
-    const rows = this.database.prepare(`
-      SELECT * FROM plugin_installations ORDER BY installation_id ASC;
-    `).all() as unknown as PluginInstallationRow[];
-    return rows.map(decode_installation);
+  /** 读取指定 profile。 */
+  get_profile(plugin_id_input: string, profile_input: string): JsonObject | null {
+    const profile = normalize_profile_id(profile_input);
+    const config = this.read_config(plugin_id_input);
+    return config.profiles[profile]
+      ? structuredClone(config.profiles[profile])
+      : null;
   }
 
-  /** 按 ID 读取第三方 Plugin installation。 */
-  get_installation(installation_id_input: string): LocalPluginInstallation | null {
-    const installation_id = normalize_installation_id(installation_id_input);
-    const row = this.database.prepare(`
-      SELECT * FROM plugin_installations WHERE installation_id = ? LIMIT 1;
-    `).get(installation_id) as PluginInstallationRow | undefined;
-    return row ? decode_installation(row) : null;
+  /** 新建或替换指定 profile。 */
+  save_profile(
+    plugin_id_input: string,
+    profile_input: string,
+    value: JsonObject,
+  ): JsonObject {
+    const plugin_id = normalize_plugin_id(plugin_id_input);
+    const profile = normalize_profile_id(profile_input);
+    assert_toml_value(value, `${plugin_id}.${profile}`);
+    const current = this.read_config(plugin_id);
+    const profiles = {
+      ...current.profiles,
+      [profile]: structuredClone(value),
+    };
+    this.write_config(plugin_id, { schema_version: 1, profiles });
+    return structuredClone(value);
   }
 
-  /** 原子新建或更新第三方 Plugin installation。 */
-  save_installation(input: LocalPluginInstallation): LocalPluginInstallation {
-    const installation = { ...input, installation_id: normalize_installation_id(input.installation_id) };
-    this.database.prepare(`
-      INSERT INTO plugin_installations (
-        installation_id, source, resolved_commit, entry_path, manifest_json,
-        integrity, installed_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(installation_id) DO UPDATE SET
-        source = excluded.source,
-        resolved_commit = excluded.resolved_commit,
-        entry_path = excluded.entry_path,
-        manifest_json = excluded.manifest_json,
-        integrity = excluded.integrity,
-        updated_at = excluded.updated_at;
-    `).run(
-      installation.installation_id,
-      installation.source,
-      installation.resolved_commit ?? null,
-      installation.entry_path,
-      JSON.stringify(installation.manifest),
-      installation.integrity || null,
-      installation.installed_at,
-      installation.updated_at,
+  /** 删除指定 profile；调用方必须先完成 Agent 引用检查。 */
+  remove_profile(plugin_id_input: string, profile_input: string): void {
+    const plugin_id = normalize_plugin_id(plugin_id_input);
+    const profile = normalize_profile_id(profile_input);
+    const current = this.read_config(plugin_id);
+    const profiles = { ...current.profiles };
+    delete profiles[profile];
+    this.write_config(plugin_id, { schema_version: 1, profiles });
+  }
+
+  /** 返回 Plugin 稳定目录。 */
+  plugin_path(plugin_id_input: string): string {
+    return get_local_plugin_path(this.root_path, normalize_plugin_id(plugin_id_input));
+  }
+
+  /** 原子写入规范化 TOML。 */
+  private write_config(plugin_id: string, config: LocalPluginConfig): void {
+    const ordered_profiles = Object.fromEntries(
+      Object.entries(config.profiles).sort(([left], [right]) => left.localeCompare(right)),
     );
-    return installation;
+    this.write_atomic(
+      this.config_file_path(plugin_id),
+      stringify({ schema_version: 1, profiles: ordered_profiles }),
+    );
   }
 
-  /** 删除一个没有 Binding 或 Resource 引用的共享 installation。 */
-  remove_installation(installation_id_input: string): LocalPluginInstallation {
-    const installation = this.get_installation(installation_id_input);
-    if (!installation) throw new Error(`Plugin installation not found: ${installation_id_input}`);
-    for (const manifest of installation.manifest.plugins) {
-      const binding = this.find_binding(manifest.name);
-      if (binding) throw new Error(`Plugin is still bound to agent ${binding.agent_id}: ${manifest.name}`);
-      const resource = this.database.prepare(
-        "SELECT resource_id FROM plugin_resources WHERE plugin_name = ? LIMIT 1;",
-      ).get(manifest.name) as { resource_id: string } | undefined;
-      if (resource) throw new Error(`Plugin still owns Resource ${resource.resource_id}: ${manifest.name}`);
+  /** 使用同目录临时文件提交完整内容。 */
+  private write_atomic(file_path: string, content: string): void {
+    fs.ensureDirSync(path.dirname(file_path), { mode: 0o700 });
+    fs.chmodSync(path.dirname(file_path), 0o700);
+    const temp_path = `${file_path}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(temp_path, content, { encoding: "utf8", mode: 0o600 });
+    fs.renameSync(temp_path, file_path);
+    fs.chmodSync(file_path, 0o600);
+  }
+
+  private plugin_file_path(plugin_id: string): string {
+    return path.join(get_local_plugin_path(this.root_path, plugin_id), PLUGIN_FILE_NAME);
+  }
+
+  private config_file_path(plugin_id: string): string {
+    return path.join(get_local_plugin_path(this.root_path, plugin_id), CONFIG_FILE_NAME);
+  }
+}
+
+/** 规范化 Plugin profile ID。 */
+export function normalize_profile_id(input: string): string {
+  const profile = String(input || "").trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]*$/u.test(profile)) {
+    throw new Error(`Invalid Plugin profile: ${input}`);
+  }
+  return profile;
+}
+
+/** 把 TOML table 收窄为 Plugin profile 表。 */
+function normalize_profiles(input: Record<string, unknown>): Record<string, JsonObject> {
+  return Object.fromEntries(Object.entries(input).map(([profile_id, value]) => {
+    const profile = normalize_profile_id(profile_id);
+    if (!is_plain_object(value)) throw new Error(`Invalid Plugin profile: ${profile}`);
+    assert_toml_value(value, profile);
+    return [profile, structuredClone(value) as JsonObject];
+  }));
+}
+
+/** Plugin profile 只允许可无损映射到 TOML 的 JSON 值。 */
+function assert_toml_value(value: unknown, path_label: string): asserts value is JsonValue {
+  if (value === null || value === undefined || typeof value === "bigint") {
+    throw new Error(`Plugin config value is not TOML-compatible: ${path_label}`);
+  }
+  if (["string", "boolean", "number"].includes(typeof value)) return;
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assert_toml_value(item, `${path_label}[${index}]`));
+    return;
+  }
+  if (is_plain_object(value)) {
+    for (const [key, item] of Object.entries(value)) {
+      assert_toml_value(item, `${path_label}.${key}`);
     }
-    this.database.prepare(
-      "DELETE FROM plugin_installations WHERE installation_id = ?;",
-    ).run(installation.installation_id);
-    return installation;
+    return;
   }
-
-  /** 断言一个 Plugin 没有任何 Binding 或 Resource，可用于安装更新兼容检查。 */
-  assert_plugin_unused(plugin_name_input: string): void {
-    const plugin_name = normalize_plugin_name(plugin_name_input);
-    const binding = this.find_binding(plugin_name);
-    if (binding) throw new Error(`Plugin is still bound to agent ${binding.agent_id}: ${plugin_name}`);
-    const resource = this.database.prepare(
-      "SELECT resource_id FROM plugin_resources WHERE plugin_name = ? LIMIT 1;",
-    ).get(plugin_name) as { resource_id: string } | undefined;
-    if (resource) throw new Error(`Plugin still owns Resource ${resource.resource_id}: ${plugin_name}`);
-  }
-
-  /** 解密并恢复 Plugin Resource。 */
-  private decode_resource(row: PluginResourceRow): LocalPluginResource {
-    const item = JSON.parse(this.crypto_adapter.decrypt(row.item_encrypted)) as LocalPluginResource["item"];
-    if (item.id !== row.resource_id) {
-      throw new Error(`Plugin Resource identity mismatch: ${row.plugin_name}/${row.resource_id}`);
-    }
-    return { ...row, item };
-  }
-
-  /** 查找引用指定 Plugin 的第一个 Agent Binding。 */
-  private find_binding(plugin_name: string): LocalAgentPluginBinding | undefined {
-    return this.agents.list()
-      .flatMap((agent) => this.agents.list_plugin_bindings(agent.agent_id))
-      .find((binding) => binding.plugin_name === plugin_name);
-  }
-
-  /** 断言 Binding 引用的 Resource 存在。 */
-  private require_resource(plugin_name: string, resource_id: string): void {
-    if (!this.get_resource(plugin_name, resource_id)) {
-      throw new Error(`Plugin Resource not found: ${plugin_name}/${resource_id}`);
-    }
-  }
-
+  throw new Error(`Plugin config value is not TOML-compatible: ${path_label}`);
 }
 
-interface PluginResourceRow extends Omit<LocalPluginResource, "item"> {
-  /** 加密后的完整 Resource Item。 */
-  item_encrypted: string;
-}
-
-interface PluginInstallationRow extends Omit<LocalPluginInstallation, "resolved_commit" | "manifest" | "integrity"> {
-  /** 可空 Git commit SHA。 */
-  resolved_commit: string | null;
-  /** Manifest JSON 字符串。 */
-  manifest_json: string;
-  /** 可空制品摘要。 */
-  integrity: string | null;
-}
-
-/** 把 SQLite 行恢复为 installation。 */
-function decode_installation(row: PluginInstallationRow): LocalPluginInstallation {
-  return {
-    installation_id: row.installation_id,
-    source: row.source,
-    ...(row.resolved_commit ? { resolved_commit: row.resolved_commit } : {}),
-    entry_path: row.entry_path,
-    manifest: JSON.parse(row.manifest_json) as LocalPluginInstallation["manifest"],
-    integrity: row.integrity ?? "",
-    installed_at: row.installed_at,
-    updated_at: row.updated_at,
-  };
-}
-
-/** 规范化 Plugin 名称。 */
-export function normalize_plugin_name(input: string): string {
-  const value = String(input || "").trim().toLowerCase();
-  if (!/^[a-z0-9][a-z0-9_-]*$/u.test(value)) throw new Error(`Invalid Plugin name: ${input}`);
-  return value;
-}
-
-/** 规范化 Plugin installation ID。 */
-export function normalize_installation_id(input: string): string {
-  const value = String(input || "").trim().toLowerCase();
-  if (!/^[a-z0-9][a-z0-9_-]*$/u.test(value)) throw new Error(`Invalid Plugin installation id: ${input}`);
-  return value;
-}
-
-/** 规范化 Plugin Resource ID。 */
-export function normalize_resource_id(input: string): string {
-  const value = String(input || "").trim().toLowerCase();
-  if (!/^[a-z0-9][a-z0-9_-]{0,79}$/u.test(value)) throw new Error(`Invalid Plugin Resource id: ${input}`);
-  return value;
-}
-
-/** 规范化唯一 Resource ID 数组。 */
-function normalize_resource_ids(input: readonly string[]): string[] {
-  const values = input.map(normalize_resource_id);
-  if (new Set(values).size !== values.length) throw new Error("Plugin Binding resource_ids must be unique");
-  return values;
-}
-
-/** 要求字符串字段非空。 */
-function require_text(value: string, field_name: string): string {
-  const normalized = String(value || "").trim();
-  if (!normalized) throw new Error(`${field_name} is required`);
-  return normalized;
+function is_plain_object(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }

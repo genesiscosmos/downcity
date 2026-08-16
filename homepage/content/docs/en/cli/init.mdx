@@ -5,7 +5,7 @@ description: Create an Agent project and its global config with the CLI
 
 # Project Init
 
-`city agent create` creates Workspace runtime and Skills directories, stores Agent and Workspace as independent global entities, and persists the Agent's single Workspace binding. It does not generate an Agent declaration file in the Workspace.
+`city agent create` registers the Workspace independently and creates the Agent's user-level `agent.json` and `SOUL.md`. It does not generate an Agent declaration inside the Workspace or persist an Agent-Workspace binding.
 
 ```bash
 city agent create
@@ -29,10 +29,10 @@ my-project/
 └── .downcity/
 ```
 
-The global database stores Agent ID, Workspace binding, model, and Plugin config. Project `.env` overrides Global Env from `~/.downcity/.env`; explicit process environment variables have the highest priority.
+The Agent definition is written to `~/.downcity/agents/<agent_id>/agent.json` with its `SOUL.md`; Workspace registration remains in `downcity.db`. Project `.env` overrides Global Env from `~/.downcity/.env`; explicit process environment variables have the highest priority.
 
 ```bash
-# Allow replacing existing Agent config in the global database
+# Allow replacing an existing Agent file definition
 city agent create ./my-project --force
 ```
 

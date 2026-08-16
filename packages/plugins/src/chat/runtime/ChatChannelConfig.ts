@@ -14,7 +14,7 @@ import type {
   ChatChannelStateSnapshot,
 } from "@/chat/types/ChannelStatus.js";
 import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
-import { get_chat_plugin_resource_json_schema } from "@/chat/config/ChatPluginConfig.js";
+import { get_chat_plugin_channel_json_schema } from "@/chat/config/ChatPluginConfig.js";
 import {
   getChatChannelBot,
   isChatChannelEnabled,
@@ -40,26 +40,26 @@ export function buildChatChannelConfigSummary(
   accountInput?: ChatRuntimeAccount | null,
 ): Record<string, string | number | boolean | null> {
   const account = accountInput ?? resolveChannelAccount(context, channel);
-  const resource_id = resolveChannelAccountId(context, channel);
+  const channel_id = resolveChannelAccountId(context, channel);
   const configured = isChannelAccountConfigured(channel, account);
   if (channel === "telegram") {
     return {
       enabled: isChatChannelEnabled(context, channel),
-      resource_id: resource_id || null,
-      resource_configured: configured,
+      channel_id: channel_id || null,
+      channel_configured: configured,
     };
   }
   if (channel === "feishu") {
     return {
       enabled: isChatChannelEnabled(context, channel),
-      resource_id: resource_id || null,
-      resource_configured: configured,
+      channel_id: channel_id || null,
+      channel_configured: configured,
     };
   }
   return {
     enabled: isChatChannelEnabled(context, channel),
-    resource_id: resource_id || null,
-    resource_configured: configured,
+    channel_id: channel_id || null,
+    channel_configured: configured,
   };
 }
 
@@ -97,7 +97,7 @@ export function getChatChannelStatus(
     detail: {
       ...(runtime?.detail || {}),
       config: buildChatChannelConfigSummary(context, channel, channelAccount),
-      resource_schema: toJsonObject(get_chat_plugin_resource_json_schema(channel)),
+      channel_schema: toJsonObject(get_chat_plugin_channel_json_schema(channel)),
     },
   };
 }

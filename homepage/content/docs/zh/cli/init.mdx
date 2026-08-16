@@ -5,7 +5,7 @@ description: 使用 CLI 创建 Agent 项目和全局配置
 
 # 项目初始化
 
-`city agent create` 是一个便捷工作流：它创建 Workspace 运行目录和 Skills 目录，并把 Agent 与 Workspace 作为两个独立实体写入数据库，同时保存 Agent 到 Workspace 的唯一绑定。Workspace 中不生成 Agent 声明文件。
+`city agent create` 会独立登记 Workspace，并创建 Agent 的用户级 `agent.json` 与 `SOUL.md`。它不会在 Workspace 中生成 Agent 声明，也不会保存 Agent-Workspace 绑定。
 
 ```bash
 city agent create
@@ -29,10 +29,10 @@ my-project/
 └── .downcity/
 ```
 
-全局数据库保存 Agent ID、Workspace 绑定、模型和 Plugin 配置。项目 `.env` 会覆盖 `~/.downcity/.env` 中的 Global Env；启动进程显式环境变量拥有最高优先级。
+Agent 定义写入 `~/.downcity/agents/<agent_id>/agent.json`，主体指令写入同目录的 `SOUL.md`；Workspace 登记仍保存在 `downcity.db`。项目 `.env` 会覆盖 `~/.downcity/.env` 中的 Global Env；启动进程显式环境变量拥有最高优先级。
 
 ```bash
-# 允许覆盖全局数据库中的现有 Agent 配置
+# 允许覆盖现有 Agent 文件定义
 city agent create ./my-project --force
 ```
 

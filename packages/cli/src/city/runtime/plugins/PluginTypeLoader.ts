@@ -5,7 +5,7 @@
  * CLI 只投影自己的 Plugin 类型协议。
  */
 
-import type { PluginType } from "@/city/types/plugin/PluginInstallation.js";
+import type { PluginType } from "@/city/types/plugin/PluginDefinition.js";
 import { create_cli_plugin_loader } from "@/city/runtime/AgentAssembly.js";
 import { getPlatformRootDirPath } from "@/city/process/registry/CityPaths.js";
 import { create_cli_local_data } from "@/city/runtime/LocalData.js";
@@ -20,11 +20,11 @@ export interface PluginTypeLoadContext {
   port?: number;
 }
 
-/** 加载指定 Plugin 所属入口导出的完整 constructor 数组。 */
-export async function load_plugin_types(
-  plugin_name: string,
+/** 按稳定 ID 加载一个 Plugin constructor。 */
+export async function load_plugin_type(
+  plugin_id: string,
   context: PluginTypeLoadContext = {},
-): Promise<PluginType[]> {
+): Promise<PluginType> {
   const root_path = getPlatformRootDirPath();
   const data = create_cli_local_data(root_path);
   const plugin_loader = create_cli_plugin_loader({
@@ -34,19 +34,10 @@ export async function load_plugin_types(
     port: context.port,
   });
   try {
-    return await plugin_loader.load_plugin_types(plugin_name) as PluginType[];
+    const plugin_type = await plugin_loader.load_plugin_type(plugin_id);
+    if (!plugin_type) throw new Error(`Plugin constructor not found: ${plugin_id}`);
+    return plugin_type as PluginType;
   } finally {
     data.database.close();
   }
-}
-
-/** 按 Plugin 名称读取一个 constructor。 */
-export async function load_plugin_type(
-  plugin_name: string,
-  context: PluginTypeLoadContext = {},
-): Promise<PluginType> {
-  const plugin_types = await load_plugin_types(plugin_name, context);
-  const plugin_type = plugin_types.find((item) => item.manifest.name === plugin_name);
-  if (!plugin_type) throw new Error(`Plugin constructor not found: ${plugin_name}`);
-  return plugin_type;
 }

@@ -39,7 +39,7 @@ Selecting an Agent in the `city agent` panel opens its most recent conversation 
 questions when key information is missing. The CLI submits the complete answer set
 to the current Session and continues the same Turn. Press Esc to stop that Turn.
 
-Agents and Workspaces are registered independently, and each Agent persistently binds one Workspace. Agents have no independent started state. In Chat, use `/new` to create a Session, `/session` to select an existing Session or create one, and `/config` to open Agent configuration. Configuration returns to the same conversation. Chat uses RPC while City is running; scriptable one-shot calls can use the local assembly path while City is off.
+Agents and Workspaces are registered independently. An Agent enters a selected Workspace for each execution and stores no persistent Workspace binding. Agents have no independent started state. In Chat, use `/new` to create a Session, `/session` to select an existing Session or create one, and `/config` to open Agent configuration. Configuration returns to the same conversation. Chat uses RPC while City is running; scriptable one-shot calls can use the local assembly path while City is off.
 
 Use the slash command to open the system file picker and attach local files to the next message:
 
@@ -64,36 +64,31 @@ city agent token delete <token_id> [agent_id]
 
 ## Plugins
 
-`city plugin list` shows each Plugin title, stable name, purpose description, source, and version.
+`city plugin list` shows each Plugin title, stable ID, purpose, source, and saved profiles.
 
 ```bash
 city plugin list
 city plugin install <local-directory|git-url|github:owner/repo#ref>
-city plugin update <plugin_name>
-city plugin uninstall <plugin_name>
-city plugin inspect <plugin_name>
-city plugin enable <plugin_name> [agent_id] --config '{"key":"value"}'
-city plugin disable <plugin_name> [agent_id]
-city plugin config <plugin_name> [agent_id]
-city plugin config <plugin_name> [agent_id] --set '{"key":"value"}'
-city plugin config <plugin_name> [agent_id] --interactive
-city plugin config <plugin_name> [agent_id] --resources '["resource-id"]'
-city plugin resource list <plugin_name>
-city plugin resource create <plugin_name> --set '{"type":"api","api_key":"secret"}'
-city plugin resource create <plugin_name> --interactive
-city plugin resource update <plugin_name> <resource_id> --set '{"type":"api","api_key":"new-secret"}'
-city plugin resource refresh <plugin_name> <resource_id>
-city plugin resource remove <plugin_name> <resource_id>
-city plugin action <plugin_name> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
+city plugin update <plugin_id>
+city plugin uninstall <plugin_id>
+city plugin inspect <plugin_id>
+city plugin profiles <plugin_id>
+city plugin config <plugin_id> [profile] --set '{"key":"value"}'
+city plugin config <plugin_id> [profile] --interactive
+city plugin config <plugin_id> [profile] --remove
+city plugin enable <plugin_id> [agent_id] --profile <profile>
+city plugin disable <plugin_id> [agent_id]
+city plugin enabled [agent_id]
+city plugin action <plugin_id> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
-A third-party entry provides a named `plugins` constructor array export. Each Plugin declares its name, configuration, and Resource Schema through `static manifest`, and may resolve dynamic Resource fields through `static resolve_resource`. The artifact must contain a v2 `downcity.plugin.json` and a self-contained ESM entry. Installation never runs `npm install`, build scripts, lifecycle scripts, or the Plugin entry.
+A third-party artifact defines exactly one Plugin. Its v4 `downcity.plugin.json` declares a globally unique `id`, version, self-contained ESM entry, and optional profile Schema. The entry exports one named `plugin` constructor. The final directory is always `~/.downcity/plugins/<plugin_id>/`; installation never runs `npm install`, build scripts, lifecycle scripts, or the Plugin entry.
 
-Plugin configuration belongs to the Agent Binding. Plugin Resources belong to the global Resource Store, while a Binding stores only `resource_ids`. The CLI collects user fields from the Schema, invokes the Plugin constructor static Resolver for dynamic `readOnly` fields, and resolves IDs into complete Items before instantiation. The CLI then executes `new PluginType({ config, resources })`. `writeOnly` fields are stored encrypted and never echoed by CLI output.
+Plugin configuration belongs to named profiles in `plugins/<plugin_id>/config.toml`. Accounts, channels, endpoints, and other structures are defined directly by that Plugin's profile Schema. Configuration is plaintext with file mode `0600`; fields marked `writeOnly` are redacted in command output. The CLI executes `new PluginType({ config: selected_profile })`.
 
-`resource update --set` replaces all user-writable fields. `resource refresh` preserves user fields and only recomputes Resolver fields. A bound Resource cannot be removed, and a third-party Plugin that still owns Resources cannot be uninstalled.
+The Agent's `agent.json` stores only the Plugin ID and optional profile reference. Removing that entry disables the Plugin. A profile or third-party Plugin cannot be removed while an Agent still references it.
 
-After changing enable, disable, config, or Resource Binding state, run `city restart` to apply the new Runtime assembly to a running CLI City.
+After changing enable, disable, or profile configuration, run `city restart` to apply the new assembly to a running CLI City.
 
 The CLI, Agent `plugin_call`, HTTP, and scheduled jobs all invoke Plugin Actions. There is no `plugin command`, and Chat is not a top-level CLI special case.
 

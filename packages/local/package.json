@@ -1,6 +1,6 @@
 {
   "name": "@downcity/local",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Downcity 本地数据库基础设施与显式产品数据组件。",
   "type": "module",
   "main": "./bin/index.js",
@@ -36,7 +36,8 @@
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "dotenv": "^17.4.2",
-    "fs-extra": "^11.3.5"
+    "fs-extra": "^11.3.5",
+    "smol-toml": "^1.7.1"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",

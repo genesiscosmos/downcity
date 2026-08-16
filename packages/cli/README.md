@@ -38,7 +38,7 @@ CLI 从本地产品配置装配的 Agent 默认启用 `ask_question` Tool。使�
 `city agent chat <agent_id>` 交互时，模型可以在缺少关键信息时显示文本、单选或多选问题；
 回答会通过 Session Interaction 提交，并在同一轮模型执行中继续处理。
 
-Agent、Workspace 与 Plugin Binding 统一保存在 `~/.downcity/downcity.db`。每个持久化 Agent 对应一个 Workspace；一个 Workspace 可以被多个 Agent 使用。CLI daemon 和 Desktop 各自创建独立的 City 实例，启动、停止和 HTTP/RPC 生命周期互不共享。Session 仍保存在实际 Workspace 的 `.downcity/agents/<agent_id>/sessions/` 下。裸 `city` 与 `city agent` 都直接打开 Agent 列表，不展示 Agent runtime 状态；Federation 与全局 Plugin 配置直接位于同一列表的“设置”分组。点击 Agent 直接进入最近对话；Chat 内通过 `/new` 新建 Session、`/session` 切换 Session、`/config` 打开配置并返回原对话。City 运行时 Chat 通过 RPC 访问宿主，脚本化的一次性调用可以在 City 关闭时使用本地装配路径。
+Agent 定义保存在 `~/.downcity/agents/<agent_id>/agent.json`，主体指令保存在同目录的 `SOUL.md`。Plugin 以稳定 ID 使用 `~/.downcity/plugins/<plugin_id>/`，明文 profile 位于 `config.toml`；第三方 Plugin 的描述与代码分别位于 `plugin.json` 和 `artifact/`。`downcity.db` 只保存 Workspace 索引、Token 与平台状态。Agent 与 Workspace 不绑定，同一个 Agent 可以进入多个 Workspace；Agent 在 `agent.json` 中注册 Plugin 并选择可选 profile。CLI daemon 和 Desktop 各自创建独立的 City 实例，Session 仍保存在实际 Workspace 的 `.downcity/agents/<agent_id>/sessions/` 下。
 
 CLI City 只维护一个 daemon，并分别监听一个 HTTP 端口和一个原生 TCP RPC 端口。两种协议都按 `agent_id` 路由，不为每个 Agent 分配独立端口。
 

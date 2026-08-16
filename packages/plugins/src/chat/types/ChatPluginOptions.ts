@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - ChatPlugin 只接收 queue 行为与 channels 列表。
- * - 每个 channel 对象自己负责 env / 凭据 / 账号池绑定解析。
+ * - 每个 channel 对象自己负责 env、凭据与运行账号解析。
  * - 这样 ChatPlugin 不再理解 Telegram、Feishu、QQ 的具体配置字段。
  */
 
@@ -25,9 +25,9 @@ export interface ChatChannel {
    */
   isEnabled(context: PluginContext): boolean;
   /**
-   * 当前 channel 来源 Resource 的稳定 ID。
+   * 当前 channel 的稳定 ID。
    */
-  getResourceId(context: PluginContext): string;
+  get_channel_id(context: PluginContext): string;
   /**
    * 解析当前 channel 的运行态账号。
    */
@@ -50,7 +50,7 @@ export interface ChatPluginOptions {
    * 当前 agent 持有的 chat channels。
    *
    * 说明（中文）
-   * - 每个 channel 对象自己负责 env、凭据与账号池绑定解析。
+   * - 每个 channel 对象自己负责 env、凭据与运行账号解析。
    * - 未传入时不启用任何 chat channel。
    */
   channels?: ChatChannel[];

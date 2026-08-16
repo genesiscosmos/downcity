@@ -29,8 +29,8 @@ export function App() {
   const render_main_view = () => {
     if (controller.selection?.kind === "settings") return <SettingsView controller={controller} section={controller.selection.section} />;
     if (controller.selection?.kind === "plugin") {
-      const plugin_name = controller.selection.plugin_name;
-      const plugin = controller.plugins.find((item) => item.plugin_name === plugin_name);
+      const plugin_id = controller.selection.plugin_id;
+      const plugin = controller.plugins.find((item) => item.plugin_id === plugin_id);
       return plugin ? <PluginView plugin={plugin} /> : <WelcomeView />;
     }
     if (controller.selection?.kind === "workspace") {

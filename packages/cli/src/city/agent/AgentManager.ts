@@ -124,8 +124,8 @@ async function build_agent_options(
             label: "Plugins",
             value: "plugins",
             hint: t({
-              zh: "安装、更新和管理全局 Plugin 与 Resource",
-              en: "Install, update, and manage global Plugins and Resources",
+              zh: "安装、更新和管理全局 Plugin 与配置 profile",
+              en: "Install, update, and manage global Plugins and configuration profiles",
             }),
           },
           {

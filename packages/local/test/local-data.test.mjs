@@ -12,6 +12,7 @@ import {
 import {
   AgentRepository,
   ensure_local_schema,
+  PluginRepository,
   resolve_local_agent_env,
   SecureSettingRepository,
   WorkspaceRepository,
@@ -57,17 +58,65 @@ test("AgentRepository 与 WorkspaceRepository 独立维护产品配置", async (
       agent_id: "Lucas Whitman",
       execution: { type: "api", model_id: "model-test" },
       instruction: "You are Lucas.",
+      plugins: { chat: { profile: "lucas" }, task: {} },
     });
 
     assert.equal(agents.get("lucas_whitman")?.instruction, "You are Lucas.");
     assert.equal(workspaces.get(workspace.workspace_id)?.workspace_path, workspace.workspace_path);
     assert.deepEqual(agents.list().map((item) => item.agent_id), ["lucas_whitman"]);
     assert.equal(await fs.readFile(
-      path.join(root_path, "agents", "lucas_whitman", "instruction.md"),
+      path.join(root_path, "agents", "lucas_whitman", "SOUL.md"),
       "utf8",
     ), "You are Lucas.");
+    const agent_file = JSON.parse(await fs.readFile(
+      path.join(root_path, "agents", "lucas_whitman", "agent.json"),
+      "utf8",
+    ));
+    assert.equal(agent_file.schema_version, 2);
+    assert.deepEqual(agent_file.plugins, { chat: { profile: "lucas" }, task: {} });
+    assert.equal(
+      (await fs.stat(path.join(root_path, "agents", "lucas_whitman"))).mode & 0o777,
+      0o700,
+    );
+    assert.equal(
+      (await fs.stat(path.join(root_path, "agents", "lucas_whitman", "agent.json"))).mode & 0o777,
+      0o600,
+    );
   } finally {
     database.close();
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
+test("PluginRepository 按 Plugin ID 保存明文 TOML profile", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-plugin-config-"));
+  try {
+    const plugins = new PluginRepository(root_path);
+    plugins.save_profile("chat", "lucas", {
+      queue: { max_concurrency: 3 },
+      channels: [{
+        id: "telegram_main",
+        type: "telegram",
+        name: "Lucas Bot",
+        bot_token: "plain-token",
+      }],
+    });
+    assert.deepEqual(plugins.get_profile("chat", "lucas"), {
+      queue: { max_concurrency: 3 },
+      channels: [{
+        id: "telegram_main",
+        type: "telegram",
+        name: "Lucas Bot",
+        bot_token: "plain-token",
+      }],
+    });
+    const config_path = path.join(root_path, "plugins", "chat", "config.toml");
+    const content = await fs.readFile(config_path, "utf8");
+    assert.match(content, /plain-token/u);
+    assert.match(content, /\[profiles\.lucas\.queue\]/u);
+    assert.equal((await fs.stat(config_path)).mode & 0o777, 0o600);
+    assert.equal((await fs.stat(path.dirname(config_path))).mode & 0o777, 0o700);
+  } finally {
     await fs.rm(root_path, { recursive: true, force: true });
   }
 });

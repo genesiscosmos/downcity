@@ -656,7 +656,7 @@ subject_id  = message.from.id
 display_name = username / first_name / last_name
 chat_id     = message.chat.id
 chat_type   = message.chat.type
-issuer      = Plugin Resource ID，回退到 Telegram Bot ID
+issuer      = Chat Plugin profile 中的 Channel ID，回退到 Telegram Bot ID
 ```
 
 示例：
@@ -680,7 +680,7 @@ subject_id = sender.open_id
 必要时回退到当前 Adapter 已支持的 `user_id`。
 
 ```text
-issuer = Plugin Resource ID，回退到 App ID
+issuer = Chat Plugin profile 中的 Channel ID，回退到 App ID
 ```
 
 不同 App 下的相同 `open_id` 不得视为同一 Principal。
@@ -691,7 +691,7 @@ issuer = Plugin Resource ID，回退到 App ID
 
 ```text
 subject_id = user_openid / member_openid / author_id
-issuer     = Plugin Resource ID，回退到 App ID
+issuer     = Chat Plugin profile 中的 Channel ID，回退到 App ID
 ```
 
 ### 15.4 缺失身份

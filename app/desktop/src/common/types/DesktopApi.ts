@@ -47,8 +47,8 @@ export type DesktopPluginSource = "builtin" | "installed";
 
 /** Renderer 可见的 Plugin catalog 摘要。 */
 export interface DesktopPluginSummary {
-  /** Plugin 的全局稳定名称。 */
-  plugin_name: string;
+  /** Plugin 的全局稳定 ID。 */
+  plugin_id: string;
   /** Plugin 的用户可见标题。 */
   title: string;
   /** Plugin 的用途说明。 */
@@ -57,16 +57,12 @@ export interface DesktopPluginSummary {
   version?: string;
   /** Plugin 来自官方内置集合或第三方安装。 */
   source: DesktopPluginSource;
-  /** 第三方安装的稳定 ID；官方 Plugin 不存在该字段。 */
-  installation_id?: string;
   /** 当前绑定该 Plugin 的全部 Agent ID。 */
   agent_ids: string[];
-  /** 当前 Plugin 拥有的 Resource 数量。 */
-  resource_count: number;
+  /** 当前 Plugin 已保存的 profile 数量。 */
+  profile_count: number;
   /** Plugin 是否声明了可编辑配置。 */
   configurable: boolean;
-  /** Plugin 是否声明了 Resource 类型。 */
-  supports_resources: boolean;
 }
 
 /** Renderer 可见的 Session 摘要。 */

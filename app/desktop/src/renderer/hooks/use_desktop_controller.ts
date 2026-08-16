@@ -267,10 +267,10 @@ export function use_desktop_controller(): DesktopViewController {
     set_selection({ kind: "agent", agent_id });
   }, []);
 
-  const select_plugin = useCallback((plugin_name: string) => {
+  const select_plugin = useCallback((plugin_id: string) => {
     set_error("");
     set_sidebar_mode_state("plugins");
-    set_selection({ kind: "plugin", plugin_name });
+    set_selection({ kind: "plugin", plugin_id });
   }, []);
 
   const set_sidebar_mode = useCallback((mode: SidebarMode) => {

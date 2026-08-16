@@ -1,36 +1,23 @@
-/**
- * City Plugin Catalog 与 Agent Binding 的交互式管理器。
- *
- * 关键点（中文）
- * - 全局入口负责安装制品并选择 Agent；Agent 内入口直接管理当前 Binding。
- * - 所有配置交互由 JSON Schema 表单生成，不包含 Chat 或 channel 分支。
- */
+/** Plugin、profile 与 Agent 引用的交互式管理器。 */
 
-import fs from "fs-extra";
 import prompts from "@/city/tui/Prompts.js";
 import { list_agent_configs } from "@/city/process/registry/AgentConfigRepository.js";
 import {
-  get_agent_plugin_binding,
-  remove_agent_plugin_binding,
-  remove_plugin_installation,
-  set_agent_plugin_binding,
+  get_agent_plugin_reference,
+  get_plugin_profile,
+  remove_agent_plugin_reference,
+  remove_installed_plugin,
+  save_plugin_profile,
+  set_agent_plugin_reference,
 } from "@/city/process/registry/PluginRepository.js";
-import { get_plugin_installation_dir_path } from "@/city/process/registry/CityPaths.js";
 import {
   get_plugin_catalog_item,
   list_plugin_catalog,
 } from "@/city/process/plugin/PluginCatalog.js";
-import {
-  install_plugins,
-  update_plugin,
-} from "@/city/process/plugin/PluginInstaller.js";
-import { prompt_and_save_plugin_binding } from "@/city/process/plugin/PluginBindingConfiguration.js";
+import { install_plugin, update_plugin } from "@/city/process/plugin/PluginInstaller.js";
+import { prompt_plugin_config } from "@/city/process/plugin/PluginConfigForm.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import type { PluginCatalogItem } from "@/city/types/plugin/PluginCatalog.js";
-import {
-  run_interactive_binding_resources,
-  run_interactive_plugin_resource_manager,
-} from "@/city/process/plugin/InteractivePluginResourceManager.js";
 
 /** 打开 City 全局 Plugin 管理器。 */
 export async function run_interactive_plugin_manager(): Promise<void> {
@@ -43,21 +30,12 @@ export async function run_interactive_plugin_manager(): Promise<void> {
       choices: [
         ...catalog.map((plugin) => ({
           title: plugin.title,
-          description: [
-            plugin.description,
-            plugin.plugin_name,
-            plugin.source,
-            plugin.version,
-          ].filter(Boolean).join(" · "),
-          value: `plugin:${plugin.plugin_name}`,
+          description: [plugin.plugin_id, plugin.source, plugin.version].filter(Boolean).join(" · "),
+          value: `plugin:${plugin.plugin_id}`,
         })),
         { title: "操作", disabled: true },
-        {
-          title: "安装 Plugin",
-          description: "从本地目录、Git URL 或 github:owner/repo#ref 安装",
-          value: "install",
-        },
-        { title: "返回", description: "回到 City 首页", value: "back" },
+        { title: "安装 Plugin", description: "从本地目录、Git URL 或 GitHub 安装", value: "install" },
+        { title: "返回", value: "back" },
       ],
     });
     const selection = String(response.selection || "");
@@ -66,162 +44,162 @@ export async function run_interactive_plugin_manager(): Promise<void> {
       await run_interactive_install();
       continue;
     }
-    const plugin_name = selection.startsWith("plugin:") ? selection.slice(7) : "";
-    const plugin = get_plugin_catalog_item(plugin_name);
+    const plugin_id = selection.startsWith("plugin:") ? selection.slice(7) : "";
+    const plugin = get_plugin_catalog_item(plugin_id);
     if (plugin) await run_interactive_plugin_actions(plugin);
   }
 }
 
-/** 打开指定 Agent 的统一 Plugin Binding 管理器。 */
+/** 打开指定 Agent 的 Plugin 引用管理器。 */
 export async function run_interactive_agent_plugin_manager(agent_id: string): Promise<void> {
   while (true) {
     const catalog = list_plugin_catalog();
     const response = await prompts({
       type: "select",
-      name: "plugin_name",
+      name: "plugin_id",
       message: `Agent Plugins · ${agent_id}`,
       choices: [
         ...catalog.map((plugin) => {
-          const binding = get_agent_plugin_binding(agent_id, plugin.plugin_name);
-          const binding_status = binding
-            ? (binding.enabled ? "enabled" : "disabled")
-            : "not bound";
+          const reference = get_agent_plugin_reference(agent_id, plugin.plugin_id);
           return {
-            title: `${binding?.enabled ? "●" : "○"} ${plugin.title}`,
-            description: `${plugin.description} · ${plugin.plugin_name} · ${binding_status}`,
-            value: plugin.plugin_name,
+            title: `${reference ? "●" : "○"} ${plugin.title}`,
+            description: [plugin.plugin_id, reference?.profile].filter(Boolean).join(" · "),
+            value: plugin.plugin_id,
           };
         }),
-        { title: "返回", description: "返回 Agent 配置", value: "back" },
+        { title: "返回", value: "back" },
       ],
     });
-    const plugin_name = String(response.plugin_name || "");
-    if (!plugin_name || plugin_name === "back") return;
-    const plugin = get_plugin_catalog_item(plugin_name);
-    if (plugin) await run_agent_binding_actions(plugin, agent_id);
+    const plugin_id = String(response.plugin_id || "");
+    if (!plugin_id || plugin_id === "back") return;
+    const plugin = get_plugin_catalog_item(plugin_id);
+    if (plugin) await run_agent_plugin_actions(plugin, agent_id);
   }
 }
 
-/** 管理一个 Catalog Plugin 的全局动作。 */
+/** 管理一个 Plugin 的全局配置与制品。 */
 async function run_interactive_plugin_actions(plugin: PluginCatalogItem): Promise<void> {
   const response = await prompts({
     type: "select",
     name: "action",
     message: plugin.title,
-    subtitle: plugin.description || plugin.plugin_name,
+    subtitle: plugin.description,
     choices: [
-      { title: "绑定或配置 Agent", description: "选择 Agent 并进入统一配置表单", value: "bind" },
-      ...(plugin.resource_schema
-        ? [{
-            title: "管理 Resources",
-            description: "创建、编辑、刷新或删除完整 Plugin Resource",
-            value: "resources",
-          }]
-        : []),
+      { title: "配置 profile", description: "编辑 Plugin 自己的 config.toml", value: "profile" },
+      { title: "注册到 Agent", description: "选择 Agent 和 profile", value: "agent" },
       ...(plugin.source === "installed"
         ? [
-            { title: "更新", description: "从已保存来源重新安装", value: "update" },
-            { title: "卸载", description: "删除未被 Agent Binding 使用的制品", value: "uninstall" },
+            { title: "更新", description: "从已保存来源更新 artifact", value: "update" },
+            { title: "卸载", description: "删除未被 Agent 引用的 Plugin", value: "uninstall" },
           ]
         : []),
-      { title: "返回", description: "返回 Agent Plugin 列表", value: "back" },
+      { title: "返回", value: "back" },
     ],
   });
-  if (response.action === "bind") {
+  if (response.action === "profile") await configure_profile(plugin);
+  if (response.action === "agent") {
     const agent_id = await prompt_agent_id();
-    if (agent_id) await run_agent_binding_actions(plugin, agent_id);
-    return;
-  }
-  if (response.action === "resources") {
-    await run_interactive_plugin_resource_manager(plugin);
-    return;
+    if (agent_id) await run_agent_plugin_actions(plugin, agent_id);
   }
   if (response.action === "update") {
-    const installation = await update_plugin(plugin.plugin_name);
-    emitCliBlock({
-      tone: "success",
-      title: "Plugins updated",
-      summary: installation.manifest.plugins.map((item) => item.name).join(", "),
-    });
-    return;
+    const installed = await update_plugin(plugin.plugin_id);
+    emitCliBlock({ tone: "success", title: "Plugin updated", summary: installed.id });
   }
   if (response.action === "uninstall") {
     const confirmed = await prompts({
       type: "confirm",
       name: "confirmed",
-      message: `卸载与 ${plugin.plugin_name} 共享入口的全部 Plugin？`,
+      message: `卸载 ${plugin.plugin_id}？`,
       initial: false,
     });
-    if (confirmed.confirmed !== true) return;
-    const installation = remove_plugin_installation(plugin.plugin_name);
-    await fs.remove(get_plugin_installation_dir_path(installation.installation_id));
-    emitCliBlock({
-      tone: "success",
-      title: "Plugins uninstalled",
-      summary: installation.manifest.plugins.map((item) => item.name).join(", "),
-    });
+    if (confirmed.confirmed === true) {
+      const removed = remove_installed_plugin(plugin.plugin_id);
+      emitCliBlock({ tone: "success", title: "Plugin uninstalled", summary: removed.id });
+    }
   }
 }
 
-/** 管理一个 Agent 的指定 Plugin Binding。 */
-async function run_agent_binding_actions(plugin: PluginCatalogItem, agent_id: string): Promise<void> {
-  const binding = get_agent_plugin_binding(agent_id, plugin.plugin_name);
+/** 注册、切换 profile 或注销 Agent Plugin。 */
+async function run_agent_plugin_actions(
+  plugin: PluginCatalogItem,
+  agent_id: string,
+): Promise<void> {
+  const reference = get_agent_plugin_reference(agent_id, plugin.plugin_id);
   const response = await prompts({
     type: "select",
     name: "action",
     message: `${plugin.title} · ${agent_id}`,
-    subtitle: binding ? (binding.enabled ? "enabled" : "disabled") : "not bound",
     choices: [
-      {
-        title: binding ? "配置" : "启用并配置",
-        description: plugin.config_schema ? "使用 Plugin Schema 编辑完整配置" : "该 Plugin 没有配置字段",
-        value: "configure",
-      },
-      ...(plugin.resource_schema
-        ? [{
-            title: "Resources",
-            description: "创建并选择该 Plugin 实例使用的 Resource",
-            value: "resources",
-          }]
-        : []),
-      ...(binding
-        ? [{
-            title: binding.enabled ? "禁用" : "启用",
-            description: "修改下次 Agent 装配时的启用状态",
-            value: "toggle",
-          }]
-        : []),
-      ...(binding
-        ? [{ title: "删除 Binding", description: "删除当前 Agent 的配置与启用关系", value: "remove" }]
-        : []),
-      { title: "返回", description: "返回 Plugin 列表", value: "back" },
+      { title: reference ? "切换 profile" : "启用", value: "enable" },
+      { title: "配置 profile", value: "profile" },
+      ...(reference ? [{ title: "禁用", value: "disable" }] : []),
+      { title: "返回", value: "back" },
     ],
   });
-  if (response.action === "configure") {
-    const saved = await prompt_and_save_plugin_binding({
+  if (response.action === "profile") await configure_profile(plugin);
+  if (response.action === "disable") {
+    remove_agent_plugin_reference(agent_id, plugin.plugin_id);
+    emitCliBlock({ tone: "success", title: "Plugin disabled", summary: `${plugin.plugin_id} · ${agent_id}` });
+  }
+  if (response.action === "enable") {
+    const profile = await select_profile(plugin);
+    if (profile === null) return;
+    const saved = set_agent_plugin_reference({
       agent_id,
-      plugin,
-      enabled: binding?.enabled ?? true,
+      plugin_id: plugin.plugin_id,
+      ...(profile ? { profile } : {}),
     });
-    if (saved) emit_binding_saved(saved.plugin_name, saved.agent_id, saved.enabled);
-    return;
-  }
-  if (response.action === "resources") {
-    await run_interactive_binding_resources(plugin, agent_id);
-    return;
-  }
-  if (response.action === "toggle" && binding) {
-    const saved = set_agent_plugin_binding({ ...binding, enabled: !binding.enabled });
-    emit_binding_saved(saved.plugin_name, saved.agent_id, saved.enabled);
-    return;
-  }
-  if (response.action === "remove" && binding) {
-    remove_agent_plugin_binding(agent_id, plugin.plugin_name);
-    emitCliBlock({ tone: "success", title: "Plugin binding removed", summary: plugin.plugin_name });
+    emitCliBlock({
+      tone: "success",
+      title: "Plugin enabled",
+      summary: `${saved.plugin_id} · ${saved.agent_id}${saved.profile ? ` · ${saved.profile}` : ""}`,
+    });
   }
 }
 
-/** 安装一个用户显式信任的静态 Plugin 制品。 */
+/** 通过 Schema 表单编辑一个 profile。 */
+async function configure_profile(plugin: PluginCatalogItem): Promise<void> {
+  if (!plugin.config_schema) {
+    emitCliBlock({ tone: "info", title: "Plugin has no configuration", summary: plugin.plugin_id });
+    return;
+  }
+  const profile_response = await prompts({
+    type: "text",
+    name: "profile",
+    message: "Profile ID",
+    initial: plugin.profiles[0] || "default",
+  });
+  const profile = String(profile_response.profile || "").trim();
+  if (!profile) return;
+  const existing = get_plugin_profile(plugin.plugin_id, profile);
+  const config = await prompt_plugin_config({
+    plugin_name: plugin.plugin_id,
+    schema: plugin.config_schema,
+    current_config: existing ?? plugin.default_config,
+  });
+  if (!config) return;
+  save_plugin_profile(plugin.plugin_id, profile, config);
+  emitCliBlock({ tone: "success", title: "Plugin profile saved", summary: `${plugin.plugin_id}/${profile}` });
+}
+
+/** 选择已存在 profile，或对无配置 Plugin 使用默认配置。 */
+async function select_profile(plugin: PluginCatalogItem): Promise<string | null> {
+  if (!plugin.config_schema) return "";
+  if (plugin.profiles.length === 0) {
+    await configure_profile(plugin);
+    const refreshed = get_plugin_catalog_item(plugin.plugin_id);
+    return refreshed?.profiles[0] ?? null;
+  }
+  const response = await prompts({
+    type: "select",
+    name: "profile",
+    message: "选择 Plugin profile",
+    choices: plugin.profiles.map((profile) => ({ title: profile, value: profile })),
+  });
+  return String(response.profile || "").trim() || null;
+}
+
+/** 安装一个用户显式信任的 Plugin。 */
 async function run_interactive_install(): Promise<void> {
   const source_response = await prompts({
     type: "text",
@@ -234,22 +212,12 @@ async function run_interactive_install(): Promise<void> {
   const trust_response = await prompts({
     type: "confirm",
     name: "trusted",
-    message: "信任该 Plugin 来源并允许它在 Agent 进程内执行？",
+    message: "确认信任并安装该 Plugin 代码？",
     initial: false,
   });
   if (trust_response.trusted !== true) return;
-  const installation = await install_plugins(source);
-  emitCliBlock({
-    tone: "success",
-    title: "Plugins installed",
-    summary: installation.manifest.plugins.map((item) => item.name).join(", "),
-    facts: [
-      { label: "Integrity", value: installation.integrity },
-      ...(installation.resolved_commit
-        ? [{ label: "Commit", value: installation.resolved_commit }]
-        : []),
-    ],
-  });
+  const installed = await install_plugin(source);
+  emitCliBlock({ tone: "success", title: "Plugin installed", summary: installed.id });
 }
 
 /** 选择一个已登记 Agent。 */
@@ -263,20 +231,7 @@ async function prompt_agent_id(): Promise<string | null> {
     type: "select",
     name: "agent_id",
     message: "选择 Agent",
-    choices: agents.map((agent) => ({
-      title: agent.agent_id,
-      value: agent.agent_id,
-    })),
+    choices: agents.map((agent) => ({ title: agent.agent_id, value: agent.agent_id })),
   });
   return String(response.agent_id || "").trim() || null;
-}
-
-/** 输出 Binding 保存结果和明确生效检查点。 */
-function emit_binding_saved(plugin_name: string, agent_id: string, enabled: boolean): void {
-  emitCliBlock({
-    tone: "success",
-    title: "Plugin binding saved",
-    summary: `${plugin_name} · ${agent_id} · ${enabled ? "enabled" : "disabled"}`,
-    note: "新的 Plugin 装配会在下次 City 装配 Agent 时生效。",
-  });
 }

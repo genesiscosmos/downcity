@@ -11,7 +11,6 @@ import prompts from "@/city/tui/Prompts.js";
 import { validate_plugin_config } from "@/city/process/plugin/PluginConfigValidator.js";
 import type { JsonObject, JsonValue } from "@downcity/agent";
 import type { PromptPluginConfigInput } from "@/city/types/plugin/PluginConfigForm.js";
-import { list_plugin_resource_schema_variants } from "@/city/process/plugin/PluginResourceSchema.js";
 
 /** 交互编辑 Plugin 完整配置；取消时返回 null。 */
 export async function prompt_plugin_config(
@@ -26,46 +25,6 @@ export async function prompt_plugin_config(
   if (!edited) return null;
   validate_plugin_config(edited, input.schema);
   return edited;
-}
-
-/** 使用同一套 Schema 表单编辑一个 Resource 的全部用户可写字段。 */
-export async function prompt_plugin_resource_fields(input: {
-  /** 面向用户展示的 Plugin 名称。 */
-  plugin_name: string;
-
-  /** Plugin 的完整 Resource Item Schema。 */
-  schema: JsonObject;
-
-  /** 编辑时使用的现有完整 Resource Item。 */
-  current_resource?: JsonObject;
-}): Promise<JsonObject | null> {
-  const variants = list_plugin_resource_schema_variants(input.schema);
-  const current_type = String(input.current_resource?.type || "").trim();
-  let resource_type = current_type;
-  if (!resource_type) {
-    const response = await prompts({
-      type: "select",
-      name: "resource_type",
-      message: `${input.plugin_name} Resource 类型`,
-      choices: variants.map((variant) => ({
-        title: variant.title,
-        description: variant.type,
-        value: variant.type,
-      })),
-    });
-    resource_type = String(response.resource_type || "").trim();
-  }
-  const variant = variants.find((item) => item.type === resource_type);
-  if (!variant) return null;
-  const current_value = clone_json_object(input.current_resource ?? {});
-  current_value.type = resource_type;
-  const edited = await prompt_object_fields({
-    schema: variant.schema,
-    value: current_value,
-    path: `${input.plugin_name}.${resource_type}`,
-  });
-  if (!edited) return null;
-  return pick_schema_writable_fields(edited, variant.schema);
 }
 
 /** 递归编辑一个 JSON object。 */
@@ -382,15 +341,4 @@ function as_json_object(value: unknown): JsonObject | null {
 /** 深拷贝 JSON object，保证取消表单时不污染事实源。 */
 function clone_json_object(value: JsonObject): JsonObject {
   return JSON.parse(JSON.stringify(value)) as JsonObject;
-}
-
-/** 从完整 Resource 中只提取用户可写字段。 */
-function pick_schema_writable_fields(
-  value: JsonObject,
-  schema: JsonObject,
-): JsonObject {
-  const properties = as_json_object(schema.properties) ?? {};
-  return Object.fromEntries(
-    Object.entries(value).filter(([key]) => as_json_object(properties[key])?.readOnly !== true),
-  ) as JsonObject;
 }

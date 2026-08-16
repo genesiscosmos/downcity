@@ -574,7 +574,26 @@ Plugin 属于 Agent，不属于 Workspace。Agent 只有一个 PluginRegistry，
 - Setup / Usage 描述。
 - HTTP 注入定义。
 
-### 12.1 生命周期
+### 12.1 本地定义与 Profile
+
+CLI 与 Desktop 使用同一套用户级文件协议：
+
+```text
+~/.downcity/
+├─ agents/<agent_id>/
+│  ├─ agent.json                 身份、执行配置和 Plugin 引用
+│  └─ SOUL.md                    Agent 主体指令
+└─ plugins/<plugin_id>/
+   ├─ config.toml                明文 profile 配置
+   ├─ plugin.json                第三方 Plugin 描述
+   └─ artifact/                  第三方 Plugin 静态代码
+```
+
+Agent 的 `plugins` 对象以 Plugin ID 为键，值只包含可选 `profile`。Plugin profile 是传给 constructor 的唯一配置对象，账号、渠道与端点等结构由具体 Plugin 自己定义。框架不持久化 Binding、Resource 或 Installation，也不把 Plugin 配置写入 `downcity.db`。
+
+第三方制品只导出一个 `plugin` constructor。Manifest ID、目录名、Agent 引用和 Registry key 必须一致；更新只替换 `plugin.json` 与 `artifact/`，保留 `config.toml`。
+
+### 12.2 生命周期
 
 - Agent 构造时注册显式传入的 Plugin 实例。
 - PluginRegistry 启动 Agent 级 `start/stop` lifecycle。
@@ -586,7 +605,7 @@ Plugin 属于 Agent，不属于 Workspace。Agent 只有一个 PluginRegistry，
 - 正在执行的 Step 使用稳定 execution view；变化在后续检查点生效。
 - Agent dispose 时停止 ActionSchedule 并卸载 Plugin。
 
-### 12.2 Plugin Tools
+### 12.3 Plugin Tools
 
 PluginRegistry 在存在至少一个 Action 时提供：
 
@@ -595,7 +614,7 @@ PluginRegistry 在存在至少一个 Action 时提供：
 
 Agent 将 PluginRegistry Tools 注册到最终工具集合。Workspace、Plugin 和自定义 Tool 出现重名时直接报错，不进行静默覆盖；`plugin_read` 与 `plugin_call` 是保留名称。
 
-### 12.3 ActionSchedule
+### 12.4 ActionSchedule
 
 ActionSchedule 是 Agent 内部的延迟 Plugin Action 调度能力，不是独立 Plugin，也不是分布式调度系统。
 

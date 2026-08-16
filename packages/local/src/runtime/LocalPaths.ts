@@ -29,6 +29,11 @@ export function get_local_plugins_path(root_path: string): string {
   return path.join(root_path, "plugins");
 }
 
+/** 返回一个 Plugin 的稳定定义与配置目录。 */
+export function get_local_plugin_path(root_path: string, plugin_id: string): string {
+  return path.join(get_local_plugins_path(root_path), plugin_id);
+}
+
 /** 返回全部 Agent 定义的根目录。 */
 export function get_local_agents_path(root_path: string): string {
   return path.join(root_path, "agents");

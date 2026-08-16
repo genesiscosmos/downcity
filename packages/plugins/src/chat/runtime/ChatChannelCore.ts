@@ -14,8 +14,8 @@ import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
 
 const CHAT_CHANNEL_NAMES: ChatChannelName[] = ["telegram", "feishu", "qq"];
 
-export type ChatRuntimeBindings = {
-  getResourceId?(context: PluginContext, channel: ChatChannelName): string;
+export type ChatPluginRuntimeApi = {
+  get_channel_id?(context: PluginContext, channel: ChatChannelName): string;
   resolveChannelAccount?(
     context: PluginContext,
     channel: ChatChannelName,
@@ -23,11 +23,11 @@ export type ChatRuntimeBindings = {
   isChannelEnabled?(context: PluginContext, channel: ChatChannelName): boolean;
 };
 
-export function resolveChatPluginBindings(
+export function resolveChatPluginRuntimeApi(
   context: PluginContext,
-): ChatRuntimeBindings | null {
+): ChatPluginRuntimeApi | null {
   const candidate = context.plugins.get("chat") as
-    | ChatRuntimeBindings
+    | ChatPluginRuntimeApi
     | undefined;
   return candidate || null;
 }
@@ -74,8 +74,8 @@ export function resolveChannelAccountId(
   context: PluginContext,
   channel: ChatChannelName,
 ): string {
-  const plugin = resolveChatPluginBindings(context);
-  const explicit = String(plugin?.getResourceId?.(context, channel) || "").trim();
+  const plugin = resolveChatPluginRuntimeApi(context);
+  const explicit = String(plugin?.get_channel_id?.(context, channel) || "").trim();
   if (explicit) return explicit;
   return "";
 }
@@ -91,7 +91,7 @@ export function resolveChannelAccount(
   context: PluginContext,
   channel: ChatChannelName,
 ): ChatRuntimeAccount | null {
-  const plugin = resolveChatPluginBindings(context);
+  const plugin = resolveChatPluginRuntimeApi(context);
   const explicit = plugin?.resolveChannelAccount?.(context, channel);
   return explicit?.channel === channel ? explicit : null;
 }
@@ -117,7 +117,7 @@ export function isChatChannelEnabled(
   context: PluginContext,
   channel: ChatChannelName,
 ): boolean {
-  const plugin = resolveChatPluginBindings(context);
+  const plugin = resolveChatPluginRuntimeApi(context);
   if (typeof plugin?.isChannelEnabled === "function") {
     return plugin.isChannelEnabled(context, channel);
   }

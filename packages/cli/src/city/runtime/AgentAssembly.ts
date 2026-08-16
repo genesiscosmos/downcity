@@ -42,7 +42,7 @@ export function create_cli_builtin_plugin_types(input: {
   }) as LocalPluginType[];
 }
 
-/** 创建 CLI 读取本地安装和 Resource 使用的 Plugin Loader。 */
+/** 创建 CLI 读取本地 Plugin 定义与 profile 的 Loader。 */
 export function create_cli_plugin_loader(input: {
   /** Downcity 用户级数据根目录。 */
   root_path?: string;
@@ -53,9 +53,7 @@ export function create_cli_plugin_loader(input: {
   /** 当前 CLI 进程读取 Plugin 数据使用的仓储。 */
   plugin_repository: PluginRepository;
 }): LocalPluginLoader {
-  const root_path = resolve_local_root_path(input.root_path);
   return new LocalPluginLoader({
-    root_path,
     plugin_repository: input.plugin_repository,
     plugin_types: create_cli_builtin_plugin_types(input),
   });

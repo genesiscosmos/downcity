@@ -1,13 +1,10 @@
 /**
- * `city plugin` 命令树。
+ * `downcity plugin` 命令树。
  *
- * 关键点（中文）
- * - Plugin 数组制品全局安装，启用状态与配置按 Agent Binding 保存。
- * - CLI、HTTP 与 Agent 工具调用统一执行 Plugin Action。
- * - 未传 Agent ID 时只使用全局 Agent Selector，不根据当前目录推断。
+ * Plugin 以稳定 ID 管理，profile 保存于 Plugin 自己的 `config.toml`，Agent 只在
+ * `agent.json` 中引用 Plugin 与可选 profile。
  */
 
-import fs from "fs-extra";
 import type { Command } from "commander";
 import type { JsonObject, JsonValue } from "@downcity/agent";
 import {
@@ -15,41 +12,30 @@ import {
   resolve_cli_agent_target,
 } from "@/city/agent/AgentSelection.js";
 import { callServer } from "@/city/process/daemon/Client.js";
-import { get_plugin_installation_dir_path } from "@/city/process/registry/CityPaths.js";
 import {
-  get_agent_plugin_binding,
+  get_agent_plugin_reference,
   get_installed_plugin,
-  is_builtin_plugin,
-  list_agent_plugin_bindings,
-  remove_agent_plugin_binding,
-  remove_plugin_installation,
-  set_agent_plugin_binding,
+  get_plugin_profile,
+  list_agent_plugin_references,
+  list_plugin_profiles,
+  remove_agent_plugin_reference,
+  remove_installed_plugin,
+  remove_plugin_profile,
+  save_plugin_profile,
+  set_agent_plugin_reference,
 } from "@/city/process/registry/PluginRepository.js";
-import {
-  install_plugins,
-  update_plugin,
-} from "@/city/process/plugin/PluginInstaller.js";
-import { printResult } from "@/city/utils/cli/CliOutput.js";
-import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
-import { helpText, t } from "@/shared/CliLocale.js";
-import { parsePort } from "@/shared/IndexSupport.js";
+import { install_plugin, update_plugin } from "@/city/process/plugin/PluginInstaller.js";
 import {
   get_plugin_catalog_item,
   list_plugin_catalog,
 } from "@/city/process/plugin/PluginCatalog.js";
+import { prompt_plugin_config } from "@/city/process/plugin/PluginConfigForm.js";
+import { redact_plugin_config } from "@/city/process/plugin/PluginConfigRedaction.js";
 import { run_interactive_plugin_manager } from "@/city/process/plugin/InteractivePluginManager.js";
-import { prompt_and_save_plugin_binding } from "@/city/process/plugin/PluginBindingConfiguration.js";
-import {
-  create_plugin_resource,
-  refresh_plugin_resource,
-  update_plugin_resource,
-} from "@/city/process/plugin/PluginResourceService.js";
-import {
-  list_plugin_resources,
-  remove_plugin_resource,
-} from "@/city/process/registry/PluginResourceRepository.js";
-import { prompt_plugin_resource_fields } from "@/city/process/plugin/PluginConfigForm.js";
-import { redact_plugin_schema_value } from "@/city/process/plugin/PluginResourceSchema.js";
+import { printResult } from "@/city/utils/cli/CliOutput.js";
+import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
+import { helpText, t } from "@/shared/CliLocale.js";
+import { parsePort } from "@/shared/IndexSupport.js";
 
 /** Plugin Action HTTP 返回结构。 */
 interface PluginActionHttpResponse {
@@ -63,7 +49,7 @@ interface PluginActionHttpResponse {
   error?: string;
 }
 
-/** City TUI 中的统一 Plugin 制品与 Binding 管理器。 */
+/** 打开 City Plugin 管理器。 */
 export async function runInteractivePluginManager(): Promise<void> {
   await run_interactive_plugin_manager();
 }
@@ -72,365 +58,191 @@ export async function runInteractivePluginManager(): Promise<void> {
 export function registerPluginsCommand(program: Command): void {
   const plugin = program
     .command("plugin")
-    .description(t({ zh: "管理 Plugin 与 Agent Binding", en: "manage Plugins and Agent bindings" }))
+    .description(t({ zh: "管理 Plugin、profile 与 Agent 引用", en: "manage Plugins, profiles, and Agent references" }))
     .helpOption("--help", helpText())
     .action(() => plugin.outputHelp());
 
-  plugin
-    .command("list")
+  plugin.command("list")
     .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
     .helpOption("--help", helpText())
-    .action((options: { json?: boolean }) => {
-      const catalog = list_plugin_catalog();
-      if (options.json) {
-        printResult({
-          type: "block",
-          asJson: true,
-          success: true,
-          title: "plugins",
-          data: { plugins: catalog },
-        });
-        return;
-      }
-      emitCliList({
-        tone: "accent",
-        title: "Plugins",
-        summary: `${catalog.length} plugins`,
-        items: catalog.map((item) => ({
-          title: item.title === item.plugin_name
-            ? item.plugin_name
-            : `${item.title} (${item.plugin_name})`,
-          facts: [
-            { label: "Description", value: item.description },
-            { label: "Source", value: item.source },
-            ...(item.version ? [{ label: "Version", value: item.version }] : []),
-          ],
-        })),
-      });
-    });
+    .action((options: { json?: boolean }) => print_plugin_list(options.json === true));
 
-  plugin
-    .command("update <plugin_name>")
-    .helpOption("--help", helpText())
-    .action(async (plugin_name: string) => {
-      const installation = await update_plugin(plugin_name);
-      emitCliBlock({
-        tone: "success",
-        title: "Plugins updated",
-        summary: installation.manifest.plugins.map((plugin) => plugin.name).join(", "),
-        facts: [
-          { label: "Integrity", value: installation.integrity },
-          ...(installation.resolved_commit
-            ? [{ label: "Commit", value: installation.resolved_commit }]
-            : []),
-        ],
-      });
-    });
-
-  plugin
-    .command("install <source>")
+  plugin.command("install <source>")
     .helpOption("--help", helpText())
     .action(async (source: string) => {
-      const installation = await install_plugins(source);
+      const installed = await install_plugin(source);
       emitCliBlock({
         tone: "success",
-        title: "Plugins installed",
-        summary: installation.manifest.plugins.map((plugin) => plugin.name).join(", "),
-        facts: [
-          { label: "Entry", value: installation.entry_path },
-        ],
+        title: "Plugin installed",
+        summary: installed.id,
+        facts: [{ label: "Entry", value: installed.entry }],
       });
     });
 
-  plugin
-    .command("uninstall <plugin_name>")
+  plugin.command("update <plugin_id>")
     .helpOption("--help", helpText())
-    .action(async (plugin_name: string) => {
-      if (is_builtin_plugin(plugin_name)) throw new Error("Builtin Plugins cannot be uninstalled");
-      const installation = remove_plugin_installation(plugin_name);
-      await fs.remove(get_plugin_installation_dir_path(installation.installation_id));
+    .action(async (plugin_id: string) => {
+      const installed = await update_plugin(plugin_id);
       emitCliBlock({
         tone: "success",
-        title: "Plugins uninstalled",
-        summary: installation.manifest.plugins.map((plugin) => plugin.name).join(", "),
+        title: "Plugin updated",
+        summary: installed.id,
+        facts: [{ label: "Integrity", value: installed.integrity }],
       });
     });
 
-  plugin
-    .command("inspect <plugin_name>")
+  plugin.command("uninstall <plugin_id>")
+    .helpOption("--help", helpText())
+    .action((plugin_id: string) => {
+      const removed = remove_installed_plugin(plugin_id);
+      emitCliBlock({ tone: "success", title: "Plugin uninstalled", summary: removed.id });
+    });
+
+  plugin.command("inspect <plugin_id>")
     .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
     .helpOption("--help", helpText())
-    .action((plugin_name: string, options: { json?: boolean }) => {
-      const catalog_item = get_plugin_catalog_item(plugin_name);
-      if (!catalog_item) throw new Error(`Plugin not found: ${plugin_name}`);
-      const installed = get_installed_plugin(plugin_name)?.installation;
+    .action((plugin_id: string, options: { json?: boolean }) => {
+      const catalog = get_plugin_catalog_item(plugin_id);
+      if (!catalog) throw new Error(`Plugin not found: ${plugin_id}`);
+      const installed = get_installed_plugin(plugin_id);
       printResult({
         type: "block",
         asJson: options.json === true,
         success: true,
         title: "plugin",
-        data: {
-          plugin: {
-            ...catalog_item,
-            ...(installed
-              ? {
-                  resolved_commit: installed.resolved_commit,
-                  integrity: installed.integrity,
-                  installed_at: installed.installed_at,
-                  updated_at: installed.updated_at,
-                }
-              : {}),
-          },
-        },
+        data: { plugin: { ...catalog, ...(installed ?? {}) } },
       });
     });
 
-  register_binding_commands(plugin);
-  register_resource_commands(plugin);
+  register_agent_reference_commands(plugin);
+  register_profile_commands(plugin);
   register_action_command(plugin);
 }
 
-/** 注册 enable/disable/config 三个 Binding 命令。 */
-function register_binding_commands(plugin: Command): void {
-  plugin
-    .command("enable <plugin_name> [agent_id]")
-    .option("--config <json>", t({ zh: "完整配置 JSON", en: "complete config JSON" }))
+/** 注册 Agent Plugin 引用命令。 */
+function register_agent_reference_commands(plugin: Command): void {
+  plugin.command("enable <plugin_id> [agent_id]")
+    .option("--profile <profile>", t({ zh: "选择 Plugin profile", en: "select a Plugin profile" }))
     .helpOption("--help", helpText())
-    .action(async (plugin_name: string, agent_id: string | undefined, options: { config?: string }) => {
+    .action(async (
+      plugin_id: string,
+      agent_id: string | undefined,
+      options: { profile?: string },
+    ) => {
       const resolved_agent_id = await resolve_cli_agent_id(agent_id);
-      const catalog_item = get_plugin_catalog_item(plugin_name);
-      if (!catalog_item) throw new Error(`Plugin not found: ${plugin_name}`);
-      const existing = get_agent_plugin_binding(resolved_agent_id, plugin_name);
-      const config = options.config
-        ? parse_json_object(options.config, "config")
-        : existing?.config ?? catalog_item.default_config;
-      const binding = set_agent_plugin_binding({
+      const reference = set_agent_plugin_reference({
         agent_id: resolved_agent_id,
-        plugin_name,
-        enabled: true,
-        config,
-        resource_ids: existing?.resource_ids ?? [],
+        plugin_id,
+        ...(options.profile ? { profile: options.profile } : {}),
       });
       emitCliBlock({
         tone: "success",
         title: "Plugin enabled",
-        summary: `${binding.plugin_name} · ${binding.agent_id}`,
+        summary: `${reference.plugin_id} · ${reference.agent_id}`,
+        ...(reference.profile ? { facts: [{ label: "Profile", value: reference.profile }] } : {}),
         note: "新的 Plugin 装配会在下次 City 装配 Agent 时生效。",
       });
     });
 
-  plugin
-    .command("disable <plugin_name> [agent_id]")
+  plugin.command("disable <plugin_id> [agent_id]")
     .helpOption("--help", helpText())
-    .action(async (plugin_name: string, agent_id: string | undefined) => {
+    .action(async (plugin_id: string, agent_id: string | undefined) => {
       const resolved_agent_id = await resolve_cli_agent_id(agent_id);
-      const existing = get_agent_plugin_binding(resolved_agent_id, plugin_name);
-      if (!existing) throw new Error(`Plugin is not bound to agent: ${plugin_name}`);
-      set_agent_plugin_binding({ ...existing, enabled: false });
+      if (!get_agent_plugin_reference(resolved_agent_id, plugin_id)) {
+        throw new Error(`Plugin is not registered by Agent: ${plugin_id}`);
+      }
+      remove_agent_plugin_reference(resolved_agent_id, plugin_id);
       emitCliBlock({
         tone: "success",
         title: "Plugin disabled",
-        summary: `${plugin_name} · ${resolved_agent_id}`,
-        note: "新的 Plugin 装配会在下次 City 装配 Agent 时生效。",
+        summary: `${plugin_id} · ${resolved_agent_id}`,
       });
     });
 
-  plugin
-    .command("config <plugin_name> [agent_id]")
-    .option("--set <json>", t({ zh: "替换完整配置 JSON", en: "replace complete config JSON" }))
-    .option("--interactive", t({ zh: "打开 Schema 配置表单", en: "open Schema configuration form" }))
-    .option("--remove", t({ zh: "删除该 Agent Binding", en: "remove this Agent binding" }))
-    .option("--resources <json>", t({ zh: "替换 Resource ID 数组", en: "replace Resource ID array" }))
+  plugin.command("enabled [agent_id]")
     .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
     .helpOption("--help", helpText())
-    .action(async (
-      plugin_name: string,
-      agent_id: string | undefined,
-      options: {
-        set?: string;
-        interactive?: boolean;
-        remove?: boolean;
-        resources?: string;
-        json?: boolean;
-      },
-    ) => {
+    .action(async (agent_id: string | undefined, options: { json?: boolean }) => {
       const resolved_agent_id = await resolve_cli_agent_id(agent_id);
-      const existing = get_agent_plugin_binding(resolved_agent_id, plugin_name);
-      if (options.remove) {
-        remove_agent_plugin_binding(resolved_agent_id, plugin_name);
-        emitCliBlock({ tone: "success", title: "Plugin binding removed", summary: plugin_name });
-        return;
-      }
-      if (options.set) {
-        const binding = set_agent_plugin_binding({
-          agent_id: resolved_agent_id,
-          plugin_name,
-          enabled: existing?.enabled ?? true,
-          config: parse_json_object(options.set, "config"),
-          resource_ids: options.resources
-            ? parse_json_string_array(options.resources, "resources")
-            : existing?.resource_ids ?? [],
-        });
-        print_binding(binding, options.json === true);
-        return;
-      }
-      if (options.resources) {
-        if (!existing) throw new Error(`Plugin is not bound to agent: ${plugin_name}`);
-        const binding = set_agent_plugin_binding({
-          ...existing,
-          resource_ids: parse_json_string_array(options.resources, "resources"),
-        });
-        print_binding(binding, options.json === true);
-        return;
-      }
-      if (options.interactive) {
-        const catalog_item = get_plugin_catalog_item(plugin_name);
-        if (!catalog_item) throw new Error(`Plugin not found: ${plugin_name}`);
-        const binding = await prompt_and_save_plugin_binding({
-          agent_id: resolved_agent_id,
-          plugin: catalog_item,
-          enabled: existing?.enabled ?? true,
-        });
-        if (binding) print_binding(binding, options.json === true);
-        return;
-      }
-      if (!existing) throw new Error(`Plugin is not bound to agent: ${plugin_name}`);
-      print_binding(existing, options.json === true);
-    });
-}
-
-/** 注册通用 Plugin Resource 命令。 */
-function register_resource_commands(plugin: Command): void {
-  const resource = plugin
-    .command("resource")
-    .description(t({ zh: "管理完整 Plugin Resource", en: "manage complete Plugin Resources" }))
-    .helpOption("--help", helpText())
-    .action(() => resource.outputHelp());
-
-  resource
-    .command("list <plugin_name>")
-    .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
-    .helpOption("--help", helpText())
-    .action((plugin_name: string, options: { json?: boolean }) => {
-      const catalog_item = get_plugin_catalog_item(plugin_name);
-      if (!catalog_item?.resource_schema) {
-        throw new Error(`Plugin does not declare Resources: ${plugin_name}`);
-      }
-      const resources = list_plugin_resources(plugin_name).map((item) => ({
-        ...item,
-        item: redact_plugin_schema_value(item.item, catalog_item.resource_schema),
-      }));
+      const references = list_agent_plugin_references(resolved_agent_id);
       printResult({
         type: "block",
         asJson: options.json === true,
         success: true,
-        title: "plugin resources",
-        data: { plugin_name: catalog_item.plugin_name, resources },
-      });
-    });
-
-  resource
-    .command("create <plugin_name>")
-    .option("--set <json>", t({ zh: "Resource 用户字段 JSON", en: "Resource user fields JSON" }))
-    .option("--interactive", t({ zh: "打开 Schema 表单", en: "open Schema form" }))
-    .helpOption("--help", helpText())
-    .action(async (
-      plugin_name: string,
-      options: { set?: string; interactive?: boolean },
-    ) => {
-      const catalog_item = get_plugin_catalog_item(plugin_name);
-      if (!catalog_item?.resource_schema) {
-        throw new Error(`Plugin does not declare Resources: ${plugin_name}`);
-      }
-      const fields = options.set
-        ? parse_json_object(options.set, "resource")
-        : options.interactive
-          ? await prompt_plugin_resource_fields({
-              plugin_name: catalog_item.plugin_name,
-              schema: catalog_item.resource_schema,
-            })
-          : null;
-      if (!fields) {
-        throw new Error("Use --set <json> or --interactive to create a Plugin Resource");
-      }
-      const created = await create_plugin_resource({ plugin_name, fields });
-      emitCliBlock({
-        tone: "success",
-        title: "Plugin Resource created",
-        summary: `${created.item.name} · ${created.resource_id}`,
-        facts: [{ label: "Type", value: created.item.type }],
-      });
-    });
-
-  resource
-    .command("update <plugin_name> <resource_id>")
-    .option(
-      "--set <json>",
-      t({ zh: "替换完整 Resource 用户字段 JSON", en: "replace complete Resource user fields JSON" }),
-    )
-    .helpOption("--help", helpText())
-    .action(async (
-      plugin_name: string,
-      resource_id: string,
-      options: { set?: string },
-    ) => {
-      if (!options.set) {
-        throw new Error("Use --set <json> to update a Plugin Resource");
-      }
-      const updated = await update_plugin_resource({
-        plugin_name,
-        resource_id,
-        fields: parse_json_object(options.set, "resource"),
-      });
-      emitCliBlock({
-        tone: "success",
-        title: "Plugin Resource updated",
-        summary: `${updated.item.name} · ${updated.resource_id}`,
-        facts: [{ label: "Type", value: updated.item.type }],
-      });
-    });
-
-  resource
-    .command("refresh <plugin_name> <resource_id>")
-    .helpOption("--help", helpText())
-    .action(async (plugin_name: string, resource_id: string) => {
-      const refreshed = await refresh_plugin_resource(plugin_name, resource_id);
-      emitCliBlock({
-        tone: "success",
-        title: "Plugin Resource refreshed",
-        summary: `${refreshed.item.name} · ${refreshed.resource_id}`,
-      });
-    });
-
-  resource
-    .command("remove <plugin_name> <resource_id>")
-    .helpOption("--help", helpText())
-    .action((plugin_name: string, resource_id: string) => {
-      remove_plugin_resource(plugin_name, resource_id);
-      emitCliBlock({
-        tone: "success",
-        title: "Plugin Resource removed",
-        summary: `${plugin_name} · ${resource_id}`,
+        title: "agent plugins",
+        data: { agent_id: resolved_agent_id, plugins: references },
       });
     });
 }
 
-/** 注册运行中 Agent 的统一 Action 调用命令。 */
+/** 注册 Plugin profile 命令。 */
+function register_profile_commands(plugin: Command): void {
+  plugin.command("profiles <plugin_id>")
+    .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
+    .helpOption("--help", helpText())
+    .action((plugin_id: string, options: { json?: boolean }) => {
+      const profiles = list_plugin_profiles(plugin_id);
+      printResult({
+        type: "block",
+        asJson: options.json === true,
+        success: true,
+        title: "plugin profiles",
+        data: { plugin_id, profiles },
+      });
+    });
+
+  plugin.command("config <plugin_id> [profile]")
+    .option("--set <json>", t({ zh: "替换完整 profile JSON", en: "replace the complete profile JSON" }))
+    .option("--interactive", t({ zh: "打开 Schema 配置表单", en: "open the Schema form" }))
+    .option("--remove", t({ zh: "删除该 profile", en: "remove this profile" }))
+    .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
+    .helpOption("--help", helpText())
+    .action(async (
+      plugin_id: string,
+      profile_input: string | undefined,
+      options: { set?: string; interactive?: boolean; remove?: boolean; json?: boolean },
+    ) => {
+      const profile = String(profile_input || "default").trim();
+      const catalog = get_plugin_catalog_item(plugin_id);
+      if (!catalog) throw new Error(`Plugin not found: ${plugin_id}`);
+      if (options.remove) {
+        remove_plugin_profile(plugin_id, profile);
+        emitCliBlock({ tone: "success", title: "Plugin profile removed", summary: `${plugin_id}/${profile}` });
+        return;
+      }
+      const existing = get_plugin_profile(plugin_id, profile);
+      let config: JsonObject | null = null;
+      if (options.set) config = parse_json_object(options.set, "profile");
+      if (options.interactive) {
+        if (!catalog.config_schema) throw new Error(`Plugin does not declare configuration: ${plugin_id}`);
+        config = await prompt_plugin_config({
+          plugin_name: plugin_id,
+          schema: catalog.config_schema,
+          current_config: existing ?? catalog.default_config,
+        });
+      }
+      if (config) {
+        const saved = save_plugin_profile(plugin_id, profile, config);
+        print_profile(plugin_id, profile, saved, catalog.config_schema, options.json === true);
+        return;
+      }
+      if (!existing) throw new Error(`Plugin profile not found: ${plugin_id}/${profile}`);
+      print_profile(plugin_id, profile, existing, catalog.config_schema, options.json === true);
+    });
+}
+
+/** 注册运行中 Agent 的 Action 调用命令。 */
 function register_action_command(plugin: Command): void {
-  plugin
-    .command("action <plugin_name> <action_name> [agent_id]")
+  plugin.command("action <plugin_id> <action_name> [agent_id]")
     .option("--input <json>", t({ zh: "Action 输入 JSON", en: "Action input JSON" }))
     .option("--host <host>", t({ zh: "覆盖 Gateway host", en: "override Gateway host" }))
     .option("--port <port>", t({ zh: "覆盖 Gateway port", en: "override Gateway port" }), parsePort)
-    .option("--workspace <id-or-path>", t({
-      zh: "指定 Action 使用的 Workspace ID 或路径",
-      en: "select the Workspace ID or path for this Action",
-    }))
+    .option("--workspace <id-or-path>", t({ zh: "指定 Workspace ID 或路径", en: "select Workspace ID or path" }))
     .option("--token <token>", t({ zh: "Agent Bearer Token", en: "Agent Bearer token" }))
     .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
     .helpOption("--help", helpText())
     .action(async (
-      plugin_name: string,
+      plugin_id: string,
       action_name: string,
       agent_id: string | undefined,
       options: {
@@ -453,7 +265,7 @@ function register_action_command(plugin: Command): void {
         port: options.port,
         authToken: options.token,
         body: {
-          plugin_name,
+          plugin_name: plugin_id,
           action_name,
           ...(options.input ? { payload: JSON.parse(options.input) as JsonValue } : {}),
         },
@@ -467,7 +279,7 @@ function register_action_command(plugin: Command): void {
         data: {
           agent_id: target.agent_id,
           workspace_id: target.workspace_id,
-          plugin_name,
+          plugin_id,
           action_name,
           ...(result?.data !== undefined ? { data: result.data } : {}),
           ...(result?.message ? { message: result.message } : {}),
@@ -477,30 +289,43 @@ function register_action_command(plugin: Command): void {
     });
 }
 
-/** 输出一个 Agent Plugin Binding。 */
-function print_binding(binding: ReturnType<typeof list_agent_plugin_bindings>[number], as_json: boolean): void {
-  const schema = get_plugin_catalog_item(binding.plugin_name)?.config_schema;
+/** 输出 Plugin Catalog。 */
+function print_plugin_list(as_json: boolean): void {
+  const catalog = list_plugin_catalog();
+  if (as_json) {
+    printResult({ type: "block", asJson: true, success: true, title: "plugins", data: { plugins: catalog } });
+    return;
+  }
+  emitCliList({
+    tone: "accent",
+    title: "Plugins",
+    summary: `${catalog.length} plugins`,
+    items: catalog.map((item) => ({
+      title: item.title === item.plugin_id ? item.plugin_id : `${item.title} (${item.plugin_id})`,
+      facts: [
+        { label: "Description", value: item.description },
+        { label: "Source", value: item.source },
+        { label: "Profiles", value: item.profiles.join(", ") || "none" },
+      ],
+    })),
+  });
+}
+
+/** 输出一个经过凭据脱敏的 Plugin profile。 */
+function print_profile(
+  plugin_id: string,
+  profile: string,
+  config: JsonObject,
+  schema: JsonObject | undefined,
+  as_json: boolean,
+): void {
   printResult({
     type: "block",
     asJson: as_json,
     success: true,
-    title: "plugin binding",
-    data: {
-      binding: {
-        ...binding,
-        config: redact_plugin_schema_value(binding.config, schema) as JsonObject,
-      },
-    },
+    title: "plugin profile",
+    data: { plugin_id, profile, config: redact_plugin_config(config, schema) },
   });
-}
-
-/** 解析并要求 JSON 字符串数组。 */
-function parse_json_string_array(input: string, label: string): string[] {
-  const value = JSON.parse(input) as unknown;
-  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
-    throw new Error(`${label} must be a JSON string array`);
-  }
-  return value.map((item) => item.trim()).filter(Boolean);
 }
 
 /** 解析并要求 JSON 对象。 */

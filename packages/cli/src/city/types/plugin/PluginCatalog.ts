@@ -1,39 +1,28 @@
-/** City Plugin Catalog 的统一读取模型。 */
+/** CLI 与 Desktop 使用的统一 Plugin Catalog 类型。 */
 
 import type { JsonObject } from "@downcity/agent";
 
-/** Plugin 制品来源种类。 */
+/** Plugin 的本地来源。 */
 export type PluginCatalogSource = "builtin" | "installed";
 
-/** 内建与外部 Plugin 归一化后的目录项。 */
+/** 一个可注册到 Agent 的 Plugin。 */
 export interface PluginCatalogItem {
-  /** 用户安装 Plugin 的内部 installation ID；内建 Plugin 不提供。 */
-  installation_id?: string;
-
-  /** Plugin 稳定名称。 */
-  plugin_name: string;
-
-  /** 面向用户展示的标题。 */
+  /** Plugin 的全局稳定 ID。 */
+  plugin_id: string;
+  /** 用户可见标题。 */
   title: string;
-
-  /** 面向用户展示的用途说明。 */
+  /** 用途说明。 */
   description: string;
-
-  /** 制品版本；内建 Plugin 使用当前 packages 版本语义。 */
+  /** 可选语义化版本号。 */
   version?: string;
-
-  /** 制品来自静态内建目录还是用户安装目录。 */
+  /** 内置或第三方来源。 */
   source: PluginCatalogSource;
-
-  /** 可展示的原始安装来源；内建 Plugin 不提供。 */
+  /** 第三方 Plugin 的规范化来源。 */
   source_label?: string;
-
-  /** 标准 JSON Schema 2020-12 配置协议。 */
+  /** 可选 profile JSON Schema。 */
   config_schema?: JsonObject;
-
-  /** 首次启用时使用且已通过 Schema 校验的默认配置。 */
+  /** `default` profile 不存在时使用的默认配置。 */
   default_config: JsonObject;
-
-  /** 可选完整 Resource Item JSON Schema。 */
-  resource_schema?: JsonObject;
+  /** 当前已保存的 profile ID。 */
+  profiles: string[];
 }

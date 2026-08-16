@@ -17,24 +17,29 @@ Chat 插件将 Agent 连接到 Telegram、飞书、QQ 等聊天渠道。它处�
 
 ## 配置
 
-Chat 与其他 Plugin 一样，通过 Agent Plugin Binding 配置行为，并通过 Plugin Resource 连接渠道。创建 Resource 时，CLI 根据 Schema 收集凭据，Resolver 再写入 `name` 等动态字段：
+Chat 在 `~/.downcity/plugins/chat/config.toml` 中拥有完整的命名 profile。一个 profile 同时包含队列行为和 Agent 使用的渠道：
 
-```json
-{
-  "plugin_name": "chat",
-  "config": {},
-  "resource_ids": ["telegram-a1b2c3", "feishu-d4e5f6"]
-}
+```toml
+schema_version = 1
+
+[profiles.primary.queue]
+max_concurrency = 4
+
+[[profiles.primary.channels]]
+id = "telegram_primary"
+type = "telegram"
+name = "Primary Bot"
+bot_token = "123456:token"
 ```
 
 ```bash
-city plugin resource create chat --interactive
-city plugin config chat <agent_id> --resources '["telegram-a1b2c3"]'
+city plugin config chat primary --interactive
+city plugin enable chat <agent_id> --profile primary
 ```
 
-## Chat Resources
+## 渠道凭据
 
-完整 Resource Item 加密存储在 CLI 全局 DB 中。每个 Item 都有稳定 `id`、类型和展示 `name`；Binding 只保存 Resource ID。Resource 可以被多个 Agent 复用，运行时 Plugin 接收的是 ID 解析后的完整 Item 快照。
+渠道凭据明文保存在 `config.toml`，通过仅当前用户可访问的目录与文件权限保护（`0700` 和 `0600`）。CLI 与 Desktop 展示时会脱敏 `bot_token`、`app_secret` 等字段。每个 Agent 在自己的 `agent.json` 中选择一个 profile，也可以显式复用同一 profile。
 
 ## Chat Access
 
@@ -45,7 +50,7 @@ city plugin action chat access-snapshot <agent_id> --input '{}' --token <token>
 city plugin action chat access-approve <agent_id> --input '{"request_id":"<request_id>"}' --token <token>
 ```
 
-身份由渠道、当前 Chat Resource ID 和平台用户 ID 共同确定。批准只对目标 Agent 生效，不会成为 City 全局权限，也不会传播到其他 Plugin。
+身份由所选 profile 中的渠道 ID 和平台用户 ID 共同确定。批准只对目标 Agent 生效，不会成为 City 全局权限，也不会传播到其他 Plugin。
 
 ## 支持的渠道
 

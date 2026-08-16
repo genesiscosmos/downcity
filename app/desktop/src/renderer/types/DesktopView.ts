@@ -29,7 +29,7 @@ export type NavigationTarget =
   | { /** Agent 管理页。 */ kind: "agent"; /** Agent 标识。 */ agent_id: string }
   | { /** 尚未持久化的空对话。 */ kind: "draft"; /** Agent 标识。 */ agent_id: string; /** Draft 稳定标识。 */ draft_id: string }
   | { /** Session Chat。 */ kind: "session"; /** Agent 标识。 */ agent_id: string; /** Session 标识。 */ session_id: string }
-  | { /** Plugin 详情页。 */ kind: "plugin"; /** Plugin 标识。 */ plugin_name: string }
+  | { /** Plugin 详情页。 */ kind: "plugin"; /** Plugin 标识。 */ plugin_id: string }
   | { /** Desktop 设置页。 */ kind: "settings"; /** 当前设置分区。 */ section: SettingsSection };
 
 /** 创建 Agent 表单的可序列化值。 */
@@ -121,7 +121,7 @@ export interface DesktopViewController {
   /** 选择 Agent 管理页。 */
   select_agent(agent_id: string): void;
   /** 选择 Plugin 详情页。 */
-  select_plugin(plugin_name: string): void;
+  select_plugin(plugin_id: string): void;
   /** 切换主导航侧边栏集合。 */
   set_sidebar_mode(mode: SidebarMode): void;
   /** 打开一个 Workspace，并将其设为 Chat 上下文。 */

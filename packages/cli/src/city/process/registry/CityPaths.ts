@@ -3,8 +3,8 @@
  *
  * 关键点（中文）
  * - Downcity 的用户级根目录固定在 `~/.downcity/`，测试可用 `DC_PLATFORM_ROOT` 覆盖。
- * - `downcity.db` 是 CLI 与 Desktop 全部持久化配置的唯一事实源。
- * - Agent 项目列表等全局索引进入数据库，不再写 `main/agents.json`。
+ * - Agent 与 Plugin 配置由 `@downcity/local` 统一解析文件路径。
+ * - 当前模块只拥有 CLI City 的环境和运行状态路径。
  */
 
 import os from "node:os";
@@ -43,22 +43,4 @@ export function get_agent_runtimes_dir_path(): string {
 /** CLI City daemon 的唯一运行状态目录。 */
 export function get_city_daemon_runtime_dir_path(): string {
   return path.join(get_agent_runtimes_dir_path(), "city");
-}
-
-/** 全局安装的第三方 Plugin 制品目录。 */
-export function get_plugin_installations_dir_path(): string {
-  return path.join(getPlatformRootDirPath(), "plugins");
-}
-
-/**
- * 单个内部 Plugin installation 的制品目录。
- *
- * @param installation_id 内部安装记录 ID。
- */
-export function get_plugin_installation_dir_path(installation_id: string): string {
-  const normalized_installation_id = String(installation_id || "").trim().toLowerCase();
-  if (!/^[a-z0-9][a-z0-9_-]*$/u.test(normalized_installation_id)) {
-    throw new Error(`Invalid Plugin installation id: ${installation_id}`);
-  }
-  return path.join(get_plugin_installations_dir_path(), normalized_installation_id);
 }

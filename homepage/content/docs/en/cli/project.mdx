@@ -5,7 +5,7 @@ description: Boundaries between Agent projects, global config, and runtime data
 
 # Project Structure
 
-Agent management config lives in one global database. Agents require no project declaration file; a project directory is only a Workspace containing env, Skills, and business runtime data.
+Agent definitions and Plugin configuration use user-level files. A project directory is only a Workspace containing env, Skills, and business runtime data.
 
 ## Directory layout
 
@@ -25,16 +25,19 @@ my-project/
 
 ## Global config
 
-The default database is `~/.downcity/downcity.db`. With `DC_PLATFORM_ROOT`, it becomes `$DC_PLATFORM_ROOT/downcity.db`. It stores:
+The user-level configuration layout is:
 
-- independent Agent IDs, Workspace IDs, project paths, and Agent-to-Workspace bindings
-- Model bindings and Plugin config
-- Plugin Resources and Agent Plugin Bindings
-- City sessions and other platform management state
+```text
+~/.downcity/
+├── agents/<agent_id>/agent.json
+├── agents/<agent_id>/SOUL.md
+├── plugins/<plugin_id>/config.toml
+└── downcity.db
+```
 
-The CLI, Desktop, and their independent City instances all read this database. There is no project config copy.
+`downcity.db` stores Workspace IDs and paths, tokens, and platform state. It does not store Agent definitions, Plugin profiles, or Agent-to-Workspace bindings. CLI and Desktop read the same files and database.
 
-`agent_id` and `workspace_id` are the global primary keys for Agents and Workspaces. Each Agent persistently binds one Workspace, while one Workspace may be shared by multiple Agents. CLI City daemon state lives in `~/.downcity/runtimes/city/daemon.json`; Sessions remain under `.downcity/agents/<agent_id>/sessions/` in the bound Workspace.
+`agent_id` and `workspace_id` are independent global identities. An Agent enters a Workspace only for a concrete execution. CLI City daemon state lives in `~/.downcity/runtimes/city/daemon.json`; Sessions remain under `.downcity/agents/<agent_id>/sessions/` in the current Workspace.
 
 ## Project assets
 

@@ -3,15 +3,15 @@
  *
  * 关键点（中文）
  * - 该类型只用于 Channel Adapter 消费宿主已解析的构造参数。
- * - 它不表达存储、账号池或 Resource 查询能力。
- * - 生命周期字段用于现有状态与访问控制逻辑，不是 Plugin Resource 的持久化协议。
+ * - 它不表达存储、账号池或独立配置查询能力。
+ * - 生命周期字段仅用于现有状态与访问控制逻辑，不表达独立持久化领域。
  */
 
 import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 
 /** 一个 Channel 启动所需的完整运行时账号快照。 */
 export interface ChatRuntimeAccount {
-  /** 来源 Resource 或 SDK 调用方提供的稳定 ID。 */
+  /** Plugin profile 或 SDK 调用方提供的稳定 Channel ID。 */
   id: string;
 
   /** 账号对应的 Chat Channel 类型。 */

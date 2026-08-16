@@ -8,29 +8,26 @@
 export { ensure_local_schema } from "./database/LocalSchema.js";
 export { LocalPluginLoader } from "./runtime/LocalPluginLoader.js";
 export { resolve_local_agent_env } from "./runtime/LocalEnvironment.js";
-export { AgentRepository, normalize_agent_id } from "./repositories/AgentRepository.js";
-export { WorkspaceRepository, normalize_workspace_id } from "./repositories/WorkspaceRepository.js";
 export {
-  PluginRepository,
-  normalize_installation_id,
-  normalize_plugin_name,
-  normalize_resource_id,
-} from "./repositories/PluginRepository.js";
+  AgentRepository,
+  normalize_agent_id,
+  normalize_plugin_id,
+} from "./repositories/AgentRepository.js";
+export { WorkspaceRepository, normalize_workspace_id } from "./repositories/WorkspaceRepository.js";
+export { PluginRepository, normalize_profile_id } from "./repositories/PluginRepository.js";
 export { SecureSettingRepository } from "./repositories/SecureSettingRepository.js";
 export type {
   LocalAgentConfig,
-  LocalAgentPluginConfig,
+  LocalAgentPluginReference,
   LocalWorkspaceConfig,
 } from "./types/LocalConfig.js";
 export type {
-  LocalAgentPluginBinding,
-  LocalPluginInstallation,
-  LocalPluginInstallationManifest,
+  LocalInstalledPlugin,
+  LocalPluginConfig,
   LocalPluginManifest,
-  LocalPluginResource,
-  LocalPluginResourceItem,
 } from "./types/LocalPlugin.js";
 export type {
   LocalPluginLoaderOptions,
+  LocalPluginConstructorInput,
   LocalPluginType,
 } from "./types/LocalRuntime.js";

@@ -9,7 +9,7 @@ function create_channel(name) {
   return {
     name,
     isEnabled: () => false,
-    getResourceId: () => "",
+    get_channel_id: () => "",
     getAccount: () => null,
   };
 }
@@ -32,7 +32,7 @@ test("ChatPlugin 不提供配置修改 action", () => {
   assert.equal("configure" in plugin.actions, false);
 });
 
-test("ChatPlugin 只消费宿主已经解析的 Resource 构造参数", () => {
+test("ChatPlugin 只消费宿主已经解析的 profile 渠道配置", () => {
   const plugin = new ChatPlugin({
     channels: [new TelegramChannel({
       id: "telegram-main",
@@ -41,7 +41,7 @@ test("ChatPlugin 只消费宿主已经解析的 Resource 构造参数", () => {
     })],
   });
 
-  assert.equal(plugin.getResourceId({}, "telegram"), "telegram-main");
+  assert.equal(plugin.get_channel_id({}, "telegram"), "telegram-main");
   const account = plugin.resolveChannelAccount({}, "telegram");
   assert.ok(account);
   assert.deepEqual(account, {

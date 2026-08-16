@@ -41,7 +41,7 @@ Each Agent stores its own data at:
 <agent_project>/.downcity/chat/access.db
 ```
 
-The Chat Access database contains principals, requests, allow/deny grants, and audit events. It does not contain bot tokens, app secrets, or message bodies. Complete Chat Resource Items are encrypted separately in the City-global `~/.downcity/downcity.db`; the Chat Plugin Binding stores only `resource_ids`.
+The Chat Access database contains principals, requests, allow/deny grants, and audit events. It does not contain bot tokens, app secrets, or message bodies. Chat channel credentials belong to the selected plaintext profile in `~/.downcity/plugins/chat/config.toml`; CLI and Desktop redact fields marked `writeOnly` when displaying configuration.
 
 ## Difference from City Auth
 

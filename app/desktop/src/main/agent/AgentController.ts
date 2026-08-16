@@ -66,7 +66,7 @@ interface AgentControllerEvents {
 /** Electron main 内的 native Agent 生命周期控制器。 */
 export class AgentController {
   /** Desktop 与 CLI 共用的本地数据库和产品 Repository。 */
-  /** Desktop 读取本地 Plugin 安装与 Resource 使用的 Loader。 */
+  /** Desktop 读取本地 Plugin 定义与 profile 的 Loader。 */
   private readonly plugin_loader: LocalPluginLoader;
   /** Desktop 进程内的 Agent 索引与 transport 转发器。 */
   private readonly city = new City();
@@ -125,7 +125,7 @@ export class AgentController {
     }));
   }
 
-  /** 创建 Agent，并把表单中的项目目录独立登记为 Workspace。 */
+  /** 创建一个不绑定 Workspace 的 Agent。 */
   async create_agent(
     agent_id: string,
     model_id: string,
@@ -139,7 +139,7 @@ export class AgentController {
       version: "1.0.0",
       execution: { type: "api", model_id: normalized_model_id },
       instruction: "",
-      plugins: [],
+      plugins: {},
       created_at: current_time,
       updated_at: current_time,
     };
@@ -162,7 +162,7 @@ export class AgentController {
     };
   }
 
-  /** 按 Agent 的持久化 Workspace 绑定检查 Desktop native Agent。 */
+  /** 让指定 Agent 进入独立登记的 Workspace。 */
   async connect_agent(agent_id: string, workspace_id: string): Promise<DesktopAgentWorkspace> {
     await this.ready_promise;
     const config = this.data.agents.get(agent_id);

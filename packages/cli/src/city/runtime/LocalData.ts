@@ -1,8 +1,8 @@
 /**
- * CLI 本地数据库与 Repository 组合入口。
+ * CLI 本地存储与 Repository 组合入口。
  *
- * 组合只发生在 CLI 产品层；`LocalDatabase` 保持无业务语义，各 Repository 直接暴露
- * 自己拥有的领域查询和写入能力。
+ * Agent 与 Plugin 使用文件仓储，Workspace 等本地业务仍使用 SQLite。组合只发生在
+ * CLI 产品层，各 Repository 直接暴露自己拥有的领域查询和写入能力。
  */
 
 import {
@@ -49,7 +49,7 @@ export function create_cli_local_data(root_path_input?: string): CliLocalData {
   const secure_settings = new SecureSettingRepository(database, crypto_adapter);
   const workspaces = new WorkspaceRepository(database, crypto_adapter);
   const agents = new AgentRepository(root_path);
-  const plugins = new PluginRepository(database, crypto_adapter, agents);
+  const plugins = new PluginRepository(root_path);
   const agent_tokens = new AgentTokenRepository(database);
   return { root_path, database, agents, workspaces, plugins, secure_settings, agent_tokens };
 }

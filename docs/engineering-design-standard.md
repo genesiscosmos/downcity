@@ -264,11 +264,17 @@ Plugin 生命周期分为 Agent 级 `start/stop` 和可选的 Workspace 级 `ent
 
 本地 Agent 定义保存在 `~/.downcity/agents/<agent_id>/`：
 
-- `agent.json`：身份、版本和默认执行配置。
-- `instruction.md`：Agent 稳定指令。
-- `plugins.json`：Agent 注册的 Plugin 配置。
+- `agent.json`：身份、版本、默认执行配置和以 Plugin ID 为键的注册引用。
+- `SOUL.md`：Agent 跨 Workspace 复用的主体指令。
 
-`downcity.db` 继续保存 Workspace 索引、Plugin Resource/Installation、敏感设置和 Token，不保存 Agent 定义或 Agent-Workspace 绑定。
+Plugin 以全局稳定 ID 为身份，定义与配置保存在 `~/.downcity/plugins/<plugin_id>/`：
+
+- `config.toml`：Plugin 自己拥有的明文 profile 配置，目录权限为 `0700`、文件权限为 `0600`。
+- `plugin.json` 与 `artifact/`：仅第三方 Plugin 使用，分别保存规范化描述与静态代码制品。
+
+Agent 通过 `agent.json` 选择 Plugin 与可选 profile。Plugin profile 可以包含渠道、账号、端点等 Plugin 自己定义的结构；框架不定义 Binding、Resource 或 Installation 持久化领域。第三方制品必须只导出一个 Plugin，其 Manifest ID 同时是目录名和 Registry key。
+
+`downcity.db` 继续保存 Workspace 索引、平台安全设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。
 
 Workspace 只保证底层文件和 Shell 安全边界，不为 Plugin 的业务行为负责。Plugin 的业务权限、账号、网络访问与语义校验由 Plugin 或宿主管理。
 

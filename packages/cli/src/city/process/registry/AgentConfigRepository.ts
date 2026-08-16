@@ -80,7 +80,7 @@ export function save_agent_config(input: AgentConfig): AgentConfig {
       ...(input.execution ? { execution: input.execution as unknown as JsonObject } : {}),
       ...(input.llm ? { llm: input.llm as unknown as JsonObject } : {}),
       instruction: input.instruction,
-      plugins: previous?.plugins ?? [],
+      plugins: previous?.plugins ?? {},
       created_at: previous?.created_at ?? input.created_at,
       updated_at: input.updated_at,
     }));

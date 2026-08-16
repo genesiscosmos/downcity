@@ -48,7 +48,6 @@ export function create_desktop_plugin_loader(
   data: DesktopLocalData,
 ): LocalPluginLoader {
   return new LocalPluginLoader({
-    root_path: data.root_path,
     plugin_repository: data.plugins,
     plugin_types: create_desktop_builtin_plugin_types(data),
   });
@@ -121,45 +120,40 @@ export async function list_desktop_agent_models(
     }));
 }
 
-/** 合并官方与第三方 Plugin manifest，并附加本地绑定与 Resource 摘要。 */
+/** 合并官方与第三方 Plugin，并附加 Agent 引用与 profile 摘要。 */
 export function list_desktop_plugins(data: DesktopLocalData): DesktopPluginSummary[] {
-  const binding_agents = new Map<string, string[]>();
+  const registered_agents = new Map<string, string[]>();
   for (const agent of data.agents.list()) {
-    for (const plugin of agent.plugins) {
-      const agent_ids = binding_agents.get(plugin.plugin_name) ?? [];
+    for (const plugin_id of Object.keys(agent.plugins)) {
+      const agent_ids = registered_agents.get(plugin_id) ?? [];
       agent_ids.push(agent.agent_id);
-      binding_agents.set(plugin.plugin_name, agent_ids);
+      registered_agents.set(plugin_id, agent_ids);
     }
   }
   const plugins = new Map<string, DesktopPluginSummary>();
   for (const plugin_type of create_desktop_builtin_plugin_types(data)) {
     const manifest = plugin_type.manifest;
     plugins.set(manifest.name, {
-      plugin_name: manifest.name,
+      plugin_id: manifest.name,
       title: manifest.title || manifest.name,
       description: manifest.description || "",
       source: "builtin",
-      agent_ids: binding_agents.get(manifest.name) ?? [],
-      resource_count: data.plugins.list_resources(manifest.name).length,
+      agent_ids: registered_agents.get(manifest.name) ?? [],
+      profile_count: Object.keys(data.plugins.read_config(manifest.name).profiles).length,
       configurable: Boolean(manifest.config),
-      supports_resources: Boolean(manifest.resources),
     });
   }
-  for (const installation of data.plugins.list_installations()) {
-    for (const manifest of installation.manifest.plugins) {
-      plugins.set(manifest.name, {
-        plugin_name: manifest.name,
-        title: manifest.title || manifest.name,
-        description: manifest.description || "",
-        ...(manifest.version ? { version: manifest.version } : {}),
+  for (const installed of data.plugins.list_installed()) {
+      plugins.set(installed.id, {
+        plugin_id: installed.id,
+        title: installed.title || installed.id,
+        description: installed.description,
+        version: installed.version,
         source: "installed",
-        installation_id: installation.installation_id,
-        agent_ids: binding_agents.get(manifest.name) ?? [],
-        resource_count: data.plugins.list_resources(manifest.name).length,
-        configurable: Boolean(manifest.config),
-        supports_resources: Boolean(manifest.resources),
+        agent_ids: registered_agents.get(installed.id) ?? [],
+        profile_count: Object.keys(data.plugins.read_config(installed.id).profiles).length,
+        configurable: Boolean(installed.config_schema),
       });
-    }
   }
   return [...plugins.values()].sort((left, right) => left.title.localeCompare(right.title));
 }

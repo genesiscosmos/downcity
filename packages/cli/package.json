@@ -1,6 +1,6 @@
 {
   "name": "downcity",
-  "version": "1.1.448",
+  "version": "1.1.449",
   "type": "module",
   "description": "Downcity CLI — local City container and Federation Server management",
   "bin": {

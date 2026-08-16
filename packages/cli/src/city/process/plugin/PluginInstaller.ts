@@ -1,10 +1,8 @@
 /**
- * 第三方 Plugin 数组静态制品安装器。
+ * 第三方单 Plugin 静态制品安装器。
  *
- * 关键点（中文）
- * - 入口模块只需导出 `plugins` constructor 数组。
- * - installation 是来源、入口与文件原子替换的内部实现，不进入公开 Plugin 模型。
- * - 安装检查只读取静态 JSON，不执行 npm、生命周期脚本或 Plugin 入口。
+ * Plugin Manifest 声明的唯一 ID 同时是公开身份和最终目录名。随机名称只用于安装
+ * staging，更新时仅替换 `plugin.json` 与 `artifact/`，保留用户的 `config.toml`。
  */
 
 import path from "node:path";
@@ -12,271 +10,220 @@ import { createHash, randomUUID } from "node:crypto";
 import fs from "fs-extra";
 import { execa } from "execa";
 import type { JsonObject } from "@downcity/agent";
-import {
-  get_plugin_installation_dir_path,
-  get_plugin_installations_dir_path,
-} from "@/city/process/registry/CityPaths.js";
+import { get_local_plugin_path } from "@downcity/local";
+import { create_cli_local_data } from "@/city/runtime/LocalData.js";
 import {
   get_installed_plugin,
-  get_plugin_installation,
-  normalize_plugin_name,
-  save_plugin_installation,
+  is_builtin_plugin,
+  normalize_plugin_id,
+  save_installed_plugin,
 } from "@/city/process/registry/PluginRepository.js";
-import { list_plugin_catalog } from "@/city/process/plugin/PluginCatalog.js";
 import {
-  PLUGIN_INSTALLATION_MANIFEST_FILE_NAME,
-  PLUGIN_INSTALLATION_MANIFEST_VERSION,
-  type InstalledPluginInstallation,
-  type PluginInstallationManifest,
+  PLUGIN_MANIFEST_FILE_NAME,
+  PLUGIN_MANIFEST_VERSION,
+  type InstalledPlugin,
   type PluginManifest,
   type ResolvedPluginSource,
-} from "@/city/types/plugin/PluginInstallation.js";
+} from "@/city/types/plugin/PluginDefinition.js";
 import {
   validate_plugin_config,
   validate_plugin_config_schema,
 } from "@/city/process/plugin/PluginConfigValidator.js";
-import { validate_plugin_resource_schema } from "@/city/process/plugin/PluginResourceSchema.js";
-import { assert_plugin_resources_compatible } from "@/city/process/registry/PluginResourceRepository.js";
-import { create_cli_local_data } from "@/city/runtime/LocalData.js";
 
-/** 从本地目录、Git 或 GitHub shorthand 安装一个 Plugin 数组制品。 */
-export async function install_plugins(
+/** 从本地目录、Git URL 或 GitHub shorthand 安装一个 Plugin。 */
+export async function install_plugin(
   source_input: string,
-  expected_installation_id?: string,
-): Promise<InstalledPluginInstallation> {
+  expected_plugin_id?: string,
+): Promise<InstalledPlugin> {
   const source = await resolve_plugin_source(source_input);
-  const installation_id = create_installation_id(source.normalized_source);
-  if (expected_installation_id && installation_id !== expected_installation_id) {
-    throw new Error("Plugin update source changed its internal installation identity");
-  }
-  const installations_dir = get_plugin_installations_dir_path();
-  await fs.ensureDir(installations_dir);
-  const staging_dir = path.join(installations_dir, `.install-${randomUUID()}`);
-  const backup_dir = path.join(installations_dir, `.backup-${randomUUID()}`);
+  const data = create_cli_local_data();
+  const root_path = data.root_path;
+  const plugins_root = path.join(root_path, "plugins");
+  data.database.close();
+  await fs.ensureDir(plugins_root, { mode: 0o700 });
+  const working_dir = path.join(plugins_root, `.install-${randomUUID()}`);
+  const artifact_dir = path.join(working_dir, "artifact");
+  const backup_dir = path.join(plugins_root, `.backup-${randomUUID()}`);
   let resolved_commit: string | undefined;
 
   try {
     if (source.local_path) {
-      await fs.copy(source.local_path, staging_dir, {
+      await fs.copy(source.local_path, artifact_dir, {
         filter: (entry) => path.basename(entry) !== ".git",
       });
     } else {
       const clone_arguments = ["clone", "--depth", "1"];
       if (source.git_ref) clone_arguments.push("--branch", source.git_ref);
-      clone_arguments.push(source.git_url!, staging_dir);
+      clone_arguments.push(source.git_url!, artifact_dir);
       await execa("git", clone_arguments, { stdio: "pipe" });
       const revision = await execa("git", ["rev-parse", "HEAD"], {
-        cwd: staging_dir,
+        cwd: artifact_dir,
         stdio: "pipe",
       });
       resolved_commit = revision.stdout.trim() || undefined;
-      await fs.remove(path.join(staging_dir, ".git"));
+      await fs.remove(path.join(artifact_dir, ".git"));
     }
 
-    await assert_plugin_artifact_has_no_symlinks(staging_dir);
-    const manifest = await read_plugin_installation_manifest(staging_dir);
-    assert_plugin_names_available(manifest, installation_id);
-    const entry_path = resolve_plugin_artifact_path(staging_dir, manifest.entry, "entry");
+    await assert_plugin_artifact_has_no_symlinks(artifact_dir);
+    const manifest = await read_plugin_manifest(artifact_dir);
+    if (expected_plugin_id && manifest.id !== normalize_plugin_id(expected_plugin_id)) {
+      throw new Error(`Plugin update changed ID: ${expected_plugin_id} -> ${manifest.id}`);
+    }
+    if (is_builtin_plugin(manifest.id)) {
+      throw new Error(`Plugin ID conflicts with builtin Plugin: ${manifest.id}`);
+    }
+    const entry_path = resolve_plugin_artifact_path(artifact_dir, manifest.entry, "entry");
     if (!await fs.pathExists(entry_path) || !(await fs.stat(entry_path)).isFile()) {
       throw new Error(`Plugin entry not found: ${manifest.entry}`);
     }
 
-    const existing = get_plugin_installation(installation_id);
-    if (existing) assert_installation_update_compatible(existing, manifest);
-    const integrity = await calculate_plugin_integrity(staging_dir);
-    const target_dir = get_plugin_installation_dir_path(installation_id);
-    if (await fs.pathExists(target_dir)) await fs.move(target_dir, backup_dir);
+    validate_existing_profiles(manifest);
+    const integrity = await calculate_plugin_integrity(artifact_dir);
+    const existing = get_installed_plugin(manifest.id);
+    const target_dir = get_local_plugin_path(root_path, manifest.id);
+    const target_artifact = path.join(target_dir, "artifact");
+    const target_descriptor = path.join(target_dir, "plugin.json");
+    await fs.ensureDir(target_dir, { mode: 0o700 });
+    await fs.ensureDir(backup_dir, { mode: 0o700 });
+    if (await fs.pathExists(target_artifact)) {
+      await fs.move(target_artifact, path.join(backup_dir, "artifact"));
+    }
+    if (await fs.pathExists(target_descriptor)) {
+      await fs.move(target_descriptor, path.join(backup_dir, "plugin.json"));
+    }
 
     try {
-      await fs.move(staging_dir, target_dir);
+      await fs.move(artifact_dir, target_artifact);
       const current_time = new Date().toISOString();
-      return save_plugin_installation({
-        installation_id,
+      return save_installed_plugin({
+        schema_version: 1,
+        id: manifest.id,
+        version: manifest.version,
+        ...(manifest.title ? { title: manifest.title } : {}),
+        description: manifest.description,
         source: source.normalized_source,
         ...(resolved_commit ? { resolved_commit } : {}),
-        entry_path: resolve_plugin_artifact_path(target_dir, manifest.entry, "entry"),
-        manifest,
+        entry: path.posix.join("artifact", manifest.entry.split(path.sep).join("/")),
+        ...(manifest.config?.schema ? { config_schema: manifest.config.schema } : {}),
+        ...(manifest.config?.defaults ? { default_config: manifest.config.defaults } : {}),
         integrity,
         installed_at: existing?.installed_at ?? current_time,
         updated_at: current_time,
       });
     } catch (error) {
-      await fs.remove(target_dir);
-      if (await fs.pathExists(backup_dir)) await fs.move(backup_dir, target_dir);
+      await fs.remove(target_artifact);
+      await fs.remove(target_descriptor);
+      if (await fs.pathExists(path.join(backup_dir, "artifact"))) {
+        await fs.move(path.join(backup_dir, "artifact"), target_artifact);
+      }
+      if (await fs.pathExists(path.join(backup_dir, "plugin.json"))) {
+        await fs.move(path.join(backup_dir, "plugin.json"), target_descriptor);
+      }
       throw error;
     }
   } finally {
-    await fs.remove(staging_dir);
+    await fs.remove(working_dir);
     await fs.remove(backup_dir);
   }
 }
 
-/** 使用 Plugin 所属 installation 的已保存来源更新整个共享入口。 */
-export async function update_plugin(plugin_name_input: string): Promise<InstalledPluginInstallation> {
-  const plugin_name = normalize_plugin_name(plugin_name_input);
-  const reference = get_installed_plugin(plugin_name);
-  if (!reference) throw new Error(`Plugin is not installed: ${plugin_name}`);
-  return await install_plugins(
-    reference.installation.source,
-    reference.installation.installation_id,
-  );
+/** 使用 Plugin 自己保存的来源更新制品。 */
+export async function update_plugin(plugin_id_input: string): Promise<InstalledPlugin> {
+  const plugin_id = normalize_plugin_id(plugin_id_input);
+  const plugin = get_installed_plugin(plugin_id);
+  if (!plugin) throw new Error(`Plugin is not installed: ${plugin_id}`);
+  return await install_plugin(plugin.source, plugin_id);
 }
 
-/** 读取并验证静态安装清单以及内嵌的全部 Plugin Manifest。 */
-export async function read_plugin_installation_manifest(
-  installation_dir: string,
-): Promise<PluginInstallationManifest> {
-  const manifest_path = path.join(installation_dir, PLUGIN_INSTALLATION_MANIFEST_FILE_NAME);
+/** 读取并严格验证单 Plugin 静态清单。 */
+export async function read_plugin_manifest(artifact_dir: string): Promise<PluginManifest> {
+  const manifest_path = path.join(artifact_dir, PLUGIN_MANIFEST_FILE_NAME);
   if (!await fs.pathExists(manifest_path)) {
-    throw new Error(`Missing ${PLUGIN_INSTALLATION_MANIFEST_FILE_NAME}`);
+    throw new Error(`Missing ${PLUGIN_MANIFEST_FILE_NAME}`);
   }
   const raw = await fs.readJson(manifest_path) as Record<string, unknown>;
-  assert_known_fields(raw, ["manifest_version", "entry", "plugins"], "manifest");
-  if (raw.manifest_version !== PLUGIN_INSTALLATION_MANIFEST_VERSION) {
-    throw new Error(`Plugin manifest_version must be ${PLUGIN_INSTALLATION_MANIFEST_VERSION}`);
-  }
-  const entry = String(raw.entry || "").trim();
-  if (!entry) throw new Error("Plugin manifest entry is required");
-  resolve_plugin_artifact_path(installation_dir, entry, "entry");
-  if (!Array.isArray(raw.plugins) || raw.plugins.length === 0) {
-    throw new Error("Plugin manifest plugins must be a non-empty array");
-  }
-
-  const plugins = raw.plugins.map((plugin, index) =>
-    read_plugin_manifest(plugin, index)
-  );
-  const plugin_names = plugins.map((plugin) => plugin.name);
-  if (new Set(plugin_names).size !== plugin_names.length) {
-    throw new Error("Plugin manifest names must be unique");
-  }
-  return {
-    manifest_version: PLUGIN_INSTALLATION_MANIFEST_VERSION,
-    entry,
-    plugins,
-  };
-}
-
-/** 读取并验证一个 Plugin 的静态 Manifest。 */
-function read_plugin_manifest(value: unknown, index: number): PluginManifest {
-  if (!is_json_object(value)) throw new Error(`Plugin manifest must be an object: ${index}`);
   assert_known_fields(
-    value,
-    ["name", "version", "title", "description", "config", "resources"],
-    `Plugin manifest ${index}`,
+    raw,
+    ["manifest_version", "id", "version", "title", "description", "entry", "config"],
+    "Plugin manifest",
   );
-  const name = normalize_plugin_name(String(value.name || ""));
-  if (name !== value.name) throw new Error(`Plugin manifest name must be normalized: ${value.name}`);
-  const version = value.version === undefined ? "" : String(value.version).trim();
-  if (version && !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(version)) {
+  if (raw.manifest_version !== PLUGIN_MANIFEST_VERSION) {
+    throw new Error(`Plugin manifest_version must be ${PLUGIN_MANIFEST_VERSION}`);
+  }
+  const id = normalize_plugin_id(String(raw.id || ""));
+  if (raw.id !== id) throw new Error(`Plugin manifest ID must be normalized: ${raw.id}`);
+  const version = String(raw.version || "").trim();
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u.test(version)) {
     throw new Error(`Plugin version must be semantic: ${version}`);
   }
-  if (value.title !== undefined && typeof value.title !== "string") {
-    throw new Error(`Plugin title must be a string: ${name}`);
-  }
-  if (typeof value.description !== "string" || !value.description.trim()) {
-    throw new Error(`Plugin description is required: ${name}`);
-  }
+  const description = String(raw.description || "").trim();
+  if (!description) throw new Error(`Plugin description is required: ${id}`);
+  const entry = String(raw.entry || "").trim();
+  if (!entry) throw new Error(`Plugin entry is required: ${id}`);
+  resolve_plugin_artifact_path(artifact_dir, entry, "entry");
   let config: PluginManifest["config"];
-  if (value.config !== undefined) {
-    if (!is_json_object(value.config)) throw new Error(`Plugin config must be an object: ${name}`);
-    assert_known_fields(value.config, ["schema", "defaults"], `Plugin config ${name}`);
-    if (!is_json_object(value.config.schema)) {
-      throw new Error(`Plugin config.schema must be an object: ${name}`);
+  if (raw.config !== undefined) {
+    if (!is_json_object(raw.config)) throw new Error(`Plugin config must be an object: ${id}`);
+    assert_known_fields(raw.config, ["schema", "defaults"], `Plugin config ${id}`);
+    if (!is_json_object(raw.config.schema)) {
+      throw new Error(`Plugin config.schema must be an object: ${id}`);
     }
-    validate_plugin_config_schema(value.config.schema);
-    if (value.config.defaults !== undefined && !is_json_object(value.config.defaults)) {
-      throw new Error(`Plugin config.defaults must be an object: ${name}`);
+    validate_plugin_config_schema(raw.config.schema);
+    if (raw.config.defaults !== undefined && !is_json_object(raw.config.defaults)) {
+      throw new Error(`Plugin config.defaults must be an object: ${id}`);
     }
-    if (value.config.defaults !== undefined) {
-      validate_plugin_config(value.config.defaults, value.config.schema);
+    if (raw.config.defaults !== undefined) {
+      validate_plugin_config(raw.config.defaults, raw.config.schema);
     }
     config = {
-      schema: value.config.schema,
-      ...(value.config.defaults !== undefined ? { defaults: value.config.defaults } : {}),
+      schema: raw.config.schema,
+      ...(raw.config.defaults ? { defaults: raw.config.defaults } : {}),
     };
   }
-
-  let resources: PluginManifest["resources"];
-  if (value.resources !== undefined) {
-    if (!is_json_object(value.resources)) {
-      throw new Error(`Plugin resources must be an object: ${name}`);
-    }
-    assert_known_fields(value.resources, ["schema"], `Plugin resources ${name}`);
-    if (!is_json_object(value.resources.schema)) {
-      throw new Error(`Plugin resources.schema must be an object: ${name}`);
-    }
-    validate_plugin_resource_schema(value.resources.schema);
-    resources = { schema: value.resources.schema };
-  }
-
-  const title = typeof value.title === "string" ? value.title.trim() : "";
-  const description = value.description.trim();
+  const title = typeof raw.title === "string" ? raw.title.trim() : "";
   return {
-    name,
-    ...(version ? { version } : {}),
+    manifest_version: 4,
+    id,
+    version,
     ...(title ? { title } : {}),
     description,
+    entry,
     ...(config ? { config } : {}),
-    ...(resources ? { resources } : {}),
   };
 }
 
-/** 确认新数组中的 Plugin 名称不与其他安装或内建 Plugin 冲突。 */
-function assert_plugin_names_available(
-  manifest: PluginInstallationManifest,
-  current_installation_id: string,
-): void {
-  const catalog = list_plugin_catalog();
-  for (const plugin of manifest.plugins) {
-    const conflict = catalog.find((item) =>
-      item.plugin_name === plugin.name
-      && item.installation_id !== current_installation_id
-    );
-    if (conflict) throw new Error(`Plugin name is already installed: ${plugin.name}`);
-  }
-}
-
-/** 校验共享入口更新不会破坏已有 Binding 与 Resource。 */
-function assert_installation_update_compatible(
-  existing: InstalledPluginInstallation,
-  next_manifest: PluginInstallationManifest,
-): void {
-  for (const plugin of existing.manifest.plugins) {
-    const next_plugin = next_manifest.plugins.find((item) => item.name === plugin.name);
-    if (!next_plugin) assert_plugin_unused(plugin.name);
-    if (next_plugin) {
-      assert_plugin_resources_compatible(plugin.name, next_plugin.resources?.schema);
-    }
-  }
-}
-
-/** 确认 Plugin 不再被任何 Binding 或 Resource 使用。 */
-function assert_plugin_unused(plugin_name: string): void {
+/** 更新前用新 Schema 验证所有已保存 profile。 */
+function validate_existing_profiles(manifest: PluginManifest): void {
+  if (!manifest.config?.schema) return;
   const data = create_cli_local_data();
   try {
-    data.plugins.assert_plugin_unused(plugin_name);
+    const profiles = data.plugins.read_config(manifest.id).profiles;
+    for (const [profile, config] of Object.entries(profiles)) {
+      try {
+        validate_plugin_config(config, manifest.config.schema);
+      } catch (error) {
+        throw new Error(`Plugin profile is incompatible with update: ${manifest.id}/${profile}`, {
+          cause: error,
+        });
+      }
+    }
   } finally {
     data.database.close();
   }
 }
 
-/** 安全解析 Plugin 安装根目录内的静态制品路径。 */
+/** 安全解析 Plugin 制品根目录内的静态路径。 */
 export function resolve_plugin_artifact_path(
-  installation_dir: string,
+  artifact_dir: string,
   relative_path: string,
   label: string,
 ): string {
-  const root = path.resolve(installation_dir);
+  const root = path.resolve(artifact_dir);
   const resolved = path.resolve(root, relative_path);
   if (resolved === root || !resolved.startsWith(`${root}${path.sep}`)) {
-    throw new Error(`Plugin ${label} must stay inside the installation directory`);
+    throw new Error(`Plugin ${label} must stay inside the artifact directory`);
   }
   return resolved;
-}
-
-/** 根据规范化来源稳定派生内部 installation ID。 */
-function create_installation_id(normalized_source: string): string {
-  return `source_${createHash("sha256").update(normalized_source).digest("hex").slice(0, 24)}`;
 }
 
 /** 解析 local、Git URL 与 GitHub shorthand。 */
@@ -314,7 +261,7 @@ async function resolve_plugin_source(source_input: string): Promise<ResolvedPlug
   };
 }
 
-/** 拒绝带符号链接的 Plugin 制品，避免路径和完整性语义漂移。 */
+/** 拒绝符号链接，避免路径与完整性语义漂移。 */
 async function assert_plugin_artifact_has_no_symlinks(root: string): Promise<void> {
   const entries = await fs.readdir(root, { withFileTypes: true });
   for (const entry of entries) {
@@ -341,8 +288,7 @@ async function calculate_plugin_integrity(root: string): Promise<string> {
 
 /** 按相对路径稳定排序枚举 Plugin 制品文件。 */
 async function list_plugin_files(root: string, current = ""): Promise<string[]> {
-  const directory = path.join(root, current);
-  const entries = (await fs.readdir(directory, { withFileTypes: true }))
+  const entries = (await fs.readdir(path.join(root, current), { withFileTypes: true }))
     .sort((left, right) => left.name.localeCompare(right.name));
   const files: string[] = [];
   for (const entry of entries) {
@@ -353,12 +299,11 @@ async function list_plugin_files(root: string, current = ""): Promise<string[]> 
   return files.sort((left, right) => left.localeCompare(right));
 }
 
-/** 判断未知值是否为 JSON 对象。 */
 function is_json_object(value: unknown): value is Record<string, unknown> & JsonObject {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-/** 拒绝静态 Manifest 中无法识别的字段，避免拼写错误被静默忽略。 */
+/** 拒绝静态 Manifest 中无法识别的字段。 */
 function assert_known_fields(
   value: Record<string, unknown>,
   allowed_fields: string[],

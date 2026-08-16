@@ -17,24 +17,29 @@ The Chat plugin connects your Agent to messaging channels like Telegram, Feishu,
 
 ## Configuration
 
-Like every other Plugin, Chat keeps behavior settings in its Agent Plugin Binding and connects channels through Plugin Resources. When creating a Resource, the CLI collects writable fields from its Schema and a Resolver fills dynamic fields such as `name`:
+Chat owns complete named profiles in `~/.downcity/plugins/chat/config.toml`. A profile contains queue behavior and the channels used by an Agent:
 
-```json
-{
-  "plugin_name": "chat",
-  "config": {},
-  "resource_ids": ["telegram-a1b2c3", "feishu-d4e5f6"]
-}
+```toml
+schema_version = 1
+
+[profiles.primary.queue]
+max_concurrency = 4
+
+[[profiles.primary.channels]]
+id = "telegram_primary"
+type = "telegram"
+name = "Primary Bot"
+bot_token = "123456:token"
 ```
 
 ```bash
-city plugin resource create chat --interactive
-city plugin config chat <agent_id> --resources '["telegram-a1b2c3"]'
+city plugin config chat primary --interactive
+city plugin enable chat <agent_id> --profile primary
 ```
 
-## Chat Resources
+## Channel credentials
 
-Complete Resource Items are encrypted in the CLI global DB. Each Item has a stable `id`, a type, and a display `name`; the Binding stores only Resource IDs. A Resource may be reused by multiple Agents, while the runtime Plugin receives immutable full Item snapshots resolved from those IDs.
+Channel credentials are plaintext in `config.toml`, protected by user-only directory and file permissions (`0700` and `0600`). CLI and Desktop redact fields such as `bot_token` and `app_secret` in displayed output. Each Agent selects one profile in its own `agent.json`; profiles can be shared intentionally.
 
 ## Chat Access
 
@@ -45,7 +50,7 @@ city plugin action chat access-snapshot <agent_id> --input '{}' --token <token>
 city plugin action chat access-approve <agent_id> --input '{"request_id":"<request_id>"}' --token <token>
 ```
 
-Identity combines the channel, current Chat Resource ID, and platform user ID. Approval applies only to the target Agent; it is neither a City-global permission nor propagated to other Plugins.
+Identity combines the channel ID from the selected profile and the platform user ID. Approval applies only to the target Agent; it is neither a City-global permission nor propagated to other Plugins.
 
 ## Supported channels
 

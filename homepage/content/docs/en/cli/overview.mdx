@@ -12,18 +12,18 @@ The Downcity package installs two independent tools:
 
 ## City data model
 
-Agents and Workspaces are independent global entities. An Agent is identified by `agent_id` and owns its model, Plugin Bindings, and tokens. A Workspace is identified by `workspace_id` and points to a project directory. Each Agent is persistently bound to one Workspace, while one Workspace may be used by multiple Agents. CLI and Desktop own separate City instances and host lifecycles but share `~/.downcity/downcity.db`; Global Env lives in `~/.downcity/.env`, Workspace Env lives in the project `.env`, and CLI daemon files live in `~/.downcity/runtimes/<agent_id>/`.
+Agents and Workspaces are independent global entities. An Agent is identified by `agent_id`, keeps its structured definition in `~/.downcity/agents/<agent_id>/agent.json`, and keeps its stable identity instructions in `SOUL.md`. A Workspace is identified by `workspace_id` and points to a project directory. An Agent can enter multiple Workspaces; neither entity stores a persistent binding to the other. CLI and Desktop own separate City instances but share the same user-level files and Workspace index.
 
 Federation Admin configuration and Embassy User Sessions also live in `~/.downcity/downcity.db`. On upgrade, administration configuration in the legacy `~/.downcity/federation.db` is migrated once. The old file remains available for manual recovery but is no longer read at runtime.
 
-Plugin artifacts are installed globally under `~/.downcity/plugins/`. Plugin configuration is not stored on the Agent SDK runtime Plugin object. It is stored per `agent_id + plugin_name` in an Agent Plugin Binding.
+Each Plugin uses its stable ID as `~/.downcity/plugins/<plugin_id>/`. Its plaintext profiles live in `config.toml`; third-party code lives in `artifact/` with a normalized `plugin.json`. An Agent registers a Plugin and selects an optional profile in its own `agent.json`. `downcity.db` stores Workspace indexes, tokens, and platform state, not Agent or Plugin configuration.
 
 ## City commands
 
 | Command | Purpose |
 |---|---|
 | `city agent` | Manage global Agents |
-| `city plugin` | Manage plugin artifacts, bindings, config, and actions |
+| `city plugin` | Manage Plugin artifacts, profiles, Agent references, and actions |
 | `city env` | Manage environment variables injected by City |
 | `city federation` | Manage Federation connections |
 
