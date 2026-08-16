@@ -14,11 +14,6 @@ export function get_local_database_path(root_path: string): string {
   return path.join(root_path, "downcity.db");
 }
 
-/** 返回统一配置加密密钥路径。 */
-export function get_local_key_path(root_path: string): string {
-  return path.join(root_path, "main", "model-db.key");
-}
-
 /** 返回全局环境变量文件路径。 */
 export function get_local_env_path(root_path: string): string {
   return path.join(root_path, ".env");

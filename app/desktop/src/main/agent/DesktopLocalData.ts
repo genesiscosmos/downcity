@@ -6,7 +6,6 @@
 
 import {
   get_local_database_path,
-  LocalCrypto,
   LocalDatabase,
   resolve_local_root_path,
 } from "@downcity/local";
@@ -14,7 +13,7 @@ import {
   AgentRepository,
   ensure_local_schema,
   PluginRepository,
-  SecureSettingRepository,
+  LocalSettingRepository,
   WorkspaceRepository,
 } from "@downcity/local/product";
 
@@ -30,8 +29,8 @@ export interface DesktopLocalData {
   workspaces: WorkspaceRepository;
   /** Plugin 配置仓储。 */
   plugins: PluginRepository;
-  /** 平台加密设置仓储。 */
-  secure_settings: SecureSettingRepository;
+  /** 平台明文设置仓储。 */
+  settings: LocalSettingRepository;
 }
 
 /** 显式创建 Desktop 本地数据依赖。 */
@@ -39,10 +38,9 @@ export function create_desktop_local_data(): DesktopLocalData {
   const root_path = resolve_local_root_path();
   const database = new LocalDatabase({ filename: get_local_database_path(root_path) });
   ensure_local_schema(database);
-  const crypto_adapter = new LocalCrypto(root_path);
-  const secure_settings = new SecureSettingRepository(database, crypto_adapter);
-  const workspaces = new WorkspaceRepository(database, crypto_adapter);
+  const settings = new LocalSettingRepository(database);
+  const workspaces = new WorkspaceRepository(database);
   const agents = new AgentRepository(root_path);
   const plugins = new PluginRepository(root_path);
-  return { root_path, database, agents, workspaces, plugins, secure_settings };
+  return { root_path, database, agents, workspaces, plugins, settings };
 }

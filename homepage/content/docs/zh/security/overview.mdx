@@ -1,6 +1,6 @@
 ---
 title: 安全与权限总览
-description: 运行隔离、Chat Access、密钥保护的用户视角说明
+description: 运行隔离、Chat Access、本地配置权限的用户视角说明
 ---
 
 # 安全与权限总览
@@ -9,17 +9,17 @@ Downcity 的安全模型分为 3 层：
 
 1. Agent 隔离：一个运行中的 agent 绑定一个 `projectRoot`，默认不会跨项目串上下文。
 2. Chat Access：按 Agent、Chat 账号和平台用户身份决定消息能否进入 Agent。
-3. 数据保护：模型 provider 的 `apiKey` 以加密形式存储在 `~/.downcity/downcity.db`。
+3. 本地配置：模型、Workspace、Agent 和 Plugin 配置保存在本机文件中，主要依靠文件权限隔离。
 
 ## 你需要重点关注
 
 1. 不要在终端残留错误的 `DC_CITY_HOST/DC_CITY_PORT`，避免把命令路由到错误 runtime。
 2. 新用户默认不会进入 Agent，启用聊天渠道后先处理待批准的 Access Request。
-3. 生产环境优先使用 `DC_MODEL_DB_KEY` 管理密钥，不要把明文 key 写入仓库。
+3. 本地配置以明文保存，不要把 `~/.downcity`、Agent 配置或 Plugin 配置复制到不受信任的位置。
 
 ## 推荐阅读顺序
 
 1. [API 认证](/zh/docs/security/api-authentication)
 2. [权限配置](/zh/docs/security/permissions)
-3. [数据安全与密钥](/zh/docs/security/data-security)
+3. [数据存储与权限](/zh/docs/security/data-security)
 4. [调用路由与环境隔离](/zh/docs/concepts/invocation-routing-and-isolation)

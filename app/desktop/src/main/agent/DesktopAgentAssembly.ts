@@ -261,7 +261,7 @@ function create_embassy_user(
   data: DesktopLocalData,
   env: Readonly<Record<string, string | undefined>>,
 ): EmbassyUser {
-  const config = data.secure_settings.get<DesktopDowncityConfig>("downcity.config") ?? {};
+  const config = data.settings.get<DesktopDowncityConfig>("downcity.config") ?? {};
   const federation_url = normalize_federation_url(
     read_string(env.DOWNCITY_FEDERATION_URL)
       || read_string(config.selected_federation_url)

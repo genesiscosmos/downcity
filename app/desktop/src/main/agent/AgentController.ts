@@ -457,7 +457,7 @@ export class AgentController {
     const model_ids = this.read_session_model_ids();
     if (!(session_key in model_ids)) return;
     delete model_ids[session_key];
-    this.data.secure_settings.set(session_model_settings_key, model_ids);
+    this.data.settings.set(session_model_settings_key, model_ids);
   }
 
   /** 从 SDK status 恢复应用重启或首次进入时的运行态。 */
@@ -505,14 +505,14 @@ export class AgentController {
 
   /** 读取按 Agent + Session 索引的稳定模型 ID。 */
   private read_session_model_ids(): Record<string, string> {
-    const value = this.data.secure_settings.get<Record<string, unknown>>(session_model_settings_key) ?? {};
+    const value = this.data.settings.get<Record<string, unknown>>(session_model_settings_key) ?? {};
     return Object.fromEntries(Object.entries(value).flatMap(([key, model_id]) => typeof model_id === "string" && model_id.trim() ? [[key, model_id.trim()]] : []));
   }
 
   /** 保存一个 Session 的稳定模型 ID。 */
   private persist_session_model_id(agent_id: string, workspace_id: string, session_id: string, model_id: string): void {
     const current = this.read_session_model_ids();
-    this.data.secure_settings.set(session_model_settings_key, {
+    this.data.settings.set(session_model_settings_key, {
       ...current,
       [get_session_key(agent_id, workspace_id, session_id)]: model_id,
     });

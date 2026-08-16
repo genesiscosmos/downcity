@@ -3,7 +3,7 @@
  *
  * 关键说明（中文）
  * - downfed 的 server profile、管理员会话、Cloudflare account 与语言写入 `downcity.db`。
- * - 配置通过共享 SecureSettingRepository 加密保存，避免明文 JSON 状态散落。
+ * - 配置通过共享 LocalSettingRepository 保存，避免配置读写散落在业务模块。
  * - user session 由 `city` 维护，本模块只负责 Federation admin 管理态。
  */
 
@@ -557,10 +557,10 @@ function deriveServerName(baseUrl: string): string {
 
 function readStoredConfig(): Record<string, unknown> | undefined {
   return with_cli_local_data((data) =>
-    data.secure_settings.get<Record<string, unknown>>(FEDERATION_CONFIG_KEY) ?? undefined
+    data.settings.get<Record<string, unknown>>(FEDERATION_CONFIG_KEY) ?? undefined
   );
 }
 
 function writeStoredConfig(config: ClientConfig): void {
-  with_cli_local_data((data) => data.secure_settings.set(FEDERATION_CONFIG_KEY, config));
+  with_cli_local_data((data) => data.settings.set(FEDERATION_CONFIG_KEY, config));
 }

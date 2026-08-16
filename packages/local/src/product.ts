@@ -19,7 +19,7 @@ export {
 } from "./repositories/AgentRepository.js";
 export { WorkspaceRepository, normalize_workspace_id } from "./repositories/WorkspaceRepository.js";
 export { PluginRepository, normalize_profile_id } from "./repositories/PluginRepository.js";
-export { SecureSettingRepository } from "./repositories/SecureSettingRepository.js";
+export { LocalSettingRepository } from "./repositories/LocalSettingRepository.js";
 export type {
   LocalAgentConfig,
   LocalAgentPluginReference,

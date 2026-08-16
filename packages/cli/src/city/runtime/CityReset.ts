@@ -2,7 +2,7 @@
  * City 本地数据库重置能力。
  *
  * 该模块只删除 SQLite 主文件及其 WAL/SHM 伴随文件，不理解数据库业务表，
- * 也不删除环境变量、加密密钥、Plugin 制品或 Workspace/Session 文件。
+ * 也不删除环境变量、Agent/Plugin 配置或 Workspace/Session 文件。
  */
 
 import fs from "fs-extra";

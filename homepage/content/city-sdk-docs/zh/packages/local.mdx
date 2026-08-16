@@ -3,13 +3,12 @@ title: "@downcity/local"
 description: 使用数据库 Adapter 和显式 Repository 管理本地产品配置。
 ---
 
-`@downcity/local` 的根入口提供 CLI 与 Desktop 共用的 SQLite Adapter、加密和路径能力。
+`@downcity/local` 的根入口提供 CLI 与 Desktop 共用的 SQLite Adapter 和路径能力。
 Agent、Workspace、Plugin 的产品 Schema、Repository 与 Loader 位于
 `@downcity/local/product` 子入口。
 
 ```ts
 import {
-  LocalCrypto,
   LocalDatabase,
 } from "@downcity/local";
 import {
@@ -21,10 +20,10 @@ import {
 const database = new LocalDatabase({ filename: database_path });
 ensure_local_schema(database);
 
-const crypto_adapter = new LocalCrypto(root_path);
-const workspaces = new WorkspaceRepository(database, crypto_adapter);
-const agents = new AgentRepository(database, crypto_adapter, workspaces);
+const workspaces = new WorkspaceRepository(database);
+const agents = new AgentRepository(root_path);
 ```
 
 CLI 与 Desktop 在各自组合根中创建这些依赖，读取配置后显式调用 `new Agent()`。
 `@downcity/local` 不创建 Agent、Workspace、Model 或 City，City 也不查询或持久化产品数据。
+Workspace 与平台设置以明文 JSON 保存，依靠本地数据库文件的 `0600` 权限进行用户级隔离。

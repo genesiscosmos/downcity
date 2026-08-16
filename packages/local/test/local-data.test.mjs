@@ -6,15 +6,14 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-  LocalCrypto,
   LocalDatabase,
 } from "../bin/index.js";
 import {
   AgentRepository,
   ensure_local_schema,
+  LocalSettingRepository,
   PluginRepository,
   resolve_local_agent_env,
-  SecureSettingRepository,
   WorkspaceRepository,
 } from "../bin/product.js";
 
@@ -39,6 +38,8 @@ test("LocalDatabase 不会隐式创建产品业务表", async () => {
     });
     assert.equal(after.rows.some((row) => row.name === "managed_agents"), false);
     assert.equal(after.rows.some((row) => row.name === "workspaces"), true);
+    assert.equal(after.rows.some((row) => row.name === "platform_settings"), true);
+    assert.equal((await fs.stat(path.join(root_path, "downcity.db"))).mode & 0o777, 0o600);
   } finally {
     database.close();
     await fs.rm(root_path, { recursive: true, force: true });
@@ -49,8 +50,8 @@ test("AgentRepository 与 WorkspaceRepository 独立维护产品配置", async (
   const { root_path, database } = await create_local_data();
   try {
     ensure_local_schema(database);
-    const crypto_adapter = new LocalCrypto(root_path);
-    const workspaces = new WorkspaceRepository(database, crypto_adapter);
+    const workspaces = new WorkspaceRepository(database);
+    const settings = new LocalSettingRepository(database);
     const agents = new AgentRepository(root_path);
 
     const workspace = workspaces.ensure({ workspace_path: path.join(root_path, "project") });
@@ -63,6 +64,22 @@ test("AgentRepository 与 WorkspaceRepository 独立维护产品配置", async (
 
     assert.equal(agents.get("lucas_whitman")?.instruction, "You are Lucas.");
     assert.equal(workspaces.get(workspace.workspace_id)?.workspace_path, workspace.workspace_path);
+    const workspace_row = database.query({
+      sql: "SELECT config_json FROM workspaces WHERE workspace_id = ?;",
+      params: [workspace.workspace_id],
+    }).rows[0];
+    assert.ok(workspace_row);
+    const workspace_config = JSON.parse(String(workspace_row.config_json));
+    assert.equal(workspace_config.workspace_id, workspace.workspace_id);
+    assert.equal(workspace_config.workspace_path, workspace.workspace_path);
+    settings.set("test.settings", { enabled: true, token: "plain-token" });
+    assert.deepEqual(settings.get("test.settings"), { enabled: true, token: "plain-token" });
+    const setting_row = database.query({
+      sql: "SELECT value_json FROM platform_settings WHERE key = ?;",
+      params: ["test.settings"],
+    }).rows[0];
+    assert.equal(setting_row.value_json, JSON.stringify({ enabled: true, token: "plain-token" }));
+    await assert.rejects(fs.access(path.join(root_path, "main", "model-db.key")));
     assert.deepEqual(agents.list().map((item) => item.agent_id), ["lucas_whitman"]);
     assert.equal(await fs.readFile(
       path.join(root_path, "agents", "lucas_whitman", "SOUL.md"),

@@ -7,7 +7,6 @@
 
 import {
   get_local_database_path,
-  LocalCrypto,
   LocalDatabase,
   resolve_local_root_path,
 } from "@downcity/local";
@@ -15,7 +14,7 @@ import {
   AgentRepository,
   ensure_local_schema,
   PluginRepository,
-  SecureSettingRepository,
+  LocalSettingRepository,
   WorkspaceRepository,
 } from "@downcity/local/product";
 import { AgentTokenRepository } from "@/city/runtime/auth/AgentTokenRepository.js";
@@ -33,8 +32,8 @@ export interface CliLocalData {
   workspaces: WorkspaceRepository;
   /** Plugin 配置仓储。 */
   plugins: PluginRepository;
-  /** 平台加密设置仓储。 */
-  secure_settings: SecureSettingRepository;
+  /** 平台明文设置仓储。 */
+  settings: LocalSettingRepository;
   /** CLI Agent HTTP Bearer Token 仓储。 */
   agent_tokens: AgentTokenRepository;
 }
@@ -45,13 +44,12 @@ export function create_cli_local_data(root_path_input?: string): CliLocalData {
   const database = new LocalDatabase({ filename: get_local_database_path(root_path) });
   ensure_local_schema(database);
   ensure_cli_local_schema(database);
-  const crypto_adapter = new LocalCrypto(root_path);
-  const secure_settings = new SecureSettingRepository(database, crypto_adapter);
-  const workspaces = new WorkspaceRepository(database, crypto_adapter);
+  const settings = new LocalSettingRepository(database);
+  const workspaces = new WorkspaceRepository(database);
   const agents = new AgentRepository(root_path);
   const plugins = new PluginRepository(root_path);
   const agent_tokens = new AgentTokenRepository(database);
-  return { root_path, database, agents, workspaces, plugins, secure_settings, agent_tokens };
+  return { root_path, database, agents, workspaces, plugins, settings, agent_tokens };
 }
 
 /** 在短连接本地数据依赖上执行同步操作。 */

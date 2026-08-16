@@ -56,7 +56,7 @@ export function normalize_federation_url(value: string): string {
  */
 export function read_downcity_config(): DowncityConfig {
   return with_cli_local_data((data) =>
-    normalize_downcity_config(data.secure_settings.get<DowncityConfig>(DOWNCITY_CONFIG_KEY))
+    normalize_downcity_config(data.settings.get<DowncityConfig>(DOWNCITY_CONFIG_KEY))
   );
 }
 
@@ -65,7 +65,7 @@ export function read_downcity_config(): DowncityConfig {
  */
 export function write_downcity_config(state: DowncityConfig): void {
   with_cli_local_data((data) =>
-    data.secure_settings.set(DOWNCITY_CONFIG_KEY, normalize_downcity_config(state))
+    data.settings.set(DOWNCITY_CONFIG_KEY, normalize_downcity_config(state))
   );
 }
 
@@ -238,7 +238,7 @@ function derive_federation_name(federation_url: string): string {
 
 function read_federation_admin_config(): FederationAdminConfig {
   return with_cli_local_data((data) =>
-    data.secure_settings.get<FederationAdminConfig>(FEDERATION_CONFIG_KEY) ?? {}
+    data.settings.get<FederationAdminConfig>(FEDERATION_CONFIG_KEY) ?? {}
   );
 }
 

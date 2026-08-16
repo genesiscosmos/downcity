@@ -276,7 +276,7 @@ Plugin 以全局稳定 ID 为身份，定义与配置保存在 `~/.downcity/plug
 
 Agent 通过 `agent.json` 选择 Plugin 与可选 profile。Plugin profile 可以包含渠道、账号、端点等 Plugin 自己定义的结构；配置 Schema 与默认值由 Plugin definition 拥有，TOML 只保存 profile 值，TypeScript 类型由 Plugin 代码独立维护。框架不定义 Binding、Resource 或 Installation 持久化领域。内置与第三方 Plugin 都按稳定 ID、JSON Schema 与 Plugin constructor 进入 Loader；第三方入口通过 `plugin` 直接导出 constructor，不增加公开工厂协议，Definition ID 同时是目录名和 Registry key。
 
-`downcity.db` 继续保存 Workspace 索引、平台安全设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。
+`downcity.db` 继续保存 Workspace 索引、平台设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。Workspace 与平台设置以明文 JSON 保存，本地隔离依赖数据库文件权限。
 
 Workspace 只保证底层文件和 Shell 安全边界，不为 Plugin 的业务行为负责。Plugin 的业务权限、账号、网络访问与语义校验由 Plugin 或宿主管理。
 

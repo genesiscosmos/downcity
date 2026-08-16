@@ -19,7 +19,7 @@ city reset --yes                 # 跳过确认
 
 CLI City 使用一个 HTTP 端口和一个原生 TCP RPC 端口，并在两个协议内按 `agent_id` 路由全部 Agent。
 
-`city reset` 会先停止 CLI City daemon，再删除 `downcity.db`、`downcity.db-wal` 和 `downcity.db-shm`。它不会删除 `.env`、加密密钥、Plugin 制品或 Workspace 中的 Session 文件。
+`city reset` 会先停止 CLI City daemon，再删除 `downcity.db`、`downcity.db-wal` 和 `downcity.db-shm`。它不会删除 `.env`、Agent/Plugin 配置或 Workspace 中的 Session 文件。
 
 ## Agent
 

@@ -69,11 +69,11 @@ test("City reset 只删除 SQLite 数据库文件", async () => {
   const database_path = path.join(platform_root, "downcity.db");
   const preserved_files = [
     path.join(platform_root, ".env"),
-    path.join(platform_root, "main", "model-db.key"),
+    path.join(platform_root, "agents", "keep", "agent.json"),
     path.join(platform_root, "plugins", "keep.txt"),
   ];
   try {
-    fs.mkdirSync(path.join(platform_root, "main"), { recursive: true });
+    fs.mkdirSync(path.join(platform_root, "agents", "keep"), { recursive: true });
     fs.mkdirSync(path.join(platform_root, "plugins"), { recursive: true });
     for (const file_path of [database_path, `${database_path}-wal`, `${database_path}-shm`, ...preserved_files]) {
       fs.writeFileSync(file_path, "keep");
@@ -142,7 +142,6 @@ test("Agent 文件定义与 Workspace 数据库索引独立管理", async () => 
 test("Embassy 只接受新的 Federation 身份环境变量", async () => {
   const platform_root = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
-  process.env.DC_MODEL_DB_KEY = "embassy-session-env-test";
   try {
     const { EmbassySessionResolver } = await import("../bin/city/shared/EmbassySessionResolver.js");
     const resolver = new EmbassySessionResolver();
@@ -164,7 +163,6 @@ test("Embassy 只接受新的 Federation 身份环境变量", async () => {
     assert.equal(legacy.user_token, "");
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
-    delete process.env.DC_MODEL_DB_KEY;
     fs.rmSync(platform_root, { recursive: true, force: true });
   }
 });

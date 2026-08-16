@@ -1,6 +1,6 @@
 ---
 title: Security and Permissions Overview
-description: User-facing security model for isolation, Chat Access, and secret protection
+description: User-facing security model for isolation, Chat Access, and local configuration permissions
 ---
 
 # Security and Permissions Overview
@@ -9,17 +9,17 @@ Downcity security has three layers:
 
 1. Agent isolation: one running agent is bound to one `projectRoot`.
 2. Chat Access: per-Agent grants decide which external Chat users can send messages into the Agent.
-3. Data protection: model provider `apiKey` is encrypted in `~/.downcity/downcity.db`.
+3. Local configuration: model, Workspace, Agent, and Plugin configuration is stored on the local machine and primarily isolated by file permissions.
 
 ## What to watch first
 
 1. Avoid stale `DC_CITY_HOST/DC_CITY_PORT` in your shell, or requests may hit the wrong agent.
 2. New users cannot enter an Agent by default, so review pending Access Requests after enabling a channel.
-3. In production, prefer `DC_MODEL_DB_KEY` from secret management.
+3. Local configuration is plaintext. Do not copy `~/.downcity`, Agent configuration, or Plugin configuration to untrusted locations.
 
 ## Recommended reading
 
 1. [API Authentication](/en/docs/security/api-authentication)
 2. [Permissions](/en/docs/security/permissions)
-3. [Data Security and Keys](/en/docs/security/data-security)
+3. [Data Storage and Permissions](/en/docs/security/data-security)
 4. [Invocation Routing and Isolation](/en/docs/concepts/invocation-routing-and-isolation)

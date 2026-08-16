@@ -31,6 +31,8 @@ export class LocalDatabase implements LocalDatabaseTransaction {
     const filename = path.resolve(filename_input);
     fs.ensureDirSync(path.dirname(filename));
     this.sqlite = new DatabaseSync(filename);
+    // 本地配置为明文数据，数据库文件只允许当前用户读写。
+    fs.chmodSync(filename, 0o600);
     this.sqlite.exec("PRAGMA busy_timeout = 5000;");
     this.sqlite.exec("PRAGMA foreign_keys = ON;");
     if (options.wal !== false) this.sqlite.exec("PRAGMA journal_mode = WAL;");

@@ -46,13 +46,13 @@ export class DesktopUserController {
   async switch_account(account_id: string): Promise<DesktopUserSummary> {
     if (this.has_active_sessions()) throw new Error("当前有执行中的对话，完成或停止后才能切换账户");
     const vault = this.read_vault(); const account = vault.accounts[account_id]; if (!account) throw new Error("账户不存在");
-    const next = { ...account, last_used_at: Date.now() }; this.data.secure_settings.set(vault_key, { ...vault, active_account_id: account_id, accounts: { ...vault.accounts, [account_id]: next } }); this.write_active_config(next); return this.current();
+    const next = { ...account, last_used_at: Date.now() }; this.data.settings.set(vault_key, { ...vault, active_account_id: account_id, accounts: { ...vault.accounts, [account_id]: next } }); this.write_active_config(next); return this.current();
   }
   async remove_account(account_id: string): Promise<DesktopUserSummary> {
     if (this.has_active_sessions()) throw new Error("当前有执行中的对话，完成或停止后才能移除账户");
     const vault = this.read_vault(); if (!vault.accounts[account_id]) throw new Error("账户不存在"); const accounts = { ...vault.accounts }; delete accounts[account_id];
     const next = vault.active_account_id === account_id ? Object.values(accounts).sort((a, b) => b.last_used_at - a.last_used_at)[0] : accounts[vault.active_account_id || ""];
-    this.data.secure_settings.set(vault_key, { accounts, ...(next ? { active_account_id: next.account_id } : {}) }); if (next) this.write_active_config(next); else this.clear_active_config(); return this.current();
+    this.data.settings.set(vault_key, { accounts, ...(next ? { active_account_id: next.account_id } : {}) }); if (next) this.write_active_config(next); else this.clear_active_config(); return this.current();
   }
   async logout(): Promise<DesktopUserSummary> { if (read_string(process.env.DOWNCITY_USER_TOKEN)) throw new Error("当前用户 Token 来自 DOWNCITY_USER_TOKEN 环境变量，无法在 Desktop 中退出"); const active = this.read_active_account(); return active ? this.remove_account(active.account_id) : { authenticated: false, federation_url: this.read_identity().federation_url }; }
   async get_resources(): Promise<DesktopAccountResources> {
@@ -66,14 +66,14 @@ export class DesktopUserController {
   }
   private embassy(account: DesktopStoredAccount): Embassy { return new Embassy({ federation_url: account.federation_url, user_token: account.user_token }); }
   private read_active_account(): DesktopStoredAccount | undefined { const vault = this.read_vault(); return vault.active_account_id ? vault.accounts[vault.active_account_id] : undefined; }
-  private save_account(account: DesktopStoredAccount, remove_account_id?: string): void { const vault = this.read_vault(); const accounts = { ...vault.accounts, [account.account_id]: account }; if (remove_account_id) delete accounts[remove_account_id]; this.data.secure_settings.set(vault_key, { ...vault, active_account_id: account.account_id, accounts }); }
+  private save_account(account: DesktopStoredAccount, remove_account_id?: string): void { const vault = this.read_vault(); const accounts = { ...vault.accounts, [account.account_id]: account }; if (remove_account_id) delete accounts[remove_account_id]; this.data.settings.set(vault_key, { ...vault, active_account_id: account.account_id, accounts }); }
   private read_vault(): DesktopAccountVault {
-    const stored = this.data.secure_settings.get<Partial<DesktopAccountVault>>(vault_key); if (stored?.accounts && typeof stored.accounts === "object") return { active_account_id: stored.active_account_id, accounts: stored.accounts as Record<string, DesktopStoredAccount> };
+    const stored = this.data.settings.get<Partial<DesktopAccountVault>>(vault_key); if (stored?.accounts && typeof stored.accounts === "object") return { active_account_id: stored.active_account_id, accounts: stored.accounts as Record<string, DesktopStoredAccount> };
     const config = this.read_config(); const accounts: Record<string, DesktopStoredAccount> = {}; for (const session of Object.values(config.sessions ?? {})) { const account_id = make_account_id(session.federation_url, session.federation_url); accounts[account_id] = { account_id, federation_url: session.federation_url, user_token: session.user_token, user_id: "", bureau_id: "", last_used_at: Date.now() }; } const selected = config.selected_federation_url ? Object.values(accounts).find((account) => account.federation_url === config.selected_federation_url) : undefined; return { accounts, ...(selected ? { active_account_id: selected.account_id } : {}) };
   }
-  private read_config(): DesktopDowncityConfig { return this.data.secure_settings.get<DesktopDowncityConfig>(config_key) ?? {}; }
-  private write_active_config(account: DesktopStoredAccount): void { const config = this.read_config(); this.data.secure_settings.set(config_key, { ...config, selected_federation_url: account.federation_url, sessions: { ...config.sessions, [account.federation_url]: { federation_url: account.federation_url, user_token: account.user_token } } }); }
-  private clear_active_config(): void { const config = this.read_config(); const sessions = { ...config.sessions }; if (config.selected_federation_url) delete sessions[config.selected_federation_url]; this.data.secure_settings.set(config_key, { ...config, sessions, selected_federation_url: default_federation_url }); }
+  private read_config(): DesktopDowncityConfig { return this.data.settings.get<DesktopDowncityConfig>(config_key) ?? {}; }
+  private write_active_config(account: DesktopStoredAccount): void { const config = this.read_config(); this.data.settings.set(config_key, { ...config, selected_federation_url: account.federation_url, sessions: { ...config.sessions, [account.federation_url]: { federation_url: account.federation_url, user_token: account.user_token } } }); }
+  private clear_active_config(): void { const config = this.read_config(); const sessions = { ...config.sessions }; if (config.selected_federation_url) delete sessions[config.selected_federation_url]; this.data.settings.set(config_key, { ...config, sessions, selected_federation_url: default_federation_url }); }
   private read_identity(): { federation_url: string; user_token?: string } { const config = this.read_config(); const federation_url = normalize_federation_url(read_string(process.env.DOWNCITY_FEDERATION_URL) || read_string(config.selected_federation_url) || default_federation_url); const user_token = read_string(process.env.DOWNCITY_USER_TOKEN) || read_string(config.sessions?.[federation_url]?.user_token); return { federation_url, ...(user_token ? { user_token } : {}) }; }
 }
 

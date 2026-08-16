@@ -34,7 +34,7 @@ export class DesktopSettingsController {
 
   /** 读取当前完整设置。 */
   get(): DesktopSettings {
-    return normalize_settings(this.data.secure_settings.get<Partial<DesktopSettings>>(settings_key));
+    return normalize_settings(this.data.settings.get<Partial<DesktopSettings>>(settings_key));
   }
 
   /** 合并一份受控设置补丁。 */
@@ -42,7 +42,7 @@ export class DesktopSettingsController {
     const current = this.get();
     const next = normalize_settings({ ...current, ...patch });
     if (next.proxy_enabled && !next.proxy_url) throw new Error("启用网络代理前需要填写代理地址");
-    this.data.secure_settings.set(settings_key, next);
+    this.data.settings.set(settings_key, next);
     return next;
   }
 }

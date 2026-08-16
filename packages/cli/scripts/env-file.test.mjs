@@ -43,9 +43,7 @@ test("Agent Env 写入 Workspace，City 未运行时不产生广播目标", asyn
   const workspace_path = path.join(root, "workspace");
   await fs.mkdir(workspace_path);
   const previous_platform_root = process.env.DC_PLATFORM_ROOT;
-  const previous_model_db_key = process.env.DC_MODEL_DB_KEY;
   process.env.DC_PLATFORM_ROOT = path.join(root, "platform");
-  process.env.DC_MODEL_DB_KEY = "downcity-agent-env-target-test";
   try {
     const workspace = create_workspace({ workspace_path });
     create_agent_config({
@@ -61,8 +59,6 @@ test("Agent Env 写入 Workspace，City 未运行时不产生广播目标", asyn
   } finally {
     if (previous_platform_root === undefined) delete process.env.DC_PLATFORM_ROOT;
     else process.env.DC_PLATFORM_ROOT = previous_platform_root;
-    if (previous_model_db_key === undefined) delete process.env.DC_MODEL_DB_KEY;
-    else process.env.DC_MODEL_DB_KEY = previous_model_db_key;
     await fs.rm(root, { recursive: true, force: true });
   }
 });

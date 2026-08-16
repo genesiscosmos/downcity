@@ -2,7 +2,6 @@
 
 import crypto from "node:crypto";
 import path from "node:path";
-import type { LocalCrypto } from "@/database/LocalCrypto.js";
 import type { LocalDatabase } from "@/database/LocalDatabase.js";
 import type { LocalWorkspaceConfig } from "@/types/LocalConfig.js";
 
@@ -12,8 +11,8 @@ interface WorkspaceRow {
   workspace_id: string;
   /** Workspace 路径。 */
   workspace_path: string;
-  /** 加密配置。 */
-  config_encrypted: string;
+  /** 明文 JSON 配置。 */
+  config_json: string;
   /** 创建时间。 */
   created_at: string;
   /** 更新时间。 */
@@ -22,10 +21,7 @@ interface WorkspaceRow {
 
 /** 管理 Workspace 配置和路径唯一性。 */
 export class WorkspaceRepository {
-  constructor(
-    private readonly database: LocalDatabase,
-    private readonly crypto_adapter: LocalCrypto,
-  ) {}
+  constructor(private readonly database: LocalDatabase) {}
 
   /** 创建或读取同一路径 Workspace。 */
   ensure(input: {
@@ -53,12 +49,12 @@ export class WorkspaceRepository {
     };
     this.database.prepare(`
       INSERT INTO workspaces (
-        workspace_id, workspace_path, config_encrypted, created_at, updated_at
+        workspace_id, workspace_path, config_json, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?);
     `).run(
       workspace_id,
       workspace_path,
-      this.crypto_adapter.encrypt(JSON.stringify(config)),
+      JSON.stringify(config),
       current_time,
       current_time,
     );
@@ -68,7 +64,7 @@ export class WorkspaceRepository {
   /** 列出全部 Workspace。 */
   list(): LocalWorkspaceConfig[] {
     const rows = this.database.prepare(`
-      SELECT workspace_id, workspace_path, config_encrypted, created_at, updated_at
+      SELECT workspace_id, workspace_path, config_json, created_at, updated_at
       FROM workspaces ORDER BY workspace_id ASC;
     `).all() as unknown as WorkspaceRow[];
     return rows.map((row) => this.decode(row));
@@ -78,7 +74,7 @@ export class WorkspaceRepository {
   get(workspace_id_input: string): LocalWorkspaceConfig | null {
     const workspace_id = normalize_workspace_id(workspace_id_input);
     const row = this.database.prepare(`
-      SELECT workspace_id, workspace_path, config_encrypted, created_at, updated_at
+      SELECT workspace_id, workspace_path, config_json, created_at, updated_at
       FROM workspaces WHERE workspace_id = ? LIMIT 1;
     `).get(workspace_id) as WorkspaceRow | undefined;
     return row ? this.decode(row) : null;
@@ -88,15 +84,15 @@ export class WorkspaceRepository {
   get_by_path(workspace_path_input: string): LocalWorkspaceConfig | null {
     const workspace_path = path.resolve(String(workspace_path_input || "").trim());
     const row = this.database.prepare(`
-      SELECT workspace_id, workspace_path, config_encrypted, created_at, updated_at
+      SELECT workspace_id, workspace_path, config_json, created_at, updated_at
       FROM workspaces WHERE workspace_path = ? LIMIT 1;
     `).get(workspace_path) as WorkspaceRow | undefined;
     return row ? this.decode(row) : null;
   }
 
-  /** 解密 Workspace 数据库行。 */
+  /** 读取 Workspace 明文 JSON 数据库行。 */
   private decode(row: WorkspaceRow): LocalWorkspaceConfig {
-    const raw = JSON.parse(this.crypto_adapter.decrypt(row.config_encrypted)) as Record<string, unknown>;
+    const raw = JSON.parse(row.config_json) as Record<string, unknown>;
     return {
       workspace_id: row.workspace_id,
       workspace_path: path.resolve(row.workspace_path),

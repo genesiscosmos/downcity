@@ -1,36 +1,30 @@
 ---
-title: Data Security and Keys
-description: Model storage, encryption behavior, and key management guidance
+title: Data Storage and Permissions
+description: Local configuration storage, file permissions, and user guidance
 ---
 
-# Data Security and Keys
+# Data Storage and Permissions
 
-Local CLI state uses encrypted SQLite stores:
+Local CLI and Desktop state use plaintext SQLite/JSON files:
 
-1. City-local state and credentials: `~/.downcity/downcity.db`
-2. Federation admin profiles and session metadata: `~/.downcity/federation.db`
-3. Agent binding is stored in the CLI global DB as `execution.modelId`
+1. Workspace indexes, platform settings, and local tokens: `~/.downcity/downcity.db`
+2. Agent definitions and identity instructions: `~/.downcity/agents/<agent_id>/agent.json` and `SOUL.md`
+3. Plugin definitions and profiles: `~/.downcity/plugins/<plugin_id>/plugin.json` and `config.toml`
 
-## How secrets are protected
+## File Permissions and Boundaries
 
-Provider `apiKey`, channel credentials, user sessions, and Federation administrator metadata are not stored in plaintext. Passwords are stored as PBKDF2 digests; session tokens are stored hashed or encrypted before being written to local SQLite stores.
+Database files, Agent configuration directories, and Plugin configuration files are restricted to the current user by default (`0600` for files and `0700` for directories). This is not encrypted storage: a process that can read the local user's files can also read these configurations.
 
 `city env` is an explicit file-based configuration feature. Global Env is stored in plaintext at
 `~/.downcity/.env`, and Workspace Env is stored in plaintext in the project `.env`. The Global file
 is restricted to the current user, and project `.env` is added to `.gitignore` by default. Use the
 launch environment or a secret manager when stronger secret protection is required.
 
-Key source priority:
-
-1. `DC_MODEL_DB_KEY`
-2. `~/.downcity/main/model-db.key`
-
 ## Best practices
 
-1. Never commit `~/.downcity` or any key material.
-2. Use a secret manager to inject `DC_MODEL_DB_KEY` in team/production environments.
-3. After key rotation, validate model connectivity through CLI and one real invocation.
-4. Never commit Workspace `.env`, and keep `~/.downcity/.env` accessible only to your user account.
+1. Never commit `~/.downcity` or local configuration files.
+2. Never commit Workspace `.env`, and keep `~/.downcity/.env` accessible only to your user account.
+3. Use process environment variables or an operating-system secret manager when stronger protection is required.
 
 ## Related docs
 
