@@ -8,11 +8,11 @@
 import {
   normalize_plugin_id as normalize_local_plugin_id,
   normalize_profile_id,
-  type LocalInstalledPlugin,
+  type LocalInstalledPluginDefinition,
 } from "@downcity/local/product";
 import type { JsonObject } from "@downcity/agent";
 import { with_cli_local_data } from "@/city/runtime/LocalData.js";
-import { create_cli_builtin_plugin_types } from "@/city/runtime/AgentAssembly.js";
+import { create_cli_builtin_plugin_registrations } from "@/city/runtime/AgentAssembly.js";
 import { get_plugin_catalog_item } from "@/city/process/plugin/PluginCatalog.js";
 import { validate_plugin_config } from "@/city/process/plugin/PluginConfigValidator.js";
 import type {
@@ -22,7 +22,7 @@ import type {
 
 /** City 导出的全部内建 Plugin ID。 */
 export const BUILTIN_PLUGIN_IDS = Object.freeze(
-  create_cli_builtin_plugin_types().map((plugin_type) => plugin_type.manifest.name),
+  create_cli_builtin_plugin_registrations().map((registration) => registration.definition.id),
 );
 
 /** 规范化 Plugin 稳定 ID。 */
@@ -36,23 +36,18 @@ export function is_builtin_plugin(plugin_id_input: string): boolean {
 }
 
 /** 列出全部第三方 Plugin。 */
-export function list_installed_plugins(): LocalInstalledPlugin[] {
+export function list_installed_plugins(): LocalInstalledPluginDefinition[] {
   return with_cli_local_data((data) => data.plugins.list_installed());
 }
 
 /** 读取指定第三方 Plugin。 */
-export function get_installed_plugin(plugin_id_input: string): LocalInstalledPlugin | null {
+export function get_installed_plugin(plugin_id_input: string): LocalInstalledPluginDefinition | null {
   const plugin_id = normalize_plugin_id(plugin_id_input);
   return with_cli_local_data((data) => data.plugins.get_installed(plugin_id));
 }
 
-/** 保存第三方 Plugin 描述。 */
-export function save_installed_plugin(input: LocalInstalledPlugin): LocalInstalledPlugin {
-  return with_cli_local_data((data) => data.plugins.save_installed(input));
-}
-
 /** 删除一个没有 Agent 引用的第三方 Plugin 目录。 */
-export function remove_installed_plugin(plugin_id_input: string): LocalInstalledPlugin {
+export function remove_installed_plugin(plugin_id_input: string): LocalInstalledPluginDefinition {
   const plugin_id = normalize_plugin_id(plugin_id_input);
   if (is_builtin_plugin(plugin_id)) throw new Error("Builtin Plugins cannot be uninstalled");
   const installed = get_installed_plugin(plugin_id);

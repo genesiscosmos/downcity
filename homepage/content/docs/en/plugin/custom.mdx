@@ -5,17 +5,18 @@ description: Build, publish, and configure an installable Downcity Plugin
 
 # Custom Plugin
 
-A third-party artifact defines exactly one Plugin. The Plugin's globally unique ID is also its final directory name, Agent reference key, and runtime Registry key.
+A third-party directory defines exactly one Plugin. The Plugin's globally unique ID is also its final directory name, Agent reference key, and runtime Registry key.
 
-## Artifact structure
+## Directory structure
 
 ```text
 github-plugin/
-├── downcity.plugin.json
+├── plugin.json
+├── package.json
 └── dist/index.js
 ```
 
-The ESM entry exports one named constructor:
+The ESM entry exports the Plugin constructor as the named `plugin` export:
 
 ```ts
 export const plugin = GithubPlugin;
@@ -24,62 +25,58 @@ export const plugin = GithubPlugin;
 ## Plugin constructor
 
 ```ts
-import type { JsonObject } from "@downcity/agent";
+import type { Plugin, PluginActions } from "@downcity/agent";
+import { z } from "zod";
 
-export class GithubPlugin {
-  static readonly manifest = {
-    name: "github",
-    version: "1.0.0",
-    title: "GitHub",
-    description: "GitHub integration",
-    config: {
-      schema: GITHUB_PROFILE_JSON_SCHEMA,
-      defaults: { api_url: "https://api.github.com" },
-    },
-  };
+const github_config_type = z.object({
+  api_url: z.url().default("https://api.github.com").meta({ title: "API URL" }),
+  token: z.string().min(1).meta({ title: "Token", writeOnly: true }),
+}).strict();
+
+export type GithubPluginConfig = z.infer<typeof github_config_type>;
+
+export class GithubPlugin implements Plugin {
+  static readonly type = { config: github_config_type };
 
   readonly name = "github";
-  readonly actions = {};
+  readonly title = "GitHub";
+  readonly description = "GitHub integration";
+  readonly actions: PluginActions;
 
-  constructor({ config }: { config: JsonObject }) {
-    // config is the complete profile selected by the Agent.
+  constructor({ config }: { config: GithubPluginConfig }) {
+    this.actions = {};
   }
 }
+
+export const plugin = GithubPlugin;
 ```
 
-The instance `name`, static `manifest.name`, installation Manifest `id`, and directory name must match. Runtime construction is always:
+The instance `name`, `plugin.json` `id`, directory name, and Agent reference must match. The constructor does not repeat a `static manifest`; `type.config` is the only source of truth for profile types, defaults, and validation. Builtin and third-party Plugins resolve to the same runtime registration protocol:
 
 ```ts
-new GithubPlugin({ config: selected_profile });
+new PluginConstructor({ config: selected_profile });
 ```
 
-Accounts, tokens, endpoints, and other structures belong directly to the profile Schema. There is no framework-level Binding, Resource, Resolver, or Installation domain.
+The Loader first runs `PluginConstructor.type.config.parse(raw_profile)` and then passes the complete parsed configuration to the constructor. Accounts, tokens, endpoints, and other structures belong directly to the Zod type. There is no framework-level Binding, Resource, Resolver, or Installation domain.
 
-## Static manifest
+## Plugin definition
 
-Installation reads a v4 static file without executing third-party code:
+The source directory contains one `plugin.json`:
 
 ```json
 {
-  "manifest_version": 4,
+  "schema_version": 1,
   "id": "github",
   "version": "1.0.0",
   "title": "GitHub",
   "description": "GitHub integration",
-  "entry": "dist/index.js",
-  "config": {
-    "schema": {
-      "type": "object",
-      "properties": {
-        "api_url": { "type": "string", "format": "uri" },
-        "token": { "type": "string", "writeOnly": true }
-      },
-      "additionalProperties": false
-    },
-    "defaults": { "api_url": "https://api.github.com" }
-  }
+  "entry": "dist/index.js"
 }
 ```
+
+Plugin authors do not write JSON Schema. The installer derives an input JSON Schema and available defaults from `type.config`, then writes that snapshot together with `source`, `revision`, `integrity`, and timestamps into the installed `plugin.json`. It does not generate a second Manifest.
+
+The `entry` must be a self-contained ESM artifact. Bundle runtime Zod usage into `dist/index.js`; the installer does not install dependencies.
 
 The installed layout is deterministic:
 
@@ -87,10 +84,21 @@ The installed layout is deterministic:
 ~/.downcity/plugins/github/
 ├── plugin.json
 ├── config.toml
-└── artifact/
+├── package.json
+└── dist/index.js
 ```
 
-`config.toml` contains named plaintext profiles and uses file mode `0600`. CLI and Desktop redact Schema fields marked `writeOnly` when displaying configuration.
+`config.toml` contains only named plaintext profile values and uses file mode `0600`. CLI and Desktop build forms from the Zod-generated Schema and redact fields marked with `.meta({ writeOnly: true })`. Zod `.default()` fills fields omitted from TOML.
+
+```toml
+schema_version = 1
+
+[profiles.production]
+api_url = "https://api.github.com"
+token = "plain-local-token"
+```
+
+An explicitly selected missing profile is an error. Without an explicit selection, Downcity reads the `default` profile and passes `{}` to Zod when that profile does not exist.
 
 ## Install and configure
 
@@ -102,9 +110,9 @@ city plugin update github
 city plugin uninstall github
 ```
 
-Updates replace only `plugin.json` and `artifact/`, preserving `config.toml`. The CLI rejects an update when saved profiles fail the new Schema, and rejects profile or Plugin removal while an Agent still references it.
+Updates atomically replace the complete Plugin directory while preserving `config.toml`. The CLI rejects an update when saved profiles fail the new Schema, and rejects profile or Plugin removal while an Agent still references it.
 
-Installation never runs `npm install`, build scripts, lifecycle scripts, or the Plugin entry. It records the resolved Git commit and SHA-256 artifact digest. The entry executes when an Agent loads the Plugin, so install only trusted sources.
+Installation does not run `npm install`, build scripts, or Plugin lifecycle hooks. The installer imports the entry to validate the `plugin` constructor, so module-level code executes, but the constructor is not called. Static code and resources receive a SHA-256 digest; install only trusted sources.
 
 Continue with:
 

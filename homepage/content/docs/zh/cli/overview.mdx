@@ -16,7 +16,7 @@ Agent 与 Workspace 是两个独立的全局实体。Agent 由 `agent_id` 标识
 
 Federation Admin 配置与 Embassy User Session 也统一保存在 `~/.downcity/downcity.db`。升级后，旧 `~/.downcity/federation.db` 中的管理配置会被一次性迁入；旧文件保留用于人工恢复，但运行时不再读取。
 
-每个 Plugin 使用稳定 ID 对应 `~/.downcity/plugins/<plugin_id>/`。明文 profile 位于 `config.toml`；第三方代码位于 `artifact/`，规范化描述位于 `plugin.json`。Agent 在自己的 `agent.json` 中注册 Plugin 并选择可选 profile。`downcity.db` 只保存 Workspace 索引、Token 和平台状态，不保存 Agent 或 Plugin 配置。
+每个 Plugin 使用稳定 ID 对应 `~/.downcity/plugins/<plugin_id>/`。明文 profile 位于 `config.toml`；第三方 Plugin 的唯一 `plugin.json`、代码与资源直接位于该目录。Agent 在自己的 `agent.json` 中注册 Plugin 并选择可选 profile。`downcity.db` 只保存 Workspace 索引、Token 和平台状态，不保存 Agent 或 Plugin 配置。
 
 ## City 命令
 

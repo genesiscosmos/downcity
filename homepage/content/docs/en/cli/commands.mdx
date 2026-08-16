@@ -82,9 +82,9 @@ city plugin enabled [agent_id]
 city plugin action <plugin_id> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
-A third-party artifact defines exactly one Plugin. Its v4 `downcity.plugin.json` declares a globally unique `id`, version, self-contained ESM entry, and optional profile Schema. The entry exports one named `plugin` constructor. The final directory is always `~/.downcity/plugins/<plugin_id>/`; installation never runs `npm install`, build scripts, lifecycle scripts, or the Plugin entry.
+A third-party directory defines exactly one Plugin. Its `plugin.json` declares `schema_version: 1`, a globally unique `id`, version, and self-contained ESM entry. The entry exports a Plugin constructor as the named `plugin` export; configurable Plugins declare a Zod type through `static type.config`. Code and resources live directly in `~/.downcity/plugins/<plugin_id>/` without an `artifact/` layer. Installation never runs `npm install`, build scripts, or Plugin lifecycle hooks, but it imports the entry to validate the constructor and Zod type.
 
-Plugin configuration belongs to named profiles in `plugins/<plugin_id>/config.toml`. Accounts, channels, endpoints, and other structures are defined directly by that Plugin's profile Schema. Configuration is plaintext with file mode `0600`; fields marked `writeOnly` are redacted in command output. The CLI executes `new PluginType({ config: selected_profile })`.
+Plugin configuration belongs to named profiles in `plugins/<plugin_id>/config.toml`. Accounts, channels, endpoints, and other structures are defined directly by that Plugin's Zod type. Configuration is plaintext with file mode `0600`; CLI builds forms from the generated JSON Schema and redacts `writeOnly` fields. The Loader runs Zod `parse()` before invoking the constructor.
 
 The Agent's `agent.json` stores only the Plugin ID and optional profile reference. Removing that entry disables the Plugin. A profile or third-party Plugin cannot be removed while an Agent still references it.
 

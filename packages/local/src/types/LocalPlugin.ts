@@ -1,49 +1,63 @@
-/** 本地文件型 Plugin 定义与配置协议。 */
+/** 本地文件型 Plugin 定义、注册与配置协议。 */
 
-import type { JsonObject } from "@downcity/agent";
+import type { JsonObject, Plugin } from "@downcity/agent";
+import type { ZodType } from "zod";
 
-/** Plugin constructor 对外声明的静态 Manifest。 */
-export interface LocalPluginManifest {
-  /** Plugin 的全局稳定 ID。 */
-  name: string;
-  /** 可选 Plugin 语义化版本号。 */
-  version?: string;
-  /** 面向用户展示的标题。 */
-  title?: string;
-  /** 面向用户展示的用途说明。 */
-  description: string;
-  /** Plugin profile 的 Schema 与默认值。 */
-  config?: {
-    /** 完整 JSON Schema。 */
-    schema: JsonObject;
-    /** `default` profile 不存在时使用的完整默认配置。 */
-    defaults?: JsonObject;
-  };
+/** 安装器从 Zod 生成的 Plugin 配置展示快照。 */
+export interface LocalPluginConfigDefinition {
+  /** 供 Catalog、CLI 与 Desktop 使用的完整 JSON Schema。 */
+  schema: JsonObject;
+  /** Zod 能从空对象完整解析时得到的默认配置。 */
+  defaults?: JsonObject;
 }
 
-/** `plugins/<plugin_id>/plugin.json` 中的第三方 Plugin 描述。 */
-export interface LocalInstalledPlugin {
-  /** 文件协议版本。 */
-  schema_version: 1;
-  /** Plugin 的全局稳定 ID，同时也是目录名。 */
+/** 内置与第三方 Plugin 共享的静态领域定义。 */
+export interface LocalPluginDefinition {
+  /** Plugin 的全局稳定 ID。 */
   id: string;
-  /** Plugin 语义化版本号。 */
-  version: string;
   /** 面向用户展示的标题。 */
   title?: string;
   /** 面向用户展示的用途说明。 */
   description: string;
+}
+
+/** Plugin constructor 暴露的运行时类型。 */
+export interface LocalPluginRuntimeType {
+  /** Plugin profile 的唯一 Zod 类型定义。 */
+  config: ZodType;
+}
+
+/** 创建 Agent 独享 Plugin 实例的输入。 */
+export interface LocalPluginCreateInput {
+  /** 已通过 Plugin Zod 类型解析并补齐默认值的完整配置。 */
+  config: JsonObject;
+}
+
+/** 内置与第三方 Plugin 共享的运行注册协议。 */
+export interface LocalPluginRegistration {
+  /** Plugin 的唯一静态定义。 */
+  definition: LocalPluginDefinition;
+  /** Plugin 的运行时配置类型；无配置 Plugin 可以省略。 */
+  type?: LocalPluginRuntimeType;
+  /** 创建一个归当前 Agent 所有的 Plugin 实例。 */
+  create(input: LocalPluginCreateInput): Plugin;
+}
+
+/** `plugins/<plugin_id>/plugin.json` 中的第三方 Plugin 定义。 */
+export interface LocalInstalledPluginDefinition extends LocalPluginDefinition {
+  /** 文件协议版本。 */
+  schema_version: 1;
+  /** Plugin 语义化版本号。 */
+  version: string;
+  /** 相对 Plugin 目录的自包含 ESM 入口。 */
+  entry: string;
+  /** 安装器从 constructor Zod 类型生成的展示快照。 */
+  config?: LocalPluginConfigDefinition;
   /** 可供更新命令重放的规范化来源。 */
   source: string;
   /** Git 来源解析得到的 commit SHA。 */
-  resolved_commit?: string;
-  /** 相对 Plugin 目录的 ESM 入口。 */
-  entry: string;
-  /** Plugin profile 的完整 JSON Schema。 */
-  config_schema?: JsonObject;
-  /** `default` profile 不存在时使用的默认配置。 */
-  default_config?: JsonObject;
-  /** `artifact/` 制品内容摘要。 */
+  revision?: string;
+  /** 除 `plugin.json` 与 `config.toml` 外静态文件的内容摘要。 */
   integrity: string;
   /** 首次安装时间。 */
   installed_at: string;

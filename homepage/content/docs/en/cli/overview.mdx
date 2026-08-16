@@ -16,7 +16,7 @@ Agents and Workspaces are independent global entities. An Agent is identified by
 
 Federation Admin configuration and Embassy User Sessions also live in `~/.downcity/downcity.db`. On upgrade, administration configuration in the legacy `~/.downcity/federation.db` is migrated once. The old file remains available for manual recovery but is no longer read at runtime.
 
-Each Plugin uses its stable ID as `~/.downcity/plugins/<plugin_id>/`. Its plaintext profiles live in `config.toml`; third-party code lives in `artifact/` with a normalized `plugin.json`. An Agent registers a Plugin and selects an optional profile in its own `agent.json`. `downcity.db` stores Workspace indexes, tokens, and platform state, not Agent or Plugin configuration.
+Each Plugin uses its stable ID as `~/.downcity/plugins/<plugin_id>/`. Its plaintext profiles live in `config.toml`; a third-party Plugin's single `plugin.json`, code, and resources live directly in that directory. An Agent registers a Plugin and selects an optional profile in its own `agent.json`. `downcity.db` stores Workspace indexes, tokens, and platform state, not Agent or Plugin configuration.
 
 ## City commands
 

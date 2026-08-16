@@ -16,7 +16,7 @@ import {
 } from "@/runtime/LocalPaths.js";
 import { normalize_plugin_id } from "@/repositories/AgentRepository.js";
 import type {
-  LocalInstalledPlugin,
+  LocalInstalledPluginDefinition,
   LocalPluginConfig,
 } from "@/types/LocalPlugin.js";
 
@@ -32,48 +32,41 @@ export class PluginRepository {
     this.root_path = resolve_local_root_path(root_path_input);
   }
 
-  /** 列出全部第三方 Plugin 描述。 */
-  list_installed(): LocalInstalledPlugin[] {
+  /** 列出全部第三方 Plugin 定义。 */
+  list_installed(): LocalInstalledPluginDefinition[] {
     const plugins_path = get_local_plugins_path(this.root_path);
     if (!fs.pathExistsSync(plugins_path)) return [];
     return fs.readdirSync(plugins_path, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
       .map((entry) => this.get_installed(entry.name))
-      .filter((item): item is LocalInstalledPlugin => item !== null)
+      .filter((item): item is LocalInstalledPluginDefinition => item !== null)
       .sort((left, right) => left.id.localeCompare(right.id));
   }
 
-  /** 按 Plugin ID 读取第三方描述；内置 Plugin 没有该文件。 */
-  get_installed(plugin_id_input: string): LocalInstalledPlugin | null {
+  /** 按 Plugin ID 读取第三方定义；内置 Plugin 没有该文件。 */
+  get_installed(plugin_id_input: string): LocalInstalledPluginDefinition | null {
     const plugin_id = normalize_plugin_id(plugin_id_input);
     const file_path = this.plugin_file_path(plugin_id);
     if (!fs.pathExistsSync(file_path)) return null;
-    const value = JSON.parse(fs.readFileSync(file_path, "utf8")) as LocalInstalledPlugin;
+    const value = JSON.parse(fs.readFileSync(file_path, "utf8")) as LocalInstalledPluginDefinition;
     if (
       value.schema_version !== 1
       || value.id !== plugin_id
       || !value.version
       || !value.description
       || !value.entry
+      || !value.source
+      || !value.integrity
+      || !value.installed_at
+      || !value.updated_at
+      || (
+        value.config !== undefined
+        && (!is_plain_object(value.config) || !is_plain_object(value.config.schema))
+      )
     ) {
       throw new Error(`Invalid installed Plugin definition: ${plugin_id}`);
     }
     return structuredClone(value);
-  }
-
-  /** 原子保存第三方 Plugin 描述。 */
-  save_installed(input: LocalInstalledPlugin): LocalInstalledPlugin {
-    const plugin_id = normalize_plugin_id(input.id);
-    const descriptor: LocalInstalledPlugin = {
-      ...structuredClone(input),
-      schema_version: 1,
-      id: plugin_id,
-    };
-    this.write_atomic(
-      this.plugin_file_path(plugin_id),
-      `${JSON.stringify(descriptor, null, 2)}\n`,
-    );
-    return descriptor;
   }
 
   /** 删除整个第三方 Plugin；调用方必须先完成 Agent 引用检查。 */

@@ -22,12 +22,19 @@ export type {
   LocalWorkspaceConfig,
 } from "./types/LocalConfig.js";
 export type {
-  LocalInstalledPlugin,
+  LocalInstalledPluginDefinition,
   LocalPluginConfig,
-  LocalPluginManifest,
+  LocalPluginConfigDefinition,
+  LocalPluginCreateInput,
+  LocalPluginDefinition,
+  LocalPluginRegistration,
+  LocalPluginRuntimeType,
 } from "./types/LocalPlugin.js";
+export {
+  create_local_plugin_config_definition,
+  is_zod_plugin_config_type,
+  parse_local_plugin_config,
+} from "./runtime/LocalPluginConfigType.js";
 export type {
   LocalPluginLoaderOptions,
-  LocalPluginConstructorInput,
-  LocalPluginType,
 } from "./types/LocalRuntime.js";

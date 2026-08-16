@@ -644,12 +644,6 @@ importers:
       '@downcity/agent':
         specifier: workspace:^
         version: link:../agent
-      ajv:
-        specifier: ^8.20.0
-        version: 8.20.0
-      ajv-formats:
-        specifier: ^3.0.1
-        version: 3.0.1(ajv@8.20.0)
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -659,6 +653,9 @@ importers:
       smol-toml:
         specifier: ^1.7.1
         version: 1.7.1
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/fs-extra':
         specifier: ^11.0.4

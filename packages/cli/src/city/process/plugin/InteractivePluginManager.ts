@@ -89,7 +89,7 @@ async function run_interactive_plugin_actions(plugin: PluginCatalogItem): Promis
       { title: "注册到 Agent", description: "选择 Agent 和 profile", value: "agent" },
       ...(plugin.source === "installed"
         ? [
-            { title: "更新", description: "从已保存来源更新 artifact", value: "update" },
+            { title: "更新", description: "从已保存来源更新 Plugin", value: "update" },
             { title: "卸载", description: "删除未被 Agent 引用的 Plugin", value: "uninstall" },
           ]
         : []),

@@ -1,13 +1,17 @@
-/** 第三方 Plugin 的单制品定义与运行协议。 */
+/** 第三方 Plugin 的单目录定义与运行协议。 */
 
-import type { JsonObject, Plugin } from "@downcity/agent";
-import type { LocalInstalledPlugin } from "@downcity/local/product";
+import type {
+  LocalInstalledPluginDefinition,
+  LocalPluginConfigDefinition,
+  LocalPluginDefinition,
+  LocalPluginRegistration,
+} from "@downcity/local/product";
 
-/** Plugin 源目录中的静态清单文件名。 */
-export const PLUGIN_MANIFEST_FILE_NAME = "downcity.plugin.json";
+/** Plugin 源目录与安装目录共享的清单文件名。 */
+export const PLUGIN_DEFINITION_FILE_NAME = "plugin.json";
 
-/** 当前支持的单 Plugin 清单协议版本。 */
-export const PLUGIN_MANIFEST_VERSION = 4;
+/** 当前支持的 Plugin 文件协议版本。 */
+export const PLUGIN_DEFINITION_SCHEMA_VERSION = 1;
 
 /** 安装器解析后的 Plugin 来源。 */
 export interface ResolvedPluginSource {
@@ -21,50 +25,21 @@ export interface ResolvedPluginSource {
   git_ref?: string;
 }
 
-/** Plugin profile 的配置协议。 */
-export interface PluginConfigManifest {
-  /** 完整 JSON Schema 2020-12 协议。 */
-  schema: JsonObject;
-  /** `default` profile 不存在时使用的完整默认配置。 */
-  defaults?: JsonObject;
-}
-
-/** 源制品声明的唯一 Plugin。 */
-export interface PluginManifest {
-  /** 清单协议版本。 */
-  manifest_version: 4;
-  /** Plugin 的全局稳定 ID。 */
-  id: string;
+/** 源目录 `plugin.json` 必须声明的可安装 Plugin。 */
+export interface PluginPackageDefinition extends LocalPluginDefinition {
+  /** 文件协议版本。 */
+  schema_version: 1;
   /** Plugin 语义化版本号。 */
   version: string;
-  /** 用户可见标题。 */
-  title?: string;
-  /** 非空用途说明。 */
-  description: string;
-  /** 相对制品根目录的自包含 ESM 入口。 */
+  /** 相对 Plugin 根目录的自包含 ESM 入口。 */
   entry: string;
-  /** 可选 profile Schema 与默认值。 */
-  config?: PluginConfigManifest;
 }
 
-/** CLI 可以统一实例化的 Plugin constructor。 */
-export interface PluginType {
-  /** 使用已校验 profile 创建 Agent 独享实例。 */
-  new(input: { /** 完整 Plugin profile。 */ config: JsonObject }): Plugin;
-  /** constructor 自带的静态 Manifest。 */
-  readonly manifest: {
-    /** Plugin 的稳定 ID。 */
-    name: string;
-    /** 可选语义化版本号。 */
-    version?: string;
-    /** 可选用户可见标题。 */
-    title?: string;
-    /** 非空用途说明。 */
-    description: string;
-    /** 可选 profile Schema 与默认值。 */
-    config?: PluginConfigManifest;
-  };
-}
+/** Plugin profile 的公开配置协议。 */
+export type PluginConfigDefinition = LocalPluginConfigDefinition;
+
+/** CLI 可以统一实例化的 Plugin 注册。 */
+export type PluginRegistration = LocalPluginRegistration;
 
 /** 已安装 Plugin 的管理视图。 */
-export type InstalledPlugin = LocalInstalledPlugin;
+export type InstalledPlugin = LocalInstalledPluginDefinition;

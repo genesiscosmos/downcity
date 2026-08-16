@@ -4,21 +4,26 @@ import {
   list_installed_plugins,
   list_plugin_profiles,
 } from "@/city/process/registry/PluginRepository.js";
-import { create_cli_builtin_plugin_types } from "@/city/runtime/AgentAssembly.js";
+import { create_cli_builtin_plugin_registrations } from "@/city/runtime/AgentAssembly.js";
+import { create_local_plugin_config_definition } from "@downcity/local/product";
 import type { PluginCatalogItem } from "@/city/types/plugin/PluginCatalog.js";
 
 /** 列出全部内置与第三方 Plugin。 */
 export function list_plugin_catalog(): PluginCatalogItem[] {
-  const builtin_items = create_cli_builtin_plugin_types().map((plugin_type) => {
-    const manifest = plugin_type.manifest;
+  const builtin_items = create_cli_builtin_plugin_registrations().map((registration) => {
+    const definition = registration.definition;
+    const config = create_local_plugin_config_definition(
+      registration.type?.config,
+      `Plugin ${definition.id} type.config`,
+    );
     return {
-      plugin_id: manifest.name,
-      title: manifest.title || manifest.name,
-      description: manifest.description,
+      plugin_id: definition.id,
+      title: definition.title || definition.id,
+      description: definition.description,
       source: "builtin" as const,
-      ...(manifest.config?.schema ? { config_schema: manifest.config.schema } : {}),
-      default_config: manifest.config?.defaults ?? {},
-      profiles: list_plugin_profiles(manifest.name),
+      ...(config?.schema ? { config_schema: config.schema } : {}),
+      default_config: config?.defaults ?? {},
+      profiles: list_plugin_profiles(definition.id),
     };
   });
   const installed_items = list_installed_plugins().map((plugin) => ({
@@ -28,8 +33,8 @@ export function list_plugin_catalog(): PluginCatalogItem[] {
     version: plugin.version,
     source: "installed" as const,
     source_label: plugin.source,
-    ...(plugin.config_schema ? { config_schema: plugin.config_schema } : {}),
-    default_config: plugin.default_config ?? {},
+    ...(plugin.config?.schema ? { config_schema: plugin.config.schema } : {}),
+    default_config: plugin.config?.defaults ?? {},
     profiles: list_plugin_profiles(plugin.id),
   }));
   return [...builtin_items, ...installed_items]

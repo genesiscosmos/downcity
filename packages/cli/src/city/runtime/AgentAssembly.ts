@@ -10,13 +10,13 @@ import {
   type LocalAgentConfig,
   type LocalWorkspaceConfig,
   type PluginRepository,
-  type LocalPluginType,
+  type LocalPluginRegistration,
 } from "@downcity/local/product";
 import { Agent, type AgentModel, type AgentOptions, Workspace } from "@downcity/agent";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell } from "@downcity/shell";
 import {
-  create_builtin_plugin_types,
+  create_builtin_plugin_registrations,
   type BuiltinPluginAi,
 } from "@downcity/plugins";
 import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
@@ -25,21 +25,21 @@ import { resolve_local_agent_env } from "@downcity/local/product";
 import { resolve_local_root_path } from "@downcity/local";
 import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
 
-/** 创建 CLI 与 Desktop 可共享语义的官方 Plugin constructor 集合。 */
-export function create_cli_builtin_plugin_types(input: {
+/** 创建 CLI 与 Desktop 可共享语义的官方 Plugin 注册集合。 */
+export function create_cli_builtin_plugin_registrations(input: {
   /** Downcity 用户级数据根目录。 */
   root_path?: string;
   /** Contact Plugin 报告的 HTTP 地址。 */
   host?: string;
   /** Contact Plugin 报告的 HTTP 端口。 */
   port?: number;
-} = {}): LocalPluginType[] {
+} = {}): LocalPluginRegistration[] {
   const resolver = new EmbassySessionResolver();
-  return create_builtin_plugin_types({
+  return create_builtin_plugin_registrations({
     platform_root_path: resolve_local_root_path(input.root_path),
     contact_http: { host: input.host, port: input.port },
     resolve_ai: async () => await create_builtin_plugin_ai(resolver),
-  }) as LocalPluginType[];
+  });
 }
 
 /** 创建 CLI 读取本地 Plugin 定义与 profile 的 Loader。 */
@@ -55,7 +55,7 @@ export function create_cli_plugin_loader(input: {
 }): LocalPluginLoader {
   return new LocalPluginLoader({
     plugin_repository: input.plugin_repository,
-    plugin_types: create_cli_builtin_plugin_types(input),
+    plugin_registrations: create_cli_builtin_plugin_registrations(input),
   });
 }
 

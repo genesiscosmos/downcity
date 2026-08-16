@@ -8,6 +8,8 @@ import test from "node:test";
 import Database from "better-sqlite3";
 import { spawnSync } from "node:child_process";
 
+const zod_module_url = import.meta.resolve("zod");
+
 function create_temp_root() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "downcity-config-storage-"));
 }
@@ -16,42 +18,36 @@ function write_plugin_source(root, input = {}) {
   const id = input.id ?? "example";
   const version = input.version ?? "1.0.0";
   const description = input.description ?? "Example Plugin for configuration tests.";
-  const config_schema = input.config_schema ?? {
-    type: "object",
-    required: ["endpoint"],
-    properties: {
-      endpoint: { type: "string" },
-      api_key: { type: "string", writeOnly: true },
-    },
-    additionalProperties: false,
-  };
-  fs.writeFileSync(path.join(root, "downcity.plugin.json"), JSON.stringify({
-    manifest_version: 4,
+  fs.writeFileSync(path.join(root, "plugin.json"), JSON.stringify({
+    schema_version: 1,
     id,
     version,
     description,
     entry: input.entry ?? "index.js",
-    config: { schema: config_schema },
     ...(input.extra_manifest ?? {}),
   }));
   fs.writeFileSync(path.join(root, "index.js"), input.module_source ?? `
-const config_schema = ${JSON.stringify(config_schema)};
+import { z } from ${JSON.stringify(zod_module_url)};
+const config_type = z.object({
+  endpoint: z.string().min(1),
+  api_key: z.string().optional().meta({ writeOnly: true }),
+  timeout_ms: z.number().int().min(1000).default(10000),
+}).strict();
 class ExamplePlugin {
-  static manifest = {
-    name: ${JSON.stringify(input.runtime_id ?? id)},
-    version: ${JSON.stringify(version)},
-    description: ${JSON.stringify(description)},
-    config: { schema: config_schema },
-  };
+  static type = { config: config_type };
   constructor({ config }) {
     this.name = ${JSON.stringify(input.runtime_id ?? id)};
     this.title = "Example";
     this.description = config.endpoint;
+    this.timeout_ms = config.timeout_ms;
     this.actions = {};
   }
 }
 export const plugin = ExamplePlugin;
 `);
+  if (input.source_config) {
+    fs.writeFileSync(path.join(root, "config.toml"), input.source_config);
+  }
 }
 
 test("City reset 只删除 SQLite 数据库文件", async () => {
@@ -204,7 +200,7 @@ test("Agent HTTP Bearer Token 按 Agent 隔离", async () => {
   }
 });
 
-test("第三方 Plugin 使用 Manifest ID 目录和单 constructor", async () => {
+test("第三方 Plugin 使用 definition ID 目录和单 constructor", async () => {
   const platform_root = create_temp_root();
   const plugin_source = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
@@ -219,11 +215,14 @@ test("第三方 Plugin 使用 Manifest ID 目录和单 constructor", async () =>
     agents.create_agent_config({ agent_id: "plugin_agent" });
     const installed = await installer.install_plugin(plugin_source);
     assert.equal(installed.id, "example");
-    assert.equal(installed.entry, "artifact/index.js");
+    assert.equal(installed.entry, "index.js");
     assert.match(installed.integrity, /^sha256-[a-f0-9]{64}$/u);
+    assert.equal(installed.config.schema.properties.api_key.writeOnly, true);
+    assert.deepEqual(installed.config.defaults, undefined);
     const plugin_dir = path.join(platform_root, "plugins", "example");
     assert.equal(fs.existsSync(path.join(plugin_dir, "plugin.json")), true);
-    assert.equal(fs.existsSync(path.join(plugin_dir, "artifact", "index.js")), true);
+    assert.equal(fs.existsSync(path.join(plugin_dir, "index.js")), true);
+    assert.equal(fs.existsSync(path.join(plugin_dir, "artifact")), false);
 
     assert.throws(
       () => plugins.save_plugin_profile("example", "default", {}),
@@ -246,11 +245,15 @@ test("第三方 Plugin 使用 Manifest ID 目录和单 constructor", async () =>
       assert.equal(runtime_plugins.length, 1);
       assert.equal(runtime_plugins[0].name, "example");
       assert.equal(runtime_plugins[0].description, "https://example.com");
+      assert.equal(runtime_plugins[0].timeout_ms, 10000);
     } finally {
       data.database.close();
     }
 
-    write_plugin_source(plugin_source, { version: "1.1.0" });
+    write_plugin_source(plugin_source, {
+      version: "1.1.0",
+      source_config: "schema_version = 1\n[profiles.default]\nendpoint = \"overwritten\"\n",
+    });
     const updated = await installer.update_plugin("example");
     assert.equal(updated.version, "1.1.0");
     assert.match(fs.readFileSync(path.join(plugin_dir, "config.toml"), "utf8"), /plain-secret/u);
@@ -277,8 +280,25 @@ test("Plugin 安装拒绝内置 ID、非法清单与逃逸入口", async () => {
     write_plugin_source(plugin_source, { extra_manifest: { actions: [] } });
     await assert.rejects(() => installer.install_plugin(plugin_source), /unknown field: actions/u);
 
+    write_plugin_source(plugin_source, { extra_manifest: { config: { schema: {} } } });
+    await assert.rejects(() => installer.install_plugin(plugin_source), /unknown field: config/u);
+
     write_plugin_source(plugin_source, { entry: "../outside.js" });
-    await assert.rejects(() => installer.install_plugin(plugin_source), /stay inside the artifact directory/u);
+    await assert.rejects(() => installer.install_plugin(plugin_source), /stay inside the Plugin directory/u);
+
+    write_plugin_source(plugin_source, { module_source: "export const value = 1;" });
+    await assert.rejects(
+      () => installer.install_plugin(plugin_source),
+      /must export plugin constructor/u,
+    );
+
+    write_plugin_source(plugin_source, {
+      module_source: "export class InvalidPlugin { static type = { config: {} }; }\nexport const plugin = InvalidPlugin;",
+    });
+    await assert.rejects(
+      () => installer.install_plugin(plugin_source),
+      /type\.config must be a Zod type/u,
+    );
 
     write_plugin_source(plugin_source);
     fs.symlinkSync("index.js", path.join(plugin_source, "linked.js"));
@@ -290,16 +310,31 @@ test("Plugin 安装拒绝内置 ID、非法清单与逃逸入口", async () => {
   }
 });
 
-test("Plugin constructor Manifest 必须匹配 plugin.json", async () => {
+test("Plugin 实例 ID 必须匹配 plugin.json", async () => {
   const platform_root = create_temp_root();
   const plugin_source = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
     write_plugin_source(plugin_source, { id: "declared", runtime_id: "unexpected" });
     const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
-    const loader = await import("../bin/city/runtime/plugins/PluginTypeLoader.js");
+    const agents = await import("../bin/city/process/registry/AgentConfigRepository.js");
+    const plugins = await import("../bin/city/process/registry/PluginRepository.js");
+    const local_data = await import("../bin/city/runtime/LocalData.js");
+    const assembly = await import("../bin/city/runtime/AgentAssembly.js");
     await installer.install_plugin(plugin_source);
-    await assert.rejects(() => loader.load_plugin_type("declared"), /manifest is invalid/u);
+    agents.create_agent_config({ agent_id: "mismatch_agent" });
+    plugins.save_plugin_profile("declared", "default", { endpoint: "https://example.com" });
+    plugins.set_agent_plugin_reference({ agent_id: "mismatch_agent", plugin_id: "declared" });
+    const data = local_data.create_cli_local_data();
+    try {
+      const loader = assembly.create_cli_plugin_loader({ plugin_repository: data.plugins });
+      await assert.rejects(
+        () => loader.create_plugins(data.agents.get("mismatch_agent")),
+        /instance ID does not match definition/u,
+      );
+    } finally {
+      data.database.close();
+    }
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });
@@ -372,14 +407,19 @@ test("内建 Chat Plugin 从 Agent 选择的 TOML profile 装配", async () => {
 });
 
 test("CLI 生命周期只属于 City 且 Agent model 命令可见", () => {
-  const result = spawnSync(process.execPath, [path.resolve("bin/downcity.js"), "agent", "--help"], {
-    encoding: "utf8",
-    env: { ...process.env, NO_COLOR: "1" },
-  });
-  assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /model/u);
-  assert.doesNotMatch(result.stdout, /\bstart\b/u);
-  assert.doesNotMatch(result.stdout, /\bstop\b/u);
+  const platform_root = create_temp_root();
+  try {
+    const result = spawnSync(process.execPath, [path.resolve("bin/downcity.js"), "agent", "--help"], {
+      encoding: "utf8",
+      env: { ...process.env, DC_PLATFORM_ROOT: platform_root, NO_COLOR: "1" },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /model/u);
+    assert.doesNotMatch(result.stdout, /\bstart\b/u);
+    assert.doesNotMatch(result.stdout, /\bstop\b/u);
+  } finally {
+    fs.rmSync(platform_root, { recursive: true, force: true });
+  }
 });
 
 test("Agent 模型选择只接受对话执行模型", async () => {

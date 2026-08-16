@@ -270,9 +270,10 @@ Plugin 生命周期分为 Agent 级 `start/stop` 和可选的 Workspace 级 `ent
 Plugin 以全局稳定 ID 为身份，定义与配置保存在 `~/.downcity/plugins/<plugin_id>/`：
 
 - `config.toml`：Plugin 自己拥有的明文 profile 配置，目录权限为 `0700`、文件权限为 `0600`。
-- `plugin.json` 与 `artifact/`：仅第三方 Plugin 使用，分别保存规范化描述与静态代码制品。
+- `plugin.json`：仅第三方 Plugin 使用，是静态定义与安装来源信息的唯一事实源；源文件不手写配置 Schema，安装后的配置 Schema 只是从 Zod 自动生成的展示快照。
+- 其他文件：第三方 Plugin 的代码与资源直接位于 Plugin ID 目录，不增加 `artifact/` 层级。
 
-Agent 通过 `agent.json` 选择 Plugin 与可选 profile。Plugin profile 可以包含渠道、账号、端点等 Plugin 自己定义的结构；框架不定义 Binding、Resource 或 Installation 持久化领域。第三方制品必须只导出一个 Plugin，其 Manifest ID 同时是目录名和 Registry key。
+Agent 通过 `agent.json` 选择 Plugin 与可选 profile。Plugin profile 可以包含渠道、账号、端点等 Plugin 自己定义的结构；配置类型、默认值与校验统一由 Plugin 的 Zod `type.config` 拥有，TOML 只保存原始 profile 值。框架不定义 Binding、Resource 或 Installation 持久化领域。内置与第三方 Plugin 都按稳定 ID、Zod 配置类型与 Plugin constructor 进入 Loader；第三方入口通过 `plugin` 直接导出 constructor，不增加公开工厂协议，Definition ID 同时是目录名和 Registry key。
 
 `downcity.db` 继续保存 Workspace 索引、平台安全设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。
 

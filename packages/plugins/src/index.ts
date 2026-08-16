@@ -17,12 +17,12 @@ export * from "./task.js";
 export * from "./web.js";
 export * from "./workboard.js";
 export {
-  create_builtin_plugin_types,
+  create_builtin_plugin_registrations,
 } from "./builtin/BuiltinPluginTypes.js";
 export type {
   BuiltinPluginAi,
-  BuiltinPluginConstructorInput,
-  BuiltinPluginManifest,
-  BuiltinPluginType,
-  BuiltinPluginTypesOptions,
+  BuiltinPluginCreateInput,
+  BuiltinPluginDefinition,
+  BuiltinPluginRegistration,
+  BuiltinPluginRegistrationsOptions,
 } from "./builtin/BuiltinPluginTypes.js";

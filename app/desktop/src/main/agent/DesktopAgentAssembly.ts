@@ -10,7 +10,7 @@ import {
   type LocalAgentConfig,
   type LocalWorkspaceConfig,
   resolve_local_agent_env,
-  type LocalPluginType,
+  type LocalPluginRegistration,
 } from "@downcity/local/product";
 import { resolve_local_root_path } from "@downcity/local";
 import { type AgentModel, type AgentOptions, Workspace } from "@downcity/agent";
@@ -19,7 +19,7 @@ import { Shell } from "@downcity/shell";
 import type { DesktopLocalData } from "./DesktopLocalData.js";
 import { Embassy, type EmbassyUser } from "@downcity/federation";
 import {
-  create_builtin_plugin_types,
+  create_builtin_plugin_registrations,
   type BuiltinPluginAi,
 } from "@downcity/plugins";
 import { create_desktop_platform_sandbox } from "./DesktopPlatformSandbox.js";
@@ -49,7 +49,7 @@ export function create_desktop_plugin_loader(
 ): LocalPluginLoader {
   return new LocalPluginLoader({
     plugin_repository: data.plugins,
-    plugin_types: create_desktop_builtin_plugin_types(data),
+    plugin_registrations: create_desktop_builtin_plugin_registrations(data),
   });
 }
 
@@ -131,16 +131,16 @@ export function list_desktop_plugins(data: DesktopLocalData): DesktopPluginSumma
     }
   }
   const plugins = new Map<string, DesktopPluginSummary>();
-  for (const plugin_type of create_desktop_builtin_plugin_types(data)) {
-    const manifest = plugin_type.manifest;
-    plugins.set(manifest.name, {
-      plugin_id: manifest.name,
-      title: manifest.title || manifest.name,
-      description: manifest.description || "",
+  for (const registration of create_desktop_builtin_plugin_registrations(data)) {
+    const definition = registration.definition;
+    plugins.set(definition.id, {
+      plugin_id: definition.id,
+      title: definition.title || definition.id,
+      description: definition.description || "",
       source: "builtin",
-      agent_ids: registered_agents.get(manifest.name) ?? [],
-      profile_count: Object.keys(data.plugins.read_config(manifest.name).profiles).length,
-      configurable: Boolean(manifest.config),
+      agent_ids: registered_agents.get(definition.id) ?? [],
+      profile_count: Object.keys(data.plugins.read_config(definition.id).profiles).length,
+      configurable: Boolean(registration.type?.config),
     });
   }
   for (const installed of data.plugins.list_installed()) {
@@ -152,7 +152,7 @@ export function list_desktop_plugins(data: DesktopLocalData): DesktopPluginSumma
         source: "installed",
         agent_ids: registered_agents.get(installed.id) ?? [],
         profile_count: Object.keys(data.plugins.read_config(installed.id).profiles).length,
-        configurable: Boolean(installed.config_schema),
+        configurable: Boolean(installed.config),
       });
   }
   return [...plugins.values()].sort((left, right) => left.title.localeCompare(right.title));
@@ -204,12 +204,14 @@ class LazyDesktopAgentModel implements LanguageModelV3 {
   }
 }
 
-/** 创建 Desktop 宿主提供的官方 Plugin constructor。 */
-function create_desktop_builtin_plugin_types(data: DesktopLocalData): LocalPluginType[] {
-  return create_builtin_plugin_types({
+/** 创建 Desktop 宿主提供的官方 Plugin 注册。 */
+function create_desktop_builtin_plugin_registrations(
+  data: DesktopLocalData,
+): LocalPluginRegistration[] {
+  return create_builtin_plugin_registrations({
     platform_root_path: resolve_local_root_path(data.root_path),
     resolve_ai: async () => create_builtin_plugin_ai(create_embassy_user(data, process.env)),
-  }) as LocalPluginType[];
+  });
 }
 
 /** 把 Embassy User AI 子域投影成官方 Plugin 的最小协议。 */

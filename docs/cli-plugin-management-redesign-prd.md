@@ -4,7 +4,7 @@
 
 - Agent 是身份、模型、主体指令和 Plugin 注册关系的拥有者。
 - Agent 与 Workspace 不绑定；宿主在执行时调用 `agent.enter(workspace)`。
-- Plugin 使用 Manifest 声明的全局唯一 ID，不存在来源 Hash 生成的公开身份。
+- Plugin 使用 `plugin.json` 声明的全局唯一 ID，不存在来源 Hash 生成的公开身份。
 - Plugin 完整拥有代码与配置；框架不定义 Binding、Resource 或 Installation 持久化领域。
 - CLI 与 Desktop 读取同一套用户级文件协议。
 
@@ -20,11 +20,12 @@
 │   └── <plugin_id>/
 │       ├── config.toml
 │       ├── plugin.json
-│       └── artifact/
+│       ├── package.json
+│       └── dist/
 └── downcity.db
 ```
 
-`plugin.json` 与 `artifact/` 只属于第三方 Plugin。内置 Plugin 的 constructor 由宿主注入，但配置仍使用相同的 `plugins/<plugin_id>/config.toml`。
+第三方 Plugin 的定义、代码与资源直接位于 `<plugin_id>/`；内置 Plugin 的注册由宿主注入，但配置仍使用相同的 `plugins/<plugin_id>/config.toml`。两者进入 Loader 后都按稳定 ID、Zod 配置类型与 Plugin constructor 处理。
 
 ## 3. Agent 定义
 
@@ -63,36 +64,38 @@ name = "Primary Bot"
 bot_token = "123456:token"
 ```
 
-Profile 是传给 Plugin constructor 的唯一配置对象：
+TOML Profile 是原始配置值；Loader 使用 constructor 的 Zod 类型解析后再创建 Plugin：
 
 ```ts
-new PluginType({ config: selected_profile });
+const config = PluginConstructor.type.config.parse(selected_profile ?? {});
+new PluginConstructor({ config });
 ```
 
-账号、渠道、端点和 Token 等结构由具体 Plugin 的 profile Schema 定义。TOML 明文保存，Plugin 目录权限为 `0700`，配置文件权限为 `0600`；宿主展示 `writeOnly` 字段时脱敏。
+账号、渠道、端点和 Token 等结构由具体 Plugin 的 `type.config` Zod 类型定义。TOML 明文保存，Plugin 目录权限为 `0700`，配置文件权限为 `0600`；宿主从 Zod 生成 input JSON Schema，并按 `writeOnly` metadata 脱敏。
 
 ## 5. 第三方 Plugin
 
-一个制品只定义一个 Plugin。源目录包含 v4 `downcity.plugin.json`：
+一个目录只定义一个 Plugin。源目录包含唯一的 `plugin.json`：
 
 ```json
 {
-  "manifest_version": 4,
+  "schema_version": 1,
   "id": "github",
   "version": "1.0.0",
   "description": "GitHub integration",
-  "entry": "dist/index.js",
-  "config": { "schema": {} }
+  "entry": "dist/index.js"
 }
 ```
 
-ESM 入口命名导出唯一 constructor：
+ESM 入口命名导出唯一 Plugin constructor：
 
 ```ts
 export const plugin = GithubPlugin;
 ```
 
-安装目标固定为 `plugins/<manifest.id>/`。随机目录只用于 staging；更新原子替换 `plugin.json` 和 `artifact/`，保留 `config.toml`。新 Schema 无法校验已有 profile 时拒绝更新；仍被 Agent 引用时拒绝卸载。
+`GithubPlugin.type.config` 使用 Zod 定义 profile 类型、默认值与校验。源 `plugin.json` 不允许手写 `config`；安装器只在安装后的同一个文件中保存自动生成的 Schema 展示快照。
+
+安装目标固定为 `plugins/<definition.id>/`。随机目录只用于 staging；更新原子替换整个 Plugin 目录并保留 `config.toml`。新 Schema 无法校验已有 profile 时拒绝更新；仍被 Agent 引用时拒绝卸载。
 
 ## 6. 数据库边界
 

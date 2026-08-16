@@ -5,17 +5,18 @@ description: 编写、发布并配置可安装的 Downcity Plugin
 
 # 自定义插件
 
-一个第三方制品只定义一个 Plugin。Plugin 的全局唯一 ID 同时是最终目录名、Agent 引用键和运行时 Registry key。
+一个第三方目录只定义一个 Plugin。Plugin 的全局唯一 ID 同时是最终目录名、Agent 引用键和运行时 Registry key。
 
-## 制品结构
+## 目录结构
 
 ```text
 github-plugin/
-├── downcity.plugin.json
+├── plugin.json
+├── package.json
 └── dist/index.js
 ```
 
-ESM 入口命名导出一个 constructor：
+ESM 入口通过 `plugin` 命名导出 Plugin constructor：
 
 ```ts
 export const plugin = GithubPlugin;
@@ -24,62 +25,58 @@ export const plugin = GithubPlugin;
 ## Plugin constructor
 
 ```ts
-import type { JsonObject } from "@downcity/agent";
+import type { Plugin, PluginActions } from "@downcity/agent";
+import { z } from "zod";
 
-export class GithubPlugin {
-  static readonly manifest = {
-    name: "github",
-    version: "1.0.0",
-    title: "GitHub",
-    description: "GitHub 集成",
-    config: {
-      schema: GITHUB_PROFILE_JSON_SCHEMA,
-      defaults: { api_url: "https://api.github.com" },
-    },
-  };
+const github_config_type = z.object({
+  api_url: z.url().default("https://api.github.com").meta({ title: "API URL" }),
+  token: z.string().min(1).meta({ title: "Token", writeOnly: true }),
+}).strict();
+
+export type GithubPluginConfig = z.infer<typeof github_config_type>;
+
+export class GithubPlugin implements Plugin {
+  static readonly type = { config: github_config_type };
 
   readonly name = "github";
-  readonly actions = {};
+  readonly title = "GitHub";
+  readonly description = "GitHub 集成";
+  readonly actions: PluginActions;
 
-  constructor({ config }: { config: JsonObject }) {
-    // config 是 Agent 选择的完整 profile。
+  constructor({ config }: { config: GithubPluginConfig }) {
+    this.actions = {};
   }
 }
+
+export const plugin = GithubPlugin;
 ```
 
-实例 `name`、静态 `manifest.name`、安装 Manifest `id` 和目录名必须一致。运行时统一执行：
+实例 `name`、`plugin.json` 的 `id`、目录名和 Agent 引用必须一致。constructor 不重复声明 `static manifest`；`type.config` 是 profile 类型、默认值和校验的唯一事实源。内置与第三方 Plugin 在运行时都解析为相同的注册协议：
 
 ```ts
-new GithubPlugin({ config: selected_profile });
+new PluginConstructor({ config: selected_profile });
 ```
 
-账号、Token、端点等结构直接属于 profile Schema。框架不再定义 Binding、Resource、Resolver 或 Installation 持久化领域。
+Loader 先执行 `PluginConstructor.type.config.parse(raw_profile)`，再把解析后的完整配置传入 constructor。账号、Token、端点等结构直接属于 Zod 类型。框架不定义 Binding、Resource、Resolver 或 Installation 持久化领域。
 
-## 静态清单
+## Plugin 定义
 
-安装阶段读取 v4 静态文件，不执行第三方代码：
+源目录只保留一个 `plugin.json`：
 
 ```json
 {
-  "manifest_version": 4,
+  "schema_version": 1,
   "id": "github",
   "version": "1.0.0",
   "title": "GitHub",
   "description": "GitHub 集成",
-  "entry": "dist/index.js",
-  "config": {
-    "schema": {
-      "type": "object",
-      "properties": {
-        "api_url": { "type": "string", "format": "uri" },
-        "token": { "type": "string", "writeOnly": true }
-      },
-      "additionalProperties": false
-    },
-    "defaults": { "api_url": "https://api.github.com" }
-  }
+  "entry": "dist/index.js"
 }
 ```
+
+Plugin 作者不手写 JSON Schema。安装器从 `type.config` 生成 input JSON Schema 和可用默认值，并与 `source`、`revision`、`integrity`、时间信息一起写入安装后的同一个 `plugin.json`；不会生成第二份 Manifest。
+
+`entry` 必须是自包含 ESM 制品。构建时需要把运行时使用的 Zod 打包进 `dist/index.js`；安装器不会执行依赖安装。
 
 安装后的目录是确定的：
 
@@ -87,10 +84,21 @@ new GithubPlugin({ config: selected_profile });
 ~/.downcity/plugins/github/
 ├── plugin.json
 ├── config.toml
-└── artifact/
+├── package.json
+└── dist/index.js
 ```
 
-`config.toml` 保存命名的明文 profile，文件权限为 `0600`。CLI 与 Desktop 展示配置时会脱敏 Schema 标记为 `writeOnly` 的字段。
+`config.toml` 只保存命名的明文 profile 值，文件权限为 `0600`。CLI 与 Desktop 使用 Zod 生成的 Schema 构建表单，并脱敏 `.meta({ writeOnly: true })` 字段。TOML 中缺省的字段由 Zod `.default()` 补齐。
+
+```toml
+schema_version = 1
+
+[profiles.production]
+api_url = "https://api.github.com"
+token = "plain-local-token"
+```
+
+Agent 显式选择的 profile 不存在时会报错；没有显式选择时读取 `default` profile，不存在则用 `{}` 交给 Zod 解析默认值。
 
 ## 安装与配置
 
@@ -102,9 +110,9 @@ city plugin update github
 city plugin uninstall github
 ```
 
-更新只替换 `plugin.json` 与 `artifact/`，保留 `config.toml`。新 Schema 无法校验已有 profile 时更新失败；仍被 Agent 引用的 profile 或 Plugin 不能删除。
+更新会原子替换整个 Plugin 目录并保留 `config.toml`。新 Schema 无法校验已有 profile 时更新失败；仍被 Agent 引用的 profile 或 Plugin 不能删除。
 
-安装过程不会执行 `npm install`、构建脚本、生命周期脚本或 Plugin 入口，并记录 Git commit 和制品 SHA-256 摘要。Plugin 入口会在 Agent 加载时执行，因此只应安装可信来源。
+安装过程不会执行 `npm install`、构建脚本或 Plugin lifecycle。安装器会导入入口以验证 `plugin` constructor，因此模块顶层代码会执行，但 constructor 不会被调用。静态代码和资源会生成 SHA-256 摘要；只应安装可信来源。
 
 继续阅读：
 

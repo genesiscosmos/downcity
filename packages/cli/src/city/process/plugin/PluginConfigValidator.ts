@@ -1,9 +1,9 @@
 /**
- * Plugin JSON Schema 与 Binding 配置校验器。
+ * Plugin JSON Schema 展示快照校验器。
  *
  * 关键点（中文）
- * - JSON Schema 2020-12 是内建与第三方 Plugin 的统一配置协议。
- * - Ajv 是唯一协议校验实现，不再维护会静默忽略��束的手写子集。
+ * - Plugin 的配置类型与运行时校验由 Zod 拥有，JSON Schema 只服务 CLI 与 Desktop 控制面。
+ * - Ajv 校验安装器生成的 JSON Schema 快照，避免控制面保存明显无效的原始配置。
  * - 表单提示只使用标准 Schema 注解，不注册宿主私有配置关键字。
  */
 
