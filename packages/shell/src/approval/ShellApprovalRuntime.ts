@@ -39,7 +39,7 @@ function build_input_preview(value: string): string {
 
 /** 返回 unrestricted 权限审计日志路径。 */
 function resolve_audit_path(context: ShellHostContext): string {
-  return path.join(context.rootPath, ".downcity", "logs", "unrestricted-sandbox-audit.jsonl");
+  return path.join(context.dataPath, "logs", "unrestricted-sandbox-audit.jsonl");
 }
 
 /** 追加一条权限审计记录。 */

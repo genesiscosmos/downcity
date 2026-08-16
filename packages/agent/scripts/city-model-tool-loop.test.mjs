@@ -162,7 +162,7 @@ test("CityModel uses direct LanguageModel path and sends tool result back", asyn
       }),
     },
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
 
   try {
     const session = await entry.sessions.create();

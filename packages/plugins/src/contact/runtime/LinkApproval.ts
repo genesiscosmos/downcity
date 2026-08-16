@@ -99,31 +99,31 @@ function readCallbackCandidate(
 }
 
 async function findApprovedContact(params: {
-  project_root: string;
+  data_path: string;
   agentName: string;
 }) {
   const stable = await readContact(
-    params.project_root,
+    params.data_path,
     createStableContactId(params.agentName),
   );
   if (stable) return stable;
-  const contacts = await listContacts(params.project_root);
+  const contacts = await listContacts(params.data_path);
   const lower = params.agentName.trim().toLowerCase();
   return contacts.find((item) => item.name.toLowerCase() === lower) || null;
 }
 
 async function saveApprovedInboundContact(params: {
-  project_root: string;
+  data_path: string;
   agentName: string;
   tokenForOwner: string;
   nowMs: number;
 }) {
   const existing = await findApprovedContact({
-    project_root: params.project_root,
+    data_path: params.data_path,
     agentName: params.agentName,
   });
   const hasOutboundSide = Boolean(existing?.endpoint && existing?.outboundToken);
-  await saveContact(params.project_root, {
+  await saveContact(params.data_path, {
     id: existing?.id || createStableContactId(params.agentName),
     name: existing?.name || params.agentName,
     endpoint: existing?.endpoint || null,
@@ -143,7 +143,7 @@ export async function approveContactLinkRequest(
   input: ApproveContactLinkRequestInput,
 ): Promise<ContactApproveLinkResponse> {
   const nowMs = input.nowMs ?? Date.now();
-  const link = await readContactLinkRecord(input.project_root, input.request.linkId);
+  const link = await readContactLinkRecord(input.data_path, input.request.linkId);
   if (!link) {
     return failure({
       ownerAgentName: input.ownerAgentName,
@@ -185,10 +185,10 @@ export async function approveContactLinkRequest(
           tokenForRequester: callbackCandidate.token,
           callbackReason: input.request.callbackReason || link.callbackReason || null,
         };
-        await saveContactLinkRecord(input.project_root, nextLink);
+        await saveContactLinkRecord(input.data_path, nextLink);
       }
       await saveApprovedInboundContact({
-        project_root: input.project_root,
+        data_path: input.data_path,
         agentName: input.request.agentName,
         tokenForOwner: link.tokenForOwner,
         nowMs,
@@ -219,9 +219,9 @@ export async function approveContactLinkRequest(
   };
 
   // 先消费 link，再派生 contact；重试时以 link 记录为来源修复 contact，避免孤儿 trusted contact。
-  await saveContactLinkRecord(input.project_root, approvedLink);
+  await saveContactLinkRecord(input.data_path, approvedLink);
   await saveApprovedInboundContact({
-    project_root: input.project_root,
+    data_path: input.data_path,
     agentName: input.request.agentName,
     tokenForOwner,
     nowMs,
@@ -242,7 +242,7 @@ export async function confirmContactLinkRequest(
   input: ConfirmContactLinkRequestInput,
 ): Promise<ContactConfirmResponse> {
   const nowMs = input.nowMs ?? Date.now();
-  const link = await readContactLinkRecord(input.project_root, input.request.linkId);
+  const link = await readContactLinkRecord(input.data_path, input.request.linkId);
   if (!link) {
     return confirmFailure({
       ownerAgentName: input.ownerAgentName,
@@ -309,7 +309,7 @@ export async function confirmContactLinkRequest(
     });
   }
   const contact = await findApprovedContact({
-    project_root: input.project_root,
+    data_path: input.data_path,
     agentName: input.request.agentName,
   });
   if (!contact || contact.status !== "trusted") {
@@ -332,7 +332,7 @@ export async function confirmContactLinkRequest(
   ) {
     if (!link.confirmedAt) {
       // contact 已经完成双向升级时，重试 confirm 需要补齐 link 状态，避免最终状态分裂。
-      await saveContactLinkRecord(input.project_root, {
+      await saveContactLinkRecord(input.data_path, {
         ...link,
         approvedEndpoint: endpoint,
         tokenForRequester: token,
@@ -363,7 +363,7 @@ export async function confirmContactLinkRequest(
     };
   }
 
-  await saveContact(input.project_root, {
+  await saveContact(input.data_path, {
     ...contact,
     endpoint,
     reachability: "bidirectional",
@@ -371,7 +371,7 @@ export async function confirmContactLinkRequest(
     inboundTokenHash: contact.inboundTokenHash,
     lastSeenAt: nowMs,
   });
-  await saveContactLinkRecord(input.project_root, {
+  await saveContactLinkRecord(input.data_path, {
     ...link,
     approvedEndpoint: endpoint,
     tokenForRequester: token,

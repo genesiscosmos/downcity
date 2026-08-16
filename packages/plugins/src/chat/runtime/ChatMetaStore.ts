@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 入站消息到达时由 chat plugin runtime 写入
  * - 出站按 session_id/chat_key 发送时由 chat plugin runtime 读取
- * - 底层数据落在 `.downcity/channel/meta.json`，由 ChannelContextStore 统一维护
+ * - 底层数据落在 AgentWorkspace 数据目录的 `channel/meta.json`，由 ChannelContextStore 统一维护
  */
 
 import type { PluginContext } from "@downcity/agent";

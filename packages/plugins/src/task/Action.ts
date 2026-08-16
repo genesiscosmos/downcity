@@ -58,7 +58,7 @@ function buildDefaultTaskBody(): string {
     "# 任务目标",
     "",
     "- 明确这次任务最终要交付什么结果，最终回复会由系统自动发送到任务绑定的 chat。",
-    "- 如果需要额外文件，请写入本次 run 目录，便于审计和排查。",
+    "- 如果需要向用户交付额外文件，请写入明确的项目路径。",
     "",
     "# 背景与输入",
     "",
@@ -69,7 +69,7 @@ function buildDefaultTaskBody(): string {
     "",
     "1. 先理解任务目标与完成标准。",
     "2. 按需要收集信息、执行分析或运行命令。",
-    "3. 把关键中间产物写入 run 目录。",
+    "3. 需要文件交付时，把产物写入明确的项目路径。",
     "4. 整理出面向用户可直接阅读的最终结果。",
     "",
     "# 输出要求",
@@ -87,7 +87,7 @@ function buildDefaultTaskBody(): string {
     "# 注意事项",
     "",
     "- 当前是独立 task 上下文，不要假设仍处在原始聊天回合里。",
-    "- 尽量使用可审计的方式：关键中间产物写入 `./.downcity/task/<title>/<timestamp>/` 下的 markdown 文件。",
+    "- 任务运行记录由系统保存在当前 AgentWorkspace 的私有目录；需要交付给用户的文件应明确写入项目目录。",
     "- 如果任务明确要求跨会话、跨平台或发送额外通知，再显式调用 chat plugin 的发送 action。",
     "",
   ].join("\n");
@@ -95,10 +95,10 @@ function buildDefaultTaskBody(): string {
 
 
 export async function listTaskDefinitions(params: {
-  project_root: string;
+  data_path: string;
   status?: ShipTaskStatus;
 }): Promise<TaskListResponse> {
-  const root = path.resolve(params.project_root);
+  const root = path.resolve(params.data_path);
   const normalizedStatus = normalizeTaskStatus(params.status);
 
   const tasks = await listTasks(root);
@@ -126,10 +126,10 @@ export async function listTaskDefinitions(params: {
 }
 
 export async function createTaskDefinition(params: {
-  project_root: string;
+  data_path: string;
   request: TaskCreateRequest;
 }): Promise<TaskCreateResponse> {
-  const root = path.resolve(params.project_root);
+  const root = path.resolve(params.data_path);
   const req = params.request;
 
   const title = String(req.title || "").trim();
@@ -178,7 +178,7 @@ export async function createTaskDefinition(params: {
   try {
     const written = await writeTask({
       taskId: targetTaskId,
-      project_root: root,
+      data_path: root,
       overwrite: Boolean(req.overwrite) || Boolean(duplicated),
       frontmatter: {
         title,
@@ -206,15 +206,15 @@ export async function createTaskDefinition(params: {
 }
 
 export async function updateTaskDefinition(params: {
-  project_root: string;
+  data_path: string;
   request: TaskUpdateRequest;
 }): Promise<TaskUpdateResponse> {
-  const root = path.resolve(params.project_root);
+  const root = path.resolve(params.data_path);
   const req = params.request;
   const title = String(req.title || "").trim();
   let taskId = "";
   try {
-    taskId = await resolveTaskIdByTitle({ project_root: root, title });
+    taskId = await resolveTaskIdByTitle({ data_path: root, title });
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -229,7 +229,7 @@ export async function updateTaskDefinition(params: {
 
   try {
     const current = await readTask({
-      project_root: root,
+      data_path: root,
       taskId,
     });
 
@@ -291,7 +291,7 @@ export async function updateTaskDefinition(params: {
         : current.body;
 
     const written = await writeTask({
-      project_root: root,
+      data_path: root,
       taskId,
       overwrite: true,
       frontmatter: {
@@ -321,15 +321,15 @@ export async function updateTaskDefinition(params: {
 
 export async function runTaskDefinition(params: {
   context: PluginContext;
-  project_root: string;
+  data_path: string;
   request: TaskRunRequest;
   execution_context?: PluginExecutionContext;
 }): Promise<TaskRunResponse> {
-  const root = path.resolve(params.project_root);
+  const root = path.resolve(params.data_path);
   const title = String(params.request.title || "").trim();
   let taskId = "";
   try {
-    taskId = await resolveTaskIdByTitle({ project_root: root, title });
+    taskId = await resolveTaskIdByTitle({ data_path: root, title });
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -343,7 +343,7 @@ export async function runTaskDefinition(params: {
     // 关键点（中文）：run 改为“异步受理”，先做存在性校验，再后台执行。
     await readTask({
       taskId,
-      project_root: root,
+      data_path: root,
     });
 
     params.context.logger.info(
@@ -358,7 +358,7 @@ export async function runTaskDefinition(params: {
     const executionId = `${taskId}:${Date.now()}`;
     void runTaskNow({
       context: params.context,
-      project_root: root,
+      data_path: root,
       taskId,
       trigger,
       executionId,
@@ -417,14 +417,14 @@ export async function runTaskDefinition(params: {
 }
 
 export async function setTaskStatus(params: {
-  project_root: string;
+  data_path: string;
   request: TaskSetStatusRequest;
 }): Promise<TaskSetStatusResponse> {
-  const root = path.resolve(params.project_root);
+  const root = path.resolve(params.data_path);
   const title = String(params.request.title || "").trim();
   let taskId = "";
   try {
-    taskId = await resolveTaskIdByTitle({ project_root: root, title });
+    taskId = await resolveTaskIdByTitle({ data_path: root, title });
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -439,12 +439,12 @@ export async function setTaskStatus(params: {
 
   try {
     const task = await readTask({
-      project_root: root,
+      data_path: root,
       taskId,
     });
 
     await writeTask({
-      project_root: root,
+      data_path: root,
       taskId,
       overwrite: true,
       frontmatter: {
@@ -468,21 +468,21 @@ export async function setTaskStatus(params: {
 }
 
 export async function deleteTaskDefinition(params: {
-  project_root: string;
+  data_path: string;
   request: TaskDeleteRequest;
 }): Promise<TaskDeleteResponse> {
-  const root = path.resolve(params.project_root);
+  const root = path.resolve(params.data_path);
   const title = String(params.request.title || "").trim();
   let taskId = "";
   try {
-    taskId = await resolveTaskIdByTitle({ project_root: root, title });
+    taskId = await resolveTaskIdByTitle({ data_path: root, title });
   } catch (error) {
     return { success: false, error: String(error) };
   }
 
   try {
     const deleted = await deleteTask({
-      project_root: root,
+      data_path: root,
       taskId,
     });
     return {

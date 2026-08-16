@@ -208,8 +208,8 @@ export interface RevokeChatAccessGrantInput {
 
 /** ChatAccessService 构造参数。 */
 export interface ChatAccessServiceOptions {
-  /** 当前 Agent 项目根目录。 */
-  project_root: string;
+  /** 当前 AgentWorkspace 私有数据根目录。 */
+  data_path: string;
 }
 
 /** 直接设置 Principal Grant 的输入。 */

@@ -2,17 +2,18 @@
  * Workspace：本地项目资源与安全作用域。
  *
  * 职责说明（中文）
- * - 只解析一次项目根目录，并将 Store、Tool 与可选 Shell 绑定到同一资源容器。
- * - SessionStore 与 WorkspaceTools 共用同一个 FileSystem 和目录访问范围。
+ * - 只解析一次项目根目录，并组合项目 Tool、Env 与可选 Shell。
+ * - AgentWorkspace 私有 Store 使用独立 FileSystem，不暴露给项目文件工具。
  * - 每个 Workspace 实例只绑定一个 Agent；同一物理目录可创建多个独立实例。
  */
 
 import { realpathSync, statSync } from "node:fs";
 import path from "node:path";
+import fs from "fs-extra";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 import { LocalFileSystem } from "@/workspace/LocalFileSystem.js";
 import type { WorkspaceOptions } from "@/types/workspace/Workspace.js";
-import type { SessionStore } from "@/types/store/SessionStore.js";
+import type { AgentWorkspaceStorage } from "@/types/workspace/AgentWorkspaceStorage.js";
 import type { WorkspaceTools } from "@/types/workspace/WorkspaceTools.js";
 import type {
   WorkspaceEnvPatch,
@@ -22,6 +23,7 @@ import type {
 import { resolve_workspace_env } from "@/workspace/WorkspaceEnv.js";
 import { create_workspace_tools } from "@/workspace/tool/WorkspaceTools.js";
 import { WorkspaceBase } from "@/workspace/WorkspaceBase.js";
+import { get_sdk_agent_workspace_storage_path } from "@/workspace/store/LocalStorePaths.js";
 
 /** 将调用方路径解析为稳定、真实的本地目录。 */
 function resolve_workspace_path(input: string): string {
@@ -44,6 +46,9 @@ export class Workspace extends WorkspaceBase {
   /** 已解析且不可变的项目根目录。 */
   readonly path: string;
 
+  /** Downcity 用户级数据根目录。 */
+  readonly data_root_path: string;
+
   /** Workspace 根目录内统一的受控文件与搜索能力。 */
   readonly files: FileSystem;
 
@@ -59,8 +64,8 @@ export class Workspace extends WorkspaceBase {
   /** 当前 Workspace 已绑定的 Agent 标识；未绑定时为空。 */
   private bound_agent_id?: string;
 
-  /** 当前 Workspace 为唯一 Agent 创建的结构化 Store。 */
-  private session_store?: SessionStore;
+  /** 当前 Workspace 为已进入的 Agent 创建的私有结构化 Store。 */
+  private agent_workspace_storage?: AgentWorkspaceStorage;
 
   /** 当前 Workspace configured env 的唯一可变状态。 */
   private readonly env: Record<string, string>;
@@ -73,10 +78,12 @@ export class Workspace extends WorkspaceBase {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Workspace requires a non-empty id");
     this.path = resolve_workspace_path(options.path);
+    const data_root_path = String(options.data_root_path || "").trim();
+    if (!data_root_path) throw new Error("Workspace requires a non-empty data_root_path");
+    this.data_root_path = path.resolve(data_root_path);
     this.files = new LocalFileSystem(this.path);
     this.env = resolve_workspace_env(this.path, options.env);
     this.shell = options.shell;
-    this.shell?.bind(this.path);
     this.shell?.set_env(this.env);
     this.tools = create_workspace_tools({
       files: this.files,
@@ -112,11 +119,11 @@ export class Workspace extends WorkspaceBase {
     };
   }
 
-  /** 将当前 Workspace 唯一绑定到 Agent，并创建 Session 集合存储。 */
-  create_session_store(agent_id: string): SessionStore {
+  /** 将当前 Workspace 唯一绑定到 Agent，并创建集中式内部存储。 */
+  create_agent_workspace_storage(agent_id: string): AgentWorkspaceStorage {
     const resolved_agent_id = String(agent_id || "").trim();
     if (!resolved_agent_id) {
-      throw new Error("Workspace.create_session_store requires a non-empty agent_id");
+      throw new Error("Workspace storage requires a non-empty agent_id");
     }
     if (this.dispose_promise) {
       throw new Error("Cannot bind a disposed Workspace");
@@ -127,15 +134,38 @@ export class Workspace extends WorkspaceBase {
       );
     }
     this.bound_agent_id = resolved_agent_id;
-    this.session_store = this.create_default_session_store(resolved_agent_id);
-    return this.session_store;
+    const storage_root_path = get_sdk_agent_workspace_storage_path(
+      this.data_root_path,
+      resolved_agent_id,
+      this.id,
+    );
+    ensure_private_directory_tree(this.data_root_path, storage_root_path);
+    const storage_files = new LocalFileSystem({
+      root_path: storage_root_path,
+      directory_mode: 0o700,
+      file_mode: 0o600,
+    });
+    this.shell?.bind({
+      root_path: this.path,
+      data_path: storage_root_path,
+    });
+    this.agent_workspace_storage = {
+      root_path: storage_root_path,
+      files: storage_files,
+      sessions: this.create_default_session_store(
+        resolved_agent_id,
+        storage_files,
+        storage_root_path,
+      ),
+    };
+    return this.agent_workspace_storage;
   }
 
-  /** 关闭 Workspace 持有的 Store、命令进程与平台 Sandbox 资源。 */
+  /** 关闭 AgentWorkspace Store、命令进程与平台 Sandbox 资源。 */
   async dispose(): Promise<void> {
     this.dispose_promise ??= (async () => {
       const results = await Promise.allSettled([
-        this.session_store?.dispose() ?? Promise.resolve(),
+        this.agent_workspace_storage?.sessions.dispose() ?? Promise.resolve(),
         this.shell?.dispose() ?? Promise.resolve(),
       ]);
       const errors = results.flatMap((result) =>
@@ -179,5 +209,22 @@ export class Workspace extends WorkspaceBase {
         // 观察者失败不能回滚已经完成的 Workspace env 修改。
       }
     }
+  }
+}
+
+/** 创建并收紧用户级 AgentWorkspace 目录链权限。 */
+function ensure_private_directory_tree(
+  data_root_path: string,
+  storage_root_path: string,
+): void {
+  const relative_path = path.relative(data_root_path, storage_root_path);
+  const segments = relative_path.split(path.sep).filter(Boolean);
+  let current_path = data_root_path;
+  fs.ensureDirSync(current_path, { mode: 0o700 });
+  fs.chmodSync(current_path, 0o700);
+  for (const segment of segments) {
+    current_path = path.join(current_path, segment);
+    fs.ensureDirSync(current_path, { mode: 0o700 });
+    fs.chmodSync(current_path, 0o700);
   }
 }

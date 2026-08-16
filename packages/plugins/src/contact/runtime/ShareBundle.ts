@@ -235,7 +235,7 @@ export async function receiveShare(params: {
   /**
    * 项目根目录。
    */
-  project_root: string;
+  data_path: string;
   /**
    * share id。
    */
@@ -250,22 +250,22 @@ export async function receiveShare(params: {
    */
   receivedPath: string;
 }> {
-  const payload = await readContactInboxSharePayload(params.project_root, params.shareId);
+  const payload = await readContactInboxSharePayload(params.data_path, params.shareId);
   if (!payload) throw new Error(`Share payload not found: ${params.shareId}`);
   if (payload.kind !== "share") throw new Error(`Unsupported share payload: ${payload.kind}`);
 
-  const receivedPath = getContactReceivedSharePath(params.project_root, params.shareId);
+  const receivedPath = getContactReceivedSharePath(params.data_path, params.shareId);
   await fs.ensureDir(receivedPath);
   await fs.writeJson(path.join(receivedPath, "payload.json"), payload, { spaces: 2 });
 
-  const filesRoot = getInboxShareFilesRoot(params.project_root, params.shareId);
+  const filesRoot = getInboxShareFilesRoot(params.data_path, params.shareId);
   if (await fs.pathExists(filesRoot)) {
     await fs.copy(filesRoot, path.join(receivedPath, "files"), {
       overwrite: true,
     });
   }
 
-  await markContactInboxShareReceived(params.project_root, params.shareId);
+  await markContactInboxShareReceived(params.data_path, params.shareId);
   return {
     itemCount: payload.items.length,
     receivedPath,

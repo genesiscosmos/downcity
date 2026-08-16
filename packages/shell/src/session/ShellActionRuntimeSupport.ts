@@ -345,7 +345,7 @@ async function loadPersistedSnapshot(
   context: ShellHostContext,
   shellId: string,
 ): Promise<ShellSessionSnapshot | null> {
-  const file = getShellSnapshotPath(context.rootPath, shellId);
+  const file = getShellSnapshotPath(context.dataPath, shellId);
   if (!(await fs.pathExists(file))) return null;
   const raw = await fs.readJson(file).catch(() => null);
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
@@ -357,7 +357,7 @@ async function readPersistedOutput(
   context: ShellHostContext,
   shellId: string,
 ): Promise<string> {
-  const file = getShellOutputPath(context.rootPath, shellId);
+  const file = getShellOutputPath(context.dataPath, shellId);
   if (!(await fs.pathExists(file))) return "";
   return await fs.readFile(file, "utf-8");
 }

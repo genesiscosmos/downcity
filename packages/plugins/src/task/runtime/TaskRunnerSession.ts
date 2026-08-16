@@ -127,7 +127,7 @@ export function createTaskSessionRuntimePort(params: {
     const created = new SessionMessages({
       session_id: key,
       store: create_session_message_store({
-        files: context.files,
+        files: context.data_files,
         session_id: key,
         file_path: path.join(messages_dir_path, "active.jsonl"),
         assistant_message_file_path: path.join(

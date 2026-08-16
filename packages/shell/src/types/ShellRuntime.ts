@@ -68,6 +68,12 @@ export interface ShellOptions {
    */
   root_path?: string;
   /**
+   * Shell、Sandbox 与审计日志使用的内部数据根目录。
+   *
+   * 该目录必须与项目根目录分离，由 AgentWorkspace 组合阶段显式绑定。
+   */
+  data_path?: string;
+  /**
    * 传给 shell 子进程的基础环境变量。
    */
   env?: Record<string, string | undefined>;
@@ -90,6 +96,15 @@ export interface ShellOptions {
    * 可选日志器。
    */
   logger?: ShellRuntimeLogger;
+}
+
+/** Shell 绑定到 AgentWorkspace 时使用的路径。 */
+export interface ShellBinding {
+  /** 命令实际执行和文件权限约束使用的项目根目录。 */
+  root_path: string;
+
+  /** Shell、Sandbox 与审计产物使用的内部数据根目录。 */
+  data_path: string;
 }
 
 /**

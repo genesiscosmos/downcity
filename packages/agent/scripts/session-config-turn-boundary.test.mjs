@@ -101,7 +101,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
     },
   });
   const workspace = new Workspace({ id: "test_workspace",
-    path: agent_path,
+    path: agent_path, data_root_path: path.join(agent_path, "data"),
     env: { TURN_ENV: "old" },
   });
   const agent = new Agent({
@@ -183,7 +183,7 @@ test("Plugin registry changes do not rewrite an existing Session system", async 
     id: "fixed_plugin_system_agent",
     model: new MockLanguageModelV3({ modelId: "fixed-plugin-system-model" }),
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
   const runtime_plugin = create_plugin({
     name: "runtime-system",
     title: "Runtime System",
@@ -234,15 +234,6 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
     path.join(os.tmpdir(), "downcity-session-syncshot-"),
   );
   const session_id = "syncshot_session";
-  const instruction_path = path.join(
-    agent_path,
-    ".downcity",
-    "agents",
-    "syncshot_agent",
-    "sessions",
-    session_id,
-    "instruction.md",
-  );
   const create_system_plugin = (content) => create_plugin({
     name: "syncshot-system",
     title: "Syncshot System",
@@ -256,7 +247,13 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
     instruction: ["instruction:initial"],
     plugins: [create_system_plugin("plugin-system:initial")],
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const instruction_path = path.join(
+    entry.data_path,
+    "sessions",
+    session_id,
+    "instruction.md",
+  );
 
   try {
     const session = await entry.sessions.create({ session_id: session_id });
@@ -316,7 +313,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
       system: () => "plugin-system:persisted",
     })],
   });
-  const first_entry = first_agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const first_entry = first_agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
 
   try {
     const session = await first_entry.sessions.create({
@@ -330,10 +327,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     await session.snapshot();
 
     const instruction_path = path.join(
-      agent_path,
-      ".downcity",
-      "agents",
-      "instruction_restart_agent",
+      first_entry.data_path,
       "sessions",
       "instruction_restart_session",
       "instruction.md",
@@ -356,7 +350,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     model,
     instruction: ["instruction:new"],
   });
-  const restarted_entry = restarted_agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const restarted_entry = restarted_agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
   try {
     const restored_session = await restarted_entry.sessions.get(
       "instruction_restart_session",
@@ -373,10 +367,14 @@ test("Session snapshot explicitly persists the complete system to instruction.md
   }
 
   const instruction_path = path.join(
-    agent_path,
-    ".downcity",
-    "agents",
-    "instruction_restart_agent",
+    path.join(
+      agent_path,
+      "data",
+      "agents",
+      "instruction_restart_agent",
+      "workspaces",
+      "test_workspace",
+    ),
     "sessions",
     "instruction_restart_session",
     "instruction.md",
@@ -388,7 +386,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     model,
     instruction: ["instruction:new"],
   });
-  const fallback_entry = fallback_agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const fallback_entry = fallback_agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
   try {
     const fallback_session = await fallback_entry.sessions.get(
       "instruction_restart_session",
@@ -414,7 +412,7 @@ test("empty Session snapshot suppresses Agent instruction after restart", async 
     id: "empty_snapshot_agent",
     model,
   });
-  const first_entry = first_agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const first_entry = first_agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
   try {
     const session = await first_entry.sessions.create({
       session_id: "empty_snapshot_session",
@@ -429,7 +427,7 @@ test("empty Session snapshot suppresses Agent instruction after restart", async 
     model,
     instruction: ["instruction:must-not-appear"],
   });
-  const restarted_entry = restarted_agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const restarted_entry = restarted_agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
   try {
     const session = await restarted_entry.sessions.get("empty_snapshot_session");
     const system = await session.system();
@@ -487,7 +485,7 @@ test("running session model changes apply with steer at the next Session step", 
     model: old_model,
     plugins: [runtime_plugin],
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
 
   try {
     const session = await entry.sessions.create({
@@ -589,7 +587,7 @@ test("running session approval mode changes stay queued until the next Session s
     model,
     plugins: [runtime_plugin],
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
 
   try {
     const session = await entry.sessions.create({
@@ -676,7 +674,7 @@ test("session set options independently control Action persistence and Mutation 
     id: "session_set_options_agent",
     model: first_model,
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
 
   try {
     const session = await entry.sessions.create({
@@ -766,7 +764,7 @@ test("restored Session rebinds the same model without emitting a configuration M
     id: "session_config_restore_agent",
     model: create_model(),
   });
-  const first_entry = first_agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const first_entry = first_agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
 
   try {
     const session = await first_entry.sessions.create({
@@ -785,7 +783,7 @@ test("restored Session rebinds the same model without emitting a configuration M
     id: "session_config_restore_agent",
     model: create_model(),
   });
-  const restored_entry = restored_agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const restored_entry = restored_agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
   try {
     const session = await restored_entry.sessions.get(
       "session_config_restore_session",
@@ -856,7 +854,7 @@ test("config remains effective when its action message cannot be persisted", asy
     id: "config_action_observability_agent",
     model: old_model,
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
 
   try {
     const session = await entry.sessions.create({

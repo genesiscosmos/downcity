@@ -24,11 +24,13 @@ import {
 
 async function create_context() {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-shell-pty-"));
+  const data_path = path.join(root_path, "agent-workspace-data");
   return {
     root_path,
     context: {
       sandbox: test_sandbox,
       rootPath: root_path,
+      dataPath: data_path,
       env: {},
       config: { id: "test-agent" },
       paths: {
@@ -87,20 +89,24 @@ function create_delayed_exit_sandbox(delay_ms, on_process_exit) {
 }
 
 test("Shell only exposes command tools", () => {
-  const shell = new Shell({ root_path: process.cwd(), sandbox: test_sandbox });
+  const shell = new Shell({
+    root_path: process.cwd(),
+    data_path: path.join(process.cwd(), "agent-workspace-data"),
+    sandbox: test_sandbox,
+  });
   assert.deepEqual(Object.keys(shell.tools).sort(), [
     "shell_exec",
     "shell_session",
   ]);
 });
 
-test("Shell rejects rebinding to another Workspace", () => {
+test("Shell rejects rebinding to another AgentWorkspace", () => {
   const shell = new Shell({ sandbox: test_sandbox });
-  shell.bind("/workspace/first");
-  shell.bind("/workspace/first");
+  shell.bind({ root_path: "/workspace/first", data_path: "/data/first" });
+  shell.bind({ root_path: "/workspace/first", data_path: "/data/first" });
   assert.throws(
-    () => shell.bind("/workspace/second"),
-    /already bound to another Workspace/,
+    () => shell.bind({ root_path: "/workspace/second", data_path: "/data/second" }),
+    /already bound to another AgentWorkspace/,
   );
 });
 

@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - Chat Plugin 是 channel meta、chat history 与渠道缓存路径的唯一所有者。
- * - PluginContext 只提供项目根目录，不暴露任何 Chat 领域路径。
+ * - PluginContext 提供 AgentWorkspace 数据根，Chat 不再写入项目目录。
  * - CLI 离线维护通过本模块操作 Chat 存储，不复制内部 JSON 结构。
  */
 
@@ -28,27 +28,27 @@ function normalize_thread_id(input: unknown): number | undefined {
   return Math.trunc(value);
 }
 
-function get_downcity_path(root_path: string): string {
-  return path.join(root_path, ".downcity");
+function get_chat_data_path(data_path: string): string {
+  return path.resolve(data_path);
 }
 
 /** 返回 Chat 渠道路由目录。 */
-export function get_chat_channel_dir_path(root_path: string): string {
-  return path.join(get_downcity_path(root_path), "channel");
+export function get_chat_channel_dir_path(data_path: string): string {
+  return path.join(get_chat_data_path(data_path), "channel");
 }
 
 /** 返回 Chat 渠道路由文件。 */
-export function get_chat_channel_meta_path(root_path: string): string {
-  return path.join(get_chat_channel_dir_path(root_path), "meta.json");
+export function get_chat_channel_meta_path(data_path: string): string {
+  return path.join(get_chat_channel_dir_path(data_path), "meta.json");
 }
 
 /** 返回单个 Chat 会话的事件目录。 */
 export function get_chat_session_dir_path(
-  root_path: string,
+  data_path: string,
   session_id: string,
 ): string {
   return path.join(
-    get_downcity_path(root_path),
+    get_chat_data_path(data_path),
     "chat",
     encodeURIComponent(normalize_text(session_id)),
   );
@@ -56,21 +56,21 @@ export function get_chat_session_dir_path(
 
 /** 返回单个 Chat 会话的事件流文件。 */
 export function get_chat_history_path(
-  root_path: string,
+  data_path: string,
   session_id: string,
 ): string {
-  return path.join(get_chat_session_dir_path(root_path, session_id), "history.jsonl");
+  return path.join(get_chat_session_dir_path(data_path, session_id), "history.jsonl");
 }
 
 /** 返回飞书渠道的消息去重目录。 */
-export function get_feishu_dedupe_dir_path(root_path: string): string {
-  return path.join(get_downcity_path(root_path), ".cache", "feishu", "dedupe");
+export function get_feishu_dedupe_dir_path(data_path: string): string {
+  return path.join(get_chat_data_path(data_path), ".cache", "feishu", "dedupe");
 }
 
 async function read_channel_meta(
-  root_path: string,
+  data_path: string,
 ): Promise<Partial<ChannelContextMetaFileV1>> {
-  const raw = await fs.readJson(get_chat_channel_meta_path(root_path)).catch(() => null);
+  const raw = await fs.readJson(get_chat_channel_meta_path(data_path)).catch(() => null);
   return raw && typeof raw === "object"
     ? raw as Partial<ChannelContextMetaFileV1>
     : {};
@@ -124,7 +124,7 @@ function resolve_session_id(
 }
 
 async function remove_route(
-  root_path: string,
+  data_path: string,
   meta: Partial<ChannelContextMetaFileV1>,
   session_id: string,
 ): Promise<boolean> {
@@ -143,9 +143,9 @@ async function remove_route(
     removed = true;
   }
   if (!removed) return false;
-  await fs.ensureDir(get_chat_channel_dir_path(root_path));
+  await fs.ensureDir(get_chat_channel_dir_path(data_path));
   await fs.writeJson(
-    get_chat_channel_meta_path(root_path),
+    get_chat_channel_meta_path(data_path),
     {
       ...meta,
       v: 1,
@@ -162,10 +162,10 @@ async function remove_route(
  * 清空单个 Chat 会话的事件历史。
  */
 export async function clear_chat_history(
-  root_path: string,
+  data_path: string,
   session_id: string,
 ): Promise<boolean> {
-  const history_path = get_chat_history_path(root_path, session_id);
+  const history_path = get_chat_history_path(data_path, session_id);
   const existed = await fs.pathExists(history_path);
   if (existed) await fs.remove(history_path);
   return existed;
@@ -181,8 +181,8 @@ export async function clear_chat_history(
 export async function clean_chat_storage(
   input: ChatStorageCleanInput,
 ): Promise<ChatStorageCleanResult> {
-  const root_path = path.resolve(normalize_text(input.root_path) || ".");
-  const meta = await read_channel_meta(root_path);
+  const data_path = path.resolve(normalize_text(input.data_path) || ".");
+  const meta = await read_channel_meta(data_path);
   const session_id = resolve_session_id(meta, input);
   if (!session_id) {
     return {
@@ -191,10 +191,10 @@ export async function clean_chat_storage(
       removed_route: false,
     };
   }
-  const chat_dir_path = get_chat_session_dir_path(root_path, session_id);
+  const chat_dir_path = get_chat_session_dir_path(data_path, session_id);
   const removed_chat_dir = await fs.pathExists(chat_dir_path);
   if (removed_chat_dir) await fs.remove(chat_dir_path);
-  const removed_route = await remove_route(root_path, meta, session_id);
+  const removed_route = await remove_route(data_path, meta, session_id);
   return {
     session_id,
     removed_chat_dir,

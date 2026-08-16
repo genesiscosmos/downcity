@@ -4,7 +4,7 @@ You can use the `task` plugin to manage task definitions, execution, scheduling,
 
 ## Task Model
 
-Each task is defined in `./.downcity/task/<title>/task.md` and contains:
+Each task is defined in the current AgentWorkspace private `task/<title>/task.md` and contains:
 - frontmatter for structured fields
 - body for the task instructions
 
@@ -16,8 +16,7 @@ Core frontmatter fields:
 - `status`: `enabled|paused|disabled`
 - `kind`: `agent|script`, defaulting to `agent`
 
-Each execution creates a run directory:
-- `./.downcity/task/<title>/<timestamp>/`
+Each execution creates a private run record managed by Downcity under the current AgentWorkspace.
 
 Common artifacts:
 - `input.md`
@@ -66,7 +65,7 @@ Common artifacts:
 - If `run` returns `accepted=true`:
   - Do not manually forward task output to the user again.
   - Do not actively poll the run directory, `run-progress.json`, or `output.md`.
-  - Inspect the run directory only when the user explicitly asks to debug, view artifacts, or confirm execution details.
+  - Inspect run details through the task/control API only when the user explicitly asks to debug, view artifacts, or confirm execution details.
 - Agent tasks only need to produce valid output by default. They should send to an external channel only when the task body explicitly requires it.
 
 ## Designing The Task Body
@@ -156,7 +155,7 @@ The body should include at least these headings:
 - The body must be a pure shell script. Do not mix in explanatory natural language.
 - Start with comments that describe the script's purpose, input dependencies, and failure conditions when possible.
 - Keep output stable so it can be sent directly as the final result.
-- If files need to be generated, write them to the run directory or to an explicit project path.
+- If files need to be delivered to the user, write them to an explicit project path.
 
 ### Output Design Principles
 
@@ -192,7 +191,7 @@ The body should include at least these headings:
 
 1. Understand the task goal and completion criteria.
 2. Collect necessary information and execute the task.
-3. Write key intermediate artifacts to the run directory.
+3. Write user-visible artifacts to an explicit project path when needed.
 4. Output the final result body.
 
 # Output Requirements

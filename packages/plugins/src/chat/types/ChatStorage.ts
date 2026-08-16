@@ -10,8 +10,8 @@
  * 清理单个 Chat 会话存储的输入。
  */
 export interface ChatStorageCleanInput {
-  /** 当前 Agent 项目根目录。 */
-  root_path: string;
+  /** 当前 AgentWorkspace 内部数据根目录。 */
+  data_path: string;
   /** 已知的 Session 标识；提供时优先使用。 */
   session_id?: string;
   /** Chat 渠道名称；未提供 Session 标识时用于解析目标会话。 */

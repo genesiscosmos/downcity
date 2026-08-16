@@ -2,37 +2,37 @@
  * Workspace LocalSessionStore 的 Session 路径规则。
  *
  * 关键点（中文）
- * - 所有 agent session 统一落盘到 `.downcity/agents/<agent_id>/sessions/<session_id>/...`。
- * - `agent_id` 是唯一隔离维度，不再保留第二套旧 session 根目录。
+ * - 本地 AgentWorkspace 根目录由用户级数据根、Agent ID 与 Workspace ID 唯一确定。
+ * - Session 路径只在该根目录内展开，不再读取或创建项目级 `.downcity`。
  */
 
 import path from "node:path";
 
 /**
- * `.downcity` 根目录路径。
+ * 返回用户级数据根下的 AgentWorkspace 目录。
  */
-export function get_sdk_downcity_dir_path(workspace_path: string): string {
-  return path.join(workspace_path, ".downcity");
-}
-
-/**
- * SDK agents 根目录路径。
- */
-export function get_sdk_agents_root_dir_path(workspace_path: string): string {
-  return path.join(get_sdk_downcity_dir_path(workspace_path), "agents");
+export function get_sdk_agent_workspace_storage_path(
+  data_root_path: string,
+  agent_id: string,
+  workspace_id: string,
+): string {
+  return path.join(
+    path.resolve(data_root_path),
+    "agents",
+    encodeURIComponent(String(agent_id || "").trim()),
+    "workspaces",
+    encodeURIComponent(String(workspace_id || "").trim()),
+  );
 }
 
 /**
  * 单个 agent 根目录路径。
  */
 export function get_sdk_agent_dir_path(
-  workspace_path: string,
-  agent_id: string,
+  agent_workspace_storage_path: string,
+  _agent_id: string,
 ): string {
-  return path.join(
-    get_sdk_agents_root_dir_path(workspace_path),
-    encodeURIComponent(String(agent_id || "").trim()),
-  );
+  return path.resolve(agent_workspace_storage_path);
 }
 
 /**

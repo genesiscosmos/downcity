@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 所有平台共用相同的 Principal、Grant、Request 和 Audit 业务规则。
  * - Chat Access 只做准入判定，不向 Agent Session 或其他 Plugin 传播权限。
- * - 每个方法自行打开并关闭项目级 Store，避免 Channel 生命周期遗漏连接释放。
+ * - 每个方法自行打开并关闭 AgentWorkspace Store，避免 Channel 生命周期遗漏连接释放。
  */
 
 import path from "node:path";
@@ -63,13 +63,13 @@ export function resolve_chat_access_scope(
  * 当前 Agent 的 Chat Access 应用服务。
  */
 export class ChatAccessService {
-  private readonly project_root: string;
+  private readonly data_path: string;
   constructor(options: ChatAccessServiceOptions) {
-    this.project_root = path.resolve(normalize_text(options.project_root) || ".");
+    this.data_path = path.resolve(normalize_text(options.data_path) || ".");
   }
 
   private with_store<T>(operation: (store: ChatAccessStore) => T): T {
-    const store = new ChatAccessStore(this.project_root);
+    const store = new ChatAccessStore(this.data_path);
     try {
       return operation(store);
     } finally {

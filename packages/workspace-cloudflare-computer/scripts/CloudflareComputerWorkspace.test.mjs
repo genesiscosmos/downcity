@@ -30,6 +30,7 @@ function create_memory_fs() {
 
 test("CloudflareComputerWorkspace 将相对路径限制在逻辑根目录", async () => {
   const workspace = new CloudflareComputerWorkspace({
+    id: "project",
     computer: { fs: create_memory_fs() },
   });
   await workspace.files.write_file_atomically("notes.md", "hello");
@@ -39,15 +40,18 @@ test("CloudflareComputerWorkspace 将相对路径限制在逻辑根目录", asyn
   assert.deepEqual(Object.keys(workspace.tools).sort(), ["edit", "exec", "ls", "read", "write"]);
 });
 
-test("CloudflareComputerWorkspace 维持单 Agent 绑定和远程释放生命周期", async () => {
+test("CloudflareComputerWorkspace 隔离多个 Agent 的远程存储并释放生命周期", async () => {
   let disposed = false;
   const workspace = new CloudflareComputerWorkspace({
+    id: "project",
     computer: { fs: create_memory_fs() },
     env: { NODE_ENV: "test" },
     dispose: () => { disposed = true; },
   });
-  workspace.create_session_store("agent-one");
-  assert.throws(() => workspace.create_session_store("agent-two"), /already bound/);
+  const first = workspace.create_agent_workspace_storage("agent-one");
+  const second = workspace.create_agent_workspace_storage("agent-two");
+  assert.notEqual(first.root_path, second.root_path);
+  assert.notEqual(first.files, second.files);
   assert.deepEqual(workspace.get_env(), { NODE_ENV: "test" });
   await workspace.dispose();
   assert.equal(disposed, true);
@@ -55,6 +59,7 @@ test("CloudflareComputerWorkspace 维持单 Agent 绑定和远程释放生命周
 
 test("CloudflareComputerWorkspace 自动提供默认 Runtime exec 工具", async () => {
   const workspace = new CloudflareComputerWorkspace({
+    id: "project",
     computer: {
       fs: create_memory_fs(),
       shell: {

@@ -2,9 +2,9 @@
  * Task storage (disk-backed).
  *
  * 关键点（中文）
- * - Task 的“唯一来源”是 `./.downcity/task/<taskId>/task.md`
+ * - Task 的“唯一来源”是 AgentWorkspace 私有目录中的 `task/<taskId>/task.md`
  * - list/read/write 都只围绕 markdown 文件与目录结构，不引入数据库
- * - 运行产物目录：`./.downcity/task/<taskId>/<timestamp>/...`
+ * - 运行产物目录：AgentWorkspace 私有目录中的 `task/<taskId>/<timestamp>/...`
  */
 
 import fs from "fs-extra";
@@ -52,11 +52,11 @@ function isDirectoryNameTimestamp(name: string): boolean {
  * 列出全部任务。
  *
  * 算法（中文）
- * - 遍历 `.downcity/task/*` 目录并解析每个 `task.md`。
+ * - 遍历 AgentWorkspace 的 `task/*` 目录并解析每个 `task.md`。
  * - 通过子目录时间戳推断 `lastRunTimestamp`。
  */
-export async function listTasks(project_root: string): Promise<TaskListItem[]> {
-  const root = String(project_root || "").trim();
+export async function listTasks(data_path: string): Promise<TaskListItem[]> {
+  const root = String(data_path || "").trim();
   if (!root) return [];
 
   const dir = getTaskRootDir(root);
@@ -88,7 +88,7 @@ export async function listTasks(project_root: string): Promise<TaskListItem[]> {
       taskId,
       markdown: raw,
       taskMdPath,
-      project_root: root,
+      data_path: root,
     });
     if (!parsed.ok) continue;
 
@@ -136,11 +136,11 @@ export async function listTasks(project_root: string): Promise<TaskListItem[]> {
  * - 若磁盘中存在同 title 多定义，会拒绝并提示冲突。
  */
 export async function resolveTaskIdByTitle(params: {
-  project_root: string;
+  data_path: string;
   title: string;
 }): Promise<string> {
-  const root = String(params.project_root || "").trim();
-  if (!root) throw new Error("project_root is required");
+  const root = String(params.data_path || "").trim();
+  if (!root) throw new Error("data_path is required");
   const title = String(params.title || "").trim();
   if (!title) throw new Error("title is required");
 
@@ -156,9 +156,9 @@ export async function resolveTaskIdByTitle(params: {
 /**
  * 读取单个任务定义。
  */
-export async function readTask(params: { taskId: string; project_root: string }): Promise<ShipTaskDefinitionV1> {
-  const root = String(params.project_root || "").trim();
-  if (!root) throw new Error("project_root is required");
+export async function readTask(params: { taskId: string; data_path: string }): Promise<ShipTaskDefinitionV1> {
+  const root = String(params.data_path || "").trim();
+  if (!root) throw new Error("data_path is required");
   const taskId = normalizeTaskId(params.taskId);
 
   const taskMdPath = getTaskMdPath(root, taskId);
@@ -167,7 +167,7 @@ export async function readTask(params: { taskId: string; project_root: string })
     taskId,
     markdown: raw,
     taskMdPath,
-    project_root: root,
+    data_path: root,
   });
   if (!parsed.ok) throw new Error(parsed.error);
   return parsed.task;
@@ -178,10 +178,10 @@ export async function readTask(params: { taskId: string; project_root: string })
  */
 export async function deleteTask(params: {
   taskId: string;
-  project_root: string;
+  data_path: string;
 }): Promise<{ taskId: string; taskDirPath: string }> {
-  const root = String(params.project_root || "").trim();
-  if (!root) throw new Error("project_root is required");
+  const root = String(params.data_path || "").trim();
+  if (!root) throw new Error("data_path is required");
   const taskId = normalizeTaskId(params.taskId);
 
   const taskMdPath = getTaskMdPath(root, taskId);
@@ -208,11 +208,11 @@ export async function writeTask(params: {
   taskId: string;
   frontmatter: ShipTaskFrontmatterV1;
   body: string;
-  project_root: string;
+  data_path: string;
   overwrite?: boolean;
 }): Promise<{ taskId: string; taskMdPath: string }> {
-  const root = String(params.project_root || "").trim();
-  if (!root) throw new Error("project_root is required");
+  const root = String(params.data_path || "").trim();
+  if (!root) throw new Error("data_path is required");
   const taskId = normalizeTaskId(params.taskId);
 
   const dir = getTaskDir(root, taskId);
@@ -239,10 +239,10 @@ export async function writeTask(params: {
 export async function ensureRunDir(params: {
   taskId: string;
   timestamp: string;
-  project_root: string;
+  data_path: string;
 }): Promise<{ runDir: string; runDirRel: string }> {
-  const root = String(params.project_root || "").trim();
-  if (!root) throw new Error("project_root is required");
+  const root = String(params.data_path || "").trim();
+  if (!root) throw new Error("data_path is required");
   const taskId = normalizeTaskId(params.taskId);
   const runDir = getTaskRunDir(root, taskId, params.timestamp);
   await fs.ensureDir(runDir);

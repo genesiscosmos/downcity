@@ -114,7 +114,7 @@ export async function executeTaskListAction(params: {
   return {
     success: true,
     data: await listTaskDefinitions({
-      project_root: params.context.workspace_path,
+      data_path: params.context.data_path,
       ...(params.payload.status ? { status: params.payload.status } : {}),
     }),
   };
@@ -130,7 +130,7 @@ export async function executeTaskCreateAction(params: {
 }) {
   const payload = params.payload;
   const result = await createTaskDefinition({
-    project_root: params.context.workspace_path,
+    data_path: params.context.data_path,
     request: payload,
   });
   if (!result.success) {
@@ -163,7 +163,7 @@ export async function executeTaskRunAction(params: {
 }) {
   const result = await runTaskDefinition({
     context: params.context,
-    project_root: params.context.workspace_path,
+    data_path: params.context.data_path,
     request: params.payload,
     execution_context: params.execution_context,
   });
@@ -189,7 +189,7 @@ export async function executeTaskDeleteAction(params: {
 }) {
   const payload = params.payload;
   const result = await deleteTaskDefinition({
-    project_root: params.context.workspace_path,
+    data_path: params.context.data_path,
     request: payload,
   });
   if (!result.success) {
@@ -222,7 +222,7 @@ export async function executeTaskUpdateAction(params: {
 }) {
   const payload = params.payload;
   const result = await updateTaskDefinition({
-    project_root: params.context.workspace_path,
+    data_path: params.context.data_path,
     request: payload,
   });
   if (!result.success) {
@@ -255,7 +255,7 @@ export async function executeTaskStatusAction(params: {
 }) {
   const payload = params.payload;
   const result = await setTaskStatus({
-    project_root: params.context.workspace_path,
+    data_path: params.context.data_path,
     request: payload,
   });
   if (!result.success) {

@@ -2,7 +2,7 @@
  * ChannelContextStore：渠道目标与 session_id 映射存储。
  *
  * 关键点（中文）
- * - 映射文件位于 `.downcity/channel/meta.json`。
+ * - 映射文件位于当前 AgentWorkspace 数据目录的 `channel/meta.json`。
  * - session_id 由服务端随机生成并持久化，不依赖字符串拼接规则。
  * - 统一提供“按目标找 session_id / 按 session_id 找目标”能力。
  */
@@ -169,11 +169,11 @@ export async function readChannelSessionRouteBySessionId(params: {
   context: PluginContext;
   session_id: string;
 }): Promise<ChannelContextRouteV1 | null> {
-  const rootPath = String(params.context.workspace_path || "").trim();
+  const rootPath = String(params.context.data_path || "").trim();
   const session_id = toOptionalTrimmedString(params.session_id);
   if (!rootPath || !session_id) return null;
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.workspace_path),
+    filePath: get_chat_channel_meta_path(params.context.data_path),
   });
   return normalizeRoute(file.routesBySessionId[session_id]);
 }
@@ -182,7 +182,7 @@ export async function readChannelSessionRouteBySessionId(params: {
  * 列出当前 agent 已记录的所有渠道路由条目。
  *
  * 关键点（中文）
- * - 数据源为 `.downcity/channel/meta.json` 的 `routesBySessionId`。
+ * - 数据源为当前 AgentWorkspace 数据目录下 `channel/meta.json` 的 `routesBySessionId`。
  * - 默认按 `updated_at` 倒序返回，便于展示“最近活跃”会话。
  */
 export async function listChannelSessionRoutes(params: {
@@ -191,7 +191,7 @@ export async function listChannelSessionRoutes(params: {
   updated_at: number;
   routes: ChannelContextRouteV1[];
 }> {
-  const rootPath = String(params.context.workspace_path || "").trim();
+  const rootPath = String(params.context.data_path || "").trim();
   if (!rootPath) {
     return {
       updated_at: Date.now(),
@@ -199,7 +199,7 @@ export async function listChannelSessionRoutes(params: {
     };
   }
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.workspace_path),
+    filePath: get_chat_channel_meta_path(params.context.data_path),
   });
   const routes = Object.values(file.routesBySessionId)
     .map((route) => normalizeRoute(route))
@@ -218,12 +218,12 @@ export async function resolveChannelSessionIdByTarget(params: {
   context: PluginContext;
   target: ChannelContextTarget;
 }): Promise<string | null> {
-  const rootPath = String(params.context.workspace_path || "").trim();
+  const rootPath = String(params.context.data_path || "").trim();
   if (!rootPath) return null;
   const targetKey = buildChannelTargetKey(params.target);
   if (!targetKey) return null;
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.workspace_path),
+    filePath: get_chat_channel_meta_path(params.context.data_path),
   });
   const session_id = toOptionalTrimmedString(file.sessionIdByTargetKey[targetKey]);
   if (!session_id) return null;
@@ -237,7 +237,7 @@ export async function resolveOrCreateChannelSessionIdByTarget(params: {
   context: PluginContext;
   target: ChannelContextTarget;
 }): Promise<string | null> {
-  const rootPath = String(params.context.workspace_path || "").trim();
+  const rootPath = String(params.context.data_path || "").trim();
   if (!rootPath) return null;
   const normalizedTarget = normalizeTarget(params.target);
   if (!normalizedTarget) return null;
@@ -245,7 +245,7 @@ export async function resolveOrCreateChannelSessionIdByTarget(params: {
   if (!targetKey) return null;
 
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.workspace_path),
+    filePath: get_chat_channel_meta_path(params.context.data_path),
   });
   const existingSessionId = toOptionalTrimmedString(file.sessionIdByTargetKey[targetKey]);
   if (
@@ -271,8 +271,8 @@ export async function resolveOrCreateChannelSessionIdByTarget(params: {
   };
   file.updated_at = Date.now();
   await writeMetaFile({
-    dirPath: get_chat_channel_dir_path(params.context.workspace_path),
-    filePath: get_chat_channel_meta_path(params.context.workspace_path),
+    dirPath: get_chat_channel_dir_path(params.context.data_path),
+    filePath: get_chat_channel_meta_path(params.context.data_path),
     file,
   });
   return nextSessionId;
@@ -290,7 +290,7 @@ export async function upsertChannelSessionRouteBySessionId(params: {
   actorName?: string;
   chatTitle?: string;
 }): Promise<void> {
-  const rootPath = String(params.context.workspace_path || "").trim();
+  const rootPath = String(params.context.data_path || "").trim();
   const session_id = toOptionalTrimmedString(params.session_id);
   const normalizedTarget = normalizeTarget(params.target);
   if (!rootPath || !session_id || !normalizedTarget) return;
@@ -298,7 +298,7 @@ export async function upsertChannelSessionRouteBySessionId(params: {
   if (!targetKey) return;
 
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.workspace_path),
+    filePath: get_chat_channel_meta_path(params.context.data_path),
   });
   const prev = normalizeRoute(file.routesBySessionId[session_id]);
   const nextRoute: ChannelContextRouteV1 = {
@@ -337,8 +337,8 @@ export async function upsertChannelSessionRouteBySessionId(params: {
   file.sessionIdByTargetKey[targetKey] = session_id;
   file.updated_at = Date.now();
   await writeMetaFile({
-    dirPath: get_chat_channel_dir_path(params.context.workspace_path),
-    filePath: get_chat_channel_meta_path(params.context.workspace_path),
+    dirPath: get_chat_channel_dir_path(params.context.data_path),
+    filePath: get_chat_channel_meta_path(params.context.data_path),
     file,
   });
 }
@@ -357,7 +357,7 @@ export async function removeChannelSessionRouteBySessionId(params: {
   removed: boolean;
   route: ChannelContextRouteV1 | null;
 }> {
-  const rootPath = String(params.context.workspace_path || "").trim();
+  const rootPath = String(params.context.data_path || "").trim();
   const session_id = toOptionalTrimmedString(params.session_id);
   if (!rootPath || !session_id) {
     return {
@@ -367,7 +367,7 @@ export async function removeChannelSessionRouteBySessionId(params: {
   }
 
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.workspace_path),
+    filePath: get_chat_channel_meta_path(params.context.data_path),
   });
   const route = normalizeRoute(file.routesBySessionId[session_id]);
   if (!route) {
@@ -388,8 +388,8 @@ export async function removeChannelSessionRouteBySessionId(params: {
 
   file.updated_at = Date.now();
   await writeMetaFile({
-    dirPath: get_chat_channel_dir_path(params.context.workspace_path),
-    filePath: get_chat_channel_meta_path(params.context.workspace_path),
+    dirPath: get_chat_channel_dir_path(params.context.data_path),
+    filePath: get_chat_channel_meta_path(params.context.data_path),
     file,
   });
   return {

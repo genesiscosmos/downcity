@@ -75,9 +75,9 @@ export async function startShellSession(
     String(
       request.turnId || "",
     ).trim() || undefined;
-  const shellDir = getShellDir(context.rootPath, shellId);
-  const snapshotFilePath = getShellSnapshotPath(context.rootPath, shellId);
-  const outputFilePath = getShellOutputPath(context.rootPath, shellId);
+  const shellDir = getShellDir(context.dataPath, shellId);
+  const snapshotFilePath = getShellSnapshotPath(context.dataPath, shellId);
+  const outputFilePath = getShellOutputPath(context.dataPath, shellId);
 
   await fs.ensureDir(shellDir);
   await fs.writeFile(outputFilePath, "", "utf-8");

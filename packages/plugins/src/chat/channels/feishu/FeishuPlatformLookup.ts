@@ -26,6 +26,8 @@ export interface FeishuLookupDeps {
    * 项目根目录。
    */
   rootPath: string;
+  /** AgentWorkspace 内部数据根目录。 */
+  dataPath: string;
   /**
    * 日志器。
    */
@@ -481,7 +483,7 @@ export async function downloadFeishuIncomingAttachments(
 ): Promise<FeishuDownloadedAttachment[]> {
   if (!deps.client || params.attachments.length === 0) return [];
 
-  const dir = path.join(deps.rootPath, ".downcity", ".cache", "feishu");
+  const dir = path.join(deps.dataPath, ".cache", "feishu");
   await fs.ensureDir(dir);
 
   const out: FeishuDownloadedAttachment[] = [];

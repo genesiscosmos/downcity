@@ -40,8 +40,16 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
     fs.mkdir(path.join(root, "homepage")),
   ]);
   const agent = new Agent({ id: "coder", plugins: [plugin] });
-  const first = agent.enter(new Workspace({ id: "sdk", path: path.join(root, "sdk") }));
-  const second = agent.enter(new Workspace({ id: "homepage", path: path.join(root, "homepage") }));
+  const first = agent.enter(new Workspace({
+    id: "sdk",
+    path: path.join(root, "sdk"),
+    data_root_path: path.join(root, "data"),
+  }));
+  const second = agent.enter(new Workspace({
+    id: "homepage",
+    path: path.join(root, "homepage"),
+    data_root_path: path.join(root, "data"),
+  }));
 
   try {
     const [first_result, second_result] = await Promise.all([
@@ -87,8 +95,16 @@ test("Plugin can ignore Workspace while still receiving its Context", async () =
     fs.mkdir(path.join(root, "two")),
   ]);
   const agent = new Agent({ id: "global_counter", plugins: [plugin] });
-  const first = agent.enter(new Workspace({ id: "one", path: path.join(root, "one") }));
-  const second = agent.enter(new Workspace({ id: "two", path: path.join(root, "two") }));
+  const first = agent.enter(new Workspace({
+    id: "one",
+    path: path.join(root, "one"),
+    data_root_path: path.join(root, "data"),
+  }));
+  const second = agent.enter(new Workspace({
+    id: "two",
+    path: path.join(root, "two"),
+    data_root_path: path.join(root, "data"),
+  }));
   try {
     assert.equal((await first.plugins.run_action({ plugin: "counter", action: "increment" })).data.value, 1);
     assert.equal((await second.plugins.run_action({ plugin: "counter", action: "increment" })).data.value, 2);
@@ -120,7 +136,11 @@ test("Workspace cleanup continues after one Plugin leave failure", async () => {
     id: "cleanup_agent",
     plugins: [failing_plugin, healthy_plugin],
   });
-  const entry = agent.enter(new Workspace({ id: "cleanup", path: root }));
+  const entry = agent.enter(new Workspace({
+    id: "cleanup",
+    path: root,
+    data_root_path: path.join(root, "data"),
+  }));
 
   try {
     await entry.sessions.list();

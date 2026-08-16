@@ -41,6 +41,8 @@ export type ShellHostContext = {
    * 当前项目根目录。
    */
   rootPath: string;
+  /** 当前 AgentWorkspace 的内部数据根目录。 */
+  dataPath: string;
   /**
    * 传给 shell 的显式环境变量。
    */

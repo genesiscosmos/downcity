@@ -8,7 +8,7 @@
  */
 
 import type { Shell } from "@downcity/shell";
-import type { SessionStore } from "@/types/store/SessionStore.js";
+import type { AgentWorkspaceStorage } from "@/types/workspace/AgentWorkspaceStorage.js";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 import { LocalSessionStore } from "@/workspace/store/LocalSessionStore.js";
 import type { WorkspaceTools } from "@/types/workspace/WorkspaceTools.js";
@@ -52,12 +52,16 @@ export abstract class WorkspaceBase {
     subscriber: WorkspaceEnvSubscriber,
   ): WorkspaceEnvUnsubscribe;
 
-  /** 为唯一绑定的 Agent 创建 Session 集合存储。 */
-  abstract create_session_store(agent_id: string): SessionStore;
+  /** 为唯一绑定的 Agent 创建当前 Workspace 的内部持久化资源。 */
+  abstract create_agent_workspace_storage(agent_id: string): AgentWorkspaceStorage;
 
-  /** 使用当前 Workspace FileSystem 创建默认 Session 集合存储。 */
-  protected create_default_session_store(agent_id: string): SessionStore {
-    return new LocalSessionStore({ files: this.files, agent_id });
+  /** 使用指定内部文件能力创建默认 Session 集合存储。 */
+  protected create_default_session_store(
+    agent_id: string,
+    files: FileSystem,
+    storage_root_path: string,
+  ): LocalSessionStore {
+    return new LocalSessionStore({ files, agent_id, storage_root_path });
   }
 
   /** 释放 Workspace 持有的资源。 */

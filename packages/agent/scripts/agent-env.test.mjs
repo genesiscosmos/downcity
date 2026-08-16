@@ -45,7 +45,7 @@ test("Agent 运行时只使用显式 id，不读取完整项目 config", async (
       version: "9.9.9",
     }));
     const agent = new Agent({ id: "sdk_id" });
-    const entry = agent.enter(new Workspace({ id: "test_workspace", path: project_root }));
+    const entry = agent.enter(new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
     assert.equal(agent.id, "sdk_id");
     assert.equal(entry.workspace.path, fs.realpathSync(project_root));
     await entry.sessions.create({ session_id: "env_runtime" });

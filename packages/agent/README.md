@@ -71,11 +71,10 @@ src/
 
 - `src/workspace/`
   - 统一承载项目根目录、文件系统、模型工具、初始化和结构化存储
-  - `setup/` 负责项目 `.env`、`.gitignore` 与 `.downcity` 初始化
-  - `store/` 负责 Agent、Session 和 JSONL Message 的本地持久化
+  - `store/` 负责 AgentWorkspace、Session 和 JSONL Message 的本地持久化
   - `WorkspaceEnv.ts` 负责 Workspace 环境变量装配
   - `tool/WorkspaceTools.ts` 组合文件、搜索与可选 Shell 工具
-  - `WorkspacePaths.ts` 负责 Workspace 内部路径布局
+  - `WorkspacePaths.ts` 负责 AgentWorkspace 私有数据路径布局
 
 - `src/session/`
   - `Session.ts` 是公开 facade 与 Session 对象装配入口

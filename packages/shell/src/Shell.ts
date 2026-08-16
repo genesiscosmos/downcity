@@ -9,6 +9,7 @@
 import type { ShellHostContext } from "@/types/ShellHostContext.js";
 import type {
   ShellOptions,
+  ShellBinding,
   ShellToolAction,
   ShellToolRunContext,
   ShellToolSet,
@@ -85,18 +86,24 @@ export class Shell {
    * - 同一个 Shell 可以被同一路径重复绑定，方便组合根幂等初始化。
    * - 已绑定后拒绝切换目录，避免活动进程与后续命令跨越 Workspace 安全边界。
    */
-  bind(root_path: string): void {
-    const next_root_path = String(root_path || "").trim();
-    if (!next_root_path) {
-      throw new Error("Shell.bind requires a non-empty root_path");
+  bind(input: ShellBinding): void {
+    const next_root_path = String(input?.root_path || "").trim();
+    const next_data_path = String(input?.data_path || "").trim();
+    if (!next_root_path || !next_data_path) {
+      throw new Error("Shell.bind requires root_path and data_path");
     }
     const current_root_path = String(this.host_options.root_path || "").trim();
-    if (current_root_path && current_root_path !== next_root_path) {
+    const current_data_path = String(this.host_options.data_path || "").trim();
+    if (
+      (current_root_path && current_root_path !== next_root_path)
+      || (current_data_path && current_data_path !== next_data_path)
+    ) {
       throw new Error(
-        `Shell is already bound to another Workspace: ${current_root_path}`,
+        `Shell is already bound to another AgentWorkspace: ${current_root_path}`,
       );
     }
     this.host_options.root_path = next_root_path;
+    this.host_options.data_path = next_data_path;
   }
 
   /**
@@ -145,10 +152,12 @@ export class Shell {
       return;
     }
     const root_path = String(this.host_options.root_path || "").trim();
-    if (root_path) {
+    const data_path = String(this.host_options.data_path || "").trim();
+    if (root_path && data_path) {
       await resolve_sandbox_policy({
         sandbox: this.sandbox,
         rootPath: root_path,
+        dataPath: data_path,
         env: this.host_options.env,
         safe_read_only_paths: next_paths,
         logger: this.host_options.logger,
@@ -229,14 +238,16 @@ export class Shell {
     run_context: ShellToolRunContext = {},
   ): ShellHostContext {
     const root_path = String(this.host_options.root_path || "").trim();
-    if (!root_path) {
-      throw new Error("Shell requires root_path. Bind it through new Workspace({ path, shell }).");
+    const data_path = String(this.host_options.data_path || "").trim();
+    if (!root_path || !data_path) {
+      throw new Error("Shell requires root_path and data_path from AgentWorkspace");
     }
     const session_id = run_context.ownerContextId || "";
     const turn_id = run_context.turnId || "";
     return {
       sandbox: this.sandbox,
       rootPath: root_path,
+      dataPath: data_path,
       env: run_context.env || this.host_options.env,
       safe_read_only_paths: this.host_options.safe_read_only_paths,
       config: {},

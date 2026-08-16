@@ -23,7 +23,7 @@ export class QqInboundDedupeStore {
   private loaded: boolean = false;
 
   constructor(params: {
-    rootPath: string;
+    dataPath: string;
     logger: Logger;
     maxEntries?: number;
   }) {
@@ -35,8 +35,7 @@ export class QqInboundDedupeStore {
         ? Math.floor(params.maxEntries)
         : 2000;
     this.filePath = path.join(
-      params.rootPath,
-      ".downcity",
+      params.dataPath,
       ".cache",
       "qq",
       "inbound-dedupe.json",

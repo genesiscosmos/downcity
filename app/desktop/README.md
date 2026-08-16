@@ -1,14 +1,14 @@
 # Downcity Desktop
 
-Downcity Desktop 与 CLI 共享 `~/.downcity/downcity.db` 中的 Agent、Workspace、Plugin 与 Embassy 配置。Electron main 直接创建 native `Agent`，并由进程内 `City` 统一管理生命周期；它不执行 CLI 命令，也不连接 CLI daemon。
+Downcity Desktop 与 CLI 共享 `~/.downcity/agents/`、`~/.downcity/plugins/` 中的文件型定义，以及 `downcity.db` 中的 Workspace、Token 与平台状态。Electron main 直接创建 native `Agent`，并由进程内 `City` 统一管理生命周期；它不执行 CLI 命令，也不连接 CLI daemon。
 
-Agent 与 Workspace 是独立记录。Desktop 在装配 Agent 时显式选择 Workspace，Session 继续保存在该 Workspace 的 `.downcity/agents/<agent_id>/sessions/` 下。
+Agent 与 Workspace 是独立记录。Desktop 在执行时让 Agent 进入指定 Workspace，Session、日志、Shell、Sandbox 与 Plugin 状态统一保存在 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`，不写入项目目录。
 
 ## 对话与用户状态
 
 Desktop 直接订阅 `SessionMutation`，以 canonical `SessionMessage` 展示流式文本、推理、Tool、审批、问题、文件与错误。发送请求只等待 Session 接受输入；Turn 运行态、停止与最终结果通过独立 IPC 事件同步。一个 Session 执行期间的新输入由 Renderer 队列管理，切换 Session 时分别保留草稿与队列。
 
-设置和 Federation 用户 Session 属于 Desktop/CLI 共享的用户级控制面，不写入 Agent 或 Workspace。用户 Token 继续加密保存在 `downcity.config`；如果 Token 来自 `DOWNCITY_USER_TOKEN` 环境变量，Desktop 只读使用该身份，不能在界面中清除环境变量。
+设置和 Federation 用户 Session 属于 Desktop/CLI 共享的用户级控制面，不写入项目目录。如果 Token 来自 `DOWNCITY_USER_TOKEN` 环境变量，Desktop 只读使用该身份，不能在界面中清除环境变量。
 
 ## 开发
 

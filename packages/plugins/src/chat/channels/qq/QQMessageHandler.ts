@@ -58,6 +58,10 @@ export interface QQMessageHandlerOptions {
    */
   rootPath: string;
   /**
+   * 当前 AgentWorkspace 的私有数据目录。
+   */
+  dataPath: string;
+  /**
    * 日志器。
    */
   logger: Logger;
@@ -256,6 +260,7 @@ export async function handleQqChannelMessage(
   const instructions = await buildQqInboundInstructions({
     context: options.context,
     rootPath: options.rootPath,
+    dataPath: options.dataPath,
     chatId: channelId,
     chat_key: options.getChatKey({ chatId: channelId, chatType }),
     message_id,
@@ -410,6 +415,7 @@ async function handleQqInboundMessage(
   const instructions = await buildQqInboundInstructions({
     context: options.context,
     rootPath: options.rootPath,
+    dataPath: options.dataPath,
     chatId,
     chat_key,
     message_id,

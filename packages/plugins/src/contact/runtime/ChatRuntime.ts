@@ -30,7 +30,7 @@ export async function receiveContactChatMessage(params: {
    */
   message: string;
 }): Promise<ContactChatResponse> {
-  const contact = await findContactByInboundToken(params.context.workspace_path, params.token);
+  const contact = await findContactByInboundToken(params.context.data_path, params.token);
   if (!contact || contact.status !== "trusted") {
     return {
       success: false,
@@ -41,7 +41,7 @@ export async function receiveContactChatMessage(params: {
   }
 
   const now = Date.now();
-  await appendContactMessage(params.context.workspace_path, contact.id, {
+  await appendContactMessage(params.context.data_path, contact.id, {
     role: "remote",
     text: params.message,
     created_at: now,
@@ -53,7 +53,7 @@ export async function receiveContactChatMessage(params: {
   });
   const result = await turn.finished;
   const reply = result.text.trim();
-  await appendContactMessage(params.context.workspace_path, contact.id, {
+  await appendContactMessage(params.context.data_path, contact.id, {
     role: "local",
     text: reply,
     created_at: Date.now(),

@@ -2,24 +2,28 @@
  * 本地 Workspace Store 实现的构造类型。
  *
  * 关键点（中文）
- * - 本地 Store 只接收 Workspace 已创建的 FileSystem，不单独接收存储根目录。
- * - SessionStore 与 SessionDataStore 因而始终和 WorkspaceTools 使用同一资源容器。
+ * - 本地 Store 接收 AgentWorkspaceStorage 创建的私有 FileSystem 与存储根目录。
+ * - SessionStore 与 SessionDataStore 不复用项目 WorkspaceTools 的 FileSystem。
  */
 
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 
 /** LocalSessionStore 构造参数。 */
 export interface LocalSessionStoreOptions {
-  /** 当前 Store 与 WorkspaceTools 共用的 Workspace 文件能力。 */
+  /** 当前 AgentWorkspace 私有数据文件能力。 */
   files: FileSystem;
-  /** 当前 Agent 的稳定标识，用于划分 `.downcity/agents` 子目录。 */
+  /** 当前 AgentWorkspace 内部数据的绝对根路径。 */
+  storage_root_path: string;
+  /** 当前 Agent 的稳定标识，用于划分用户级 `agents` 子目录。 */
   agent_id: string;
 }
 
 /** LocalSessionDataStore 构造参数。 */
 export interface LocalSessionDataStoreOptions {
-  /** 当前 Store 与 WorkspaceTools 共用的 Workspace 文件能力。 */
+  /** 当前 AgentWorkspace 私有数据文件能力。 */
   files: FileSystem;
+  /** 当前 AgentWorkspace 内部数据的绝对根路径。 */
+  storage_root_path: string;
   /** 当前 Session 所属 Agent 的稳定标识。 */
   agent_id: string;
   /** 当前 Session 的稳定标识。 */
@@ -28,7 +32,7 @@ export interface LocalSessionDataStoreOptions {
 
 /** JsonlSessionMessageStore 构造参数。 */
 export interface JsonlSessionMessageStoreOptions {
-  /** 当前 Message Store 与 Session 共用的 Workspace 文件能力。 */
+  /** 当前 Message Store 使用的 AgentWorkspace 私有文件能力。 */
   files: FileSystem;
   /** 当前 Session 的稳定标识。 */
   session_id: string;

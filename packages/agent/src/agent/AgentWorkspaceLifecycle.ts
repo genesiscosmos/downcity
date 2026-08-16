@@ -9,6 +9,7 @@
 
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
+import type { AgentWorkspaceStorage } from "@/types/workspace/AgentWorkspaceStorage.js";
 import {
   start_action_schedule_runtime,
   type ActionScheduleRuntimeHandle,
@@ -22,6 +23,7 @@ export class AgentWorkspaceLifecycle {
   constructor(
     private readonly context: PluginContext,
     private readonly plugins: PluginRegistry,
+    private readonly storage: AgentWorkspaceStorage,
   ) {
     this.ready_promise = this.start();
   }
@@ -49,7 +51,10 @@ export class AgentWorkspaceLifecycle {
       );
     }
     try {
-      this.action_schedule = await start_action_schedule_runtime(this.context);
+      this.action_schedule = await start_action_schedule_runtime(
+        this.context,
+        this.storage,
+      );
     } catch (error) {
       this.context.logger.error(`ActionSchedule start failed: ${String(error)}`);
     }

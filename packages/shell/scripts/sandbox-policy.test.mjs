@@ -24,6 +24,7 @@ test("host tool directory enters read-only policy only", async () => {
     const policy = await resolve_sandbox_policy({
       sandbox: test_sandbox,
       rootPath: fixture.project_root,
+      dataPath: path.join(fixture.fixture_root, "agent-workspace-data"),
       safe_read_only_paths: [fixture.tool_root],
     }, {});
     const real_tool_root = await fs.realpath(fixture.tool_root);
@@ -44,6 +45,7 @@ test("host tool directory cannot overlap workspace writable root", async () => {
     await assert.rejects(resolve_sandbox_policy({
       sandbox: test_sandbox,
       rootPath: fixture.project_root,
+      dataPath: path.join(fixture.fixture_root, "agent-workspace-data"),
       safe_read_only_paths: [nested_tool_root],
     }, {}), /overlaps a writable path/);
   } finally {
@@ -58,6 +60,7 @@ test("group or world writable host tool directory is rejected", async () => {
     await assert.rejects(resolve_sandbox_policy({
       sandbox: test_sandbox,
       rootPath: fixture.project_root,
+      dataPath: path.join(fixture.fixture_root, "agent-workspace-data"),
       safe_read_only_paths: [fixture.tool_root],
     }, {}), /must not be group\/world writable/);
   } finally {

@@ -32,7 +32,7 @@ function telegram_identity(issuer, chat_type = "private") {
 test("Chat Access 按 issuer 隔离并复用 pending request", () => {
   const project_root = create_project_root();
   try {
-    const service = new ChatAccessService({ project_root });
+    const service = new ChatAccessService({ data_path: project_root });
     const first = service.evaluate(telegram_identity("telegram-main"));
     const repeated = service.evaluate(telegram_identity("telegram-main"));
     const other_issuer = service.evaluate(telegram_identity("telegram-backup"));
@@ -54,6 +54,7 @@ test("Telegram 授权命令使用代码格式并保留完整标识符", () => {
       {
         agent_id: "lucas_whitman",
         workspace_path: project_root,
+        data_path: project_root,
         logger: {
           debug() {},
           info() {},
@@ -85,7 +86,7 @@ test("Telegram 授权命令使用代码格式并保留完整标识符", () => {
 test("approve all、revoke 和 deny 保持明确状态语义", () => {
   const project_root = create_project_root();
   try {
-    const service = new ChatAccessService({ project_root });
+    const service = new ChatAccessService({ data_path: project_root });
     const pending = service.evaluate(telegram_identity("telegram-main"));
     assert.ok(pending.request_id);
 

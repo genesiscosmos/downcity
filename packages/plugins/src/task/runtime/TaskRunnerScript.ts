@@ -25,10 +25,6 @@ export interface RunScriptTaskBranchParams {
    */
   context: PluginContext;
   /**
-   * 当前 run 目录绝对路径。
-   */
-  runDirAbs: string;
-  /**
    * script 任务绑定的 session_id。
    */
   session_id: string;
@@ -110,7 +106,6 @@ export async function runScriptTaskBranch(
   try {
     const scriptResult = await runScriptTask({
       context: params.context,
-      runDirAbs: params.runDirAbs,
       session_id: params.session_id,
       scriptBody: params.scriptBody,
     });

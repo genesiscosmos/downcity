@@ -80,7 +80,7 @@ test("compact Handle 在队列命令完成后兑现并阻塞后续 Prompt", asyn
     }),
     session_class: CompactSession,
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: project_root }));
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
 
   try {
     const session = await entry.sessions.create({

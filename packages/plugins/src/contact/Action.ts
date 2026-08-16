@@ -193,7 +193,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
       execute: async (params) => ({
         success: true,
         data: {
-          contacts: await listContacts(params.context.workspace_path),
+          contacts: await listContacts(params.context.data_path),
         } as unknown as JsonValue,
       }),
     }),
@@ -354,7 +354,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
       execute: async (params) => ({
         success: true,
         data: {
-          shares: await listContactInboxShares(params.context.workspace_path),
+          shares: await listContactInboxShares(params.context.data_path),
         } as unknown as JsonValue,
       }),
     }),
@@ -385,7 +385,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
       execute: async (params) => ({
         success: true,
         data: (await receiveShare({
-          project_root: params.context.workspace_path,
+          data_path: params.context.data_path,
           shareId: (params.input as unknown as ContactReceiveCommandPayload).shareId,
         })) as unknown as JsonValue,
       }),

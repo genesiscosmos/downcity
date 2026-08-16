@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 每次 get_logger 调用都应返回独立实例。
- * - 两个实例并发写日志时，只能写入各自项目的 `.downcity/logs`。
+ * - 两个实例并发写日志时，只能写入各自绑定数据根的 `logs`。
  */
 
 import test from "node:test";
@@ -18,7 +18,7 @@ import { get_logger } from "../bin/index.js";
  * 读取项目日志目录内的全部 JSONL 文本。
  */
 async function read_project_logs(project_root) {
-  const logs_dir = path.join(project_root, ".downcity", "logs");
+  const logs_dir = path.join(project_root, "logs");
   const files = await fs.readdir(logs_dir);
   const jsonl_files = files.filter((file) => file.endsWith(".jsonl"));
   const chunks = await Promise.all(

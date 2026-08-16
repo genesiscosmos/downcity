@@ -11,17 +11,18 @@ description: 使用 @downcity/agent 构建具备项目文件、受控命令、Pl
 
 ```mermaid
 flowchart LR
-    Host["SDK 宿主"] --> Workspace["Workspace<br/>项目资源与安全边界"]
-    Workspace --> Agent["Agent<br/>能力组合根"]
-    Agent --> Session["Session<br/>有状态执行容器"]
+    Host["SDK 宿主"] --> Agent["Agent<br/>身份与 Plugin 注册表"]
+    Agent --> Workspace["agent.enter(Workspace)<br/>执行作用域"]
+    Workspace --> Session["Session<br/>有状态执行容器"]
     Session --> Turn["Turn<br/>一次 prompt 执行"]
     Agent --> Plugin["Plugin<br/>扩展能力"]
 ```
 
 | 对象 | 负责 | 不负责 |
 | --- | --- | --- |
-| `Workspace` | 项目文件、Env、Store、Tools、Shell 与 Sandbox | 模型、Plugin、Session 编排 |
-| `Agent` | 模型、指令、最终 Tools、Plugins、Sessions | HTTP/RPC transport |
+| `Workspace` | 项目文件、Env、Tools、Shell 与 Sandbox | Agent 身份、Plugin、Session 持久化 |
+| `Agent` | 模型、指令、PluginRegistry，并可进入多个 Workspace | HTTP/RPC transport |
+| `AgentWorkspace` | 当前 Workspace 的 Session、私有 Storage 与 PluginContext | 其他 Workspace 的状态 |
 | `Session` | 对话状态、消息历史、执行顺序与审批 | 项目资源所有权 |
 | `PluginContext` | Agent 投影给 Plugin 的稳定能力 | 充当第二个 Agent |
 | `SessionTurnContext` | 一个 Turn 的执行上下文与生命周期 | 保存长期 Agent 状态 |
@@ -43,6 +44,8 @@ flowchart LR
 Shell 是本地 Agent 使用项目命令和进程的标准入口。SDK 不会自动选择平台 Sandbox；应用只安装并注入当前操作系统对应的 Adapter。以下示例使用 macOS：
 
 ```ts
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { Agent, Workspace } from "@downcity/agent";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 import { Shell } from "@downcity/shell";
@@ -52,18 +55,20 @@ const shell = new Shell({
 });
 
 const workspace = new Workspace({
+  id: "project",
   path: process.cwd(),
+  data_root_path: join(homedir(), ".downcity"),
   shell,
 });
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace,
   model,
 });
+const agent_workspace = agent.enter(workspace);
 
 try {
-  const session = await agent.sessions.create();
+  const session = await agent_workspace.sessions.create();
   const turn = await session.prompt({ query: "总结当前仓库" });
   const result = await turn.finished;
   console.log(result.text);
@@ -75,10 +80,10 @@ try {
 只需要记住这条主链路：
 
 ```text
-Workspace + Shell → Agent → Session → prompt() → turn.finished → dispose()
+Agent + Workspace + Shell → agent.enter(workspace) → Session → prompt() → turn.finished → dispose()
 ```
 
-`agent.dispose()` 会释放 Agent 及其独占 Workspace，包括 Plugin lifecycle、ActionSchedule、Shell 进程、PTY 和 Sandbox。不要在正常流程中再次单独释放同一个 Workspace。
+`agent.dispose()` 会释放 Agent 进入的全部 AgentWorkspace，包括 Plugin lifecycle、ActionSchedule、Shell 进程、PTY 和 Sandbox。项目目录不会创建 `.downcity`。
 
 ## 模型归属
 

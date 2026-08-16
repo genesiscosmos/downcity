@@ -19,8 +19,8 @@ import type { JsonObject } from "@downcity/agent";
 export class TelegramStateStore {
   private readonly lastUpdateIdFile: string;
 
-  constructor(project_root: string) {
-    const dir = path.join(project_root, ".downcity", ".cache", "telegram");
+  constructor(data_path: string) {
+    const dir = path.join(data_path, ".cache", "telegram");
     this.lastUpdateIdFile = path.join(dir, "lastUpdateId.json");
   }
 

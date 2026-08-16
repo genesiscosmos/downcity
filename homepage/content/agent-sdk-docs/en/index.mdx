@@ -11,17 +11,18 @@ description: Build local or remote Agents with project files, sandboxed commands
 
 ```mermaid
 flowchart LR
-    Host["SDK host"] --> Workspace["Workspace<br/>project resources and security boundary"]
-    Workspace --> Agent["Agent<br/>capability composition root"]
-    Agent --> Session["Session<br/>stateful execution container"]
+    Host["SDK host"] --> Agent["Agent<br/>identity and Plugin registry"]
+    Agent --> Workspace["agent.enter(Workspace)<br/>execution scope"]
+    Workspace --> Session["Session<br/>stateful execution container"]
     Session --> Turn["Turn<br/>one prompt execution"]
     Agent --> Plugin["Plugin<br/>extension capability"]
 ```
 
 | Object | Owns | Does not own |
 | --- | --- | --- |
-| `Workspace` | Project files, env, Store, Tools, Shell, and Sandbox | Models, plugins, Session orchestration |
-| `Agent` | Model, instructions, final Tools, plugins, and Sessions | HTTP/RPC transports |
+| `Workspace` | Project files, env, Tools, Shell, and Sandbox | Agent identity, plugins, and Session persistence |
+| `Agent` | Model, instructions, PluginRegistry, and entry into multiple Workspaces | HTTP/RPC transports |
+| `AgentWorkspace` | Sessions, private Storage, and PluginContext for one Workspace entry | State in other Workspaces |
 | `Session` | Conversation state, message history, execution order, and approvals | Project resource ownership |
 | `PluginContext` | Stable Agent capabilities projected to a Plugin | A second Agent facade |
 | `SessionTurnContext` | Execution context and lifecycle for one Turn | Long-lived Agent state |
@@ -43,6 +44,8 @@ Network serving does not belong to Agent. Use `AgentHTTP` or `AgentRPC` from `@d
 Shell is the standard entry for project commands and processes. The SDK does not select a platform Sandbox automatically; install and inject the Adapter for the current operating system. This example uses macOS:
 
 ```ts
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { Agent, Workspace } from "@downcity/agent";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 import { Shell } from "@downcity/shell";
@@ -52,18 +55,20 @@ const shell = new Shell({
 });
 
 const workspace = new Workspace({
+  id: "project",
   path: process.cwd(),
+  data_root_path: join(homedir(), ".downcity"),
   shell,
 });
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace,
   model,
 });
+const agent_workspace = agent.enter(workspace);
 
 try {
-  const session = await agent.sessions.create();
+  const session = await agent_workspace.sessions.create();
   const turn = await session.prompt({ query: "Summarize this repository" });
   const result = await turn.finished;
   console.log(result.text);
@@ -75,10 +80,10 @@ try {
 Remember this primary path:
 
 ```text
-Workspace + Shell → Agent → Session → prompt() → turn.finished → dispose()
+Agent + Workspace + Shell → agent.enter(workspace) → Session → prompt() → turn.finished → dispose()
 ```
 
-`agent.dispose()` releases the Agent and its exclusive Workspace, including plugin lifecycle, ActionSchedule, Shell processes, PTYs, and Sandbox resources. Do not dispose the same Workspace again in the normal flow.
+`agent.dispose()` releases every AgentWorkspace it entered, including plugin lifecycle, ActionSchedule, Shell processes, PTYs, and Sandbox resources. The project directory never receives `.downcity`.
 
 ## Model ownership
 

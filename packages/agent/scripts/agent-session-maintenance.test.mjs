@@ -16,9 +16,10 @@ function create_project_root() {
 function get_session_path(root_path, agent_id, session_id) {
   return path.join(
     root_path,
-    ".downcity",
     "agents",
     encodeURIComponent(agent_id),
+    "workspaces",
+    "test_workspace",
     "sessions",
     encodeURIComponent(session_id),
   );
@@ -26,12 +27,17 @@ function get_session_path(root_path, agent_id, session_id) {
 
 test("Agent sessions 负责清空消息和删除 Session 数据", async () => {
   const root_path = create_project_root();
+  const data_root_path = path.join(root_path, "data");
   const agent = new Agent({ id: "agent_test" });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: root_path }));
+  const entry = agent.enter(new Workspace({
+    id: "test_workspace",
+    path: root_path,
+    data_root_path,
+  }));
   try {
     const session_id = "session_test";
     await entry.sessions.create({ session_id: session_id });
-    const session_path = get_session_path(root_path, agent.id, session_id);
+    const session_path = get_session_path(data_root_path, agent.id, session_id);
     const messages_path = path.join(session_path, "messages");
     fs.mkdirSync(messages_path, { recursive: true });
     fs.writeFileSync(path.join(messages_path, "active.jsonl"), "{}\n");

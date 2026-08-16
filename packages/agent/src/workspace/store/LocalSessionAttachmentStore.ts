@@ -1,7 +1,7 @@
 /**
  * Workspace 内 Session 附件的本地实现。
  *
- * Data URL 在这里解码为文件；Message 层只接收相对 Workspace 根目录的文件引用。
+ * Data URL 在这里解码为文件；Message 层保存 AgentWorkspace 私有目录中的绝对路径。
  */
 
 import path from "node:path";
@@ -50,7 +50,7 @@ export class LocalSessionAttachmentStore implements SessionAttachmentStore {
     const absolute_path = path.join(this.attachments_dir_path, attachment_name);
     await this.files.ensure_directory(this.attachments_dir_path);
     await this.files.write_file_atomically(absolute_path, parsed.bytes);
-    return path.relative(this.files.root_path, absolute_path);
+    return absolute_path;
   }
 }
 

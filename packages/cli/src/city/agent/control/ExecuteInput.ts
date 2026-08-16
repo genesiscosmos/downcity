@@ -134,7 +134,7 @@ function resolveAttachmentBytes(
 }
 
 async function materializeAttachmentContent(params: {
-  project_root: string;
+  data_path: string;
   session_id: string;
   attachment: ControlSessionExecuteAttachmentInput;
   index: number;
@@ -164,21 +164,21 @@ async function materializeAttachmentContent(params: {
     .slice(0, 32);
   const prefix = safeContext || "context";
   const fileName = `${Date.now()}-${prefix}-${String(params.index + 1).padStart(2, "0")}-${safeName}`;
-  const cacheDir = path.join(getCacheDirPath(params.project_root), "chrome-extension");
+  const cacheDir = path.join(getCacheDirPath(params.data_path), "chrome-extension");
   await fs.ensureDir(cacheDir);
   const absPath = path.join(cacheDir, fileName);
   await fs.writeFile(absPath, bytes);
-  return toProjectRelativePath(params.project_root, absPath);
+  return absPath;
 }
 
 function toAttachmentLine(params: {
   type: ControlSessionExecuteAttachmentType;
-  relativePath: string;
+  filePath: string;
   caption?: string;
 }): string {
   return render_chat_message_file_tag({
     type: params.type,
-    path: params.relativePath,
+    path: params.filePath,
     ...(params.caption ? { caption: params.caption } : {}),
   });
 }
@@ -187,7 +187,10 @@ function toAttachmentLine(params: {
  * 构造 execute 入站文本。
  */
 export async function buildExecuteInputText(params: {
+  /** 当前项目根目录，只用于校验调用方传入的已有文件路径。 */
   project_root: string;
+  /** 当前 AgentWorkspace 私有数据目录，用于保存请求内联附件。 */
+  data_path: string;
   session_id: string;
   instructions: string;
   attachments?: ControlSessionExecuteAttachmentInput[];
@@ -209,20 +212,20 @@ export async function buildExecuteInputText(params: {
       project_root: params.project_root,
       attachment,
     });
-    const relativePath =
+    const filePath =
       reusePath ||
       (await materializeAttachmentContent({
-        project_root: params.project_root,
+        data_path: params.data_path,
         session_id: params.session_id,
         attachment,
         index,
       }));
-    if (!relativePath) continue;
+    if (!filePath) continue;
 
     lines.push(
       toAttachmentLine({
         type,
-        relativePath,
+        filePath,
         ...(caption ? { caption } : {}),
       }),
     );

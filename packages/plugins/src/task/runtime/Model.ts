@@ -203,9 +203,9 @@ export function parseTaskMarkdown(params: {
   taskId: string;
   markdown: string;
   taskMdPath: string;
-  project_root: string;
+  data_path: string;
 }): { ok: true; task: ShipTaskDefinitionV1 } | { ok: false; error: string } {
-  const { taskId, markdown, taskMdPath, project_root } = params;
+  const { taskId, markdown, taskMdPath, data_path } = params;
   const text = String(markdown ?? "");
   const { frontMatterYaml, body } = parseFrontMatter(text);
 
@@ -283,7 +283,7 @@ export function parseTaskMarkdown(params: {
   };
 
   const relTaskMdPath = path
-    .relative(project_root, taskMdPath)
+    .relative(data_path, taskMdPath)
     .split(path.sep)
     .join("/");
 

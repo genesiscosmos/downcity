@@ -64,7 +64,7 @@ export class FeishuBot extends BaseChatChannel {
     this.appId = appId;
     this.appSecret = appSecret;
     this.domain = domain;
-    this.dedupeDir = get_feishu_dedupe_dir_path(context.workspace_path);
+    this.dedupeDir = get_feishu_dedupe_dir_path(context.data_path);
     this.platform = new FeishuPlatformClient({
       context,
       config: {

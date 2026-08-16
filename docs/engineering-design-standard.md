@@ -110,11 +110,11 @@ Downcity 的工程目标不是追求最多的抽象、最强的限制或最通�
 优先组合职责明确的对象：
 
 ```text
-Workspace = Files + Env + WorkspaceTools + SessionStore + Shell?
+Workspace = ProjectPath + Files + Env + WorkspaceTools + Shell? + DataRoot
 
 Agent = Identity + Model + Instruction + Plugins
 
-AgentWorkspace = Agent.enter(Workspace) + Tools + Sessions + Context
+AgentWorkspace = Agent.enter(Workspace) + Storage + Tools + Sessions + Context
 
 Session = State + Queue + Messages + Composer + Executor + Approvals
 
@@ -146,7 +146,7 @@ Shell = Command/Process Protocol + Sandbox Adapter
 - SessionMessages 是会话消息的 canonical source。
 - Workspace 持有 Workspace env，Agent 不复制另一份 env。
 - PluginRegistry 持有已注册 Plugin，Agent 只组合和暴露。
-- SessionStore 基于 Workspace FileSystem 实现持久化，不绕开 Workspace 另建文件通道。
+- SessionStore 基于 AgentWorkspaceStorage 的私有 FileSystem 实现持久化，不写入项目目录。
 - 运行中状态通过事件或 getter 投影，不能在 Context 中复制后长期漂移。
 
 缓存可以存在，但必须明确：
@@ -196,8 +196,8 @@ Workspace 统一持有一个 Agent 可以使用的项目资源：
 - Rooted FileSystem。
 - 文件与搜索工具。
 - Workspace env。
-- SessionStore。
 - 可选 Shell。
+- 由宿主传入的用户级数据根路径。
 
 Workspace 不负责：
 
@@ -207,7 +207,7 @@ Workspace 不负责：
 - daemon 和多 Agent 管理。
 - 用户级全局配置。
 
-Workspace 必须有稳定 ID。Agent 定义不保存 Workspace 绑定；宿主在一次具体执行开始时创建 Workspace，并通过 `agent.enter(workspace)` 得到 AgentWorkspace。一个 Agent 可以同时进入多个 Workspace，各自的 Session、Shell、env、日志与后台项目资源必须隔离。
+Workspace 必须有稳定 ID。Agent 定义不保存 Workspace 绑定；宿主在一次具体执行开始时创建 Workspace，并通过 `agent.enter(workspace)` 得到 AgentWorkspace。一个 Agent 可以同时进入多个 Workspace，各自的 Session、Shell、env、日志与 Plugin 状态必须隔离。项目目录只承担真实项目文件与命令 cwd，不承担 Downcity 运行状态。
 
 ### 4.2 Agent 是单 Agent 组合根
 
@@ -220,6 +220,14 @@ Agent 持有：
 - Agent 自身长期运行状态。
 
 Agent 不持有单一 Workspace。`AgentWorkspace` 是 Agent 进入一个 Workspace 后的执行边界，持有该项目的工具、Session、PluginContext 和项目生命周期资源。
+
+每个本地 AgentWorkspace 的内部状态统一保存在：
+
+```text
+~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/
+```
+
+该目录包含 Session、日志、Shell、Sandbox、Schedule、Plugin 状态与缓存。`AgentWorkspace.data_path` 和 `PluginContext.data_path` 指向该根目录；`PluginContext.workspace_path` 始终只指向真实项目。
 
 Agent 不负责：
 
@@ -277,6 +285,8 @@ Plugin 以全局稳定 ID 为身份，定义与配置保存在 `~/.downcity/plug
 Agent 通过 `agent.json` 选择 Plugin 与可选 profile。Plugin profile 可以包含渠道、账号、端点等 Plugin 自己定义的结构；配置 Schema 与默认值由 Plugin definition 拥有，TOML 只保存 profile 值，TypeScript 类型由 Plugin 代码独立维护。框架不定义 Binding、Resource 或 Installation 持久化领域。内置与第三方 Plugin 都按稳定 ID、JSON Schema 与 Plugin constructor 进入 Loader；第三方入口通过 `plugin` 直接导出 constructor，不增加公开工厂协议，Definition ID 同时是目录名和 Registry key。
 
 `downcity.db` 继续保存 Workspace 索引、平台设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。Workspace 与平台设置以明文 JSON 保存，本地隔离依赖数据库文件权限。
+
+Agent 在 Workspace 中执行产生的本地状态保存在 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`。项目目录中不得创建 `<project>/.downcity`，也不进行旧目录兼容读取或迁移。
 
 Workspace 只保证底层文件和 Shell 安全边界，不为 Plugin 的业务行为负责。Plugin 的业务权限、账号、网络访问与语义校验由 Plugin 或宿主管理。
 
@@ -341,8 +351,13 @@ Shell 不应该吸收：
 目标使用方式：
 
 ```ts
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 const workspace = new Workspace({
+  id: "project",
   path: process.cwd(),
+  data_root_path: join(homedir(), ".downcity"),
   shell: new Shell({ sandbox: platform_sandbox }),
 });
 ```
@@ -434,16 +449,16 @@ PluginContext 只服务 Plugin；宿主直接依赖 Agent，不获取 PluginCont
 
 ### 8.1 Store 是领域能力，不是第二个资源容器
 
-Store 基于 Workspace 提供的 FileSystem 原子能力实现 Agent/Session 结构化持久化。Store 与 Workspace 的关系是：
+Store 基于 AgentWorkspaceStorage 提供的私有 FileSystem 原子能力实现 Agent/Session 结构化持久化。Store 与 Workspace 的关系是：
 
 ```text
-Workspace 提供资源与文件原语
+Workspace 提供项目资源，并在 Agent enter 时创建 AgentWorkspaceStorage
   → SessionStore 定义 Session 集合存储语义
   → SessionDataStore 定义单个 Session 存储语义
   → MessageStore 定义消息提交与恢复语义
 ```
 
-Store 不应绕开 Workspace 自行访问另一套根目录，也不应限制 Agent 读取自己的历史、instruction 或审计数据。
+Store 只能使用 AgentWorkspaceStorage，不能使用项目 FileSystem。项目 Tool 不能读取或修改 Session、instruction、日志和 Plugin 私有状态；需要内部持久化能力的 Plugin 使用 `PluginContext.data_path` 或 `data_files`。
 
 ### 8.2 持久化必须服务于恢复
 

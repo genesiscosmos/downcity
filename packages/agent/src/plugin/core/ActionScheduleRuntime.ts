@@ -8,6 +8,7 @@
  */
 
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
+import type { AgentWorkspaceStorage } from "@/types/workspace/AgentWorkspaceStorage.js";
 import { run_due_action_schedule_jobs } from "@/plugin/core/ActionScheduleExecutor.js";
 import { ActionScheduleStore } from "@/plugin/core/ActionScheduleStore.js";
 
@@ -33,8 +34,9 @@ export interface ActionScheduleRuntimeHandle {
  */
 export async function start_action_schedule_runtime(
   context: PluginContext,
+  storage: AgentWorkspaceStorage,
 ): Promise<ActionScheduleRuntimeHandle> {
-  const store = new ActionScheduleStore(context.files);
+  const store = new ActionScheduleStore(storage.files, storage.root_path);
   const recovered = await store.reset_running_jobs_to_pending();
   if (recovered > 0) {
     context.logger.warn(

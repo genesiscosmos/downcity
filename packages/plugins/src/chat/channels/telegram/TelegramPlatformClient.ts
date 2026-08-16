@@ -75,9 +75,10 @@ export class TelegramPlatformClient {
     this.api = new TelegramApiClient({
       botToken: options.botToken,
       project_root: options.context.workspace_path,
+      data_path: options.context.data_path,
       logger: options.context.logger,
     });
-    this.stateStore = new TelegramStateStore(options.context.workspace_path);
+    this.stateStore = new TelegramStateStore(options.context.data_path);
     this.onMessage = options.onMessage;
     this.onCallbackQuery = options.onCallbackQuery;
     this.onWebhookConflictResolved = options.onWebhookConflictResolved;

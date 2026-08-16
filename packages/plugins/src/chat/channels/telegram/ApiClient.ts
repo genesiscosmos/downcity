@@ -38,11 +38,18 @@ function sleep(ms: number): Promise<void> {
 export class TelegramApiClient {
   private readonly botToken: string;
   private readonly rootPath: string;
+  private readonly dataPath: string;
   private readonly logger: Logger;
 
-  constructor(opts: { botToken: string; project_root: string; logger: Logger }) {
+  constructor(opts: {
+    botToken: string;
+    project_root: string;
+    data_path: string;
+    logger: Logger;
+  }) {
     this.botToken = opts.botToken;
     this.rootPath = opts.project_root;
+    this.dataPath = opts.data_path;
     this.logger = opts.logger;
   }
 
@@ -166,7 +173,7 @@ export class TelegramApiClient {
   }
 
   /**
-   * 下载 Telegram 文件并保存到 `.downcity/.cache/telegram`。
+   * 下载 Telegram 文件并保存到当前 AgentWorkspace 数据目录的 `.cache/telegram`。
    *
    * 说明（中文）
    * - 文件名会做安全化处理，避免路径注入
@@ -200,7 +207,7 @@ export class TelegramApiClient {
       base.replace(/[^\w.\-()@\u4e00-\u9fff]+/g, "_").slice(0, 160) ||
       `tg-${fileId}`;
 
-    const dir = path.join(this.rootPath, ".downcity", ".cache", "telegram");
+    const dir = path.join(this.dataPath, ".cache", "telegram");
     await fs.ensureDir(dir);
     const uniq = `${Date.now()}-${fileId.slice(0, 8)}`;
     const outPath = path.join(dir, `${uniq}-${safeBase}`);

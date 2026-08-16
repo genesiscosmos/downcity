@@ -26,6 +26,7 @@ import { randomUUID } from "node:crypto";
 import {
   access,
   appendFile,
+  chmod,
   mkdir,
   open,
   readFile,
@@ -35,6 +36,7 @@ import {
   stat,
 } from "node:fs/promises";
 import { write_file_atomically } from "@/workspace/file/FileAtomicWriter.js";
+import type { LocalFileSystemOptions } from "@/types/workspace/LocalFileSystem.js";
 
 const FILE_LOCK_STALE_MS = 120_000;
 const FILE_LOCK_TIMEOUT_MS = FILE_LOCK_STALE_MS * 2;
@@ -52,8 +54,17 @@ export class LocalFileSystem implements FileSystem {
   /** 已解析且不可变的项目根目录。 */
   readonly root_path: string;
 
-  constructor(root_path: string) {
-    this.root_path = root_path;
+  /** 新建目录使用的可选权限。 */
+  private readonly directory_mode?: number;
+
+  /** 新建文件使用的可选权限。 */
+  private readonly file_mode?: number;
+
+  constructor(input: string | LocalFileSystemOptions) {
+    const options = typeof input === "string" ? { root_path: input } : input;
+    this.root_path = path.resolve(options.root_path);
+    this.directory_mode = options.directory_mode;
+    this.file_mode = options.file_mode;
   }
 
   /** 将相对路径安全解析到当前 Workspace 根目录。 */
@@ -89,7 +100,14 @@ export class LocalFileSystem implements FileSystem {
 
   /** 创建目录及缺失的父目录。 */
   async ensure_directory(directory_path: string): Promise<void> {
-    await mkdir(this.resolve_path(directory_path), { recursive: true });
+    const resolved_path = this.resolve_path(directory_path);
+    await mkdir(resolved_path, {
+      recursive: true,
+      ...(this.directory_mode !== undefined ? { mode: this.directory_mode } : {}),
+    });
+    if (this.directory_mode !== undefined) {
+      await chmod(resolved_path, this.directory_mode);
+    }
   }
 
   /** 递归删除文件或目录；不存在时保持幂等。 */
@@ -125,7 +143,10 @@ export class LocalFileSystem implements FileSystem {
     content: string | Buffer,
   ): Promise<void> {
     const resolved_path = this.resolve_path(file_path);
-    await mkdir(path.dirname(resolved_path), { recursive: true });
+    await mkdir(path.dirname(resolved_path), {
+      recursive: true,
+      ...(this.directory_mode !== undefined ? { mode: this.directory_mode } : {}),
+    });
     const mode = await stat(resolved_path)
       .then((value) => value.mode)
       .catch(() => undefined);
@@ -133,17 +154,25 @@ export class LocalFileSystem implements FileSystem {
       file_path: resolved_path,
       content: Buffer.isBuffer(content) ? content : Buffer.from(content, "utf8"),
       overwrite: true,
-      ...(typeof mode === "number" ? { mode } : {}),
+      ...(typeof mode === "number"
+        ? { mode }
+        : this.file_mode !== undefined
+          ? { mode: this.file_mode }
+          : {}),
     });
   }
 
   /** 串行调用方可使用的文件追加能力。 */
   async append_file(file_path: string, content: string | Buffer): Promise<void> {
     const resolved_path = this.resolve_path(file_path);
-    await mkdir(path.dirname(resolved_path), { recursive: true });
+    await mkdir(path.dirname(resolved_path), {
+      recursive: true,
+      ...(this.directory_mode !== undefined ? { mode: this.directory_mode } : {}),
+    });
     await appendFile(
       resolved_path,
       Buffer.isBuffer(content) ? content : Buffer.from(content, "utf8"),
+      this.file_mode !== undefined ? { mode: this.file_mode } : undefined,
     );
   }
 
@@ -159,7 +188,11 @@ export class LocalFileSystem implements FileSystem {
 
     while (true) {
       try {
-        const lock_file = await open(resolved_lock_path, "wx");
+        const lock_file = await open(
+          resolved_lock_path,
+          "wx",
+          this.file_mode ?? 0o666,
+        );
         await lock_file.writeFile(token, "utf8");
         await lock_file.close();
         break;

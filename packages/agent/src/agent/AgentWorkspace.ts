@@ -68,6 +68,8 @@ export class AgentWorkspace {
   readonly plugins: AgentPlugins;
   /** 当前 Workspace 下的 Session 集合。 */
   readonly sessions: AgentSessions;
+  /** 当前 AgentWorkspace 内部数据根路径。 */
+  readonly data_path: string;
 
   private readonly context: PluginContext;
   private readonly logger: Logger;
@@ -80,8 +82,10 @@ export class AgentWorkspace {
     this.agent = options.agent;
     this.workspace = options.workspace;
     this.workspace_id = options.workspace.id;
+    const storage = this.workspace.create_agent_workspace_storage(this.agent.id);
+    this.data_path = storage.root_path;
     this.logger = new Logger();
-    this.logger.bind_workspace(this.workspace.files);
+    this.logger.bind_storage(storage.files, storage.root_path);
 
     let contextual_plugins: AgentPlugins | undefined;
     let contextual_sessions: AgentSessions | undefined;
@@ -89,7 +93,9 @@ export class AgentWorkspace {
       agent_id: this.agent.id,
       workspace_id: this.workspace_id,
       workspace_path: this.workspace.path,
+      data_path: this.data_path,
       files: this.workspace.files,
+      data_files: storage.files,
       ...(this.workspace.shell ? { shell: this.workspace.shell } : {}),
       logger: this.logger,
       get_workspace_env: () => this.workspace.get_env(),
@@ -113,11 +119,10 @@ export class AgentWorkspace {
     register_tools(this.tools, this.agent.plugin_registry.tools(this.context), "PluginRegistry");
     register_tools(this.tools, this.agent.custom_tools, "AgentOptions.tools");
 
-    const store = this.workspace.create_session_store(this.agent.id);
     this.sessions = new AgentSessions({
       agent_id: this.agent.id,
       workspace_path: this.workspace.path,
-      store,
+      store: storage.sessions,
       tools: this.tools,
       logger: this.logger,
       get_instruction: () => [...this.agent.get_instructions()],
@@ -146,7 +151,11 @@ export class AgentWorkspace {
         plugins: this.agent.plugin_registry.execution_view(this.context),
       });
     });
-    this.lifecycle = new AgentWorkspaceLifecycle(this.context, this.agent.plugin_registry);
+    this.lifecycle = new AgentWorkspaceLifecycle(
+      this.context,
+      this.agent.plugin_registry,
+      storage,
+    );
   }
 
   /** 当前 Agent ID。 */

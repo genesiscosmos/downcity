@@ -12,6 +12,7 @@ import {
 } from "@downcity/agent";
 import type {
   SessionStore,
+  AgentWorkspaceStorage,
   FileSystem,
   WorkspaceDirectoryEntry,
   WorkspaceEnvPatch,
@@ -142,7 +143,8 @@ export class CloudflareComputerWorkspace extends WorkspaceBase {
   readonly shell: Shell | undefined;
   private readonly env: Record<string, string>;
   private readonly env_subscribers = new Set<WorkspaceEnvSubscriber>();
-  private session_store?: SessionStore;
+  private readonly remote_fs: CloudflareComputerFileApi;
+  private readonly session_stores = new Map<string, SessionStore>();
   private disposed = false;
   private readonly dispose_computer?: CloudflareComputerWorkspaceOptions["dispose"];
 
@@ -151,10 +153,8 @@ export class CloudflareComputerWorkspace extends WorkspaceBase {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("CloudflareComputerWorkspace requires a stable id");
     this.path = normalize_root_path(options.root_path || "/workspace");
-    this.files = new CloudflareComputerFileSystem(
-      options.computer.fs as CloudflareComputerFileApi,
-      this.path,
-    );
+    this.remote_fs = options.computer.fs as CloudflareComputerFileApi;
+    this.files = new CloudflareComputerFileSystem(this.remote_fs, this.path);
     const computer_tools = {
       ...createAITools({ workspace: options.computer }),
       exec: create_cloudflare_exec_tool(options.computer),
@@ -199,22 +199,42 @@ export class CloudflareComputerWorkspace extends WorkspaceBase {
     return () => this.env_subscribers.delete(subscriber);
   }
 
-  create_session_store(agent_id: string): SessionStore {
+  create_agent_workspace_storage(agent_id: string): AgentWorkspaceStorage {
     const resolved_agent_id = String(agent_id || "").trim();
     if (!resolved_agent_id) {
-      throw new Error("Workspace.create_session_store requires a non-empty agent_id");
+      throw new Error("Workspace storage requires a non-empty agent_id");
     }
     if (this.disposed) throw new Error("Cannot bind a disposed Workspace");
-    if (this.session_store) throw new Error("Workspace is already bound to an Agent");
-    const store = this.create_default_session_store(resolved_agent_id);
-    this.session_store = store;
-    return store;
+    const storage_root_path = normalize_root_path(
+      `${this.path}/.downcity/agents/${encodeURIComponent(resolved_agent_id)}`
+      + `/workspaces/${encodeURIComponent(this.id)}`,
+    );
+    const existing = this.session_stores.get(resolved_agent_id);
+    if (existing) {
+      return {
+        root_path: storage_root_path,
+        files: new CloudflareComputerFileSystem(this.remote_fs, storage_root_path),
+        sessions: existing,
+      };
+    }
+    const storage_files = new CloudflareComputerFileSystem(this.remote_fs, storage_root_path);
+    const store = this.create_default_session_store(
+      resolved_agent_id,
+      storage_files,
+      storage_root_path,
+    );
+    this.session_stores.set(resolved_agent_id, store);
+    return {
+      root_path: storage_root_path,
+      files: storage_files,
+      sessions: store,
+    };
   }
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
     const results = await Promise.allSettled([
-      this.session_store?.dispose() ?? Promise.resolve(),
+      ...[...this.session_stores.values()].map((store) => store.dispose()),
       this.dispose_computer?.() ?? Promise.resolve(),
     ]);
     const errors = results.flatMap((result) =>

@@ -164,7 +164,8 @@ function normalizeToAllowedMessageLabels(message: string): string {
  * - Provide a single logger interface usable by both:
  *   - system/runtime components (server, scheduler, tool executor, etc.)
  *   - agent/LLM execution (LLM request/response logging expects `logger.log(...)`)
- * - Persist logs as JSONL to `.downcity/logs/<YYYY-MM-DD>.jsonl` (one line per entry).
+ * - Persist logs as JSONL to the current AgentWorkspace data directory
+ *   (`logs/<YYYY-MM-DD>.jsonl`, one line per entry).
  * - Keep console output human-friendly, but make disk logs machine-friendly.
  *
  * Notes:
@@ -194,6 +195,7 @@ export class Logger {
   private writeChain: Promise<void> = Promise.resolve();
   private readonly maxInMemoryEntries = 2000;
   private workspace_files: FileSystem | null = null;
+  private storage_root_path = "";
 
   constructor(logLevel: string = "info") {
     this.logLevel = logLevel;
@@ -205,16 +207,18 @@ export class Logger {
    * 关键点（中文）
    * - 每个 Agent / workspace 持有独立 Logger，绑定只影响当前实例。
    * - 落盘目录必须在实例初始化后明确指定。
-   * - 未绑定 project_root 时，只打印到 console，不写入 `.downcity/logs/*`。
+   * - 未绑定存储时，只打印到 console，不写入本地文件。
    */
   bind_project_root(project_root: string): void {
     const root = String(project_root || "").trim();
     this.workspace_files = root ? new LocalFileSystem(root) : null;
+    this.storage_root_path = root;
   }
 
-  /** 绑定现有 Workspace FileSystem，避免创建第二套文件入口。 */
-  bind_workspace(files: FileSystem): void {
+  /** 绑定 AgentWorkspace 内部存储，避免日志写入项目目录。 */
+  bind_storage(files: FileSystem, storage_root_path: string): void {
     this.workspace_files = files;
+    this.storage_root_path = String(storage_root_path || "").trim();
   }
 
   /**
@@ -320,12 +324,12 @@ export class Logger {
 
   /**
    * 落盘算法（中文）
-   * - 日志按自然日分片：`.downcity/logs/YYYY-MM-DD.jsonl`。
+   * - 日志按自然日分片：`<agent-workspace-data>/logs/YYYY-MM-DD.jsonl`。
    * - 每条日志一行 JSON，便于 grep / 流式消费。
    */
   private async saveToFile(entry: LogEntry): Promise<void> {
     if (!this.workspace_files) return;
-    const logsDir = get_logs_dir_path(this.workspace_files.root_path);
+    const logsDir = get_logs_dir_path(this.storage_root_path);
     const date = String(entry.timestamp || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
     const logFile = this.workspace_files.resolve_path(logsDir, `${date}.jsonl`);
 
@@ -363,7 +367,8 @@ export class Logger {
  *
  * 说明（中文）
  * - 每次调用都返回独立实例，避免不同 Agent / workspace 互相覆盖落盘目录。
- * - 提供 project_root 时立即绑定日志目录；未提供时仅输出到 console。
+ * - 提供 project_root 时绑定项目目录（兼容旧的独立 Logger 用法）；AgentWorkspace
+ *   运行时应使用 `bind_storage` 将日志写入私有数据目录。
  */
 export function get_logger(project_root?: string, log_level?: string): Logger {
   const logger = new Logger(log_level);

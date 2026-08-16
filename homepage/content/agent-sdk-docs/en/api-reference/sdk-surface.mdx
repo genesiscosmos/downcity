@@ -12,18 +12,19 @@ The `@downcity/agent` root exports the complete extension surface, but ordinary 
 Most local applications need only:
 
 - `Workspace`: create the project resource and security boundary and receive Shell.
-- `Agent`: compose the model, instructions, Tools, plugins, and Sessions.
-- `agent.sessions.create()` / `get()`: create or restore a Session.
+- `Agent`: compose the model, instructions, Tools, plugins, and enter Workspaces.
+- `agent_workspace.sessions.create()` / `get()`: create or restore a Session in the current scope.
 - `session.prompt()`: start one Turn.
 - `turn.finished`: await the final result.
-- `agent.dispose()`: release Agent and its exclusive Workspace.
+- `agent.dispose()`: release every Workspace scope entered by the Agent.
 
 ```ts
-const workspace = new Workspace({ path, shell });
-const agent = new Agent({ id, workspace, model });
+const workspace = new Workspace({ id: workspace_id, path, data_root_path, shell });
+const agent = new Agent({ id, model });
+const agent_workspace = agent.enter(workspace);
 
 try {
-  const session = await agent.sessions.create();
+  const session = await agent_workspace.sessions.create();
   const turn = await session.prompt({ query: "Inspect the project" });
   const result = await turn.finished;
 } finally {
@@ -87,12 +88,12 @@ The server host always owns the model and system persistence policy for a remote
 ## Lifecycle rules
 
 ```text
-one Workspace instance → one Agent → one agent.dispose()
+one Agent → multiple `agent.enter(workspace)` scopes → one agent.dispose()
 ```
 
-- The caller constructs Workspace; Agent releases it after binding.
-- Multiple Agents may target the same physical directory, but each needs a separate Workspace instance.
-- `agent.dispose()` releases Plugin runtime, Workspace, Shell, PTYs, and Sandbox.
+- Agent is not bound to one Workspace; one Agent can enter multiple Workspaces.
+- Each AgentWorkspace owns isolated Sessions, private data, Shell, and Plugin context.
+- `agent.dispose()` releases every AgentWorkspace, Plugin runtime, Shell, PTYs, and Sandbox.
 - `RemoteAgent.close()` closes only the client connection, not the server-side Agent.
 
 Continue with the [Agent API](/en/agent-sdk-docs/api-reference/agent-class) and [Sessions overview](/en/agent-sdk-docs/sessions/overview).

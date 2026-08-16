@@ -209,7 +209,7 @@ export class ContactPlugin extends BasePlugin {
     );
     const agentName = getAgentName(context);
 
-    await saveContactLinkRecord(context.workspace_path, {
+    await saveContactLinkRecord(context.data_path, {
       id: linkId,
       agentName,
       endpoint,
@@ -293,7 +293,7 @@ export class ContactPlugin extends BasePlugin {
     if (!response.success) throw new Error(response.error || "Contact approve failed");
 
     const name = String(payload.name || response.agentName || parsed.agentName).trim();
-    const contact = await saveContact(context.workspace_path, {
+    const contact = await saveContact(context.data_path, {
       id: createStableContactId(name),
       name,
       endpoint: response.endpoint || parsed.endpoint,
@@ -326,7 +326,7 @@ export class ContactPlugin extends BasePlugin {
       }
     }
     const finalContact = confirmed
-      ? await saveContact(context.workspace_path, {
+      ? await saveContact(context.data_path, {
           ...contact,
           reachability: "bidirectional",
           inboundTokenHash: tokenForRequester ? hashContactToken(tokenForRequester) : null,
@@ -356,7 +356,7 @@ export class ContactPlugin extends BasePlugin {
     const endpointInput = String(payload.endpoint || "").trim();
     const contact = endpointInput
       ? null
-      : await findContact(context.workspace_path, String(payload.target || "").trim());
+      : await findContact(context.data_path, String(payload.target || "").trim());
     const endpoint = endpointInput || contact?.endpoint || "";
     if (!endpoint) throw new Error("contact target or --to endpoint is required");
     if (contact && !contact.outboundToken) {
@@ -369,7 +369,7 @@ export class ContactPlugin extends BasePlugin {
         token: contact?.outboundToken || undefined,
       });
       if (contact && pong.success) {
-        await touchContactSeen(context.workspace_path, contact.id);
+        await touchContactSeen(context.data_path, contact.id);
       }
       return {
         target: contact?.name || endpoint,
@@ -392,17 +392,17 @@ export class ContactPlugin extends BasePlugin {
   }
 
   private async chat(context: PluginContext, payload: ContactChatCommandPayload) {
-    const contact = await findContact(context.workspace_path, payload.to);
+    const contact = await findContact(context.data_path, payload.to);
     if (!contact) throw new Error(`Contact not found: ${payload.to}`);
     const message = String(payload.message || "").trim();
     if (!message) {
       return {
         contact,
-        messages: await readContactMessages(context.workspace_path, contact.id),
+        messages: await readContactMessages(context.data_path, contact.id),
       };
     }
 
-    await appendContactMessage(context.workspace_path, contact.id, {
+    await appendContactMessage(context.data_path, contact.id, {
       role: "local",
       text: message,
       created_at: Date.now(),
@@ -418,7 +418,7 @@ export class ContactPlugin extends BasePlugin {
       } as unknown as JsonValue,
     });
     if (!response.success) throw new Error(response.error || "Contact chat failed");
-    await appendContactMessage(context.workspace_path, contact.id, {
+    await appendContactMessage(context.data_path, contact.id, {
       role: "remote",
       text: response.reply,
       created_at: Date.now(),
@@ -427,7 +427,7 @@ export class ContactPlugin extends BasePlugin {
   }
 
   private async share(context: PluginContext, payload: ContactShareCommandPayload) {
-    const contact = await findContact(context.workspace_path, payload.to);
+    const contact = await findContact(context.data_path, payload.to);
     if (!contact) throw new Error(`Contact not found: ${payload.to}`);
     const outbound = requireOutboundContact(contact);
     const share = await createShareInput({
@@ -466,7 +466,7 @@ export class ContactPlugin extends BasePlugin {
         plugin: "contact",
       };
     }
-    const contact = await findContactByInboundToken(context.workspace_path, token);
+    const contact = await findContactByInboundToken(context.data_path, token);
     return {
       success: true,
       agentName: getAgentName(context),
@@ -480,7 +480,7 @@ export class ContactPlugin extends BasePlugin {
     request: ContactApproveLinkRequest,
   ): Promise<ContactApproveLinkResponse> {
     return await approveContactLinkRequest({
-      project_root: context.workspace_path,
+      data_path: context.data_path,
       ownerAgentName: getAgentName(context),
       ownerEndpoint: await resolveSelfEndpoint(context, this.options),
       request,
@@ -492,7 +492,7 @@ export class ContactPlugin extends BasePlugin {
     request: ContactConfirmRequest,
   ): Promise<ContactConfirmResponse> {
     return await confirmContactLinkRequest({
-      project_root: context.workspace_path,
+      data_path: context.data_path,
       ownerAgentName: getAgentName(context),
       request,
       verifyCallback: async ({ endpoint, token }) => {
@@ -509,7 +509,7 @@ export class ContactPlugin extends BasePlugin {
     const payload = readContactObject(rawPayload);
     const token = readContactString(payload, "token");
     const body = readContactObject(payload.body);
-    const contact = await findContactByInboundToken(context.workspace_path, token);
+    const contact = await findContactByInboundToken(context.data_path, token);
     if (!contact || contact.status !== "trusted") {
       throw new Error("Invalid contact token");
     }
@@ -521,7 +521,7 @@ export class ContactPlugin extends BasePlugin {
       receivedAt: Date.now(),
       status: "pending" as const,
     };
-    await saveContactInboxShare(context.workspace_path, {
+    await saveContactInboxShare(context.data_path, {
       meta,
       payload: share.payload,
       files: Array.isArray(share.files) ? share.files : [],

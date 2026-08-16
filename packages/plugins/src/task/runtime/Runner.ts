@@ -79,7 +79,7 @@ export async function runTaskNow(params: {
   taskId: string;
   trigger: ShipTaskRunTriggerV1;
   executionId?: string;
-  project_root?: string;
+  data_path?: string;
   /** 发起该任务的 Session step 已提交生效的 env 快照。 */
   workspace_env?: Readonly<Record<string, string>>;
   /** 发起该任务的 Session step 已提交生效的 instruction 快照。 */
@@ -102,19 +102,19 @@ export async function runTaskNow(params: {
   runDirRel: string;
 }> {
   const context = params.context;
-  const root = String(params.project_root || context.workspace_path || "").trim();
-  if (!root) throw new Error("project_root is required");
+  const root = String(params.data_path || context.data_path || "").trim();
+  if (!root) throw new Error("data_path is required");
 
   const startedAt = Date.now();
   const timestamp = formatTaskRunTimestamp(new Date(startedAt));
   const executionId = String(params.executionId || `${params.taskId}:${timestamp}`).trim();
 
-  const task = await readTask({ taskId: params.taskId, project_root: root });
+  const task = await readTask({ taskId: params.taskId, data_path: root });
   const runDirAbs = getTaskRunDir(root, task.taskId, timestamp);
   const { runDirRel } = await ensureRunDir({
     taskId: task.taskId,
     timestamp,
-    project_root: root,
+    data_path: root,
   });
   const filePaths = createTaskRunFilePaths(runDirAbs);
 
@@ -170,7 +170,6 @@ export async function runTaskNow(params: {
   if (taskKind === "script") {
     const scriptResult = await runScriptTaskBranch({
       context,
-      runDirAbs,
       session_id: task.frontmatter.session_id,
       scriptBody: task.body,
       runProgress,

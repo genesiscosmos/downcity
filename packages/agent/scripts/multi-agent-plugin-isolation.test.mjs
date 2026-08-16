@@ -142,8 +142,8 @@ test("multiple session prompts use only their owning Agent plugin registry", asy
     plugins: [create_owner_plugin("agent_b", executed_owners)],
     model: create_test_model("model_b", model_requests),
   });
-  const entry_a = agent_a.enter(new Workspace({ id: "workspace_a", path: root_a }));
-  const entry_b = agent_b.enter(new Workspace({ id: "workspace_b", path: root_b }));
+  const entry_a = agent_a.enter(new Workspace({ id: "workspace_a", path: root_a, data_root_path: path.join(root_a, "data") }));
+  const entry_b = agent_b.enter(new Workspace({ id: "workspace_b", path: root_b, data_root_path: path.join(root_b, "data") }));
 
   try {
     const session_a = await entry_a.sessions.create({ session_id: "session_a" });

@@ -2,7 +2,7 @@
  * SDK Session 元数据辅助。
  *
  * 关键点（中文）
- * - 统一负责 `.downcity/agents/<agent_id>/sessions/<session_id>/messages/meta.json` 的规范化读取。
+ * - 统一负责 AgentWorkspace `sessions/<session_id>/messages/meta.json` 的规范化读取。
  * - 仅处理轻量配置摘要与索引信息，不负责消息 JSONL 的读写。
  */
 

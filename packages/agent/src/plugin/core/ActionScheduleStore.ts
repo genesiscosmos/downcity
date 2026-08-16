@@ -137,9 +137,9 @@ export class ActionScheduleStore {
   private readonly lock_path: string;
   private readonly files: FileSystem;
 
-  constructor(files: FileSystem) {
+  constructor(files: FileSystem, storage_root_path: string = files.root_path) {
     this.files = files;
-    this.file_path = get_downcity_schedule_db_path(files.root_path);
+    this.file_path = get_downcity_schedule_db_path(storage_root_path);
     this.lock_path = `${this.file_path}.lock`;
   }
 

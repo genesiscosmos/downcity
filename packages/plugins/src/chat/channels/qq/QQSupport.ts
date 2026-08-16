@@ -58,6 +58,10 @@ export interface BuildQqInboundInstructionsParams {
    */
   rootPath: string;
   /**
+   * 当前 AgentWorkspace 的私有数据目录。
+   */
+  dataPath: string;
+  /**
    * 平台 chatId。
    */
   chatId: string;
@@ -233,6 +237,7 @@ export async function buildQqInboundInstructions(
       try {
         const localPath = await resolveQqAttachmentLocalPath({
           rootPath: params.rootPath,
+          dataPath: params.dataPath,
           attachment,
           authToken,
         });

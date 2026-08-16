@@ -110,7 +110,7 @@ export async function resolve_sandbox_policy(
   const backend = context.sandbox.backend;
   const configured_root_path = path.resolve(context.rootPath);
   const root_path = await fs.realpath(configured_root_path).catch(() => configured_root_path);
-  const sandbox_dir = path.join(root_path, ".downcity", "sandbox");
+  const sandbox_dir = path.join(path.resolve(context.dataPath), "sandbox");
   const read_write_paths = [root_path];
   const host_read_only_paths = await normalize_host_read_only_paths(
     context,

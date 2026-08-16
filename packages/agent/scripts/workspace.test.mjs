@@ -12,7 +12,7 @@ import { Agent, Workspace } from "../bin/index.js";
 test("Workspace exposes file tools without requiring Shell", async (t) => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-"));
 
-  const workspace = new Workspace({ id: "test_workspace", path: root_path });
+  const workspace = new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") });
   const agent = new Agent({ id: "workspace-files" });
   const entry = agent.enter(workspace);
   t.after(async () => {
@@ -38,8 +38,9 @@ test("one Workspace instance enters one Agent and is disposed with it", async (t
   let dispose_count = 0;
   const shell = {
     tools: { shell_exec: {} },
-    bind(root_path) {
-      assert.equal(root_path, workspace_path);
+    bind(binding) {
+      assert.equal(binding.root_path, workspace_path);
+      assert.match(binding.data_path, /data\/agents\/workspace-first\/workspaces\/test_workspace$/);
     },
     set_env(env) {
       assert.deepEqual(env, {});
@@ -49,7 +50,7 @@ test("one Workspace instance enters one Agent and is disposed with it", async (t
     },
   };
   const workspace_path = await fs.realpath(root_path);
-  const workspace = new Workspace({ id: "test_workspace", path: root_path, shell });
+  const workspace = new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data"), shell });
   const agent = new Agent({ id: "workspace-first" });
   const second_agent = new Agent({ id: "workspace-second" });
   agent.enter(workspace);
@@ -69,8 +70,8 @@ test("separate Workspace instances may use the same directory", async (t) => {
   t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
   const first_agent = new Agent({ id: "workspace-directory-first" });
   const second_agent = new Agent({ id: "workspace-directory-second" });
-  first_agent.enter(new Workspace({ id: "test_workspace", path: root_path }));
-  second_agent.enter(new Workspace({ id: "test_workspace", path: root_path }));
+  first_agent.enter(new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
+  second_agent.enter(new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
 
   await first_agent.dispose();
   await second_agent.dispose();
@@ -91,7 +92,7 @@ test("Workspace owns env and publishes only real changes", async (t) => {
   };
 
   const workspace = new Workspace({ id: "test_workspace",
-    path: root_path,
+    path: root_path, data_root_path: path.join(root_path, "data"),
     shell,
     env: { OVERRIDE: "explicit", EXPLICIT: "value" },
   });
@@ -133,7 +134,7 @@ test("Agent rejects Workspace, Plugin and custom Tool name conflicts", async (t)
   });
   assert.throws(
     () => workspace_conflict_agent.enter(
-      new Workspace({ id: "test_workspace", path: root_path }),
+      new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }),
     ),
     /Agent tool name conflict: "read"/,
   );
@@ -143,7 +144,7 @@ test("Agent rejects Workspace, Plugin and custom Tool name conflicts", async (t)
   });
   assert.throws(
     () => plugin_conflict_agent.enter(
-      new Workspace({ id: "test_workspace", path: root_path }),
+      new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }),
     ),
     /reserved for PluginRegistry/,
   );

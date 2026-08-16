@@ -2,8 +2,8 @@
  * @file 验证 session 列表从正确目录读取持久化 title。
  *
  * 关键点（中文）
- * - 普通列表只读取 `.downcity/agents/<agent_id>/sessions` 下的 meta。
- * - 归档列表只读取 `.downcity/agents/<agent_id>/archived-sessions` 下的 meta。
+ * - 普通列表只读取 AgentWorkspace `sessions` 下的 meta。
+ * - 归档列表只读取 AgentWorkspace `archived-sessions` 下的 meta。
  * - title 允许为空；这里仅验证已由模型生成并落盘的 title 能被列表返回。
  */
 
@@ -62,7 +62,7 @@ async function create_agent_with_titled_session(input) {
     id: input.agent_id,
     model: create_mock_title_model(input.title),
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path }));
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
   const collection = entry.sessions;
   const session = await collection.create({
     session_id: input.session_id,
@@ -101,10 +101,7 @@ test("list_sessions returns persisted title from active session metadata", async
     const meta = JSON.parse(
       await fs.readFile(
         path.join(
-          entry.workspace.path,
-          ".downcity",
-          "agents",
-          encodeURIComponent(agent.id),
+          entry.data_path,
           "sessions",
           encodeURIComponent(session.id),
           "messages",
@@ -119,10 +116,7 @@ test("list_sessions returns persisted title from active session metadata", async
     assert.equal(meta.preview_text, "Need the session list to show the generated title");
     const history_stat = await fs.stat(
       path.join(
-        entry.workspace.path,
-        ".downcity",
-        "agents",
-        encodeURIComponent(agent.id),
+        entry.data_path,
         "sessions",
         encodeURIComponent(session.id),
         "messages",
@@ -158,10 +152,7 @@ test("list_sessions reflects canonical SessionMessages changes", async () => {
     first_user_text: "Initial history",
   });
   const messages_dir = path.join(
-    entry.workspace.path,
-    ".downcity",
-    "agents",
-    encodeURIComponent(agent.id),
+    entry.data_path,
     "sessions",
     encodeURIComponent(session.id),
     "messages",

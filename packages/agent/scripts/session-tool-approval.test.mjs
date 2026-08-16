@@ -115,7 +115,7 @@ async function run_approval_case(decision) {
       },
     },
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: project_root }));
+  const entry = agent.enter(new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
 
   try {
     const session = await entry.sessions.create({ session_id: "tool_approval" });

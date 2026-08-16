@@ -2,9 +2,9 @@
  * ChatSessionDelete：按 session_id 彻底删除 chat 会话数据。
  *
  * 关键点（中文）
- * - 删除路由映射（`.downcity/channel/meta.json`）
- * - 删除 chat 审计目录（`.downcity/chat/<session_id>/`）
- * - 删除 core session 目录（`.downcity/agents/<agent_id>/sessions/<session_id>/`）
+ * - 删除路由映射（AgentWorkspace 数据目录的 `channel/meta.json`）
+ * - 删除 chat 审计目录（AgentWorkspace 数据目录的 `chat/<session_id>/`）
+ * - 删除 core session 目录（AgentWorkspace 数据目录的 `sessions/<session_id>/`）
  * - 清理运行中 agent 与队列，避免残留任务继续执行
  */
 
@@ -52,7 +52,7 @@ export async function deleteChatSessionById(params: {
     resolveChatQueueStore(params.context).clear(session_id);
 
     const chat_result = await clean_chat_storage({
-      root_path: params.context.workspace_path,
+      data_path: params.context.data_path,
       session_id: session_id,
     });
     const removed_session_dir = await params.context.sessions.remove(session_id);

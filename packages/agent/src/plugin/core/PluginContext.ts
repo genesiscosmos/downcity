@@ -16,8 +16,12 @@ export interface CreatePluginContextInput {
   workspace_id: PluginContext["workspace_id"];
   /** 当前 Workspace 绝对根目录。 */
   workspace_path: PluginContext["workspace_path"];
+  /** 当前 AgentWorkspace 内部数据根路径。 */
+  data_path: PluginContext["data_path"];
   /** 当前 Workspace 文件能力。 */
   files: PluginContext["files"];
+  /** 当前 AgentWorkspace 私有数据目录的文件能力。 */
+  data_files: PluginContext["data_files"];
   /** 当前 Workspace 可选 Shell。 */
   shell?: PluginContext["shell"];
   /** 当前 Agent 日志器。 */
@@ -40,7 +44,9 @@ export function create_plugin_context(
     agent_id: input.agent_id,
     workspace_id: input.workspace_id,
     workspace_path: input.workspace_path,
+    data_path: input.data_path,
     files: input.files,
+    data_files: input.data_files,
     ...(input.shell ? { shell: input.shell } : {}),
     logger: input.logger,
     get sessions() {

@@ -55,7 +55,7 @@ export async function execute_chat_history_clear_action(params: {
       error: "Missing session_id",
     };
   }
-  const cleared = await clear_chat_history(params.context.workspace_path, session_id);
+  const cleared = await clear_chat_history(params.context.data_path, session_id);
   return {
     success: true,
     data: {
@@ -193,16 +193,16 @@ export async function executeChatInfoAction(params: {
   });
 
   const toPosixRelativePath = (absPath: string): string =>
-    path.relative(params.context.workspace_path, absPath).split(path.sep).join("/");
+    path.relative(params.context.data_path, absPath).split(path.sep).join("/");
 
   const channelMetaPath = toPosixRelativePath(
-    get_chat_channel_meta_path(params.context.workspace_path),
+    get_chat_channel_meta_path(params.context.data_path),
   );
   const chatDirPath = toPosixRelativePath(
-    get_chat_session_dir_path(params.context.workspace_path, session_id),
+    get_chat_session_dir_path(params.context.data_path, session_id),
   );
   const historyPath = toPosixRelativePath(
-    get_chat_history_path(params.context.workspace_path, session_id),
+    get_chat_history_path(params.context.data_path, session_id),
   );
 
   return {
@@ -259,7 +259,7 @@ export async function executeChatHistoryAction(params: {
     afterTs: payload.afterTs,
   });
   const historyPath = historyResult.historyPath
-    .replace(`${params.context.workspace_path}/`, "")
+    .replace(`${params.context.data_path}/`, "")
     .split("\\")
     .join("/");
 

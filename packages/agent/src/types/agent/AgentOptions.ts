@@ -33,7 +33,7 @@ export interface AgentOptions {
    * 当前 agent 的稳定标识。
    *
    * 关键点（中文）
-   * - 用于 `.downcity/agents/<agent_id>/...` 目录分区。
+   * - 用于用户级数据根下的 `agents/<agent_id>/...` 目录分区。
    * - 应保持稳定、可 URL 编码、尽量不要依赖展示名称。
    */
   id: string;

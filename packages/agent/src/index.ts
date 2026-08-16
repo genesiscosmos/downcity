@@ -35,6 +35,8 @@ export type {
   SearchToolActionResult,
 } from "./types/workspace/SearchTool.js";
 export type { WorkspaceOptions } from "./types/workspace/Workspace.js";
+export type { AgentWorkspaceStorage } from "./types/workspace/AgentWorkspaceStorage.js";
+export type { LocalFileSystemOptions } from "./types/workspace/LocalFileSystem.js";
 export type {
   WorkspaceEnvPatch,
   WorkspaceEnvSubscriber,

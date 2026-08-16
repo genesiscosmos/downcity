@@ -124,7 +124,7 @@ test("unrestricted Shell 审批保留当前 Turn 并等待用户决定", async (
   });
   const entry = agent.enter(new Workspace({
     id: "test_workspace",
-    path: project_root,
+    path: project_root, data_root_path: path.join(project_root, "data"),
     shell: new Shell({ sandbox }),
   }));
 

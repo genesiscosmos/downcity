@@ -14,7 +14,7 @@ import type { QQEventCaptureConfig, QQEventCaptureMode, QQGatewayPayload } from 
 /**
  * 读取 QQ 原始事件捕获配置。
  */
-export function getQqEventCaptureConfig(project_root: string): QQEventCaptureConfig {
+export function getQqEventCaptureConfig(data_path: string): QQEventCaptureConfig {
   const raw = String(process.env.SHIP_QQ_CAPTURE_EVENTS ?? "")
     .trim()
     .toLowerCase();
@@ -22,7 +22,7 @@ export function getQqEventCaptureConfig(project_root: string): QQEventCaptureCon
     return {
       enabled: false,
       mode: "dispatch",
-      dir: join(project_root, ".downcity", ".debug", "qq-events"),
+      dir: join(data_path, ".debug", "qq-events"),
     };
   }
 
@@ -32,7 +32,7 @@ export function getQqEventCaptureConfig(project_root: string): QQEventCaptureCon
     typeof process.env.SHIP_QQ_CAPTURE_DIR === "string" &&
     process.env.SHIP_QQ_CAPTURE_DIR.trim()
       ? process.env.SHIP_QQ_CAPTURE_DIR.trim()
-      : join(project_root, ".downcity", ".debug", "qq-events");
+      : join(data_path, ".debug", "qq-events");
 
   return {
     enabled: true,

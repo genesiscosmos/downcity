@@ -2,9 +2,9 @@
  * Task System paths and identifiers.
  *
  * 约定（中文）
- * - task root: `./.downcity/task/`
- * - definition: `./.downcity/task/<taskId>/task.md`
- * - run dir: `./.downcity/task/<taskId>/<timestamp>/`
+ * - task root: `<AgentWorkspace data>/task/`
+ * - definition: `<AgentWorkspace data>/task/<taskId>/task.md`
+ * - run dir: `<AgentWorkspace data>/task/<taskId>/<timestamp>/`
  *
  * 同时定义“task run session_id”格式，用于把 Agent 的 session 映射到 run 目录：
  * - `task-run:<taskId>:<timestamp>`
@@ -59,16 +59,16 @@ export function normalizeTaskId(input: string): string {
   return id;
 }
 
-export function getTaskRootDir(project_root: string): string {
-  return path.join(String(project_root || "").trim(), ".downcity", "task");
+export function getTaskRootDir(data_path: string): string {
+  return path.join(String(data_path || "").trim(), "task");
 }
 
-export function getTaskDir(project_root: string, taskId: string): string {
-  return path.join(getTaskRootDir(project_root), normalizeTaskId(taskId));
+export function getTaskDir(data_path: string, taskId: string): string {
+  return path.join(getTaskRootDir(data_path), normalizeTaskId(taskId));
 }
 
-export function getTaskMdPath(project_root: string, taskId: string): string {
-  return path.join(getTaskDir(project_root, taskId), "task.md");
+export function getTaskMdPath(data_path: string, taskId: string): string {
+  return path.join(getTaskDir(data_path, taskId), "task.md");
 }
 
 export function formatTaskRunTimestamp(date: Date = new Date()): string {
@@ -85,13 +85,13 @@ export function formatTaskRunTimestamp(date: Date = new Date()): string {
 }
 
 export function getTaskRunDir(
-  project_root: string,
+  data_path: string,
   taskId: string,
   timestamp: string,
 ): string {
   const ts = String(timestamp || "").trim();
   if (!ts) throw new Error("timestamp is required");
-  return path.join(getTaskDir(project_root, taskId), ts);
+  return path.join(getTaskDir(data_path, taskId), ts);
 }
 
 export function createTaskRunSessionId(taskId: string, timestamp: string): string {

@@ -44,10 +44,10 @@ function deriveTaskIdFromTitle(title: string): string {
  * 读取近期日志。
  */
 export async function readRecentLogs(params: {
-  project_root: string;
+  data_path: string;
   limit: number;
 }): Promise<ControlLogEntry[]> {
-  const logsDir = getLogsDirPath(params.project_root);
+  const logsDir = getLogsDirPath(params.data_path);
   if (!(await fs.pathExists(logsDir))) return [];
 
   const files = (await fs.readdir(logsDir, { withFileTypes: true }))
@@ -87,20 +87,20 @@ export async function readRecentLogs(params: {
   return out;
 }
 
-async function resolveTaskDir(project_root: string, title: string): Promise<string> {
+async function resolveTaskDir(data_path: string, title: string): Promise<string> {
   const taskId = deriveTaskIdFromTitle(title);
-  return path.join(getDowncityTasksDirPath(project_root), taskId);
+  return path.join(getDowncityTasksDirPath(data_path), taskId);
 }
 
 /**
  * 枚举任务运行摘要。
  */
 export async function listTaskRuns(params: {
-  project_root: string;
+  data_path: string;
   title: string;
   limit: number;
 }): Promise<ControlTaskRunSummary[]> {
-  const taskDir = await resolveTaskDir(params.project_root, params.title);
+  const taskDir = await resolveTaskDir(params.data_path, params.title);
   if (!(await fs.pathExists(taskDir))) return [];
 
   const entries = await fs.readdir(taskDir, { withFileTypes: true });
@@ -117,7 +117,7 @@ export async function listTaskRuns(params: {
     const runDir = path.join(taskDir, timestamp);
     const metaPath = path.join(runDir, "run.json");
     const progressPath = path.join(runDir, "run-progress.json");
-    const runDirRel = path.relative(params.project_root, runDir).split(path.sep).join("/");
+    const runDirRel = path.relative(params.data_path, runDir).split(path.sep).join("/");
     const meta = (await fs.readJson(metaPath).catch(() => null)) as {
       status?: string;
       executionStatus?: string;
@@ -178,11 +178,11 @@ export async function listTaskRuns(params: {
  * 读取任务运行详情。
  */
 export async function readTaskRunDetail(params: {
-  project_root: string;
+  data_path: string;
   title: string;
   timestamp: string;
 }): Promise<ControlTaskRunDetail | null> {
-  const taskDir = await resolveTaskDir(params.project_root, params.title);
+  const taskDir = await resolveTaskDir(params.data_path, params.title);
   const runDir = path.join(taskDir, params.timestamp);
   if (!(await fs.pathExists(runDir))) return null;
 
@@ -226,7 +226,7 @@ export async function readTaskRunDetail(params: {
   return {
     title: params.title,
     timestamp: params.timestamp,
-    runDirRel: path.relative(params.project_root, runDir).split(path.sep).join("/"),
+    runDirRel: path.relative(params.data_path, runDir).split(path.sep).join("/"),
     meta: await readJson<Record<string, unknown>>("run.json"),
     ...(progress ? { progress } : {}),
     dialogue: await readJson<Record<string, unknown>>("dialogue.json"),

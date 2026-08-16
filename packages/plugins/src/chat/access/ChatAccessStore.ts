@@ -34,10 +34,10 @@ import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
 type SqlRow = Record<string, unknown>;
 
 /**
- * 返回项目级 Chat Access 数据库路径。
+ * 返回 AgentWorkspace Chat Access 数据库路径。
  */
-export function get_chat_access_db_path(project_root: string): string {
-  return path.join(path.resolve(project_root), ".downcity", "chat", "access.db");
+export function get_chat_access_db_path(data_path: string): string {
+  return path.join(path.resolve(data_path), "chat", "access.db");
 }
 
 function normalize_text(value: unknown): string {
@@ -131,8 +131,8 @@ export class ChatAccessStore {
   /**
    * 打开当前项目 Chat Access 数据库。
    */
-  constructor(project_root: string) {
-    const database_path = get_chat_access_db_path(project_root);
+  constructor(data_path: string) {
+    const database_path = get_chat_access_db_path(data_path);
     fs.ensureDirSync(path.dirname(database_path), { mode: 0o700 });
     this.database = new DatabaseSync(database_path);
     ensure_chat_access_schema(this.database);

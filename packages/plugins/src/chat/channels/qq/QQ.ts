@@ -58,7 +58,7 @@ export class QQBot extends BaseChatChannel {
     this.appSecret = appSecret;
     this.useSandbox = useSandbox;
     this.inboundDedupeStore = new QqInboundDedupeStore({
-      rootPath: this.rootPath,
+      dataPath: this.dataPath,
       logger: this.logger,
     });
     this.gateway = new QQGatewayClient({
@@ -67,7 +67,7 @@ export class QQBot extends BaseChatChannel {
       appId: this.appId,
       appSecret: this.appSecret,
       useSandbox: this.useSandbox,
-      captureConfig: getQqEventCaptureConfig(this.rootPath),
+      captureConfig: getQqEventCaptureConfig(this.dataPath),
       onDispatch: async (params) => {
         await this.handleDispatch(params.eventType, params.data);
       },
@@ -268,6 +268,7 @@ export class QQBot extends BaseChatChannel {
     return {
       context: this.context,
       rootPath: this.rootPath,
+      dataPath: this.dataPath,
       logger: this.logger,
       getBotUserId: () => this.botUserId,
       getChatKey: (params) => this.getChatKey(params),

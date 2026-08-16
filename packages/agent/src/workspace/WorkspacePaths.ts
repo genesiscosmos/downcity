@@ -1,8 +1,8 @@
 /**
- * Workspace 项目路径规则模块。
+ * AgentWorkspace 内部数据路径规则模块。
  *
  * 职责说明（中文）
- * - 统一管理 Workspace 根目录下的 `.downcity` 运行时状态路径。
+ * - 统一管理用户级 AgentWorkspace 根目录下的运行时状态路径。
  * - 负责把“路径协议”集中到一个模块，避免各领域模块自行拼接字符串。
  * - 为初始化、日志、任务与调试文件等非 Store 子系统提供一致的路径入口。
  *
@@ -13,10 +13,10 @@
 import path from "path";
 
 /**
- * 返回项目运行时状态根目录 `.downcity` 的路径。
+ * 返回 AgentWorkspace 内部数据根目录。
  */
-export function get_downcity_dir_path(cwd: string): string {
-  return path.join(cwd, ".downcity");
+export function get_downcity_dir_path(data_path: string): string {
+  return path.resolve(data_path);
 }
 
 /**
@@ -40,7 +40,7 @@ export function get_cache_dir_path(cwd: string): string {
  * Plugin Schedule JSONL 路径。
  *
  * 关键点（中文）
- * - 调度任务属于项目 runtime 本地状态，因此放在项目 `.downcity/` 下。
+ * - 调度任务属于 AgentWorkspace，因此放在集中式内部数据目录。
  */
 export function get_downcity_schedule_db_path(cwd: string): string {
   return path.join(get_downcity_dir_path(cwd), "schedule.jsonl");

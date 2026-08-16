@@ -26,6 +26,8 @@ On another platform, replace only the Sandbox package and instance:
 ## Complete minimal example
 
 ```ts
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { Agent, Workspace } from "@downcity/agent";
 import { createOpenAI } from "@ai-sdk/openai";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
@@ -40,18 +42,20 @@ const shell = new Shell({
 });
 
 const workspace = new Workspace({
+  id: "project",
   path: "/path/to/project",
+  data_root_path: join(homedir(), ".downcity"),
   shell,
 });
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace,
   model: openai.responses("gpt-5"),
 });
+const agent_workspace = agent.enter(workspace);
 
 try {
-  const session = await agent.sessions.create();
+  const session = await agent_workspace.sessions.create();
   const turn = await session.prompt({
     query: "Summarize the current repository structure",
   });
@@ -67,8 +71,8 @@ try {
 
 1. Create the Sandbox Adapter for the current platform.
 2. Create `Shell` and inject the Sandbox.
-3. Create `Workspace` and pass it the Shell.
-4. Create `Agent` with the Workspace and model.
+3. Create `Workspace` with a stable ID, project path, user data root, and Shell.
+4. Create the independent `Agent`, then enter the Workspace with `agent.enter(workspace)`.
 5. Create a Session, start a Turn with `prompt()`, and await `turn.finished`.
 6. Call `agent.dispose()` in `finally`.
 
@@ -77,15 +81,16 @@ Shell matters: without it, Workspace still provides file and search Tools, but A
 ## Objects and lifecycle
 
 ```text
-Workspace + Shell → Agent → Session → Turn
-                         └──────────────→ agent.dispose()
+Agent + Workspace + Shell → agent.enter(workspace) → Session → Turn
+                                      └──────────────→ agent.dispose()
 ```
 
-- One Workspace instance can bind to only one Agent.
-- Multiple Workspace instances may point to the same physical directory for different Agents.
+- Agent is not bound to a single Workspace; one Agent can enter multiple Workspaces with `enter()`.
+- Workspace describes project resources only; AgentWorkspace owns Sessions and runtime state for that Agent in the project.
+- Multiple Agents may target the same directory, using distinct agent IDs and isolated Workspace data partitions.
 - Plugin lifecycle and ActionSchedule begin starting immediately after `new Agent(...)`.
 - Session execution waits for the Agent runtime automatically; callers do not manage a separate startup state.
-- `agent.dispose()` also releases the exclusive Workspace, Shell processes, PTYs, and Sandbox. Do not call `workspace.dispose()` again.
+- `agent.dispose()` releases every AgentWorkspace it entered, including Shell processes, PTYs, and Sandbox resources.
 - HTTP/RPC transports do not belong to Agent; use `@downcity/city` when you need network serving.
 
 ## Model resolution

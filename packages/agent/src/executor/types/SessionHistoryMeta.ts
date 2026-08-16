@@ -2,7 +2,7 @@
  * SessionHistoryMeta：随 session_id 持久化的元信息。
  *
  * 关键点（中文）
- * - 存储位置：`.downcity/agents/<encodedAgentId>/sessions/<encodedSessionId>/messages/meta.json`
+ * - 存储位置：AgentWorkspace `sessions/<encodedSessionId>/messages/meta.json`
  * - 用于保存 session 列表、详情和索引所需的轻量元信息
  */
 

@@ -131,6 +131,7 @@ export abstract class BaseChatChannel {
   readonly channel: ChatDispatchChannel;
   protected readonly context: PluginContext;
   protected readonly rootPath: string;
+  protected readonly dataPath: string;
   protected readonly logger: Logger;
   private readonly access_notice_sent_at = new Map<string, number>();
 
@@ -141,6 +142,7 @@ export abstract class BaseChatChannel {
     this.channel = params.channel;
     this.context = params.context;
     this.rootPath = params.context.workspace_path;
+    this.dataPath = params.context.data_path;
     this.logger = params.context.logger;
 
     const dispatcher: ChatDispatcher = {

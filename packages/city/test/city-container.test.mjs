@@ -13,7 +13,7 @@ async function create_agent(root, agent_id) {
   const workspace_path = path.join(root, agent_id);
   await fs.mkdir(workspace_path, { recursive: true });
   const agent = new Agent({ id: agent_id });
-  agent.enter(new Workspace({ id: agent_id, path: workspace_path }));
+  agent.enter(new Workspace({ id: agent_id, path: workspace_path, data_root_path: path.join(workspace_path, "data") }));
   return agent;
 }
 

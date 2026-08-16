@@ -44,7 +44,7 @@ test("workspace set_env and patch_env are visible in shell safe sandbox", async 
   process.env.HOST_ONLY_ENV_REPRO = "host_secret";
 
   const workspace = new Workspace({ id: "test_workspace",
-    path: root_path,
+    path: root_path, data_root_path: path.join(root_path, "data"),
     shell: new Shell({ sandbox }),
   });
   const agent = new Agent({ id: "agent-env-shell-sandbox-test" });

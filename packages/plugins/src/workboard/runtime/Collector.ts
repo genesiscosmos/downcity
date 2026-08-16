@@ -36,7 +36,7 @@ export async function collectWorkboardSnapshot(
     executingSessionIds,
   });
   const runtimePlugins = list_plugin_states({ context });
-  const taskResult = await listTaskDefinitions({ project_root: context.workspace_path });
+  const taskResult = await listTaskDefinitions({ data_path: context.data_path });
   const degradedCount = runtimePlugins.filter(
     (item) => item.status !== "ready",
   ).length;

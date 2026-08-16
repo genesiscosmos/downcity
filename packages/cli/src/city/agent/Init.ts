@@ -2,7 +2,7 @@
  * `city agent create`：创建 Agent 配置并独立登记一个 Workspace。
  *
  * 目标
- * - 生成 `.agents/skills` 与 `.downcity/` 运行目录
+ * - 生成项目 `.agents/skills`，运行状态统一保存在用户级 AgentWorkspace 目录
  * - 通过交互式问题收集 Agent 身份与默认模型
  *
  * 设计要点

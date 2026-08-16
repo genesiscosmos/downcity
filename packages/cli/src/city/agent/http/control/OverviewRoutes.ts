@@ -63,7 +63,7 @@ export function registerControlOverviewRoutes(
             : {};
         const tasks = Array.isArray(taskData.tasks) ? taskData.tasks : [];
         const logs = await readRecentLogs({
-          project_root: runtime.workspace.path,
+          data_path: runtime.data_path,
           limit: 50,
         });
 

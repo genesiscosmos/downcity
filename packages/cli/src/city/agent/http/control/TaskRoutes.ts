@@ -73,7 +73,7 @@ async function resolveTaskIdByTitleViaPlugin(params: {
  * 读取任务当前是否仍在执行。
  */
 async function readTaskRunningState(params: {
-  project_root: string;
+  data_path: string;
   routes: ControlRouteRegistrationParams;
   title: string;
   lastRunTimestamp?: string;
@@ -93,7 +93,7 @@ async function readTaskRunningState(params: {
   }
 
   const progressPath = join(
-    getDowncityTasksDirPath(params.project_root),
+    getDowncityTasksDirPath(params.data_path),
     taskId,
     timestamp,
     "run-progress.json",
@@ -124,7 +124,7 @@ export function registerControlTaskRoutes(
         const tasksWithRunning = await Promise.all(
           tasks.map(async (task) => {
             const running = await readTaskRunningState({
-              project_root: runtime.workspace.path,
+              data_path: runtime.data_path,
               routes: params,
               title: String(task.title || "").trim(),
               lastRunTimestamp: task.lastRunTimestamp,
@@ -267,7 +267,7 @@ export function registerControlTaskRoutes(
         } catch {
           return c.json({ success: false, error: "Task not found" }, 404);
         }
-        const runDir = join(getDowncityTasksDirPath(runtime.workspace.path), taskId, timestamp);
+        const runDir = join(getDowncityTasksDirPath(runtime.data_path), taskId, timestamp);
         if (!(await fs.pathExists(runDir))) {
           return c.json({ success: false, error: "Run not found" }, 404);
         }
@@ -315,7 +315,7 @@ export function registerControlTaskRoutes(
           return c.json({ success: false, error: "Task not found" }, 404);
         }
 
-        const taskDir = join(getDowncityTasksDirPath(runtime.workspace.path), taskId);
+        const taskDir = join(getDowncityTasksDirPath(runtime.data_path), taskId);
         if (!(await fs.pathExists(taskDir))) {
           return c.json({
             success: true,
@@ -372,7 +372,7 @@ export function registerControlTaskRoutes(
 
         const limit = toLimit(c.req.query("limit"), 50);
         const runs = await listTaskRuns({
-          project_root: runtime.workspace.path,
+          data_path: runtime.data_path,
           title,
           limit,
         });
@@ -397,7 +397,7 @@ export function registerControlTaskRoutes(
         }
 
         const detail = await readTaskRunDetail({
-          project_root: runtime.workspace.path,
+          data_path: runtime.data_path,
           title,
           timestamp,
         });
@@ -417,7 +417,7 @@ export function registerControlTaskRoutes(
         const runtime = params.get_agent();
         const limit = toLimit(c.req.query("limit"), 200);
         const logs = await readRecentLogs({
-          project_root: runtime.workspace.path,
+          data_path: runtime.data_path,
           limit,
         });
         return c.json({

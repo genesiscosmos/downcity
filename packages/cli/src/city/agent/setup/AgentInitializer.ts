@@ -44,7 +44,7 @@ export function normalize_default_agent_id(input: string): string {
  * 初始化 agent 项目骨架。
  *
  * 关键点（中文）
- * - 会创建 `.downcity` 运行目录、项目 `.env` 与 `.agents/skills`。
+ * - 只创建项目 `.env` 与 `.agents/skills`；运行状态由用户级 AgentWorkspace 目录持有。
  * - 对已存在文件采取“能跳过就跳过、明确冲突则报错”的策略，降低误覆盖风险。
  * - 返回结果只描述本次初始化写入摘要，方便 CLI 与控制台直接展示。
  */
@@ -58,7 +58,6 @@ export async function initialize_agent_project(
   const execution = input.execution as ExecutionBindingConfig;
 
   const dot_env_path = path.join(project_root, ".env");
-  const downcity_dir_path = path.join(project_root, ".downcity");
   const skills_dir_path = path.join(project_root, ".agents", "skills");
   const created_files: string[] = [];
   const skipped_files: string[] = [];
@@ -79,34 +78,15 @@ export async function initialize_agent_project(
   );
   (dot_env_exists ? skipped_files : created_files).push(".env");
 
-  const downcity_gitignore_status = await ensure_gitignore_entry(project_root, ".downcity");
   const dotenv_gitignore_status = await ensure_gitignore_entry(project_root, ".env");
-  if (
-    downcity_gitignore_status !== "unchanged" ||
-    dotenv_gitignore_status !== "unchanged"
-  ) {
+  if (dotenv_gitignore_status !== "unchanged") {
     created_files.push(".gitignore");
   } else {
     skipped_files.push(".gitignore");
   }
 
-  const downcity_dir_exists = await fs.pathExists(downcity_dir_path);
   const skills_dir_exists = await fs.pathExists(skills_dir_path);
-  const directories = [
-    downcity_dir_path,
-    path.join(downcity_dir_path, "task"),
-    path.join(downcity_dir_path, "logs"),
-    path.join(downcity_dir_path, ".cache"),
-    path.join(downcity_dir_path, "data"),
-    path.join(downcity_dir_path, "agents"),
-    path.join(downcity_dir_path, "public"),
-    path.join(downcity_dir_path, "resources"),
-    skills_dir_path,
-  ];
-  for (const directory of directories) {
-    await fs.ensureDir(directory);
-  }
-  (downcity_dir_exists ? skipped_files : created_files).push(".downcity/");
+  await fs.ensureDir(skills_dir_path);
   (skills_dir_exists ? skipped_files : created_files).push(".agents/skills/");
 
   return {

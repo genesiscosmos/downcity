@@ -34,8 +34,16 @@ async function create_city() {
   ]);
   const first_agent = new Agent({ id: "first_agent" });
   const second_agent = new Agent({ id: "second_agent" });
-  first_agent.enter(new Workspace({ id: "first", path: path.join(root, "first") }));
-  second_agent.enter(new Workspace({ id: "second", path: path.join(root, "second") }));
+  first_agent.enter(new Workspace({
+    id: "first",
+    path: path.join(root, "first"),
+    data_root_path: path.join(root, "data"),
+  }));
+  second_agent.enter(new Workspace({
+    id: "second",
+    path: path.join(root, "second"),
+    data_root_path: path.join(root, "data"),
+  }));
   const agents = [first_agent, second_agent];
   return { city: new City(agents), agents, root };
 }
@@ -176,7 +184,11 @@ test("CityHTTP 动态识别运行中新增和删除的 Agent", async () => {
     const agent = new Agent({
       id: "third_agent",
     });
-    agent.enter(new Workspace({ id: "third", path: path.join(root, "third") }));
+    agent.enter(new Workspace({
+      id: "third",
+      path: path.join(root, "third"),
+      data_root_path: path.join(root, "data"),
+    }));
     city.add(agent);
     const created = await transport.router().request(
       "/agents/third_agent/workspaces/third/api/sdk/sessions",

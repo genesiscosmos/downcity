@@ -49,11 +49,14 @@ function create_files(workspace_path) {
 }
 
 function create_context(workspace_path = process.cwd()) {
+  const data_path = path.join(workspace_path, "agent-workspace-data");
   return {
     agent_id: "image_test_agent",
     workspace_id: "image_test_workspace",
     workspace_path,
+    data_path,
     files: create_files(workspace_path),
+    data_files: create_files(data_path),
   };
 }
 
@@ -263,19 +266,19 @@ test("ImagePlugin image_result stores remote images locally and preserves source
 
   assert.equal(result.success, true);
   assert.deepEqual(result.data.result.parts.map((part) => part.url), [
-    ".downcity/image/results/img_remote/image_01.png",
-    ".downcity/image/results/img_remote/image_02.webp",
+    path.join(workspace_path, "agent-workspace-data", "image", "results", "img_remote", "image_01.png"),
+    path.join(workspace_path, "agent-workspace-data", "image", "results", "img_remote", "image_02.webp"),
   ]);
   assert.deepEqual(
     result.data.result.parts.map((part) => part.providerMetadata.downcity.source_url),
     remote_message.parts.map((part) => part.url),
   );
   assert.equal(
-    await fs.readFile(path.join(workspace_path, result.data.result.parts[0].url), "utf8"),
+    await fs.readFile(result.data.result.parts[0].url, "utf8"),
     "png-bytes",
   );
   assert.equal(
-    await fs.readFile(path.join(workspace_path, result.data.result.parts[1].url), "utf8"),
+    await fs.readFile(result.data.result.parts[1].url, "utf8"),
     "webp-bytes",
   );
   assert.deepEqual(result.messages[0].parts, result.data.result.parts);

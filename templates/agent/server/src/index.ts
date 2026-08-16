@@ -7,7 +7,8 @@
  * 读取历史并追加消息，不接触 Node runtime 或模型密钥。
  */
 
-import { resolve } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import {
   Agent,
@@ -41,17 +42,21 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
 const deepseek = createDeepSeek({ apiKey: api_key });
 const agent = new Agent({
   id: "template-agent",
-  workspace: new Workspace({ path: workspace_path }),
   model: deepseek("deepseek-chat"),
   instruction: "你是一个简洁、可靠的项目助手。",
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "default",
+  path: workspace_path,
+  data_root_path: join(homedir(), ".downcity"),
+}));
 
 /** 恢复固定 Web Session，不存在时首次创建。 */
 async function get_session() {
   try {
-    return await agent.sessions.get(session_id);
+    return await agent_workspace.sessions.get(session_id);
   } catch {
-    return await agent.sessions.create({ session_id });
+    return await agent_workspace.sessions.create({ session_id });
   }
 }
 

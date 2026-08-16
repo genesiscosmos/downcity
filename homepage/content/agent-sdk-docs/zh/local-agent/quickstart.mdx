@@ -26,6 +26,8 @@ pnpm add @downcity/agent @downcity/shell @downcity/sandbox-macos @ai-sdk/openai
 ## 完整的最小示例
 
 ```ts
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { Agent, Workspace } from "@downcity/agent";
 import { createOpenAI } from "@ai-sdk/openai";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
@@ -40,18 +42,20 @@ const shell = new Shell({
 });
 
 const workspace = new Workspace({
+  id: "project",
   path: "/path/to/project",
+  data_root_path: join(homedir(), ".downcity"),
   shell,
 });
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace,
   model: openai.responses("gpt-5"),
 });
+const agent_workspace = agent.enter(workspace);
 
 try {
-  const session = await agent.sessions.create();
+  const session = await agent_workspace.sessions.create();
   const turn = await session.prompt({
     query: "总结当前仓库结构",
   });
@@ -67,8 +71,8 @@ try {
 
 1. 创建当前平台的 Sandbox Adapter。
 2. 创建 `Shell` 并注入 Sandbox。
-3. 创建 `Workspace` 并传入 Shell。
-4. 创建 `Agent` 并传入 Workspace 与模型。
+3. 创建 `Workspace` 并传入项目路径、稳定 ID、用户级数据根目录和 Shell。
+4. 创建独立的 `Agent`，再通过 `agent.enter(workspace)` 进入当前 Workspace。
 5. 创建 Session，通过 `prompt()` 启动 Turn，并等待 `turn.finished`。
 6. 在 `finally` 中调用 `agent.dispose()`。
 
@@ -77,15 +81,16 @@ Shell 很重要：没有 Shell 时，Workspace 仍提供文件和搜索工具，
 ## 对象与生命周期
 
 ```text
-Workspace + Shell → Agent → Session → Turn
-                         └──────────────→ agent.dispose()
+Agent + Workspace + Shell → agent.enter(workspace) → Session → Turn
+                                      └──────────────→ agent.dispose()
 ```
 
-- 一个 Workspace 实例只能绑定一个 Agent。
-- 同一物理目录可以创建多个 Workspace 实例，分别交给不同 Agent。
+- Agent 不绑定单一 Workspace；同一个 Agent 可以通过 `enter()` 进入多个 Workspace。
+- Workspace 只描述项目资源边界；AgentWorkspace 承载当前 Agent 在该项目中的 Session 和运行状态。
+- 多个 Agent 可以指向同一目录，但应使用不同的 `agent.id` 和独立的 Workspace 数据分区。
 - `new Agent(...)` 后，Plugin lifecycle 与 ActionSchedule 会立即开始启动。
 - Session 执行会自动等待 Agent runtime 就绪，调用方不管理独立的启动状态。
-- `agent.dispose()` 会同时释放独占 Workspace、Shell 进程、PTY 和 Sandbox，不需要再次调用 `workspace.dispose()`。
+- `agent.dispose()` 会释放它进入的全部 AgentWorkspace、Shell 进程、PTY 和 Sandbox。
 - HTTP/RPC transport 不属于 Agent；需要网络服务时使用 `@downcity/city`。
 
 ## 模型如何解析

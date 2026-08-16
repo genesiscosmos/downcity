@@ -2,8 +2,8 @@
  * Workspace 文件系统类型。
  *
  * 关键点（中文）
- * - 文件与搜索共享同一个已解析项目根目录。
- * - WorkspaceTools 与 SessionStore 共用这一文件能力，不建立额外存储根目录。
+ * - 同一接口可分别约束项目目录和 AgentWorkspace 私有数据目录。
+ * - 每个实例只允许访问自己的已解析根目录。
  */
 
 import type {
@@ -25,9 +25,9 @@ export interface WorkspaceDirectoryEntry {
   is_file: boolean;
 }
 
-/** Workspace 内统一的文件与搜索能力。 */
+/** 受单一根目录约束的文件能力。 */
 export interface FileSystem {
-  /** 已解析且不可变的项目根目录。 */
+  /** 已解析且不可变的受控根目录。 */
   readonly root_path: string;
 
   /** 将 Workspace 内的相对路径片段解析为本地绝对路径。 */

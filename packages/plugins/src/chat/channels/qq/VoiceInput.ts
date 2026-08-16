@@ -298,6 +298,7 @@ function defaultExtByKind(kind: QqInboundAttachmentKind): string {
 }
 
 async function downloadRemoteAttachment(params: {
+  dataPath: string;
   rootPath: string;
   attachment: QqIncomingAttachment;
   authToken?: string;
@@ -346,7 +347,7 @@ async function downloadRemoteAttachment(params: {
     extFromContentType(responseType) ||
     defaultExtByKind(params.attachment.kind);
 
-  const dir = path.join(params.rootPath, ".downcity", ".cache", "qq");
+  const dir = path.join(params.dataPath, ".cache", "qq");
   await mkdir(dir, { recursive: true });
 
   const stem = safeBase.replace(/\.[^.]+$/, "");
@@ -364,6 +365,9 @@ async function downloadRemoteAttachment(params: {
  * - 远程 URL 会按需下载到 cache，再返回绝对路径。
  */
 export async function resolveQqAttachmentLocalPath(params: {
+  /** 当前 AgentWorkspace 的私有数据目录，用于保存下载缓存。 */
+  dataPath: string;
+  /** 项目根目录，用于解析消息中已有的项目相对路径。 */
   rootPath: string;
   attachment: QqIncomingAttachment;
   authToken?: string;

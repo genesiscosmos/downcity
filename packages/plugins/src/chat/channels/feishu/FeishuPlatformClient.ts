@@ -60,6 +60,7 @@ export interface FeishuPlatformClientOptions {
 export class FeishuPlatformClient {
   private readonly context: PluginContext;
   private readonly rootPath: string;
+  private readonly dataPath: string;
   private readonly logger: PluginContext["logger"];
   private readonly appId: string;
   private readonly appSecret: string;
@@ -79,6 +80,7 @@ export class FeishuPlatformClient {
   constructor(options: FeishuPlatformClientOptions) {
     this.context = options.context;
     this.rootPath = options.context.workspace_path;
+    this.dataPath = options.context.data_path;
     this.logger = options.context.logger;
     this.appId = options.config.appId;
     this.appSecret = options.config.appSecret;
@@ -394,6 +396,7 @@ export class FeishuPlatformClient {
   private getLookupDeps() {
     return {
       rootPath: this.rootPath,
+      dataPath: this.dataPath,
       logger: this.logger,
       client: this.client,
       getAppAccessToken: () => this.getAppAccessToken(),

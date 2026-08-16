@@ -14,16 +14,13 @@ function create_project_root() {
 }
 
 test("clean_chat_storage 只清理 Chat Plugin 自有数据", async () => {
-  const root_path = create_project_root();
+  const data_path = create_project_root();
   try {
     const session_id = "session_chat";
-    const meta_path = path.join(root_path, ".downcity", "channel", "meta.json");
-    const chat_dir = path.join(root_path, ".downcity", "chat", session_id);
+    const meta_path = path.join(data_path, "channel", "meta.json");
+    const chat_dir = path.join(data_path, "chat", session_id);
     const agent_session_dir = path.join(
-      root_path,
-      ".downcity",
-      "agents",
-      "agent_test",
+      data_path,
       "sessions",
       session_id,
     );
@@ -47,7 +44,7 @@ test("clean_chat_storage 只清理 Chat Plugin 自有数据", async () => {
     }));
 
     const result = await clean_chat_storage({
-      root_path,
+      data_path,
       channel: "telegram",
       chat_id: "chat_1",
     });
@@ -59,17 +56,16 @@ test("clean_chat_storage 只清理 Chat Plugin 自有数据", async () => {
     const meta = JSON.parse(fs.readFileSync(meta_path, "utf8"));
     assert.equal(meta.routesBySessionId[session_id], undefined);
   } finally {
-    fs.rmSync(root_path, { recursive: true, force: true });
+    fs.rmSync(data_path, { recursive: true, force: true });
   }
 });
 
 test("chat.history_clear action 只清空事件历史", async () => {
-  const root_path = create_project_root();
+  const data_path = create_project_root();
   try {
     const session_id = "session_history";
     const history_path = path.join(
-      root_path,
-      ".downcity",
+      data_path,
       "chat",
       session_id,
       "history.jsonl",
@@ -78,7 +74,7 @@ test("chat.history_clear action 只清空事件历史", async () => {
     fs.writeFileSync(history_path, "{}\n");
     const plugin = new ChatPlugin({ channels: [] });
     const result = await plugin.actions.history_clear.execute({
-      context: { workspace_path: root_path },
+      context: { workspace_path: data_path, data_path },
       input: { session_id: session_id },
       plugin_name: "chat",
       action_name: "history_clear",
@@ -87,6 +83,6 @@ test("chat.history_clear action 只清空事件历史", async () => {
     assert.equal(result.data.cleared, true);
     assert.equal(fs.existsSync(history_path), false);
   } finally {
-    fs.rmSync(root_path, { recursive: true, force: true });
+    fs.rmSync(data_path, { recursive: true, force: true });
   }
 });

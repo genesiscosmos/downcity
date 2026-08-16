@@ -12,18 +12,19 @@ description: 按日常使用、常用进阶和框架集成三个层级理解 Age
 大多数本地应用只需要：
 
 - `Workspace`：创建项目资源与安全边界，并接收 Shell。
-- `Agent`：组合模型、指令、Tools、Plugins 和 Sessions。
-- `agent.sessions.create()` / `get()`：创建或恢复 Session。
+- `Agent`：组合模型、指令、Tools、Plugins，并通过 `enter()` 进入 Workspace。
+- `agent_workspace.sessions.create()` / `get()`：创建或恢复当前作用域的 Session。
 - `session.prompt()`：启动一次 Turn。
 - `turn.finished`：等待最终结果。
-- `agent.dispose()`：释放 Agent 及其独占 Workspace。
+- `agent.dispose()`：释放 Agent 进入的全部 Workspace 作用域。
 
 ```ts
-const workspace = new Workspace({ path, shell });
-const agent = new Agent({ id, workspace, model });
+const workspace = new Workspace({ id: workspace_id, path, data_root_path, shell });
+const agent = new Agent({ id, model });
+const agent_workspace = agent.enter(workspace);
 
 try {
-  const session = await agent.sessions.create();
+  const session = await agent_workspace.sessions.create();
   const turn = await session.prompt({ query: "检查项目" });
   const result = await turn.finished;
 } finally {
@@ -87,12 +88,12 @@ try {
 ## 生命周期规则
 
 ```text
-一个 Workspace 实例 → 一个 Agent → 一次 agent.dispose()
+一个 Agent → 多个 `agent.enter(workspace)` 作用域 → 一次 agent.dispose()
 ```
 
-- Workspace 由调用方构造，绑定后由 Agent 统一释放。
-- 多个 Agent 可以指向同一物理目录，但必须分别创建 Workspace 实例。
-- `agent.dispose()` 会释放 Plugin runtime、Workspace、Shell、PTY 和 Sandbox。
+- Agent 不绑定单一 Workspace，同一个 Agent 可以进入多个 Workspace。
+- 每个 AgentWorkspace 独立持有 Session、私有数据、Shell 和 Plugin 上下文。
+- `agent.dispose()` 会释放所有 AgentWorkspace、Plugin runtime、Shell、PTY 和 Sandbox。
 - `RemoteAgent.close()` 只关闭客户端连接，不释放服务端 Agent。
 
 继续阅读：[Agent API](/zh/agent-sdk-docs/api-reference/agent-class)和[Session 总览](/zh/agent-sdk-docs/sessions/overview)。

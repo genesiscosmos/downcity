@@ -2,7 +2,7 @@
  * ChatHistoryStore：聊天事件流持久化。
  *
  * 关键点（中文）
- * - 写入 `.downcity/chat/<session_id>/history.jsonl`（append-only）。
+ * - 写入 AgentWorkspace 数据目录的 `chat/<session_id>/history.jsonl`（append-only）。
  * - 记录 inbound（audit/exec）与 outbound 事件。
  * - 与 session message history 分离，避免审计噪声进入模型上下文。
  */
@@ -145,7 +145,7 @@ export async function appendInboundChatHistory(params: {
   actorName?: string;
   extra?: JsonObject;
 }): Promise<void> {
-  const rootPath = normalizeTrimmedString(params.context.workspace_path);
+  const rootPath = normalizeTrimmedString(params.context.data_path);
   const session_id = normalizeTrimmedString(params.session_id);
   const chatId = normalizeTrimmedString(params.chatId);
   if (!rootPath || !session_id || !chatId) return;
@@ -164,7 +164,7 @@ export async function appendInboundChatHistory(params: {
     extra: toOptionalObject(params.extra),
   });
 
-  const file = get_chat_history_path(params.context.workspace_path, session_id);
+  const file = get_chat_history_path(params.context.data_path, session_id);
   await fs.ensureDir(path.dirname(file));
   await fs.appendFile(file, JSON.stringify(event) + "\n", "utf8");
 }
@@ -189,7 +189,7 @@ export async function appendOutboundChatHistory(params: {
   actorName?: string;
   extra?: JsonObject;
 }): Promise<void> {
-  const rootPath = normalizeTrimmedString(params.context.workspace_path);
+  const rootPath = normalizeTrimmedString(params.context.data_path);
   const session_id = normalizeTrimmedString(params.session_id);
   const chatId = normalizeTrimmedString(params.chatId);
   if (!rootPath || !session_id || !chatId) return;
@@ -207,7 +207,7 @@ export async function appendOutboundChatHistory(params: {
     extra: toOptionalObject(params.extra),
   });
 
-  const file = get_chat_history_path(params.context.workspace_path, session_id);
+  const file = get_chat_history_path(params.context.data_path, session_id);
   await fs.ensureDir(path.dirname(file));
   await fs.appendFile(file, JSON.stringify(event) + "\n", "utf8");
 }
@@ -227,9 +227,9 @@ export async function readChatHistory(params: {
   beforeTs?: number;
   afterTs?: number;
 }): Promise<{ historyPath: string; events: ChatHistoryEventV1[] }> {
-  const rootPath = normalizeTrimmedString(params.context.workspace_path);
+  const rootPath = normalizeTrimmedString(params.context.data_path);
   const session_id = normalizeTrimmedString(params.session_id);
-  const historyPath = get_chat_history_path(params.context.workspace_path, session_id);
+  const historyPath = get_chat_history_path(params.context.data_path, session_id);
   if (!rootPath || !session_id) {
     return {
       historyPath,

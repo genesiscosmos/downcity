@@ -28,7 +28,7 @@ export function resolve_chat_access_issuer_map(
 /** 创建当前 Agent 的 ChatAccessService。 */
 export function create_chat_access_service(context: PluginContext): ChatAccessService {
   return new ChatAccessService({
-    project_root: context.workspace_path,
+    data_path: context.data_path,
   });
 }
 

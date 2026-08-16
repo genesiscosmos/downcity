@@ -9,30 +9,32 @@ description: 详细说明 Workspace env、WorkspaceTools 以及本地 Agent 的 
 
 ```ts
 const workspace = new Workspace({
+  id,
   path,
+  data_root_path,
   shell,
   env,
 });
 
-new Agent({
+const agent = new Agent({
   id,
-  workspace,
   model,
   instruction,
   tools,
   plugins,
   Session,
-})
+});
+const agent_workspace = agent.enter(workspace);
 ```
 
 ## `id`
 
 agent 的稳定标识。
 
-它会影响 SDK session 落盘路径：
+它会影响用户级 Agent 数据路径：
 
 ```text
-<project_root>/.downcity/agents/<agent_id>/...
+~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/...
 ```
 
 推荐：
@@ -43,7 +45,7 @@ agent 的稳定标识。
 
 因为它直接决定了 session 落盘目录分区。
 
-## `workspace`
+## `workspace` 与 `agent.enter(workspace)`
 
 当前 Agent 可以访问的项目资源与安全边界。Workspace 统一持有项目根目录、文件与搜索工具，以及可选 Shell：
 
@@ -60,9 +62,21 @@ const workspace = new Workspace({
 - `path` 会在 Workspace 构造时解析为真实绝对目录
 - 文件和搜索工具固定限制在 Workspace 内
 - Shell 与文件工具使用同一个项目根目录
-- 一个 Workspace 实例只绑定一个 Agent
-- 多个 Agent 可以指向同一目录，但必须分别创建 Workspace
-- `agent.dispose()` 会同时释放它独占的 Workspace
+- Agent 不在构造时绑定 Workspace；通过 `agent.enter(workspace)` 创建一个 AgentWorkspace 执行作用域
+- 同一个 Agent 可以进入多个 Workspace，每个作用域拥有独立 Session、日志、Shell 和插件上下文
+- 多个 Agent 可以指向同一目录，但使用各自的 `agent.id` 和数据分区
+
+`Workspace` 必须提供稳定的 `id`、真实项目 `path` 和用户级 `data_root_path`：
+
+```ts
+const workspace = new Workspace({
+  id: "project",
+  path: "/path/to/project",
+  data_root_path: join(homedir(), ".downcity"),
+  shell,
+});
+const agent_workspace = agent.enter(workspace);
+```
 
 如果 `path` 不存在、不是目录或为空，Workspace 会立即拒绝构造。
 
@@ -73,7 +87,6 @@ const workspace = new Workspace({
 ```ts
 new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   instruction: [
     "你是一个简洁的代码助手。",
     "解释代码时优先给出明确文件引用。",

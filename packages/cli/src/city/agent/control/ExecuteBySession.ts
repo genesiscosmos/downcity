@@ -29,6 +29,7 @@ export async function executeBySessionId(params: {
 
   const executeInput = await buildExecuteInputText({
     project_root: params.agentState.workspace.path,
+    data_path: params.agentState.data_path,
     session_id,
     instructions,
     attachments: params.attachments,

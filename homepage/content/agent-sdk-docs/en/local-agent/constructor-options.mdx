@@ -9,30 +9,32 @@ The local Agent is constructed like this:
 
 ```ts
 const workspace = new Workspace({
+  id,
   path,
+  data_root_path,
   shell,
   env,
 });
 
-new Agent({
+const agent = new Agent({
   id,
-  workspace,
   model,
   instruction,
   tools,
   plugins,
   Session,
-})
+});
+const agent_workspace = agent.enter(workspace);
 ```
 
 ## `id`
 
 The stable identifier of the agent.
 
-It affects the SDK session storage path:
+It affects the user-level Agent data path:
 
 ```text
-<project_root>/.downcity/agents/<agent_id>/...
+~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/...
 ```
 
 Recommended properties:
@@ -43,7 +45,7 @@ Recommended properties:
 
 That is because it directly controls the session storage partition.
 
-## `workspace`
+## `workspace` and `agent.enter(workspace)`
 
 The project resource and security boundary available to the Agent. Workspace owns the project root, file and search tools, and an optional Shell:
 
@@ -60,9 +62,21 @@ Key points:
 - `path` is resolved to a real absolute directory during construction
 - file and search tools remain confined to the Workspace
 - Shell and file tools share the same project root
-- one Workspace instance binds exactly one Agent
-- multiple Agents may target the same directory through separate Workspace instances
-- `agent.dispose()` also disposes its exclusive Workspace
+- Agent is not bound to a Workspace at construction time; `agent.enter(workspace)` creates an AgentWorkspace execution scope
+- one Agent can enter multiple Workspaces, each with isolated Sessions, logs, Shell, and plugin context
+- multiple Agents may target the same directory, using distinct agent IDs and data partitions
+
+`Workspace` requires a stable `id`, the real project `path`, and a user-level `data_root_path`:
+
+```ts
+const workspace = new Workspace({
+  id: "project",
+  path: "/path/to/project",
+  data_root_path: join(homedir(), ".downcity"),
+  shell,
+});
+const agent_workspace = agent.enter(workspace);
+```
 
 Workspace construction fails immediately when `path` is empty, missing, or not a directory.
 
@@ -73,7 +87,6 @@ Static caller-provided instructions for the local SDK Agent.
 ```ts
 new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   instruction: [
     "You are a concise code assistant.",
     "Prefer direct file references when explaining code.",

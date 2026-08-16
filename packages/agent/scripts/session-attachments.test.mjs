@@ -16,6 +16,7 @@ async function create_harness() {
   const files = new LocalFileSystem(root_path);
   const store = new LocalSessionDataStore({
     files,
+    storage_root_path: root_path,
     agent_id: "attachment-test-agent",
     session_id: "attachment-test-session",
   });
@@ -47,11 +48,12 @@ test("Data URL 落盘后保留用户文件名并保存相对路径", async () =>
 
   const part = result.parts[0];
   assert.equal(part.type, "file");
-  assert.match(part.url, /^\.downcity\/agents\/attachment-test-agent\/sessions\/attachment-test-session\/attachments\/att_/);
+  assert.equal(path.isAbsolute(part.url), true);
+  assert.match(part.url, /sessions\/attachment-test-session\/attachments\/att_/);
   assert.equal(part.url.endsWith(".png"), true);
   assert.equal(part.filename, "diagram.png");
   assert.equal(
-    (await fs.readFile(path.join(harness.root_path, part.url))).toString(),
+    (await fs.readFile(part.url)).toString(),
     "hello",
   );
   assert.equal(part.url.includes("base64"), false);
@@ -76,7 +78,7 @@ test("视频 Data URL 使用 MIME 类型和扩展名落盘", async () => {
   const part = result.parts[0];
   assert.equal(part.url.endsWith(".mp4"), true);
   assert.deepEqual(
-    [...await fs.readFile(path.join(harness.root_path, part.url))],
+    [...await fs.readFile(part.url)],
     [1, 2, 3],
   );
 });

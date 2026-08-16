@@ -5,10 +5,10 @@ description: 理解 Active、Segment、累计 Summary、Assistant 草稿和中�
 
 # 元数据与落盘
 
-SDK Session 默认保存在项目目录中。应用应通过 Session API 读写，不要把这些文件当作自己的数据库。
+SDK Session 默认保存在用户级 AgentWorkspace 数据目录中。应用应通过 Session API 读写，不要把这些文件当作自己的数据库。
 
 ```text
-<project_root>/.downcity/agents/<agent_id>/sessions/<session_id>/
+~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/sessions/<session_id>/
 ├── instruction.md
 └── messages/
     ├── active.jsonl
@@ -19,7 +19,7 @@ SDK Session 默认保存在项目目录中。应用应通过 Session API 读写�
         └── 000000000901-000000001500.jsonl
 ```
 
-`agent_id` 是存储分区的一部分。同一项目中的多个 Agent 可以使用相同 `session_id` 而不冲突。
+`agent_id` 和 `workspace_id` 共同构成存储分区。同一项目中的多个 Agent 可以使用相同 `session_id` 而不冲突，项目目录不会创建 `.downcity`。
 
 `instruction.md` 是可选的完整 system 快照。Session 首次生成 system 后默认只在内存中固定；调用本地 `session.snapshot()` 会创建或覆盖该文件。`session.syncshot()` 会重新生成内存 system，并在文件已经存在时同步覆盖。恢复时若文件不存在，Session 会从 Agent 当前 instruction 和 plugin 重新生成；删除文件即可恢复这一行为。
 
