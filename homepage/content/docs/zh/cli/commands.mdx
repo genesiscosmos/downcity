@@ -81,7 +81,7 @@ city plugin enabled [agent_id]
 city plugin action <plugin_id> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
-一个第三方目录只定义一个 Plugin。`plugin.json` 声明 `schema_version: 1`、全局唯一 `id`、版本、自包含 ESM entry，以及可选的 `config.schema/defaults`；入口通过 `plugin` 命名导出 Plugin constructor。最终目录固定为 `~/.downcity/plugins/<plugin_id>/`，代码与资源直接位于其中，不增加 `artifact/` 层级。安装过程不会执行 `npm install`、构建脚本、Plugin lifecycle 或入口模块。
+一个第三方来源目录只定义一个 Plugin。`plugin.json` 声明 `schema_version: 1`、全局唯一 `id`、版本、单个自包含 ESM entry，以及可选的 `config.schema/defaults`；入口通过 `plugin` 命名导出 Plugin constructor，`package.json` 必须声明 `"type": "module"`。最终目录固定为 `~/.downcity/plugins/<plugin_id>/`，只包含安装后的 `plugin.json`、`package.json`、entry 与本地 `config.toml`，不复制源码和构建配置。安装过程不会执行 `npm install`、构建脚本、Plugin lifecycle 或入口模块。
 
 Plugin 配置属于 `plugins/<plugin_id>/config.toml` 中的命名 profile。账号、渠道、端点等结构由 `plugin.json` JSON Schema 定义，TypeScript 类型由 Plugin 代码独立维护。配置以 `0600` 权限明文保存；CLI 使用同一 Schema 校验、构建表单并脱敏 `writeOnly` 字段。
 

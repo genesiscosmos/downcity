@@ -7,13 +7,26 @@ description: Build, publish, and configure an installable Downcity Plugin
 
 A third-party directory defines exactly one Plugin. The Plugin's globally unique ID is also its final directory name, Agent reference key, and runtime Registry key.
 
-## Directory structure
+## Development directory
 
 ```text
 github-plugin/
+├── src/index.ts
 ├── plugin.json
 ├── package.json
+├── tsconfig.json
 └── dist/index.js
+```
+
+`src/` and `tsconfig.json` are development-only files. Downcity does not prescribe a build tool and does not require `tsup.config.ts`. `package.json` belongs to the Plugin package and establishes an explicit ESM package boundary, so it must contain `"type": "module"` and is installed with the Plugin. The build script only needs to bundle the entry and its runtime dependencies into one self-contained ESM file. For example, `package.json` can invoke esbuild directly:
+
+```json
+{
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js"
+  }
+}
 ```
 
 The ESM entry exports the Plugin constructor as the named `plugin` export:
@@ -82,7 +95,7 @@ The source directory contains one `plugin.json`:
 
 Plugin authors declare the complete JSON Schema and optional `defaults` directly in `plugin.json`. The installer validates the Schema, defaults, and saved profiles, then writes source, integrity, and timestamps into the same installed file. It does not generate a second Manifest or Schema snapshot.
 
-The `entry` must be a self-contained ESM artifact. The installer does not install dependencies or import the Plugin entry.
+The `entry` must point to one self-contained ESM file. The installer does not install dependencies, run build scripts, import the Plugin entry, or copy source and development files outside the entry. If the Plugin uses runtime dependencies such as Zod, the build tool must bundle them into the entry.
 
 The installed layout is deterministic:
 
@@ -118,7 +131,7 @@ city plugin uninstall github
 
 Updates atomically replace the complete Plugin directory while preserving `config.toml`. The CLI rejects an update when saved profiles fail the new Schema, and rejects profile or Plugin removal while an Agent still references it.
 
-Installation does not run `npm install`, build scripts, Plugin lifecycle hooks, or the entry module. The constructor export and instance ID are validated when an Agent actually loads the Plugin. Static code and resources receive a SHA-256 digest; install only trusted sources.
+Installation reads and copies only `plugin.json`, `package.json`, and the declared entry. It does not run `npm install`, build scripts, Plugin lifecycle hooks, or the entry module. The constructor export and instance ID are validated when an Agent actually loads the Plugin, and `package.json` plus the entry receive a SHA-256 digest. Install only trusted sources.
 
 Continue with:
 

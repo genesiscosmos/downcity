@@ -21,11 +21,11 @@
 │       ├── config.toml
 │       ├── plugin.json
 │       ├── package.json
-│       └── dist/
+│       └── dist/index.js
 └── downcity.db
 ```
 
-第三方 Plugin 的定义、代码与资源直接位于 `<plugin_id>/`；内置 Plugin 的注册由宿主注入，但配置仍使用相同的 `plugins/<plugin_id>/config.toml`。两者进入 Loader 后都按稳定 ID、JSON Schema 与 Plugin constructor 处理。
+第三方 Plugin 的定义、ESM package 边界和自包含入口直接位于 `<plugin_id>/`，源码、TypeScript 配置和具体构建工具不进入安装目录；内置 Plugin 的注册由宿主注入，但配置仍使用相同的 `plugins/<plugin_id>/config.toml`。两者进入 Loader 后都按稳定 ID、JSON Schema 与 Plugin constructor 处理。
 
 ## 3. Agent 定义
 
@@ -76,7 +76,7 @@ new PluginConstructor({ config });
 
 ## 5. 第三方 Plugin
 
-一个目录只定义一个 Plugin。源目录包含唯一的 `plugin.json`：
+一个来源目录只定义一个 Plugin，可以包含作者自己的源码和构建配置；安装协议只读取唯一的 `plugin.json`、声明 `"type": "module"` 的 `package.json` 与自包含入口：
 
 ```json
 {
@@ -104,9 +104,9 @@ ESM 入口命名导出唯一 Plugin constructor：
 export const plugin = GithubPlugin;
 ```
 
-Plugin 代码单独声明 TypeScript 配置类型，运行时协议以 `plugin.json.config.schema` 为准。安装器校验 Schema 与默认值，但不导入或执行第三方入口。
+Plugin 代码单独声明 TypeScript 配置类型，运行时协议以 `plugin.json.config.schema` 为准。入口必须是单个自包含 ESM 文件；`package.json` 负责建立明确的 ESM package 边界。安装器校验 Schema 与默认值，但不导入或执行第三方入口，也不复制源码与开发文件。
 
-安装目标固定为 `plugins/<definition.id>/`。随机目录只用于 staging；更新原子替换整个 Plugin 目录并保留 `config.toml`。新 Schema 无法校验已有 profile 时拒绝更新；仍被 Agent 引用时拒绝卸载。
+安装目标固定为 `plugins/<definition.id>/`，内容只有安装后的 `plugin.json`、`package.json`、自包含入口与本地 `config.toml`。随机目录只用于 staging；更新原子替换整个 Plugin 目录并保留 `config.toml`。新 Schema 无法校验已有 profile 时拒绝更新；仍被 Agent 引用时拒绝卸载。
 
 ## 6. 数据库边界
 

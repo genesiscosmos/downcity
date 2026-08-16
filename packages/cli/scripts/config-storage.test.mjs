@@ -16,12 +16,17 @@ function write_plugin_source(root, input = {}) {
   const id = input.id ?? "example";
   const version = input.version ?? "1.0.0";
   const description = input.description ?? "Example Plugin for configuration tests.";
+  const entry = input.entry ?? "dist/index.js";
+  fs.writeFileSync(
+    path.join(root, "package.json"),
+    input.package_source ?? JSON.stringify({ type: "module" }),
+  );
   fs.writeFileSync(path.join(root, "plugin.json"), JSON.stringify({
     schema_version: 1,
     id,
     version,
     description,
-    entry: input.entry ?? "index.js",
+    entry,
     config: {
       schema: {
         type: "object",
@@ -40,7 +45,9 @@ function write_plugin_source(root, input = {}) {
     },
     ...(input.extra_manifest ?? {}),
   }));
-  fs.writeFileSync(path.join(root, "index.js"), input.module_source ?? `
+  const module_path = path.join(root, input.module_path ?? "dist/index.js");
+  fs.mkdirSync(path.dirname(module_path), { recursive: true });
+  fs.writeFileSync(module_path, input.module_source ?? `
 class ExamplePlugin {
   constructor({ config }) {
     this.name = ${JSON.stringify(input.runtime_id ?? id)};
@@ -213,6 +220,10 @@ test("第三方 Plugin 使用 definition ID 目录和单 constructor", async () 
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
     write_plugin_source(plugin_source);
+    fs.mkdirSync(path.join(plugin_source, "src"), { recursive: true });
+    fs.writeFileSync(path.join(plugin_source, "src", "index.ts"), "export {};\n");
+    fs.writeFileSync(path.join(plugin_source, "tsconfig.json"), "{}\n");
+    fs.writeFileSync(path.join(plugin_source, "tsup.config.ts"), "export default {};\n");
     const agents = await import("../bin/city/process/registry/AgentConfigRepository.js");
     const plugins = await import("../bin/city/process/registry/PluginRepository.js");
     const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
@@ -222,7 +233,7 @@ test("第三方 Plugin 使用 definition ID 目录和单 constructor", async () 
     agents.create_agent_config({ agent_id: "plugin_agent" });
     const installed = await installer.install_plugin(plugin_source);
     assert.equal(installed.id, "example");
-    assert.equal(installed.entry, "index.js");
+    assert.equal(installed.entry, "dist/index.js");
     assert.match(installed.integrity, /^sha256-[a-f0-9]{64}$/u);
     assert.equal(installed.config.schema.properties.api_key.writeOnly, true);
     assert.deepEqual(installed.config.defaults, {
@@ -231,8 +242,12 @@ test("第三方 Plugin 使用 definition ID 目录和单 constructor", async () 
     });
     const plugin_dir = path.join(platform_root, "plugins", "example");
     assert.equal(fs.existsSync(path.join(plugin_dir, "plugin.json")), true);
-    assert.equal(fs.existsSync(path.join(plugin_dir, "index.js")), true);
+    assert.equal(fs.existsSync(path.join(plugin_dir, "dist", "index.js")), true);
     assert.equal(fs.existsSync(path.join(plugin_dir, "artifact")), false);
+    assert.equal(fs.existsSync(path.join(plugin_dir, "src")), false);
+    assert.equal(fs.existsSync(path.join(plugin_dir, "package.json")), true);
+    assert.equal(fs.existsSync(path.join(plugin_dir, "tsconfig.json")), false);
+    assert.equal(fs.existsSync(path.join(plugin_dir, "tsup.config.ts")), false);
 
     assert.throws(
       () => plugins.save_plugin_profile("example", "default", {}),
@@ -300,8 +315,19 @@ test("Plugin 安装拒绝内置 ID、非法清单与逃逸入口", async () => {
     await assert.rejects(() => installer.install_plugin(plugin_source), /stay inside the Plugin directory/u);
 
     write_plugin_source(plugin_source);
-    fs.symlinkSync("index.js", path.join(plugin_source, "linked.js"));
-    await assert.rejects(() => installer.install_plugin(plugin_source), /cannot contain symlinks/u);
+    fs.rmSync(path.join(plugin_source, "package.json"));
+    await assert.rejects(() => installer.install_plugin(plugin_source), /package not found/u);
+
+    write_plugin_source(plugin_source, { package_source: JSON.stringify({ type: "commonjs" }) });
+    await assert.rejects(() => installer.install_plugin(plugin_source), /must declare "type": "module"/u);
+
+    write_plugin_source(plugin_source);
+    fs.renameSync(
+      path.join(plugin_source, "dist", "index.js"),
+      path.join(plugin_source, "dist", "real.js"),
+    );
+    fs.symlinkSync("real.js", path.join(plugin_source, "dist", "index.js"));
+    await assert.rejects(() => installer.install_plugin(plugin_source), /entry cannot use symlinks/u);
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });

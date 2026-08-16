@@ -7,13 +7,26 @@ description: 编写、发布并配置可安装的 Downcity Plugin
 
 一个第三方目录只定义一个 Plugin。Plugin 的全局唯一 ID 同时是最终目录名、Agent 引用键和运行时 Registry key。
 
-## 目录结构
+## 开发目录
 
 ```text
 github-plugin/
+├── src/index.ts
 ├── plugin.json
 ├── package.json
+├── tsconfig.json
 └── dist/index.js
+```
+
+`src/` 和 `tsconfig.json` 只服务本地开发。Downcity 不规定构建工具，也不需要 `tsup.config.ts`。`package.json` 属于 Plugin 包，用来声明明确的 ESM package 边界，因此必须包含 `"type": "module"` 并会随 Plugin 安装。构建脚本只需把入口及其运行时依赖打包成一个自包含 ESM 文件；例如可直接在 `package.json` 中调用 esbuild：
+
+```json
+{
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js"
+  }
+}
 ```
 
 ESM 入口通过 `plugin` 命名导出 Plugin constructor：
@@ -82,7 +95,7 @@ Loader 先使用 JSON Schema 校验 profile，再把完整配置传入 construct
 
 Plugin 作者直接在 `plugin.json` 中声明完整 JSON Schema 和可选 `defaults`。安装器校验 Schema、默认值与已有 profile，并把来源、完整性和时间信息写回安装后的同一个文件；不会生成第二份 Manifest 或 Schema 快照。
 
-`entry` 必须是自包含 ESM 制品；安装器不会执行依赖安装，也不会导入 Plugin 入口。
+`entry` 必须指向单个自包含 ESM 文件。安装器不会执行依赖安装、构建脚本或导入 Plugin 入口，也不会复制入口之外的源码和开发文件。Plugin 使用 Zod 等运行时依赖时，构建工具必须把依赖打进入口。
 
 安装后的目录是确定的：
 
@@ -118,7 +131,7 @@ city plugin uninstall github
 
 更新会原子替换整个 Plugin 目录并保留 `config.toml`。新 Schema 无法校验已有 profile 时更新失败；仍被 Agent 引用的 profile 或 Plugin 不能删除。
 
-安装过程不会执行 `npm install`、构建脚本、Plugin lifecycle 或入口模块。constructor 的导出与实例 ID 在 Agent 真正加载 Plugin 时验证。静态代码和资源会生成 SHA-256 摘要；只应安装可信来源。
+安装过程只读取并复制 `plugin.json`、`package.json` 与声明的入口，不会执行 `npm install`、构建脚本、Plugin lifecycle 或入口模块。constructor 的导出与实例 ID 在 Agent 真正加载 Plugin 时验证；`package.json` 与入口会生成 SHA-256 摘要。只应安装可信来源。
 
 继续阅读：
 

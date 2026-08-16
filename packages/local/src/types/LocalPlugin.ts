@@ -48,7 +48,7 @@ export interface LocalInstalledPluginDefinition extends LocalPluginDefinition {
   source: string;
   /** Git 来源解析得到的 commit SHA。 */
   revision?: string;
-  /** 除 `plugin.json` 与 `config.toml` 外静态文件的内容摘要。 */
+  /** `package.json` 与自包含 ESM 入口文件的内容摘要。 */
   integrity: string;
   /** 首次安装时间。 */
   installed_at: string;

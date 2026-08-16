@@ -5,7 +5,7 @@ import type {
   LocalPluginDefinition,
 } from "@downcity/local/product";
 
-/** Plugin 源目录与安装目录共享的清单文件名。 */
+/** Plugin 来源目录与安装目录共享的清单文件名。 */
 export const PLUGIN_DEFINITION_FILE_NAME = "plugin.json";
 
 /** 当前支持的 Plugin 文件协议版本。 */
@@ -23,13 +23,13 @@ export interface ResolvedPluginSource {
   git_ref?: string;
 }
 
-/** 源目录 `plugin.json` 必须声明的可安装 Plugin。 */
+/** 来源目录 `plugin.json` 必须声明的可安装 Plugin 包。 */
 export interface PluginPackageDefinition extends LocalPluginDefinition {
   /** 文件协议版本。 */
   schema_version: 1;
   /** Plugin 语义化版本号。 */
   version: string;
-  /** 相对 Plugin 根目录的自包含 ESM 入口。 */
+  /** 相对来源目录的自包含 ESM 入口。 */
   entry: string;
 }
 

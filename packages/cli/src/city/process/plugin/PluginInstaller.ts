@@ -1,8 +1,9 @@
 /**
- * 第三方单 Plugin 目录安装器。
+ * 第三方单 Plugin 包安装器。
  *
- * Plugin 定义的唯一 ID 同时是公开身份和最终目录名。随机名称只用于 staging；更新
- * 原子替换整个 Plugin 目录，同时保留用户自己的 `config.toml`。
+ * 来源目录可以包含源码与任意开发工具；安装目录只保留 `plugin.json`、`package.json`、
+ * 自包含 ESM 入口和用户自己的 `config.toml`。Plugin 定义的唯一 ID 同时是公开身份和
+ * 最终目录名。
  */
 
 import path from "node:path";
@@ -30,6 +31,7 @@ import {
 } from "@/city/types/plugin/PluginDefinition.js";
 
 const PLUGIN_CONFIG_FILE_NAME = "config.toml";
+const PLUGIN_PACKAGE_FILE_NAME = "package.json";
 
 /** 从本地目录、Git URL 或 GitHub shorthand 安装一个 Plugin。 */
 export async function install_plugin(
@@ -42,43 +44,63 @@ export async function install_plugin(
   const plugins_root = path.join(root_path, "plugins");
   data.database.close();
   await fs.ensureDir(plugins_root, { mode: 0o700 });
+  const source_dir = path.join(plugins_root, `.source-${randomUUID()}`);
   const staging_dir = path.join(plugins_root, `.install-${randomUUID()}`);
   const backup_dir = path.join(plugins_root, `.backup-${randomUUID()}`);
   let revision: string | undefined;
 
   try {
-    if (source.local_path) {
-      await copy_local_plugin_source(source.local_path, staging_dir);
-    } else {
+    let plugin_root = source.local_path;
+    if (!plugin_root) {
       const clone_arguments = ["clone", "--depth", "1"];
       if (source.git_ref) clone_arguments.push("--branch", source.git_ref);
-      clone_arguments.push(source.git_url!, staging_dir);
+      clone_arguments.push(source.git_url!, source_dir);
       await execa("git", clone_arguments, { stdio: "pipe" });
       const revision_result = await execa("git", ["rev-parse", "HEAD"], {
-        cwd: staging_dir,
+        cwd: source_dir,
         stdio: "pipe",
       });
       revision = revision_result.stdout.trim() || undefined;
-      await fs.remove(path.join(staging_dir, ".git"));
-      await fs.remove(path.join(staging_dir, PLUGIN_CONFIG_FILE_NAME));
+      plugin_root = source_dir;
     }
-    await fs.chmod(staging_dir, 0o700);
 
-    await assert_plugin_has_no_symlinks(staging_dir);
-    const definition = await read_plugin_definition(staging_dir);
+    await assert_plugin_package_file(
+      plugin_root,
+      PLUGIN_DEFINITION_FILE_NAME,
+      "definition",
+    );
+    const package_path = await assert_plugin_package_file(
+      plugin_root,
+      PLUGIN_PACKAGE_FILE_NAME,
+      "package",
+    );
+    await validate_plugin_package(package_path);
+    const definition = await read_plugin_definition(plugin_root);
     if (expected_plugin_id && definition.id !== normalize_plugin_id(expected_plugin_id)) {
       throw new Error(`Plugin update changed ID: ${expected_plugin_id} -> ${definition.id}`);
     }
     if (is_builtin_plugin(definition.id)) {
       throw new Error(`Plugin ID conflicts with builtin Plugin: ${definition.id}`);
     }
-    const entry_path = resolve_plugin_path(staging_dir, definition.entry, "entry");
-    if (!await fs.pathExists(entry_path) || !(await fs.stat(entry_path)).isFile()) {
-      throw new Error(`Plugin entry not found: ${definition.entry}`);
-    }
+    const entry_path = await assert_plugin_package_file(
+      plugin_root,
+      definition.entry,
+      "entry",
+    );
     validate_existing_profiles(definition);
 
-    const integrity = await calculate_plugin_integrity(staging_dir);
+    await fs.ensureDir(staging_dir, { mode: 0o700 });
+    const installed_package_path = path.join(staging_dir, PLUGIN_PACKAGE_FILE_NAME);
+    await fs.copyFile(package_path, installed_package_path);
+    await fs.chmod(installed_package_path, 0o600);
+    const installed_entry_path = resolve_plugin_path(staging_dir, definition.entry, "entry");
+    await fs.ensureDir(path.dirname(installed_entry_path), { mode: 0o700 });
+    await fs.copyFile(entry_path, installed_entry_path);
+    await fs.chmod(installed_entry_path, 0o600);
+    const integrity = await calculate_plugin_integrity(staging_dir, [
+      PLUGIN_PACKAGE_FILE_NAME,
+      definition.entry,
+    ]);
     const existing = get_installed_plugin(definition.id);
     const target_dir = get_local_plugin_path(root_path, definition.id);
     const existing_config = path.join(target_dir, PLUGIN_CONFIG_FILE_NAME);
@@ -111,6 +133,7 @@ export async function install_plugin(
     await fs.remove(backup_dir);
     return installed;
   } finally {
+    await fs.remove(source_dir);
     await fs.remove(staging_dir);
     await fs.remove(backup_dir);
   }
@@ -272,61 +295,67 @@ async function resolve_plugin_source(source_input: string): Promise<ResolvedPlug
   };
 }
 
-/** 复制本地 Plugin，同时拒绝把来源仓库和用户配置装入静态目录。 */
-async function copy_local_plugin_source(source_root: string, target_root: string): Promise<void> {
-  await fs.copy(source_root, target_root, {
-    filter: (source_path) => {
-      const relative_path = path.relative(source_root, source_path);
-      if (!relative_path) return true;
-      const segments = relative_path.split(path.sep);
-      if (segments.includes(".git")) return false;
-      return relative_path !== PLUGIN_CONFIG_FILE_NAME;
-    },
-  });
+/**
+ * 验证安装协议实际读取的文件。
+ *
+ * 逐段拒绝符号链接，确保入口不会借助来源目录中的链接改变真实位置。与安装无关的源码、
+ * 构建配置和版本库文件不会被读取，也不会进入安装目录。
+ */
+async function assert_plugin_package_file(
+  plugin_root: string,
+  relative_path: string,
+  label: string,
+): Promise<string> {
+  const resolved_path = resolve_plugin_path(plugin_root, relative_path, label);
+  const normalized_relative_path = path.relative(path.resolve(plugin_root), resolved_path);
+  const segments = normalized_relative_path.split(path.sep);
+  let current_path = path.resolve(plugin_root);
+
+  for (const [index, segment] of segments.entries()) {
+    current_path = path.join(current_path, segment);
+    let stats: fs.Stats;
+    try {
+      stats = await fs.lstat(current_path);
+    } catch {
+      throw new Error(`Plugin ${label} not found: ${relative_path}`);
+    }
+    if (stats.isSymbolicLink()) {
+      throw new Error(`Plugin ${label} cannot use symlinks: ${relative_path}`);
+    }
+    const is_last_segment = index === segments.length - 1;
+    if (!is_last_segment && !stats.isDirectory()) {
+      throw new Error(`Plugin ${label} path is invalid: ${relative_path}`);
+    }
+    if (is_last_segment && !stats.isFile()) {
+      throw new Error(`Plugin ${label} must be a file: ${relative_path}`);
+    }
+  }
+  return resolved_path;
 }
 
-/** 拒绝符号链接，避免路径与完整性语义漂移。 */
-async function assert_plugin_has_no_symlinks(root: string): Promise<void> {
-  const entries = await fs.readdir(root, { withFileTypes: true });
-  for (const entry of entries) {
-    const absolute_path = path.join(root, entry.name);
-    if (entry.isSymbolicLink()) {
-      throw new Error(`Plugin directory cannot contain symlinks: ${entry.name}`);
-    }
-    if (entry.isDirectory()) await assert_plugin_has_no_symlinks(absolute_path);
+/** 校验 `package.json` 建立了明确的 ESM package 边界。 */
+async function validate_plugin_package(package_path: string): Promise<void> {
+  let package_definition: unknown;
+  try {
+    package_definition = await fs.readJson(package_path);
+  } catch (error) {
+    throw new Error("Plugin package.json must contain valid JSON", { cause: error });
+  }
+  if (!is_json_object(package_definition) || package_definition.type !== "module") {
+    throw new Error('Plugin package.json must declare "type": "module"');
   }
 }
 
-/** 计算 Plugin 全部静态代码与资源的稳定 SHA-256 摘要。 */
-async function calculate_plugin_integrity(root: string): Promise<string> {
+/** 计算 Plugin package 边界与自包含入口的稳定 SHA-256 摘要。 */
+async function calculate_plugin_integrity(root: string, files: string[]): Promise<string> {
   const hash = createHash("sha256");
-  const files = await list_plugin_files(root);
-  for (const relative_path of files) {
+  for (const relative_path of [...files].sort((left, right) => left.localeCompare(right))) {
     hash.update(relative_path.split(path.sep).join("/"));
     hash.update("\0");
-    hash.update(await fs.readFile(path.join(root, relative_path)));
+    hash.update(await fs.readFile(resolve_plugin_path(root, relative_path, "package file")));
     hash.update("\0");
   }
   return `sha256-${hash.digest("hex")}`;
-}
-
-/** 按相对路径稳定排序枚举 Plugin 静态文件。 */
-async function list_plugin_files(root: string, current = ""): Promise<string[]> {
-  const entries = (await fs.readdir(path.join(root, current), { withFileTypes: true }))
-    .sort((left, right) => left.name.localeCompare(right.name));
-  const files: string[] = [];
-  for (const entry of entries) {
-    const relative_path = current ? path.join(current, entry.name) : entry.name;
-    if (entry.isDirectory()) files.push(...await list_plugin_files(root, relative_path));
-    if (
-      entry.isFile()
-      && relative_path !== PLUGIN_DEFINITION_FILE_NAME
-      && relative_path !== PLUGIN_CONFIG_FILE_NAME
-    ) {
-      files.push(relative_path);
-    }
-  }
-  return files.sort((left, right) => left.localeCompare(right));
 }
 
 /** 拒绝 Plugin definition 中无法识别的字段。 */
