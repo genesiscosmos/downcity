@@ -5,20 +5,20 @@ description: 内建 shell tools、sandbox 模式与审批流程
 
 # Shell Built-In
 
-Shell 不再是 plugin。它是 `@downcity/shell` 提供的内建能力，并组合一个独立平台 Sandbox Adapter 后挂到 Agent 上。
+Shell 不再是 plugin。它是 `@downcity/workspace` 提供的内建能力，并组合一个独立平台 Sandbox Adapter 后挂到 Agent 上。
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
-import { Shell } from "@downcity/shell";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
+import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
-const agent = new Agent({
-  id: "repo-helper",
-  workspace: new Workspace({
-    path: "/path/to/project",
-    shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
-  }),
-});
+const agent = new Agent({ id: "repo-helper" });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+}));
 ```
 
 ## Tools
@@ -62,11 +62,12 @@ const shell = new Shell({
   ],
 });
 
-const agent = new Agent({
-  id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
+const agent = new Agent({ id: "repo-helper" });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
   shell,
-});
+}));
 ```
 
 只读目录必须是已存在的绝对目录，不能位于项目目录内。macOS 将其编译为 Seatbelt `file-read*` 规则，Linux 将其映射为 Bubblewrap `--ro-bind`，Windows 则把它作为只读根目录交给 MXC，或为 SRT 的独立用户添加 READ ACL；所有后端都不会增加写权限。
@@ -115,7 +116,7 @@ const current = await session.status();
 
 ## 关键语义
 
-- Shell 归属于 `@downcity/shell`，不属于 `@downcity/plugins`。
+- Shell 归属于 `@downcity/workspace`，不属于 `@downcity/plugins`。
 - Agent 只挂载 Shell tools；工具审批和实时 Mutation 都归属具体 Session。
 - Safe Sandbox 命令可读写项目，并使用配置的 sandbox 目录。
 - 宿主只读目录只能扩展读取能力，不能扩展项目外写权限。

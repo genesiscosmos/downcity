@@ -1,6 +1,6 @@
 {
   "name": "@downcity/workspace-cloudflare-computer",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "type": "module",
   "description": "Cloudflare Computer Workspace adapter for Downcity Agent",
   "main": "./bin/index.js",
@@ -21,8 +21,7 @@
   },
   "dependencies": {
     "@cloudflare/computer": "0.1.0-alpha.1",
-    "@downcity/agent": "workspace:*",
-    "@downcity/shell": "workspace:*",
+    "@downcity/workspace": "workspace:*",
     "ai": "^6.0.196",
     "zod": "^4.4.3"
   },

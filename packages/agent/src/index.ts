@@ -10,8 +10,6 @@
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
 export { AgentWorkspace } from "./agent/AgentWorkspace.js";
-export { Workspace } from "./workspace/Workspace.js";
-export { WorkspaceBase } from "./workspace/WorkspaceBase.js";
 export type { SessionStore } from "./types/store/SessionStore.js";
 export type {
   CompactActiveMessagesInput,
@@ -22,27 +20,7 @@ export type {
 } from "./types/store/SessionDataStore.js";
 export type { SessionAttachmentStore } from "./types/store/SessionAttachmentStore.js";
 export { create_session_message_store } from "./workspace/store/SessionMessageStoreFactory.js";
-export type {
-  FileSystem,
-  WorkspaceDirectoryEntry,
-} from "./types/workspace/FileSystem.js";
-export type {
-  FileToolActionRequest,
-  FileToolActionResult,
-} from "./types/workspace/FileTool.js";
-export type {
-  SearchToolActionRequest,
-  SearchToolActionResult,
-} from "./types/workspace/SearchTool.js";
-export type { WorkspaceOptions } from "./types/workspace/Workspace.js";
 export type { AgentWorkspaceStorage } from "./types/workspace/AgentWorkspaceStorage.js";
-export type { LocalFileSystemOptions } from "./types/workspace/LocalFileSystem.js";
-export type {
-  WorkspaceEnvPatch,
-  WorkspaceEnvSubscriber,
-  WorkspaceEnvUnsubscribe,
-} from "./types/workspace/WorkspaceEnv.js";
-export type { WorkspaceTools } from "./types/workspace/WorkspaceTools.js";
 export { RemoteAgent } from "./remote/RemoteAgent.js";
 export { Session } from "./session/Session.js";
 export type { SessionOptions } from "./types/session/SessionOptions.js";
@@ -290,12 +268,6 @@ export type {
   ChatMessageSegment,
   ChatMessageSendOptions,
 } from "./executor/messages/ChatMessageMarkupTypes.js";
-
-// Workspace 环境集成
-export {
-  load_project_dotenv,
-  resolve_workspace_env,
-} from "./workspace/WorkspaceEnv.js";
 
 // 日志
 export { get_logger, type Logger } from "./utils/logger/Logger.js";

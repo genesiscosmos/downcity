@@ -6,7 +6,7 @@
  */
 
 import type { SessionStore } from "@/types/store/SessionStore.js";
-import type { FileSystem } from "@/types/workspace/FileSystem.js";
+import type { FileSystem } from "@downcity/workspace";
 
 /** Agent 在一个 Workspace 中独享的持久化资源。 */
 export interface AgentWorkspaceStorage {

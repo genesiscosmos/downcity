@@ -43,7 +43,7 @@ sync_downcity_workspace_packages_globally() {
   local package_dir="$2"
   local package_name
 
-  for package_name in type shell sandbox-macos sandbox-linux sandbox-windows-mxc sandbox-windows-srt agent federation plugins city services ui; do
+  for package_name in type workspace sandbox-macos sandbox-linux sandbox-windows-mxc sandbox-windows-srt agent federation plugins city services ui; do
     sync_downcity_workspace_package_globally "$workspace_root" "$package_dir" "$package_name"
   done
 }

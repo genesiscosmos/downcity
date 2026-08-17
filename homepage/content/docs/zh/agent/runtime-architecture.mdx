@@ -19,7 +19,8 @@ Agent runtime 的核心目标是：让每次输入都按确定顺序执行，让
 - 实时 Mutation 流。
 
 ```ts
-const session = await agent.sessions.create();
+const agent_workspace = agent.enter(workspace);
+const session = await agent_workspace.sessions.create();
 const turn = await session.prompt({ query: "检查并修复项目" });
 const result = await turn.finished;
 ```
@@ -102,20 +103,18 @@ Session 提供三种 System 语义：
 
 ## Message 与持久化
 
-默认本地状态位于 Workspace 的 `.downcity`：
+默认本地状态位于用户级 Downcity 目录中当前 Agent 的 Workspace 作用域：
 
 ```text
-<workspace>/.downcity/
-├─ agents/<agent-id>/
-│  ├─ sessions/<session-id>/
-│  │  ├─ instruction.md
-│  │  └─ messages/
-│  │     ├─ meta.json
-│  │     ├─ active.jsonl
-│  │     ├─ assistant_message.json
-│  │     └─ segments/*.jsonl
-│  └─ archived-sessions/
-├─ resources/
+~/.downcity/agents/<agent-id>/workspaces/<workspace-id>/
+├─ sessions/<session-id>/
+│  ├─ instruction.md
+│  ├─ meta.json
+│  └─ messages/
+│     ├─ active.jsonl
+│     ├─ assistant_message.json
+│     └─ segments/*.jsonl
+├─ archived-sessions/
 ├─ logs/
 ├─ schedule.jsonl
 └─ sandbox/
@@ -150,7 +149,7 @@ Plugin 属于 Agent，不属于 Workspace。它可以提供 Action、System、Ho
 
 PluginRegistry 的变化同样在 Session 检查点生效。单个 Plugin 启动失败只隔离自身，不阻断其他 Plugin；Agent 关闭时停止 ActionSchedule 并卸载 Plugin。
 
-ActionSchedule 是本地延迟 Plugin Action 调度器。事件存放在 `.downcity/schedule.jsonl`，Agent 重启时会把遗留的 running 状态恢复为 pending。它不是分布式调度系统，也不提供跨机器选主。
+ActionSchedule 是本地延迟 Plugin Action 调度器。事件存放在当前 AgentWorkspace 的 `schedule.jsonl`，Agent 重启时会把遗留的 running 状态恢复为 pending。它不是分布式调度系统，也不提供跨机器选主。
 
 ## 安全模型
 
@@ -189,7 +188,8 @@ flowchart LR
     Schedule --> Barrier["内部初始化屏障"]
     Barrier --> Running["执行 Session"]
     Running --> Dispose["agent.dispose()"]
-    Dispose --> Workspace["Workspace.dispose()"]
+    Dispose --> Leave["离开全部 AgentWorkspace"]
+    Leave --> Workspace["Workspace.dispose()"]
     Workspace --> Shell["关闭进程与 Sandbox"]
 ```
 

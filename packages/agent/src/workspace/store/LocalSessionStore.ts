@@ -30,7 +30,7 @@ import {
   list_archived_agent_session_summary_page,
   list_agent_session_summary_page,
 } from "@/session/browse/Browse.js";
-import type { FileSystem } from "@/types/workspace/FileSystem.js";
+import type { FileSystem } from "@downcity/workspace";
 import type { LocalSessionStoreOptions } from "@/types/store/LocalStore.js";
 
 /** 解码目录中经过 URL 编码的 Session 标识。 */

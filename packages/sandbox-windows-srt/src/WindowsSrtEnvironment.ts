@@ -7,7 +7,7 @@
  * - 环境通过 srt-win 的 --env argv 传递，不拼接进 cmd 命令文本。
  */
 
-import type { SandboxSpawnRequest } from "@downcity/shell";
+import type { SandboxSpawnRequest } from "@downcity/workspace/protocol";
 
 const RESERVED_ENV_NAMES = new Set([
   "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",

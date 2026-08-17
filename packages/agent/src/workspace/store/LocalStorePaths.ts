@@ -2,24 +2,12 @@
  * Workspace 本地运行数据与 Session 路径规则。
  *
  * 关键点（中文）
- * - Workspace 是本地运行数据的目录聚合根。
- * - Session 在 Workspace 内使用稳定且唯一的 session_id 定位。
- * - Agent 归属保存在 Session metadata 中，不参与物理路径分区。
+ * - 调用方已经把文件能力限制在当前 AgentWorkspace 的私有数据根。
+ * - Session 在 AgentWorkspace 内使用稳定且唯一的 session_id 定位。
+ * - 本模块只拼接作用域内的相对领域路径，不解析用户级数据根。
  */
 
 import path from "node:path";
-
-/** 返回用户级数据根下的 Workspace 运行数据目录。 */
-export function get_workspace_storage_path(
-  data_root_path: string,
-  workspace_id: string,
-): string {
-  return path.join(
-    path.resolve(data_root_path),
-    "workspaces",
-    encodeURIComponent(String(workspace_id || "").trim()),
-  );
-}
 
 /** 返回活动 Session 集合目录。 */
 export function get_workspace_sessions_path(storage_root_path: string): string {

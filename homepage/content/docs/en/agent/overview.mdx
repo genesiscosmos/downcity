@@ -5,7 +5,7 @@ description: What the Agent SDK is and how it runs agent work
 
 # Agent
 
-The **Agent SDK** (`@downcity/agent`) is the core runtime for executing agent work. An Agent instance assembles a Workspace, sessions, tools, plugins, and a model into one execution context. `City` is the lifecycle container for Agent instances inside one host process.
+The **Agent SDK** (`@downcity/agent`) is the core runtime for executing agent work. An Agent instance enters a Workspace and creates an AgentWorkspace containing sessions, tools, plugins, and a model. `City` is the lifecycle container for Agent instances inside one host process.
 
 ## What an Agent does
 
@@ -18,20 +18,22 @@ The **Agent SDK** (`@downcity/agent`) is the core runtime for executing agent wo
 ## Creating an Agent
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
-import { Shell } from "@downcity/shell";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
+import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({
-    path: "/path/to/project",
-    shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
-  }),
   model: myModel,
   tools: { my_tool: myTool },
   plugins: [myPlugin],
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+}));
 ```
 
 ## Key concepts

@@ -56,7 +56,6 @@ When several Sessions share one model, provide the instance directly to the Agen
 ```ts
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   model,
 });
 ```
@@ -67,7 +66,7 @@ A Session without an explicit model falls back to the Agent model; once set, its
 
 The local SDK behaves more like an embedded execution shell:
 
-- the agent handles path, tools, plugins, and session storage
+- Agent owns identity, model, custom tools, and plugins; AgentWorkspace owns project tools and session storage
 - the caller decides which live model instance should be used
 
 That makes the local SDK more flexible, but it also makes the caller responsible for model readiness.

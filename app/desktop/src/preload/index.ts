@@ -57,7 +57,10 @@ const desktop_api: DesktopApi = {
   },
   user: {
     current: () => ipcRenderer.invoke("user:current"),
-    login: (federation_url, user_token) => ipcRenderer.invoke("user:login", federation_url, user_token),
+    list_login_providers: (federation_url, force_refresh) => ipcRenderer.invoke("user:list-login-providers", federation_url, force_refresh),
+    start_login: (input) => ipcRenderer.invoke("user:start-login", input),
+    get_login_result: (login_id) => ipcRenderer.invoke("user:get-login-result", login_id),
+    cancel_login: (login_id) => ipcRenderer.invoke("user:cancel-login", login_id),
     list_accounts: () => ipcRenderer.invoke("user:list-accounts"),
     switch_account: (account_id) => ipcRenderer.invoke("user:switch-account", account_id),
     remove_account: (account_id) => ipcRenderer.invoke("user:remove-account", account_id),

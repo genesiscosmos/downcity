@@ -6,7 +6,7 @@
  * - SessionStore 与 SessionDataStore 不复用项目 WorkspaceTools 的 FileSystem。
  */
 
-import type { FileSystem } from "@/types/workspace/FileSystem.js";
+import type { FileSystem } from "@downcity/workspace";
 
 /** LocalSessionStore 构造参数。 */
 export interface LocalSessionStoreOptions {

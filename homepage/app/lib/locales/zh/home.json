@@ -55,19 +55,36 @@
     }
   },
   "quickstart": {
-    "sectionLabel": "快速开始",
-    "title": "选择你想从哪一层开始。",
-    "description": "直接使用 Agent Harness、把产品 City 连接到 Federation，或通过终端管理同一套运行时。",
-    "tabsLabel": "选择 Agent SDK、City SDK 或 CLI 快速上手路径",
-    "agentTitle": "使用 Agent Harness 构建",
-    "agentDescription": "在应用中创建 Agent、打开 Session，并执行第一个 Turn。",
-    "cityTitle": "连接 City 与 Federation",
-    "cityDescription": "由 Federation 承载共享产品基础，再通过 City 客户端连接每一个产品。",
-    "cliTitle": "通过终端运行",
-    "cliDescription": "无需手动组装 SDK 运行时，创建 Agent 配置并由 CLI City 统一托管。",
-    "agentDocs": "查看 Agent 文档",
-    "cityDocs": "查看 City 文档",
-    "cliDocs": "查看 CLI 文档"
+    "sectionLabel": "从使用到构建",
+    "title": "三种方式，组成同一个 Downcity。",
+    "description": "使用者运行 Agent，产品开发者把 Agent 组织进 City，服务开发者通过 Federation 为多个产品提供共享能力。",
+    "tabsLabel": "选择使用者、产品开发者或服务开发者入口",
+    "stageLabel": "DOWNCITY / RUNTIME PATH",
+    "currentLayer": "当前层级",
+    "flowLabel": "运行关系",
+    "entries": {
+      "user": {
+        "audience": "使用者",
+        "title": "运行和管理 Agent",
+        "products": "CLI · Desktop",
+        "description": "用 CLI 创建、启动并与 Agent 对话，或在 Desktop 中完成同样的工作。两者使用同一套 City 与 Agent 状态。",
+        "codeLabel": "Terminal"
+      },
+      "productDeveloper": {
+        "audience": "产品开发者",
+        "title": "把 Agent 变成产品能力",
+        "products": "Agent · City",
+        "description": "Agent 持有 Workspace、模型与 Session；City 组织这些 Agent，并把它们接入 CLI、Desktop 或你的产品宿主。",
+        "codeLabel": "agent.ts"
+      },
+      "serviceDeveloper": {
+        "audience": "服务开发者",
+        "title": "提供跨产品共享服务",
+        "products": "Federation · Embassy · Services",
+        "description": "Federation 运行共享 Service，Embassy 代表用户或管理员访问模型、身份、用量与产品业务能力。",
+        "codeLabel": "federation.ts"
+      }
+    }
   },
   "features": {
     "sectionLabel": "功能特性",
@@ -96,40 +113,6 @@
         "title": "连接界面并保持控制",
         "description": "通过 CLI、Console、SDK 或产品界面与 Agent 交互，同时查看状态、审批操作并管理运行过程。"
       }
-    }
-  },
-  "architecture": {
-    "sectionLabel": "架构",
-    "title": "产品运行在用户的环境里，共享能力来自 Federation。",
-    "description": "Creator 把 Agent 的角色、工具、技能和产品界面组织成一座 City。City 在用户的电脑或服务器上运行，并保存会话、任务和工作产物；当 Agent 需要模型、账号、用量或其他共享服务时，再连接 Federation。",
-    "diagramLabel": "Creator 设计产品与 Agent。City 在用户环境中运行并保存工作数据，需要模型、鉴权、服务路由或用量管理时连接 Federation。",
-    "creator": "Creator",
-    "creatorCaption": "设计产品与 Agent",
-    "creatorLabel": "设计产品、Agent 角色与工作方式的 Creator",
-    "user": "用户",
-    "userEnvironment": "用户的运行环境",
-    "userEnvironmentLabel": "用户的电脑或服务器运行 City，并保存会话、任务与工作产物",
-    "productCity": "City",
-    "productBoundary": "产品、Agent 与运行数据",
-    "agentsInCity": "Agent 在这里入驻与工作",
-    "localRuntime": "本地运行时",
-    "memoryAndTools": "记忆与工具",
-    "userControl": "用户控制",
-    "federation": "Federation",
-    "federationCaption": "模型与共享服务",
-    "federationLabel": "Federation 提供模型、鉴权、服务路由与用量管理",
-    "mobileCaption": "City 在用户环境中运行，需要共享能力时连接 Federation。",
-    "paths": {
-      "setup": "配置共享服务",
-      "offer": "提供 City + Agent",
-      "hold": "持有",
-      "connect": "连接共享服务"
-    },
-    "services": {
-      "models": "模型",
-      "services": "服务",
-      "auth": "鉴权",
-      "usage": "用量"
     }
   },
   "productWorld": {

@@ -8,9 +8,8 @@ import path from "node:path";
 import test from "node:test";
 import {
   Agent,
-  Workspace,
-  resolve_workspace_env,
 } from "../bin/index.js";
+import { Workspace, resolve_workspace_env } from "@downcity/workspace";
 
 function create_project_root() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "downcity-agent-env-"));

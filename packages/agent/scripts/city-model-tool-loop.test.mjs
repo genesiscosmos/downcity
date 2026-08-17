@@ -16,7 +16,8 @@ import { MockLanguageModelV3 } from "ai/test";
 import { tool } from "ai";
 import { z } from "zod";
 
-import { Agent, Workspace } from "../bin/index.js";
+import { Agent } from "../bin/index.js";
+import { Workspace } from "@downcity/workspace";
 import { create_action, create_plugin } from "../bin/plugin/core/PluginActionFactory.js";
 import { CITY_MODEL_KIND } from "@downcity/type";
 

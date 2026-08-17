@@ -5,31 +5,32 @@ description: 运行时数据目录结构与用途
 
 # `.downcity/` 目录
 
-`.downcity/` 是 Downcity 的本地运行数据目录，默认建议不提交到 Git。
-
-通过 Downcity 初始化项目时，系统会自动把 `.downcity` 追加到当前项目的 `.gitignore`。
+`~/.downcity/` 是 Downcity 的用户级配置与运行数据目录。Downcity 不会在每个项目中创建 `.downcity/` 目录。
 
 ## 常见结构
 
 ```text
-.downcity/
-  logs/
-  agents/
-  chat/
-  task/
-  data/
-  public/
-  resources/
-  .cache/
+~/.downcity/
+├── agents/<agent_id>/
+│   ├── agent.json
+│   ├── SOUL.md
+│   └── workspaces/<workspace_id>/
+│       ├── sessions/
+│       ├── archived-sessions/
+│       └── logs/
+├── plugins/<plugin_id>/
+│   └── config.toml
+├── runtimes/city/
+└── downcity.db
 ```
 
 ## 重点目录
 
-### `.downcity/logs/`
+### `agents/<agent_id>/workspaces/<workspace_id>/logs/`
 
 每日 JSONL 日志：`<YYYY-MM-DD>.jsonl`。
 
-### `.downcity/agents/<agent_id>/sessions/<session_id>/messages/`
+### `agents/<agent_id>/workspaces/<workspace_id>/sessions/<session_id>/messages/`
 
 会话消息事实源：`active.jsonl`、`assistant_message.json` 与按 sequence 命名的 `segments/*.jsonl`。
 
@@ -37,17 +38,9 @@ description: 运行时数据目录结构与用途
 
 长期 Memory 不属于 Workspace `.downcity/` 协议。Memory 内容由当前 Agent 启用的 `MemoryProvider` 管理；内建 File Adapter 默认使用 `~/.downcity/agents/<agent_id>/memory/`，其他 Provider 可以使用数据库或远程服务。
 
-### `.downcity/chat/`
+### Plugin 运行数据
 
-chat 元信息与 history 事件流。`access.db` 保存当前 Agent 的 Chat Principal、Request、Allow/Deny Grant 和审计事件；`migration-backup/authorization/` 保存一次性迁移后的旧授权 JSON。
-
-### `.downcity/channel/meta.json`
-
-渠道目标到 `session_id` 的映射快照（由 chat plugin runtime 维护）。
-
-### `.downcity/task/`
-
-任务定义与每次运行产物（`run.json`、`result.md` 等）。
+Plugin 自有运行数据使用当前 AgentWorkspace context 提供的私有存储作用域。Plugin 定义与 profile 仍保存在 `~/.downcity/plugins/<plugin_id>/`。
 
 ### Skills 目录位置
 
@@ -55,5 +48,5 @@ chat 元信息与 history 事件流。`access.db` 保存当前 Agent 的 Chat Pr
 
 ## 安全建议
 
-- `.downcity/` 可能含敏感对话与执行痕迹，不建议提交到公开仓库。
-- 需要排障时优先查看 `logs`、`task`、`agents` 三处。
+- `~/.downcity/` 可能包含敏感配置、对话、Token 与执行痕迹。
+- 不要把该目录提交到版本库或复制到不受信任的位置。

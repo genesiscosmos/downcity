@@ -12,12 +12,11 @@ description: How the built-in skill plugin discovers, verifies, and loads local 
 ## Registration
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
 import { SkillPlugin } from "@downcity/plugins/skill";
 
 const agent = new Agent({
   id: "skill-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   plugins: [new SkillPlugin()],
 });
 ```

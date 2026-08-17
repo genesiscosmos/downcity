@@ -2,7 +2,7 @@
 
 > 状态：当前实现
 >
-> 适用包：`@downcity/agent`、`@downcity/shell` 与平台 Sandbox Packages
+> 适用包：`@downcity/agent`、`@downcity/workspace` 与平台 Sandbox Packages
 >
 > 更新时间：2026-07-25
 
@@ -37,7 +37,7 @@ flowchart TD
 
     Workspace --> Files["LocalFileSystem"]
     Workspace --> WorkspaceTools["File / Search Tools"]
-    Workspace --> SessionStore["LocalSessionStore"]
+    Workspace --> StorageProvider["WorkspaceStorageProvider"]
     Workspace --> Shell["Shell（可选）"]
 
     Shell --> ShellTools["Shell Tools"]
@@ -45,6 +45,8 @@ flowchart TD
 
     Agent --> Plugins["PluginRegistry"]
     Agent --> AgentWorkspace["AgentWorkspace"]
+    AgentWorkspace --> SessionStore["LocalSessionStore"]
+    StorageProvider --> AgentWorkspace
     AgentWorkspace --> Sessions["AgentSessions"]
     AgentWorkspace -.-> Context["PluginContext（当前 Workspace 投影）"]
 
@@ -68,15 +70,15 @@ flowchart TD
 
 ```text
 调用方
-  → Workspace
-  → Agent
+  → Agent + Workspace
+  → AgentWorkspace
   → Session
   → Composer / Executor
   → Model 与 Tools
 
 Workspace
   → FileSystem
-  → SessionStore
+  → WorkspaceStorageProvider
   → Shell（可选）
 ```
 
@@ -95,7 +97,7 @@ Workspace
 负责单 Agent 执行面：
 
 - 本地 `Agent` 和 `Session` facade。
-- Workspace 文件、搜索和 Store。
+- AgentWorkspace、Session 与 Agent 领域 Store。
 - Session 队列、消息、审批、压缩与恢复。
 - 模型调用和 Tool Loop。
 - Plugin registry、action、hook、system 和生命周期。
@@ -109,17 +111,19 @@ Workspace
 - HTTP/RPC Server 生命周期。
 - 选择当前操作系统的 Sandbox Package。
 
-### 3.2 `@downcity/shell`
+### 3.2 `@downcity/workspace`
 
-负责跨平台一致的命令执行协议：
+负责项目资源边界与跨平台一致的命令执行协议：
 
+- Workspace、WorkspaceBase 与 WorkspaceStorageProvider。
+- 本地 Rooted FileSystem、File/Search Tools 与 Workspace Env。
 - 短命令执行。
 - 长期 Shell Session。
 - 输出读取、状态查询、stdin、等待和关闭。
 - Safe / unrestricted 模式与审批衔接。
 - 将统一 Sandbox Policy 交给平台 Adapter。
 
-Shell 不负责文件 Store、Session 历史、Agent 配置或模型调用。
+Workspace 不负责 SessionStore、Session 历史、Agent 配置或模型调用。
 
 ### 3.3 平台 Sandbox Packages
 
@@ -186,28 +190,29 @@ packages/agent/src/
 
 ### 5.1 为什么需要 Workspace
 
-文件工具、搜索工具、Session Store 和 Shell 都围绕同一个项目目录工作。如果分别把路径传给各模块，会出现：
+文件工具、搜索工具、环境变量和 Shell 都围绕同一个项目目录工作。如果分别把路径传给各模块，会出现：
 
 - File Tool 和 Shell 指向不同目录。
 - Store 自己拼接另一套路径。
 - Agent 承担过多基础设施装配。
 - 安全边界在多个对象里重复解释。
 
-Workspace 在构造阶段只做一次真实路径解析，然后把全部项目资源绑定到这个稳定根目录。
+Workspace 在构造阶段只做一次真实路径解析，然后把项目资源绑定到这个稳定根目录。AgentWorkspace 私有状态位于用户级目录，不属于项目目录。
 
 ### 5.2 Workspace 提供什么
 
 ```ts
 class Workspace {
+  readonly id: string;
   readonly path: string;
   readonly files: FileSystem;
   readonly tools: WorkspaceTools;
   readonly shell?: Shell;
+  readonly storage: WorkspaceStorageProvider;
 
   get_env(): Record<string, string>;
   set_env(next: WorkspaceEnvPatch): void;
   patch_env(patch: WorkspaceEnvPatch): void;
-  create_session_store(agent_id: string): SessionStore;
   dispose(): Promise<void>;
 }
 ```
@@ -217,12 +222,12 @@ class Workspace {
 - `tools`：默认 File/Search Tools，加上可选 Shell Tools。
 - `get_env/set_env/patch_env`：读取和修改 Workspace 执行环境。
 - `shell`：可选命令能力。
-- `create_session_store()`：为唯一 Agent 创建 Store。
-- `dispose()`：统一释放 Store、Shell、进程和 Sandbox 资源。
+- `storage`：不理解 Agent 语义的通用私有存储 Provider。
+- `dispose()`：统一释放 Shell、进程和 Sandbox 资源。
 
 ### 5.3 Workspace 实例的所有权唯一
 
-Workspace 实例只允许调用一次 `create_session_store()`。原因不是物理目录不能共享，而是生命周期所有权必须唯一：
+Workspace 实例的 Storage 与 Shell 只允许绑定到一个 AgentWorkspace。原因不是物理目录不能共享，而是生命周期所有权必须唯一：
 
 ```text
 一个 Workspace 实例 → 一个 AgentWorkspace → 一次 leave/dispose
@@ -238,7 +243,7 @@ const agent_b = new Agent({ id: "b" });
 agent_b.enter(new Workspace({ id: "project-b", path: project_path }));
 ```
 
-Store 使用 `agent_id` 分区，因此两者的 Session 数据不会混在一起。
+AgentWorkspace 使用 `agent_id/workspace_id` 分区，因此两者的 Session 数据不会混在一起。
 
 ### 5.4 Workspace 不是 Host 或 Service Container
 
@@ -252,9 +257,9 @@ Workspace 只持有与项目资源直接相关的能力，不吸收：
 
 因此不需要额外的 `Host` 或 `SystemHandler`。这些对象没有独立领域语义，只会增加转发和耦合。
 
-## 6. FileSystem、WorkspaceTools 与 SessionStore
+## 6. FileSystem、WorkspaceTools 与 AgentWorkspace Store
 
-这三者共用 Workspace，但职责不同。
+项目 FileSystem 和 WorkspaceTools 属于 Workspace；SessionStore 使用 AgentWorkspace 打开的私有 FileSystem，职责与访问边界不同。
 
 ### 6.1 LocalFileSystem
 
@@ -266,7 +271,7 @@ Workspace 只持有与项目资源直接相关的能力，不吸收：
 - 跨进程 lock file。
 - 有界文件与搜索操作。
 
-它是 Agent Core 的最低文件能力，也是 SessionStore 的底层原子能力。
+它是 Workspace File/Search Tools 的底层原子能力。AgentWorkspace 私有 Store 使用另一个限制在用户级数据作用域的 LocalFileSystem 实例。
 
 ### 6.2 WorkspaceTools
 
@@ -281,14 +286,14 @@ WorkspaceTools 是 Workspace 提供给 Agent 注册的 AI SDK Tools：
 
 ### 6.3 SessionStore
 
-SessionStore 不是第二套权限系统，而是 Workspace 文件能力上的领域分支：
+SessionStore 不是 Workspace 能力，而是 AgentWorkspace 私有存储作用域上的领域实现：
 
 - 负责 Agent/Session 路径布局。
 - 创建稳定的 SessionDataStore。
 - 管理 Session 列表、删除、归档和清理。
 - 管理 Message sequence、revision、Segment 和崩溃恢复。
 
-模型的文件工具仍然可以正常读写 `.downcity`。Store 的价值是结构化语义、写入一致性和恢复能力，而不是把历史藏起来。
+模型的项目文件工具无法读取 AgentWorkspace 私有状态。Store 的价值是结构化语义、写入一致性和恢复能力；应用通过 Session API 访问这些状态。
 
 ## 7. Agent：单 Agent 组合根
 
@@ -310,8 +315,9 @@ sequenceDiagram
     App->>A: new Agent({ id, plugins, ... })
     App->>A: enter(W)
     A->>AW: 创建 Workspace 执行边界
-    AW->>W: create_session_store(id)
-    W-->>AW: LocalSessionStore
+    AW->>W: storage.open_scope(agents/id/workspaces/workspace_id)
+    W-->>AW: WorkspaceStorageScope
+    AW->>AW: 创建 LocalSessionStore
     A->>P: 注册 Plugin
     AW->>AW: 创建 AgentSessions 与 PluginContext
     AW->>P: enter_workspace(PluginContext)
@@ -363,12 +369,13 @@ Session 是 SDK 最重要的运行边界。每个 Session 拥有：
 ### 8.1 Session 生命周期
 
 ```ts
-const session = await agent.sessions.create();
-const existing = await agent.sessions.get(session_id);
+const agent_workspace = agent.enter(workspace);
+const session = await agent_workspace.sessions.create();
+const existing = await agent_workspace.sessions.get(session_id);
 
-const page = await agent.sessions.list();
-await agent.sessions.archive({ id: session_id });
-await agent.sessions.remove(session_id);
+const page = await agent_workspace.sessions.list();
+await agent_workspace.sessions.archive({ id: session_id });
+await agent_workspace.sessions.remove(session_id);
 ```
 
 `AgentSessions` 缓存当前进程中的 Session 实例。未缓存但 Store 中存在的 Session 会从本地数据恢复。
@@ -522,19 +529,17 @@ Executor 不负责：
 ### 11.1 物理目录
 
 ```text
-<workspace>/.downcity/
-├─ agents/
-│  └─ <encoded-agent-id>/
-│     ├─ sessions/
-│     │  └─ <encoded-session-id>/
-│     │     ├─ instruction.md
-│     │     └─ messages/
-│     │        ├─ meta.json
-│     │        ├─ active.jsonl
-│     │        ├─ assistant_message.json
-│     │        └─ segments/
-│     │           └─ <start-sequence>-<end-sequence>.jsonl
-│     └─ archived-sessions/
+~/.downcity/agents/<encoded-agent-id>/workspaces/<encoded-workspace-id>/
+├─ sessions/
+│  └─ <encoded-session-id>/
+│     ├─ instruction.md
+│     ├─ meta.json
+│     └─ messages/
+│        ├─ active.jsonl
+│        ├─ assistant_message.json
+│        └─ segments/
+│           └─ <start-sequence>-<end-sequence>.jsonl
+├─ archived-sessions/
 ├─ logs/
 ├─ schedule.jsonl
 └─ sandbox/
@@ -553,7 +558,7 @@ Executor 不负责：
 
 - 所有 Message 使用全局单调 `sequence`。
 - 同一 Message 的流式更新使用递增 `revision`。
-- 写入通过 Workspace lock file 串行化。
+- 写入通过 AgentWorkspace 私有 FileSystem lock 串行化。
 - 完整 JSON 文件使用原子覆盖。
 - Compact 先落不可变 Segment，再覆盖 Active。
 - 若进程在 Compact 两步之间退出，初始化时根据 sequence 去除重复前缀。
@@ -619,7 +624,7 @@ Agent 将 PluginRegistry Tools 注册到最终工具集合。Workspace、Plugin 
 
 ActionSchedule 是 Agent 内部的延迟 Plugin Action 调度能力，不是独立 Plugin，也不是分布式调度系统。
 
-- 事件写入 Workspace 的 `.downcity/schedule.jsonl`。
+- 事件写入当前 AgentWorkspace 私有目录的 `schedule.jsonl`。
 - 状态包括 pending、running 和终态。
 - 多实例文件操作通过 Workspace lock 串行。
 - Agent 重启时把遗留 running 恢复为 pending。
@@ -629,7 +634,7 @@ ActionSchedule 是 Agent 内部的延迟 Plugin Action 调度能力，不是独�
 
 `WorkspaceBase` 定义 Agent 所需的 Workspace 资源契约；`Workspace` 仍是本地文件系统实现。
 `@downcity/workspace-cloudflare-computer` 通过继承 `WorkspaceBase` 接入 Cloudflare Computer 的
-Durable Object 虚拟文件系统，并复用 SessionStore 的领域接口。
+Durable Object 虚拟文件系统，并提供通用 WorkspaceStorageProvider；AgentWorkspace 继续负责创建 SessionStore。
 
 Cloudflare Computer 的文件、目录与发布 Tool 由适配器内部调用官方 `createAITools()` 创建，Shell 则由适配器包装为 `exec` Tool。
 适配器不把 Worker RPC、Container 或 Dynamic Worker 的实现细节引入 `@downcity/agent`。
@@ -674,6 +679,7 @@ const shell = new Shell({
 });
 
 const workspace = new Workspace({
+  id: "project",
   path: process.cwd(),
   shell,
 });
@@ -693,7 +699,7 @@ Safe 模式的核心策略：
 - Workspace 可读写。
 - 宿主额外目录只能由宿主配置为只读。
 - 模型 Tool input 不能扩展宿主只读路径。
-- HOME、tmp 和 cache 收敛到 Workspace 的 `.downcity/sandbox/`。
+- HOME、tmp 和 cache 收敛到 AgentWorkspace 私有目录的 `sandbox/`。
 - 平台 Adapter 只消费 Shell Core 已经校验好的统一策略。
 
 unrestricted 模式是 Shell 专属的显式能力升级，需要审批网关。它不是 File/Search、Plugin 或自定义 Tool 的通用参数，也不会隐式改变 Workspace FileSystem。Plugin 使用自己的业务授权，自定义 Tool 的权限由注册它的宿主负责。
@@ -712,10 +718,11 @@ Session Prompt 可以携带 AI SDK file part，也允许宿主显式提供绝对
 
 ### 15.1 本地 Agent
 
-本地 `Agent` 持有真实 Workspace、Store、Plugin、Session 和模型执行器。
+本地 `Agent` 持有身份、Plugin 和模型；`AgentWorkspace` 持有真实 Workspace、Store 与 Session。
 
 ```ts
-const session = await agent.sessions.create();
+const agent_workspace = agent.enter(workspace);
+const session = await agent_workspace.sessions.create();
 const turn = await session.prompt({ query: "hello" });
 const result = await turn.finished;
 ```
@@ -741,15 +748,16 @@ const agent = new RemoteAgent({
 
 ```mermaid
 flowchart LR
-    Construct["new Agent"] --> StartPlugins["启动 Plugin lifecycle"]
-    StartPlugins --> StartSchedule["启动 ActionSchedule"]
-    StartSchedule --> Running["Session 执行等待内部初始化屏障"]
+    Construct["new Agent"] --> Enter["agent.enter(workspace)"]
+    Enter --> StartWorkspace["启动 Workspace Plugin lifecycle 与 ActionSchedule"]
+    StartWorkspace --> Running["Session 执行等待内部初始化屏障"]
     Running --> Dispose["agent.dispose()"]
-    Dispose --> StopSchedule["停止 ActionSchedule"]
-    StopSchedule --> StopPlugins["卸载 Plugin"]
-    StopPlugins --> SaveLogs["刷新日志"]
+    Dispose --> Leave["离开全部 AgentWorkspace"]
+    Leave --> StopSchedule["停止 ActionSchedule"]
+    StopSchedule --> SaveLogs["刷新 Store 与日志"]
     SaveLogs --> DisposeWorkspace["Workspace.dispose()"]
     DisposeWorkspace --> CloseShell["关闭进程与 Sandbox"]
+    CloseShell --> StopPlugins["卸载 Agent Plugin"]
 ```
 
 调用方必须在不再使用 Agent 时执行：
@@ -758,28 +766,30 @@ flowchart LR
 await agent.dispose();
 ```
 
-Agent 与 Workspace 一对一，因此 Agent dispose 同时关闭 Workspace。HTTP/RPC Server 不属于 Agent，必须由其拥有者独立关闭。
+Agent 可以进入多个 Workspace；Agent dispose 会逐一离开并关闭它们。HTTP/RPC Server 不属于 Agent，必须由其拥有者独立关闭。
 
 ## 17. 推荐用法
 
 ### 17.1 只有文件与模型
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 
 const workspace = new Workspace({
+  id: "project",
   path: process.cwd(),
 });
 
 const agent = new Agent({
   id: "demo",
-  workspace,
   model,
   instruction: "你负责维护当前项目。",
 });
 
 try {
-  const session = await agent.sessions.create();
+  const agent_workspace = agent.enter(workspace);
+  const session = await agent_workspace.sessions.create();
   const turn = await session.prompt({ query: "先理解项目结构" });
   console.log(await turn.finished);
 } finally {
@@ -790,11 +800,12 @@ try {
 ### 17.2 带平台 Shell
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
-import { Shell } from "@downcity/shell";
+import { Agent } from "@downcity/agent";
+import { Shell, Workspace } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const workspace = new Workspace({
+  id: "project",
   path: process.cwd(),
   shell: new Shell({
     sandbox: new MacOsSeatbeltSandbox(),
@@ -803,9 +814,10 @@ const workspace = new Workspace({
 
 const agent = new Agent({
   id: "demo",
-  workspace,
   model,
 });
+
+const agent_workspace = agent.enter(workspace);
 ```
 
 Windows 或 Linux 只替换 Sandbox Adapter，Agent SDK 代码保持一致。
@@ -815,13 +827,14 @@ Windows 或 Linux 只替换 Sandbox Adapter，Agent SDK 代码保持一致。
 ```ts
 const agent = new Agent({
   id: "demo",
-  workspace,
   model,
   plugins: [calendar_plugin, task_plugin],
   tools: {
     company_search: company_search_tool,
   },
 });
+
+const agent_workspace = agent.enter(workspace);
 ```
 
 Plugin 是 Agent 能力，自定义 Tool 与 Workspace Tools 合并后供所有 Session 共享。
@@ -876,11 +889,11 @@ Env、Plugin、Model 和 compact 等变化通过 Session Queue 在 Step 边界�
 对应最简结构：
 
 ```text
-Workspace = Files + Env + WorkspaceTools + SessionStore + Shell?
+Workspace = Files + Env + WorkspaceTools + StorageProvider + Shell?
 
 Agent = Identity + Model + Instruction + Plugins
 
-AgentWorkspace = Agent.enter(Workspace) + Tools + Sessions + PluginContext
+AgentWorkspace = Agent.enter(Workspace) + PrivateStore + Tools + Sessions + PluginContext
 
 Session = State + Queue + Messages + Composer + Executor + Approvals
 

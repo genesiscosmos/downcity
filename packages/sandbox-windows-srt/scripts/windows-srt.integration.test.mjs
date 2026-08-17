@@ -18,7 +18,7 @@ import {
   closeAllShellSessions,
   createShellRuntimeState,
   execShellCommand,
-} from "@downcity/shell/session/ShellActionRuntime.js";
+} from "@downcity/workspace/shell/session/ShellActionRuntime.js";
 import { WindowsSrtSandbox } from "../bin/index.js";
 
 const exec_file = promisify(execFile);

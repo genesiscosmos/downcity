@@ -7,7 +7,7 @@
  */
 
 import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.js";
-import type { FileSystem } from "@/types/workspace/FileSystem.js";
+import type { FileSystem } from "@downcity/workspace";
 
 function normalizeModelLabel(input: unknown): string | undefined {
   const label = typeof input === "string" ? input.trim() : "";

@@ -53,7 +53,7 @@ export class NotesPlugin extends BasePlugin {
 ## 挂到本地 Agent 上
 
 ```ts
-import { Agent, Workspace, BasePlugin, type PluginActions } from "@downcity/agent";
+import { Agent, BasePlugin, type PluginActions } from "@downcity/agent";
 
 class NotesPlugin extends BasePlugin {
   readonly name = "notes";
@@ -75,7 +75,6 @@ class NotesPlugin extends BasePlugin {
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new NotesPlugin()],
 });

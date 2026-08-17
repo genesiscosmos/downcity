@@ -13,7 +13,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { MockLanguageModelV3 } from "ai/test";
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 
 /** 构造 AI SDK V3 usage。 */

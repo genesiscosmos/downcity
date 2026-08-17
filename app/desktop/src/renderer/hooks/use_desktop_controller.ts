@@ -667,16 +667,46 @@ export function use_desktop_controller(): DesktopViewController {
     }
   }, []);
 
-  const login = useCallback(async (federation_url: string, user_token: string) => {
+  const list_login_providers = useCallback(async (federation_url: string, force_refresh = false) => {
     set_error("");
     try {
-      set_user(await window.downcity.user.login(federation_url, user_token));
+      return await window.downcity.user.list_login_providers(federation_url, force_refresh);
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, []);
+
+  const login = useCallback(async (federation_url: string, provider_id: string) => {
+    set_error("");
+    let pending_login_id = "";
+    try {
+      const started = await window.downcity.user.start_login({ federation_url, provider_id });
+      pending_login_id = started.status === "done" ? "" : started.login_id;
+      if (started.status === "input_required") throw new Error("当前 Desktop 暂不支持需要输入信息的登录方式");
+      if (started.status !== "done") {
+        let completed = false;
+        for (let attempt = 0; attempt < 180; attempt += 1) {
+          const result = await window.downcity.user.get_login_result(started.login_id);
+          if (result.status === "error") throw new Error(result.error || "登录失败");
+          if (result.status === "done") {
+            pending_login_id = "";
+            completed = true;
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1_000));
+        }
+        if (!completed) throw new Error("登录授权已超时，请重试");
+      }
+      set_user(await window.downcity.user.current());
       set_accounts(await window.downcity.user.list_accounts());
       set_account_resources(await window.downcity.user.get_resources());
       void refresh_models();
     } catch (reason) {
       set_error(to_error_message(reason));
       throw reason;
+    } finally {
+      if (pending_login_id) await window.downcity.user.cancel_login(pending_login_id).catch(() => undefined);
     }
   }, [refresh_models]);
 
@@ -770,6 +800,7 @@ export function use_desktop_controller(): DesktopViewController {
     move_queued_message,
     update_settings,
     login,
+    list_login_providers,
     logout,
     switch_account,
     remove_account,

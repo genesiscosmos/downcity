@@ -12,7 +12,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { Workspace } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 
 async function create_fixture(t) {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-file-tools-"));

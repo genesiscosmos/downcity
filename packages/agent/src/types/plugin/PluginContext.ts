@@ -8,9 +8,9 @@
 
 import type { AgentSessions } from "@/agent/AgentSessions.js";
 import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
-import type { FileSystem } from "@/types/workspace/FileSystem.js";
+import type { FileSystem } from "@downcity/workspace";
 import type { Logger } from "@/utils/logger/Logger.js";
-import type { Shell } from "@downcity/shell";
+import type { WorkspaceShell } from "@downcity/workspace";
 
 /** Agent 向 Plugin 开放的最小、稳定运行时能力。 */
 export interface PluginContext {
@@ -33,7 +33,7 @@ export interface PluginContext {
   readonly data_files: FileSystem;
 
   /** 当前 Workspace 显式挂载的 Shell；未启用时为空。 */
-  readonly shell?: Shell;
+  readonly shell?: WorkspaceShell;
 
   /** 当前 Agent 在当前 Workspace 中使用的统一日志器。 */
   readonly logger: Logger;

@@ -7,7 +7,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { LocalFileSystem } from "../bin/workspace/LocalFileSystem.js";
+import { LocalFileSystem } from "@downcity/workspace";
 import { LocalSessionDataStore } from "../bin/workspace/store/LocalSessionDataStore.js";
 import { SessionMessages } from "../bin/session/SessionMessages.js";
 

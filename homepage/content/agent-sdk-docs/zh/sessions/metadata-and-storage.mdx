@@ -8,7 +8,7 @@ description: 理解 Active、Segment、累计 Summary、Assistant 草稿和中�
 SDK Session 默认保存在用户级 Workspace 数据目录中。应用应通过 Session API 读写，不要把这些文件当作自己的数据库。
 
 ```text
-~/.downcity/workspaces/<workspace_id>/sessions/<session_id>/
+~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/sessions/<session_id>/
 ├── meta.json
 ├── instruction.md
 └── messages/
@@ -19,7 +19,7 @@ SDK Session 默认保存在用户级 Workspace 数据目录中。应用应通过
         └── 000000000901-000000001500.jsonl
 ```
 
-`session_id` 在 Workspace 内唯一。`meta.json` 同时记录 `agent_id` 与 `workspace_id`，SessionStore 通过这两个字段校验归属并过滤列表。不同 Agent 不能在同一 Workspace 中复用相同 `session_id`，项目目录不会创建 `.downcity`。
+`session_id` 在一个 AgentWorkspace 内唯一。`meta.json` 同时记录 `agent_id` 与 `workspace_id`，物理目录也已经按这两个 ID 分区。不同 Agent 可以复用相同 `session_id` 而不会共享数据，项目目录不会创建 `.downcity`。
 
 `instruction.md` 是可选的完整 system 快照。Session 首次生成 system 后默认只在内存中固定；调用本地 `session.snapshot()` 会创建或覆盖该文件。`session.syncshot()` 会重新生成内存 system，并在文件已经存在时同步覆盖。恢复时若文件不存在，Session 会从 Agent 当前 instruction 和 plugin 重新生成；删除文件即可恢复这一行为。
 

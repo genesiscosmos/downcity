@@ -1,0 +1,57 @@
+---
+title: "@downcity/workspace"
+description: "项目资源、私有存储能力、文件工具、环境变量与 Shell。"
+---
+
+`@downcity/workspace` 定义 Agent 执行任务时使用的资源边界。它拥有项目路径、rooted 文件
+能力、文件与搜索工具、环境变量、私有存储能力和可选 Shell，但不拥有 Agent 身份、Plugin、
+Session 或模型调用。
+
+```bash
+pnpm add @downcity/workspace @downcity/agent
+```
+
+```ts
+import { Agent } from "@downcity/agent";
+import { Shell, Workspace } from "@downcity/workspace";
+import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+
+const workspace = new Workspace({
+  id: "project",
+  path: process.cwd(),
+  env: { NODE_ENV: "development" },
+  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+});
+
+const agent = new Agent({ id: "repo-helper", model, plugins });
+const agent_workspace = agent.enter(workspace);
+const session = await agent_workspace.sessions.create();
+```
+
+## 所有权
+
+- `Workspace` 拥有项目资源与可选 Shell。
+- `Agent` 拥有身份、指令、模型、自定义工具和 Plugin 注册。
+- `AgentWorkspace` 拥有 `agent.enter(workspace)` 创建的执行作用域，包括 Session、日志、
+  调度任务、Workspace 级 Plugin 生命周期和私有运行状态。
+- Shell 是 Workspace 能力，不再存在独立的 `@downcity/shell` 包。
+
+一个 Agent 可以进入多个 Workspace。一个 Workspace 实例只能被进入一次，因为其中的 Shell
+和私有存储会绑定到一个 AgentWorkspace 生命周期。多个 Agent 操作同一物理项目目录时，应分别
+创建 Workspace 实例。
+
+## 存储
+
+本地 Workspace 在内部解析私有存储 Provider，调用方不传数据根路径。运行状态集中保存在项目
+目录之外：
+
+```text
+~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/
+```
+
+`WorkspaceStorageProvider` 不理解任何 Agent 领域语义。`AgentWorkspace` 负责选择
+`agents/<agent_id>/workspaces/<workspace_id>` 作用域，并在其中创建 SessionStore。项目
+File/Search 工具始终限制在真实项目目录内，无法读取这些私有状态。
+
+Edge Adapter 应从 `@downcity/workspace/protocol` 导入 `WorkspaceBase` 与协议类型，避免加载
+Node.js 文件系统、PTY 和本地 Shell 实现。

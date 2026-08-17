@@ -2,13 +2,13 @@
 
 > 状态：Implemented（SQLite 与 Plugin 进程隔离除外）
 >
-> 范围：`@downcity/agent`、`@downcity/shell`、Session 持久化、跨平台执行和安全边界。
+> 范围：`@downcity/agent`、`@downcity/workspace`、Session 持久化、跨平台执行和安全边界。
 >
 > 本文基于 2026-07-25 对 Codex、Anthropic Sandbox Runtime、OpenHands 与 VS Code 的公开源码调研形成，同时记录目标设计与实际迁移进度。
 
 > 2026-08-16 更新：Agent 已不再绑定单一 Workspace。当前公开模型以 [`agent-sdk-architecture.md`](./agent-sdk-architecture.md) 为准：`new Agent(...)` 创建主体，`agent.enter(new Workspace({ id, ... }))` 创建执行边界。
 
-实现进度：Workspace 已统一提供项目 LocalFileSystem、WorkspaceTools、Env 与可选 Shell；Agent 统一注册 Plugin、Session Interaction 与自定义 Tools。Agent 进入 Workspace 后创建 AgentWorkspaceStorage 视图，Session、日志、Schedule 和 Plugin 状态统一写入用户级 `~/.downcity/workspaces/<workspace_id>/`，不会污染项目目录。
+实现进度：`@downcity/workspace` 已统一提供项目 LocalFileSystem、WorkspaceTools、Env、通用私有存储 Provider 与可选 Shell；Agent 统一注册 Plugin、Session Interaction 与自定义 Tools。Agent 进入 Workspace 后创建 AgentWorkspaceStorage 视图，Session、日志、Schedule 和 Plugin 状态统一写入用户级 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`，不会污染项目目录。
 
 源码按职责直接表达领域边界：
 
@@ -392,7 +392,7 @@ class AgentWorkspace {
 
 ## 9. LocalFileSystem
 
-`LocalFileSystem` 是 Workspace 的内部实现，不属于 `@downcity/shell`，也不要求用户手动创建。
+`LocalFileSystem` 是 `@downcity/workspace` 的内部实现，不要求用户手动创建。
 
 ```ts
 /** 项目根目录内的受控文件能力。 */
@@ -588,22 +588,20 @@ interface SessionDataStore {
 
 ### 13.1 默认存储位置
 
-runtime 数据位于用户级 Workspace：
+runtime 数据位于用户级 AgentWorkspace 作用域：
 
 ```text
 ~/.downcity/
-└─ workspaces/<workspace_id>/
-   ├─ sessions/<session_id>/
-   │  ├─ meta.json
-   │  ├─ instruction.md
-   │  └─ messages/
-   ├─ archived-sessions/
-   ├─ logs/
-   ├─ task/
-   ├─ chat/
-   ├─ contact/
-   ├─ image/
-   └─ schedule.jsonl
+└─ agents/<agent_id>/
+   └─ workspaces/<workspace_id>/
+      ├─ sessions/<session_id>/
+      │  ├─ meta.json
+      │  ├─ instruction.md
+      │  └─ messages/
+      ├─ archived-sessions/
+      ├─ logs/
+      ├─ schedule.jsonl
+      └─ sandbox/
 ```
 
 SessionStore 使用 AgentWorkspaceStorage 的私有 FileSystem；WorkspaceTools 和 Shell 只把 `Workspace.path` 作为项目 cwd。模型不能通过项目文件工具访问私有运行时目录。
@@ -724,7 +722,7 @@ JSONL 可以作为导入导出和审计格式，不必永久承担并发数据�
 
 | 主体 | 信任等级 | 能力 |
 | --- | --- | --- |
-| Agent Core | 可信 | Workspace、SessionStore 与 Tool 装配 |
+| Agent Core | 可信 | AgentWorkspace、SessionStore 与 Tool 装配 |
 | Session Domain | 可信、最小依赖 | SessionDataStore |
 | 模型输入 | 不可信 | Tool Schema |
 | Shell 子进程 | 不可信 | OS Sandbox 后的能力 |
@@ -735,7 +733,7 @@ JSONL 可以作为导入导出和审计格式，不必永久承担并发数据�
 
 - File Tool：可信实现、rooted FileSystem、路径校验。
 - Shell Tool：审批、Platform Sandbox、network policy。
-- SessionStore：结构化状态接口，与 WorkspaceTools 共用 rooted FileSystem。
+- SessionStore：结构化状态接口，使用 AgentWorkspace 私有 rooted FileSystem，不与 WorkspaceTools 共用项目文件边界。
 - 第三方 Plugin：独立 Plugin Host 和 OS Sandbox。
 
 ### 16.3 TOCTOU
@@ -780,7 +778,7 @@ Shell owns child processes and Sandbox Adapter
 6. Workspace 关闭 Shell 的活动进程与 PTY。
 7. Workspace 释放 Shell Sandbox Adapter。
 
-Agent 不与 Workspace 一对一绑定。同一个 Agent 可以通过 `agent.enter(workspace)` 同时进入多个 Workspace，每个 AgentWorkspace 分别持有 Session、Shell、env、日志与 Workspace 级 Plugin 生命周期。`agent.dispose()` 会先离开全部 Workspace，再停止 Agent 级 Plugin 生命周期。
+Agent 不与 Workspace 一对一绑定。同一个 Agent 可以通过 `agent.enter(workspace)` 同时进入多个 Workspace；每个 AgentWorkspace 分别持有 Session、日志与 Workspace 级 Plugin 生命周期，并绑定当前 Workspace 提供的 Shell 与 env。`agent.dispose()` 会先离开全部 Workspace，再停止 Agent 级 Plugin 生命周期。
 
 同一个 `agent_id + workspace_id` 在同一宿主中只允许一个活动执行边界。ActionSchedule 是本地调度器，不提供分布式 owner、lease 或多进程协调；宿主应在进程管理层避免重复装配同一个执行目标。
 
@@ -913,7 +911,7 @@ interface WorkspaceBackend {
 6. Session 不知道物理存储路径与格式。
 7. SessionStore 使用 AgentWorkspace 私有 FileSystem；WorkspaceTools 与 Shell 只访问项目目录。
 8. Workspace 保证 LocalFileSystem 与 Shell 使用同一个 canonical project root。
-9. runtime 数据默认位于 `~/.downcity/workspaces/<workspace_id>/`；Session metadata 记录 `agent_id` 和 `workspace_id`，项目目录不创建 `.downcity`。
+9. runtime 数据默认位于 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`；Session metadata 记录 `agent_id` 和 `workspace_id`，项目目录不创建 `.downcity`。
 10. macOS、Linux、Windows 运行同一 Node.js contract tests。
 11. Platform Adapter 只处理原生 Sandbox 与进程差异。
 12. 不可信 Plugin 使用进程级强制隔离。

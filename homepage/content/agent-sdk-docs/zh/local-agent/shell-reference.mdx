@@ -5,7 +5,7 @@ description: 配置 Agent 的本地命令执行、沙箱和审批流程
 
 # Shell 与沙箱
 
-Agent 使用 `@downcity/shell` 执行本地命令、管理沙箱运行环境、处理交互式审批。
+Agent 使用 `@downcity/workspace` 执行本地命令、管理沙箱运行环境、处理交互式审批。
 
 ## 安装
 
@@ -13,16 +13,16 @@ Shell 核心与平台实现分包安装。只安装当前系统需要的 adapter
 
 ```bash
 # macOS
-pnpm add @downcity/shell @downcity/sandbox-macos
+pnpm add @downcity/workspace @downcity/sandbox-macos
 
 # Linux
-pnpm add @downcity/shell @downcity/sandbox-linux
+pnpm add @downcity/workspace @downcity/sandbox-linux
 
 # Windows（MXC Development）
-pnpm add @downcity/shell @downcity/sandbox-windows-mxc
+pnpm add @downcity/workspace @downcity/sandbox-windows-mxc
 
 # Windows（Anthropic SRT Alpha）
-pnpm add @downcity/shell @downcity/sandbox-windows-srt
+pnpm add @downcity/workspace @downcity/sandbox-windows-srt
 npx @downcity/sandbox-windows-srt setup
 ```
 
@@ -33,21 +33,21 @@ npx @downcity/sandbox-windows-srt setup
 ### 最小示例
 
 ```ts
-import { Shell } from "@downcity/shell";
-import { Agent, Workspace } from "@downcity/agent";
+import { Shell } from "@downcity/workspace";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const shell = new Shell({
   sandbox: new MacOsSeatbeltSandbox(),
 });
 
-const agent = new Agent({
-  id: "demo",
-  workspace: new Workspace({
-    path: process.cwd(),
-    shell,
-  }),
-});
+const agent = new Agent({ id: "demo" });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: process.cwd(),
+  shell,
+}));
 ```
 
 Workspace 会把项目根目录绑定给 Shell，Agent 不再直接配置或持有 Shell。独立使用 Shell 时仍可以传入 `root_path`。
@@ -96,7 +96,7 @@ Shell 命令默认使用 safe sandbox。SDK 不会自动选择或安装平台后
 - `windows-srt-alpha` — Anthropic Sandbox Runtime 原生 Windows 沙箱，当前为 Alpha
 - `unrestricted-host` — 不启用沙箱
 
-`@downcity/shell` 只维护 workspace 写边界、路径校验、环境收敛和策略指纹。系统目录、宿主预检、策略编译和进程启动由独立 adapter 负责。MXC 与 Anthropic SRT 只属于各自的 Windows package，macOS/Linux 用户不会因为安装 `@downcity/shell` 下载 Windows runtime。Downcity CLI 默认继续使用 MXC；设置 `DC_WINDOWS_SANDBOX=srt` 才会显式启用 SRT。SDK 用户需要安装并注入对应 adapter。
+`@downcity/workspace` 只维护 workspace 写边界、路径校验、环境收敛和策略指纹。系统目录、宿主预检、策略编译和进程启动由独立 adapter 负责。MXC 与 Anthropic SRT 只属于各自的 Windows package，macOS/Linux 用户不会因为安装 `@downcity/workspace` 下载 Windows runtime。Downcity CLI 默认继续使用 MXC；设置 `DC_WINDOWS_SANDBOX=srt` 才会显式启用 SRT。SDK 用户需要安装并注入对应 adapter。
 
 ### Windows adapter
 
@@ -115,7 +115,7 @@ SDK 把 Windows 隔离交给锁定版本的 `@microsoft/mxc-sdk` runtime。MXC �
 SRT 方案直接使用 Anthropic 开源的 `@anthropic-ai/sandbox-runtime`。它通过独立的 `downcity-sandbox` Windows 用户、Restricted Token、Job Object、NTFS ACL 和 WFP 网络规则保护宿主。第一次使用前必须显式运行 `npx @downcity/sandbox-windows-srt setup` 并确认 UAC；普通命令执行不会自动提权或静默安装。
 
 ```ts
-import { Shell } from "@downcity/shell";
+import { Shell } from "@downcity/workspace";
 import { WindowsSrtSandbox } from "@downcity/sandbox-windows-srt";
 
 const shell = new Shell({
@@ -160,7 +160,7 @@ workspace.patch_env({
   GITHUB_TOKEN: token,
 });
 
-await agent.tools.shell_exec.execute(
+await agent_workspace.tools.shell_exec.execute(
   {
     cmd: 'printf "%s\\n" "$GITHUB_TOKEN"',
     sandbox: "safe",

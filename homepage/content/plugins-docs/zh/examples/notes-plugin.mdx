@@ -30,7 +30,6 @@ description: 用一个最小但有真实用途的 NotesPlugin 场景说明 actio
 ```ts
 import {
   Agent,
-  Workspace,
   BasePlugin,
   type PluginContext,
   type PluginActions,
@@ -72,7 +71,6 @@ class NotesPlugin extends BasePlugin {
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new NotesPlugin()],
 });

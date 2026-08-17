@@ -1,0 +1,57 @@
+---
+title: "@downcity/workspace"
+description: "Project resources, private storage capability, file tools, environment, and Shell."
+---
+
+`@downcity/workspace` defines the resource boundary in which an Agent performs work. It owns the
+project path, rooted file access, file and search tools, environment variables, private storage
+capability, and an optional Shell. It does not own Agent identity, Plugins, Sessions, or model calls.
+
+```bash
+pnpm add @downcity/workspace @downcity/agent
+```
+
+```ts
+import { Agent } from "@downcity/agent";
+import { Shell, Workspace } from "@downcity/workspace";
+import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+
+const workspace = new Workspace({
+  id: "project",
+  path: process.cwd(),
+  env: { NODE_ENV: "development" },
+  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+});
+
+const agent = new Agent({ id: "repo-helper", model, plugins });
+const agent_workspace = agent.enter(workspace);
+const session = await agent_workspace.sessions.create();
+```
+
+## Ownership
+
+- `Workspace` owns project resources and the optional Shell.
+- `Agent` owns identity, instruction, model, custom tools, and Plugin registration.
+- `AgentWorkspace` owns the execution scope created by `agent.enter(workspace)`, including Sessions,
+  logs, scheduled actions, contextual Plugin lifecycle, and private runtime state.
+- Shell is a Workspace capability. There is no separate `@downcity/shell` package.
+
+An Agent can enter multiple Workspaces. A Workspace instance can be entered only once because its
+Shell and private storage are bound to one AgentWorkspace lifecycle. Create separate Workspace
+instances when multiple Agents operate on the same physical project directory.
+
+## Storage
+
+The local Workspace resolves its private storage provider internally. Callers do not pass a data
+root path. Runtime state is centralized outside project directories:
+
+```text
+~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/
+```
+
+`WorkspaceStorageProvider` is intentionally domain-neutral. `AgentWorkspace` chooses the
+`agents/<agent_id>/workspaces/<workspace_id>` scope and creates the SessionStore there. Project
+File/Search tools remain rooted at the real project path and cannot read this private state.
+
+Edge adapters should import `WorkspaceBase` and protocol types from `@downcity/workspace/protocol`
+so they do not load Node.js filesystem, PTY, or local Shell implementations.

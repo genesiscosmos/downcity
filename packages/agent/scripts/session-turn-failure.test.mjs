@@ -11,7 +11,7 @@ import test from "node:test";
 import { SessionInteractions } from "../bin/session/control/SessionInteractions.js";
 import { SessionShellApprovalAdapter } from "../bin/session/execution/tools/SessionShellApprovalAdapter.js";
 import { JsonlSessionMessageStore } from "../bin/workspace/store/JsonlSessionMessageStore.js";
-import { LocalFileSystem } from "../bin/workspace/LocalFileSystem.js";
+import { LocalFileSystem } from "@downcity/workspace";
 import { SessionMessages } from "../bin/session/SessionMessages.js";
 import { SessionEventHub } from "../bin/session/runtime/SessionEventHub.js";
 import { SessionLoop } from "../bin/session/SessionLoop.js";

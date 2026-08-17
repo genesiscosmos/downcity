@@ -13,9 +13,9 @@ import {
   type LocalPluginRegistration,
 } from "@downcity/local/product";
 import { resolve_local_root_path } from "@downcity/local";
-import { type AgentModel, type AgentOptions, Workspace } from "@downcity/agent";
+import { type AgentModel, type AgentOptions } from "@downcity/agent";
 import { AskQuestionsTool } from "@downcity/agent/tools";
-import { Shell } from "@downcity/shell";
+import { Shell, Workspace } from "@downcity/workspace";
 import type { DesktopLocalData } from "./DesktopLocalData.js";
 import { Embassy, type EmbassyUser } from "@downcity/federation";
 import {

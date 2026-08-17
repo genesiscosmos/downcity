@@ -1,0 +1,59 @@
+{
+  "name": "@downcity/workspace",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Downcity Workspace 资源边界、文件工具与内置 Shell runtime",
+  "main": "./bin/index.js",
+  "types": "./bin/index.d.ts",
+  "files": [
+    "bin"
+  ],
+  "exports": {
+    ".": {
+      "types": "./bin/index.d.ts",
+      "import": "./bin/index.js"
+    },
+    "./protocol": {
+      "types": "./bin/protocol.d.ts",
+      "import": "./bin/protocol.js"
+    },
+    "./shell": {
+      "types": "./bin/shell/index.d.ts",
+      "import": "./bin/shell/index.js"
+    },
+    "./shell/*.js": {
+      "types": "./bin/shell/*.d.ts",
+      "import": "./bin/shell/*.js"
+    },
+    "./*": {
+      "types": "./bin/*",
+      "import": "./bin/*"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/clean-package.mjs && tsc && tsc-alias -f",
+    "dev": "tsc --watch",
+    "test": "pnpm build && node --test scripts/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "prepack": "npm run build",
+    "version:patch": "node ../../scripts/bump-package-version.mjs ./package.json"
+  },
+  "dependencies": {
+    "ai": "6.0.193",
+    "dotenv": "^17.4.2",
+    "fs-extra": "^11.3.5",
+    "globby": "^11.1.0",
+    "node-pty": "1.2.0-beta.14",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^25.9.1",
+    "tsc-alias": "^1.8.17",
+    "typescript": "^6.0.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT"
+}

@@ -44,9 +44,10 @@ Network serving does not belong to Agent. Use `AgentHTTP` or `AgentRPC` from `@d
 Shell is the standard entry for project commands and processes. The SDK does not select a platform Sandbox automatically; install and inject the Adapter for the current operating system. This example uses macOS:
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
-import { Shell } from "@downcity/shell";
+import { Shell } from "@downcity/workspace";
 
 const shell = new Shell({
   sandbox: new MacOsSeatbeltSandbox(),

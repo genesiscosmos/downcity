@@ -5,7 +5,7 @@ description: Boundaries between Agent projects, global config, and runtime data
 
 # Project Structure
 
-Agent definitions and Plugin configuration use user-level files. A project directory is only a Workspace containing env, Skills, and business runtime data.
+Agent definitions, Plugin configuration, and runtime data use user-level files. A project directory is only a Workspace containing project env, Skills, and business source files.
 
 ## Directory layout
 
@@ -14,12 +14,6 @@ my-project/
 ├── .env                 # project environment variables
 ├── .agents/
 │   └── skills/          # user-managed, versioned Skills
-├── .downcity/           # Agent and Plugin runtime data
-│   ├── agents/          # sessions and messages
-│   ├── chat/            # Chat Access, routing, and history
-│   ├── logs/            # runtime logs
-│   ├── memory/          # memory data
-│   └── task/            # task runtime data
 └── src/                 # application code (optional)
 ```
 
@@ -29,15 +23,21 @@ The user-level configuration layout is:
 
 ```text
 ~/.downcity/
-├── agents/<agent_id>/agent.json
-├── agents/<agent_id>/SOUL.md
+├── agents/<agent_id>/
+│   ├── agent.json
+│   ├── SOUL.md
+│   └── workspaces/<workspace_id>/
+│       ├── sessions/
+│       ├── archived-sessions/
+│       └── logs/
 ├── plugins/<plugin_id>/config.toml
+├── runtimes/city/
 └── downcity.db
 ```
 
 `downcity.db` stores Workspace IDs and paths, tokens, and platform state. It does not store Agent definitions, Plugin profiles, or Agent-to-Workspace bindings. CLI and Desktop read the same files and database.
 
-`agent_id` and `workspace_id` are independent global identities. An Agent enters a Workspace only for a concrete execution. CLI City daemon state lives in `~/.downcity/runtimes/city/daemon.json`; Sessions remain under `.downcity/agents/<agent_id>/sessions/` in the current Workspace.
+`agent_id` and `workspace_id` are independent global identities. An Agent enters a Workspace only for a concrete execution. CLI City daemon state lives in `~/.downcity/runtimes/city/`; Sessions live under `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/sessions/`.
 
 ## Project assets
 
@@ -45,7 +45,7 @@ Global Env is stored separately in `~/.downcity/.env`. Project `.env` overrides 
 
 ## Runtime data
 
-`.downcity/` only contains sessions, Chat Access, tasks, memory, and caches. Management config, PIDs, and daemon metadata do not belong there.
+Downcity does not create `<project>/.downcity/`. AgentWorkspace runtime data is centralized under `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`; Plugin-owned data follows the storage scope exposed by its current AgentWorkspace context.
 
 Continue with:
 

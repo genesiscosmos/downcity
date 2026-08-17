@@ -19,7 +19,6 @@ This kind of pre-chain value enrichment is a strong fit for `pipeline`.
 ```ts
 import {
   Agent,
-  Workspace,
   BasePlugin,
   type JsonObject,
   type PluginHooks,
@@ -48,7 +47,6 @@ class MessageAugmentPlugin extends BasePlugin {
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new MessageAugmentPlugin()],
 });

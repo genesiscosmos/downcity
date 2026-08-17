@@ -8,11 +8,13 @@ description: Embed the Downcity Agent runtime in a Node application
 Use `@downcity/agent` to create an Agent, manage Sessions, and execute model calls in the same process. See the [Agent SDK docs](/en/agent-sdk-docs) for the complete API.
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
-import { Shell } from "@downcity/shell";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
+import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const workspace = new Workspace({
+  id: "project",
   path: process.cwd(),
   shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
   env: { API_KEY: process.env.API_KEY ?? "" },
@@ -20,22 +22,28 @@ const workspace = new Workspace({
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace,
   model,
   tools: { search: search_tool },
   plugins: [plugin],
 });
 
-const session = await agent.sessions.create();
+const agent_workspace = agent.enter(workspace);
+const session = await agent_workspace.sessions.create();
 const turn = await session.prompt({ query: "Inspect this project" });
 const result = await turn.finished;
 
 await agent.dispose();
 ```
 
-`Workspace` is the unified resource container for SessionStore, WorkspaceTools, Env, and an optional Shell. Session history and metadata live in the same project's `.downcity` directory and remain readable and editable through Workspace file tools; SessionStore does not contain Agent configuration.
+`Workspace` comes from `@downcity/workspace` and owns project files, search tools, Env, private storage capability, and an optional Shell. It does not own Agent identity, Plugins, or Session semantics. `AgentWorkspace`, returned by `agent.enter(workspace)`, creates the SessionStore inside the Agent-specific private storage scope.
 
-Each Workspace instance binds to exactly one Agent and is released by `agent.dispose()`. Multiple Agents may operate on the same physical directory by using separate Workspace instances.
+An Agent is not configured with a Workspace. The same Agent may enter multiple Workspace instances, and multiple Agents may operate on the same physical directory by creating separate Workspace instances. `agent.dispose()` leaves all entered Workspaces and releases their Shell resources.
+
+Local runtime state is centralized outside the project directory:
+
+```text
+~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/
+```
 
 Construction starts plugin lifecycle and background work. Session execution waits for initialization automatically; use `await agent.dispose()` to release resources. HTTP and RPC are supplied by `AgentHTTP` and `AgentRPC` from `@downcity/city`.
 
@@ -85,7 +93,7 @@ const page = await session.messages();
 const timeline = page.items.flatMap(to_session_message_timeline_events);
 ```
 
-Session JSONL, logs, and scheduled actions all use the Workspace FileSystem for rooted paths, atomic writes, and cross-process file transactions. Applications should use Agent and Session APIs for structured state rather than reading the physical storage layout.
+Session JSONL, logs, and scheduled actions use the AgentWorkspace private FileSystem for rooted paths, atomic writes, and cross-process file transactions. Project File/Search tools cannot access this private state. Applications should use AgentWorkspace and Session APIs rather than depend on the physical layout.
 
 Continue with:
 

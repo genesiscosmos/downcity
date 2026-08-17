@@ -21,18 +21,22 @@ You no longer need a separate start, stop, restart, or project-level enabled swi
 Plugins passed to the Agent constructor are registered automatically:
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { PlaywrightBrowserProvider, WebPlugin } from "@downcity/plugins/web";
 
 const agent = new Agent({
   id: "agent",
-  workspace: new Workspace({ path: process.cwd() }),
   plugins: [new WebPlugin({
     browser: new PlaywrightBrowserProvider({ cdp_url: "http://127.0.0.1:9222" }),
   })],
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: process.cwd(),
+}));
 
-const session = await agent.sessions.create();
+const session = await agent_workspace.sessions.create();
 ```
 
 After the Agent is instantiated, you can register more plugins:
@@ -113,7 +117,7 @@ An unregistered plugin does not need a state because it is no longer in the regi
 
 ActionSchedule is not a plugin.
 
-It is an Agent-level action scheduling loop. Due jobs call actions on currently registered plugins.
+Each AgentWorkspace owns one local scheduling loop. Due jobs call actions on the Agent's currently registered plugins with that Workspace context.
 
 ## Related docs
 

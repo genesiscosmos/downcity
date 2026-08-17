@@ -1,6 +1,7 @@
 packages:
   - homepage
   - packages/agent
+  - packages/workspace
   - app/desktop
   - packages/workspace-cloudflare-computer
   - packages/city
@@ -8,7 +9,6 @@ packages:
   - packages/federation
   - packages/services
   - packages/plugins
-  - packages/shell
   - packages/sandbox-macos
   - packages/sandbox-linux
   - packages/sandbox-windows-mxc

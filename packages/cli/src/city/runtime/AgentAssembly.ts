@@ -12,9 +12,9 @@ import {
   type PluginRepository,
   type LocalPluginRegistration,
 } from "@downcity/local/product";
-import { Agent, type AgentModel, type AgentOptions, Workspace } from "@downcity/agent";
+import { Agent, type AgentModel, type AgentOptions } from "@downcity/agent";
 import { AskQuestionsTool } from "@downcity/agent/tools";
-import { Shell } from "@downcity/shell";
+import { Shell, Workspace } from "@downcity/workspace";
 import {
   create_builtin_plugin_registrations,
   type BuiltinPluginAi,

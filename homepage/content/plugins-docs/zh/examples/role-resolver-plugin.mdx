@@ -20,7 +20,6 @@ description: 用一个 resolve 场景说明为什么某些点必须只有一个�
 ```ts
 import {
   Agent,
-  Workspace,
   BasePlugin,
   type PluginResolveHook,
 } from "@downcity/agent";
@@ -47,7 +46,6 @@ class RoleResolverPlugin extends BasePlugin {
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new RoleResolverPlugin()],
 });

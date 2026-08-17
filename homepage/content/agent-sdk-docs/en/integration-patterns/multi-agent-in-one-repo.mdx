@@ -12,14 +12,11 @@ If you create several local SDK Agents inside the same project directory, the mo
 For example:
 
 ```ts
-new Agent({
-  id: "planner",
-  workspace: new Workspace({ path: repo_path }),
-});
-new Agent({
-  id: "reviewer",
-  workspace: new Workspace({ path: repo_path }),
-});
+const planner = new Agent({ id: "planner" });
+planner.enter(new Workspace({ id: "planner-project", path: repo_path }));
+
+const reviewer = new Agent({ id: "reviewer" });
+reviewer.enter(new Workspace({ id: "reviewer-project", path: repo_path }));
 ```
 
 Each Agent requires a separate Workspace instance. Both Workspaces may target the same physical directory; Store partitions Sessions by `agent_id`. If both Agents need command capabilities, create and pass a separate Shell instance to each Workspace as well.

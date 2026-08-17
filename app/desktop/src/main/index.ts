@@ -1,5 +1,5 @@
 /** Downcity Desktop Electron 主进程入口。 */
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, session, shell } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentController } from "@/agent/AgentController.js";
@@ -12,6 +12,7 @@ import type {
   DesktopChatInput,
   DesktopChatMutationEvent,
   DesktopChatRuntimeEvent,
+  DesktopLoginStartInput,
 } from "../common/types/DesktopApi.js";
 import type { RespondSessionInteractionInput, SessionApprovalMode } from "@downcity/agent";
 
@@ -100,7 +101,28 @@ ipcMain.handle("settings:update", async (_event, patch) => {
   return settings;
 });
 ipcMain.handle("user:current", () => user_controller.current());
-ipcMain.handle("user:login", (_event, federation_url: string, user_token: string) => user_controller.login(federation_url, user_token));
+ipcMain.handle("user:list-login-providers", (_event, federation_url: string, force_refresh?: boolean) => user_controller.list_login_providers(federation_url, force_refresh));
+ipcMain.handle("user:start-login", async (_event, input: DesktopLoginStartInput) => {
+  const result = await user_controller.start_login(input);
+  if (result.status === "redirect_required") {
+    try {
+      if (!result.url) throw new Error("Federation 未返回授权地址");
+      await shell.openExternal(normalize_external_login_url(result.url));
+    } catch (reason) {
+      user_controller.cancel_login(result.login_id);
+      throw reason;
+    }
+  }
+  return result;
+});
+
+function normalize_external_login_url(value: string): string {
+  const url = new URL(value);
+  if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Federation 返回了不受支持的授权地址");
+  return url.toString();
+}
+ipcMain.handle("user:get-login-result", (_event, login_id: string) => user_controller.get_login_result(login_id));
+ipcMain.handle("user:cancel-login", (_event, login_id: string) => user_controller.cancel_login(login_id));
 ipcMain.handle("user:list-accounts", () => user_controller.list_accounts());
 ipcMain.handle("user:switch-account", (_event, account_id: string) => user_controller.switch_account(account_id));
 ipcMain.handle("user:remove-account", (_event, account_id: string) => user_controller.remove_account(account_id));

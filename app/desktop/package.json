@@ -21,7 +21,7 @@
     "@downcity/federation": "workspace:^",
     "@downcity/local": "workspace:^",
     "@downcity/plugins": "workspace:^",
-    "@downcity/shell": "workspace:^",
+    "@downcity/workspace": "workspace:^",
     "@tiptap/core": "3.29.2",
     "@tiptap/extension-placeholder": "3.29.2",
     "@tiptap/pm": "3.29.2",

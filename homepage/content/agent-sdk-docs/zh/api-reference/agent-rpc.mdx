@@ -5,7 +5,7 @@ description: Agent 的 RPC 传输层 — 跨进程会话访问
 
 # AgentRPC
 
-`AgentRPC` 是本地 Agent 的 TCP RPC 传输层，让其他进程或服务可以通过主机和端口访问 agent 的会话，无需走 HTTP。
+`AgentRPC` 是一个本地 `AgentWorkspace` 的 TCP RPC 传输层，让其他进程通过主机和端口访问该 Workspace 的会话，无需走 HTTP。
 
 需要额外安装 `@downcity/city`：
 
@@ -17,14 +17,15 @@ pnpm add @downcity/city
 
 ```ts
 import { AgentRPC } from "@downcity/city";
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 
 const agent = new Agent({
   id: "demo",
-  workspace: new Workspace({ path: process.cwd() }),
   model,
 });
-const rpc = new AgentRPC(agent);
+const agent_workspace = agent.enter(new Workspace({ id: "project", path: process.cwd() }));
+const rpc = new AgentRPC(agent_workspace);
 
 const binding = await rpc.listen({ host: "127.0.0.1", port: 15314 });
 ```
@@ -32,12 +33,12 @@ const binding = await rpc.listen({ host: "127.0.0.1", port: 15314 });
 ## 构造参数
 
 ```ts
-new AgentRPC(agent: Agent)
+new AgentRPC(agent_workspace: AgentWorkspace)
 ```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `agent` | `Agent` | 已构造好的本地 Agent 实例 |
+| `agent_workspace` | `AgentWorkspace` | 需要暴露的本地 Agent 执行作用域 |
 
 ## 方法
 

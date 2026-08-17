@@ -8,6 +8,20 @@
  */
 
 export { cn } from "./lib/utils";
+export {
+  ShortcutProvider,
+  detect_shortcut_platform,
+  format_shortcut_display,
+  get_shortcut_context,
+  list_registered_shortcut_definitions,
+  list_registered_shortcuts,
+  matches_shortcut,
+  normalize_shortcut_key,
+  register_shortcuts,
+  shortcut_priority_value,
+  use_register_shortcuts,
+} from "./shortcuts";
+export type { ShortcutContext, ShortcutDefinition, ShortcutFocus, ShortcutPlatform, ShortcutPriority, ShortcutScope } from "./shortcuts";
 export type {
   DowncityChatAttachment,
   DowncityChatMessage,

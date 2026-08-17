@@ -11,7 +11,7 @@ import {
   SandboxManager,
   parseWindowsBinShell,
 } from "@anthropic-ai/sandbox-runtime";
-import type { SandboxSpawnRequest } from "@downcity/shell";
+import type { SandboxSpawnRequest } from "@downcity/workspace/protocol";
 import { build_windows_srt_env, inject_windows_srt_env } from "./WindowsSrtEnvironment.js";
 import { build_windows_srt_config } from "./WindowsSrtPolicy.js";
 import type {

@@ -24,16 +24,14 @@ downcity on
 ### Option 2: start a standalone RPC or HTTP server
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { AgentRPC } from "@downcity/city";
 
-const workspace = new Workspace({ path });
-const agent = new Agent({
-  id,
-  workspace,
-  model,
-});
-const rpc = new AgentRPC(agent);
+const workspace = new Workspace({ id: "project", path });
+const agent = new Agent({ id, model });
+const agent_workspace = agent.enter(workspace);
+const rpc = new AgentRPC(agent_workspace);
 await rpc.listen({ host: "127.0.0.1", port: 15314 });
 ```
 

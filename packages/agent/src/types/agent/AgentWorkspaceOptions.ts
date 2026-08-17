@@ -6,7 +6,7 @@
  */
 
 import type { Agent } from "@/agent/Agent.js";
-import type { WorkspaceBase } from "@/workspace/WorkspaceBase.js";
+import type { WorkspaceBase } from "@downcity/workspace";
 
 /** Agent 进入 Workspace 时使用的内部装配参数。 */
 export interface AgentWorkspaceOptions {

@@ -32,7 +32,7 @@ import { create_session_turn_context } from "@/session/runtime/SessionTurnContex
 import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
 import { SessionState } from "@/session/SessionState.js";
 import { SessionMessages } from "@/session/SessionMessages.js";
-import type { ShellApprovalGateway } from "@downcity/shell";
+import type { ShellApprovalGateway } from "@downcity/workspace";
 import type {
   SessionInteractionLifecycle,
   SessionInteractionPort,

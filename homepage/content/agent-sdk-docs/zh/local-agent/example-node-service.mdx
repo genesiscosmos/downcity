@@ -20,15 +20,16 @@ description: 一个典型的本地 Agent 嵌入模式示例，并说明什么时
 ## 最小嵌入模式
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 
-const agent = new Agent({
-  id: "repo-helper",
-  workspace: new Workspace({ path: process.cwd() }),
-  model,
-});
+const agent = new Agent({ id: "repo-helper", model });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: process.cwd(),
+}));
 
-const session = await agent.sessions.create();
+const session = await agent_workspace.sessions.create();
 ```
 
 这种模式下，模型实例由你的 Node 宿主直接持有。

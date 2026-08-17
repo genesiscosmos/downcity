@@ -7,7 +7,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { Agent, Workspace } from "../bin/index.js";
+import { Agent } from "../bin/index.js";
+import { Workspace } from "@downcity/workspace";
 
 function create_project_root() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "downcity-session-maintenance-"));
@@ -16,6 +17,8 @@ function create_project_root() {
 function get_session_path(root_path, session_id) {
   return path.join(
     root_path,
+    "agents",
+    "agent_test",
     "workspaces",
     "test_workspace",
     "sessions",

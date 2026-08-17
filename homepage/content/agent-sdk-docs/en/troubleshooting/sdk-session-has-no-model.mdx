@@ -16,9 +16,12 @@ You can fix it in either way:
 ```ts
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   model,
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+}));
 ```
 
 or:
@@ -30,7 +33,7 @@ await session.set({ model });
 ## Correct order
 
 ```ts
-const session = await agent.sessions.create();
+const session = await agent_workspace.sessions.create();
 const turn = await session.prompt({ query: "Continue" });
 await turn.finished;
 ```

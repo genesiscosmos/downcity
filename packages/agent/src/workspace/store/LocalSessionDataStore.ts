@@ -17,7 +17,7 @@ import {
 import { normalize_session_metadata } from "@/session/storage/Metadata.js";
 import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
-import type { FileSystem } from "@/types/workspace/FileSystem.js";
+import type { FileSystem } from "@downcity/workspace";
 import type { LocalSessionDataStoreOptions } from "@/types/store/LocalStore.js";
 import { LocalSessionAttachmentStore } from "@/workspace/store/LocalSessionAttachmentStore.js";
 

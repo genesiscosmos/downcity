@@ -1,13 +1,15 @@
 ---
 title: "@downcity/agent"
-description: "Single-Agent runtime, Workspace, Session, Plugin SDK, and RemoteAgent."
+description: "Single-Agent runtime, AgentWorkspace, Session, Plugin SDK, and RemoteAgent."
 ---
 
-`@downcity/agent` provides the single-Agent execution surface. It owns Agent, Workspace,
-Session, Plugin SDK, and RemoteAgent, but does not own a multi-Agent host or network server.
+`@downcity/agent` provides the single-Agent execution surface. It owns Agent, AgentWorkspace,
+Session, Plugin SDK, and RemoteAgent. Workspace resources are provided by
+`@downcity/workspace`; this package does not own a multi-Agent host or network server.
 
 ```ts
-const session = await agent.sessions.create();
+const agent_workspace = agent.enter(workspace);
+const session = await agent_workspace.sessions.create();
 const turn = await session.prompt({ query: "Hello" });
 const result = await turn.finished;
 ```

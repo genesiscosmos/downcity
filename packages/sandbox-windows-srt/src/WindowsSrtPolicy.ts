@@ -8,7 +8,7 @@ import {
   VENDORED_SRT_WIN_EXE,
   type SandboxRuntimeConfig,
 } from "@anthropic-ai/sandbox-runtime";
-import type { SandboxSpawnRequest } from "@downcity/shell";
+import type { SandboxSpawnRequest } from "@downcity/workspace/protocol";
 import {
   WINDOWS_SRT_DEFAULT_PROXY_PORT_RANGE,
   WINDOWS_SRT_DEFAULT_SUBLAYER_GUID,

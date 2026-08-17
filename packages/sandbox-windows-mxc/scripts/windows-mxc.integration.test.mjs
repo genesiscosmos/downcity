@@ -17,7 +17,7 @@ import {
   closeAllShellSessions,
   createShellRuntimeState,
   execShellCommand,
-} from "@downcity/shell/session/ShellActionRuntime.js";
+} from "@downcity/workspace/shell/session/ShellActionRuntime.js";
 import { WindowsMxcSandbox } from "../bin/index.js";
 
 test("Windows MXC runs cmd and confines writes to the workspace", {

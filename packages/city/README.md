@@ -4,7 +4,8 @@
 Agent，也不访问数据库。
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { City } from "@downcity/city";
 
 const agent = new Agent({ id: "lucas", model, plugins });
@@ -42,8 +43,8 @@ http://127.0.0.1:5314/agents/<agent_id>/workspaces/<workspace_id>
 rpc://127.0.0.1:15314/<agent_id>/<workspace_id>
 ```
 
-单 Agent 的 Workspace、Session、Plugin SDK 和 RemoteAgent 位于
-`@downcity/agent`。Federation、Embassy 与 Bureau 位于
+AgentWorkspace、Session、Plugin SDK 和 RemoteAgent 位于
+`@downcity/agent`；Workspace 资源位于 `@downcity/workspace`。Federation、Embassy 与 Bureau 位于
 `@downcity/federation`。
 
 CLI 与 Desktop 使用包内的宿主协调 API 登记 City 进程所有权。状态保存在

@@ -12,7 +12,7 @@ on:
       - "packages/plugins/**"
       - "packages/sandbox-linux/**"
       - "packages/sandbox-macos/**"
-      - "packages/shell/**"
+      - "packages/workspace/**"
       - "packages/sandbox-windows-mxc/**"
       - "packages/sandbox-windows-srt/**"
       - "packages/type/**"
@@ -32,7 +32,7 @@ on:
       - "packages/plugins/**"
       - "packages/sandbox-linux/**"
       - "packages/sandbox-macos/**"
-      - "packages/shell/**"
+      - "packages/workspace/**"
       - "packages/sandbox-windows-mxc/**"
       - "packages/sandbox-windows-srt/**"
       - "packages/type/**"
@@ -70,7 +70,7 @@ jobs:
         run: pnpm -r --filter "downcity..." build
 
       - name: Verify Windows command and sandbox adapter models
-        run: node --test packages/shell/scripts/shell-command-model.test.mjs packages/sandbox-windows-mxc/scripts/windows-mxc-command-line.test.mjs packages/sandbox-windows-mxc/scripts/windows-mxc-policy.test.mjs packages/sandbox-windows-mxc/scripts/windows-mxc-support.test.mjs packages/sandbox-windows-srt/scripts/windows-srt-policy.test.mjs packages/sandbox-windows-srt/scripts/windows-srt-environment.test.mjs packages/cli/scripts/env-file.test.mjs packages/cli/scripts/windows-platform.test.mjs
+        run: node --test packages/workspace/scripts/shell-command-model.test.mjs packages/sandbox-windows-mxc/scripts/windows-mxc-command-line.test.mjs packages/sandbox-windows-mxc/scripts/windows-mxc-policy.test.mjs packages/sandbox-windows-mxc/scripts/windows-mxc-support.test.mjs packages/sandbox-windows-srt/scripts/windows-srt-policy.test.mjs packages/sandbox-windows-srt/scripts/windows-srt-environment.test.mjs packages/cli/scripts/env-file.test.mjs packages/cli/scripts/windows-platform.test.mjs
 
       - name: Verify CLI platform storage
         working-directory: packages/cli
@@ -94,7 +94,7 @@ jobs:
       - name: Typecheck affected packages
         shell: pwsh
         run: |
-          pnpm -C packages/shell typecheck
+          pnpm -C packages/workspace typecheck
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           pnpm -C packages/sandbox-windows-mxc typecheck
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

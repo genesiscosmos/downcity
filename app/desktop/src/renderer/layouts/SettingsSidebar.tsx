@@ -9,6 +9,8 @@ import { SidebarContainer } from "./NavigationSidebar";
 interface SettingsSidebarProps {
   /** Renderer 根控制器。 */
   controller: DesktopViewController;
+  /** 是否隐藏左侧设置栏。 */
+  collapsed?: boolean;
 }
 
 const settings_groups: Array<{ label: string; items: Array<{ section: SettingsSection; label: string; icon: typeof TbUser }> }> = [
@@ -24,7 +26,8 @@ const settings_groups: Array<{ label: string; items: Array<{ section: SettingsSe
 ];
 
 /** 与 Duobox SettingsSidebar 一致，设置导航直接替换应用 Sidebar 内容。 */
-export function SettingsSidebar({ controller }: SettingsSidebarProps) {
+export function SettingsSidebar({ controller, collapsed = false }: SettingsSidebarProps) {
+  if (collapsed) return null;
   const active_section = controller.selection?.kind === "settings" ? controller.selection.section : "user";
   return <SidebarContainer>
     <div className="flex h-full min-h-0 flex-col overflow-hidden">

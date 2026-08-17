@@ -1,6 +1,6 @@
 {
   "name": "@downcity/agent",
-  "version": "1.1.351",
+  "version": "1.1.352",
   "type": "module",
   "description": "Downcity 单 Agent SDK 与执行运行时",
   "main": "./bin/index.js",
@@ -25,7 +25,7 @@
     "postpack": "node ../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"
   },
   "dependencies": {
-    "@downcity/shell": "workspace:^",
+    "@downcity/workspace": "workspace:^",
     "@downcity/type": "workspace:*",
     "ai": "^6.0.193",
     "commander": "^15.0.0",

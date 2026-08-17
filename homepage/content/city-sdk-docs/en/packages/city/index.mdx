@@ -8,14 +8,19 @@ maintains an in-memory Agent index and optional HTTP/RPC transports. It never re
 or accesses a database.
 
 ```bash
-pnpm add @downcity/city @downcity/agent
+pnpm add @downcity/city @downcity/agent @downcity/workspace
 ```
 
 ```ts
 import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
+import { Workspace } from "@downcity/workspace";
 
-const agent = new Agent({ id: "lucas", workspace, model, plugins });
+const agent = new Agent({ id: "lucas", model, plugins });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: process.cwd(),
+}));
 const city = new City([agent]);
 
 const current_agent = city.agent("lucas");
@@ -39,5 +44,6 @@ the new host asks for confirmation, requests a graceful shutdown, and waits for 
 to release its transports. This protocol only coordinates City listener ownership. It adds no Agent
 started state and never modifies persisted Agent, Plugin, or Session data.
 
-Single-Agent execution, Workspace, Session, Plugin SDK, and RemoteAgent remain in
-`@downcity/agent`. Federation, Embassy, and Bureau belong to `@downcity/federation`.
+Single-Agent execution, AgentWorkspace, Session, Plugin SDK, and RemoteAgent remain in
+`@downcity/agent`. Project resources and Shell belong to `@downcity/workspace`. Federation,
+Embassy, and Bureau belong to `@downcity/federation`.

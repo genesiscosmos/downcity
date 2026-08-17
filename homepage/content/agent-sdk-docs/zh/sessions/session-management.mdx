@@ -5,16 +5,16 @@ description: 创建、打开、列表、归档和永久清理 Session
 
 # 管理 Session
 
-`agent.sessions` 是 Session 集合入口。它只管理当前 Agent 的会话，不会跨 `agent_id` 查找或修改其他 Agent 的数据。
+`agent_workspace.sessions` 是本地 Session 集合入口，只管理当前 Agent 在当前 Workspace 中的会话。
 
 ## 创建与打开
 
 ```ts
-const created = await agent.sessions.create({
+const created = await agent_workspace.sessions.create({
   session_id: "repo-analysis",
 });
 
-const existing = await agent.sessions.get("repo-analysis");
+const existing = await agent_workspace.sessions.get("repo-analysis");
 ```
 
 `create()` 表示创建意图：同名 Session 已存在时会报错，不会静默复用。省略 `session_id` 时由 SDK 生成不可推导的稳定 ID。需要“有则打开、无则创建”时，先 `get()`，按不存在错误再调用 `create()`。
@@ -22,7 +22,7 @@ const existing = await agent.sessions.get("repo-analysis");
 ## 列表与搜索
 
 ```ts
-const page = await agent.sessions.list({
+const page = await agent_workspace.sessions.list({
   limit: 30,
   query: "repo",
 });
@@ -32,7 +32,7 @@ for (const item of page.items) {
 }
 
 if (page.has_more) {
-  const next_page = await agent.sessions.list({
+  const next_page = await agent_workspace.sessions.list({
     limit: 30,
     cursor: page.next_cursor,
     query: "repo",
@@ -47,11 +47,11 @@ if (page.has_more) {
 ## 归档与清理
 
 ```ts
-await agent.sessions.archive({ id: "repo-analysis" });
+await agent_workspace.sessions.archive({ id: "repo-analysis" });
 
-const archived_page = await agent.sessions.archived({ limit: 30 });
+const archived_page = await agent_workspace.sessions.archived({ limit: 30 });
 
-const removed = await agent.sessions.clean_archive();
+const removed = await agent_workspace.sessions.clean_archive();
 console.log(removed.removed_session_ids);
 ```
 

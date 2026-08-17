@@ -22,7 +22,7 @@ import {
   setShellApprovalModeView,
   startShellSession,
   writeShellSession,
-} from "@downcity/shell/session/ShellActionRuntime.js";
+} from "@downcity/workspace/shell/session/ShellActionRuntime.js";
 
 async function create_fixture() {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-unrestricted-"));

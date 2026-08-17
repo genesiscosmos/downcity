@@ -30,7 +30,6 @@ not a long-lived background worker.
 ```ts
 import {
   Agent,
-  Workspace,
   BasePlugin,
   type PluginContext,
   type PluginActions,
@@ -72,7 +71,6 @@ class NotesPlugin extends BasePlugin {
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new NotesPlugin()],
 });

@@ -5,71 +5,48 @@ description: The core public API of the local Agent SDK
 
 # Agent Class
 
-The local `Agent` exposes the following main public API:
+`Agent` is the reusable subject of the local SDK. It owns identity, instruction, model, custom
+Tools, Plugin registration, and the set of Workspaces it has entered. It does not own a permanent
+Workspace or a global Session collection.
+
+## Public API
 
 - `new Agent(options)`
-- `agent.dispose()`
-- `agent.sessions`
+- `agent.enter(workspace)`
+- `agent.workspaces()`
+- `agent.workspace(workspace_id)`
+- `agent.set_instruction(input)`
+- `agent.get_instructions()`
 - `agent.get_logger()`
-- `agent.get_shell()`
 - `agent.plugins`
+- `agent.dispose()`
 
-`agent.sessions.create()` and `agent.sessions.get()` return `AgentSession`.
+`agent.enter(workspace)` returns an `AgentWorkspace`. Local Sessions belong to that execution
+scope:
 
-Hosts use explicit `Agent` capabilities such as `workspace`, `sessions`, `plugins`, `get_logger()`, and `get_shell()`. `PluginContext` is projected internally to plugins; it is not a host API or a second copy of Agent state.
-
-## Sessions
-
-`agent.sessions` returns an `AgentSessions` with the following methods:
-
-- `agent.sessions.create(input?)`
-- `agent.sessions.get(session_id)`
-- `agent.sessions.list(input?)`
-- `agent.sessions.archive({ id })`
-- `agent.sessions.archived(input?)`
-- `agent.sessions.clean_archive()`
-- `agent.sessions.remove(session_id)`
-- `agent.sessions.clear_messages(session_id)`
-
-`archive({ id })` moves an existing non-executing session to the archive. `archived(input?)` lists archived sessions and `clean_archive()` permanently removes them. `remove(session_id)` permanently deletes one local Session's Agent-owned data. `clear_messages(session_id)` clears only its messages and keeps the Session.
+```ts
+const agent_workspace = agent.enter(workspace);
+const session = await agent_workspace.sessions.create();
+```
 
 ## Constructor options
 
-- `id`
-- `workspace`
-- `tools`
-- `instruction`
-- `model`
-- `plugins`
-- `session_class`
+- `id`: stable Agent identity and private data partition key.
+- `tools`: custom Tools shared by every AgentWorkspace.
+- `instruction`: static Agent-level base instruction.
+- `model`: default `AgentModel`; a local Session may override it.
+- `plugins`: Plugin objects registered once on the Agent.
+- `session_class`: optional custom local Session class.
 
-There is currently no `mode` constructor option.
+There is no `workspace` constructor option. The host creates Workspace independently and enters it
+when that Agent needs to work in the project.
 
-`model` is the `AgentModel` instance held by the Agent and can be either an AI SDK `LanguageModel` or a City `CityModel`. A local Session can hold its own `AgentModel` through `session.set({ model })`; execution prefers the Session model and falls back to the Agent model. The SDK does not persist or restore model instances or model IDs.
+## AgentWorkspace
 
-Full project and Plugin configuration belongs to an upstream host such as the CLI. The host constructs Plugin instances and passes them through `plugins`; Agent does not read, mutate, or persist that control-plane configuration.
+`AgentWorkspace` exposes `workspace`, `sessions`, `tools`, `plugins`, `data_path`, and `leave()`.
+Its Session collection provides `create`, `get`, `list`, `archive`, `archived`, `clean_archive`,
+`remove`, and `clear_messages`.
 
-## Workspace env
-
-Environment belongs to Workspace rather than Agent. Workspace reads the project `.env`, then applies explicit constructor `env` overrides. Use `workspace.get_env()`, `workspace.set_env(next)`, and `workspace.patch_env(patch)` to manage it. Existing Sessions commit changes at the next step checkpoint; an in-flight provider request and its tools keep the already effective snapshot.
-
-## Construction and `dispose()`
-
-After `new Agent(...)`, plugin lifecycle and ActionSchedule start automatically.
-
-- Session execution waits for Plugin lifecycle and ActionSchedule startup internally.
-- `await agent.dispose()` stops plugin lifecycle, ActionSchedule, and shell.
-
-## RPC and HTTP exposure
-
-The Agent itself no longer starts any transport. Use [`@downcity/city`](/en/agent-sdk-docs/local-agent/http-and-rpc) when you need RPC or HTTP:
-
-```ts
-import { AgentRPC, AgentHTTP } from "@downcity/city";
-
-const rpc = new AgentRPC(agent);
-await rpc.listen({ host: "127.0.0.1", port: 15314 });
-
-const http = new AgentHTTP(agent);
-await http.server().listen({ host: "127.0.0.1", port: 5314 });
-```
+One Agent may enter multiple Workspaces. `agent.dispose()` leaves every active AgentWorkspace,
+closes its Shell and storage resources, and then unregisters Agent-level Plugins. Network transports
+created by `@downcity/city` remain owned by the host.

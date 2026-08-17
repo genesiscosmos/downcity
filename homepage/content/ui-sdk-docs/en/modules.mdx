@@ -7,6 +7,27 @@ description: Review the complete public export surface of @downcity/ui
 
 This page lists the full public module surface of `@downcity/ui`.
 
+## Shortcuts
+
+The shortcut module provides cross-platform matching, registration, and a React provider. `Mod` means `Command` on macOS and `Ctrl` on Windows/Linux.
+
+```tsx
+import { ShortcutProvider, use_register_shortcuts } from "@downcity/ui";
+
+function AppShortcuts() {
+  use_register_shortcuts(() => [{
+    id: "editor.bold",
+    title: "Bold",
+    keys: ["Mod+B"],
+    scope: "editor",
+    run: () => { document.execCommand("bold"); return true; },
+  }], []);
+  return null;
+}
+```
+
+It supports combinations such as `Mod+B`, `Mod+L`, `Mod+I`, and `Mod+,`. Host applications provide the actions; the UI SDK does not impose business behavior.
+
 ## Utilities and Types
 
 ### `cn`

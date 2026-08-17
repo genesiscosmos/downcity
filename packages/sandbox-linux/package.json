@@ -1,6 +1,6 @@
 {
   "name": "@downcity/sandbox-linux",
-  "version": "0.1.35",
+  "version": "0.1.36",
   "type": "module",
   "description": "Downcity Linux Bubblewrap sandbox adapter",
   "main": "./bin/index.js",
@@ -34,7 +34,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@downcity/shell": "workspace:^",
+    "@downcity/workspace": "workspace:^",
     "fs-extra": "^11.3.5"
   },
   "devDependencies": {

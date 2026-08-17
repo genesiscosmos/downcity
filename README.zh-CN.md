@@ -24,7 +24,8 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 | 包 / 目录 | 作用 |
 | --- | --- |
 | `downcity` | 公共 CLI 聚合包：`city`/`downcity` 是管理 Agent、运行时与控制台的本机 City 容器；`fed`/`downfed` 是 Federation Server Manager。 |
-| `@downcity/agent` | 单 Agent runtime，负责 Workspace、Session、Plugin SDK、Tool 与 RemoteAgent。 |
+| `@downcity/workspace` | Workspace 资源、文件/搜索工具、环境变量、私有存储与内建 Shell。 |
+| `@downcity/agent` | 单 Agent runtime，负责 AgentWorkspace、Session、Plugin SDK、Tool 与 RemoteAgent。 |
 | `@downcity/city` | Agent 宿主，负责多 Agent 所有权、本地持久化装配与 Agent HTTP/RPC transport。 |
 | `@downcity/federation` | Federation 运行时与 Embassy SDK，负责 Service、鉴权、Env、Bureau、User 与 Admin 访问。 |
 | `@downcity/type` | 跨 package 共享协议类型，包含 City 返回的 City 模型描述等核心类型。 |
@@ -35,7 +36,7 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 
 ## 核心能力
 
-- 全局 Agent 管理：Agent 身份与配置保存在 `~/.downcity/downcity.db`，每个 Agent 可绑定任意 Workspace 路径。
+- 全局 Agent 管理：Agent 身份与配置保存在用户级 Downcity 数据目录，执行时再进入指定 Workspace。
 - 本机 City 托管：通过 `downcity on`、`downcity status`、`downcity off` 托管全部本机 Agent。
 - Agent 管理：创建、查看、配置和对话；Agent 没有独立 started/stopped 状态。
 - Federation 连接：通过 `downcity federation` 让本机 Agent 连接当前 Federation。
@@ -88,17 +89,16 @@ downcity federation status
 downcity agent create .
 ```
 
-初始化后会创建 Workspace 资产，但不会生成 Agent 声明文件；Agent 身份与配置保存在全局数据库：
+初始化后会登记 Workspace 路径，并在用户级 Downcity 目录创建 Agent 定义：
 
 ```text
-your-project/
-├── .agents/
-│   └── skills/
-└── .downcity/
-    ├── agents/
-    ├── chat/
-    ├── memory/
-    └── task/
+~/.downcity/
+├── agents/
+│   └── <agent_id>/
+│       ├── agent.json
+│       └── SOUL.md
+└── plugins/
+    └── <plugin_id>/
 ```
 
 ### 4. 启动 CLI City
@@ -136,8 +136,8 @@ downcity agent chat <agent_id>
 ### 本地 Agent
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
-import { Shell } from "@downcity/shell";
+import { Agent } from "@downcity/agent";
+import { Shell, Workspace } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 import { createOpenAI } from "@ai-sdk/openai";
 
@@ -145,16 +145,15 @@ const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
 
-const agent = new Agent({
-  id: "repo-helper",
-  workspace: new Workspace({
-    path: "/path/to/project",
-    shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
-  }),
-  tools: {},
+const workspace = new Workspace({
+  id: "project",
+  path: "/path/to/project",
+  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
 });
+const agent = new Agent({ id: "repo-helper", tools: {} });
+const agent_workspace = agent.enter(workspace);
 
-const session = await agent.session();
+const session = await agent_workspace.sessions.create();
 await session.set({
   model: openai.responses("gpt-5"),
 });

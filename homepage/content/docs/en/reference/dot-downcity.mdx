@@ -5,31 +5,32 @@ description: Runtime data layout and what each folder is for
 
 # `.downcity/` Directory
 
-`.downcity/` is Downcity's local runtime data directory. In most projects, it should not be committed to Git.
-
-When Downcity initializes a project, it automatically appends `.downcity` to that project's `.gitignore`.
+`~/.downcity/` is Downcity's user-level configuration and runtime data directory. Downcity does not create a `.downcity/` directory inside each project.
 
 ## Typical layout
 
 ```text
-.downcity/
-  logs/
-  agents/
-  chat/
-  task/
-  data/
-  public/
-  resources/
-  .cache/
+~/.downcity/
+├── agents/<agent_id>/
+│   ├── agent.json
+│   ├── SOUL.md
+│   └── workspaces/<workspace_id>/
+│       ├── sessions/
+│       ├── archived-sessions/
+│       └── logs/
+├── plugins/<plugin_id>/
+│   └── config.toml
+├── runtimes/city/
+└── downcity.db
 ```
 
 ## Key folders
 
-### `.downcity/logs/`
+### `agents/<agent_id>/workspaces/<workspace_id>/logs/`
 
 Daily JSONL logs: `<YYYY-MM-DD>.jsonl`.
 
-### `.downcity/agents/<agent_id>/sessions/<session_id>/messages/`
+### `agents/<agent_id>/workspaces/<workspace_id>/sessions/<session_id>/messages/`
 
 Conversation source of truth: `active.jsonl`, `assistant_message.json`, and sequence-named `segments/*.jsonl`.
 
@@ -37,17 +38,9 @@ Conversation source of truth: `active.jsonl`, `assistant_message.json`, and sequ
 
 Long-term Memory is not part of the Workspace `.downcity/` contract. Memory content is owned by the Agent's active `MemoryProvider`. The built-in File Adapter defaults to `~/.downcity/agents/<agent_id>/memory/`; other Providers can use databases or remote services.
 
-### `.downcity/chat/`
+### Plugin runtime data
 
-Chat metadata and history event streams. `access.db` stores this Agent's Chat principals, requests, allow/deny grants, and audit events. `migration-backup/authorization/` contains legacy authorization JSON after one-time migration.
-
-### `.downcity/channel/meta.json`
-
-Channel-target to `session_id` mapping snapshot (managed by chat plugin runtime).
-
-### `.downcity/task/`
-
-Task definitions and per-run artifacts (`run.json`, `result.md`, etc.).
+Plugin-owned runtime data uses the private storage scope exposed by the current AgentWorkspace context. Plugin definitions and profiles remain under `~/.downcity/plugins/<plugin_id>/`.
 
 ### Skills location
 
@@ -55,5 +48,5 @@ Task definitions and per-run artifacts (`run.json`, `result.md`, etc.).
 
 ## Security guidance
 
-- `.downcity/` may contain sensitive conversations and execution traces.
-- For debugging, prioritize `logs`, `task`, and `agents`.
+- `~/.downcity/` may contain sensitive configuration, conversations, tokens, and execution traces.
+- Do not commit or copy the directory to an untrusted location.

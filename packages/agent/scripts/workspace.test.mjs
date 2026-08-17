@@ -7,7 +7,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { Agent, Workspace } from "../bin/index.js";
+import { Agent } from "../bin/index.js";
+import { Workspace } from "@downcity/workspace";
 
 test("Workspace resolves the Downcity data root internally", async (t) => {
   const fixture_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-root-"));
@@ -32,6 +33,8 @@ test("Workspace resolves the Downcity data root internally", async (t) => {
     entry.data_path,
     path.join(
       platform_root,
+      "agents",
+      "internal-root-agent",
       "workspaces",
       "internal-root-workspace",
     ),
@@ -71,10 +74,16 @@ test("one Workspace instance enters one Agent and is disposed with it", async (t
     tools: { shell_exec: {} },
     bind(binding) {
       assert.equal(binding.root_path, workspace_path);
-      assert.match(binding.data_path, /data\/workspaces\/test_workspace$/);
+      assert.match(
+        binding.data_path,
+        /data\/agents\/workspace-first\/workspaces\/test_workspace$/,
+      );
     },
     set_env(env) {
       assert.deepEqual(env, {});
+    },
+    async run_safe_command() {
+      throw new Error("not used");
     },
     async dispose() {
       dispose_count += 1;
@@ -87,7 +96,7 @@ test("one Workspace instance enters one Agent and is disposed with it", async (t
   agent.enter(workspace);
   assert.throws(
     () => second_agent.enter(workspace),
-    /already bound to Agent "workspace-first"/,
+    /already bound to another scope/,
   );
 
   await agent.dispose();
@@ -103,7 +112,7 @@ test("separate Workspace instances may use the same directory", async (t) => {
   const second_agent = new Agent({ id: "workspace-directory-second" });
   const first_entry = first_agent.enter(new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
   const second_entry = second_agent.enter(new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
-  assert.equal(first_entry.data_path, second_entry.data_path);
+  assert.notEqual(first_entry.data_path, second_entry.data_path);
   await first_entry.sessions.create({ session_id: "first-session" });
   await second_entry.sessions.create({ session_id: "second-session" });
   assert.deepEqual(
@@ -119,7 +128,7 @@ test("separate Workspace instances may use the same directory", async (t) => {
   await second_agent.dispose();
 });
 
-test("Session IDs are unique across Agents in one Workspace", async (t) => {
+test("Session IDs are isolated by Agent in one Workspace", async (t) => {
   const root_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-workspace-session-owner-"),
   );
@@ -142,14 +151,7 @@ test("Session IDs are unique across Agents in one Workspace", async (t) => {
     first_entry.sessions.create({ session_id: "shared-session" }),
     second_entry.sessions.create({ session_id: "shared-session" }),
   ]);
-  assert.equal(
-    results.filter((result) => result.status === "fulfilled").length,
-    1,
-  );
-  assert.equal(
-    results.filter((result) => result.status === "rejected").length,
-    1,
-  );
+  assert.equal(results.every((result) => result.status === "fulfilled"), true);
 
   await first_agent.dispose();
   await second_agent.dispose();
@@ -165,6 +167,9 @@ test("Workspace owns env and publishes only real changes", async (t) => {
     bind() {},
     set_env(env) {
       shell_env_snapshots.push({ ...env });
+    },
+    async run_safe_command() {
+      throw new Error("not used");
     },
     async dispose() {},
   };

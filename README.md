@@ -24,7 +24,8 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 | Package | Purpose |
 | --- | --- |
 | `downcity` | Public CLI bundle: `city`/`downcity` is the local City container for Agent management, runtime, and console workflows; `fed`/`downfed` is the Federation Server Manager. |
-| `@downcity/agent` | Single-Agent runtime for Workspace, Session, Plugin SDK, tools, and RemoteAgent. |
+| `@downcity/workspace` | Workspace resources, rooted files/search tools, environment, private storage, and built-in Shell. |
+| `@downcity/agent` | Single-Agent runtime for AgentWorkspace, Session, Plugin SDK, tools, and RemoteAgent. |
 | `@downcity/city` | Agent host for multi-Agent ownership, local persistent assembly, and Agent HTTP/RPC transport. |
 | `@downcity/federation` | Federation runtime and Embassy SDK for Services, auth, env, Bureau, user, and admin access. |
 | `@downcity/type` | Shared protocol types used across packages, including City model descriptors returned by City. |
@@ -35,7 +36,7 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 
 ## Core Capabilities
 
-- Global Agent management: store Agent identity and config in `~/.downcity/downcity.db`, while binding each Agent to any Workspace path.
+- Global Agent management: store Agent identity and config in the user-level Downcity data directory, while entering any Workspace at execution time.
 - Local City hosting: run `downcity on`, `downcity status`, and `downcity off` to host all configured Agents in one CLI City.
 - Agent operations: create, inspect, configure, and chat with globally managed Agents; Agents do not have an independent started/stopped state.
 - Federation connection: use `downcity federation` to connect local Agents to the active Federation.
@@ -88,17 +89,16 @@ Run this inside the target repository:
 downcity agent create .
 ```
 
-This creates Workspace assets without an Agent declaration file; Agent identity and config stay in the global database:
+This registers the Workspace path and creates an Agent definition under the user-level Downcity directory:
 
 ```text
-your-project/
-├── .agents/
-│   └── skills/
-└── .downcity/
-    ├── agents/
-    ├── chat/
-    ├── memory/
-    └── task/
+~/.downcity/
+├── agents/
+│   └── <agent_id>/
+│       ├── agent.json
+│       └── SOUL.md
+└── plugins/
+    └── <plugin_id>/
 ```
 
 ### 4. Start the CLI City
@@ -136,8 +136,8 @@ downcity agent chat <agent_id>
 ### Local agent
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
-import { Shell } from "@downcity/shell";
+import { Agent } from "@downcity/agent";
+import { Shell, Workspace } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 import { createOpenAI } from "@ai-sdk/openai";
 
@@ -145,16 +145,15 @@ const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
 
-const agent = new Agent({
-  id: "repo-helper",
-  workspace: new Workspace({
-    path: "/path/to/project",
-    shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
-  }),
-  tools: {},
+const workspace = new Workspace({
+  id: "project",
+  path: "/path/to/project",
+  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
 });
+const agent = new Agent({ id: "repo-helper", tools: {} });
+const agent_workspace = agent.enter(workspace);
 
-const session = await agent.session();
+const session = await agent_workspace.sessions.create();
 await session.set({
   model: openai.responses("gpt-5"),
 });

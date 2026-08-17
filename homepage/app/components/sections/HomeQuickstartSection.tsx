@@ -1,132 +1,266 @@
 /**
- * 首页滚动驱动的代码执行舞台。
+ * 首页 Downcity 代码导览。
  *
- * 代码是唯一叙事时间轴。用户向下滚动时，当前执行行、运行时节点和结果状态
- * 同步前进；组件不提供额外的点击步骤，也不依赖解释型卡片。
+ * 本模块按使用者、产品开发者与服务开发者三个层级展示真实的最短使用路径。
+ * 每一层都在当前页面说明领域职责并直接展示对应代码，避免访问者必须跳转文档后
+ * 才能理解 CLI、Desktop、Agent、City、Federation、Embassy 与 Services 的关系。
  */
 
-import { useRef, useState } from "react";
-import { IconArrowDown, IconCheck, IconCircle } from "@tabler/icons-react";
-import { motion, useMotionValueEvent, useReducedMotion, useScroll } from "framer-motion";
+import { CodeBlock } from "@downcity/ui";
+import { IconArrowRight } from "@tabler/icons-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 
-const execution_code = [
-  { text: 'import { Agent, Workspace } from "@downcity/agent";', group: 0 },
-  { text: 'import { createOpenAI } from "@ai-sdk/openai";', group: 0 },
-  { text: "", group: 0 },
-  { text: "const agent = new Agent({", group: 2 },
-  { text: '  id: "assistant",', group: 2 },
-  { text: '  workspace: new Workspace({ path: process.cwd() }),', group: 1 },
-  { text: '  model: createOpenAI().responses("gpt-5"),', group: 2 },
-  { text: "});", group: 2 },
-  { text: "", group: 2 },
-  { text: "const session = await agent.sessions.create();", group: 3 },
-  { text: 'const turn = await session.prompt({ query: "Start working" });', group: 4 },
-  { text: "const result = await turn.finished;", group: 5 },
-  { text: "console.log(result.text);", group: 5 },
-  { text: "", group: 5 },
-  { text: "await agent.dispose();", group: 6 },
+const entry_groups = [
+  { key: "user", number: "01", language: "bash", accent: "#557b70" },
+  { key: "productDeveloper", number: "02", language: "ts", accent: "#4f6f9f" },
+  { key: "serviceDeveloper", number: "03", language: "ts", accent: "#b45d4c" },
 ] as const;
 
-const runtime_nodes = [
-  { key: "workspace", group: 1, value: "./project", accent: "#4f6f9f" },
-  { key: "agent", group: 2, value: "gpt-5", accent: "#557b70" },
-  { key: "session", group: 3, value: "context", accent: "#716a9f" },
-  { key: "turn", group: 4, value: "query", accent: "#b45d4c" },
-  { key: "result", group: 5, value: "text", accent: "#3f7d5b" },
-] as const;
+const entry_code = {
+  zh: {
+    user: `npm install -g downcity
 
-const execution_ranges = [0.08, 0.25, 0.43, 0.6, 0.76, 0.9, 0.98] as const;
+downcity federation use
+downcity agent create .
+downcity on
+downcity agent chat <agent_id>
 
-/** 渲染滚动驱动的 Agent 代码执行过程。 */
+# Desktop 使用同一套 Agent 与 City 状态`,
+    productDeveloper: `import { Agent } from "@downcity/agent";
+import { City } from "@downcity/city";
+import { Workspace } from "@downcity/workspace";
+import { createOpenAI } from "@ai-sdk/openai";
+
+const agent = new Agent({
+  id: "assistant",
+  model: createOpenAI().responses("gpt-5"),
+});
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: process.cwd(),
+}));
+const city = new City([agent]);
+
+const session = await agent_workspace.sessions.create();
+const turn = await session.prompt({ query: "开始工作" });
+console.log((await turn.finished).text);`,
+    serviceDeveloper: `import { Embassy, Federation, Service } from "@downcity/federation";
+
+const translate = new Service({ id: "translate", name: "翻译" });
+translate.action("run", async (context) => ({
+  text: await translate_text(String(context.input.text ?? "")),
+}));
+
+const federation = new Federation({ database });
+federation.use(translate);
+
+const embassy = new Embassy({
+  federation_url: "https://fed.example.com",
+  user_token: process.env.DOWNCITY_USER_TOKEN,
+});
+const result = await embassy.user.service("translate")
+  .action("run").invoke({ text: "你好 Downcity" });`,
+  },
+  en: {
+    user: `npm install -g downcity
+
+downcity federation use
+downcity agent create .
+downcity on
+downcity agent chat <agent_id>
+
+# Desktop uses the same Agent and City state`,
+    productDeveloper: `import { Agent } from "@downcity/agent";
+import { City } from "@downcity/city";
+import { Workspace } from "@downcity/workspace";
+import { createOpenAI } from "@ai-sdk/openai";
+
+const agent = new Agent({
+  id: "assistant",
+  model: createOpenAI().responses("gpt-5"),
+});
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: process.cwd(),
+}));
+const city = new City([agent]);
+
+const session = await agent_workspace.sessions.create();
+const turn = await session.prompt({ query: "Start working" });
+console.log((await turn.finished).text);`,
+    serviceDeveloper: `import { Embassy, Federation, Service } from "@downcity/federation";
+
+const translate = new Service({ id: "translate", name: "Translate" });
+translate.action("run", async (context) => ({
+  text: await translate_text(String(context.input.text ?? "")),
+}));
+
+const federation = new Federation({ database });
+federation.use(translate);
+
+const embassy = new Embassy({
+  federation_url: "https://fed.example.com",
+  user_token: process.env.DOWNCITY_USER_TOKEN,
+});
+const result = await embassy.user.service("translate")
+  .action("run").invoke({ text: "Hello Downcity" });`,
+  },
+} as const;
+
+/** 渲染首页三个包含真实代码的 Downcity 使用与开发入口。 */
 export function HomeQuickstartSection() {
   const { i18n } = useTranslation("home");
   const locale = use_interface_locale();
   const t = i18n.getFixedT(locale, "home");
   const reduce_motion = useReducedMotion();
-  const section_ref = useRef<HTMLElement>(null);
-  const [active_group, set_active_group] = useState(0);
-  const { scrollYProgress } = useScroll({ target: section_ref, offset: ["start start", "end end"] });
+  const [active_entry, set_active_entry] = useState<(typeof entry_groups)[number]["key"]>("user");
+  const [transition_direction, set_transition_direction] = useState(1);
+  const active_group = entry_groups.find((entry_group) => entry_group.key === active_entry) ?? entry_groups[0];
+  const active_index = entry_groups.findIndex((entry_group) => entry_group.key === active_entry);
 
-  useMotionValueEvent(scrollYProgress, "change", (progress) => {
-    if (reduce_motion) return;
-    const next_group = execution_ranges.findIndex((range) => progress < range);
-    set_active_group(next_group === -1 ? execution_ranges.length - 1 : next_group);
-  });
+  const select_entry = (entry_key: (typeof entry_groups)[number]["key"]) => {
+    const next_index = entry_groups.findIndex((entry_group) => entry_group.key === entry_key);
+    if (next_index === active_index) return;
+    set_transition_direction(next_index > active_index ? 1 : -1);
+    set_active_entry(entry_key);
+  };
 
-  const visible_group = reduce_motion ? execution_ranges.length - 1 : active_group;
-  const is_zh = locale === "zh";
-  const section_class_name = reduce_motion ? "relative min-h-svh overflow-hidden border-t border-line bg-background" : "relative h-[360svh] overflow-hidden border-t border-line bg-background";
-  const runtime_label = is_zh ? "运行时" : "Runtime";
-  const final_label = is_zh ? "下一轮从这里继续" : "The next turn starts here";
+  const handle_tab_key_down = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const next_index = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? entry_groups.length - 1
+        : (active_index + (event.key === "ArrowRight" ? 1 : -1) + entry_groups.length) % entry_groups.length;
+    const next_entry = entry_groups[next_index];
+    select_entry(next_entry.key);
+    window.requestAnimationFrame(() => document.getElementById(`quickstart-tab-${next_entry.key}`)?.focus());
+  };
 
   return (
-    <section ref={section_ref} id="quickstart" className={section_class_name}>
-      <h2 className="sr-only">{t("quickstart.title")}</h2>
-      <div className="sticky top-0 flex h-svh items-center overflow-hidden">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-35 [background-image:radial-gradient(var(--line-strong)_0.7px,transparent_0.7px)] [background-size:24px_24px]" />
-        <div className="relative mx-auto grid w-full max-w-[1320px] gap-8 px-5 py-12 md:px-8 lg:grid-cols-[minmax(0,1.55fr)_minmax(250px,0.7fr)] lg:gap-16">
-          <div className="min-w-0">
-            <div className="mb-5 flex items-center justify-between px-1">
-              <span className="font-mono text-[0.68rem] uppercase tracking-[0.2em] text-text-subtle">agent.ts</span>
-              <span className="font-mono text-[0.62rem] uppercase tracking-[0.16em] text-text-subtle">{is_zh ? "向下滚动执行" : "Scroll to execute"}</span>
-            </div>
-            <div className="overflow-hidden rounded-2xl border border-line bg-[#111315] shadow-[0_30px_100px_-50px_var(--foreground)]">
-              <div className="flex h-11 items-center justify-between border-b border-white/10 px-4">
-                <div className="flex items-center gap-1.5" aria-hidden="true"><span className="size-2.5 rounded-full bg-[#ff6b62]/80" /><span className="size-2.5 rounded-full bg-[#f4c95d]/80" /><span className="size-2.5 rounded-full bg-[#63c174]/80" /></div>
-                <span className="font-mono text-[0.65rem] text-white/35">tsx</span>
-                <span className="font-mono text-[0.65rem] text-white/35">{String(visible_group + 1).padStart(2, "0")} / 07</span>
-              </div>
-              <pre className="overflow-x-auto p-5 font-mono text-[clamp(0.7rem,1.3vw,0.86rem)] leading-7 text-white/80 [tab-size:2] sm:p-7 md:p-9">
-                <code>
-                  {execution_code.map((line, line_index) => {
-                    const is_active = line.group === visible_group;
-                    const is_done = line.group < visible_group;
-                    return (
-                      <motion.span
-                        key={line_index}
-                        className="block min-h-7 whitespace-pre px-2"
-                        initial={false}
-                        animate={{ opacity: is_active || is_done || line.text === "" ? 1 : 0.22, backgroundColor: is_active ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0)" }}
-                        transition={{ duration: reduce_motion ? 0 : 0.2 }}
-                      >
-                        <span className="mr-6 inline-block w-5 select-none text-right text-[0.65rem] text-white/20">{String(line_index + 1).padStart(2, "0")}</span>{line.text || " "}
-                      </motion.span>
-                    );
-                  })}
-                </code>
-              </pre>
-            </div>
+    <section id="quickstart" className="scroll-mt-16 border-t border-line bg-background py-20 md:py-28">
+      <div className="mx-auto max-w-[1320px] px-5 md:px-8 lg:px-20">
+        <div className="max-w-3xl">
+          <p className="text-[0.72rem] font-medium uppercase tracking-[0.08em] text-text-soft">
+            {t("quickstart.sectionLabel")}
+          </p>
+          <h2 className="mt-4 font-serif text-[clamp(1.75rem,3vw,2.5rem)] font-bold leading-[1.1] text-foreground">
+            {t("quickstart.title")}
+          </h2>
+          <p className="mt-5 max-w-2xl text-base leading-[1.7] text-text-soft">
+            {t("quickstart.description")}
+          </p>
+        </div>
+
+        <div className="mt-14 overflow-hidden rounded-2xl border border-line bg-surface-muted p-2 md:p-3">
+          <div className="flex items-center justify-between px-3 py-2 font-mono text-[0.62rem] uppercase tracking-[0.12em] text-text-subtle md:px-4">
+            <span>{t("quickstart.stageLabel")}</span>
+            <span>{String(active_index + 1).padStart(2, "0")} / {String(entry_groups.length).padStart(2, "0")}</span>
           </div>
 
-          <div className="flex min-h-[18rem] flex-col justify-center lg:min-h-0">
-            <span className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-text-subtle">{runtime_label}</span>
-            <div className="mt-6">
-              {runtime_nodes.map((node, node_index) => {
-                const is_active = visible_group >= node.group;
-                const is_current = visible_group === node.group;
-                return (
-                  <div key={node.key} className="relative flex items-center gap-4 pb-7 last:pb-0">
-                    {node_index < runtime_nodes.length - 1 ? <motion.div className="absolute left-[5px] top-5 h-full w-px origin-top bg-line-strong" animate={{ scaleY: is_active ? 1 : 0.2, opacity: is_active ? 1 : 0.45 }} /> : null}
-                    <motion.span className="relative z-10 flex size-3 shrink-0 items-center justify-center rounded-full border-2 bg-background" animate={{ borderColor: is_current || is_active ? node.accent : "var(--line-strong)", scale: is_current ? 1.25 : 1 }} transition={{ duration: reduce_motion ? 0 : 0.2 }}>
-                      {is_active ? <IconCheck className="size-2 text-foreground" strokeWidth={3} /> : null}
-                    </motion.span>
-                    <div className="min-w-0">
-                      <span className={`block font-serif text-lg ${is_current ? "text-foreground" : is_active ? "text-foreground/75" : "text-text-subtle"}`}>{node.key}</span>
-                      <span className={`block font-mono text-xs ${is_current ? "text-text-soft" : "text-text-subtle"}`}>{node.value}</span>
+          <div
+            className="relative grid grid-cols-3 gap-1 rounded-xl border border-line-soft bg-background p-1"
+            role="tablist"
+            aria-label={t("quickstart.tabsLabel")}
+          >
+            {entry_groups.map((entry_group) => {
+              const is_active = entry_group.key === active_entry;
+              return (
+                <button
+                  key={entry_group.key}
+                  type="button"
+                  id={`quickstart-tab-${entry_group.key}`}
+                  role="tab"
+                  aria-selected={is_active}
+                  aria-controls={`quickstart-panel-${entry_group.key}`}
+                  tabIndex={is_active ? 0 : -1}
+                  onClick={() => select_entry(entry_group.key)}
+                  onKeyDown={handle_tab_key_down}
+                  className={`relative min-w-0 overflow-hidden rounded-lg px-3 py-4 text-left transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5 md:py-5 ${is_active ? "text-foreground" : "text-text-subtle hover:text-foreground"}`}
+                >
+                  {is_active ? <motion.span layoutId="quickstart-active-tab" aria-hidden="true" className="absolute inset-0 rounded-lg bg-surface-soft shadow-sm" transition={{ duration: reduce_motion ? 0 : 0.24, ease: [0.16, 1, 0.3, 1] }} /> : null}
+                  <span className="relative z-10 block">
+                  <span className="block font-mono text-[0.65rem] text-text-subtle">
+                    {entry_group.number}
+                  </span>
+                  <span className="mt-2 block text-xs font-medium leading-5 sm:text-sm">
+                    {t(`quickstart.entries.${entry_group.key}.audience`)}
+                  </span>
+                  <span className="mt-1 block truncate font-mono text-[0.65rem] leading-5 sm:text-xs">
+                    {t(`quickstart.entries.${entry_group.key}.products`)}
+                  </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="relative min-h-[28rem] overflow-hidden px-2 md:min-h-[31rem] md:px-3">
+            <AnimatePresence initial={false} custom={transition_direction} mode="wait">
+              <motion.article
+                key={active_group.key}
+                id={`quickstart-panel-${active_group.key}`}
+                role="tabpanel"
+                aria-labelledby={`quickstart-tab-${active_group.key}`}
+                custom={transition_direction}
+                initial={{ opacity: 0, x: reduce_motion ? 0 : transition_direction * 24 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: reduce_motion ? 0 : transition_direction * -24 }}
+                transition={{ duration: reduce_motion ? 0 : 0.24, ease: [0.16, 1, 0.3, 1] }}
+                className="grid gap-8 py-10 md:py-14 lg:grid-cols-[minmax(15rem,0.72fr)_minmax(0,1.28fr)] lg:gap-16"
+              >
+                <div className="flex min-w-0 flex-col justify-between">
+                  <div className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-4 lg:block">
+                    <span className="font-mono text-[0.7rem] text-text-subtle">
+                      {active_group.number}
+                    </span>
+                    <div>
+                      <p className="text-xs font-medium text-text-subtle">
+                        {t(`quickstart.entries.${active_group.key}.audience`)}
+                      </p>
+                      <h3 className="mt-2 text-xl font-semibold leading-snug text-foreground md:text-2xl">
+                        {t(`quickstart.entries.${active_group.key}.title`)}
+                      </h3>
+                      <p className="mt-3 font-mono text-xs font-medium text-foreground">
+                        {t(`quickstart.entries.${active_group.key}.products`)}
+                      </p>
+                      <p className="mt-5 max-w-md text-sm leading-7 text-text-soft">
+                        {t(`quickstart.entries.${active_group.key}.description`)}
+                      </p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-            <motion.div className="mt-8 flex items-center gap-2 font-mono text-xs text-success" animate={{ opacity: visible_group >= 5 ? 1 : 0 }}>
-              <IconCircle className="size-2.5 fill-current" />
-              {final_label}
-            </motion.div>
+                  <div className="mt-10 hidden items-center gap-2 font-mono text-[0.65rem] text-text-subtle lg:flex">
+                    <span className="size-1.5 rounded-full" style={{ backgroundColor: active_group.accent }} />
+                    {t("quickstart.currentLayer")}
+                  </div>
+                </div>
+
+                <div className="min-w-0 self-center [&_[data-slot=code-block]_button]:opacity-100 lg:[&_[data-slot=code-block]_button]:opacity-0 lg:hover:[&_[data-slot=code-block]_button]:opacity-100">
+                  <CodeBlock
+                    code={entry_code[locale][active_group.key]}
+                    language={active_group.language}
+                    label={t(`quickstart.entries.${active_group.key}.codeLabel`)}
+                    className="max-h-[28rem] min-h-[16rem] p-2 text-[0.72rem] leading-5 sm:p-3 sm:text-xs sm:leading-6 md:min-h-[18rem]"
+                  />
+                </div>
+              </motion.article>
+            </AnimatePresence>
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto border-t border-line-soft px-3 py-3 font-mono text-[0.62rem] text-text-subtle md:px-4">
+            <span className="mr-2 shrink-0 uppercase tracking-[0.08em]">{t("quickstart.flowLabel")}</span>
+            {entry_groups.map((entry_group, entry_index) => (
+              <span key={entry_group.key} className="flex shrink-0 items-center gap-2">
+                <span className={entry_group.key === active_entry ? "text-foreground" : ""}>{t(`quickstart.entries.${entry_group.key}.products`)}</span>
+                {entry_index < entry_groups.length - 1 ? <IconArrowRight className="size-3.5" strokeWidth={1.4} /> : null}
+              </span>
+            ))}
           </div>
         </div>
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center text-text-subtle"><IconArrowDown className={`size-4 ${reduce_motion ? "" : "animate-bounce"}`} /></div>
       </div>
     </section>
   );

@@ -44,9 +44,10 @@ flowchart LR
 Shell 是本地 Agent 使用项目命令和进程的标准入口。SDK 不会自动选择平台 Sandbox；应用只安装并注入当前操作系统对应的 Adapter。以下示例使用 macOS：
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
-import { Shell } from "@downcity/shell";
+import { Shell } from "@downcity/workspace";
 
 const shell = new Shell({
   sandbox: new MacOsSeatbeltSandbox(),

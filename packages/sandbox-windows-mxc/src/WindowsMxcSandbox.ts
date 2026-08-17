@@ -10,7 +10,7 @@ import fs from "fs-extra";
 import type {
   SandboxPreflightResult, SandboxSpawnRequest, SandboxSpawnResult,
   ShellSandboxAdapter, ShellSandboxHostInput,
-} from "@downcity/shell";
+} from "@downcity/workspace/protocol";
 import type { WindowsMxcSupport } from "./types/WindowsMxc.js";
 import { read_windows_env_value } from "./WindowsEnvironment.js";
 import { inspect_windows_mxc_support } from "./WindowsMxcSupport.js";

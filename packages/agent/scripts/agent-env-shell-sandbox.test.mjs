@@ -12,8 +12,9 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { Agent, Workspace } from "@downcity/agent";
-import { Shell } from "@downcity/shell";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
+import { Shell } from "@downcity/workspace";
 import { create_platform_sandbox } from "./PlatformSandbox.mjs";
 
 async function execute_shell(agent, cmd) {

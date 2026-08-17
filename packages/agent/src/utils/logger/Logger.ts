@@ -9,8 +9,8 @@
 import { get_logs_dir_path } from "@/workspace/WorkspacePaths.js";
 import { get_timestamp } from "@/utils/Time.js";
 import type { JsonObject } from "@/types/common/Json.js";
-import type { FileSystem } from "@/types/workspace/FileSystem.js";
-import { LocalFileSystem } from "@/workspace/LocalFileSystem.js";
+import type { FileSystem } from "@downcity/workspace";
+import { LocalFileSystem } from "@downcity/workspace";
 
 type LogDetails = {
   [key: string]: JsonObject[keyof JsonObject] | undefined;

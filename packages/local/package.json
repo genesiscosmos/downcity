@@ -1,6 +1,6 @@
 {
   "name": "@downcity/local",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "description": "Downcity 本地数据库基础设施与显式产品数据组件。",
   "type": "module",
   "main": "./bin/index.js",
@@ -33,6 +33,7 @@
   "license": "MIT",
   "dependencies": {
     "@downcity/agent": "workspace:^",
+    "@downcity/workspace": "workspace:^",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "dotenv": "^17.4.2",

@@ -7,7 +7,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { load_project_dotenv } from "@downcity/agent";
+import { load_project_dotenv } from "@downcity/workspace";
 import dotenv from "dotenv";
 import { get_local_env_path } from "@/runtime/LocalPaths.js";
 

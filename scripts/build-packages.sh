@@ -13,7 +13,7 @@ PACKAGES=()
 BUILD_PACKAGES=()
 ALL_PACKAGES=(
   "type"
-  "shell"
+  "workspace"
   "sandbox-macos"
   "sandbox-linux"
   "sandbox-windows-mxc"
@@ -38,7 +38,7 @@ usage() {
   echo "Usage: pnpm patch:build -- [packages] [--no-bump] [--no-global-install]"
   echo ""
   echo "Package options:"
-  echo "  --type --shell --sandbox-macos --sandbox-linux"
+  echo "  --type --workspace --sandbox-macos --sandbox-linux"
   echo "  --sandbox-windows-mxc --sandbox-windows-srt"
   echo "  --agent --workspace-cloudflare-computer --federation"
   echo "  --database-d1 --database-sqlite --database-postgresql"
@@ -72,18 +72,15 @@ add_build_package() {
   BUILD_PACKAGES+=("$package_name")
 
   case "$package_name" in
-    shell)
-      add_build_package "type"
-      ;;
     sandbox-*)
-      add_build_package "shell"
+      add_build_package "workspace"
       ;;
     agent)
       add_build_package "type"
-      add_build_package "shell"
+      add_build_package "workspace"
       ;;
     workspace-cloudflare-computer)
-      add_build_package "agent"
+      add_build_package "workspace"
       ;;
     federation|database-*)
       add_build_package "type"
@@ -97,7 +94,6 @@ add_build_package() {
       ;;
     plugins)
       add_build_package "type"
-      add_build_package "shell"
       add_build_package "agent"
       ;;
     city)
@@ -166,7 +162,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --) shift; continue ;;
     --type) add_package "type" ;;
-    --shell) add_package "shell" ;;
+    --workspace) add_package "workspace" ;;
     --sandbox-macos) add_package "sandbox-macos" ;;
     --sandbox-linux) add_package "sandbox-linux" ;;
     --sandbox-windows-mxc) add_package "sandbox-windows-mxc" ;;

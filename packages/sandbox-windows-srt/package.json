@@ -1,6 +1,6 @@
 {
   "name": "@downcity/sandbox-windows-srt",
-  "version": "0.1.34",
+  "version": "0.1.35",
   "type": "module",
   "description": "Downcity Anthropic Sandbox Runtime adapter for native Windows",
   "main": "./bin/index.js",
@@ -38,7 +38,7 @@
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sandbox-runtime": "0.0.67",
-    "@downcity/shell": "workspace:^",
+    "@downcity/workspace": "workspace:^",
     "fs-extra": "^11.3.5"
   },
   "devDependencies": {

@@ -8,7 +8,7 @@ description: 本地 SDK Agent 的 Session 文件布局与数据边界
 本地 SDK Agent 的 Session 默认集中落盘到 `~/.downcity`；测试或多实例宿主可以通过 `DC_PLATFORM_ROOT` 覆盖内部根目录：
 
 ```text
-~/.downcity/workspaces/<workspace_id>/sessions/<session_id>/
+~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/sessions/<session_id>/
 ├── meta.json
 └── messages/
     ├── active.jsonl

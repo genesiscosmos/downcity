@@ -11,7 +11,7 @@ import type {
   SandboxSpawnResult,
   ShellSandboxAdapter,
   ShellSandboxHostInput,
-} from "@downcity/shell";
+} from "@downcity/workspace/protocol";
 import { WINDOWS_SRT_BACKEND } from "./WindowsSrtConstants.js";
 import { spawn_windows_srt } from "./WindowsSrtProcess.js";
 import { dispose_windows_srt_runtime } from "./WindowsSrtRuntime.js";

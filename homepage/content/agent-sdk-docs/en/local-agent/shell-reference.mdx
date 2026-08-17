@@ -5,7 +5,7 @@ description: Configure shell execution, sandboxing, and approval flows for the l
 
 # Shell & Sandbox
 
-The Agent uses `@downcity/shell` for local command execution, sandboxed runners, shell session management, and interactive approval flows.
+The Agent uses `@downcity/workspace` for local command execution, sandboxed runners, shell session management, and interactive approval flows.
 
 ## Install
 
@@ -13,16 +13,16 @@ Shell core and platform implementations are separate packages. Install only the 
 
 ```bash
 # macOS
-pnpm add @downcity/shell @downcity/sandbox-macos
+pnpm add @downcity/workspace @downcity/sandbox-macos
 
 # Linux
-pnpm add @downcity/shell @downcity/sandbox-linux
+pnpm add @downcity/workspace @downcity/sandbox-linux
 
 # Windows (MXC Development)
-pnpm add @downcity/shell @downcity/sandbox-windows-mxc
+pnpm add @downcity/workspace @downcity/sandbox-windows-mxc
 
 # Windows (Anthropic SRT Alpha)
-pnpm add @downcity/shell @downcity/sandbox-windows-srt
+pnpm add @downcity/workspace @downcity/sandbox-windows-srt
 npx @downcity/sandbox-windows-srt setup
 ```
 
@@ -33,21 +33,21 @@ The `Shell` class manages command execution and the approval runtime. Applicatio
 ### Minimal usage
 
 ```ts
-import { Shell } from "@downcity/shell";
-import { Agent, Workspace } from "@downcity/agent";
+import { Shell } from "@downcity/workspace";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const shell = new Shell({
   sandbox: new MacOsSeatbeltSandbox(),
 });
 
-const agent = new Agent({
-  id: "demo",
-  workspace: new Workspace({
-    path: process.cwd(),
-    shell,
-  }),
-});
+const agent = new Agent({ id: "demo" });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: process.cwd(),
+  shell,
+}));
 ```
 
 Workspace binds its project root to Shell; Agent no longer configures or owns Shell directly. Pass `root_path` only when using Shell independently.
@@ -96,7 +96,7 @@ Shell commands use the safe sandbox by default. The SDK does not select or insta
 - `windows-srt-alpha` — Anthropic Sandbox Runtime native Windows sandbox; Alpha
 - `unrestricted-host` — No sandboxing
 
-`@downcity/shell` owns the workspace write boundary, path validation, environment convergence, and policy fingerprint. Independent adapters own system paths, host preflight, policy compilation, and process startup. MXC and Anthropic SRT belong only to their Windows packages, so installing `@downcity/shell` does not download a Windows runtime on macOS or Linux. The Downcity CLI keeps MXC as its default and enables SRT only when `DC_WINDOWS_SANDBOX=srt` is set. SDK applications install and inject their selected adapter explicitly.
+`@downcity/workspace` owns the workspace write boundary, path validation, environment convergence, and policy fingerprint. Independent adapters own system paths, host preflight, policy compilation, and process startup. MXC and Anthropic SRT belong only to their Windows packages, so installing `@downcity/workspace` does not download a Windows runtime on macOS or Linux. The Downcity CLI keeps MXC as its default and enables SRT only when `DC_WINDOWS_SANDBOX=srt` is set. SDK applications install and inject their selected adapter explicitly.
 
 ### Windows adapters
 
@@ -115,7 +115,7 @@ Current Windows considerations:
 The SRT adapter directly uses Anthropic's open-source `@anthropic-ai/sandbox-runtime`. It protects the host with a dedicated `downcity-sandbox` Windows user, Restricted Token, Job Object, NTFS ACLs, and WFP network filters. Run `npx @downcity/sandbox-windows-srt setup` once and approve UAC before use. Normal command execution never installs or elevates automatically.
 
 ```ts
-import { Shell } from "@downcity/shell";
+import { Shell } from "@downcity/workspace";
 import { WindowsSrtSandbox } from "@downcity/sandbox-windows-srt";
 
 const shell = new Shell({

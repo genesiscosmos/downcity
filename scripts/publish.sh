@@ -47,7 +47,7 @@ if (!newVersion) {
 
 const files = [
   'package.json',
-  'packages/shell/package.json',
+  'packages/workspace/package.json',
   'packages/sandbox-macos/package.json',
   'packages/sandbox-linux/package.json',
   'packages/sandbox-windows-mxc/package.json',
@@ -179,7 +179,7 @@ main() {
   # 6. 暂存发布版本文件。UI SDK 走 packages 主发布流程。
   git add \
     package.json \
-    packages/shell/package.json \
+    packages/workspace/package.json \
     packages/sandbox-macos/package.json \
     packages/sandbox-linux/package.json \
     packages/sandbox-windows-mxc/package.json \

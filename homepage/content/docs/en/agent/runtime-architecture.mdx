@@ -19,7 +19,8 @@ Each Session owns independent:
 - Live Mutation stream.
 
 ```ts
-const session = await agent.sessions.create();
+const agent_workspace = agent.enter(workspace);
+const session = await agent_workspace.sessions.create();
 const turn = await session.prompt({ query: "Inspect and fix the project" });
 const result = await turn.finished;
 ```
@@ -102,20 +103,18 @@ A Session supports three System semantics:
 
 ## Messages and persistence
 
-Local state lives under `.downcity` in the Workspace:
+Local state lives under the Agent-specific Workspace scope in the user-level Downcity directory:
 
 ```text
-<workspace>/.downcity/
-├─ agents/<agent-id>/
-│  ├─ sessions/<session-id>/
-│  │  ├─ instruction.md
-│  │  └─ messages/
-│  │     ├─ meta.json
-│  │     ├─ active.jsonl
-│  │     ├─ assistant_message.json
-│  │     └─ segments/*.jsonl
-│  └─ archived-sessions/
-├─ resources/
+~/.downcity/agents/<agent-id>/workspaces/<workspace-id>/
+├─ sessions/<session-id>/
+│  ├─ instruction.md
+│  ├─ meta.json
+│  └─ messages/
+│     ├─ active.jsonl
+│     ├─ assistant_message.json
+│     └─ segments/*.jsonl
+├─ archived-sessions/
 ├─ logs/
 ├─ schedule.jsonl
 └─ sandbox/
@@ -150,7 +149,7 @@ Plugins belong to Agent, not Workspace. They may contribute Actions, System text
 
 PluginRegistry changes take effect at Session checkpoints. A Plugin startup failure isolates that Plugin without blocking others. Agent disposal stops ActionSchedule and unloads Plugins.
 
-ActionSchedule is a local delayed Plugin Action scheduler. Events are stored in `.downcity/schedule.jsonl`; after restart, abandoned running entries recover to pending. It is not a distributed scheduler and provides no cross-machine leader election.
+ActionSchedule is a local delayed Plugin Action scheduler. Events are stored in the current AgentWorkspace's `schedule.jsonl`; after restart, abandoned running entries recover to pending. It is not a distributed scheduler and provides no cross-machine leader election.
 
 ## Security model
 
@@ -189,7 +188,8 @@ flowchart LR
     Schedule --> Barrier["internal initialization barrier"]
     Barrier --> Running["execute Sessions"]
     Running --> Dispose["agent.dispose()"]
-    Dispose --> Workspace["Workspace.dispose()"]
+    Dispose --> Leave["leave all AgentWorkspaces"]
+    Leave --> Workspace["Workspace.dispose()"]
     Workspace --> Shell["close processes and Sandbox"]
 ```
 

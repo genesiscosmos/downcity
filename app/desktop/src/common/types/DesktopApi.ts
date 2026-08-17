@@ -526,8 +526,14 @@ export interface DesktopApi {
   user: {
     /** 读取并尽可能刷新当前用户资料。 */
     current(): Promise<DesktopUserSummary>;
-    /** 保存 Federation 地址和用户 Token。 */
-    login(federation_url: string, user_token: string): Promise<DesktopUserSummary>;
+    /** 读取 Federation 动态发布的登录 Provider。 */
+    list_login_providers(federation_url: string, force_refresh?: boolean): Promise<DesktopLoginProvider[]>;
+    /** 启动一个 Federation Provider 登录流程。 */
+    start_login(input: DesktopLoginStartInput): Promise<DesktopLoginStartResult>;
+    /** 查询登录流程，并在成功后保存和激活账户。 */
+    get_login_result(login_id: string): Promise<DesktopLoginResult>;
+    /** 取消一个尚未完成的登录流程。 */
+    cancel_login(login_id: string): Promise<void>;
     /** 列出 Desktop 保存的全部 Federation 账户。 */
     list_accounts(): Promise<DesktopAccountSummary[]>;
     /** 切换当前 Federation 账户。 */

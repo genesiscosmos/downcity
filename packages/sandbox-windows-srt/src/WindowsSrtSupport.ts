@@ -11,7 +11,7 @@ import {
   resolveSrtWin,
   uninstallWindowsSandbox,
 } from "@anthropic-ai/sandbox-runtime";
-import type { SandboxPreflightResult } from "@downcity/shell";
+import type { SandboxPreflightResult } from "@downcity/workspace/protocol";
 import {
   WINDOWS_SRT_BACKEND,
   WINDOWS_SRT_DEFAULT_PROXY_PORT_RANGE,

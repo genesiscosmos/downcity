@@ -21,18 +21,22 @@ Plugin 只属于 Agent。
 Agent 构造时传入的 plugin 会自动注册：
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { PlaywrightBrowserProvider, WebPlugin } from "@downcity/plugins/web";
 
 const agent = new Agent({
   id: "agent",
-  workspace: new Workspace({ path: process.cwd() }),
   plugins: [new WebPlugin({
     browser: new PlaywrightBrowserProvider({ cdp_url: "http://127.0.0.1:9222" }),
   })],
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: process.cwd(),
+}));
 
-const session = await agent.sessions.create();
+const session = await agent_workspace.sessions.create();
 ```
 
 Agent 实例化之后，也可以继续注册 plugin：
@@ -101,7 +105,7 @@ Plugin 注册后先进入 `initializing`。首次 action、availability、system
 
 ActionSchedule 不是 plugin。
 
-它是 Agent 级 action 调度 loop，跟随 Agent runtime 启动。到期任务会重新调用已注册 plugin 的 action。
+每个 AgentWorkspace 持有一个本地 action 调度 loop。到期任务会使用当前 Workspace Context 调用 Agent 已注册 Plugin 的 action。
 
 ## 相关文档
 

@@ -16,7 +16,7 @@ import type {
   AgentOptions,
   AgentSessionConstructor,
 } from "@/types/agent/AgentOptions.js";
-import type { WorkspaceBase } from "@/workspace/WorkspaceBase.js";
+import type { WorkspaceBase } from "@downcity/workspace";
 import type { AgentPluginContext } from "@/types/plugin/AgentPluginContext.js";
 import { Logger } from "@/utils/logger/Logger.js";
 

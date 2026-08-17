@@ -33,7 +33,7 @@ import {
 import { read_session_metadata_from_path } from "@/session/storage/Metadata.js";
 import { to_executor_ui_message } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
-import type { FileSystem } from "@/types/workspace/FileSystem.js";
+import type { FileSystem } from "@downcity/workspace";
 
 type SessionBrowseBaseInput = {
   /**

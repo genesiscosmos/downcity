@@ -6,19 +6,23 @@ description: 一个最小可运行的本地 Agent SDK 示例
 # 例子：最小本地 Agent
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+}));
 ```
 
 然后：
 
 ```ts
-const session = await agent.sessions.create();
+const session = await agent_workspace.sessions.create();
 await session.set({ model });
 const turn = await session.prompt({ query: "继续" });
 await turn.finished;

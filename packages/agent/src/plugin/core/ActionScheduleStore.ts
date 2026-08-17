@@ -15,7 +15,7 @@ import type {
 } from "@/plugin/types/ActionSchedule.js";
 import { generate_id } from "@/utils/Id.js";
 import { get_downcity_schedule_db_path } from "@/workspace/WorkspacePaths.js";
-import type { FileSystem } from "@/types/workspace/FileSystem.js";
+import type { FileSystem } from "@downcity/workspace";
 
 type ActionScheduleJobEvent =
   | {

@@ -7,7 +7,7 @@
  * - 上下文归属当前 Turn，不通过进程级或异步全局容器共享。
  */
 
-import type { ShellToolRunContext } from "@downcity/shell/types/ShellRuntime.js";
+import type { ShellToolRunContext } from "@downcity/workspace/shell/types/ShellRuntime.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 
 /**

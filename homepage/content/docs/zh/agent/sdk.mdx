@@ -8,11 +8,13 @@ description: 在 Node 应用中嵌入 Downcity Agent 运行时
 `@downcity/agent` 用于在同一进程中创建 Agent、管理 Session 并执行模型调用。完整 API 参考在 [Agent SDK 文档](/zh/agent-sdk-docs)。
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
-import { Shell } from "@downcity/shell";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
+import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const workspace = new Workspace({
+  id: "project",
   path: process.cwd(),
   shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
   env: { API_KEY: process.env.API_KEY ?? "" },
@@ -20,22 +22,28 @@ const workspace = new Workspace({
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace,
   model,
   tools: { search: search_tool },
   plugins: [plugin],
 });
 
-const session = await agent.sessions.create();
+const agent_workspace = agent.enter(workspace);
+const session = await agent_workspace.sessions.create();
 const turn = await session.prompt({ query: "检查当前项目" });
 const result = await turn.finished;
 
 await agent.dispose();
 ```
 
-`Workspace` 是统一资源容器，同时提供 SessionStore、WorkspaceTools、Env 与可选 Shell。Session 历史和元数据默认保存在同一个项目的 `.downcity` 目录中，也可以被 Workspace 的文件工具正常读取和编辑；SessionStore 不保存 Agent 配置。
+`Workspace` 来自 `@downcity/workspace`，拥有项目文件、搜索工具、Env、私有存储能力与可选 Shell，但不拥有 Agent 身份、Plugin 或 Session 语义。`agent.enter(workspace)` 返回的 `AgentWorkspace` 在当前 Agent 的私有存储作用域内创建 SessionStore。
 
-每个 Workspace 实例只绑定一个 Agent，并由 `agent.dispose()` 一并释放。多个 Agent 可以操作同一物理目录，但需要分别创建 Workspace 实例。
+Agent 配置不绑定 Workspace。同一个 Agent 可以进入多个 Workspace；多个 Agent 也可以通过各自的 Workspace 实例操作同一物理目录。`agent.dispose()` 会离开所有已进入的 Workspace，并释放其中的 Shell 资源。
+
+本地运行状态集中保存在项目目录之外：
+
+```text
+~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/
+```
 
 `Agent` 在构造时启动 plugin 生命周期与后台任务，Session 执行会自动等待初始化完成；关闭时使用 `await agent.dispose()`。HTTP 与 RPC 由独立包 `@downcity/city` 的 `AgentHTTP` 与 `AgentRPC` 提供。
 
@@ -85,7 +93,7 @@ const page = await session.messages();
 const timeline = page.items.flatMap(to_session_message_timeline_events);
 ```
 
-Session JSONL、日志和调度任务统一通过 Workspace FileSystem 完成根目录限制、原子写入与跨进程文件事务。应用应通过 Agent 和 Session API 访问结构化状态，而不是直接读取物理存储布局。
+Session JSONL、日志和调度任务通过 AgentWorkspace 私有 FileSystem 完成根目录限制、原子写入与跨进程文件事务。项目 File/Search 工具无法访问这些私有状态；应用应通过 AgentWorkspace 与 Session API 访问结构化状态。
 
 继续阅读：
 

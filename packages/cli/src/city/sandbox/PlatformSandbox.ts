@@ -7,7 +7,7 @@
  * - Windows 默认保留 MXC；只有用户显式设置 DC_WINDOWS_SANDBOX=srt 时才启用 SRT Alpha。
  */
 
-import type { ShellSandboxAdapter } from "@downcity/shell";
+import type { ShellSandboxAdapter } from "@downcity/workspace";
 
 /** Windows CLI 当前支持的 sandbox backend 选择。 */
 export type WindowsSandboxSelection = "mxc" | "srt";

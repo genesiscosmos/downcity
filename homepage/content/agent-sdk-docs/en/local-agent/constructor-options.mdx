@@ -33,7 +33,7 @@ The stable identifier of the agent.
 It affects the user-level Agent data path:
 
 ```text
-~/.downcity/workspaces/<workspace_id>/...
+~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/...
 ```
 
 Recommended properties:
@@ -111,7 +111,6 @@ The default `AgentModel` instance held by the Agent. `AgentModel` can be an AI S
 ```ts
 new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   model: openai.responses("gpt-5"),
 });
 ```
@@ -130,6 +129,7 @@ The project execution environment owned by the Workspace.
 
 ```ts
 const workspace = new Workspace({
+  id: "project",
   path: "/path/to/project",
   env: {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "",
@@ -189,17 +189,17 @@ This is a good fit when multiple sessions should share a stable default tool set
 Optional built-in shell capability.
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
-import { Shell } from "@downcity/shell";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
+import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
-const agent = new Agent({
-  id: "repo-helper",
-  workspace: new Workspace({
-    path: "/path/to/project",
-    shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
-  }),
-});
+const agent = new Agent({ id: "repo-helper" });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+}));
 ```
 
 Key points:
@@ -218,15 +218,19 @@ This accepts already-instantiated `BasePlugin` objects.
 For example:
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { SkillPlugin } from "@downcity/plugins/skill";
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new SkillPlugin()],
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+}));
 ```
 
 Web capabilities are opt-in and require an explicit provider; see the [Web Plugin guide](/en/plugins-docs/builtins/web).
@@ -282,9 +286,12 @@ class CustomSession extends Session {
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   session_class: CustomSession,
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+}));
 ```
 
 Key points:

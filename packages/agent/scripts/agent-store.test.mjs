@@ -7,7 +7,29 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { Agent, Workspace } from "../bin/index.js";
+import { Agent } from "../bin/index.js";
+import { Workspace } from "@downcity/workspace";
+import { LocalSessionStore } from "../bin/workspace/store/LocalSessionStore.js";
+
+/** 由 Agent 领域在 Workspace 通用作用域上创建 SessionStore。 */
+function create_agent_storage(workspace, agent_id) {
+  const scope = workspace.storage.open_scope([
+    "agents",
+    agent_id,
+    "workspaces",
+    workspace.id,
+  ]);
+  return {
+    root_path: scope.root_path,
+    files: scope.files,
+    sessions: new LocalSessionStore({
+      files: scope.files,
+      storage_root_path: scope.root_path,
+      agent_id,
+      workspace_id: workspace.id,
+    }),
+  };
+}
 
 async function create_test_roots(t) {
   const parent_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-agent-store-"));
@@ -18,14 +40,14 @@ async function create_test_roots(t) {
   return { data_root_path, workspace_path };
 }
 
-test("Workspace provides SessionStore through private AgentWorkspace storage", async (t) => {
+test("Agent creates SessionStore on the Workspace private storage scope", async (t) => {
   const { data_root_path, workspace_path } = await create_test_roots(t);
   const workspace = new Workspace({
     id: "test_workspace",
     path: workspace_path,
     data_root_path,
   });
-  const storage = workspace.create_agent_workspace_storage("store-test");
+  const storage = create_agent_storage(workspace, "store-test");
   const store = storage.sessions;
   const session_store = store.session("first");
 
@@ -77,7 +99,7 @@ test("LocalSessionStore archives and cleans sessions", async (t) => {
     path: workspace_path,
     data_root_path,
   });
-  const store = workspace.create_agent_workspace_storage("archive-test").sessions;
+  const store = create_agent_storage(workspace, "archive-test").sessions;
   const archived_store = store.session("archived");
   await archived_store.messages.initialize();
   await archived_store.write_metadata({

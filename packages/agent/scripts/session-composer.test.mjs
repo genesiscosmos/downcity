@@ -12,8 +12,8 @@ import {
   Agent,
   DefaultSessionComposer,
   Session,
-  Workspace,
 } from "../bin/index.js";
+import { Workspace } from "@downcity/workspace";
 
 function create_input(model) {
   return {

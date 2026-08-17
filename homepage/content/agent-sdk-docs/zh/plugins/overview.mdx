@@ -58,12 +58,11 @@ plugin 是 Downcity 里“一个能力边界”的统一承载单元。
 ## 在本地 SDK 里怎么接入 plugin
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
 import { SkillPlugin } from "@downcity/plugins/skill";
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new SkillPlugin()],
 });

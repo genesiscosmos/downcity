@@ -10,7 +10,7 @@ import type {
   ShellApprovalHandle,
   ShellApprovalRequest,
   ShellApprovalStatus,
-} from "@downcity/shell";
+} from "@downcity/workspace";
 import type { SessionInteractions } from "@/session/control/SessionInteractions.js";
 import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
 import { generate_id } from "@/utils/Id.js";

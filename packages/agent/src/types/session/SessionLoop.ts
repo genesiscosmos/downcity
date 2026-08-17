@@ -4,7 +4,7 @@
  * 这些类型描述 Turn 编排所依赖的领域对象，不实现任何调度行为。
  */
 
-import type { ShellApprovalGateway } from "@downcity/shell";
+import type { ShellApprovalGateway } from "@downcity/workspace";
 import type { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
 import type { SessionMessages } from "@/session/SessionMessages.js";
 import type { SessionState } from "@/session/SessionState.js";

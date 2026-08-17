@@ -76,16 +76,20 @@ await session.respond({
 model needs this capability:
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {
     ask_question: AskQuestionsTool,
   },
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+}));
 ```
 
 When missing information would materially change the outcome, the model returns a standard Tool Call:
@@ -147,10 +151,10 @@ const delete_file = tool({
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace,
   model,
   tools: { delete_file },
 });
+const agent_workspace = agent.enter(workspace);
 ```
 
 The approval policy belongs to the Tool, not the Agent. After the model produces a Tool Call, the

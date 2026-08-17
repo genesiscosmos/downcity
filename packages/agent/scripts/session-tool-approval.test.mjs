@@ -14,7 +14,8 @@ import os from "node:os";
 import path from "node:path";
 import { MockLanguageModelV3 } from "ai/test";
 import { z } from "zod";
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 
 function create_usage() {
   return {

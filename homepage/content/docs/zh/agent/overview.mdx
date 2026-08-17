@@ -5,7 +5,7 @@ description: Agent SDK 是什么，以及如何运行 Agent 工作
 
 # Agent
 
-**Agent SDK** (`@downcity/agent`) 是执行 Agent 工作的核心运行时。Agent 实例将 Workspace、会话、工具、插件和模型组装成一个执行上下文。`City` 是宿主进程内 Agent 实例的生命周期容器。
+**Agent SDK** (`@downcity/agent`) 是执行 Agent 工作的核心运行时。Agent 实例在执行时进入 Workspace，并通过 AgentWorkspace 组合会话、工具、插件和模型。`City` 是宿主进程内 Agent 实例的生命周期容器。
 
 ## Agent 做什么
 
@@ -18,20 +18,22 @@ description: Agent SDK 是什么，以及如何运行 Agent 工作
 ## 创建 Agent
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
-import { Shell } from "@downcity/shell";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
+import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({
-    path: "/path/to/project",
-    shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
-  }),
   model: myModel,
   tools: { my_tool: myTool },
   plugins: [myPlugin],
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+}));
 ```
 
 ## 关键概念

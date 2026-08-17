@@ -7,6 +7,27 @@ description: 完整查看 @downcity/ui 的导出模块、组件分组和可用�
 
 本页用于完整列出 `@downcity/ui` 的公开模块，方便在开发时快速确认可复用能力，而不必去翻源码。
 
+## 快捷键
+
+快捷键模块提供跨平台的按键匹配、注册和 React Provider。`Mod` 在 macOS 上表示 `Command`，在 Windows/Linux 上表示 `Ctrl`。
+
+```tsx
+import { ShortcutProvider, use_register_shortcuts } from "@downcity/ui";
+
+function AppShortcuts() {
+  use_register_shortcuts(() => [{
+    id: "editor.bold",
+    title: "加粗",
+    keys: ["Mod+B"],
+    scope: "editor",
+    run: () => { document.execCommand("bold"); return true; },
+  }], []);
+  return null;
+}
+```
+
+支持 `Mod+B`、`Mod+L`、`Mod+I`、`Mod+,` 等组合键。快捷键动作由宿主应用注册，UI SDK 不预设业务行为。
+
 ## 工具与类型
 
 ### `cn`

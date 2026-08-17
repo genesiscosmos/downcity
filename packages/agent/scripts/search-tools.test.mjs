@@ -13,7 +13,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { Workspace } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 
 const rg_available = spawnSync("rg", ["--version"], { stdio: "ignore" }).status === 0;
 

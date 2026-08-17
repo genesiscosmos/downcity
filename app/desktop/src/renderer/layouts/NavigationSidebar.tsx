@@ -20,6 +20,8 @@ interface NavigationSidebarProps {
   open_create_agent(workspace_id?: string): void;
   /** 打开创建 Workspace 表单。 */
   open_create_workspace(): void;
+  /** 是否隐藏左侧导航栏。 */
+  collapsed?: boolean;
 }
 
 /** Duobox Sidebar 容器，支持相同的宽度和拖拽动画。 */
@@ -51,7 +53,8 @@ export function SidebarContainer({ children }: { /** Sidebar 的实际业务内�
 }
 
 /** Agent 与 Session 的 Duobox 导航视图。 */
-export function NavigationSidebar({ controller, open_create_agent, open_create_workspace }: NavigationSidebarProps) {
+export function NavigationSidebar({ controller, open_create_agent, open_create_workspace, collapsed = false }: NavigationSidebarProps) {
+  if (collapsed) return null;
   return <SidebarContainer>
     <div className="header-drag-region h-9 shrink-0" />
     <div className="flex h-10 shrink-0 items-center gap-2 px-2 pb-1">

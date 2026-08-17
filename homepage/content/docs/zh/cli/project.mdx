@@ -5,7 +5,7 @@ description: Agent 项目目录、全局配置和运行数据的边界
 
 # 项目结构
 
-Agent 定义与 Plugin 配置使用用户级文件。项目目录只作为 Workspace，保留环境、Skills 和业务运行数据。
+Agent 定义、Plugin 配置与运行数据都使用用户级文件。项目目录只作为 Workspace，保留项目环境、Skills 和业务源码。
 
 ## 目录布局
 
@@ -14,12 +14,6 @@ my-project/
 ├── .env                 # 项目环境变量
 ├── .agents/
 │   └── skills/          # 用户管理、可进入版本控制的 Skills
-├── .downcity/           # Agent 与 Plugin 运行数据
-│   ├── agents/          # 会话与消息数据
-│   ├── chat/            # Chat Access、路由和历史数据
-│   ├── logs/            # 运行日志
-│   ├── memory/          # 记忆数据
-│   └── task/            # 任务运行数据
 └── src/                 # 业务代码（可选）
 ```
 
@@ -29,15 +23,21 @@ my-project/
 
 ```text
 ~/.downcity/
-├── agents/<agent_id>/agent.json
-├── agents/<agent_id>/SOUL.md
+├── agents/<agent_id>/
+│   ├── agent.json
+│   ├── SOUL.md
+│   └── workspaces/<workspace_id>/
+│       ├── sessions/
+│       ├── archived-sessions/
+│       └── logs/
 ├── plugins/<plugin_id>/config.toml
+├── runtimes/city/
 └── downcity.db
 ```
 
 `downcity.db` 保存 Workspace ID 与路径、Token 和平台状态，不保存 Agent 定义、Plugin profile 或 Agent-Workspace 绑定。CLI 与 Desktop 读取同一套文件与数据库。
 
-`agent_id` 与 `workspace_id` 是彼此独立的全局身份。Agent 只在一次具体执行时进入 Workspace。CLI City 的 daemon 状态记录在 `~/.downcity/runtimes/city/daemon.json`；Session 保存在当前 Workspace 的 `.downcity/agents/<agent_id>/sessions/` 下。
+`agent_id` 与 `workspace_id` 是彼此独立的全局身份。Agent 只在一次具体执行时进入 Workspace。CLI City 的 daemon 状态记录在 `~/.downcity/runtimes/city/`；Session 保存在 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/sessions/` 下。
 
 ## 项目资产
 
@@ -45,7 +45,7 @@ Global Env 单独保存在 `~/.downcity/.env`。项目 `.env` 覆盖 Global Env�
 
 ## 运行数据
 
-`.downcity/` 只保存会话、Chat Access、任务、记忆和缓存等业务运行数据。不要把管理配置、PID 或 daemon 元数据写入该目录。
+Downcity 不再创建 `<project>/.downcity/`。AgentWorkspace 运行数据统一保存在 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`；Plugin 自有数据使用当前 AgentWorkspace context 提供的存储作用域。
 
 继续阅读：
 

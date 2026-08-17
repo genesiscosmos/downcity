@@ -5,7 +5,7 @@ description: Agent 的 HTTP 传输层 — 通过 HTTP 暴露会话访问
 
 # AgentHTTP
 
-`AgentHTTP` 是本地 Agent 的 HTTP 传输层，暴露 RemoteAgent 所需的 Session API、plugin action 和 Shell 审批端点。
+`AgentHTTP` 是一个本地 `AgentWorkspace` 的 HTTP 传输层，暴露 RemoteAgent 所需的 Session API 与审批端点。
 
 需要额外安装 `@downcity/city`：
 
@@ -17,14 +17,15 @@ pnpm add @downcity/city
 
 ```ts
 import { AgentHTTP } from "@downcity/city";
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 
 const agent = new Agent({
   id: "demo",
-  workspace: new Workspace({ path: process.cwd() }),
   model,
 });
-const http = new AgentHTTP(agent);
+const agent_workspace = agent.enter(new Workspace({ id: "project", path: process.cwd() }));
+const http = new AgentHTTP(agent_workspace);
 
 const binding = await http.server().listen({ host: "127.0.0.1", port: 5314 });
 // HTTP 服务监听在 http://127.0.0.1:5314
@@ -33,12 +34,12 @@ const binding = await http.server().listen({ host: "127.0.0.1", port: 5314 });
 ## 构造参数
 
 ```ts
-new AgentHTTP(agent: Agent)
+new AgentHTTP(agent_workspace: AgentWorkspace)
 ```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `agent` | `Agent` | 已构造好的本地 Agent 实例 |
+| `agent_workspace` | `AgentWorkspace` | 需要暴露的本地 Agent 执行作用域 |
 
 ## 方法
 

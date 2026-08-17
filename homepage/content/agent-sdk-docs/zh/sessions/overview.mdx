@@ -5,7 +5,7 @@ description: Session 的职责、生命周期，以及本地和远程模式的�
 
 # Session 总览
 
-`Agent` 负责组装工具、plugin、配置和存储位置。模型由宿主在执行前注入；真正承载一次连续对话、历史、流式输出与工具审批的是 `Session`。
+`Agent` 拥有身份、模型、自定义工具与 Plugin；`AgentWorkspace` 负责组合 Workspace Tool、存储与 Session。真正承载一次连续对话、历史、流式输出与工具审批的是 `Session`。
 
 一个 Session 是一条持久化的、线性有序的 Message 序列。你可以离开进程后重新 `get()` 它，也可以在本地 `Agent` 与 `RemoteAgent` 之间复用几乎相同的调用方式。
 
@@ -26,7 +26,7 @@ create / get
 ## 一个完整的本地例子
 
 ```ts
-const session = await agent.sessions.create({
+const session = await agent_workspace.sessions.create({
   session_id: "repo-analysis",
 });
 
@@ -127,7 +127,7 @@ canonical Action Message；Message 提交成功后才发布对应 Mutation。完
 
 ## API 地图
 
-- 管理本地会话：`agent.sessions.create/get/list/archive/archived/clean_archive/remove/clear_messages()`
+- 管理本地会话：`agent_workspace.sessions.create/get/list/archive/archived/clean_archive/remove/clear_messages()`
 - 输入与完成：`session.prompt()`、`turn.finished`
 - 读取与实时：`session.messages()`、`session.get_info()`、`session.subscribe()`
 - 重命名本地 Session：`session.rename(title)`

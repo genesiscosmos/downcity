@@ -56,7 +56,6 @@ Session 初始化或恢复可关闭两项可观测输出；用户主动切换模
 ```ts
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   model,
 });
 ```
@@ -67,7 +66,7 @@ Session 没有显式模型时会回退到该 Agent 模型；设置后则优先�
 
 因为本地 SDK 更像一个嵌入式执行壳：
 
-- agent 负责路径、工具、plugin、会话落盘
+- Agent 负责身份、模型、自定义工具与 Plugin；AgentWorkspace 负责项目工具和会话落盘
 - 具体用哪个运行中的模型实例，由调用方决定
 
 这让本地 SDK 更灵活，但也把“模型是否准备好”的责任明确交给了调用方。

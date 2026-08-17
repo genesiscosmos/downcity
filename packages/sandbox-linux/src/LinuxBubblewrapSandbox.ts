@@ -9,7 +9,7 @@ import path from "node:path";
 import type {
   SandboxPreflightResult, SandboxSpawnRequest, SandboxSpawnResult,
   ShellSandboxAdapter, ShellSandboxHostInput,
-} from "@downcity/shell";
+} from "@downcity/workspace/protocol";
 import { spawn_linux_bubblewrap } from "./LinuxBubblewrap.js";
 
 const SYSTEM_READ_ONLY_PATHS = ["/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc"];

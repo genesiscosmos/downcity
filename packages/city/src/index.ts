@@ -2,7 +2,8 @@
  * @downcity/city - Agent 内存索引与 HTTP/RPC 转发器。
  *
  * City 维护多 Agent 运行时引用并提供可选 HTTP/RPC transport。
- * 单 Agent 的 Workspace、Session 与 Plugin 执行能力仍由 `@downcity/agent` 提供。
+ * AgentWorkspace、Session 与 Plugin 执行能力由 `@downcity/agent` 提供，Workspace 资源由
+ * `@downcity/workspace` 提供。
  */
 
 export { City } from "./runtime/City.js";

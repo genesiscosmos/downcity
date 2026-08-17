@@ -77,16 +77,20 @@ await session.respond({
 `ask_question` 是可选 Tool，不会由 Agent 默认注册。需要该能力时由调用方显式传入：
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {
     ask_question: AskQuestionsTool,
   },
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+}));
 ```
 
 模型缺少会实质影响结果的信息时，返回标准 Tool Call：
@@ -146,10 +150,10 @@ const delete_file = tool({
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace,
   model,
   tools: { delete_file },
 });
+const agent_workspace = agent.enter(workspace);
 ```
 
 审批策略属于 Tool，不属于 Agent。模型产生 Tool Call 后，AI SDK 先完成 schema 校验；

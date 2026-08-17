@@ -9,7 +9,7 @@
 
 import type { Tool, SystemModelMessage } from "ai";
 import type { Hono } from "hono";
-import type { Shell } from "@downcity/shell";
+import type { WorkspaceShell } from "@downcity/workspace";
 import { AgentSessions } from "@/agent/AgentSessions.js";
 import { AgentWorkspaceLifecycle } from "@/agent/AgentWorkspaceLifecycle.js";
 import { create_plugin_context } from "@/plugin/core/PluginContext.js";
@@ -21,6 +21,8 @@ import type { PluginSnapshot } from "@/types/plugin/PluginState.js";
 import type { AgentWorkspaceOptions } from "@/types/agent/AgentWorkspaceOptions.js";
 import { Logger } from "@/utils/logger/Logger.js";
 import { generate_id } from "@/utils/Id.js";
+import { LocalSessionStore } from "@/workspace/store/LocalSessionStore.js";
+import type { AgentWorkspaceStorage } from "@/types/workspace/AgentWorkspaceStorage.js";
 import {
   resolve_session_system_messages,
   type SystemProfile,
@@ -76,14 +78,35 @@ export class AgentWorkspace {
   private readonly lifecycle: AgentWorkspaceLifecycle;
   private readonly unsubscribe_env: () => void;
   private readonly unsubscribe_plugins: () => void;
+  private readonly storage: AgentWorkspaceStorage;
   private leave_promise?: Promise<void>;
 
   constructor(options: AgentWorkspaceOptions) {
     this.agent = options.agent;
     this.workspace = options.workspace;
     this.workspace_id = options.workspace.id;
-    const storage = this.workspace.create_agent_workspace_storage(this.agent.id);
+    const storage_scope = this.workspace.storage.open_scope([
+      "agents",
+      this.agent.id,
+      "workspaces",
+      this.workspace_id,
+    ]);
+    const storage: AgentWorkspaceStorage = {
+      root_path: storage_scope.root_path,
+      files: storage_scope.files,
+      sessions: new LocalSessionStore({
+        files: storage_scope.files,
+        storage_root_path: storage_scope.root_path,
+        agent_id: this.agent.id,
+        workspace_id: this.workspace_id,
+      }),
+    };
+    this.storage = storage;
     this.data_path = storage.root_path;
+    this.workspace.shell?.bind({
+      root_path: this.workspace.path,
+      data_path: this.data_path,
+    });
     this.logger = new Logger();
     this.logger.bind_storage(storage.files, storage.root_path, {
       agent_id: this.agent.id,
@@ -167,7 +190,7 @@ export class AgentWorkspace {
   }
 
   /** 返回当前 Workspace 的 Shell。 */
-  get_shell(): Shell | undefined {
+  get_shell(): WorkspaceShell | undefined {
     return this.workspace.shell;
   }
 
@@ -215,6 +238,7 @@ export class AgentWorkspace {
         () => this.unsubscribe_plugins(),
         () => this.sessions.dispose_title_generation(),
         async () => await this.lifecycle.dispose(),
+        async () => await this.storage.sessions.dispose(),
         async () => await this.logger.save_all_logs(),
         async () => await this.workspace.dispose(),
       ];

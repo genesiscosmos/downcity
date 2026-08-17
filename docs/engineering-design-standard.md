@@ -197,7 +197,7 @@ Workspace 统一持有一个 Agent 可以使用的项目资源：
 - 文件与搜索工具。
 - Workspace env。
 - 可选 Shell。
-- 由宿主传入的用户级数据根路径。
+- 通用的私有存储 Provider；Provider 不理解 Agent、Session 或 Plugin 语义。
 
 Workspace 不负责：
 
@@ -221,13 +221,13 @@ Agent 持有：
 
 Agent 不持有单一 Workspace。`AgentWorkspace` 是 Agent 进入一个 Workspace 后的执行边界，持有该项目的工具、Session、PluginContext 和项目生命周期资源。
 
-每个本地 Workspace 的内部运行状态统一保存在：
+每个本地 AgentWorkspace 的内部运行状态统一保存在：
 
 ```text
-~/.downcity/workspaces/<workspace_id>/
+~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/
 ```
 
-该目录包含 Session、日志、Schedule、Plugin 状态与缓存。`AgentWorkspace.data_path` 和 `PluginContext.data_path` 指向同一个 Workspace 数据根；Session、日志和 Schedule 在内容中记录 `agent_id`，`PluginContext.workspace_path` 始终只指向真实项目。
+该目录包含 Session、日志、Schedule、Plugin 状态与缓存。`AgentWorkspace.data_path` 和 `PluginContext.data_path` 指向同一个 AgentWorkspace 数据根；`PluginContext.workspace_path` 始终只指向真实项目。
 
 Agent 不负责：
 
@@ -286,7 +286,7 @@ Agent 通过 `agent.json` 选择 Plugin 与可选 profile。Plugin profile 可�
 
 `downcity.db` 继续保存 Workspace 索引、平台设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。Workspace 与平台设置以明文 JSON 保存，本地隔离依赖数据库文件权限。
 
-Agent 在 Workspace 中执行产生的本地状态保存在 `~/.downcity/workspaces/<workspace_id>/`。Session ID 在 Workspace 内唯一，Session metadata 必须同时记录 `workspace_id` 与 `agent_id`。项目目录中不得创建 `<project>/.downcity`，也不进行旧目录兼容读取或迁移。
+Agent 在 Workspace 中执行产生的本地状态保存在 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`。Session ID 在 AgentWorkspace 内唯一，Session metadata 必须同时记录 `workspace_id` 与 `agent_id`。项目目录中不得创建 `<project>/.downcity`，也不进行旧目录兼容读取或迁移。
 
 Workspace 只保证底层文件和 Shell 安全边界，不为 Plugin 的业务行为负责。Plugin 的业务权限、账号、网络访问与语义校验由 Plugin 或宿主管理。
 
@@ -448,7 +448,9 @@ PluginContext 只服务 Plugin；宿主直接依赖 Agent，不获取 PluginCont
 Store 基于 AgentWorkspaceStorage 提供的私有 FileSystem 原子能力实现 Agent/Session 结构化持久化。Store 与 Workspace 的关系是：
 
 ```text
-Workspace 提供项目资源，并在 Agent enter 时创建 AgentWorkspaceStorage
+Workspace 提供项目资源与通用私有存储 Provider
+  → Agent.enter() 打开 agents/<agent_id>/workspaces/<workspace_id> 作用域
+  → AgentWorkspace 创建 AgentWorkspaceStorage 与 LocalSessionStore
   → SessionStore 定义 Session 集合存储语义
   → SessionDataStore 定义单个 Session 存储语义
   → MessageStore 定义消息提交与恢复语义

@@ -12,34 +12,37 @@ Local Agents can receive an explicit tool set:
 ```ts
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {
     my_tool: myTool,
   },
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+}));
 ```
 
 These tools are available during session execution.
 
 ## shell
 
-Use `@downcity/shell` when the Agent should own shell execution tools:
+Use `@downcity/workspace` when the Agent should own shell execution tools:
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
-import { Shell } from "@downcity/shell";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
+import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
-const agent = new Agent({
-  id: "repo-helper",
-  workspace: new Workspace({
-    path: "/path/to/project",
-    shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
-  }),
-});
+const agent = new Agent({ id: "repo-helper" });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+}));
 ```
 
-Workspace creates WorkspaceTools from five file/search tools by default, and Shell contributes two command tools. Agent registers all of them in `agent.tools`:
+Workspace creates WorkspaceTools from five file/search tools by default, and Shell contributes two command tools. AgentWorkspace merges them into `agent_workspace.tools`:
 
 - `shell_exec`: one-shot non-interactive commands
 - `shell_session`: long-running or stdin-driven interactive PTY sessions
@@ -56,12 +59,12 @@ When `read` opens a PNG, JPEG, GIF, WebP, BMP, or PDF, `output` contains only th
 `read` returns the file SHA-256. When another process may change the file concurrently, pass it as `edit.expected_sha256` to prevent a stale edit from replacing newer content:
 
 ```ts
-const current_result = await agent.tools.read.execute({
+const current_result = await agent_workspace.tools.read.execute({
   file_path: "src/index.ts",
 });
 const current = current_result.output;
 
-await agent.tools.edit.execute({
+await agent_workspace.tools.edit.execute({
   file_path: "src/index.ts",
   expected_sha256: current.sha256,
   edits: [
@@ -88,16 +91,20 @@ A live UI reads the complete request from a pending Interaction Part while the r
 Explicitly register the standalone tool when the model needs to ask questions:
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {
     ask_question: AskQuestionsTool,
   },
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+}));
 ```
 
 The model invokes `ask_question` as a standard Tool Call, not as a provider-specific message type.
@@ -111,14 +118,18 @@ the next Step of the same Turn. See
 Local Agents can also receive explicit plugin instances:
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { SkillPlugin } from "@downcity/plugins/skill";
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   plugins: [new SkillPlugin()],
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+}));
 ```
 
 Add `WebPlugin` only when a search, document, or browser provider is configured. See the [Web Plugin guide](/en/plugins-docs/builtins/web).
@@ -127,7 +138,7 @@ Registered plugin actions can be called through `agent.plugins.run_action(...)`,
 
 `PluginContext` does not expose a generic path bundle. A plugin uses `context.workspace_path` as the project boundary and owns its domain storage paths inside the plugin. Operations on Agent Sessions go through `context.sessions`, not the Agent's Session directories.
 
-`context.sessions` directly references the Agent's `AgentSessions`; it is not an adapter. Plugins use `context.sessions.runtime(session_id)` for the synchronous runtime port. SDK callers still restore an existing public Session with `await agent.sessions.get(session_id)`.
+`context.sessions` directly references the current AgentWorkspace's `AgentSessions`; it is not an adapter. Plugins use `context.sessions.runtime(session_id)` for the synchronous runtime port. SDK callers restore an existing public Session with `await agent_workspace.sessions.get(session_id)`.
 
 Each `Agent` has its own plugin registry and its own `plugin_read` / `plugin_call` tool instances. If one process creates and caches multiple Agents, a session's `plugin_call` only reaches the registry for the Agent that owns that session.
 
@@ -145,7 +156,8 @@ WorkspaceTools, Plugin Tools, and `AgentOptions.tools` cannot reuse a name. Agen
 Custom plugins can declare action metadata with `create_plugin` / `create_action`:
 
 ```ts
-import { Agent, Workspace, create_action, create_plugin } from "@downcity/agent";
+import { Agent, create_action, create_plugin } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { z } from "zod";
 
 const demo_plugin = create_plugin({
@@ -187,7 +199,6 @@ const demo_plugin = create_plugin({
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   plugins: [demo_plugin],
 });
 ```
@@ -201,12 +212,12 @@ Tools and Plugin Actions share one Session result path: put the ordinary result 
 Use `ChatPlugin` when you want the SDK runtime to own long-lived chat channels:
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { ChatPlugin, TelegramChannel } from "@downcity/plugins/chat";
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   plugins: [
     new ChatPlugin({
       channels: [
@@ -228,12 +239,12 @@ Each channel object owns its own env and credential parsing, so `ChatPlugin` onl
 Use `ImagePlugin` when you want an Agent to generate images during a conversation:
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { ImagePlugin } from "@downcity/plugins/image";
 
 const agent = new Agent({
   id: "creative-agent",
-  workspace: new Workspace({ path: "/path/to/project" }),
   model,
   plugins: [
     new ImagePlugin({

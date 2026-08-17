@@ -55,19 +55,36 @@
     }
   },
   "quickstart": {
-    "sectionLabel": "Quick Start",
-    "title": "Choose the layer you want to start from.",
-    "description": "Use the Agent Harness directly, connect a City to Federation, or manage the same runtime from the terminal.",
-    "tabsLabel": "Choose an Agent SDK, City SDK, or CLI quickstart",
-    "agentTitle": "Build with the Agent Harness",
-    "agentDescription": "Create an Agent, open a Session, and run the first Turn directly in your application.",
-    "cityTitle": "Connect City and Federation",
-    "cityDescription": "Run shared product infrastructure in Federation, then connect each product through its City client.",
-    "cliTitle": "Operate from the terminal",
-    "cliDescription": "Create Agent configuration and let the CLI City host assemble it without wiring the SDK by hand.",
-    "agentDocs": "Read Agent docs",
-    "cityDocs": "Read City docs",
-    "cliDocs": "Read CLI docs"
+    "sectionLabel": "From use to build",
+    "title": "Three paths, one Downcity.",
+    "description": "Users run agents, product developers organize agents into a City, and service developers provide shared capabilities through Federation.",
+    "tabsLabel": "Choose the user, product developer, or service developer path",
+    "stageLabel": "DOWNCITY / RUNTIME PATH",
+    "currentLayer": "Current layer",
+    "flowLabel": "Runtime path",
+    "entries": {
+      "user": {
+        "audience": "Users",
+        "title": "Run and manage agents",
+        "products": "CLI · Desktop",
+        "description": "Create, start, and talk to agents from the CLI, or do the same work in Desktop. Both use the same City and Agent state.",
+        "codeLabel": "Terminal"
+      },
+      "productDeveloper": {
+        "audience": "Product developers",
+        "title": "Turn agents into product capabilities",
+        "products": "Agent · City",
+        "description": "Agent owns the workspace, model, and sessions. City organizes those agents and connects them to the CLI, Desktop, or your product host.",
+        "codeLabel": "agent.ts"
+      },
+      "serviceDeveloper": {
+        "audience": "Service developers",
+        "title": "Provide shared services across products",
+        "products": "Federation · Embassy · Services",
+        "description": "Federation runs shared services. Embassy gives users and administrators access to models, identity, usage, and product capabilities.",
+        "codeLabel": "federation.ts"
+      }
+    }
   },
   "features": {
     "sectionLabel": "Features",
@@ -96,40 +113,6 @@
         "title": "Connect interfaces and stay in control",
         "description": "Interact through CLI, Console, SDKs, or product interfaces while inspecting status, approving actions, and managing the runtime."
       }
-    }
-  },
-  "architecture": {
-    "sectionLabel": "Architecture",
-    "title": "Products run in the user's environment. Federation provides shared capabilities.",
-    "description": "A creator organizes agent roles, tools, skills, and product interfaces into a City. The City runs on the user's computer or server and stores sessions, tasks, and work artifacts. When an agent needs models, accounts, usage, or other shared services, it connects to Federation.",
-    "diagramLabel": "The creator designs the product and agents. The City runs and stores work data in the user's environment, connecting to Federation for models, authentication, service routing, and usage management.",
-    "creator": "Creator",
-    "creatorCaption": "Designs products and agents",
-    "creatorLabel": "Creator who designs the product, agent roles, and ways of working",
-    "user": "User",
-    "userEnvironment": "User's environment",
-    "userEnvironmentLabel": "The user's computer or server runs the City and stores sessions, tasks, and work artifacts",
-    "productCity": "City",
-    "productBoundary": "Product, agents, and runtime data",
-    "agentsInCity": "Agents live and work here",
-    "localRuntime": "Local runtime",
-    "memoryAndTools": "Memory and tools",
-    "userControl": "User control",
-    "federation": "Federation",
-    "federationCaption": "Models and shared services",
-    "federationLabel": "Federation provides models, authentication, service routing, and usage management",
-    "mobileCaption": "A City runs in the user's environment and connects to Federation when it needs shared capabilities.",
-    "paths": {
-      "setup": "sets up services",
-      "offer": "offers City + Agents",
-      "hold": "holds",
-      "connect": "connects to shared services"
-    },
-    "services": {
-      "models": "Models",
-      "services": "Services",
-      "auth": "Auth",
-      "usage": "Usage"
     }
   },
   "productWorld": {

@@ -40,7 +40,7 @@ test("CloudflareComputerWorkspace 将相对路径限制在逻辑根目录", asyn
   assert.deepEqual(Object.keys(workspace.tools).sort(), ["edit", "exec", "ls", "read", "write"]);
 });
 
-test("CloudflareComputerWorkspace 共享 Workspace 根并隔离 Agent Session 视图", async () => {
+test("CloudflareComputerWorkspace 提供通用私有存储作用域", async () => {
   let disposed = false;
   const workspace = new CloudflareComputerWorkspace({
     id: "project",
@@ -48,10 +48,17 @@ test("CloudflareComputerWorkspace 共享 Workspace 根并隔离 Agent Session �
     env: { NODE_ENV: "test" },
     dispose: () => { disposed = true; },
   });
-  const first = workspace.create_agent_workspace_storage("agent-one");
-  const second = workspace.create_agent_workspace_storage("agent-two");
-  assert.equal(first.root_path, second.root_path);
-  assert.notEqual(first.files, second.files);
+  const first = workspace.storage.open_scope([
+    "agents",
+    "agent-one",
+    "workspaces",
+    "project",
+  ]);
+  assert.match(first.root_path, /\/\.downcity\/agents\/agent-one\/workspaces\/project$/);
+  assert.throws(
+    () => workspace.storage.open_scope(["agents", "agent-two", "workspaces", "project"]),
+    /already bound to another scope/,
+  );
   assert.deepEqual(workspace.get_env(), { NODE_ENV: "test" });
   await workspace.dispose();
   assert.equal(disposed, true);

@@ -1,7 +1,8 @@
 /** Downcity Desktop 设置与 Federation 用户视图。 */
 
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { TbCheck, TbChevronDown, TbChevronRight, TbCoin, TbCopy, TbCpu, TbCurrencyDollar, TbExternalLink, TbInfoCircle, TbLoader2, TbLogin2, TbLogout, TbPlus, TbRefresh, TbRotate, TbSwitchHorizontal, TbTicket, TbUser } from "react-icons/tb";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { TbArrowLeft, TbArrowRight, TbBrandGithub, TbBrandGoogle, TbBrandWechat, TbCheck, TbChevronDown, TbChevronRight, TbCoin, TbCopy, TbCpu, TbCurrencyDollar, TbExternalLink, TbInfoCircle, TbLoader2, TbLogin2, TbLogout, TbMail, TbPlugConnected, TbPlus, TbRefresh, TbRotate, TbSwitchHorizontal, TbTicket, TbUser } from "react-icons/tb";
+import type { IconType } from "react-icons";
 import { LLMModelIcon } from "@/components/model";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -45,75 +46,119 @@ export function SettingsView({ controller, section }: SettingsViewProps) {
   </MainViewLayout>;
 }
 
-/** Federation 用户设置。 */
-function UserSettings({ controller }: { /** Renderer 根控制器。 */ controller: DesktopViewController }) {
-  const [federation_url, set_federation_url] = useState(controller.user.federation_url);
-  const [user_token, set_user_token] = useState("");
-  const [submitting, set_submitting] = useState(false);
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!user_token.trim() || submitting) return;
-    set_submitting(true);
-    try {
-      await controller.login(federation_url, user_token);
-      set_user_token("");
-    } finally {
-      set_submitting(false);
-    }
-  };
-
-  const resources = controller.account_resources;
-  return <SettingsContainer>
-    <SettingsHeader title="用户" description="Downcity Federation 身份由 Desktop 与 CLI 共享。" />
-    {controller.user.authenticated ? <SettingSection title="当前用户">
-      <SettingGroup>
-        <div className="flex min-h-20 items-center gap-3 px-4 py-3">
-          {controller.user.avatar_url ? <img src={controller.user.avatar_url} alt="" className="size-11 rounded-full object-cover" /> : <span className="flex size-11 items-center justify-center rounded-full bg-foreground/[0.06]"><TbUser /></span>}
-          <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{controller.user.display_name || controller.user.email || controller.user.user_id}</div><div className="mt-0.5 truncate text-xs text-muted-foreground">{controller.user.email || controller.user.federation_url}</div></div>
-          <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><TbCheck />已登录</span>
-        </div>
-        {controller.user.error ? <div className="px-4 py-2 text-xs text-destructive">资料刷新失败：{controller.user.error}</div> : null}
-        {resources?.credits ? <div className="border-t border-border/45 px-4 py-3"><div className="text-xs text-muted-foreground">可用 Credits</div><div className="mt-1 text-xl font-semibold tabular-nums">{format_credits(resources.credits.available_credits)}</div><div className="mt-2 flex flex-wrap gap-1.5">{resources.credits.cards.map((card) => <span key={`${card.kind}:${card.card_id}`} className="rounded-md bg-background px-2 py-1 text-[10px] text-muted-foreground">{card.name} · {format_credits(card.credits)}</span>)}</div></div> : null}
-        <SettingAction label="退出登录" description={controller.user.federation_url} icon={<TbLogout />} destructive on_click={() => void controller.logout()} />
-      </SettingGroup>
-      {controller.accounts.length > 0 ? <SettingSection title="账户管理" description="可在多个 Federation 用户之间切换。"><SettingGroup>{controller.accounts.map((account) => <div key={account.account_id} className="flex min-h-14 items-center gap-3 px-3.5 py-2.5"><span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full text-xs", account.active ? "bg-primary/15 text-primary" : "bg-foreground/[0.06] text-muted-foreground")}><TbUser /></span><span className="min-w-0 flex-1"><span className="block truncate text-xs">{account.display_name || account.email || account.user_id || account.federation_url}</span><span className="block truncate text-[10px] text-muted-foreground">{account.email || account.federation_url}</span></span>{account.active ? <span className="text-[10px] text-primary">当前</span> : <Button className="h-7 px-2 text-xs" onClick={() => void controller.switch_account(account.account_id)}>切换</Button>}<Button size="icon" title="移除账户" onClick={() => void controller.remove_account(account.account_id)}><TbLogout /></Button></div>)}</SettingGroup></SettingSection> : null}
-      {resources?.usage_days.length ? <SettingSection title="个人用量" description={`最近 ${resources.usage_days.length} 天`}><SettingGroup><div className="grid grid-cols-3 gap-3 px-4 py-3"><Metric label="Credits" value={format_credits(resources.usage_days.reduce((sum, day) => sum + day.credits_used, 0))} /><Metric label="执行次数" value={String(resources.usage_days.reduce((sum, day) => sum + day.execution_count, 0))} /><Metric label="生成图片" value={String(resources.usage_days.reduce((sum, day) => sum + day.image_count, 0))} /></div><div className="max-h-48 divide-y divide-border/45 overflow-y-auto">{resources.usage_days.slice().reverse().map((day) => <div key={day.date} className="flex items-center justify-between px-4 py-2 text-xs"><span className="text-muted-foreground">{day.date}</span><span className="tabular-nums">{format_credits(day.credits_used)} Credits · {day.execution_count} 次</span></div>)}</div></SettingGroup></SettingSection> : null}
-    </SettingSection> : <SettingSection title="登录 Federation" description="Token 只会加密保存在 Downcity 本地数据中。">
-      <form onSubmit={submit} className="overflow-hidden rounded-lg bg-surface-subtle">
-        <label className="block border-b border-border/45 px-3.5 py-2.5"><span className="block text-xs text-muted-foreground">Federation 地址</span><input className="mt-1 h-8 w-full rounded-md bg-background px-2 text-xs ring-1 ring-border focus:ring-foreground/20" value={federation_url} onChange={(event) => set_federation_url(event.target.value)} /></label>
-        <label className="block px-3.5 py-2.5"><span className="block text-xs text-muted-foreground">用户 Token</span><input type="password" className="mt-1 h-8 w-full rounded-md bg-background px-2 text-xs ring-1 ring-border focus:ring-foreground/20" value={user_token} onChange={(event) => set_user_token(event.target.value)} /></label>
-        <div className="flex justify-end border-t border-border/45 px-3.5 py-2.5"><Button type="submit" variant="primary" disabled={!user_token.trim() || submitting}>{submitting ? "验证中…" : "登录"}</Button></div>
-      </form>
-    </SettingSection>}
-  </SettingsContainer>;
-}
-
 /** 按 Duobox AccountSettings 结构展示账户资料、余额、账户切换与用量。 */
 function UserSettingsExact({ controller }: { controller: DesktopViewController }) {
   const [accounts_expanded, set_accounts_expanded] = useState(false);
-  const [federation_url, set_federation_url] = useState(controller.user.federation_url);
-  const [user_token, set_user_token] = useState("");
-  const [submitting, set_submitting] = useState(false);
+  const [adding_account, set_adding_account] = useState(false);
   const resources = controller.account_resources;
   const account = controller.user;
   const name = account.display_name || account.email || account.user_id || "暂无账户";
   const copy_user_id = async () => { if (account.user_id) await navigator.clipboard?.writeText(account.user_id); };
   return <SettingsContainer>
-    {!account.authenticated ? <><section className="flex min-h-56 flex-col items-center justify-center rounded-lg bg-surface-subtle px-6 py-10 text-center"><span className="flex size-11 items-center justify-center rounded-full bg-foreground/[0.05] text-muted-foreground"><TbUser className="size-5" /></span><h2 className="mt-4 text-sm font-medium text-foreground/90">暂无当前账户</h2><p className="mt-1.5 max-w-72 text-xs leading-5 text-muted-foreground">登录 Federation 后可使用模型、Credits 和个人用量。</p></section><form className="overflow-hidden rounded-lg bg-surface-subtle" onSubmit={(event) => { event.preventDefault(); if (!user_token.trim() || submitting) return; set_submitting(true); void controller.login(federation_url, user_token).finally(() => { set_submitting(false); set_user_token(""); }); }}><label className="block border-b border-border/45 px-3.5 py-2.5"><span className="block text-xs text-muted-foreground">Federation 地址</span><input className="mt-1 h-8 w-full rounded-md bg-background px-2 text-xs ring-1 ring-border" value={federation_url} onChange={(event) => set_federation_url(event.target.value)} /></label><label className="block px-3.5 py-2.5"><span className="block text-xs text-muted-foreground">用户 Token</span><input type="password" className="mt-1 h-8 w-full rounded-md bg-background px-2 text-xs ring-1 ring-border" value={user_token} onChange={(event) => set_user_token(event.target.value)} /></label><div className="flex justify-end border-t border-border/45 px-3.5 py-2.5"><Button type="submit" variant="primary" disabled={!user_token.trim() || submitting}>{submitting ? <TbLoader2 className="animate-spin" /> : <TbLogin2 />}登录</Button></div></form></> : <>
+    {!account.authenticated ? <><section className="flex min-h-56 flex-col items-center justify-center rounded-lg bg-surface-subtle px-6 py-10 text-center"><span className="flex size-11 items-center justify-center rounded-full bg-foreground/[0.05] text-muted-foreground"><TbUser className="size-5" /></span><h2 className="mt-4 text-sm font-medium text-foreground/90">暂无当前账户</h2><p className="mt-1.5 max-w-72 text-xs leading-5 text-muted-foreground">登录 Federation 后可使用模型、Credits 和个人用量。</p></section><AccountLoginPanel controller={controller} /></> : <>
       <section className="px-2 py-1" aria-labelledby="account-profile-title"><div className="flex min-w-0 items-center gap-4"><div className="flex size-14 shrink-0 overflow-hidden rounded-full bg-surface-subtle">{account.avatar_url ? <img src={account.avatar_url} alt={name} className="size-full object-cover" /> : <div className="flex size-full items-center justify-center text-lg font-medium text-muted-foreground">{name.slice(0, 1).toUpperCase()}</div>}</div><div className="min-w-0 flex-1"><div className="group flex min-w-0 items-center gap-1"><h2 id="account-profile-title" className="truncate text-xl font-semibold tracking-tight text-foreground">{name}</h2>{account.user_id ? <Button size="icon" className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" onClick={() => void copy_user_id()} title="复制用户 ID" aria-label="复制用户 ID"><TbCopy /></Button> : null}</div><p className="mt-0.5 truncate text-xs text-muted-foreground">{account.email || account.user_id || account.federation_url}</p></div></div>{account.error ? <p className="mt-3 text-xs text-destructive" role="status">{account.error}</p> : null}</section>
       <SettingSection title="Credits"><div className="overflow-hidden divide-y divide-divider rounded-lg bg-surface-subtle"><CreditsRow name="Primary Credits" amount={resources?.credits ? format_credits(resources.credits.available_credits) : "—"} action={<div className="flex items-center gap-1"><Button disabled={!resources?.credits}><TbTicket />兑换</Button><Button variant="primary" disabled={!resources?.credits}><TbCoin />充值</Button></div>} />{resources?.credits?.cards.filter((card) => card.kind === "ephemeral").map((card) => <CreditsRow key={card.card_id} name={card.name} description={card.expires_at ? `有效期至 ${format_date(card.expires_at)}` : undefined} status={card.status === "active" ? undefined : card.status === "depleted" ? "已用尽" : "已过期"} urgent={card.status === "active" && Boolean(card.expires_at && new Date(card.expires_at).getTime() - Date.now() < 7 * 86400000)} amount={format_credits(card.credits)} />)}</div></SettingSection>
       <UsagePanelExact resources={resources} />
       <SettingSection title="账户详情"><SettingGroup><AccountDetailRow label="Federation" value={account.federation_url} /><AccountDetailRow label="用户 ID" value={account.user_id || "—"} /><AccountDetailRow label="最近使用" value={account.user_id ? "当前账户" : "—"} /></SettingGroup></SettingSection>
-      <SettingSection><SettingGroup><SettingActionItemExact label="切换账户" icon={<TbSwitchHorizontal />} trailing={<TbChevronDown className={cn("transition-transform", !accounts_expanded && "-rotate-90")} />} expanded={accounts_expanded} disabled={false} onClick={() => set_accounts_expanded((current) => !current)} />{accounts_expanded ? <div className="p-2"><AccountSwitchListExact controller={controller} /></div> : null}<SettingActionItemExact label="退出账户" icon={<TbLogout />} destructive onClick={() => void controller.logout()} /></SettingGroup></SettingSection>
+      <SettingSection><SettingGroup><SettingActionItemExact label="切换账户" icon={<TbSwitchHorizontal />} trailing={<TbChevronDown className={cn("transition-transform", !accounts_expanded && "-rotate-90")} />} expanded={accounts_expanded} disabled={false} onClick={() => set_accounts_expanded((current) => !current)} />{accounts_expanded ? <div className="p-2"><AccountSwitchListExact controller={controller} on_add={() => set_adding_account(true)} /></div> : null}<SettingActionItemExact label="退出账户" icon={<TbLogout />} destructive onClick={() => void controller.logout()} /></SettingGroup></SettingSection>
+      {adding_account ? <SettingSection title="添加账户"><AccountLoginPanel controller={controller} on_completed={() => set_adding_account(false)} /></SettingSection> : null}
     </>}
   </SettingsContainer>;
+}
+
+const default_federation_url = "https://base.downcity.ai";
+const provider_icons: Record<string, IconType> = {
+  email: TbMail,
+  github: TbBrandGithub,
+  google: TbBrandGoogle,
+  wechat: TbBrandWechat,
+};
+
+/** 按 Federation 动态 Provider 执行浏览器授权登录。 */
+function AccountLoginPanel({ controller, on_completed }: { controller: DesktopViewController; on_completed?: () => void }) {
+  const list_login_providers = controller.list_login_providers;
+  const [step, set_step] = useState<"providers" | "federation">("providers");
+  const [federation_url, set_federation_url] = useState(default_federation_url);
+  const [federation_input, set_federation_input] = useState("");
+  const [providers, set_providers] = useState<Awaited<ReturnType<DesktopViewController["list_login_providers"]>>>([]);
+  const [loading, set_loading] = useState(true);
+  const [starting_provider_id, set_starting_provider_id] = useState("");
+  const [error, set_error] = useState("");
+
+  const load_providers = useCallback(async (target_url: string, force_refresh = false) => {
+    set_loading(true);
+    set_error("");
+    try {
+      set_providers(await list_login_providers(target_url, force_refresh));
+      return true;
+    } catch (reason) {
+      set_error(reason instanceof Error ? reason.message : String(reason));
+      return false;
+    } finally {
+      set_loading(false);
+    }
+  }, [list_login_providers]);
+
+  useEffect(() => { void load_providers(default_federation_url); }, [load_providers]);
+
+  const connect_federation = async () => {
+    let normalized_url = "";
+    try {
+      normalized_url = normalize_login_url(federation_input);
+    } catch (reason) {
+      set_error(reason instanceof Error ? reason.message : String(reason));
+      return;
+    }
+    if (!await load_providers(normalized_url, true)) return;
+    set_federation_url(normalized_url);
+    set_step("providers");
+  };
+
+  const start_login = async (provider_id: string) => {
+    if (starting_provider_id) return;
+    set_starting_provider_id(provider_id);
+    set_error("");
+    try {
+      await controller.login(federation_url, provider_id);
+      on_completed?.();
+    } catch (reason) {
+      set_error(reason instanceof Error ? reason.message : String(reason));
+      set_starting_provider_id("");
+    }
+  };
+
+  if (step === "federation") {
+    return <section className="overflow-hidden rounded-lg bg-surface-subtle">
+      <button type="button" className="flex min-h-10 items-center gap-1 px-3.5 text-xs text-muted-foreground transition-colors hover:text-foreground" onClick={() => { set_error(""); set_step("providers"); }}><TbArrowLeft />返回</button>
+      <label className="block border-y border-border/45 px-3.5 py-2.5"><span className="block text-xs text-muted-foreground">Federation 地址</span><input autoFocus type="url" className="mt-1 h-8 w-full rounded-md bg-background px-2 text-xs ring-1 ring-border" value={federation_input} placeholder="https://example.com" disabled={loading} onChange={(event) => { set_federation_input(event.target.value); set_error(""); }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void connect_federation(); } }} /></label>
+      {error ? <p className="px-3.5 pt-2 text-xs text-destructive" role="alert">{error}</p> : null}
+      <div className="flex justify-end px-3.5 py-2.5"><Button variant="primary" disabled={loading || !federation_input.trim()} onClick={() => void connect_federation()}>{loading ? <TbLoader2 className="animate-spin" /> : <TbPlugConnected />}连接 Federation</Button></div>
+    </section>;
+  }
+
+  return <section className="overflow-hidden rounded-lg bg-surface-subtle">
+    {loading ? <div className="flex h-16 items-center justify-center text-muted-foreground"><TbLoader2 className="size-4 animate-spin" /></div> : providers.length > 0 ? <div className="divide-y divide-divider">{providers.map((provider) => {
+      const ProviderIcon = provider_icons[provider.provider_id] || (provider.type === "password" ? TbMail : TbPlugConnected);
+      const starting = starting_provider_id === provider.provider_id;
+      return <Button key={provider.provider_id} size="full" className="h-10 gap-2 rounded-none px-3 text-xs text-foreground" title={provider.description} disabled={Boolean(starting_provider_id)} onClick={() => void start_login(provider.provider_id)}>{starting ? <TbLoader2 className="size-4 animate-spin" /> : <ProviderIcon className="size-4" />}<span className="min-w-0 flex-1 truncate text-left">{provider.label}</span><TbArrowRight className="text-muted-foreground/60" /></Button>;
+    })}</div> : <div className="flex min-h-20 flex-col items-center justify-center gap-2 px-4 py-3 text-center"><p className="text-xs text-muted-foreground">{error || "当前 Federation 没有可用的登录方式"}</p><Button onClick={() => void load_providers(federation_url, true)}><TbRefresh />重试</Button></div>}
+    {error && providers.length > 0 ? <p className="border-t border-border/45 px-3.5 py-2 text-xs text-destructive" role="alert">{error}</p> : null}
+    <Button size="full" className="h-9 gap-2 rounded-none border-t border-border/45 px-3 text-xs" disabled={Boolean(starting_provider_id)} onClick={() => { set_federation_input(""); set_error(""); set_step("federation"); }}><TbPlugConnected /><span>使用其他 Federation</span><TbArrowRight className="ml-auto" /></Button>
+  </section>;
+}
+
+function normalize_login_url(value: string): string {
+  const url = new URL(value.trim());
+  if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Federation 地址必须使用 HTTP 或 HTTPS");
+  url.hash = "";
+  url.search = "";
+  return url.toString().replace(/\/+$/u, "");
 }
 
 function CreditsRow({ name, description, status, urgent, amount, action }: { name: string; description?: string; status?: string; urgent?: boolean; amount: string; action?: ReactNode }) { return <div className="px-3.5 py-3"><div className="flex min-h-8 items-center gap-3"><TbCurrencyDollar className="size-4 shrink-0 text-muted-foreground/65" /><div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-2"><p className="truncate text-[13px] text-foreground/90">{name}</p>{status ? <span className="shrink-0 text-[10px] text-destructive">{status}</span> : null}</div>{description ? <p className={cn("mt-0.5 truncate text-[11px]", urgent ? "text-destructive" : "text-muted-foreground/65")}>{description}</p> : null}</div><p className="shrink-0 text-lg font-semibold tracking-tight text-foreground tabular-nums">{amount}</p></div>{action ? <div className="mt-2 flex justify-end">{action}</div> : null}</div>; }
 function AccountDetailRow({ label, value }: { label: string; value: ReactNode }) { return <div className="flex min-h-12 items-center gap-4 px-3.5 py-2.5"><span className="w-28 shrink-0 text-xs text-muted-foreground">{label}</span><span className="min-w-0 flex-1 truncate text-right text-xs text-foreground/85">{value}</span></div>; }
 function SettingActionItemExact({ label, icon, trailing, destructive, expanded, disabled, onClick }: { label: string; icon: ReactNode; trailing?: ReactNode; destructive?: boolean; expanded?: boolean; disabled?: boolean; onClick(): void }) { return <button type="button" disabled={disabled} aria-expanded={expanded} onClick={onClick} className={cn("flex min-h-12 w-full items-center gap-3 px-3.5 py-2.5 text-left text-xs outline-none transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover disabled:pointer-events-none disabled:opacity-50", destructive && "text-destructive")}><span className="flex size-5 items-center justify-center">{icon}</span><span className="min-w-0 flex-1">{label}</span>{trailing}</button>; }
-function AccountSwitchListExact({ controller }: { controller: DesktopViewController }) { return <div className="flex min-h-0 flex-col gap-3">{controller.accounts.length > 0 ? <div className="overflow-hidden divide-y divide-divider rounded-lg bg-surface-subtle">{controller.accounts.map((account) => { const label = account.display_name || account.email || account.user_id || account.federation_url; return <button key={account.account_id} type="button" disabled={account.active} className="flex min-h-12 w-full items-center gap-3 px-3.5 py-2 text-left text-xs outline-none transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover disabled:opacity-100" onClick={() => void controller.switch_account(account.account_id)}><span className="flex size-7 shrink-0 overflow-hidden rounded-full bg-surface-subtle">{account.avatar_url ? <img src={account.avatar_url} alt={label} className="size-full object-cover" /> : <span className="flex size-full items-center justify-center text-[9px] font-medium text-muted-foreground">{label.slice(0, 1).toUpperCase()}</span>}</span><span className="min-w-0 flex-1"><span className="block truncate text-[13px] text-foreground/90">{label}</span><span className="block truncate text-[11px] text-muted-foreground/70">{account.email || account.user_id || account.federation_url}</span></span>{account.active ? <TbCheck className="size-4 shrink-0 text-foreground/70" /> : null}</button>; })}</div> : <div className="rounded-lg bg-surface-subtle px-4 py-8 text-center text-xs text-muted-foreground">暂无已保存账户</div>}<Button size="sidebar" onClick={() => document.querySelector<HTMLInputElement>("input[type=password]")?.focus()}><TbPlus />添加账户</Button></div>; }
+function AccountSwitchListExact({ controller, on_add }: { controller: DesktopViewController; on_add(): void }) { return <div className="flex min-h-0 flex-col gap-3">{controller.accounts.length > 0 ? <div className="overflow-hidden divide-y divide-divider rounded-lg bg-surface-subtle">{controller.accounts.map((account) => { const label = account.display_name || account.email || account.user_id || account.federation_url; return <button key={account.account_id} type="button" disabled={account.active} className="flex min-h-12 w-full items-center gap-3 px-3.5 py-2 text-left text-xs outline-none transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover disabled:opacity-100" onClick={() => void controller.switch_account(account.account_id)}><span className="flex size-7 shrink-0 overflow-hidden rounded-full bg-surface-subtle">{account.avatar_url ? <img src={account.avatar_url} alt={label} className="size-full object-cover" /> : <span className="flex size-full items-center justify-center text-[9px] font-medium text-muted-foreground">{label.slice(0, 1).toUpperCase()}</span>}</span><span className="min-w-0 flex-1"><span className="block truncate text-[13px] text-foreground/90">{label}</span><span className="block truncate text-[11px] text-muted-foreground/70">{account.email || account.user_id || account.federation_url}</span></span>{account.active ? <TbCheck className="size-4 shrink-0 text-foreground/70" /> : null}</button>; })}</div> : <div className="rounded-lg bg-surface-subtle px-4 py-8 text-center text-xs text-muted-foreground">暂无已保存账户</div>}<Button size="sidebar" onClick={on_add}><TbPlus />添加账户</Button></div>; }
 const usage_period_options = [{ value: "day", label: "日" }, { value: "week", label: "周" }, { value: "month", label: "月" }] as const;
 function UsagePanelExact({ resources }: { resources?: DesktopViewController["account_resources"] }) {
   const [period, set_period] = useState<UsagePeriod>("day");

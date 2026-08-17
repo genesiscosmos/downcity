@@ -5,115 +5,46 @@ description: 本地 Agent SDK 的核心公开接口
 
 # Agent 类
 
-本地 `Agent` 的核心公开使用面包括：
+`Agent` 是本地 SDK 中可跨项目复用的主体，拥有身份、指令、模型、自定义 Tool、Plugin 注册和
+当前进入的 Workspace 集合，但不拥有永久绑定的 Workspace 或全局 Session 集合。
+
+## 公开 API
 
 - `new Agent(options)`
-- `agent.dispose()`
-- `agent.sessions`
+- `agent.enter(workspace)`
+- `agent.workspaces()`
+- `agent.workspace(workspace_id)`
+- `agent.set_instruction(input)`
+- `agent.get_instructions()`
 - `agent.get_logger()`
-- `agent.get_shell()`
 - `agent.plugins`
+- `agent.dispose()`
 
-`agent.sessions.create()` 和 `agent.sessions.get()` 返回 `AgentSession`。
+`agent.enter(workspace)` 返回 `AgentWorkspace`，本地 Session 属于这个执行作用域：
 
-宿主直接通过 `Agent` 的明确能力工作，例如 `workspace`、`sessions`、`plugins`、`get_logger()` 与 `get_shell()`。`PluginContext` 只在 Agent 内部投影给 Plugin，不是宿主 API，也不是第二份 Agent 状态。
-
-## Sessions
-
-`agent.sessions` 返回一个 `AgentSessions`，包含以下方法：
-
-- `agent.sessions.create(input?)`
-- `agent.sessions.get(session_id)`
-- `agent.sessions.list(input?)`
-- `agent.sessions.archive({ id })`
-- `agent.sessions.archived(input?)`
-- `agent.sessions.clean_archive()`
-- `agent.sessions.remove(session_id)`
-- `agent.sessions.clear_messages(session_id)`
-
-`archive({ id })` 把当前 agent 下一个已存在且未在执行中的 session 移动到归档目录。`archived(input?)` 列出已归档 session 的分页摘要。`clean_archive()` 永久删除所有已归档 session。`remove(session_id)` 永久删除一个本地 Session 的全部 Agent 数据；`clear_messages(session_id)` 只清空消息，保留 Session。
+```ts
+const agent_workspace = agent.enter(workspace);
+const session = await agent_workspace.sessions.create();
+```
 
 ## 构造参数
 
-- `id`
-- `workspace`
-- `tools`
-- `instruction`
-- `model`
-- `plugins`
-- `session_class`
+- `id`：稳定 Agent 身份和私有数据分区键。
+- `tools`：每个 AgentWorkspace 都会使用的 Agent 自定义 Tool。
+- `instruction`：Agent 级静态基础指令。
+- `model`：默认 `AgentModel`，本地 Session 可以覆盖。
+- `plugins`：只在 Agent 注册一次的 Plugin 对象。
+- `session_class`：可选的本地自定义 Session 类。
 
-当前没有 `mode` 这个构造参数。
+构造参数中没有 `workspace`。宿主独立创建 Workspace，并在 Agent 需要进入项目执行时调用
+`agent.enter(workspace)`。
 
-`model` 是 Agent 持有的 `AgentModel` 实例，可以是 AI SDK `LanguageModel` 或 City `CityModel`。Session 可以通过 `session.set({ model })` 持有自己的 `AgentModel`；执行时优先使用 Session 模型，没有时回退到 Agent 模型。SDK 不保存或恢复模型实例与模型 ID。
+## AgentWorkspace
 
-完整项目 config 与 Plugin config 都属于 CLI 等上游宿主。上游根据配置构造 Plugin 实例，再通过 `plugins` 传给 Agent；Agent 不读取、修改或持久化这些控制面配置。
+`AgentWorkspace` 暴露 `workspace`、`sessions`、`tools`、`plugins`、`data_path` 与 `leave()`。
+其中的 Session 集合提供 `create`、`get`、`list`、`archive`、`archived`、`clean_archive`、
+`remove` 与 `clear_messages`。
 
-## 核心语义
-
-- `Agent` 是本地运行时状态与长期对象的唯一所有者
-- 真正的执行对象是它创建出来的 session
-
-从 API 设计上看，它更像一个“session 工厂 + 运行时生命周期入口”。Transport（RPC、HTTP）由 [`@downcity/city`](/zh/agent-sdk-docs/local-agent/http-and-rpc) 单独提供。
-
-## Workspace Env
-
-Env 是 Workspace 的动态项目执行状态。Workspace 先读取项目根目录 `.env`，再用构造参数 `env` 覆盖同名值。宿主可以在不重建 Agent 的情况下更新它。
-
-- `workspace.get_env()`：返回当前 env 的浅拷贝快照
-- `workspace.set_env(next)`：整体替换当前 env
-- `workspace.patch_env(patch)`：增量更新当前 env，字段值为 `null` 或 `undefined` 时删除该 key
-
-`agent.set_instruction()` 只更新当前 Agent 的默认 instruction：之后通过 `sessions.create()` 创建的新 Session 会使用新 instruction，当前内存中的已有 Session 不会被回溯修改。本地 Session 可调用 `session.syncshot()` 显式采用 Agent 当前 instruction 和 plugin；调用 `session.snapshot()` 可以把固定后的完整 system 持久化到 `instruction.md`。
-
-Workspace env 与 plugin 注册表修改采用 Session step 边界：配置方法成功后，Agent 会把修改加入已有 Session 的统一输入队列，并在下一个 step 检查点生效。当前流式响应和工具执行继续使用本 step 已经提交的 env 与 plugin 视图；如果本轮没有后续 step，则在下一个 Session turn 开始时生效。
-
-生效时 Session timeline 会写入 completed action message。新创建的 Session 直接使用 Workspace 当前 env。默认 safe sandbox 会允许当前 Session step 已生效的 Workspace env 进入 shell 子进程，但不会继承完整宿主 `process.env`。
-
-```ts
-workspace.patch_env({
-  OPENAI_API_KEY: token,
-  OLD_TOKEN: null,
-});
-```
-
-## 构造与 `dispose()`
-
-`new Agent(...)` 之后，plugin lifecycle 与 ActionSchedule 会自动启动。
-
-- Session 执行会在内部等待 Plugin lifecycle 与 ActionSchedule 启动完成。
-- `await agent.dispose()`：停止 plugin lifecycle、ActionSchedule、shell 等 Agent 自有运行时资源。
-
-## RPC / HTTP 暴露
-
-Agent 自身不再启动任何 transport。需要 RPC 或 HTTP 时，使用 [`@downcity/city`](/zh/agent-sdk-docs/local-agent/http-and-rpc)：
-
-```ts
-import { AgentRPC, AgentHTTP } from "@downcity/city";
-
-const rpc = new AgentRPC(agent);
-await rpc.listen({ host: "127.0.0.1", port: 15314 });
-
-const http = new AgentHTTP(agent);
-await http.server().listen({ host: "127.0.0.1", port: 5314 });
-```
-
-## `agent.plugins`
-
-`agent.plugins` 是本地 SDK 里很重要的公开面。
-
-你可以直接用它做：
-
-- `agent.plugins.register(plugin)`
-- `agent.plugins.unregister(plugin_name)`
-- `agent.plugins.has(plugin_name)`
-- `agent.plugins.get(plugin_name)`
-- `agent.plugins.status(plugin_name)`
-- `agent.plugins.snapshots()`
-- `agent.plugins.list()`
-- `agent.plugins.availability(plugin_name)`
-- `agent.plugins.run_action({ plugin, action, payload })`
-- `agent.plugins.pipeline(point_name, value)`
-- `agent.plugins.guard(point_name, value)`
-- `agent.plugins.effect(point_name, value)`
-- `agent.plugins.resolve(pointName, value)`
+一个 Agent 可以进入多个 Workspace。`agent.dispose()` 会离开所有活跃 AgentWorkspace，关闭其中
+的 Shell 与存储资源，最后注销 Agent 级 Plugin。`@downcity/city` 创建的网络 transport 仍由宿主
+负责关闭。

@@ -6,7 +6,8 @@
 
 import type { CityHttpRuntimeOptions } from "@/transport/types/CityHttpRuntime.js";
 import type { CityRpcRuntimeOptions } from "@/transport/types/CityRpcRuntime.js";
-import type { Agent, WorkspaceBase } from "@downcity/agent";
+import type { Agent } from "@downcity/agent";
+import type { WorkspaceBase } from "@downcity/workspace";
 
 /** City 构造时可注入的 transport 扩展能力。 */
 export interface CityRuntimeOptions {

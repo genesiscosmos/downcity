@@ -197,8 +197,10 @@ export interface DesktopViewController {
   move_queued_message(workspace_id: string, agent_id: string, session_id: string, message_id: string, direction: "up" | "down"): void;
   /** 合并 Desktop 用户级设置。 */
   update_settings(patch: Partial<DesktopSettings>): Promise<void>;
-  /** 使用 Federation Token 登录。 */
-  login(federation_url: string, user_token: string): Promise<void>;
+  /** 读取 Federation 当前允许登录的 Provider。 */
+  list_login_providers(federation_url: string, force_refresh?: boolean): Promise<import("../../common/types/DesktopApi").DesktopLoginProvider[]>;
+  /** 使用 Federation Provider 完成浏览器授权登录。 */
+  login(federation_url: string, provider_id: string): Promise<void>;
   /** 退出当前 Federation 用户。 */
   logout(): Promise<void>;
   /** 切换已保存账户。 */

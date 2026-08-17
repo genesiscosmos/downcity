@@ -20,7 +20,7 @@ esac
 if [[ "$BUILD_SCOPE" == "all" ]]; then
   # 构建顺序：City 在 Agent、Federation、Plugins 与平台 Adapter 之后装配宿主能力。
   run_project_build "$ROOT_DIR/packages/type"
-  run_project_build "$ROOT_DIR/packages/shell"
+  run_project_build "$ROOT_DIR/packages/workspace"
   run_project_build "$ROOT_DIR/packages/sandbox-macos"
   run_project_build "$ROOT_DIR/packages/sandbox-linux"
   run_project_build "$ROOT_DIR/packages/sandbox-windows-mxc"
@@ -40,7 +40,7 @@ fi
 
 # build:cli — 仅构建 CLI 交付链路
 run_project_build "$ROOT_DIR/packages/type"
-run_project_build "$ROOT_DIR/packages/shell"
+run_project_build "$ROOT_DIR/packages/workspace"
 run_project_build "$ROOT_DIR/packages/sandbox-macos"
 run_project_build "$ROOT_DIR/packages/sandbox-linux"
 run_project_build "$ROOT_DIR/packages/sandbox-windows-mxc"

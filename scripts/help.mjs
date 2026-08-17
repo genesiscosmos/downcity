@@ -38,7 +38,7 @@ const HELP_ITEMS = [
   {
     name: "build:plugins",
     summary: "只构建 Plugins 包。",
-    detail: "先构建 `@downcity/shell`，再执行 `pnpm -C packages/plugins build`，不会修改 package version。",
+    detail: "先构建 `@downcity/workspace` 和 Agent，再构建 Plugins，不会修改 package version。",
   },
   {
     name: "build:federation",
@@ -64,17 +64,17 @@ const HELP_ITEMS = [
     name: "patch:build",
     summary: "按 package 执行 patch bump + build。",
     detail:
-      "支持 `npm run patch:build -- --shell --agent --city --local --services --plugins --cli`、`--ui`、`--all`、`--no-bump`。",
+      "支持 `npm run patch:build -- --workspace --agent --city --local --services --plugins --cli`、`--ui`、`--all`、`--no-bump`。",
   },
   {
     name: "agent:patch:build",
     summary: "只对 @downcity/agent 执行 patch bump + build。",
-    detail: "等价于 `npm run patch:build -- --agent`，会先构建 @downcity/shell 作为依赖。",
+    detail: "等价于 `npm run patch:build -- --agent`，会先构建 @downcity/workspace 作为依赖。",
   },
   {
     name: "plugins:patch:build",
     summary: "只对 @downcity/plugins 执行 patch bump + build。",
-    detail: "等价于 `npm run patch:build -- --plugins`，会先构建 shell 和 agent 作为依赖。",
+    detail: "等价于 `npm run patch:build -- --plugins`，会先构建 workspace 和 agent 作为依赖。",
   },
   {
     name: "federation:patch:build",
@@ -95,7 +95,7 @@ const HELP_ITEMS = [
   {
     name: "all:patch:build",
     summary: "对全部 packages 执行 patch bump + build。",
-    detail: "等价于 `npm run patch:build -- --all`，会处理 shell、agent、city、services、plugins、ui、cli。",
+    detail: "等价于 `npm run patch:build -- --all`，会处理 workspace、agent、city、services、plugins、ui、cli。",
   },
   {
     name: "install:ws",
@@ -126,7 +126,7 @@ const HELP_ITEMS = [
     name: "publish",
     summary: "执行 downcity 发布脚本。",
     detail:
-      "同步 root、@downcity/shell、@downcity/agent、@downcity/plugins、downcity 版本并推送，触发 scoped 包发布 workflow，并在成功后触发 downcity 镜像包 workflow。",
+      "同步 root、@downcity/workspace、@downcity/agent、@downcity/plugins、downcity 版本并推送，触发 scoped 包发布 workflow，并在成功后触发 downcity 镜像包 workflow。",
   },
   {
     name: "build:packages",

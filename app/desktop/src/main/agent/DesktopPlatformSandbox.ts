@@ -4,7 +4,7 @@
  * Electron main 拥有宿主平台选择；本模块不会进入 Agent、City 或本地数据包。
  */
 
-import type { ShellSandboxAdapter } from "@downcity/shell";
+import type { ShellSandboxAdapter } from "@downcity/workspace";
 
 /** 为当前 Desktop 进程创建平台对应的 Sandbox Adapter。 */
 export async function create_desktop_platform_sandbox(): Promise<ShellSandboxAdapter> {

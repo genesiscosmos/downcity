@@ -16,9 +16,12 @@ description: 本地 Agent SDK 执行时报 session 没有 model 时该怎么办
 ```ts
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   model,
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+}));
 ```
 
 或者：
@@ -30,7 +33,7 @@ await session.set({ model });
 ## 正确顺序
 
 ```ts
-const session = await agent.sessions.create();
+const session = await agent_workspace.sessions.create();
 const turn = await session.prompt({ query: "继续" });
 await turn.finished;
 ```

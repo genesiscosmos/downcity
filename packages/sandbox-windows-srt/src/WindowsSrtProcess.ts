@@ -9,12 +9,12 @@ import fs from "fs-extra";
 import {
   createPipeProcessHandle,
   spawnPtyProcessHandle,
-} from "@downcity/shell/sandbox/ShellProcessHandle.js";
+} from "@downcity/workspace/shell/sandbox/ShellProcessHandle.js";
 import type {
   SandboxSpawnRequest,
   SandboxSpawnResult,
   ShellProcessHandle,
-} from "@downcity/shell/types/Sandbox.js";
+} from "@downcity/workspace/shell/types/Sandbox.js";
 import { WINDOWS_SRT_BACKEND } from "./WindowsSrtConstants.js";
 import { acquire_windows_srt_runtime } from "./WindowsSrtRuntime.js";
 import type { WindowsSrtSandboxOptions } from "./types/WindowsSrt.js";

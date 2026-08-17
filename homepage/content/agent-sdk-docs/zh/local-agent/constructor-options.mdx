@@ -33,7 +33,7 @@ agent 的稳定标识。
 它会影响用户级 Agent 数据路径：
 
 ```text
-~/.downcity/workspaces/<workspace_id>/...
+~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/...
 ```
 
 推荐：
@@ -111,7 +111,6 @@ Agent 持有的默认 `AgentModel` 实例。`AgentModel` 可以是 AI SDK `Langu
 ```ts
 new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   model: openai.responses("gpt-5"),
 });
 ```
@@ -130,6 +129,7 @@ Env 描述当前 Workspace 的项目执行环境，由 Workspace 持有：
 
 ```ts
 const workspace = new Workspace({
+  id: "project",
   path: "/path/to/project",
   env: {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "",
@@ -191,17 +191,17 @@ Agent 最终持有的额外自定义工具集合。
 可选的内建 shell 能力。
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
-import { Shell } from "@downcity/shell";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
+import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
-const agent = new Agent({
-  id: "repo-helper",
-  workspace: new Workspace({
-    path: "/path/to/project",
-    shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
-  }),
-});
+const agent = new Agent({ id: "repo-helper" });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+}));
 ```
 
 关键点：
@@ -220,15 +220,19 @@ const agent = new Agent({
 例如：
 
 ```ts
-import { Agent, Workspace } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { SkillPlugin } from "@downcity/plugins/skill";
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   tools: {},
   plugins: [new SkillPlugin()],
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+}));
 ```
 
 联网能力是显式选择的，并且必须提供 provider，请参阅 [Web Plugin 文档](/zh/plugins-docs/builtins/web)。
@@ -284,9 +288,12 @@ class CustomSession extends Session {
 
 const agent = new Agent({
   id: "repo-helper",
-  workspace: new Workspace({ path: "/path/to/project" }),
   session_class: CustomSession,
 });
+const agent_workspace = agent.enter(new Workspace({
+  id: "project",
+  path: "/path/to/project",
+}));
 ```
 
 关键点：

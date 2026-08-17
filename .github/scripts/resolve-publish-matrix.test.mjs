@@ -13,12 +13,12 @@ import {
   resolve_publish_layers,
 } from "./resolve-publish-matrix.mjs";
 
-test("当前 workspace 被解析为四个稳定发布层", () => {
+test("当前 workspace 被解析为三个稳定发布层", () => {
   const workspace_root = path.resolve(import.meta.dirname, "../..");
   const graph = resolve_publish_layers(workspace_root);
 
   assert.deepEqual(graph.layers.map((layer) => layer.map((item) => item.name)), [
-    ["@downcity/shell", "@downcity/type", "@downcity/ui"],
+    ["@downcity/type", "@downcity/ui", "@downcity/workspace"],
     [
       "@downcity/agent",
       "@downcity/federation",
@@ -26,27 +26,29 @@ test("当前 workspace 被解析为四个稳定发布层", () => {
       "@downcity/sandbox-macos",
       "@downcity/sandbox-windows-mxc",
       "@downcity/sandbox-windows-srt",
+      "@downcity/workspace-cloudflare-computer",
     ],
     [
+      "@downcity/city",
       "@downcity/database-d1",
       "@downcity/database-postgresql",
       "@downcity/database-sqlite",
+      "@downcity/local",
       "@downcity/plugins",
       "@downcity/services",
-      "@downcity/workspace-cloudflare-computer",
     ],
-    ["@downcity/city"],
   ]);
 
   const outputs = create_workflow_outputs(graph);
   assert.equal(outputs.has_packages, "true");
-  assert.equal(outputs.layer_count, "4");
-  assert.equal(outputs.has_layer_3, "true");
+  assert.equal(outputs.layer_count, "3");
+  assert.equal(outputs.has_layer_3, "false");
   assert.equal(outputs.has_layer_4, "false");
   assert.equal(outputs.has_layer_2, "true");
   assert.equal(JSON.parse(outputs.layer_0_matrix).include.length, 3);
-  assert.equal(JSON.parse(outputs.layer_1_matrix).include.length, 6);
-  assert.equal(JSON.parse(outputs.layer_3_matrix).include.length, 1);
+  assert.equal(JSON.parse(outputs.layer_1_matrix).include.length, 7);
+  assert.equal(JSON.parse(outputs.layer_2_matrix).include.length, 7);
+  assert.equal(JSON.parse(outputs.layer_3_matrix).include.length, 0);
   assert.equal(JSON.parse(outputs.layer_4_matrix).include.length, 0);
 });
 

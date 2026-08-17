@@ -13,7 +13,8 @@ import path from "node:path";
 import fs from "node:fs/promises";
 
 import { MockLanguageModelV3 } from "ai/test";
-import { Agent, Workspace } from "../bin/index.js";
+import { Agent } from "../bin/index.js";
+import { Workspace } from "@downcity/workspace";
 import { create_plugin } from "../bin/plugin/core/PluginActionFactory.js";
 
 function create_deferred() {

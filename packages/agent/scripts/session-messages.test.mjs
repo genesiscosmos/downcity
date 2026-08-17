@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { JsonlSessionMessageStore } from "../bin/workspace/store/JsonlSessionMessageStore.js";
-import { LocalFileSystem } from "../bin/workspace/LocalFileSystem.js";
+import { LocalFileSystem } from "@downcity/workspace";
 import { SessionMessages } from "../bin/session/SessionMessages.js";
 import { SessionInteractions } from "../bin/session/control/SessionInteractions.js";
 import { SessionShellApprovalAdapter } from "../bin/session/execution/tools/SessionShellApprovalAdapter.js";

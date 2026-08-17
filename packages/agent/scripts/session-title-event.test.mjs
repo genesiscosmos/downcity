@@ -14,7 +14,8 @@ import path from "node:path";
 import fs from "node:fs/promises";
 
 import { MockLanguageModelV3 } from "ai/test";
-import { Agent, Workspace } from "../bin/index.js";
+import { Agent } from "../bin/index.js";
+import { Workspace } from "@downcity/workspace";
 
 function create_stream_text_result(text) {
   return {

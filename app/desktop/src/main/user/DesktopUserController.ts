@@ -3,13 +3,15 @@
  * Desktop 账户库允许同一个 Federation 保存多个用户，并把当前账户同步回 CLI 配置。
  */
 import { Embassy, type EmbassyCurrentUser } from "@downcity/federation";
-import type { DesktopAccountResources, DesktopAccountSummary, DesktopCreditsSummary, DesktopCreditCardSummary, DesktopUsageDay, DesktopUserSummary } from "../../common/types/DesktopApi.js";
+import type { DesktopAccountResources, DesktopAccountSummary, DesktopCreditsSummary, DesktopCreditCardSummary, DesktopLoginProvider, DesktopLoginResult, DesktopLoginStartInput, DesktopLoginStartResult, DesktopUsageDay, DesktopUserSummary } from "../../common/types/DesktopApi.js";
 import type { DesktopLocalData } from "../agent/DesktopLocalData.js";
+import { DesktopLoginTransaction } from "./DesktopLoginTransaction.js";
 
 const config_key = "downcity.config";
 const vault_key = "desktop.user-accounts";
 const default_federation_url = "https://base.downcity.ai";
 const default_credits_per_usd = 1_000_000;
+const login_providers_ttl_ms = 5 * 60_000;
 interface DesktopEmbassySession { federation_url: string; user_token: string }
 interface DesktopDowncityConfig { selected_federation_url?: string; sessions?: Record<string, DesktopEmbassySession> }
 interface DesktopStoredAccount { account_id: string; federation_url: string; user_token: string; user_id: string; bureau_id: string; display_name?: string; email?: string; avatar_url?: string; last_used_at: number }
@@ -17,7 +19,15 @@ interface DesktopAccountVault { active_account_id?: string; accounts: Record<str
 
 /** 维护 Federation 账户、当前用户资料与用量资源。 */
 export class DesktopUserController {
-  constructor(private readonly data: DesktopLocalData, private readonly has_active_sessions: () => boolean = () => false) {}
+  private readonly login_transaction: DesktopLoginTransaction;
+  private readonly login_providers = new Map<string, { expires_at: number; providers: DesktopLoginProvider[] }>();
+  constructor(private readonly data: DesktopLocalData, private readonly has_active_sessions: () => boolean = () => false) {
+    this.login_transaction = new DesktopLoginTransaction({
+      now: () => Date.now(),
+      create_embassy: (federation_url) => new Embassy({ federation_url }),
+      complete_login: (federation_url, user_token) => this.complete_login(federation_url, user_token).then(() => undefined),
+    });
+  }
   async current(): Promise<DesktopUserSummary> {
     const account = this.read_active_account();
     if (!account) {
@@ -33,7 +43,31 @@ export class DesktopUserController {
       return summary;
     } catch (reason) { return { ...to_user_summary_from_account(account), error: to_error_message(reason) }; }
   }
-  async login(federation_url: string, user_token: string): Promise<DesktopUserSummary> {
+  /** 读取 Federation 当前允许登录的 Provider。 */
+  async list_login_providers(federation_url: string, force_refresh = false): Promise<DesktopLoginProvider[]> {
+    const normalized_url = normalize_federation_url(federation_url || default_federation_url);
+    const cached = this.login_providers.get(normalized_url);
+    if (!force_refresh && cached && cached.expires_at > Date.now()) return cached.providers;
+    const embassy = new Embassy({ federation_url: normalized_url });
+    const providers = await embassy.user.account.providers();
+    const normalized_providers = providers.filter((provider) => provider.enabled && provider.login_enabled !== false).map((provider) => ({
+      provider_id: provider.id,
+      label: read_string(provider.label) || title_case(provider.id),
+      type: read_string(provider.type),
+      description: read_string(provider.description),
+      login_enabled: provider.login_enabled !== false,
+    }));
+    this.login_providers.set(normalized_url, { expires_at: Date.now() + login_providers_ttl_ms, providers: normalized_providers });
+    return normalized_providers;
+  }
+  /** 启动一个 Provider 登录事务。 */
+  start_login(input: DesktopLoginStartInput): Promise<DesktopLoginStartResult> { return this.login_transaction.start(input); }
+  /** 查询登录事务结果。 */
+  get_login_result(login_id: string): Promise<DesktopLoginResult> { return this.login_transaction.poll(login_id); }
+  /** 取消登录事务。 */
+  cancel_login(login_id: string): void { this.login_transaction.cancel(login_id); }
+  /** 校验登录结果并保存为当前账户。 */
+  private async complete_login(federation_url: string, user_token: string): Promise<DesktopUserSummary> {
     const normalized_url = normalize_federation_url(federation_url || default_federation_url);
     const normalized_token = read_string(user_token);
     if (!normalized_token) throw new Error("user_token is required");
@@ -89,3 +123,4 @@ function local_date_key(date: Date): string { return [date.getFullYear(), String
 function read_string(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
 function read_number(value: unknown): number { return typeof value === "number" && Number.isFinite(value) ? value : Number(value) || 0; }
 function to_error_message(reason: unknown): string { return reason instanceof Error ? reason.message : String(reason); }
+function title_case(value: string): string { return value.split(/[\s._-]+/u).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" "); }

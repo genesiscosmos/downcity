@@ -1,249 +1,169 @@
 ---
 title: Agent SDK 架构
-description: Workspace、Agent、Session、Tool、Plugin 与 Shell 的职责和组合关系
+description: Agent、Workspace、AgentWorkspace、Session、Plugin 与 Shell 的职责和组合关系
 ---
 
 # Agent SDK 架构
 
-`@downcity/agent` 是运行在 Node.js 进程中的单 Agent SDK。它将模型、指令、工具、Plugin、Session 历史和本地项目资源组合成一个可持续运行、可以恢复和观察的 Agent runtime。
-
-最小组合只有两个核心对象：
+Downcity 将 Agent 主体与它执行任务的项目分开。`Agent` 拥有身份、指令、模型、自定义 Tool
+和 Plugin 注册；`Workspace` 拥有项目资源与 Shell；调用 `agent.enter(workspace)` 后才创建
+`AgentWorkspace` 执行边界。
 
 ```ts
-const workspace = new Workspace({ path, shell });
-const agent = new Agent({ id, workspace, model, instruction, plugins });
+import { Agent } from "@downcity/agent";
+import { Shell, Workspace } from "@downcity/workspace";
+
+const agent = new Agent({ id, model, instruction, plugins });
+const workspace = new Workspace({ id: "project", path, shell });
+const agent_workspace = agent.enter(workspace);
+const session = await agent_workspace.sessions.create();
 ```
 
-- `Workspace` 定义 Agent 可以使用的项目资源。
-- `Agent` 组合模型、工具、Plugin 和 Session。
-- `Session` 管理一段连续对话的状态与执行顺序。
-- `Executor` 在一个 Step 中调用模型并完成 Tool Loop。
-- `Shell` 在当前操作系统上执行命令和进程。
-
-## 总体关系
+## 职责模型
 
 ```mermaid
 flowchart TD
-    App["SDK 调用方"] --> Workspace["Workspace<br/>项目资源容器"]
-    App --> Agent["Agent<br/>单 Agent 组合根"]
-
-    Workspace --> Files["LocalFileSystem"]
-    Workspace --> WorkspaceTools["WorkspaceTools<br/>File / Search / Shell?"]
-    Workspace --> Store["SessionStore"]
-    Workspace --> Env["Env"]
-    Workspace --> Shell["Shell（可选）"]
-    Shell --> Sandbox["Platform Sandbox Adapter"]
-
-    Agent --> Tools["统一 Tool Registry"]
-    Agent --> Plugins["PluginRegistry"]
-    Agent --> Sessions["AgentSessions"]
-    Sessions --> Session["Session"]
-    Session --> Executor["Composer / Executor"]
-    Executor --> Model["LanguageModel"]
-    Executor --> Tools
-
-    WorkspaceTools --> Tools
-    Plugins --> Tools
+    Host["宿主应用"] --> Agent["Agent<br/>身份、模型、指令、Plugin"]
+    Host --> Workspace["Workspace<br/>项目资源与 Shell"]
+    Agent --> Enter["agent.enter(workspace)"]
+    Workspace --> Enter
+    Enter --> AgentWorkspace["AgentWorkspace<br/>执行与私有状态"]
+    AgentWorkspace --> Sessions["Sessions"]
+    AgentWorkspace --> Tools["Workspace + Agent + Plugin Tools"]
+    AgentWorkspace --> Context["带 Workspace 上下文的 PluginContext"]
+    AgentWorkspace --> Storage["Agent 独立存储作用域"]
+    Workspace --> Files["项目 File/Search"]
+    Workspace --> Env["Workspace Env"]
+    Workspace --> Shell["Shell 与 Sandbox Adapter"]
 ```
 
-依赖始终从组合层流向基础能力。FileSystem 不知道 Agent 和 Session，Shell 不知道历史和模型，Sandbox Adapter 也只负责受限进程启动。
+依赖方向保持明确：
 
-## Workspace：统一项目资源容器
+- `@downcity/workspace` 不依赖 Agent 或 Session。
+- `@downcity/agent` 依赖 Workspace 协议，并负责创建 Agent 领域状态。
+- 宿主选择平台 Sandbox，并组合 Agent 与 Workspace。
+- Edge Adapter 使用 `@downcity/workspace/protocol`，不会加载 Node.js 本地实现。
 
-Workspace 将同一项目下的资源绑定到一个真实绝对根目录：
+## Agent 是主体
 
-```ts
-const workspace = new Workspace({
-  path: process.cwd(),
-  env: {
-    NODE_ENV: "development",
-  },
-  shell,
-});
-```
-
-它提供：
-
-- `path`：解析后的稳定项目根目录。
-- `files`：Workspace 根目录内的文件原子能力。
-- `tools`：File、Search 与可选 Shell Tools。
-- `get_env()`、`set_env()`、`patch_env()`：Workspace 执行环境。
-- `SessionStore`：Session 集合和单 Session 数据的结构化存储分支。
-- `dispose()`：释放 Store、Shell、进程和 Sandbox 资源。
-
-Workspace 不是 `Host`、`SystemHandler` 或通用 Service Container。Model、Plugin registry、Session 生命周期和网络 transport 都不属于 Workspace。
-
-### 一个 Workspace 实例绑定一个 Agent
-
-Workspace 实例只有一个生命周期所有者：
-
-```text
-一个 Workspace 实例 → 一个 Agent → 一次 dispose
-```
-
-多个 Agent 可以操作同一物理目录，但应分别创建 Workspace。Store 按 `agent_id` 分区，因此 Session 数据不会混合。
-
-### 生命周期所有权
-
-Workspace 由调用方创建，但绑定 Agent 后由 Agent 统一管理释放：
-
-```text
-调用方创建 Workspace → Agent 绑定 Workspace → agent.dispose() 统一释放
-```
-
-`agent.dispose()` 会依次关闭 Agent 长期运行状态并释放 Workspace 持有的 Store、Shell、进程和 Sandbox。正常使用中不需要再调用同一个 `workspace.dispose()`。如果构造 Agent 前的初始化失败，Workspace 尚未绑定，调用方才需要自行释放它。
-
-## 三种 Workspace 能力
-
-### LocalFileSystem
-
-LocalFileSystem 是基于 Node.js 的 rooted 文件能力，负责安全路径解析、读写移动、原子覆盖、跨进程 lock 和有界搜索。它既是 WorkspaceTools 的底层能力，也是 SessionStore 的文件原语。
-
-### WorkspaceTools
-
-WorkspaceTools 是 Workspace 返回给 Agent 注册的模型工具：
-
-- 结构化 File Tools。
-- 项目 Search Tools。
-- 存在 Shell 时的命令和 Shell Session Tools。
-
-Plugin Tool 和调用方自定义 Tool 不属于 WorkspaceTools。File/Search 始终限制在 Workspace 根目录内，也不提供 unrestricted 模式。
-
-### SessionStore
-
-SessionStore 不是第二套权限系统，而是同一 FileSystem 上的领域分支。集合级
-`SessionStore` 负责 Session 列表和归档，单 Session 的 `SessionDataStore` 负责 Message、
-Metadata、Instruction 和附件。它们都不保存 Agent 配置，也不参与 Agent 实例装配。
-
-Workspace 文件工具仍然可以读写 `.downcity`。Store 的价值是结构化语义和一致性，不是隐藏历史或 Instruction。
-
-## Agent：统一 Tool 的组合根
-
-Agent 持有完整的最终工具集合：
-
-```text
-Agent.tools
-  = WorkspaceTools
-  + PluginRegistry Tools
-  + AgentOptions.tools
-```
-
-- Workspace 提供项目文件、搜索和可选 Shell 操作。
-- PluginRegistry 在存在 Action 时提供 `plugin_read` 和 `plugin_call`。
-- 调用方通过 `AgentOptions.tools` 注册业务 Tool。
-
-任意来源出现同名 Tool 时，构造过程直接报错，不会静默覆盖。`plugin_read` 和 `plugin_call` 是 PluginRegistry 的保留名称。
+一个 Agent 可以跨项目复用，不能在配置中永久绑定单一 Workspace。
 
 ```ts
 const agent = new Agent({
   id: "repo-helper",
-  workspace,
   model,
+  instruction: "维护当前项目。",
   plugins: [task_plugin],
-  tools: {
-    company_search: company_search_tool,
-  },
+  tools: { company_search: company_search_tool },
 });
+
+const frontend = agent.enter(frontend_workspace);
+const backend = agent.enter(backend_workspace);
 ```
 
-## Env 属于 Workspace
+Plugin 只在 Agent 注册一次，不再划分单独的 Workspace Plugin。每次 Plugin Action 都会获得当前
+执行上下文；是否使用 `workspace_path`、`data_path`、文件、Shell，完全由 Plugin 自己决定。
+可选的 `enter_workspace` 与 `leave_workspace` 钩子只表达生命周期需要，不形成新的 Plugin 类型。
 
-环境变量描述项目执行环境，所以由 Workspace 而不是 Agent 持有：
+## Workspace 是资源边界
+
+`Workspace` 拥有：
+
+- 稳定的 Workspace ID 与规范化项目路径。
+- Rooted 项目文件能力和 File/Search 工具。
+- Workspace 环境变量。
+- 可选 Shell 及其 Sandbox Adapter。
+- 不理解领域语义的 `WorkspaceStorageProvider`。
+
+Workspace 不创建 SessionStore，不理解 Agent ID，不注册 Plugin，也不调用模型。本地实现会在内部
+解析用户级存储根，构造参数中没有 `data_root_path`。
+
+Shell 属于 Workspace，因为命令执行作用于 Workspace 资源。公开入口是：
+
+```ts
+import { Shell, Workspace } from "@downcity/workspace";
+```
+
+不再存在独立的 `@downcity/shell` 包。各平台 Sandbox 仍是独立安装的 package，由宿主注入 Shell。
+
+## AgentWorkspace 是执行边界
+
+`agent.enter(workspace)` 组合两个主体，但不混合它们的所有权。AgentWorkspace 负责创建：
+
+- Workspace Tool、Agent 自定义 Tool 与 Plugin 桥接 Tool 组成的最终工具集合。
+- `AgentSessions` 与 Agent 领域的 `LocalSessionStore`。
+- 带当前 Workspace 的 Plugin Context 与生命周期。
+- 日志、Plugin 调度任务和 Shell 绑定。
+
+不同来源的 Tool 同名时直接失败，不会静默覆盖。同一个 Agent 可以持有多个 AgentWorkspace；同一个
+Workspace 实例只能进入一次，因为其中的 Shell 与私有存储会绑定到一个执行生命周期。
+
+## 私有存储
+
+本地运行状态集中保存在项目目录之外：
+
+```text
+~/.downcity/
+└── agents/
+    └── <agent_id>/
+        └── workspaces/
+            └── <workspace_id>/
+                ├── sessions/
+                ├── archived-sessions/
+                ├── logs/
+                ├── schedule.jsonl
+                └── sandbox/
+```
+
+Workspace 只提供安全的存储原语。AgentWorkspace 打开稳定的
+`agents/<agent_id>/workspaces/<workspace_id>` 作用域，并在其中创建 Agent 领域 Store。项目
+File/Search 工具使用另一套 rooted FileSystem，无法读取或修改 Session 历史、Plugin 状态与
+Sandbox 数据。
+
+## 环境变量与检查点
+
+环境变量描述项目执行环境，因此属于 Workspace：
 
 ```text
 <workspace>/.env < WorkspaceOptions.env
 ```
 
-SDK 不修改 `process.env`，也不把运行时修改写回 `.env`。`set_env()` 和 `patch_env()` 更新 Workspace 内存中的 configured env，并同步给 Shell。已有 Session 会在下一个 Step 检查点提交新环境，避免执行中的模型调用突然切换上下文。
+`set_env()` 与 `patch_env()` 更新 Workspace 快照并同步 Shell。已有 Session 会在下一个 Step
+检查点提交新环境，避免模型调用执行到一半时上下文发生变化。
 
-## Shell 与平台 Sandbox
+Plugin registry 更新、Session model 更新和 compact 也遵循相同的检查点规则。
 
-### Cloudflare Computer Workspace
+## 生命周期
 
-`@downcity/workspace-cloudflare-computer` 将 Cloudflare Durable Object 中的
-`@cloudflare/computer` Workspace 接入同一套 Agent Workspace 基类。它负责把远程虚拟文件系统提供给
-SessionStore 和 Workspace 生命周期；适配器内部调用 Cloudflare 官方 `createAITools()` 提供文件、目录和发布工具，并包装 Computer Shell 为 `exec`
-Tool。Agent 仍然运行模型、Session、Plugin 和 Tool Loop。
-
-```ts
-const computer_workspace = await getWorkspace(agent_stub);
-const workspace = new CloudflareComputerWorkspace({
-  computer: computer_workspace,
-});
+```mermaid
+sequenceDiagram
+    participant Host as 宿主
+    participant Agent
+    participant Workspace
+    participant AW as AgentWorkspace
+    Host->>Agent: new Agent(options)
+    Host->>Workspace: new Workspace(options)
+    Host->>Agent: enter(workspace)
+    Agent->>AW: 创建执行作用域
+    AW->>Workspace: 绑定 Shell 与存储作用域
+    Host->>AW: sessions.create()
+    Host->>Agent: dispose()
+    Agent->>AW: leave()
+    AW->>Workspace: dispose()
+    Agent->>Agent: 注销 Plugin
 ```
 
-在 Cloudflare 部署中，通常一个 Durable Object 实例对应一个 Agent 和一个 Workspace。Worker 负责入口
-与连接，Worker Shell 或 Cloudflare Container 负责实际命令执行。
+`agent.dispose()` 会离开所有 AgentWorkspace，刷写 Session 与日志状态，关闭 Shell 进程和
+Sandbox 资源，最后停止 Agent 级 Plugin。`@downcity/city` 创建的 HTTP/RPC transport 仍由宿主
+拥有，需要单独关闭。
 
-Agent 核心包不捆绑全部操作系统的原生 Sandbox。调用方只安装当前系统需要的平台包，并在应用组合根注入：
+## Package 边界
 
-```ts
-import { Shell } from "@downcity/shell";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
-
-const shell = new Shell({
-  sandbox: new MacOsSeatbeltSandbox(),
-});
-
-const workspace = new Workspace({
-  path: process.cwd(),
-  shell,
-});
-```
-
-macOS、Linux 和 Windows 使用同一个 Workspace、Agent、Session 和 Store。不同平台只替换 Shell 的 Sandbox Adapter：
-
-| 平台 | Adapter 包 | 原生边界 |
+| Package | 拥有 | 不拥有 |
 | --- | --- | --- |
-| macOS | `@downcity/sandbox-macos` | Seatbelt |
-| Linux | `@downcity/sandbox-linux` | Bubblewrap |
-| Windows | `@downcity/sandbox-windows-mxc` 或 `@downcity/sandbox-windows-srt` | MXC 或 SRT |
-
-`unrestricted` 是 Shell 专属的显式能力升级，需要经过审批。File/Search、Plugin 和自定义 Tool 没有统一 unrestricted 开关；Plugin 使用自身业务授权，自定义 Tool 的权限由注册它的宿主负责。
-
-## 包边界
-
-| 包 | 负责 | 不负责 |
-| --- | --- | --- |
-| `@downcity/agent` | Agent、Workspace、Session、Store、模型 Tool Loop、Plugin runtime | 平台 Sandbox 实现、多 Agent 控制面 |
-| `@downcity/shell` | 命令、长期 Shell Session、输出、审批和 Sandbox 协议 | Session 历史、Agent 配置和模型调用 |
-| Sandbox packages | 将统一 Policy 映射为当前 OS 的进程隔离 | Agent、Session 和 Store 业务 |
-| `@downcity/city` | HTTP/RPC 服务端与 transport | 本地 Agent 的领域状态 |
-
-用户级 `~/.downcity`、全局数据库和密钥由 CLI/City 宿主管理。需要全局账号等资源的 Plugin 通过自身构造参数接收最小 Store 接口，不反向依赖 CLI，也不把全局资源塞入 Workspace。
-
-## 推荐组合
-
-```ts
-import { Agent, Workspace } from "@downcity/agent";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
-import { Shell } from "@downcity/shell";
-
-const shell = new Shell({
-  sandbox: new MacOsSeatbeltSandbox(),
-});
-
-const workspace = new Workspace({
-  path: process.cwd(),
-  shell,
-});
-
-const agent = new Agent({
-  id: "demo",
-  workspace,
-  model,
-  instruction: "你负责维护当前项目。",
-  plugins: [task_plugin],
-  tools: { company_search: company_search_tool },
-});
-
-try {
-  const session = await agent.sessions.create();
-  const turn = await session.prompt({ query: "理解并检查当前项目" });
-  console.log(await turn.finished);
-} finally {
-  await agent.dispose();
-}
-```
+| `@downcity/workspace` | Workspace 协议、本地项目资源、File/Search、Env、Shell | Agent 身份、Plugin registry、Session 语义、模型调用 |
+| `@downcity/agent` | Agent、AgentWorkspace、Session、Store、Plugin runtime、模型 Tool Loop | 项目资源实现、平台 Sandbox、多 Agent 控制面 |
+| Sandbox packages | 单个平台的原生进程隔离 | Workspace、Agent、Session 或 Plugin 业务 |
+| `@downcity/city` | Agent 索引与 HTTP/RPC transport | 本地配置 Repository 与 Agent 执行状态 |
 
 继续阅读：[运行时架构](/zh/docs/agent/runtime-architecture)。

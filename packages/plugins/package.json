@@ -64,7 +64,6 @@
   },
   "dependencies": {
     "@downcity/agent": "workspace:^",
-    "@downcity/shell": "workspace:^",
     "ai": "^6.0.193",
     "commander": "^15.0.0",
     "execa": "^9.6.1",
