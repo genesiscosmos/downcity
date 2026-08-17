@@ -80,16 +80,18 @@ test("SessionTurnContext 负责 Plugin lease 与只读投影生命周期", async
   await context.step.replace_plugins(create_lease("first"));
   await context.step.replace_plugins(create_lease("second"));
 
-  const plugin_execution_context = context.step.plugin_execution_context();
+  const plugin_execution_context = context.step.plugin_execution_context("call-context-test");
   assert.deepEqual(Object.keys(plugin_execution_context).sort(), [
     "abort_signal",
     "agent_systems",
+    "call_id",
     "project_root",
     "session_id",
     "turn_id",
     "workspace_env",
   ]);
   assert.equal(Object.isFrozen(plugin_execution_context), true);
+  assert.equal(plugin_execution_context.call_id, "call-context-test");
   assert.deepEqual(plugin_execution_context.workspace_env, { REGION: "cn" });
   assert.deepEqual(released, ["first"]);
 

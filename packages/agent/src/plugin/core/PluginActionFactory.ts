@@ -28,6 +28,7 @@ import type {
 import type { PluginLifecycle } from "@/types/plugin/PluginCommand.js";
 import type { PluginHttpDefinition } from "@/types/plugin/PluginHttp.js";
 import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
+import type { PluginActionExecutionContext } from "@/types/plugin/PluginActionExecution.js";
 
 /**
  * 从 Zod schema 推导 JSON 输入类型。
@@ -48,6 +49,8 @@ export interface CreatePluginActionOptions<
   input_schema?: z.ZodTypeAny | PluginActionInputSchema<P>;
   /** Action 调用示例。 */
   examples?: PluginActionExample<P>[];
+  /** Action 的协作式超时上限（毫秒）。 */
+  timeout_ms?: number;
   /** CLI 定义。 */
   command?: PluginActionCommand<P>;
   /** HTTP 定义。 */
@@ -57,7 +60,7 @@ export interface CreatePluginActionOptions<
     /** 当前执行上下文。 */
     context: PluginContext;
     /** 当前 action 所属 Session Turn 的只读执行快照。 */
-    execution_context?: PluginExecutionContext;
+    execution_context: PluginActionExecutionContext;
     /** 已通过 schema 校验后的输入。 */
     input: P;
     /** 当前插件名称。 */
@@ -135,6 +138,9 @@ export function create_action(
       ? { input_schema: normalize_input_schema(options.input_schema) }
       : {}),
     ...(options.examples ? { examples: options.examples } : {}),
+    ...(options.timeout_ms !== undefined
+      ? { timeout_ms: options.timeout_ms }
+      : {}),
     ...(options.command ? { command: options.command } : {}),
     ...(options.api ? { api: options.api } : {}),
     execute: options.execute,

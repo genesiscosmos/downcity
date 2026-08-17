@@ -29,6 +29,7 @@ import type {
   PluginSnapshot,
 } from "@/types/plugin/PluginState.js";
 import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
+import { execute_plugin_action } from "@/plugin/core/PluginActionExecution.js";
 import type { Tool } from "ai";
 import { create_plugin_tools } from "@/plugin/tool/PluginTools.js";
 import type {
@@ -682,28 +683,6 @@ export class PluginRegistry {
   }
 
   /**
-   * 按 action schema 校验 payload。
-   */
-  private parseActionPayload(params: {
-    plugin_name: string;
-    action_name: string;
-    payload: JsonValue;
-    action: NonNullable<Plugin["actions"]>[string];
-  }): PluginActionResult<JsonValue> | { input: JsonValue } {
-    const schema = params.action.input_schema?.zod;
-    if (!schema) return { input: params.payload };
-    const parsed = schema.safeParse(params.payload);
-    if (parsed.success) {
-      return { input: parsed.data as JsonValue };
-    }
-    return {
-      success: false,
-      error: `Invalid payload for ${params.plugin_name}.${params.action_name}: ${parsed.error.message}`,
-      message: `Invalid payload for ${params.plugin_name}.${params.action_name}`,
-    };
-  }
-
-  /**
    * 运行 plugin action。
    */
   async run_action(params: {
@@ -766,33 +745,16 @@ export class PluginRegistry {
       };
     }
 
-    try {
-      const parsed_payload = this.parseActionPayload({
-        plugin_name: record.plugin.name,
-        action_name,
-        payload: (params.payload ?? {}) as JsonValue,
-        action,
-      });
-      if (!("input" in parsed_payload)) {
-        return parsed_payload;
-      }
-      const result = await action.execute({
-        context,
-        input: parsed_payload.input,
-        plugin_name: record.plugin.name,
-        action_name,
-        ...(params.execution_context
-          ? { execution_context: params.execution_context }
-          : {}),
-      });
-      return result;
-    } catch (error) {
-      return {
-        success: false,
-        error: String(error),
-        message: String(error),
-      };
-    }
+    return await execute_plugin_action({
+      context,
+      plugin_name: record.plugin.name,
+      action_name,
+      action,
+      payload: (params.payload ?? {}) as JsonValue,
+      ...(params.execution_context
+        ? { execution_context: params.execution_context }
+        : {}),
+    });
   }
 
   /**

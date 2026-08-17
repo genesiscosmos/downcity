@@ -53,6 +53,7 @@ export function create_plugin_call_tool(options: CreatePluginToolsOptions) {
       await invoke_plugin_call_tool({
         plugins: options.plugins,
         turn_context: require_turn_context(execution_options),
+        call_id: String(execution_options.toolCallId || "").trim(),
         input: input as PluginCallInput,
       }),
   });

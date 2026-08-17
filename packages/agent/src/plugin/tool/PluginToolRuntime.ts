@@ -53,7 +53,7 @@ export async function invoke_plugin_call_tool(
       plugin,
       action,
       payload,
-      execution_context: turn_context.step.plugin_execution_context(),
+      execution_context: turn_context.step.plugin_execution_context(params.call_id),
     });
     return {
       output: {

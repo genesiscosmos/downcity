@@ -115,7 +115,7 @@ export interface SessionTurnContext {
     release(): Promise<void>;
 
     /** 为 Plugin 生成只包含稳定、只读运行快照的新对象。 */
-    plugin_execution_context(): PluginExecutionContext;
+    plugin_execution_context(call_id?: string): PluginExecutionContext;
   };
 
   /** 当前运行的动态 User 输入及延迟持久化输入。 */

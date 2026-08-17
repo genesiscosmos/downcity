@@ -220,6 +220,7 @@ export type {
 } from "./types/executor/SessionTurnContext.js";
 export type { SessionToolExecutionContext } from "./types/executor/SessionToolExecutionContext.js";
 export type { PluginExecutionContext } from "./types/plugin/PluginExecutionContext.js";
+export type { PluginActionExecutionContext } from "./types/plugin/PluginActionExecution.js";
 export type {
   SessionActionRecordV1,
   SessionMessageRecordV1,

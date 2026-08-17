@@ -86,6 +86,9 @@ export interface InvokePluginCallToolOptions {
   /** Executor 为当前 Tool Call 绑定的 Session Turn Context。 */
   turn_context: SessionTurnContext;
 
+  /** AI SDK 为当前 plugin_call 分配的稳定 Tool Call 标识。 */
+  call_id: string;
+
   /** 模型提交给 plugin_call 的结构化输入。 */
   input: PluginCallInput;
 }

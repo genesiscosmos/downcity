@@ -10,7 +10,7 @@ import type { Command } from "commander";
 import type { Context as HonoContext } from "hono";
 import type { z } from "zod";
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
-import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
+import type { PluginActionExecutionContext } from "@/types/plugin/PluginActionExecution.js";
 import type { JsonObject, JsonValue } from "@/types/common/Json.js";
 import type { ActionResultMessage } from "@/types/action/ActionResult.js";
 
@@ -134,6 +134,8 @@ export interface PluginActionMetadata<P extends JsonValue = JsonValue> {
   input_schema?: PluginActionInputSchema<P>;
   /** Action 调用示例。 */
   examples?: PluginActionExample<P>[];
+  /** Action 的协作式超时上限（毫秒）；Action 必须监听 execution_context.abort_signal。 */
+  timeout_ms?: number;
 }
 
 /**
@@ -155,10 +157,10 @@ export interface PluginAction<
      * 当前 action 所属 Session Turn 的只读 Plugin 执行快照。
      *
      * 关键点（中文）
-     * - 模型 tool 调用时必定提供。
-     * - CLI、HTTP 或定时任务等非 Session 入口可能不提供。
+     * - 模型 tool 调用复用对应 tool call ID 和 Turn 取消信号。
+     * - CLI、HTTP 与定时任务等非 Session 入口由 Registry 补齐调用身份和取消信号。
      */
-    execution_context?: PluginExecutionContext;
+    execution_context: PluginActionExecutionContext;
     /** 已通过 schema 校验后的输入。 */
     input: P;
     /** 当前插件名称。 */

@@ -1,6 +1,6 @@
 ---
 title: Plugin Actions
-description: 说明 plugin action 的 command、api、execute 结构，以及 allowWhenDisabled 的语义
+description: 说明 plugin action 的 command、api、execute 结构，以及执行上下文和协作式超时
 ---
 
 # Plugin Actions
@@ -39,7 +39,16 @@ actions: {
 - 执行业务逻辑
 - 返回 `success / data / error / message`
 
-当 action 由 Session 中的 Tool 调用时，参数还会包含该 Session Turn 的显式 `execution_context`。CLI、HTTP 或 scheduler 直接调用时该字段可能不存在。本轮 Step 的有效配置读取 `execution_context.workspace_env` 与 `execution_context.agent_systems`；`context.workspace_env` 是 Workspace 当前配置快照，`context.instructions` 是 Agent 指令。
+每次 Action 调用都会收到只读的 `execution_context`，其中包含：
+
+- `agent_id`：当前 Agent 标识
+- `workspace_id`：当前 Workspace 标识
+- `call_id`：当前 Action 调用标识；模型 Tool 调用时等于对应的 Tool Call ID
+- `abort_signal`：当前调用必须监听的取消信号
+- `session_id` / `turn_id`：Session 调用时提供
+- `workspace_env` / `agent_systems`：当前执行检查点的有效配置快照
+
+CLI、HTTP 或 scheduler 直接调用时，运行时会自动生成 `call_id` 和取消信号。Action 应该把 `abort_signal` 传递给网络请求、轮询和长耗时任务。
 
 ## `command`
 
@@ -60,6 +69,26 @@ actions: {
 - method
 - path
 - 从 HTTP 请求到 payload 的映射
+
+## `timeout_ms`
+
+Action 可以声明协作式超时：
+
+```ts
+actions: {
+  search: {
+    timeout_ms: 30_000,
+    execute: async ({ execution_context }) => {
+      const response = await fetch("https://example.com", {
+        signal: execution_context.abort_signal,
+      });
+      return { success: true, data: { status: response.status } };
+    },
+  },
+}
+```
+
+超时会触发 `execution_context.abort_signal`。这是协作式约束，Action 必须把信号传给底层操作；业务失败不会改变 Plugin 的生命周期状态。
 
 ## `allowWhenDisabled`
 

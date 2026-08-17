@@ -1,6 +1,6 @@
 ---
 title: Plugin Actions
-description: Understand command, api, execute, and allowWhenDisabled in plugin actions
+description: Understand command, api, execute, execution context, and cooperative timeouts in plugin actions
 ---
 
 # Plugin Actions
@@ -39,7 +39,16 @@ actions: {
 - running the business logic
 - returning `success / data / error / message`
 
-When an action is called by a Session tool, its parameters also include the explicit `execution_context` for that Session Turn. It may be absent for direct CLI, HTTP, or scheduler calls. Use `execution_context.workspace_env` and `execution_context.agent_systems` for the effective Step configuration; `context.workspace_env` is the current Workspace snapshot and `context.instructions` contains Agent instructions.
+Every Action call receives a readonly `execution_context` containing:
+
+- `agent_id`: the current Agent id
+- `workspace_id`: the current Workspace id
+- `call_id`: the current Action call id; for model tools this is the matching Tool Call ID
+- `abort_signal`: the cancellation signal the Action must honor
+- `session_id` / `turn_id`: present for Session calls
+- `workspace_env` / `agent_systems`: the effective configuration snapshot for the execution checkpoint
+
+Direct CLI, HTTP, and scheduler calls receive a runtime-generated `call_id` and cancellation signal. Pass `abort_signal` to network requests, polling, and other long-running operations.
 
 ## `command`
 
@@ -60,6 +69,26 @@ It is a good place to define:
 - method
 - path
 - how an HTTP request becomes structured payload
+
+## `timeout_ms`
+
+An Action may declare a cooperative timeout:
+
+```ts
+actions: {
+  search: {
+    timeout_ms: 30_000,
+    execute: async ({ execution_context }) => {
+      const response = await fetch("https://example.com", {
+        signal: execution_context.abort_signal,
+      });
+      return { success: true, data: { status: response.status } };
+    },
+  },
+}
+```
+
+The timeout aborts `execution_context.abort_signal`. This is cooperative: the Action must pass the signal to the underlying operation. A business failure does not change the Plugin lifecycle state.
 
 ## `allowWhenDisabled`
 

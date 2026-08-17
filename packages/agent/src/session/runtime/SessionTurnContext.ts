@@ -123,8 +123,8 @@ class DefaultSessionTurnContext implements SessionTurnContext {
         if (previous && previous !== plugins) await previous.release();
       },
       release: async () => await context.release_plugins(),
-      plugin_execution_context: () =>
-        context.create_plugin_execution_context(),
+      plugin_execution_context: (call_id?: string) =>
+        context.create_plugin_execution_context(call_id),
     });
 
     this.input = Object.freeze({
@@ -168,10 +168,12 @@ class DefaultSessionTurnContext implements SessionTurnContext {
   }
 
   /** 为 Plugin 生成不共享根对象引用的只读快照。 */
-  private create_plugin_execution_context(): PluginExecutionContext {
+  private create_plugin_execution_context(call_id?: string): PluginExecutionContext {
+    const normalized_call_id = String(call_id || "").trim();
     return Object.freeze({
       session_id: this.session.session_id,
       turn_id: this.session.turn_id,
+      ...(normalized_call_id ? { call_id: normalized_call_id } : {}),
       ...(this.session.project_root
         ? { project_root: this.session.project_root }
         : {}),

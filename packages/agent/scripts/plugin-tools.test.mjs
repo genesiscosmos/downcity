@@ -87,6 +87,7 @@ test("invoke_plugin_call_tool preserves Action output and messages", async () =>
   const result = await invoke_plugin_call_tool({
     plugins,
     turn_context,
+    call_id: "call_image_result",
     input: {
       plugin: "image",
       action: "image_result",
@@ -276,6 +277,7 @@ test("create_plugin_tools binds plugin_call to the current registry", async () =
             data: {
               owner,
               session_id: execution_context?.session_id,
+              call_id: execution_context.call_id,
               context_keys: Object.keys(execution_context || {}).sort(),
             },
             message: owner,
@@ -322,16 +324,107 @@ test("create_plugin_tools binds plugin_call to the current registry", async () =
   assert.equal(result_a.output.success, true);
   assert.equal(result_a.output.data.owner, "agent_a");
   assert.equal(result_a.output.data.session_id, "session_a");
+  assert.equal(result_a.output.data.call_id, "call_session_a");
   assert.deepEqual(result_a.output.data.context_keys, [
     "abort_signal",
+    "agent_id",
     "agent_systems",
+    "call_id",
     "project_root",
     "session_id",
     "turn_id",
+    "workspace_env",
+    "workspace_id",
   ]);
   assert.equal(result_b.output.success, true);
   assert.equal(result_b.output.data.owner, "agent_b");
   assert.equal(result_b.output.data.session_id, "session_b");
+  assert.equal(result_b.output.data.call_id, "call_session_b");
+});
+
+test("PluginRegistry supplies identity and cancellation context for non-Session actions", async () => {
+  let observed_context;
+  const plugin = create_plugin({
+    name: "identity",
+    actions: {
+      inspect: create_action({
+        execute: async ({ execution_context }) => {
+          observed_context = execution_context;
+          return { success: true };
+        },
+      }),
+    },
+  });
+  const plugins = create_registry(plugin);
+
+  const result = await plugins.run_action({
+    plugin: "identity",
+    action: "inspect",
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(observed_context.agent_id, "plugin_tools_agent");
+  assert.equal(observed_context.workspace_id, "plugin_tools_workspace");
+  assert.match(observed_context.call_id, /^plugin:/);
+  assert.equal(observed_context.abort_signal.aborted, false);
+  assert.equal(Object.isFrozen(observed_context), true);
+});
+
+test("PluginRegistry rejects an action before execution when the caller is cancelled", async () => {
+  let executed = false;
+  const plugin = create_plugin({
+    name: "cancelled",
+    actions: {
+      run: create_action({
+        execute: async () => {
+          executed = true;
+          return { success: true };
+        },
+      }),
+    },
+  });
+  const plugins = create_registry(plugin);
+  const controller = new AbortController();
+  controller.abort(new Error("caller cancelled"));
+
+  const result = await plugins.run_action({
+    plugin: "cancelled",
+    action: "run",
+    execution_context: {
+      call_id: "call_cancelled",
+      abort_signal: controller.signal,
+    },
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(result.error, "caller cancelled");
+  assert.equal(executed, false);
+});
+
+test("PluginRegistry applies the action cooperative timeout to abort_signal", async () => {
+  const plugin = create_plugin({
+    name: "timeout",
+    actions: {
+      wait: create_action({
+        timeout_ms: 10,
+        execute: async ({ execution_context }) => {
+          await new Promise((resolve) => {
+            execution_context.abort_signal.addEventListener("abort", resolve, { once: true });
+          });
+          return { success: true };
+        },
+      }),
+    },
+  });
+  const plugins = create_registry(plugin);
+
+  const result = await plugins.run_action({
+    plugin: "timeout",
+    action: "wait",
+  });
+
+  assert.equal(result.success, false);
+  assert.match(result.error, /timed out after 10 ms/);
 });
 
 test("PluginRegistry keeps plugin ready after action business failure", async () => {
