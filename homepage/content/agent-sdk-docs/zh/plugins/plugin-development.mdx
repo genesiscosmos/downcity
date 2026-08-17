@@ -11,7 +11,7 @@ description: 从目录结构、profile 配置到 Agent 运行时上下文，完�
 
 - Plugin 构造函数只接收自己的 `profile`，不接收 `Agent`、`City`、`Embassy` 或 `dependencies` 容器。
 - Plugin 内部创建并拥有自己的 provider、client、store、queue 和资源句柄。
-- Agent 级外部能力通过 `context.services` 注入；Plugin 只依赖实际需要的服务接口。
+- Agent 级外部能力通过 `context.ai` 或 `context.web` 暴露；Plugin 只依赖实际需要的能力。
 - 配置是可持久化、可校验的 profile；运行态对象是实例内部状态，不能放进配置文件。
 - 一个 Plugin 只负责一个清晰的领域能力。需要不同实现时，创建新的 Plugin，而不是在一个 Plugin 内继续堆叠组合开关。
 
@@ -21,17 +21,14 @@ description: 从目录结构、profile 配置到 Agent 运行时上下文，完�
 
 ```text
 example-plugin/
-├── .codex-plugin/
-│   └── plugin.json
+├── plugin.json
 ├── package.json
 ├── README.md
-├── index.mjs
-└── src/
-    ├── ExamplePlugin.ts
-    └── types.ts
+├── icon.svg
+└── plugin.js
 ```
 
-`index.mjs` 是安装产物的自包含 ESM 入口。`src/` 和构建配置可以保留在源码仓库中，但安装目录必须包含 `plugin.json`、`package.json`、`README.md` 和入口文件。
+`plugin.js` 是安装产物的自包含 ESM 入口；文件名不固定，只要与 `plugin.json` 的 `entry` 一致即可。`src/` 和构建配置可以保留在源码仓库中，但安装目录必须包含 `plugin.json`、`package.json`、`README.md` 和入口文件。
 
 ## plugin.json
 
@@ -44,7 +41,8 @@ example-plugin/
   "version": "1.0.0",
   "title": "Example",
   "description": "A small example Plugin.",
-  "entry": "index.mjs",
+  "icon": "icon.svg",
+  "entry": "plugin.js",
   "source": "github:owner/example-plugin",
   "config": {
     "schema": {
@@ -157,7 +155,8 @@ interface PluginContext {
   files: FileSystem;
   data_files: FileSystem;
   logger: Logger;
-  services: PluginServices;
+  ai?: PluginAiServices;
+  web?: PluginWebServices;
   sessions: AgentSessions;
   plugins: AgentPlugins;
   workspace_env: Readonly<Record<string, string>>;
@@ -167,22 +166,14 @@ interface PluginContext {
 
 `files` 用于用户 Workspace；`data_files` 用于 Agent 私有持久化数据。不要把私有数据库、缓存或凭证写入用户 Workspace。
 
-## 使用 Agent services
+## 使用 Agent 能力
 
 宿主在构造 Agent 时提供服务：
 
 ```ts
 const agent = new Agent({
   id: "assistant",
-  services: {
-    ai: {
-      list_models: () => city.services.list_models(),
-      image_create: (input) => city.services.image_create(input),
-      image_result: (input) => city.services.image_result(input),
-      asr: (input) => city.services.asr(input),
-      tts: (input) => city.services.tts(input),
-    },
-  },
+  ai: embassy.user.ai,
   plugins: [new ExamplePlugin({ provider: "local" })],
 });
 ```
@@ -190,7 +181,7 @@ const agent = new Agent({
 Plugin 只读取最小接口：
 
 ```ts
-const models = await context.services.ai?.list_models();
+const models = await context.ai?.catalog();
 if (!models) return { success: false, error: "AI service is unavailable" };
 ```
 
@@ -204,7 +195,7 @@ if (!models) return { success: false, error: "AI service is unavailable" };
 run: create_action({
   input_schema: z.object({ value: z.string().min(1) }),
   execute: async ({ input, execution_context }) => {
-    execution_context.signal.throwIfAborted();
+    execution_context.abort_signal.throwIfAborted();
     const result = await client.run(input.value, {
       signal: execution_context.signal,
     });
@@ -287,7 +278,7 @@ it("returns a stable error when AI is unavailable", async () => {
 });
 ```
 
-不要通过重新引入旧的 callback 构造参数来测试。服务应通过 `Agent.services` 或测试用的 `PluginContext` 注入。
+不要通过重新引入旧的 callback 构造参数来测试。宿主 AI 对象应通过 `Agent.ai` 传入，Plugin 测试则使用测试用的 `PluginContext.ai`。
 
 ## 发布检查清单
 

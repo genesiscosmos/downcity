@@ -18,7 +18,7 @@ import type {
 } from "@/types/agent/AgentOptions.js";
 import type { WorkspaceBase } from "@downcity/workspace";
 import type { AgentPluginContext } from "@/types/plugin/AgentPluginContext.js";
-import type { PluginServices } from "@/types/plugin/PluginServices.js";
+import type { PluginAiServices, PluginWebServices } from "@/types/plugin/PluginServices.js";
 import { Logger } from "@/utils/logger/Logger.js";
 
 /** SDK Agent 主体。 */
@@ -29,8 +29,11 @@ export class Agent {
   /** Agent 默认模型；Session 可以显式覆盖。 */
   readonly model?: AgentModel;
 
-  /** 当前 Agent 为 Plugin 提供的宿主服务能力。 */
-  readonly services: PluginServices;
+  /** 当前 Agent 持有的用户级 AI 能力。 */
+  readonly ai?: PluginAiServices;
+
+  /** 当前 Agent 持有的 Web 搜索与文档能力。 */
+  readonly web?: PluginWebServices;
 
   /** Agent 注册的唯一 PluginRegistry。 */
   readonly plugins: PluginRegistry;
@@ -60,12 +63,15 @@ export class Agent {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Agent requires a non-empty id");
     this.model = options.model;
-    this.services = Object.freeze({ ...(options.services || {}) });
+    this.ai = options.ai as PluginAiServices | undefined;
+    this.web = options.web;
     this.instruction = normalize_instruction_input(options.instruction);
     const agent = this;
     const agent_plugin_context: AgentPluginContext = Object.freeze({
       agent_id: this.id,
       logger: this.logger,
+      ai: this.ai,
+      web: this.web,
       get instructions() {
         return agent.get_instructions();
       },

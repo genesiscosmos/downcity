@@ -20,8 +20,6 @@ import type { DesktopLocalData } from "./DesktopLocalData.js";
 import { Embassy, type EmbassyUser } from "@downcity/federation";
 import {
   create_builtin_plugin_registrations,
-  create_builtin_plugin_services,
-  type BuiltinPluginAi,
 } from "@downcity/plugins";
 import { create_desktop_platform_sandbox } from "./DesktopPlatformSandbox.js";
 import type { DesktopModelSummary, DesktopPluginSummary } from "../../common/types/DesktopApi.js";
@@ -51,7 +49,6 @@ export function create_desktop_plugin_loader(
   return new LocalPluginLoader({
     plugin_repository: data.plugins,
     plugin_registrations: create_desktop_builtin_plugin_registrations(data),
-    services: create_builtin_plugin_services(async () => create_builtin_plugin_ai(create_embassy_user(data, process.env))),
   });
 }
 
@@ -217,47 +214,6 @@ export function create_desktop_builtin_plugin_registrations(
   });
 }
 
-/** 把 Embassy User AI 子域投影成官方 Plugin 的最小协议。 */
-function create_builtin_plugin_ai(user: EmbassyUser): BuiltinPluginAi {
-  return {
-    async list_models() {
-      const catalog = await user.ai.catalog();
-      return { items: catalog.all().map((model) => ({
-        id: model.id,
-        name: model.name,
-        description: model.description,
-        modalities: [...model.modalities],
-        tags: model.tags ? [...model.tags] : undefined,
-        meta: JSON.parse(JSON.stringify(model.meta ?? {})),
-      })) };
-    },
-    async image_create(input) {
-      return await user.ai.image_create({
-        ...input,
-        model: require_model(input, "image_create"),
-      });
-    },
-    async image_result(input) {
-      return await user.ai.image_result(input);
-    },
-    async asr(input) {
-      return await user.ai.asr({ ...input, model: require_model(input, "asr") });
-    },
-    async tts(input) {
-      return await user.ai.tts({ ...input, model: require_model(input, "tts") });
-    },
-  };
-}
-
-/** 从 Plugin 输入中读取必填模型 ID。 */
-function require_model(input: unknown, capability: string): string {
-  const model = input && typeof input === "object"
-    ? (input as { model?: unknown }).model
-    : undefined;
-  const model_id = typeof model === "string" ? model.trim() : "";
-  if (!model_id) throw new TypeError(`${capability} requires model id`);
-  return model_id;
-}
 
 /** 按环境覆盖和共享持久化 Session 创建 Embassy User。 */
 function create_embassy_user(
@@ -276,6 +232,14 @@ function create_embassy_user(
     throw new Error("Federation user token is required. Run `city federation login` first.");
   }
   return new Embassy({ federation_url, user_token }).user;
+}
+
+/** 创建当前 Desktop Agent 使用的用户级 AI 能力。 */
+export function create_desktop_agent_ai(
+  data: DesktopLocalData,
+  env: Readonly<Record<string, string | undefined>>,
+): EmbassyUser["ai"] {
+  return create_embassy_user(data, env).ai;
 }
 
 /** 规范化 Federation URL，并保留本机默认端口规则。 */

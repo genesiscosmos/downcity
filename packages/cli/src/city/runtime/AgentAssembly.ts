@@ -17,8 +17,6 @@ import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell, Workspace } from "@downcity/workspace";
 import {
   create_builtin_plugin_registrations,
-  create_builtin_plugin_services,
-  type BuiltinPluginAi,
 } from "@downcity/plugins";
 import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
 import { createCityAiAgentModel } from "@/city/runtime/city-model/CityAiServiceBinding.js";
@@ -54,7 +52,6 @@ export function create_cli_plugin_loader(input: {
   return new LocalPluginLoader({
     plugin_repository: input.plugin_repository,
     plugin_registrations: create_cli_builtin_plugin_registrations(input),
-    services: create_builtin_plugin_services(async () => await create_builtin_plugin_ai(new EmbassySessionResolver())),
   });
 }
 
@@ -67,7 +64,8 @@ export async function create_cli_agent(input: {
   /** 可选的 Downcity 用户级数据根目录。 */
   root_path?: string;
 }): Promise<Agent> {
-  const [model, plugins, tools] = await Promise.all([
+  const [{ embassy_user }, model, plugins, tools] = await Promise.all([
+    new EmbassySessionResolver().create_user_client(),
     Promise.resolve(create_cli_agent_model(input.config, process_environment())),
     input.plugin_loader.create_plugins(input.config),
     Promise.resolve(create_cli_agent_tools()),
@@ -78,7 +76,7 @@ export async function create_cli_agent(input: {
     model,
     plugins,
     tools,
-    services: input.plugin_loader.services,
+    ai: embassy_user.ai,
   });
 }
 
@@ -193,49 +191,4 @@ class LazyCliAgentModel implements LanguageModelV3 {
 /** 从 Agent execution 读取模型 ID。 */
 function read_model_id(execution: LocalAgentConfig["execution"]): string {
   return typeof execution?.model_id === "string" ? execution.model_id.trim() : "";
-}
-
-/** 把 Embassy User AI 子域投影为官方 Plugin 的最小协议。 */
-async function create_builtin_plugin_ai(
-  resolver: EmbassySessionResolver,
-): Promise<BuiltinPluginAi> {
-  const { embassy_user } = await resolver.create_user_client();
-  return {
-    async list_models() {
-      const catalog = await embassy_user.ai.catalog();
-      return { items: catalog.all().map((model) => ({
-        id: model.id,
-        name: model.name,
-        description: model.description,
-        modalities: [...model.modalities],
-        tags: model.tags ? [...model.tags] : undefined,
-        meta: JSON.parse(JSON.stringify(model.meta ?? {})),
-      })) };
-    },
-    async image_create(input) {
-      return await embassy_user.ai.image_create({
-        ...input,
-        model: require_model(input, "image_create"),
-      });
-    },
-    async image_result(input) {
-      return await embassy_user.ai.image_result(input);
-    },
-    async asr(input) {
-      return await embassy_user.ai.asr({ ...input, model: require_model(input, "asr") });
-    },
-    async tts(input) {
-      return await embassy_user.ai.tts({ ...input, model: require_model(input, "tts") });
-    },
-  };
-}
-
-/** 从 Plugin 输入中读取必填模型 ID。 */
-function require_model(input: unknown, capability: string): string {
-  const model = input && typeof input === "object"
-    ? (input as { model?: unknown }).model
-    : undefined;
-  const model_id = typeof model === "string" ? model.trim() : "";
-  if (!model_id) throw new TypeError(`${capability} requires model id`);
-  return model_id;
 }

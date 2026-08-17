@@ -7,6 +7,7 @@
  */
 
 import type { Logger } from "@/utils/logger/Logger.js";
+import type { PluginAiServices, PluginWebServices } from "@/types/plugin/PluginServices.js";
 
 /** Plugin 的 Agent 级生命周期上下文。 */
 export interface AgentPluginContext {
@@ -15,6 +16,12 @@ export interface AgentPluginContext {
 
   /** 当前 Agent 的全局日志器，不绑定任何 Workspace 文件系统。 */
   readonly logger: Logger;
+
+  /** 当前 Agent 持有的用户级 AI 能力。 */
+  readonly ai?: PluginAiServices;
+
+  /** 当前 Agent 持有的 Web 搜索与文档能力。 */
+  readonly web?: PluginWebServices;
 
   /** 动态读取当前 Agent 静态指令的只读快照。 */
   readonly instructions: readonly string[];

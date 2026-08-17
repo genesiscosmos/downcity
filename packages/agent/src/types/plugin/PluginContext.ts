@@ -11,7 +11,7 @@ import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
 import type { FileSystem } from "@downcity/workspace";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { WorkspaceShell } from "@downcity/workspace";
-import type { PluginServices } from "@/types/plugin/PluginServices.js";
+import type { PluginAiServices, PluginWebServices } from "@/types/plugin/PluginServices.js";
 
 /** Agent 向 Plugin 开放的最小、稳定运行时能力。 */
 export interface PluginContext {
@@ -39,8 +39,11 @@ export interface PluginContext {
   /** 当前 Agent 在当前 Workspace 中使用的统一日志器。 */
   readonly logger: Logger;
 
-  /** 当前 Agent 为 Plugin 提供的最小外部服务能力。 */
-  readonly services: PluginServices;
+  /** 当前 Agent 持有的用户级 AI 能力；通常来自 `embassy.user.ai`。 */
+  readonly ai?: PluginAiServices;
+
+  /** 当前 Agent 持有的 Web 搜索与文档能力。 */
+  readonly web?: PluginWebServices;
 
   /** 当前 Agent 的 Session 集合入口。 */
   readonly sessions: AgentSessions;

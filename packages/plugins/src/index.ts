@@ -18,10 +18,8 @@ export * from "./web.js";
 export * from "./workboard.js";
 export {
   create_builtin_plugin_registrations,
-  create_builtin_plugin_services,
 } from "./builtin/BuiltinPluginTypes.js";
 export type {
-  BuiltinPluginAi,
   BuiltinPluginDefinition,
   BuiltinPluginRegistration,
   BuiltinPluginRegistrationsOptions,

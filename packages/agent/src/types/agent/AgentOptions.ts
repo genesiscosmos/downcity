@@ -13,7 +13,7 @@ import type {
   AgentManagedSession,
   SessionOptions,
 } from "@/types/session/SessionOptions.js";
-import type { PluginServices } from "@/types/plugin/PluginServices.js";
+import type { PluginWebServices } from "@/types/plugin/PluginServices.js";
 
 /**
  * Agent 可使用的 Session 类。
@@ -67,8 +67,14 @@ export interface AgentOptions {
    */
   model?: AgentModel;
 
-  /** 当前 Agent 为 Plugin 提供的宿主服务能力。 */
-  services?: PluginServices;
+  /**
+   * 当前 Agent 持有的用户级 AI 对象，通常直接传入 `embassy.user.ai`。
+   * Agent 不绑定具体宿主类型；PluginContext 会将其投影为 Plugin 所需的最小能力。
+   */
+  ai?: unknown;
+
+  /** 当前 Agent 持有的 Web 搜索与文档能力。 */
+  web?: PluginWebServices;
 
   /**
    * 当前 agent 显式持有的插件实例集合。

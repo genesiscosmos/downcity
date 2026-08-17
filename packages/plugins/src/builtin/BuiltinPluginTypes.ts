@@ -5,7 +5,7 @@
  * Federation，只消费宿主提供的 AI 能力和本地路径。
  */
 
-import type { JsonObject, JsonValue, Plugin, PluginServices } from "@downcity/agent";
+import type { JsonObject, Plugin } from "@downcity/agent";
 import {
   CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
   ChatPlugin,
@@ -14,26 +14,12 @@ import {
 } from "@/chat.js";
 import { FeishuChannel, QqChannel, TelegramChannel } from "@/chat.js";
 import { ContactPlugin } from "@/contact.js";
-import {
-  ImagePlugin,
-  type ImagePluginJobCreateResult,
-  type ImagePluginJobResult,
-  type ImagePluginJobResultInput,
-  type ImagePluginModel,
-  type ImagePluginResolvedInput,
-} from "@/image.js";
+import { ImagePlugin } from "@/image.js";
 import {
   MemoryPlugin,
 } from "@/memory.js";
 import { SkillPlugin } from "@/skill.js";
-import {
-  SoundPlugin,
-  type SoundPluginAsrInput,
-  type SoundPluginAsrResult,
-  type SoundPluginModel,
-  type SoundPluginTtsInput,
-  type SoundPluginTtsResult,
-} from "@/sound.js";
+import { SoundPlugin } from "@/sound.js";
 import { TaskPlugin } from "@/task.js";
 import { WebPlugin } from "@/web.js";
 import { WorkboardPlugin } from "@/workboard.js";
@@ -70,40 +56,6 @@ export interface BuiltinPluginRegistration {
   create(profile: JsonObject): Plugin;
 }
 
-/** Image 和 Sound Plugin 使用的宿主 AI 能力。 */
-export interface BuiltinPluginAi {
-  /** 列出当前用户可使用的图片、ASR 与 TTS 模型。 */
-  list_models(): Promise<{
-    /** 完整模型集合。 */
-    items: Array<{
-      /** 模型的全局稳定 ID。 */
-      id: string;
-      /** 模型的用户可见名称。 */
-      name: string;
-      /** 模型用途说明。 */
-      description?: string;
-      /** 模型支持的能力集合。 */
-      modalities: string[];
-      /** 模型筛选标签。 */
-      tags?: string[];
-      /** 模型扩展元数据。 */
-      meta?: JsonObject;
-    }>;
-  }>;
-
-  /** 创建图片生成任务。 */
-  image_create(input: ImagePluginResolvedInput): Promise<ImagePluginJobCreateResult>;
-
-  /** 查询图片生成结果。 */
-  image_result(input: ImagePluginJobResultInput): Promise<ImagePluginJobResult>;
-
-  /** 执行音频转写。 */
-  asr(input: SoundPluginAsrInput): Promise<SoundPluginAsrResult>;
-
-  /** 执行语音合成。 */
-  tts(input: SoundPluginTtsInput): Promise<SoundPluginTtsResult>;
-}
-
 /** 创建官方 Plugin 注册集合所需的宿主能力。 */
 export interface BuiltinPluginRegistrationsOptions {
   /** Contact Plugin 对外报告的 HTTP 地址。 */
@@ -114,21 +66,6 @@ export interface BuiltinPluginRegistrationsOptions {
     port?: number;
   };
 
-}
-
-/** 把宿主 AI 能力投影为 Agent PluginContext 使用的最小服务协议。 */
-export function create_builtin_plugin_services(
-  resolve_ai: () => Promise<BuiltinPluginAi>,
-): PluginServices {
-  return {
-    ai: {
-      list_models: async () => (await resolve_ai()).list_models(),
-      image_create: async (input) => await (await resolve_ai()).image_create(input as never) as unknown as JsonValue,
-      image_result: async (input) => await (await resolve_ai()).image_result(input as never) as unknown as JsonValue,
-      asr: async (input) => await (await resolve_ai()).asr(input as never) as unknown as JsonValue,
-      tts: async (input) => await (await resolve_ai()).tts(input as never) as unknown as JsonValue,
-    },
-  };
 }
 
 const memory_plugin_config_schema: JsonObject = {

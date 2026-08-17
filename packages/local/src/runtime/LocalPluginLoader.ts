@@ -9,7 +9,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import fs from "fs-extra";
-import type { JsonObject, Plugin, PluginServices } from "@downcity/agent";
+import type { JsonObject, Plugin } from "@downcity/agent";
 import { validate_local_plugin_config } from "@/runtime/LocalPluginConfigSchema.js";
 import type { LocalAgentConfig } from "@/types/LocalConfig.js";
 import type {
@@ -22,12 +22,8 @@ export class LocalPluginLoader {
   /** 当前宿主注入的内置 Plugin 注册。 */
   private readonly builtin_registrations: readonly LocalPluginRegistration[];
 
-  /** 当前宿主提供给 Agent 的 Plugin 服务能力。 */
-  readonly services: PluginServices;
-
   constructor(private readonly options: LocalPluginLoaderOptions) {
     this.builtin_registrations = [...(options.plugin_registrations ?? [])];
-    this.services = Object.freeze({ ...(options.services || {}) });
   }
 
   /** 根据 Agent 定义创建全部已注册 Plugin。 */

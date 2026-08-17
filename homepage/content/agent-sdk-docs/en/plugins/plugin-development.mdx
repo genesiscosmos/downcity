@@ -11,7 +11,7 @@ This guide covers the complete Downcity Plugin model. A Plugin is an independent
 
 - The Plugin constructor accepts its own `profile`, not an `Agent`, `City`, `Embassy`, or `dependencies` bag.
 - The Plugin creates and owns its providers, clients, stores, queues, and resource handles.
-- Host capabilities are supplied by the Agent through `context.services`; a Plugin depends only on the service interfaces it needs.
+- Host capabilities are exposed by the Agent through `context.ai` or `context.web`; a Plugin depends only on the capabilities it needs.
 - A profile contains persistent, validated values. Runtime objects belong to the Plugin instance and never belong in configuration files.
 - Keep one clear domain capability per Plugin. When an implementation needs a different boundary, create another Plugin instead of adding more composition switches.
 
@@ -19,17 +19,14 @@ This guide covers the complete Downcity Plugin model. A Plugin is an independent
 
 ```text
 example-plugin/
-├── .codex-plugin/
-│   └── plugin.json
+├── plugin.json
 ├── package.json
 ├── README.md
-├── index.mjs
-└── src/
-    ├── ExamplePlugin.ts
-    └── types.ts
+├── icon.svg
+└── plugin.js
 ```
 
-`index.mjs` is the self-contained ESM entry in the installation artifact. Source files and build configuration may remain in the source repository, but an installed directory must contain `plugin.json`, `package.json`, `README.md`, and the entry file.
+`plugin.js` is the self-contained ESM entry in the installation artifact; its filename is not fixed as long as it matches `plugin.json`'s `entry`. Source files and build configuration may remain in the source repository, but an installed directory must contain `plugin.json`, `package.json`, `README.md`, and the entry file.
 
 ## plugin.json
 
@@ -42,7 +39,8 @@ The manifest describes installation, presentation, and the profile schema. It do
   "version": "1.0.0",
   "title": "Example",
   "description": "A small example Plugin.",
-  "entry": "index.mjs",
+  "icon": "icon.svg",
+  "entry": "plugin.js",
   "source": "github:owner/example-plugin",
   "config": {
     "schema": {
@@ -155,7 +153,8 @@ interface PluginContext {
   files: FileSystem;
   data_files: FileSystem;
   logger: Logger;
-  services: PluginServices;
+  ai?: PluginAiServices;
+  web?: PluginWebServices;
   sessions: AgentSessions;
   plugins: AgentPlugins;
   workspace_env: Readonly<Record<string, string>>;
@@ -165,22 +164,14 @@ interface PluginContext {
 
 Use `files` for user Workspace data and `data_files` for Agent-private persistent data. Do not write private databases, caches, or credentials into the user Workspace.
 
-## Using Agent services
+## Using Agent capabilities
 
 The host provides services when constructing the Agent:
 
 ```ts
 const agent = new Agent({
   id: "assistant",
-  services: {
-    ai: {
-      list_models: () => city.services.list_models(),
-      image_create: (input) => city.services.image_create(input),
-      image_result: (input) => city.services.image_result(input),
-      asr: (input) => city.services.asr(input),
-      tts: (input) => city.services.tts(input),
-    },
-  },
+  ai: embassy.user.ai,
   plugins: [new ExamplePlugin({ provider: "local" })],
 });
 ```
@@ -188,7 +179,7 @@ const agent = new Agent({
 A Plugin reads only the smallest interface it needs:
 
 ```ts
-const models = await context.services.ai?.list_models();
+const models = await context.ai?.catalog();
 if (!models) return { success: false, error: "AI service is unavailable" };
 ```
 
@@ -202,7 +193,7 @@ Every action should have an explicit input Schema, a stable result, and cancella
 run: create_action({
   input_schema: z.object({ value: z.string().min(1) }),
   execute: async ({ input, execution_context }) => {
-    execution_context.signal.throwIfAborted();
+    execution_context.abort_signal.throwIfAborted();
     const result = await client.run(input.value, {
       signal: execution_context.signal,
     });
@@ -285,7 +276,7 @@ it("returns a stable error when AI is unavailable", async () => {
 });
 ```
 
-Do not restore legacy callback constructor arguments just to make tests easier. Inject services through `Agent.services` or a test `PluginContext`.
+Do not restore legacy callback constructor arguments just to make tests easier. Pass the host AI object through `Agent.ai`, and use a test `PluginContext.ai` in Plugin tests.
 
 ## Release checklist
 

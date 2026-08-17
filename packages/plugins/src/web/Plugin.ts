@@ -121,11 +121,11 @@ export class WebPlugin extends BasePlugin {
       }),
       examples: [{ title: "Search official sources", payload: { query: "Playwright CDP documentation", limit: 5 } }],
       execute: async ({ context, input }) => {
-        if (!context.services.web) {
+        if (!context.web) {
           return failure_result("WebPlugin search provider is not configured");
         }
         try {
-          const result = await context.services.web.search(input as JsonObject);
+          const result = await context.web.search(input as JsonObject);
           return { success: true, data: result, message: "web search completed" };
         } catch (error) {
           return failure_result(error);
@@ -138,11 +138,11 @@ export class WebPlugin extends BasePlugin {
       input_schema: z.object({ url: URL_SCHEMA, max_chars: MAX_CHARS_SCHEMA }),
       examples: [{ title: "Read official documentation", payload: { url: "https://playwright.dev/docs/api/class-playwright" } }],
       execute: async ({ context, input }) => {
-        if (!context.services.web) {
+        if (!context.web) {
           return failure_result("WebPlugin document provider is not configured");
         }
         try {
-          const result = await context.services.web.open(input as JsonObject);
+          const result = await context.web.open(input as JsonObject);
           return { success: true, data: result, message: "web document opened" };
         } catch (error) {
           return failure_result(error);

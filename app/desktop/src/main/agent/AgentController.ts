@@ -44,6 +44,7 @@ import type {
 } from "../../common/types/DesktopApi.js";
 import {
   create_desktop_agent_model,
+  create_desktop_agent_ai,
   create_desktop_agent_tools,
   create_desktop_plugin_loader,
   create_desktop_workspace,
@@ -452,7 +453,7 @@ export class AgentController {
       model,
       plugins,
       tools,
-      services: this.plugin_loader.services,
+      ai: create_desktop_agent_ai(this.data, process.env),
     });
   }
 

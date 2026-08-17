@@ -164,7 +164,12 @@ export type {
 } from "./types/sdk/AgentSessionCompact.js";
 export type { PluginContext } from "./types/plugin/PluginContext.js";
 export type { AgentPluginContext } from "./types/plugin/AgentPluginContext.js";
-export type { PluginAiServices, PluginServices, PluginWebServices } from "./types/plugin/PluginServices.js";
+export type {
+  PluginAiServices,
+  PluginModelCatalog,
+  PluginModelDescriptor,
+  PluginWebServices,
+} from "./types/plugin/PluginServices.js";
 export type { SessionPort } from "./types/session/SessionPort.js";
 
 // Plugin 作者 API
