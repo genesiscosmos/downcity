@@ -84,6 +84,7 @@ new PluginConstructor({ config });
   "id": "github",
   "version": "1.0.0",
   "description": "GitHub integration",
+  "icon": "./assets/github.svg",
   "entry": "dist/index.js",
   "config": {
     "schema": {
@@ -106,7 +107,7 @@ export const plugin = GithubPlugin;
 
 Plugin 代码单独声明 TypeScript 配置类型，运行时协议以 `plugin.json.config.schema` 为准。入口必须是单个自包含 ESM 文件；`package.json` 负责建立明确的 ESM package 边界。安装器校验 Schema 与默认值，但不导入或执行第三方入口，也不复制源码与开发文件。
 
-安装目标固定为 `plugins/<definition.id>/`，内容只有安装后的 `plugin.json`、`package.json`、自包含入口与本地 `config.toml`。随机目录只用于 staging；更新原子替换整个 Plugin 目录并保留 `config.toml`。新 Schema 无法校验已有 profile 时拒绝更新；仍被 Agent 引用时拒绝卸载。
+安装目标固定为 `plugins/<definition.id>/`。来源目录必须包含 `README.md`；安装器保留安装后的 `plugin.json`、`package.json`、`README.md`、自包含入口、可选本地图标与本地 `config.toml`。`icon` 支持 `http(s)` URL 或 Plugin 根目录内的相对路径；本地资源必须经过路径和 symlink 校验。随机目录只用于 staging；更新原子替换整个 Plugin 目录并保留 `config.toml`。新 Schema 无法校验已有 profile 时拒绝更新；仍被 Agent 引用时拒绝卸载。
 
 ## 6. 数据库边界
 
