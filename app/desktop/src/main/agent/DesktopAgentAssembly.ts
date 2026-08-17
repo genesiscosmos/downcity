@@ -117,6 +117,7 @@ export async function list_desktop_agent_models(
       modalities: [...model.modalities],
       ...(typeof model.context_window === "number" ? { context_window: model.context_window } : {}),
       tags: [...(model.tags ?? [])],
+      ...(model.price ? { price: [...model.price] } : {}),
     }));
 }
 

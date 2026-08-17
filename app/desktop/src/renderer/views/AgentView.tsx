@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { TbChevronRight, TbComponents, TbFileText, TbFolder, TbGhost3, TbMessageCircle } from "react-icons/tb";
+import { TbChevronRight, TbComponents, TbFileText, TbFolder, TbGhost3, TbMessageCircle, TbPlus } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { LLMModelIcon } from "@/components/model/LLMModelIcon";
 import { ModelSelector } from "@/components/model/ModelSelector";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { use_horizontal_resize } from "@/hooks/use_horizontal_resize";
 import { MainViewBody, MainViewLayout } from "@/layouts/MainViewLayout";
 import { SHELL_PANEL_TRANSITION } from "@/layouts/shellMotion";
@@ -64,7 +65,7 @@ export function AgentView({ agent, workspaces, plugins, sessions, controller, cr
     set_saving(true);
     set_editor_error("");
     try {
-      const plugins_input = Object.fromEntries(Object.entries(definition.plugins).map(([plugin_id, reference]) => [plugin_id, { profile: reference.profile.trim() || "default" }]));
+      const plugins_input = Object.fromEntries(Object.entries(definition.plugins).map(([plugin_id, reference]) => [plugin_id, reference.profile ? { profile: reference.profile.trim() } : {}]));
       await controller.update_agent(agent.agent_id, { model_id: definition.model_id, instruction: definition.instruction, plugins: plugins_input });
       await load_definition();
     } catch (reason) {
@@ -131,7 +132,7 @@ function AgentEditorPanel({ section, definition, plugins, controller, loading, s
         {loading && !definition ? <div className="py-10 text-center text-xs text-muted-foreground">加载中…</div> : null}
         {definition && section === "model" ? <ModelEditor definition={definition} controller={controller} set_definition={set_definition} /> : null}
         {definition && section === "soul" ? <SoulEditor definition={definition} controller={controller} set_definition={set_definition} /> : null}
-        {definition && section === "plugins" ? <PluginEditor definition={definition} plugins={plugins} set_definition={set_definition} /> : null}
+        {definition && section === "plugins" ? <PluginEditor definition={definition} plugins={plugins} controller={controller} set_definition={set_definition} /> : null}
         {error ? <div className="mt-3 text-[0.6875rem] leading-4 text-destructive">{error}</div> : null}
       </div>
       <div className="flex shrink-0 justify-end gap-2 border-t border-border/35 p-3"><Button disabled={loading || saving} onClick={cancel_edit}>取消</Button><Button variant="primary" disabled={!definition || loading || saving || !definition.model_id.trim()} onClick={() => void save_definition()}>{saving ? "保存中…" : "保存"}</Button></div>
@@ -151,19 +152,22 @@ function SoulEditor({ definition, controller, set_definition }: { /** 未提交�
 }
 
 /** Plugin 注册与 profile 编辑器。 */
-function PluginEditor({ definition, plugins, set_definition }: { /** 未提交定义。 */ definition: DesktopAgentDefinition; /** 可用 Plugin。 */ plugins: DesktopPluginSummary[]; /** 替换定义。 */ set_definition(value: DesktopAgentDefinition): void }) {
+function PluginEditor({ definition, plugins, controller, set_definition }: { /** 未提交定义。 */ definition: DesktopAgentDefinition; /** 可用 Plugin。 */ plugins: DesktopPluginSummary[]; /** Desktop 根控制器。 */ controller: DesktopViewController; /** 替换定义。 */ set_definition(value: DesktopAgentDefinition): void }) {
+  const [expanded_plugins, set_expanded_plugins] = useState<Set<string>>(() => new Set());
+  const [missing_profile_plugin, set_missing_profile_plugin] = useState<DesktopPluginSummary>();
   const set_plugin = (plugin_id: string, enabled: boolean) => {
     const next_plugins = { ...definition.plugins };
-    if (enabled) next_plugins[plugin_id] = { profile: "default" };
+    if (enabled) next_plugins[plugin_id] = {};
     else delete next_plugins[plugin_id];
     set_definition({ ...definition, plugins: next_plugins });
   };
   const set_profile = (plugin_id: string, reference: DesktopAgentPluginReference, profile: string) => set_definition({ ...definition, plugins: { ...definition.plugins, [plugin_id]: { ...reference, profile } } });
-  return <div className="space-y-1">{plugins.map((plugin) => {
+  return <><div className="space-y-1">{plugins.map((plugin) => {
     const reference = definition.plugins[plugin.plugin_id];
-    const profile_ids = [...new Set([reference?.profile, ...plugin.profile_ids, "default"].filter((value): value is string => Boolean(value)))];
-    return <div key={plugin.plugin_id} className="rounded-lg bg-background px-2.5 py-2"><label className="flex min-h-6 items-center gap-2"><input type="checkbox" checked={Boolean(reference)} onChange={(event) => set_plugin(plugin.plugin_id, event.target.checked)} /><span className="min-w-0 flex-1 truncate text-xs text-foreground">{plugin.title}</span></label>{reference ? <select value={reference.profile} className="mt-2 h-7 w-full rounded-md border border-input bg-background px-2 font-mono text-[0.6875rem] text-foreground" onChange={(event) => set_profile(plugin.plugin_id, reference, event.target.value)}>{profile_ids.map((profile_id) => <option key={profile_id} value={profile_id}>{profile_id}</option>)}</select> : null}</div>;
-  })}{plugins.length === 0 ? <div className="py-8 text-center text-xs text-muted-foreground">暂无可用 Plugin</div> : null}</div>;
+    const expanded = expanded_plugins.has(plugin.plugin_id);
+    if (!plugin.configurable) return <label key={plugin.plugin_id} className="flex min-h-10 items-center gap-2 rounded-lg bg-background px-2.5"><input type="checkbox" checked={Boolean(reference)} onChange={(event) => set_plugin(plugin.plugin_id, event.target.checked)} /><span className="min-w-0 flex-1 truncate text-xs text-foreground">{plugin.title}</span></label>;
+    return <div key={plugin.plugin_id} className="overflow-hidden rounded-xl border border-border/60 bg-surface-subtle"><button type="button" className="flex min-h-11 w-full items-center gap-2 px-3 text-left hover:bg-interaction-hover" onClick={() => set_expanded_plugins((current) => { const next = new Set(current); if (next.has(plugin.plugin_id)) next.delete(plugin.plugin_id); else next.add(plugin.plugin_id); return next; })}><TbChevronRight className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} /><span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{plugin.title}</span>{reference?.profile ? <span className="max-w-32 truncate rounded-md bg-primary/[0.1] px-1.5 py-0.5 font-mono text-[0.625rem] text-primary">{reference.profile}</span> : <span className="text-[0.625rem] text-muted-foreground">未选择</span>}</button>{expanded ? <div className="border-t border-border/50 bg-background/45 p-2">{plugin.profile_ids.length ? <div className="grid gap-1.5">{plugin.profile_ids.map((profile_id) => <button key={profile_id} type="button" className={`flex min-h-9 items-center gap-2 rounded-lg border px-2.5 text-left text-xs transition-colors ${reference?.profile === profile_id ? "border-primary/40 bg-primary/[0.1] text-foreground" : "border-transparent text-muted-foreground hover:border-border hover:bg-interaction-hover"}`} onClick={() => set_profile(plugin.plugin_id, reference ?? {}, profile_id)}><span className={`size-1.5 shrink-0 rounded-full ${reference?.profile === profile_id ? "bg-primary" : "bg-muted-foreground/40"}`} /><span className="min-w-0 flex-1 truncate font-mono">{profile_id}</span>{reference?.profile === profile_id ? <span className="text-[0.625rem] text-primary">已选择</span> : null}</button>)}</div> : <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-border px-3 py-2.5"><span className="text-[0.6875rem] text-muted-foreground">这个 Plugin 还没有可用配置</span><Button onClick={() => set_missing_profile_plugin(plugin)}><TbPlus />添加配置</Button></div>}</div> : null}</div>;
+  })}{plugins.length === 0 ? <div className="py-8 text-center text-xs text-muted-foreground">暂无可用 Plugin</div> : null}</div><Dialog open={Boolean(missing_profile_plugin)} onOpenChange={(open) => { if (!open) set_missing_profile_plugin(undefined); }}><DialogContent><DialogHeader><DialogTitle>为 {missing_profile_plugin?.title} 添加配置</DialogTitle><DialogDescription>需要先创建一个 Profile，Agent 才能使用这个 Plugin。</DialogDescription></DialogHeader><DialogBody><div className="rounded-lg bg-muted/50 px-3 py-2.5 text-xs leading-5 text-muted-foreground">创建完成后返回当前 Agent 页面，再展开 Plugin 选择刚刚创建的 Profile。</div></DialogBody><DialogFooter><Button onClick={() => set_missing_profile_plugin(undefined)}>取消</Button><Button variant="primary" onClick={() => { const plugin_id = missing_profile_plugin?.plugin_id; set_missing_profile_plugin(undefined); if (plugin_id) controller.select_plugin(plugin_id); }}>去创建配置</Button></DialogFooter></DialogContent></Dialog></>;
 }
 
 /** 设置式信息分组。 */

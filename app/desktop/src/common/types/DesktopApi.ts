@@ -44,8 +44,8 @@ export interface DesktopCreateAgentResult {
 
 /** Agent 定义中的一个 Plugin 引用。 */
 export interface DesktopAgentPluginReference {
-  /** Plugin 使用的 profile；为空时使用 default。 */
-  profile: string;
+  /** Plugin 使用的已保存 profile；不需要配置的 Plugin 不设置此字段。 */
+  profile?: string;
 }
 
 /** Renderer 可编辑的完整 Agent 定义。 */
@@ -249,6 +249,8 @@ export interface DesktopModelSummary {
   context_window?: number;
   /** Federation 提供的模型标签。 */
   tags: string[];
+  /** Federation 提供的价格说明列表；每项通常描述输入或输出 token 价格。 */
+  price?: string[];
 }
 
 /** 当前 Session 可动态切换的配置。 */

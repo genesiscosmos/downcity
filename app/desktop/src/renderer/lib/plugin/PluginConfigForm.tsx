@@ -10,7 +10,8 @@ export function PluginConfigForm({ schema, value, on_change }: PluginConfigFormP
 /** 渲染 Schema 对象属性集合。 */
 function SchemaObject({ schema, value, on_change }: PluginConfigFormProps) {
   const properties = is_object(schema.properties) ? schema.properties : {};
-  return <div className="space-y-3">{Object.entries(properties).map(([key, child]) => is_object(child) ? <SchemaField key={key} name={key} schema={child} value={value[key]} on_change={(next) => on_change({ ...value, [key]: next })} /> : null)}{Object.keys(properties).length === 0 ? <div className="py-8 text-center text-xs text-muted-foreground">此配置没有可编辑字段</div> : null}</div>;
+  const required = Array.isArray(schema.required) ? schema.required.filter((item): item is string => typeof item === "string") : [];
+  return <div className="space-y-3">{Object.entries(properties).map(([key, child]) => is_object(child) ? <SchemaField key={key} name={key} schema={{ ...child, required: required.includes(key) }} value={value[key]} on_change={(next) => on_change({ ...value, [key]: next })} /> : null)}{Object.keys(properties).length === 0 ? <div className="py-8 text-center text-xs text-muted-foreground">此配置没有可编辑字段</div> : null}</div>;
 }
 
 /** 按 JSON Schema 类型渲染单个字段。 */
@@ -18,16 +19,17 @@ function SchemaField({ name, schema, value, on_change }: { /** 字段名。 */ n
   const label = typeof schema.title === "string" ? schema.title : name;
   const description = typeof schema.description === "string" ? schema.description : "";
   const type = typeof schema.type === "string" ? schema.type : infer_type(value);
+  const enum_values = get_enum_values(schema);
   if (type === "object") return <fieldset className="rounded-lg border border-border/45 bg-background p-3"><legend className="px-1 text-xs font-medium text-foreground">{label}</legend><SchemaObject schema={schema} value={is_object(value) ? value : {}} on_change={on_change} /></fieldset>;
-  return <label className="block"><span className="mb-1 block text-xs font-medium text-foreground">{label}</span>{description ? <span className="mb-1.5 block text-[0.6875rem] leading-4 text-muted-foreground">{description}</span> : null}<FieldInput type={type} enum_values={Array.isArray(schema.enum) ? schema.enum : []} value={value} on_change={on_change} /></label>;
+  return <label className="block"><span className="mb-1 block text-xs font-medium text-foreground">{label}{schema.required === true ? <span className="ml-1 text-destructive">*</span> : null}</span>{description ? <span className="mb-1.5 block text-[0.6875rem] leading-4 text-muted-foreground">{description}</span> : null}<FieldInput type={type} enum_values={enum_values} minimum={typeof schema.minimum === "number" ? schema.minimum : undefined} maximum={typeof schema.maximum === "number" ? schema.maximum : undefined} value={value} on_change={on_change} /></label>;
 }
 
 /** 渲染基础值和数组输入。 */
-function FieldInput({ type, enum_values, value, on_change }: { /** Schema 类型。 */ type: string; /** 枚举值。 */ enum_values: JsonValue[]; /** 当前值。 */ value: JsonValue | undefined; /** 变化回调。 */ on_change(value: JsonValue): void }) {
+function FieldInput({ type, enum_values, minimum, maximum, value, on_change }: { /** Schema 类型。 */ type: string; /** 枚举值。 */ enum_values: JsonValue[]; /** 最小值。 */ minimum?: number; /** 最大值。 */ maximum?: number; /** 当前值。 */ value: JsonValue | undefined; /** 变化回调。 */ on_change(value: JsonValue): void }) {
   const class_name = "h-8 w-full rounded-lg border border-input bg-background px-2.5 text-xs text-foreground outline-none focus:border-ring";
   if (enum_values.length) return <select className={class_name} value={String(value ?? "")} onChange={(event) => on_change(enum_values.find((item) => String(item) === event.target.value) ?? event.target.value)}>{enum_values.map((item) => <option key={String(item)} value={String(item)}>{String(item)}</option>)}</select>;
   if (type === "boolean") return <input type="checkbox" checked={Boolean(value)} className="size-4" onChange={(event) => on_change(event.target.checked)} />;
-  if (type === "number" || type === "integer") return <input type="number" step={type === "integer" ? 1 : "any"} className={class_name} value={typeof value === "number" ? value : ""} onChange={(event) => on_change(Number(event.target.value))} />;
+  if (type === "number" || type === "integer") return <input type="number" step={type === "integer" ? 1 : "any"} min={minimum} max={maximum} className={class_name} value={typeof value === "number" ? value : ""} onChange={(event) => on_change(Number(event.target.value))} />;
   if (type === "array") return <textarea className="min-h-24 w-full resize-y rounded-lg border border-input bg-background px-2.5 py-2 font-mono text-xs text-foreground" value={JSON.stringify(Array.isArray(value) ? value : [], null, 2)} onChange={(event) => { try { const next = JSON.parse(event.target.value); if (Array.isArray(next)) on_change(next); } catch { /* 等待有效 JSON。 */ } }} />;
   return <input className={class_name} value={typeof value === "string" ? value : ""} onChange={(event) => on_change(event.target.value)} />;
 }
@@ -36,3 +38,13 @@ function FieldInput({ type, enum_values, value, on_change }: { /** Schema 类型
 function is_object(value: unknown): value is JsonObject { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
 /** 从当前值推断未声明的 Schema 类型。 */
 function infer_type(value: JsonValue | undefined): string { return Array.isArray(value) ? "array" : value == null ? "string" : typeof value; }
+/** 读取标准 enum 与 oneOf/anyOf 中的常见枚举分支。 */
+function get_enum_values(schema: JsonObject): JsonValue[] {
+  if (Array.isArray(schema.enum)) return schema.enum as JsonValue[];
+  for (const key of ["oneOf", "anyOf"]) {
+    const branches = Array.isArray(schema[key]) ? schema[key] : [];
+    const values = branches.map((branch) => is_object(branch) && Array.isArray(branch.enum) ? branch.enum : null).find((value): value is JsonValue[] => Boolean(value));
+    if (values) return values;
+  }
+  return [];
+}

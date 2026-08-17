@@ -114,7 +114,7 @@ export class AgentController {
       agent_id: config.agent_id,
       model_id: typeof config.execution?.model_id === "string" ? config.execution.model_id : "",
       instruction: config.instruction,
-      plugins: Object.fromEntries(Object.entries(config.plugins).map(([plugin_id, reference]) => [plugin_id, { profile: reference.profile ?? "default" }])),
+      plugins: Object.fromEntries(Object.entries(config.plugins).map(([plugin_id, reference]) => [plugin_id, reference.profile ? { profile: reference.profile } : {}])),
     };
   }
 
@@ -189,7 +189,10 @@ export class AgentController {
       ...current,
       execution: { ...current.execution, type: "api", model_id },
       instruction: String(input.instruction || ""),
-      plugins: Object.fromEntries(Object.entries(input.plugins || {}).map(([plugin_id, reference]) => [plugin_id, { profile: String(reference.profile || "default").trim() || "default" }])),
+      plugins: Object.fromEntries(Object.entries(input.plugins || {}).map(([plugin_id, reference]) => {
+        const profile = String(reference.profile || "").trim();
+        return [plugin_id, profile ? { profile } : {}];
+      })),
       updated_at: new Date().toISOString(),
     };
     const replacement = await this.create_native_agent(candidate);
