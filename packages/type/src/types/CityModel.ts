@@ -38,6 +38,20 @@ export interface CityModelReasoning {
   default_effort?: string;
 }
 
+/** 模型的结构化价格方案。 */
+export interface ModelPricing {
+  /** ISO 4217 货币代码，例如 USD 或 CNY。 */
+  currency: string;
+  /** 计费对象，例如 token、request 或 image。 */
+  unit: "token" | "request" | "image" | string;
+  /** 每个价格对应的计费单位数量；token 通常为 1_000_000。 */
+  scale?: number;
+  /** 命名计费组件，例如 input、output 或 cached_input。 */
+  rates: Record<string, number>;
+  /** 价格适用条件，例如时段、分辨率或上下文档位。 */
+  dimensions?: Record<string, string>;
+}
+
 /** City 模型目录中的公开模型信息。 */
 export interface CityModelDescriptor {
   /** 模型唯一 ID，用于请求 City AIService。 */
@@ -52,7 +66,9 @@ export interface CityModelDescriptor {
   modalities: string[];
   /** 用于筛选或展示的模型标签。 */
   tags: string[];
-  /** 面向用户展示的价格说明列表；每一项由 Provider 自行定义展示文案。 */
+  /** 结构化价格方案；多个方案用于表达条件、时段或档位差异。 */
+  pricing?: ModelPricing | ModelPricing[];
+  /** 兼容旧客户端的价格说明列表，由 pricing 派生。 */
   price?: string[];
   /** 模型元数据，供宿主记录 provider、区域、套餐等扩展信息。 */
   meta: Record<string, unknown>;

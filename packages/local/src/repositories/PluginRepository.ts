@@ -59,6 +59,7 @@ export class PluginRepository {
       || !value.integrity
       || !value.installed_at
       || !value.updated_at
+      || (value.icon !== undefined && typeof value.icon !== "string")
       || (
         value.config !== undefined
         && (

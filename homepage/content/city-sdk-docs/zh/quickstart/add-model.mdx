@@ -41,3 +41,17 @@ federation.use(ai);
 这一个 `stream()` 同时支持 `city.ai.text()`、`city.ai.stream()`、`CityModel` 和 `/v1/ai/chat/completions`。
 
 reasoning、fallback、计费和 providerOptions 详见 [AIChannel 与模型注册](/zh/city-sdk-docs/service/ai/provider)。
+## 结构化价格
+
+模型可以通过 `pricing` 提供机器可读的价格方案。`unit` 表示计费对象，`scale` 表示每个价格对应的单位数量；多个方案可通过 `dimensions` 表达时段或档位。
+
+```ts
+pricing: {
+  currency: "USD",
+  unit: "token",
+  scale: 1_000_000,
+  rates: { input: 1.6, output: 9.6, cached_input: 0.16 },
+}
+```
+
+旧版 `price` 字段仅作为兼容投影，新增模型不应单独维护价格文案。

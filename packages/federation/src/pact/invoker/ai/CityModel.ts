@@ -38,6 +38,7 @@ export class CityModel implements CityModelContract {
   readonly modalities: string[];
   readonly tags: string[];
   readonly price?: string[];
+  readonly pricing?: CityModelContract["pricing"];
   readonly meta: Record<string, unknown>;
   readonly reasoning: CityModelContract["reasoning"];
   readonly env_requirements: CityModelContract["env_requirements"];
@@ -54,6 +55,7 @@ export class CityModel implements CityModelContract {
     this.modalities = [...descriptor.modalities];
     this.tags = [...descriptor.tags];
     this.price = descriptor.price ? [...descriptor.price] : undefined;
+    this.pricing = descriptor.pricing;
     this.meta = { ...descriptor.meta };
     this.reasoning = descriptor.reasoning;
     this.env_requirements = descriptor.env_requirements;

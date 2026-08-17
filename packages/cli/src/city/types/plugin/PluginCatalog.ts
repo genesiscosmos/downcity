@@ -13,6 +13,8 @@ export interface PluginCatalogItem {
   title: string;
   /** 用途说明。 */
   description: string;
+  /** 可选图标地址。 */
+  icon?: string;
   /** 可选语义化版本号。 */
   version?: string;
   /** 内置或第三方来源。 */

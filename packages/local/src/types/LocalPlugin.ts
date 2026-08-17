@@ -18,6 +18,8 @@ export interface LocalPluginDefinition {
   title?: string;
   /** 面向用户展示的用途说明。 */
   description: string;
+  /** Plugin 图标地址；可为 http(s) URL 或 Plugin 根目录内的相对路径。 */
+  icon?: string;
   /** Plugin profile 的可选 JSON Schema 与默认配置。 */
   config?: LocalPluginConfigDefinition;
 }

@@ -78,6 +78,7 @@ Loader 先使用 JSON Schema 校验 profile，再把完整配置传入 construct
   "version": "1.0.0",
   "title": "GitHub",
   "description": "GitHub 集成",
+  "icon": "./assets/github.svg",
   "entry": "dist/index.js",
   "config": {
     "schema": {
@@ -93,6 +94,48 @@ Loader 先使用 JSON Schema 校验 profile，再把完整配置传入 construct
 }
 ```
 
+`icon` 可选，支持 `http://`、`https://` 远程地址，或 Plugin 根目录内的相对路径。相对路径对应的文件会随安装复制，并且不能使用 symlink 或路径逃逸。
+
+`README.md` 是第三方 Plugin 的必需文件，安装后会保留在 Plugin 目录，供 CLI、Desktop 和用户离线查看。
+
+配置 `schema` 使用 JSON Schema 2020-12。常用字段包括：
+
+- `type`、`properties`、`required`、`additionalProperties`
+- `enum`、`const`、`oneOf`、`anyOf`、`allOf`
+- 字符串的 `minLength`、`maxLength`、`pattern`、`format`
+- 数值的 `minimum`、`maximum`、`multipleOf`
+- 数组的 `items`、`minItems`、`maxItems`、`uniqueItems`
+- `default`、`examples`、`title`、`description`
+- 敏感字段使用 `writeOnly: true`
+
+例如：
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "format": "uri"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["safe", "fast"],
+      "default": "safe"
+    },
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    }
+  },
+  "required": ["endpoint", "token"],
+  "additionalProperties": false
+}
+```
+
+表单展示所需的占位符、排序或控件提示放在 `x_downcity` 下，不改变 JSON Schema 的运行时校验语义。
+
 Plugin 作者直接在 `plugin.json` 中声明完整 JSON Schema 和可选 `defaults`。安装器校验 Schema、默认值与已有 profile，并把来源、完整性和时间信息写回安装后的同一个文件；不会生成第二份 Manifest 或 Schema 快照。
 
 `entry` 必须指向单个自包含 ESM 文件。安装器不会执行依赖安装、构建脚本或导入 Plugin 入口，也不会复制入口之外的源码和开发文件。Plugin 使用 Zod 等运行时依赖时，构建工具必须把依赖打进入口。
@@ -104,6 +147,8 @@ Plugin 作者直接在 `plugin.json` 中声明完整 JSON Schema 和可选 `defa
 ├── plugin.json
 ├── config.toml
 ├── package.json
+├── README.md
+├── assets/github.svg
 └── dist/index.js
 ```
 

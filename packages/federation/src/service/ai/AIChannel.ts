@@ -23,6 +23,7 @@ import type {
   LanguageModelV3CallOptions,
   LanguageModelV3StreamResult,
 } from "../../types/AI.js";
+import type { ModelPricing } from "@downcity/type";
 import type { UIMessage } from "ai";
 import type { Context } from "../service.js";
 import { execute_language_model_text } from "./language-model-text.js";
@@ -203,6 +204,7 @@ export abstract class AIChannel {
     return {
       ...model_spec,
       channel_id: this.id,
+      ...(spec.pricing ? { pricing: clone_pricing(spec.pricing) } : {}),
       ...(spec.price ? { price: [...spec.price] } : {}),
       env: this.env,
       runtime: {
@@ -230,6 +232,16 @@ export abstract class AIChannel {
         : {}),
     };
   }
+}
+
+/** 复制模型价格方案，保持 Channel 与目录注册表之间的数据隔离。 */
+function clone_pricing(pricing: AIModelSpec["pricing"]): ModelPricing[] {
+  const values: ModelPricing[] = pricing ? (Array.isArray(pricing) ? pricing : [pricing]) : [];
+  return values.map((item) => ({
+    ...item,
+    rates: { ...item.rates },
+    ...(item.dimensions ? { dimensions: { ...item.dimensions } } : {}),
+  }));
 }
 
 /** 复制服务端 providerOptions，避免调用方原地修改已注册配置。 */

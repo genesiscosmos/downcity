@@ -9,6 +9,7 @@ import type { LanguageModel, UIMessage } from "ai";
 import type {
   CityModelEnvRequirement,
   CityModelReasoning,
+  ModelPricing,
 } from "@downcity/type";
 import type { ActionFn } from "../service/action.js";
 import type { Context } from "../service/service.js";
@@ -139,7 +140,9 @@ export interface AIModelSpec {
   context_window?: number;
   /** 模型目录标签。 */
   tags?: string[];
-  /** 面向用户展示的价格说明列表，不参与实际扣费。 */
+  /** 结构化价格方案；多个方案用于表达条件、时段或档位差异。 */
+  pricing?: ModelPricing | ModelPricing[];
+  /** 兼容旧客户端的价格说明列表，由 pricing 派生。 */
   price?: string[];
   /** 不公开给客户端的模型级 AI SDK providerOptions。 */
   ai_sdk_provider_options?: AISDKProviderOptions;
@@ -252,6 +255,8 @@ export interface AIBillInput {
   readonly output: unknown;
   /** AIService 已解析完成的最终模型。 */
   readonly model: AIChannelModel;
+  /** 本次结算使用的结构化价格方案；由 AIService 从最终模型注入。 */
+  readonly pricing?: ModelPricing | ModelPricing[];
   /** AIService 已归一化的可选计量信息。 */
   readonly metering?: RuntimeMetering;
   /** 当前请求的可选用户 ID。 */

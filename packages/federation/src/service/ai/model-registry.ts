@@ -10,6 +10,7 @@ import type {
   AIModelDefinition,
 } from "../../types/AI.js";
 import type { CityModelDescriptor } from "@downcity/type";
+import type { ModelPricing } from "@downcity/type";
 import { validate_model_context_window } from "./model-context-window.js";
 import { validate_model_reasoning } from "./reasoning.js";
 
@@ -40,6 +41,7 @@ export class AIModelRegistry {
       }
       validate_model_context_window(config);
       validate_model_reasoning(config);
+      validate_model_pricing(config.pricing);
       this.model_map.set(config.id, config);
     }
   }
@@ -82,7 +84,10 @@ export class AIModelRegistry {
         : {}),
       modalities: options.get_modalities(model),
       tags: model.tags ?? [],
-      ...(model.price ? { price: [...model.price] } : {}),
+      ...(model.pricing ? { pricing: clone_pricing(model.pricing) } : {}),
+      ...(model.pricing
+        ? { price: pricing_to_legacy_price(model.pricing) }
+        : model.price ? { price: [...model.price] } : {}),
       meta: model.meta ?? {},
       ...(model.reasoning ? { reasoning: model.reasoning } : {}),
       ...(include_admin_fields
@@ -101,4 +106,38 @@ export class AIModelRegistry {
       required: true,
     }));
   }
+}
+
+/** 校验结构化价格，尽早拒绝无法用于目录或计费的配置。 */
+function validate_model_pricing(pricing: AIModelDefinition["pricing"]): void {
+  if (!pricing) return;
+  const values: ModelPricing[] = pricing ? (Array.isArray(pricing) ? pricing : [pricing]) : [];
+  for (const item of values) {
+    if (!item.currency.trim() || !item.unit.trim()) throw new Error("Model pricing currency and unit are required");
+    if (item.scale !== undefined && (!Number.isFinite(item.scale) || item.scale <= 0)) throw new Error("Model pricing scale must be positive");
+    for (const [key, value] of Object.entries(item.rates)) {
+      if (!key.trim() || !Number.isFinite(value) || value < 0) throw new Error("Model pricing rates must be non-negative finite numbers");
+    }
+    if (item.dimensions && Object.values(item.dimensions).some((value) => typeof value !== "string")) throw new Error("Model pricing dimensions must be strings");
+  }
+}
+
+/** 复制公开价格，避免目录调用方修改注册表中的事实源。 */
+function clone_pricing(pricing: AIModelDefinition["pricing"]): ModelPricing[] {
+  const values: ModelPricing[] = pricing ? (Array.isArray(pricing) ? pricing : [pricing]) : [];
+  return values.map((item) => ({
+    ...item,
+    rates: { ...item.rates },
+    ...(item.dimensions ? { dimensions: { ...item.dimensions } } : {}),
+  }));
+}
+
+/** 为旧客户端生成稳定、可读且不参与计费的兼容文案。 */
+function pricing_to_legacy_price(pricing: NonNullable<AIModelDefinition["pricing"]>): string[] {
+  return (Array.isArray(pricing) ? pricing : [pricing]).map((item) => {
+    const scale = item.scale ? ` / ${item.scale} ${item.unit}` : ` / ${item.unit}`;
+    const rates = Object.entries(item.rates).map(([key, value]) => `${key}=${value}`).join(", ");
+    const dimensions = item.dimensions ? ` (${Object.entries(item.dimensions).map(([key, value]) => `${key}=${value}`).join(", ")})` : "";
+    return `${item.currency}${scale}: ${rates}${dimensions}`;
+  });
 }

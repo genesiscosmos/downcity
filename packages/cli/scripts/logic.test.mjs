@@ -31,19 +31,26 @@ test("内建 slash 命令未知时回退为普通消息", () => {
 test("Plugin JSON Schema 校验成功配置并报告错误路径", () => {
   const schema = {
     type: "object",
-    properties: { endpoint: { type: "string", minLength: 1 } },
-    required: ["endpoint"],
+    properties: {
+      endpoint: { type: "string", format: "uri", minLength: 1 },
+      mode: { type: "string", enum: ["safe", "fast"], default: "safe" },
+    },
+    required: ["endpoint", "mode"],
     additionalProperties: false,
   }
   assert.doesNotThrow(() => validate_local_plugin_config_schema(schema))
-  assert.doesNotThrow(() => validate_local_plugin_config({ endpoint: "https://example.com" }, schema))
+  assert.doesNotThrow(() => validate_local_plugin_config({ endpoint: "https://example.com", mode: "safe" }, schema))
   assert.throws(
     () => validate_local_plugin_config({ endpoint: "" }, schema),
     /config\/endpoint must NOT have fewer than 1 characters/iu,
   )
   assert.throws(
-    () => validate_local_plugin_config({ endpoint: "ok", extra: true }, schema),
+    () => validate_local_plugin_config({ endpoint: "https://example.com", mode: "invalid", extra: true }, schema),
     /config must NOT have additional properties/iu,
+  )
+  assert.throws(
+    () => validate_local_plugin_config({ endpoint: "not-a-url", mode: "safe" }, schema),
+    /config\/endpoint must match format "uri"/iu,
   )
   assert.throws(
     () => validate_local_plugin_config_schema({ type: "not-a-json-schema-type" }),

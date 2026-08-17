@@ -21,6 +21,10 @@ function write_plugin_source(root, input = {}) {
     path.join(root, "package.json"),
     input.package_source ?? JSON.stringify({ type: "module" }),
   );
+  fs.writeFileSync(
+    path.join(root, "README.md"),
+    input.readme ?? "# Example Plugin\n\nConfiguration and usage.\n",
+  );
   fs.writeFileSync(path.join(root, "plugin.json"), JSON.stringify({
     schema_version: 1,
     id,
@@ -244,6 +248,7 @@ test("第三方 Plugin 使用 definition ID 目录和单 constructor", async () 
     assert.equal(fs.existsSync(path.join(plugin_dir, "artifact")), false);
     assert.equal(fs.existsSync(path.join(plugin_dir, "src")), false);
     assert.equal(fs.existsSync(path.join(plugin_dir, "package.json")), true);
+    assert.equal(fs.existsSync(path.join(plugin_dir, "README.md")), true);
     assert.equal(fs.existsSync(path.join(plugin_dir, "tsconfig.json")), false);
     assert.equal(fs.existsSync(path.join(plugin_dir, "tsup.config.ts")), false);
 
@@ -285,6 +290,55 @@ test("第三方 Plugin 使用 definition ID 目录和单 constructor", async () 
     plugins.remove_agent_plugin_reference("plugin_agent", "example");
     plugins.remove_installed_plugin("example");
     assert.equal(fs.existsSync(plugin_dir), false);
+  } finally {
+    delete process.env.DC_PLATFORM_ROOT;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+    fs.rmSync(plugin_source, { recursive: true, force: true });
+  }
+});
+
+test("第三方 Plugin 安装本地 icon 并保留远程 icon 地址", async () => {
+  const platform_root = create_temp_root();
+  const local_source = create_temp_root();
+  const remote_source = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  try {
+    write_plugin_source(local_source, {
+      id: "local-icon",
+      extra_manifest: { icon: "assets/icon.svg" },
+    });
+    fs.mkdirSync(path.join(local_source, "assets"), { recursive: true });
+    fs.writeFileSync(path.join(local_source, "assets", "icon.svg"), "<svg></svg>\n");
+    const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
+    const local_installed = await installer.install_plugin(local_source);
+    const local_dir = path.join(platform_root, "plugins", "local-icon");
+    assert.equal(local_installed.icon, "assets/icon.svg");
+    assert.equal(fs.existsSync(path.join(local_dir, "assets", "icon.svg")), true);
+
+    write_plugin_source(remote_source, {
+      id: "remote-icon",
+      extra_manifest: { icon: "https://example.com/icon.svg" },
+    });
+    const remote_installed = await installer.install_plugin(remote_source);
+    assert.equal(remote_installed.icon, "https://example.com/icon.svg");
+    assert.equal(fs.existsSync(path.join(platform_root, "plugins", "remote-icon", "icon.svg")), false);
+  } finally {
+    delete process.env.DC_PLATFORM_ROOT;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+    fs.rmSync(local_source, { recursive: true, force: true });
+    fs.rmSync(remote_source, { recursive: true, force: true });
+  }
+});
+
+test("第三方 Plugin 必须提供 README.md", async () => {
+  const platform_root = create_temp_root();
+  const plugin_source = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  try {
+    write_plugin_source(plugin_source);
+    fs.rmSync(path.join(plugin_source, "README.md"));
+    const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
+    await assert.rejects(() => installer.install_plugin(plugin_source), /README not found/u);
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });

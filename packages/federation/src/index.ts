@@ -129,6 +129,7 @@ export type {
 export { AIService } from "./service/ai/ai-service.js";
 export { AIChannel } from "./service/ai/AIChannel.js";
 export { read_resolved_reasoning } from "./service/ai/reasoning.js";
+export { calculate_model_price, select_model_pricing } from "./service/ai/model-pricing.js";
 
 export type {
   AIChannelOptions,

@@ -15,6 +15,7 @@ export type {
   CityModelEnvRequirement,
   CityModelReasoning,
   CityModelReasoningEffort,
+  ModelPricing,
 } from "./types/CityModel.js";
 
 export type { AuthRoutePolicy } from "./types/auth/AuthRoute.js";

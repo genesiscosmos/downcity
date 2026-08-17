@@ -863,6 +863,7 @@ export class AIService extends Service {
         id: model.id,
         upstream_model: model.upstream_model,
       },
+      ...(model.pricing ? { pricing: model.pricing } : {}),
       ...(ctx.metering ? { metering: ctx.metering } : {}),
       ...(ctx.user?.user_id ? { user_id: ctx.user.user_id } : {}),
       ...(ctx.bureau?.bureau_id ? { bureau_id: ctx.bureau.bureau_id } : {}),

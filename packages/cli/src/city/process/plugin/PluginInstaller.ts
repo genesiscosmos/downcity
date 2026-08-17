@@ -1,9 +1,8 @@
 /**
  * 第三方单 Plugin 包安装器。
  *
- * 来源目录可以包含源码与任意开发工具；安装目录只保留 `plugin.json`、`package.json`、
- * 自包含 ESM 入口和用户自己的 `config.toml`。Plugin 定义的唯一 ID 同时是公开身份和
- * 最终目录名。
+ * 来源目录可以包含源码与任意开发工具；安装目录只保留清单、运行入口、README、图标
+ * 和用户自己的 `config.toml`。Plugin 定义的唯一 ID 同时是公开身份和最终目录名。
  */
 
 import path from "node:path";
@@ -32,6 +31,7 @@ import {
 
 const PLUGIN_CONFIG_FILE_NAME = "config.toml";
 const PLUGIN_PACKAGE_FILE_NAME = "package.json";
+const PLUGIN_README_FILE_NAME = "README.md";
 
 /** 从本地目录、Git URL 或 GitHub shorthand 安装一个 Plugin。 */
 export async function install_plugin(
@@ -76,6 +76,11 @@ export async function install_plugin(
     );
     await validate_plugin_package(package_path);
     const definition = await read_plugin_definition(plugin_root);
+    const readme_path = await assert_plugin_package_file(
+      plugin_root,
+      PLUGIN_README_FILE_NAME,
+      "README",
+    );
     if (expected_plugin_id && definition.id !== normalize_plugin_id(expected_plugin_id)) {
       throw new Error(`Plugin update changed ID: ${expected_plugin_id} -> ${definition.id}`);
     }
@@ -87,19 +92,32 @@ export async function install_plugin(
       definition.entry,
       "entry",
     );
+    const icon_path = definition.icon && is_local_plugin_asset(definition.icon)
+      ? await assert_plugin_package_file(plugin_root, definition.icon, "icon")
+      : undefined;
     validate_existing_profiles(definition);
 
     await fs.ensureDir(staging_dir, { mode: 0o700 });
     const installed_package_path = path.join(staging_dir, PLUGIN_PACKAGE_FILE_NAME);
     await fs.copyFile(package_path, installed_package_path);
     await fs.chmod(installed_package_path, 0o600);
+    await fs.copyFile(readme_path, path.join(staging_dir, PLUGIN_README_FILE_NAME));
+    await fs.chmod(path.join(staging_dir, PLUGIN_README_FILE_NAME), 0o600);
     const installed_entry_path = resolve_plugin_path(staging_dir, definition.entry, "entry");
     await fs.ensureDir(path.dirname(installed_entry_path), { mode: 0o700 });
     await fs.copyFile(entry_path, installed_entry_path);
     await fs.chmod(installed_entry_path, 0o600);
+    if (icon_path && definition.icon) {
+      const installed_icon_path = resolve_plugin_path(staging_dir, definition.icon, "icon");
+      await fs.ensureDir(path.dirname(installed_icon_path), { mode: 0o700 });
+      await fs.copyFile(icon_path, installed_icon_path);
+      await fs.chmod(installed_icon_path, 0o600);
+    }
     const integrity = await calculate_plugin_integrity(staging_dir, [
       PLUGIN_PACKAGE_FILE_NAME,
+      PLUGIN_README_FILE_NAME,
       definition.entry,
+      ...(definition.icon && is_local_plugin_asset(definition.icon) ? [definition.icon] : []),
     ]);
     const existing = get_installed_plugin(definition.id);
     const target_dir = get_local_plugin_path(root_path, definition.id);
@@ -164,6 +182,7 @@ export async function read_plugin_definition(
       "version",
       "title",
       "description",
+      "icon",
       "entry",
       "config",
       "source",
@@ -187,6 +206,7 @@ export async function read_plugin_definition(
   }
   const description = String(raw.description || "").trim();
   if (!description) throw new Error(`Plugin description is required: ${id}`);
+  const icon = normalize_plugin_icon(raw.icon, id);
   const entry = String(raw.entry || "").trim();
   if (!entry) throw new Error(`Plugin entry is required: ${id}`);
   resolve_plugin_path(plugin_root, entry, "entry");
@@ -220,9 +240,28 @@ export async function read_plugin_definition(
     version,
     ...(title ? { title } : {}),
     description,
+    ...(icon ? { icon } : {}),
     entry: entry.split(path.sep).join("/"),
     ...(config ? { config } : {}),
   };
+}
+
+/** 校验并规范化 Plugin 图标地址。 */
+function normalize_plugin_icon(value: unknown, plugin_id: string): string | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "string") throw new Error(`Plugin icon must be a string: ${plugin_id}`);
+  const icon = value.trim();
+  if (!icon) return undefined;
+  if (/^https?:\/\//iu.test(icon)) return icon;
+  if (/^[a-z][a-z0-9+.-]*:/iu.test(icon)) {
+    throw new Error(`Plugin icon protocol is not supported: ${icon}`);
+  }
+  return icon.split(path.sep).join("/");
+}
+
+/** 判断图标是否为 Plugin 根目录内的本地资源。 */
+function is_local_plugin_asset(icon: string): boolean {
+  return !/^https?:\/\//iu.test(icon);
 }
 
 /** 更新前用 `plugin.json` Schema 验证全部已保存 profile。 */
