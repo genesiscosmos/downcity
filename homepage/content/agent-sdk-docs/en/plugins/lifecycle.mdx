@@ -23,13 +23,11 @@ Plugins passed to the Agent constructor are registered automatically:
 ```ts
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";
-import { PlaywrightBrowserProvider, WebPlugin } from "@downcity/plugins/web";
+import { WebPlugin } from "@downcity/plugins/web";
 
 const agent = new Agent({
   id: "agent",
-  plugins: [new WebPlugin({
-    browser: new PlaywrightBrowserProvider({ cdp_url: "http://127.0.0.1:9222" }),
-  })],
+  plugins: [new WebPlugin({ browser: "playwright", cdp_url: "http://127.0.0.1:9222" })],
 });
 const agent_workspace = agent.enter(new Workspace({
   id: "project",

@@ -270,12 +270,6 @@ const agent = new Agent({
   plugins: [
     new ImagePlugin({
       default_model: "image-model-id",
-      list_models: async () => {
-        const catalog = await city.ai.catalog();
-        return catalog.forModality("image");
-      },
-      image_create: (input) => city.ai.image_create(input),
-      image_result: (input) => city.ai.image_result(input),
     }),
   ],
 });
@@ -284,13 +278,7 @@ const agent = new Agent({
 如果默认图片模型需要由业务状态决定，也可以传函数：
 
 ```ts
-new ImagePlugin({
-  default_model: async ({ input }) => {
-    return input.aspect_ratio === "16:9" ? "image-wide-model-id" : "image-model-id";
-  },
-  image_create: (input) => city.ai.image_create(input),
-  image_result: (input) => city.ai.image_result(input),
-});
+new ImagePlugin({ default_model: "image-model-id" });
 ```
 
 注册后，Agent 会自动获得内置的 `plugin_read` / `plugin_call` tool。模型可以先读取 action metadata：

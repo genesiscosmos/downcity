@@ -9,11 +9,10 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import fs from "fs-extra";
-import type { Plugin } from "@downcity/agent";
+import type { JsonObject, Plugin, PluginServices } from "@downcity/agent";
 import { validate_local_plugin_config } from "@/runtime/LocalPluginConfigSchema.js";
 import type { LocalAgentConfig } from "@/types/LocalConfig.js";
 import type {
-  LocalPluginCreateInput,
   LocalPluginRegistration,
 } from "@/types/LocalPlugin.js";
 import type { LocalPluginLoaderOptions } from "@/types/LocalRuntime.js";
@@ -23,8 +22,12 @@ export class LocalPluginLoader {
   /** 当前宿主注入的内置 Plugin 注册。 */
   private readonly builtin_registrations: readonly LocalPluginRegistration[];
 
+  /** 当前宿主提供给 Agent 的 Plugin 服务能力。 */
+  readonly services: PluginServices;
+
   constructor(private readonly options: LocalPluginLoaderOptions) {
     this.builtin_registrations = [...(options.plugin_registrations ?? [])];
+    this.services = Object.freeze({ ...(options.services || {}) });
   }
 
   /** 根据 Agent 定义创建全部已注册 Plugin。 */
@@ -45,7 +48,7 @@ export class LocalPluginLoader {
         registration.definition.config?.schema,
         `Plugin profile ${plugin_id}`,
       );
-      const plugin = registration.create({ config: plugin_config });
+      const plugin = registration.create(plugin_config);
       if (plugin.name !== plugin_id) {
         throw new Error(`Plugin instance ID does not match definition: ${plugin_id}`);
       }
@@ -87,7 +90,7 @@ export class LocalPluginLoader {
     const plugin_constructor = module.plugin as PluginConstructor;
     return {
       definition,
-      create: ({ config }) => new plugin_constructor({ config }),
+      create: (profile) => new plugin_constructor(profile),
     };
   }
 }
@@ -123,7 +126,7 @@ async function verify_installed_plugin_integrity(
 /** 第三方入口导出的 Plugin constructor。 */
 type PluginConstructor = {
   /** 使用已校验配置创建 Agent 独享实例。 */
-  new(input: LocalPluginCreateInput): Plugin;
+  new(profile: JsonObject): Plugin;
 };
 
 /** 安全解析 Plugin 根目录内的入口。 */

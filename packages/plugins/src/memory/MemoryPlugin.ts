@@ -13,6 +13,8 @@
  */
 
 import type { Command } from "commander";
+import os from "node:os";
+import path from "node:path";
 import { BasePlugin, create_action } from "@downcity/agent";
 import type {
   JsonObject,
@@ -31,6 +33,8 @@ import {
   status_memory_action,
 } from "@/memory/Action.js";
 import { build_memory_plugin_system_text } from "@/memory/runtime/SystemProvider.js";
+import { BuiltinMemoryProvider } from "@/memory/providers/BuiltinMemoryProvider.js";
+import { FileMemoryStorageAdapter, get_default_file_memory_root_path } from "@/memory/adapters/FileMemoryStorageAdapter.js";
 import type {
   MemoryPluginOptions,
   MemoryProvider,
@@ -106,12 +110,20 @@ export class MemoryPlugin extends BasePlugin {
   /** 当前 Plugin 唯一绑定的 Memory Provider。 */
   readonly provider: MemoryProvider;
 
-  constructor(options: MemoryPluginOptions) {
+  constructor(profile: MemoryPluginOptions = {}) {
     super();
-    if (!options?.provider) throw new Error("MemoryPlugin requires provider");
-    const provider_name = String(options.provider.name || "").trim();
-    if (!provider_name) throw new Error("MemoryPlugin provider requires name");
-    this.provider = options.provider;
+    const root_path = profile.root_path?.trim();
+    if (root_path && !path.isAbsolute(root_path)) {
+      throw new Error("MemoryPlugin root_path must be absolute");
+    }
+    this.provider = new BuiltinMemoryProvider({
+      create_storage: ({ agent_id }) => new FileMemoryStorageAdapter({
+        root_path: root_path || get_default_file_memory_root_path({
+          platform_root_path: process.env.DC_PLATFORM_ROOT || path.join(os.homedir(), ".downcity"),
+          agent_id,
+        }),
+      }),
+    });
   }
 
   /** 构建 provider-neutral Memory system 内容。 */

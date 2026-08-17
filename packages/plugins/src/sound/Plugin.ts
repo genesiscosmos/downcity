@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 对 Agent 暴露 `models`、`asr`、`tts` 三个 action。
- * - 模型目录与真实 ASR/TTS 能力全部由 FED/City constructor 回调注入。
+ * - 模型目录与真实 ASR/TTS 能力全部由 Agent PluginContext.services.ai 提供。
  * - 本地音频只负责读取并转换为 data URL，不加载或运行任何本地语音模型。
  * - TTS 返回已经落盘的本地音频 UIMessage Parts，并由 Action 声明 Assistant Message。
  */
@@ -433,9 +433,6 @@ export class SoundPlugin extends BasePlugin {
   /** Plugin 用途说明。 */
   readonly description: string;
 
-  private readonly asr_handler: SoundPluginOptions["asr"];
-  private readonly tts_handler: SoundPluginOptions["tts"];
-  private readonly list_models?: SoundPluginOptions["list_models"];
   private readonly default_asr_model?: string;
   private readonly default_tts_model?: string;
   private readonly auto_asr: boolean;
@@ -443,15 +440,9 @@ export class SoundPlugin extends BasePlugin {
   private readonly voice?: string;
   private readonly format?: string;
 
-  constructor(options: SoundPluginOptions) {
+  constructor(options: SoundPluginOptions = {}) {
     super();
     const name = normalize_optional_string(options.name) ?? DEFAULT_SOUND_PLUGIN_NAME;
-    if (typeof options.asr !== "function") {
-      throw new TypeError("SoundPlugin requires an asr function");
-    }
-    if (typeof options.tts !== "function") {
-      throw new TypeError("SoundPlugin requires a tts function");
-    }
     const default_asr_model = normalize_optional_string(options.default_asr_model);
     if (options.auto_asr === true && !default_asr_model) {
       throw new TypeError("SoundPlugin auto_asr requires default_asr_model");
@@ -460,9 +451,6 @@ export class SoundPlugin extends BasePlugin {
     this.title = normalize_optional_string(options.title) ?? DEFAULT_SOUND_PLUGIN_TITLE;
     this.description = normalize_optional_string(options.description)
       ?? DEFAULT_SOUND_PLUGIN_DESCRIPTION;
-    this.asr_handler = options.asr;
-    this.tts_handler = options.tts;
-    this.list_models = options.list_models;
     this.default_asr_model = default_asr_model;
     this.default_tts_model = normalize_optional_string(options.default_tts_model);
     this.auto_asr = options.auto_asr === true;
@@ -518,22 +506,28 @@ export class SoundPlugin extends BasePlugin {
       ...input,
       model,
     });
-    return normalize_asr_result(await this.asr_handler(resolved_input));
+    const service = context.services.ai;
+    if (!service) throw new TypeError("SoundPlugin AI service is not configured");
+    return normalize_asr_result(
+      await service.asr(resolved_input as unknown as JsonObject) as unknown as SoundPluginAsrResult,
+    );
   }
 
   /**
    * 执行一次 TTS 合成。
    */
-  private async synthesize(input: SoundPluginTtsInput): Promise<SoundPluginTtsResult> {
+  private async synthesize(context: PluginContext, input: SoundPluginTtsInput): Promise<SoundPluginTtsResult> {
     const model = resolve_model_id("tts", input.model, this.default_tts_model);
-    const result = await this.tts_handler({
+    const service = context.services.ai;
+    if (!service) throw new TypeError("SoundPlugin AI service is not configured");
+    const result = await service.tts({
       ...(this.language ? { language: this.language } : {}),
       ...(this.voice ? { voice: this.voice } : {}),
       ...(this.format ? { format: this.format } : {}),
       ...input,
       model,
     });
-    return normalize_tts_result(result);
+    return normalize_tts_result(result as unknown as SoundPluginTtsResult);
   }
 
   /**
@@ -609,13 +603,15 @@ export class SoundPlugin extends BasePlugin {
         { title: "ASR models", payload: { capability: "asr" } },
         { title: "TTS models", payload: { capability: "tts" } },
       ],
-      execute: async ({ input }: { input: JsonValue }) => {
+      execute: async ({ context, input }: { context: PluginContext; input: JsonValue }) => {
         try {
-          if (!this.list_models) {
-            throw new TypeError("SoundPlugin list_models is not configured");
-          }
+          const service = context.services.ai;
+          if (!service) throw new TypeError("SoundPlugin AI service is not configured");
           const capability = normalize_models_capability(input);
-          const result = normalize_sound_models(await this.list_models(), capability);
+          const result = normalize_sound_models(
+            await service.list_models() as unknown as SoundPluginModel[],
+            capability,
+          );
           return {
             success: true,
             data: result as unknown as JsonObject,
@@ -691,9 +687,9 @@ export class SoundPlugin extends BasePlugin {
           payload: { model: "tts-model-id", text: "Welcome back", voice: "alloy", format: "mp3" },
         },
       ],
-      execute: async ({ input }: { input: JsonValue }) => {
+      execute: async ({ context, input }: { context: PluginContext; input: JsonValue }) => {
         try {
-          const result = await this.synthesize(normalize_tts_payload(input));
+          const result = await this.synthesize(context, normalize_tts_payload(input));
           return {
             success: true,
             message: "speech synthesized",

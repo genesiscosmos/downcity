@@ -62,10 +62,10 @@ export const plugin = GithubPlugin;
 实例 `name`、`plugin.json` 的 `id`、目录名和 Agent 引用必须一致。constructor 不重复声明 Manifest 或运行时 Schema；TypeScript 类型只服务 Plugin 代码，profile 的运行时协议由 `plugin.json.config.schema` 定义：
 
 ```ts
-new PluginConstructor({ config: selected_profile });
+new PluginConstructor(selected_profile);
 ```
 
-Loader 先使用 JSON Schema 校验 profile，再把完整配置传入 constructor。账号、Token、端点等结构直接属于 Plugin profile。框架不定义 Binding、Resource、Resolver 或 Installation 持久化领域。
+Loader 先使用 JSON Schema 校验 profile，再把完整 profile 直接传入 constructor。运行时 Client 和 Provider 由 Plugin 内部创建；Agent 级服务通过 Plugin 执行上下文读取。框架不定义 Binding、Resource、Resolver 或 Installation 持久化领域。
 
 ## Plugin 定义
 

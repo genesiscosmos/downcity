@@ -17,6 +17,7 @@ import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell, Workspace } from "@downcity/workspace";
 import {
   create_builtin_plugin_registrations,
+  create_builtin_plugin_services,
   type BuiltinPluginAi,
 } from "@downcity/plugins";
 import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
@@ -34,11 +35,8 @@ export function create_cli_builtin_plugin_registrations(input: {
   /** Contact Plugin 报告的 HTTP 端口。 */
   port?: number;
 } = {}): LocalPluginRegistration[] {
-  const resolver = new EmbassySessionResolver();
   return create_builtin_plugin_registrations({
-    platform_root_path: resolve_local_root_path(input.root_path),
     contact_http: { host: input.host, port: input.port },
-    resolve_ai: async () => await create_builtin_plugin_ai(resolver),
   });
 }
 
@@ -56,6 +54,7 @@ export function create_cli_plugin_loader(input: {
   return new LocalPluginLoader({
     plugin_repository: input.plugin_repository,
     plugin_registrations: create_cli_builtin_plugin_registrations(input),
+    services: create_builtin_plugin_services(async () => await create_builtin_plugin_ai(new EmbassySessionResolver())),
   });
 }
 
@@ -79,6 +78,7 @@ export async function create_cli_agent(input: {
     model,
     plugins,
     tools,
+    services: input.plugin_loader.services,
   });
 }
 

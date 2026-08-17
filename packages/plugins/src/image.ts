@@ -18,6 +18,7 @@ export type {
   ImagePluginModel,
   ImagePluginModelsResult,
   ImagePluginOptions,
+  ImagePluginProfile,
   ImagePluginResolvedContent,
   ImagePluginResolvedInput,
   ImagePluginResolvedMessage,

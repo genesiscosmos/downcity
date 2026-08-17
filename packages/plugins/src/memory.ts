@@ -17,6 +17,7 @@ export type {
   MemoryForgetInput,
   MemoryForgetResult,
   MemoryPluginOptions,
+  MemoryPluginProfile,
   MemoryProvider,
   MemoryProviderCapabilities,
   MemoryProviderInitializeInput,

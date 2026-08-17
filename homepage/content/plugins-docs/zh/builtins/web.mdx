@@ -5,20 +5,16 @@ description: 通过可替换 provider 提供结构化搜索、网页读取和 Pl
 
 # web Plugin
 
-`web` 是真实的联网能力插件，不再只是向 Agent 注入方法论或返回安装提示。它只组合宿主显式传入的 provider，不绑定搜索厂商、云浏览器或 Computer Use 模型。
+`web` 是真实的联网能力插件。构造函数只接收 profile，Plugin 会在内部创建选中的浏览器 provider；搜索和文档能力从 Agent Plugin context 读取。
 
 ## 使用 Playwright/CDP
 
 ```ts
-import {
-  PlaywrightBrowserProvider,
-  WebPlugin,
-} from "@downcity/plugins/web";
+import { WebPlugin } from "@downcity/plugins/web";
 
 const web = new WebPlugin({
-  browser: new PlaywrightBrowserProvider({
-    cdp_url: "http://127.0.0.1:9222",
-  }),
+  browser: "playwright",
+  cdp_url: "http://127.0.0.1:9222",
 });
 ```
 
@@ -69,11 +65,7 @@ await web.actions.browser_close_session.execute({
 `WebPlugin` 可以只配置其中一种能力：
 
 ```ts
-const web = new WebPlugin({
-  search: (input) => search_service.search(input),
-  open: (input) => reader_service.open(input),
-  browser: browser_provider,
-});
+const web = new WebPlugin({ browser: "playwright", cdp_url: "http://127.0.0.1:9222" });
 ```
 
 语义能力通过 adapter 注入，不直接绑定模型厂商：

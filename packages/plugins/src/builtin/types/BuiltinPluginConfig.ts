@@ -12,6 +12,8 @@ export interface BuiltinMemoryPluginConfig {
 
 /** Web Plugin 的完整 profile。 */
 export interface BuiltinWebPluginConfig {
+  /** 浏览器实现类型。 */
+  browser: "playwright";
   /** 浏览器 CDP WebSocket 或 HTTP 地址。 */
   cdp_url: string;
   /** 新建浏览器 Session 时使用的可选默认地址。 */

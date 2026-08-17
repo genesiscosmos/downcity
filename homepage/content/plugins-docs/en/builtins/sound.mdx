@@ -15,14 +15,8 @@ description: Use the FED model catalog to provide unified ASR, TTS, and automati
 import { SoundPlugin } from "@downcity/plugins/sound";
 
 const sound = new SoundPlugin({
-  list_models: async () => {
-    const catalog = await city.ai.catalog();
-    return catalog.all().filter((model) =>
-      model.modalities.includes("asr") || model.modalities.includes("tts")
-    );
-  },
-  asr: (input) => city.ai.asr(input),
-  tts: (input) => city.ai.tts(input),
+  default_asr_model: "asr-model-id",
+  default_tts_model: "tts-model-id",
 });
 ```
 

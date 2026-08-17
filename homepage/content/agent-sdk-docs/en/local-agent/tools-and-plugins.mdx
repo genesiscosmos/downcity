@@ -249,12 +249,6 @@ const agent = new Agent({
   plugins: [
     new ImagePlugin({
       default_model: "image-model-id",
-      list_models: async () => {
-        const catalog = await city.ai.catalog();
-        return catalog.forModality("image");
-      },
-      image_create: (input) => city.ai.image_create(input),
-      image_result: (input) => city.ai.image_result(input),
     }),
   ],
 });
@@ -263,13 +257,7 @@ const agent = new Agent({
 When the default image model depends on application state, pass a function:
 
 ```ts
-new ImagePlugin({
-  default_model: async ({ input }) => {
-    return input.aspect_ratio === "16:9" ? "image-wide-model-id" : "image-model-id";
-  },
-  image_create: (input) => city.ai.image_create(input),
-  image_result: (input) => city.ai.image_result(input),
-});
+new ImagePlugin({ default_model: "image-model-id" });
 ```
 
 After registration, the Agent automatically gets the built-in `plugin_read` / `plugin_call` tools. The model can inspect action metadata first:

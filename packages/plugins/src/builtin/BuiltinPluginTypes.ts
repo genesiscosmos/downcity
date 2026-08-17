@@ -5,8 +5,7 @@
  * Federation，只消费宿主提供的 AI 能力和本地路径。
  */
 
-import path from "node:path";
-import type { JsonObject, Plugin } from "@downcity/agent";
+import type { JsonObject, JsonValue, Plugin, PluginServices } from "@downcity/agent";
 import {
   CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
   ChatPlugin,
@@ -24,10 +23,7 @@ import {
   type ImagePluginResolvedInput,
 } from "@/image.js";
 import {
-  BuiltinMemoryProvider,
-  FileMemoryStorageAdapter,
   MemoryPlugin,
-  get_default_file_memory_root_path,
 } from "@/memory.js";
 import { SkillPlugin } from "@/skill.js";
 import {
@@ -39,7 +35,7 @@ import {
   type SoundPluginTtsResult,
 } from "@/sound.js";
 import { TaskPlugin } from "@/task.js";
-import { PlaywrightBrowserProvider, WebPlugin } from "@/web.js";
+import { WebPlugin } from "@/web.js";
 import { WorkboardPlugin } from "@/workboard.js";
 import type {
   BuiltinMemoryPluginConfig,
@@ -65,19 +61,13 @@ export interface BuiltinPluginDefinition {
   };
 }
 
-/** 官方 Plugin factory 的统一输入。 */
-export interface BuiltinPluginCreateInput {
-  /** 当前 Agent 对 Plugin 的已校验完整配置。 */
-  config: JsonObject;
-
-}
-
 /** 官方 Plugin 注册协议。 */
 export interface BuiltinPluginRegistration {
   /** Plugin 的唯一静态定义。 */
   readonly definition: BuiltinPluginDefinition;
   /** 创建一个 Agent 独享的 Plugin 实例。 */
-  create(input: BuiltinPluginCreateInput): Plugin;
+  /** 使用已校验的完整 profile 创建 Plugin。 */
+  create(profile: JsonObject): Plugin;
 }
 
 /** Image 和 Sound Plugin 使用的宿主 AI 能力。 */
@@ -116,9 +106,6 @@ export interface BuiltinPluginAi {
 
 /** 创建官方 Plugin 注册集合所需的宿主能力。 */
 export interface BuiltinPluginRegistrationsOptions {
-  /** `~/.downcity` 等用户级数据根目录。 */
-  platform_root_path: string;
-
   /** Contact Plugin 对外报告的 HTTP 地址。 */
   contact_http?: {
     /** HTTP 监听地址。 */
@@ -127,8 +114,21 @@ export interface BuiltinPluginRegistrationsOptions {
     port?: number;
   };
 
-  /** 延迟获取当前用户 AI 能力；只有对应 Action 执行时才调用。 */
-  resolve_ai?: () => Promise<BuiltinPluginAi>;
+}
+
+/** 把宿主 AI 能力投影为 Agent PluginContext 使用的最小服务协议。 */
+export function create_builtin_plugin_services(
+  resolve_ai: () => Promise<BuiltinPluginAi>,
+): PluginServices {
+  return {
+    ai: {
+      list_models: async () => (await resolve_ai()).list_models(),
+      image_create: async (input) => await (await resolve_ai()).image_create(input as never) as unknown as JsonValue,
+      image_result: async (input) => await (await resolve_ai()).image_result(input as never) as unknown as JsonValue,
+      asr: async (input) => await (await resolve_ai()).asr(input as never) as unknown as JsonValue,
+      tts: async (input) => await (await resolve_ai()).tts(input as never) as unknown as JsonValue,
+    },
+  };
 }
 
 const memory_plugin_config_schema: JsonObject = {
@@ -149,6 +149,7 @@ const web_plugin_config_schema: JsonObject = {
   title: "Web Plugin",
   description: "Browser connection and observation configuration.",
   properties: {
+    browser: { type: "string", enum: ["playwright"], default: "playwright" },
     cdp_url: { type: "string", minLength: 1 },
     default_url: { type: "string", minLength: 1 },
     timeout_ms: { type: "integer", minimum: 1000, maximum: 60000 },
@@ -162,7 +163,6 @@ const web_plugin_config_schema: JsonObject = {
 export function create_builtin_plugin_registrations(
   options: BuiltinPluginRegistrationsOptions,
 ): BuiltinPluginRegistration[] {
-  const platform_root_path = path.resolve(options.platform_root_path);
   return [
     simple_registration(
       "skill",
@@ -201,8 +201,8 @@ export function create_builtin_plugin_registrations(
           defaults: {},
         },
       },
-      create(input) {
-        const config = input.config as unknown as ChatPluginConfig;
+      create(profile) {
+        const config = profile as unknown as ChatPluginConfig;
         return new ChatPlugin({
           queue: config.queue,
           channels: create_chat_channels(config.channels ?? []),
@@ -219,22 +219,9 @@ export function create_builtin_plugin_registrations(
           defaults: { provider: "builtin", storage: "file" },
         },
       },
-      create(input) {
-        const config = input.config as unknown as BuiltinMemoryPluginConfig;
-        const root_path = config.root_path;
-        if (root_path && !path.isAbsolute(root_path)) {
-          throw new Error("Memory Plugin root_path must be absolute");
-        }
-        return new MemoryPlugin({
-          provider: new BuiltinMemoryProvider({
-            create_storage: ({ agent_id }) => new FileMemoryStorageAdapter({
-              root_path: root_path || get_default_file_memory_root_path({
-                platform_root_path,
-                agent_id,
-              }),
-            }),
-          }),
-        });
+      create(profile) {
+        const config = profile as unknown as BuiltinMemoryPluginConfig;
+        return new MemoryPlugin(config);
       },
     },
     {
@@ -242,42 +229,52 @@ export function create_builtin_plugin_registrations(
         id: "web",
         title: "Web",
         description: "Provides structured browser sessions through a configured CDP endpoint.",
-        config: { schema: web_plugin_config_schema },
+        config: { schema: web_plugin_config_schema, defaults: { browser: "playwright" } },
       },
-      create(input) {
-        const config = input.config as unknown as BuiltinWebPluginConfig;
-        return new WebPlugin({
-          browser: new PlaywrightBrowserProvider({
-            cdp_url: config.cdp_url,
-            ...(config.default_url ? { default_url: config.default_url } : {}),
-            ...(config.timeout_ms !== undefined ? { timeout_ms: config.timeout_ms } : {}),
-            ...(config.max_observation_chars !== undefined
-              ? { max_observation_chars: config.max_observation_chars }
-              : {}),
-          }),
-        });
+      create(profile) {
+        const config = profile as unknown as BuiltinWebPluginConfig;
+        return new WebPlugin(config);
       },
     },
-    simple_registration(
-      "image",
-      "Image",
-      "Discovers image models, generates images, and reads results.",
-      () => new ImagePlugin({
-        list_models: async () => filter_image_models(await require_ai(options)),
-        image_create: async (input) => await (await require_ai(options)).image_create(input),
-        image_result: async (input) => await (await require_ai(options)).image_result(input),
-      }),
-    ),
-    simple_registration(
-      "sound",
-      "Sound",
-      "Discovers speech models and provides ASR and TTS.",
-      () => new SoundPlugin({
-        list_models: async () => filter_sound_models(await require_ai(options)),
-        asr: async (input) => await (await require_ai(options)).asr(input),
-        tts: async (input) => await (await require_ai(options)).tts(input),
-      }),
-    ),
+    {
+      definition: {
+        id: "image",
+        title: "Image",
+        description: "Discovers image models, generates images, and reads results.",
+        config: {
+          schema: {
+            type: "object",
+            properties: { default_model: { type: "string", minLength: 1 } },
+            additionalProperties: false,
+          },
+          defaults: {},
+        },
+      },
+      create: (profile) => new ImagePlugin(profile),
+    },
+    {
+      definition: {
+        id: "sound",
+        title: "Sound",
+        description: "Discovers speech models and provides ASR and TTS.",
+        config: {
+          schema: {
+            type: "object",
+            properties: {
+              default_asr_model: { type: "string", minLength: 1 },
+              default_tts_model: { type: "string", minLength: 1 },
+              auto_asr: { type: "boolean", default: false },
+              language: { type: "string", minLength: 1 },
+              voice: { type: "string", minLength: 1 },
+              format: { type: "string", minLength: 1 },
+            },
+            additionalProperties: false,
+          },
+          defaults: {},
+        },
+      },
+      create: (profile) => new SoundPlugin(profile),
+    },
   ];
 }
 
@@ -323,28 +320,4 @@ function create_chat_channels(configs: ChatPluginChannelConfig[]) {
       sandbox: config.sandbox,
     });
   });
-}
-
-/** 读取宿主 AI 能力，缺失时给出明确错误。 */
-async function require_ai(options: BuiltinPluginRegistrationsOptions): Promise<BuiltinPluginAi> {
-  if (!options.resolve_ai) {
-    throw new Error("Official AI Plugin requires a signed-in Embassy user");
-  }
-  return await options.resolve_ai();
-}
-
-/** 从模型目录筛选图片模型。 */
-async function filter_image_models(ai: BuiltinPluginAi): Promise<ImagePluginModel[]> {
-  const catalog = await ai.list_models();
-  return catalog.items
-    .filter((model) => model.modalities.includes("image"))
-    .map((model) => ({ ...model }));
-}
-
-/** 从模型目录筛选语音模型。 */
-async function filter_sound_models(ai: BuiltinPluginAi): Promise<SoundPluginModel[]> {
-  const catalog = await ai.list_models();
-  return catalog.items
-    .filter((model) => model.modalities.includes("asr") || model.modalities.includes("tts"))
-    .map((model) => ({ ...model }));
 }

@@ -131,7 +131,7 @@ export type SoundPluginTtsResult = UIMessage;
 /**
  * SoundPlugin 构造参数。
  */
-export interface SoundPluginOptions {
+export interface SoundPluginProfile {
   /** Plugin 稳定名称，默认 `sound`。 */
   name?: string;
   /** Plugin 展示标题，默认 `Sound`。 */
@@ -150,14 +150,7 @@ export interface SoundPluginOptions {
   voice?: string;
   /** TTS 默认输出格式。 */
   format?: string;
-  /** 调用 FED ASR action 的函数，通常传入 `(input) => city.ai.asr(input)`。 */
-  asr: (
-    input: SoundPluginAsrInput,
-  ) => Promise<SoundPluginAsrResult> | SoundPluginAsrResult;
-  /** 调用 FED TTS action 的函数，通常传入 `(input) => city.ai.tts(input)`。 */
-  tts: (
-    input: SoundPluginTtsInput,
-  ) => Promise<SoundPluginTtsResult> | SoundPluginTtsResult;
-  /** 列出 FED 中支持 ASR 或 TTS 的模型。 */
-  list_models?: () => Promise<SoundPluginModel[]> | SoundPluginModel[];
 }
+
+/** SoundPlugin profile 的兼容名称别名。 */
+export type SoundPluginOptions = SoundPluginProfile;

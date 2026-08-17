@@ -20,6 +20,7 @@ import type { DesktopLocalData } from "./DesktopLocalData.js";
 import { Embassy, type EmbassyUser } from "@downcity/federation";
 import {
   create_builtin_plugin_registrations,
+  create_builtin_plugin_services,
   type BuiltinPluginAi,
 } from "@downcity/plugins";
 import { create_desktop_platform_sandbox } from "./DesktopPlatformSandbox.js";
@@ -50,6 +51,7 @@ export function create_desktop_plugin_loader(
   return new LocalPluginLoader({
     plugin_repository: data.plugins,
     plugin_registrations: create_desktop_builtin_plugin_registrations(data),
+    services: create_builtin_plugin_services(async () => create_builtin_plugin_ai(create_embassy_user(data, process.env))),
   });
 }
 
@@ -212,8 +214,6 @@ export function create_desktop_builtin_plugin_registrations(
   data: DesktopLocalData,
 ): LocalPluginRegistration[] {
   return create_builtin_plugin_registrations({
-    platform_root_path: resolve_local_root_path(data.root_path),
-    resolve_ai: async () => create_builtin_plugin_ai(create_embassy_user(data, process.env)),
   });
 }
 

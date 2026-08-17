@@ -124,6 +124,7 @@ export class AgentWorkspace {
       data_files: storage.files,
       ...(this.workspace.shell ? { shell: this.workspace.shell } : {}),
       logger: this.logger,
+      services: this.agent.services,
       get_workspace_env: () => this.workspace.get_env(),
       get_instructions: () => this.agent.get_instructions(),
       get_plugins: () => {

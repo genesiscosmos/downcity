@@ -2,7 +2,7 @@
  * WebPlugin：provider-neutral 的联网与浏览器能力边界。
  *
  * 关键点（中文）
- * - Plugin 只编排已显式注入的 provider，不选择云厂商或模型。
+ * - Plugin 只接收 profile，并根据有限 provider 枚举在内部创建浏览器 provider。
  * - 搜索、文档读取与浏览器 session 是三个独立能力。
  * - 浏览器长期资源由 provider 拥有，并在 Plugin lifecycle.stop 时统一释放。
  */
@@ -16,13 +16,13 @@ import type {
   BrowserCreateSessionInput,
   BrowserExtractInput,
   BrowserObserveInput,
+  BrowserProvider,
   BrowserSemanticActInput,
   BrowserSemanticExtractInput,
-  WebOpenInput,
   WebPluginOptions,
-  WebSearchInput,
 } from "@/web/types/WebPlugin.js";
 import { WEB_PLUGIN_ACTIONS } from "@/web/types/WebPlugin.js";
+import { PlaywrightBrowserProvider } from "@/web/providers/PlaywrightBrowserProvider.js";
 
 const URL_SCHEMA = z.string().url();
 const SESSION_ID_SCHEMA = z.string().trim().min(1);
@@ -70,23 +70,24 @@ export class WebPlugin extends BasePlugin {
   readonly description =
     "Provides structured web search, document reading, and browser sessions through configured providers.";
 
-  /** 搜索 provider。 */
-  private readonly search_provider?: WebPluginOptions["search"];
-
-  /** 文档读取 provider。 */
-  private readonly open_provider?: WebPluginOptions["open"];
-
   /** 浏览器 provider。 */
-  private readonly browser_provider?: WebPluginOptions["browser"];
+  private readonly browser_provider?: BrowserProvider;
 
-  constructor(options: WebPluginOptions) {
+  constructor(options: WebPluginOptions = {}) {
     super();
-    if (!options.search && !options.open && !options.browser) {
-      throw new TypeError("WebPlugin requires at least one provider");
+    if (options.browser && options.browser !== "playwright") {
+      throw new TypeError(`Unsupported Web browser provider: ${options.browser}`);
     }
-    this.search_provider = options.search;
-    this.open_provider = options.open;
-    this.browser_provider = options.browser;
+    this.browser_provider = options.cdp_url
+      ? new PlaywrightBrowserProvider({
+          cdp_url: options.cdp_url,
+          ...(options.default_url ? { default_url: options.default_url } : {}),
+          ...(options.timeout_ms !== undefined ? { timeout_ms: options.timeout_ms } : {}),
+          ...(options.max_observation_chars !== undefined
+            ? { max_observation_chars: options.max_observation_chars }
+            : {}),
+        })
+      : undefined;
   }
 
   /** Agent 释放或卸载 plugin 时关闭全部浏览器资源。 */
@@ -119,12 +120,12 @@ export class WebPlugin extends BasePlugin {
         domains: z.array(z.string().trim().min(1)).max(50).optional(),
       }),
       examples: [{ title: "Search official sources", payload: { query: "Playwright CDP documentation", limit: 5 } }],
-      execute: async ({ input }) => {
-        if (!this.search_provider) {
+      execute: async ({ context, input }) => {
+        if (!context.services.web) {
           return failure_result("WebPlugin search provider is not configured");
         }
         try {
-          const result = await this.search_provider(input as WebSearchInput);
+          const result = await context.services.web.search(input as JsonObject);
           return { success: true, data: result, message: "web search completed" };
         } catch (error) {
           return failure_result(error);
@@ -136,12 +137,12 @@ export class WebPlugin extends BasePlugin {
       description: "Read a known URL with the configured document provider.",
       input_schema: z.object({ url: URL_SCHEMA, max_chars: MAX_CHARS_SCHEMA }),
       examples: [{ title: "Read official documentation", payload: { url: "https://playwright.dev/docs/api/class-playwright" } }],
-      execute: async ({ input }) => {
-        if (!this.open_provider) {
+      execute: async ({ context, input }) => {
+        if (!context.services.web) {
           return failure_result("WebPlugin document provider is not configured");
         }
         try {
-          const result = await this.open_provider(input as WebOpenInput);
+          const result = await context.services.web.open(input as JsonObject);
           return { success: true, data: result, message: "web document opened" };
         } catch (error) {
           return failure_result(error);

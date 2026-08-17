@@ -13,6 +13,7 @@ import type {
   AgentManagedSession,
   SessionOptions,
 } from "@/types/session/SessionOptions.js";
+import type { PluginServices } from "@/types/plugin/PluginServices.js";
 
 /**
  * Agent 可使用的 Session 类。
@@ -65,6 +66,9 @@ export interface AgentOptions {
    * - Session 未显式设置模型时，执行自动回退到该实例。
    */
   model?: AgentModel;
+
+  /** 当前 Agent 为 Plugin 提供的宿主服务能力。 */
+  services?: PluginServices;
 
   /**
    * 当前 agent 显式持有的插件实例集合。

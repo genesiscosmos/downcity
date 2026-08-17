@@ -386,11 +386,18 @@ export interface MemoryProvider {
   dispose(): Promise<void>;
 }
 
-/** MemoryPlugin constructor 参数。 */
-export interface MemoryPluginOptions {
-  /** 当前 Plugin 唯一使用的主 Memory Provider。 */
-  provider: MemoryProvider;
+/** MemoryPlugin profile。 */
+export interface MemoryPluginProfile {
+  /** 当前启用的 Memory Provider。 */
+  provider?: "builtin";
+  /** 当前启用的 Memory Storage。 */
+  storage?: "file";
+  /** 可选的绝对存储目录。 */
+  root_path?: string;
 }
+
+/** MemoryPlugin profile 的兼容名称别名。 */
+export type MemoryPluginOptions = MemoryPluginProfile;
 
 /** Memory action 可以接受的公开 JSON payload 联合。 */
 export type MemoryActionPayload =

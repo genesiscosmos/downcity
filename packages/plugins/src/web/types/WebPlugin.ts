@@ -236,16 +236,19 @@ export interface BrowserProvider {
   dispose(): Promise<void>;
 }
 
-/** WebPlugin 构造参数。 */
-export interface WebPluginOptions {
-  /** 搜索 provider；未配置时 search action 返回能力不可用。 */
-  search?: (
-    input: WebSearchInput,
-  ) => Promise<WebSearchResult> | WebSearchResult;
-  /** 已知 URL 文档 provider；未配置时 open action 返回能力不可用。 */
-  open?: (
-    input: WebOpenInput,
-  ) => Promise<WebOpenResult> | WebOpenResult;
-  /** 浏览器 provider；未配置时 browser actions 返回能力不可用。 */
-  browser?: BrowserProvider;
+/** WebPlugin profile。 */
+export interface WebPluginProfile {
+  /** 浏览器实现类型。 */
+  browser?: "playwright";
+  /** 浏览器 CDP 地址。 */
+  cdp_url?: string;
+  /** 新建 Session 时使用的默认地址。 */
+  default_url?: string;
+  /** 浏览器操作超时时间。 */
+  timeout_ms?: number;
+  /** 页面观察的最大字符数。 */
+  max_observation_chars?: number;
 }
+
+/** WebPlugin profile 的兼容名称别名。 */
+export type WebPluginOptions = WebPluginProfile;

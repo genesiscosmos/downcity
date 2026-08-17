@@ -1,0 +1,300 @@
+---
+title: Plugin 开发指南
+description: 从目录结构、profile 配置到 Agent 运行时上下文，完整开发一个 Downcity Plugin
+---
+
+# Plugin 开发指南
+
+这篇文档介绍 Downcity Plugin 的完整开发模型。Plugin 是一个独立的能力单元：它拥有自己的配置、action、状态和生命周期；运行时能力由 Agent 通过 `PluginContext` 按最小接口提供。
+
+## 设计原则
+
+- Plugin 构造函数只接收自己的 `profile`，不接收 `Agent`、`City`、`Embassy` 或 `dependencies` 容器。
+- Plugin 内部创建并拥有自己的 provider、client、store、queue 和资源句柄。
+- Agent 级外部能力通过 `context.services` 注入；Plugin 只依赖实际需要的服务接口。
+- 配置是可持久化、可校验的 profile；运行态对象是实例内部状态，不能放进配置文件。
+- 一个 Plugin 只负责一个清晰的领域能力。需要不同实现时，创建新的 Plugin，而不是在一个 Plugin 内继续堆叠组合开关。
+
+## 目录结构
+
+一个可发布的第三方 Plugin 最小目录如下：
+
+```text
+example-plugin/
+├── .codex-plugin/
+│   └── plugin.json
+├── package.json
+├── README.md
+├── index.mjs
+└── src/
+    ├── ExamplePlugin.ts
+    └── types.ts
+```
+
+`index.mjs` 是安装产物的自包含 ESM 入口。`src/` 和构建配置可以保留在源码仓库中，但安装目录必须包含 `plugin.json`、`package.json`、`README.md` 和入口文件。
+
+## plugin.json
+
+清单描述安装、展示和 profile Schema，不描述运行态依赖：
+
+```json
+{
+  "schema_version": 1,
+  "id": "example",
+  "version": "1.0.0",
+  "title": "Example",
+  "description": "A small example Plugin.",
+  "entry": "index.mjs",
+  "source": "github:owner/example-plugin",
+  "config": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["local", "remote"],
+          "default": "local"
+        }
+      },
+      "additionalProperties": false
+    },
+    "defaults": {
+      "provider": "local"
+    }
+  }
+}
+```
+
+`config.schema` 用于 CLI/Desktop 表单和启动前校验；`config.defaults` 是没有指定 profile 时传入构造函数的完整默认对象。Schema 中的字段 `default` 主要是表单提示，不替代 `defaults`。
+
+## profile 与运行态
+
+profile 只放用户可以保存、复制和审计的值，例如 provider 名称、模型 ID、超时和路径：
+
+```ts
+export interface ExampleProfile {
+  /** 选择 Plugin 使用的实现。 */
+  provider?: "local" | "remote";
+  /** 远程服务地址。 */
+  endpoint?: string;
+}
+```
+
+运行态对象必须在 Plugin 内部创建：
+
+```ts
+export class ExamplePlugin extends BasePlugin {
+  readonly name = "example";
+  private readonly client: ExampleClient;
+
+  constructor(profile: ExampleProfile = {}) {
+    super();
+    this.client = new ExampleClient({
+      provider: profile.provider ?? "local",
+      endpoint: profile.endpoint,
+    });
+  }
+}
+```
+
+不要把下面这些对象放入 profile：浏览器实例、数据库连接、队列、函数回调、Agent 实例或 City/Embassy 实例。
+
+## Plugin 类与入口
+
+```ts
+import { BasePlugin, create_action } from "@downcity/agent";
+import { z } from "zod";
+
+export class ExamplePlugin extends BasePlugin {
+  readonly name = "example";
+  readonly title = "Example";
+  readonly description = "An example Plugin.";
+
+  constructor(profile: ExampleProfile = {}) {
+    super();
+    // 在这里校验 profile，并创建 Plugin 自己拥有的运行态依赖。
+  }
+
+  readonly actions = {
+    status: create_action({
+      description: "Return the current Plugin status.",
+      input_schema: z.object({}),
+      execute: async ({ context, execution_context }) => ({
+        success: true,
+        data: {
+          agent_id: context.agent_id,
+          workspace_id: context.workspace_id,
+          request_id: execution_context.request_id,
+        },
+      }),
+    }),
+  };
+}
+```
+
+第三方入口必须导出 `plugin(profile)`：
+
+```ts
+import type { JsonObject, Plugin } from "@downcity/agent";
+
+export function plugin(profile: JsonObject): Plugin {
+  return new ExamplePlugin(profile as ExampleProfile);
+}
+```
+
+Loader 会对 profile 做 Schema 校验，然后为每个 Agent 创建一个独立实例。
+
+## PluginContext
+
+Action、system 和生命周期钩子可以使用 `PluginContext`：
+
+```ts
+interface PluginContext {
+  agent_id: string;
+  workspace_id: string;
+  workspace_path: string;
+  data_path: string;
+  files: FileSystem;
+  data_files: FileSystem;
+  logger: Logger;
+  services: PluginServices;
+  sessions: AgentSessions;
+  plugins: AgentPlugins;
+  workspace_env: Readonly<Record<string, string>>;
+  instructions: readonly string[];
+}
+```
+
+`files` 用于用户 Workspace；`data_files` 用于 Agent 私有持久化数据。不要把私有数据库、缓存或凭证写入用户 Workspace。
+
+## 使用 Agent services
+
+宿主在构造 Agent 时提供服务：
+
+```ts
+const agent = new Agent({
+  id: "assistant",
+  services: {
+    ai: {
+      list_models: () => city.services.list_models(),
+      image_create: (input) => city.services.image_create(input),
+      image_result: (input) => city.services.image_result(input),
+      asr: (input) => city.services.asr(input),
+      tts: (input) => city.services.tts(input),
+    },
+  },
+  plugins: [new ExamplePlugin({ provider: "local" })],
+});
+```
+
+Plugin 只读取最小接口：
+
+```ts
+const models = await context.services.ai?.list_models();
+if (!models) return { success: false, error: "AI service is unavailable" };
+```
+
+这让同一个 Plugin 可以在 CLI、Desktop 或嵌入式宿主中运行，而不依赖某个宿主的完整对象。
+
+## Action
+
+每个 action 都应该有明确输入 Schema、稳定结果和可取消的异步执行：
+
+```ts
+run: create_action({
+  input_schema: z.object({ value: z.string().min(1) }),
+  execute: async ({ input, execution_context }) => {
+    execution_context.signal.throwIfAborted();
+    const result = await client.run(input.value, {
+      signal: execution_context.signal,
+    });
+    return { success: true, data: result };
+  },
+})
+```
+
+长任务必须响应 `execution_context.signal`，并在外部请求中传递 `AbortSignal`。超时和取消由调用层控制，Plugin 不应自行阻塞 Agent。
+
+## 生命周期
+
+生命周期资源只由 Plugin 自己创建和释放：
+
+```ts
+readonly lifecycle = {
+  start: async (context: PluginContext) => {
+    await this.client.initialize({ agent_id: context.agent_id });
+  },
+  enter_workspace: async (context: PluginContext) => {
+    await this.client.select_workspace(context.workspace_path);
+  },
+  leave_workspace: async () => {
+    await this.client.clear_workspace();
+  },
+  stop: async () => {
+    await this.client.dispose();
+  },
+};
+```
+
+Agent 注册 Plugin 后启动生命周期，卸载或停止时调用 `stop`。`stop` 应该幂等，且释放浏览器、连接、定时器和队列等所有长期资源。
+
+## 配置文件与装配
+
+本地宿主可以保存多个 profile：
+
+```toml
+schema_version = 1
+
+[profiles.default]
+provider = "local"
+
+[profiles.remote]
+provider = "remote"
+endpoint = "https://example.com"
+```
+
+Agent 绑定 profile 名称后，Loader 会读取 profile、校验 Schema，并执行：
+
+```ts
+registration.create(profile)
+```
+
+内建 Plugin 与第三方 Plugin 使用同一条路径。宿主负责配置来源和凭证，Plugin 只接收已经解析好的 profile。
+
+## 数据边界
+
+- 用户创建和编辑的文件：`context.files`。
+- Plugin 私有索引、缓存和状态：`context.data_files`。
+- Workspace 级资源：由 `enter_workspace` / `leave_workspace` 管理。
+- Agent 级资源：由 `start` / `stop` 管理。
+
+Plugin 不应修改其他 Plugin 的私有目录，也不应保存宿主的完整配置对象。
+
+## 测试
+
+测试重点是 profile、action、服务缺失、取消和生命周期：
+
+```ts
+it("uses the profile to select the provider", async () => {
+  const plugin = new ExamplePlugin({ provider: "local" });
+  expect(plugin.name).toBe("example");
+});
+
+it("returns a stable error when AI is unavailable", async () => {
+  const agent = new Agent({ id: "test", plugins: [new ExamplePlugin()] });
+  const result = await agent.plugins.call("example", "models", {});
+  expect(result.success).toBe(false);
+});
+```
+
+不要通过重新引入旧的 callback 构造参数来测试。服务应通过 `Agent.services` 或测试用的 `PluginContext` 注入。
+
+## 发布检查清单
+
+1. `plugin.json` 的 `id`、`version`、`entry` 和 `config.schema` 正确。
+2. 入口导出 `plugin(profile)`，且每次调用都会创建新实例。
+3. profile 不包含连接、实例、回调和宿主对象。
+4. 所有长期资源都在 `stop` 中释放。
+5. action 输入经过 Schema 校验，异步任务响应取消信号。
+6. 私有数据使用 `data_files`，用户文件使用 `files`。
+7. CLI、Desktop 和嵌入式宿主都能通过同一 profile 构造 Plugin。

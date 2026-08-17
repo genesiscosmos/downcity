@@ -5,7 +5,7 @@ description: Structured web search, document reading, and Playwright/CDP browser
 
 # web Plugin
 
-`web` is a real web-capability plugin. It no longer only injects methodology or returns installation prompts. It composes providers explicitly supplied by the host and does not bind the SDK to a search vendor, cloud browser, or Computer Use model.
+`web` is a real web-capability plugin. Its constructor receives only a profile; the Plugin creates the selected browser provider internally. Search and document services are read from the Agent Plugin context.
 
 ## Playwright/CDP
 
@@ -16,9 +16,8 @@ import {
 } from "@downcity/plugins/web";
 
 const web = new WebPlugin({
-  browser: new PlaywrightBrowserProvider({
-    cdp_url: "http://127.0.0.1:9222",
-  }),
+  browser: "playwright",
+  cdp_url: "http://127.0.0.1:9222",
 });
 ```
 
@@ -47,11 +46,7 @@ The endpoint must still expose a default context and support creating a new page
 ## Provider composition
 
 ```ts
-const web = new WebPlugin({
-  search: (input) => search_service.search(input),
-  open: (input) => reader_service.open(input),
-  browser: browser_provider,
-});
+const web = new WebPlugin({ browser: "playwright", cdp_url: "http://127.0.0.1:9222" });
 ```
 
 Semantic capabilities are injected through an adapter and are not tied to one model vendor:
@@ -73,7 +68,7 @@ Use search or HTTP reading first. Create a browser for dynamic rendering, logged
 
 ## Lifecycle and safety
 
-- `WebPlugin` requires at least one configured provider.
+- `WebPlugin` accepts a profile and creates the selected browser provider internally.
 - The provider owns browser sessions and is disposed when the Agent or Plugin is disposed.
 - `browser_act` exposes deterministic browser actions. Host approval is required for consequential actions such as submit, send, purchase, upload, or delete.
 - Playwright `Browser`, `Page`, and `Buffer` objects never cross the Plugin action boundary; results are JSON-serializable.

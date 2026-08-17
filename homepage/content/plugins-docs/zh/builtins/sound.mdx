@@ -15,14 +15,8 @@ description: 使用 FED 模型目录统一提供 ASR 语音识别、TTS 语音�
 import { SoundPlugin } from "@downcity/plugins/sound";
 
 const sound = new SoundPlugin({
-  list_models: async () => {
-    const catalog = await city.ai.catalog();
-    return catalog.all().filter((model) =>
-      model.modalities.includes("asr") || model.modalities.includes("tts")
-    );
-  },
-  asr: (input) => city.ai.asr(input),
-  tts: (input) => city.ai.tts(input),
+  default_asr_model: "asr-model-id",
+  default_tts_model: "tts-model-id",
 });
 ```
 

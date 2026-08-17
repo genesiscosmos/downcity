@@ -452,6 +452,7 @@ export class AgentController {
       model,
       plugins,
       tools,
+      services: this.plugin_loader.services,
     });
   }
 

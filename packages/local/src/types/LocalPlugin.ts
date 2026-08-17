@@ -24,18 +24,12 @@ export interface LocalPluginDefinition {
   config?: LocalPluginConfigDefinition;
 }
 
-/** 创建 Agent 独享 Plugin 实例的输入。 */
-export interface LocalPluginCreateInput {
-  /** 已通过 `plugin.json` JSON Schema 校验的完整配置。 */
-  config: JsonObject;
-}
-
 /** 内置与第三方 Plugin 共享的运行注册协议。 */
 export interface LocalPluginRegistration {
   /** Plugin 的唯一静态定义。 */
   definition: LocalPluginDefinition;
-  /** 创建一个归当前 Agent 所有的 Plugin 实例。 */
-  create(input: LocalPluginCreateInput): Plugin;
+  /** 使用已校验的完整 profile 创建归当前 Agent 所有的 Plugin 实例。 */
+  create(profile: JsonObject): Plugin;
 }
 
 /** `plugins/<plugin_id>/plugin.json` 中的第三方 Plugin 定义。 */

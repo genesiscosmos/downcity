@@ -284,23 +284,16 @@ export type ImagePluginDefaultModel =
 /**
  * ImagePlugin 构造参数。
  */
-export interface ImagePluginOptions {
+export interface ImagePluginProfile {
   /** Plugin 稳定名称，默认 `image`。 */
   name?: string;
   /** Plugin 展示标题，默认 `Image`。 */
   title?: string;
   /** Plugin 用途说明。 */
   description?: string;
-  /** 默认图片模型配置。Agent 调用 `image_create` 未传 `model` 时会自动使用字符串值或函数返回值。 */
-  default_model?: ImagePluginDefaultModel;
-  /** 创建图片生成任务，通常传入 `(input) => city.ai.image_create(input)`。 */
-  image_create?: (
-    input: ImagePluginResolvedInput,
-  ) => Promise<ImagePluginJobCreateResult> | ImagePluginJobCreateResult;
-  /** 查询图片生成任务，通常传入 `(input) => city.ai.image_result(input)`。 */
-  image_result?: (
-    input: ImagePluginJobResultInput,
-  ) => Promise<ImagePluginJobResult> | ImagePluginJobResult;
-  /** 列出可用图片模型，通常传入 `async () => city.ai.catalog().then((catalog) => catalog.forModality("image"))`。 */
-  list_models?: () => Promise<ImagePluginModel[]> | ImagePluginModel[];
+  /** 默认图片模型 ID。 */
+  default_model?: string;
 }
+
+/** ImagePlugin profile 的兼容名称别名。 */
+export type ImagePluginOptions = ImagePluginProfile;

@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 对 Agent 暴露 `image_create` / `image_result` 两步式任务 action。
- * - City / provider 的图片能力通过 image_create / image_result 任务函数注入。
+ * - City / provider 的图片能力通过 Agent PluginContext.services.ai 提供。
  * - 成功结果中的远程图片会写入 Workspace，并同时保留本地引用与在线来源地址。
  */
 
@@ -504,31 +504,19 @@ export class ImagePlugin extends BasePlugin {
    */
   readonly description: string;
 
-  private readonly image_create: NonNullable<ImagePluginOptions["image_create"]>;
-  private readonly image_result: NonNullable<ImagePluginOptions["image_result"]>;
-  private readonly list_models?: ImagePluginOptions["list_models"];
   private readonly default_model?: ImagePluginDefaultModel;
 
-  constructor(options: ImagePluginOptions) {
+  constructor(options: ImagePluginOptions = {}) {
     super();
     const name = String(options.name || DEFAULT_IMAGE_PLUGIN_NAME).trim();
     if (!name) {
       throw new Error("ImagePlugin requires a non-empty name");
-    }
-    if (typeof options.image_create !== "function") {
-      throw new Error("ImagePlugin requires an image_create function");
-    }
-    if (typeof options.image_result !== "function") {
-      throw new Error("ImagePlugin requires an image_result function");
     }
     this.name = name;
     this.title = String(options.title || DEFAULT_IMAGE_PLUGIN_TITLE).trim();
     this.description = String(
       options.description || DEFAULT_IMAGE_PLUGIN_DESCRIPTION,
     ).trim();
-    this.image_create = options.image_create;
-    this.image_result = options.image_result;
-    this.list_models = options.list_models;
     this.default_model = normalize_default_image_model(options.default_model);
   }
 
@@ -578,8 +566,9 @@ export class ImagePlugin extends BasePlugin {
    */
   private async read_image_result(
     input: ImagePluginJobResultInput,
+    context: PluginContext,
   ): Promise<ImagePluginJobResult> {
-    const first = await this.fetch_job_once(input.job_id);
+    const first = await this.fetch_job_once(input.job_id, context);
     if (!input.until_done) return first;
     if (is_terminal_status(first.status)) return first;
 
@@ -599,7 +588,7 @@ export class ImagePlugin extends BasePlugin {
       const sleep_ms = Math.min(wait_ms, remaining);
       if (sleep_ms === 0) break;
       await delay_ms(sleep_ms);
-      current = await this.fetch_job_once(input.job_id);
+      current = await this.fetch_job_once(input.job_id, context);
       if (is_terminal_status(current.status)) return current;
     }
     return current;
@@ -608,8 +597,13 @@ export class ImagePlugin extends BasePlugin {
   /**
    * 拉取一次任务状态并校验。
    */
-  private async fetch_job_once(job_id: string): Promise<ImagePluginJobResult> {
-    const current = await this.image_result({ job_id });
+  private async fetch_job_once(
+    job_id: string,
+    context: PluginContext,
+  ): Promise<ImagePluginJobResult> {
+    const service = context.services.ai;
+    if (!service) throw new TypeError("ImagePlugin AI service is not configured");
+    const current = await service.image_result({ job_id }) as unknown as ImagePluginJobResult;
     validate_job_result(current);
     if (current.status === "succeeded" && current.result) {
       normalize_image_result(current.result);
@@ -624,16 +618,11 @@ export class ImagePlugin extends BasePlugin {
     models: create_action({
       description: "List image-capable models available to ImagePlugin.",
       input_schema: z.object({}).passthrough(),
-      execute: async () => {
+      execute: async ({ context }) => {
         try {
-          if (!this.list_models) {
-            return {
-              success: false,
-              error: "ImagePlugin list_models is not configured",
-              message: "ImagePlugin list_models is not configured",
-            };
-          }
-          const models = await this.list_models();
+          const service = context.services.ai;
+          if (!service) throw new TypeError("ImagePlugin AI service is not configured");
+          const models = await service.list_models() as unknown as ImagePluginModel[];
           const result = normalize_image_models(models);
           return {
             success: true,
@@ -729,7 +718,9 @@ export class ImagePlugin extends BasePlugin {
             await normalize_image_create_input(context, normalized_payload),
             this.default_model,
           );
-          const created = await this.image_create(normalized_input);
+          const service = context.services.ai;
+          if (!service) throw new TypeError("ImagePlugin AI service is not configured");
+          const created = await service.image_create(normalized_input as unknown as JsonObject) as unknown as ImagePluginJobCreateResult;
           validate_created_job(created);
           return {
             success: true,
@@ -795,7 +786,7 @@ export class ImagePlugin extends BasePlugin {
       execute: async ({ context, execution_context, input }) => {
         try {
           const normalized_input = normalize_image_result_payload(input);
-          const current = await this.read_image_result(normalized_input);
+          const current = await this.read_image_result(normalized_input, context);
           if (current.status === "failed") {
             return {
               success: false,

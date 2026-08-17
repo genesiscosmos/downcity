@@ -29,7 +29,6 @@ export type {
   LocalInstalledPluginDefinition,
   LocalPluginConfig,
   LocalPluginConfigDefinition,
-  LocalPluginCreateInput,
   LocalPluginDefinition,
   LocalPluginRegistration,
 } from "./types/LocalPlugin.js";

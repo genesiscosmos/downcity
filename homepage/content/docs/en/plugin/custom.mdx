@@ -62,10 +62,10 @@ export const plugin = GithubPlugin;
 The instance `name`, `plugin.json` `id`, directory name, and Agent reference must match. The constructor does not repeat a Manifest or runtime Schema. TypeScript types serve Plugin code, while `plugin.json.config.schema` defines the runtime profile protocol:
 
 ```ts
-new PluginConstructor({ config: selected_profile });
+new PluginConstructor(selected_profile);
 ```
 
-The Loader validates the profile against JSON Schema, then passes the complete configuration to the constructor. Accounts, tokens, endpoints, and other structures belong directly to the Plugin profile. There is no framework-level Binding, Resource, Resolver, or Installation domain.
+The Loader validates the profile against JSON Schema, then passes the complete profile directly to the constructor. Runtime clients and providers are created inside the Plugin; Agent-scoped services are read from the Plugin execution context. There is no framework-level Binding, Resource, Resolver, or Installation domain.
 
 ## Plugin definition
 

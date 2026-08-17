@@ -13,6 +13,7 @@ export type {
   SoundPluginModel,
   SoundPluginModelsResult,
   SoundPluginOptions,
+  SoundPluginProfile,
   SoundPluginTtsInput,
   SoundPluginTtsResult,
 } from "./sound/types/SoundPlugin.js";

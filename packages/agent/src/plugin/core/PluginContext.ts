@@ -26,6 +26,8 @@ export interface CreatePluginContextInput {
   shell?: PluginContext["shell"];
   /** 当前 Agent 日志器。 */
   logger: PluginContext["logger"];
+  /** 当前 Agent 为 Plugin 提供的外部服务能力。 */
+  services?: PluginContext["services"];
   /** 延迟读取当前 AgentWorkspace Session 集合。 */
   get_sessions: () => PluginContext["sessions"];
   /** 延迟读取当前 AgentWorkspace 的 Plugin 注册表视图。 */
@@ -49,6 +51,7 @@ export function create_plugin_context(
     data_files: input.data_files,
     ...(input.shell ? { shell: input.shell } : {}),
     logger: input.logger,
+    services: input.services || {},
     get sessions() {
       return input.get_sessions();
     },
