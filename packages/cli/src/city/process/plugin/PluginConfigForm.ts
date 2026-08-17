@@ -2,7 +2,7 @@
  * 标准 JSON Schema 驱动的 Plugin 配置 TUI。
  *
  * 关键点（中文）
- * - 递归处理 object、boolean、number、string、enum 与 array。
+ * - 递归处理 object、boolean、number、string、enum、array 与判别式 oneOf。
  * - `readOnly`、`writeOnly` 和 `const` 直接遵循标准 JSON Schema 语义。
  * - 全部编辑先写入草稿，最终 Schema 校验通过后才由调用方持久化。
  */
@@ -33,13 +33,17 @@ async function prompt_object_fields(input: {
   value: JsonObject;
   path: string;
 }): Promise<JsonObject | null> {
-  const properties = as_json_object(input.schema.properties) ?? {};
+  const resolved = await resolve_composed_schema(input.schema, input.value, input.path);
+  if (!resolved) return null;
+  const active_schema = resolved.schema;
+  const initial_value = resolved.value;
+  const properties = as_json_object(active_schema.properties) ?? {};
   const required = new Set(
-    Array.isArray(input.schema.required)
-      ? input.schema.required.filter((item): item is string => typeof item === "string")
+    Array.isArray(active_schema.required)
+      ? active_schema.required.filter((item): item is string => typeof item === "string")
       : [],
   );
-  const result = clone_json_object(input.value);
+  const result = clone_json_object(initial_value);
 
   for (const [key, raw_schema] of Object.entries(properties)) {
     const field_schema = as_json_object(raw_schema);
@@ -49,6 +53,7 @@ async function prompt_object_fields(input: {
     const current_value = result[key];
 
     if (field_schema.readOnly === true) continue;
+    if (resolved.locked_keys.has(key)) continue;
     if (field_schema.const !== undefined) {
       result[key] = field_schema.const as JsonValue;
       continue;
@@ -89,6 +94,98 @@ async function prompt_object_fields(input: {
     else result[key] = next_value.value as JsonValue;
   }
   return result;
+}
+
+/** 解析当前对象的判别式 oneOf 分支，并在首次配置时询问分支字段。 */
+async function resolve_composed_schema(
+  schema: JsonObject,
+  value: JsonObject,
+  path: string,
+): Promise<{ schema: JsonObject; value: JsonObject; locked_keys: Set<string> } | null> {
+  if (!Array.isArray(schema.oneOf)) {
+    return { schema, value, locked_keys: new Set() };
+  }
+  const variants = schema.oneOf
+    .map((item) => as_json_object(item))
+    .filter((item): item is JsonObject => item !== null);
+  const variant_for_value = variants.find((variant) => variant_matches_value(variant, value));
+  if (variant_for_value) {
+    return {
+      schema: merge_object_schema(schema, variant_for_value),
+      value,
+      locked_keys: new Set(),
+    };
+  }
+
+  const discriminator = find_discriminator(variants);
+  if (!discriminator) return { schema, value, locked_keys: new Set() };
+  const choices = discriminator.values;
+  const discriminator_schema = as_json_object(schema.properties)?.[discriminator.key];
+  const discriminator_schema_object = as_json_object(discriminator_schema) ?? {};
+  const response = await prompt_enum_field({
+    schema: {
+      type: "string",
+      title: schema_title(discriminator_schema_object, `${path}.${discriminator.key}`),
+      ...(schema_description(discriminator_schema_object)
+        ? { description: schema_description(discriminator_schema_object) }
+        : {}),
+      enum: choices,
+    },
+    current_value: value[discriminator.key],
+    path: `${path}.${discriminator.key}`,
+    required: true,
+  });
+  if (response.cancelled || response.unset || response.value === undefined) return null;
+  const next_value = { ...value, [discriminator.key]: response.value };
+  const selected_variant = variants.find((variant) => variant_matches_value(variant, next_value));
+  if (!selected_variant) return null;
+  return {
+    schema: merge_object_schema(schema, selected_variant),
+    value: next_value,
+    locked_keys: new Set([discriminator.key]),
+  };
+}
+
+/** 判断对象是否满足一个带 const 判别字段的 oneOf 分支。 */
+function variant_matches_value(variant: JsonObject, value: JsonObject): boolean {
+  const properties = as_json_object(variant.properties) ?? {};
+  const discriminators = Object.entries(properties)
+    .filter(([, item]) => as_json_object(item)?.const !== undefined);
+  return discriminators.length > 0
+    && discriminators.every(([key, item]) => value[key] === as_json_object(item)?.const);
+}
+
+/** 找出多个 oneOf 分支共用的 const 判别字段。 */
+function find_discriminator(variants: JsonObject[]): { key: string; values: JsonValue[] } | null {
+  const candidates = new Map<string, JsonValue[]>();
+  for (const variant of variants) {
+    const properties = as_json_object(variant.properties) ?? {};
+    for (const [key, item] of Object.entries(properties)) {
+      const field = as_json_object(item);
+      if (field?.const !== undefined) {
+        candidates.set(key, [...(candidates.get(key) ?? []), field.const as JsonValue]);
+      }
+    }
+  }
+  for (const [key, values] of candidates) {
+    const unique_values = values.filter((value, index) => values.findIndex((item) => Object.is(item, value)) === index);
+    if (unique_values.length === variants.length) return { key, values: unique_values };
+  }
+  return null;
+}
+
+/** 合并通用对象 Schema 与选中的 oneOf 分支。 */
+function merge_object_schema(base: JsonObject, variant: JsonObject): JsonObject {
+  const base_properties = as_json_object(base.properties) ?? {};
+  const variant_properties = as_json_object(variant.properties) ?? {};
+  const base_required = Array.isArray(base.required) ? base.required.filter((item): item is string => typeof item === "string") : [];
+  const variant_required = Array.isArray(variant.required) ? variant.required.filter((item): item is string => typeof item === "string") : [];
+  return {
+    ...base,
+    ...variant,
+    properties: { ...base_properties, ...variant_properties },
+    required: [...new Set([...base_required, ...variant_required])],
+  };
 }
 
 /** 询问是否进入、保留或清空嵌套配置对象。 */

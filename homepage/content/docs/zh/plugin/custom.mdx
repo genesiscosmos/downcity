@@ -136,6 +136,8 @@ Loader 先使用 JSON Schema 校验 profile，再把完整配置传入 construct
 
 表单展示所需的占位符、排序或控件提示放在 `x_downcity` 下，不改变 JSON Schema 的运行时校验语义。
 
+运行时默认配置只取 `plugin.json.config.defaults`。字段级 `default` 保留为 JSON Schema 注解，供表单或文档展示，不会自动写入 profile。
+
 Plugin 作者直接在 `plugin.json` 中声明完整 JSON Schema 和可选 `defaults`。安装器校验 Schema、默认值与已有 profile，并把来源、完整性和时间信息写回安装后的同一个文件；不会生成第二份 Manifest 或 Schema 快照。
 
 `entry` 必须指向单个自包含 ESM 文件。安装器不会执行依赖安装、构建脚本或导入 Plugin 入口，也不会复制入口之外的源码和开发文件。Plugin 使用 Zod 等运行时依赖时，构建工具必须把依赖打进入口。

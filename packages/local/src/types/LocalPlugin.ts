@@ -6,7 +6,7 @@ import type { JsonObject, Plugin } from "@downcity/agent";
 export interface LocalPluginConfigDefinition {
   /** 校验 profile 并驱动 CLI、Desktop 表单的完整 JSON Schema。 */
   schema: JsonObject;
-  /** `default` profile 不存在时使用的完整默认配置。 */
+  /** `default` profile 不存在时使用的完整默认配置；字段级 `default` 只作为 Schema 注解。 */
   defaults?: JsonObject;
 }
 

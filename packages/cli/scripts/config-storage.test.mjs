@@ -275,6 +275,11 @@ test("第三方 Plugin 使用 definition ID 目录和单 constructor", async () 
       assert.equal(runtime_plugins[0].name, "example");
       assert.equal(runtime_plugins[0].description, "https://example.com");
       assert.equal(runtime_plugins[0].timeout_ms, 10000);
+      fs.appendFileSync(path.join(plugin_dir, "dist", "index.js"), "\n// tampered\n");
+      await assert.rejects(
+        () => loader.create_plugins(data.agents.get("plugin_agent")),
+        /integrity check failed/u,
+      );
     } finally {
       data.database.close();
     }

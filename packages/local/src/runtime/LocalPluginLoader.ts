@@ -6,6 +6,7 @@
  */
 
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import fs from "fs-extra";
 import type { Plugin } from "@downcity/agent";
@@ -70,6 +71,7 @@ export class LocalPluginLoader {
     const definition = this.options.plugin_repository.get_installed(plugin_id);
     if (!definition) return null;
     const plugin_root = this.options.plugin_repository.plugin_path(plugin_id);
+    await verify_installed_plugin_integrity(plugin_root, definition);
     const expected_entry = resolve_plugin_path(plugin_root, definition.entry);
     const [real_root, real_entry] = await Promise.all([
       fs.realpath(plugin_root),
@@ -87,6 +89,34 @@ export class LocalPluginLoader {
       definition,
       create: ({ config }) => new plugin_constructor({ config }),
     };
+  }
+}
+
+/** 校验安装制品完整性，防止已安装入口或运行资源被静默替换。 */
+async function verify_installed_plugin_integrity(
+  plugin_root: string,
+  definition: LocalPluginRegistration["definition"] & {
+    entry: string;
+    integrity: string;
+  },
+): Promise<void> {
+  const files = ["package.json", "README.md", definition.entry];
+  if (definition.icon && !/^https?:\/\//iu.test(definition.icon)) files.push(definition.icon);
+  const hash = createHash("sha256");
+  for (const relative_path of [...files].sort((left, right) => left.localeCompare(right))) {
+    const file_path = resolve_plugin_path(plugin_root, relative_path);
+    const stats = await fs.lstat(file_path).catch(() => null);
+    if (!stats?.isFile() || stats.isSymbolicLink()) {
+      throw new Error(`Installed Plugin file is invalid: ${definition.id}/${relative_path}`);
+    }
+    hash.update(relative_path.split(path.sep).join("/"));
+    hash.update("\0");
+    hash.update(await fs.readFile(file_path));
+    hash.update("\0");
+  }
+  const actual_integrity = `sha256-${hash.digest("hex")}`;
+  if (actual_integrity !== definition.integrity) {
+    throw new Error(`Installed Plugin integrity check failed: ${definition.id}`);
   }
 }
 

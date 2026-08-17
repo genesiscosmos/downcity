@@ -32,7 +32,7 @@ test("Plugin JSON Schema 校验成功配置并报告错误路径", () => {
   const schema = {
     type: "object",
     properties: {
-      endpoint: { type: "string", format: "uri", minLength: 1 },
+      endpoint: { type: "string", format: "uri", minLength: 1, x_downcity: { widget: "url" } },
       mode: { type: "string", enum: ["safe", "fast"], default: "safe" },
     },
     required: ["endpoint", "mode"],

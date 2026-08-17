@@ -10,6 +10,13 @@ const plugin_config_ajv = new Ajv2020({
   strict: true,
 });
 
+// `x_downcity` 只承载表单展示提示，不参与配置值校验。
+plugin_config_ajv.addKeyword({
+  keyword: "x_downcity",
+  schemaType: "object",
+  valid: true,
+});
+
 (formats_plugin as unknown as (ajv: Ajv2020) => Ajv2020)(plugin_config_ajv);
 
 /** 校验 `plugin.json` 声明的配置 JSON Schema。 */
