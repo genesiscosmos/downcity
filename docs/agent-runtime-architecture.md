@@ -23,7 +23,7 @@ src/
    └─ store/              Agent、Session 与 Message 本地持久化
 ```
 
-`AgentWorkspace` 属于 Agent 进入 Workspace 后的执行边界；`WorkspaceEnv`、项目路径和项目文件能力属于 Workspace；私有运行时 Store 由 `AgentWorkspaceStorage` 负责。用户级 `~/.downcity` 根目录由宿主传入 `Workspace.data_root_path`，共享协议类型仍统一放在 `src/types/`。
+`AgentWorkspace` 属于 Agent 进入 Workspace 后的执行边界；`WorkspaceEnv`、项目路径和项目文件能力属于 Workspace；私有运行时 Store 由 `AgentWorkspaceStorage` 负责。本地实现自动使用 `DC_PLATFORM_ROOT` 或 `~/.downcity`，共享协议类型仍统一放在 `src/types/`。
 
 ## 1. 最终结论
 
@@ -47,7 +47,6 @@ Agent                  Agent 身份、模型、指令和 Plugin 注册表
 const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
-  data_root_path: join(homedir(), ".downcity"),
   shell: new Shell({
     sandbox: new MacOsSeatbeltSandbox(),
   }),
@@ -65,7 +64,6 @@ Windows 只替换 Sandbox：
 const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
-  data_root_path: join(homedir(), ".downcity"),
   shell: new Shell({
     sandbox: new WindowsMxcSandbox(),
   }),
@@ -242,7 +240,7 @@ Downcity 应借鉴：
 
 ```mermaid
 flowchart TD
-    App["SDK 调用方"] --> Workspace["new Workspace({ id, path, data_root_path, shell })"]
+    App["SDK 调用方"] --> Workspace["new Workspace({ id, path, shell })"]
     App --> Agent["new Agent({ id, plugins })"]
     Agent --> AgentWorkspace["agent.enter(workspace)"]
     Workspace --> AgentWorkspace
@@ -330,9 +328,6 @@ interface WorkspaceOptions {
 
   /** Workspace 绑定的本地项目根目录。 */
   path: string;
-
-  /** 用户级 Downcity 数据根目录。 */
-  data_root_path: string;
 
   /** Workspace 内可选的受控命令执行能力。 */
   shell?: Shell;
@@ -912,7 +907,7 @@ interface WorkspaceBackend {
 
 ## 22. 验收标准
 
-1. 公共 API 使用 `new Agent({ id, plugins? })` 与 `agent.enter(new Workspace({ id, path, data_root_path, shell? }))`。
+1. 公共 API 使用 `new Agent({ id, plugins? })` 与 `agent.enter(new Workspace({ id, path, shell? }))`。
 2. 不存在 AgentHost 或通用 SystemHandler。
 3. Agent 与 Session 不包含平台分支。
 4. File/Search Tool 不依赖 Shell command protocol。
@@ -928,7 +923,7 @@ interface WorkspaceBackend {
 ## 23. 最终框架
 
 ```text
-new Agent({ id }) + new Workspace({ id, path, data_root_path, shell? })
+new Agent({ id }) + new Workspace({ id, path, shell? })
                             │
                             ▼
                  agent.enter(workspace)

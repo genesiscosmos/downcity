@@ -5,7 +5,7 @@ description: 本地 SDK Agent 的 Session 文件布局与数据边界
 
 # SDK Session 布局
 
-本地 SDK Agent 的 Session 默认集中落盘到用户级数据根目录。`data_root_path` 通常是 `~/.downcity`：
+本地 SDK Agent 的 Session 默认集中落盘到 `~/.downcity`；测试或多实例宿主可以通过 `DC_PLATFORM_ROOT` 覆盖内部根目录：
 
 ```text
 ~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/sessions/<session_id>/

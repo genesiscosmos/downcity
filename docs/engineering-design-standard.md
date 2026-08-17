@@ -351,13 +351,9 @@ Shell 不应该吸收：
 目标使用方式：
 
 ```ts
-import { homedir } from "node:os";
-import { join } from "node:path";
-
 const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
-  data_root_path: join(homedir(), ".downcity"),
   shell: new Shell({ sandbox: platform_sandbox }),
 });
 ```

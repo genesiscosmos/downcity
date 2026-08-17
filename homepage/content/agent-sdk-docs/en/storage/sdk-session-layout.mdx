@@ -5,7 +5,7 @@ description: File layout and data boundaries for local SDK Agent Sessions
 
 # SDK Session Layout
 
-Local SDK Agent Sessions are persisted under the user data root, normally `~/.downcity` via `data_root_path`:
+Local SDK Agent Sessions are persisted under `~/.downcity`; tests and multi-instance hosts can override the internal root with `DC_PLATFORM_ROOT`:
 
 ```text
 ~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/sessions/<session_id>/

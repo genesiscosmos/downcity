@@ -19,7 +19,7 @@ description: 按日常使用、常用进阶和框架集成三个层级理解 Age
 - `agent.dispose()`：释放 Agent 进入的全部 Workspace 作用域。
 
 ```ts
-const workspace = new Workspace({ id: workspace_id, path, data_root_path, shell });
+const workspace = new Workspace({ id: workspace_id, path, shell });
 const agent = new Agent({ id, model });
 const agent_workspace = agent.enter(workspace);
 

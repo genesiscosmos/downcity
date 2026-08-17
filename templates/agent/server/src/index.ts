@@ -7,8 +7,7 @@
  * 读取历史并追加消息，不接触 Node runtime 或模型密钥。
  */
 
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import {
   Agent,
@@ -48,7 +47,6 @@ const agent = new Agent({
 const agent_workspace = agent.enter(new Workspace({
   id: "default",
   path: workspace_path,
-  data_root_path: join(homedir(), ".downcity"),
 }));
 
 /** 恢复固定 Web Session，不存在时首次创建。 */

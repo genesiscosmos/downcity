@@ -11,7 +11,6 @@ The local Agent is constructed like this:
 const workspace = new Workspace({
   id,
   path,
-  data_root_path,
   shell,
   env,
 });
@@ -51,6 +50,7 @@ The project resource and security boundary available to the Agent. Workspace own
 
 ```ts
 const workspace = new Workspace({
+  id: "project",
   path: "/path/to/project",
   shell,
 });
@@ -66,19 +66,20 @@ Key points:
 - one Agent can enter multiple Workspaces, each with isolated Sessions, logs, Shell, and plugin context
 - multiple Agents may target the same directory, using distinct agent IDs and data partitions
 
-`Workspace` requires a stable `id`, the real project `path`, and a user-level `data_root_path`:
+`Workspace` requires only a stable `id`, the real project `path`, and optional Shell and env values. The implementation resolves Downcity's internal data root automatically:
 
 ```ts
 const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-  data_root_path: join(homedir(), ".downcity"),
   shell,
 });
 const agent_workspace = agent.enter(workspace);
 ```
 
 Workspace construction fails immediately when `path` is empty, missing, or not a directory.
+
+The local implementation writes private data under `~/.downcity` by default. Tests and multi-instance hosts can override the root with `DC_PLATFORM_ROOT`; that environment variable is not part of the Workspace API.
 
 ## `instruction`
 

@@ -19,7 +19,7 @@ Most local applications need only:
 - `agent.dispose()`: release every Workspace scope entered by the Agent.
 
 ```ts
-const workspace = new Workspace({ id: workspace_id, path, data_root_path, shell });
+const workspace = new Workspace({ id: workspace_id, path, shell });
 const agent = new Agent({ id, model });
 const agent_workspace = agent.enter(workspace);
 

@@ -9,6 +9,39 @@ import path from "node:path";
 import test from "node:test";
 import { Agent, Workspace } from "../bin/index.js";
 
+test("Workspace resolves the Downcity data root internally", async (t) => {
+  const fixture_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-root-"));
+  const project_path = path.join(fixture_root, "project");
+  const platform_root = path.join(fixture_root, "platform");
+  await fs.mkdir(project_path);
+  const previous_root = process.env.DC_PLATFORM_ROOT;
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  const agent = new Agent({ id: "internal-root-agent" });
+  const entry = agent.enter(new Workspace({
+    id: "internal-root-workspace",
+    path: project_path,
+  }));
+  t.after(async () => {
+    await agent.dispose();
+    if (previous_root === undefined) delete process.env.DC_PLATFORM_ROOT;
+    else process.env.DC_PLATFORM_ROOT = previous_root;
+    await fs.rm(fixture_root, { recursive: true, force: true });
+  });
+
+  assert.equal(
+    entry.data_path,
+    path.join(
+      platform_root,
+      "agents",
+      "internal-root-agent",
+      "workspaces",
+      "internal-root-workspace",
+    ),
+  );
+  assert.equal(await fs.stat(entry.data_path).then((value) => value.isDirectory()), true);
+  assert.equal(await fs.stat(entry.data_path).then((value) => value.mode & 0o777), 0o700);
+});
+
 test("Workspace exposes file tools without requiring Shell", async (t) => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-"));
 

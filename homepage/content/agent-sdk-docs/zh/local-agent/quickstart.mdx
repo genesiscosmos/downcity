@@ -26,8 +26,6 @@ pnpm add @downcity/agent @downcity/shell @downcity/sandbox-macos @ai-sdk/openai
 ## 完整的最小示例
 
 ```ts
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { Agent, Workspace } from "@downcity/agent";
 import { createOpenAI } from "@ai-sdk/openai";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
@@ -44,7 +42,6 @@ const shell = new Shell({
 const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-  data_root_path: join(homedir(), ".downcity"),
   shell,
 });
 
@@ -71,7 +68,7 @@ try {
 
 1. 创建当前平台的 Sandbox Adapter。
 2. 创建 `Shell` 并注入 Sandbox。
-3. 创建 `Workspace` 并传入项目路径、稳定 ID、用户级数据根目录和 Shell。
+3. 创建 `Workspace` 并传入项目路径、稳定 ID 和 Shell。
 4. 创建独立的 `Agent`，再通过 `agent.enter(workspace)` 进入当前 Workspace。
 5. 创建 Session，通过 `prompt()` 启动 Turn，并等待 `turn.finished`。
 6. 在 `finally` 中调用 `agent.dispose()`。

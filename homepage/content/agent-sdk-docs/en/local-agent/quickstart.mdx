@@ -26,8 +26,6 @@ On another platform, replace only the Sandbox package and instance:
 ## Complete minimal example
 
 ```ts
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { Agent, Workspace } from "@downcity/agent";
 import { createOpenAI } from "@ai-sdk/openai";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
@@ -44,7 +42,6 @@ const shell = new Shell({
 const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-  data_root_path: join(homedir(), ".downcity"),
   shell,
 });
 
@@ -71,7 +68,7 @@ try {
 
 1. Create the Sandbox Adapter for the current platform.
 2. Create `Shell` and inject the Sandbox.
-3. Create `Workspace` with a stable ID, project path, user data root, and Shell.
+3. Create `Workspace` with a stable ID, project path, and Shell.
 4. Create the independent `Agent`, then enter the Workspace with `agent.enter(workspace)`.
 5. Create a Session, start a Turn with `prompt()`, and await `turn.finished`.
 6. Call `agent.dispose()` in `finally`.

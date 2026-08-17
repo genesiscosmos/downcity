@@ -8,6 +8,7 @@
  */
 
 import { realpathSync, statSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import fs from "fs-extra";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
@@ -38,6 +39,20 @@ function resolve_workspace_path(input: string): string {
   return resolved_path;
 }
 
+/** 解析本地 Downcity 用户级数据根目录。 */
+function resolve_data_root_path(input?: string): string {
+  const explicit_root = String(input || process.env.DC_PLATFORM_ROOT || "").trim();
+  return explicit_root
+    ? path.resolve(explicit_root)
+    : path.join(os.homedir(), ".downcity");
+}
+
+/** 仅供包内测试隔离使用，不进入 Workspace 公开类型。 */
+interface WorkspaceInternalOptions {
+  /** 测试使用的临时 Downcity 数据根目录。 */
+  data_root_path?: string;
+}
+
 /** 本地 Workspace。 */
 export class Workspace extends WorkspaceBase {
   /** Workspace 的稳定标识。 */
@@ -46,8 +61,8 @@ export class Workspace extends WorkspaceBase {
   /** 已解析且不可变的项目根目录。 */
   readonly path: string;
 
-  /** Downcity 用户级数据根目录。 */
-  readonly data_root_path: string;
+  /** Downcity 内部用户级数据根目录。 */
+  private readonly storage_root_path: string;
 
   /** Workspace 根目录内统一的受控文件与搜索能力。 */
   readonly files: FileSystem;
@@ -78,9 +93,8 @@ export class Workspace extends WorkspaceBase {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Workspace requires a non-empty id");
     this.path = resolve_workspace_path(options.path);
-    const data_root_path = String(options.data_root_path || "").trim();
-    if (!data_root_path) throw new Error("Workspace requires a non-empty data_root_path");
-    this.data_root_path = path.resolve(data_root_path);
+    const internal_options = options as WorkspaceOptions & WorkspaceInternalOptions;
+    this.storage_root_path = resolve_data_root_path(internal_options.data_root_path);
     this.files = new LocalFileSystem(this.path);
     this.env = resolve_workspace_env(this.path, options.env);
     this.shell = options.shell;
@@ -135,11 +149,11 @@ export class Workspace extends WorkspaceBase {
     }
     this.bound_agent_id = resolved_agent_id;
     const storage_root_path = get_sdk_agent_workspace_storage_path(
-      this.data_root_path,
+      this.storage_root_path,
       resolved_agent_id,
       this.id,
     );
-    ensure_private_directory_tree(this.data_root_path, storage_root_path);
+    ensure_private_directory_tree(this.storage_root_path, storage_root_path);
     const storage_files = new LocalFileSystem({
       root_path: storage_root_path,
       directory_mode: 0o700,

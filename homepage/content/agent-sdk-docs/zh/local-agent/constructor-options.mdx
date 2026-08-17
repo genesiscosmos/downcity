@@ -11,7 +11,6 @@ description: 详细说明 Workspace env、WorkspaceTools 以及本地 Agent 的 
 const workspace = new Workspace({
   id,
   path,
-  data_root_path,
   shell,
   env,
 });
@@ -51,6 +50,7 @@ agent 的稳定标识。
 
 ```ts
 const workspace = new Workspace({
+  id: "project",
   path: "/path/to/project",
   shell,
 });
@@ -66,19 +66,20 @@ const workspace = new Workspace({
 - 同一个 Agent 可以进入多个 Workspace，每个作用域拥有独立 Session、日志、Shell 和插件上下文
 - 多个 Agent 可以指向同一目录，但使用各自的 `agent.id` 和数据分区
 
-`Workspace` 必须提供稳定的 `id`、真实项目 `path` 和用户级 `data_root_path`：
+`Workspace` 只需要提供稳定的 `id`、真实项目 `path`，以及可选的 Shell 和 env。Downcity 内部数据根目录由实现自动解析：
 
 ```ts
 const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-  data_root_path: join(homedir(), ".downcity"),
   shell,
 });
 const agent_workspace = agent.enter(workspace);
 ```
 
 如果 `path` 不存在、不是目录或为空，Workspace 会立即拒绝构造。
+
+本地实现默认把私有数据写入 `~/.downcity`。测试或多实例宿主可以通过 `DC_PLATFORM_ROOT` 覆盖根目录，该环境变量不属于 Workspace API。
 
 ## `instruction`
 
