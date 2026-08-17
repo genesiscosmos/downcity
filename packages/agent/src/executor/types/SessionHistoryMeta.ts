@@ -2,7 +2,7 @@
  * SessionHistoryMeta：随 session_id 持久化的元信息。
  *
  * 关键点（中文）
- * - 存储位置：AgentWorkspace `sessions/<encodedSessionId>/messages/meta.json`
+ * - 存储位置：Workspace `sessions/<encodedSessionId>/meta.json`
  * - 用于保存 session 列表、详情和索引所需的轻量元信息
  */
 
@@ -12,7 +12,9 @@ export type SessionHistoryMetaV1 = {
   /** 当前元信息所属的 session_id。 */
   session_id: string;
   /** 当前 session 所属的 agent_id。 */
-  agent_id?: string;
+  agent_id: string;
+  /** 当前 session 所属的 workspace_id。 */
+  workspace_id: string;
   /** 当前 session 首次创建时间戳（ms）。 */
   created_at?: number;
   /** 当前 session 初始化时解析到的系统时区。 */

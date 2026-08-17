@@ -85,7 +85,10 @@ export class AgentWorkspace {
     const storage = this.workspace.create_agent_workspace_storage(this.agent.id);
     this.data_path = storage.root_path;
     this.logger = new Logger();
-    this.logger.bind_storage(storage.files, storage.root_path);
+    this.logger.bind_storage(storage.files, storage.root_path, {
+      agent_id: this.agent.id,
+      workspace_id: this.workspace_id,
+    });
 
     let contextual_plugins: AgentPlugins | undefined;
     let contextual_sessions: AgentSessions | undefined;

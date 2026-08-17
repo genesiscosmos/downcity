@@ -92,7 +92,7 @@ one Agent → multiple `agent.enter(workspace)` scopes → one agent.dispose()
 ```
 
 - Agent is not bound to one Workspace; one Agent can enter multiple Workspaces.
-- Each AgentWorkspace owns isolated Sessions, private data, Shell, and Plugin context.
+- Each AgentWorkspace owns an Agent-filtered Session view, Shell, and Plugin context; entries for the same Workspace share one internal data root.
 - `agent.dispose()` releases every AgentWorkspace, Plugin runtime, Shell, PTYs, and Sandbox.
 - `RemoteAgent.close()` closes only the client connection, not the server-side Agent.
 

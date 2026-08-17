@@ -212,6 +212,8 @@ test("Session logs title generation failure without blocking the session", async
 
     assert.ok(title_failure_log);
     assert.equal(title_failure_log.type, "warn");
+    assert.equal(title_failure_log.agent_id, "title_log_agent");
+    assert.equal(title_failure_log.workspace_id, "test_workspace");
     assert.equal(title_failure_log.details.session_id, session.id);
     assert.equal(
       title_failure_log.details.model_label,

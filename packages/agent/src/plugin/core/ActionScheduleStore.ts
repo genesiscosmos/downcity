@@ -76,6 +76,8 @@ function normalizeJobRecord(
 ): ActionScheduleJobRecord {
   return {
     id: String(input.id || "").trim(),
+    agent_id: String(input.agent_id || "").trim(),
+    workspace_id: String(input.workspace_id || "").trim(),
     plugin_name: String(input.plugin_name || "").trim(),
     action_name: String(input.action_name || "").trim(),
     payload: input.payload ?? null,
@@ -136,9 +138,21 @@ export class ActionScheduleStore {
   private readonly file_path: string;
   private readonly lock_path: string;
   private readonly files: FileSystem;
+  private readonly agent_id: string;
+  private readonly workspace_id: string;
 
-  constructor(files: FileSystem, storage_root_path: string = files.root_path) {
+  constructor(
+    files: FileSystem,
+    storage_root_path: string,
+    agent_id: string,
+    workspace_id: string,
+  ) {
     this.files = files;
+    this.agent_id = String(agent_id || "").trim();
+    this.workspace_id = String(workspace_id || "").trim();
+    if (!this.agent_id || !this.workspace_id) {
+      throw new Error("ActionScheduleStore requires agent_id and workspace_id");
+    }
     this.file_path = get_downcity_schedule_db_path(storage_root_path);
     this.lock_path = `${this.file_path}.lock`;
   }
@@ -158,6 +172,8 @@ export class ActionScheduleStore {
     const now = Date.now();
     const job: ActionScheduleJobRecord = {
       id: `sched_${generate_id()}`,
+      agent_id: this.agent_id,
+      workspace_id: this.workspace_id,
       plugin_name: String(input.plugin_name || "").trim(),
       action_name: String(input.action_name || "").trim(),
       payload: input.payload ?? null,
@@ -182,9 +198,10 @@ export class ActionScheduleStore {
   async get_job_by_id(job_id: string): Promise<ActionScheduleJobRecord | null> {
     const key = String(job_id || "").trim();
     if (!key) return null;
-    return await this.with_store_lock(async () =>
-      (await this.read_job_map_unlocked()).get(key) || null
-    );
+    return await this.with_store_lock(async () => {
+      const job = (await this.read_job_map_unlocked()).get(key);
+      return job && this.owns_job(job) ? job : null;
+    });
   }
 
   /**
@@ -197,7 +214,7 @@ export class ActionScheduleStore {
     const allowed = new Set(statuses);
     return await this.with_store_lock(async () =>
       (await this.read_jobs_unlocked())
-        .filter((job) => allowed.has(job.status))
+        .filter((job) => this.owns_job(job) && allowed.has(job.status))
         .sort(compareJobs)
     );
   }
@@ -215,7 +232,10 @@ export class ActionScheduleStore {
         : 100;
     return await this.with_store_lock(async () => {
       const jobs = (await this.read_jobs_unlocked())
-        .filter((job) => !params?.status || job.status === params.status)
+        .filter((job) =>
+          this.owns_job(job) &&
+          (!params?.status || job.status === params.status)
+        )
         .sort(compareJobs);
       return jobs.slice(0, limit);
     });
@@ -229,7 +249,9 @@ export class ActionScheduleStore {
       (await this.read_jobs_unlocked())
         .filter(
           (job) =>
-            job.status === "pending" && job.run_at_ms <= Math.trunc(nowMs),
+            this.owns_job(job) &&
+            job.status === "pending" &&
+            job.run_at_ms <= Math.trunc(nowMs),
         )
         .sort(compareJobs)
     );
@@ -241,7 +263,7 @@ export class ActionScheduleStore {
   async reset_running_jobs_to_pending(): Promise<number> {
     return await this.with_store_lock(async () => {
       const running_jobs = (await this.read_jobs_unlocked())
-        .filter((job) => job.status === "running");
+        .filter((job) => this.owns_job(job) && job.status === "running");
       const now = Date.now();
       for (const job of running_jobs) {
         await this.append_event_unlocked({
@@ -346,7 +368,9 @@ export class ActionScheduleStore {
   ): Promise<boolean> {
     return await this.with_store_lock(async () => {
       const current = (await this.read_job_map_unlocked()).get(job_id);
-      if (!current || current.status !== "pending") return false;
+      if (!current || !this.owns_job(current) || current.status !== "pending") {
+        return false;
+      }
       await this.append_event_unlocked({
         v: 1,
         type: "status",
@@ -368,7 +392,9 @@ export class ActionScheduleStore {
   }): Promise<boolean> {
     return await this.with_store_lock(async () => {
       const current = (await this.read_job_map_unlocked()).get(params.job_id);
-      if (!current || current.status !== "running") return false;
+      if (!current || !this.owns_job(current) || current.status !== "running") {
+        return false;
+      }
       await this.append_event_unlocked({
         v: 1,
         type: "status",
@@ -379,5 +405,11 @@ export class ActionScheduleStore {
       });
       return true;
     });
+  }
+
+  /** 判断任务是否属于当前 AgentWorkspace 执行视图。 */
+  private owns_job(job: ActionScheduleJobRecord): boolean {
+    return job.agent_id === this.agent_id &&
+      job.workspace_id === this.workspace_id;
   }
 }

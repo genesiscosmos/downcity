@@ -5,21 +5,21 @@ description: Understand Active, Segments, cumulative Summaries, Assistant drafts
 
 # Metadata and Storage
 
-SDK Sessions are persisted under the user-level AgentWorkspace data directory. Applications should read and write through the Session API rather than use these files as their own database.
+SDK Sessions are persisted under the user-level Workspace data directory. Applications should read and write through the Session API rather than use these files as their own database.
 
 ```text
-~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/sessions/<session_id>/
+~/.downcity/workspaces/<workspace_id>/sessions/<session_id>/
+├── meta.json
 ├── instruction.md
 └── messages/
     ├── active.jsonl
     ├── assistant_message.json
-    ├── meta.json
     └── segments/
         ├── 000000000001-000000000900.jsonl
         └── 000000000901-000000001500.jsonl
 ```
 
-`agent_id` and `workspace_id` form the storage partition. Multiple Agents in one project can use the same `session_id` without conflict, and the project directory never receives `.downcity`.
+`session_id` is unique within a Workspace. `meta.json` records both `agent_id` and `workspace_id`; SessionStore validates those fields and filters lists by ownership. Different Agents cannot reuse the same `session_id` in one Workspace, and the project directory never receives `.downcity`.
 
 `instruction.md` is an optional complete system snapshot. A Session fixes its first generated system in memory by default. Local `session.snapshot()` creates or overwrites the file. `session.syncshot()` regenerates the in-memory system and also overwrites the file when it already exists. If the file is absent when restored, the Session regenerates from the Agent's current instruction and plugins; deleting the file restores that behavior.
 

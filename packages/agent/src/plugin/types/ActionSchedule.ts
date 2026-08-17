@@ -27,6 +27,10 @@ export interface ActionScheduleJobRecord {
    * ActionSchedule 任务唯一 ID。
    */
   id: string;
+  /** 执行该任务的 Agent 稳定标识。 */
+  agent_id: string;
+  /** 任务所属 Workspace 的稳定标识。 */
+  workspace_id: string;
   /**
    * 目标 plugin 名称。
    */

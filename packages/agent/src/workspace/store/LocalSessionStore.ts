@@ -1,5 +1,5 @@
 /**
- * LocalSessionStore：Workspace 内一个 Agent 所属 Session 的数据入口。
+ * LocalSessionStore：Workspace 内指定 Agent 的 Session 查询与管理视图。
  *
  * 职责说明（中文）
  * - 统一管理 Session 创建判断、删除、列表、归档与清理。
@@ -19,10 +19,12 @@ import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import { LocalSessionDataStore } from "@/workspace/store/LocalSessionDataStore.js";
 import {
-  get_sdk_agent_archived_session_dir_path,
-  get_sdk_agent_archived_sessions_dir_path,
-  get_sdk_agent_session_dir_path,
-  get_sdk_agent_session_messages_dir_path,
+  get_workspace_archived_session_meta_path,
+  get_workspace_archived_session_path,
+  get_workspace_archived_sessions_path,
+  get_workspace_session_messages_path,
+  get_workspace_session_meta_path,
+  get_workspace_session_path,
 } from "@/workspace/store/LocalStorePaths.js";
 import {
   list_archived_agent_session_summary_page,
@@ -42,13 +44,16 @@ function decode_session_id(input: string): string {
 
 /** 默认本地 Agent Store。 */
 export class LocalSessionStore implements SessionStore {
-  /** 当前 AgentWorkspace 私有数据文件能力。 */
+  /** 当前 Workspace 内部数据文件能力。 */
   private readonly files: FileSystem;
 
   /** 当前 Agent 的稳定标识。 */
   private readonly agent_id: string;
 
-  /** 当前 AgentWorkspace 内部数据根路径。 */
+  /** 当前 Workspace 的稳定标识。 */
+  private readonly workspace_id: string;
+
+  /** 当前 Workspace 内部数据根路径。 */
   private readonly storage_root_path: string;
 
   /** 已创建的 Session Store 缓存。 */
@@ -57,6 +62,7 @@ export class LocalSessionStore implements SessionStore {
   constructor(options: LocalSessionStoreOptions) {
     this.files = options.files;
     this.agent_id = options.agent_id;
+    this.workspace_id = options.workspace_id;
     this.storage_root_path = options.storage_root_path;
   }
 
@@ -72,6 +78,7 @@ export class LocalSessionStore implements SessionStore {
       files: this.files,
       storage_root_path: this.storage_root_path,
       agent_id: this.agent_id,
+      workspace_id: this.workspace_id,
       session_id: resolved_session_id,
     });
     this.sessions.set(resolved_session_id, created);
@@ -80,27 +87,35 @@ export class LocalSessionStore implements SessionStore {
 
   /** 判断活动 Session 是否存在。 */
   async has_session(session_id: string): Promise<boolean> {
-    return await this.files.path_exists(this.session_path(session_id));
+    const session_path = this.session_path(session_id);
+    if (!(await this.files.path_exists(session_path))) return false;
+    await this.assert_session_owner(session_id, false);
+    return true;
   }
 
   /** 永久删除活动 Session。 */
   async remove_session(session_id: string): Promise<boolean> {
     const session_path = this.session_path(session_id);
     const existed = await this.files.path_exists(session_path);
-    if (existed) await this.files.remove_path(session_path);
+    if (existed) {
+      await this.assert_session_owner(session_id, false);
+      await this.files.remove_path(session_path);
+    }
     this.sessions.delete(session_id);
     return existed;
   }
 
   /** 清空活动 Session Message 数据。 */
   async clear_session_messages(session_id: string): Promise<boolean> {
-    const messages_path = get_sdk_agent_session_messages_dir_path(
+    const messages_path = get_workspace_session_messages_path(
       this.storage_root_path,
-      this.agent_id,
       session_id,
     );
     const existed = await this.files.path_exists(messages_path);
-    if (existed) await this.files.remove_path(messages_path);
+    if (existed) {
+      await this.assert_session_owner(session_id, false);
+      await this.files.remove_path(messages_path);
+    }
     this.sessions.delete(session_id);
     return existed;
   }
@@ -113,6 +128,7 @@ export class LocalSessionStore implements SessionStore {
     return await list_agent_session_summary_page({
       project_root: this.storage_root_path,
       agent_id: this.agent_id,
+      workspace_id: this.workspace_id,
       input,
       executingSessionIds: new Set(executing_session_ids),
       files: this.files,
@@ -125,17 +141,16 @@ export class LocalSessionStore implements SessionStore {
     if (!(await this.files.path_exists(source_path))) {
       throw new Error(`Session "${session_id}" not found`);
     }
-    const target_path = get_sdk_agent_archived_session_dir_path(
+    await this.assert_session_owner(session_id, false);
+    const target_path = get_workspace_archived_session_path(
       this.storage_root_path,
-      this.agent_id,
       session_id,
     );
     if (await this.files.path_exists(target_path)) {
       throw new Error(`Archived session "${session_id}" already exists`);
     }
-    await this.files.ensure_directory(get_sdk_agent_archived_sessions_dir_path(
+    await this.files.ensure_directory(get_workspace_archived_sessions_path(
       this.storage_root_path,
-      this.agent_id,
     ));
     await this.files.move_path(source_path, target_path);
     this.sessions.delete(session_id);
@@ -152,6 +167,7 @@ export class LocalSessionStore implements SessionStore {
     return await list_archived_agent_session_summary_page({
       project_root: this.storage_root_path,
       agent_id: this.agent_id,
+      workspace_id: this.workspace_id,
       input,
       files: this.files,
     });
@@ -159,9 +175,8 @@ export class LocalSessionStore implements SessionStore {
 
   /** 永久删除全部归档 Session。 */
   async clean_archive(): Promise<AgentCleanArchiveResult> {
-    const archive_path = get_sdk_agent_archived_sessions_dir_path(
+    const archive_path = get_workspace_archived_sessions_path(
       this.storage_root_path,
-      this.agent_id,
     );
     if (!(await this.files.path_exists(archive_path))) {
       return { removed_session_ids: [] };
@@ -172,9 +187,9 @@ export class LocalSessionStore implements SessionStore {
       if (!entry.is_directory) continue;
       const session_id = decode_session_id(entry.name);
       if (!session_id) continue;
-      await this.files.remove_path(get_sdk_agent_archived_session_dir_path(
+      if (!(await this.is_session_owner(session_id, true))) continue;
+      await this.files.remove_path(get_workspace_archived_session_path(
         this.storage_root_path,
-        this.agent_id,
         session_id,
       ));
       removed_session_ids.push(session_id);
@@ -187,10 +202,43 @@ export class LocalSessionStore implements SessionStore {
 
   /** 返回活动 Session 物理目录，仅供本地实现内部使用。 */
   private session_path(session_id: string): string {
-    return get_sdk_agent_session_dir_path(
+    return get_workspace_session_path(
       this.storage_root_path,
-      this.agent_id,
       session_id,
     );
+  }
+
+  /** 校验目标 Session 确实属于当前 Agent 与 Workspace。 */
+  private async assert_session_owner(
+    session_id: string,
+    archived: boolean,
+  ): Promise<void> {
+    if (await this.is_session_owner(session_id, archived)) return;
+    throw new Error(
+      `Session "${session_id}" belongs to another Agent or Workspace`,
+    );
+  }
+
+  /** 判断 Session metadata 是否匹配当前查询视图。 */
+  private async is_session_owner(
+    session_id: string,
+    archived: boolean,
+  ): Promise<boolean> {
+    const file_path = archived
+      ? get_workspace_archived_session_meta_path(
+        this.storage_root_path,
+        session_id,
+      )
+      : get_workspace_session_meta_path(this.storage_root_path, session_id);
+    if (!(await this.files.path_exists(file_path))) return false;
+    try {
+      const metadata = JSON.parse(
+        (await this.files.read_file(file_path)).toString("utf8"),
+      ) as { agent_id?: unknown; workspace_id?: unknown };
+      return metadata.agent_id === this.agent_id &&
+        metadata.workspace_id === this.workspace_id;
+    } catch {
+      return false;
+    }
   }
 }

@@ -10,12 +10,14 @@ import type { FileSystem } from "@/types/workspace/FileSystem.js";
 
 /** LocalSessionStore 构造参数。 */
 export interface LocalSessionStoreOptions {
-  /** 当前 AgentWorkspace 私有数据文件能力。 */
+  /** 当前 Workspace 内部数据文件能力。 */
   files: FileSystem;
-  /** 当前 AgentWorkspace 内部数据的绝对根路径。 */
+  /** 当前 Workspace 内部数据的绝对根路径。 */
   storage_root_path: string;
-  /** 当前 Agent 的稳定标识，用于划分用户级 `agents` 子目录。 */
+  /** 当前 Session 查询视图所属 Agent 的稳定标识。 */
   agent_id: string;
+  /** 当前 Workspace 的稳定标识。 */
+  workspace_id: string;
 }
 
 /** LocalSessionDataStore 构造参数。 */
@@ -26,6 +28,8 @@ export interface LocalSessionDataStoreOptions {
   storage_root_path: string;
   /** 当前 Session 所属 Agent 的稳定标识。 */
   agent_id: string;
+  /** 当前 Session 所属 Workspace 的稳定标识。 */
+  workspace_id: string;
   /** 当前 Session 的稳定标识。 */
   session_id: string;
 }

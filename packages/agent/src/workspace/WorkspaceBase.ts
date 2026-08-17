@@ -58,10 +58,16 @@ export abstract class WorkspaceBase {
   /** 使用指定内部文件能力创建默认 Session 集合存储。 */
   protected create_default_session_store(
     agent_id: string,
+    workspace_id: string,
     files: FileSystem,
     storage_root_path: string,
   ): LocalSessionStore {
-    return new LocalSessionStore({ files, agent_id, storage_root_path });
+    return new LocalSessionStore({
+      files,
+      agent_id,
+      workspace_id,
+      storage_root_path,
+    });
   }
 
   /** 释放 Workspace 持有的资源。 */

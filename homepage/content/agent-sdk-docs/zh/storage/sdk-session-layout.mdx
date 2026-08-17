@@ -8,21 +8,21 @@ description: 本地 SDK Agent 的 Session 文件布局与数据边界
 本地 SDK Agent 的 Session 默认集中落盘到 `~/.downcity`；测试或多实例宿主可以通过 `DC_PLATFORM_ROOT` 覆盖内部根目录：
 
 ```text
-~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/sessions/<session_id>/
+~/.downcity/workspaces/<workspace_id>/sessions/<session_id>/
+├── meta.json
 └── messages/
     ├── active.jsonl
     ├── assistant_message.json
-    ├── meta.json
     └── segments/
         └── <start_sequence>-<end_sequence>.jsonl
 ```
 
-`agent_id` 隔离 Agent，`workspace_id` 隔离 Agent 进入的项目作用域，`session_id` 隔离每条连续对话。项目目录不会创建 `.downcity`。
+`workspace_id` 定位 Workspace 数据根，`session_id` 在 Workspace 内唯一。`meta.json` 记录 Session 所属的 `agent_id` 和 `workspace_id`；Agent 的 Session 列表只返回 metadata 与自己匹配的记录。项目目录不会创建 `.downcity`。
 
 - `active.jsonl`：上次 Compact 后保留的完整 `SessionMessage` 快照。
 - `assistant_message.json`：唯一的运行中 Assistant 完整草稿。
 - `segments/*.jsonl`：不可变历史段；真实 Message 在前，累计 Summary footer 在最后。
-- `meta.json`：标题、模型标签、时间戳、消息数和存储字节数等轻量索引，不保存运行时模型实例。
+- `meta.json`：Agent 与 Workspace 归属、标题、模型标签、时间戳、消息数和存储字节数等轻量索引，不保存运行时模型实例。
 
 Segment 文件名使用 12 位补零 sequence，例如 `000000000001-000000000900.jsonl`。目录不使用 manifest，扫描文件名即可确定历史顺序。Summary 不属于 Message，也不占 sequence。
 

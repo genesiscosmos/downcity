@@ -92,7 +92,7 @@ try {
 ```
 
 - Agent 不绑定单一 Workspace，同一个 Agent 可以进入多个 Workspace。
-- 每个 AgentWorkspace 独立持有 Session、私有数据、Shell 和 Plugin 上下文。
+- 每个 AgentWorkspace 持有按 Agent 过滤的 Session 视图、Shell 和 Plugin 上下文；同一 Workspace 的内部数据根共享。
 - `agent.dispose()` 会释放所有 AgentWorkspace、Plugin runtime、Shell、PTY 和 Sandbox。
 - `RemoteAgent.close()` 只关闭客户端连接，不释放服务端 Agent。
 

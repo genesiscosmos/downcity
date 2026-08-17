@@ -23,12 +23,12 @@ import { is_session_message_record } from "@/executor/types/SessionRecords.js";
 import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.js";
 import { resolve_session_message_preview } from "@/session/preview/SessionMessagePreview.js";
 import {
-  get_sdk_agent_archived_session_messages_path,
-  get_sdk_agent_archived_session_meta_path,
-  get_sdk_agent_archived_sessions_dir_path,
-  get_sdk_agent_session_messages_path,
-  get_sdk_agent_session_meta_path,
-  get_sdk_agent_sessions_root_dir_path,
+  get_workspace_archived_session_active_messages_path,
+  get_workspace_archived_session_meta_path,
+  get_workspace_archived_sessions_path,
+  get_workspace_session_active_messages_path,
+  get_workspace_session_meta_path,
+  get_workspace_sessions_path,
 } from "@/workspace/store/LocalStorePaths.js";
 import { read_session_metadata_from_path } from "@/session/storage/Metadata.js";
 import { to_executor_ui_message } from "@/session/messages/SessionMessageCodec.js";
@@ -372,6 +372,7 @@ async function resolve_session_disk_stats(
 export async function list_agent_session_summary_page(params: {
   project_root: string;
   agent_id: string;
+  workspace_id: string;
   input?: AgentListSessionsInput;
   executingSessionIds?: Set<string>;
   files: FileSystem;
@@ -379,10 +380,7 @@ export async function list_agent_session_summary_page(params: {
   const limit = normalizeLimit(params.input?.limit, 50, 500);
   const cursor = normalizeCursor(params.input?.cursor);
   const query = String(params.input?.query || "").trim().toLowerCase();
-  const sessionsRoot = get_sdk_agent_sessions_root_dir_path(
-    params.project_root,
-    params.agent_id,
-  );
+  const sessionsRoot = get_workspace_sessions_path(params.project_root);
 
   if (!(await params.files.path_exists(sessionsRoot))) {
     return {
@@ -399,22 +397,22 @@ export async function list_agent_session_summary_page(params: {
     if (!entry.is_directory) continue;
     const session_id = decodeMaybe(entry.name);
     if (!session_id) continue;
-    const meta_path = get_sdk_agent_session_meta_path(
+    const meta_path = get_workspace_session_meta_path(
       params.project_root,
-      params.agent_id,
       session_id,
     );
-    const messages_path = get_sdk_agent_session_messages_path(
+    const messages_path = get_workspace_session_active_messages_path(
       params.project_root,
-      params.agent_id,
       session_id,
     );
     const persisted_metadata = await read_session_metadata_from_path({
       filePath: meta_path,
       session_id,
       agent_id: params.agent_id,
+      workspace_id: params.workspace_id,
       files: params.files,
-    });
+    }).catch(() => null);
+    if (!persisted_metadata) continue;
     const metadata = await resolve_session_summary_metadata({
       metadata: persisted_metadata,
       messagesPath: messages_path,
@@ -475,16 +473,14 @@ export async function list_agent_session_summary_page(params: {
 export async function list_archived_agent_session_summary_page(params: {
   project_root: string;
   agent_id: string;
+  workspace_id: string;
   input?: AgentListSessionsInput;
   files: FileSystem;
 }): Promise<AgentSessionSummaryPage> {
   const limit = normalizeLimit(params.input?.limit, 50, 500);
   const cursor = normalizeCursor(params.input?.cursor);
   const query = String(params.input?.query || "").trim().toLowerCase();
-  const archivedRoot = get_sdk_agent_archived_sessions_dir_path(
-    params.project_root,
-    params.agent_id,
-  );
+  const archivedRoot = get_workspace_archived_sessions_path(params.project_root);
 
   if (!(await params.files.path_exists(archivedRoot))) {
     return {
@@ -501,22 +497,22 @@ export async function list_archived_agent_session_summary_page(params: {
     if (!entry.is_directory) continue;
     const session_id = decodeMaybe(entry.name);
     if (!session_id) continue;
-    const meta_path = get_sdk_agent_archived_session_meta_path(
+    const meta_path = get_workspace_archived_session_meta_path(
       params.project_root,
-      params.agent_id,
       session_id,
     );
-    const messages_path = get_sdk_agent_archived_session_messages_path(
+    const messages_path = get_workspace_archived_session_active_messages_path(
       params.project_root,
-      params.agent_id,
       session_id,
     );
     const persisted_metadata = await read_session_metadata_from_path({
       filePath: meta_path,
       session_id,
       agent_id: params.agent_id,
+      workspace_id: params.workspace_id,
       files: params.files,
-    });
+    }).catch(() => null);
+    if (!persisted_metadata) continue;
     const metadata = await resolve_session_summary_metadata({
       metadata: persisted_metadata,
       messagesPath: messages_path,

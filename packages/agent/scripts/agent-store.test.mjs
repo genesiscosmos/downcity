@@ -37,6 +37,7 @@ test("Workspace provides SessionStore through private AgentWorkspace storage", a
     v: 1,
     session_id: "first",
     agent_id: "store-test",
+    workspace_id: "test_workspace",
     created_at: 1,
     updated_at: 1,
     title: "独立存储",
@@ -50,7 +51,7 @@ test("Workspace provides SessionStore through private AgentWorkspace storage", a
   const tool_result = await storage.files.run_file_action({
     action: "read",
     input: {
-      file_path: "sessions/first/messages/meta.json",
+      file_path: "sessions/first/meta.json",
     },
   });
   assert.equal(tool_result.success, true);
@@ -58,12 +59,12 @@ test("Workspace provides SessionStore through private AgentWorkspace storage", a
   assert.equal(await fs.access(path.join(workspace_path, ".downcity")).then(() => true).catch(() => false), false);
   assert.equal((await fs.stat(storage.root_path)).mode & 0o777, 0o700);
   assert.equal(
-    (await fs.stat(path.join(storage.root_path, "sessions", "first", "messages", "meta.json"))).mode & 0o777,
+    (await fs.stat(path.join(storage.root_path, "sessions", "first", "meta.json"))).mode & 0o777,
     0o600,
   );
 
   assert.equal(await store.clear_session_messages("first"), true);
-  assert.equal((await store.session("first").read_metadata()).title, undefined);
+  assert.equal((await store.session("first").read_metadata()).title, "独立存储");
   assert.equal(await store.has_session("first"), true);
   assert.equal(await store.remove_session("first"), true);
   assert.equal(await store.has_session("first"), false);
@@ -77,7 +78,15 @@ test("LocalSessionStore archives and cleans sessions", async (t) => {
     data_root_path,
   });
   const store = workspace.create_agent_workspace_storage("archive-test").sessions;
-  await store.session("archived").messages.initialize();
+  const archived_store = store.session("archived");
+  await archived_store.messages.initialize();
+  await archived_store.write_metadata({
+    v: 1,
+    session_id: "archived",
+    agent_id: "archive-test",
+    workspace_id: "test_workspace",
+    updated_at: 1,
+  });
 
   const archived = await store.archive_session("archived");
   assert.equal(archived.session_id, "archived");

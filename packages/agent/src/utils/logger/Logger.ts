@@ -175,6 +175,10 @@ function normalizeToAllowedMessageLabels(message: string): string {
  */
 export interface LogEntry {
   id: string;
+  /** 产生日志的 Agent 稳定标识。 */
+  agent_id?: string;
+  /** 产生日志的 Workspace 稳定标识。 */
+  workspace_id?: string;
   timestamp: string;
   type: "info" | "warn" | "error" | "debug" | "action";
   message: string;
@@ -196,6 +200,8 @@ export class Logger {
   private readonly maxInMemoryEntries = 2000;
   private workspace_files: FileSystem | null = null;
   private storage_root_path = "";
+  private agent_id = "";
+  private workspace_id = "";
 
   constructor(logLevel: string = "info") {
     this.logLevel = logLevel;
@@ -216,9 +222,20 @@ export class Logger {
   }
 
   /** 绑定 AgentWorkspace 内部存储，避免日志写入项目目录。 */
-  bind_storage(files: FileSystem, storage_root_path: string): void {
+  bind_storage(
+    files: FileSystem,
+    storage_root_path: string,
+    owner?: {
+      /** 当前 Agent 的稳定标识。 */
+      agent_id: string;
+      /** 当前 Workspace 的稳定标识。 */
+      workspace_id: string;
+    },
+  ): void {
     this.workspace_files = files;
     this.storage_root_path = String(storage_root_path || "").trim();
+    this.agent_id = String(owner?.agent_id || "").trim();
+    this.workspace_id = String(owner?.workspace_id || "").trim();
   }
 
   /**
@@ -276,6 +293,8 @@ export class Logger {
   ): Promise<void> {
     const entry: LogEntry = {
       id: this.generate_id(),
+      ...(this.agent_id ? { agent_id: this.agent_id } : {}),
+      ...(this.workspace_id ? { workspace_id: this.workspace_id } : {}),
       timestamp: get_timestamp(),
       type,
       message: normalizeToAllowedMessageLabels(message),
@@ -324,7 +343,7 @@ export class Logger {
 
   /**
    * 落盘算法（中文）
-   * - 日志按自然日分片：`<agent-workspace-data>/logs/YYYY-MM-DD.jsonl`。
+   * - 日志按自然日分片：`<workspace-data>/logs/YYYY-MM-DD.jsonl`。
    * - 每条日志一行 JSON，便于 grep / 流式消费。
    */
   private async saveToFile(entry: LogEntry): Promise<void> {

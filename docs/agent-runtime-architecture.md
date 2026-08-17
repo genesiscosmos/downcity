@@ -8,7 +8,7 @@
 
 > 2026-08-16 更新：Agent 已不再绑定单一 Workspace。当前公开模型以 [`agent-sdk-architecture.md`](./agent-sdk-architecture.md) 为准：`new Agent(...)` 创建主体，`agent.enter(new Workspace({ id, ... }))` 创建执行边界。
 
-实现进度：Workspace 已统一提供项目 LocalFileSystem、WorkspaceTools、Env 与可选 Shell；Agent 统一注册 Plugin、Session Interaction 与自定义 Tools。Agent 进入 Workspace 后创建 AgentWorkspaceStorage，Session、日志、Shell、Sandbox 和 Plugin 状态统一写入用户级 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`，不会污染项目目录。
+实现进度：Workspace 已统一提供项目 LocalFileSystem、WorkspaceTools、Env 与可选 Shell；Agent 统一注册 Plugin、Session Interaction 与自定义 Tools。Agent 进入 Workspace 后创建 AgentWorkspaceStorage 视图，Session、日志、Schedule 和 Plugin 状态统一写入用户级 `~/.downcity/workspaces/<workspace_id>/`，不会污染项目目录。
 
 源码按职责直接表达领域边界：
 
@@ -106,7 +106,7 @@ const agent_workspace = agent.enter(workspace);
 ### 2.3 安全
 
 - 模型文件工具只能访问项目根目录。
-- Session 历史位于用户级 AgentWorkspace 数据目录，与项目文件访问边界分离。
+- Session 历史位于用户级 Workspace 数据目录，并通过 metadata 保留 Agent 归属，与项目文件访问边界分离。
 - Shell 子进程通过 OS Sandbox 强制限制。
 - Tool input 不能修改根目录、Store 路径或 Sandbox Policy。
 - 不可信 Plugin 不在 Agent Core 进程中运行。
@@ -588,24 +588,22 @@ interface SessionDataStore {
 
 ### 13.1 默认存储位置
 
-runtime 数据位于用户级 AgentWorkspace：
+runtime 数据位于用户级 Workspace：
 
 ```text
 ~/.downcity/
-└─ agents/<agent_id>/
-   └─ workspaces/<workspace_id>/
-      ├─ sessions/<session_id>/
-      │  ├─ instruction.md
-      │  └─ messages/
-      ├─ archived-sessions/
-      ├─ logs/
-      ├─ shell/
-      ├─ sandbox/
-      ├─ task/
-      ├─ chat/
-      ├─ contact/
-      ├─ image/
-      └─ schedule.jsonl
+└─ workspaces/<workspace_id>/
+   ├─ sessions/<session_id>/
+   │  ├─ meta.json
+   │  ├─ instruction.md
+   │  └─ messages/
+   ├─ archived-sessions/
+   ├─ logs/
+   ├─ task/
+   ├─ chat/
+   ├─ contact/
+   ├─ image/
+   └─ schedule.jsonl
 ```
 
 SessionStore 使用 AgentWorkspaceStorage 的私有 FileSystem；WorkspaceTools 和 Shell 只把 `Workspace.path` 作为项目 cwd。模型不能通过项目文件工具访问私有运行时目录。
@@ -915,7 +913,7 @@ interface WorkspaceBackend {
 6. Session 不知道物理存储路径与格式。
 7. SessionStore 使用 AgentWorkspace 私有 FileSystem；WorkspaceTools 与 Shell 只访问项目目录。
 8. Workspace 保证 LocalFileSystem 与 Shell 使用同一个 canonical project root。
-9. runtime 数据默认位于 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`，项目目录不创建 `.downcity`。
+9. runtime 数据默认位于 `~/.downcity/workspaces/<workspace_id>/`；Session metadata 记录 `agent_id` 和 `workspace_id`，项目目录不创建 `.downcity`。
 10. macOS、Linux、Windows 运行同一 Node.js contract tests。
 11. Platform Adapter 只处理原生 Sandbox 与进程差异。
 12. 不可信 Plugin 使用进程级强制隔离。

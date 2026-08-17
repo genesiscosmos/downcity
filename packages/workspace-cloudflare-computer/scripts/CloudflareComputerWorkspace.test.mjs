@@ -40,7 +40,7 @@ test("CloudflareComputerWorkspace 将相对路径限制在逻辑根目录", asyn
   assert.deepEqual(Object.keys(workspace.tools).sort(), ["edit", "exec", "ls", "read", "write"]);
 });
 
-test("CloudflareComputerWorkspace 隔离多个 Agent 的远程存储并释放生命周期", async () => {
+test("CloudflareComputerWorkspace 共享 Workspace 根并隔离 Agent Session 视图", async () => {
   let disposed = false;
   const workspace = new CloudflareComputerWorkspace({
     id: "project",
@@ -50,7 +50,7 @@ test("CloudflareComputerWorkspace 隔离多个 Agent 的远程存储并释放生
   });
   const first = workspace.create_agent_workspace_storage("agent-one");
   const second = workspace.create_agent_workspace_storage("agent-two");
-  assert.notEqual(first.root_path, second.root_path);
+  assert.equal(first.root_path, second.root_path);
   assert.notEqual(first.files, second.files);
   assert.deepEqual(workspace.get_env(), { NODE_ENV: "test" });
   await workspace.dispose();

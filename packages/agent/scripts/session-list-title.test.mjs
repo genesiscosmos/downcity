@@ -2,8 +2,8 @@
  * @file 验证 session 列表从正确目录读取持久化 title。
  *
  * 关键点（中文）
- * - 普通列表只读取 AgentWorkspace `sessions` 下的 meta。
- * - 归档列表只读取 AgentWorkspace `archived-sessions` 下的 meta。
+ * - 普通列表只读取 Workspace `sessions` 下当前 Agent 的 meta。
+ * - 归档列表只读取 Workspace `archived-sessions` 下当前 Agent 的 meta。
  * - title 允许为空；这里仅验证已由模型生成并落盘的 title 能被列表返回。
  */
 
@@ -104,7 +104,6 @@ test("list_sessions returns persisted title from active session metadata", async
           entry.data_path,
           "sessions",
           encodeURIComponent(session.id),
-          "messages",
           "meta.json",
         ),
         "utf8",
@@ -158,7 +157,7 @@ test("list_sessions reflects canonical SessionMessages changes", async () => {
     "messages",
   );
   const messages_path = path.join(messages_dir, "active.jsonl");
-  const meta_path = path.join(messages_dir, "meta.json");
+  const meta_path = path.join(path.dirname(messages_dir), "meta.json");
 
   try {
     await session.append_assistant_message({

@@ -206,8 +206,7 @@ export class CloudflareComputerWorkspace extends WorkspaceBase {
     }
     if (this.disposed) throw new Error("Cannot bind a disposed Workspace");
     const storage_root_path = normalize_root_path(
-      `${this.path}/.downcity/agents/${encodeURIComponent(resolved_agent_id)}`
-      + `/workspaces/${encodeURIComponent(this.id)}`,
+      `${this.path}/.downcity/workspaces/${encodeURIComponent(this.id)}`,
     );
     const existing = this.session_stores.get(resolved_agent_id);
     if (existing) {
@@ -220,6 +219,7 @@ export class CloudflareComputerWorkspace extends WorkspaceBase {
     const storage_files = new CloudflareComputerFileSystem(this.remote_fs, storage_root_path);
     const store = this.create_default_session_store(
       resolved_agent_id,
+      this.id,
       storage_files,
       storage_root_path,
     );

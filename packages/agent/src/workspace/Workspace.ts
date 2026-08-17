@@ -24,7 +24,7 @@ import type {
 import { resolve_workspace_env } from "@/workspace/WorkspaceEnv.js";
 import { create_workspace_tools } from "@/workspace/tool/WorkspaceTools.js";
 import { WorkspaceBase } from "@/workspace/WorkspaceBase.js";
-import { get_sdk_agent_workspace_storage_path } from "@/workspace/store/LocalStorePaths.js";
+import { get_workspace_storage_path } from "@/workspace/store/LocalStorePaths.js";
 
 /** 将调用方路径解析为稳定、真实的本地目录。 */
 function resolve_workspace_path(input: string): string {
@@ -148,9 +148,8 @@ export class Workspace extends WorkspaceBase {
       );
     }
     this.bound_agent_id = resolved_agent_id;
-    const storage_root_path = get_sdk_agent_workspace_storage_path(
+    const storage_root_path = get_workspace_storage_path(
       this.storage_root_path,
-      resolved_agent_id,
       this.id,
     );
     ensure_private_directory_tree(this.storage_root_path, storage_root_path);
@@ -168,6 +167,7 @@ export class Workspace extends WorkspaceBase {
       files: storage_files,
       sessions: this.create_default_session_store(
         resolved_agent_id,
+        this.id,
         storage_files,
         storage_root_path,
       ),

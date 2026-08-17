@@ -18,7 +18,12 @@ test("ActionScheduleStore persists through AgentWorkspace private FileSystem", a
   });
   const workspace = new Workspace({ id: "test_workspace", path: workspace_path, data_root_path: path.join(workspace_path, "data") });
   const storage = workspace.create_agent_workspace_storage("schedule-test");
-  const store = new ActionScheduleStore(storage.files, storage.root_path);
+  const store = new ActionScheduleStore(
+    storage.files,
+    storage.root_path,
+    "schedule-test",
+    "test_workspace",
+  );
 
   const created = await store.create_job({
     plugin_name: "demo",
@@ -26,6 +31,8 @@ test("ActionScheduleStore persists through AgentWorkspace private FileSystem", a
     payload: { value: 1 },
     run_at_ms: Date.now() - 1,
   });
+  assert.equal(created.agent_id, "schedule-test");
+  assert.equal(created.workspace_id, "test_workspace");
   assert.equal((await store.list_due_pending_jobs(Date.now())).length, 1);
   assert.equal(await store.mark_job_running(created.id), true);
   assert.equal((await store.get_job_by_id(created.id))?.status, "running");
@@ -47,8 +54,8 @@ test("ActionScheduleStore serializes cross-instance pending claims", async (t) =
   const second_workspace = new Workspace({ id: "test_workspace", path: workspace_path, data_root_path: path.join(workspace_path, "data") });
   const first_storage = first_workspace.create_agent_workspace_storage("schedule-test");
   const second_storage = second_workspace.create_agent_workspace_storage("schedule-test");
-  const first_store = new ActionScheduleStore(first_storage.files, first_storage.root_path);
-  const second_store = new ActionScheduleStore(second_storage.files, second_storage.root_path);
+  const first_store = new ActionScheduleStore(first_storage.files, first_storage.root_path, "schedule-test", "test_workspace");
+  const second_store = new ActionScheduleStore(second_storage.files, second_storage.root_path, "schedule-test", "test_workspace");
   const created = await first_store.create_job({
     plugin_name: "demo",
     action_name: "run",
@@ -78,7 +85,7 @@ test("ActionScheduleStore only allows running jobs to enter terminal states", as
   });
   const workspace = new Workspace({ id: "test_workspace", path: workspace_path, data_root_path: path.join(workspace_path, "data") });
   const storage = workspace.create_agent_workspace_storage("schedule-test");
-  const store = new ActionScheduleStore(storage.files, storage.root_path);
+  const store = new ActionScheduleStore(storage.files, storage.root_path, "schedule-test", "test_workspace");
 
   const cancelled = await store.create_job({
     plugin_name: "demo",
@@ -102,4 +109,56 @@ test("ActionScheduleStore only allows running jobs to enter terminal states", as
   assert.equal((await store.get_job_by_id(running.id))?.status, "succeeded");
 
   await workspace.dispose();
+});
+
+test("ActionScheduleStore filters shared Workspace jobs by Agent ownership", async (t) => {
+  const workspace_path = await fs.mkdtemp(
+    path.join(os.tmpdir(), "downcity-action-schedule-owner-"),
+  );
+  t.after(async () => {
+    await fs.rm(workspace_path, { recursive: true, force: true });
+  });
+  const data_root_path = path.join(workspace_path, "data");
+  const first_workspace = new Workspace({
+    id: "test_workspace",
+    path: workspace_path,
+    data_root_path,
+  });
+  const second_workspace = new Workspace({
+    id: "test_workspace",
+    path: workspace_path,
+    data_root_path,
+  });
+  const first_storage =
+    first_workspace.create_agent_workspace_storage("first-agent");
+  const second_storage =
+    second_workspace.create_agent_workspace_storage("second-agent");
+  const first_store = new ActionScheduleStore(
+    first_storage.files,
+    first_storage.root_path,
+    "first-agent",
+    "test_workspace",
+  );
+  const second_store = new ActionScheduleStore(
+    second_storage.files,
+    second_storage.root_path,
+    "second-agent",
+    "test_workspace",
+  );
+  const created = await first_store.create_job({
+    plugin_name: "demo",
+    action_name: "run",
+    payload: null,
+    run_at_ms: Date.now(),
+  });
+
+  assert.equal((await first_store.list_jobs()).length, 1);
+  assert.equal((await second_store.list_jobs()).length, 0);
+  assert.equal(await second_store.get_job_by_id(created.id), null);
+  assert.equal(await second_store.mark_job_running(created.id), false);
+
+  await Promise.all([
+    first_workspace.dispose(),
+    second_workspace.dispose(),
+  ]);
 });

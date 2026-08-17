@@ -2,7 +2,7 @@
  * SDK Session 元数据辅助。
  *
  * 关键点（中文）
- * - 统一负责 AgentWorkspace `sessions/<session_id>/messages/meta.json` 的规范化读取。
+ * - 统一负责 Workspace `sessions/<session_id>/meta.json` 的规范化读取。
  * - 仅处理轻量配置摘要与索引信息，不负责消息 JSONL 的读写。
  */
 
@@ -75,17 +75,27 @@ export async function read_session_metadata_from_path(input: {
   session_id: string;
   /** 当前 agent_id。 */
   agent_id: string;
+  /** 当前 workspace_id。 */
+  workspace_id: string;
   /** 当前 Workspace 的统一文件能力。 */
   files: FileSystem;
 }): Promise<SessionHistoryMetaV1> {
-  try {
-    const raw = JSON.parse(
-      (await input.files.read_file(input.filePath)).toString("utf8"),
-    ) as Partial<SessionHistoryMetaV1>;
-    return normalize_session_metadata(raw, input.session_id, input.agent_id);
-  } catch {
-    return normalize_session_metadata({}, input.session_id, input.agent_id);
+  const raw = JSON.parse(
+    (await input.files.read_file(input.filePath)).toString("utf8"),
+  ) as Partial<SessionHistoryMetaV1>;
+  if (
+    raw.session_id !== input.session_id ||
+    raw.agent_id !== input.agent_id ||
+    raw.workspace_id !== input.workspace_id
+  ) {
+    throw new Error(`Invalid Session ownership metadata: ${input.session_id}`);
   }
+  return normalize_session_metadata(
+    raw,
+    input.session_id,
+    input.agent_id,
+    input.workspace_id,
+  );
 }
 
 /** 将未知 Metadata 内容规范化为当前 Session 的稳定结构。 */
@@ -93,11 +103,13 @@ export function normalize_session_metadata(
   raw: Partial<SessionHistoryMetaV1>,
   session_id: string,
   agent_id: string,
+  workspace_id: string,
 ): SessionHistoryMetaV1 {
   return {
     v: 1,
     session_id: session_id,
     agent_id: agent_id,
+    workspace_id: workspace_id,
     created_at:
       typeof raw.created_at === "number" && Number.isFinite(raw.created_at)
         ? raw.created_at

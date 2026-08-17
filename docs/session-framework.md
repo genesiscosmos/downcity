@@ -382,7 +382,7 @@ sequenceDiagram
 flowchart TB
     Messages["SessionMessages"] --> Active["messages/active.jsonl\n当前完整消息"]
     Messages --> Draft["messages/assistant_message.json\n流式草稿"]
-    Messages --> Meta["messages/meta.json\n序列与压缩元数据"]
+    Messages --> Meta["meta.json\n归属、序列与压缩元数据"]
     Messages --> Segments["messages/segments/*.jsonl\n不可变历史段"]
 
     Segments --> Summary["累计 Summary Footer"]

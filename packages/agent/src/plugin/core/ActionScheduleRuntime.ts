@@ -36,7 +36,12 @@ export async function start_action_schedule_runtime(
   context: PluginContext,
   storage: AgentWorkspaceStorage,
 ): Promise<ActionScheduleRuntimeHandle> {
-  const store = new ActionScheduleStore(storage.files, storage.root_path);
+  const store = new ActionScheduleStore(
+    storage.files,
+    storage.root_path,
+    context.agent_id,
+    context.workspace_id,
+  );
   const recovered = await store.reset_running_jobs_to_pending();
   if (recovered > 0) {
     context.logger.warn(

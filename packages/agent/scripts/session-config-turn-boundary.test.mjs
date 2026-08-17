@@ -370,8 +370,6 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     path.join(
       agent_path,
       "data",
-      "agents",
-      "instruction_restart_agent",
       "workspaces",
       "test_workspace",
     ),
