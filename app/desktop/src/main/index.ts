@@ -65,7 +65,9 @@ function require_agent_controller(): AgentController {
 }
 
 ipcMain.handle("agent:list", () => require_agent_controller().list_agents());
+ipcMain.handle("agent:get", (_event, agent_id: string) => require_agent_controller().get_agent(agent_id));
 ipcMain.handle("agent:create", (_event, agent_id: string, model_id: string) => require_agent_controller().create_agent(agent_id, model_id));
+ipcMain.handle("agent:update", (_event, agent_id: string, input: import("../common/types/DesktopApi.js").DesktopUpdateAgentInput) => require_agent_controller().update_agent(agent_id, input));
 ipcMain.handle("workspace:list", () => require_agent_controller().list_workspaces());
 ipcMain.handle("workspace:create", (_event, workspace_path: string, name: string) => require_agent_controller().create_workspace(workspace_path, name));
 ipcMain.handle("agent:connect", (_event, agent_id: string, workspace_id: string) => require_agent_controller().connect_agent(agent_id, workspace_id));

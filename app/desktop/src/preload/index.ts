@@ -5,7 +5,9 @@ import type { DesktopAgentSummary, DesktopApi } from "../common/types/DesktopApi
 const desktop_api: DesktopApi = {
   agent: {
     list: (): Promise<DesktopAgentSummary[]> => ipcRenderer.invoke("agent:list"),
+    get: (agent_id) => ipcRenderer.invoke("agent:get", agent_id),
     create: (agent_id, model_id) => ipcRenderer.invoke("agent:create", agent_id, model_id),
+    update: (agent_id, input) => ipcRenderer.invoke("agent:update", agent_id, input),
     connect: (agent_id, workspace_id) => ipcRenderer.invoke("agent:connect", agent_id, workspace_id),
   },
   workspace: {

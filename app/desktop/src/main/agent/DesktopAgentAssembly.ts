@@ -140,6 +140,7 @@ export function list_desktop_plugins(data: DesktopLocalData): DesktopPluginSumma
       source: "builtin",
       agent_ids: registered_agents.get(definition.id) ?? [],
       profile_count: Object.keys(data.plugins.read_config(definition.id).profiles).length,
+      profile_ids: Object.keys(data.plugins.read_config(definition.id).profiles),
       configurable: Boolean(definition.config),
     });
   }
@@ -152,6 +153,7 @@ export function list_desktop_plugins(data: DesktopLocalData): DesktopPluginSumma
         source: "installed",
         agent_ids: registered_agents.get(installed.id) ?? [],
         profile_count: Object.keys(data.plugins.read_config(installed.id).profiles).length,
+        profile_ids: Object.keys(data.plugins.read_config(installed.id).profiles),
         configurable: Boolean(installed.config),
       });
   }

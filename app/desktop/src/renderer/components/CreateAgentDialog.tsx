@@ -1,7 +1,7 @@
 /** 使用目录选择器和真实模型目录创建 Agent。 */
 
 import { useState, type FormEvent } from "react";
-import { TbRobot } from "react-icons/tb";
+import { TbGhost3 } from "react-icons/tb";
 import { ModelSelector } from "@/components/model/ModelSelector";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -45,7 +45,7 @@ export function CreateAgentDialog({ close_dialog, create_agent, models, models_l
 
   return <Dialog open onOpenChange={(open) => { if (!open && !submitting) close_dialog(); }}><DialogContent>
     <form onSubmit={(event) => void submit_form(event)}>
-      <DialogHeader className="flex items-start gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><TbRobot className="size-4.5" /></div><div><DialogTitle>创建 Agent</DialogTitle><DialogDescription>Agent 可在多个 Workspace 中执行；Workspace 在开始对话时选择。</DialogDescription></div></DialogHeader>
+      <DialogHeader className="flex items-start gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><TbGhost3 className="size-4.5" /></div><div><DialogTitle>创建 Agent</DialogTitle><DialogDescription>Agent 可在多个 Workspace 中执行；Workspace 在开始对话时选择。</DialogDescription></div></DialogHeader>
       <DialogBody className="flex flex-col gap-3">
         <Field label="Agent ID"><input autoFocus value={agent_id} placeholder="research-agent" className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" onChange={(event) => set_agent_id(event.target.value)} /></Field>
         <Field label="默认模型"><ModelSelector current_model_id={model_id} models={text_models} loading={models_loading} trigger_label="选择模型" class_name="h-8 w-full max-w-none justify-start rounded-lg border border-input px-2.5" on_select_model={set_model_id} /></Field>

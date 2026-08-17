@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { motion } from "framer-motion";
-import { TbSettings, TbUser } from "react-icons/tb";
+import { TbFolderPlus, TbPlus, TbSettings, TbUser } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { use_horizontal_resize } from "@/hooks/use_horizontal_resize";
 import type { DesktopViewController } from "@/types/DesktopView";
@@ -54,7 +54,12 @@ export function SidebarContainer({ children }: { /** Sidebar 的实际业务内�
 export function NavigationSidebar({ controller, open_create_agent, open_create_workspace }: NavigationSidebarProps) {
   return <SidebarContainer>
     <div className="header-drag-region h-9 shrink-0" />
-    <SidebarViewSwitcher active_mode={controller.sidebar_mode} on_change={controller.set_sidebar_mode} />
+    <div className="flex h-10 shrink-0 items-center gap-2 px-2 pb-1">
+      <SidebarViewSwitcher active_mode={controller.sidebar_mode} on_change={controller.set_sidebar_mode} />
+      <div className="min-w-0 flex-1" />
+      {controller.sidebar_mode === "chat" ? <Button size="icon" title="添加 Workspace" aria-label="添加 Workspace" onClick={open_create_workspace}><TbFolderPlus /></Button> : null}
+      {controller.sidebar_mode === "agents" ? <Button size="icon" title="创建 Agent" aria-label="创建 Agent" onClick={() => open_create_agent()}><TbPlus /></Button> : null}
+    </div>
     {controller.sidebar_mode === "chat" ? <ChatSidebar controller={controller} open_create_agent={open_create_agent} open_create_workspace={open_create_workspace} /> : null}
     {controller.sidebar_mode === "agents" ? <AgentSidebar controller={controller} open_create_agent={open_create_agent} /> : null}
     {controller.sidebar_mode === "plugins" ? <PluginSidebar controller={controller} /> : null}

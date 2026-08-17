@@ -41,10 +41,10 @@ export function App() {
       return <WorkspaceView
         workspace={workspace}
         agents={workspace_agents}
-        sessions_by_agent={controller.sessions_by_agent}
+        sessions_by_agent={Object.fromEntries(controller.agents.map((agent) => [agent.agent_id, (controller.sessions_by_workspace[workspace_id] ?? []).filter((item) => item.agent_id === agent.agent_id).map((item) => item.session)]))}
         open_create_agent={() => { set_create_agent_workspace_id(workspace.workspace_id); set_create_dialog_open(true); }}
         select_agent={controller.select_agent}
-        select_session={controller.select_session}
+        select_session={(agent_id, session_id) => controller.select_session(workspace_id, agent_id, session_id)}
       />;
     }
     if (!controller.selection || !selected_agent) return <WelcomeView />;
@@ -52,30 +52,34 @@ export function App() {
       agent={selected_agent}
       workspaces={controller.workspaces}
       plugins={controller.plugins}
-      sessions={controller.sessions_by_agent[selected_agent.agent_id] ?? []}
-      create_session={() => controller.create_session(selected_agent.agent_id)}
-      select_session={(session_id) => controller.select_session(selected_agent.agent_id, session_id)}
+      sessions={(controller.sessions_by_workspace[controller.active_workspace_id] ?? []).filter((item) => item.agent_id === selected_agent.agent_id).map((item) => item.session)}
+      create_session={() => controller.create_session(controller.active_workspace_id, selected_agent.agent_id)}
+      select_session={(session_id) => controller.select_session(controller.active_workspace_id, selected_agent.agent_id, session_id)}
+      controller={controller}
     />;
     if (controller.selection.kind === "draft") {
       const draft_id = controller.selection.draft_id;
-      const draft_key = get_session_key(controller.active_workspace_id, selected_agent.agent_id, draft_id);
+      const workspace_id = controller.selection.workspace_id;
+      const draft_key = get_session_key(workspace_id, selected_agent.agent_id, draft_id);
       return <SessionView
         agent={selected_agent}
         session={{ session_id: draft_id, title: "新对话", preview_text: "", created_at: 0, updated_at: 0, message_count: 0, executing: false }}
         messages={[]}
         draft={controller.drafts_by_session[draft_key] ?? ""}
         draft_files={controller.draft_files_by_session[draft_key] ?? []}
+        draft_references={controller.draft_references_by_session[draft_key] ?? []}
         queued_messages={[]}
         settings={controller.settings}
         models={controller.models}
         configuration={controller.configuration_by_session[draft_key] ?? { model_id: selected_agent.model_id, approval_mode: "ask" }}
         models_loading={controller.models_loading}
-        update_draft={(text) => controller.update_draft(selected_agent.agent_id, draft_id, text)}
-        update_draft_files={(files) => controller.update_draft_files(selected_agent.agent_id, draft_id, files)}
-        send_message={(input) => controller.send_message(selected_agent.agent_id, draft_id, input)}
+        update_draft={(text) => controller.update_draft(workspace_id, selected_agent.agent_id, draft_id, text)}
+        update_draft_files={(files) => controller.update_draft_files(workspace_id, selected_agent.agent_id, draft_id, files)}
+        update_draft_references={(references) => controller.update_draft_references(workspace_id, selected_agent.agent_id, draft_id, references)}
+        send_message={(input) => controller.send_message(workspace_id, selected_agent.agent_id, draft_id, input)}
         refresh_models={controller.refresh_models}
-        set_model={(model_id) => controller.set_session_model(selected_agent.agent_id, draft_id, model_id)}
-        set_approval_mode={(approval_mode) => controller.set_session_approval_mode(selected_agent.agent_id, draft_id, approval_mode)}
+        set_model={(model_id) => controller.set_session_model(workspace_id, selected_agent.agent_id, draft_id, model_id)}
+        set_approval_mode={(approval_mode) => controller.set_session_approval_mode(workspace_id, selected_agent.agent_id, draft_id, approval_mode)}
         stop_session={async () => undefined}
         respond_interaction={async () => undefined}
         remove_queued_message={() => undefined}
@@ -84,10 +88,11 @@ export function App() {
       />;
     }
     const selected_session_id = controller.selection.session_id;
-    const session = (controller.sessions_by_agent[selected_agent.agent_id] ?? []).find((item) => item.session_id === selected_session_id);
+    const workspace_id = controller.selection.workspace_id;
+    const session = (controller.sessions_by_workspace[workspace_id] ?? []).find((item) => item.agent_id === selected_agent.agent_id && item.session.session_id === selected_session_id)?.session;
     if (!session) return <WelcomeView />;
     const session_key = get_session_key(
-      controller.active_workspace_id,
+      workspace_id,
       selected_agent.agent_id,
       session.session_id,
     );
@@ -98,23 +103,25 @@ export function App() {
       runtime={controller.chat_runtime_by_session[session_key]}
       draft={controller.drafts_by_session[session_key] ?? ""}
       draft_files={controller.draft_files_by_session[session_key] ?? []}
+      draft_references={controller.draft_references_by_session[session_key] ?? []}
       queued_messages={controller.queued_messages_by_session[session_key] ?? []}
       history={controller.history_by_session[session_key]}
       settings={controller.settings}
       models={controller.models}
       configuration={controller.configuration_by_session[session_key]}
       models_loading={controller.models_loading}
-      update_draft={(text) => controller.update_draft(selected_agent.agent_id, session.session_id, text)}
-      update_draft_files={(files) => controller.update_draft_files(selected_agent.agent_id, session.session_id, files)}
-      send_message={(input) => controller.send_message(selected_agent.agent_id, session.session_id, input)}
+      update_draft={(text) => controller.update_draft(workspace_id, selected_agent.agent_id, session.session_id, text)}
+      update_draft_files={(files) => controller.update_draft_files(workspace_id, selected_agent.agent_id, session.session_id, files)}
+      update_draft_references={(references) => controller.update_draft_references(workspace_id, selected_agent.agent_id, session.session_id, references)}
+      send_message={(input) => controller.send_message(workspace_id, selected_agent.agent_id, session.session_id, input)}
       refresh_models={controller.refresh_models}
-      set_model={(model_id) => controller.set_session_model(selected_agent.agent_id, session.session_id, model_id)}
-      set_approval_mode={(approval_mode) => controller.set_session_approval_mode(selected_agent.agent_id, session.session_id, approval_mode)}
-      stop_session={() => controller.stop_session(selected_agent.agent_id, session.session_id)}
-      respond_interaction={(input) => controller.respond_interaction(selected_agent.agent_id, session.session_id, input)}
-      remove_queued_message={(message_id) => controller.remove_queued_message(selected_agent.agent_id, session.session_id, message_id)}
-      move_queued_message={(message_id, direction) => controller.move_queued_message(selected_agent.agent_id, session.session_id, message_id, direction)}
-      load_earlier_history={() => controller.load_earlier_history(selected_agent.agent_id, session.session_id)}
+      set_model={(model_id) => controller.set_session_model(workspace_id, selected_agent.agent_id, session.session_id, model_id)}
+      set_approval_mode={(approval_mode) => controller.set_session_approval_mode(workspace_id, selected_agent.agent_id, session.session_id, approval_mode)}
+      stop_session={() => controller.stop_session(workspace_id, selected_agent.agent_id, session.session_id)}
+      respond_interaction={(input) => controller.respond_interaction(workspace_id, selected_agent.agent_id, session.session_id, input)}
+      remove_queued_message={(message_id) => controller.remove_queued_message(workspace_id, selected_agent.agent_id, session.session_id, message_id)}
+      move_queued_message={(message_id, direction) => controller.move_queued_message(workspace_id, selected_agent.agent_id, session.session_id, message_id, direction)}
+      load_earlier_history={() => controller.load_earlier_history(workspace_id, selected_agent.agent_id, session.session_id)}
     />;
   };
 

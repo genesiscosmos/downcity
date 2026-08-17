@@ -18,6 +18,7 @@ import {
   TbCopy,
   TbFile,
   TbLoader2,
+  TbMessageReply,
   TbRoute,
   TbSearch,
   TbTool,
@@ -25,10 +26,11 @@ import {
 } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { ChatInputEditor } from "@/lib/chat/ChatInputEditor";
+import { dispatch_chat_reference } from "@/lib/chat/editor/chatReferenceEvent";
 import { MainViewBody, MainViewLayout } from "@/layouts/MainViewLayout";
 import { cn } from "@/lib/utils";
 import { is_chat_busy, type ChatHistoryState, type QueuedChatMessage } from "@/types/DesktopView";
-import type { DesktopAgentSummary, DesktopChatFileInput, DesktopChatInput, DesktopChatRuntime, DesktopModelSummary, DesktopSessionConfiguration, DesktopSessionSummary, DesktopSettings } from "@common/types/DesktopApi";
+import type { DesktopAgentSummary, DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopChatRuntime, DesktopModelSummary, DesktopSessionConfiguration, DesktopSessionSummary, DesktopSettings } from "@common/types/DesktopApi";
 
 /** Session Chat 主视图属性。 */
 interface SessionViewProps {
@@ -44,6 +46,8 @@ interface SessionViewProps {
   draft: string;
   /** 当前 Session 附件草稿。 */
   draft_files: DesktopChatFileInput[];
+  /** 当前 Session 消息引用草稿。 */
+  draft_references: DesktopChatReferenceInput[];
   /** 当前 Session 待发送队列。 */
   queued_messages: QueuedChatMessage[];
   /** 当前 Session 更早历史分页状态。 */
@@ -60,6 +64,8 @@ interface SessionViewProps {
   update_draft(text: string): void;
   /** 更新当前附件草稿。 */
   update_draft_files(files: DesktopChatFileInput[]): void;
+  /** 更新当前消息引用草稿。 */
+  update_draft_references(references: DesktopChatReferenceInput[]): void;
   /** 发送或排队一条消息。 */
   send_message(input: DesktopChatInput): Promise<void>;
   /** 刷新模型目录。 */
@@ -135,9 +141,11 @@ export function SessionView(props: SessionViewProps) {
 
         <div className="mx-auto m-2 w-[calc(100%-1rem)] max-w-[840px] flex-none rounded-2xl bg-muted-foreground/10">
           <ChatInputEditor
+            editor_key={session.session_id}
             agent={props.agent}
             draft={props.draft}
             draft_files={props.draft_files}
+            draft_references={props.draft_references}
             runtime={props.runtime}
             queued_messages={props.queued_messages}
             configuration={props.configuration}
@@ -146,6 +154,7 @@ export function SessionView(props: SessionViewProps) {
             settings={props.settings}
             update_draft={props.update_draft}
             update_draft_files={props.update_draft_files}
+            update_draft_references={props.update_draft_references}
             send_message={props.send_message}
             stop_session={props.stop_session}
             refresh_models={props.refresh_models}
@@ -203,6 +212,7 @@ function MessageRenderer({ message, show_reasoning, respond_interaction }: { /**
             {text ? <div className="text-[0.8125rem] leading-[1.34]"><ChatMarkdown class_name="user-message-markdown !h-auto !w-auto break-words" text={text} mode="static" /></div> : null}
             {message.parts.flatMap((part) => part.type === "file" ? [<a key={part.part_id} href={part.url} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1.5 text-[0.75rem] text-foreground/80"><TbFile className="size-3.5 shrink-0" /><span className="truncate">{part.filename || "文件"}</span></a>] : [])}
           </div>
+          {text ? <button type="button" className="flex size-5 items-center justify-center rounded-md text-primary/45 opacity-0 transition-opacity hover:bg-primary/10 hover:text-primary/65 group-hover:opacity-100" title="引用" onClick={() => dispatch_chat_reference({ message_id: message.message_id, role: "user", text })}><TbMessageReply className="size-3" /></button> : null}
         </div>
       </div>
     </div>;
@@ -228,6 +238,7 @@ function AssistantMessage({ message, show_reasoning, respond_interaction }: { /*
       {message.status === "streaming" ? <ActivityIndicator status="streaming" compact /> : <div className="assistant-message-menu-bar flex h-6 min-h-6 shrink-0 items-center pl-1">
         {text ? <div className="message-action-toolbar pointer-events-none flex h-5 items-center gap-0.5 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
           <button type="button" onClick={() => void copy_message()} className="group/message-action flex size-5 items-center justify-center rounded-md bg-transparent p-0 text-primary/45 transition-colors hover:bg-primary/10 hover:text-primary/65" title="复制">{copied ? <TbCheck className="size-3 shrink-0 !text-primary/45 stroke-[1.65] group-hover/message-action:!text-primary/65" /> : <TbCopy className="size-3 shrink-0 !text-primary/45 stroke-[1.65] group-hover/message-action:!text-primary/65" />}</button>
+          <button type="button" onClick={() => dispatch_chat_reference({ message_id: message.message_id, role: "assistant", text })} className="group/message-action flex size-5 items-center justify-center rounded-md bg-transparent p-0 text-primary/45 transition-colors hover:bg-primary/10 hover:text-primary/65" title="引用"><TbMessageReply className="size-3" /></button>
         </div> : null}
       </div>}
     </div>

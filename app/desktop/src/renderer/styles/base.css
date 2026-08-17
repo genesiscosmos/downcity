@@ -81,23 +81,57 @@ a,
 }
 
 /* 与 Duobox ChatInputEditor 一致的输入区域尺寸。 */
-.chat-input-editor {
+.chat-input-editor,
+.chat-input-editor.ProseMirror {
   width: 100%;
   min-height: 50px;
   max-height: 200px;
   overflow-y: auto;
-  resize: none;
   padding: 4px 4px 0 4px;
-  border: 0;
   font-family: var(--font-sans) !important;
   font-size: 0.8125rem !important;
   line-height: 1.34 !important;
-  color: var(--foreground);
   outline: none;
 }
 
-.chat-input-editor::placeholder {
+.chat-input-editor p {
+  margin: 0;
+}
+
+.chat-input-editor ul,
+.chat-input-editor ol {
+  margin: 0.2rem 0;
+  padding-left: 1.35rem;
+  list-style-position: outside;
+}
+
+.chat-input-editor ul { list-style-type: disc; }
+.chat-input-editor ol { list-style-type: decimal; }
+.chat-input-editor ul ul { list-style-type: circle; }
+.chat-input-editor ul ul ul { list-style-type: square; }
+.chat-input-editor li { display: list-item; padding-left: 0.1rem; }
+.chat-input-editor li::marker { color: color-mix(in srgb, var(--muted-foreground) 72%, transparent); }
+.chat-input-editor li > p { margin: 0; }
+.chat-input-editor li + li { margin-top: 0.1rem; }
+
+.chat-input-editor a,
+.chat-input-editor a:visited,
+.chat-input-editor a:hover,
+.chat-input-editor a:active {
+  color: inherit;
+  text-decoration: none;
+  pointer-events: none;
+  cursor: text;
+}
+
+.chat-input-editor.is-editor-empty > p:first-child::before,
+.chat-input-editor > p.is-empty:first-child::before {
+  content: attr(data-placeholder);
   color: color-mix(in srgb, var(--muted-foreground) 50%, transparent);
+  opacity: 0.5;
+  float: left;
+  height: 0;
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

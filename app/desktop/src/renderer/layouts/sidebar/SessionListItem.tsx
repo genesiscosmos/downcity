@@ -12,6 +12,8 @@ import type { DesktopSessionSummary } from "@common/types/DesktopApi";
 interface SessionListItemProps {
   /** Session 摘要。 */
   session: DesktopSessionSummary;
+  /** Session 使用的 Agent 标识。 */
+  agent_id: string;
   /** 是否选中。 */
   active: boolean;
   /** 进入 Session。 */
@@ -25,7 +27,7 @@ interface SessionListItemProps {
 }
 
 /** 与 Duobox ThreadListItem 一致的行布局。 */
-export function SessionListItem({ session, active, on_select, on_rename, on_archive, on_remove }: SessionListItemProps) {
+export function SessionListItem({ session, agent_id, active, on_select, on_rename, on_archive, on_remove }: SessionListItemProps) {
   const [rename_open, set_rename_open] = useState(false);
   const [remove_open, set_remove_open] = useState(false);
   const [title, set_title] = useState(session.title || "");
@@ -57,6 +59,7 @@ export function SessionListItem({ session, active, on_select, on_rename, on_arch
       <div className="flex min-w-0 flex-1 items-center">
         <span className="min-w-0 truncate text-xs leading-4 text-foreground">{session.title || "新对话"}</span>
       </div>
+      <span className="max-w-20 shrink-0 truncate rounded bg-foreground/[0.06] px-1.5 py-0.5 text-[0.5625rem] leading-3 text-muted-foreground group-hover:hidden">{agent_id}</span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button

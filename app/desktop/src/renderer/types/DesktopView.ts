@@ -3,10 +3,12 @@
 import type { RespondSessionInteractionInput, SessionMessage } from "@downcity/agent";
 import type {
   DesktopAgentSummary,
+  DesktopAgentDefinition,
   DesktopAccountResources,
   DesktopAccountSummary,
   DesktopChatFileInput,
   DesktopChatInput,
+  DesktopChatReferenceInput,
   DesktopChatRuntime,
   DesktopModelSummary,
   DesktopPluginSummary,
@@ -14,6 +16,7 @@ import type {
   DesktopSessionSummary,
   DesktopSettings,
   DesktopUserSummary,
+  DesktopUpdateAgentInput,
   DesktopWorkspaceSummary,
 } from "../../common/types/DesktopApi";
 
@@ -27,8 +30,8 @@ export type SidebarMode = "chat" | "agents" | "plugins";
 export type NavigationTarget =
   | { /** Workspace 管理页。 */ kind: "workspace"; /** Workspace 标识。 */ workspace_id: string }
   | { /** Agent 管理页。 */ kind: "agent"; /** Agent 标识。 */ agent_id: string }
-  | { /** 尚未持久化的空对话。 */ kind: "draft"; /** Agent 标识。 */ agent_id: string; /** Draft 稳定标识。 */ draft_id: string }
-  | { /** Session Chat。 */ kind: "session"; /** Agent 标识。 */ agent_id: string; /** Session 标识。 */ session_id: string }
+  | { /** 尚未持久化的空对话。 */ kind: "draft"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Draft 稳定标识。 */ draft_id: string }
+  | { /** Session Chat。 */ kind: "session"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Session 标识。 */ session_id: string }
   | { /** Plugin 详情页。 */ kind: "plugin"; /** Plugin 标识。 */ plugin_id: string }
   | { /** Desktop 设置页。 */ kind: "settings"; /** 当前设置分区。 */ section: SettingsSection };
 
@@ -70,16 +73,24 @@ export interface ChatHistoryState {
   next_before_sequence?: number;
 }
 
+/** Workspace 导航树中的一条 Session，并保留其执行 Agent。 */
+export interface DesktopWorkspaceSession {
+  /** 执行该 Session 的 Agent 标识。 */
+  agent_id: string;
+  /** Session 的导航摘要。 */
+  session: DesktopSessionSummary;
+}
+
 /** Renderer 根状态控制器向视图公开的能力。 */
 export interface DesktopViewController {
   /** 共享 Registry 中的全部 Agent。 */
   agents: DesktopAgentSummary[];
   /** 共享 Registry 中独立登记的全部 Workspace。 */
   workspaces: DesktopWorkspaceSummary[];
-  /** 按 Agent 标识缓存的 Session 导航数据。 */
-  sessions_by_agent: Record<string, DesktopSessionSummary[]>;
-  /** 按 Agent 标识缓存的已归档 Session。 */
-  archived_sessions_by_agent: Record<string, DesktopSessionSummary[]>;
+  /** 按 Workspace 标识缓存的 Session 导航数据。 */
+  sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
+  /** 按 Workspace 标识缓存的已归档 Session。 */
+  archived_sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
   /** 按 Agent 与 Session 组合键缓存的 canonical 消息。 */
   messages_by_session: Record<string, SessionMessage[]>;
   /** 按 Session 组合键缓存的实时运行态。 */
@@ -88,6 +99,8 @@ export interface DesktopViewController {
   drafts_by_session: Record<string, string>;
   /** 按 Session 组合键隔离的附件草稿。 */
   draft_files_by_session: Record<string, DesktopChatFileInput[]>;
+  /** 按 Session 组合键隔离的消息引用草稿。 */
+  draft_references_by_session: Record<string, DesktopChatReferenceInput[]>;
   /** 按 Session 组合键隔离的待发送队列。 */
   queued_messages_by_session: Record<string, QueuedChatMessage[]>;
   /** 按 Session 组合键保存的历史分页状态。 */
@@ -102,7 +115,7 @@ export interface DesktopViewController {
   models_loading: boolean;
   /** 当前主视图导航目标。 */
   selection: NavigationTarget | null;
-  /** Chat Sidebar 当前打开的 Workspace。 */
+  /** 当前主视图使用的 Workspace 上下文，不控制 Sidebar 展开状态。 */
   active_workspace_id: string;
   /** 主导航侧边栏当前模式。 */
   sidebar_mode: SidebarMode;
@@ -130,44 +143,50 @@ export interface DesktopViewController {
   open_settings(section?: SettingsSection): void;
   /** 离开设置并返回之前的业务视图。 */
   close_settings(): void;
-  /** 切换到尚未持久化的空对话。 */
-  create_session(agent_id: string): Promise<void>;
+  /** 在指定 Workspace 切换到尚未持久化的空对话。 */
+  create_session(workspace_id: string, agent_id: string): Promise<void>;
   /** 切换到 Session Chat 并读取快照。 */
-  select_session(agent_id: string, session_id: string): Promise<void>;
+  select_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
   /** 重命名一个 Session。 */
-  rename_session(agent_id: string, session_id: string, title: string): Promise<void>;
+  rename_session(workspace_id: string, agent_id: string, session_id: string, title: string): Promise<void>;
   /** 归档一个 Session。 */
-  archive_session(agent_id: string, session_id: string): Promise<void>;
+  archive_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
   /** 永久删除一个 Session。 */
-  remove_session(agent_id: string, session_id: string): Promise<void>;
-  /** 读取并缓存一个 Agent 的已归档 Session。 */
-  load_archived_sessions(agent_id: string): Promise<void>;
+  remove_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
+  /** 读取并缓存一个 Workspace 的已归档 Session。 */
+  load_archived_sessions(workspace_id: string): Promise<void>;
   /** 读取当前 Session 的一个更早历史 Segment。 */
-  load_earlier_history(agent_id: string, session_id: string): Promise<void>;
+  load_earlier_history(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
   /** 创建共享 Registry Agent。 */
   create_agent(value: CreateAgentFormValue): Promise<void>;
+  /** 读取 Agent 的完整定义。 */
+  get_agent(agent_id: string): Promise<DesktopAgentDefinition>;
+  /** 保存 Agent 定义并刷新 Renderer 摘要。 */
+  update_agent(agent_id: string, input: DesktopUpdateAgentInput): Promise<void>;
   /** 独立登记并打开 Workspace。 */
   create_workspace(value: CreateWorkspaceFormValue): Promise<void>;
   /** 修改 Session 输入草稿。 */
-  update_draft(agent_id: string, session_id: string, text: string): void;
+  update_draft(workspace_id: string, agent_id: string, session_id: string, text: string): void;
   /** 替换当前输入的附件草稿。 */
-  update_draft_files(agent_id: string, session_id: string, files: DesktopChatFileInput[]): void;
+  update_draft_files(workspace_id: string, agent_id: string, session_id: string, files: DesktopChatFileInput[]): void;
+  /** 替换当前输入的消息引用草稿。 */
+  update_draft_references(workspace_id: string, agent_id: string, session_id: string, references: DesktopChatReferenceInput[]): void;
   /** 发送消息；执行中时自动进入 Renderer 队列。 */
-  send_message(agent_id: string, session_id: string, input: DesktopChatInput): Promise<void>;
+  send_message(workspace_id: string, agent_id: string, session_id: string, input: DesktopChatInput): Promise<void>;
   /** 刷新当前 Federation 模型目录。 */
   refresh_models(): Promise<void>;
   /** 为 Draft 或已存在 Session 选择模型。 */
-  set_session_model(agent_id: string, session_id: string, model_id: string): Promise<void>;
+  set_session_model(workspace_id: string, agent_id: string, session_id: string, model_id: string): Promise<void>;
   /** 为 Draft 或已存在 Session 选择审批模式。 */
-  set_session_approval_mode(agent_id: string, session_id: string, approval_mode: DesktopSessionConfiguration["approval_mode"]): Promise<void>;
+  set_session_approval_mode(workspace_id: string, agent_id: string, session_id: string, approval_mode: DesktopSessionConfiguration["approval_mode"]): Promise<void>;
   /** 停止当前 Session Turn。 */
-  stop_session(agent_id: string, session_id: string): Promise<void>;
+  stop_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
   /** 响应当前 Session 的审批或问题。 */
-  respond_interaction(agent_id: string, session_id: string, input: RespondSessionInteractionInput): Promise<void>;
+  respond_interaction(workspace_id: string, agent_id: string, session_id: string, input: RespondSessionInteractionInput): Promise<void>;
   /** 删除一条尚未发送的队列消息。 */
-  remove_queued_message(agent_id: string, session_id: string, message_id: string): void;
+  remove_queued_message(workspace_id: string, agent_id: string, session_id: string, message_id: string): void;
   /** 调整一条队列消息的顺序。 */
-  move_queued_message(agent_id: string, session_id: string, message_id: string, direction: "up" | "down"): void;
+  move_queued_message(workspace_id: string, agent_id: string, session_id: string, message_id: string, direction: "up" | "down"): void;
   /** 合并 Desktop 用户级设置。 */
   update_settings(patch: Partial<DesktopSettings>): Promise<void>;
   /** 使用 Federation Token 登录。 */

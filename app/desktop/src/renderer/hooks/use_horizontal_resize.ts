@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 /** 水平缩放 Hook 输入。 */
 interface HorizontalResizeOptions {
+  /** 拖拽边缘；右侧边缘向右增宽，左侧边缘向左增宽。 */
+  resize_edge?: "left" | "right";
   /** 上次持久化的面板宽度。 */
   stored_width?: number | null;
   /** 允许的最小宽度。 */
@@ -23,7 +25,7 @@ function clamp_width(width: number, min_width: number, max_width: number): numbe
 
 /** 提供与 Duobox Sidebar 相同的拖拽缩放生命周期。 */
 export function use_horizontal_resize(options: HorizontalResizeOptions) {
-  const { stored_width, min_width, max_width, default_width, on_width_change } = options;
+  const { stored_width, min_width, max_width, default_width, on_width_change, resize_edge = "right" } = options;
   const [is_resizing, set_is_resizing] = useState(false);
   const [current_width, set_current_width] = useState(() => clamp_width(stored_width ?? default_width, min_width, max_width));
   const start_x_ref = useRef(0);
@@ -56,7 +58,8 @@ export function use_horizontal_resize(options: HorizontalResizeOptions) {
     document.body.style.userSelect = "none";
 
     const handle_mouse_move = (event: MouseEvent) => {
-      const next_width = clamp_width(start_width_ref.current + event.clientX - start_x_ref.current, min_width, max_width);
+      const horizontal_delta = event.clientX - start_x_ref.current;
+      const next_width = clamp_width(start_width_ref.current + (resize_edge === "left" ? -horizontal_delta : horizontal_delta), min_width, max_width);
       current_width_ref.current = next_width;
       set_current_width(next_width);
     };
@@ -73,7 +76,7 @@ export function use_horizontal_resize(options: HorizontalResizeOptions) {
       document.body.style.cursor = previous_cursor;
       document.body.style.userSelect = previous_user_select;
     };
-  }, [is_resizing, max_width, min_width, on_width_change]);
+  }, [is_resizing, max_width, min_width, on_width_change, resize_edge]);
 
   return { current_width, is_resizing, handle_resize_start };
 }

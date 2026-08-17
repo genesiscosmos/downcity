@@ -35,6 +35,8 @@ import type {
   DesktopChatRuntimeEvent,
   DesktopChatSendResult,
   DesktopChatSnapshot,
+  DesktopAgentDefinition,
+  DesktopUpdateAgentInput,
   DesktopModelSummary,
   DesktopPluginSummary,
   DesktopSessionConfiguration,
@@ -105,6 +107,19 @@ export class AgentController {
     return this.data.agents.list().map(to_desktop_agent_summary);
   }
 
+  /** 读取 Agent 的完整本地定义，供 Renderer 编辑。 */
+  async get_agent(agent_id: string): Promise<DesktopAgentDefinition> {
+    await this.ready_promise;
+    const config = this.data.agents.get(agent_id);
+    if (!config) throw new Error(`Agent not found: ${agent_id}`);
+    return {
+      agent_id: config.agent_id,
+      model_id: typeof config.execution?.model_id === "string" ? config.execution.model_id : "",
+      instruction: config.instruction,
+      plugins: Object.fromEntries(Object.entries(config.plugins).map(([plugin_id, reference]) => [plugin_id, { profile: reference.profile ?? "default" }])),
+    };
+  }
+
   /** 列出独立登记的全部 Workspace。 */
   async list_workspaces(): Promise<DesktopWorkspaceSummary[]> {
     await this.ready_promise;
@@ -160,6 +175,49 @@ export class AgentController {
         execution: config.execution,
       }),
     };
+  }
+
+  /** 保存 Agent 定义，并以同一稳定 ID 替换进程内实例。 */
+  async update_agent(agent_id: string, input: DesktopUpdateAgentInput): Promise<DesktopAgentSummary> {
+    await this.ready_promise;
+    const current = this.data.agents.get(agent_id);
+    if (!current) throw new Error(`Agent not found: ${agent_id}`);
+    if ([...this.runtimes.values()].some((runtime) => runtime.agent_id === current.agent_id && (runtime.status === "submitted" || runtime.status === "streaming" || runtime.status === "waiting_input"))) {
+      throw new Error("Agent 正在执行 Session，请等待执行结束后再编辑");
+    }
+    const model_id = String(input.model_id || "").trim();
+    if (!model_id) throw new Error("model_id is required");
+    const candidate: LocalAgentConfig = {
+      ...current,
+      execution: { ...current.execution, type: "api", model_id },
+      instruction: String(input.instruction || ""),
+      plugins: Object.fromEntries(Object.entries(input.plugins || {}).map(([plugin_id, reference]) => [plugin_id, { profile: String(reference.profile || "default").trim() || "default" }])),
+      updated_at: new Date().toISOString(),
+    };
+    const replacement = await this.create_native_agent(candidate);
+    let saved = false;
+    let previous_agent: Agent | null = null;
+    try {
+      this.data.agents.save(candidate);
+      saved = true;
+      previous_agent = await this.city.remove(current.agent_id);
+      this.city.add(replacement);
+    } catch (error) {
+      await this.city.remove(current.agent_id).catch(() => null);
+      if (previous_agent) this.city.add(previous_agent);
+      if (saved) this.data.agents.save(current);
+      await replacement.dispose().catch(() => undefined);
+      throw error;
+    }
+    for (const [session_key, unsubscribe] of this.session_unsubscribes) {
+      if (!session_key.startsWith(`${current.agent_id}:`)) continue;
+      unsubscribe();
+      this.session_unsubscribes.delete(session_key);
+      this.runtimes.delete(session_key);
+      this.restored_session_models.delete(session_key);
+    }
+    await previous_agent?.dispose();
+    return to_desktop_agent_summary(this.data.agents.get(current.agent_id)!);
   }
 
   /** 让指定 Agent 进入独立登记的 Workspace。 */
@@ -596,9 +654,22 @@ function to_error_message(reason: unknown): string {
 function normalize_chat_input(input: DesktopChatInput): AgentSessionPromptInput["query"] {
   const text = String(input?.text || "").trim();
   const files = Array.isArray(input?.files) ? input.files : [];
-  if (!text && files.length === 0) throw new Error("message is required");
-  if (files.length === 0) return text;
+  const references = Array.isArray(input?.references) ? input.references.filter((reference) => String(reference?.message_id || "").trim() && String(reference?.text || "").trim()) : [];
+  if (!text && files.length === 0 && references.length === 0) throw new Error("message is required");
+  if (files.length === 0 && references.length === 0) return text;
   const parts: Array<Record<string, unknown>> = [];
+  if (references.length > 0) {
+    parts.push({
+      type: "text",
+      text: references.map((reference) => `> 引用 ${reference.role === "user" ? "用户" : "Agent"} 消息：\n> ${String(reference.text).trim().replace(/\n/g, "\n> ")}`).join("\n\n"),
+    });
+    for (const reference of references) {
+      parts.push({
+        type: "data-reference",
+        data: { message_id: String(reference.message_id), role: reference.role, text: String(reference.text).trim() },
+      });
+    }
+  }
   if (text) parts.push({ type: "text", text });
   for (const file of files) {
     const data_url = String(file?.data_url || "");

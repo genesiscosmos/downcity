@@ -42,6 +42,34 @@ export interface DesktopCreateAgentResult {
   agent: DesktopAgentSummary;
 }
 
+/** Agent 定义中的一个 Plugin 引用。 */
+export interface DesktopAgentPluginReference {
+  /** Plugin 使用的 profile；为空时使用 default。 */
+  profile: string;
+}
+
+/** Renderer 可编辑的完整 Agent 定义。 */
+export interface DesktopAgentDefinition {
+  /** Agent 的全局稳定标识；编辑时不可修改。 */
+  agent_id: string;
+  /** Agent 使用的默认模型标识。 */
+  model_id: string;
+  /** 从 SOUL.md 读取的 Agent 主体指令。 */
+  instruction: string;
+  /** 以 Plugin ID 为键的已注册 Plugin 引用。 */
+  plugins: Record<string, DesktopAgentPluginReference>;
+}
+
+/** Desktop 更新 Agent 定义的输入。 */
+export interface DesktopUpdateAgentInput {
+  /** Agent 使用的默认模型标识。 */
+  model_id: string;
+  /** 写入 SOUL.md 的 Agent 主体指令。 */
+  instruction: string;
+  /** 保存到 agent.json 的 Plugin 引用。 */
+  plugins: Record<string, DesktopAgentPluginReference>;
+}
+
 /** Renderer 可见的 Plugin 来源。 */
 export type DesktopPluginSource = "builtin" | "installed";
 
@@ -61,6 +89,8 @@ export interface DesktopPluginSummary {
   agent_ids: string[];
   /** 当前 Plugin 已保存的 profile 数量。 */
   profile_count: number;
+  /** 当前 Plugin 可选择的 profile 标识。 */
+  profile_ids: string[];
   /** Plugin 是否声明了可编辑配置。 */
   configurable: boolean;
 }
@@ -167,12 +197,24 @@ export interface DesktopChatFileInput {
   data_url: string;
 }
 
+/** Renderer 提交的一条 Session 消息引用。 */
+export interface DesktopChatReferenceInput {
+  /** 被引用 canonical 消息的稳定标识。 */
+  message_id: string;
+  /** 被引用消息在对话中的身份。 */
+  role: "user" | "assistant";
+  /** 提交时冻结的可读文本摘录。 */
+  text: string;
+}
+
 /** Renderer 到 Session 的一次完整用户输入。 */
 export interface DesktopChatInput {
   /** 用户输入的纯文本；只有附件时允许为空。 */
   text: string;
   /** 当前消息携带的文件列表。 */
   files: DesktopChatFileInput[];
+  /** 当前消息显式引用的历史消息。 */
+  references: DesktopChatReferenceInput[];
 }
 
 /** Federation 模型目录中的 Renderer 投影。 */
@@ -329,14 +371,67 @@ export interface DesktopUserSummary {
   error?: string;
 }
 
+/** Federation 发布的一个 Desktop 登录 Provider。 */
+export interface DesktopLoginProvider {
+  /** Provider 稳定标识。 */
+  provider_id: string;
+  /** Provider 展示名称。 */
+  label: string;
+  /** Provider 交互类型。 */
+  type: string;
+  /** Provider 用途说明。 */
+  description: string;
+  /** Provider 是否允许登录。 */
+  login_enabled: boolean;
+}
+
+/** 启动 Federation 登录的输入。 */
+export interface DesktopLoginStartInput {
+  /** 目标 Federation 地址。 */
+  federation_url: string;
+  /** 登录 Provider 稳定标识。 */
+  provider_id: string;
+}
+
+/** Desktop 登录流程状态。 */
+export type DesktopLoginStatus = "input_required" | "redirect_required" | "pending" | "done";
+
+/** 启动 Federation 登录后的结果。 */
+export interface DesktopLoginStartResult {
+  /** 当前登录阶段。 */
+  status: DesktopLoginStatus;
+  /** 登录事务稳定标识。 */
+  login_id: string;
+  /** 实际使用的 Provider 标识。 */
+  provider_id: string;
+  /** 需要由系统浏览器打开的授权地址。 */
+  url?: string;
+  /** 输入型 Provider 声明的字段；Desktop 当前不处理该流程。 */
+  inputs?: Array<Record<string, unknown>>;
+}
+
+/** 一次登录轮询的结果。 */
+export interface DesktopLoginResult {
+  /** 登录仍在等待、已经完成或远端明确失败。 */
+  status: "pending" | "done" | "error";
+  /** 登录事务稳定标识。 */
+  login_id: string;
+  /** 远端返回的失败原因。 */
+  error?: string;
+}
+
 /** Preload 向 Renderer 暴露的最小 API。 */
 export interface DesktopApi {
   /** Agent 注册和运行能力。 */
   agent: {
     /** 列出共享 Registry 中的全部 Agent。 */
     list(): Promise<DesktopAgentSummary[]>;
+    /** 读取一份完整、可编辑的 Agent 定义。 */
+    get(agent_id: string): Promise<DesktopAgentDefinition>;
     /** 创建共享注册记录。 */
     create(agent_id: string, model_id: string): Promise<DesktopCreateAgentResult>;
+    /** 保存 Agent 定义并重新装配其运行实例。 */
+    update(agent_id: string, input: DesktopUpdateAgentInput): Promise<DesktopAgentSummary>;
     /** 让 Agent 进入指定 Workspace。 */
     connect(agent_id: string, workspace_id: string): Promise<DesktopAgentWorkspace>;
   };
