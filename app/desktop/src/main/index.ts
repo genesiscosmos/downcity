@@ -6,6 +6,7 @@ import { AgentController } from "@/agent/AgentController.js";
 import { create_desktop_local_data } from "@/agent/DesktopLocalData.js";
 import { DesktopSettingsController } from "@/settings/DesktopSettingsController.js";
 import { DesktopUserController } from "@/user/DesktopUserController.js";
+import { PluginController } from "@/plugin/PluginController.js";
 import { read_city_host_state, request_city_host_shutdown } from "@downcity/city";
 import type {
   DesktopChatInput,
@@ -20,6 +21,7 @@ const development_window_icon_path = path.join(current_directory, "../../build/i
 let agent_controller: AgentController | undefined;
 const local_data = create_desktop_local_data();
 const settings_controller = new DesktopSettingsController(local_data);
+const plugin_controller = new PluginController(local_data);
 let user_controller: DesktopUserController;
 let quitting = false;
 
@@ -73,7 +75,10 @@ ipcMain.handle("workspace:create", (_event, workspace_path: string, name: string
 ipcMain.handle("agent:connect", (_event, agent_id: string, workspace_id: string) => require_agent_controller().connect_agent(agent_id, workspace_id));
 ipcMain.handle("chat:list-sessions", (_event, agent_id: string, workspace_id: string) => require_agent_controller().list_sessions(agent_id, workspace_id));
 ipcMain.handle("chat:list-models", () => require_agent_controller().list_models());
-ipcMain.handle("plugin:list", () => require_agent_controller().list_plugins());
+ipcMain.handle("plugin:list", () => plugin_controller.list());
+ipcMain.handle("plugin:get", (_event, plugin_id: string) => plugin_controller.get(plugin_id));
+ipcMain.handle("plugin:save-profile", (_event, plugin_id: string, input: import("../common/types/DesktopApi.js").DesktopSavePluginProfileInput) => plugin_controller.save_profile(plugin_id, input));
+ipcMain.handle("plugin:remove-profile", (_event, plugin_id: string, profile_id: string) => plugin_controller.remove_profile(plugin_id, profile_id));
 ipcMain.handle("chat:create-session", (_event, agent_id: string, workspace_id: string) => require_agent_controller().create_session(agent_id, workspace_id));
 ipcMain.handle("chat:rename-session", (_event, agent_id: string, workspace_id: string, session_id: string, title: string) => require_agent_controller().rename_session(agent_id, workspace_id, session_id, title));
 ipcMain.handle("chat:archive-session", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().archive_session(agent_id, workspace_id, session_id));

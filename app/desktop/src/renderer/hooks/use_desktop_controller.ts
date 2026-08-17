@@ -446,6 +446,34 @@ export function use_desktop_controller(): DesktopViewController {
     }
   }, []);
 
+  const get_plugin = useCallback(async (plugin_id: string) => {
+    return await window.downcity.plugin.get(plugin_id);
+  }, []);
+
+  const save_plugin_profile = useCallback(async (plugin_id: string, input: Parameters<typeof window.downcity.plugin.save_profile>[1]) => {
+    set_error("");
+    try {
+      const definition = await window.downcity.plugin.save_profile(plugin_id, input);
+      set_plugins(await window.downcity.plugin.list());
+      return definition;
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, []);
+
+  const remove_plugin_profile = useCallback(async (plugin_id: string, profile_id: string) => {
+    set_error("");
+    try {
+      const definition = await window.downcity.plugin.remove_profile(plugin_id, profile_id);
+      set_plugins(await window.downcity.plugin.list());
+      return definition;
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, []);
+
   const create_workspace = useCallback(async (value: CreateWorkspaceFormValue) => {
     set_error("");
     const workspace = await window.downcity.workspace.create(value.workspace_path, value.name);
@@ -725,6 +753,9 @@ export function use_desktop_controller(): DesktopViewController {
     create_agent,
     get_agent,
     update_agent,
+    get_plugin,
+    save_plugin_profile,
+    remove_plugin_profile,
     create_workspace,
     update_draft,
     update_draft_files,

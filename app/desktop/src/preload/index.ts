@@ -16,6 +16,9 @@ const desktop_api: DesktopApi = {
   },
   plugin: {
     list: () => ipcRenderer.invoke("plugin:list"),
+    get: (plugin_id) => ipcRenderer.invoke("plugin:get", plugin_id),
+    save_profile: (plugin_id, input) => ipcRenderer.invoke("plugin:save-profile", plugin_id, input),
+    remove_profile: (plugin_id, profile_id) => ipcRenderer.invoke("plugin:remove-profile", plugin_id, profile_id),
   },
   dialog: {
     open_directory: () => ipcRenderer.invoke("dialog:open-directory"),

@@ -207,7 +207,7 @@ class LazyDesktopAgentModel implements LanguageModelV3 {
 }
 
 /** 创建 Desktop 宿主提供的官方 Plugin 注册。 */
-function create_desktop_builtin_plugin_registrations(
+export function create_desktop_builtin_plugin_registrations(
   data: DesktopLocalData,
 ): LocalPluginRegistration[] {
   return create_builtin_plugin_registrations({

@@ -12,6 +12,8 @@ import type {
   DesktopChatRuntime,
   DesktopModelSummary,
   DesktopPluginSummary,
+  DesktopPluginDefinition,
+  DesktopSavePluginProfileInput,
   DesktopSessionConfiguration,
   DesktopSessionSummary,
   DesktopSettings,
@@ -163,6 +165,12 @@ export interface DesktopViewController {
   get_agent(agent_id: string): Promise<DesktopAgentDefinition>;
   /** 保存 Agent 定义并刷新 Renderer 摘要。 */
   update_agent(agent_id: string, input: DesktopUpdateAgentInput): Promise<void>;
+  /** 读取 Plugin manifest 与全部 Profile。 */
+  get_plugin(plugin_id: string): Promise<DesktopPluginDefinition>;
+  /** 保存 Plugin Profile 并刷新 catalog。 */
+  save_plugin_profile(plugin_id: string, input: DesktopSavePluginProfileInput): Promise<DesktopPluginDefinition>;
+  /** 删除 Plugin Profile 并刷新 catalog。 */
+  remove_plugin_profile(plugin_id: string, profile_id: string): Promise<DesktopPluginDefinition>;
   /** 独立登记并打开 Workspace。 */
   create_workspace(value: CreateWorkspaceFormValue): Promise<void>;
   /** 修改 Session 输入草稿。 */

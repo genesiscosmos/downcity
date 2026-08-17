@@ -38,7 +38,6 @@ import type {
   DesktopAgentDefinition,
   DesktopUpdateAgentInput,
   DesktopModelSummary,
-  DesktopPluginSummary,
   DesktopSessionConfiguration,
   DesktopSessionSummary,
   DesktopWorkspaceSummary,
@@ -49,7 +48,6 @@ import {
   create_desktop_plugin_loader,
   create_desktop_workspace,
   list_desktop_agent_models,
-  list_desktop_plugins,
   resolve_desktop_agent_model,
 } from "./DesktopAgentAssembly.js";
 import type { DesktopLocalData } from "./DesktopLocalData.js";
@@ -242,12 +240,6 @@ export class AgentController {
   async list_models(): Promise<DesktopModelSummary[]> {
     await this.ready_promise;
     return await list_desktop_agent_models(this.data, process.env);
-  }
-
-  /** 列出 Desktop 当前可用的官方与第三方 Plugin。 */
-  async list_plugins(): Promise<DesktopPluginSummary[]> {
-    await this.ready_promise;
-    return list_desktop_plugins(this.data);
   }
 
   /** 在当前 Workspace 创建新的 Session。 */

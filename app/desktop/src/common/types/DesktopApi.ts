@@ -95,6 +95,24 @@ export interface DesktopPluginSummary {
   configurable: boolean;
 }
 
+/** Renderer 可读取和编辑的完整 Plugin 定义。 */
+export interface DesktopPluginDefinition extends DesktopPluginSummary {
+  /** Plugin 声明的 JSON Schema；未声明时 Plugin 不需要配置。 */
+  config_schema?: import("@downcity/agent").JsonObject;
+  /** 新建 Profile 时使用的默认配置。 */
+  default_config: import("@downcity/agent").JsonObject;
+  /** 按稳定 Profile ID 索引的全部已保存配置。 */
+  profiles: Record<string, import("@downcity/agent").JsonObject>;
+}
+
+/** Desktop 保存 Plugin Profile 的输入。 */
+export interface DesktopSavePluginProfileInput {
+  /** Profile 的稳定标识。 */
+  profile_id: string;
+  /** 经 Plugin JSON Schema 校验后写入 TOML 的配置。 */
+  config: import("@downcity/agent").JsonObject;
+}
+
 /** Renderer 可见的 Session 摘要。 */
 export interface DesktopSessionSummary {
   /** Session 的稳定标识。 */
@@ -446,6 +464,12 @@ export interface DesktopApi {
   plugin: {
     /** 列出官方与第三方 Plugin，并附带当前 Agent 绑定。 */
     list(): Promise<DesktopPluginSummary[]>;
+    /** 读取 Plugin manifest 与全部 Profile。 */
+    get(plugin_id: string): Promise<DesktopPluginDefinition>;
+    /** 新建或替换一个 Profile。 */
+    save_profile(plugin_id: string, input: DesktopSavePluginProfileInput): Promise<DesktopPluginDefinition>;
+    /** 删除未被 Agent 引用的 Profile。 */
+    remove_profile(plugin_id: string, profile_id: string): Promise<DesktopPluginDefinition>;
   };
   /** Electron 原生文件选择能力。 */
   dialog: {

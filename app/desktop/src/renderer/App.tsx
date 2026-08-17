@@ -31,7 +31,7 @@ export function App() {
     if (controller.selection?.kind === "plugin") {
       const plugin_id = controller.selection.plugin_id;
       const plugin = controller.plugins.find((item) => item.plugin_id === plugin_id);
-      return plugin ? <PluginView plugin={plugin} /> : <WelcomeView />;
+      return plugin ? <PluginView plugin={plugin} controller={controller} /> : <WelcomeView />;
     }
     if (controller.selection?.kind === "workspace") {
       const workspace_id = controller.selection.workspace_id;
