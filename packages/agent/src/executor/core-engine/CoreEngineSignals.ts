@@ -21,15 +21,6 @@ import type { JsonObject } from "@/types/common/Json.js";
 export const MAX_TOOL_LOOP_STEPS = 64;
 
 /**
- * text-only 提醒续跑的最大次数。
- *
- * 关键点（中文）
- * - 仅用于“模型明显承诺下一步、但没有实际调用工具”的兜底。
- * - 设置较小上限，避免进入无界自催促循环。
- */
-export const MAX_TEXT_ONLY_CONTINUATIONS = 3;
-
-/**
  * 不完整响应自动恢复的最大次数。
  *
  * 关键点（中文）
@@ -51,38 +42,6 @@ const INCOMPLETE_TOOL_PART_STATES = new Set([
   "input-available",
   "output-streaming",
 ]);
-
-/**
- * 可能表示“只是描述下一步、还没真正执行”的文本模式。
- *
- * 关键点（中文）
- * - 这里故意只匹配非常明显的“我现在开始/接下来我会”类表达。
- * - 不做泛化判断，避免把正常最终答案误判为继续执行。
- */
-const TEXT_ONLY_CONTINUATION_PATTERNS: ReadonlyArray<{
-  name: string;
-  pattern: RegExp;
-}> = [
-  { name: "zh_start_now", pattern: /我现在开始/ },
-  { name: "zh_next_will", pattern: /接下来我会/ },
-  { name: "zh_will_do", pattern: /我会(?:先|继续|开始|基于|按)/ },
-  { name: "zh_after_finish", pattern: /写完.*发你|完成后.*发你/ },
-  { name: "zh_fill_write", pattern: /开始(?:填充|写|补全)/ },
-  { name: "zh_one_by_one", pattern: /先把.+写完整/ },
-  {
-    name: "en_start_now",
-    pattern: /\bi(?:'m| am)?\s+(?:now\s+)?(?:starting|going to start)\b/i,
-  },
-  { name: "en_next_will", pattern: /\bnext,\s*i(?:'ll| will)\b/i },
-  {
-    name: "en_will_do",
-    pattern: /\bi(?:'ll| will)\s+(?:start|continue|write|fill|complete)\b/i,
-  },
-  {
-    name: "en_after_finish",
-    pattern: /\bafter (?:that|this),?\s*i(?:'ll| will)\b/i,
-  },
-];
 
 function toJsonObject(value: unknown): JsonObject | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -381,42 +340,4 @@ export function detect_incomplete_response(params: {
       textPreview: to_inline_preview(text),
     },
   };
-}
-
-/**
- * 检测“只有口头计划，没有真正执行”的续跑信号。
- */
-export function detect_text_only_continuation_reason(
-  step_result: unknown,
-): string | null {
-  const record = toJsonObject(step_result) || {};
-  const finishReason =
-    typeof record.finishReason === "string" ? record.finishReason : "";
-  const text = typeof record.text === "string" ? record.text.trim() : "";
-  const toolCalls = Array.isArray(record.toolCalls) ? record.toolCalls : [];
-
-  if (!text || toolCalls.length > 0) return null;
-  if (finishReason && finishReason !== "stop") return null;
-
-  for (const candidate of TEXT_ONLY_CONTINUATION_PATTERNS) {
-    if (candidate.pattern.test(text)) {
-      return candidate.name;
-    }
-  }
-  return null;
-}
-
-/**
- * 构造“text-only 续跑”提示。
- */
-export function build_text_only_continuation_nudge(
-  continuationIndex: number,
-): string {
-  const round = Math.max(1, continuationIndex);
-  return [
-    `系统续跑提醒（第 ${round} 次）：继续执行当前任务。`,
-    "不要只描述计划、下一步或“我接下来会做什么”。",
-    "如果需要工具，请直接调用工具并产出实际结果。",
-    "只有在任务真正完成、明确受阻、或必须等待用户提供信息时才停止。",
-  ].join("\n");
 }

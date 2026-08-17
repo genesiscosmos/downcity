@@ -22,12 +22,9 @@ import { log_assistant_message_now } from "@executor/messages/SessionMessageLog.
 import { pick_last_successful_chat_send_text } from "@executor/messages/UserVisibleText.js";
 import {
   MAX_INCOMPLETE_RESPONSE_RECOVERIES,
-  MAX_TEXT_ONLY_CONTINUATIONS,
   MAX_TOOL_LOOP_STEPS,
   build_incomplete_response_recovery_nudge,
-  build_text_only_continuation_nudge,
   detect_incomplete_response,
-  detect_text_only_continuation_reason,
   merge_assistant_ui_messages,
   summarize_step_for_debug,
   summarize_ui_message_for_debug,
@@ -225,7 +222,6 @@ export class CoreEngineRunner {
         });
       };
 
-      let text_only_continuation_count = 0;
       let incomplete_response_recovery_count = 0;
       let context_error_compaction_retries = 0;
       let compact_pending = false;
@@ -435,16 +431,10 @@ export class CoreEngineRunner {
           step_result: last_step,
           assistant_message: step_assistant_ui_message,
         });
-        const text_only_continuation_reason =
-          detect_text_only_continuation_reason(last_step);
         const loop_decision = evaluate_core_engine_loop_decision({
           hasIncompleteResponse: incomplete_response !== null,
           incompleteRecoveryCount: incomplete_response_recovery_count,
           maxIncompleteRecoveries: MAX_INCOMPLETE_RESPONSE_RECOVERIES,
-          textOnlyContinuationReason: text_only_continuation_reason,
-          textOnlyContinuationCount: text_only_continuation_count,
-          maxTextOnlyContinuations: MAX_TEXT_ONLY_CONTINUATIONS,
-          hasTools: Object.keys(tools).length > 0,
           toolCallCount: last_step.toolCalls.length,
         });
 
@@ -452,12 +442,9 @@ export class CoreEngineRunner {
           session_id: session_id,
           step_index: step_count,
           continueForToolCalls: loop_decision.continueForToolCalls,
-          continueForTextOnly: loop_decision.continueForTextOnly,
           continueForIncompleteRecovery:
             loop_decision.continueForIncompleteRecovery,
           decisionKind: loop_decision.kind,
-          textOnlyContinuationReason: text_only_continuation_reason,
-          textOnlyContinuationCount: text_only_continuation_count,
           incompleteResponseReason: incomplete_response?.reason ?? null,
           incompleteResponseRecoveryCount: incomplete_response_recovery_count,
           toolCallCount: last_step.toolCalls.length,
@@ -524,24 +511,7 @@ export class CoreEngineRunner {
         }
 
         if (loop_decision.continueForToolCalls) {
-          text_only_continuation_count = 0;
           incomplete_response_recovery_count = 0;
-          continue;
-        }
-
-        if (loop_decision.continueForTextOnly) {
-          text_only_continuation_count += 1;
-          incomplete_response_recovery_count = 0;
-          const continuation_message = build_internal_user_message({
-            session_id,
-            text: build_text_only_continuation_nudge(text_only_continuation_count),
-            extra: {
-              internal: "agent_loop_auto_continue",
-              reason: text_only_continuation_reason,
-              step_index: step_count,
-            },
-          });
-          await message_state.appendUserTextMessage(continuation_message);
           continue;
         }
 
@@ -554,7 +524,6 @@ export class CoreEngineRunner {
             mergedUserMessageCount: tail_merged_message_count,
           })
         ) {
-          text_only_continuation_count = 0;
           incomplete_response_recovery_count = 0;
           await this.logger.log("info", "[agent] loop.tail_merge_continue", {
             session_id: session_id,

@@ -18,8 +18,7 @@ import type {
  * 优先级（中文）
  * 1. 不完整响应恢复
  * 2. 已发生的工具调用
- * 3. text-only 自动续跑
- * 4. 停止
+ * 3. 停止
  */
 export function evaluate_core_engine_loop_decision(
   input: SessionLoopDecisionInput,
@@ -31,7 +30,6 @@ export function evaluate_core_engine_loop_decision(
     return {
       kind: "recover_incomplete",
       continueForToolCalls: false,
-      continueForTextOnly: false,
       continueForIncompleteRecovery: true,
     };
   }
@@ -40,20 +38,6 @@ export function evaluate_core_engine_loop_decision(
     return {
       kind: "continue_for_tool_calls",
       continueForToolCalls: true,
-      continueForTextOnly: false,
-      continueForIncompleteRecovery: false,
-    };
-  }
-
-  if (
-    input.textOnlyContinuationReason !== null &&
-    input.hasTools &&
-    input.textOnlyContinuationCount < input.maxTextOnlyContinuations
-  ) {
-    return {
-      kind: "continue_for_text_only",
-      continueForToolCalls: false,
-      continueForTextOnly: true,
       continueForIncompleteRecovery: false,
     };
   }
@@ -61,7 +45,6 @@ export function evaluate_core_engine_loop_decision(
   return {
     kind: "stop",
     continueForToolCalls: false,
-    continueForTextOnly: false,
     continueForIncompleteRecovery: false,
   };
 }
