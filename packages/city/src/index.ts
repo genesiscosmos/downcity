@@ -8,6 +8,11 @@
 
 export { City } from "./runtime/City.js";
 export type { CityListenOptions, CityRuntimeOptions } from "./types/City.js";
+export type {
+  PluginHostContext,
+  PluginHostExtensions,
+  PluginSetupModule,
+} from "./types/PluginHostContext.js";
 export {
   create_city_host_instance_id,
   get_city_host_state_path,

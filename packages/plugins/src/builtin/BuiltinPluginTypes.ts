@@ -1,11 +1,12 @@
 /**
  * Downcity 官方 Plugin 注册集合。
  *
- * 本模块负责把官方 Plugin 组合成统一 definition + factory 协议。它不依赖 City、Embassy 或
- * Federation，只消费宿主提供的 AI 能力和本地路径。
+ * 本模块负责把官方 Plugin 组合成统一 definition + setup 协议。City 负责提供
+ * PluginHostContext，Agent 负责接管 setup 返回的实例。
  */
 
 import type { JsonObject, Plugin } from "@downcity/agent";
+import type { PluginHostContext } from "@downcity/city";
 import {
   CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
   ChatPlugin,
@@ -51,9 +52,8 @@ export interface BuiltinPluginDefinition {
 export interface BuiltinPluginRegistration {
   /** Plugin 的唯一静态定义。 */
   readonly definition: BuiltinPluginDefinition;
-  /** 创建一个 Agent 独享的 Plugin 实例。 */
-  /** 使用已校验的完整 profile 创建 Plugin。 */
-  create(profile: JsonObject): Plugin;
+  /** 使用 City 已校验的 profile 创建一个 Agent 独享的 Plugin 实例。 */
+  setup(context: PluginHostContext): Plugin | Promise<Plugin>;
 }
 
 /** 创建官方 Plugin 注册集合所需的宿主能力。 */
@@ -138,8 +138,8 @@ export function create_builtin_plugin_registrations(
           defaults: {},
         },
       },
-      create(profile) {
-        const config = profile as unknown as ChatPluginConfig;
+      setup(context) {
+        const config = context.profile as unknown as ChatPluginConfig;
         return new ChatPlugin({
           queue: config.queue,
           channels: create_chat_channels(config.channels ?? []),
@@ -156,8 +156,8 @@ export function create_builtin_plugin_registrations(
           defaults: { provider: "builtin", storage: "file" },
         },
       },
-      create(profile) {
-        const config = profile as unknown as BuiltinMemoryPluginConfig;
+      setup(context) {
+        const config = context.profile as unknown as BuiltinMemoryPluginConfig;
         return new MemoryPlugin(config);
       },
     },
@@ -168,8 +168,8 @@ export function create_builtin_plugin_registrations(
         description: "Provides structured browser sessions through a configured CDP endpoint.",
         config: { schema: web_plugin_config_schema, defaults: { browser: "playwright" } },
       },
-      create(profile) {
-        const config = profile as unknown as BuiltinWebPluginConfig;
+      setup(context) {
+        const config = context.profile as unknown as BuiltinWebPluginConfig;
         return new WebPlugin(config);
       },
     },
@@ -187,7 +187,7 @@ export function create_builtin_plugin_registrations(
           defaults: {},
         },
       },
-      create: (profile) => new ImagePlugin(profile),
+      setup: (context) => new ImagePlugin(context.profile),
     },
     {
       definition: {
@@ -210,7 +210,7 @@ export function create_builtin_plugin_registrations(
           defaults: {},
         },
       },
-      create: (profile) => new SoundPlugin(profile),
+      setup: (context) => new SoundPlugin(context.profile),
     },
   ];
 }
@@ -220,9 +220,9 @@ function simple_registration(
   id: string,
   title: string,
   description: string,
-  create: () => Plugin,
+  setup: () => Plugin,
 ): BuiltinPluginRegistration {
-  return { definition: { id, title, description }, create };
+  return { definition: { id, title, description }, setup };
 }
 
 /** 创建 Chat Resource 对应的运行渠道。 */

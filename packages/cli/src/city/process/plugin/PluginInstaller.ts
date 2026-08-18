@@ -1,7 +1,7 @@
 /**
  * 第三方单 Plugin 包安装器。
  *
- * 来源目录可以包含源码与任意开发工具；安装目录只保留清单、运行入口、README、图标
+ * 来源目录可以包含源码与任意开发工具；安装目录只保留清单、setup 入口、README、图标
  * 和用户自己的 `config.toml`。Plugin 定义的唯一 ID 同时是公开身份和最终目录名。
  */
 
@@ -9,11 +9,10 @@ import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "fs-extra";
 import { execa } from "execa";
-import type { JsonObject } from "@downcity/agent";
 import { get_local_plugin_path } from "@downcity/local";
 import {
+  load_local_plugin_setup_module,
   validate_local_plugin_config,
-  validate_local_plugin_config_schema,
 } from "@downcity/local/product";
 import { create_cli_local_data } from "@/city/runtime/LocalData.js";
 import {
@@ -87,15 +86,15 @@ export async function install_plugin(
     if (is_builtin_plugin(definition.id)) {
       throw new Error(`Plugin ID conflicts with builtin Plugin: ${definition.id}`);
     }
-    const entry_path = await assert_plugin_package_file(
+    const setup_path = await assert_plugin_package_file(
       plugin_root,
-      definition.entry,
-      "entry",
+      definition.setup,
+      "setup",
     );
     const icon_path = definition.icon && is_local_plugin_asset(definition.icon)
       ? await assert_plugin_package_file(plugin_root, definition.icon, "icon")
       : undefined;
-    validate_existing_profiles(definition);
+    await validate_existing_profiles(definition, setup_path);
 
     await fs.ensureDir(staging_dir, { mode: 0o700 });
     const installed_package_path = path.join(staging_dir, PLUGIN_PACKAGE_FILE_NAME);
@@ -103,10 +102,10 @@ export async function install_plugin(
     await fs.chmod(installed_package_path, 0o600);
     await fs.copyFile(readme_path, path.join(staging_dir, PLUGIN_README_FILE_NAME));
     await fs.chmod(path.join(staging_dir, PLUGIN_README_FILE_NAME), 0o600);
-    const installed_entry_path = resolve_plugin_path(staging_dir, definition.entry, "entry");
-    await fs.ensureDir(path.dirname(installed_entry_path), { mode: 0o700 });
-    await fs.copyFile(entry_path, installed_entry_path);
-    await fs.chmod(installed_entry_path, 0o600);
+    const installed_setup_path = resolve_plugin_path(staging_dir, definition.setup, "setup");
+    await fs.ensureDir(path.dirname(installed_setup_path), { mode: 0o700 });
+    await fs.copyFile(setup_path, installed_setup_path);
+    await fs.chmod(installed_setup_path, 0o600);
     if (icon_path && definition.icon) {
       const installed_icon_path = resolve_plugin_path(staging_dir, definition.icon, "icon");
       await fs.ensureDir(path.dirname(installed_icon_path), { mode: 0o700 });
@@ -116,7 +115,7 @@ export async function install_plugin(
     const integrity = await calculate_plugin_integrity(staging_dir, [
       PLUGIN_PACKAGE_FILE_NAME,
       PLUGIN_README_FILE_NAME,
-      definition.entry,
+      definition.setup,
       ...(definition.icon && is_local_plugin_asset(definition.icon) ? [definition.icon] : []),
     ]);
     const existing = get_installed_plugin(definition.id);
@@ -183,8 +182,7 @@ export async function read_plugin_definition(
       "title",
       "description",
       "icon",
-      "entry",
-      "config",
+      "setup",
       "source",
       "revision",
       "integrity",
@@ -207,32 +205,9 @@ export async function read_plugin_definition(
   const description = String(raw.description || "").trim();
   if (!description) throw new Error(`Plugin description is required: ${id}`);
   const icon = normalize_plugin_icon(raw.icon, id);
-  const entry = String(raw.entry || "").trim();
-  if (!entry) throw new Error(`Plugin entry is required: ${id}`);
-  resolve_plugin_path(plugin_root, entry, "entry");
-  let config: PluginPackageDefinition["config"];
-  if (raw.config !== undefined) {
-    if (!is_json_object(raw.config)) throw new Error(`Plugin config must be an object: ${id}`);
-    assert_known_fields(raw.config, ["schema", "defaults"], `Plugin config ${id}`);
-    if (!is_json_object(raw.config.schema)) {
-      throw new Error(`Plugin config.schema must be an object: ${id}`);
-    }
-    const config_schema = structuredClone(raw.config.schema) as JsonObject;
-    validate_local_plugin_config_schema(config_schema);
-    if (raw.config.defaults !== undefined && !is_json_object(raw.config.defaults)) {
-      throw new Error(`Plugin config.defaults must be an object: ${id}`);
-    }
-    const config_defaults = is_json_object(raw.config.defaults)
-      ? structuredClone(raw.config.defaults) as JsonObject
-      : undefined;
-    if (config_defaults) {
-      validate_local_plugin_config(config_defaults, config_schema);
-    }
-    config = {
-      schema: config_schema,
-      ...(config_defaults ? { defaults: config_defaults } : {}),
-    };
-  }
+  const setup = String(raw.setup || "").trim();
+  if (!setup) throw new Error(`Plugin setup is required: ${id}`);
+  resolve_plugin_path(plugin_root, setup, "setup");
   const title = typeof raw.title === "string" ? raw.title.trim() : "";
   return {
     schema_version: 1,
@@ -241,8 +216,7 @@ export async function read_plugin_definition(
     ...(title ? { title } : {}),
     description,
     ...(icon ? { icon } : {}),
-    entry: entry.split(path.sep).join("/"),
-    ...(config ? { config } : {}),
+    setup: setup.split(path.sep).join("/"),
   };
 }
 
@@ -264,15 +238,22 @@ function is_local_plugin_asset(icon: string): boolean {
   return !/^https?:\/\//iu.test(icon);
 }
 
-/** 更新前用 `plugin.json` Schema 验证全部已保存 profile。 */
-function validate_existing_profiles(definition: PluginPackageDefinition): void {
-  if (!definition.config?.schema) return;
+/** 更新前使用新 setup 模块导出的 Schema 验证全部已保存 profile。 */
+async function validate_existing_profiles(
+  definition: PluginPackageDefinition,
+  setup_path: string,
+): Promise<void> {
   const data = create_cli_local_data();
   try {
     const profiles = data.plugins.read_config(definition.id).profiles;
+    if (Object.keys(profiles).length === 0) return;
+    const setup_hash = createHash("sha256")
+      .update(await fs.readFile(setup_path))
+      .digest("hex");
+    const module = await load_local_plugin_setup_module(setup_path, setup_hash);
     for (const [profile, config] of Object.entries(profiles)) {
       try {
-        validate_local_plugin_config(config, definition.config.schema);
+        validate_local_plugin_config(config, module.schema);
       } catch (error) {
         throw new Error(
           `Plugin profile is incompatible with update: ${definition.id}/${profile}`,

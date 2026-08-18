@@ -13,7 +13,10 @@ import {
 import type { JsonObject } from "@downcity/agent";
 import { with_cli_local_data } from "@/city/runtime/LocalData.js";
 import { create_cli_builtin_plugin_registrations } from "@/city/runtime/AgentAssembly.js";
-import { get_plugin_catalog_item } from "@/city/process/plugin/PluginCatalog.js";
+import {
+  list_plugin_catalog,
+  resolve_plugin_catalog_item,
+} from "@/city/process/plugin/PluginCatalog.js";
 import { validate_local_plugin_config } from "@downcity/local/product";
 import type {
   AgentPluginReference,
@@ -90,7 +93,7 @@ export function set_agent_plugin_reference(
 ): AgentPluginReference {
   const agent_id = String(input.agent_id || "").trim();
   const plugin_id = normalize_plugin_id(input.plugin_id);
-  const plugin = get_plugin_catalog_item(plugin_id);
+  const plugin = list_plugin_catalog().find((item) => item.plugin_id === plugin_id);
   if (!plugin) throw new Error(`Plugin not found: ${plugin_id}`);
   const profile = String(input.profile || "").trim();
   if (profile) {
@@ -133,14 +136,14 @@ export function get_plugin_profile(
 }
 
 /** 校验并保存一个 Plugin profile。 */
-export function save_plugin_profile(
+export async function save_plugin_profile(
   plugin_id_input: string,
   profile_input: string,
   config: JsonObject,
-): JsonObject {
+): Promise<JsonObject> {
   const plugin_id = normalize_plugin_id(plugin_id_input);
   const profile = normalize_profile_id(profile_input);
-  const plugin = get_plugin_catalog_item(plugin_id);
+  const plugin = await resolve_plugin_catalog_item(plugin_id);
   if (!plugin) throw new Error(`Plugin not found: ${plugin_id}`);
   if (plugin.config_schema) validate_local_plugin_config(config, plugin.config_schema);
   return with_cli_local_data((data) => data.plugins.save_profile(plugin_id, profile, config));

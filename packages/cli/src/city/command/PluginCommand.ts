@@ -26,7 +26,7 @@ import {
 } from "@/city/process/registry/PluginRepository.js";
 import { install_plugin, update_plugin } from "@/city/process/plugin/PluginInstaller.js";
 import {
-  get_plugin_catalog_item,
+  resolve_plugin_catalog_item,
   list_plugin_catalog,
 } from "@/city/process/plugin/PluginCatalog.js";
 import { prompt_plugin_config } from "@/city/process/plugin/PluginConfigForm.js";
@@ -75,7 +75,7 @@ export function registerPluginsCommand(program: Command): void {
         tone: "success",
         title: "Plugin installed",
         summary: installed.id,
-        facts: [{ label: "Entry", value: installed.entry }],
+        facts: [{ label: "Setup", value: installed.setup }],
       });
     });
 
@@ -101,8 +101,8 @@ export function registerPluginsCommand(program: Command): void {
   plugin.command("inspect <plugin_id>")
     .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
     .helpOption("--help", helpText())
-    .action((plugin_id: string, options: { json?: boolean }) => {
-      const catalog = get_plugin_catalog_item(plugin_id);
+    .action(async (plugin_id: string, options: { json?: boolean }) => {
+      const catalog = await resolve_plugin_catalog_item(plugin_id);
       if (!catalog) throw new Error(`Plugin not found: ${plugin_id}`);
       const installed = get_installed_plugin(plugin_id);
       printResult({
@@ -203,7 +203,7 @@ function register_profile_commands(plugin: Command): void {
       options: { set?: string; interactive?: boolean; remove?: boolean; json?: boolean },
     ) => {
       const profile = String(profile_input || "default").trim();
-      const catalog = get_plugin_catalog_item(plugin_id);
+      const catalog = await resolve_plugin_catalog_item(plugin_id);
       if (!catalog) throw new Error(`Plugin not found: ${plugin_id}`);
       if (options.remove) {
         remove_plugin_profile(plugin_id, profile);
@@ -222,7 +222,7 @@ function register_profile_commands(plugin: Command): void {
         });
       }
       if (config) {
-        const saved = save_plugin_profile(plugin_id, profile, config);
+        const saved = await save_plugin_profile(plugin_id, profile, config);
         print_profile(plugin_id, profile, saved, catalog.config_schema, options.json === true);
         return;
       }
@@ -290,7 +290,7 @@ function register_action_command(plugin: Command): void {
 }
 
 /** 输出 Plugin Catalog。 */
-function print_plugin_list(as_json: boolean): void {
+async function print_plugin_list(as_json: boolean): Promise<void> {
   const catalog = list_plugin_catalog();
   if (as_json) {
     printResult({ type: "block", asJson: true, success: true, title: "plugins", data: { plugins: catalog } });

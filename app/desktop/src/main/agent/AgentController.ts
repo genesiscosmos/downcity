@@ -7,6 +7,7 @@
 
 import {
   Agent,
+  get_logger,
   type AgentSession,
   type AgentSessionPromptInput,
   type AgentSessionSummary,
@@ -14,6 +15,7 @@ import {
   type SessionApprovalMode,
   type SessionMutationUnsubscribe,
 } from "@downcity/agent";
+import path from "node:path";
 import {
   City,
   create_city_host_instance_id,
@@ -45,6 +47,7 @@ import type {
 import {
   create_desktop_agent_model,
   create_desktop_agent_ai,
+  create_desktop_embassy,
   create_desktop_agent_tools,
   create_desktop_plugin_loader,
   create_desktop_workspace,
@@ -444,7 +447,20 @@ export class AgentController {
   private async create_native_agent(config: LocalAgentConfig): Promise<Agent> {
     const [model, plugins, tools] = await Promise.all([
       Promise.resolve(create_desktop_agent_model(this.data, config, process_environment())),
-      this.plugin_loader.create_plugins(config),
+      this.plugin_loader.create_plugins(config, ({ plugin_id, profile }) => ({
+        plugin_id,
+        profile,
+        embassy: create_desktop_embassy(this.data, process.env),
+        data_path: path.join(
+          this.data.root_path,
+          "agents",
+          config.agent_id,
+          "plugins",
+          plugin_id,
+        ),
+        logger: get_logger(),
+        extensions: {},
+      })),
       Promise.resolve(create_desktop_agent_tools()),
     ]);
     return new Agent({

@@ -24,13 +24,13 @@ export interface ResolvedPluginSource {
 }
 
 /** 来源目录 `plugin.json` 必须声明的可安装 Plugin 包。 */
-export interface PluginPackageDefinition extends LocalPluginDefinition {
+export interface PluginPackageDefinition extends Omit<LocalPluginDefinition, "config"> {
   /** 文件协议版本。 */
   schema_version: 1;
   /** Plugin 语义化版本号。 */
   version: string;
-  /** 相对来源目录的自包含 ESM 入口。 */
-  entry: string;
+  /** 相对来源目录的 setup ESM 入口。 */
+  setup: string;
 }
 
 /** 已安装 Plugin 的管理视图。 */

@@ -278,12 +278,12 @@ Plugin 生命周期分为 Agent 级 `start/stop` 和可选的 Workspace 级 `ent
 Plugin 以全局稳定 ID 为身份，定义与配置保存在 `~/.downcity/plugins/<plugin_id>/`：
 
 - `config.toml`：Plugin 自己拥有的明文 profile 配置，目录权限为 `0700`、文件权限为 `0600`。
-- `plugin.json`：仅第三方 Plugin 使用，是静态定义、图标地址、配置 JSON Schema、默认配置与安装来源信息的唯一事实源。
+- `plugin.json`：仅第三方 Plugin 使用，是静态定义、图标地址、setup 入口与安装来源信息的唯一事实源；配置 Schema 由 setup 模块导出。
 - `package.json`：仅第三方 Plugin 使用，声明 `"type": "module"` 并建立明确的 ESM package 边界。
 - `README.md`：第三方 Plugin 的必需用户文档，安装后保留在 Plugin ID 目录。
-- 自包含入口与本地图标：安装 `plugin.json.entry` 指向的单个入口，以及 `icon` 指向的 Plugin 根目录内相对资源；源码、TypeScript 配置和构建工具配置不进入 Plugin ID 目录。
+- 自包含 setup 入口与本地图标：安装 `plugin.json.setup` 指向的单个入口，以及 `icon` 指向的 Plugin 根目录内相对资源；源码、TypeScript 配置和构建工具配置不进入 Plugin ID 目录。
 
-Agent 通过 `agent.json` 选择 Plugin 与可选 profile。Plugin profile 可以包含渠道、账号、端点等 Plugin 自己定义的结构；配置 Schema 与默认值由 Plugin definition 拥有，TOML 只保存 profile 值，TypeScript 类型由 Plugin 代码独立维护。框架不定义 Binding、Resource 或 Installation 持久化领域。内置与第三方 Plugin 都按稳定 ID、JSON Schema 与 Plugin constructor 进入 Loader；第三方入口通过 `plugin` 直接导出 constructor，不增加公开工厂协议，Definition ID 同时是目录名和 Registry key。
+Agent 通过 `agent.json` 选择 Plugin 与可选 profile。Plugin profile 可以包含渠道、账号、端点等 Plugin 自己定义的结构；配置 Schema 由第三方 setup 模块导出，TOML 只保存 profile 值，TypeScript 类型由 Plugin 代码独立维护。框架不定义 Binding、Resource 或 Installation 持久化领域。内置 Plugin 由宿主注册，第三方 Plugin 由 `plugin.json.setup` 导出的 `schema` 与 `setup(context)` 进入 Loader；setup 每次创建一个新的 Plugin 实例，Plugin Class 的 constructor 参数完全由作者决定。
 
 `downcity.db` 继续保存 Workspace 索引、平台设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。Workspace 与平台设置以明文 JSON 保存，本地隔离依赖数据库文件权限。
 

@@ -21,11 +21,11 @@
 │       ├── config.toml
 │       ├── plugin.json
 │       ├── package.json
-│       └── dist/index.js
+│       └── dist/setup.js
 └── downcity.db
 ```
 
-第三方 Plugin 的定义、ESM package 边界和自包含入口直接位于 `<plugin_id>/`，源码、TypeScript 配置和具体构建工具不进入安装目录；内置 Plugin 的注册由宿主注入，但配置仍使用相同的 `plugins/<plugin_id>/config.toml`。两者进入 Loader 后都按稳定 ID、JSON Schema 与 Plugin constructor 处理。
+第三方 Plugin 的定义、ESM package 边界和自包含 setup 入口直接位于 `<plugin_id>/`，源码、TypeScript 配置和具体构建工具不进入安装目录；内置 Plugin 的注册由宿主注入，但配置仍使用相同的 `plugins/<plugin_id>/config.toml`。第三方 setup 模块导出 `schema` 与 `setup(context)`，内置 Plugin 由宿主直接注册。
 
 ## 3. Agent 定义
 
@@ -64,15 +64,15 @@ name = "Primary Bot"
 bot_token = "123456:token"
 ```
 
-TOML Profile 是原始配置值；Loader 使用 definition 的 JSON Schema 校验后再创建 Plugin：
+TOML Profile 是原始配置值；Loader 使用 setup 模块导出的 JSON Schema 校验后再调用 setup 创建 Plugin：
 
 ```ts
-const config = selected_profile ?? definition.config?.defaults ?? {};
-validate_plugin_config(config, definition.config?.schema);
-new PluginConstructor({ config });
+const config = selected_profile ?? {};
+validate_plugin_config(config, setup_module.schema);
+await setup_module.setup({ plugin_id, profile: config, ...host_context });
 ```
 
-账号、渠道、端点和 Token 等结构由具体 Plugin 的 `plugin.json.config.schema` 定义。TOML 明文保存，Plugin 目录权限为 `0700`，配置文件权限为 `0600`；宿主按 JSON Schema 的 `writeOnly` 标记脱敏。
+账号、渠道、端点和 Token 等结构由具体 Plugin 的 setup 模块 `schema` 定义。TOML 明文保存，Plugin 目录权限为 `0700`，配置文件权限为 `0600`；宿主按 JSON Schema 的 `writeOnly` 标记脱敏。
 
 ## 5. 第三方 Plugin
 
@@ -85,27 +85,20 @@ new PluginConstructor({ config });
   "version": "1.0.0",
   "description": "GitHub integration",
   "icon": "./assets/github.svg",
-  "entry": "dist/index.js",
-  "config": {
-    "schema": {
-      "type": "object",
-      "properties": {
-        "token": { "type": "string", "writeOnly": true }
-      },
-      "required": ["token"],
-      "additionalProperties": false
-    }
-  }
+  "setup": "dist/setup.js"
 }
 ```
 
-ESM 入口命名导出唯一 Plugin constructor：
+setup 模块导出配置 Schema 与宿主装配函数：
 
 ```ts
-export const plugin = GithubPlugin;
+export const schema = { type: "object", required: ["token"], properties: { token: { type: "string", writeOnly: true } }, additionalProperties: false };
+export function setup(context: PluginHostContext): GithubPlugin {
+  return new GithubPlugin(context.profile as GithubPluginConfig);
+}
 ```
 
-Plugin 代码单独声明 TypeScript 配置类型，运行时协议以 `plugin.json.config.schema` 为准。入口必须是单个自包含 ESM 文件；`package.json` 负责建立明确的 ESM package 边界。安装器校验 Schema 与默认值，但不导入或执行第三方入口，也不复制源码与开发文件。
+Plugin 代码单独声明 TypeScript 配置类型，运行时协议以 setup 模块 `schema` 为准。setup 必须是单个自包含 ESM 文件；`package.json` 负责建立明确的 ESM package 边界。安装器不导入或执行第三方 setup，也不复制源码与开发文件。
 
 安装目标固定为 `plugins/<definition.id>/`。来源目录必须包含 `README.md`；安装器保留安装后的 `plugin.json`、`package.json`、`README.md`、自包含入口、可选本地图标与本地 `config.toml`。`icon` 支持 `http(s)` URL 或 Plugin 根目录内的相对路径；本地资源必须经过路径和 symlink 校验。随机目录只用于 staging；更新原子替换整个 Plugin 目录并保留 `config.toml`。新 Schema 无法校验已有 profile 时拒绝更新；仍被 Agent 引用时拒绝卸载。
 

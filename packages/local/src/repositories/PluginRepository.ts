@@ -54,23 +54,12 @@ export class PluginRepository {
       || value.id !== plugin_id
       || !value.version
       || !value.description
-      || !value.entry
+      || !value.setup
       || !value.source
       || !value.integrity
       || !value.installed_at
       || !value.updated_at
       || (value.icon !== undefined && typeof value.icon !== "string")
-      || (
-        value.config !== undefined
-        && (
-          !is_plain_object(value.config)
-          || !is_plain_object(value.config.schema)
-          || (
-            value.config.defaults !== undefined
-            && !is_plain_object(value.config.defaults)
-          )
-        )
-      )
     ) {
       throw new Error(`Invalid installed Plugin definition: ${plugin_id}`);
     }

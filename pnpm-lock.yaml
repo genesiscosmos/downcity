@@ -366,6 +366,9 @@ importers:
       '@downcity/agent':
         specifier: workspace:^
         version: link:../agent
+      '@downcity/federation':
+        specifier: workspace:^
+        version: link:../federation
       '@downcity/workspace':
         specifier: workspace:^
         version: link:../workspace
@@ -662,6 +665,9 @@ importers:
       '@downcity/agent':
         specifier: workspace:^
         version: link:../agent
+      '@downcity/city':
+        specifier: workspace:^
+        version: link:../city
       '@downcity/workspace':
         specifier: workspace:^
         version: link:../workspace
@@ -699,6 +705,9 @@ importers:
       '@downcity/agent':
         specifier: workspace:^
         version: link:../agent
+      '@downcity/city':
+        specifier: workspace:^
+        version: link:../city
       ai:
         specifier: ^6.0.193
         version: 6.0.193(zod@4.4.3)

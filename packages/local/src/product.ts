@@ -6,7 +6,11 @@
  */
 
 export { ensure_local_schema } from "./database/LocalSchema.js";
-export { LocalPluginLoader } from "./runtime/LocalPluginLoader.js";
+export {
+  LocalPluginLoader,
+  load_local_plugin_setup_module,
+  verify_local_installed_plugin_integrity,
+} from "./runtime/LocalPluginLoader.js";
 export { resolve_local_agent_env } from "./runtime/LocalEnvironment.js";
 export {
   validate_local_plugin_config,

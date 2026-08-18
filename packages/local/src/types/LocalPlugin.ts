@@ -1,6 +1,7 @@
 /** 本地文件型 Plugin 定义、注册与配置协议。 */
 
 import type { JsonObject, Plugin } from "@downcity/agent";
+import type { PluginHostContext } from "@downcity/city";
 
 /** Plugin 在静态定义中声明的配置协议。 */
 export interface LocalPluginConfigDefinition {
@@ -28,18 +29,18 @@ export interface LocalPluginDefinition {
 export interface LocalPluginRegistration {
   /** Plugin 的唯一静态定义。 */
   definition: LocalPluginDefinition;
-  /** 使用已校验的完整 profile 创建归当前 Agent 所有的 Plugin 实例。 */
-  create(profile: JsonObject): Plugin;
+  /** City 已完成配置校验后，创建归当前 Agent 所有的 Plugin 实例。 */
+  setup(context: PluginHostContext): Plugin | Promise<Plugin>;
 }
 
 /** `plugins/<plugin_id>/plugin.json` 中的第三方 Plugin 定义。 */
-export interface LocalInstalledPluginDefinition extends LocalPluginDefinition {
+export interface LocalInstalledPluginDefinition extends Omit<LocalPluginDefinition, "config"> {
   /** 文件协议版本。 */
   schema_version: 1;
   /** Plugin 语义化版本号。 */
   version: string;
-  /** 相对 Plugin 目录的自包含 ESM 入口。 */
-  entry: string;
+  /** 相对 Plugin 目录的 setup ESM 入口。 */
+  setup: string;
   /** 可供更新命令重放的规范化来源。 */
   source: string;
   /** Git 来源解析得到的 commit SHA。 */

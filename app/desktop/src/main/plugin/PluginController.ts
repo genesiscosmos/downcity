@@ -5,8 +5,11 @@
  * 持久化以及删除前的 Agent 引用检查。
  */
 
+import path from "node:path";
 import type { JsonObject } from "@downcity/agent";
 import {
+  load_local_plugin_setup_module,
+  verify_local_installed_plugin_integrity,
   normalize_profile_id,
   validate_local_plugin_config,
   type LocalPluginDefinition,
@@ -29,8 +32,8 @@ export class PluginController {
   }
 
   /** 读取一份 Plugin 定义和全部 Profile。 */
-  get(plugin_id: string): DesktopPluginDefinition {
-    const { definition, summary } = this.require_definition(plugin_id);
+  async get(plugin_id: string): Promise<DesktopPluginDefinition> {
+    const { definition, summary } = await this.resolve_definition(plugin_id);
     const config = this.data.plugins.read_config(plugin_id);
     return {
       ...summary,
@@ -41,18 +44,18 @@ export class PluginController {
   }
 
   /** 校验并保存一个 Profile。 */
-  save_profile(plugin_id: string, input: DesktopSavePluginProfileInput): DesktopPluginDefinition {
-    const { definition } = this.require_definition(plugin_id);
+  async save_profile(plugin_id: string, input: DesktopSavePluginProfileInput): Promise<DesktopPluginDefinition> {
+    const { definition } = await this.resolve_definition(plugin_id);
     if (!definition.config) throw new Error(`Plugin does not require configuration: ${plugin_id}`);
     const profile_id = normalize_profile_id(input.profile_id);
     validate_local_plugin_config(input.config, definition.config.schema, `${plugin_id}.${profile_id}`);
     this.data.plugins.save_profile(plugin_id, profile_id, input.config);
-    return this.get(plugin_id);
+    return await this.get(plugin_id);
   }
 
   /** 删除未被任何 Agent 引用的 Profile。 */
-  remove_profile(plugin_id: string, profile_id_input: string): DesktopPluginDefinition {
-    this.require_definition(plugin_id);
+  async remove_profile(plugin_id: string, profile_id_input: string): Promise<DesktopPluginDefinition> {
+    await this.resolve_definition(plugin_id);
     const profile_id = normalize_profile_id(profile_id_input);
     const agent_ids = this.data.agents.list()
       .filter((agent) => {
@@ -64,16 +67,27 @@ export class PluginController {
       throw new Error(`Profile ${plugin_id}/${profile_id} is used by Agent: ${agent_ids.join(", ")}`);
     }
     this.data.plugins.remove_profile(plugin_id, profile_id);
-    return this.get(plugin_id);
+    return await this.get(plugin_id);
   }
 
   /** 解析内置或第三方 Plugin，并读取对应 catalog 摘要。 */
-  private require_definition(plugin_id: string): { definition: LocalPluginDefinition; summary: DesktopPluginSummary } {
+  private async resolve_definition(plugin_id: string): Promise<{ definition: LocalPluginDefinition; summary: DesktopPluginSummary }> {
     const builtin = create_desktop_builtin_plugin_registrations(this.data)
       .find((registration) => registration.definition.id === plugin_id)?.definition;
-    const definition = builtin ?? this.data.plugins.get_installed(plugin_id);
+    let definition = builtin ?? this.data.plugins.get_installed(plugin_id);
     const summary = this.list().find((plugin) => plugin.plugin_id === plugin_id);
     if (!definition || !summary) throw new Error(`Plugin not found: ${plugin_id}`);
+    if (!builtin) {
+      const installed = this.data.plugins.get_installed(plugin_id);
+      if (!installed) throw new Error(`Plugin not found: ${plugin_id}`);
+      const plugin_root = this.data.plugins.plugin_path(plugin_id);
+      await verify_local_installed_plugin_integrity(plugin_root, installed);
+      const setup_module = await load_local_plugin_setup_module(
+        path.join(plugin_root, installed.setup),
+        installed.integrity,
+      );
+      definition = { ...installed, config: { schema: setup_module.schema } };
+    }
     return { definition, summary };
   }
 }

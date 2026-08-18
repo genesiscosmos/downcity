@@ -11,7 +11,7 @@ import {
   set_agent_plugin_reference,
 } from "@/city/process/registry/PluginRepository.js";
 import {
-  get_plugin_catalog_item,
+  resolve_plugin_catalog_item,
   list_plugin_catalog,
 } from "@/city/process/plugin/PluginCatalog.js";
 import { install_plugin, update_plugin } from "@/city/process/plugin/PluginInstaller.js";
@@ -45,7 +45,7 @@ export async function run_interactive_plugin_manager(): Promise<void> {
       continue;
     }
     const plugin_id = selection.startsWith("plugin:") ? selection.slice(7) : "";
-    const plugin = get_plugin_catalog_item(plugin_id);
+    const plugin = await resolve_plugin_catalog_item(plugin_id);
     if (plugin) await run_interactive_plugin_actions(plugin);
   }
 }
@@ -72,7 +72,7 @@ export async function run_interactive_agent_plugin_manager(agent_id: string): Pr
     });
     const plugin_id = String(response.plugin_id || "");
     if (!plugin_id || plugin_id === "back") return;
-    const plugin = get_plugin_catalog_item(plugin_id);
+    const plugin = await resolve_plugin_catalog_item(plugin_id);
     if (plugin) await run_agent_plugin_actions(plugin, agent_id);
   }
 }
@@ -178,7 +178,7 @@ async function configure_profile(plugin: PluginCatalogItem): Promise<void> {
     current_config: existing ?? plugin.default_config,
   });
   if (!config) return;
-  save_plugin_profile(plugin.plugin_id, profile, config);
+  await save_plugin_profile(plugin.plugin_id, profile, config);
   emitCliBlock({ tone: "success", title: "Plugin profile saved", summary: `${plugin.plugin_id}/${profile}` });
 }
 
@@ -187,7 +187,7 @@ async function select_profile(plugin: PluginCatalogItem): Promise<string | null>
   if (!plugin.config_schema) return "";
   if (plugin.profiles.length === 0) {
     await configure_profile(plugin);
-    const refreshed = get_plugin_catalog_item(plugin.plugin_id);
+    const refreshed = await resolve_plugin_catalog_item(plugin.plugin_id);
     return refreshed?.profiles[0] ?? null;
   }
   const response = await prompts({

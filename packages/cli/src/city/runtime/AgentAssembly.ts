@@ -5,6 +5,7 @@
  * 只接收已经创建完成的 Agent，不参与任何装配决策。
  */
 
+import path from "node:path";
 import {
   LocalPluginLoader,
   type LocalAgentConfig,
@@ -12,7 +13,7 @@ import {
   type PluginRepository,
   type LocalPluginRegistration,
 } from "@downcity/local/product";
-import { Agent, type AgentModel, type AgentOptions } from "@downcity/agent";
+import { Agent, get_logger, type AgentModel, type AgentOptions } from "@downcity/agent";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell, Workspace } from "@downcity/workspace";
 import {
@@ -64,10 +65,24 @@ export async function create_cli_agent(input: {
   /** 可选的 Downcity 用户级数据根目录。 */
   root_path?: string;
 }): Promise<Agent> {
-  const [{ embassy_user }, model, plugins, tools] = await Promise.all([
-    new EmbassySessionResolver().create_user_client(),
+  const { embassy, embassy_user } = await new EmbassySessionResolver().create_user_client();
+  const root_path = resolve_local_root_path(input.root_path);
+  const [model, plugins, tools] = await Promise.all([
     Promise.resolve(create_cli_agent_model(input.config, process_environment())),
-    input.plugin_loader.create_plugins(input.config),
+    input.plugin_loader.create_plugins(input.config, ({ plugin_id, profile }) => ({
+      plugin_id,
+      profile,
+      embassy,
+      data_path: path.join(
+        root_path,
+        "agents",
+        input.config.agent_id,
+        "plugins",
+        plugin_id,
+      ),
+      logger: get_logger(),
+      extensions: {},
+    })),
     Promise.resolve(create_cli_agent_tools()),
   ]);
   return new Agent({

@@ -98,6 +98,9 @@ export class EmbassySessionResolver {
      * 绑定当前用户身份的 Federation 用户访问器。
      */
     embassy_user: EmbassyUser;
+
+    /** 绑定当前用户身份的完整 Embassy 客户端。 */
+    embassy: Embassy;
   }> {
     const user = await this.resolve_current_user({
       ...input,
@@ -106,12 +109,14 @@ export class EmbassySessionResolver {
     if (!user.user_token) {
       throw new Error("Federation user token is required. Run `city federation login` first.");
     }
+    const embassy = new Embassy({
+      federation_url: user.federation_url,
+      user_token: user.user_token,
+    });
     return {
       user,
-      embassy_user: new Embassy({
-        federation_url: user.federation_url,
-        user_token: user.user_token,
-      }).user,
+      embassy,
+      embassy_user: embassy.user,
     };
   }
 

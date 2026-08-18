@@ -154,7 +154,7 @@ export function list_desktop_plugins(data: DesktopLocalData): DesktopPluginSumma
         agent_ids: registered_agents.get(installed.id) ?? [],
         profile_count: Object.keys(data.plugins.read_config(installed.id).profiles).length,
         profile_ids: Object.keys(data.plugins.read_config(installed.id).profiles),
-        configurable: Boolean(installed.config),
+        configurable: true,
       });
   }
   return [...plugins.values()].sort((left, right) => left.title.localeCompare(right.title));
@@ -215,11 +215,11 @@ export function create_desktop_builtin_plugin_registrations(
 }
 
 
-/** 按环境覆盖和共享持久化 Session 创建 Embassy User。 */
-function create_embassy_user(
+/** 按环境覆盖和共享持久化 Session 创建完整 Embassy。 */
+export function create_desktop_embassy(
   data: DesktopLocalData,
   env: Readonly<Record<string, string | undefined>>,
-): EmbassyUser {
+): Embassy {
   const config = data.settings.get<DesktopDowncityConfig>("downcity.config") ?? {};
   const federation_url = normalize_federation_url(
     read_string(env.DOWNCITY_FEDERATION_URL)
@@ -231,7 +231,15 @@ function create_embassy_user(
   if (!user_token) {
     throw new Error("Federation user token is required. Run `city federation login` first.");
   }
-  return new Embassy({ federation_url, user_token }).user;
+  return new Embassy({ federation_url, user_token });
+}
+
+/** 按环境覆盖和共享持久化 Session 创建 Embassy User。 */
+function create_embassy_user(
+  data: DesktopLocalData,
+  env: Readonly<Record<string, string | undefined>>,
+): EmbassyUser {
+  return create_desktop_embassy(data, env).user;
 }
 
 /** 创建当前 Desktop Agent 使用的用户级 AI 能力。 */

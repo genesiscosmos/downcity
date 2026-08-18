@@ -12,11 +12,21 @@ function create_temp_root() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "downcity-config-storage-"));
 }
 
+function create_test_plugin_host_context(root) {
+  return ({ plugin_id, profile }) => ({
+    plugin_id,
+    profile,
+    data_path: path.join(root, "agent-data", plugin_id),
+    logger: {},
+    extensions: {},
+  });
+}
+
 function write_plugin_source(root, input = {}) {
   const id = input.id ?? "example";
   const version = input.version ?? "1.0.0";
   const description = input.description ?? "Example Plugin for configuration tests.";
-  const entry = input.entry ?? "dist/index.js";
+  const setup = input.setup ?? "dist/setup.js";
   fs.writeFileSync(
     path.join(root, "package.json"),
     input.package_source ?? JSON.stringify({ type: "module" }),
@@ -30,30 +40,14 @@ function write_plugin_source(root, input = {}) {
     id,
     version,
     description,
-    entry,
-    config: {
-      schema: {
-        type: "object",
-        properties: {
-          endpoint: { type: "string", minLength: 1 },
-          api_key: { type: "string", writeOnly: true },
-          timeout_ms: { type: "integer", minimum: 1000 },
-        },
-        required: ["endpoint", "timeout_ms"],
-        additionalProperties: false,
-      },
-      defaults: {
-        endpoint: "https://example.com",
-        timeout_ms: 10000,
-      },
-    },
+    setup,
     ...(input.extra_manifest ?? {}),
   }));
-  const module_path = path.join(root, input.module_path ?? "dist/index.js");
+  const module_path = path.join(root, input.module_path ?? setup);
   fs.mkdirSync(path.dirname(module_path), { recursive: true });
   fs.writeFileSync(module_path, input.module_source ?? `
 class ExamplePlugin {
-  constructor({ config }) {
+  constructor(config) {
     this.name = ${JSON.stringify(input.runtime_id ?? id)};
     this.title = "Example";
     this.description = config.endpoint;
@@ -61,7 +55,19 @@ class ExamplePlugin {
     this.actions = {};
   }
 }
-export const plugin = ExamplePlugin;
+export const schema = ${JSON.stringify({
+  type: "object",
+  properties: {
+    endpoint: { type: "string", minLength: 1 },
+    api_key: { type: "string", writeOnly: true },
+    timeout_ms: { type: "integer", minimum: 1000 },
+  },
+  required: ["endpoint", "timeout_ms"],
+  additionalProperties: false,
+})};
+export function setup(context) {
+  return new ExamplePlugin(context.profile);
+}
 `);
   if (input.source_config) {
     fs.writeFileSync(path.join(root, "config.toml"), input.source_config);
@@ -109,7 +115,7 @@ test("Agent 文件定义与 Workspace 数据库索引独立管理", async () => 
       execution: { type: "api", model_id: "model_a" },
       instruction: "You are File Agent.",
     });
-    plugins.save_plugin_profile("chat", "file_agent", { channels: [] });
+    await plugins.save_plugin_profile("chat", "file_agent", { channels: [] });
     plugins.set_agent_plugin_reference({
       agent_id: "file_agent",
       plugin_id: "chat",
@@ -216,7 +222,7 @@ test("Agent HTTP Bearer Token 按 Agent 隔离", async () => {
   }
 });
 
-test("第三方 Plugin 使用 definition ID 目录和单 constructor", async () => {
+test("第三方 Plugin 使用 definition ID 目录和 setup 协议", async () => {
   const platform_root = create_temp_root();
   const plugin_source = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
@@ -235,16 +241,11 @@ test("第三方 Plugin 使用 definition ID 目录和单 constructor", async () 
     agents.create_agent_config({ agent_id: "plugin_agent" });
     const installed = await installer.install_plugin(plugin_source);
     assert.equal(installed.id, "example");
-    assert.equal(installed.entry, "dist/index.js");
+    assert.equal(installed.setup, "dist/setup.js");
     assert.match(installed.integrity, /^sha256-[a-f0-9]{64}$/u);
-    assert.equal(installed.config.schema.properties.api_key.writeOnly, true);
-    assert.deepEqual(installed.config.defaults, {
-      endpoint: "https://example.com",
-      timeout_ms: 10000,
-    });
     const plugin_dir = path.join(platform_root, "plugins", "example");
     assert.equal(fs.existsSync(path.join(plugin_dir, "plugin.json")), true);
-    assert.equal(fs.existsSync(path.join(plugin_dir, "dist", "index.js")), true);
+    assert.equal(fs.existsSync(path.join(plugin_dir, "dist", "setup.js")), true);
     assert.equal(fs.existsSync(path.join(plugin_dir, "artifact")), false);
     assert.equal(fs.existsSync(path.join(plugin_dir, "src")), false);
     assert.equal(fs.existsSync(path.join(plugin_dir, "package.json")), true);
@@ -252,11 +253,11 @@ test("第三方 Plugin 使用 definition ID 目录和单 constructor", async () 
     assert.equal(fs.existsSync(path.join(plugin_dir, "tsconfig.json")), false);
     assert.equal(fs.existsSync(path.join(plugin_dir, "tsup.config.ts")), false);
 
-    assert.throws(
+    await assert.rejects(
       () => plugins.save_plugin_profile("example", "default", {}),
       /required property 'endpoint'/u,
     );
-    plugins.save_plugin_profile("example", "default", {
+    await plugins.save_plugin_profile("example", "default", {
       endpoint: "https://example.com",
       api_key: "plain-secret",
       timeout_ms: 10000,
@@ -270,14 +271,25 @@ test("第三方 Plugin 使用 definition ID 目录和单 constructor", async () 
     const data = local_data.create_cli_local_data();
     try {
       const loader = assembly.create_cli_plugin_loader({ plugin_repository: data.plugins });
-      const runtime_plugins = await loader.create_plugins(data.agents.get("plugin_agent"));
+      const runtime_plugins = await loader.create_plugins(
+        data.agents.get("plugin_agent"),
+        create_test_plugin_host_context(platform_root),
+      );
       assert.equal(runtime_plugins.length, 1);
       assert.equal(runtime_plugins[0].name, "example");
       assert.equal(runtime_plugins[0].description, "https://example.com");
       assert.equal(runtime_plugins[0].timeout_ms, 10000);
-      fs.appendFileSync(path.join(plugin_dir, "dist", "index.js"), "\n// tampered\n");
+      fs.appendFileSync(path.join(plugin_dir, "dist", "setup.js"), "\n// tampered\n");
+      const catalog = await import("../bin/city/process/plugin/PluginCatalog.js");
       await assert.rejects(
-        () => loader.create_plugins(data.agents.get("plugin_agent")),
+        () => catalog.resolve_plugin_catalog_item("example"),
+        /integrity check failed/u,
+      );
+      await assert.rejects(
+        () => loader.create_plugins(
+          data.agents.get("plugin_agent"),
+          create_test_plugin_host_context(platform_root),
+        ),
         /integrity check failed/u,
       );
     } finally {
@@ -351,7 +363,7 @@ test("第三方 Plugin 必须提供 README.md", async () => {
   }
 });
 
-test("Plugin 安装拒绝内置 ID、非法清单与逃逸入口", async () => {
+test("Plugin 安装拒绝内置 ID、非法清单与逃逸 setup", async () => {
   const platform_root = create_temp_root();
   const plugin_source = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
@@ -366,9 +378,9 @@ test("Plugin 安装拒绝内置 ID、非法清单与逃逸入口", async () => {
     write_plugin_source(plugin_source, {
       extra_manifest: { config: { schema: { type: "invalid" } } },
     });
-    await assert.rejects(() => installer.install_plugin(plugin_source), /Invalid Plugin config schema/u);
+    await assert.rejects(() => installer.install_plugin(plugin_source), /unknown field: config/u);
 
-    write_plugin_source(plugin_source, { entry: "../outside.js" });
+    write_plugin_source(plugin_source, { setup: "../outside.js" });
     await assert.rejects(() => installer.install_plugin(plugin_source), /stay inside the Plugin directory/u);
 
     write_plugin_source(plugin_source);
@@ -380,11 +392,11 @@ test("Plugin 安装拒绝内置 ID、非法清单与逃逸入口", async () => {
 
     write_plugin_source(plugin_source);
     fs.renameSync(
-      path.join(plugin_source, "dist", "index.js"),
+      path.join(plugin_source, "dist", "setup.js"),
       path.join(plugin_source, "dist", "real.js"),
     );
-    fs.symlinkSync("real.js", path.join(plugin_source, "dist", "index.js"));
-    await assert.rejects(() => installer.install_plugin(plugin_source), /entry cannot use symlinks/u);
+    fs.symlinkSync("real.js", path.join(plugin_source, "dist", "setup.js"));
+    await assert.rejects(() => installer.install_plugin(plugin_source), /setup cannot use symlinks/u);
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });
@@ -392,13 +404,13 @@ test("Plugin 安装拒绝内置 ID、非法清单与逃逸入口", async () => {
   }
 });
 
-test("Plugin 安装不执行入口模块", async () => {
+test("Plugin 安装不执行 setup 模块", async () => {
   const platform_root = create_temp_root();
   const plugin_source = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
     write_plugin_source(plugin_source, {
-      module_source: 'throw new Error("entry executed");',
+      module_source: 'throw new Error("setup executed");',
     });
     const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
     const agents = await import("../bin/city/process/registry/AgentConfigRepository.js");
@@ -415,12 +427,43 @@ test("Plugin 安装不执行入口模块", async () => {
     try {
       const loader = assembly.create_cli_plugin_loader({ plugin_repository: data.plugins });
       await assert.rejects(
-        () => loader.create_plugins(data.agents.get("lazy_plugin_agent")),
-        /entry executed/u,
+        () => loader.create_plugins(
+          data.agents.get("lazy_plugin_agent"),
+          create_test_plugin_host_context(platform_root),
+        ),
+        /setup executed/u,
       );
     } finally {
       data.database.close();
     }
+  } finally {
+    delete process.env.DC_PLATFORM_ROOT;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+    fs.rmSync(plugin_source, { recursive: true, force: true });
+  }
+});
+
+test("Plugin 配置只读取 schema 而不调用 setup", async () => {
+  const platform_root = create_temp_root();
+  const plugin_source = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  try {
+    write_plugin_source(plugin_source, {
+      module_source: `
+export const schema = {
+  type: "object",
+  properties: {},
+  additionalProperties: false,
+};
+export function setup() {
+  throw new Error("setup must not run while configuring");
+}
+`,
+    });
+    const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
+    const plugins = await import("../bin/city/process/registry/PluginRepository.js");
+    await installer.install_plugin(plugin_source);
+    await assert.doesNotReject(() => plugins.save_plugin_profile("example", "default", {}));
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });
@@ -441,7 +484,7 @@ test("Plugin 实例 ID 必须匹配 plugin.json", async () => {
     const assembly = await import("../bin/city/runtime/AgentAssembly.js");
     await installer.install_plugin(plugin_source);
     agents.create_agent_config({ agent_id: "mismatch_agent" });
-    plugins.save_plugin_profile("declared", "default", {
+    await plugins.save_plugin_profile("declared", "default", {
       endpoint: "https://example.com",
       timeout_ms: 10000,
     });
@@ -450,7 +493,10 @@ test("Plugin 实例 ID 必须匹配 plugin.json", async () => {
     try {
       const loader = assembly.create_cli_plugin_loader({ plugin_repository: data.plugins });
       await assert.rejects(
-        () => loader.create_plugins(data.agents.get("mismatch_agent")),
+        () => loader.create_plugins(
+          data.agents.get("mismatch_agent"),
+          create_test_plugin_host_context(platform_root),
+        ),
         /instance ID does not match definition/u,
       );
     } finally {
@@ -468,7 +514,7 @@ test("内建 Plugin Catalog 暴露 profile Schema", async () => {
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
     const catalog = await import("../bin/city/process/plugin/PluginCatalog.js");
-    const chat = catalog.get_plugin_catalog_item("chat");
+    const chat = await catalog.resolve_plugin_catalog_item("chat");
     assert.equal(chat.plugin_id, "chat");
     assert.equal(chat.source, "builtin");
     assert.equal(chat.config_schema.properties.channels.type, "array");
@@ -497,7 +543,7 @@ test("内建 Chat Plugin 从 Agent 选择的 TOML profile 装配", async () => {
     const local_data = await import("../bin/city/runtime/LocalData.js");
     const assembly = await import("../bin/city/runtime/AgentAssembly.js");
     agents.create_agent_config({ agent_id: "chat_agent" });
-    plugins.save_plugin_profile("chat", "primary", {
+    await plugins.save_plugin_profile("chat", "primary", {
       queue: { max_concurrency: 5 },
       channels: [{
         id: "telegram_primary",
@@ -514,7 +560,10 @@ test("内建 Chat Plugin 从 Agent 选择的 TOML profile 装配", async () => {
     const data = local_data.create_cli_local_data();
     try {
       const loader = assembly.create_cli_plugin_loader({ plugin_repository: data.plugins });
-      const [chat] = await loader.create_plugins(data.agents.get("chat_agent"));
+      const [chat] = await loader.create_plugins(
+        data.agents.get("chat_agent"),
+        create_test_plugin_host_context(platform_root),
+      );
       assert.equal(chat.get_channel_id({}, "telegram"), "telegram_primary");
       assert.deepEqual(chat.getQueueWorkerConfig({}), { max_concurrency: 5 });
       assert.equal(chat.resolveChannelAccount({}, "telegram").bot_token, "plain-token");
