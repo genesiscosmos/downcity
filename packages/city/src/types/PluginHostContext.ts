@@ -25,7 +25,7 @@ export interface PluginHostContext {
   /** 当前 Embassy 用户客户端；没有登录态的离线装配可以缺省。 */
   readonly embassy?: Embassy;
 
-  /** Plugin 私有数据目录。 */
+  /** Plugin 运行时私有数据目录；不用于存放 City 管理的 profile 配置。 */
   readonly data_path: string;
 
   /** City 提供的宿主日志器。 */

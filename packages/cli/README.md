@@ -38,7 +38,7 @@ CLI 从本地产品配置装配的 Agent 默认启用 `ask_question` Tool。使�
 `city agent chat <agent_id>` 交互时，模型可以在缺少关键信息时显示文本、单选或多选问题；
 回答会通过 Session Interaction 提交，并在同一轮模型执行中继续处理。
 
-Agent 定义保存在 `~/.downcity/agents/<agent_id>/agent.json`，主体指令保存在同目录的 `SOUL.md`。Plugin 以稳定 ID 使用 `~/.downcity/plugins/<plugin_id>/`，明文 profile 位于 `config.toml`；第三方 Plugin 的安装目录只保留唯一 `plugin.json`、建立 ESM 边界的 `package.json` 与自包含入口，不保留源码和构建配置。`downcity.db` 只保存 Workspace 索引、Token 与平台状态。Agent 与 Workspace 不绑定，同一个 Agent 可以进入多个 Workspace；Agent 在 `agent.json` 中注册 Plugin 并选择可选 profile。CLI daemon 和 Desktop 各自创建独立的 City 实例，AgentWorkspace 状态统一保存在 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`，项目目录不创建 `.downcity`。
+Agent 定义保存在 `~/.downcity/agents/<agent_id>/agent.json`，主体指令保存在同目录的 `SOUL.md`。Plugin 以稳定 ID 使用 `~/.downcity/plugins/<plugin_id>/`，明文 profile 位于全局 `config.toml`；多个 Agent 可以引用同一个 profile。第三方 Plugin 的安装目录只保留唯一 `plugin.json`、建立 ESM 边界的 `package.json` 与自包含入口，不保留源码和构建配置。Plugin 运行时状态和缓存由宿主放入 Agent/Workspace 的运行时目录，不写入 Plugin 配置目录。`downcity.db` 只保存 Workspace 索引、Token 与平台状态。Agent 与 Workspace 不绑定，同一个 Agent 可以进入多个 Workspace；Agent 在 `agent.json` 中注册 Plugin 并选择可选 profile。CLI daemon 和 Desktop 各自创建独立的 City 实例，AgentWorkspace 状态统一保存在 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`，项目目录不创建 `.downcity`。
 
 CLI City 只维护一个 daemon，并分别监听一个 HTTP 端口和一个原生 TCP RPC 端口。两种协议都按 `agent_id` 路由，不为每个 Agent 分配独立端口。
 

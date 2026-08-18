@@ -178,7 +178,7 @@ example-plugin/
 ├── package.json
 ├── README.md
 ├── icon.png
-├── config.toml                 # 宿主保存的配置，可选
+├── config.toml                 # City 级 Plugin profile 配置，可选
 └── dist/
     └── setup.js
 ```
@@ -253,7 +253,7 @@ export interface PluginHostContext {
   /** 当前用户的 Embassy 访问能力。 */
   readonly embassy?: Embassy;
 
-  /** Plugin 私有数据目录。 */
+  /** Plugin 运行时私有数据目录，不用于存放 City 管理的 profile 配置。 */
   readonly data_path: string;
 
   /** City 提供的日志器。 */
@@ -344,7 +344,7 @@ Schema 不替代 Plugin 内部的领域校验。Plugin 仍然必须在 `setup` �
 }
 ```
 
-Profile 数据由 City 持久化，具体格式不是 SDK Plugin 协议的一部分。当前 CLI 可以继续使用 `config.toml` 作为本地存储，但传给 `setup` 的必须是已经解析后的对象。
+Profile 数据由 City 持久化，具体格式不是 SDK Plugin 协议的一部分。当前 CLI 可以继续使用 `config.toml` 作为本地存储，但传给 `setup` 的必须是已经解析后的对象。`config.toml` 属于 Plugin 的 City 级配置，同一个 Plugin 的多个 Agent 可以引用同一个 profile；Agent 只在自己的 `agent.json` 中保存 profile 引用，不复制或拥有这份配置。
 
 ## 7. 安装与配置
 
@@ -402,10 +402,12 @@ const agent = new Agent({
 
 Agent 只持有 Plugin 实例，不关心实例来自 SDK、CLI 还是远程安装。
 
+配置与运行时数据必须分离。City 从全局的 `~/.downcity/plugins/<plugin_id>/config.toml` 读取 profile，并在每次装配时把 profile 快照传给 `setup`；`context.data_path` 只表示 Plugin 的运行时私有目录。CLI 和 Desktop 可以把这个目录放在 Agent（以及未来的 Workspace）边界内，因此不同 Agent 不共享运行时状态，但仍然共享同一份 City 级 profile 配置。
+
 每个 Agent 必须拥有独立的：
 
 - Plugin 实例；
-- Plugin 配置快照；
+- Plugin profile 快照；
 - Plugin 运行状态；
 - Plugin 私有数据路径；
 - Plugin lifecycle；
@@ -544,7 +546,7 @@ const plugin = await module.setup({
   plugin_id,
   profile,
   embassy,
-  data_path,
+  data_path, // 运行时私有目录，不是 profile 配置目录
   logger,
   extensions,
 });

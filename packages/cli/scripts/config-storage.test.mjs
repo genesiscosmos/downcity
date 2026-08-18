@@ -12,11 +12,11 @@ function create_temp_root() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "downcity-config-storage-"));
 }
 
-function create_test_plugin_host_context(root) {
+function create_test_plugin_host_context(root, agent_id = "test-agent") {
   return ({ plugin_id, profile }) => ({
     plugin_id,
     profile,
-    data_path: path.join(root, "agent-data", plugin_id),
+    data_path: path.join(root, "agents", agent_id, "plugins", plugin_id),
     logger: {},
     extensions: {},
   });
@@ -307,6 +307,84 @@ test("第三方 Plugin 使用 definition ID 目录和 setup 协议", async () =>
     plugins.remove_agent_plugin_reference("plugin_agent", "example");
     plugins.remove_installed_plugin("example");
     assert.equal(fs.existsSync(plugin_dir), false);
+  } finally {
+    delete process.env.DC_PLATFORM_ROOT;
+    fs.rmSync(platform_root, { recursive: true, force: true });
+    fs.rmSync(plugin_source, { recursive: true, force: true });
+  }
+});
+
+test("Plugin profile 在 City 级共享而运行时目录按 Agent 隔离", async () => {
+  const platform_root = create_temp_root();
+  const plugin_source = create_temp_root();
+  process.env.DC_PLATFORM_ROOT = platform_root;
+  try {
+    write_plugin_source(plugin_source);
+    const agents = await import("../bin/city/process/registry/AgentConfigRepository.js");
+    const plugins = await import("../bin/city/process/registry/PluginRepository.js");
+    const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
+    const local_data = await import("../bin/city/runtime/LocalData.js");
+    const assembly = await import("../bin/city/runtime/AgentAssembly.js");
+    agents.create_agent_config({ agent_id: "agent_one" });
+    agents.create_agent_config({ agent_id: "agent_two" });
+    await installer.install_plugin(plugin_source);
+    await plugins.save_plugin_profile("example", "shared", {
+      endpoint: "https://example.com",
+      timeout_ms: 10000,
+    });
+    for (const agent_id of ["agent_one", "agent_two"]) {
+      plugins.set_agent_plugin_reference({
+        agent_id,
+        plugin_id: "example",
+        profile: "shared",
+      });
+    }
+
+    const first_contexts = [];
+    const second_contexts = [];
+    const data = local_data.create_cli_local_data();
+    try {
+      const loader = assembly.create_cli_plugin_loader({ plugin_repository: data.plugins });
+      await loader.create_plugins(
+        data.agents.get("agent_one"),
+        (input) => {
+          const context = create_test_plugin_host_context(platform_root, "agent_one")(input);
+          first_contexts.push(context);
+          return context;
+        },
+      );
+      await loader.create_plugins(
+        data.agents.get("agent_two"),
+        (input) => {
+          const context = create_test_plugin_host_context(platform_root, "agent_two")(input);
+          second_contexts.push(context);
+          return context;
+        },
+      );
+    } finally {
+      data.database.close();
+    }
+
+    assert.equal(first_contexts.length, 1);
+    assert.equal(second_contexts.length, 1);
+    assert.deepEqual(first_contexts[0].profile, second_contexts[0].profile);
+    assert.notEqual(first_contexts[0].data_path, second_contexts[0].data_path);
+    assert.equal(
+      fs.existsSync(path.join(platform_root, "plugins", "example", "config.toml")),
+      true,
+    );
+    assert.equal(
+      fs.existsSync(path.join(platform_root, "agents", "agent_one", "plugins", "example", "config.toml")),
+      false,
+    );
+    assert.equal(
+      fs.existsSync(path.join(platform_root, "agents", "agent_two", "plugins", "example", "config.toml")),
+      false,
+    );
+    assert.match(
+      fs.readFileSync(path.join(platform_root, "plugins", "example", "config.toml"), "utf8"),
+      /\[profiles\.shared\]/u,
+    );
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });

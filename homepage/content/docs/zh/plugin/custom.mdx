@@ -108,7 +108,7 @@ export function setup(context: PluginHostContext): GithubPlugin {
 }
 ```
 
-`setup` 是 City 的装配边界，不是安装脚本，也不是 Plugin 生命周期。每次调用都必须创建新的 Plugin 实例；`context.embassy`、`context.data_path` 和 `context.extensions` 只代表当前宿主提供的能力。需要登录态的 Plugin 应显式检查 `context.embassy` 是否存在。
+`setup` 是 City 的装配边界，不是安装脚本，也不是 Plugin 生命周期。每次调用都必须创建新的 Plugin 实例；`context.embassy`、`context.data_path` 和 `context.extensions` 只代表当前宿主提供的能力。`context.data_path` 是运行时私有目录，不用于保存 profile 配置；profile 由 City 在 `~/.downcity/plugins/<plugin_id>/config.toml` 中统一管理，多个 Agent 可以引用同一个 profile。需要登录态的 Plugin 应显式检查 `context.embassy` 是否存在。
 
 `icon` 可选，支持 `http://`、`https://` 远程地址，或 Plugin 根目录内的相对路径。相对路径对应的文件会随安装复制，并且不能使用 symlink 或路径逃逸。
 
@@ -168,7 +168,7 @@ export function setup(context: PluginHostContext): GithubPlugin {
 └── dist/setup.js
 ```
 
-`config.toml` 只保存命名的明文 profile 值，文件权限为 `0600`。CLI 与 Desktop 在需要配置或装配时加载 `setup` 模块的 `schema`，构建表单并脱敏 `writeOnly` 字段。普通安装和 Plugin 列表不会调用 `setup()`。
+`config.toml` 只保存命名的明文 profile 值，文件权限为 `0600`。它属于 Plugin 的全局配置，不复制到 Agent 目录。CLI 与 Desktop 在需要配置或装配时加载 `setup` 模块的 `schema`，构建表单并脱敏 `writeOnly` 字段。普通安装和 Plugin 列表不会调用 `setup()`。Plugin 的运行时状态和缓存使用 `context.data_path`，宿主可以按 Agent 或 Workspace 隔离。
 
 ```toml
 schema_version = 1

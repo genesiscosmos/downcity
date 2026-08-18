@@ -227,7 +227,7 @@ Agent 不持有单一 Workspace。`AgentWorkspace` 是 Agent 进入一个 Worksp
 ~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/
 ```
 
-该目录包含 Session、日志、Schedule、Plugin 状态与缓存。`AgentWorkspace.data_path` 和 `PluginContext.data_path` 指向同一个 AgentWorkspace 数据根；`PluginContext.workspace_path` 始终只指向真实项目。
+该目录包含 Session、日志、Schedule、Plugin 状态与缓存。`AgentWorkspace.data_path` 和运行时 `PluginContext.data_path` 指向同一个 AgentWorkspace 数据根；`PluginContext.workspace_path` 始终只指向真实项目。Plugin 的 City 级 profile 配置不进入该目录，仍保存在 `~/.downcity/plugins/<plugin_id>/config.toml`。
 
 Agent 不负责：
 
@@ -275,13 +275,15 @@ Plugin 生命周期分为 Agent 级 `start/stop` 和可选的 Workspace 级 `ent
 - `agent.json`：身份、版本、默认执行配置和以 Plugin ID 为键的注册引用。
 - `SOUL.md`：Agent 跨 Workspace 复用的主体指令。
 
-Plugin 以全局稳定 ID 为身份，定义与配置保存在 `~/.downcity/plugins/<plugin_id>/`：
+Plugin 以全局稳定 ID 为身份，定义与 City 级配置保存在 `~/.downcity/plugins/<plugin_id>/`：
 
 - `config.toml`：Plugin 自己拥有的明文 profile 配置，目录权限为 `0700`、文件权限为 `0600`。
 - `plugin.json`：仅第三方 Plugin 使用，是静态定义、图标地址、setup 入口与安装来源信息的唯一事实源；配置 Schema 由 setup 模块导出。
 - `package.json`：仅第三方 Plugin 使用，声明 `"type": "module"` 并建立明确的 ESM package 边界。
 - `README.md`：第三方 Plugin 的必需用户文档，安装后保留在 Plugin ID 目录。
 - 自包含 setup 入口与本地图标：安装 `plugin.json.setup` 指向的单个入口，以及 `icon` 指向的 Plugin 根目录内相对资源；源码、TypeScript 配置和构建工具配置不进入 Plugin ID 目录。
+
+`config.toml` 是所有 Agent 共享的 Plugin 配置源；Agent 只保存 profile 引用。Plugin 运行时状态、缓存和私有文件使用 `PluginContext.data_path`，由宿主按 Agent 或 Workspace 隔离。
 
 Agent 通过 `agent.json` 选择 Plugin 与可选 profile。Plugin profile 可以包含渠道、账号、端点等 Plugin 自己定义的结构；配置 Schema 由第三方 setup 模块导出，TOML 只保存 profile 值，TypeScript 类型由 Plugin 代码独立维护。框架不定义 Binding、Resource 或 Installation 持久化领域。内置 Plugin 由宿主注册，第三方 Plugin 由 `plugin.json.setup` 导出的 `schema` 与 `setup(context)` 进入 Loader；setup 每次创建一个新的 Plugin 实例，Plugin Class 的 constructor 参数完全由作者决定。
 

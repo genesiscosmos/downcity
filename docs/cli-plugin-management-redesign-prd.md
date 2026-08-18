@@ -27,6 +27,8 @@
 
 第三方 Plugin 的定义、ESM package 边界和自包含 setup 入口直接位于 `<plugin_id>/`，源码、TypeScript 配置和具体构建工具不进入安装目录；内置 Plugin 的注册由宿主注入，但配置仍使用相同的 `plugins/<plugin_id>/config.toml`。第三方 setup 模块导出 `schema` 与 `setup(context)`，内置 Plugin 由宿主直接注册。
 
+`config.toml` 是 City 级的 Plugin 配置，不属于某个 Agent。Agent 只在自己的 `agent.json` 中保存 Plugin ID 和 profile 引用；多个 Agent 可以引用同一个 profile。Plugin 的运行时状态、缓存和私有文件由 `PluginHostContext.data_path` 提供，宿主可以按 Agent 或 Workspace 隔离。
+
 ## 3. Agent 定义
 
 ```json
@@ -100,7 +102,7 @@ export function setup(context: PluginHostContext): GithubPlugin {
 
 Plugin 代码单独声明 TypeScript 配置类型，运行时协议以 setup 模块 `schema` 为准。setup 必须是单个自包含 ESM 文件；`package.json` 负责建立明确的 ESM package 边界。安装器不导入或执行第三方 setup，也不复制源码与开发文件。
 
-安装目标固定为 `plugins/<definition.id>/`。来源目录必须包含 `README.md`；安装器保留安装后的 `plugin.json`、`package.json`、`README.md`、自包含入口、可选本地图标与本地 `config.toml`。`icon` 支持 `http(s)` URL 或 Plugin 根目录内的相对路径；本地资源必须经过路径和 symlink 校验。随机目录只用于 staging；更新原子替换整个 Plugin 目录并保留 `config.toml`。新 Schema 无法校验已有 profile 时拒绝更新；仍被 Agent 引用时拒绝卸载。
+安装目标固定为 `plugins/<definition.id>/`。来源目录必须包含 `README.md`；安装器保留安装后的 `plugin.json`、`package.json`、`README.md`、自包含入口、可选本地图标与本地 `config.toml`。`config.toml` 始终保留在 Plugin 全局目录，不复制到 Agent 目录。`icon` 支持 `http(s)` URL 或 Plugin 根目录内的相对路径；本地资源必须经过路径和 symlink 校验。随机目录只用于 staging；更新原子替换整个 Plugin 目录并保留 `config.toml`。新 Schema 无法校验已有 profile 时拒绝更新；仍被 Agent 引用时拒绝卸载。
 
 ## 6. 数据库边界
 
