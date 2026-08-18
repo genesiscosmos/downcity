@@ -1,11 +1,9 @@
 /** Plugin manifest、Agent 引用与 Profile 配置编辑页。 */
 import { useCallback, useEffect, useState } from "react";
-import { motion } from "framer-motion";
 import { TbChevronRight, TbComponents, TbSettings, TbTrash } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
-import { use_horizontal_resize } from "@/hooks/use_horizontal_resize";
+import { DetailEditorSidebar } from "@/components/DetailEditorSidebar";
 import { MainViewBody, MainViewLayout } from "@/layouts/MainViewLayout";
-import { SHELL_PANEL_TRANSITION } from "@/layouts/shellMotion";
 import { PluginConfigForm } from "@/lib/plugin/PluginConfigForm";
 import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopPluginDefinition, DesktopPluginSummary } from "@common/types/DesktopApi";
@@ -49,13 +47,11 @@ export function PluginView({ plugin, controller }: PluginViewProps) {
 /** Plugin 页面右侧的 Profile 编辑容器。 */
 function PluginEditor(props: { /** 完整定义。 */ definition?: DesktopPluginDefinition; /** 当前 Profile ID。 */ profile_id: string; /** 配置草稿。 */ draft: JsonObject; /** 是否读取中。 */ loading: boolean; /** 是否提交中。 */ saving: boolean; /** 错误文本。 */ error: string; /** 选择 Profile。 */ select_profile(value: string): void; /** 修改 ID。 */ set_profile_id(value: string): void; /** 修改草稿。 */ set_draft(value: JsonObject): void; /** 保存。 */ save(): Promise<void>; /** 删除。 */ remove(): Promise<void>; /** 重载。 */ reload(): Promise<void>; /** 关闭。 */ close(): void }) {
   const { definition, profile_id, draft, loading, saving, error, select_profile, set_profile_id, set_draft, save, remove, reload, close } = props;
-  const [stored_width, set_stored_width] = useState(() => Number(localStorage.getItem("downcity.plugin_editor_width")) || 420);
-  const { current_width, is_resizing, handle_resize_start } = use_horizontal_resize({ stored_width, min_width: 360, max_width: 600, default_width: 420, resize_edge: "left", on_width_change: (width) => { set_stored_width(width); localStorage.setItem("downcity.plugin_editor_width", String(width)); } });
   const existing = Boolean(profile_id && definition?.profiles[profile_id]);
-  return <motion.aside initial={false} animate={{ width: current_width }} transition={{ ...SHELL_PANEL_TRANSITION, duration: is_resizing ? 0 : SHELL_PANEL_TRANSITION.duration }} className="relative flex h-full min-h-0 flex-none overflow-hidden bg-muted"><div className="absolute inset-y-0 right-0 flex h-full flex-col border-l border-border/45 bg-muted" style={{ width: current_width }}><div onMouseDown={handle_resize_start} className="absolute -left-[3px] top-0 z-10 h-full w-1.5 cursor-ew-resize" /><div className="header-drag-region flex h-10 shrink-0 items-center gap-2 px-3"><h2 className="min-w-0 flex-1 truncate text-xs font-semibold">Plugin Configuration</h2><Button onClick={close}>关闭</Button></div><div className="min-h-0 flex-1 overflow-y-auto border-t border-border/35 p-3">
+  return <DetailEditorSidebar title="Plugin Configuration" storage_key="downcity.plugin_editor_width" default_width={420} on_close={close} footer={<div className="flex flex-col items-center gap-2"><Button size="full" variant="primary" className="h-9 justify-center text-xs" disabled={!definition?.config_schema || !profile_id.trim() || loading || saving} onClick={() => void save()}>{saving ? "保存中…" : "保存"}</Button><Button size="full" className="h-9 justify-center text-xs" disabled={loading || saving} onClick={() => void reload()}>取消</Button></div>}>
     {loading && !definition ? <div className="py-10 text-center text-xs text-muted-foreground">加载中…</div> : null}
     {definition ? <><div className="mb-4 flex gap-2"><select className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 font-mono text-xs" value={existing ? profile_id : ""} onChange={(event) => select_profile(event.target.value)}><option value="">新建 Profile</option>{Object.keys(definition.profiles).map((id) => <option key={id} value={id}>{id}</option>)}</select>{existing ? <Button aria-label="删除 Profile" title="删除 Profile" disabled={saving} onClick={() => void remove()}><TbTrash /></Button> : null}</div>{!existing ? <input autoFocus className="mb-4 h-8 w-full rounded-lg border border-input bg-background px-2.5 font-mono text-xs" value={profile_id} placeholder="Profile ID" onChange={(event) => set_profile_id(event.target.value)} /> : null}{definition.config_schema ? <PluginConfigForm schema={definition.config_schema} value={draft} on_change={set_draft} /> : <div className="py-10 text-center text-xs text-muted-foreground">此 Plugin 不需要配置</div>}</> : null}{error ? <div className="mt-3 text-[0.6875rem] leading-4 text-destructive">{error}</div> : null}
-  </div><div className="flex shrink-0 justify-end gap-2 border-t border-border/35 p-3"><Button disabled={loading || saving} onClick={() => void reload()}>取消</Button><Button variant="primary" disabled={!definition?.config_schema || !profile_id.trim() || loading || saving} onClick={() => void save()}>{saving ? "保存中…" : "保存"}</Button></div></div></motion.aside>;
+  </DetailEditorSidebar>;
 }
 
 /** 设置式信息分组。 */

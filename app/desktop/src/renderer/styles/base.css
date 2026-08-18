@@ -70,6 +70,40 @@
   -webkit-app-region: drag;
 }
 
+.desktop-dialog-backdrop {
+  opacity: 1;
+  transition: opacity 200ms ease-out;
+  animation: desktop-dialog-backdrop-in 200ms ease-out both;
+}
+
+.desktop-dialog-backdrop[data-starting-style],
+.desktop-dialog-backdrop[data-ending-style] {
+  opacity: 0;
+}
+
+.desktop-dialog-popup {
+  opacity: 1;
+  scale: 1;
+  transition: opacity 200ms ease-out, scale 200ms ease-out;
+  animation: desktop-dialog-popup-in 200ms ease-out both;
+}
+
+.desktop-dialog-popup[data-starting-style],
+.desktop-dialog-popup[data-ending-style] {
+  opacity: 0;
+  scale: 0.97;
+}
+
+@keyframes desktop-dialog-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes desktop-dialog-popup-in {
+  from { opacity: 0; scale: 0.97; }
+  to { opacity: 1; scale: 1; }
+}
+
 button,
 input,
 select,
@@ -132,14 +166,4 @@ a,
   float: left;
   height: 0;
   pointer-events: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
 }

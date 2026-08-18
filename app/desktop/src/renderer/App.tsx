@@ -95,7 +95,6 @@ export function App() {
       workspaces={controller.workspaces}
       plugins={controller.plugins}
       sessions={(controller.sessions_by_workspace[controller.active_workspace_id] ?? []).filter((item) => item.agent_id === selected_agent.agent_id).map((item) => item.session)}
-      create_session={() => controller.create_session(controller.active_workspace_id, selected_agent.agent_id)}
       select_session={(session_id) => controller.select_session(controller.active_workspace_id, selected_agent.agent_id, session_id)}
       controller={controller}
     />;

@@ -2,8 +2,9 @@
 
 import { useCallback, useState } from "react";
 import { motion } from "framer-motion";
-import { TbFolderPlus, TbPlus, TbSettings, TbUser } from "react-icons/tb";
+import { TbFolderPlus, TbGhost3, TbPlus, TbSettings, TbUser } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { use_horizontal_resize } from "@/hooks/use_horizontal_resize";
 import type { DesktopViewController } from "@/types/DesktopView";
 import { SHELL_PANEL_TRANSITION, SHELL_SIDEBAR_DEFAULT_WIDTH, SHELL_SIDEBAR_MAX_WIDTH, SHELL_SIDEBAR_MIN_WIDTH } from "./shellMotion";
@@ -61,7 +62,7 @@ export function NavigationSidebar({ controller, open_create_agent, open_create_w
       <SidebarViewSwitcher active_mode={controller.sidebar_mode} on_change={controller.set_sidebar_mode} />
       <div className="min-w-0 flex-1" />
       {controller.sidebar_mode === "chat" ? <Button size="icon" title="添加 Workspace" aria-label="添加 Workspace" onClick={open_create_workspace}><TbFolderPlus /></Button> : null}
-      {controller.sidebar_mode === "agents" ? <Button size="icon" title="创建 Agent" aria-label="创建 Agent" onClick={() => open_create_agent()}><TbPlus /></Button> : null}
+      {controller.sidebar_mode === "agents" ? <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" title="创建 Agent" aria-label="创建 Agent"><TbPlus /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" sideOffset={4}><DropdownMenuItem onClick={() => open_create_agent()}><TbGhost3 /><span>创建 Agent</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu> : null}
     </div>
     {controller.sidebar_mode === "chat" ? <ChatSidebar controller={controller} open_create_agent={open_create_agent} open_create_workspace={open_create_workspace} /> : null}
     {controller.sidebar_mode === "agents" ? <AgentSidebar controller={controller} open_create_agent={open_create_agent} /> : null}
