@@ -98,8 +98,6 @@ export interface SessionCompactionPlan {
   summary: SessionSegmentSummary;
   /** 当前计划覆盖到的最后一条 Message 标识。 */
   boundary_message_id: string;
-  /** Summary 是否因为模型失败而使用了确定性降级内容。 */
-  used_fallback: boolean;
 }
 
 /** Session 级可替换执行策略。 */

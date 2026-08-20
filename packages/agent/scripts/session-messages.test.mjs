@@ -1604,40 +1604,54 @@ test("Action revision 追加完整快照，读取时只返回最新版本", asyn
 
 test("compact 把 Active 前缀关闭为带累计 Summary 的 Segment", async () => {
   const { recorder, file_path } = await create_recorder("compact-test");
+  const prompts = [];
   for (let index = 1; index <= 6; index += 1) {
     await recorder.append_user_message({
       turn_id: `turn-${String(index)}`,
       input_type: "prompt",
-      parts: [{ part_id: `user-${String(index)}`, type: "text", text: `message ${String(index)}`, state: "done" }],
+      parts: [{
+        part_id: `user-${String(index)}`,
+        type: "text",
+        text: `message ${String(index)}:${index <= 3 ? "x".repeat(8_000) : ""}`,
+        state: "done",
+      }],
     });
   }
   const model = new MockLanguageModelV3({
     modelId: "compact-model",
-    doGenerate: async () => ({
-      content: [{ type: "text", text: "Compact summary" }],
-      finishReason: { unified: "stop", raw: "stop" },
-      usage: {
-        inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
-        outputTokens: { total: 0, text: 0, reasoning: 0 },
-      },
-      warnings: [],
-    }),
+    doGenerate: async (options) => {
+      prompts.push(JSON.stringify(options.prompt));
+      return {
+        content: [{ type: "text", text: "Compact summary" }],
+        finishReason: { unified: "stop", raw: "stop" },
+        usage: {
+          inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 0, text: 0, reasoning: 0 },
+        },
+        warnings: [],
+      };
+    },
   });
   assert.equal(await compact_messages(recorder, "compact-test", model), true);
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0], /message 1/);
+  assert.match(prompts[0], /message 3/);
+  assert.doesNotMatch(prompts[0], /message 4/);
+  assert.doesNotMatch(prompts[0], /message 6/);
   assert.equal((await fs.readFile(file_path, "utf8")).includes("message 1"), false);
   const active = await recorder.list_messages({ include_internal: true });
-  assert.deepEqual(active.items.map((message) => message.sequence), []);
+  assert.deepEqual(active.items.map((message) => message.sequence), [4, 5, 6]);
   assert.equal(active.source, "active");
   assert.equal(active.has_more, true);
   const segment = await recorder.list_messages({
     before_sequence: 7,
     include_internal: true,
   });
-  assert.deepEqual(segment.items.map((message) => message.sequence), [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(segment.items.map((message) => message.sequence), [1, 2, 3]);
   assert.equal(segment.source, "segment");
   assert.equal(
     to_executor_history("compact-test", await recorder.context_snapshot()).length,
-    1,
+    4,
   );
   await assert.rejects(
     recorder.list_messages({ before_sequence: 0 }),
@@ -1789,19 +1803,23 @@ test("连续 Compact 生成按 sequence 连续的 Segment 与累计 Summary", as
   assert.equal(prompts[1].includes("<previous-summary>"), true);
   assert.equal(prompts[1].includes("Summary 1"), true);
   const active = await recorder.list_messages();
-  assert.deepEqual(active.items.map((message) => message.sequence), []);
+  assert.deepEqual(active.items.map((message) => message.sequence), [9, 10, 11, 12]);
   const latest_segment = await recorder.list_messages({ before_sequence: 13 });
-  assert.deepEqual(latest_segment.items.map((message) => message.sequence), [9, 10, 11, 12]);
+  assert.deepEqual(latest_segment.items.map((message) => message.sequence), [5, 6, 7, 8]);
   assert.equal(latest_segment.has_more, true);
   const earliest_segment = await recorder.list_messages({
     before_sequence: latest_segment.start_sequence,
   });
-  assert.deepEqual(earliest_segment.items.map((message) => message.sequence), [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.deepEqual(earliest_segment.items.map((message) => message.sequence), [1, 2, 3, 4]);
   const context = to_executor_history(session_id, await recorder.context_snapshot());
   assert.equal(context[0].parts[0]?.text, "Summary 2");
+  assert.deepEqual(
+    context.slice(1).map((message) => message.parts[0]?.text),
+    ["message 9", "message 10", "message 11", "message 12"],
+  );
 });
 
-test("Summary 生成失败时使用确定性 Summary 完成归档", async () => {
+test("Summary 生成失败时拒绝归档并保留 Active", async () => {
   const session_id = "compact-summary-failure-test";
   const { recorder, file_path } = await create_recorder(session_id);
   for (let index = 1; index <= 6; index += 1) {
@@ -1822,10 +1840,34 @@ test("Summary 生成失败时使用确定性 Summary 完成归档", async () => 
       throw new Error("summary unavailable");
     },
   });
-  assert.equal(await compact_messages(recorder, session_id, model), true);
-  assert.deepEqual((await recorder.list_messages()).items, []);
-  const segment_entries = await fs.readdir(path.join(path.dirname(file_path), "segments"));
-  assert.equal(segment_entries.length, 1);
+  await assert.rejects(
+    compact_messages(recorder, session_id, model),
+    /summary unavailable/,
+  );
+  const empty_summary_model = new MockLanguageModelV3({
+    modelId: "empty-compact-model",
+    doGenerate: async () => ({
+      content: [],
+      finishReason: { unified: "stop", raw: "stop" },
+      usage: {
+        inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
+        outputTokens: { total: 0, text: 0, reasoning: 0 },
+      },
+      warnings: [],
+    }),
+  });
+  await assert.rejects(
+    compact_messages(recorder, session_id, empty_summary_model),
+    /Compaction model returned an empty Summary/,
+  );
+  assert.deepEqual(
+    (await recorder.list_messages()).items.map((message) => message.sequence),
+    [1, 2, 3, 4, 5, 6],
+  );
+  assert.deepEqual(
+    await fs.readdir(path.join(path.dirname(file_path), "segments")),
+    [],
+  );
 });
 
 test("内部上下文读取完整快照并保留第 500 条之后的最新消息", async () => {

@@ -27,16 +27,16 @@ SDK Sessions are persisted under the user-level Workspace data directory. Applic
 
 `active.jsonl` contains only real `SessionMessage` values still in the active window after the latest Compact. It has no fixed message-count or API page-size limit. The SDK does not estimate tokens before a model call. Compact is scheduled only when the Provider's real `usage.totalTokens` (or `inputTokens + outputTokens` when total is unavailable) reaches 95% of the model's configured `context_window`.
 
-During Compact, the SDK first folds reasoning, text, and tool output at part level in the running model context while keeping the latest tool call/result/approval transaction intact. After the Assistant has finished persisting, the current Active is closed as an immutable Segment named by its sequence range. The Segment stores real Messages first and one cumulative Summary footer last:
+During Compact, the SDK selects `floor(n / 2)` of the oldest User and Assistant Messages in Active. It sends only that prefix, together with the previous cumulative Summary when one exists, to one summary-model call. The newer half is not part of the summary input and remains in Active. After the Assistant has finished persisting, the selected prefix is closed as an immutable Segment named by its sequence range. The Segment stores real Messages first and one cumulative Summary footer last:
 
 ```text
 message sequence 1
 ...
-message sequence 900
-summary through sequence 900
+message sequence 450
+summary through sequence 450
 ```
 
-The next Compact might create `901-1500`. Its footer merges the previous Summary with new content from 901-1500, so it cumulatively covers 1-1500. A Summary is not a `SessionMessage`, consumes no sequence, and is never stored in Active.
+The next Compact selects the oldest half of the then-current Active window. Its footer merges the previous Summary with that selected prefix, so the Summary remains cumulative. A Summary is not a `SessionMessage`, consumes no sequence, and is never stored in Active.
 
 The next real usage after Compact validates the result: 50% of `context_window` or less passes; above 50% schedules another deep compact before the next step. If a Provider returns a context-length error without usage, the SDK also forces an in-memory fold and retries.
 
@@ -82,7 +82,7 @@ sequenceDiagram
     Session->>Session: Provider usage reaches 95% of context_window
     Session->>Session: deep compact Parts/Tool transaction before next step
     Session->>Composer: request read-only compaction plan
-    Composer->>Model: old Summary + chunked Active context
+    Composer->>Model: old Summary + oldest 50% of Active context
     Model-->>Composer: new cumulative Summary
     Composer-->>Session: SessionCompactionPlan
     Session->>Messages: commit compaction plan
@@ -96,6 +96,8 @@ sequenceDiagram
 ```
 
 The Composer only reads snapshots and returns model input or a compaction plan. `SessionMessages` owns the actual writes for Messages, Assistant drafts, and Segments.
+
+Summary generation must succeed before a compaction plan can be committed. Provider errors and empty summaries fail Compact without creating a Segment or changing Active history.
 
 ## `assistant_message.json`
 
@@ -111,7 +113,7 @@ When a Session starts or reopens, the SDK also checks the Assistant draft. Exist
 
 - Normal model progression reads only the latest Summary and Active, so it does not grow linearly with total history.
 - Compact triggering uses only real Provider usage and performs no pre-call token estimation.
-- Summary input is chunked to a fixed character bound, so one large Assistant or Tool output cannot bypass folding.
+- Each Compact makes exactly one summary-model call for the selected prefix.
 - Loading older history parses one Segment at a time.
 - Segment files are immutable and their names are the sequence index; no `manifest.json` is required.
 - `fork()` intentionally copies full history and therefore reads every Segment; it is a lower-frequency full-history operation.

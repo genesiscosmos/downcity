@@ -139,19 +139,36 @@ test("Session system 快照与 Custom Composer 的实际模型输入一致", asy
 });
 
 test("Composer compact 只返回计划，不修改 Message 快照", async () => {
+  const prompts = [];
   const model = new MockLanguageModelV3({
     modelId: "composer-compact-model",
-    doGenerate: async () => ({
-      content: [{ type: "text", text: "Composer summary" }],
-      finishReason: { unified: "stop", raw: "stop" },
-      usage: {
-        inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
-        outputTokens: { total: 0, text: 0, reasoning: 0 },
-      },
-      warnings: [],
-    }),
+    doGenerate: async (options) => {
+      prompts.push(JSON.stringify(options.prompt));
+      return {
+        content: [{ type: "text", text: "Composer summary" }],
+        finishReason: { unified: "stop", raw: "stop" },
+        usage: {
+          inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 0, text: 0, reasoning: 0 },
+        },
+        warnings: [],
+      };
+    },
   });
   const input = create_input(model);
+  for (let sequence = 2; sequence <= 3; sequence += 1) {
+    input.history.messages.push({
+      ...structuredClone(input.history.messages[0]),
+      message_id: `user-${String(sequence)}`,
+      sequence,
+      parts: [{
+        part_id: `text-${String(sequence)}`,
+        type: "text",
+        text: `message ${String(sequence)}`,
+        state: "done",
+      }],
+    });
+  }
   const before = structuredClone(input.history);
   const plan = await new DefaultSessionComposer().compact({
     session: input.session,
@@ -161,5 +178,30 @@ test("Composer compact 只返回计划，不修改 Message 快照", async () => 
 
   assert.equal(plan.through_sequence, 1);
   assert.equal(plan.summary.text, "Composer summary");
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0], /hello/);
+  assert.doesNotMatch(prompts[0], /message 2/);
+  assert.doesNotMatch(prompts[0], /message 3/);
   assert.deepEqual(input.history, before);
+});
+
+test("Composer compact 在 Active 少于两条上下文消息时不调用模型", async () => {
+  let generation_count = 0;
+  const model = new MockLanguageModelV3({
+    modelId: "composer-no-compact-model",
+    doGenerate: async () => {
+      generation_count += 1;
+      throw new Error("summary should not run");
+    },
+  });
+  const input = create_input(model);
+
+  const plan = await new DefaultSessionComposer().compact({
+    session: input.session,
+    model: input.state.model,
+    history: input.history,
+  });
+
+  assert.equal(plan, null);
+  assert.equal(generation_count, 0);
 });

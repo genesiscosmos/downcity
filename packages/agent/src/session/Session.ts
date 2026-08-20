@@ -956,9 +956,7 @@ export class Session implements AgentSession {
       await this.emit_action_event({
         id: action_id,
         title: "Session messages compacted",
-        description: plan.used_fallback
-          ? `Closed Active through Message ${plan.boundary_message_id} with deterministic fallback Summary.`
-          : `Closed Active through Message ${plan.boundary_message_id}.`,
+        description: `Closed Active through Message ${plan.boundary_message_id}.`,
         state: "completed",
         ...(turn_id
           ? { turn_id }

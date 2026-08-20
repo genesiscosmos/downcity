@@ -31,13 +31,15 @@ The method is available on both `AgentSession` and `RemoteAgentSession`.
 
 Before compacting during an active turn, the SDK closes the current Assistant draft. After the canonical history is rewritten, the next provider request reloads that history instead of continuing with stale in-memory messages.
 
+Manual and automatic Compact use the same algorithm: select `floor(n / 2)` of the oldest Active User and Assistant Messages, summarize that prefix with exactly one model call, archive it as a Segment, and leave the newer messages in Active.
+
 ## Observing completion
 
-Compaction publishes action messages through the normal Session timeline:
+After summary generation succeeds, the canonical commit publishes action messages through the normal Session timeline:
 
-- `running` while the summary and archive are being prepared
+- `running` while the archive is being committed
 - `completed` after the canonical history has been replaced
-- `failed` when the model, composer, or storage operation fails
+- `failed` when the storage operation fails after the commit starts
 
 If there are no active records, the Session emits a completed action explaining that there was nothing to compact.
 
@@ -48,6 +50,8 @@ The stable Handle result includes:
 - `compacted`: whether a compaction plan was generated and committed
 - `reason`: `compacted | nothing_to_compact | compact_failed`
 - `error`: the failure message, when present
+
+If summary generation fails or returns empty text, Compact returns `compact_failed` directly and leaves Active history unchanged. The SDK never starts the canonical commit, commits a fallback Summary, or reports the operation as successfully compacted.
 
 `subscribe()` still emits `compact` lifecycle mutations and timeline actions for UI state. Application logic should normally await `handle.finished` instead of inferring completion from Action Messages.
 

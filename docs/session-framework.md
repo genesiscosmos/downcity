@@ -499,6 +499,11 @@ flowchart TB
     Commit --> Store["SessionMessages.compact_active()"]
 ```
 
+统一历史压缩事务按 Active 中 User/Assistant Message 的数量选择最旧的
+`floor(n / 2)` 条消息。Composer 只执行一次摘要模型调用，输入为旧累计 Summary（如有）
+与选中的消息前缀；较新的消息不进入摘要输入并继续留在 Active。摘要调用失败或返回空文本时，
+事务返回 `compact_failed`，不生成 Plan、不创建 Segment，也不修改 Active。
+
 ### 14.1 Usage 阈值
 
 ```mermaid

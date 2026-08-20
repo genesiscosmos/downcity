@@ -31,13 +31,15 @@ await session.prompt({ query: "基于压缩后的历史继续" });
 
 运行中执行 compact 前，SDK 会先收口当前 Assistant 草稿。canonical history 重写完成后，下一次 provider 调用会重新加载历史，不会继续使用压缩前的内存消息。
 
+手动与自动 Compact 使用同一算法：按 Active 中 User 和 Assistant Message 的数量选择最旧的 `floor(n / 2)` 条消息，只调用一次模型生成该前缀的摘要，将其归档为 Segment，并把较新的消息继续保留在 Active。
+
 ## 观察执行结果
 
-压缩过程通过正常的 Session timeline 发布 action message：
+摘要生成成功后，canonical 提交过程会通过正常的 Session timeline 发布 action message：
 
-- 准备摘要和归档时为 `running`
+- 提交归档时为 `running`
 - canonical history 替换完成后为 `completed`
-- 模型、composer 或存储操作失败时为 `failed`
+- 提交开始后的存储操作失败时为 `failed`
 
 如果当前没有可压缩的 active record，Session 会产生一条 completed action，说明不需要压缩。
 
@@ -48,6 +50,8 @@ Handle 的稳定结果包含：
 - `compacted`：是否实际生成并提交了压缩计划
 - `reason`：`compacted | nothing_to_compact | compact_failed`
 - `error`：失败时的错误文本
+
+如果摘要生成失败或返回空文本，Compact 会直接返回 `compact_failed` 并保持 Active 历史不变。SDK 不会开始 canonical 提交、提交降级 Summary，也不会把这次操作报告为压缩成功。
 
 `subscribe()` 仍会发布 `compact` 生命周期 Mutation 和 timeline action，适合驱动 UI；业务代码应优先等待 `handle.finished`，不需要从 Action Message 反推完成状态。
 
