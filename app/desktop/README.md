@@ -2,7 +2,7 @@
 
 Downcity Desktop 与 CLI 共享 `~/.downcity/agents/`、`~/.downcity/plugins/` 中的文件型定义，以及 `downcity.db` 中的 Workspace、Token 与平台状态。Electron main 直接创建 native `Agent`，并由进程内 `City` 统一管理生命周期；它不执行 CLI 命令，也不连接 CLI daemon。
 
-Agent 与 Workspace 是独立记录。Desktop 在执行时让 Agent 进入指定 Workspace，Session、日志、Shell、Sandbox 与 Plugin 状态统一保存在 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`，不写入项目目录。
+Agent 与 Workspace 是独立记录。Desktop 在执行时让 Agent 进入指定 Workspace；Session、日志、Shell 与 Sandbox 保存在 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`，Plugin 运行时状态保存在 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`，都不写入项目目录。
 
 ## 对话与用户状态
 

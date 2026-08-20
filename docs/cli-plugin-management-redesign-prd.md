@@ -27,7 +27,7 @@
 
 第三方 Plugin 的定义、ESM package 边界和自包含 setup 入口直接位于 `<plugin_id>/`，源码、TypeScript 配置和具体构建工具不进入安装目录；内置 Plugin 的注册由宿主注入，但配置仍使用相同的 `plugins/<plugin_id>/config.toml`。第三方 setup 模块导出 `schema` 与 `setup(context)`，内置 Plugin 由宿主直接注册。
 
-`config.toml` 是 City 级的 Plugin 配置，不属于某个 Agent。Agent 只在自己的 `agent.json` 中保存 Plugin ID 和 profile 引用；多个 Agent 可以引用同一个 profile。Plugin 的运行时状态、缓存和私有文件由 `PluginHostContext.data_path` 提供，宿主可以按 Agent 或 Workspace 隔离。
+`config.toml` 是 City 级的 Plugin 配置，不属于某个 Agent。Agent 只在自己的 `agent.json` 中保存 Plugin ID 和 profile 引用；多个 Agent 可以引用同一个 profile。Plugin 的运行时状态、缓存和私有文件由 `PluginHostContext.data_path` 提供，当前宿主按 Agent 隔离，不按 Workspace 复制 Plugin 数据。
 
 ## 3. Agent 定义
 

@@ -16,11 +16,11 @@ export interface CreatePluginContextInput {
   workspace_id: PluginContext["workspace_id"];
   /** 当前 Workspace 绝对根目录。 */
   workspace_path: PluginContext["workspace_path"];
-  /** 当前 AgentWorkspace 内部数据根路径。 */
+  /** 当前 Plugin 在 Agent 内的运行时数据根路径。 */
   data_path: PluginContext["data_path"];
   /** 当前 Workspace 文件能力。 */
   files: PluginContext["files"];
-  /** 当前 AgentWorkspace 私有数据目录的文件能力。 */
+  /** 当前 Plugin 运行时私有数据目录的文件能力。 */
   data_files: PluginContext["data_files"];
   /** 当前 Workspace 可选 Shell。 */
   shell?: PluginContext["shell"];

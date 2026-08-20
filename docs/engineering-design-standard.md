@@ -207,7 +207,7 @@ Workspace 不负责：
 - daemon 和多 Agent 管理。
 - 用户级全局配置。
 
-Workspace 必须有稳定 ID。Agent 定义不保存 Workspace 绑定；宿主在一次具体执行开始时创建 Workspace，并通过 `agent.enter(workspace)` 得到 AgentWorkspace。一个 Agent 可以同时进入多个 Workspace，各自的 Session、Shell、env、日志与 Plugin 状态必须隔离。项目目录只承担真实项目文件与命令 cwd，不承担 Downcity 运行状态。
+Workspace 必须有稳定 ID。Agent 定义不保存 Workspace 绑定；宿主在一次具体执行开始时创建 Workspace，并通过 `agent.enter(workspace)` 得到 AgentWorkspace。一个 Agent 可以同时进入多个 Workspace，各自的 Session、Shell、env 与日志必须隔离；同一个 Agent 的 Plugin 运行时数据不按 Workspace 复制。项目目录只承担真实项目文件与命令 cwd，不承担 Downcity 运行状态。
 
 ### 4.2 Agent 是单 Agent 组合根
 
@@ -221,13 +221,13 @@ Agent 持有：
 
 Agent 不持有单一 Workspace。`AgentWorkspace` 是 Agent 进入一个 Workspace 后的执行边界，持有该项目的工具、Session、PluginContext 和项目生命周期资源。
 
-每个本地 AgentWorkspace 的内部运行状态统一保存在：
+每个本地 AgentWorkspace 的 Workspace 运行状态统一保存在：
 
 ```text
 ~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/
 ```
 
-该目录包含 Session、日志、Schedule、Plugin 状态与缓存。`AgentWorkspace.data_path` 和运行时 `PluginContext.data_path` 指向同一个 AgentWorkspace 数据根；`PluginContext.workspace_path` 始终只指向真实项目。Plugin 的 City 级 profile 配置不进入该目录，仍保存在 `~/.downcity/plugins/<plugin_id>/config.toml`。
+该目录包含 Session、日志和 Schedule。`AgentWorkspace.data_path` 指向该 Workspace 数据根；运行时 `PluginContext.data_path` 指向当前 Plugin 的 Agent 级目录 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`。`PluginContext.workspace_path` 始终只指向真实项目。Plugin 的 City 级 profile 配置不进入运行时目录，仍保存在 `~/.downcity/plugins/<plugin_id>/config.toml`。
 
 Agent 不负责：
 
@@ -264,7 +264,7 @@ Plugin 可以提供：
 
 Plugin 通过 PluginContext 使用 Agent 内核允许的能力。PluginContext 是内部能力投影，不是宿主控制面，也不是 Agent 全量状态容器。
 
-所有 Plugin 都由 Agent 注册。Action、Hook、System、Availability 调用始终获得当前 Workspace 的 PluginContext；Plugin 自己决定是否读取其中的 Workspace 能力。框架不定义 workspace plugin、scope 或 requirements。
+所有 Plugin 都由 Agent 注册。Action、Hook、System、Availability 调用始终获得当前 Workspace 与当前 Plugin 的 PluginContext；其中 `data_path/data_files` 固定指向 Agent/Plugin 运行时目录，Workspace 文件、Shell、env 等能力仍来自当前 Workspace。框架不定义 workspace plugin、scope 或 requirements。
 
 Plugin 生命周期分为 Agent 级 `start/stop` 和可选的 Workspace 级 `enter_workspace/leave_workspace`。实现哪些钩子由 Plugin 自己决定，不构成 Plugin 分类。
 
@@ -283,7 +283,7 @@ Plugin 以全局稳定 ID 为身份，定义与 City 级配置保存在 `~/.down
 - `README.md`：第三方 Plugin 的必需用户文档，安装后保留在 Plugin ID 目录。
 - 自包含 setup 入口与本地图标：安装 `plugin.json.setup` 指向的单个入口，以及 `icon` 指向的 Plugin 根目录内相对资源；源码、TypeScript 配置和构建工具配置不进入 Plugin ID 目录。
 
-`config.toml` 是所有 Agent 共享的 Plugin 配置源；Agent 只保存 profile 引用。Plugin 运行时状态、缓存和私有文件使用 `PluginContext.data_path`，由宿主按 Agent 或 Workspace 隔离。
+`config.toml` 是所有 Agent 共享的 Plugin 配置源；Agent 只保存 profile 引用。Plugin 运行时状态、缓存和私有文件使用 `PluginContext.data_path`，由宿主按 Agent/Plugin 隔离，不按 Workspace 复制。
 
 Agent 通过 `agent.json` 选择 Plugin 与可选 profile。Plugin profile 可以包含渠道、账号、端点等 Plugin 自己定义的结构；配置 Schema 由第三方 setup 模块导出，TOML 只保存 profile 值，TypeScript 类型由 Plugin 代码独立维护。框架不定义 Binding、Resource 或 Installation 持久化领域。内置 Plugin 由宿主注册，第三方 Plugin 由 `plugin.json.setup` 导出的 `schema` 与 `setup(context)` 进入 Loader；setup 每次创建一个新的 Plugin 实例，Plugin Class 的 constructor 参数完全由作者决定。
 

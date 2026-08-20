@@ -214,7 +214,7 @@ packages/workspace/
 - `SessionDataStore`。
 - `SessionMessageStore`。
 - `SessionAttachmentStore`。
-- AgentWorkspace 日志、Schedule 与 Plugin 状态。
+- AgentWorkspace 日志与 Schedule；Plugin 运行时状态由 Agent/Plugin 目录管理。
 - `agents/<agent_id>/workspaces/<workspace_id>` 命名规则。
 
 这些对象表达的是 Agent 执行与恢复语义，不是通用 Workspace 资源。
@@ -502,7 +502,7 @@ Agent 只公开 Agent、AgentWorkspace、Session、Plugin 和执行协议。Plug
 - 一个 Agent 进入多个 Workspace。
 - 多个 Agent 使用同一物理目录的不同 Workspace 实例。
 - 同一个 Workspace 实例拒绝重复占用。
-- Session、日志、Schedule 和 Plugin 状态仍写入原数据布局。
+- Session、日志和 Schedule 仍写入 `agents/<agent_id>/workspaces/<workspace_id>`；Plugin 运行时状态写入 `agents/<agent_id>/plugins/<plugin_id>`。
 - Agent dispose 按顺序释放 AgentWorkspace、SessionStore 与 Workspace。
 - Shell 审批和 Tool Loop 行为不变。
 

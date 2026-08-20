@@ -30,6 +30,9 @@ import {
 
 const RESERVED_PLUGIN_TOOL_NAMES = new Set(["plugin_read", "plugin_call"]);
 
+/** 记录一个 Workspace 实例当前绑定的 AgentWorkspace，避免共享可变资源。 */
+const workspace_owners = new WeakMap<AgentWorkspaceOptions["workspace"], AgentWorkspace>();
+
 /** 拒绝普通 Tool 占用 PluginRegistry 的稳定桥接名称。 */
 function assert_no_reserved_plugin_tools(
   source: Record<string, Tool>,
@@ -70,7 +73,7 @@ export class AgentWorkspace {
   readonly plugins: AgentPlugins;
   /** 当前 Workspace 下的 Session 集合。 */
   readonly sessions: AgentSessions;
-  /** 当前 AgentWorkspace 内部数据根路径。 */
+  /** 当前 Workspace 的 Session、日志和调度数据根路径。 */
   readonly data_path: string;
 
   private readonly context: PluginContext;
@@ -79,12 +82,16 @@ export class AgentWorkspace {
   private readonly unsubscribe_env: () => void;
   private readonly unsubscribe_plugins: () => void;
   private readonly storage: AgentWorkspaceStorage;
+  private readonly plugin_contexts = new Map<string, PluginContext>();
   private leave_promise?: Promise<void>;
 
   constructor(options: AgentWorkspaceOptions) {
     this.agent = options.agent;
     this.workspace = options.workspace;
     this.workspace_id = options.workspace.id;
+    if (workspace_owners.has(this.workspace)) {
+      throw new Error("Workspace storage is already bound to another scope");
+    }
     const storage_scope = this.workspace.storage.open_scope([
       "agents",
       this.agent.id,
@@ -115,7 +122,7 @@ export class AgentWorkspace {
 
     let contextual_plugins: AgentPlugins | undefined;
     let contextual_sessions: AgentSessions | undefined;
-    this.context = create_plugin_context({
+    const context_input = {
       agent_id: this.agent.id,
       workspace_id: this.workspace_id,
       workspace_path: this.workspace.path,
@@ -136,7 +143,12 @@ export class AgentWorkspace {
         if (!contextual_sessions) throw new Error("AgentWorkspace sessions are not initialized");
         return contextual_sessions;
       },
-    });
+    } satisfies Parameters<typeof create_plugin_context>[0];
+    this.context = create_plugin_context(context_input);
+    this.agent.plugin_registry.bind_workspace_context(
+      this.context,
+      (plugin_name) => this.get_plugin_context(plugin_name, context_input),
+    );
     contextual_plugins = this.agent.plugin_registry.contextual(this.context);
     this.plugins = contextual_plugins;
 
@@ -184,6 +196,7 @@ export class AgentWorkspace {
       this.agent.plugin_registry,
       storage,
     );
+    workspace_owners.set(this.workspace, this);
   }
 
   /** 当前 Agent ID。 */
@@ -210,7 +223,7 @@ export class AgentWorkspace {
   register_plugin_http_routes(app: Hono): void {
     register_plugin_http_routes({
       app,
-      get_context: () => this.context,
+      get_context: (plugin_name) => this.agent.plugin_registry.plugin_context(this.context, plugin_name),
       plugins: this.agent.plugin_registry.snapshots()
         .map((snapshot) => this.agent.plugin_registry.get(snapshot.name))
         .filter((plugin) => plugin !== null),
@@ -252,10 +265,37 @@ export class AgentWorkspace {
         }
       }
       this.agent.release_workspace(this.workspace_id, this);
+      this.agent.plugin_registry.unbind_workspace_context(this.context);
+      if (workspace_owners.get(this.workspace) === this) {
+        workspace_owners.delete(this.workspace);
+      }
       if (errors.length > 0) {
         throw new AggregateError(errors, `AgentWorkspace cleanup failed: ${this.workspace_id}`);
       }
     })();
     await this.leave_promise;
+  }
+
+  /** 返回指定 Plugin 的 Agent 级运行时 Context。 */
+  private get_plugin_context(
+    plugin_name: string,
+    input: Parameters<typeof create_plugin_context>[0],
+  ): PluginContext {
+    const key = String(plugin_name || "").trim();
+    const existing = this.plugin_contexts.get(key);
+    if (existing) return existing;
+    const scope = this.workspace.storage.open_scope([
+      "agents",
+      this.agent.id,
+      "plugins",
+      key,
+    ]);
+    const context = create_plugin_context({
+      ...input,
+      data_path: scope.root_path,
+      data_files: scope.files,
+    });
+    this.plugin_contexts.set(key, context);
+    return context;
   }
 }

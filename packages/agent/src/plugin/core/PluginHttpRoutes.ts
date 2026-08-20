@@ -34,13 +34,13 @@ export function list_plugin_auth_policies(plugins: Iterable<Plugin>): AuthRouteP
  */
 export function register_plugin_http_routes(params: {
   app: Hono;
-  get_context: () => PluginContext;
+  get_context: (plugin_name: string) => PluginContext;
   plugins: Iterable<Plugin>;
 }): void {
   for (const plugin of params.plugins) {
     plugin.http?.server?.register({
       app: params.app,
-      get_context: params.get_context,
+      get_context: () => params.get_context(plugin.name),
       plugin_name: plugin.name,
     });
   }

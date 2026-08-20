@@ -46,6 +46,11 @@ function normalize_plugin_name(plugin_name: string): string {
   return String(plugin_name || "").trim();
 }
 
+/** 为当前 Workspace 的指定 Plugin 创建专属运行时 Context。 */
+type PluginContextFactory = (
+  plugin_name: string,
+) => PluginContext;
+
 function create_record(plugin: Plugin): PluginRuntimeRecord {
   const current_time = now_ms();
   return {
@@ -117,6 +122,9 @@ export class PluginRegistry {
   /** Agent 当前已进入的 Workspace Context。 */
   private readonly workspace_contexts = new Map<string, PluginContext>();
 
+  /** Agent 当前已进入 Workspace 的 Plugin Context 工厂。 */
+  private readonly workspace_context_factories = new Map<string, PluginContextFactory>();
+
   /** 初始 Plugin lifecycle 的唯一启动流程。 */
   private initial_start_promise?: Promise<PluginSnapshot[]>;
 
@@ -143,6 +151,25 @@ export class PluginRegistry {
     return () => {
       this.change_subscribers.delete(subscriber);
     };
+  }
+
+  /** 绑定当前 Workspace 的 Plugin Context 工厂。 */
+  bind_workspace_context(
+    context: PluginContext,
+    factory: PluginContextFactory,
+  ): void {
+    this.workspace_context_factories.set(context.workspace_id, factory);
+  }
+
+  /** 解除当前 Workspace 的 Plugin Context 工厂。 */
+  unbind_workspace_context(context: PluginContext): void {
+    this.workspace_context_factories.delete(context.workspace_id);
+  }
+
+  /** 返回指定 Plugin 的运行时 Context；未绑定工厂时回退到传入 Context。 */
+  plugin_context(context: PluginContext, plugin_name: string): PluginContext {
+    const key = normalize_plugin_name(plugin_name);
+    return this.workspace_context_factories.get(context.workspace_id)?.(key) || context;
   }
 
   /**
@@ -341,16 +368,20 @@ export class PluginRegistry {
     if (this.workspace_contexts.get(workspace_id) === context) {
       this.workspace_contexts.delete(workspace_id);
     }
-    const results = await Promise.allSettled(
-      [...this.records.values()].map(async (record) =>
-        await this.leave_record_workspace(record, context)
-      ),
-    );
-    const errors = results.flatMap((result) =>
-      result.status === "rejected" ? [result.reason] : []
-    );
-    if (errors.length > 0) {
-      throw new AggregateError(errors, `Plugin Workspace cleanup failed: ${workspace_id}`);
+    try {
+      const results = await Promise.allSettled(
+        [...this.records.values()].map(async (record) =>
+          await this.leave_record_workspace(record, context)
+        ),
+      );
+      const errors = results.flatMap((result) =>
+        result.status === "rejected" ? [result.reason] : []
+      );
+      if (errors.length > 0) {
+        throw new AggregateError(errors, `Plugin Workspace cleanup failed: ${workspace_id}`);
+      }
+    } finally {
+      this.workspace_context_factories.delete(workspace_id);
     }
   }
 
@@ -456,7 +487,9 @@ export class PluginRegistry {
     if (record.workspace_contexts.has(context.workspace_id)) return;
     await run_serial(record, async () => {
       if (record.workspace_contexts.has(context.workspace_id)) return;
-      await record.plugin.lifecycle?.enter_workspace?.(context);
+      await record.plugin.lifecycle?.enter_workspace?.(
+        this.plugin_context(context, record.plugin.name),
+      );
       record.workspace_contexts.set(context.workspace_id, context);
       record.updated_at = now_ms();
     });
@@ -471,7 +504,9 @@ export class PluginRegistry {
     await run_serial(record, async () => {
       if (record.workspace_contexts.get(context.workspace_id) !== context) return;
       try {
-        await record.plugin.lifecycle?.leave_workspace?.(context);
+        await record.plugin.lifecycle?.leave_workspace?.(
+          this.plugin_context(context, record.plugin.name),
+        );
       } finally {
         record.workspace_contexts.delete(context.workspace_id);
         record.updated_at = now_ms();
@@ -486,7 +521,9 @@ export class PluginRegistry {
       try {
         for (const context of [...record.workspace_contexts.values()].reverse()) {
           try {
-            await record.plugin.lifecycle?.leave_workspace?.(context);
+            await record.plugin.lifecycle?.leave_workspace?.(
+              this.plugin_context(context, record.plugin.name),
+            );
           } catch (error) {
             errors.push(error);
           }
@@ -516,7 +553,12 @@ export class PluginRegistry {
     value: T,
   ): Promise<T> {
     await this.ensure_initial_started();
-    return this.hookRegistry.pipelineValue(context, point_name, value);
+    return this.hookRegistry.pipelineValue(
+      context,
+      point_name,
+      value,
+      (plugin_name) => this.plugin_context(context, plugin_name),
+    );
   }
 
   /**
@@ -528,7 +570,12 @@ export class PluginRegistry {
     value: T,
   ): Promise<void> {
     await this.ensure_initial_started();
-    return this.hookRegistry.guardValue(context, point_name, value);
+    return this.hookRegistry.guardValue(
+      context,
+      point_name,
+      value,
+      (plugin_name) => this.plugin_context(context, plugin_name),
+    );
   }
 
   /**
@@ -540,7 +587,12 @@ export class PluginRegistry {
     value: T,
   ): Promise<void> {
     await this.ensure_initial_started();
-    return this.hookRegistry.effectValue(context, point_name, value);
+    return this.hookRegistry.effectValue(
+      context,
+      point_name,
+      value,
+      (plugin_name) => this.plugin_context(context, plugin_name),
+    );
   }
 
   /**
@@ -552,7 +604,12 @@ export class PluginRegistry {
     value: TInput,
   ): Promise<TOutput> {
     await this.ensure_initial_started();
-    return this.hookRegistry.resolveValue<TInput, TOutput>(context, point_name, value);
+    return this.hookRegistry.resolveValue<TInput, TOutput>(
+      context,
+      point_name,
+      value,
+      (plugin_name) => this.plugin_context(context, plugin_name),
+    );
   }
 
   /**
@@ -672,7 +729,7 @@ export class PluginRegistry {
     }
 
     if (record.plugin.availability) {
-      return await record.plugin.availability(context);
+      return await record.plugin.availability(this.plugin_context(context, key));
     }
 
     return {
@@ -746,7 +803,7 @@ export class PluginRegistry {
     }
 
     return await execute_plugin_action({
-      context,
+      context: this.plugin_context(context, record.plugin.name),
       plugin_name: record.plugin.name,
       action_name,
       action,
@@ -787,11 +844,15 @@ export class PluginRegistry {
       if (typeof plugin.system !== "function") continue;
       try {
         if (typeof plugin.availability === "function") {
-          const availability = await plugin.availability(context);
+          const plugin_context = this.plugin_context(context, plugin.name);
+          const availability = await plugin.availability(plugin_context);
           if (!availability.available) continue;
         }
         const text = String(
-          await plugin.system(context, execution_context),
+          await plugin.system(
+            this.plugin_context(context, plugin.name),
+            execution_context,
+          ),
         ).trim();
         if (!text) continue;
         out.push({

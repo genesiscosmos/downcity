@@ -3,6 +3,7 @@
  *
  * 关键点（中文）
  * - Provider 只负责根目录、路径片段隔离和文件能力。
+ * - 同一 Provider 可以打开多个独立作用域；资源所有权由上层 AgentWorkspace 管理。
  * - 不理解 Agent、Session 或 Plugin 的业务语义。
  */
 
@@ -16,8 +17,7 @@ import type {
 
 /** 本地用户级 Workspace 存储 Provider。 */
 export class LocalWorkspaceStorageProvider implements WorkspaceStorageProvider {
-  private opened_scope_key?: string;
-  private opened_scope?: WorkspaceStorageScope;
+  private readonly opened_scopes = new Map<string, WorkspaceStorageScope>();
 
   constructor(private readonly root_path: string) {}
 
@@ -28,19 +28,15 @@ export class LocalWorkspaceStorageProvider implements WorkspaceStorageProvider {
       throw new Error("Workspace storage scope requires at least one segment");
     }
     const scope_key = normalized_segments.join("/");
-    if (this.opened_scope) {
-      if (this.opened_scope_key !== scope_key) {
-        throw new Error("Workspace storage is already bound to another scope");
-      }
-      return this.opened_scope;
-    }
+    const existing_scope = this.opened_scopes.get(scope_key);
+    if (existing_scope) return existing_scope;
 
     const storage_root_path = normalized_segments.reduce(
       (current_path, segment) => path.join(current_path, encodeURIComponent(segment)),
       path.resolve(this.root_path),
     );
     ensure_private_directory_tree(path.resolve(this.root_path), storage_root_path);
-    this.opened_scope = {
+    const scope: WorkspaceStorageScope = {
       root_path: storage_root_path,
       files: new LocalFileSystem({
         root_path: storage_root_path,
@@ -48,8 +44,8 @@ export class LocalWorkspaceStorageProvider implements WorkspaceStorageProvider {
         file_mode: 0o600,
       }),
     };
-    this.opened_scope_key = scope_key;
-    return this.opened_scope;
+    this.opened_scopes.set(scope_key, scope);
+    return scope;
   }
 }
 

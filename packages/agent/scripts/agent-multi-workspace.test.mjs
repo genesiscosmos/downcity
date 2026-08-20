@@ -30,6 +30,7 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
             agent_id: context.agent_id,
             workspace_id: context.workspace_id,
             workspace_path: context.workspace_path,
+            data_path: context.data_path,
           });
           return { success: true, data: contexts.at(-1) };
         },
@@ -60,6 +61,8 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
     assert.equal(first_result.data.workspace_id, "sdk");
     assert.equal(second_result.data.workspace_id, "homepage");
     assert.deepEqual(new Set(contexts.map((item) => item.workspace_id)), new Set(["sdk", "homepage"]));
+    assert.equal(contexts[0].data_path, contexts[1].data_path);
+    assert.match(contexts[0].data_path, /data\/agents\/coder\/plugins\/context_probe$/u);
     assert.equal(lifecycle_events.filter((item) => item === "start:coder").length, 1);
     assert.equal(lifecycle_events.filter((item) => item.startsWith("enter:")).length, 2);
 
@@ -75,6 +78,65 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
 
   assert.equal(lifecycle_events.includes("leave:homepage"), true);
   assert.equal(lifecycle_events.filter((item) => item === "stop:coder").length, 1);
+});
+
+test("Plugin runtime data is isolated by Agent and shared across Workspaces", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-agent-plugin-data-"));
+  const contexts = [];
+  const plugin = create_plugin({
+    name: "data_probe",
+    title: "Data Probe",
+    description: "Records its runtime data path.",
+    actions: {
+      inspect: {
+        description: "Read the runtime data path.",
+        execute: ({ context }) => {
+          contexts.push({ agent_id: context.agent_id, workspace_id: context.workspace_id, data_path: context.data_path });
+          return { success: true, data: { data_path: context.data_path } };
+        },
+      },
+    },
+  });
+  await Promise.all([
+    fs.mkdir(path.join(root, "one")),
+    fs.mkdir(path.join(root, "two")),
+    fs.mkdir(path.join(root, "three")),
+  ]);
+  const agent_a = new Agent({ id: "data_agent_a", plugins: [plugin] });
+  const agent_b = new Agent({ id: "data_agent_b", plugins: [create_plugin({
+    name: "data_probe",
+    title: "Data Probe",
+    description: "Records its runtime data path.",
+    actions: {
+      inspect: {
+        description: "Read the runtime data path.",
+        execute: ({ context }) => {
+          contexts.push({ agent_id: context.agent_id, workspace_id: context.workspace_id, data_path: context.data_path });
+          return { success: true, data: { data_path: context.data_path } };
+        },
+      },
+    },
+  })] });
+  const first = agent_a.enter(new Workspace({ id: "one", path: path.join(root, "one"), data_root_path: path.join(root, "data") }));
+  const second = agent_a.enter(new Workspace({ id: "two", path: path.join(root, "two"), data_root_path: path.join(root, "data") }));
+  const third = agent_b.enter(new Workspace({ id: "three", path: path.join(root, "three"), data_root_path: path.join(root, "data") }));
+  try {
+    await Promise.all([
+      first.plugins.run_action({ plugin: "data_probe", action: "inspect" }),
+      second.plugins.run_action({ plugin: "data_probe", action: "inspect" }),
+      third.plugins.run_action({ plugin: "data_probe", action: "inspect" }),
+    ]);
+    const agent_a_paths = contexts.filter((item) => item.agent_id === "data_agent_a").map((item) => item.data_path);
+    const agent_b_paths = contexts.filter((item) => item.agent_id === "data_agent_b").map((item) => item.data_path);
+    assert.equal(new Set(agent_a_paths).size, 1);
+    assert.equal(new Set(agent_b_paths).size, 1);
+    assert.notEqual(agent_a_paths[0], agent_b_paths[0]);
+    assert.match(agent_a_paths[0], /data\/agents\/data_agent_a\/plugins\/data_probe$/u);
+    assert.match(agent_b_paths[0], /data\/agents\/data_agent_b\/plugins\/data_probe$/u);
+  } finally {
+    await Promise.all([agent_a.dispose(), agent_b.dispose()]);
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });
 
 test("Plugin can ignore Workspace while still receiving its Context", async () => {

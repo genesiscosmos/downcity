@@ -8,7 +8,7 @@
 
 > 2026-08-16 更新：Agent 已不再绑定单一 Workspace。当前公开模型以 [`agent-sdk-architecture.md`](./agent-sdk-architecture.md) 为准：`new Agent(...)` 创建主体，`agent.enter(new Workspace({ id, ... }))` 创建执行边界。
 
-实现进度：`@downcity/workspace` 已统一提供项目 LocalFileSystem、WorkspaceTools、Env、通用私有存储 Provider 与可选 Shell；Agent 统一注册 Plugin、Session Interaction 与自定义 Tools。Agent 进入 Workspace 后创建 AgentWorkspaceStorage 视图，Session、日志、Schedule 和 Plugin 状态统一写入用户级 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`，不会污染项目目录。
+实现进度：`@downcity/workspace` 已统一提供项目 LocalFileSystem、WorkspaceTools、Env、通用私有存储 Provider 与可选 Shell；Agent 统一注册 Plugin、Session Interaction 与自定义 Tools。Agent 进入 Workspace 后创建 AgentWorkspaceStorage 视图，Session、日志和 Schedule 写入用户级 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`；Plugin 运行时状态写入 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`，都不会污染项目目录。
 
 源码按职责直接表达领域边界：
 
@@ -36,7 +36,7 @@ Agent                  Agent 身份、模型、指令和 Plugin 注册表
 ├─ PluginRegistry       所有 Workspace 共享的 Plugin 定义
 └─ AgentWorkspace       Agent 进入一个 Workspace 后的执行边界
    ├─ Workspace          项目路径、文件、Env 与可选 Shell
-   ├─ AgentWorkspaceStorage  私有 Session、日志、Task、Chat 等状态
+   ├─ AgentWorkspaceStorage  私有 Session、日志、Schedule 等 Workspace 执行状态
    └─ Shell?             命令、进程、PTY 与 Sandbox
        └─ Platform Sandbox Adapter
 ```
@@ -83,7 +83,7 @@ const agent_workspace = agent.enter(workspace);
 | `AgentWorkspace` | 组合当前 Workspace 与私有 Storage，提供 Session、Plugin Context 与运行时资源 | 其他 Workspace 的状态 |
 | `Workspace` | 统一提供项目 FileSystem、WorkspaceTools、Env 与可选 Shell | Agent 身份和 Session 持久化 |
 | `LocalFileSystem` | Workspace 范围内的安全文件、原子覆盖与跨进程锁 | Session 领域规则和命令执行 |
-| `AgentWorkspaceStorage` | 基于用户级数据根目录提供结构化 Session 和 Plugin 私有状态 | 项目文件与通用 File Tool |
+| `AgentWorkspaceStorage` | 基于用户级数据根目录提供结构化 Session 和 Workspace 执行状态 | 项目文件与通用 File Tool |
 | `Shell` | Command、Shell Session、PTY、审批和 Sandbox | Session 历史与通用系统服务 |
 | `Sandbox Adapter` | 将统一策略映射到当前 OS | Agent 和 Session 业务 |
 
@@ -186,8 +186,8 @@ Agent → Shell → SystemHandler → Files / Session / Logs / Cache
 ### 4.4 AgentWorkspaceStorage 是执行边界的私有状态
 
 - Workspace 是项目资源与安全边界。
-- AgentWorkspaceStorage 保存 Session、Instruction、日志、Schedule 以及 Plugin 自有状态。
-- PluginContext 同时接收 `workspace_path/files` 和 `data_path/data_files`，Plugin 是否使用 Workspace 上下文由自身定义。
+- AgentWorkspaceStorage 保存 Session、Instruction、日志和 Schedule 等 Workspace 执行状态。
+- Plugin 自有状态使用 Agent 级 `PluginContext.data_path`；Plugin 是否读取当前 Workspace 能力由自身定义。
 - Storage 不对模型暴露通用项目 File Tool，也不把私有状态混入项目目录。
 
 因此 SessionStore 由 AgentWorkspace 创建，Workspace 本身不持有 Agent 专属 Store。

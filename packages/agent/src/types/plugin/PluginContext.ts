@@ -24,13 +24,13 @@ export interface PluginContext {
   /** 当前 Workspace 的绝对根目录。 */
   readonly workspace_path: string;
 
-  /** 当前 AgentWorkspace 内部持久化数据的绝对根路径。 */
+  /** 当前 Plugin 在 Agent 内的运行时私有数据根路径。 */
   readonly data_path: string;
 
   /** 当前 Workspace 的统一文件能力。 */
   readonly files: FileSystem;
 
-  /** 当前 AgentWorkspace 私有数据目录的统一文件能力。 */
+  /** 当前 Plugin 运行时私有数据目录的统一文件能力。 */
   readonly data_files: FileSystem;
 
   /** 当前 Workspace 显式挂载的 Shell；未启用时为空。 */

@@ -200,6 +200,7 @@ export class HookRegistry {
     context: PluginContext,
     point_name: string,
     value: T,
+    resolve_context: (plugin_name: string) => PluginContext = () => context,
   ): Promise<T> {
     const key = String(point_name || "").trim();
     if (!key) return value;
@@ -210,7 +211,7 @@ export class HookRegistry {
     for (const item of bucket) {
       if (!this.is_plugin_ready(item.plugin_name)) continue;
       current = await item.handler({
-        context,
+        context: resolve_context(item.plugin_name),
         value: current,
         plugin: item.plugin_name,
       });
@@ -225,6 +226,7 @@ export class HookRegistry {
     context: PluginContext,
     point_name: string,
     value: T,
+    resolve_context: (plugin_name: string) => PluginContext = () => context,
   ): Promise<void> {
     const key = String(point_name || "").trim();
     if (!key) return;
@@ -234,7 +236,7 @@ export class HookRegistry {
     for (const item of bucket) {
       if (!this.is_plugin_ready(item.plugin_name)) continue;
       await item.handler({
-        context,
+        context: resolve_context(item.plugin_name),
         value: value as JsonValue,
         plugin: item.plugin_name,
       });
@@ -248,6 +250,7 @@ export class HookRegistry {
     context: PluginContext,
     point_name: string,
     value: T,
+    resolve_context: (plugin_name: string) => PluginContext = () => context,
   ): Promise<void> {
     const key = String(point_name || "").trim();
     if (!key) return;
@@ -257,7 +260,7 @@ export class HookRegistry {
     for (const item of bucket) {
       if (!this.is_plugin_ready(item.plugin_name)) continue;
       await item.handler({
-        context,
+        context: resolve_context(item.plugin_name),
         value: value as JsonValue,
         plugin: item.plugin_name,
       });
@@ -271,6 +274,7 @@ export class HookRegistry {
     context: PluginContext,
     point_name: string,
     value: TInput,
+    resolve_context: (plugin_name: string) => PluginContext = () => context,
   ): Promise<TOutput> {
     const key = String(point_name || "").trim();
     if (!key) {
@@ -285,7 +289,7 @@ export class HookRegistry {
     }
 
     return await record.handler({
-      context,
+      context: resolve_context(record.plugin_name),
       value: value as JsonValue,
       plugin: record.plugin_name,
     }) as TOutput;

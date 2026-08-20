@@ -402,7 +402,7 @@ const agent = new Agent({
 
 Agent 只持有 Plugin 实例，不关心实例来自 SDK、CLI 还是远程安装。
 
-配置与运行时数据必须分离。City 从全局的 `~/.downcity/plugins/<plugin_id>/config.toml` 读取 profile，并在每次装配时把 profile 快照传给 `setup`；`context.data_path` 只表示 Plugin 的运行时私有目录。CLI 和 Desktop 可以把这个目录放在 Agent（以及未来的 Workspace）边界内，因此不同 Agent 不共享运行时状态，但仍然共享同一份 City 级 profile 配置。
+配置与运行时数据必须分离。City 从全局的 `~/.downcity/plugins/<plugin_id>/config.toml` 读取 profile，并在每次装配时把 profile 快照传给 `setup`；`context.data_path` 只表示 Plugin 的运行时私有目录。CLI 和 Desktop 将这个目录放在 Agent 边界内，因此不同 Agent 不共享运行时状态，但同一个 Agent 不会因为进入不同 Workspace 而复制一份 Plugin 状态，所有 Agent 仍然共享同一份 City 级 profile 配置。
 
 每个 Agent 必须拥有独立的：
 
