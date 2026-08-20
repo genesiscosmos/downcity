@@ -5,6 +5,9 @@ import type { JsonObject } from "@downcity/agent";
 /** Plugin 的本地来源。 */
 export type PluginCatalogSource = "builtin" | "installed";
 
+/** Plugin 对命名 profile 的要求。 */
+export type PluginCatalogConfiguration = "none" | "optional" | "required";
+
 /** 一个可注册到 Agent 的 Plugin。 */
 export interface PluginCatalogItem {
   /** Plugin 的全局稳定 ID。 */
@@ -23,8 +26,10 @@ export interface PluginCatalogItem {
   source_label?: string;
   /** 可选 profile JSON Schema。 */
   config_schema?: JsonObject;
-  /** `default` profile 不存在时使用的默认配置。 */
-  default_config: JsonObject;
+  /** 根据 Schema default 与 const 注解创建的新 profile 草稿。 */
+  initial_config: JsonObject;
+  /** Plugin 不需要、可选或必须选择命名 profile。 */
+  configuration: PluginCatalogConfiguration;
   /** 当前已保存的 profile ID。 */
   profiles: string[];
 }

@@ -175,16 +175,16 @@ async function configure_profile(plugin: PluginCatalogItem): Promise<void> {
   const config = await prompt_plugin_config({
     plugin_name: plugin.plugin_id,
     schema: plugin.config_schema,
-    current_config: existing ?? plugin.default_config,
+    current_config: existing ?? plugin.initial_config,
   });
   if (!config) return;
   await save_plugin_profile(plugin.plugin_id, profile, config);
   emitCliBlock({ tone: "success", title: "Plugin profile saved", summary: `${plugin.plugin_id}/${profile}` });
 }
 
-/** 选择已存在 profile，或对无配置 Plugin 使用默认配置。 */
+/** 根据 schema 对空配置的接受程度选择或创建 profile。 */
 async function select_profile(plugin: PluginCatalogItem): Promise<string | null> {
-  if (!plugin.config_schema) return "";
+  if (plugin.configuration === "none" || plugin.configuration === "optional") return "";
   if (plugin.profiles.length === 0) {
     await configure_profile(plugin);
     const refreshed = await resolve_plugin_catalog_item(plugin.plugin_id);

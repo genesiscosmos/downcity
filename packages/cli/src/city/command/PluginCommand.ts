@@ -130,6 +130,11 @@ function register_agent_reference_commands(plugin: Command): void {
       options: { profile?: string },
     ) => {
       const resolved_agent_id = await resolve_cli_agent_id(agent_id);
+      const catalog = await resolve_plugin_catalog_item(plugin_id);
+      if (!catalog) throw new Error(`Plugin not found: ${plugin_id}`);
+      if (catalog.configuration === "required" && !options.profile) {
+        throw new Error(`Plugin profile is required: ${plugin_id}`);
+      }
       const reference = set_agent_plugin_reference({
         agent_id: resolved_agent_id,
         plugin_id,
@@ -218,7 +223,7 @@ function register_profile_commands(plugin: Command): void {
         config = await prompt_plugin_config({
           plugin_name: plugin_id,
           schema: catalog.config_schema,
-          current_config: existing ?? catalog.default_config,
+          current_config: existing ?? catalog.initial_config,
         });
       }
       if (config) {

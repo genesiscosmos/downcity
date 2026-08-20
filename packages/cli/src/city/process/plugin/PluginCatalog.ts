@@ -8,10 +8,13 @@ import {
 import { create_cli_builtin_plugin_registrations } from "@/city/runtime/AgentAssembly.js";
 import { create_cli_local_data } from "@/city/runtime/LocalData.js";
 import {
+  accepts_empty_local_plugin_config,
+  create_local_plugin_config_draft,
   load_local_plugin_setup_module,
   verify_local_installed_plugin_integrity,
 } from "@downcity/local/product";
 import type { PluginCatalogItem } from "@/city/types/plugin/PluginCatalog.js";
+import type { PluginCatalogConfiguration } from "@/city/types/plugin/PluginCatalog.js";
 
 /** 列出全部内置与第三方 Plugin。 */
 export function list_plugin_catalog(): PluginCatalogItem[] {
@@ -24,7 +27,12 @@ export function list_plugin_catalog(): PluginCatalogItem[] {
       source: "builtin" as const,
       ...(definition.icon ? { icon: definition.icon } : {}),
       ...(definition.config?.schema ? { config_schema: definition.config.schema } : {}),
-      default_config: definition.config?.defaults ?? {},
+      initial_config: definition.config
+        ? create_local_plugin_config_draft(definition.config.schema)
+        : {},
+      configuration: (definition.config
+        ? accepts_empty_local_plugin_config(definition.config.schema) ? "optional" : "required"
+        : "none") as PluginCatalogConfiguration,
       profiles: list_plugin_profiles(definition.id),
     };
   });
@@ -36,7 +44,8 @@ export function list_plugin_catalog(): PluginCatalogItem[] {
     version: plugin.version,
     source: "installed" as const,
     source_label: plugin.source,
-    default_config: {},
+    initial_config: {},
+    configuration: "required" as const,
     profiles: list_plugin_profiles(plugin.id),
   }));
   return [...builtin_items, ...installed_items]
@@ -65,6 +74,8 @@ export async function resolve_plugin_catalog_item(
     return {
       ...item,
       config_schema: module.schema,
+      initial_config: create_local_plugin_config_draft(module.schema),
+      configuration: accepts_empty_local_plugin_config(module.schema) ? "optional" : "required",
     };
   } finally {
     data.database.close();

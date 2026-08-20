@@ -271,6 +271,18 @@ test("第三方 Plugin 使用 definition ID 目录和 setup 协议", async () =>
     const data = local_data.create_cli_local_data();
     try {
       const loader = assembly.create_cli_plugin_loader({ plugin_repository: data.plugins });
+      await assert.rejects(
+        () => loader.create_plugins(
+          data.agents.get("plugin_agent"),
+          create_test_plugin_host_context(platform_root),
+        ),
+        /required property 'endpoint'/u,
+      );
+      plugins.set_agent_plugin_reference({
+        agent_id: "plugin_agent",
+        plugin_id: "example",
+        profile: "default",
+      });
       const runtime_plugins = await loader.create_plugins(
         data.agents.get("plugin_agent"),
         create_test_plugin_host_context(platform_root),
@@ -566,7 +578,11 @@ test("Plugin 实例 ID 必须匹配 plugin.json", async () => {
       endpoint: "https://example.com",
       timeout_ms: 10000,
     });
-    plugins.set_agent_plugin_reference({ agent_id: "mismatch_agent", plugin_id: "declared" });
+    plugins.set_agent_plugin_reference({
+      agent_id: "mismatch_agent",
+      plugin_id: "declared",
+      profile: "default",
+    });
     const data = local_data.create_cli_local_data();
     try {
       const loader = assembly.create_cli_plugin_loader({ plugin_repository: data.plugins });
@@ -595,11 +611,18 @@ test("内建 Plugin Catalog 暴露 profile Schema", async () => {
     const chat = await catalog.resolve_plugin_catalog_item("chat");
     assert.equal(chat.plugin_id, "chat");
     assert.equal(chat.source, "builtin");
+    assert.equal(chat.configuration, "optional");
     assert.equal(chat.config_schema.properties.channels.type, "array");
     assert.equal(
       chat.config_schema.properties.channels.items.oneOf[0].properties.bot_token.writeOnly,
       true,
     );
+    const memory = await catalog.resolve_plugin_catalog_item("memory");
+    assert.equal(memory.configuration, "none");
+    assert.equal(memory.config_schema, undefined);
+    const web = await catalog.resolve_plugin_catalog_item("web");
+    assert.equal(web.configuration, "optional");
+    assert.equal(web.config_schema.required, undefined);
     const result = spawnSync(process.execPath, [path.resolve("bin/downcity.js"), "plugin", "list"], {
       encoding: "utf8",
       env: { ...process.env, NO_COLOR: "1" },

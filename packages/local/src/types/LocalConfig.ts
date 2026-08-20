@@ -4,7 +4,7 @@ import type { JsonObject } from "@downcity/agent";
 
 /** Agent 对一个 Plugin 的持久化引用。 */
 export interface LocalAgentPluginReference {
-  /** Plugin 配置目录中选用的 profile；未填写时选择 `default` profile。 */
+  /** Plugin 配置目录中显式选用的 profile；未填写时使用空配置。 */
   profile?: string;
 }
 

@@ -15,19 +15,25 @@ import {
 } from "@/chat.js";
 import { FeishuChannel, QqChannel, TelegramChannel } from "@/chat.js";
 import { ContactPlugin } from "@/contact.js";
-import { ImagePlugin } from "@/image.js";
+import {
+  IMAGE_PLUGIN_CONFIG_JSON_SCHEMA,
+  ImagePlugin,
+} from "@/image.js";
 import {
   MemoryPlugin,
 } from "@/memory.js";
 import { SkillPlugin } from "@/skill.js";
-import { SoundPlugin } from "@/sound.js";
+import {
+  SOUND_PLUGIN_CONFIG_JSON_SCHEMA,
+  SoundPlugin,
+} from "@/sound.js";
 import { TaskPlugin } from "@/task.js";
-import { WebPlugin } from "@/web.js";
+import {
+  WEB_PLUGIN_CONFIG_JSON_SCHEMA,
+  WebPlugin,
+  type WebPluginOptions,
+} from "@/web.js";
 import { WorkboardPlugin } from "@/workboard.js";
-import type {
-  BuiltinMemoryPluginConfig,
-  BuiltinWebPluginConfig,
-} from "@/builtin/types/BuiltinPluginConfig.js";
 
 /** 官方 Plugin definition 的最小结构协议。 */
 export interface BuiltinPluginDefinition {
@@ -39,12 +45,10 @@ export interface BuiltinPluginDefinition {
 
   /** Plugin 的用途说明。 */
   description: string;
-  /** Plugin profile 的可选 JSON Schema 与默认配置。 */
+  /** Plugin profile 的可选 JSON Schema。 */
   config?: {
     /** 校验 profile 并驱动管理表单的完整 JSON Schema。 */
     schema: JsonObject;
-    /** `default` profile 不存在时使用的完整默认配置。 */
-    defaults?: JsonObject;
   };
 }
 
@@ -67,34 +71,6 @@ export interface BuiltinPluginRegistrationsOptions {
   };
 
 }
-
-const memory_plugin_config_schema: JsonObject = {
-  type: "object",
-  title: "Memory Plugin",
-  description: "Long-term memory provider and storage configuration.",
-  properties: {
-    provider: { type: "string", const: "builtin" },
-    storage: { type: "string", const: "file" },
-    root_path: { type: "string", minLength: 1 },
-  },
-  required: ["provider", "storage"],
-  additionalProperties: false,
-};
-
-const web_plugin_config_schema: JsonObject = {
-  type: "object",
-  title: "Web Plugin",
-  description: "Browser connection and observation configuration.",
-  properties: {
-    browser: { type: "string", enum: ["playwright"], default: "playwright" },
-    cdp_url: { type: "string", minLength: 1 },
-    default_url: { type: "string", minLength: 1 },
-    timeout_ms: { type: "integer", minimum: 1000, maximum: 60000 },
-    max_observation_chars: { type: "integer", minimum: 1, maximum: 100000 },
-  },
-  required: ["cdp_url"],
-  additionalProperties: false,
-};
 
 /** 创建 Downcity 官方 Plugin 注册集合。 */
 export function create_builtin_plugin_registrations(
@@ -135,7 +111,6 @@ export function create_builtin_plugin_registrations(
         description: "Connects Agents to Telegram, Feishu, and QQ channels.",
         config: {
           schema: CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
-          defaults: {},
         },
       },
       setup(context) {
@@ -151,25 +126,20 @@ export function create_builtin_plugin_registrations(
         id: "memory",
         title: "Memory",
         description: "Provides provider-neutral long-term memory, recall, revision, and deletion.",
-        config: {
-          schema: memory_plugin_config_schema,
-          defaults: { provider: "builtin", storage: "file" },
-        },
       },
       setup(context) {
-        const config = context.profile as unknown as BuiltinMemoryPluginConfig;
-        return new MemoryPlugin(config);
+        return new MemoryPlugin({ root_path: context.data_path });
       },
     },
     {
       definition: {
         id: "web",
         title: "Web",
-        description: "Provides structured browser sessions through a configured CDP endpoint.",
-        config: { schema: web_plugin_config_schema, defaults: { browser: "playwright" } },
+        description: "Provides web search, document reading, and optional browser sessions.",
+        config: { schema: WEB_PLUGIN_CONFIG_JSON_SCHEMA },
       },
       setup(context) {
-        const config = context.profile as unknown as BuiltinWebPluginConfig;
+        const config = context.profile as unknown as WebPluginOptions;
         return new WebPlugin(config);
       },
     },
@@ -179,12 +149,7 @@ export function create_builtin_plugin_registrations(
         title: "Image",
         description: "Discovers image models, generates images, and reads results.",
         config: {
-          schema: {
-            type: "object",
-            properties: { default_model: { type: "string", minLength: 1 } },
-            additionalProperties: false,
-          },
-          defaults: {},
+          schema: IMAGE_PLUGIN_CONFIG_JSON_SCHEMA,
         },
       },
       setup: (context) => new ImagePlugin(context.profile),
@@ -195,19 +160,7 @@ export function create_builtin_plugin_registrations(
         title: "Sound",
         description: "Discovers speech models and provides ASR and TTS.",
         config: {
-          schema: {
-            type: "object",
-            properties: {
-              default_asr_model: { type: "string", minLength: 1 },
-              default_tts_model: { type: "string", minLength: 1 },
-              auto_asr: { type: "boolean", default: false },
-              language: { type: "string", minLength: 1 },
-              voice: { type: "string", minLength: 1 },
-              format: { type: "string", minLength: 1 },
-            },
-            additionalProperties: false,
-          },
-          defaults: {},
+          schema: SOUND_PLUGIN_CONFIG_JSON_SCHEMA,
         },
       },
       setup: (context) => new SoundPlugin(context.profile),

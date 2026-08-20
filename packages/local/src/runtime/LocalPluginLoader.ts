@@ -45,13 +45,12 @@ export class LocalPluginLoader {
     for (const [plugin_id, reference] of Object.entries(config.plugins)) {
       const registration = await this.load_plugin_registration(plugin_id);
       if (!registration) throw new Error(`Plugin not found: ${plugin_id}`);
-      const profile_id = reference.profile ?? "default";
-      const profile = this.options.plugin_repository.get_profile(plugin_id, profile_id);
-      if (reference.profile && !profile) {
+      const plugin_config = reference.profile
+        ? this.options.plugin_repository.get_profile(plugin_id, reference.profile)
+        : {};
+      if (!plugin_config) {
         throw new Error(`Plugin profile not found: ${plugin_id}/${reference.profile}`);
       }
-      const plugin_config = profile
-        ?? structuredClone(registration.definition.config?.defaults ?? {});
       validate_local_plugin_config(
         plugin_config,
         registration.definition.config?.schema,

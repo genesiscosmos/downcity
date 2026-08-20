@@ -174,31 +174,10 @@ test("Builtin Provider 在 initialize 阶段按 Agent 延迟创建 Adapter", asy
   await provider.dispose();
 });
 
-test("MemoryPlugin 将公开 Action 委托给唯一 Provider", async () => {
-  const calls = [];
-  const provider = {
-    name: "test-provider",
-    capabilities: {
-      remember: true,
-      recall: true,
-      read: true,
-      revise: true,
-      forget: true,
-      digest: true,
-      system_context: true,
-    },
-    async initialize(input) { calls.push(["initialize", input]); },
-    async status() { return { provider: this.name, state: "ready", capabilities: this.capabilities }; },
-    async recall(input) { calls.push(["recall", input]); return { provider: this.name, items: [] }; },
-    async read(input) { calls.push(["read", input]); return { memory_id: input.memory_id, memory: null }; },
-    async remember(input) { calls.push(["remember", input]); return { memory_id: "remote:1", mode: "created" }; },
-    async digest(input) { calls.push(["digest", input]); return { memory_ids: [], message_count: input.message_count, mode: "archived" }; },
-    async revise(input) { calls.push(["revise", input]); return { memory_id: input.memory_id, mode: "revised" }; },
-    async forget(input) { calls.push(["forget", input]); return { memory_id: input.memory_id, forgotten: true }; },
-    async system_context() { return { items: [] }; },
-    async dispose() { calls.push(["dispose"]); },
-  };
-  const plugin = new MemoryPlugin({ provider });
+test("MemoryPlugin 使用显式运行时目录并公开完整 Action", async (context) => {
+  const memory_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-plugin-"));
+  context.after(async () => await fs.rm(memory_root, { recursive: true, force: true }));
+  const plugin = new MemoryPlugin({ root_path: memory_root });
   const plugin_context = {
     agent_id: "memory_test_agent",
     workspace_path: "/workspace",
@@ -215,13 +194,11 @@ test("MemoryPlugin 将公开 Action 委托给唯一 Provider", async () => {
     action_name: "remember",
   });
   assert.equal(result.success, true);
-  assert.equal(result.data.memory_id, "remote:1");
-  assert.deepEqual(calls[0], ["initialize", {
-    agent_id: "memory_test_agent",
-  }]);
-  assert.equal(calls[1][0], "remember");
-  assert.equal(calls[1][1].scope.agent_id, "memory_test_agent");
+  assert.equal(result.data.memory_id, "wiki/test");
+  assert.equal(
+    await fs.access(path.join(memory_root, "wiki", "test.md")).then(() => true).catch(() => false),
+    true,
+  );
   assert.equal("files" in plugin_context, false);
   await plugin.lifecycle.stop(plugin_context);
-  assert.equal(calls.at(-1)[0], "dispose");
 });

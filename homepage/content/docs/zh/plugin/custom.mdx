@@ -152,7 +152,7 @@ export function setup(context: PluginHostContext): GithubPlugin {
 
 表单展示所需的占位符、排序或控件提示放在 `x_downcity` 下，不改变 JSON Schema 的运行时校验语义。
 
-字段级 `default` 只作为 JSON Schema 注解，供表单或文档展示，不会自动写入 profile。Schema 的唯一事实源是 `setup` 模块；`plugin.json` 不重复保存 `config`、`schema` 或 `defaults`。
+字段级 `default` 只作为 JSON Schema 注解，供新 Profile 表单初始化，不会自动写入未选择 Profile 的运行时配置。Schema 的唯一事实源是 `setup` 模块；`plugin.json` 不重复保存 `config`、`schema` 或 `defaults`。
 
 `setup` 必须指向单个自包含 ESM 文件。安装器不会执行依赖安装、构建脚本或调用 `setup()`，也不会复制入口之外的源码和开发文件。Plugin 使用 Zod 等运行时依赖时，构建工具必须把依赖打进入口。
 
@@ -168,7 +168,7 @@ export function setup(context: PluginHostContext): GithubPlugin {
 └── dist/setup.js
 ```
 
-`config.toml` 只保存命名的明文 profile 值，文件权限为 `0600`。它属于 Plugin 的全局配置，不复制到 Agent 目录。CLI 与 Desktop 在需要配置或装配时加载 `setup` 模块的 `schema`，构建表单并脱敏 `writeOnly` 字段。普通安装和 Plugin 列表不会调用 `setup()`。Plugin 的运行时状态和缓存使用 `context.data_path`，宿主可以按 Agent 或 Workspace 隔离。
+`config.toml` 只保存命名的明文 profile 值，文件权限为 `0600`。它属于 Plugin 的全局配置，不复制到 Agent 目录。CLI 与 Desktop 在需要配置或装配时加载 `setup` 模块的 `schema`，构建表单并脱敏 `writeOnly` 字段。普通安装和 Plugin 列表不会调用 `setup()`。Plugin 的运行时状态和缓存使用 `context.data_path`，CLI 与 Desktop 按 Agent 和 Plugin 隔离，不因进入不同 Workspace 而复制。
 
 ```toml
 schema_version = 1
@@ -178,7 +178,7 @@ api_url = "https://api.github.com"
 token = "plain-local-token"
 ```
 
-Agent 显式选择的 profile 不存在时会报错；没有显式选择时读取 `default` profile，不存在则使用空对象，再执行 setup 模块 Schema 校验。
+Agent 的 Plugin 引用有两种运行语义：没有显式 profile 时直接使用空对象 `{}`，永远不会隐式读取名为 `default` 的 Profile；显式选择 profile 时读取该全局 Profile，不存在则报错。两种配置都会执行 setup 模块 Schema 校验。Schema 接受 `{}` 的 Plugin 可以直接启用，Schema 要求字段的 Plugin 必须先创建并显式选择 Profile。
 
 ## 安装与配置
 

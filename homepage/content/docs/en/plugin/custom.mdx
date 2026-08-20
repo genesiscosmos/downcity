@@ -11,11 +11,15 @@ A third-party directory defines exactly one Plugin. The Plugin's globally unique
 
 ```text
 github-plugin/
-├── src/index.ts
 ├── plugin.json
 ├── package.json
+├── README.md
+├── icon.svg
+├── src/
+│   ├── plugin.ts
+│   └── setup.ts
 ├── tsconfig.json
-└── dist/index.js
+└── dist/setup.js
 ```
 
 `src/` and `tsconfig.json` are development-only files. Downcity does not prescribe a build tool and does not require `tsup.config.ts`. `package.json` belongs to the Plugin package and establishes an explicit ESM package boundary, so it must contain `"type": "module"` and is installed with the Plugin. The build script only needs to bundle the entry and its runtime dependencies into one self-contained ESM file. For example, `package.json` can invoke esbuild directly:
@@ -24,18 +28,12 @@ github-plugin/
 {
   "type": "module",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js"
+    "build": "esbuild src/setup.ts --bundle --platform=node --format=esm --outfile=dist/setup.js"
   }
 }
 ```
 
-The ESM entry exports the Plugin constructor as the named `plugin` export:
-
-```ts
-export const plugin = GithubPlugin;
-```
-
-## Plugin constructor
+The SDK Plugin class is independent from the CLI configuration protocol. Its constructor parameters are entirely owned by the Plugin:
 
 ```ts
 import type { Plugin, PluginActions } from "@downcity/agent";
@@ -51,21 +49,28 @@ export class GithubPlugin implements Plugin {
   readonly description = "GitHub integration";
   readonly actions: PluginActions;
 
-  constructor({ config }: { config: GithubPluginConfig }) {
+  constructor(config: GithubPluginConfig) {
     this.actions = {};
   }
 }
-
-export const plugin = GithubPlugin;
 ```
 
-The instance `name`, `plugin.json` `id`, directory name, and Agent reference must match. The constructor does not repeat a Manifest or runtime Schema. TypeScript types serve Plugin code, while `plugin.json.config.schema` defines the runtime profile protocol:
+SDK users assemble the instance directly:
 
 ```ts
-new PluginConstructor(selected_profile);
+const plugin = new GithubPlugin({
+  api_url: "https://api.github.com",
+  token: process.env.GITHUB_TOKEN ?? "",
+});
+
+const agent = new Agent({
+  id: "coding-pro",
+  model,
+  plugins: [plugin],
+});
 ```
 
-The Loader validates the profile against JSON Schema, then passes the complete profile directly to the constructor. Runtime clients and providers are created inside the Plugin; Agent-scoped services are read from the Plugin execution context. There is no framework-level Binding, Resource, Resolver, or Installation domain.
+The instance `name`, `plugin.json` `id`, directory name, and Agent reference must match. The SDK does not require a fixed constructor export or require the constructor to accept a profile.
 
 ## Plugin definition
 
@@ -78,24 +83,36 @@ The source directory contains one `plugin.json`:
   "version": "1.0.0",
   "title": "GitHub",
   "description": "GitHub integration",
-  "entry": "dist/index.js",
-  "config": {
-    "schema": {
-      "type": "object",
-      "properties": {
-        "api_url": { "type": "string", "format": "uri" },
-        "token": { "type": "string", "minLength": 1, "writeOnly": true }
-      },
-      "required": ["api_url", "token"],
-      "additionalProperties": false
-    }
-  }
+  "icon": "./icon.svg",
+  "setup": "dist/setup.js"
 }
 ```
 
-Plugin authors declare the complete JSON Schema and optional `defaults` directly in `plugin.json`. The installer validates the Schema, defaults, and saved profiles, then writes source, integrity, and timestamps into the same installed file. It does not generate a second Manifest or Schema snapshot.
+`setup` points to a self-contained ESM module that exports the configuration Schema and host assembly function:
 
-The `entry` must point to one self-contained ESM file. The installer does not install dependencies, run build scripts, import the Plugin entry, or copy source and development files outside the entry. If the Plugin uses runtime dependencies such as Zod, the build tool must bundle them into the entry.
+```ts
+import type { PluginHostContext } from "@downcity/city";
+
+export const schema = {
+  type: "object",
+  properties: {
+    api_url: { type: "string", format: "uri" },
+    token: { type: "string", minLength: 1, writeOnly: true },
+  },
+  required: ["api_url", "token"],
+  additionalProperties: false,
+} as const;
+
+export function setup(context: PluginHostContext): GithubPlugin {
+  return new GithubPlugin(context.profile as GithubPluginConfig);
+}
+```
+
+`setup` is City's assembly boundary, not an install script or Plugin lifecycle hook. Each call creates a new Plugin instance. `context.data_path` is private runtime storage and never stores profile configuration. The global profile remains under `~/.downcity/plugins/<plugin_id>/config.toml` and can be selected by multiple Agents.
+
+Plugin authors declare the complete JSON Schema from the setup module. Field-level `default` values initialize new profile forms only; they are not merged into runtime configuration when an Agent does not select a profile.
+
+The setup path must point to one self-contained ESM file. The installer does not install dependencies, run build scripts, import the setup module, or copy source and development files outside the declared artifact set. If the Plugin uses runtime dependencies such as Zod, the build tool must bundle them into setup.
 
 The installed layout is deterministic:
 
@@ -104,10 +121,12 @@ The installed layout is deterministic:
 ├── plugin.json
 ├── config.toml
 ├── package.json
-└── dist/index.js
+├── README.md
+├── icon.svg
+└── dist/setup.js
 ```
 
-`config.toml` contains only named plaintext profile values and uses file mode `0600`. CLI and Desktop build forms from the `plugin.json` Schema and redact fields marked `writeOnly`.
+`README.md` is required. `config.toml` contains only named plaintext profile values and uses file mode `0600`. CLI and Desktop load the setup Schema to build forms and redact fields marked `writeOnly`.
 
 ```toml
 schema_version = 1
@@ -117,7 +136,7 @@ api_url = "https://api.github.com"
 token = "plain-local-token"
 ```
 
-An explicitly selected missing profile is an error. Without an explicit selection, Downcity reads the `default` profile, falls back to `plugin.json.config.defaults` or an empty object, then validates it against the Schema.
+An Agent reference without an explicit profile always passes `{}` and never implicitly reads a persisted `default` profile. An explicitly selected profile is loaded from the global Plugin configuration and is an error when missing. Both paths are validated against the setup Schema. A Plugin whose Schema accepts `{}` can be enabled directly; a Plugin with required fields needs a named profile.
 
 ## Install and configure
 
@@ -131,7 +150,7 @@ city plugin uninstall github
 
 Updates atomically replace the complete Plugin directory while preserving `config.toml`. The CLI rejects an update when saved profiles fail the new Schema, and rejects profile or Plugin removal while an Agent still references it.
 
-Installation reads and copies only `plugin.json`, `package.json`, and the declared entry. It does not run `npm install`, build scripts, Plugin lifecycle hooks, or the entry module. The constructor export and instance ID are validated when an Agent actually loads the Plugin, and `package.json` plus the entry receive a SHA-256 digest. Install only trusted sources.
+Installation reads and copies only `plugin.json`, `package.json`, `README.md`, the declared setup file, and an optional local icon. It does not run `npm install`, build scripts, Plugin lifecycle hooks, or `setup()`. The setup exports and instance ID are validated when needed, and the installed artifacts receive a SHA-256 digest. Install only trusted sources.
 
 Continue with:
 

@@ -1,6 +1,6 @@
 {
   "name": "@downcity/plugins",
-  "version": "1.0.266",
+  "version": "1.0.267",
   "type": "module",
   "description": "Downcity 内建 plugin 集合包",
   "main": "./bin/index.js",

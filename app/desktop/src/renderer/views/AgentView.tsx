@@ -172,19 +172,71 @@ function SoulEditor({ definition, controller, set_definition }: { /** 未提交�
 function PluginEditor({ definition, plugins, controller, set_definition }: { /** 未提交定义。 */ definition: DesktopAgentDefinition; /** 可用 Plugin。 */ plugins: DesktopPluginSummary[]; /** Desktop 根控制器。 */ controller: DesktopViewController; /** 替换定义。 */ set_definition(value: DesktopAgentDefinition): void }) {
   const [expanded_plugins, set_expanded_plugins] = useState<Set<string>>(() => new Set());
   const [missing_profile_plugin, set_missing_profile_plugin] = useState<DesktopPluginSummary>();
-  const set_plugin = (plugin_id: string, enabled: boolean) => {
+  const set_plugin = (plugin: DesktopPluginSummary, enabled: boolean) => {
     const next_plugins = { ...definition.plugins };
-    if (enabled) next_plugins[plugin_id] = {};
-    else delete next_plugins[plugin_id];
+    if (!enabled) {
+      delete next_plugins[plugin.plugin_id];
+    } else if (plugin.configuration === "required") {
+      const profile = plugin.profile_ids[0];
+      if (!profile) {
+        set_missing_profile_plugin(plugin);
+        return;
+      }
+      next_plugins[plugin.plugin_id] = { profile };
+    } else {
+      next_plugins[plugin.plugin_id] = {};
+    }
     set_definition({ ...definition, plugins: next_plugins });
   };
-  const set_profile = (plugin_id: string, reference: DesktopAgentPluginReference, profile: string) => set_definition({ ...definition, plugins: { ...definition.plugins, [plugin_id]: { ...reference, profile } } });
-  return <><div className="space-y-1">{plugins.map((plugin) => {
-    const reference = definition.plugins[plugin.plugin_id];
-    const expanded = expanded_plugins.has(plugin.plugin_id);
-    if (!plugin.configurable) return <label key={plugin.plugin_id} className="flex min-h-10 items-center gap-2 rounded-lg bg-background px-2.5"><input type="checkbox" checked={Boolean(reference)} onChange={(event) => set_plugin(plugin.plugin_id, event.target.checked)} /><span className="min-w-0 flex-1 truncate text-xs text-foreground">{plugin.title}</span></label>;
-    return <div key={plugin.plugin_id} className="overflow-hidden rounded-xl border border-border/60 bg-surface-subtle"><button type="button" className="flex min-h-11 w-full items-center gap-2 px-3 text-left hover:bg-interaction-hover" onClick={() => set_expanded_plugins((current) => { const next = new Set(current); if (next.has(plugin.plugin_id)) next.delete(plugin.plugin_id); else next.add(plugin.plugin_id); return next; })}><TbChevronRight className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} /><span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{plugin.title}</span>{reference?.profile ? <span className="max-w-32 truncate rounded-md bg-primary/[0.1] px-1.5 py-0.5 font-mono text-[0.625rem] text-primary">{reference.profile}</span> : <span className="text-[0.625rem] text-muted-foreground">未选择</span>}</button>{expanded ? <div className="border-t border-border/50 bg-background/45 p-2">{plugin.profile_ids.length ? <div className="grid gap-1.5">{plugin.profile_ids.map((profile_id) => <button key={profile_id} type="button" className={`flex min-h-9 items-center gap-2 rounded-lg border px-2.5 text-left text-xs transition-colors ${reference?.profile === profile_id ? "border-primary/40 bg-primary/[0.1] text-foreground" : "border-transparent text-muted-foreground hover:border-border hover:bg-interaction-hover"}`} onClick={() => set_profile(plugin.plugin_id, reference ?? {}, profile_id)}><span className={`size-1.5 shrink-0 rounded-full ${reference?.profile === profile_id ? "bg-primary" : "bg-muted-foreground/40"}`} /><span className="min-w-0 flex-1 truncate font-mono">{profile_id}</span>{reference?.profile === profile_id ? <span className="text-[0.625rem] text-primary">已选择</span> : null}</button>)}</div> : <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-border px-3 py-2.5"><span className="text-[0.6875rem] text-muted-foreground">这个 Plugin 还没有可用配置</span><Button onClick={() => set_missing_profile_plugin(plugin)}><TbPlus />添加配置</Button></div>}</div> : null}</div>;
-  })}{plugins.length === 0 ? <div className="py-8 text-center text-xs text-muted-foreground">暂无可用 Plugin</div> : null}</div><Dialog open={Boolean(missing_profile_plugin)} onOpenChange={(open) => { if (!open) set_missing_profile_plugin(undefined); }}><DialogContent><DialogHeader><DialogTitle>为 {missing_profile_plugin?.title} 添加配置</DialogTitle><DialogDescription>需要先创建一个 Profile，Agent 才能使用这个 Plugin。</DialogDescription></DialogHeader><DialogBody><div className="rounded-lg bg-muted/50 px-3 py-2.5 text-xs leading-5 text-muted-foreground">创建完成后返回当前 Agent 页面，再展开 Plugin 选择刚刚创建的 Profile。</div></DialogBody><DialogFooter><Button onClick={() => set_missing_profile_plugin(undefined)}>取消</Button><Button variant="primary" onClick={() => { const plugin_id = missing_profile_plugin?.plugin_id; set_missing_profile_plugin(undefined); if (plugin_id) controller.select_plugin(plugin_id); }}>去创建配置</Button></DialogFooter></DialogContent></Dialog></>;
+  const set_profile = (plugin_id: string, profile: string) => set_definition({
+    ...definition,
+    plugins: { ...definition.plugins, [plugin_id]: { profile } },
+  });
+  const toggle_expanded = (plugin_id: string) => set_expanded_plugins((current) => {
+    const next = new Set(current);
+    if (next.has(plugin_id)) next.delete(plugin_id);
+    else next.add(plugin_id);
+    return next;
+  });
+  return <>
+    <div className="space-y-1">{plugins.map((plugin) => {
+      const reference = definition.plugins[plugin.plugin_id];
+      const expanded = expanded_plugins.has(plugin.plugin_id);
+      if (plugin.configuration === "none") {
+        return <label key={plugin.plugin_id} className="flex min-h-10 items-center gap-2 rounded-lg bg-background px-2.5">
+          <input type="checkbox" checked={Boolean(reference)} onChange={(event) => set_plugin(plugin, event.target.checked)} />
+          <span className="min-w-0 flex-1 truncate text-xs text-foreground">{plugin.title}</span>
+        </label>;
+      }
+      return <div key={plugin.plugin_id} className="overflow-hidden rounded-xl border border-border/60 bg-surface-subtle">
+        <div className="flex min-h-11 items-center gap-2 px-3 hover:bg-interaction-hover">
+          <input type="checkbox" checked={Boolean(reference)} onChange={(event) => set_plugin(plugin, event.target.checked)} />
+          <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => toggle_expanded(plugin.plugin_id)}>
+            <TbChevronRight className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} />
+            <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{plugin.title}</span>
+            {reference?.profile
+              ? <span className="max-w-32 truncate rounded-md bg-primary/[0.1] px-1.5 py-0.5 font-mono text-[0.625rem] text-primary">{reference.profile}</span>
+              : <span className={`text-[0.625rem] ${plugin.configuration === "required" ? "text-destructive" : "text-muted-foreground"}`}>{plugin.configuration === "required" ? "需要配置" : "默认配置"}</span>}
+          </button>
+        </div>
+        {expanded ? <div className="grid gap-1.5 border-t border-border/50 bg-background/45 p-2">
+          {plugin.configuration === "optional" ? <button type="button" className={`flex min-h-9 items-center gap-2 rounded-lg border px-2.5 text-left text-xs transition-colors ${reference && !reference.profile ? "border-primary/40 bg-primary/[0.1] text-foreground" : "border-transparent text-muted-foreground hover:border-border hover:bg-interaction-hover"}`} onClick={() => set_plugin(plugin, true)}>
+            <span className={`size-1.5 shrink-0 rounded-full ${reference && !reference.profile ? "bg-primary" : "bg-muted-foreground/40"}`} />
+            <span className="min-w-0 flex-1">默认配置</span>
+          </button> : null}
+          {plugin.profile_ids.map((profile_id) => <button key={profile_id} type="button" className={`flex min-h-9 items-center gap-2 rounded-lg border px-2.5 text-left text-xs transition-colors ${reference?.profile === profile_id ? "border-primary/40 bg-primary/[0.1] text-foreground" : "border-transparent text-muted-foreground hover:border-border hover:bg-interaction-hover"}`} onClick={() => set_profile(plugin.plugin_id, profile_id)}>
+            <span className={`size-1.5 shrink-0 rounded-full ${reference?.profile === profile_id ? "bg-primary" : "bg-muted-foreground/40"}`} />
+            <span className="min-w-0 flex-1 truncate font-mono">{profile_id}</span>
+            {reference?.profile === profile_id ? <span className="text-[0.625rem] text-primary">已选择</span> : null}
+          </button>)}
+          <Button onClick={() => set_missing_profile_plugin(plugin)}><TbPlus />添加配置</Button>
+        </div> : null}
+      </div>;
+    })}{plugins.length === 0 ? <div className="py-8 text-center text-xs text-muted-foreground">暂无可用 Plugin</div> : null}</div>
+    <Dialog open={Boolean(missing_profile_plugin)} onOpenChange={(open) => { if (!open) set_missing_profile_plugin(undefined); }}>
+      <DialogContent><DialogHeader><DialogTitle>为 {missing_profile_plugin?.title} 添加配置</DialogTitle><DialogDescription>创建一个命名 Profile 后，Agent 可以显式选择它。</DialogDescription></DialogHeader><DialogBody><div className="rounded-lg bg-muted/50 px-3 py-2.5 text-xs leading-5 text-muted-foreground">创建完成后返回当前 Agent 页面，再展开 Plugin 选择刚刚创建的 Profile。</div></DialogBody><DialogFooter><Button onClick={() => set_missing_profile_plugin(undefined)}>取消</Button><Button variant="primary" onClick={() => { const plugin_id = missing_profile_plugin?.plugin_id; set_missing_profile_plugin(undefined); if (plugin_id) controller.select_plugin(plugin_id); }}>去创建配置</Button></DialogFooter></DialogContent>
+    </Dialog>
+  </>;
 }
 
 /** 设置式信息分组。 */

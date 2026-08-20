@@ -22,7 +22,7 @@ import {
   create_builtin_plugin_registrations,
 } from "@downcity/plugins";
 import { create_desktop_platform_sandbox } from "./DesktopPlatformSandbox.js";
-import type { DesktopModelSummary, DesktopPluginSummary } from "../../common/types/DesktopApi.js";
+import type { DesktopModelSummary } from "../../common/types/DesktopApi.js";
 
 const default_federation_url = "https://base.downcity.ai";
 
@@ -118,46 +118,6 @@ export async function list_desktop_agent_models(
       tags: [...(model.tags ?? [])],
       ...(model.price ? { price: [...model.price] } : {}),
     }));
-}
-
-/** 合并官方与第三方 Plugin，并附加 Agent 引用与 profile 摘要。 */
-export function list_desktop_plugins(data: DesktopLocalData): DesktopPluginSummary[] {
-  const registered_agents = new Map<string, string[]>();
-  for (const agent of data.agents.list()) {
-    for (const plugin_id of Object.keys(agent.plugins)) {
-      const agent_ids = registered_agents.get(plugin_id) ?? [];
-      agent_ids.push(agent.agent_id);
-      registered_agents.set(plugin_id, agent_ids);
-    }
-  }
-  const plugins = new Map<string, DesktopPluginSummary>();
-  for (const registration of create_desktop_builtin_plugin_registrations(data)) {
-    const definition = registration.definition;
-    plugins.set(definition.id, {
-      plugin_id: definition.id,
-      title: definition.title || definition.id,
-      description: definition.description || "",
-      source: "builtin",
-      agent_ids: registered_agents.get(definition.id) ?? [],
-      profile_count: Object.keys(data.plugins.read_config(definition.id).profiles).length,
-      profile_ids: Object.keys(data.plugins.read_config(definition.id).profiles),
-      configurable: Boolean(definition.config),
-    });
-  }
-  for (const installed of data.plugins.list_installed()) {
-      plugins.set(installed.id, {
-        plugin_id: installed.id,
-        title: installed.title || installed.id,
-        description: installed.description,
-        version: installed.version,
-        source: "installed",
-        agent_ids: registered_agents.get(installed.id) ?? [],
-        profile_count: Object.keys(data.plugins.read_config(installed.id).profiles).length,
-        profile_ids: Object.keys(data.plugins.read_config(installed.id).profiles),
-        configurable: true,
-      });
-  }
-  return [...plugins.values()].sort((left, right) => left.title.localeCompare(right.title));
 }
 
 /** 创建 Desktop 默认交互 Tool。 */

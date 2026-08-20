@@ -5,6 +5,7 @@
  */
 
 export { WebPlugin } from "./web/Plugin.js";
+export { WEB_PLUGIN_CONFIG_JSON_SCHEMA } from "./web/config/WebPluginConfig.js";
 export { PlaywrightBrowserProvider } from "./web/providers/PlaywrightBrowserProvider.js";
 export { SemanticBrowserProviderAdapter } from "./web/providers/SemanticBrowserProviderAdapter.js";
 export { ComputerUseBrowserProviderAdapter } from "./web/providers/ComputerUseBrowserProviderAdapter.js";

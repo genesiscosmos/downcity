@@ -597,6 +597,8 @@ CLI 与 Desktop 使用同一套用户级文件协议：
 
 Agent 的 `plugins` 对象以 Plugin ID 为键，值只包含可选 `profile`。TOML profile 是原始配置值，Loader 通过第三方 setup 模块导出的 `schema` 完成 JSON Schema 校验，再调用 `setup(context)`。账号、渠道与端点等结构由具体 Plugin 自己定义。框架不持久化 Binding、Resource 或 Installation，也不把 Plugin 配置写入 `downcity.db`。
 
+未设置 `profile` 的 Agent 引用始终使用空配置 `{}`，不会隐式读取名为 `default` 的持久化 profile。只有显式引用的 profile 才会从 `config.toml` 读取，缺失时直接失败。管理端通过同一 Schema 是否接受 `{}` 判断配置为 `optional` 或 `required`；字段级 `default` 只初始化新 profile 表单，不进入运行时合并。
+
 `config.toml` 是 City 级 Plugin 配置，多个 Agent 可以引用同一个 profile；Agent 不复制配置，也不在 Agent 目录保存 Plugin profile。`setup(context)` 收到的是当前装配的 profile 快照，`context.data_path` 则专门用于运行时状态、缓存和私有文件，宿主按 Agent/Plugin 隔离，不按 Workspace 复制。
 
 第三方 setup 模块导出 `schema` 与 `setup(context)`，SDK Class 的 constructor 参数由 Plugin 作者自由定义。配置 JSON Schema 不复制到 `plugin.json`，TypeScript 配置类型由 Plugin 代码独立维护。安装器只保留 `plugin.json`、声明 `"type": "module"` 的 `package.json` 与自包含 setup，不复制源码或构建配置。Definition ID、目录名、Agent 引用、实例 `name` 和 Registry key 必须一致；更新原子替换整个 Plugin 目录并保留 `config.toml`。

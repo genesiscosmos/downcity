@@ -13,6 +13,10 @@ export {
 } from "./runtime/LocalPluginLoader.js";
 export { resolve_local_agent_env } from "./runtime/LocalEnvironment.js";
 export {
+  accepts_empty_local_plugin_config,
+  create_local_plugin_config_draft,
+  redact_local_plugin_write_only_values,
+  restore_local_plugin_write_only_values,
   validate_local_plugin_config,
   validate_local_plugin_config_schema,
 } from "./runtime/LocalPluginConfigSchema.js";

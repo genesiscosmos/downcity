@@ -7,8 +7,6 @@ import type { PluginHostContext } from "@downcity/city";
 export interface LocalPluginConfigDefinition {
   /** 校验 profile 并驱动 CLI、Desktop 表单的完整 JSON Schema。 */
   schema: JsonObject;
-  /** `default` profile 不存在时使用的完整默认配置；字段级 `default` 只作为 Schema 注解。 */
-  defaults?: JsonObject;
 }
 
 /** 内置与第三方 Plugin 共享的静态领域定义。 */
@@ -21,7 +19,7 @@ export interface LocalPluginDefinition {
   description: string;
   /** Plugin 图标地址；可为 http(s) URL 或 Plugin 根目录内的相对路径。 */
   icon?: string;
-  /** Plugin profile 的可选 JSON Schema 与默认配置。 */
+  /** Plugin profile 的可选 JSON Schema。 */
   config?: LocalPluginConfigDefinition;
 }
 
