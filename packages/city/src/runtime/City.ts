@@ -100,13 +100,14 @@ export class City implements AgentCity {
     });
     this.workspaces = Object.freeze({
       add: (workspace) => this.add_workspace(workspace),
-      get: (workspace_id) => this.workspace(workspace_id),
+      get: (workspace_id) => this.get_workspace(workspace_id),
       list: () => this.list_workspaces(),
     });
   }
 
   /** 返回 City 持有的 Workspace；不存在时返回 null。 */
-  workspace(workspace_id_input: string): WorkspaceBase | null {
+  /** 内部 AgentCity 协议；用户应使用 `city.workspaces.get()`。 */
+  get_workspace(workspace_id_input: string): WorkspaceBase | null {
     const workspace_id = String(workspace_id_input || "").trim();
     return this.workspaces_by_id.get(workspace_id) ?? null;
   }
@@ -160,7 +161,7 @@ export class City implements AgentCity {
     if (!workspace_id) throw new Error("City request requires workspace_id");
     const existing = get_agent_workspace(agent, workspace_id);
     if (existing) return existing;
-    const city_workspace = this.workspace(workspace_id);
+    const city_workspace = this.get_workspace(workspace_id);
     if (city_workspace) return create_agent_workspace(agent, city_workspace);
     if (!this.resolve_workspace) {
       throw new Error(`Agent "${agent.id}" has not entered Workspace: ${workspace_id}`);

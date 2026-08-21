@@ -23,7 +23,7 @@ const workspace = new Workspace({
 const city = new City({ embassy, workspaces: [workspace] });
 const agent = new Agent({ id: "lucas", model, plugins });
 city.agents.add(agent);
-const session = await agent.sessions.create({ workspace: city.workspace("project")! });
+const session = await agent.sessions.create({ workspace: city.workspaces.get("project")! });
 
 const current_agent = city.agents.get("lucas");
 

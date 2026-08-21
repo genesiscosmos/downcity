@@ -18,7 +18,7 @@ import type {
 /** Agent 可绑定的 City 最小结构，避免 Agent 反向依赖 @downcity/city。 */
 export interface AgentCity {
   /** 按 ID 返回 City 持有的 Workspace。 */
-  workspace(workspace_id: string): import("@downcity/workspace").WorkspaceBase | null;
+  get_workspace(workspace_id: string): import("@downcity/workspace").WorkspaceBase | null;
   /**
    * 释放 City 对 Agent 的运行时引用。
    *

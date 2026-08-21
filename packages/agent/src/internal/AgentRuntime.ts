@@ -52,7 +52,7 @@ export function create_agent_workspace(agent: Agent, workspace: WorkspaceBase): 
   const workspace_id = String(workspace?.id || "").trim();
   if (!workspace_id) throw new Error("Agent sessions require a Workspace with a stable id");
   const city = state.bound_city;
-  if (city && city.workspace(workspace_id) !== workspace) {
+  if (city && city.get_workspace(workspace_id) !== workspace) {
     throw new Error(`Workspace "${workspace_id}" does not belong to the Agent City`);
   }
   const existing = state.workspaces_by_id.get(workspace_id);
