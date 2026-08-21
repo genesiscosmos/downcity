@@ -11,20 +11,17 @@ description: 本地 Agent SDK 的核心公开接口
 ## 公开 API
 
 - `new Agent(options)`
-- `agent.enter(workspace)`
-- `agent.workspaces()`
-- `agent.workspace(workspace_id)`
+- `agent.sessions.create({ workspace })`
 - `agent.set_instruction(input)`
 - `agent.get_instructions()`
 - `agent.get_logger()`
 - `agent.plugins`
 - `agent.dispose()`
 
-`agent.enter(workspace)` 返回 `AgentWorkspace`，本地 Session 属于这个执行作用域：
+Session 由 Agent 创建，并在创建时显式选择 Workspace：
 
 ```ts
-const agent_workspace = agent.enter(workspace);
-const session = await agent_workspace.sessions.create();
+const session = await agent.sessions.create({ workspace });
 ```
 
 ## 构造参数
@@ -37,7 +34,7 @@ const session = await agent_workspace.sessions.create();
 - `session_class`：可选的本地自定义 Session 类。
 
 构造参数中没有 `workspace`。宿主独立创建 Workspace，并在 Agent 需要进入项目执行时调用
-`agent.enter(workspace)`。
+`agent.sessions.create({ workspace })`。
 
 ## AgentWorkspace
 

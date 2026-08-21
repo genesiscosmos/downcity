@@ -6,27 +6,22 @@ description: The core public API of the local Agent SDK
 # Agent Class
 
 `Agent` is the reusable subject of the local SDK. It owns identity, instruction, model, custom
-Tools, Plugin registration, and the set of Workspaces it has entered. It does not own a permanent
-Workspace or a global Session collection.
+Tools, Plugin instances, and its Session collection. It does not own a permanent Workspace.
 
 ## Public API
 
 - `new Agent(options)`
-- `agent.enter(workspace)`
-- `agent.workspaces()`
-- `agent.workspace(workspace_id)`
+- `agent.sessions.create({ workspace })`
 - `agent.set_instruction(input)`
 - `agent.get_instructions()`
 - `agent.get_logger()`
 - `agent.plugins`
 - `agent.dispose()`
 
-`agent.enter(workspace)` returns an `AgentWorkspace`. Local Sessions belong to that execution
-scope:
+Sessions are created by the Agent and select the Workspace explicitly:
 
 ```ts
-const agent_workspace = agent.enter(workspace);
-const session = await agent_workspace.sessions.create();
+const session = await agent.sessions.create({ workspace });
 ```
 
 ## Constructor options
@@ -38,15 +33,14 @@ const session = await agent_workspace.sessions.create();
 - `plugins`: Plugin objects registered once on the Agent.
 - `session_class`: optional custom local Session class.
 
-There is no `workspace` constructor option. The host creates Workspace independently and enters it
-when that Agent needs to work in the project.
+There is no `workspace` constructor option. The host creates Workspace independently and selects it
+when creating a Session.
 
 ## AgentWorkspace
 
-`AgentWorkspace` exposes `workspace`, `sessions`, `tools`, `plugins`, `data_path`, and `leave()`.
-Its Session collection provides `create`, `get`, `list`, `archive`, `archived`, `clean_archive`,
-`remove`, and `clear_messages`.
+`AgentWorkspace` is an internal runtime scope used by City and transport. It is not part of the
+public Agent API.
 
-One Agent may enter multiple Workspaces. `agent.dispose()` leaves every active AgentWorkspace,
+One Agent may create Sessions in multiple Workspaces. `agent.dispose()` leaves every active runtime scope,
 closes its Shell and storage resources, and then unregisters Agent-level Plugins. Network transports
 created by `@downcity/city` remain owned by the host.

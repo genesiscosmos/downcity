@@ -21,18 +21,18 @@ const workspace = new Workspace({
   path: process.cwd(),
 });
 const city = new City({ embassy, workspaces: [workspace] });
-const agent = new Agent({ id: "lucas", city, model, plugins });
+const agent = new Agent({ id: "lucas", model, plugins });
+city.agents.add(agent);
 const session = await agent.sessions.create({ workspace: city.workspace("project")! });
 
-const current_agent = city.agent("lucas");
+const current_agent = city.agents.get("lucas");
 
 await city.close();
-await agent.dispose();
 ```
 
 ## Ownership
 
-- The application creates Agents and Plugins; each Agent binds to at most one City.
+- The application creates Agents and Plugins; `city.agents.add(agent)` binds an Agent to one City.
 - `City` owns Workspaces and Embassy services, and keeps Agent references only for routing and shutdown coordination.
 - Sessions are created by the Agent and select a City Workspace explicitly.
 - Each Agent owns its Plugin lifecycle and ActionSchedule.
@@ -45,6 +45,6 @@ the new host asks for confirmation, requests a graceful shutdown, and waits for 
 to release its transports. This protocol only coordinates City listener ownership. It adds no Agent
 started state and never modifies persisted Agent, Plugin, or Session data.
 
-Single-Agent execution, AgentWorkspace, Session, Plugin SDK, and RemoteAgent remain in
+Single-Agent execution, internal AgentWorkspace runtime, Session, Plugin SDK, and RemoteAgent remain in
 `@downcity/agent`. Project resources and Shell belong to `@downcity/workspace`. Federation,
 Embassy, and Bureau belong to `@downcity/federation`.

@@ -27,12 +27,11 @@ const session = await agent.sessions.create({ workspace: city.workspace("project
 const current_agent = city.agents.get("lucas");
 
 await city.close();
-await agent.dispose();
 ```
 
 ## 所有权
 
-- 应用创建 Agent 和 Plugin，再通过 `city.agents.add(agent)` 将 Agent 纳入 City；每个 Agent 最多绑定一个 City。
+- 应用创建 Agent 和 Plugin，再通过 `city.agents.add(agent)` 将 Agent 纳入 City；一个 Agent 只属于一个 City。
 - `City` 持有 Workspace、Embassy 和 transport，并只为路由与关闭协调维护 Agent 引用。
 - Session 由 Agent 创建，并在创建时显式选择 City Workspace。
 - Plugin lifecycle 和 ActionSchedule 归各 Agent 自己拥有。
@@ -44,6 +43,6 @@ CLI 与 Desktop 启动 City 时使用同一份宿主状态。如果另一端已�
 用户确认，请求已有宿主退出，并等待其释放 transport。这个协议只协调 City 监听权，不给
 Agent 增加启动状态，也不修改 Agent、Plugin 或 Session 的持久化数据。
 
-单 Agent 执行、AgentWorkspace、Session、Plugin SDK 和 RemoteAgent 位于
+单 Agent 执行、内部 AgentWorkspace runtime、Session、Plugin SDK 和 RemoteAgent 位于
 `@downcity/agent`；项目资源与 Shell 位于 `@downcity/workspace`；Federation、Embassy 和
 Bureau 位于 `@downcity/federation`。
