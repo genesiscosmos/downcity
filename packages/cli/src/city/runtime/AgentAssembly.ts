@@ -62,10 +62,12 @@ export async function create_cli_agent(input: {
   config: LocalAgentConfig;
   /** 当前产品实例创建的 Plugin Loader。 */
   plugin_loader: LocalPluginLoader;
+  /** Agent 使用的 City 资源容器。 */
+  city?: import("@downcity/city").City;
   /** 可选的 Downcity 用户级数据根目录。 */
   root_path?: string;
 }): Promise<Agent> {
-  const { embassy, embassy_user } = await new EmbassySessionResolver().create_user_client();
+  const { embassy } = await new EmbassySessionResolver().create_user_client();
   const root_path = resolve_local_root_path(input.root_path);
   const [model, plugins, tools] = await Promise.all([
     Promise.resolve(create_cli_agent_model(input.config, process_environment())),
@@ -91,7 +93,7 @@ export async function create_cli_agent(input: {
     model,
     plugins,
     tools,
-    ai: embassy_user.ai,
+    city: input.city,
   });
 }
 

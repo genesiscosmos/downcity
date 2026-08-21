@@ -5,72 +5,62 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { Agent, Workspace } from "../../agent/bin/index.js";
+import { Agent } from "../../agent/bin/index.js";
+import { Workspace } from "../../workspace/bin/index.js";
 import { City } from "../bin/index.js";
 
 /** 创建临时运行时 Agent。 */
 async function create_agent(root, agent_id) {
   const workspace_path = path.join(root, agent_id);
   await fs.mkdir(workspace_path, { recursive: true });
-  const agent = new Agent({ id: agent_id });
-  agent.enter(new Workspace({ id: agent_id, path: workspace_path, data_root_path: path.join(workspace_path, "data") }));
-  return agent;
+  return new Workspace({ id: agent_id, path: workspace_path, data_root_path: path.join(workspace_path, "data") });
 }
 
-test("City.add 注册调用方创建的 Agent 并拒绝重复 ID", async () => {
+test("Agent 绑定 City 后可使用 City Workspace 并拒绝重复 ID", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-add-"));
-  const city = new City();
-  const first = await create_agent(root, "first");
-  const duplicate = await create_agent(root, "first");
+  const first_workspace = await create_agent(root, "first");
+  const city = new City({ workspaces: [first_workspace] });
+  const first = new Agent({ id: "first", city });
   try {
-    city.add(first);
     assert.equal(city.require_agent("first"), first);
-    assert.throws(() => city.add(duplicate), /already exists/u);
+    assert.throws(() => new Agent({ id: "first", city }), /already exists/u);
     assert.throws(() => city.require_agent("missing"), /not found/u);
   } finally {
-    await duplicate.dispose();
     await city.close();
     await first.dispose();
+    await first_workspace.dispose();
     await fs.rm(root, { recursive: true, force: true });
   }
 });
 
-test("City.close 不释放或清空 Agent", async () => {
+test("City.close 释放绑定 Agent 与 City Workspace", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-close-"));
-  const city = new City();
-  const agent = await create_agent(root, "owned");
+  const workspace = await create_agent(root, "owned");
+  const city = new City({ workspaces: [workspace] });
+  const agent = new Agent({ id: "owned", city });
   try {
-    city.add(agent);
     await city.close();
-    assert.equal(city.require_agent("owned"), agent);
+    assert.equal(city.agent("owned"), null);
     await city.close();
     await city.close();
-    assert.equal(city.require_agent("owned"), agent);
+    assert.equal(city.agent("owned"), null);
   } finally {
     await agent.dispose();
     await fs.rm(root, { recursive: true, force: true });
   }
 });
 
-test("City.remove 在 transport 释放失败时恢复 Agent 可见性并允许重试", async () => {
+test("Agent dispose 解除 City 运行时绑定", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-remove-"));
-  const city = new City();
-  const agent = await create_agent(root, "retry_remove");
-  let detach_count = 0;
-  city.http.detach_agent = async () => {
-    detach_count += 1;
-    if (detach_count === 1) throw new Error("detach failed");
-  };
+  const workspace = await create_agent(root, "retry_remove");
+  const city = new City({ workspaces: [workspace] });
+  const agent = new Agent({ id: "retry_remove", city });
   try {
-    city.add(agent);
-    await assert.rejects(city.remove(agent.id), /detach failed/u);
     assert.equal(city.require_agent(agent.id), agent);
-    assert.equal(await city.remove(agent.id), agent);
+    await agent.dispose();
     assert.equal(city.agent(agent.id), null);
-    assert.equal(detach_count, 2);
   } finally {
     await city.close();
-    await agent.dispose();
     await fs.rm(root, { recursive: true, force: true });
   }
 });

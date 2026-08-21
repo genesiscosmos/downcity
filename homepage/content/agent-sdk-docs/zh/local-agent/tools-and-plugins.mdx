@@ -269,6 +269,7 @@ const agent = new Agent({
   model,
   plugins: [
     new ImagePlugin({
+      image_ai: embassy.user.ai,
       default_model: "image-model-id",
     }),
   ],
@@ -278,7 +279,7 @@ const agent = new Agent({
 如果默认图片模型需要由业务状态决定，也可以传函数：
 
 ```ts
-new ImagePlugin({ default_model: "image-model-id" });
+new ImagePlugin({ image_ai: embassy.user.ai, default_model: "image-model-id" });
 ```
 
 注册后，Agent 会自动获得内置的 `plugin_read` / `plugin_call` tool。模型可以先读取 action metadata：

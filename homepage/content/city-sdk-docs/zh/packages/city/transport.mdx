@@ -4,7 +4,7 @@ description: 通过 City 宿主的 transport Adapter 暴露 Agent。
 ---
 
 `City` 统一拥有一个 HTTP transport 和一个 RPC transport。两个端口都按 `agent_id`
-路由到同一组 Agent，运行中通过 `city.add/remove` 修改实例集合会同时对两者生效。
+路由到同一组 Agent，并通过 `workspace_id` 选择 City 持有的 Workspace；Session 仍由 Agent 创建。
 
 ```ts
 await city.listen({

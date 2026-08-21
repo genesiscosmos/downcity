@@ -11,7 +11,7 @@ description: 从目录结构、profile 配置到 Agent 运行时上下文，完�
 
 - Plugin 构造函数只接收自己的 `profile`，不接收 `Agent`、`City`、`Embassy` 或 `dependencies` 容器。
 - Plugin 内部创建并拥有自己的 provider、client、store、queue 和资源句柄。
-- Agent 级外部能力通过 `context.ai` 或 `context.web` 暴露；Plugin 只依赖实际需要的能力。
+- Workspace 能力通过运行时 Context 暴露；图片、语音等外部服务通过 Plugin 构造函数注入对应的窄接口。
 - 配置是可持久化、可校验的 profile；运行态对象是实例内部状态，不能放进配置文件。
 - 一个 Plugin 只负责一个清晰的领域能力。需要不同实现时，创建新的 Plugin，而不是在一个 Plugin 内继续堆叠组合开关。
 
@@ -173,7 +173,6 @@ interface PluginContext {
 ```ts
 const agent = new Agent({
   id: "assistant",
-  ai: embassy.user.ai,
   plugins: [new ExamplePlugin({ provider: "local" })],
 });
 ```
@@ -181,7 +180,7 @@ const agent = new Agent({
 Plugin 只读取最小接口：
 
 ```ts
-const models = await context.ai?.catalog();
+const models = await image_ai.catalog();
 if (!models) return { success: false, error: "AI service is unavailable" };
 ```
 
@@ -278,7 +277,7 @@ it("returns a stable error when AI is unavailable", async () => {
 });
 ```
 
-不要通过重新引入旧的 callback 构造参数来测试。宿主 AI 对象应通过 `Agent.ai` 传入，Plugin 测试则使用测试用的 `PluginContext.ai`。
+不要通过 `Agent.ai` 传递通用 AI 对象。Plugin 只接收自身需要的窄服务接口，测试时传入该接口的测试实现。
 
 ## 发布检查清单
 

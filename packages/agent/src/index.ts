@@ -130,9 +130,14 @@ export type {
   SessionToolApprovalInteractionRequest,
 } from "./types/session/SessionInteraction.js";
 export type {
+  AgentCity,
   AgentOptions,
   AgentSessionConstructor,
 } from "./types/agent/AgentOptions.js";
+export type {
+  AgentCreateSessionOptions,
+  AgentSessionCollection,
+} from "./types/agent/AgentSessionCollection.js";
 export type {
   AgentSession,
   AgentSessionActor,
@@ -165,9 +170,6 @@ export type {
 export type { PluginContext } from "./types/plugin/PluginContext.js";
 export type { AgentPluginContext } from "./types/plugin/AgentPluginContext.js";
 export type {
-  PluginAiServices,
-  PluginModelCatalog,
-  PluginModelDescriptor,
   PluginWebServices,
 } from "./types/plugin/PluginServices.js";
 export type { SessionPort } from "./types/session/SessionPort.js";

@@ -4,7 +4,7 @@
  * 职责说明（中文）
  * - 让 Agent 注册的 Plugin 进入当前 Workspace。
  * - 为当前 Workspace 独立启动 ActionSchedule。
- * - 离开 Workspace 时只释放 Workspace 资源，不注销 Agent Plugin。
+ * - 离开 Workspace 时只释放 Agent 级执行资源，不注销 Agent Plugin 或 City Workspace。
  */
 
 import type { PluginContext } from "@/types/plugin/PluginContext.js";

@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent, RemoteAgent } from "../../agent/bin/index.js";
-import { Workspace } from "../../agent/bin/index.js";
+import { Workspace } from "../../workspace/bin/index.js";
 import { City, CityHTTP, CityRPC } from "../bin/index.js";
 
 const network_tests_enabled = process.env.DOWNCITY_RUN_NETWORK_TESTS === "1";
@@ -32,20 +32,21 @@ async function create_city() {
     fs.mkdir(path.join(root, "first")),
     fs.mkdir(path.join(root, "second")),
   ]);
-  const first_agent = new Agent({ id: "first_agent" });
-  const second_agent = new Agent({ id: "second_agent" });
-  first_agent.enter(new Workspace({
+  const first_workspace = new Workspace({
     id: "first",
     path: path.join(root, "first"),
     data_root_path: path.join(root, "data"),
-  }));
-  second_agent.enter(new Workspace({
+  });
+  const second_workspace = new Workspace({
     id: "second",
     path: path.join(root, "second"),
     data_root_path: path.join(root, "data"),
-  }));
+  });
+  const city = new City({ workspaces: [first_workspace, second_workspace] });
+  const first_agent = new Agent({ id: "first_agent", city });
+  const second_agent = new Agent({ id: "second_agent", city });
   const agents = [first_agent, second_agent];
-  return { city: new City(agents), agents, root };
+  return { city, agents, root };
 }
 
 test("CityHTTP mounts each Agent below its stable ID", async () => {
@@ -133,7 +134,10 @@ test("CityHTTP does not recreate an Agent removed while router resolution is que
     );
     const detach_promise = transport.detach_agent("first_agent");
     const queued_request = transport.router().request("/agents/first_agent/workspaces/first/api/sdk/sessions");
-    const remove_promise = city.remove("first_agent");
+    const remove_promise = (async () => {
+      city.unbind_agent(agents[0]);
+      await detach_promise;
+    })();
     release_dispose();
     await Promise.all([detach_promise, remove_promise]);
     assert.equal((await queued_request).status, 404);
@@ -189,7 +193,7 @@ test("CityHTTP 动态识别运行中新增和删除的 Agent", async () => {
       path: path.join(root, "third"),
       data_root_path: path.join(root, "data"),
     }));
-    city.add(agent);
+    city.bind_agent(agent);
     const created = await transport.router().request(
       "/agents/third_agent/workspaces/third/api/sdk/sessions",
       {
@@ -199,7 +203,7 @@ test("CityHTTP 动态识别运行中新增和删除的 Agent", async () => {
       },
     );
     assert.equal(created.status, 200);
-    await city.remove("third_agent");
+    city.unbind_agent(agent);
     await agent.dispose();
     assert.equal(
       (await transport.router().request("/agents/third_agent/workspaces/third/api/sdk/sessions")).status,

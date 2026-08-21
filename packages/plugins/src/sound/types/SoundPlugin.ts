@@ -10,6 +10,18 @@
 import type { UIMessage } from "ai";
 import type { JsonObject, JsonValue } from "@downcity/agent";
 
+/** SoundPlugin 使用的最小语音 AI 服务协议。 */
+export interface SoundAiService {
+  /** 读取当前可用模型目录。 */
+  catalog(): Promise<{ all(): readonly unknown[] }>;
+
+  /** 执行语音识别。 */
+  asr(input: JsonObject): Promise<unknown>;
+
+  /** 执行语音合成。 */
+  tts(input: JsonObject): Promise<unknown>;
+}
+
 /**
  * SoundPlugin 支持的语音能力。
  */
@@ -152,5 +164,8 @@ export interface SoundPluginProfile {
   format?: string;
 }
 
-/** SoundPlugin profile 的兼容名称别名。 */
-export type SoundPluginOptions = SoundPluginProfile;
+/** SoundPlugin 构造参数。 */
+export interface SoundPluginOptions extends SoundPluginProfile {
+  /** 语音 AI 服务；通常来自 Embassy User AI。 */
+  sound_ai: SoundAiService;
+}

@@ -9,11 +9,21 @@
 import type { Tool } from "ai";
 import type { AgentModel } from "@/agent/AgentModel.js";
 import type { Plugin } from "@/types/plugin/PluginDefinition.js";
+import type { PluginWebServices } from "@/types/plugin/PluginServices.js";
 import type {
   AgentManagedSession,
   SessionOptions,
 } from "@/types/session/SessionOptions.js";
-import type { PluginWebServices } from "@/types/plugin/PluginServices.js";
+
+/** Agent 可绑定的 City 最小结构，避免 Agent 反向依赖 @downcity/city。 */
+export interface AgentCity {
+  /** 绑定 Agent 运行时引用。 */
+  bind_agent(agent: { readonly id: string }): void;
+  /** 解除 Agent 运行时引用。 */
+  unbind_agent(agent: { readonly id: string }): void;
+  /** 按 ID 返回 City 持有的 Workspace。 */
+  workspace(workspace_id: string): import("@downcity/workspace").WorkspaceBase | null;
+}
 
 /**
  * Agent 可使用的 Session 类。
@@ -38,6 +48,9 @@ export interface AgentOptions {
    * - 应保持稳定、可 URL 编码、尽量不要依赖展示名称。
    */
   id: string;
+
+  /** Agent 使用的 City 资源容器；省略时 Agent 可独立运行。 */
+  city?: AgentCity;
 
   /**
    * 当前 agent 默认可用的工具集合。
@@ -66,12 +79,6 @@ export interface AgentOptions {
    * - Session 未显式设置模型时，执行自动回退到该实例。
    */
   model?: AgentModel;
-
-  /**
-   * 当前 Agent 持有的用户级 AI 对象，通常直接传入 `embassy.user.ai`。
-   * Agent 不绑定具体宿主类型；PluginContext 会将其投影为 Plugin 所需的最小能力。
-   */
-  ai?: unknown;
 
   /** 当前 Agent 持有的 Web 搜索与文档能力。 */
   web?: PluginWebServices;

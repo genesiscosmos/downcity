@@ -95,20 +95,7 @@ export class CliCityRuntime {
       port: http_port,
       plugin_repository: data.plugins,
     });
-    const agents: Agent[] = [];
-    try {
-      for (const config of data.agents.list()) {
-        agents.push(await create_cli_agent({
-          config,
-          plugin_loader,
-        }));
-      }
-    } catch (error) {
-      await Promise.allSettled(agents.map(async (agent) => await agent.dispose()));
-      data.database.close();
-      throw error;
-    }
-    const city = new City(agents, {
+    const city = new City({ runtime: {
       resolve_workspace: async (_agent, workspace_id) => {
         const workspace_config = data.workspaces.get(workspace_id);
         if (!workspace_config) throw new Error(`Workspace not found: ${workspace_id}`);
@@ -149,8 +136,21 @@ export class CliCityRuntime {
           return env;
         },
       },
-    });
-
+    }});
+    const agents: Agent[] = [];
+    try {
+      for (const config of data.agents.list()) {
+        agents.push(await create_cli_agent({
+          config,
+          plugin_loader,
+          city,
+        }));
+      }
+    } catch (error) {
+      await Promise.allSettled(agents.map(async (agent) => await agent.dispose()));
+      data.database.close();
+      throw error;
+    }
     process.env.DC_CITY_HOST = host;
     process.env.DC_CITY_PORT = String(http_port);
     process.env.DC_CITY_RPC_HOST = "127.0.0.1";

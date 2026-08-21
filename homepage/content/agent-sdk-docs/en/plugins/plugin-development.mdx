@@ -11,7 +11,7 @@ This guide covers the complete Downcity Plugin model. A Plugin is an independent
 
 - The Plugin constructor accepts its own `profile`, not an `Agent`, `City`, `Embassy`, or `dependencies` bag.
 - The Plugin creates and owns its providers, clients, stores, queues, and resource handles.
-- Host capabilities are exposed by the Agent through `context.ai` or `context.web`; a Plugin depends only on the capabilities it needs.
+- Workspace capabilities are exposed through the runtime context; external services such as image or speech AI are injected into the Plugin constructor as narrow interfaces.
 - A profile contains persistent, validated values. Runtime objects belong to the Plugin instance and never belong in configuration files.
 - Keep one clear domain capability per Plugin. When an implementation needs a different boundary, create another Plugin instead of adding more composition switches.
 
@@ -171,7 +171,6 @@ The host provides services when constructing the Agent:
 ```ts
 const agent = new Agent({
   id: "assistant",
-  ai: embassy.user.ai,
   plugins: [new ExamplePlugin({ provider: "local" })],
 });
 ```
@@ -179,7 +178,7 @@ const agent = new Agent({
 A Plugin reads only the smallest interface it needs:
 
 ```ts
-const models = await context.ai?.catalog();
+const models = await image_ai.catalog();
 if (!models) return { success: false, error: "AI service is unavailable" };
 ```
 
@@ -276,7 +275,7 @@ it("returns a stable error when AI is unavailable", async () => {
 });
 ```
 
-Do not restore legacy callback constructor arguments just to make tests easier. Pass the host AI object through `Agent.ai`, and use a test `PluginContext.ai` in Plugin tests.
+Do not pass a generic AI object through `Agent`. Inject only the narrow service required by the Plugin and use a test implementation of that service in Plugin tests.
 
 ## Release checklist
 

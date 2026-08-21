@@ -3,8 +3,8 @@ title: "@downcity/city"
 description: 在内存中索引 Agent，并通过 HTTP/RPC 按 ID 转发请求。
 ---
 
-`@downcity/city` 是 CLI、Desktop 和自定义 Node 宿主共用的 Agent 转发包。它维护
-Agent 的内存索引和可选 HTTP/RPC transport，不读取配置，也不访问数据库。
+`@downcity/city` 是 CLI、Desktop 和自定义 Node 宿主共用的运行环境容器。它持有
+Workspace、Embassy 和可选 HTTP/RPC transport，不创建 Agent、Session 或 Plugin。
 
 ```bash
 pnpm add @downcity/city @downcity/agent @downcity/workspace
@@ -15,12 +15,13 @@ import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
 import { Workspace } from "@downcity/workspace";
 
-const agent = new Agent({ id: "lucas", model, plugins });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
-}));
-const city = new City([agent]);
+});
+const city = new City({ embassy, workspaces: [workspace] });
+const agent = new Agent({ id: "lucas", city, model, plugins });
+const session = await agent.sessions.create({ workspace: city.workspace("project")! });
 
 const current_agent = city.agent("lucas");
 
@@ -30,9 +31,9 @@ await agent.dispose();
 
 ## 所有权
 
-- CLI、Desktop 或自定义宿主创建并释放 Agent。
-- `City` 只维护 `agent_id -> Agent` 的运行时引用和 HTTP/RPC transport。
-- `city.add/remove` 只修改内存引用，不创建、释放或持久化 Agent。
+- 应用创建 Agent 和 Plugin；每个 Agent 最多绑定一个 City。
+- `City` 持有 Workspace、Embassy 和 transport，并只为路由与关闭协调维护 Agent 引用。
+- Session 由 Agent 创建，并在创建时显式选择 City Workspace。
 - Plugin lifecycle 和 ActionSchedule 归各 Agent 自己拥有。
 - CLI daemon 与 Desktop 窗口分别拥有独立的 City 和 Agent 生命周期。
 

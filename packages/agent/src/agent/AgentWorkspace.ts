@@ -30,9 +30,6 @@ import {
 
 const RESERVED_PLUGIN_TOOL_NAMES = new Set(["plugin_read", "plugin_call"]);
 
-/** 记录一个 Workspace 实例当前绑定的 AgentWorkspace，避免共享可变资源。 */
-const workspace_owners = new WeakMap<AgentWorkspaceOptions["workspace"], AgentWorkspace>();
-
 /** 拒绝普通 Tool 占用 PluginRegistry 的稳定桥接名称。 */
 function assert_no_reserved_plugin_tools(
   source: Record<string, Tool>,
@@ -89,9 +86,6 @@ export class AgentWorkspace {
     this.agent = options.agent;
     this.workspace = options.workspace;
     this.workspace_id = options.workspace.id;
-    if (workspace_owners.has(this.workspace)) {
-      throw new Error("Workspace storage is already bound to another scope");
-    }
     const storage_scope = this.workspace.storage.open_scope([
       "agents",
       this.agent.id,
@@ -110,10 +104,12 @@ export class AgentWorkspace {
     };
     this.storage = storage;
     this.data_path = storage.root_path;
-    this.workspace.shell?.bind({
-      root_path: this.workspace.path,
-      data_path: this.data_path,
-    });
+    if (!this.agent.city) {
+      this.workspace.shell?.bind({
+        root_path: this.workspace.path,
+        data_path: this.data_path,
+      });
+    }
     this.logger = new Logger();
     this.logger.bind_storage(storage.files, storage.root_path, {
       agent_id: this.agent.id,
@@ -131,8 +127,6 @@ export class AgentWorkspace {
       data_files: storage.files,
       ...(this.workspace.shell ? { shell: this.workspace.shell } : {}),
       logger: this.logger,
-      ai: this.agent.ai,
-      web: this.agent.web,
       get_workspace_env: () => this.workspace.get_env(),
       get_instructions: () => this.agent.get_instructions(),
       get_plugins: () => {
@@ -196,7 +190,6 @@ export class AgentWorkspace {
       this.agent.plugin_registry,
       storage,
     );
-    workspace_owners.set(this.workspace, this);
   }
 
   /** 当前 Agent ID。 */
@@ -244,7 +237,7 @@ export class AgentWorkspace {
     });
   }
 
-  /** 离开当前 Workspace 并释放其独享资源。 */
+  /** 离开当前 Workspace 并释放 Agent 独享的执行资源。 */
   async leave(): Promise<void> {
     this.leave_promise ??= (async () => {
       const errors: unknown[] = [];
@@ -255,7 +248,7 @@ export class AgentWorkspace {
         async () => await this.lifecycle.dispose(),
         async () => await this.storage.sessions.dispose(),
         async () => await this.logger.save_all_logs(),
-        async () => await this.workspace.dispose(),
+        ...(this.agent.city ? [] : [async () => await this.workspace.dispose()]),
       ];
       for (const cleanup of cleanup_steps) {
         try {
@@ -266,9 +259,6 @@ export class AgentWorkspace {
       }
       this.agent.release_workspace(this.workspace_id, this);
       this.agent.plugin_registry.unbind_workspace_context(this.context);
-      if (workspace_owners.get(this.workspace) === this) {
-        workspace_owners.delete(this.workspace);
-      }
       if (errors.length > 0) {
         throw new AggregateError(errors, `AgentWorkspace cleanup failed: ${this.workspace_id}`);
       }

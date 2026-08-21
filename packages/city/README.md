@@ -1,17 +1,17 @@
 # @downcity/city
 
-`@downcity/city` 是 Agent 内存索引与 HTTP/RPC 转发器。它不读取配置、不创建
-Agent，也不访问数据库。
+`@downcity/city` 是给 Agent 提供 Workspace、Embassy 和 transport 的资源容器。
+它不创建 Agent、Session 或 Plugin。
 
 ```ts
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";
 import { City } from "@downcity/city";
 
-const agent = new Agent({ id: "lucas", model, plugins });
 const workspace = new Workspace({ id: "sdk", path: "/projects/sdk" });
-agent.enter(workspace);
-const city = new City([agent]);
+const city = new City({ embassy, workspaces: [workspace] });
+const agent = new Agent({ id: "lucas", city, model, plugins });
+const session = await agent.sessions.create({ workspace: city.workspace("sdk")! });
 
 const agents = city.agents();
 const current_agent = city.agent("lucas");
@@ -20,12 +20,11 @@ await city.close();
 await agent.dispose();
 ```
 
-宿主拥有 Agent 生命周期。`city.add(agent)` 和 `city.remove(agent_id)` 只修改内存索引，
-不会创建、释放或持久化 Agent。Plugin 生命周期归 Agent。
+Agent 拥有自己的 Plugin 和 Session；City 负责 Workspace、Embassy、transport 以及关闭时的资源协调。
 
 ## 公开能力
 
-- `City`：Agent 内存索引与 transport 生命周期
+- `City`：Workspace、Embassy 与 transport 生命周期
 - `AgentHTTP` 与 `AgentRPC`：独立暴露一个 AgentWorkspace
 - `CityHTTP` 与 `CityRPC`：在两个 City 级端口上按 Agent ID 与 Workspace ID 暴露执行边界
 

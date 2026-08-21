@@ -4,7 +4,7 @@ description: Expose an Agent through the City host transport adapters.
 ---
 
 `City` owns one HTTP transport and one RPC transport. Both route by `agent_id` to the same Agent
-collection. Runtime changes made through `city.add/remove` become visible to both.
+collection and by `workspace_id` to a Workspace owned by City.
 
 ```ts
 await city.listen({

@@ -248,6 +248,7 @@ const agent = new Agent({
   model,
   plugins: [
     new ImagePlugin({
+      image_ai: embassy.user.ai,
       default_model: "image-model-id",
     }),
   ],
@@ -257,7 +258,7 @@ const agent = new Agent({
 When the default image model depends on application state, pass a function:
 
 ```ts
-new ImagePlugin({ default_model: "image-model-id" });
+new ImagePlugin({ image_ai: embassy.user.ai, default_model: "image-model-id" });
 ```
 
 After registration, the Agent automatically gets the built-in `plugin_read` / `plugin_call` tools. The model can inspect action metadata first:

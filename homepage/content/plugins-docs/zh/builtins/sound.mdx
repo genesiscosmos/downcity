@@ -13,8 +13,10 @@ description: 使用 FED 模型目录统一提供 ASR 语音识别、TTS 语音�
 
 ```ts
 import { SoundPlugin } from "@downcity/plugins/sound";
+import { Embassy } from "@downcity/federation";
 
 const sound = new SoundPlugin({
+  sound_ai: embassy.user.ai,
   default_asr_model: "asr-model-id",
   default_tts_model: "tts-model-id",
 });
@@ -97,11 +99,9 @@ TTS 返回 AI SDK `UIMessage`。音频使用 `file` part 表示，Agent 会统�
 
 ```ts
 new SoundPlugin({
+  sound_ai: embassy.user.ai,
   default_asr_model: "asr-model-id",
   default_tts_model: "tts-model-id",
-  list_models,
-  asr,
-  tts,
 });
 ```
 
@@ -113,11 +113,9 @@ new SoundPlugin({
 
 ```ts
 new SoundPlugin({
+  sound_ai: embassy.user.ai,
   auto_asr: true,
   default_asr_model: "asr-model-id",
-  list_models,
-  asr,
-  tts,
 });
 ```
 

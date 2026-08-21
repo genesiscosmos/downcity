@@ -23,22 +23,21 @@ const workspace = new Workspace({
   shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
 });
 
-const agent = new Agent({ id: "repo-helper", model, plugins });
-const agent_workspace = agent.enter(workspace);
-const session = await agent_workspace.sessions.create();
+const city = new City({ workspaces: [workspace] });
+const agent = new Agent({ id: "repo-helper", city, model, plugins });
+const session = await agent.sessions.create({ workspace: city.workspace("project")! });
 ```
 
 ## 所有权
 
 - `Workspace` 拥有项目资源与可选 Shell。
 - `Agent` 拥有身份、指令、模型、自定义工具和 Plugin 注册。
-- `AgentWorkspace` 拥有 `agent.enter(workspace)` 创建的执行作用域，包括 Session、日志、
+- `AgentWorkspace` 是 Agent 内部创建的执行作用域，包括 Session、日志、
   调度任务、Workspace 级 Plugin 生命周期和私有运行状态。
 - Shell 是 Workspace 能力，不再存在独立的 `@downcity/shell` 包。
 
-一个 Agent 可以进入多个 Workspace。一个 Workspace 实例只能被进入一次，因为其中的 Shell
-和私有存储会绑定到一个 AgentWorkspace 生命周期。多个 Agent 操作同一物理项目目录时，应分别
-创建 Workspace 实例。
+一个 Agent 可以在多个 City Workspace 中创建 Session。Workspace 由 City 持有，可以被多个
+Agent 共享；Agent 私有的 Session 与 Plugin 数据始终隔离。
 
 ## 存储
 

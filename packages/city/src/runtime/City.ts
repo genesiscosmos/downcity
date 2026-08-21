@@ -1,19 +1,31 @@
 /**
- * City：Agent 内存索引与统一 transport 转发器。
+ * City：Workspace、Embassy 与统一 transport 的资源容器。
  *
- * City 不读取配置、不创建 Agent，也不拥有 Agent 的生命周期。宿主负责创建并释放
- * Agent；City 只维护运行时引用，并按 Agent ID 转发 HTTP/RPC 请求。
+ * City 不创建 Agent、Session 或 Plugin。应用创建 Agent 后通过 `new Agent({ city })`
+ * 完成绑定；City 只持有运行时引用，管理自己的 Workspace/Embassy 资源并负责 transport。
  */
 
 import { Agent, type AgentWorkspace } from "@downcity/agent";
+import type { WorkspaceBase } from "@downcity/workspace";
 import { CityHTTP } from "@/transport/http/CityHTTP.js";
 import { CityRPC } from "@/transport/rpc/CityRPC.js";
-import type { CityListenOptions, CityRuntimeOptions } from "@/types/City.js";
+import type {
+  CityAgentBinding,
+  CityListenOptions,
+  CityOptions,
+  CityRuntimeOptions,
+} from "@/types/City.js";
 
 /** Agent 实例索引与 transport 宿主。 */
-export class City {
+export class City implements CityAgentBinding {
   /** 当前 City 引用的 Agent，按稳定 ID 索引。 */
   private readonly agents_by_id = new Map<string, Agent>();
+
+  /** City 持有的 Workspace 资源，按稳定 ID 索引。 */
+  private readonly workspaces_by_id = new Map<string, WorkspaceBase>();
+
+  /** City 绑定的 Embassy 服务入口。 */
+  readonly embassy?: CityOptions["embassy"];
 
   /** 正在解除注册的 Agent；对查询立即不可见，失败后恢复可见。 */
   private readonly removing_agent_ids = new Set<string>();
@@ -36,14 +48,39 @@ export class City {
   /** City transport 组合操作的唯一串行链。 */
   private transport_operation_chain: Promise<void> = Promise.resolve();
 
-  constructor(
-    agents: readonly Agent[] = [],
-    runtime_options: CityRuntimeOptions = {},
-  ) {
+  constructor(options: CityOptions = {}) {
+    this.embassy = options.embassy;
+    for (const workspace of options.workspaces ?? []) {
+      const workspace_id = String(workspace?.id || "").trim();
+      if (!workspace_id) throw new Error("City requires Workspace with a stable id");
+      if (this.workspaces_by_id.has(workspace_id)) {
+        throw new Error(`Workspace already exists in City: ${workspace_id}`);
+      }
+      workspace.shell?.bind({
+        root_path: workspace.path,
+        data_path: workspace.storage.open_scope([
+          "cities",
+          workspace_id,
+          "shell",
+        ]).root_path,
+      });
+      this.workspaces_by_id.set(workspace_id, workspace);
+    }
+    const runtime_options = options.runtime ?? {};
     this.resolve_workspace = runtime_options.resolve_workspace;
     this.http = new CityHTTP(this, runtime_options.http);
     this.rpc = new CityRPC(this, runtime_options.rpc);
-    for (const agent of agents) this.register_agent(agent);
+  }
+
+  /** 返回 City 持有的 Workspace；不存在时返回 null。 */
+  workspace(workspace_id_input: string): WorkspaceBase | null {
+    const workspace_id = String(workspace_id_input || "").trim();
+    return this.workspaces_by_id.get(workspace_id) ?? null;
+  }
+
+  /** 返回 City 持有的 Workspace 稳定快照。 */
+  workspaces(): readonly WorkspaceBase[] {
+    return [...this.workspaces_by_id.values()];
   }
 
   /** 返回当前 City 已注册 Agent 的稳定快照。 */
@@ -90,6 +127,8 @@ export class City {
     if (!workspace_id) throw new Error("City request requires workspace_id");
     const existing = agent.workspace(workspace_id);
     if (existing) return existing;
+    const city_workspace = this.workspace(workspace_id);
+    if (city_workspace) return agent.enter(city_workspace);
     if (!this.resolve_workspace) {
       throw new Error(`Agent "${agent.id}" has not entered Workspace: ${workspace_id}`);
     }
@@ -104,6 +143,7 @@ export class City {
           `Resolved Workspace ID mismatch: expected ${workspace_id}, received ${workspace.id}`,
         );
       }
+      this.add_workspace(workspace);
       return agent.enter(workspace);
     })();
     this.workspace_entry_promises.set(target_key, entry_promise);
@@ -116,9 +156,14 @@ export class City {
     }
   }
 
-  /** 注册一个已实例化 Agent；City 不接管该实例的生命周期。 */
-  add(agent: Agent): Agent {
-    return this.register_agent(agent);
+  /** 绑定一个已实例化 Agent；Agent 仍然拥有自身生命周期。 */
+  bind_agent(agent: Agent): void {
+    this.register_agent(agent);
+  }
+
+  /** 解除一个 Agent 的运行时绑定；不释放 Agent 实例。 */
+  unbind_agent(agent: Agent): void {
+    if (this.agents_by_id.get(agent.id) === agent) this.agents_by_id.delete(agent.id);
   }
 
   /** 从 City 解除 Agent 注册；不释放实例，也不修改任何持久化数据。 */
@@ -170,13 +215,15 @@ export class City {
     });
   }
 
-  /** 幂等关闭 HTTP/RPC，不释放或移除 Agent。 */
+  /** 幂等关闭 transport，并按依赖顺序释放绑定 Agent 与 City Workspace。 */
   async close(): Promise<void> {
     await this.enqueue_transport_operation(async () => {
-      const results = await Promise.allSettled([
-        this.http.close(),
-        this.rpc.close(),
-      ]);
+      const results: PromiseSettledResult<unknown>[] = [];
+      results.push(...await Promise.allSettled([this.http.close(), this.rpc.close()]));
+      results.push(...await Promise.allSettled(this.agents().map(async (agent) => await agent.dispose())));
+      results.push(...await Promise.allSettled(
+        [...this.workspaces_by_id.values()].map(async (workspace) => await workspace.dispose()),
+      ));
       const errors = results.flatMap((result) =>
         result.status === "rejected" ? [result.reason] : [],
       );
@@ -192,6 +239,22 @@ export class City {
     }
     this.agents_by_id.set(agent.id, agent);
     return agent;
+  }
+
+  /** 把宿主按需解析出的 Workspace 纳入 City 资源索引。 */
+  private add_workspace(workspace: WorkspaceBase): void {
+    const workspace_id = String(workspace?.id || "").trim();
+    if (!workspace_id) throw new Error("City requires Workspace with a stable id");
+    const existing = this.workspaces_by_id.get(workspace_id);
+    if (existing && existing !== workspace) {
+      throw new Error(`Workspace already exists in City: ${workspace_id}`);
+    }
+    if (existing) return;
+    workspace.shell?.bind({
+      root_path: workspace.path,
+      data_path: workspace.storage.open_scope(["cities", workspace_id, "shell"]).root_path,
+    });
+    this.workspaces_by_id.set(workspace_id, workspace);
   }
 
   /** 串行执行一次 City transport 组合操作。 */

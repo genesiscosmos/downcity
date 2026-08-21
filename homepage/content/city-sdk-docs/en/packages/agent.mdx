@@ -8,8 +8,9 @@ Session, Plugin SDK, and RemoteAgent. Workspace resources are provided by
 `@downcity/workspace`; this package does not own a multi-Agent host or network server.
 
 ```ts
-const agent_workspace = agent.enter(workspace);
-const session = await agent_workspace.sessions.create();
+const city = new City({ workspaces: [workspace] });
+const agent = new Agent({ id: "assistant", city });
+const session = await agent.sessions.create({ workspace: city.workspace("project")! });
 const turn = await session.prompt({ query: "Hello" });
 const result = await turn.finished;
 ```

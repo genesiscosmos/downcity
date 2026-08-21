@@ -14,6 +14,18 @@ import type {
 } from "@downcity/agent";
 import type { PluginContext } from "@downcity/agent";
 
+/** ImagePlugin 使用的最小图片 AI 服务协议。 */
+export interface ImageAiService {
+  /** 读取当前可用的图片模型目录。 */
+  catalog(): Promise<{ all(): readonly unknown[] }>;
+
+  /** 创建图片生成任务。 */
+  image_create(input: JsonObject): Promise<unknown>;
+
+  /** 查询图片生成任务。 */
+  image_result(input: JsonObject): Promise<unknown>;
+}
+
 /**
  * 图片生成文本内容片段。
  */
@@ -295,5 +307,8 @@ export interface ImagePluginProfile {
   default_model?: string;
 }
 
-/** ImagePlugin profile 的兼容名称别名。 */
-export type ImagePluginOptions = ImagePluginProfile;
+/** ImagePlugin 构造参数。 */
+export interface ImagePluginOptions extends ImagePluginProfile {
+  /** 图片 AI 服务；通常来自 Embassy User AI。 */
+  image_ai: ImageAiService;
+}

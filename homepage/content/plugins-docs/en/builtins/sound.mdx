@@ -13,8 +13,10 @@ description: Use the FED model catalog to provide unified ASR, TTS, and automati
 
 ```ts
 import { SoundPlugin } from "@downcity/plugins/sound";
+import { Embassy } from "@downcity/federation";
 
 const sound = new SoundPlugin({
+  sound_ai: embassy.user.ai,
   default_asr_model: "asr-model-id",
   default_tts_model: "tts-model-id",
 });
@@ -97,11 +99,9 @@ Configure separate ASR and TTS defaults when needed:
 
 ```ts
 new SoundPlugin({
+  sound_ai: embassy.user.ai,
   default_asr_model: "asr-model-id",
   default_tts_model: "tts-model-id",
-  list_models,
-  asr,
-  tts,
 });
 ```
 
@@ -113,11 +113,9 @@ If neither the action nor the plugin provides a model, the call fails with guida
 
 ```ts
 new SoundPlugin({
+  sound_ai: embassy.user.ai,
   auto_asr: true,
   default_asr_model: "asr-model-id",
-  list_models,
-  asr,
-  tts,
 });
 ```
 

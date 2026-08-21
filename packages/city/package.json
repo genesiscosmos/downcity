@@ -1,7 +1,7 @@
 {
   "name": "@downcity/city",
-  "version": "0.2.280",
-  "description": "Downcity Agent 内存索引与 HTTP/RPC 转发器。",
+  "version": "0.2.281",
+  "description": "Downcity Agent 工作环境、Workspace 与 HTTP/RPC transport 容器。",
   "type": "module",
   "main": "./bin/index.js",
   "module": "./bin/index.js",

@@ -15,6 +15,18 @@ import path from "node:path";
 
 import { SoundPlugin } from "../bin/index.js";
 
+function create_sound_plugin(options = {}) {
+  const { list_models, asr, tts, ...profile } = options;
+  return new SoundPlugin({
+    ...profile,
+    sound_ai: {
+      catalog: async () => ({ all: () => (list_models ? list_models() : []) }),
+      asr,
+      tts,
+    },
+  });
+}
+
 function create_context(root_path) {
   return {
     workspace_path: root_path,
@@ -46,7 +58,7 @@ function create_tts_message(url = "/workspace/speech.mp3") {
 }
 
 test("sound.models 只返回 FED 中支持 ASR 或 TTS 的模型", async () => {
-  const plugin = new SoundPlugin({
+  const plugin = create_sound_plugin({
     list_models: () => [
       { id: "asr", name: "ASR", modalities: ["asr"] },
       { id: "tts", name: "TTS", modalities: ["tts"] },
@@ -76,7 +88,7 @@ test("sound.asr 把本地音频转为 data URL 后直接调用 FED", async () =>
   const audio_path = path.join(root_path, "voice.wav");
   await fs.writeFile(audio_path, Buffer.from("audio-test"));
   let received_input;
-  const plugin = new SoundPlugin({
+  const plugin = create_sound_plugin({
     default_asr_model: "fed-asr",
     asr: async (input) => {
       received_input = input;
@@ -117,7 +129,7 @@ test("sound.asr 把本地音频转为 data URL 后直接调用 FED", async () =>
 test("sound.tts 使用默认参数并返回 AI SDK UIMessage", async () => {
   let received_input;
   const message = create_tts_message();
-  const plugin = new SoundPlugin({
+  const plugin = create_sound_plugin({
     default_tts_model: "fed-tts",
     language: "zh",
     voice: "alloy",
@@ -151,7 +163,7 @@ test("sound.tts 使用默认参数并返回 AI SDK UIMessage", async () => {
 });
 
 test("sound action 不会隐式选择模型或接受非 UIMessage TTS 结果", async () => {
-  const plugin = new SoundPlugin({
+  const plugin = create_sound_plugin({
     asr: async () => ({ text: "ok" }),
     tts: async () => ({ url: "https://example.com/speech.mp3" }),
   });
@@ -172,7 +184,7 @@ test("sound action 不会隐式选择模型或接受非 UIMessage TTS 结果", a
 });
 
 test("sound.asr 只接受一种音频来源", async () => {
-  const plugin = new SoundPlugin({
+  const plugin = create_sound_plugin({
     asr: async () => ({ text: "ok" }),
     tts: async () => create_tts_message(),
   });
@@ -186,7 +198,7 @@ test("sound.asr 只接受一种音频来源", async () => {
 });
 
 test("sound.tts 要求 UIMessage 包含音频 file part", async () => {
-  const plugin = new SoundPlugin({
+  const plugin = create_sound_plugin({
     asr: async () => ({ text: "ok" }),
     tts: async () => ({
       id: "sound:text-only",
@@ -204,7 +216,7 @@ test("sound.tts 要求 UIMessage 包含音频 file part", async () => {
 
 test("auto_asr 必须配置默认 ASR 模型", () => {
   assert.throws(
-    () => new SoundPlugin({
+    () => create_sound_plugin({
       auto_asr: true,
       asr: async () => ({ text: "ok" }),
       tts: async () => create_tts_message(),
@@ -217,7 +229,7 @@ test("auto_asr 把 chat 语音附件转写追加到正文", async () => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-sound-auto-"));
   const audio_path = path.join(root_path, "message.ogg");
   await fs.writeFile(audio_path, Buffer.from("voice"));
-  const plugin = new SoundPlugin({
+  const plugin = create_sound_plugin({
     auto_asr: true,
     default_asr_model: "fed-asr",
     asr: async () => ({ text: "hello <world>" }),

@@ -3,9 +3,9 @@ title: "@downcity/city"
 description: Index Agent instances in memory and route HTTP/RPC requests by ID.
 ---
 
-`@downcity/city` is the Agent router shared by the CLI, Desktop, and custom Node hosts. It
-maintains an in-memory Agent index and optional HTTP/RPC transports. It never reads configuration
-or accesses a database.
+`@downcity/city` is the runtime container shared by the CLI, Desktop, and custom Node hosts. It
+owns Workspaces, Embassy services, and optional HTTP/RPC transports. It never creates Agents,
+Sessions, or Plugins.
 
 ```bash
 pnpm add @downcity/city @downcity/agent @downcity/workspace
@@ -16,12 +16,13 @@ import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
 import { Workspace } from "@downcity/workspace";
 
-const agent = new Agent({ id: "lucas", model, plugins });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
-}));
-const city = new City([agent]);
+});
+const city = new City({ embassy, workspaces: [workspace] });
+const agent = new Agent({ id: "lucas", city, model, plugins });
+const session = await agent.sessions.create({ workspace: city.workspace("project")! });
 
 const current_agent = city.agent("lucas");
 
@@ -31,9 +32,9 @@ await agent.dispose();
 
 ## Ownership
 
-- The CLI, Desktop, or custom host creates and disposes Agents.
-- `City` only maintains `agent_id -> Agent` runtime references and HTTP/RPC transports.
-- `city.add/remove` only update in-memory references. They never create, dispose, or persist Agents.
+- The application creates Agents and Plugins; each Agent binds to at most one City.
+- `City` owns Workspaces and Embassy services, and keeps Agent references only for routing and shutdown coordination.
+- Sessions are created by the Agent and select a City Workspace explicitly.
 - Each Agent owns its Plugin lifecycle and ActionSchedule.
 - The CLI daemon and Desktop window own independent City and Agent lifecycles.
 

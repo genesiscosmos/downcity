@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 对 Agent 暴露 `models`、`asr`、`tts` 三个 action。
- * - 模型目录与真实 ASR/TTS 能力全部由 Agent PluginContext.ai 提供。
+ * - 模型目录与真实 ASR/TTS 能力通过构造参数注入窄服务接口。
  * - 本地音频只负责读取并转换为 data URL，不加载或运行任何本地语音模型。
  * - TTS 返回已经落盘的本地音频 UIMessage Parts，并由 Action 声明 Assistant Message。
  */
@@ -439,9 +439,12 @@ export class SoundPlugin extends BasePlugin {
   private readonly language?: string;
   private readonly voice?: string;
   private readonly format?: string;
+  /** 当前实例使用的语音 AI 服务。 */
+  private readonly sound_ai: SoundPluginOptions["sound_ai"];
 
-  constructor(options: SoundPluginOptions = {}) {
+  constructor(options: SoundPluginOptions) {
     super();
+    this.sound_ai = options.sound_ai;
     const name = normalize_optional_string(options.name) ?? DEFAULT_SOUND_PLUGIN_NAME;
     const default_asr_model = normalize_optional_string(options.default_asr_model);
     if (options.auto_asr === true && !default_asr_model) {
@@ -506,10 +509,8 @@ export class SoundPlugin extends BasePlugin {
       ...input,
       model,
     });
-    const service = context.ai;
-    if (!service) throw new TypeError("SoundPlugin AI service is not configured");
     return normalize_asr_result(
-      await service.asr(resolved_input as unknown as JsonObject) as unknown as SoundPluginAsrResult,
+      await this.sound_ai.asr(resolved_input as unknown as JsonObject) as unknown as SoundPluginAsrResult,
     );
   }
 
@@ -518,9 +519,7 @@ export class SoundPlugin extends BasePlugin {
    */
   private async synthesize(context: PluginContext, input: SoundPluginTtsInput): Promise<SoundPluginTtsResult> {
     const model = resolve_model_id("tts", input.model, this.default_tts_model);
-    const service = context.ai;
-    if (!service) throw new TypeError("SoundPlugin AI service is not configured");
-    const result = await service.tts({
+    const result = await this.sound_ai.tts({
       ...(this.language ? { language: this.language } : {}),
       ...(this.voice ? { voice: this.voice } : {}),
       ...(this.format ? { format: this.format } : {}),
@@ -605,11 +604,9 @@ export class SoundPlugin extends BasePlugin {
       ],
       execute: async ({ context, input }: { context: PluginContext; input: JsonValue }) => {
         try {
-          const service = context.ai;
-          if (!service) throw new TypeError("SoundPlugin AI service is not configured");
           const capability = normalize_models_capability(input);
           const result = normalize_sound_models(
-            await service.catalog().then((catalog) => catalog.all()) as unknown as SoundPluginModel[],
+            await this.sound_ai.catalog().then((catalog) => catalog.all()) as unknown as SoundPluginModel[],
             capability,
           );
           return {

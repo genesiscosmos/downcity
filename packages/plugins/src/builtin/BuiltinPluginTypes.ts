@@ -1,8 +1,8 @@
 /**
  * Downcity 官方 Plugin 注册集合。
  *
- * 本模块负责把官方 Plugin 组合成统一 definition + setup 协议。City 负责提供
- * PluginHostContext，Agent 负责接管 setup 返回的实例。
+ * 本模块负责把官方 Plugin 按应用配置装配成 Agent 独享实例。应用提供
+ * Embassy 服务，Plugin 自身只持有明确的服务接口。
  */
 
 import type { JsonObject, Plugin } from "@downcity/agent";
@@ -18,6 +18,7 @@ import { ContactPlugin } from "@/contact.js";
 import {
   IMAGE_PLUGIN_CONFIG_JSON_SCHEMA,
   ImagePlugin,
+  type ImageAiService,
 } from "@/image.js";
 import {
   MemoryPlugin,
@@ -26,6 +27,7 @@ import { SkillPlugin } from "@/skill.js";
 import {
   SOUND_PLUGIN_CONFIG_JSON_SCHEMA,
   SoundPlugin,
+  type SoundAiService,
 } from "@/sound.js";
 import { TaskPlugin } from "@/task.js";
 import {
@@ -152,7 +154,10 @@ export function create_builtin_plugin_registrations(
           schema: IMAGE_PLUGIN_CONFIG_JSON_SCHEMA,
         },
       },
-      setup: (context) => new ImagePlugin(context.profile),
+      setup: (context) => new ImagePlugin({
+        ...context.profile,
+        image_ai: require_image_ai(context),
+      }),
     },
     {
       definition: {
@@ -163,9 +168,34 @@ export function create_builtin_plugin_registrations(
           schema: SOUND_PLUGIN_CONFIG_JSON_SCHEMA,
         },
       },
-      setup: (context) => new SoundPlugin(context.profile),
+      setup: (context) => new SoundPlugin({
+        ...context.profile,
+        sound_ai: require_sound_ai(context),
+      }),
     },
   ];
+}
+
+/** 获取并适配官方 ImagePlugin 所需的 Embassy 图片服务。 */
+function require_image_ai(context: PluginHostContext): ImageAiService {
+  const service = context.embassy?.user.ai;
+  if (!service) throw new Error("Builtin AI Plugin requires an Embassy user AI service");
+  return {
+    catalog: async () => await service.catalog(),
+    image_create: async (input) => await service.image_create(input as never),
+    image_result: async (input) => await service.image_result(input as never),
+  };
+}
+
+/** 获取并适配官方 SoundPlugin 所需的 Embassy 语音服务。 */
+function require_sound_ai(context: PluginHostContext): SoundAiService {
+  const service = context.embassy?.user.ai;
+  if (!service) throw new Error("Builtin AI Plugin requires an Embassy user AI service");
+  return {
+    catalog: async () => await service.catalog(),
+    asr: async (input) => await service.asr(input as never),
+    tts: async (input) => await service.tts(input as never),
+  };
 }
 
 /** 创建没有配置协议的简单注册。 */

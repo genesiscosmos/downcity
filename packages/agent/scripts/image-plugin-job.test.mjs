@@ -16,6 +16,18 @@ import path from "node:path";
 import { ImagePlugin } from "../../plugins/bin/index.js";
 import { PluginRegistry } from "../bin/plugin/core/PluginRegistry.js";
 
+function create_image_plugin(options = {}) {
+  const { list_models, image_create, image_result, ...profile } = options;
+  return new ImagePlugin({
+    ...profile,
+    image_ai: {
+      catalog: async () => ({ all: () => (list_models ? list_models() : []) }),
+      image_create,
+      image_result,
+    },
+  });
+}
+
 function create_image_message() {
   return {
     id: "msg_image_test",
@@ -69,7 +81,7 @@ function create_registry(plugin, workspace_path = process.cwd()) {
 }
 
 test("ImagePlugin exposes only job-style image actions", async () => {
-  const plugin = new ImagePlugin({
+  const plugin = create_image_plugin({
     image_create: () => ({ job_id: "img_1", status: "queued", poll_after_ms: 1 }),
     image_result: () => ({ job_id: "img_1", status: "queued", poll_after_ms: 1 }),
   });
@@ -81,7 +93,7 @@ test("ImagePlugin exposes only job-style image actions", async () => {
 });
 
 test("ImagePlugin image_create returns image job", async () => {
-  const plugin = new ImagePlugin({
+  const plugin = create_image_plugin({
     image_create: (input) => ({
       job_id: "img_1",
       status: "queued",
@@ -104,7 +116,7 @@ test("ImagePlugin image_create returns image job", async () => {
 });
 
 test("ImagePlugin models lists image-capable models", async () => {
-  const plugin = new ImagePlugin({
+  const plugin = create_image_plugin({
     list_models: () => [
       {
         id: "text_1",
@@ -141,7 +153,7 @@ test("ImagePlugin models lists image-capable models", async () => {
 });
 
 test("ImagePlugin exposes action metadata through plugin registry", async () => {
-  const plugin = new ImagePlugin({
+  const plugin = create_image_plugin({
     image_create: () => ({ job_id: "img_1", status: "queued", poll_after_ms: 1 }),
     image_result: () => ({ job_id: "img_1", status: "queued", poll_after_ms: 1 }),
   });
@@ -163,7 +175,7 @@ test("ImagePlugin exposes action metadata through plugin registry", async () => 
 
 test("ImagePlugin image_result reads pending state once", async () => {
   const calls = [];
-  const plugin = new ImagePlugin({
+  const plugin = create_image_plugin({
     image_create: () => ({ job_id: "img_1", status: "queued", poll_after_ms: 1 }),
     image_result: (input) => {
       calls.push(input.job_id);
@@ -192,7 +204,7 @@ test("ImagePlugin image_result reads pending state once", async () => {
 
 test("ImagePlugin image_result returns final message when succeeded", async () => {
   const message = create_image_message();
-  const plugin = new ImagePlugin({
+  const plugin = create_image_plugin({
     image_create: () => ({ job_id: "img_1", status: "queued", poll_after_ms: 1 }),
     image_result: (input) => ({
       job_id: input.job_id,
@@ -248,7 +260,7 @@ test("ImagePlugin image_result stores remote images locally and preserves source
       },
     ],
   };
-  const plugin = new ImagePlugin({
+  const plugin = create_image_plugin({
     image_create: () => ({ job_id: "img_remote", status: "queued" }),
     image_result: () => ({
       job_id: "img_remote",
@@ -291,7 +303,7 @@ test("ImagePlugin image_result keeps remote URL when local storage fails", async
     return new Response("unavailable", { status: 503 });
   });
   const remote_url = "https://storage.example.com/failed.png";
-  const plugin = new ImagePlugin({
+  const plugin = create_image_plugin({
     image_create: () => ({ job_id: "img_fallback", status: "queued" }),
     image_result: () => ({
       job_id: "img_fallback",
@@ -326,7 +338,7 @@ test("ImagePlugin image_result keeps remote URL when local storage fails", async
 });
 
 test("ImagePlugin image_result reports failed terminal job", async () => {
-  const plugin = new ImagePlugin({
+  const plugin = create_image_plugin({
     image_create: () => ({ job_id: "img_1", status: "queued", poll_after_ms: 1 }),
     image_result: (input) => ({
       job_id: input.job_id,
@@ -349,7 +361,7 @@ test("ImagePlugin image_result reports failed terminal job", async () => {
 });
 
 test("ImagePlugin image_result payload is schema validated by registry", async () => {
-  const plugin = new ImagePlugin({
+  const plugin = create_image_plugin({
     image_create: () => ({ job_id: "img_1", status: "queued", poll_after_ms: 1 }),
     image_result: () => ({ job_id: "img_1", status: "queued", poll_after_ms: 1 }),
   });
@@ -370,7 +382,7 @@ test("ImagePlugin image_create converts local content image paths", async () => 
   try {
     await fs.writeFile(path.join(tempDir, "input.png"), Buffer.from("png"));
     let captured_input;
-    const plugin = new ImagePlugin({
+    const plugin = create_image_plugin({
       image_create: (input) => {
         captured_input = input;
         return { job_id: "img_1", status: "queued", poll_after_ms: 1 };
@@ -403,7 +415,7 @@ test("ImagePlugin image_create converts local content image paths", async () => 
 
 test("ImagePlugin image_create uses content instead of prompt when both exist", async () => {
   let captured_input;
-  const plugin = new ImagePlugin({
+  const plugin = create_image_plugin({
     image_create: (input) => {
       captured_input = input;
       return { job_id: "img_1", status: "queued", poll_after_ms: 1 };
@@ -428,7 +440,7 @@ test("ImagePlugin image_create uses content instead of prompt when both exist", 
 
 test("ImagePlugin image_create keeps remote content image URLs", async () => {
   let captured_input;
-  const plugin = new ImagePlugin({
+  const plugin = create_image_plugin({
     image_create: (input) => {
       captured_input = input;
       return { job_id: "img_1", status: "queued", poll_after_ms: 1 };
@@ -454,7 +466,7 @@ test("ImagePlugin image_create keeps remote content image URLs", async () => {
 });
 
 test("ImagePlugin image_create rejects legacy messages and data URLs", async () => {
-  const plugin = new ImagePlugin({
+  const plugin = create_image_plugin({
     image_create: () => ({ job_id: "img_1", status: "queued", poll_after_ms: 1 }),
     image_result: () => ({ job_id: "img_1", status: "queued", poll_after_ms: 1 }),
   });
@@ -496,7 +508,7 @@ test("ImagePlugin image_result polls until terminal when until_done=true", async
   const calls = [];
   let next_status = "running";
   const message = create_image_message();
-  const plugin = new ImagePlugin({
+  const plugin = create_image_plugin({
     image_create: () => ({ job_id: "img_wait", status: "queued", poll_after_ms: 1 }),
     image_result: (input) => {
       calls.push(input.job_id);
@@ -542,7 +554,7 @@ test("ImagePlugin image_result polls until terminal when until_done=true", async
 });
 
 test("ImagePlugin image_result returns last status when max_wait_ms elapses", async () => {
-  const plugin = new ImagePlugin({
+  const plugin = create_image_plugin({
     image_create: () => ({ job_id: "img_timeout", status: "queued", poll_after_ms: 1 }),
     image_result: (input) => ({
       job_id: input.job_id,

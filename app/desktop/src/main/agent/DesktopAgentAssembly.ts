@@ -202,14 +202,6 @@ function create_embassy_user(
   return create_desktop_embassy(data, env).user;
 }
 
-/** 创建当前 Desktop Agent 使用的用户级 AI 能力。 */
-export function create_desktop_agent_ai(
-  data: DesktopLocalData,
-  env: Readonly<Record<string, string | undefined>>,
-): EmbassyUser["ai"] {
-  return create_embassy_user(data, env).ai;
-}
-
 /** 规范化 Federation URL，并保留本机默认端口规则。 */
 function normalize_federation_url(value: string): string {
   const raw = read_string(value);

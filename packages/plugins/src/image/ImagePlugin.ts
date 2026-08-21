@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 对 Agent 暴露 `image_create` / `image_result` 两步式任务 action。
- * - 用户级 AI 能力通过 Agent PluginContext.ai 提供。
+ * - 图片 AI 通过构造参数注入窄服务接口；Workspace 文件能力由运行时 Context 提供。
  * - 成功结果中的远程图片会写入 Workspace，并同时保留本地引用与在线来源地址。
  */
 
@@ -504,10 +504,14 @@ export class ImagePlugin extends BasePlugin {
    */
   readonly description: string;
 
+  /** 当前实例使用的图片 AI 服务。 */
+  private readonly image_ai: ImagePluginOptions["image_ai"];
+
   private readonly default_model?: ImagePluginDefaultModel;
 
-  constructor(options: ImagePluginOptions = {}) {
+  constructor(options: ImagePluginOptions) {
     super();
+    this.image_ai = options.image_ai;
     const name = String(options.name || DEFAULT_IMAGE_PLUGIN_NAME).trim();
     if (!name) {
       throw new Error("ImagePlugin requires a non-empty name");
@@ -601,9 +605,7 @@ export class ImagePlugin extends BasePlugin {
     job_id: string,
     context: PluginContext,
   ): Promise<ImagePluginJobResult> {
-    const service = context.ai;
-    if (!service) throw new TypeError("ImagePlugin AI service is not configured");
-    const current = await service.image_result({ job_id }) as unknown as ImagePluginJobResult;
+    const current = await this.image_ai.image_result({ job_id }) as unknown as ImagePluginJobResult;
     validate_job_result(current);
     if (current.status === "succeeded" && current.result) {
       normalize_image_result(current.result);
@@ -620,9 +622,7 @@ export class ImagePlugin extends BasePlugin {
       input_schema: z.object({}).passthrough(),
       execute: async ({ context }) => {
         try {
-          const service = context.ai;
-          if (!service) throw new TypeError("ImagePlugin AI service is not configured");
-          const models = await service.catalog().then((catalog) => catalog.all()) as unknown as ImagePluginModel[];
+          const models = await this.image_ai.catalog().then((catalog) => catalog.all()) as unknown as ImagePluginModel[];
           const result = normalize_image_models(models);
           return {
             success: true,
@@ -718,9 +718,7 @@ export class ImagePlugin extends BasePlugin {
             await normalize_image_create_input(context, normalized_payload),
             this.default_model,
           );
-          const service = context.ai;
-          if (!service) throw new TypeError("ImagePlugin AI service is not configured");
-          const created = await service.image_create(normalized_input as unknown as JsonObject) as unknown as ImagePluginJobCreateResult;
+          const created = await this.image_ai.image_create(normalized_input as unknown as JsonObject) as unknown as ImagePluginJobCreateResult;
           validate_created_job(created);
           return {
             success: true,

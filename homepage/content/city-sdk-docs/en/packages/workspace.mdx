@@ -23,22 +23,21 @@ const workspace = new Workspace({
   shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
 });
 
-const agent = new Agent({ id: "repo-helper", model, plugins });
-const agent_workspace = agent.enter(workspace);
-const session = await agent_workspace.sessions.create();
+const city = new City({ workspaces: [workspace] });
+const agent = new Agent({ id: "repo-helper", city, model, plugins });
+const session = await agent.sessions.create({ workspace: city.workspace("project")! });
 ```
 
 ## Ownership
 
 - `Workspace` owns project resources and the optional Shell.
 - `Agent` owns identity, instruction, model, custom tools, and Plugin registration.
-- `AgentWorkspace` owns the execution scope created by `agent.enter(workspace)`, including Sessions,
+- `AgentWorkspace` is an internal execution scope created by the Agent, including Sessions,
   logs, scheduled actions, contextual Plugin lifecycle, and private runtime state.
 - Shell is a Workspace capability. There is no separate `@downcity/shell` package.
 
-An Agent can enter multiple Workspaces. A Workspace instance can be entered only once because its
-Shell and private storage are bound to one AgentWorkspace lifecycle. Create separate Workspace
-instances when multiple Agents operate on the same physical project directory.
+An Agent can create Sessions in multiple City Workspaces. A Workspace is owned by City and can be
+shared by multiple Agents; Agent-private Session and Plugin data remain isolated.
 
 ## Storage
 

@@ -18,7 +18,11 @@ import type {
 } from "@/types/agent/AgentOptions.js";
 import type { WorkspaceBase } from "@downcity/workspace";
 import type { AgentPluginContext } from "@/types/plugin/AgentPluginContext.js";
-import type { PluginAiServices, PluginWebServices } from "@/types/plugin/PluginServices.js";
+import type { PluginWebServices } from "@/types/plugin/PluginServices.js";
+import type {
+  AgentCreateSessionOptions,
+  AgentSessionCollection,
+} from "@/types/agent/AgentSessionCollection.js";
 import { Logger } from "@/utils/logger/Logger.js";
 
 /** SDK Agent 主体。 */
@@ -26,11 +30,14 @@ export class Agent {
   /** Agent 的全局稳定标识。 */
   readonly id: string;
 
+  /** Agent 绑定的 City 资源容器。 */
+  readonly city?: AgentOptions["city"];
+
   /** Agent 默认模型；Session 可以显式覆盖。 */
   readonly model?: AgentModel;
 
-  /** 当前 Agent 持有的用户级 AI 能力。 */
-  readonly ai?: PluginAiServices;
+  /** Agent 面向用户的 Session 创建入口。 */
+  readonly sessions: AgentSessionCollection;
 
   /** 当前 Agent 持有的 Web 搜索与文档能力。 */
   readonly web?: PluginWebServices;
@@ -62,15 +69,14 @@ export class Agent {
   constructor(options: AgentOptions) {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Agent requires a non-empty id");
+    this.city = options.city;
     this.model = options.model;
-    this.ai = options.ai as PluginAiServices | undefined;
     this.web = options.web;
     this.instruction = normalize_instruction_input(options.instruction);
     const agent = this;
     const agent_plugin_context: AgentPluginContext = Object.freeze({
       agent_id: this.id,
       logger: this.logger,
-      ai: this.ai,
       web: this.web,
       get instructions() {
         return agent.get_instructions();
@@ -82,6 +88,10 @@ export class Agent {
       ? { ...options.tools }
       : {};
     this.session_class = options.session_class;
+    this.sessions = {
+      create: async (input) => await this.create_session(input),
+    };
+    this.city?.bind_agent(this);
   }
 
   /**
@@ -94,6 +104,9 @@ export class Agent {
     if (this.dispose_promise) throw new Error("Cannot enter Workspace after Agent disposal");
     const workspace_id = String(workspace?.id || "").trim();
     if (!workspace_id) throw new Error("Agent.enter requires a Workspace with a stable id");
+    if (this.city && this.city.workspace(workspace_id) !== workspace) {
+      throw new Error(`Workspace "${workspace_id}" does not belong to the Agent City`);
+    }
     const existing = this.workspaces_by_id.get(workspace_id);
     if (existing) {
       if (existing.workspace !== workspace) {
@@ -148,8 +161,17 @@ export class Agent {
       const errors = results.flatMap((result) =>
         result.status === "rejected" ? [result.reason] : []
       );
+      this.city?.unbind_agent(this);
       if (errors.length > 0) throw new AggregateError(errors, "Agent dispose failed");
     })();
     await this.dispose_promise;
+  }
+
+  /** 在指定 City Workspace 中创建属于当前 Agent 的 Session。 */
+  private async create_session(input: AgentCreateSessionOptions) {
+    if (!input?.workspace) throw new Error("agent.sessions.create requires a Workspace");
+    return await this.enter(input.workspace).sessions.create({
+      ...(input.session_id ? { session_id: input.session_id } : {}),
+    });
   }
 }

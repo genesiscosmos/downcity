@@ -7,6 +7,7 @@
 export { ImagePlugin } from "./image/ImagePlugin.js";
 export { IMAGE_PLUGIN_CONFIG_JSON_SCHEMA } from "./image/config/ImagePluginConfig.js";
 export type {
+  ImageAiService,
   ImagePluginContent,
   ImagePluginDefaultModel,
   ImagePluginDefaultModelResolverInput,

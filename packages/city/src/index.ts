@@ -7,7 +7,12 @@
  */
 
 export { City } from "./runtime/City.js";
-export type { CityListenOptions, CityRuntimeOptions } from "./types/City.js";
+export type {
+  CityAgentBinding,
+  CityListenOptions,
+  CityOptions,
+  CityRuntimeOptions,
+} from "./types/City.js";
 export type {
   PluginHostContext,
   PluginHostExtensions,

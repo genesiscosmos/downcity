@@ -49,7 +49,6 @@ import type {
 } from "../../common/types/DesktopApi.js";
 import {
   create_desktop_agent_model,
-  create_desktop_agent_ai,
   create_desktop_embassy,
   create_desktop_agent_tools,
   create_desktop_plugin_loader,
@@ -168,7 +167,6 @@ export class AgentController {
     let config: LocalAgentConfig | null = null;
     try {
       config = this.data.agents.create(candidate);
-      this.city.add(agent);
     } catch (error) {
       if (config) this.data.agents.remove(config.agent_id);
       await agent.dispose().catch(() => undefined);
@@ -203,17 +201,18 @@ export class AgentController {
       })),
       updated_at: new Date().toISOString(),
     };
-    const replacement = await this.create_native_agent(candidate);
+    const replacement = await this.create_native_agent(candidate, false);
     let saved = false;
     let previous_agent: Agent | null = null;
     try {
       this.data.agents.save(candidate);
       saved = true;
-      previous_agent = await this.city.remove(current.agent_id);
-      this.city.add(replacement);
+      previous_agent = this.city.agent(current.agent_id);
+      if (previous_agent) this.city.unbind_agent(previous_agent);
+      this.city.bind_agent(replacement);
     } catch (error) {
-      await this.city.remove(current.agent_id).catch(() => null);
-      if (previous_agent) this.city.add(previous_agent);
+      this.city.unbind_agent(replacement);
+      if (previous_agent) this.city.bind_agent(previous_agent);
       if (saved) this.data.agents.save(current);
       await replacement.dispose().catch(() => undefined);
       throw error;
@@ -497,7 +496,6 @@ export class AgentController {
       for (const config of this.data.agents.list()) {
         const agent = await this.create_native_agent(config);
         try {
-          this.city.add(agent);
           initialized_agents.push(agent);
         } catch (error) {
           await agent.dispose().catch(() => undefined);
@@ -512,7 +510,6 @@ export class AgentController {
       });
     } catch (error) {
       await Promise.allSettled(initialized_agents.map(async (agent) => {
-        await this.city.remove(agent.id);
         await agent.dispose();
       }));
       throw error;
@@ -520,7 +517,7 @@ export class AgentController {
   }
 
   /** 显式装配一个 Desktop native Agent。 */
-  private async create_native_agent(config: LocalAgentConfig): Promise<Agent> {
+  private async create_native_agent(config: LocalAgentConfig, bind_city = true): Promise<Agent> {
     const [model, plugins, tools] = await Promise.all([
       Promise.resolve(create_desktop_agent_model(this.data, config, process_environment())),
       this.plugin_loader.create_plugins(config, ({ plugin_id, profile }) => ({
@@ -541,11 +538,11 @@ export class AgentController {
     ]);
     return new Agent({
       id: config.agent_id,
+      ...(bind_city ? { city: this.city } : {}),
       instruction: config.instruction,
       model,
       plugins,
       tools,
-      ai: create_desktop_agent_ai(this.data, process.env),
     });
   }
 

@@ -7,6 +7,7 @@
 export { SoundPlugin } from "./sound/Plugin.js";
 export { SOUND_PLUGIN_CONFIG_JSON_SCHEMA } from "./sound/config/SoundPluginConfig.js";
 export type {
+  SoundAiService,
   SoundPluginAsrInput,
   SoundPluginAsrResult,
   SoundPluginAsrSegment,
