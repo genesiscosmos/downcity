@@ -111,11 +111,11 @@ export async function createRemoteAgent(params: {
         config,
         plugin_loader,
       });
-      const entry = agent.enter(await create_cli_workspace(workspace_config, data.root_path));
+      const workspace = await create_cli_workspace(workspace_config, data.root_path);
       return {
         sessions: create_local_chat_sessions(
-          entry.sessions,
-          async (model_id) => await resolve_cli_agent_model(model_id, entry.workspace.get_env()),
+          agent.enter(workspace).sessions,
+          async (model_id) => await resolve_cli_agent_model(model_id, workspace.get_env()),
         ),
         close: async () => {
           await agent!.dispose();

@@ -281,7 +281,10 @@ export class AgentController {
 
   /** 在当前 Workspace 创建新的 Session。 */
   async create_session(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary> {
-    const session = await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.create();
+    const agent = this.require_native_agent(agent_id);
+    const workspace = this.city.workspaces.get(workspace_id)
+      ?? (await this.require_agent_workspace(agent_id, workspace_id)).workspace;
+    const session = await agent.sessions.create({ workspace });
     this.observe_session(agent_id, workspace_id, session);
     return to_desktop_session_summary(await session.get_info());
   }

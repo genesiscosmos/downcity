@@ -2,7 +2,7 @@
  * Agent：身份、模型、指令与 Plugin 的主体对象。
  *
  * 职责说明（中文）
- * - Agent 不绑定 Workspace；调用方通过 `enter()` 让同一个 Agent 进入项目。
+ * - Agent 不绑定 Workspace；调用方通过 `agent.sessions.create({ workspace })` 选择本次执行环境。
  * - PluginRegistry 只属于 Agent，所有 Workspace 共享同一份注册定义。
  * - Workspace Tool、Session、Shell 与项目日志由 AgentWorkspace 独立持有。
  */
@@ -55,7 +55,7 @@ export class Agent {
   /** AgentPlugin 的内部访问名，仍指向 Agent 唯一 Registry。 */
   readonly plugin_registry: PluginRegistry;
 
-  /** 当前 Agent 已进入的 Workspace。 */
+  /** 当前 Agent 已创建的内部 Workspace 执行作用域。 */
   private readonly workspaces_by_id = new Map<string, AgentWorkspace>();
 
   /** Agent 级日志器，不绑定任何 Workspace。 */
@@ -117,10 +117,11 @@ export class Agent {
   }
 
   /**
-   * 进入一个 Workspace。
+   * 创建或复用一个 Workspace 内部执行作用域。
    *
-   * 同一 Agent 可以同时进入多个 Workspace；同一 Workspace ID 重复进入时返回已有
-   * 作用域，防止重复创建 Shell、SessionStore 与后台任务。
+   * 该方法仅供 Agent runtime、City transport 和宿主适配层使用。SDK 用户应使用
+   * `agent.sessions.create({ workspace })`，不直接操作内部作用域。
+   * @internal
    */
   enter(workspace: WorkspaceBase): AgentWorkspace {
     if (this.dispose_promise) throw new Error("Cannot enter Workspace after Agent disposal");
@@ -141,12 +142,12 @@ export class Agent {
     return entry;
   }
 
-  /** 返回当前 Agent 已进入的 Workspace 作用域。 */
+  /** 返回当前 Agent 的内部 Workspace 作用域；仅供 runtime 使用。 @internal */
   workspaces(): readonly AgentWorkspace[] {
     return [...this.workspaces_by_id.values()];
   }
 
-  /** 按稳定 ID 读取已进入的 Workspace。 */
+  /** 按稳定 ID 读取内部 Workspace 作用域；仅供 runtime 使用。 @internal */
   workspace(workspace_id_input: string): AgentWorkspace | null {
     return this.workspaces_by_id.get(String(workspace_id_input || "").trim()) ?? null;
   }
