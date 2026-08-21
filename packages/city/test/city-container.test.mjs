@@ -34,6 +34,30 @@ test("Agent 绑定 City 后可使用 City Workspace 并拒绝重复 ID", async (
   }
 });
 
+test("City 运行时添加 Workspace 后 Agent 可以进入", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-workspace-add-"));
+  const workspace_path = path.join(root, "runtime");
+  await fs.mkdir(workspace_path, { recursive: true });
+  const city = new City();
+  const agent = new Agent({ id: "runtime-agent" });
+  city.agents.add(agent);
+  const workspace = new Workspace({
+    id: "runtime-workspace",
+    path: workspace_path,
+    data_root_path: path.join(root, "data"),
+  });
+  try {
+    assert.equal(city.workspaces.add(workspace), workspace);
+    assert.equal(city.workspaces.get(workspace.id), workspace);
+    assert.deepEqual(city.workspaces.list(), [workspace]);
+    assert.equal(agent.enter(workspace).workspace, workspace);
+  } finally {
+    await city.close();
+    await agent.dispose();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("City.close 释放绑定 Agent 与 City Workspace", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-close-"));
   const workspace = await create_agent(root, "owned");

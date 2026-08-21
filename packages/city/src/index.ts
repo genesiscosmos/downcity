@@ -12,6 +12,7 @@ export type {
   CityListenOptions,
   CityOptions,
   CityRuntimeOptions,
+  CityWorkspaces,
 } from "./types/City.js";
 export type {
   PluginHostContext,

@@ -52,6 +52,16 @@ export interface CityAgents {
   remove(agent_id: string): Promise<Agent | null>;
 }
 
+/** City 管理的 Workspace 集合。 */
+export interface CityWorkspaces {
+  /** 添加一个 Workspace 并交由 City 管理；重复实例直接返回，重复 ID 的其他实例失败。 */
+  add(workspace: WorkspaceBase): WorkspaceBase;
+  /** 按稳定 ID 获取 Workspace；不存在时返回 null。 */
+  get(workspace_id: string): WorkspaceBase | null;
+  /** 返回当前 City 管理的 Workspace 稳定快照。 */
+  list(): readonly WorkspaceBase[];
+}
+
 /** City 同时启动 HTTP 与 RPC transport 的监听参数。 */
 export interface CityListenOptions {
   /** HTTP transport 监听参数；省略时不启动 HTTP。 */

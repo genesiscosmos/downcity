@@ -10,6 +10,9 @@ import { City } from "@downcity/city";
 
 const workspace = new Workspace({ id: "sdk", path: "/projects/sdk" });
 const city = new City({ embassy, workspaces: [workspace] });
+
+// 运行时创建的 Workspace 也必须先纳入 City
+const another_workspace = city.workspaces.add(new Workspace({ id: "another", path: "/projects/another" }));
 const agent = new Agent({ id: "lucas", model, plugins });
 city.agents.add(agent);
 const session = await agent.sessions.create({ workspace: city.workspace("sdk")! });

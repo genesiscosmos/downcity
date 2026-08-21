@@ -15,6 +15,7 @@ import type {
   CityListenOptions,
   CityOptions,
   CityRuntimeOptions,
+  CityWorkspaces,
 } from "@/types/City.js";
 
 /** Agent 实例索引与 transport 宿主。 */
@@ -24,6 +25,9 @@ export class City implements AgentCity {
 
   /** City 面向应用的 Agent 集合入口。 */
   readonly agents: CityAgents;
+
+  /** City 面向宿主的 Workspace 集合入口。 */
+  readonly workspaces: CityWorkspaces;
 
   /** City 持有的 Workspace 资源，按稳定 ID 索引。 */
   private readonly workspaces_by_id = new Map<string, WorkspaceBase>();
@@ -80,6 +84,11 @@ export class City implements AgentCity {
       list: () => this.list_agents(),
       remove: async (agent_id) => await this.remove_agent(agent_id),
     });
+    this.workspaces = Object.freeze({
+      add: (workspace) => this.add_workspace(workspace),
+      get: (workspace_id) => this.workspace(workspace_id),
+      list: () => this.list_workspaces(),
+    });
   }
 
   /** 返回 City 持有的 Workspace；不存在时返回 null。 */
@@ -89,7 +98,7 @@ export class City implements AgentCity {
   }
 
   /** 返回 City 持有的 Workspace 稳定快照。 */
-  workspaces(): readonly WorkspaceBase[] {
+  private list_workspaces(): readonly WorkspaceBase[] {
     return [...this.workspaces_by_id.values()];
   }
 
@@ -253,19 +262,20 @@ export class City implements AgentCity {
   }
 
   /** 把宿主按需解析出的 Workspace 纳入 City 资源索引。 */
-  private add_workspace(workspace: WorkspaceBase): void {
+  private add_workspace(workspace: WorkspaceBase): WorkspaceBase {
     const workspace_id = String(workspace?.id || "").trim();
     if (!workspace_id) throw new Error("City requires Workspace with a stable id");
     const existing = this.workspaces_by_id.get(workspace_id);
     if (existing && existing !== workspace) {
       throw new Error(`Workspace already exists in City: ${workspace_id}`);
     }
-    if (existing) return;
+    if (existing) return existing;
     workspace.shell?.bind({
       root_path: workspace.path,
       data_path: workspace.storage.open_scope(["cities", workspace_id, "shell"]).root_path,
     });
     this.workspaces_by_id.set(workspace_id, workspace);
+    return workspace;
   }
 
   /** 串行执行一次 City transport 组合操作。 */

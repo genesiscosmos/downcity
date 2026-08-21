@@ -682,7 +682,9 @@ export class AgentController {
     if (existing) return existing;
     const config = this.data.workspaces.get(workspace_id);
     if (!config) throw new Error(`Workspace not found: ${workspace_id}`);
-    return agent.enter(await create_desktop_workspace(this.data, config));
+    const workspace = this.city.workspace(workspace_id)
+      ?? this.city.workspaces.add(await create_desktop_workspace(this.data, config));
+    return agent.enter(workspace);
   }
 }
 
