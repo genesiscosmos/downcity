@@ -10,7 +10,7 @@
 
 import http from "node:http";
 import { Hono } from "hono";
-import type { AgentWorkspace } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent/internal";
 import { registerSdkSessionRoutes } from "@/transport/http/routes/SessionRoutes.js";
 import { registerRuntimeRoutes } from "@/transport/http/routes/RuntimeRoutes.js";
 import { createNodeHttpServer } from "@/transport/http/NodeHttpAdapter.js";

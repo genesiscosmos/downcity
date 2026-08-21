@@ -23,6 +23,7 @@ import {
   register_city_host,
   unregister_city_host,
 } from "@downcity/city";
+import { create_agent_workspace, get_agent_workspace } from "@downcity/agent/internal";
 import {
   type LocalAgentConfig,
   type LocalWorkspaceConfig,
@@ -679,13 +680,13 @@ export class AgentController {
   /** 按需让 Desktop Agent 进入指定 Workspace。 */
   private async require_agent_workspace(agent_id: string, workspace_id: string) {
     const agent = this.require_native_agent(agent_id);
-    const existing = agent.workspace(workspace_id);
+    const existing = get_agent_workspace(agent, workspace_id);
     if (existing) return existing;
     const config = this.data.workspaces.get(workspace_id);
     if (!config) throw new Error(`Workspace not found: ${workspace_id}`);
     const workspace = this.city.workspace(workspace_id)
       ?? this.city.workspaces.add(await create_desktop_workspace(this.data, config));
-    return agent.enter(workspace);
+    return create_agent_workspace(agent, workspace);
   }
 }
 

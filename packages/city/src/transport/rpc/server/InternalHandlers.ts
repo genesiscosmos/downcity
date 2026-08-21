@@ -8,7 +8,7 @@
  */
 
 import type { SystemModelMessage } from "ai";
-import type { AgentWorkspace } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent/internal";
 import type { RpcRequest } from "@/transport/types/RpcProtocol.js";
 import type {
   RpcRequestHandlerOptions,

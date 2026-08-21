@@ -18,6 +18,7 @@ import {
   type AgentSessionSummary,
   type RemoteAgentSession,
 } from "@downcity/agent";
+import { create_agent_workspace } from "@downcity/agent/internal";
 import type { AgentModel } from "@downcity/agent";
 import { resolveDaemonRpcEndpoint } from "@/city/process/daemon/Client.js";
 import {
@@ -114,7 +115,7 @@ export async function createRemoteAgent(params: {
       const workspace = await create_cli_workspace(workspace_config, data.root_path);
       return {
         sessions: create_local_chat_sessions(
-          agent.enter(workspace).sessions,
+          create_agent_workspace(agent, workspace).sessions,
           async (model_id) => await resolve_cli_agent_model(model_id, workspace.get_env()),
         ),
         close: async () => {

@@ -6,7 +6,8 @@
  */
 
 import type { AgentSessionModelResolver } from "@/transport/types/AgentSessionModelResolver.js";
-import type { Agent, AgentWorkspace } from "@downcity/agent";
+import type { Agent } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent/internal";
 import type { Hono } from "hono";
 
 /** 宿主为一个 Agent 提供的 HTTP 扩展。 */

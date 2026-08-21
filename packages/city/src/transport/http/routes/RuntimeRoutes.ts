@@ -8,7 +8,7 @@
  */
 
 import type { Hono } from "hono";
-import type { AgentWorkspace } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent/internal";
 import type { JsonValue } from "@downcity/agent";
 
 /**

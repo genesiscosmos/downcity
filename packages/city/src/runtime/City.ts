@@ -6,7 +6,15 @@
  * 资源与统一 transport。
  */
 
-import { Agent, type AgentWorkspace, type AgentCity } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import {
+  attach_agent_city,
+  create_agent_workspace,
+  detach_agent_city,
+  get_agent_workspace,
+  type AgentCity,
+  type AgentWorkspace,
+} from "@downcity/agent/internal";
 import type { WorkspaceBase } from "@downcity/workspace";
 import { CityHTTP } from "@/transport/http/CityHTTP.js";
 import { CityRPC } from "@/transport/rpc/CityRPC.js";
@@ -135,7 +143,7 @@ export class City implements AgentCity {
     const agent = this.require_agent(agent_id_input);
     const workspace_id = String(workspace_id_input || "").trim();
     if (!workspace_id) throw new Error("City request requires workspace_id");
-    const entry = agent.workspace(workspace_id);
+    const entry = get_agent_workspace(agent, workspace_id);
     if (!entry) {
       throw new Error(`Agent "${agent.id}" has not entered Workspace: ${workspace_id}`);
     }
@@ -150,10 +158,10 @@ export class City implements AgentCity {
     const agent = this.require_agent(agent_id_input);
     const workspace_id = String(workspace_id_input || "").trim();
     if (!workspace_id) throw new Error("City request requires workspace_id");
-    const existing = agent.workspace(workspace_id);
+    const existing = get_agent_workspace(agent, workspace_id);
     if (existing) return existing;
     const city_workspace = this.workspace(workspace_id);
-    if (city_workspace) return agent.enter(city_workspace);
+    if (city_workspace) return create_agent_workspace(agent, city_workspace);
     if (!this.resolve_workspace) {
       throw new Error(`Agent "${agent.id}" has not entered Workspace: ${workspace_id}`);
     }
@@ -169,7 +177,7 @@ export class City implements AgentCity {
         );
       }
       this.add_workspace(workspace);
-      return agent.enter(workspace);
+      return create_agent_workspace(agent, workspace);
     })();
     this.workspace_entry_promises.set(target_key, entry_promise);
     try {
@@ -270,7 +278,7 @@ export class City implements AgentCity {
     if (this.agents_by_id.has(agent.id) || this.removing_agent_ids.has(agent.id)) {
       throw new Error(`Agent already exists in City: ${agent.id}`);
     }
-    agent.attach_city(this);
+    attach_agent_city(agent, this);
     this.agents_by_id.set(agent.id, agent);
     return agent;
   }
@@ -279,7 +287,7 @@ export class City implements AgentCity {
   release_agent(agent: { readonly id: string }): void {
     const current = this.agents_by_id.get(agent.id);
     if (!current || current !== agent) return;
-    current.detach_city(this);
+    detach_agent_city(current, this);
     this.agents_by_id.delete(agent.id);
     void this.http.detach_agent(agent.id).catch(() => undefined);
   }

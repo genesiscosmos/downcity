@@ -15,7 +15,7 @@ import { healthRouter } from "@/city/agent/http/health/health.js";
 import { createPluginsRouter } from "@/city/agent/http/plugins/plugins.js";
 import { createStaticRouter } from "@/city/agent/http/static/static.js";
 import { createControlRouter } from "@/city/agent/http/control/ControlRouter.js";
-import type { AgentWorkspace } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent/internal";
 import { AuthService } from "@/city/runtime/auth/AuthService.js";
 import {
   createRouteAuthGuardMiddleware,

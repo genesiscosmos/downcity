@@ -17,6 +17,7 @@ import type {
   AgentHttpBinding,
   AgentHttpListenOptions,
 } from "@/transport/types/AgentHttpBinding.js";
+import { get_agent_workspace } from "@downcity/agent/internal";
 
 /** 在单一 HTTP 端口暴露 City 的多 Agent transport。 */
 export class CityHTTP {
@@ -141,7 +142,8 @@ export class CityHTTP {
     const route_key = `${agent_id}/${workspace_id}`;
     return await this.enqueue_agent_operation(route_key, async () => {
       // Agent 可能在请求排队期间被 City 删除，装配前必须重新确认所有权。
-      if (this.city.agents.get(agent_id)?.workspace(workspace_id) !== entry) return null;
+      const agent = this.city.agents.get(agent_id);
+      if (!agent || get_agent_workspace(agent, workspace_id) !== entry) return null;
       const cached = this.routers_by_workspace.get(route_key);
       if (cached?.entry === entry) return cached.router;
       if (cached) {

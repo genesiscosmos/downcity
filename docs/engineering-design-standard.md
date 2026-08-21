@@ -207,7 +207,7 @@ Workspace 不负责：
 - daemon 和多 Agent 管理。
 - 用户级全局配置。
 
-Workspace 必须有稳定 ID。Agent 定义不保存 Workspace 绑定；宿主在一次具体执行开始时创建 Workspace，并通过 `agent.enter(workspace)` 得到 AgentWorkspace。一个 Agent 可以同时进入多个 Workspace，各自的 Session、Shell、env 与日志必须隔离；同一个 Agent 的 Plugin 运行时数据不按 Workspace 复制。项目目录只承担真实项目文件与命令 cwd，不承担 Downcity 运行状态。
+Workspace 必须有稳定 ID。Agent 定义不保存 Workspace 绑定；宿主在一次具体执行开始时创建 Workspace，并通过 `agent.sessions.create({ workspace })` 创建 Session。一个 Agent 可以同时使用多个 Workspace，各自的 Session、Shell、env 与日志必须隔离；同一个 Agent 的 Plugin 运行时数据不按 Workspace 复制。项目目录只承担真实项目文件与命令 cwd，不承担 Downcity 运行状态。内部 AgentWorkspace 只用于运行时装配，不属于公开 SDK API。
 
 ### 4.2 Agent 是单 Agent 组合根
 

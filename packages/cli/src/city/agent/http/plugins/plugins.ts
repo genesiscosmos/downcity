@@ -8,7 +8,7 @@
  */
 
 import { Hono } from "hono";
-import type { AgentWorkspace } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent/internal";
 
 /**
  * Plugin 路由参数。

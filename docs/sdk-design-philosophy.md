@@ -432,12 +432,12 @@ await city.listen({ http: { port: 5314 } });
 await city.close();
 ```
 
-当前代码仍保留 `AgentWorkspace`、`agent.enter(workspace)`、`agent.workspace(workspace_id)`、`City.enter_workspace()` 和 `City.remove()`。它们服务于 transport、CLI、Desktop 与运行时装配，处理已进入 Workspace 的执行作用域、按需 Workspace 解析和路由回收。
+运行时仍保留内部 `AgentWorkspace` 和 `City.enter_workspace()`，用于 transport、CLI、Desktop 的装配；它们不再从公开 Agent API 暴露。用户只通过 `city.agents.*` 管理主体，通过 `agent.sessions.create({ workspace })` 创建活动。
 
 这些能力不改变公开心智模型：
 
 - 用户不需要把 `AgentWorkspace` 当作主体概念。
-- 用户不通过 `agent.enter()` 表达“Agent 加入 Workspace”的业务状态。
+- 用户不通过内部运行时对象表达“Agent 加入 Workspace”的业务状态；Session 创建本身就是一次 Agent 在 Workspace 中的活动。
 - 用户不通过 `City.enter_workspace()` 在请求中隐式创建资源。
 - 用户创建 Session 时显式指定已有 Workspace。
 

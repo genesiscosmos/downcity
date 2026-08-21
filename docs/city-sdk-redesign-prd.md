@@ -217,8 +217,10 @@ const backend_session = await agent.sessions.create({
 ```ts
 const workspace = city.workspace("project");
 
-const reviewer = new Agent({ id: "reviewer", city });
-const implementer = new Agent({ id: "implementer", city });
+const reviewer = new Agent({ id: "reviewer" });
+const implementer = new Agent({ id: "implementer" });
+city.agents.add(reviewer);
+city.agents.add(implementer);
 
 const review_session = await reviewer.sessions.create({ workspace });
 const implementation_session = await implementer.sessions.create({ workspace });
@@ -642,8 +644,7 @@ const session = await agent.sessions.create({ workspace });
 
 ```ts
 // 删除
-const agent_workspace = agent.enter(workspace);
-const session = await agent_workspace.sessions.create();
+const session = await agent.sessions.create({ workspace });
 
 // 目标
 const session = await agent.sessions.create({ workspace });

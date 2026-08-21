@@ -7,7 +7,8 @@
  */
 
 import type { Hono } from "hono";
-import type { AgentWorkspace, JsonValue } from "@downcity/agent";
+import type { JsonValue } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent/internal";
 import type { AgentTokenPrincipal } from "@/city/types/auth/AgentToken.js";
 import { CHAT_ACCESS_ACTIONS } from "@downcity/plugins/chat";
 import { buildControlRouteAliases } from "@/city/agent/control/CommonHelpers.js";

@@ -9,15 +9,12 @@
 
 import type { Tool } from "ai";
 import type { AgentModel } from "@/agent/AgentModel.js";
-import { AgentWorkspace } from "@/agent/AgentWorkspace.js";
 import { normalize_instruction_input } from "@/agent/AgentInstructions.js";
 import { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
 import type {
   AgentOptions,
-  AgentCity,
   AgentSessionConstructor,
 } from "@/types/agent/AgentOptions.js";
-import type { WorkspaceBase } from "@downcity/workspace";
 import type { AgentPluginContext } from "@/types/plugin/AgentPluginContext.js";
 import type { PluginWebServices } from "@/types/plugin/PluginServices.js";
 import type {
@@ -25,14 +22,18 @@ import type {
   AgentSessionCollection,
 } from "@/types/agent/AgentSessionCollection.js";
 import { Logger } from "@/utils/logger/Logger.js";
+import {
+  agent_city,
+  clear_agent_runtime,
+  create_agent_workspace,
+  initialize_agent_runtime,
+  list_agent_workspaces,
+} from "@/internal/AgentRuntime.js";
 
 /** SDK Agent 主体。 */
 export class Agent {
   /** Agent 的全局稳定标识。 */
   readonly id: string;
-
-  /** Agent 当前绑定的 City 资源容器；未加入 City 时为空。 */
-  private bound_city?: AgentCity;
 
   /** Agent 默认模型；Session 可以显式覆盖。 */
   readonly model?: AgentModel;
@@ -55,9 +56,6 @@ export class Agent {
   /** AgentPlugin 的内部访问名，仍指向 Agent 唯一 Registry。 */
   readonly plugin_registry: PluginRegistry;
 
-  /** 当前 Agent 已创建的内部 Workspace 执行作用域。 */
-  private readonly workspaces_by_id = new Map<string, AgentWorkspace>();
-
   /** Agent 级日志器，不绑定任何 Workspace。 */
   private readonly logger = new Logger();
 
@@ -70,6 +68,7 @@ export class Agent {
   constructor(options: AgentOptions) {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Agent requires a non-empty id");
+    initialize_agent_runtime(this);
     this.model = options.model;
     this.web = options.web;
     this.instruction = normalize_instruction_input(options.instruction);
@@ -93,65 +92,6 @@ export class Agent {
     };
   }
 
-  /** 返回 Agent 当前绑定的 City；仅由 City 集合建立绑定。 */
-  get city(): AgentCity | undefined {
-    return this.bound_city;
-  }
-
-  /**
-   * 将 Agent 纳入 City。
-   *
-   * 该方法是 City 集合与 Agent 之间的内部装配协议，应用代码应调用
-   * `city.agents.add(agent)`，不要直接调用它。
-   */
-  attach_city(city: AgentCity): void {
-    if (this.bound_city && this.bound_city !== city) {
-      throw new Error(`Agent "${this.id}" already belongs to another City`);
-    }
-    this.bound_city = city;
-  }
-
-  /** 解除 Agent 与 City 的内部绑定；仅由 City 生命周期调用。 */
-  detach_city(city: AgentCity): void {
-    if (this.bound_city === city) this.bound_city = undefined;
-  }
-
-  /**
-   * 创建或复用一个 Workspace 内部执行作用域。
-   *
-   * 该方法仅供 Agent runtime、City transport 和宿主适配层使用。SDK 用户应使用
-   * `agent.sessions.create({ workspace })`，不直接操作内部作用域。
-   * @internal
-   */
-  enter(workspace: WorkspaceBase): AgentWorkspace {
-    if (this.dispose_promise) throw new Error("Cannot enter Workspace after Agent disposal");
-    const workspace_id = String(workspace?.id || "").trim();
-    if (!workspace_id) throw new Error("Agent.enter requires a Workspace with a stable id");
-    if (this.city && this.city.workspace(workspace_id) !== workspace) {
-      throw new Error(`Workspace "${workspace_id}" does not belong to the Agent City`);
-    }
-    const existing = this.workspaces_by_id.get(workspace_id);
-    if (existing) {
-      if (existing.workspace !== workspace) {
-        throw new Error(`Agent already entered Workspace "${workspace_id}" with another instance`);
-      }
-      return existing;
-    }
-    const entry = new AgentWorkspace({ agent: this, workspace });
-    this.workspaces_by_id.set(workspace_id, entry);
-    return entry;
-  }
-
-  /** 返回当前 Agent 的内部 Workspace 作用域；仅供 runtime 使用。 @internal */
-  workspaces(): readonly AgentWorkspace[] {
-    return [...this.workspaces_by_id.values()];
-  }
-
-  /** 按稳定 ID 读取内部 Workspace 作用域；仅供 runtime 使用。 @internal */
-  workspace(workspace_id_input: string): AgentWorkspace | null {
-    return this.workspaces_by_id.get(String(workspace_id_input || "").trim()) ?? null;
-  }
-
   /** 更新 Agent 的静态基础指令。 */
   set_instruction(input: string | string[]): void {
     const next_instruction = normalize_instruction_input(input);
@@ -168,23 +108,17 @@ export class Agent {
     return this.logger;
   }
 
-  /** 由 AgentWorkspace.leave() 回收已离开的作用域。 */
-  release_workspace(workspace_id: string, entry: AgentWorkspace): void {
-    if (this.workspaces_by_id.get(workspace_id) === entry) {
-      this.workspaces_by_id.delete(workspace_id);
-    }
-  }
-
   /** 释放 Agent 进入的全部 Workspace 与 Agent Plugin。 */
   async dispose(): Promise<void> {
     this.dispose_promise ??= (async () => {
-      const entries = [...this.workspaces_by_id.values()];
+      const entries = [...list_agent_workspaces(this)];
       const results = await Promise.allSettled(entries.map(async (entry) => await entry.leave()));
       await this.plugins.unregister_all();
       const errors = results.flatMap((result) =>
         result.status === "rejected" ? [result.reason] : []
       );
-      this.bound_city?.release_agent(this);
+      agent_city(this)?.release_agent(this);
+      clear_agent_runtime(this);
       if (errors.length > 0) throw new AggregateError(errors, "Agent dispose failed");
     })();
     await this.dispose_promise;
@@ -193,7 +127,8 @@ export class Agent {
   /** 在指定 City Workspace 中创建属于当前 Agent 的 Session。 */
   private async create_session(input: AgentCreateSessionOptions) {
     if (!input?.workspace) throw new Error("agent.sessions.create requires a Workspace");
-    return await this.enter(input.workspace).sessions.create({
+    if (this.dispose_promise) throw new Error("Cannot create a Session after Agent disposal");
+    return await create_agent_workspace(this, input.workspace).sessions.create({
       ...(input.session_id ? { session_id: input.session_id } : {}),
     });
   }

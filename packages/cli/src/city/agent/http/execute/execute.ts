@@ -8,7 +8,7 @@
  */
 
 import { Hono } from "hono";
-import type { AgentWorkspace } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent/internal";
 
 /**
  * 执行入口路由参数。

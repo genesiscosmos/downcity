@@ -7,7 +7,7 @@
  */
 
 import type { Hono } from "hono";
-import type { AgentWorkspace } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent/internal";
 
 /**
  * Control 路由注册入参。

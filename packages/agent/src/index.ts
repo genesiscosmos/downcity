@@ -9,7 +9,6 @@
 
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
-export { AgentWorkspace } from "./agent/AgentWorkspace.js";
 export type { SessionStore } from "./types/store/SessionStore.js";
 export type {
   CompactActiveMessagesInput,
@@ -130,7 +129,6 @@ export type {
   SessionToolApprovalInteractionRequest,
 } from "./types/session/SessionInteraction.js";
 export type {
-  AgentCity,
   AgentOptions,
   AgentSessionConstructor,
 } from "./types/agent/AgentOptions.js";

@@ -11,7 +11,7 @@ import { Hono } from "hono";
 import fs from "fs-extra";
 import path from "path";
 import { getDowncityPublicDirPath } from "@/city/config/Paths.js";
-import type { AgentWorkspace } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent/internal";
 
 /**
  * 静态资源路由参数。

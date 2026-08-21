@@ -6,7 +6,7 @@
  * - chat / queue 等渠道语义由宿主显式注入的 plugin 自行实现。
  */
 
-import type { AgentWorkspace } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent/internal";
 import type { ControlSessionExecuteAttachmentInput } from "@/city/agent/control/types/ControlSessionExecute.js";
 import { buildExecuteInputText } from "@/city/agent/control/ExecuteInput.js";
 

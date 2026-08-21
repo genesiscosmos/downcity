@@ -7,7 +7,7 @@
  */
 
 import type { AgentSessions } from "@downcity/agent";
-import type { AgentWorkspace } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent/internal";
 import type { RpcEventFrame } from "@/transport/types/RpcProtocol.js";
 import type { AgentSessionModelResolver } from "@/transport/types/AgentSessionModelResolver.js";
 

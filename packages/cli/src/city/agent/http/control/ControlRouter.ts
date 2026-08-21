@@ -13,7 +13,7 @@
  */
 
 import { Hono } from "hono";
-import type { AgentWorkspace } from "@downcity/agent";
+import type { AgentWorkspace } from "@downcity/agent/internal";
 import { registerControlApiRoutes } from "@/city/agent/http/control/ControlApiRoutes.js";
 
 /**

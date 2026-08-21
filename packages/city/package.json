@@ -1,6 +1,6 @@
 {
   "name": "@downcity/city",
-  "version": "0.2.284",
+  "version": "0.2.285",
   "description": "Downcity Agent 工作环境、Workspace 与 HTTP/RPC transport 容器。",
   "type": "module",
   "main": "./bin/index.js",

@@ -27,6 +27,7 @@ import {
   resolve_session_system_messages,
   type SystemProfile,
 } from "@/executor/composer/system/default/SystemDomain.js";
+import { agent_is_in_city, release_agent_workspace } from "@/internal/AgentRuntime.js";
 
 const RESERVED_PLUGIN_TOOL_NAMES = new Set(["plugin_read", "plugin_call"]);
 
@@ -104,7 +105,7 @@ export class AgentWorkspace {
     };
     this.storage = storage;
     this.data_path = storage.root_path;
-    if (!this.agent.city) {
+    if (!agent_is_in_city(this.agent)) {
       this.workspace.shell?.bind({
         root_path: this.workspace.path,
         data_path: this.data_path,
@@ -248,7 +249,7 @@ export class AgentWorkspace {
         async () => await this.lifecycle.dispose(),
         async () => await this.storage.sessions.dispose(),
         async () => await this.logger.save_all_logs(),
-        ...(this.agent.city ? [] : [async () => await this.workspace.dispose()]),
+        ...(agent_is_in_city(this.agent) ? [] : [async () => await this.workspace.dispose()]),
       ];
       for (const cleanup of cleanup_steps) {
         try {
@@ -257,7 +258,7 @@ export class AgentWorkspace {
           errors.push(error);
         }
       }
-      this.agent.release_workspace(this.workspace_id, this);
+      release_agent_workspace(this.agent, this.workspace_id, this);
       this.agent.plugin_registry.unbind_workspace_context(this.context);
       if (errors.length > 0) {
         throw new AggregateError(errors, `AgentWorkspace cleanup failed: ${this.workspace_id}`);

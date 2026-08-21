@@ -52,7 +52,7 @@ test("City 运行时添加 Workspace 后 Agent 可以进入", async () => {
     assert.equal(city.workspaces.add(workspace), workspace);
     assert.equal(city.workspaces.get(workspace.id), workspace);
     assert.deepEqual(city.workspaces.list(), [workspace]);
-    assert.equal(agent.enter(workspace).workspace, workspace);
+    assert.equal((await agent.sessions.create({ workspace })).agent_id, agent.id);
   } finally {
     await city.close();
     await agent.dispose();
