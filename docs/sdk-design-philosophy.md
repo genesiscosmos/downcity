@@ -245,7 +245,7 @@ const agent = new Agent({
 });
 
 const session = await agent.sessions.create({
-  workspace: city.workspace("project")!,
+  workspace: city.workspaces.get("project")!,
 });
 
 await session.prompt({ query: "检查当前项目并修复测试。" });
@@ -259,11 +259,11 @@ await session.prompt({ query: "检查当前项目并修复测试。" });
 
 ```ts
 const frontend_session = await agent.sessions.create({
-  workspace: city.workspace("frontend")!,
+  workspace: city.workspaces.get("frontend")!,
 });
 
 const backend_session = await agent.sessions.create({
-  workspace: city.workspace("backend")!,
+  workspace: city.workspaces.get("backend")!,
 });
 ```
 
@@ -274,7 +274,7 @@ const backend_session = await agent.sessions.create({
 多个 Agent 可以协作同一项目：
 
 ```ts
-const workspace = city.workspace("project")!;
+const workspace = city.workspaces.get("project")!;
 
 const reviewer = new Agent({ id: "reviewer", model });
 const implementer = new Agent({ id: "implementer", model });

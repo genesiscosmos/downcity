@@ -55,7 +55,7 @@ const agent = new Agent({
 });
 
 try {
-  const session = await agent.sessions.create({ workspace: city.workspace("project")! });
+  const session = await agent.sessions.create({ workspace: city.workspaces.get("project")! });
   const turn = await session.prompt({
     query: "Summarize the current repository structure",
   });
@@ -72,7 +72,7 @@ try {
 1. Create the Sandbox Adapter for the current platform.
 2. Create `Shell` and inject the Sandbox.
 3. Create `Workspace` with a stable ID, project path, and Shell.
-4. Create `City` with the Workspace, then bind the Agent with `new Agent({ city })`.
+4. Create `City` with the Workspace, create the Agent independently, then call `city.agents.add(agent)`.
 5. Create a Session, start a Turn with `prompt()`, and await `turn.finished`.
 6. Call `agent.dispose()` in `finally`.
 

@@ -55,7 +55,7 @@ const agent = new Agent({
 });
 
 try {
-  const session = await agent.sessions.create({ workspace: city.workspace("project")! });
+  const session = await agent.sessions.create({ workspace: city.workspaces.get("project")! });
   const turn = await session.prompt({
     query: "总结当前仓库结构",
   });
@@ -72,7 +72,7 @@ try {
 1. 创建当前平台的 Sandbox Adapter。
 2. 创建 `Shell` 并注入 Sandbox。
 3. 创建 `Workspace` 并传入项目路径、稳定 ID 和 Shell。
-4. 创建包含 Workspace 的 `City`，再通过 `new Agent({ city })` 绑定 Agent。
+4. 创建包含 Workspace 的 `City`，独立创建 Agent，再调用 `city.agents.add(agent)`。
 5. 创建 Session，通过 `prompt()` 启动 Turn，并等待 `turn.finished`。
 6. 在 `finally` 中调用 `agent.dispose()`。
 

@@ -41,7 +41,7 @@ const agent = new Agent({
 city.agents.add(agent);
 
 const session = await agent.sessions.create({
-  workspace: city.workspace("project"),
+  workspace: city.workspaces.get("project"),
 });
 
 await session.prompt({ query: "检查当前项目" });
@@ -164,11 +164,11 @@ Agent 不需要加入或退出 Workspace，也不维护公开的 presence 状态
 
 ```ts
 const frontend_session = await agent.sessions.create({
-  workspace: city.workspace("frontend"),
+  workspace: city.workspaces.get("frontend"),
 });
 
 const backend_session = await agent.sessions.create({
-  workspace: city.workspace("backend"),
+  workspace: city.workspaces.get("backend"),
 });
 ```
 
@@ -177,7 +177,7 @@ const backend_session = await agent.sessions.create({
 ### 5.2 一个 Workspace 被多个 Agent 使用
 
 ```ts
-const workspace = city.workspace("project");
+const workspace = city.workspaces.get("project");
 
 const reviewer = new Agent({ id: "reviewer" });
 const implementer = new Agent({ id: "implementer" });

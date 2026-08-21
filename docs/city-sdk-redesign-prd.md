@@ -68,7 +68,7 @@ const city = new City({
   workspaces: [project_workspace],
 });
 
-const workspace = city.workspace("project");
+const workspace = city.workspaces.get("project");
 
 await city.listen({
   http: { host: "127.0.0.1", port: 5314 },
@@ -188,7 +188,7 @@ Session 永远归 Agent 所有。Workspace 只是 Session 的执行上下文，�
 
 ```ts
 const session = await agent.sessions.create({
-  workspace: city.workspace("project"),
+  workspace: city.workspaces.get("project"),
 });
 
 await session.prompt({
@@ -202,11 +202,11 @@ await session.prompt({
 
 ```ts
 const frontend_session = await agent.sessions.create({
-  workspace: city.workspace("frontend"),
+  workspace: city.workspaces.get("frontend"),
 });
 
 const backend_session = await agent.sessions.create({
-  workspace: city.workspace("backend"),
+  workspace: city.workspaces.get("backend"),
 });
 ```
 
@@ -215,7 +215,7 @@ const backend_session = await agent.sessions.create({
 ### 5.3 多 Agent 共享 Workspace
 
 ```ts
-const workspace = city.workspace("project");
+const workspace = city.workspaces.get("project");
 
 const reviewer = new Agent({ id: "reviewer" });
 const implementer = new Agent({ id: "implementer" });
@@ -514,18 +514,18 @@ const agent = new Agent({
 });
 
 const frontend_session = await agent.sessions.create({
-  workspace: city.workspace("frontend"),
+  workspace: city.workspaces.get("frontend"),
 });
 
 const backend_session = await agent.sessions.create({
-  workspace: city.workspace("backend"),
+  workspace: city.workspaces.get("backend"),
 });
 ```
 
 ### 9.4 一个 Workspace 使用多个 Agent
 
 ```ts
-const workspace = city.workspace("project");
+const workspace = city.workspaces.get("project");
 
 const reviewer = new Agent({
   id: "reviewer",
