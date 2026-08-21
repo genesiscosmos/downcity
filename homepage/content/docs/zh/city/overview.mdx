@@ -9,7 +9,7 @@ description: City 是什么，以及如何为 Agent 提供共享 AI 基础设施
 
 ## City 负责什么
 
-- **Agent 索引** — `city.add(agent)` 注册内存中的 Agent，`city.agent(agent_id)` 按 ID 读取，`city.agents()` 列出全部实例。
+- **Agent 集合** — `city.agents.add(agent)` 接纳已创建的 Agent，`city.agents.get(agent_id)` 按 ID 读取，`city.agents.list()` 列出全部实例。
 - **HTTP/RPC 转发** — City 统一提供两个端口，通过 `agent_id` 把请求转发到对应 Agent。
 - **宿主生命周期** — CLI/Desktop 负责创建和释放 City、Agent、Workspace 与平台资源；City 负责自己的 Server 生命周期。
 

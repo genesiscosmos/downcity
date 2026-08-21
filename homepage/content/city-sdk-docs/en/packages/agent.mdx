@@ -9,8 +9,9 @@ Session, Plugin SDK, and RemoteAgent. Workspace resources are provided by
 
 ```ts
 const city = new City({ workspaces: [workspace] });
-const agent = new Agent({ id: "assistant", city });
-const session = await agent.sessions.create({ workspace: city.workspace("project")! });
+const agent = new Agent({ id: "assistant" });
+city.agents.add(agent);
+const session = await agent.sessions.create({ workspace });
 const turn = await session.prompt({ query: "Hello" });
 const result = await turn.finished;
 ```

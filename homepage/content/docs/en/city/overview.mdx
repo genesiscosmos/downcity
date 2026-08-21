@@ -9,7 +9,7 @@ description: What City is and how it provides shared AI infrastructure to Agents
 
 ## What City owns
 
-- **Agent index** — `city.add(agent)` registers an in-memory Agent, `city.agent(agent_id)` reads one, and `city.agents()` lists them.
+- **Agent collection** — `city.agents.add(agent)` admits an existing Agent, `city.agents.get(agent_id)` reads one, and `city.agents.list()` lists them.
 - **HTTP/RPC forwarding** — City owns two transport ports and forwards requests by `agent_id`.
 - **Host lifecycle** — CLI/Desktop create and dispose City, Agent, Workspace, and platform resources; City owns its server lifecycle.
 
@@ -25,7 +25,7 @@ These belong to the Agent runtime.
 
 When you run `city on`, the CLI reads configuration from the global DB, explicitly creates every Agent, registers them with one `City`, and starts City's HTTP/RPC servers.
 
-When you use the SDK directly, create an `Agent` yourself. Add it to a `City` when you need unified HTTP/RPC forwarding.
+When you use the SDK directly, create an `Agent` yourself. Call `city.agents.add(agent)` when you need unified HTTP/RPC forwarding.
 
 ## Where to learn more
 

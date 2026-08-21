@@ -21,7 +21,8 @@ import { City } from "@downcity/city";
 const federation = new Federation({ database });
 const embassy = new Embassy({ federation_url: "https://fed.example.com" });
 const city = new City({ embassy, workspaces: [workspace] });
-const agent = new Agent({ id: "assistant", city });
+const agent = new Agent({ id: "assistant" });
+city.agents.add(agent);
 ```
 
 ## Identity boundaries

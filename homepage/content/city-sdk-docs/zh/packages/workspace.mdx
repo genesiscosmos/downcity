@@ -24,8 +24,9 @@ const workspace = new Workspace({
 });
 
 const city = new City({ workspaces: [workspace] });
-const agent = new Agent({ id: "repo-helper", city, model, plugins });
-const session = await agent.sessions.create({ workspace: city.workspace("project")! });
+const agent = new Agent({ id: "repo-helper", model, plugins });
+city.agents.add(agent);
+const session = await agent.sessions.create({ workspace });
 ```
 
 ## 所有权
