@@ -8,6 +8,7 @@ import { LLMModelIcon } from "@/components/model/LLMModelIcon";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MainViewBody, MainViewLayout } from "@/layouts/MainViewLayout";
 import { cn } from "@/lib/utils";
+import { AgentAvatar } from "@/components/AgentAvatar";
 import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopAgentDefinition, DesktopAgentPluginReference, DesktopAgentSummary, DesktopPluginSummary, DesktopSessionSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
@@ -33,6 +34,7 @@ export function AgentView({ agent, workspaces, plugins, sessions, controller, se
   const [definition_dirty, set_definition_dirty] = useState(false);
   const definition_version_ref = useRef(0);
   const [editor_error, set_editor_error] = useState("");
+  const [avatar_editor_open, set_avatar_editor_open] = useState(false);
   const bound_plugins = plugins.filter((plugin) => plugin.agent_ids.includes(agent.agent_id));
   const recent_sessions = [...sessions].sort((left, right) => right.updated_at - left.updated_at).slice(0, 5);
 
@@ -87,10 +89,10 @@ export function AgentView({ agent, workspaces, plugins, sessions, controller, se
 
   return <div className="flex h-full min-h-0 min-w-0 flex-1 bg-background">
     <MainViewLayout>
-      <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2"><div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1 text-xs text-muted-foreground"><TbGhost3 /><span className="truncate font-medium text-foreground/80">{agent.agent_id}</span></div></header>
+      <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2"><div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1 text-xs text-muted-foreground"><AgentAvatar agent={agent} /><span className="truncate font-medium text-foreground/80">{agent.agent_id}</span></div></header>
       <MainViewBody>
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto"><div className="mx-auto w-full max-w-[42rem] px-6 pb-12 pt-14">
-        <div className="mb-9 flex min-w-0 items-center gap-4"><div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-surface-subtle text-muted-foreground"><TbGhost3 className="size-6" /></div><div className="min-w-0"><h1 className="truncate text-lg font-semibold text-foreground">{agent.agent_id}</h1><p className="mt-1 truncate text-xs text-muted-foreground">可进入 {workspaces.length} 个 Workspace</p></div></div>
+        <div className="mb-9 flex min-w-0 items-center gap-4"><button type="button" className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-subtle text-muted-foreground transition-opacity hover:opacity-80" title="编辑头像" aria-label="编辑头像" onClick={() => set_avatar_editor_open(true)}><AgentAvatar agent={agent} class_name="size-12 rounded-xl" icon_class_name="size-6" /></button><div className="min-w-0"><h1 className="truncate text-lg font-semibold text-foreground">{agent.agent_id}</h1><p className="mt-1 truncate text-xs text-muted-foreground">可进入 {workspaces.length} 个 Workspace</p></div></div>
         <SettingsGroup title="Definition">
           <EditablePropertyRow icon={<LLMModelIcon model_id={agent.model_id} size_class="size-4" />} label="Model" value={agent.model_id || "未配置"} active={editor_section === "model"} on_select={() => open_editor("model")} />
           <EditablePropertyRow icon={<TbFileText />} label="SOUL.md" value={definition ? `${definition.instruction.length} characters` : "Agent instruction"} active={editor_section === "soul"} on_select={() => open_editor("soul")} />
@@ -101,7 +103,32 @@ export function AgentView({ agent, workspaces, plugins, sessions, controller, se
       </MainViewBody>
     </MainViewLayout>
     {editor_section ? <AgentEditorPanel section={editor_section} definition={definition} plugins={plugins} controller={controller} loading={loading_definition} error={editor_error} set_definition={update_definition} close_editor={() => set_editor_section(undefined)} /> : null}
+    {avatar_editor_open ? <AvatarEditor agent={agent} controller={controller} close_editor={() => set_avatar_editor_open(false)} /> : null}
   </div>;
+}
+
+/** Agent 头像编辑侧栏。 */
+function AvatarEditor({ agent, controller, close_editor }: { /** 当前 Agent。 */ agent: DesktopAgentSummary; /** Desktop 根控制器。 */ controller: DesktopViewController; /** 关闭侧栏。 */ close_editor(): void }) {
+  const [saving, set_saving] = useState(false);
+  const [error, set_error] = useState("");
+  const choose_avatar = async () => {
+    set_saving(true);
+    set_error("");
+    try { await controller.choose_agent_avatar(agent.agent_id); } catch (reason) { set_error(reason instanceof Error ? reason.message : String(reason)); } finally { set_saving(false); }
+  };
+  const remove_avatar = async () => {
+    set_saving(true);
+    set_error("");
+    try { await controller.remove_agent_avatar(agent.agent_id); } catch (reason) { set_error(reason instanceof Error ? reason.message : String(reason)); } finally { set_saving(false); }
+  };
+  const generate_avatar = async () => {
+    set_saving(true);
+    set_error("");
+    try { await controller.generate_agent_avatar(agent.agent_id); } catch (reason) { set_error(reason instanceof Error ? reason.message : String(reason)); } finally { set_saving(false); }
+  };
+  return <DetailEditorSidebar title="Avatar" storage_key="downcity.avatar_editor_width" default_width={360} max_width={480} on_close={close_editor}>
+    <div className="flex flex-col items-center gap-4 py-5"><div className="flex size-32 items-center justify-center overflow-hidden rounded-2xl bg-surface-subtle text-muted-foreground"><AgentAvatar agent={agent} class_name="size-32 rounded-2xl" icon_class_name="size-14" /></div><div className="grid w-full grid-cols-2 gap-2"><Button type="button" variant="primary" className="w-full" disabled={saving} onClick={() => void generate_avatar()}><TbGhost3 />随机生成</Button><Button type="button" className="w-full" disabled={saving} onClick={() => void choose_avatar()}><TbPlus />选择图片</Button></div><Button type="button" className="w-full" disabled={saving || !agent.avatar_url} onClick={() => void remove_avatar()}>移除头像</Button><p className="w-full text-xs leading-5 text-muted-foreground">随机头像使用 Downcity Ghost 形象生成。自定义图片支持 PNG、JPEG 和 WebP，文件大小不超过 2 MiB。</p>{error ? <p className="w-full text-xs leading-5 text-destructive">{error}</p> : null}</div>
+  </DetailEditorSidebar>;
 }
 
 /** Agent 页面右侧的分区编辑容器。 */

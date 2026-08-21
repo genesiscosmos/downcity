@@ -36,6 +36,29 @@ const agent_workspace = agent.enter(new Workspace({
 }));
 ```
 
+## 从历史消息创建 Session 分支
+
+`session.fork()` 默认保留锚点消息。编辑并重新发送历史消息时，可以排除原消息，让新 Session 从修改后的内容继续：
+
+```ts
+const forked_session = await session.fork({
+  message_id,
+  include_message: false,
+});
+```
+
+## 设置 Desktop Agent 头像
+
+Desktop 会从用户级 Agent 目录读取头像。将图片放在对应 Agent ID 目录下即可：
+
+```text
+~/.downcity/agents/<agent_id>/avatar.png
+```
+
+也支持 `avatar.jpg`、`avatar.jpeg` 和 `avatar.webp`，头像文件大小限制为 2 MiB。未配置头像时，Desktop 使用默认图标。
+
+在 Desktop 的 Agent 详情页点击头像，可以通过右侧编辑栏随机生成 Downcity Ghost 头像、选择自定义图片或移除头像。
+
 ## 关键概念
 
 - **City** — 持有一个或多个已经实例化的 Agent，并在宿主退出时统一释放。它不读取 Registry，也不决定 Agent 是否应当运行。

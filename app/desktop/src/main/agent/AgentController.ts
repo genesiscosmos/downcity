@@ -15,6 +15,7 @@ import {
   type SessionApprovalMode,
   type SessionMutationUnsubscribe,
 } from "@downcity/agent";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
   City,
@@ -31,6 +32,8 @@ import type {
   DesktopAgentWorkspace,
   DesktopAgentSummary,
   DesktopChatInput,
+  DesktopChatRewriteInput,
+  DesktopChatRewriteResult,
   DesktopChatMutationEvent,
   DesktopChatHistoryPage,
   DesktopChatRuntime,
@@ -56,6 +59,7 @@ import {
 } from "./DesktopAgentAssembly.js";
 import type { DesktopLocalData } from "./DesktopLocalData.js";
 import type { LocalPluginLoader } from "@downcity/local/product";
+import { generate_agent_avatar_svg, read_downcity_logo_svg } from "./GeneratedAgentAvatar.js";
 
 const session_model_settings_key = "desktop.session-models";
 
@@ -106,7 +110,7 @@ export class AgentController {
   /** 列出 CLI 与 Desktop 共用的 Agent 注册记录。 */
   async list_agents(): Promise<DesktopAgentSummary[]> {
     await this.ready_promise;
-    return this.data.agents.list().map(to_desktop_agent_summary);
+    return this.data.agents.list().map((record) => to_desktop_agent_summary(record, this.data.agents.get_avatar_url(record.agent_id)));
   }
 
   /** 读取 Agent 的完整本地定义，供 Renderer 编辑。 */
@@ -175,7 +179,7 @@ export class AgentController {
         agent_id: agent.id,
         version: config.version,
         execution: config.execution,
-      }),
+      }, this.data.agents.get_avatar_url(agent.id)),
     };
   }
 
@@ -222,7 +226,34 @@ export class AgentController {
       this.restored_session_models.delete(session_key);
     }
     await previous_agent?.dispose();
-    return to_desktop_agent_summary(this.data.agents.get(current.agent_id)!);
+    return to_desktop_agent_summary(this.data.agents.get(current.agent_id)!, this.data.agents.get_avatar_url(current.agent_id));
+  }
+
+  /** 保存 Agent 头像并返回刷新后的摘要。 */
+  async set_avatar(agent_id: string, source_path: string): Promise<DesktopAgentSummary> {
+    await this.ready_promise;
+    this.data.agents.set_avatar(agent_id, source_path);
+    const config = this.data.agents.get(agent_id);
+    if (!config) throw new Error(`Agent not found: ${agent_id}`);
+    return to_desktop_agent_summary(config, this.data.agents.get_avatar_url(config.agent_id));
+  }
+
+  /** 删除 Agent 头像并返回刷新后的摘要。 */
+  async remove_avatar(agent_id: string): Promise<DesktopAgentSummary> {
+    await this.ready_promise;
+    this.data.agents.remove_avatar(agent_id);
+    const config = this.data.agents.get(agent_id);
+    if (!config) throw new Error(`Agent not found: ${agent_id}`);
+    return to_desktop_agent_summary(config, undefined);
+  }
+
+  /** 生成并保存一份新的随机 Downcity Ghost 头像。 */
+  async generate_avatar(agent_id: string): Promise<DesktopAgentSummary> {
+    await this.ready_promise;
+    const config = this.data.agents.get(agent_id);
+    if (!config) throw new Error(`Agent not found: ${agent_id}`);
+    this.data.agents.set_generated_avatar(config.agent_id, generate_agent_avatar_svg(randomUUID(), read_downcity_logo_svg()));
+    return to_desktop_agent_summary(config, this.data.agents.get_avatar_url(config.agent_id));
   }
 
   /** 让指定 Agent 进入独立登记的 Workspace。 */
@@ -254,6 +285,45 @@ export class AgentController {
     const session = await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.create();
     this.observe_session(agent_id, workspace_id, session);
     return to_desktop_session_summary(await session.get_info());
+  }
+
+  /** 从 canonical Message 锚点创建分支 Session，并纳入 Desktop 实时投影。 */
+  async fork_session(agent_id: string, workspace_id: string, session_id: string, message_id: string): Promise<DesktopSessionSummary> {
+    const source = await this.get_session(agent_id, workspace_id, session_id);
+    const source_info = await source.get_info();
+    const forked = await source.fork({ message_id });
+    const source_title = String(source_info.title || "新会话").trim();
+    await forked.rename(`${source_title}（分支）`);
+    this.observe_session(agent_id, workspace_id, forked);
+    return to_desktop_session_summary(await forked.get_info());
+  }
+
+  /** 从历史用户消息之前创建新 Session，并以修改后的文本启动新 Turn。 */
+  async rewrite_session_message(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatRewriteInput): Promise<DesktopChatRewriteResult> {
+    const source = await this.get_session(agent_id, workspace_id, session_id);
+    if ((await source.status()).state === "running") throw new Error("Session 正在执行，不能编辑历史消息");
+    const message_id = String(input.message_id || "").trim();
+    const text = String(input.text || "").trim();
+    if (!message_id) throw new Error("message_id is required");
+    if (!text) throw new Error("编辑后的消息不能为空");
+    if (input.action !== "fork" && input.action !== "rollback") throw new Error("不支持的历史消息重写方式");
+    const source_info = await source.get_info();
+    const forked = await source.fork({ message_id, include_message: false });
+    const source_title = String(source_info.title || "新对话").trim();
+    try {
+      await forked.rename(input.action === "fork" ? `${source_title}（分支）` : source_title);
+      this.observe_session(agent_id, workspace_id, forked);
+      const sent = await this.send_message(agent_id, workspace_id, forked.id, { text, files: [], references: [] });
+      if (input.action === "rollback") {
+        await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.archive({ id: session_id });
+        this.release_session_projection(agent_id, workspace_id, session_id);
+      }
+      return { session: to_desktop_session_summary(await forked.get_info()), turn_id: sent.turn_id };
+    } catch (error) {
+      await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.remove(forked.id).catch(() => false);
+      this.release_session_projection(agent_id, workspace_id, forked.id);
+      throw error;
+    }
   }
 
   /** 更新 Session 的 canonical 标题。 */
@@ -343,6 +413,12 @@ export class AgentController {
       });
       throw reason;
     }
+  }
+
+  /** 将显式压缩命令加入 Session 的有序执行队列。 */
+  async compact_session(agent_id: string, workspace_id: string, session_id: string): Promise<void> {
+    const session = await this.get_session(agent_id, workspace_id, session_id);
+    await session.compact();
   }
 
   /** 停止当前 Session Turn。 */
@@ -614,9 +690,10 @@ export class AgentController {
 }
 
 /** 把 Registry Agent 收敛成 Renderer 所需摘要。 */
-function to_desktop_agent_summary(record: Pick<LocalAgentConfig, "agent_id" | "version" | "execution">): DesktopAgentSummary {
+function to_desktop_agent_summary(record: Pick<LocalAgentConfig, "agent_id" | "version" | "execution">, avatar_url?: string): DesktopAgentSummary {
   return {
     agent_id: record.agent_id,
+    ...(avatar_url ? { avatar_url } : {}),
     model_id: typeof record.execution?.model_id === "string" ? record.execution.model_id : "",
     version: record.version,
   };

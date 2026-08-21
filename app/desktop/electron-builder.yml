@@ -7,6 +7,9 @@ directories:
 files:
   - out/**/*
   - package.json
+extraResources:
+  - from: resources/downcity-logo.svg
+    to: downcity-logo.svg
 icon: build/icon.icns
 win:
   icon: build/icon.ico

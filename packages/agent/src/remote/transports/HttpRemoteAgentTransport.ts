@@ -259,6 +259,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       typeof input === "string"
         ? String(input || "").trim() || undefined
         : String(input?.message_id || "").trim() || undefined;
+    const include_message = typeof input === "string" || input?.include_message !== false;
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
@@ -270,6 +271,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       }),
       body: JSON.stringify({
         ...(message_id ? { message_id: message_id } : {}),
+        ...(message_id && !include_message ? { include_message: false } : {}),
       }),
     });
     if (!payload.success || !payload.session?.session_id) {

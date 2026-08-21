@@ -55,34 +55,54 @@
     }
   },
   "quickstart": {
-    "sectionLabel": "From use to build",
-    "title": "Three paths, one Downcity.",
-    "description": "Users run agents, product developers organize agents into a City, and service developers provide shared capabilities through Federation.",
-    "tabsLabel": "Choose the user, product developer, or service developer path",
-    "stageLabel": "DOWNCITY / RUNTIME PATH",
-    "currentLayer": "Current layer",
-    "flowLabel": "Runtime path",
+    "sectionLabel": "Three core SDKs",
+    "title": "From Agent to City to Federation.",
+    "description": "An Agent composes a model and Plugins, works inside a Workspace, joins other Agents in an independent City, and accesses shared Federation Services through Embassy.",
+    "copyCode": "Copy code",
+    "copiedCode": "Copied",
+    "map": {
+      "ariaLabel": "A domain map growing from Agent, Workspace, and City into Federation Services",
+      "labels": {
+        "federation": "Federation",
+        "database": "Database",
+        "city": "City A",
+        "neighborCity": "City B",
+        "thirdCity": "City C",
+        "agent": "Agent",
+        "plugin": "Plugin",
+        "workspace": "Workspace",
+        "service": "Service",
+        "model": "AI Model",
+        "account": "Accounts",
+        "payment": "Payment",
+        "credits": "Credits",
+        "embassy": "Embassy",
+        "session": "Session · Agent conversation",
+        "user": "User",
+        "userPrompt": "“Summarize this repository”",
+        "agentReply": "“Repository summary complete.”"
+      }
+    },
     "entries": {
-      "user": {
-        "audience": "Users",
-        "title": "Run and manage agents",
-        "products": "CLI · Desktop",
-        "description": "Create, start, and talk to agents from the CLI, or do the same work in Desktop. Both use the same City and Agent state.",
-        "codeLabel": "Terminal"
+      "agent": {
+        "title": "Agent SDK",
+        "description": "Define one Agent, let it enter a Workspace, and keep work moving through Sessions.",
+        "docsLink": "Explore Agent SDK"
       },
-      "productDeveloper": {
-        "audience": "Product developers",
-        "title": "Turn agents into product capabilities",
-        "products": "Agent · City",
-        "description": "Agent owns the workspace, model, and sessions. City organizes those agents and connects them to the CLI, Desktop, or your product host.",
-        "codeLabel": "agent.ts"
+      "city": {
+        "title": "City SDK",
+        "description": "Index multiple Agents inside one runtime boundary and expose them through HTTP / RPC transports.",
+        "docsLink": "Explore City SDK"
       },
-      "serviceDeveloper": {
-        "audience": "Service developers",
-        "title": "Provide shared services across products",
-        "products": "Federation · Embassy · Services",
-        "description": "Federation runs shared services. Embassy gives users and administrators access to models, identity, usage, and product capabilities.",
-        "codeLabel": "federation.ts"
+      "embassy": {
+        "title": "Embassy Client",
+        "description": "Access models and shared Federation Services from the product side.",
+        "docsLink": "Explore Embassy"
+      },
+      "federation": {
+        "title": "Federation SDK",
+        "description": "Provide shared Services, identity, data, and one route space for multiple Cities.",
+        "docsLink": "Explore Federation SDK"
       }
     }
   },
@@ -223,6 +243,7 @@
     "codeLabel": "Create and start",
     "copyCode": "Copy commands",
     "copiedCode": "Copied",
+    "filesLabel": "SDK example files",
     "install": "Choose your system",
     "start": "Quick Start",
     "github": "Star on GitHub"

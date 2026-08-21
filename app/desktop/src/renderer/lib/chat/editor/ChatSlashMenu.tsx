@@ -1,7 +1,7 @@
 /** Chat Composer 的键盘可操作 Slash 命令菜单。 */
 
 import { useEffect, useState } from "react";
-import { TbAdjustments, TbFile, TbPhoto, TbTrash } from "react-icons/tb";
+import { TbAdjustments, TbArrowsMinimize, TbFile, TbPhoto, TbTrash } from "react-icons/tb";
 import { MenuItemShell } from "@/components/ui/item";
 import type { ChatSlashCommand } from "@/types/ChatComposer";
 
@@ -37,7 +37,7 @@ export function ChatSlashMenu({ commands, select_command }: ChatSlashMenuProps) 
   if (commands.length === 0) return null;
   return <div className="absolute bottom-full left-1 z-30 mb-2 w-56 overflow-hidden rounded-floating-surface border border-border bg-background p-1 text-popover-foreground outline-none">
     {commands.map((command, index) => {
-      const Icon = command.command_id === "attach" ? TbFile : command.command_id === "image" ? TbPhoto : command.command_id === "clear" ? TbTrash : TbAdjustments;
+      const Icon = command.command_id === "attach" ? TbFile : command.command_id === "image" ? TbPhoto : command.command_id === "clear" ? TbTrash : command.command_id === "compact" ? TbArrowsMinimize : TbAdjustments;
       return <MenuItemShell key={command.command_id} is_selected={index === active_index} role="button" onMouseDown={(event) => event.preventDefault()} onClick={() => select_command(command)}>
         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 truncate">{command.title}</span>

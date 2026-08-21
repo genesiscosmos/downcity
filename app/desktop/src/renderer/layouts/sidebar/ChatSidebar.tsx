@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { TbArchive, TbChevronRight, TbDots, TbFolder, TbFolderPlus, TbGhost3, TbPlus } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
+import { AgentAvatar } from "@/components/AgentAvatar";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import type { DesktopViewController } from "@/types/DesktopView";
@@ -76,9 +77,7 @@ export function ChatSidebar({ controller, open_create_workspace, open_create_age
         const expanded = expanded_workspace_ids.has(workspace.workspace_id);
         const sessions = [...(controller.sessions_by_workspace[workspace.workspace_id] ?? [])]
           .sort((left, right) => Number(right.session.executing) - Number(left.session.executing) || right.session.updated_at - left.session.updated_at);
-        const draft = controller.selection?.kind === "draft" && controller.selection.workspace_id === workspace.workspace_id
-          ? controller.selection
-          : undefined;
+        const get_agent = (agent_id: string) => controller.agents.find((agent) => agent.agent_id === agent_id);
         return <section key={workspace.workspace_id} className="mb-0.5">
           <div className="group flex min-h-7 w-full cursor-pointer items-center gap-1 rounded-lg border border-transparent p-0.5 transition-all duration-200 ease-out hover:bg-foreground/[0.07] focus-within:bg-foreground/[0.07]" onClick={() => toggle_workspace(workspace.workspace_id)}>
             <Button size="icon" aria-label={expanded ? "折叠 Workspace" : "展开 Workspace"} aria-expanded={expanded} onClick={(event) => { event.stopPropagation(); toggle_workspace(workspace.workspace_id); }}>
@@ -88,22 +87,21 @@ export function ChatSidebar({ controller, open_create_workspace, open_create_age
               <TbFolder className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{workspace.name}</span>
             </div>
-            <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100" title="新对话" aria-label="新对话" onClick={(event) => event.stopPropagation()}><TbPlus /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" sideOffset={4} onClick={(event) => event.stopPropagation()}>{controller.agents.map((agent) => <DropdownMenuItem key={agent.agent_id} onClick={() => create_session(workspace.workspace_id, agent.agent_id)}><TbGhost3 /><span>{agent.agent_id}</span></DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
+            <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100" title="新对话" aria-label="新对话" onClick={(event) => event.stopPropagation()}><TbPlus /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" sideOffset={4} onClick={(event) => event.stopPropagation()}>{controller.agents.map((agent) => <DropdownMenuItem key={agent.agent_id} onClick={() => create_session(workspace.workspace_id, agent.agent_id)}><AgentAvatar agent={agent} /><span>{agent.agent_id}</span></DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
             <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100" title="Workspace 操作" aria-label="Workspace 操作" onClick={(event) => event.stopPropagation()}><TbDots /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" sideOffset={4} onClick={(event) => event.stopPropagation()}><DropdownMenuItem onClick={() => open_archives(workspace.workspace_id)}><TbArchive /><span>已归档对话</span></DropdownMenuItem><DropdownMenuItem onClick={() => open_create_agent(workspace.workspace_id)}><TbGhost3 /><span>创建 Agent</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
           </div>
           {expanded ? <div className="space-y-0.5 pl-5">
-            {draft ? <div className="flex min-h-7 items-center gap-1 rounded-lg bg-primary/[0.1] px-2"><span className="min-w-0 flex-1 truncate text-xs text-foreground">新对话</span><span className="max-w-20 truncate rounded bg-foreground/[0.06] px-1.5 py-0.5 text-[0.5625rem] text-muted-foreground">{draft.agent_id}</span></div> : null}
             {sessions.map(({ agent_id, session }) => <SessionListItem
               key={`${agent_id}:${session.session_id}`}
               session={session}
-              agent_id={agent_id}
+              agent={get_agent(agent_id) ?? { agent_id, model_id: "", version: "" }}
               active={controller.selection?.kind === "session" && controller.selection.workspace_id === workspace.workspace_id && controller.selection.agent_id === agent_id && controller.selection.session_id === session.session_id}
               on_select={() => void controller.select_session(workspace.workspace_id, agent_id, session.session_id)}
               on_rename={(title) => controller.rename_session(workspace.workspace_id, agent_id, session.session_id, title)}
               on_archive={() => controller.archive_session(workspace.workspace_id, agent_id, session.session_id)}
               on_remove={() => controller.remove_session(workspace.workspace_id, agent_id, session.session_id)}
             />)}
-            {sessions.length === 0 && !draft ? <div className="px-2 py-2 text-[0.6875rem] text-muted-foreground/60">暂无对话</div> : null}
+            {sessions.length === 0 ? <div className="px-2 py-2 text-[0.6875rem] text-muted-foreground/60">暂无对话</div> : null}
           </div> : null}
         </section>;
       })}

@@ -16,6 +16,7 @@ import { ChatAttachmentNode, ChatReferenceNode } from "./editor/ChatComposerNode
 import { ChatSlashMenu } from "./editor/ChatSlashMenu";
 import { decode_chat_composer, encode_chat_composer } from "./editor/chatComposerCodec";
 import { add_chat_reference_listener } from "./editor/chatReferenceEvent";
+import { resolve_chat_input_command } from "./chat_input_command";
 
 /** ChatInput 属性。 */
 interface ChatInputEditorProps {
@@ -34,6 +35,7 @@ interface ChatInputEditorProps {
   /** 更新附件草稿。 */ update_draft_files(files: DesktopChatFileInput[]): void;
   /** 更新引用草稿。 */ update_draft_references(references: DesktopChatReferenceInput[]): void;
   /** 提交完整输入。 */ send_message(input: DesktopChatInput): Promise<void>;
+  /** 执行当前 Session 的显式压缩命令。 */ compact_session?(): Promise<void>;
   /** 停止当前 Turn。 */ stop_session(): Promise<void>;
   /** 刷新模型目录。 */ refresh_models(): Promise<void>;
   /** 切换模型。 */ set_model(model_id: string): Promise<void>;
@@ -96,11 +98,37 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
     }
   }
 
+  const run_compact_command = useCallback(async (restore_command_on_failure: boolean) => {
+    const current_editor = editor_ref.current;
+    if (!current_editor || submitting_ref.current || !props_ref.current.compact_session) return;
+    set_submitting(true);
+    submitting_ref.current = true;
+    try {
+      await props_ref.current.compact_session();
+      current_editor.commands.clearContent();
+      current_editor.commands.focus();
+    } catch {
+      const current_input = decode_chat_composer(current_editor.getJSON());
+      if (restore_command_on_failure && !current_input.text.trim() && current_input.files.length === 0 && current_input.references.length === 0) {
+        current_editor.chain().focus().insertContent("/compact").run();
+      }
+    } finally {
+      submitting_ref.current = false;
+      set_submitting(false);
+    }
+  }, []);
+
   const submit_message = useCallback(async () => {
     const current_editor = editor_ref.current;
     if (!current_editor || submitting_ref.current) return;
     const input = decode_chat_composer(current_editor.getJSON());
     if (!input.text.trim() && input.files.length === 0 && input.references.length === 0) return;
+    const command = resolve_chat_input_command(input);
+    if (command === "compact") {
+      if (!props_ref.current.compact_session) return;
+      await run_compact_command(false);
+      return;
+    }
     set_submitting(true);
     submitting_ref.current = true;
     try {
@@ -110,7 +138,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
       submitting_ref.current = false;
       set_submitting(false);
     }
-  }, [submitting]);
+  }, [run_compact_command, submitting]);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -177,12 +205,13 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
       { command_id: "attach", title: "/attach", description: "添加文件附件", keywords: ["file", "附件"], run: () => file_input_ref.current?.click() },
       { command_id: "image", title: "/image", description: "添加图片", keywords: ["photo", "图片"], run: () => image_input_ref.current?.click() },
       { command_id: "clear", title: "/clear", description: "清空当前输入", keywords: ["reset", "清空"], run: () => { editor_ref.current?.commands.clearContent(); } },
+      ...(props.compact_session ? [{ command_id: "compact", title: "/compact", description: "压缩当前对话上下文", keywords: ["compact", "压缩", "context"], run: () => run_compact_command(true) }] : []),
       ...props.models.map((model) => ({ command_id: `model:${model.model_id}`, title: `/model ${model.name}`, description: `切换到 ${model.model_id}`, keywords: ["model", "模型", model.model_id], run: () => props.set_model(model.model_id) })),
       ...(["ask", "always-allow"] as const).map((mode) => ({ command_id: `approval:${mode}`, title: `/approval ${mode}`, description: mode === "ask" ? "执行前询问" : "自动允许", keywords: ["approval", "权限"], run: () => props.set_approval_mode(mode) })),
     ];
     const query = slash_query?.query.toLowerCase() ?? "";
     return commands.filter((command) => !query || `${command.title} ${command.keywords.join(" ")}`.toLowerCase().includes(query)).slice(0, 8);
-  }, [props.models, props.set_approval_mode, props.set_model, slash_query?.query]);
+  }, [props.compact_session, props.models, props.set_approval_mode, props.set_model, run_compact_command, slash_query?.query]);
 
   const select_slash_command = useCallback((command: ChatSlashCommand) => {
     const current_editor = editor_ref.current;

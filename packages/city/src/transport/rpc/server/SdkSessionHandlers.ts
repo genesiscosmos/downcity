@@ -106,7 +106,10 @@ export async function handleSdkSessionRpcRequest(params: {
     }
     case "sdk.sessions.fork": {
       const session = await options.sessions.get(request.params.session_id);
-      const forked = await session.fork(request.params.message_id);
+      const forked = await session.fork(request.params.message_id ? {
+        message_id: request.params.message_id,
+        include_message: request.params.include_message,
+      } : undefined);
       write_success(request.id, { session: await forked.get_info() });
       return true;
     }

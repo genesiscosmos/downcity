@@ -171,12 +171,16 @@ export function Navbar() {
   return (
     <header
       className={cn(
-        "top-0 z-50 w-full bg-background/[0.86] backdrop-blur-[16px] transition-transform focus-within:translate-y-0 motion-reduce:transition-none",
-        is_home_page ? "fixed inset-x-0" : "sticky",
-        header_visible
-          ? "translate-y-0 duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
-          : "-translate-y-full duration-150 ease-[cubic-bezier(0.55,0,1,0.45)]",
-        scrolled && "border-b border-line/60",
+        "z-50 w-full bg-background/[0.86] backdrop-blur-[16px]",
+        is_home_page
+          ? "relative"
+          : cn(
+              "sticky top-0 transition-transform focus-within:translate-y-0 motion-reduce:transition-none",
+              header_visible
+                ? "translate-y-0 duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
+                : "-translate-y-full duration-150 ease-[cubic-bezier(0.55,0,1,0.45)]",
+              scrolled && "border-b border-line/60",
+            ),
       )}
     >
       <div className="mx-auto flex h-[60px] max-w-[1320px] items-center justify-between gap-4 px-5 md:px-8 lg:px-20">

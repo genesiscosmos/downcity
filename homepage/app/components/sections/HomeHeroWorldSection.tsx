@@ -25,8 +25,8 @@ export function HomeHeroWorldSection() {
   const learn_more_path = locale === "zh" ? "/zh/product" : "/product";
 
   return (
-    <section className="relative min-h-svh overflow-hidden bg-background">
-      <div className="relative mx-auto flex min-h-svh max-w-7xl flex-col px-5 pt-[12svh] md:px-8 md:pt-[14svh]">
+    <section className="relative min-h-[calc(100svh-60px)] overflow-hidden bg-background">
+      <div className="relative mx-auto flex min-h-[calc(100svh-60px)] max-w-7xl flex-col px-5 pt-[12svh] md:px-8 md:pt-[14svh]">
         <div className="mx-auto w-full max-w-4xl text-center">
           <h1 className="font-serif text-[clamp(2.75rem,7vw,5.5rem)] font-bold leading-none text-foreground">{t("hero.title")}</h1>
           <p className="mx-auto mt-5 max-w-3xl text-[clamp(1.05rem,2vw,1.45rem)] font-medium leading-snug text-foreground">{positioning.hero_headline}</p>

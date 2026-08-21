@@ -192,6 +192,8 @@ type RpcRequestPayload =
         session_id: string;
         /** 可选源消息 id。 */
         message_id?: string;
+        /** 是否包含源消息；默认包含。 */
+        include_message?: boolean;
       };
     }
   | {

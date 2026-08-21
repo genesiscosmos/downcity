@@ -1,4 +1,4 @@
-/** 基于 Base UI 的 Desktop 通用 Dialog。 */
+/** 基于 Base UI、与 Duobox Dialog 视觉和交互规范一致的 Desktop 通用 Dialog。 */
 
 import * as React from "react";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
@@ -16,16 +16,29 @@ interface DialogContentProps extends BaseDialog.Popup.Props {
   children: React.ReactNode;
   /** 是否隐藏右上角关闭按钮。 */
   hide_close?: boolean;
+  /** Dialog 宽度规格。 */
+  size?: DialogSize;
 }
+
+/** Dialog 支持的内容宽度规格。 */
+type DialogSize = "sm" | "md" | "lg" | "fullscreen";
+
+const dialog_size_class_names: Record<DialogSize, string> = {
+  sm: "w-[min(25rem,calc(100vw-2rem))]",
+  md: "w-[min(32rem,calc(100vw-2rem))]",
+  lg: "w-[min(48rem,calc(100vw-2rem))]",
+  fullscreen: "h-[min(52rem,calc(100vh-2rem))] w-[min(72rem,calc(100vw-2rem))]",
+};
 
 /** 带 Portal、遮罩和标准动效的 Dialog 内容。 */
 const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
-  ({ className, children, hide_close = false, ...props }, ref) => <BaseDialog.Portal>
-    <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-foreground/15 backdrop-blur-[2px] transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0" />
+  ({ className, children, hide_close = false, size = "md", ...props }, ref) => <BaseDialog.Portal>
+    <BaseDialog.Backdrop className="desktop-dialog-backdrop fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px]" />
     <BaseDialog.Popup
       ref={ref}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl outline-none transition-[opacity,transform] duration-150 data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0",
+        "desktop-dialog-popup fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border-subtle bg-background text-foreground shadow-2xl outline-none",
+        dialog_size_class_names[size],
         className,
       )}
       {...props}
@@ -47,17 +60,17 @@ DialogDescription.displayName = "DialogDescription";
 
 /** Dialog 头部布局。 */
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("px-5 pb-3 pt-5 pr-12", className)} {...props} />;
+  return <div className={cn("flex shrink-0 items-start gap-3 px-4 pb-3 pt-4 pr-12", className)} {...props} />;
 }
 
 /** Dialog 主体布局。 */
 function DialogBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("px-5 py-3", className)} {...props} />;
+  return <div className={cn("min-h-0 flex flex-1 flex-col overflow-y-auto px-4 pb-4", className)} {...props} />;
 }
 
 /** Dialog 底部操作区。 */
 function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex justify-end gap-2 border-t border-border/60 bg-muted/35 px-5 py-3", className)} {...props} />;
+  return <div className={cn("flex shrink-0 items-center justify-end gap-2 bg-foreground/[0.015] px-4 py-3 [&_button]:h-8 [&_button]:px-3 [&_button]:text-xs", className)} {...props} />;
 }
 
 export { Dialog, DialogBody, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger };

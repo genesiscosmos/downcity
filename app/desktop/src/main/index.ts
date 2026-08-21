@@ -71,6 +71,16 @@ ipcMain.handle("agent:list", () => require_agent_controller().list_agents());
 ipcMain.handle("agent:get", (_event, agent_id: string) => require_agent_controller().get_agent(agent_id));
 ipcMain.handle("agent:create", (_event, agent_id: string, model_id: string) => require_agent_controller().create_agent(agent_id, model_id));
 ipcMain.handle("agent:update", (_event, agent_id: string, input: import("../common/types/DesktopApi.js").DesktopUpdateAgentInput) => require_agent_controller().update_agent(agent_id, input));
+ipcMain.handle("agent:choose-avatar", async (_event, agent_id: string) => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openFile"],
+    filters: [{ name: "Agent Avatar", extensions: ["png", "jpg", "jpeg", "webp"] }],
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  return require_agent_controller().set_avatar(agent_id, result.filePaths[0]);
+});
+ipcMain.handle("agent:remove-avatar", (_event, agent_id: string) => require_agent_controller().remove_avatar(agent_id));
+ipcMain.handle("agent:generate-avatar", (_event, agent_id: string) => require_agent_controller().generate_avatar(agent_id));
 ipcMain.handle("workspace:list", () => require_agent_controller().list_workspaces());
 ipcMain.handle("workspace:create", (_event, workspace_path: string, name: string) => require_agent_controller().create_workspace(workspace_path, name));
 ipcMain.handle("agent:connect", (_event, agent_id: string, workspace_id: string) => require_agent_controller().connect_agent(agent_id, workspace_id));
@@ -81,6 +91,8 @@ ipcMain.handle("plugin:get", (_event, plugin_id: string) => plugin_controller.ge
 ipcMain.handle("plugin:save-profile", (_event, plugin_id: string, input: import("../common/types/DesktopApi.js").DesktopSavePluginProfileInput) => plugin_controller.save_profile(plugin_id, input));
 ipcMain.handle("plugin:remove-profile", (_event, plugin_id: string, profile_id: string) => plugin_controller.remove_profile(plugin_id, profile_id));
 ipcMain.handle("chat:create-session", (_event, agent_id: string, workspace_id: string) => require_agent_controller().create_session(agent_id, workspace_id));
+ipcMain.handle("chat:fork-session", (_event, agent_id: string, workspace_id: string, session_id: string, message_id: string) => require_agent_controller().fork_session(agent_id, workspace_id, session_id, message_id));
+ipcMain.handle("chat:rewrite-session-message", (_event, agent_id: string, workspace_id: string, session_id: string, input: import("../common/types/DesktopApi.js").DesktopChatRewriteInput) => require_agent_controller().rewrite_session_message(agent_id, workspace_id, session_id, input));
 ipcMain.handle("chat:rename-session", (_event, agent_id: string, workspace_id: string, session_id: string, title: string) => require_agent_controller().rename_session(agent_id, workspace_id, session_id, title));
 ipcMain.handle("chat:archive-session", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().archive_session(agent_id, workspace_id, session_id));
 ipcMain.handle("chat:remove-session", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().remove_session(agent_id, workspace_id, session_id));
@@ -88,6 +100,7 @@ ipcMain.handle("chat:list-archived-sessions", (_event, agent_id: string, workspa
 ipcMain.handle("chat:get-snapshot", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().get_chat_snapshot(agent_id, workspace_id, session_id));
 ipcMain.handle("chat:get-history", (_event, agent_id: string, workspace_id: string, session_id: string, before_sequence: number) => require_agent_controller().get_chat_history(agent_id, workspace_id, session_id, before_sequence));
 ipcMain.handle("chat:send", (_event, agent_id: string, workspace_id: string, session_id: string, input: DesktopChatInput) => require_agent_controller().send_message(agent_id, workspace_id, session_id, input));
+ipcMain.handle("chat:compact-session", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().compact_session(agent_id, workspace_id, session_id));
 ipcMain.handle("chat:stop", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().stop_session(agent_id, workspace_id, session_id));
 ipcMain.handle("chat:respond", (_event, agent_id: string, workspace_id: string, session_id: string, input: RespondSessionInteractionInput) => require_agent_controller().respond_interaction(agent_id, workspace_id, session_id, input));
 ipcMain.handle("chat:get-runtime", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().get_runtime(agent_id, workspace_id, session_id));

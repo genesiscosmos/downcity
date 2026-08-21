@@ -20,6 +20,16 @@ import {
 
 const AGENT_FILE_NAME = "agent.json";
 const SOUL_FILE_NAME = "SOUL.md";
+const AVATAR_FILE_NAMES = ["avatar.svg", "avatar.png", "avatar.jpg", "avatar.jpeg", "avatar.webp"] as const;
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+const AVATAR_MEDIA_TYPES: Record<string, string> = {
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webp": "image/webp",
+};
+const AVATAR_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 
 /** `agent.json` 的稳定文件协议。 */
 interface AgentDefinitionFile {
@@ -139,6 +149,62 @@ export class AgentRepository {
     };
   }
 
+  /** 读取 Agent 头像并转换为 Renderer 可安全消费的 data URL。 */
+  get_avatar_url(agent_id_input: string): string | undefined {
+    const agent_id = normalize_agent_id(agent_id_input);
+    for (const file_name of AVATAR_FILE_NAMES) {
+      const file_path = path.join(get_local_agent_path(this.root_path, agent_id), file_name);
+      if (!fs.pathExistsSync(file_path)) continue;
+      const file_stat = fs.statSync(file_path);
+      if (!file_stat.isFile() || file_stat.size > MAX_AVATAR_BYTES) return undefined;
+      const media_type = AVATAR_MEDIA_TYPES[path.extname(file_name)];
+      return `data:${media_type};base64,${fs.readFileSync(file_path).toString("base64")}`;
+    }
+    return undefined;
+  }
+
+  /** 复制并保存 Agent 头像，统一将文件权限收敛到 Agent 目录协议。 */
+  set_avatar(agent_id_input: string, source_path_input: string): string {
+    const agent_id = normalize_agent_id(agent_id_input);
+    const source_path = path.resolve(String(source_path_input || "").trim());
+    const extension = path.extname(source_path).toLowerCase();
+    if (!AVATAR_EXTENSIONS.has(extension)) throw new Error("Agent avatar must be PNG, JPEG, or WebP");
+    const file_stat = fs.statSync(source_path);
+    if (!file_stat.isFile()) throw new Error("Agent avatar must be a file");
+    if (file_stat.size > MAX_AVATAR_BYTES) throw new Error("Agent avatar must be 2 MiB or smaller");
+    const agent_path = get_local_agent_path(this.root_path, agent_id);
+    const target_path = path.join(agent_path, `avatar${extension}`);
+    const content = fs.readFileSync(source_path);
+    this.write_atomic(target_path, content);
+    for (const file_name of AVATAR_FILE_NAMES) {
+      const existing_path = path.join(agent_path, file_name);
+      if (existing_path !== target_path) fs.removeSync(existing_path);
+    }
+    return target_path;
+  }
+
+  /** 删除 Agent 自定义头像并恢复默认图标。 */
+  remove_avatar(agent_id_input: string): void {
+    const agent_id = normalize_agent_id(agent_id_input);
+    const agent_path = get_local_agent_path(this.root_path, agent_id);
+    for (const file_name of AVATAR_FILE_NAMES) fs.removeSync(path.join(agent_path, file_name));
+  }
+
+  /** 保存由 Desktop 内置生成器产生的 SVG 头像。 */
+  set_generated_avatar(agent_id_input: string, svg_content: string): void {
+    const agent_id = normalize_agent_id(agent_id_input);
+    const content = String(svg_content || "").trim();
+    if (!content.startsWith("<svg ") || !content.endsWith("</svg>")) throw new Error("Invalid generated Agent avatar");
+    if (Buffer.byteLength(content, "utf8") > MAX_AVATAR_BYTES) throw new Error("Generated Agent avatar is too large");
+    const agent_path = get_local_agent_path(this.root_path, agent_id);
+    const target_path = path.join(agent_path, "avatar.svg");
+    this.write_atomic(target_path, content);
+    for (const file_name of AVATAR_FILE_NAMES) {
+      const existing_path = path.join(agent_path, file_name);
+      if (existing_path !== target_path) fs.removeSync(existing_path);
+    }
+  }
+
   /** 注册或切换一个 Plugin profile。 */
   set_plugin(
     agent_id_input: string,
@@ -198,11 +264,11 @@ export class AgentRepository {
   }
 
   /** 使用同目录临时文件提交完整内容。 */
-  private write_atomic(file_path: string, content: string): void {
+  private write_atomic(file_path: string, content: string | Buffer): void {
     fs.ensureDirSync(path.dirname(file_path), { mode: 0o700 });
     fs.chmodSync(path.dirname(file_path), 0o700);
     const temp_path = `${file_path}.${process.pid}.${Date.now()}.tmp`;
-    fs.writeFileSync(temp_path, content, { encoding: "utf8", mode: 0o600 });
+    fs.writeFileSync(temp_path, content, { mode: 0o600 });
     fs.renameSync(temp_path, file_path);
     fs.chmodSync(file_path, 0o600);
   }

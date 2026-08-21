@@ -301,11 +301,14 @@ export function registerSdkSessionRoutes(
       }
       const body = (await c.req.json().catch(() => ({}))) as {
         message_id?: unknown;
+        include_message?: unknown;
       };
       const session = await sessions.get(session_id);
-      const forked = await session.fork(
-        String(body.message_id || "").trim() || undefined,
-      );
+      const message_id = String(body.message_id || "").trim() || undefined;
+      const forked = await session.fork(message_id ? {
+        message_id,
+        include_message: body.include_message !== false,
+      } : undefined);
       return c.json({
         success: true,
         session: await forked.get_info(),

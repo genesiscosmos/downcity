@@ -283,12 +283,14 @@ export class RpcClient {
   async fork_session(params: {
     session_id: string;
     message_id?: string;
+    include_message?: boolean;
   }): Promise<AgentSessionInfo> {
     const data = await this.request<{ session: AgentSessionInfo }>({
       method: "sdk.sessions.fork",
       params: {
         session_id: params.session_id,
         ...(params.message_id ? { message_id: params.message_id } : {}),
+        ...(params.include_message === false ? { include_message: false } : {}),
       },
     });
     return data.session;

@@ -104,6 +104,9 @@ export function App() {
       const draft_key = get_session_key(workspace_id, selected_agent.agent_id, draft_id);
       return <SessionView
         agent={selected_agent}
+        workspace={controller.workspaces.find((workspace) => workspace.workspace_id === workspace_id) ?? { workspace_id, workspace_path: "", name: workspace_id }}
+        workspaces={controller.workspaces}
+        agents={controller.agents}
         session={{ session_id: draft_id, title: "新对话", preview_text: "", created_at: 0, updated_at: 0, message_count: 0, executing: false }}
         messages={[]}
         draft={controller.drafts_by_session[draft_key] ?? ""}
@@ -111,6 +114,7 @@ export function App() {
         draft_references={controller.draft_references_by_session[draft_key] ?? []}
         queued_messages={[]}
         settings={controller.settings}
+        switch_draft_context={controller.switch_draft_context}
         models={controller.models}
         configuration={controller.configuration_by_session[draft_key] ?? { model_id: selected_agent.model_id, approval_mode: "ask" }}
         models_loading={controller.models_loading}
@@ -123,6 +127,7 @@ export function App() {
         set_approval_mode={(approval_mode) => controller.set_session_approval_mode(workspace_id, selected_agent.agent_id, draft_id, approval_mode)}
         stop_session={async () => undefined}
         respond_interaction={async () => undefined}
+        fork_message={async () => undefined}
         remove_queued_message={() => undefined}
         move_queued_message={() => undefined}
         load_earlier_history={async () => undefined}
@@ -139,6 +144,9 @@ export function App() {
     );
     return <SessionView
       agent={selected_agent}
+      workspace={controller.workspaces.find((workspace) => workspace.workspace_id === workspace_id) ?? { workspace_id, workspace_path: "", name: workspace_id }}
+      workspaces={controller.workspaces}
+      agents={controller.agents}
       session={session}
       messages={controller.messages_by_session[session_key] ?? []}
       runtime={controller.chat_runtime_by_session[session_key]}
@@ -148,6 +156,10 @@ export function App() {
       queued_messages={controller.queued_messages_by_session[session_key] ?? []}
       history={controller.history_by_session[session_key]}
       settings={controller.settings}
+      rename_session={(title) => controller.rename_session(workspace_id, selected_agent.agent_id, session.session_id, title)}
+      archive_session={() => controller.archive_session(workspace_id, selected_agent.agent_id, session.session_id)}
+      remove_session={() => controller.remove_session(workspace_id, selected_agent.agent_id, session.session_id)}
+      switch_draft_context={controller.switch_draft_context}
       models={controller.models}
       configuration={controller.configuration_by_session[session_key]}
       models_loading={controller.models_loading}
@@ -155,11 +167,14 @@ export function App() {
       update_draft_files={(files) => controller.update_draft_files(workspace_id, selected_agent.agent_id, session.session_id, files)}
       update_draft_references={(references) => controller.update_draft_references(workspace_id, selected_agent.agent_id, session.session_id, references)}
       send_message={(input) => controller.send_message(workspace_id, selected_agent.agent_id, session.session_id, input)}
+      compact_session={() => controller.compact_session(workspace_id, selected_agent.agent_id, session.session_id)}
       refresh_models={controller.refresh_models}
       set_model={(model_id) => controller.set_session_model(workspace_id, selected_agent.agent_id, session.session_id, model_id)}
       set_approval_mode={(approval_mode) => controller.set_session_approval_mode(workspace_id, selected_agent.agent_id, session.session_id, approval_mode)}
       stop_session={() => controller.stop_session(workspace_id, selected_agent.agent_id, session.session_id)}
       respond_interaction={(input) => controller.respond_interaction(workspace_id, selected_agent.agent_id, session.session_id, input)}
+      fork_message={(message_id) => controller.fork_session(workspace_id, selected_agent.agent_id, session.session_id, message_id)}
+      rewrite_message={(input) => controller.rewrite_session_message(workspace_id, selected_agent.agent_id, session.session_id, input)}
       remove_queued_message={(message_id) => controller.remove_queued_message(workspace_id, selected_agent.agent_id, session.session_id, message_id)}
       move_queued_message={(message_id, direction) => controller.move_queued_message(workspace_id, selected_agent.agent_id, session.session_id, message_id, direction)}
       load_earlier_history={() => controller.load_earlier_history(workspace_id, selected_agent.agent_id, session.session_id)}

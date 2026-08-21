@@ -365,6 +365,12 @@ export interface AgentSessionForkInput {
    * - 传入时复制到该消息为止（包含该消息）。
    */
   message_id?: string;
+  /**
+   * 是否将 `message_id` 指向的锚点消息复制到新 Session。
+   *
+   * 省略时默认为 `true`；编辑并重新发送历史消息时传入 `false`，避免新旧消息同时出现。
+   */
+  include_message?: boolean;
 }
 
 /**

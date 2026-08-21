@@ -55,34 +55,54 @@
     }
   },
   "quickstart": {
-    "sectionLabel": "从使用到构建",
-    "title": "三种方式，组成同一个 Downcity。",
-    "description": "使用者运行 Agent，产品开发者把 Agent 组织进 City，服务开发者通过 Federation 为多个产品提供共享能力。",
-    "tabsLabel": "选择使用者、产品开发者或服务开发者入口",
-    "stageLabel": "DOWNCITY / RUNTIME PATH",
-    "currentLayer": "当前层级",
-    "flowLabel": "运行关系",
+    "sectionLabel": "三套核心 SDK",
+    "title": "从 Agent，到 City，再到 Federation。",
+    "description": "Agent 组合模型与 Plugin，在 Workspace 中工作；多名 Agent 组成独立的 City，并通过 Embassy 使用 Federation 提供的共享 Service。",
+    "copyCode": "复制代码",
+    "copiedCode": "已复制",
+    "map": {
+      "ariaLabel": "从 Agent、Workspace 和 City 生长到 Federation Service 的领域地图",
+      "labels": {
+        "federation": "Federation",
+        "database": "Database",
+        "city": "City A",
+        "neighborCity": "City B",
+        "thirdCity": "City C",
+        "agent": "Agent",
+        "plugin": "Plugin",
+        "workspace": "Workspace",
+        "service": "Service",
+        "model": "AI Model",
+        "account": "Accounts",
+        "payment": "Payment",
+        "credits": "Credits",
+        "embassy": "Embassy",
+        "session": "Session · Agent 对话",
+        "user": "User",
+        "userPrompt": "“总结当前仓库”",
+        "agentReply": "“当前仓库总结已完成。”"
+      }
+    },
     "entries": {
-      "user": {
-        "audience": "使用者",
-        "title": "运行和管理 Agent",
-        "products": "CLI · Desktop",
-        "description": "用 CLI 创建、启动并与 Agent 对话，或在 Desktop 中完成同样的工作。两者使用同一套 City 与 Agent 状态。",
-        "codeLabel": "Terminal"
+      "agent": {
+        "title": "Agent SDK",
+        "description": "定义单个 Agent，让它进入 Workspace，并通过 Session 持续执行工作。",
+        "docsLink": "查看 Agent SDK"
       },
-      "productDeveloper": {
-        "audience": "产品开发者",
-        "title": "把 Agent 变成产品能力",
-        "products": "Agent · City",
-        "description": "Agent 持有 Workspace、模型与 Session；City 组织这些 Agent，并把它们接入 CLI、Desktop 或你的产品宿主。",
-        "codeLabel": "agent.ts"
+      "city": {
+        "title": "City SDK",
+        "description": "在一个运行边界内索引多个 Agent，并通过 HTTP / RPC transport 暴露它们。",
+        "docsLink": "查看 City SDK"
       },
-      "serviceDeveloper": {
-        "audience": "服务开发者",
-        "title": "提供跨产品共享服务",
-        "products": "Federation · Embassy · Services",
-        "description": "Federation 运行共享 Service，Embassy 代表用户或管理员访问模型、身份、用量与产品业务能力。",
-        "codeLabel": "federation.ts"
+      "embassy": {
+        "title": "Embassy Client",
+        "description": "从产品侧访问 Federation 提供的模型与共享 Service。",
+        "docsLink": "查看 Embassy 文档"
+      },
+      "federation": {
+        "title": "Federation SDK",
+        "description": "为多座 City 提供共享的 Service、身份、数据与统一路由空间。",
+        "docsLink": "查看 Federation SDK"
       }
     }
   },
@@ -223,6 +243,7 @@
     "codeLabel": "创建并启动",
     "copyCode": "复制命令",
     "copiedCode": "已复制",
+    "filesLabel": "SDK 示例文件",
     "install": "选择你的系统",
     "start": "快速开始",
     "github": "在 GitHub 上 Star"

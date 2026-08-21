@@ -63,6 +63,23 @@ test("AgentRepository 与 WorkspaceRepository 独立维护产品配置", async (
     });
 
     assert.equal(agents.get("lucas_whitman")?.instruction, "You are Lucas.");
+    await fs.writeFile(
+      path.join(root_path, "agents", "lucas_whitman", "avatar.png"),
+      Buffer.from("avatar-content"),
+    );
+    assert.equal(
+      agents.get_avatar_url("lucas_whitman"),
+      `data:image/png;base64,${Buffer.from("avatar-content").toString("base64")}`,
+    );
+    const avatar_source_path = path.join(root_path, "source.webp");
+    await fs.writeFile(avatar_source_path, Buffer.from("webp-avatar-content"));
+    agents.set_avatar("lucas_whitman", avatar_source_path);
+    assert.equal(await fs.readFile(path.join(root_path, "agents", "lucas_whitman", "avatar.webp"), "utf8"), "webp-avatar-content");
+    assert.equal(await fs.stat(path.join(root_path, "agents", "lucas_whitman", "avatar.png")).then(() => true, () => false), false);
+    agents.remove_avatar("lucas_whitman");
+    assert.equal(agents.get_avatar_url("lucas_whitman"), undefined);
+    agents.set_generated_avatar("lucas_whitman", "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>");
+    assert.equal(agents.get_avatar_url("lucas_whitman").startsWith("data:image/svg+xml;base64,"), true);
     assert.equal(workspaces.get(workspace.workspace_id)?.workspace_path, workspace.workspace_path);
     const workspace_row = database.query({
       sql: "SELECT config_json FROM workspaces WHERE workspace_id = ?;",

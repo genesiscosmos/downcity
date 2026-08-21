@@ -1,8 +1,9 @@
 /** Agent 集合 Sidebar。 */
 
-import { TbCopy, TbDots, TbGhost3, TbMessageCircle } from "react-icons/tb";
+import { TbCopy, TbDots, TbMessageCircle } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
+import { AgentAvatar } from "@/components/AgentAvatar";
 import { cn } from "@/lib/utils";
 import type { DesktopViewController } from "@/types/DesktopView";
 
@@ -16,7 +17,7 @@ export function AgentSidebar({ controller, open_create_agent }: AgentSidebarProp
       {controller.agents.map((agent) => {
         const active = controller.selection?.kind === "agent" && controller.selection.agent_id === agent.agent_id;
         return <div key={agent.agent_id} role="button" tabIndex={0} className={cn("group relative flex min-h-8 w-full cursor-pointer items-center gap-2 rounded-lg border border-transparent p-0.5 pl-2 transition-all duration-200", active ? "bg-primary/[0.1] hover:bg-primary/[0.12]" : "hover:bg-foreground/[0.07]")} onClick={() => controller.select_agent(agent.agent_id)}>
-          <TbGhost3 className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate text-xs text-foreground">{agent.agent_id}</span>
+          <AgentAvatar agent={agent} /><span className="min-w-0 flex-1 truncate text-xs text-foreground">{agent.agent_id}</span>
           <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100" onClick={(event) => event.stopPropagation()}><TbDots /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}><DropdownMenuItem disabled={!controller.active_workspace_id} onClick={() => void controller.create_session(controller.active_workspace_id, agent.agent_id)}><TbMessageCircle /><span>新对话</span></DropdownMenuItem><DropdownMenuItem onClick={() => void navigator.clipboard.writeText(agent.agent_id)}><TbCopy /><span>复制 Agent ID</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
         </div>;
       })}

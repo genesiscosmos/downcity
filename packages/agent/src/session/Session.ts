@@ -590,9 +590,10 @@ export class Session implements AgentSession {
     const message_id = typeof input === "string"
       ? String(input || "").trim() || undefined
       : String(input?.message_id || "").trim() || undefined;
+    const include_message = typeof input === "string" || input?.include_message !== false;
     const messages = await this.session_messages.list_history_messages();
     const fork_messages = message_id
-      ? this.resolve_fork_messages(messages, message_id)
+      ? this.resolve_fork_messages(messages, message_id, include_message)
       : messages;
     const action_id = `history-forking:${this.id}:${Date.now()}:${nanoid(8)}`;
     await this.emit_action_event({
@@ -633,10 +634,11 @@ export class Session implements AgentSession {
     }
   }
 
-  /** 截取 Fork 目标 Message 及其之前的完整历史。 */
+  /** 截取 Fork 目标 Message 之前的历史，并按调用语义决定是否包含锚点。 */
   private resolve_fork_messages(
     messages: SessionMessage[],
     message_id: string,
+    include_message: boolean,
   ): SessionMessage[] {
     const target_index = messages.findIndex(
       (message) => message.message_id === message_id,
@@ -646,7 +648,7 @@ export class Session implements AgentSession {
         `Cannot fork session "${this.id}": message_id "${message_id}" not found.`,
       );
     }
-    return messages.slice(0, target_index + 1);
+    return messages.slice(0, include_message ? target_index + 1 : target_index);
   }
 
   /**

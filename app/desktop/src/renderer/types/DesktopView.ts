@@ -8,6 +8,7 @@ import type {
   DesktopAccountSummary,
   DesktopChatFileInput,
   DesktopChatInput,
+  DesktopChatRewriteInput,
   DesktopChatReferenceInput,
   DesktopChatRuntime,
   DesktopModelSummary,
@@ -147,8 +148,14 @@ export interface DesktopViewController {
   close_settings(): void;
   /** 在指定 Workspace 切换到尚未持久化的空对话。 */
   create_session(workspace_id: string, agent_id: string): Promise<void>;
+  /** 迁移当前空对话草稿并切换 Workspace 或 Agent 上下文。 */
+  switch_draft_context(workspace_id: string, agent_id: string): void;
   /** 切换到 Session Chat 并读取快照。 */
   select_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
+  /** 从指定 canonical Message 创建分支 Session 并打开。 */
+  fork_session(workspace_id: string, agent_id: string, session_id: string, message_id: string): Promise<void>;
+  /** 重写历史用户消息，并按操作创建分支或替换当前 Session。 */
+  rewrite_session_message(workspace_id: string, agent_id: string, session_id: string, input: DesktopChatRewriteInput): Promise<void>;
   /** 重命名一个 Session。 */
   rename_session(workspace_id: string, agent_id: string, session_id: string, title: string): Promise<void>;
   /** 归档一个 Session。 */
@@ -165,6 +172,12 @@ export interface DesktopViewController {
   get_agent(agent_id: string): Promise<DesktopAgentDefinition>;
   /** 保存 Agent 定义并刷新 Renderer 摘要。 */
   update_agent(agent_id: string, input: DesktopUpdateAgentInput): Promise<void>;
+  /** 打开原生文件选择器并保存 Agent 头像。 */
+  choose_agent_avatar(agent_id: string): Promise<void>;
+  /** 删除 Agent 自定义头像。 */
+  remove_agent_avatar(agent_id: string): Promise<void>;
+  /** 生成并保存一份新的随机 Downcity Ghost 头像。 */
+  generate_agent_avatar(agent_id: string): Promise<void>;
   /** 读取 Plugin manifest 与全部 Profile。 */
   get_plugin(plugin_id: string): Promise<DesktopPluginDefinition>;
   /** 保存 Plugin Profile 并刷新 catalog。 */
@@ -181,6 +194,8 @@ export interface DesktopViewController {
   update_draft_references(workspace_id: string, agent_id: string, session_id: string, references: DesktopChatReferenceInput[]): void;
   /** 发送消息；执行中时自动进入 Renderer 队列。 */
   send_message(workspace_id: string, agent_id: string, session_id: string, input: DesktopChatInput): Promise<void>;
+  /** 请求当前 Session 历史上下文压缩。 */
+  compact_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
   /** 刷新当前 Federation 模型目录。 */
   refresh_models(): Promise<void>;
   /** 为 Draft 或已存在 Session 选择模型。 */

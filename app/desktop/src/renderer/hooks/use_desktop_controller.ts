@@ -13,6 +13,7 @@ import type {
   DesktopAccountSummary,
   DesktopChatFileInput,
   DesktopChatInput,
+  DesktopChatRewriteInput,
   DesktopChatReferenceInput,
   DesktopChatRuntime,
   DesktopModelSummary,
@@ -57,6 +58,13 @@ const default_settings: DesktopSettings = {
 };
 const default_user: DesktopUserSummary = { authenticated: false, federation_url: "https://base.downcity.ai" };
 const active_workspace_storage_key = "downcity.active_workspace_id";
+
+/** 将一项 Draft 状态移动到新组合键，避免切换上下文后留下过期副本。 */
+function move_draft_value<Value>(current: Record<string, Value>, source_key: string, target_key: string, fallback: Value): Record<string, Value> {
+  const next = { ...current, [target_key]: current[source_key] ?? fallback };
+  delete next[source_key];
+  return next;
+}
 
 /** 把未知失败统一转换为用户可见文本。 */
 function to_error_message(reason: unknown): string {
@@ -312,6 +320,29 @@ export function use_desktop_controller(): DesktopViewController {
     set_selection({ kind: "draft", workspace_id, agent_id, draft_id });
   }, [agents]);
 
+  /** 将当前 Draft 的全部编辑状态移动到新的 Workspace 与 Agent。 */
+  const switch_draft_context = useCallback((workspace_id: string, agent_id: string) => {
+    if (selection?.kind !== "draft") return;
+    const source_key = get_session_key(selection.workspace_id, selection.agent_id, selection.draft_id);
+    const draft_id = get_draft_session_id(agent_id);
+    const target_key = get_session_key(workspace_id, agent_id, draft_id);
+    if (source_key === target_key) return;
+
+    set_drafts_by_session((current) => move_draft_value(current, source_key, target_key, ""));
+    set_draft_files_by_session((current) => move_draft_value(current, source_key, target_key, []));
+    set_draft_references_by_session((current) => move_draft_value(current, source_key, target_key, []));
+    set_configuration_by_session((current) => {
+      const agent = agents.find((item) => item.agent_id === agent_id);
+      return move_draft_value(current, source_key, target_key, {
+        model_id: settings.default_text_model_id || agent?.model_id || "",
+        approval_mode: "ask",
+      });
+    });
+    set_active_workspace_id(workspace_id);
+    localStorage.setItem(active_workspace_storage_key, workspace_id);
+    set_selection({ kind: "draft", workspace_id, agent_id, draft_id });
+  }, [agents, selection, settings.default_text_model_id]);
+
   const select_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string) => {
     set_error("");
     set_sidebar_mode_state("chat");
@@ -339,6 +370,45 @@ export function use_desktop_controller(): DesktopViewController {
       set_error(to_error_message(reason));
     }
   }, []);
+
+  /** 创建分支 Session，将其加入导航列表并立即打开。 */
+  const fork_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, message_id: string) => {
+    set_error("");
+    try {
+      const session = await window.downcity.chat.fork_session(agent_id, workspace_id, session_id, message_id);
+      set_sessions_by_workspace((current) => ({
+        ...current,
+        [workspace_id]: [{ agent_id, session }, ...(current[workspace_id] ?? []).filter((item) => item.agent_id !== agent_id || item.session.session_id !== session.session_id)],
+      }));
+      await select_session(workspace_id, agent_id, session.session_id);
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, [select_session]);
+
+  /** 重写历史用户消息，并将承载新 Turn 的 Session 设为当前会话。 */
+  const rewrite_session_message = useCallback(async (workspace_id: string, agent_id: string, session_id: string, input: DesktopChatRewriteInput) => {
+    set_error("");
+    try {
+      const result = await window.downcity.chat.rewrite_session_message(agent_id, workspace_id, session_id, input);
+      set_sessions_by_workspace((current) => ({
+        ...current,
+        [workspace_id]: [
+          { agent_id, session: result.session },
+          ...(current[workspace_id] ?? []).filter((item) => {
+            if (item.agent_id !== agent_id) return true;
+            if (item.session.session_id === result.session.session_id) return false;
+            return input.action !== "rollback" || item.session.session_id !== session_id;
+          }),
+        ],
+      }));
+      await select_session(workspace_id, agent_id, result.session.session_id);
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, [select_session]);
 
   const rename_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, title: string) => {
     try {
@@ -440,6 +510,39 @@ export function use_desktop_controller(): DesktopViewController {
       const agent = await window.downcity.agent.update(agent_id, input);
       set_agents((current) => current.map((item) => item.agent_id === agent.agent_id ? agent : item));
       set_plugins(await window.downcity.plugin.list());
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, []);
+
+  const choose_agent_avatar = useCallback(async (agent_id: string) => {
+    set_error("");
+    try {
+      const agent = await window.downcity.agent.choose_avatar(agent_id);
+      if (agent) set_agents((current) => current.map((item) => item.agent_id === agent.agent_id ? agent : item));
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, []);
+
+  const remove_agent_avatar = useCallback(async (agent_id: string) => {
+    set_error("");
+    try {
+      const agent = await window.downcity.agent.remove_avatar(agent_id);
+      set_agents((current) => current.map((item) => item.agent_id === agent.agent_id ? agent : item));
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, []);
+
+  const generate_agent_avatar = useCallback(async (agent_id: string) => {
+    set_error("");
+    try {
+      const agent = await window.downcity.agent.generate_avatar(agent_id);
+      set_agents((current) => current.map((item) => item.agent_id === agent.agent_id ? agent : item));
     } catch (reason) {
       set_error(to_error_message(reason));
       throw reason;
@@ -570,6 +673,17 @@ export function use_desktop_controller(): DesktopViewController {
       set_error(to_error_message(reason));
     }
   }, [agents, commit_queue, configuration_by_session, process_next_queue, settings.default_text_model_id]);
+
+  const compact_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string) => {
+    if (is_draft_session_id(session_id)) return;
+    set_error("");
+    try {
+      await window.downcity.chat.compact_session(agent_id, workspace_id, session_id);
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, []);
 
   const refresh_models = useCallback(async () => {
     set_models_loading(true);
@@ -774,7 +888,10 @@ export function use_desktop_controller(): DesktopViewController {
     open_settings,
     close_settings,
     create_session,
+    switch_draft_context,
     select_session,
+    fork_session,
+    rewrite_session_message,
     rename_session,
     archive_session,
     remove_session,
@@ -783,6 +900,9 @@ export function use_desktop_controller(): DesktopViewController {
     create_agent,
     get_agent,
     update_agent,
+    choose_agent_avatar,
+    remove_agent_avatar,
+    generate_agent_avatar,
     get_plugin,
     save_plugin_profile,
     remove_plugin_profile,
@@ -791,6 +911,7 @@ export function use_desktop_controller(): DesktopViewController {
     update_draft_files,
     update_draft_references,
     send_message,
+    compact_session,
     refresh_models,
     set_session_model,
     set_session_approval_mode,

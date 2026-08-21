@@ -10,6 +10,8 @@ import type { RespondSessionInteractionInput, SessionApprovalMode, SessionMessag
 export interface DesktopAgentSummary {
   /** Agent 的全局稳定标识。 */
   agent_id: string;
+  /** Agent 头像的 data URL；未配置头像时为空。 */
+  avatar_url?: string;
   /** Agent 使用的 City AIService 模型标识。 */
   model_id: string;
   /** Agent 注册配置的结构版本。 */
@@ -205,6 +207,27 @@ export interface DesktopChatRuntimeEvent {
 /** Chat 输入被 Session 接受后的结果。 */
 export interface DesktopChatSendResult {
   /** 新建 Turn 的稳定标识。 */
+  turn_id: string;
+}
+
+/** 历史用户消息重写方式。 */
+export type DesktopChatRewriteAction = "rollback" | "fork";
+
+/** Renderer 提交的一次历史用户消息重写。 */
+export interface DesktopChatRewriteInput {
+  /** 被替换的 canonical 用户消息标识。 */
+  message_id: string;
+  /** 修改后的非空文本。 */
+  text: string;
+  /** 创建独立分支，或用新 Session 替代并归档当前 Session。 */
+  action: DesktopChatRewriteAction;
+}
+
+/** 历史消息重写被接受后的新 Session。 */
+export interface DesktopChatRewriteResult {
+  /** 承载修改后消息的新 Session 摘要。 */
+  session: DesktopSessionSummary;
+  /** 修改后的消息已启动的 Turn 标识。 */
   turn_id: string;
 }
 
@@ -455,6 +478,12 @@ export interface DesktopApi {
     create(agent_id: string, model_id: string): Promise<DesktopCreateAgentResult>;
     /** 保存 Agent 定义并重新装配其运行实例。 */
     update(agent_id: string, input: DesktopUpdateAgentInput): Promise<DesktopAgentSummary>;
+    /** 打开原生文件选择器并保存 Agent 头像。取消选择时返回空值。 */
+    choose_avatar(agent_id: string): Promise<DesktopAgentSummary | null>;
+    /** 删除 Agent 自定义头像。 */
+    remove_avatar(agent_id: string): Promise<DesktopAgentSummary>;
+    /** 生成并保存一份新的随机 Downcity Ghost 头像。 */
+    generate_avatar(agent_id: string): Promise<DesktopAgentSummary>;
     /** 让 Agent 进入指定 Workspace。 */
     connect(agent_id: string, workspace_id: string): Promise<DesktopAgentWorkspace>;
   };
@@ -489,6 +518,10 @@ export interface DesktopApi {
     list_sessions(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary[]>;
     /** 创建新的 Session。 */
     create_session(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary>;
+    /** 从指定消息创建一个新的分支 Session。 */
+    fork_session(agent_id: string, workspace_id: string, session_id: string, message_id: string): Promise<DesktopSessionSummary>;
+    /** 从历史用户消息之前创建 Session 并发送修改后的文本。 */
+    rewrite_session_message(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatRewriteInput): Promise<DesktopChatRewriteResult>;
     /** 修改 Session 的用户可见标题。 */
     rename_session(agent_id: string, workspace_id: string, session_id: string, title: string): Promise<string>;
     /** 将 Session 移入归档。 */
@@ -503,6 +536,8 @@ export interface DesktopApi {
     get_history(agent_id: string, workspace_id: string, session_id: string, before_sequence: number): Promise<DesktopChatHistoryPage>;
     /** 提交输入并在 Session 接受后返回。 */
     send(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatInput): Promise<DesktopChatSendResult>;
+    /** 将显式压缩命令加入 Session 的有序执行队列。 */
+    compact_session(agent_id: string, workspace_id: string, session_id: string): Promise<void>;
     /** 停止当前 Session Turn。 */
     stop(agent_id: string, workspace_id: string, session_id: string): Promise<void>;
     /** 响应 Session 当前等待的审批或问题。 */

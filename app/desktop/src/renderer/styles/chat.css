@@ -351,6 +351,384 @@ div[data-streamdown="table-wrapper"] > div:first-child {
   overflow-wrap: anywhere;
 }
 
+/* Assistant 活动详情遵循 Duobox 的紧凑日志布局。 */
+.reasoning-activity-content,
+.activity-tool-terminal {
+  min-width: 0;
+  width: calc(100% - 1.4rem);
+  margin-left: 1.4rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--muted) 24%, transparent);
+}
+
+.reasoning-activity-content {
+  padding: 0.5rem 0.6rem;
+}
+
+.activity-tool-log {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.16rem;
+}
+
+.activity-tool-group-summary .activity-tool-state {
+  color: color-mix(in srgb, var(--foreground) 66%, transparent);
+}
+
+.activity-tool-group-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.16rem;
+  padding-left: 1.4rem;
+}
+
+.activity-tool-terminal {
+  position: relative;
+  min-height: 0;
+  padding: 0.42rem 0.52rem;
+  overflow: hidden;
+}
+
+.activity-tool-terminal-output {
+  min-width: 0;
+  max-height: 10rem;
+  margin: 0;
+  padding: 0.36rem 0.42rem;
+  border: 1px solid color-mix(in srgb, var(--border) 28%, transparent);
+  border-radius: 5px;
+  overflow: auto;
+  color: color-mix(in srgb, var(--foreground) 78%, transparent);
+  background: color-mix(in srgb, var(--muted-foreground) 10%, transparent);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.71875rem;
+  font-weight: 500;
+  line-height: 1.38;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.activity-tool-command-prompt {
+  color: color-mix(in srgb, var(--foreground) 88%, transparent);
+}
+
+.activity-tool-terminal.has-change-preview {
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+}
+
+.activity-tool-change-preview {
+  min-width: 0;
+  max-height: 12rem;
+  padding: 0.3rem 0.36rem;
+  border-radius: 6px;
+  overflow: auto;
+  color: color-mix(in srgb, var(--foreground) 74%, transparent);
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
+}
+
+.activity-tool-write-content,
+.activity-tool-diff-line {
+  margin: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.65625rem;
+  font-weight: 400;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.activity-tool-write-content {
+  padding: 0.08rem 0.28rem;
+}
+
+.activity-tool-edit-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+}
+
+.activity-tool-edit-pair {
+  min-width: 0;
+}
+
+.activity-tool-diff-line {
+  display: grid;
+  grid-template-columns: 0.78rem minmax(0, 1fr);
+  align-items: start;
+  padding: 0.06rem 0.28rem 0.06rem 0.1rem;
+}
+
+.activity-tool-diff-line code {
+  min-width: 0;
+  color: inherit;
+  font: inherit;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.activity-tool-diff-line.is-removal {
+  color: color-mix(in srgb, var(--foreground) 42%, transparent);
+}
+
+.activity-tool-diff-line.is-addition {
+  color: color-mix(in srgb, var(--foreground) 82%, transparent);
+}
+
+.activity-tool-diff-marker {
+  color: color-mix(in srgb, var(--foreground) 30%, transparent);
+  user-select: none;
+}
+
+.activity-tool-diff-line.is-addition .activity-tool-diff-marker {
+  color: var(--primary);
+}
+
+.activity-tool-input-caret {
+  display: inline-block;
+  width: 1px;
+  height: 0.88rem;
+  margin-left: 0.12rem;
+  vertical-align: -0.14rem;
+  background: var(--primary);
+  animation: activity-tool-input-caret-blink 0.9s steps(1, end) infinite;
+}
+
+.activity-tool-terminal.has-change-preview .activity-tool-terminal-output {
+  margin-top: 0.38rem;
+}
+
+@keyframes activity-tool-input-caret-blink {
+  50% { opacity: 0; }
+}
+
+/* Interaction 保持消息流内联，不引入独立弹窗生命周期。 */
+.interaction-card {
+  display: grid;
+  gap: 0.58rem;
+  min-width: 0;
+  width: 100%;
+  padding: 0.68rem 0.72rem;
+  border: 1px solid color-mix(in srgb, var(--border) 54%, transparent);
+  border-radius: 8px;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--muted) 94%, var(--foreground) 6%);
+}
+
+.interaction-card-header,
+.interaction-card-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.interaction-card-title,
+.interaction-card-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.interaction-card-title {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  font-weight: 560;
+}
+
+.interaction-card-meta,
+.question-footer-hint,
+.interaction-terminal-label {
+  color: color-mix(in srgb, var(--foreground) 48%, transparent);
+  font-size: 0.6875rem;
+  line-height: 1.25;
+}
+
+.interaction-card-body {
+  min-width: 0;
+}
+
+.approval-card-detail {
+  color: color-mix(in srgb, var(--foreground) 72%, transparent);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.34;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.approval-card-message {
+  margin: 0.18rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  line-height: 1.32;
+}
+
+.approval-actions,
+.question-navigation {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.approval-action,
+.question-back,
+.question-submit {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.14rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--border) 48%, transparent);
+  border-radius: 6px;
+  color: var(--foreground);
+  background: transparent;
+  font-size: 0.6875rem;
+  font-weight: 560;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.approval-action svg,
+.question-back svg,
+.question-submit svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.approval-action.approve,
+.question-submit {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.approval-action:hover:not(:disabled),
+.question-back:hover:not(:disabled),
+.question-submit:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.approval-action:disabled,
+.question-back:disabled,
+.question-submit:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.question-stage {
+  display: grid;
+  gap: 0.48rem;
+}
+
+.question-prompt {
+  color: color-mix(in srgb, var(--foreground) 82%, transparent);
+  font-size: 0.75rem;
+  line-height: 1.42;
+}
+
+.question-text-input {
+  width: 100%;
+  min-height: 4rem;
+  resize: vertical;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--border) 62%, transparent);
+  border-radius: 6px;
+  outline: none;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--background) 70%, transparent);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.question-text-input:focus {
+  border-color: color-mix(in srgb, var(--primary) 58%, transparent);
+}
+
+.question-options {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.question-option {
+  display: grid;
+  grid-template-columns: 0.9rem minmax(0, 1fr);
+  gap: 0.42rem;
+  align-items: start;
+  padding: 0.42rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--border) 44%, transparent);
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.question-option:hover,
+.question-option.is-selected {
+  border-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.question-option input {
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-top: 0.12rem;
+  accent-color: var(--primary);
+}
+
+.question-option-label,
+.question-option-description {
+  display: block;
+}
+
+.question-option-label {
+  color: var(--foreground);
+  font-size: 0.71875rem;
+  line-height: 1.3;
+}
+
+.question-option-description {
+  margin-top: 0.12rem;
+  color: var(--muted-foreground);
+  font-size: 0.65625rem;
+  line-height: 1.32;
+}
+
+.assistant-resource-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.4rem;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.28rem 0.42rem;
+  border-radius: 5px;
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--muted) 28%, transparent);
+  font-size: 0.71875rem;
+}
+
+.assistant-resource-row svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: 0 0 auto;
+}
+
+.assistant-resource-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .thinking-dots-icon {
   display: grid;
   width: 1rem;
@@ -398,6 +776,10 @@ div[data-streamdown="table-wrapper"] > div:first-child {
 
 @media (prefers-reduced-motion: reduce) {
   .activity-tool-row.is-running > .activity-tool-summary :is(.activity-tool-icon, .activity-tool-state, .activity-tool-name) {
+    animation: none;
+  }
+
+  .activity-tool-input-caret {
     animation: none;
   }
 }

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Downcity Logo</title>
+  <desc id="desc">A white capsule ghost inside a three-plane rounded isometric city cell.</desc>
+  <defs>
+    <clipPath id="hex-c">
+      <path d="M145.32 26L207.68 62Q225 72 225 92V164Q225 184 207.68 194L145.32 230Q128 240 110.68 230L48.32 194Q31 184 31 164V92Q31 72 48.32 62L110.68 26Q128 16 145.32 26Z"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#hex-c)">
+    <path d="M128 16L128 128L31 184V72Z" fill="#B96F63"/>
+    <path d="M128 16L225 72V184L128 128Z" fill="#C99A62"/>
+    <path d="M128 128L225 184L128 240L31 184Z" fill="#3B2934"/>
+  </g>
+  <g transform="translate(-10.24 4.88) scale(1.08)">
+    <path d="M128 62C106 62 90 79 90 101V166L109 151L128 166L147 151L166 166V101C166 79 150 62 128 62Z" fill="#F7F6F0"/>
+    <g fill="#1B1B18"><circle cx="116" cy="110" r="4.6"/><circle cx="140" cy="110" r="4.6"/></g>
+  </g>
+</svg>

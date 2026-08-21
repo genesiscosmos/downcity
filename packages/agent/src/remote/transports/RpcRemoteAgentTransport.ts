@@ -124,6 +124,7 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     return await this.client.fork_session({
       session_id,
       ...(message_id ? { message_id } : {}),
+      ...(typeof input !== "string" && input?.include_message === false ? { include_message: false } : {}),
     });
   }
 
