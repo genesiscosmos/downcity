@@ -33,9 +33,6 @@ export class CliCityRuntime {
   /** 当前 City RPC 端口。 */
   readonly rpc_port: number;
 
-  /** CLI 宿主创建并拥有的全部 Agent。 */
-  private readonly agents: readonly Agent[];
-
   /** CLI 宿主拥有的本地数据库和 Repository。 */
   private readonly data: CliLocalData;
   private readonly host_instance_id: string;
@@ -49,8 +46,6 @@ export class CliCityRuntime {
     http_port: number;
     /** RPC 端口。 */
     rpc_port: number;
-    /** CLI 宿主创建的全部 Agent。 */
-    agents: readonly Agent[];
     /** CLI 宿主使用的本地产品数据。 */
     data: CliLocalData;
     host_instance_id: string;
@@ -58,7 +53,6 @@ export class CliCityRuntime {
     this.city = input.city;
     this.http_port = input.http_port;
     this.rpc_port = input.rpc_port;
-    this.agents = input.agents;
     this.data = input.data;
     this.host_instance_id = input.host_instance_id;
   }
@@ -69,9 +63,6 @@ export class CliCityRuntime {
     this.stopped = true;
     const results: PromiseSettledResult<unknown>[] = [];
     results.push(...await Promise.allSettled([this.city.close()]));
-    results.push(...await Promise.allSettled(
-      this.agents.map(async (agent) => await agent.dispose()),
-    ));
     results.push(...await Promise.allSettled([
       Promise.resolve().then(() => this.data.database.close()),
       unregister_city_host(this.host_instance_id),
@@ -173,7 +164,7 @@ export class CliCityRuntime {
         rpc_host: "127.0.0.1",
         rpc_port,
       });
-      return new CliCityRuntime({ city, http_port, rpc_port, agents, data, host_instance_id });
+      return new CliCityRuntime({ city, http_port, rpc_port, data, host_instance_id });
     } catch (error) {
       await city.close().catch(() => undefined);
       await Promise.allSettled(agents.map(async (agent) => await agent.dispose()));

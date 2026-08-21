@@ -26,6 +26,8 @@ test("Agent 绑定 City 后可使用 City Workspace 并拒绝重复 ID", async (
     assert.equal(city.agents.get("first"), first);
     assert.throws(() => city.agents.add(new Agent({ id: "first" })), /already exists/u);
     assert.equal(city.agents.get("missing"), null);
+    const session = await first.sessions.create({ workspace: first_workspace });
+    assert.equal(session.agent_id, first.id);
   } finally {
     await city.close();
     await first.dispose();
@@ -74,6 +76,19 @@ test("City.close 释放绑定 Agent 与 City Workspace", async () => {
     await agent.dispose();
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+test("City.close 后拒绝继续添加 Agent 或 Workspace", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-closed-"));
+  const workspace_path = path.join(root, "workspace");
+  await fs.mkdir(workspace_path, { recursive: true });
+  const city = new City();
+  await city.close();
+  assert.throws(() => city.agents.add(new Agent({ id: "closed-agent" })), /City is closed/u);
+  assert.throws(() => city.workspaces.add(new Workspace({ id: "closed-workspace", path: workspace_path })), /City is closed/u);
+  assert.equal(city.agents.list().length, 0);
+  assert.equal(city.workspaces.list().length, 0);
+  await fs.rm(root, { recursive: true, force: true });
 });
 
 test("Agent dispose 解除 City 运行时绑定", async () => {

@@ -481,10 +481,8 @@ export class AgentController {
     this.session_unsubscribes.clear();
     this.runtimes.clear();
     this.restored_session_models.clear();
-    const agents = this.city.agents.list();
     const results: PromiseSettledResult<unknown>[] = [];
     results.push(...await Promise.allSettled([this.city.close()]));
-    results.push(...await Promise.allSettled(agents.map(async (agent) => await agent.dispose())));
     results.push(...await Promise.allSettled([
       unregister_city_host(this.host_instance_id),
     ]));

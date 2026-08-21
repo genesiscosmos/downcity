@@ -56,6 +56,12 @@ export class City implements AgentCity {
   /** City transport 组合操作的唯一串行链。 */
   private transport_operation_chain: Promise<void> = Promise.resolve();
 
+  /** City 自身的生命周期状态。 */
+  private city_status: "active" | "closing" | "closed" = "active";
+
+  /** City 关闭流程；并发调用共享同一个 Promise。 */
+  private close_promise?: Promise<void>;
+
   constructor(options: CityOptions = {}) {
     this.embassy = options.embassy;
     for (const workspace of options.workspaces ?? []) {
@@ -205,6 +211,7 @@ export class City implements AgentCity {
 
   /** 启动 City 唯一的 HTTP/RPC transport。 */
   async listen(options: CityListenOptions): Promise<void> {
+    this.assert_active();
     await this.enqueue_transport_operation(async () => {
       const started: Array<() => Promise<void>> = [];
       try {
@@ -227,22 +234,38 @@ export class City implements AgentCity {
 
   /** 幂等关闭 transport，并按依赖顺序释放绑定 Agent 与 City Workspace。 */
   async close(): Promise<void> {
-    await this.enqueue_transport_operation(async () => {
-      const results: PromiseSettledResult<unknown>[] = [];
-      results.push(...await Promise.allSettled([this.http.close(), this.rpc.close()]));
-      results.push(...await Promise.allSettled(this.agents.list().map(async (agent) => await agent.dispose())));
-      results.push(...await Promise.allSettled(
-        [...this.workspaces_by_id.values()].map(async (workspace) => await workspace.dispose()),
-      ));
-      const errors = results.flatMap((result) =>
-        result.status === "rejected" ? [result.reason] : [],
-      );
-      if (errors.length > 0) throw new AggregateError(errors, "City transport close failed");
-    });
+    if (this.city_status === "closed") return;
+    if (!this.close_promise) {
+      const close_operation = this.enqueue_transport_operation(async () => {
+        this.city_status = "closing";
+        const results: PromiseSettledResult<unknown>[] = [];
+        results.push(...await Promise.allSettled([this.http.close(), this.rpc.close()]));
+        results.push(...await Promise.allSettled(this.agents.list().map(async (agent) => await agent.dispose())));
+        results.push(...await Promise.allSettled(
+          [...this.workspaces_by_id.values()].map(async (workspace) => await workspace.dispose()),
+        ));
+        const errors = results.flatMap((result) =>
+          result.status === "rejected" ? [result.reason] : [],
+        );
+        if (errors.length > 0) {
+          this.city_status = "active";
+          throw new AggregateError(errors, "City transport close failed");
+        }
+        this.agents_by_id.clear();
+        this.workspaces_by_id.clear();
+        this.city_status = "closed";
+      });
+      this.close_promise = close_operation.catch((error) => {
+        this.close_promise = undefined;
+        throw error;
+      });
+    }
+    await this.close_promise;
   }
 
   /** 将已创建 Agent 加入集合并建立唯一 City 绑定。 */
   private add_agent(agent: Agent): Agent {
+    this.assert_active();
     if (!agent?.id) throw new Error("City requires an Agent with a stable ID");
     if (this.agents_by_id.has(agent.id) || this.removing_agent_ids.has(agent.id)) {
       throw new Error(`Agent already exists in City: ${agent.id}`);
@@ -263,6 +286,7 @@ export class City implements AgentCity {
 
   /** 把宿主按需解析出的 Workspace 纳入 City 资源索引。 */
   private add_workspace(workspace: WorkspaceBase): WorkspaceBase {
+    this.assert_active();
     const workspace_id = String(workspace?.id || "").trim();
     if (!workspace_id) throw new Error("City requires Workspace with a stable id");
     const existing = this.workspaces_by_id.get(workspace_id);
@@ -276,6 +300,13 @@ export class City implements AgentCity {
     });
     this.workspaces_by_id.set(workspace_id, workspace);
     return workspace;
+  }
+
+  /** 拒绝在 City 关闭后继续注入运行时资源。 */
+  private assert_active(): void {
+    if (this.city_status !== "active") {
+      throw new Error(`City is ${this.city_status}`);
+    }
   }
 
   /** 串行执行一次 City transport 组合操作。 */
