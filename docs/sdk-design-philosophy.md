@@ -251,7 +251,7 @@ const session = await agent.sessions.create({
 await session.prompt({ query: "检查当前项目并修复测试。" });
 ```
 
-`new Agent({ city })` 表达 Agent 与宿主环境的稳定绑定。`agent.sessions.create({ workspace })` 表达这次执行选择哪个环境。两者不是同一件事：City 绑定不等于进入项目，Session 选择 Workspace 也不改变 Agent 的身份或所有权。
+`city.agents.add(agent)` 表达已创建的 Agent 加入宿主环境。`agent.sessions.create({ workspace })` 表达这次执行选择哪个环境。两者不是同一件事：加入 City 不等于进入项目，Session 选择 Workspace 也不改变 Agent 的身份或所有权。
 
 ### 5.2 一个 Agent 使用多个 Workspace
 
@@ -276,8 +276,10 @@ const backend_session = await agent.sessions.create({
 ```ts
 const workspace = city.workspace("project")!;
 
-const reviewer = new Agent({ id: "reviewer", city, model });
-const implementer = new Agent({ id: "implementer", city, model });
+const reviewer = new Agent({ id: "reviewer", model });
+const implementer = new Agent({ id: "implementer", model });
+city.agents.add(reviewer);
+city.agents.add(implementer);
 
 const review_session = await reviewer.sessions.create({ workspace });
 const implementation_session = await implementer.sessions.create({ workspace });
@@ -413,7 +415,7 @@ Agent
   -> AgentCity 最小协议，而非 @downcity/city 实现
 ```
 
-`@downcity/agent` 通过最小 `AgentCity` 协议感知 City，避免反向依赖 `@downcity/city`。应用可以替换 City 宿主实现，只要它提供绑定 Agent 和解析 Workspace 的必要协议。
+`@downcity/agent` 通过最小 `AgentCity` 协议感知 City，避免反向依赖 `@downcity/city`。应用通过 `city.agents.add(agent)` 建立绑定；应用可以替换 City 宿主实现，只要它提供解析 Workspace 和释放 Agent 的必要协议。
 
 ## 10. 公开 API 与内部适配层
 
@@ -421,7 +423,8 @@ Agent
 
 ```ts
 const city = new City({ embassy, workspaces });
-const agent = new Agent({ id, city, model, plugins });
+const agent = new Agent({ id, model, plugins });
+city.agents.add(agent);
 const session = await agent.sessions.create({ workspace });
 
 await session.prompt({ query });

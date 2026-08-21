@@ -14,6 +14,7 @@ import { normalize_instruction_input } from "@/agent/AgentInstructions.js";
 import { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
 import type {
   AgentOptions,
+  AgentCity,
   AgentSessionConstructor,
 } from "@/types/agent/AgentOptions.js";
 import type { WorkspaceBase } from "@downcity/workspace";
@@ -30,8 +31,8 @@ export class Agent {
   /** Agent 的全局稳定标识。 */
   readonly id: string;
 
-  /** Agent 绑定的 City 资源容器。 */
-  readonly city?: AgentOptions["city"];
+  /** Agent 当前绑定的 City 资源容器；未加入 City 时为空。 */
+  private bound_city?: AgentCity;
 
   /** Agent 默认模型；Session 可以显式覆盖。 */
   readonly model?: AgentModel;
@@ -69,7 +70,6 @@ export class Agent {
   constructor(options: AgentOptions) {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Agent requires a non-empty id");
-    this.city = options.city;
     this.model = options.model;
     this.web = options.web;
     this.instruction = normalize_instruction_input(options.instruction);
@@ -91,7 +91,29 @@ export class Agent {
     this.sessions = {
       create: async (input) => await this.create_session(input),
     };
-    this.city?.bind_agent(this);
+  }
+
+  /** 返回 Agent 当前绑定的 City；仅由 City 集合建立绑定。 */
+  get city(): AgentCity | undefined {
+    return this.bound_city;
+  }
+
+  /**
+   * 将 Agent 纳入 City。
+   *
+   * 该方法是 City 集合与 Agent 之间的内部装配协议，应用代码应调用
+   * `city.agents.add(agent)`，不要直接调用它。
+   */
+  attach_city(city: AgentCity): void {
+    if (this.bound_city && this.bound_city !== city) {
+      throw new Error(`Agent "${this.id}" already belongs to another City`);
+    }
+    this.bound_city = city;
+  }
+
+  /** 解除 Agent 与 City 的内部绑定；仅由 City 生命周期调用。 */
+  detach_city(city: AgentCity): void {
+    if (this.bound_city === city) this.bound_city = undefined;
   }
 
   /**
@@ -161,7 +183,7 @@ export class Agent {
       const errors = results.flatMap((result) =>
         result.status === "rejected" ? [result.reason] : []
       );
-      this.city?.unbind_agent(this);
+      this.bound_city?.release_agent(this);
       if (errors.length > 0) throw new AggregateError(errors, "Agent dispose failed");
     })();
     await this.dispose_promise;

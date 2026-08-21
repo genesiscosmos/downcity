@@ -35,10 +35,10 @@ const task_plugin = new TaskPlugin();
 
 const agent = new Agent({
   id: "coder",
-  city,
   instruction: "维护当前项目。",
   plugins: [memory_plugin, task_plugin],
 });
+city.agents.add(agent);
 
 const session = await agent.sessions.create({
   workspace: city.workspace("project"),
@@ -50,7 +50,7 @@ await agent.plugins.memory.search({ query: "项目约定" });
 
 这里没有 `city.add(agent)`，也没有 `city.register(plugin)`：
 
-- `new Agent({ city })` 完成 Agent 与 City 的绑定；City 内部可以维护运行时引用，但不提供工厂式创建 Agent 的 API。
+- `new Agent()` 创建 Agent 主体；`city.agents.add(agent)` 将已创建的 Agent 纳入 City，City 不提供工厂式创建 Agent 的 API。
 - `new MemoryPlugin()` 创建 Plugin 实例；实例随后由 Agent 持有，并在运行时消费 City 提供的资源。
 - Session 永远从 Agent 创建，Workspace 只是本次 Session 的执行资源。
 
@@ -80,9 +80,9 @@ Plugin 不在 City 注册。应用或用户直接构造实例，再传给 Agent�
 const memory_plugin = new MemoryPlugin();
 const agent = new Agent({
   id: "coder",
-  city,
   plugins: [memory_plugin],
 });
+city.agents.add(agent);
 ```
 
 City 不保存 Plugin 类型、Plugin ID、Definition 或 Factory。不存在 `city.plugins`、`city.create_plugin()` 或 `plugins: ["memory"]` 这类注册式 API。
@@ -179,8 +179,10 @@ const backend_session = await agent.sessions.create({
 ```ts
 const workspace = city.workspace("project");
 
-const reviewer = new Agent({ id: "reviewer", city });
-const implementer = new Agent({ id: "implementer", city });
+const reviewer = new Agent({ id: "reviewer" });
+const implementer = new Agent({ id: "implementer" });
+city.agents.add(reviewer);
+city.agents.add(implementer);
 
 const review_session = await reviewer.sessions.create({ workspace });
 const implementation_session = await implementer.sessions.create({ workspace });
@@ -238,7 +240,8 @@ Transport 是 City 的部署适配器，不改变用户面向 Agent 的调用方
 
 ```ts
 const city = new City({ workspaces, embassy });
-const agent = new Agent({ id: "assistant", city });
+const agent = new Agent({ id: "assistant" });
+city.agents.add(agent);
 
 await city.listen({
   http: { host: "127.0.0.1", port: 5314 },
@@ -317,7 +320,8 @@ const city = new City({ plugins: [memory_definition] });
 
 // 目标
 const memory_plugin = new MemoryPlugin();
-const agent = new Agent({ id: "coder", city, plugins: [memory_plugin] });
+const agent = new Agent({ id: "coder", plugins: [memory_plugin] });
+city.agents.add(agent);
 ```
 
 ### 10.2 City 创建 Agent
@@ -327,7 +331,8 @@ const agent = new Agent({ id: "coder", city, plugins: [memory_plugin] });
 const agent = city.create_agent(agent_options);
 
 // 目标
-const agent = new Agent({ ...agent_options, city });
+const agent = new Agent(agent_options);
+city.agents.add(agent);
 ```
 
 ### 10.3 Agent 进入 Workspace
@@ -354,7 +359,7 @@ const session = await agent.sessions.create({ workspace });
 ## 11. 验收标准
 
 1. 用户通过 `new Agent()` 创建和操作 Agent，City 不提供 Agent 工厂。
-2. `new Agent({ city })` 是 Agent 获取 City 资源的主路径；不需要额外 `add` 或 `enter`。
+2. `city.agents.add(agent)` 是已创建 Agent 获取 City 资源的主路径；不需要额外的绑定工厂函数。
 3. City 构造函数只描述它拥有的 Workspace 和 City 级资源。
 4. Plugin 由用户或应用直接 `new`，构造函数只接收自身配置或明确的 Provider；City 不注册 Plugin。
 5. Plugin 实例唯一归 Agent，Agent 负责其运行和释放。

@@ -8,7 +8,7 @@
 
 export { City } from "./runtime/City.js";
 export type {
-  CityAgentBinding,
+  CityAgents,
   CityListenOptions,
   CityOptions,
   CityRuntimeOptions,

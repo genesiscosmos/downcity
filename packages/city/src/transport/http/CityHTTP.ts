@@ -45,7 +45,7 @@ export class CityHTTP {
       success: true,
       status: "ok",
       pid: process.pid,
-      agent_ids: this.city.agents().map((agent) => agent.id),
+      agent_ids: this.city.agents.list().map((agent) => agent.id),
     }));
     this.cached_router = root;
     return root;
@@ -114,7 +114,7 @@ export class CityHTTP {
   private async dispatch_workspace(context: Context): Promise<Response> {
     const agent_id = decodeURIComponent(String(context.req.param("agent_id") || "")).trim();
     const workspace_id = decodeURIComponent(String(context.req.param("workspace_id") || "")).trim();
-    const agent = this.city.agent(agent_id);
+    const agent = this.city.agents.get(agent_id);
     if (!agent) return context.json({ success: false, error: `Agent not found: ${agent_id}` }, 404);
     const entry = await this.city.enter_workspace(agent_id, workspace_id)
       .catch(() => null);
@@ -141,7 +141,7 @@ export class CityHTTP {
     const route_key = `${agent_id}/${workspace_id}`;
     return await this.enqueue_agent_operation(route_key, async () => {
       // Agent 可能在请求排队期间被 City 删除，装配前必须重新确认所有权。
-      if (this.city.agent(agent_id)?.workspace(workspace_id) !== entry) return null;
+      if (this.city.agents.get(agent_id)?.workspace(workspace_id) !== entry) return null;
       const cached = this.routers_by_workspace.get(route_key);
       if (cached?.entry === entry) return cached.router;
       if (cached) {

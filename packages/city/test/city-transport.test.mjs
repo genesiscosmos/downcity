@@ -43,8 +43,10 @@ async function create_city() {
     data_root_path: path.join(root, "data"),
   });
   const city = new City({ workspaces: [first_workspace, second_workspace] });
-  const first_agent = new Agent({ id: "first_agent", city });
-  const second_agent = new Agent({ id: "second_agent", city });
+  const first_agent = new Agent({ id: "first_agent" });
+  const second_agent = new Agent({ id: "second_agent" });
+  city.agents.add(first_agent);
+  city.agents.add(second_agent);
   const agents = [first_agent, second_agent];
   return { city, agents, root };
 }
@@ -135,7 +137,7 @@ test("CityHTTP does not recreate an Agent removed while router resolution is que
     const detach_promise = transport.detach_agent("first_agent");
     const queued_request = transport.router().request("/agents/first_agent/workspaces/first/api/sdk/sessions");
     const remove_promise = (async () => {
-      city.unbind_agent(agents[0]);
+      await city.agents.remove(agents[0].id);
       await detach_promise;
     })();
     release_dispose();
@@ -193,7 +195,7 @@ test("CityHTTP 动态识别运行中新增和删除的 Agent", async () => {
       path: path.join(root, "third"),
       data_root_path: path.join(root, "data"),
     }));
-    city.bind_agent(agent);
+    city.agents.add(agent);
     const created = await transport.router().request(
       "/agents/third_agent/workspaces/third/api/sdk/sessions",
       {
@@ -203,7 +205,7 @@ test("CityHTTP 动态识别运行中新增和删除的 Agent", async () => {
       },
     );
     assert.equal(created.status, 200);
-    city.unbind_agent(agent);
+    await city.agents.remove(agent.id);
     await agent.dispose();
     assert.equal(
       (await transport.router().request("/agents/third_agent/workspaces/third/api/sdk/sessions")).status,

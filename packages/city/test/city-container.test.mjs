@@ -20,11 +20,12 @@ test("Agent 绑定 City 后可使用 City Workspace 并拒绝重复 ID", async (
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-add-"));
   const first_workspace = await create_agent(root, "first");
   const city = new City({ workspaces: [first_workspace] });
-  const first = new Agent({ id: "first", city });
+  const first = new Agent({ id: "first" });
+  city.agents.add(first);
   try {
-    assert.equal(city.require_agent("first"), first);
-    assert.throws(() => new Agent({ id: "first", city }), /already exists/u);
-    assert.throws(() => city.require_agent("missing"), /not found/u);
+    assert.equal(city.agents.get("first"), first);
+    assert.throws(() => city.agents.add(new Agent({ id: "first" })), /already exists/u);
+    assert.equal(city.agents.get("missing"), null);
   } finally {
     await city.close();
     await first.dispose();
@@ -37,13 +38,14 @@ test("City.close 释放绑定 Agent 与 City Workspace", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-close-"));
   const workspace = await create_agent(root, "owned");
   const city = new City({ workspaces: [workspace] });
-  const agent = new Agent({ id: "owned", city });
+  const agent = new Agent({ id: "owned" });
+  city.agents.add(agent);
   try {
     await city.close();
-    assert.equal(city.agent("owned"), null);
+    assert.equal(city.agents.get("owned"), null);
     await city.close();
     await city.close();
-    assert.equal(city.agent("owned"), null);
+    assert.equal(city.agents.get("owned"), null);
   } finally {
     await agent.dispose();
     await fs.rm(root, { recursive: true, force: true });
@@ -54,11 +56,12 @@ test("Agent dispose 解除 City 运行时绑定", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-remove-"));
   const workspace = await create_agent(root, "retry_remove");
   const city = new City({ workspaces: [workspace] });
-  const agent = new Agent({ id: "retry_remove", city });
+  const agent = new Agent({ id: "retry_remove" });
+  city.agents.add(agent);
   try {
-    assert.equal(city.require_agent(agent.id), agent);
+    assert.equal(city.agents.get(agent.id), agent);
     await agent.dispose();
-    assert.equal(city.agent(agent.id), null);
+    assert.equal(city.agents.get(agent.id), null);
   } finally {
     await city.close();
     await fs.rm(root, { recursive: true, force: true });

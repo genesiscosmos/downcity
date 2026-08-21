@@ -62,8 +62,6 @@ export async function create_cli_agent(input: {
   config: LocalAgentConfig;
   /** 当前产品实例创建的 Plugin Loader。 */
   plugin_loader: LocalPluginLoader;
-  /** Agent 使用的 City 资源容器。 */
-  city?: import("@downcity/city").City;
   /** 可选的 Downcity 用户级数据根目录。 */
   root_path?: string;
 }): Promise<Agent> {
@@ -93,7 +91,6 @@ export async function create_cli_agent(input: {
     model,
     plugins,
     tools,
-    city: input.city,
   });
 }
 

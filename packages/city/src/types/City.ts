@@ -1,7 +1,7 @@
 /**
  * City 生命周期类型。
  *
- * City 只维护 Agent 的内存索引与 transport，不表达持久化或 Agent 生命周期。
+ * City 维护 Agent 集合与 transport，并协调已加入 Agent 的运行时生命周期。
  */
 
 import type { CityHttpRuntimeOptions } from "@/transport/types/CityHttpRuntime.js";
@@ -37,14 +37,19 @@ export interface CityRuntimeOptions {
   rpc?: CityRpcRuntimeOptions;
 }
 
-/** Agent 绑定 City 时所需的最小宿主协议。 */
-export interface CityAgentBinding {
-  /** 绑定一个 Agent；重复 ID 必须失败。 */
-  bind_agent(agent: Agent): void;
-  /** 解除一个 Agent 的运行时引用。 */
-  unbind_agent(agent: Agent): void;
-  /** 按 ID 返回 City 持有的 Workspace。 */
-  workspace(workspace_id: string): WorkspaceBase | null;
+/** City 管理的 Agent 集合。 */
+export interface CityAgents {
+  /**
+   * 添加一个已经实例化的 Agent，并建立它与当前 City 的资源绑定。
+   * 重复 Agent ID 或已属于其他 City 时必须失败。
+   */
+  add(agent: Agent): Agent;
+  /** 按稳定 ID 获取 Agent；不存在或正在移除时返回 null。 */
+  get(agent_id: string): Agent | null;
+  /** 返回当前 City 管理的 Agent 稳定快照。 */
+  list(): readonly Agent[];
+  /** 停止、释放并移除 Agent；不存在时返回 null。 */
+  remove(agent_id: string): Promise<Agent | null>;
 }
 
 /** City 同时启动 HTTP 与 RPC transport 的监听参数。 */

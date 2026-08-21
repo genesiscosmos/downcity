@@ -17,12 +17,15 @@ import type {
 
 /** Agent 可绑定的 City 最小结构，避免 Agent 反向依赖 @downcity/city。 */
 export interface AgentCity {
-  /** 绑定 Agent 运行时引用。 */
-  bind_agent(agent: { readonly id: string }): void;
-  /** 解除 Agent 运行时引用。 */
-  unbind_agent(agent: { readonly id: string }): void;
   /** 按 ID 返回 City 持有的 Workspace。 */
   workspace(workspace_id: string): import("@downcity/workspace").WorkspaceBase | null;
+  /**
+   * 释放 City 对 Agent 的运行时引用。
+   *
+   * 该方法只供 City 与 Agent 的内部生命周期协议使用，应用代码应使用
+   * `city.agents.remove()` 管理 Agent。
+   */
+  release_agent(agent: { readonly id: string }): void;
 }
 
 /**
@@ -48,9 +51,6 @@ export interface AgentOptions {
    * - 应保持稳定、可 URL 编码、尽量不要依赖展示名称。
    */
   id: string;
-
-  /** Agent 使用的 City 资源容器；省略时 Agent 可独立运行。 */
-  city?: AgentCity;
 
   /**
    * 当前 agent 默认可用的工具集合。

@@ -143,8 +143,8 @@ export class CliCityRuntime {
         agents.push(await create_cli_agent({
           config,
           plugin_loader,
-          city,
         }));
+        city.agents.add(agents[agents.length - 1]);
       }
     } catch (error) {
       await Promise.allSettled(agents.map(async (agent) => await agent.dispose()));

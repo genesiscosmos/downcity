@@ -65,7 +65,7 @@ export class CityRPC {
             return {
               sessions: unavailable_sessions,
               get_city_status: () => ({
-                agent_ids: this.city.agents().map((agent) => agent.id),
+                agent_ids: this.city.agents.list().map((agent) => agent.id),
               }),
               shutdown_city: this.runtime_options.shutdown,
             };

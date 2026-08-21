@@ -10,14 +10,14 @@ import { City } from "@downcity/city";
 
 const workspace = new Workspace({ id: "sdk", path: "/projects/sdk" });
 const city = new City({ embassy, workspaces: [workspace] });
-const agent = new Agent({ id: "lucas", city, model, plugins });
+const agent = new Agent({ id: "lucas", model, plugins });
+city.agents.add(agent);
 const session = await agent.sessions.create({ workspace: city.workspace("sdk")! });
 
-const agents = city.agents();
-const current_agent = city.agent("lucas");
+const agents = city.agents.list();
+const current_agent = city.agents.get("lucas");
 
 await city.close();
-await agent.dispose();
 ```
 
 Agent 拥有自己的 Plugin 和 Session；City 负责 Workspace、Embassy、transport 以及关闭时的资源协调。

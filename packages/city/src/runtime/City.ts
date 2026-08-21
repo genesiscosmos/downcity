@@ -1,25 +1,29 @@
 /**
  * City：Workspace、Embassy 与统一 transport 的资源容器。
  *
- * City 不创建 Agent、Session 或 Plugin。应用创建 Agent 后通过 `new Agent({ city })`
- * 完成绑定；City 只持有运行时引用，管理自己的 Workspace/Embassy 资源并负责 transport。
+ * City 不创建 Agent、Session 或 Plugin。应用创建 Agent 后通过
+ * `city.agents.add(agent)` 加入当前容器；City 管理 Agent 集合、Workspace/Embassy
+ * 资源与统一 transport。
  */
 
-import { Agent, type AgentWorkspace } from "@downcity/agent";
+import { Agent, type AgentWorkspace, type AgentCity } from "@downcity/agent";
 import type { WorkspaceBase } from "@downcity/workspace";
 import { CityHTTP } from "@/transport/http/CityHTTP.js";
 import { CityRPC } from "@/transport/rpc/CityRPC.js";
 import type {
-  CityAgentBinding,
+  CityAgents,
   CityListenOptions,
   CityOptions,
   CityRuntimeOptions,
 } from "@/types/City.js";
 
 /** Agent 实例索引与 transport 宿主。 */
-export class City implements CityAgentBinding {
+export class City implements AgentCity {
   /** 当前 City 引用的 Agent，按稳定 ID 索引。 */
   private readonly agents_by_id = new Map<string, Agent>();
+
+  /** City 面向应用的 Agent 集合入口。 */
+  readonly agents: CityAgents;
 
   /** City 持有的 Workspace 资源，按稳定 ID 索引。 */
   private readonly workspaces_by_id = new Map<string, WorkspaceBase>();
@@ -70,6 +74,12 @@ export class City implements CityAgentBinding {
     this.resolve_workspace = runtime_options.resolve_workspace;
     this.http = new CityHTTP(this, runtime_options.http);
     this.rpc = new CityRPC(this, runtime_options.rpc);
+    this.agents = Object.freeze({
+      add: (agent) => this.add_agent(agent),
+      get: (agent_id) => this.get_agent(agent_id),
+      list: () => this.list_agents(),
+      remove: async (agent_id) => await this.remove_agent(agent_id),
+    });
   }
 
   /** 返回 City 持有的 Workspace；不存在时返回 null。 */
@@ -84,28 +94,28 @@ export class City implements CityAgentBinding {
   }
 
   /** 返回当前 City 已注册 Agent 的稳定快照。 */
-  agents(): readonly Agent[] {
+  private list_agents(): readonly Agent[] {
     return [...this.agents_by_id.entries()]
       .filter(([agent_id]) => !this.removing_agent_ids.has(agent_id))
       .map(([, agent]) => agent);
   }
 
   /** 按稳定 ID 返回可直接使用的 Agent；不存在时返回 null。 */
-  agent(agent_id_input: string): Agent | null {
+  private get_agent(agent_id_input: string): Agent | null {
     const agent_id = String(agent_id_input || "").trim();
     if (this.removing_agent_ids.has(agent_id)) return null;
     return this.agents_by_id.get(agent_id) ?? null;
   }
 
-  /** 按稳定 ID 返回 Agent；不存在时抛出明确错误。 */
-  require_agent(agent_id_input: string): Agent {
+  /** 按稳定 ID 返回内部 transport 所需 Agent；不存在时抛出明确错误。 */
+  private require_agent(agent_id_input: string): Agent {
     const agent_id = String(agent_id_input || "").trim();
-    const agent = this.agent(agent_id);
+    const agent = this.get_agent(agent_id);
     if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
     return agent;
   }
 
-  /** 按 Agent ID 与 Workspace ID 返回明确的执行作用域。 */
+  /** 按 Agent ID 与 Workspace ID 返回 transport 所需的明确执行作用域。 */
   require_workspace(agent_id_input: string, workspace_id_input: string): AgentWorkspace {
     const agent = this.require_agent(agent_id_input);
     const workspace_id = String(workspace_id_input || "").trim();
@@ -156,18 +166,8 @@ export class City implements CityAgentBinding {
     }
   }
 
-  /** 绑定一个已实例化 Agent；Agent 仍然拥有自身生命周期。 */
-  bind_agent(agent: Agent): void {
-    this.register_agent(agent);
-  }
-
-  /** 解除一个 Agent 的运行时绑定；不释放 Agent 实例。 */
-  unbind_agent(agent: Agent): void {
-    if (this.agents_by_id.get(agent.id) === agent) this.agents_by_id.delete(agent.id);
-  }
-
-  /** 从 City 解除 Agent 注册；不释放实例，也不修改任何持久化数据。 */
-  async remove(agent_id_input: string): Promise<Agent | null> {
+  /** 停止、释放并从 City 移除指定 Agent。 */
+  private async remove_agent(agent_id_input: string): Promise<Agent | null> {
     const agent_id = String(agent_id_input || "").trim();
     const existing_removal = this.removal_promises.get(agent_id);
     if (existing_removal) return await existing_removal;
@@ -177,7 +177,8 @@ export class City implements CityAgentBinding {
     const removal = (async () => {
       try {
         await this.http.detach_agent(agent_id);
-        this.agents_by_id.delete(agent_id);
+        await agent.dispose();
+        this.release_agent(agent);
         return agent;
       } finally {
         this.removing_agent_ids.delete(agent_id);
@@ -220,7 +221,7 @@ export class City implements CityAgentBinding {
     await this.enqueue_transport_operation(async () => {
       const results: PromiseSettledResult<unknown>[] = [];
       results.push(...await Promise.allSettled([this.http.close(), this.rpc.close()]));
-      results.push(...await Promise.allSettled(this.agents().map(async (agent) => await agent.dispose())));
+      results.push(...await Promise.allSettled(this.agents.list().map(async (agent) => await agent.dispose())));
       results.push(...await Promise.allSettled(
         [...this.workspaces_by_id.values()].map(async (workspace) => await workspace.dispose()),
       ));
@@ -231,14 +232,24 @@ export class City implements CityAgentBinding {
     });
   }
 
-  /** 注册一个运行时 Agent 引用并维护 ID 唯一性。 */
-  private register_agent(agent: Agent): Agent {
+  /** 将已创建 Agent 加入集合并建立唯一 City 绑定。 */
+  private add_agent(agent: Agent): Agent {
     if (!agent?.id) throw new Error("City requires an Agent with a stable ID");
     if (this.agents_by_id.has(agent.id) || this.removing_agent_ids.has(agent.id)) {
       throw new Error(`Agent already exists in City: ${agent.id}`);
     }
+    agent.attach_city(this);
     this.agents_by_id.set(agent.id, agent);
     return agent;
+  }
+
+  /** Agent 自行释放时清除 City 运行时引用。 */
+  release_agent(agent: { readonly id: string }): void {
+    const current = this.agents_by_id.get(agent.id);
+    if (!current || current !== agent) return;
+    current.detach_city(this);
+    this.agents_by_id.delete(agent.id);
+    void this.http.detach_agent(agent.id).catch(() => undefined);
   }
 
   /** 把宿主按需解析出的 Workspace 纳入 City 资源索引。 */

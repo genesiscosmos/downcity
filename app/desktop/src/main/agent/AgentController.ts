@@ -201,18 +201,18 @@ export class AgentController {
       })),
       updated_at: new Date().toISOString(),
     };
-    const replacement = await this.create_native_agent(candidate, false);
+      const replacement = await this.create_native_agent(candidate);
     let saved = false;
     let previous_agent: Agent | null = null;
     try {
       this.data.agents.save(candidate);
       saved = true;
-      previous_agent = this.city.agent(current.agent_id);
-      if (previous_agent) this.city.unbind_agent(previous_agent);
-      this.city.bind_agent(replacement);
+      previous_agent = this.city.agents.get(current.agent_id);
+      if (previous_agent) await this.city.agents.remove(previous_agent.id);
+      this.city.agents.add(replacement);
     } catch (error) {
-      this.city.unbind_agent(replacement);
-      if (previous_agent) this.city.bind_agent(previous_agent);
+      await this.city.agents.remove(replacement.id).catch(() => null);
+      if (previous_agent) this.city.agents.add(previous_agent);
       if (saved) this.data.agents.save(current);
       await replacement.dispose().catch(() => undefined);
       throw error;
@@ -262,7 +262,7 @@ export class AgentController {
     if (!config) throw new Error(`Agent not found: ${agent_id}`);
     const workspace = this.data.workspaces.get(workspace_id);
     if (!workspace) throw new Error(`Workspace is not registered: ${workspace_id}`);
-    if (!this.city.agent(config.agent_id)) throw new Error(`Agent is not available in Desktop City: ${config.agent_id}`);
+    if (!this.city.agents.get(config.agent_id)) throw new Error(`Agent is not available in Desktop City: ${config.agent_id}`);
     await this.require_agent_workspace(config.agent_id, workspace_id);
     return { agent_id: config.agent_id, workspace_id, workspace: to_desktop_workspace_summary(workspace) };
   }
@@ -478,7 +478,7 @@ export class AgentController {
     this.session_unsubscribes.clear();
     this.runtimes.clear();
     this.restored_session_models.clear();
-    const agents = this.city.agents();
+    const agents = this.city.agents.list();
     const results: PromiseSettledResult<unknown>[] = [];
     results.push(...await Promise.allSettled([this.city.close()]));
     results.push(...await Promise.allSettled(agents.map(async (agent) => await agent.dispose())));
@@ -495,6 +495,7 @@ export class AgentController {
     try {
       for (const config of this.data.agents.list()) {
         const agent = await this.create_native_agent(config);
+        this.city.agents.add(agent);
         try {
           initialized_agents.push(agent);
         } catch (error) {
@@ -517,7 +518,7 @@ export class AgentController {
   }
 
   /** 显式装配一个 Desktop native Agent。 */
-  private async create_native_agent(config: LocalAgentConfig, bind_city = true): Promise<Agent> {
+  private async create_native_agent(config: LocalAgentConfig): Promise<Agent> {
     const [model, plugins, tools] = await Promise.all([
       Promise.resolve(create_desktop_agent_model(this.data, config, process_environment())),
       this.plugin_loader.create_plugins(config, ({ plugin_id, profile }) => ({
@@ -538,7 +539,6 @@ export class AgentController {
     ]);
     return new Agent({
       id: config.agent_id,
-      ...(bind_city ? { city: this.city } : {}),
       instruction: config.instruction,
       model,
       plugins,
@@ -670,7 +670,7 @@ export class AgentController {
 
   /** 读取由 Desktop City 持有的本地 Agent。 */
   private require_native_agent(agent_id: string): Agent {
-    const agent = this.city.agent(agent_id);
+    const agent = this.city.agents.get(agent_id);
     if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
     return agent;
   }

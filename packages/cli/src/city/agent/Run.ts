@@ -29,7 +29,7 @@ export async function run_city_foreground(options: CityDaemonOptions): Promise<v
   process.on("SIGINT", () => void shutdown());
   process.on("SIGTERM", () => void shutdown());
   console.log([
-    `City running with ${runtime.city.agents().length} Agent(s)`,
+    `City running with ${runtime.city.agents.list().length} Agent(s)`,
     `HTTP: http://${options.host || "127.0.0.1"}:${runtime.http_port}`,
     `RPC: rpc://127.0.0.1:${runtime.rpc_port}/<agent_id>`,
   ].join("\n"));
