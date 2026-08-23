@@ -3,7 +3,7 @@
 ## 1. 产品结论
 
 - Agent 是身份、模型、主体指令和 Plugin 注册关系的拥有者。
-- Agent 与 Workspace 不绑定；宿主在执行时调用 `agent.enter(workspace)`。
+- Agent 是主体，Session 创建时选择 Workspace：`agent.sessions.create({ workspace })`。
 - Plugin 使用 `plugin.json` 声明的全局唯一 ID，不存在来源 Hash 生成的公开身份。
 - Plugin 完整拥有代码与配置；框架不定义 Binding、Resource 或 Installation 持久化领域。
 - CLI 与 Desktop 读取同一套用户级文件协议。

@@ -15,7 +15,7 @@ SDK 的组合根只有两个核心对象：
 ```ts
 const agent = new Agent({ id, model, instruction, plugins });
 const workspace = new Workspace({ id: "sdk", path, shell });
-const sdk = agent.enter(workspace);
+const sdk = agent.sessions.create({ workspace });
 ```
 
 其中：
@@ -369,13 +369,13 @@ Session 是 SDK 最重要的运行边界。每个 Session 拥有：
 ### 8.1 Session 生命周期
 
 ```ts
-const agent_workspace = agent.enter(workspace);
-const session = await agent_workspace.sessions.create();
-const existing = await agent_workspace.sessions.get(session_id);
+const session = await agent.sessions.create({ workspace });
+const session = await agent.sessions.create();
+const existing = await agent.sessions.get(session_id);
 
-const page = await agent_workspace.sessions.list();
-await agent_workspace.sessions.archive({ id: session_id });
-await agent_workspace.sessions.remove(session_id);
+const page = await agent.sessions.list();
+await agent.sessions.archive({ id: session_id });
+await agent.sessions.remove(session_id);
 ```
 
 `AgentSessions` 缓存当前进程中的 Session 实例。未缓存但 Store 中存在的 Session 会从本地数据恢复。
@@ -725,8 +725,8 @@ Session Prompt 可以携带 AI SDK file part，也允许宿主显式提供绝对
 本地 `Agent` 持有身份、Plugin 和模型；`AgentWorkspace` 持有真实 Workspace、Store 与 Session。
 
 ```ts
-const agent_workspace = agent.enter(workspace);
-const session = await agent_workspace.sessions.create();
+const session = await agent.sessions.create({ workspace });
+const session = await agent.sessions.create();
 const turn = await session.prompt({ query: "hello" });
 const result = await turn.finished;
 ```
@@ -752,7 +752,7 @@ const agent = new RemoteAgent({
 
 ```mermaid
 flowchart LR
-    Construct["new Agent"] --> Enter["agent.enter(workspace)"]
+    Construct["new Agent"] --> Enter["agent.sessions.create({ workspace })"]
     Enter --> StartWorkspace["启动 Workspace Plugin lifecycle 与 ActionSchedule"]
     StartWorkspace --> Running["Session 执行等待内部初始化屏障"]
     Running --> Dispose["agent.dispose()"]
@@ -792,8 +792,8 @@ const agent = new Agent({
 });
 
 try {
-  const agent_workspace = agent.enter(workspace);
-  const session = await agent_workspace.sessions.create();
+  const session = await agent.sessions.create({ workspace });
+  const session = await agent.sessions.create();
   const turn = await session.prompt({ query: "先理解项目结构" });
   console.log(await turn.finished);
 } finally {
@@ -821,7 +821,7 @@ const agent = new Agent({
   model,
 });
 
-const agent_workspace = agent.enter(workspace);
+const session = await agent.sessions.create({ workspace });
 ```
 
 Windows 或 Linux 只替换 Sandbox Adapter，Agent SDK 代码保持一致。
@@ -838,7 +838,7 @@ const agent = new Agent({
   },
 });
 
-const agent_workspace = agent.enter(workspace);
+const session = await agent.sessions.create({ workspace });
 ```
 
 Plugin 是 Agent 能力，自定义 Tool 与 Workspace Tools 合并后供所有 Session 共享。

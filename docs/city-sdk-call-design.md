@@ -328,7 +328,8 @@ city.agents.add(agent);
 
 ```ts
 // 删除
-const agent = city.create_agent(agent_options);
+const agent = new Agent(agent_options);
+city.agents.add(agent);
 
 // 目标
 const agent = new Agent(agent_options);
@@ -339,8 +340,8 @@ city.agents.add(agent);
 
 ```ts
 // 删除
-const agent_workspace = agent.enter(workspace);
-const session = await agent_workspace.sessions.create();
+const session = await agent.sessions.create({ workspace });
+const session = await agent.sessions.create();
 
 // 目标
 const session = await agent.sessions.create({ workspace });

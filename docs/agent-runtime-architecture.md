@@ -6,7 +6,7 @@
 >
 > 本文基于 2026-07-25 对 Codex、Anthropic Sandbox Runtime、OpenHands 与 VS Code 的公开源码调研形成，同时记录目标设计与实际迁移进度。
 
-> 2026-08-16 更新：Agent 已不再绑定单一 Workspace。当前公开模型以 [`agent-sdk-architecture.md`](./agent-sdk-architecture.md) 为准：`new Agent(...)` 创建主体，`agent.enter(new Workspace({ id, ... }))` 创建执行边界。
+> 2026-08-16 更新：Agent 已不再绑定单一 Workspace。当前公开模型以 [`agent-sdk-architecture.md`](./agent-sdk-architecture.md) 为准：`new Agent(...)` 创建主体，`agent.sessions.create({ workspace })` 创建执行边界。
 
 实现进度：`@downcity/workspace` 已统一提供项目 LocalFileSystem、WorkspaceTools、Env、通用私有存储 Provider 与可选 Shell；Agent 统一注册 Plugin、Session Interaction 与自定义 Tools。Agent 进入 Workspace 后创建 AgentWorkspaceStorage 视图，Session、日志和 Schedule 写入用户级 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`；Plugin 运行时状态写入 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`，都不会污染项目目录。
 
@@ -55,7 +55,7 @@ const workspace = new Workspace({
 const agent = new Agent({
   id: "demo",
 });
-const agent_workspace = agent.enter(workspace);
+const session = await agent.sessions.create({ workspace });
 ```
 
 Windows 只替换 Sandbox：
@@ -72,7 +72,7 @@ const workspace = new Workspace({
 const agent = new Agent({
   id: "demo",
 });
-const agent_workspace = agent.enter(workspace);
+const session = await agent.sessions.create({ workspace });
 ```
 
 核心边界：
@@ -242,7 +242,7 @@ Downcity 应借鉴：
 flowchart TD
     App["SDK 调用方"] --> Workspace["new Workspace({ id, path, shell })"]
     App --> Agent["new Agent({ id, plugins })"]
-    Agent --> AgentWorkspace["agent.enter(workspace)"]
+    Agent --> AgentWorkspace["agent.sessions.create({ workspace })"]
     Workspace --> AgentWorkspace
     Workspace --> Files["LocalFileSystem"]
     Workspace --> Shell["Shell"]
@@ -778,7 +778,7 @@ Shell owns child processes and Sandbox Adapter
 6. Workspace 关闭 Shell 的活动进程与 PTY。
 7. Workspace 释放 Shell Sandbox Adapter。
 
-Agent 不与 Workspace 一对一绑定。同一个 Agent 可以通过 `agent.enter(workspace)` 同时进入多个 Workspace；每个 AgentWorkspace 分别持有 Session、日志与 Workspace 级 Plugin 生命周期，并绑定当前 Workspace 提供的 Shell 与 env。`agent.dispose()` 会先离开全部 Workspace，再停止 Agent 级 Plugin 生命周期。
+Agent 不与 Workspace 一对一绑定。同一个 Agent 可以通过 `agent.sessions.create({ workspace })` 同时进入多个 Workspace；每个 AgentWorkspace 分别持有 Session、日志与 Workspace 级 Plugin 生命周期，并绑定当前 Workspace 提供的 Shell 与 env。`agent.dispose()` 会先离开全部 Workspace，再停止 Agent 级 Plugin 生命周期。
 
 同一个 `agent_id + workspace_id` 在同一宿主中只允许一个活动执行边界。ActionSchedule 是本地调度器，不提供分布式 owner、lease 或多进程协调；宿主应在进程管理层避免重复装配同一个执行目标。
 
@@ -903,7 +903,7 @@ interface WorkspaceBackend {
 
 ## 22. 验收标准
 
-1. 公共 API 使用 `new Agent({ id, plugins? })` 与 `agent.enter(new Workspace({ id, path, shell? }))`。
+1. 公共 API 使用 `new Agent({ id, plugins? })` 与 `agent.sessions.create({ workspace })`。
 2. 不存在 AgentHost 或通用 SystemHandler。
 3. Agent 与 Session 不包含平台分支。
 4. File/Search Tool 不依赖 Shell command protocol。
@@ -922,7 +922,7 @@ interface WorkspaceBackend {
 new Agent({ id }) + new Workspace({ id, path, shell? })
                             │
                             ▼
-                 agent.enter(workspace)
+                 agent.sessions.create({ workspace })
                             │
              ┌──────────────┼──────────────┐
              ▼              ▼              ▼

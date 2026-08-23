@@ -333,7 +333,7 @@ const agent = new Agent({
   plugins,
 });
 
-const agent_workspace = agent.enter(workspace);
+const session = await agent.sessions.create({ workspace });
 ```
 
 `WorkspaceOptions` 只包含：
@@ -359,7 +359,7 @@ const workspace = new CloudflareComputerWorkspace({
 });
 
 const agent = new Agent({ id: "research-agent", model, plugins });
-const agent_workspace = agent.enter(workspace);
+const session = await agent.sessions.create({ workspace });
 ```
 
 Cloudflare Adapter 通过 `@downcity/workspace/protocol` 使用 Workspace 协议，不依赖 `@downcity/agent` 或 Workspace 的本地 Shell 实现。
@@ -556,7 +556,7 @@ Agent 只公开 Agent、AgentWorkspace、Session、Plugin 和执行协议。Plug
 ## 16. 验收标准
 
 1. `@downcity/workspace` 成为 Workspace 唯一公开来源。
-2. 用户从 `@downcity/workspace` 导入 `Workspace`，并通过 `agent.enter(workspace)` 执行。
+2. 用户从 `@downcity/workspace` 导入 `Workspace`，并通过 `agent.sessions.create({ workspace })` 执行。
 3. `@downcity/agent` 不再包含或导出通用 Workspace 实现。
 4. `@downcity/workspace` 不依赖 Agent、Session、Plugin、City 或 Local。
 5. Shell 默认实现和协议位于 `@downcity/workspace`，Workspace 作为可选能力持有并支持自定义实现。
