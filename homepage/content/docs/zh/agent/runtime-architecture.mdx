@@ -19,8 +19,8 @@ Agent runtime 的核心目标是：让每次输入都按确定顺序执行，让
 - 实时 Mutation 流。
 
 ```ts
-const agent_workspace = agent.enter(workspace);
-const session = await agent_workspace.sessions.create();
+// Session 在创建时选择 Workspace。
+const session = await agent.sessions.create({ workspace });
 const turn = await session.prompt({ query: "检查并修复项目" });
 const result = await turn.finished;
 ```

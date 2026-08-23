@@ -12,7 +12,7 @@ description: 使用 @downcity/agent 构建具备项目文件、受控命令、Pl
 ```mermaid
 flowchart LR
     Host["SDK 宿主"] --> Agent["Agent<br/>身份与 Plugin 注册表"]
-    Agent --> Workspace["agent.enter(Workspace)<br/>执行作用域"]
+    Agent --> Workspace["agent.sessions.create({ workspace })<br/>Session 作用域"]
     Workspace --> Session["Session<br/>有状态执行容器"]
     Session --> Turn["Turn<br/>一次 prompt 执行"]
     Agent --> Plugin["Plugin<br/>扩展能力"]
@@ -63,10 +63,10 @@ const agent = new Agent({
   id: "repo-helper",
   model,
 });
-const agent_workspace = agent.enter(workspace);
+// Session 在创建时选择 Workspace。
 
 try {
-  const session = await agent_workspace.sessions.create();
+  const session = await agent.sessions.create({ workspace });
   const turn = await session.prompt({ query: "总结当前仓库" });
   const result = await turn.finished;
   console.log(result.text);
@@ -78,7 +78,7 @@ try {
 只需要记住这条主链路：
 
 ```text
-Agent + Workspace + Shell → agent.enter(workspace) → Session → prompt() → turn.finished → dispose()
+Agent + Workspace + Shell → agent.sessions.create({ workspace }) → Session → prompt() → turn.finished → dispose()
 ```
 
 `agent.dispose()` 会释放 Agent 进入的全部 AgentWorkspace，包括 Plugin lifecycle、ActionSchedule、Shell 进程、PTY 和 Sandbox。项目目录不会创建 `.downcity`。

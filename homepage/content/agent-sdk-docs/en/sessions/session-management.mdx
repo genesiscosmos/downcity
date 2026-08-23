@@ -5,16 +5,17 @@ description: Create, open, list, archive, and permanently clean up Sessions
 
 # Managing Sessions
 
-`agent_workspace.sessions` is the local collection entry point. It manages only Sessions owned by the current Agent in the current Workspace.
+`agent.sessions` is the local collection entry point. Each Session selects its Workspace at creation time.
 
 ## Create and open
 
 ```ts
-const created = await agent_workspace.sessions.create({
+const created = await agent.sessions.create({
+  workspace,
   session_id: "repo-analysis",
 });
 
-const existing = await agent_workspace.sessions.get("repo-analysis");
+const existing = await agent.sessions.get("repo-analysis");
 ```
 
 `create()` expresses creation intent. It throws when the ID already exists instead of silently reusing it. When `session_id` is omitted, the SDK generates a stable, non-guessable ID. For get-or-create behavior, call `get()` first and call `create()` only when it is missing.
@@ -22,7 +23,7 @@ const existing = await agent_workspace.sessions.get("repo-analysis");
 ## List and search
 
 ```ts
-const page = await agent_workspace.sessions.list({
+const page = await agent.sessions.list({
   limit: 30,
   query: "repo",
 });
@@ -32,7 +33,7 @@ for (const item of page.items) {
 }
 
 if (page.has_more) {
-  const next_page = await agent_workspace.sessions.list({
+  const next_page = await agent.sessions.list({
     limit: 30,
     cursor: page.next_cursor,
     query: "repo",
@@ -47,11 +48,11 @@ List items are lightweight summaries, not complete Messages. Common fields are `
 ## Archive and clean up
 
 ```ts
-await agent_workspace.sessions.archive({ id: "repo-analysis" });
+await agent.sessions.archive({ id: "repo-analysis" });
 
-const archived_page = await agent_workspace.sessions.archived({ limit: 30 });
+const archived_page = await agent.sessions.archived({ limit: 30 });
 
-const removed = await agent_workspace.sessions.clean_archive();
+const removed = await agent.sessions.clean_archive();
 console.log(removed.removed_session_ids);
 ```
 

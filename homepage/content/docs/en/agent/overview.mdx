@@ -29,11 +29,11 @@ const agent = new Agent({
   tools: { my_tool: myTool },
   plugins: [myPlugin],
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
   shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
-}));
+});
 ```
 
 ## Key concepts

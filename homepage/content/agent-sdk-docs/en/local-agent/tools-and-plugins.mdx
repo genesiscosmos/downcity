@@ -16,10 +16,10 @@ const agent = new Agent({
     my_tool: myTool,
   },
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 ```
 
 These tools are available during session execution.
@@ -35,11 +35,11 @@ import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const agent = new Agent({ id: "repo-helper" });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
   shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
-}));
+});
 ```
 
 Workspace creates WorkspaceTools from five file/search tools by default, and Shell contributes two command tools. AgentWorkspace merges them into `agent_workspace.tools`:
@@ -101,10 +101,10 @@ const agent = new Agent({
     ask_question: AskQuestionsTool,
   },
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 ```
 
 The model invokes `ask_question` as a standard Tool Call, not as a provider-specific message type.
@@ -126,10 +126,10 @@ const agent = new Agent({
   id: "repo-helper",
   plugins: [new SkillPlugin()],
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 ```
 
 Add `WebPlugin` only when a search, document, or browser provider is configured. See the [Web Plugin guide](/en/plugins-docs/builtins/web).
@@ -138,7 +138,7 @@ Registered plugin actions can be called through `agent.plugins.run_action(...)`,
 
 `PluginContext` does not expose a generic path bundle. A plugin uses `context.workspace_path` as the project boundary and owns its domain storage paths inside the plugin. Operations on Agent Sessions go through `context.sessions`, not the Agent's Session directories.
 
-`context.sessions` directly references the current AgentWorkspace's `AgentSessions`; it is not an adapter. Plugins use `context.sessions.runtime(session_id)` for the synchronous runtime port. SDK callers restore an existing public Session with `await agent_workspace.sessions.get(session_id)`.
+`context.sessions` directly references the current AgentWorkspace's `AgentSessions`; it is not an adapter. Plugins use `context.sessions.runtime(session_id)` for the synchronous runtime port. SDK callers restore an existing public Session with `await agent.sessions.get(session_id)`.
 
 Each `Agent` has its own plugin registry and its own `plugin_read` / `plugin_call` tool instances. If one process creates and caches multiple Agents, a session's `plugin_call` only reaches the registry for the Agent that owns that session.
 

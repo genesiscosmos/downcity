@@ -18,10 +18,10 @@ const agent = new Agent({
   id: "repo-helper",
   model,
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 ```
 
 or:
@@ -33,7 +33,7 @@ await session.set({ model });
 ## Correct order
 
 ```ts
-const session = await agent_workspace.sessions.create();
+const session = await agent.sessions.create({ workspace });
 const turn = await session.prompt({ query: "Continue" });
 await turn.finished;
 ```

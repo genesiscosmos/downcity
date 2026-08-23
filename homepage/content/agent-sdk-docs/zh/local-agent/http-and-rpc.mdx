@@ -31,8 +31,8 @@ import { AgentRPC } from "@downcity/agent/city";
 
 const workspace = new Workspace({ id: "project", path });
 const agent = new Agent({ id, model });
-const agent_workspace = agent.enter(workspace);
-const rpc = new AgentRPC(agent_workspace);
+// Session 在创建时选择 Workspace。
+const rpc = new AgentRPC(agent, workspace);
 const binding = await rpc.listen({ host: "127.0.0.1", port: 15314 });
 console.log(binding.url); // rpc://127.0.0.1:15314
 
@@ -56,8 +56,8 @@ import { AgentHTTP } from "@downcity/agent/city";
 
 const workspace = new Workspace({ id: "project", path });
 const agent = new Agent({ id, model });
-const agent_workspace = agent.enter(workspace);
-const http = new AgentHTTP(agent_workspace);
+// Session 在创建时选择 Workspace。
+const http = new AgentHTTP(agent, workspace);
 const binding = await http.server().listen({ host: "127.0.0.1", port: 5314 });
 console.log(binding.url); // http://127.0.0.1:5314
 
@@ -75,7 +75,7 @@ import { Hono } from "hono";
 import { AgentHTTP } from "@downcity/agent/city";
 
 const app = new Hono();
-const http = new AgentHTTP(agent_workspace);
+const http = new AgentHTTP(agent, workspace);
 app.route("/", http.router());
 ```
 

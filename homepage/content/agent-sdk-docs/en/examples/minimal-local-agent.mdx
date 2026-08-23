@@ -13,16 +13,16 @@ const agent = new Agent({
   id: "repo-helper",
   tools: {},
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 ```
 
 Then:
 
 ```ts
-const session = await agent_workspace.sessions.create();
+const session = await agent.sessions.create({ workspace });
 await session.set({ model });
 const turn = await session.prompt({ query: "Continue" });
 await turn.finished;

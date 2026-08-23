@@ -20,13 +20,13 @@ const agent = new Agent({
   id: "my-agent",
   model,
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
   shell,
-}));
+});
 
-const session = await agent_workspace.sessions.create();
+const session = await agent.sessions.create({ workspace });
 const turn = await session.prompt({ query: "Start" });
 await turn.finished;
 

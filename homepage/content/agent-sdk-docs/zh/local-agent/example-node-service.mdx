@@ -24,12 +24,12 @@ import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";
 
 const agent = new Agent({ id: "repo-helper", model });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
-}));
+});
 
-const session = await agent_workspace.sessions.create();
+const session = await agent.sessions.create({ workspace });
 ```
 
 这种模式下，模型实例由你的 Node 宿主直接持有。

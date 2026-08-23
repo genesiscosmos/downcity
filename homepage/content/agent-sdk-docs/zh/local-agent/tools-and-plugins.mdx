@@ -16,10 +16,10 @@ const agent = new Agent({
     my_tool: myTool,
   },
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 ```
 
 这些工具会在 session 执行时直接可用。
@@ -37,11 +37,11 @@ import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const agent = new Agent({ id: "repo-helper" });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
   shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
-}));
+});
 ```
 
 Workspace 默认生成由五个文件/搜索工具组成的 WorkspaceTools，Shell 额外加入两个命令工具。AgentWorkspace 将它们合并到最终 `agent_workspace.tools`：
@@ -103,10 +103,10 @@ const agent = new Agent({
     ask_question: AskQuestionsTool,
   },
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 ```
 
 `ask_question` 由模型作为标准 Tool Call 调用，不是 Provider 私有消息类型。它支持
@@ -138,10 +138,10 @@ const agent = new Agent({
     }),
   ],
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 ```
 
 这类写法适合：
@@ -163,10 +163,10 @@ const agent = new Agent({
   tools: {},
   plugins: [new SkillPlugin()],
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 
 const plugins = agent.plugins.list();
 ```
@@ -186,7 +186,7 @@ const plugins = agent.plugins.list();
 
 `PluginContext` 不提供通用路径集合。Plugin 通过 `context.workspace_path` 确定项目边界，并在自己的模块内管理领域存储路径；需要操作 Agent Session 时使用 `context.sessions`，不要读取 Agent 的 Session 目录。
 
-`context.sessions` 直接引用当前 AgentWorkspace 的 `AgentSessions`，不是转发对象。Plugin 需要同步运行时端口时使用 `context.sessions.runtime(session_id)`；SDK 用户恢复已存在的公开 Session 时使用 `await agent_workspace.sessions.get(session_id)`。
+`context.sessions` 直接引用当前 AgentWorkspace 的 `AgentSessions`，不是转发对象。Plugin 需要同步运行时端口时使用 `context.sessions.runtime(session_id)`；SDK 用户恢复已存在的公开 Session 时使用 `await agent.sessions.get(session_id)`。
 
 每个 `Agent` 都有独立的 plugin registry 和独立的 `plugin_read` / `plugin_call` tool 实例。即使同一个进程里同时创建多个 Agent，模型通过 `plugin_call` 触发 action 时，也只会访问当前 session 所属 Agent 的 registry。
 

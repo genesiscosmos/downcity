@@ -14,11 +14,11 @@ import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const agent = new Agent({ id: "repo-helper" });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
   shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
-}));
+});
 ```
 
 ## Tools
@@ -63,11 +63,11 @@ const shell = new Shell({
 });
 
 const agent = new Agent({ id: "repo-helper" });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
   shell,
-}));
+});
 ```
 
 Each entry must be an existing absolute directory outside the project. macOS compiles it to a Seatbelt `file-read*` rule, Linux maps it with Bubblewrap `--ro-bind`, and Windows passes it to MXC as a read-only root or grants an SRT READ ACL to its dedicated user. No backend grants write access.

@@ -8,6 +8,9 @@
  */
 
 import type { AgentWorkspace } from "@/internal/index.js";
+import { create_agent_workspace } from "@/internal/index.js";
+import type { Agent } from "@/agent/Agent.js";
+import type { WorkspaceBase } from "@downcity/workspace";
 import { start_rpc_server, type RpcServerInstance } from "@/city/transport/rpc/RpcServer.js";
 import type {
   AgentRpcBinding,
@@ -32,9 +35,18 @@ export class AgentRPC {
     AgentRpcBinding
   >;
 
-  constructor(agent_workspace: AgentWorkspace, runtime_options: AgentRpcRuntimeOptions = {}) {
-    this.agent_workspace = agent_workspace;
-    this.runtime_options = runtime_options;
+  constructor(
+    agent_or_workspace: Agent | AgentWorkspace,
+    workspace_or_options?: WorkspaceBase | AgentRpcRuntimeOptions,
+    runtime_options: AgentRpcRuntimeOptions = {},
+  ) {
+    if (workspace_or_options && "id" in workspace_or_options && "path" in workspace_or_options) {
+      this.agent_workspace = create_agent_workspace(agent_or_workspace as Agent, workspace_or_options);
+      this.runtime_options = runtime_options;
+    } else {
+      this.agent_workspace = agent_or_workspace as AgentWorkspace;
+      this.runtime_options = (workspace_or_options as AgentRpcRuntimeOptions | undefined) ?? {};
+    }
     this.lifecycle = new SerializedTransport({
       start: async (options) => {
         const host = String(options?.host || DEFAULT_RPC_HOST).trim() || DEFAULT_RPC_HOST;

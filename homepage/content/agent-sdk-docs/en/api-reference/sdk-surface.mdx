@@ -13,7 +13,7 @@ Most local applications need only:
 
 - `Workspace`: create the project resource and security boundary and receive Shell.
 - `Agent`: compose the model, instructions, Tools, plugins, and enter Workspaces.
-- `agent_workspace.sessions.create()` / `get()`: create or restore a Session in the current scope.
+- `agent.sessions.create({ workspace })` / `get()`: create or restore a Session in the current scope.
 - `session.prompt()`: start one Turn.
 - `turn.finished`: await the final result.
 - `agent.dispose()`: release every Workspace scope entered by the Agent.
@@ -21,10 +21,10 @@ Most local applications need only:
 ```ts
 const workspace = new Workspace({ id: workspace_id, path, shell });
 const agent = new Agent({ id, model });
-const agent_workspace = agent.enter(workspace);
+// Session 在创建时选择 Workspace。
 
 try {
-  const session = await agent_workspace.sessions.create();
+  const session = await agent.sessions.create({ workspace });
   const turn = await session.prompt({ query: "Inspect the project" });
   const result = await turn.finished;
 } finally {

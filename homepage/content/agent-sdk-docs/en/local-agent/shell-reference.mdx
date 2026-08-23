@@ -43,11 +43,11 @@ const shell = new Shell({
 });
 
 const agent = new Agent({ id: "demo" });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
   shell,
-}));
+});
 ```
 
 Workspace binds its project root to Shell; Agent no longer configures or owns Shell directly. Pass `root_path` only when using Shell independently.

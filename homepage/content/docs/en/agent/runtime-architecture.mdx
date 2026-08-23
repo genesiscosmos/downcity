@@ -19,8 +19,8 @@ Each Session owns independent:
 - Live Mutation stream.
 
 ```ts
-const agent_workspace = agent.enter(workspace);
-const session = await agent_workspace.sessions.create();
+// Session 在创建时选择 Workspace。
+const session = await agent.sessions.create({ workspace });
 const turn = await session.prompt({ query: "Inspect and fix the project" });
 const result = await turn.finished;
 ```

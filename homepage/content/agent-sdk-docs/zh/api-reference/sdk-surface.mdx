@@ -13,7 +13,7 @@ description: 按日常使用、常用进阶和框架集成三个层级理解 Age
 
 - `Workspace`：创建项目资源与安全边界，并接收 Shell。
 - `Agent`：组合模型、指令、Tools、Plugins，并通过 `enter()` 进入 Workspace。
-- `agent_workspace.sessions.create()` / `get()`：创建或恢复当前作用域的 Session。
+- `agent.sessions.create({ workspace })` / `get()`：创建或恢复当前作用域的 Session。
 - `session.prompt()`：启动一次 Turn。
 - `turn.finished`：等待最终结果。
 - `agent.dispose()`：释放 Agent 进入的全部 Workspace 作用域。
@@ -21,10 +21,10 @@ description: 按日常使用、常用进阶和框架集成三个层级理解 Age
 ```ts
 const workspace = new Workspace({ id: workspace_id, path, shell });
 const agent = new Agent({ id, model });
-const agent_workspace = agent.enter(workspace);
+// Session 在创建时选择 Workspace。
 
 try {
-  const session = await agent_workspace.sessions.create();
+  const session = await agent.sessions.create({ workspace });
   const turn = await session.prompt({ query: "检查项目" });
   const result = await turn.finished;
 } finally {

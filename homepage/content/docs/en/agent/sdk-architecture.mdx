@@ -7,7 +7,7 @@ description: Responsibilities and composition of Agent, Workspace, AgentWorkspac
 
 Downcity separates the Agent subject from the project in which it works. `Agent` owns identity,
 instruction, model, custom tools, and Plugin registration. `Workspace` owns project resources and
-Shell. Calling `agent.enter(workspace)` creates the `AgentWorkspace` execution boundary.
+Shell. Calling `agent.sessions.create({ workspace })` creates a Session execution boundary.
 
 ```ts
 import { Agent } from "@downcity/agent";
@@ -15,8 +15,8 @@ import { Shell, Workspace } from "@downcity/workspace";
 
 const agent = new Agent({ id, model, instruction, plugins });
 const workspace = new Workspace({ id: "project", path, shell });
-const agent_workspace = agent.enter(workspace);
-const session = await agent_workspace.sessions.create();
+// Session 在创建时选择 Workspace。
+const session = await agent.sessions.create({ workspace });
 ```
 
 ## Responsibility model
@@ -25,7 +25,7 @@ const session = await agent_workspace.sessions.create();
 flowchart TD
     Host["Host application"] --> Agent["Agent<br/>identity, model, instruction, plugins"]
     Host --> Workspace["Workspace<br/>project resources and Shell"]
-    Agent --> Enter["agent.enter(workspace)"]
+    Agent --> Enter["agent.sessions.create({ workspace })"]
     Workspace --> Enter
     Enter --> AgentWorkspace["AgentWorkspace<br/>execution and private state"]
     AgentWorkspace --> Sessions["Sessions"]
@@ -57,8 +57,8 @@ const agent = new Agent({
   tools: { company_search: company_search_tool },
 });
 
-const frontend = agent.enter(frontend_workspace);
-const backend = agent.enter(backend_workspace);
+const frontend = await agent.sessions.create({ workspace: frontend_workspace });
+const backend = await agent.sessions.create({ workspace: backend_workspace });
 ```
 
 Plugins are registered once on Agent. There is no separate Workspace Plugin category. Every Plugin
@@ -93,7 +93,7 @@ installable and are injected into Shell.
 
 ## AgentWorkspace is the execution boundary
 
-`agent.enter(workspace)` combines the two subjects without merging their ownership. AgentWorkspace
+`agent.sessions.create({ workspace })` combines the two subjects for one Session without merging their ownership. The internal AgentWorkspace
 creates:
 
 - The final Tool set from Workspace tools, Agent custom tools, and Plugin bridge tools.

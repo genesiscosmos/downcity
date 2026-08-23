@@ -41,7 +41,7 @@ The UI must fall back to `session_id`, `preview_text`, or its own new-conversati
 
 ## List versus detail
 
-- Sidebar: use `agent_workspace.sessions.list()` instead of calling `get_info()` for every item.
+- Sidebar: use `agent.sessions.list()` instead of calling `get_info()` for every item.
 - Selected Session: use `get_info()` to refresh header and execution state.
 - Content area: load history with `messages()` and keep it synchronized with `subscribe()`.
 

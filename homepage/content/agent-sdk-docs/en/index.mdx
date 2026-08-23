@@ -12,7 +12,7 @@ description: Build local or remote Agents with project files, sandboxed commands
 ```mermaid
 flowchart LR
     Host["SDK host"] --> Agent["Agent<br/>identity and Plugin registry"]
-    Agent --> Workspace["agent.enter(Workspace)<br/>execution scope"]
+    Agent --> Workspace["agent.sessions.create({ workspace })<br/>Session scope"]
     Workspace --> Session["Session<br/>stateful execution container"]
     Session --> Turn["Turn<br/>one prompt execution"]
     Agent --> Plugin["Plugin<br/>extension capability"]
@@ -63,10 +63,10 @@ const agent = new Agent({
   id: "repo-helper",
   model,
 });
-const agent_workspace = agent.enter(workspace);
+// Session 在创建时选择 Workspace。
 
 try {
-  const session = await agent_workspace.sessions.create();
+  const session = await agent.sessions.create({ workspace });
   const turn = await session.prompt({ query: "Summarize this repository" });
   const result = await turn.finished;
   console.log(result.text);
@@ -78,7 +78,7 @@ try {
 Remember this primary path:
 
 ```text
-Agent + Workspace + Shell → agent.enter(workspace) → Session → prompt() → turn.finished → dispose()
+Agent + Workspace + Shell → agent.sessions.create({ workspace }) → Session → prompt() → turn.finished → dispose()
 ```
 
 `agent.dispose()` releases every AgentWorkspace it entered, including plugin lifecycle, ActionSchedule, Shell processes, PTYs, and Sandbox resources. The project directory never receives `.downcity`.

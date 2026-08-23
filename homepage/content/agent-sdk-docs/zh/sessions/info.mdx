@@ -41,7 +41,7 @@ render_header({
 
 ## 列表与详情的分工
 
-- 侧边栏：使用 `agent_workspace.sessions.list()`，避免为每个条目调用 `get_info()`。
+- 侧边栏：使用 `agent.sessions.list()`，避免为每个条目调用 `get_info()`。
 - 当前选中会话：使用 `get_info()` 更新头部和执行状态。
 - 内容区域：使用 `messages()` 加载历史，使用 `subscribe()` 保持同步。
 

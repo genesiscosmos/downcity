@@ -14,11 +14,11 @@ import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const agent = new Agent({ id: "repo-helper" });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
   shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
-}));
+});
 ```
 
 ## Tools
@@ -63,11 +63,11 @@ const shell = new Shell({
 });
 
 const agent = new Agent({ id: "repo-helper" });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
   shell,
-}));
+});
 ```
 
 只读目录必须是已存在的绝对目录，不能位于项目目录内。macOS 将其编译为 Seatbelt `file-read*` 规则，Linux 将其映射为 Bubblewrap `--ro-bind`，Windows 则把它作为只读根目录交给 MXC，或为 SRT 的独立用户添加 READ ACL；所有后端都不会增加写权限。

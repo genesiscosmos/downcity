@@ -6,7 +6,7 @@ description: Agent、Workspace、AgentWorkspace、Session、Plugin 与 Shell 的
 # Agent SDK 架构
 
 Downcity 将 Agent 主体与它执行任务的项目分开。`Agent` 拥有身份、指令、模型、自定义 Tool
-和 Plugin 注册；`Workspace` 拥有项目资源与 Shell；调用 `agent.enter(workspace)` 后才创建
+和 Plugin 注册；`Workspace` 拥有项目资源与 Shell；调用 `agent.sessions.create({ workspace })` 后才创建
 `AgentWorkspace` 执行边界。
 
 ```ts
@@ -15,8 +15,8 @@ import { Shell, Workspace } from "@downcity/workspace";
 
 const agent = new Agent({ id, model, instruction, plugins });
 const workspace = new Workspace({ id: "project", path, shell });
-const agent_workspace = agent.enter(workspace);
-const session = await agent_workspace.sessions.create();
+// Session 在创建时选择 Workspace。
+const session = await agent.sessions.create({ workspace });
 ```
 
 ## 职责模型
@@ -25,7 +25,7 @@ const session = await agent_workspace.sessions.create();
 flowchart TD
     Host["宿主应用"] --> Agent["Agent<br/>身份、模型、指令、Plugin"]
     Host --> Workspace["Workspace<br/>项目资源与 Shell"]
-    Agent --> Enter["agent.enter(workspace)"]
+    Agent --> Enter["agent.sessions.create({ workspace })"]
     Workspace --> Enter
     Enter --> AgentWorkspace["AgentWorkspace<br/>执行与私有状态"]
     AgentWorkspace --> Sessions["Sessions"]
@@ -57,8 +57,8 @@ const agent = new Agent({
   tools: { company_search: company_search_tool },
 });
 
-const frontend = agent.enter(frontend_workspace);
-const backend = agent.enter(backend_workspace);
+const frontend = await agent.sessions.create({ workspace: frontend_workspace });
+const backend = await agent.sessions.create({ workspace: backend_workspace });
 ```
 
 Plugin 只在 Agent 注册一次，不再划分单独的 Workspace Plugin。每次 Plugin Action 都会获得当前
@@ -88,7 +88,7 @@ import { Shell, Workspace } from "@downcity/workspace";
 
 ## AgentWorkspace 是执行边界
 
-`agent.enter(workspace)` 组合两个主体，但不混合它们的所有权。AgentWorkspace 负责创建：
+`agent.sessions.create({ workspace })` 组合两个主体，但不混合它们的所有权。内部 AgentWorkspace 负责创建：
 
 - Workspace Tool、Agent 自定义 Tool 与 Plugin 桥接 Tool 组成的最终工具集合。
 - `AgentSessions` 与 Agent 领域的 `LocalSessionStore`。

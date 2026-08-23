@@ -86,10 +86,10 @@ const agent = new Agent({
     ask_question: AskQuestionsTool,
   },
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 ```
 
 When missing information would materially change the outcome, the model returns a standard Tool Call:
@@ -154,7 +154,7 @@ const agent = new Agent({
   model,
   tools: { delete_file },
 });
-const agent_workspace = agent.enter(workspace);
+// Session 在创建时选择 Workspace。
 ```
 
 The approval policy belongs to the Tool, not the Agent. After the model produces a Tool Call, the

@@ -24,8 +24,8 @@ const agent = new Agent({
   id: "demo",
   model,
 });
-const agent_workspace = agent.enter(new Workspace({ id: "project", path: process.cwd() }));
-const http = new AgentHTTP(agent_workspace);
+const workspace = new Workspace({ id: "project", path: process.cwd() });
+const http = new AgentHTTP(agent, workspace);
 
 const binding = await http.server().listen({ host: "127.0.0.1", port: 5314 });
 // HTTP 服务监听在 http://127.0.0.1:5314
@@ -34,12 +34,12 @@ const binding = await http.server().listen({ host: "127.0.0.1", port: 5314 });
 ## 构造参数
 
 ```ts
-new AgentHTTP(agent_workspace: AgentWorkspace)
+new AgentHTTP(agent: Agent, workspace: Workspace)
 ```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `agent_workspace` | `AgentWorkspace` | 需要暴露的本地 Agent 执行作用域 |
+| `agent_workspace` | `AgentWorkspace` | 需要暴露的 Agent 与 Workspace |
 
 ## 方法
 

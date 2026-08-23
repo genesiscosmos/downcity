@@ -23,7 +23,7 @@ const agent = new Agent({
   plugins,
   Session,
 });
-const agent_workspace = agent.enter(workspace);
+// Session 在创建时选择 Workspace。
 ```
 
 ## `id`
@@ -44,7 +44,7 @@ agent 的稳定标识。
 
 因为它直接决定了 session 落盘目录分区。
 
-## `workspace` 与 `agent.enter(workspace)`
+## `workspace` 与 `agent.sessions.create({ workspace })`
 
 当前 Agent 可以访问的项目资源与安全边界。Workspace 统一持有项目根目录、文件与搜索工具，以及可选 Shell：
 
@@ -62,7 +62,7 @@ const workspace = new Workspace({
 - `path` 会在 Workspace 构造时解析为真实绝对目录
 - 文件和搜索工具固定限制在 Workspace 内
 - Shell 与文件工具使用同一个项目根目录
-- Agent 不在构造时绑定 Workspace；通过 `agent.enter(workspace)` 创建一个 AgentWorkspace 执行作用域
+- Agent 不在构造时绑定 Workspace；通过 `agent.sessions.create({ workspace })` 创建 Session 执行作用域
 - 同一个 Agent 可以进入多个 Workspace，每个作用域拥有独立 Session、日志、Shell 和插件上下文
 - 多个 Agent 可以指向同一目录，但使用各自的 `agent.id` 和数据分区
 
@@ -74,7 +74,7 @@ const workspace = new Workspace({
   path: "/path/to/project",
   shell,
 });
-const agent_workspace = agent.enter(workspace);
+// Session 在创建时选择 Workspace。
 ```
 
 如果 `path` 不存在、不是目录或为空，Workspace 会立即拒绝构造。
@@ -197,11 +197,11 @@ import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const agent = new Agent({ id: "repo-helper" });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
   shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
-}));
+});
 ```
 
 关键点：
@@ -229,10 +229,10 @@ const agent = new Agent({
   tools: {},
   plugins: [new SkillPlugin()],
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 ```
 
 联网能力是显式选择的，并且必须提供 provider，请参阅 [Web Plugin 文档](/zh/plugins-docs/builtins/web)。
@@ -290,10 +290,10 @@ const agent = new Agent({
   id: "repo-helper",
   session_class: CustomSession,
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 ```
 
 关键点：

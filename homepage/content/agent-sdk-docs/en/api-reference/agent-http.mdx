@@ -24,8 +24,8 @@ const agent = new Agent({
   id: "demo",
   model,
 });
-const agent_workspace = agent.enter(new Workspace({ id: "project", path: process.cwd() }));
-const http = new AgentHTTP(agent_workspace);
+const workspace = new Workspace({ id: "project", path: process.cwd() });
+const http = new AgentHTTP(agent, workspace);
 
 const binding = await http.server().listen({ host: "127.0.0.1", port: 5314 });
 // HTTP server listening on http://127.0.0.1:5314
@@ -34,7 +34,7 @@ const binding = await http.server().listen({ host: "127.0.0.1", port: 5314 });
 ## Constructor
 
 ```ts
-new AgentHTTP(agent_workspace: AgentWorkspace)
+new AgentHTTP(agent: Agent, workspace: Workspace)
 ```
 
 | Param | Type | Description |

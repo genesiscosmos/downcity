@@ -11,6 +11,9 @@
 import http from "node:http";
 import { Hono } from "hono";
 import type { AgentWorkspace } from "@/internal/index.js";
+import { create_agent_workspace } from "@/internal/index.js";
+import type { Agent } from "@/agent/Agent.js";
+import type { WorkspaceBase } from "@downcity/workspace";
 import { register_sdk_session_routes } from "@/city/transport/http/routes/SessionRoutes.js";
 import { register_runtime_routes } from "@/city/transport/http/routes/RuntimeRoutes.js";
 import { create_node_http_server } from "@/city/transport/http/NodeHttpAdapter.js";
@@ -44,9 +47,18 @@ export class AgentHTTP {
   private cached_router: Hono | null = null;
   private cached_server: AgentHttpServerHandle | null = null;
 
-  constructor(agent_workspace: AgentWorkspace, runtime_options: AgentHttpRuntimeOptions = {}) {
-    this.agent_workspace = agent_workspace;
-    this.runtime_options = runtime_options;
+  constructor(
+    agent_or_workspace: Agent | AgentWorkspace,
+    workspace_or_options?: WorkspaceBase | AgentHttpRuntimeOptions,
+    runtime_options: AgentHttpRuntimeOptions = {},
+  ) {
+    if (workspace_or_options && "id" in workspace_or_options && "path" in workspace_or_options) {
+      this.agent_workspace = create_agent_workspace(agent_or_workspace as Agent, workspace_or_options);
+      this.runtime_options = runtime_options;
+      return;
+    }
+    this.agent_workspace = agent_or_workspace as AgentWorkspace;
+    this.runtime_options = (workspace_or_options as AgentHttpRuntimeOptions | undefined) ?? {};
   }
 
   /**

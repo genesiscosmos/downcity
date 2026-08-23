@@ -30,8 +30,8 @@ import { AgentRPC } from "@downcity/agent/city";
 
 const workspace = new Workspace({ id: "project", path });
 const agent = new Agent({ id, model });
-const agent_workspace = agent.enter(workspace);
-const rpc = new AgentRPC(agent_workspace);
+// Session 在创建时选择 Workspace。
+const rpc = new AgentRPC(agent, workspace);
 await rpc.listen({ host: "127.0.0.1", port: 15314 });
 ```
 

@@ -156,7 +156,7 @@ export class CityHTTP {
       }
 
       const resolve_session_model = this.runtime_options.resolve_session_model;
-      const sdk_router = new AgentHTTP(entry, {
+      const sdk_router = new AgentHTTP(agent, entry.workspace, {
         resolve_session_model: resolve_session_model
           ? async (model_id) => await resolve_session_model(agent_id, workspace_id, model_id)
           : undefined,

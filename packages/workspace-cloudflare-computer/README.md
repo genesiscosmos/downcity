@@ -21,7 +21,7 @@ const agent = new Agent({
   id: "research-agent",
   model,
 });
-const agent_workspace = agent.enter(workspace);
+// Session 在创建时选择 Workspace。
 ```
 
 适配器内部使用 Cloudflare Computer 官方 `createAITools()` 创建文件、目录和发布工具，并自动封装 Computer Shell 为 `exec` 工具。调用方不需要配置工具；`exec` 默认使用 Computer 已配置的默认 backend，模型也可以在调用时显式选择 backend id。

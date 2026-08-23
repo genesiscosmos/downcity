@@ -29,12 +29,12 @@ const agent = new Agent({
   id: "agent",
   plugins: [new WebPlugin({ browser: "playwright", cdp_url: "http://127.0.0.1:9222" })],
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
-}));
+});
 
-const session = await agent_workspace.sessions.create();
+const session = await agent.sessions.create({ workspace });
 ```
 
 After the Agent is instantiated, you can register more plugins:

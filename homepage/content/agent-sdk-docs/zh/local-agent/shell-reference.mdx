@@ -43,11 +43,11 @@ const shell = new Shell({
 });
 
 const agent = new Agent({ id: "demo" });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
   shell,
-}));
+});
 ```
 
 Workspace 会把项目根目录绑定给 Shell，Agent 不再直接配置或持有 Shell。独立使用 Shell 时仍可以传入 `root_path`。

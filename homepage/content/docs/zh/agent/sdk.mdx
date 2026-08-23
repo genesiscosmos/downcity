@@ -27,15 +27,15 @@ const agent = new Agent({
   plugins: [plugin],
 });
 
-const agent_workspace = agent.enter(workspace);
-const session = await agent_workspace.sessions.create();
+// Session 在创建时选择 Workspace。
+const session = await agent.sessions.create({ workspace });
 const turn = await session.prompt({ query: "检查当前项目" });
 const result = await turn.finished;
 
 await agent.dispose();
 ```
 
-`Workspace` 来自 `@downcity/workspace`，拥有项目文件、搜索工具、Env、私有存储能力与可选 Shell，但不拥有 Agent 身份、Plugin 或 Session 语义。`agent.enter(workspace)` 返回的 `AgentWorkspace` 在当前 Agent 的私有存储作用域内创建 SessionStore。
+`Workspace` 来自 `@downcity/workspace`，拥有项目文件、搜索工具、Env、私有存储能力与可选 Shell，但不拥有 Agent 身份、Plugin 或 Session 语义。`agent.sessions.create({ workspace })` 在当前 Agent 的私有存储作用域内创建 SessionStore。
 
 Agent 配置不绑定 Workspace。同一个 Agent 可以进入多个 Workspace；多个 Agent 也可以通过各自的 Workspace 实例操作同一物理目录。`agent.dispose()` 会离开所有已进入的 Workspace，并释放其中的 Shell 资源。
 

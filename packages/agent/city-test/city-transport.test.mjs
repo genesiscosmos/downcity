@@ -190,12 +190,14 @@ test("CityHTTP 动态识别运行中新增和删除的 Agent", async () => {
     const agent = new Agent({
       id: "third_agent",
     });
-    await agent.sessions.create({ workspace: new Workspace({
+    const workspace = new Workspace({
       id: "third",
       path: path.join(root, "third"),
       data_root_path: path.join(root, "data"),
-    }) });
+    });
     city.agents.add(agent);
+    city.workspaces.add(workspace);
+    await agent.sessions.create({ workspace });
     const created = await transport.router().request(
       "/agents/third_agent/workspaces/third/api/sdk/sessions",
       {

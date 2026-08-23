@@ -23,7 +23,7 @@ const agent = new Agent({
   plugins,
   Session,
 });
-const agent_workspace = agent.enter(workspace);
+// Session 在创建时选择 Workspace。
 ```
 
 ## `id`
@@ -44,7 +44,7 @@ Recommended properties:
 
 That is because it directly controls the session storage partition.
 
-## `workspace` and `agent.enter(workspace)`
+## `workspace` and `agent.sessions.create({ workspace })`
 
 The project resource and security boundary available to the Agent. Workspace owns the project root, file and search tools, and an optional Shell:
 
@@ -62,7 +62,7 @@ Key points:
 - `path` is resolved to a real absolute directory during construction
 - file and search tools remain confined to the Workspace
 - Shell and file tools share the same project root
-- Agent is not bound to a Workspace at construction time; `agent.enter(workspace)` creates an AgentWorkspace execution scope
+- Agent is not bound to a Workspace at construction time; `agent.sessions.create({ workspace })` creates a Session execution scope
 - one Agent can enter multiple Workspaces, each with isolated Sessions, logs, Shell, and plugin context
 - multiple Agents may target the same directory, using distinct agent IDs and data partitions
 
@@ -74,7 +74,7 @@ const workspace = new Workspace({
   path: "/path/to/project",
   shell,
 });
-const agent_workspace = agent.enter(workspace);
+// Session 在创建时选择 Workspace。
 ```
 
 Workspace construction fails immediately when `path` is empty, missing, or not a directory.
@@ -195,11 +195,11 @@ import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const agent = new Agent({ id: "repo-helper" });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
   shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
-}));
+});
 ```
 
 Key points:
@@ -227,10 +227,10 @@ const agent = new Agent({
   tools: {},
   plugins: [new SkillPlugin()],
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 ```
 
 Web capabilities are opt-in and require an explicit provider; see the [Web Plugin guide](/en/plugins-docs/builtins/web).
@@ -288,10 +288,10 @@ const agent = new Agent({
   id: "repo-helper",
   session_class: CustomSession,
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 ```
 
 Key points:

@@ -24,8 +24,8 @@ const agent = new Agent({
   id: "demo",
   model,
 });
-const agent_workspace = agent.enter(new Workspace({ id: "project", path: process.cwd() }));
-const rpc = new AgentRPC(agent_workspace);
+const workspace = new Workspace({ id: "project", path: process.cwd() });
+const rpc = new AgentRPC(agent, workspace);
 
 const binding = await rpc.listen({ host: "127.0.0.1", port: 15314 });
 ```
@@ -33,12 +33,12 @@ const binding = await rpc.listen({ host: "127.0.0.1", port: 15314 });
 ## 构造参数
 
 ```ts
-new AgentRPC(agent_workspace: AgentWorkspace)
+new AgentRPC(agent: Agent, workspace: Workspace)
 ```
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `agent_workspace` | `AgentWorkspace` | 需要暴露的本地 Agent 执行作用域 |
+| `agent_workspace` | `AgentWorkspace` | 需要暴露的 Agent 与 Workspace |
 
 ## 方法
 

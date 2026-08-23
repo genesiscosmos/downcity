@@ -26,7 +26,8 @@ Subscribe before calling `prompt()`. A subscription only receives future Mutatio
 ## A complete local example
 
 ```ts
-const session = await agent_workspace.sessions.create({
+const session = await agent.sessions.create({
+  workspace,
   session_id: "repo-analysis",
 });
 
@@ -134,7 +135,7 @@ Remote clients do not participate in model selection. IDs, defaults, and recover
 
 ## API map
 
-- Manage local Sessions: `agent_workspace.sessions.create/get/list/archive/archived/clean_archive/remove/clear_messages()`
+- Manage local Sessions: `agent.sessions.create/get/list/archive/archived/clean_archive/remove/clear_messages()`
 - Input and completion: `session.prompt()` and `turn.finished`
 - Read and stream: `session.messages()`, `session.get_info()`, and `session.subscribe()`
 - Rename a local Session: `session.rename(title)`

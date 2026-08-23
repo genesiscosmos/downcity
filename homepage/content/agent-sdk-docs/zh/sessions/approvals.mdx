@@ -87,10 +87,10 @@ const agent = new Agent({
     ask_question: AskQuestionsTool,
   },
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 ```
 
 模型缺少会实质影响结果的信息时，返回标准 Tool Call：
@@ -153,7 +153,7 @@ const agent = new Agent({
   model,
   tools: { delete_file },
 });
-const agent_workspace = agent.enter(workspace);
+// Session 在创建时选择 Workspace。
 ```
 
 审批策略属于 Tool，不属于 Agent。模型产生 Tool Call 后，AI SDK 先完成 schema 校验；

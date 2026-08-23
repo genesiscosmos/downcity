@@ -18,10 +18,10 @@ const agent = new Agent({
   id: "repo-helper",
   model,
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-}));
+});
 ```
 
 或者：
@@ -33,7 +33,7 @@ await session.set({ model });
 ## 正确顺序
 
 ```ts
-const session = await agent_workspace.sessions.create();
+const session = await agent.sessions.create({ workspace });
 const turn = await session.prompt({ query: "继续" });
 await turn.finished;
 ```
