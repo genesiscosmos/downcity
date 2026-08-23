@@ -309,6 +309,4 @@ export interface ImagePluginProfile {
 
 /** ImagePlugin 构造参数。 */
 export interface ImagePluginOptions extends ImagePluginProfile {
-  /** 图片 AI 服务；通常来自 Embassy User AI。 */
-  image_ai: ImageAiService;
 }

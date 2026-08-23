@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 对 Agent 暴露 `image_create` / `image_result` 两步式任务 action。
- * - 图片 AI 通过构造参数注入窄服务接口；Workspace 文件能力由运行时 Context 提供。
+ * - 图片 AI 从运行时 Context 的 City 环境读取；Workspace 文件能力由运行时 Context 提供。
  * - 成功结果中的远程图片会写入 Workspace，并同时保留本地引用与在线来源地址。
  */
 
@@ -19,6 +19,7 @@ import type {
 } from "@downcity/agent";
 import type {
   ImagePluginInput,
+  ImageAiService,
   ImagePluginJobCreateResult,
   ImagePluginJobResult,
   ImagePluginJobResultInput,
@@ -50,6 +51,17 @@ const DEFAULT_IMAGE_MEDIA_TYPE = "image/png";
 const DEFAULT_IMAGE_WAIT_MS = 60_000;
 const DEFAULT_IMAGE_POLL_MS = 1_500;
 const MAX_IMAGE_WAIT_MS = 10 * 60_000;
+
+/** 从当前 Agent 所在 City 获取图片 AI 服务。 */
+function require_image_ai(context: PluginContext): ImageAiService {
+  const service = context.city?.embassy?.user.ai;
+  if (!service) throw new Error("ImagePlugin requires a City Embassy user AI service");
+  return {
+    catalog: async () => await service.catalog(),
+    image_create: async (input) => await service.image_create(input as never),
+    image_result: async (input) => await service.image_result(input as never),
+  };
+}
 
 /**
  * 判断任务状态是否已到达终态。
@@ -504,14 +516,10 @@ export class ImagePlugin extends BasePlugin {
    */
   readonly description: string;
 
-  /** 当前实例使用的图片 AI 服务。 */
-  private readonly image_ai: ImagePluginOptions["image_ai"];
-
   private readonly default_model?: ImagePluginDefaultModel;
 
   constructor(options: ImagePluginOptions) {
     super();
-    this.image_ai = options.image_ai;
     const name = String(options.name || DEFAULT_IMAGE_PLUGIN_NAME).trim();
     if (!name) {
       throw new Error("ImagePlugin requires a non-empty name");
@@ -605,7 +613,7 @@ export class ImagePlugin extends BasePlugin {
     job_id: string,
     context: PluginContext,
   ): Promise<ImagePluginJobResult> {
-    const current = await this.image_ai.image_result({ job_id }) as unknown as ImagePluginJobResult;
+    const current = await require_image_ai(context).image_result({ job_id }) as unknown as ImagePluginJobResult;
     validate_job_result(current);
     if (current.status === "succeeded" && current.result) {
       normalize_image_result(current.result);
@@ -622,7 +630,7 @@ export class ImagePlugin extends BasePlugin {
       input_schema: z.object({}).passthrough(),
       execute: async ({ context }) => {
         try {
-          const models = await this.image_ai.catalog().then((catalog) => catalog.all()) as unknown as ImagePluginModel[];
+          const models = await require_image_ai(context).catalog().then((catalog) => catalog.all()) as unknown as ImagePluginModel[];
           const result = normalize_image_models(models);
           return {
             success: true,
@@ -718,7 +726,7 @@ export class ImagePlugin extends BasePlugin {
             await normalize_image_create_input(context, normalized_payload),
             this.default_model,
           );
-          const created = await this.image_ai.image_create(normalized_input as unknown as JsonObject) as unknown as ImagePluginJobCreateResult;
+          const created = await require_image_ai(context).image_create(normalized_input as unknown as JsonObject) as unknown as ImagePluginJobCreateResult;
           validate_created_job(created);
           return {
             success: true,

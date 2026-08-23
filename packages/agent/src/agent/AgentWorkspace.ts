@@ -27,7 +27,7 @@ import {
   resolve_session_system_messages,
   type SystemProfile,
 } from "@/executor/composer/system/default/SystemDomain.js";
-import { agent_is_in_city, release_agent_workspace } from "@/internal/AgentRuntime.js";
+import { agent_city, agent_is_in_city, release_agent_workspace } from "@/internal/AgentRuntime.js";
 
 const RESERVED_PLUGIN_TOOL_NAMES = new Set(["plugin_read", "plugin_call"]);
 
@@ -128,6 +128,7 @@ export class AgentWorkspace {
       data_files: storage.files,
       ...(this.workspace.shell ? { shell: this.workspace.shell } : {}),
       logger: this.logger,
+      city: agent_city(this.agent),
       get_workspace_env: () => this.workspace.get_env(),
       get_instructions: () => this.agent.get_instructions(),
       get_plugins: () => {

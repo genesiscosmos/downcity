@@ -28,6 +28,8 @@ export interface CreatePluginContextInput {
   logger: PluginContext["logger"];
   /** 当前 Agent 的 Web 搜索与文档能力。 */
   web?: PluginContext["web"];
+  /** 当前 Agent 所在的 City 环境。 */
+  city?: PluginContext["city"];
   /** 延迟读取当前 AgentWorkspace Session 集合。 */
   get_sessions: () => PluginContext["sessions"];
   /** 延迟读取当前 AgentWorkspace 的 Plugin 注册表视图。 */
@@ -52,6 +54,7 @@ export function create_plugin_context(
     ...(input.shell ? { shell: input.shell } : {}),
     logger: input.logger,
     ...(input.web ? { web: input.web } : {}),
+    ...(input.city ? { city: input.city } : {}),
     get sessions() {
       return input.get_sessions();
     },

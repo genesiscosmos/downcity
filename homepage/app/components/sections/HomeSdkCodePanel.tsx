@@ -59,7 +59,7 @@ function create_code_groups(locale: "zh" | "en") {
       { key: "user-prompt", start_step: 15, order: 32, lines: [`await session.prompt({ query: "${locale === "zh" ? "总结当前仓库" : "Summarize this repository"}" });`] },
     ],
     city: [
-      { key: "city-import", start_step: 6, order: 0, lines: ['import { City } from "@downcity/city";'] },
+      { key: "city-import", start_step: 6, order: 0, lines: ['import { City } from "@downcity/agent";'] },
       { key: "city-build", start_step: 6, order: 1, lines: ["", "const city = new City({ workspaces: [workspace] });"] },
       { key: "city-research", start_step: 7, order: 2, lines: ["", "const shared_workspace = city.workspaces.get(\"project\");"] },
       { key: "city-operations", start_step: 8, order: 3, lines: ["", "const reviewer = new Agent({ id: \"reviewer\" });", "city.agents.add(reviewer);"] },

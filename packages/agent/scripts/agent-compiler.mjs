@@ -21,6 +21,8 @@ const packageRoot = path.resolve(__dirname, "..");
 const srcRoot = path.join(packageRoot, "src");
 const tsc_entry = module_require.resolve("typescript/bin/tsc");
 const tsc_alias_entry = module_require.resolve("tsc-alias/dist/bin/index.js");
+const rewrite_alias_script = path.join(packageRoot, "scripts/rewrite-build-aliases.mjs");
+const verify_alias_script = path.join(packageRoot, "scripts/verify-build-aliases.mjs");
 const generatedHeader = [
   "/**",
   " * 自动生成文件，请勿手改。",
@@ -124,6 +126,8 @@ async function runBuild() {
   ]);
   await spawnCommand(process.execPath, [tsc_entry]);
   await spawnCommand(process.execPath, [tsc_alias_entry, "-f"]);
+  await spawnCommand(process.execPath, [rewrite_alias_script]);
+  await spawnCommand(process.execPath, [verify_alias_script]);
 }
 
 async function runTypecheck() {

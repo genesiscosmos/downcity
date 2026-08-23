@@ -7,10 +7,10 @@
 import type { WorkspaceBase } from "@downcity/workspace";
 import { Agent } from "@/agent/Agent.js";
 import { AgentWorkspace } from "@/agent/AgentWorkspace.js";
-import type { AgentCity } from "@/types/agent/AgentOptions.js";
+import type { City } from "../city/index.js";
 
 interface AgentRuntimeState {
-  bound_city?: AgentCity;
+  bound_city?: City;
   workspaces_by_id: Map<string, AgentWorkspace>;
 }
 
@@ -26,7 +26,7 @@ function runtime_state(agent: Agent): AgentRuntimeState {
   return state;
 }
 
-export function attach_agent_city(agent: Agent, city: AgentCity): void {
+export function attach_agent_city(agent: Agent, city: City): void {
   const state = runtime_state(agent);
   if (state.bound_city && state.bound_city !== city) {
     throw new Error(`Agent "${agent.id}" already belongs to another City`);
@@ -34,12 +34,12 @@ export function attach_agent_city(agent: Agent, city: AgentCity): void {
   state.bound_city = city;
 }
 
-export function detach_agent_city(agent: Agent, city: AgentCity): void {
+export function detach_agent_city(agent: Agent, city: City): void {
   const state = runtime_state(agent);
   if (state.bound_city === city) state.bound_city = undefined;
 }
 
-export function agent_city(agent: Agent): AgentCity | undefined {
+export function agent_city(agent: Agent): City | undefined {
   return runtime_state(agent).bound_city;
 }
 

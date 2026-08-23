@@ -12,6 +12,7 @@ import type { FileSystem } from "@downcity/workspace";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { WorkspaceShell } from "@downcity/workspace";
 import type { PluginWebServices } from "@/types/plugin/PluginServices.js";
+import type { City } from "../../city/index.js";
 
 /** Agent 向 Plugin 开放的最小、稳定运行时能力。 */
 export interface PluginContext {
@@ -41,6 +42,9 @@ export interface PluginContext {
 
   /** 当前 Agent 持有的 Web 搜索与文档能力。 */
   readonly web?: PluginWebServices;
+
+  /** 当前 Agent 所在的完整 City 环境；Agent 未加入 City 时为空。 */
+  readonly city?: City;
 
   /** 当前 Agent 的 Session 集合入口。 */
   readonly sessions: AgentSessions;

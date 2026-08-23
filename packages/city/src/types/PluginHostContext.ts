@@ -8,7 +8,6 @@
  * - Agent 不反向依赖 City，也不读取 Plugin 安装目录。
  */
 
-import type { Embassy } from "@downcity/federation";
 import type { JsonObject, Logger } from "@downcity/agent";
 
 /** City 可以为未来宿主能力增加的显式扩展集合。 */
@@ -21,9 +20,6 @@ export interface PluginHostContext {
 
   /** City 读取并校验后的 Plugin profile。 */
   readonly profile: JsonObject;
-
-  /** 当前 Embassy 用户客户端；没有登录态的离线装配可以缺省。 */
-  readonly embassy?: Embassy;
 
   /** Plugin 运行时私有数据目录；不用于存放 City 管理的 profile 配置。 */
   readonly data_path: string;

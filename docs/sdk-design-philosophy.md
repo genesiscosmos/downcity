@@ -216,7 +216,7 @@ City 可以持有 Embassy，让多个 Agent 在同一宿主环境下使用同一
 
 ```ts
 import { Agent } from "@downcity/agent";
-import { City } from "@downcity/city";
+import { City } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";
 import { ImagePlugin } from "@downcity/plugins";
 

@@ -8,6 +8,7 @@
 
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { PluginWebServices } from "@/types/plugin/PluginServices.js";
+import type { City } from "../../city/index.js";
 
 /** Plugin 的 Agent 级生命周期上下文。 */
 export interface AgentPluginContext {
@@ -19,6 +20,9 @@ export interface AgentPluginContext {
 
   /** 当前 Agent 持有的 Web 搜索与文档能力。 */
   readonly web?: PluginWebServices;
+
+  /** 当前 Agent 所在的完整 City 环境；Agent 未加入 City 时为空。 */
+  readonly city?: City;
 
   /** 动态读取当前 Agent 静态指令的只读快照。 */
   readonly instructions: readonly string[];

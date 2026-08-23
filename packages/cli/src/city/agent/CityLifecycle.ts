@@ -23,7 +23,7 @@ import { list_agent_configs } from "@/city/process/registry/AgentConfigRepositor
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { CliError } from "@/shared/CliError.js";
 import { run_city_foreground } from "@/city/agent/Run.js";
-import { read_city_host_state, request_city_host_shutdown } from "@downcity/city";
+import { read_city_host_state, request_city_host_shutdown } from "@downcity/agent/city";
 import prompts from "@/city/tui/Prompts.js";
 
 /** 启动 City；foreground=true 时由当前进程直接持有。 */

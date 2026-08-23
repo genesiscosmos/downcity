@@ -14,7 +14,7 @@ description: 分清权威后端、业务分区、访问窗口与 Agent 宿主。
 
 ```ts
 import { Embassy, Federation } from "@downcity/federation";
-import { City } from "@downcity/city";
+import { City } from "@downcity/agent";
 
 const federation = new Federation({ database });
 const embassy = new Embassy({ federation_url: "https://fed.example.com" });

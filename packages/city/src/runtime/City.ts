@@ -12,7 +12,6 @@ import {
   create_agent_workspace,
   detach_agent_city,
   get_agent_workspace,
-  type AgentCity,
   type AgentWorkspace,
 } from "@downcity/agent/internal";
 import type { WorkspaceBase } from "@downcity/workspace";
@@ -27,7 +26,7 @@ import type {
 } from "@/types/City.js";
 
 /** Agent 实例索引与 transport 宿主。 */
-export class City implements AgentCity {
+export class City {
   /** 当前 City 引用的 Agent，按稳定 ID 索引。 */
   private readonly agents_by_id = new Map<string, Agent>();
 

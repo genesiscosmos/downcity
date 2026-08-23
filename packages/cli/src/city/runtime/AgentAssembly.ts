@@ -19,7 +19,6 @@ import { Shell, Workspace } from "@downcity/workspace";
 import {
   create_builtin_plugin_registrations,
 } from "@downcity/plugins";
-import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
 import { createCityAiAgentModel } from "@/city/runtime/city-model/CityAiServiceBinding.js";
 import { resolve_local_agent_env } from "@downcity/local/product";
 import { resolve_local_root_path } from "@downcity/local";
@@ -65,14 +64,12 @@ export async function create_cli_agent(input: {
   /** 可选的 Downcity 用户级数据根目录。 */
   root_path?: string;
 }): Promise<Agent> {
-  const { embassy } = await new EmbassySessionResolver().create_user_client();
   const root_path = resolve_local_root_path(input.root_path);
   const [model, plugins, tools] = await Promise.all([
     Promise.resolve(create_cli_agent_model(input.config, process_environment())),
     input.plugin_loader.create_plugins(input.config, ({ plugin_id, profile }) => ({
       plugin_id,
       profile,
-      embassy,
       data_path: path.join(
         root_path,
         "agents",

@@ -7,7 +7,7 @@ import { create_desktop_local_data } from "@/agent/DesktopLocalData.js";
 import { DesktopSettingsController } from "@/settings/DesktopSettingsController.js";
 import { DesktopUserController } from "@/user/DesktopUserController.js";
 import { PluginController } from "@/plugin/PluginController.js";
-import { read_city_host_state, request_city_host_shutdown } from "@downcity/city";
+import { read_city_host_state, request_city_host_shutdown } from "@downcity/agent/city";
 import type {
   DesktopChatInput,
   DesktopChatMutationEvent,

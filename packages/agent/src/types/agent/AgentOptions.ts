@@ -15,19 +15,6 @@ import type {
   SessionOptions,
 } from "@/types/session/SessionOptions.js";
 
-/** Agent 可绑定的 City 最小结构，避免 Agent 反向依赖 @downcity/city。 */
-export interface AgentCity {
-  /** 按 ID 返回 City 持有的 Workspace。 */
-  get_workspace(workspace_id: string): import("@downcity/workspace").WorkspaceBase | null;
-  /**
-   * 释放 City 对 Agent 的运行时引用。
-   *
-   * 该方法只供 City 与 Agent 的内部生命周期协议使用，应用代码应使用
-   * `city.agents.remove()` 管理 Agent。
-   */
-  release_agent(agent: { readonly id: string }): void;
-}
-
 /**
  * Agent 可使用的 Session 类。
  *

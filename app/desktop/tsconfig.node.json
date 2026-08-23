@@ -11,6 +11,10 @@
     "paths": {
       "@/*": ["src/main/*"],
       "@downcity/agent": ["../../packages/agent/bin/index.d.ts"],
+      "@downcity/agent/agent": ["../../packages/agent/bin/agent/index.d.ts"],
+      "@downcity/agent/city": ["../../packages/agent/bin/city/index.d.ts"],
+      "@downcity/agent/internal": ["../../packages/agent/bin/internal/index.d.ts"],
+      "@downcity/agent/tools": ["../../packages/agent/bin/tools/index.d.ts"],
       "@downcity/city": ["../../packages/city/bin/index.d.ts"],
       "@downcity/federation": ["../../packages/federation/bin/index.d.ts"],
       "@downcity/local": ["../../packages/local/bin/index.d.ts"],

@@ -17,7 +17,6 @@
   "dependencies": {
     "@base-ui/react": "^1.5.0",
     "@downcity/agent": "workspace:^",
-    "@downcity/city": "workspace:^",
     "@downcity/federation": "workspace:^",
     "@downcity/local": "workspace:^",
     "@downcity/plugins": "workspace:^",

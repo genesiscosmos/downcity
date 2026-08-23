@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 对 Agent 暴露 `models`、`asr`、`tts` 三个 action。
- * - 模型目录与真实 ASR/TTS 能力通过构造参数注入窄服务接口。
+ * - 模型目录与真实 ASR/TTS 能力从运行时 Context 的 City 环境读取。
  * - 本地音频只负责读取并转换为 data URL，不加载或运行任何本地语音模型。
  * - TTS 返回已经落盘的本地音频 UIMessage Parts，并由 Action 声明 Assistant Message。
  */
@@ -20,6 +20,7 @@ import type {
 } from "@/chat/types/ChatPlugin.js";
 import type {
   SoundPluginAsrInput,
+  SoundAiService,
   SoundPluginAsrResult,
   SoundPluginAsrSegment,
   SoundPluginCapability,
@@ -35,6 +36,17 @@ const DEFAULT_SOUND_PLUGIN_TITLE = "Sound";
 const DEFAULT_SOUND_PLUGIN_DESCRIPTION =
   "Transcribe audio and synthesize speech through FED-provided models.";
 const DEFAULT_AUDIO_MEDIA_TYPE = "audio/mpeg";
+
+/** 从当前 Agent 所在 City 获取语音 AI 服务。 */
+function require_sound_ai(context: PluginContext): SoundAiService {
+  const service = context.city?.embassy?.user.ai;
+  if (!service) throw new Error("SoundPlugin requires a City Embassy user AI service");
+  return {
+    catalog: async () => await service.catalog(),
+    asr: async (input) => await service.asr(input as never),
+    tts: async (input) => await service.tts(input as never),
+  };
+}
 
 const AUDIO_MEDIA_TYPES: Record<string, string> = {
   ".aac": "audio/aac",
@@ -439,12 +451,8 @@ export class SoundPlugin extends BasePlugin {
   private readonly language?: string;
   private readonly voice?: string;
   private readonly format?: string;
-  /** 当前实例使用的语音 AI 服务。 */
-  private readonly sound_ai: SoundPluginOptions["sound_ai"];
-
   constructor(options: SoundPluginOptions) {
     super();
-    this.sound_ai = options.sound_ai;
     const name = normalize_optional_string(options.name) ?? DEFAULT_SOUND_PLUGIN_NAME;
     const default_asr_model = normalize_optional_string(options.default_asr_model);
     if (options.auto_asr === true && !default_asr_model) {
@@ -510,7 +518,7 @@ export class SoundPlugin extends BasePlugin {
       model,
     });
     return normalize_asr_result(
-      await this.sound_ai.asr(resolved_input as unknown as JsonObject) as unknown as SoundPluginAsrResult,
+      await require_sound_ai(context).asr(resolved_input as unknown as JsonObject) as unknown as SoundPluginAsrResult,
     );
   }
 
@@ -519,7 +527,7 @@ export class SoundPlugin extends BasePlugin {
    */
   private async synthesize(context: PluginContext, input: SoundPluginTtsInput): Promise<SoundPluginTtsResult> {
     const model = resolve_model_id("tts", input.model, this.default_tts_model);
-    const result = await this.sound_ai.tts({
+    const result = await require_sound_ai(context).tts({
       ...(this.language ? { language: this.language } : {}),
       ...(this.voice ? { voice: this.voice } : {}),
       ...(this.format ? { format: this.format } : {}),
@@ -606,7 +614,7 @@ export class SoundPlugin extends BasePlugin {
         try {
           const capability = normalize_models_capability(input);
           const result = normalize_sound_models(
-            await this.sound_ai.catalog().then((catalog) => catalog.all()) as unknown as SoundPluginModel[],
+            await require_sound_ai(context).catalog().then((catalog) => catalog.all()) as unknown as SoundPluginModel[],
             capability,
           );
           return {

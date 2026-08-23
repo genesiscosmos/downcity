@@ -7,6 +7,7 @@
 
 import {
   Agent,
+  City,
   get_logger,
   type AgentSession,
   type AgentSessionPromptInput,
@@ -14,15 +15,16 @@ import {
   type RespondSessionInteractionInput,
   type SessionApprovalMode,
   type SessionMutationUnsubscribe,
+  type SessionMessage,
+  type SessionMutation,
 } from "@downcity/agent";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
-  City,
   create_city_host_instance_id,
   register_city_host,
   unregister_city_host,
-} from "@downcity/city";
+} from "@downcity/agent/city";
 import { create_agent_workspace, get_agent_workspace } from "@downcity/agent/internal";
 import {
   type LocalAgentConfig,
@@ -77,7 +79,7 @@ export class AgentController {
   /** Desktop 读取本地 Plugin 定义与 profile 的 Loader。 */
   private readonly plugin_loader: LocalPluginLoader;
   /** Desktop 进程内的 Agent 索引与 transport 转发器。 */
-  private readonly city = new City();
+  private readonly city: City;
   /** 当前 Desktop City 宿主实例标识。 */
   private readonly host_instance_id = create_city_host_instance_id();
   /** 已订阅 Session 的取消订阅函数。 */
@@ -93,6 +95,7 @@ export class AgentController {
     private readonly data: DesktopLocalData,
     private readonly events: AgentControllerEvents,
   ) {
+    this.city = new City({ embassy: create_desktop_embassy(data, process.env) });
     this.plugin_loader = create_desktop_plugin_loader(this.data);
     this.ready_promise = this.initialize_agents();
   }
@@ -363,7 +366,7 @@ export class AgentController {
     const session = await this.get_session(agent_id, workspace_id, session_id);
     const page = await session.messages();
     return {
-      messages: page.items.filter((message) => message.visibility === "visible"),
+      messages: page.items.filter((message: SessionMessage) => message.visibility === "visible"),
       runtime: await this.read_runtime(agent_id, workspace_id, session),
       has_more: page.has_more,
       ...(page.next_before_sequence ? { next_before_sequence: page.next_before_sequence } : {}),
@@ -380,7 +383,7 @@ export class AgentController {
     const session = await this.get_session(agent_id, workspace_id, session_id);
     const page = await session.messages({ before_sequence });
     return {
-      messages: page.items.filter((message) => message.visibility === "visible"),
+      messages: page.items.filter((message: SessionMessage) => message.visibility === "visible"),
       has_more: page.has_more,
       ...(page.next_before_sequence ? { next_before_sequence: page.next_before_sequence } : {}),
     };
@@ -526,7 +529,6 @@ export class AgentController {
       this.plugin_loader.create_plugins(config, ({ plugin_id, profile }) => ({
         plugin_id,
         profile,
-        embassy: create_desktop_embassy(this.data, process.env),
         data_path: path.join(
           this.data.root_path,
           "agents",
@@ -560,7 +562,7 @@ export class AgentController {
   private observe_session(agent_id: string, workspace_id: string, session: AgentSession): void {
     const session_key = get_session_key(agent_id, workspace_id, session.id);
     if (this.session_unsubscribes.has(session_key)) return;
-    const unsubscribe = session.subscribe((mutation) => {
+    const unsubscribe = session.subscribe((mutation: SessionMutation) => {
       this.events.mutation({ agent_id, workspace_id, session_id: session.id, mutation });
       if (mutation.variant === "part" && mutation.type === "interaction") {
         const current = this.runtimes.get(session_key);

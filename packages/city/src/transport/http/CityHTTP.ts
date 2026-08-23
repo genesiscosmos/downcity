@@ -145,7 +145,7 @@ export class CityHTTP {
       const agent = this.city.agents.get(agent_id);
       if (!agent || get_agent_workspace(agent, workspace_id) !== entry) return null;
       const cached = this.routers_by_workspace.get(route_key);
-      if (cached?.entry === entry) return cached.router;
+      if (cached && cached.entry === entry) return cached.router;
       if (cached) {
         const dispose = this.extension_disposers.get(route_key);
         if (dispose) await dispose();

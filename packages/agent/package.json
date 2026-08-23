@@ -1,6 +1,6 @@
 {
   "name": "@downcity/agent",
-  "version": "1.1.363",
+  "version": "1.1.364",
   "type": "module",
   "description": "Downcity 单 Agent SDK 与执行运行时",
   "main": "./bin/index.js",
@@ -9,6 +9,14 @@
     ".": {
       "import": "./bin/index.js",
       "types": "./bin/index.d.ts"
+    },
+    "./agent": {
+      "import": "./bin/agent/index.js",
+      "types": "./bin/agent/index.d.ts"
+    },
+    "./city": {
+      "import": "./bin/city/index.js",
+      "types": "./bin/city/index.d.ts"
     },
     "./tools": {
       "import": "./bin/tools/index.js",
@@ -29,6 +37,7 @@
     "postpack": "node ../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"
   },
   "dependencies": {
+    "@downcity/city": "workspace:^",
     "@downcity/workspace": "workspace:^",
     "@downcity/type": "workspace:*",
     "ai": "^6.0.193",

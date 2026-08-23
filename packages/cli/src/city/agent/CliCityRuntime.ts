@@ -5,13 +5,13 @@
  * 与一个 RPC Server。Agent 不拥有独立端口。
  */
 
-import { Agent } from "@downcity/agent";
+import { Agent, City } from "@downcity/agent";
 import {
-  City,
   create_city_host_instance_id,
   register_city_host,
   unregister_city_host,
-} from "@downcity/city";
+} from "@downcity/agent/city";
+import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
 import type { CityDaemonOptions } from "@/city/process/daemon/Types.js";
 import { create_agent_http_gateway_app } from "@/city/agent/AgentHttpGateway.js";
 import { AuthService } from "@/city/runtime/auth/AuthService.js";
@@ -86,7 +86,8 @@ export class CliCityRuntime {
       port: http_port,
       plugin_repository: data.plugins,
     });
-    const city = new City({ runtime: {
+    const { embassy } = await new EmbassySessionResolver().create_user_client();
+    const city = new City({ embassy, runtime: {
       resolve_workspace: async (_agent, workspace_id) => {
         const workspace_config = data.workspaces.get(workspace_id);
         if (!workspace_config) throw new Error(`Workspace not found: ${workspace_id}`);

@@ -9,6 +9,19 @@
 
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
+export { City } from "./city/index.js";
+export type {
+  CityAgents,
+  CityListenOptions,
+  CityOptions,
+  CityRuntimeOptions,
+  CityWorkspaces,
+} from "./city/index.js";
+export type {
+  PluginHostContext,
+  PluginHostExtensions,
+  PluginSetupModule,
+} from "./city/index.js";
 export type { SessionStore } from "./types/store/SessionStore.js";
 export type {
   CompactActiveMessagesInput,

@@ -166,6 +166,4 @@ export interface SoundPluginProfile {
 
 /** SoundPlugin 构造参数。 */
 export interface SoundPluginOptions extends SoundPluginProfile {
-  /** 语音 AI 服务；通常来自 Embassy User AI。 */
-  sound_ai: SoundAiService;
 }

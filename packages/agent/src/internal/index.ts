@@ -4,7 +4,6 @@
  * Agent 运行时内部协议。应用代码不应依赖此入口；它不属于 SDK 公共领域 API。
  */
 export { AgentWorkspace } from "@/agent/AgentWorkspace.js";
-export type { AgentCity } from "@/types/agent/AgentOptions.js";
 export {
   initialize_agent_runtime,
   attach_agent_city,
