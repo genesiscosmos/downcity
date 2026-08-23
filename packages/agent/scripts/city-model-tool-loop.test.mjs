@@ -17,6 +17,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { Agent } from "../bin/index.js";
+import { create_agent_workspace } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 import { create_action, create_plugin } from "../bin/plugin/core/PluginActionFactory.js";
 import { CITY_MODEL_KIND } from "@downcity/type";
@@ -163,7 +164,7 @@ test("CityModel uses direct LanguageModel path and sends tool result back", asyn
       }),
     },
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const entry = create_agent_workspace(agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
 
   try {
     const session = await entry.sessions.create();

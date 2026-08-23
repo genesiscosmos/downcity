@@ -193,6 +193,6 @@ flowchart LR
     Workspace --> Shell["close processes and Sandbox"]
 ```
 
-Sessions wait on the internal initialization barrier before execution. `dispose()` releases Agent, Plugin, Schedule, Workspace, and Shell resources, but it does not close HTTP/RPC transports created by `@downcity/city`.
+Sessions wait on the internal initialization barrier before execution. `dispose()` releases Agent, Plugin, Schedule, Workspace, and Shell resources, but it does not close HTTP/RPC transports created by `@downcity/agent`.
 
 Continue with [Agent Lifecycle](/en/docs/agent/lifecycle).

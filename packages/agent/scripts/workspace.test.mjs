@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent } from "../bin/index.js";
+import { create_agent_workspace } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 
 test("Workspace resolves the Downcity data root internally", async (t) => {
@@ -18,7 +19,7 @@ test("Workspace resolves the Downcity data root internally", async (t) => {
   const previous_root = process.env.DC_PLATFORM_ROOT;
   process.env.DC_PLATFORM_ROOT = platform_root;
   const agent = new Agent({ id: "internal-root-agent" });
-  const entry = agent.enter(new Workspace({
+  const entry = create_agent_workspace(agent, new Workspace({
     id: "internal-root-workspace",
     path: project_path,
   }));
@@ -48,7 +49,7 @@ test("Workspace exposes file tools without requiring Shell", async (t) => {
 
   const workspace = new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") });
   const agent = new Agent({ id: "workspace-files" });
-  const entry = agent.enter(workspace);
+  const entry = create_agent_workspace(agent, workspace);
   t.after(async () => {
     await agent.dispose();
     await fs.rm(root_path, { recursive: true, force: true });
@@ -66,7 +67,7 @@ test("Workspace exposes file tools without requiring Shell", async (t) => {
   assert.equal(entry.get_shell(), undefined);
 });
 
-test("one Workspace instance enters one Agent and is disposed with it", async (t) => {
+test("one unbound Workspace instance belongs to one Agent", async (t) => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-shared-"));
   t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
   let dispose_count = 0;
@@ -93,15 +94,14 @@ test("one Workspace instance enters one Agent and is disposed with it", async (t
   const workspace = new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data"), shell });
   const agent = new Agent({ id: "workspace-first" });
   const second_agent = new Agent({ id: "workspace-second" });
-  agent.enter(workspace);
+  create_agent_workspace(agent, workspace);
   assert.throws(
-    () => second_agent.enter(workspace),
+    () => create_agent_workspace(second_agent, workspace),
     /already bound to another scope/,
   );
 
   await agent.dispose();
   await second_agent.dispose();
-  await agent.dispose();
   assert.equal(dispose_count, 1);
 });
 
@@ -110,8 +110,8 @@ test("separate Workspace instances may use the same directory", async (t) => {
   t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
   const first_agent = new Agent({ id: "workspace-directory-first" });
   const second_agent = new Agent({ id: "workspace-directory-second" });
-  const first_entry = first_agent.enter(new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
-  const second_entry = second_agent.enter(new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
+  const first_entry = create_agent_workspace(first_agent, new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
+  const second_entry = create_agent_workspace(second_agent, new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
   assert.notEqual(first_entry.data_path, second_entry.data_path);
   await first_entry.sessions.create({ session_id: "first-session" });
   await second_entry.sessions.create({ session_id: "second-session" });
@@ -136,12 +136,12 @@ test("Session IDs are isolated by Agent in one Workspace", async (t) => {
   const data_root_path = path.join(root_path, "data");
   const first_agent = new Agent({ id: "session-owner-first" });
   const second_agent = new Agent({ id: "session-owner-second" });
-  const first_entry = first_agent.enter(new Workspace({
+  const first_entry = create_agent_workspace(first_agent, new Workspace({
     id: "test_workspace",
     path: root_path,
     data_root_path,
   }));
-  const second_entry = second_agent.enter(new Workspace({
+  const second_entry = create_agent_workspace(second_agent, new Workspace({
     id: "test_workspace",
     path: root_path,
     data_root_path,
@@ -216,7 +216,7 @@ test("Agent rejects Workspace, Plugin and custom Tool name conflicts", async (t)
     tools: { read: {} },
   });
   assert.throws(
-    () => workspace_conflict_agent.enter(
+    () => create_agent_workspace(workspace_conflict_agent,
       new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }),
     ),
     /Agent tool name conflict: "read"/,
@@ -226,7 +226,7 @@ test("Agent rejects Workspace, Plugin and custom Tool name conflicts", async (t)
     tools: { plugin_call: {} },
   });
   assert.throws(
-    () => plugin_conflict_agent.enter(
+    () => create_agent_workspace(plugin_conflict_agent,
       new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }),
     ),
     /reserved for PluginRegistry/,

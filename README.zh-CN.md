@@ -25,8 +25,7 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 | --- | --- |
 | `downcity` | 公共 CLI 聚合包：`city`/`downcity` 是管理 Agent、运行时与控制台的本机 City 容器；`fed`/`downfed` 是 Federation Server Manager。 |
 | `@downcity/workspace` | Workspace 资源、文件/搜索工具、环境变量、私有存储与内建 Shell。 |
-| `@downcity/agent` | 单 Agent runtime，负责 AgentWorkspace、Session、Plugin SDK、Tool 与 RemoteAgent。 |
-| `@downcity/city` | Agent 宿主，负责多 Agent 所有权、本地持久化装配与 Agent HTTP/RPC transport。 |
+| `@downcity/agent` | Agent runtime 与 City 容器，负责 AgentWorkspace、Session、Plugin SDK、多 Agent 所有权及 HTTP/RPC transport。 |
 | `@downcity/federation` | Federation 运行时与 Embassy SDK，负责 Service、鉴权、Env、Bureau、User 与 Admin 访问。 |
 | `@downcity/type` | 跨 package 共享协议类型，包含 City 返回的 City 模型描述等核心类型。 |
 | `@downcity/services` | 公共服务集合，负责 accounts、balance、usage、payment 与 Stripe 支付闭环。 |
@@ -151,9 +150,8 @@ const workspace = new Workspace({
   shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
 });
 const agent = new Agent({ id: "repo-helper", tools: {} });
-const agent_workspace = agent.enter(workspace);
 
-const session = await agent_workspace.sessions.create();
+const session = await agent.sessions.create({ workspace });
 await session.set({
   model: openai.responses("gpt-5"),
 });
@@ -214,7 +212,7 @@ downcity/
 - City SDK 文档：[downcity.ai/city-sdk-docs](https://downcity.ai/city-sdk-docs)
 - Agent SDK 文档：[downcity.ai/agent-sdk-docs](https://downcity.ai/agent-sdk-docs)
 - UI SDK 文档：[downcity.ai/ui-sdk-docs](https://downcity.ai/ui-sdk-docs)
-- 包文档：[packages/agent/README.md](./packages/agent/README.md)、[packages/city/README.md](./packages/city/README.md)、[packages/type/README.md](./packages/type/README.md)、[packages/services/README.md](./packages/services/README.md)、[packages/cli/README.md](./packages/cli/README.md)、[packages/ui/README.md](./packages/ui/README.md)
+- 包文档：[packages/agent/README.md](./packages/agent/README.md)、[packages/type/README.md](./packages/type/README.md)、[packages/services/README.md](./packages/services/README.md)、[packages/cli/README.md](./packages/cli/README.md)、[packages/ui/README.md](./packages/ui/README.md)
 
 ## 本地开发
 

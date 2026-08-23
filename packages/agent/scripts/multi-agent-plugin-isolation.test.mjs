@@ -13,6 +13,7 @@ import fs from "node:fs/promises";
 import { MockLanguageModelV3 } from "ai/test";
 
 import { Agent } from "../bin/index.js";
+import { create_agent_workspace } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 import { create_action, create_plugin } from "../bin/plugin/core/PluginActionFactory.js";
 import { CITY_MODEL_KIND } from "@downcity/type";
@@ -143,8 +144,8 @@ test("multiple session prompts use only their owning Agent plugin registry", asy
     plugins: [create_owner_plugin("agent_b", executed_owners)],
     model: create_test_model("model_b", model_requests),
   });
-  const entry_a = agent_a.enter(new Workspace({ id: "workspace_a", path: root_a, data_root_path: path.join(root_a, "data") }));
-  const entry_b = agent_b.enter(new Workspace({ id: "workspace_b", path: root_b, data_root_path: path.join(root_b, "data") }));
+  const entry_a = create_agent_workspace(agent_a, new Workspace({ id: "workspace_a", path: root_a, data_root_path: path.join(root_a, "data") }));
+  const entry_b = create_agent_workspace(agent_b, new Workspace({ id: "workspace_b", path: root_b, data_root_path: path.join(root_b, "data") }));
 
   try {
     const session_a = await entry_a.sessions.create({ session_id: "session_a" });

@@ -2,7 +2,7 @@
 
 `@downcity/type` 是 Downcity 跨 package 的共享协议类型包。
 
-它只放需要被多个 package 共同识别的核心协议，避免 `@downcity/agent`、`@downcity/city`、`@downcity/services` 之间产生不必要的直接耦合。
+它只放需要被多个 package 共同识别的核心协议，避免 `@downcity/agent`、`@downcity/agent`、`@downcity/services` 之间产生不必要的直接耦合。
 
 ## 当前协议
 

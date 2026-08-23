@@ -18,15 +18,14 @@ ALL_PACKAGES=(
   "sandbox-linux"
   "sandbox-windows-mxc"
   "sandbox-windows-srt"
-  "agent"
   "workspace-cloudflare-computer"
   "federation"
+  "agent"
   "database-d1"
   "database-sqlite"
   "database-postgresql"
   "services"
   "plugins"
-  "city"
   "local"
   "ui"
   "cli"
@@ -42,7 +41,7 @@ usage() {
   echo "  --sandbox-windows-mxc --sandbox-windows-srt"
   echo "  --agent --workspace-cloudflare-computer --federation"
   echo "  --database-d1 --database-sqlite --database-postgresql"
-  echo "  --services --plugins --city --local --ui --cli --all"
+  echo "  --services --plugins --local --ui --cli --all"
   echo ""
   echo "  --no-bump           只构建，不修改 package version"
   echo "  --no-global-install 不同步本机全局 Downcity CLI"
@@ -78,6 +77,7 @@ add_build_package() {
     agent)
       add_build_package "type"
       add_build_package "workspace"
+      add_build_package "federation"
       ;;
     workspace-cloudflare-computer)
       add_build_package "workspace"
@@ -96,15 +96,11 @@ add_build_package() {
       add_build_package "type"
       add_build_package "agent"
       ;;
-    city)
-      add_build_package "type"
-      add_build_package "agent"
-      ;;
     local)
       add_build_package "agent"
       ;;
     cli)
-      add_build_package "city"
+      add_build_package "agent"
       add_build_package "local"
       add_build_package "services"
       add_build_package "ui"
@@ -150,7 +146,7 @@ should_sync_global_cli() {
   local package_name
   for package_name in "${PACKAGES[@]}"; do
     case "$package_name" in
-      agent|federation|plugins|city|local|ui|cli)
+      agent|federation|plugins|local|ui|cli)
         return 0
         ;;
     esac
@@ -175,7 +171,6 @@ while [[ $# -gt 0 ]]; do
     --database-postgresql) add_package "database-postgresql" ;;
     --services) add_package "services" ;;
     --plugins) add_package "plugins" ;;
-    --city) add_package "city" ;;
     --local) add_package "local" ;;
     --ui) add_package "ui" ;;
     --cli) add_package "cli" ;;
@@ -189,7 +184,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ${#PACKAGES[@]} -eq 0 ]]; then
-  echo "Error: 至少需要显式指定一个 package，例如 --city 或 --agent --plugins。" >&2
+  echo "Error: 至少需要显式指定一个 package，例如 --agent 或 --agent --plugins。" >&2
   usage
 fi
 

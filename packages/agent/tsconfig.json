@@ -10,7 +10,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@executor/*": ["./src/executor/*"],
-      "@downcity/city": ["../city/bin/index.d.ts"]
+      "@downcity/federation": ["../federation/bin/index.d.ts"]
     },
     "strict": true,
     "noImplicitAny": false,

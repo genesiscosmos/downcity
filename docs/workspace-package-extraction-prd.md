@@ -2,7 +2,7 @@
 
 > 状态：Draft
 >
-> 适用范围：`@downcity/workspace`、`@downcity/agent`、`@downcity/city`、`@downcity/local`、CLI、Desktop 与 Workspace Adapter
+> 适用范围：`@downcity/workspace`、`@downcity/agent`、`@downcity/agent`、`@downcity/local`、CLI、Desktop 与 Workspace Adapter
 >
 > 核心决策：Workspace 从 `@downcity/agent` 独立为 `@downcity/workspace`；Shell 作为 Workspace 的内置可选执行能力，由 `@downcity/workspace` 统一导出并保留可替换协议
 
@@ -141,7 +141,7 @@ flowchart TB
     Cloudflare["@downcity/workspace-cloudflare-computer"] --> Workspace
     Agent["@downcity/agent"] --> Workspace
     Plugins["@downcity/plugins"] --> Agent
-    City["@downcity/city"] --> Agent
+    City["@downcity/agent"] --> Agent
     City --> Workspace
     Local["@downcity/local"] --> Agent
     Local --> Workspace
@@ -426,7 +426,7 @@ Agent 只公开 Agent、AgentWorkspace、Session、Plugin 和执行协议。Plug
 - 不再创建 Agent SessionStore。
 - 保持自己的远程 FileSystem、Tool 与 Stub 生命周期。
 
-### 12.3 `@downcity/city`
+### 12.3 `@downcity/agent`
 
 - `resolve_workspace` 和相关类型从 `@downcity/workspace` 导入。
 - City 的 Agent、AgentWorkspace 与 Session transport 仍从 `@downcity/agent` 导入。

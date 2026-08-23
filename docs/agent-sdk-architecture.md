@@ -746,7 +746,7 @@ const agent = new RemoteAgent({
 - `rpc://` 使用长连接 RPC transport。
 - RemoteSession 尽量保持与本地 Session 相同的方法命名和 Mutation 协议。
 - 远程客户端不复制本地 Session 编排、Store 或 Tool Loop。
-- Server 和 transport 生命周期由 `@downcity/city` 或上层宿主管理。
+- Server 和 transport 生命周期由 `@downcity/agent` 或上层宿主管理。
 
 ## 16. 生命周期与资源释放
 

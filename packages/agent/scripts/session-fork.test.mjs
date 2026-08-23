@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent } from "../bin/index.js";
+import { create_agent_workspace } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 
 async function create_session(t) {
@@ -14,7 +15,7 @@ async function create_session(t) {
   const agent = new Agent({ id: "fork_test_agent" });
   t.after(async () => await agent.dispose());
   const workspace = new Workspace({ id: "fork_workspace", path: root_path, data_root_path: path.join(root_path, "data") });
-  return await agent.enter(workspace).sessions.create({ session_id: "source" });
+  return await create_agent_workspace(agent, workspace).sessions.create({ session_id: "source" });
 }
 
 test("Fork 默认包含锚点消息，显式排除时只复制锚点之前的历史", async (t) => {

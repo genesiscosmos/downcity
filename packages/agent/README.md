@@ -1,6 +1,6 @@
 # @downcity/agent
 
-`@downcity/agent` 是 Downcity 的单 Agent 运行时包。`Agent` 是单实例组合根；多 Agent 宿主 `City` 位于 `@downcity/city`。
+`@downcity/agent` 是 Downcity 的 Agent runtime 包。`Agent` 是主体，`City` 是承载多个 Agent、Workspace、Embassy 与 transport 的环境容器。
 
 它负责把一个 agent 项目目录装配成可执行运行时，包括：
 
@@ -9,7 +9,7 @@
 - Plugin 框架：registry、action、tool runtime 与执行生命周期
 - 远程访问：`RemoteAgent`、HTTP/RPC transport
 
-CLI 与 Desktop 负责读取产品配置并显式装配 `Agent`；`@downcity/city` 只索引已经创建的 Agent 并转发 HTTP/RPC。两个产品各自创建独立的 `City` 实例并拥有自己的宿主生命周期，`City` 不赋予 Agent 启动或停止状态。
+CLI 与 Desktop 负责读取产品配置并显式装配 `Agent`，再通过 `city.agents.add(agent)` 将 Agent 加入环境。City 不创建 Agent，也不持有 Plugin 实例；Plugin 属于 Agent，通过 `context.city` 使用 City 资源。
 
 ## 包定位
 
@@ -21,13 +21,11 @@ CLI 与 Desktop 负责读取产品配置并显式装配 `Agent`；`@downcity/cit
 ## 与其他包的边界
 
 - `@downcity/agent`
-  - 单 Agent runtime
+  - Agent 与 City runtime
   - session SDK、executor 内核、plugin 框架、sandbox
-  - 本地 SDK facade
+  - City Workspace、Embassy、HTTP/RPC transport
 - `downcity`
   - CLI City daemon 与平台控制面
-- `@downcity/city`
-  - 多 Agent `City` 内存索引与 HTTP/RPC 转发
 - `@downcity/local`
   - CLI 与 Desktop 共用的本地数据库 Adapter、配置 Repository 与 Plugin Loader
   - 不创建 Agent、Workspace、Model 或 City

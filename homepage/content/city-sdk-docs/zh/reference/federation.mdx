@@ -125,7 +125,7 @@ serve({ fetch: (request) => base.fetch(request), port: 43127, hostname: "127.0.0
 
 `base.middle()` 用于注册 Federation 级 HTTP middleware。它们会在内部路由和 Action body 读取之前执行，因此调用方可以在 Federation 入口接入 CORS、安全响应头、body 大小限制、粗粒度限流、请求超时或其他 HTTP 策略。
 
-`@downcity/city` 只定义 middleware 接口，不实现也不导出 CORS、限流、超时、安全响应头、body 限制、客户端 IP 读取等 helper。这些策略应由你的应用、平台或 HTTP 框架提供。
+`@downcity/agent` 只定义 middleware 接口，不实现也不导出 CORS、限流、超时、安全响应头、body 限制、客户端 IP 读取等 helper。这些策略应由你的应用、平台或 HTTP 框架提供。
 
 ```ts
 base.middle(async (ctx, next) => {

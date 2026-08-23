@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent, create_plugin } from "../bin/index.js";
+import { create_agent_workspace, get_agent_workspace } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 
 test("one Agent enters multiple Workspaces with contextual Plugin execution", async () => {
@@ -42,12 +43,12 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
     fs.mkdir(path.join(root, "homepage")),
   ]);
   const agent = new Agent({ id: "coder", plugins: [plugin] });
-  const first = agent.enter(new Workspace({
+  const first = create_agent_workspace(agent, new Workspace({
     id: "sdk",
     path: path.join(root, "sdk"),
     data_root_path: path.join(root, "data"),
   }));
-  const second = agent.enter(new Workspace({
+  const second = create_agent_workspace(agent, new Workspace({
     id: "homepage",
     path: path.join(root, "homepage"),
     data_root_path: path.join(root, "data"),
@@ -67,8 +68,8 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
     assert.equal(lifecycle_events.filter((item) => item.startsWith("enter:")).length, 2);
 
     await first.leave();
-    assert.equal(agent.workspace("sdk"), null);
-    assert.equal(agent.workspace("homepage"), second);
+    assert.equal(get_agent_workspace(agent, "sdk"), null);
+    assert.equal(get_agent_workspace(agent, "homepage"), second);
     assert.equal(lifecycle_events.includes("leave:sdk"), true);
     assert.equal(lifecycle_events.includes("stop:coder"), false);
   } finally {
@@ -117,9 +118,9 @@ test("Plugin runtime data is isolated by Agent and shared across Workspaces", as
       },
     },
   })] });
-  const first = agent_a.enter(new Workspace({ id: "one", path: path.join(root, "one"), data_root_path: path.join(root, "data") }));
-  const second = agent_a.enter(new Workspace({ id: "two", path: path.join(root, "two"), data_root_path: path.join(root, "data") }));
-  const third = agent_b.enter(new Workspace({ id: "three", path: path.join(root, "three"), data_root_path: path.join(root, "data") }));
+  const first = create_agent_workspace(agent_a, new Workspace({ id: "one", path: path.join(root, "one"), data_root_path: path.join(root, "data") }));
+  const second = create_agent_workspace(agent_a, new Workspace({ id: "two", path: path.join(root, "two"), data_root_path: path.join(root, "data") }));
+  const third = create_agent_workspace(agent_b, new Workspace({ id: "three", path: path.join(root, "three"), data_root_path: path.join(root, "data") }));
   try {
     await Promise.all([
       first.plugins.run_action({ plugin: "data_probe", action: "inspect" }),
@@ -158,12 +159,12 @@ test("Plugin can ignore Workspace while still receiving its Context", async () =
     fs.mkdir(path.join(root, "two")),
   ]);
   const agent = new Agent({ id: "global_counter", plugins: [plugin] });
-  const first = agent.enter(new Workspace({
+  const first = create_agent_workspace(agent, new Workspace({
     id: "one",
     path: path.join(root, "one"),
     data_root_path: path.join(root, "data"),
   }));
-  const second = agent.enter(new Workspace({
+  const second = create_agent_workspace(agent, new Workspace({
     id: "two",
     path: path.join(root, "two"),
     data_root_path: path.join(root, "data"),
@@ -199,7 +200,7 @@ test("Workspace cleanup continues after one Plugin leave failure", async () => {
     id: "cleanup_agent",
     plugins: [failing_plugin, healthy_plugin],
   });
-  const entry = agent.enter(new Workspace({
+  const entry = create_agent_workspace(agent, new Workspace({
     id: "cleanup",
     path: root,
     data_root_path: path.join(root, "data"),
@@ -208,7 +209,7 @@ test("Workspace cleanup continues after one Plugin leave failure", async () => {
   try {
     await entry.sessions.list();
     await assert.rejects(entry.leave(), /AgentWorkspace cleanup failed/u);
-    assert.equal(agent.workspace("cleanup"), null);
+    assert.equal(get_agent_workspace(agent, "cleanup"), null);
     assert.deepEqual(
       new Set(lifecycle_events),
       new Set(["failing:cleanup", "healthy:cleanup"]),

@@ -1,6 +1,6 @@
 {
   "name": "@downcity/agent",
-  "version": "1.1.364",
+  "version": "1.1.365",
   "type": "module",
   "description": "Downcity 单 Agent SDK 与执行运行时",
   "main": "./bin/index.js",
@@ -30,16 +30,16 @@
   "scripts": {
     "build": "node scripts/agent-compiler.mjs build",
     "dev": "node scripts/agent-compiler.mjs dev",
-    "test": "pnpm build && pnpm --filter '@downcity/sandbox-*' build && pnpm -C ../plugins build && node --test scripts/*.test.mjs",
+    "test": "pnpm build && pnpm --filter '@downcity/sandbox-*' build && pnpm -C ../plugins build && node --test scripts/*.test.mjs city-test/*.test.mjs",
     "test:executor-runtime": "pnpm build && node --test scripts/session-prompt-runtime.test.mjs",
     "typecheck": "node scripts/agent-compiler.mjs typecheck",
     "prepack": "npm run build && node ../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
     "postpack": "node ../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"
   },
   "dependencies": {
-    "@downcity/city": "workspace:^",
     "@downcity/workspace": "workspace:^",
     "@downcity/type": "workspace:*",
+    "@downcity/federation": "workspace:^",
     "ai": "^6.0.193",
     "commander": "^15.0.0",
     "dotenv": "^17.4.2",

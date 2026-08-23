@@ -164,7 +164,7 @@ sequenceDiagram
 
 `agent.dispose()` leaves every entered AgentWorkspace, flushes Session and log state, closes Shell
 processes and Sandbox resources, then stops Agent-level Plugins. HTTP/RPC transports created by
-`@downcity/city` remain owned by the host and must be closed separately.
+`@downcity/agent` remain owned by the host and must be closed separately.
 
 ## Package boundaries
 
@@ -173,6 +173,6 @@ processes and Sandbox resources, then stops Agent-level Plugins. HTTP/RPC transp
 | `@downcity/workspace` | Workspace protocol, local project resources, File/Search tools, Env, Shell | Agent identity, Plugin registry, Session semantics, model calls |
 | `@downcity/agent` | Agent, AgentWorkspace, Session, Store, Plugin runtime, model Tool Loop | Project resource implementation, platform Sandbox, multi-Agent control plane |
 | Sandbox packages | Native process isolation for one platform | Workspace, Agent, Session, or Plugin business behavior |
-| `@downcity/city` | Agent index and HTTP/RPC transports | Local configuration repository and Agent execution state |
+| `@downcity/agent` | Agent index and HTTP/RPC transports | Local configuration repository and Agent execution state |
 
 Continue with [Runtime architecture](/en/docs/agent/runtime-architecture).

@@ -1153,7 +1153,7 @@ packages/services/src/credits/
 11. 更新 CLI、Homepage 中英文文档与类型契约测试。
 12. 使用多 package patch 脚本完成版本更新和构建。
 
-实现联动 `@downcity/services`、`@downcity/city` 与支付连接，准备提交时使用：
+实现联动 `@downcity/services`、`@downcity/agent` 与支付连接，准备提交时使用：
 
 ```bash
 pnpm all:patch:build

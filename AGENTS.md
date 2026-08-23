@@ -13,11 +13,10 @@
 6. 类型统一放到 types/ 下面
 7. package 对外能力、SDK API、用户可见行为发生变化并准备提交时，必须使用 patch 脚本完成版本号自增与构建：
    - 只改 `@downcity/agent`：`pnpm agent:patch:build`
-   - 只改 `@downcity/city`：`pnpm city:patch:build`
    - 只改 `downcity`：`pnpm cli:patch:build`
-   - 涉及多个 package：根据实际影响范围显式指定，例如 `pnpm patch:build -- --city --services --database-d1`
+   - 涉及多个 package：根据实际影响范围显式指定，例如 `pnpm patch:build -- --agent --services --database-d1`
    - 只允许 bump 对外能力实际发生变化的 package；依赖 package 可以参与构建验证，但不能因此自动 bump
-   - 仅验证不需要 bump 时，显式指定验证范围并使用 `pnpm patch:build -- --no-bump --city --services`
+   - 仅验证不需要 bump 时，显式指定验证范围并使用 `pnpm patch:build -- --no-bump --agent --services`
 
 # Patch + Commit
 

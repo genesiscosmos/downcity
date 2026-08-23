@@ -15,6 +15,7 @@ import fs from "node:fs/promises";
 
 import { MockLanguageModelV3 } from "ai/test";
 import { Agent } from "../bin/index.js";
+import { create_agent_workspace } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 
 function create_stream_text_result(text) {
@@ -130,7 +131,7 @@ test("Session keeps title empty when no model is available", async () => {
     path.join(os.tmpdir(), "downcity-agent-session-title-"),
   );
   const agent = new Agent({ id: "title_agent" });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const entry = create_agent_workspace(agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
   const session = await entry.sessions.create();
   const events = [];
   const unsubscribe = session.subscribe((event) => {
@@ -164,7 +165,7 @@ test("Session title generation does not block user message append", async () => 
     id: "title_async_agent",
     model: delayed.model,
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const entry = create_agent_workspace(agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
   const session = await entry.sessions.create();
 
   try {
@@ -186,7 +187,7 @@ test("Session logs title generation failure without blocking the session", async
     id: "title_log_agent",
     model: create_failing_title_model(),
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const entry = create_agent_workspace(agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
   const session = await entry.sessions.create();
   await session.set({ model: create_failing_title_model() });
 
@@ -238,7 +239,7 @@ test("Session retries title generation after model becomes available", async () 
     path.join(os.tmpdir(), "downcity-agent-session-title-retry-"),
   );
   const agent = new Agent({ id: "title_retry_agent" });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const entry = create_agent_workspace(agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
   const session = await entry.sessions.create();
   const events = [];
   const unsubscribe = session.subscribe((event) => {

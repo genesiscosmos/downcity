@@ -91,7 +91,7 @@ City(Workspace) → Agent(city) → Agent Session(Workspace) → Turn
 - Plugin lifecycle and ActionSchedule begin starting immediately after `new Agent(...)`.
 - Session execution waits for the Agent runtime automatically; callers do not manage a separate startup state.
 - `agent.dispose()` releases the Agent's sessions and plugins. `city.close()` releases shared Workspaces and Shell resources.
-- HTTP/RPC transports do not belong to Agent; use `@downcity/city` when you need network serving.
+- HTTP/RPC transports do not belong to Agent; use `@downcity/agent` when you need network serving.
 
 ## Model resolution
 

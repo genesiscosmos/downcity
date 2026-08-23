@@ -91,7 +91,7 @@ City(Workspace) → Agent(city) → Agent Session(Workspace) → Turn
 - `new Agent(...)` 后，Plugin lifecycle 与 ActionSchedule 会立即开始启动。
 - Session 执行会自动等待 Agent runtime 就绪，调用方不管理独立的启动状态。
 - `agent.dispose()` 释放 Agent 的 Session 与 Plugin；`city.close()` 释放共享 Workspace、Shell 和 Sandbox。
-- HTTP/RPC transport 不属于 Agent；需要网络服务时使用 `@downcity/city`。
+- HTTP/RPC transport 不属于 Agent；需要网络服务时使用 `@downcity/agent`。
 
 ## 模型如何解析
 

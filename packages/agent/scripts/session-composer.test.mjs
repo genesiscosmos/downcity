@@ -13,6 +13,7 @@ import {
   DefaultSessionComposer,
   Session,
 } from "../bin/index.js";
+import { create_agent_workspace } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 
 function create_input(model) {
@@ -124,7 +125,7 @@ test("Session system 快照与 Custom Composer 的实际模型输入一致", asy
     model: new MockLanguageModelV3({ modelId: "custom-composer-model" }),
     session_class: CustomSession,
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
+  const entry = create_agent_workspace(agent, new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
   try {
     const session = await entry.sessions.create({
       session_id: "custom_composer_session",

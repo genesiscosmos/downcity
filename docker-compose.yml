@@ -25,7 +25,7 @@ services:
         COPY . .
 
         RUN pnpm install --frozen-lockfile
-        RUN pnpm -C packages/city build
+        RUN pnpm -C packages/agent build
         RUN pnpm -C packages/services build
         RUN pnpm -C templates/localfed typecheck
 

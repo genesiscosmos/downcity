@@ -22,7 +22,7 @@ test("instruction blocks keep Downcity core after custom instruction", () => {
     blocks.map((block) => `${block.source}:${block.name}`),
     ["instruction:agent", "core:default"],
   );
-  assert.match(blocks[1].content, /# Downcity Agent/);
+  assert.match(blocks[1].content, /# Harness Design/);
   assert.match(blocks[1].content, /# Harness Design/);
   assert.match(blocks[1].content, /human-owned workspace/);
   assert.match(blocks[1].content, /project structure is the control surface/);

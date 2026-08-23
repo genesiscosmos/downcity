@@ -1,14 +1,14 @@
 ---
 title: 通过 RPC 与 HTTP 暴露 Agent
-description: 使用 @downcity/city 提供的 AgentRPC 和 AgentHTTP 把本地 Agent 暴露成网络服务
+description: 使用 @downcity/agent 提供的 AgentRPC 和 AgentHTTP 把本地 Agent 暴露成网络服务
 ---
 
 # 通过 RPC 与 HTTP 暴露 Agent
 
-`@downcity/agent` 只负责构造 Agent 和运行会话。网络暴露能力放在独立包 `@downcity/city` 里，按需引入。
+`@downcity/agent` 只负责构造 Agent 和运行会话。网络暴露能力放在独立包 `@downcity/agent` 里，按需引入。
 
 ```bash
-pnpm add @downcity/agent @downcity/city
+pnpm add @downcity/agent @downcity/agent
 ```
 
 ## Agent 不再有 `start()`

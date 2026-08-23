@@ -4,7 +4,7 @@
 >
 > 目的：把 Mastra 与 Prime Agent 的可借鉴能力，转换为符合 Downcity 当前架构、所有权和生命周期的优化计划。
 >
-> 范围：`packages/agent`、`packages/plugins`、`packages/city` 及其用户文档。
+> 范围：`packages/agent`、`packages/plugins`、`packages/agent` 及其用户文档。
 >
 > 本文只描述当前代码可以证明的缺口和可落地的演进方向，不把外部项目的实现方式直接当作 Downcity 的目标架构。
 
@@ -81,7 +81,7 @@ Downcity 当前并不是缺少“人类交互暂停”或“memory 能力”：
 
 ### 2.3 City fallback 与 usage
 
-`packages/city/src/service/ai/model-routing.ts` 已存在媒体输入 fallback：规则根据媒体类型匹配备用模型，并记录 `fallback_from`、`fallback_reason` 和 `fallback_media_type`。
+`packages/agent/src/service/ai/model-routing.ts` 已存在媒体输入 fallback：规则根据媒体类型匹配备用模型，并记录 `fallback_from`、`fallback_reason` 和 `fallback_media_type`。
 
 这不等于通用服务端 fallback。当前仍缺少：
 
@@ -269,9 +269,9 @@ Agent Turn/Tool Event
 | Tool 审批统一 | `packages/agent` + `packages/shell` | 现有 Interaction | Agent API/行为变化 |
 | Memory Adapter 研究端口 | `packages/plugins` | 当前 MemoryPlugin | 先内部，冻结后需文档 |
 | Evals | 新 `packages/evals` | Agent 公开事件和测试模型 | 新 package |
-| Provider fallback | `packages/city` | AIService usage 结算 | City 行为变化 |
+| Provider fallback | `packages/agent` | AIService usage 结算 | City 行为变化 |
 | 子 Agent 句柄 | `packages/agent` | Remote transport/RPC | Agent/RPC 协议变化 |
-| Usage attribution | `packages/agent` + `packages/city` | 相关事件契约 | 多 package 公开变化 |
+| Usage attribution | `packages/agent` + `packages/agent` | 相关事件契约 | 多 package 公开变化 |
 
 任何公开 API 或用户可见行为落地后，必须按 `AGENTS.md` 运行对应 patch/build、typecheck、测试和用户文档构建。
 

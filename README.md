@@ -25,8 +25,7 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 | --- | --- |
 | `downcity` | Public CLI bundle: `city`/`downcity` is the local City container for Agent management, runtime, and console workflows; `fed`/`downfed` is the Federation Server Manager. |
 | `@downcity/workspace` | Workspace resources, rooted files/search tools, environment, private storage, and built-in Shell. |
-| `@downcity/agent` | Single-Agent runtime for AgentWorkspace, Session, Plugin SDK, tools, and RemoteAgent. |
-| `@downcity/city` | Agent host for multi-Agent ownership, local persistent assembly, and Agent HTTP/RPC transport. |
+| `@downcity/agent` | Agent runtime and City container: AgentWorkspace, Session, Plugin SDK, multi-Agent ownership, and HTTP/RPC transport. |
 | `@downcity/federation` | Federation runtime and Embassy SDK for Services, auth, env, Bureau, user, and admin access. |
 | `@downcity/type` | Shared protocol types used across packages, including City model descriptors returned by City. |
 | `@downcity/services` | Public services for accounts, balance, usage, payment, and Stripe payment flows. |
@@ -151,9 +150,8 @@ const workspace = new Workspace({
   shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
 });
 const agent = new Agent({ id: "repo-helper", tools: {} });
-const agent_workspace = agent.enter(workspace);
 
-const session = await agent_workspace.sessions.create();
+const session = await agent.sessions.create({ workspace });
 await session.set({
   model: openai.responses("gpt-5"),
 });
@@ -217,7 +215,7 @@ The `templates/*` projects are convenient developer starters and showcases. The 
 - Agent SDK docs: [downcity.ai/agent-sdk-docs](https://downcity.ai/agent-sdk-docs)
 - UI SDK docs: [downcity.ai/ui-sdk-docs](https://downcity.ai/ui-sdk-docs)
 - Chinese overview: [README.zh-CN.md](./README.zh-CN.md)
-- Package docs: [packages/agent/README.md](./packages/agent/README.md), [packages/city/README.md](./packages/city/README.md), [packages/type/README.md](./packages/type/README.md), [packages/services/README.md](./packages/services/README.md), [packages/cli/README.md](./packages/cli/README.md), [packages/ui/README.md](./packages/ui/README.md)
+- Package docs: [packages/agent/README.md](./packages/agent/README.md), [packages/type/README.md](./packages/type/README.md), [packages/services/README.md](./packages/services/README.md), [packages/cli/README.md](./packages/cli/README.md), [packages/ui/README.md](./packages/ui/README.md)
 
 ## Local Development
 

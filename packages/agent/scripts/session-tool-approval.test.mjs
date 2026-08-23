@@ -16,6 +16,7 @@ import { MockLanguageModelV3 } from "ai/test";
 import { z } from "zod";
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";
+import { create_agent_workspace } from "../bin/internal/index.js";
 
 function create_usage() {
   return {
@@ -116,7 +117,7 @@ async function run_approval_case(decision) {
       },
     },
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
+  const entry = create_agent_workspace(agent, new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
 
   try {
     const session = await entry.sessions.create({ session_id: "tool_approval" });

@@ -2,7 +2,7 @@
  * City 模型公共协议模块。
  *
  * 该模块定义跨 package 共享的模型目录与可执行 LanguageModelV3 协议。
- * 具体的 HTTP transport 由 @downcity/city 内部实现，Agent 只依赖标准模型接口。
+ * 具体的 HTTP transport 由 @downcity/agent 内部实现，Agent 只依赖标准模型接口。
  */
 
 import type { LanguageModel } from "ai";

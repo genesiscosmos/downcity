@@ -26,7 +26,7 @@ import {
 interface AgentHttpGatewayOptions {
   /** 当前 agent context 读取函数。 */
   get_agent: () => AgentWorkspace;
-  /** 可选 SDK transport 子路由（来自 `@downcity/city` 的 `AgentHTTP.router()`）。 */
+  /** 可选 SDK transport 子路由（来自 `@downcity/agent` 的 `AgentHTTP.router()`）。 */
   sdk_router?: HonoType;
   /** CLI 组合根创建并拥有的鉴权服务。 */
   auth_service: AuthService;

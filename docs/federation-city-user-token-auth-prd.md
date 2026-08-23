@@ -7,7 +7,7 @@
 ## 1. 文档状态
 
 - 状态：历史版本，已取代
-- 范围：`@downcity/city`、Federation Accounts、CLI 与用户文档
+- 范围：`@downcity/agent`、Federation Accounts、CLI 与用户文档
 - 核心模型：City 直连 Federation；Bureau 是可选产品后端
 
 ## 2. 目标

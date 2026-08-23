@@ -4,7 +4,7 @@
 >
 > 更新时间：2026-08-21
 >
-> 范围：`@downcity/city`、`@downcity/agent`、`@downcity/plugins` 的公开概念、调用方式、资源所有权和生命周期。
+> 范围：`@downcity/agent`、`@downcity/agent`、`@downcity/plugins` 的公开概念、调用方式、资源所有权和生命周期。
 
 ## 1. 产品结论
 
@@ -80,7 +80,7 @@ await city.close();
 City 不提供以下 API：
 
 ```ts
-city.create_agent(...);
+new Agent({ id: "assistant" });
 city.add(agent);
 city.create_plugin(...);
 city.register_plugin(...);
@@ -562,7 +562,7 @@ const session = await remote_agent.sessions.create({
 ## 10. Package 边界
 
 ```text
-@downcity/city
+@downcity/agent
 ├── City
 ├── Workspace
 ├── Embassy / City service binding

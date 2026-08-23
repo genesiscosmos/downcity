@@ -15,6 +15,7 @@ import path from "node:path";
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";
 import { Shell } from "@downcity/workspace";
+import { create_agent_workspace } from "../bin/internal/index.js";
 import { create_platform_sandbox } from "./PlatformSandbox.mjs";
 
 async function execute_shell(agent, cmd) {
@@ -49,7 +50,7 @@ test("workspace set_env and patch_env are visible in shell safe sandbox", async 
     shell: new Shell({ sandbox }),
   });
   const agent = new Agent({ id: "agent-env-shell-sandbox-test" });
-  const entry = agent.enter(workspace);
+  const entry = create_agent_workspace(agent, workspace);
 
   try {
     workspace.set_env({

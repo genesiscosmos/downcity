@@ -79,7 +79,7 @@ serve({ fetch: (request) => base.fetch(request), port: 43127, hostname: "127.0.0
 
 Use `base.middle()` to register Federation-level HTTP middleware. Middleware runs before the internal router and before Action body parsing, so callers can attach CORS, security headers, body size limits, coarse rate limits, request timeouts, or other HTTP policies at the edge of the Federation.
 
-`@downcity/city` only defines the middleware interface. It does not implement or export CORS, rate limit, timeout, security header, body limit, or client IP helpers. Those policies should come from your application, platform, or HTTP framework.
+`@downcity/agent` only defines the middleware interface. It does not implement or export CORS, rate limit, timeout, security header, body limit, or client IP helpers. Those policies should come from your application, platform, or HTTP framework.
 
 ```ts
 base.middle(async (ctx, next) => {

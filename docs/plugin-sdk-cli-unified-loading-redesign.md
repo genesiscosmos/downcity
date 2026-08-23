@@ -135,7 +135,7 @@ Plugin Class → Agent Plugin contract
 Agent ↛ City
 ```
 
-`@downcity/agent` 不能反向依赖 `@downcity/city`。`PluginHostContext` 由 City 导出，Plugin 的 `setup.ts` 可以依赖它；Agent 只接收 `setup` 返回的 Plugin 实例。
+`@downcity/agent` 不能反向依赖 `@downcity/agent`。`PluginHostContext` 由 City 导出，Plugin 的 `setup.ts` 可以依赖它；Agent 只接收 `setup` 返回的 Plugin 实例。
 
 ### 2.4 Profile 只属于 City 配置层
 
@@ -240,7 +240,7 @@ export { schema, setup } from "./setup.js";
 
 ### 5.1 输入
 
-`setup` 接收由 `@downcity/city` 导出的宿主上下文：
+`setup` 接收由 `@downcity/agent` 导出的宿主上下文：
 
 ```ts
 export interface PluginHostContext {
@@ -264,7 +264,7 @@ export interface PluginHostContext {
 }
 ```
 
-`PluginHostContext` 由 `@downcity/city` 导出。它不是 Plugin 实例，也不是 Agent 全量对象。在已登录的 City 宿主中，第一阶段保证的外部身份能力为：
+`PluginHostContext` 由 `@downcity/agent` 导出。它不是 Plugin 实例，也不是 Agent 全量对象。在已登录的 City 宿主中，第一阶段保证的外部身份能力为：
 
 ```ts
 context.embassy.user

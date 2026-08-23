@@ -45,7 +45,7 @@ Local runtime state is centralized outside the project directory:
 ~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/
 ```
 
-Construction starts plugin lifecycle and background work. Session execution waits for initialization automatically; use `await agent.dispose()` to release resources. HTTP and RPC are supplied by `AgentHTTP` and `AgentRPC` from `@downcity/city`.
+Construction starts plugin lifecycle and background work. Session execution waits for initialization automatically; use `await agent.dispose()` to release resources. HTTP and RPC are supplied by `AgentHTTP` and `AgentRPC` from `@downcity/agent`.
 
 ## Streaming messages
 

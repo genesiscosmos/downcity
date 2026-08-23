@@ -5,7 +5,7 @@ Thanks for helping improve Downcity. This repository is a TypeScript monorepo fo
 ## Project Shape
 
 - `packages/agent`: single-agent runtime and SDK.
-- `packages/city`: City runtime and access SDK.
+- `packages/agent`: City runtime and access SDK.
 - `packages/services`: accounts, balance, usage, billing, and payment services.
 - `packages/type`: shared protocol types.
 - `packages/ui`: React UI SDK.
@@ -54,7 +54,6 @@ Before submitting a package change that is intended for release, run the matchin
 
 ```bash
 pnpm agent:patch:build
-pnpm city:patch:build
 pnpm services:patch:build
 pnpm cli:patch:build
 pnpm all:patch:build

@@ -15,6 +15,7 @@ import path from "node:path";
 import { MockLanguageModelV3 } from "ai/test";
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";
+import { create_agent_workspace } from "../bin/internal/index.js";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 
 /** 构造 AI SDK V3 usage。 */
@@ -101,7 +102,7 @@ test("Agent 默认不注册 ask_question", async () => {
     path.join(os.tmpdir(), "downcity-agent-without-ask-question-"),
   );
   const agent = new Agent({ id: "agent_without_ask_question" });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
+  const entry = create_agent_workspace(agent, new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
 
   try {
     assert.equal("ask_question" in entry.tools, false);
@@ -141,7 +142,7 @@ test("显式注入的 ask_question 等待回答并继续同一个 Turn", async (
       ask_question: AskQuestionsTool,
     },
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
+  const entry = create_agent_workspace(agent, new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
 
   try {
     assert.ok(entry.tools.ask_question);

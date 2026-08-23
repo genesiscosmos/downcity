@@ -154,7 +154,7 @@ sequenceDiagram
 ```
 
 `agent.dispose()` 会离开所有 AgentWorkspace，刷写 Session 与日志状态，关闭 Shell 进程和
-Sandbox 资源，最后停止 Agent 级 Plugin。`@downcity/city` 创建的 HTTP/RPC transport 仍由宿主
+Sandbox 资源，最后停止 Agent 级 Plugin。`@downcity/agent` 创建的 HTTP/RPC transport 仍由宿主
 拥有，需要单独关闭。
 
 ## Package 边界
@@ -164,6 +164,6 @@ Sandbox 资源，最后停止 Agent 级 Plugin。`@downcity/city` 创建的 HTTP
 | `@downcity/workspace` | Workspace 协议、本地项目资源、File/Search、Env、Shell | Agent 身份、Plugin registry、Session 语义、模型调用 |
 | `@downcity/agent` | Agent、AgentWorkspace、Session、Store、Plugin runtime、模型 Tool Loop | 项目资源实现、平台 Sandbox、多 Agent 控制面 |
 | Sandbox packages | 单个平台的原生进程隔离 | Workspace、Agent、Session 或 Plugin 业务 |
-| `@downcity/city` | Agent 索引与 HTTP/RPC transport | 本地配置 Repository 与 Agent 执行状态 |
+| `@downcity/agent` | Agent 索引与 HTTP/RPC transport | 本地配置 Repository 与 Agent 执行状态 |
 
 继续阅读：[运行时架构](/zh/docs/agent/runtime-architecture)。

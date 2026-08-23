@@ -47,8 +47,8 @@ const HELP_ITEMS = [
   },
   {
     name: "build:city",
-    summary: "构建 @downcity/city Agent 宿主包。",
-    detail: "先构建 Agent、Federation、Plugins 与平台 Adapter，再构建 City。",
+    summary: "构建 @downcity/agent（包含 City）运行时包。",
+    detail: "先构建 Agent 所需依赖，再构建包含 City 与 transport 的 Agent runtime。",
   },
   {
     name: "build:cli",
@@ -64,7 +64,7 @@ const HELP_ITEMS = [
     name: "patch:build",
     summary: "按 package 执行 patch bump + build。",
     detail:
-      "支持 `npm run patch:build -- --workspace --agent --city --local --services --plugins --cli`、`--ui`、`--all`、`--no-bump`。",
+      "支持 `npm run patch:build -- --workspace --agent --local --services --plugins --cli`、`--ui`、`--all`、`--no-bump`。",
   },
   {
     name: "agent:patch:build",
@@ -82,20 +82,15 @@ const HELP_ITEMS = [
     detail: "等价于 `npm run patch:build -- --federation`。",
   },
   {
-    name: "city:patch:build",
-    summary: "只对 @downcity/city 执行 patch bump + build。",
-    detail: "等价于 `npm run patch:build -- --city`。",
-  },
-  {
     name: "cli:patch:build",
     summary: "只对 downcity 执行 patch bump + build。",
     detail:
-      "等价于 `npm run patch:build -- --cli`，会构建 Agent、Federation、Plugins、City、Services 与 UI 等依赖，再构建 packages/cli 并全局安装 downcity 命令。",
+      "等价于 `npm run patch:build -- --cli`，会构建 Agent、Federation、Plugins、Services 与 UI 等依赖，再构建 packages/cli 并全局安装 downcity 命令。",
   },
   {
     name: "all:patch:build",
     summary: "对全部 packages 执行 patch bump + build。",
-    detail: "等价于 `npm run patch:build -- --all`，会处理 workspace、agent、city、services、plugins、ui、cli。",
+    detail: "等价于 `npm run patch:build -- --all`，会处理 workspace、agent、services、plugins、ui、cli。",
   },
   {
     name: "install:ws",

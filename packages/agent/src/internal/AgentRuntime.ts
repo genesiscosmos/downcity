@@ -15,6 +15,8 @@ interface AgentRuntimeState {
 }
 
 const runtime_states = new WeakMap<Agent, AgentRuntimeState>();
+/** 未加入 City 的 Workspace 只允许一个 Agent 建立执行作用域。 */
+const unbound_workspace_owners = new WeakMap<object, Agent>();
 
 export function initialize_agent_runtime(agent: Agent): void {
   runtime_states.set(agent, { workspaces_by_id: new Map() });
@@ -55,6 +57,13 @@ export function create_agent_workspace(agent: Agent, workspace: WorkspaceBase): 
   if (city && city.get_workspace(workspace_id) !== workspace) {
     throw new Error(`Workspace "${workspace_id}" does not belong to the Agent City`);
   }
+  if (!city) {
+    const owner = unbound_workspace_owners.get(workspace);
+    if (owner && owner !== agent) {
+      throw new Error(`Workspace "${workspace_id}" already bound to another scope`);
+    }
+    unbound_workspace_owners.set(workspace, agent);
+  }
   const existing = state.workspaces_by_id.get(workspace_id);
   if (existing) {
     if (existing.workspace !== workspace) {
@@ -77,7 +86,12 @@ export function list_agent_workspaces(agent: Agent): readonly AgentWorkspace[] {
 
 export function release_agent_workspace(agent: Agent, workspace_id: string, entry: AgentWorkspace): void {
   const state = runtime_state(agent);
-  if (state.workspaces_by_id.get(workspace_id) === entry) state.workspaces_by_id.delete(workspace_id);
+  if (state.workspaces_by_id.get(workspace_id) === entry) {
+    state.workspaces_by_id.delete(workspace_id);
+    if (!state.bound_city && unbound_workspace_owners.get(entry.workspace) === agent) {
+      unbound_workspace_owners.delete(entry.workspace);
+    }
+  }
 }
 
 export function clear_agent_runtime(agent: Agent): void {

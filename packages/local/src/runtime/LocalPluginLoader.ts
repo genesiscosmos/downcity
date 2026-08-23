@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import fs from "fs-extra";
 import type { JsonObject, Plugin } from "@downcity/agent";
-import type { PluginHostContext, PluginSetupModule } from "@downcity/city";
+import type { PluginHostContext, PluginSetupModule } from "@downcity/agent";
 import {
   validate_local_plugin_config,
   validate_local_plugin_config_schema,

@@ -15,6 +15,7 @@ import fs from "node:fs/promises";
 
 import { MockLanguageModelV3 } from "ai/test";
 import { Agent } from "../bin/index.js";
+import { create_agent_workspace } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 
 function create_mock_title_model(title_text) {
@@ -63,7 +64,7 @@ async function create_agent_with_titled_session(input) {
     id: input.agent_id,
     model: create_mock_title_model(input.title),
   });
-  const entry = agent.enter(new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const entry = create_agent_workspace(agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
   const collection = entry.sessions;
   const session = await collection.create({
     session_id: input.session_id,

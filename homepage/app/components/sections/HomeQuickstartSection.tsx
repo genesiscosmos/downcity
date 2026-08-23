@@ -38,7 +38,7 @@ export function HomeQuickstartSection() {
   const docs_prefix = locale === "zh" ? "/zh" : "/en";
   const docs_paths: Record<HomeSdkFileKey, string> = {
     agent: `${docs_prefix}/agent-sdk-docs/local-agent/quickstart`,
-    city: `${docs_prefix}/city-sdk-docs/packages/city`,
+    city: `${docs_prefix}/city-sdk-docs/packages/agent`,
     federation: `${docs_prefix}/city-sdk-docs/packages/federation`,
   };
   const map_labels = {

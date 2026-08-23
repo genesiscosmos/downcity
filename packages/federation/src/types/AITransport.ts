@@ -2,7 +2,7 @@
  * City AI transport 内部类型模块。
  *
  * 本模块只服务于 CityModel transport、text 输入转换和 OpenAI HTTP adapter，
- * 不从 @downcity/city 公共入口导出。
+ * 不从 @downcity/agent 公共入口导出。
  */
 
 import type { ModelMessage, ToolSet, UIMessage } from "ai";

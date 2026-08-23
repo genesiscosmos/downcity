@@ -43,5 +43,5 @@ const session = await agent.sessions.create({ workspace });
 `remove` 与 `clear_messages`。
 
 一个 Agent 可以进入多个 Workspace。`agent.dispose()` 会离开所有活跃 AgentWorkspace，关闭其中
-的 Shell 与存储资源，最后注销 Agent 级 Plugin。`@downcity/city` 创建的网络 transport 仍由宿主
+的 Shell 与存储资源，最后注销 Agent 级 Plugin。`@downcity/agent` 创建的网络 transport 仍由宿主
 负责关闭。

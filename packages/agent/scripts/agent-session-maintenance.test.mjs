@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent } from "../bin/index.js";
+import { create_agent_workspace } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 
 function create_project_root() {
@@ -30,7 +31,7 @@ test("Agent sessions 负责清空消息和删除 Session 数据", async () => {
   const root_path = create_project_root();
   const data_root_path = path.join(root_path, "data");
   const agent = new Agent({ id: "agent_test" });
-  const entry = agent.enter(new Workspace({
+  const entry = create_agent_workspace(agent, new Workspace({
     id: "test_workspace",
     path: root_path,
     data_root_path,

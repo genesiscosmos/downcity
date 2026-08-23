@@ -1299,11 +1299,11 @@ AIService 不负责：
 packages/type/src/types/
 └── CityModel.ts
 
-packages/city/src/types/
+packages/agent/src/types/
 ├── AI.ts
 └── AITransport.ts
 
-packages/city/src/service/ai/
+packages/agent/src/service/ai/
 ├── AIChannel.ts
 ├── ai-service.ts
 ├── model-registry.ts
@@ -1314,7 +1314,7 @@ packages/city/src/service/ai/
 ├── charge-runtime.ts
 └── helpers.ts
 
-packages/city/src/pact/invoker/ai/
+packages/agent/src/pact/invoker/ai/
 ├── index.ts
 ├── CityModel.ts
 └── client-stream.ts

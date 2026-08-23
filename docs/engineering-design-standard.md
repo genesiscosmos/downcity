@@ -653,10 +653,10 @@ package 行为测试优先使用编译后的公开入口，确保测试内容与
 package 公开能力、SDK API 或用户可见行为变化时，按影响范围运行 patch 脚本：
 
 - Agent：`pnpm agent:patch:build`
-- City：`pnpm city:patch:build`
+- City/Agent：`pnpm agent:patch:build`
 - CLI：`pnpm cli:patch:build`
-- 多 package：按实际影响范围显式指定，例如 `pnpm patch:build -- --city --services --database-d1`
-- 仅验证：显式指定范围并使用 `pnpm patch:build -- --no-bump --city --services`
+- 多 package：按实际影响范围显式指定，例如 `pnpm patch:build -- --agent --services --database-d1`
+- 仅验证：显式指定范围并使用 `pnpm patch:build -- --no-bump --agent --services`
 
 只有对外能力实际发生变化的 package 才递增版本。构建脚本可以自动补齐依赖 package 进行验证，但依赖被构建不代表它也需要递增版本。
 

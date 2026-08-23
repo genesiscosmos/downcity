@@ -26,13 +26,13 @@ The recommended order is:
 - product-facing profile table
 - City `user_token` issuance after login
 
-## Relationship with `@downcity/city`
+## Relationship with `@downcity/agent`
 
 The cleanest way to separate the two is:
 
 - `@downcity/services`
   registers the `accounts` service and its actions into City
-- `@downcity/city`
+- `@downcity/agent`
   gives frontends, apps, services, and trusted backends a unified way to call those actions
 
 So this service owns "adding auth capability into City," while the SDK still owns the actual calling pattern:
@@ -152,11 +152,11 @@ const reply = await user.ai.text({
 });
 ```
 
-This is why `AccountsService()` and `@downcity/city` are usually read together: one provides the auth capability, the other provides the calling surface.
+This is why `AccountsService()` and `@downcity/agent` are usually read together: one provides the auth capability, the other provides the calling surface.
 
 ## Related docs
 
 - For the step-by-step flows, continue with the three subpages in this section
 - For the full account capability, continue in [Accounts Service](/en/payments/accounts)
-- For the downcity SDK, read [@downcity/city](/en/city-sdk-docs/packages/federation/federation)
+- For the downcity SDK, read [@downcity/agent](/en/city-sdk-docs/packages/federation/federation)
 - For more detailed product-side calling patterns, read [Embassy User](/en/city-sdk-docs/reference/city-user)

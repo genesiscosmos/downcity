@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - Agent 与 Session 对外统一接收 AgentModel，executor 内部只处理 AI SDK LanguageModel。
  * - CityModel 自身实现 LanguageModelV3，executor 可以直接调用。
- * - 这里不依赖 @downcity/city，只依赖 @downcity/type 的共享协议。
+ * - 这里不依赖 @downcity/agent，只依赖 @downcity/type 的共享协议。
  */
 
 import {

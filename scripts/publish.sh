@@ -54,7 +54,6 @@ const files = [
   'packages/sandbox-windows-srt/package.json',
   'packages/agent/package.json',
   'packages/federation/package.json',
-  'packages/city/package.json',
   'packages/services/package.json',
   'packages/plugins/package.json',
   'packages/cli/package.json',
@@ -186,7 +185,6 @@ main() {
     packages/sandbox-windows-srt/package.json \
     packages/agent/package.json \
     packages/federation/package.json \
-    packages/city/package.json \
     packages/services/package.json \
     packages/plugins/package.json \
     packages/cli/package.json

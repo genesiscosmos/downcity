@@ -263,7 +263,7 @@ Federation 数据库不存储：
 ## 9. 包边界
 
 - `@downcity/federation`：正式拥有 Federation、Embassy、Bureau、Service 和协议类型。
-- `@downcity/city`：维护 Agent 运行时内存索引，并按 ID 转发 HTTP/RPC；不读取或持久化产品配置。
+- `@downcity/agent`：维护 Agent 运行时内存索引，并按 ID 转发 HTTP/RPC；不读取或持久化产品配置。
 - `@downcity/local`：提供本地数据库 Adapter、产品配置 Repository 与 Plugin Loader。
 - `downcity` CLI：管理本机 Agent/City，并通过 `fed` 命令管理 Federation 部署和凭证。
 - Agent package：拥有单 Agent、Workspace、Session 和 Plugin SDK，不依赖本文的身份客户端组织方式。

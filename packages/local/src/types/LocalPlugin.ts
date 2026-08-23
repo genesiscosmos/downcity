@@ -1,7 +1,7 @@
 /** 本地文件型 Plugin 定义、注册与配置协议。 */
 
 import type { JsonObject, Plugin } from "@downcity/agent";
-import type { PluginHostContext } from "@downcity/city";
+import type { PluginHostContext } from "@downcity/agent";
 
 /** Plugin 在静态定义中声明的配置协议。 */
 export interface LocalPluginConfigDefinition {

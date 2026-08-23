@@ -16,15 +16,17 @@ import path from "node:path";
 import { ImagePlugin } from "../../plugins/bin/index.js";
 import { PluginRegistry } from "../bin/plugin/core/PluginRegistry.js";
 
+let current_image_ai;
+
 function create_image_plugin(options = {}) {
   const { list_models, image_create, image_result, ...profile } = options;
+  current_image_ai = {
+    catalog: async () => ({ all: () => (list_models ? list_models() : []) }),
+    image_create,
+    image_result,
+  };
   return new ImagePlugin({
     ...profile,
-    image_ai: {
-      catalog: async () => ({ all: () => (list_models ? list_models() : []) }),
-      image_create,
-      image_result,
-    },
   });
 }
 
@@ -69,6 +71,7 @@ function create_context(workspace_path = process.cwd()) {
     data_path,
     files: create_files(workspace_path),
     data_files: create_files(data_path),
+    city: { embassy: { user: { ai: current_image_ai } } },
   };
 }
 

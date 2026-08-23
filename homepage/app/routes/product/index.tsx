@@ -38,7 +38,7 @@ const page_content = {
         id: "sdk",
         title: "City SDK",
         desc: "把模型目录、Service 路由、身份、用量、余额和支付接入你的产品体系。",
-        source: "packages/city/",
+        source: "packages/agent/",
       },
       {
         id: "agent-sdk",
@@ -57,7 +57,7 @@ const page_content = {
     facts: [
       "Downcity 面向 AI builders：核心价值是让多个 Agent 产品复用同一套运行基础设施。",
       "Downcity CLI：官方命令行实现，目录为 packages/cli/。",
-      "City SDK：核心 runtime 与服务访问方式位于 packages/city/。",
+      "City SDK：核心 runtime 与服务访问方式位于 packages/agent/。",
       "Agent SDK：本地 Agent / RemoteAgent SDK 位于 packages/agent/。",
       "Downcity UI SDK：React + Tailwind 组件包目录为 packages/ui/。",
     ],
@@ -92,7 +92,7 @@ const page_content = {
         id: "sdk",
         title: "City SDK",
         desc: "Bring model catalogs, service routing, auth, usage, balance, and payment capabilities into your product flow.",
-        source: "packages/city/",
+        source: "packages/agent/",
       },
       {
         id: "agent-sdk",
@@ -111,7 +111,7 @@ const page_content = {
     facts: [
       "Downcity is for AI builders: the core value is reusing one runtime infrastructure across many agent products.",
       "Downcity CLI is the official command-line implementation under packages/cli/.",
-      "City SDK runtime and service access helpers live in packages/city/.",
+      "City SDK runtime and service access helpers live in packages/agent/.",
       "Agent SDK local Agent and RemoteAgent runtime are in packages/agent/.",
       "Downcity UI SDK is the React + Tailwind component package under packages/ui/.",
     ],

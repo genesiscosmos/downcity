@@ -193,6 +193,6 @@ flowchart LR
     Workspace --> Shell["关闭进程与 Sandbox"]
 ```
 
-Session 执行前会等待 Agent 的内部初始化屏障。`dispose()` 会释放 Agent、Plugin、Schedule、Workspace 和 Shell 资源，但不会关闭由 `@downcity/city` 创建的 HTTP/RPC transport。
+Session 执行前会等待 Agent 的内部初始化屏障。`dispose()` 会释放 Agent、Plugin、Schedule、Workspace 和 Shell 资源，但不会关闭由 `@downcity/agent` 创建的 HTTP/RPC transport。
 
 继续阅读：[Agent 生命周期](/zh/docs/agent/lifecycle)。

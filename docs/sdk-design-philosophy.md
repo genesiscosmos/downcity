@@ -389,7 +389,7 @@ Session metadata 同时记录 `agent_id` 与 `workspace_id`。这使恢复、审
 
 | Package | 对外职责 | 不承担的职责 |
 | --- | --- | --- |
-| `@downcity/city` | City 资源容器、Agent 路由、HTTP/RPC transport、关闭协调 | Agent 或 Plugin 工厂、Session 领域逻辑 |
+| `@downcity/agent` | City 资源容器、Agent 路由、HTTP/RPC transport、关闭协调 | Agent 或 Plugin 工厂、Session 领域逻辑 |
 | `@downcity/agent` | 单 Agent、Session、执行器、Plugin runtime、远程 Agent client | City 控制面、全局 Agent registry、平台 Sandbox 选择 |
 | `@downcity/workspace` | 项目资源、受控文件能力、Workspace Tool、env、可选 Shell 与私有存储 Provider | Agent 身份、模型、Plugin 与 Session 规则 |
 | `@downcity/plugins` | 可复用 Plugin 实现及其窄服务协议 | City 注册表、宿主生命周期 |
@@ -412,10 +412,10 @@ Plugin
   -> 自身的窄服务接口
 
 Agent
-  -> AgentCity 最小协议，而非 @downcity/city 实现
+  -> AgentCity 最小协议，而非 @downcity/agent 实现
 ```
 
-`@downcity/agent` 通过最小 `AgentCity` 协议感知 City，避免反向依赖 `@downcity/city`。应用通过 `city.agents.add(agent)` 建立绑定；应用可以替换 City 宿主实现，只要它提供解析 Workspace 和释放 Agent 的必要协议。
+`@downcity/agent` 通过最小 `AgentCity` 协议感知 City，避免反向依赖 `@downcity/agent`。应用通过 `city.agents.add(agent)` 建立绑定；应用可以替换 City 宿主实现，只要它提供解析 Workspace 和释放 Agent 的必要协议。
 
 ## 10. 公开 API 与内部适配层
 

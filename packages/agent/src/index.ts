@@ -22,6 +22,35 @@ export type {
   PluginHostExtensions,
   PluginSetupModule,
 } from "./city/index.js";
+export {
+  AgentHTTP,
+  CityHTTP,
+  AgentRPC,
+  CityRPC,
+  create_city_host_instance_id,
+  get_city_host_state_path,
+  is_process_alive,
+  read_city_host_state,
+  register_city_host,
+  request_city_host_shutdown,
+  unregister_city_host,
+  wait_for_city_host_exit,
+} from "./city/index.js";
+export type {
+  AgentHttpServerHandle,
+  AgentHttpBinding,
+  AgentHttpListenOptions,
+  AgentHttpRuntimeOptions,
+  CityHttpRuntimeOptions,
+  CityAgentHttpExtension,
+  AgentRpcBinding,
+  AgentRpcListenOptions,
+  AgentRpcRuntimeOptions,
+  CityRpcRuntimeOptions,
+  AgentSessionModelResolver,
+  CityHostOwner,
+  CityHostState,
+} from "./city/index.js";
 export type { SessionStore } from "./types/store/SessionStore.js";
 export type {
   CompactActiveMessagesInput,

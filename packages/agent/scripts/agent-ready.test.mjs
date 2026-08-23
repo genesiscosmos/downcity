@@ -14,6 +14,7 @@ import fs from "node:fs/promises";
 
 import { MockLanguageModelV3 } from "ai/test";
 import { Agent } from "../bin/index.js";
+import { create_agent_workspace } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 import { create_plugin } from "../bin/plugin/core/PluginActionFactory.js";
 
@@ -142,7 +143,7 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
     plugins: [blocking_plugin],
     model,
   });
-  const entry = agent.enter(new Workspace({ id: "ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const entry = create_agent_workspace(agent, new Workspace({ id: "ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
 
   try {
     const session = await entry.sessions.create({
@@ -198,7 +199,7 @@ test("agent.plugins waits for lifecycle start before direct action execution", a
     id: "plugin_ready_agent",
     plugins: [plugin],
   });
-  const entry = agent.enter(new Workspace({ id: "plugin_ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const entry = create_agent_workspace(agent, new Workspace({ id: "plugin_ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
 
   try {
     const action_promise = entry.plugins.run_action({
@@ -245,7 +246,7 @@ test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 启动失�
     id: "ready_isolation_agent",
     plugins: [failing_plugin, healthy_plugin],
   });
-  const entry = agent.enter(new Workspace({ id: "isolation_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const entry = create_agent_workspace(agent, new Workspace({ id: "isolation_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
 
   try {
     await entry.sessions.create({ session_id: "initial_barrier" });
@@ -265,7 +266,7 @@ test("Agent registers PluginRegistry tools and removes them with the last action
   const agent = new Agent({
     id: "state_plugin_tools_agent",
   });
-  const entry = agent.enter(new Workspace({ id: "plugin_tools_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const entry = create_agent_workspace(agent, new Workspace({ id: "plugin_tools_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
   const action_plugin = create_plugin({
     name: "dynamic_action",
     actions: {

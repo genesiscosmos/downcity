@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent } from "../bin/index.js";
+import { create_agent_workspace } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 import { LocalSessionStore } from "../bin/workspace/store/LocalSessionStore.js";
 
@@ -125,7 +126,7 @@ test("AgentWorkspace obtains its Store from private Workspace storage", async (t
     data_root_path,
   });
   const agent = new Agent({ id: "dispose-test" });
-  const entry = agent.enter(workspace);
+  const entry = create_agent_workspace(agent, workspace);
 
   assert.equal(entry.workspace, workspace);
   assert.equal((await entry.sessions.create({ session_id: "first" })).id, "first");
