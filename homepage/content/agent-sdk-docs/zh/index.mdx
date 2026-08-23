@@ -37,7 +37,8 @@ flowchart LR
 | Agent 已由另一个进程通过 HTTP/RPC 暴露 | `RemoteAgent` |
 | 客户端只需要创建 Session、发送 prompt 和订阅结果 | `RemoteAgent` |
 
-网络服务不属于 Agent。需要暴露本地 Agent 时，使用 `@downcity/agent` 提供的 `AgentHTTP` 或 `AgentRPC`。
+网络服务不属于 Agent。创建 `City`，通过 `city.agents.add(agent)` 加入 Agent，再使用
+`city.http()` 或 `city.rpc()` 暴露整个 City。
 
 ## 推荐的本地组合
 

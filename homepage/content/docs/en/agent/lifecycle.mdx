@@ -33,6 +33,6 @@ await turn.finished;
 await agent.dispose();
 ```
 
-Sessions wait for Agent initialization before execution. `dispose()` stops plugin lifecycle, ActionSchedule, and Shell resources; callers must separately close transports created by `AgentHTTP` or `AgentRPC`.
+Sessions wait for Agent initialization before execution. `dispose()` stops plugin lifecycle, ActionSchedule, and Shell resources; the containing `City` owns and closes its HTTP/RPC transports.
 
 Continue with the [Agent SDK docs](/en/agent-sdk-docs).

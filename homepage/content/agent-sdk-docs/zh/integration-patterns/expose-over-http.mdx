@@ -13,11 +13,11 @@ description: 把本地 Agent 作为 HTTP 服务暴露给其它进程或客户端
 downcity on
 ```
 
-然后别的进程用：
+然后别的进程用 City 的 Workspace 路径：
 
 ```ts
 new RemoteAgent({
-  url: "http://127.0.0.1:5314/agents/repo-helper",
+  url: "http://127.0.0.1:5314/agents/repo-helper/workspaces/project",
 })
 ```
 
@@ -26,7 +26,7 @@ new RemoteAgent({
 这是一种很自然的本地 client-server 形态：
 
 - 本地 Agent 负责执行
-- Downcity 负责 HTTP 网关发布
+- City 负责 HTTP 网关发布
 - RemoteAgent 负责消费
 
 如果你同时注册了 plugins，Downcity 也会把 plugin 的 HTTP 路由一起挂出去。

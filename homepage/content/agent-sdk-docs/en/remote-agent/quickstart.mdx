@@ -1,6 +1,6 @@
 ---
 title: RemoteAgent Quickstart
-description: Connect to an Agent that has already been exposed by Downcity over HTTP or by Agent RPC
+description: Connect to an Agent that has already been exposed by a City over HTTP or RPC
 ---
 
 # RemoteAgent Quickstart
@@ -21,18 +21,17 @@ It currently supports:
 downcity on
 ```
 
-### Option 2: start a standalone RPC or HTTP server
+### Option 2: start a City RPC or HTTP server
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, City } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";
-import { AgentRPC } from "@downcity/agent/city";
 
 const workspace = new Workspace({ id: "project", path });
 const agent = new Agent({ id, model });
-// Session 在创建时选择 Workspace。
-const rpc = new AgentRPC(agent, workspace);
-await rpc.listen({ host: "127.0.0.1", port: 15314 });
+const city = new City({ workspaces: [workspace] });
+city.agents.add(agent);
+await city.rpc({ host: "127.0.0.1", port: 15314 });
 ```
 
 ## Connect from the client
@@ -43,7 +42,7 @@ await rpc.listen({ host: "127.0.0.1", port: 15314 });
 import { RemoteAgent } from "@downcity/agent";
 
 const agent = new RemoteAgent({
-  url: "http://127.0.0.1:5314/agents/assistant",
+  url: "http://127.0.0.1:5314/agents/assistant/workspaces/project",
 });
 
 const session = await agent.sessions.create();
@@ -60,7 +59,7 @@ const result = await turn.finished;
 import { RemoteAgent } from "@downcity/agent";
 
 const agent = new RemoteAgent({
-  url: "rpc://127.0.0.1:15314/assistant",
+  url: "rpc://127.0.0.1:15314/assistant/project",
 });
 ```
 

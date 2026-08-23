@@ -13,6 +13,7 @@ In Downcity, HTTP exposure is published by Downcity:
 downcity on
 ```
 
-The CLI City exposes every registered Agent at `http://127.0.0.1:5314/agents/<agent_id>`.
+The CLI City exposes every registered Agent and Workspace at
+`http://127.0.0.1:5314/agents/<agent_id>/workspaces/<workspace_id>`.
 
 For local process-to-process access, prefer `rpc://`. Use HTTP when an external client needs to call the Agent through the Downcity gateway.

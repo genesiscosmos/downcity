@@ -1,62 +1,17 @@
 ---
-title: AgentRPC
-description: Agent 的 RPC 传输层 — 跨进程会话访问
+title: City RPC
+description: 由 City 持有的 Agent 与 Workspace RPC transport
 ---
 
-# AgentRPC
+# City RPC
 
-`AgentRPC` 是一个本地 `AgentWorkspace` 的 TCP RPC 传输层，让其他进程通过主机和端口访问该 Workspace 的会话，无需走 HTTP。
-
-需要额外安装 `@downcity/agent`：
-
-```bash
-pnpm add @downcity/agent
-```
-
-## 最小示例
+RPC 属于 `City`，不属于单个 `Agent`。使用 `city.rpc()` 在一个 NDJSON-over-TCP 监听器中暴露当前 City
+中的全部 Agent。
 
 ```ts
-import { AgentRPC } from "@downcity/agent/city";
-import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-
-const agent = new Agent({
-  id: "demo",
-  model,
-});
-const workspace = new Workspace({ id: "project", path: process.cwd() });
-const rpc = new AgentRPC(agent, workspace);
-
-const binding = await rpc.listen({ host: "127.0.0.1", port: 15314 });
+const rpc = await city.rpc({ host: "127.0.0.1", port: 15314 });
+console.log(rpc.binding()?.url);
+await city.close();
 ```
 
-## 构造参数
-
-```ts
-new AgentRPC(agent: Agent, workspace: Workspace)
-```
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| `agent_workspace` | `AgentWorkspace` | 需要暴露的 Agent 与 Workspace |
-
-## 方法
-
-### `listen(options?)`
-
-启动 RPC 监听。
-
-```ts
-const binding = await rpc.listen({ host: "127.0.0.1", port: 15314 });
-// 返回 AgentRpcBinding，包含 TCP 连接端点信息
-```
-
-### `close()`
-
-停止 RPC 服务并释放资源。
-
-```ts
-await rpc.close();
-```
-
-另见：[AgentHTTP](/zh/agent-sdk-docs/api-reference/agent-http) HTTP 传输层。
+Remote 客户端使用 `rpc://host:port/<agent_id>/<workspace_id>`。完整示例参见 [City transport](/zh/city-sdk-docs/zh/packages/city/transport)。

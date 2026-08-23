@@ -37,7 +37,8 @@ flowchart LR
 | Another process already exposes the Agent over HTTP/RPC | `RemoteAgent` |
 | The client only creates Sessions, sends prompts, and subscribes | `RemoteAgent` |
 
-Network serving does not belong to Agent. Use `AgentHTTP` or `AgentRPC` from `@downcity/agent` to expose a local Agent.
+Network serving does not belong to Agent. Create a `City`, add the Agent with `city.agents.add(agent)`,
+then use `city.http()` or `city.rpc()` to expose the City.
 
 ## Recommended local composition
 

@@ -7,7 +7,8 @@ description: The minimal HTTP session routes Downcity can expose for RemoteAgent
 
 These SDK routes do not belong to `Agent` itself.
 
-They are exposed by `AgentHTTP` from [`@downcity/agent`](/en/agent-sdk-docs/local-agent/http-and-rpc). Mount them as a standalone HTTP server, or as a Hono sub-router on any host server (Downcity gateway included).
+They are exposed by the City HTTP transport returned from `city.http()`. City may start the
+standalone server itself or mount its router in a host server such as the Downcity gateway.
 
 The current core set includes:
 

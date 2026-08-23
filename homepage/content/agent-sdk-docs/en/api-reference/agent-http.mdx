@@ -1,77 +1,19 @@
 ---
-title: AgentHTTP
-description: HTTP transport layer for local Agent — exposes session access over HTTP
+title: City HTTP
+description: City-owned HTTP transport for Agents and Workspaces
 ---
 
-# AgentHTTP
+# City HTTP
 
-`AgentHTTP` is the HTTP transport for one local `AgentWorkspace`. It exposes its RemoteAgent Session API and approval operations over HTTP.
-
-Only available when you install `@downcity/agent`:
-
-```bash
-pnpm add @downcity/agent
-```
-
-## Minimal usage
+HTTP is owned by `City`, not by an individual `Agent`. Use `city.http()` to expose every
+registered Agent through one listener.
 
 ```ts
-import { AgentHTTP } from "@downcity/agent/city";
-import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-
-const agent = new Agent({
-  id: "demo",
-  model,
-});
-const workspace = new Workspace({ id: "project", path: process.cwd() });
-const http = new AgentHTTP(agent, workspace);
-
-const binding = await http.server().listen({ host: "127.0.0.1", port: 5314 });
-// HTTP server listening on http://127.0.0.1:5314
+const http = await city.http({ host: "127.0.0.1", port: 5314 });
+console.log(http.binding()?.url);
+await city.close();
 ```
 
-## Constructor
-
-```ts
-new AgentHTTP(agent: Agent, workspace: Workspace)
-```
-
-| Param | Type | Description |
-|-------|------|-------------|
-| `agent_workspace` | `AgentWorkspace` | The local Agent execution scope to expose |
-
-## Methods
-
-### `listen(options)`
-
-Start the HTTP server.
-
-```ts
-const binding = await http.server().listen({
-  host: "127.0.0.1",  // optional: bind address (default: "127.0.0.1")
-  port: 5314,            // required: TCP port
-});
-```
-
-Returns `AgentHttpBinding` with the server URL, host, and port. Use `router()` before startup when you need to mount the transport on your own Hono app.
-
-### `close()`
-
-Stop the HTTP server.
-
-```ts
-await http.close();
-```
-
-## Endpoints
-
-The HTTP server exposes a RESTful interface for session management, execution, and health checks. For the exact route table, see [HTTP Endpoints](/en/agent-sdk-docs/api-reference/sdk-http-endpoints).
-
-## When to use it
-
-- You want to access an agent session from a browser or mobile app
-- You are building a local dev server with an agent backend
-- You need to integrate with HTTP middleware or existing web infrastructure
-
-See also: [AgentRPC](/en/agent-sdk-docs/api-reference/agent-rpc) for the lightweight RPC transport.
+Requests use the route prefix
+`/agents/<agent_id>/workspaces/<workspace_id>`. See [City transport](/en/city-sdk-docs/en/packages/city/transport)
+for the complete composition example.

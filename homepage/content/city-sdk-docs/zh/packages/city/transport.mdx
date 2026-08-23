@@ -22,5 +22,5 @@ const http = await city.http({ host: "127.0.0.1", port: 5314 });
 const rpc = await city.rpc({ host: "127.0.0.1", port: 15314 });
 ```
 
-HTTP 地址是 `http://host:port/agents/<agent_id>`，RPC 地址是
-`rpc://host:port/<agent_id>`。不再提供 Agent 级 transport 构造器，外部服务统一属于 City。
+HTTP 地址是 `http://host:port/agents/<agent_id>/workspaces/<workspace_id>`，RPC 地址是
+`rpc://host:port/<agent_id>/<workspace_id>`。不再提供 Agent 级 transport 构造器，外部服务统一属于 City。

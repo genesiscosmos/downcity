@@ -33,6 +33,6 @@ await turn.finished;
 await agent.dispose();
 ```
 
-Session 会在执行前自动等待 Agent 初始化完成。`dispose()` 会关闭 plugin lifecycle、ActionSchedule 和 Shell 等 Agent 自有运行时资源，但不会关闭由 `AgentHTTP` 或 `AgentRPC` 创建的 transport，调用方需要分别关闭它们。
+Session 会在执行前自动等待 Agent 初始化完成。`dispose()` 会关闭 plugin lifecycle、ActionSchedule 和 Shell 等 Agent 自有运行时资源；HTTP/RPC transport 由所属 City 管理并关闭。
 
 继续阅读：[Agent SDK](/zh/agent-sdk-docs)。

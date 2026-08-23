@@ -8,5 +8,5 @@ description: One process exposes Agent capability, another consumes it through R
 This mode usually looks like:
 
 - the server process owns the local `Agent`
-- the server exposes HTTP through Downcity, or RPC / HTTP through `AgentRPC` / `AgentHTTP` from `@downcity/agent`
+- the server exposes HTTP or RPC through the containing `City` with `city.http()` / `city.rpc()`
 - the client process creates `RemoteAgent`

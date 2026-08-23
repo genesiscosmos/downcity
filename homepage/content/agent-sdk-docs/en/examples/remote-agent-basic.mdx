@@ -9,7 +9,7 @@ description: Call an Agent hosted in another process over HTTP or RPC
 import { RemoteAgent } from "@downcity/agent";
 
 const agent = new RemoteAgent({
-  url: "http://127.0.0.1:5314/agents/repo-helper",
+  url: "http://127.0.0.1:5314/agents/repo-helper/workspaces/project",
 });
 
 const session = await agent.sessions.create();

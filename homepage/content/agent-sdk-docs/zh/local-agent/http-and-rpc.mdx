@@ -1,95 +1,71 @@
 ---
-title: 通过 RPC 与 HTTP 暴露 Agent
-description: 使用 @downcity/agent 提供的 AgentRPC 和 AgentHTTP 把本地 Agent 暴露成网络服务
+title: 通过 City 暴露 RPC 与 HTTP
+description: 使用 City 持有的 HTTP 和 RPC 服务暴露 Agent
 ---
 
-# 通过 RPC 与 HTTP 暴露 Agent
+# 通过 City 暴露 RPC 与 HTTP
 
-`@downcity/agent` 只负责构造 Agent 和运行会话。网络暴露能力放在独立包 `@downcity/agent` 里，按需引入。
+外部服务属于 `City`。Agent 仍然是执行主体，City 负责网络监听，并把请求路由到对应的
+Agent 和 Workspace。
 
 ```bash
-pnpm add @downcity/agent @downcity/agent
+pnpm add @downcity/agent @downcity/workspace
 ```
 
-## Agent 不再有 `start()`
-
-`new Agent(...)` 之后，plugin lifecycle 和 ActionSchedule 会自动启动。无需再手动调用 `start()`。
-
-- Session 执行会在内部等待 Plugin lifecycle 与 ActionSchedule 启动完成。
-- `await agent.dispose()`：释放 Agent 自有运行时资源（plugins、ActionSchedule、shell）。
-
-RPC 与 HTTP 不再是 Agent 的职责。
-
-## AgentRPC：暴露为本机 RPC
-
-`AgentRPC` 把一个 `AgentWorkspace` 通过 NDJSON-over-TCP 暴露给 `RemoteAgent("rpc://...")` 使用。
+## 启动 City transport
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, City } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";
-import { AgentRPC } from "@downcity/agent/city";
 
-const workspace = new Workspace({ id: "project", path });
-const agent = new Agent({ id, model });
-// Session 在创建时选择 Workspace。
-const rpc = new AgentRPC(agent, workspace);
-const binding = await rpc.listen({ host: "127.0.0.1", port: 15314 });
-console.log(binding.url); // rpc://127.0.0.1:15314
+const workspace = new Workspace({ id: "project", path: process.cwd() });
+const agent = new Agent({ id: "assistant", model });
+const city = new City({ workspaces: [workspace] });
+city.agents.add(agent);
 
-// 关闭
-await rpc.close();
-await agent.dispose();
+const rpc = await city.rpc({ host: "127.0.0.1", port: 15314 });
+const http = await city.http({ host: "127.0.0.1", port: 5314 });
+console.log(rpc.binding()?.url); // rpc://127.0.0.1:15314
+console.log(http.binding()?.url); // http://127.0.0.1:5314
+
+await city.close();
 ```
 
-`AgentRPC` 默认监听 `127.0.0.1:15314`，协议为 NDJSON，无鉴权，仅用于本机或可信网络。
+`City` 统一拥有一个 HTTP transport 和一个 RPC transport，按 Agent ID 与 Workspace ID 路由：
 
-## AgentHTTP：暴露最小 SDK HTTP 表面
+- HTTP：`http://127.0.0.1:5314/agents/assistant/workspaces/project`
+- RPC：`rpc://127.0.0.1:15314/assistant/project`
 
-`AgentHTTP` 提供 `RemoteAgent` HTTP 客户端所需的最小 HTTP 表面（`/api/sdk/sessions/*`）。两种用法二选一。
+RPC 使用 NDJSON 协议。鉴权、CORS 和其他宿主级策略由 City 宿主负责。
 
-### 方式 1：独立 HTTP server
+## 同时启动两个 transport
 
 ```ts
-import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { AgentHTTP } from "@downcity/agent/city";
+await city.listen({
+  http: { host: "127.0.0.1", port: 5314 },
+  rpc: { host: "127.0.0.1", port: 15314 },
+});
 
-const workspace = new Workspace({ id: "project", path });
-const agent = new Agent({ id, model });
-// Session 在创建时选择 Workspace。
-const http = new AgentHTTP(agent, workspace);
-const binding = await http.server().listen({ host: "127.0.0.1", port: 5314 });
-console.log(binding.url); // http://127.0.0.1:5314
-
-// 关闭
-await http.close();
-await agent.dispose();
+await city.close();
 ```
 
-### 方式 2：挂载到你自己的 Hono server
+需要独立控制生命周期时，分别调用 `city.http()` 或 `city.rpc()`。
 
-`AgentHTTP.router()` 返回一个 `Hono` 子路由，可以直接挂载：
+## 与 RemoteAgent 的关系
 
 ```ts
-import { Hono } from "hono";
-import { AgentHTTP } from "@downcity/agent/city";
+import { RemoteAgent } from "@downcity/agent";
 
-const app = new Hono();
-const http = new AgentHTTP(agent, workspace);
-app.route("/", http.router());
+const agent = new RemoteAgent({
+  url: "http://127.0.0.1:5314/agents/assistant/workspaces/project",
+});
+const session = await agent.sessions.create();
 ```
 
-CORS / logger / 鉴权等中间件由你自行决定。`AgentHTTP` 不会附带任何中间件。
-
-## 与 Downcity、RemoteAgent 的关系
-
-- `downcity on` 创建一个 `City`，恢复全部 Agent，并分别启动一个 City HTTP 端口和一个 City RPC 端口。
-- City HTTP 地址为 `http://127.0.0.1:5314/agents/<agent_id>`；City RPC 地址为 `rpc://127.0.0.1:15314/<agent_id>`。
-- `RemoteAgent` 客户端可以连到 `AgentRPC.listen()` 暴露的 `rpc://` 地址，或 `AgentHTTP` 暴露的 HTTP 表面。
+`RemoteAgent` 只消费 City 暴露的地址，不创建或配置服务端 Agent。
 
 ## 相关文档
 
 - [Local Agent 快速开始](/zh/agent-sdk-docs/local-agent/quickstart)
 - [RemoteAgent 快速开始](/zh/agent-sdk-docs/remote-agent/quickstart)
-- [AgentRPC](/zh/agent-sdk-docs/api-reference/agent-rpc) — RPC 传输层
-- [AgentHTTP](/zh/agent-sdk-docs/api-reference/agent-http) — HTTP 传输层
+- [City transport](/zh/city-sdk-docs/zh/packages/city/transport)

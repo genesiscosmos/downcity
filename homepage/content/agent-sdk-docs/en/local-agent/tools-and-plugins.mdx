@@ -324,12 +324,12 @@ The `image_result` callback may return a remote URL or a local path. For a remot
 
 ## plugin HTTP
 
-If Downcity exposes the Agent HTTP gateway, registered plugins with `plugin.http.server.register(...)` are also mounted onto the same HTTP app automatically.
+If Downcity exposes the City HTTP gateway, registered plugins with `plugin.http.server.register(...)` are also mounted onto the same HTTP app automatically.
 
 So:
 
 - plugin existence comes from the `plugins` array you pass into `Agent`
-- plugin HTTP exposure happens when Downcity publishes the Agent HTTP gateway
+- plugin HTTP exposure happens when Downcity publishes the City HTTP gateway
 
 ## See also
 

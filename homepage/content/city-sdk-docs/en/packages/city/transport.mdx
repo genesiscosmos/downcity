@@ -22,5 +22,6 @@ const http = await city.http({ host: "127.0.0.1", port: 5314 });
 const rpc = await city.rpc({ host: "127.0.0.1", port: 15314 });
 ```
 
-HTTP uses `http://host:port/agents/<agent_id>` and RPC uses `rpc://host:port/<agent_id>`.
+HTTP uses `http://host:port/agents/<agent_id>/workspaces/<workspace_id>` and RPC uses
+`rpc://host:port/<agent_id>/<workspace_id>`.
 There are no Agent-level transport constructors; external services belong to City.

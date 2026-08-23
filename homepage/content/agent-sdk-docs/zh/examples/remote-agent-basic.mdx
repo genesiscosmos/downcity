@@ -9,7 +9,7 @@ description: 通过 HTTP 或 RPC 调用另一个进程中的 Agent
 import { RemoteAgent } from "@downcity/agent";
 
 const agent = new RemoteAgent({
-  url: "http://127.0.0.1:5314/agents/repo-helper",
+  url: "http://127.0.0.1:5314/agents/repo-helper/workspaces/project",
 });
 
 const session = await agent.sessions.create();
@@ -24,7 +24,7 @@ const result = await turn.finished;
 
 ```ts
 const agent = new RemoteAgent({
-  url: "rpc://127.0.0.1:15314",
+  url: "rpc://127.0.0.1:15314/repo-helper/project",
 });
 ```
 

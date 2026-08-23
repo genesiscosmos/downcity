@@ -345,12 +345,12 @@ const job = await plugin_call({
 
 ## plugin HTTP
 
-如果 Downcity 暴露 Agent HTTP 网关，已注册 plugin 的 `plugin.http.server.register(...)` 也会自动挂到同一个 HTTP app 上。
+如果 Downcity 暴露 City HTTP 网关，已注册 plugin 的 `plugin.http.server.register(...)` 也会自动挂到同一个 HTTP app 上。
 
 也就是说：
 
 - 插件是否存在，由 `Agent` 构造参数里的 `plugins` 决定
-- 插件 HTTP 是否真正暴露，由 Downcity 是否发布 Agent HTTP 网关决定
+- 插件 HTTP 是否真正暴露，由 Downcity 是否发布 City HTTP 网关决定
 
 ## 一个重要边界
 

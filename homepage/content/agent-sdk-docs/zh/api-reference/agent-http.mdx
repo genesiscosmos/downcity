@@ -1,65 +1,17 @@
 ---
-title: AgentHTTP
-description: Agent 的 HTTP 传输层 — 通过 HTTP 暴露会话访问
+title: City HTTP
+description: 由 City 持有的 Agent 与 Workspace HTTP transport
 ---
 
-# AgentHTTP
+# City HTTP
 
-`AgentHTTP` 是一个本地 `AgentWorkspace` 的 HTTP 传输层，暴露 RemoteAgent 所需的 Session API 与审批端点。
-
-需要额外安装 `@downcity/agent`：
-
-```bash
-pnpm add @downcity/agent
-```
-
-## 最小示例
+HTTP 属于 `City`，不属于单个 `Agent`。使用 `city.http()` 在一个监听器中暴露当前 City
+中的全部 Agent。
 
 ```ts
-import { AgentHTTP } from "@downcity/agent/city";
-import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-
-const agent = new Agent({
-  id: "demo",
-  model,
-});
-const workspace = new Workspace({ id: "project", path: process.cwd() });
-const http = new AgentHTTP(agent, workspace);
-
-const binding = await http.server().listen({ host: "127.0.0.1", port: 5314 });
-// HTTP 服务监听在 http://127.0.0.1:5314
+const http = await city.http({ host: "127.0.0.1", port: 5314 });
+console.log(http.binding()?.url);
+await city.close();
 ```
 
-## 构造参数
-
-```ts
-new AgentHTTP(agent: Agent, workspace: Workspace)
-```
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| `agent_workspace` | `AgentWorkspace` | 需要暴露的 Agent 与 Workspace |
-
-## 方法
-
-### `listen(options)`
-
-启动 HTTP 服务。
-
-```ts
-const binding = await http.server().listen({
-  host: "127.0.0.1",
-  port: 5314,
-});
-```
-
-### `close()`
-
-停止 HTTP 服务。
-
-```ts
-await http.close();
-```
-
-另见：[AgentRPC](/zh/agent-sdk-docs/api-reference/agent-rpc) 轻量 RPC 传输层。
+请求路径前缀为 `/agents/<agent_id>/workspaces/<workspace_id>`。完整示例参见 [City transport](/zh/city-sdk-docs/zh/packages/city/transport)。

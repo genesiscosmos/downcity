@@ -45,7 +45,7 @@ Agent 配置不绑定 Workspace。同一个 Agent 可以进入多个 Workspace�
 ~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/
 ```
 
-`Agent` 在构造时启动 plugin 生命周期与后台任务，Session 执行会自动等待初始化完成；关闭时使用 `await agent.dispose()`。HTTP 与 RPC 由独立包 `@downcity/agent` 的 `AgentHTTP` 与 `AgentRPC` 提供。
+`Agent` 在构造时启动 plugin 生命周期与后台任务，Session 执行会自动等待初始化完成；关闭时使用 `await agent.dispose()`。HTTP 与 RPC 由宿主 `City` 通过 `city.http()` 与 `city.rpc()` 提供。
 
 ## 流式消息
 
