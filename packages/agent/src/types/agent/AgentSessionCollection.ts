@@ -20,4 +20,7 @@ export interface AgentCreateSessionOptions {
 export interface AgentSessionCollection {
   /** 在指定 Workspace 中创建一个属于当前 Agent 的 Session。 */
   create(options: AgentCreateSessionOptions): Promise<AgentSession>;
+
+  /** 在指定 Workspace 中恢复一个已经属于当前 Agent 的 Session。 */
+  get(options: AgentCreateSessionOptions & { session_id: string }): Promise<AgentSession>;
 }

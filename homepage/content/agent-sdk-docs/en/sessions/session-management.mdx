@@ -15,7 +15,7 @@ const created = await agent.sessions.create({
   session_id: "repo-analysis",
 });
 
-const existing = await agent.sessions.get("repo-analysis");
+const existing = await agent.sessions.get({ workspace, session_id: "repo-analysis" });
 ```
 
 `create()` expresses creation intent. It throws when the ID already exists instead of silently reusing it. When `session_id` is omitted, the SDK generates a stable, non-guessable ID. For get-or-create behavior, call `get()` first and call `create()` only when it is missing.

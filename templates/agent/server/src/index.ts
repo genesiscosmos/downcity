@@ -11,9 +11,9 @@ import { resolve } from "node:path";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import {
   Agent,
-  Workspace,
   type SessionMessage,
 } from "@downcity/agent";
+import { Workspace } from "@downcity/workspace";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
@@ -44,17 +44,17 @@ const agent = new Agent({
   model: deepseek("deepseek-chat"),
   instruction: "你是一个简洁、可靠的项目助手。",
 });
-const agent_workspace = agent.enter(new Workspace({
+const workspace = new Workspace({
   id: "default",
   path: workspace_path,
-}));
+});
 
 /** 恢复固定 Web Session，不存在时首次创建。 */
 async function get_session() {
   try {
-    return await agent_workspace.sessions.get(session_id);
+    return await agent.sessions.get({ workspace, session_id });
   } catch {
-    return await agent_workspace.sessions.create({ session_id });
+    return await agent.sessions.create({ workspace, session_id });
   }
 }
 

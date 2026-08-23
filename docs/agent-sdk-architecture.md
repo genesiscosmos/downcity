@@ -371,7 +371,7 @@ Session 是 SDK 最重要的运行边界。每个 Session 拥有：
 ```ts
 const session = await agent.sessions.create({ workspace });
 const session = await agent.sessions.create();
-const existing = await agent.sessions.get(session_id);
+const existing = await agent.sessions.get({ workspace, session_id });
 
 const page = await agent.sessions.list();
 await agent.sessions.archive({ id: session_id });

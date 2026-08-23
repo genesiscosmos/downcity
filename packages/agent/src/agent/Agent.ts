@@ -98,6 +98,7 @@ export class Agent {
     this.session_class = options.session_class;
     this.sessions = {
       create: async (input) => await this.create_session(input),
+      get: async (input) => await this.get_session(input),
     };
   }
 
@@ -140,5 +141,13 @@ export class Agent {
     return await create_agent_workspace(this, input.workspace).sessions.create({
       ...(input.session_id ? { session_id: input.session_id } : {}),
     });
+  }
+
+  /** 在指定 Workspace 中恢复属于当前 Agent 的 Session。 */
+  private async get_session(input: AgentCreateSessionOptions & { session_id: string }) {
+    if (!input?.workspace) throw new Error("agent.sessions.get requires a Workspace");
+    if (!input?.session_id) throw new Error("agent.sessions.get requires a session_id");
+    if (this.dispose_promise) throw new Error("Cannot get a Session after Agent disposal");
+    return await create_agent_workspace(this, input.workspace).sessions.get(input.session_id);
   }
 }

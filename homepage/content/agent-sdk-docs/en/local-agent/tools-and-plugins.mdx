@@ -138,7 +138,7 @@ Registered plugin actions can be called through `agent.plugins.run_action(...)`,
 
 `PluginContext` does not expose a generic path bundle. A plugin uses `context.workspace_path` as the project boundary and owns its domain storage paths inside the plugin. Operations on Agent Sessions go through `context.sessions`, not the Agent's Session directories.
 
-`context.sessions` directly references the current AgentWorkspace's `AgentSessions`; it is not an adapter. Plugins use `context.sessions.runtime(session_id)` for the synchronous runtime port. SDK callers restore an existing public Session with `await agent.sessions.get(session_id)`.
+`context.sessions` directly references the current internal AgentWorkspace's `AgentSessions`; it is not an adapter. Plugins use `context.sessions.runtime(session_id)` for the synchronous runtime port. SDK callers restore an existing public Session with `await agent.sessions.get({ workspace, session_id })`.
 
 Each `Agent` has its own plugin registry and its own `plugin_read` / `plugin_call` tool instances. If one process creates and caches multiple Agents, a session's `plugin_call` only reaches the registry for the Agent that owns that session.
 

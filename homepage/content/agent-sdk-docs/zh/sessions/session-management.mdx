@@ -15,7 +15,7 @@ const created = await agent.sessions.create({
   session_id: "repo-analysis",
 });
 
-const existing = await agent.sessions.get("repo-analysis");
+const existing = await agent.sessions.get({ workspace, session_id: "repo-analysis" });
 ```
 
 `create()` 表示创建意图：同名 Session 已存在时会报错，不会静默复用。省略 `session_id` 时由 SDK 生成不可推导的稳定 ID。需要“有则打开、无则创建”时，先 `get()`，按不存在错误再调用 `create()`。
