@@ -88,7 +88,7 @@ The server host always owns the model and system persistence policy for a remote
 ## Lifecycle rules
 
 ```text
-one Agent → multiple `agent.enter(workspace)` scopes → one agent.dispose()
+one Agent → multiple `agent.sessions.create({ workspace })` Sessions → one agent.dispose()
 ```
 
 - Agent is not bound to one Workspace; one Agent can enter multiple Workspaces.

@@ -88,7 +88,7 @@ try {
 ## 生命周期规则
 
 ```text
-一个 Agent → 多个 `agent.enter(workspace)` 作用域 → 一次 agent.dispose()
+一个 Agent → 多个 `agent.sessions.create({ workspace })` Session → 一次 agent.dispose()
 ```
 
 - Agent 不绑定单一 Workspace，同一个 Agent 可以进入多个 Workspace。
