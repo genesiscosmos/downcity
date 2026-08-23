@@ -117,6 +117,16 @@ export async function list_desktop_agent_models(
       ...(typeof model.context_window === "number" ? { context_window: model.context_window } : {}),
       tags: [...(model.tags ?? [])],
       ...(model.price ? { price: [...model.price] } : {}),
+      ...(model.reasoning ? {
+        reasoning: {
+          efforts: model.reasoning.efforts.map((effort) => ({
+            id: effort.id,
+            name: effort.name,
+            ...(effort.description ? { description: effort.description } : {}),
+          })),
+          ...(model.reasoning.default_effort ? { default_effort: model.reasoning.default_effort } : {}),
+        },
+      } : {}),
     }));
 }
 

@@ -261,6 +261,24 @@ export interface DesktopChatInput {
   references: DesktopChatReferenceInput[];
 }
 
+/** 模型支持的推理强度档位。 */
+export interface DesktopModelReasoningEffort {
+  /** 档位唯一标识，同时也是请求参数使用的值。 */
+  id: string;
+  /** 面向用户展示的档位名称。 */
+  name: string;
+  /** 面向用户展示的档位说明。 */
+  description?: string;
+}
+
+/** 模型公开的推理强度配置。 */
+export interface DesktopModelReasoning {
+  /** 模型支持的推理强度档位，数组顺序即前端展示顺序。 */
+  efforts: DesktopModelReasoningEffort[];
+  /** 模型未显式指定推理强度时使用的默认档位标识。 */
+  default_effort?: string;
+}
+
 /** Federation 模型目录中的 Renderer 投影。 */
 export interface DesktopModelSummary {
   /** Federation 模型稳定标识。 */
@@ -277,6 +295,8 @@ export interface DesktopModelSummary {
   tags: string[];
   /** Federation 提供的价格说明列表；每项通常描述输入或输出 token 价格。 */
   price?: string[];
+  /** 模型公开的推理强度档位；未提供时表示模型不支持可配置推理强度。 */
+  reasoning?: DesktopModelReasoning;
 }
 
 /** 当前 Session 可动态切换的配置。 */

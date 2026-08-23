@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import type { DesktopModelSummary } from "@common/types/DesktopApi";
 import { LLMModelIcon } from "./LLMModelIcon";
+import { format_model_reasoning } from "@/lib/model/model_reasoning";
 
 /** 模型选择器属性。 */
 interface ModelSelectorProps {
@@ -71,6 +72,7 @@ export function ModelSelector({
             {sorted_models.length === 0 ? <div className="py-4 text-center text-xs text-muted-foreground">{empty_text}</div> : <div className="space-y-0.5">
               {sorted_models.map((model) => {
                 const active = model.model_id === current_model_id;
+                const reasoning_label = format_model_reasoning(model);
                 return <Button
                   key={model.model_id}
                   size="full"
@@ -78,7 +80,7 @@ export function ModelSelector({
                   onClick={() => select_model(model.model_id)}
                 >
                   <LLMModelIcon model_id={model.model_id} size_class="size-4" />
-                  <span className="min-w-0 flex-1 truncate text-left" title={model.name}>{model.name}</span>
+                  <span className="min-w-0 flex-1 text-left"><span className="block truncate" title={model.name}>{model.name}</span>{reasoning_label ? <span className="block truncate text-[10px] text-muted-foreground/75">{reasoning_label}</span> : null}</span>
                 </Button>;
               })}
             </div>}
