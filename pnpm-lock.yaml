@@ -281,6 +281,9 @@ importers:
 
   packages/agent:
     dependencies:
+      '@downcity/federation':
+        specifier: workspace:^
+        version: link:../federation
       '@downcity/type':
         specifier: workspace:*
         version: link:../type
@@ -1013,6 +1016,9 @@ importers:
       '@downcity/agent':
         specifier: workspace:*
         version: link:../../../packages/agent
+      '@downcity/workspace':
+        specifier: workspace:*
+        version: link:../../../packages/workspace
       '@hono/node-server':
         specifier: ^2.0.4
         version: 2.0.4(hono@4.12.23)
