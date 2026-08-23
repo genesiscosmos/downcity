@@ -1,11 +1,11 @@
 ---
-title: Expose Agent over RPC and HTTP
-description: Use AgentRPC and AgentHTTP from @downcity/agent to expose a local Agent as a network service
+title: Expose City over RPC and HTTP
+description: Use City-owned HTTP and RPC services to expose Agents
 ---
 
-# Expose Agent over RPC and HTTP
+# Expose City over RPC and HTTP
 
-`@downcity/agent` only constructs Agents and runs sessions. Network exposure lives in a separate package, `@downcity/agent`. Install and start it on demand.
+External services belong to `City`. Agents remain the execution subjects; City owns the network listeners and routes requests to its Agents and Workspaces.
 
 ```bash
 pnpm add @downcity/agent @downcity/agent
@@ -20,76 +20,62 @@ After `new Agent(...)`, plugin lifecycle and ActionSchedule start automatically.
 
 RPC and HTTP are no longer Agent responsibilities.
 
-## AgentRPC: expose as local RPC
+## City RPC
 
-`AgentRPC` exposes one `AgentWorkspace` over NDJSON-on-TCP for `RemoteAgent("rpc://...")`.
+`city.rpc()` exposes all City Agents over NDJSON-on-TCP for `RemoteAgent("rpc://...")`.
 
 ```ts
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";
-import { AgentRPC } from "@downcity/agent/city";
+import { City } from "@downcity/agent";
 
 const workspace = new Workspace({ id: "project", path });
 const agent = new Agent({ id, model });
 // Session 在创建时选择 Workspace。
-const rpc = new AgentRPC(agent, workspace);
-const binding = await rpc.listen({ host: "127.0.0.1", port: 15314 });
+const city = new City({ workspaces: [workspace] });
+city.agents.add(agent);
+const rpc = await city.rpc({ host: "127.0.0.1", port: 15314 });
 console.log(binding.url); // rpc://127.0.0.1:15314
 
 // shutdown
-await rpc.close();
-await agent.dispose();
+await city.close();
 ```
 
 `AgentRPC` defaults to `127.0.0.1:15314`. The protocol is NDJSON, no auth. Use it on local or trusted networks.
 
-## AgentHTTP: expose minimal SDK HTTP surface
+## City HTTP
 
-`AgentHTTP` provides the minimal HTTP surface (`/api/sdk/sessions/*`) consumed by the `RemoteAgent` HTTP client. Two usage modes; pick one.
+`city.http()` provides the HTTP surface consumed by the `RemoteAgent` HTTP client.
 
 ### Mode 1: standalone HTTP server
 
 ```ts
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";
-import { AgentHTTP } from "@downcity/agent/city";
+import { City } from "@downcity/agent";
 
 const workspace = new Workspace({ id: "project", path });
 const agent = new Agent({ id, model });
 // Session 在创建时选择 Workspace。
-const http = new AgentHTTP(agent, workspace);
-const binding = await http.server().listen({ host: "127.0.0.1", port: 5314 });
+const city = new City({ workspaces: [workspace] });
+city.agents.add(agent);
+const http = await city.http({ host: "127.0.0.1", port: 5314 });
 console.log(binding.url); // http://127.0.0.1:5314
 
 // shutdown
-await http.close();
-await agent.dispose();
+await city.close();
 ```
 
-### Mode 2: mount onto your own Hono server
-
-`AgentHTTP.router()` returns a `Hono` sub-router. Mount it directly:
-
-```ts
-import { Hono } from "hono";
-import { AgentHTTP } from "@downcity/agent/city";
-
-const app = new Hono();
-const http = new AgentHTTP(agent, workspace);
-app.route("/", http.router());
-```
-
-CORS / logger / auth middleware are your responsibility. `AgentHTTP` does not attach any.
+City owns the listener and the complete Agent routing table. CORS, logger and auth are configured by the City host.
 
 ## Relationship with Downcity and RemoteAgent
 
 - `downcity on` creates one `City`, restores all Agents, and starts one City HTTP port plus one City RPC port.
 - City HTTP URLs use `http://127.0.0.1:5314/agents/<agent_id>`; City RPC URLs use `rpc://127.0.0.1:15314/<agent_id>`.
-- `RemoteAgent` clients can connect to the `rpc://` URL exposed by `AgentRPC.listen()` or to the HTTP surface exposed by `AgentHTTP`.
+- `RemoteAgent` clients can connect to the `rpc://` URL exposed by `city.rpc()` or to the HTTP surface exposed by `city.http()`.
 
 ## Related docs
 
 - [Local Agent quickstart](/en/agent-sdk-docs/local-agent/quickstart)
 - [RemoteAgent quickstart](/en/agent-sdk-docs/remote-agent/quickstart)
-- [AgentRPC](/en/agent-sdk-docs/api-reference/agent-rpc) — RPC transport setup
-- [AgentHTTP](/en/agent-sdk-docs/api-reference/agent-http) — HTTP transport setup
+- [City transport](/en/city-sdk-docs/en/packages/city/transport) — HTTP and RPC setup

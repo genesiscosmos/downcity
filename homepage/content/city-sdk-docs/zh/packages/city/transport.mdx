@@ -15,5 +15,12 @@ await city.listen({
 await city.close(); // 只关闭 transport；Agent 仍由创建它的宿主释放
 ```
 
+如果需要分别控制生命周期，也可以直接启动 City 的单个 transport：
+
+```ts
+const http = await city.http({ host: "127.0.0.1", port: 5314 });
+const rpc = await city.rpc({ host: "127.0.0.1", port: 15314 });
+```
+
 HTTP 地址是 `http://host:port/agents/<agent_id>`，RPC 地址是
-`rpc://host:port/<agent_id>`。`AgentHTTP` 和 `AgentRPC` 仍可用于只暴露一个 SDK Agent。
+`rpc://host:port/<agent_id>`。不再提供 Agent 级 transport 构造器，外部服务统一属于 City。

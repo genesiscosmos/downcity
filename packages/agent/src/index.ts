@@ -23,10 +23,6 @@ export type {
   PluginSetupModule,
 } from "./city/index.js";
 export {
-  AgentHTTP,
-  CityHTTP,
-  AgentRPC,
-  CityRPC,
   create_city_host_instance_id,
   get_city_host_state_path,
   is_process_alive,
@@ -37,7 +33,6 @@ export {
   wait_for_city_host_exit,
 } from "./city/index.js";
 export type {
-  AgentHttpServerHandle,
   AgentHttpBinding,
   AgentHttpListenOptions,
   AgentHttpRuntimeOptions,

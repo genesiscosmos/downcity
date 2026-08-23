@@ -112,20 +112,20 @@ test("City.listen 失败只回滚本次新启动的 transport", async () => {
   let rpc_listen_count = 0;
   let rpc_close_count = 0;
   let rpc_binding = null;
-  city.rpc.listen = async () => {
+  city.rpc_transport.listen = async () => {
     rpc_listen_count += 1;
     rpc_binding ??= { url: "rpc://127.0.0.1:15314", host: "127.0.0.1", port: 15314 };
     return rpc_binding;
   };
-  city.rpc.binding = () => rpc_binding;
-  city.rpc.close = async () => {
+  city.rpc_transport.binding = () => rpc_binding;
+  city.rpc_transport.close = async () => {
     rpc_close_count += 1;
     rpc_binding = null;
   };
-  city.http.listen = async () => {
+  city.http_transport.listen = async () => {
     throw new Error("http unavailable");
   };
-  city.http.binding = () => null;
+  city.http_transport.binding = () => null;
 
   await city.listen({ rpc: { port: 15314 } });
   await assert.rejects(

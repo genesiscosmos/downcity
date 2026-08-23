@@ -31,11 +31,7 @@ export {
 } from "./host/CityHostRegistry.js";
 export type { CityHostOwner, CityHostState } from "./host/CityHostRegistry.js";
 
-export { AgentHTTP } from "./transport/http/AgentHTTP.js";
-export { CityHTTP } from "./transport/http/CityHTTP.js";
-export type { AgentHttpServerHandle } from "./transport/http/AgentHTTP.js";
-export { AgentRPC } from "./transport/rpc/AgentRPC.js";
-export { CityRPC } from "./transport/rpc/CityRPC.js";
+/** Transport 实现由 City.http() / City.rpc() 持有，不作为独立构造器公开。 */
 export type {
   AgentHttpBinding,
   AgentHttpListenOptions,

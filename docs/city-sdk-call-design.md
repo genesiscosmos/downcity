@@ -215,9 +215,9 @@ City 不根据请求隐式创建 Workspace，也不通过 `enter_workspace()` �
 City 拥有 Workspace、Embassy、transport 以及其他 City 级资源。Plugin 可以持有这些资源的引用，但不因此取得资源所有权。
 
 ```ts
-await city.listen({
-  http: { host: "127.0.0.1", port: 5314 },
-});
+// 分别启动并取得 City transport 句柄
+const http = await city.http({ host: "127.0.0.1", port: 5314 });
+const rpc = await city.rpc({ host: "127.0.0.1", port: 15314 });
 
 await city.close();
 ```
@@ -291,7 +291,8 @@ CLI 和 Desktop 可以根据配置决定实例化哪些 Plugin，但实例化动
 ```ts
 class City {
   constructor(options: CityOptions);
-  workspace(workspace_id: string): Workspace;
+  http(options: CityHttpListenOptions): Promise<CityHTTP>;
+  rpc(options?: CityRpcListenOptions): Promise<CityRPC>;
   listen(options: CityListenOptions): Promise<void>;
   close(): Promise<void>;
 }

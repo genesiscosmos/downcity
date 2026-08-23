@@ -10,7 +10,9 @@ import path from "node:path";
 import test from "node:test";
 import { Agent, RemoteAgent } from "../bin/index.js";
 import { Workspace } from "../../workspace/bin/index.js";
-import { City, CityHTTP, CityRPC } from "../bin/index.js";
+import { City } from "../bin/index.js";
+import { CityHTTP } from "../bin/city/transport/http/CityHTTP.js";
+import { CityRPC } from "../bin/city/transport/rpc/CityRPC.js";
 
 const network_tests_enabled = process.env.DOWNCITY_RUN_NETWORK_TESTS === "1";
 

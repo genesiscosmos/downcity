@@ -55,10 +55,10 @@ export class City {
   private readonly workspace_entry_promises = new Map<string, Promise<AgentWorkspace>>();
 
   /** 当前 City 唯一的 HTTP transport。 */
-  private readonly http: CityHTTP;
+  private readonly http_transport: CityHTTP;
 
   /** 当前 City 唯一的 RPC transport。 */
-  private readonly rpc: CityRPC;
+  private readonly rpc_transport: CityRPC;
 
   /** City transport 组合操作的唯一串行链。 */
   private transport_operation_chain: Promise<void> = Promise.resolve();
@@ -89,8 +89,8 @@ export class City {
     }
     const runtime_options = options.runtime ?? {};
     this.resolve_workspace = runtime_options.resolve_workspace;
-    this.http = new CityHTTP(this, runtime_options.http);
-    this.rpc = new CityRPC(this, runtime_options.rpc);
+    this.http_transport = new CityHTTP(this, runtime_options.http);
+    this.rpc_transport = new CityRPC(this, runtime_options.rpc);
     this.agents = Object.freeze({
       add: (agent) => this.add_agent(agent),
       get: (agent_id) => this.get_agent(agent_id),
@@ -199,7 +199,7 @@ export class City {
     this.removing_agent_ids.add(agent_id);
     const removal = (async () => {
       try {
-        await this.http.detach_agent(agent_id);
+        await this.http_transport.detach_agent(agent_id);
         await agent.dispose();
         this.release_agent(agent);
         return agent;
@@ -218,20 +218,38 @@ export class City {
   }
 
   /** 启动 City 唯一的 HTTP/RPC transport。 */
+  async http(options: Parameters<CityHTTP["listen"]>[0]): Promise<CityHTTP> {
+    this.assert_active();
+    await this.enqueue_transport_operation(async () => {
+      await this.http_transport.listen(options);
+    });
+    return this.http_transport;
+  }
+
+  /** 启动 City 唯一的 RPC transport。 */
+  async rpc(options?: Parameters<CityRPC["listen"]>[0]): Promise<CityRPC> {
+    this.assert_active();
+    await this.enqueue_transport_operation(async () => {
+      await this.rpc_transport.listen(options);
+    });
+    return this.rpc_transport;
+  }
+
+  /** 启动 City 唯一的 HTTP/RPC transport。 */
   async listen(options: CityListenOptions): Promise<void> {
     this.assert_active();
     await this.enqueue_transport_operation(async () => {
       const started: Array<() => Promise<void>> = [];
       try {
         if (options.rpc) {
-          const was_listening = Boolean(this.rpc.binding());
-          await this.rpc.listen(options.rpc);
-          if (!was_listening) started.push(async () => await this.rpc.close());
+          const was_listening = Boolean(this.rpc_transport.binding());
+          await this.rpc_transport.listen(options.rpc);
+          if (!was_listening) started.push(async () => await this.rpc_transport.close());
         }
         if (options.http) {
-          const was_listening = Boolean(this.http.binding());
-          await this.http.listen(options.http);
-          if (!was_listening) started.push(async () => await this.http.close());
+          const was_listening = Boolean(this.http_transport.binding());
+          await this.http_transport.listen(options.http);
+          if (!was_listening) started.push(async () => await this.http_transport.close());
         }
       } catch (error) {
         await Promise.allSettled(started.reverse().map(async (close) => await close()));
@@ -247,7 +265,10 @@ export class City {
       const close_operation = this.enqueue_transport_operation(async () => {
         this.city_status = "closing";
         const results: PromiseSettledResult<unknown>[] = [];
-        results.push(...await Promise.allSettled([this.http.close(), this.rpc.close()]));
+        results.push(...await Promise.allSettled([
+          this.http_transport.close(),
+          this.rpc_transport.close(),
+        ]));
         results.push(...await Promise.allSettled(this.agents.list().map(async (agent) => await agent.dispose())));
         results.push(...await Promise.allSettled(
           [...this.workspaces_by_id.values()].map(async (workspace) => await workspace.dispose()),
@@ -289,7 +310,7 @@ export class City {
     if (!current || current !== agent) return;
     detach_agent_city(current, this);
     this.agents_by_id.delete(agent.id);
-    void this.http.detach_agent(agent.id).catch(() => undefined);
+    void this.http_transport.detach_agent(agent.id).catch(() => undefined);
   }
 
   /** 把宿主按需解析出的 Workspace 纳入 City 资源索引。 */
