@@ -275,7 +275,8 @@ export class AgentController {
 
   /** 列出一个 native Agent 在当前 Workspace 中的 Session。 */
   async list_sessions(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary[]> {
-    const page = await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.list();
+    void workspace_id;
+    const page = await this.require_native_agent(agent_id).sessions.list();
     return page.items.map(to_desktop_session_summary);
   }
 
@@ -323,12 +324,12 @@ export class AgentController {
       this.observe_session(agent_id, workspace_id, forked);
       const sent = await this.send_message(agent_id, workspace_id, forked.id, { text, files: [], references: [] });
       if (input.action === "rollback") {
-        await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.archive({ id: session_id });
+        await this.require_native_agent(agent_id).sessions.archive({ id: session_id });
         this.release_session_projection(agent_id, workspace_id, session_id);
       }
       return { session: to_desktop_session_summary(await forked.get_info()), turn_id: sent.turn_id };
     } catch (error) {
-      await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.remove(forked.id).catch(() => false);
+      await this.require_native_agent(agent_id).sessions.remove(forked.id).catch(() => false);
       this.release_session_projection(agent_id, workspace_id, forked.id);
       throw error;
     }
@@ -346,20 +347,23 @@ export class AgentController {
 
   /** 归档 Session，并释放 Desktop 对它的进程内投影。 */
   async archive_session(agent_id: string, workspace_id: string, session_id: string): Promise<void> {
-    await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.archive({ id: session_id });
+    void workspace_id;
+    await this.require_native_agent(agent_id).sessions.archive({ id: session_id });
     this.release_session_projection(agent_id, workspace_id, session_id);
   }
 
   /** 永久删除 Session，并释放 Desktop 对它的进程内投影。 */
   async remove_session(agent_id: string, workspace_id: string, session_id: string): Promise<boolean> {
-    const removed = await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.remove(session_id);
+    void workspace_id;
+    const removed = await this.require_native_agent(agent_id).sessions.remove(session_id);
     if (removed) this.release_session_projection(agent_id, workspace_id, session_id);
     return removed;
   }
 
   /** 列出一个 Agent 已归档的 Session。 */
   async list_archived_sessions(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary[]> {
-    const page = await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.archived();
+    void workspace_id;
+    const page = await this.require_native_agent(agent_id).sessions.archived();
     return page.items.map(to_desktop_session_summary);
   }
 
@@ -569,7 +573,8 @@ export class AgentController {
 
   /** 读取 Session，并确保实时 mutation 只订阅一次。 */
   private async get_session(agent_id: string, workspace_id: string, session_id: string): Promise<AgentSession> {
-    const session = await (await this.require_agent_workspace(agent_id, workspace_id)).sessions.get(session_id);
+    const entry = await this.require_agent_workspace(agent_id, workspace_id);
+    const session = await this.require_native_agent(agent_id).sessions.get(session_id, { workspace: entry.workspace });
     await this.restore_session_model(agent_id, workspace_id, session);
     this.observe_session(agent_id, workspace_id, session);
     return session;

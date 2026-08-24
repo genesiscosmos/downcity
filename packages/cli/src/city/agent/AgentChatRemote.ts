@@ -12,13 +12,14 @@ import {
   generate_id,
   type AgentSessions,
   type AgentSession,
+  type AgentSessionCollection,
   type AgentSessionSetOptions,
   RemoteAgent,
   type RemoteSessionSetInput,
   type AgentSessionSummary,
   type RemoteAgentSession,
 } from "@downcity/agent";
-import { create_agent_workspace } from "@downcity/agent/internal";
+import type { WorkspaceBase } from "@downcity/workspace";
 import type { AgentModel } from "@downcity/agent";
 import { resolveDaemonRpcEndpoint } from "@/city/process/daemon/Client.js";
 import {
@@ -115,7 +116,8 @@ export async function createRemoteAgent(params: {
       const workspace = await create_cli_workspace(workspace_config, data.root_path);
       return {
         sessions: create_local_chat_sessions(
-          create_agent_workspace(agent, workspace).sessions,
+          agent.sessions,
+          workspace,
           async (model_id) => await resolve_cli_agent_model(model_id, workspace.get_env()),
         ),
         close: async () => {
@@ -140,7 +142,8 @@ export async function createRemoteAgent(params: {
 
 /** 把本地 Session 的模型实例输入适配为 RemoteSession 的 model_id 输入。 */
 function create_local_chat_sessions(
-  sessions: AgentSessions<AgentSession>,
+  sessions: AgentSessionCollection,
+  workspace: WorkspaceBase,
   resolve_model: (model_id: string) => Promise<AgentModel>,
 ): AgentSessions<RemoteAgentSession> {
   const wrap = (session: AgentSession): RemoteAgentSession => ({
@@ -167,8 +170,8 @@ function create_local_chat_sessions(
     fork: async (input) => wrap(await session.fork(input)),
   });
   return {
-    create: async (input) => wrap(await sessions.create(input)),
-    get: async (session_id) => wrap(await sessions.get(session_id)),
+    create: async () => wrap(await sessions.create({ workspace })),
+    get: async (session_id) => wrap(await sessions.get(session_id, { workspace })),
     list: async (input) => await sessions.list(input),
     archive: async (input) => await sessions.archive(input),
     archived: async (input) => await sessions.archived(input),
@@ -203,10 +206,8 @@ export async function createRemoteChatSession(params: {
   remote_agent: AgentChatClient;
   session_id?: string;
 }): Promise<{ session_id: string }> {
-  const session_id = String(params.session_id || "").trim() || createAgentChatSessionId();
-  const session = await params.remote_agent.sessions.create({
-    session_id: session_id,
-  });
+  void params.session_id;
+  const session = await params.remote_agent.sessions.create();
   return {
     session_id: session.id,
   };
@@ -222,9 +223,8 @@ export async function getOrCreateRemoteSession(params: {
 }): Promise<RemoteAgentSession> {
   const collection = params.remote_agent.sessions;
   if (params.create_new_session === true) {
-    return await collection.create({
-      session_id: params.session_id,
-    });
+    void params.session_id;
+    return await collection.create();
   }
   try {
     return await collection.get(params.session_id);
