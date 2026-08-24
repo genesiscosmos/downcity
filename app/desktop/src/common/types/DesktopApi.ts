@@ -303,6 +303,8 @@ export interface DesktopModelSummary {
 export interface DesktopSessionConfiguration {
   /** 当前实际使用的模型标识。 */
   model_id: string;
+  /** 当前模型生效的推理强度档位标识。 */
+  reasoning_effort?: string;
   /** 当前安全审批模式。 */
   approval_mode: SessionApprovalMode;
 }
@@ -568,6 +570,8 @@ export interface DesktopApi {
     get_configuration(agent_id: string, workspace_id: string, session_id: string): Promise<DesktopSessionConfiguration>;
     /** 切换当前 Session 模型。 */
     set_model(agent_id: string, workspace_id: string, session_id: string, model_id: string): Promise<DesktopSessionConfiguration>;
+    /** 设置当前 Session 的推理强度档位。 */
+    set_reasoning_effort(agent_id: string, workspace_id: string, session_id: string, reasoning_effort?: string): Promise<DesktopSessionConfiguration>;
     /** 切换当前 Session 审批模式。 */
     set_approval_mode(agent_id: string, workspace_id: string, session_id: string, approval_mode: SessionApprovalMode): Promise<DesktopSessionConfiguration>;
     /** 订阅 canonical Session mutation。 */

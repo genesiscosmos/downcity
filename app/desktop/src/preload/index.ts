@@ -45,6 +45,7 @@ const desktop_api: DesktopApi = {
     get_runtime: (...args) => ipcRenderer.invoke("chat:get-runtime", ...args),
     get_configuration: (...args) => ipcRenderer.invoke("chat:get-configuration", ...args),
     set_model: (...args) => ipcRenderer.invoke("chat:set-model", ...args),
+    set_reasoning_effort: (...args) => ipcRenderer.invoke("chat:set-reasoning-effort", ...args),
     set_approval_mode: (...args) => ipcRenderer.invoke("chat:set-approval-mode", ...args),
     on_mutation: (callback) => {
       const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof callback>[0]) => callback(value);

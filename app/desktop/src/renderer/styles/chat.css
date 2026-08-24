@@ -137,6 +137,22 @@
   font-weight: 400 !important;
 }
 
+/* Streamdown/Shiki 同时输出明暗两套 token；Desktop 暗色模式必须显式切换到 dark token。 */
+.dark .chat-markdown [data-streamdown="code-block"] .shiki span {
+  color: var(--shiki-dark, var(--foreground)) !important;
+  font-style: var(--shiki-dark-font-style, normal) !important;
+  font-weight: var(--shiki-dark-font-weight, 400) !important;
+  text-decoration: var(--shiki-dark-text-decoration, none) !important;
+}
+
+/* Shiki token 缺少 dark 值时，代码正文仍必须继承当前主题的可读前景色。 */
+.dark .chat-markdown [data-streamdown="code-block-body"],
+.dark .chat-markdown [data-streamdown="code-block-body"] code,
+.dark .chat-markdown [data-streamdown="code-block-body"] code > span,
+.dark .chat-markdown [data-streamdown="code-block-body"] code > span > span {
+  color: var(--shiki-dark, var(--foreground)) !important;
+}
+
 div[data-streamdown="table-wrapper"] {
   margin: 0.75rem 0 !important;
   overflow: hidden;

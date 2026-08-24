@@ -102,6 +102,13 @@ export async function resolve_desktop_agent_model(
   return model;
 }
 
+/** 为 City 模型绑定 Desktop 当前 Session 选择的推理档位。 */
+export function configure_desktop_agent_model(model: AgentModel, reasoning_effort?: string): AgentModel {
+  const effort = reasoning_effort?.trim();
+  if (!effort || typeof model !== "object" || model.specificationVersion !== "v3") return model;
+  return new DesktopReasoningAgentModel(model, effort);
+}
+
 /** 列出当前 Federation 中可见的全部模型；Renderer 按能力分组。 */
 export async function list_desktop_agent_models(
   data: DesktopLocalData,
@@ -173,6 +180,31 @@ class LazyDesktopAgentModel implements LanguageModelV3 {
     }
     // 关键点（中文）：每个 Turn 重新读取共享 Federation Session，登录切换或退出后不能继续复用旧 Token。
     return model as LanguageModelV3;
+  }
+}
+
+/** 在不改变 Federation 模型对象的前提下注入 providerOptions。 */
+class DesktopReasoningAgentModel implements LanguageModelV3 {
+  readonly specificationVersion = "v3" as const;
+  readonly provider = "downcity";
+  readonly supportedUrls: Record<string, RegExp[]> = {};
+  readonly modelId: string;
+
+  constructor(private readonly model: LanguageModelV3, private readonly reasoning_effort: string) {
+    this.modelId = model.modelId;
+  }
+
+  async doGenerate(options: Parameters<LanguageModelV3["doGenerate"]>[0]) {
+    return await this.model.doGenerate(this.with_reasoning(options));
+  }
+
+  async doStream(options: Parameters<LanguageModelV3["doStream"]>[0]) {
+    return await this.model.doStream(this.with_reasoning(options));
+  }
+
+  private with_reasoning<T extends Parameters<LanguageModelV3["doGenerate"]>[0]>(options: T): T {
+    const provider_options = { ...(options.providerOptions ?? {}), downcity: { ...(options.providerOptions?.downcity ?? {}), reasoningEffort: this.reasoning_effort } };
+    return { ...options, providerOptions: provider_options } as T;
   }
 }
 

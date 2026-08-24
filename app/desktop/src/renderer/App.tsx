@@ -14,6 +14,7 @@ import { SettingsView } from "@/views/SettingsView";
 import { PluginView } from "@/views/PluginView";
 import { WelcomeView } from "@/views/WelcomeView";
 import { WorkspaceView } from "@/views/WorkspaceView";
+import { ShellPanelControls } from "@/layouts/ShellPanelControls";
 
 /** Desktop 根组件。 */
 export function App() {
@@ -124,6 +125,7 @@ export function App() {
         send_message={(input) => controller.send_message(workspace_id, selected_agent.agent_id, draft_id, input)}
         refresh_models={controller.refresh_models}
         set_model={(model_id) => controller.set_session_model(workspace_id, selected_agent.agent_id, draft_id, model_id)}
+        set_reasoning_effort={(effort) => controller.set_session_reasoning_effort(workspace_id, selected_agent.agent_id, draft_id, effort)}
         set_approval_mode={(approval_mode) => controller.set_session_approval_mode(workspace_id, selected_agent.agent_id, draft_id, approval_mode)}
         stop_session={async () => undefined}
         respond_interaction={async () => undefined}
@@ -170,6 +172,7 @@ export function App() {
       compact_session={() => controller.compact_session(workspace_id, selected_agent.agent_id, session.session_id)}
       refresh_models={controller.refresh_models}
       set_model={(model_id) => controller.set_session_model(workspace_id, selected_agent.agent_id, session.session_id, model_id)}
+      set_reasoning_effort={(effort) => controller.set_session_reasoning_effort(workspace_id, selected_agent.agent_id, session.session_id, effort)}
       set_approval_mode={(approval_mode) => controller.set_session_approval_mode(workspace_id, selected_agent.agent_id, session.session_id, approval_mode)}
       stop_session={() => controller.stop_session(workspace_id, selected_agent.agent_id, session.session_id)}
       respond_interaction={(input) => controller.respond_interaction(workspace_id, selected_agent.agent_id, session.session_id, input)}
@@ -191,8 +194,9 @@ export function App() {
           open_create_workspace={() => set_create_workspace_dialog_open(true)}
           collapsed={sidebar_collapsed}
         />}
-      <main className="flex h-full min-w-0 flex-1 flex-col bg-background">{render_main_view()}</main>
+      <main data-sidebar-collapsed={sidebar_collapsed ? "true" : "false"} className="main-view-shell flex h-full min-w-0 flex-1 flex-col bg-background">{render_main_view()}</main>
     </div>
+    <ShellPanelControls sidebar_collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} />
     {controller.error ? <div className="fixed bottom-5 left-1/2 z-40 flex max-w-xl -translate-x-1/2 items-start gap-3 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl"><span className="min-w-0 flex-1 break-words">{controller.error}</span><Button onClick={controller.clear_error}>关闭</Button></div> : null}
     {create_dialog_open ? <CreateAgentDialog close_dialog={() => { set_create_dialog_open(false); set_create_agent_workspace_id(undefined); }} create_agent={controller.create_agent} models={controller.models} models_loading={controller.models_loading} default_model_id={controller.settings.default_text_model_id} workspace={controller.workspaces.find((workspace) => workspace.workspace_id === create_agent_workspace_id)} /> : null}
     {create_workspace_dialog_open ? <CreateWorkspaceDialog close_dialog={() => set_create_workspace_dialog_open(false)} create_workspace={controller.create_workspace} /> : null}

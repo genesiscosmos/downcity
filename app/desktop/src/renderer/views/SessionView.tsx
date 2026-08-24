@@ -92,6 +92,8 @@ interface SessionViewProps {
   refresh_models(): Promise<void>;
   /** 切换当前模型。 */
   set_model(model_id: string): Promise<void>;
+  /** 切换推理强度。 */
+  set_reasoning_effort(reasoning_effort?: string): Promise<void>;
   /** 切换当前审批模式。 */
   set_approval_mode(approval_mode: DesktopSessionConfiguration["approval_mode"]): Promise<void>;
   /** 停止当前 Turn。 */
@@ -187,6 +189,7 @@ export function SessionView(props: SessionViewProps) {
               stop_session={props.stop_session}
               refresh_models={props.refresh_models}
               set_model={props.set_model}
+              set_reasoning_effort={props.set_reasoning_effort}
               set_approval_mode={props.set_approval_mode}
               remove_queued_message={props.remove_queued_message}
               move_queued_message={props.move_queued_message}

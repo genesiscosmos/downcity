@@ -39,6 +39,7 @@ interface ChatInputEditorProps {
   /** 停止当前 Turn。 */ stop_session(): Promise<void>;
   /** 刷新模型目录。 */ refresh_models(): Promise<void>;
   /** 切换模型。 */ set_model(model_id: string): Promise<void>;
+  /** 切换推理强度。 */ set_reasoning_effort(reasoning_effort?: string): Promise<void>;
   /** 切换审批模式。 */ set_approval_mode(approval_mode: DesktopSessionConfiguration["approval_mode"]): Promise<void>;
   /** 删除队列消息。 */ remove_queued_message(message_id: string): void;
   /** 调整队列消息顺序。 */ move_queued_message(message_id: string, direction: "up" | "down"): void;
@@ -230,7 +231,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
     <div className="min-h-20 max-h-60 w-full overflow-hidden p-1">
       <EditorContent editor={editor} />
       <div className="mt-2 flex items-center justify-between">
-        <div className="flex min-w-0 items-center gap-1"><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="rounded-full" aria-label="添加内容" title="添加内容" disabled={submitting}><TbPlus className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent side="top" sideOffset={4}><DropdownMenuItem onClick={() => file_input_ref.current?.click()}><TbPaperclip className="size-4" /><span>附件</span></DropdownMenuItem><DropdownMenuItem onClick={() => image_input_ref.current?.click()}><TbPhoto className="size-4" /><span>图片</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu><ChatModelSelector agent={props.agent} configuration={props.configuration} models={props.models} models_loading={props.models_loading} set_model={props.set_model} /><ChatApprovalModeSelector configuration={props.configuration} set_approval_mode={props.set_approval_mode} /></div>
+        <div className="flex min-w-0 items-center gap-1"><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="rounded-full" aria-label="添加内容" title="添加内容" disabled={submitting}><TbPlus className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent side="top" sideOffset={4}><DropdownMenuItem onClick={() => file_input_ref.current?.click()}><TbPaperclip className="size-4" /><span>附件</span></DropdownMenuItem><DropdownMenuItem onClick={() => image_input_ref.current?.click()}><TbPhoto className="size-4" /><span>图片</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu><ChatModelSelector agent={props.agent} configuration={props.configuration} models={props.models} models_loading={props.models_loading} set_model={props.set_model} set_reasoning_effort={props.set_reasoning_effort} /><ChatApprovalModeSelector configuration={props.configuration} set_approval_mode={props.set_approval_mode} /></div>
         <Button type="button" onClick={() => void (show_stop ? props.stop_session() : submit_message())} disabled={submitting || (!show_stop && input_empty)} size="icon" variant="primary" className="rounded-full" aria-label={show_stop ? "停止生成" : busy ? "加入队列" : "发送消息"} title={show_stop ? "停止生成" : busy ? "加入队列" : "发送消息"}>{show_stop ? <TbSquare className="size-4 stroke-3" /> : submitting ? <TbLoader2 className="size-4 animate-spin" /> : <TbArrowUp className="size-4 stroke-3" />}</Button>
       </div>
     </div>

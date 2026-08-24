@@ -106,6 +106,7 @@ ipcMain.handle("chat:respond", (_event, agent_id: string, workspace_id: string, 
 ipcMain.handle("chat:get-runtime", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().get_runtime(agent_id, workspace_id, session_id));
 ipcMain.handle("chat:get-configuration", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().get_configuration(agent_id, workspace_id, session_id));
 ipcMain.handle("chat:set-model", (_event, agent_id: string, workspace_id: string, session_id: string, model_id: string) => require_agent_controller().set_model(agent_id, workspace_id, session_id, model_id));
+ipcMain.handle("chat:set-reasoning-effort", (_event, agent_id: string, workspace_id: string, session_id: string, reasoning_effort?: string) => require_agent_controller().set_reasoning_effort(agent_id, workspace_id, session_id, reasoning_effort));
 ipcMain.handle("chat:set-approval-mode", (_event, agent_id: string, workspace_id: string, session_id: string, approval_mode: SessionApprovalMode) => require_agent_controller().set_approval_mode(agent_id, workspace_id, session_id, approval_mode));
 ipcMain.handle("settings:get", () => settings_controller.get());
 ipcMain.handle("settings:update", async (_event, patch) => {

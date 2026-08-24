@@ -702,7 +702,13 @@ export function use_desktop_controller(): DesktopViewController {
     try {
       if (is_draft_session_id(session_id)) {
         const current = configuration_by_session[session_key] ?? { model_id, approval_mode: "ask" as const };
-        set_configuration_by_session((values) => ({ ...values, [session_key]: { ...current, model_id } }));
+        const selected_model = models.find((item) => item.model_id === model_id);
+        const efforts = selected_model?.reasoning?.efforts ?? [];
+        const reasoning_effort = efforts.find((item) => item.id === current.reasoning_effort)?.id
+          || efforts.find((item) => item.id === selected_model?.reasoning?.default_effort)?.id
+          || efforts[0]?.id;
+        const { reasoning_effort: _old_reasoning_effort, ...base_configuration } = current;
+        set_configuration_by_session((values) => ({ ...values, [session_key]: { ...base_configuration, model_id, ...(reasoning_effort ? { reasoning_effort } : {}) } }));
         return;
       }
       const configuration = await window.downcity.chat.set_model(agent_id, workspace_id, session_id, model_id);
@@ -710,7 +716,23 @@ export function use_desktop_controller(): DesktopViewController {
     } catch (reason) {
       set_error(to_error_message(reason));
     }
-  }, [configuration_by_session]);
+  }, [configuration_by_session, models]);
+
+  const set_session_reasoning_effort = useCallback(async (workspace_id: string, agent_id: string, session_id: string, reasoning_effort?: string) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id);
+    try {
+      if (is_draft_session_id(session_id)) {
+        const current = configuration_by_session[session_key] ?? { model_id: agents.find((item) => item.agent_id === agent_id)?.model_id || "", approval_mode: "ask" as const };
+        const { reasoning_effort: _old_reasoning_effort, ...base_configuration } = current;
+        set_configuration_by_session((values) => ({ ...values, [session_key]: { ...base_configuration, ...(reasoning_effort ? { reasoning_effort } : {}) } }));
+        return;
+      }
+      const configuration = await window.downcity.chat.set_reasoning_effort(agent_id, workspace_id, session_id, reasoning_effort);
+      set_configuration_by_session((current) => ({ ...current, [session_key]: configuration }));
+    } catch (reason) {
+      set_error(to_error_message(reason));
+    }
+  }, [agents, configuration_by_session]);
 
   const set_session_approval_mode = useCallback(async (
     workspace_id: string,
@@ -914,6 +936,7 @@ export function use_desktop_controller(): DesktopViewController {
     compact_session,
     refresh_models,
     set_session_model,
+    set_session_reasoning_effort,
     set_session_approval_mode,
     stop_session,
     respond_interaction,

@@ -200,6 +200,8 @@ export interface DesktopViewController {
   refresh_models(): Promise<void>;
   /** 为 Draft 或已存在 Session 选择模型。 */
   set_session_model(workspace_id: string, agent_id: string, session_id: string, model_id: string): Promise<void>;
+  /** 切换当前 Session 的推理强度。 */
+  set_session_reasoning_effort(workspace_id: string, agent_id: string, session_id: string, reasoning_effort?: string): Promise<void>;
   /** 为 Draft 或已存在 Session 选择审批模式。 */
   set_session_approval_mode(workspace_id: string, agent_id: string, session_id: string, approval_mode: DesktopSessionConfiguration["approval_mode"]): Promise<void>;
   /** 停止当前 Session Turn。 */

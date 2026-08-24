@@ -68,7 +68,31 @@
 
 .header-drag-region {
   -webkit-app-region: drag;
+  transition: padding-left 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+.sidebar-header-actions,
+.sidebar-header-actions button,
+.sidebar-header-actions [role="button"] {
+  -webkit-app-region: no-drag !important;
+  pointer-events: auto !important;
+}
+
+.shell-panel-controls,
+.shell-panel-controls button {
+  -webkit-app-region: no-drag !important;
+  pointer-events: auto !important;
+}
+
+.shell-panel-controls {
+  isolation: isolate;
+}
+
+/* Sidebar 折叠后，主视图 Header 为左上角 shell 控件预留 macOS 安全区。 */
+.main-view-shell[data-sidebar-collapsed="true"] .header-drag-region {
+  padding-left: 112px !important;
+}
+
 
 .desktop-dialog-backdrop {
   opacity: 1;

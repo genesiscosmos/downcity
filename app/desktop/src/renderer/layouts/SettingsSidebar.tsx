@@ -27,11 +27,10 @@ const settings_groups: Array<{ label: string; items: Array<{ section: SettingsSe
 
 /** 与 Duobox SettingsSidebar 一致，设置导航直接替换应用 Sidebar 内容。 */
 export function SettingsSidebar({ controller, collapsed = false }: SettingsSidebarProps) {
-  if (collapsed) return null;
   const active_section = controller.selection?.kind === "settings" ? controller.selection.section : "user";
-  return <SidebarContainer>
+  return <SidebarContainer collapsed={collapsed}>
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="header-drag-region h-9 shrink-0" />
+      <div className="relative flex h-9 shrink-0 items-center"><div className="header-drag-region absolute inset-0" /></div>
       <div className="shrink-0 px-2 pb-2">
         <Button size="sidebar" className="justify-start text-foreground/80" onClick={controller.close_settings}>
           <TbArrowLeft />

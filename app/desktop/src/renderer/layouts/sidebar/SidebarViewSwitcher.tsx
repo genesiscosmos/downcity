@@ -1,6 +1,7 @@
 /** Chat、Agent 与 Plugin 集合切换器。 */
 
 import { useCallback, useLayoutEffect, useRef } from "react";
+import { Tooltip } from "@base-ui/react/tooltip";
 import { TbComponents, TbGhost3, TbMessageCircle } from "react-icons/tb";
 import { cn } from "@/lib/utils";
 import type { SidebarMode } from "@/types/DesktopView";
@@ -11,6 +12,8 @@ interface SidebarViewSwitcherProps {
   active_mode: SidebarMode;
   /** 切换集合。 */
   on_change(mode: SidebarMode): void;
+  /** 导航布局；left 模式显示为窄图标 rail。 */
+  layout?: "top" | "left";
 }
 
 const items = [
@@ -20,7 +23,7 @@ const items = [
 ] as const;
 
 /** 对齐 Duobox 顶部横向胶囊式集合切换器。 */
-export function SidebarViewSwitcher({ active_mode, on_change }: SidebarViewSwitcherProps) {
+export function SidebarViewSwitcher({ active_mode, on_change, layout = "top" }: SidebarViewSwitcherProps) {
   const group_ref = useRef<HTMLDivElement>(null);
   const indicator_ref = useRef<HTMLSpanElement>(null);
   const update_indicator = useCallback(() => {
@@ -42,26 +45,17 @@ export function SidebarViewSwitcher({ active_mode, on_change }: SidebarViewSwitc
     observer.observe(group);
     group.querySelectorAll<HTMLElement>("[data-sidebar-view]").forEach((item) => observer.observe(item));
     return () => observer.disconnect();
-  }, [active_mode, update_indicator]);
+  }, [active_mode, layout, update_indicator]);
 
-  return <div ref={group_ref} role="group" aria-label="侧边栏视图" className="relative isolate flex h-8 w-fit shrink-0 items-center rounded-full bg-surface-subtle p-1">
-    <span ref={indicator_ref} aria-hidden="true" className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-control-hover opacity-0 transition-[width,height,transform,opacity] duration-200 ease-out motion-reduce:transition-none" />
+  const vertical = layout === "left";
+  return <div ref={group_ref} role="group" aria-label="侧边栏视图" className={cn("relative isolate flex shrink-0", vertical ? "w-8 flex-col gap-1" : "h-8 w-fit items-center rounded-full bg-surface-subtle p-1")}>
+    <span ref={indicator_ref} aria-hidden="true" className={cn("pointer-events-none absolute left-0 top-0 z-0 opacity-0 transition-[width,height,transform,opacity] duration-200 ease-out motion-reduce:transition-none", vertical ? "rounded-lg bg-interaction-selected" : "rounded-full bg-control-hover")} />
     {items.map((item) => {
       const Icon = item.icon;
       const active = item.mode === active_mode;
-      return <button
-        key={item.mode}
-        type="button"
-        aria-pressed={active}
-        data-sidebar-view={item.mode}
-        className={cn(
-          "relative z-10 flex h-6 min-w-0 items-center justify-center gap-1 rounded-full bg-transparent px-1.5 text-[0.6875rem] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 [&_svg]:size-3.5",
-          active && "text-foreground",
-        )}
-        onClick={() => on_change(item.mode)}
-      >
-        <Icon /><span className="truncate">{item.label}</span>
-      </button>;
+      const button = <button key={item.mode} type="button" aria-pressed={active} aria-label={item.label} title={vertical ? item.label : undefined} data-sidebar-view={item.mode} className={cn("group/toggle relative z-10 inline-flex shrink-0 items-center justify-center bg-transparent text-[11px] leading-none whitespace-nowrap text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0", vertical ? "h-8 w-8 rounded-lg [&_svg]:size-4" : "h-6 gap-1 rounded-full px-1.5", active && "text-foreground")} onClick={() => on_change(item.mode)}><Icon />{!vertical ? <span className="truncate">{item.label}</span> : null}</button>;
+      if (!vertical) return button;
+      return <Tooltip.Root key={item.mode}><Tooltip.Trigger delay={300} render={button} /><Tooltip.Portal><Tooltip.Positioner side="right" sideOffset={8} className="z-50"><Tooltip.Popup className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-foreground shadow-lg outline-none">{item.label}</Tooltip.Popup></Tooltip.Positioner></Tooltip.Portal></Tooltip.Root>;
     })}
   </div>;
 }

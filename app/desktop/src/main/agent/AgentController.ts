@@ -56,6 +56,7 @@ import {
   create_desktop_agent_tools,
   create_desktop_plugin_loader,
   create_desktop_workspace,
+  configure_desktop_agent_model,
   list_desktop_agent_models,
   resolve_desktop_agent_model,
 } from "./DesktopAgentAssembly.js";
@@ -64,6 +65,7 @@ import type { LocalPluginLoader } from "@downcity/local/product";
 import { generate_agent_avatar_svg, read_downcity_logo_svg } from "./GeneratedAgentAvatar.js";
 
 const session_model_settings_key = "desktop.session-models";
+const session_reasoning_settings_key = "desktop.session-reasoning";
 
 /** Agent 控制器向 Electron 窗口广播的实时事件。 */
 interface AgentControllerEvents {
@@ -460,9 +462,24 @@ export class AgentController {
     const entry = await this.require_agent_workspace(agent_id, workspace_id);
     const session = await this.get_session(agent_id, workspace_id, session_id);
     const model = await resolve_desktop_agent_model(this.data, model_id, entry.workspace.get_env());
-    await session.set({ model });
+    const configured_effort = this.read_session_reasoning_efforts()[get_session_key(agent_id, workspace_id, session_id)];
+    const reasoning_effort = select_model_reasoning_effort(model, configured_effort);
+    this.persist_session_reasoning_effort(agent_id, workspace_id, session_id, reasoning_effort);
+    await session.set({ model: configure_desktop_agent_model(model, reasoning_effort) });
     this.persist_session_model_id(agent_id, workspace_id, session_id, model_id);
     this.restored_session_models.set(get_session_key(agent_id, workspace_id, session_id), model_id);
+    return await this.read_session_configuration(workspace_id, session);
+  }
+
+  /** 设置当前 Session 的推理强度，并让后续 Turn 使用该档位。 */
+  async set_reasoning_effort(agent_id: string, workspace_id: string, session_id: string, reasoning_effort?: string): Promise<DesktopSessionConfiguration> {
+    const entry = await this.require_agent_workspace(agent_id, workspace_id);
+    const session = await this.get_session(agent_id, workspace_id, session_id);
+    const model_id = (await this.read_session_configuration(workspace_id, session)).model_id;
+    const model = await resolve_desktop_agent_model(this.data, model_id, entry.workspace.get_env());
+    const selected_effort = select_model_reasoning_effort(model, reasoning_effort);
+    await session.set({ model: configure_desktop_agent_model(model, selected_effort) });
+    this.persist_session_reasoning_effort(agent_id, workspace_id, session_id, selected_effort);
     return await this.read_session_configuration(workspace_id, session);
   }
 
@@ -603,9 +620,15 @@ export class AgentController {
     this.runtimes.delete(session_key);
     this.restored_session_models.delete(session_key);
     const model_ids = this.read_session_model_ids();
-    if (!(session_key in model_ids)) return;
-    delete model_ids[session_key];
-    this.data.settings.set(session_model_settings_key, model_ids);
+    if (session_key in model_ids) {
+      delete model_ids[session_key];
+      this.data.settings.set(session_model_settings_key, model_ids);
+    }
+    const reasoning = this.read_session_reasoning_efforts();
+    if (session_key in reasoning) {
+      delete reasoning[session_key];
+      this.data.settings.set(session_reasoning_settings_key, reasoning);
+    }
   }
 
   /** 从 SDK status 恢复应用重启或首次进入时的运行态。 */
@@ -634,8 +657,10 @@ export class AgentController {
     const session_key = get_session_key(session.agent_id, workspace_id, session.id);
     const configured_model = session.config.model as { modelId?: unknown } | undefined;
     const runtime_model_id = typeof configured_model?.modelId === "string" ? configured_model.modelId : "";
+    const reasoning_effort = this.read_session_reasoning_efforts()[session_key];
     return {
       model_id: runtime_model_id || this.read_session_model_ids()[session_key] || default_model_id,
+      ...(reasoning_effort ? { reasoning_effort } : {}),
       approval_mode: status.security.approval_mode,
     };
   }
@@ -647,7 +672,9 @@ export class AgentController {
     if (!model_id || this.restored_session_models.get(session_key) === model_id) return;
     const entry = await this.require_agent_workspace(agent_id, workspace_id);
     const model = await resolve_desktop_agent_model(this.data, model_id, entry.workspace.get_env());
-    await session.set({ model }, { persist_action: false });
+    const reasoning_effort = select_model_reasoning_effort(model, this.read_session_reasoning_efforts()[session_key]);
+    this.persist_session_reasoning_effort(agent_id, workspace_id, session.id, reasoning_effort);
+    await session.set({ model: configure_desktop_agent_model(model, reasoning_effort) }, { persist_action: false });
     this.restored_session_models.set(session_key, model_id);
   }
 
@@ -664,6 +691,20 @@ export class AgentController {
       ...current,
       [get_session_key(agent_id, workspace_id, session_id)]: model_id,
     });
+  }
+
+  /** 读取按 Agent + Session 索引的推理档位覆盖。 */
+  private read_session_reasoning_efforts(): Record<string, string> {
+    const value = this.data.settings.get<Record<string, unknown>>(session_reasoning_settings_key) ?? {};
+    return Object.fromEntries(Object.entries(value).flatMap(([key, effort]) => typeof effort === "string" && effort.trim() ? [[key, effort.trim()]] : []));
+  }
+
+  /** 保存一个 Session 的推理档位覆盖。 */
+  private persist_session_reasoning_effort(agent_id: string, workspace_id: string, session_id: string, reasoning_effort?: string): void {
+    const current = this.read_session_reasoning_efforts();
+    const key = get_session_key(agent_id, workspace_id, session_id);
+    if (reasoning_effort?.trim()) current[key] = reasoning_effort.trim(); else delete current[key];
+    this.data.settings.set(session_reasoning_settings_key, current);
   }
 
   /** 保存并广播 Session 运行态。 */
@@ -690,6 +731,15 @@ export class AgentController {
       ?? this.city.workspaces.add(await create_desktop_workspace(this.data, config));
     return create_agent_workspace(agent, workspace);
   }
+}
+
+/** 使模型切换后的推理档位始终来自该模型公开的档位列表。 */
+function select_model_reasoning_effort(model: unknown, requested?: string): string | undefined {
+  const reasoning = (model as { reasoning?: { efforts?: Array<{ id?: string }>; default_effort?: string } }).reasoning;
+  const efforts = reasoning?.efforts?.map((effort) => effort.id).filter((id): id is string => Boolean(id?.trim())) ?? [];
+  if (efforts.length === 0) return undefined;
+  if (requested && efforts.includes(requested)) return requested;
+  return reasoning?.default_effort && efforts.includes(reasoning.default_effort) ? reasoning.default_effort : efforts[0];
 }
 
 /** 把 Registry Agent 收敛成 Renderer 所需摘要。 */
