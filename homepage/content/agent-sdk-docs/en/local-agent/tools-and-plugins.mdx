@@ -82,7 +82,7 @@ Unrestricted sandbox requests belong to the Session that started the tool call:
 const interactions = await session.interactions();
 await session.respond({
   interaction_id: interactions[0].request.interaction_id,
-  response: { type: "approval", payload: { decision: "approved" } },
+  response: { type: "approval", outcome: "resolved", payload: { decision: "approved" } },
 });
 ```
 
@@ -185,11 +185,11 @@ const demo_plugin = create_plugin({
           payload: { text: "hello" },
         },
       ],
-      execute: async ({ input, execution_context }) => ({
+      execute: async ({ input, execution }) => ({
         success: true,
         data: {
           text: input.text,
-          session_id: execution_context?.session_id,
+          session_id: execution.session?.session_id,
         },
         message: "echoed",
       }),
@@ -203,7 +203,7 @@ const agent = new Agent({
 });
 ```
 
-The `zod` schema handles runtime validation. `json_schema` and `examples` are returned by `plugin_read` for the model or UI. `execution_context` is present when the action runs through a session tool and can be absent for direct CLI, HTTP, or scheduler calls. Use `execution_context.workspace_env` for the effective env committed at the current session step; `context.workspace_env` is the current Workspace configuration snapshot. Existing `class extends BasePlugin` plugins still work, and can gradually move individual actions to `create_action(...)`.
+The `zod` schema handles runtime validation. `json_schema` and `examples` are returned by `plugin_read` for the model or UI. Every Action receives a stable `context` capability view and a per-call `execution` object. Session identity and interactions are available through `execution.session`; the effective Step env is available through `execution.snapshot.workspace_env`. Direct CLI, HTTP, or scheduler calls have no `execution.session`. `context.workspace_env` remains the current Workspace configuration snapshot.
 
 Tools and Plugin Actions share one Session result path: put the ordinary result in `output`, and return content that belongs in the conversation as `messages: [{ role, parts }]`. User Parts become available in the next Step; Assistant Parts are written to the current Assistant Message. Session does not download or rewrite files. An Action must save a file first and return a File Part pointing to that local path.
 

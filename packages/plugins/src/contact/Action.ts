@@ -130,7 +130,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
         data: await handlers.link(
           params.context,
           params.input as ContactLinkCommandPayload,
-          params.execution_context,
+          params.execution.snapshot,
         ),
       }),
     }),
@@ -173,7 +173,7 @@ export function createContactActions(handlers: ContactActionHandlers): PluginAct
         data: await handlers.approve(
           params.context,
           params.input as unknown as ContactApproveCommandPayload,
-          params.execution_context,
+          params.execution.snapshot,
         ),
       }),
     }),

@@ -43,7 +43,7 @@ session.subscribe((mutation) => {
 
 await session.respond({
   interaction_id,
-  response: { type: "approval", payload: { decision: "approved" } },
+  response: { type: "approval", outcome: "resolved", payload: { decision: "approved" } },
 });
 ```
 

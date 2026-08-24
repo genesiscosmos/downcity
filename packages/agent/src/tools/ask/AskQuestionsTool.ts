@@ -41,10 +41,10 @@ export const AskQuestionsTool = tool({
     const execution_context = execution_options.experimental_context as
       | Partial<SessionToolExecutionContext>
       | undefined;
-    const turn_context = execution_context?.session_turn_context;
-    const interaction_port = turn_context?.interactions;
-    const turn_id = String(turn_context?.session.turn_id || "").trim();
-    const tool_call_id = String(execution_options.toolCallId || "").trim();
+    const action_execution = execution_context?.action_execution_context;
+    const interaction_port = action_execution?.session.interactions;
+    const turn_id = String(action_execution?.session.turn_id || "").trim();
+    const tool_call_id = String(action_execution?.call_id || "").trim();
     if (!interaction_port || !turn_id || !tool_call_id) {
       throw new Error(
         "ask_question requires an active Session tool execution context",
@@ -78,7 +78,11 @@ export const AskQuestionsTool = tool({
     if (result.status === "expired") {
       throw new Error("ask_question expired before the user responded");
     }
-    if (result.status !== "resolved" || result.response.type !== "question") {
+    if (
+      result.status !== "resolved" ||
+      result.response.type !== "question" ||
+      result.response.outcome !== "resolved"
+    ) {
       throw new Error(
         "ask_question received an incompatible Interaction response",
       );

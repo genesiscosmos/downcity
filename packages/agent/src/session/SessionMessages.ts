@@ -748,7 +748,7 @@ export class SessionMessages {
       : [];
     const interrupted_tool_ids = new Set(
       interrupted_interactions.flatMap((part) =>
-        part.request.source.type === "tool"
+        part.request.source.tool_call_id
           ? [part.request.source.tool_call_id]
           : [],
       ),

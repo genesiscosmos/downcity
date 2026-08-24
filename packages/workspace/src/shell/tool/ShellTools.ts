@@ -19,8 +19,8 @@ import {
 import { validateChatSendCommand } from "@/shell/tool/ShellToolFormatting.js";
 import type {
   ShellToolAction,
+  ShellExecutionContext,
   ShellToolExecutionContext,
-  ShellToolRunContext,
   ShellToolRunner,
   ShellToolSet,
 } from "@/shell/types/ShellRuntime.js";
@@ -30,12 +30,12 @@ type JsonObject = Record<string, unknown>;
 /**
  * 从 AI SDK tool 显式上下文中读取 Shell 运行快照。
  */
-function resolve_shell_run_context(value: unknown): ShellToolRunContext {
+function resolve_shell_execution_context(value: unknown): ShellExecutionContext {
   if (!value || typeof value !== "object") return {};
   const context = value as Partial<ShellToolExecutionContext>;
-  const run_context = context.shell_run_context;
-  if (!run_context || typeof run_context !== "object") return {};
-  return run_context;
+  const execution_context = context.shell_execution_context;
+  if (!execution_context || typeof execution_context !== "object") return {};
+  return execution_context;
 }
 
 function flattenShellActionResponse(params: {
@@ -226,15 +226,15 @@ export function createShellTools(runner: ShellToolRunner): ShellToolSet {
     payload: JsonObject,
     options: ToolExecutionOptions,
   ): Promise<ShellActionResponse> {
-    const run_context = resolve_shell_run_context(options.experimental_context);
+    const execution_context = resolve_shell_execution_context(options.experimental_context);
     return runner.run_action({
       action,
       payload,
-      ownerContextId: run_context.ownerContextId,
-      turnId: run_context.turnId,
-      env: run_context.env,
-      approval_gateway: run_context.approval_gateway,
-      toolCallId: options.toolCallId,
+      execution: {
+        ...execution_context,
+        call_id: options.toolCallId || execution_context.call_id,
+        abort_signal: options.abortSignal || execution_context.abort_signal,
+      },
     });
   }
 

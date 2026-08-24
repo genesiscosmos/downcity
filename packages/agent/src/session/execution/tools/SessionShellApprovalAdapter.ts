@@ -56,7 +56,7 @@ export class SessionShellApprovalAdapter implements ShellApprovalGateway {
       turn_id: input.turn_id,
       type: "approval",
       source: {
-        type: "tool",
+        type: "shell",
         tool_call_id: input.tool_call_id,
         tool_name: input.tool_name,
       },
@@ -85,7 +85,7 @@ export class SessionShellApprovalAdapter implements ShellApprovalGateway {
       decision: handle.result.then((result): ShellApprovalStatus => {
         if (result.status === "expired") return "expired";
         if (result.status !== "resolved") return "denied";
-        if (result.status !== "resolved" || result.response.type !== "approval") return "denied";
+        if (result.response.outcome !== "resolved" || result.response.type !== "approval") return "denied";
         const payload = result.response.payload;
         if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "denied";
         return (payload as { decision?: "approved" | "denied" }).decision || "denied";

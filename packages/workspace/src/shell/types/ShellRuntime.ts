@@ -23,28 +23,23 @@ export interface ShellRuntimeLogger {
   warn(message: string, meta?: Record<string, unknown>): void;
 }
 
-/**
- * Shell tool 执行时需要的宿主运行上下文。
- *
- * 关键点（中文）
- * - 显式把 session/turn 上下文传给 Shell action。
- * - 由 Agent 在 tool.execute 入口提供，Shell 内部不再读取隐式全局状态。
- */
-export interface ShellToolRunContext {
-  /**
-   * 当前 tool 调用所属的 agent session id。
-   */
-  ownerContextId?: string;
-  /**
-   * 当前 tool 调用所属的 turn id。
-   */
-  turnId?: string;
-
-  /** 当前 Session step 已提交生效的 Agent env。 */
-  env?: Readonly<Record<string, string>>;
-
-  /** 当前 Agent Session 注入的 unrestricted 审批网关。 */
-  approval_gateway?: ShellApprovalGateway;
+/** Shell Tool 一次调用获得的最小执行上下文。 */
+export interface ShellExecutionContext {
+  /** 当前调用所属的 Session 范围。 */
+  readonly session?: {
+    /** 当前 Session 标识。 */
+    readonly session_id: string;
+    /** 当前 Turn 标识。 */
+    readonly turn_id: string;
+  };
+  /** 当前 Shell Tool Call 标识。 */
+  readonly call_id?: string;
+  /** 当前调用的取消信号。 */
+  readonly abort_signal?: AbortSignal;
+  /** 当前 Session 注入的 unrestricted 审批网关。 */
+  readonly approval_gateway?: ShellApprovalGateway;
+  /** 当前 Step 已提交生效的环境变量。 */
+  readonly workspace_env?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -55,8 +50,8 @@ export interface ShellToolRunContext {
  * - Shell 只读取自己的字段，不感知 Agent 的 SessionTurnContext。
  */
 export interface ShellToolExecutionContext {
-  /** 当前 Shell tool 调用的 session、turn 与 env 快照。 */
-  shell_run_context: ShellToolRunContext;
+  /** 当前 Shell Tool 的执行上下文。 */
+  readonly shell_execution_context: ShellExecutionContext;
 }
 
 /**
@@ -140,25 +135,8 @@ export interface ShellToolRunner {
      * action payload。
      */
     payload: Record<string, unknown>;
-    /**
-     * 当前 tool 调用所属的 agent session id。
-     */
-    ownerContextId?: string;
-    /**
-     * 当前 tool 调用所属的 turn id。
-     */
-    turnId?: string;
-    /** 当前 Session step 已提交生效的环境变量。 */
-    env?: Readonly<Record<string, string>>;
-    /** 当前 Session 注入的 unrestricted 审批网关。 */
-    approval_gateway?: ShellApprovalGateway;
-    /**
-     * AI SDK 分配给当前 tool 调用的 id。
-     *
-     * 关键点（中文）
-     * - Session Tool Runtime 使用它把完整输入、审批和输出投影到同一个 Tool Part。
-     */
-    toolCallId?: string;
+    /** 当前 Shell Tool 的执行上下文。 */
+    execution: ShellExecutionContext;
   }): Promise<ShellActionResponse>;
 }
 

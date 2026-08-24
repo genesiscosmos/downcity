@@ -238,10 +238,11 @@ Step 边界负责：
 - 必要时关闭当前 Assistant Message，再把新 User steer 放入顶层消息序列。
 - Compact 后请求下一 Provider Step 重新读取 canonical history。
 
-## 8. SessionTurnContext 上下文中台
+## 8. SessionTurnContext 与执行上下文
 
-`SessionTurnContext` 是一个 Turn 内部共享的上下文中台。它不是新的调度层，也不复制
-Session 的长期事实；它把跨 Executor、Tool、Plugin、Shell 的运行期协作集中在一个根对象中。
+`SessionTurnContext` 是一个 Turn 内部共享的上下文中台。它不是业务 Tool、Plugin Action
+或 Shell 的公开上下文。Executor 和 Plugin Action Runner 从这个根对象投影出各执行入口真正
+需要的只读上下文，避免业务能力反向依赖 Session 内部实现。
 
 ```mermaid
 flowchart TB
@@ -260,25 +261,61 @@ sequenceDiagram
     participant SL as SessionLoop
     participant C as SessionTurnContext
     participant E as Executor
-    participant T as Tool
-    participant P as Plugin
+    participant T as 普通 Tool
+    participant P as Plugin Action Runner
+    participant S as Shell Tool
 
     SL->>C: create(turn_id)
     E->>C: step.commit(snapshot)
     E->>C: step.replace_plugins(lease)
-    E->>T: execute(experimental_context)
-    T->>C: 读取 input / output / interactions
-    P->>C: 读取只读 PluginExecutionContext
+    E->>T: action_execution_context
+    T->>T: 读取调用身份、取消、Workspace、Interaction
+    E->>S: shell_execution_context
+    S->>S: 读取调用身份、取消、env、approval_gateway
+    E->>P: PluginExecutionContext snapshot
+    P->>P: 创建 PluginActionExecutionContext
     SL->>C: lifecycle.dispose()
-    C->>P: release lease
 ```
 
 边界规则：
 
 - Session 长期状态仍属于 `SessionState` 和 `SessionMessages`。
 - Context 只保存当前 Turn/Step 必需的运行快照和资源句柄。
-- Plugin 只获得 `PluginExecutionContext` 只读投影，不获得整个 Context 根对象。
-- Shell 保留自己的 `ShellRunContext`，因为它表达命令运行领域，不是 Session 层级。
+- 完整 `SessionTurnContext` 只供 Agent 内部桥接工具使用，不是业务 Tool API。
+- 普通 Tool 只读取 `ToolActionExecutionContext`；交互能力位于
+  `action_execution_context.session.interactions`。
+- Shell Tool 只读取 `ShellExecutionContext`，不感知 Plugin 或 Session 内部对象。
+- Plugin Action 同时获得稳定 `PluginContext` 和单次 `PluginActionExecutionContext`。
+
+### 8.1 三类执行入口的上游
+
+```mermaid
+flowchart TD
+    Workspace["AgentWorkspace"] --> PluginContext["PluginContext\n稳定能力与 Workspace 所有权"]
+    SessionTurn["SessionTurnContext"] --> Executor["Executor"]
+    SessionTurn --> Invocation["PluginExecutionContext\nStep 调用快照"]
+
+    Invocation --> Runner["Plugin Action Runner"]
+    Runner --> PluginExecution["PluginActionExecutionContext\ncall / abort / session / snapshot"]
+
+    Executor --> ToolExecution["ToolActionExecutionContext\ncall / abort / session / workspace"]
+    Executor --> ShellExecution["ShellExecutionContext\ncall / abort / session / env / approval"]
+
+    PluginContext --> PluginAction["Plugin Action"]
+    PluginExecution --> PluginAction
+    ToolExecution --> Tool["普通 Tool"]
+    ShellExecution --> Shell["Shell Tool"]
+```
+
+`PluginContext` 由 `AgentWorkspace` 创建并随 Plugin 生命周期稳定存在，包含文件、Shell、
+日志、Web、City、Sessions、Plugins 和 Workspace 路径等能力。一次 Action 调用的身份、
+取消信号、Session 范围和 Step 快照全部进入 `PluginActionExecutionContext`，不再混入稳定
+能力对象。
+
+普通 Tool 和 Shell Tool 都由 Executor 在每个 Tool Call 开始时创建上下文。二者共享
+`call_id`、`abort_signal` 和可选的 Session 身份，但 Shell 独有审批网关，普通 Tool 独有
+Interaction 端口。Plugin Tool 是 Agent 内部桥接层：它读取完整 `SessionTurnContext`，再让
+Plugin Action Runner 创建对业务 Action 可见的最小上下文。
 
 ## 9. Composer 与 Executor
 
@@ -538,6 +575,11 @@ Interaction 使用统一的可扩展信封：核心只约束 `interaction_id`、
 `plugin:<plugin-name>/<action>` 形式的动态 type。前端不需要理解所有业务类型，
 可以通过自己的 renderer 选择弹窗、表单、CLI 面板或其他呈现方式；未知类型必须保持
 pending 并允许明确拒绝，不能默认批准。
+
+所有可关联 Tool 的 Interaction 都通过 `source.tool_call_id` 建立关系，不再根据
+`approval`、`question` 或 Plugin 类型分别处理。响应统一携带 `outcome`：
+`resolved` 让 `waiting-user` Tool 恢复为 `running`，`denied`、`expired`、`cancelled`
+和 `failed` 让关联 Tool 进入 `failed`。
 
 Approval、Question、Plugin Confirmation 都通过 `session.respond()` 恢复执行。
 PTY/Shell Session 仍然是持续进程流，不是一次性 Interaction。

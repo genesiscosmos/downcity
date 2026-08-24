@@ -14,6 +14,7 @@ import type { Plugin } from "@/types/plugin/PluginDefinition.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { PluginSnapshot } from "@/types/plugin/PluginState.js";
 import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
+import type { SessionInteractionPort } from "@/types/session/SessionInteraction.js";
 
 /**
  * Plugin 概览视图。
@@ -134,6 +135,8 @@ export interface AgentPlugins {
     payload?: JsonValue;
     /** 当前 action 所属 Session Turn 的只读 Plugin 执行快照。 */
     execution_context?: PluginExecutionContext;
+    /** 当前 Session 的 Interaction 端口；非 Session 调用时为空。 */
+    interactions?: SessionInteractionPort;
   }): Promise<PluginActionResult<JsonValue>>;
   /** 读取当前生效的 plugin system blocks。 */
   system_blocks(
@@ -175,6 +178,8 @@ export interface AgentPluginExecutionView {
     payload?: JsonValue;
     /** 当前 action 所属 Session Turn 的只读 Plugin 执行快照。 */
     execution_context?: PluginExecutionContext;
+    /** 当前 Session 的 Interaction 端口；非 Session 调用时为空。 */
+    interactions?: SessionInteractionPort;
   }): Promise<PluginActionResult<JsonValue>>;
 
   /** 解析当前视图中捕获的 plugin system blocks。 */

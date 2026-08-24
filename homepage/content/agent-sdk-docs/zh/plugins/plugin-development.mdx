@@ -117,12 +117,12 @@ export class ExamplePlugin extends BasePlugin {
     status: create_action({
       description: "Return the current Plugin status.",
       input_schema: z.object({}),
-      execute: async ({ context, execution_context }) => ({
+      execute: async ({ context, execution }) => ({
         success: true,
         data: {
           agent_id: context.agent_id,
           workspace_id: context.workspace_id,
-          request_id: execution_context.request_id,
+          call_id: execution.call_id,
         },
       }),
     }),
@@ -193,17 +193,17 @@ if (!models) return { success: false, error: "AI service is unavailable" };
 ```ts
 run: create_action({
   input_schema: z.object({ value: z.string().min(1) }),
-  execute: async ({ input, execution_context }) => {
-    execution_context.abort_signal.throwIfAborted();
+  execute: async ({ input, execution }) => {
+    execution.abort_signal.throwIfAborted();
     const result = await client.run(input.value, {
-      signal: execution_context.signal,
+      signal: execution.abort_signal,
     });
     return { success: true, data: result };
   },
 })
 ```
 
-长任务必须响应 `execution_context.signal`，并在外部请求中传递 `AbortSignal`。超时和取消由调用层控制，Plugin 不应自行阻塞 Agent。
+长任务必须响应 `execution.abort_signal`，并在外部请求中传递 `AbortSignal`。超时和取消由调用层控制，Plugin 不应自行阻塞 Agent。
 
 ## 生命周期
 

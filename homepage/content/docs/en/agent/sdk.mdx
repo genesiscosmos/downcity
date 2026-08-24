@@ -77,7 +77,7 @@ const unsubscribe = session.subscribe((mutation) => {
 async function decide_approval(interaction_id: string, decision: "approved" | "denied") {
   await session.respond({
     interaction_id,
-    response: { type: "approval", payload: { decision } },
+    response: { type: "approval", outcome: decision === "approved" ? "resolved" : "denied", payload: { decision } },
   });
 }
 ```

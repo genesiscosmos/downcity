@@ -81,7 +81,7 @@ async function stop(): Promise<void> {
 ```ts
 await session.respond({
   interaction_id,
-  response: { type: "approval", payload: { decision: "approved" } },
+  response: { type: "approval", outcome: "resolved", payload: { decision: "approved" } },
 });
 ```
 

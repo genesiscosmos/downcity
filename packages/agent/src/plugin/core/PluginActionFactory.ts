@@ -57,10 +57,10 @@ export interface CreatePluginActionOptions<
   api?: PluginActionApi<P>;
   /** Action 执行器。 */
   execute: (params: {
-    /** 当前执行上下文。 */
+    /** AgentWorkspace 创建的稳定 Plugin 能力视图。 */
     context: PluginContext;
-    /** 当前 action 所属 Session Turn 的只读执行快照。 */
-    execution_context: PluginActionExecutionContext;
+    /** 当前 Action 的执行身份和生命周期。 */
+    execution: PluginActionExecutionContext;
     /** 已通过 schema 校验后的输入。 */
     input: P;
     /** 当前插件名称。 */

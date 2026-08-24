@@ -10,8 +10,8 @@ import type { ShellHostContext } from "@/shell/types/ShellHostContext.js";
 import type {
   ShellOptions,
   ShellBinding,
+  ShellExecutionContext,
   ShellToolAction,
-  ShellToolRunContext,
   ShellToolSet,
 } from "@/shell/types/ShellRuntime.js";
 import type { ShellActionResponse } from "@/shell/types/ShellAction.js";
@@ -69,11 +69,7 @@ export class Shell {
           await this.run_action(
             params.action,
             params.payload,
-            params.ownerContextId,
-            params.turnId,
-            params.env,
-            params.approval_gateway,
-            params.toolCallId,
+            params.execution,
           ),
       }),
     };
@@ -191,23 +187,16 @@ export class Shell {
   private async run_action(
     action: ShellToolAction,
     payload: Record<string, unknown>,
-    ownerContextId?: string,
-    turnId?: string,
-    env?: Readonly<Record<string, string>>,
-    approval_gateway?: ShellToolRunContext["approval_gateway"],
-    toolCallId?: string,
+    execution: ShellExecutionContext,
   ): Promise<ShellActionResponse> {
-    const context = this.create_host_context({
-      ...(ownerContextId ? { ownerContextId } : {}),
-      ...(turnId ? { turnId } : {}),
-      ...(env ? { env } : {}),
-      ...(approval_gateway ? { approval_gateway } : {}),
-    });
+    const session_id = execution.session?.session_id;
+    const turn_id = execution.session?.turn_id;
+    const context = this.create_host_context(execution);
     const payload_with_context: Record<string, unknown> = {
       ...payload,
-      ...(ownerContextId ? { ownerContextId } : {}),
-      ...(turnId ? { turnId } : {}),
-      ...(toolCallId ? { toolCallId } : {}),
+      ...(session_id ? { ownerContextId: session_id } : {}),
+      ...(turn_id ? { turnId: turn_id } : {}),
+      ...(execution.call_id ? { toolCallId: execution.call_id } : {}),
     };
     switch (action) {
       case "start":
@@ -235,24 +224,24 @@ export class Shell {
    * 根据单次 action 的显式运行上下文构建宿主上下文。
    */
   private create_host_context(
-    run_context: ShellToolRunContext = {},
+    execution: ShellExecutionContext = {},
   ): ShellHostContext {
     const root_path = String(this.host_options.root_path || "").trim();
     const data_path = String(this.host_options.data_path || "").trim();
     if (!root_path || !data_path) {
       throw new Error("Shell requires root_path and data_path from AgentWorkspace");
     }
-    const session_id = run_context.ownerContextId || "";
-    const turn_id = run_context.turnId || "";
+    const session_id = execution.session?.session_id || "";
+    const turn_id = execution.session?.turn_id || "";
     return {
       sandbox: this.sandbox,
       rootPath: root_path,
       dataPath: data_path,
-      env: run_context.env || this.host_options.env,
+      env: execution.workspace_env || this.host_options.env,
       safe_read_only_paths: this.host_options.safe_read_only_paths,
       config: {},
       logger: this.host_options.logger,
-      approval_gateway: run_context.approval_gateway,
+      approval_gateway: execution.approval_gateway,
       shellIntegration: {
         getRunContext: () => ({
           ...(session_id ? { sessionId: session_id } : {}),

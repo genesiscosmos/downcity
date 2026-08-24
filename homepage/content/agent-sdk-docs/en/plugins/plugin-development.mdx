@@ -115,12 +115,12 @@ export class ExamplePlugin extends BasePlugin {
     status: create_action({
       description: "Return the current Plugin status.",
       input_schema: z.object({}),
-      execute: async ({ context, execution_context }) => ({
+      execute: async ({ context, execution }) => ({
         success: true,
         data: {
           agent_id: context.agent_id,
           workspace_id: context.workspace_id,
-          request_id: execution_context.request_id,
+          call_id: execution.call_id,
         },
       }),
     }),
@@ -191,17 +191,17 @@ Every action should have an explicit input Schema, a stable result, and cancella
 ```ts
 run: create_action({
   input_schema: z.object({ value: z.string().min(1) }),
-  execute: async ({ input, execution_context }) => {
-    execution_context.abort_signal.throwIfAborted();
+  execute: async ({ input, execution }) => {
+    execution.abort_signal.throwIfAborted();
     const result = await client.run(input.value, {
-      signal: execution_context.signal,
+      signal: execution.abort_signal,
     });
     return { success: true, data: result };
   },
 })
 ```
 
-Long-running work must respond to `execution_context.signal` and pass the `AbortSignal` to external requests. Timeout and cancellation are controlled by the caller; a Plugin should not block the Agent itself.
+Long-running work must respond to `execution.abort_signal` and pass the `AbortSignal` to external requests. Timeout and cancellation are controlled by the caller; a Plugin should not block the Agent itself.
 
 ## Lifecycle
 

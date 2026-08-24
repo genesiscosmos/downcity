@@ -789,7 +789,7 @@ export class ImagePlugin extends BasePlugin {
           },
         },
       ],
-      execute: async ({ context, execution_context, input }) => {
+      execute: async ({ context, execution, input }) => {
         try {
           const normalized_input = normalize_image_result_payload(input);
           const current = await this.read_image_result(normalized_input, context);
@@ -806,7 +806,7 @@ export class ImagePlugin extends BasePlugin {
                 context,
                 job_id: current.job_id,
                 result: current.result,
-                abort_signal: execution_context?.abort_signal,
+                abort_signal: execution.abort_signal,
               })
             : undefined;
           const output = localized

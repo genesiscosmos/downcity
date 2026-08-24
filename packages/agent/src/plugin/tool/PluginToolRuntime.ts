@@ -54,6 +54,9 @@ export async function invoke_plugin_call_tool(
       action,
       payload,
       execution_context: turn_context.step.plugin_execution_context(params.call_id),
+      ...(turn_context.interactions
+        ? { interactions: turn_context.interactions }
+        : {}),
     });
     return {
       output: {

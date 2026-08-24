@@ -25,9 +25,9 @@ export type SessionInteractionSource =
       /** 来源为 Tool Call。 */
       type: "tool";
       /** 发起 Interaction 的稳定 Tool Call 标识。 */
-      tool_call_id: string;
+      tool_call_id?: string;
       /** 发起 Interaction 的工具注册名称。 */
-      tool_name: string;
+      tool_name?: string;
     }
   | {
       /** 来源为 Plugin。 */
@@ -36,6 +36,8 @@ export type SessionInteractionSource =
       plugin_name: string;
       /** Plugin 关联的 Tool Call 标识。 */
       tool_call_id?: string;
+      /** Plugin 关联的 Tool 名称。 */
+      tool_name?: string;
     }
   | {
       /** 来源为 Shell。 */
@@ -48,6 +50,10 @@ export type SessionInteractionSource =
   | {
       /** 来源为不绑定具体 Tool 的 Session 执行过程。 */
       type: "execution";
+      /** 可选关联的 Tool Call 标识。 */
+      tool_call_id?: string;
+      /** 可选关联的 Tool 名称。 */
+      tool_name?: string;
     };
 
 /** Interaction 请求公共字段。 */
@@ -152,6 +158,8 @@ export interface SessionQuestionResponsePayload {
 export interface SessionInteractionResponse {
   /** 必须与原请求 type 一致。 */
   type: string;
+  /** 用户是否允许当前 Interaction 继续。 */
+  outcome: "resolved" | "denied";
   /** 业务响应数据，由 type 对应的生产者解释。 */
   payload: JsonValue;
 }

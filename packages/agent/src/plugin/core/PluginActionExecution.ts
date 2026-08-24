@@ -12,6 +12,7 @@ import type { PluginActionExecutionContext } from "@/types/plugin/PluginActionEx
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
 import type { JsonValue } from "@/types/common/Json.js";
+import type { SessionInteractionPort } from "@/types/session/SessionInteraction.js";
 import { generate_id } from "@/utils/Id.js";
 
 /** Action 超时写入 abort_signal.reason 的内部错误。 */
@@ -48,6 +49,8 @@ export interface ExecutePluginActionInput {
   payload: JsonValue;
   /** Session 或其他入口提供的可选执行快照。 */
   execution_context?: PluginExecutionContext;
+  /** 当前 Session 的 Interaction 端口。 */
+  interactions?: SessionInteractionPort;
 }
 
 /** 读取异常的稳定可读文本。 */
@@ -129,16 +132,14 @@ function create_abort_scope(input: {
 function create_action_execution_context(input: {
   context: PluginContext;
   execution_context?: PluginExecutionContext;
+  interactions?: SessionInteractionPort;
   abort_signal: AbortSignal;
 }): PluginActionExecutionContext {
   const source = input.execution_context;
   const session_id = String(source?.session_id || "").trim();
   const turn_id = String(source?.turn_id || "").trim();
   const call_id = String(source?.call_id || "").trim() || `plugin:${generate_id()}`;
-  return Object.freeze({
-    agent_id: input.context.agent_id,
-    workspace_id: input.context.workspace_id,
-    call_id,
+  const snapshot: PluginExecutionContext = Object.freeze({
     ...(session_id ? { session_id } : {}),
     ...(turn_id ? { turn_id } : {}),
     project_root: input.context.workspace_path,
@@ -149,6 +150,23 @@ function create_action_execution_context(input: {
       ...(source?.agent_systems ?? input.context.instructions ?? []),
     ]),
     abort_signal: input.abort_signal,
+    call_id,
+  });
+  return Object.freeze({
+    call_id,
+    abort_signal: input.abort_signal,
+    snapshot,
+    ...(session_id && turn_id
+      ? {
+          session: Object.freeze({
+            session_id,
+            turn_id,
+            ...(input.interactions
+              ? { interactions: input.interactions }
+              : {}),
+          }),
+        }
+      : {}),
   });
 }
 
@@ -177,6 +195,7 @@ export async function execute_plugin_action(
   const execution_context = create_action_execution_context({
     context: input.context,
     execution_context: input.execution_context,
+    interactions: input.interactions,
     abort_signal: abort_scope.signal,
   });
 
@@ -187,8 +206,8 @@ export async function execute_plugin_action(
       );
     }
     const result = await input.action.execute({
+      execution: execution_context,
       context: input.context,
-      execution_context,
       input: parsed_payload.input,
       plugin_name: input.plugin_name,
       action_name: input.action_name,

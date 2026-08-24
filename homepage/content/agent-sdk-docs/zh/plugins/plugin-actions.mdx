@@ -39,16 +39,12 @@ actions: {
 - 执行业务逻辑
 - 返回 `success / data / error / message`
 
-每次 Action 调用都会收到只读的 `execution_context`，其中包含：
+每次 Action 调用都会收到两个职责分离的只读输入：
 
-- `agent_id`：当前 Agent 标识
-- `workspace_id`：当前 Workspace 标识
-- `call_id`：当前 Action 调用标识；模型 Tool 调用时等于对应的 Tool Call ID
-- `abort_signal`：当前调用必须监听的取消信号
-- `session_id` / `turn_id`：Session 调用时提供
-- `workspace_env` / `agent_systems`：当前执行检查点的有效配置快照
+- `context`：稳定的 Agent 与 Workspace 能力，包括身份、文件、Shell、日志、Web、Sessions 和 Plugins
+- `execution`：单次调用的身份、取消信号、可选 Session 范围和当前 Step 快照
 
-CLI、HTTP 或 scheduler 直接调用时，运行时会自动生成 `call_id` 和取消信号。Action 应该把 `abort_signal` 传递给网络请求、轮询和长耗时任务。
+模型 Tool 调用时，`execution.call_id` 等于对应 Tool Call ID；Session 身份和可选交互端口位于 `execution.session`；当前生效的 `workspace_env` 与 `agent_systems` 位于 `execution.snapshot`。CLI、HTTP 或 scheduler 直接调用时，运行时会自动生成 `call_id` 和取消信号，但没有 Session 范围。Action 应把 `execution.abort_signal` 传递给网络请求、轮询和长耗时任务。
 
 ## `command`
 
@@ -78,9 +74,9 @@ Action 可以声明协作式超时：
 actions: {
   search: {
     timeout_ms: 30_000,
-    execute: async ({ execution_context }) => {
+    execute: async ({ execution }) => {
       const response = await fetch("https://example.com", {
-        signal: execution_context.abort_signal,
+        signal: execution.abort_signal,
       });
       return { success: true, data: { status: response.status } };
     },
@@ -88,7 +84,7 @@ actions: {
 }
 ```
 
-超时会触发 `execution_context.abort_signal`。这是协作式约束，Action 必须把信号传给底层操作；业务失败不会改变 Plugin 的生命周期状态。
+超时会触发 `execution.abort_signal`。这是协作式约束，Action 必须把信号传给底层操作；业务失败不会改变 Plugin 的生命周期状态。
 
 ## `allowWhenDisabled`
 
@@ -111,13 +107,7 @@ actions: {
 
 ## action 的执行上下文是什么
 
-plugin action 的 `execute` 接收到的是 `PluginCommandContext` 语义。
-
-对使用者来说，可以理解为：
-
-- 一组最小但稳定的命令执行上下文
-
-它包括当前 Agent 标识、项目根目录、日志器和已经整理好的 env。Plugin 的产品配置由上游在构造 Plugin 实例时传入，不通过 action context 读取或持久化。
+Plugin Action 会刻意分开稳定能力与单次调用状态：从 `context` 读取 Agent 与 Workspace 服务，从 `execution` 读取调用身份、取消、Session 交互和当前 Step 快照。Plugin 产品配置仍由上游在构造 Plugin 实例时传入。
 
 ## 一个完整一些的例子
 
@@ -133,8 +123,8 @@ actions: {
         };
       },
     },
-    execute: async ({ payload }) => {
-      const provider = String((payload as { provider?: unknown }).provider || "").trim();
+    execute: async ({ input }) => {
+      const provider = String((input as { provider?: unknown }).provider || "").trim();
       if (!provider) {
         return {
           success: false,

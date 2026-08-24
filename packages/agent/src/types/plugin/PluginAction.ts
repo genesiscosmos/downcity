@@ -134,7 +134,7 @@ export interface PluginActionMetadata<P extends JsonValue = JsonValue> {
   input_schema?: PluginActionInputSchema<P>;
   /** Action 调用示例。 */
   examples?: PluginActionExample<P>[];
-  /** Action 的协作式超时上限（毫秒）；Action 必须监听 execution_context.abort_signal。 */
+  /** Action 的协作式超时上限（毫秒）；Action 必须监听 execution.abort_signal。 */
   timeout_ms?: number;
 }
 
@@ -151,7 +151,7 @@ export interface PluginAction<
   api?: PluginActionApi<P>;
   /** Action 执行器。 */
   execute: (params: {
-    /** 当前执行上下文。 */
+    /** AgentWorkspace 创建的稳定 Plugin 能力视图。 */
     context: PluginContext;
     /**
      * 当前 action 所属 Session Turn 的只读 Plugin 执行快照。
@@ -160,7 +160,7 @@ export interface PluginAction<
      * - 模型 tool 调用复用对应 tool call ID 和 Turn 取消信号。
      * - CLI、HTTP 与定时任务等非 Session 入口由 Registry 补齐调用身份和取消信号。
      */
-    execution_context: PluginActionExecutionContext;
+    execution: PluginActionExecutionContext;
     /** 已通过 schema 校验后的输入。 */
     input: P;
     /** 当前插件名称。 */

@@ -60,6 +60,7 @@ test("动态 Plugin Interaction 使用通用 type/payload 完成恢复", async (
       interaction_id: handle.interaction_id,
       response: {
         type: "plugin:deployment/confirm",
+        outcome: "resolved",
         payload: { decision: "confirmed" },
       },
     });

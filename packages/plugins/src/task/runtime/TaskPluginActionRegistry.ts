@@ -222,7 +222,7 @@ export function createTaskPluginActions(params: {
         return executeTaskRunAction({
           context: actionParams.context,
           payload: actionParams.input as TaskRunRequest,
-          execution_context: actionParams.execution_context,
+          execution_context: actionParams.execution.snapshot,
         });
       },
     }),

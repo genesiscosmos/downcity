@@ -427,10 +427,10 @@ this.user_service;
 Action 的 Agent 执行上下文来自 Agent：
 
 ```ts
-execute: async ({ context, execution_context, input }) => {
+execute: async ({ context, execution, input }) => {
   await context.data_files.write_file(...);
 
-  if (execution_context.abort_signal?.aborted) {
+  if (execution.abort_signal.aborted) {
     throw new Error("action aborted");
   }
 

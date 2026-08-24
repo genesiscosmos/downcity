@@ -98,16 +98,11 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
       input.interaction_id,
       input.response,
     );
-    const denied = input.response.type === "approval" &&
-      input.response.payload &&
-      typeof input.response.payload === "object" &&
-      !Array.isArray(input.response.payload) &&
-      (input.response.payload as { decision?: unknown }).decision === "denied";
-    const result: SessionInteractionResult = denied
+    const result: SessionInteractionResult = input.response.outcome === "denied"
       ? {
         status: "denied",
         interaction_id: input.interaction_id,
-        reason: (input.response.payload as { reason?: string }).reason,
+        reason: extract_interaction_reason(input.response.payload),
       }
       : {
         status: "resolved",
@@ -176,6 +171,9 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
     if (!String(request.type || "").trim()) {
       throw new Error("Session Interaction requires a non-empty type");
     }
+    if (!request.source || typeof request.source !== "object") {
+      throw new Error("Session Interaction requires a source");
+    }
     if (request.type === "question") {
       const payload = request.payload as { questions?: unknown };
       const questions = payload?.questions;
@@ -230,6 +228,9 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
   ): void {
     if (request.type !== response.type) {
       throw new Error("Session Interaction response type mismatch");
+    }
+    if (response.outcome !== "resolved" && response.outcome !== "denied") {
+      throw new Error("Session Interaction response requires a valid outcome");
     }
     if (request.type !== "question") return;
     const request_payload = request.payload as { questions?: unknown };
@@ -298,4 +299,13 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
     this.pending_by_id.delete(interaction_id);
     pending.resolve(result);
   }
+}
+
+/** 从通用响应 payload 中读取可选的人类可读拒绝原因。 */
+function extract_interaction_reason(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return undefined;
+  }
+  const reason = (payload as { reason?: unknown }).reason;
+  return typeof reason === "string" ? reason : undefined;
 }

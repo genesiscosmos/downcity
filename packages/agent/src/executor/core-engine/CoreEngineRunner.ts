@@ -669,6 +669,7 @@ async function resolve_tool_approval_responses(input: {
         : undefined;
       const approved = result.status === "resolved" &&
         result.response.type === "approval" &&
+        result.response.outcome === "resolved" &&
         response_payload?.decision === "approved";
       return {
         type: "tool-approval-response",

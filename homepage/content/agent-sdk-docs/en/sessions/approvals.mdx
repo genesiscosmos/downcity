@@ -34,6 +34,7 @@ await session.respond({
   interaction_id,
   response: {
     type: "approval",
+    outcome: "resolved",
     payload: { decision: "approved" },
   },
 });
@@ -62,6 +63,7 @@ await session.respond({
   interaction_id,
   response: {
     type: "question",
+    outcome: "resolved",
     payload: { answers: [
       { question_id: "region", value: "cn" },
       { question_id: "features", value: ["search", "files"] },
@@ -218,7 +220,7 @@ Setting the same approval mode is idempotent and does not create another configu
 ## UI implementation details
 
 - Use `interaction_id` as the stable card key.
-- For `source.type === "tool"`, link it with `source.tool_call_id`.
+- For any source with `source.tool_call_id`, link it with that Tool Call ID.
 - Keep a `waiting-user` Tool in a waiting state; do not synthesize running or success client-side.
 - `resolved`, `expired`, and `cancelled` are terminal and cannot be answered again.
 - Clear old Interaction UI when switching Sessions; never send an old Session's ID to a new one.

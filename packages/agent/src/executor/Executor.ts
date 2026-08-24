@@ -301,20 +301,6 @@ export class Executor implements SessionExecutor {
     tools: Record<string, Tool>,
     turn_context: SessionTurnContext,
   ): Record<string, Tool> {
-    const execution_context: SessionToolExecutionContext = {
-      session_turn_context: turn_context,
-      shell_run_context: {
-        ownerContextId: turn_context.session.session_id,
-        turnId: turn_context.session.turn_id,
-        ...(turn_context.step.workspace_env
-          ? { env: turn_context.step.workspace_env }
-          : {}),
-        ...(turn_context.shell.approval_gateway
-          ? { approval_gateway: turn_context.shell.approval_gateway }
-          : {}),
-      },
-    };
-
     const wrapped: Record<string, Tool> = {};
     for (const [name, tool] of Object.entries(tools)) {
       const original_execute = tool.execute;
@@ -326,6 +312,9 @@ export class Executor implements SessionExecutor {
         ...tool,
         execute: async (args: unknown, options: ToolExecutionOptions) => {
           const tool_call_id = String(options.toolCallId || "").trim();
+          if (!tool_call_id) {
+            throw new Error(`Tool execution requires toolCallId: ${name}`);
+          }
           if (tool_call_id && turn_context.output.assistant) {
             await turn_context.output.assistant.prepare_tool_input({
               tool_call_id,
@@ -333,6 +322,40 @@ export class Executor implements SessionExecutor {
               input: args,
             });
           }
+          const abort_signal = options.abortSignal ||
+            turn_context.lifecycle.abort_signal;
+          const execution_context: SessionToolExecutionContext = {
+            session_turn_context: turn_context,
+            action_execution_context: {
+              call_id: tool_call_id,
+              abort_signal,
+              session: {
+                session_id: turn_context.session.session_id,
+                turn_id: turn_context.session.turn_id,
+                interactions: turn_context.interactions,
+              },
+              ...(turn_context.session.project_root
+                ? { workspace_path: turn_context.session.project_root }
+                : {}),
+              ...(turn_context.step.workspace_env
+                ? { workspace_env: turn_context.step.workspace_env }
+                : {}),
+            },
+            shell_execution_context: {
+              session: {
+                session_id: turn_context.session.session_id,
+                turn_id: turn_context.session.turn_id,
+              },
+              call_id: tool_call_id,
+              abort_signal,
+              ...(turn_context.step.workspace_env
+                ? { workspace_env: turn_context.step.workspace_env }
+                : {}),
+              ...(turn_context.shell.approval_gateway
+                ? { approval_gateway: turn_context.shell.approval_gateway }
+                : {}),
+            },
+          };
           const output = await original_execute(args, {
             ...options,
             experimental_context: execution_context,

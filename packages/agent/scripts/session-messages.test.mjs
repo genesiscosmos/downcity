@@ -235,7 +235,7 @@ test("Tool Runtime 在文本中间保持输入、审批和输出的确定顺序"
   assert.equal(recorder.get_message(writer.message_id).parts[1].state, "waiting-user");
   await interactions.respond({
     interaction_id: approval_handle.approval_id,
-    response: { type: "approval", payload: { decision: "approved" } },
+    response: { type: "approval", outcome: "resolved", payload: { decision: "approved" } },
   });
   assert.equal(await approval_handle.decision, "approved");
   await writer.apply_chunk({ type: "text-start", id: "text-2" });
@@ -780,7 +780,7 @@ test("Session Interaction 只接受已经准备完整输入的 Tool", async () =
   assert.equal(tool.input.cmd, "ls -la /Users/example/Desktop");
   await interactions.respond({
     interaction_id: approval_handle.approval_id,
-    response: { type: "approval", payload: { decision: "denied" } },
+    response: { type: "approval", outcome: "denied", payload: { decision: "denied" } },
   });
   assert.equal(await approval_handle.decision, "denied");
   await writer.apply_chunk({
@@ -835,6 +835,7 @@ test("Question Interaction 校验文本、单选与多选回答后恢复执行",
       interaction_id: handle.interaction_id,
       response: {
         type: "question",
+        outcome: "resolved",
         payload: { answers: [{ question_id: "name", value: "Downcity" }] },
       },
     }),
@@ -844,6 +845,7 @@ test("Question Interaction 校验文本、单选与多选回答后恢复执行",
     interaction_id: handle.interaction_id,
     response: {
       type: "question",
+      outcome: "resolved",
       payload: { answers: [
         { question_id: "name", value: "Downcity" },
         { question_id: "region", value: "cn" },
@@ -1011,7 +1013,7 @@ test("流式更新与 Interaction 共享 Assistant revision 写队列", async ()
 
   await interactions.respond({
     interaction_id: approval_handle.approval_id,
-    response: { type: "approval", payload: { decision: "denied" } },
+    response: { type: "approval", outcome: "denied", payload: { decision: "denied" } },
   });
   assert.equal(await approval_handle.decision, "denied");
 });

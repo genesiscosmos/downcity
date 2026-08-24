@@ -84,7 +84,7 @@ Unrestricted sandbox 请求归属发起工具调用的 Session：
 const interactions = await session.interactions();
 await session.respond({
   interaction_id: interactions[0].request.interaction_id,
-  response: { type: "approval", payload: { decision: "approved" } },
+  response: { type: "approval", outcome: "resolved", payload: { decision: "approved" } },
 });
 ```
 
@@ -239,11 +239,11 @@ const demo_plugin = create_plugin({
           payload: { text: "hello" },
         },
       ],
-      execute: async ({ input, execution_context }) => ({
+      execute: async ({ input, execution }) => ({
         success: true,
         data: {
           text: input.text,
-          session_id: execution_context?.session_id,
+          session_id: execution.session?.session_id,
         },
         message: "echoed",
       }),
@@ -257,7 +257,7 @@ const agent = new Agent({
 });
 ```
 
-`zod` schema 负责运行时校验；`json_schema` 和 `examples` 用于 `plugin_read` 返回给模型或 UI。action 通过 Session Tool 执行时会收到 `execution_context`；CLI、HTTP 或 scheduler 直接调用时该字段可能不存在。当前 Session Step 已提交生效的 env 应读取 `execution_context.workspace_env`，`context.workspace_env` 表示 Workspace 当前配置快照。旧的 `class extends BasePlugin` 写法仍然可用，也可以只在 `actions` 里逐步换成 `create_action(...)`。
+`zod` schema 负责运行时校验；`json_schema` 和 `examples` 用于 `plugin_read` 返回给模型或 UI。每个 Action 都会收到稳定能力视图 `context` 和单次调用对象 `execution`。Session 身份与交互端口位于 `execution.session`，当前 Step 生效的 env 位于 `execution.snapshot.workspace_env`；CLI、HTTP 或 scheduler 直接调用时没有 `execution.session`。`context.workspace_env` 始终表示 Workspace 当前配置快照。
 
 Tool 与 Plugin Action 使用同一条 Session 结果链路：普通结果放在 `output`，需要进入对话的内容直接使用 `messages: [{ role, parts }]`。User Parts 在下一个 Step 生效，Assistant Parts 写入当前 Assistant Message。Session 不下载或改写文件；Action 应先保存文件，再返回指向该本地路径的 File Part。
 

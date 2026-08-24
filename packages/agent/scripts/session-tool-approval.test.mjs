@@ -134,7 +134,7 @@ async function run_approval_case(decision) {
       pending_request = mutation.part.request;
       response_promise = session.respond({
         interaction_id: mutation.part.interaction_id,
-        response: { type: "approval", payload: { decision } },
+        response: { type: "approval", outcome: decision === "approved" ? "resolved" : "denied", payload: { decision } },
       });
     });
 

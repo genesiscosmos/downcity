@@ -195,7 +195,7 @@ export function createChatPluginActions(params: {
         return executeChatInfoAction({
           context: actionParams.context,
           payload: actionParams.input as ChatInfoActionPayload,
-          execution_context: actionParams.execution_context,
+          execution_context: actionParams.execution.snapshot,
         });
       },
     }),
@@ -226,7 +226,7 @@ export function createChatPluginActions(params: {
         return executeChatSendAction({
           context: actionParams.context,
           payload: actionParams.input as ChatSendActionPayload,
-          execution_context: actionParams.execution_context,
+          execution_context: actionParams.execution.snapshot,
         });
       },
     }),
@@ -255,7 +255,7 @@ export function createChatPluginActions(params: {
         return executeChatReactAction({
           context: actionParams.context,
           payload: actionParams.input as ChatReactActionPayload,
-          execution_context: actionParams.execution_context,
+          execution_context: actionParams.execution.snapshot,
         });
       },
     }),
@@ -282,7 +282,7 @@ export function createChatPluginActions(params: {
         return executeChatContextAction({
           context: actionParams.context,
           payload: actionParams.input as ChatSessionActionPayload,
-          execution_context: actionParams.execution_context,
+          execution_context: actionParams.execution.snapshot,
         });
       },
     }),
@@ -305,7 +305,7 @@ export function createChatPluginActions(params: {
         return executeChatDeleteAction({
           context: actionParams.context,
           payload: actionParams.input as ChatDeleteActionPayload,
-          execution_context: actionParams.execution_context,
+          execution_context: actionParams.execution.snapshot,
         });
       },
     }),
@@ -335,7 +335,7 @@ export function createChatPluginActions(params: {
         return executeChatHistoryAction({
           context: actionParams.context,
           payload: actionParams.input as ChatHistoryActionPayload,
-          execution_context: actionParams.execution_context,
+          execution_context: actionParams.execution.snapshot,
         });
       },
     }),

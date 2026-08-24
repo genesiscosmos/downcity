@@ -29,6 +29,7 @@ import type {
   PluginSnapshot,
 } from "@/types/plugin/PluginState.js";
 import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
+import type { SessionInteractionPort } from "@/types/session/SessionInteraction.js";
 import { execute_plugin_action } from "@/plugin/core/PluginActionExecution.js";
 import type { Tool } from "ai";
 import { create_plugin_tools } from "@/plugin/tool/PluginTools.js";
@@ -748,6 +749,7 @@ export class PluginRegistry {
     action: string;
     payload?: JsonValue;
     execution_context?: PluginExecutionContext;
+    interactions?: SessionInteractionPort;
   }): Promise<PluginActionResult<JsonValue>> {
     await this.ensure_initial_started();
     return await this.run_action_from_records(this.records, params.context, params);
@@ -764,6 +766,7 @@ export class PluginRegistry {
       action: string;
       payload?: JsonValue;
       execution_context?: PluginExecutionContext;
+      interactions?: SessionInteractionPort;
     },
   ): Promise<PluginActionResult<JsonValue>> {
     const key = normalize_plugin_name(params.plugin);
@@ -811,6 +814,7 @@ export class PluginRegistry {
       ...(params.execution_context
         ? { execution_context: params.execution_context }
         : {}),
+      ...(params.interactions ? { interactions: params.interactions } : {}),
     });
   }
 

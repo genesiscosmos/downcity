@@ -63,8 +63,9 @@ export class SessionMessageInteractionWriter {
   async request(
     request: SessionInteractionRequest,
   ): Promise<SessionAssistantInteractionPart> {
-    const message_id = request.source.type === "tool"
-      ? this.require_streaming_tool(request.source.tool_call_id).message_id
+    const tool_call_id = request.source.tool_call_id;
+    const message_id = tool_call_id
+      ? this.require_streaming_tool(tool_call_id).message_id
       : this.require_streaming_assistant().message_id;
     await this.options.enqueue_assistant_write(message_id, async () => {
       const current = this.require_streaming_assistant(message_id);
@@ -79,22 +80,19 @@ export class SessionMessageInteractionWriter {
       }
 
       let parts = current.parts;
-      if (request.source.type === "tool") {
-        const tool = this.require_streaming_tool(request.source.tool_call_id);
+      if (tool_call_id) {
+        const tool = this.require_streaming_tool(tool_call_id);
         if (tool.message_id !== message_id) {
           throw new Error(
-            `Tool Assistant Message changed: ${request.source.tool_call_id}`,
+            `Tool Assistant Message changed: ${tool_call_id}`,
           );
         }
-        const native_tool_approval =
-          request.type === "approval" &&
-          tool.part.state === "waiting-user";
-        if (tool.part.state !== "ready" && !native_tool_approval) {
+        if (tool.part.state !== "ready" && tool.part.state !== "waiting-user") {
           throw new Error(
-            `Tool Interaction requires ready input: ${request.source.tool_call_id} (${tool.part.state})`,
+            `Tool Interaction requires ready input: ${tool_call_id} (${tool.part.state})`,
           );
         }
-        if (!native_tool_approval) {
+        if (tool.part.state === "ready") {
           parts = parts.map((part) =>
             part.part_id === tool.part.part_id
               ? { ...tool.part, state: "waiting-user" as const }
@@ -135,32 +133,29 @@ export class SessionMessageInteractionWriter {
       if (interaction.part.interaction_type !== response.type) {
         throw new Error(`Session Interaction response type mismatch: ${interaction_id}`);
       }
-      const response_payload = response.payload;
-      const denied = response.type === "approval" &&
-        response_payload &&
-        typeof response_payload === "object" &&
-        !Array.isArray(response_payload) &&
-        (response_payload as { decision?: unknown }).decision === "denied";
+      const tool_call_id = interaction.part.request.source.tool_call_id;
       const parts = current.parts.map((part) => {
         if (part.part_id === interaction.part.part_id) {
           return {
             ...interaction.part,
-            status: denied ? "denied" as const : "resolved" as const,
+            status: response.outcome === "denied"
+              ? "denied" as const
+              : "resolved" as const,
             response: structuredClone(response),
             resolved_at: Date.now(),
           };
         }
         if (
-          interaction.part.request.source.type === "tool" &&
+          tool_call_id &&
           part.type === "tool" &&
-          part.tool_call_id === interaction.part.request.source.tool_call_id
+          part.tool_call_id === tool_call_id
         ) {
           if (part.state !== "waiting-user") {
             throw new Error(
               `Tool is not waiting for Interaction: ${part.tool_call_id} (${part.state})`,
             );
           }
-          return denied
+          return response.outcome === "denied"
             ? { ...part, state: "failed" as const, error: "Interaction denied" }
             : { ...part, state: "running" as const };
         }
@@ -199,10 +194,11 @@ export class SessionMessageInteractionWriter {
               : {}),
           };
         }
+        const tool_call_id = interaction.part.request.source.tool_call_id;
         if (
-          interaction.part.request.source.type === "tool" &&
+          tool_call_id &&
           part.type === "tool" &&
-          part.tool_call_id === interaction.part.request.source.tool_call_id
+          part.tool_call_id === tool_call_id
         ) {
           if (part.state !== "waiting-user") return part;
           return { ...part, state: "failed" as const, error };

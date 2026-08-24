@@ -91,7 +91,7 @@ const pending = await session.interactions();
 
 await session.respond({
   interaction_id: pending[0].request.interaction_id,
-  response: { type: "approval", payload: { decision: "approved" } },
+  response: { type: "approval", outcome: "resolved", payload: { decision: "approved" } },
 });
 ```
 

@@ -75,6 +75,19 @@ function create_context(workspace_path = process.cwd()) {
   };
 }
 
+function create_execution_context() {
+  const call_id = "image_test_call";
+  const abort_signal = new AbortController().signal;
+  return {
+    call_id,
+    abort_signal,
+    snapshot: {
+      call_id,
+      abort_signal,
+    },
+  };
+}
+
 function create_registry(plugin, workspace_path = process.cwd()) {
   const registry = new PluginRegistry({
     agent_id: "image_test_agent",
@@ -108,6 +121,7 @@ test("ImagePlugin image_create returns image job", async () => {
 
   const result = await plugin.actions.image_create.execute({
     context: create_context(),
+    execution: create_execution_context(),
     input: { prompt: "draw" },
     plugin_name: "image",
     action_name: "image_create",
@@ -145,6 +159,7 @@ test("ImagePlugin models lists image-capable models", async () => {
 
   const result = await plugin.actions.models.execute({
     context: create_context(),
+    execution: create_execution_context(),
     input: {},
     plugin_name: "image",
     action_name: "models",
@@ -193,6 +208,7 @@ test("ImagePlugin image_result reads pending state once", async () => {
 
   const result = await plugin.actions.image_result.execute({
     context: create_context(),
+    execution: create_execution_context(),
     input: { job_id: "img_1" },
     plugin_name: "image",
     action_name: "image_result",
@@ -219,6 +235,7 @@ test("ImagePlugin image_result returns final message when succeeded", async () =
 
   const result = await plugin.actions.image_result.execute({
     context: create_context(),
+    execution: create_execution_context(),
     input: { job_id: "img_1" },
     plugin_name: "image",
     action_name: "image_result",
@@ -274,6 +291,7 @@ test("ImagePlugin image_result stores remote images locally and preserves source
 
   const result = await plugin.actions.image_result.execute({
     context: create_context(workspace_path),
+    execution: create_execution_context(),
     input: { job_id: "img_remote" },
     plugin_name: "image",
     action_name: "image_result",
@@ -321,6 +339,7 @@ test("ImagePlugin image_result keeps remote URL when local storage fails", async
 
   const result = await plugin.actions.image_result.execute({
     context: create_context(workspace_path),
+    execution: create_execution_context(),
     input: { job_id: "img_fallback" },
     plugin_name: "image",
     action_name: "image_result",
@@ -353,6 +372,7 @@ test("ImagePlugin image_result reports failed terminal job", async () => {
 
   const result = await plugin.actions.image_result.execute({
     context: create_context(),
+    execution: create_execution_context(),
     input: { job_id: "img_1" },
     plugin_name: "image",
     action_name: "image_result",
@@ -395,6 +415,7 @@ test("ImagePlugin image_create converts local content image paths", async () => 
 
     const result = await plugin.actions.image_create.execute({
       context: create_context(tempDir),
+      execution: create_execution_context(),
       input: {
         content: [
           { type: "text", text: "change background" },
@@ -428,6 +449,7 @@ test("ImagePlugin image_create uses content instead of prompt when both exist", 
 
   const result = await plugin.actions.image_create.execute({
     context: create_context(),
+    execution: create_execution_context(),
     input: {
       prompt: "ignore this prompt",
       content: [{ type: "text", text: "use this content" }],
@@ -453,6 +475,7 @@ test("ImagePlugin image_create keeps remote content image URLs", async () => {
 
   const result = await plugin.actions.image_create.execute({
     context: create_context(),
+    execution: create_execution_context(),
     input: {
       content: [
         { type: "text", text: "use this style" },
@@ -476,6 +499,7 @@ test("ImagePlugin image_create rejects legacy messages and data URLs", async () 
 
   const messages_result = await plugin.actions.image_create.execute({
     context: create_context(),
+    execution: create_execution_context(),
     input: {
       messages: [
         {
@@ -493,6 +517,7 @@ test("ImagePlugin image_create rejects legacy messages and data URLs", async () 
 
   const data_url_result = await plugin.actions.image_create.execute({
     context: create_context(),
+    execution: create_execution_context(),
     input: {
       content: [
         { type: "text", text: "edit this" },
@@ -537,6 +562,7 @@ test("ImagePlugin image_result polls until terminal when until_done=true", async
 
   const result = await plugin.actions.image_result.execute({
     context: create_context(),
+    execution: create_execution_context(),
     input: {
       job_id: "img_wait",
       until_done: true,
@@ -569,6 +595,7 @@ test("ImagePlugin image_result returns last status when max_wait_ms elapses", as
 
   const result = await plugin.actions.image_result.execute({
     context: create_context(),
+    execution: create_execution_context(),
     input: {
       job_id: "img_timeout",
       until_done: true,

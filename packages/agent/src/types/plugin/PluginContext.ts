@@ -8,9 +8,8 @@
 
 import type { AgentSessions } from "@/agent/AgentSessions.js";
 import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
-import type { FileSystem } from "@downcity/workspace";
+import type { FileSystem, WorkspaceShell } from "@downcity/workspace";
 import type { Logger } from "@/utils/logger/Logger.js";
-import type { WorkspaceShell } from "@downcity/workspace";
 import type { PluginWebServices } from "@/types/plugin/PluginServices.js";
 import type { City } from "../../city/index.js";
 

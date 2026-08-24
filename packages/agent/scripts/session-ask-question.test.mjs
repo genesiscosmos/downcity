@@ -163,6 +163,7 @@ test("显式注入的 ask_question 等待回答并继续同一个 Turn", async (
         interaction_id: mutation.part.interaction_id,
         response: {
           type: "question",
+          outcome: "resolved",
           payload: { answers: [{
             question_id: pending_interaction.request.payload.questions[0].question_id,
             value: "cn",
@@ -186,6 +187,7 @@ test("显式注入的 ask_question 等待回答并继续同一个 Turn", async (
       interaction_id: pending_interaction.interaction_id,
       response: {
         type: "question",
+        outcome: "resolved",
         payload: { answers: [{
           question_id: pending_interaction.request.payload.questions[0].question_id,
           value: "cn",

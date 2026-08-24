@@ -34,6 +34,7 @@ await session.respond({
   interaction_id,
   response: {
     type: "approval",
+    outcome: "resolved",
     payload: { decision: "approved" },
   },
 });
@@ -64,6 +65,7 @@ await session.respond({
   interaction_id,
   response: {
     type: "question",
+    outcome: "resolved",
     payload: { answers: [
       { question_id: "region", value: "cn" },
       { question_id: "features", value: ["search", "files"] },
@@ -212,7 +214,7 @@ await session.set(
 ## UI 实现要点
 
 - 使用 `interaction_id` 作为交互卡片稳定 key。
-- `source.type === "tool"` 时，用 `source.tool_call_id` 关联 Tool Part。
+- 任何带有 `source.tool_call_id` 的来源，都用该 Tool Call ID 关联 Tool Part。
 - Tool 为 `waiting-user` 时保持等待态，不要在客户端伪造 `running` 或成功。
 - `resolved`、`expired`、`cancelled` 都是终态，不能重复响应。
 - Session 切换时清理旧交互 UI，不能把旧 Session 的 `interaction_id` 发给新 Session。

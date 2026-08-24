@@ -310,9 +310,7 @@ export class AgentChatTuiCoordinator {
       ? new ApprovalPanelComponent({
           approval_id: request.interaction_id,
           approval_type: payload.operation === "tool" ? "tool" : "shell",
-          tool_name: request.source.type === "tool"
-            ? request.source.tool_name
-            : "session",
+          tool_name: String(request.source.tool_name || "session"),
           details: payload.operation === "tool"
             ? [
                 {
@@ -335,6 +333,7 @@ export class AgentChatTuiCoordinator {
             this.hide_interaction_panel();
             void this.respond_interaction_panel(pending, {
               type: "approval",
+              outcome: decision === "approve" ? "resolved" : "denied",
               payload: { decision: decision === "approve" ? "approved" : "denied" },
             });
           },
@@ -345,6 +344,7 @@ export class AgentChatTuiCoordinator {
             this.hide_interaction_panel();
             void this.respond_interaction_panel(pending, {
               type: request.type,
+              outcome: "resolved",
               payload: {
                 answers: answers.map(({ question_id, value }) => ({
                   question_id,

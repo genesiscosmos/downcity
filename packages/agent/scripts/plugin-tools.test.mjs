@@ -272,13 +272,14 @@ test("create_plugin_tools binds plugin_call to the current registry", async () =
       actions: {
         lookup: create_action({
           description: "Return registry owner",
-          execute: async ({ execution_context }) => ({
+          execute: async ({ execution }) => ({
             success: true,
             data: {
               owner,
-              session_id: execution_context?.session_id,
-              call_id: execution_context.call_id,
-              context_keys: Object.keys(execution_context || {}).sort(),
+              session_id: execution.session?.session_id,
+              call_id: execution.call_id,
+              has_interactions: Boolean(execution.session?.interactions),
+              context_keys: Object.keys(execution).sort(),
             },
             message: owner,
           }),
@@ -297,15 +298,17 @@ test("create_plugin_tools binds plugin_call to the current registry", async () =
       session_id,
       turn_id: `turn_${session_id}`,
       project_root: process.cwd(),
+      interactions: {
+        request: async () => {
+          throw new Error("interaction request is not expected in this test");
+        },
+      },
     });
     return {
       toolCallId: `call_${session_id}`,
       messages: [],
       experimental_context: {
         session_turn_context: turn_context,
-        shell_run_context: {
-          ownerContextId: session_id,
-        },
       },
     };
   };
@@ -325,31 +328,60 @@ test("create_plugin_tools binds plugin_call to the current registry", async () =
   assert.equal(result_a.output.data.owner, "agent_a");
   assert.equal(result_a.output.data.session_id, "session_a");
   assert.equal(result_a.output.data.call_id, "call_session_a");
+  assert.equal(result_a.output.data.has_interactions, true);
   assert.deepEqual(result_a.output.data.context_keys, [
     "abort_signal",
-    "agent_id",
-    "agent_systems",
     "call_id",
-    "project_root",
-    "session_id",
-    "turn_id",
-    "workspace_env",
-    "workspace_id",
+    "session",
+    "snapshot",
   ]);
   assert.equal(result_b.output.success, true);
   assert.equal(result_b.output.data.owner, "agent_b");
   assert.equal(result_b.output.data.session_id, "session_b");
   assert.equal(result_b.output.data.call_id, "call_session_b");
+  assert.equal(result_b.output.data.has_interactions, true);
 });
 
-test("PluginRegistry supplies identity and cancellation context for non-Session actions", async () => {
+test("PluginRegistry keeps Session identity when no Interaction port is provided", async () => {
+  let observed_execution;
+  const plugin = create_plugin({
+    name: "session_identity",
+    actions: {
+      inspect: create_action({
+        execute: async ({ execution }) => {
+          observed_execution = execution;
+          return { success: true };
+        },
+      }),
+    },
+  });
+  const plugins = create_registry(plugin);
+
+  const result = await plugins.run_action({
+    plugin: "session_identity",
+    action: "inspect",
+    execution_context: {
+      session_id: "session_without_interactions",
+      turn_id: "turn_without_interactions",
+    },
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(observed_execution.session.session_id, "session_without_interactions");
+  assert.equal(observed_execution.session.turn_id, "turn_without_interactions");
+  assert.equal(observed_execution.session.interactions, undefined);
+});
+
+test("PluginRegistry separates stable context from non-Session action execution", async () => {
   let observed_context;
+  let observed_execution;
   const plugin = create_plugin({
     name: "identity",
     actions: {
       inspect: create_action({
-        execute: async ({ execution_context }) => {
-          observed_context = execution_context;
+        execute: async ({ context, execution }) => {
+          observed_context = context;
+          observed_execution = execution;
           return { success: true };
         },
       }),
@@ -365,9 +397,10 @@ test("PluginRegistry supplies identity and cancellation context for non-Session 
   assert.equal(result.success, true);
   assert.equal(observed_context.agent_id, "plugin_tools_agent");
   assert.equal(observed_context.workspace_id, "plugin_tools_workspace");
-  assert.match(observed_context.call_id, /^plugin:/);
-  assert.equal(observed_context.abort_signal.aborted, false);
-  assert.equal(Object.isFrozen(observed_context), true);
+  assert.match(observed_execution.call_id, /^plugin:/);
+  assert.equal(observed_execution.abort_signal.aborted, false);
+  assert.equal(Object.isFrozen(observed_execution), true);
+  assert.equal(observed_execution.session, undefined);
 });
 
 test("PluginRegistry rejects an action before execution when the caller is cancelled", async () => {
@@ -407,9 +440,9 @@ test("PluginRegistry applies the action cooperative timeout to abort_signal", as
     actions: {
       wait: create_action({
         timeout_ms: 10,
-        execute: async ({ execution_context }) => {
+        execute: async ({ execution }) => {
           await new Promise((resolve) => {
-            execution_context.abort_signal.addEventListener("abort", resolve, { once: true });
+            execution.abort_signal.addEventListener("abort", resolve, { once: true });
           });
           return { success: true };
         },

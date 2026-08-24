@@ -1,18 +1,10 @@
 /**
- * Plugin 单次调用的执行上下文。
- *
- * 关键点（中文）
- * - 只暴露 plugin 业务需要的只读 Session 快照。
- * - 不暴露 Executor 内部队列、callback 或 plugin lease。
- * - CLI、HTTP 与 scheduler 等非 Session 调用可能不提供该对象。
- */
-
-/**
  * Plugin action 与 system provider 可读取的执行快照。
  *
  * Session 调用时，该对象是当前 Turn 的只读 Plugin 投影；CLI、HTTP 与
  * scheduler 等非 Session 调用也可以提供自己的调用快照或完全缺省。
  */
+
 export interface PluginExecutionContext {
   /** 当前调用所属的 Session 标识；非 Session 调用可以缺省。 */
   readonly session_id?: string;
