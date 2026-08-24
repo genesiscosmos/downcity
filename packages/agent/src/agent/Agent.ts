@@ -71,6 +71,9 @@ export class Agent {
   /** Agent 释放状态。 */
   private dispose_promise?: Promise<void>;
 
+  /** Agent 级 Plugin lifecycle 启动流程。 */
+  private readonly plugin_ready: Promise<unknown>;
+
   constructor(options: AgentOptions) {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Agent requires a non-empty id");
@@ -92,6 +95,7 @@ export class Agent {
     });
     this.plugins = new PluginRegistry(agent_plugin_context, options.plugins || []);
     this.plugin_registry = this.plugins;
+    this.plugin_ready = this.plugins.start_all();
     this.custom_tools = options.tools && typeof options.tools === "object"
       ? { ...options.tools }
       : {};
@@ -121,6 +125,7 @@ export class Agent {
   /** 释放 Agent 进入的全部 Workspace 与 Agent Plugin。 */
   async dispose(): Promise<void> {
     this.dispose_promise ??= (async () => {
+      await this.plugin_ready.catch(() => undefined);
       const entries = [...list_agent_workspaces(this)];
       const results = await Promise.allSettled(entries.map(async (entry) => await entry.leave()));
       await this.plugins.unregister_all();
@@ -138,16 +143,26 @@ export class Agent {
   private async create_session(input: AgentCreateSessionOptions) {
     if (!input?.workspace) throw new Error("agent.sessions.create requires a Workspace");
     if (this.dispose_promise) throw new Error("Cannot create a Session after Agent disposal");
-    return await create_agent_workspace(this, input.workspace).sessions.create({
-      ...(input.session_id ? { session_id: input.session_id } : {}),
-    });
+    await this.plugin_ready;
+    return await create_agent_workspace(this, input.workspace).sessions.create();
   }
 
-  /** 在指定 Workspace 中恢复属于当前 Agent 的 Session。 */
-  private async get_session(input: AgentCreateSessionOptions & { session_id: string }) {
-    if (!input?.workspace) throw new Error("agent.sessions.get requires a Workspace");
-    if (!input?.session_id) throw new Error("agent.sessions.get requires a session_id");
+  /** 恢复属于当前 Agent 的 Session；Workspace 仅作为可选定位提示。 */
+  private async get_session(session_id: string, input?: AgentCreateSessionOptions) {
+    if (!session_id) throw new Error("agent.sessions.get requires a session_id");
     if (this.dispose_promise) throw new Error("Cannot get a Session after Agent disposal");
-    return await create_agent_workspace(this, input.workspace).sessions.get(input.session_id);
+    if (input?.workspace) {
+      return await create_agent_workspace(this, input.workspace).sessions.get(session_id);
+    }
+    for (const entry of list_agent_workspaces(this)) {
+      try {
+        return await entry.sessions.get(session_id);
+      } catch (error) {
+        if (!(error instanceof Error) || !error.message.includes("not found")) {
+          throw error;
+        }
+      }
+    }
+    throw new Error(`Session "${session_id}" not found`);
   }
 }

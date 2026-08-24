@@ -75,8 +75,8 @@ export async function read_session_metadata_from_path(input: {
   session_id: string;
   /** 当前 agent_id。 */
   agent_id: string;
-  /** 当前 workspace_id。 */
-  workspace_id: string;
+  /** 当前查询上下文的 workspace_id；仅用于兼容旧调用，不参与 Agent 归属校验。 */
+  workspace_id?: string;
   /** 当前 Workspace 的统一文件能力。 */
   files: FileSystem;
 }): Promise<SessionHistoryMetaV1> {
@@ -85,8 +85,7 @@ export async function read_session_metadata_from_path(input: {
   ) as Partial<SessionHistoryMetaV1>;
   if (
     raw.session_id !== input.session_id ||
-    raw.agent_id !== input.agent_id ||
-    raw.workspace_id !== input.workspace_id
+    raw.agent_id !== input.agent_id
   ) {
     throw new Error(`Invalid Session ownership metadata: ${input.session_id}`);
   }
@@ -94,7 +93,7 @@ export async function read_session_metadata_from_path(input: {
     raw,
     input.session_id,
     input.agent_id,
-    input.workspace_id,
+    raw.workspace_id || input.workspace_id,
   );
 }
 
@@ -103,13 +102,13 @@ export function normalize_session_metadata(
   raw: Partial<SessionHistoryMetaV1>,
   session_id: string,
   agent_id: string,
-  workspace_id: string,
+  workspace_id?: string,
 ): SessionHistoryMetaV1 {
   return {
     v: 1,
     session_id: session_id,
     agent_id: agent_id,
-    workspace_id: workspace_id,
+    ...(workspace_id ? { workspace_id: workspace_id } : {}),
     created_at:
       typeof raw.created_at === "number" && Number.isFinite(raw.created_at)
         ? raw.created_at

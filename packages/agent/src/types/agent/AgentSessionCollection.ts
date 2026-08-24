@@ -11,9 +11,6 @@ import type { AgentSession } from "@/types/agent/SessionActor.js";
 export interface AgentCreateSessionOptions {
   /** 本次 Session 使用的 Workspace 资源；绑定 City 时必须来自该 City。 */
   workspace: WorkspaceBase;
-
-  /** 可选的稳定 Session 标识；省略时由 SDK 生成。 */
-  session_id?: string;
 }
 
 /** Agent 公开的 Session 创建入口。 */
@@ -22,5 +19,5 @@ export interface AgentSessionCollection {
   create(options: AgentCreateSessionOptions): Promise<AgentSession>;
 
   /** 在指定 Workspace 中恢复一个已经属于当前 Agent 的 Session。 */
-  get(options: AgentCreateSessionOptions & { session_id: string }): Promise<AgentSession>;
+  get(session_id: string, options?: AgentCreateSessionOptions): Promise<AgentSession>;
 }

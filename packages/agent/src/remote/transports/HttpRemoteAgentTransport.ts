@@ -78,9 +78,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       headers: this.headers({
         "Content-Type": "application/json",
       }),
-      body: JSON.stringify({
-        ...(input?.session_id ? { session_id: input.session_id } : {}),
-      }),
+      body: JSON.stringify({}),
     });
     if (!payload.success || !payload.session?.session_id) {
       throw new Error(String(payload.error || "Remote session create failed"));

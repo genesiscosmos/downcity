@@ -10,6 +10,7 @@ export {
   detach_agent_city,
   agent_city,
   agent_is_in_city,
+  agent_storage_scope,
   create_agent_workspace,
   get_agent_workspace,
   list_agent_workspaces,

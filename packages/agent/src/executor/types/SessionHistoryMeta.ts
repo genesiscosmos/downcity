@@ -14,7 +14,7 @@ export type SessionHistoryMetaV1 = {
   /** 当前 session 所属的 agent_id。 */
   agent_id: string;
   /** 当前 session 所属的 workspace_id。 */
-  workspace_id: string;
+  workspace_id?: string;
   /** 当前 session 首次创建时间戳（ms）。 */
   created_at?: number;
   /** 当前 session 初始化时解析到的系统时区。 */

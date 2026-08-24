@@ -61,7 +61,6 @@ function create_record(plugin: Plugin): PluginRuntimeRecord {
     updated_at: current_time,
     chain: Promise.resolve(),
     lifecycle_started: false,
-    workspace_contexts: new Map(),
     active_execution_leases: 0,
     retired: false,
     retirement_started: false,
@@ -119,9 +118,6 @@ export class PluginRegistry {
 
   /** 当前 Registry 所属 Agent 的生命周期上下文。 */
   private readonly agent_context: AgentPluginContext;
-
-  /** Agent 当前已进入的 Workspace Context。 */
-  private readonly workspace_contexts = new Map<string, PluginContext>();
 
   /** Agent 当前已进入 Workspace 的 Plugin Context 工厂。 */
   private readonly workspace_context_factories = new Map<string, PluginContextFactory>();
@@ -242,9 +238,6 @@ export class PluginRegistry {
 
     try {
       await this.start_record(record);
-      for (const context of this.workspace_contexts.values()) {
-        await this.enter_record_workspace(record, context);
-      }
       this.publish_change({ type: "register", plugin_name: key });
       return to_plugin_snapshot(record);
     } catch (error) {
@@ -333,57 +326,6 @@ export class PluginRegistry {
   /** 确保任何异步 Plugin 执行都发生在初始 lifecycle 启动完成后。 */
   private async ensure_initial_started(): Promise<void> {
     await this.start_all();
-  }
-
-  /**
-   * 让全部已注册 Plugin 进入指定 Workspace。
-   *
-   * Plugin 不需要项目资源时可以不实现 enter_workspace；Registry 不据此对 Plugin
-   * 分类，也不改变 Action 始终获得 Workspace Context 的规则。
-   */
-  async enter_workspace(context: PluginContext): Promise<PluginSnapshot[]> {
-    const workspace_id = String(context.workspace_id || "").trim();
-    if (!workspace_id) throw new Error("PluginContext requires workspace_id");
-    const existing = this.workspace_contexts.get(workspace_id);
-    if (existing && existing !== context) {
-      throw new Error(`Workspace Context already exists: ${workspace_id}`);
-    }
-    this.workspace_contexts.set(workspace_id, context);
-    await this.ensure_initial_started();
-    for (const record of this.records.values()) {
-      if (record.state !== "ready") continue;
-      try {
-        await this.enter_record_workspace(record, context);
-      } catch (error) {
-        context.logger.error(
-          `Plugin enter_workspace failed: ${record.plugin.name} - ${String(error)}`,
-        );
-      }
-    }
-    return this.snapshots();
-  }
-
-  /** 让全部已注册 Plugin 离开指定 Workspace。 */
-  async leave_workspace(context: PluginContext): Promise<void> {
-    const workspace_id = String(context.workspace_id || "").trim();
-    if (this.workspace_contexts.get(workspace_id) === context) {
-      this.workspace_contexts.delete(workspace_id);
-    }
-    try {
-      const results = await Promise.allSettled(
-        [...this.records.values()].map(async (record) =>
-          await this.leave_record_workspace(record, context)
-        ),
-      );
-      const errors = results.flatMap((result) =>
-        result.status === "rejected" ? [result.reason] : []
-      );
-      if (errors.length > 0) {
-        throw new AggregateError(errors, `Plugin Workspace cleanup failed: ${workspace_id}`);
-      }
-    } finally {
-      this.workspace_context_factories.delete(workspace_id);
-    }
   }
 
   /**
@@ -480,56 +422,11 @@ export class PluginRegistry {
     });
   }
 
-  /** 启动单个 Plugin 在指定 Workspace 中的长期资源。 */
-  private async enter_record_workspace(
-    record: PluginRuntimeRecord,
-    context: PluginContext,
-  ): Promise<void> {
-    if (record.workspace_contexts.has(context.workspace_id)) return;
-    await run_serial(record, async () => {
-      if (record.workspace_contexts.has(context.workspace_id)) return;
-      await record.plugin.lifecycle?.enter_workspace?.(
-        this.plugin_context(context, record.plugin.name),
-      );
-      record.workspace_contexts.set(context.workspace_id, context);
-      record.updated_at = now_ms();
-    });
-  }
-
-  /** 释放单个 Plugin 在指定 Workspace 中的长期资源。 */
-  private async leave_record_workspace(
-    record: PluginRuntimeRecord,
-    context: PluginContext,
-  ): Promise<void> {
-    if (record.workspace_contexts.get(context.workspace_id) !== context) return;
-    await run_serial(record, async () => {
-      if (record.workspace_contexts.get(context.workspace_id) !== context) return;
-      try {
-        await record.plugin.lifecycle?.leave_workspace?.(
-          this.plugin_context(context, record.plugin.name),
-        );
-      } finally {
-        record.workspace_contexts.delete(context.workspace_id);
-        record.updated_at = now_ms();
-      }
-    });
-  }
-
   private async stop_record(record: PluginRuntimeRecord): Promise<void> {
     await run_serial(record, async () => {
       if (!record.lifecycle_started) return;
       const errors: unknown[] = [];
       try {
-        for (const context of [...record.workspace_contexts.values()].reverse()) {
-          try {
-            await record.plugin.lifecycle?.leave_workspace?.(
-              this.plugin_context(context, record.plugin.name),
-            );
-          } catch (error) {
-            errors.push(error);
-          }
-        }
-        record.workspace_contexts.clear();
         try {
           await record.plugin.lifecycle?.stop?.(this.agent_context);
         } catch (error) {

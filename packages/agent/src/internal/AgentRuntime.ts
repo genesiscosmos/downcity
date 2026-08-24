@@ -8,6 +8,7 @@ import type { WorkspaceBase } from "@downcity/workspace";
 import { Agent } from "@/agent/Agent.js";
 import { AgentWorkspace } from "@/agent/AgentWorkspace.js";
 import type { City } from "../city/index.js";
+import type { WorkspaceStorageScope } from "@downcity/workspace";
 
 interface AgentRuntimeState {
   bound_city?: City;
@@ -47,6 +48,12 @@ export function agent_city(agent: Agent): City | undefined {
 
 export function agent_is_in_city(agent: Agent): boolean {
   return Boolean(runtime_state(agent).bound_city);
+}
+
+/** 返回 Agent 所属 City 提供的私有存储作用域。 */
+export function agent_storage_scope(agent: Agent): WorkspaceStorageScope | null {
+  const city = runtime_state(agent).bound_city;
+  return city ? city.open_agent_storage(agent.id) : null;
 }
 
 export function create_agent_workspace(agent: Agent, workspace: WorkspaceBase): AgentWorkspace {

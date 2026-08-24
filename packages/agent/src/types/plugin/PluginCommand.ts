@@ -5,7 +5,6 @@
  */
 
 import type { AgentPluginContext } from "@/types/plugin/AgentPluginContext.js";
-import type { PluginContext } from "@/types/plugin/PluginContext.js";
 
 /** Plugin 生命周期定义。 */
 export interface PluginLifecycle {
@@ -13,8 +12,4 @@ export interface PluginLifecycle {
   start?(context: AgentPluginContext): Promise<void> | void;
   /** Plugin 随 Agent 停止的钩子。 */
   stop?(context: AgentPluginContext): Promise<void> | void;
-  /** Agent 进入一个 Workspace 后启动该项目所需资源的钩子。 */
-  enter_workspace?(context: PluginContext): Promise<void> | void;
-  /** Agent 离开一个 Workspace 前释放该项目资源的钩子。 */
-  leave_workspace?(context: PluginContext): Promise<void> | void;
 }

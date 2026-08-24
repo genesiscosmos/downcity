@@ -182,18 +182,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async create(
     input?: AgentCreateSessionInput,
   ): Promise<AgentSession> {
-    const explicit_session_id =
-      String(input?.session_id || "").trim() || undefined;
-    if (
-      explicit_session_id &&
-      (this.sessions_by_id.has(explicit_session_id) ||
-        (await this.store.has_session(explicit_session_id)))
-    ) {
-      throw new Error(`Session "${explicit_session_id}" already exists`);
-    }
-    const session = this.get_or_create_session({
-      session_id: explicit_session_id,
-    });
+    const session = this.get_or_create_session();
     await session.initialize();
     return session;
   }

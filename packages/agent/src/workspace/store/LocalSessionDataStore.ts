@@ -83,12 +83,9 @@ export class LocalSessionDataStore implements SessionDataStore {
         this.agent_id,
         this.workspace_id,
       );
-      if (
-        raw.agent_id !== this.agent_id ||
-        raw.workspace_id !== this.workspace_id
-      ) {
+      if (raw.agent_id !== this.agent_id) {
         throw new Error(
-          `Session "${this.session_id}" belongs to another Agent or Workspace`,
+          `Session "${this.session_id}" belongs to another Agent`,
         );
       }
       return metadata;
@@ -121,13 +118,9 @@ export class LocalSessionDataStore implements SessionDataStore {
         const existing = JSON.parse(
           (await this.files.read_file(metadata_path)).toString("utf8"),
         ) as Partial<SessionHistoryMetaV1>;
-        if (
-          existing.session_id !== this.session_id ||
-          existing.agent_id !== this.agent_id ||
-          existing.workspace_id !== this.workspace_id
-        ) {
+        if (existing.session_id !== this.session_id || existing.agent_id !== this.agent_id) {
           throw new Error(
-            `Session "${this.session_id}" belongs to another Agent or Workspace`,
+            `Session "${this.session_id}" belongs to another Agent`,
           );
         }
       }

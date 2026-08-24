@@ -9,9 +9,13 @@ import type { CityRpcRuntimeOptions } from "@/city/transport/types/CityRpcRuntim
 import type { Agent } from "@/index.js";
 import type { Embassy } from "@downcity/federation";
 import type { WorkspaceBase } from "@downcity/workspace";
+import type { WorkspaceStorageProvider } from "@downcity/workspace";
 
 /** City 的资源容器构造参数。 */
 export interface CityOptions {
+  /** City 为其 Agent 提供持久化数据根；未提供时使用默认平台数据根。 */
+  storage?: WorkspaceStorageProvider;
+
   /** City 使用的 Federation Embassy；Plugin 只通过窄服务借用其能力。 */
   embassy?: Embassy;
 

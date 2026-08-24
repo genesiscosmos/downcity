@@ -36,6 +36,7 @@ export type {
   WorkspaceStorageScope,
   WorkspaceStorageProvider,
 } from "./types/workspace/WorkspaceStorage.js";
+export { LocalWorkspaceStorageProvider } from "./workspace/storage/LocalWorkspaceStorageProvider.js";
 export {
   load_project_dotenv,
   resolve_workspace_env,

@@ -38,18 +38,10 @@ export class AgentWorkspaceLifecycle {
     await this.ready_promise.catch(() => undefined);
     this.action_schedule?.stop();
     this.action_schedule = null;
-    await this.plugins.leave_workspace(this.context);
   }
 
   /** 进入 Plugin Workspace 生命周期并启动当前 Workspace 的 ActionSchedule。 */
   private async start(): Promise<void> {
-    const snapshots = await this.plugins.enter_workspace(this.context);
-    for (const item of snapshots) {
-      if (item.status !== "error") continue;
-      this.context.logger.error(
-        `Plugin start failed: ${item.name} - ${item.last_error || "unknown error"}`,
-      );
-    }
     try {
       this.action_schedule = await start_action_schedule_runtime(
         this.context,

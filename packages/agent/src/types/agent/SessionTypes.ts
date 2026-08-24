@@ -13,16 +13,6 @@ import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js"
  * 新建 session 的输入参数。
  */
 export interface AgentCreateSessionInput {
-  /**
-   * 可选显式 session_id。
-   *
-   * 关键点（中文）
-   * - 传入时表达“创建意图”。
-   * - 若该 session 已存在，SDK 应直接报错，而不是静默复用。
-   * - 省略时由 SDK 自动生成稳定且不可推导的 session_id。
-   */
-  session_id?: string;
-
 }
 
 /**

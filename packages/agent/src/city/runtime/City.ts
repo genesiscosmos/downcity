@@ -6,6 +6,7 @@
  * 资源与统一 transport。
  */
 
+import os from "node:os";
 import { Agent } from "@/agent/Agent.js";
 import {
   attach_agent_city,
@@ -15,6 +16,8 @@ import {
   type AgentWorkspace,
 } from "@/internal/index.js";
 import type { WorkspaceBase } from "@downcity/workspace";
+import type { WorkspaceStorageProvider, WorkspaceStorageScope } from "@downcity/workspace";
+import { LocalWorkspaceStorageProvider } from "@downcity/workspace";
 import { CityHTTP } from "@/city/transport/http/CityHTTP.js";
 import { CityRPC } from "@/city/transport/rpc/CityRPC.js";
 import type {
@@ -27,6 +30,8 @@ import type {
 
 /** Agent 实例索引与 transport 宿主。 */
 export class City {
+  /** City 持有的 Agent 级持久化 Provider。 */
+  readonly storage: WorkspaceStorageProvider;
   /** 当前 City 引用的 Agent，按稳定 ID 索引。 */
   private readonly agents_by_id = new Map<string, Agent>();
 
@@ -70,6 +75,9 @@ export class City {
   private close_promise?: Promise<void>;
 
   constructor(options: CityOptions = {}) {
+    this.storage = options.storage || new LocalWorkspaceStorageProvider(
+      String(process.env.DC_PLATFORM_ROOT || "").trim() || `${os.homedir()}/.downcity`,
+    );
     this.embassy = options.embassy;
     for (const workspace of options.workspaces ?? []) {
       const workspace_id = String(workspace?.id || "").trim();
@@ -102,6 +110,13 @@ export class City {
       get: (workspace_id) => this.get_workspace(workspace_id),
       list: () => this.list_workspaces(),
     });
+  }
+
+  /** 打开指定 Agent 的私有持久化作用域。 */
+  open_agent_storage(agent_id_input: string): WorkspaceStorageScope {
+    const agent_id = String(agent_id_input || "").trim();
+    if (!agent_id) throw new Error("City agent storage requires a non-empty agent_id");
+    return this.storage.open_scope(["agents", agent_id]);
   }
 
   /** 返回 City 持有的 Workspace；不存在时返回 null。 */

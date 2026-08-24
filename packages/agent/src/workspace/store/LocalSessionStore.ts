@@ -215,7 +215,7 @@ export class LocalSessionStore implements SessionStore {
   ): Promise<void> {
     if (await this.is_session_owner(session_id, archived)) return;
     throw new Error(
-      `Session "${session_id}" belongs to another Agent or Workspace`,
+      `Session "${session_id}" belongs to another Agent`,
     );
   }
 
@@ -235,8 +235,7 @@ export class LocalSessionStore implements SessionStore {
       const metadata = JSON.parse(
         (await this.files.read_file(file_path)).toString("utf8"),
       ) as { agent_id?: unknown; workspace_id?: unknown };
-      return metadata.agent_id === this.agent_id &&
-        metadata.workspace_id === this.workspace_id;
+      return metadata.agent_id === this.agent_id;
     } catch {
       return false;
     }
