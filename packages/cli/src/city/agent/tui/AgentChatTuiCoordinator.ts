@@ -26,6 +26,7 @@ import { ChatSecurityController } from "@/city/agent/tui/controllers/ChatSecurit
 import { SessionPickerComponent } from "@/city/agent/tui/dialogs/SessionPicker.js";
 import { ApprovalPanelComponent } from "@/city/agent/tui/dialogs/ApprovalDialog.js";
 import { QuestionPanelComponent } from "@/city/agent/tui/dialogs/QuestionDialog.js";
+import { GenericInteractionPanelComponent } from "@/city/agent/tui/dialogs/InteractionDialog.js";
 import { SecurityPolicyPanelComponent } from "@/city/agent/tui/dialogs/SecurityPolicyDialog.js";
 import type {
   AgentChatPendingInteractionView,
@@ -292,7 +293,7 @@ export class AgentChatTuiCoordinator {
     this.ensure_interaction_panel();
   }
 
-  /** 当前没有活动面板时，按请求 kind 展示队首 Interaction。 */
+  /** 当前没有活动面板时，按请求 type 展示队首 Interaction。 */
   private ensure_interaction_panel(): void {
     if (
       this.interaction_panel.is_active ||
@@ -338,7 +339,8 @@ export class AgentChatTuiCoordinator {
             });
           },
         })
-      : new QuestionPanelComponent({
+      : request.type === "question"
+      ? new QuestionPanelComponent({
           request,
           on_submit: (answers) => {
             this.hide_interaction_panel();
@@ -356,6 +358,17 @@ export class AgentChatTuiCoordinator {
           on_cancel: () => {
             this.hide_interaction_panel();
             void this.cancel_question_panel(pending);
+          },
+        })
+      : new GenericInteractionPanelComponent({
+          request,
+          on_deny: () => {
+            this.hide_interaction_panel();
+            void this.respond_interaction_panel(pending, {
+              type: request.type,
+              outcome: "denied",
+              payload: { reason: "CLI has no renderer for this interaction type" },
+            });
           },
         });
 

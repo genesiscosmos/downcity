@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState, type FormEvent, type ComponentType } from "react";
-import type { RespondSessionInteractionInput, SessionAssistantInteractionPart, SessionAssistantMessagePart } from "@downcity/agent";
+import type { RespondSessionInteractionInput, SessionAssistantInteractionPart, SessionAssistantMessagePart, SessionInteractionQuestion } from "@downcity/agent";
 import {
   TbBulb,
   TbCheck,
@@ -140,22 +140,25 @@ function FileChangePreview({ part, visual_kind }: { /** Tool part。 */ part: Ex
 
 /** Interaction 统一使用 Duobox 风格的独立卡片。 */
 function InteractionCard({ part, respond }: { /** Interaction part。 */ part: SessionAssistantInteractionPart; /** 提交响应。 */ respond(input: RespondSessionInteractionInput): Promise<void> }) {
-  return part.request.kind === "approval" ? <ApprovalCard part={part} respond={respond} /> : <QuestionCard part={part} respond={respond} />;
+  if (part.request.type === "approval") return <ApprovalCard part={part} respond={respond} />;
+  if (part.request.type === "question") return <QuestionCard part={part} respond={respond} />;
+  return <GenericInteractionCard part={part} />;
 }
 
 /** 高风险操作审批卡片。 */
 function ApprovalCard({ part, respond }: { /** Approval interaction。 */ part: SessionAssistantInteractionPart; /** 提交审批。 */ respond(input: RespondSessionInteractionInput): Promise<void> }) {
   const [submitting, set_submitting] = useState<"approve" | "deny">();
-  if (part.request.kind !== "approval") return null;
   const pending = part.status === "pending";
   const request = part.request;
+  const payload = interaction_payload(request);
   const submit = async (decision: "approved" | "denied") => {
     if (!pending || submitting) return;
     set_submitting(decision === "approved" ? "approve" : "deny");
-    try { await respond({ interaction_id: part.interaction_id, response: { kind: "approval", decision } }); } finally { set_submitting(undefined); }
+    try { await respond({ interaction_id: part.interaction_id, response: { type: request.type, outcome: decision === "approved" ? "resolved" : "denied", payload: { decision } } }); } finally { set_submitting(undefined); }
   };
-  const detail = request.operation === "tool" ? format_value(request.validated_input) : request.command;
-  const description = request.operation === "tool" ? request.model_explanation || request.tool_description : request.description || request.reason;
+  const operation = typeof payload.operation === "string" ? payload.operation : undefined;
+  const detail = operation === "tool" ? format_value(payload.validated_input) : string_value(payload.command);
+  const description = operation === "tool" ? string_value(payload.model_explanation) || string_value(payload.tool_description) : request.description || string_value(payload.reason);
   return <div className="interaction-card approval-interaction" role="group" aria-label="操作确认">
     <header className="interaction-card-header"><span className="interaction-card-title">操作确认</span><span className="interaction-card-meta">{interaction_status_label(part)}</span></header>
     <div className="interaction-card-body"><div className="approval-card-detail">{detail}</div>{description ? <p className="approval-card-message">{description}</p> : null}</div>
@@ -168,14 +171,14 @@ function QuestionCard({ part, respond }: { /** Question interaction。 */ part: 
   const [answers, set_answers] = useState<Record<string, string | string[]>>(() => read_question_answers(part));
   const [current_index, set_current_index] = useState(0);
   const [submitting, set_submitting] = useState(false);
-  if (part.request.kind !== "question") return null;
   const request = part.request;
-  const question = request.questions[current_index];
+  const questions = interaction_questions(request);
+  const question = questions[current_index];
   const pending = part.status === "pending";
   if (!question) return null;
   const current_complete = is_answer_complete(answers[question.question_id]);
-  const all_complete = request.questions.every((item) => is_answer_complete(answers[item.question_id]));
-  const last = current_index === request.questions.length - 1;
+  const all_complete = questions.every((item) => is_answer_complete(answers[item.question_id]));
+  const last = current_index === questions.length - 1;
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!pending || submitting || !current_complete) return;
@@ -183,18 +186,18 @@ function QuestionCard({ part, respond }: { /** Question interaction。 */ part: 
     if (!all_complete) return;
     set_submitting(true);
     try {
-      await respond({ interaction_id: part.interaction_id, response: { kind: "question", answers: request.questions.map((item) => ({ question_id: item.question_id, value: answers[item.question_id] })) } });
+      await respond({ interaction_id: part.interaction_id, response: { type: request.type, outcome: "resolved", payload: { answers: questions.map((item) => ({ question_id: item.question_id, value: answers[item.question_id] })) } } });
     } finally { set_submitting(false); }
   };
-  return <form className="interaction-card question-interaction" aria-label={request.title} onSubmit={(event) => void submit(event)}>
-    <header className="interaction-card-header"><span className="interaction-card-title">{request.title}</span><span className="interaction-card-meta">{pending ? `${current_index + 1} / ${request.questions.length}` : interaction_status_label(part)}</span></header>
+  return <form className="interaction-card question-interaction" aria-label={request.title || request.type} onSubmit={(event) => void submit(event)}>
+    <header className="interaction-card-header"><span className="interaction-card-title">{request.title || "需要输入"}</span><span className="interaction-card-meta">{pending ? `${current_index + 1} / ${questions.length}` : interaction_status_label(part)}</span></header>
     <div className="interaction-card-body question-stage"><div className="question-prompt">{question.prompt}</div><QuestionField question={question} value={answers[question.question_id]} disabled={!pending || submitting} set_value={(value) => set_answers((current) => ({ ...current, [question.question_id]: value }))} /></div>
     <footer className="interaction-card-actions"><span className="question-footer-hint">{question.response_type === "single_select" ? "选择一项" : question.response_type === "multi_select" ? "可选择多项" : ""}</span>{pending ? <div className="question-navigation">{current_index > 0 ? <button type="button" className="question-back" disabled={submitting} onClick={() => set_current_index((value) => value - 1)}><TbChevronLeft />上一题</button> : null}<button type="submit" className="question-submit" disabled={!current_complete || submitting}>{submitting ? <TbLoader2 className="animate-spin" /> : last ? <TbSend /> : <TbChevronRight />}{submitting ? "提交中" : last ? "提交回答" : "下一题"}</button></div> : <span className="interaction-terminal-label">{question_result_label(part)}</span>}</footer>
   </form>;
 }
 
 /** 单个问题的文本、单选或多选输入。 */
-function QuestionField({ question, value, disabled, set_value }: { /** 当前问题。 */ question: Extract<SessionAssistantInteractionPart["request"], { kind: "question" }>["questions"][number]; /** 当前回答。 */ value?: string | string[]; /** 是否禁用。 */ disabled: boolean; /** 更新回答。 */ set_value(value: string | string[]): void }) {
+function QuestionField({ question, value, disabled, set_value }: { /** 当前问题。 */ question: SessionInteractionQuestion; /** 当前回答。 */ value?: string | string[]; /** 是否禁用。 */ disabled: boolean; /** 更新回答。 */ set_value(value: string | string[]): void }) {
   if (question.response_type === "text") return <textarea className="question-text-input" disabled={disabled} value={typeof value === "string" ? value : ""} onChange={(event) => set_value(event.target.value)} />;
   return <div className="question-options">{question.options?.map((option) => {
     const checked = Array.isArray(value) ? value.includes(option.value) : value === option.value;
@@ -227,13 +230,43 @@ function find_last_reasoning(parts: AssistantActivityPart[]): Extract<AssistantA
   }
   return undefined;
 }
-function interaction_title(part: SessionAssistantInteractionPart): string { return part.request.kind === "approval" ? part.request.operation === "tool" ? part.request.tool_description || "操作确认" : part.request.command : part.request.title; }
+function interaction_title(part: SessionAssistantInteractionPart): string { return part.request.title || (part.request.type === "approval" ? "操作确认" : part.request.type === "question" ? "需要输入" : part.request.type); }
 function is_answer_complete(value: string | string[] | undefined): value is string | string[] { return Array.isArray(value) ? value.length > 0 : typeof value === "string" && Boolean(value.trim()); }
 function read_question_answers(part: SessionAssistantInteractionPart): Record<string, string | string[]> {
-  if (part.response?.kind !== "question") return {};
-  return Object.fromEntries(part.response.answers.map((answer) => [answer.question_id, answer.value]));
+  const payload = part.response?.payload;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return {};
+  const answers = (payload as { answers?: unknown }).answers;
+  if (!Array.isArray(answers)) return {};
+  return Object.fromEntries(answers.flatMap((answer) => {
+    if (!answer || typeof answer !== "object" || Array.isArray(answer)) return [];
+    const item = answer as { question_id?: unknown; value?: unknown };
+    return typeof item.question_id === "string" && (typeof item.value === "string" || Array.isArray(item.value))
+      ? [[item.question_id, item.value as string | string[]]]
+      : [];
+  }));
 }
 function format_value(value: unknown): string { if (typeof value === "string") return value; try { return JSON.stringify(value, null, 2) ?? ""; } catch { return String(value); } }
-function interaction_status_label(part: SessionAssistantInteractionPart): string { return part.status === "pending" ? "等待响应" : part.status === "resolved" ? "已响应" : part.status === "expired" ? "已过期" : "已取消"; }
-function approval_result_label(part: SessionAssistantInteractionPart): string { return part.response?.kind === "approval" && part.response.decision === "approved" ? "已允许" : part.status === "expired" ? "已过期" : part.status === "cancelled" ? "已取消" : "已拒绝"; }
+function interaction_status_label(part: SessionAssistantInteractionPart): string { return part.status === "pending" ? "等待响应" : part.status === "resolved" ? "已响应" : part.status === "expired" ? "已过期" : part.status === "cancelled" ? "已取消" : "已失败"; }
+function approval_result_label(part: SessionAssistantInteractionPart): string {
+  const payload = part.response?.payload;
+  const decision = payload && typeof payload === "object" && !Array.isArray(payload) ? (payload as { decision?: unknown }).decision : undefined;
+  return decision === "approved" ? "已允许" : part.status === "expired" ? "已过期" : part.status === "cancelled" ? "已取消" : part.status === "failed" ? "已失败" : "已拒绝";
+}
 function question_result_label(part: SessionAssistantInteractionPart): string { return part.status === "expired" ? "已过期" : part.status === "cancelled" ? "已取消" : "已回答"; }
+
+function interaction_payload(request: SessionAssistantInteractionPart["request"]): Record<string, unknown> {
+  return request.payload && typeof request.payload === "object" && !Array.isArray(request.payload)
+    ? request.payload as Record<string, unknown>
+    : {};
+}
+
+function interaction_questions(request: SessionAssistantInteractionPart["request"]): SessionInteractionQuestion[] {
+  const questions = interaction_payload(request).questions;
+  return Array.isArray(questions) ? questions as SessionInteractionQuestion[] : [];
+}
+
+function string_value(value: unknown): string | undefined { return typeof value === "string" && value ? value : undefined; }
+
+function GenericInteractionCard({ part }: { /** 未注册 renderer 的动态 Interaction。 */ part: SessionAssistantInteractionPart }) {
+  return <div className="interaction-card" role="status"><header className="interaction-card-header"><span className="interaction-card-title">{interaction_title(part)}</span><span className="interaction-card-meta">{interaction_status_label(part)}</span></header><div className="interaction-card-body">此交互类型需要宿主应用提供自定义呈现：{part.request.type}</div></div>;
+}

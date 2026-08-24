@@ -48,7 +48,7 @@ export interface ExecutePluginActionInput {
   /** 未校验的调用 payload。 */
   payload: JsonValue;
   /** Session 或其他入口提供的可选执行快照。 */
-  execution_context?: PluginExecutionContext;
+  snapshot?: PluginExecutionContext;
   /** 当前 Session 的 Interaction 端口。 */
   interactions?: SessionInteractionPort;
 }
@@ -131,11 +131,11 @@ function create_abort_scope(input: {
 /** 把可选入口快照归一化为 Action 必定可用的完整执行上下文。 */
 function create_action_execution_context(input: {
   context: PluginContext;
-  execution_context?: PluginExecutionContext;
+  snapshot?: PluginExecutionContext;
   interactions?: SessionInteractionPort;
   abort_signal: AbortSignal;
 }): PluginActionExecutionContext {
-  const source = input.execution_context;
+  const source = input.snapshot;
   const session_id = String(source?.session_id || "").trim();
   const turn_id = String(source?.turn_id || "").trim();
   const call_id = String(source?.call_id || "").trim() || `plugin:${generate_id()}`;
@@ -189,12 +189,12 @@ export async function execute_plugin_action(
   const abort_scope = create_abort_scope({
     plugin_name: input.plugin_name,
     action_name: input.action_name,
-    source_signal: input.execution_context?.abort_signal,
+    source_signal: input.snapshot?.abort_signal,
     timeout_ms,
   });
-  const execution_context = create_action_execution_context({
+  const action_execution = create_action_execution_context({
     context: input.context,
-    execution_context: input.execution_context,
+    snapshot: input.snapshot,
     interactions: input.interactions,
     abort_signal: abort_scope.signal,
   });
@@ -206,7 +206,7 @@ export async function execute_plugin_action(
       );
     }
     const result = await input.action.execute({
-      execution: execution_context,
+      execution: action_execution,
       context: input.context,
       input: parsed_payload.input,
       plugin_name: input.plugin_name,

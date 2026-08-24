@@ -38,9 +38,11 @@ function create_interaction_part(sequence: number): Extract<SessionAssistantMess
       turn_id: "turn-1",
       source: { type: "execution" },
       created_at: 1,
-      kind: "question",
       title: "确认",
-      questions: [{ question_id: "question-1", prompt: "继续吗？", response_type: "text" }],
+      type: "question",
+      payload: {
+        questions: [{ question_id: "question-1", prompt: "继续吗？", response_type: "text" }],
+      },
     },
   };
 }

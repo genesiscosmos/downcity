@@ -812,7 +812,7 @@ export class PluginRegistry {
       action,
       payload: (params.payload ?? {}) as JsonValue,
       ...(params.execution_context
-        ? { execution_context: params.execution_context }
+        ? { snapshot: params.execution_context }
         : {}),
       ...(params.interactions ? { interactions: params.interactions } : {}),
     });

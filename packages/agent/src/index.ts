@@ -370,10 +370,6 @@ export type {
   PluginActionScheduleInput,
 } from "./plugin/types/ActionSchedule.js";
 export { list_plugin_states } from "./plugin/core/PluginStateController.js";
-export {
-  invoke_plugin_action,
-  resolve_plugin_action,
-} from "./plugin/core/PluginActionRunner.js";
 
 // 跨包 RPC 与 session 标识协议
 export type {
