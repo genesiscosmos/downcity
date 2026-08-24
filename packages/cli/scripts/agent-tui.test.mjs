@@ -587,17 +587,14 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
       request: {
         interaction_id: "approval-streaming-input",
         turn_id: "turn-streaming-input",
-        kind: "approval",
+        type: "approval",
         source: {
           type: "tool",
           tool_call_id: "call-streaming-input",
           tool_name: "shell_exec",
         },
         title: "Approve shell_exec",
-        command: "ls -la ~/Desktop",
-        cwd: "/workspace",
-        reason: "Inspect the requested desktop files",
-        operation: "exec",
+        payload: { command: "ls -la ~/Desktop", cwd: "/workspace", reason: "Inspect the requested desktop files", operation: "exec" },
         created_at: 1,
         expires_at: 60_001,
       },
@@ -747,17 +744,14 @@ test("审批 part 展示请求详情且 Esc 按安全语义拒绝", () => {
   const approval_request = {
     interaction_id: "approval-1",
     turn_id: "turn-1",
-    kind: "approval",
+    type: "approval",
     source: {
       type: "tool",
       tool_call_id: "call-1",
       tool_name: "shell_exec",
     },
     title: "Approve shell_exec",
-    command: "rm -rf build",
-    cwd: "/workspace",
-    reason: "Clean generated output",
-    operation: "exec",
+    payload: { command: "rm -rf build", cwd: "/workspace", reason: "Clean generated output", operation: "exec" },
     created_at: 1,
     expires_at: 60_001,
   };
@@ -816,7 +810,7 @@ test("审批 part 展示请求详情且 Esc 按安全语义拒绝", () => {
     },
   });
 
-  assert.equal(approval_request.kind, "approval");
+  assert.equal(approval_request.type, "approval");
   assert.equal(approval_request.interaction_id, "approval-1");
   assert.equal(approval_request.source.tool_name, "shell_exec");
   assert.match(
@@ -830,9 +824,9 @@ test("审批 part 展示请求详情且 Esc 按安全语义拒绝", () => {
     approval_type: "shell",
     tool_name: approval_request.source.tool_name,
     details: [
-      { label: "cmd", value: approval_request.command },
-      { label: "cwd", value: approval_request.cwd },
-      { label: "reason", value: approval_request.reason },
+      { label: "cmd", value: approval_request.payload.command },
+      { label: "cwd", value: approval_request.payload.cwd },
+      { label: "reason", value: approval_request.payload.reason },
     ],
     on_decide: (next_decision) => {
       decision = next_decision;
@@ -865,14 +859,14 @@ test("Question Interaction 逐项收集文本、单选和多选答案", () => {
   const request = {
     interaction_id: "question-1",
     turn_id: "turn-1",
-    kind: "question",
+    type: "question",
     source: {
       type: "tool",
       tool_call_id: "call-question-1",
       tool_name: "ask_question",
     },
     title: "Project settings",
-    questions: [
+    payload: { questions: [
       {
         question_id: "name",
         prompt: "Project name?",
@@ -896,7 +890,7 @@ test("Question Interaction 逐项收集文本、单选和多选答案", () => {
           { value: "test", label: "Test" },
         ],
       },
-    ],
+    ] },
     created_at: 1,
   };
   let answers;

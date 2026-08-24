@@ -54,7 +54,7 @@ export class SessionShellApprovalAdapter implements ShellApprovalGateway {
     const handle = await this.interactions.request({
       interaction_id,
       turn_id: input.turn_id,
-      kind: "approval",
+      type: "approval",
       source: {
         type: "tool",
         tool_call_id: input.tool_call_id,
@@ -62,10 +62,19 @@ export class SessionShellApprovalAdapter implements ShellApprovalGateway {
       },
       title: `Approve ${input.tool_name}`,
       description: input.reason,
-      command: input.command,
-      cwd: input.cwd,
-      reason: input.reason,
-      operation: input.operation,
+      payload: {
+        operation: input.operation,
+        command: input.command,
+        cwd: input.cwd,
+        reason: input.reason,
+      },
+      response_schema: {
+        type: "object",
+        required: ["decision"],
+        properties: {
+          decision: { type: "string", enum: ["approved", "denied"] },
+        },
+      },
       created_at,
       expires_at: created_at + input.timeout_ms,
     });
@@ -76,8 +85,10 @@ export class SessionShellApprovalAdapter implements ShellApprovalGateway {
       decision: handle.result.then((result): ShellApprovalStatus => {
         if (result.status === "expired") return "expired";
         if (result.status !== "resolved") return "denied";
-        if (result.response.kind !== "approval") return "denied";
-        return result.response.decision;
+        if (result.status !== "resolved" || result.response.type !== "approval") return "denied";
+        const payload = result.response.payload;
+        if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "denied";
+        return (payload as { decision?: "approved" | "denied" }).decision || "denied";
       }),
     };
   }

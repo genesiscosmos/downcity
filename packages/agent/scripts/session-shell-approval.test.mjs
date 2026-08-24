@@ -142,13 +142,13 @@ test("unrestricted Shell 审批保留当前 Turn 并等待用户决定", async (
         mutation.type !== "interaction" ||
         mutation.part.interaction_type !== "approval" ||
         mutation.part.status !== "pending" ||
-        mutation.part.request.kind !== "approval" ||
+        mutation.part.request.type !== "approval" ||
         mutation.part.request.source.type !== "tool"
       ) return;
       interaction_snapshot = mutation.part;
       interaction_result = session.respond({
         interaction_id: mutation.part.interaction_id,
-        response: { kind: "approval", decision: "approved" },
+        response: { type: "approval", payload: { decision: "approved" } },
       });
     });
 
@@ -168,7 +168,7 @@ test("unrestricted Shell 审批保留当前 Turn 并等待用户决定", async (
     assert.deepEqual(await interaction_result, {
       status: "resolved",
       interaction_id: interaction_snapshot.interaction_id,
-      response: { kind: "approval", decision: "approved" },
+      response: { type: "approval", payload: { decision: "approved" } },
     });
     assert.equal(tool_part?.state, "completed");
     assert.equal(tool_part?.output?.output, "approval-ok");

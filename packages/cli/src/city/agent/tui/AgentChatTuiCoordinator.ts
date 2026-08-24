@@ -303,36 +303,39 @@ export class AgentChatTuiCoordinator {
     const pending = this.interaction_queue[0];
     if (!pending) return;
     const request = pending.request;
-    const panel = request.kind === "approval"
+    const payload = request.payload && typeof request.payload === "object" && !Array.isArray(request.payload)
+      ? request.payload as Record<string, unknown>
+      : {};
+    const panel = request.type === "approval"
       ? new ApprovalPanelComponent({
           approval_id: request.interaction_id,
-          approval_type: request.operation === "tool" ? "tool" : "shell",
+          approval_type: payload.operation === "tool" ? "tool" : "shell",
           tool_name: request.source.type === "tool"
             ? request.source.tool_name
             : "session",
-          details: request.operation === "tool"
+          details: payload.operation === "tool"
             ? [
                 {
                   label: "input",
-                  value: JSON.stringify(request.validated_input),
+                  value: JSON.stringify(payload.validated_input),
                 },
-                ...(request.tool_description
-                  ? [{ label: "description", value: request.tool_description }]
+                ...(typeof payload.tool_description === "string"
+                  ? [{ label: "description", value: payload.tool_description }]
                   : []),
-                ...(request.model_explanation
-                  ? [{ label: "model", value: request.model_explanation }]
+                ...(typeof payload.model_explanation === "string"
+                  ? [{ label: "model", value: payload.model_explanation }]
                   : []),
               ]
             : [
-                { label: "cmd", value: request.command },
-                { label: "cwd", value: request.cwd },
-                { label: "reason", value: request.reason },
+                { label: "cmd", value: String(payload.command || "") },
+                { label: "cwd", value: String(payload.cwd || "") },
+                { label: "reason", value: String(payload.reason || "") },
               ],
           on_decide: (decision) => {
             this.hide_interaction_panel();
             void this.respond_interaction_panel(pending, {
-              kind: "approval",
-              decision: decision === "approve" ? "approved" : "denied",
+              type: "approval",
+              payload: { decision: decision === "approve" ? "approved" : "denied" },
             });
           },
         })
@@ -341,8 +344,13 @@ export class AgentChatTuiCoordinator {
           on_submit: (answers) => {
             this.hide_interaction_panel();
             void this.respond_interaction_panel(pending, {
-              kind: "question",
-              answers,
+              type: request.type,
+              payload: {
+                answers: answers.map(({ question_id, value }) => ({
+                  question_id,
+                  value,
+                })),
+              },
             });
           },
           on_cancel: () => {

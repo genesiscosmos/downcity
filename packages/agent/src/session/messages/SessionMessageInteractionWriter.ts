@@ -87,8 +87,7 @@ export class SessionMessageInteractionWriter {
           );
         }
         const native_tool_approval =
-          request.kind === "approval" &&
-          request.operation === "tool" &&
+          request.type === "approval" &&
           tool.part.state === "waiting-user";
         if (tool.part.state !== "ready" && !native_tool_approval) {
           throw new Error(
@@ -112,7 +111,7 @@ export class SessionMessageInteractionWriter {
         ),
         type: "interaction",
         interaction_id: request.interaction_id,
-        interaction_type: request.kind,
+        interaction_type: request.type,
         status: "pending",
         request: structuredClone(request),
       };
@@ -133,15 +132,20 @@ export class SessionMessageInteractionWriter {
       if (interaction.message_id !== message_id) {
         throw new Error(`Session Interaction Message changed: ${interaction_id}`);
       }
-      if (interaction.part.interaction_type !== response.kind) {
-        throw new Error(`Session Interaction response kind mismatch: ${interaction_id}`);
+      if (interaction.part.interaction_type !== response.type) {
+        throw new Error(`Session Interaction response type mismatch: ${interaction_id}`);
       }
-      const denied = response.kind === "approval" && response.decision === "denied";
+      const response_payload = response.payload;
+      const denied = response.type === "approval" &&
+        response_payload &&
+        typeof response_payload === "object" &&
+        !Array.isArray(response_payload) &&
+        (response_payload as { decision?: unknown }).decision === "denied";
       const parts = current.parts.map((part) => {
         if (part.part_id === interaction.part.part_id) {
           return {
             ...interaction.part,
-            status: "resolved" as const,
+            status: denied ? "denied" as const : "resolved" as const,
             response: structuredClone(response),
             resolved_at: Date.now(),
           };

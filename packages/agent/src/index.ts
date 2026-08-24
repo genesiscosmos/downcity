@@ -141,8 +141,6 @@ export type {
 } from "./types/session/SessionMutation.js";
 export type {
   RespondSessionInteractionInput,
-  SessionApprovalInteractionRequest,
-  SessionApprovalInteractionResponse,
   SessionApprovalMode,
   SessionCancelledInteractionResult,
   SessionExpiredInteractionResult,
@@ -159,11 +157,7 @@ export type {
   SessionInteractionSource,
   SessionInteractionStatus,
   SessionPendingInteraction,
-  SessionQuestionInteractionRequest,
-  SessionQuestionInteractionResponse,
   SessionResolvedInteractionResult,
-  SessionShellApprovalInteractionRequest,
-  SessionToolApprovalInteractionRequest,
 } from "./types/session/SessionInteraction.js";
 export type {
   AgentOptions,

@@ -44,7 +44,7 @@ Shell approvals belong to the specific remote Session, not the top-level `Remote
 const interactions = await session.interactions();
 await session.respond({
   interaction_id: interactions[0].request.interaction_id,
-  response: { kind: "approval", decision: "approved" },
+  response: { type: "approval", payload: { decision: "approved" } },
 });
 ```
 

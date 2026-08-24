@@ -71,16 +71,21 @@ export function session_part_to_chat_part(raw_part: unknown, index = 0): Downcit
   if (type === "interaction") {
     const request = part.request && typeof part.request === "object" ? part.request as Record<string, unknown> : {};
     const source = request.source && typeof request.source === "object" ? request.source as Record<string, unknown> : {};
-    const raw_questions = Array.isArray(request.questions) ? request.questions : [];
+    const payload = request.payload && typeof request.payload === "object" && !Array.isArray(request.payload)
+      ? request.payload as Record<string, unknown>
+      : {};
+    const raw_questions = Array.isArray(payload.questions) ? payload.questions : [];
     return {
       id,
       type,
       interaction_id: typeof request.interaction_id === "string" ? request.interaction_id : typeof part.interaction_id === "string" ? part.interaction_id : undefined,
       interaction_tool_call_id: to_string(source.tool_call_id),
-      interaction_type: typeof request.kind === "string" ? request.kind : typeof part.kind === "string" ? part.kind : typeof part.interaction_type === "string" ? part.interaction_type : undefined,
+      interaction_type: typeof request.type === "string" ? request.type : typeof part.interaction_type === "string" ? part.interaction_type : undefined,
+      interaction_payload: request.payload,
+      interaction_response_schema: request.response_schema,
       interaction_status: typeof part.status === "string" ? part.status : undefined,
       title: typeof request.title === "string" ? request.title : typeof part.title === "string" ? part.title : undefined,
-      description: typeof request.description === "string" ? request.description : typeof request.reason === "string" ? request.reason : typeof part.description === "string" ? part.description : undefined,
+      description: typeof request.description === "string" ? request.description : typeof part.description === "string" ? part.description : undefined,
       questions: raw_questions.map((question, question_index) => {
         const item = question as Record<string, unknown>;
         return {

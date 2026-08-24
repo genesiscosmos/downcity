@@ -84,7 +84,7 @@ Unrestricted sandbox 请求归属发起工具调用的 Session：
 const interactions = await session.interactions();
 await session.respond({
   interaction_id: interactions[0].request.interaction_id,
-  response: { kind: "approval", decision: "approved" },
+  response: { type: "approval", payload: { decision: "approved" } },
 });
 ```
 
@@ -113,6 +113,12 @@ const workspace = new Workspace({
 `text`、`single_select` 和 `multi_select`，且每个问题都必须显式提供 `type`；用户回答后，
 答案作为 Tool Result 返回模型，模型在同一个 Turn 的下一 Step 继续执行。完整接入方式参见
 [用户异步交互](/zh/agent-sdk-docs/sessions/approvals)。
+
+所有暂停执行并等待外部决定的能力都使用同一个 Interaction 协议。核心字段是
+`type`、`payload` 和 `response_schema`，Plugin 可以使用命名空间 type，例如
+`plugin:deployment/confirm`。前端负责选择呈现方式；Web、CLI 和桌面端可以为同一个
+Interaction 使用不同 renderer。宿主应用始终通过 `session.interactions()` 读取 pending
+请求，并通过 `session.respond({ interaction_id, response })` 提交响应。
 
 ## plugin 实例
 

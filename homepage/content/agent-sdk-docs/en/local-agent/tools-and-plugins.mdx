@@ -82,7 +82,7 @@ Unrestricted sandbox requests belong to the Session that started the tool call:
 const interactions = await session.interactions();
 await session.respond({
   interaction_id: interactions[0].request.interaction_id,
-  response: { kind: "approval", decision: "approved" },
+  response: { type: "approval", payload: { decision: "approved" } },
 });
 ```
 

@@ -15,6 +15,8 @@ import type {
 import type { SessionToolExecutionContext } from "@/types/executor/SessionToolExecutionContext.js";
 import { generate_id } from "@/utils/Id.js";
 import type { ActionResult } from "@/types/action/ActionResult.js";
+import type { JsonValue } from "@/types/common/Json.js";
+import type { SessionInteractionAnswer } from "@/types/session/SessionInteraction.js";
 
 /**
  * 由调用方显式注册、按当前 Session Turn 上下文执行的提问 Tool。
@@ -52,19 +54,21 @@ export const AskQuestionsTool = tool({
     const handle = await interaction_port.request({
       interaction_id: `interaction:${generate_id()}`,
       turn_id,
-      kind: "question",
+      type: "question",
       source: {
         type: "tool",
         tool_call_id,
         tool_name: "ask_question",
       },
       title: input.title,
-      questions: input.questions.map((question) => ({
-        question_id: `question:${generate_id()}`,
-        prompt: question.question,
-        response_type: question.type,
-        ...(question.options ? { options: question.options } : {}),
-      })),
+      payload: {
+        questions: input.questions.map((question) => ({
+          question_id: `question:${generate_id()}`,
+          prompt: question.question,
+          response_type: question.type,
+          ...(question.options ? { options: question.options } : {}),
+        })),
+      } as unknown as JsonValue,
       created_at: Date.now(),
     });
     const result = await handle.result;
@@ -74,7 +78,7 @@ export const AskQuestionsTool = tool({
     if (result.status === "expired") {
       throw new Error("ask_question expired before the user responded");
     }
-    if (result.response.kind !== "question") {
+    if (result.status !== "resolved" || result.response.type !== "question") {
       throw new Error(
         "ask_question received an incompatible Interaction response",
       );
@@ -82,7 +86,7 @@ export const AskQuestionsTool = tool({
     return {
       output: {
         status: "resolved",
-        answers: result.response.answers,
+        answers: (result.response.payload as unknown as { answers: SessionInteractionAnswer[] }).answers,
       },
       messages: [],
     };

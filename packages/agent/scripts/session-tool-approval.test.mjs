@@ -128,13 +128,13 @@ async function run_approval_case(decision) {
         mutation.variant !== "part" ||
         mutation.type !== "interaction" ||
         mutation.part.status !== "pending" ||
-        mutation.part.request.kind !== "approval" ||
-        mutation.part.request.operation !== "tool"
+        mutation.part.request.type !== "approval" ||
+        mutation.part.request.payload.operation !== "tool"
       ) return;
       pending_request = mutation.part.request;
       response_promise = session.respond({
         interaction_id: mutation.part.interaction_id,
-        response: { kind: "approval", decision },
+        response: { type: "approval", payload: { decision } },
       });
     });
 
@@ -147,11 +147,11 @@ async function run_approval_case(decision) {
     assert.equal(execution_count, decision === "approved" ? 1 : 0);
     assert.ok(pending_request);
     assert.equal(pending_request.source.tool_name, "custom_approval");
-    assert.deepEqual(pending_request.validated_input, {
+    assert.deepEqual(pending_request.payload.validated_input, {
       value: "approval-value",
     });
     assert.equal(
-      pending_request.tool_description,
+      pending_request.payload.tool_description,
       "Execute a custom operation after approval.",
     );
     assert.equal("title" in pending_request, false);

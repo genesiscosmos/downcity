@@ -81,7 +81,7 @@ Approval UI gets the same identity from an Interaction Part or `session.interact
 ```ts
 await session.respond({
   interaction_id,
-  response: { kind: "approval", decision: "approved" },
+  response: { type: "approval", payload: { decision: "approved" } },
 });
 ```
 

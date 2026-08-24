@@ -643,24 +643,33 @@ async function resolve_tool_approval_responses(input: {
       const handle = await interactions.request({
         interaction_id: `interaction:tool-approval:${request.approvalId}`,
         turn_id: input.turn_context.session.turn_id,
-        kind: "approval",
-        operation: "tool",
+        type: "approval",
         source: {
           type: "tool",
           tool_call_id: request.toolCall.toolCallId,
           tool_name,
         },
-        validated_input: to_session_json_value(request.toolCall.input),
-        ...(tool_definition?.description
-          ? { tool_description: tool_definition.description }
-          : {}),
-        ...(model_explanation ? { model_explanation } : {}),
+        payload: {
+          operation: "tool",
+          validated_input: to_session_json_value(request.toolCall.input),
+          ...(tool_definition?.description
+            ? { tool_description: tool_definition.description }
+            : {}),
+          ...(model_explanation ? { model_explanation } : {}),
+        },
         created_at: Date.now(),
       });
       const result = await handle.result;
+      const response_payload = result.status === "resolved" &&
+        result.response.type === "approval" &&
+        result.response.payload &&
+        typeof result.response.payload === "object" &&
+        !Array.isArray(result.response.payload)
+        ? result.response.payload as { decision?: unknown }
+        : undefined;
       const approved = result.status === "resolved" &&
-        result.response.kind === "approval" &&
-        result.response.decision === "approved";
+        result.response.type === "approval" &&
+        response_payload?.decision === "approved";
       return {
         type: "tool-approval-response",
         approvalId: request.approvalId,

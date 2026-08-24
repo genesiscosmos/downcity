@@ -87,17 +87,14 @@ function create_fake_agent() {
               request: {
                 interaction_id: "interaction-http-test",
                 turn_id: "turn-http-test",
-                kind: "approval",
+                type: "approval",
                 source: {
                   type: "tool",
                   tool_call_id: "call-http-test",
                   tool_name: "shell_exec",
                 },
                 title: "Approve shell_exec",
-                command: "pwd",
-                cwd: "/tmp",
-                reason: "test",
-                operation: "exec",
+                payload: { command: "pwd", cwd: "/tmp", reason: "test", operation: "exec" },
                 created_at: Date.now(),
                 expires_at: Date.now() + 60_000,
               },
@@ -161,13 +158,10 @@ function create_fake_agent() {
         request: {
           interaction_id: "interaction-http-test",
           turn_id: "turn-http-test",
-          kind: "approval",
+          type: "approval",
           source: { type: "tool", tool_call_id: "call-http-test", tool_name: "shell_exec" },
           title: "Approve shell_exec",
-          command: "pwd",
-          cwd: "/tmp",
-          reason: "test",
-          operation: "exec",
+          payload: { command: "pwd", cwd: "/tmp", reason: "test", operation: "exec" },
           created_at: Date.now(),
         },
       }];
@@ -251,7 +245,7 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", {
       ) {
         approval_decision = session.respond({
           interaction_id: mutation.part.interaction_id,
-          response: { kind: "approval", decision: "approved" },
+          response: { type: "approval", payload: { decision: "approved" } },
         });
       }
     });
@@ -265,7 +259,7 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", {
     assert.deepEqual(await approval_decision, {
       status: "resolved",
       interaction_id: "interaction-http-test",
-      response: { kind: "approval", decision: "approved" },
+      response: { type: "approval", payload: { decision: "approved" } },
     });
 
     assert.equal((await session.interactions())[0].request.interaction_id, "interaction-http-test");
@@ -292,12 +286,12 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", {
     assert.deepEqual(
       await session.respond({
         interaction_id: "interaction-http-test",
-        response: { kind: "approval", decision: "approved" },
+        response: { type: "approval", payload: { decision: "approved" } },
       }),
       {
         status: "resolved",
         interaction_id: "interaction-http-test",
-        response: { kind: "approval", decision: "approved" },
+        response: { type: "approval", payload: { decision: "approved" } },
       },
     );
     const compact = await session.compact();

@@ -32,6 +32,8 @@ export interface DowncityChatMessagePart {
   /** 交互标题。 */ title?: React.ReactNode;
   /** 交互说明。 */ description?: React.ReactNode;
   /** 交互类型。 */ interaction_type?: "approval" | "question" | string;
+  /** 交互业务请求 payload。 */ interaction_payload?: unknown;
+  /** 交互响应 schema。 */ interaction_response_schema?: unknown;
   /** 交互状态。 */ interaction_status?: string;
   /** 问题集合。 */ questions?: DowncityChatQuestion[];
   /** 文件 URL。 */ url?: string;
@@ -109,7 +111,8 @@ export interface DowncityChatPanelProps extends Omit<React.ComponentPropsWithout
   /** 审批模式切换回调。 */ on_approval_mode_change?: (mode: DowncityChatApprovalMode) => void | Promise<void>;
   /** 提交消息。 */ on_submit?: (input: DowncityChatSubmitInput, mode?: "send" | "queue") => void | Promise<void>;
   /** 停止生成。 */ on_stop?: () => void | Promise<void>;
-  /** 响应当前 Session 的 approval/question Interaction。 */ on_respond_interaction?: (interaction_id: string, response: unknown) => void | Promise<void>;
+  /** 响应当前 Session Interaction。 */ on_respond_interaction?: (interaction_id: string, response: unknown) => void | Promise<void>;
+  /** 自定义 Interaction 呈现器；未提供时使用内置呈现。 */ render_interaction?: (props: { part: DowncityChatMessagePart; on_respond_interaction?: DowncityChatPanelProps["on_respond_interaction"] }) => React.ReactNode;
   /** 打开附件选择。 */ on_attach?: () => void;
   /** 新建会话。 */ on_create_thread?: () => void | Promise<void>;
   /** 选择会话。 */ on_select_thread?: (thread_id: string) => void | Promise<void>;

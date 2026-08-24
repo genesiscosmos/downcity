@@ -533,6 +533,15 @@ Compact 发生在 Queue 检查点。三者共享 Composer、Plan、Segment 提�
 
 ## 15. ask_question 与 Interaction
 
+Interaction 使用统一的可扩展信封：核心只约束 `interaction_id`、`turn_id`、`type`、
+`source`、`payload`、`response_schema` 和生命周期；Plugin 可以使用
+`plugin:<plugin-name>/<action>` 形式的动态 type。前端不需要理解所有业务类型，
+可以通过自己的 renderer 选择弹窗、表单、CLI 面板或其他呈现方式；未知类型必须保持
+pending 并允许明确拒绝，不能默认批准。
+
+Approval、Question、Plugin Confirmation 都通过 `session.respond()` 恢复执行。
+PTY/Shell Session 仍然是持续进程流，不是一次性 Interaction。
+
 `ask_question` 是从 `@downcity/agent/tools` 按需导入并显式注册的 Tool，不是 Agent 默认能力，
 也不是新的 Turn API。它把模型 Tool Call 映射为 Question Interaction，等待用户回答后把
 答案作为 Tool Result 交回同一个 Turn。

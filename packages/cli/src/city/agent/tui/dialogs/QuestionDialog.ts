@@ -18,7 +18,7 @@ import {
 import type {
   SessionInteractionAnswer,
   SessionInteractionQuestion,
-  SessionQuestionInteractionRequest,
+  SessionInteractionRequest,
 } from "@downcity/agent";
 
 import { SELECT_POINTER } from "@/city/agent/tui/constant/symbols.js";
@@ -31,7 +31,7 @@ const MAX_VISIBLE_OPTIONS = 6;
 /** Question 面板构造参数。 */
 export interface QuestionPanelOptions {
   /** Session 持久化的 Question Interaction 请求。 */
-  request: SessionQuestionInteractionRequest;
+  request: SessionInteractionRequest;
   /** 全部问题完成后的结构化回答回调。 */
   on_submit: (answers: SessionInteractionAnswer[]) => void;
   /** 用户主动取消回答时触发，由协调器停止当前 Turn。 */
@@ -40,7 +40,7 @@ export interface QuestionPanelOptions {
 
 /** 支持文本、单选和多选的 Question Interaction 面板。 */
 export class QuestionPanelComponent implements Component, Focusable {
-  private readonly request: SessionQuestionInteractionRequest;
+  private readonly request: SessionInteractionRequest;
   private readonly on_submit: (answers: SessionInteractionAnswer[]) => void;
   private readonly on_cancel: () => void;
   private readonly answers: SessionInteractionAnswer[] = [];
@@ -120,7 +120,14 @@ export class QuestionPanelComponent implements Component, Focusable {
   }
 
   private get current_question(): SessionInteractionQuestion | undefined {
-    return this.request.questions[this.question_index];
+    return this.questions[this.question_index];
+  }
+
+  private get questions(): SessionInteractionQuestion[] {
+    const payload = this.request.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+    const questions = (payload as { questions?: unknown }).questions;
+    return Array.isArray(questions) ? questions as SessionInteractionQuestion[] : [];
   }
 
   /** 为当前问题重置临时输入状态。 */
@@ -136,7 +143,7 @@ export class QuestionPanelComponent implements Component, Focusable {
     const question = this.current_question;
     if (!question) return;
     this.answers.push({ question_id: question.question_id, value });
-    if (this.answers.length === this.request.questions.length) {
+    if (this.answers.length === this.questions.length) {
       this.on_submit([...this.answers]);
       return;
     }
@@ -178,10 +185,10 @@ export class QuestionPanelComponent implements Component, Focusable {
   }
 
   private render_title(inner_width: number): string {
-    const progress = `${this.question_index + 1}/${this.request.questions.length}`;
+    const progress = `${this.question_index + 1}/${this.questions.length}`;
     const title = current_theme.bold_fg(
       "accent",
-      ` ${this.request.title} · ${progress} `,
+      ` ${this.request.title || "需要输入"} · ${progress} `,
     );
     return " " + truncateToWidth(title, inner_width, ELLIPSIS);
   }

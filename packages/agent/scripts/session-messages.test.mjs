@@ -235,7 +235,7 @@ test("Tool Runtime 在文本中间保持输入、审批和输出的确定顺序"
   assert.equal(recorder.get_message(writer.message_id).parts[1].state, "waiting-user");
   await interactions.respond({
     interaction_id: approval_handle.approval_id,
-    response: { kind: "approval", decision: "approved" },
+    response: { type: "approval", payload: { decision: "approved" } },
   });
   assert.equal(await approval_handle.decision, "approved");
   await writer.apply_chunk({ type: "text-start", id: "text-2" });
@@ -776,11 +776,11 @@ test("Session Interaction 只接受已经准备完整输入的 Tool", async () =
   const interaction = recorder.get_message(writer.message_id).parts[1];
   assert.equal(tool.state, "waiting-user");
   assert.equal(interaction.interaction_id, approval_handle.approval_id);
-  assert.equal(interaction.request.command, approval_input.command);
+  assert.equal(interaction.request.payload.command, approval_input.command);
   assert.equal(tool.input.cmd, "ls -la /Users/example/Desktop");
   await interactions.respond({
     interaction_id: approval_handle.approval_id,
-    response: { kind: "approval", decision: "denied" },
+    response: { type: "approval", payload: { decision: "denied" } },
   });
   assert.equal(await approval_handle.decision, "denied");
   await writer.apply_chunk({
@@ -809,10 +809,10 @@ test("Question Interaction 校验文本、单选与多选回答后恢复执行",
   const handle = await interactions.request({
     interaction_id: "interaction-question",
     turn_id: "turn-question",
-    kind: "question",
+    type: "question",
     source: { type: "execution" },
     title: "补充信息",
-    questions: [
+    payload: { questions: [
       { question_id: "name", prompt: "项目名称？", response_type: "text" },
       {
         question_id: "region",
@@ -826,7 +826,7 @@ test("Question Interaction 校验文本、单选与多选回答后恢复执行",
         response_type: "multi_select",
         options: [{ value: "search", label: "搜索" }],
       },
-    ],
+    ] },
     created_at: Date.now(),
   });
 
@@ -834,8 +834,8 @@ test("Question Interaction 校验文本、单选与多选回答后恢复执行",
     interactions.respond({
       interaction_id: handle.interaction_id,
       response: {
-        kind: "question",
-        answers: [{ question_id: "name", value: "Downcity" }],
+        type: "question",
+        payload: { answers: [{ question_id: "name", value: "Downcity" }] },
       },
     }),
     /answer count mismatch/,
@@ -843,12 +843,12 @@ test("Question Interaction 校验文本、单选与多选回答后恢复执行",
   const result = await interactions.respond({
     interaction_id: handle.interaction_id,
     response: {
-      kind: "question",
-      answers: [
+      type: "question",
+      payload: { answers: [
         { question_id: "name", value: "Downcity" },
         { question_id: "region", value: "cn" },
         { question_id: "features", value: ["search"] },
-      ],
+      ] },
     },
   });
 
@@ -881,14 +881,14 @@ test("取消 Interaction 先原子关闭 Tool 与 Interaction，再兑现等待�
   const handle = await interactions.request({
     interaction_id: "interaction-cancel",
     turn_id: "turn-cancel",
-    kind: "question",
+    type: "question",
     source: {
       type: "tool",
       tool_call_id: "call-cancel",
       tool_name: "ask_user",
     },
     title: "确认",
-    questions: [{ question_id: "continue", prompt: "继续吗？", response_type: "text" }],
+    payload: { questions: [{ question_id: "continue", prompt: "继续吗？", response_type: "text" }] },
     created_at: Date.now(),
   });
 
@@ -915,10 +915,10 @@ test("Interaction 超时后持久化 expired 终态", async () => {
   const handle = await interactions.request({
     interaction_id: "interaction-expire",
     turn_id: "turn-expire",
-    kind: "question",
+    type: "question",
     source: { type: "execution" },
     title: "即将超时",
-    questions: [{ question_id: "value", prompt: "请输入", response_type: "text" }],
+    payload: { questions: [{ question_id: "value", prompt: "请输入", response_type: "text" }] },
     created_at: Date.now(),
     expires_at: Date.now() + 10,
   });
@@ -1011,7 +1011,7 @@ test("流式更新与 Interaction 共享 Assistant revision 写队列", async ()
 
   await interactions.respond({
     interaction_id: approval_handle.approval_id,
-    response: { kind: "approval", decision: "denied" },
+    response: { type: "approval", payload: { decision: "denied" } },
   });
   assert.equal(await approval_handle.decision, "denied");
 });
@@ -1545,17 +1545,14 @@ test("重启时收口 Assistant、取消 Interaction 并标记运行中 Action �
   await interactions.request({
     interaction_id: "interaction-recovery",
     turn_id: "turn-1",
-    kind: "approval",
+    type: "approval",
     source: {
       type: "tool",
       tool_call_id: "call-recovery",
       tool_name: "shell_exec",
     },
     title: "Approve shell_exec",
-    command: "pwd",
-    cwd: "/workspace",
-    reason: "test recovery",
-    operation: "exec",
+    payload: { command: "pwd", cwd: "/workspace", reason: "test recovery", operation: "exec" },
     created_at: Date.now(),
   });
   await recorder.open_action_message({ message_id: "running-action", action_type: "fork", title: "Forking" });

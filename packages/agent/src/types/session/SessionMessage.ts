@@ -177,7 +177,7 @@ export interface SessionAssistantInteractionPart {
   /** 当前 Interaction 的稳定唯一标识。 */
   interaction_id: string;
   /** 当前 Interaction 的具体业务类型。 */
-  interaction_type: "approval" | "question";
+  interaction_type: string;
   /** 当前 Interaction 的生命周期状态。 */
   status: SessionInteractionStatus;
   /** 已持久化的完整 Interaction 请求。 */

@@ -98,11 +98,22 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
       input.interaction_id,
       input.response,
     );
-    const result: SessionInteractionResult = {
-      status: "resolved",
-      interaction_id: input.interaction_id,
-      response: structuredClone(input.response),
-    };
+    const denied = input.response.type === "approval" &&
+      input.response.payload &&
+      typeof input.response.payload === "object" &&
+      !Array.isArray(input.response.payload) &&
+      (input.response.payload as { decision?: unknown }).decision === "denied";
+    const result: SessionInteractionResult = denied
+      ? {
+        status: "denied",
+        interaction_id: input.interaction_id,
+        reason: (input.response.payload as { reason?: string }).reason,
+      }
+      : {
+        status: "resolved",
+        interaction_id: input.interaction_id,
+        response: structuredClone(input.response),
+      };
     this.finish_pending(input.interaction_id, result);
     return result;
   }
@@ -162,21 +173,24 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
     ) {
       throw new Error("Session Interaction expires_at must not precede created_at");
     }
-    if (request.kind === "question") {
-      if (request.questions.length === 0) {
+    if (!String(request.type || "").trim()) {
+      throw new Error("Session Interaction requires a non-empty type");
+    }
+    if (request.type === "question") {
+      const payload = request.payload as { questions?: unknown };
+      const questions = payload?.questions;
+      if (!Array.isArray(questions) || questions.length === 0) {
         throw new Error("Question Interaction requires at least one question");
       }
       const question_ids = new Set<string>();
-      for (const question of request.questions) {
+      for (const question of questions as Array<Record<string, unknown>>) {
         if (!String(question.question_id || "").trim()) {
           throw new Error("Interaction question requires question_id");
         }
-        if (question_ids.has(question.question_id)) {
-          throw new Error(
-            `Duplicate Interaction question_id: ${question.question_id}`,
-          );
+        if (question_ids.has(String(question.question_id))) {
+          throw new Error("Duplicate Interaction question_id");
         }
-        question_ids.add(question.question_id);
+        question_ids.add(String(question.question_id));
         if (!String(question.prompt || "").trim()) {
           throw new Error(
             `Interaction question requires prompt: ${question.question_id}`,
@@ -184,7 +198,7 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
         }
         if (
           question.response_type !== "text" &&
-          (!question.options || question.options.length === 0)
+          (!Array.isArray(question.options) || question.options.length === 0)
         ) {
           throw new Error(
             `Select Interaction question requires options: ${question.question_id}`,
@@ -192,76 +206,73 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
         }
         if (question.options) {
           const option_values = new Set<string>();
-          for (const option of question.options) {
+          for (const option of question.options as Array<Record<string, unknown>>) {
             if (!String(option.value || "").trim()) {
               throw new Error(
                 `Interaction option requires value: ${question.question_id}`,
               );
             }
-            if (option_values.has(option.value)) {
-              throw new Error(
-                `Duplicate Interaction option value: ${question.question_id}/${option.value}`,
-              );
+            const option_value = String(option.value);
+            if (option_values.has(option_value)) {
+              throw new Error("Duplicate Interaction option value");
             }
-            option_values.add(option.value);
+            option_values.add(option_value);
           }
         }
       }
     }
   }
 
-  /** 校验响应 kind、问题集合与回答值。 */
+  /** 校验响应 type、问题集合与回答值。 */
   private validate_response(
     request: SessionInteractionRequest,
     response: SessionInteractionResponse,
   ): void {
-    if (request.kind !== response.kind) {
-      throw new Error(
-        `Session Interaction response kind mismatch: ${request.interaction_id}`,
-      );
+    if (request.type !== response.type) {
+      throw new Error("Session Interaction response type mismatch");
     }
-    if (request.kind !== "question" || response.kind !== "question") return;
+    if (request.type !== "question") return;
+    const request_payload = request.payload as { questions?: unknown };
+    const response_payload = response.payload as { answers?: unknown };
+    const questions = Array.isArray(request_payload.questions)
+      ? request_payload.questions as Array<Record<string, unknown>>
+      : [];
+    const response_answers = Array.isArray(response_payload?.answers)
+      ? response_payload.answers as Array<Record<string, unknown>>
+      : [];
     const answers = new Map<string, string | string[]>();
-    for (const answer of response.answers) {
-      if (answers.has(answer.question_id)) {
-        throw new Error(
-          `Duplicate Session Interaction answer: ${answer.question_id}`,
-        );
+    for (const answer of response_answers) {
+      const question_id = String(answer.question_id || "");
+      if (answers.has(question_id)) {
+        throw new Error("Duplicate Session Interaction answer");
       }
-      answers.set(answer.question_id, answer.value);
+      answers.set(question_id, answer.value as string | string[]);
     }
-    if (answers.size !== request.questions.length) {
-      throw new Error(
-        `Session Interaction answer count mismatch: ${request.interaction_id}`,
-      );
+    if (answers.size !== questions.length) {
+      throw new Error("Session Interaction answer count mismatch");
     }
-    for (const question of request.questions) {
-      const value = answers.get(question.question_id);
+    for (const question of questions) {
+      const question_id = String(question.question_id || "");
+      const value = answers.get(question_id);
       if (value === undefined) {
-        throw new Error(
-          `Session Interaction answer is missing: ${question.question_id}`,
-        );
+        throw new Error("Session Interaction answer is missing");
       }
       if (question.response_type === "multi_select") {
         if (!Array.isArray(value)) {
-          throw new Error(
-            `Session Interaction answer must be an array: ${question.question_id}`,
-          );
+          throw new Error("Session Interaction answer must be an array");
         }
       } else if (typeof value !== "string") {
-        throw new Error(
-          `Session Interaction answer must be a string: ${question.question_id}`,
-        );
+        throw new Error("Session Interaction answer must be a string");
       }
       if (question.response_type !== "text") {
         const allowed = new Set(
-          (question.options || []).map((option) => option.value),
+          (Array.isArray(question.options) ? question.options : []).map(
+            (option) => (option as { value: string }).value,
+          ),
         );
         const selected = Array.isArray(value) ? value : [value];
         if (selected.some((item) => !allowed.has(item))) {
-          throw new Error(
-            `Session Interaction answer contains an invalid option: ${question.question_id}`,
-          );
+          throw new Error("Session Interaction answer contains an invalid option");
         }
       }
     }

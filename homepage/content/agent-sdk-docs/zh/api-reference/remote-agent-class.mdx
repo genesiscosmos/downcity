@@ -44,7 +44,7 @@ Shell 审批属于具体远程 Session，不属于 `RemoteAgent` 顶层。可以
 const interactions = await session.interactions();
 await session.respond({
   interaction_id: interactions[0].request.interaction_id,
-  response: { kind: "approval", decision: "approved" },
+  response: { type: "approval", payload: { decision: "approved" } },
 });
 ```
 

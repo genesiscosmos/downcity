@@ -33,8 +33,8 @@ const unsubscribe = session.subscribe((mutation) => {
 await session.respond({
   interaction_id,
   response: {
-    kind: "approval",
-    decision: "approved",
+    type: "approval",
+    payload: { decision: "approved" },
   },
 });
 ```
@@ -48,10 +48,10 @@ await session.respond({
 const pending = await session.interactions();
 
 for (const { request } of pending) {
-  if (request.kind === "approval") {
+  if (request.type === "approval") {
     render_approval(request);
   } else {
-    render_questions(request.questions);
+    render_questions(request.payload.questions);
   }
 }
 ```
@@ -63,11 +63,11 @@ Question 支持 `text`、`single_select` 与 `multi_select`。回答必须覆盖
 await session.respond({
   interaction_id,
   response: {
-    kind: "question",
-    answers: [
+    type: "question",
+    payload: { answers: [
       { question_id: "region", value: "cn" },
       { question_id: "features", value: ["search", "files"] },
-    ],
+    ] },
   },
 });
 ```
