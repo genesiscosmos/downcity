@@ -6,14 +6,18 @@ import { TbBrandOpenai, TbSparkles } from "react-icons/tb";
 /** 模型品牌图标属性。 */
 interface LLMModelIconProps {
   /** Federation 模型标识。 */ model_id: string;
+  /** Federation 返回的模型展示名称，用于补充品牌识别。 */ model_name?: string;
+  /** Federation 返回的模型标签，用于补充品牌识别。 */ tags?: string[];
   /** 图标尺寸样式。 */ size_class?: string;
 }
 
 /** 从 provider/model、provider:model 或普通模型名中识别品牌。 */
-export function LLMModelIcon({ model_id, size_class = "size-5" }: LLMModelIconProps) {
+export function LLMModelIcon({ model_id, model_name, tags = [], size_class = "size-5" }: LLMModelIconProps) {
   const id = String(model_id || "").toLowerCase();
-  const model_name = id.split(/[/:]/).filter(Boolean).at(-1) || id;
-  const matches = (...tokens: string[]) => tokens.some((token) => id.startsWith(token) || model_name.startsWith(token) || id.includes(`/${token}`) || id.includes(`:${token}`));
+  const normalized_model_name = String(model_name || "").toLowerCase();
+  const model_id_tail = id.split(/[/:]/).filter(Boolean).at(-1) || id;
+  const search_text = [id, model_id_tail, normalized_model_name, ...tags.map((tag) => String(tag).toLowerCase())].join(" ");
+  const matches = (...tokens: string[]) => tokens.some((token) => search_text.includes(token));
   if (matches("gpt", "openai", "o1", "o3", "o4")) return <TbBrandOpenai className={size_class} aria-label="OpenAI" />;
   if (matches("claude", "anthropic")) return <ClaudeIcon class_name={size_class} />;
   if (matches("gemini", "google")) return <SiGooglegemini className={`${size_class} text-[#3186ff]`} aria-label="Gemini" />;

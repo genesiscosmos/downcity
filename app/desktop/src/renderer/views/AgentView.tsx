@@ -161,7 +161,7 @@ function ModelEditor({ definition, controller, set_definition }: { /** 未提交
     {text_models.map((model) => {
       const active = model.model_id === definition.model_id;
       return <button key={model.model_id} type="button" onClick={() => set_definition({ ...definition, model_id: model.model_id })} aria-pressed={active} className={cn("group flex min-h-10 w-full items-center gap-2 px-3 text-left transition-colors hover:bg-interaction-hover", active && "bg-interaction-selected hover:bg-interaction-active")}>
-        <LLMModelIcon model_id={model.model_id} size_class="size-4" />
+        <LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-4" />
         <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground/90" title={model.name}>{model.name}</span>
         {model.context_window ? <span className="rounded bg-foreground/[0.04] px-1.5 text-[10px] leading-4 text-muted-foreground/75 tabular-nums">{format_context_window(model.context_window)}</span> : null}
         <TbCheck className={cn("size-4 shrink-0 text-foreground transition-opacity", active ? "opacity-100" : "opacity-0")} aria-hidden="true" />
