@@ -3,8 +3,8 @@
  *
  * 关键点（中文）
  * - 这是 chat queue 的实例级状态容器。
- * - 允许 `ChatPlugin` 持有自己的 queue store，而不是完全依赖模块级全局状态。
- * - 旧的 `ChatQueue.ts` 会保留共享门面，逐步迁移到显式实例注入。
+ * - `ChatPlugin` 为每个 Workspace Context 持有独立 queue store。
+ * - 队列必须通过显式 Context 解析，不允许模块级共享状态。
  */
 
 import type { PluginContext } from "@downcity/agent";
@@ -53,13 +53,6 @@ export interface ChatQueueStorePort {
   clear(laneKey: string): void;
 }
 
-/**
- * 共享 queue store。
- *
- * 关键点（中文）
- * - 迁移阶段仍保留一份共享实例，避免一次性改动所有旧入口。
- * - 新代码应优先通过 `PluginContext.agent` 解析显式 queue store。
- */
 /**
  * Chat queue 实例级存储。
  */
@@ -158,28 +151,19 @@ export class ChatQueueStore implements ChatQueueStorePort {
   }
 }
 
-const sharedChatQueueStore = new ChatQueueStore();
-
-/**
- * 读取共享 chat queue store。
- */
-export function getSharedChatQueueStore(): ChatQueueStore {
-  return sharedChatQueueStore;
-}
-
 /**
  * 从运行时解析 chat queue store。
  *
  * 关键点（中文）
- * - 新路径优先读取当前 Agent 注册的 ChatPlugin 实例。
- * - 迁移阶段若拿不到，则回退到共享 queue store，保证旧入口可继续工作。
+ * - 只读取当前 Agent 注册的 ChatPlugin 实例。
+ * - 缺少 Context 或对应 Workspace runtime 时立即失败，避免跨 Agent/Workspace 串队列。
  */
-export function resolveChatQueueStore(context?: PluginContext): ChatQueueStorePort {
-  const chatService = context?.plugins.get("chat") as
+export function resolveChatQueueStore(context: PluginContext): ChatQueueStorePort {
+  const chatService = context.plugins.get("chat") as
     | { queue_store?: (context: PluginContext) => ChatQueueStorePort }
     | undefined;
-  if (chatService?.queue_store && context) {
-    return chatService.queue_store(context);
+  if (!chatService?.queue_store) {
+    throw new Error("Chat queue requires an active ChatPlugin for the current Workspace");
   }
-  return sharedChatQueueStore;
+  return chatService.queue_store(context);
 }

@@ -13,6 +13,7 @@ import { Hono } from "hono";
 import type { AgentWorkspace } from "@/internal/index.js";
 import { create_agent_workspace } from "@/internal/index.js";
 import type { Agent } from "@/agent/Agent.js";
+import type { AgentSessionCollection } from "@/types/agent/AgentSessionCollection.js";
 import type { WorkspaceBase } from "@downcity/workspace";
 import { register_sdk_session_routes } from "@/city/transport/http/routes/SessionRoutes.js";
 import { register_runtime_routes } from "@/city/transport/http/routes/RuntimeRoutes.js";
@@ -43,6 +44,7 @@ export interface AgentHttpServerHandle {
  */
 export class AgentHTTP {
   private readonly agent_workspace: AgentWorkspace;
+  private readonly session_collection: AgentSessionCollection;
   private readonly runtime_options: AgentHttpRuntimeOptions;
   private cached_router: Hono | null = null;
   private cached_server: AgentHttpServerHandle | null = null;
@@ -54,10 +56,12 @@ export class AgentHTTP {
   ) {
     if (workspace_or_options && "id" in workspace_or_options && "path" in workspace_or_options) {
       this.agent_workspace = create_agent_workspace(agent_or_workspace as Agent, workspace_or_options);
+      this.session_collection = (agent_or_workspace as Agent).sessions;
       this.runtime_options = runtime_options;
       return;
     }
-    this.agent_workspace = agent_or_workspace as AgentWorkspace;
+      this.agent_workspace = agent_or_workspace as AgentWorkspace;
+      this.session_collection = this.agent_workspace.sessions;
     this.runtime_options = (workspace_or_options as AgentHttpRuntimeOptions | undefined) ?? {};
   }
 
@@ -71,7 +75,7 @@ export class AgentHTTP {
   router(): Hono {
     if (this.cached_router) return this.cached_router;
     const router = new Hono();
-    register_sdk_session_routes(router, this.agent_workspace.sessions, {
+    register_sdk_session_routes(router, this.session_collection, this.agent_workspace.workspace, {
       resolve_session_model: this.runtime_options.resolve_session_model,
     });
     register_runtime_routes(router, this.agent_workspace);

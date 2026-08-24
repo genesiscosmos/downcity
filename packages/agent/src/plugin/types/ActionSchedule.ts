@@ -30,7 +30,7 @@ export interface ActionScheduleJobRecord {
   /** 执行该任务的 Agent 稳定标识。 */
   agent_id: string;
   /** 任务所属 Workspace 的稳定标识。 */
-  workspace_id: string;
+  workspace_id?: string;
   /**
    * 目标 plugin 名称。
    */
@@ -69,6 +69,8 @@ export interface ActionScheduleJobRecord {
  * 创建 ActionSchedule 任务所需输入。
  */
 export interface CreateActionScheduleJobInput {
+  /** 任务执行时解析 PluginContext 所需的 Workspace 稳定标识；省略时使用当前活动 Workspace。 */
+  workspace_id: string;
   /**
    * 目标 plugin 名称。
    */

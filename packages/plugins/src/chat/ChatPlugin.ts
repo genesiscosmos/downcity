@@ -10,7 +10,7 @@
 
 import { BasePlugin } from "@downcity/agent";
 import type { PluginActions } from "@downcity/agent";
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext, AgentPluginContext } from "@downcity/agent";
 import type { PluginExecutionContext } from "@downcity/agent";
 import type {
   ChatChannelState,
@@ -58,6 +58,9 @@ export class ChatPlugin extends BasePlugin {
   /** 各 Workspace 独立持有的渠道与队列运行态。 */
   private readonly runtimes_by_workspace = new Map<string, ChatWorkspaceRuntime>();
 
+  /** 各 Workspace 当前唯一的懒启动流程，避免 system/action 并发重复连接渠道。 */
+  private readonly starts_by_workspace = new Map<string, Promise<void>>();
+
   /**
    * 当前实例持有的显式 plugin 配置。
    */
@@ -75,6 +78,7 @@ export class ChatPlugin extends BasePlugin {
     context: PluginContext,
     execution_context?: PluginExecutionContext,
   ): Promise<string> => {
+    await this.ensure_workspace_runtime(context);
     return await buildChatPluginSystem(context, execution_context);
   };
 
@@ -86,41 +90,52 @@ export class ChatPlugin extends BasePlugin {
   /**
    * 启动当前实例的 queue worker。
    */
-  private async enter_workspace(context: PluginContext): Promise<void> {
+  private async start_workspace_runtime(context: PluginContext): Promise<void> {
     if (this.runtimes_by_workspace.has(context.workspace_id)) return;
-    const channel_state = createChatChannelState();
-    const queue_store = new ChatQueueStore();
-    const worker = new ChatQueueWorker({
-      logger: context.logger,
-      context,
-      queueStore: queue_store,
-      config: this.getQueueWorkerConfig(context),
-    });
-    worker.start();
-    this.runtimes_by_workspace.set(context.workspace_id, {
-      channel_state,
-      queue_store,
-      queue_worker: worker,
-    });
+    const started = this.starts_by_workspace.get(context.workspace_id);
+    if (started) return await started;
+    const start_promise = (async () => {
+      const channel_state = createChatChannelState();
+      const queue_store = new ChatQueueStore();
+      const worker = new ChatQueueWorker({
+        logger: context.logger,
+        context,
+        queueStore: queue_store,
+        config: this.getQueueWorkerConfig(context),
+      });
+      worker.start();
+      this.runtimes_by_workspace.set(context.workspace_id, {
+        channel_state,
+        queue_store,
+        queue_worker: worker,
+      });
+      try {
+        await startChatChannels(channel_state, context);
+      } catch (error) {
+        this.runtimes_by_workspace.delete(context.workspace_id);
+        worker.stop();
+        await stopChatChannels(channel_state);
+        throw error;
+      }
+    })();
+    this.starts_by_workspace.set(context.workspace_id, start_promise);
     try {
-      await startChatChannels(channel_state, context);
-    } catch (error) {
-      this.runtimes_by_workspace.delete(context.workspace_id);
-      worker.stop();
-      await stopChatChannels(channel_state);
-      throw error;
+      await start_promise;
+    } finally {
+      if (this.starts_by_workspace.get(context.workspace_id) === start_promise) {
+        this.starts_by_workspace.delete(context.workspace_id);
+      }
     }
   }
 
-  /**
-   * 停止当前实例的 queue worker。
-   */
-  private async leave_workspace(context: PluginContext): Promise<void> {
+  /** 按当前 Workspace Context 懒启动 chat 运行态。 */
+  private async ensure_workspace_runtime(context: PluginContext): Promise<ChatWorkspaceRuntime> {
+    const existing = this.runtimes_by_workspace.get(context.workspace_id);
+    if (existing) return existing;
+    await this.start_workspace_runtime(context);
     const runtime = this.runtimes_by_workspace.get(context.workspace_id);
-    if (!runtime) return;
-    this.runtimes_by_workspace.delete(context.workspace_id);
-    runtime.queue_worker.stop();
-    await stopChatChannels(runtime.channel_state);
+    if (!runtime) throw new Error(`ChatPlugin failed to start Workspace runtime: ${context.workspace_id}`);
+    return runtime;
   }
 
   constructor(options?: ChatPluginOptions) {
@@ -136,22 +151,49 @@ export class ChatPlugin extends BasePlugin {
       ...create_chat_access_actions(),
     };
     this.lifecycle = {
-      enter_workspace: async (context) => await this.enter_workspace(context),
-      leave_workspace: async (context) => await this.leave_workspace(context),
+      start: async (_context: AgentPluginContext) => {},
+      stop: async (_context: AgentPluginContext) => {
+        await Promise.allSettled([...this.starts_by_workspace.values()]);
+        await Promise.all([...this.runtimes_by_workspace.values()].map(async (runtime) => {
+          runtime.queue_worker.stop();
+          await stopChatChannels(runtime.channel_state);
+        }));
+        this.runtimes_by_workspace.clear();
+        this.starts_by_workspace.clear();
+      },
     };
   }
 
   /** 读取当前 Workspace 的渠道状态。 */
   private resolve_channel_state(context: PluginContext): ChatChannelState {
     const runtime = this.runtimes_by_workspace.get(context.workspace_id);
-    if (!runtime) throw new Error(`ChatPlugin has not entered Workspace: ${context.workspace_id}`);
+    if (!runtime) {
+      const channel_state = createChatChannelState();
+      const queue_store = new ChatQueueStore();
+      const worker = new ChatQueueWorker({
+        logger: context.logger,
+        context,
+        queueStore: queue_store,
+        config: this.getQueueWorkerConfig(context),
+      });
+      worker.start();
+      const created = { channel_state, queue_store, queue_worker: worker } satisfies ChatWorkspaceRuntime;
+      this.runtimes_by_workspace.set(context.workspace_id, created);
+      void startChatChannels(channel_state, context).catch((error) => {
+        context.logger.warn(`[chat] channel startup failed: ${String(error)}`);
+      });
+      return channel_state;
+    }
     return runtime.channel_state;
   }
 
   /** 向 chat 入队路径暴露当前 Workspace 的独立队列。 */
   queue_store(context: PluginContext): ChatQueueStore {
     const runtime = this.runtimes_by_workspace.get(context.workspace_id);
-    if (!runtime) throw new Error(`ChatPlugin has not entered Workspace: ${context.workspace_id}`);
+    if (!runtime) {
+      this.resolve_channel_state(context);
+      return this.runtimes_by_workspace.get(context.workspace_id)!.queue_store;
+    }
     return runtime.queue_store;
   }
 

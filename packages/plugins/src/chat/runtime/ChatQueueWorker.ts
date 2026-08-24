@@ -13,9 +13,6 @@ import type { ChatQueueWorkerConfig } from "@/chat/types/ChatQueueWorker.js";
 import type { ChatQueueItem } from "@/chat/types/ChatQueue.js";
 import type { SessionMutation } from "@downcity/agent";
 import type { AgentSessionTurnResult } from "@downcity/agent";
-import {
-  getSharedChatQueueStore,
-} from "./ChatQueue.js";
 import { getChatSender } from "./ChatSendRegistry.js";
 import {
   buildChannelErrorText,
@@ -61,13 +58,13 @@ export class ChatQueueWorker {
   constructor(params: {
     logger: Logger;
     context: PluginContext;
-    queueStore?: ChatQueueStorePort;
+    queueStore: ChatQueueStorePort;
     config?: Partial<ChatQueueWorkerConfig>;
   }) {
     this.logger = params.logger;
     this.context = params.context;
     this.config = normalizeChatQueueWorkerConfig(params.config);
-    this.queueStore = params.queueStore || getSharedChatQueueStore();
+    this.queueStore = params.queueStore;
   }
 
   /**

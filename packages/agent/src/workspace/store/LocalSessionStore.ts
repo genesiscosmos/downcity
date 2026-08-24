@@ -51,7 +51,7 @@ export class LocalSessionStore implements SessionStore {
   private readonly agent_id: string;
 
   /** 当前 Workspace 的稳定标识。 */
-  private readonly workspace_id: string;
+  private readonly workspace_id?: string;
 
   /** 当前 Workspace 内部数据根路径。 */
   private readonly storage_root_path: string;
@@ -67,7 +67,7 @@ export class LocalSessionStore implements SessionStore {
   }
 
   /** 返回指定 Session 的稳定持久化视图。 */
-  session(session_id: string): SessionDataStore {
+  session(session_id: string, workspace_id = this.workspace_id): SessionDataStore {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) {
       throw new Error("SessionStore.session requires a non-empty session_id");
@@ -78,7 +78,7 @@ export class LocalSessionStore implements SessionStore {
       files: this.files,
       storage_root_path: this.storage_root_path,
       agent_id: this.agent_id,
-      workspace_id: this.workspace_id,
+      workspace_id: workspace_id,
       session_id: resolved_session_id,
     });
     this.sessions.set(resolved_session_id, created);
@@ -128,7 +128,7 @@ export class LocalSessionStore implements SessionStore {
     return await list_agent_session_summary_page({
       project_root: this.storage_root_path,
       agent_id: this.agent_id,
-      workspace_id: this.workspace_id,
+      ...(this.workspace_id ? { workspace_id: this.workspace_id } : {}),
       input,
       executingSessionIds: new Set(executing_session_ids),
       files: this.files,
@@ -167,7 +167,7 @@ export class LocalSessionStore implements SessionStore {
     return await list_archived_agent_session_summary_page({
       project_root: this.storage_root_path,
       agent_id: this.agent_id,
-      workspace_id: this.workspace_id,
+      ...(this.workspace_id ? { workspace_id: this.workspace_id } : {}),
       input,
       files: this.files,
     });

@@ -39,7 +39,7 @@ export class LocalSessionDataStore implements SessionDataStore {
   private readonly agent_id: string;
 
   /** 当前 Workspace 的稳定标识。 */
-  private readonly workspace_id: string;
+  private readonly workspace_id?: string;
 
   /** 当前 Workspace 内部数据根路径。 */
   private readonly storage_root_path: string;

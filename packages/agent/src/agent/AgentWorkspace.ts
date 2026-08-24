@@ -11,7 +11,6 @@ import type { Tool, SystemModelMessage } from "ai";
 import type { Hono } from "hono";
 import type { WorkspaceShell } from "@downcity/workspace";
 import { AgentSessions } from "@/agent/AgentSessions.js";
-import { AgentWorkspaceLifecycle } from "@/agent/AgentWorkspaceLifecycle.js";
 import { create_plugin_context } from "@/plugin/core/PluginContext.js";
 import { register_plugin_http_routes } from "@/plugin/core/PluginHttpRoutes.js";
 import { list_plugin_states } from "@/plugin/core/PluginStateController.js";
@@ -21,13 +20,13 @@ import type { PluginSnapshot } from "@/types/plugin/PluginState.js";
 import type { AgentWorkspaceOptions } from "@/types/agent/AgentWorkspaceOptions.js";
 import { Logger } from "@/utils/logger/Logger.js";
 import { generate_id } from "@/utils/Id.js";
-import { LocalSessionStore } from "@/workspace/store/LocalSessionStore.js";
-import type { AgentWorkspaceStorage } from "@/types/workspace/AgentWorkspaceStorage.js";
+import { MemoryFileSystem } from "@/workspace/store/MemoryFileSystem.js";
+import type { AgentStorage } from "@/types/agent/AgentStorage.js";
 import {
   resolve_session_system_messages,
   type SystemProfile,
 } from "@/executor/composer/system/default/SystemDomain.js";
-import { agent_city, agent_is_in_city, agent_storage_scope, release_agent_workspace } from "@/internal/AgentRuntime.js";
+import { agent_city, agent_is_in_city, get_agent_storage, agent_storage_scope, release_agent_workspace } from "@/internal/AgentRuntime.js";
 
 const RESERVED_PLUGIN_TOOL_NAMES = new Set(["plugin_read", "plugin_call"]);
 
@@ -76,10 +75,9 @@ export class AgentWorkspace {
 
   private readonly context: PluginContext;
   private readonly logger: Logger;
-  private readonly lifecycle: AgentWorkspaceLifecycle;
   private readonly unsubscribe_env: () => void;
   private readonly unsubscribe_plugins: () => void;
-  private readonly storage: AgentWorkspaceStorage;
+  private readonly storage: AgentStorage;
   private readonly plugin_contexts = new Map<string, PluginContext>();
   private leave_promise?: Promise<void>;
 
@@ -87,28 +85,14 @@ export class AgentWorkspace {
     this.agent = options.agent;
     this.workspace = options.workspace;
     this.workspace_id = options.workspace.id;
-    const storage_scope = agent_storage_scope(this.agent) || this.workspace.storage.open_scope([
-      "agents",
-      this.agent.id,
-      "workspaces",
-      this.workspace_id,
-    ]);
-    const storage: AgentWorkspaceStorage = {
-      root_path: storage_scope.root_path,
-      files: storage_scope.files,
-      sessions: new LocalSessionStore({
-        files: storage_scope.files,
-        storage_root_path: storage_scope.root_path,
-        agent_id: this.agent.id,
-        workspace_id: this.workspace_id,
-      }),
-    };
+    const storage: AgentStorage = get_agent_storage(this.agent);
     this.storage = storage;
     this.data_path = storage.root_path;
     if (!agent_is_in_city(this.agent)) {
       this.workspace.shell?.bind({
         root_path: this.workspace.path,
-        data_path: this.data_path,
+        // 无 City 时内部状态仍在内存；Shell 的审批/临时文件必须落在真实项目根目录。
+        data_path: this.workspace.path,
       });
     }
     this.logger = new Logger();
@@ -164,7 +148,9 @@ export class AgentWorkspace {
       get_instruction: () => [...this.agent.get_instructions()],
       get_workspace_env: () => this.workspace.get_env(),
       get_agent_plugins: () => this.agent.plugin_registry.execution_view(this.context),
-      ensure_agent_ready: async () => await this.lifecycle.ensure_ready(),
+      workspace_id: this.workspace_id,
+      on_session_routed: (session_id, sessions) => this.agent.register_session_route(session_id, sessions),
+      ensure_agent_ready: async () => await this.agent.ensure_ready(),
       get_agent_model: () => this.agent.model,
       session_class: this.agent.session_class,
     });
@@ -187,11 +173,6 @@ export class AgentWorkspace {
         plugins: this.agent.plugin_registry.execution_view(this.context),
       });
     });
-    this.lifecycle = new AgentWorkspaceLifecycle(
-      this.context,
-      this.agent.plugin_registry,
-      storage,
-    );
   }
 
   /** 当前 Agent ID。 */
@@ -246,9 +227,8 @@ export class AgentWorkspace {
       const cleanup_steps: Array<() => void | Promise<void>> = [
         () => this.unsubscribe_env(),
         () => this.unsubscribe_plugins(),
+        async () => await this.sessions.stop_executing_sessions(),
         () => this.sessions.dispose_title_generation(),
-        async () => await this.lifecycle.dispose(),
-        async () => await this.storage.sessions.dispose(),
         async () => await this.logger.save_all_logs(),
         ...(agent_is_in_city(this.agent) ? [] : [async () => await this.workspace.dispose()]),
       ];
@@ -259,6 +239,7 @@ export class AgentWorkspace {
           errors.push(error);
         }
       }
+      this.agent.unregister_session_routes(this.sessions);
       release_agent_workspace(this.agent, this.workspace_id, this);
       this.agent.plugin_registry.unbind_workspace_context(this.context);
       if (errors.length > 0) {
@@ -266,6 +247,11 @@ export class AgentWorkspace {
       }
     })();
     await this.leave_promise;
+  }
+
+  /** 返回当前 Workspace 的 PluginContext，供 Agent 级调度器解析执行上下文。 */
+  get_context(): PluginContext {
+    return this.context;
   }
 
   /** 返回指定 Plugin 的 Agent 级运行时 Context。 */
@@ -276,16 +262,15 @@ export class AgentWorkspace {
     const key = String(plugin_name || "").trim();
     const existing = this.plugin_contexts.get(key);
     if (existing) return existing;
-    const scope = this.workspace.storage.open_scope([
-      "agents",
-      this.agent.id,
-      "plugins",
-      key,
-    ]);
+    const agent_scope = agent_storage_scope(this.agent);
+    const plugin_scope = agent_scope
+      ? this.agent.city!.storage.open_scope(["agents", this.agent.id, "plugins", key])
+      : MemoryFileSystem.shared(`/memory/agents/${this.agent.id}/plugins/${key}`);
+    const plugin_files = "files" in plugin_scope ? plugin_scope.files : plugin_scope;
     const context = create_plugin_context({
       ...input,
-      data_path: scope.root_path,
-      data_files: scope.files,
+      data_path: plugin_scope.root_path,
+      data_files: plugin_files,
     });
     this.plugin_contexts.set(key, context);
     return context;

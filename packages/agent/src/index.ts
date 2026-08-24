@@ -56,7 +56,7 @@ export type {
 } from "./types/store/SessionDataStore.js";
 export type { SessionAttachmentStore } from "./types/store/SessionAttachmentStore.js";
 export { create_session_message_store } from "./workspace/store/SessionMessageStoreFactory.js";
-export type { AgentWorkspaceStorage } from "./types/workspace/AgentWorkspaceStorage.js";
+export type { AgentStorage } from "./types/agent/AgentStorage.js";
 export { RemoteAgent } from "./remote/RemoteAgent.js";
 export { Session } from "./session/Session.js";
 export type { SessionOptions } from "./types/session/SessionOptions.js";

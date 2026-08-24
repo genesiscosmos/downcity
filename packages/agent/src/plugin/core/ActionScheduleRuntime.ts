@@ -7,8 +7,9 @@
  * - 普通 plugin 先启动，ActionSchedule 再开始轮询，避免到期 action 执行到未启动的 plugin。
  */
 
+import type { AgentStorage } from "@/types/agent/AgentStorage.js";
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
-import type { AgentWorkspaceStorage } from "@/types/workspace/AgentWorkspaceStorage.js";
+import type { Logger } from "@/utils/logger/Logger.js";
 import { run_due_action_schedule_jobs } from "@/plugin/core/ActionScheduleExecutor.js";
 import { ActionScheduleStore } from "@/plugin/core/ActionScheduleStore.js";
 
@@ -33,18 +34,19 @@ export interface ActionScheduleRuntimeHandle {
  * 启动 ActionSchedule 轮询 runtime。
  */
 export async function start_action_schedule_runtime(
-  context: PluginContext,
-  storage: AgentWorkspaceStorage,
+  agent_id: string,
+  storage: AgentStorage,
+  logger: Logger,
+  resolve_context: (workspace_id?: string) => PluginContext | null,
 ): Promise<ActionScheduleRuntimeHandle> {
   const store = new ActionScheduleStore(
     storage.files,
     storage.root_path,
-    context.agent_id,
-    context.workspace_id,
+    agent_id,
   );
   const recovered = await store.reset_running_jobs_to_pending();
   if (recovered > 0) {
-    context.logger.warn(
+    logger.warn(
       formatActionScheduleLogMessage("Recovered interrupted running jobs"),
       { recovered },
     );
@@ -59,8 +61,9 @@ export async function start_action_schedule_runtime(
     ticking = true;
     try {
       await run_due_action_schedule_jobs({
-        context,
         store,
+        resolve_context,
+        logger,
       });
     } finally {
       ticking = false;
@@ -72,7 +75,7 @@ export async function start_action_schedule_runtime(
     void tick();
   }, ACTION_SCHEDULE_POLL_INTERVAL_MS);
 
-  context.logger.info(formatActionScheduleLogMessage("Runtime started"));
+  logger.info(formatActionScheduleLogMessage("Runtime started"));
 
   return {
     stop: () => {
@@ -83,7 +86,7 @@ export async function start_action_schedule_runtime(
         timer = null;
       }
       store.close();
-      context.logger.info(formatActionScheduleLogMessage("Runtime stopped"));
+      logger.info(formatActionScheduleLogMessage("Runtime stopped"));
     },
   };
 }

@@ -19,7 +19,7 @@ import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 /** 一个 Agent 所属全部 Session 的持久化入口。 */
 export interface SessionStore {
   /** 返回指定 Session 的稳定持久化视图。 */
-  session(session_id: string): SessionDataStore;
+  session(session_id: string, workspace_id?: string): SessionDataStore;
 
   /** 判断活动 Session 是否存在。 */
   has_session(session_id: string): Promise<boolean>;

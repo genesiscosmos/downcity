@@ -6,7 +6,7 @@
  * - `RpcServer.ts` 负责网络层，handler 把协议方法转成 Agent 操作。
  */
 
-import type { AgentSessions } from "@/index.js";
+import type { AgentSessionCollection } from "@/types/agent/AgentSessionCollection.js";
 import type { AgentWorkspace } from "@/internal/index.js";
 import type { RpcEventFrame } from "@/city/transport/types/RpcProtocol.js";
 import type { AgentSessionModelResolver } from "@/city/transport/types/AgentSessionModelResolver.js";
@@ -20,7 +20,7 @@ export interface RpcServerStartOptions {
   /** RPC 服务监听主机。 */
   host: string;
   /** Session 集合访问口。 */
-  sessions: AgentSessions;
+  sessions: AgentSessionCollection;
   /** 当前 AgentWorkspace 执行上下文访问口。 */
   get_workspace?: () => AgentWorkspace;
   /** 将远程模型 ID 解析为当前宿主可执行的模型实例。 */
@@ -38,7 +38,7 @@ export interface RpcServerStartOptions {
  */
 export interface RpcRequestHandlerOptions {
   /** Session 集合访问口。 */
-  sessions: AgentSessions;
+  sessions: AgentSessionCollection;
   /** 当前 AgentWorkspace 执行上下文访问口。 */
   get_workspace?: () => AgentWorkspace;
   /** 将远程模型 ID 解析为当前宿主可执行的模型实例。 */

@@ -139,20 +139,20 @@ export class ActionScheduleStore {
   private readonly lock_path: string;
   private readonly files: FileSystem;
   private readonly agent_id: string;
-  private readonly workspace_id: string;
+  private readonly default_workspace_id?: string;
 
   constructor(
     files: FileSystem,
     storage_root_path: string,
     agent_id: string,
-    workspace_id: string,
+    default_workspace_id?: string,
   ) {
     this.files = files;
     this.agent_id = String(agent_id || "").trim();
-    this.workspace_id = String(workspace_id || "").trim();
-    if (!this.agent_id || !this.workspace_id) {
-      throw new Error("ActionScheduleStore requires agent_id and workspace_id");
+    if (!this.agent_id) {
+      throw new Error("ActionScheduleStore requires agent_id");
     }
+    this.default_workspace_id = String(default_workspace_id || "").trim() || undefined;
     this.file_path = get_downcity_schedule_db_path(storage_root_path);
     this.lock_path = `${this.file_path}.lock`;
   }
@@ -173,7 +173,7 @@ export class ActionScheduleStore {
     const job: ActionScheduleJobRecord = {
       id: `sched_${generate_id()}`,
       agent_id: this.agent_id,
-      workspace_id: this.workspace_id,
+      workspace_id: String(input.workspace_id || this.default_workspace_id || "").trim(),
       plugin_name: String(input.plugin_name || "").trim(),
       action_name: String(input.action_name || "").trim(),
       payload: input.payload ?? null,
@@ -407,9 +407,8 @@ export class ActionScheduleStore {
     });
   }
 
-  /** 判断任务是否属于当前 AgentWorkspace 执行视图。 */
+  /** 判断任务是否属于当前 Agent 的调度视图。 */
   private owns_job(job: ActionScheduleJobRecord): boolean {
-    return job.agent_id === this.agent_id &&
-      job.workspace_id === this.workspace_id;
+    return job.agent_id === this.agent_id;
   }
 }

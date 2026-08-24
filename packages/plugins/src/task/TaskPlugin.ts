@@ -8,6 +8,7 @@
  */
 
 import { BasePlugin, create_action } from "@downcity/agent";
+import type { AgentPluginContext } from "@downcity/agent";
 import type { PluginActions } from "@downcity/agent";
 import type { PluginContext } from "@downcity/agent";
 import type {
@@ -45,7 +46,10 @@ export class TaskPlugin extends BasePlugin {
   /**
    * task plugin 的 system 文本提供器。
    */
-  readonly system = (): string => TASK_PLUGIN_PROMPT;
+  readonly system = async (context: PluginContext): Promise<string> => {
+    await this.start_cron_runtime(context);
+    return TASK_PLUGIN_PROMPT;
+  };
 
   /**
    * task plugin 的 action 定义表。
@@ -65,6 +69,9 @@ export class TaskPlugin extends BasePlugin {
    * - 不再复用 module-global 单例。
    */
   private readonly runtimes_by_workspace = new Map<string, TaskWorkspaceRuntime>();
+
+  /** 各 Workspace 当前唯一的 cron 启动流程。 */
+  private readonly starts_by_workspace = new Map<string, Promise<TaskCronRegisterResult | null>>();
 
   constructor(options?: TaskPluginOptions) {
     super();
@@ -97,19 +104,13 @@ export class TaskPlugin extends BasePlugin {
     };
 
     this.lifecycle = {
-      enter_workspace: async (context) => {
-        const result = await this.start_cron_runtime(context);
-        if (!result) return;
-        context.logger.info(
-          formatTaskLogMessage(
-            `Task cron trigger started (tasks=${result.tasksFound}, jobs=${result.jobsScheduled})`,
-          ),
-        );
-      },
-      leave_workspace: async (context) => {
-        const stopped = await this.stop_cron_runtime(context.workspace_id);
-        if (!stopped) return;
-        context.logger.info(formatTaskLogMessage("Task cron trigger stopped"));
+      start: async (_context: AgentPluginContext) => {},
+      stop: async (_context: AgentPluginContext) => {
+        await Promise.allSettled([...this.starts_by_workspace.values()]);
+        await Promise.all([...this.runtimes_by_workspace.keys()].map(async (workspace_id) => {
+          await this.stop_cron_runtime(workspace_id);
+        }));
+        this.starts_by_workspace.clear();
       },
     };
   }
@@ -121,21 +122,33 @@ export class TaskPlugin extends BasePlugin {
     context: PluginContext,
   ): Promise<TaskCronRegisterResult | null> {
     if (this.runtimes_by_workspace.has(context.workspace_id)) return null;
+    const started = this.starts_by_workspace.get(context.workspace_id);
+    if (started) return await started;
 
-    const engine = new TaskCronTriggerEngine();
-    const running_task_ids = new Set<string>();
-    const registerResult = await registerTaskCronJobs({
-      context,
-      engine,
-      timezone: this.resolveTimezone(),
-      runningTaskIds: running_task_ids,
-    });
-    await engine.start();
-    this.runtimes_by_workspace.set(context.workspace_id, {
-      cron_engine: engine,
-      running_task_ids,
-    });
-    return registerResult;
+    const start_promise = (async () => {
+      const engine = new TaskCronTriggerEngine();
+      const running_task_ids = new Set<string>();
+      const register_result = await registerTaskCronJobs({
+        context,
+        engine,
+        timezone: this.resolveTimezone(),
+        runningTaskIds: running_task_ids,
+      });
+      await engine.start();
+      this.runtimes_by_workspace.set(context.workspace_id, {
+        cron_engine: engine,
+        running_task_ids,
+      });
+      return register_result;
+    })();
+    this.starts_by_workspace.set(context.workspace_id, start_promise);
+    try {
+      return await start_promise;
+    } finally {
+      if (this.starts_by_workspace.get(context.workspace_id) === start_promise) {
+        this.starts_by_workspace.delete(context.workspace_id);
+      }
+    }
   }
 
   /**

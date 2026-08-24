@@ -81,6 +81,12 @@ type AgentSessionsOptions = {
 
   /** 读取 Agent 当前持有的运行时模型实例。 */
   get_agent_model: () => AgentModel | undefined;
+
+  /** 当前 Session 执行上下文的可选 Workspace ID。 */
+  workspace_id?: string;
+
+  /** Session 创建或恢复后的内部路由登记回调。 */
+  on_session_routed?: (session_id: string, sessions: AgentSessions) => void;
 };
 
 /**
@@ -98,6 +104,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly ensure_agent_ready: AgentSessionsOptions["ensure_agent_ready"];
   private readonly session_class: AgentSessionConstructor;
   private readonly get_agent_model: AgentSessionsOptions["get_agent_model"];
+  private readonly workspace_id?: string;
+  private readonly on_session_routed?: AgentSessionsOptions["on_session_routed"];
   private readonly sessions_by_id = new Map<string, AgentManagedSession>();
 
   constructor(options: AgentSessionsOptions) {
@@ -112,6 +120,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     this.ensure_agent_ready = options.ensure_agent_ready;
     this.session_class = options.session_class || Session;
     this.get_agent_model = options.get_agent_model;
+    this.workspace_id = options.workspace_id;
+    this.on_session_routed = options.on_session_routed;
   }
 
   /**
@@ -131,6 +141,12 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   /** 返回当前执行中的 Session 数量。 */
   get_executing_session_count(): number {
     return this.list_executing_session_ids().length;
+  }
+
+  /** 停止当前集合内所有正在执行的 Session。 */
+  async stop_executing_sessions(): Promise<void> {
+    const executing_sessions = this.list_cached_sessions().filter((session) => session.is_executing());
+    await Promise.all(executing_sessions.map(async (session) => await session.stop()));
   }
 
   /** 释放全部缓存 Session 的标题后台任务。 */
@@ -183,6 +199,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     input?: AgentCreateSessionInput,
   ): Promise<AgentSession> {
     const session = this.get_or_create_session();
+    this.on_session_routed?.(session.id, this);
     await session.initialize();
     return session;
   }
@@ -204,6 +221,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const session = this.get_or_create_session({
       session_id: resolved_session_id,
     });
+    this.on_session_routed?.(resolved_session_id, this);
     await session.initialize();
     return session;
   }
@@ -313,8 +331,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const created = new this.session_class({
       agent_id: this.agent_id,
       workspace_path: this.workspace_path,
-      store: this.store.session(resolved_session_id),
-      get_session_store: (session_id) => this.store.session(session_id),
+      store: this.store.session(resolved_session_id, this.workspace_id),
+      get_session_store: (session_id) => this.store.session(session_id, this.workspace_id),
       session_id: resolved_session_id,
       tools: this.tools,
       logger: this.logger,

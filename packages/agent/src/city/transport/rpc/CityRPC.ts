@@ -6,6 +6,7 @@
  */
 
 import type { AgentSessions } from "@/index.js";
+import type { AgentSessionCollection } from "@/types/agent/AgentSessionCollection.js";
 import type { City } from "@/city/runtime/City.js";
 import { start_rpc_server, type RpcServerInstance } from "@/city/transport/rpc/RpcServer.js";
 import type {
@@ -52,7 +53,7 @@ export class CityRPC {
   }> {
       const host = String(options?.host || DEFAULT_RPC_HOST).trim() || DEFAULT_RPC_HOST;
       const port = Number.isInteger(options?.port) ? Number(options?.port) : DEFAULT_RPC_PORT;
-      const unavailable_sessions = create_unavailable_sessions();
+      const unavailable_sessions = create_unavailable_sessions() as unknown as AgentSessionCollection;
       const instance = await start_rpc_server({
         host,
         port,
@@ -75,10 +76,17 @@ export class CityRPC {
           const workspace_id = String(request.workspace_id || "").trim();
           if (!workspace_id) throw new Error("CityRPC request requires workspace_id");
           const agent_workspace = await this.city.enter_workspace(agent_id, workspace_id);
+          const agent = this.city.agents.get(agent_id);
+          if (!agent) throw new Error(`Agent not found: ${agent_id}`);
+          const sessions = {
+            ...agent.sessions,
+            create: async () => await agent.sessions.create({ workspace: agent_workspace.workspace }),
+            get: async (session_id: string) => await agent.sessions.get(session_id, { workspace: agent_workspace.workspace }),
+          };
           const resolve_session_model = this.runtime_options.resolve_session_model;
           const reload_workspace_env = this.runtime_options.reload_workspace_env;
           return {
-            sessions: agent_workspace.sessions,
+            sessions,
             get_workspace: () => agent_workspace,
             resolve_session_model: resolve_session_model
               ? async (model_id) => await resolve_session_model(

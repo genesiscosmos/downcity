@@ -372,7 +372,7 @@ async function resolve_session_disk_stats(
 export async function list_agent_session_summary_page(params: {
   project_root: string;
   agent_id: string;
-  workspace_id: string;
+  workspace_id?: string;
   input?: AgentListSessionsInput;
   executingSessionIds?: Set<string>;
   files: FileSystem;
@@ -473,7 +473,7 @@ export async function list_agent_session_summary_page(params: {
 export async function list_archived_agent_session_summary_page(params: {
   project_root: string;
   agent_id: string;
-  workspace_id: string;
+  workspace_id?: string;
   input?: AgentListSessionsInput;
   files: FileSystem;
 }): Promise<AgentSessionSummaryPage> {
