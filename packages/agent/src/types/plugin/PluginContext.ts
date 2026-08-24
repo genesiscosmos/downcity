@@ -36,7 +36,7 @@ export interface PluginContext {
   /** 当前 Workspace 显式挂载的 Shell；未启用时为空。 */
   readonly shell?: WorkspaceShell;
 
-  /** 当前 Agent 在当前 Workspace 中使用的统一日志器。 */
+  /** 当前 Agent 在当前 Workspace 执行上下文中使用的统一日志器。 */
   readonly logger: Logger;
 
   /** 当前 Agent 持有的 Web 搜索与文档能力。 */

@@ -1,5 +1,5 @@
 /**
- * LocalSessionStore：Workspace 内指定 Agent 的 Session 查询与管理视图。
+ * LocalSessionStore：Agent 的 Session 查询与管理视图。
  *
  * 职责说明（中文）
  * - 统一管理 Session 创建判断、删除、列表、归档与清理。
@@ -44,7 +44,7 @@ function decode_session_id(input: string): string {
 
 /** 默认本地 Agent Store。 */
 export class LocalSessionStore implements SessionStore {
-  /** 当前 Workspace 内部数据文件能力。 */
+  /** 当前 Agent 内部数据文件能力。 */
   private readonly files: FileSystem;
 
   /** 当前 Agent 的稳定标识。 */
@@ -53,7 +53,7 @@ export class LocalSessionStore implements SessionStore {
   /** 当前 Workspace 的稳定标识。 */
   private readonly workspace_id?: string;
 
-  /** 当前 Workspace 内部数据根路径。 */
+  /** 当前 Agent 内部数据根路径。 */
   private readonly storage_root_path: string;
 
   /** 已创建的 Session Store 缓存。 */

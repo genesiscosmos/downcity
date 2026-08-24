@@ -1,5 +1,5 @@
 /**
- * LocalSessionDataStore：Workspace 内单个 Session 的 JSONL 持久化视图。
+ * LocalSessionDataStore：Agent 内单个 Session 的 JSONL 持久化视图。
  *
  * 职责说明（中文）
  * - 集中创建 Message Store，并封装 Metadata 与 Instruction 的物理路径。
@@ -32,7 +32,7 @@ export class LocalSessionDataStore implements SessionDataStore {
   /** 当前 Session 的附件持久化能力。 */
   readonly attachments: LocalSessionAttachmentStore;
 
-  /** 当前 Workspace 内部数据文件能力。 */
+  /** 当前 Agent 内部数据文件能力。 */
   private readonly files: FileSystem;
 
   /** 当前 Agent 的稳定标识。 */
@@ -41,7 +41,7 @@ export class LocalSessionDataStore implements SessionDataStore {
   /** 当前 Workspace 的稳定标识。 */
   private readonly workspace_id?: string;
 
-  /** 当前 Workspace 内部数据根路径。 */
+  /** 当前 Agent 内部数据根路径。 */
   private readonly storage_root_path: string;
 
   constructor(options: LocalSessionDataStoreOptions) {

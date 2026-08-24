@@ -2,9 +2,9 @@
  * Task storage (disk-backed).
  *
  * 关键点（中文）
- * - Task 的“唯一来源”是 AgentWorkspace 私有目录中的 `task/<taskId>/task.md`
+ * - Task 的“唯一来源”是 Agent 私有目录中的 `task/<taskId>/task.md`
  * - list/read/write 都只围绕 markdown 文件与目录结构，不引入数据库
- * - 运行产物目录：AgentWorkspace 私有目录中的 `task/<taskId>/<timestamp>/...`
+ * - 运行产物目录：Agent 私有目录中的 `task/<taskId>/<timestamp>/...`
  */
 
 import fs from "fs-extra";
@@ -52,7 +52,7 @@ function isDirectoryNameTimestamp(name: string): boolean {
  * 列出全部任务。
  *
  * 算法（中文）
- * - 遍历 AgentWorkspace 的 `task/*` 目录并解析每个 `task.md`。
+ * - 遍历 Agent 的 `task/*` 目录并解析每个 `task.md`。
  * - 通过子目录时间戳推断 `lastRunTimestamp`。
  */
 export async function listTasks(data_path: string): Promise<TaskListItem[]> {

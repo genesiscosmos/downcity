@@ -5,7 +5,7 @@
  *
  * 数据边界（中文）：
  * - 输入边界：`session.prompt()` 接收 `type: "file"`、`mediaType` 和 Data URL。
- * - 存储边界：Store 解码 Data URL，写入 AgentWorkspace 私有附件目录。
+ * - 存储边界：Store 解码 Data URL，写入 Agent 私有附件目录。
  * - Message 边界：Session Message 只记录附件的稳定绝对路径。
  * - 模型边界：模型转换器读取该路径，在内存中恢复成模型需要的文件内容。
  *
@@ -15,7 +15,7 @@
 /** 可持久化的 Data URL 附件。 */
 export interface SessionAttachmentStore {
   /**
-   * 保存 Data URL，并返回 AgentWorkspace 私有目录中的稳定绝对路径。
+   * 保存 Data URL，并返回 Agent 私有目录中的稳定绝对路径。
    * 调用成功后，返回路径对应的附件文件必须已经完整落盘。
    */
   persist_data_url(input: {

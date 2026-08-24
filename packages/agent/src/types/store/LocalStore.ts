@@ -10,9 +10,9 @@ import type { FileSystem } from "@downcity/workspace";
 
 /** LocalSessionStore 构造参数。 */
 export interface LocalSessionStoreOptions {
-  /** 当前 Workspace 内部数据文件能力。 */
+  /** 当前 Agent 内部数据文件能力。 */
   files: FileSystem;
-  /** 当前 Workspace 内部数据的绝对根路径。 */
+  /** 当前 Agent 内部数据的绝对根路径。 */
   storage_root_path: string;
   /** 当前 Session 查询视图所属 Agent 的稳定标识。 */
   agent_id: string;
@@ -22,9 +22,9 @@ export interface LocalSessionStoreOptions {
 
 /** LocalSessionDataStore 构造参数。 */
 export interface LocalSessionDataStoreOptions {
-  /** 当前 AgentWorkspace 私有数据文件能力。 */
+  /** 当前 Agent 私有数据文件能力。 */
   files: FileSystem;
-  /** 当前 AgentWorkspace 内部数据的绝对根路径。 */
+  /** 当前 Agent 内部数据的绝对根路径。 */
   storage_root_path: string;
   /** 当前 Session 所属 Agent 的稳定标识。 */
   agent_id: string;
@@ -36,7 +36,7 @@ export interface LocalSessionDataStoreOptions {
 
 /** JsonlSessionMessageStore 构造参数。 */
 export interface JsonlSessionMessageStoreOptions {
-  /** 当前 Message Store 使用的 AgentWorkspace 私有文件能力。 */
+  /** 当前 Message Store 使用的 Agent 私有文件能力。 */
   files: FileSystem;
   /** 当前 Session 的稳定标识。 */
   session_id: string;

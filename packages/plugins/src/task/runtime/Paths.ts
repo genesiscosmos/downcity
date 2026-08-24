@@ -2,9 +2,9 @@
  * Task System paths and identifiers.
  *
  * 约定（中文）
- * - task root: `<AgentWorkspace data>/task/`
- * - definition: `<AgentWorkspace data>/task/<taskId>/task.md`
- * - run dir: `<AgentWorkspace data>/task/<taskId>/<timestamp>/`
+ * - task root: `<Agent data>/task/`
+ * - definition: `<Agent data>/task/<taskId>/task.md`
+ * - run dir: `<Agent data>/task/<taskId>/<timestamp>/`
  *
  * 同时定义“task run session_id”格式，用于把 Agent 的 session 映射到 run 目录：
  * - `task-run:<taskId>:<timestamp>`

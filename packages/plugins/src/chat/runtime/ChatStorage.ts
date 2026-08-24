@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - Chat Plugin 是 channel meta、chat history 与渠道缓存路径的唯一所有者。
- * - PluginContext 提供 AgentWorkspace 数据根，Chat 不再写入项目目录。
+ * - PluginContext 提供 Agent 数据根，Chat 不再写入项目目录。
  * - CLI 离线维护通过本模块操作 Chat 存储，不复制内部 JSON 结构。
  */
 

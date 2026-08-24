@@ -2,8 +2,8 @@
  * Workspace 本地运行数据与 Session 路径规则。
  *
  * 关键点（中文）
- * - 调用方已经把文件能力限制在当前 AgentWorkspace 的私有数据根。
- * - Session 在 AgentWorkspace 内使用稳定且唯一的 session_id 定位。
+ * - 调用方已经把文件能力限制在当前 Agent 的私有数据根。
+ * - Session 在 Agent 内使用稳定且唯一的 session_id 定位。
  * - 本模块只拼接作用域内的相对领域路径，不解析用户级数据根。
  */
 
