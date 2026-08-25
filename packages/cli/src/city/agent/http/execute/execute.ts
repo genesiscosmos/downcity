@@ -9,6 +9,7 @@
 
 import { Hono } from "hono";
 import type { CliAgentContext } from "@/city/agent/CliAgentContext.js";
+import type { AgentSession } from "@downcity/agent";
 
 /**
  * 执行入口路由参数。
@@ -27,6 +28,7 @@ export function createExecuteRouter(
   options: ExecuteRouterOptions,
 ): Hono {
   const router = new Hono();
+  const session_ids_by_chat_key = new Map<string, string>();
 
   router.post("/api/execute", async (c) => {
     let body_text = "";
@@ -75,9 +77,21 @@ export function createExecuteRouter(
     }
 
     try {
-      const session_id = `api:chat:${chatId}`;
       const agentState = options.get_context();
-      const session = agentState.sessions.runtime(session_id);
+      const chat_key = `${agentState.id}:${agentState.workspace_id}:${chatId}`;
+      let session_id = session_ids_by_chat_key.get(chat_key);
+      let session: AgentSession;
+      if (session_id) {
+        session = await agentState.sessions.get(session_id, {
+          workspace: agentState.workspace,
+        });
+      } else {
+        session = await agentState.sessions.create({
+          workspace: agentState.workspace,
+        });
+        session_id = session.id;
+        session_ids_by_chat_key.set(chat_key, session_id);
+      }
       const turn = await session.prompt({
         query: String(instructions),
       });

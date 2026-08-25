@@ -255,9 +255,7 @@ const remote_agent = new RemoteAgent({
   base_url: "http://127.0.0.1:5314/agents/assistant",
 });
 
-const session = await remote_agent.sessions.create({
-  workspace_id: "project",
-});
+const session = await remote_agent.sessions.create();
 ```
 
 Transport 只解析已存在的 Agent、Session 和 Workspace，不在请求期间创建 Agent、Plugin 或 Workspace。

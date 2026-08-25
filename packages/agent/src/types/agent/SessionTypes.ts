@@ -10,16 +10,14 @@ import type { AgentModel } from "@/agent/AgentModel.js";
 import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
 
 /**
- * 新建 session 的输入参数。
+ * 新建 Session 的输入参数。
+ *
+ * Session ID 由 AgentSessions 在创建时生成，调用方只能在恢复时通过
+ * `sessions.get(session_id)` 指定已有 ID。
  */
 export interface AgentCreateSessionInput {
-  /**
-   * 可选的 Session 稳定标识。
-   *
-   * 未传入时由 SDK 自动生成；传入时主要用于恢复测试数据、迁移数据
-   * 或由宿主在创建流程中提前分配标识。
-   */
-  session_id?: string;
+  /** 保持创建输入为无配置字段的协议对象。 */
+  readonly __create_session_input?: never;
 }
 
 /**

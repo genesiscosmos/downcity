@@ -16,7 +16,8 @@ import fs from "node:fs/promises";
 import { MockLanguageModelV3 } from "ai/test";
 import { Agent } from "../bin/index.js";
 import { create_workspace_entry } from "../bin/internal/index.js";
-import { Workspace } from "@downcity/workspace";
+import { City } from "../bin/index.js";
+import { LocalWorkspaceStorageProvider, Workspace } from "@downcity/workspace";
 
 function create_stream_text_result(text) {
   return {
@@ -107,7 +108,10 @@ function create_delayed_title_model(title_text) {
 
 async function read_log_lines(data_path) {
   const logs_path = path.join(data_path, "logs");
-  const entries = await fs.readdir(logs_path);
+  const entries = await fs.readdir(logs_path).catch((error) => {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  });
   const lines = [];
   for (const entry of entries) {
     if (!entry.endsWith(".jsonl")) continue;
@@ -179,15 +183,25 @@ test("Session title generation does not block user message append", async () => 
   }
 });
 
-test.skip("Session logs title generation failure without blocking the session", async () => {
+test("Session logs title generation failure without blocking the session", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-session-title-log-"),
   );
+  const workspace = new Workspace({
+    id: "test_workspace",
+    path: agent_path,
+    data_root_path: path.join(agent_path, "workspace-data"),
+  });
+  const city = new City({
+    storage: new LocalWorkspaceStorageProvider(path.join(agent_path, "city-data")),
+    workspaces: [workspace],
+  });
   const agent = new Agent({
     id: "title_log_agent",
     model: create_failing_title_model(),
   });
-  const entry = create_workspace_entry(agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  city.agents.add(agent);
+  const entry = create_workspace_entry(agent, workspace);
   const session = await entry.sessions.create();
   await session.set({ model: create_failing_title_model() });
 
@@ -231,6 +245,7 @@ test.skip("Session logs title generation failure without blocking the session", 
     );
   } finally {
     await agent.dispose();
+    await city.close();
   }
 });
 

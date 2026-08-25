@@ -35,7 +35,9 @@ export async function executeBySessionId(params: {
     attachments: params.attachments,
   });
 
-  const session = params.agentState.sessions.runtime(session_id);
+  const session = await params.agentState.sessions.get(session_id, {
+    workspace: params.agentState.workspace,
+  });
   const turn = await session.prompt({
     query: executeInput,
   });

@@ -20,6 +20,7 @@ import {
 interface AgentRuntimeState {
   bound_city?: City;
   memory_storage?: AgentStorage;
+  memory_session_started?: boolean;
   workspaces_by_id: Map<string, WorkspaceEntry>;
   agent_storage?: AgentStorage;
   action_schedule?: ActionScheduleRuntimeHandle;
@@ -42,10 +43,21 @@ function runtime_state(agent: Agent): AgentRuntimeState {
 
 export function attach_agent_city(agent: Agent, city: City): void {
   const state = runtime_state(agent);
+  if (state.memory_session_started) {
+    throw new Error(
+      `Agent "${agent.id}" already created Session data without City; join City before creating Sessions`,
+    );
+  }
   if (state.bound_city && state.bound_city !== city) {
     throw new Error(`Agent "${agent.id}" already belongs to another City`);
   }
   state.bound_city = city;
+}
+
+/** 标记 Agent 已经创建或恢复过无 City 的 Session。 */
+export function mark_agent_session_started(agent: Agent): void {
+  const state = runtime_state(agent);
+  if (!state.bound_city) state.memory_session_started = true;
 }
 
 export function detach_agent_city(agent: Agent, city: City): void {

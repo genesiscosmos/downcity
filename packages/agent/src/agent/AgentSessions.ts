@@ -50,6 +50,7 @@ type AgentSessionsOptions = {
   resolve_session_context: (workspace?: WorkspaceBase) => {
     workspace_path: string;
     workspace_id?: string;
+    logger: Logger;
     tools: Record<string, Tool>;
     get_workspace_env: () => Record<string, string>;
     get_agent_plugins: () => AgentPluginExecutionRuntime;
@@ -170,10 +171,20 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   }
 
   /**
-   * 获取或创建一个 session runtime port。
+   * 获取已缓存 Session 的 runtime port。
+   *
+   * runtime 是执行层的内部投影，不负责创建 Session。需要创建时必须
+   * 通过 `create()` 获取内部生成的 ID；需要恢复时必须先调用 `get()`。
    */
   runtime(session_id: string): SessionPort {
-    return this.get_or_create_session({ session_id }).get_runtime_port();
+    const resolved_session_id = String(session_id || "").trim();
+    const session = this.sessions_by_id.get(resolved_session_id);
+    if (!session) {
+      throw new Error(
+        `Session "${resolved_session_id}" is not loaded; call sessions.get(session_id) first`,
+      );
+    }
+    return session.get_runtime_port();
   }
 
   /**
@@ -183,7 +194,6 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     input?: AgentCreateSessionInput & { workspace?: WorkspaceBase },
   ): Promise<AgentSession> {
     const session = this.get_or_create_session({
-      session_id: input?.session_id,
       workspace: input?.workspace,
     });
     this.on_session_routed?.(session.id, this);
@@ -209,8 +219,19 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     ) {
       throw new Error(`Session "${resolved_session_id}" not found`);
     }
+    const persisted_metadata = await store
+      .session(resolved_session_id, input?.workspace?.id)
+      .read_metadata();
+    const persisted_workspace_id = String(persisted_metadata.workspace_id || "").trim() || undefined;
     const cached = this.sessions_by_id.get(resolved_session_id);
     const requested_workspace_id = String(input?.workspace?.id || "").trim() || undefined;
+    if (persisted_workspace_id !== requested_workspace_id) {
+      throw new Error(
+        persisted_workspace_id
+          ? `Session "${resolved_session_id}" requires Workspace "${persisted_workspace_id}"`
+          : `Session "${resolved_session_id}" is not bound to a Workspace`,
+      );
+    }
     if (cached && cached.workspace_id !== requested_workspace_id) {
       throw new Error(
         `Session "${resolved_session_id}" is already bound to Workspace "${cached.workspace_id || ""}"`,
@@ -338,7 +359,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       get_session_store: (session_id) => context.store.session(session_id, context.workspace_id),
       session_id: resolved_session_id,
       tools: context.tools,
-      logger: this.logger,
+      logger: context.logger,
       instruction_system_blocks: this.load_instruction_system_blocks(context.workspace_path),
       get_instruction_system_blocks: () => this.load_instruction_system_blocks(context.workspace_path),
       get_workspace_env: () => context.get_workspace_env(),

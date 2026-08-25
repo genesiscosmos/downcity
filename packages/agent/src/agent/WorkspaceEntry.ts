@@ -254,6 +254,7 @@ export class WorkspaceEntry {
   get_session_context(): {
     workspace_path: string;
     workspace_id: string;
+    logger: Logger;
     tools: Record<string, Tool>;
     get_workspace_env: () => Record<string, string>;
     get_agent_plugins: () => AgentPluginExecutionRuntime;
@@ -262,6 +263,7 @@ export class WorkspaceEntry {
     return {
       workspace_path: this.workspace.path,
       workspace_id: this.workspace_id,
+      logger: this.logger,
       tools: this.tools,
       get_workspace_env: () => this.workspace.get_env(),
       get_agent_plugins: () => this.agent.plugin_registry.execution_view(this.context),

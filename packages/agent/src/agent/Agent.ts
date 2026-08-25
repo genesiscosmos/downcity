@@ -31,6 +31,7 @@ import {
   get_agent_storage,
   initialize_agent_runtime,
   list_workspace_entries,
+  mark_agent_session_started,
 } from "@/internal/AgentRuntime.js";
 
 /** SDK Agent 主体。 */
@@ -137,9 +138,11 @@ export class Agent {
       ensure_agent_ready: async () => { await this.plugin_ready; },
       get_agent_model: () => this.model,
       session_class: this.session_class,
+      on_session_routed: () => mark_agent_session_started(agent),
       resolve_session_context: (workspace) => {
         if (!workspace) return {
           workspace_path: ".",
+          logger: this.logger,
           tools: this.custom_tools,
           get_workspace_env: () => ({}),
           get_agent_plugins: no_workspace_plugins,

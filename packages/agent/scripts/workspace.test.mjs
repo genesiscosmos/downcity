@@ -94,19 +94,41 @@ test("separate Workspace instances may use the same directory", async (t) => {
   const first_entry = create_workspace_entry(first_agent, new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
   const second_entry = create_workspace_entry(second_agent, new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
   assert.notEqual(first_entry.data_path, second_entry.data_path);
-  await first_entry.sessions.create({ session_id: "first-session" });
-  await second_entry.sessions.create({ session_id: "second-session" });
+  const first_session = await first_entry.sessions.create();
+  const second_session = await second_entry.sessions.create();
   assert.deepEqual(
     (await first_entry.sessions.list()).items.map((item) => item.session_id),
-    ["first-session"],
+    [first_session.id],
   );
   assert.deepEqual(
     (await second_entry.sessions.list()).items.map((item) => item.session_id),
-    ["second-session"],
+    [second_session.id],
   );
 
   await first_agent.dispose();
   await second_agent.dispose();
+});
+
+test("恢复绑定 Workspace 的 Session 必须提供同一个 Workspace", async (t) => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-workspace-restore-"));
+  t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
+  const agent = new Agent({ id: "workspace-restore-agent" });
+  const workspace = new Workspace({
+    id: "restore-workspace",
+    path: root_path,
+    data_root_path: path.join(root_path, "data"),
+  });
+  const entry = create_workspace_entry(agent, workspace);
+  try {
+    const session = await entry.sessions.create();
+    await assert.rejects(
+      agent.sessions.get(session.id),
+      /requires Workspace "restore-workspace"/u,
+    );
+    assert.equal((await entry.sessions.get(session.id, { workspace })).id, session.id);
+  } finally {
+    await agent.dispose();
+  }
 });
 
 test("Session IDs are isolated by Agent in one Workspace", async (t) => {

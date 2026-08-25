@@ -129,6 +129,21 @@ test("Workspace execution entry obtains its Store from private Workspace storage
   const entry = create_workspace_entry(agent, workspace);
 
   assert.equal(entry.workspace, workspace);
-  assert.equal((await entry.sessions.create({ session_id: "first" })).id, "first");
+  const first_session = await entry.sessions.create();
+  assert.ok(first_session.id);
   await agent.dispose();
+});
+
+test("Agent sessions runtime 只解析已加载的 Session", async () => {
+  const agent = new Agent({ id: "runtime-lookup-test" });
+  try {
+    assert.throws(
+      () => agent.sessions.runtime("missing-session"),
+      /call sessions\.get\(session_id\) first/u,
+    );
+    const session = await agent.sessions.create();
+    assert.equal(agent.sessions.runtime(session.id).session_id, session.id);
+  } finally {
+    await agent.dispose();
+  }
 });

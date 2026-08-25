@@ -229,9 +229,7 @@ export async function getOrCreateRemoteSession(params: {
   try {
     return await collection.get(params.session_id);
   } catch {
-    return await collection.create({
-      session_id: params.session_id,
-    });
+    return await collection.create();
   }
 }
 

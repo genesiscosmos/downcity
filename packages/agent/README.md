@@ -32,6 +32,10 @@ CLI 与 Desktop 负责读取产品配置并显式装配 `Agent`，再通过 `cit
 - `@downcity/ui`
   - React UI 组件与展示层
 
+Session ID 由 `agent.sessions.create()` 内部生成；创建接口不接受调用方指定的
+`session_id`。恢复已有 Session 时使用 `agent.sessions.get(session_id)`，如果该
+Session 创建时绑定了 Workspace，恢复时必须传入同一个 Workspace。
+
 ## 根目录结构
 
 ```text

@@ -15,7 +15,8 @@ import fs from "node:fs/promises";
 import { MockLanguageModelV3 } from "ai/test";
 import { Agent } from "../bin/index.js";
 import { create_workspace_entry } from "../bin/internal/index.js";
-import { Workspace } from "@downcity/workspace";
+import { City } from "../bin/index.js";
+import { LocalWorkspaceStorageProvider, Workspace } from "@downcity/workspace";
 import {
   create_action,
   create_plugin,
@@ -294,10 +295,19 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
   }
 });
 
-test.skip("Session snapshot explicitly persists the complete system to instruction.md", async () => {
+test("Session snapshot explicitly persists the complete system to instruction.md", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-instruction-restart-"),
   );
+  const workspace = new Workspace({
+    id: "test_workspace",
+    path: agent_path,
+    data_root_path: path.join(agent_path, "workspace-data"),
+  });
+  const city = new City({
+    storage: new LocalWorkspaceStorageProvider(path.join(agent_path, "city-data")),
+    workspaces: [workspace],
+  });
   const model = new MockLanguageModelV3({ modelId: "instruction-restart-model" });
   const first_agent = new Agent({
     id: "instruction_restart_agent",
@@ -310,12 +320,13 @@ test.skip("Session snapshot explicitly persists the complete system to instructi
       system: () => "plugin-system:persisted",
     })],
   });
-  const first_entry = create_workspace_entry(first_agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  city.agents.add(first_agent);
+  const first_entry = create_workspace_entry(first_agent, workspace);
+  let session_id;
 
   try {
-    const session = await first_entry.sessions.create({
-      session_id: "instruction_restart_session",
-    });
+    const session = await first_entry.sessions.create();
+    session_id = session.id;
     const first_system = await session.system();
     assert.match(
       first_system.blocks.map((block) => block.content).join("\n"),
@@ -324,14 +335,9 @@ test.skip("Session snapshot explicitly persists the complete system to instructi
     await session.snapshot();
 
     const instruction_path = path.join(
-      agent_path,
-      "data",
-      "agents",
-      first_agent.id,
-      "workspaces",
-      "test_workspace",
+      city.storage.open_scope(["agents", first_agent.id]).root_path,
       "sessions",
-      "instruction_restart_session",
+      session_id,
       "instruction.md",
     );
     const persisted_system = await fs.readFile(instruction_path, "utf8");
@@ -352,10 +358,12 @@ test.skip("Session snapshot explicitly persists the complete system to instructi
     model,
     instruction: ["instruction:new"],
   });
-  const restarted_entry = create_workspace_entry(restarted_agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  city.agents.add(restarted_agent);
+  const restarted_entry = create_workspace_entry(restarted_agent, workspace);
   try {
     const restored_session = await restarted_entry.sessions.get(
-      "instruction_restart_session",
+      session_id,
+      { workspace },
     );
     const restored_system = await restored_session.system();
     const restored_system_text = restored_system.blocks
@@ -369,16 +377,9 @@ test.skip("Session snapshot explicitly persists the complete system to instructi
   }
 
   const instruction_path = path.join(
-    path.join(
-      agent_path,
-      "data",
-      "agents",
-      "instruction_restart_agent",
-      "workspaces",
-      "test_workspace",
-    ),
+    city.storage.open_scope(["agents", "instruction_restart_agent"]).root_path,
     "sessions",
-    "instruction_restart_session",
+    session_id,
     "instruction.md",
   );
   await fs.rm(instruction_path);
@@ -388,10 +389,12 @@ test.skip("Session snapshot explicitly persists the complete system to instructi
     model,
     instruction: ["instruction:new"],
   });
-  const fallback_entry = create_workspace_entry(fallback_agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  city.agents.add(fallback_agent);
+  const fallback_entry = create_workspace_entry(fallback_agent, workspace);
   try {
     const fallback_session = await fallback_entry.sessions.get(
-      "instruction_restart_session",
+      session_id,
+      { workspace },
     );
     const fallback_system = await fallback_session.system();
     const fallback_system_text = fallback_system.blocks
@@ -401,24 +404,35 @@ test.skip("Session snapshot explicitly persists the complete system to instructi
     assert.doesNotMatch(fallback_system_text, /instruction:old/);
   } finally {
     await fallback_agent.dispose();
+    await city.close();
     await fs.rm(agent_path, { recursive: true, force: true });
   }
 });
 
-test.skip("empty Session snapshot suppresses Agent instruction after restart", async () => {
+test("empty Session snapshot suppresses Agent instruction after restart", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-empty-instruction-snapshot-"),
   );
+  const workspace = new Workspace({
+    id: "test_workspace",
+    path: agent_path,
+    data_root_path: path.join(agent_path, "workspace-data"),
+  });
+  const city = new City({
+    storage: new LocalWorkspaceStorageProvider(path.join(agent_path, "city-data")),
+    workspaces: [workspace],
+  });
   const model = new MockLanguageModelV3({ modelId: "empty-snapshot-model" });
   const first_agent = new Agent({
     id: "empty_snapshot_agent",
     model,
   });
-  const first_entry = create_workspace_entry(first_agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  city.agents.add(first_agent);
+  const first_entry = create_workspace_entry(first_agent, workspace);
+  let session_id;
   try {
-    const session = await first_entry.sessions.create({
-      session_id: "empty_snapshot_session",
-    });
+    const session = await first_entry.sessions.create();
+    session_id = session.id;
     await session.snapshot();
   } finally {
     await first_agent.dispose();
@@ -429,9 +443,12 @@ test.skip("empty Session snapshot suppresses Agent instruction after restart", a
     model,
     instruction: ["instruction:must-not-appear"],
   });
-  const restarted_entry = create_workspace_entry(restarted_agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  city.agents.add(restarted_agent);
+  const restarted_entry = create_workspace_entry(restarted_agent, workspace);
   try {
-    const session = await restarted_entry.sessions.get("empty_snapshot_session");
+    const session = await restarted_entry.sessions.get(session_id, {
+      workspace,
+    });
     const system = await session.system();
     assert.doesNotMatch(
       system.blocks.map((block) => block.content).join("\n"),
@@ -439,6 +456,7 @@ test.skip("empty Session snapshot suppresses Agent instruction after restart", a
     );
   } finally {
     await restarted_agent.dispose();
+    await city.close();
     await fs.rm(agent_path, { recursive: true, force: true });
   }
 });
@@ -754,10 +772,19 @@ test("session set options independently control Action persistence and Mutation 
   }
 });
 
-test.skip("restored Session rebinds the same model without emitting a configuration Mutation", async () => {
+test("restored Session rebinds the same model without emitting a configuration Mutation", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-session-config-restore-"),
   );
+  const workspace = new Workspace({
+    id: "test_workspace",
+    path: agent_path,
+    data_root_path: path.join(agent_path, "workspace-data"),
+  });
+  const city = new City({
+    storage: new LocalWorkspaceStorageProvider(path.join(agent_path, "city-data")),
+    workspaces: [workspace],
+  });
   const create_model = () => new MockLanguageModelV3({
     modelId: "restored-session-model",
     doStream: async () => create_stream_text_result("restored"),
@@ -766,12 +793,13 @@ test.skip("restored Session rebinds the same model without emitting a configurat
     id: "session_config_restore_agent",
     model: create_model(),
   });
-  const first_entry = create_workspace_entry(first_agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  city.agents.add(first_agent);
+  const first_entry = create_workspace_entry(first_agent, workspace);
+  let session_id;
 
   try {
-    const session = await first_entry.sessions.create({
-      session_id: "session_config_restore_session",
-    });
+    const session = await first_entry.sessions.create();
+    session_id = session.id;
     await session.set({
       model: create_model(),
       security: { approval_mode: "always-allow" },
@@ -785,10 +813,12 @@ test.skip("restored Session rebinds the same model without emitting a configurat
     id: "session_config_restore_agent",
     model: create_model(),
   });
-  const restored_entry = create_workspace_entry(restored_agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  city.agents.add(restored_agent);
+  const restored_entry = create_workspace_entry(restored_agent, workspace);
   try {
     const session = await restored_entry.sessions.get(
-      "session_config_restore_session",
+      session_id,
+      { workspace },
     );
     assert.deepEqual((await session.status()).security, {
       approval_mode: "always-allow",
@@ -829,6 +859,7 @@ test.skip("restored Session rebinds the same model without emitting a configurat
     unsubscribe();
   } finally {
     await restored_agent.dispose();
+    await city.close();
     await fs.rm(agent_path, { recursive: true, force: true });
   }
 });

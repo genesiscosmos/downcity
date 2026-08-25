@@ -25,8 +25,8 @@ test("Agent sessions 负责清空消息和删除 Session 数据", async () => {
     data_root_path,
   }));
   try {
-    const session_id = "session_test";
-    const session = await entry.sessions.create({ session_id: session_id });
+    const session = await entry.sessions.create();
+    const session_id = session.id;
     await session.append_user_message({ text: "maintenance" });
 
     assert.equal(

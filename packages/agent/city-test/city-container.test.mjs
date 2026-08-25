@@ -36,6 +36,21 @@ test("Agent 绑定 City 后可使用 City Workspace 并拒绝重复 ID", async (
   }
 });
 
+test("Agent 创建无 City Session 后不能再切换到 City 存储", async () => {
+  const agent = new Agent({ id: "memory-first-agent" });
+  const city = new City();
+  try {
+    await agent.sessions.create();
+    assert.throws(
+      () => city.agents.add(agent),
+      /already created Session data without City/u,
+    );
+  } finally {
+    await agent.dispose();
+    await city.close();
+  }
+});
+
 test("City 运行时添加 Workspace 后 Agent 可以进入", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-workspace-add-"));
   const workspace_path = path.join(root, "runtime");
