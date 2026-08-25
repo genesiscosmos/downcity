@@ -63,7 +63,7 @@ export class AgentHTTP {
       this.plugins = "agent" in agent_or_workspace
         ? agent_or_workspace.plugins
         : create_workspace_entry(agent, workspace_or_options).plugins;
-      this.session_collection = agent.sessions;
+      this.session_collection = create_workspace_entry(agent, workspace_or_options).sessions;
       this.runtime_options = runtime_options;
       return;
     }
@@ -71,7 +71,9 @@ export class AgentHTTP {
       this.agent = entry.agent || agent_or_workspace as Agent;
       this.workspace = entry.workspace;
       this.plugins = entry.plugins || this.agent.plugins as unknown as AgentPlugins;
-      this.session_collection = this.agent.sessions;
+      this.session_collection = this.workspace
+        ? create_workspace_entry(this.agent, this.workspace).sessions
+        : this.agent.sessions;
     this.runtime_options = (workspace_or_options as AgentHttpRuntimeOptions | undefined) ?? {};
   }
 

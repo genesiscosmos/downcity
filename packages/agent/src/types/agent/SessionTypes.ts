@@ -25,6 +25,14 @@ export interface AgentCreateSessionInput {
  */
 export interface AgentListSessionsInput {
   /**
+   * 只返回绑定到指定 Workspace 的 Session。
+   *
+   * 省略时查询当前 Agent 的全部 Session；传入时没有 Workspace metadata 的
+   * 历史 Session 不会匹配任何 Workspace。
+   */
+  workspace_id?: string;
+
+  /**
    * 当前页返回上限。
    *
    * 说明（中文）
@@ -386,6 +394,14 @@ export interface AgentArchiveSessionInput {
  * 列出已归档 session 的输入参数。
  */
 export interface AgentArchiveSessionsInput {
+  /**
+   * 只返回绑定到指定 Workspace 的归档 Session。
+   *
+   * 省略时查询当前 Agent 的全部归档 Session；传入时没有 Workspace metadata
+   * 的历史 Session 不会匹配任何 Workspace。
+   */
+  workspace_id?: string;
+
   /**
    * 当前页返回上限。
    *

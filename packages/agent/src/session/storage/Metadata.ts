@@ -75,7 +75,7 @@ export async function read_session_metadata_from_path(input: {
   session_id: string;
   /** 当前 agent_id。 */
   agent_id: string;
-  /** 当前查询上下文的 workspace_id；仅用于兼容旧调用，不参与 Agent 归属校验。 */
+  /** 当前查询上下文的 workspace_id；存在时必须与 metadata 严格匹配。 */
   workspace_id?: string;
   /** 当前 Workspace 的统一文件能力。 */
   files: FileSystem;
@@ -89,11 +89,14 @@ export async function read_session_metadata_from_path(input: {
   ) {
     throw new Error(`Invalid Session ownership metadata: ${input.session_id}`);
   }
+  if (input.workspace_id && raw.workspace_id !== input.workspace_id) {
+    throw new Error(`Invalid Session Workspace metadata: ${input.session_id}`);
+  }
   return normalize_session_metadata(
     raw,
     input.session_id,
     input.agent_id,
-    raw.workspace_id || input.workspace_id,
+    raw.workspace_id,
   );
 }
 

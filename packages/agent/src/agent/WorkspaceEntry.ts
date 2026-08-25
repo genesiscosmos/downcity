@@ -4,7 +4,8 @@
  * 关键点（中文）
  * - Agent 仍是身份、模型、指令与 Plugin 的唯一拥有者。
  * - 当前对象只组合 Workspace Tool、Plugin Context、日志与后台资源。
- * - Session 的所有权属于 Agent.sessions；本对象只提供带 Workspace 的转发视图。
+ * - Session 的所有权属于 Agent.sessions；本对象只提供内部执行上下文。
+ * - 它不是公开领域对象，也不是 AgentWorkspace。
  */
 
 import type { Tool, SystemModelMessage } from "ai";
@@ -57,7 +58,7 @@ function register_tools(
   }
 }
 
-/** Agent 在一个 Workspace 中的公开执行入口。 */
+/** Agent 在一个 Workspace 中的内部执行上下文。 */
 export class WorkspaceEntry {
   /** 拥有当前作用域的 Agent。 */
   readonly agent: WorkspaceEntryOptions["agent"];
@@ -69,8 +70,10 @@ export class WorkspaceEntry {
   readonly tools: Record<string, Tool>;
   /** 当前 Workspace Context 绑定的 Agent Plugin 调用面。 */
   readonly plugins: AgentPlugins;
-  /** 当前 Workspace 下的 Session 转发视图；不拥有 Session。 */
-  /** 兼容内部调用的 Workspace Session 视图；实际所有权属于 Agent.sessions。 */
+  /**
+   * 当前 Workspace 的内部 Session 查询视图；实际所有权仍属于 Agent.sessions。
+   * 该视图只供 City transport 和内部测试装配使用，不是新的 Session 所有者。
+   */
   readonly sessions: AgentSessionCollection;
   /** 当前 Workspace 的 Session、日志和调度数据根路径。 */
   readonly data_path: string;
@@ -142,18 +145,31 @@ export class WorkspaceEntry {
     this.sessions = {
       create: async (input) => await this.agent.sessions.create({ ...(input || {}), workspace: this.workspace }),
       get: async (session_id, input) => await this.agent.sessions.get(session_id, { ...(input || {}), workspace: this.workspace }),
-      list: async (input) => await this.agent.sessions.list(input),
-      archive: async (input) => await this.agent.sessions.archive(input),
-      archived: async (input) => await this.agent.sessions.archived(input),
+      list: async (input) => await this.agent.sessions.list({ ...(input || {}), workspace_id: this.workspace_id }),
+      archive: async (input) => {
+        await this.agent.sessions.get(input.id, { workspace: this.workspace });
+        return await this.agent.sessions.archive(input);
+      },
+      archived: async (input) => await this.agent.sessions.archived({ ...(input || {}), workspace_id: this.workspace_id }),
       clean_archive: async () => await this.agent.sessions.clean_archive(),
       runtime: (session_id) => this.agent.sessions.runtime(session_id),
-      list_executing_session_ids: () => this.agent.sessions.list_executing_session_ids(),
-      remove: async (session_id) => await this.agent.sessions.remove(session_id),
-      clear_messages: async (session_id) => await this.agent.sessions.clear_messages(session_id),
+      list_executing_session_ids: () => (this.agent.sessions as AgentSessions).list_executing_session_ids(this.workspace_id),
+      remove: async (session_id) => {
+        await this.agent.sessions.get(session_id, { workspace: this.workspace });
+        return await this.agent.sessions.remove(session_id);
+      },
+      clear_messages: async (session_id) => {
+        await this.agent.sessions.get(session_id, { workspace: this.workspace });
+        return await this.agent.sessions.clear_messages(session_id);
+      },
     };
 
     this.unsubscribe_env = this.workspace.subscribe_env((env) => {
-      (this.agent.sessions as AgentSessions).broadcast_env({ ...env }, generate_id());
+      (this.agent.sessions as AgentSessions).broadcast_env(
+        { ...env },
+        generate_id(),
+        this.workspace_id,
+      );
     });
     this.unsubscribe_plugins = this.agent.plugin_registry.subscribe_change((change) => {
       for (const tool_name of RESERVED_PLUGIN_TOOL_NAMES) delete this.tools[tool_name];
@@ -167,6 +183,7 @@ export class WorkspaceEntry {
         command_id: generate_id(),
         title: `Agent plugin ${change.plugin_name} ${verb}`,
         plugins: this.agent.plugin_registry.execution_view(this.context),
+        workspace_id: this.workspace_id,
       });
     });
   }
@@ -223,8 +240,8 @@ export class WorkspaceEntry {
       const cleanup_steps: Array<() => void | Promise<void>> = [
         () => this.unsubscribe_env(),
         () => this.unsubscribe_plugins(),
-        async () => await (this.agent.sessions as AgentSessions).stop_executing_sessions(),
-        () => (this.agent.sessions as AgentSessions).dispose_title_generation(),
+        async () => await (this.agent.sessions as AgentSessions).stop_executing_sessions(this.workspace_id),
+        () => (this.agent.sessions as AgentSessions).dispose_title_generation(this.workspace_id),
         async () => await this.logger.save_all_logs(),
         ...(agent_is_in_city(this.agent) ? [] : [async () => await this.workspace.dispose()]),
       ];

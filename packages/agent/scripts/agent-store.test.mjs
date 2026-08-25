@@ -14,7 +14,7 @@ import { LocalStorageProvider } from "@downcity/workspace";
 import { LocalSessionStore } from "../bin/workspace/store/LocalSessionStore.js";
 
 /** 由 Agent 领域在 City 提供的 Agent 作用域上创建 SessionStore。 */
-function create_agent_storage(storage, agent_id) {
+function create_agent_storage(storage, agent_id, workspace_id = "test_workspace") {
   const scope = storage.open_scope([
     "agents",
     agent_id,
@@ -26,7 +26,7 @@ function create_agent_storage(storage, agent_id) {
       files: scope.files,
       storage_root_path: scope.root_path,
       agent_id,
-      workspace_id: "test_workspace",
+      workspace_id,
     }),
   };
 }
@@ -113,6 +113,42 @@ test("LocalSessionStore archives and cleans sessions", async (t) => {
   assert.equal((await store.list_archived_sessions()).items[0]?.session_id, "archived");
   assert.deepEqual((await store.clean_archive()).removed_session_ids, ["archived"]);
   assert.equal((await store.list_archived_sessions()).items.length, 0);
+});
+
+test("LocalSessionStore 按 Workspace 隔离活动与归档 Session", async (t) => {
+  const { data_root_path, workspace_path } = await create_test_roots(t);
+  const store = create_agent_storage(new LocalStorageProvider(data_root_path), "workspace-filter-test", null).sessions;
+
+  for (const [session_id, workspace_id] of [["first", "workspace-first"], ["second", "workspace-second"]]) {
+    const session_store = store.session(session_id, workspace_id);
+    await session_store.messages.initialize();
+    await session_store.write_metadata({
+      v: 1,
+      session_id,
+      agent_id: "workspace-filter-test",
+      workspace_id,
+      updated_at: 1,
+    });
+  }
+
+  assert.deepEqual(
+    (await store.list_sessions({ workspace_id: "workspace-first" }, new Set())).items.map((item) => item.session_id),
+    ["first"],
+  );
+  assert.deepEqual(
+    (await store.list_sessions({ workspace_id: "workspace-missing" }, new Set())).items,
+    [],
+  );
+
+  await store.archive_session("first");
+  assert.deepEqual(
+    (await store.list_archived_sessions({ workspace_id: "workspace-first" })).items.map((item) => item.session_id),
+    ["first"],
+  );
+  assert.deepEqual(
+    (await store.list_archived_sessions({ workspace_id: "workspace-second" })).items,
+    [],
+  );
 });
 
 test("Workspace execution entry obtains its Store from the Agent storage scope", async (t) => {

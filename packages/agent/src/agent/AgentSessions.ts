@@ -116,10 +116,13 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return [...this.sessions_by_id.values()];
   }
 
-  /** 返回当前所有执行中的 Session 标识。 */
-  list_executing_session_ids(): string[] {
+  /** 返回当前所有执行中的 Session 标识；可按 Workspace 限定。 */
+  list_executing_session_ids(workspace_id?: string): string[] {
     return this.list_cached_sessions()
-      .filter((session) => session.is_executing())
+      .filter((session) =>
+        session.is_executing()
+        && (!workspace_id || session.workspace_id === workspace_id)
+      )
       .map((session) => session.id);
   }
 
@@ -128,15 +131,19 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return this.list_executing_session_ids().length;
   }
 
-  /** 停止当前集合内所有正在执行的 Session。 */
-  async stop_executing_sessions(): Promise<void> {
-    const executing_sessions = this.list_cached_sessions().filter((session) => session.is_executing());
+  /** 停止当前集合内正在执行的 Session；可按 Workspace 限定。 */
+  async stop_executing_sessions(workspace_id?: string): Promise<void> {
+    const executing_sessions = this.list_cached_sessions().filter((session) =>
+      session.is_executing()
+      && (!workspace_id || session.workspace_id === workspace_id)
+    );
     await Promise.all(executing_sessions.map(async (session) => await session.stop()));
   }
 
   /** 释放全部缓存 Session 的标题后台任务。 */
-  dispose_title_generation(): void {
+  dispose_title_generation(workspace_id?: string): void {
     for (const session of this.sessions_by_id.values()) {
+      if (workspace_id && session.workspace_id !== workspace_id) continue;
       session.dispose_title_generation?.();
     }
   }
@@ -144,8 +151,9 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   /**
    * 把 Agent env 修改广播到已有 Session 的统一输入队列。
    */
-  broadcast_env(env: Record<string, string>, command_id: string): void {
+  broadcast_env(env: Record<string, string>, command_id: string, workspace_id?: string): void {
     for (const session of this.sessions_by_id.values()) {
+      if (workspace_id && session.workspace_id !== workspace_id) continue;
       session.enqueue_workspace_env({
         command_id,
         env: { ...env },
@@ -160,8 +168,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     command_id: string;
     title: string;
     plugins: AgentPluginExecutionRuntime;
+    workspace_id?: string;
   }): void {
     for (const session of this.sessions_by_id.values()) {
+      if (input.workspace_id && session.workspace_id !== input.workspace_id) continue;
       session.enqueue_agent_plugins({
         command_id: input.command_id,
         title: input.title,

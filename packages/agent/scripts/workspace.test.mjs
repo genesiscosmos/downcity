@@ -109,6 +109,28 @@ test("separate Workspace instances may use the same directory", async (t) => {
   await second_agent.dispose();
 });
 
+test("同一 Agent 的 Workspace Session 列表彼此隔离", async (t) => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-session-filter-"));
+  t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
+  const agent = new Agent({ id: "workspace-session-filter" });
+  const first_entry = create_workspace_entry(agent, new Workspace({
+    id: "workspace-first",
+    path: root_path,
+    data_root_path: path.join(root_path, "data"),
+  }));
+  const second_entry = create_workspace_entry(agent, new Workspace({
+    id: "workspace-second",
+    path: root_path,
+    data_root_path: path.join(root_path, "data"),
+  }));
+  t.after(async () => await agent.dispose());
+
+  const first_session = await first_entry.sessions.create();
+  const second_session = await second_entry.sessions.create();
+  assert.deepEqual((await first_entry.sessions.list()).items.map((item) => item.session_id), [first_session.id]);
+  assert.deepEqual((await second_entry.sessions.list()).items.map((item) => item.session_id), [second_session.id]);
+});
+
 test("恢复绑定 Workspace 的 Session 必须提供同一个 Workspace", async (t) => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-workspace-restore-"));
   t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));

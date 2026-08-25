@@ -89,6 +89,37 @@ test("CityHTTP mounts each Agent below its stable ID", async () => {
   }
 });
 
+test("CityHTTP Workspace 路由只返回当前 Workspace 的 Session", async () => {
+  const { city, agents, root } = await create_city();
+  const transport = new CityHTTP(city);
+  try {
+    const first_create = await transport.router().request(
+      "/agents/first_agent/workspaces/first/api/sdk/sessions",
+      { method: "POST" },
+    );
+    const second_create = await transport.router().request(
+      "/agents/first_agent/workspaces/second/api/sdk/sessions",
+      { method: "POST" },
+    );
+    assert.equal(first_create.status, 200);
+    assert.equal(second_create.status, 200);
+
+    const first_list = await transport.router().request(
+      "/agents/first_agent/workspaces/first/api/sdk/sessions",
+    );
+    const second_list = await transport.router().request(
+      "/agents/first_agent/workspaces/second/api/sdk/sessions",
+    );
+    assert.equal((await first_list.json()).sessions.length, 1);
+    assert.equal((await second_list.json()).sessions.length, 1);
+  } finally {
+    await transport.close();
+    await city.close();
+    await Promise.all(agents.map((agent) => agent.dispose()));
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("CityHTTP concurrently creates only one Agent extension", async () => {
   const { city, agents, root } = await create_city();
   let extension_count = 0;

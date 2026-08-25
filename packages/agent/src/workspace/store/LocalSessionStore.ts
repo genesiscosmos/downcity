@@ -128,7 +128,7 @@ export class LocalSessionStore implements SessionStore {
     return await list_agent_session_summary_page({
       project_root: this.storage_root_path,
       agent_id: this.agent_id,
-      ...(this.workspace_id ? { workspace_id: this.workspace_id } : {}),
+      ...(this.workspace_id || input?.workspace_id ? { workspace_id: this.workspace_id || input?.workspace_id } : {}),
       input,
       executingSessionIds: new Set(executing_session_ids),
       files: this.files,
@@ -167,7 +167,7 @@ export class LocalSessionStore implements SessionStore {
     return await list_archived_agent_session_summary_page({
       project_root: this.storage_root_path,
       agent_id: this.agent_id,
-      ...(this.workspace_id ? { workspace_id: this.workspace_id } : {}),
+      ...(this.workspace_id || input?.workspace_id ? { workspace_id: this.workspace_id || input?.workspace_id } : {}),
       input,
       files: this.files,
     });

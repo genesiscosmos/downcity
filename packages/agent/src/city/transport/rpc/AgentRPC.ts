@@ -50,11 +50,7 @@ export class AgentRPC {
       this.agent = agent;
       this.workspace = workspace_or_options;
       this.plugins = entry.plugins;
-      this.session_collection = {
-        ...agent.sessions,
-        create: async (input) => await agent.sessions.create({ ...(input || {}), workspace: workspace_or_options }),
-        get: async (session_id) => await agent.sessions.get(session_id, { workspace: workspace_or_options }),
-      };
+      this.session_collection = entry.sessions;
       this.runtime_options = runtime_options;
     } else {
       const entry = agent_or_workspace as { agent: Agent; workspace: WorkspaceBase; plugins: AgentPlugins };
@@ -62,11 +58,7 @@ export class AgentRPC {
       this.agent = agent;
       this.workspace = entry.workspace;
       this.plugins = entry.plugins;
-      this.session_collection = {
-        ...agent.sessions,
-        create: async (input) => await agent.sessions.create({ ...(input || {}), workspace: entry.workspace }),
-        get: async (session_id) => await agent.sessions.get(session_id, { workspace: entry.workspace }),
-      };
+      this.session_collection = create_workspace_entry(agent, entry.workspace).sessions;
       this.runtime_options = (workspace_or_options as AgentRpcRuntimeOptions | undefined) ?? {};
     }
     this.lifecycle = new SerializedTransport({
