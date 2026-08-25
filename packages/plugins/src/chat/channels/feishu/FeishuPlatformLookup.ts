@@ -26,7 +26,7 @@ export interface FeishuLookupDeps {
    * 项目根目录。
    */
   rootPath: string;
-  /** AgentWorkspace 内部数据根目录。 */
+  /** Agent private runtime directory 内部数据根目录。 */
   dataPath: string;
   /**
    * 日志器。

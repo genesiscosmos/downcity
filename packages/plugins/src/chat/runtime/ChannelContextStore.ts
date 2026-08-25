@@ -2,7 +2,7 @@
  * ChannelContextStore：渠道目标与 session_id 映射存储。
  *
  * 关键点（中文）
- * - 映射文件位于当前 AgentWorkspace 数据目录的 `channel/meta.json`。
+ * - 映射文件位于当前 Agent private runtime directory 数据目录的 `channel/meta.json`。
  * - session_id 由服务端随机生成并持久化，不依赖字符串拼接规则。
  * - 统一提供“按目标找 session_id / 按 session_id 找目标”能力。
  */
@@ -182,7 +182,7 @@ export async function readChannelSessionRouteBySessionId(params: {
  * 列出当前 agent 已记录的所有渠道路由条目。
  *
  * 关键点（中文）
- * - 数据源为当前 AgentWorkspace 数据目录下 `channel/meta.json` 的 `routesBySessionId`。
+ * - 数据源为当前 Agent private runtime directory 数据目录下 `channel/meta.json` 的 `routesBySessionId`。
  * - 默认按 `updated_at` 倒序返回，便于展示“最近活跃”会话。
  */
 export async function listChannelSessionRoutes(params: {

@@ -114,7 +114,7 @@ Workspace = ProjectPath + Files + Env + WorkspaceTools + Shell? + DataRoot
 
 Agent = Identity + Model + Instruction + Plugins
 
-AgentWorkspace = Agent.enter(Workspace) + Storage + Tools + Sessions + Context
+SessionContext = Workspace resources + tools + env + Plugin execution view
 
 Session = State + Queue + Messages + Composer + Executor + Approvals
 
@@ -146,7 +146,7 @@ Shell = Command/Process Protocol + Sandbox Adapter
 - SessionMessages 是会话消息的 canonical source。
 - Workspace 持有 Workspace env，Agent 不复制另一份 env。
 - PluginRegistry 持有已注册 Plugin，Agent 只组合和暴露。
-- SessionStore 基于 AgentWorkspaceStorage 的私有 FileSystem 实现持久化，不写入项目目录。
+- SessionStore 基于 City 提供的 AgentStorage 私有 FileSystem 实现持久化，不写入项目目录。
 - 运行中状态通过事件或 getter 投影，不能在 Context 中复制后长期漂移。
 
 缓存可以存在，但必须明确：
@@ -207,7 +207,7 @@ Workspace 不负责：
 - daemon 和多 Agent 管理。
 - 用户级全局配置。
 
-Workspace 必须有稳定 ID。Agent 定义不保存 Workspace 绑定；宿主在一次具体执行开始时创建 Workspace，并通过 `agent.sessions.create({ workspace })` 创建 Session。一个 Agent 可以同时使用多个 Workspace，各自的 Session、Shell、env 与日志必须隔离；同一个 Agent 的 Plugin 运行时数据不按 Workspace 复制。项目目录只承担真实项目文件与命令 cwd，不承担 Downcity 运行状态。内部 AgentWorkspace 只用于运行时装配，不属于公开 SDK API。
+Workspace 必须有稳定 ID。Agent 定义不保存 Workspace 绑定；宿主在一次具体执行开始时创建 Workspace，并通过 `agent.sessions.create({ workspace })` 创建 Session。一个 Agent 可以同时使用多个 Workspace；Workspace 只提供当前 Session 的项目文件、Shell、env 与工具，Session 仍由 AgentSessions 统一持有。项目目录只承担真实项目文件与命令 cwd，不承担 Downcity 运行状态。Workspace 上下文只作为 Session 的内部执行参数，不构成新的领域所有者。
 
 ### 4.2 Agent 是单 Agent 组合根
 
@@ -219,15 +219,15 @@ Agent 持有：
 - 唯一 PluginRegistry。
 - Agent 自身长期运行状态。
 
-Agent 不持有单一 Workspace。`AgentWorkspace` 是 Agent 进入一个 Workspace 后的执行边界，持有该项目的工具、Session、PluginContext 和项目生命周期资源。
+Agent 不持有单一 Workspace。AgentSessions 是 Agent 唯一的 Session 集合；Workspace 通过 `agent.sessions.create/get({ workspace })` 注入单个 Session。运行时可以存在内部装配对象，但它不拥有 Session，也不属于公开领域 API。
 
-每个本地 AgentWorkspace 的 Workspace 运行状态统一保存在：
+加入 City 后，每个 Agent 的运行状态统一保存在：
 
 ```text
-~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/
+~/.downcity/agents/<agent_id>/
 ```
 
-该目录包含 Session、日志和 Schedule。`AgentWorkspace.data_path` 指向该 Workspace 数据根；运行时 `PluginContext.data_path` 指向当前 Plugin 的 Agent 级目录 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`。`PluginContext.workspace_path` 始终只指向真实项目。Plugin 的 City 级 profile 配置不进入运行时目录，仍保存在 `~/.downcity/plugins/<plugin_id>/config.toml`。
+该目录包含 Agent 的 Session、日志和 Schedule。Session 的物理目录是 `<agent_root>/sessions/<session_id>/`；只有创建或恢复时传入 Workspace，Session 的 `meta.json` 才记录 `workspace_id`。运行时 Plugin 的 `data_path` 指向当前 Plugin 的 Agent 级目录 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`，Workspace 路径始终只指向真实项目。Plugin 的 City 级 profile 配置不进入运行时目录，仍保存在 `~/.downcity/plugins/<plugin_id>/config.toml`。
 
 Agent 不负责：
 
@@ -289,7 +289,7 @@ Agent 通过 `agent.json` 选择 Plugin 与可选 profile。Plugin profile 可�
 
 `downcity.db` 继续保存 Workspace 索引、平台设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。Workspace 与平台设置以明文 JSON 保存，本地隔离依赖数据库文件权限。
 
-Agent 在 Workspace 中执行产生的本地状态保存在 `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`。Session ID 在 AgentWorkspace 内唯一，Session metadata 必须同时记录 `workspace_id` 与 `agent_id`。项目目录中不得创建 `<project>/.downcity`，也不进行旧目录兼容读取或迁移。
+Agent 在 City 中执行产生的本地状态保存在 `~/.downcity/agents/<agent_id>/`。Session ID 在 Agent 内唯一，Session metadata 必须同时记录 `workspace_id`（若创建时传入）与 `agent_id`。没有 City 时只使用 Agent 实例生命周期内的内存 Store。项目目录中不得创建 `<project>/.downcity`，也不进行旧目录兼容读取或迁移。
 
 Workspace 只保证底层文件和 Shell 安全边界，不为 Plugin 的业务行为负责。Plugin 的业务权限、账号、网络访问与语义校验由 Plugin 或宿主管理。
 
@@ -448,18 +448,17 @@ PluginContext 只服务 Plugin；宿主直接依赖 Agent，不获取 PluginCont
 
 ### 8.1 Store 是领域能力，不是第二个资源容器
 
-Store 基于 AgentWorkspaceStorage 提供的私有 FileSystem 原子能力实现 Agent/Session 结构化持久化。Store 与 Workspace 的关系是：
+Store 基于 AgentStorage 提供的私有 FileSystem 原子能力实现 Agent/Session 结构化持久化。Store 与 Workspace 的关系是：
 
 ```text
-Workspace 提供项目资源与通用私有存储 Provider
-  → Agent.enter() 打开 agents/<agent_id>/workspaces/<workspace_id> 作用域
-  → AgentWorkspace 创建 AgentWorkspaceStorage 与 LocalSessionStore
+City 提供项目外的 AgentStorage（或无 City 时由 Agent 使用进程内存储）
+  → AgentStorage 创建 LocalSessionStore
   → SessionStore 定义 Session 集合存储语义
   → SessionDataStore 定义单个 Session 存储语义
   → MessageStore 定义消息提交与恢复语义
 ```
 
-Store 只能使用 AgentWorkspaceStorage，不能使用项目 FileSystem。项目 Tool 不能读取或修改 Session、instruction、日志和 Plugin 私有状态；需要内部持久化能力的 Plugin 使用 `PluginContext.data_path` 或 `data_files`。
+Store 只能使用 AgentStorage，不能使用项目 FileSystem。项目 Tool 不能读取或修改 Session、instruction、日志和 Plugin 私有状态；需要内部持久化能力的 Plugin 使用 `PluginContext.data_path` 或 `data_files`。
 
 ### 8.2 持久化必须服务于恢复
 

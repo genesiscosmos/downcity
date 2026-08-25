@@ -7,7 +7,11 @@
  */
 
 import type { AgentSessionCollection } from "@/types/agent/AgentSessionCollection.js";
-import type { AgentWorkspace } from "@/internal/index.js";
+import type { Agent } from "@/agent/Agent.js";
+import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
+import type { PluginSnapshot } from "@/types/plugin/PluginState.js";
+import type { WorkspaceBase } from "@downcity/workspace";
+import type { SystemModelMessage } from "ai";
 import type { RpcEventFrame } from "@/city/transport/types/RpcProtocol.js";
 import type { AgentSessionModelResolver } from "@/city/transport/types/AgentSessionModelResolver.js";
 
@@ -21,8 +25,8 @@ export interface RpcServerStartOptions {
   host: string;
   /** Session 集合访问口。 */
   sessions: AgentSessionCollection;
-  /** 当前 AgentWorkspace 执行上下文访问口。 */
-  get_workspace?: () => AgentWorkspace;
+  /** 当前请求对应的 Agent 执行能力。 */
+  get_agent_context?: () => RpcAgentContext;
   /** 将远程模型 ID 解析为当前宿主可执行的模型实例。 */
   resolve_session_model?: AgentSessionModelResolver;
   /** 由宿主重新加载并提交 Workspace Env 的能力。 */
@@ -39,8 +43,8 @@ export interface RpcServerStartOptions {
 export interface RpcRequestHandlerOptions {
   /** Session 集合访问口。 */
   sessions: AgentSessionCollection;
-  /** 当前 AgentWorkspace 执行上下文访问口。 */
-  get_workspace?: () => AgentWorkspace;
+  /** 当前请求对应的 Agent 执行能力。 */
+  get_agent_context?: () => RpcAgentContext;
   /** 将远程模型 ID 解析为当前宿主可执行的模型实例。 */
   resolve_session_model?: AgentSessionModelResolver;
   /** 由宿主重新加载并提交 Workspace Env 的能力。 */
@@ -52,6 +56,31 @@ export interface RpcRequestHandlerOptions {
   };
   /** 请求当前宿主优雅退出。 */
   shutdown_city?: () => void | Promise<void>;
+}
+
+/**
+ * RPC internal handler 所需的最小 Agent 能力集合。
+ *
+ * 这是传输层的依赖投影，不是新的领域对象，也不拥有 Agent 或 Session。
+ */
+export interface RpcAgentContext {
+  /** 当前 Agent 实例。 */
+  agent: Agent;
+  /** 当前请求绑定的 Workspace。 */
+  workspace: WorkspaceBase;
+  /** 当前 Agent 唯一的 Session 集合。 */
+  sessions: AgentSessionCollection;
+  /** 当前 Agent 在 Workspace 中可用的 Plugin 调用面。 */
+  plugins: AgentPlugins;
+  /** 读取当前 Agent 的 Plugin 状态。 */
+  list_plugin_states: () => PluginSnapshot[];
+  /** 解析当前 Session 的 system messages。 */
+  resolve_system_messages: (input: {
+    /** 目标 Session ID。 */
+    session_id: string;
+    /** system message profile。 */
+    profile?: "chat" | "task";
+  }) => Promise<SystemModelMessage[]>;
 }
 
 /**

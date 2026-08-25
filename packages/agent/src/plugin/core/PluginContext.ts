@@ -30,9 +30,9 @@ export interface CreatePluginContextInput {
   web?: PluginContext["web"];
   /** 当前 Agent 所在的 City 环境。 */
   city?: PluginContext["city"];
-  /** 延迟读取当前 AgentWorkspace Session 集合。 */
+  /** 延迟读取当前 WorkspaceEntry Session 集合。 */
   get_sessions: () => PluginContext["sessions"];
-  /** 延迟读取当前 AgentWorkspace 的 Plugin 注册表视图。 */
+  /** 延迟读取当前 WorkspaceEntry 的 Plugin 注册表视图。 */
   get_plugins: () => PluginContext["plugins"];
   /** 延迟读取 Workspace env。 */
   get_workspace_env: () => PluginContext["workspace_env"];

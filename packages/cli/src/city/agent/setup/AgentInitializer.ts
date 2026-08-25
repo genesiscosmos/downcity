@@ -44,7 +44,7 @@ export function normalize_default_agent_id(input: string): string {
  * 初始化 agent 项目骨架。
  *
  * 关键点（中文）
- * - 只创建项目 `.env` 与 `.agents/skills`；运行状态由用户级 AgentWorkspace 目录持有。
+ * - 只创建项目 `.env` 与 `.agents/skills`；运行状态由用户级 CliAgentContext 目录持有。
  * - 对已存在文件采取“能跳过就跳过、明确冲突则报错”的策略，降低误覆盖风险。
  * - 返回结果只描述本次初始化写入摘要，方便 CLI 与控制台直接展示。
  */

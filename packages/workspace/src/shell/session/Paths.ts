@@ -2,7 +2,7 @@
  * Shell service 路径工具。
  *
  * 关键点（中文）
- * - shell 运行产物统一落在 AgentWorkspace 数据目录的 `shell/<shellId>/`。
+ * - shell 运行产物统一落在 Agent private runtime directory 数据目录的 `shell/<shellId>/`。
  * - 目录结构简单稳定，便于调试与后续恢复。
  */
 

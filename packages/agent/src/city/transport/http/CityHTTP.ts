@@ -17,7 +17,7 @@ import type {
   AgentHttpBinding,
   AgentHttpListenOptions,
 } from "@/city/transport/types/AgentHttpBinding.js";
-import { get_agent_workspace } from "@/internal/index.js";
+import { get_workspace_entry } from "@/internal/index.js";
 
 /** 在单一 HTTP 端口暴露 City 的多 Agent transport。 */
 export class CityHTTP {
@@ -99,7 +99,7 @@ export class CityHTTP {
     await Promise.all([...route_keys].map(async (route_key) => await this.detach_route(route_key)));
   }
 
-  /** 释放一个 AgentWorkspace 路由对应的宿主扩展。 */
+  /** 释放一个 WorkspaceEntry 路由对应的宿主扩展。 */
   private async detach_route(route_key: string): Promise<void> {
     await this.enqueue_agent_operation(route_key, async () => {
       const dispose = this.extension_disposers.get(route_key);
@@ -143,7 +143,7 @@ export class CityHTTP {
     return await this.enqueue_agent_operation(route_key, async () => {
       // Agent 可能在请求排队期间被 City 删除，装配前必须重新确认所有权。
       const agent = this.city.agents.get(agent_id);
-      if (!agent || get_agent_workspace(agent, workspace_id) !== entry) return null;
+      if (!agent || get_workspace_entry(agent, workspace_id) !== entry) return null;
       const cached = this.routers_by_workspace.get(route_key);
       if (cached && cached.entry === entry) return cached.router;
       if (cached) {
@@ -163,7 +163,8 @@ export class CityHTTP {
       }).router();
       const extension = this.runtime_options.create_agent_extension?.({
         agent: entry.agent,
-        agent_workspace: entry,
+        workspace: entry.workspace,
+        plugins: entry.plugins,
         sdk_router,
       });
       const router = extension?.router ?? sdk_router;

@@ -69,10 +69,10 @@ src/
 
 - `src/workspace/`
   - 统一承载项目根目录、文件系统、模型工具、初始化和结构化存储
-  - `store/` 负责 AgentWorkspace、Session 和 JSONL Message 的本地持久化
+  - `store/` 负责 AgentStorage、Session 和 JSONL Message 的本地持久化
   - `WorkspaceEnv.ts` 负责 Workspace 环境变量装配
   - `tool/WorkspaceTools.ts` 组合文件、搜索与可选 Shell 工具
-  - `WorkspacePaths.ts` 负责 AgentWorkspace 私有数据路径布局
+  - `WorkspacePaths.ts` 负责 AgentStorage 私有数据路径布局
 
 - `src/session/`
   - `Session.ts` 是公开 facade 与 Session 对象装配入口
@@ -81,7 +81,7 @@ src/
   - `SessionMessages.ts` 是 canonical Message 唯一事实源
   - `DefaultSessionComposer.ts` 负责 system/history/tools 与压缩计划定制
   - `messages/` 放 Assistant writer、Message codec 与 compaction；JSONL Store 位于 `workspace/store/`
-  - 完整设计见 [`docs/session-runtime-architecture.md`](../../docs/session-runtime-architecture.md)
+  - Session 由 `AgentSessions` 统一持有；Workspace 只作为 `agent.sessions.create/get({ workspace })` 的单次执行输入
 
 - `src/executor/`
   - 内部执行内核
@@ -124,5 +124,4 @@ src/
 - `SessionMessages` 是 Message 唯一事实源，Executor 不持有 Store
 - `types / utils` 提供横向公共支撑
 
-完整架构、执行链、持久化、Plugin、Shell 与跨平台设计见
-[`docs/agent-sdk-architecture.md`](../../docs/agent-sdk-architecture.md)。
+持久化规则：加入 City 后使用 `~/.downcity/agents/<agent_id>/sessions/<session_id>/`；未加入 City 时使用当前 Agent 实例内存存储。只有传入 Workspace 的 Session 才会在 `meta.json` 写入 `workspace_id`。

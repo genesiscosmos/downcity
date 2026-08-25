@@ -34,7 +34,7 @@ import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
 type SqlRow = Record<string, unknown>;
 
 /**
- * 返回 AgentWorkspace Chat Access 数据库路径。
+ * 返回 Agent private runtime directory Chat Access 数据库路径。
  */
 export function get_chat_access_db_path(data_path: string): string {
   return path.join(path.resolve(data_path), "chat", "access.db");

@@ -15,7 +15,7 @@ import path from "node:path";
 import { MockLanguageModelV3 } from "ai/test";
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";
-import { create_agent_workspace } from "../bin/internal/index.js";
+import { create_workspace_entry } from "../bin/internal/index.js";
 import { Shell } from "@downcity/workspace";
 import { create_platform_sandbox } from "./PlatformSandbox.mjs";
 
@@ -124,7 +124,7 @@ test("unrestricted Shell 审批保留当前 Turn 并等待用户决定", async (
     id: "session_shell_approval_agent",
     model,
   });
-  const entry = create_agent_workspace(agent, new Workspace({
+  const entry = create_workspace_entry(agent, new Workspace({
     id: "test_workspace",
     path: project_root, data_root_path: path.join(project_root, "data"),
     shell: new Shell({ sandbox }),

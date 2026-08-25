@@ -7,11 +7,11 @@
  * - 仅提供 `listen()` / `close()` / `binding()` 三个方法，端口、host 由调用方决定。
  */
 
-import type { AgentWorkspace } from "@/internal/index.js";
-import { create_agent_workspace } from "@/internal/index.js";
+import { create_workspace_entry } from "@/internal/index.js";
 import type { Agent } from "@/agent/Agent.js";
 import type { AgentSessionCollection } from "@/types/agent/AgentSessionCollection.js";
 import type { WorkspaceBase } from "@downcity/workspace";
+import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
 import { start_rpc_server, type RpcServerInstance } from "@/city/transport/rpc/RpcServer.js";
 import type {
   AgentRpcBinding,
@@ -27,7 +27,9 @@ const DEFAULT_RPC_PORT = 15314;
  * 把一个 `Agent` 暴露为本机 RPC 服务。
  */
 export class AgentRPC {
-  private readonly agent_workspace: AgentWorkspace;
+  private readonly agent: Agent;
+  private readonly workspace?: WorkspaceBase;
+  private readonly plugins?: AgentPlugins;
   private readonly session_collection: AgentSessionCollection;
   private readonly runtime_options: AgentRpcRuntimeOptions;
   /** 当前 Agent RPC Server 的唯一串行生命周期。 */
@@ -38,26 +40,32 @@ export class AgentRPC {
   >;
 
   constructor(
-    agent_or_workspace: Agent | AgentWorkspace,
+    agent_or_workspace: Agent | { agent: Agent; workspace: WorkspaceBase; plugins: AgentPlugins },
     workspace_or_options?: WorkspaceBase | AgentRpcRuntimeOptions,
     runtime_options: AgentRpcRuntimeOptions = {},
   ) {
     if (workspace_or_options && "id" in workspace_or_options && "path" in workspace_or_options) {
-      this.agent_workspace = create_agent_workspace(agent_or_workspace as Agent, workspace_or_options);
       const agent = agent_or_workspace as Agent;
+      const entry = create_workspace_entry(agent, workspace_or_options);
+      this.agent = agent;
+      this.workspace = workspace_or_options;
+      this.plugins = entry.plugins;
       this.session_collection = {
         ...agent.sessions,
-        create: async () => await agent.sessions.create({ workspace: this.agent_workspace.workspace }),
-        get: async (session_id) => await agent.sessions.get(session_id, { workspace: this.agent_workspace.workspace }),
+        create: async (input) => await agent.sessions.create({ ...(input || {}), workspace: workspace_or_options }),
+        get: async (session_id) => await agent.sessions.get(session_id, { workspace: workspace_or_options }),
       };
       this.runtime_options = runtime_options;
     } else {
-      this.agent_workspace = agent_or_workspace as AgentWorkspace;
-      const agent = this.agent_workspace.agent;
+      const entry = agent_or_workspace as { agent: Agent; workspace: WorkspaceBase; plugins: AgentPlugins };
+      const agent = entry.agent;
+      this.agent = agent;
+      this.workspace = entry.workspace;
+      this.plugins = entry.plugins;
       this.session_collection = {
         ...agent.sessions,
-        create: async () => await agent.sessions.create({ workspace: this.agent_workspace.workspace }),
-        get: async (session_id) => await agent.sessions.get(session_id, { workspace: this.agent_workspace.workspace }),
+        create: async (input) => await agent.sessions.create({ ...(input || {}), workspace: entry.workspace }),
+        get: async (session_id) => await agent.sessions.get(session_id, { workspace: entry.workspace }),
       };
       this.runtime_options = (workspace_or_options as AgentRpcRuntimeOptions | undefined) ?? {};
     }
@@ -71,7 +79,7 @@ export class AgentRPC {
           host,
           port,
           sessions: this.session_collection,
-          get_workspace: () => this.agent_workspace,
+          get_agent_context: undefined,
           resolve_session_model: this.runtime_options.resolve_session_model,
           reload_workspace_env: this.runtime_options.reload_workspace_env,
         });

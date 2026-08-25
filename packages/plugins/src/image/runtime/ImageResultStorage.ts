@@ -2,7 +2,7 @@
  * ImagePlugin 生成结果本地化。
  *
  * 关键点（中文）
- * - City / provider 返回的远程图片先落到当前 AgentWorkspace 私有目录，再交给 Agent Session。
+ * - City / provider 返回的远程图片先落到当前 Agent private runtime directory 私有目录，再交给 Agent Session。
  * - File Part 的 `url` 使用稳定的本地绝对路径，原始在线地址写入 provider metadata。
  * - 单张图片下载失败时保留远程地址，并返回可观察错误，不丢弃已经生成成功的结果。
  */
@@ -109,7 +109,7 @@ async function read_response_bytes(response: Response): Promise<Buffer> {
   return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), total_bytes);
 }
 
-/** 下载一张远程图片并返回 AgentWorkspace 私有目录中的绝对路径。 */
+/** 下载一张远程图片并返回 Agent private runtime directory 私有目录中的绝对路径。 */
 async function persist_remote_image(input: {
   context: ImagePluginResultStorageInput["context"];
   job_id: string;

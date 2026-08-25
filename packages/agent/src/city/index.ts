@@ -2,7 +2,7 @@
  * @downcity/agent - Agent 内存索引与 HTTP/RPC 转发器。
  *
  * City 维护多 Agent 运行时引用并提供可选 HTTP/RPC transport。
- * AgentWorkspace、Session 与 Plugin 执行能力由 `@/index.js` 提供，Workspace 资源由
+ * Agent、Session 与 Plugin 执行能力由 `@/index.js` 提供，Workspace 资源由
  * `@downcity/workspace` 提供。
  */
 

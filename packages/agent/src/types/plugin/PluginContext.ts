@@ -6,7 +6,7 @@
  * - 动态状态通过只读 getter 暴露，保证 Workspace env 与 instruction 始终来自唯一状态源。
  */
 
-import type { AgentSessions } from "@/agent/AgentSessions.js";
+import type { AgentSessionCollection } from "@/types/agent/AgentSessionCollection.js";
 import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
 import type { FileSystem, WorkspaceShell } from "@downcity/workspace";
 import type { Logger } from "@/utils/logger/Logger.js";
@@ -46,7 +46,7 @@ export interface PluginContext {
   readonly city?: City;
 
   /** 当前 Agent 的 Session 集合入口。 */
-  readonly sessions: AgentSessions;
+  readonly sessions: AgentSessionCollection;
 
   /** 当前 Agent 唯一的 Plugin 调用与注册入口。 */
   readonly plugins: AgentPlugins;

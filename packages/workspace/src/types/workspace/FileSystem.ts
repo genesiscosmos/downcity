@@ -2,7 +2,7 @@
  * Workspace 文件系统类型。
  *
  * 关键点（中文）
- * - 同一接口可分别约束项目目录和 AgentWorkspace 私有数据目录。
+ * - 同一接口可分别约束项目目录和 Agent private runtime directory 私有数据目录。
  * - 每个实例只允许访问自己的已解析根目录。
  */
 

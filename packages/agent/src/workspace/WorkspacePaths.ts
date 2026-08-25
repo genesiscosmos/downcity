@@ -1,5 +1,5 @@
 /**
- * AgentWorkspace 内部数据路径规则模块。
+ * WorkspaceEntry 内部数据路径规则模块。
  *
  * 职责说明（中文）
  * - 统一管理 Agent 根目录下的运行时状态路径。

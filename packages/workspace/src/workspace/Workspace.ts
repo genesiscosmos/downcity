@@ -3,7 +3,7 @@
  *
  * 职责说明（中文）
  * - 只解析一次项目根目录，并组合项目 Tool、Env 与可选 Shell。
- * - AgentWorkspace 私有 Store 使用独立 FileSystem，不暴露给项目文件工具。
+ * - Agent private runtime directory 私有 Store 使用独立 FileSystem，不暴露给项目文件工具。
  * - Workspace 不持有 Agent；同一物理目录可以由不同 Agent 分别创建实例进入。
  */
 

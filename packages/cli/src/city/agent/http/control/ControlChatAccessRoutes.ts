@@ -8,7 +8,7 @@
 
 import type { Hono } from "hono";
 import type { JsonValue } from "@downcity/agent";
-import type { AgentWorkspace } from "@downcity/agent/internal";
+import type { CliAgentContext } from "@/city/agent/CliAgentContext.js";
 import type { AgentTokenPrincipal } from "@/city/types/auth/AgentToken.js";
 import { CHAT_ACCESS_ACTIONS } from "@downcity/plugins/chat";
 import { buildControlRouteAliases } from "@/city/agent/control/CommonHelpers.js";
@@ -39,7 +39,7 @@ function normalize_scope(value: unknown): "direct" | "group" | "all" | undefined
 /** 执行当前 Agent 的 Chat Access Action。 */
 async function run_chat_access_action(input: {
   /** 当前 Agent Context。 */
-  context: AgentWorkspace;
+  context: CliAgentContext;
   /** Chat Plugin Action 名称。 */
   action: string;
   /** 传给 Action 的 JSON 数据。 */
@@ -61,15 +61,15 @@ export function register_control_chat_access_routes(input: {
   /** Hono 应用实例。 */
   app: Hono;
   /** 获取当前 Agent Context。 */
-  get_agent: () => AgentWorkspace;
+  get_context: () => CliAgentContext;
 }): void {
-  const { app, get_agent } = input;
+  const { app, get_context } = input;
 
   for (const route_path of buildControlRouteAliases("/chat/access")) {
     app.get(route_path, async (context) => {
       try {
         const data = await run_chat_access_action({
-          context: get_agent(),
+          context: get_context(),
           action: CHAT_ACCESS_ACTIONS.snapshot,
         });
         return context.json({ success: true, data });
@@ -85,7 +85,7 @@ export function register_control_chat_access_routes(input: {
         const body = (await context.req.json().catch(() => ({}))) as ChatAccessResolveRequestBody;
         const scope = normalize_scope(body.scope);
         const data = await run_chat_access_action({
-          context: get_agent(),
+          context: get_context(),
           action: CHAT_ACCESS_ACTIONS.approve,
           payload: {
             request_id: String(context.req.param("request_id") || ""),
@@ -106,7 +106,7 @@ export function register_control_chat_access_routes(input: {
         const body = (await context.req.json().catch(() => ({}))) as ChatAccessResolveRequestBody;
         const scope = normalize_scope(body.scope);
         const data = await run_chat_access_action({
-          context: get_agent(),
+          context: get_context(),
           action: CHAT_ACCESS_ACTIONS.deny,
           payload: {
             request_id: String(context.req.param("request_id") || ""),
@@ -131,7 +131,7 @@ export function register_control_chat_access_routes(input: {
           return context.json({ success: false, error: "scope and effect are required" }, 400);
         }
         const data = await run_chat_access_action({
-          context: get_agent(),
+          context: get_context(),
           action: CHAT_ACCESS_ACTIONS.set,
           payload: {
             principal_id: String(context.req.param("principal_id") || ""),
@@ -154,7 +154,7 @@ export function register_control_chat_access_routes(input: {
           return context.json({ success: false, error: "scope is required" }, 400);
         }
         const data = await run_chat_access_action({
-          context: get_agent(),
+          context: get_context(),
           action: CHAT_ACCESS_ACTIONS.revoke,
           payload: {
             principal_id: String(context.req.param("principal_id") || ""),

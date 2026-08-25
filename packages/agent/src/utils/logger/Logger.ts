@@ -164,7 +164,7 @@ function normalizeToAllowedMessageLabels(message: string): string {
  * - Provide a single logger interface usable by both:
  *   - system/runtime components (server, scheduler, tool executor, etc.)
  *   - agent/LLM execution (LLM request/response logging expects `logger.log(...)`)
- * - Persist logs as JSONL to the current AgentWorkspace data directory
+ * - Persist logs as JSONL to the current WorkspaceEntry data directory
  *   (`logs/<YYYY-MM-DD>.jsonl`, one line per entry).
  * - Keep console output human-friendly, but make disk logs machine-friendly.
  *
@@ -221,7 +221,7 @@ export class Logger {
     this.storage_root_path = root;
   }
 
-  /** 绑定 AgentWorkspace 内部存储，避免日志写入项目目录。 */
+  /** 绑定 WorkspaceEntry 内部存储，避免日志写入项目目录。 */
   bind_storage(
     files: FileSystem,
     storage_root_path: string,
@@ -386,7 +386,7 @@ export class Logger {
  *
  * 说明（中文）
  * - 每次调用都返回独立实例，避免不同 Agent / workspace 互相覆盖落盘目录。
- * - 提供 project_root 时绑定项目目录（兼容旧的独立 Logger 用法）；AgentWorkspace
+ * - 提供 project_root 时绑定项目目录（兼容旧的独立 Logger 用法）；WorkspaceEntry
  *   运行时应使用 `bind_storage` 将日志写入私有数据目录。
  */
 export function get_logger(project_root?: string, log_level?: string): Logger {

@@ -57,7 +57,7 @@ export interface CreatePluginActionOptions<
   api?: PluginActionApi<P>;
   /** Action 执行器。 */
   execute: (params: {
-    /** AgentWorkspace 创建的稳定 Plugin 能力视图。 */
+    /** WorkspaceEntry 创建的稳定 Plugin 能力视图。 */
     context: PluginContext;
     /** 当前 Action 的执行身份和生命周期。 */
     execution: PluginActionExecutionContext;

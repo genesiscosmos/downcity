@@ -110,7 +110,7 @@ export function registerControlSessionRoutes(
   for (const routePath of buildControlRouteAliases("/sessions")) {
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.get_agent();
+        const runtime = params.get_context();
         const limit = toLimit(c.req.query("limit"));
         const sessions = await list_control_session_summaries(
           runtime.sessions,
@@ -129,7 +129,7 @@ export function registerControlSessionRoutes(
   for (const routePath of buildControlRouteAliases("/sessions/:session_id/messages")) {
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.get_agent();
+        const runtime = params.get_context();
         const limit = toLimit(c.req.query("limit"), 200);
         const session_id = decodeMaybe(String(c.req.param("session_id") || "").trim());
         if (!session_id) {
@@ -157,7 +157,7 @@ export function registerControlSessionRoutes(
   for (const routePath of buildControlRouteAliases("/sessions/:session_id/messages")) {
     app.delete(routePath, async (c) => {
       try {
-        const runtime = params.get_agent();
+        const runtime = params.get_context();
         const session_id = decodeMaybe(String(c.req.param("session_id") || "").trim());
         if (!session_id) {
           return c.json({ success: false, error: "Missing session_id" }, 400);
@@ -178,7 +178,7 @@ export function registerControlSessionRoutes(
   for (const routePath of buildControlRouteAliases("/sessions/:session_id/chat-history")) {
     app.delete(routePath, async (c) => {
       try {
-        const runtime = params.get_agent();
+        const runtime = params.get_context();
         const session_id = decodeMaybe(String(c.req.param("session_id") || "").trim());
         if (!session_id) {
           return c.json({ success: false, error: "Missing session_id" }, 400);
@@ -207,7 +207,7 @@ export function registerControlSessionRoutes(
   for (const routePath of buildControlRouteAliases("/system-prompt")) {
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.get_agent();
+        const runtime = params.get_context();
         const session_id =
           decodeMaybe(String(c.req.query("session_id") || "").trim()) ||
           DEFAULT_SYSTEM_SESSION_ID;
@@ -229,7 +229,7 @@ export function registerControlSessionRoutes(
   for (const routePath of buildControlRouteAliases("/sessions/:session_id/execute")) {
     app.post(routePath, async (c) => {
       try {
-        const runtime = params.get_agent();
+        const runtime = params.get_context();
         const session_id = decodeMaybe(String(c.req.param("session_id") || "").trim());
         const body = (await c.req.json().catch(() => ({}))) as Partial<ControlSessionExecuteRequestBody>;
         const instructions = String(body.instructions || "").trim();

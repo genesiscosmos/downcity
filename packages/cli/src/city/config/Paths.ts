@@ -1,10 +1,10 @@
 /**
- * City AgentWorkspace 数据路径规则模块。
+ * City Agent private runtime directory 数据路径规则模块。
  *
  * 关键点（中文）
- * - 统一管理 AgentWorkspace 私有数据根及其子目录路径规则。
+ * - 统一管理 Agent private runtime directory 私有数据根及其子目录路径规则。
  * - 避免路径字符串在不同模块重复拼接，降低维护成本。
- * - 调用方必须传入 `AgentWorkspace.data_path`，不能传入项目目录。
+ * - 调用方必须传入 `Agent private runtime directory.data_path`，不能传入项目目录。
  */
 import path from "path";
 
@@ -31,7 +31,7 @@ export function getDowncityTasksDirPath(data_path: string): string {
 }
 
 /**
- * AgentWorkspace 私有公开资源目录路径。
+ * Agent private runtime directory 私有公开资源目录路径。
  */
 export function getDowncityPublicDirPath(data_path: string): string {
   return path.join(getDowncityDirPath(data_path), "public");

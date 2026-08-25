@@ -81,6 +81,8 @@ import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 export class Session implements AgentSession {
   readonly id: string;
   readonly agent_id: string;
+  /** 当前 Session 创建时绑定的 Workspace ID。 */
+  readonly workspace_id?: string;
 
   private readonly workspace_path: string;
   private readonly store: SessionDataStore;
@@ -120,6 +122,7 @@ export class Session implements AgentSession {
   constructor(options: SessionOptions) {
     this.id = String(options.session_id || "").trim();
     this.agent_id = String(options.agent_id || "").trim();
+    this.workspace_id = String(options.workspace_id || "").trim() || undefined;
     this.workspace_path = String(options.workspace_path || "").trim();
     this.store = options.store;
     this.get_session_store = options.get_session_store;

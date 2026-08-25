@@ -95,7 +95,7 @@ export class Shell {
       || (current_data_path && current_data_path !== next_data_path)
     ) {
       throw new Error(
-        `Shell is already bound to another AgentWorkspace: ${current_root_path}`,
+        `Shell is already bound to another Agent execution context: ${current_root_path}`,
       );
     }
     this.host_options.root_path = next_root_path;
@@ -229,7 +229,7 @@ export class Shell {
     const root_path = String(this.host_options.root_path || "").trim();
     const data_path = String(this.host_options.data_path || "").trim();
     if (!root_path || !data_path) {
-      throw new Error("Shell requires root_path and data_path from AgentWorkspace");
+      throw new Error("Shell requires root_path and data_path from Agent private runtime directory");
     }
     const session_id = execution.session?.session_id || "";
     const turn_id = execution.session?.turn_id || "";

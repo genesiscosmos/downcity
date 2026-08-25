@@ -13,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent, RemoteAgent } from "../bin/index.js";
-import { create_agent_workspace } from "../bin/internal/index.js";
+import { create_workspace_entry } from "../bin/internal/index.js";
 import { Workspace } from "../../workspace/bin/index.js";
 import { AgentRPC } from "../bin/city/transport/rpc/AgentRPC.js";
 
@@ -65,7 +65,7 @@ test("RPC resolves model_id through the host and queues compact", {
     id: "rpc_model_agent",
     model,
   });
-  const entry = create_agent_workspace(agent, new Workspace({ id: "rpc_model_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
+  const entry = create_workspace_entry(agent, new Workspace({ id: "rpc_model_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
   let resolved_model_id = "";
   const rpc = new AgentRPC(entry, {
     resolve_session_model: (model_id) => {
@@ -110,7 +110,7 @@ test("RPC rejects remote model switching when the host has no resolver", {
     id: "rpc_model_resolver_required_agent",
     model: { modelId: "host-model", provider: "test" },
   });
-  const entry = create_agent_workspace(agent, new Workspace({ id: "resolver_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
+  const entry = create_workspace_entry(agent, new Workspace({ id: "resolver_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
   const rpc = new AgentRPC(entry);
   const port = await reserve_port();
   const remote_agent = new RemoteAgent({ url: `rpc://127.0.0.1:${port}` });
@@ -139,7 +139,7 @@ test("internal RPC 让宿主重新加载 Workspace Env", {
     env: { BEFORE: "value" },
   });
   const agent = new Agent({ id: "rpc_env_agent" });
-  const entry = create_agent_workspace(agent, workspace);
+  const entry = create_workspace_entry(agent, workspace);
   let reload_count = 0;
   const rpc = new AgentRPC(entry, {
     reload_workspace_env: () => {

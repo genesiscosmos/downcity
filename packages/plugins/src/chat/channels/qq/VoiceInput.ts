@@ -365,7 +365,7 @@ async function downloadRemoteAttachment(params: {
  * - 远程 URL 会按需下载到 cache，再返回绝对路径。
  */
 export async function resolveQqAttachmentLocalPath(params: {
-  /** 当前 AgentWorkspace 的私有数据目录，用于保存下载缓存。 */
+  /** 当前 Agent private runtime directory 的私有数据目录，用于保存下载缓存。 */
   dataPath: string;
   /** 项目根目录，用于解析消息中已有的项目相对路径。 */
   rootPath: string;

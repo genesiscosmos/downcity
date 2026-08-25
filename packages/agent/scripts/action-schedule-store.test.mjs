@@ -1,5 +1,5 @@
 /**
- * @file 验证 ActionScheduleStore 通过 AgentWorkspace 私有存储持久化异步事件流。
+ * @file 验证 ActionScheduleStore 通过 Workspace execution entry 私有存储持久化异步事件流。
  */
 
 import assert from "node:assert/strict";
@@ -10,7 +10,7 @@ import test from "node:test";
 import { ActionScheduleStore } from "../bin/index.js";
 import { Workspace } from "@downcity/workspace";
 
-/** 打开 AgentWorkspace 使用的通用 Workspace 私有存储作用域。 */
+/** 打开 Workspace execution entry 使用的通用 Workspace 私有存储作用域。 */
 function open_agent_scope(workspace, agent_id) {
   return workspace.storage.open_scope([
     "agents",
@@ -20,7 +20,7 @@ function open_agent_scope(workspace, agent_id) {
   ]);
 }
 
-test("ActionScheduleStore persists through AgentWorkspace private FileSystem", async (t) => {
+test("ActionScheduleStore persists through Workspace execution entry private FileSystem", async (t) => {
   const workspace_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-action-schedule-"),
   );

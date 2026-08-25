@@ -13,7 +13,7 @@
  */
 
 import { Hono } from "hono";
-import type { AgentWorkspace } from "@downcity/agent/internal";
+import type { CliAgentContext } from "@/city/agent/CliAgentContext.js";
 import { registerControlApiRoutes } from "@/city/agent/http/control/ControlApiRoutes.js";
 
 /**
@@ -23,7 +23,7 @@ type ControlRouterOptions = {
   /**
    * 读取当前 agent 执行上下文。
    */
-  get_agent: () => AgentWorkspace;
+  get_context: () => CliAgentContext;
 };
 
 /**
@@ -35,7 +35,7 @@ export function createControlRouter(
   const router = new Hono();
   registerControlApiRoutes({
     app: router,
-    get_agent: options.get_agent,
+    get_context: options.get_context,
   });
   return router;
 }

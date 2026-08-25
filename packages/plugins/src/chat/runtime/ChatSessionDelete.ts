@@ -2,9 +2,9 @@
  * ChatSessionDelete：按 session_id 彻底删除 chat 会话数据。
  *
  * 关键点（中文）
- * - 删除路由映射（AgentWorkspace 数据目录的 `channel/meta.json`）
- * - 删除 chat 审计目录（AgentWorkspace 数据目录的 `chat/<session_id>/`）
- * - 删除 core session 目录（AgentWorkspace 数据目录的 `sessions/<session_id>/`）
+ * - 删除路由映射（Agent private runtime directory 数据目录的 `channel/meta.json`）
+ * - 删除 chat 审计目录（Agent private runtime directory 数据目录的 `chat/<session_id>/`）
+ * - 删除 core session 目录（Agent private runtime directory 数据目录的 `sessions/<session_id>/`）
  * - 清理运行中 agent 与队列，避免残留任务继续执行
  */
 

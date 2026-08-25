@@ -173,7 +173,7 @@ export class TelegramApiClient {
   }
 
   /**
-   * 下载 Telegram 文件并保存到当前 AgentWorkspace 数据目录的 `.cache/telegram`。
+   * 下载 Telegram 文件并保存到当前 Agent private runtime directory 数据目录的 `.cache/telegram`。
    *
    * 说明（中文）
    * - 文件名会做安全化处理，避免路径注入

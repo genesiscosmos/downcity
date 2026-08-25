@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - Workspace 表达项目资源边界，提供项目 Tool、Env 与可选 Shell。
- * - AgentWorkspace Store 的用户级根目录由本地实现解析，不进入公开参数。
+ * - Agent private runtime directory Store 的用户级根目录由本地实现解析，不进入公开参数。
  * - 所有平台共用同一类型，平台差异由可选 Shell 的 Sandbox Adapter 处理。
  */
 

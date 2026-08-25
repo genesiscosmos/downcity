@@ -8,40 +8,24 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent } from "../bin/index.js";
-import { create_agent_workspace } from "../bin/internal/index.js";
+import { create_workspace_entry } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 
 test("Workspace resolves the Downcity data root internally", async (t) => {
   const fixture_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-root-"));
   const project_path = path.join(fixture_root, "project");
-  const platform_root = path.join(fixture_root, "platform");
   await fs.mkdir(project_path);
-  const previous_root = process.env.DC_PLATFORM_ROOT;
-  process.env.DC_PLATFORM_ROOT = platform_root;
   const agent = new Agent({ id: "internal-root-agent" });
-  const entry = create_agent_workspace(agent, new Workspace({
+  const entry = create_workspace_entry(agent, new Workspace({
     id: "internal-root-workspace",
     path: project_path,
   }));
   t.after(async () => {
     await agent.dispose();
-    if (previous_root === undefined) delete process.env.DC_PLATFORM_ROOT;
-    else process.env.DC_PLATFORM_ROOT = previous_root;
     await fs.rm(fixture_root, { recursive: true, force: true });
   });
 
-  assert.equal(
-    entry.data_path,
-    path.join(
-      platform_root,
-      "agents",
-      "internal-root-agent",
-      "workspaces",
-      "internal-root-workspace",
-    ),
-  );
-  assert.equal(await fs.stat(entry.data_path).then((value) => value.isDirectory()), true);
-  assert.equal(await fs.stat(entry.data_path).then((value) => value.mode & 0o777), 0o700);
+  assert.equal(entry.data_path, "/memory/agents/internal-root-agent");
 });
 
 test("Workspace exposes file tools without requiring Shell", async (t) => {
@@ -49,7 +33,7 @@ test("Workspace exposes file tools without requiring Shell", async (t) => {
 
   const workspace = new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") });
   const agent = new Agent({ id: "workspace-files" });
-  const entry = create_agent_workspace(agent, workspace);
+  const entry = create_workspace_entry(agent, workspace);
   t.after(async () => {
     await agent.dispose();
     await fs.rm(root_path, { recursive: true, force: true });
@@ -75,10 +59,7 @@ test("one unbound Workspace instance belongs to one Agent", async (t) => {
     tools: { shell_exec: {} },
     bind(binding) {
       assert.equal(binding.root_path, workspace_path);
-      assert.match(
-        binding.data_path,
-        /data\/agents\/workspace-first\/workspaces\/test_workspace$/,
-      );
+      assert.equal(binding.data_path, workspace_path);
     },
     set_env(env) {
       assert.deepEqual(env, {});
@@ -94,9 +75,9 @@ test("one unbound Workspace instance belongs to one Agent", async (t) => {
   const workspace = new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data"), shell });
   const agent = new Agent({ id: "workspace-first" });
   const second_agent = new Agent({ id: "workspace-second" });
-  create_agent_workspace(agent, workspace);
+  create_workspace_entry(agent, workspace);
   assert.throws(
-    () => create_agent_workspace(second_agent, workspace),
+    () => create_workspace_entry(second_agent, workspace),
     /already bound to another scope/,
   );
 
@@ -110,8 +91,8 @@ test("separate Workspace instances may use the same directory", async (t) => {
   t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
   const first_agent = new Agent({ id: "workspace-directory-first" });
   const second_agent = new Agent({ id: "workspace-directory-second" });
-  const first_entry = create_agent_workspace(first_agent, new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
-  const second_entry = create_agent_workspace(second_agent, new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
+  const first_entry = create_workspace_entry(first_agent, new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
+  const second_entry = create_workspace_entry(second_agent, new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
   assert.notEqual(first_entry.data_path, second_entry.data_path);
   await first_entry.sessions.create({ session_id: "first-session" });
   await second_entry.sessions.create({ session_id: "second-session" });
@@ -136,12 +117,12 @@ test("Session IDs are isolated by Agent in one Workspace", async (t) => {
   const data_root_path = path.join(root_path, "data");
   const first_agent = new Agent({ id: "session-owner-first" });
   const second_agent = new Agent({ id: "session-owner-second" });
-  const first_entry = create_agent_workspace(first_agent, new Workspace({
+  const first_entry = create_workspace_entry(first_agent, new Workspace({
     id: "test_workspace",
     path: root_path,
     data_root_path,
   }));
-  const second_entry = create_agent_workspace(second_agent, new Workspace({
+  const second_entry = create_workspace_entry(second_agent, new Workspace({
     id: "test_workspace",
     path: root_path,
     data_root_path,
@@ -216,7 +197,7 @@ test("Agent rejects Workspace, Plugin and custom Tool name conflicts", async (t)
     tools: { read: {} },
   });
   assert.throws(
-    () => create_agent_workspace(workspace_conflict_agent,
+    () => create_workspace_entry(workspace_conflict_agent,
       new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }),
     ),
     /Agent tool name conflict: "read"/,
@@ -226,7 +207,7 @@ test("Agent rejects Workspace, Plugin and custom Tool name conflicts", async (t)
     tools: { plugin_call: {} },
   });
   assert.throws(
-    () => create_agent_workspace(plugin_conflict_agent,
+    () => create_workspace_entry(plugin_conflict_agent,
       new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }),
     ),
     /reserved for PluginRegistry/,

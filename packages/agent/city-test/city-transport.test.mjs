@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent, RemoteAgent } from "../bin/index.js";
-import { Workspace } from "../../workspace/bin/index.js";
+import { LocalWorkspaceStorageProvider, Workspace } from "../../workspace/bin/index.js";
 import { City } from "../bin/index.js";
 import { CityHTTP } from "../bin/city/transport/http/CityHTTP.js";
 import { CityRPC } from "../bin/city/transport/rpc/CityRPC.js";
@@ -44,7 +44,10 @@ async function create_city() {
     path: path.join(root, "second"),
     data_root_path: path.join(root, "data"),
   });
-  const city = new City({ workspaces: [first_workspace, second_workspace] });
+  const city = new City({
+    storage: new LocalWorkspaceStorageProvider(path.join(root, "city-data")),
+    workspaces: [first_workspace, second_workspace],
+  });
   const first_agent = new Agent({ id: "first_agent" });
   const second_agent = new Agent({ id: "second_agent" });
   city.agents.add(first_agent);
@@ -72,9 +75,9 @@ test("CityHTTP mounts each Agent below its stable ID", async () => {
     const second_list = await transport.router().request(
       "/agents/second_agent/workspaces/second/api/sdk/sessions",
     );
-    assert.deepEqual((await first_list.json()).sessions.map((item) => item.session_id), [
-      "shared-session",
-    ]);
+    const first_sessions = (await first_list.json()).sessions;
+    assert.equal(first_sessions.length, 1);
+    assert.match(first_sessions[0].session_id, /^session-/u);
     assert.deepEqual((await second_list.json()).sessions, []);
     assert.equal(
       (await transport.router().request("/agents/missing/workspaces/first/api/sdk/sessions")).status,

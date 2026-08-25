@@ -8,10 +8,10 @@
  */
 
 import type { SystemModelMessage } from "ai";
-import type { AgentWorkspace } from "@/internal/index.js";
 import type { RpcRequest } from "@/city/transport/types/RpcProtocol.js";
 import type {
   RpcRequestHandlerOptions,
+  RpcAgentContext,
   RpcWriteSuccess,
 } from "@/city/transport/rpc/server/ServerTypes.js";
 
@@ -52,8 +52,8 @@ export async function handle_internal_rpc_request(params: {
       write_success(request.id, {
         status: "ok",
         pid: process.pid,
-        agent_id: context.id,
-        workspace_id: context.workspace_id,
+        agent_id: context.agent.id,
+        workspace_id: context.workspace.id,
         workspace_path: context.workspace.path,
         instance_id: String(process.env.DOWNCITY_DAEMON_INSTANCE_ID || "").trim(),
       });
@@ -160,8 +160,8 @@ export async function handle_internal_rpc_request(params: {
   }
 }
 
-function requireAgent(options: RpcRequestHandlerOptions): AgentWorkspace {
-  const context = options.get_workspace?.();
+function requireAgent(options: RpcRequestHandlerOptions): RpcAgentContext {
+  const context = options.get_agent_context?.();
   if (!context) {
     throw new Error("Agent RPC server was started without Agent");
   }

@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - Provider 只负责根目录、路径片段隔离和文件能力。
- * - 同一 Provider 可以打开多个独立作用域；资源所有权由上层 AgentWorkspace 管理。
+ * - 同一 Provider 可以打开多个独立作用域；资源所有权由上层 Agent private runtime directory 管理。
  * - 不理解 Agent、Session 或 Plugin 的业务语义。
  */
 

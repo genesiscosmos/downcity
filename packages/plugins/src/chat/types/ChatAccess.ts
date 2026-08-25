@@ -208,7 +208,7 @@ export interface RevokeChatAccessGrantInput {
 
 /** ChatAccessService 构造参数。 */
 export interface ChatAccessServiceOptions {
-  /** 当前 AgentWorkspace 私有数据根目录。 */
+  /** 当前 Agent private runtime directory 私有数据根目录。 */
   data_path: string;
 }
 

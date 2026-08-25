@@ -6,6 +6,7 @@
  */
 
 import { Agent, City } from "@downcity/agent";
+import { create_workspace_entry } from "@downcity/agent/internal";
 import {
   create_city_host_instance_id,
   register_city_host,
@@ -99,14 +100,14 @@ export class CliCityRuntime {
             model_id,
             (await city.enter_workspace(agent_id, workspace_id)).workspace.get_env(),
           ),
-        create_agent_extension: ({ agent, agent_workspace, sdk_router }) => {
+        create_agent_extension: ({ agent, workspace, sdk_router }) => {
           const auth_service = new AuthService({
             agent_id: agent.id,
             repository: data.agent_tokens,
           });
           return {
             router: create_agent_http_gateway_app({
-              get_agent: () => agent_workspace,
+              get_context: () => create_workspace_entry(agent, workspace),
               sdk_router,
               auth_service,
             }),

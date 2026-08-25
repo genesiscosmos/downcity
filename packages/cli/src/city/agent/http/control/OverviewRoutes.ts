@@ -43,7 +43,7 @@ export function registerControlOverviewRoutes(
   for (const routePath of buildControlRouteAliases("/overview")) {
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.get_agent();
+        const runtime = params.get_context();
         const sessionLimit = toLimit(
           c.req.query("sessionLimit") || c.req.query("contextLimit"),
           20,
@@ -53,7 +53,7 @@ export function registerControlOverviewRoutes(
           sessionLimit,
         );
         const runtimePlugins = runtime.list_plugin_states();
-        const taskResult = await params.get_agent().plugins.run_action({
+        const taskResult = await params.get_context().plugins.run_action({
           plugin: "task",
           action: "list",
         });
@@ -102,7 +102,7 @@ export function registerControlOverviewRoutes(
     app.get(routePath, (c) => {
       return c.json({
         success: true,
-        plugins: params.get_agent().list_plugin_states(),
+        plugins: params.get_context().list_plugin_states(),
       });
     });
   }

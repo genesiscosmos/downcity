@@ -1,23 +1,25 @@
 /**
- * AgentWorkspace：Agent 进入一个 Workspace 后的执行作用域。
+ * Workspace 执行上下文的内部组合对象。
  *
  * 关键点（中文）
  * - Agent 仍是身份、模型、指令与 Plugin 的唯一拥有者。
- * - 当前对象只组合 Workspace Tool、SessionStore、Plugin Context 与后台资源。
- * - 一个 Agent 可以同时持有多个 AgentWorkspace，彼此的 Session 与 Shell 隔离。
+ * - 当前对象只组合 Workspace Tool、Plugin Context、日志与后台资源。
+ * - Session 的所有权属于 Agent.sessions；本对象只提供带 Workspace 的转发视图。
  */
 
 import type { Tool, SystemModelMessage } from "ai";
 import type { Hono } from "hono";
 import type { WorkspaceShell } from "@downcity/workspace";
 import { AgentSessions } from "@/agent/AgentSessions.js";
+import type { AgentSessionCollection } from "@/types/agent/AgentSessionCollection.js";
 import { create_plugin_context } from "@/plugin/core/PluginContext.js";
 import { register_plugin_http_routes } from "@/plugin/core/PluginHttpRoutes.js";
 import { list_plugin_states } from "@/plugin/core/PluginStateController.js";
 import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
+import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.js";
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { PluginSnapshot } from "@/types/plugin/PluginState.js";
-import type { AgentWorkspaceOptions } from "@/types/agent/AgentWorkspaceOptions.js";
+import type { WorkspaceEntryOptions } from "@/types/agent/WorkspaceEntryOptions.js";
 import { Logger } from "@/utils/logger/Logger.js";
 import { generate_id } from "@/utils/Id.js";
 import { MemoryFileSystem } from "@/workspace/store/MemoryFileSystem.js";
@@ -26,7 +28,7 @@ import {
   resolve_session_system_messages,
   type SystemProfile,
 } from "@/executor/composer/system/default/SystemDomain.js";
-import { agent_city, agent_is_in_city, get_agent_storage, agent_storage_scope, release_agent_workspace } from "@/internal/AgentRuntime.js";
+import { agent_city, agent_is_in_city, get_agent_storage, agent_storage_scope, release_workspace_entry } from "@/internal/AgentRuntime.js";
 
 const RESERVED_PLUGIN_TOOL_NAMES = new Set(["plugin_read", "plugin_call"]);
 
@@ -57,19 +59,20 @@ function register_tools(
 }
 
 /** Agent 在一个 Workspace 中的公开执行入口。 */
-export class AgentWorkspace {
+export class WorkspaceEntry {
   /** 拥有当前作用域的 Agent。 */
-  readonly agent: AgentWorkspaceOptions["agent"];
+  readonly agent: WorkspaceEntryOptions["agent"];
   /** 当前 Workspace。 */
-  readonly workspace: AgentWorkspaceOptions["workspace"];
+  readonly workspace: WorkspaceEntryOptions["workspace"];
   /** 当前 Workspace ID。 */
   readonly workspace_id: string;
   /** 当前 Workspace 下的 Tool 集合。 */
   readonly tools: Record<string, Tool>;
   /** 当前 Workspace Context 绑定的 Agent Plugin 调用面。 */
   readonly plugins: AgentPlugins;
-  /** 当前 Workspace 下的 Session 集合。 */
-  readonly sessions: AgentSessions;
+  /** 当前 Workspace 下的 Session 转发视图；不拥有 Session。 */
+  /** 兼容内部调用的 Workspace Session 视图；实际所有权属于 Agent.sessions。 */
+  readonly sessions: AgentSessionCollection;
   /** 当前 Workspace 的 Session、日志和调度数据根路径。 */
   readonly data_path: string;
 
@@ -81,7 +84,7 @@ export class AgentWorkspace {
   private readonly plugin_contexts = new Map<string, PluginContext>();
   private leave_promise?: Promise<void>;
 
-  constructor(options: AgentWorkspaceOptions) {
+  constructor(options: WorkspaceEntryOptions) {
     this.agent = options.agent;
     this.workspace = options.workspace;
     this.workspace_id = options.workspace.id;
@@ -102,7 +105,6 @@ export class AgentWorkspace {
     });
 
     let contextual_plugins: AgentPlugins | undefined;
-    let contextual_sessions: AgentSessions | undefined;
     const context_input = {
       agent_id: this.agent.id,
       workspace_id: this.workspace_id,
@@ -116,12 +118,11 @@ export class AgentWorkspace {
       get_workspace_env: () => this.workspace.get_env(),
       get_instructions: () => this.agent.get_instructions(),
       get_plugins: () => {
-        if (!contextual_plugins) throw new Error("AgentWorkspace plugins are not initialized");
+        if (!contextual_plugins) throw new Error("WorkspaceEntry plugins are not initialized");
         return contextual_plugins;
       },
       get_sessions: () => {
-        if (!contextual_sessions) throw new Error("AgentWorkspace sessions are not initialized");
-        return contextual_sessions;
+        return this.agent.sessions;
       },
     } satisfies Parameters<typeof create_plugin_context>[0];
     this.context = create_plugin_context(context_input);
@@ -139,25 +140,21 @@ export class AgentWorkspace {
     register_tools(this.tools, this.agent.plugin_registry.tools(this.context), "PluginRegistry");
     register_tools(this.tools, this.agent.custom_tools, "AgentOptions.tools");
 
-    this.sessions = new AgentSessions({
-      agent_id: this.agent.id,
-      workspace_path: this.workspace.path,
-      store: storage.sessions,
-      tools: this.tools,
-      logger: this.logger,
-      get_instruction: () => [...this.agent.get_instructions()],
-      get_workspace_env: () => this.workspace.get_env(),
-      get_agent_plugins: () => this.agent.plugin_registry.execution_view(this.context),
-      workspace_id: this.workspace_id,
-      on_session_routed: (session_id, sessions) => this.agent.register_session_route(session_id, sessions),
-      ensure_agent_ready: async () => await this.agent.ensure_ready(),
-      get_agent_model: () => this.agent.model,
-      session_class: this.agent.session_class,
-    });
-    contextual_sessions = this.sessions;
+    this.sessions = {
+      create: async (input) => await this.agent.sessions.create({ ...(input || {}), workspace: this.workspace }),
+      get: async (session_id, input) => await this.agent.sessions.get(session_id, { ...(input || {}), workspace: this.workspace }),
+      list: async (input) => await this.agent.sessions.list(input),
+      archive: async (input) => await this.agent.sessions.archive(input),
+      archived: async (input) => await this.agent.sessions.archived(input),
+      clean_archive: async () => await this.agent.sessions.clean_archive(),
+      runtime: (session_id) => this.agent.sessions.runtime(session_id),
+      list_executing_session_ids: () => this.agent.sessions.list_executing_session_ids(),
+      remove: async (session_id) => await this.agent.sessions.remove(session_id),
+      clear_messages: async (session_id) => await this.agent.sessions.clear_messages(session_id),
+    };
 
     this.unsubscribe_env = this.workspace.subscribe_env((env) => {
-      this.sessions.broadcast_env({ ...env }, generate_id());
+      (this.agent.sessions as AgentSessions).broadcast_env({ ...env }, generate_id());
     });
     this.unsubscribe_plugins = this.agent.plugin_registry.subscribe_change((change) => {
       for (const tool_name of RESERVED_PLUGIN_TOOL_NAMES) delete this.tools[tool_name];
@@ -167,7 +164,7 @@ export class AgentWorkspace {
         "PluginRegistry",
       );
       const verb = change.type === "register" ? "registered" : "unregistered";
-      this.sessions.broadcast_plugins({
+      (this.agent.sessions as AgentSessions).broadcast_plugins({
         command_id: generate_id(),
         title: `Agent plugin ${change.plugin_name} ${verb}`,
         plugins: this.agent.plugin_registry.execution_view(this.context),
@@ -227,8 +224,8 @@ export class AgentWorkspace {
       const cleanup_steps: Array<() => void | Promise<void>> = [
         () => this.unsubscribe_env(),
         () => this.unsubscribe_plugins(),
-        async () => await this.sessions.stop_executing_sessions(),
-        () => this.sessions.dispose_title_generation(),
+        async () => await (this.agent.sessions as AgentSessions).stop_executing_sessions(),
+        () => (this.agent.sessions as AgentSessions).dispose_title_generation(),
         async () => await this.logger.save_all_logs(),
         ...(agent_is_in_city(this.agent) ? [] : [async () => await this.workspace.dispose()]),
       ];
@@ -239,11 +236,10 @@ export class AgentWorkspace {
           errors.push(error);
         }
       }
-      this.agent.unregister_session_routes(this.sessions);
-      release_agent_workspace(this.agent, this.workspace_id, this);
+      release_workspace_entry(this.agent, this.workspace_id, this);
       this.agent.plugin_registry.unbind_workspace_context(this.context);
       if (errors.length > 0) {
-        throw new AggregateError(errors, `AgentWorkspace cleanup failed: ${this.workspace_id}`);
+        throw new AggregateError(errors, `WorkspaceEntry cleanup failed: ${this.workspace_id}`);
       }
     })();
     await this.leave_promise;
@@ -252,6 +248,25 @@ export class AgentWorkspace {
   /** 返回当前 Workspace 的 PluginContext，供 Agent 级调度器解析执行上下文。 */
   get_context(): PluginContext {
     return this.context;
+  }
+
+  /** 返回单个 Session 创建所需的 Workspace 执行上下文。 */
+  get_session_context(): {
+    workspace_path: string;
+    workspace_id: string;
+    tools: Record<string, Tool>;
+    get_workspace_env: () => Record<string, string>;
+    get_agent_plugins: () => AgentPluginExecutionRuntime;
+    store: AgentStorage["sessions"];
+  } {
+    return {
+      workspace_path: this.workspace.path,
+      workspace_id: this.workspace_id,
+      tools: this.tools,
+      get_workspace_env: () => this.workspace.get_env(),
+      get_agent_plugins: () => this.agent.plugin_registry.execution_view(this.context),
+      store: this.storage.sessions,
+    };
   }
 
   /** 返回指定 Plugin 的 Agent 级运行时 Context。 */

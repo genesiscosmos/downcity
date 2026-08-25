@@ -72,6 +72,9 @@ export interface AgentSessionActor {
   /** 当前 session 稳定标识。 */
   readonly id: string;
 
+  /** 当前 Session 创建时绑定的 Workspace ID；无 Workspace 时为空。 */
+  readonly workspace_id?: string;
+
   /** 读取当前 session 详情。 */
   get_info(): Promise<AgentSessionInfo>;
 

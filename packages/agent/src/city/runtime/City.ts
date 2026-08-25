@@ -10,11 +10,11 @@ import os from "node:os";
 import { Agent } from "@/agent/Agent.js";
 import {
   attach_agent_city,
-  create_agent_workspace,
+  create_workspace_entry,
   detach_agent_city,
-  get_agent_workspace,
-  type AgentWorkspace,
+  get_workspace_entry,
 } from "@/internal/index.js";
+import type { WorkspaceEntry } from "@/agent/WorkspaceEntry.js";
 import type { WorkspaceBase } from "@downcity/workspace";
 import type { WorkspaceStorageProvider, WorkspaceStorageScope } from "@downcity/workspace";
 import { LocalWorkspaceStorageProvider } from "@downcity/workspace";
@@ -57,7 +57,7 @@ export class City {
   private readonly resolve_workspace?: CityRuntimeOptions["resolve_workspace"];
 
   /** 相同 Agent/Workspace 目标当前唯一的进入流程。 */
-  private readonly workspace_entry_promises = new Map<string, Promise<AgentWorkspace>>();
+  private readonly workspace_entry_promises = new Map<string, Promise<WorkspaceEntry>>();
 
   /** 当前 City 唯一的 HTTP transport。 */
   private readonly http_transport: CityHTTP;
@@ -154,11 +154,11 @@ export class City {
   }
 
   /** 按 Agent ID 与 Workspace ID 返回 transport 所需的明确执行作用域。 */
-  require_workspace(agent_id_input: string, workspace_id_input: string): AgentWorkspace {
+  require_workspace(agent_id_input: string, workspace_id_input: string): WorkspaceEntry {
     const agent = this.require_agent(agent_id_input);
     const workspace_id = String(workspace_id_input || "").trim();
     if (!workspace_id) throw new Error("City request requires workspace_id");
-    const entry = get_agent_workspace(agent, workspace_id);
+    const entry = get_workspace_entry(agent, workspace_id);
     if (!entry) {
       throw new Error(`Agent "${agent.id}" has not entered Workspace: ${workspace_id}`);
     }
@@ -169,14 +169,14 @@ export class City {
   async enter_workspace(
     agent_id_input: string,
     workspace_id_input: string,
-  ): Promise<AgentWorkspace> {
+  ): Promise<WorkspaceEntry> {
     const agent = this.require_agent(agent_id_input);
     const workspace_id = String(workspace_id_input || "").trim();
     if (!workspace_id) throw new Error("City request requires workspace_id");
-    const existing = get_agent_workspace(agent, workspace_id);
+    const existing = get_workspace_entry(agent, workspace_id);
     if (existing) return existing;
     const city_workspace = this.get_workspace(workspace_id);
-    if (city_workspace) return create_agent_workspace(agent, city_workspace);
+    if (city_workspace) return create_workspace_entry(agent, city_workspace);
     if (!this.resolve_workspace) {
       throw new Error(`Agent "${agent.id}" has not entered Workspace: ${workspace_id}`);
     }
@@ -192,7 +192,7 @@ export class City {
         );
       }
       this.add_workspace(workspace);
-      return create_agent_workspace(agent, workspace);
+      return create_workspace_entry(agent, workspace);
     })();
     this.workspace_entry_promises.set(target_key, entry_promise);
     try {

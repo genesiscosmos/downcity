@@ -8,7 +8,7 @@
  */
 
 import { Hono } from "hono";
-import type { AgentWorkspace } from "@downcity/agent/internal";
+import type { CliAgentContext } from "@/city/agent/CliAgentContext.js";
 
 /**
  * 执行入口路由参数。
@@ -17,7 +17,7 @@ type ExecuteRouterOptions = {
   /**
    * 读取当前 agent runtime。
    */
-  get_agent: () => AgentWorkspace;
+  get_context: () => CliAgentContext;
 };
 
 /**
@@ -76,7 +76,7 @@ export function createExecuteRouter(
 
     try {
       const session_id = `api:chat:${chatId}`;
-      const agentState = options.get_agent();
+      const agentState = options.get_context();
       const session = agentState.sessions.runtime(session_id);
       const turn = await session.prompt({
         query: String(instructions),

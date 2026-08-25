@@ -151,7 +151,7 @@ export interface PluginAction<
   api?: PluginActionApi<P>;
   /** Action 执行器。 */
   execute: (params: {
-    /** AgentWorkspace 创建的稳定 Plugin 能力视图。 */
+    /** WorkspaceEntry 创建的稳定 Plugin 能力视图。 */
     context: PluginContext;
     /**
      * 当前 action 所属 Session Turn 的只读 Plugin 执行快照。

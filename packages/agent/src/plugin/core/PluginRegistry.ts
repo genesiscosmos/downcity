@@ -182,7 +182,7 @@ export class PluginRegistry {
   }
 
   /**
-   * 创建绑定当前 AgentWorkspace 的 Plugin 调用面。
+   * 创建绑定当前 WorkspaceEntry 的 Plugin 调用面。
    *
    * Registry 只保存 Agent 注册的 Plugin；Action、Hook、System 与 availability 在
    * 调用时显式使用这里捕获的 Workspace Context。

@@ -33,6 +33,7 @@ import type { SessionPort } from "@/types/session/SessionPort.js";
 import { create_instruction_system_blocks } from "@/agent/AgentInstructions.js";
 import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
+import type { WorkspaceBase } from "@downcity/workspace";
 
 type AgentSessionsOptions = {
   /**
@@ -41,17 +42,19 @@ type AgentSessionsOptions = {
   agent_id: string;
 
   /**
-   * 当前项目根目录。
+   * 按 Session 解析执行上下文。
+   *
+   * AgentSessions 是 Agent 唯一的 Session 集合；Workspace 相关能力不能
+   * 固定在集合实例上，而应在创建或恢复单个 Session 时解析。
    */
-  workspace_path: string;
-
-  /** 当前 Agent 独享的领域持久化入口。 */
-  store: SessionStore;
-
-  /**
-   * 当前 agent 默认工具集合。
-   */
-  tools: Record<string, Tool>;
+  resolve_session_context: (workspace?: WorkspaceBase) => {
+    workspace_path: string;
+    workspace_id?: string;
+    tools: Record<string, Tool>;
+    get_workspace_env: () => Record<string, string>;
+    get_agent_plugins: () => AgentPluginExecutionRuntime;
+    store: SessionStore;
+  };
 
   /**
    * 当前统一日志器。
@@ -62,12 +65,6 @@ type AgentSessionsOptions = {
    * 当前静态 instruction 文本集合。
    */
   get_instruction: () => string[];
-
-  /** 延迟读取当前 Workspace configured env。 */
-  get_workspace_env: () => Record<string, string>;
-
-  /** 创建当前 configured Plugin registry 的 Session step 执行视图。 */
-  get_agent_plugins: () => AgentPluginExecutionRuntime;
 
   /**
    * 等待当前 Agent 持有的长期运行时启动完成。
@@ -82,9 +79,6 @@ type AgentSessionsOptions = {
   /** 读取 Agent 当前持有的运行时模型实例。 */
   get_agent_model: () => AgentModel | undefined;
 
-  /** 当前 Session 执行上下文的可选 Workspace ID。 */
-  workspace_id?: string;
-
   /** Session 创建或恢复后的内部路由登记回调。 */
   on_session_routed?: (session_id: string, sessions: AgentSessions) => void;
 };
@@ -94,33 +88,23 @@ type AgentSessionsOptions = {
  */
 export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly agent_id: string;
-  private readonly workspace_path: string;
-  private readonly store: SessionStore;
-  private readonly tools: Record<string, Tool>;
+  private readonly resolve_session_context: AgentSessionsOptions["resolve_session_context"];
   private readonly logger: Logger;
   private readonly get_instruction: AgentSessionsOptions["get_instruction"];
-  private readonly get_workspace_env: AgentSessionsOptions["get_workspace_env"];
-  private readonly get_agent_plugins: AgentSessionsOptions["get_agent_plugins"];
   private readonly ensure_agent_ready: AgentSessionsOptions["ensure_agent_ready"];
   private readonly session_class: AgentSessionConstructor;
   private readonly get_agent_model: AgentSessionsOptions["get_agent_model"];
-  private readonly workspace_id?: string;
   private readonly on_session_routed?: AgentSessionsOptions["on_session_routed"];
   private readonly sessions_by_id = new Map<string, AgentManagedSession>();
 
   constructor(options: AgentSessionsOptions) {
     this.agent_id = options.agent_id;
-    this.workspace_path = options.workspace_path;
-    this.store = options.store;
-    this.tools = options.tools;
+    this.resolve_session_context = options.resolve_session_context;
     this.logger = options.logger;
     this.get_instruction = options.get_instruction;
-    this.get_workspace_env = options.get_workspace_env;
-    this.get_agent_plugins = options.get_agent_plugins;
     this.ensure_agent_ready = options.ensure_agent_ready;
     this.session_class = options.session_class || Session;
     this.get_agent_model = options.get_agent_model;
-    this.workspace_id = options.workspace_id;
     this.on_session_routed = options.on_session_routed;
   }
 
@@ -196,9 +180,12 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 新建一个 session。
    */
   async create(
-    input?: AgentCreateSessionInput,
+    input?: AgentCreateSessionInput & { workspace?: WorkspaceBase },
   ): Promise<AgentSession> {
-    const session = this.get_or_create_session();
+    const session = this.get_or_create_session({
+      session_id: input?.session_id,
+      workspace: input?.workspace,
+    });
     this.on_session_routed?.(session.id, this);
     await session.initialize();
     return session;
@@ -207,19 +194,31 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   /**
    * 获取一个已存在的 session。
    */
-  async get(session_id: string): Promise<AgentSession> {
+  async get(
+    session_id: string,
+    input?: { workspace?: WorkspaceBase },
+  ): Promise<AgentSession> {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) {
       throw new Error("sessions.get requires a non-empty session_id");
     }
+    const store = this.resolve_session_context(input?.workspace).store;
     if (
       !this.sessions_by_id.has(resolved_session_id) &&
-      !(await this.store.has_session(resolved_session_id))
+      !(await store.has_session(resolved_session_id))
     ) {
       throw new Error(`Session "${resolved_session_id}" not found`);
     }
+    const cached = this.sessions_by_id.get(resolved_session_id);
+    const requested_workspace_id = String(input?.workspace?.id || "").trim() || undefined;
+    if (cached && cached.workspace_id !== requested_workspace_id) {
+      throw new Error(
+        `Session "${resolved_session_id}" is already bound to Workspace "${cached.workspace_id || ""}"`,
+      );
+    }
     const session = this.get_or_create_session({
       session_id: resolved_session_id,
+      workspace: input?.workspace,
     });
     this.on_session_routed?.(resolved_session_id, this);
     await session.initialize();
@@ -243,7 +242,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       await cached.stop();
     }
     cached?.dispose_title_generation?.();
-    const existed = await this.store.remove_session(resolved_session_id);
+    const existed = await this.resolve_session_context().store.remove_session(resolved_session_id);
     this.sessions_by_id.delete(resolved_session_id);
     return existed;
   }
@@ -261,7 +260,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       throw new Error(`Session "${resolved_session_id}" is currently executing`);
     }
     cached?.dispose_title_generation?.();
-    const existed = await this.store.clear_session_messages(resolved_session_id);
+    const existed = await this.resolve_session_context().store.clear_session_messages(resolved_session_id);
     this.sessions_by_id.delete(resolved_session_id);
     return existed;
   }
@@ -272,7 +271,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async list(
     input?: AgentListSessionsInput,
   ): Promise<AgentSessionSummaryPage> {
-    return await this.store.list_sessions(
+    return await this.resolve_session_context().store.list_sessions(
       input,
       new Set(this.list_executing_session_ids()),
     );
@@ -294,7 +293,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       throw new Error(`Session "${session_id}" is currently executing`);
     }
 
-    const result = await this.store.archive_session(session_id);
+    const result = await this.resolve_session_context().store.archive_session(session_id);
     this.sessions_by_id.get(session_id)?.dispose_title_generation?.();
     this.sessions_by_id.delete(session_id);
     return result;
@@ -306,14 +305,14 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async archived(
     input?: AgentArchiveSessionsInput,
   ): Promise<AgentArchiveSessionsResult> {
-    return await this.store.list_archived_sessions(input);
+    return await this.resolve_session_context().store.list_archived_sessions(input);
   }
 
   /**
    * 永久清空已归档 session。
    */
   async clean_archive(): Promise<AgentCleanArchiveResult> {
-    return await this.store.clean_archive();
+    return await this.resolve_session_context().store.clean_archive();
   }
 
   private get_or_create_session(input?: {
@@ -321,6 +320,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
      * 可选指定 session id。
      */
     session_id?: string;
+    /** 当前 Session 可选使用的 Workspace。 */
+    workspace?: WorkspaceBase;
   }): AgentManagedSession {
     const resolved_session_id =
       String(input?.session_id || "").trim() ||
@@ -328,19 +329,21 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const cached = this.sessions_by_id.get(resolved_session_id);
     if (cached) return cached;
 
+    const context = this.resolve_session_context(input?.workspace);
     const created = new this.session_class({
       agent_id: this.agent_id,
-      workspace_path: this.workspace_path,
-      store: this.store.session(resolved_session_id, this.workspace_id),
-      get_session_store: (session_id) => this.store.session(session_id, this.workspace_id),
+      workspace_path: context.workspace_path,
+      ...(context.workspace_id ? { workspace_id: context.workspace_id } : {}),
+      store: context.store.session(resolved_session_id, context.workspace_id),
+      get_session_store: (session_id) => context.store.session(session_id, context.workspace_id),
       session_id: resolved_session_id,
-      tools: this.tools,
+      tools: context.tools,
       logger: this.logger,
-      instruction_system_blocks: this.load_instruction_system_blocks(),
-      get_instruction_system_blocks: () => this.load_instruction_system_blocks(),
-      get_workspace_env: () => this.get_workspace_env(),
+      instruction_system_blocks: this.load_instruction_system_blocks(context.workspace_path),
+      get_instruction_system_blocks: () => this.load_instruction_system_blocks(context.workspace_path),
+      get_workspace_env: () => context.get_workspace_env(),
       get_agent_model: () => this.get_agent_model(),
-      get_agent_plugins: () => this.get_agent_plugins(),
+      get_agent_plugins: () => context.get_agent_plugins(),
       get_managed_plugin_system_blocks: async () => [],
       ensure_configured: async (session) => {
         await this.ensure_agent_ready();
@@ -350,10 +353,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return created;
   }
 
-  private load_instruction_system_blocks(): AgentSessionSystemBlock[] {
+  private load_instruction_system_blocks(workspace_path: string): AgentSessionSystemBlock[] {
     return create_instruction_system_blocks(
       this.get_instruction(),
-      this.workspace_path,
+      workspace_path,
     );
   }
 

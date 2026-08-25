@@ -5,7 +5,7 @@
  * Workspace 的运行时关系，但不把执行作用域提升为 Agent 的公开领域 API。
  */
 import { Agent } from "@/agent/Agent.js";
-import { AgentWorkspace } from "@/agent/AgentWorkspace.js";
+import { WorkspaceEntry } from "@/agent/WorkspaceEntry.js";
 import type { WorkspaceBase } from "@downcity/workspace";
 import type { City } from "../city/index.js";
 import type { WorkspaceStorageScope } from "@downcity/workspace";
@@ -19,7 +19,8 @@ import {
 
 interface AgentRuntimeState {
   bound_city?: City;
-  workspaces_by_id: Map<string, AgentWorkspace>;
+  memory_storage?: AgentStorage;
+  workspaces_by_id: Map<string, WorkspaceEntry>;
   agent_storage?: AgentStorage;
   action_schedule?: ActionScheduleRuntimeHandle;
   action_schedule_promise?: Promise<void>;
@@ -71,15 +72,29 @@ export function get_agent_storage(
   agent: Agent,
 ): AgentStorage {
   const state = runtime_state(agent);
+  if (!state.bound_city) {
+    if (state.memory_storage) return state.memory_storage;
+    const files = new MemoryFileSystem(`/memory/agents/${agent.id}`);
+    state.memory_storage = {
+      root_path: files.root_path,
+      files,
+      sessions: new LocalSessionStore({
+        files,
+        storage_root_path: files.root_path,
+        agent_id: agent.id,
+      }),
+    };
+    return state.memory_storage;
+  }
   if (state.agent_storage) return state.agent_storage;
-  const scope = state.bound_city?.open_agent_storage(agent.id);
-  const files = scope?.files || MemoryFileSystem.shared(`/memory/agents/${agent.id}`);
+  const scope = state.bound_city.open_agent_storage(agent.id);
+  const files = scope?.files || new MemoryFileSystem(`/memory/agents/${agent.id}`);
   const storage: AgentStorage = {
-    root_path: scope?.root_path || files.root_path,
+    root_path: scope.root_path,
     files,
     sessions: new LocalSessionStore({
       files,
-      storage_root_path: scope?.root_path || files.root_path,
+      storage_root_path: scope.root_path,
       agent_id: agent.id,
     }),
   };
@@ -127,7 +142,7 @@ export function agent_storage(agent: Agent): AgentStorage | null {
   return runtime_state(agent).agent_storage ?? null;
 }
 
-export function create_agent_workspace(agent: Agent, workspace: WorkspaceBase): AgentWorkspace {
+export function create_workspace_entry(agent: Agent, workspace: WorkspaceBase): WorkspaceEntry {
   const state = runtime_state(agent);
   const workspace_id = String(workspace?.id || "").trim();
   if (!workspace_id) throw new Error("Agent sessions require a Workspace with a stable id");
@@ -149,21 +164,21 @@ export function create_agent_workspace(agent: Agent, workspace: WorkspaceBase): 
     }
     return existing;
   }
-  const entry = new AgentWorkspace({ agent, workspace });
+  const entry = new WorkspaceEntry({ agent, workspace });
   state.workspaces_by_id.set(workspace_id, entry);
   ensure_agent_action_schedule(agent);
   return entry;
 }
 
-export function get_agent_workspace(agent: Agent, workspace_id_input: string): AgentWorkspace | null {
+export function get_workspace_entry(agent: Agent, workspace_id_input: string): WorkspaceEntry | null {
   return runtime_state(agent).workspaces_by_id.get(String(workspace_id_input || "").trim()) ?? null;
 }
 
-export function list_agent_workspaces(agent: Agent): readonly AgentWorkspace[] {
+export function list_workspace_entries(agent: Agent): readonly WorkspaceEntry[] {
   return [...runtime_state(agent).workspaces_by_id.values()];
 }
 
-export function release_agent_workspace(agent: Agent, workspace_id: string, entry: AgentWorkspace): void {
+export function release_workspace_entry(agent: Agent, workspace_id: string, entry: WorkspaceEntry): void {
   const state = runtime_state(agent);
   if (state.workspaces_by_id.get(workspace_id) === entry) {
     state.workspaces_by_id.delete(workspace_id);

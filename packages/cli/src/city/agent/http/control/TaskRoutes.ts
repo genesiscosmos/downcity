@@ -41,7 +41,7 @@ async function listTasksViaPlugin(params: {
   routes: ControlRouteRegistrationParams;
   status?: string;
 }): Promise<TaskListItem[]> {
-  const result = await params.routes.get_agent().plugins.run_action({
+  const result = await params.routes.get_context().plugins.run_action({
     plugin: "task",
     action: "list",
     payload: params.status ? { status: params.status } : undefined,
@@ -115,7 +115,7 @@ export function registerControlTaskRoutes(
   for (const routePath of buildControlRouteAliases("/tasks")) {
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.get_agent();
+        const runtime = params.get_context();
         const status = toOptionalString(c.req.query("status"));
         const tasks = await listTasksViaPlugin({
           routes: params,
@@ -155,7 +155,7 @@ export function registerControlTaskRoutes(
         }
 
         const reason = toOptionalString(body.reason);
-        const result = await params.get_agent().plugins.run_action({
+        const result = await params.get_context().plugins.run_action({
           plugin: "task",
           action: "run",
           payload: {
@@ -185,7 +185,7 @@ export function registerControlTaskRoutes(
           return c.json({ success: false, error: "Invalid status" }, 400);
         }
 
-        const result = await params.get_agent().plugins.run_action({
+        const result = await params.get_context().plugins.run_action({
           plugin: "task",
           action: "status",
           payload: {
@@ -221,7 +221,7 @@ export function registerControlTaskRoutes(
           return c.json({ success: false, error: "Invalid title" }, 400);
         }
 
-        const result = await params.get_agent().plugins.run_action({
+        const result = await params.get_context().plugins.run_action({
           plugin: "task",
           action: "delete",
           payload: {
@@ -248,7 +248,7 @@ export function registerControlTaskRoutes(
   for (const routePath of buildControlRouteAliases("/tasks/:title/runs/:timestamp")) {
     app.delete(routePath, async (c) => {
       try {
-        const runtime = params.get_agent();
+        const runtime = params.get_context();
         const title = decodeMaybe(String(c.req.param("title") || "").trim());
         const timestamp = String(c.req.param("timestamp") || "").trim();
         if (!title) {
@@ -299,7 +299,7 @@ export function registerControlTaskRoutes(
   for (const routePath of buildControlRouteAliases("/tasks/:title/runs")) {
     app.delete(routePath, async (c) => {
       try {
-        const runtime = params.get_agent();
+        const runtime = params.get_context();
         const title = decodeMaybe(String(c.req.param("title") || "").trim());
         if (!title) {
           return c.json({ success: false, error: "Invalid title" }, 400);
@@ -364,7 +364,7 @@ export function registerControlTaskRoutes(
 
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.get_agent();
+        const runtime = params.get_context();
         const title = decodeMaybe(String(c.req.param("title") || "").trim());
         if (!title) {
           return c.json({ success: false, error: "Invalid title" }, 400);
@@ -386,7 +386,7 @@ export function registerControlTaskRoutes(
   for (const routePath of buildControlRouteAliases("/tasks/:title/runs/:timestamp")) {
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.get_agent();
+        const runtime = params.get_context();
         const title = decodeMaybe(String(c.req.param("title") || "").trim());
         const timestamp = String(c.req.param("timestamp") || "").trim();
         if (!title) {
@@ -414,7 +414,7 @@ export function registerControlTaskRoutes(
   for (const routePath of buildControlRouteAliases("/logs")) {
     app.get(routePath, async (c) => {
       try {
-        const runtime = params.get_agent();
+        const runtime = params.get_context();
         const limit = toLimit(c.req.query("limit"), 200);
         const logs = await readRecentLogs({
           data_path: runtime.data_path,

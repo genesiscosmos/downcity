@@ -2,7 +2,7 @@
  * ChatHistoryStore：聊天事件流持久化。
  *
  * 关键点（中文）
- * - 写入 AgentWorkspace 数据目录的 `chat/<session_id>/history.jsonl`（append-only）。
+ * - 写入 Agent private runtime directory 数据目录的 `chat/<session_id>/history.jsonl`（append-only）。
  * - 记录 inbound（audit/exec）与 outbound 事件。
  * - 与 session message history 分离，避免审计噪声进入模型上下文。
  */

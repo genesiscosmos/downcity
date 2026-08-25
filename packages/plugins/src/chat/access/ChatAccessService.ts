@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 所有平台共用相同的 Principal、Grant、Request 和 Audit 业务规则。
  * - Chat Access 只做准入判定，不向 Agent Session 或其他 Plugin 传播权限。
- * - 每个方法自行打开并关闭 AgentWorkspace Store，避免 Channel 生命周期遗漏连接释放。
+ * - 每个方法自行打开并关闭 Agent private runtime directory Store，避免 Channel 生命周期遗漏连接释放。
  */
 
 import path from "node:path";

@@ -58,7 +58,7 @@ export interface BuildQqInboundInstructionsParams {
    */
   rootPath: string;
   /**
-   * 当前 AgentWorkspace 的私有数据目录。
+   * 当前 Agent private runtime directory 的私有数据目录。
    */
   dataPath: string;
   /**

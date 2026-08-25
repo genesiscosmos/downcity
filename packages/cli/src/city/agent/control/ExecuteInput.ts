@@ -189,7 +189,7 @@ function toAttachmentLine(params: {
 export async function buildExecuteInputText(params: {
   /** 当前项目根目录，只用于校验调用方传入的已有文件路径。 */
   project_root: string;
-  /** 当前 AgentWorkspace 私有数据目录，用于保存请求内联附件。 */
+  /** 当前 CliAgentContext 私有数据目录，用于保存请求内联附件。 */
   data_path: string;
   session_id: string;
   instructions: string;

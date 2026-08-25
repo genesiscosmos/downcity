@@ -13,6 +13,13 @@ import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js"
  * 新建 session 的输入参数。
  */
 export interface AgentCreateSessionInput {
+  /**
+   * 可选的 Session 稳定标识。
+   *
+   * 未传入时由 SDK 自动生成；传入时主要用于恢复测试数据、迁移数据
+   * 或由宿主在创建流程中提前分配标识。
+   */
+  session_id?: string;
 }
 
 /**

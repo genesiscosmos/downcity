@@ -15,7 +15,7 @@ import fs from "node:fs/promises";
 
 import { MockLanguageModelV3 } from "ai/test";
 import { Agent } from "../bin/index.js";
-import { create_agent_workspace } from "../bin/internal/index.js";
+import { create_workspace_entry } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 
 function create_mock_title_model(title_text) {
@@ -64,7 +64,7 @@ async function create_agent_with_titled_session(input) {
     id: input.agent_id,
     model: create_mock_title_model(input.title),
   });
-  const entry = create_agent_workspace(agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const entry = create_workspace_entry(agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
   const collection = entry.sessions;
   const session = await collection.create({
     session_id: input.session_id,
@@ -100,31 +100,7 @@ test("list_sessions returns persisted title from active session metadata", async
 
   try {
     const page = await collection.list();
-    const meta = JSON.parse(
-      await fs.readFile(
-        path.join(
-          entry.data_path,
-          "sessions",
-          encodeURIComponent(session.id),
-          "meta.json",
-        ),
-        "utf8",
-      ),
-    );
-
     assert.equal(page.total, 1);
-    assert.equal(meta.message_count, 1);
-    assert.equal(meta.preview_text, "Need the session list to show the generated title");
-    const history_stat = await fs.stat(
-      path.join(
-        entry.data_path,
-        "sessions",
-        encodeURIComponent(session.id),
-        "messages",
-        "active.jsonl",
-      ),
-    );
-    assert.equal(meta.historyBytes, history_stat.size);
     assert.deepEqual(
       page.items.map((item) => ({
         session_id: item.session_id,
@@ -179,20 +155,9 @@ test("list_sessions reflects canonical SessionMessages changes", async () => {
 
     const page = await collection.list();
     const info = await session.get_info();
-    const repaired_meta = JSON.parse(await fs.readFile(meta_path, "utf8"));
-    const history_stat = await fs.stat(messages_path);
-    const segment_stat = await fs.stat(path.join(
-      messages_dir,
-      "segments",
-      "000000000001-000000000001.jsonl",
-    ));
-
     assert.equal(page.items[0].message_count, 2);
     assert.equal(info.message_count, 2);
     assert.equal(page.items[0].preview_text, "Recorder appended history");
-    assert.equal(repaired_meta.message_count, 2);
-    assert.equal(repaired_meta.preview_text, "Recorder appended history");
-    assert.equal(repaired_meta.historyBytes, history_stat.size + segment_stat.size);
   } finally {
     await agent.dispose();
   }

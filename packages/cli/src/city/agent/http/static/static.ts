@@ -3,7 +3,7 @@
  *
  * 职责说明：
  * 1. 提供根目录前端静态文件访问。
- * 2. 提供 AgentWorkspace 私有 `public` 目录的受限文件暴露。
+ * 2. 提供 CliAgentContext 私有 `public` 目录的受限文件暴露。
  * 3. 只处理静态资源协议，不承载业务逻辑。
  */
 
@@ -11,7 +11,7 @@ import { Hono } from "hono";
 import fs from "fs-extra";
 import path from "path";
 import { getDowncityPublicDirPath } from "@/city/config/Paths.js";
-import type { AgentWorkspace } from "@downcity/agent/internal";
+import type { CliAgentContext } from "@/city/agent/CliAgentContext.js";
 
 /**
  * 静态资源路由参数。
@@ -20,7 +20,7 @@ type StaticRouterOptions = {
   /**
    * 读取当前 agent runtime。
    */
-  get_agent: () => AgentWorkspace;
+  get_context: () => CliAgentContext;
 };
 
 /**
@@ -32,7 +32,7 @@ export function createStaticRouter(
   const router = new Hono();
 
   router.get("/", async (c) => {
-    const indexPath = path.join(options.get_agent().workspace.path, "public", "index.html");
+    const indexPath = path.join(options.get_context().workspace.path, "public", "index.html");
     if (await fs.pathExists(indexPath)) {
       const content = await fs.readFile(indexPath, "utf-8");
       return c.body(content, 200, {
@@ -44,7 +44,7 @@ export function createStaticRouter(
   });
 
   router.get("/styles.css", async (c) => {
-    const cssPath = path.join(options.get_agent().workspace.path, "public", "styles.css");
+    const cssPath = path.join(options.get_context().workspace.path, "public", "styles.css");
     if (await fs.pathExists(cssPath)) {
       const content = await fs.readFile(cssPath, "utf-8");
       return c.body(content, 200, {
@@ -56,7 +56,7 @@ export function createStaticRouter(
   });
 
   router.get("/app.js", async (c) => {
-    const jsPath = path.join(options.get_agent().workspace.path, "public", "app.js");
+    const jsPath = path.join(options.get_context().workspace.path, "public", "app.js");
     if (await fs.pathExists(jsPath)) {
       const content = await fs.readFile(jsPath, "utf-8");
       return c.body(content, 200, {
@@ -68,7 +68,7 @@ export function createStaticRouter(
   });
 
   router.get("/downcity/public/*", async (c) => {
-    const root = getDowncityPublicDirPath(options.get_agent().data_path);
+    const root = getDowncityPublicDirPath(options.get_context().data_path);
     const prefix = "/downcity/public/";
     const requestPath = c.req.path;
     const rel = requestPath.startsWith(prefix)

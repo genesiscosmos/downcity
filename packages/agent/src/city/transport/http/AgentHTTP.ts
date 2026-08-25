@@ -10,11 +10,11 @@
 
 import http from "node:http";
 import { Hono } from "hono";
-import type { AgentWorkspace } from "@/internal/index.js";
-import { create_agent_workspace } from "@/internal/index.js";
+import { create_workspace_entry } from "@/internal/index.js";
 import type { Agent } from "@/agent/Agent.js";
 import type { AgentSessionCollection } from "@/types/agent/AgentSessionCollection.js";
 import type { WorkspaceBase } from "@downcity/workspace";
+import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
 import { register_sdk_session_routes } from "@/city/transport/http/routes/SessionRoutes.js";
 import { register_runtime_routes } from "@/city/transport/http/routes/RuntimeRoutes.js";
 import { create_node_http_server } from "@/city/transport/http/NodeHttpAdapter.js";
@@ -40,28 +40,38 @@ export interface AgentHttpServerHandle {
 }
 
 /**
- * 把一个 `AgentWorkspace` 暴露为最小 SDK HTTP 面。
+ * 把一个 `WorkspaceEntry` 暴露为最小 SDK HTTP 面。
  */
 export class AgentHTTP {
-  private readonly agent_workspace: AgentWorkspace;
+  private readonly agent: Agent;
+  private readonly workspace?: WorkspaceBase;
+  private readonly plugins: AgentPlugins;
   private readonly session_collection: AgentSessionCollection;
   private readonly runtime_options: AgentHttpRuntimeOptions;
   private cached_router: Hono | null = null;
   private cached_server: AgentHttpServerHandle | null = null;
 
   constructor(
-    agent_or_workspace: Agent | AgentWorkspace,
+    agent_or_workspace: Agent | { agent: Agent; workspace: WorkspaceBase; plugins: AgentPlugins },
     workspace_or_options?: WorkspaceBase | AgentHttpRuntimeOptions,
     runtime_options: AgentHttpRuntimeOptions = {},
   ) {
     if (workspace_or_options && "id" in workspace_or_options && "path" in workspace_or_options) {
-      this.agent_workspace = create_agent_workspace(agent_or_workspace as Agent, workspace_or_options);
-      this.session_collection = (agent_or_workspace as Agent).sessions;
+      const agent = "agent" in agent_or_workspace ? agent_or_workspace.agent : agent_or_workspace;
+      this.agent = agent;
+      this.workspace = workspace_or_options;
+      this.plugins = "agent" in agent_or_workspace
+        ? agent_or_workspace.plugins
+        : create_workspace_entry(agent, workspace_or_options).plugins;
+      this.session_collection = agent.sessions;
       this.runtime_options = runtime_options;
       return;
     }
-      this.agent_workspace = agent_or_workspace as AgentWorkspace;
-      this.session_collection = this.agent_workspace.sessions;
+      const entry = agent_or_workspace as { agent?: Agent; workspace?: WorkspaceBase; plugins?: AgentPlugins };
+      this.agent = entry.agent || agent_or_workspace as Agent;
+      this.workspace = entry.workspace;
+      this.plugins = entry.plugins || this.agent.plugins as unknown as AgentPlugins;
+      this.session_collection = this.agent.sessions;
     this.runtime_options = (workspace_or_options as AgentHttpRuntimeOptions | undefined) ?? {};
   }
 
@@ -75,10 +85,10 @@ export class AgentHTTP {
   router(): Hono {
     if (this.cached_router) return this.cached_router;
     const router = new Hono();
-    register_sdk_session_routes(router, this.session_collection, this.agent_workspace.workspace, {
+    register_sdk_session_routes(router, this.session_collection, this.workspace, {
       resolve_session_model: this.runtime_options.resolve_session_model,
     });
-    register_runtime_routes(router, this.agent_workspace);
+    register_runtime_routes(router, this.plugins);
     this.cached_router = router;
     return router;
   }

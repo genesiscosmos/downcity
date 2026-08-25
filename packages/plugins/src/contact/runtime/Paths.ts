@@ -2,7 +2,7 @@
  * contact plugin runtime 路径规则。
  *
  * 关键点（中文）
- * - 所有 contact 运行时状态都收敛在 AgentWorkspace 私有 `contact` 目录。
+ * - 所有 contact 运行时状态都收敛在 Agent private runtime directory 私有 `contact` 目录。
  * - 每个 contact 一个目录；每条 inbox share 一个目录。
  */
 

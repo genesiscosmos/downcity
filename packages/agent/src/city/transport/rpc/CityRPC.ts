@@ -75,19 +75,26 @@ export class CityRPC {
           if (!agent_id) throw new Error("CityRPC request requires agent_id");
           const workspace_id = String(request.workspace_id || "").trim();
           if (!workspace_id) throw new Error("CityRPC request requires workspace_id");
-          const agent_workspace = await this.city.enter_workspace(agent_id, workspace_id);
+          const workspace_entry = await this.city.enter_workspace(agent_id, workspace_id);
           const agent = this.city.agents.get(agent_id);
           if (!agent) throw new Error(`Agent not found: ${agent_id}`);
           const sessions = {
             ...agent.sessions,
-            create: async () => await agent.sessions.create({ workspace: agent_workspace.workspace }),
-            get: async (session_id: string) => await agent.sessions.get(session_id, { workspace: agent_workspace.workspace }),
+            create: async () => await agent.sessions.create({ workspace: workspace_entry.workspace }),
+            get: async (session_id: string) => await agent.sessions.get(session_id, { workspace: workspace_entry.workspace }),
           };
           const resolve_session_model = this.runtime_options.resolve_session_model;
           const reload_workspace_env = this.runtime_options.reload_workspace_env;
           return {
             sessions,
-            get_workspace: () => agent_workspace,
+            get_agent_context: () => ({
+              agent,
+              workspace: workspace_entry.workspace,
+              sessions,
+              plugins: workspace_entry.plugins,
+              list_plugin_states: () => workspace_entry.list_plugin_states(),
+              resolve_system_messages: async (input) => await workspace_entry.resolve_system_messages(input),
+            }),
             resolve_session_model: resolve_session_model
               ? async (model_id) => await resolve_session_model(
                   agent_id,

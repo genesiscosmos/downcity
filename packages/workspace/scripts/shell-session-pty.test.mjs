@@ -100,13 +100,13 @@ test("Shell only exposes command tools", () => {
   ]);
 });
 
-test("Shell rejects rebinding to another AgentWorkspace", () => {
+test("Shell rejects rebinding to another Agent execution context", () => {
   const shell = new Shell({ sandbox: test_sandbox });
   shell.bind({ root_path: "/workspace/first", data_path: "/data/first" });
   shell.bind({ root_path: "/workspace/first", data_path: "/data/first" });
   assert.throws(
     () => shell.bind({ root_path: "/workspace/second", data_path: "/data/second" }),
-    /already bound to another AgentWorkspace/,
+    /already bound to another Agent execution context/,
   );
 });
 

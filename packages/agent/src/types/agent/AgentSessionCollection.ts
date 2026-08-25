@@ -6,6 +6,7 @@
 
 import type { WorkspaceBase } from "@downcity/workspace";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
+import type { AgentCreateSessionInput } from "@/types/agent/SessionTypes.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type {
   AgentArchiveSessionInput,
@@ -18,7 +19,7 @@ import type {
 } from "@/types/agent/SessionTypes.js";
 
 /** 创建 Agent Session 的公开参数。 */
-export interface AgentCreateSessionOptions {
+export interface AgentCreateSessionOptions extends AgentCreateSessionInput {
   /** 本次 Session 可选使用的 Workspace 资源；未传入时使用内存执行上下文。 */
   workspace?: WorkspaceBase;
 }
@@ -45,6 +46,9 @@ export interface AgentSessionCollection {
 
   /** 获取 Session runtime port。 */
   runtime(session_id: string): SessionPort;
+
+  /** 返回当前 Agent 正在执行的 Session 标识。 */
+  list_executing_session_ids(): string[];
 
   /** 永久删除 Session。 */
   remove(session_id: string): Promise<boolean>;

@@ -60,7 +60,7 @@ export interface WorkspaceShell {
   bind(input: {
     /** 项目文件和命令 cwd 的根路径。 */
     root_path: string;
-    /** AgentWorkspace 私有数据根路径。 */
+    /** Agent private runtime directory 私有数据根路径。 */
     data_path: string;
   }): void;
 
