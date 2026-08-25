@@ -40,6 +40,7 @@ test("Windows MXC runs cmd and confines writes to the workspace", {
     const execute_result = await execShellCommand(state, {
       sandbox: new WindowsMxcSandbox(),
       rootPath: project_root,
+      dataPath: fixture_root,
       env: { WINDOWS_TEST_VALUE: "downcity" },
     }, {
       cmd: command,

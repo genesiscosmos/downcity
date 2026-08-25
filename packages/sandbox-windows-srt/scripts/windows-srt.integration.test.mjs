@@ -70,6 +70,7 @@ test("Windows SRT confines writes inside an ACL-hardened fixture", {
     const execute_result = await execShellCommand(state, {
       sandbox,
       rootPath: project_root,
+      dataPath: fixture_root,
       env: { WINDOWS_TEST_VALUE: "downcity" },
     }, {
       cmd: command,
