@@ -124,6 +124,18 @@ const HELP_ITEMS = [
       "同步 root、@downcity/workspace、@downcity/agent、@downcity/plugins、downcity 版本并推送，触发 scoped 包发布 workflow，并在成功后触发 downcity 镜像包 workflow。",
   },
   {
+    name: "packages:publish",
+    summary: "在本地按依赖拓扑交互式发布 npm packages。",
+    detail:
+      "检查 npm 登录状态，支持全部 scoped packages、指定 package 或 downcity CLI；不会自动 commit 或 push。",
+  },
+  {
+    name: "homepage:deploy",
+    summary: "在本地构建并部署 homepage 到 Cloudflare Pages。",
+    detail:
+      "首次使用前执行 `pnpm dlx wrangler@4.95.0 login`，默认部署到 downcity Pages 项目。",
+  },
+  {
     name: "build:packages",
     summary: "packages 构建脚本底层入口。",
     detail: "当前与 `patch:build` 指向同一个脚本，保留给已有使用习惯与兼容调用。",
