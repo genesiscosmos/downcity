@@ -37,9 +37,9 @@ const DEFAULT_SOUND_PLUGIN_DESCRIPTION =
   "Transcribe audio and synthesize speech through FED-provided models.";
 const DEFAULT_AUDIO_MEDIA_TYPE = "audio/mpeg";
 
-/** 从当前 Agent 所在 City 获取语音 AI 服务。 */
+/** 从 City 注入的 Embassy 获取语音 AI 服务。 */
 function require_sound_ai(context: PluginContext): SoundAiService {
-  const service = context.city?.embassy?.user.ai;
+  const service = context.embassy?.user.ai;
   if (!service) throw new Error("SoundPlugin requires a City Embassy user AI service");
   return {
     catalog: async () => await service.catalog(),

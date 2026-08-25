@@ -10,7 +10,6 @@
 import type { WorkspaceShell } from "@/shell/types/WorkspaceShell.js";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 import type { WorkspaceTools } from "@/types/workspace/WorkspaceTools.js";
-import type { WorkspaceStorageProvider } from "@/types/workspace/WorkspaceStorage.js";
 import type {
   WorkspaceEnvPatch,
   WorkspaceEnvSubscriber,
@@ -36,9 +35,6 @@ export abstract class WorkspaceBase {
 
   /** Workspace 提供的可选命令执行能力。 */
   abstract readonly shell?: WorkspaceShell;
-
-  /** Workspace 私有数据的通用存储后端。 */
-  abstract readonly storage: WorkspaceStorageProvider;
 
   /** 返回当前 Workspace 环境变量快照。 */
   abstract get_env(): Record<string, string>;

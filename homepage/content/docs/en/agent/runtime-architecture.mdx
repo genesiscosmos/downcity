@@ -106,7 +106,7 @@ A Session supports three System semantics:
 Local state lives under the Agent-specific Workspace scope in the user-level Downcity directory:
 
 ```text
-~/.downcity/agents/<agent-id>/workspaces/<workspace-id>/
+~/.downcity/agents/<agent-id>/
 ├─ sessions/<session-id>/
 │  ├─ instruction.md
 │  ├─ meta.json
@@ -149,7 +149,7 @@ Plugins belong to Agent, not Workspace. They may contribute Actions, System text
 
 PluginRegistry changes take effect at Session checkpoints. A Plugin startup failure isolates that Plugin without blocking others. Agent disposal stops ActionSchedule and unloads Plugins.
 
-ActionSchedule is a local delayed Plugin Action scheduler. Events are stored in the current AgentWorkspace's `schedule.jsonl`; after restart, abandoned running entries recover to pending. It is not a distributed scheduler and provides no cross-machine leader election.
+ActionSchedule is a local delayed Plugin Action scheduler owned by the Agent. Events are stored in the Agent's storage scope; after restart, abandoned running entries recover to pending. It is not a distributed scheduler and provides no cross-machine leader election.
 
 ## Security model
 
@@ -188,8 +188,8 @@ flowchart LR
     Schedule --> Barrier["internal initialization barrier"]
     Barrier --> Running["execute Sessions"]
     Running --> Dispose["agent.dispose()"]
-    Dispose --> Leave["leave all AgentWorkspaces"]
-    Leave --> Workspace["Workspace.dispose()"]
+    Dispose --> Sessions["release AgentSessions"]
+    Sessions --> Workspace["Workspace.dispose()"]
     Workspace --> Shell["close processes and Sandbox"]
 ```
 

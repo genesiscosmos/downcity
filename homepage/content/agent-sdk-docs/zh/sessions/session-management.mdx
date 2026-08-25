@@ -12,13 +12,13 @@ description: 创建、打开、列表、归档和永久清理 Session
 ```ts
 const created = await agent.sessions.create({
   workspace,
-  session_id: "repo-analysis",
 });
 
-const existing = await agent.sessions.get({ workspace, session_id: "repo-analysis" });
+const existing = await agent.sessions.get("session-id-from-list", { workspace });
 ```
 
-`create()` 表示创建意图：同名 Session 已存在时会报错，不会静默复用。省略 `session_id` 时由 SDK 生成不可推导的稳定 ID。需要“有则打开、无则创建”时，先 `get()`，按不存在错误再调用 `create()`。
+`create()` 始终由 SDK 内部生成 Session ID。恢复已有 Session 时，从 `list()` 或其他持久化引用
+取得 ID，再调用 `get(session_id, { workspace })`。
 
 ## 列表与搜索
 

@@ -18,6 +18,7 @@ import {
   type SessionMessage,
   type SessionMutation,
 } from "@downcity/agent";
+import { LocalStorageProvider } from "@downcity/workspace";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
@@ -25,14 +26,14 @@ import {
   register_city_host,
   unregister_city_host,
 } from "@downcity/agent/city";
-import { create_agent_workspace, get_agent_workspace } from "@downcity/agent/internal";
+import { create_workspace_entry, get_workspace_entry } from "@downcity/agent/internal";
 import {
   type LocalAgentConfig,
   type LocalWorkspaceConfig,
   normalize_agent_id,
 } from "@downcity/local/product";
 import type {
-  DesktopAgentWorkspace,
+  DesktopAgentConnection,
   DesktopAgentSummary,
   DesktopChatInput,
   DesktopChatRewriteInput,
@@ -97,7 +98,10 @@ export class AgentController {
     private readonly data: DesktopLocalData,
     private readonly events: AgentControllerEvents,
   ) {
-    this.city = new City({ embassy: create_desktop_embassy(data, process.env) });
+    this.city = new City({
+      embassy: create_desktop_embassy(data, process.env),
+      storage: new LocalStorageProvider(data.root_path),
+    });
     this.plugin_loader = create_desktop_plugin_loader(this.data);
     this.ready_promise = this.initialize_agents();
   }
@@ -262,14 +266,14 @@ export class AgentController {
   }
 
   /** 让指定 Agent 进入独立登记的 Workspace。 */
-  async connect_agent(agent_id: string, workspace_id: string): Promise<DesktopAgentWorkspace> {
+  async connect_agent(agent_id: string, workspace_id: string): Promise<DesktopAgentConnection> {
     await this.ready_promise;
     const config = this.data.agents.get(agent_id);
     if (!config) throw new Error(`Agent not found: ${agent_id}`);
     const workspace = this.data.workspaces.get(workspace_id);
     if (!workspace) throw new Error(`Workspace is not registered: ${workspace_id}`);
     if (!this.city.agents.get(config.agent_id)) throw new Error(`Agent is not available in Desktop City: ${config.agent_id}`);
-    await this.require_agent_workspace(config.agent_id, workspace_id);
+    await this.require_workspace_entry(config.agent_id, workspace_id);
     return { agent_id: config.agent_id, workspace_id, workspace: to_desktop_workspace_summary(workspace) };
   }
 
@@ -290,7 +294,7 @@ export class AgentController {
   async create_session(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary> {
     const agent = this.require_native_agent(agent_id);
     const workspace = this.city.workspaces.get(workspace_id)
-      ?? (await this.require_agent_workspace(agent_id, workspace_id)).workspace;
+      ?? (await this.require_workspace_entry(agent_id, workspace_id)).workspace;
     const session = await agent.sessions.create({ workspace });
     this.observe_session(agent_id, workspace_id, session);
     return to_desktop_session_summary(await session.get_info());
@@ -463,7 +467,7 @@ export class AgentController {
 
   /** 解析 Federation 模型并切换当前 Session。 */
   async set_model(agent_id: string, workspace_id: string, session_id: string, model_id: string): Promise<DesktopSessionConfiguration> {
-    const entry = await this.require_agent_workspace(agent_id, workspace_id);
+    const entry = await this.require_workspace_entry(agent_id, workspace_id);
     const session = await this.get_session(agent_id, workspace_id, session_id);
     const model = await resolve_desktop_agent_model(this.data, model_id, entry.workspace.get_env());
     const configured_effort = this.read_session_reasoning_efforts()[get_session_key(agent_id, workspace_id, session_id)];
@@ -477,7 +481,7 @@ export class AgentController {
 
   /** 设置当前 Session 的推理强度，并让后续 Turn 使用该档位。 */
   async set_reasoning_effort(agent_id: string, workspace_id: string, session_id: string, reasoning_effort?: string): Promise<DesktopSessionConfiguration> {
-    const entry = await this.require_agent_workspace(agent_id, workspace_id);
+    const entry = await this.require_workspace_entry(agent_id, workspace_id);
     const session = await this.get_session(agent_id, workspace_id, session_id);
     const model_id = (await this.read_session_configuration(workspace_id, session)).model_id;
     const model = await resolve_desktop_agent_model(this.data, model_id, entry.workspace.get_env());
@@ -573,7 +577,7 @@ export class AgentController {
 
   /** 读取 Session，并确保实时 mutation 只订阅一次。 */
   private async get_session(agent_id: string, workspace_id: string, session_id: string): Promise<AgentSession> {
-    const entry = await this.require_agent_workspace(agent_id, workspace_id);
+    const entry = await this.require_workspace_entry(agent_id, workspace_id);
     const session = await this.require_native_agent(agent_id).sessions.get(session_id, { workspace: entry.workspace });
     await this.restore_session_model(agent_id, workspace_id, session);
     this.observe_session(agent_id, workspace_id, session);
@@ -675,7 +679,7 @@ export class AgentController {
     const session_key = get_session_key(agent_id, workspace_id, session.id);
     const model_id = this.read_session_model_ids()[session_key];
     if (!model_id || this.restored_session_models.get(session_key) === model_id) return;
-    const entry = await this.require_agent_workspace(agent_id, workspace_id);
+    const entry = await this.require_workspace_entry(agent_id, workspace_id);
     const model = await resolve_desktop_agent_model(this.data, model_id, entry.workspace.get_env());
     const reasoning_effort = select_model_reasoning_effort(model, this.read_session_reasoning_efforts()[session_key]);
     this.persist_session_reasoning_effort(agent_id, workspace_id, session.id, reasoning_effort);
@@ -726,15 +730,15 @@ export class AgentController {
   }
 
   /** 按需让 Desktop Agent 进入指定 Workspace。 */
-  private async require_agent_workspace(agent_id: string, workspace_id: string) {
+  private async require_workspace_entry(agent_id: string, workspace_id: string) {
     const agent = this.require_native_agent(agent_id);
-    const existing = get_agent_workspace(agent, workspace_id);
+    const existing = get_workspace_entry(agent, workspace_id);
     if (existing) return existing;
     const config = this.data.workspaces.get(workspace_id);
     if (!config) throw new Error(`Workspace not found: ${workspace_id}`);
     const workspace = this.city.workspaces.get(workspace_id)
       ?? this.city.workspaces.add(await create_desktop_workspace(this.data, config));
-    return create_agent_workspace(agent, workspace);
+    return create_workspace_entry(agent, workspace);
   }
 }
 

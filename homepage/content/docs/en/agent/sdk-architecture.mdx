@@ -1,6 +1,6 @@
 ---
 title: Agent SDK Architecture
-description: Responsibilities and composition of Agent, Workspace, AgentWorkspace, Session, Plugin, and Shell
+description: Responsibilities and composition of City, Agent, Workspace, Session, Plugin, and Shell
 ---
 
 # Agent SDK Architecture
@@ -27,11 +27,12 @@ flowchart TD
     Host --> Workspace["Workspace<br/>project resources and Shell"]
     Agent --> Enter["agent.sessions.create({ workspace })"]
     Workspace --> Enter
-    Enter --> AgentWorkspace["AgentWorkspace<br/>execution and private state"]
-    AgentWorkspace --> Sessions["Sessions"]
-    AgentWorkspace --> Tools["Workspace + Agent + Plugin tools"]
-    AgentWorkspace --> Context["Workspace-aware PluginContext"]
-    AgentWorkspace --> Storage["Agent-specific storage scope"]
+    Enter --> Sessions["AgentSessions<br/>Session collection"]
+    Sessions --> Session["Session<br/>continuous execution"]
+    Session --> Tools["Workspace + Agent + Plugin tools"]
+    Session --> Context["Workspace-aware PluginContext"]
+    City["City<br/>storage and resource container"] --> Storage["StorageProvider<br/>Memory by default"]
+    Session --> Storage
     Workspace --> Files["Project File/Search"]
     Workspace --> Env["Workspace Env"]
     Workspace --> Shell["Shell and Sandbox adapter"]
@@ -40,7 +41,7 @@ flowchart TD
 The dependency direction stays explicit:
 
 - `@downcity/workspace` does not depend on Agent or Session.
-- `@downcity/agent` depends on the Workspace protocol and creates Agent domain state.
+- `@downcity/agent` depends on the Workspace protocol and interprets City Storage for Agent domain state.
 - Hosts choose a platform Sandbox and compose Agent with Workspace.
 - Edge adapters use `@downcity/workspace/protocol` without loading Node.js local implementations.
 
@@ -75,11 +76,10 @@ type.
 - Rooted project file access and File/Search tools.
 - Workspace environment variables.
 - An optional Shell and its Sandbox adapter.
-- A domain-neutral `WorkspaceStorageProvider`.
+  - It never owns Agent or Session runtime storage. City provides the domain-neutral `StorageProvider`.
 
-Workspace does not create SessionStore, understand Agent IDs, register Plugins, or call models.
-The local implementation resolves its user-level storage root internally; the constructor has no
-`data_root_path` option.
+Workspace does not create SessionStore, understand Agent IDs, register Plugins, call models, or
+create Storage. The constructor has no runtime data-root option.
 
 Shell belongs to Workspace because command execution operates on Workspace resources. The public
 entry is:
@@ -91,10 +91,9 @@ import { Shell, Workspace } from "@downcity/workspace";
 There is no separate `@downcity/shell` package. Platform Sandbox packages remain independently
 installable and are injected into Shell.
 
-## AgentWorkspace is the execution boundary
+## Session is the execution boundary
 
-`agent.sessions.create({ workspace })` combines the two subjects for one Session without merging their ownership. The internal AgentWorkspace
-creates:
+`agent.sessions.create({ workspace })` combines the two subjects for one Session without merging their ownership. The Agent and Session internals create:
 
 - The final Tool set from Workspace tools, Agent custom tools, and Plugin bridge tools.
 - `AgentSessions` and the Agent domain `LocalSessionStore`.
@@ -102,30 +101,27 @@ creates:
 - Logs, scheduled Plugin Actions, and Shell binding.
 
 Tool name conflicts fail during composition; no source silently overwrites another. The same Agent
-can hold multiple AgentWorkspaces. A Workspace instance itself can be entered only once because its
-Shell and private storage are bound to one execution lifecycle.
+can hold multiple Sessions with different Workspace resources. Workspace resources may be registered
+in City or managed by the host outside City.
 
 ## Private storage
 
-Local runtime state is centralized outside the project:
+When City receives a local persistent Storage Provider, runtime state is centralized outside the project:
 
 ```text
 ~/.downcity/
 └── agents/
     └── <agent_id>/
-        └── workspaces/
-            └── <workspace_id>/
-                ├── sessions/
-                ├── archived-sessions/
-                ├── logs/
-                ├── schedule.jsonl
-                └── sandbox/
+        ├── sessions/
+        ├── plugins/
+        ├── logs/
+        └── schedule.jsonl
 ```
 
-Workspace only supplies a safe storage primitive. AgentWorkspace opens the stable
-`agents/<agent_id>/workspaces/<workspace_id>` scope and constructs Agent domain stores inside it.
-Project File/Search tools use a different rooted FileSystem, so they cannot inspect or change
-Session history, Plugin state, or Sandbox data.
+City Storage is a bottom-level file/database capability. Agent code interprets the
+`agents/<agent_id>/` business scope and creates Session and Plugin stores inside it. Project
+File/Search tools use a different rooted FileSystem, so they cannot inspect or change Session
+history, Plugin state, or runtime data.
 
 ## Environment and checkpoints
 
@@ -149,29 +145,28 @@ sequenceDiagram
     participant Host
     participant Agent
     participant Workspace
-    participant AW as AgentWorkspace
+    participant City
     Host->>Agent: new Agent(options)
     Host->>Workspace: new Workspace(options)
-    Host->>Agent: enter(workspace)
-    Agent->>AW: create execution scope
-    AW->>Workspace: bind Shell and storage scope
-    Host->>AW: sessions.create()
+    Host->>City: city.agents.add(agent)
+    Host->>Agent: sessions.create({ workspace })
+    Agent->>Workspace: use current resource
+    Agent->>City: use injected Storage
     Host->>Agent: dispose()
-    Agent->>AW: leave()
-    AW->>Workspace: dispose()
+    City->>Workspace: dispose registered resources
     Agent->>Agent: unregister Plugins
 ```
 
-`agent.dispose()` leaves every entered AgentWorkspace, flushes Session and log state, closes Shell
-processes and Sandbox resources, then stops Agent-level Plugins. HTTP/RPC transports created by
-`@downcity/agent` remain owned by the host and must be closed separately.
+`city.close()` stops registered Agents and Sessions, disposes registered Workspace resources,
+closes the City Storage Provider, and then closes HTTP/RPC transports. A Workspace managed outside
+City remains owned by its host.
 
 ## Package boundaries
 
 | Package | Owns | Does not own |
 | --- | --- | --- |
 | `@downcity/workspace` | Workspace protocol, local project resources, File/Search tools, Env, Shell | Agent identity, Plugin registry, Session semantics, model calls |
-| `@downcity/agent` | Agent, AgentWorkspace, Session, Store, Plugin runtime, model Tool Loop | Project resource implementation, platform Sandbox, multi-Agent control plane |
+| `@downcity/agent` | City, Agent, AgentSessions, Session, Store, Plugin runtime, model Tool Loop | Project resource implementation, platform Sandbox, local product repositories |
 | Sandbox packages | Native process isolation for one platform | Workspace, Agent, Session, or Plugin business behavior |
 | `@downcity/agent` | Agent index and HTTP/RPC transports | Local configuration repository and Agent execution state |
 

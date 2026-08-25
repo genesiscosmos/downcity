@@ -29,9 +29,9 @@ export type {
   WorkspaceToolActionResult,
 } from "./types/workspace/WorkspaceToolResult.js";
 export type {
-  WorkspaceStorageScope,
-  WorkspaceStorageProvider,
-} from "./types/workspace/WorkspaceStorage.js";
+  StorageScope,
+  StorageProvider,
+} from "./types/storage/Storage.js";
 export type {
   WorkspaceShell,
   WorkspaceShellSafeCommandInput,

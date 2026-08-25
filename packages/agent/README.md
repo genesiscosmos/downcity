@@ -9,7 +9,7 @@
 - Plugin 框架：registry、action、tool runtime 与执行生命周期
 - 远程访问：`RemoteAgent`、HTTP/RPC transport
 
-CLI 与 Desktop 负责读取产品配置并显式装配 `Agent`，再通过 `city.agents.add(agent)` 将 Agent 加入环境。City 不创建 Agent，也不持有 Plugin 实例；Plugin 属于 Agent，通过 `context.city` 使用 City 资源。
+CLI 与 Desktop 负责读取产品配置并显式装配 `Agent`，再通过 `city.agents.add(agent)` 将 Agent 加入环境。City 不创建 Agent，也不持有 Plugin 实例；City 只提供底层资源和 Storage，Plugin 通过执行 Context 使用被允许的能力。
 
 ## 包定位
 

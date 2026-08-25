@@ -8,13 +8,11 @@
  */
 
 import { realpathSync, statSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 import { LocalFileSystem } from "@/workspace/LocalFileSystem.js";
 import type { WorkspaceOptions } from "@/types/workspace/Workspace.js";
 import type { WorkspaceTools } from "@/types/workspace/WorkspaceTools.js";
-import type { WorkspaceStorageProvider } from "@/types/workspace/WorkspaceStorage.js";
 import type {
   WorkspaceEnvPatch,
   WorkspaceEnvSubscriber,
@@ -23,7 +21,6 @@ import type {
 import { resolve_workspace_env } from "@/workspace/WorkspaceEnv.js";
 import { create_workspace_tools } from "@/workspace/tool/WorkspaceTools.js";
 import { WorkspaceBase } from "@/workspace/WorkspaceBase.js";
-import { LocalWorkspaceStorageProvider } from "@/workspace/storage/LocalWorkspaceStorageProvider.js";
 
 /** 将调用方路径解析为稳定、真实的本地目录。 */
 function resolve_workspace_path(input: string): string {
@@ -38,20 +35,6 @@ function resolve_workspace_path(input: string): string {
   return resolved_path;
 }
 
-/** 解析本地 Downcity 用户级数据根目录。 */
-function resolve_data_root_path(input?: string): string {
-  const explicit_root = String(input || process.env.DC_PLATFORM_ROOT || "").trim();
-  return explicit_root
-    ? path.resolve(explicit_root)
-    : path.join(os.homedir(), ".downcity");
-}
-
-/** 仅供包内测试隔离使用，不进入 Workspace 公开类型。 */
-interface WorkspaceInternalOptions {
-  /** 测试使用的临时 Downcity 数据根目录。 */
-  data_root_path?: string;
-}
-
 /** 本地 Workspace。 */
 export class Workspace extends WorkspaceBase {
   /** Workspace 的稳定标识。 */
@@ -59,9 +42,6 @@ export class Workspace extends WorkspaceBase {
 
   /** 已解析且不可变的项目根目录。 */
   readonly path: string;
-
-  /** Downcity 内部用户级数据根目录。 */
-  private readonly storage_root_path: string;
 
   /** Workspace 根目录内统一的受控文件与搜索能力。 */
   readonly files: FileSystem;
@@ -75,9 +55,6 @@ export class Workspace extends WorkspaceBase {
   /** Workspace 首次释放产生的稳定 Promise，保证重复释放不会重复关闭资源。 */
   private dispose_promise?: Promise<void>;
 
-  /** 当前 Workspace 的通用私有数据后端。 */
-  readonly storage: WorkspaceStorageProvider;
-
   /** 当前 Workspace configured env 的唯一可变状态。 */
   private readonly env: Record<string, string>;
 
@@ -89,12 +66,9 @@ export class Workspace extends WorkspaceBase {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Workspace requires a non-empty id");
     this.path = resolve_workspace_path(options.path);
-    const internal_options = options as WorkspaceOptions & WorkspaceInternalOptions;
-    this.storage_root_path = resolve_data_root_path(internal_options.data_root_path);
     this.files = new LocalFileSystem(this.path);
     this.env = resolve_workspace_env(this.path, options.env);
     this.shell = options.shell;
-    this.storage = new LocalWorkspaceStorageProvider(this.storage_root_path);
     this.shell?.set_env(this.env);
     this.tools = create_workspace_tools({
       files: this.files,

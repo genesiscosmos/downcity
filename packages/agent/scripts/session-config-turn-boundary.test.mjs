@@ -16,7 +16,7 @@ import { MockLanguageModelV3 } from "ai/test";
 import { Agent } from "../bin/index.js";
 import { create_workspace_entry } from "../bin/internal/index.js";
 import { City } from "../bin/index.js";
-import { LocalWorkspaceStorageProvider, Workspace } from "@downcity/workspace";
+import { LocalStorageProvider, Workspace } from "@downcity/workspace";
 import {
   create_action,
   create_plugin,
@@ -305,7 +305,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     data_root_path: path.join(agent_path, "workspace-data"),
   });
   const city = new City({
-    storage: new LocalWorkspaceStorageProvider(path.join(agent_path, "city-data")),
+    storage: new LocalStorageProvider(path.join(agent_path, "city-data")),
     workspaces: [workspace],
   });
   const model = new MockLanguageModelV3({ modelId: "instruction-restart-model" });
@@ -419,7 +419,7 @@ test("empty Session snapshot suppresses Agent instruction after restart", async 
     data_root_path: path.join(agent_path, "workspace-data"),
   });
   const city = new City({
-    storage: new LocalWorkspaceStorageProvider(path.join(agent_path, "city-data")),
+    storage: new LocalStorageProvider(path.join(agent_path, "city-data")),
     workspaces: [workspace],
   });
   const model = new MockLanguageModelV3({ modelId: "empty-snapshot-model" });
@@ -782,7 +782,7 @@ test("restored Session rebinds the same model without emitting a configuration M
     data_root_path: path.join(agent_path, "workspace-data"),
   });
   const city = new City({
-    storage: new LocalWorkspaceStorageProvider(path.join(agent_path, "city-data")),
+    storage: new LocalStorageProvider(path.join(agent_path, "city-data")),
     workspaces: [workspace],
   });
   const create_model = () => new MockLanguageModelV3({

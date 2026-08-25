@@ -27,7 +27,7 @@ const session = await agent.sessions.create({ workspace });
 ## 构造参数
 
 - `id`：稳定 Agent 身份和私有数据分区键。
-- `tools`：每个 AgentWorkspace 都会使用的 Agent 自定义 Tool。
+- `tools`：该 Agent 创建的 Session 可使用的自定义 Tool。
 - `instruction`：Agent 级静态基础指令。
 - `model`：默认 `AgentModel`，本地 Session 可以覆盖。
 - `plugins`：只在 Agent 注册一次的 Plugin 对象。
@@ -36,12 +36,6 @@ const session = await agent.sessions.create({ workspace });
 构造参数中没有 `workspace`。宿主独立创建 Workspace，并在 Agent 需要进入项目执行时调用
 `agent.sessions.create({ workspace })`。
 
-## AgentWorkspace
-
-`AgentWorkspace` 暴露 `workspace`、`sessions`、`tools`、`plugins`、`data_path` 与 `leave()`。
-其中的 Session 集合提供 `create`、`get`、`list`、`archive`、`archived`、`clean_archive`、
-`remove` 与 `clear_messages`。
-
-一个 Agent 可以进入多个 Workspace。`agent.dispose()` 会离开所有活跃 AgentWorkspace，关闭其中
-的 Shell 与存储资源，最后注销 Agent 级 Plugin。`@downcity/agent` 创建的网络 transport 仍由宿主
-负责关闭。
+一个 Agent 可以在多个 Workspace 中创建 Session。Workspace 只在创建 Session 时传入，不会成为
+Agent 的公开对象。`agent.dispose()` 会释放 Agent 级 Plugin 与运行时资源；`@downcity/agent`
+创建的网络 transport 仍由宿主负责关闭。

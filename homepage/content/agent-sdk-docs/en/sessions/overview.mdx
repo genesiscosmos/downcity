@@ -5,7 +5,9 @@ description: What a Session owns, its lifecycle, and the shared local and remote
 
 # Session Overview
 
-`Agent` owns identity, model, custom tools, and Plugins. `AgentWorkspace` assembles Workspace tools, storage, and Sessions. A `Session` owns one continuous conversation, its history, streaming output, and tool approvals.
+`Agent` owns identity, model, custom tools, and Plugins. `AgentSessions` owns the Session objects, while
+each Session may receive a Workspace for project tools and environment. A `Session` owns one continuous
+conversation, its history, streaming output, and tool approvals.
 
 A Session is one persisted, linearly ordered Message sequence. It can be reopened with `get()` after a process restart, and local `Agent` and `RemoteAgent` share nearly the same calling model.
 
@@ -28,7 +30,6 @@ Subscribe before calling `prompt()`. A subscription only receives future Mutatio
 ```ts
 const session = await agent.sessions.create({
   workspace,
-  session_id: "repo-analysis",
 });
 
 await session.set({ model });

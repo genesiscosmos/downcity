@@ -1,7 +1,7 @@
 /**
  * Workspace 内 Session 附件的本地实现。
  *
- * Data URL 在这里解码为文件；Message 层保存 WorkspaceEntry 私有目录中的绝对路径。
+ * Data URL 在这里解码为文件；Message 层保存 Agent 私有目录中的绝对路径。
  */
 
 import path from "node:path";

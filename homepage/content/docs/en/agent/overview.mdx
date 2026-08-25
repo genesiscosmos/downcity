@@ -5,7 +5,7 @@ description: What the Agent SDK is and how it runs agent work
 
 # Agent
 
-The **Agent SDK** (`@downcity/agent`) is the core runtime for executing agent work. An Agent instance enters a Workspace and creates an AgentWorkspace containing sessions, tools, plugins, and a model. `City` is the lifecycle container for Agent instances inside one host process.
+The **Agent SDK** (`@downcity/agent`) is the core runtime for executing agent work. An Agent owns identity, model, instructions, plugins, and one `AgentSessions` collection. Each Session may receive a Workspace for project tools and environment. `City` is the lifecycle container for Agent instances inside one host process.
 
 ## What an Agent does
 

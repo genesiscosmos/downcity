@@ -106,7 +106,7 @@ Session 提供三种 System 语义：
 默认本地状态位于用户级 Downcity 目录中当前 Agent 的 Workspace 作用域：
 
 ```text
-~/.downcity/agents/<agent-id>/workspaces/<workspace-id>/
+~/.downcity/agents/<agent-id>/
 ├─ sessions/<session-id>/
 │  ├─ instruction.md
 │  ├─ meta.json
@@ -149,7 +149,7 @@ Plugin 属于 Agent，不属于 Workspace。它可以提供 Action、System、Ho
 
 PluginRegistry 的变化同样在 Session 检查点生效。单个 Plugin 启动失败只隔离自身，不阻断其他 Plugin；Agent 关闭时停止 ActionSchedule 并卸载 Plugin。
 
-ActionSchedule 是本地延迟 Plugin Action 调度器。事件存放在当前 AgentWorkspace 的 `schedule.jsonl`，Agent 重启时会把遗留的 running 状态恢复为 pending。它不是分布式调度系统，也不提供跨机器选主。
+ActionSchedule 是 Agent 持有的本地延迟 Plugin Action 调度器。事件存放在 Agent 的存储作用域中，Agent 重启时会把遗留的 running 状态恢复为 pending。它不是分布式调度系统，也不提供跨机器选主。
 
 ## 安全模型
 
@@ -188,8 +188,8 @@ flowchart LR
     Schedule --> Barrier["内部初始化屏障"]
     Barrier --> Running["执行 Session"]
     Running --> Dispose["agent.dispose()"]
-    Dispose --> Leave["离开全部 AgentWorkspace"]
-    Leave --> Workspace["Workspace.dispose()"]
+    Dispose --> Sessions["释放 AgentSessions"]
+    Sessions --> Workspace["Workspace.dispose()"]
     Workspace --> Shell["关闭进程与 Sandbox"]
 ```
 

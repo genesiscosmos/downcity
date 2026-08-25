@@ -5,10 +5,11 @@ description: File layout and data boundaries for local SDK Agent Sessions
 
 # SDK Session Layout
 
-Local SDK Agent Sessions are persisted under `~/.downcity`; tests and multi-instance hosts can override the internal root with `DC_PLATFORM_ROOT`:
+Local SDK Agent Sessions are persisted under the City-provided storage root; with a local provider this
+is commonly `~/.downcity`:
 
 ```text
-~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/sessions/<session_id>/
+~/.downcity/agents/<agent_id>/sessions/<session_id>/
 ├── meta.json
 └── messages/
     ├── active.jsonl
@@ -17,7 +18,8 @@ Local SDK Agent Sessions are persisted under `~/.downcity`; tests and multi-inst
         └── <start_sequence>-<end_sequence>.jsonl
 ```
 
-`workspace_id` locates the Workspace data root, and `session_id` is unique within that Workspace. `meta.json` records the owning `agent_id` and `workspace_id`; an Agent's Session list returns only matching metadata. The project directory never receives a `.downcity` directory.
+`session_id` is unique within the Agent. `meta.json` records the owning `agent_id` and adds `workspace_id`
+only when a Workspace was passed to the Session. The project directory never receives a `.downcity` directory.
 
 - `active.jsonl`: complete `SessionMessage` snapshots retained after the latest Compact.
 - `assistant_message.json`: the one complete in-progress Assistant draft.

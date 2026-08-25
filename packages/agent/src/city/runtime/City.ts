@@ -6,18 +6,18 @@
  * 资源与统一 transport。
  */
 
-import os from "node:os";
 import { Agent } from "@/agent/Agent.js";
 import {
   attach_agent_city,
+  attach_agent_storage,
   create_workspace_entry,
   detach_agent_city,
   get_workspace_entry,
 } from "@/internal/index.js";
 import type { WorkspaceEntry } from "@/agent/WorkspaceEntry.js";
 import type { WorkspaceBase } from "@downcity/workspace";
-import type { WorkspaceStorageProvider, WorkspaceStorageScope } from "@downcity/workspace";
-import { LocalWorkspaceStorageProvider } from "@downcity/workspace";
+import type { StorageProvider } from "@downcity/workspace";
+import { MemoryStorageProvider } from "@downcity/workspace";
 import { CityHTTP } from "@/city/transport/http/CityHTTP.js";
 import { CityRPC } from "@/city/transport/rpc/CityRPC.js";
 import type {
@@ -30,8 +30,8 @@ import type {
 
 /** Agent 实例索引与 transport 宿主。 */
 export class City {
-  /** City 持有的 Agent 级持久化 Provider。 */
-  readonly storage: WorkspaceStorageProvider;
+  /** City 持有的底层 Storage；默认是进程内存储。 */
+  readonly storage: StorageProvider;
   /** 当前 City 引用的 Agent，按稳定 ID 索引。 */
   private readonly agents_by_id = new Map<string, Agent>();
 
@@ -75,9 +75,7 @@ export class City {
   private close_promise?: Promise<void>;
 
   constructor(options: CityOptions = {}) {
-    this.storage = options.storage || new LocalWorkspaceStorageProvider(
-      String(process.env.DC_PLATFORM_ROOT || "").trim() || `${os.homedir()}/.downcity`,
-    );
+    this.storage = options.storage || new MemoryStorageProvider();
     this.embassy = options.embassy;
     for (const workspace of options.workspaces ?? []) {
       const workspace_id = String(workspace?.id || "").trim();
@@ -85,14 +83,7 @@ export class City {
       if (this.workspaces_by_id.has(workspace_id)) {
         throw new Error(`Workspace already exists in City: ${workspace_id}`);
       }
-      workspace.shell?.bind({
-        root_path: workspace.path,
-        data_path: workspace.storage.open_scope([
-          "cities",
-          workspace_id,
-          "shell",
-        ]).root_path,
-      });
+      this.bind_workspace_shell(workspace);
       this.workspaces_by_id.set(workspace_id, workspace);
     }
     const runtime_options = options.runtime ?? {};
@@ -110,13 +101,6 @@ export class City {
       get: (workspace_id) => this.get_workspace(workspace_id),
       list: () => this.list_workspaces(),
     });
-  }
-
-  /** 打开指定 Agent 的私有持久化作用域。 */
-  open_agent_storage(agent_id_input: string): WorkspaceStorageScope {
-    const agent_id = String(agent_id_input || "").trim();
-    if (!agent_id) throw new Error("City agent storage requires a non-empty agent_id");
-    return this.storage.open_scope(["agents", agent_id]);
   }
 
   /** 返回 City 持有的 Workspace；不存在时返回 null。 */
@@ -288,6 +272,9 @@ export class City {
         results.push(...await Promise.allSettled(
           [...this.workspaces_by_id.values()].map(async (workspace) => await workspace.dispose()),
         ));
+        results.push(...await Promise.allSettled([
+          this.storage.dispose?.() ?? Promise.resolve(),
+        ]));
         const errors = results.flatMap((result) =>
           result.status === "rejected" ? [result.reason] : [],
         );
@@ -315,6 +302,7 @@ export class City {
       throw new Error(`Agent already exists in City: ${agent.id}`);
     }
     attach_agent_city(agent, this);
+    attach_agent_storage(agent, this.storage);
     this.agents_by_id.set(agent.id, agent);
     return agent;
   }
@@ -338,12 +326,17 @@ export class City {
       throw new Error(`Workspace already exists in City: ${workspace_id}`);
     }
     if (existing) return existing;
-    workspace.shell?.bind({
-      root_path: workspace.path,
-      data_path: workspace.storage.open_scope(["cities", workspace_id, "shell"]).root_path,
-    });
+    this.bind_workspace_shell(workspace);
     this.workspaces_by_id.set(workspace_id, workspace);
     return workspace;
+  }
+
+  /** 将 City 的底层 Storage 绑定到 Workspace 的 Shell 运行目录。 */
+  private bind_workspace_shell(workspace: WorkspaceBase): void {
+    workspace.shell?.bind({
+      root_path: workspace.path,
+      data_path: this.storage.open_scope(["workspaces", workspace.id, "shell"]).root_path,
+    });
   }
 
   /** 拒绝在 City 关闭后继续注入运行时资源。 */

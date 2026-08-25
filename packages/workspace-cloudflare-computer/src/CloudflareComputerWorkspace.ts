@@ -15,8 +15,6 @@ import type {
   WorkspaceEnvSubscriber,
   WorkspaceEnvUnsubscribe,
   WorkspaceShell,
-  WorkspaceStorageProvider,
-  WorkspaceStorageScope,
   WorkspaceTools,
 } from "@downcity/workspace/protocol";
 import { createAITools } from "@cloudflare/computer/tools";
@@ -34,9 +32,6 @@ import type {
   SearchToolActionRequest,
   SearchToolActionResult,
 } from "@downcity/workspace/protocol";
-
-/** Cloudflare Computer 内的用户级 Downcity 私有数据根。 */
-const CLOUDFLARE_STORAGE_ROOT_PATH = "/.downcity";
 
 class CloudflareComputerFileSystem implements FileSystem {
   readonly root_path: string;
@@ -135,58 +130,6 @@ class CloudflareComputerFileSystem implements FileSystem {
   }
 }
 
-/** Cloudflare Computer 的通用 Workspace 私有存储 Provider。 */
-class CloudflareWorkspaceStorageProvider implements WorkspaceStorageProvider {
-  /** 当前 Provider 已打开的唯一逻辑作用域键。 */
-  private opened_scope_key?: string;
-
-  /** 当前 Provider 已打开的稳定作用域。 */
-  private opened_scope?: WorkspaceStorageScope;
-
-  constructor(private readonly remote_fs: CloudflareComputerFileApi) {}
-
-  /** 打开一个位于远程用户级数据根下的逻辑作用域。 */
-  open_scope(segments: readonly string[]): WorkspaceStorageScope {
-    const normalized_segments = segments.map(normalize_storage_segment);
-    if (normalized_segments.length === 0) {
-      throw new Error("Workspace storage scope requires at least one segment");
-    }
-    const scope_key = normalized_segments.join("/");
-    if (this.opened_scope) {
-      if (this.opened_scope_key !== scope_key) {
-        throw new Error("Workspace storage is already bound to another scope");
-      }
-      return this.opened_scope;
-    }
-    const root_path = normalize_root_path(
-      `${CLOUDFLARE_STORAGE_ROOT_PATH}/${normalized_segments
-        .map((segment) => encodeURIComponent(segment))
-        .join("/")}`,
-    );
-    this.opened_scope_key = scope_key;
-    this.opened_scope = {
-      root_path,
-      files: new CloudflareComputerFileSystem(this.remote_fs, root_path),
-    };
-    return this.opened_scope;
-  }
-}
-
-/** 校验一个私有存储逻辑路径片段。 */
-function normalize_storage_segment(value: string): string {
-  const segment = String(value || "").trim();
-  if (
-    !segment ||
-    segment === "." ||
-    segment === ".." ||
-    segment.includes("/") ||
-    segment.includes("\\")
-  ) {
-    throw new Error("Workspace storage scope contains an invalid segment");
-  }
-  return segment;
-}
-
 /** 将 Cloudflare Computer 虚拟文件系统作为 Downcity Agent Workspace 使用。 */
 export class CloudflareComputerWorkspace extends WorkspaceBase {
   readonly id: string;
@@ -194,7 +137,6 @@ export class CloudflareComputerWorkspace extends WorkspaceBase {
   readonly files: FileSystem;
   readonly tools: WorkspaceTools;
   readonly shell: WorkspaceShell | undefined;
-  readonly storage: WorkspaceStorageProvider;
   private readonly env: Record<string, string>;
   private readonly env_subscribers = new Set<WorkspaceEnvSubscriber>();
   private readonly remote_fs: CloudflareComputerFileApi;
@@ -208,7 +150,6 @@ export class CloudflareComputerWorkspace extends WorkspaceBase {
     this.path = normalize_root_path(options.root_path || "/workspace");
     this.remote_fs = options.computer.fs as CloudflareComputerFileApi;
     this.files = new CloudflareComputerFileSystem(this.remote_fs, this.path);
-    this.storage = new CloudflareWorkspaceStorageProvider(this.remote_fs);
     const computer_tools = {
       ...createAITools({ workspace: options.computer }),
       exec: create_cloudflare_exec_tool(options.computer),

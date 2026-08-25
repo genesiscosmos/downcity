@@ -29,10 +29,10 @@ export interface CreatePluginContextInput {
   /** 当前 Agent 的 Web 搜索与文档能力。 */
   web?: PluginContext["web"];
   /** 当前 Agent 所在的 City 环境。 */
-  city?: PluginContext["city"];
-  /** 延迟读取当前 WorkspaceEntry Session 集合。 */
+  embassy?: PluginContext["embassy"];
+  /** 延迟读取当前 Agent 的 Session 集合。 */
   get_sessions: () => PluginContext["sessions"];
-  /** 延迟读取当前 WorkspaceEntry 的 Plugin 注册表视图。 */
+  /** 延迟读取当前 Agent 的 Plugin 注册表视图。 */
   get_plugins: () => PluginContext["plugins"];
   /** 延迟读取 Workspace env。 */
   get_workspace_env: () => PluginContext["workspace_env"];
@@ -54,7 +54,7 @@ export function create_plugin_context(
     ...(input.shell ? { shell: input.shell } : {}),
     logger: input.logger,
     ...(input.web ? { web: input.web } : {}),
-    ...(input.city ? { city: input.city } : {}),
+    ...(input.embassy ? { embassy: input.embassy } : {}),
     get sessions() {
       return input.get_sessions();
     },

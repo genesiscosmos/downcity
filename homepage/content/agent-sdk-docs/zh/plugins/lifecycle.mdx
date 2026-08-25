@@ -103,7 +103,7 @@ Plugin 注册后先进入 `initializing`。首次 action、availability、system
 
 ActionSchedule 不是 plugin。
 
-每个 AgentWorkspace 持有一个本地 action 调度 loop。到期任务会使用当前 Workspace Context 调用 Agent 已注册 Plugin 的 action。
+每个 Agent 持有一个本地 action 调度 loop。到期任务会调用 Agent 已注册 Plugin 的 action；只有 Session 执行时才选择 Workspace Context。
 
 ## 相关文档
 

@@ -2,7 +2,7 @@
  * PluginContext：Agent 向 Plugin 投影的稳定能力视图。
  *
  * 边界说明（中文）
- * - Plugin 只依赖本接口，不持有 Agent 实例，也不参与 Session 内核编排。
+ * - Plugin 只依赖本接口，不持有 Agent、City 实例，也不参与 Session 内核编排。
  * - 动态状态通过只读 getter 暴露，保证 Workspace env 与 instruction 始终来自唯一状态源。
  */
 
@@ -11,7 +11,7 @@ import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
 import type { FileSystem, WorkspaceShell } from "@downcity/workspace";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { PluginWebServices } from "@/types/plugin/PluginServices.js";
-import type { City } from "../../city/index.js";
+import type { Embassy } from "@downcity/federation";
 
 /** Agent 向 Plugin 开放的最小、稳定运行时能力。 */
 export interface PluginContext {
@@ -42,8 +42,8 @@ export interface PluginContext {
   /** 当前 Agent 持有的 Web 搜索与文档能力。 */
   readonly web?: PluginWebServices;
 
-  /** 当前 Agent 所在的完整 City 环境；Agent 未加入 City 时为空。 */
-  readonly city?: City;
+  /** City 注入的 Embassy 能力；Agent 未加入 City 时为空。 */
+  readonly embassy?: Embassy;
 
   /** 当前 Agent 的 Session 集合入口。 */
   readonly sessions: AgentSessionCollection;

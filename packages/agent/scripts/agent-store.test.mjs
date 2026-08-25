@@ -10,15 +10,14 @@ import test from "node:test";
 import { Agent } from "../bin/index.js";
 import { create_workspace_entry } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
+import { LocalStorageProvider } from "@downcity/workspace";
 import { LocalSessionStore } from "../bin/workspace/store/LocalSessionStore.js";
 
-/** 由 Agent 领域在 Workspace 通用作用域上创建 SessionStore。 */
-function create_agent_storage(workspace, agent_id) {
-  const scope = workspace.storage.open_scope([
+/** 由 Agent 领域在 City 提供的 Agent 作用域上创建 SessionStore。 */
+function create_agent_storage(storage, agent_id) {
+  const scope = storage.open_scope([
     "agents",
     agent_id,
-    "workspaces",
-    workspace.id,
   ]);
   return {
     root_path: scope.root_path,
@@ -27,7 +26,7 @@ function create_agent_storage(workspace, agent_id) {
       files: scope.files,
       storage_root_path: scope.root_path,
       agent_id,
-      workspace_id: workspace.id,
+      workspace_id: "test_workspace",
     }),
   };
 }
@@ -41,14 +40,13 @@ async function create_test_roots(t) {
   return { data_root_path, workspace_path };
 }
 
-test("Agent creates SessionStore on the Workspace private storage scope", async (t) => {
+test("Agent creates SessionStore on the Agent storage scope", async (t) => {
   const { data_root_path, workspace_path } = await create_test_roots(t);
   const workspace = new Workspace({
     id: "test_workspace",
     path: workspace_path,
-    data_root_path,
   });
-  const storage = create_agent_storage(workspace, "store-test");
+  const storage = create_agent_storage(new LocalStorageProvider(data_root_path), "store-test");
   const store = storage.sessions;
   const session_store = store.session("first");
 
@@ -98,9 +96,8 @@ test("LocalSessionStore archives and cleans sessions", async (t) => {
   const workspace = new Workspace({
     id: "test_workspace",
     path: workspace_path,
-    data_root_path,
   });
-  const store = create_agent_storage(workspace, "archive-test").sessions;
+  const store = create_agent_storage(new LocalStorageProvider(data_root_path), "archive-test").sessions;
   const archived_store = store.session("archived");
   await archived_store.messages.initialize();
   await archived_store.write_metadata({
@@ -118,7 +115,7 @@ test("LocalSessionStore archives and cleans sessions", async (t) => {
   assert.equal((await store.list_archived_sessions()).items.length, 0);
 });
 
-test("Workspace execution entry obtains its Store from private Workspace storage", async (t) => {
+test("Workspace execution entry obtains its Store from the Agent storage scope", async (t) => {
   const { data_root_path, workspace_path } = await create_test_roots(t);
   const workspace = new Workspace({
     id: "test_workspace",

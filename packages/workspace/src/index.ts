@@ -33,10 +33,11 @@ export type {
   WorkspaceToolActionResult,
 } from "./types/workspace/WorkspaceToolResult.js";
 export type {
-  WorkspaceStorageScope,
-  WorkspaceStorageProvider,
-} from "./types/workspace/WorkspaceStorage.js";
-export { LocalWorkspaceStorageProvider } from "./workspace/storage/LocalWorkspaceStorageProvider.js";
+  StorageScope,
+  StorageProvider,
+} from "./types/storage/Storage.js";
+export { LocalStorageProvider } from "./workspace/storage/LocalStorageProvider.js";
+export { MemoryStorageProvider } from "./workspace/storage/MemoryStorageProvider.js";
 export {
   load_project_dotenv,
   resolve_workspace_env,

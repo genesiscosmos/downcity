@@ -26,8 +26,8 @@ The user-level configuration layout is:
 ├── agents/<agent_id>/
 │   ├── agent.json
 │   ├── SOUL.md
-│   └── workspaces/<workspace_id>/
-│       ├── sessions/
+│   └── sessions/
+│       ├── <session_id>/
 │       ├── archived-sessions/
 │       └── logs/
 ├── plugins/<plugin_id>/config.toml
@@ -37,7 +37,7 @@ The user-level configuration layout is:
 
 `downcity.db` stores Workspace IDs and paths, tokens, and platform state. It does not store Agent definitions, Plugin profiles, or Agent-to-Workspace bindings. CLI and Desktop read the same files and database.
 
-`agent_id` and `workspace_id` are independent global identities. An Agent enters a Workspace only for a concrete execution. CLI City daemon state lives in `~/.downcity/runtimes/city/`; Sessions live under `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/sessions/`.
+`agent_id` and `workspace_id` are independent global identities. A Session receives a Workspace only for a concrete execution. CLI City daemon state lives in `~/.downcity/runtimes/city/`; Sessions live under `~/.downcity/agents/<agent_id>/sessions/`. A Session's `meta.json` records `workspace_id` only when a Workspace was supplied.
 
 ## Project assets
 
@@ -45,7 +45,7 @@ Global Env is stored separately in `~/.downcity/.env`. Project `.env` overrides 
 
 ## Runtime data
 
-Downcity does not create `<project>/.downcity/`. AgentWorkspace runtime data is centralized under `~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/`; Plugin-owned data follows the storage scope exposed by its current AgentWorkspace context.
+Downcity does not create `<project>/.downcity/`. Agent runtime data is centralized under the City-provided storage scope `agents/<agent_id>/`; without a City, it remains in memory. Plugin-owned data uses the Agent-level scope exposed through PluginContext.
 
 Continue with:
 

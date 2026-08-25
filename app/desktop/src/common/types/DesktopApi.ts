@@ -28,8 +28,8 @@ export interface DesktopWorkspaceSummary {
   name: string;
 }
 
-/** Desktop main 中一个 Agent 已进入的 Workspace 执行边界。 */
-export interface DesktopAgentWorkspace {
+/** Desktop main 中一次 Agent 与 Workspace 的连接结果。 */
+export interface DesktopAgentConnection {
   /** 当前 Agent ID。 */
   agent_id: string;
   /** 当前进入的 Workspace ID。 */
@@ -507,7 +507,7 @@ export interface DesktopApi {
     /** 生成并保存一份新的随机 Downcity Ghost 头像。 */
     generate_avatar(agent_id: string): Promise<DesktopAgentSummary>;
     /** 让 Agent 进入指定 Workspace。 */
-    connect(agent_id: string, workspace_id: string): Promise<DesktopAgentWorkspace>;
+    connect(agent_id: string, workspace_id: string): Promise<DesktopAgentConnection>;
   };
   /** 独立 Workspace Registry 能力。 */
   workspace: {

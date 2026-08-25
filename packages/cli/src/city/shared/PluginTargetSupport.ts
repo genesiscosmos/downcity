@@ -1,5 +1,5 @@
 /**
- * Agent Workspace 目标解析辅助。
+ * Agent 执行目标解析辅助。
  *
  * 关键点（中文）：该模块只服务 Agent 生命周期与内部 TUI，不再承担 Plugin CLI 的 cwd 推断。
  */
@@ -13,7 +13,7 @@ import {
   list_workspaces,
 } from "@/city/process/registry/WorkspaceRepository.js";
 import { ensure_agent_execution_model_ready } from "@/city/agent/AgentExecutionModelRecovery.js";
-import type { AgentWorkspaceTarget } from "@/city/agent/AgentSelection.js";
+import type { AgentExecutionTarget } from "@/city/agent/AgentSelection.js";
 
 /** Agent 启动前预检选项。 */
 export interface AgentPreflightOptions {
@@ -23,7 +23,7 @@ export interface AgentPreflightOptions {
 
 /** 执行 Sandbox、Agent Binding 与模型可用性预检。 */
 export async function checkAgentPreflight(
-  target: AgentWorkspaceTarget,
+  target: AgentExecutionTarget,
   options?: AgentPreflightOptions,
 ): Promise<void> {
   if (options?.requireShellSandbox !== false) {

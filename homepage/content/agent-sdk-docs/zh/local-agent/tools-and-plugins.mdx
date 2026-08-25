@@ -44,7 +44,7 @@ const workspace = new Workspace({
 });
 ```
 
-Workspace 默认生成由五个文件/搜索工具组成的 WorkspaceTools，Shell 额外加入两个命令工具。AgentWorkspace 将它们合并到最终 `agent_workspace.tools`：
+Workspace 默认生成由五个文件/搜索工具组成的 WorkspaceTools，Shell 额外加入两个命令工具。Session 会将它们与 Agent 自定义 Tool 合并：
 
 - `shell_exec`：一次性非交互命令
 - `shell_session`：长任务和需要 stdin 的 PTY 交互式会话
@@ -56,27 +56,7 @@ Workspace 默认生成由五个文件/搜索工具组成的 WorkspaceTools，She
 
 文件和搜索工具只允许访问 Workspace 根目录，即使没有 Shell 也可使用。通用 `unrestricted` 只属于 Shell；File/Search、Plugin 和自定义 Tool 不共享这个开关。项目外操作需要 Shell unrestricted 审批、用户显式附件或宿主注册的专用 Tool。`grep` 和 `find` 会遵守 ignore 文件，默认最多返回 200 项，并允许通过 `max_results` 提高到 2,000 项。
 
-`read` 读取 PNG、JPEG、GIF、WebP、BMP 或 PDF 时，`output` 只包含普通文件结果，同时把指向本地文件的 User File Part 注入下一个模型 Step。Tool Result 不包含 base64；其他二进制文件只返回元数据。
-
-`read` 会返回文件 SHA-256。文件可能被其他进程同时修改时，把该值作为 `edit.expected_sha256` 传入，可以阻止过期编辑覆盖新内容：
-
-```ts
-const current_result = await agent_workspace.tools.read.execute({
-  file_path: "src/index.ts",
-});
-const current = current_result.output;
-
-await agent_workspace.tools.edit.execute({
-  file_path: "src/index.ts",
-  expected_sha256: current.sha256,
-  edits: [
-    {
-      old_text: "const enabled = false;",
-      new_text: "const enabled = true;",
-    },
-  ],
-});
-```
+`read` 读取 PNG、JPEG、GIF、WebP、BMP 或 PDF 时，结果会把 User File Part 注入下一个模型 Step。内部 Tool 对象不是 Agent 或 Workspace 的公开 API；Session 会在 `prompt()` 执行期间自动组合并调用这些工具。
 
 Unrestricted sandbox 请求归属发起工具调用的 Session：
 
@@ -192,7 +172,7 @@ const plugins = agent.plugins.list();
 
 `PluginContext` 不提供通用路径集合。Plugin 通过 `context.workspace_path` 确定项目边界，并在自己的模块内管理领域存储路径；需要操作 Agent Session 时使用 `context.sessions`，不要读取 Agent 的 Session 目录。
 
-`context.sessions` 直接引用当前内部 AgentWorkspace 的 `AgentSessions`，不是转发对象。Plugin 需要同步运行时端口时使用 `context.sessions.runtime(session_id)`；SDK 用户恢复已存在的公开 Session 时使用 `await agent.sessions.get({ workspace, session_id })`。
+`context.sessions` 引用 Agent 的 `AgentSessions`，不是第二个 Session 所有者。Plugin 需要同步运行时端口时使用 `context.sessions.runtime(session_id)`；SDK 用户恢复已存在的公开 Session 时使用 `await agent.sessions.get(session_id, { workspace })`。
 
 每个 `Agent` 都有独立的 plugin registry 和独立的 `plugin_read` / `plugin_call` tool 实例。即使同一个进程里同时创建多个 Agent，模型通过 `plugin_call` 触发 action 时，也只会访问当前 session 所属 Agent 的 registry。
 

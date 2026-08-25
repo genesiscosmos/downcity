@@ -1,11 +1,11 @@
 ---
 title: "@downcity/workspace"
-description: "Project resources, private storage capability, file tools, environment, and Shell."
+description: "Project resources, file tools, environment, and Shell."
 ---
 
 `@downcity/workspace` defines the resource boundary in which an Agent performs work. It owns the
-project path, rooted file access, file and search tools, environment variables, private storage
-capability, and an optional Shell. It does not own Agent identity, Plugins, Sessions, or model calls.
+project path, rooted file access, file and search tools, environment variables, and an optional Shell.
+It does not own Agent identity, Plugins, Sessions, storage, or model calls.
 
 ```bash
 pnpm add @downcity/workspace @downcity/agent
@@ -33,25 +33,27 @@ const session = await agent.sessions.create({ workspace });
 
 - `Workspace` owns project resources and the optional Shell.
 - `Agent` owns identity, instruction, model, custom tools, and Plugin registration.
-- `AgentWorkspace` is an internal execution scope created by the Agent, including Sessions,
-  logs, scheduled actions, contextual Plugin lifecycle, and private runtime state.
+- `AgentSessions` owns Sessions. A Workspace is only a resource that a Session may use.
 - Shell is a Workspace capability. There is no separate `@downcity/shell` package.
 
-An Agent can create Sessions in multiple City Workspaces. A Workspace is owned by City and can be
-shared by multiple Agents; Agent-private Session and Plugin data remain isolated.
+An Agent can create Sessions with multiple Workspace resources. A Workspace may be registered in a
+City or managed by the host outside City; Agent-private Session and Plugin data remain isolated.
 
 ## Storage
 
-The local Workspace resolves its private storage provider internally. Callers do not pass a data
-root path. Runtime state is centralized outside project directories:
+City provides a domain-neutral Storage Provider. The default is in-memory; a host can inject a local
+file provider when persistence is needed. With a local provider, runtime state is centralized outside
+project directories:
 
 ```text
-~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/
+~/.downcity/agents/<agent_id>/
+├── sessions/
+└── plugins/
 ```
 
-`WorkspaceStorageProvider` is intentionally domain-neutral. `AgentWorkspace` chooses the
-`agents/<agent_id>/workspaces/<workspace_id>` scope and creates the SessionStore there. Project
-File/Search tools remain rooted at the real project path and cannot read this private state.
+`StorageProvider` is intentionally domain-neutral. Agent code interprets the provider for Agent,
+Session, and Plugin data. Workspace does not own or create this storage. Project File/Search tools
+remain rooted at the real project path and cannot read this private state.
 
 Edge adapters should import `WorkspaceBase` and protocol types from `@downcity/workspace/protocol`
 so they do not load Node.js filesystem, PTY, or local Shell implementations.

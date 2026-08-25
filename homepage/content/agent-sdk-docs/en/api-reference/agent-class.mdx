@@ -27,7 +27,7 @@ const session = await agent.sessions.create({ workspace });
 ## Constructor options
 
 - `id`: stable Agent identity and private data partition key.
-- `tools`: custom Tools shared by every AgentWorkspace.
+- `tools`: custom Tools available to Sessions created by this Agent.
 - `instruction`: static Agent-level base instruction.
 - `model`: default `AgentModel`; a local Session may override it.
 - `plugins`: Plugin objects registered once on the Agent.
@@ -36,11 +36,6 @@ const session = await agent.sessions.create({ workspace });
 There is no `workspace` constructor option. The host creates Workspace independently and selects it
 when creating a Session.
 
-## AgentWorkspace
-
-`AgentWorkspace` is an internal runtime scope used by City and transport. It is not part of the
-public Agent API.
-
-One Agent may create Sessions in multiple Workspaces. `agent.dispose()` leaves every active runtime scope,
-closes its Shell and storage resources, and then unregisters Agent-level Plugins. Network transports
-created by `@downcity/agent` remain owned by the host.
+One Agent may create Sessions in multiple Workspaces. The Workspace is supplied to each Session and
+does not become an Agent-owned public object. `agent.dispose()` releases Agent-level Plugins and
+runtime resources; Network transports created by `@downcity/agent` remain owned by the host.

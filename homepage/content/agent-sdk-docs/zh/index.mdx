@@ -22,7 +22,7 @@ flowchart LR
 | --- | --- | --- |
 | `Workspace` | 项目文件、Env、Tools、Shell 与 Sandbox | Agent 身份、Plugin、Session 持久化 |
 | `Agent` | 模型、指令、PluginRegistry，并可进入多个 Workspace | HTTP/RPC transport |
-| `AgentWorkspace` | 当前 Workspace 的 Session、私有 Storage 与 PluginContext | 其他 Workspace 的状态 |
+| `AgentSessions` | 当前 Agent 的全部 Session；每个 Session 可以接收一个 Workspace | Agent 身份与 Plugin 定义 |
 | `Session` | 对话状态、消息历史、执行顺序与审批 | 项目资源所有权 |
 | `PluginContext` | Agent 投影给 Plugin 的稳定能力 | 充当第二个 Agent |
 | `SessionTurnContext` | 一个 Turn 的执行上下文与生命周期 | 保存长期 Agent 状态 |
@@ -82,7 +82,7 @@ try {
 Agent + Workspace + Shell → agent.sessions.create({ workspace }) → Session → prompt() → turn.finished → dispose()
 ```
 
-`agent.dispose()` 会释放 Agent 进入的全部 AgentWorkspace，包括 Plugin lifecycle、ActionSchedule、Shell 进程、PTY 和 Sandbox。项目目录不会创建 `.downcity`。
+`agent.dispose()` 会释放 Agent 级 Plugin lifecycle、ActionSchedule，以及当前 Session 使用的 Workspace 资源。项目目录不会创建 `.downcity`。
 
 ## 模型归属
 

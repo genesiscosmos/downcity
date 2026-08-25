@@ -17,7 +17,7 @@ import { MockLanguageModelV3 } from "ai/test";
 import { Agent } from "../bin/index.js";
 import { create_workspace_entry } from "../bin/internal/index.js";
 import { City } from "../bin/index.js";
-import { LocalWorkspaceStorageProvider, Workspace } from "@downcity/workspace";
+import { LocalStorageProvider, Workspace } from "@downcity/workspace";
 
 function create_stream_text_result(text) {
   return {
@@ -190,10 +190,9 @@ test("Session logs title generation failure without blocking the session", async
   const workspace = new Workspace({
     id: "test_workspace",
     path: agent_path,
-    data_root_path: path.join(agent_path, "workspace-data"),
   });
   const city = new City({
-    storage: new LocalWorkspaceStorageProvider(path.join(agent_path, "city-data")),
+    storage: new LocalStorageProvider(path.join(agent_path, "city-data")),
     workspaces: [workspace],
   });
   const agent = new Agent({

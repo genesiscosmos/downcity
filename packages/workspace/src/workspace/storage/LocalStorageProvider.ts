@@ -1,5 +1,5 @@
 /**
- * 本地 Workspace 私有存储 Provider。
+ * 本地底层存储 Provider。
  *
  * 关键点（中文）
  * - Provider 只负责根目录、路径片段隔离和文件能力。
@@ -11,21 +11,21 @@ import path from "node:path";
 import fs from "fs-extra";
 import { LocalFileSystem } from "@/workspace/LocalFileSystem.js";
 import type {
-  WorkspaceStorageProvider,
-  WorkspaceStorageScope,
-} from "@/types/workspace/WorkspaceStorage.js";
+  StorageProvider,
+  StorageScope,
+} from "@/types/storage/Storage.js";
 
-/** 本地用户级 Workspace 存储 Provider。 */
-export class LocalWorkspaceStorageProvider implements WorkspaceStorageProvider {
-  private readonly opened_scopes = new Map<string, WorkspaceStorageScope>();
+/** 本地文件系统存储 Provider。 */
+export class LocalStorageProvider implements StorageProvider {
+  private readonly opened_scopes = new Map<string, StorageScope>();
 
   constructor(private readonly root_path: string) {}
 
   /** 打开一个只能访问用户级根目录内的逻辑作用域。 */
-  open_scope(segments: readonly string[]): WorkspaceStorageScope {
+  open_scope(segments: readonly string[]): StorageScope {
     const normalized_segments = segments.map(normalize_storage_segment);
     if (normalized_segments.length === 0) {
-      throw new Error("Workspace storage scope requires at least one segment");
+      throw new Error("Storage scope requires at least one segment");
     }
     const scope_key = normalized_segments.join("/");
     const existing_scope = this.opened_scopes.get(scope_key);
@@ -36,7 +36,7 @@ export class LocalWorkspaceStorageProvider implements WorkspaceStorageProvider {
       path.resolve(this.root_path),
     );
     ensure_private_directory_tree(path.resolve(this.root_path), storage_root_path);
-    const scope: WorkspaceStorageScope = {
+    const scope: StorageScope = {
       root_path: storage_root_path,
       files: new LocalFileSystem({
         root_path: storage_root_path,
@@ -53,10 +53,10 @@ export class LocalWorkspaceStorageProvider implements WorkspaceStorageProvider {
 function normalize_storage_segment(value: string): string {
   const segment = String(value || "").trim();
   if (!segment || segment === "." || segment === "..") {
-    throw new Error("Workspace storage scope contains an invalid segment");
+    throw new Error("Storage scope contains an invalid segment");
   }
   if (segment.includes("/") || segment.includes("\\") || path.isAbsolute(segment)) {
-    throw new Error("Workspace storage scope segment cannot contain a path");
+    throw new Error("Storage scope segment cannot contain a path");
   }
   return segment;
 }
@@ -68,7 +68,7 @@ function ensure_private_directory_tree(
 ): void {
   const relative_path = path.relative(data_root_path, storage_root_path);
   if (relative_path.startsWith("..") || path.isAbsolute(relative_path)) {
-    throw new Error("Workspace storage scope escapes its root");
+    throw new Error("Storage scope escapes its root");
   }
   const segments = relative_path.split(path.sep).filter(Boolean);
   let current_path = data_root_path;

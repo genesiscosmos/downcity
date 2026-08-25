@@ -31,7 +31,7 @@ import {
 } from "@/city/process/daemon/Manager.js";
 
 /** 一次执行所选的 Agent 与 Workspace 目标。 */
-export interface AgentWorkspaceTarget {
+export interface AgentExecutionTarget {
   /** Agent 稳定 ID。 */
   agent_id: string;
   /** 当前执行使用的 Workspace 稳定 ID。 */
@@ -151,7 +151,7 @@ export async function emit_registered_agent_list(): Promise<void> {
 export async function resolve_cli_agent_target(
   agent_id_input?: string,
   workspace_input?: string,
-): Promise<AgentWorkspaceTarget> {
+): Promise<AgentExecutionTarget> {
   const agent_id = await resolve_cli_agent_id(agent_id_input);
   const workspace = await resolve_workspace(workspace_input);
   return {

@@ -24,8 +24,8 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 | 包 / 目录 | 作用 |
 | --- | --- |
 | `downcity` | 公共 CLI 聚合包：`city`/`downcity` 是管理 Agent、运行时与控制台的本机 City 容器；`fed`/`downfed` 是 Federation Server Manager。 |
-| `@downcity/workspace` | Workspace 资源、文件/搜索工具、环境变量、私有存储与内建 Shell。 |
-| `@downcity/agent` | Agent runtime 与 City 容器，负责 AgentWorkspace、Session、Plugin SDK、多 Agent 所有权及 HTTP/RPC transport。 |
+| `@downcity/workspace` | Workspace 资源、文件/搜索工具、环境变量、内建 Shell，以及 City 使用的底层 Storage Provider。 |
+| `@downcity/agent` | Agent runtime 与 City 容器，负责 Agent、AgentSessions、Session、Plugin SDK、多 Agent 所有权及 HTTP/RPC transport。 |
 | `@downcity/federation` | Federation 运行时与 Embassy SDK，负责 Service、鉴权、Env、Bureau、User 与 Admin 访问。 |
 | `@downcity/type` | 跨 package 共享协议类型，包含 City 返回的 City 模型描述等核心类型。 |
 | `@downcity/services` | 公共服务集合，负责 accounts、balance、usage、payment 与 Stripe 支付闭环。 |

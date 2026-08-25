@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent, RemoteAgent } from "../bin/index.js";
-import { LocalWorkspaceStorageProvider, Workspace } from "../../workspace/bin/index.js";
+import { LocalStorageProvider, Workspace } from "../../workspace/bin/index.js";
 import { City } from "../bin/index.js";
 import { CityHTTP } from "../bin/city/transport/http/CityHTTP.js";
 import { CityRPC } from "../bin/city/transport/rpc/CityRPC.js";
@@ -37,15 +37,13 @@ async function create_city() {
   const first_workspace = new Workspace({
     id: "first",
     path: path.join(root, "first"),
-    data_root_path: path.join(root, "data"),
   });
   const second_workspace = new Workspace({
     id: "second",
     path: path.join(root, "second"),
-    data_root_path: path.join(root, "data"),
   });
   const city = new City({
-    storage: new LocalWorkspaceStorageProvider(path.join(root, "city-data")),
+    storage: new LocalStorageProvider(path.join(root, "city-data")),
     workspaces: [first_workspace, second_workspace],
   });
   const first_agent = new Agent({ id: "first_agent" });

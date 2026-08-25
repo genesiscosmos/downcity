@@ -3,12 +3,13 @@
  *
  * 边界说明（中文）
  * - 该上下文不包含 Workspace，避免 Agent 级资源意外绑定第一个项目。
+ * - 该上下文不暴露完整 City，只暴露宿主明确注入的 Embassy 能力。
  * - Plugin 是否需要 Agent 级生命周期，由 Plugin 自己是否实现 start/stop 决定。
  */
 
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { PluginWebServices } from "@/types/plugin/PluginServices.js";
-import type { City } from "../../city/index.js";
+import type { Embassy } from "@downcity/federation";
 
 /** Plugin 的 Agent 级生命周期上下文。 */
 export interface AgentPluginContext {
@@ -21,8 +22,8 @@ export interface AgentPluginContext {
   /** 当前 Agent 持有的 Web 搜索与文档能力。 */
   readonly web?: PluginWebServices;
 
-  /** 当前 Agent 所在的完整 City 环境；Agent 未加入 City 时为空。 */
-  readonly city?: City;
+  /** City 注入的 Embassy 能力；Agent 未加入 City 时为空。 */
+  readonly embassy?: Embassy;
 
   /** 动态读取当前 Agent 静态指令的只读快照。 */
   readonly instructions: readonly string[];

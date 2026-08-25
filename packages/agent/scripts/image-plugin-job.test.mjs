@@ -71,7 +71,7 @@ function create_context(workspace_path = process.cwd()) {
     data_path,
     files: create_files(workspace_path),
     data_files: create_files(data_path),
-    city: { embassy: { user: { ai: current_image_ai } } },
+    embassy: { user: { ai: current_image_ai } },
   };
 }
 

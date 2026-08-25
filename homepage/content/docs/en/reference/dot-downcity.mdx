@@ -14,8 +14,8 @@ description: Runtime data layout and what each folder is for
 ├── agents/<agent_id>/
 │   ├── agent.json
 │   ├── SOUL.md
-│   └── workspaces/<workspace_id>/
-│       ├── sessions/
+│   └── sessions/
+│       ├── <session_id>/
 │       ├── archived-sessions/
 │       └── logs/
 ├── plugins/<plugin_id>/
@@ -26,11 +26,11 @@ description: Runtime data layout and what each folder is for
 
 ## Key folders
 
-### `agents/<agent_id>/workspaces/<workspace_id>/logs/`
+### `agents/<agent_id>/logs/`
 
 Daily JSONL logs: `<YYYY-MM-DD>.jsonl`.
 
-### `agents/<agent_id>/workspaces/<workspace_id>/sessions/<session_id>/messages/`
+### `agents/<agent_id>/sessions/<session_id>/messages/`
 
 Conversation source of truth: `active.jsonl`, `assistant_message.json`, and sequence-named `segments/*.jsonl`.
 
@@ -40,7 +40,7 @@ Long-term Memory is not part of the Workspace `.downcity/` contract. Memory cont
 
 ### Plugin runtime data
 
-Plugin-owned runtime data uses the private storage scope exposed by the current AgentWorkspace context. Plugin definitions and profiles remain under `~/.downcity/plugins/<plugin_id>/`.
+Plugin-owned runtime data uses the Agent-level storage scope exposed by PluginContext. Plugin definitions and profiles remain under `~/.downcity/plugins/<plugin_id>/`.
 
 ### Skills location
 

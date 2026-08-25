@@ -6,6 +6,7 @@
  */
 
 import { Agent, City } from "@downcity/agent";
+import { LocalStorageProvider } from "@downcity/workspace";
 import { create_workspace_entry } from "@downcity/agent/internal";
 import {
   create_city_host_instance_id,
@@ -88,7 +89,10 @@ export class CliCityRuntime {
       plugin_repository: data.plugins,
     });
     const { embassy } = await new EmbassySessionResolver().create_user_client();
-    const city = new City({ embassy, runtime: {
+    const city = new City({
+      storage: new LocalStorageProvider(data.root_path),
+      embassy,
+      runtime: {
       resolve_workspace: async (_agent, workspace_id) => {
         const workspace_config = data.workspaces.get(workspace_id);
         if (!workspace_config) throw new Error(`Workspace not found: ${workspace_id}`);
@@ -129,7 +133,8 @@ export class CliCityRuntime {
           return env;
         },
       },
-    }});
+      },
+    });
     const agents: Agent[] = [];
     try {
       for (const config of data.agents.list()) {

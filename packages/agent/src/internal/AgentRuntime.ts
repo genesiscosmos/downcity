@@ -8,10 +8,11 @@ import { Agent } from "@/agent/Agent.js";
 import { WorkspaceEntry } from "@/agent/WorkspaceEntry.js";
 import type { WorkspaceBase } from "@downcity/workspace";
 import type { City } from "../city/index.js";
-import type { WorkspaceStorageScope } from "@downcity/workspace";
+import type { Embassy } from "@downcity/federation";
+import type { StorageProvider, StorageScope } from "@downcity/workspace";
+import { MemoryStorageProvider } from "@downcity/workspace";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
 import { LocalSessionStore } from "@/workspace/store/LocalSessionStore.js";
-import { MemoryFileSystem } from "@/workspace/store/MemoryFileSystem.js";
 import {
   start_action_schedule_runtime,
   type ActionScheduleRuntimeHandle,
@@ -19,9 +20,10 @@ import {
 
 interface AgentRuntimeState {
   bound_city?: City;
-  memory_storage?: AgentStorage;
+  embassy?: Embassy;
   memory_session_started?: boolean;
   workspaces_by_id: Map<string, WorkspaceEntry>;
+  storage_provider: StorageProvider;
   agent_storage?: AgentStorage;
   action_schedule?: ActionScheduleRuntimeHandle;
   action_schedule_promise?: Promise<void>;
@@ -32,7 +34,10 @@ const runtime_states = new WeakMap<Agent, AgentRuntimeState>();
 const unbound_workspace_owners = new WeakMap<object, Agent>();
 
 export function initialize_agent_runtime(agent: Agent): void {
-  runtime_states.set(agent, { workspaces_by_id: new Map() });
+  runtime_states.set(agent, {
+    workspaces_by_id: new Map(),
+    storage_provider: new MemoryStorageProvider(),
+  });
 }
 
 function runtime_state(agent: Agent): AgentRuntimeState {
@@ -52,6 +57,21 @@ export function attach_agent_city(agent: Agent, city: City): void {
     throw new Error(`Agent "${agent.id}" already belongs to another City`);
   }
   state.bound_city = city;
+  state.embassy = city.embassy;
+}
+
+/** 将 City 提供的底层 Storage 注入 Agent；该函数只在组合根调用。 */
+export function attach_agent_storage(agent: Agent, storage_provider: StorageProvider): void {
+  const state = runtime_state(agent);
+  if (state.memory_session_started) {
+    throw new Error(
+      `Agent "${agent.id}" already created Session data without City; join City before creating Sessions`,
+    );
+  }
+  if (state.agent_storage) {
+    throw new Error(`Agent "${agent.id}" storage is already initialized`);
+  }
+  state.storage_provider = storage_provider;
 }
 
 /** 标记 Agent 已经创建或恢复过无 City 的 Session。 */
@@ -62,45 +82,49 @@ export function mark_agent_session_started(agent: Agent): void {
 
 export function detach_agent_city(agent: Agent, city: City): void {
   const state = runtime_state(agent);
-  if (state.bound_city === city) state.bound_city = undefined;
-}
-
-export function agent_city(agent: Agent): City | undefined {
-  return runtime_state(agent).bound_city;
+  if (state.bound_city === city) {
+    state.bound_city = undefined;
+    state.embassy = undefined;
+  }
 }
 
 export function agent_is_in_city(agent: Agent): boolean {
   return Boolean(runtime_state(agent).bound_city);
 }
 
-/** 返回 Agent 所属 City 提供的私有存储作用域。 */
-export function agent_storage_scope(agent: Agent): WorkspaceStorageScope | null {
-  const city = runtime_state(agent).bound_city;
-  return city ? city.open_agent_storage(agent.id) : null;
+/** 返回 City 注入的窄 Embassy 能力。 */
+export function agent_embassy(agent: Agent): Embassy | undefined {
+  return runtime_state(agent).embassy;
 }
 
-/** 获取或创建 Agent 在 City 中唯一的 Session 存储。 */
+/** 由 Agent 释放自身时通知所属 City。 */
+export function release_agent_from_city(agent: Agent): void {
+  runtime_state(agent).bound_city?.release_agent(agent);
+}
+
+/** 返回 Agent 解释出的业务存储作用域。 */
+export function agent_storage_scope(agent: Agent): StorageScope {
+  return runtime_state(agent).storage_provider.open_scope(["agents", agent.id]);
+}
+
+/** 返回指定 Agent Plugin 的底层数据作用域。 */
+export function plugin_storage_scope(agent: Agent, plugin_id: string): StorageScope {
+  return runtime_state(agent).storage_provider.open_scope([
+    "agents",
+    agent.id,
+    "plugins",
+    plugin_id,
+  ]);
+}
+
+/** 获取或创建 Agent 唯一的 Session 存储。 */
 export function get_agent_storage(
   agent: Agent,
 ): AgentStorage {
   const state = runtime_state(agent);
-  if (!state.bound_city) {
-    if (state.memory_storage) return state.memory_storage;
-    const files = new MemoryFileSystem(`/memory/agents/${agent.id}`);
-    state.memory_storage = {
-      root_path: files.root_path,
-      files,
-      sessions: new LocalSessionStore({
-        files,
-        storage_root_path: files.root_path,
-        agent_id: agent.id,
-      }),
-    };
-    return state.memory_storage;
-  }
   if (state.agent_storage) return state.agent_storage;
-  const scope = state.bound_city.open_agent_storage(agent.id);
-  const files = scope?.files || new MemoryFileSystem(`/memory/agents/${agent.id}`);
+  const scope = state.storage_provider.open_scope(["agents", agent.id]);
+  const files = scope.files;
   const storage: AgentStorage = {
     root_path: scope.root_path,
     files,

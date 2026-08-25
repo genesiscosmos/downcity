@@ -12,13 +12,13 @@ description: Create, open, list, archive, and permanently clean up Sessions
 ```ts
 const created = await agent.sessions.create({
   workspace,
-  session_id: "repo-analysis",
 });
 
-const existing = await agent.sessions.get({ workspace, session_id: "repo-analysis" });
+const existing = await agent.sessions.get("session-id-from-list", { workspace });
 ```
 
-`create()` expresses creation intent. It throws when the ID already exists instead of silently reusing it. When `session_id` is omitted, the SDK generates a stable, non-guessable ID. For get-or-create behavior, call `get()` first and call `create()` only when it is missing.
+`create()` always generates the Session ID internally. To reopen an existing Session, obtain its ID from
+`list()` or another persisted reference and pass it to `get(session_id, { workspace })`.
 
 ## List and search
 

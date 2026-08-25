@@ -10,7 +10,7 @@
  * 输入到输出（中文）：
  * `file.url = data:<media-type>;base64,...`
  *   → Session Attachment Store 解码并写入附件文件
- *   → `file.url = <WorkspaceEntry data>/sessions/.../attachments/att_<id>.<ext>`
+ *   → `file.url = <Agent storage>/sessions/.../attachments/att_<id>.<ext>`
  *   → Message 持久化路径引用
  *   → 模型执行前读取文件并恢复为 Data URL
  *   → `convertToModelMessages()` 生成最终 ModelMessage。
@@ -118,7 +118,7 @@ async function hydrateFileUrlPart(
  *
  * 关键点（中文）
  * - 只有 Data URL 会在此处落盘；远程 URL 和本地路径保持引用不变。
- * - 附件成功落盘后才把 URL 替换为 WorkspaceEntry 私有目录中的绝对路径。
+ * - 附件成功落盘后才把 URL 替换为 Agent 私有目录中的绝对路径。
  * - canonical filename 保留调用侧传入的用户可见文件名；真实落盘路径只写入 url。
  */
 export async function persist_user_prompt_file_parts(

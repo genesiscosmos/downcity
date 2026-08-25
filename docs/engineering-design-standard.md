@@ -110,7 +110,7 @@ Downcity 的工程目标不是追求最多的抽象、最强的限制或最通�
 优先组合职责明确的对象：
 
 ```text
-Workspace = ProjectPath + Files + Env + WorkspaceTools + Shell? + DataRoot
+Workspace = ResourceId + Capabilities + Env + Shell?
 
 Agent = Identity + Model + Instruction + Plugins
 
@@ -188,7 +188,7 @@ Shell = Command/Process Protocol + Sandbox Adapter
 
 ## 4. Downcity 的领域边界
 
-### 4.1 Workspace 是资源容器
+### 4.1 Workspace 是工作资源
 
 Workspace 统一持有一个 Agent 可以使用的项目资源：
 
@@ -197,7 +197,6 @@ Workspace 统一持有一个 Agent 可以使用的项目资源：
 - 文件与搜索工具。
 - Workspace env。
 - 可选 Shell。
-- 通用的私有存储 Provider；Provider 不理解 Agent、Session 或 Plugin 语义。
 
 Workspace 不负责：
 
@@ -206,6 +205,10 @@ Workspace 不负责：
 - Plugin 业务。
 - daemon 和多 Agent 管理。
 - 用户级全局配置。
+- Agent、Session、Plugin 的运行存储。
+
+Workspace 可以登记在 City 内，也可以由宿主在 City 外管理。它可以代表本地目录、SSH
+远程目录、容器、云电脑或其他工作环境；文件系统不是 Workspace 的必要条件。
 
 Workspace 必须有稳定 ID。Agent 定义不保存 Workspace 绑定；宿主在一次具体执行开始时创建 Workspace，并通过 `agent.sessions.create({ workspace })` 创建 Session。一个 Agent 可以同时使用多个 Workspace；Workspace 只提供当前 Session 的项目文件、Shell、env 与工具，Session 仍由 AgentSessions 统一持有。项目目录只承担真实项目文件与命令 cwd，不承担 Downcity 运行状态。Workspace 上下文只作为 Session 的内部执行参数，不构成新的领域所有者。
 
@@ -289,7 +292,7 @@ Agent 通过 `agent.json` 选择 Plugin 与可选 profile。Plugin profile 可�
 
 `downcity.db` 继续保存 Workspace 索引、平台设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。Workspace 与平台设置以明文 JSON 保存，本地隔离依赖数据库文件权限。
 
-Agent 在 City 中执行产生的本地状态保存在 `~/.downcity/agents/<agent_id>/`。Session ID 在 Agent 内唯一，Session metadata 必须同时记录 `workspace_id`（若创建时传入）与 `agent_id`。没有 City 时只使用 Agent 实例生命周期内的内存 Store。项目目录中不得创建 `<project>/.downcity`，也不进行旧目录兼容读取或迁移。
+当 City 注入本地持久化 Storage 时，Agent 运行状态保存在 `~/.downcity/agents/<agent_id>/`。Session ID 在 Agent 内唯一，Session metadata 必须同时记录 `workspace_id`（若创建时传入）与 `agent_id`。City 默认使用 MemoryStorage，未注入持久化 Storage 时运行状态只存在于当前进程。项目目录中不得创建 `<project>/.downcity`，也不进行旧目录兼容读取或迁移。
 
 Workspace 只保证底层文件和 Shell 安全边界，不为 Plugin 的业务行为负责。Plugin 的业务权限、账号、网络访问与语义校验由 Plugin 或宿主管理。
 
@@ -448,17 +451,17 @@ PluginContext 只服务 Plugin；宿主直接依赖 Agent，不获取 PluginCont
 
 ### 8.1 Store 是领域能力，不是第二个资源容器
 
-Store 基于 AgentStorage 提供的私有 FileSystem 原子能力实现 Agent/Session 结构化持久化。Store 与 Workspace 的关系是：
+Store 基于 City 提供的底层 Storage 原子能力实现 Agent/Session 结构化持久化。Store 与 Workspace 的关系是：
 
 ```text
-City 提供项目外的 AgentStorage（或无 City 时由 Agent 使用进程内存储）
-  → AgentStorage 创建 LocalSessionStore
+City 提供项目外的 Storage（默认 MemoryStorage）
+  → Agent 解释 agents/<agent_id> 业务范围
   → SessionStore 定义 Session 集合存储语义
   → SessionDataStore 定义单个 Session 存储语义
   → MessageStore 定义消息提交与恢复语义
 ```
 
-Store 只能使用 AgentStorage，不能使用项目 FileSystem。项目 Tool 不能读取或修改 Session、instruction、日志和 Plugin 私有状态；需要内部持久化能力的 Plugin 使用 `PluginContext.data_path` 或 `data_files`。
+Store 只能使用 City Storage，不能使用项目 FileSystem。项目 Tool 不能读取或修改 Session、instruction、日志和 Plugin 私有状态；需要内部持久化能力的 Plugin 使用 Agent 分配的 `data_path` 或 `data_files`。
 
 ### 8.2 持久化必须服务于恢复
 

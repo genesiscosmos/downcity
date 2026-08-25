@@ -5,10 +5,10 @@ description: 本地 SDK Agent 的 Session 文件布局与数据边界
 
 # SDK Session 布局
 
-本地 SDK Agent 的 Session 默认集中落盘到 `~/.downcity`；测试或多实例宿主可以通过 `DC_PLATFORM_ROOT` 覆盖内部根目录：
+本地 SDK Agent 的 Session 保存在 City 注入的存储根目录下；使用本地 Provider 时通常是 `~/.downcity`：
 
 ```text
-~/.downcity/agents/<agent_id>/workspaces/<workspace_id>/sessions/<session_id>/
+~/.downcity/agents/<agent_id>/sessions/<session_id>/
 ├── meta.json
 └── messages/
     ├── active.jsonl
@@ -17,7 +17,8 @@ description: 本地 SDK Agent 的 Session 文件布局与数据边界
         └── <start_sequence>-<end_sequence>.jsonl
 ```
 
-`workspace_id` 定位 Workspace 数据根，`session_id` 在 Workspace 内唯一。`meta.json` 记录 Session 所属的 `agent_id` 和 `workspace_id`；Agent 的 Session 列表只返回 metadata 与自己匹配的记录。项目目录不会创建 `.downcity`。
+`session_id` 在 Agent 内唯一。`meta.json` 记录 Session 所属的 `agent_id`，只有传入 Workspace
+时才增加 `workspace_id`；项目目录不会创建 `.downcity`。
 
 - `active.jsonl`：上次 Compact 后保留的完整 `SessionMessage` 快照。
 - `assistant_message.json`：唯一的运行中 Assistant 完整草稿。

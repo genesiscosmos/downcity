@@ -8,27 +8,25 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { ActionScheduleStore } from "../bin/index.js";
-import { Workspace } from "@downcity/workspace";
+import { LocalStorageProvider, Workspace } from "@downcity/workspace";
 
-/** 打开 Workspace execution entry 使用的通用 Workspace 私有存储作用域。 */
-function open_agent_scope(workspace, agent_id) {
-  return workspace.storage.open_scope([
+/** 打开 City 提供的 Agent 存储作用域。 */
+function open_agent_scope(storage, agent_id) {
+  return storage.open_scope([
     "agents",
     agent_id,
-    "workspaces",
-    workspace.id,
   ]);
 }
 
-test("ActionScheduleStore persists through Workspace execution entry private FileSystem", async (t) => {
+test("ActionScheduleStore persists through the Agent storage scope", async (t) => {
   const workspace_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-action-schedule-"),
   );
   t.after(async () => {
     await fs.rm(workspace_path, { recursive: true, force: true });
   });
-  const workspace = new Workspace({ id: "test_workspace", path: workspace_path, data_root_path: path.join(workspace_path, "data") });
-  const storage = open_agent_scope(workspace, "schedule-test");
+  const workspace = new Workspace({ id: "test_workspace", path: workspace_path });
+  const storage = open_agent_scope(new LocalStorageProvider(path.join(workspace_path, "data")), "schedule-test");
   const store = new ActionScheduleStore(
     storage.files,
     storage.root_path,
@@ -61,10 +59,11 @@ test("ActionScheduleStore serializes cross-instance pending claims", async (t) =
   t.after(async () => {
     await fs.rm(workspace_path, { recursive: true, force: true });
   });
-  const first_workspace = new Workspace({ id: "test_workspace", path: workspace_path, data_root_path: path.join(workspace_path, "data") });
-  const second_workspace = new Workspace({ id: "test_workspace", path: workspace_path, data_root_path: path.join(workspace_path, "data") });
-  const first_storage = open_agent_scope(first_workspace, "schedule-test");
-  const second_storage = open_agent_scope(second_workspace, "schedule-test");
+  const first_workspace = new Workspace({ id: "test_workspace", path: workspace_path });
+  const second_workspace = new Workspace({ id: "test_workspace", path: workspace_path });
+  const shared_storage = new LocalStorageProvider(path.join(workspace_path, "data"));
+  const first_storage = open_agent_scope(shared_storage, "schedule-test");
+  const second_storage = open_agent_scope(shared_storage, "schedule-test");
   const first_store = new ActionScheduleStore(first_storage.files, first_storage.root_path, "schedule-test", "test_workspace");
   const second_store = new ActionScheduleStore(second_storage.files, second_storage.root_path, "schedule-test", "test_workspace");
   const created = await first_store.create_job({
@@ -94,8 +93,8 @@ test("ActionScheduleStore only allows running jobs to enter terminal states", as
   t.after(async () => {
     await fs.rm(workspace_path, { recursive: true, force: true });
   });
-  const workspace = new Workspace({ id: "test_workspace", path: workspace_path, data_root_path: path.join(workspace_path, "data") });
-  const storage = open_agent_scope(workspace, "schedule-test");
+  const workspace = new Workspace({ id: "test_workspace", path: workspace_path });
+  const storage = open_agent_scope(new LocalStorageProvider(path.join(workspace_path, "data")), "schedule-test");
   const store = new ActionScheduleStore(storage.files, storage.root_path, "schedule-test", "test_workspace");
 
   const cancelled = await store.create_job({
@@ -133,15 +132,14 @@ test("ActionScheduleStore filters shared Workspace jobs by Agent ownership", asy
   const first_workspace = new Workspace({
     id: "test_workspace",
     path: workspace_path,
-    data_root_path,
   });
   const second_workspace = new Workspace({
     id: "test_workspace",
     path: workspace_path,
-    data_root_path,
   });
-  const first_storage = open_agent_scope(first_workspace, "first-agent");
-  const second_storage = open_agent_scope(second_workspace, "second-agent");
+  const shared_storage = new LocalStorageProvider(data_root_path);
+  const first_storage = open_agent_scope(shared_storage, "first-agent");
+  const second_storage = open_agent_scope(shared_storage, "second-agent");
   const first_store = new ActionScheduleStore(
     first_storage.files,
     first_storage.root_path,

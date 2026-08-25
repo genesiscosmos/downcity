@@ -11,7 +11,7 @@ import { Agent } from "../bin/index.js";
 import { create_workspace_entry } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 
-test("Workspace resolves the Downcity data root internally", async (t) => {
+test("Agent runtime uses memory data when no City is attached", async (t) => {
   const fixture_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-root-"));
   const project_path = path.join(fixture_root, "project");
   await fs.mkdir(project_path);

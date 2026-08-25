@@ -92,8 +92,8 @@ one Agent → multiple `agent.sessions.create({ workspace })` Sessions → one a
 ```
 
 - Agent is not bound to one Workspace; one Agent can enter multiple Workspaces.
-- Each AgentWorkspace owns an Agent-filtered Session view, Shell, and Plugin context; entries for the same Workspace share one internal data root.
-- `agent.dispose()` releases every AgentWorkspace, Plugin runtime, Shell, PTYs, and Sandbox.
+- `AgentSessions` owns the Agent's Sessions. Each Session receives its own Workspace context and Plugin projection.
+- `agent.dispose()` releases Agent-level Plugin runtime and all resources used by its Sessions.
 - `RemoteAgent.close()` closes only the client connection, not the server-side Agent.
 
 Continue with the [Agent API](/en/agent-sdk-docs/api-reference/agent-class) and [Sessions overview](/en/agent-sdk-docs/sessions/overview).

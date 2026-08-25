@@ -5,7 +5,7 @@ description: Agent SDK 是什么，以及如何运行 Agent 工作
 
 # Agent
 
-**Agent SDK** (`@downcity/agent`) 是执行 Agent 工作的核心运行时。Agent 实例在执行时进入 Workspace，并通过 AgentWorkspace 组合会话、工具、插件和模型。`City` 是宿主进程内 Agent 实例的生命周期容器。
+**Agent SDK** (`@downcity/agent`) 是执行 Agent 工作的核心运行时。Agent 负责身份、模型、指令、Plugin 与唯一的 `AgentSessions` 集合；每个 Session 可以接收一个 Workspace，用于项目工具和环境。`City` 是宿主进程内 Agent 实例的生命周期容器。
 
 ## Agent 做什么
 

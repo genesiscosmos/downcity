@@ -22,13 +22,12 @@ import type { PluginSnapshot } from "@/types/plugin/PluginState.js";
 import type { WorkspaceEntryOptions } from "@/types/agent/WorkspaceEntryOptions.js";
 import { Logger } from "@/utils/logger/Logger.js";
 import { generate_id } from "@/utils/Id.js";
-import { MemoryFileSystem } from "@/workspace/store/MemoryFileSystem.js";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
 import {
   resolve_session_system_messages,
   type SystemProfile,
 } from "@/executor/composer/system/default/SystemDomain.js";
-import { agent_city, agent_is_in_city, get_agent_storage, agent_storage_scope, release_workspace_entry } from "@/internal/AgentRuntime.js";
+import { agent_embassy, agent_is_in_city, get_agent_storage, plugin_storage_scope, release_workspace_entry } from "@/internal/AgentRuntime.js";
 
 const RESERVED_PLUGIN_TOOL_NAMES = new Set(["plugin_read", "plugin_call"]);
 
@@ -114,7 +113,7 @@ export class WorkspaceEntry {
       data_files: storage.files,
       ...(this.workspace.shell ? { shell: this.workspace.shell } : {}),
       logger: this.logger,
-      city: agent_city(this.agent),
+      embassy: agent_embassy(this.agent),
       get_workspace_env: () => this.workspace.get_env(),
       get_instructions: () => this.agent.get_instructions(),
       get_plugins: () => {
@@ -279,11 +278,8 @@ export class WorkspaceEntry {
     const key = String(plugin_name || "").trim();
     const existing = this.plugin_contexts.get(key);
     if (existing) return existing;
-    const agent_scope = agent_storage_scope(this.agent);
-    const plugin_scope = agent_scope
-      ? this.agent.city!.storage.open_scope(["agents", this.agent.id, "plugins", key])
-      : MemoryFileSystem.shared(`/memory/agents/${this.agent.id}/plugins/${key}`);
-    const plugin_files = "files" in plugin_scope ? plugin_scope.files : plugin_scope;
+    const plugin_scope = plugin_storage_scope(this.agent, key);
+    const plugin_files = plugin_scope.files;
     const context = create_plugin_context({
       ...input,
       data_path: plugin_scope.root_path,

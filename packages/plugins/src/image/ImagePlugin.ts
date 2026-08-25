@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 对 Agent 暴露 `image_create` / `image_result` 两步式任务 action。
- * - 图片 AI 从运行时 Context 的 City 环境读取；Workspace 文件能力由运行时 Context 提供。
+ * - 图片 AI 从运行时 Context 的 Embassy 能力读取；Workspace 文件能力由运行时 Context 提供。
  * - 成功结果中的远程图片会写入 Workspace，并同时保留本地引用与在线来源地址。
  */
 
@@ -52,9 +52,9 @@ const DEFAULT_IMAGE_WAIT_MS = 60_000;
 const DEFAULT_IMAGE_POLL_MS = 1_500;
 const MAX_IMAGE_WAIT_MS = 10 * 60_000;
 
-/** 从当前 Agent 所在 City 获取图片 AI 服务。 */
+/** 从 City 注入的 Embassy 获取图片 AI 服务。 */
 function require_image_ai(context: PluginContext): ImageAiService {
-  const service = context.city?.embassy?.user.ai;
+  const service = context.embassy?.user.ai;
   if (!service) throw new Error("ImagePlugin requires a City Embassy user AI service");
   return {
     catalog: async () => await service.catalog(),

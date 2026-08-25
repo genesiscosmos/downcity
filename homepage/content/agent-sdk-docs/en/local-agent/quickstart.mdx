@@ -86,8 +86,8 @@ City(Workspace) → Agent(city) → Agent Session(Workspace) → Turn
 ```
 
 - Agent is bound to one City resource container; each Session selects a City Workspace.
-- Workspace describes project resources only; AgentWorkspace owns Sessions and runtime state for that Agent in the project.
-- Multiple Agents may target the same directory, using distinct agent IDs and isolated Workspace data partitions.
+- Workspace describes project resources only; AgentSessions owns Sessions and Agent runtime state remains in the Agent storage scope.
+- Multiple Agents may target the same directory, using distinct agent IDs and isolated Agent storage scopes.
 - Plugin lifecycle and ActionSchedule begin starting immediately after `new Agent(...)`.
 - Session execution waits for the Agent runtime automatically; callers do not manage a separate startup state.
 - `agent.dispose()` releases the Agent's sessions and plugins. `city.close()` releases shared Workspaces and Shell resources.

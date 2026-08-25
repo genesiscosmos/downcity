@@ -160,13 +160,7 @@ workspace.patch_env({
   GITHUB_TOKEN: token,
 });
 
-await agent_workspace.tools.shell_exec.execute(
-  {
-    cmd: 'printf "%s\\n" "$GITHUB_TOKEN"',
-    sandbox: "safe",
-  },
-  { toolCallId: "example" },
-);
+await session.prompt({ query: "执行 shell 命令" });
 ```
 
 ### Policy

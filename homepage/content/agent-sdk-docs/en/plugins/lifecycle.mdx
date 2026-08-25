@@ -115,7 +115,7 @@ An unregistered plugin does not need a state because it is no longer in the regi
 
 ActionSchedule is not a plugin.
 
-Each AgentWorkspace owns one local scheduling loop. Due jobs call actions on the Agent's currently registered plugins with that Workspace context.
+Each Agent owns one local scheduling loop. Due jobs call actions on the Agent's currently registered plugins; a Workspace context is selected only when a Session executes the job.
 
 ## Related docs
 

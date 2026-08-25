@@ -17,14 +17,13 @@ import type {
 } from "@/types/agent/AgentOptions.js";
 import type { AgentPluginContext } from "@/types/plugin/AgentPluginContext.js";
 import type { PluginWebServices } from "@/types/plugin/PluginServices.js";
-import type { City } from "../city/index.js";
 import type {
   AgentSessionCollection,
 } from "@/types/agent/AgentSessionCollection.js";
 import { Logger } from "@/utils/logger/Logger.js";
 import { AgentSessions } from "@/agent/AgentSessions.js";
 import {
-  agent_city,
+  agent_embassy,
   clear_agent_runtime,
   create_workspace_entry,
   dispose_agent_runtime,
@@ -32,6 +31,7 @@ import {
   initialize_agent_runtime,
   list_workspace_entries,
   mark_agent_session_started,
+  release_agent_from_city,
 } from "@/internal/AgentRuntime.js";
 
 /** SDK Agent 主体。 */
@@ -60,11 +60,6 @@ export class Agent {
   /** AgentPlugin 的内部访问名，仍指向 Agent 唯一 Registry。 */
   readonly plugin_registry: PluginRegistry;
 
-  /** 当前 Agent 所在的完整 City；未加入 City 时为空。 */
-  get city(): City | undefined {
-    return agent_city(this);
-  }
-
   /** Agent 级日志器，不绑定任何 Workspace。 */
   private readonly logger = new Logger();
 
@@ -92,8 +87,8 @@ export class Agent {
       agent_id: this.id,
       logger: this.logger,
       web: this.web,
-      get city() {
-        return agent_city(agent);
+      get embassy() {
+        return agent_embassy(agent);
       },
       get instructions() {
         return agent.get_instructions();
@@ -182,7 +177,7 @@ export class Agent {
       const errors = results.flatMap((result) =>
         result.status === "rejected" ? [result.reason] : []
       );
-      agent_city(this)?.release_agent(this);
+      release_agent_from_city(this);
       clear_agent_runtime(this);
       if (errors.length > 0) throw new AggregateError(errors, "Agent dispose failed");
     })();

@@ -45,6 +45,6 @@ the new host asks for confirmation, requests a graceful shutdown, and waits for 
 to release its transports. This protocol only coordinates City listener ownership. It adds no Agent
 started state and never modifies persisted Agent, Plugin, or Session data.
 
-Single-Agent execution, internal AgentWorkspace runtime, Session, Plugin SDK, and RemoteAgent remain in
+Single-Agent execution, AgentSessions, Session, Plugin SDK, and RemoteAgent remain in
 `@downcity/agent`. Project resources and Shell belong to `@downcity/workspace`. Federation,
 Embassy, and Bureau belong to `@downcity/federation`.

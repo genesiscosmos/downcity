@@ -12,8 +12,7 @@ description: Build local or remote Agents with project files, sandboxed commands
 ```mermaid
 flowchart LR
     Host["SDK host"] --> Agent["Agent<br/>identity and Plugin registry"]
-    Agent --> Workspace["agent.sessions.create({ workspace })<br/>Session scope"]
-    Workspace --> Session["Session<br/>stateful execution container"]
+    Agent --> Session["agent.sessions.create({ workspace })<br/>Session"]
     Session --> Turn["Turn<br/>one prompt execution"]
     Agent --> Plugin["Plugin<br/>extension capability"]
 ```
@@ -22,7 +21,7 @@ flowchart LR
 | --- | --- | --- |
 | `Workspace` | Project files, env, Tools, Shell, and Sandbox | Agent identity, plugins, and Session persistence |
 | `Agent` | Model, instructions, PluginRegistry, and entry into multiple Workspaces | HTTP/RPC transports |
-| `AgentWorkspace` | Sessions, private Storage, and PluginContext for one Workspace entry | State in other Workspaces |
+| `AgentSessions` | All Sessions owned by one Agent; each Session may receive a Workspace | Agent identity and Plugin definitions |
 | `Session` | Conversation state, message history, execution order, and approvals | Project resource ownership |
 | `PluginContext` | Stable Agent capabilities projected to a Plugin | A second Agent facade |
 | `SessionTurnContext` | Execution context and lifecycle for one Turn | Long-lived Agent state |
@@ -82,7 +81,7 @@ Remember this primary path:
 Agent + Workspace + Shell → agent.sessions.create({ workspace }) → Session → prompt() → turn.finished → dispose()
 ```
 
-`agent.dispose()` releases every AgentWorkspace it entered, including plugin lifecycle, ActionSchedule, Shell processes, PTYs, and Sandbox resources. The project directory never receives `.downcity`.
+`agent.dispose()` releases Agent-level Plugin lifecycle and ActionSchedule resources, then releases every Session and Workspace resource it currently uses. The project directory never receives `.downcity`.
 
 ## Model ownership
 

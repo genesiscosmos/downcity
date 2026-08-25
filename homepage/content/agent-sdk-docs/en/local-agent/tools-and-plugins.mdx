@@ -42,7 +42,7 @@ const workspace = new Workspace({
 });
 ```
 
-Workspace creates WorkspaceTools from five file/search tools by default, and Shell contributes two command tools. AgentWorkspace merges them into `agent_workspace.tools`:
+Workspace creates WorkspaceTools from five file/search tools by default, and Shell contributes two command tools. The Session combines them with Agent custom Tools:
 
 - `shell_exec`: one-shot non-interactive commands
 - `shell_session`: long-running or stdin-driven interactive PTY sessions
@@ -54,27 +54,7 @@ Workspace creates WorkspaceTools from five file/search tools by default, and She
 
 File and search tools can only access the Workspace root and remain available without Shell. Generic `unrestricted` belongs only to Shell; File/Search, Plugin, and custom tools do not share that switch. Outside-project access requires Shell unrestricted approval, an explicit user attachment, or a dedicated host tool. `grep` and `find` respect ignore files, return at most 200 results by default, and accept `max_results` up to 2,000.
 
-When `read` opens a PNG, JPEG, GIF, WebP, BMP, or PDF, `output` contains only the normal file result and a User File Part pointing to the local file is injected into the next model step. The Tool Result contains no base64. Other binary files return metadata only.
-
-`read` returns the file SHA-256. When another process may change the file concurrently, pass it as `edit.expected_sha256` to prevent a stale edit from replacing newer content:
-
-```ts
-const current_result = await agent_workspace.tools.read.execute({
-  file_path: "src/index.ts",
-});
-const current = current_result.output;
-
-await agent_workspace.tools.edit.execute({
-  file_path: "src/index.ts",
-  expected_sha256: current.sha256,
-  edits: [
-    {
-      old_text: "const enabled = false;",
-      new_text: "const enabled = true;",
-    },
-  ],
-});
-```
+When `read` opens a PNG, JPEG, GIF, WebP, BMP, or PDF, the result includes a User File Part for the next model step. The internal Tool object is not a public Agent or Workspace API; the Session assembles and invokes these tools during `prompt()`.
 
 Unrestricted sandbox requests belong to the Session that started the tool call:
 
@@ -138,7 +118,7 @@ Registered plugin actions can be called through `agent.plugins.run_action(...)`,
 
 `PluginContext` does not expose a generic path bundle. A plugin uses `context.workspace_path` as the project boundary and owns its domain storage paths inside the plugin. Operations on Agent Sessions go through `context.sessions`, not the Agent's Session directories.
 
-`context.sessions` directly references the current internal AgentWorkspace's `AgentSessions`; it is not an adapter. Plugins use `context.sessions.runtime(session_id)` for the synchronous runtime port. SDK callers restore an existing public Session with `await agent.sessions.get({ workspace, session_id })`.
+`context.sessions` references the Agent's `AgentSessions`; it is not a second Session owner. Plugins use `context.sessions.runtime(session_id)` for the synchronous runtime port. SDK callers restore an existing public Session with `await agent.sessions.get(session_id, { workspace })`.
 
 Each `Agent` has its own plugin registry and its own `plugin_read` / `plugin_call` tool instances. If one process creates and caches multiple Agents, a session's `plugin_call` only reaches the registry for the Agent that owns that session.
 

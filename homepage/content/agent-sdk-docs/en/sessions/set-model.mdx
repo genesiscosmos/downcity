@@ -66,7 +66,7 @@ A Session without an explicit model falls back to the Agent model; once set, its
 
 The local SDK behaves more like an embedded execution shell:
 
-- Agent owns identity, model, custom tools, and plugins; AgentWorkspace owns project tools and session storage
+- Agent owns identity, model, custom tools, and plugins; AgentSessions owns Sessions and each Session may use project tools
 - the caller decides which live model instance should be used
 
 That makes the local SDK more flexible, but it also makes the caller responsible for model readiness.

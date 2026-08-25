@@ -21,7 +21,7 @@ export function App() {
   const controller = use_desktop_controller();
   const [create_dialog_open, set_create_dialog_open] = useState(false);
   const [create_workspace_dialog_open, set_create_workspace_dialog_open] = useState(false);
-  const [create_agent_workspace_id, set_create_agent_workspace_id] = useState<string>();
+  const [create_workspace_id, set_create_workspace_id] = useState<string>();
   const [sidebar_collapsed, set_sidebar_collapsed] = useState(false);
   const [command_palette_open, set_command_palette_open] = useState(false);
   const current_selection = controller.selection;
@@ -85,7 +85,7 @@ export function App() {
         workspace={workspace}
         agents={workspace_agents}
         sessions_by_agent={Object.fromEntries(controller.agents.map((agent) => [agent.agent_id, (controller.sessions_by_workspace[workspace_id] ?? []).filter((item) => item.agent_id === agent.agent_id).map((item) => item.session)]))}
-        open_create_agent={() => { set_create_agent_workspace_id(workspace.workspace_id); set_create_dialog_open(true); }}
+        open_create_agent={() => { set_create_workspace_id(workspace.workspace_id); set_create_dialog_open(true); }}
         select_agent={controller.select_agent}
         select_session={(agent_id, session_id) => controller.select_session(workspace_id, agent_id, session_id)}
       />;
@@ -190,7 +190,7 @@ export function App() {
         ? <SettingsSidebar controller={controller} collapsed={sidebar_collapsed} />
         : <NavigationSidebar
           controller={controller}
-          open_create_agent={(workspace_id) => { set_create_agent_workspace_id(workspace_id); set_create_dialog_open(true); }}
+          open_create_agent={(workspace_id) => { set_create_workspace_id(workspace_id); set_create_dialog_open(true); }}
           open_create_workspace={() => set_create_workspace_dialog_open(true)}
           collapsed={sidebar_collapsed}
         />}
@@ -198,7 +198,7 @@ export function App() {
     </div>
     <ShellPanelControls sidebar_collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} />
     {controller.error ? <div className="fixed bottom-5 left-1/2 z-40 flex max-w-xl -translate-x-1/2 items-start gap-3 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl"><span className="min-w-0 flex-1 break-words">{controller.error}</span><Button onClick={controller.clear_error}>关闭</Button></div> : null}
-    {create_dialog_open ? <CreateAgentDialog close_dialog={() => { set_create_dialog_open(false); set_create_agent_workspace_id(undefined); }} create_agent={controller.create_agent} models={controller.models} models_loading={controller.models_loading} default_model_id={controller.settings.default_text_model_id} workspace={controller.workspaces.find((workspace) => workspace.workspace_id === create_agent_workspace_id)} /> : null}
+    {create_dialog_open ? <CreateAgentDialog close_dialog={() => { set_create_dialog_open(false); set_create_workspace_id(undefined); }} create_agent={controller.create_agent} models={controller.models} models_loading={controller.models_loading} default_model_id={controller.settings.default_text_model_id} workspace={controller.workspaces.find((workspace) => workspace.workspace_id === create_workspace_id)} /> : null}
     {create_workspace_dialog_open ? <CreateWorkspaceDialog close_dialog={() => set_create_workspace_dialog_open(false)} create_workspace={controller.create_workspace} /> : null}
     {command_palette_open ? <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/25 pt-[18vh]" onMouseDown={() => set_command_palette_open(false)}><div className="w-[min(34rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-popover p-2 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { set_command_palette_open(false); controller.open_settings("user"); }}>打开设置 <span className="ml-auto text-xs text-muted-foreground">⌘,</span></button><button type="button" className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { set_command_palette_open(false); set_sidebar_collapsed((value) => !value); }}>切换左侧边栏 <span className="ml-auto text-xs text-muted-foreground">⌘B</span></button></div></div> : null}
   </div>;
