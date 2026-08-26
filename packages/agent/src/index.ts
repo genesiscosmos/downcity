@@ -9,9 +9,24 @@
 
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
+export { Group } from "./group/Group.js";
+export type {
+  GroupCreateSessionOptions,
+  GroupMember,
+  GroupMessage,
+  GroupMessageSubscriber,
+  GroupMessageUnsubscribe,
+  GroupOptions,
+  GroupSession,
+  GroupSessionPromptInput,
+  GroupSessionTurnHandle,
+  GroupSessionTurnResult,
+  GroupSessions,
+} from "./types/group/Group.js";
 export { City } from "./city/index.js";
 export type {
   CityAgents,
+  CityGroups,
   CityListenOptions,
   CityOptions,
   CityRuntimeOptions,

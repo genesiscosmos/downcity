@@ -9,6 +9,7 @@
 export { City } from "./runtime/City.js";
 export type {
   CityAgents,
+  CityGroups,
   CityListenOptions,
   CityOptions,
   CityRuntimeOptions,

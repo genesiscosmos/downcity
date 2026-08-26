@@ -7,6 +7,7 @@
  */
 
 import { Agent } from "@/agent/Agent.js";
+import { Group } from "@/group/Group.js";
 import {
   attach_agent_city,
   attach_agent_storage,
@@ -22,6 +23,7 @@ import { CityHTTP } from "@/city/transport/http/CityHTTP.js";
 import { CityRPC } from "@/city/transport/rpc/CityRPC.js";
 import type {
   CityAgents,
+  CityGroups,
   CityListenOptions,
   CityOptions,
   CityRuntimeOptions,
@@ -35,8 +37,14 @@ export class City {
   /** 当前 City 引用的 Agent，按稳定 ID 索引。 */
   private readonly agents_by_id = new Map<string, Agent>();
 
+  /** 当前 City 引用的 Group，按稳定 ID 索引。 */
+  private readonly groups_by_id = new Map<string, Group>();
+
   /** City 面向应用的 Agent 集合入口。 */
   readonly agents: CityAgents;
+
+  /** City 面向宿主的 Group 集合入口。 */
+  readonly groups: CityGroups;
 
   /** City 面向宿主的 Workspace 集合入口。 */
   readonly workspaces: CityWorkspaces;
@@ -96,11 +104,56 @@ export class City {
       list: () => this.list_agents(),
       remove: async (agent_id) => await this.remove_agent(agent_id),
     });
+    this.groups = Object.freeze({
+      add: (group: Group) => this.add_group(group),
+      get: (group_id: string) => this.get_group(group_id),
+      list: () => this.list_groups(),
+      remove: async (group_id: string) => await this.remove_group(group_id),
+    });
     this.workspaces = Object.freeze({
       add: (workspace) => this.add_workspace(workspace),
       get: (workspace_id) => this.get_workspace(workspace_id),
       list: () => this.list_workspaces(),
     });
+  }
+
+  /** 按稳定 ID 获取 City 管理的 Group。 */
+  private get_group(group_id_input: string): Group | null {
+    return this.groups_by_id.get(String(group_id_input || "").trim()) ?? null;
+  }
+
+  /** 返回 City 管理的 Group 稳定快照。 */
+  private list_groups(): readonly Group[] {
+    return [...this.groups_by_id.values()];
+  }
+
+  /** 将已创建 Group 加入 City，并校验成员属于当前 City。 */
+  private add_group(group: Group): Group {
+    this.assert_active();
+    if (!group?.id) throw new Error("City requires a Group with a stable ID");
+    const existing = this.groups_by_id.get(group.id);
+    if (existing && existing !== group) throw new Error(`Group already exists in City: ${group.id}`);
+    if (existing) return existing;
+    for (const member of group.members) {
+      if (this.agents_by_id.get(member.agent.id) !== member.agent) {
+        throw new Error(`Group member is not registered in City: ${member.agent.id}`);
+      }
+    }
+    group.bind_workspace_resolver(
+      (workspace_id) => Boolean(this.get_workspace(workspace_id)),
+    );
+    this.groups_by_id.set(group.id, group);
+    return group;
+  }
+
+  /** 释放并移除一个 Group。 */
+  private async remove_group(group_id_input: string): Promise<Group | null> {
+    const group_id = String(group_id_input || "").trim();
+    const group = this.groups_by_id.get(group_id) ?? null;
+    if (!group) return null;
+    await group.dispose();
+    this.groups_by_id.delete(group_id);
+    return group;
   }
 
   /** 返回 City 持有的 Workspace；不存在时返回 null。 */
@@ -199,6 +252,12 @@ export class City {
     const removal = (async () => {
       try {
         await this.http_transport.detach_agent(agent_id);
+        const dependent_groups = [...this.groups_by_id.values()]
+          .filter((group) => group.members.some((member) => member.agent === agent));
+        await Promise.allSettled(dependent_groups.map(async (group) => {
+          await group.dispose();
+          this.groups_by_id.delete(group.id);
+        }));
         await agent.dispose();
         this.release_agent(agent);
         return agent;
@@ -268,6 +327,9 @@ export class City {
           this.http_transport.close(),
           this.rpc_transport.close(),
         ]));
+        results.push(...await Promise.allSettled(
+          [...this.groups_by_id.values()].map(async (group) => await group.dispose()),
+        ));
         results.push(...await Promise.allSettled(this.agents.list().map(async (agent) => await agent.dispose())));
         results.push(...await Promise.allSettled(
           [...this.workspaces_by_id.values()].map(async (workspace) => await workspace.dispose()),
@@ -283,6 +345,7 @@ export class City {
           throw new AggregateError(errors, "City transport close failed");
         }
         this.agents_by_id.clear();
+        this.groups_by_id.clear();
         this.workspaces_by_id.clear();
         this.city_status = "closed";
       });

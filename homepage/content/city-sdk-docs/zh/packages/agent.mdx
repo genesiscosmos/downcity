@@ -17,3 +17,36 @@ const result = await turn.finished;
 
 CLI、Desktop 或 Node 进程需要持有多个 Agent、根据本地配置装配实例或暴露 HTTP/RPC 时，使用
 `@downcity/agent`。
+
+## Group 与 GroupSession
+
+`Group` 是具有集体主体性的协作主体，拥有自己的 `GroupSession`。`GroupSession` 保存共享频道消息，
+但不直接执行模型；每次响应都会转交给成员 Agent 自己的 `AgentSession`。因此成员的私有上下文、Plugin
+和工具调用不会混入群组历史。
+
+```ts
+const lead = new Agent({ id: "lead", model });
+const reviewer = new Agent({ id: "reviewer", model });
+city.agents.add(lead);
+city.agents.add(reviewer);
+
+const group = new Group({
+  id: "delivery-team",
+  members: [
+    { agent: lead, role: "coordinator" },
+    { agent: reviewer, role: "reviewer" },
+  ],
+  coordinator_id: "lead",
+});
+city.groups.add(group);
+
+const group_session = await group.sessions.create({ workspace });
+const turn = await group_session.prompt({
+  query: "请完成实现并让 reviewer 审查改动",
+  agent_id: "lead",
+});
+await turn.finished;
+```
+
+`Workspace` 仍然是 City 提供的资源。它绑定到具体的 `AgentSession` 或 `GroupSession`，不属于 Agent、
+Group，也不决定成员如何协作。

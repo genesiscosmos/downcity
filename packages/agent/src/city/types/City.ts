@@ -10,6 +10,7 @@ import type { Agent } from "@/index.js";
 import type { Embassy } from "@downcity/federation";
 import type { WorkspaceBase } from "@downcity/workspace";
 import type { StorageProvider } from "@downcity/workspace";
+import type { Group } from "@/group/Group.js";
 
 /** City 的资源容器构造参数。 */
 export interface CityOptions {
@@ -54,6 +55,18 @@ export interface CityAgents {
   list(): readonly Agent[];
   /** 停止、释放并移除 Agent；不存在时返回 null。 */
   remove(agent_id: string): Promise<Agent | null>;
+}
+
+/** City 管理的 Group 集合。 */
+export interface CityGroups {
+  /** 加入一个已经创建的 Group；成员必须已经加入当前 City。 */
+  add(group: Group): Group;
+  /** 按稳定 ID 获取 Group。 */
+  get(group_id: string): Group | null;
+  /** 返回当前 City 管理的 Group 稳定快照。 */
+  list(): readonly Group[];
+  /** 释放并移除 Group。 */
+  remove(group_id: string): Promise<Group | null>;
 }
 
 /** City 管理的 Workspace 集合。 */
