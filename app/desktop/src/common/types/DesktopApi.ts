@@ -46,10 +46,28 @@ export interface DesktopGroupSummary {
   instruction?: string;
   /** Group 当前成员。 */
   members: DesktopGroupMember[];
-  /** Group 当前使用的共享 Workspace；未设置时为空。 */
-  workspace_id?: string;
   /** Group 当前消息数量。 */
   message_count: number;
+  /** Group 下可恢复的群聊会话摘要。 */
+  sessions: DesktopGroupSessionSummary[];
+  /** 当前打开的 GroupSession 标识。 */
+  active_session_id?: string;
+}
+
+/** Renderer 可见的 GroupSession 摘要。 */
+export interface DesktopGroupSessionSummary {
+  /** GroupSession 稳定标识。 */
+  session_id: string;
+  /** 首次创建时间戳，单位为毫秒。 */
+  created_at: number;
+  /** 最近更新时间戳，单位为毫秒。 */
+  updated_at: number;
+  /** 已持久化消息数量。 */
+  message_count: number;
+  /** 当前 GroupSession 绑定的 Workspace ID；未绑定时为空。 */
+  workspace_id?: string;
+  /** 最后一条消息的可见预览。 */
+  preview_text?: string;
 }
 
 /** Renderer 可见的一条 Group 共享消息。 */
@@ -70,6 +88,8 @@ export interface DesktopGroupMessage {
 export interface DesktopGroupMessageEvent {
   /** 所属 Group 标识。 */
   group_id: string;
+  /** 所属 GroupSession 标识。 */
+  session_id: string;
   /** 新增的共享消息。 */
   message: DesktopGroupMessage;
 }
@@ -84,8 +104,6 @@ export interface DesktopCreateGroupInput {
   instruction?: string;
   /** 成员 Agent 标识。 */
   member_agent_ids: string[];
-  /** Group 使用的共享 Workspace ID；未填写时使用内存执行上下文。 */
-  workspace_id?: string;
 }
 
 /** 更新 Desktop Group 定义的输入。 */
@@ -96,8 +114,6 @@ export interface DesktopUpdateGroupInput {
   instruction: string;
   /** Group 成员 Agent 标识。 */
   member_agent_ids: string[];
-  /** Group 使用的共享 Workspace ID；未填写时使用内存执行上下文。 */
-  workspace_id?: string;
 }
 
 /** 向 Group 发送一条文本消息的输入。 */
@@ -694,13 +710,19 @@ export interface DesktopApi {
     /** 删除一个已保存的 Group。 */
     remove(group_id: string): Promise<boolean>;
     /** 打开一个运行时 Group。 */
-    open(group_id: string): Promise<DesktopGroupSummary>;
+    open(group_id: string, session_id?: string): Promise<DesktopGroupSummary>;
+    /** 列出指定 Group 的 GroupSession 摘要。 */
+    list_sessions(group_id: string): Promise<DesktopGroupSessionSummary[]>;
+    /** 创建指定 Group 的新 GroupSession。 */
+    create_session(group_id: string, workspace_id?: string): Promise<DesktopGroupSummary>;
     /** 读取 Group 的共享消息。 */
-    list_messages(group_id: string): Promise<DesktopGroupMessage[]>;
+    list_messages(group_id: string, session_id?: string): Promise<DesktopGroupMessage[]>;
     /** 向 Group 发言并驱动成员 Agent 执行。 */
-    send(group_id: string, input: DesktopGroupSendInput): Promise<{ turn_id?: string }>;
+    send(group_id: string, session_id: string | undefined, input: DesktopGroupSendInput): Promise<{ turn_id?: string }>;
     /** 停止 Group 当前执行。 */
-    stop(group_id: string): Promise<void>;
+    stop(group_id: string, session_id?: string): Promise<void>;
+    /** 删除指定 GroupSession。 */
+    remove_session(group_id: string, session_id: string): Promise<DesktopGroupSummary>;
     /** 订阅 Group 新增共享消息。 */
     on_message(callback: (event: DesktopGroupMessageEvent) => void): () => void;
   };

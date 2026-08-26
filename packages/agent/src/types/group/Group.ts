@@ -3,7 +3,6 @@
 import type { Agent } from "@/agent/Agent.js";
 import type { AttentionPolicy } from "@/types/group/AttentionPolicy.js";
 import type { GroupSessions } from "@/types/group/GroupSession.js";
-import type { WorkspaceBase } from "@downcity/workspace";
 
 /** Group 成员及其展示信息。 */
 export interface GroupMember {
@@ -23,8 +22,6 @@ export interface GroupOptions {
   readonly instruction?: string;
   /** Group 成员列表。 */
   readonly members: readonly GroupMember[];
-  /** Group 为成员执行提供的共享 Workspace；资源本身仍由 City 持有。 */
-  readonly workspace?: WorkspaceBase;
   /** Group 的注意力策略；省略时使用提及策略。 */
   readonly attention_policy?: AttentionPolicy;
 }
@@ -57,8 +54,6 @@ export interface GroupContract {
   readonly instruction?: string;
   /** Group 成员快照。 */
   readonly members: readonly GroupMember[];
-  /** Group 为成员执行提供的共享 Workspace。 */
-  readonly workspace?: WorkspaceBase;
   /** Group 使用的注意力策略。 */
   readonly attention_policy: AttentionPolicy;
   /** 当前 Group 创建的独立群聊上下文集合。 */

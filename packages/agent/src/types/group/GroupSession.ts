@@ -5,6 +5,7 @@ import type {
   GroupMember,
   GroupMessage,
 } from "@/types/group/Group.js";
+import type { WorkspaceBase } from "@downcity/workspace";
 
 /** Group 消息订阅回调。 */
 export type GroupMessageSubscriber = (message: GroupMessage) => void | Promise<void>;
@@ -26,10 +27,40 @@ export interface GroupMemberRuntime {
   readonly running: boolean;
 }
 
+/** GroupSession 列表使用的轻量摘要，不加载消息历史。 */
+export interface GroupSessionSummary {
+  /** GroupSession 稳定标识。 */
+  readonly id: string;
+  /** 所属 Group 稳定标识。 */
+  readonly group_id: string;
+  /** 首次创建时间戳。 */
+  readonly created_at: number;
+  /** 最近更新时间戳。 */
+  readonly updated_at: number;
+  /** 已持久化消息数量。 */
+  readonly message_count: number;
+  /** 当前 GroupSession 绑定的 Workspace 标识。 */
+  readonly workspace_id?: string;
+  /** 最后一条消息的用户可见预览。 */
+  readonly preview_text?: string;
+}
+
 /** GroupSession 的创建输入；第一阶段不允许调用方指定 session_id。 */
 export interface GroupSessionCreateInput {
-  /** 保持创建输入为无配置字段的协议对象。 */
-  readonly __create_group_session_input?: never;
+  /** 当前群聊使用的 Workspace；省略时使用内存执行上下文。 */
+  readonly workspace?: WorkspaceBase;
+}
+
+/** 恢复 GroupSession 时的上下文输入。 */
+export interface GroupSessionGetInput {
+  /** 当前群聊使用的 Workspace；必须与持久化 metadata 一致。 */
+  readonly workspace?: WorkspaceBase;
+}
+
+/** GroupSession 列表过滤条件。 */
+export interface GroupSessionListInput {
+  /** 只返回绑定到指定 Workspace 的群聊上下文。 */
+  readonly workspace_id?: string;
 }
 
 /** GroupSession 公开能力。 */
@@ -38,7 +69,9 @@ export interface GroupSessionContract {
   readonly id: string;
   /** 所属 Group 的稳定标识。 */
   readonly group_id: string;
-  /** 追加用户消息并异步驱动成员执行。 */
+  /** 当前 GroupSession 绑定的 Workspace ID；未绑定时为空。 */
+  readonly workspace_id?: string;
+  /** 追加用户消息并等待当前群聊传播完成。 */
   prompt(input: GroupPromptInput): Promise<void>;
   /** 读取共享消息事实快照。 */
   messages(): Promise<readonly GroupMessage[]>;
@@ -60,11 +93,11 @@ export interface GroupSessions {
   /** 创建一个新的群聊上下文，标识由集合内部生成。 */
   create(input?: GroupSessionCreateInput): Promise<GroupSession>;
   /** 从 Storage 恢复当前 Group 的一个群聊上下文。 */
-  get(session_id: string): Promise<GroupSession | null>;
+  get(session_id: string, input?: GroupSessionGetInput): Promise<GroupSession | null>;
   /** 从 Storage 恢复当前 Group 的全部群聊上下文。 */
-  list(): Promise<readonly GroupSession[]>;
+  list(input?: GroupSessionListInput): Promise<readonly GroupSessionSummary[]>;
   /** 释放并移除指定群聊上下文。 */
-  remove(session_id: string): Promise<GroupSession | null>;
+  remove(session_id: string, input?: GroupSessionGetInput): Promise<GroupSession | null>;
 }
 
 /** GroupSession 的内部依赖快照。 */

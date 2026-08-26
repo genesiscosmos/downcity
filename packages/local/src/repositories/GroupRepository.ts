@@ -28,8 +28,6 @@ export class GroupRepository {
     instruction?: string;
     /** Group 成员 Agent ID。 */
     member_agent_ids: readonly string[];
-    /** Group 使用的共享 Workspace ID；未填写时使用内存执行上下文。 */
-    workspace_id?: string;
   }): LocalGroupConfig {
     const group_id = normalize_group_id(input.group_id);
     if (this.get(group_id)) throw new Error(`Group already exists: ${group_id}`);
@@ -41,7 +39,6 @@ export class GroupRepository {
       name: String(input.name || group_id).trim() || group_id,
       instruction: String(input.instruction || "").trim(),
       member_agent_ids,
-      ...(normalize_workspace_id(input.workspace_id) ? { workspace_id: normalize_workspace_id(input.workspace_id) } : {}),
       created_at: current_time,
       updated_at: current_time,
     };
@@ -70,8 +67,6 @@ export class GroupRepository {
     instruction?: string;
     /** Group 成员 Agent ID。 */
     member_agent_ids: readonly string[];
-    /** Group 使用的共享 Workspace ID；未填写时使用内存执行上下文。 */
-    workspace_id?: string;
   }): LocalGroupConfig {
     const current = this.get(group_id_input);
     if (!current) throw new Error(`Group not found: ${group_id_input}`);
@@ -82,7 +77,6 @@ export class GroupRepository {
       name: String(input.name || current.group_id).trim() || current.group_id,
       instruction: String(input.instruction || "").trim(),
       member_agent_ids,
-      workspace_id: normalize_workspace_id(input.workspace_id),
       updated_at: new Date().toISOString(),
     };
     this.write(config);
@@ -109,7 +103,6 @@ export class GroupRepository {
       name: String(raw.name || row.group_id).trim() || row.group_id,
       instruction: String(raw.instruction || ""),
       member_agent_ids: normalize_member_agent_ids(raw.member_agent_ids || []),
-      ...(normalize_workspace_id(raw.workspace_id) ? { workspace_id: normalize_workspace_id(raw.workspace_id) } : {}),
       created_at: String(raw.created_at || row.created_at),
       updated_at: String(raw.updated_at || row.updated_at),
     };
@@ -125,10 +118,4 @@ export function normalize_group_id(input: string): string {
 
 function normalize_member_agent_ids(input: readonly string[]): string[] {
   return [...new Set((input || []).map((agent_id) => String(agent_id || "").trim()).filter(Boolean))];
-}
-
-/** 规范化可选 Workspace ID。 */
-function normalize_workspace_id(input: unknown): string | undefined {
-  const workspace_id = String(input || "").trim();
-  return workspace_id || undefined;
 }

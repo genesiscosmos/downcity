@@ -20,9 +20,9 @@ CLI、Desktop 或 Node 进程需要持有多个 Agent、根据本地配置装配
 
 ## Group 与 GroupSession
 
-`Group` 是具有集体主体性的协作主体，拥有自己的 `GroupSession`。`GroupSession` 保存共享频道消息，
-但不直接执行模型；每次响应都会转交给成员 Agent 自己的 `AgentSession`。因此成员的私有上下文、Plugin
-和工具调用不会混入群组历史。
+`Group` 是具有集体主体性的协作主体，拥有自己的 `GroupSession` 集合。`GroupSession` 保存一次群聊的共享消息，
+成员是否响应由注意力策略和成员自身判断决定；成员执行仍使用成员 Agent 的 `AgentSession`，不会把私有上下文、Plugin
+和工具调用复制进群聊历史。`GroupSession` 的 `prompt()` 会在当前传播完成后返回，连续调用按提交顺序执行。
 
 ```ts
 const lead = new Agent({ id: "lead", model });
@@ -36,17 +36,16 @@ const group = new Group({
     { agent: lead, role: "coordinator" },
     { agent: reviewer, role: "reviewer" },
   ],
-  coordinator_id: "lead",
 });
 city.groups.add(group);
 
 const group_session = await group.sessions.create({ workspace });
-const turn = await group_session.prompt({
-  query: "请完成实现并让 reviewer 审查改动",
-  agent_id: "lead",
-});
-await turn.finished;
+await group_session.prompt({ query: "请完成实现并让 reviewer 审查改动" });
+
+const sessions = await group.sessions.list();
+const restored = await group.sessions.get(sessions[0].id, { workspace });
 ```
 
-`Workspace` 仍然是 City 提供的资源。它绑定到具体的 `AgentSession` 或 `GroupSession`，不属于 Agent、
-Group，也不决定成员如何协作。
+`Workspace` 仍然是 City 提供的资源。Workspace 只注入具体的 GroupSession，再由 GroupSession 注入成员 AgentSession；它不属于 Agent、
+Group，也不决定成员如何协作。加入带持久化 Storage 的 City 后，GroupSession 会保存自己的 Workspace ID、消息摘要以及成员 AgentSession ID 映射；
+`sessions.list()` 只读取摘要，`sessions.get(id)` 才恢复完整消息和成员会话引用。

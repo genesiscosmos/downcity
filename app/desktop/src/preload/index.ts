@@ -66,10 +66,13 @@ const desktop_api: DesktopApi = {
     create: (input) => ipcRenderer.invoke("group:create", input),
     update: (group_id, input) => ipcRenderer.invoke("group:update", group_id, input),
     remove: (group_id) => ipcRenderer.invoke("group:remove", group_id),
-    open: (group_id) => ipcRenderer.invoke("group:open", group_id),
-    list_messages: (group_id) => ipcRenderer.invoke("group:list-messages", group_id),
-    send: (group_id, input) => ipcRenderer.invoke("group:send", group_id, input),
-    stop: (group_id) => ipcRenderer.invoke("group:stop", group_id),
+    open: (group_id, session_id) => ipcRenderer.invoke("group:open", group_id, session_id),
+    list_sessions: (group_id) => ipcRenderer.invoke("group:list-sessions", group_id),
+    create_session: (group_id, workspace_id) => ipcRenderer.invoke("group:create-session", group_id, workspace_id),
+    list_messages: (group_id, session_id) => ipcRenderer.invoke("group:list-messages", group_id, session_id),
+    send: (group_id, session_id, input) => ipcRenderer.invoke("group:send", group_id, session_id, input),
+    stop: (group_id, session_id) => ipcRenderer.invoke("group:stop", group_id, session_id),
+    remove_session: (group_id, session_id) => ipcRenderer.invoke("group:remove-session", group_id, session_id),
     on_message: (callback) => {
       const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof callback>[0]) => callback(value);
       ipcRenderer.on("group:message", handler);

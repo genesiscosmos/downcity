@@ -12,5 +12,8 @@ export type {
   GroupPromptInput,
   GroupSessionContract,
   GroupSessionCreateInput,
+  GroupSessionGetInput,
+  GroupSessionListInput,
+  GroupSessionSummary,
   GroupSessions as GroupSessionsContract,
 } from "@/types/group/GroupSession.js";

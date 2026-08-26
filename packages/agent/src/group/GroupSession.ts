@@ -38,6 +38,7 @@ export interface GroupSessionOptions {
 export class GroupSession implements GroupSessionContract {
   readonly id: string;
   readonly group_id: string;
+  readonly workspace_id?: string;
 
   private readonly group_name: string;
   private readonly instruction?: string;
@@ -47,9 +48,11 @@ export class GroupSession implements GroupSessionContract {
   private readonly messages_by_id: GroupMessage[] = [];
   private readonly subscribers = new Set<GroupMessageSubscriber>();
   private readonly member_sessions = new Map<string, AgentSession>();
+  private readonly member_session_ids = new Map<string, string>();
   private readonly member_running = new Set<string>();
   private readonly pending_deliveries = new Set<Promise<void>>();
   private store?: GroupSessionDataStore;
+  private prompt_tail: Promise<void> = Promise.resolve();
   private stop_requested = false;
   private disposed = false;
 
@@ -63,6 +66,7 @@ export class GroupSession implements GroupSessionContract {
     this.members = options.members;
     this.attention_policy = options.attention_policy;
     this.workspace = options.workspace;
+    this.workspace_id = options.workspace?.id;
   }
 
   /** 从持久化 Store 初始化当前 GroupSession 的消息历史。 */
@@ -77,7 +81,40 @@ export class GroupSession implements GroupSessionContract {
     if (metadata.group_id !== this.group_id) {
       throw new Error(`GroupSession "${this.id}" belongs to another Group`);
     }
+    const requested_workspace_id = this.workspace?.id;
+    if (metadata.workspace_id && metadata.workspace_id !== requested_workspace_id) {
+      throw new Error(
+        `GroupSession "${this.id}" requires Workspace "${metadata.workspace_id}"`,
+      );
+    }
+    if (!metadata.workspace_id && requested_workspace_id) {
+      await store.update_metadata({ workspace_id: requested_workspace_id });
+    }
     this.messages_by_id.push(...await store.list_messages());
+    const member_session_ids = metadata.member_session_ids || {};
+    const valid_member_session_ids: Record<string, string> = {};
+    for (const [agent_id, session_id] of Object.entries(member_session_ids)) {
+      const member = this.get_member(agent_id);
+      if (!member) continue;
+      try {
+        const session = await member.sessions.get(session_id, {
+          ...(this.workspace ? { workspace: this.workspace } : {}),
+          origin: {
+            type: "group",
+            group_id: this.group_id,
+            group_session_id: this.id,
+          },
+        });
+        this.member_sessions.set(agent_id, session);
+        this.member_session_ids.set(agent_id, session.id);
+        valid_member_session_ids[agent_id] = session.id;
+      } catch {
+        // 成员已被删除或其 Session 不再匹配时，清理失效映射并继续恢复群聊。
+      }
+    }
+    if (Object.keys(valid_member_session_ids).length !== Object.keys(member_session_ids).length) {
+      await store.update_metadata({ member_session_ids: valid_member_session_ids });
+    }
     return this;
   }
 
@@ -86,17 +123,28 @@ export class GroupSession implements GroupSessionContract {
     this.assert_available();
     const text = String(input?.query || "").trim();
     if (!text) throw new Error("group_session.prompt requires a non-empty query");
-    const message = await this.append_message({ sender_type: "user", sender_id: "user", text });
-    const delivery = this.deliver_message(message).catch(async (error) => {
-      await this.append_message({
-        sender_type: "system",
-        sender_id: "system",
-        text: error instanceof Error ? error.message : String(error),
-        reply_to: message.id,
-      });
+    const delivery = this.prompt_tail.then(async () => {
+      if (this.stop_requested || this.disposed) return;
+      const message = await this.append_message({ sender_type: "user", sender_id: "user", text });
+      try {
+        await this.deliver_message(message);
+      } catch (error) {
+        if (this.stop_requested || this.disposed) return;
+        await this.append_message({
+          sender_type: "system",
+          sender_id: "system",
+          text: error instanceof Error ? error.message : String(error),
+          reply_to: message.id,
+        });
+      }
     });
+    this.prompt_tail = delivery.catch(() => undefined);
     this.pending_deliveries.add(delivery);
-    void delivery.finally(() => this.pending_deliveries.delete(delivery));
+    try {
+      await delivery;
+    } finally {
+      this.pending_deliveries.delete(delivery);
+    }
   }
 
   /** 读取共享消息快照。 */
@@ -173,6 +221,12 @@ export class GroupSession implements GroupSessionContract {
         },
       });
       this.member_sessions.set(agent.id, session);
+      this.member_session_ids.set(agent.id, session.id);
+      const store = this.store;
+      if (!store) throw new Error(`GroupSession "${this.id}" is not initialized`);
+      await store.update_metadata({
+        member_session_ids: Object.fromEntries(this.member_session_ids),
+      });
     }
     this.member_running.add(agent.id);
     try {

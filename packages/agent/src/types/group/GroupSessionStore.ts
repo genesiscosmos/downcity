@@ -11,6 +11,8 @@ export interface GroupSessionHistoryMeta {
   readonly session_id: string;
   /** 所属 Group 标识。 */
   readonly group_id: string;
+  /** 当前 GroupSession 绑定的 Workspace 标识；未绑定时为空。 */
+  readonly workspace_id?: string;
   /** 首次创建时间戳。 */
   readonly created_at: number;
   /** 最近更新时间戳。 */
@@ -19,6 +21,8 @@ export interface GroupSessionHistoryMeta {
   readonly message_count: number;
   /** 最后一条消息的用户可见预览。 */
   readonly preview_text?: string;
+  /** GroupSession 为每个成员 Agent 复用的 AgentSession 标识。 */
+  readonly member_session_ids?: Readonly<Record<string, string>>;
 }
 
 /** 单个 GroupSession 的持久化数据视图。 */
@@ -35,6 +39,8 @@ export interface GroupSessionDataStore {
   read_metadata(): Promise<GroupSessionHistoryMeta>;
   /** 写入当前 GroupSession metadata。 */
   write_metadata(metadata: GroupSessionHistoryMeta): Promise<void>;
+  /** 在文件锁内合并更新当前 GroupSession metadata。 */
+  update_metadata(patch: Partial<GroupSessionHistoryMeta>): Promise<GroupSessionHistoryMeta>;
 }
 
 /** Group 所拥有的全部 GroupSession 持久化入口。 */

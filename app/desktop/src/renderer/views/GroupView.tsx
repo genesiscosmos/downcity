@@ -1,33 +1,47 @@
 /** 运行时 Group 共享消息视图，保持与 Agent Session Chat 一致的视觉结构。 */
 
 import { useEffect, useRef, useState } from "react";
-import { TbPlayerStop, TbSend, TbUsers } from "react-icons/tb";
+import { TbPlayerStop, TbPlus, TbSend, TbTrash, TbUsers } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { MainViewBody, MainViewLayout } from "@/layouts/MainViewLayout";
 import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
-import type { DesktopGroupMessage, DesktopGroupSummary } from "@common/types/DesktopApi";
+import type { DesktopGroupMessage, DesktopGroupSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 interface GroupViewProps {
   /** 当前运行时 Group。 */
   group: DesktopGroupSummary;
+  /** 当前可选 Workspace。 */
+  workspaces: DesktopWorkspaceSummary[];
   /** 当前共享消息。 */
   messages: DesktopGroupMessage[];
   /** 向 Group 发送文本。 */
   send_message(text: string): Promise<void>;
   /** 停止 Group 当前执行。 */
   stop_session(): Promise<void>;
+  /** 切换当前 GroupSession。 */
+  open_session(session_id: string): Promise<void>;
+  /** 创建新的 GroupSession。 */
+  create_session(workspace_id?: string): Promise<void>;
+  /** 删除当前 GroupSession。 */
+  remove_session(session_id: string): Promise<void>;
 }
 
 /** Group 复用 Agent Chat 的消息流和输入区布局，但保留共享消息语义。 */
-export function GroupView({ group, messages, send_message, stop_session }: GroupViewProps) {
+export function GroupView({ group, workspaces, messages, send_message, stop_session, open_session, create_session, remove_session }: GroupViewProps) {
   const scroll_ref = useRef<HTMLDivElement | null>(null);
   const [draft, set_draft] = useState("");
   const [sending, set_sending] = useState(false);
+  const active_summary = group.sessions.find((session) => session.session_id === group.active_session_id);
+  const [workspace_id, set_workspace_id] = useState(active_summary?.workspace_id || "");
 
   useEffect(() => {
     const container = scroll_ref.current;
     if (container) container.scrollTop = container.scrollHeight;
   }, [messages]);
+
+  useEffect(() => {
+    set_workspace_id(active_summary?.workspace_id || "");
+  }, [active_summary?.workspace_id]);
 
   const submit = async () => {
     const text = draft.trim();
@@ -43,7 +57,7 @@ export function GroupView({ group, messages, send_message, stop_session }: Group
 
   return <MainViewLayout>
     <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2">
-      <div className="flex min-w-0 flex-1 items-center gap-2 pl-1"><TbUsers className="size-4 shrink-0 text-muted-foreground" /><div className="min-w-0 truncate text-xs font-medium text-foreground">{group.name}</div></div>
+      <div className="flex min-w-0 flex-1 items-center gap-2 pl-1"><TbUsers className="size-4 shrink-0 text-muted-foreground" /><div className="min-w-0 truncate text-xs font-medium text-foreground">{group.name}</div><select aria-label="选择 GroupSession" value={group.active_session_id ?? ""} onChange={(event) => void open_session(event.target.value)} className="h-7 max-w-48 rounded-md border border-border bg-background px-1 text-[0.6875rem] text-foreground"><option value="" disabled>选择会话</option>{group.sessions.map((session) => <option key={session.session_id} value={session.session_id}>{new Date(session.updated_at).toLocaleString()} ({session.message_count})</option>)}</select><select aria-label="选择 Workspace" value={workspace_id} onChange={(event) => set_workspace_id(event.target.value)} className="h-7 max-w-40 rounded-md border border-border bg-background px-1 text-[0.6875rem] text-foreground"><option value="">内存</option>{workspaces.map((workspace) => <option key={workspace.workspace_id} value={workspace.workspace_id}>{workspace.name}</option>)}</select><Button size="icon" title="新建会话" aria-label="新建会话" onClick={() => void create_session(workspace_id || undefined)}><TbPlus /></Button>{group.active_session_id && group.sessions.length > 1 ? <Button size="icon" title="删除当前会话" aria-label="删除当前会话" onClick={() => void remove_session(group.active_session_id!)}><TbTrash /></Button> : null}</div>
       <Button size="icon" title="停止执行" aria-label="停止执行" onClick={() => void stop_session()}><TbPlayerStop /></Button>
     </header>
     <MainViewBody>

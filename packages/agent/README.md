@@ -36,10 +36,10 @@ Session ID 由 `agent.sessions.create()` 内部生成；创建接口不接受调
 `session_id`。恢复已有 Session 时使用 `agent.sessions.get(session_id)`，如果该
 Session 创建时绑定了 Workspace，恢复时必须传入同一个 Workspace。
 
-Group 是和 Agent 并列的可联系主体。Group 持有成员关系、注意力策略和可选 Workspace，
+Group 是和 Agent 并列的可联系主体。Group 只持有成员关系和注意力策略，
 并通过 `group.sessions.create()` 创建独立的群聊上下文。消息和传播属于 GroupSession；
 成员执行仍通过成员 Agent 的 `AgentSessions` 完成，Session metadata 会记录 Group 与
-GroupSession 来源。
+GroupSession 来源。`group.sessions.list()` 返回轻量摘要，`group.sessions.get(id)` 恢复完整上下文。
 
 ## 根目录结构
 
@@ -136,5 +136,5 @@ src/
 
 持久化规则：加入 City 后，AgentSession 使用 `agents/<agent_id>/sessions/<session_id>/`，
 GroupSession 使用 `groups/<group_id>/sessions/<group_session_id>/`；未加入 City 时两者均使用
-当前主体实例的内存 Storage。只有传入 Workspace 的 AgentSession 才会在 `meta.json` 写入
-`workspace_id`。
+当前主体实例的内存 Storage。只有传入 Workspace 的 AgentSession 或 GroupSession 才会在
+`meta.json` 写入 `workspace_id`。

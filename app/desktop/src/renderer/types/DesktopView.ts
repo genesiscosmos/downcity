@@ -39,7 +39,7 @@ export type NavigationTarget =
   | { /** Agent 管理页。 */ kind: "agent"; /** Agent 标识。 */ agent_id: string }
   | { /** 尚未持久化的空对话。 */ kind: "draft"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Draft 稳定标识。 */ draft_id: string }
   | { /** Session Chat。 */ kind: "session"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Session 标识。 */ session_id: string }
-  | { /** Group 群聊。 */ kind: "group"; /** Group 标识。 */ group_id: string; /** Workspace 标识；无 Workspace 时为空。 */ workspace_id?: string }
+  | { /** Group 群聊。 */ kind: "group"; /** Group 标识。 */ group_id: string }
   | { /** Plugin 详情页。 */ kind: "plugin"; /** Plugin 标识。 */ plugin_id: string }
   | { /** Desktop 设置页。 */ kind: "settings"; /** 当前设置分区。 */ section: SettingsSection };
 
@@ -164,7 +164,11 @@ export interface DesktopViewController {
   /** 删除一个 Group。 */
   remove_group(group_id: string): Promise<void>;
   /** 为 Group 创建共享 Session 并打开。 */
-  open_group(group_id: string): Promise<void>;
+  open_group(group_id: string, session_id?: string): Promise<void>;
+  /** 为 Group 创建新的共享 Session 并打开。 */
+  create_group_session(group_id: string, workspace_id?: string): Promise<void>;
+  /** 删除 Group 的共享 Session。 */
+  remove_group_session(group_id: string, session_id: string): Promise<void>;
   /** 向 Group 发送文本。 */
   send_group_message(group_id: string, text: string): Promise<void>;
   /** 停止 Group 当前执行。 */

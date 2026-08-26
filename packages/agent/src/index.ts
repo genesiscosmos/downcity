@@ -31,6 +31,9 @@ export type {
   GroupPromptInput,
   GroupSessionContract,
   GroupSessionCreateInput,
+  GroupSessionGetInput,
+  GroupSessionListInput,
+  GroupSessionSummary,
   GroupSessionsContract,
 } from "./group/index.js";
 export { MentionAttentionPolicy } from "./group/index.js";

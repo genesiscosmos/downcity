@@ -52,11 +52,7 @@ export class LocalGroupSessionStore implements GroupSessionStore {
     const metadata: GroupSessionHistoryMeta[] = [];
     for (const entry of entries.filter((item) => item.is_directory)) {
       const session_id = decode_session_id(entry.name);
-      try {
-        metadata.push(await this.session(session_id).read_metadata());
-      } catch {
-        // 忽略不完整目录，让后续显式 get() 报出具体错误。
-      }
+      metadata.push(await this.session(session_id).read_metadata());
     }
     return metadata.sort((left, right) => right.updated_at - left.updated_at);
   }

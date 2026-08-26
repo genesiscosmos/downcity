@@ -204,7 +204,9 @@ export function use_desktop_controller(): DesktopViewController {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = window.downcity.group.on_message(({ group_id, message }) => {
+    const unsubscribe = window.downcity.group.on_message(({ group_id, session_id, message }) => {
+      const current_group = groups_by_id[group_id];
+      if (current_group?.active_session_id && current_group.active_session_id !== session_id) return;
       set_group_messages_by_group((current) => ({
         ...current,
         [group_id]: [...(current[group_id] ?? []), message],
@@ -214,7 +216,7 @@ export function use_desktop_controller(): DesktopViewController {
         : current);
     });
     return unsubscribe;
-  }, []);
+  }, [groups_by_id]);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -324,9 +326,10 @@ export function use_desktop_controller(): DesktopViewController {
     set_error("");
     if (!groups_by_id[group_id]) return;
     set_selection({ kind: "group", group_id });
-    if (group_messages_by_group[group_id]) return;
+    const active_session_id = groups_by_id[group_id].active_session_id;
+    if (group_messages_by_group[group_id] && active_session_id === groups_by_id[group_id].active_session_id) return;
     try {
-      const messages = await window.downcity.group.list_messages(group_id);
+      const messages = await window.downcity.group.list_messages(group_id, active_session_id);
       set_group_messages_by_group((current) => ({ ...current, [group_id]: messages }));
     } catch (reason) {
       set_error(to_error_message(reason));
@@ -373,35 +376,62 @@ export function use_desktop_controller(): DesktopViewController {
     }
   }, [selection]);
 
-  const open_group = useCallback(async (group_id: string) => {
+  const open_group = useCallback(async (group_id: string, session_id?: string) => {
     set_error("");
     try {
-      const group = await window.downcity.group.open(group_id);
+      const group = await window.downcity.group.open(group_id, session_id);
       set_groups_by_id((current) => ({ ...current, [group_id]: group }));
-      set_group_messages_by_group((current) => ({ ...current, [group.group_id]: current[group.group_id] ?? [] }));
+      const messages = await window.downcity.group.list_messages(group_id, group.active_session_id);
+      set_group_messages_by_group((current) => ({ ...current, [group.group_id]: messages }));
       set_selection({ kind: "group", group_id });
     } catch (reason) {
       set_error(to_error_message(reason));
     }
   }, []);
 
+  const create_group_session = useCallback(async (group_id: string, workspace_id?: string) => {
+    set_error("");
+    try {
+      const group = await window.downcity.group.create_session(group_id, workspace_id);
+      set_groups((current) => current.map((item) => item.group_id === group.group_id ? group : item));
+      set_groups_by_id((current) => ({ ...current, [group.group_id]: group }));
+      set_group_messages_by_group((current) => ({ ...current, [group.group_id]: [] }));
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, []);
+
+  const remove_group_session = useCallback(async (group_id: string, session_id: string) => {
+    set_error("");
+    try {
+      const group = await window.downcity.group.remove_session(group_id, session_id);
+      set_groups((current) => current.map((item) => item.group_id === group.group_id ? group : item));
+      set_groups_by_id((current) => ({ ...current, [group.group_id]: group }));
+      set_group_messages_by_group((current) => ({ ...current, [group.group_id]: [] }));
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, []);
+
   const send_group_message = useCallback(async (group_id: string, text: string) => {
     set_error("");
     try {
-      await window.downcity.group.send(group_id, { text });
+      await window.downcity.group.send(group_id, groups_by_id[group_id]?.active_session_id, { text });
     } catch (reason) {
       set_error(to_error_message(reason));
     }
-  }, []);
+  }, [groups_by_id]);
 
   const stop_group = useCallback(async (group_id: string) => {
     set_error("");
     try {
-      await window.downcity.group.stop(group_id);
+      await window.downcity.group.stop(group_id, groups_by_id[group_id]?.active_session_id);
     } catch (reason) {
       set_error(to_error_message(reason));
     }
-  }, []);
+  }, [groups_by_id]);
 
   const open_settings = useCallback((section: SettingsSection = "user") => {
     set_error("");
@@ -1053,6 +1083,8 @@ export function use_desktop_controller(): DesktopViewController {
     update_group,
     remove_group,
     open_group,
+    create_group_session,
+    remove_group_session,
     send_group_message,
     stop_group,
     open_settings,

@@ -4,8 +4,7 @@ import { MentionAttentionPolicy } from "@/types/group/AttentionPolicy.js";
 import type { AttentionPolicy } from "@/types/group/AttentionPolicy.js";
 import type { GroupContract, GroupMember, GroupOptions } from "@/types/group/Group.js";
 import { GroupSessions } from "@/group/GroupSessions.js";
-import { initialize_group_runtime } from "@/internal/GroupRuntime.js";
-import type { WorkspaceBase } from "@downcity/workspace";
+import { dispose_group_runtime, initialize_group_runtime } from "@/internal/GroupRuntime.js";
 
 /** Group 主体：只持有身份、成员、资源引用和群聊上下文集合。 */
 export class Group implements GroupContract {
@@ -13,7 +12,6 @@ export class Group implements GroupContract {
   readonly name: string;
   readonly instruction?: string;
   readonly members: readonly GroupMember[];
-  readonly workspace?: WorkspaceBase;
   readonly attention_policy: AttentionPolicy;
   readonly sessions: GroupSessions;
 
@@ -30,7 +28,6 @@ export class Group implements GroupContract {
     }));
     this.name = String(options.name || this.id).trim() || this.id;
     this.instruction = options.instruction?.trim() || undefined;
-    this.workspace = options.workspace;
     this.attention_policy = options.attention_policy || new MentionAttentionPolicy();
     initialize_group_runtime(this);
     this.sessions = new GroupSessions(this);
@@ -39,5 +36,6 @@ export class Group implements GroupContract {
   /** 释放 Group 所拥有的全部群聊上下文。 */
   async dispose(): Promise<void> {
     await this.sessions.dispose();
+    await dispose_group_runtime(this);
   }
 }

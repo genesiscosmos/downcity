@@ -108,9 +108,13 @@ export function App() {
       if (!group) return <WelcomeView />;
       return <GroupView
         group={group}
+        workspaces={controller.workspaces}
         messages={controller.group_messages_by_group[group_selection.group_id] ?? []}
         send_message={(text) => controller.send_group_message(group_selection.group_id, text)}
         stop_session={() => controller.stop_group(group_selection.group_id)}
+        open_session={(session_id) => controller.open_group(group_selection.group_id, session_id)}
+        create_session={(workspace_id) => controller.create_group_session(group_selection.group_id, workspace_id)}
+        remove_session={(session_id) => controller.remove_group_session(group_selection.group_id, session_id)}
       />;
     }
     if (!controller.selection || !selected_agent) return <WelcomeView />;
