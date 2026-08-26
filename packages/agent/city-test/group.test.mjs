@@ -29,13 +29,13 @@ test("Group broadcasts user messages and collects member replies", async () => {
   const group = new Group({ id: "delivery", members: [{ agent: architect }, { agent: reviewer }] });
   city.groups.add(group);
   const group_session = await group.sessions.create();
-  const prompt_result = await group_session.prompt({ query: "analyze payment" });
+  const prompt_result = await group_session.prompt({ query: "大家分别 analyze payment" });
   assert.equal(prompt_result.success, true);
   assert.match(prompt_result.turn_id, /^group-turn-/);
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), ["architect", "reviewer"]);
   assert.deepEqual((await group_session.messages()).map((message) => [message.sender_type, message.sender_id, message.text]), [
-    ["user", "user", "analyze payment"],
+    ["user", "user", "大家分别 analyze payment"],
     ["agent", "architect", "reply:architect"],
     ["agent", "reviewer", "reply:reviewer"],
   ]);

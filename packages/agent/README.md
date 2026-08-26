@@ -36,7 +36,7 @@ Session ID 由 `agent.sessions.create()` 内部生成；创建接口不接受调
 `session_id`。恢复已有 Session 时使用 `agent.sessions.get(session_id)`，如果该
 Session 创建时绑定了 Workspace，恢复时必须传入同一个 Workspace。
 
-Group 是和 Agent 并列的可联系主体。Group 只持有成员关系和注意力策略，
+Group 是和 Agent 并列的可联系主体。Group 只持有成员关系和消息调度策略；默认策略识别明确提及、多人请求和歧义消息，普通消息不会无条件广播给全部 Agent。
 并通过 `group.sessions.create()` 创建独立的群聊上下文。消息和传播属于 GroupSession；
 成员执行仍通过成员 Agent 的 `AgentSessions` 完成，`prompt()` 返回本轮 `turn_id`、完成状态和消息数量，成员运行态可通过
 `subscribe_member_status()` 订阅；Session metadata 会记录 Group 与
@@ -60,7 +60,7 @@ packages/agent
 src/
 ├── index.ts               # 包公开入口
 ├── agent/                 # Agent facade、状态、模型、环境与执行绑定
-├── group/                 # Group 主体、GroupSession 和注意力策略
+├── group/                 # Group 主体、GroupSession 和消息调度策略
 ├── executor/              # LLM/Tool Loop、执行恢复与内存上下文折叠
 ├── plugin/                # Plugin registry、执行视图、工具桥接与生命周期
 ├── remote/                # RemoteAgent、RemoteSession 与 HTTP/RPC transport

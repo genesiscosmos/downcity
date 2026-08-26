@@ -257,7 +257,7 @@ Session 不负责平台差异，也不直接拼接物理存储路径。
 
 ### 4.4 Group 是集体主体
 
-Group 与 Agent 并列为可联系的主体。Group 持有身份、成员关系和注意力策略；
+Group 与 Agent 并列为可联系的主体。Group 持有身份、成员关系和消息调度策略；
 City 持有实际 Workspace 与 Storage，具体 GroupSession 在创建时引用 Workspace。Group 不拥有 Agent，
 但拥有 `GroupSessions` 集合；每个 GroupSession 是一次独立的群聊上下文，负责共享消息、
 传播过程和成员运行态。成员执行仍通过成员 Agent 的 `AgentSessions` 完成，并在 Session
@@ -265,7 +265,7 @@ metadata 中记录 Group 与 GroupSession 来源。Group 的注意力策略只�
 成员，不定义 leader、pipeline 或其他固定拓扑。GroupSession 的消息与 metadata 通过
 City Storage 的 `groups/<group_id>/sessions/<group_session_id>/` 作用域持久化；没有 City
 时使用该 Group 自己的内存 Storage。
-Group 的注意力策略只决定当前消息投递给哪些成员，不定义 leader、pipeline 或其他固定
+Group 的调度策略决定当前消息由哪些成员发言、采用单人还是多人响应，以及是否继续传播；默认策略对对象不明确的消息要求澄清，不定义 leader、pipeline 或其他固定
 拓扑。Workspace 是 GroupSession 的执行资源，随后由成员 AgentSession 使用；Shell 仍属于 Workspace 的能力边界。
 
 ### 4.5 Plugin 是 Agent 能力扩展

@@ -1,7 +1,7 @@
 /** Group 群聊主体的本地实现。 */
 
-import { MentionAttentionPolicy } from "@/types/group/AttentionPolicy.js";
-import type { AttentionPolicy } from "@/types/group/AttentionPolicy.js";
+import { DefaultDispatchStrategy } from "@/types/group/DispatchStrategy.js";
+import type { DispatchStrategy } from "@/types/group/DispatchStrategy.js";
 import type { GroupContract, GroupMember, GroupOptions } from "@/types/group/Group.js";
 import { GroupSessions } from "@/group/GroupSessions.js";
 import { dispose_group_runtime, initialize_group_runtime } from "@/internal/GroupRuntime.js";
@@ -12,7 +12,7 @@ export class Group implements GroupContract {
   readonly name: string;
   readonly instruction?: string;
   readonly members: readonly GroupMember[];
-  readonly attention_policy: AttentionPolicy;
+  readonly dispatch_strategy: DispatchStrategy;
   readonly sessions: GroupSessions;
 
   constructor(options: GroupOptions) {
@@ -28,7 +28,7 @@ export class Group implements GroupContract {
     }));
     this.name = String(options.name || this.id).trim() || this.id;
     this.instruction = options.instruction?.trim() || undefined;
-    this.attention_policy = options.attention_policy || new MentionAttentionPolicy();
+    this.dispatch_strategy = options.dispatch_strategy || new DefaultDispatchStrategy();
     initialize_group_runtime(this);
     this.sessions = new GroupSessions(this);
   }

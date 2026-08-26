@@ -2,8 +2,13 @@
 export { Group } from "./Group.js";
 export { GroupSession } from "./GroupSession.js";
 export { GroupSessions } from "./GroupSessions.js";
-export { MentionAttentionPolicy } from "@/types/group/AttentionPolicy.js";
-export type { AttentionDecision, AttentionPolicy } from "@/types/group/AttentionPolicy.js";
+export { DefaultDispatchStrategy } from "@/types/group/DispatchStrategy.js";
+export type {
+  DispatchContinuation,
+  DispatchDecision,
+  DispatchResponseMode,
+  DispatchStrategy,
+} from "@/types/group/DispatchStrategy.js";
 export type { GroupContract, GroupMember, GroupMessage, GroupOptions } from "@/types/group/Group.js";
 export type {
   GroupMemberRuntime,

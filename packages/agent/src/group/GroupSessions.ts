@@ -97,7 +97,7 @@ export class GroupSessions implements GroupSessionsContract {
       group_name: this.group.name,
       instruction: this.group.instruction,
       members: this.group.members,
-      attention_policy: this.group.attention_policy,
+      dispatch_strategy: this.group.dispatch_strategy,
       ...(workspace ? { workspace } : {}),
     });
   }

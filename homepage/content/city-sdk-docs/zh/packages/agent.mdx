@@ -21,7 +21,7 @@ CLI、Desktop 或 Node 进程需要持有多个 Agent、根据本地配置装配
 ## Group 与 GroupSession
 
 `Group` 是具有集体主体性的协作主体，拥有自己的 `GroupSession` 集合。`GroupSession` 保存一次群聊的共享消息，
-成员是否响应由注意力策略和成员自身判断决定；成员执行仍使用成员 Agent 的 `AgentSession`，不会把私有上下文、Plugin
+成员是否响应由消息调度策略和成员自身判断决定；默认调度会识别明确提及、多人请求和歧义消息，不会把普通消息无条件广播给全部 Agent。成员执行仍使用成员 Agent 的 `AgentSession`，不会把私有上下文、Plugin
 和工具调用复制进群聊历史。`GroupSession` 的 `prompt()` 会在当前传播完成后返回本轮结果，连续调用按提交顺序执行；成员运行态可通过
 `subscribe_member_status()` 订阅。
 

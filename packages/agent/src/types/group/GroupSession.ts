@@ -121,8 +121,8 @@ export interface GroupSessionRuntimeContext {
   readonly members: readonly GroupMember[];
   /** 当前 Group 的协作说明。 */
   readonly instruction?: string;
-  /** 当前 Group 的注意力策略。 */
-  readonly attention_policy: import("@/types/group/AttentionPolicy.js").AttentionPolicy;
+  /** 当前 Group 的消息调度策略。 */
+  readonly dispatch_strategy: import("@/types/group/DispatchStrategy.js").DispatchStrategy;
   /** 当前 Group 的稳定标识。 */
   readonly group_id: string;
   /** 当前 Group 的展示名称。 */

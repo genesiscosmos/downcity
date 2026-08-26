@@ -13,7 +13,7 @@ import type {
   GroupPromptResult,
   GroupSessionContract,
 } from "@/types/group/GroupSession.js";
-import type { AttentionPolicy } from "@/types/group/AttentionPolicy.js";
+import type { DispatchDecision, DispatchStrategy } from "@/types/group/DispatchStrategy.js";
 import type { WorkspaceBase } from "@downcity/workspace";
 import type { GroupSessionDataStore } from "@/types/group/GroupSessionStore.js";
 
@@ -31,8 +31,8 @@ export interface GroupSessionOptions {
   readonly instruction?: string;
   /** Group 成员。 */
   readonly members: readonly GroupMember[];
-  /** Group 注意力策略。 */
-  readonly attention_policy: AttentionPolicy;
+  /** Group 消息调度策略。 */
+  readonly dispatch_strategy: DispatchStrategy;
   /** Group 为成员执行提供的共享 Workspace。 */
   readonly workspace?: WorkspaceBase;
 }
@@ -46,7 +46,7 @@ export class GroupSession implements GroupSessionContract {
   private readonly group_name: string;
   private readonly instruction?: string;
   private readonly members: readonly GroupMember[];
-  private readonly attention_policy: AttentionPolicy;
+  private readonly dispatch_strategy: DispatchStrategy;
   private readonly workspace?: WorkspaceBase;
   private readonly messages_by_id: GroupMessage[] = [];
   private readonly subscribers = new Set<GroupMessageSubscriber>();
@@ -69,7 +69,7 @@ export class GroupSession implements GroupSessionContract {
     this.group_name = options.group_name;
     this.instruction = options.instruction;
     this.members = options.members;
-    this.attention_policy = options.attention_policy;
+    this.dispatch_strategy = options.dispatch_strategy;
     this.workspace = options.workspace;
     this.workspace_id = options.workspace?.id;
   }
@@ -221,18 +221,23 @@ export class GroupSession implements GroupSessionContract {
       });
       return;
     }
-    const decision = await this.attention_policy.decide_attention({
+    const decision = await this.dispatch_strategy.decide_dispatch({
       message,
       messages: await this.messages(),
       members: this.members,
     });
-    const targets = [...new Set(decision.member_ids)]
+    if (decision.clarification) {
+      await this.append_message({ sender_type: "system", sender_id: "system", text: decision.clarification, reply_to: message.id });
+      return;
+    }
+    const selected_ids = decision.response_mode === "single" ? decision.member_ids.slice(0, 1) : decision.member_ids;
+    const targets = [...new Set(selected_ids)]
       .map((agent_id) => this.get_member(agent_id))
       .filter((agent): agent is Agent => Boolean(agent));
-    await Promise.all(targets.map((agent) => this.deliver_to_member(agent, message, depth)));
+    await Promise.all(targets.map((agent) => this.deliver_to_member(agent, message, depth, decision)));
   }
 
-  private async deliver_to_member(agent: Agent, message: GroupMessage, depth: number): Promise<void> {
+  private async deliver_to_member(agent: Agent, message: GroupMessage, depth: number, decision: DispatchDecision): Promise<void> {
     if (this.stop_requested || this.disposed) return;
     let session = this.member_sessions.get(agent.id);
     if (!session) {
@@ -251,7 +256,7 @@ export class GroupSession implements GroupSessionContract {
     }
     this.set_member_running(agent.id, 1);
     try {
-      const turn = await session.prompt({ query: this.build_member_context(message) });
+      const turn = await session.prompt({ query: this.build_member_context(message, decision.instruction) });
       const result = await turn.finished;
       if (!result.success || !result.text?.trim() || this.stop_requested || this.disposed) return;
       const reply = await this.append_message({
@@ -260,7 +265,7 @@ export class GroupSession implements GroupSessionContract {
         text: result.text.trim(),
         reply_to: message.id,
       });
-      await this.deliver_message(reply, depth + 1);
+      if (decision.continuation !== "stop") await this.deliver_message(reply, depth + 1);
     } finally {
       this.set_member_running(agent.id, -1);
     }
@@ -286,7 +291,7 @@ export class GroupSession implements GroupSessionContract {
     return session;
   }
 
-  private build_member_context(message: GroupMessage): string {
+  private build_member_context(message: GroupMessage, dispatch_instruction: string): string {
     const history = this.messages_by_id
       .filter((item) => item.id !== message.id)
       .map((item) => `${item.sender_type === "user" ? "User" : item.sender_id}: ${item.text}`)
@@ -297,7 +302,8 @@ export class GroupSession implements GroupSessionContract {
       "Group conversation:",
       history,
       `Current message from ${message.sender_type === "agent" ? message.sender_id : "user"}: ${message.text}`,
-      "Decide yourself whether to reply. If no reply is needed, return an empty response.",
+      dispatch_instruction,
+      "如果不需要你发言，返回空内容。",
     ].filter(Boolean).join("\n");
   }
 

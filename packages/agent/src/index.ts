@@ -11,8 +11,10 @@
 export { Agent } from "./agent/Agent.js";
 export { Group } from "./group/Group.js";
 export type {
-  AttentionDecision,
-  AttentionPolicy,
+  DispatchContinuation,
+  DispatchDecision,
+  DispatchResponseMode,
+  DispatchStrategy,
   GroupContract,
   GroupMember,
   GroupMessage,
@@ -38,7 +40,7 @@ export type {
   GroupSessionSummary,
   GroupSessionsContract,
 } from "./group/index.js";
-export { MentionAttentionPolicy } from "./group/index.js";
+export { DefaultDispatchStrategy } from "./group/index.js";
 export { City } from "./city/index.js";
 export type {
   CityAgents,

@@ -1,7 +1,7 @@
 /** Group 的公开领域类型：Group 是持续存在的群聊主体。 */
 
 import type { Agent } from "@/agent/Agent.js";
-import type { AttentionPolicy } from "@/types/group/AttentionPolicy.js";
+import type { DispatchStrategy } from "@/types/group/DispatchStrategy.js";
 import type { GroupSessions } from "@/types/group/GroupSession.js";
 
 /** Group 成员及其展示信息。 */
@@ -22,8 +22,8 @@ export interface GroupOptions {
   readonly instruction?: string;
   /** Group 成员列表。 */
   readonly members: readonly GroupMember[];
-  /** Group 的注意力策略；省略时使用提及策略。 */
-  readonly attention_policy?: AttentionPolicy;
+  /** Group 的消息调度策略；省略时使用默认人类群聊调度。 */
+  readonly dispatch_strategy?: DispatchStrategy;
 }
 
 /** Group 中的一条共享消息。 */
@@ -54,8 +54,8 @@ export interface GroupContract {
   readonly instruction?: string;
   /** Group 成员快照。 */
   readonly members: readonly GroupMember[];
-  /** Group 使用的注意力策略。 */
-  readonly attention_policy: AttentionPolicy;
+  /** Group 使用的消息调度策略。 */
+  readonly dispatch_strategy: DispatchStrategy;
   /** 当前 Group 创建的独立群聊上下文集合。 */
   readonly sessions: GroupSessions;
 }
