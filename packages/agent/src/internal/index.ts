@@ -23,3 +23,10 @@ export {
   dispose_agent_runtime,
   ensure_agent_action_schedule,
 } from "@/internal/AgentRuntime.js";
+export {
+  initialize_group_runtime,
+  attach_group_storage,
+  get_group_session_store,
+  mark_group_session_started,
+  dispose_group_runtime,
+} from "@/internal/GroupRuntime.js";

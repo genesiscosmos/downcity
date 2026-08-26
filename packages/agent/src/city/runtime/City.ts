@@ -11,6 +11,7 @@ import { Group } from "@/group/Group.js";
 import {
   attach_agent_city,
   attach_agent_storage,
+  attach_group_storage,
   create_workspace_entry,
   detach_agent_city,
   get_workspace_entry,
@@ -142,6 +143,7 @@ export class City {
     if (group.workspace && this.workspaces_by_id.get(group.workspace.id) !== group.workspace) {
       throw new Error(`Group Workspace is not registered in City: ${group.workspace.id}`);
     }
+    attach_group_storage(group, this.storage, this);
     this.groups_by_id.set(group.id, group);
     return group;
   }

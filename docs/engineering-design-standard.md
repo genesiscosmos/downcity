@@ -262,7 +262,9 @@ City 持有实际 Workspace 与 Storage，Group 只引用并授权这些资源�
 但拥有 `GroupSessions` 集合；每个 GroupSession 是一次独立的群聊上下文，负责共享消息、
 传播过程和成员运行态。成员执行仍通过成员 Agent 的 `AgentSessions` 完成，并在 Session
 metadata 中记录 Group 与 GroupSession 来源。Group 的注意力策略只决定当前消息投递给哪些
-成员，不定义 leader、pipeline 或其他固定拓扑。
+成员，不定义 leader、pipeline 或其他固定拓扑。GroupSession 的消息与 metadata 通过
+City Storage 的 `groups/<group_id>/sessions/<group_session_id>/` 作用域持久化；没有 City
+时使用该 Group 自己的内存 Storage。
 Group 的注意力策略只决定当前消息投递给哪些成员，不定义 leader、pipeline 或其他固定
 拓扑。Workspace 是成员执行时借用的资源，Shell 仍属于 Workspace 的能力边界。
 

@@ -1,7 +1,10 @@
 import test from "node:test";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import assert from "node:assert/strict";
 import { Agent, City, Group, Session } from "../bin/index.js";
-import { Workspace } from "@downcity/workspace";
+import { LocalStorageProvider, Workspace } from "@downcity/workspace";
 
 class RecordingSession extends Session {
   static created = [];
@@ -29,7 +32,7 @@ test("Group broadcasts user messages and collects member replies", async () => {
   await group_session.prompt({ query: "analyze payment" });
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), ["architect", "reviewer"]);
-  assert.deepEqual(group_session.messages().map((message) => [message.sender_type, message.sender_id, message.text]), [
+  assert.deepEqual((await group_session.messages()).map((message) => [message.sender_type, message.sender_id, message.text]), [
     ["user", "user", "analyze payment"],
     ["agent", "architect", "reply:architect"],
     ["agent", "reviewer", "reply:reviewer"],
@@ -68,4 +71,34 @@ test("Group 成员 Session 使用 Group 的共享 Workspace", async () => {
   assert.equal(sessions.items.length, 1);
   assert.deepEqual(sessions.items[0].origin, { type: "group", group_id: "build-team", group_session_id: group_session.id });
   await city.close();
+});
+
+test("GroupSession 使用 City Storage 持久化并可恢复", async () => {
+  RecordingSession.created = [];
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-group-session-"));
+  const storage = new LocalStorageProvider(root_path);
+  const city = new City({ storage });
+  const agent = new Agent({ id: "builder", session_class: RecordingSession });
+  city.agents.add(agent);
+  const group = new Group({ id: "persistent-team", members: [{ agent }] });
+  city.groups.add(group);
+  const created = await group.sessions.create();
+  await created.prompt({ query: "persist this message" });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  await city.close();
+
+  const restored_city = new City({ storage });
+  const restored_agent = new Agent({ id: "builder", session_class: RecordingSession });
+  restored_city.agents.add(restored_agent);
+  const restored_group = new Group({ id: "persistent-team", members: [{ agent: restored_agent }] });
+  restored_city.groups.add(restored_group);
+  const restored = await restored_group.sessions.get(created.id);
+  assert.ok(restored);
+  assert.deepEqual((await restored.messages()).map((message) => message.text), [
+    "persist this message",
+    "reply:builder",
+  ]);
+  assert.equal((await restored_group.sessions.list()).length, 1);
+  await restored_city.close();
+  await fs.rm(root_path, { recursive: true, force: true });
 });

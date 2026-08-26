@@ -134,4 +134,7 @@ src/
 - `SessionMessages` 是 Message 唯一事实源，Executor 不持有 Store
 - `types / utils` 提供横向公共支撑
 
-持久化规则：加入 City 后使用 `~/.downcity/agents/<agent_id>/sessions/<session_id>/`；未加入 City 时使用当前 Agent 实例内存存储。只有传入 Workspace 的 Session 才会在 `meta.json` 写入 `workspace_id`。
+持久化规则：加入 City 后，AgentSession 使用 `agents/<agent_id>/sessions/<session_id>/`，
+GroupSession 使用 `groups/<group_id>/sessions/<group_session_id>/`；未加入 City 时两者均使用
+当前主体实例的内存 Storage。只有传入 Workspace 的 AgentSession 才会在 `meta.json` 写入
+`workspace_id`。

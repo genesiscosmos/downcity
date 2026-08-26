@@ -41,7 +41,7 @@ export interface GroupSessionContract {
   /** 追加用户消息并异步驱动成员执行。 */
   prompt(input: GroupPromptInput): Promise<void>;
   /** 读取共享消息事实快照。 */
-  messages(): readonly GroupMessage[];
+  messages(): Promise<readonly GroupMessage[]>;
   /** 订阅共享消息。 */
   subscribe(subscriber: GroupMessageSubscriber): GroupMessageUnsubscribe;
   /** 读取每个成员当前是否正在执行的运行态快照。 */
@@ -59,10 +59,10 @@ export interface GroupSession extends GroupSessionContract {}
 export interface GroupSessions {
   /** 创建一个新的群聊上下文，标识由集合内部生成。 */
   create(input?: GroupSessionCreateInput): Promise<GroupSession>;
-  /** 获取当前 Group 的一个群聊上下文。 */
-  get(session_id: string): GroupSession | null;
-  /** 列出当前 Group 的群聊上下文快照。 */
-  list(): readonly GroupSession[];
+  /** 从 Storage 恢复当前 Group 的一个群聊上下文。 */
+  get(session_id: string): Promise<GroupSession | null>;
+  /** 从 Storage 恢复当前 Group 的全部群聊上下文。 */
+  list(): Promise<readonly GroupSession[]>;
   /** 释放并移除指定群聊上下文。 */
   remove(session_id: string): Promise<GroupSession | null>;
 }

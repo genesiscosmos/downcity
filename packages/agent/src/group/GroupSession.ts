@@ -12,6 +12,7 @@ import type {
 } from "@/types/group/GroupSession.js";
 import type { AttentionPolicy } from "@/types/group/AttentionPolicy.js";
 import type { WorkspaceBase } from "@downcity/workspace";
+import type { GroupSessionDataStore } from "@/types/group/GroupSessionStore.js";
 
 const max_delivery_depth = 32;
 
@@ -48,6 +49,7 @@ export class GroupSession implements GroupSessionContract {
   private readonly member_sessions = new Map<string, AgentSession>();
   private readonly member_running = new Set<string>();
   private readonly pending_deliveries = new Set<Promise<void>>();
+  private store?: GroupSessionDataStore;
   private stop_requested = false;
   private disposed = false;
 
@@ -63,14 +65,30 @@ export class GroupSession implements GroupSessionContract {
     this.workspace = options.workspace;
   }
 
+  /** 从持久化 Store 初始化当前 GroupSession 的消息历史。 */
+  async initialize(store: GroupSessionDataStore): Promise<this> {
+    if (this.store && this.store !== store) {
+      throw new Error(`GroupSession "${this.id}" is already initialized with another Store`);
+    }
+    if (this.store === store) return this;
+    this.store = store;
+    await store.initialize();
+    const metadata = await store.read_metadata();
+    if (metadata.group_id !== this.group_id) {
+      throw new Error(`GroupSession "${this.id}" belongs to another Group`);
+    }
+    this.messages_by_id.push(...await store.list_messages());
+    return this;
+  }
+
   /** 追加用户消息并异步开始群聊传播。 */
   async prompt(input: GroupPromptInput): Promise<void> {
     this.assert_available();
     const text = String(input?.query || "").trim();
     if (!text) throw new Error("group_session.prompt requires a non-empty query");
-    const message = this.append_message({ sender_type: "user", sender_id: "user", text });
-    const delivery = this.deliver_message(message).catch((error) => {
-      this.append_message({
+    const message = await this.append_message({ sender_type: "user", sender_id: "user", text });
+    const delivery = this.deliver_message(message).catch(async (error) => {
+      await this.append_message({
         sender_type: "system",
         sender_id: "system",
         text: error instanceof Error ? error.message : String(error),
@@ -82,7 +100,7 @@ export class GroupSession implements GroupSessionContract {
   }
 
   /** 读取共享消息快照。 */
-  messages(): readonly GroupMessage[] {
+  async messages(): Promise<readonly GroupMessage[]> {
     return this.messages_by_id.map((message) => ({ ...message }));
   }
 
@@ -123,7 +141,7 @@ export class GroupSession implements GroupSessionContract {
   private async deliver_message(message: GroupMessage, depth = 0): Promise<void> {
     if (this.stop_requested || this.disposed) return;
     if (depth >= max_delivery_depth) {
-      this.append_message({
+      await this.append_message({
         sender_type: "system",
         sender_id: "system",
         text: "Group message propagation limit reached.",
@@ -133,7 +151,7 @@ export class GroupSession implements GroupSessionContract {
     }
     const decision = await this.attention_policy.decide_attention({
       message,
-      messages: this.messages(),
+      messages: await this.messages(),
       members: this.members,
     });
     const targets = [...new Set(decision.member_ids)]
@@ -161,7 +179,7 @@ export class GroupSession implements GroupSessionContract {
       const turn = await session.prompt({ query: this.build_member_context(message) });
       const result = await turn.finished;
       if (!result.success || !result.text?.trim() || this.stop_requested || this.disposed) return;
-      const reply = this.append_message({
+      const reply = await this.append_message({
         sender_type: "agent",
         sender_id: agent.id,
         text: result.text.trim(),
@@ -192,13 +210,15 @@ export class GroupSession implements GroupSessionContract {
     return this.members.find((member) => member.agent.id === agent_id)?.agent || null;
   }
 
-  private append_message(input: Omit<GroupMessage, "id" | "group_id" | "created_at">): GroupMessage {
+  private async append_message(input: Omit<GroupMessage, "id" | "group_id" | "created_at">): Promise<GroupMessage> {
     const message: GroupMessage = {
       ...input,
       id: `group-message-${nanoid(12)}`,
       group_id: this.group_id,
       created_at: Date.now(),
     };
+    if (!this.store) throw new Error(`GroupSession "${this.id}" is not initialized`);
+    await this.store.append_message(message);
     this.messages_by_id.push(message);
     for (const subscriber of this.subscribers) void subscriber(message);
     return message;

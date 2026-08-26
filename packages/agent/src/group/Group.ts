@@ -4,6 +4,7 @@ import { MentionAttentionPolicy } from "@/types/group/AttentionPolicy.js";
 import type { AttentionPolicy } from "@/types/group/AttentionPolicy.js";
 import type { GroupContract, GroupMember, GroupOptions } from "@/types/group/Group.js";
 import { GroupSessions } from "@/group/GroupSessions.js";
+import { initialize_group_runtime } from "@/internal/GroupRuntime.js";
 import type { WorkspaceBase } from "@downcity/workspace";
 
 /** Group 主体：只持有身份、成员、资源引用和群聊上下文集合。 */
@@ -31,6 +32,7 @@ export class Group implements GroupContract {
     this.instruction = options.instruction?.trim() || undefined;
     this.workspace = options.workspace;
     this.attention_policy = options.attention_policy || new MentionAttentionPolicy();
+    initialize_group_runtime(this);
     this.sessions = new GroupSessions(this);
   }
 

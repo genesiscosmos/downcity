@@ -323,7 +323,10 @@ export class AgentController {
   /** 列出当前 City 中由本地定义恢复的运行时 Group。 */
   async list_groups(): Promise<DesktopGroupSummary[]> {
     await this.ready_promise;
-    return this.city.groups.list().map((group) => to_desktop_group_summary(group, this.group_sessions_by_group.get(group.id)));
+    return await Promise.all(this.city.groups.list().map(async (group) => {
+      const group_session = (await group.sessions.list())[0];
+      return await to_desktop_group_summary(group, group_session);
+    }));
   }
 
   /** 创建并注册一个运行时 Group。 */
@@ -344,7 +347,7 @@ export class AgentController {
       await this.ensure_group_workspace(config);
       const group = this.create_runtime_group(config);
       this.city.groups.add(group);
-      return to_desktop_group_summary(group);
+      return await to_desktop_group_summary(group);
     } catch (error) {
       this.data.groups.remove(config.group_id);
       throw error;
@@ -371,7 +374,7 @@ export class AgentController {
       const group = this.create_runtime_group(next);
       this.city.groups.add(group);
       if (previous_unsubscribe) this.subscribe_group(await this.require_group_session(group));
-      return to_desktop_group_summary(group, this.group_sessions_by_group.get(group.id));
+      return await to_desktop_group_summary(group, this.group_sessions_by_group.get(group.id));
     } catch (error) {
       await this.ensure_group_workspace(current);
       const restored = this.create_runtime_group(current);
@@ -400,13 +403,13 @@ export class AgentController {
     const group = this.require_group(group_id);
     const group_session = await this.require_group_session(group);
     if (!this.group_unsubscribes.has(group.id)) this.subscribe_group(group_session);
-    return to_desktop_group_summary(group, group_session);
+    return await to_desktop_group_summary(group, group_session);
   }
 
   async list_group_messages(group_id: string): Promise<DesktopGroupMessage[]> {
     await this.ready_promise;
     const group_session = await this.require_group_session(this.require_group(group_id));
-    return group_session.messages().map(to_desktop_group_message);
+    return (await group_session.messages()).map(to_desktop_group_message);
   }
 
   async send_group_message(group_id: string, input: DesktopGroupSendInput): Promise<{ turn_id?: string }> {
@@ -957,7 +960,8 @@ export class AgentController {
   private async require_group_session(group: Group): Promise<GroupSessionContract> {
     const existing = this.group_sessions_by_group.get(group.id);
     if (existing) return existing;
-    const created = await group.sessions.create();
+    const sessions = await group.sessions.list();
+    const created = sessions[0] || await group.sessions.create();
     this.group_sessions_by_group.set(group.id, created);
     return created;
   }
@@ -1010,7 +1014,7 @@ function to_desktop_workspace_summary(record: LocalWorkspaceConfig): DesktopWork
 }
 
 /** 把 SDK Group 收敛成 Renderer 所需的可序列化摘要。 */
-function to_desktop_group_summary(group: Group, group_session?: GroupSessionContract): DesktopGroupSummary {
+async function to_desktop_group_summary(group: Group, group_session?: GroupSessionContract): Promise<DesktopGroupSummary> {
   return {
     group_id: group.id,
     name: group.name,
@@ -1020,7 +1024,7 @@ function to_desktop_group_summary(group: Group, group_session?: GroupSessionCont
       agent_id: member.agent.id,
       ...(member.role ? { role: member.role } : {}),
     })),
-    message_count: group_session?.messages().length ?? 0,
+    message_count: group_session ? (await group_session.messages()).length : 0,
   };
 }
 

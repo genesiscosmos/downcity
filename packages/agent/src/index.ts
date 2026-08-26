@@ -18,6 +18,11 @@ export type {
   GroupMessage,
   GroupOptions,
 } from "./group/index.js";
+export type {
+  GroupSessionDataStore,
+  GroupSessionHistoryMeta,
+  GroupSessionStore,
+} from "./types/group/GroupSessionStore.js";
 export { GroupSession, GroupSessions } from "./group/index.js";
 export type {
   GroupMemberRuntime,
