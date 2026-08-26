@@ -8,6 +8,7 @@
 
 import type { AgentModel } from "@/agent/AgentModel.js";
 import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 
 /**
  * 新建 Session 的输入参数。
@@ -324,6 +325,8 @@ export interface AgentSessionSummary {
   message_count: number;
   /** 当前 session 绑定模型的可读标签。 */
   model_label?: string;
+  /** 当前 Session 的创建来源。 */
+  origin?: SessionOrigin;
   /** 当前 session 是否处于执行中。 */
   executing?: boolean;
 }

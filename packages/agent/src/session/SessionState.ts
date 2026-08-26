@@ -46,6 +46,7 @@ export interface SessionModelSetResult {
 export class SessionState {
   private readonly agent_id: string;
   private readonly session_id: string;
+  private readonly origin?: SessionStateOptions["origin"];
   private readonly store: SessionDataStore;
   private readonly messages: SessionMessages;
   private readonly state: SessionLocalState;
@@ -59,6 +60,7 @@ export class SessionState {
   constructor(options: SessionStateOptions) {
     this.agent_id = options.agent_id;
     this.session_id = options.session_id;
+    this.origin = options.origin;
     this.store = options.store;
     this.messages = options.messages;
     this.state = options.state;
@@ -121,6 +123,7 @@ export class SessionState {
         agent_id: this.agent_id,
         created_at: created_at,
         timezone,
+        ...(this.origin ? { origin: this.origin } : {}),
       });
       this.state.created_at = created_at;
       this.state.timezone = timezone;

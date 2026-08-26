@@ -8,8 +8,10 @@
 import {
   Agent,
   City,
+  Group,
   get_logger,
   type AgentSession,
+  type GroupSessionContract,
   type AgentSessionPromptInput,
   type AgentSessionSummary,
   type RespondSessionInteractionInput,
@@ -29,6 +31,7 @@ import {
 import { create_workspace_entry, get_workspace_entry } from "@downcity/agent/internal";
 import {
   type LocalAgentConfig,
+  type LocalGroupConfig,
   type LocalWorkspaceConfig,
   normalize_agent_id,
 } from "@downcity/local/product";
@@ -50,7 +53,16 @@ import type {
   DesktopSessionConfiguration,
   DesktopSessionSummary,
   DesktopWorkspaceSummary,
+  DesktopWorkspaceFile,
+  DesktopChatFileInput,
+  DesktopCreateGroupInput,
+  DesktopUpdateGroupInput,
+  DesktopGroupMessage,
+  DesktopGroupMessageEvent,
+  DesktopGroupSendInput,
+  DesktopGroupSummary,
 } from "../../common/types/DesktopApi.js";
+import { mkdir, readFile, readdir, stat } from "node:fs/promises";
 import {
   create_desktop_agent_model,
   create_desktop_embassy,
@@ -74,6 +86,8 @@ interface AgentControllerEvents {
   mutation(event: DesktopChatMutationEvent): void;
   /** 广播 Session 运行态。 */
   runtime(event: DesktopChatRuntimeEvent): void;
+  /** 广播 Group 共享消息。 */
+  group_message(event: DesktopGroupMessageEvent): void;
 }
 
 /** Electron main 内的 native Agent 生命周期控制器。 */
@@ -87,6 +101,10 @@ export class AgentController {
   private readonly host_instance_id = create_city_host_instance_id();
   /** 已订阅 Session 的取消订阅函数。 */
   private readonly session_unsubscribes = new Map<string, SessionMutationUnsubscribe>();
+  /** Group 消息订阅取消函数。 */
+  private readonly group_unsubscribes = new Map<string, () => void>();
+  /** 每个 Group 当前默认打开的群聊上下文。 */
+  private readonly group_sessions_by_group = new Map<string, GroupSessionContract>();
   /** Main 进程持有的 Session 运行态投影。 */
   private readonly runtimes = new Map<string, DesktopChatRuntime>();
   /** 当前进程已经按持久化 ID 恢复的 Session 模型。 */
@@ -141,6 +159,14 @@ export class AgentController {
     return this.data.workspaces.list().map(to_desktop_workspace_summary);
   }
 
+  /** 获取 Desktop Agent 主聊天固定使用的本地 Workspace。 */
+  async get_default_workspace(): Promise<DesktopWorkspaceSummary> {
+    await this.ready_promise;
+    const workspace_path = path.join(this.data.root_path, "workspaces", "app");
+    await mkdir(workspace_path, { recursive: true });
+    return to_desktop_workspace_summary(this.data.workspaces.ensure({ workspace_path, name: "app" }));
+  }
+
   /** 独立登记 Workspace，不隐式创建 Agent 或 Session。 */
   async create_workspace(
     workspace_path: string,
@@ -175,9 +201,13 @@ export class AgentController {
     };
     const agent = await this.create_native_agent(candidate);
     let config: LocalAgentConfig | null = null;
+    let registered = false;
     try {
       config = this.data.agents.create(candidate);
+      this.city.agents.add(agent);
+      registered = true;
     } catch (error) {
+      if (registered) await this.city.agents.remove(agent.id).catch(() => null);
       if (config) this.data.agents.remove(config.agent_id);
       await agent.dispose().catch(() => undefined);
       throw error;
@@ -234,6 +264,19 @@ export class AgentController {
       this.runtimes.delete(session_key);
       this.restored_session_models.delete(session_key);
     }
+    for (const config of this.data.groups.list()) {
+      if (!config.member_agent_ids.includes(current.agent_id)) continue;
+      const existing_group = this.city.groups.get(config.group_id);
+      this.group_sessions_by_group.delete(config.group_id);
+      const group_unsubscribe = this.group_unsubscribes.get(config.group_id);
+      group_unsubscribe?.();
+      this.group_unsubscribes.delete(config.group_id);
+      if (existing_group) await this.city.groups.remove(config.group_id);
+      await this.ensure_group_workspace(config);
+      const rebuilt_group = this.create_runtime_group(config);
+      this.city.groups.add(rebuilt_group);
+      if (group_unsubscribe) this.subscribe_group(await this.require_group_session(rebuilt_group));
+    }
     await previous_agent?.dispose();
     return to_desktop_agent_summary(this.data.agents.get(current.agent_id)!, this.data.agents.get_avatar_url(current.agent_id));
   }
@@ -277,10 +320,113 @@ export class AgentController {
     return { agent_id: config.agent_id, workspace_id, workspace: to_desktop_workspace_summary(workspace) };
   }
 
+  /** 列出当前 City 中由本地定义恢复的运行时 Group。 */
+  async list_groups(): Promise<DesktopGroupSummary[]> {
+    await this.ready_promise;
+    return this.city.groups.list().map((group) => to_desktop_group_summary(group, this.group_sessions_by_group.get(group.id)));
+  }
+
+  /** 创建并注册一个运行时 Group。 */
+  async create_group(input: DesktopCreateGroupInput): Promise<DesktopGroupSummary> {
+    await this.ready_promise;
+    const group_id = String(input.group_id || "").trim();
+    const member_agent_ids = [...new Set((input.member_agent_ids ?? []).map((agent_id) => String(agent_id || "").trim()).filter(Boolean))];
+    if (!group_id) throw new Error("group_id is required");
+    if (member_agent_ids.length === 0) throw new Error("至少需要一个 Group 成员 Agent");
+    if (this.city.groups.get(group_id)) throw new Error(`Group already exists: ${group_id}`);
+    const members = member_agent_ids.map((agent_id) => {
+      const agent = this.city.agents.get(agent_id);
+      if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
+      return { agent };
+    });
+    const config = this.data.groups.create(input);
+    try {
+      await this.ensure_group_workspace(config);
+      const group = this.create_runtime_group(config);
+      this.city.groups.add(group);
+      return to_desktop_group_summary(group);
+    } catch (error) {
+      this.data.groups.remove(config.group_id);
+      throw error;
+    }
+  }
+
+  /** 更新 Group 定义，并替换 City 中的运行时主体。 */
+  async update_group(group_id: string, input: DesktopUpdateGroupInput): Promise<DesktopGroupSummary> {
+    await this.ready_promise;
+    const current = this.data.groups.get(group_id);
+    if (!current) throw new Error(`Group not found: ${group_id}`);
+    const member_agent_ids = [...new Set(input.member_agent_ids.map((agent_id) => String(agent_id || "").trim()).filter(Boolean))];
+    for (const agent_id of member_agent_ids) this.require_native_agent(agent_id);
+    await this.ensure_group_workspace({ workspace_id: input.workspace_id });
+    const next = this.data.groups.update(group_id, { ...input, member_agent_ids });
+    const previous_group = this.city.groups.get(current.group_id);
+    const previous_unsubscribe = this.group_unsubscribes.get(current.group_id);
+    previous_unsubscribe?.();
+    this.group_unsubscribes.delete(current.group_id);
+    if (previous_group) await this.city.groups.remove(current.group_id);
+    this.group_sessions_by_group.delete(current.group_id);
+    try {
+      await this.ensure_group_workspace(next);
+      const group = this.create_runtime_group(next);
+      this.city.groups.add(group);
+      if (previous_unsubscribe) this.subscribe_group(await this.require_group_session(group));
+      return to_desktop_group_summary(group, this.group_sessions_by_group.get(group.id));
+    } catch (error) {
+      await this.ensure_group_workspace(current);
+      const restored = this.create_runtime_group(current);
+      this.city.groups.add(restored);
+      if (previous_unsubscribe) this.subscribe_group(await this.require_group_session(restored));
+      this.data.groups.update(current.group_id, current);
+      throw error;
+    }
+  }
+
+  /** 删除 Group 定义和 City 中的运行时主体。 */
+  async remove_group(group_id: string): Promise<boolean> {
+    await this.ready_promise;
+    const resolved_group_id = String(group_id || "").trim();
+    const existed = this.data.groups.remove(resolved_group_id);
+    if (this.city.groups.get(resolved_group_id)) await this.city.groups.remove(resolved_group_id);
+    this.group_sessions_by_group.delete(resolved_group_id);
+    this.group_unsubscribes.get(resolved_group_id)?.();
+    this.group_unsubscribes.delete(resolved_group_id);
+    return existed;
+  }
+
+  /** 注册并读取 Group 的消息流。 */
+  async open_group(group_id: string): Promise<DesktopGroupSummary> {
+    await this.ready_promise;
+    const group = this.require_group(group_id);
+    const group_session = await this.require_group_session(group);
+    if (!this.group_unsubscribes.has(group.id)) this.subscribe_group(group_session);
+    return to_desktop_group_summary(group, group_session);
+  }
+
+  async list_group_messages(group_id: string): Promise<DesktopGroupMessage[]> {
+    await this.ready_promise;
+    const group_session = await this.require_group_session(this.require_group(group_id));
+    return group_session.messages().map(to_desktop_group_message);
+  }
+
+  async send_group_message(group_id: string, input: DesktopGroupSendInput): Promise<{ turn_id?: string }> {
+    await this.ready_promise;
+    const text = String(input.text || "").trim();
+    if (!text) throw new Error("message is required");
+    const group_session = await this.require_group_session(this.require_group(group_id));
+    if (!this.group_unsubscribes.has(group_session.group_id)) this.subscribe_group(group_session);
+    await group_session.prompt({ query: text });
+    return {};
+  }
+
+  async stop_group(group_id: string): Promise<void> {
+    await this.ready_promise;
+    await (await this.require_group_session(this.require_group(group_id))).stop();
+  }
+
   /** 列出一个 native Agent 在当前 Workspace 中的 Session。 */
   async list_sessions(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary[]> {
-    void workspace_id;
-    const page = await this.require_native_agent(agent_id).sessions.list();
+    const page = await this.require_native_agent(agent_id).sessions.list({ workspace_id });
     return page.items.map(to_desktop_session_summary);
   }
 
@@ -366,8 +512,7 @@ export class AgentController {
 
   /** 列出一个 Agent 已归档的 Session。 */
   async list_archived_sessions(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary[]> {
-    void workspace_id;
-    const page = await this.require_native_agent(agent_id).sessions.archived();
+    const page = await this.require_native_agent(agent_id).sessions.archived({ workspace_id });
     return page.items.map(to_desktop_session_summary);
   }
 
@@ -397,6 +542,37 @@ export class AgentController {
       has_more: page.has_more,
       ...(page.next_before_sequence ? { next_before_sequence: page.next_before_sequence } : {}),
     };
+  }
+
+  /** 列出当前 Workspace 根目录的直接文件，并按最近修改时间倒序返回。 */
+  async list_workspace_files(workspace_id: string): Promise<DesktopWorkspaceFile[]> {
+    await this.ready_promise;
+    const config = this.data.workspaces.get(workspace_id);
+    if (!config) throw new Error(`Workspace not found: ${workspace_id}`);
+    const entries = await readdir(config.workspace_path, { withFileTypes: true });
+    const files = await Promise.all(entries
+      .filter((entry) => entry.isFile() && !entry.name.startsWith("."))
+      .map(async (entry) => {
+        const file_path = path.join(config.workspace_path, entry.name);
+        const file_stat = await stat(file_path);
+        return { relative_path: entry.name, filename: entry.name, modified_at: file_stat.mtimeMs };
+      }));
+    return files.sort((left, right) => right.modified_at - left.modified_at || left.relative_path.localeCompare(right.relative_path));
+  }
+
+  /** 读取 Workspace 根目录下的文件，禁止绝对路径和目录穿越。 */
+  async read_workspace_file(workspace_id: string, relative_path: string): Promise<DesktopChatFileInput> {
+    await this.ready_promise;
+    const config = this.data.workspaces.get(workspace_id);
+    if (!config) throw new Error(`Workspace not found: ${workspace_id}`);
+    const normalized_path = String(relative_path || "").trim();
+    if (!normalized_path || path.isAbsolute(normalized_path) || normalized_path.includes("..") || normalized_path.includes("/") || normalized_path.includes("\\")) throw new Error("Workspace file path is invalid");
+    const file_path = path.join(config.workspace_path, normalized_path);
+    const file_stat = await stat(file_path);
+    if (!file_stat.isFile()) throw new Error("Workspace path is not a file");
+    const content = await readFile(file_path);
+    const media_type = workspace_file_media_type(normalized_path);
+    return { filename: normalized_path, media_type, data_url: `data:${media_type};base64,${content.toString("base64")}` };
   }
 
   /** 向 Session 提交输入；后续执行结果通过实时事件广播。 */
@@ -508,6 +684,8 @@ export class AgentController {
     await this.ready_promise.catch(() => undefined);
     for (const unsubscribe of this.session_unsubscribes.values()) unsubscribe();
     this.session_unsubscribes.clear();
+    for (const unsubscribe of this.group_unsubscribes.values()) unsubscribe();
+    this.group_unsubscribes.clear();
     this.runtimes.clear();
     this.restored_session_models.clear();
     const results: PromiseSettledResult<unknown>[] = [];
@@ -532,6 +710,11 @@ export class AgentController {
           await agent.dispose().catch(() => undefined);
           throw error;
         }
+      }
+      for (const config of this.data.groups.list()) {
+        await this.ensure_group_workspace(config);
+        const group = this.create_runtime_group(config);
+        this.city.groups.add(group);
       }
       await register_city_host({
         owner: "desktop",
@@ -573,6 +756,31 @@ export class AgentController {
       plugins,
       tools,
     });
+  }
+
+  /** 根据本地 Group 定义创建运行时 Group。 */
+  private create_runtime_group(config: LocalGroupConfig): Group {
+    const members = config.member_agent_ids.map((agent_id) => ({ agent: this.require_native_agent(agent_id) }));
+    const workspace = config.workspace_id ? this.city.workspaces.get(config.workspace_id) : undefined;
+    if (config.workspace_id && !workspace) {
+      throw new Error(`Group Workspace is not available in City: ${config.workspace_id}`);
+    }
+    return new Group({
+      id: config.group_id,
+      name: config.name,
+      instruction: config.instruction || undefined,
+      members,
+      ...(workspace ? { workspace } : {}),
+    });
+  }
+
+  /** 确保 Group 配置引用的 Workspace 已由当前 City 持有。 */
+  private async ensure_group_workspace(config: { workspace_id?: string }): Promise<void> {
+    const workspace_id = String(config.workspace_id || "").trim();
+    if (!workspace_id || this.city.workspaces.get(workspace_id)) return;
+    const workspace_config = this.data.workspaces.get(workspace_id);
+    if (!workspace_config) throw new Error(`Workspace not found: ${workspace_id}`);
+    this.city.workspaces.add(await create_desktop_workspace(this.data, workspace_config));
   }
 
   /** 读取 Session，并确保实时 mutation 只订阅一次。 */
@@ -729,6 +937,31 @@ export class AgentController {
     return agent;
   }
 
+  /** 读取当前 City 持有的 Group。 */
+  private require_group(group_id: string): Group {
+    const group = this.city.groups.get(String(group_id || "").trim());
+    if (!group) throw new Error(`Group not found: ${group_id}`);
+    return group;
+  }
+
+  /** 为 Desktop 当前打开的 Group 建立唯一消息订阅。 */
+  private subscribe_group(group_session: GroupSessionContract): void {
+    const group_id = group_session.group_id;
+    if (this.group_unsubscribes.has(group_id)) return;
+    this.group_unsubscribes.set(group_id, group_session.subscribe((message) => {
+      this.events.group_message({ group_id, message: to_desktop_group_message(message) });
+    }));
+  }
+
+  /** 获取或创建 Group 当前默认群聊上下文。 */
+  private async require_group_session(group: Group): Promise<GroupSessionContract> {
+    const existing = this.group_sessions_by_group.get(group.id);
+    if (existing) return existing;
+    const created = await group.sessions.create();
+    this.group_sessions_by_group.set(group.id, created);
+    return created;
+  }
+
   /** 按需让 Desktop Agent 进入指定 Workspace。 */
   private async require_workspace_entry(agent_id: string, workspace_id: string) {
     const agent = this.require_native_agent(agent_id);
@@ -740,6 +973,12 @@ export class AgentController {
       ?? this.city.workspaces.add(await create_desktop_workspace(this.data, config));
     return create_workspace_entry(agent, workspace);
   }
+}
+
+/** 根据常见 Workspace 文件扩展名推断 MIME 类型。 */
+function workspace_file_media_type(file_name: string): string {
+  const extension = path.extname(file_name).toLowerCase();
+  return ({ ".txt": "text/plain", ".md": "text/markdown", ".json": "application/json", ".js": "text/javascript", ".ts": "text/typescript", ".tsx": "text/typescript", ".css": "text/css", ".html": "text/html", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".pdf": "application/pdf" } as Record<string, string>)[extension] ?? "application/octet-stream";
 }
 
 /** 使模型切换后的推理档位始终来自该模型公开的档位列表。 */
@@ -767,6 +1006,32 @@ function to_desktop_workspace_summary(record: LocalWorkspaceConfig): DesktopWork
     workspace_id: record.workspace_id,
     workspace_path: record.workspace_path,
     name: record.name,
+  };
+}
+
+/** 把 SDK Group 收敛成 Renderer 所需的可序列化摘要。 */
+function to_desktop_group_summary(group: Group, group_session?: GroupSessionContract): DesktopGroupSummary {
+  return {
+    group_id: group.id,
+    name: group.name,
+    ...(group.instruction ? { instruction: group.instruction } : {}),
+    ...(group.workspace ? { workspace_id: group.workspace.id } : {}),
+    members: group.members.map((member) => ({
+      agent_id: member.agent.id,
+      ...(member.role ? { role: member.role } : {}),
+    })),
+    message_count: group_session?.messages().length ?? 0,
+  };
+}
+
+/** 把 SDK GroupMessage 收敛成安全 IPC 消息。 */
+function to_desktop_group_message(message: import("@downcity/agent").GroupMessage): DesktopGroupMessage {
+  return {
+    message_id: message.id,
+  author_type: message.sender_type,
+  ...(message.sender_id !== "user" && message.sender_id !== "system" ? { author_id: message.sender_id } : {}),
+    text: message.text,
+    created_at: message.created_at,
   };
 }
 

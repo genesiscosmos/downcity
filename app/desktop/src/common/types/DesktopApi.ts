@@ -28,6 +28,84 @@ export interface DesktopWorkspaceSummary {
   name: string;
 }
 
+/** Renderer 可见的 Group 成员。 */
+export interface DesktopGroupMember {
+  /** 成员 Agent 的稳定标识。 */
+  agent_id: string;
+  /** 成员在 Group 中的协作角色。 */
+  role?: string;
+}
+
+/** Renderer 可见的运行时 Group 摘要。 */
+export interface DesktopGroupSummary {
+  /** Group 的稳定标识。 */
+  group_id: string;
+  /** Group 的用户可见名称。 */
+  name: string;
+  /** Group 的协作目标。 */
+  instruction?: string;
+  /** Group 当前成员。 */
+  members: DesktopGroupMember[];
+  /** Group 当前使用的共享 Workspace；未设置时为空。 */
+  workspace_id?: string;
+  /** Group 当前消息数量。 */
+  message_count: number;
+}
+
+/** Renderer 可见的一条 Group 共享消息。 */
+export interface DesktopGroupMessage {
+  /** 消息稳定标识。 */
+  message_id: string;
+  /** 消息作者类型。 */
+  author_type: "user" | "agent" | "system";
+  /** Agent 作者标识；用户和系统消息没有该字段。 */
+  author_id?: string;
+  /** 消息文本。 */
+  text: string;
+  /** 创建时间戳，单位为毫秒。 */
+  created_at: number;
+}
+
+/** Group 共享消息实时事件。 */
+export interface DesktopGroupMessageEvent {
+  /** 所属 Group 标识。 */
+  group_id: string;
+  /** 新增的共享消息。 */
+  message: DesktopGroupMessage;
+}
+
+/** 创建运行时 Group 的输入。 */
+export interface DesktopCreateGroupInput {
+  /** Group 稳定标识。 */
+  group_id: string;
+  /** Group 用户可见名称；省略时使用 group_id。 */
+  name?: string;
+  /** Group 协作目标。 */
+  instruction?: string;
+  /** 成员 Agent 标识。 */
+  member_agent_ids: string[];
+  /** Group 使用的共享 Workspace ID；未填写时使用内存执行上下文。 */
+  workspace_id?: string;
+}
+
+/** 更新 Desktop Group 定义的输入。 */
+export interface DesktopUpdateGroupInput {
+  /** Group 用户可见名称。 */
+  name: string;
+  /** Group 协作目标。 */
+  instruction: string;
+  /** Group 成员 Agent 标识。 */
+  member_agent_ids: string[];
+  /** Group 使用的共享 Workspace ID；未填写时使用内存执行上下文。 */
+  workspace_id?: string;
+}
+
+/** 向 Group 发送一条文本消息的输入。 */
+export interface DesktopGroupSendInput {
+  /** 要发送的非空文本。 */
+  text: string;
+}
+
 /** Desktop main 中一次 Agent 与 Workspace 的连接结果。 */
 export interface DesktopAgentConnection {
   /** 当前 Agent ID。 */
@@ -241,6 +319,16 @@ export interface DesktopChatFileInput {
   data_url: string;
 }
 
+/** 当前 Workspace 根目录中的可引用文件。 */
+export interface DesktopWorkspaceFile {
+  /** 相对于 Workspace 根目录的文件路径。 */
+  relative_path: string;
+  /** 文件名。 */
+  filename: string;
+  /** 文件最近修改时间戳，单位为毫秒。 */
+  modified_at: number;
+}
+
 /** Renderer 提交的一条 Session 消息引用。 */
 export interface DesktopChatReferenceInput {
   /** 被引用 canonical 消息的稳定标识。 */
@@ -343,6 +431,16 @@ export interface DesktopSettings {
   default_text_model_id: string;
   /** 生图能力默认使用的模型；为空时使用目录第一项。 */
   default_image_model_id: string;
+  /** 每个 Agent 主 Session 所绑定的 Workspace 与 Session。 */
+  agent_main_sessions: Record<string, DesktopAgentMainSession>;
+}
+
+/** Agent 主 Session 的本地绑定。 */
+export interface DesktopAgentMainSession {
+  /** 主 Session 使用的 Workspace 标识。 */
+  workspace_id: string;
+  /** 主 Session 的稳定标识。 */
+  session_id: string;
 }
 
 /** Desktop 安全存储中的一个 Federation 账户摘要。 */
@@ -513,6 +611,8 @@ export interface DesktopApi {
   workspace: {
     /** 列出全部已登记 Workspace。 */
     list(): Promise<DesktopWorkspaceSummary[]>;
+    /** 获取并登记 Desktop Agent 主聊天的默认 Workspace。 */
+    get_default(): Promise<DesktopWorkspaceSummary>;
     /** 独立登记一个 Workspace；相同路径返回已有记录。 */
     create(workspace_path: string, name: string): Promise<DesktopWorkspaceSummary>;
   };
@@ -534,6 +634,10 @@ export interface DesktopApi {
   };
   /** Agent Session 与聊天能力。 */
   chat: {
+    /** 列出当前 Workspace 根目录中按修改时间倒序排列的文件。 */
+    list_workspace_files(workspace_id: string): Promise<DesktopWorkspaceFile[]>;
+    /** 读取当前 Workspace 根目录中的一个文件并转换为可提交附件。 */
+    read_workspace_file(workspace_id: string, relative_path: string): Promise<DesktopChatFileInput>;
     /** 读取当前 Federation 中可用于 Agent 对话的模型目录。 */
     list_models(): Promise<DesktopModelSummary[]>;
     /** 列出指定 Agent 的 Session。 */
@@ -578,6 +682,27 @@ export interface DesktopApi {
     on_mutation(callback: (event: DesktopChatMutationEvent) => void): () => void;
     /** 订阅 Session 运行态变化。 */
     on_runtime(callback: (event: DesktopChatRuntimeEvent) => void): () => void;
+  };
+  /** 运行时 Group 与共享消息能力。 */
+  group: {
+    /** 列出当前 Desktop City 中的运行时 Group。 */
+    list(): Promise<DesktopGroupSummary[]>;
+    /** 创建并注册一个运行时 Group。 */
+    create(input: DesktopCreateGroupInput): Promise<DesktopGroupSummary>;
+    /** 更新一个已保存的 Group 定义。 */
+    update(group_id: string, input: DesktopUpdateGroupInput): Promise<DesktopGroupSummary>;
+    /** 删除一个已保存的 Group。 */
+    remove(group_id: string): Promise<boolean>;
+    /** 打开一个运行时 Group。 */
+    open(group_id: string): Promise<DesktopGroupSummary>;
+    /** 读取 Group 的共享消息。 */
+    list_messages(group_id: string): Promise<DesktopGroupMessage[]>;
+    /** 向 Group 发言并驱动成员 Agent 执行。 */
+    send(group_id: string, input: DesktopGroupSendInput): Promise<{ turn_id?: string }>;
+    /** 停止 Group 当前执行。 */
+    stop(group_id: string): Promise<void>;
+    /** 订阅 Group 新增共享消息。 */
+    on_message(callback: (event: DesktopGroupMessageEvent) => void): () => void;
   };
   /** Desktop 用户级设置。 */
   settings: {

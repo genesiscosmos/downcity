@@ -11,6 +11,10 @@ import type {
   DesktopChatRewriteInput,
   DesktopChatReferenceInput,
   DesktopChatRuntime,
+  DesktopCreateGroupInput,
+  DesktopUpdateGroupInput,
+  DesktopGroupMessage,
+  DesktopGroupSummary,
   DesktopModelSummary,
   DesktopPluginSummary,
   DesktopPluginDefinition,
@@ -35,6 +39,7 @@ export type NavigationTarget =
   | { /** Agent 管理页。 */ kind: "agent"; /** Agent 标识。 */ agent_id: string }
   | { /** 尚未持久化的空对话。 */ kind: "draft"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Draft 稳定标识。 */ draft_id: string }
   | { /** Session Chat。 */ kind: "session"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Session 标识。 */ session_id: string }
+  | { /** Group 群聊。 */ kind: "group"; /** Group 标识。 */ group_id: string; /** Workspace 标识；无 Workspace 时为空。 */ workspace_id?: string }
   | { /** Plugin 详情页。 */ kind: "plugin"; /** Plugin 标识。 */ plugin_id: string }
   | { /** Desktop 设置页。 */ kind: "settings"; /** 当前设置分区。 */ section: SettingsSection };
 
@@ -90,6 +95,12 @@ export interface DesktopViewController {
   agents: DesktopAgentSummary[];
   /** 共享 Registry 中独立登记的全部 Workspace。 */
   workspaces: DesktopWorkspaceSummary[];
+  /** 当前 Desktop City 中的运行时 Group。 */
+  groups: DesktopGroupSummary[];
+  /** 按 Group 标识缓存的运行时 Group。 */
+  groups_by_id: Record<string, DesktopGroupSummary>;
+  /** 按 Group 标识缓存的共享消息。 */
+  group_messages_by_group: Record<string, DesktopGroupMessage[]>;
   /** 按 Workspace 标识缓存的 Session 导航数据。 */
   sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
   /** 按 Workspace 标识缓存的已归档 Session。 */
@@ -136,12 +147,28 @@ export interface DesktopViewController {
   loading: boolean;
   /** 选择 Agent 管理页。 */
   select_agent(agent_id: string): void;
+  /** 打开 Agent 固定 Workspace 与持久化 Session 对话。 */
+  open_agent_chat(agent_id: string): Promise<void>;
   /** 选择 Plugin 详情页。 */
   select_plugin(plugin_id: string): void;
   /** 切换主导航侧边栏集合。 */
   set_sidebar_mode(mode: SidebarMode): void;
   /** 打开一个 Workspace，并将其设为 Chat 上下文。 */
   select_workspace(workspace_id: string): void;
+  /** 选择一个运行时 Group。 */
+  select_group(group_id: string): Promise<void>;
+  /** 创建一个运行时 Group。 */
+  create_group(input: DesktopCreateGroupInput): Promise<void>;
+  /** 更新一个 Group 定义。 */
+  update_group(group_id: string, input: DesktopUpdateGroupInput): Promise<void>;
+  /** 删除一个 Group。 */
+  remove_group(group_id: string): Promise<void>;
+  /** 为 Group 创建共享 Session 并打开。 */
+  open_group(group_id: string): Promise<void>;
+  /** 向 Group 发送文本。 */
+  send_group_message(group_id: string, text: string): Promise<void>;
+  /** 停止 Group 当前执行。 */
+  stop_group(group_id: string): Promise<void>;
   /** 打开设置分区。 */
   open_settings(section?: SettingsSection): void;
   /** 离开设置并返回之前的业务视图。 */
@@ -150,8 +177,8 @@ export interface DesktopViewController {
   create_session(workspace_id: string, agent_id: string): Promise<void>;
   /** 迁移当前空对话草稿并切换 Workspace 或 Agent 上下文。 */
   switch_draft_context(workspace_id: string, agent_id: string): void;
-  /** 切换到 Session Chat 并读取快照。 */
-  select_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
+  /** 切换到 Session Chat 并读取快照；可保持当前 Sidebar 集合。 */
+  select_session(workspace_id: string, agent_id: string, session_id: string, preserve_sidebar?: boolean): Promise<void>;
   /** 从指定 canonical Message 创建分支 Session 并打开。 */
   fork_session(workspace_id: string, agent_id: string, session_id: string, message_id: string): Promise<void>;
   /** 重写历史用户消息，并按操作创建分支或替换当前 Session。 */

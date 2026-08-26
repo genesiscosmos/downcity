@@ -34,6 +34,7 @@ import { create_instruction_system_blocks } from "@/agent/AgentInstructions.js";
 import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { WorkspaceBase } from "@downcity/workspace";
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 
 type AgentSessionsOptions = {
   /**
@@ -201,10 +202,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 新建一个 session。
    */
   async create(
-    input?: AgentCreateSessionInput & { workspace?: WorkspaceBase },
+    input?: AgentCreateSessionInput & { workspace?: WorkspaceBase; origin?: SessionOrigin },
   ): Promise<AgentSession> {
     const session = this.get_or_create_session({
       workspace: input?.workspace,
+      origin: input?.origin,
     });
     this.on_session_routed?.(session.id, this);
     await session.initialize();
@@ -216,7 +218,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    */
   async get(
     session_id: string,
-    input?: { workspace?: WorkspaceBase },
+    input?: { workspace?: WorkspaceBase; origin?: SessionOrigin },
   ): Promise<AgentSession> {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) {
@@ -233,6 +235,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       .session(resolved_session_id, input?.workspace?.id)
       .read_metadata();
     const persisted_workspace_id = String(persisted_metadata.workspace_id || "").trim() || undefined;
+    const persisted_origin = persisted_metadata.origin;
     const cached = this.sessions_by_id.get(resolved_session_id);
     const requested_workspace_id = String(input?.workspace?.id || "").trim() || undefined;
     if (persisted_workspace_id !== requested_workspace_id) {
@@ -247,9 +250,13 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
         `Session "${resolved_session_id}" is already bound to Workspace "${cached.workspace_id || ""}"`,
       );
     }
+    if (input?.origin && JSON.stringify(persisted_origin || { type: "user" }) !== JSON.stringify(input.origin)) {
+      throw new Error(`Session "${resolved_session_id}" has a different origin`);
+    }
     const session = this.get_or_create_session({
       session_id: resolved_session_id,
       workspace: input?.workspace,
+      origin: input?.origin || persisted_origin,
     });
     this.on_session_routed?.(resolved_session_id, this);
     await session.initialize();
@@ -353,6 +360,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     session_id?: string;
     /** 当前 Session 可选使用的 Workspace。 */
     workspace?: WorkspaceBase;
+    /** 当前 Session 的创建来源。 */
+    origin?: SessionOrigin;
   }): AgentManagedSession {
     const resolved_session_id =
       String(input?.session_id || "").trim() ||
@@ -365,6 +374,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       agent_id: this.agent_id,
       workspace_path: context.workspace_path,
       ...(context.workspace_id ? { workspace_id: context.workspace_id } : {}),
+      ...(input?.origin ? { origin: input.origin } : {}),
       store: context.store.session(resolved_session_id, context.workspace_id),
       get_session_store: (session_id) => context.store.session(session_id, context.workspace_id),
       session_id: resolved_session_id,

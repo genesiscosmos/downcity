@@ -41,6 +41,7 @@ import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js"
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type { AgentSessionCompactHandle } from "@/types/sdk/AgentSessionCompact.js";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 
 /**
  * SDK Session 集合入口。
@@ -74,6 +75,8 @@ export interface AgentSessionActor {
 
   /** 当前 Session 创建时绑定的 Workspace ID；无 Workspace 时为空。 */
   readonly workspace_id?: string;
+  /** 当前 Session 的创建来源。 */
+  readonly origin?: SessionOrigin;
 
   /** 读取当前 session 详情。 */
   get_info(): Promise<AgentSessionInfo>;

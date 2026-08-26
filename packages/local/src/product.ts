@@ -28,9 +28,11 @@ export {
 export { WorkspaceRepository, normalize_workspace_id } from "./repositories/WorkspaceRepository.js";
 export { PluginRepository, normalize_profile_id } from "./repositories/PluginRepository.js";
 export { LocalSettingRepository } from "./repositories/LocalSettingRepository.js";
+export { GroupRepository, normalize_group_id } from "./repositories/GroupRepository.js";
 export type {
   LocalAgentConfig,
   LocalAgentPluginReference,
+  LocalGroupConfig,
   LocalWorkspaceConfig,
 } from "./types/LocalConfig.js";
 export type {

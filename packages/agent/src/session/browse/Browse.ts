@@ -235,6 +235,7 @@ export function build_session_info(
     ...(input.metadata.model_label
       ? { model_label: input.metadata.model_label }
       : {}),
+    ...(input.metadata.origin ? { origin: input.metadata.origin } : {}),
     ...(typeof input.metadata.timezone === "string" && input.metadata.timezone.trim()
       ? { timezone: input.metadata.timezone.trim() }
       : {}),
@@ -436,6 +437,7 @@ export async function list_agent_session_summary_page(params: {
       ...(typeof info.created_at === "number" ? { created_at: info.created_at } : {}),
       ...(typeof info.updated_at === "number" ? { updated_at: info.updated_at } : {}),
       ...(info.model_label ? { model_label: info.model_label } : {}),
+      ...(info.origin ? { origin: info.origin } : {}),
       ...(info.executing ? { executing: true } : {}),
     };
 

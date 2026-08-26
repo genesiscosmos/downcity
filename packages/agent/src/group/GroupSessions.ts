@@ -1,61 +1,61 @@
-/**
- * GroupSessions：Group 唯一的共享 Session 集合。
- */
+/** GroupSessions：Group 所拥有的群聊上下文集合。 */
 
-import { GroupSessionImpl } from "@/group/GroupSession.js";
+import { nanoid } from "nanoid";
+import { GroupSession } from "@/group/GroupSession.js";
 import type { Group } from "@/group/Group.js";
 import type {
-  GroupCreateSessionOptions,
-  GroupSession,
-  GroupSessions,
-} from "@/types/group/Group.js";
+  GroupSession as GroupSessionContract,
+  GroupSessionCreateInput,
+  GroupSessions as GroupSessionsContract,
+} from "@/types/group/GroupSession.js";
 
-/** GroupSession 的本地拥有者集合。 */
-export class GroupSessionsImpl implements GroupSessions {
-  private readonly sessions_by_id = new Map<string, GroupSessionImpl>();
+/** Group 的群聊上下文集合。 */
+export class GroupSessions implements GroupSessionsContract {
   private readonly group: Group;
-  private workspace_resolver?: (workspace_id: string) => boolean;
+  private readonly sessions_by_id = new Map<string, GroupSession>();
 
   constructor(group: Group) {
     this.group = group;
   }
 
-  /** 绑定 City 提供的 Workspace 资源校验。 */
-  bind_workspace_resolver(resolver: (workspace_id: string) => boolean): void {
-    this.workspace_resolver = resolver;
-  }
-
-  /** 创建并持有一个 GroupSession。 */
-  async create(input?: GroupCreateSessionOptions): Promise<GroupSession> {
-    if (input?.workspace && !this.workspace_resolver?.(input.workspace.id)) {
-      throw new Error(
-        `Workspace "${input.workspace.id}" is not provided by the City hosting Group "${this.group.id}"`,
-      );
-    }
-    const session = new GroupSessionImpl({
-      group: this.group,
-      workspace: input?.workspace,
-      on_dispose: (session_id) => this.sessions_by_id.delete(session_id),
+  /** 创建一个新的群聊上下文，session_id 由内部生成。 */
+  async create(_input?: GroupSessionCreateInput): Promise<GroupSessionContract> {
+    const session = new GroupSession({
+      id: `group-session-${Date.now()}-${nanoid(8)}`,
+      group_id: this.group.id,
+      group_name: this.group.name,
+      instruction: this.group.instruction,
+      members: this.group.members,
+      attention_policy: this.group.attention_policy,
+      ...(this.group.workspace ? { workspace: this.group.workspace } : {}),
     });
     this.sessions_by_id.set(session.id, session);
     return session;
   }
 
-  /** 获取一个已创建的 GroupSession。 */
-  get(session_id: string): GroupSession | null {
+  /** 获取当前 Group 的群聊上下文。 */
+  get(session_id: string): GroupSessionContract | null {
     return this.sessions_by_id.get(String(session_id || "").trim()) ?? null;
   }
 
-  /** 返回 GroupSession 稳定快照。 */
-  list(): readonly GroupSession[] {
+  /** 列出当前 Group 的群聊上下文。 */
+  list(): readonly GroupSessionContract[] {
     return [...this.sessions_by_id.values()];
   }
 
-  /** 停止并释放全部 GroupSession。 */
+  /** 释放并移除指定群聊上下文。 */
+  async remove(session_id: string): Promise<GroupSessionContract | null> {
+    const resolved_session_id = String(session_id || "").trim();
+    const session = this.sessions_by_id.get(resolved_session_id) ?? null;
+    if (!session) return null;
+    await session.dispose();
+    this.sessions_by_id.delete(resolved_session_id);
+    return session;
+  }
+
+  /** 释放 Group 所有群聊上下文。 */
   async dispose(): Promise<void> {
-    await Promise.allSettled(
-      [...this.sessions_by_id.values()].map(async (session) => await session.dispose()),
-    );
+    await Promise.allSettled([...this.sessions_by_id.values()].map((session) => session.dispose()));
     this.sessions_by_id.clear();
   }
 }

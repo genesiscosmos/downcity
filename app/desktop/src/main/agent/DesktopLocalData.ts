@@ -12,6 +12,7 @@ import {
 import {
   AgentRepository,
   ensure_local_schema,
+  GroupRepository,
   PluginRepository,
   LocalSettingRepository,
   WorkspaceRepository,
@@ -29,6 +30,8 @@ export interface DesktopLocalData {
   workspaces: WorkspaceRepository;
   /** Plugin 配置仓储。 */
   plugins: PluginRepository;
+  /** Group 定义仓储。 */
+  groups: GroupRepository;
   /** 平台明文设置仓储。 */
   settings: LocalSettingRepository;
 }
@@ -42,5 +45,6 @@ export function create_desktop_local_data(): DesktopLocalData {
   const workspaces = new WorkspaceRepository(database);
   const agents = new AgentRepository(root_path);
   const plugins = new PluginRepository(root_path);
-  return { root_path, database, agents, workspaces, plugins, settings };
+  const groups = new GroupRepository(database);
+  return { root_path, database, agents, workspaces, plugins, groups, settings };
 }

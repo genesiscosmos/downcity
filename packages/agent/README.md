@@ -4,7 +4,7 @@
 
 它负责把一个 agent 项目目录装配成可执行运行时，包括：
 
-- 本地 SDK：`Agent`、`Workspace`、`Session`、`RemoteAgent`
+- 本地 SDK：`Agent`、`Group`、`Workspace`、`Session`、`RemoteAgent`
 - 内部执行内核：Session Composer、LLM/Tool Loop、增量输出
 - Plugin 框架：registry、action、tool runtime 与执行生命周期
 - 远程访问：`RemoteAgent`、HTTP/RPC transport
@@ -36,6 +36,11 @@ Session ID 由 `agent.sessions.create()` 内部生成；创建接口不接受调
 `session_id`。恢复已有 Session 时使用 `agent.sessions.get(session_id)`，如果该
 Session 创建时绑定了 Workspace，恢复时必须传入同一个 Workspace。
 
+Group 是和 Agent 并列的可联系主体。Group 持有成员关系、注意力策略和可选 Workspace，
+并通过 `group.sessions.create()` 创建独立的群聊上下文。消息和传播属于 GroupSession；
+成员执行仍通过成员 Agent 的 `AgentSessions` 完成，Session metadata 会记录 Group 与
+GroupSession 来源。
+
 ## 根目录结构
 
 ```text
@@ -54,6 +59,7 @@ packages/agent
 src/
 ├── index.ts               # 包公开入口
 ├── agent/                 # Agent facade、状态、模型、环境与执行绑定
+├── group/                 # Group 主体、GroupSession 和注意力策略
 ├── executor/              # LLM/Tool Loop、执行恢复与内存上下文折叠
 ├── plugin/                # Plugin registry、执行视图、工具桥接与生命周期
 ├── remote/                # RemoteAgent、RemoteSession 与 HTTP/RPC transport

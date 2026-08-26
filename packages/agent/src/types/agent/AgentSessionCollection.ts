@@ -5,6 +5,7 @@
  */
 
 import type { WorkspaceBase } from "@downcity/workspace";
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { AgentCreateSessionInput } from "@/types/agent/SessionTypes.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
@@ -22,6 +23,8 @@ import type {
 export interface AgentCreateSessionOptions extends AgentCreateSessionInput {
   /** 本次 Session 可选使用的 Workspace 资源；未传入时使用内存执行上下文。 */
   workspace?: WorkspaceBase;
+  /** 当前 Session 的创建来源；未填写时视为用户直接创建。 */
+  origin?: SessionOrigin;
 }
 
 /** Agent 公开的 Session 创建入口。 */

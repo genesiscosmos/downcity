@@ -255,7 +255,18 @@ Session 负责：
 
 Session 不负责平台差异，也不直接拼接物理存储路径。
 
-### 4.4 Plugin 是 Agent 能力扩展
+### 4.4 Group 是集体主体
+
+Group 与 Agent 并列为可联系的主体。Group 持有身份、成员关系、注意力策略和资源授权；
+City 持有实际 Workspace 与 Storage，Group 只引用并授权这些资源。Group 不拥有 Agent，
+但拥有 `GroupSessions` 集合；每个 GroupSession 是一次独立的群聊上下文，负责共享消息、
+传播过程和成员运行态。成员执行仍通过成员 Agent 的 `AgentSessions` 完成，并在 Session
+metadata 中记录 Group 与 GroupSession 来源。Group 的注意力策略只决定当前消息投递给哪些
+成员，不定义 leader、pipeline 或其他固定拓扑。
+Group 的注意力策略只决定当前消息投递给哪些成员，不定义 leader、pipeline 或其他固定
+拓扑。Workspace 是成员执行时借用的资源，Shell 仍属于 Workspace 的能力边界。
+
+### 4.5 Plugin 是 Agent 能力扩展
 
 Plugin 可以提供：
 
@@ -271,7 +282,7 @@ Plugin 通过 PluginContext 使用 Agent 内核允许的能力。PluginContext �
 
 Plugin 生命周期分为 Agent 级 `start/stop` 和可选的 Workspace 级 `enter_workspace/leave_workspace`。实现哪些钩子由 Plugin 自己决定，不构成 Plugin 分类。
 
-### 4.5 Agent 定义的本地事实源
+### 4.6 Agent 定义的本地事实源
 
 本地 Agent 定义保存在 `~/.downcity/agents/<agent_id>/`：
 
@@ -292,11 +303,11 @@ Agent 通过 `agent.json` 选择 Plugin 与可选 profile。Plugin profile 可�
 
 `downcity.db` 继续保存 Workspace 索引、平台设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。Workspace 与平台设置以明文 JSON 保存，本地隔离依赖数据库文件权限。
 
-当 City 注入本地持久化 Storage 时，Agent 运行状态保存在 `~/.downcity/agents/<agent_id>/`。Session ID 在 Agent 内唯一，Session metadata 必须同时记录 `workspace_id`（若创建时传入）与 `agent_id`。City 默认使用 MemoryStorage，未注入持久化 Storage 时运行状态只存在于当前进程。项目目录中不得创建 `<project>/.downcity`，也不进行旧目录兼容读取或迁移。
+当 City 注入本地持久化 Storage 时，Agent 运行状态保存在 `~/.downcity/agents/<agent_id>/`。Session ID 在 Agent 内唯一，Session metadata 必须记录 `agent_id`，并在创建时传入 Workspace 或 Group 来源时分别记录 `workspace_id` 或 `origin`。City 默认使用 MemoryStorage，未注入持久化 Storage 时运行状态只存在于当前进程。项目目录中不得创建 `<project>/.downcity`，也不进行旧目录兼容读取或迁移。
 
 Workspace 只保证底层文件和 Shell 安全边界，不为 Plugin 的业务行为负责。Plugin 的业务权限、账号、网络访问与语义校验由 Plugin 或宿主管理。
 
-### 4.5 Shell 只负责命令和进程
+### 4.7 Shell 只负责命令和进程
 
 Shell 提供统一的命令与长期进程协议，并与 Sandbox Adapter 协作。
 
@@ -310,7 +321,7 @@ Shell 不应该吸收：
 
 文件 Tool 和 Shell Tool 都属于 Workspace 能力，但它们是不同执行通道，不能因为都访问本机而合并为同一个 God Object。
 
-### 4.6 控制面属于 CLI/City
+### 4.8 控制面属于 CLI/City
 
 以下能力属于宿主控制面：
 

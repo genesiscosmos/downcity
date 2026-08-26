@@ -16,6 +16,7 @@ import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.j
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 
 /**
  * Agent 可管理的本地 Session 实例。
@@ -72,6 +73,9 @@ export interface SessionOptions {
 
   /** 当前 Session 创建时绑定的 Workspace 稳定标识；未传 Workspace 时为空。 */
   workspace_id?: string;
+
+  /** 当前 Session 的创建来源；未填写时视为用户直接创建。 */
+  origin?: SessionOrigin;
 
   /** 当前 Session 独享的领域持久化视图。 */
   store: SessionDataStore;

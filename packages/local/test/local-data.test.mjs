@@ -10,6 +10,7 @@ import {
 } from "../bin/index.js";
 import {
   AgentRepository,
+  GroupRepository,
   ensure_local_schema,
   LocalSettingRepository,
   PluginRepository,
@@ -116,6 +117,26 @@ test("AgentRepository 与 WorkspaceRepository 独立维护产品配置", async (
       (await fs.stat(path.join(root_path, "agents", "lucas_whitman", "agent.json"))).mode & 0o777,
       0o600,
     );
+  } finally {
+    database.close();
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
+test("GroupRepository 持久化并更新 Group 定义", async () => {
+  const { root_path, database } = await create_local_data();
+  try {
+    ensure_local_schema(database);
+    const groups = new GroupRepository(database);
+    const created = groups.create({ group_id: "delivery-team", name: "Delivery", member_agent_ids: ["architect", "reviewer"], workspace_id: "project" });
+    assert.equal(created.workspace_id, "project");
+    assert.equal(groups.get("delivery-team")?.name, "Delivery");
+    const updated = groups.update("delivery-team", { name: "Release", instruction: "Review releases", member_agent_ids: ["reviewer"], workspace_id: "release" });
+    assert.deepEqual(updated.member_agent_ids, ["reviewer"]);
+    assert.equal(updated.workspace_id, "release");
+    assert.equal(groups.list().length, 1);
+    assert.equal(groups.remove(created.group_id), true);
+    assert.equal(groups.get(created.group_id), null);
   } finally {
     database.close();
     await fs.rm(root_path, { recursive: true, force: true });

@@ -15,6 +15,7 @@ const desktop_api: DesktopApi = {
   },
   workspace: {
     list: () => ipcRenderer.invoke("workspace:list"),
+    get_default: () => ipcRenderer.invoke("workspace:get-default"),
     create: (workspace_path, name) => ipcRenderer.invoke("workspace:create", workspace_path, name),
   },
   plugin: {
@@ -27,6 +28,8 @@ const desktop_api: DesktopApi = {
     open_directory: () => ipcRenderer.invoke("dialog:open-directory"),
   },
   chat: {
+    list_workspace_files: (workspace_id) => ipcRenderer.invoke("chat:list-workspace-files", workspace_id),
+    read_workspace_file: (workspace_id, relative_path) => ipcRenderer.invoke("chat:read-workspace-file", workspace_id, relative_path),
     list_models: () => ipcRenderer.invoke("chat:list-models"),
     list_sessions: (agent_id, workspace_id) => ipcRenderer.invoke("chat:list-sessions", agent_id, workspace_id),
     create_session: (agent_id, workspace_id) => ipcRenderer.invoke("chat:create-session", agent_id, workspace_id),
@@ -56,6 +59,21 @@ const desktop_api: DesktopApi = {
       const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof callback>[0]) => callback(value);
       ipcRenderer.on("chat:runtime", handler);
       return () => ipcRenderer.removeListener("chat:runtime", handler);
+    },
+  },
+  group: {
+    list: () => ipcRenderer.invoke("group:list"),
+    create: (input) => ipcRenderer.invoke("group:create", input),
+    update: (group_id, input) => ipcRenderer.invoke("group:update", group_id, input),
+    remove: (group_id) => ipcRenderer.invoke("group:remove", group_id),
+    open: (group_id) => ipcRenderer.invoke("group:open", group_id),
+    list_messages: (group_id) => ipcRenderer.invoke("group:list-messages", group_id),
+    send: (group_id, input) => ipcRenderer.invoke("group:send", group_id, input),
+    stop: (group_id) => ipcRenderer.invoke("group:stop", group_id),
+    on_message: (callback) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof callback>[0]) => callback(value);
+      ipcRenderer.on("group:message", handler);
+      return () => ipcRenderer.removeListener("group:message", handler);
     },
   },
   settings: {

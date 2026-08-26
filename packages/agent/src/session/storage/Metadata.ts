@@ -7,6 +7,7 @@
  */
 
 import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.js";
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 import type { FileSystem } from "@downcity/workspace";
 
 function normalizeModelLabel(input: unknown): string | undefined {
@@ -61,6 +62,17 @@ function normalize_history_bytes(input: unknown): number | undefined {
     : undefined;
 }
 
+/** 归一化 Session 来源元数据。 */
+function normalize_session_origin(input: unknown): SessionOrigin | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const raw = input as { type?: unknown; group_id?: unknown; group_session_id?: unknown };
+  if (raw.type === "user") return { type: "user" };
+  if (raw.type !== "group") return undefined;
+  const group_id = typeof raw.group_id === "string" ? raw.group_id.trim() : "";
+  const group_session_id = typeof raw.group_session_id === "string" ? raw.group_session_id.trim() : "";
+  return group_id && group_session_id ? { type: "group", group_id, group_session_id } : undefined;
+}
+
 /**
  * 从指定路径读取 session meta.json。
  *
@@ -112,6 +124,9 @@ export function normalize_session_metadata(
     session_id: session_id,
     agent_id: agent_id,
     ...(workspace_id ? { workspace_id: workspace_id } : {}),
+    ...(normalize_session_origin(raw.origin)
+      ? { origin: normalize_session_origin(raw.origin) }
+      : {}),
     created_at:
       typeof raw.created_at === "number" && Number.isFinite(raw.created_at)
         ? raw.created_at

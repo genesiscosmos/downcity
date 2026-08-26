@@ -13,6 +13,7 @@ import type {
   DesktopChatMutationEvent,
   DesktopChatRuntimeEvent,
   DesktopLoginStartInput,
+  DesktopGroupMessageEvent,
 } from "../common/types/DesktopApi.js";
 import type { RespondSessionInteractionInput, SessionApprovalMode } from "@downcity/agent";
 
@@ -27,7 +28,7 @@ let user_controller: DesktopUserController;
 let quitting = false;
 
 /** 向全部仍存活的 Renderer 广播一条安全事件。 */
-function broadcast(channel: string, payload: DesktopChatMutationEvent | DesktopChatRuntimeEvent): void {
+function broadcast(channel: string, payload: DesktopChatMutationEvent | DesktopChatRuntimeEvent | DesktopGroupMessageEvent): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.webContents.isDestroyed()) window.webContents.send(channel, payload);
   }
@@ -82,10 +83,21 @@ ipcMain.handle("agent:choose-avatar", async (_event, agent_id: string) => {
 ipcMain.handle("agent:remove-avatar", (_event, agent_id: string) => require_agent_controller().remove_avatar(agent_id));
 ipcMain.handle("agent:generate-avatar", (_event, agent_id: string) => require_agent_controller().generate_avatar(agent_id));
 ipcMain.handle("workspace:list", () => require_agent_controller().list_workspaces());
+ipcMain.handle("workspace:get-default", () => require_agent_controller().get_default_workspace());
 ipcMain.handle("workspace:create", (_event, workspace_path: string, name: string) => require_agent_controller().create_workspace(workspace_path, name));
 ipcMain.handle("agent:connect", (_event, agent_id: string, workspace_id: string) => require_agent_controller().connect_agent(agent_id, workspace_id));
+ipcMain.handle("group:list", () => require_agent_controller().list_groups());
+ipcMain.handle("group:create", (_event, input: import("../common/types/DesktopApi.js").DesktopCreateGroupInput) => require_agent_controller().create_group(input));
+ipcMain.handle("group:update", (_event, group_id: string, input: import("../common/types/DesktopApi.js").DesktopUpdateGroupInput) => require_agent_controller().update_group(group_id, input));
+ipcMain.handle("group:remove", (_event, group_id: string) => require_agent_controller().remove_group(group_id));
+ipcMain.handle("group:open", (_event, group_id: string) => require_agent_controller().open_group(group_id));
+ipcMain.handle("group:list-messages", (_event, group_id: string) => require_agent_controller().list_group_messages(group_id));
+ipcMain.handle("group:send", (_event, group_id: string, input: import("../common/types/DesktopApi.js").DesktopGroupSendInput) => require_agent_controller().send_group_message(group_id, input));
+ipcMain.handle("group:stop", (_event, group_id: string) => require_agent_controller().stop_group(group_id));
 ipcMain.handle("chat:list-sessions", (_event, agent_id: string, workspace_id: string) => require_agent_controller().list_sessions(agent_id, workspace_id));
 ipcMain.handle("chat:list-models", () => require_agent_controller().list_models());
+ipcMain.handle("chat:list-workspace-files", (_event, workspace_id: string) => require_agent_controller().list_workspace_files(workspace_id));
+ipcMain.handle("chat:read-workspace-file", (_event, workspace_id: string, relative_path: string) => require_agent_controller().read_workspace_file(workspace_id, relative_path));
 ipcMain.handle("plugin:list", () => plugin_controller.list());
 ipcMain.handle("plugin:get", (_event, plugin_id: string) => plugin_controller.get(plugin_id));
 ipcMain.handle("plugin:save-profile", (_event, plugin_id: string, input: import("../common/types/DesktopApi.js").DesktopSavePluginProfileInput) => plugin_controller.save_profile(plugin_id, input));
@@ -182,6 +194,7 @@ app.whenReady().then(async () => {
   const next_agent_controller = new AgentController(local_data, {
     mutation: (event) => broadcast("chat:mutation", event),
     runtime: (event) => broadcast("chat:runtime", event),
+    group_message: (event) => broadcast("group:message", event),
   });
   agent_controller = next_agent_controller;
   user_controller = new DesktopUserController(local_data, () => next_agent_controller.has_active_sessions());

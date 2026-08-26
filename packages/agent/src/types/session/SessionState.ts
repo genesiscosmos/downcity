@@ -10,6 +10,7 @@ import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import type { SessionMutation } from "@/types/session/SessionMutation.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 
 /** SessionState 构造参数。 */
 export interface SessionStateOptions {
@@ -17,6 +18,8 @@ export interface SessionStateOptions {
   agent_id: string;
   /** 当前 Session 的稳定标识。 */
   session_id: string;
+  /** 当前 Session 的创建来源。 */
+  origin?: SessionOrigin;
   /** 当前 Session 独享的领域持久化视图。 */
   store: SessionDataStore;
   /** 当前 Session 的 canonical Message 入口。 */

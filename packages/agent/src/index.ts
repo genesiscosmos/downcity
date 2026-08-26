@@ -11,18 +11,24 @@
 export { Agent } from "./agent/Agent.js";
 export { Group } from "./group/Group.js";
 export type {
-  GroupCreateSessionOptions,
+  AttentionDecision,
+  AttentionPolicy,
+  GroupContract,
   GroupMember,
   GroupMessage,
+  GroupOptions,
+} from "./group/index.js";
+export { GroupSession, GroupSessions } from "./group/index.js";
+export type {
+  GroupMemberRuntime,
   GroupMessageSubscriber,
   GroupMessageUnsubscribe,
-  GroupOptions,
-  GroupSession,
-  GroupSessionPromptInput,
-  GroupSessionTurnHandle,
-  GroupSessionTurnResult,
-  GroupSessions,
-} from "./types/group/Group.js";
+  GroupPromptInput,
+  GroupSessionContract,
+  GroupSessionCreateInput,
+  GroupSessionsContract,
+} from "./group/index.js";
+export { MentionAttentionPolicy } from "./group/index.js";
 export { City } from "./city/index.js";
 export type {
   CityAgents,
@@ -75,6 +81,7 @@ export type { AgentStorage } from "./types/agent/AgentStorage.js";
 export { RemoteAgent } from "./remote/RemoteAgent.js";
 export { Session } from "./session/Session.js";
 export type { SessionOptions } from "./types/session/SessionOptions.js";
+export type { SessionOrigin } from "./types/session/SessionOrigin.js";
 export {
   infer_agent_model_label,
   normalize_agent_model,

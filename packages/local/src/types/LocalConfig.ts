@@ -22,6 +22,24 @@ export interface LocalWorkspaceConfig {
   updated_at: string;
 }
 
+/** 本地 Group 的持久化配置。 */
+export interface LocalGroupConfig {
+  /** Group 的稳定 ID；创建后不可修改。 */
+  group_id: string;
+  /** Group 的用户可见名称。 */
+  name: string;
+  /** Group 的协作目标指令。 */
+  instruction: string;
+  /** Group 成员 Agent 的稳定 ID 列表。 */
+  member_agent_ids: readonly string[];
+  /** Group 使用的共享 Workspace ID；未填写时使用内存执行上下文。 */
+  workspace_id?: string;
+  /** 首次创建时间，使用 ISO 8601 字符串。 */
+  created_at: string;
+  /** 最近更新时间，使用 ISO 8601 字符串。 */
+  updated_at: string;
+}
+
 /** 本地 Agent 的持久化管理视图。 */
 export interface LocalAgentConfig {
   /** Agent 的全局稳定 ID。 */

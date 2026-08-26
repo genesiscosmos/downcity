@@ -83,6 +83,8 @@ export class Session implements AgentSession {
   readonly agent_id: string;
   /** 当前 Session 创建时绑定的 Workspace ID。 */
   readonly workspace_id?: string;
+  /** 当前 Session 的创建来源。 */
+  readonly origin?: SessionOptions["origin"];
 
   private readonly workspace_path: string;
   private readonly store: SessionDataStore;
@@ -123,6 +125,7 @@ export class Session implements AgentSession {
     this.id = String(options.session_id || "").trim();
     this.agent_id = String(options.agent_id || "").trim();
     this.workspace_id = String(options.workspace_id || "").trim() || undefined;
+    this.origin = options.origin;
     this.workspace_path = String(options.workspace_path || "").trim();
     this.store = options.store;
     this.get_session_store = options.get_session_store;
@@ -172,6 +175,7 @@ export class Session implements AgentSession {
     this.state = new SessionState({
       agent_id: this.agent_id,
       session_id: this.id,
+      origin: this.origin,
       store: this.store,
       messages: this.session_messages,
       state: this.local_state,

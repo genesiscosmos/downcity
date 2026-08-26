@@ -139,9 +139,9 @@ export class City {
         throw new Error(`Group member is not registered in City: ${member.agent.id}`);
       }
     }
-    group.bind_workspace_resolver(
-      (workspace_id) => Boolean(this.get_workspace(workspace_id)),
-    );
+    if (group.workspace && this.workspaces_by_id.get(group.workspace.id) !== group.workspace) {
+      throw new Error(`Group Workspace is not registered in City: ${group.workspace.id}`);
+    }
     this.groups_by_id.set(group.id, group);
     return group;
   }

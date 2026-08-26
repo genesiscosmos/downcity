@@ -19,6 +19,15 @@ export function ensure_local_schema(database: LocalDatabase): void {
     CREATE INDEX IF NOT EXISTS workspaces_updated_at_idx
     ON workspaces(updated_at);
 
+    CREATE TABLE IF NOT EXISTS groups (
+      group_id TEXT PRIMARY KEY NOT NULL,
+      config_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS groups_updated_at_idx
+    ON groups(updated_at);
+
     CREATE TABLE IF NOT EXISTS platform_settings (
       key TEXT PRIMARY KEY NOT NULL,
       value_json TEXT NOT NULL,
