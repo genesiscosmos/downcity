@@ -110,6 +110,7 @@ export function App() {
         group={group}
         workspaces={controller.workspaces}
         messages={controller.group_messages_by_group[group_selection.group_id] ?? []}
+        member_statuses={controller.group_member_statuses_by_group[group_selection.group_id] ?? []}
         send_message={(text) => controller.send_group_message(group_selection.group_id, text)}
         stop_session={() => controller.stop_group(group_selection.group_id)}
         open_session={(session_id) => controller.open_group(group_selection.group_id, session_id)}

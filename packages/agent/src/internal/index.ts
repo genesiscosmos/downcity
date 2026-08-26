@@ -26,6 +26,7 @@ export {
 export {
   initialize_group_runtime,
   attach_group_storage,
+  detach_group_storage,
   get_group_session_store,
   mark_group_session_started,
   dispose_group_runtime,

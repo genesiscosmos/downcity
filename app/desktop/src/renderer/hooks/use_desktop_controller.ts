@@ -20,6 +20,7 @@ import type {
   DesktopUpdateGroupInput,
   DesktopGroupSummary,
   DesktopGroupMessage,
+  DesktopGroupMemberRuntime,
   DesktopModelSummary,
   DesktopPluginSummary,
   DesktopSessionConfiguration,
@@ -83,6 +84,7 @@ export function use_desktop_controller(): DesktopViewController {
   const [groups, set_groups] = useState<DesktopGroupSummary[]>([]);
   const [groups_by_id, set_groups_by_id] = useState<Record<string, DesktopGroupSummary>>({});
   const [group_messages_by_group, set_group_messages_by_group] = useState<Record<string, DesktopGroupMessage[]>>({});
+  const [group_member_statuses_by_group, set_group_member_statuses_by_group] = useState<Record<string, DesktopGroupMemberRuntime[]>>({});
   const [sessions_by_workspace, set_sessions_by_workspace] = useState<Record<string, DesktopWorkspaceSession[]>>({});
   const [archived_sessions_by_workspace, set_archived_sessions_by_workspace] = useState<Record<string, DesktopWorkspaceSession[]>>({});
   const [messages_by_session, set_messages_by_session] = useState<DesktopViewController["messages_by_session"]>({});
@@ -214,6 +216,15 @@ export function use_desktop_controller(): DesktopViewController {
       set_groups_by_id((current) => current[group_id]
         ? { ...current, [group_id]: { ...current[group_id], message_count: current[group_id].message_count + 1 } }
         : current);
+    });
+    return unsubscribe;
+  }, [groups_by_id]);
+
+  useEffect(() => {
+    const unsubscribe = window.downcity.group.on_member_status(({ group_id, session_id, statuses }) => {
+      const current_group = groups_by_id[group_id];
+      if (current_group?.active_session_id && current_group.active_session_id !== session_id) return;
+      set_group_member_statuses_by_group((current) => ({ ...current, [group_id]: statuses }));
     });
     return unsubscribe;
   }, [groups_by_id]);
@@ -369,6 +380,7 @@ export function use_desktop_controller(): DesktopViewController {
       set_groups((current) => current.filter((item) => item.group_id !== group_id));
       set_groups_by_id((current) => { const next = { ...current }; delete next[group_id]; return next; });
       set_group_messages_by_group((current) => { const next = { ...current }; delete next[group_id]; return next; });
+      set_group_member_statuses_by_group((current) => { const next = { ...current }; delete next[group_id]; return next; });
       if (selection?.kind === "group" && selection.group_id === group_id) set_selection(null);
     } catch (reason) {
       set_error(to_error_message(reason));
@@ -396,6 +408,7 @@ export function use_desktop_controller(): DesktopViewController {
       set_groups((current) => current.map((item) => item.group_id === group.group_id ? group : item));
       set_groups_by_id((current) => ({ ...current, [group.group_id]: group }));
       set_group_messages_by_group((current) => ({ ...current, [group.group_id]: [] }));
+      set_group_member_statuses_by_group((current) => ({ ...current, [group.group_id]: [] }));
     } catch (reason) {
       set_error(to_error_message(reason));
       throw reason;
@@ -409,6 +422,7 @@ export function use_desktop_controller(): DesktopViewController {
       set_groups((current) => current.map((item) => item.group_id === group.group_id ? group : item));
       set_groups_by_id((current) => ({ ...current, [group.group_id]: group }));
       set_group_messages_by_group((current) => ({ ...current, [group.group_id]: [] }));
+      set_group_member_statuses_by_group((current) => ({ ...current, [group.group_id]: [] }));
     } catch (reason) {
       set_error(to_error_message(reason));
       throw reason;
@@ -418,9 +432,11 @@ export function use_desktop_controller(): DesktopViewController {
   const send_group_message = useCallback(async (group_id: string, text: string) => {
     set_error("");
     try {
-      await window.downcity.group.send(group_id, groups_by_id[group_id]?.active_session_id, { text });
+      const result = await window.downcity.group.send(group_id, groups_by_id[group_id]?.active_session_id, { text });
+      return result.turn_id;
     } catch (reason) {
       set_error(to_error_message(reason));
+      return undefined;
     }
   }, [groups_by_id]);
 
@@ -1051,6 +1067,7 @@ export function use_desktop_controller(): DesktopViewController {
     groups,
     groups_by_id,
     group_messages_by_group,
+    group_member_statuses_by_group,
     sessions_by_workspace,
     archived_sessions_by_workspace,
     messages_by_session,

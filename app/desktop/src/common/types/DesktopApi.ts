@@ -94,6 +94,24 @@ export interface DesktopGroupMessageEvent {
   message: DesktopGroupMessage;
 }
 
+/** Renderer 可见的 Group 成员运行态。 */
+export interface DesktopGroupMemberRuntime {
+  /** 成员 Agent 标识。 */
+  agent_id: string;
+  /** 当前是否正在执行。 */
+  running: boolean;
+}
+
+/** Group 成员运行态实时事件。 */
+export interface DesktopGroupMemberStatusEvent {
+  /** 所属 Group 标识。 */
+  group_id: string;
+  /** 所属 GroupSession 标识。 */
+  session_id: string;
+  /** 当前全部成员运行态。 */
+  statuses: DesktopGroupMemberRuntime[];
+}
+
 /** 创建运行时 Group 的输入。 */
 export interface DesktopCreateGroupInput {
   /** Group 稳定标识。 */
@@ -725,6 +743,8 @@ export interface DesktopApi {
     remove_session(group_id: string, session_id: string): Promise<DesktopGroupSummary>;
     /** 订阅 Group 新增共享消息。 */
     on_message(callback: (event: DesktopGroupMessageEvent) => void): () => void;
+    /** 订阅 Group 成员运行态变化。 */
+    on_member_status(callback: (event: DesktopGroupMemberStatusEvent) => void): () => void;
   };
   /** Desktop 用户级设置。 */
   settings: {

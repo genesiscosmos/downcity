@@ -60,6 +60,7 @@ import type {
   DesktopUpdateGroupInput,
   DesktopGroupMessage,
   DesktopGroupMessageEvent,
+  DesktopGroupMemberStatusEvent,
   DesktopGroupSendInput,
   DesktopGroupSummary,
   DesktopGroupSessionSummary,
@@ -90,6 +91,8 @@ interface AgentControllerEvents {
   runtime(event: DesktopChatRuntimeEvent): void;
   /** 广播 Group 共享消息。 */
   group_message(event: DesktopGroupMessageEvent): void;
+  /** 广播 Group 成员运行态。 */
+  group_member_status(event: DesktopGroupMemberStatusEvent): void;
 }
 
 /** Electron main 内的 native Agent 生命周期控制器。 */
@@ -433,8 +436,8 @@ export class AgentController {
     const group_session = await this.require_group_session(group, session_id);
     this.active_group_session_ids.set(group.id, group_session.id);
     this.subscribe_group(group_session);
-    await group_session.prompt({ query: text });
-    return {};
+    const result = await group_session.prompt({ query: text });
+    return { turn_id: result.turn_id };
   }
 
   async stop_group(group_id: string, session_id?: string): Promise<void> {
@@ -967,9 +970,20 @@ export class AgentController {
   private subscribe_group(group_session: GroupSessionContract): void {
     const cache_key = get_group_session_key(group_session.group_id, group_session.id);
     if (this.group_unsubscribes.has(cache_key)) return;
-    this.group_unsubscribes.set(cache_key, group_session.subscribe((message) => {
+    const unsubscribe_message = group_session.subscribe((message) => {
       this.events.group_message({ group_id: group_session.group_id, session_id: group_session.id, message: to_desktop_group_message(message) });
-    }));
+    });
+    const unsubscribe_status = group_session.subscribe_member_status((statuses) => {
+      this.events.group_member_status({
+        group_id: group_session.group_id,
+        session_id: group_session.id,
+        statuses: statuses.map((status) => ({ ...status })),
+      });
+    });
+    this.group_unsubscribes.set(cache_key, () => {
+      unsubscribe_message();
+      unsubscribe_status();
+    });
   }
 
   /** 获取或创建 Group 指定或当前活动的群聊上下文。 */

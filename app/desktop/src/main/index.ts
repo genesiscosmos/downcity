@@ -14,6 +14,7 @@ import type {
   DesktopChatRuntimeEvent,
   DesktopLoginStartInput,
   DesktopGroupMessageEvent,
+  DesktopGroupMemberStatusEvent,
 } from "../common/types/DesktopApi.js";
 import type { RespondSessionInteractionInput, SessionApprovalMode } from "@downcity/agent";
 
@@ -28,7 +29,7 @@ let user_controller: DesktopUserController;
 let quitting = false;
 
 /** 向全部仍存活的 Renderer 广播一条安全事件。 */
-function broadcast(channel: string, payload: DesktopChatMutationEvent | DesktopChatRuntimeEvent | DesktopGroupMessageEvent): void {
+function broadcast(channel: string, payload: DesktopChatMutationEvent | DesktopChatRuntimeEvent | DesktopGroupMessageEvent | DesktopGroupMemberStatusEvent): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.webContents.isDestroyed()) window.webContents.send(channel, payload);
   }
@@ -198,6 +199,7 @@ app.whenReady().then(async () => {
     mutation: (event) => broadcast("chat:mutation", event),
     runtime: (event) => broadcast("chat:runtime", event),
     group_message: (event) => broadcast("group:message", event),
+    group_member_status: (event) => broadcast("group:member-status", event),
   });
   agent_controller = next_agent_controller;
   user_controller = new DesktopUserController(local_data, () => next_agent_controller.has_active_sessions());

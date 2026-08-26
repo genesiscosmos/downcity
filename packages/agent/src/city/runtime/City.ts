@@ -12,6 +12,7 @@ import {
   attach_agent_city,
   attach_agent_storage,
   attach_group_storage,
+  detach_group_storage,
   create_workspace_entry,
   detach_agent_city,
   get_workspace_entry,
@@ -151,6 +152,7 @@ export class City {
     const group = this.groups_by_id.get(group_id) ?? null;
     if (!group) return null;
     await group.dispose();
+    await detach_group_storage(group, this);
     this.groups_by_id.delete(group_id);
     return group;
   }
@@ -327,7 +329,10 @@ export class City {
           this.rpc_transport.close(),
         ]));
         results.push(...await Promise.allSettled(
-          [...this.groups_by_id.values()].map(async (group) => await group.dispose()),
+          [...this.groups_by_id.values()].map(async (group) => {
+            await group.dispose();
+            await detach_group_storage(group, this);
+          }),
         ));
         results.push(...await Promise.allSettled(this.agents.list().map(async (agent) => await agent.dispose())));
         results.push(...await Promise.allSettled(

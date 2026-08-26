@@ -43,6 +43,17 @@ export function attach_group_storage(group: Group, storage_provider: StorageProv
   state.group_session_store = undefined;
 }
 
+/** 解除 Group 与 City Storage 的绑定，允许主体重新装配到其他 City。 */
+export async function detach_group_storage(group: Group, owner?: object): Promise<void> {
+  const state = require_group_runtime(group);
+  if (owner && state.owner && state.owner !== owner) return;
+  await state.group_session_store?.dispose();
+  state.group_session_store = undefined;
+  state.storage_provider = new MemoryStorageProvider();
+  state.storage_attached = false;
+  state.owner = undefined;
+}
+
 /** 获取 Group 的 GroupSession 持久化 Store。 */
 export function get_group_session_store(group: Group): GroupSessionStore {
   const state = require_group_runtime(group);

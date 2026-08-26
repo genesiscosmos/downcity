@@ -78,6 +78,11 @@ const desktop_api: DesktopApi = {
       ipcRenderer.on("group:message", handler);
       return () => ipcRenderer.removeListener("group:message", handler);
     },
+    on_member_status: (callback) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof callback>[0]) => callback(value);
+      ipcRenderer.on("group:member-status", handler);
+      return () => ipcRenderer.removeListener("group:member-status", handler);
+    },
   },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),

@@ -5,9 +5,12 @@ import type { Agent } from "@/agent/Agent.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { GroupMember, GroupMessage } from "@/types/group/Group.js";
 import type {
+  GroupMemberRuntime,
+  GroupMemberStatusUnsubscribe,
   GroupMessageSubscriber,
   GroupMessageUnsubscribe,
   GroupPromptInput,
+  GroupPromptResult,
   GroupSessionContract,
 } from "@/types/group/GroupSession.js";
 import type { AttentionPolicy } from "@/types/group/AttentionPolicy.js";
@@ -49,8 +52,10 @@ export class GroupSession implements GroupSessionContract {
   private readonly subscribers = new Set<GroupMessageSubscriber>();
   private readonly member_sessions = new Map<string, AgentSession>();
   private readonly member_session_ids = new Map<string, string>();
-  private readonly member_running = new Set<string>();
-  private readonly pending_deliveries = new Set<Promise<void>>();
+  private readonly member_session_promises = new Map<string, Promise<AgentSession>>();
+  private readonly member_running_counts = new Map<string, number>();
+  private readonly member_status_subscribers = new Set<(statuses: readonly GroupMemberRuntime[]) => void | Promise<void>>();
+  private readonly pending_deliveries = new Set<Promise<GroupPromptResult>>();
   private store?: GroupSessionDataStore;
   private prompt_tail: Promise<void> = Promise.resolve();
   private stop_requested = false;
@@ -119,29 +124,36 @@ export class GroupSession implements GroupSessionContract {
   }
 
   /** 追加用户消息并异步开始群聊传播。 */
-  async prompt(input: GroupPromptInput): Promise<void> {
+  async prompt(input: GroupPromptInput): Promise<GroupPromptResult> {
     this.assert_available();
     const text = String(input?.query || "").trim();
     if (!text) throw new Error("group_session.prompt requires a non-empty query");
-    const delivery = this.prompt_tail.then(async () => {
-      if (this.stop_requested || this.disposed) return;
+    const turn_id = `group-turn-${nanoid(12)}`;
+    const delivery = this.prompt_tail.then(async (): Promise<GroupPromptResult> => {
+      if (this.stop_requested || this.disposed) {
+        return { turn_id, success: false, message_count: this.messages_by_id.length };
+      }
       const message = await this.append_message({ sender_type: "user", sender_id: "user", text });
       try {
         await this.deliver_message(message);
+        return { turn_id, success: true, message_count: this.messages_by_id.length };
       } catch (error) {
-        if (this.stop_requested || this.disposed) return;
+        if (this.stop_requested || this.disposed) {
+          return { turn_id, success: false, message_count: this.messages_by_id.length };
+        }
         await this.append_message({
           sender_type: "system",
           sender_id: "system",
           text: error instanceof Error ? error.message : String(error),
           reply_to: message.id,
         });
+        return { turn_id, success: false, message_count: this.messages_by_id.length };
       }
     });
-    this.prompt_tail = delivery.catch(() => undefined);
+    this.prompt_tail = delivery.then(() => undefined, () => undefined);
     this.pending_deliveries.add(delivery);
     try {
-      await delivery;
+      return await delivery;
     } finally {
       this.pending_deliveries.delete(delivery);
     }
@@ -159,11 +171,21 @@ export class GroupSession implements GroupSessionContract {
     return () => this.subscribers.delete(subscriber);
   }
 
+  /** 订阅成员运行态变化。 */
+  subscribe_member_status(
+    subscriber: (statuses: readonly GroupMemberRuntime[]) => void | Promise<void>,
+  ): GroupMemberStatusUnsubscribe {
+    this.assert_available();
+    this.member_status_subscribers.add(subscriber);
+    void subscriber(this.member_statuses());
+    return () => this.member_status_subscribers.delete(subscriber);
+  }
+
   /** 读取成员运行态；成员是否回复由成员自身决定。 */
   member_statuses() {
     return this.members.map((member) => ({
       agent_id: member.agent.id,
-      running: this.member_running.has(member.agent.id),
+      running: (this.member_running_counts.get(member.agent.id) || 0) > 0,
     }));
   }
 
@@ -182,8 +204,10 @@ export class GroupSession implements GroupSessionContract {
     await this.stop();
     this.disposed = true;
     this.subscribers.clear();
+    this.member_status_subscribers.clear();
     this.member_sessions.clear();
-    this.member_running.clear();
+    this.member_session_promises.clear();
+    this.member_running_counts.clear();
   }
 
   private async deliver_message(message: GroupMessage, depth = 0): Promise<void> {
@@ -212,23 +236,20 @@ export class GroupSession implements GroupSessionContract {
     if (this.stop_requested || this.disposed) return;
     let session = this.member_sessions.get(agent.id);
     if (!session) {
-      session = await agent.sessions.create({
-        ...(this.workspace ? { workspace: this.workspace } : {}),
-        origin: {
-          type: "group",
-          group_id: this.group_id,
-          group_session_id: this.id,
-        },
-      });
-      this.member_sessions.set(agent.id, session);
-      this.member_session_ids.set(agent.id, session.id);
-      const store = this.store;
-      if (!store) throw new Error(`GroupSession "${this.id}" is not initialized`);
-      await store.update_metadata({
-        member_session_ids: Object.fromEntries(this.member_session_ids),
-      });
+      let create_promise = this.member_session_promises.get(agent.id);
+      if (!create_promise) {
+        create_promise = this.create_member_session(agent);
+        this.member_session_promises.set(agent.id, create_promise);
+      }
+      try {
+        session = await create_promise;
+      } finally {
+        if (this.member_session_promises.get(agent.id) === create_promise) {
+          this.member_session_promises.delete(agent.id);
+        }
+      }
     }
-    this.member_running.add(agent.id);
+    this.set_member_running(agent.id, 1);
     try {
       const turn = await session.prompt({ query: this.build_member_context(message) });
       const result = await turn.finished;
@@ -241,8 +262,28 @@ export class GroupSession implements GroupSessionContract {
       });
       await this.deliver_message(reply, depth + 1);
     } finally {
-      this.member_running.delete(agent.id);
+      this.set_member_running(agent.id, -1);
     }
+  }
+
+  /** 创建并登记一个成员专属的 AgentSession。 */
+  private async create_member_session(agent: Agent): Promise<AgentSession> {
+    const session = await agent.sessions.create({
+      ...(this.workspace ? { workspace: this.workspace } : {}),
+      origin: {
+        type: "group",
+        group_id: this.group_id,
+        group_session_id: this.id,
+      },
+    });
+    this.member_sessions.set(agent.id, session);
+    this.member_session_ids.set(agent.id, session.id);
+    const store = this.store;
+    if (!store) throw new Error(`GroupSession "${this.id}" is not initialized`);
+    await store.update_metadata({
+      member_session_ids: Object.fromEntries(this.member_session_ids),
+    });
+    return session;
   }
 
   private build_member_context(message: GroupMessage): string {
@@ -262,6 +303,17 @@ export class GroupSession implements GroupSessionContract {
 
   private get_member(agent_id: string): Agent | null {
     return this.members.find((member) => member.agent.id === agent_id)?.agent || null;
+  }
+
+  /** 更新成员运行计数，并在可见状态发生变化时通知订阅者。 */
+  private set_member_running(agent_id: string, delta: 1 | -1): void {
+    const previous_count = this.member_running_counts.get(agent_id) || 0;
+    const next_count = Math.max(0, previous_count + delta);
+    if (next_count === 0) this.member_running_counts.delete(agent_id);
+    else this.member_running_counts.set(agent_id, next_count);
+    if ((previous_count > 0) === (next_count > 0)) return;
+    const statuses = this.member_statuses();
+    for (const subscriber of this.member_status_subscribers) void subscriber(statuses);
   }
 
   private async append_message(input: Omit<GroupMessage, "id" | "group_id" | "created_at">): Promise<GroupMessage> {

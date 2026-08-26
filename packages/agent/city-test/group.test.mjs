@@ -29,7 +29,9 @@ test("Group broadcasts user messages and collects member replies", async () => {
   const group = new Group({ id: "delivery", members: [{ agent: architect }, { agent: reviewer }] });
   city.groups.add(group);
   const group_session = await group.sessions.create();
-  await group_session.prompt({ query: "analyze payment" });
+  const prompt_result = await group_session.prompt({ query: "analyze payment" });
+  assert.equal(prompt_result.success, true);
+  assert.match(prompt_result.turn_id, /^group-turn-/);
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), ["architect", "reviewer"]);
   assert.deepEqual((await group_session.messages()).map((message) => [message.sender_type, message.sender_id, message.text]), [
@@ -40,6 +42,25 @@ test("Group broadcasts user messages and collects member replies", async () => {
   const architect_sessions = await architect.sessions.list();
   assert.equal(architect_sessions.items.length, 1);
   assert.deepEqual(architect_sessions.items[0].origin, { type: "group", group_id: "delivery", group_session_id: group_session.id });
+  await city.close();
+});
+
+test("GroupSession exposes member runtime transitions", async () => {
+  const statuses = [];
+  const city = new City();
+  const agent = new Agent({ id: "status-agent", session_class: RecordingSession });
+  city.agents.add(agent);
+  const group = new Group({ id: "status-group", members: [{ agent }] });
+  city.groups.add(group);
+  const group_session = await group.sessions.create();
+  const unsubscribe = group_session.subscribe_member_status((snapshot) => {
+    statuses.push(snapshot.map((status) => ({ ...status })));
+  });
+  await group_session.prompt({ query: "status" });
+  unsubscribe();
+  assert.equal(statuses[0][0].running, false);
+  assert.equal(statuses.some((snapshot) => snapshot[0].running), true);
+  assert.equal(statuses.at(-1)[0].running, false);
   await city.close();
 });
 
@@ -71,6 +92,18 @@ test("Group 成员 Session 使用 Group 的共享 Workspace", async () => {
   assert.equal((await group.sessions.list({ workspace_id: "shared-project" })).length, 1);
   assert.equal((await group.sessions.get(group_session.id, { workspace })).workspace_id, "shared-project");
   await city.close();
+});
+
+test("Group 从 City 释放后可以在同一 City 重新装配", async () => {
+  const group = new Group({ id: "reattachable-group", members: [{ agent: new Agent({ id: "reattachable-agent", session_class: RecordingSession }) }] });
+  const first_city = new City();
+  first_city.agents.add(group.members[0].agent);
+  first_city.groups.add(group);
+  await first_city.groups.remove(group.id);
+
+  first_city.groups.add(group);
+  await group.sessions.create();
+  await first_city.close();
 });
 
 test("GroupSession 使用 City Storage 持久化并可恢复", async () => {

@@ -26,9 +26,11 @@ export type {
 export { GroupSession, GroupSessions } from "./group/index.js";
 export type {
   GroupMemberRuntime,
+  GroupMemberStatusUnsubscribe,
   GroupMessageSubscriber,
   GroupMessageUnsubscribe,
   GroupPromptInput,
+  GroupPromptResult,
   GroupSessionContract,
   GroupSessionCreateInput,
   GroupSessionGetInput,

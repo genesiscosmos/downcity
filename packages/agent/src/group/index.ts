@@ -7,9 +7,11 @@ export type { AttentionDecision, AttentionPolicy } from "@/types/group/Attention
 export type { GroupContract, GroupMember, GroupMessage, GroupOptions } from "@/types/group/Group.js";
 export type {
   GroupMemberRuntime,
+  GroupMemberStatusUnsubscribe,
   GroupMessageSubscriber,
   GroupMessageUnsubscribe,
   GroupPromptInput,
+  GroupPromptResult,
   GroupSessionContract,
   GroupSessionCreateInput,
   GroupSessionGetInput,

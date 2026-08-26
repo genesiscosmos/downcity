@@ -38,7 +38,8 @@ Session 创建时绑定了 Workspace，恢复时必须传入同一个 Workspace�
 
 Group 是和 Agent 并列的可联系主体。Group 只持有成员关系和注意力策略，
 并通过 `group.sessions.create()` 创建独立的群聊上下文。消息和传播属于 GroupSession；
-成员执行仍通过成员 Agent 的 `AgentSessions` 完成，Session metadata 会记录 Group 与
+成员执行仍通过成员 Agent 的 `AgentSessions` 完成，`prompt()` 返回本轮 `turn_id`、完成状态和消息数量，成员运行态可通过
+`subscribe_member_status()` 订阅；Session metadata 会记录 Group 与
 GroupSession 来源。`group.sessions.list()` 返回轻量摘要，`group.sessions.get(id)` 恢复完整上下文。
 
 ## 根目录结构

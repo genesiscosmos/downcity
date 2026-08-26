@@ -14,6 +14,7 @@ import type {
   DesktopCreateGroupInput,
   DesktopUpdateGroupInput,
   DesktopGroupMessage,
+  DesktopGroupMemberRuntime,
   DesktopGroupSummary,
   DesktopModelSummary,
   DesktopPluginSummary,
@@ -101,6 +102,8 @@ export interface DesktopViewController {
   groups_by_id: Record<string, DesktopGroupSummary>;
   /** 按 Group 标识缓存的共享消息。 */
   group_messages_by_group: Record<string, DesktopGroupMessage[]>;
+  /** 按 Group 标识缓存的成员运行态。 */
+  group_member_statuses_by_group: Record<string, DesktopGroupMemberRuntime[]>;
   /** 按 Workspace 标识缓存的 Session 导航数据。 */
   sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
   /** 按 Workspace 标识缓存的已归档 Session。 */
@@ -170,7 +173,7 @@ export interface DesktopViewController {
   /** 删除 Group 的共享 Session。 */
   remove_group_session(group_id: string, session_id: string): Promise<void>;
   /** 向 Group 发送文本。 */
-  send_group_message(group_id: string, text: string): Promise<void>;
+  send_group_message(group_id: string, text: string): Promise<string | undefined>;
   /** 停止 Group 当前执行。 */
   stop_group(group_id: string): Promise<void>;
   /** 打开设置分区。 */

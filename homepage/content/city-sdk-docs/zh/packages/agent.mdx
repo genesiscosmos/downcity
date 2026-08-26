@@ -22,7 +22,8 @@ CLI、Desktop 或 Node 进程需要持有多个 Agent、根据本地配置装配
 
 `Group` 是具有集体主体性的协作主体，拥有自己的 `GroupSession` 集合。`GroupSession` 保存一次群聊的共享消息，
 成员是否响应由注意力策略和成员自身判断决定；成员执行仍使用成员 Agent 的 `AgentSession`，不会把私有上下文、Plugin
-和工具调用复制进群聊历史。`GroupSession` 的 `prompt()` 会在当前传播完成后返回，连续调用按提交顺序执行。
+和工具调用复制进群聊历史。`GroupSession` 的 `prompt()` 会在当前传播完成后返回本轮结果，连续调用按提交顺序执行；成员运行态可通过
+`subscribe_member_status()` 订阅。
 
 ```ts
 const lead = new Agent({ id: "lead", model });
@@ -40,7 +41,8 @@ const group = new Group({
 city.groups.add(group);
 
 const group_session = await group.sessions.create({ workspace });
-await group_session.prompt({ query: "请完成实现并让 reviewer 审查改动" });
+const result = await group_session.prompt({ query: "请完成实现并让 reviewer 审查改动" });
+console.log(result.turn_id, result.success);
 
 const sessions = await group.sessions.list();
 const restored = await group.sessions.get(sessions[0].id, { workspace });

@@ -13,6 +13,19 @@ export type GroupMessageSubscriber = (message: GroupMessage) => void | Promise<v
 /** 取消 Group 消息订阅。 */
 export type GroupMessageUnsubscribe = () => void;
 
+/** 取消 Group 成员运行态订阅。 */
+export type GroupMemberStatusUnsubscribe = () => void;
+
+/** GroupSession 一轮群聊传播的结果。 */
+export interface GroupPromptResult {
+  /** 当前群聊轮次的稳定标识。 */
+  readonly turn_id: string;
+  /** 本轮传播是否完整完成。 */
+  readonly success: boolean;
+  /** 本轮完成时共享消息总数。 */
+  readonly message_count: number;
+}
+
 /** 向 GroupSession 发言的输入。 */
 export interface GroupPromptInput {
   /** 用户消息正文。 */
@@ -72,11 +85,13 @@ export interface GroupSessionContract {
   /** 当前 GroupSession 绑定的 Workspace ID；未绑定时为空。 */
   readonly workspace_id?: string;
   /** 追加用户消息并等待当前群聊传播完成。 */
-  prompt(input: GroupPromptInput): Promise<void>;
+  prompt(input: GroupPromptInput): Promise<GroupPromptResult>;
   /** 读取共享消息事实快照。 */
   messages(): Promise<readonly GroupMessage[]>;
   /** 订阅共享消息。 */
   subscribe(subscriber: GroupMessageSubscriber): GroupMessageUnsubscribe;
+  /** 订阅成员运行态变化。 */
+  subscribe_member_status(subscriber: (statuses: readonly GroupMemberRuntime[]) => void | Promise<void>): GroupMemberStatusUnsubscribe;
   /** 读取每个成员当前是否正在执行的运行态快照。 */
   member_statuses(): readonly GroupMemberRuntime[];
   /** 停止当前传播和成员执行；停止完成后可再次 prompt。 */
