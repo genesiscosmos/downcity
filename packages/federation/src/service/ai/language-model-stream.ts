@@ -57,6 +57,7 @@ export function decode_city_language_model_request(
     ...(read_optional_string(input.reasoning_effort)
       ? { reasoning_effort: read_optional_string(input.reasoning_effort) }
       : {}),
+    ...(input.reasoning === false ? { reasoning: false } : {}),
   };
 }
 

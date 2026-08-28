@@ -1,8 +1,9 @@
 /** 运行时 Group 共享消息视图，保持与 Agent Session Chat 一致的视觉结构。 */
 
 import { useEffect, useRef, useState } from "react";
-import { TbCheck, TbChevronRight, TbFileText, TbLayoutSidebar, TbLayoutSidebarFilled, TbLoader2, TbPlayerStop, TbUsers } from "react-icons/tb";
+import { TbCheck, TbChevronDown, TbChevronRight, TbFileText, TbLayoutSidebar, TbLayoutSidebarFilled, TbLoader2, TbPlayerStop, TbUsers } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { DetailEditorSidebar } from "@/components/DetailEditorSidebar";
 import { LLMModelIcon } from "@/components/model/LLMModelIcon";
@@ -69,10 +70,18 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
   return <MainViewLayout>
     <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2">
       <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
-        <div className="flex min-w-0 max-w-[min(100%,24rem)] items-center gap-2 rounded-lg px-1 py-1 text-left">
-          <TbUsers className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="flex min-w-0 flex-col items-start"><span className="min-w-0 max-w-48 truncate text-xs font-medium text-foreground">{group.name}</span>{group_phase === "executing" ? <span className="flex items-center gap-1 text-[10px] leading-3 text-primary"><span className="thinking-dots-icon is-highlighted" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <span key={index} className="thinking-dot" />)}</span>正在回复。</span> : null}</span>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className="group flex min-w-0 max-w-[min(100%,24rem)] items-center gap-2 rounded-lg px-1 py-1 text-left hover:bg-foreground/[0.05]" aria-label="切换 Group Session">
+              <TbUsers className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="flex min-w-0 flex-col items-start"><span className="flex max-w-48 items-center gap-1 truncate text-xs font-medium text-foreground"><span className="truncate">{group.name}</span><TbChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" /></span>{group_phase === "executing" ? <span className="flex items-center gap-1 text-[10px] leading-3 text-primary"><span className="thinking-dots-icon is-highlighted" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <span key={index} className="thinking-dot" />)}</span>正在回复。</span> : null}</span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="bottom" sideOffset={4}>
+            {group.sessions.map((item) => <DropdownMenuItem key={item.session_id} is_selected={item.session_id === session.session_id} onClick={() => void controller.open_group(group.group_id, item.session_id)}><TbUsers /><span className="min-w-0 flex-1 truncate">{format_group_session_title(item)}</span><span className="text-[0.625rem] text-muted-foreground">{item.message_count}</span>{item.session_id === session.session_id ? <TbCheck className="size-3.5 text-primary" /> : null}</DropdownMenuItem>)}
+            <DropdownMenuItem onClick={() => void controller.create_group_session(group.group_id, workspace_id)}><TbUsers /><span>新建 Session</span></DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       <div className="flex items-center gap-1"><Button size="icon" title="停止执行" aria-label="停止执行" disabled={group_phase !== "dispatching" && group_phase !== "dispatched" && group_phase !== "executing"} onClick={() => void stop_session(session.session_id)}><TbPlayerStop /></Button><Button size="icon" actived={config_sidebar_open && !config_sidebar_collapsed} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={toggle_config_sidebar} title={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Group 配置侧栏" : "打开 Group 配置侧栏"} aria-label={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Group 配置侧栏" : "打开 Group 配置侧栏"}>{config_sidebar_open && !config_sidebar_collapsed ? <TbLayoutSidebarFilled className="-scale-x-100" /> : <TbLayoutSidebar className="-scale-x-100" />}</Button></div>
     </header>
@@ -87,10 +96,15 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
               : []).map((agent_id) => <GroupTypingRow key={`typing:${agent_id}`} agent={agents.find((item) => item.agent_id === agent_id)} agent_id={agent_id} />)}
           </div>
         </div>
-        <ChatInputEditor group_mode group_members={agents.filter((agent) => group.members.some((member) => member.agent_id === agent.agent_id))} group_phase={group_phase} surface="agent" workspace_id={workspace_id} editor_key={session.session_id} agent={group_agent} draft={draft} draft_files={draft_files} draft_references={draft_references} queued_messages={[]} models={[]} models_loading={false} settings={settings} update_draft={set_draft} update_draft_files={set_draft_files} update_draft_references={set_draft_references} send_message={async (input: DesktopChatInput) => { await send_message(session.session_id, input.text); set_draft(""); set_draft_files([]); set_draft_references([]); }} stop_session={() => stop_session(session.session_id)} refresh_models={async () => undefined} set_model={async () => undefined} set_reasoning_effort={async () => undefined} set_approval_mode={async () => undefined} remove_queued_message={() => undefined} move_queued_message={() => undefined} />
+        <ChatInputEditor group_mode group_members={agents.filter((agent) => group.members.some((member) => member.agent_id === agent.agent_id))} group_sessions={group.sessions} select_group_session={(session_id) => controller.open_group(group.group_id, session_id)} group_phase={group_phase} surface="agent" workspace_id={workspace_id} editor_key={session.session_id} agent={group_agent} draft={draft} draft_files={draft_files} draft_references={draft_references} queued_messages={[]} models={[]} models_loading={false} settings={settings} update_draft={set_draft} update_draft_files={set_draft_files} update_draft_references={set_draft_references} send_message={async (input: DesktopChatInput) => { await send_message(session.session_id, input.text); set_draft(""); set_draft_files([]); set_draft_references([]); }} stop_session={() => stop_session(session.session_id)} refresh_models={async () => undefined} set_model={async () => undefined} set_reasoning_effort={async () => undefined} set_approval_mode={async () => undefined} remove_queued_message={() => undefined} move_queued_message={() => undefined} />
       </div>
     </MainViewBody>
   </MainViewLayout>;
+}
+
+/** 生成 GroupSession 的紧凑显示标题。 */
+function format_group_session_title(session: DesktopGroupSessionSummary): string {
+  return session.preview_text?.trim().slice(0, 36) || `Session ${session.session_id.slice(0, 8)}`;
 }
 
 /** Group 主体配置侧栏；保存规则与 Agent 定义侧栏一致，采用短暂防抖提交。 */

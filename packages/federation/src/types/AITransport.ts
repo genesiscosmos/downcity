@@ -47,6 +47,8 @@ export interface CityLanguageModelStreamRequestV1 {
   call: CityTransportJsonObject;
   /** 用户显式选择的 Downcity 推理强度。 */
   reasoning_effort?: string;
+  /** 是否启用模型推理；显式为 false 时跳过模型默认推理。 */
+  reasoning?: boolean;
 }
 
 /** Federation 通过 SSE 返回的标准模型流事件。 */
@@ -65,6 +67,8 @@ export interface DecodedCityLanguageModelRequest {
   call: LanguageModelV3CallOptions;
   /** 用户显式选择的推理强度。 */
   reasoning_effort?: string;
+  /** 是否启用模型推理；显式为 false 时跳过模型默认推理。 */
+  reasoning?: boolean;
 }
 
 /** 供运行时校验的原始 CityModel transport 请求。 */

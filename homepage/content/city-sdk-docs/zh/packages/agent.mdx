@@ -20,9 +20,21 @@ CLI、Desktop 或 Node 进程需要持有多个 Agent、根据本地配置装配
 
 ## Group 与 GroupSession
 
-`Group` 是具有集体主体性的协作主体，拥有自己的 `model` 和 `GroupSession` 集合。`Group.model` 专门用于理解群聊意图并选择投递成员；默认使用 AI 调度。未提供模型或模型调用失败时，`GroupSession` 会记录明确的调度失败，不会自动切换到另一套规则；如需自定义行为，应显式提供 `dispatch_strategy`。成员执行仍使用成员 Agent 的 `AgentSession`，不会把私有上下文、Plugin
+`Group` 是具有集体主体性的协作主体，拥有自己的 `model` 和 `GroupSession` 集合。`Group.model` 专门用于理解群聊意图并选择投递成员；默认使用 AI 调度。AI 调度通过一次强制的内部 `dispatch_group` tool call 提交最小投递计划，SDK 再将其编译为内部执行图，不依赖 `generateObject`。未提供模型或模型调用失败时，`GroupSession` 会记录明确的调度失败，不会自动切换到另一套规则；如需自定义行为，应显式提供 `dispatch_strategy`。成员执行仍使用成员 Agent 的 `AgentSession`，不会把私有上下文、Plugin
 和工具调用复制进群聊历史。`GroupSession` 的 `prompt()` 只负责立即写入用户消息并启动异步调度；多个调用可以同时进入。GroupSession 只运行一个全局 auto dispatch，在当前成员执行完成后统一判断下一步；消息和 Group/成员运行态统一通过
 `subscribe()` 订阅。
+
+`dispatch_group` 的输入只有 `steps` 和 `next`：`steps` 是二维数组，外层阶段按顺序执行，同一阶段数组内的成员并行执行；`next` 为 `continue` 时才允许全局 auto dispatch 继续判断。例如：
+
+```json
+{
+  "steps": [
+    ["architect"],
+    ["reviewer"]
+  ],
+  "next": "stop"
+}
+```
 
 ```ts
 const lead = new Agent({ id: "lead", model });

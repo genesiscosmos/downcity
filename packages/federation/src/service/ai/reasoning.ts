@@ -64,6 +64,14 @@ export function resolve_model_reasoning(
     throw httpError(422, "effort_id is not supported; use reasoning_effort");
   }
 
+  // 调用方显式关闭 reasoning 时，不读取模型默认档位。
+  if (input.reasoning === false) {
+    if (input.reasoning_effort !== undefined) {
+      throw httpError(422, "reasoning and reasoning_effort cannot be used together");
+    }
+    return undefined;
+  }
+
   const requested_value = input.reasoning_effort;
   const has_requested_effort = requested_value !== undefined;
   if (has_requested_effort && typeof requested_value !== "string") {

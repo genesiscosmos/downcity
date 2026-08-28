@@ -96,11 +96,13 @@ export class CityModel implements CityModelContract {
     const reasoning_effort = read_optional_string(
       downcity_options?.reasoningEffort ?? downcity_options?.reasoning_effort,
     );
+    const reasoning = downcity_options?.reasoning === false ? false : undefined;
     return {
       protocol: CITY_LANGUAGE_MODEL_PROTOCOL_V1,
       model_id: this.modelId,
       call: encode_city_transport_object(call),
       ...(reasoning_effort ? { reasoning_effort } : {}),
+      ...(reasoning === false ? { reasoning } : {}),
     };
   }
 }

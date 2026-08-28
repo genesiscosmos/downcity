@@ -88,6 +88,37 @@ test("Federation removes client providerOptions before Provider execution", () =
   assert.equal("providerOptions" in call, false)
 })
 
+test("CityModel transports explicit reasoning false", async () => {
+  const requests = []
+  const model = new CityModel({
+    descriptor: {
+      id: "reasoning-disabled-model",
+      name: "Reasoning Disabled Model",
+      description: "Reasoning transport test",
+      modalities: ["text"],
+      tags: [],
+      meta: {},
+    },
+    request_stream: async (request) => {
+      requests.push(request)
+      const encoder = new TextEncoder()
+      const event = { protocol: "downcity-language-model-v1", part: { type: "finish", finishReason: { unified: "stop", raw: "stop" }, usage: { inputTokens: { total: 0 }, outputTokens: { total: 0 } } } }
+      return new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+          controller.close()
+        },
+      }), { status: 200 })
+    },
+  })
+  const result = await model.doGenerate({
+    prompt: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
+    providerOptions: { downcity: { reasoning: false } },
+  })
+  assert.equal(result.finishReason.unified, "stop")
+  assert.equal(requests[0].reasoning, false)
+})
+
 test("CityModel directly streams through Federation LanguageModelV3 runtime", async () => {
   const charges = []
   const requests = []

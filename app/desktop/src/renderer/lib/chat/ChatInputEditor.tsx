@@ -10,7 +10,7 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { is_chat_busy, type QueuedChatMessage } from "@/types/DesktopView";
 import type { ChatSlashCommand } from "@/types/ChatComposer";
-import type { DesktopAgentSummary, DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopChatRuntime, DesktopGroupStatusPhase, DesktopModelSummary, DesktopSessionConfiguration, DesktopSettings } from "@common/types/DesktopApi";
+import type { DesktopAgentSummary, DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopChatRuntime, DesktopGroupSessionSummary, DesktopGroupStatusPhase, DesktopModelSummary, DesktopSessionConfiguration, DesktopSettings } from "@common/types/DesktopApi";
 import { ChatApprovalModeSelector } from "./ChatApprovalModeSelector";
 import { ChatModelSelector } from "./ChatModelSelector";
 import { ChatAttachmentNode, ChatReferenceNode } from "./editor/ChatComposerNodes";
@@ -25,6 +25,10 @@ interface ChatInputEditorProps {
   group_mode?: boolean;
   /** Group 群聊可被 @ 提及的成员。 */
   group_members?: DesktopAgentSummary[];
+  /** Group 群聊可切换的 Session。 */
+  group_sessions?: DesktopGroupSessionSummary[];
+  /** 切换当前 Group Session。 */
+  select_group_session?(session_id: string): Promise<void>;
   /** 当前 Chat 的 UI 表面；仅影响空状态和输入提示。 */
   surface?: "agent" | "workspace";
   /** 当前 Workspace 稳定标识。 */
@@ -135,7 +139,6 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
   }, []);
 
   const update_slash_query = useCallback((current_editor: Editor) => {
-    if (props_ref.current.group_mode) { set_slash_query(undefined); return; }
     const { $from } = current_editor.state.selection;
     if (!$from.parent.isTextblock) { set_slash_query(undefined); set_file_query(undefined); return; }
     const before_cursor = $from.parent.textBetween(0, $from.parentOffset, "\n", "\0");
@@ -326,16 +329,19 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
 
   const slash_commands = useMemo(() => {
     const commands: ChatSlashCommand[] = [
-      { command_id: "attach", title: "/attach", description: "添加文件附件", keywords: ["file", "附件"], run: () => file_input_ref.current?.click() },
-      { command_id: "image", title: "/image", description: "添加图片", keywords: ["photo", "图片"], run: () => image_input_ref.current?.click() },
+      ...(props.group_mode ? [] : [
+        { command_id: "attach", title: "/attach", description: "添加文件附件", keywords: ["file", "附件"], run: () => file_input_ref.current?.click() },
+        { command_id: "image", title: "/image", description: "添加图片", keywords: ["photo", "图片"], run: () => image_input_ref.current?.click() },
+      ]),
       { command_id: "clear", title: "/clear", description: "清空当前输入", keywords: ["reset", "清空"], run: () => { editor_ref.current?.commands.clearContent(); } },
+      ...(props.group_mode && props.select_group_session ? (props.group_sessions ?? []).map((session) => ({ command_id: `sessions:${session.session_id}`, title: `/sessions ${session.session_id.slice(0, 8)}`, description: "切换 Group Session", keywords: ["session", "sessions", session.session_id], run: () => props.select_group_session?.(session.session_id) })) : []),
       ...(props.compact_session ? [{ command_id: "compact", title: "/compact", description: "压缩当前对话上下文", keywords: ["compact", "压缩", "context"], run: () => run_compact_command(true) }] : []),
-      ...props.models.map((model) => ({ command_id: `model:${model.model_id}`, title: `/model ${model.name}`, description: `切换到 ${model.model_id}`, keywords: ["model", "模型", model.model_id], run: () => props.set_model(model.model_id) })),
-      ...(["ask", "always-allow"] as const).map((mode) => ({ command_id: `approval:${mode}`, title: `/approval ${mode}`, description: mode === "ask" ? "执行前询问" : "自动允许", keywords: ["approval", "权限"], run: () => props.set_approval_mode(mode) })),
+      ...(props.group_mode ? [] : props.models.map((model) => ({ command_id: `model:${model.model_id}`, title: `/model ${model.name}`, description: `切换到 ${model.model_id}`, keywords: ["model", "模型", model.model_id], run: () => props.set_model(model.model_id) }))),
+      ...(props.group_mode ? [] : (["ask", "always-allow"] as const).map((mode) => ({ command_id: `approval:${mode}`, title: `/approval ${mode}`, description: mode === "ask" ? "执行前询问" : "自动允许", keywords: ["approval", "权限"], run: () => props.set_approval_mode(mode) }))),
     ];
     const query = slash_query?.query.toLowerCase() ?? "";
     return commands.filter((command) => !query || `${command.title} ${command.keywords.join(" ")}`.toLowerCase().includes(query)).slice(0, 8);
-  }, [props.compact_session, props.models, props.set_approval_mode, props.set_model, run_compact_command, slash_query?.query]);
+  }, [props.compact_session, props.group_mode, props.group_sessions, props.models, props.select_group_session, props.set_approval_mode, props.set_model, run_compact_command, slash_query?.query]);
 
   const file_candidates = useMemo(() => {
     const query = file_query?.query.toLowerCase() ?? "";

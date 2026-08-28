@@ -153,6 +153,14 @@ test("AIService exposes reasoning capability and resolves request or default eff
   }))
   assert.deepEqual(fallback_default.metadata.reasoning, { effort: "low", source: "default" })
   assert.equal(fallback_default.metadata.input_effort, "low")
+
+  const disabled = await action.run(create_context({
+    model: "reasoning-model",
+    prompt: "hello",
+    reasoning: false,
+  }))
+  assert.equal(disabled.metadata.reasoning, undefined)
+  assert.equal(disabled.metadata.input_effort, undefined)
 })
 
 test("AIService rejects unsupported reasoning input against the final fallback model", async () => {

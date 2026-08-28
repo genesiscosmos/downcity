@@ -383,6 +383,7 @@ export class AIService extends Service {
       model: request.model_id,
       call,
       ...(request.reasoning_effort ? { reasoning_effort: request.reasoning_effort } : {}),
+      ...(request.reasoning === false ? { reasoning: false } : {}),
     };
     const initial_resolved = this.resolve({ model: request.model_id, mode: LANGUAGE_MODEL_MODE }, ctx.env);
     const routing = this.plan_text_execution(initial_resolved, ctx, LANGUAGE_MODEL_MODE);

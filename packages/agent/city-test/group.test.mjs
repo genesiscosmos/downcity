@@ -43,6 +43,15 @@ const test_dispatch_strategy = {
   },
 };
 
+function create_dispatch_tool_call(input, tool_call_id = "dispatch-call") {
+  return {
+    type: "tool-call",
+    toolCallId: tool_call_id,
+    toolName: "dispatch_group",
+    input: JSON.stringify(input),
+  };
+}
+
 class RecordingSession extends Session {
   static created = [];
 
@@ -88,12 +97,9 @@ test("Group.model uses AI dispatch to select only the returned members", async (
   const dispatch_model = new MockLanguageModelV3({
     modelId: "group-dispatch-model",
     doGenerate: async () => ({
-      content: [{
-        type: "text",
-        text: JSON.stringify(dispatch_calls++ === 0
-          ? { nodes: [{ node_id: "review", member_ids: ["reviewer"], response_mode: "single", depends_on_node_ids: [], instruction: "只回答当前问题。" }], terminal: false }
-          : { nodes: [], terminal: true }),
-      }],
+      content: [create_dispatch_tool_call(dispatch_calls++ === 0
+        ? { steps: [["reviewer"]], next: "continue" }
+        : { steps: [], next: "stop" })],
       finishReason: { unified: "stop", raw: "stop" },
       usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
       warnings: [],
@@ -118,10 +124,7 @@ test("AI Dispatch 返回空响应图时直接结束当前调度", async () => {
   const dispatch_model = new MockLanguageModelV3({
     modelId: "empty-dispatch-model",
     doGenerate: async () => ({
-      content: [{
-        type: "text",
-        text: JSON.stringify({ nodes: [], terminal: true }),
-      }],
+      content: [create_dispatch_tool_call({ steps: [], next: "stop" })],
       finishReason: { unified: "stop", raw: "stop" },
       usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
       warnings: [],
@@ -178,6 +181,61 @@ test("AI Dispatch 失败时不切换到隐式规则策略", async () => {
   assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), []);
   assert.match((await group_session.messages()).at(-1).text, /^Group dispatch model failed:/);
   await city.close();
+});
+
+test("AI Dispatch 未调用 dispatch_group 时记录协议错误", async () => {
+  const dispatch_model = new MockLanguageModelV3({
+    modelId: "text-only-dispatch-model",
+    doGenerate: async () => ({
+      content: [{ type: "text", text: "我建议让 reviewer 回复。" }],
+      finishReason: { unified: "stop", raw: "stop" },
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      warnings: [],
+    }),
+  });
+  const city = new City();
+  const agent = new Agent({ id: "text-only-agent", session_class: RecordingSession });
+  city.agents.add(agent);
+  const group = new Group({ id: "text-only-group", model: dispatch_model, members: [agent] });
+  city.groups.add(group);
+  const group_session = await group.sessions.create();
+
+  await group_session.prompt({ query: "请回答" });
+  await wait_for_group_idle(group_session);
+
+  assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), []);
+  assert.match((await group_session.messages()).at(-1).text, /did not call dispatch_group/);
+  await city.close();
+});
+
+test("AI Dispatch 拒绝未知成员和重复投递", async () => {
+  const inputs = [
+    { steps: [["unknown"]], next: "stop" },
+    { steps: [["known"], ["known"]], next: "stop" },
+  ];
+  for (const [index, input] of inputs.entries()) {
+    const dispatch_model = new MockLanguageModelV3({
+      modelId: `invalid-dispatch-model-${index}`,
+      doGenerate: async () => ({
+        content: [create_dispatch_tool_call(input)],
+        finishReason: { unified: "tool-calls", raw: "tool_calls" },
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        warnings: [],
+      }),
+    });
+    const city = new City();
+    const agent = new Agent({ id: "known", session_class: RecordingSession });
+    city.agents.add(agent);
+    const group = new Group({ id: `invalid-dispatch-group-${index}`, model: dispatch_model, members: [agent] });
+    city.groups.add(group);
+    const group_session = await group.sessions.create();
+
+    await group_session.prompt({ query: "请回答" });
+    await wait_for_group_idle(group_session);
+
+    assert.match((await group_session.messages()).at(-1).text, /Group dispatch model failed:/);
+    await city.close();
+  }
 });
 
 test("GroupSession publishes messages and member runtime through one event stream", async () => {
