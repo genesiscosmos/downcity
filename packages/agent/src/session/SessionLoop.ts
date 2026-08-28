@@ -357,15 +357,20 @@ export class SessionLoop {
 
     active_turn.prompt_started = true;
     this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
-    deferred_handle.resolve(create_turn_handle(active_turn));
+    let handle_resolved = false;
     try {
       await this.persist_prompt_message(input, active_turn.turn_id, "prompt");
+      // 只有 canonical user message 已经写入 Session 后，调用方才认为输入被接收。
+      deferred_handle.resolve(create_turn_handle(active_turn));
+      handle_resolved = true;
       const result = await this.execute_prompt_turn({
         active_turn,
         prompt_input: input,
       });
       await this.finish_active_turn(active_turn, result);
     } catch (error) {
+      // 持久化失败时仍兑现句柄，让调用方可以观察到失败的 Turn，而不是永久等待。
+      if (!handle_resolved) deferred_handle.resolve(create_turn_handle(active_turn));
       await this.fail_active_turn(active_turn, error);
     }
   }

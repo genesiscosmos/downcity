@@ -23,6 +23,20 @@ export interface GroupSessionHistoryMeta {
   readonly preview_text?: string;
   /** GroupSession 为每个成员 Agent 复用的 AgentSession 标识。 */
   readonly member_session_ids?: Readonly<Record<string, string>>;
+  /** 尚未完成收口的 GroupTurn 检查点；进程重启后仅据此恢复 auto dispatch。 */
+  readonly pending_turns?: readonly GroupSessionTurnCheckpoint[];
+  /** 进程中断前尚未消费的 auto dispatch frontier 消息标识。 */
+  readonly auto_frontier_message_ids?: readonly string[];
+}
+
+/** GroupSession 可恢复的最小运行检查点。 */
+export interface GroupSessionTurnCheckpoint {
+  /** 用户请求对应的 GroupTurn 标识。 */
+  readonly turn_id: string;
+  /** 用户根消息标识。 */
+  readonly root_message_id: string;
+  /** 用户消息写入时冻结的上下文消息标识。 */
+  readonly context_message_ids: readonly string[];
 }
 
 /** 单个 GroupSession 的持久化数据视图。 */

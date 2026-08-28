@@ -28,6 +28,8 @@ export interface LocalGroupConfig {
   group_id: string;
   /** Group 的用户可见名称。 */
   name: string;
+  /** Group 用于理解群聊意图并决定消息投递的模型标识。 */
+  model_id: string;
   /** Group 的协作目标指令。 */
   instruction: string;
   /** Group 成员 Agent 的稳定 ID 列表。 */

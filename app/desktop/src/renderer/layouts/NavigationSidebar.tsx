@@ -2,9 +2,8 @@
 
 import { useCallback, useState } from "react";
 import { motion } from "framer-motion";
-import { TbFolderPlus, TbGhost3, TbPlus, TbSettings, TbUser } from "react-icons/tb";
+import { TbFolderPlus, TbSettings, TbUser } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { use_horizontal_resize } from "@/hooks/use_horizontal_resize";
 import type { DesktopViewController } from "@/types/DesktopView";
 import { SHELL_PANEL_TRANSITION, SHELL_SIDEBAR_DEFAULT_WIDTH, SHELL_SIDEBAR_MAX_WIDTH, SHELL_SIDEBAR_MIN_WIDTH } from "./shellMotion";
@@ -21,6 +20,8 @@ interface NavigationSidebarProps {
   open_create_agent(workspace_id?: string): void;
   /** 打开创建 Workspace 表单。 */
   open_create_workspace(): void;
+  /** 打开 Group 并展示其配置侧栏。 */
+  open_group_config(group_id: string): Promise<void>;
   /** 是否隐藏左侧导航栏。 */
   collapsed?: boolean;
 }
@@ -49,20 +50,19 @@ export function SidebarContainer({ children, collapsed = false }: { /** Sidebar 
 }
 
 /** Agent 与 Session 的 Duobox 导航视图。 */
-export function NavigationSidebar({ controller, open_create_agent, open_create_workspace, collapsed = false }: NavigationSidebarProps) {
+export function NavigationSidebar({ controller, open_create_agent, open_create_workspace, open_group_config, collapsed = false }: NavigationSidebarProps) {
   return <SidebarContainer collapsed={collapsed}>
-    <div className="relative flex h-9 shrink-0 items-center">
+    <div className="relative flex h-10 shrink-0 items-center">
       <div className="header-drag-region absolute inset-0" />
       <div className="sidebar-header-actions relative z-10 ml-auto flex shrink-0 items-center gap-1 px-2">
         {controller.sidebar_mode === "chat" ? <Button size="icon" title="添加 Workspace" aria-label="添加 Workspace" onClick={open_create_workspace}><TbFolderPlus /></Button> : null}
-        {controller.sidebar_mode === "agents" ? <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" title="创建 Agent" aria-label="创建 Agent"><TbPlus /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" sideOffset={4}><DropdownMenuItem onClick={() => open_create_agent()}><TbGhost3 /><span>创建 Agent</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu> : null}
       </div>
     </div>
     <div className="flex min-h-0 flex-1 overflow-hidden">
-      <div className="flex w-10 shrink-0 flex-col items-center px-1.5 pt-1"><SidebarViewSwitcher active_mode={controller.sidebar_mode} on_change={controller.set_sidebar_mode} layout="left" /></div>
+      <div className="flex w-10 shrink-0 flex-col items-center pl-2"><SidebarViewSwitcher active_mode={controller.sidebar_mode} on_change={controller.set_sidebar_mode} layout="left" /></div>
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {controller.sidebar_mode === "chat" ? <ChatSidebar controller={controller} open_create_agent={open_create_agent} open_create_workspace={open_create_workspace} /> : null}
-        {controller.sidebar_mode === "agents" ? <AgentSidebar controller={controller} open_create_agent={open_create_agent} /> : null}
+        {controller.sidebar_mode === "agents" ? <AgentSidebar controller={controller} open_create_agent={open_create_agent} open_group_config={open_group_config} /> : null}
         {controller.sidebar_mode === "plugins" ? <PluginSidebar controller={controller} /> : null}
       </div>
     </div>

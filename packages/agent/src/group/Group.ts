@@ -1,8 +1,10 @@
 /** Group 群聊主体的本地实现。 */
 
-import { DefaultDispatchStrategy } from "@/types/group/DispatchStrategy.js";
+import { AiDispatchStrategy } from "@/types/group/DispatchStrategy.js";
 import type { DispatchStrategy } from "@/types/group/DispatchStrategy.js";
-import type { GroupContract, GroupMember, GroupOptions } from "@/types/group/Group.js";
+import type { AgentModel } from "@/agent/AgentModel.js";
+import type { GroupContract, GroupOptions } from "@/types/group/Group.js";
+import type { Agent } from "@/agent/Agent.js";
 import { GroupSessions } from "@/group/GroupSessions.js";
 import { dispose_group_runtime, initialize_group_runtime } from "@/internal/GroupRuntime.js";
 
@@ -11,7 +13,8 @@ export class Group implements GroupContract {
   readonly id: string;
   readonly name: string;
   readonly instruction?: string;
-  readonly members: readonly GroupMember[];
+  readonly model?: AgentModel;
+  readonly members: readonly Agent[];
   readonly dispatch_strategy: DispatchStrategy;
   readonly sessions: GroupSessions;
 
@@ -21,14 +24,15 @@ export class Group implements GroupContract {
     if (!options.members?.length) throw new Error("Group requires at least one member");
     const member_ids = new Set<string>();
     this.members = Object.freeze(options.members.map((member) => {
-      if (!member?.agent?.id) throw new Error("Group member requires an Agent");
-      if (member_ids.has(member.agent.id)) throw new Error(`Group member already exists: ${member.agent.id}`);
-      member_ids.add(member.agent.id);
-      return Object.freeze({ agent: member.agent, role: member.role });
+      if (!member?.id) throw new Error("Group member requires an Agent");
+      if (member_ids.has(member.id)) throw new Error(`Group member already exists: ${member.id}`);
+      member_ids.add(member.id);
+      return member;
     }));
     this.name = String(options.name || this.id).trim() || this.id;
     this.instruction = options.instruction?.trim() || undefined;
-    this.dispatch_strategy = options.dispatch_strategy || new DefaultDispatchStrategy();
+    this.model = options.model;
+    this.dispatch_strategy = options.dispatch_strategy || new AiDispatchStrategy({ model: this.model });
     initialize_group_runtime(this);
     this.sessions = new GroupSessions(this);
   }

@@ -18,6 +18,8 @@ const default_settings: DesktopSettings = {
   proxy_url: "",
   default_text_model_id: "",
   default_image_model_id: "",
+  agent_main_sessions: {},
+  group_main_sessions: {},
 };
 
 const appearance_modes = new Set<DesktopSettings["appearance_mode"]>(["light", "dark", "system"]);
@@ -68,5 +70,29 @@ export function normalize_settings(input?: Partial<DesktopSettings> | null): Des
     proxy_url: typeof input?.proxy_url === "string" ? input.proxy_url.trim() : default_settings.proxy_url,
     default_text_model_id: typeof input?.default_text_model_id === "string" ? input.default_text_model_id.trim() : default_settings.default_text_model_id,
     default_image_model_id: typeof input?.default_image_model_id === "string" ? input.default_image_model_id.trim() : default_settings.default_image_model_id,
+    agent_main_sessions: normalize_agent_main_sessions(input?.agent_main_sessions),
+    group_main_sessions: normalize_group_main_sessions(input?.group_main_sessions),
   };
+}
+
+/** 过滤损坏的 Agent 固定对话绑定，避免配置文件污染导航状态。 */
+function normalize_agent_main_sessions(input: DesktopSettings["agent_main_sessions"] | undefined): DesktopSettings["agent_main_sessions"] {
+  if (!input || typeof input !== "object") return {};
+  return Object.fromEntries(Object.entries(input).flatMap(([agent_id, context]) => {
+    if (!context || typeof context !== "object") return [];
+    const workspace_id = String(context.workspace_id || "").trim();
+    const session_id = String(context.session_id || "").trim();
+    return workspace_id && session_id ? [[agent_id, { workspace_id, session_id }]] : [];
+  }));
+}
+
+/** 过滤损坏的 Group 默认对话绑定。 */
+function normalize_group_main_sessions(input: DesktopSettings["group_main_sessions"] | undefined): DesktopSettings["group_main_sessions"] {
+  if (!input || typeof input !== "object") return {};
+  return Object.fromEntries(Object.entries(input).flatMap(([group_id, context]) => {
+    if (!context || typeof context !== "object") return [];
+    const workspace_id = String(context.workspace_id || "").trim();
+    const session_id = String(context.session_id || "").trim();
+    return workspace_id && session_id ? [[group_id, { workspace_id, session_id }]] : [];
+  }));
 }

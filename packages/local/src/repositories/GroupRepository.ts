@@ -24,6 +24,8 @@ export class GroupRepository {
     group_id: string;
     /** Group 展示名称。 */
     name?: string;
+    /** Group 用于群聊投递的模型标识。 */
+    model_id: string;
     /** Group 协作目标。 */
     instruction?: string;
     /** Group 成员 Agent ID。 */
@@ -33,10 +35,12 @@ export class GroupRepository {
     if (this.get(group_id)) throw new Error(`Group already exists: ${group_id}`);
     const member_agent_ids = normalize_member_agent_ids(input.member_agent_ids);
     if (member_agent_ids.length === 0) throw new Error("Group requires at least one member Agent");
+    const model_id = normalize_model_id(input.model_id);
     const current_time = new Date().toISOString();
     const config: LocalGroupConfig = {
       group_id,
       name: String(input.name || group_id).trim() || group_id,
+      model_id,
       instruction: String(input.instruction || "").trim(),
       member_agent_ids,
       created_at: current_time,
@@ -63,6 +67,8 @@ export class GroupRepository {
   update(group_id_input: string, input: {
     /** Group 展示名称。 */
     name?: string;
+    /** Group 用于群聊投递的模型标识。 */
+    model_id: string;
     /** Group 协作目标。 */
     instruction?: string;
     /** Group 成员 Agent ID。 */
@@ -72,9 +78,11 @@ export class GroupRepository {
     if (!current) throw new Error(`Group not found: ${group_id_input}`);
     const member_agent_ids = normalize_member_agent_ids(input.member_agent_ids);
     if (member_agent_ids.length === 0) throw new Error("Group requires at least one member Agent");
+    const model_id = normalize_model_id(input.model_id);
     const config: LocalGroupConfig = {
       ...current,
       name: String(input.name || current.group_id).trim() || current.group_id,
+      model_id,
       instruction: String(input.instruction || "").trim(),
       member_agent_ids,
       updated_at: new Date().toISOString(),
@@ -101,6 +109,7 @@ export class GroupRepository {
     return {
       group_id: row.group_id,
       name: String(raw.name || row.group_id).trim() || row.group_id,
+      model_id: String(raw.model_id || "").trim(),
       instruction: String(raw.instruction || ""),
       member_agent_ids: normalize_member_agent_ids(raw.member_agent_ids || []),
       created_at: String(raw.created_at || row.created_at),
@@ -118,4 +127,11 @@ export function normalize_group_id(input: string): string {
 
 function normalize_member_agent_ids(input: readonly string[]): string[] {
   return [...new Set((input || []).map((agent_id) => String(agent_id || "").trim()).filter(Boolean))];
+}
+
+/** 规范化 Group 的必填模型标识。 */
+function normalize_model_id(input: string): string {
+  const model_id = String(input || "").trim();
+  if (!model_id) throw new Error("Group requires a model_id");
+  return model_id;
 }

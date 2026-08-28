@@ -1,7 +1,7 @@
 /** 以可折叠 Workspace 文档树组织 Session 的 Chat Sidebar。 */
 
 import { useEffect, useState } from "react";
-import { TbArchive, TbChevronRight, TbDots, TbFolder, TbFolderPlus, TbGhost3, TbPlus } from "react-icons/tb";
+import { TbArchive, TbChevronRight, TbDots, TbFolder, TbFolderPlus, TbGhost3, TbPlus, TbTrash, TbUsers } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -77,6 +77,8 @@ export function ChatSidebar({ controller, open_create_workspace, open_create_age
         const expanded = expanded_workspace_ids.has(workspace.workspace_id);
         const sessions = [...(controller.sessions_by_workspace[workspace.workspace_id] ?? [])]
           .sort((left, right) => Number(right.session.executing) - Number(left.session.executing) || right.session.updated_at - left.session.updated_at);
+        const group_sessions = [...(controller.group_sessions_by_workspace[workspace.workspace_id] ?? [])]
+          .sort((left, right) => right.session.updated_at - left.session.updated_at);
         const get_agent = (agent_id: string) => controller.agents.find((agent) => agent.agent_id === agent_id);
         return <section key={workspace.workspace_id} className="mb-0.5">
           <div className="group flex min-h-7 w-full cursor-pointer items-center gap-1 rounded-lg border border-transparent p-0.5 transition-all duration-200 ease-out hover:bg-foreground/[0.07] focus-within:bg-foreground/[0.07]" onClick={() => toggle_workspace(workspace.workspace_id)}>
@@ -87,7 +89,7 @@ export function ChatSidebar({ controller, open_create_workspace, open_create_age
               <TbFolder className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{workspace.name}</span>
             </div>
-            <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100" title="新对话" aria-label="新对话" onClick={(event) => event.stopPropagation()}><TbPlus /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" sideOffset={4} onClick={(event) => event.stopPropagation()}>{controller.agents.map((agent) => <DropdownMenuItem key={agent.agent_id} onClick={() => create_session(workspace.workspace_id, agent.agent_id)}><AgentAvatar agent={agent} /><span>{agent.agent_id}</span></DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
+            <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100" title="新对话" aria-label="新对话" onClick={(event) => event.stopPropagation()}><TbPlus /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" sideOffset={4} onClick={(event) => event.stopPropagation()}>{controller.agents.map((agent) => <DropdownMenuItem key={`agent:${agent.agent_id}`} onClick={() => create_session(workspace.workspace_id, agent.agent_id)}><AgentAvatar agent={agent} /><span>{agent.agent_id}</span></DropdownMenuItem>)}{controller.groups.map((group) => <DropdownMenuItem key={`group:${group.group_id}`} onClick={() => void controller.create_group_session(group.group_id, workspace.workspace_id)}><TbUsers /><span>{group.name}</span></DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
             <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100" title="Workspace 操作" aria-label="Workspace 操作" onClick={(event) => event.stopPropagation()}><TbDots /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" sideOffset={4} onClick={(event) => event.stopPropagation()}><DropdownMenuItem onClick={() => open_archives(workspace.workspace_id)}><TbArchive /><span>已归档对话</span></DropdownMenuItem><DropdownMenuItem onClick={() => open_create_agent(workspace.workspace_id)}><TbGhost3 /><span>创建 Agent</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
           </div>
           {expanded ? <div className="space-y-0.5 pl-5">
@@ -101,7 +103,8 @@ export function ChatSidebar({ controller, open_create_workspace, open_create_age
               on_archive={() => controller.archive_session(workspace.workspace_id, agent_id, session.session_id)}
               on_remove={() => controller.remove_session(workspace.workspace_id, agent_id, session.session_id)}
             />)}
-            {sessions.length === 0 ? <div className="px-2 py-2 text-[0.6875rem] text-muted-foreground/60">暂无对话</div> : null}
+            {group_sessions.map(({ group_id, group, session }) => <div key={`${group_id}:${session.session_id}`} role="button" tabIndex={0} className={`group relative flex min-h-7 w-full cursor-pointer items-center gap-1 rounded-lg border border-transparent p-0.5 pl-1 text-left transition-all duration-200 ease-out ${controller.selection?.kind === "group_session" && controller.selection.group_id === group_id && controller.selection.session_id === session.session_id ? "bg-primary/[0.1] hover:bg-primary/[0.12]" : "hover:bg-foreground/[0.07]"}`} onClick={() => void controller.open_group(group_id, session.session_id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void controller.open_group(group_id, session.session_id); } }}><TbUsers className="size-5 shrink-0 rounded-md bg-foreground/[0.06] p-0.5 text-muted-foreground" /><div className="flex min-w-0 flex-1 items-center"><span className="min-w-0 truncate text-xs leading-4 text-foreground">{group.name}</span><span className="ml-1.5 shrink-0 text-[0.625rem] text-muted-foreground/60">{session.message_count}</span></div><Button size="icon" className="opacity-0 group-hover:opacity-100" title="删除 GroupSession" aria-label="删除 GroupSession" onClick={(event) => { event.stopPropagation(); void controller.remove_group_session(group_id, session.session_id); }}><TbTrash /></Button></div>)}
+            {sessions.length === 0 && group_sessions.length === 0 ? <div className="px-2 py-2 text-[0.6875rem] text-muted-foreground/60">暂无对话</div> : null}
           </div> : null}
         </section>;
       })}

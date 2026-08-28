@@ -757,6 +757,10 @@ div[data-streamdown="table-wrapper"] > div:first-child {
   color: color-mix(in srgb, var(--foreground) 52%, transparent);
 }
 
+.thinking-dots-icon.is-highlighted {
+  color: var(--primary);
+}
+
 .thinking-dot {
   display: block;
   width: 3px;

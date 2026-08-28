@@ -73,15 +73,10 @@ const desktop_api: DesktopApi = {
     send: (group_id, session_id, input) => ipcRenderer.invoke("group:send", group_id, session_id, input),
     stop: (group_id, session_id) => ipcRenderer.invoke("group:stop", group_id, session_id),
     remove_session: (group_id, session_id) => ipcRenderer.invoke("group:remove-session", group_id, session_id),
-    on_message: (callback) => {
+    subscribe: (callback) => {
       const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof callback>[0]) => callback(value);
-      ipcRenderer.on("group:message", handler);
-      return () => ipcRenderer.removeListener("group:message", handler);
-    },
-    on_member_status: (callback) => {
-      const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof callback>[0]) => callback(value);
-      ipcRenderer.on("group:member-status", handler);
-      return () => ipcRenderer.removeListener("group:member-status", handler);
+      ipcRenderer.on("group:event", handler);
+      return () => ipcRenderer.removeListener("group:event", handler);
     },
   },
   settings: {

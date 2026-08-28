@@ -6,6 +6,7 @@ import type { GroupMessage } from "@/types/group/Group.js";
 import type {
   GroupSessionDataStore,
   GroupSessionHistoryMeta,
+  GroupSessionTurnCheckpoint,
 } from "@/types/group/GroupSessionStore.js";
 
 /** 单个 GroupSession 的本地文件存储。 */
@@ -110,6 +111,12 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
       ...(raw.member_session_ids && typeof raw.member_session_ids === "object"
         ? { member_session_ids: normalize_member_session_ids(raw.member_session_ids) }
         : {}),
+      ...(Array.isArray(raw.pending_turns)
+        ? { pending_turns: normalize_pending_turns(raw.pending_turns) }
+        : {}),
+      ...(Array.isArray(raw.auto_frontier_message_ids)
+        ? { auto_frontier_message_ids: normalize_message_ids(raw.auto_frontier_message_ids) }
+        : {}),
     };
   }
 
@@ -205,4 +212,21 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
 
 function normalize_member_session_ids(input: object): Record<string, string> {
   return Object.fromEntries(Object.entries(input).filter(([agent_id, session_id]) => Boolean(agent_id.trim()) && typeof session_id === "string" && session_id.trim()));
+}
+
+function normalize_pending_turns(input: unknown[]): GroupSessionTurnCheckpoint[] {
+  return input.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const candidate = item as Partial<GroupSessionTurnCheckpoint>;
+    const turn_id = typeof candidate.turn_id === "string" ? candidate.turn_id.trim() : "";
+    const root_message_id = typeof candidate.root_message_id === "string" ? candidate.root_message_id.trim() : "";
+    const context_message_ids = Array.isArray(candidate.context_message_ids)
+      ? normalize_message_ids(candidate.context_message_ids)
+      : [];
+    return turn_id && root_message_id ? [{ turn_id, root_message_id, context_message_ids }] : [];
+  });
+}
+
+function normalize_message_ids(input: unknown[]): string[] {
+  return [...new Set(input.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))];
 }

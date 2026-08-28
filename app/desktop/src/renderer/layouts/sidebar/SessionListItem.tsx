@@ -50,7 +50,7 @@ export function SessionListItem({ session, agent, active, on_select, on_rename, 
             aria-label="更多操作"
             onClick={(event) => event.stopPropagation()}
           >
-            {session.executing ? <TbLoader2 className="animate-spin text-primary" /> : <TbDots />}
+            {session.executing ? <TbLoader2 className="animate-spin text-primary" aria-label="正在回复。" /> : <TbDots />}
           </Button>
       } />
     </div>

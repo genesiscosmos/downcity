@@ -12,7 +12,7 @@ interface WorkspaceViewProps {
   /** 当前 Workspace 下的 Agent。 */ agents: DesktopAgentSummary[];
   /** 全部 Agent Session 投影。 */ sessions_by_agent: Record<string, DesktopSessionSummary[]>;
   /** 在 Workspace 中创建 Agent。 */ open_create_agent(): void;
-  /** 打开 Agent 管理页。 */ select_agent(agent_id: string): void;
+  /** 打开 Agent 主视图。 */ select_agent(agent_id: string): void;
   /** 进入 Session。 */ select_session(agent_id: string, session_id: string): Promise<void>;
 }
 

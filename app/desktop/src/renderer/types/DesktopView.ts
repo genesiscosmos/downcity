@@ -15,7 +15,9 @@ import type {
   DesktopUpdateGroupInput,
   DesktopGroupMessage,
   DesktopGroupMemberRuntime,
+  DesktopGroupStatusPhase,
   DesktopGroupSummary,
+  DesktopGroupSessionSummary,
   DesktopModelSummary,
   DesktopPluginSummary,
   DesktopPluginDefinition,
@@ -40,7 +42,7 @@ export type NavigationTarget =
   | { /** Agent 管理页。 */ kind: "agent"; /** Agent 标识。 */ agent_id: string }
   | { /** 尚未持久化的空对话。 */ kind: "draft"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Draft 稳定标识。 */ draft_id: string }
   | { /** Session Chat。 */ kind: "session"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Session 标识。 */ session_id: string }
-  | { /** Group 群聊。 */ kind: "group"; /** Group 标识。 */ group_id: string }
+  | { /** 具体 GroupSession Chat。 */ kind: "group_session"; /** Group 标识。 */ group_id: string; /** Workspace 标识。 */ workspace_id: string; /** GroupSession 标识。 */ session_id: string }
   | { /** Plugin 详情页。 */ kind: "plugin"; /** Plugin 标识。 */ plugin_id: string }
   | { /** Desktop 设置页。 */ kind: "settings"; /** 当前设置分区。 */ section: SettingsSection };
 
@@ -90,6 +92,16 @@ export interface DesktopWorkspaceSession {
   session: DesktopSessionSummary;
 }
 
+/** Workspace 导航树中的一条 GroupSession。 */
+export interface DesktopWorkspaceGroupSession {
+  /** Group 标识。 */
+  group_id: string;
+  /** Group 摘要，用于展示名称和成员。 */
+  group: DesktopGroupSummary;
+  /** GroupSession 摘要。 */
+  session: DesktopGroupSessionSummary;
+}
+
 /** Renderer 根状态控制器向视图公开的能力。 */
 export interface DesktopViewController {
   /** 共享 Registry 中的全部 Agent。 */
@@ -104,8 +116,14 @@ export interface DesktopViewController {
   group_messages_by_group: Record<string, DesktopGroupMessage[]>;
   /** 按 Group 标识缓存的成员运行态。 */
   group_member_statuses_by_group: Record<string, DesktopGroupMemberRuntime[]>;
+  /** 按 Group 标识缓存的当前运行阶段。 */
+  group_phase_by_group: Record<string, DesktopGroupStatusPhase>;
+  /** 按 Group 标识缓存已完成 Dispatch 的消息标识。 */
+  group_read_message_ids_by_group: Record<string, string[]>;
   /** 按 Workspace 标识缓存的 Session 导航数据。 */
   sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
+  /** 按 Workspace 标识缓存的 GroupSession 导航数据。 */
+  group_sessions_by_workspace: Record<string, DesktopWorkspaceGroupSession[]>;
   /** 按 Workspace 标识缓存的已归档 Session。 */
   archived_sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
   /** 按 Agent 与 Session 组合键缓存的 canonical 消息。 */
@@ -158,24 +176,22 @@ export interface DesktopViewController {
   set_sidebar_mode(mode: SidebarMode): void;
   /** 打开一个 Workspace，并将其设为 Chat 上下文。 */
   select_workspace(workspace_id: string): void;
-  /** 选择一个运行时 Group。 */
-  select_group(group_id: string): Promise<void>;
   /** 创建一个运行时 Group。 */
   create_group(input: DesktopCreateGroupInput): Promise<void>;
   /** 更新一个 Group 定义。 */
   update_group(group_id: string, input: DesktopUpdateGroupInput): Promise<void>;
   /** 删除一个 Group。 */
   remove_group(group_id: string): Promise<void>;
-  /** 为 Group 创建共享 Session 并打开。 */
+  /** 为 Group 打开指定共享 Session。 */
   open_group(group_id: string, session_id?: string): Promise<void>;
   /** 为 Group 创建新的共享 Session 并打开。 */
   create_group_session(group_id: string, workspace_id?: string): Promise<void>;
   /** 删除 Group 的共享 Session。 */
   remove_group_session(group_id: string, session_id: string): Promise<void>;
-  /** 向 Group 发送文本。 */
-  send_group_message(group_id: string, text: string): Promise<string | undefined>;
+  /** 向指定 GroupSession 发送文本。 */
+  send_group_message(group_id: string, session_id: string, text: string): Promise<string | undefined>;
   /** 停止 Group 当前执行。 */
-  stop_group(group_id: string): Promise<void>;
+  stop_group(group_id: string, session_id: string): Promise<void>;
   /** 打开设置分区。 */
   open_settings(section?: SettingsSection): void;
   /** 离开设置并返回之前的业务视图。 */

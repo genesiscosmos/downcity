@@ -19,6 +19,8 @@ test("缺失设置使用稳定默认值", () => {
     proxy_url: "",
     default_text_model_id: "",
     default_image_model_id: "",
+    agent_main_sessions: {},
+    group_main_sessions: {},
   });
 });
 

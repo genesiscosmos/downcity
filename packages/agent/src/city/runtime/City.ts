@@ -137,8 +137,8 @@ export class City {
     if (existing && existing !== group) throw new Error(`Group already exists in City: ${group.id}`);
     if (existing) return existing;
     for (const member of group.members) {
-      if (this.agents_by_id.get(member.agent.id) !== member.agent) {
-        throw new Error(`Group member is not registered in City: ${member.agent.id}`);
+      if (this.agents_by_id.get(member.id) !== member) {
+        throw new Error(`Group member is not registered in City: ${member.id}`);
       }
     }
     attach_group_storage(group, this.storage, this);
@@ -254,7 +254,7 @@ export class City {
       try {
         await this.http_transport.detach_agent(agent_id);
         const dependent_groups = [...this.groups_by_id.values()]
-          .filter((group) => group.members.some((member) => member.agent === agent));
+          .filter((group) => group.members.some((member) => member === agent));
         await Promise.allSettled(dependent_groups.map(async (group) => {
           await group.dispose();
           this.groups_by_id.delete(group.id);

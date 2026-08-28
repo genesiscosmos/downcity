@@ -1,7 +1,7 @@
 /** Agent 身份、配置索引与右侧定义编辑容器。 */
 
 import { useEffect, useRef, useState } from "react";
-import { TbCheck, TbChevronRight, TbComponents, TbFileText, TbGhost3, TbMessageCircle, TbPlus } from "react-icons/tb";
+import { TbCheck, TbChevronRight, TbComponents, TbFileText, TbLayoutSidebar, TbLayoutSidebarFilled, TbMessageCircle, TbPlus } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { DetailEditorSidebar } from "@/components/DetailEditorSidebar";
 import { LLMModelIcon } from "@/components/model/LLMModelIcon";
@@ -13,20 +13,85 @@ import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopAgentDefinition, DesktopAgentPluginReference, DesktopAgentSummary, DesktopPluginSummary, DesktopSessionSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 /** Agent 页面可以在右侧编辑的定义分区。 */
-type AgentEditorSection = "model" | "soul" | "plugins";
+export type AgentEditorSection = "model" | "soul" | "plugins" | "avatar";
 
 /** Agent 管理页属性。 */
 interface AgentViewProps {
   /** 当前 Agent。 */ agent: DesktopAgentSummary;
   /** 全部 Workspace。 */ workspaces: DesktopWorkspaceSummary[];
   /** 当前可用 Plugin。 */ plugins: DesktopPluginSummary[];
-  /** 当前 Agent 的 Session。 */ sessions: DesktopSessionSummary[];
+  /** 当前 Agent 的主 Session。 */ main_session?: { workspace_id: string; session: DesktopSessionSummary };
   /** Renderer 根控制器。 */ controller: DesktopViewController;
-  /** 进入 Session。 */ select_session(session_id: string): Promise<void>;
+  /** 打开主 Session 对话。 */ open_main_session(): Promise<void>;
+  /** 打开 Agent 配置侧栏。 */ open_config(section: AgentEditorSection): void;
+  /** 切换 Agent 配置侧栏。 */ toggle_config_sidebar(): void;
+  /** 配置侧栏是否打开。 */ config_sidebar_open: boolean;
+  /** 配置侧栏是否折叠。 */ config_sidebar_collapsed: boolean;
+}
+
+/** Agent 信息侧栏属性。 */
+interface AgentInfoSidebarProps {
+  /** 当前 Agent。 */
+  agent: DesktopAgentSummary;
+  /** 当前可用 Plugin。 */
+  plugins: DesktopPluginSummary[];
+  /** Renderer 根控制器。 */
+  controller: DesktopViewController;
+  /** 关闭信息侧栏。 */
+  close_sidebar(): void;
+  /** 当前配置分区。 */
+  section?: AgentEditorSection;
+  /** 是否折叠侧栏。 */
+  collapsed?: boolean;
+}
+
+/** Agent Sidebar 中的固定信息与配置编辑侧栏。 */
+export function AgentInfoSidebar({ agent, plugins, controller, close_sidebar, section, collapsed = false }: AgentInfoSidebarProps) {
+  const [editor_section, set_editor_section] = useState<AgentEditorSection | undefined>(section || "model");
+  useEffect(() => { if (section) set_editor_section(section); }, [section]);
+  const [definition, set_definition] = useState<DesktopAgentDefinition>();
+  const [loading_definition, set_loading_definition] = useState(false);
+  const [definition_dirty, set_definition_dirty] = useState(false);
+  const [editor_error, set_editor_error] = useState("");
+  const definition_version_ref = useRef(0);
+  const bound_plugins = plugins.filter((plugin) => plugin.agent_ids.includes(agent.agent_id));
+  const load_definition = async () => {
+    set_loading_definition(true);
+    set_editor_error("");
+    try { set_definition(await controller.get_agent(agent.agent_id)); }
+    catch (reason) { set_editor_error(reason instanceof Error ? reason.message : String(reason)); }
+    finally { set_loading_definition(false); }
+  };
+  const update_definition = (value: DesktopAgentDefinition) => {
+    definition_version_ref.current += 1;
+    set_definition(value);
+    set_definition_dirty(true);
+  };
+  useEffect(() => {
+    if (!definition_dirty || !definition) return;
+    const version = definition_version_ref.current;
+    const timeout_id = window.setTimeout(() => {
+      const plugins_input = Object.fromEntries(Object.entries(definition.plugins).map(([plugin_id, reference]) => [plugin_id, reference.profile ? { profile: reference.profile.trim() } : {}]));
+      void controller.update_agent(agent.agent_id, { model_id: definition.model_id, instruction: definition.instruction, plugins: plugins_input })
+        .then(() => { if (definition_version_ref.current === version) set_definition_dirty(false); })
+        .catch((reason) => set_editor_error(reason instanceof Error ? reason.message : String(reason)));
+    }, 500);
+    return () => window.clearTimeout(timeout_id);
+  }, [agent.agent_id, controller.update_agent, definition, definition_dirty]);
+  return <DetailEditorSidebar title={`${agent.agent_id} 配置`} storage_key="downcity.agent_config_width" default_width={400} max_width={560} on_close={close_sidebar} collapsed={collapsed} show_close={false}>
+    <div className="mb-4 flex min-w-0 items-center gap-3 px-1"><div className="min-w-0"><div className="truncate text-sm font-semibold text-foreground">{agent.agent_id}</div><div className="truncate text-[0.6875rem] text-muted-foreground">Agent 配置</div></div></div>
+    <SettingsGroup title="Definition">
+      <EditablePropertyRow icon={<LLMModelIcon model_id={agent.model_id} />} label="Model" value={definition?.model_id || agent.model_id || "未配置"} active={editor_section === "model"} on_select={() => { set_editor_section("model"); if (!definition && !loading_definition) void load_definition(); }} />
+      <EditablePropertyRow icon={<TbFileText />} label="SOUL.md" value={definition ? `${definition.instruction.length} characters` : "Agent instruction"} active={editor_section === "soul"} on_select={() => { set_editor_section("soul"); if (!definition && !loading_definition) void load_definition(); }} />
+      <EditablePropertyRow icon={<TbComponents />} label="Plugins" value={`${bound_plugins.length} enabled`} active={editor_section === "plugins"} on_select={() => { set_editor_section("plugins"); if (!definition && !loading_definition) void load_definition(); }} />
+      <EditablePropertyRow icon={<AgentAvatar agent={agent} class_name="size-4 rounded" />} label="Avatar" value={agent.avatar_url ? "Custom avatar" : "Default avatar"} active={editor_section === "avatar"} on_select={() => { set_editor_section("avatar"); if (!definition && !loading_definition) void load_definition(); }} last />
+    </SettingsGroup>
+    {editor_section ? <AgentEditorPanel embedded section={editor_section} definition={definition} plugins={plugins} controller={controller} loading={loading_definition} error={editor_error} set_definition={update_definition} close_editor={() => set_editor_section(undefined)} /> : null}
+  </DetailEditorSidebar>;
 }
 
 /** 左侧展示 Agent 摘要，点击配置项后在右侧展开对应编辑容器。 */
-export function AgentView({ agent, workspaces, plugins, sessions, controller, select_session }: AgentViewProps) {
+export function AgentView({ agent, workspaces, plugins, main_session, controller, open_main_session, open_config, toggle_config_sidebar, config_sidebar_open, config_sidebar_collapsed }: AgentViewProps) {
   const [editor_section, set_editor_section] = useState<AgentEditorSection>();
   const [definition, set_definition] = useState<DesktopAgentDefinition>();
   const [loading_definition, set_loading_definition] = useState(false);
@@ -34,9 +99,8 @@ export function AgentView({ agent, workspaces, plugins, sessions, controller, se
   const [definition_dirty, set_definition_dirty] = useState(false);
   const definition_version_ref = useRef(0);
   const [editor_error, set_editor_error] = useState("");
-  const [avatar_editor_open, set_avatar_editor_open] = useState(false);
   const bound_plugins = plugins.filter((plugin) => plugin.agent_ids.includes(agent.agent_id));
-  const recent_sessions = [...sessions].sort((left, right) => right.updated_at - left.updated_at).slice(0, 5);
+  const recent_sessions = main_session ? [main_session.session] : [];
 
   const load_definition = async () => {
     set_loading_definition(true);
@@ -89,50 +153,20 @@ export function AgentView({ agent, workspaces, plugins, sessions, controller, se
 
   return <div className="flex h-full min-h-0 min-w-0 flex-1 bg-background">
     <MainViewLayout>
-      <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2"><div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1 text-xs text-muted-foreground"><AgentAvatar agent={agent} /><span className="truncate font-medium text-foreground/80">{agent.agent_id}</span></div></header>
+      <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2"><div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1 text-xs text-muted-foreground"><AgentAvatar agent={agent} /><span className="truncate font-medium text-foreground/80">{agent.agent_id}</span></div><Button size="icon" actived={config_sidebar_open && !config_sidebar_collapsed} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={toggle_config_sidebar} title={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Agent 配置侧栏" : "打开 Agent 配置侧栏"} aria-label={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Agent 配置侧栏" : "打开 Agent 配置侧栏"}>{config_sidebar_open && !config_sidebar_collapsed ? <TbLayoutSidebarFilled className="-scale-x-100" /> : <TbLayoutSidebar className="-scale-x-100" />}</Button></header>
       <MainViewBody>
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto"><div className="mx-auto w-full max-w-[42rem] px-6 pb-12 pt-14">
-        <div className="mb-9 flex min-w-0 items-center gap-4"><button type="button" className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-subtle text-muted-foreground transition-opacity hover:opacity-80" title="编辑头像" aria-label="编辑头像" onClick={() => set_avatar_editor_open(true)}><AgentAvatar agent={agent} class_name="size-12 rounded-xl" icon_class_name="size-6" /></button><div className="min-w-0"><h1 className="truncate text-lg font-semibold text-foreground">{agent.agent_id}</h1><p className="mt-1 truncate text-xs text-muted-foreground">可进入 {workspaces.length} 个 Workspace</p></div></div>
-        <SettingsGroup title="Definition">
-          <EditablePropertyRow icon={<LLMModelIcon model_id={agent.model_id} size_class="size-4" />} label="Model" value={agent.model_id || "未配置"} active={editor_section === "model"} on_select={() => open_editor("model")} />
-          <EditablePropertyRow icon={<TbFileText />} label="SOUL.md" value={definition ? `${definition.instruction.length} characters` : "Agent instruction"} active={editor_section === "soul"} on_select={() => open_editor("soul")} />
-          <EditablePropertyRow icon={<TbComponents />} label="Plugins" value={`${bound_plugins.length} enabled`} active={editor_section === "plugins"} on_select={() => open_editor("plugins")} last />
-        </SettingsGroup>
-        <SettingsGroup title="Recent Sessions">{recent_sessions.length > 0 ? recent_sessions.map((session, index) => <button key={session.session_id} className={`flex min-h-11 w-full items-center gap-3 px-3.5 text-left hover:bg-foreground/[0.04] ${index === recent_sessions.length - 1 ? "" : "border-b border-border/45"}`} onClick={() => void select_session(session.session_id)}><TbMessageCircle className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate text-xs text-foreground">{session.title || "新对话"}</span><span className="text-[0.625rem] text-muted-foreground">{session.message_count} messages</span></button>) : <EmptyRow text="暂无 Session" />}</SettingsGroup>
+        <div className="mb-9 flex min-w-0 items-center gap-4"><div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-subtle text-muted-foreground"><AgentAvatar agent={agent} class_name="size-12 rounded-xl" icon_class_name="size-6" /></div><div className="min-w-0"><h1 className="truncate text-lg font-semibold text-foreground">{agent.agent_id}</h1><p className="mt-1 truncate text-xs text-muted-foreground">可进入 {workspaces.length} 个 Workspace</p></div></div>
+        <SettingsGroup title="Definition"><EditablePropertyRow icon={<LLMModelIcon model_id={agent.model_id} />} label="Model" value={agent.model_id || "未配置"} active={false} on_select={() => open_config("model")} /><EditablePropertyRow icon={<TbFileText />} label="SOUL.md" value="Agent instruction" active={false} on_select={() => open_config("soul")} /><EditablePropertyRow icon={<TbComponents />} label="Plugins" value={`${bound_plugins.length} enabled`} active={false} on_select={() => open_config("plugins")} /><EditablePropertyRow icon={<AgentAvatar agent={agent} class_name="size-4 rounded" />} label="Avatar" value={agent.avatar_url ? "Custom avatar" : "Default avatar"} active={false} on_select={() => open_config("avatar")} last /></SettingsGroup>
+        <SettingsGroup title="主对话">{recent_sessions.length > 0 ? recent_sessions.map((session) => <button key={session.session_id} className="flex min-h-11 w-full items-center gap-3 px-3.5 text-left hover:bg-foreground/[0.04]" onClick={() => void open_main_session()}><TbMessageCircle className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate text-xs text-foreground">{session.title || "主对话"}</span><span className="text-[0.625rem] text-muted-foreground">{session.message_count} messages</span></button>) : <Button variant="primary" onClick={() => void open_main_session()}><TbMessageCircle />开始主对话</Button>}</SettingsGroup>
       </div></div>
       </MainViewBody>
     </MainViewLayout>
-    {editor_section ? <AgentEditorPanel section={editor_section} definition={definition} plugins={plugins} controller={controller} loading={loading_definition} error={editor_error} set_definition={update_definition} close_editor={() => set_editor_section(undefined)} /> : null}
-    {avatar_editor_open ? <AvatarEditor agent={agent} controller={controller} close_editor={() => set_avatar_editor_open(false)} /> : null}
   </div>;
 }
 
-/** Agent 头像编辑侧栏。 */
-function AvatarEditor({ agent, controller, close_editor }: { /** 当前 Agent。 */ agent: DesktopAgentSummary; /** Desktop 根控制器。 */ controller: DesktopViewController; /** 关闭侧栏。 */ close_editor(): void }) {
-  const [saving, set_saving] = useState(false);
-  const [error, set_error] = useState("");
-  const choose_avatar = async () => {
-    set_saving(true);
-    set_error("");
-    try { await controller.choose_agent_avatar(agent.agent_id); } catch (reason) { set_error(reason instanceof Error ? reason.message : String(reason)); } finally { set_saving(false); }
-  };
-  const remove_avatar = async () => {
-    set_saving(true);
-    set_error("");
-    try { await controller.remove_agent_avatar(agent.agent_id); } catch (reason) { set_error(reason instanceof Error ? reason.message : String(reason)); } finally { set_saving(false); }
-  };
-  const generate_avatar = async () => {
-    set_saving(true);
-    set_error("");
-    try { await controller.generate_agent_avatar(agent.agent_id); } catch (reason) { set_error(reason instanceof Error ? reason.message : String(reason)); } finally { set_saving(false); }
-  };
-  return <DetailEditorSidebar title="Avatar" storage_key="downcity.avatar_editor_width" default_width={360} max_width={480} on_close={close_editor}>
-    <div className="flex flex-col items-center gap-4 py-5"><div className="flex size-32 items-center justify-center overflow-hidden rounded-2xl bg-surface-subtle text-muted-foreground"><AgentAvatar agent={agent} class_name="size-32 rounded-2xl" icon_class_name="size-14" /></div><div className="grid w-full grid-cols-2 gap-2"><Button type="button" variant="primary" className="w-full" disabled={saving} onClick={() => void generate_avatar()}><TbGhost3 />随机生成</Button><Button type="button" className="w-full" disabled={saving} onClick={() => void choose_avatar()}><TbPlus />选择图片</Button></div><Button type="button" className="w-full" disabled={saving || !agent.avatar_url} onClick={() => void remove_avatar()}>移除头像</Button><p className="w-full text-xs leading-5 text-muted-foreground">随机头像使用 Downcity Ghost 形象生成。自定义图片支持 PNG、JPEG 和 WebP，文件大小不超过 2 MiB。</p>{error ? <p className="w-full text-xs leading-5 text-destructive">{error}</p> : null}</div>
-  </DetailEditorSidebar>;
-}
-
 /** Agent 页面右侧的分区编辑容器。 */
-function AgentEditorPanel({ section, definition, plugins, controller, loading, error, set_definition, close_editor }: {
+function AgentEditorPanel({ section, definition, plugins, controller, loading, error, set_definition, close_editor, embedded = false }: {
   /** 当前编辑分区。 */ section: AgentEditorSection;
   /** 当前未提交定义。 */ definition?: DesktopAgentDefinition;
   /** 可注册的全部 Plugin。 */ plugins: DesktopPluginSummary[];
@@ -141,15 +175,18 @@ function AgentEditorPanel({ section, definition, plugins, controller, loading, e
   /** 当前编辑错误。 */ error: string;
   /** 替换未提交定义。 */ set_definition(value: DesktopAgentDefinition): void;
   /** 收起右侧容器。 */ close_editor(): void;
+  /** 是否嵌入已有信息侧栏。 */ embedded?: boolean;
 }) {
-  const titles: Record<AgentEditorSection, string> = { model: "Model", soul: "SOUL.md", plugins: "Plugins" };
-  return <DetailEditorSidebar title={titles[section]} storage_key="downcity.agent_editor_width" default_width={400} max_width={560} on_close={close_editor}>
+  const titles: Record<AgentEditorSection, string> = { model: "Model", soul: "SOUL.md", plugins: "Plugins", avatar: "Avatar" };
+  const content = <>
         {loading && !definition ? <div className="py-10 text-center text-xs text-muted-foreground">加载中…</div> : null}
         {definition && section === "model" ? <ModelEditor definition={definition} controller={controller} set_definition={set_definition} /> : null}
         {definition && section === "soul" ? <SoulEditor definition={definition} controller={controller} set_definition={set_definition} /> : null}
         {definition && section === "plugins" ? <PluginEditor definition={definition} plugins={plugins} controller={controller} set_definition={set_definition} /> : null}
+        {section === "avatar" ? <div className="flex flex-col items-center gap-3 py-4"><AgentAvatar agent={controller.agents.find((item) => item.agent_id === definition?.agent_id) ?? { agent_id: "", model_id: "", version: "" }} class_name="size-24 rounded-2xl" /><div className="flex w-full gap-2"><Button className="flex-1" onClick={() => void controller.generate_agent_avatar(controller.agents.find((item) => item.agent_id === definition?.agent_id)?.agent_id || "")}>随机生成</Button><Button className="flex-1" onClick={() => void controller.choose_agent_avatar(controller.agents.find((item) => item.agent_id === definition?.agent_id)?.agent_id || "")}>选择图片</Button></div></div> : null}
         {error ? <div className="mt-3 text-[0.6875rem] leading-4 text-destructive">{error}</div> : null}
-  </DetailEditorSidebar>;
+  </>;
+  return embedded ? <div className="mt-3 border-t border-border/45 pt-3">{content}</div> : <DetailEditorSidebar title={titles[section]} storage_key="downcity.agent_editor_width" default_width={400} max_width={560} on_close={close_editor}>{content}</DetailEditorSidebar>;
 }
 
 /** 默认模型编辑器。 */

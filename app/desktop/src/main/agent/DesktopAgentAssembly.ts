@@ -86,6 +86,21 @@ export function create_desktop_agent_model(
     : undefined;
 }
 
+/** 根据 Group 的模型标识创建延迟解析的群聊意图模型。 */
+export function create_desktop_group_model(
+  data: DesktopLocalData,
+  model_id_input: string,
+  env: Readonly<Record<string, string>>,
+): AgentModel | undefined {
+  const model_id = String(model_id_input || "").trim();
+  return model_id
+    ? new LazyDesktopAgentModel(
+      model_id,
+      async () => await resolve_desktop_agent_model(data, model_id, env),
+    )
+    : undefined;
+}
+
 /** 通过 Desktop 当前 Embassy Session 解析 Federation 模型。 */
 export async function resolve_desktop_agent_model(
   data: DesktopLocalData,

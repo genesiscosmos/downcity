@@ -30,7 +30,7 @@ export function SettingsSidebar({ controller, collapsed = false }: SettingsSideb
   const active_section = controller.selection?.kind === "settings" ? controller.selection.section : "user";
   return <SidebarContainer collapsed={collapsed}>
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="relative flex h-9 shrink-0 items-center"><div className="header-drag-region absolute inset-0" /></div>
+      <div className="relative flex h-10 shrink-0 items-center"><div className="header-drag-region absolute inset-0" /></div>
       <div className="shrink-0 px-2 pb-2">
         <Button size="sidebar" className="justify-start text-foreground/80" onClick={controller.close_settings}>
           <TbArrowLeft />

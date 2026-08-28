@@ -11,12 +11,13 @@
 export { Agent } from "./agent/Agent.js";
 export { Group } from "./group/Group.js";
 export type {
-  DispatchContinuation,
   DispatchDecision,
+  DispatchNode,
   DispatchResponseMode,
+  DispatchTrigger,
   DispatchStrategy,
+  AiDispatchStrategyOptions,
   GroupContract,
-  GroupMember,
   GroupMessage,
   GroupOptions,
 } from "./group/index.js";
@@ -28,9 +29,10 @@ export type {
 export { GroupSession, GroupSessions } from "./group/index.js";
 export type {
   GroupMemberRuntime,
-  GroupMemberStatusUnsubscribe,
-  GroupMessageSubscriber,
-  GroupMessageUnsubscribe,
+  GroupEvent,
+  GroupStatusPhase,
+  GroupEventSubscriber,
+  GroupEventUnsubscribe,
   GroupPromptInput,
   GroupPromptResult,
   GroupSessionContract,
@@ -40,7 +42,7 @@ export type {
   GroupSessionSummary,
   GroupSessionsContract,
 } from "./group/index.js";
-export { DefaultDispatchStrategy } from "./group/index.js";
+export { AiDispatchStrategy } from "./group/index.js";
 export { City } from "./city/index.js";
 export type {
   CityAgents,

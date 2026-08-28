@@ -1,28 +1,39 @@
 /** GroupSession 的公开领域类型：一次 Group 的独立群聊上下文。 */
 
 import type { AgentSession } from "@/types/agent/SessionActor.js";
-import type {
-  GroupMember,
-  GroupMessage,
-} from "@/types/group/Group.js";
+import type { GroupMessage } from "@/types/group/Group.js";
+import type { Agent } from "@/agent/Agent.js";
 import type { WorkspaceBase } from "@downcity/workspace";
 
-/** Group 消息订阅回调。 */
-export type GroupMessageSubscriber = (message: GroupMessage) => void | Promise<void>;
+/** Group 成员运行态。 */
+export interface GroupMemberRuntime {
+  /** 成员 Agent 标识。 */
+  readonly agent_id: string;
+  /** 当前是否正在执行。 */
+  readonly running: boolean;
+}
+
+/** Group 运行阶段。 */
+export type GroupStatusPhase = "idle" | "dispatching" | "dispatched" | "executing" | "stopped" | "failed";
+
+/** GroupSession 的统一实时事件。 */
+export type GroupEvent =
+  | { /** 事件类型。 */ readonly type: "message"; /** 新增的共享消息。 */ readonly message: GroupMessage }
+  | { /** 事件类型。 */ readonly type: "status"; /** 当前群聊轮次。 */ readonly turn_id?: string; /** 当前轮次对应的消息标识。 */ readonly message_id?: string; /** 当前运行阶段。 */ readonly phase: GroupStatusPhase; /** Dispatch 完成后实际接受消息的成员标识。 */ readonly dispatched_member_ids?: readonly string[]; /** 成员运行态快照。 */ readonly members: readonly GroupMemberRuntime[] };
+
+/** Group 事件订阅回调。 */
+export type GroupEventSubscriber = (event: GroupEvent) => void | Promise<void>;
 
 /** 取消 Group 消息订阅。 */
-export type GroupMessageUnsubscribe = () => void;
+export type GroupEventUnsubscribe = () => void;
 
-/** 取消 Group 成员运行态订阅。 */
-export type GroupMemberStatusUnsubscribe = () => void;
-
-/** GroupSession 一轮群聊传播的结果。 */
+/** GroupSession 接收一条用户消息后的异步调度回执。 */
 export interface GroupPromptResult {
-  /** 当前群聊轮次的稳定标识。 */
+  /** 当前用户消息对应的 GroupTurn 标识。 */
   readonly turn_id: string;
-  /** 本轮传播是否完整完成。 */
+  /** 用户消息是否已经成功写入并开始调度；不代表成员已经完成回复。 */
   readonly success: boolean;
-  /** 本轮完成时共享消息总数。 */
+  /** 回执生成时共享消息总数。 */
   readonly message_count: number;
 }
 
@@ -30,14 +41,6 @@ export interface GroupPromptResult {
 export interface GroupPromptInput {
   /** 用户消息正文。 */
   readonly query: string;
-}
-
-/** 成员当前是否正在处理 Group 消息。 */
-export interface GroupMemberRuntime {
-  /** 成员 Agent 标识。 */
-  readonly agent_id: string;
-  /** 当前是否正在处理消息。 */
-  readonly running: boolean;
 }
 
 /** GroupSession 列表使用的轻量摘要，不加载消息历史。 */
@@ -84,16 +87,12 @@ export interface GroupSessionContract {
   readonly group_id: string;
   /** 当前 GroupSession 绑定的 Workspace ID；未绑定时为空。 */
   readonly workspace_id?: string;
-  /** 追加用户消息并等待当前群聊传播完成。 */
+  /** 立即追加用户消息并开始异步群聊调度。 */
   prompt(input: GroupPromptInput): Promise<GroupPromptResult>;
   /** 读取共享消息事实快照。 */
   messages(): Promise<readonly GroupMessage[]>;
   /** 订阅共享消息。 */
-  subscribe(subscriber: GroupMessageSubscriber): GroupMessageUnsubscribe;
-  /** 订阅成员运行态变化。 */
-  subscribe_member_status(subscriber: (statuses: readonly GroupMemberRuntime[]) => void | Promise<void>): GroupMemberStatusUnsubscribe;
-  /** 读取每个成员当前是否正在执行的运行态快照。 */
-  member_statuses(): readonly GroupMemberRuntime[];
+  subscribe(subscriber: GroupEventSubscriber): GroupEventUnsubscribe;
   /** 停止当前传播和成员执行；停止完成后可再次 prompt。 */
   stop(): Promise<void>;
   /** 释放当前上下文，不再接受新的 prompt。 */
@@ -118,7 +117,7 @@ export interface GroupSessions {
 /** GroupSession 的内部依赖快照。 */
 export interface GroupSessionRuntimeContext {
   /** 当前 Group 的成员。 */
-  readonly members: readonly GroupMember[];
+  readonly members: readonly Agent[];
   /** 当前 Group 的协作说明。 */
   readonly instruction?: string;
   /** 当前 Group 的消息调度策略。 */
@@ -131,3 +130,21 @@ export interface GroupSessionRuntimeContext {
 
 /** 当前群聊上下文中由 Agent 持有的成员 Session。 */
 export type GroupMemberSession = AgentSession;
+
+/** GroupSession 内部维护的一次用户请求运行记录。 */
+export interface GroupTurnRuntime {
+  /** 用户请求对应的 GroupTurn 标识。 */
+  readonly turn_id: string;
+  /** 用户根消息标识。 */
+  readonly root_message_id: string;
+  /** 用户消息写入时冻结的上下文消息标识。 */
+  readonly context_message_ids: readonly string[];
+  /** 当前 GroupTurn 的异步 user dispatch。 */
+  user_dispatch?: Promise<void>;
+  /** 当前 GroupTurn 是否等待 GroupSession 的 auto dispatch。 */
+  auto_pending: boolean;
+  /** 当前 GroupTurn 是否已经停止或失败。 */
+  stopped: boolean;
+  /** 当前 GroupTurn 是否由持久化检查点恢复，只等待统一 auto dispatch 收口。 */
+  readonly recovered?: boolean;
+}

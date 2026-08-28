@@ -80,6 +80,31 @@ test("Provider 在输出前失败时只持久化 Error Message", async () => {
   assert.equal(page.items[1].message, "quota exceeded");
 });
 
+test("SessionLoop 只在 canonical 用户消息写入后返回 prompt 句柄", async () => {
+  let finish_execution;
+  const execution_finished = new Promise((resolve) => {
+    finish_execution = resolve;
+  });
+  const { messages, turn } = await create_turn_harness(async () => {
+    await execution_finished;
+    return {
+      success: true,
+      text: "done",
+      deferred_persisted_user_messages: [],
+    };
+  });
+
+  const handle = await turn.prompt({ query: "已持久化的输入" });
+  const page = await messages.list_messages();
+
+  assert.equal(handle.result, null);
+  assert.deepEqual(page.items.map((message) => message.type), ["user"]);
+  assert.equal(page.items[0].parts[0].text, "已持久化的输入");
+
+  finish_execution();
+  await handle.finished;
+});
+
 test("SessionLoop 在 Turn 收口后释放其 SessionTurnContext", async () => {
   let release_count = 0;
   const { turn } = await create_turn_harness(async (turn_context) => {

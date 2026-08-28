@@ -13,6 +13,7 @@ import {
   TbFile,
   TbFolder,
   TbGitBranch,
+  TbGhost3,
   TbLoader2,
   TbMessageReply,
   TbPencil,
@@ -25,6 +26,7 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { SessionActionsMenu } from "@/components/session/SessionActionsMenu";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { LLMModelIcon } from "@/components/model/LLMModelIcon";
 import { AssistantContent } from "@/lib/chat/assistant/AssistantActivity";
 import { should_show_assistant_actions } from "@/lib/chat/assistant/assistant_activity";
 import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
@@ -38,6 +40,10 @@ import type { DesktopAgentSummary, DesktopChatFileInput, DesktopChatInput, Deskt
 
 /** Session Chat 主视图属性。 */
 interface SessionViewProps {
+  /** 当前 Chat 的 UI 表面。 */
+  chat_surface?: "agent" | "workspace";
+  /** 当前 Workspace 稳定标识。 */
+  workspace_id: string;
   /** Session 所属 Agent。 */
   agent: DesktopAgentSummary;
   /** Session 所属 Workspace。 */
@@ -48,6 +54,12 @@ interface SessionViewProps {
   agents: DesktopAgentSummary[];
   /** 当前 Session 摘要。 */
   session: DesktopSessionSummary;
+  /** 打开当前 Agent 信息侧栏。 */
+  open_agent_info?(): void;
+  /** 打开或折叠 Agent 主聊天的配置侧栏。 */
+  toggle_agent_config?(): void;
+  /** Agent 配置侧栏是否展开。 */
+  agent_config_open?: boolean;
   /** 当前 Session 的 canonical 可见消息。 */
   messages: SessionMessage[];
   /** 当前 Session 实时运行态。 */
@@ -125,6 +137,8 @@ export function SessionView(props: SessionViewProps) {
   const scroll_ref = useRef<HTMLDivElement | null>(null);
   const sticky_ref = useRef(true);
   const busy = is_chat_busy(runtime);
+  const current_model_id = props.configuration?.model_id || props.agent.model_id;
+  const current_model_name = props.models.find((model) => model.model_id === current_model_id)?.name || current_model_id || "未配置模型";
   const can_compact = Boolean(props.compact_session && messages.some((message) => message.type === "user" || message.type === "assistant"));
 
   useEffect(() => {
@@ -144,7 +158,15 @@ export function SessionView(props: SessionViewProps) {
 
   return <MainViewLayout>
     <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2">
-      <div className="min-w-0 flex-1 truncate pl-1 text-xs font-medium text-foreground">{session.title || "新对话"}</div>
+      {props.chat_surface === "agent" ? <div className="flex min-w-0 flex-none items-center gap-2">
+        <button type="button" className="flex min-w-0 max-w-[min(100%,24rem)] items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-foreground/[0.06]" title="打开 Agent 配置" aria-label="打开 Agent 配置" onClick={props.toggle_agent_config}>
+          <AgentAvatar agent={props.agent} class_name="size-6 rounded-md" />
+          <span className="flex min-w-0 flex-col items-start"><span className="min-w-0 max-w-48 truncate text-xs font-medium text-foreground">{props.agent.agent_id}</span>{is_agent_typing(runtime?.status) ? <span className="flex items-center gap-1 text-[10px] leading-3 text-primary"><span className="thinking-dots-icon is-highlighted" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <span key={index} className="thinking-dot" />)}</span>正在回复。</span> : null}</span>
+        </button>
+        <span className="inline-flex max-w-40 min-w-0 shrink items-center gap-1 rounded-md bg-muted-foreground/[0.08] px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground"><LLMModelIcon model_id={current_model_id} model_name={current_model_name} size_class="size-3" /><span className="truncate">{current_model_name}</span></span>
+      </div> : <div className="min-w-0 flex-1 truncate pl-1 text-xs font-medium text-foreground">{session.title || "新对话"}</div>}
+      {props.chat_surface === "agent" ? <div className="min-w-0 flex-1" /> : null}
+      {props.chat_surface === "agent" && props.toggle_agent_config ? <button type="button" className={cn("flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-foreground/[0.06] hover:text-foreground", props.agent_config_open ? "text-foreground" : "text-muted-foreground")} title={props.agent_config_open ? "折叠 Agent 配置侧栏" : "打开 Agent 配置侧栏"} aria-label={props.agent_config_open ? "折叠 Agent 配置侧栏" : "打开 Agent 配置侧栏"} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={props.toggle_agent_config}><TbGhost3 className="size-4" /></button> : null}
       {props.rename_session && props.archive_session && props.remove_session ? <SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<button type="button" className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground" title="对话操作" aria-label="对话操作"><TbDots className="size-4" /></button>} /> : null}
     </header>
     <MainViewBody>
@@ -160,16 +182,16 @@ export function SessionView(props: SessionViewProps) {
         >
           <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
             {props.history?.has_more ? <div className="flex justify-center py-1"><Button disabled={props.history.loading} onClick={() => void load_earlier()}><TbArrowUp />{props.history.loading ? "正在加载…" : "加载更早消息"}</Button></div> : null}
-            {messages.length === 0 ? <EmptyPrompts on_select={props.update_draft} /> : null}
+            {messages.length === 0 ? <EmptyPrompts surface={props.chat_surface} agent={props.agent} workspace={props.workspace} workspaces={props.workspaces} agents={props.agents} switch_context={props.switch_draft_context} on_select={props.update_draft} /> : null}
             {messages.map((message, index) => <MessageRenderer key={message.message_id} message={message} agent={props.agent} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction} fork_message={props.fork_message} rewrite_message={props.rewrite_message} is_last_message={index === messages.length - 1} can_use_history_actions={!busy} />)}
-            {busy && !has_streaming_assistant(messages) ? <ActivityIndicator status={runtime?.status} /> : null}
+            {busy && !has_streaming_assistant(messages) ? <ActivityIndicator agent={props.agent} status={runtime?.status} /> : null}
           </div>
         </div>
 
-        <div className="mx-auto m-2 flex w-[calc(100%-1rem)] max-w-[840px] flex-none flex-col gap-2">
-          {session.session_id.startsWith("draft:") ? <ChatContextBar workspace={props.workspace} workspaces={props.workspaces} agent={props.agent} agents={props.agents} switch_context={props.switch_draft_context} /> : null}
-          <div className="rounded-2xl bg-muted-foreground/10">
-            <ChatInputEditor
+        <div className="flex w-full flex-none flex-col">
+          <ChatInputEditor
+              surface={props.chat_surface}
+              workspace_id={props.workspace_id}
               editor_key={session.session_id}
               agent={props.agent}
               draft={props.draft}
@@ -193,26 +215,39 @@ export function SessionView(props: SessionViewProps) {
               set_approval_mode={props.set_approval_mode}
               remove_queued_message={props.remove_queued_message}
               move_queued_message={props.move_queued_message}
-            />
-          </div>
+          />
         </div>
       </div>
     </MainViewBody>
   </MainViewLayout>;
 }
 
+/** 顶部仅在 Agent 实际生成内容时显示输入状态。 */
+function is_agent_typing(status: DesktopChatRuntime["status"] | undefined): boolean {
+  return status === "submitted" || status === "streaming";
+}
+
 /** 空会话提示。 */
-function EmptyPrompts({ on_select }: { /** 将预设提示放入输入框。 */ on_select(prompt: string): void }) {
+function EmptyPrompts({ surface = "workspace", agent, workspace, workspaces, agents, switch_context, on_select }: { /** 当前 Chat 表面。 */ surface?: "agent" | "workspace"; /** 当前联系人 Agent。 */ agent: DesktopAgentSummary; /** 当前 Workspace。 */ workspace: DesktopWorkspaceSummary; /** 可切换 Workspace。 */ workspaces: DesktopWorkspaceSummary[]; /** 可切换 Agent。 */ agents: DesktopAgentSummary[]; /** 切换新对话上下文。 */ switch_context(workspace_id: string, agent_id: string): void; /** 将预设提示放入输入框。 */ on_select(prompt: string): void }) {
+  const prompts = surface === "agent" ? agent_empty_prompts : empty_prompts;
+  if (surface === "workspace") return <div className="flex min-h-[50vh] items-center justify-center px-4"><NewChatContextSelector workspace={workspace} workspaces={workspaces} agent={agent} agents={agents} switch_context={switch_context} /></div>;
   return <div className="flex min-h-[50vh] flex-col items-center justify-center gap-6 px-4">
-    <p className="text-center text-sm text-muted-foreground">开始新的对话</p>
+    <p className="text-center text-sm text-muted-foreground">{surface === "agent" ? "和 Agent 开始对话" : "开始新的项目对话"}</p>
     <div className="flex w-full max-w-80 flex-col gap-1">
-      {empty_prompts.map(({ title, description, icon: Icon, prompt }) => <Button key={title} size="full" className="h-auto min-h-12 items-start gap-2 rounded-md px-2.5 py-2 text-left whitespace-normal text-foreground/75" onClick={() => on_select(prompt)}>
+      {prompts.map(({ title, description, icon: Icon, prompt }) => <Button key={title} size="full" className="h-auto min-h-12 items-start gap-2 rounded-md px-2.5 py-2 text-left whitespace-normal text-foreground/75" onClick={() => on_select(prompt)}>
         <Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1"><span className="block text-[0.6875rem] font-medium leading-4">{title}</span><span className="mt-0.5 block text-[0.625rem] leading-3.5 text-muted-foreground">{description}</span></span>
       </Button>)}
     </div>
   </div>;
 }
+
+const agent_empty_prompts = [
+  { title: "梳理想法", description: "帮我把一个想法整理清楚", icon: TbWriting, prompt: "帮我梳理一个想法" },
+  { title: "制定计划", description: "把目标拆成清晰的下一步", icon: TbRoute, prompt: "帮我制定一个执行计划" },
+  { title: "分析问题", description: "从不同角度分析一个问题", icon: TbSearch, prompt: "帮我分析一个问题" },
+  { title: "开始协作", description: "和我一起推进当前工作", icon: TbChecklist, prompt: "和我一起推进当前工作" },
+];
 
 /** 按 canonical 消息类型渲染。 */
 function MessageRenderer({ message, agent, show_reasoning, respond_interaction, fork_message, rewrite_message, is_last_message, can_use_history_actions }: { /** canonical 消息。 */ message: SessionMessage; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 是否是当前消息列表最后一条。 */ is_last_message: boolean; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean }) {
@@ -381,17 +416,25 @@ function MessageActionButton({ title, disabled, on_click, children }: { /** 操�
 }
 
 /** 新建 Chat 输入框上方的当前上下文。 */
-function ChatContextBar({ workspace, workspaces, agent, agents, switch_context }: { /** 当前 Workspace。 */ workspace: DesktopWorkspaceSummary; /** 可切换 Workspace。 */ workspaces: DesktopWorkspaceSummary[]; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 可切换 Agent。 */ agents: DesktopAgentSummary[]; /** 提交上下文切换。 */ switch_context(workspace_id: string, agent_id: string): void }) {
-  return <div className="flex min-w-0 items-center gap-1 self-start rounded-lg border border-border/35 bg-muted-foreground/[0.07] p-1 text-[0.6875rem] text-muted-foreground">
-    <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 transition-colors hover:bg-foreground/[0.06] hover:text-foreground" aria-label="切换 Workspace"><TbFolder className="size-3.5 shrink-0" /><span className="max-w-48 truncate">{workspace.name}</span><TbChevronDown className="size-3 shrink-0" /></button></DropdownMenuTrigger><DropdownMenuContent align="start" side="top" sideOffset={6}>{workspaces.map((item) => <DropdownMenuItem key={item.workspace_id} is_selected={item.workspace_id === workspace.workspace_id} onClick={() => switch_context(item.workspace_id, agent.agent_id)}><TbFolder className="size-3.5" /><span className="min-w-0 flex-1 truncate">{item.name}</span>{item.workspace_id === workspace.workspace_id ? <TbCheck className="size-3.5 text-primary" /> : null}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
-    <span className="h-4 w-px bg-border/60" aria-hidden />
-    <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 transition-colors hover:bg-foreground/[0.06] hover:text-foreground" aria-label="切换 Agent"><AgentAvatar agent={agent} class_name="size-5 rounded" /><span className="max-w-48 truncate">{agent.agent_id}</span><TbChevronDown className="size-3 shrink-0" /></button></DropdownMenuTrigger><DropdownMenuContent align="start" side="top" sideOffset={6}>{agents.map((item) => <DropdownMenuItem key={item.agent_id} is_selected={item.agent_id === agent.agent_id} onClick={() => switch_context(workspace.workspace_id, item.agent_id)}><AgentAvatar agent={item} class_name="size-5 rounded" /><span className="min-w-0 flex-1 truncate">{item.agent_id}</span>{item.agent_id === agent.agent_id ? <TbCheck className="size-3.5 text-primary" /> : null}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
+function NewChatContextSelector({ workspace, workspaces, agent, agents, switch_context }: { /** 当前 Workspace。 */ workspace: DesktopWorkspaceSummary; /** 可切换 Workspace。 */ workspaces: DesktopWorkspaceSummary[]; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 可切换 Agent。 */ agents: DesktopAgentSummary[]; /** 提交上下文切换。 */ switch_context(workspace_id: string, agent_id: string): void }) {
+  return <div className="flex min-w-0 max-w-full flex-col items-center gap-4">
+    <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="group flex min-w-0 max-w-full flex-col items-center gap-2 rounded-xl px-5 py-3 transition-colors hover:bg-foreground/[0.05]" aria-label="选择联系人"><AgentAvatar agent={agent} class_name="size-14 rounded-2xl" /><span className="flex max-w-64 items-center gap-1.5 text-base font-medium text-foreground"><span className="truncate">{agent.agent_id}</span><TbChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" /></span><span className="text-xs text-muted-foreground">联系人</span></button></DropdownMenuTrigger><DropdownMenuContent align="center" side="bottom" sideOffset={6}>{agents.map((item) => <DropdownMenuItem key={item.agent_id} is_selected={item.agent_id === agent.agent_id} onClick={() => switch_context(workspace.workspace_id, item.agent_id)}><AgentAvatar agent={item} class_name="size-5 rounded" /><span className="min-w-0 flex-1 truncate">{item.agent_id}</span>{item.agent_id === agent.agent_id ? <TbCheck className="size-3.5 text-primary" /> : null}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
+    <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="flex min-w-0 max-w-72 items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground" aria-label="选择 Workspace"><TbFolder className="size-4 shrink-0" /><span className="truncate">{workspace.name}</span><TbChevronDown className="size-3.5 shrink-0" /></button></DropdownMenuTrigger><DropdownMenuContent align="center" side="bottom" sideOffset={6}>{workspaces.map((item) => <DropdownMenuItem key={item.workspace_id} is_selected={item.workspace_id === workspace.workspace_id} onClick={() => switch_context(item.workspace_id, agent.agent_id)}><TbFolder className="size-4" /><span className="min-w-0 flex-1 truncate">{item.name}</span>{item.workspace_id === workspace.workspace_id ? <TbCheck className="size-3.5 text-primary" /> : null}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
+    <span className="text-[0.6875rem] text-muted-foreground/70">选择联系人和 Workspace 开始对话</span>
   </div>;
 }
 
 /** 运行活动提示。 */
-function ActivityIndicator({ status, compact = false }: { /** 运行阶段。 */ status?: DesktopChatRuntime["status"]; /** 是否嵌入消息。 */ compact?: boolean }) {
-  return <div className={cn("assistant-message-menu-bar flex items-center pl-1", compact ? "h-6 min-h-6" : "px-1 py-2")}><span className="activity-tool-main h-5"><span className="thinking-dots-icon" aria-hidden>{Array.from({ length: 6 }, (_, index) => <span key={index} className="thinking-dot" />)}</span><span className="thinking-status-label">{status === "submitted" ? "正在提交" : status === "waiting_input" ? "等待输入" : "正在思考"}</span></span></div>;
+function ActivityIndicator({ agent, status, compact = false }: { /** 当前 Agent；非 compact 状态下用于显示身份。 */ agent?: DesktopAgentSummary; /** 运行阶段。 */ status?: DesktopChatRuntime["status"]; /** 是否嵌入消息。 */ compact?: boolean }) {
+  const status_content = <span className="activity-tool-main h-5"><span className="thinking-dots-icon" aria-hidden>{Array.from({ length: 6 }, (_, index) => <span key={index} className="thinking-dot" />)}</span><span className="thinking-status-label">{status === "submitted" ? "正在提交" : status === "waiting_input" ? "等待输入" : "正在思考"}</span></span>;
+  if (compact || !agent) return <div className="assistant-message-menu-bar flex h-6 min-h-6 items-center pl-1">{status_content}</div>;
+  return <div className="group is-assistant flex w-full items-start gap-2 py-2 !m-0 !p-0">
+    <div className="shrink-0 px-1 pt-0.5"><AgentAvatar agent={agent} class_name="size-7 rounded-md" /></div>
+    <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-visible pt-0.5 text-sm text-foreground">
+      <div className="min-w-0 truncate text-xs font-medium text-foreground/85">{agent.agent_id}</div>
+      <div className="assistant-message-menu-bar flex items-center">{status_content}</div>
+    </div>
+  </div>;
 }
 
 /** 判断当前已有 streaming assistant。 */

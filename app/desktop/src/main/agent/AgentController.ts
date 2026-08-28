@@ -59,8 +59,7 @@ import type {
   DesktopCreateGroupInput,
   DesktopUpdateGroupInput,
   DesktopGroupMessage,
-  DesktopGroupMessageEvent,
-  DesktopGroupMemberStatusEvent,
+  DesktopGroupEvent,
   DesktopGroupSendInput,
   DesktopGroupSummary,
   DesktopGroupSessionSummary,
@@ -68,6 +67,7 @@ import type {
 import { mkdir, readFile, readdir, stat } from "node:fs/promises";
 import {
   create_desktop_agent_model,
+  create_desktop_group_model,
   create_desktop_embassy,
   create_desktop_agent_tools,
   create_desktop_plugin_loader,
@@ -90,9 +90,8 @@ interface AgentControllerEvents {
   /** 广播 Session 运行态。 */
   runtime(event: DesktopChatRuntimeEvent): void;
   /** 广播 Group 共享消息。 */
-  group_message(event: DesktopGroupMessageEvent): void;
-  /** 广播 Group 成员运行态。 */
-  group_member_status(event: DesktopGroupMemberStatusEvent): void;
+  /** 广播 GroupSession 统一消息与状态事件。 */
+  group_event(event: DesktopGroupEvent): void;
 }
 
 /** Electron main 内的 native Agent 生命周期控制器。 */
@@ -329,6 +328,7 @@ export class AgentController {
     await this.ready_promise;
     return await Promise.all(this.city.groups.list().map(async (group) => await to_desktop_group_summary(
       group,
+      this.data.groups.get(group.id)?.model_id || "",
       await group.sessions.list(),
       this.active_group_session_ids.get(group.id),
     )));
@@ -338,20 +338,21 @@ export class AgentController {
   async create_group(input: DesktopCreateGroupInput): Promise<DesktopGroupSummary> {
     await this.ready_promise;
     const group_id = String(input.group_id || "").trim();
+    const model_id = String(input.model_id || "").trim();
     const member_agent_ids = [...new Set((input.member_agent_ids ?? []).map((agent_id) => String(agent_id || "").trim()).filter(Boolean))];
     if (!group_id) throw new Error("group_id is required");
+    if (!model_id) throw new Error("model_id is required");
     if (member_agent_ids.length === 0) throw new Error("至少需要一个 Group 成员 Agent");
     if (this.city.groups.get(group_id)) throw new Error(`Group already exists: ${group_id}`);
-    const members = member_agent_ids.map((agent_id) => {
-      const agent = this.city.agents.get(agent_id);
-      if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
-      return { agent };
-    });
-    const config = this.data.groups.create(input);
+    for (const agent_id of member_agent_ids) {
+      if (!this.city.agents.get(agent_id)) throw new Error(`Agent not found in City: ${agent_id}`);
+    }
+    await resolve_desktop_agent_model(this.data, model_id, process_environment());
+    const config = this.data.groups.create({ ...input, model_id });
     try {
       const group = this.create_runtime_group(config);
       this.city.groups.add(group);
-      return await to_desktop_group_summary(group, await group.sessions.list());
+      return await to_desktop_group_summary(group, config.model_id, await group.sessions.list());
     } catch (error) {
       this.data.groups.remove(config.group_id);
       throw error;
@@ -363,9 +364,12 @@ export class AgentController {
     await this.ready_promise;
     const current = this.data.groups.get(group_id);
     if (!current) throw new Error(`Group not found: ${group_id}`);
+    const model_id = String(input.model_id || "").trim();
+    if (!model_id) throw new Error("model_id is required");
     const member_agent_ids = [...new Set(input.member_agent_ids.map((agent_id) => String(agent_id || "").trim()).filter(Boolean))];
     for (const agent_id of member_agent_ids) this.require_native_agent(agent_id);
-    const next = this.data.groups.update(group_id, { ...input, member_agent_ids });
+    await resolve_desktop_agent_model(this.data, model_id, process_environment());
+    const next = this.data.groups.update(group_id, { ...input, model_id, member_agent_ids });
     const previous_group = this.city.groups.get(current.group_id);
     const had_group_subscription = [...this.group_unsubscribes.keys()].some((key) => key.startsWith(`${current.group_id}:`));
     if (previous_group) await this.city.groups.remove(current.group_id);
@@ -374,7 +378,7 @@ export class AgentController {
       const group = this.create_runtime_group(next);
       this.city.groups.add(group);
       if (had_group_subscription) this.subscribe_group(await this.require_group_session(group));
-      return await to_desktop_group_summary(group, await group.sessions.list(), this.active_group_session_ids.get(group.id));
+      return await to_desktop_group_summary(group, next.model_id, await group.sessions.list(), this.active_group_session_ids.get(group.id));
     } catch (error) {
       const restored = this.create_runtime_group(current);
       this.city.groups.add(restored);
@@ -401,7 +405,7 @@ export class AgentController {
     const group_session = await this.require_group_session(group, session_id);
     this.active_group_session_ids.set(group.id, group_session.id);
     this.subscribe_group(group_session);
-    return await to_desktop_group_summary(group, await group.sessions.list(), group_session.id);
+    return await to_desktop_group_summary(group, this.require_group_config(group.id).model_id, await group.sessions.list(), group_session.id);
   }
 
   async list_group_sessions(group_id: string): Promise<DesktopGroupSessionSummary[]> {
@@ -417,7 +421,7 @@ export class AgentController {
     this.active_group_session_ids.set(group.id, session.id);
     this.cache_group_session(session);
     this.subscribe_group(session);
-    return await to_desktop_group_summary(group, await group.sessions.list(), session.id);
+    return await to_desktop_group_summary(group, this.require_group_config(group.id).model_id, await group.sessions.list(), session.id);
   }
 
   async list_group_messages(group_id: string, session_id?: string): Promise<DesktopGroupMessage[]> {
@@ -433,11 +437,15 @@ export class AgentController {
     const text = String(input.text || "").trim();
     if (!text) throw new Error("message is required");
     const group = this.require_group(group_id);
+    if (!this.require_group_config(group.id).model_id) {
+      throw new Error("Group 需要先选择群聊模型");
+    }
     const group_session = await this.require_group_session(group, session_id);
     this.active_group_session_ids.set(group.id, group_session.id);
     this.subscribe_group(group_session);
-    const result = await group_session.prompt({ query: text });
-    return { turn_id: result.turn_id };
+    const prompt = group_session.prompt({ query: text });
+    void prompt.catch(() => undefined);
+    return {};
   }
 
   async stop_group(group_id: string, session_id?: string): Promise<void> {
@@ -458,7 +466,7 @@ export class AgentController {
     const next_session_id = summaries[0]?.id;
     if (next_session_id) this.active_group_session_ids.set(group_id, next_session_id);
     else this.active_group_session_ids.delete(group_id);
-    return await to_desktop_group_summary(group, summaries, next_session_id);
+    return await to_desktop_group_summary(group, this.require_group_config(group.id).model_id, summaries, next_session_id);
   }
 
   /** 列出一个 native Agent 在当前 Workspace 中的 Session。 */
@@ -796,11 +804,12 @@ export class AgentController {
 
   /** 根据本地 Group 定义创建运行时 Group。 */
   private create_runtime_group(config: LocalGroupConfig): Group {
-    const members = config.member_agent_ids.map((agent_id) => ({ agent: this.require_native_agent(agent_id) }));
+    const members = config.member_agent_ids.map((agent_id) => this.require_native_agent(agent_id));
     return new Group({
       id: config.group_id,
       name: config.name,
       instruction: config.instruction || undefined,
+      model: create_desktop_group_model(this.data, config.model_id, process_environment()),
       members,
     });
   }
@@ -966,24 +975,32 @@ export class AgentController {
     return group;
   }
 
+  /** 读取当前 City Group 对应的本地定义。 */
+  private require_group_config(group_id: string): LocalGroupConfig {
+    const config = this.data.groups.get(String(group_id || "").trim());
+    if (!config) throw new Error(`Group config not found: ${group_id}`);
+    return config;
+  }
+
   /** 为 Desktop 当前打开的 Group 建立唯一消息订阅。 */
   private subscribe_group(group_session: GroupSessionContract): void {
     const cache_key = get_group_session_key(group_session.group_id, group_session.id);
     if (this.group_unsubscribes.has(cache_key)) return;
-    const unsubscribe_message = group_session.subscribe((message) => {
-      this.events.group_message({ group_id: group_session.group_id, session_id: group_session.id, message: to_desktop_group_message(message) });
+    const unsubscribe = group_session.subscribe((event) => {
+      this.events.group_event(event.type === "message"
+        ? { group_id: group_session.group_id, session_id: group_session.id, type: "message", message: to_desktop_group_message(event.message) }
+        : {
+          group_id: group_session.group_id,
+          session_id: group_session.id,
+          type: "status",
+          ...(event.turn_id ? { turn_id: event.turn_id } : {}),
+          ...(event.message_id ? { message_id: event.message_id } : {}),
+          ...(event.dispatched_member_ids ? { dispatched_member_ids: [...event.dispatched_member_ids] } : {}),
+          phase: event.phase,
+          members: event.members.map((status) => ({ ...status })),
+        });
     });
-    const unsubscribe_status = group_session.subscribe_member_status((statuses) => {
-      this.events.group_member_status({
-        group_id: group_session.group_id,
-        session_id: group_session.id,
-        statuses: statuses.map((status) => ({ ...status })),
-      });
-    });
-    this.group_unsubscribes.set(cache_key, () => {
-      unsubscribe_message();
-      unsubscribe_status();
-    });
+    this.group_unsubscribes.set(cache_key, unsubscribe);
   }
 
   /** 获取或创建 Group 指定或当前活动的群聊上下文。 */
@@ -1083,6 +1100,7 @@ function to_desktop_workspace_summary(record: LocalWorkspaceConfig): DesktopWork
 /** 把 SDK Group 收敛成 Renderer 所需的可序列化摘要。 */
 async function to_desktop_group_summary(
   group: Group,
+  model_id: string,
   session_summaries: readonly GroupSessionSummary[] = [],
   active_session_id?: string,
 ): Promise<DesktopGroupSummary> {
@@ -1090,11 +1108,9 @@ async function to_desktop_group_summary(
   return {
     group_id: group.id,
     name: group.name,
+    model_id,
     ...(group.instruction ? { instruction: group.instruction } : {}),
-    members: group.members.map((member) => ({
-      agent_id: member.agent.id,
-      ...(member.role ? { role: member.role } : {}),
-    })),
+    members: group.members.map((member) => ({ agent_id: member.id })),
     message_count: active_summary?.message_count || 0,
     sessions: session_summaries.map(to_desktop_group_session_summary),
     ...(active_summary ? { active_session_id: active_summary.id } : {}),

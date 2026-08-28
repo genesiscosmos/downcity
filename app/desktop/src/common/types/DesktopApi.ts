@@ -32,8 +32,6 @@ export interface DesktopWorkspaceSummary {
 export interface DesktopGroupMember {
   /** 成员 Agent 的稳定标识。 */
   agent_id: string;
-  /** 成员在 Group 中的协作角色。 */
-  role?: string;
 }
 
 /** Renderer 可见的运行时 Group 摘要。 */
@@ -42,6 +40,8 @@ export interface DesktopGroupSummary {
   group_id: string;
   /** Group 的用户可见名称。 */
   name: string;
+  /** Group 用于理解群聊意图并决定消息投递的模型标识。 */
+  model_id: string;
   /** Group 的协作目标。 */
   instruction?: string;
   /** Group 当前成员。 */
@@ -70,6 +70,14 @@ export interface DesktopGroupSessionSummary {
   preview_text?: string;
 }
 
+/** Group 默认 Session 的本地绑定。 */
+export interface DesktopGroupMainSession {
+  /** 默认 GroupSession 所属 Workspace 标识。 */
+  workspace_id: string;
+  /** 默认 GroupSession 的稳定标识。 */
+  session_id: string;
+}
+
 /** Renderer 可见的一条 Group 共享消息。 */
 export interface DesktopGroupMessage {
   /** 消息稳定标识。 */
@@ -84,15 +92,34 @@ export interface DesktopGroupMessage {
   created_at: number;
 }
 
-/** Group 共享消息实时事件。 */
-export interface DesktopGroupMessageEvent {
+/** GroupSession 的统一实时事件。 */
+export type DesktopGroupEvent = {
   /** 所属 Group 标识。 */
-  group_id: string;
+  readonly group_id: string;
   /** 所属 GroupSession 标识。 */
-  session_id: string;
+  readonly session_id: string;
+  /** 事件类型。 */
+  readonly type: "message";
   /** 新增的共享消息。 */
-  message: DesktopGroupMessage;
-}
+  readonly message: DesktopGroupMessage;
+} | {
+  /** 所属 Group 标识。 */
+  readonly group_id: string;
+  /** 所属 GroupSession 标识。 */
+  readonly session_id: string;
+  /** 事件类型。 */
+  readonly type: "status";
+  /** 当前群聊轮次标识。 */
+  readonly turn_id?: string;
+  /** 当前轮次对应的 Group 消息标识。 */
+  readonly message_id?: string;
+  /** 当前 Group 运行阶段。 */
+  readonly phase: "idle" | "dispatching" | "dispatched" | "executing" | "stopped" | "failed";
+  /** Dispatch 完成后实际接受消息的成员标识。 */
+  readonly dispatched_member_ids?: string[];
+  /** 当前全部成员运行态。 */
+  readonly members: DesktopGroupMemberRuntime[];
+};
 
 /** Renderer 可见的 Group 成员运行态。 */
 export interface DesktopGroupMemberRuntime {
@@ -102,15 +129,8 @@ export interface DesktopGroupMemberRuntime {
   running: boolean;
 }
 
-/** Group 成员运行态实时事件。 */
-export interface DesktopGroupMemberStatusEvent {
-  /** 所属 Group 标识。 */
-  group_id: string;
-  /** 所属 GroupSession 标识。 */
-  session_id: string;
-  /** 当前全部成员运行态。 */
-  statuses: DesktopGroupMemberRuntime[];
-}
+/** GroupSession 的当前运行阶段。 */
+export type DesktopGroupStatusPhase = "idle" | "dispatching" | "dispatched" | "executing" | "stopped" | "failed";
 
 /** 创建运行时 Group 的输入。 */
 export interface DesktopCreateGroupInput {
@@ -118,6 +138,8 @@ export interface DesktopCreateGroupInput {
   group_id: string;
   /** Group 用户可见名称；省略时使用 group_id。 */
   name?: string;
+  /** Group 用于理解群聊意图并决定消息投递的模型标识。 */
+  model_id: string;
   /** Group 协作目标。 */
   instruction?: string;
   /** 成员 Agent 标识。 */
@@ -128,6 +150,8 @@ export interface DesktopCreateGroupInput {
 export interface DesktopUpdateGroupInput {
   /** Group 用户可见名称。 */
   name: string;
+  /** Group 用于理解群聊意图并决定消息投递的模型标识。 */
+  model_id: string;
   /** Group 协作目标。 */
   instruction: string;
   /** Group 成员 Agent 标识。 */
@@ -467,6 +491,8 @@ export interface DesktopSettings {
   default_image_model_id: string;
   /** 每个 Agent 主 Session 所绑定的 Workspace 与 Session。 */
   agent_main_sessions: Record<string, DesktopAgentMainSession>;
+  /** 每个 Group 默认 Session 所绑定的 Workspace 与 Session。 */
+  group_main_sessions: Record<string, DesktopGroupMainSession>;
 }
 
 /** Agent 主 Session 的本地绑定。 */
@@ -741,10 +767,8 @@ export interface DesktopApi {
     stop(group_id: string, session_id?: string): Promise<void>;
     /** 删除指定 GroupSession。 */
     remove_session(group_id: string, session_id: string): Promise<DesktopGroupSummary>;
-    /** 订阅 Group 新增共享消息。 */
-    on_message(callback: (event: DesktopGroupMessageEvent) => void): () => void;
-    /** 订阅 Group 成员运行态变化。 */
-    on_member_status(callback: (event: DesktopGroupMemberStatusEvent) => void): () => void;
+    /** 订阅 GroupSession 的统一消息与状态事件。 */
+    subscribe(callback: (event: DesktopGroupEvent) => void): () => void;
   };
   /** Desktop 用户级设置。 */
   settings: {
