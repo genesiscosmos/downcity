@@ -59,7 +59,6 @@ export class GroupSession implements GroupSessionContract {
   private readonly group_turns_by_id = new Map<string, GroupTurnRuntime>();
   private readonly consumed_auto_message_ids = new Set<string>();
   private readonly auto_dispatch_path_keys = new Set<string>();
-  private readonly auto_dispatch_member_ids = new Set<string>();
   private auto_frontier_messages: readonly GroupMessage[] = [];
   private store?: GroupSessionDataStore;
   private auto_dispatch_promise: Promise<void> | null = null;
@@ -214,7 +213,6 @@ export class GroupSession implements GroupSessionContract {
     this.auto_frontier_messages = [];
     this.group_turns_by_id.clear();
     this.auto_dispatch_path_keys.clear();
-    this.auto_dispatch_member_ids.clear();
     await this.persist_dispatch_checkpoint();
     this.stop_requested = false;
   }
@@ -232,7 +230,6 @@ export class GroupSession implements GroupSessionContract {
     this.consumed_auto_message_ids.clear();
     this.auto_frontier_messages = [];
     this.auto_dispatch_path_keys.clear();
-    this.auto_dispatch_member_ids.clear();
   }
 
   private async run_user_dispatch(message: GroupMessage, turn_id: string): Promise<void> {
@@ -277,7 +274,6 @@ export class GroupSession implements GroupSessionContract {
     let dispatch_count = 0;
     if (frontier_messages.length === 0 && [...this.group_turns_by_id.values()].some((group_turn) => group_turn.auto_pending)) {
       this.auto_dispatch_path_keys.clear();
-      this.auto_dispatch_member_ids.clear();
     }
     while (this.auto_dispatch_requested && !this.stop_requested && !this.disposed) {
       this.auto_dispatch_requested = false;
@@ -291,31 +287,21 @@ export class GroupSession implements GroupSessionContract {
         try {
           const decision = await this.decide_dispatch("auto", message, frontier_messages);
           const dispatch_key = JSON.stringify(decision);
-          const selected_member_ids = decision.nodes.flatMap((node) => node.member_ids);
-          const repeated_member = selected_member_ids.some((member_id) => this.auto_dispatch_member_ids.has(member_id));
-          const repeated_frontier_member = frontier_messages.some((frontier_message) => (
-            frontier_message.sender_type === "agent" &&
-            Boolean(frontier_message.dispatch_id) &&
-            selected_member_ids.includes(frontier_message.sender_id)
-          ));
-          if (this.auto_dispatch_path_keys.has(dispatch_key) || repeated_member || repeated_frontier_member) {
+          if (this.auto_dispatch_path_keys.has(dispatch_key)) {
             await this.append_message({ sender_type: "system", sender_id: "system", text: "Group auto dispatch detected a repeated path.", reply_to: message.id });
             frontier_messages = [];
             this.auto_frontier_messages = [];
             this.auto_dispatch_path_keys.clear();
-            this.auto_dispatch_member_ids.clear();
             await this.persist_dispatch_checkpoint();
             this.publish_status(undefined, "idle");
             continue;
           }
           this.auto_dispatch_path_keys.add(dispatch_key);
-          for (const member_id of selected_member_ids) this.auto_dispatch_member_ids.add(member_id);
           frontier_messages = await this.run_dispatch_plan(decision, message, this.messages_by_id, undefined, `group-dispatch-${nanoid(12)}`);
           if (decision.terminal || frontier_messages.length === 0) {
             frontier_messages = [];
             this.auto_frontier_messages = [];
             this.auto_dispatch_path_keys.clear();
-            this.auto_dispatch_member_ids.clear();
             await this.persist_dispatch_checkpoint();
             this.publish_status(undefined, "idle");
           } else {
@@ -329,7 +315,6 @@ export class GroupSession implements GroupSessionContract {
           frontier_messages = [];
           this.auto_frontier_messages = [];
           this.auto_dispatch_path_keys.clear();
-          this.auto_dispatch_member_ids.clear();
           await this.persist_dispatch_checkpoint();
         }
         continue;

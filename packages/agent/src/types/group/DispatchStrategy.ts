@@ -143,7 +143,6 @@ function build_dispatch_prompt(input: {
 function normalize_dispatch_tool_input(value: unknown, members: readonly Agent[]): DispatchDecision {
   const parsed = dispatch_group_input_schema.parse(value);
   const valid_ids = new Set(members.map((member) => member.id));
-  const selected_ids = new Set<string>();
   const nodes = parsed.steps.map((member_ids, index) => {
     const unique_member_ids = [...new Set(member_ids)];
     if (unique_member_ids.length !== member_ids.length) {
@@ -153,10 +152,6 @@ function normalize_dispatch_tool_input(value: unknown, members: readonly Agent[]
       if (!valid_ids.has(member_id)) {
         throw new Error(`Group dispatch selected unknown member: ${member_id}`);
       }
-      if (selected_ids.has(member_id)) {
-        throw new Error(`Group dispatch selected member more than once: ${member_id}`);
-      }
-      selected_ids.add(member_id);
     }
     return {
       node_id: `step-${index}`,

@@ -36,6 +36,8 @@ CLI、Desktop 或 Node 进程需要持有多个 Agent、根据本地配置装配
 }
 ```
 
+同一个成员可以出现在不同阶段，例如 `[["architect"], ["developer"], ["architect"], ["reviewer"]]` 表示回复沿着 `architect -> developer -> architect -> reviewer` 继续传播；同一阶段内不要重复同一个成员。
+
 ```ts
 const lead = new Agent({ id: "lead", model });
 const reviewer = new Agent({ id: "reviewer", model });

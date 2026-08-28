@@ -208,16 +208,20 @@ test("AI Dispatch 未调用 dispatch_group 时记录协议错误", async () => {
   await city.close();
 });
 
-test("AI Dispatch 拒绝未知成员和重复投递", async () => {
+test("AI Dispatch 拒绝未知成员并允许跨阶段重复投递", async () => {
   const inputs = [
-    { steps: [["unknown"]], next: "stop" },
-    { steps: [["known"], ["known"]], next: "stop" },
+    { input: { steps: [["unknown"]], next: "stop" }, expected_agent_ids: [] },
+    { input: { steps: [["known"], ["known"]], next: "stop" }, expected_agent_ids: ["known", "known"] },
   ];
-  for (const [index, input] of inputs.entries()) {
+  for (const [index, { input, expected_agent_ids }] of inputs.entries()) {
+    RecordingSession.created = [];
+    let dispatch_calls = 0;
     const dispatch_model = new MockLanguageModelV3({
       modelId: `invalid-dispatch-model-${index}`,
       doGenerate: async () => ({
-        content: [create_dispatch_tool_call(input)],
+        content: [create_dispatch_tool_call(expected_agent_ids.length > 0 && dispatch_calls++ > 0
+          ? { steps: [], next: "stop" }
+          : input)],
         finishReason: { unified: "tool-calls", raw: "tool_calls" },
         usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
         warnings: [],
@@ -233,7 +237,11 @@ test("AI Dispatch 拒绝未知成员和重复投递", async () => {
     await group_session.prompt({ query: "请回答" });
     await wait_for_group_idle(group_session);
 
-    assert.match((await group_session.messages()).at(-1).text, /Group dispatch model failed:/);
+    if (expected_agent_ids.length === 0) {
+      assert.match((await group_session.messages()).at(-1).text, /Group dispatch model failed:/);
+    } else {
+      assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), expected_agent_ids);
+    }
     await city.close();
   }
 });
@@ -531,6 +539,39 @@ test("Dispatch 响应图按依赖传递上一个成员的回复", async () => {
   await city.close();
 });
 
+test("Dispatch 拓扑允许同一成员在不同节点重复参与", async () => {
+  RecordingSession.created = [];
+  const city = new City();
+  const members = ["a", "d", "e", "f"].map((id) => new Agent({ id, session_class: RecordingSession }));
+  for (const member of members) city.agents.add(member);
+  const group = new Group({
+    id: "repeated-member-group",
+    members,
+    dispatch_strategy: {
+      decide_dispatch: ({ trigger }) => trigger === "user"
+        ? {
+          nodes: [
+            { node_id: "step-0", member_ids: ["a"], response_mode: "single", depends_on_node_ids: [], instruction: "第一阶段。" },
+            { node_id: "step-1", member_ids: ["d"], response_mode: "single", depends_on_node_ids: ["step-0"], instruction: "第二阶段。" },
+            { node_id: "step-2", member_ids: ["a"], response_mode: "single", depends_on_node_ids: ["step-1"], instruction: "第三阶段。" },
+            { node_id: "step-3", member_ids: ["e"], response_mode: "single", depends_on_node_ids: ["step-2"], instruction: "第四阶段。" },
+            { node_id: "step-4", member_ids: ["f"], response_mode: "single", depends_on_node_ids: ["step-3"], instruction: "第五阶段。" },
+          ],
+          terminal: true,
+        }
+        : { nodes: [], terminal: true },
+    },
+  });
+  city.groups.add(group);
+  const group_session = await group.sessions.create();
+  await group_session.prompt({ query: "执行多阶段流程" });
+  await wait_for_group_idle(group_session);
+  assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), ["a", "d", "a", "e", "f"]);
+  assert.match(RecordingSession.created[2].query, /d: reply:d/);
+  assert.match(RecordingSession.created[4].query, /e: reply:e/);
+  await city.close();
+});
+
 test("唯一 auto dispatch 等待并合并并发输入批次", async () => {
   const calls = [];
   const auto_batches = [];
@@ -655,7 +696,7 @@ test("auto dispatch 检测重复路由并停止传播", async () => {
   await wait_for_group_idle(session);
   const messages = await session.messages();
   auto_calls = messages.filter((message) => message.sender_type === "agent").length;
-  assert.equal(auto_calls, 2);
+  assert.equal(auto_calls, 3);
   assert.match(messages.at(-1).text, /repeated path/);
   assert.equal(original_messages.length, 0);
   await city.close();
