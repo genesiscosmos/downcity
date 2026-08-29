@@ -13,7 +13,7 @@ import { SettingsView } from "@/views/SettingsView";
 import { PluginView } from "@/views/PluginView";
 import { WelcomeView } from "@/views/WelcomeView";
 import { WorkspaceView } from "@/views/WorkspaceView";
-import { ShellPanelControls } from "@/layouts/ShellPanelControls";
+import { WindowHeader } from "@/layouts/WindowHeader";
 import { GroupInfoSidebar, GroupView, type GroupEditorSection } from "@/views/GroupView";
 import { AgentInfoSidebar, AgentView, type AgentEditorSection } from "@/views/AgentView";
 import { RecentSessionsSidebar } from "@/components/RecentSessionsSidebar";
@@ -264,8 +264,12 @@ export function App() {
     />;
   };
 
-  return <div className="fixed inset-0 flex overflow-hidden bg-muted">
-    <div className="flex h-full w-full overflow-hidden">
+  return <div className="fixed inset-0 flex flex-col overflow-hidden bg-muted">
+    <WindowHeader
+      left_actions={<Button size="icon" title={sidebar_collapsed ? "展开侧边栏" : "折叠侧边栏"} aria-label={sidebar_collapsed ? "展开侧边栏" : "折叠侧边栏"} onClick={() => set_sidebar_collapsed((value) => !value)}>{sidebar_collapsed ? <TbLayoutSidebar /> : <TbLayoutSidebarFilled />}</Button>}
+      right_actions={<Button size="icon" actived={right_panel?.type === "recent"} title="最近" aria-label="最近" onClick={() => set_right_panel((panel) => panel?.type === "recent" ? null : { type: "recent" })}><span className="text-xs">最近</span></Button>}
+    />
+    <div className="flex min-h-0 h-full w-full flex-1 overflow-hidden">
       {controller.selection?.kind === "settings"
         ? <SettingsSidebar controller={controller} collapsed={sidebar_collapsed} />
         : <NavigationSidebar
@@ -280,7 +284,6 @@ export function App() {
         {right_panel?.type === "recent" ? <RecentSessionsSidebar controller={controller} close_sidebar={() => set_right_panel(null)} /> : right_panel?.type === "agent_config" && selected_agent && (current_selection?.kind === "agent" || current_selection?.kind === "session") ? <AgentInfoSidebar agent={selected_agent} plugins={controller.plugins} controller={controller} section={agent_config_section} collapsed={agent_config_collapsed} close_sidebar={() => set_right_panel(null)} /> : right_panel?.type === "group_config" && current_selection?.kind === "group_session" && controller.groups.find((item) => item.group_id === current_selection.group_id) ? <GroupInfoSidebar group={controller.groups.find((item) => item.group_id === current_selection.group_id)!} agents={controller.agents} controller={controller} section={group_config_section} collapsed={group_config_collapsed} close_sidebar={() => set_right_panel(null)} /> : null}
       </RightPanelHost>
     </div>
-    <ShellPanelControls sidebar_collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} recent_open={right_panel?.type === "recent"} toggle_recent={() => set_right_panel((panel) => panel?.type === "recent" ? null : { type: "recent" })} />
     {controller.error ? <div className="fixed bottom-5 left-1/2 z-40 flex max-w-xl -translate-x-1/2 items-start gap-3 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl"><span className="min-w-0 flex-1 break-words">{controller.error}</span><Button onClick={controller.clear_error}>关闭</Button></div> : null}
     {create_dialog_open ? <CreateAgentDialog close_dialog={() => { set_create_dialog_open(false); set_create_workspace_id(undefined); }} create_agent={controller.create_agent} models={controller.models} models_loading={controller.models_loading} default_model_id={controller.settings.default_text_model_id} workspace={controller.workspaces.find((workspace) => workspace.workspace_id === create_workspace_id)} /> : null}
     {create_workspace_dialog_open ? <CreateWorkspaceDialog close_dialog={() => set_create_workspace_dialog_open(false)} create_workspace={controller.create_workspace} /> : null}
