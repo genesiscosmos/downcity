@@ -26,7 +26,6 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { SessionActionsMenu } from "@/components/session/SessionActionsMenu";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { AgentAvatar } from "@/components/AgentAvatar";
-import { LLMModelIcon } from "@/components/model/LLMModelIcon";
 import { AssistantContent } from "@/lib/chat/assistant/AssistantActivity";
 import { should_show_assistant_actions } from "@/lib/chat/assistant/assistant_activity";
 import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
@@ -54,6 +53,10 @@ interface SessionViewProps {
   agents: DesktopAgentSummary[];
   /** 当前 Session 摘要。 */
   session: DesktopSessionSummary;
+  /** 当前 Agent 可切换的 Session 列表。 */
+  sessions?: DesktopSessionSummary[];
+  /** 切换到当前 Agent 的另一个 Session。 */
+  select_session?(session_id: string): void;
   /** 打开当前 Agent 信息侧栏。 */
   open_agent_info?(): void;
   /** 打开或折叠 Agent 主聊天的配置侧栏。 */
@@ -137,8 +140,6 @@ export function SessionView(props: SessionViewProps) {
   const scroll_ref = useRef<HTMLDivElement | null>(null);
   const sticky_ref = useRef(true);
   const busy = is_chat_busy(runtime);
-  const current_model_id = props.configuration?.model_id || props.agent.model_id;
-  const current_model_name = props.models.find((model) => model.model_id === current_model_id)?.name || current_model_id || "未配置模型";
   const can_compact = Boolean(props.compact_session && messages.some((message) => message.type === "user" || message.type === "assistant"));
 
   useEffect(() => {
@@ -156,14 +157,10 @@ export function SessionView(props: SessionViewProps) {
     });
   };
 
-  return <ChatSurfaceLayout header_left={<>
-      {props.chat_surface === "agent" ? <div className="flex min-w-0 items-center gap-2">
-        <button type="button" className="flex min-w-0 max-w-[min(100%,24rem)] items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-foreground/[0.06]" title="打开 Agent 配置" aria-label="打开 Agent 配置" onClick={props.toggle_agent_config}>
-          <AgentAvatar agent={props.agent} class_name="size-6 rounded-md" />
-          <span className="flex min-w-0 flex-col items-start"><span className="min-w-0 max-w-48 truncate text-xs font-medium text-foreground">{props.agent.agent_id}</span>{is_agent_typing(runtime?.status) ? <span className="flex items-center gap-1 text-[10px] leading-3 text-primary"><span className="thinking-dots-icon is-highlighted" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <span key={index} className="thinking-dot" />)}</span>正在回复。</span> : null}</span>
-        </button>
-        <span className="inline-flex max-w-40 min-w-0 shrink-0 items-center gap-1 rounded-md bg-muted-foreground/[0.08] px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground"><LLMModelIcon model_id={current_model_id} model_name={current_model_name} size_class="size-3" /><span className="truncate">{current_model_name}</span></span>
-      </div> : <div className="min-w-0 max-w-[min(100%,32rem)] truncate pl-1 text-xs font-medium text-foreground">{session.title || "新对话"}</div>}</>} header_right={<div className="flex shrink-0 items-center gap-1">
+  return <ChatSurfaceLayout header_left={props.chat_surface === "agent" ? <DropdownMenu>
+      <DropdownMenuTrigger asChild><button type="button" className="group flex min-w-0 max-w-[min(100%,22rem)] items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-foreground/[0.06]" aria-label="切换 Session"><AgentAvatar agent={props.agent} class_name="size-6 rounded-md" /><span className="flex min-w-0 flex-col items-start"><span className="flex min-w-0 max-w-48 items-center gap-1 text-xs font-medium text-foreground"><span className="truncate">{props.agent.agent_id}</span><TbChevronDown className="size-3 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" /></span><span className="max-w-48 truncate text-[10px] text-muted-foreground">{session.title || "新对话"}</span></span></button></DropdownMenuTrigger><DropdownMenuContent align="start" side="bottom" sideOffset={4}>{(props.sessions ?? []).map((item) => <DropdownMenuItem key={item.session_id} is_selected={item.session_id === session.session_id} onClick={() => props.select_session?.(item.session_id)}><span className="min-w-0 flex-1 truncate">{item.title || "新对话"}</span>{item.session_id === session.session_id ? <TbCheck className="size-3.5 text-primary" /> : null}</DropdownMenuItem>)}</DropdownMenuContent>
+    </DropdownMenu> : <div className="min-w-0 max-w-[min(100%,22rem)] truncate pl-1 text-xs font-medium text-foreground">{session.title || "新对话"}</div>} header_right={<div className="flex shrink-0 items-center gap-1">
+      {is_agent_typing(runtime?.status) ? <span className="mr-1 flex items-center gap-1 text-[10px] text-primary"><span className="thinking-dots-icon is-highlighted" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <span key={index} className="thinking-dot" />)}</span>正在回复</span> : null}
         {props.chat_surface === "agent" && props.toggle_agent_config ? <button type="button" className={cn("flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-foreground/[0.06] hover:text-foreground", props.agent_config_open ? "text-foreground" : "text-muted-foreground")} title={props.agent_config_open ? "折叠 Agent 配置侧栏" : "打开 Agent 配置侧栏"} aria-label={props.agent_config_open ? "折叠 Agent 配置侧栏" : "打开 Agent 配置侧栏"} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={props.toggle_agent_config}><TbGhost3 className="size-4" /></button> : null}
         {props.rename_session && props.archive_session && props.remove_session ? <SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<button type="button" className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground" title="对话操作" aria-label="对话操作"><TbDots className="size-4" /></button>} /> : null}
       </div>}

@@ -224,8 +224,10 @@ export function App() {
       agent={selected_agent}
       workspace={controller.workspaces.find((workspace) => workspace.workspace_id === workspace_id) ?? { workspace_id, workspace_path: "", name: workspace_id }}
       workspaces={controller.workspaces}
-      agents={controller.agents}
-      session={session}
+        agents={controller.agents}
+        session={session}
+        sessions={(controller.sessions_by_workspace[workspace_id] ?? []).filter((item) => item.agent_id === selected_agent.agent_id).map((item) => item.session)}
+        select_session={(session_id) => void controller.select_session(workspace_id, selected_agent.agent_id, session_id)}
       toggle_agent_config={() => { if (right_panel?.type !== "agent_config") open_agent_config(agent_config_section); else set_agent_config_collapsed((value) => !value); }}
       agent_config_open={right_panel?.type === "agent_config" && !agent_config_collapsed}
       messages={controller.messages_by_session[session_key] ?? []}

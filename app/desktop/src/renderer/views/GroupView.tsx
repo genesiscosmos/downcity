@@ -1,7 +1,7 @@
 /** 运行时 Group 共享消息视图，保持与 Agent Session Chat 一致的视觉结构。 */
 
 import { useEffect, useRef, useState } from "react";
-import { TbCheck, TbChevronDown, TbChevronRight, TbFileText, TbLayoutSidebar, TbLayoutSidebarFilled, TbLoader2, TbPlayerStop, TbUsers } from "react-icons/tb";
+import { TbCheck, TbChevronDown, TbChevronRight, TbFileText, TbLayoutSidebar, TbLayoutSidebarFilled, TbLoader2, TbUsers } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { AgentAvatar } from "@/components/AgentAvatar";
@@ -87,7 +87,7 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      </div>} header_right={<><Button size="icon" title="停止执行" aria-label="停止执行" disabled={group_phase !== "dispatching" && group_phase !== "dispatched" && group_phase !== "executing"} onClick={() => void stop_session(session.session_id)}><TbPlayerStop /></Button><Button size="icon" actived={config_sidebar_open && !config_sidebar_collapsed} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={toggle_config_sidebar} title={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Group 配置侧栏" : "打开 Group 配置侧栏"} aria-label={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Group 配置侧栏" : "打开 Group 配置侧栏"}>{config_sidebar_open && !config_sidebar_collapsed ? <TbLayoutSidebarFilled className="-scale-x-100" /> : <TbLayoutSidebar className="-scale-x-100" />}</Button></>}> 
+      </div>} header_right={<Button size="icon" actived={config_sidebar_open && !config_sidebar_collapsed} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={toggle_config_sidebar} title={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Group 配置侧栏" : "打开 Group 配置侧栏"} aria-label={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Group 配置侧栏" : "打开 Group 配置侧栏"}>{config_sidebar_open && !config_sidebar_collapsed ? <TbLayoutSidebarFilled className="-scale-x-100" /> : <TbLayoutSidebar className="-scale-x-100" />}</Button>}> 
       <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
         <div ref={scroll_ref} className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log">
           <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
