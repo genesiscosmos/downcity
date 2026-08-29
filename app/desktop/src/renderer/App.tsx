@@ -266,6 +266,7 @@ export function App() {
 
   return <div className="fixed inset-0 flex flex-col overflow-hidden bg-muted">
     <WindowHeader
+      visible={controller.selection?.kind !== "session" && controller.selection?.kind !== "group_session" && controller.selection?.kind !== "draft"}
       left_actions={<Button size="icon" title={sidebar_collapsed ? "展开侧边栏" : "折叠侧边栏"} aria-label={sidebar_collapsed ? "展开侧边栏" : "折叠侧边栏"} onClick={() => set_sidebar_collapsed((value) => !value)}>{sidebar_collapsed ? <TbLayoutSidebar /> : <TbLayoutSidebarFilled />}</Button>}
       right_actions={<Button size="icon" actived={right_panel?.type === "recent"} title="最近" aria-label="最近" onClick={() => set_right_panel((panel) => panel?.type === "recent" ? null : { type: "recent" })}><span className="text-xs">最近</span></Button>}
     />
