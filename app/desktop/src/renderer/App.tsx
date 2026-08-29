@@ -218,18 +218,16 @@ export function App() {
       selected_agent.agent_id,
       session.session_id,
     );
-    const main_context = controller.settings.agent_main_sessions[selected_agent.agent_id];
-    const is_main_session = main_context?.workspace_id === workspace_id && main_context.session_id === session.session_id;
     return <SessionView
-      chat_surface={is_main_session ? "agent" : "workspace"}
+      chat_surface="agent"
       workspace_id={workspace_id}
       agent={selected_agent}
       workspace={controller.workspaces.find((workspace) => workspace.workspace_id === workspace_id) ?? { workspace_id, workspace_path: "", name: workspace_id }}
       workspaces={controller.workspaces}
       agents={controller.agents}
       session={session}
-      toggle_agent_config={is_main_session ? () => { if (right_panel?.type !== "agent_config") open_agent_config(agent_config_section); else set_agent_config_collapsed((value) => !value); } : undefined}
-      agent_config_open={is_main_session && right_panel?.type === "agent_config" && !agent_config_collapsed}
+      toggle_agent_config={() => { if (right_panel?.type !== "agent_config") open_agent_config(agent_config_section); else set_agent_config_collapsed((value) => !value); }}
+      agent_config_open={right_panel?.type === "agent_config" && !agent_config_collapsed}
       messages={controller.messages_by_session[session_key] ?? []}
       runtime={controller.chat_runtime_by_session[session_key]}
       draft={controller.drafts_by_session[session_key] ?? ""}
@@ -238,9 +236,9 @@ export function App() {
       queued_messages={controller.queued_messages_by_session[session_key] ?? []}
       history={controller.history_by_session[session_key]}
       settings={controller.settings}
-      rename_session={is_main_session ? undefined : (title) => controller.rename_session(workspace_id, selected_agent.agent_id, session.session_id, title)}
-      archive_session={is_main_session ? undefined : () => controller.archive_session(workspace_id, selected_agent.agent_id, session.session_id)}
-      remove_session={is_main_session ? undefined : () => controller.remove_session(workspace_id, selected_agent.agent_id, session.session_id)}
+      rename_session={(title) => controller.rename_session(workspace_id, selected_agent.agent_id, session.session_id, title)}
+      archive_session={() => controller.archive_session(workspace_id, selected_agent.agent_id, session.session_id)}
+      remove_session={() => controller.remove_session(workspace_id, selected_agent.agent_id, session.session_id)}
       switch_draft_context={controller.switch_draft_context}
       models={controller.models}
       configuration={controller.configuration_by_session[session_key]}
@@ -277,7 +275,7 @@ export function App() {
         />}
       <main data-sidebar-collapsed={sidebar_collapsed ? "true" : "false"} className="main-view-shell flex h-full min-w-0 flex-1 flex-col bg-background">{render_main_view()}</main>
       <RightPanelHost>
-        {right_panel?.type === "recent" ? <RecentSessionsSidebar controller={controller} close_sidebar={() => set_right_panel(null)} /> : right_panel?.type === "agent_config" && selected_agent && (current_selection?.kind === "agent" || (current_selection?.kind === "session" && controller.settings.agent_main_sessions[selected_agent.agent_id]?.session_id === current_selection.session_id)) ? <AgentInfoSidebar agent={selected_agent} plugins={controller.plugins} controller={controller} section={agent_config_section} collapsed={agent_config_collapsed} close_sidebar={() => set_right_panel(null)} /> : right_panel?.type === "group_config" && current_selection?.kind === "group_session" && controller.groups.find((item) => item.group_id === current_selection.group_id) ? <GroupInfoSidebar group={controller.groups.find((item) => item.group_id === current_selection.group_id)!} agents={controller.agents} controller={controller} section={group_config_section} collapsed={group_config_collapsed} close_sidebar={() => set_right_panel(null)} /> : null}
+        {right_panel?.type === "recent" ? <RecentSessionsSidebar controller={controller} close_sidebar={() => set_right_panel(null)} /> : right_panel?.type === "agent_config" && selected_agent && (current_selection?.kind === "agent" || current_selection?.kind === "session") ? <AgentInfoSidebar agent={selected_agent} plugins={controller.plugins} controller={controller} section={agent_config_section} collapsed={agent_config_collapsed} close_sidebar={() => set_right_panel(null)} /> : right_panel?.type === "group_config" && current_selection?.kind === "group_session" && controller.groups.find((item) => item.group_id === current_selection.group_id) ? <GroupInfoSidebar group={controller.groups.find((item) => item.group_id === current_selection.group_id)!} agents={controller.agents} controller={controller} section={group_config_section} collapsed={group_config_collapsed} close_sidebar={() => set_right_panel(null)} /> : null}
       </RightPanelHost>
     </div>
     <ShellPanelControls sidebar_collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} recent_open={right_panel?.type === "recent"} toggle_recent={() => set_right_panel((panel) => panel?.type === "recent" ? null : { type: "recent" })} />
