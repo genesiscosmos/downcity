@@ -73,8 +73,7 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
 
   const group_agent = agents.find((agent) => group.members.some((member) => member.agent_id === agent.agent_id)) ?? agents[0] ?? { agent_id: "group", model_id: "", version: "" };
 
-  return <ChatSurfaceLayout header={<>
-      <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
+  return <ChatSurfaceLayout header_left={<div><div className="min-w-0 pl-1">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className="group flex min-w-0 max-w-[min(100%,24rem)] items-center gap-2 rounded-lg px-1 py-1 text-left hover:bg-foreground/[0.05]" aria-label="切换 Group Session">
@@ -88,8 +87,7 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="flex shrink-0 items-center gap-1"><Button size="icon" title="停止执行" aria-label="停止执行" disabled={group_phase !== "dispatching" && group_phase !== "dispatched" && group_phase !== "executing"} onClick={() => void stop_session(session.session_id)}><TbPlayerStop /></Button><Button size="icon" actived={config_sidebar_open && !config_sidebar_collapsed} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={toggle_config_sidebar} title={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Group 配置侧栏" : "打开 Group 配置侧栏"} aria-label={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Group 配置侧栏" : "打开 Group 配置侧栏"}>{config_sidebar_open && !config_sidebar_collapsed ? <TbLayoutSidebarFilled className="-scale-x-100" /> : <TbLayoutSidebar className="-scale-x-100" />}</Button></div>
-    </>}>
+      </div>} header_right={<><Button size="icon" title="停止执行" aria-label="停止执行" disabled={group_phase !== "dispatching" && group_phase !== "dispatched" && group_phase !== "executing"} onClick={() => void stop_session(session.session_id)}><TbPlayerStop /></Button><Button size="icon" actived={config_sidebar_open && !config_sidebar_collapsed} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={toggle_config_sidebar} title={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Group 配置侧栏" : "打开 Group 配置侧栏"} aria-label={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Group 配置侧栏" : "打开 Group 配置侧栏"}>{config_sidebar_open && !config_sidebar_collapsed ? <TbLayoutSidebarFilled className="-scale-x-100" /> : <TbLayoutSidebar className="-scale-x-100" />}</Button></>}> 
       <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
         <div ref={scroll_ref} className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log">
           <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
