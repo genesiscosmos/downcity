@@ -580,6 +580,43 @@ export function use_desktop_controller(): DesktopViewController {
     }
   }, []);
 
+  /** 刷新当前 Agent Session 的 canonical 快照，恢复窗口切换期间错过的 mutation。 */
+  const refresh_session_snapshot = useCallback(async (workspace_id: string, agent_id: string, session_id: string): Promise<void> => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id);
+    try {
+      const [snapshot, configuration] = await Promise.all([
+        window.downcity.chat.get_snapshot(agent_id, workspace_id, session_id),
+        window.downcity.chat.get_configuration(agent_id, workspace_id, session_id),
+      ]);
+      set_messages_by_session((current) => ({ ...current, [session_key]: merge_session_snapshot(current[session_key] ?? [], snapshot.messages) }));
+      const history_state = { loading: false, has_more: snapshot.has_more, next_before_sequence: snapshot.next_before_sequence };
+      history_ref.current = { ...history_ref.current, [session_key]: history_state };
+      set_history_by_session(history_ref.current);
+      const current_runtime = chat_runtime_ref.current[session_key];
+      const next_runtime = current_runtime && current_runtime.updated_at > snapshot.runtime.updated_at ? current_runtime : snapshot.runtime;
+      chat_runtime_ref.current = { ...chat_runtime_ref.current, [session_key]: next_runtime };
+      set_chat_runtime_by_session(chat_runtime_ref.current);
+      set_configuration_by_session((current) => ({ ...current, [session_key]: configuration }));
+    } catch (reason) {
+      set_error(to_error_message(reason));
+    }
+  }, []);
+
+  /** 窗口重新可见或获得焦点时同步当前 Session，避免漏掉后台期间的交互事件。 */
+  useEffect(() => {
+    const refresh_current_session = () => {
+      if (document.visibilityState === "hidden") return;
+      const current = selection;
+      if (current?.kind === "session") void refresh_session_snapshot(current.workspace_id, current.agent_id, current.session_id);
+    };
+    document.addEventListener("visibilitychange", refresh_current_session);
+    window.addEventListener("focus", refresh_current_session);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh_current_session);
+      window.removeEventListener("focus", refresh_current_session);
+    };
+  }, [refresh_session_snapshot, selection]);
+
   /** 打开 Agent 最近更新的持久化 Session 对话。 */
   const open_agent_chat = useCallback(async (agent_id: string) => {
     set_error("");
