@@ -157,16 +157,17 @@ export function SessionView(props: SessionViewProps) {
   };
 
   return <ChatSurfaceLayout header={<>
-      {props.chat_surface === "agent" ? <div className="flex min-w-0 flex-none items-center gap-2">
+      {props.chat_surface === "agent" ? <div className="flex min-w-0 flex-1 items-center gap-2">
         <button type="button" className="flex min-w-0 max-w-[min(100%,24rem)] items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-foreground/[0.06]" title="打开 Agent 配置" aria-label="打开 Agent 配置" onClick={props.toggle_agent_config}>
           <AgentAvatar agent={props.agent} class_name="size-6 rounded-md" />
           <span className="flex min-w-0 flex-col items-start"><span className="min-w-0 max-w-48 truncate text-xs font-medium text-foreground">{props.agent.agent_id}</span>{is_agent_typing(runtime?.status) ? <span className="flex items-center gap-1 text-[10px] leading-3 text-primary"><span className="thinking-dots-icon is-highlighted" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <span key={index} className="thinking-dot" />)}</span>正在回复。</span> : null}</span>
         </button>
-        <span className="inline-flex max-w-40 min-w-0 shrink items-center gap-1 rounded-md bg-muted-foreground/[0.08] px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground"><LLMModelIcon model_id={current_model_id} model_name={current_model_name} size_class="size-3" /><span className="truncate">{current_model_name}</span></span>
+        <span className="inline-flex max-w-40 min-w-0 shrink-0 items-center gap-1 rounded-md bg-muted-foreground/[0.08] px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground"><LLMModelIcon model_id={current_model_id} model_name={current_model_name} size_class="size-3" /><span className="truncate">{current_model_name}</span></span>
       </div> : <div className="min-w-0 flex-1 truncate pl-1 text-xs font-medium text-foreground">{session.title || "新对话"}</div>}
-      {props.chat_surface === "agent" ? <div className="min-w-0 flex-1" /> : null}
-      {props.chat_surface === "agent" && props.toggle_agent_config ? <button type="button" className={cn("flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-foreground/[0.06] hover:text-foreground", props.agent_config_open ? "text-foreground" : "text-muted-foreground")} title={props.agent_config_open ? "折叠 Agent 配置侧栏" : "打开 Agent 配置侧栏"} aria-label={props.agent_config_open ? "折叠 Agent 配置侧栏" : "打开 Agent 配置侧栏"} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={props.toggle_agent_config}><TbGhost3 className="size-4" /></button> : null}
-      {props.rename_session && props.archive_session && props.remove_session ? <SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<button type="button" className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground" title="对话操作" aria-label="对话操作"><TbDots className="size-4" /></button>} /> : null}
+      <div className="flex shrink-0 items-center gap-1">
+        {props.chat_surface === "agent" && props.toggle_agent_config ? <button type="button" className={cn("flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-foreground/[0.06] hover:text-foreground", props.agent_config_open ? "text-foreground" : "text-muted-foreground")} title={props.agent_config_open ? "折叠 Agent 配置侧栏" : "打开 Agent 配置侧栏"} aria-label={props.agent_config_open ? "折叠 Agent 配置侧栏" : "打开 Agent 配置侧栏"} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={props.toggle_agent_config}><TbGhost3 className="size-4" /></button> : null}
+        {props.rename_session && props.archive_session && props.remove_session ? <SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<button type="button" className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground" title="对话操作" aria-label="对话操作"><TbDots className="size-4" /></button>} /> : null}
+      </div>
     </>}>
       <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
         <div
