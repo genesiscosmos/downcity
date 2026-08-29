@@ -78,7 +78,7 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
           <DropdownMenuTrigger asChild>
             <button type="button" className="group flex min-w-0 max-w-[min(100%,24rem)] items-center gap-2 rounded-lg px-1 py-1 text-left hover:bg-foreground/[0.05]" aria-label="切换 Group Session">
               <TbUsers className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <span className="flex min-w-0 flex-col items-start"><span className="flex max-w-48 items-center gap-1 truncate text-xs font-medium text-foreground"><span className="truncate">{group.name}</span><TbChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" /></span>{group_phase === "executing" ? <span className="flex items-center gap-1 text-[10px] leading-3 text-primary"><span className="thinking-dots-icon is-highlighted" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <span key={index} className="thinking-dot" />)}</span>正在回复。</span> : null}</span>
+              <span className="flex min-w-0 flex-col items-start"><span className="flex max-w-48 items-center gap-1 truncate text-xs font-medium text-foreground"><span className="truncate">{group.name}</span><TbChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" /></span><span className="max-w-48 truncate text-[10px] text-muted-foreground">{format_group_session_title(session)}</span></span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="bottom" sideOffset={4}>
