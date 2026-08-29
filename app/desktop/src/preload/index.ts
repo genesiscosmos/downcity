@@ -72,6 +72,7 @@ const desktop_api: DesktopApi = {
     list_messages: (group_id, session_id) => ipcRenderer.invoke("group:list-messages", group_id, session_id),
     send: (group_id, session_id, input) => ipcRenderer.invoke("group:send", group_id, session_id, input),
     stop: (group_id, session_id) => ipcRenderer.invoke("group:stop", group_id, session_id),
+    respond_interaction: (group_id, session_id, input) => ipcRenderer.invoke("group:respond-interaction", group_id, session_id, input),
     remove_session: (group_id, session_id) => ipcRenderer.invoke("group:remove-session", group_id, session_id),
     subscribe: (callback) => {
       const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof callback>[0]) => callback(value);

@@ -4,7 +4,7 @@
  * 这些类型只描述可序列化的安全桥接边界，不暴露 Electron、数据库或 SDK 实例。
  */
 
-import type { RespondSessionInteractionInput, SessionApprovalMode, SessionMessage, SessionMutation } from "@downcity/agent";
+import type { RespondSessionInteractionInput, SessionApprovalMode, SessionInteractionRequest, SessionMessage, SessionMutation } from "@downcity/agent";
 
 /** Renderer 可见的 Agent 摘要。 */
 export interface DesktopAgentSummary {
@@ -102,6 +102,17 @@ export type DesktopGroupEvent = {
   readonly type: "message";
   /** 新增的共享消息。 */
   readonly message: DesktopGroupMessage;
+} | {
+  /** 所属 Group 标识。 */
+  readonly group_id: string;
+  /** 所属 GroupSession 标识。 */
+  readonly session_id: string;
+  /** 事件类型。 */
+  readonly type: "interaction";
+  /** 发起交互的成员 Agent。 */
+  readonly agent_id: string;
+  /** 成员 Agent Session 的交互请求。 */
+  readonly request: SessionInteractionRequest;
 } | {
   /** 所属 Group 标识。 */
   readonly group_id: string;
@@ -765,6 +776,8 @@ export interface DesktopApi {
     send(group_id: string, session_id: string | undefined, input: DesktopGroupSendInput): Promise<{ turn_id?: string }>;
     /** 停止 Group 当前执行。 */
     stop(group_id: string, session_id?: string): Promise<void>;
+    /** 响应 Group 成员 Agent Session 的交互请求。 */
+    respond_interaction(group_id: string, session_id: string, input: RespondSessionInteractionInput): Promise<void>;
     /** 删除指定 GroupSession。 */
     remove_session(group_id: string, session_id: string): Promise<DesktopGroupSummary>;
     /** 订阅 GroupSession 的统一消息与状态事件。 */

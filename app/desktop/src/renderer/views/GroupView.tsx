@@ -10,10 +10,12 @@ import { LLMModelIcon } from "@/components/model/LLMModelIcon";
 import { ChatInputEditor } from "@/lib/chat/ChatInputEditor";
 import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopGroupStatusPhase, DesktopSettings } from "@common/types/DesktopApi";
+import type { RespondSessionInteractionInput, SessionAssistantInteractionPart } from "@downcity/agent";
 import { MainViewBody, MainViewLayout } from "@/layouts/MainViewLayout";
 import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
 import type { DesktopAgentSummary, DesktopGroupMemberRuntime, DesktopGroupMessage, DesktopGroupSessionSummary, DesktopGroupSummary } from "@common/types/DesktopApi";
 import { cn } from "@/lib/utils";
+import { AssistantContent } from "@/lib/chat/assistant/AssistantActivity";
 
 /** Group 定义侧栏可以编辑的分区。 */
 export type GroupEditorSection = "model" | "instruction" | "members";
@@ -33,6 +35,10 @@ interface GroupViewProps {
   group_phase: DesktopGroupStatusPhase;
   /** 已完成 Dispatch 的用户消息标识。 */
   read_message_ids: string[];
+  /** 当前待响应的成员交互。 */
+  interactions: { agent_id: string; part: SessionAssistantInteractionPart }[];
+  /** 响应成员交互。 */
+  respond_interaction(input: RespondSessionInteractionInput): Promise<void>;
   /** 向 Group 发送文本。 */
   /** 当前 GroupSession 摘要。 */
   session: DesktopGroupSessionSummary;
@@ -55,7 +61,7 @@ interface GroupViewProps {
 }
 
 /** Group 复用 Agent Chat 的消息流和输入区布局，但保留共享消息语义。 */
-export function GroupView({ group, agents, settings, messages, member_statuses, group_phase, read_message_ids, session, workspace_id, send_message, stop_session, controller, open_config, toggle_config_sidebar, config_sidebar_open, config_sidebar_collapsed }: GroupViewProps) {
+export function GroupView({ group, agents, settings, messages, member_statuses, group_phase, read_message_ids, interactions, respond_interaction, session, workspace_id, send_message, stop_session, controller, open_config, toggle_config_sidebar, config_sidebar_open, config_sidebar_collapsed }: GroupViewProps) {
   const scroll_ref = useRef<HTMLDivElement | null>(null);
   const [draft, set_draft] = useState("");
   const [draft_files, set_draft_files] = useState<DesktopChatFileInput[]>([]);
@@ -91,6 +97,7 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
           <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
             {messages.length === 0 ? <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 px-4"><TbUsers className="size-8 text-muted-foreground/50" /><p className="text-center text-sm text-muted-foreground">开始与 {group.name} 协作</p><p className="text-center text-xs text-muted-foreground/60">{group.members.length} 个 Agent 已加入</p></div> : null}
             {messages.map((message) => <GroupMessageRow key={message.message_id} message={message} agents={agents} read={read_message_ids.includes(message.message_id)} />)}
+            {interactions.map(({ agent_id, part }) => <div key={part.interaction_id} className="group is-assistant flex min-w-0 w-full items-start gap-2 py-2"><div className="size-8 shrink-0"><AgentAvatar agent={agents.find((item) => item.agent_id === agent_id) ?? { agent_id, model_id: "", version: "" }} class_name="size-8 rounded-md" /></div><div className="min-w-0 flex-1 px-1 pt-0.5"><div className="mb-1 text-[0.6875rem] font-medium text-muted-foreground">{agent_id} 需要你的响应</div><AssistantContent parts={[part]} show_reasoning={true} streaming={false} respond_interaction={respond_interaction} /></div></div>)}
             {(group_phase === "executing"
               ? member_statuses.filter((status) => status.running).map((status) => status.agent_id)
               : []).map((agent_id) => <GroupTypingRow key={`typing:${agent_id}`} agent={agents.find((item) => item.agent_id === agent_id)} agent_id={agent_id} />)}

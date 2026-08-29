@@ -4,6 +4,7 @@ import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { GroupMessage } from "@/types/group/Group.js";
 import type { Agent } from "@/agent/Agent.js";
 import type { WorkspaceBase } from "@downcity/workspace";
+import type { RespondSessionInteractionInput, SessionInteractionRequest } from "@/types/session/SessionInteraction.js";
 
 /** Group 成员运行态。 */
 export interface GroupMemberRuntime {
@@ -19,6 +20,7 @@ export type GroupStatusPhase = "idle" | "dispatching" | "dispatched" | "executin
 /** GroupSession 的统一实时事件。 */
 export type GroupEvent =
   | { /** 事件类型。 */ readonly type: "message"; /** 新增的共享消息。 */ readonly message: GroupMessage }
+  | { /** 事件类型。 */ readonly type: "interaction"; /** 发起交互的成员 Agent。 */ readonly agent_id: string; /** 成员 Session 的交互请求。 */ readonly request: SessionInteractionRequest }
   | { /** 事件类型。 */ readonly type: "status"; /** 当前群聊轮次。 */ readonly turn_id?: string; /** 当前轮次对应的消息标识。 */ readonly message_id?: string; /** 当前运行阶段。 */ readonly phase: GroupStatusPhase; /** Dispatch 完成后实际接受消息的成员标识。 */ readonly dispatched_member_ids?: readonly string[]; /** 成员运行态快照。 */ readonly members: readonly GroupMemberRuntime[] };
 
 /** Group 事件订阅回调。 */
@@ -93,6 +95,8 @@ export interface GroupSessionContract {
   messages(): Promise<readonly GroupMessage[]>;
   /** 订阅共享消息。 */
   subscribe(subscriber: GroupEventSubscriber): GroupEventUnsubscribe;
+  /** 响应成员 Agent Session 当前等待的 Interaction。 */
+  respond_interaction(input: RespondSessionInteractionInput): Promise<void>;
   /** 停止当前传播和成员执行；停止完成后可再次 prompt。 */
   stop(): Promise<void>;
   /** 释放当前上下文，不再接受新的 prompt。 */

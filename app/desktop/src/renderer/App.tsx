@@ -16,6 +16,7 @@ import { WorkspaceView } from "@/views/WorkspaceView";
 import { ShellPanelControls } from "@/layouts/ShellPanelControls";
 import { GroupInfoSidebar, GroupView, type GroupEditorSection } from "@/views/GroupView";
 import { AgentInfoSidebar, AgentView, type AgentEditorSection } from "@/views/AgentView";
+import { RecentSessionsSidebar } from "@/components/RecentSessionsSidebar";
 import { TbLayoutSidebar, TbLayoutSidebarFilled } from "react-icons/tb";
 
 /** Desktop 根组件。 */
@@ -32,6 +33,7 @@ export function App() {
   const [group_info_open, set_group_info_open] = useState(false);
   const [group_config_section, set_group_config_section] = useState<GroupEditorSection>("model");
   const [group_config_collapsed, set_group_config_collapsed] = useState(false);
+  const [recent_open, set_recent_open] = useState(false);
   const open_agent_config = (section: AgentEditorSection) => { set_agent_config_section(section); set_agent_info_open(true); set_agent_config_collapsed(false); };
   const open_group_config = (section: GroupEditorSection) => { set_group_config_section(section); set_group_info_open(true); set_group_config_collapsed(false); };
   const open_group_config_from_sidebar = async (group_id: string) => {
@@ -131,6 +133,8 @@ export function App() {
         member_statuses={controller.group_member_statuses_by_group[group_selection.group_id] ?? []}
         group_phase={controller.group_phase_by_group[group_selection.group_id] ?? "idle"}
         read_message_ids={controller.group_read_message_ids_by_group[group_selection.group_id] ?? []}
+        interactions={controller.group_interactions_by_group[group_selection.group_id] ?? []}
+        respond_interaction={(input) => controller.respond_group_interaction(group_selection.group_id, group_selection.session_id, input)}
         controller={controller}
         open_config={open_group_config}
         toggle_config_sidebar={() => { if (!group_info_open) open_group_config(group_config_section); else set_group_config_collapsed((value) => !value); }}
@@ -268,8 +272,9 @@ export function App() {
       <main data-sidebar-collapsed={sidebar_collapsed ? "true" : "false"} className="main-view-shell flex h-full min-w-0 flex-1 flex-col bg-background">{render_main_view()}</main>
       {agent_info_open && selected_agent && (current_selection?.kind === "agent" || (current_selection?.kind === "session" && controller.settings.agent_main_sessions[selected_agent.agent_id]?.session_id === current_selection.session_id)) ? <AgentInfoSidebar agent={selected_agent} plugins={controller.plugins} controller={controller} section={agent_config_section} collapsed={agent_config_collapsed} close_sidebar={() => set_agent_info_open(false)} /> : null}
       {group_info_open && current_selection?.kind === "group_session" && controller.groups.find((item) => item.group_id === current_selection.group_id) ? <GroupInfoSidebar group={controller.groups.find((item) => item.group_id === current_selection.group_id)!} agents={controller.agents} controller={controller} section={group_config_section} collapsed={group_config_collapsed} close_sidebar={() => set_group_info_open(false)} /> : null}
+      {recent_open ? <RecentSessionsSidebar controller={controller} close_sidebar={() => set_recent_open(false)} /> : null}
     </div>
-    <ShellPanelControls sidebar_collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} />
+    <ShellPanelControls sidebar_collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} recent_open={recent_open} toggle_recent={() => set_recent_open((value) => !value)} />
     {controller.error ? <div className="fixed bottom-5 left-1/2 z-40 flex max-w-xl -translate-x-1/2 items-start gap-3 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl"><span className="min-w-0 flex-1 break-words">{controller.error}</span><Button onClick={controller.clear_error}>关闭</Button></div> : null}
     {create_dialog_open ? <CreateAgentDialog close_dialog={() => { set_create_dialog_open(false); set_create_workspace_id(undefined); }} create_agent={controller.create_agent} models={controller.models} models_loading={controller.models_loading} default_model_id={controller.settings.default_text_model_id} workspace={controller.workspaces.find((workspace) => workspace.workspace_id === create_workspace_id)} /> : null}
     {create_workspace_dialog_open ? <CreateWorkspaceDialog close_dialog={() => set_create_workspace_dialog_open(false)} create_workspace={controller.create_workspace} /> : null}

@@ -1,6 +1,6 @@
 /** Desktop Shell 层控件，独立于 Sidebar 与 MainView 的拖拽内容。 */
 
-import { TbLayoutSidebar, TbLayoutSidebarFilled } from "react-icons/tb";
+import { TbClock, TbLayoutSidebar, TbLayoutSidebarFilled } from "react-icons/tb";
 import type { CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -10,15 +10,24 @@ interface ShellPanelControlsProps {
   sidebar_collapsed: boolean;
   /** 切换 Sidebar 折叠状态。 */
   toggle_sidebar(): void;
+  /** 当前是否打开最近 Session 侧栏。 */
+  recent_open: boolean;
+  /** 切换最近 Session 侧栏。 */
+  toggle_recent(): void;
 }
 
 /** 参考 Duobox 的左上角 Sidebar 控件。 */
-export function ShellPanelControls({ sidebar_collapsed, toggle_sidebar }: ShellPanelControlsProps) {
+export function ShellPanelControls({ sidebar_collapsed, toggle_sidebar, recent_open, toggle_recent }: ShellPanelControlsProps) {
   const left = navigator.platform.toLowerCase().includes("mac") ? 80 : 8;
   const no_drag_style = { WebkitAppRegion: "no-drag" } as CSSProperties;
-  return <div className="shell-panel-controls absolute top-2 z-[100]" style={{ left, ...no_drag_style }}>
+  return <>
+  <div className="shell-panel-controls absolute top-2 z-[100]" style={{ left, ...no_drag_style }}>
     <Button data-header-sidebar-toggle size="icon" style={no_drag_style} actived={!sidebar_collapsed} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={toggle_sidebar} title={sidebar_collapsed ? "展开侧边栏" : "折叠侧边栏"} aria-label={sidebar_collapsed ? "展开侧边栏" : "折叠侧边栏"}>
       {sidebar_collapsed ? <TbLayoutSidebar /> : <TbLayoutSidebarFilled />}
     </Button>
-  </div>;
+  </div>
+  <div className="absolute right-11 top-2 z-[100]" style={no_drag_style}>
+    <Button size="icon" style={no_drag_style} actived={recent_open} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={toggle_recent} title="最近" aria-label="最近"><TbClock /></Button>
+  </div>
+  </>;
 }

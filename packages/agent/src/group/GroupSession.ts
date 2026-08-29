@@ -16,6 +16,7 @@ import type {
 import type { DispatchDecision, DispatchNode, DispatchStrategy } from "@/types/group/DispatchStrategy.js";
 import type { WorkspaceBase } from "@downcity/workspace";
 import type { GroupSessionDataStore } from "@/types/group/GroupSessionStore.js";
+import type { RespondSessionInteractionInput } from "@/types/session/SessionInteraction.js";
 
 const max_auto_dispatch_count = 32;
 
@@ -53,6 +54,8 @@ export class GroupSession implements GroupSessionContract {
   private readonly member_sessions = new Map<string, AgentSession>();
   private readonly member_session_ids = new Map<string, string>();
   private readonly member_session_promises = new Map<string, Promise<AgentSession>>();
+  private readonly member_session_unsubscribes = new Map<string, () => void>();
+  private readonly interaction_sessions = new Map<string, AgentSession>();
   private readonly member_running_counts = new Map<string, number>();
   private readonly pending_deliveries = new Set<Promise<void>>();
   private readonly active_member_deliveries = new Set<Promise<void>>();
@@ -139,6 +142,7 @@ export class GroupSession implements GroupSessionContract {
         });
         this.member_sessions.set(agent_id, session);
         this.member_session_ids.set(agent_id, session.id);
+        this.subscribe_member_session(agent_id, session);
         valid_member_session_ids[agent_id] = session.id;
       } catch {
         // 成员已被删除或其 Session 不再匹配时，清理失效映射并继续恢复群聊。
@@ -193,6 +197,13 @@ export class GroupSession implements GroupSessionContract {
     return () => this.subscribers.delete(subscriber);
   }
 
+  async respond_interaction(input: RespondSessionInteractionInput): Promise<void> {
+    const session = this.interaction_sessions.get(input.interaction_id);
+    if (!session) throw new Error(`Group interaction not found: ${input.interaction_id}`);
+    await session.respond(input);
+    this.interaction_sessions.delete(input.interaction_id);
+  }
+
   /** 读取成员运行态快照；成员是否回复由成员自身决定。 */
   private member_statuses(): readonly GroupMemberRuntime[] {
     return this.members.map((member) => ({
@@ -223,6 +234,9 @@ export class GroupSession implements GroupSessionContract {
     await this.stop();
     this.disposed = true;
     this.subscribers.clear();
+    for (const unsubscribe of this.member_session_unsubscribes.values()) unsubscribe();
+    this.member_session_unsubscribes.clear();
+    this.interaction_sessions.clear();
     this.member_sessions.clear();
     this.member_session_promises.clear();
     this.member_running_counts.clear();
@@ -599,12 +613,26 @@ export class GroupSession implements GroupSessionContract {
     });
     this.member_sessions.set(agent.id, session);
     this.member_session_ids.set(agent.id, session.id);
+    this.subscribe_member_session(agent.id, session);
     const store = this.store;
     if (!store) throw new Error(`GroupSession "${this.id}" is not initialized`);
     await store.update_metadata({
       member_session_ids: Object.fromEntries(this.member_session_ids),
     });
     return session;
+  }
+
+  private subscribe_member_session(agent_id: string, session: AgentSession): void {
+    this.member_session_unsubscribes.get(agent_id)?.();
+    this.member_session_unsubscribes.set(agent_id, session.subscribe((mutation) => {
+      if (mutation.variant !== "part" || mutation.type !== "interaction") return;
+      if (mutation.part.status === "pending") {
+        this.interaction_sessions.set(mutation.part.interaction_id, session);
+        this.publish_event({ type: "interaction", agent_id, request: mutation.part.request });
+      } else {
+        this.interaction_sessions.delete(mutation.part.interaction_id);
+      }
+    }));
   }
 
   private build_member_context(
@@ -686,6 +714,10 @@ export class GroupSession implements GroupSessionContract {
       phase,
       members: this.member_statuses(),
     };
+    for (const subscriber of this.subscribers) void subscriber(event);
+  }
+
+  private publish_event(event: Parameters<GroupEventSubscriber>[0]): void {
     for (const subscriber of this.subscribers) void subscriber(event);
   }
 

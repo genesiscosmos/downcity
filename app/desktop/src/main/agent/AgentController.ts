@@ -453,6 +453,10 @@ export class AgentController {
     await (await this.require_group_session(this.require_group(group_id), session_id)).stop();
   }
 
+  async respond_group_interaction(group_id: string, session_id: string, input: RespondSessionInteractionInput): Promise<void> {
+    await (await this.require_group_session(this.require_group(group_id), session_id)).respond_interaction(input);
+  }
+
   async remove_group_session(group_id: string, session_id: string): Promise<DesktopGroupSummary> {
     await this.ready_promise;
     const group = this.require_group(group_id);
@@ -989,6 +993,8 @@ export class AgentController {
     const unsubscribe = group_session.subscribe((event) => {
       this.events.group_event(event.type === "message"
         ? { group_id: group_session.group_id, session_id: group_session.id, type: "message", message: to_desktop_group_message(event.message) }
+        : event.type === "interaction"
+          ? { group_id: group_session.group_id, session_id: group_session.id, type: "interaction", agent_id: event.agent_id, request: event.request }
         : {
           group_id: group_session.group_id,
           session_id: group_session.id,

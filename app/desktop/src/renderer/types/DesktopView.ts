@@ -1,6 +1,6 @@
 /** Downcity Desktop Renderer 的页面和交互状态类型。 */
 
-import type { RespondSessionInteractionInput, SessionMessage } from "@downcity/agent";
+import type { RespondSessionInteractionInput, SessionAssistantInteractionPart, SessionMessage } from "@downcity/agent";
 import type {
   DesktopAgentSummary,
   DesktopAgentDefinition,
@@ -120,6 +120,8 @@ export interface DesktopViewController {
   group_phase_by_group: Record<string, DesktopGroupStatusPhase>;
   /** 按 Group 标识缓存已完成 Dispatch 的消息标识。 */
   group_read_message_ids_by_group: Record<string, string[]>;
+  /** 按 Group 标识缓存待响应的成员交互。 */
+  group_interactions_by_group: Record<string, { agent_id: string; part: SessionAssistantInteractionPart }[]>;
   /** 按 Workspace 标识缓存的 Session 导航数据。 */
   sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
   /** 按 Workspace 标识缓存的 GroupSession 导航数据。 */
@@ -192,6 +194,8 @@ export interface DesktopViewController {
   send_group_message(group_id: string, session_id: string, text: string): Promise<string | undefined>;
   /** 停止 Group 当前执行。 */
   stop_group(group_id: string, session_id: string): Promise<void>;
+  /** 响应 Group 成员交互。 */
+  respond_group_interaction(group_id: string, session_id: string, input: RespondSessionInteractionInput): Promise<void>;
   /** 打开设置分区。 */
   open_settings(section?: SettingsSection): void;
   /** 离开设置并返回之前的业务视图。 */
