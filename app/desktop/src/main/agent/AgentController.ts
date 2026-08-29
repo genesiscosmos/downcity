@@ -835,6 +835,14 @@ export class AgentController {
       this.events.mutation({ agent_id, workspace_id, session_id: session.id, mutation });
       if (mutation.variant === "part" && mutation.type === "interaction") {
         const current = this.runtimes.get(session_key);
+        // interaction 的收口事件可能晚于 Turn finish 到达，终态不能被回退为 streaming。
+        if (
+          !current
+          || current.status === "completed"
+          || current.status === "failed"
+          || current.status === "stopped"
+          || (current.turn_id && mutation.turn_id && current.turn_id !== mutation.turn_id)
+        ) return;
         this.update_runtime({
           agent_id,
           workspace_id,

@@ -1,7 +1,7 @@
 /** Agent 身份、配置索引与右侧定义编辑容器。 */
 
 import { useEffect, useRef, useState } from "react";
-import { TbCheck, TbChevronRight, TbComponents, TbFileText, TbLayoutSidebar, TbLayoutSidebarFilled, TbMessageCircle, TbPlus } from "react-icons/tb";
+import { TbCheck, TbChevronRight, TbComponents, TbFileText, TbMessageCircle, TbPlus } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { DetailEditorSidebar } from "@/components/DetailEditorSidebar";
 import { LLMModelIcon } from "@/components/model/LLMModelIcon";
@@ -24,9 +24,6 @@ interface AgentViewProps {
   /** Renderer 根控制器。 */ controller: DesktopViewController;
   /** 打开主 Session 对话。 */ open_main_session(): Promise<void>;
   /** 打开 Agent 配置侧栏。 */ open_config(section: AgentEditorSection): void;
-  /** 切换 Agent 配置侧栏。 */ toggle_config_sidebar(): void;
-  /** 配置侧栏是否打开。 */ config_sidebar_open: boolean;
-  /** 配置侧栏是否折叠。 */ config_sidebar_collapsed: boolean;
 }
 
 /** Agent 信息侧栏属性。 */
@@ -43,10 +40,12 @@ interface AgentInfoSidebarProps {
   section?: AgentEditorSection;
   /** 是否折叠侧栏。 */
   collapsed?: boolean;
+  /** 是否嵌入 BayBar。 */
+  embedded?: boolean;
 }
 
 /** Agent Sidebar 中的固定信息与配置编辑侧栏。 */
-export function AgentInfoSidebar({ agent, plugins, controller, close_sidebar, section, collapsed = false }: AgentInfoSidebarProps) {
+export function AgentInfoSidebar({ agent, plugins, controller, close_sidebar, section, collapsed = false, embedded = false }: AgentInfoSidebarProps) {
   const [editor_section, set_editor_section] = useState<AgentEditorSection | undefined>(section || "model");
   useEffect(() => { if (section) set_editor_section(section); }, [section]);
   const [definition, set_definition] = useState<DesktopAgentDefinition>();
@@ -78,7 +77,7 @@ export function AgentInfoSidebar({ agent, plugins, controller, close_sidebar, se
     }, 500);
     return () => window.clearTimeout(timeout_id);
   }, [agent.agent_id, controller.update_agent, definition, definition_dirty]);
-  return <DetailEditorSidebar title={`${agent.agent_id} 配置`} storage_key="downcity.agent_config_width" default_width={400} max_width={560} on_close={close_sidebar} collapsed={collapsed} show_close={false}>
+  return <DetailEditorSidebar title={`${agent.agent_id} 配置`} storage_key="downcity.agent_config_width" default_width={400} max_width={560} on_close={close_sidebar} collapsed={collapsed} show_close={false} embedded={embedded}>
     <div className="mb-4 flex min-w-0 items-center gap-3 px-1"><div className="min-w-0"><div className="truncate text-sm font-semibold text-foreground">{agent.agent_id}</div><div className="truncate text-[0.6875rem] text-muted-foreground">Agent 配置</div></div></div>
     <SettingsGroup title="Definition">
       <EditablePropertyRow icon={<LLMModelIcon model_id={agent.model_id} />} label="Model" value={definition?.model_id || agent.model_id || "未配置"} active={editor_section === "model"} on_select={() => { set_editor_section("model"); if (!definition && !loading_definition) void load_definition(); }} />
@@ -91,7 +90,7 @@ export function AgentInfoSidebar({ agent, plugins, controller, close_sidebar, se
 }
 
 /** 左侧展示 Agent 摘要，点击配置项后在右侧展开对应编辑容器。 */
-export function AgentView({ agent, workspaces, plugins, main_session, controller, open_main_session, open_config, toggle_config_sidebar, config_sidebar_open, config_sidebar_collapsed }: AgentViewProps) {
+export function AgentView({ agent, workspaces, plugins, main_session, controller, open_main_session, open_config }: AgentViewProps) {
   const [editor_section, set_editor_section] = useState<AgentEditorSection>();
   const [definition, set_definition] = useState<DesktopAgentDefinition>();
   const [loading_definition, set_loading_definition] = useState(false);
@@ -153,7 +152,7 @@ export function AgentView({ agent, workspaces, plugins, main_session, controller
 
   return <div className="flex h-full min-h-0 min-w-0 flex-1 bg-background">
     <MainViewLayout>
-      <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2"><div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1 text-xs text-muted-foreground"><AgentAvatar agent={agent} /><span className="truncate font-medium text-foreground/80">{agent.agent_id}</span></div><Button size="icon" actived={config_sidebar_open && !config_sidebar_collapsed} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={toggle_config_sidebar} title={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Agent 配置侧栏" : "打开 Agent 配置侧栏"} aria-label={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Agent 配置侧栏" : "打开 Agent 配置侧栏"}>{config_sidebar_open && !config_sidebar_collapsed ? <TbLayoutSidebarFilled className="-scale-x-100" /> : <TbLayoutSidebar className="-scale-x-100" />}</Button></header>
+      <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2"><div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1 text-xs text-muted-foreground"><AgentAvatar agent={agent} /><span className="truncate font-medium text-foreground/80">{agent.agent_id}</span></div></header>
       <MainViewBody>
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto"><div className="mx-auto w-full max-w-[42rem] px-6 pb-12 pt-14">
         <div className="mb-9 flex min-w-0 items-center gap-4"><div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-subtle text-muted-foreground"><AgentAvatar agent={agent} class_name="size-12 rounded-xl" icon_class_name="size-6" /></div><div className="min-w-0"><h1 className="truncate text-lg font-semibold text-foreground">{agent.agent_id}</h1><p className="mt-1 truncate text-xs text-muted-foreground">可进入 {workspaces.length} 个 Workspace</p></div></div>

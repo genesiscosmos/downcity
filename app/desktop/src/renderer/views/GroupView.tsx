@@ -1,7 +1,7 @@
 /** 运行时 Group 共享消息视图，保持与 Agent Session Chat 一致的视觉结构。 */
 
 import { useEffect, useRef, useState } from "react";
-import { TbCheck, TbChevronDown, TbChevronRight, TbFileText, TbLayoutSidebar, TbLayoutSidebarFilled, TbLoader2, TbUsers } from "react-icons/tb";
+import { TbCheck, TbChevronDown, TbChevronRight, TbFileText, TbLoader2, TbUsers } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { AgentAvatar } from "@/components/AgentAvatar";
@@ -50,18 +50,10 @@ interface GroupViewProps {
   stop_session(session_id: string): Promise<void>;
   /** Desktop 根状态控制器。 */
   controller: DesktopViewController;
-  /** 打开 Group 配置分区。 */
-  open_config(section: GroupEditorSection): void;
-  /** 切换 Group 配置侧栏。 */
-  toggle_config_sidebar(): void;
-  /** 配置侧栏是否打开。 */
-  config_sidebar_open: boolean;
-  /** 配置侧栏是否折叠。 */
-  config_sidebar_collapsed: boolean;
 }
 
 /** Group 复用 Agent Chat 的消息流和输入区布局，但保留共享消息语义。 */
-export function GroupView({ group, agents, settings, messages, member_statuses, group_phase, read_message_ids, interactions, respond_interaction, session, workspace_id, send_message, stop_session, controller, open_config, toggle_config_sidebar, config_sidebar_open, config_sidebar_collapsed }: GroupViewProps) {
+export function GroupView({ group, agents, settings, messages, member_statuses, group_phase, read_message_ids, interactions, respond_interaction, session, workspace_id, send_message, stop_session, controller }: GroupViewProps) {
   const scroll_ref = useRef<HTMLDivElement | null>(null);
   const [draft, set_draft] = useState("");
   const [draft_files, set_draft_files] = useState<DesktopChatFileInput[]>([]);
@@ -87,7 +79,7 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      </div>} header_right={<Button size="icon" actived={config_sidebar_open && !config_sidebar_collapsed} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={toggle_config_sidebar} title={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Group 配置侧栏" : "打开 Group 配置侧栏"} aria-label={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Group 配置侧栏" : "打开 Group 配置侧栏"}>{config_sidebar_open && !config_sidebar_collapsed ? <TbLayoutSidebarFilled className="-scale-x-100" /> : <TbLayoutSidebar className="-scale-x-100" />}</Button>}> 
+      </div>}>
       <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
         <div ref={scroll_ref} className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log">
           <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
@@ -110,7 +102,7 @@ function format_group_session_title(session: DesktopGroupSessionSummary): string
 }
 
 /** Group 主体配置侧栏；保存规则与 Agent 定义侧栏一致，采用短暂防抖提交。 */
-export function GroupInfoSidebar({ group, agents, controller, close_sidebar, section, collapsed = false }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** 全部 Agent。 */ agents: DesktopAgentSummary[]; /** Desktop 根状态控制器。 */ controller: DesktopViewController; /** 关闭侧栏。 */ close_sidebar(): void; /** 当前编辑分区。 */ section?: GroupEditorSection; /** 是否折叠。 */ collapsed?: boolean }) {
+export function GroupInfoSidebar({ group, agents, controller, close_sidebar, section, collapsed = false, embedded = false }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** 全部 Agent。 */ agents: DesktopAgentSummary[]; /** Desktop 根状态控制器。 */ controller: DesktopViewController; /** 关闭侧栏。 */ close_sidebar(): void; /** 当前编辑分区。 */ section?: GroupEditorSection; /** 是否折叠。 */ collapsed?: boolean; /** 是否嵌入 BayBar。 */ embedded?: boolean }) {
   const [editor_section, set_editor_section] = useState<GroupEditorSection | undefined>(section || "model");
   const [draft, set_draft] = useState(group);
   const [draft_dirty, set_draft_dirty] = useState(false);
@@ -131,7 +123,7 @@ export function GroupInfoSidebar({ group, agents, controller, close_sidebar, sec
     return () => { window.clearTimeout(timeout_id); };
   }, [controller.update_group, draft, draft_dirty, group.group_id]);
   const update_draft = (next: DesktopGroupSummary) => { version_ref.current += 1; set_draft(next); set_draft_dirty(true); };
-  return <DetailEditorSidebar title={`${group.name} 配置`} storage_key="downcity.group_config_width" default_width={400} max_width={560} on_close={close_sidebar} collapsed={collapsed} show_close={false}>
+  return <DetailEditorSidebar title={`${group.name} 配置`} storage_key="downcity.group_config_width" default_width={400} max_width={560} on_close={close_sidebar} collapsed={collapsed} show_close={false} embedded={embedded}>
     <div className="mb-4 flex min-w-0 items-center gap-3 px-1"><GroupAvatar group={group} agents={agents} /><div className="min-w-0"><div className="truncate text-sm font-semibold text-foreground">{group.name}</div><div className="truncate text-[0.6875rem] text-muted-foreground">Group 配置</div></div></div>
     <SettingsGroup title="Definition">
       <EditablePropertyRow icon={<LLMModelIcon model_id={draft.model_id} />} label="Model" value={draft.model_id || "未配置"} active={editor_section === "model"} on_select={() => set_editor_section("model")} />

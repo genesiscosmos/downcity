@@ -187,7 +187,8 @@ async function apply_proxy_settings(proxy_enabled: boolean, proxy_url: string): 
   if (proxy_enabled && !proxy_rules) throw new Error("启用网络代理前需要填写代理地址");
   await session.defaultSession.setProxy({
     proxyRules: proxy_rules,
-    proxyBypassRules: "<-loopback>",
+    // 本地回环服务（包括 Electron 开发环境的 Vite Server）始终直连，不经过用户代理。
+    proxyBypassRules: "localhost;127.0.0.1;[::1]",
   });
 }
 
