@@ -33,7 +33,7 @@ import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
 import { ChatInputEditor } from "@/lib/chat/ChatInputEditor";
 import { dispatch_chat_reference } from "@/lib/chat/editor/chatReferenceEvent";
 import { resolve_user_message_rewrite } from "@/lib/chat/user_message_rewrite";
-import { MainViewBody, MainViewLayout } from "@/layouts/MainViewLayout";
+import { ChatSurfaceLayout } from "@/layouts/ChatSurfaceLayout";
 import { cn } from "@/lib/utils";
 import { is_chat_busy, type ChatHistoryState, type QueuedChatMessage } from "@/types/DesktopView";
 import type { DesktopAgentSummary, DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopChatRewriteAction, DesktopChatRewriteInput, DesktopChatRuntime, DesktopModelSummary, DesktopSessionConfiguration, DesktopSessionSummary, DesktopSettings, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
@@ -156,8 +156,7 @@ export function SessionView(props: SessionViewProps) {
     });
   };
 
-  return <MainViewLayout>
-    <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2">
+  return <ChatSurfaceLayout header={<>
       {props.chat_surface === "agent" ? <div className="flex min-w-0 flex-none items-center gap-2">
         <button type="button" className="flex min-w-0 max-w-[min(100%,24rem)] items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-foreground/[0.06]" title="打开 Agent 配置" aria-label="打开 Agent 配置" onClick={props.toggle_agent_config}>
           <AgentAvatar agent={props.agent} class_name="size-6 rounded-md" />
@@ -168,8 +167,7 @@ export function SessionView(props: SessionViewProps) {
       {props.chat_surface === "agent" ? <div className="min-w-0 flex-1" /> : null}
       {props.chat_surface === "agent" && props.toggle_agent_config ? <button type="button" className={cn("flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-foreground/[0.06] hover:text-foreground", props.agent_config_open ? "text-foreground" : "text-muted-foreground")} title={props.agent_config_open ? "折叠 Agent 配置侧栏" : "打开 Agent 配置侧栏"} aria-label={props.agent_config_open ? "折叠 Agent 配置侧栏" : "打开 Agent 配置侧栏"} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={props.toggle_agent_config}><TbGhost3 className="size-4" /></button> : null}
       {props.rename_session && props.archive_session && props.remove_session ? <SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<button type="button" className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground" title="对话操作" aria-label="对话操作"><TbDots className="size-4" /></button>} /> : null}
-    </header>
-    <MainViewBody>
+    </>}>
       <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
         <div
           ref={scroll_ref}
@@ -218,8 +216,7 @@ export function SessionView(props: SessionViewProps) {
           />
         </div>
       </div>
-    </MainViewBody>
-  </MainViewLayout>;
+  </ChatSurfaceLayout>;
 }
 
 /** 顶部仅在 Agent 实际生成内容时显示输入状态。 */

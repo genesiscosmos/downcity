@@ -11,7 +11,7 @@ import { ChatInputEditor } from "@/lib/chat/ChatInputEditor";
 import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopGroupStatusPhase, DesktopSettings } from "@common/types/DesktopApi";
 import type { RespondSessionInteractionInput, SessionAssistantInteractionPart } from "@downcity/agent";
-import { MainViewBody, MainViewLayout } from "@/layouts/MainViewLayout";
+import { ChatSurfaceLayout } from "@/layouts/ChatSurfaceLayout";
 import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
 import type { DesktopAgentSummary, DesktopGroupMemberRuntime, DesktopGroupMessage, DesktopGroupSessionSummary, DesktopGroupSummary } from "@common/types/DesktopApi";
 import { cn } from "@/lib/utils";
@@ -73,8 +73,7 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
 
   const group_agent = agents.find((agent) => group.members.some((member) => member.agent_id === agent.agent_id)) ?? agents[0] ?? { agent_id: "group", model_id: "", version: "" };
 
-  return <MainViewLayout>
-    <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2">
+  return <ChatSurfaceLayout header={<>
       <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -90,8 +89,7 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
         </DropdownMenu>
       </div>
       <div className="flex items-center gap-1"><Button size="icon" title="停止执行" aria-label="停止执行" disabled={group_phase !== "dispatching" && group_phase !== "dispatched" && group_phase !== "executing"} onClick={() => void stop_session(session.session_id)}><TbPlayerStop /></Button><Button size="icon" actived={config_sidebar_open && !config_sidebar_collapsed} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onClick={toggle_config_sidebar} title={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Group 配置侧栏" : "打开 Group 配置侧栏"} aria-label={config_sidebar_open && !config_sidebar_collapsed ? "折叠 Group 配置侧栏" : "打开 Group 配置侧栏"}>{config_sidebar_open && !config_sidebar_collapsed ? <TbLayoutSidebarFilled className="-scale-x-100" /> : <TbLayoutSidebar className="-scale-x-100" />}</Button></div>
-    </header>
-    <MainViewBody>
+    </>}>
       <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
         <div ref={scroll_ref} className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log">
           <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
@@ -105,8 +103,7 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
         </div>
         <ChatInputEditor group_mode group_members={agents.filter((agent) => group.members.some((member) => member.agent_id === agent.agent_id))} group_sessions={group.sessions} select_group_session={(session_id) => controller.open_group(group.group_id, session_id)} group_phase={group_phase} surface="agent" workspace_id={workspace_id} editor_key={session.session_id} agent={group_agent} draft={draft} draft_files={draft_files} draft_references={draft_references} queued_messages={[]} models={[]} models_loading={false} settings={settings} update_draft={set_draft} update_draft_files={set_draft_files} update_draft_references={set_draft_references} send_message={async (input: DesktopChatInput) => { await send_message(session.session_id, input.text); set_draft(""); set_draft_files([]); set_draft_references([]); }} stop_session={() => stop_session(session.session_id)} refresh_models={async () => undefined} set_model={async () => undefined} set_reasoning_effort={async () => undefined} set_approval_mode={async () => undefined} remove_queued_message={() => undefined} move_queued_message={() => undefined} />
       </div>
-    </MainViewBody>
-  </MainViewLayout>;
+  </ChatSurfaceLayout>;
 }
 
 /** 生成 GroupSession 的紧凑显示标题。 */

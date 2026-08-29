@@ -17,7 +17,15 @@ import { ShellPanelControls } from "@/layouts/ShellPanelControls";
 import { GroupInfoSidebar, GroupView, type GroupEditorSection } from "@/views/GroupView";
 import { AgentInfoSidebar, AgentView, type AgentEditorSection } from "@/views/AgentView";
 import { RecentSessionsSidebar } from "@/components/RecentSessionsSidebar";
+import { RightPanelHost } from "@/layouts/RightPanelHost";
 import { TbLayoutSidebar, TbLayoutSidebarFilled } from "react-icons/tb";
+
+/** 当前右侧面板。面板由根应用统一拥有，保证同一时间只有一个面板可见。 */
+type RightPanelState =
+  | { /** 最近会话面板。 */ type: "recent" }
+  | { /** Agent 配置面板。 */ type: "agent_config" }
+  | { /** Group 配置面板。 */ type: "group_config" }
+  | null;
 
 /** Desktop 根组件。 */
 export function App() {
@@ -27,15 +35,13 @@ export function App() {
   const [create_workspace_id, set_create_workspace_id] = useState<string>();
   const [sidebar_collapsed, set_sidebar_collapsed] = useState(false);
   const [command_palette_open, set_command_palette_open] = useState(false);
-  const [agent_info_open, set_agent_info_open] = useState(false);
   const [agent_config_section, set_agent_config_section] = useState<AgentEditorSection>("model");
   const [agent_config_collapsed, set_agent_config_collapsed] = useState(false);
-  const [group_info_open, set_group_info_open] = useState(false);
   const [group_config_section, set_group_config_section] = useState<GroupEditorSection>("model");
   const [group_config_collapsed, set_group_config_collapsed] = useState(false);
-  const [recent_open, set_recent_open] = useState(false);
-  const open_agent_config = (section: AgentEditorSection) => { set_agent_config_section(section); set_agent_info_open(true); set_agent_config_collapsed(false); };
-  const open_group_config = (section: GroupEditorSection) => { set_group_config_section(section); set_group_info_open(true); set_group_config_collapsed(false); };
+  const [right_panel, set_right_panel] = useState<RightPanelState>(null);
+  const open_agent_config = (section: AgentEditorSection) => { set_agent_config_section(section); set_agent_config_collapsed(false); set_right_panel({ type: "agent_config" }); };
+  const open_group_config = (section: GroupEditorSection) => { set_group_config_section(section); set_group_config_collapsed(false); set_right_panel({ type: "group_config" }); };
   const open_group_config_from_sidebar = async (group_id: string) => {
     await controller.open_group(group_id);
     open_group_config("model");
@@ -46,13 +52,13 @@ export function App() {
     : undefined;
 
   useEffect(() => {
-    set_agent_info_open(false);
+    set_right_panel((panel) => panel?.type === "agent_config" ? null : panel);
     set_agent_config_collapsed(false);
     set_agent_config_section("model");
   }, [selected_agent?.agent_id]);
 
   useEffect(() => {
-    set_group_info_open(false);
+    set_right_panel((panel) => panel?.type === "group_config" ? null : panel);
     set_group_config_collapsed(false);
     set_group_config_section("model");
   }, [current_selection?.kind === "group_session" ? current_selection.group_id : undefined]);
@@ -137,8 +143,8 @@ export function App() {
         respond_interaction={(input) => controller.respond_group_interaction(group_selection.group_id, group_selection.session_id, input)}
         controller={controller}
         open_config={open_group_config}
-        toggle_config_sidebar={() => { if (!group_info_open) open_group_config(group_config_section); else set_group_config_collapsed((value) => !value); }}
-        config_sidebar_open={group_info_open}
+        toggle_config_sidebar={() => { if (right_panel?.type !== "group_config") open_group_config(group_config_section); else set_group_config_collapsed((value) => !value); }}
+        config_sidebar_open={right_panel?.type === "group_config"}
         config_sidebar_collapsed={group_config_collapsed}
         send_message={(session_id, text) => controller.send_group_message(group_selection.group_id, session_id, text)}
         stop_session={(session_id) => controller.stop_group(group_selection.group_id, session_id)}
@@ -161,8 +167,8 @@ export function App() {
           await controller.select_session(main_context.workspace_id, selected_agent.agent_id, main_context.session_id);
         }}
         open_config={open_agent_config}
-        toggle_config_sidebar={() => { if (!agent_info_open) open_agent_config(agent_config_section); else set_agent_config_collapsed((value) => !value); }}
-        config_sidebar_open={agent_info_open}
+        toggle_config_sidebar={() => { if (right_panel?.type !== "agent_config") open_agent_config(agent_config_section); else set_agent_config_collapsed((value) => !value); }}
+        config_sidebar_open={right_panel?.type === "agent_config"}
         config_sidebar_collapsed={agent_config_collapsed}
       />;
     }
@@ -222,8 +228,8 @@ export function App() {
       workspaces={controller.workspaces}
       agents={controller.agents}
       session={session}
-      toggle_agent_config={is_main_session ? () => { if (!agent_info_open) open_agent_config(agent_config_section); else set_agent_config_collapsed((value) => !value); } : undefined}
-      agent_config_open={is_main_session && agent_info_open && !agent_config_collapsed}
+      toggle_agent_config={is_main_session ? () => { if (right_panel?.type !== "agent_config") open_agent_config(agent_config_section); else set_agent_config_collapsed((value) => !value); } : undefined}
+      agent_config_open={is_main_session && right_panel?.type === "agent_config" && !agent_config_collapsed}
       messages={controller.messages_by_session[session_key] ?? []}
       runtime={controller.chat_runtime_by_session[session_key]}
       draft={controller.drafts_by_session[session_key] ?? ""}
@@ -270,11 +276,11 @@ export function App() {
           collapsed={sidebar_collapsed}
         />}
       <main data-sidebar-collapsed={sidebar_collapsed ? "true" : "false"} className="main-view-shell flex h-full min-w-0 flex-1 flex-col bg-background">{render_main_view()}</main>
-      {agent_info_open && selected_agent && (current_selection?.kind === "agent" || (current_selection?.kind === "session" && controller.settings.agent_main_sessions[selected_agent.agent_id]?.session_id === current_selection.session_id)) ? <AgentInfoSidebar agent={selected_agent} plugins={controller.plugins} controller={controller} section={agent_config_section} collapsed={agent_config_collapsed} close_sidebar={() => set_agent_info_open(false)} /> : null}
-      {group_info_open && current_selection?.kind === "group_session" && controller.groups.find((item) => item.group_id === current_selection.group_id) ? <GroupInfoSidebar group={controller.groups.find((item) => item.group_id === current_selection.group_id)!} agents={controller.agents} controller={controller} section={group_config_section} collapsed={group_config_collapsed} close_sidebar={() => set_group_info_open(false)} /> : null}
-      {recent_open ? <RecentSessionsSidebar controller={controller} close_sidebar={() => set_recent_open(false)} /> : null}
+      <RightPanelHost>
+        {right_panel?.type === "recent" ? <RecentSessionsSidebar controller={controller} close_sidebar={() => set_right_panel(null)} /> : right_panel?.type === "agent_config" && selected_agent && (current_selection?.kind === "agent" || (current_selection?.kind === "session" && controller.settings.agent_main_sessions[selected_agent.agent_id]?.session_id === current_selection.session_id)) ? <AgentInfoSidebar agent={selected_agent} plugins={controller.plugins} controller={controller} section={agent_config_section} collapsed={agent_config_collapsed} close_sidebar={() => set_right_panel(null)} /> : right_panel?.type === "group_config" && current_selection?.kind === "group_session" && controller.groups.find((item) => item.group_id === current_selection.group_id) ? <GroupInfoSidebar group={controller.groups.find((item) => item.group_id === current_selection.group_id)!} agents={controller.agents} controller={controller} section={group_config_section} collapsed={group_config_collapsed} close_sidebar={() => set_right_panel(null)} /> : null}
+      </RightPanelHost>
     </div>
-    <ShellPanelControls sidebar_collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} recent_open={recent_open} toggle_recent={() => set_recent_open((value) => !value)} />
+    <ShellPanelControls sidebar_collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} recent_open={right_panel?.type === "recent"} toggle_recent={() => set_right_panel((panel) => panel?.type === "recent" ? null : { type: "recent" })} />
     {controller.error ? <div className="fixed bottom-5 left-1/2 z-40 flex max-w-xl -translate-x-1/2 items-start gap-3 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl"><span className="min-w-0 flex-1 break-words">{controller.error}</span><Button onClick={controller.clear_error}>关闭</Button></div> : null}
     {create_dialog_open ? <CreateAgentDialog close_dialog={() => { set_create_dialog_open(false); set_create_workspace_id(undefined); }} create_agent={controller.create_agent} models={controller.models} models_loading={controller.models_loading} default_model_id={controller.settings.default_text_model_id} workspace={controller.workspaces.find((workspace) => workspace.workspace_id === create_workspace_id)} /> : null}
     {create_workspace_dialog_open ? <CreateWorkspaceDialog close_dialog={() => set_create_workspace_dialog_open(false)} create_workspace={controller.create_workspace} /> : null}
