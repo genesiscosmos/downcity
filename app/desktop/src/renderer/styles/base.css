@@ -89,11 +89,6 @@
 }
 
 /* Sidebar 折叠后，主视图 Header 为左上角 shell 控件预留 macOS 安全区。 */
-.main-view-shell[data-sidebar-collapsed="true"] .header-drag-region {
-  padding-left: 112px !important;
-}
-
-
 .desktop-dialog-backdrop {
   opacity: 1;
   transition: opacity 200ms ease-out;
