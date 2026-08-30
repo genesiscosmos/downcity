@@ -13,14 +13,16 @@ import { SettingsView } from "@/views/SettingsView";
 import { PluginView } from "@/views/PluginView";
 import { WelcomeView } from "@/views/WelcomeView";
 import { WorkspaceView } from "@/views/WorkspaceView";
+import { WorkspaceFileView } from "@/views/WorkspaceFileView";
 import { BayBar, type BayBarState } from "@/layouts/BayBar";
-import { ShellPanelControls } from "@/layouts/ShellPanelControls";
 import { GroupConfigView, GroupInfoSidebar, GroupView, type GroupEditorSection } from "@/views/GroupView";
 import { AgentInfoSidebar, AgentView, type AgentEditorSection } from "@/views/AgentView";
-import { MainViewBody, MainViewLayout } from "@/layouts/MainViewLayout";
+import { MainViewBody, MainViewHeaderProvider, MainViewLayout } from "@/layouts/MainViewLayout";
+import { AgentChatSessionSidebar, GroupChatSessionSidebar } from "@/layouts/ChatSessionSidebar";
+import { ShellSidebarControl } from "@/layouts/ShellSidebarControl";
 
 /** 当前右侧面板。面板由根应用统一拥有，保证同一时间只有一个面板可见。 */
-type RightPanelState = BayBarState & { section: AgentEditorSection | GroupEditorSection };
+type RightPanelState = BayBarState & { section: AgentEditorSection | GroupEditorSection | "global_env" };
 
 /** Desktop 根组件。 */
 export function App() {
@@ -29,11 +31,20 @@ export function App() {
   const [create_workspace_dialog_open, set_create_workspace_dialog_open] = useState(false);
   const [create_workspace_id, set_create_workspace_id] = useState<string>();
   const [sidebar_collapsed, set_sidebar_collapsed] = useState(false);
+  const [chat_session_sidebar_collapsed, set_chat_session_sidebar_collapsed] = useState(() => localStorage.getItem("downcity.chat_session_sidebar_collapsed") === "true");
   const [command_palette_open, set_command_palette_open] = useState(false);
   const [right_panel, set_right_panel] = useState<RightPanelState>({ open: false, active_tab: "agent_config", section: "model" });
   const open_agent_config = (section: AgentEditorSection) => set_right_panel({ open: true, active_tab: "agent_config", section });
   const open_group_config = (section: GroupEditorSection) => set_right_panel({ open: true, active_tab: "group_config", section });
+  const open_global_env = () => {
+    void controller.list_global_env();
+    set_right_panel({ open: true, active_tab: "global_env", section: "global_env" });
+  };
   const open_group_from_sidebar = (group_id: string) => controller.select_group(group_id);
+  const toggle_chat_session_sidebar = () => set_chat_session_sidebar_collapsed((current) => {
+    localStorage.setItem("downcity.chat_session_sidebar_collapsed", String(!current));
+    return !current;
+  });
   const current_selection = controller.selection;
   const selected_agent = current_selection?.kind === "agent" || current_selection?.kind === "session" || current_selection?.kind === "draft"
     ? controller.agents.find((agent) => agent.agent_id === current_selection.agent_id)
@@ -42,16 +53,13 @@ export function App() {
     ? controller.groups.find((group) => group.group_id === current_selection.group_id)
     : undefined;
   const baybar_visible = right_panel.open;
+  const baybar_available = current_selection?.kind === "agent" || current_selection?.kind === "draft" || current_selection?.kind === "session" || current_selection?.kind === "group" || (current_selection?.kind === "settings" && current_selection.section === "general");
   useEffect(() => {
-    if (current_selection?.kind !== "agent" && current_selection?.kind !== "group") set_right_panel((current) => ({ ...current, open: false }));
-  }, [current_selection?.kind, current_selection?.kind === "agent" ? current_selection.agent_id : current_selection?.kind === "group" ? current_selection.group_id : undefined]);
-  const toggle_baybar = () => {
-    if (!right_panel.open) {
-      set_right_panel((current) => ({ ...current, open: true }));
-      return;
-    }
-    set_right_panel((current) => ({ ...current, open: false }));
-  };
+    if (current_selection?.kind === "settings" && current_selection.section !== "general") set_right_panel((current) => ({ ...current, open: false }));
+    else if ((current_selection?.kind === "agent" || current_selection?.kind === "group") && right_panel.active_tab === "global_env") set_right_panel((current) => ({ ...current, open: false }));
+    else if (current_selection?.kind !== "agent" && current_selection?.kind !== "group" && current_selection?.kind !== "settings") set_right_panel((current) => ({ ...current, open: false }));
+  }, [current_selection?.kind, current_selection?.kind === "agent" ? current_selection.agent_id : current_selection?.kind === "group" ? current_selection.group_id : current_selection?.kind === "settings" ? current_selection.section : undefined, right_panel.active_tab]);
+  const open_baybar = () => set_right_panel((current) => ({ ...current, open: true }));
 
   useEffect(() => {
     const handle_key_down = (event: KeyboardEvent) => {
@@ -94,7 +102,7 @@ export function App() {
   }, [controller]);
 
   const render_main_view = () => {
-    if (controller.selection?.kind === "settings") return <SettingsView controller={controller} section={controller.selection.section} />;
+    if (controller.selection?.kind === "settings") return <SettingsView controller={controller} section={controller.selection.section} open_global_env={open_global_env} />;
     if (controller.selection?.kind === "plugin") {
       const plugin_id = controller.selection.plugin_id;
       const plugin = controller.plugins.find((item) => item.plugin_id === plugin_id);
@@ -113,6 +121,11 @@ export function App() {
         select_agent={controller.select_agent}
         select_session={(agent_id, session_id) => controller.select_session(workspace_id, agent_id, session_id)}
       />;
+    }
+    if (controller.selection?.kind === "workspace_file") {
+      const workspace_file_selection = controller.selection;
+      const workspace = controller.workspaces.find((item) => item.workspace_id === workspace_file_selection.workspace_id);
+      return workspace ? <WorkspaceFileView workspace={workspace} relative_path={workspace_file_selection.relative_path} /> : <WelcomeView />;
     }
     if (controller.selection?.kind === "group_session") {
       const group_selection = controller.selection;
@@ -134,6 +147,9 @@ export function App() {
         controller={controller}
         send_message={(session_id, text) => controller.send_group_message(group_selection.group_id, session_id, text)}
         stop_session={(session_id) => controller.stop_group(group_selection.group_id, session_id)}
+        session_sidebar_collapsed={chat_session_sidebar_collapsed}
+        toggle_session_sidebar={toggle_chat_session_sidebar}
+        session_sidebar={<GroupChatSessionSidebar group={group} controller={controller} collapsed={chat_session_sidebar_collapsed} toggle_collapsed={toggle_chat_session_sidebar} />}
       />;
     }
     if (controller.selection?.kind === "group") {
@@ -168,6 +184,9 @@ export function App() {
         workspaces={controller.workspaces}
         agents={controller.agents}
         session={{ session_id: draft_id, title: "新对话", preview_text: "", created_at: 0, updated_at: 0, message_count: 0, executing: false }}
+        session_sidebar_collapsed={chat_session_sidebar_collapsed}
+        toggle_session_sidebar={toggle_chat_session_sidebar}
+        session_sidebar={<AgentChatSessionSidebar agent={selected_agent} controller={controller} collapsed={chat_session_sidebar_collapsed} toggle_collapsed={toggle_chat_session_sidebar} />}
         messages={[]}
         draft={controller.drafts_by_session[draft_key] ?? ""}
         draft_files={controller.draft_files_by_session[draft_key] ?? []}
@@ -211,6 +230,9 @@ export function App() {
       workspaces={controller.workspaces}
         agents={controller.agents}
         session={session}
+      session_sidebar_collapsed={chat_session_sidebar_collapsed}
+      toggle_session_sidebar={toggle_chat_session_sidebar}
+      session_sidebar={<AgentChatSessionSidebar agent={selected_agent} controller={controller} collapsed={chat_session_sidebar_collapsed} toggle_collapsed={toggle_chat_session_sidebar} />}
       messages={controller.messages_by_session[session_key] ?? []}
       runtime={controller.chat_runtime_by_session[session_key]}
       draft={controller.drafts_by_session[session_key] ?? ""}
@@ -256,18 +278,31 @@ export function App() {
           open_group_config={open_group_from_sidebar}
           collapsed={sidebar_collapsed}
         />}
-      <main data-sidebar-collapsed={sidebar_collapsed ? "true" : "false"} data-baybar-open={baybar_visible ? "true" : "false"} data-shell-platform={navigator.platform.toLowerCase().includes("mac") ? "mac" : "other"} className="main-view-shell flex h-full min-w-0 flex-1 flex-col bg-background">{render_main_view()}</main>
-      <BayBar
-        state={right_panel}
-        agent_config_content={selected_agent && right_panel.active_tab === "agent_config" ? <AgentInfoSidebar agent={selected_agent} plugins={controller.plugins} controller={controller} section={right_panel.section as AgentEditorSection} embedded close_sidebar={() => set_right_panel((current) => ({ ...current, open: false }))} /> : undefined}
-        group_config_content={selected_group && right_panel.active_tab === "group_config" ? <GroupInfoSidebar group={selected_group} agents={controller.agents} controller={controller} section={right_panel.section as GroupEditorSection} embedded close_sidebar={() => set_right_panel((current) => ({ ...current, open: false }))} /> : undefined}
-        on_active_tab_change={(active_tab) => set_right_panel((current) => ({ ...current, active_tab, open: true }))}
-      />
+      <main className="main-view-shell relative flex h-full min-w-0 flex-1 bg-background">
+        <MainViewHeaderProvider value={{ sidebar_collapsed, baybar_available, baybar_open: baybar_visible, open_baybar }}><div className="flex h-full min-w-0 flex-1 flex-col">{render_main_view()}</div></MainViewHeaderProvider>
+        <BayBar
+          state={right_panel}
+          agent_config_content={selected_agent && right_panel.active_tab === "agent_config" ? <AgentInfoSidebar agent={selected_agent} plugins={controller.plugins} controller={controller} section={right_panel.section as AgentEditorSection} embedded close_sidebar={() => set_right_panel((current) => ({ ...current, open: false }))} /> : undefined}
+          group_config_content={selected_group && right_panel.active_tab === "group_config" ? <GroupInfoSidebar group={selected_group} agents={controller.agents} controller={controller} section={right_panel.section as GroupEditorSection} embedded close_sidebar={() => set_right_panel((current) => ({ ...current, open: false }))} /> : undefined}
+          global_env_content={current_selection?.kind === "settings" && current_selection.section === "general" ? <GlobalEnvEditor controller={controller} /> : undefined}
+          on_active_tab_change={(active_tab) => set_right_panel((current) => ({ ...current, active_tab, open: true }))}
+          on_close={() => set_right_panel((current) => ({ ...current, open: false }))}
+        />
+      </main>
     </div>
-    <ShellPanelControls sidebar_collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} baybar_open={baybar_visible} toggle_baybar={toggle_baybar} />
+    <ShellSidebarControl collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} />
     {controller.error ? <div className="fixed bottom-5 left-1/2 z-40 flex max-w-xl -translate-x-1/2 items-start gap-3 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl"><span className="min-w-0 flex-1 break-words">{controller.error}</span><Button onClick={controller.clear_error}>关闭</Button></div> : null}
     {create_dialog_open ? <CreateAgentDialog close_dialog={() => { set_create_dialog_open(false); set_create_workspace_id(undefined); }} create_agent={controller.create_agent} models={controller.models} models_loading={controller.models_loading} default_model_id={controller.settings.default_text_model_id} workspace={controller.workspaces.find((workspace) => workspace.workspace_id === create_workspace_id)} /> : null}
     {create_workspace_dialog_open ? <CreateWorkspaceDialog close_dialog={() => set_create_workspace_dialog_open(false)} create_workspace={controller.create_workspace} /> : null}
     {command_palette_open ? <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/25 pt-[18vh]" onMouseDown={() => set_command_palette_open(false)}><div className="w-[min(34rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-popover p-2 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { set_command_palette_open(false); controller.open_settings("user"); }}>打开设置 <span className="ml-auto text-xs text-muted-foreground">⌘,</span></button><button type="button" className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { set_command_palette_open(false); set_sidebar_collapsed((value) => !value); }}>切换左侧边栏 <span className="ml-auto text-xs text-muted-foreground">⌘B</span></button></div></div> : null}
   </div>;
+}
+
+/** BayBar 中的 Global Env 原文编辑器。 */
+function GlobalEnvEditor({ controller }: { controller: ReturnType<typeof use_desktop_controller> }) {
+  const [draft, set_draft] = useState(controller.global_env);
+  const [saving, set_saving] = useState(false);
+  useEffect(() => set_draft(controller.global_env), [controller.global_env]);
+  const save = async () => { set_saving(true); try { await controller.update_global_env(draft); } finally { set_saving(false); } };
+  return <div className="flex h-full min-h-0 flex-col p-3"><p className="mb-2 text-[11px] text-muted-foreground">~/.downcity/.env</p><textarea className="min-h-0 flex-1 resize-none rounded-md bg-background p-3 font-mono text-xs leading-5 text-foreground outline-none ring-1 ring-border focus:ring-foreground/30" value={draft} onChange={(event) => set_draft(event.target.value)} spellCheck={false} aria-label="Global Env" /><div className="flex justify-end pt-3"><Button variant="primary" disabled={saving} onClick={() => void save()}>{saving ? "保存中" : "保存"}</Button></div></div>;
 }

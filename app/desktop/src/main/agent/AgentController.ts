@@ -55,6 +55,8 @@ import type {
   DesktopSessionSummary,
   DesktopWorkspaceSummary,
   DesktopWorkspaceFile,
+  DesktopWorkspaceEntry,
+  DesktopWorkspaceTextFile,
   DesktopChatFileInput,
   DesktopCreateGroupInput,
   DesktopUpdateGroupInput,
@@ -64,7 +66,7 @@ import type {
   DesktopGroupSummary,
   DesktopGroupSessionSummary,
 } from "../../common/types/DesktopApi.js";
-import { mkdir, readFile, readdir, stat } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath, stat } from "node:fs/promises";
 import {
   create_desktop_agent_model,
   create_desktop_group_model,
@@ -79,10 +81,13 @@ import {
 } from "./DesktopAgentAssembly.js";
 import type { DesktopLocalData } from "./DesktopLocalData.js";
 import type { LocalPluginLoader } from "@downcity/local/product";
+import { resolve_local_agent_env } from "@downcity/local/product";
 import { generate_agent_avatar_svg, read_downcity_logo_svg } from "./GeneratedAgentAvatar.js";
 
 const session_model_settings_key = "desktop.session-models";
 const session_reasoning_settings_key = "desktop.session-reasoning";
+const workspace_preview_max_bytes = 2 * 1024 * 1024;
+const hidden_workspace_entry_names = new Set([".git", ".DS_Store", "node_modules", "dist", "build", "out"]);
 
 /** Agent 控制器向 Electron 窗口广播的实时事件。 */
 interface AgentControllerEvents {
@@ -134,6 +139,20 @@ export class AgentController {
   /** 等待 Desktop City 完成 Agent 装配与宿主登记。 */
   async ready(): Promise<void> {
     await this.ready_promise;
+  }
+
+  /** 重新加载当前 City 已持有的全部 Workspace Global Env。 */
+  async reload_global_env(): Promise<void> {
+    await this.ready_promise;
+    for (const config of this.data.workspaces.list()) {
+      const workspace = this.city.workspaces.get(config.workspace_id);
+      if (!workspace) continue;
+      workspace.set_env(resolve_local_agent_env({
+        root_path: this.data.root_path,
+        workspace_path: config.workspace_path,
+        process_env: {},
+      }));
+    }
   }
 
   /** 当前是否存在仍在执行的对话，用于保护账户切换。 */
@@ -610,6 +629,60 @@ export class AgentController {
     return files.sort((left, right) => right.modified_at - left.modified_at || left.relative_path.localeCompare(right.relative_path));
   }
 
+  /** 列出 Workspace 内一个目录的直接子节点，目录树由 Renderer 按需展开。 */
+  async list_workspace_entries(workspace_id: string, relative_path = ""): Promise<DesktopWorkspaceEntry[]> {
+    const { target_path } = await this.resolve_workspace_path(workspace_id, relative_path);
+    const target_stat = await stat(target_path);
+    if (!target_stat.isDirectory()) throw new Error("Workspace path is not a directory");
+    const entries = await readdir(target_path, { withFileTypes: true });
+    const visible_entries = entries.filter((entry) => !entry.name.startsWith(".") && !hidden_workspace_entry_names.has(entry.name));
+    const result = await Promise.all(visible_entries.map(async (entry): Promise<DesktopWorkspaceEntry | undefined> => {
+      if (!entry.isDirectory() && !entry.isFile()) return undefined;
+      const entry_relative_path = path.posix.join(normalize_workspace_relative_path(relative_path), entry.name);
+      const entry_stat = await stat(path.join(target_path, entry.name));
+      return {
+        relative_path: entry_relative_path,
+        name: entry.name,
+        kind: entry.isDirectory() ? "directory" : "file",
+        ...(entry.isFile() ? { size: entry_stat.size } : {}),
+        modified_at: entry_stat.mtimeMs,
+      };
+    }));
+    return result
+      .filter((entry): entry is DesktopWorkspaceEntry => Boolean(entry))
+      .sort((left, right) => Number(left.kind === "file") - Number(right.kind === "file") || left.name.localeCompare(right.name));
+  }
+
+  /** 读取 Workspace 内的小型 UTF-8 文本文件，供 Desktop 主视图只读预览。 */
+  async read_workspace_text_file(workspace_id: string, relative_path: string): Promise<DesktopWorkspaceTextFile> {
+    const { target_path } = await this.resolve_workspace_path(workspace_id, relative_path);
+    const file_stat = await stat(target_path);
+    if (!file_stat.isFile()) throw new Error("Workspace path is not a file");
+    if (file_stat.size > workspace_preview_max_bytes) throw new Error("文件超过 2 MB，无法在 Desktop 中预览");
+    const content = await readFile(target_path);
+    if (content.includes(0)) throw new Error("二进制文件无法作为文本预览");
+    return {
+      relative_path: normalize_workspace_relative_path(relative_path),
+      name: path.basename(target_path),
+      content: content.toString("utf8"),
+      size: file_stat.size,
+    };
+  }
+
+  /** 解析并校验 Workspace 内部路径，同时阻止目录穿越与符号链接越界。 */
+  private async resolve_workspace_path(workspace_id: string, relative_path: string): Promise<{ root_path: string; target_path: string }> {
+    await this.ready_promise;
+    const config = this.data.workspaces.get(workspace_id);
+    if (!config) throw new Error(`Workspace not found: ${workspace_id}`);
+    const normalized_path = normalize_workspace_relative_path(relative_path);
+    const root_path = await realpath(config.workspace_path);
+    const candidate_path = path.resolve(root_path, normalized_path);
+    if (candidate_path !== root_path && !candidate_path.startsWith(`${root_path}${path.sep}`)) throw new Error("Workspace path is invalid");
+    const target_path = await realpath(candidate_path);
+    if (target_path !== root_path && !target_path.startsWith(`${root_path}${path.sep}`)) throw new Error("Workspace path escapes its root");
+    return { root_path, target_path };
+  }
+
   /** 读取 Workspace 根目录下的文件，禁止绝对路径和目录穿越。 */
   async read_workspace_file(workspace_id: string, relative_path: string): Promise<DesktopChatFileInput> {
     await this.ready_promise;
@@ -1082,6 +1155,16 @@ export class AgentController {
 function workspace_file_media_type(file_name: string): string {
   const extension = path.extname(file_name).toLowerCase();
   return ({ ".txt": "text/plain", ".md": "text/markdown", ".json": "application/json", ".js": "text/javascript", ".ts": "text/typescript", ".tsx": "text/typescript", ".css": "text/css", ".html": "text/html", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".pdf": "application/pdf" } as Record<string, string>)[extension] ?? "application/octet-stream";
+}
+
+/** 将 Renderer 路径转换为安全、跨平台一致的 Workspace 相对路径。 */
+function normalize_workspace_relative_path(relative_path: string): string {
+  const value = String(relative_path || "").trim().replaceAll("\\", "/");
+  if (!value) return "";
+  if (path.posix.isAbsolute(value)) throw new Error("Workspace path must be relative");
+  const normalized_path = path.posix.normalize(value);
+  if (normalized_path === ".." || normalized_path.startsWith("../")) throw new Error("Workspace path is invalid");
+  return normalized_path === "." ? "" : normalized_path;
 }
 
 /** 使模型切换后的推理档位始终来自该模型公开的档位列表。 */

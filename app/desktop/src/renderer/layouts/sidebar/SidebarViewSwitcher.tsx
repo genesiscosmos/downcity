@@ -1,8 +1,8 @@
-/** Chat、Agent 与 Plugin 集合切换器。 */
+/** Chat、Workspace 与 Plugin 集合切换器。 */
 
 import { useCallback, useLayoutEffect, useRef } from "react";
 import { Tooltip } from "@base-ui/react/tooltip";
-import { TbComponents, TbGhost3, TbMessageCircle } from "react-icons/tb";
+import { TbComponents, TbFolder, TbMessageCircle } from "react-icons/tb";
 import { cn } from "@/lib/utils";
 import type { SidebarMode } from "@/types/DesktopView";
 
@@ -18,7 +18,7 @@ interface SidebarViewSwitcherProps {
 
 const items = [
   { mode: "chat", label: "Chat", icon: TbMessageCircle },
-  { mode: "agents", label: "Agents", icon: TbGhost3 },
+  { mode: "workspace", label: "Workspace", icon: TbFolder },
   { mode: "plugins", label: "Plugins", icon: TbComponents },
 ] as const;
 

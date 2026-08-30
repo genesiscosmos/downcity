@@ -7,6 +7,7 @@ import { create_desktop_local_data } from "@/agent/DesktopLocalData.js";
 import { DesktopSettingsController } from "@/settings/DesktopSettingsController.js";
 import { DesktopUserController } from "@/user/DesktopUserController.js";
 import { PluginController } from "@/plugin/PluginController.js";
+import { DesktopGlobalEnvController } from "@/settings/DesktopGlobalEnvController.js";
 import { read_city_host_state, request_city_host_shutdown } from "@downcity/agent/city";
 import type {
   DesktopChatInput,
@@ -23,6 +24,7 @@ const development_window_icon_path = path.join(current_directory, "../../build/i
 let agent_controller: AgentController | undefined;
 const local_data = create_desktop_local_data();
 const settings_controller = new DesktopSettingsController(local_data);
+const global_env_controller = new DesktopGlobalEnvController(local_data);
 const plugin_controller = new PluginController(local_data);
 let user_controller: DesktopUserController;
 let quitting = false;
@@ -85,6 +87,8 @@ ipcMain.handle("agent:generate-avatar", (_event, agent_id: string) => require_ag
 ipcMain.handle("workspace:list", () => require_agent_controller().list_workspaces());
 ipcMain.handle("workspace:get-default", () => require_agent_controller().get_default_workspace());
 ipcMain.handle("workspace:create", (_event, workspace_path: string, name: string) => require_agent_controller().create_workspace(workspace_path, name));
+ipcMain.handle("workspace:list-entries", (_event, workspace_id: string, relative_path?: string) => require_agent_controller().list_workspace_entries(workspace_id, relative_path));
+ipcMain.handle("workspace:read-text-file", (_event, workspace_id: string, relative_path: string) => require_agent_controller().read_workspace_text_file(workspace_id, relative_path));
 ipcMain.handle("agent:connect", (_event, agent_id: string, workspace_id: string) => require_agent_controller().connect_agent(agent_id, workspace_id));
 ipcMain.handle("group:list", () => require_agent_controller().list_groups());
 ipcMain.handle("group:create", (_event, input: import("../common/types/DesktopApi.js").DesktopCreateGroupInput) => require_agent_controller().create_group(input));
@@ -129,6 +133,12 @@ ipcMain.handle("settings:update", async (_event, patch) => {
   const settings = settings_controller.update(patch);
   await apply_proxy_settings(settings.proxy_enabled, settings.proxy_url);
   return settings;
+});
+ipcMain.handle("settings:env-list", () => global_env_controller.list());
+ipcMain.handle("settings:env-update", async (_event, raw: unknown) => {
+  const result = await global_env_controller.update(raw);
+  await agent_controller?.reload_global_env();
+  return result;
 });
 ipcMain.handle("user:current", () => user_controller.current());
 ipcMain.handle("user:list-login-providers", (_event, federation_url: string, force_refresh?: boolean) => user_controller.list_login_providers(federation_url, force_refresh));

@@ -17,6 +17,8 @@ const desktop_api: DesktopApi = {
     list: () => ipcRenderer.invoke("workspace:list"),
     get_default: () => ipcRenderer.invoke("workspace:get-default"),
     create: (workspace_path, name) => ipcRenderer.invoke("workspace:create", workspace_path, name),
+    list_entries: (workspace_id, relative_path) => ipcRenderer.invoke("workspace:list-entries", workspace_id, relative_path),
+    read_text_file: (workspace_id, relative_path) => ipcRenderer.invoke("workspace:read-text-file", workspace_id, relative_path),
   },
   plugin: {
     list: () => ipcRenderer.invoke("plugin:list"),
@@ -83,6 +85,8 @@ const desktop_api: DesktopApi = {
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),
     update: (patch) => ipcRenderer.invoke("settings:update", patch),
+    list_env: () => ipcRenderer.invoke("settings:env-list"),
+    update_env: (values) => ipcRenderer.invoke("settings:env-update", values),
   },
   user: {
     current: () => ipcRenderer.invoke("user:current"),

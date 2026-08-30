@@ -1,7 +1,7 @@
 /** Downcity Desktop 设置与 Federation 用户视图。 */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { TbArrowLeft, TbArrowRight, TbBrandGithub, TbBrandGoogle, TbBrandWechat, TbCheck, TbChevronDown, TbChevronRight, TbCoin, TbCopy, TbCpu, TbCurrencyDollar, TbExternalLink, TbInfoCircle, TbLoader2, TbLogin2, TbLogout, TbMail, TbPlugConnected, TbPlus, TbRefresh, TbRotate, TbSwitchHorizontal, TbTicket, TbUser } from "react-icons/tb";
+import { TbArrowLeft, TbArrowRight, TbBrandGithub, TbBrandGoogle, TbBrandWechat, TbCheck, TbChevronDown, TbChevronRight, TbCode, TbCoin, TbCopy, TbCpu, TbCurrencyDollar, TbExternalLink, TbInfoCircle, TbLoader2, TbLogin2, TbLogout, TbMail, TbPlugConnected, TbPlus, TbRefresh, TbRotate, TbSwitchHorizontal, TbTicket, TbUser } from "react-icons/tb";
 import type { IconType } from "react-icons";
 import { LLMModelIcon } from "@/components/model";
 import { ModelPricingChart } from "@/components/model/ModelPricingChart";
@@ -13,7 +13,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { UsageHeatmap } from "@/components/usage/UsageHeatmap";
 import { UsageLineChart } from "@/components/usage/UsageLineChart";
-import { MainViewBody, MainViewLayout } from "@/layouts/MainViewLayout";
+import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
 import { format_credits_as_usd } from "@/lib/usage/usage_format";
 import { build_usage_heatmap, build_usage_trend, current_date_key, sum_heatmap_credits, summarize_usage_period } from "@/lib/usage/usage_metrics";
 import { build_model_pricing } from "@/lib/model/model_pricing";
@@ -28,19 +28,21 @@ interface SettingsViewProps {
   controller: DesktopViewController;
   /** 当前设置分区。 */
   section: SettingsSection;
+  /** 打开 Global Env BayBar 编辑器。 */
+  open_global_env(): void;
 }
 
 /** Desktop 设置主视图。 */
-export function SettingsView({ controller, section }: SettingsViewProps) {
+export function SettingsView({ controller, section, open_global_env }: SettingsViewProps) {
   return <MainViewLayout>
-    <header className="header-drag-region flex h-10 w-full flex-none items-center px-3"><span className="text-xs font-medium text-foreground/80">设置</span></header>
+    <MainViewHeader title="设置" />
     <MainViewBody>
       <div className="flex min-h-0 flex-1 overflow-hidden bg-background">
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-3xl px-8 pb-12 pt-10">
             {section === "user" ? <UserSettingsExact controller={controller} /> : null}
             {section === "models" ? <ModelSettingsExact controller={controller} /> : null}
-            {section === "general" ? <GeneralSettings controller={controller} /> : null}
+            {section === "general" ? <GeneralSettings controller={controller} open_global_env={open_global_env} /> : null}
             {section === "appearance" ? <AppearanceSettings controller={controller} /> : null}
             {section === "chat" ? <ChatSettings controller={controller} /> : null}
           </div>
@@ -212,7 +214,7 @@ function ModelPricingDisclosure({ data, expanded, on_expanded_change }: { data: 
 function DetailRow({ label, value }: { label: string; value: string }) { return <div className="min-w-0"><div className="text-[10px] text-muted-foreground">{label}</div><div className="mt-0.5 truncate text-foreground/85" title={value}>{value}</div></div>; }
 
 /** 通用设置。 */
-function GeneralSettings({ controller }: { /** Renderer 根控制器。 */ controller: DesktopViewController }) {
+function GeneralSettings({ controller, open_global_env }: { /** Renderer 根控制器。 */ controller: DesktopViewController; /** 打开 Global Env 编辑器。 */ open_global_env(): void }) {
   return <SettingsContainer>
     <SettingsHeader title="通用" description="Desktop 启动和默认导航偏好。" />
     <SettingSection title="启动">
@@ -229,6 +231,11 @@ function GeneralSettings({ controller }: { /** Renderer 根控制器。 */ contr
         <SettingRow label="代理地址" description="例如 http://127.0.0.1:7890。">
           <input className="h-8 w-56 rounded-md bg-background px-2 text-xs ring-1 ring-border focus:ring-foreground/20" defaultValue={controller.settings.proxy_url} placeholder="http://127.0.0.1:7890" onBlur={(event) => void controller.update_settings({ proxy_url: event.target.value })} />
         </SettingRow>
+      </SettingGroup>
+    </SettingSection>
+    <SettingSection title="环境变量" description="管理所有 Workspace 共用的默认环境变量。">
+      <SettingGroup>
+        <SettingActionItemExact label="编辑 Global Env" icon={<TbCode />} trailing={<TbArrowRight className="text-muted-foreground" />} onClick={open_global_env} />
       </SettingGroup>
     </SettingSection>
   </SettingsContainer>;

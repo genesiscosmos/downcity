@@ -1,6 +1,6 @@
 /** 运行时 Group 共享消息视图，保持与 Agent Session Chat 一致的视觉结构。 */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { TbCheck, TbChevronDown, TbChevronRight, TbFileText, TbLoader2, TbUsers } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
@@ -12,7 +12,7 @@ import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopGroupStatusPhase, DesktopSettings } from "@common/types/DesktopApi";
 import type { RespondSessionInteractionInput, SessionAssistantInteractionPart } from "@downcity/agent";
 import { ChatSurfaceLayout } from "@/layouts/ChatSurfaceLayout";
-import { MainViewBody, MainViewLayout } from "@/layouts/MainViewLayout";
+import { MainViewBody, MainViewHeader, MainViewLayout, SessionSidebarButton } from "@/layouts/MainViewLayout";
 import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
 import type { DesktopAgentSummary, DesktopGroupMemberRuntime, DesktopGroupMessage, DesktopGroupSessionSummary, DesktopGroupSummary } from "@common/types/DesktopApi";
 import { cn } from "@/lib/utils";
@@ -49,12 +49,18 @@ interface GroupViewProps {
   send_message(session_id: string, text: string): Promise<string | undefined>;
   /** 停止 Group 当前执行。 */
   stop_session(session_id: string): Promise<void>;
+  /** Session Sidebar 是否折叠。 */
+  session_sidebar_collapsed: boolean;
+  /** 切换 Session Sidebar。 */
+  toggle_session_sidebar(): void;
+  /** Header 下方的 Session Sidebar。 */
+  session_sidebar: ReactNode;
   /** Desktop 根状态控制器。 */
   controller: DesktopViewController;
 }
 
 /** Group 复用 Agent Chat 的消息流和输入区布局，但保留共享消息语义。 */
-export function GroupView({ group, agents, settings, messages, member_statuses, group_phase, read_message_ids, interactions, respond_interaction, session, workspace_id, send_message, stop_session, controller }: GroupViewProps) {
+export function GroupView({ group, agents, settings, messages, member_statuses, group_phase, read_message_ids, interactions, respond_interaction, session, workspace_id, send_message, stop_session, session_sidebar_collapsed, toggle_session_sidebar, session_sidebar, controller }: GroupViewProps) {
   const scroll_ref = useRef<HTMLDivElement | null>(null);
   const [draft, set_draft] = useState("");
   const [draft_files, set_draft_files] = useState<DesktopChatFileInput[]>([]);
@@ -66,21 +72,7 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
 
   const group_agent = agents.find((agent) => group.members.some((member) => member.agent_id === agent.agent_id)) ?? agents[0] ?? { agent_id: "group", model_id: "", version: "" };
 
-  return <ChatSurfaceLayout header_left={<div><div className="min-w-0 pl-1">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className="group flex min-w-0 max-w-[min(100%,24rem)] items-center gap-2 rounded-lg px-1 py-1 text-left hover:bg-foreground/[0.05]" aria-label="切换 Group Session">
-              <TbUsers className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <span className="flex min-w-0 flex-col items-start"><span className="flex max-w-48 items-center gap-1 truncate text-xs font-medium text-foreground"><span className="truncate">{group.name}</span><TbChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" /></span><span className="max-w-48 truncate text-[10px] text-muted-foreground">{format_group_session_title(session)}</span></span>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="bottom" sideOffset={4}>
-            {group.sessions.map((item) => <DropdownMenuItem key={item.session_id} is_selected={item.session_id === session.session_id} onClick={() => void controller.open_group(group.group_id, item.session_id)}><TbUsers /><span className="min-w-0 flex-1 truncate">{format_group_session_title(item)}</span><span className="text-[0.625rem] text-muted-foreground">{item.message_count}</span>{item.session_id === session.session_id ? <TbCheck className="size-3.5 text-primary" /> : null}</DropdownMenuItem>)}
-            <DropdownMenuItem onClick={() => void controller.create_group_session(group.group_id, workspace_id)}><TbUsers /><span>新建 Session</span></DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      </div>}>
+  return <ChatSurfaceLayout sidebar={session_sidebar} header_actions={<SessionSidebarButton collapsed={session_sidebar_collapsed} toggle_collapsed={toggle_session_sidebar} />} header_left={<div className="min-w-0 max-w-[min(100%,28rem)] truncate text-xs font-medium text-foreground">{format_group_session_title(session)}</div>}>
       <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
         <div ref={scroll_ref} className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log">
           <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
@@ -100,7 +92,7 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
 /** Group 联系人主页面，只展示摘要和可进入的具体配置项。 */
 export function GroupConfigView({ group, agents, open_config }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** 全部 Agent。 */ agents: DesktopAgentSummary[]; /** 打开具体配置项。 */ open_config(section: GroupEditorSection): void }) {
   return <MainViewLayout>
-    <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2 text-xs font-medium text-foreground"><GroupAvatar group={group} agents={agents} /><span className="truncate">{group.name}</span></header>
+    <MainViewHeader title={<span className="flex min-w-0 items-center gap-2"><GroupAvatar group={group} agents={agents} /><span className="truncate">{group.name}</span></span>} />
     <MainViewBody>
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto"><div className="mx-auto w-full max-w-[42rem] px-6 pb-12 pt-14">
         <div className="mb-9 flex min-w-0 items-center gap-4"><div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-subtle"><GroupAvatar group={group} agents={agents} /></div><div className="min-w-0"><h1 className="truncate text-lg font-semibold text-foreground">{group.name}</h1><p className="mt-1 truncate text-xs text-muted-foreground">{group.members.length} 个 Agent 成员</p></div></div>

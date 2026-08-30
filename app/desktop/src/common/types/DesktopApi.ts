@@ -398,6 +398,32 @@ export interface DesktopWorkspaceFile {
   modified_at: number;
 }
 
+/** Workspace 文件树中的一个直接子节点。 */
+export interface DesktopWorkspaceEntry {
+  /** 相对于 Workspace 根目录的规范化路径；统一使用正斜杠。 */
+  relative_path: string;
+  /** 节点的文件或目录名称。 */
+  name: string;
+  /** 节点是否为可继续展开的目录。 */
+  kind: "directory" | "file";
+  /** 文件大小，单位为字节；目录不提供该字段。 */
+  size?: number;
+  /** 节点最近修改时间戳，单位为毫秒。 */
+  modified_at: number;
+}
+
+/** Workspace 文本文件的只读内容。 */
+export interface DesktopWorkspaceTextFile {
+  /** 相对于 Workspace 根目录的规范化路径。 */
+  relative_path: string;
+  /** 文件名。 */
+  name: string;
+  /** 用于只读预览的 UTF-8 文本。 */
+  content: string;
+  /** 文件大小，单位为字节。 */
+  size: number;
+}
+
 /** Renderer 提交的一条 Session 消息引用。 */
 export interface DesktopChatReferenceInput {
   /** 被引用 canonical 消息的稳定标识。 */
@@ -686,6 +712,10 @@ export interface DesktopApi {
     get_default(): Promise<DesktopWorkspaceSummary>;
     /** 独立登记一个 Workspace；相同路径返回已有记录。 */
     create(workspace_path: string, name: string): Promise<DesktopWorkspaceSummary>;
+    /** 列出 Workspace 指定目录的直接子节点。 */
+    list_entries(workspace_id: string, relative_path?: string): Promise<DesktopWorkspaceEntry[]>;
+    /** 读取 Workspace 中的 UTF-8 文本文件用于只读预览。 */
+    read_text_file(workspace_id: string, relative_path: string): Promise<DesktopWorkspaceTextFile>;
   };
   /** 本地 Plugin catalog 能力。 */
   plugin: {
@@ -789,6 +819,10 @@ export interface DesktopApi {
     get(): Promise<DesktopSettings>;
     /** 合并并保存设置。 */
     update(patch: Partial<DesktopSettings>): Promise<DesktopSettings>;
+    /** 读取 Global Env。 */
+    list_env(): Promise<string>;
+    /** 保存 Global Env。 */
+    update_env(raw: string): Promise<string>;
   };
   /** Downcity Federation 当前用户。 */
   user: {

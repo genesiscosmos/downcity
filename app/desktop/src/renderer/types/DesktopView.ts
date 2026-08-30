@@ -34,11 +34,12 @@ import type {
 export type SettingsSection = "user" | "models" | "general" | "appearance" | "chat";
 
 /** 主导航侧边栏当前展示的业务集合。 */
-export type SidebarMode = "chat" | "agents" | "plugins";
+export type SidebarMode = "chat" | "workspace" | "plugins";
 
 /** 中间主视图当前展示的业务对象。 */
 export type NavigationTarget =
   | { /** Workspace 管理页。 */ kind: "workspace"; /** Workspace 标识。 */ workspace_id: string }
+  | { /** Workspace 文件只读预览。 */ kind: "workspace_file"; /** Workspace 标识。 */ workspace_id: string; /** Workspace 内的相对文件路径。 */ relative_path: string }
   | { /** Agent 管理页。 */ kind: "agent"; /** Agent 标识。 */ agent_id: string }
   | { /** 尚未持久化的空对话。 */ kind: "draft"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Draft 稳定标识。 */ draft_id: string }
   | { /** Session Chat。 */ kind: "session"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Session 标识。 */ session_id: string }
@@ -159,6 +160,8 @@ export interface DesktopViewController {
   sidebar_mode: SidebarMode;
   /** Desktop 用户级偏好。 */
   settings: DesktopSettings;
+  /** 当前 Global Env 快照。 */
+  global_env: string;
   /** 当前 Federation 用户。 */
   user: DesktopUserSummary;
   /** 当前 Desktop 保存的全部账户。 */
@@ -179,6 +182,8 @@ export interface DesktopViewController {
   set_sidebar_mode(mode: SidebarMode): void;
   /** 打开一个 Workspace，并将其设为 Chat 上下文。 */
   select_workspace(workspace_id: string): void;
+  /** 在主视图中打开一个 Workspace 文件的只读预览。 */
+  select_workspace_file(workspace_id: string, relative_path: string): void;
   /** 选择 Group 配置页。 */
   select_group(group_id: string): void;
   /** 创建一个运行时 Group。 */
@@ -271,6 +276,10 @@ export interface DesktopViewController {
   move_queued_message(workspace_id: string, agent_id: string, session_id: string, message_id: string, direction: "up" | "down"): void;
   /** 合并 Desktop 用户级设置。 */
   update_settings(patch: Partial<DesktopSettings>): Promise<void>;
+  /** 读取 Global Env。 */
+  list_global_env(): Promise<string>;
+  /** 保存 Global Env。 */
+  update_global_env(raw: string): Promise<void>;
   /** 读取 Federation 当前允许登录的 Provider。 */
   list_login_providers(federation_url: string, force_refresh?: boolean): Promise<import("../../common/types/DesktopApi").DesktopLoginProvider[]>;
   /** 使用 Federation Provider 完成浏览器授权登录。 */

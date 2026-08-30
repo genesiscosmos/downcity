@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { DetailEditorSidebar } from "@/components/DetailEditorSidebar";
 import { LLMModelIcon } from "@/components/model/LLMModelIcon";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { MainViewBody, MainViewLayout } from "@/layouts/MainViewLayout";
+import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
 import { cn } from "@/lib/utils";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import type { DesktopViewController } from "@/types/DesktopView";
@@ -90,7 +90,7 @@ export function AgentView({ agent, workspaces, plugins, main_session, controller
 
   return <div className="flex h-full min-h-0 min-w-0 flex-1 bg-background">
     <MainViewLayout>
-      <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2"><div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1 text-xs text-muted-foreground"><AgentAvatar agent={agent} /><span className="truncate font-medium text-foreground/80">{agent.agent_id}</span></div></header>
+      <MainViewHeader title={<span className="flex min-w-0 items-center gap-1.5"><AgentAvatar agent={agent} /><span className="truncate">{agent.agent_id}</span></span>} />
       <MainViewBody>
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto"><div className="mx-auto w-full max-w-[42rem] px-6 pb-12 pt-14">
         <div className="mb-9 flex min-w-0 items-center gap-4"><div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-subtle text-muted-foreground"><AgentAvatar agent={agent} class_name="size-12 rounded-xl" icon_class_name="size-6" /></div><div className="min-w-0"><h1 className="truncate text-lg font-semibold text-foreground">{agent.agent_id}</h1><p className="mt-1 truncate text-xs text-muted-foreground">可进入 {workspaces.length} 个 Workspace</p></div></div>

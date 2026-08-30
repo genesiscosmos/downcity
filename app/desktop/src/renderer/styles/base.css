@@ -70,25 +70,6 @@
   -webkit-app-region: drag;
 }
 
-/* MainView 的顶层 Header 为窗口级 Sidebar/BayBar 开关预留稳定安全区。 */
-.main-view-layout > header {
-  transition: padding-left 300ms cubic-bezier(0.4, 0, 0.2, 1),
-    padding-right 300ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.main-view-shell[data-sidebar-collapsed="true"][data-shell-platform="mac"] .main-view-layout > header {
-  padding-left: 112px !important;
-}
-
-.main-view-shell[data-sidebar-collapsed="true"][data-shell-platform="other"] .main-view-layout > header {
-  padding-left: 40px !important;
-}
-
-.main-view-shell[data-baybar-open="false"] .main-view-layout > header {
-  /* 右上固定开关为 24px，右侧 8px，和 Header 内容保留 8px 间隔。 */
-  padding-right: 40px !important;
-}
-
 .sidebar-header-actions,
 .sidebar-header-actions button,
 .sidebar-header-actions [role="button"] {

@@ -67,6 +67,14 @@ const default_settings: DesktopSettings = {
 const default_user: DesktopUserSummary = { authenticated: false, federation_url: "https://base.downcity.ai" };
 const active_workspace_storage_key = "downcity.active_workspace_id";
 
+/** 返回导航目标所属的主导航业务集合；设置页不属于任何业务集合。 */
+function get_sidebar_mode_for_target(target: NavigationTarget): SidebarMode | undefined {
+  if (target.kind === "workspace" || target.kind === "workspace_file") return "workspace";
+  if (target.kind === "plugin") return "plugins";
+  if (target.kind === "settings") return undefined;
+  return "chat";
+}
+
 /** 将一项 Draft 状态移动到新组合键，避免切换上下文后留下过期副本。 */
 function move_draft_value<Value>(current: Record<string, Value>, source_key: string, target_key: string, fallback: Value): Record<string, Value> {
   const next = { ...current, [target_key]: current[source_key] ?? fallback };
@@ -77,6 +85,14 @@ function move_draft_value<Value>(current: Record<string, Value>, source_key: str
 /** 把未知失败统一转换为用户可见文本。 */
 function to_error_message(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
+}
+
+/** 把新版原文或旧版 key/value Env 响应统一收敛为编辑器文本。 */
+function normalize_global_env_text(input: unknown): string {
+  if (typeof input === "string") return input;
+  if (!input || typeof input !== "object" || Array.isArray(input)) return "";
+  const lines = Object.entries(input).map(([key, value]) => `${key}=${String(value ?? "")}`);
+  return lines.length > 0 ? `${lines.join("\n")}\n` : "";
 }
 
 /** 管理 Renderer 根状态，并把异步 IPC 细节隔离在视图组件之外。 */
@@ -108,6 +124,7 @@ export function use_desktop_controller(): DesktopViewController {
   const [active_workspace_id, set_active_workspace_id] = useState("");
   const [sidebar_mode, set_sidebar_mode_state] = useState<SidebarMode>("chat");
   const [settings, set_settings] = useState<DesktopSettings>(default_settings);
+  const [global_env, set_global_env] = useState("");
   const [user, set_user] = useState<DesktopUserSummary>(default_user);
   const [accounts, set_accounts] = useState<DesktopAccountSummary[]>([]);
   const [account_resources, set_account_resources] = useState<DesktopAccountResources>();
@@ -122,10 +139,16 @@ export function use_desktop_controller(): DesktopViewController {
   const snapshot_request_ref = useRef(new Map<string, number>());
   const processing_queue_ref = useRef(new Set<string>());
   const previous_selection_ref = useRef<NavigationTarget | null>(null);
+  const selection_by_sidebar_mode_ref = useRef<Partial<Record<SidebarMode, NavigationTarget>>>({});
 
   useEffect(() => { chat_runtime_ref.current = chat_runtime_by_session; }, [chat_runtime_by_session]);
   useEffect(() => { queue_ref.current = queued_messages_by_session; }, [queued_messages_by_session]);
   useEffect(() => { history_ref.current = history_by_session; }, [history_by_session]);
+  useEffect(() => {
+    if (!selection) return;
+    const target_mode = get_sidebar_mode_for_target(selection);
+    if (target_mode) selection_by_sidebar_mode_ref.current[target_mode] = selection;
+  }, [selection]);
 
   /** 保存队列并同步异步回调读取的引用。 */
   const commit_queue = useCallback((next: Record<string, QueuedChatMessage[]>) => {
@@ -172,14 +195,16 @@ export function use_desktop_controller(): DesktopViewController {
       window.downcity.workspace.list(),
       window.downcity.group.list(),
       window.downcity.settings.get(),
+      window.downcity.settings.list_env(),
       window.downcity.plugin.list(),
-    ]).then(async ([next_agents, next_workspaces, next_groups, next_settings, next_plugins]) => {
+    ]).then(async ([next_agents, next_workspaces, next_groups, next_settings, next_env, next_plugins]) => {
       set_agents(next_agents);
       set_workspaces(next_workspaces);
       set_groups(next_groups);
       set_groups_by_id(Object.fromEntries(next_groups.map((group) => [group.group_id, group])));
       set_group_sessions_by_workspace(index_group_sessions(next_groups));
       set_settings(next_settings);
+      set_global_env(normalize_global_env_text(next_env));
       set_plugins(next_plugins);
       const initial_agent = next_agents.find((agent) => agent.agent_id === next_settings.default_agent_id) ?? next_agents[0];
       const stored_workspace_id = localStorage.getItem(active_workspace_storage_key) || "";
@@ -192,6 +217,7 @@ export function use_desktop_controller(): DesktopViewController {
       if (initial_agent && initial_workspace && next_settings.open_empty_chat_on_start) {
         set_selection({ kind: "draft", workspace_id: initial_workspace.workspace_id, agent_id: initial_agent.agent_id, draft_id: get_draft_session_id(initial_agent.agent_id) });
       } else if (initial_workspace) {
+        set_sidebar_mode_state("workspace");
         set_selection({ kind: "workspace", workspace_id: initial_workspace.workspace_id });
       }
     }).catch((reason) => set_error(to_error_message(reason))).finally(() => set_loading(false));
@@ -336,15 +362,39 @@ export function use_desktop_controller(): DesktopViewController {
 
   const set_sidebar_mode = useCallback((mode: SidebarMode) => {
     set_sidebar_mode_state(mode);
-  }, []);
+    const remembered_selection = selection_by_sidebar_mode_ref.current[mode];
+    if (remembered_selection) {
+      set_selection(remembered_selection);
+      return;
+    }
+    if (mode === "workspace") {
+      const workspace = workspaces.find((item) => item.workspace_id === active_workspace_id) ?? workspaces[0];
+      set_selection(workspace ? { kind: "workspace", workspace_id: workspace.workspace_id } : null);
+      return;
+    }
+    if (mode === "plugins") {
+      set_selection(plugins[0] ? { kind: "plugin", plugin_id: plugins[0].plugin_id } : null);
+      return;
+    }
+    set_selection(agents[0] ? { kind: "agent", agent_id: agents[0].agent_id } : null);
+  }, [active_workspace_id, agents, plugins, workspaces]);
 
   const select_workspace = useCallback((workspace_id: string) => {
     if (!workspaces.some((workspace) => workspace.workspace_id === workspace_id)) return;
     set_error("");
-    set_sidebar_mode_state("chat");
+    set_sidebar_mode_state("workspace");
     set_active_workspace_id(workspace_id);
     localStorage.setItem(active_workspace_storage_key, workspace_id);
     set_selection({ kind: "workspace", workspace_id });
+  }, [workspaces]);
+
+  const select_workspace_file = useCallback((workspace_id: string, relative_path: string) => {
+    if (!workspaces.some((workspace) => workspace.workspace_id === workspace_id)) return;
+    set_error("");
+    set_sidebar_mode_state("workspace");
+    set_active_workspace_id(workspace_id);
+    localStorage.setItem(active_workspace_storage_key, workspace_id);
+    set_selection({ kind: "workspace_file", workspace_id, relative_path });
   }, [workspaces]);
 
   const create_group = useCallback(async (input: DesktopCreateGroupInput) => {
@@ -354,7 +404,7 @@ export function use_desktop_controller(): DesktopViewController {
       set_groups((current) => [...current, group]);
       set_groups_by_id((current) => ({ ...current, [group.group_id]: group }));
       set_group_sessions_by_workspace((current) => merge_group_sessions(current, group));
-      set_sidebar_mode_state("agents");
+      set_sidebar_mode_state("chat");
       set_selection(null);
     } catch (reason) {
       set_error(to_error_message(reason));
@@ -612,10 +662,17 @@ export function use_desktop_controller(): DesktopViewController {
     };
   }, [refresh_session_snapshot, selection]);
 
-  /** 打开 Agent 最近更新的持久化 Session 对话。 */
+  /** 打开 Agent 最近更新的 Session；没有历史时进入未持久化的新对话。 */
   const open_agent_chat = useCallback(async (agent_id: string) => {
     set_error("");
     try {
+      const latest_session = Object.entries(sessions_by_workspace)
+        .flatMap(([workspace_id, entries]) => entries.filter((entry) => entry.agent_id === agent_id).map((entry) => ({ workspace_id, session: entry.session })))
+        .sort((left, right) => right.session.updated_at - left.session.updated_at)[0];
+      if (latest_session) {
+        await select_session(latest_session.workspace_id, agent_id, latest_session.session.session_id, true);
+        return;
+      }
       const target_workspace = workspaces.find((workspace) => workspace.workspace_id === active_workspace_id)
         ?? workspaces[0]
         ?? await window.downcity.workspace.get_default();
@@ -623,18 +680,11 @@ export function use_desktop_controller(): DesktopViewController {
       if (!workspaces.some((workspace) => workspace.workspace_id === workspace_id)) {
         set_workspaces((current) => [...current, target_workspace]);
       }
-      const sessions = await window.downcity.chat.list_sessions(agent_id, workspace_id);
-      const session = sessions[0] ?? await window.downcity.chat.create_session(agent_id, workspace_id);
-      set_sessions_by_workspace((current) => ({
-        ...current,
-        [workspace_id]: [{ agent_id, session }, ...(current[workspace_id] ?? []).filter((item) => item.agent_id !== agent_id || item.session.session_id !== session.session_id)],
-      }));
-      set_active_workspace_id(workspace_id);
-      await select_session(workspace_id, agent_id, session.session_id, true);
+      await create_session(workspace_id, agent_id);
     } catch (reason) {
       set_error(to_error_message(reason));
     }
-  }, [active_workspace_id, select_session, workspaces]);
+  }, [active_workspace_id, create_session, select_session, sessions_by_workspace, workspaces]);
 
   const select_agent = useCallback((agent_id: string) => {
     set_error("");
@@ -771,7 +821,7 @@ export function use_desktop_controller(): DesktopViewController {
     set_error("");
     const result = await window.downcity.agent.create(value.agent_id, value.model_id);
     set_agents((current) => [...current.filter((item) => item.agent_id !== result.agent.agent_id), result.agent]);
-    set_sidebar_mode_state("agents");
+    set_sidebar_mode_state("chat");
     set_selection({ kind: "agent", agent_id: result.agent.agent_id });
   }, []);
 
@@ -856,7 +906,7 @@ export function use_desktop_controller(): DesktopViewController {
     set_error("");
     const workspace = await window.downcity.workspace.create(value.workspace_path, value.name);
     set_workspaces((current) => [...current.filter((item) => item.workspace_id !== workspace.workspace_id), workspace]);
-    set_sidebar_mode_state("chat");
+    set_sidebar_mode_state("workspace");
     set_active_workspace_id(workspace.workspace_id);
     localStorage.setItem(active_workspace_storage_key, workspace.workspace_id);
     set_selection({ kind: "workspace", workspace_id: workspace.workspace_id });
@@ -1078,6 +1128,21 @@ export function use_desktop_controller(): DesktopViewController {
     }
   }, []);
 
+  const list_global_env = useCallback(async () => {
+    const next = normalize_global_env_text(await window.downcity.settings.list_env());
+    set_global_env(next);
+    return next;
+  }, []);
+
+  const update_global_env = useCallback(async (raw: string) => {
+    try {
+      set_global_env(normalize_global_env_text(await window.downcity.settings.update_env(raw)));
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, []);
+
   const list_login_providers = useCallback(async (federation_url: string, force_refresh = false) => {
     set_error("");
     try {
@@ -1181,6 +1246,7 @@ export function use_desktop_controller(): DesktopViewController {
     active_workspace_id,
     sidebar_mode,
     settings,
+    global_env,
     user,
     accounts,
     account_resources,
@@ -1192,6 +1258,7 @@ export function use_desktop_controller(): DesktopViewController {
     select_plugin,
     set_sidebar_mode,
     select_workspace,
+    select_workspace_file,
     create_group,
     update_group,
     remove_group,
@@ -1237,6 +1304,8 @@ export function use_desktop_controller(): DesktopViewController {
     remove_queued_message,
     move_queued_message,
     update_settings,
+    list_global_env,
+    update_global_env,
     login,
     list_login_providers,
     logout,

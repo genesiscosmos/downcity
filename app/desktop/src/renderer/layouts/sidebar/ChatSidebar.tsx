@@ -1,119 +1,69 @@
-/** 以可折叠 Workspace 文档树组织 Session 的 Chat Sidebar。 */
+/** 仅负责选择 Agent 与 Group 聊天主体的全局 Chat Sidebar。 */
 
-import { useEffect, useState } from "react";
-import { TbArchive, TbChevronRight, TbDots, TbFolder, TbFolderPlus, TbGhost3, TbPlus, TbTrash, TbUsers } from "react-icons/tb";
-import { Button } from "@/components/ui/button";
+import { useMemo, useState } from "react";
+import { TbCopy, TbDots, TbEdit, TbGhost3, TbLoader2, TbMessageCircle, TbPlus, TbTrash, TbUsers } from "react-icons/tb";
 import { AgentAvatar } from "@/components/AgentAvatar";
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
-import type { DesktopViewController } from "@/types/DesktopView";
-import { SessionListItem } from "./SessionListItem";
-
-const expanded_workspaces_storage_key = "downcity.expanded_workspace_ids";
+import { cn } from "@/lib/utils";
+import { get_session_key, is_chat_busy, type DesktopViewController } from "@/types/DesktopView";
+import type { DesktopAgentSummary, DesktopGroupSummary } from "@common/types/DesktopApi";
+import { GroupEditorDialog } from "./AgentSidebar";
 
 /** Chat Sidebar 属性。 */
 interface ChatSidebarProps {
-  /** 根状态控制器。 */
+  /** Renderer 根状态与操作入口。 */
   controller: DesktopViewController;
-  /** 打开 Workspace 创建流程。 */
-  open_create_workspace(): void;
-  /** 打开 Agent 创建流程。 */
-  open_create_agent(workspace_id: string): void;
+  /** 打开创建 Agent 表单。 */
+  open_create_agent(): void;
+  /** 打开 Group 配置页。 */
+  open_group_config(group_id: string): void;
 }
 
-/** 读取持久化的 Workspace 展开状态。 */
-function read_expanded_workspace_ids(): Set<string> {
-  try {
-    const value = JSON.parse(localStorage.getItem(expanded_workspaces_storage_key) || "[]");
-    return new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []);
-  } catch {
-    return new Set();
-  }
-}
-
-/** Workspace 是可独立展开的目录，Session 直接列在目录之下。 */
-export function ChatSidebar({ controller, open_create_workspace, open_create_agent }: ChatSidebarProps) {
-  const [expanded_workspace_ids, set_expanded_workspace_ids] = useState(read_expanded_workspace_ids);
-  const [archive_workspace_id, set_archive_workspace_id] = useState<string>();
-
-  useEffect(() => {
-    if (controller.workspaces.length === 0 || localStorage.getItem(expanded_workspaces_storage_key) !== null) return;
-    const workspace_ids = new Set(controller.workspaces.map((workspace) => workspace.workspace_id));
-    set_expanded_workspace_ids(workspace_ids);
-    localStorage.setItem(expanded_workspaces_storage_key, JSON.stringify([...workspace_ids]));
-  }, [controller.workspaces]);
-
-  const toggle_workspace = (workspace_id: string) => {
-    set_expanded_workspace_ids((current) => {
-      const next = new Set(current);
-      if (next.has(workspace_id)) next.delete(workspace_id);
-      else next.add(workspace_id);
-      localStorage.setItem(expanded_workspaces_storage_key, JSON.stringify([...next]));
-      return next;
-    });
-  };
-
-  const create_session = (workspace_id: string, agent_id: string) => {
-    set_expanded_workspace_ids((current) => {
-      const next = new Set(current).add(workspace_id);
-      localStorage.setItem(expanded_workspaces_storage_key, JSON.stringify([...next]));
-      return next;
-    });
-    void controller.create_session(workspace_id, agent_id);
-  };
-
-  const open_archives = (workspace_id: string) => {
-    set_archive_workspace_id(workspace_id);
-    void controller.load_archived_sessions(workspace_id);
-  };
-
-  const archived_workspace = controller.workspaces.find((workspace) => workspace.workspace_id === archive_workspace_id);
-  const archived_sessions = archive_workspace_id ? controller.archived_sessions_by_workspace[archive_workspace_id] ?? [] : [];
+/** 展示可进入聊天工作区的 Agent 与 Group。 */
+export function ChatSidebar({ controller, open_create_agent, open_group_config }: ChatSidebarProps) {
+  const [create_group_open, set_create_group_open] = useState(false);
+  const session_count_by_agent = useMemo(() => Object.values(controller.sessions_by_workspace).flat().reduce<Record<string, number>>((result, item) => {
+    result[item.agent_id] = (result[item.agent_id] ?? 0) + 1;
+    return result;
+  }, {}), [controller.sessions_by_workspace]);
 
   return <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-    <div data-sidebar-scrollable="true" className="sidebar-body-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-      {controller.workspaces.length === 0 ? <EmptyWorkspace open_create_workspace={open_create_workspace} /> : null}
-      {controller.workspaces.map((workspace) => {
-        const expanded = expanded_workspace_ids.has(workspace.workspace_id);
-        const sessions = [...(controller.sessions_by_workspace[workspace.workspace_id] ?? [])]
-          .sort((left, right) => Number(right.session.executing) - Number(left.session.executing) || right.session.updated_at - left.session.updated_at);
-        const group_sessions = [...(controller.group_sessions_by_workspace[workspace.workspace_id] ?? [])]
-          .sort((left, right) => right.session.updated_at - left.session.updated_at);
-        const get_agent = (agent_id: string) => controller.agents.find((agent) => agent.agent_id === agent_id);
-        return <section key={workspace.workspace_id} className="mb-0.5">
-          <div className="group flex min-h-7 w-full cursor-pointer items-center gap-1 rounded-lg border border-transparent p-0.5 transition-all duration-200 ease-out hover:bg-foreground/[0.07] focus-within:bg-foreground/[0.07]" onClick={() => toggle_workspace(workspace.workspace_id)}>
-            <Button size="icon" aria-label={expanded ? "折叠 Workspace" : "展开 Workspace"} aria-expanded={expanded} onClick={(event) => { event.stopPropagation(); toggle_workspace(workspace.workspace_id); }}>
-              <TbChevronRight className={`transition-transform duration-200 ${expanded ? "rotate-90" : ""}`} />
-            </Button>
-            <div className="flex min-w-0 flex-1 items-center gap-1 text-left">
-              <TbFolder className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{workspace.name}</span>
-            </div>
-            <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100" title="新对话" aria-label="新对话" onClick={(event) => event.stopPropagation()}><TbPlus /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" sideOffset={4} onClick={(event) => event.stopPropagation()}>{controller.agents.map((agent) => <DropdownMenuItem key={`agent:${agent.agent_id}`} onClick={() => create_session(workspace.workspace_id, agent.agent_id)}><AgentAvatar agent={agent} /><span>{agent.agent_id}</span></DropdownMenuItem>)}{controller.groups.map((group) => <DropdownMenuItem key={`group:${group.group_id}`} onClick={() => void controller.create_group_session(group.group_id, workspace.workspace_id)}><TbUsers /><span>{group.name}</span></DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
-            <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100" title="Workspace 操作" aria-label="Workspace 操作" onClick={(event) => event.stopPropagation()}><TbDots /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" sideOffset={4} onClick={(event) => event.stopPropagation()}><DropdownMenuItem onClick={() => open_archives(workspace.workspace_id)}><TbArchive /><span>已归档对话</span></DropdownMenuItem><DropdownMenuItem onClick={() => open_create_agent(workspace.workspace_id)}><TbGhost3 /><span>创建 Agent</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
-          </div>
-          {expanded ? <div className="space-y-0.5 pl-5">
-            {sessions.map(({ agent_id, session }) => <SessionListItem
-              key={`${agent_id}:${session.session_id}`}
-              session={session}
-              agent={get_agent(agent_id) ?? { agent_id, model_id: "", version: "" }}
-              active={controller.selection?.kind === "session" && controller.selection.workspace_id === workspace.workspace_id && controller.selection.agent_id === agent_id && controller.selection.session_id === session.session_id}
-              on_select={() => void controller.select_session(workspace.workspace_id, agent_id, session.session_id)}
-              on_rename={(title) => controller.rename_session(workspace.workspace_id, agent_id, session.session_id, title)}
-              on_archive={() => controller.archive_session(workspace.workspace_id, agent_id, session.session_id)}
-              on_remove={() => controller.remove_session(workspace.workspace_id, agent_id, session.session_id)}
-            />)}
-            {group_sessions.map(({ group_id, group, session }) => <div key={`${group_id}:${session.session_id}`} role="button" tabIndex={0} className={`group relative flex min-h-7 w-full cursor-pointer items-center gap-1 rounded-lg border border-transparent p-0.5 pl-1 text-left transition-all duration-200 ease-out ${controller.selection?.kind === "group_session" && controller.selection.group_id === group_id && controller.selection.session_id === session.session_id ? "bg-primary/[0.1] hover:bg-primary/[0.12]" : "hover:bg-foreground/[0.07]"}`} onClick={() => void controller.open_group(group_id, session.session_id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void controller.open_group(group_id, session.session_id); } }}><TbUsers className="size-5 shrink-0 rounded-md bg-foreground/[0.06] p-0.5 text-muted-foreground" /><div className="flex min-w-0 flex-1 items-center"><span className="min-w-0 truncate text-xs leading-4 text-foreground">{group.name}</span><span className="ml-1.5 shrink-0 text-[0.625rem] text-muted-foreground/60">{session.message_count}</span></div><Button size="icon" className="opacity-0 group-hover:opacity-100" title="删除 GroupSession" aria-label="删除 GroupSession" onClick={(event) => { event.stopPropagation(); void controller.remove_group_session(group_id, session.session_id); }}><TbTrash /></Button></div>)}
-            {sessions.length === 0 && group_sessions.length === 0 ? <div className="px-2 py-2 text-[0.6875rem] text-muted-foreground/60">暂无对话</div> : null}
-          </div> : null}
-        </section>;
-      })}
+    <div className="flex h-9 shrink-0 items-center gap-2 px-2"><span className="min-w-0 flex-1 truncate px-1 text-xs font-medium text-muted-foreground">Chat</span><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" title="添加聊天主体" aria-label="添加聊天主体"><TbPlus /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={open_create_agent}><TbGhost3 /><span>创建 Agent</span></DropdownMenuItem><DropdownMenuItem onClick={() => set_create_group_open(true)}><TbUsers /><span>创建 Group</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
+    <div data-sidebar-scrollable="true" className="sidebar-body-scroll min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-2">
+      {controller.agents.map((agent) => <AgentSubject key={agent.agent_id} agent={agent} session_count={session_count_by_agent[agent.agent_id] ?? 0} controller={controller} />)}
+      {controller.groups.map((group) => <GroupSubject key={group.group_id} group={group} controller={controller} open_group_config={open_group_config} />)}
+      {!controller.loading && controller.agents.length === 0 && controller.groups.length === 0 ? <div className="flex flex-col items-center px-4 py-10 text-center"><TbGhost3 className="mb-2 size-5 text-muted-foreground" /><div className="text-xs text-foreground">暂无聊天主体</div><Button className="mt-3" variant="primary" onClick={open_create_agent}>创建 Agent</Button></div> : null}
     </div>
-    <Dialog open={Boolean(archive_workspace_id)} onOpenChange={(open) => { if (!open) set_archive_workspace_id(undefined); }}><DialogContent><DialogHeader><DialogTitle>已归档对话</DialogTitle><DialogDescription>{archived_workspace?.name || "Workspace"} 下的归档 Session。</DialogDescription></DialogHeader><DialogBody className="max-h-80 overflow-y-auto px-3">{archived_sessions.map(({ agent_id, session }) => <div key={`${agent_id}:${session.session_id}`} className="flex min-h-9 items-center gap-2 rounded-lg px-2 text-xs text-foreground hover:bg-foreground/[0.05]"><span className="min-w-0 flex-1 truncate">{session.title || "新对话"}</span><span className="max-w-24 truncate rounded bg-foreground/[0.06] px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">{agent_id}</span></div>)}{archived_sessions.length === 0 ? <div className="py-8 text-center text-xs text-muted-foreground">暂无已归档对话</div> : null}</DialogBody></DialogContent></Dialog>
+    <GroupEditorDialog open={create_group_open} close_dialog={() => set_create_group_open(false)} agents={controller.agents} models={controller.models} models_loading={controller.models_loading} create_group={controller.create_group} />
   </div>;
 }
 
-/** 尚未添加 Workspace 的空状态。 */
-function EmptyWorkspace({ open_create_workspace }: { /** 打开 Workspace 创建流程。 */ open_create_workspace(): void }) {
-  return <div className="flex flex-col items-center px-4 py-10 text-center"><TbFolderPlus className="mb-2 size-5 text-muted-foreground" /><div className="text-xs text-foreground">添加 Workspace</div><Button className="mt-3" variant="primary" onClick={open_create_workspace}>添加</Button></div>;
+/** 可直接进入聊天工作区的 Agent 主体行。 */
+function AgentSubject({ agent, session_count, controller }: { /** Agent 摘要。 */ agent: DesktopAgentSummary; /** Agent Session 数量。 */ session_count: number; /** 根控制器。 */ controller: DesktopViewController }) {
+  const model_label = controller.models.find((model) => model.model_id === agent.model_id)?.name || agent.model_id || "未配置模型";
+  const running = Object.entries(controller.sessions_by_workspace).some(([workspace_id, sessions]) => sessions.some((item) => item.agent_id === agent.agent_id && (item.session.executing || is_chat_busy(controller.chat_runtime_by_session[get_session_key(workspace_id, agent.agent_id, item.session.session_id)]))));
+  const active = controller.selection && "agent_id" in controller.selection && controller.selection.agent_id === agent.agent_id;
+  const workspace_id = controller.active_workspace_id || controller.workspaces[0]?.workspace_id;
+  return <div className={cn("group flex min-h-12 items-center gap-2 rounded-lg border border-transparent px-1.5 py-1 transition-colors duration-150", active ? "bg-primary/[0.1] hover:bg-primary/[0.12]" : "hover:bg-foreground/[0.07]")}>
+    <button type="button" className="flex min-w-0 flex-1 items-center gap-2.5 text-left" onClick={() => void controller.open_agent_chat(agent.agent_id)}><span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md"><AgentAvatar agent={agent} class_name="size-8 rounded-md" /></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-foreground">{agent.agent_id}</span><span className={cn("mt-0.5 flex items-center gap-1 truncate text-[10px]", running ? "text-primary" : "text-muted-foreground/70")}>{running ? <><TbLoader2 className="size-3 animate-spin" />正在回复</> : `${model_label} · ${session_count} 个对话`}</span></span></button>
+    <Button size="icon" className="opacity-0 group-hover:opacity-100" title="新对话" aria-label="新对话" disabled={!workspace_id} onClick={() => { if (workspace_id) void controller.create_session(workspace_id, agent.agent_id); }}><TbPlus /></Button>
+    <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100" title="Agent 操作" aria-label="Agent 操作"><TbDots /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem disabled={!workspace_id} onClick={() => { if (workspace_id) void controller.create_session(workspace_id, agent.agent_id); }}><TbMessageCircle /><span>新对话</span></DropdownMenuItem><DropdownMenuItem onClick={() => controller.select_agent(agent.agent_id)}><TbEdit /><span>Agent 配置</span></DropdownMenuItem><DropdownMenuItem onClick={() => void navigator.clipboard.writeText(agent.agent_id)}><TbCopy /><span>复制 Agent ID</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+  </div>;
+}
+
+/** 可直接进入聊天工作区的 Group 主体行。 */
+function GroupSubject({ group, controller, open_group_config }: { /** Group 摘要。 */ group: DesktopGroupSummary; /** 根控制器。 */ controller: DesktopViewController; /** 打开 Group 配置。 */ open_group_config(group_id: string): void }) {
+  const active = controller.selection && "group_id" in controller.selection && controller.selection.group_id === group.group_id;
+  return <div className={cn("group flex min-h-12 items-center gap-2 rounded-lg border border-transparent px-1.5 py-1 transition-colors duration-150", active ? "bg-primary/[0.1] hover:bg-primary/[0.12]" : "hover:bg-foreground/[0.07]")}>
+    <button type="button" className="flex min-w-0 flex-1 items-center gap-2.5 text-left" onClick={() => void controller.open_group(group.group_id)}><GroupAvatar group={group} agents={controller.agents} /><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-foreground">{group.name}</span><span className="mt-0.5 block truncate text-[10px] text-muted-foreground/70">{group.members.length} 个成员 · {group.sessions.length} 个对话</span></span></button>
+    <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100" title="Group 操作" aria-label="Group 操作"><TbDots /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => void controller.create_group_session(group.group_id, controller.active_workspace_id || undefined)}><TbMessageCircle /><span>新对话</span></DropdownMenuItem><DropdownMenuItem onClick={() => open_group_config(group.group_id)}><TbEdit /><span>Group 配置</span></DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm(`确定删除 Group「${group.name}」吗？`)) void controller.remove_group(group.group_id); }}><TbTrash /><span>删除 Group</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+  </div>;
+}
+
+/** 使用 Group 成员头像组成紧凑主体头像。 */
+function GroupAvatar({ group, agents }: { /** Group 摘要。 */ group: DesktopGroupSummary; /** Agent 列表。 */ agents: DesktopAgentSummary[] }) {
+  const members = group.members.slice(0, 3).map((member) => agents.find((agent) => agent.agent_id === member.agent_id) ?? { agent_id: member.agent_id, model_id: "", version: "" });
+  if (members.length === 0) return <TbUsers className="size-8 shrink-0 rounded-full bg-foreground/[0.06] p-2 text-muted-foreground" />;
+  return <span className="relative flex size-8 shrink-0 items-center" aria-label={`${group.name} 成员头像`}>{members.map((agent, index) => <AgentAvatar key={agent.agent_id} agent={agent} class_name={cn("absolute size-6 rounded-md border-2 border-muted", index === 0 && "left-0 top-0", index === 1 && "right-0 top-1", index === 2 && "left-1 bottom-0")} />)}</span>;
 }

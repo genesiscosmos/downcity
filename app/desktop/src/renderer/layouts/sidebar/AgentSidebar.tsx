@@ -50,7 +50,7 @@ function GroupAvatar({ group, agents }: { /** Group 摘要。 */ group: DesktopG
 }
 
 /** 创建运行时 Group 的最小配置对话框。 */
-function GroupEditorDialog({ open, close_dialog, group, agents, models, models_loading, create_group, update_group }: { open: boolean; close_dialog(): void; group?: DesktopGroupSummary; agents: DesktopViewController["agents"]; models: DesktopViewController["models"]; models_loading: boolean; create_group?: (input: DesktopCreateGroupInput) => Promise<void>; update_group?: (group_id: string, input: DesktopUpdateGroupInput) => Promise<void> }) {
+export function GroupEditorDialog({ open, close_dialog, group, agents, models, models_loading, create_group, update_group }: { open: boolean; close_dialog(): void; group?: DesktopGroupSummary; agents: DesktopViewController["agents"]; models: DesktopViewController["models"]; models_loading: boolean; create_group?: (input: DesktopCreateGroupInput) => Promise<void>; update_group?: (group_id: string, input: DesktopUpdateGroupInput) => Promise<void> }) {
   const [group_id, set_group_id] = useState("");
   const [name, set_name] = useState("");
   const [instruction, set_instruction] = useState("");
