@@ -328,11 +328,6 @@ export function use_desktop_controller(): DesktopViewController {
     };
   }, [process_next_queue]);
 
-  const select_agent = useCallback((agent_id: string) => {
-    set_error("");
-    set_selection({ kind: "agent", agent_id });
-  }, []);
-
   const select_plugin = useCallback((plugin_id: string) => {
     set_error("");
     set_sidebar_mode_state("plugins");
@@ -620,19 +615,30 @@ export function use_desktop_controller(): DesktopViewController {
   /** 打开 Agent 最近更新的持久化 Session 对话。 */
   const open_agent_chat = useCallback(async (agent_id: string) => {
     set_error("");
-    const recent = Object.entries(sessions_by_workspace)
-      .flatMap(([workspace_id, sessions]) => sessions.filter((item) => item.agent_id === agent_id).map((item) => ({ workspace_id, session: item.session })))
-      .sort((left, right) => right.session.updated_at - left.session.updated_at)[0];
-    if (recent) {
-      await select_session(recent.workspace_id, agent_id, recent.session.session_id, true);
-      return;
+    try {
+      const target_workspace = workspaces.find((workspace) => workspace.workspace_id === active_workspace_id)
+        ?? workspaces[0]
+        ?? await window.downcity.workspace.get_default();
+      const workspace_id = target_workspace.workspace_id;
+      if (!workspaces.some((workspace) => workspace.workspace_id === workspace_id)) {
+        set_workspaces((current) => [...current, target_workspace]);
+      }
+      const sessions = await window.downcity.chat.list_sessions(agent_id, workspace_id);
+      const session = sessions[0] ?? await window.downcity.chat.create_session(agent_id, workspace_id);
+      set_sessions_by_workspace((current) => ({
+        ...current,
+        [workspace_id]: [{ agent_id, session }, ...(current[workspace_id] ?? []).filter((item) => item.agent_id !== agent_id || item.session.session_id !== session.session_id)],
+      }));
+      set_active_workspace_id(workspace_id);
+      await select_session(workspace_id, agent_id, session.session_id, true);
+    } catch (reason) {
+      set_error(to_error_message(reason));
     }
-    const target_workspace = workspaces.find((workspace) => workspace.workspace_id === active_workspace_id) ?? workspaces[0] ?? await window.downcity.workspace.get_default();
-    if (!workspaces.some((workspace) => workspace.workspace_id === target_workspace.workspace_id)) set_workspaces((current) => [...current, target_workspace]);
-    const session = await window.downcity.chat.create_session(agent_id, target_workspace.workspace_id);
-    set_sessions_by_workspace((current) => ({ ...current, [target_workspace.workspace_id]: [{ agent_id, session }, ...(current[target_workspace.workspace_id] ?? [])] }));
-    await select_session(target_workspace.workspace_id, agent_id, session.session_id, true);
-  }, [active_workspace_id, select_session, sessions_by_workspace, workspaces]);
+  }, [active_workspace_id, select_session, workspaces]);
+
+  const select_agent = useCallback((agent_id: string) => {
+    void open_agent_chat(agent_id);
+  }, [open_agent_chat]);
 
   /** 创建分支 Session，将其加入导航列表并立即打开。 */
   const fork_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, message_id: string) => {

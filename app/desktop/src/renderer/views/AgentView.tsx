@@ -25,7 +25,6 @@ interface AgentViewProps {
   /** 打开主 Session 对话。 */ open_main_session(): Promise<void>;
   /** 打开 Agent 配置侧栏。 */ open_config(section: AgentEditorSection): void;
 }
-
 /** Agent 信息侧栏属性。 */
 interface AgentInfoSidebarProps {
   /** 当前 Agent。 */

@@ -23,6 +23,10 @@ import { resolve_chat_input_command } from "./chat_input_command";
 interface ChatInputEditorProps {
   /** 是否用于 Group 群聊；群聊保留纯文本发送，并支持成员 @ 提及。 */
   group_mode?: boolean;
+  /** 是否用于不绑定 Workspace 的 Agent 客户端对话。 */
+  client_mode?: boolean;
+  /** 客户端对话当前是否正在执行。 */
+  client_executing?: boolean;
   /** Group 群聊可被 @ 提及的成员。 */
   group_members?: DesktopAgentSummary[];
   /** Group 群聊可切换的 Session。 */
@@ -101,6 +105,8 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
   member_query_ref.current = member_query;
   const busy = props.group_mode
     ? props.group_phase === "dispatching" || props.group_phase === "dispatched" || props.group_phase === "executing"
+    : props.client_mode
+      ? props.client_executing === true
     : is_chat_busy(props.runtime);
 
   const handle_resize_start = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
@@ -150,7 +156,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
   }, []);
 
   const update_file_query = useCallback((current_editor: Editor) => {
-    if (props_ref.current.group_mode) { set_file_query(undefined); return; }
+    if (props_ref.current.group_mode || props_ref.current.client_mode) { set_file_query(undefined); return; }
     const { $from } = current_editor.state.selection;
     if (!$from.parent.isTextblock) return set_file_query(undefined);
     const before_cursor = $from.parent.textBetween(0, $from.parentOffset, "\n", "\0");
@@ -180,7 +186,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
   }, []);
 
   useEffect(() => {
-    if (props.group_mode) {
+    if (props.group_mode || props.client_mode) {
       set_workspace_files([]);
       set_file_query(undefined);
       return;
@@ -191,7 +197,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
   }, [props.group_mode, props.workspace_id, props.surface]);
 
   async function insert_files(files: ArrayLike<File>) {
-    if (props_ref.current.group_mode) return;
+    if (props_ref.current.group_mode || props_ref.current.client_mode) return;
     const selected_files = Array.from(files);
     const too_large = selected_files.find((file) => file.size > 20 * 1024 * 1024);
     if (too_large) return set_attachment_error(`${too_large.name} 超过 20 MB`);
@@ -228,12 +234,12 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
     const current_editor = editor_ref.current;
     if (!current_editor || submitting_ref.current) return;
     const input = decode_chat_composer(current_editor.getJSON());
-    const submitted_input: DesktopChatInput = props_ref.current.group_mode
+    const submitted_input: DesktopChatInput = props_ref.current.group_mode || props_ref.current.client_mode
       ? { text: input.text, files: [], references: [] }
       : input;
     if (!submitted_input.text.trim() && submitted_input.files.length === 0 && submitted_input.references.length === 0) return;
     // 群聊没有 Agent 专属本地命令；斜杠文本应作为普通群聊消息交给调度器。
-    const command = props_ref.current.group_mode ? undefined : resolve_chat_input_command(submitted_input);
+    const command = props_ref.current.group_mode || props_ref.current.client_mode ? undefined : resolve_chat_input_command(submitted_input);
     if (command === "compact") {
       if (!props_ref.current.compact_session) return;
       await run_compact_command(false);
@@ -252,20 +258,20 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
 
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [StarterKit.configure({ heading: false, codeBlock: false, blockquote: false }), Placeholder.configure({ placeholder: props.group_mode ? "输入消息，发送给 Group…" : props.surface === "agent" ? "和 Agent 继续对话…" : "输入消息，使用 / 打开命令…" }), ChatAttachmentNode, ChatReferenceNode],
+    extensions: [StarterKit.configure({ heading: false, codeBlock: false, blockquote: false }), Placeholder.configure({ placeholder: props.group_mode ? "输入消息，发送给 Group…" : props.client_mode ? "和 Agent 继续对话…" : props.surface === "agent" ? "和 Agent 继续对话…" : "输入消息，使用 / 打开命令…" }), ChatAttachmentNode, ChatReferenceNode],
     content: encode_chat_composer(props.draft, props.draft_files, props.draft_references),
       editorProps: {
       attributes: { class: "chat-input-editor", "data-chat-input": "true", spellcheck: String(props.settings.spellcheck_enabled) },
       handlePaste: (_view, event) => {
         const files = event.clipboardData?.files;
-        if (!files?.length) return false;
+        if (!files?.length || props_ref.current.client_mode) return false;
         event.preventDefault();
         void insert_files(files);
         return true;
       },
       handleDrop: (_view, event) => {
         const files = event.dataTransfer?.files;
-        if (!files?.length) return false;
+        if (!files?.length || props_ref.current.client_mode) return false;
         event.preventDefault();
         void insert_files(files);
         return true;
@@ -277,7 +283,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
           select_group_member(member_candidates_ref.current[0]);
           return true;
         }
-        if (!props_ref.current.group_mode && file_query_ref.current && file_candidates[0]) {
+        if (!props_ref.current.group_mode && !props_ref.current.client_mode && file_query_ref.current && file_candidates[0]) {
           event.preventDefault();
           void select_workspace_file(file_candidates[0]);
           return true;
@@ -285,6 +291,8 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
         if (slash_query_ref.current) return false;
         const current_busy = props_ref.current.group_mode
           ? props_ref.current.group_phase === "dispatching" || props_ref.current.group_phase === "dispatched" || props_ref.current.group_phase === "executing"
+          : props_ref.current.client_mode
+            ? props_ref.current.client_executing === true
           : is_chat_busy(props_ref.current.runtime);
         if (current_busy && event.shiftKey && (event.metaKey || event.ctrlKey)) {
           event.preventDefault();
@@ -329,15 +337,15 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
 
   const slash_commands = useMemo(() => {
     const commands: ChatSlashCommand[] = [
-      ...(props.group_mode ? [] : [
+      ...(props.group_mode || props.client_mode ? [] : [
         { command_id: "attach", title: "/attach", description: "添加文件附件", keywords: ["file", "附件"], run: () => file_input_ref.current?.click() },
         { command_id: "image", title: "/image", description: "添加图片", keywords: ["photo", "图片"], run: () => image_input_ref.current?.click() },
       ]),
       { command_id: "clear", title: "/clear", description: "清空当前输入", keywords: ["reset", "清空"], run: () => { editor_ref.current?.commands.clearContent(); } },
       ...(props.group_mode && props.select_group_session ? (props.group_sessions ?? []).map((session) => ({ command_id: `sessions:${session.session_id}`, title: `/sessions ${session.session_id.slice(0, 8)}`, description: "切换 Group Session", keywords: ["session", "sessions", session.session_id], run: () => props.select_group_session?.(session.session_id) })) : []),
       ...(props.compact_session ? [{ command_id: "compact", title: "/compact", description: "压缩当前对话上下文", keywords: ["compact", "压缩", "context"], run: () => run_compact_command(true) }] : []),
-      ...(props.group_mode ? [] : props.models.map((model) => ({ command_id: `model:${model.model_id}`, title: `/model ${model.name}`, description: `切换到 ${model.model_id}`, keywords: ["model", "模型", model.model_id], run: () => props.set_model(model.model_id) }))),
-      ...(props.group_mode ? [] : (["ask", "always-allow"] as const).map((mode) => ({ command_id: `approval:${mode}`, title: `/approval ${mode}`, description: mode === "ask" ? "执行前询问" : "自动允许", keywords: ["approval", "权限"], run: () => props.set_approval_mode(mode) }))),
+      ...(props.group_mode || props.client_mode ? [] : props.models.map((model) => ({ command_id: `model:${model.model_id}`, title: `/model ${model.name}`, description: `切换到 ${model.model_id}`, keywords: ["model", "模型", model.model_id], run: () => props.set_model(model.model_id) }))),
+      ...(props.group_mode || props.client_mode ? [] : (["ask", "always-allow"] as const).map((mode) => ({ command_id: `approval:${mode}`, title: `/approval ${mode}`, description: mode === "ask" ? "执行前询问" : "自动允许", keywords: ["approval", "权限"], run: () => props.set_approval_mode(mode) }))),
     ];
     const query = slash_query?.query.toLowerCase() ?? "";
     return commands.filter((command) => !query || `${command.title} ${command.keywords.join(" ")}`.toLowerCase().includes(query)).slice(0, 8);
@@ -380,7 +388,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
     <div className="chat-composer-resize-handle absolute inset-x-0 top-0 z-20 h-2 cursor-ns-resize" role="separator" aria-label="调整输入区高度" aria-orientation="horizontal" onMouseDown={handle_resize_start} onDoubleClick={reset_composer_height}><span /></div>
     <input ref={file_input_ref} type="file" multiple hidden accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,.docx,.xlsx,.pptx" onChange={(event) => { void insert_files(event.target.files ?? []); event.currentTarget.value = ""; }} />
     <input ref={image_input_ref} type="file" multiple hidden accept="image/*" onChange={(event) => { void insert_files(event.target.files ?? []); event.currentTarget.value = ""; }} />
-    {!props.group_mode ? <div className="chat-composer-toolbar relative flex min-h-10 items-center justify-between gap-2 px-2 pt-2">
+    {!props.group_mode && !props.client_mode ? <div className="chat-composer-toolbar relative flex min-h-10 items-center justify-between gap-2 px-2 pt-2">
       <div className="flex min-w-0 items-center gap-1">
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button size="icon" className="rounded-full" aria-label="添加内容" title="添加内容" disabled={submitting}><TbPlus className="size-4" /></Button></DropdownMenuTrigger>
@@ -393,7 +401,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
         <ChatApprovalModeSelector configuration={props.configuration} set_approval_mode={props.set_approval_mode} />
       </div>
     </div> : <div className="min-h-2" />}
-    {!props.group_mode && props.queued_messages.length > 0 ? <QueuedMessageList {...props} expanded={queue_expanded} toggle_expanded={() => set_queue_expanded((value) => !value)} /> : null}
+    {!props.group_mode && !props.client_mode && props.queued_messages.length > 0 ? <QueuedMessageList {...props} expanded={queue_expanded} toggle_expanded={() => set_queue_expanded((value) => !value)} /> : null}
     {attachment_error ? <div className="px-3 pb-1 text-[11px] text-destructive">{attachment_error}</div> : null}
     {member_query && member_candidates.length > 0 ? <div className="absolute bottom-full left-1 z-30 mb-2 w-56 overflow-hidden rounded-floating-surface border border-border bg-background p-1 text-popover-foreground outline-none">{member_candidates.map((member) => <button key={member.agent_id} type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-foreground/[0.06]" onMouseDown={(event) => event.preventDefault()} onClick={() => select_group_member(member)}><AgentAvatar agent={member} class_name="size-5 rounded" /><span className="min-w-0 flex-1 truncate">@{member.agent_id}</span></button>)}</div> : slash_query ? <ChatSlashMenu commands={slash_commands} select_command={select_slash_command} /> : file_query && file_candidates.length > 0 ? <div className="absolute bottom-full left-1 z-30 mb-2 w-72 overflow-hidden rounded-floating-surface border border-border bg-background p-1 text-popover-foreground outline-none">{file_candidates.map((file) => <button key={file.relative_path} type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-foreground/[0.06]" onMouseDown={(event) => event.preventDefault()} onClick={() => void select_workspace_file(file)}><TbPaperclip className="size-3.5 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{file.relative_path}</span></button>)}</div> : null}
     <div className="chat-composer-editor min-h-0 w-full flex-1 overflow-y-auto px-3 py-2">

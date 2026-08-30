@@ -16,7 +16,7 @@ import { WorkspaceView } from "@/views/WorkspaceView";
 import { BayBar, type BayBarState } from "@/layouts/BayBar";
 import { ShellPanelControls } from "@/layouts/ShellPanelControls";
 import { GroupInfoSidebar, GroupView, type GroupEditorSection } from "@/views/GroupView";
-import { AgentInfoSidebar, AgentView, type AgentEditorSection } from "@/views/AgentView";
+import { AgentInfoSidebar, type AgentEditorSection } from "@/views/AgentView";
 import { RecentSessionsSidebar } from "@/components/RecentSessionsSidebar";
 
 /** 当前右侧面板。面板由根应用统一拥有，保证同一时间只有一个面板可见。 */
@@ -76,6 +76,10 @@ export function App() {
     set_agent_config_collapsed(false);
     set_agent_config_section("model");
   }, [selected_agent?.agent_id]);
+
+  useEffect(() => {
+    if (current_selection?.kind === "agent") void controller.open_agent_chat(current_selection.agent_id);
+  }, [controller.open_agent_chat, current_selection]);
 
   useEffect(() => {
     set_right_panel((panel) => panel.active_tab === "group_config" ? { ...panel, open: false } : panel);
@@ -168,22 +172,7 @@ export function App() {
     }
     if (!controller.selection || !selected_agent) return <WelcomeView />;
     if (controller.selection.kind === "agent") {
-      const main_context = controller.settings.agent_main_sessions[selected_agent.agent_id];
-      const main_session = main_context
-        ? (controller.sessions_by_workspace[main_context.workspace_id] ?? []).find((item) => item.agent_id === selected_agent.agent_id && item.session.session_id === main_context.session_id)
-        : undefined;
-      return <AgentView
-        agent={selected_agent}
-        workspaces={controller.workspaces}
-        plugins={controller.plugins}
-        main_session={main_session ? { workspace_id: main_context!.workspace_id, session: main_session.session } : undefined}
-        controller={controller}
-        open_main_session={async () => {
-          if (!main_context) return controller.open_agent_chat(selected_agent.agent_id);
-          await controller.select_session(main_context.workspace_id, selected_agent.agent_id, main_context.session_id);
-        }}
-        open_config={open_agent_config}
-      />;
+      return <WelcomeView />;
     }
     if (controller.selection.kind === "draft") {
       const draft_id = controller.selection.draft_id;
@@ -239,8 +228,6 @@ export function App() {
       workspaces={controller.workspaces}
         agents={controller.agents}
         session={session}
-        sessions={(controller.sessions_by_workspace[workspace_id] ?? []).filter((item) => item.agent_id === selected_agent.agent_id).map((item) => item.session)}
-        select_session={(session_id) => void controller.select_session(workspace_id, selected_agent.agent_id, session_id)}
       messages={controller.messages_by_session[session_key] ?? []}
       runtime={controller.chat_runtime_by_session[session_key]}
       draft={controller.drafts_by_session[session_key] ?? ""}

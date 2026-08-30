@@ -18,6 +18,7 @@ import {
   TbPencil,
   TbRoute,
   TbSearch,
+  TbUserCircle,
   TbWriting,
 } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
@@ -52,10 +53,6 @@ interface SessionViewProps {
   agents: DesktopAgentSummary[];
   /** 当前 Session 摘要。 */
   session: DesktopSessionSummary;
-  /** 当前 Agent 可切换的 Session 列表。 */
-  sessions?: DesktopSessionSummary[];
-  /** 切换到当前 Agent 的另一个 Session。 */
-  select_session?(session_id: string): void;
   /** 打开当前 Agent 信息侧栏。 */
   open_agent_info?(): void;
   /** 当前 Session 的 canonical 可见消息。 */
@@ -152,9 +149,7 @@ export function SessionView(props: SessionViewProps) {
     });
   };
 
-  return <ChatSurfaceLayout header_left={props.chat_surface === "agent" ? <DropdownMenu>
-      <DropdownMenuTrigger asChild><button type="button" className="group flex min-w-0 max-w-[min(100%,22rem)] items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-foreground/[0.06]" aria-label="切换 Session"><AgentAvatar agent={props.agent} class_name="size-6 rounded-md" /><span className="flex min-w-0 flex-col items-start"><span className="flex min-w-0 max-w-48 items-center gap-1 text-xs font-medium text-foreground"><span className="truncate">{props.agent.agent_id}</span><TbChevronDown className="size-3 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" /></span><span className="max-w-48 truncate text-[10px] text-muted-foreground">{session.title || "新对话"}</span></span></button></DropdownMenuTrigger><DropdownMenuContent align="start" side="bottom" sideOffset={4}>{(props.sessions ?? []).map((item) => <DropdownMenuItem key={item.session_id} is_selected={item.session_id === session.session_id} onClick={() => props.select_session?.(item.session_id)}><span className="min-w-0 flex-1 truncate">{item.title || "新对话"}</span>{item.session_id === session.session_id ? <TbCheck className="size-3.5 text-primary" /> : null}</DropdownMenuItem>)}</DropdownMenuContent>
-    </DropdownMenu> : <div className="min-w-0 max-w-[min(100%,22rem)] truncate pl-1 text-xs font-medium text-foreground">{session.title || "新对话"}</div>} header_right={<div className="flex shrink-0 items-center gap-1">
+  return <ChatSurfaceLayout header_left={props.chat_surface === "agent" ? <button type="button" className="group flex min-w-0 max-w-[min(100%,22rem)] items-center gap-2 rounded-lg px-1 py-1 text-left transition-colors hover:bg-foreground/[0.06]" aria-label="Agent 信息" title="Agent 信息" onClick={props.open_agent_info}><AgentAvatar agent={props.agent} class_name="size-6 rounded-md" /><span className="flex min-w-0 flex-col items-start"><span className="flex min-w-0 max-w-48 items-center gap-1 text-xs font-medium text-foreground"><span className="truncate">{props.agent.agent_id}</span><TbUserCircle className="size-3 shrink-0 text-muted-foreground" /></span><span className="max-w-48 truncate text-[10px] text-muted-foreground">{session.title || "新对话"}</span></span></button> : <div className="min-w-0 max-w-[min(100%,22rem)] truncate pl-1 text-xs font-medium text-foreground">{session.title || "新对话"}</div>} header_right={<div className="flex shrink-0 items-center gap-1">
       {is_agent_typing(runtime?.status) ? <span className="mr-1 flex items-center gap-1 text-[10px] text-primary"><span className="thinking-dots-icon is-highlighted" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <span key={index} className="thinking-dot" />)}</span>正在回复</span> : null}
         {props.rename_session && props.archive_session && props.remove_session ? <SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<button type="button" className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground" title="对话操作" aria-label="对话操作"><TbDots className="size-4" /></button>} /> : null}
       </div>}
