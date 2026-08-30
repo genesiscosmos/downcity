@@ -4,6 +4,7 @@ import type { DesktopUsageDay } from "@common/types/DesktopApi";
 import type {
   UsageHeatmap,
   UsageHeatmapDay,
+  UsageHeatmapMetric,
   UsagePeriod,
   UsagePeriodSummary,
   UsageTrendPoint,
@@ -145,8 +146,15 @@ export function build_usage_heatmap(
   const range_start = add_days(end_date, -(lookback_days - 1));
   const grid_start = start_of_week(range_start);
   const grid_end = add_days(start_of_week(end_date), 6);
+  const has_credits = days.some((day) => (
+    day.date >= range_start && day.date <= end_date && day.credits_used > 0
+  ));
+  const metric: UsageHeatmapMetric = has_credits ? "credits" : "executions";
+  const activity_value = (day: DesktopUsageDay): number => metric === "credits"
+    ? day.credits_used
+    : day.execution_count;
   const maximum = days.reduce((result, day) => (
-    day.date >= range_start && day.date <= end_date ? Math.max(result, day.credits_used) : result
+    day.date >= range_start && day.date <= end_date ? Math.max(result, activity_value(day)) : result
   ), 0);
   const weeks: UsageHeatmap["weeks"] = [];
 
@@ -156,7 +164,8 @@ export function build_usage_heatmap(
       const date = add_days(week_start, index);
       const day = day_at(by_date, date);
       const in_range = date >= range_start && date <= end_date;
-      return { ...day, level: in_range ? heat_level(day.credits_used, maximum) : 0, in_range };
+      const value = activity_value(day);
+      return { ...day, activity_value: value, level: in_range ? heat_level(value, maximum) : 0, in_range };
     });
     weeks.push({ key: week_start, days: week_days });
     week_start = add_days(week_start, 7);
@@ -170,7 +179,7 @@ export function build_usage_heatmap(
     previous_month = representative.date.slice(0, 7);
     months.push({ key: previous_month, date: representative.date, column });
   });
-  return { weeks, months };
+  return { metric, weeks, months };
 }
 
 /** 汇总热力图真实展示范围内的 Credits。 */

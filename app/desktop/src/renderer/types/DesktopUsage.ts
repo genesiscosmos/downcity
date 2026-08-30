@@ -5,6 +5,9 @@ import type { DesktopUsageDay } from "@common/types/DesktopApi";
 /** 用量统计周期。 */
 export type UsagePeriod = "day" | "week" | "month";
 
+/** 热力图用于计算活动强度的指标。 */
+export type UsageHeatmapMetric = "credits" | "executions";
+
 /** 当前周期的汇总用量。 */
 export interface UsagePeriodSummary {
   /** 周期内消费的 Credits。 */
@@ -27,6 +30,8 @@ export interface UsageTrendPoint {
 
 /** 活动热力图中的一个自然日。 */
 export interface UsageHeatmapDay extends DesktopUsageDay {
+  /** 当前日期用于计算颜色强度的指标值。 */
+  activity_value: number;
   /** 相对当前展示范围最大值的活动等级。 */
   level: 0 | 1 | 2 | 3 | 4;
   /** 当前日期是否属于真实展示范围。 */
@@ -53,6 +58,8 @@ export interface UsageHeatmapMonthLabel {
 
 /** 活动热力图的完整网格数据。 */
 export interface UsageHeatmap {
+  /** 当前热力图使用的活动指标。 */
+  metric: UsageHeatmapMetric;
   /** 按自然周排列的热力图列。 */
   weeks: UsageHeatmapWeek[];
   /** 跨月份时显示的顶部标签。 */

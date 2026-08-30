@@ -44,6 +44,19 @@ test("按自然周补齐热力图边界并计算活动等级", () => {
   assert.equal(heatmap_days.find((item) => item.date === "2026-08-04")?.level, 4);
   assert.equal(heatmap_days.find((item) => item.date === "2026-08-05")?.in_range, false);
   assert.equal(sum_heatmap_credits(heatmap), 400);
+  assert.equal(heatmap.metric, "credits");
+});
+
+test("没有 Credits 时使用 AI 调用次数计算热力图", () => {
+  const heatmap = build_usage_heatmap([
+    { ...day("2026-08-03", 0, 50), execution_count: 2 },
+    { ...day("2026-08-04", 0, 75), execution_count: 5 },
+  ], "2026-08-04", 2);
+  const heatmap_days = heatmap.weeks.flatMap((week) => week.days);
+
+  assert.equal(heatmap.metric, "executions");
+  assert.equal(heatmap_days.find((item) => item.date === "2026-08-03")?.level, 2);
+  assert.equal(heatmap_days.find((item) => item.date === "2026-08-04")?.level, 4);
 });
 
 test("分别构建最近 30 日、12 周与 12 月趋势", () => {
