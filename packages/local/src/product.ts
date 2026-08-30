@@ -11,7 +11,10 @@ export {
   load_local_plugin_setup_module,
   verify_local_installed_plugin_integrity,
 } from "./runtime/LocalPluginLoader.js";
-export { resolve_local_agent_env } from "./runtime/LocalEnvironment.js";
+export {
+  resolve_local_agent_env,
+  resolve_local_global_env,
+} from "./runtime/LocalEnvironment.js";
 export {
   accepts_empty_local_plugin_config,
   create_local_plugin_config_draft,

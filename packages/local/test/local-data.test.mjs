@@ -268,3 +268,28 @@ test("平台身份凭证不会从全局 Env 泄漏到 Agent Workspace", async ()
     await fs.rm(root_path, { recursive: true, force: true });
   }
 });
+
+test("显式传入空环境时不读取宿主进程 Env", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-env-explicit-empty-"));
+  const workspace_path = path.join(root_path, "workspace");
+  await fs.mkdir(workspace_path);
+  const previous_value = process.env.DOWNCITY_TEST_HOST_ENV;
+  process.env.DOWNCITY_TEST_HOST_ENV = "host";
+  try {
+    await fs.writeFile(path.join(root_path, ".env"), "GLOBAL_ONLY=yes\n", "utf8");
+    await fs.writeFile(path.join(workspace_path, ".env"), "WORKSPACE_ONLY=yes\n", "utf8");
+    const env = resolve_local_agent_env({
+      root_path,
+      workspace_path,
+      process_env: {},
+    });
+    assert.deepEqual(env, {
+      GLOBAL_ONLY: "yes",
+      WORKSPACE_ONLY: "yes",
+    });
+  } finally {
+    if (previous_value === undefined) delete process.env.DOWNCITY_TEST_HOST_ENV;
+    else process.env.DOWNCITY_TEST_HOST_ENV = previous_value;
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});

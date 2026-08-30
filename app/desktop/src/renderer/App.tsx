@@ -15,12 +15,12 @@ import { WelcomeView } from "@/views/WelcomeView";
 import { WorkspaceView } from "@/views/WorkspaceView";
 import { BayBar, type BayBarState } from "@/layouts/BayBar";
 import { ShellPanelControls } from "@/layouts/ShellPanelControls";
-import { GroupInfoSidebar, GroupView, type GroupEditorSection } from "@/views/GroupView";
-import { AgentInfoSidebar, type AgentEditorSection } from "@/views/AgentView";
-import { RecentSessionsSidebar } from "@/components/RecentSessionsSidebar";
+import { GroupConfigView, GroupInfoSidebar, GroupView, type GroupEditorSection } from "@/views/GroupView";
+import { AgentInfoSidebar, AgentView, type AgentEditorSection } from "@/views/AgentView";
+import { MainViewBody, MainViewLayout } from "@/layouts/MainViewLayout";
 
 /** 当前右侧面板。面板由根应用统一拥有，保证同一时间只有一个面板可见。 */
-type RightPanelState = BayBarState & { /** 当前选中的配置分区。 */ section?: AgentEditorSection | GroupEditorSection };
+type RightPanelState = BayBarState & { section: AgentEditorSection | GroupEditorSection };
 
 /** Desktop 根组件。 */
 export function App() {
@@ -30,62 +30,28 @@ export function App() {
   const [create_workspace_id, set_create_workspace_id] = useState<string>();
   const [sidebar_collapsed, set_sidebar_collapsed] = useState(false);
   const [command_palette_open, set_command_palette_open] = useState(false);
-  const [agent_config_section, set_agent_config_section] = useState<AgentEditorSection>("model");
-  const [agent_config_collapsed, set_agent_config_collapsed] = useState(false);
-  const [group_config_section, set_group_config_section] = useState<GroupEditorSection>("model");
-  const [group_config_collapsed, set_group_config_collapsed] = useState(false);
-  const [right_panel, set_right_panel] = useState<RightPanelState>({ open: false, active_tab: "recent" });
-  const open_agent_config = (section: AgentEditorSection) => { set_agent_config_section(section); set_agent_config_collapsed(false); set_right_panel((current) => ({ ...current, open: true, active_tab: "agent_config", section })); };
-  const open_group_config = (section: GroupEditorSection) => { set_group_config_section(section); set_group_config_collapsed(false); set_right_panel((current) => ({ ...current, open: true, active_tab: "group_config", section })); };
-  const open_group_config_from_sidebar = async (group_id: string) => {
-    await controller.open_group(group_id);
-    open_group_config("model");
-  };
+  const [right_panel, set_right_panel] = useState<RightPanelState>({ open: false, active_tab: "agent_config", section: "model" });
+  const open_agent_config = (section: AgentEditorSection) => set_right_panel({ open: true, active_tab: "agent_config", section });
+  const open_group_config = (section: GroupEditorSection) => set_right_panel({ open: true, active_tab: "group_config", section });
+  const open_group_from_sidebar = (group_id: string) => controller.select_group(group_id);
   const current_selection = controller.selection;
   const selected_agent = current_selection?.kind === "agent" || current_selection?.kind === "session" || current_selection?.kind === "draft"
     ? controller.agents.find((agent) => agent.agent_id === current_selection.agent_id)
     : undefined;
-  const baybar_visible = right_panel.open && (
-    right_panel.active_tab === "recent"
-      || (right_panel.active_tab === "agent_config" && !agent_config_collapsed)
-      || (right_panel.active_tab === "group_config" && !group_config_collapsed)
-  );
+  const selected_group = current_selection?.kind === "group"
+    ? controller.groups.find((group) => group.group_id === current_selection.group_id)
+    : undefined;
+  const baybar_visible = right_panel.open;
+  useEffect(() => {
+    if (current_selection?.kind !== "agent" && current_selection?.kind !== "group") set_right_panel((current) => ({ ...current, open: false }));
+  }, [current_selection?.kind, current_selection?.kind === "agent" ? current_selection.agent_id : current_selection?.kind === "group" ? current_selection.group_id : undefined]);
   const toggle_baybar = () => {
     if (!right_panel.open) {
       set_right_panel((current) => ({ ...current, open: true }));
       return;
     }
-    if (right_panel.active_tab === "agent_config" && agent_config_collapsed) {
-      set_agent_config_collapsed(false);
-      return;
-    }
-    if (right_panel.active_tab === "group_config" && group_config_collapsed) {
-      set_group_config_collapsed(false);
-      return;
-    }
     set_right_panel((current) => ({ ...current, open: false }));
   };
-  const change_baybar_tab = (active_tab: BayBarState["active_tab"]) => {
-    if (active_tab === "agent_config") set_agent_config_collapsed(false);
-    if (active_tab === "group_config") set_group_config_collapsed(false);
-    set_right_panel((current) => ({ ...current, active_tab, open: true }));
-  };
-
-  useEffect(() => {
-    set_right_panel((panel) => panel.active_tab === "agent_config" ? { ...panel, open: false } : panel);
-    set_agent_config_collapsed(false);
-    set_agent_config_section("model");
-  }, [selected_agent?.agent_id]);
-
-  useEffect(() => {
-    if (current_selection?.kind === "agent") void controller.open_agent_chat(current_selection.agent_id);
-  }, [controller.open_agent_chat, current_selection]);
-
-  useEffect(() => {
-    set_right_panel((panel) => panel.active_tab === "group_config" ? { ...panel, open: false } : panel);
-    set_group_config_collapsed(false);
-    set_group_config_section("model");
-  }, [current_selection?.kind === "group_session" ? current_selection.group_id : undefined]);
 
   useEffect(() => {
     const handle_key_down = (event: KeyboardEvent) => {
@@ -170,9 +136,26 @@ export function App() {
         stop_session={(session_id) => controller.stop_group(group_selection.group_id, session_id)}
       />;
     }
+    if (controller.selection?.kind === "group") {
+      const group_selection = controller.selection;
+      const group = controller.groups.find((item) => item.group_id === group_selection.group_id);
+      return group ? <GroupConfigView group={group} agents={controller.agents} open_config={open_group_config} /> : <WelcomeView />;
+    }
     if (!controller.selection || !selected_agent) return <WelcomeView />;
     if (controller.selection.kind === "agent") {
-      return <WelcomeView />;
+      const main_context = controller.settings.agent_main_sessions[selected_agent.agent_id];
+      const main_session = main_context
+        ? (controller.sessions_by_workspace[main_context.workspace_id] ?? []).find((item) => item.agent_id === selected_agent.agent_id && item.session.session_id === main_context.session_id)
+        : undefined;
+      return <AgentView
+        agent={selected_agent}
+        workspaces={controller.workspaces}
+        plugins={controller.plugins}
+        main_session={main_session ? { workspace_id: main_context!.workspace_id, session: main_session.session } : undefined}
+        controller={controller}
+        open_main_session={() => controller.open_agent_chat(selected_agent.agent_id)}
+        open_config={open_agent_config}
+      />;
     }
     if (controller.selection.kind === "draft") {
       const draft_id = controller.selection.draft_id;
@@ -270,16 +253,15 @@ export function App() {
           controller={controller}
           open_create_agent={(workspace_id) => { set_create_workspace_id(workspace_id); set_create_dialog_open(true); }}
           open_create_workspace={() => set_create_workspace_dialog_open(true)}
-          open_group_config={open_group_config_from_sidebar}
+          open_group_config={open_group_from_sidebar}
           collapsed={sidebar_collapsed}
         />}
       <main data-sidebar-collapsed={sidebar_collapsed ? "true" : "false"} data-baybar-open={baybar_visible ? "true" : "false"} data-shell-platform={navigator.platform.toLowerCase().includes("mac") ? "mac" : "other"} className="main-view-shell flex h-full min-w-0 flex-1 flex-col bg-background">{render_main_view()}</main>
       <BayBar
         state={right_panel}
-        on_active_tab_change={change_baybar_tab}
-        recent_content={<RecentSessionsSidebar controller={controller} embedded close_sidebar={() => set_right_panel((current) => ({ ...current, open: false }))} />}
-        agent_config_content={selected_agent && (current_selection?.kind === "agent" || current_selection?.kind === "session") ? <AgentInfoSidebar agent={selected_agent} plugins={controller.plugins} controller={controller} section={agent_config_section} collapsed={agent_config_collapsed} embedded close_sidebar={() => set_right_panel((current) => ({ ...current, open: false }))} /> : undefined}
-        group_config_content={current_selection?.kind === "group_session" && controller.groups.find((item) => item.group_id === current_selection.group_id) ? <GroupInfoSidebar group={controller.groups.find((item) => item.group_id === current_selection.group_id)!} agents={controller.agents} controller={controller} section={group_config_section} collapsed={group_config_collapsed} embedded close_sidebar={() => set_right_panel((current) => ({ ...current, open: false }))} /> : undefined}
+        agent_config_content={selected_agent && right_panel.active_tab === "agent_config" ? <AgentInfoSidebar agent={selected_agent} plugins={controller.plugins} controller={controller} section={right_panel.section as AgentEditorSection} embedded close_sidebar={() => set_right_panel((current) => ({ ...current, open: false }))} /> : undefined}
+        group_config_content={selected_group && right_panel.active_tab === "group_config" ? <GroupInfoSidebar group={selected_group} agents={controller.agents} controller={controller} section={right_panel.section as GroupEditorSection} embedded close_sidebar={() => set_right_panel((current) => ({ ...current, open: false }))} /> : undefined}
+        on_active_tab_change={(active_tab) => set_right_panel((current) => ({ ...current, active_tab, open: true }))}
       />
     </div>
     <ShellPanelControls sidebar_collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} baybar_open={baybar_visible} toggle_baybar={toggle_baybar} />

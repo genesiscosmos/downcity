@@ -43,6 +43,7 @@ export type NavigationTarget =
   | { /** 尚未持久化的空对话。 */ kind: "draft"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Draft 稳定标识。 */ draft_id: string }
   | { /** Session Chat。 */ kind: "session"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Session 标识。 */ session_id: string }
   | { /** 具体 GroupSession Chat。 */ kind: "group_session"; /** Group 标识。 */ group_id: string; /** Workspace 标识。 */ workspace_id: string; /** GroupSession 标识。 */ session_id: string }
+  | { /** Group 配置页。 */ kind: "group"; /** Group 标识。 */ group_id: string }
   | { /** Plugin 详情页。 */ kind: "plugin"; /** Plugin 标识。 */ plugin_id: string }
   | { /** Desktop 设置页。 */ kind: "settings"; /** 当前设置分区。 */ section: SettingsSection };
 
@@ -178,6 +179,8 @@ export interface DesktopViewController {
   set_sidebar_mode(mode: SidebarMode): void;
   /** 打开一个 Workspace，并将其设为 Chat 上下文。 */
   select_workspace(workspace_id: string): void;
+  /** 选择 Group 配置页。 */
+  select_group(group_id: string): void;
   /** 创建一个运行时 Group。 */
   create_group(input: DesktopCreateGroupInput): Promise<void>;
   /** 更新一个 Group 定义。 */

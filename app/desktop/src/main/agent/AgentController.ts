@@ -75,6 +75,7 @@ import {
   configure_desktop_agent_model,
   list_desktop_agent_models,
   resolve_desktop_agent_model,
+  resolve_desktop_city_env,
 } from "./DesktopAgentAssembly.js";
 import type { DesktopLocalData } from "./DesktopLocalData.js";
 import type { LocalPluginLoader } from "@downcity/local/product";
@@ -347,7 +348,7 @@ export class AgentController {
     for (const agent_id of member_agent_ids) {
       if (!this.city.agents.get(agent_id)) throw new Error(`Agent not found in City: ${agent_id}`);
     }
-    await resolve_desktop_agent_model(this.data, model_id, process_environment());
+    await resolve_desktop_agent_model(this.data, model_id, resolve_desktop_city_env(this.data));
     const config = this.data.groups.create({ ...input, model_id });
     try {
       const group = this.create_runtime_group(config);
@@ -368,7 +369,7 @@ export class AgentController {
     if (!model_id) throw new Error("model_id is required");
     const member_agent_ids = [...new Set(input.member_agent_ids.map((agent_id) => String(agent_id || "").trim()).filter(Boolean))];
     for (const agent_id of member_agent_ids) this.require_native_agent(agent_id);
-    await resolve_desktop_agent_model(this.data, model_id, process_environment());
+    await resolve_desktop_agent_model(this.data, model_id, resolve_desktop_city_env(this.data));
     const next = this.data.groups.update(group_id, { ...input, model_id, member_agent_ids });
     const previous_group = this.city.groups.get(current.group_id);
     const had_group_subscription = [...this.group_unsubscribes.keys()].some((key) => key.startsWith(`${current.group_id}:`));
@@ -482,7 +483,7 @@ export class AgentController {
   /** 列出当前 Federation 中可用于 Agent 对话的模型。 */
   async list_models(): Promise<DesktopModelSummary[]> {
     await this.ready_promise;
-    return await list_desktop_agent_models(this.data, process.env);
+    return await list_desktop_agent_models(this.data, resolve_desktop_city_env(this.data));
   }
 
   /** 在当前 Workspace 创建新的 Session。 */
@@ -781,7 +782,7 @@ export class AgentController {
   /** 显式装配一个 Desktop native Agent。 */
   private async create_native_agent(config: LocalAgentConfig): Promise<Agent> {
     const [model, plugins, tools] = await Promise.all([
-      Promise.resolve(create_desktop_agent_model(this.data, config, process_environment())),
+      Promise.resolve(create_desktop_agent_model(this.data, config, resolve_desktop_city_env(this.data))),
       this.plugin_loader.create_plugins(config, ({ plugin_id, profile }) => ({
         plugin_id,
         profile,
@@ -813,7 +814,7 @@ export class AgentController {
       id: config.group_id,
       name: config.name,
       instruction: config.instruction || undefined,
-      model: create_desktop_group_model(this.data, config.model_id, process_environment()),
+      model: create_desktop_group_model(this.data, config.model_id, resolve_desktop_city_env(this.data)),
       members,
     });
   }
@@ -1174,15 +1175,6 @@ function to_desktop_session_summary(session: AgentSessionSummary): DesktopSessio
 /** 生成不会与其他 Agent Session 冲突的主进程缓存键。 */
 function get_session_key(agent_id: string, workspace_id: string, session_id: string): string {
   return `${agent_id}:${workspace_id}:${session_id}`;
-}
-
-/** 把进程环境收敛为不含 undefined 的只读配置。 */
-function process_environment(): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(process.env).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string",
-    ),
-  );
 }
 
 /** 把未知失败统一转换为可序列化文本。 */

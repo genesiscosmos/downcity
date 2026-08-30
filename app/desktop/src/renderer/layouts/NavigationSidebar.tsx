@@ -21,7 +21,7 @@ interface NavigationSidebarProps {
   /** 打开创建 Workspace 表单。 */
   open_create_workspace(): void;
   /** 打开 Group 并展示其配置侧栏。 */
-  open_group_config(group_id: string): Promise<void>;
+  open_group_config(group_id: string): void;
   /** 是否隐藏左侧导航栏。 */
   collapsed?: boolean;
 }
@@ -62,7 +62,7 @@ export function NavigationSidebar({ controller, open_create_agent, open_create_w
       <div className="flex w-10 shrink-0 flex-col items-center pl-2"><SidebarViewSwitcher active_mode={controller.sidebar_mode} on_change={controller.set_sidebar_mode} layout="left" /></div>
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {controller.sidebar_mode === "chat" ? <ChatSidebar controller={controller} open_create_agent={open_create_agent} open_create_workspace={open_create_workspace} /> : null}
-        {controller.sidebar_mode === "agents" ? <AgentSidebar controller={controller} open_create_agent={open_create_agent} open_group_config={open_group_config} /> : null}
+        {controller.sidebar_mode === "agents" ? <AgentSidebar controller={controller} open_create_agent={open_create_agent} open_group_config={(group_id) => { open_group_config(group_id); }} /> : null}
         {controller.sidebar_mode === "plugins" ? <PluginSidebar controller={controller} /> : null}
       </div>
     </div>

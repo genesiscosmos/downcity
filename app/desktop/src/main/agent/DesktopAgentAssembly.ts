@@ -10,6 +10,7 @@ import {
   type LocalAgentConfig,
   type LocalWorkspaceConfig,
   resolve_local_agent_env,
+  resolve_local_global_env,
   type LocalPluginRegistration,
 } from "@downcity/local/product";
 import { resolve_local_root_path } from "@downcity/local";
@@ -63,10 +64,22 @@ export async function create_desktop_workspace(
     env: resolve_local_agent_env({
       root_path: data.root_path,
       workspace_path: config.workspace_path,
-      process_env: process.env,
+      process_env: {},
     }),
     shell: new Shell({ sandbox: await create_desktop_platform_sandbox() }),
   });
+}
+
+/** 解析 Desktop City 宿主使用的环境：显式进程环境覆盖 Global Env。 */
+export function resolve_desktop_city_env(data: DesktopLocalData): Record<string, string> {
+  return {
+    ...resolve_local_global_env(data.root_path),
+    ...Object.fromEntries(
+      Object.entries(process.env).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    ),
+  };
 }
 
 /** 根据 Agent 默认模型配置创建延迟解析的模型实例。 */

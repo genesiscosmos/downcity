@@ -12,6 +12,7 @@ import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopGroupStatusPhase, DesktopSettings } from "@common/types/DesktopApi";
 import type { RespondSessionInteractionInput, SessionAssistantInteractionPart } from "@downcity/agent";
 import { ChatSurfaceLayout } from "@/layouts/ChatSurfaceLayout";
+import { MainViewBody, MainViewLayout } from "@/layouts/MainViewLayout";
 import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
 import type { DesktopAgentSummary, DesktopGroupMemberRuntime, DesktopGroupMessage, DesktopGroupSessionSummary, DesktopGroupSummary } from "@common/types/DesktopApi";
 import { cn } from "@/lib/utils";
@@ -96,12 +97,29 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
   </ChatSurfaceLayout>;
 }
 
+/** Group 联系人主页面，只展示摘要和可进入的具体配置项。 */
+export function GroupConfigView({ group, agents, open_config }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** 全部 Agent。 */ agents: DesktopAgentSummary[]; /** 打开具体配置项。 */ open_config(section: GroupEditorSection): void }) {
+  return <MainViewLayout>
+    <header className="header-drag-region flex h-10 w-full flex-none items-center gap-2 px-2 text-xs font-medium text-foreground"><GroupAvatar group={group} agents={agents} /><span className="truncate">{group.name}</span></header>
+    <MainViewBody>
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto"><div className="mx-auto w-full max-w-[42rem] px-6 pb-12 pt-14">
+        <div className="mb-9 flex min-w-0 items-center gap-4"><div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-subtle"><GroupAvatar group={group} agents={agents} /></div><div className="min-w-0"><h1 className="truncate text-lg font-semibold text-foreground">{group.name}</h1><p className="mt-1 truncate text-xs text-muted-foreground">{group.members.length} 个 Agent 成员</p></div></div>
+        <SettingsGroup title="Definition">
+          <EditablePropertyRow icon={<LLMModelIcon model_id={group.model_id} />} label="Model" value={group.model_id || "未配置"} active={false} on_select={() => open_config("model")} />
+          <EditablePropertyRow icon={<TbFileText />} label="目标" value={group.instruction ? `${group.instruction.length} characters` : "未设置"} active={false} on_select={() => open_config("instruction")} />
+          <EditablePropertyRow icon={<TbUsers />} label="成员" value={`${group.members.length} 个 Agent`} active={false} on_select={() => open_config("members")} last />
+        </SettingsGroup>
+      </div></div>
+    </MainViewBody>
+  </MainViewLayout>;
+}
+
 /** 生成 GroupSession 的紧凑显示标题。 */
 function format_group_session_title(session: DesktopGroupSessionSummary): string {
   return session.preview_text?.trim().slice(0, 36) || `Session ${session.session_id.slice(0, 8)}`;
 }
 
-/** Group 主体配置侧栏；保存规则与 Agent 定义侧栏一致，采用短暂防抖提交。 */
+/** BayBar 中当前 Group 配置项的单一编辑器。 */
 export function GroupInfoSidebar({ group, agents, controller, close_sidebar, section, collapsed = false, embedded = false }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** 全部 Agent。 */ agents: DesktopAgentSummary[]; /** Desktop 根状态控制器。 */ controller: DesktopViewController; /** 关闭侧栏。 */ close_sidebar(): void; /** 当前编辑分区。 */ section?: GroupEditorSection; /** 是否折叠。 */ collapsed?: boolean; /** 是否嵌入 BayBar。 */ embedded?: boolean }) {
   const [editor_section, set_editor_section] = useState<GroupEditorSection | undefined>(section || "model");
   const [draft, set_draft] = useState(group);
@@ -123,17 +141,8 @@ export function GroupInfoSidebar({ group, agents, controller, close_sidebar, sec
     return () => { window.clearTimeout(timeout_id); };
   }, [controller.update_group, draft, draft_dirty, group.group_id]);
   const update_draft = (next: DesktopGroupSummary) => { version_ref.current += 1; set_draft(next); set_draft_dirty(true); };
-  return <DetailEditorSidebar title={`${group.name} 配置`} storage_key="downcity.group_config_width" default_width={400} max_width={560} on_close={close_sidebar} collapsed={collapsed} show_close={false} embedded={embedded}>
-    <div className="mb-4 flex min-w-0 items-center gap-3 px-1"><GroupAvatar group={group} agents={agents} /><div className="min-w-0"><div className="truncate text-sm font-semibold text-foreground">{group.name}</div><div className="truncate text-[0.6875rem] text-muted-foreground">Group 配置</div></div></div>
-    <SettingsGroup title="Definition">
-      <EditablePropertyRow icon={<LLMModelIcon model_id={draft.model_id} />} label="Model" value={draft.model_id || "未配置"} active={editor_section === "model"} on_select={() => set_editor_section("model")} />
-      <EditablePropertyRow icon={<TbFileText />} label="目标" value={draft.instruction ? `${draft.instruction.length} characters` : "未设置"} active={editor_section === "instruction"} on_select={() => set_editor_section("instruction")} />
-      <EditablePropertyRow icon={<TbUsers />} label="成员" value={`${draft.members.length} 个 Agent`} active={editor_section === "members"} on_select={() => set_editor_section("members")} last />
-    </SettingsGroup>
-    {editor_section === "model" ? <GroupModelEditor group={draft} models={controller.models} models_loading={controller.models_loading} set_group={update_draft} /> : null}
-    {editor_section === "instruction" ? <textarea value={draft.instruction || ""} onChange={(event) => update_draft({ ...draft, instruction: event.target.value })} placeholder="Group 协作目标…" className="min-h-36 w-full resize-none border border-border bg-background px-2 py-1 font-mono text-xs leading-6 text-foreground outline-none" autoFocus /> : null}
-    {editor_section === "members" ? <div className="space-y-1">{agents.map((agent) => { const active = draft.members.some((member) => member.agent_id === agent.agent_id); return <label key={agent.agent_id} className="flex min-h-10 items-center gap-2 rounded-lg px-2.5 text-xs hover:bg-interaction-hover"><input type="checkbox" checked={active} onChange={(event) => { const members = event.target.checked ? [...draft.members, { agent_id: agent.agent_id }] : draft.members.filter((member) => member.agent_id !== agent.agent_id); if (members.length > 0) update_draft({ ...draft, members }); }} /><AgentAvatar agent={agent} class_name="size-5 rounded" /><span className="min-w-0 flex-1 truncate">{agent.agent_id}</span></label>; })}</div> : null}
-  </DetailEditorSidebar>;
+  const content = editor_section === "model" ? <GroupModelEditor group={draft} models={controller.models} models_loading={controller.models_loading} set_group={update_draft} /> : editor_section === "instruction" ? <textarea value={draft.instruction || ""} onChange={(event) => update_draft({ ...draft, instruction: event.target.value })} placeholder="Group 协作目标…" className="min-h-full w-full resize-none bg-background px-2 py-1 font-mono text-xs leading-6 text-foreground outline-none" autoFocus /> : <div className="space-y-1">{agents.map((agent) => { const active = draft.members.some((member) => member.agent_id === agent.agent_id); return <label key={agent.agent_id} className="flex min-h-10 items-center gap-2 rounded-lg px-2.5 text-xs hover:bg-interaction-hover"><input type="checkbox" checked={active} onChange={(event) => { const members = event.target.checked ? [...draft.members, { agent_id: agent.agent_id }] : draft.members.filter((member) => member.agent_id !== agent.agent_id); if (members.length > 0) update_draft({ ...draft, members }); }} /><AgentAvatar agent={agent} class_name="size-5 rounded" /><span className="min-w-0 flex-1 truncate">{agent.agent_id}</span></label>; })}</div>;
+  return <DetailEditorSidebar title={`${group.name} / ${editor_section === "model" ? "Model" : editor_section === "instruction" ? "目标" : "成员"}`} storage_key="downcity.group_config_width" default_width={400} max_width={560} on_close={close_sidebar} collapsed={collapsed} show_close={false} embedded={embedded}>{content}</DetailEditorSidebar>;
 }
 
 function GroupModelEditor({ group, models, models_loading, set_group }: { /** 当前编辑草稿。 */ group: DesktopGroupSummary; /** 可用模型。 */ models: DesktopViewController["models"]; /** 模型目录加载态。 */ models_loading: boolean; /** 更新 Group 草稿。 */ set_group(group: DesktopGroupSummary): void }) {

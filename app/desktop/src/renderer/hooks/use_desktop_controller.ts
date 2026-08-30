@@ -637,8 +637,14 @@ export function use_desktop_controller(): DesktopViewController {
   }, [active_workspace_id, select_session, workspaces]);
 
   const select_agent = useCallback((agent_id: string) => {
-    void open_agent_chat(agent_id);
-  }, [open_agent_chat]);
+    set_error("");
+    set_selection({ kind: "agent", agent_id });
+  }, []);
+
+  const select_group = useCallback((group_id: string) => {
+    set_error("");
+    set_selection({ kind: "group", group_id });
+  }, []);
 
   /** 创建分支 Session，将其加入导航列表并立即打开。 */
   const fork_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, message_id: string) => {
@@ -1181,6 +1187,7 @@ export function use_desktop_controller(): DesktopViewController {
     error,
     loading,
     select_agent,
+    select_group,
     open_agent_chat,
     select_plugin,
     set_sidebar_mode,

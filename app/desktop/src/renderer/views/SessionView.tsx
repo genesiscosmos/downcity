@@ -378,7 +378,7 @@ function AssistantMessage({ message, agent, show_reasoning, respond_interaction,
     </div>
     <div className="flex min-w-0 flex-1 flex-col gap-0 overflow-visible rounded-none pb-0 pt-0.5 text-sm text-foreground">
       <div className="mb-1 min-w-0 truncate text-xs font-medium text-foreground/85">{agent.agent_id}</div>
-      <div className="min-h-0 w-full">
+      <div className="max-w-[min(80%,42rem)] min-h-0 overflow-hidden rounded-2xl rounded-tl-none bg-muted-foreground/10 px-3 py-2">
         <AssistantContent parts={message.parts} show_reasoning={show_reasoning} respond_interaction={respond_interaction} streaming={message.status === "streaming"} />
       </div>
       {message.status === "streaming" ? <ActivityIndicator status="streaming" compact /> : show_actions ? <div className="assistant-message-menu-bar flex h-6 min-h-6 shrink-0 items-center">
