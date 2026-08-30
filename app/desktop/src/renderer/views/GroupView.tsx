@@ -72,7 +72,7 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
 
   const group_agent = agents.find((agent) => group.members.some((member) => member.agent_id === agent.agent_id)) ?? agents[0] ?? { agent_id: "group", model_id: "", version: "" };
 
-  return <ChatSurfaceLayout sidebar={session_sidebar} header_actions={<SessionSidebarButton collapsed={session_sidebar_collapsed} toggle_collapsed={toggle_session_sidebar} />} header_left={<div className="min-w-0 max-w-[min(100%,28rem)] truncate text-xs font-medium text-foreground">{format_group_session_title(session)}</div>}>
+  return <ChatSurfaceLayout sidebar={session_sidebar} reserve_shell_control={session_sidebar_collapsed} header_actions={<SessionSidebarButton collapsed={session_sidebar_collapsed} toggle_collapsed={toggle_session_sidebar} />} header_left={<div className="min-w-0 max-w-[min(100%,28rem)] truncate text-xs font-medium text-foreground">{format_group_session_title(session)}</div>}>
       <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
         <div ref={scroll_ref} className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log">
           <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">

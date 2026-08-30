@@ -156,7 +156,7 @@ export function SessionView(props: SessionViewProps) {
     });
   };
 
-  return <ChatSurfaceLayout sidebar={props.session_sidebar} header_actions={<SessionSidebarButton collapsed={props.session_sidebar_collapsed} toggle_collapsed={props.toggle_session_sidebar} />} header_left={<div className="min-w-0 max-w-[min(100%,28rem)] truncate text-xs font-medium text-foreground">{session.title || "新对话"}</div>} header_right={<div className="flex shrink-0 items-center gap-1">
+  return <ChatSurfaceLayout sidebar={props.session_sidebar} reserve_shell_control={props.session_sidebar_collapsed} header_actions={<SessionSidebarButton collapsed={props.session_sidebar_collapsed} toggle_collapsed={props.toggle_session_sidebar} />} header_left={<div className="min-w-0 max-w-[min(100%,28rem)] truncate text-xs font-medium text-foreground">{session.title || "新对话"}</div>} header_right={<div className="flex shrink-0 items-center gap-1">
       {is_agent_typing(runtime?.status) ? <span className="mr-1 flex items-center gap-1 text-[10px] text-primary"><span className="thinking-dots-icon is-highlighted" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <span key={index} className="thinking-dot" />)}</span>正在回复</span> : null}
         {props.rename_session && props.archive_session && props.remove_session ? <SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<button type="button" className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground" title="对话操作" aria-label="对话操作"><TbDots className="size-4" /></button>} /> : null}
       </div>}

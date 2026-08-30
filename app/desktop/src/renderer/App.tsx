@@ -8,21 +8,20 @@ import { use_desktop_controller } from "@/hooks/use_desktop_controller";
 import { NavigationSidebar } from "@/layouts/NavigationSidebar";
 import { SettingsSidebar } from "@/layouts/SettingsSidebar";
 import { get_session_key } from "@/types/DesktopView";
+import type { SettingsSection } from "@/types/DesktopView";
+import type { DesktopAgentSummary, DesktopGroupSummary, DesktopSessionSummary } from "@common/types/DesktopApi";
 import { SessionView } from "@/views/SessionView";
 import { SettingsView } from "@/views/SettingsView";
 import { PluginView } from "@/views/PluginView";
 import { WelcomeView } from "@/views/WelcomeView";
 import { WorkspaceView } from "@/views/WorkspaceView";
 import { WorkspaceFileView } from "@/views/WorkspaceFileView";
-import { BayBar, type BayBarState } from "@/layouts/BayBar";
+import { MainViewBayBarFrame } from "@/layouts/BayBar";
 import { GroupConfigView, GroupInfoSidebar, GroupView, type GroupEditorSection } from "@/views/GroupView";
 import { AgentInfoSidebar, AgentView, type AgentEditorSection } from "@/views/AgentView";
 import { MainViewBody, MainViewHeaderProvider, MainViewLayout } from "@/layouts/MainViewLayout";
 import { AgentChatSessionSidebar, GroupChatSessionSidebar } from "@/layouts/ChatSessionSidebar";
 import { ShellSidebarControl } from "@/layouts/ShellSidebarControl";
-
-/** 当前右侧面板。面板由根应用统一拥有，保证同一时间只有一个面板可见。 */
-type RightPanelState = BayBarState & { section: AgentEditorSection | GroupEditorSection | "global_env" };
 
 /** Desktop 根组件。 */
 export function App() {
@@ -33,13 +32,6 @@ export function App() {
   const [sidebar_collapsed, set_sidebar_collapsed] = useState(false);
   const [chat_session_sidebar_collapsed, set_chat_session_sidebar_collapsed] = useState(() => localStorage.getItem("downcity.chat_session_sidebar_collapsed") === "true");
   const [command_palette_open, set_command_palette_open] = useState(false);
-  const [right_panel, set_right_panel] = useState<RightPanelState>({ open: false, active_tab: "agent_config", section: "model" });
-  const open_agent_config = (section: AgentEditorSection) => set_right_panel({ open: true, active_tab: "agent_config", section });
-  const open_group_config = (section: GroupEditorSection) => set_right_panel({ open: true, active_tab: "group_config", section });
-  const open_global_env = () => {
-    void controller.list_global_env();
-    set_right_panel({ open: true, active_tab: "global_env", section: "global_env" });
-  };
   const open_group_from_sidebar = (group_id: string) => controller.select_group(group_id);
   const toggle_chat_session_sidebar = () => set_chat_session_sidebar_collapsed((current) => {
     localStorage.setItem("downcity.chat_session_sidebar_collapsed", String(!current));
@@ -49,17 +41,6 @@ export function App() {
   const selected_agent = current_selection?.kind === "agent" || current_selection?.kind === "session" || current_selection?.kind === "draft"
     ? controller.agents.find((agent) => agent.agent_id === current_selection.agent_id)
     : undefined;
-  const selected_group = current_selection?.kind === "group"
-    ? controller.groups.find((group) => group.group_id === current_selection.group_id)
-    : undefined;
-  const baybar_visible = right_panel.open;
-  const baybar_available = current_selection?.kind === "agent" || current_selection?.kind === "draft" || current_selection?.kind === "session" || current_selection?.kind === "group" || (current_selection?.kind === "settings" && current_selection.section === "general");
-  useEffect(() => {
-    if (current_selection?.kind === "settings" && current_selection.section !== "general") set_right_panel((current) => ({ ...current, open: false }));
-    else if ((current_selection?.kind === "agent" || current_selection?.kind === "group") && right_panel.active_tab === "global_env") set_right_panel((current) => ({ ...current, open: false }));
-    else if (current_selection?.kind !== "agent" && current_selection?.kind !== "group" && current_selection?.kind !== "settings") set_right_panel((current) => ({ ...current, open: false }));
-  }, [current_selection?.kind, current_selection?.kind === "agent" ? current_selection.agent_id : current_selection?.kind === "group" ? current_selection.group_id : current_selection?.kind === "settings" ? current_selection.section : undefined, right_panel.active_tab]);
-  const open_baybar = () => set_right_panel((current) => ({ ...current, open: true }));
 
   useEffect(() => {
     const handle_key_down = (event: KeyboardEvent) => {
@@ -102,7 +83,7 @@ export function App() {
   }, [controller]);
 
   const render_main_view = () => {
-    if (controller.selection?.kind === "settings") return <SettingsView controller={controller} section={controller.selection.section} open_global_env={open_global_env} />;
+    if (controller.selection?.kind === "settings") return <SettingsMainView key={`settings:${controller.selection.section}`} controller={controller} section={controller.selection.section} sidebar_collapsed={sidebar_collapsed} />;
     if (controller.selection?.kind === "plugin") {
       const plugin_id = controller.selection.plugin_id;
       const plugin = controller.plugins.find((item) => item.plugin_id === plugin_id);
@@ -132,7 +113,7 @@ export function App() {
       const group = controller.groups.find((item) => item.group_id === group_selection.group_id);
       const session = group?.sessions.find((item) => item.session_id === group_selection.session_id);
       if (!group || !session) return <WelcomeView />;
-      return <GroupView
+      return <MainViewBayBarFrame key={`group_session:${group.group_id}:${session.session_id}`} view_key={`group_session:${group.group_id}:${session.session_id}`} sidebar_collapsed={sidebar_collapsed} active_tab="group_config" baybar_content={<GroupInfoSidebar group={group} agents={controller.agents} controller={controller} section="model" embedded close_sidebar={() => undefined} />} >{() => <GroupView
         group={group}
         workspace_id={group_selection.workspace_id}
         session={session}
@@ -150,12 +131,12 @@ export function App() {
         session_sidebar_collapsed={chat_session_sidebar_collapsed}
         toggle_session_sidebar={toggle_chat_session_sidebar}
         session_sidebar={<GroupChatSessionSidebar group={group} controller={controller} collapsed={chat_session_sidebar_collapsed} toggle_collapsed={toggle_chat_session_sidebar} />}
-      />;
+      />}</MainViewBayBarFrame>;
     }
     if (controller.selection?.kind === "group") {
       const group_selection = controller.selection;
       const group = controller.groups.find((item) => item.group_id === group_selection.group_id);
-      return group ? <GroupConfigView group={group} agents={controller.agents} open_config={open_group_config} /> : <WelcomeView />;
+      return group ? <GroupMainView key={`group:${group.group_id}`} group={group} controller={controller} sidebar_collapsed={sidebar_collapsed} /> : <WelcomeView />;
     }
     if (!controller.selection || !selected_agent) return <WelcomeView />;
     if (controller.selection.kind === "agent") {
@@ -163,21 +144,13 @@ export function App() {
       const main_session = main_context
         ? (controller.sessions_by_workspace[main_context.workspace_id] ?? []).find((item) => item.agent_id === selected_agent.agent_id && item.session.session_id === main_context.session_id)
         : undefined;
-      return <AgentView
-        agent={selected_agent}
-        workspaces={controller.workspaces}
-        plugins={controller.plugins}
-        main_session={main_session ? { workspace_id: main_context!.workspace_id, session: main_session.session } : undefined}
-        controller={controller}
-        open_main_session={() => controller.open_agent_chat(selected_agent.agent_id)}
-        open_config={open_agent_config}
-      />;
+      return <AgentMainView key={`agent:${selected_agent.agent_id}`} agent={selected_agent} controller={controller} sidebar_collapsed={sidebar_collapsed} main_session={main_session ? { workspace_id: main_context!.workspace_id, session: main_session.session } : undefined} />;
     }
     if (controller.selection.kind === "draft") {
       const draft_id = controller.selection.draft_id;
       const workspace_id = controller.selection.workspace_id;
       const draft_key = get_session_key(workspace_id, selected_agent.agent_id, draft_id);
-      return <SessionView
+      return <MainViewBayBarFrame key={`agent_draft:${selected_agent.agent_id}:${draft_id}`} view_key={`agent_draft:${selected_agent.agent_id}:${draft_id}`} sidebar_collapsed={sidebar_collapsed} active_tab="agent_config" baybar_content={<AgentInfoSidebar agent={selected_agent} plugins={controller.plugins} controller={controller} section="model" embedded close_sidebar={() => undefined} />}>{() => <SessionView
         workspace_id={workspace_id}
         agent={selected_agent}
         workspace={controller.workspaces.find((workspace) => workspace.workspace_id === workspace_id) ?? { workspace_id, workspace_path: "", name: workspace_id }}
@@ -211,7 +184,7 @@ export function App() {
         remove_queued_message={() => undefined}
         move_queued_message={() => undefined}
         load_earlier_history={async () => undefined}
-      />;
+      />}</MainViewBayBarFrame>;
     }
     const selected_session_id = controller.selection.session_id;
     const workspace_id = controller.selection.workspace_id;
@@ -222,7 +195,7 @@ export function App() {
       selected_agent.agent_id,
       session.session_id,
     );
-    return <SessionView
+    return <MainViewBayBarFrame key={`agent_session:${selected_agent.agent_id}:${session.session_id}`} view_key={`agent_session:${selected_agent.agent_id}:${session.session_id}`} sidebar_collapsed={sidebar_collapsed} active_tab="agent_config" baybar_content={<AgentInfoSidebar agent={selected_agent} plugins={controller.plugins} controller={controller} section="model" embedded close_sidebar={() => undefined} />}>{() => <SessionView
       chat_surface="agent"
       workspace_id={workspace_id}
       agent={selected_agent}
@@ -264,7 +237,7 @@ export function App() {
       remove_queued_message={(message_id) => controller.remove_queued_message(workspace_id, selected_agent.agent_id, session.session_id, message_id)}
       move_queued_message={(message_id, direction) => controller.move_queued_message(workspace_id, selected_agent.agent_id, session.session_id, message_id, direction)}
       load_earlier_history={() => controller.load_earlier_history(workspace_id, selected_agent.agent_id, session.session_id)}
-    />;
+    />}</MainViewBayBarFrame>;
   };
 
   return <div className="fixed inset-0 flex h-full min-h-0 w-full overflow-hidden bg-muted">
@@ -279,15 +252,7 @@ export function App() {
           collapsed={sidebar_collapsed}
         />}
       <main className="main-view-shell relative flex h-full min-w-0 flex-1 bg-background">
-        <MainViewHeaderProvider value={{ sidebar_collapsed, baybar_available, baybar_open: baybar_visible, open_baybar }}><div className="flex h-full min-w-0 flex-1 flex-col">{render_main_view()}</div></MainViewHeaderProvider>
-        <BayBar
-          state={right_panel}
-          agent_config_content={selected_agent && right_panel.active_tab === "agent_config" ? <AgentInfoSidebar agent={selected_agent} plugins={controller.plugins} controller={controller} section={right_panel.section as AgentEditorSection} embedded close_sidebar={() => set_right_panel((current) => ({ ...current, open: false }))} /> : undefined}
-          group_config_content={selected_group && right_panel.active_tab === "group_config" ? <GroupInfoSidebar group={selected_group} agents={controller.agents} controller={controller} section={right_panel.section as GroupEditorSection} embedded close_sidebar={() => set_right_panel((current) => ({ ...current, open: false }))} /> : undefined}
-          global_env_content={current_selection?.kind === "settings" && current_selection.section === "general" ? <GlobalEnvEditor controller={controller} /> : undefined}
-          on_active_tab_change={(active_tab) => set_right_panel((current) => ({ ...current, active_tab, open: true }))}
-          on_close={() => set_right_panel((current) => ({ ...current, open: false }))}
-        />
+        <MainViewHeaderProvider value={{ sidebar_collapsed, baybar_available: false, baybar_open: false }}><div className="flex h-full min-w-0 flex-1 flex-col">{render_main_view()}</div></MainViewHeaderProvider>
       </main>
     </div>
     <ShellSidebarControl collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} />
@@ -296,6 +261,30 @@ export function App() {
     {create_workspace_dialog_open ? <CreateWorkspaceDialog close_dialog={() => set_create_workspace_dialog_open(false)} create_workspace={controller.create_workspace} /> : null}
     {command_palette_open ? <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/25 pt-[18vh]" onMouseDown={() => set_command_palette_open(false)}><div className="w-[min(34rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-popover p-2 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { set_command_palette_open(false); controller.open_settings("user"); }}>打开设置 <span className="ml-auto text-xs text-muted-foreground">⌘,</span></button><button type="button" className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { set_command_palette_open(false); set_sidebar_collapsed((value) => !value); }}>切换左侧边栏 <span className="ml-auto text-xs text-muted-foreground">⌘B</span></button></div></div> : null}
   </div>;
+}
+
+/** Agent MainView 独立拥有配置 BayBar 的状态与编辑分区。 */
+function AgentMainView({ agent, controller, sidebar_collapsed, main_session }: { /** 当前 Agent。 */ agent: DesktopAgentSummary; /** Desktop 根控制器。 */ controller: ReturnType<typeof use_desktop_controller>; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean; /** Agent 主对话。 */ main_session?: { workspace_id: string; session: DesktopSessionSummary } }) {
+  const [section, set_section] = useState<AgentEditorSection>("model");
+  return <MainViewBayBarFrame view_key={`agent:${agent.agent_id}`} sidebar_collapsed={sidebar_collapsed} active_tab="agent_config" baybar_content={<AgentInfoSidebar agent={agent} plugins={controller.plugins} controller={controller} section={section} embedded close_sidebar={() => undefined} />}>
+    {(open_baybar) => <AgentView agent={agent} workspaces={controller.workspaces} plugins={controller.plugins} main_session={main_session} controller={controller} open_main_session={() => controller.open_agent_chat(agent.agent_id)} open_config={(next_section) => { set_section(next_section); open_baybar(); }} />}
+  </MainViewBayBarFrame>;
+}
+
+/** Group MainView 独立拥有配置 BayBar 的状态与编辑分区。 */
+function GroupMainView({ group, controller, sidebar_collapsed }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** Desktop 根控制器。 */ controller: ReturnType<typeof use_desktop_controller>; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean }) {
+  const [section, set_section] = useState<GroupEditorSection>("model");
+  return <MainViewBayBarFrame view_key={`group:${group.group_id}`} sidebar_collapsed={sidebar_collapsed} active_tab="group_config" baybar_content={<GroupInfoSidebar group={group} agents={controller.agents} controller={controller} section={section} embedded close_sidebar={() => undefined} />}>
+    {(open_baybar) => <GroupConfigView group={group} agents={controller.agents} open_config={(next_section) => { set_section(next_section); open_baybar(); }} />}
+  </MainViewBayBarFrame>;
+}
+
+/** Settings MainView 仅在 General 页面拥有自己的 Global Env BayBar。 */
+function SettingsMainView({ controller, section, sidebar_collapsed }: { /** Desktop 根控制器。 */ controller: ReturnType<typeof use_desktop_controller>; /** 当前设置分区。 */ section: SettingsSection; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean }) {
+  if (section !== "general") return <SettingsView controller={controller} section={section} open_global_env={() => undefined} />;
+  return <MainViewBayBarFrame view_key="settings:general" sidebar_collapsed={sidebar_collapsed} active_tab="global_env" baybar_content={<GlobalEnvEditor controller={controller} />}>
+    {(open_baybar) => <SettingsView controller={controller} section={section} open_global_env={() => { void controller.list_global_env(); open_baybar(); }} />}
+  </MainViewBayBarFrame>;
 }
 
 /** BayBar 中的 Global Env 原文编辑器。 */
