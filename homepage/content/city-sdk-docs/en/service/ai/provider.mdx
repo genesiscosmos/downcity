@@ -1,22 +1,19 @@
 ---
-title: AIChannel and Model Registration
-description: Connect upstream AI capabilities with AIChannel and register Federation models with AIModelSpec.
+title: AIChannel and Provider Adapters
+description: Connect upstream models through Downcity Model Protocol.
 ---
 
-`AIChannel` is the server-side execution channel for an upstream AI capability. It owns credentials, upstream model selection, server-side AI SDK `providerOptions`, and execution of the standard `LanguageModelV3` stream.
+`AIChannel` owns only Federation's upstream execution boundary. It accepts `AIChannelStreamInput` and returns a `ReadableStream<ModelStreamEvent>`. Fallback, billing, Sessions, and tool execution do not belong to the Channel.
 
-An `AIChannel` is not an AI SDK Provider. AI SDK Providers are vendor factories returned by functions such as `createOpenAI()` and `createDeepSeek()`. An `AIChannel` is Downcity's Federation boundary around those capabilities.
-
-## Minimal example
+## OpenAI-compatible upstream
 
 ```ts
-import { createDeepSeek } from "@ai-sdk/deepseek";
 import {
   AIChannel,
   AIService,
-  read_required_env,
+  stream_openai_compatible_model,
   type AIChannelStreamInput,
-  type LanguageModelV3StreamResult,
+  type AIChannelStreamResult,
 } from "@downcity/federation";
 
 class DeepSeekChannel extends AIChannel {
@@ -25,104 +22,48 @@ class DeepSeekChannel extends AIChannel {
       id: "deepseek",
       env_key: "DEEPSEEK_API_KEY",
       base_url: "https://api.deepseek.com/v1",
-      ai_sdk_provider_id: "deepseek",
     });
   }
 
   protected async stream(
     input: AIChannelStreamInput,
-  ): Promise<LanguageModelV3StreamResult> {
-    const deepseek = createDeepSeek({
-      apiKey: read_required_env(input, this.env_key ?? ""),
-      baseURL: this.base_url,
+  ): Promise<AIChannelStreamResult> {
+    const api_key = input.env("DEEPSEEK_API_KEY");
+    if (!api_key) throw new Error("DEEPSEEK_API_KEY is required");
+    return stream_openai_compatible_model(input, {
+      api_key,
+      base_url: this.base_url ?? "https://api.deepseek.com/v1",
     });
-    return deepseek(input.model.upstream_model).doStream(input.call);
   }
 }
 
-const deepseek_channel = new DeepSeekChannel();
+const channel = new DeepSeekChannel();
 const ai = new AIService();
-
-ai.use(deepseek_channel.model({
+ai.use(channel.model({
   id: "deepseek-v4-flash",
   upstream_model: "deepseek-chat",
   name: "DeepSeek V4 Flash",
   context_window: 128_000,
-  tags: ["text"],
 }));
-
 federation.use(ai);
 ```
 
-`upstream_model` belongs to each model. One Channel can register multiple Federation models that target different upstream model IDs.
+`stream_openai_compatible_model()` is a boundary adapter. It maps `ModelCall` to Chat Completions and converts upstream SSE into Downcity events. A private vendor protocol should provide its own adapter with the same input and output contract.
 
-## Data lifecycle
+## In-process ModelClient
 
-```text
-AIChannelOptions
-  -> AIChannel
-  -> AIModelSpec
-  -> AIModelDefinition
-  -> CityModelDescriptor
-  -> CityModel + LanguageModelV3
-```
-
-- `AIChannelOptions`: Channel connection configuration, including `id`, `env_key`, `base_url`, `ai_sdk_provider_id`, and default `ai_sdk_provider_options`.
-- `AIModelSpec`: input to `channel.model()`, including the Federation ID, `upstream_model`, catalog fields, reasoning, fallback, and model options.
-- `AIModelDefinition`: complete AIService runtime model with `channel_id`, the unified `runtime` field, and private connection data.
-- `CityModelDescriptor`: public `/v1/ai/models` catalog data without secrets, upstream IDs, or providerOptions.
-- `CityModel`: an executable client object that combines descriptor fields with AI SDK `LanguageModelV3`.
-
-Set `ai_sdk_provider_id` when the Channel uses AIChannel's default reasoning mapping. It must match the providerOptions namespace, such as `openai`, `deepseek`, or `anthropic`. A custom protocol can override `build_reasoning_provider_options(input)` instead.
-
-## One language execution path
-
-Every language entry point eventually calls the same `AIChannel.stream(input)`:
-
-```text
-city.ai.text()            -> AI SDK generateText -> AIChannel.stream
-city.ai.stream()          -> CityModel.doStream  -> AIChannel.stream
-CityModel.doGenerate()    -> CityModel.doStream  -> AIChannel.stream
-/v1/ai/chat/completions   -> OpenAI adapter      -> AIChannel.stream
-```
-
-`/chat/completions` is no longer a raw passthrough, and there is no `AIChannel.openai()`. AIService converts OpenAI messages, tools, tool choice, and generation settings into `LanguageModelV3CallOptions`, then converts the standard stream back to OpenAI JSON or SSE.
-
-## AI SDK providerOptions
-
-Both the Channel and a model can declare private server-side options:
+For local Agent use without Federation:
 
 ```ts
-const openai_channel = new OpenAIResponsesChannel({
-  id: "openai",
-  env_key: "OPENAI_API_KEY",
-  ai_sdk_provider_id: "openai",
-  ai_sdk_provider_options: {
-    openai: { store: true, serviceTier: "default" },
-  },
+const model = create_openai_compatible_model({
+  id: "deepseek-chat",
+  upstream_model: "deepseek-chat",
+  base_url: "https://api.deepseek.com/v1",
+  api_key: process.env.DEEPSEEK_API_KEY!,
 });
-
-ai.use(openai_channel.model({
-  id: "gpt-5.6-luna",
-  upstream_model: "gpt-5.6-luna",
-  name: "GPT-5.6 Luna",
-  ai_sdk_provider_options: {
-    openai: { store: false, serviceTier: "priority" },
-  },
-}));
 ```
-
-The merge order is:
-
-```text
-Channel defaults < model overrides < AIService-validated reasoning options
-```
-
-These options are not published in the model catalog, and client-supplied CityModel `providerOptions` are not accepted as upstream options. OpenAI Responses `store` controls server-side application-state retention; it is not a prompt-cache switch.
 
 ## Reasoning and fallback
-
-`reasoning` and `fallback` belong to a model:
 
 ```ts
 ai.use(channel.model({
@@ -134,29 +75,12 @@ ai.use(channel.model({
     default_effort: "high",
   },
   fallback: [{
-    match: (media) => media.media_type.startsWith("image/"),
+    match: (file) => file.media_type.startsWith("image/"),
     model_id: "vision-model",
   }],
 }));
 ```
 
-AIService resolves fallback first, then validates reasoning against the final model. The trusted result is available as `input.reasoning`; AIChannel injects its mapped providerOptions into `input.call` before invoking `stream()`.
+AIService passes only files from the latest user message to fallback rules. It validates reasoning after selecting the final model and sends the complete, unchanged `ModelCall` to that model's Channel.
 
-## Images and other modalities
-
-Language models use `stream()`. Images, video, TTS, and ASR remain explicit Channel methods: `image_create()`, `image_fetch()`, `video()`, `tts()`, and `asr()`.
-
-Image Channels return `AIImageCreateResult` and `AIImageResult`. AIService owns `async_jobs` storage, Queue scheduling, state persistence, and idempotent billing; the Channel only adapts the upstream protocol to the standard result.
-
-## Fields and methods
-
-| Member | Purpose |
-|---|---|
-| `id` | Unique Channel ID within the Federation |
-| `env` / `env_key` | Declare and read Federation env values |
-| `base_url` | Upstream API root used by the Channel subclass |
-| `stream(input)` | The single language-model execution entry point |
-| `input.call` | Sanitized V3 call with server-side providerOptions |
-| `input.model` | Final Federation model ID and upstream model ID |
-| `model(spec)` | Convert `AIModelSpec` into a registerable `AIModelDefinition` |
-| `bill(input)` | Produce an optional charge draft from scoped `AIBillInput` |
+Channel and model `provider_options` are merged only on the server and interpreted by the selected Adapter. They are not part of the public model protocol.

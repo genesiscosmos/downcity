@@ -128,6 +128,10 @@ export type {
 
 export { AIService } from "./service/ai/ai-service.js";
 export { AIChannel } from "./service/ai/AIChannel.js";
+export {
+  create_openai_compatible_model,
+  stream_openai_compatible_model,
+} from "./service/ai/OpenAICompatibleModelAdapter.js";
 export { read_resolved_reasoning } from "./service/ai/reasoning.js";
 export { calculate_model_price, select_model_pricing } from "./service/ai/model-pricing.js";
 
@@ -138,13 +142,10 @@ export type {
   AIChannelStreamInput,
   AIModelSpec,
   AIModelDefinition,
-  AIModelFallbackMedia,
   AIModelFallbackRule,
   AIServiceOptions,
-  LanguageModelV3,
-  LanguageModelV3CallOptions,
-  LanguageModelV3StreamResult,
-  AISDKProviderOptions,
+  AIChannelStreamResult,
+  AIProviderRequestMetadata,
   AIResolvedReasoning,
   AICharge,
   AICreditsBridge,
@@ -152,9 +153,18 @@ export type {
   AIBill,
   AIBillInput,
   AIChargedResult,
+  AIActionFilePart,
+  AIActionMessage,
+  AIActionMessagePart,
+  AIActionTextPart,
   AIImageCreateResult,
   AIImageResult,
 } from "./types/AI.js";
+
+export type {
+  OpenAICompatibleModelAdapterOptions,
+  OpenAICompatibleModelClientOptions,
+} from "./types/OpenAICompatibleModel.js";
 
 export type {
   AIMeteringStatus,
@@ -197,9 +207,7 @@ export type {
 } from "./pact/invoker/credits/types.js";
 
 export {
-  buildAssistantMessage,
-  buildImageMessage,
-  buildToolSet,
+  build_image_message,
   isRecord,
   normalizeAIUsage,
   readErrorMessage,
@@ -211,11 +219,7 @@ export {
   trimTrailingSlash,
 } from "./service/ai/helpers.js";
 
-export type {
-  BuildAssistantMessageResult,
-  ExtractedImage,
-  ToolCallShape,
-} from "./service/ai/helpers.js";
+export type { ExtractedImage } from "./service/ai/helpers.js";
 
 // ===========================================================================
 // 场景 3：用户鉴权与 Token
@@ -320,7 +324,6 @@ export type {
   UserServiceSummary,
   UserStreamChunk,
   UserStreamResult,
-  UserTextResult,
   UserVideoResult,
 } from "./pact/user/types.js";
 

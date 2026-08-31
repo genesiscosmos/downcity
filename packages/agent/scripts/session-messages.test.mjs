@@ -20,8 +20,8 @@ import {
   to_executor_history,
   to_executor_ui_message,
 } from "../bin/session/messages/SessionMessageCodec.js";
-import { convertToModelMessages } from "ai";
-import { MockLanguageModelV3 } from "ai/test";
+import { to_model_messages } from "../bin/executor/messages/SessionMessageCodec.js";
+import { MockModelClient } from "./ModelClientMock.mjs";
 
 /** 可暂停一次 Assistant 草稿写入，用于稳定复现并发写入顺序。 */
 class PausingAssistantMessageStore extends JsonlSessionMessageStore {
@@ -447,7 +447,7 @@ test("AI SDK 流式 metadata、source、data、step 和审批状态完整持久�
   );
 });
 
-test("UI Tool Provider metadata 经 Session roundtrip 后恢复为 ModelMessage providerOptions", async () => {
+test("Session Tool roundtrip 生成 Downcity tool_call 与 tool_result", async () => {
   const parts = from_ui_assistant_parts([{
     type: "dynamic-tool",
     toolName: "lookup",
@@ -489,19 +489,14 @@ test("UI Tool Provider metadata 经 Session roundtrip 后恢复为 ModelMessage 
   });
   assert.equal(restored.parts[0].providerExecuted, false);
 
-  const model_messages = await convertToModelMessages([restored]);
+  const model_messages = await to_model_messages([restored], {});
   const model_parts = model_messages.flatMap((message) =>
     Array.isArray(message.content) ? message.content : []
   );
-  const tool_call = model_parts.find((part) => part.type === "tool-call");
-  const tool_result = model_parts.find((part) => part.type === "tool-result");
-  assert.equal(tool_call.toolCallId, "call_1");
-  assert.deepEqual(tool_call.providerOptions, {
-    openai: { itemId: "fc_1" },
-  });
-  assert.deepEqual(tool_result.providerOptions, {
-    openai: { itemId: "fc_1" },
-  });
+  const tool_call = model_parts.find((part) => part.type === "tool_call");
+  const tool_result = model_parts.find((part) => part.type === "tool_result");
+  assert.equal(tool_call.tool_call_id, "call_1");
+  assert.equal(tool_result.tool_call_id, "call_1");
 
   const typed_parts = from_ui_assistant_parts([{
     type: "tool-lookup",
@@ -541,15 +536,13 @@ test("UI Tool Provider metadata 经 Session roundtrip 后恢复为 ModelMessage 
       resultProviderMetadata: { openai: { resultId: "result_3" } },
     }]),
   });
-  const provider_model_messages = await convertToModelMessages([
+  const provider_model_messages = await to_model_messages([
     provider_executed,
-  ]);
+  ], {});
   const provider_result = provider_model_messages
     .flatMap((message) => Array.isArray(message.content) ? message.content : [])
-    .find((part) => part.type === "tool-result");
-  assert.deepEqual(provider_result.providerOptions, {
-    openai: { resultId: "result_3" },
-  });
+    .find((part) => part.type === "tool_result");
+  assert.equal(provider_result.tool_call_id, "call_3");
 });
 
 test("SessionMessage 保留稳定语义并归一化 AI SDK 原生审批字段", () => {
@@ -1616,7 +1609,7 @@ test("compact 把 Active 前缀关闭为带累计 Summary 的 Segment", async ()
       }],
     });
   }
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "compact-model",
     doGenerate: async (options) => {
       prompts.push(JSON.stringify(options.prompt));
@@ -1761,7 +1754,7 @@ test("连续 Compact 生成按 sequence 连续的 Segment 与累计 Summary", as
   const { recorder } = await create_recorder(session_id);
   const prompts = [];
   let generation_count = 0;
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "cumulative-compact-model",
     doGenerate: async (options) => {
       prompts.push(JSON.stringify(options.prompt));
@@ -1833,7 +1826,7 @@ test("Summary 生成失败时拒绝归档并保留 Active", async () => {
       }],
     });
   }
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "failed-compact-model",
     doGenerate: async () => {
       throw new Error("summary unavailable");
@@ -1843,7 +1836,7 @@ test("Summary 生成失败时拒绝归档并保留 Active", async () => {
     compact_messages(recorder, session_id, model),
     /summary unavailable/,
   );
-  const empty_summary_model = new MockLanguageModelV3({
+  const empty_summary_model = new MockModelClient({
     modelId: "empty-compact-model",
     doGenerate: async () => ({
       content: [],

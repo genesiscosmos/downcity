@@ -11,7 +11,7 @@ import type { Agent } from "@/agent/Agent.js";
 import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
 import type { PluginSnapshot } from "@/types/plugin/PluginState.js";
 import type { WorkspaceBase } from "@downcity/workspace";
-import type { SystemModelMessage } from "ai";
+import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import type { RpcEventFrame } from "@/city/transport/types/RpcProtocol.js";
 import type { AgentSessionModelResolver } from "@/city/transport/types/AgentSessionModelResolver.js";
 
@@ -80,7 +80,7 @@ export interface RpcAgentContext {
     session_id: string;
     /** system message profile。 */
     profile?: "chat" | "task";
-  }) => Promise<SystemModelMessage[]>;
+  }) => Promise<SessionSystemMessage[]>;
 }
 
 /**

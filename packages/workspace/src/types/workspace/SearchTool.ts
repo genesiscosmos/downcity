@@ -7,7 +7,7 @@
  * - 两个工具都受 Shell 项目根目录约束，不允许搜索根目录之外的路径。
  */
 
-import type { Tool } from "ai";
+import type { RuntimeTool } from "@downcity/type";
 
 /** 搜索工具支持的结构化错误码。 */
 export type SearchToolErrorCode =
@@ -134,7 +134,7 @@ export type SearchToolActionRequest = (
       input: FindToolInput;
     }
 ) & {
-  /** AI SDK 传入的单次工具调用中止信号。 */
+  /** 当前单次工具调用的中止信号。 */
   abort_signal?: AbortSignal;
 };
 
@@ -150,7 +150,7 @@ export interface SearchToolRunner {
 /** `@downcity/workspace` 对模型暴露的项目搜索工具集合。 */
 export interface SearchToolSet {
   /** 通过 ripgrep 搜索项目文件内容。 */
-  grep: Tool;
+  grep: RuntimeTool;
   /** 通过 glob 模式发现项目文件。 */
-  find: Tool;
+  find: RuntimeTool;
 }

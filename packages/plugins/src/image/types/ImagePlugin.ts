@@ -3,12 +3,12 @@
  *
  * 关键点（中文）
  * - 这里仅定义图片 plugin 对图片能力的最低层协议，不绑定 city 或任意上游 provider。
- * - 图片成功结果使用 AI SDK UIMessage，保证 session 落盘格式与现有消息系统一致。
+ * - 图片成功结果使用 Downcity Session 消息，保证结果可直接写入会话时间线。
  * - 字段保持 JSON 可序列化，便于通过 Plugin Action 与 Tool 传递。
  */
 
-import type { UIMessage } from "ai";
 import type {
+  ActionResultMessage,
   JsonObject,
   JsonValue,
 } from "@downcity/agent";
@@ -151,7 +151,7 @@ export interface ImagePluginResolvedInput {
 /**
  * ImagePlugin 图片成功结果。
  */
-export type ImagePluginResult = UIMessage;
+export type ImagePluginResult = ActionResultMessage;
 
 /**
  * 图片结果本地存储输入。
@@ -161,7 +161,7 @@ export interface ImagePluginResultStorageInput {
   context: PluginContext;
   /** 当前图片任务 ID，用于划分稳定的本地结果目录。 */
   job_id: string;
-  /** City 或 provider 返回的原始图片 UIMessage。 */
+  /** City 或 provider 返回的原始 Downcity Session 消息。 */
   result: ImagePluginResult;
   /** 当前 Session Turn 的可选取消信号。 */
   abort_signal?: AbortSignal;
@@ -171,7 +171,7 @@ export interface ImagePluginResultStorageInput {
  * 图片结果本地存储输出。
  */
 export interface ImagePluginResultStorageResult {
-  /** 已将可下载远程图片替换为本地 Workspace 路径的 UIMessage。 */
+  /** 已将可下载远程图片替换为本地 Workspace 路径的 Downcity Session 消息。 */
   result: ImagePluginResult;
   /** 未能完成本地化的图片错误；对应 File Part 会保留远程 URL。 */
   errors: string[];
@@ -206,7 +206,7 @@ export interface ImagePluginJobResult {
   job_id: string;
   /** 当前任务状态。 */
   status: ImagePluginJobStatus;
-  /** 成功时返回的 AI SDK UIMessage。 */
+  /** 成功时返回的 Downcity Session 消息。 */
   result?: ImagePluginResult;
   /** 失败时返回的错误消息。 */
   error?: string;

@@ -22,8 +22,7 @@ Admin GET                GET  /v1/{service}/{action}
 
 | 路由 | 方法 | 用途 |
 | --- | --- | --- |
-| `/v1/ai/text` | `POST` | 文本生成（SDK 通路） |
-| `/v1/ai/stream` | `POST` | CityModel LanguageModelV3 模型流 |
+| `/v1/ai/stream` | `POST` | Downcity Model Protocol 模型流 |
 | `/v1/ai/image/create` | `POST` | 创建图片生成任务 |
 | `/v1/ai/image/result` | `POST` | 查询图片生成任务 |
 | `/v1/ai/video` | `POST` | 视频生成 |
@@ -129,53 +128,26 @@ Content-Type: application/json
 }
 ```
 
-### `POST /v1/ai/text`
-
-请求（SDK 通路）：
-
-```json
-{
-  "model": "deepseek-v4-flash",
-  "prompt": "写一段欢迎语",
-  "reasoning_effort": "high"
-}
-```
-
-`reasoning_effort` 可选，但传入时必须匹配模型目录中的 `reasoning.efforts[].id`。请求经过模型 fallback 时，AIService 会按照最终执行模型重新校验该档位。
-
-返回：
-
-```json
-{
-  "id": "msg_xxx",
-  "role": "assistant",
-  "parts": [
-    { "type": "text", "text": "欢迎使用 Downcity" }
-  ]
-}
-```
-
 ### `POST /v1/ai/stream`
 
-这是 `CityModel` 使用的版本化 LanguageModelV3 transport。请求包含协议版本、模型
-ID 和标准模型调用参数：
+这是 `CityModel` 使用的版本化 Downcity Model Protocol transport。请求包含协议版本、模型 ID 和标准 `ModelCall`：
 
 ```json
 {
-  "protocol": "downcity-language-model-v1",
+  "protocol_version": 1,
   "model_id": "deepseek-v4-flash",
   "call": {
-    "prompt": [
+    "messages": [
       { "role": "user", "content": [{ "type": "text", "text": "你好" }] }
-    ]
-  },
-  "reasoning_effort": "high"
+    ],
+    "reasoning": { "enabled": true, "effort": "high" }
+  }
 }
 ```
 
-Federation 通过 SSE 返回版本化 `LanguageModelV3StreamPart`。产品代码不应手写该
-transport 请求：把模型目录返回的 `CityModel` 交给 Agent / AI SDK，或者调用
-`city.ai.stream()`。后者在客户端将同一模型流转换成 `UIMessageChunk`。
+Federation 通过 SSE 返回 `{ "protocol_version": 1, "event": ModelStreamEvent }`。产品代码通常把模型目录返回的 `CityModel` 交给 Agent，或调用 `city.ai.stream({ model, call })`；两者都直接消费同一标准事件流。
+
+`reasoning.effort` 必须匹配最终执行模型目录中的 `reasoning.efforts[].id`。发生 fallback 时，AIService 按最终模型重新校验该档位。
 
 AI 请求的用户和 Bureau 身份完全由 bearer `user_token` 解析，请求体不参与身份判断。
 
@@ -200,7 +172,7 @@ data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk","choices":[{"index":
 data: [DONE]
 ```
 
-直接用 OpenAI SDK：
+使用 OpenAI SDK：
 
 ```ts
 const openai = new OpenAI({

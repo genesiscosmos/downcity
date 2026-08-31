@@ -29,6 +29,6 @@ The right mental model is:
 global downcity.db: agent.execution.modelId
   -> Downcity reads and validates it
   -> City SDK creates an executable CityModel
-  -> Agent calls CityModel.doStream() directly
+  -> Agent calls CityModel.stream() through Downcity Model Protocol
   -> Federation AIService routes to the AIChannel and upstream protocol
 ```

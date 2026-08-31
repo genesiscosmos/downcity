@@ -6,7 +6,7 @@
  * - 不暴露具体 Session class，也不包含 Session 集合管理能力。
  */
 
-import type { LanguageModel } from "ai";
+import type { ModelClient } from "@downcity/type";
 import type {
   SessionMetadataV1,
   SessionRecordV1,
@@ -29,7 +29,7 @@ export interface SessionPort {
   readonly session_id: string;
 
   /** 获取当前 Session 优先解析后的运行时模型实例。 */
-  get_model(): LanguageModel | undefined;
+  get_model(): ModelClient | undefined;
 
   /** 获取当前 Session 的执行端口。 */
   get_executor(): SessionExecutor;

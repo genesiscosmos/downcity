@@ -12,17 +12,20 @@ class DeepSeekChannel extends AIChannel {
       id: "deepseek",
       env_key: "DEEPSEEK_API_KEY",
       base_url: "https://api.deepseek.com/v1",
-      ai_sdk_provider_id: "deepseek",
     });
   }
 
   protected async stream(input: AIChannelStreamInput) {
-    const api_key = read_required_env(input, this.env_key ?? "");
-    // 创建真实上游模型并返回 V3 stream
+    const api_key = input.env("DEEPSEEK_API_KEY");
+    if (!api_key) throw new Error("DEEPSEEK_API_KEY is required");
+    return stream_openai_compatible_model(input, {
+      api_key,
+      base_url: this.base_url ?? "https://api.deepseek.com/v1",
+    });
   }
 }
 ```
 
 `env_key` 会自动为模型目录的管理端视图生成必填 env 声明。一个 Channel 需要多个环境变量时使用 `env`。
 
-值存储在 Federation env 表中，执行时通过 `input.env(key)` 或 `read_required_env(input, key)` 读取。它们不会进入 `CityModelDescriptor` 或客户端运行时。
+值存储在 Federation env 表中，执行时通过 `input.env(key)` 读取。它们不会进入 `CityModelDescriptor` 或客户端运行时。

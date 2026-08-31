@@ -50,7 +50,7 @@ Once you ship a second or third AI product, these capabilities repeat everywhere
 
 - Model catalog and provider configuration
 - `user_token` validation
-- AI service calls such as `city.ai.text()`, `city.ai.stream()`, and `city.ai.image_create()` / `city.ai.image_result()`
+- AI service calls such as `city.ai.stream()` and `city.ai.image_create()` / `city.ai.image_result()`
 - Usage records, logs, quotas, and business hooks
 - Call logic reused across multiple products
 
@@ -96,7 +96,7 @@ In the current implementation, a model is a runtime capability unit registered i
 
 At the product layer, a model is more like a visible capability:
 
-- you can pass it explicitly into `city.ai.text({ model })`
+- you can pass it explicitly into `city.ai.stream({ model, call })`
 - every AIService call must pass an explicit model id or `CityModel`
 
 This means the product sees stable model IDs, not upstream provider details.

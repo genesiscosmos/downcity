@@ -8,7 +8,8 @@
  */
 
 import { Executor } from "@executor/Executor.js";
-import type { LanguageModel, Tool } from "ai";
+import type { ModelClient } from "@downcity/type";
+import type { RuntimeTool as Tool } from "@downcity/type";
 import {
   infer_agent_model_label,
   normalize_agent_model,
@@ -991,7 +992,7 @@ export class Session implements AgentSession {
    *
    * 解析顺序固定为 Session 覆盖模型，其次回退到 Agent 模型。
    */
-  get_model(): LanguageModel | undefined {
+  get_model(): ModelClient | undefined {
     const model = this.get_selected_model();
     return model ? normalize_agent_model(model) : undefined;
   }

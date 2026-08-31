@@ -1,6 +1,6 @@
 /** Workspace 可选 Shell 能力协议。 */
 
-import type { Tool } from "ai";
+import type { RuntimeTool } from "@downcity/type";
 import type { SandboxSpawnResult } from "@/shell/types/Sandbox.js";
 
 /** Workspace Shell 执行一次受控命令的输入。 */
@@ -54,7 +54,7 @@ export interface WorkspaceShellSafeCommandResult {
 /** 由 Workspace 持有并绑定到项目边界的命令执行能力。 */
 export interface WorkspaceShell {
   /** 当前 Shell 向 Agent 暴露的命令与进程工具。 */
-  readonly tools: Record<string, Tool>;
+  readonly tools: Record<string, RuntimeTool>;
 
   /** 将 Shell 绑定到一个 Workspace 项目和私有数据作用域。 */
   bind(input: {

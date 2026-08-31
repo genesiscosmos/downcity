@@ -82,7 +82,7 @@ async function writeGeneratedModule(sourcePath) {
   return true;
 }
 
-async function generateTextModules() {
+async function generate_text_modules() {
   const sourceFiles = await collectTextModuleSources(srcRoot);
   let updatedCount = 0;
   for (const sourcePath of sourceFiles) {
@@ -119,7 +119,7 @@ function spawnCommand(command, args, options = {}) {
 }
 
 async function runBuild() {
-  await generateTextModules();
+  await generate_text_modules();
   await Promise.all([
     fsp.rm(path.join(packageRoot, "bin"), { recursive: true, force: true }),
     fsp.rm(path.join(packageRoot, "tsconfig.tsbuildinfo"), { force: true }),
@@ -131,12 +131,12 @@ async function runBuild() {
 }
 
 async function runTypecheck() {
-  await generateTextModules();
+  await generate_text_modules();
   await spawnCommand(process.execPath, [tsc_entry, "--noEmit"]);
 }
 
 async function runDev() {
-  await generateTextModules();
+  await generate_text_modules();
 
   const watchers = [];
   const watchedDirs = new Set();
@@ -178,7 +178,7 @@ async function runDev() {
 
   async function regenerate() {
     try {
-      const result = await generateTextModules();
+      const result = await generate_text_modules();
       if (result.updatedCount > 0) {
         console.log(
           `[agent-compiler] regenerated ${String(result.updatedCount)} of ${String(result.sourceCount)} text module(s)`,
@@ -254,7 +254,7 @@ if (mode === "build") {
 } else if (mode === "dev") {
   await runDev();
 } else if (mode === "generate") {
-  const result = await generateTextModules();
+  const result = await generate_text_modules();
   console.log(
     `[agent-compiler] generated ${String(result.sourceCount)} text module(s), updated ${String(result.updatedCount)}`,
   );

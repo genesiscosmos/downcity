@@ -13,16 +13,16 @@
  *   → `file.url = <Agent storage>/sessions/.../attachments/att_<id>.<ext>`
  *   → Message 持久化路径引用
  *   → 模型执行前读取文件并恢复为 Data URL
- *   → `convertToModelMessages()` 生成最终 ModelMessage。
+ *   → `SessionMessageCodec` 生成最终 ModelMessage。
  */
 
 import fs from "fs-extra";
 import path from "node:path";
 import {
-  isFileUIPart,
-  isTextUIPart,
-  type FileUIPart,
-} from "ai";
+  is_session_file_part as isFileUIPart,
+  is_session_text_part as isTextUIPart,
+  type SessionUiPart as FileUIPart,
+} from "@/types/session/SessionUiMessage.js";
 import type { SessionUserMessagePart } from "@/types/sdk/AgentSessionPrompt.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 import type {

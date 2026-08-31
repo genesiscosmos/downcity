@@ -170,10 +170,10 @@ export type ShellStartRequest = {
   /** 内部审批来源工具名；普通调用方不需要传。 */
   approvalToolName?: ShellApprovalToolName;
   /**
-   * AI SDK 分配给当前 tool 调用的 id。
+   * 模型协议分配给当前 tool 调用的 id。
    *
    * 说明（中文）
-   * - 用于让 shell approval 事件与 AI SDK 的 tool-call / tool-result 事件共用同一 toolCallId。
+   * - 用于让 shell approval 事件与 Downcity tool_call / tool_result 共用同一 tool_call_id。
    */
   toolCallId?: string;
 };
@@ -207,10 +207,10 @@ export type ShellExecRequest = {
   /** 显式指定当前 turn id。 */
   turnId?: string;
   /**
-   * AI SDK 分配给当前 tool 调用的 id。
+   * 模型协议分配给当前 tool 调用的 id。
    *
    * 说明（中文）
-   * - 用于让 shell approval 事件与 AI SDK 的 tool-call / tool-result 事件共用同一 toolCallId。
+   * - 用于让 shell approval 事件与 Downcity tool_call / tool_result 共用同一 tool_call_id。
    */
   toolCallId?: string;
 };
@@ -258,10 +258,10 @@ export type ShellWriteRequest = {
   /** 显式指定当前 turn id。 */
   turnId?: string;
   /**
-   * AI SDK 分配给当前 tool 调用的 id。
+   * 模型协议分配给当前 tool 调用的 id。
    *
    * 说明（中文）
-   * - 用于让 shell approval 事件与 AI SDK 的 tool-call / tool-result 事件共用同一 toolCallId。
+   * - 用于让 shell approval 事件与 Downcity tool_call / tool_result 共用同一 tool_call_id。
    */
   toolCallId?: string;
 };

@@ -1,11 +1,11 @@
 /**
  * City 模型公共协议模块。
  *
- * 该模块定义跨 package 共享的模型目录与可执行 LanguageModelV3 协议。
- * 具体的 HTTP transport 由 @downcity/agent 内部实现，Agent 只依赖标准模型接口。
+ * 该模块定义跨 package 共享的模型目录与可执行 Downcity Model Protocol。
+ * 具体 HTTP transport 由 @downcity/federation 客户端实现。
  */
 
-import type { LanguageModel } from "ai";
+import type { ModelClient } from "./model/ModelClient.js";
 
 /** City model 的公开协议标识。 */
 export const CITY_MODEL_KIND = "downcity.city-model" as const;
@@ -82,18 +82,12 @@ export interface CityModelDescriptor {
   env_requirements?: CityModelEnvRequirement[];
 }
 
-/** 从 AI SDK 公共模型联合类型中提取 LanguageModelV3。 */
-type LanguageModelV3 = Extract<
-  LanguageModel,
-  { readonly specificationVersion: "v3" }
->;
-
 /**
  * 可执行 City 模型。
  *
- * 目录字段用于展示和上下文管理，LanguageModelV3 能力由 CityModel class 实现。
+ * 目录字段用于展示和上下文管理，执行能力使用 Downcity Model Protocol。
  */
-export type CityModel = CityModelDescriptor & LanguageModelV3 & {
+export type CityModel = CityModelDescriptor & ModelClient & {
   /** City model 协议标识。 */
   readonly kind: typeof CITY_MODEL_KIND;
 };
@@ -105,8 +99,6 @@ export function isCityModel(value: unknown): value is CityModel {
   return (
     record.kind === CITY_MODEL_KIND &&
     typeof record.id === "string" &&
-    record.specificationVersion === "v3" &&
-    typeof record.doStream === "function" &&
-    typeof record.doGenerate === "function"
+    typeof record.stream === "function"
   );
 }

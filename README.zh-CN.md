@@ -136,12 +136,15 @@ downcity agent chat <agent_id>
 
 ```ts
 import { Agent } from "@downcity/agent";
+import { create_openai_compatible_model } from "@downcity/federation";
 import { Shell, Workspace } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
-import { createOpenAI } from "@ai-sdk/openai";
 
-const openai = createOpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
+const model = create_openai_compatible_model({
+  id: "gpt-5",
+  upstream_model: "gpt-5",
+  base_url: "https://api.openai.com/v1",
+  api_key: process.env.OPENAI_API_KEY!,
 });
 
 const workspace = new Workspace({
@@ -153,7 +156,7 @@ const agent = new Agent({ id: "repo-helper", tools: {} });
 
 const session = await agent.sessions.create({ workspace });
 await session.set({
-  model: openai.responses("gpt-5"),
+  model,
 });
 
 const turn = await session.prompt({

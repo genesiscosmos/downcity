@@ -1,6 +1,6 @@
 {
   "name": "@downcity/workspace",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "description": "Downcity Workspace 资源边界、文件工具与内置 Shell runtime",
   "main": "./bin/index.js",
@@ -39,7 +39,7 @@
     "version:patch": "node ../../scripts/bump-package-version.mjs ./package.json"
   },
   "dependencies": {
-    "ai": "6.0.193",
+    "@downcity/type": "workspace:*",
     "dotenv": "^17.4.2",
     "fs-extra": "^11.3.5",
     "globby": "^11.1.0",

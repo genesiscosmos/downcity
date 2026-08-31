@@ -7,7 +7,7 @@
  * - Session 由 AgentSessions 统一持有；Workspace 只在单个 Session 创建时提供执行资源。
  */
 
-import type { Tool } from "ai";
+import type { RuntimeTool as Tool } from "@downcity/type";
 import type { AgentModel } from "@/agent/AgentModel.js";
 import { normalize_instruction_input } from "@/agent/AgentInstructions.js";
 import { PluginRegistry } from "@/plugin/core/PluginRegistry.js";

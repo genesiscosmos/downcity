@@ -9,8 +9,12 @@
  */
 
 import path from "node:path";
-import type { LanguageModel, Tool } from "ai";
-import type { PluginContext, SessionAttachmentStore } from "@downcity/agent";
+import type {
+  AgentModel,
+  AgentOptions,
+  PluginContext,
+  SessionAttachmentStore,
+} from "@downcity/agent";
 import { Executor } from "@downcity/agent";
 import type { SessionTurnExecutionResult } from "@downcity/agent";
 import type { TaskSessionRuntimePort } from "@/task/runtime/TaskRunnerTypes.js";
@@ -62,7 +66,7 @@ export async function appendTaskRoundUserMessage(params: {
  */
 export function createTaskSessionRuntimePort(params: {
   context: PluginContext;
-  model: LanguageModel;
+  model: AgentModel;
   runDirAbs: string;
   runSessionId: string;
   userSimulatorSessionId: string;
@@ -97,7 +101,7 @@ export function createTaskSessionRuntimePort(params: {
   if (!shell) {
     throw new Error("Task agent execution requires Agent to be configured with a Shell.");
   }
-  const shell_tools = shell.tools as unknown as Record<string, Tool>;
+  const shell_tools = shell.tools as NonNullable<AgentOptions["tools"]>;
   /**
    * Task runtime 当前只接收已经规范化的文本消息，不支持通过 Prompt 传入 Data URL 附件。
    * 显式提供适配器，避免把 Task 的临时 run 目录错误地当成普通 Session 附件目录。

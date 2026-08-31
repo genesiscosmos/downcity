@@ -1,38 +1,87 @@
 /**
- * @file 验证 UI stream 收敛时 canonical message 回调失败会终止执行。
+ * @file 验证 Downcity 模型事件投影失败会终止当前 model step。
  */
 
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { collect_final_assistant_message_from_ui_stream } from "../bin/executor/core-engine/CoreEngineUiStreamCollector.js";
+import { run_model_step } from "../bin/executor/model/ModelStepRunner.js";
 
-test("canonical message chunk 写入失败时拒绝继续完成 turn", async () => {
+test("模型事件写入 canonical Session 失败时拒绝继续完成 turn", async () => {
   const abort_controller = new AbortController();
-  abort_controller.abort();
-  const result = {
-    toUIMessageStream: () => ({
-      async *[Symbol.asyncIterator]() {
-        yield { type: "text-delta", id: "text-1", delta: "partial" };
-      },
-    }),
+  const model = {
+    id: "projection-failure-model",
+    async stream() {
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            type: "model_start",
+            request_id: "request_1",
+            model_id: "projection-failure-model",
+          });
+          controller.enqueue({ type: "text_start", content_id: "text_1" });
+          controller.enqueue({ type: "text_delta", content_id: "text_1", delta: "partial" });
+          controller.enqueue({ type: "text_finish", content_id: "text_1" });
+          controller.enqueue({
+            type: "model_usage",
+            usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+          });
+          controller.enqueue({ type: "model_finish", finish_reason: "stop" });
+          controller.close();
+        },
+      });
+    },
   };
 
   await assert.rejects(
-    collect_final_assistant_message_from_ui_stream({
-      result,
+    run_model_step({
+      model,
+      system: [],
+      messages: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
+      tools: {},
       session_id: "callback-failure-test",
-      abortSignal: abort_controller.signal,
-      logger: { log: async () => {} },
-      buildFallbackAssistantMessage: (text) => ({
-        id: "assistant-1",
-        role: "assistant",
-        parts: [{ type: "text", text }],
-      }),
-      on_ui_message_chunk_callback: async () => {
+      abort_signal: abort_controller.signal,
+      on_chunk: async () => {
         throw new Error("canonical write failed");
       },
     }),
     /canonical write failed/,
   );
+});
+
+test("Agent 拒绝不合法的 Downcity 模型流状态", async () => {
+  const invalid_event_sets = [
+    [{ type: "text_delta", content_id: "text_1", delta: "orphan" }],
+    [
+      { type: "model_start", request_id: "request_1", model_id: "invalid-model" },
+      { type: "tool_call_finish", content_id: "tool_1", input: {} },
+    ],
+    [
+      { type: "model_start", request_id: "request_1", model_id: "invalid-model" },
+      { type: "model_usage", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } },
+      { type: "model_finish", finish_reason: "tool_call" },
+    ],
+  ];
+
+  for (const events of invalid_event_sets) {
+    const model = {
+      id: "invalid-model",
+      async stream() {
+        return new ReadableStream({
+          start(controller) {
+            for (const event of events) controller.enqueue(event);
+            controller.close();
+          },
+        });
+      },
+    };
+    await assert.rejects(run_model_step({
+      model,
+      system: [],
+      messages: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
+      tools: {},
+      session_id: "invalid-stream-test",
+      abort_signal: new AbortController().signal,
+    }), /Invalid Downcity model stream/);
+  }
 });

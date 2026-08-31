@@ -1,11 +1,14 @@
 /**
  * Executor 到 Session canonical Message 的 Assistant 输出端口。
  *
- * 该端口集中隔离 AI SDK 流协议。SessionLoop 只装配端口，不解析 Chunk，具体转换
+ * 该端口集中隔离 Downcity Session UI 流。SessionLoop 只装配端口，不解析 Chunk，具体转换
  * 由 execution Adapter 完成，SessionMessages 仍是唯一 Assistant Message 事实源。
  */
 
-import type { UIMessage, UIMessageChunk } from "ai";
+import type {
+  SessionUiMessage as UIMessage,
+  SessionUiMessageChunk as UIMessageChunk,
+} from "@/types/session/SessionUiMessage.js";
 import type { SessionMessageRecordV1 } from "@/executor/types/SessionRecords.js";
 import type { SessionToolInputReady } from "@/types/session/SessionTool.js";
 
@@ -13,7 +16,7 @@ import type { SessionToolInputReady } from "@/types/session/SessionTool.js";
 export interface SessionAssistantOutput {
   /** 开始一个 Provider Step 的独立 Part 作用域。 */
   begin_step(): Promise<void>;
-  /** 写入一个 AI SDK 流式 Chunk。 */
+  /** 写入一个 Downcity Session UI 流式 Chunk。 */
   write_chunk(chunk: UIMessageChunk): Promise<void>;
   /** 使用 Provider 最终快照校验并补齐当前 Step metadata。 */
   finish_step(message: SessionMessageRecordV1): Promise<void>;

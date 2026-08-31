@@ -1,13 +1,16 @@
 /**
- * Plugin AI SDK tools。
+ * Plugin 运行时工具。
  *
  * 设计目标（中文）
  * - plugin_call 是 agent 内置 plugin action 的底层能力入口。
- * - tool 只负责 AI SDK 工具协议适配，不理解具体 plugin 的业务语义。
+ * - tool 只负责 Downcity Runtime Tool 协议适配，不理解具体 plugin 的业务语义。
  * - Plugin Action 返回的 messages 由 Executor 的统一 ActionResult 边界分流。
  */
 
-import { tool, type ToolExecutionOptions } from "ai";
+import {
+  define_runtime_tool,
+  type RuntimeToolExecutionOptions as ToolExecutionOptions,
+} from "@downcity/type";
 import type {
   AgentPluginTools,
   CreatePluginToolsOptions,
@@ -31,7 +34,7 @@ import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js"
 function require_turn_context(
   options: ToolExecutionOptions,
 ): SessionTurnContext {
-  const execution_context = options.experimental_context as
+  const execution_context = options.context as
     | Partial<SessionToolExecutionContext>
     | undefined;
   const turn_context = execution_context?.session_turn_context;
@@ -45,15 +48,15 @@ function require_turn_context(
  * 创建 `plugin_call`：调用当前 Agent 已注册 plugin action。
  */
 export function create_plugin_call_tool(options: CreatePluginToolsOptions) {
-  return tool({
+  return define_runtime_tool<PluginCallInput>({
     description:
       "Call a registered agent plugin action. Use plugin_read first when you need the action list, input schema, or examples. Generated files may be attached to the final assistant message automatically.",
-    inputSchema: plugin_call_input_schema,
+    input_schema: plugin_call_input_schema,
     execute: async (input, execution_options) =>
       await invoke_plugin_call_tool({
         plugins: options.plugins,
         turn_context: require_turn_context(execution_options),
-        call_id: String(execution_options.toolCallId || "").trim(),
+        call_id: String(execution_options.tool_call_id || "").trim(),
         input: input as PluginCallInput,
       }),
   });
@@ -63,10 +66,10 @@ export function create_plugin_call_tool(options: CreatePluginToolsOptions) {
  * 创建 `plugin_read`：读取当前 Agent 已注册 plugin / action metadata。
  */
 export function create_plugin_read_tool(options: CreatePluginToolsOptions) {
-  return tool({
+  return define_runtime_tool<PluginReadInput>({
     description:
       "Read registered agent plugin metadata, including action names, descriptions, input schemas, and examples. Use this before plugin_call when the payload shape is unclear.",
-    inputSchema: plugin_read_input_schema,
+    input_schema: plugin_read_input_schema,
     execute: async (input, execution_options) =>
       await invoke_plugin_read_tool({
         plugins: options.plugins,

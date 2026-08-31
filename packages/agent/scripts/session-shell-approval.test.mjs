@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { MockLanguageModelV3 } from "ai/test";
+import { MockModelClient } from "./ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";
 import { create_workspace_entry } from "../bin/internal/index.js";
@@ -102,7 +102,7 @@ test("unrestricted Shell 审批保留当前 Turn 并等待用户决定", async (
     path.join(os.tmpdir(), "downcity-session-shell-approval-"),
   );
   let stream_count = 0;
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "session-shell-approval-model",
     doStream: async (options) => {
       if (!Array.isArray(options.tools) || options.tools.length === 0) {

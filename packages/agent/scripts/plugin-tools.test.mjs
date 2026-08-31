@@ -43,7 +43,7 @@ function create_registry(plugin) {
 }
 
 test("plugin_call payload schema allows arbitrary object properties", async () => {
-  const plugin_call_schema = await plugin_call_input_schema.jsonSchema;
+  const plugin_call_schema = plugin_call_input_schema;
   const payload_schema = plugin_call_schema.properties.payload;
 
   assert.equal(plugin_call_schema.type, "object");
@@ -305,9 +305,9 @@ test("create_plugin_tools binds plugin_call to the current registry", async () =
       },
     });
     return {
-      toolCallId: `call_${session_id}`,
+      tool_call_id: `call_${session_id}`,
       messages: [],
-      experimental_context: {
+      context: {
         session_turn_context: turn_context,
       },
     };

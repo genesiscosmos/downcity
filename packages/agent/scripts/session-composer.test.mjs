@@ -7,7 +7,7 @@ import test from "node:test";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { MockLanguageModelV3 } from "ai/test";
+import { MockModelClient } from "./ModelClientMock.mjs";
 import {
   Agent,
   DefaultSessionComposer,
@@ -64,7 +64,7 @@ function create_input(model) {
 }
 
 test("DefaultSessionComposer 从 canonical 快照组装 Step 输入", async () => {
-  const model = new MockLanguageModelV3({ modelId: "composer-model" });
+  const model = new MockModelClient({ modelId: "composer-model" });
   const input = create_input(model);
   const step = await new DefaultSessionComposer().compose(input);
 
@@ -88,7 +88,7 @@ test("Custom Composer 可以覆盖组装结果而不接触持久化", async () =
     }
   }
 
-  const model = new MockLanguageModelV3({ modelId: "custom-composer-model" });
+  const model = new MockModelClient({ modelId: "custom-composer-model" });
   const input = create_input(model);
   const before = structuredClone(input.history);
   const step = await new CustomComposer().compose(input);
@@ -122,7 +122,7 @@ test("Session system 快照与 Custom Composer 的实际模型输入一致", asy
   );
   const agent = new Agent({
     id: "custom_composer_agent",
-    model: new MockLanguageModelV3({ modelId: "custom-composer-model" }),
+    model: new MockModelClient({ modelId: "custom-composer-model" }),
     session_class: CustomSession,
   });
   const entry = create_workspace_entry(agent, new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
@@ -141,7 +141,7 @@ test("Session system 快照与 Custom Composer 的实际模型输入一致", asy
 
 test("Composer compact 只返回计划，不修改 Message 快照", async () => {
   const prompts = [];
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "composer-compact-model",
     doGenerate: async (options) => {
       prompts.push(JSON.stringify(options.prompt));
@@ -188,7 +188,7 @@ test("Composer compact 只返回计划，不修改 Message 快照", async () => 
 
 test("Composer compact 在 Active 少于两条上下文消息时不调用模型", async () => {
   let generation_count = 0;
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "composer-no-compact-model",
     doGenerate: async () => {
       generation_count += 1;

@@ -2,13 +2,13 @@
  * SessionSystemMessage：Session 运行阶段使用的 system message。
  *
  * 关键点（中文）
- * - 当前实现与 AI SDK 的 `SystemModelMessage` 等价。
- * - 单独抽出类型别名，便于后续把“Session 语义 system”与底层 provider 类型解耦。
+ * - 该类型属于 Downcity Session，不依赖第三方 Provider。
  */
 
-import type { SystemModelMessage } from "ai";
-
-/**
- * Session system message 类型别名。
- */
-export type SessionSystemMessage = SystemModelMessage;
+/** Session system 消息。 */
+export interface SessionSystemMessage {
+  /** 消息角色固定为 system。 */
+  role: "system";
+  /** 当前 system block 的文本内容。 */
+  content: string;
+}

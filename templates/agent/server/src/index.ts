@@ -8,7 +8,7 @@
  */
 
 import { resolve } from "node:path";
-import { createDeepSeek } from "@ai-sdk/deepseek";
+import { create_openai_compatible_model } from "@downcity/federation";
 import {
   Agent,
   type SessionMessage,
@@ -24,7 +24,6 @@ import type {
   SendChatMessageRequest,
 } from "../../types/chat.js";
 
-const session_id = "web-chat";
 const api_key = process.env.DEEPSEEK_API_KEY?.trim();
 const port = Number(process.env.PORT || 5314);
 const workspace_path = resolve(
@@ -38,10 +37,14 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
   throw new Error("PORT 必须是有效端口");
 }
 
-const deepseek = createDeepSeek({ apiKey: api_key });
 const agent = new Agent({
   id: "template-agent",
-  model: deepseek("deepseek-chat"),
+  model: create_openai_compatible_model({
+    id: "deepseek-chat",
+    upstream_model: "deepseek-chat",
+    base_url: "https://api.deepseek.com/v1",
+    api_key,
+  }),
   instruction: "你是一个简洁、可靠的项目助手。",
 });
 const workspace = new Workspace({
@@ -49,13 +52,12 @@ const workspace = new Workspace({
   path: workspace_path,
 });
 
-/** 恢复固定 Web Session，不存在时首次创建。 */
+/** 当前服务进程只创建并复用一个 Web Session。 */
+const session_promise = agent.sessions.create({ workspace });
+
+/** 返回当前服务进程拥有的 Web Session。 */
 async function get_session() {
-  try {
-    return await agent.sessions.get({ workspace, session_id });
-  } catch {
-    return await agent.sessions.create({ workspace, session_id });
-  }
+  return await session_promise;
 }
 
 /** 把 Session canonical Message 投影为浏览器需要的纯文本消息。 */

@@ -3,12 +3,11 @@
  *
  * 关键点（中文）
  * - SoundPlugin 统一承载 ASR 与 TTS，不绑定本地模型、Python 或具体 provider。
- * - ASR 结果字段与 AI SDK `TranscriptionResult` 的可序列化核心字段保持一致。
- * - TTS 结果直接使用 AI SDK `UIMessage`，由 agent 统一处理音频 file part。
+ * - ASR 结果只保留跨进程可序列化的核心字段。
+ * - TTS 结果直接使用 Downcity Session 消息，由 Agent 统一处理音频 file part。
  */
 
-import type { UIMessage } from "ai";
-import type { JsonObject, JsonValue } from "@downcity/agent";
+import type { ActionResultMessage, JsonObject, JsonValue } from "@downcity/agent";
 
 /** SoundPlugin 使用的最小语音 AI 服务协议。 */
 export interface SoundAiService {
@@ -56,7 +55,7 @@ export interface SoundPluginModelsResult {
 /**
  * ASR 转写分段。
  *
- * 字段命名与 AI SDK `TranscriptionResult.segments` 保持一致。
+ * 字段命名遵循 Downcity ASR 分段协议。
  */
 export interface SoundPluginAsrSegment {
   /** 当前时间片段识别得到的文本。 */
@@ -95,7 +94,7 @@ export interface SoundPluginAsrInput {
  * ASR 输出。
  *
  * 说明（中文）
- * - 只保留 AI SDK `TranscriptionResult` 中适合 JSON 传输的核心字段。
+ * - 只保留适合 JSON 传输的核心字段。
  * - warnings、responses 与 providerMetadata 属于运行期诊断信息，不进入 plugin action 协议。
  */
 export interface SoundPluginAsrResult {
@@ -136,9 +135,9 @@ export interface SoundPluginTtsInput {
 /**
  * TTS 输出。
  *
- * 音频通过 AI SDK `UIMessage` 的 file part 返回。
+ * 音频通过 Downcity Session 消息的 file part 返回。
  */
-export type SoundPluginTtsResult = UIMessage;
+export type SoundPluginTtsResult = ActionResultMessage;
 
 /**
  * SoundPlugin 构造参数。

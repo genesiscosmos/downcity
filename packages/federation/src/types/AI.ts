@@ -5,11 +5,14 @@
  * 公共入口只导出用户配置和 Channel 实现所需的最小类型集合。
  */
 
-import type { LanguageModel, UIMessage } from "ai";
 import type {
   CityModelEnvRequirement,
   CityModelReasoning,
+  ModelCall,
+  ModelFileContent,
+  ModelJsonValue,
   ModelPricing,
+  ModelStreamEvent,
 } from "@downcity/type";
 import type { ActionFn } from "../service/action.js";
 import type { Context } from "../service/service.js";
@@ -17,32 +20,24 @@ import type { AsyncJobRecord } from "./AsyncJob.js";
 import type { RuntimeMetering } from "./Metering.js";
 
 // ===========================================================================
-// AI SDK 标准边界
+// Downcity Model Protocol 边界
 // ===========================================================================
 
-/** AI SDK LanguageModelV3。 */
-export type LanguageModelV3 = Extract<
-  LanguageModel,
-  { readonly specificationVersion: "v3" }
->;
+/** AIChannel 返回的标准模型事件流。 */
+export interface AIChannelStreamResult {
+  /** Downcity Model Protocol 事件流。 */
+  readonly stream: ReadableStream<ModelStreamEvent>;
+  /** 可选上游请求审计信息。 */
+  readonly request?: AIProviderRequestMetadata;
+}
 
-/** LanguageModelV3 的标准调用参数。 */
-export type LanguageModelV3CallOptions = Parameters<LanguageModelV3["doStream"]>[0];
-
-/** LanguageModelV3 的标准流结果。 */
-export type LanguageModelV3StreamResult = Awaited<ReturnType<LanguageModelV3["doStream"]>>;
-
-/** LanguageModelV3 的标准流事件，仅供 City 内部 transport 使用。 */
-export type LanguageModelV3StreamPart =
-  LanguageModelV3StreamResult["stream"] extends ReadableStream<infer Part>
-    ? Part
-    : never;
-
-/** LanguageModelV3 的标准非流式结果，仅供 City 内部聚合使用。 */
-export type LanguageModelV3GenerateResult = Awaited<ReturnType<LanguageModelV3["doGenerate"]>>;
-
-/** AI SDK 按 Provider ID 分组的服务端私有调用选项。 */
-export type AISDKProviderOptions = NonNullable<LanguageModelV3CallOptions["providerOptions"]>;
+/** Provider 请求的安全审计信息。 */
+export interface AIProviderRequestMetadata {
+  /** 上游请求 ID。 */
+  request_id?: string;
+  /** 不包含密钥和敏感正文的附加信息。 */
+  metadata?: Record<string, ModelJsonValue>;
+}
 
 /** AIService 已校验的推理强度。 */
 export interface AIResolvedReasoning {
@@ -66,10 +61,8 @@ export interface AIChannelOptions {
   base_url?: string;
   /** Channel 默认 API Key 对应的 Federation env key。 */
   env_key?: string;
-  /** reasoning 映射使用的 AI SDK providerOptions 命名空间。 */
-  ai_sdk_provider_id?: string;
-  /** Channel 下所有模型共享的 AI SDK providerOptions 默认值。 */
-  ai_sdk_provider_options?: AISDKProviderOptions;
+  /** Channel 下所有模型共享的服务端 Provider 配置。 */
+  provider_options?: Record<string, ModelJsonValue>;
 }
 
 /** AIService 已解析完成、可供 Channel 执行的模型身份。 */
@@ -82,14 +75,18 @@ export interface AIChannelModel {
 
 /** AIChannel 语言执行时可读取的显式输入。 */
 export interface AIChannelStreamInput {
-  /** 已移除客户端私有选项并注入服务端 providerOptions 的标准调用。 */
-  readonly call: LanguageModelV3CallOptions;
+  /** 标准 Downcity 模型调用。 */
+  readonly call: ModelCall;
   /** AIService 已解析完成的最终模型。 */
   readonly model: AIChannelModel;
   /** 读取 Federation 服务端环境变量。 */
   readonly env: (key: string) => string | undefined;
   /** AIService 已校验的可选 reasoning。 */
   readonly reasoning?: AIResolvedReasoning;
+  /** 当前 HTTP 请求的取消信号。 */
+  readonly abort_signal?: AbortSignal;
+  /** Channel 与模型合并后的服务端 Provider 配置。 */
+  readonly provider_options?: Record<string, ModelJsonValue>;
 }
 
 /** AIChannel 非语言 action 可读取的显式输入。 */
@@ -108,20 +105,10 @@ export interface AIChannelActionInput {
   readonly image_job?: AIImageJobContext;
 }
 
-/** fallback 匹配时使用的媒体信息。 */
-export interface AIModelFallbackMedia {
-  /** file part 的 IANA 媒体类型。 */
-  media_type: string;
-  /** 输入文件名。 */
-  filename?: string;
-  /** 输入文件 URL 或 Data URL。 */
-  url?: string;
-}
-
 /** 模型级媒体 fallback 规则。 */
 export interface AIModelFallbackRule {
-  /** 判断当前媒体是否命中规则。 */
-  match: (media: AIModelFallbackMedia) => boolean;
+  /** 判断最新用户消息中的当前文件是否命中规则。 */
+  match: (file: ModelFileContent) => boolean;
   /** fallback 目标 Federation 模型 ID。 */
   model_id: string;
 }
@@ -144,8 +131,8 @@ export interface AIModelSpec {
   pricing?: ModelPricing | ModelPricing[];
   /** 兼容旧客户端的价格说明列表，由 pricing 派生。 */
   price?: string[];
-  /** 不公开给客户端的模型级 AI SDK providerOptions。 */
-  ai_sdk_provider_options?: AISDKProviderOptions;
+  /** 不公开给客户端的模型级 Provider 配置。 */
+  provider_options?: Record<string, ModelJsonValue>;
   /** 可公开给客户端的模型扩展信息。 */
   meta?: Record<string, unknown>;
   /** 模型公开的 reasoning 能力。 */
@@ -159,13 +146,11 @@ export interface AIModelSpec {
 /** Channel 语言模型执行函数。 */
 export type AIModelStream = (
   ctx: Context,
-  call: LanguageModelV3CallOptions,
-) => Promise<LanguageModelV3StreamResult>;
+  call: ModelCall,
+) => Promise<AIChannelStreamResult>;
 
 /** 非语言模型 action 映射。 */
 export interface AIModelActions {
-  /** 由 AIModelStream 自动派生的 text action。 */
-  text?: ActionFn;
   /** 图片任务创建 action。 */
   image_create?: ActionFn;
   /** 图片任务抓取 action。 */
@@ -191,7 +176,7 @@ export interface AIModelRuntime {
 }
 
 /** Federation 内部已注册、可路由、可执行的模型定义。 */
-export interface AIModelDefinition extends Omit<AIModelSpec, "ai_sdk_provider_options"> {
+export interface AIModelDefinition extends Omit<AIModelSpec, "provider_options"> {
   /** 当前模型所属 AIChannel ID。 */
   channel_id: string;
   /** 当前模型所需的 Federation 环境变量。 */
@@ -279,6 +264,45 @@ export interface AIChargedResult<T = unknown> {
 }
 
 // ===========================================================================
+// 非语言 Action 消息
+// ===========================================================================
+
+/** 非语言 AI Action 返回的文本内容。 */
+export interface AIActionTextPart {
+  /** 内容判别字段。 */
+  type: "text";
+  /** 面向调用方展示的文本。 */
+  text: string;
+}
+
+/** 非语言 AI Action 返回的文件内容。 */
+export interface AIActionFilePart {
+  /** 内容判别字段。 */
+  type: "file";
+  /** 文件的 IANA MIME 类型。 */
+  media_type: string;
+  /** 调用方可以读取的文件 URL 或 data URL。 */
+  url: string;
+  /** 可选原始文件名。 */
+  filename?: string;
+}
+
+/** 非语言 AI Action 可返回的消息内容。 */
+export type AIActionMessagePart = AIActionTextPart | AIActionFilePart;
+
+/** Federation 非语言 AI Action 的稳定消息协议。 */
+export interface AIActionMessage {
+  /** 消息的稳定唯一标识。 */
+  id: string;
+  /** AI Action 输出固定归属于 assistant。 */
+  role: "assistant";
+  /** 按展示顺序排列的消息内容。 */
+  parts: AIActionMessagePart[];
+  /** Action、模型与计量等可选扩展信息。 */
+  metadata?: Record<string, unknown>;
+}
+
+// ===========================================================================
 // 图片任务
 // ===========================================================================
 
@@ -303,8 +327,8 @@ export interface AIImageCreateResult {
 
 /** image_fetch 与 image_result 共用的固定协议。 */
 export interface AIImageResult extends AIImageCreateResult {
-  /** 成功时返回的 AI SDK UIMessage。 */
-  result?: UIMessage;
+  /** 成功时返回的 Downcity 非语言 Action 消息。 */
+  result?: AIActionMessage;
 }
 
 /** AIChannel 在 image_fetch 中可读取的图片任务上下文。 */

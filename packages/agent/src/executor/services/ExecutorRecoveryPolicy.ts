@@ -7,7 +7,7 @@
  * - 不改变外部行为，只把异常分流规则集中到一个地方。
  */
 
-import type { LanguageModel } from "ai";
+import type { ModelClient } from "@downcity/type";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import type {
@@ -42,7 +42,7 @@ interface ExecutorPrepareExecutionInput {
   /**
    * 当前轮模型实例。
    */
-  model: LanguageModel;
+  model: ModelClient;
 
   /**
    * 当前显式运行上下文。
@@ -64,7 +64,7 @@ interface ExecutorExecutePreparedInput {
   /**
    * 当前轮模型实例。
    */
-  model: LanguageModel;
+  model: ModelClient;
 
   /**
    * 当前显式运行上下文。
@@ -81,7 +81,7 @@ interface ExecutorRecoveryInput {
   /**
    * 当前轮模型实例。
    */
-  model: LanguageModel;
+  model: ModelClient;
 
   /**
    * 当前显式运行上下文。

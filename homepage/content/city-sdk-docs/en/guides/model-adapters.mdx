@@ -3,25 +3,25 @@ title: Model Adapters
 description: Adapt upstream protocols once through AIChannel.stream().
 ---
 
-Downcity has two public protocols and one internal execution path:
+Downcity has one core model protocol. OpenAI Chat Completions is adapted only at the HTTP boundary:
 
 ```text
 City SDK / CityModel ------\
-                            -> LanguageModelV3CallOptions -> AIChannel.stream()
-OpenAI Chat Completions ---/                              -> V3 stream
+                            -> ModelCall -> AIService -> AIChannel.stream()
+OpenAI Chat Completions ---/                           -> ModelStreamEvent
 ```
 
-For an AI SDK model, call `model.doStream(input.call)` directly. For a private HTTP protocol, implement `stream(input)` and return `LanguageModelV3StreamResult`. AIService does not know the vendor request format.
+Use `stream_openai_compatible_model()` for an OpenAI-compatible upstream. For a private HTTP protocol, provide an Adapter that maps `ModelCall` into the vendor request and returns `AIChannelStreamResult`. AIService does not know the vendor request format.
 
-OpenAI Chat Completions is an HTTP adapter around the same V3 path. There is no raw passthrough and no separate `openai` action, so tools, fallback, reasoning, metering, and billing behave consistently across clients.
+OpenAI Chat Completions is an HTTP Adapter around the same Model Protocol path. There is no raw passthrough and no second model execution path, so tools, fallback, reasoning, metering, and billing behave consistently across clients.
 
 Keep upstream-specific behavior in the Channel:
 
 - credentials and base URL;
 - upstream model factory and protocol selection;
-- model-specific AI SDK providerOptions;
+- model-specific `provider_options`;
 - usage interpretation and billing;
-- conversion from private streams to V3 parts.
+- conversion from private streams to `ModelStreamEvent`.
 
 Keep Federation behavior in AIService:
 

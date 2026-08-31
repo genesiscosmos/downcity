@@ -6,7 +6,7 @@
  * - Shell 自己拥有 tools、sessions 与 sandbox；审批状态由宿主 Gateway 管理。
  */
 
-import type { Tool } from "ai";
+import type { RuntimeTool } from "@downcity/type";
 import type {
   ShellActionResponse,
 } from "@/shell/types/ShellAction.js";
@@ -46,7 +46,7 @@ export interface ShellExecutionContext {
  * Shell tool 的显式执行上下文。
  *
  * 关键点（中文）
- * - 该对象由宿主在每次 `tool.execute` 时通过 `experimental_context` 传入。
+ * - 该对象由宿主在每次 `tool.execute` 时通过 `context` 传入。
  * - Shell 只读取自己的字段，不感知 Agent 的 SessionTurnContext。
  */
 export interface ShellToolExecutionContext {
@@ -119,7 +119,7 @@ export type ShellToolAction =
  * Shell tool 执行器协议。
  *
  * 关键点（中文）
- * - tool 从 `ToolExecutionOptions.experimental_context` 读取显式运行上下文。
+ * - tool 从 `RuntimeToolExecutionOptions.context` 读取显式运行上下文。
  * - `run_action` 显式携带 session、turn 与 env，Shell 内部不读取隐式全局状态。
  */
 export interface ShellToolRunner {
@@ -145,4 +145,4 @@ type JsonObject = Record<string, unknown>;
 /**
  * Shell 工具集合。
  */
-export type ShellToolSet = Record<string, Tool>;
+export type ShellToolSet = Record<string, RuntimeTool>;

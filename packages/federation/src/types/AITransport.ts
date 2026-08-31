@@ -1,74 +1,35 @@
 /**
  * City AI transport 内部类型模块。
  *
- * 本模块只服务于 CityModel transport、text 输入转换和 OpenAI HTTP adapter，
+ * 本模块只服务于 CityModel transport 和 OpenAI HTTP adapter，
  * 不从 @downcity/agent 公共入口导出。
  */
 
-import type { ModelMessage, ToolSet, UIMessage } from "ai";
 import type { FetchResponseLike } from "../pact/http.js";
-import type { CityModelDescriptor } from "@downcity/type";
 import type {
-  LanguageModelV3CallOptions,
-  LanguageModelV3GenerateResult,
-  LanguageModelV3StreamPart,
-  LanguageModelV3StreamResult,
-} from "./AI.js";
+  CityModelDescriptor,
+  ModelCall,
+  ModelFinishReason,
+  ModelMessage,
+  ModelStreamEvent,
+  ModelStreamRequest,
+  ModelUsage,
+} from "@downcity/type";
 
 // ===========================================================================
 // CityModel transport
 // ===========================================================================
 
-/** City Language Model transport v1 的固定协议标识。 */
-export const CITY_LANGUAGE_MODEL_PROTOCOL_V1 = "downcity-language-model-v1" as const;
-
-/** City transport JSON 原始值。 */
-export type CityTransportJsonPrimitive = string | number | boolean | null;
-
-/** City transport JSON 对象。 */
-export interface CityTransportJsonObject {
-  /** JSON 对象字段。 */
-  [key: string]: CityTransportJsonValue;
-}
-
-/** City transport 支持的完整 JSON 值。 */
-export type CityTransportJsonValue =
-  | CityTransportJsonPrimitive
-  | CityTransportJsonObject
-  | CityTransportJsonValue[];
-
 /** CityModel 发给 Federation 的标准模型调用。 */
-export interface CityLanguageModelStreamRequestV1 {
-  /** 固定协议版本。 */
-  protocol: typeof CITY_LANGUAGE_MODEL_PROTOCOL_V1;
-  /** Federation 模型目录中的模型 ID。 */
-  model_id: string;
-  /** JSON 编码后的 LanguageModelV3CallOptions。 */
-  call: CityTransportJsonObject;
-  /** 用户显式选择的 Downcity 推理强度。 */
-  reasoning_effort?: string;
-  /** 是否启用模型推理；显式为 false 时跳过模型默认推理。 */
-  reasoning?: boolean;
-}
+export type CityLanguageModelStreamRequestV1 = ModelStreamRequest;
 
 /** Federation 通过 SSE 返回的标准模型流事件。 */
-export interface CityLanguageModelStreamEventV1 {
-  /** 固定协议版本。 */
-  protocol: typeof CITY_LANGUAGE_MODEL_PROTOCOL_V1;
-  /** JSON 编码后的 LanguageModelV3StreamPart。 */
-  part: CityTransportJsonObject;
-}
-
 /** 已校验并解码的 CityModel transport 请求。 */
 export interface DecodedCityLanguageModelRequest {
   /** Federation 模型目录中的模型 ID。 */
   model_id: string;
-  /** 解码后的标准 LanguageModelV3 调用参数。 */
-  call: LanguageModelV3CallOptions;
-  /** 用户显式选择的推理强度。 */
-  reasoning_effort?: string;
-  /** 是否启用模型推理；显式为 false 时跳过模型默认推理。 */
-  reasoning?: boolean;
+  /** 已校验的标准 Downcity 模型调用。 */
+  call: ModelCall;
 }
 
 /** 供运行时校验的原始 CityModel transport 请求。 */
@@ -78,8 +39,8 @@ export type RawCityLanguageModelRequest =
 
 /** 创建 Federation SSE 响应所需的输入。 */
 export interface CreateCityLanguageModelStreamInput {
-  /** 最终 AIChannel stream 返回的标准 LanguageModelV3 流结果。 */
-  result: LanguageModelV3StreamResult;
+  /** 最终 AIChannel 返回的标准 Downcity 模型事件流。 */
+  stream: ReadableStream<ModelStreamEvent>;
 }
 
 /** Federation SSE 响应及其最终完成事件。 */
@@ -87,7 +48,15 @@ export interface CityLanguageModelStreamExecution {
   /** 返回给 CityModel 客户端的 SSE Response。 */
   response: Response;
   /** 流结束后的明确完成结果。 */
-  completion: Promise<AIStreamCompletion<LanguageModelV3StreamPart>>;
+  completion: Promise<AIStreamCompletion<ModelStreamCompletionResult>>;
+}
+
+/** Federation 完成一次模型流后用于计量与结算的标准事实。 */
+export interface ModelStreamCompletionResult {
+  /** Provider 返回的最终累计 usage。 */
+  usage: ModelUsage;
+  /** 正常完成或失败的终态事件。 */
+  terminal_event: Extract<ModelStreamEvent, { type: "model_finish" | "model_error" }>;
 }
 
 /** 流式 AI 响应的明确完成结果。 */
@@ -119,37 +88,10 @@ export interface CityModelOptions {
   descriptor: CityModelDescriptor;
   /** 使用 City 客户端鉴权上下文发送模型请求。 */
   request_stream(
-    request: CityLanguageModelStreamRequestV1,
+    request: ModelStreamRequest,
     signal?: AbortSignal,
   ): Promise<FetchResponseLike>;
 }
-
-// ===========================================================================
-// city.ai.text() 内部输入
-// ===========================================================================
-
-/** 通用 text action 接受的输入。 */
-export interface AITextInput {
-  /** 多轮 AI SDK UIMessage；存在时优先于单轮 prompt。 */
-  messages?: UIMessage[];
-  /** 没有多轮 messages 时使用的单轮文本输入。 */
-  prompt?: string;
-  /** OpenAI function tool 定义列表。 */
-  tools?: Record<string, unknown>[];
-}
-
-/** 可直接交给 AI SDK generateText 的内部输入。 */
-export type AIResolvedTextInput = {
-  /** 转换后的 AI SDK 标准模型消息。 */
-  messages: ModelMessage[];
-  /** 当前请求携带的可选 AI SDK ToolSet。 */
-  tools?: ToolSet;
-} | {
-  /** 单轮 prompt 文本。 */
-  prompt: string;
-  /** 当前请求携带的可选 AI SDK ToolSet。 */
-  tools?: ToolSet;
-};
 
 // ===========================================================================
 // OpenAI Chat Completions adapter
@@ -237,7 +179,7 @@ export interface OpenAIChatFilePart {
   url: string;
   /** 文件 IANA 媒体类型。 */
   media_type?: string;
-  /** 兼容 AI SDK 风格的媒体类型字段。 */
+  /** 兼容 OpenAI 客户端输入的媒体类型字段。 */
   mediaType?: string;
   /** 可选文件名。 */
   filename?: string;
@@ -255,7 +197,7 @@ export interface OpenAIChatTool {
     description?: string;
     /** 工具输入 JSON Schema。 */
     parameters?: Record<string, unknown>;
-    /** 是否要求 AI SDK Provider 严格遵循 schema。 */
+    /** 是否要求上游 Provider 严格遵循 schema。 */
     strict?: boolean;
   };
 }
@@ -322,6 +264,16 @@ export interface OpenAIChatUsage {
 export interface OpenAIChatCompletionExecution {
   /** 返回给 OpenAI-compatible 客户端的响应。 */
   response: Response;
-  /** 标准 V3 聚合结果；异常或取消时为空。 */
-  completion: Promise<LanguageModelV3GenerateResult | undefined>;
+  /** Downcity 模型聚合结果；异常或取消时为空。 */
+  completion: Promise<ModelCompletionResult | undefined>;
+}
+
+/** 单个模型 step 的标准聚合结果。 */
+export interface ModelCompletionResult {
+  /** 聚合后的 assistant 模型消息。 */
+  message: ModelMessage;
+  /** 标准完成原因。 */
+  finish_reason: ModelFinishReason;
+  /** Provider 返回的最终可信 usage。 */
+  usage?: ModelUsage;
 }

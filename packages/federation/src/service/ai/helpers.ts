@@ -5,14 +5,11 @@
   * HTTP 响应读取等工具函数。
   */
 
- import type { DynamicToolUIPart, FileUIPart, ToolSet, UIMessage } from "ai";
- import { jsonSchema, tool } from "ai";
  import type {
+   AIActionFilePart,
+   AIActionMessage,
    AIChannelActionInput,
-   AICharge,
-   AIChargedResult,
  } from "../../types/AI.js";
- import type { Context } from "../service.js";
 
  // ===========================================================================
  // 基础类型判断
@@ -116,75 +113,6 @@
    return code && !message.includes(code) ? `${message} (${code})` : message;
  }
 
- // ===========================================================================
- // 消息构造
- // ===========================================================================
-
- /**
-  * generateText / streamText tool call 的临时形状。
-  */
- export interface ToolCallShape {
-   /** tool call 唯一 ID。 */
-   toolCallId: string;
-   /** tool 名称。 */
-   toolName: string;
-   /** tool 输入。 */
-   input: unknown;
- }
-
- /**
-  * buildAssistantMessage 的结果参数。
-  */
- export interface BuildAssistantMessageResult {
-   /** 结束原因。 */
-   finishReason: string;
-   /** 上游 usage。 */
-   usage?: unknown;
-   /** tool calls。 */
-   toolCalls?: ToolCallShape[];
- }
-
- /**
-  * 构造标准 assistant UIMessage。
-  */
- export function buildAssistantMessage(
-   text: string,
-   ctx: Context,
-   result: BuildAssistantMessageResult,
-   charge?: AICharge,
- ): AIChargedResult<UIMessage> {
-   const parts: UIMessage["parts"] = [{ type: "text", text }];
-
-   if (result.toolCalls) {
-     for (const toolCall of result.toolCalls) {
-       const part: DynamicToolUIPart = {
-         type: "dynamic-tool",
-         toolCallId: toolCall.toolCallId,
-         toolName: toolCall.toolName,
-         state: "input-available",
-         input: toolCall.input as Record<string, unknown>,
-       };
-       parts.push(part);
-     }
-   }
-
-   return {
-     output: {
-       id: `msg_${crypto.randomUUID()}`,
-       role: "assistant",
-       parts,
-       metadata: {
-         model: ctx.variant?.id,
-         bureau_id: ctx.bureau?.bureau_id,
-         user_id: ctx.user?.user_id,
-         finishReason: result.finishReason,
-         usage: result.usage,
-       },
-     },
-     charge,
-   };
- }
-
  /**
   * 提取后的图片信息。
   */
@@ -198,19 +126,19 @@
  }
 
  /**
-  * 构造标准图片 file-parts UIMessage。
-  */
- export function buildImageMessage(
+  * 构造标准图片 Action 消息。
+ */
+ export function build_image_message(
    input: AIChannelActionInput,
    images: ExtractedImage[],
    metadata: Record<string, unknown>,
- ): UIMessage {
+ ): AIActionMessage {
    if (images.length === 0) {
      throw new Error("Image provider returned no images");
    }
-   const parts: FileUIPart[] = images.map((image) => ({
+   const parts: AIActionFilePart[] = images.map((image) => ({
      type: "file",
-     mediaType: image.media_type,
+     media_type: image.media_type,
      url: image.url,
      ...(image.filename ? { filename: image.filename } : {}),
    }));
@@ -226,33 +154,6 @@
        ...metadata,
      }),
    };
- }
-
- // ===========================================================================
- // Tool 解析
- // ===========================================================================
-
- /**
-  * OpenAI function tools → ai-sdk ToolSet。
-  */
- export function buildToolSet(items: Record<string, unknown>[] | undefined): ToolSet | undefined {
-   if (!items?.length) return undefined;
-
-   return Object.fromEntries(
-     items
-       .filter((item): item is {
-         type: "function";
-         function: { name: string; description?: string; parameters?: unknown };
-       } =>
-         item.type === "function" && typeof (item as { function?: { name?: unknown } }).function?.name === "string")
-       .map((item) => [
-         item.function.name,
-         tool({
-           description: item.function.description ?? "",
-           inputSchema: jsonSchema(item.function.parameters ?? {}),
-         }),
-       ]),
-   );
  }
 
  // ===========================================================================

@@ -19,3 +19,42 @@ export type {
 } from "./types/CityModel.js";
 
 export type { AuthRoutePolicy } from "./types/auth/AuthRoute.js";
+
+export {
+  MODEL_PROTOCOL_VERSION,
+  ModelStreamValidator,
+} from "./types/model/index.js";
+export type {
+  ModelCall,
+  ModelClient,
+  ModelContent,
+  ModelError,
+  ModelErrorCode,
+  ModelFileBase64Source,
+  ModelFileContent,
+  ModelFileSource,
+  ModelFileUrlSource,
+  ModelFinishReason,
+  ModelJsonContent,
+  ModelJsonValue,
+  ModelMessage,
+  ModelReasoningContent,
+  ModelReasoningRequest,
+  ModelResponseFormat,
+  ModelStreamEnvelope,
+  ModelStreamEvent,
+  ModelStreamRequest,
+  ModelTextContent,
+  ModelTool,
+  ModelToolCallContent,
+  ModelToolChoice,
+  ModelToolResultContent,
+  ModelToolResultPart,
+  ModelUsage,
+} from "./types/model/index.js";
+
+export {
+  define_runtime_tool,
+  type RuntimeTool,
+  type RuntimeToolExecutionOptions,
+} from "./types/tool/index.js";

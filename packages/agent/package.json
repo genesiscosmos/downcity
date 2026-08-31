@@ -1,6 +1,6 @@
 {
   "name": "@downcity/agent",
-  "version": "1.1.397",
+  "version": "1.1.398",
   "type": "module",
   "description": "Downcity 单 Agent SDK 与执行运行时",
   "main": "./bin/index.js",
@@ -40,7 +40,6 @@
     "@downcity/workspace": "workspace:^",
     "@downcity/type": "workspace:*",
     "@downcity/federation": "workspace:^",
-    "ai": "^6.0.193",
     "commander": "^15.0.0",
     "dotenv": "^17.4.2",
     "execa": "^9.6.1",
@@ -57,7 +56,6 @@
     "@downcity/sandbox-linux": "workspace:^",
     "@downcity/sandbox-macos": "workspace:^",
     "@downcity/sandbox-windows-mxc": "workspace:^",
-    "@ai-sdk/openai": "^3.0.67",
     "@types/fs-extra": "^11.0.4",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.9.1",

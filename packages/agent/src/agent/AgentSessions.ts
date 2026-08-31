@@ -8,7 +8,7 @@
  */
 
 import { nanoid } from "nanoid";
-import type { Tool } from "ai";
+import type { RuntimeTool as Tool } from "@downcity/type";
 import type { AgentModel } from "@/agent/AgentModel.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type {

@@ -1,137 +1,44 @@
 ---
-title: 调用 AI
-description: 通过 Embassy User 和第三方工具调用 AIService。
+title: 调用模型
+description: 使用 ModelCall、CityModel 和 ModelStreamEvent 调用 Federation 模型。
 ---
 
-## SDK 通路
+## 直接调用 Federation
 
 ```ts
-import { Embassy } from "@downcity/federation";
-
-const embassy = new Embassy({
-  federation_url,
-  user_token,
+const stream = await city.ai.stream({
+  model: "deepseek-v4-flash",
+  call: {
+    messages: [{
+      role: "user",
+      content: [{ type: "text", text: "解释这个仓库" }],
+    }],
+  },
 });
 
-// 获取模型目录
-const catalog = await embassy.user.ai.catalog();
-const model = catalog.get("deepseek-v4-flash");
-
-// 文本生成
-const msg = await embassy.user.ai.text({ prompt: "hello", model });
-console.log(msg.parts[0].text);
-
-// 流式生成
-const stream = await embassy.user.ai.stream({ prompt: "hello", model });
-const reader = stream.getReader();
-while (true) {
-  const { done, value } = await reader.read();
-  if (done) break;
-  if (value.type === "text-delta") process.stdout.write(value.textDelta);
+for await (const event of stream) {
+  if (event.type === "text_delta") process.stdout.write(event.delta);
 }
 ```
 
-`city.ai.catalog()` 在 `user_token` 身份下只返回当前已经满足运行时 `env` 的模型；同一条路由在管理员会话 Token 身份下会返回全部代码注册模型和它们的 `env_requirements`。
+`city.ai.stream()` 返回 `ReadableStream<ModelStreamEvent>`。成功流以 `model_start` 开始，在 `model_finish` 前提供最终 `model_usage`；协议顺序无效时客户端会直接报错。
 
-## CityModel 和 provider 的关系
+## 作为 Agent 模型
 
-如果调用目标就是当前 Federation 里的模型，优先使用 `CityModel`。模型目录返回的
-`CityModel` 自身实现 AI SDK `LanguageModelV3`，Downcity Agent 和 AI SDK 都可以直接使用它：
+模型目录返回的对象实现 `ModelClient`，可以直接交给 Agent：
 
 ```ts
-import { Agent } from "@downcity/agent";
-
 const catalog = await city.ai.catalog();
 const model = catalog.get("deepseek-v4-flash");
-if (!model) throw new Error("model not found");
-
-await city.ai.text({
-  model,
-  prompt: "hello",
-});
-
-const agent = new Agent({
-  model,
-});
+const agent = new Agent({ id: "reviewer", model });
 ```
 
-这条路径不需要产品侧创建 AI SDK provider。Agent 直接调用 `CityModel.doStream()`，
-CityModel 请求 Federation 的 `/v1/ai/stream`。`city.ai.stream()` 也使用同一个
-CityModel，只在客户端额外转换成 `UIMessageChunk`。Session 如有自己的
-`AgentModel` 实例会优先使用。
+Agent 负责 Session 上下文、工具循环和审批；Federation 负责最终模型选择与计费。
 
-## OpenAI 兼容通路
+## 多模态 fallback
 
-当调用方需要接入 OpenAI SDK、curl 或 OpenAI-compatible 客户端时，再创建兼容 provider。provider 仍然请求
-Federation，而不是直接请求真实上游模型：
+Fallback 只检查 `ModelCall.messages` 中最新一条 `role: "user"` 消息的 `file` 内容。历史图片仍完整发送给最终模型，但最新用户消息只有文本时不会再次触发 fallback。末尾即使存在 assistant 或 tool 消息，也会向前定位最近的 user。
 
-```ts
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+## OpenAI-compatible 客户端
 
-const provider = createOpenAICompatible({
-  name: "downcity",
-  baseURL: city.ai.base_url,
-  apiKey: user_token,
-});
-
-const model = provider.languageModel("deepseek-v4-flash");
-```
-
-请求体保持标准 OpenAI-compatible JSON。`model` 来自
-`languageModel(model_id)`，`bureau_id` 由服务端从 bearer `user_token` 中解析，
-不需要放进请求体。
-
-请求会进入 Federation 的 AIService：
-
-```txt
-POST /v1/ai/chat/completions
-  -> 校验 user_token
-  -> 从 token 解析 bureau_id / user_id
-  -> 读取 body.model
-  -> 找到模型绑定的 provider
-  -> 由 provider 调用真实上游模型
-  -> 返回 OpenAI-compatible response
-```
-
-前端只关心 `model_id`，不需要知道真实 provider 是 OpenAI、DeepSeek、Gemini
-还是自定义 provider。
-
-## 调用路径选择
-
-| 场景 | 推荐方式 |
-|---|---|
-| 产品代码直接请求 Fed 文本或流式生成 | `city.ai.text()` / `city.ai.stream()` |
-| Downcity Agent 使用 Fed 模型 | 直接传 `CityModel` |
-| AI SDK 生态需要 `LanguageModel` | 直接传 `CityModel` |
-| OpenAI SDK、curl 或兼容客户端调试 | `/v1/ai/chat/completions` |
-| 图片、TTS、ASR、video | `city.ai.image_create()` / `city.ai.tts()` / `city.ai.asr()` 等 City SDK 方法 |
-| 使用非 Fed 模型 API | 产品侧自己创建对应 provider |
-
-### curl
-
-```bash
-curl http://127.0.0.1:43127/v1/ai/chat/completions \
-  -H "Authorization: Bearer <user_token>" \
-  -d '{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"hello"}],"stream":true}'
-```
-
-### OpenAI SDK
-
-```ts
-import OpenAI from "openai";
-
-const openai = new OpenAI({
-  baseURL: city.ai.base_url,
-  apiKey: user_token,
-});
-
-const stream = await openai.chat.completions.create({
-  model: "deepseek-v4-flash",
-  messages: [{ role: "user", content: "你好" }],
-  stream: true,
-});
-
-for await (const chunk of stream) {
-  process.stdout.write(chunk.choices[0]?.delta?.content || "");
-}
-```
+需要使用 OpenAI SDK、curl 或现有网关时，调用 `/v1/ai/chat/completions`。该端点会在边界把 OpenAI 请求转换为同一个 `ModelCall`，路由、fallback、reasoning、usage 和计费语义保持一致。

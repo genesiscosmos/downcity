@@ -7,11 +7,11 @@
  * - 会话控制接口统一暴露在 `/api/control/*` 下。
  */
 
-import type { SystemModelMessage } from "ai";
 import {
   to_session_message_timeline_events,
   type AgentSession,
   type SessionMessage,
+  type SessionSystemMessage,
 } from "@downcity/agent";
 import type { ControlSessionExecuteRequestBody } from "@/city/agent/control/types/ControlSessionExecute.js";
 import type { ControlRouteRegistrationParams } from "@/city/agent/http/control/types/ControlRoutes.js";
@@ -49,25 +49,14 @@ function normalizeSystemText(input: string | null | undefined): string {
   return String(input || "").trim();
 }
 
-function toSystemMessageText(message: SystemModelMessage): string {
-  const content = message.content as unknown;
-  if (typeof content === "string") return normalizeSystemText(content);
-  if (!Array.isArray(content)) return "";
-  const parts = content as Array<{ text?: unknown }>;
-  const texts: string[] = [];
-  for (const part of parts) {
-    if (!part || typeof part !== "object") continue;
-    const text = normalizeSystemText(String(part.text || ""));
-    if (!text) continue;
-    texts.push(text);
-  }
-  return texts.join("\n").trim();
+function toSystemMessageText(message: SessionSystemMessage): string {
+  return normalizeSystemText(message.content);
 }
 
 /**
  * 把 system messages 转成 control UI 可渲染结构。
  */
-function toSystemPromptPayload(messages: SystemModelMessage[]): {
+function toSystemPromptPayload(messages: SessionSystemMessage[]): {
   sections: Array<{
     key: string;
     title: string;

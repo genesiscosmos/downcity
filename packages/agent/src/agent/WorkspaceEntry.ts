@@ -8,7 +8,8 @@
  * - 它不是公开领域对象，也不是 AgentWorkspace。
  */
 
-import type { Tool, SystemModelMessage } from "ai";
+import type { RuntimeTool as Tool } from "@downcity/type";
+import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import type { Hono } from "hono";
 import type { WorkspaceShell } from "@downcity/workspace";
 import { AgentSessions } from "@/agent/AgentSessions.js";
@@ -223,7 +224,7 @@ export class WorkspaceEntry {
   async resolve_system_messages(input: {
     session_id: string;
     profile?: SystemProfile;
-  }): Promise<SystemModelMessage[]> {
+  }): Promise<SessionSystemMessage[]> {
     return await resolve_session_system_messages({
       project_root: this.workspace.path,
       session_id: input.session_id,

@@ -5,11 +5,9 @@
  * 负责组装模型输入和生成压缩计划，不持久化 Message、Metadata 或事件。
  */
 
-import type {
-  LanguageModel,
-  SystemModelMessage,
-  Tool,
-} from "ai";
+import type { ModelClient } from "@downcity/type";
+import type { RuntimeTool as Tool } from "@downcity/type";
+import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import type { SessionRecordV1 } from "@/executor/types/SessionRecords.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionContextSnapshot, SessionSegmentSummary } from "@/types/session/SessionSegment.js";
@@ -31,7 +29,7 @@ export interface SessionComposeIdentity {
 /** Composer 可读取的当前 Step 生效状态。 */
 export interface SessionComposeState {
   /** 当前 Step 使用的模型实例；只读查询允许为空。 */
-  model?: LanguageModel;
+  model?: ModelClient;
   /** 当前模型声明的上下文窗口，单位为 token。 */
   model_context_window?: number;
   /** 当前 Step 生效的 Agent 环境变量快照。 */
@@ -71,7 +69,7 @@ export interface SessionComposeInput {
 /** Composer 为一次模型 Step 生成的完整输入。 */
 export interface SessionStepInput {
   /** 当前 Step 的 system messages。 */
-  system: SystemModelMessage[];
+  system: SessionSystemMessage[];
   /** 当前 Step 的可解释 system block；自定义 Composer 可以省略。 */
   system_blocks?: AgentSessionSystemBlock[];
   /** 当前 Step 的历史与用户消息。 */
@@ -85,7 +83,7 @@ export interface SessionCompactionInput {
   /** 当前 Session 的稳定身份快照。 */
   session: SessionComposeIdentity;
   /** 当前 Session 实际使用的模型；只读或未配置场景允许为空。 */
-  model?: LanguageModel;
+  model?: ModelClient;
   /** 当前 Session 的累计 Summary 与 Active Message 快照。 */
   history: Readonly<SessionContextSnapshot>;
 }

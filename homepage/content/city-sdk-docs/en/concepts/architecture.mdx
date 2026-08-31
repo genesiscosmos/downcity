@@ -1,33 +1,33 @@
 ---
 title: AI Architecture
-description: The CityModel, AIService, AIChannel, and LanguageModelV3 execution path.
+description: The ModelClient, AIService, AIChannel, and Provider Adapter execution path.
 ---
 
 ```text
 City client / Agent
         |
         v
-CityModel (LanguageModelV3)
+CityModel (ModelClient)
         |
         v
 Federation AIService
   auth -> model lookup -> fallback -> reasoning -> metering
         |
         v
-AIChannel.stream(ctx, LanguageModelV3CallOptions)
+AIChannel.stream(AIChannelStreamInput)
         |
         v
-AI SDK model or private upstream adapter
+OpenAI-compatible or private Provider Adapter
 ```
 
 `CityModel` is the client-side executable model. It knows the public `CityModelDescriptor` and the Federation transport, but never knows upstream keys or vendor protocol details.
 
 `AIService` is the server-side orchestrator. It owns route selection, fallback, reasoning validation, usage normalization, and billing.
 
-`AIChannel` is the server-side upstream boundary. It owns connection configuration, upstream model selection, AI SDK `providerOptions`, and conversion into `LanguageModelV3StreamResult`.
+`AIChannel` is the server-side upstream boundary. It owns connection configuration, upstream model selection, server-side `provider_options`, and delegates conversion into `ModelStreamEvent` to a Provider Adapter.
 
 The OpenAI-compatible endpoint is an adapter, not another execution path:
 
 ```text
-OpenAI JSON/SSE -> V3 call -> AIService -> AIChannel.stream -> V3 stream -> OpenAI JSON/SSE
+OpenAI JSON/SSE -> ModelCall -> AIService -> AIChannel.stream -> ModelStreamEvent -> OpenAI JSON/SSE
 ```

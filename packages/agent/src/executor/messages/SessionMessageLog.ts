@@ -7,7 +7,7 @@
  * - 不参与模型消息转换，也不感知附件注入逻辑。
  */
 
-import { isTextUIPart } from "ai";
+import { is_session_text_part as isTextUIPart } from "@/types/session/SessionUiMessage.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionMessageRecordV1 } from "@/executor/types/SessionRecords.js";
 

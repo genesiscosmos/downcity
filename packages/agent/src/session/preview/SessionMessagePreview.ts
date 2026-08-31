@@ -7,10 +7,10 @@
  */
 
 import {
-  getToolName,
-  isToolUIPart,
-  type UIMessagePart,
-} from "ai";
+  is_session_tool_part as isToolUIPart,
+  read_session_tool_name,
+  type SessionUiPart,
+} from "@/types/session/SessionUiMessage.js";
 import { pick_last_successful_chat_send_text } from "@/executor/messages/UserVisibleText.js";
 import type {
   SessionMessageRecordV1,
@@ -21,10 +21,7 @@ import {
   is_session_message_record,
 } from "@/executor/types/SessionRecords.js";
 
-type SessionPreviewPart = UIMessagePart<
-  Record<string, never>,
-  Record<string, never>
->;
+type SessionPreviewPart = SessionUiPart;
 
 function extract_message_text(parts: unknown): string {
   if (!Array.isArray(parts)) return "";
@@ -46,7 +43,7 @@ function extract_assistant_tool_summary(
   const tool_names = new Set<string>();
   for (const part of message.parts as SessionPreviewPart[]) {
     if (!part || typeof part !== "object" || !isToolUIPart(part)) continue;
-    const tool_name = String(getToolName(part) || "").trim();
+    const tool_name = String(read_session_tool_name(part) || "").trim();
     if (tool_name) tool_names.add(tool_name);
   }
   return tool_names.size > 0

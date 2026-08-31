@@ -1,18 +1,26 @@
 /**
- * OpenAI Chat Completions 与 AI SDK LanguageModelV3 的协议适配模块。
+ * OpenAI Chat Completions 与 Downcity Model Protocol 的边界适配模块。
  *
- * 本模块只负责 HTTP 协议转换，不负责模型选择、fallback、reasoning 策略、
- * providerOptions 或计费。所有请求在进入 AIChannel 前都已变为标准 V3 call。
+ * OpenAI 类型只存在于本文件；AIService、路由和 AIChannel 只处理 Downcity 协议。
  */
 
+import { ModelStreamValidator } from "@downcity/type";
 import type {
-  LanguageModelV3CallOptions,
-  LanguageModelV3GenerateResult,
-  LanguageModelV3StreamPart,
-  LanguageModelV3StreamResult,
-} from "../../types/AI.js";
+  ModelCall,
+  ModelContent,
+  ModelFileContent,
+  ModelFinishReason,
+  ModelJsonValue,
+  ModelMessage,
+  ModelStreamEvent,
+  ModelTool,
+  ModelToolCallContent,
+  ModelUsage,
+} from "@downcity/type";
+import type { AIChannelStreamResult } from "../../types/AI.js";
 import type {
-  AIStreamCompletion,
+  ModelCompletionResult,
+  OpenAIChatCompletionExecution,
   OpenAIChatCompletionRequest,
   OpenAIChatContentPart,
   OpenAIChatMessage,
@@ -21,520 +29,331 @@ import type {
   OpenAIChatToolChoice,
   OpenAIChatUsage,
 } from "../../types/AITransport.js";
-import { collect_city_language_model_stream } from "../../utils/CityLanguageModelResult.js";
 
-/** OpenAI SSE 响应头。 */
 const OPENAI_SSE_HEADERS = {
   "content-type": "text/event-stream; charset=utf-8",
   "cache-control": "no-cache, no-transform",
   connection: "keep-alive",
 } as const;
 
-/** 将 OpenAI Chat Completions 请求转换为标准 LanguageModelV3 调用参数。 */
+/** 将 OpenAI Chat Completions 请求转换为 Downcity ModelCall。 */
 export function openai_chat_request_to_language_model_call(
   request: OpenAIChatCompletionRequest,
-  signal?: AbortSignal,
-): LanguageModelV3CallOptions {
-  if (!Array.isArray(request.messages)) {
-    throw create_request_error("messages must be an array");
-  }
-  const max_output_tokens = read_optional_number(
-    request.max_completion_tokens ?? request.max_tokens,
-  );
-  const stop_sequences = typeof request.stop === "string"
-    ? [request.stop]
-    : Array.isArray(request.stop)
-      ? request.stop.filter((item): item is string => typeof item === "string")
-      : undefined;
+): ModelCall {
+  if (!Array.isArray(request.messages)) throw create_request_error("messages must be an array");
+  const max_output_tokens = read_optional_number(request.max_completion_tokens ?? request.max_tokens);
   const tools = convert_tools(request.tools);
   const tool_choice = convert_tool_choice(request.tool_choice);
   const response_format = convert_response_format(request.response_format);
-
+  const reasoning_effort = read_optional_string(request.reasoning_effort);
   return {
-    prompt: convert_messages(request.messages),
-    ...(max_output_tokens !== undefined ? { maxOutputTokens: max_output_tokens } : {}),
+    messages: convert_messages(request.messages),
+    ...(max_output_tokens !== undefined ? { max_output_tokens } : {}),
     ...(read_optional_number(request.temperature) !== undefined
-      ? { temperature: read_optional_number(request.temperature) }
-      : {}),
+      ? { temperature: read_optional_number(request.temperature) } : {}),
     ...(read_optional_number(request.top_p) !== undefined
-      ? { topP: read_optional_number(request.top_p) }
-      : {}),
-    ...(stop_sequences?.length ? { stopSequences: stop_sequences } : {}),
+      ? { top_p: read_optional_number(request.top_p) } : {}),
+    ...(typeof request.stop === "string"
+      ? { stop_sequences: [request.stop] }
+      : Array.isArray(request.stop)
+        ? { stop_sequences: request.stop.filter((item): item is string => typeof item === "string") }
+        : {}),
     ...(read_optional_number(request.presence_penalty) !== undefined
-      ? { presencePenalty: read_optional_number(request.presence_penalty) }
-      : {}),
+      ? { presence_penalty: read_optional_number(request.presence_penalty) } : {}),
     ...(read_optional_number(request.frequency_penalty) !== undefined
-      ? { frequencyPenalty: read_optional_number(request.frequency_penalty) }
-      : {}),
+      ? { frequency_penalty: read_optional_number(request.frequency_penalty) } : {}),
     ...(Number.isInteger(request.seed) ? { seed: request.seed } : {}),
-    ...(tools?.length ? { tools } : {}),
-    ...(tool_choice ? { toolChoice: tool_choice } : {}),
-    ...(response_format ? { responseFormat: response_format } : {}),
-    ...(signal ? { abortSignal: signal } : {}),
-  } as LanguageModelV3CallOptions;
+    ...(tools.length > 0 ? { tools } : {}),
+    ...(tool_choice ? { tool_choice } : {}),
+    ...(response_format ? { response_format } : {}),
+    ...(reasoning_effort ? { reasoning: { enabled: true, effort: reasoning_effort } } : {}),
+  };
 }
 
-/** 把标准 V3 流输出转换成 OpenAI JSON 或 SSE Response。 */
+/** 将 Downcity 模型事件流转换为 OpenAI JSON 或 SSE。 */
 export async function create_openai_chat_completion_response(input: {
   /** Federation 对外模型 ID。 */
   model_id: string;
   /** 是否返回 SSE。 */
   stream: boolean;
-  /** AIChannel 返回的标准 V3 流。 */
-  result: LanguageModelV3StreamResult;
-}): Promise<{ response: Response; completion: Promise<AIStreamCompletion<LanguageModelV3GenerateResult>> }> {
-  if (input.stream) return create_stream_response(input.model_id, input.result);
-  const completion = collect_city_language_model_stream(
-    input.result.stream,
-    input.result.request?.body,
-  );
-  const result = await completion;
-  return {
-    response: Response.json(create_json_response(input.model_id, result)),
-    completion: Promise.resolve({ outcome: "succeeded", result }),
-  };
+  /** AIChannel 返回的标准 Downcity 流。 */
+  result: AIChannelStreamResult;
+}): Promise<OpenAIChatCompletionExecution> {
+  return input.stream
+    ? create_stream_response(input.model_id, input.result.stream)
+    : create_json_response(input.model_id, input.result.stream);
 }
 
-/** 创建非流式 OpenAI Chat Completion JSON。 */
-function create_json_response(
+/** 收集完整流并生成 OpenAI 非流式响应。 */
+async function create_json_response(
   model_id: string,
-  result: LanguageModelV3GenerateResult,
-): Record<string, unknown> {
-  const metadata = result.response;
-  const tool_calls = result.content
-    .filter((part) => part.type === "tool-call")
-    .map((part) => ({
-      id: part.toolCallId,
-      type: "function",
-      function: {
-        name: part.toolName,
-        arguments: serialize_tool_input(part.input),
-      },
-    }));
-  const content = result.content
+  stream: ReadableStream<ModelStreamEvent>,
+): Promise<OpenAIChatCompletionExecution> {
+  const completion = await collect_model_stream(stream);
+  const tool_calls = completion.message.content
+    .filter((content): content is ModelToolCallContent => content.type === "tool_call")
+    .map(to_openai_tool_call);
+  const content = completion.message.content
     .filter((part) => part.type === "text")
     .map((part) => part.text)
     .join("");
-  const reasoning_content = result.content
-    .filter((part) => part.type === "reasoning")
-    .map((part) => part.text)
-    .join("");
-  return {
-    id: metadata?.id ?? `chatcmpl_${crypto.randomUUID()}`,
+  const body = {
+    id: `chatcmpl_${crypto.randomUUID().replaceAll("-", "")}`,
     object: "chat.completion",
-    created: to_unix_timestamp(metadata?.timestamp),
+    created: Math.floor(Date.now() / 1000),
     model: model_id,
     choices: [{
       index: 0,
       message: {
         role: "assistant",
         content: content || null,
-        ...(reasoning_content ? { reasoning_content } : {}),
-        ...(tool_calls.length ? { tool_calls } : {}),
+        ...(tool_calls.length > 0 ? { tool_calls } : {}),
       },
-      finish_reason: to_openai_finish_reason(result.finishReason),
+      finish_reason: to_openai_finish_reason(completion.finish_reason),
     }],
-    usage: to_openai_usage(result.usage),
+    ...(completion.usage ? { usage: to_openai_usage(completion.usage) } : {}),
   };
+  return { response: Response.json(body), completion: Promise.resolve(completion) };
 }
 
-/** 创建 OpenAI Chat Completions SSE，并在消费过程中聚合计费所需结果。 */
+/** 增量转换 Downcity 事件并生成 OpenAI SSE。 */
 function create_stream_response(
   model_id: string,
-  result: LanguageModelV3StreamResult,
-): { response: Response; completion: Promise<AIStreamCompletion<LanguageModelV3GenerateResult>> } {
-  const reader = result.stream.getReader();
+  source: ReadableStream<ModelStreamEvent>,
+): OpenAIChatCompletionExecution {
+  const reader = source.getReader();
   const encoder = new TextEncoder();
-  const response_id = `chatcmpl_${crypto.randomUUID()}`;
-  let resolved_response_id = response_id;
-  let created = Math.floor(Date.now() / 1000);
-  let resolve_completion: (value: AIStreamCompletion<LanguageModelV3GenerateResult>) => void = () => undefined;
-  const completion = new Promise<AIStreamCompletion<LanguageModelV3GenerateResult>>((resolve) => {
+  const collector = new ModelEventCollector();
+  const validator = new ModelStreamValidator();
+  const completion_id = `chatcmpl_${crypto.randomUUID().replaceAll("-", "")}`;
+  let resolve_completion: (value: ModelCompletionResult | undefined) => void = () => undefined;
+  const completion = new Promise<ModelCompletionResult | undefined>((resolve) => {
     resolve_completion = resolve;
   });
-  const collected_parts: LanguageModelV3StreamPart[] = [];
-  const tool_indexes = new Map<string, number>();
-  const streamed_tool_ids = new Set<string>();
-  let next_tool_index = 0;
-  let completed = false;
-  let sent_role = false;
-
-  const body = new ReadableStream<Uint8Array>({
+  const response_stream = new ReadableStream<Uint8Array>({
     async pull(controller) {
       try {
-        while (true) {
-          const chunk = await reader.read();
-          if (chunk.done) {
-            await complete_stream();
-            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-            controller.close();
-            return;
-          }
-          const part = chunk.value;
-          collected_parts.push(part);
-          if (part.type === "response-metadata") {
-            if (part.id) resolved_response_id = part.id;
-            created = to_unix_timestamp(part.timestamp);
-          }
-          if (part.type === "finish") {
-            if (!sent_role) {
-              sent_role = true;
-              controller.enqueue(encoder.encode(serialize_sse_chunk({
-                delta: { role: "assistant" },
-              })));
-            }
-            controller.enqueue(encoder.encode(serialize_sse_chunk({
-              delta: {},
-              finish_reason: to_openai_finish_reason(part.finishReason),
-              usage: to_openai_usage(part.usage),
-            })));
-            return;
-          }
-          const payloads = stream_part_to_openai_chunks(part, {
-            get_tool_index: (tool_call_id) => {
-              const existing = tool_indexes.get(tool_call_id);
-              if (existing !== undefined) return existing;
-              const index = next_tool_index;
-              next_tool_index += 1;
-              tool_indexes.set(tool_call_id, index);
-              return index;
-            },
-            streamed_tool_ids,
-          });
-          if (!sent_role && payloads.length > 0) {
-            sent_role = true;
-            payloads.unshift({ role: "assistant" });
-          }
-          if (payloads.length === 0) continue;
-          for (const delta of payloads) {
-            controller.enqueue(encoder.encode(serialize_sse_chunk({ delta })));
-          }
+        const next = await reader.read();
+        if (next.done) {
+          validator.finish();
+          resolve_completion(collector.result_or_undefined());
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
           return;
         }
-      } catch (error) {
-        complete({ outcome: "failed", error });
-        controller.error(error);
+        validator.accept(next.value);
+        collector.accept(next.value);
+        const chunk = to_openai_stream_chunk(completion_id, model_id, next.value);
+        if (chunk) controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+      } catch {
+        resolve_completion(undefined);
+        controller.close();
       }
     },
     async cancel(reason) {
       await reader.cancel(reason);
-      complete({ outcome: "cancelled" });
+      resolve_completion(undefined);
     },
   });
-
   return {
-    response: new Response(body, { status: 200, headers: OPENAI_SSE_HEADERS }),
+    response: new Response(response_stream, { status: 200, headers: OPENAI_SSE_HEADERS }),
     completion,
   };
+}
 
-  /** 序列化一个 OpenAI chunk。 */
-  function serialize_sse_chunk(input: {
-    delta: Record<string, unknown>;
-    finish_reason?: string | null;
-    usage?: OpenAIChatUsage;
-  }): string {
-    return `data: ${JSON.stringify({
-      id: resolved_response_id,
-      object: "chat.completion.chunk",
-      created,
-      model: model_id,
-      choices: [{
-        index: 0,
-        delta: input.delta,
-        finish_reason: input.finish_reason ?? null,
-      }],
-      ...(input.usage ? { usage: input.usage } : {}),
-    })}\n\n`;
+/** 将单个 Downcity 事件投影为 OpenAI chunk。 */
+function to_openai_stream_chunk(id: string, model: string, event: ModelStreamEvent): unknown {
+  const base = { id, object: "chat.completion.chunk", created: Math.floor(Date.now() / 1000), model };
+  if (event.type === "model_start") {
+    return { ...base, choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }] };
+  }
+  if (event.type === "text_delta") {
+    return { ...base, choices: [{ index: 0, delta: { content: event.delta }, finish_reason: null }] };
+  }
+  if (event.type === "tool_call_start") {
+    return {
+      ...base,
+      choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: event.tool_call_id, type: "function", function: { name: event.tool_name, arguments: "" } }] }, finish_reason: null }],
+    };
+  }
+  if (event.type === "tool_call_delta") {
+    return { ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: event.input_delta } }] }, finish_reason: null }] };
+  }
+  if (event.type === "model_finish") {
+    return { ...base, choices: [{ index: 0, delta: {}, finish_reason: to_openai_finish_reason(event.finish_reason) }] };
+  }
+  if (event.type === "model_usage") return { ...base, choices: [], usage: to_openai_usage(event.usage) };
+  return undefined;
+}
+
+/** 收集标准模型流。 */
+async function collect_model_stream(stream: ReadableStream<ModelStreamEvent>): Promise<ModelCompletionResult> {
+  const collector = new ModelEventCollector();
+  const validator = new ModelStreamValidator();
+  for await (const event of stream) {
+    validator.accept(event);
+    collector.accept(event);
+  }
+  validator.finish();
+  const result = collector.result_or_undefined();
+  if (!result) throw new Error("Model stream ended without model_finish");
+  return result;
+}
+
+/** 将事件状态聚合为单个 assistant ModelMessage。 */
+class ModelEventCollector {
+  private readonly content: ModelContent[] = [];
+  private readonly text = new Map<string, string>();
+  private readonly reasoning = new Map<string, string>();
+  private readonly tools = new Map<string, { tool_call_id: string; tool_name: string }>();
+  private usage?: ModelUsage;
+  private finish_reason?: ModelFinishReason;
+
+  /** 消费单个已校验的模型事件。 */
+  accept(event: ModelStreamEvent): void {
+    if (event.type === "text_start") this.text.set(event.content_id, "");
+    else if (event.type === "text_delta") this.text.set(event.content_id, (this.text.get(event.content_id) ?? "") + event.delta);
+    else if (event.type === "text_finish") this.content.push({ type: "text", text: this.text.get(event.content_id) ?? "" });
+    else if (event.type === "reasoning_start") this.reasoning.set(event.content_id, "");
+    else if (event.type === "reasoning_delta") this.reasoning.set(event.content_id, (this.reasoning.get(event.content_id) ?? "") + event.delta);
+    else if (event.type === "reasoning_finish") this.content.push({ type: "reasoning", text: this.reasoning.get(event.content_id) ?? "", ...(event.signature ? { signature: event.signature } : {}) });
+    else if (event.type === "tool_call_start") this.tools.set(event.content_id, { tool_call_id: event.tool_call_id, tool_name: event.tool_name });
+    else if (event.type === "tool_call_finish") {
+      const tool = this.tools.get(event.content_id);
+      if (tool) this.content.push({ type: "tool_call", ...tool, input: event.input });
+    } else if (event.type === "model_usage") this.usage = event.usage;
+    else if (event.type === "model_finish") this.finish_reason = event.finish_reason;
+    else if (event.type === "model_error") throw new Error(event.error.message);
   }
 
-  /** 在上游结束时输出 finish chunk 并构造标准聚合结果。 */
-  async function complete_stream(): Promise<void> {
-    const replay = new ReadableStream<LanguageModelV3StreamPart>({
-      start(replay_controller) {
-        for (const part of collected_parts) replay_controller.enqueue(part);
-        replay_controller.close();
-      },
-    });
-    try {
-      complete({
-        outcome: "succeeded",
-        result: await collect_city_language_model_stream(replay, result.request?.body),
-      });
-    } catch (error) {
-      complete({ outcome: "failed", error });
-    }
-  }
-
-  /** 只结算一次 completion。 */
-  function complete(value: AIStreamCompletion<LanguageModelV3GenerateResult>): void {
-    if (completed) return;
-    completed = true;
-    resolve_completion(value);
+  /** 仅在收到完成事件后返回聚合结果。 */
+  result_or_undefined(): ModelCompletionResult | undefined {
+    return this.finish_reason
+      ? { message: { role: "assistant", content: this.content }, finish_reason: this.finish_reason, ...(this.usage ? { usage: this.usage } : {}) }
+      : undefined;
   }
 }
 
-/** 将一个 V3 流事件转换成零个或多个 OpenAI delta。 */
-function stream_part_to_openai_chunks(
-  part: LanguageModelV3StreamPart,
-  state: {
-    /** 为一个工具调用分配稳定的 OpenAI choice index。 */
-    get_tool_index: (tool_call_id: string) => number;
-    /** 已经输出过增量参数的工具调用 ID。 */
-    streamed_tool_ids: Set<string>;
-  },
-): Record<string, unknown>[] {
-  if (part.type === "text-delta") return [{ content: part.delta }];
-  if (part.type === "reasoning-delta") return [{ reasoning_content: part.delta }];
-  if (part.type === "tool-input-start") {
-    state.streamed_tool_ids.add(part.id);
-    return [{
-      tool_calls: [{
-        index: state.get_tool_index(part.id),
-        id: part.id,
-        type: "function",
-        function: { name: part.toolName, arguments: "" },
-      }],
-    }];
-  }
-  if (part.type === "tool-input-delta") {
-    state.streamed_tool_ids.add(part.id);
-    return [{
-      tool_calls: [{
-        index: state.get_tool_index(part.id),
-        id: part.id,
-        function: { arguments: part.delta },
-      }],
-    }];
-  }
-  if (part.type === "tool-call") {
-    if (state.streamed_tool_ids.has(part.toolCallId)) return [];
-    return [{
-      tool_calls: [{
-        index: state.get_tool_index(part.toolCallId),
-        id: part.toolCallId,
-        type: "function",
-        function: {
-          name: part.toolName,
-          arguments: serialize_tool_input(part.input),
-        },
-      }],
-    }];
-  }
-  if (part.type === "error") throw part.error;
-  return [];
+/** 将 OpenAI 消息转换为 Downcity 消息。 */
+function convert_messages(messages: OpenAIChatMessage[]): ModelMessage[] {
+  return messages.map((message) => {
+    if (message.role === "tool") return convert_tool_message(message);
+    const role = message.role === "developer" ? "system" : message.role;
+    const content = convert_content(message.content);
+    if (message.role === "assistant" && Array.isArray(message.tool_calls)) {
+      content.push(...message.tool_calls.map((tool_call): ModelToolCallContent => ({
+        type: "tool_call",
+        tool_call_id: tool_call.id,
+        tool_name: tool_call.function.name,
+        input: parse_json_value(tool_call.function.arguments),
+      })));
+    }
+    return { role, content: content.length > 0 ? content : [{ type: "text", text: "" }] } as ModelMessage;
+  });
 }
 
-/** 将 OpenAI 消息列表转换成标准 V3 prompt。 */
-function convert_messages(messages: OpenAIChatMessage[]): LanguageModelV3CallOptions["prompt"] {
-  const prompt: Array<Record<string, unknown>> = [];
-  const tool_names = new Map<string, string>();
-  for (const message of messages) {
-    if (!message || typeof message !== "object") throw create_request_error("message must be an object");
-    if (message.role === "system" || message.role === "developer") {
-      prompt.push({ role: "system", content: read_text_content(message.content) });
-      continue;
-    }
-    if (message.role === "user") {
-      prompt.push({ role: "user", content: convert_user_content(message.content) });
-      continue;
-    }
-    if (message.role === "assistant") {
-      const content: Array<Record<string, unknown>> = [];
-      if (Array.isArray(message.content)) {
-        content.push(...convert_user_content(message.content));
-      } else {
-        const text = read_optional_text_content(message.content);
-        if (text) content.push({ type: "text", text });
-      }
-      for (const tool_call of message.tool_calls ?? []) {
-        tool_names.set(tool_call.id, tool_call.function.name);
-        content.push({
-          type: "tool-call",
-          toolCallId: tool_call.id,
-          toolName: tool_call.function.name,
-          input: parse_json_or_text(tool_call.function.arguments),
-        });
-      }
-      prompt.push({ role: "assistant", content });
-      continue;
-    }
-    if (message.role === "tool") {
-      const tool_call_id = read_required_string(message.tool_call_id, "tool_call_id");
-      prompt.push({
-        role: "tool",
-        content: [{
-          type: "tool-result",
-          toolCallId: tool_call_id,
-          toolName: message.name ?? tool_names.get(tool_call_id) ?? "tool",
-          output: create_tool_output(message.content),
-        }],
-      });
-      continue;
-    }
-    throw create_request_error(`unsupported message role: ${String(message.role)}`);
-  }
-  return prompt as LanguageModelV3CallOptions["prompt"];
+/** 转换 OpenAI tool 角色消息。 */
+function convert_tool_message(message: OpenAIChatMessage): ModelMessage {
+  const tool_call_id = read_optional_string(message.tool_call_id);
+  if (!tool_call_id) throw create_request_error("tool message requires tool_call_id");
+  return {
+    role: "tool",
+    content: [{
+      type: "tool_result",
+      tool_call_id,
+      tool_name: read_optional_string(message.name) ?? "tool",
+      outcome: "succeeded",
+      content: convert_content(message.content).flatMap((part) => part.type === "text" || part.type === "file" ? [part] : []),
+    }],
+  };
 }
 
-/** 转换 user 的文本、图片和文件内容。 */
-function convert_user_content(content: OpenAIChatMessage["content"]): Array<Record<string, unknown>> {
+/** 转换 OpenAI 文本或多模态内容。 */
+function convert_content(content: OpenAIChatMessage["content"]): ModelContent[] {
   if (typeof content === "string") return [{ type: "text", text: content }];
-  if (content == null) return [];
-  if (!Array.isArray(content)) throw create_request_error("message content must be a string or array");
-  return content.map((part) => convert_user_part(part));
+  if (!Array.isArray(content)) return [];
+  return content.flatMap(convert_content_part);
 }
 
-/** 转换单个 OpenAI user content part。 */
-function convert_user_part(part: OpenAIChatContentPart): Record<string, unknown> {
-  if (part.type === "text" || part.type === "input_text") {
-    return { type: "text", text: read_required_string(part.text, "content.text") };
-  }
+/** 转换单个 OpenAI content part。 */
+function convert_content_part(part: OpenAIChatContentPart): ModelContent[] {
+  if (part.type === "text" || part.type === "input_text") return [{ type: "text", text: part.text }];
   if (part.type === "image_url" || part.type === "input_image") {
-    const url = part.url ?? part.image_url?.url;
-    return {
-      type: "file",
-      data: to_url_or_data(read_required_string(url, "content.image_url.url")),
-      mediaType: infer_media_type(url, "image/*"),
-    };
+    const url = read_optional_string(part.url) ?? read_optional_string(part.image_url?.url);
+    return url ? [{ type: "file", media_type: "image/*", source: { type: "url", url } }] : [];
   }
-  if (part.type === "file") {
-    return {
-      type: "file",
-      data: to_url_or_data(read_required_string(part.url, "content.url")),
-      mediaType: part.media_type ?? part.mediaType ?? infer_media_type(part.url, "application/octet-stream"),
-      ...(part.filename ? { filename: part.filename } : {}),
-    };
-  }
-  throw create_request_error(`unsupported content type: ${String((part as { type?: unknown }).type)}`);
+  if (part.type !== "file") return [];
+  const media_type = read_optional_string(part.media_type) ?? read_optional_string(part.mediaType);
+  if (!media_type || !read_optional_string(part.url)) return [];
+  const filename = read_optional_string(part.filename);
+  const file: ModelFileContent = {
+    type: "file",
+    media_type,
+    source: { type: "url", url: part.url },
+    ...(filename ? { filename } : {}),
+  };
+  return [file];
 }
 
-/** 转换 OpenAI function tools。 */
-function convert_tools(tools: OpenAIChatTool[] | undefined): LanguageModelV3CallOptions["tools"] {
-  if (!tools) return undefined;
-  return tools.map((tool) => {
-    if (tool.type !== "function" || !tool.function?.name) {
-      throw create_request_error("only named function tools are supported");
-    }
-    return {
-      type: "function",
-      name: tool.function.name,
-      ...(tool.function.description ? { description: tool.function.description } : {}),
-      inputSchema: tool.function.parameters ?? {},
-      ...(tool.function.strict !== undefined ? { strict: tool.function.strict } : {}),
-    };
-  }) as LanguageModelV3CallOptions["tools"];
+/** 转换 OpenAI 工具定义。 */
+function convert_tools(tools: OpenAIChatTool[] | undefined): ModelTool[] {
+  return (tools ?? []).map((tool) => ({
+    name: tool.function.name,
+    description: tool.function.description ?? "",
+    input_schema: tool.function.parameters as Record<string, ModelJsonValue> ?? {},
+  }));
 }
 
-/** 转换 OpenAI tool_choice。 */
-function convert_tool_choice(
-  choice: OpenAIChatToolChoice | undefined,
-): LanguageModelV3CallOptions["toolChoice"] {
+/** 转换 OpenAI 工具选择策略。 */
+function convert_tool_choice(choice: OpenAIChatToolChoice | undefined): ModelCall["tool_choice"] {
   if (!choice) return undefined;
-  if (typeof choice === "string") return { type: choice };
-  const tool_name = choice.function?.name;
-  if (!tool_name) throw create_request_error("tool_choice.function.name is required");
-  return { type: "tool", toolName: tool_name };
+  if (choice === "auto" || choice === "none" || choice === "required") return { type: choice };
+  return { type: "tool", tool_name: choice.function.name };
 }
 
-/** 转换 OpenAI response_format。 */
-function convert_response_format(
-  format: OpenAIChatResponseFormat | undefined,
-): LanguageModelV3CallOptions["responseFormat"] {
+/** 转换 OpenAI 输出格式。 */
+function convert_response_format(format: OpenAIChatResponseFormat | undefined): ModelCall["response_format"] {
   if (!format || format.type === "text") return format ? { type: "text" } : undefined;
   if (format.type === "json_object") return { type: "json" };
   return {
-    type: "json",
+    type: "json_schema",
     name: format.json_schema.name,
     ...(format.json_schema.description ? { description: format.json_schema.description } : {}),
-    schema: format.json_schema.schema,
-  } as LanguageModelV3CallOptions["responseFormat"];
-}
-
-/** 将 V3 finish reason 映射为 OpenAI finish_reason。 */
-function to_openai_finish_reason(reason: LanguageModelV3GenerateResult["finishReason"]): string {
-  const unified = reason.unified;
-  if (unified === "stop") return "stop";
-  if (unified === "length") return "length";
-  if (unified === "tool-calls") return "tool_calls";
-  if (unified === "content-filter") return "content_filter";
-  return "stop";
-}
-
-/** 将 V3 usage 映射为 OpenAI usage。 */
-function to_openai_usage(usage: LanguageModelV3GenerateResult["usage"]): OpenAIChatUsage {
-  const prompt_tokens = usage.inputTokens.total ?? 0;
-  const completion_tokens = usage.outputTokens.total ?? 0;
-  const cached_tokens = usage.inputTokens.cacheRead ?? 0;
-  const reasoning_tokens = usage.outputTokens.reasoning ?? 0;
-  return {
-    prompt_tokens,
-    completion_tokens,
-    total_tokens: prompt_tokens + completion_tokens,
-    ...(cached_tokens > 0 ? { prompt_tokens_details: { cached_tokens } } : {}),
-    ...(reasoning_tokens > 0 ? { completion_tokens_details: { reasoning_tokens } } : {}),
+    schema: format.json_schema.schema as Record<string, ModelJsonValue>,
   };
 }
 
-/** 将工具输入稳定序列化为 JSON 字符串。 */
-function serialize_tool_input(input: unknown): string {
-  if (typeof input === "string") return input;
+/** 转换工具调用为 OpenAI 格式。 */
+function to_openai_tool_call(content: ModelToolCallContent): unknown {
+  return { id: content.tool_call_id, type: "function", function: { name: content.tool_name, arguments: JSON.stringify(content.input) } };
+}
+
+/** 转换标准完成原因。 */
+function to_openai_finish_reason(reason: ModelFinishReason): string {
+  if (reason === "tool_call") return "tool_calls";
+  if (reason === "content_filter") return "content_filter";
+  if (reason === "length") return "length";
+  return reason === "stop" ? "stop" : "stop";
+}
+
+/** 转换标准 usage。 */
+function to_openai_usage(usage: ModelUsage): OpenAIChatUsage {
+  return {
+    prompt_tokens: usage.input_tokens,
+    completion_tokens: usage.output_tokens,
+    total_tokens: usage.total_tokens,
+    ...(usage.cached_input_tokens !== undefined ? { prompt_tokens_details: { cached_tokens: usage.cached_input_tokens } } : {}),
+    ...(usage.reasoning_tokens !== undefined ? { completion_tokens_details: { reasoning_tokens: usage.reasoning_tokens } } : {}),
+  };
+}
+
+/** 安全解析工具参数 JSON。 */
+function parse_json_value(value: string): ModelJsonValue {
   try {
-    return JSON.stringify(input ?? {});
+    return JSON.parse(value) as ModelJsonValue;
   } catch {
-    return "{}";
+    throw create_request_error("tool call arguments must be valid JSON");
   }
-}
-
-/** 将 JSON 字符串解析为工具输入，非法 JSON 保留为文本。 */
-function parse_json_or_text(input: string): unknown {
-  try {
-    return JSON.parse(input) as unknown;
-  } catch {
-    return input;
-  }
-}
-
-/** 构造标准 V3 tool result output。 */
-function create_tool_output(content: OpenAIChatMessage["content"]): Record<string, unknown> {
-  const value = read_text_content(content);
-  try {
-    return { type: "json", value: JSON.parse(value) as unknown };
-  } catch {
-    return { type: "text", value };
-  }
-}
-
-/** 从消息内容读取纯文本。 */
-function read_text_content(content: OpenAIChatMessage["content"]): string {
-  return read_optional_text_content(content) ?? "";
-}
-
-/** 从消息内容读取可选纯文本。 */
-function read_optional_text_content(content: OpenAIChatMessage["content"]): string | undefined {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return undefined;
-  const text = content
-    .filter((part): part is Extract<OpenAIChatContentPart, { type: "text" | "input_text" }> =>
-      part.type === "text" || part.type === "input_text")
-    .map((part) => part.text)
-    .join("\n");
-  return text || undefined;
-}
-
-/** HTTP URL 转成 URL 对象，Data URL 保持字符串。 */
-function to_url_or_data(value: string): URL | string {
-  return /^https?:\/\//iu.test(value) ? new URL(value) : value;
-}
-
-/** 从 Data URL 推断媒体类型，普通 URL 使用 fallback。 */
-function infer_media_type(value: string | undefined, fallback: string): string {
-  const match = value?.match(/^data:([^;,]+)[;,]/iu);
-  return match?.[1] ?? fallback;
-}
-
-/** 把 Date 转换成 OpenAI Unix 秒级时间戳。 */
-function to_unix_timestamp(value: Date | undefined): number {
-  return value ? Math.floor(value.getTime() / 1000) : Math.floor(Date.now() / 1000);
 }
 
 /** 读取有限数字。 */
@@ -542,13 +361,12 @@ function read_optional_number(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-/** 读取必填字符串。 */
-function read_required_string(value: unknown, field: string): string {
-  if (typeof value !== "string" || !value.trim()) throw create_request_error(`${field} is required`);
-  return value;
+/** 读取非空字符串。 */
+function read_optional_string(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-/** 创建会映射为 HTTP 422 的请求错误。 */
+/** 创建 422 请求错误。 */
 function create_request_error(message: string): Error {
   const error = new Error(message) as Error & { statusCode?: number };
   error.statusCode = 422;

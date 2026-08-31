@@ -1,22 +1,19 @@
 ---
-title: AIChannel 与模型注册
-description: 用 AIChannel 连接上游能力，并通过 AIModelSpec 注册 Federation 模型。
+title: AIChannel 与 Provider Adapter
+description: 用 Downcity Model Protocol 接入上游模型。
 ---
 
-`AIChannel` 是 Federation 服务端的上游 AI 执行渠道。它只负责连接凭据、选择真实上游模型、设置 AI SDK `providerOptions`，以及执行标准 `LanguageModelV3` 流。
+`AIChannel` 只拥有 Federation 到上游模型的执行边界。它接收 `AIChannelStreamInput`，返回 `ReadableStream<ModelStreamEvent>`；fallback、计费、Session 与工具执行都不属于 Channel。
 
-`AIChannel` 不是 AI SDK Provider。AI SDK Provider 是 `createOpenAI()`、`createDeepSeek()` 返回的厂商模型工厂；`AIChannel` 是 Downcity 在 Federation 服务端对这些厂商能力的编排边界。
-
-## 最小示例
+## OpenAI-compatible 上游
 
 ```ts
-import { createDeepSeek } from "@ai-sdk/deepseek";
 import {
   AIChannel,
   AIService,
-  read_required_env,
+  stream_openai_compatible_model,
   type AIChannelStreamInput,
-  type LanguageModelV3StreamResult,
+  type AIChannelStreamResult,
 } from "@downcity/federation";
 
 class DeepSeekChannel extends AIChannel {
@@ -25,104 +22,48 @@ class DeepSeekChannel extends AIChannel {
       id: "deepseek",
       env_key: "DEEPSEEK_API_KEY",
       base_url: "https://api.deepseek.com/v1",
-      ai_sdk_provider_id: "deepseek",
     });
   }
 
   protected async stream(
     input: AIChannelStreamInput,
-  ): Promise<LanguageModelV3StreamResult> {
-    const deepseek = createDeepSeek({
-      apiKey: read_required_env(input, this.env_key ?? ""),
-      baseURL: this.base_url,
+  ): Promise<AIChannelStreamResult> {
+    const api_key = input.env("DEEPSEEK_API_KEY");
+    if (!api_key) throw new Error("DEEPSEEK_API_KEY is required");
+    return stream_openai_compatible_model(input, {
+      api_key,
+      base_url: this.base_url ?? "https://api.deepseek.com/v1",
     });
-    return deepseek(input.model.upstream_model).doStream(input.call);
   }
 }
 
-const deepseek_channel = new DeepSeekChannel();
+const channel = new DeepSeekChannel();
 const ai = new AIService();
-
-ai.use(deepseek_channel.model({
+ai.use(channel.model({
   id: "deepseek-v4-flash",
   upstream_model: "deepseek-chat",
   name: "DeepSeek V4 Flash",
   context_window: 128_000,
-  tags: ["text"],
 }));
-
 federation.use(ai);
 ```
 
-`upstream_model` 必须写在具体模型上。Channel 可以注册多个 Federation 模型，每个模型可以指向不同的真实上游 ID。
+`stream_openai_compatible_model()` 是边界 Adapter：它把 `ModelCall` 转成 Chat Completions 请求，并把上游 SSE 转成 Downcity 事件。私有协议应实现自己的 Adapter，但保持相同输入输出。
 
-## 数据结构
+## 进程内 ModelClient
 
-```text
-AIChannelOptions
-  -> AIChannel
-  -> AIModelSpec
-  -> AIModelDefinition
-  -> CityModelDescriptor
-  -> CityModel + LanguageModelV3
-```
-
-- `AIChannelOptions`：Channel 级连接配置，包括 `id`、`env_key`、`base_url`、`ai_sdk_provider_id` 和默认 `ai_sdk_provider_options`。
-- `AIModelSpec`：传给 `channel.model()` 的模型声明，包括 Federation ID、`upstream_model`、展示信息、reasoning、fallback 和模型级选项。
-- `AIModelDefinition`：AIService 内部完整模型，包含 `channel_id`、统一的 `runtime` 字段和私有连接配置。
-- `CityModelDescriptor`：`/v1/ai/models` 返回的公开目录结构，不含密钥、上游 ID 和 providerOptions。
-- `CityModel`：客户端可执行对象，同时包含公开 descriptor 字段并实现 AI SDK `LanguageModelV3`。
-
-使用 AIChannel 默认 reasoning 映射时需要设置 `ai_sdk_provider_id`，其值必须对应 providerOptions 命名空间，例如 `openai`、`deepseek` 或 `anthropic`。私有协议可以改为覆盖 `build_reasoning_provider_options(input)`。
-
-## 唯一语言入口
-
-以下入口最终都调用同一个 `AIChannel.stream(input)`：
-
-```text
-city.ai.text()            -> AI SDK generateText -> AIChannel.stream
-city.ai.stream()          -> CityModel.doStream  -> AIChannel.stream
-CityModel.doGenerate()    -> CityModel.doStream  -> AIChannel.stream
-/v1/ai/chat/completions   -> OpenAI adapter      -> AIChannel.stream
-```
-
-`/chat/completions` 不再 raw passthrough，也不存在 `AIChannel.openai()`。AIService 会把 OpenAI messages、tools、tool choice 和生成参数转换成 `LanguageModelV3CallOptions`，再把标准流转换回 OpenAI JSON 或 SSE。
-
-## AI SDK providerOptions
-
-Channel 和模型都可以声明服务端私有选项：
+不经过 Federation 时，可以直接创建同协议模型：
 
 ```ts
-const openai_channel = new OpenAIResponsesChannel({
-  id: "openai",
-  env_key: "OPENAI_API_KEY",
-  ai_sdk_provider_id: "openai",
-  ai_sdk_provider_options: {
-    openai: { store: true, serviceTier: "default" },
-  },
+const model = create_openai_compatible_model({
+  id: "deepseek-chat",
+  upstream_model: "deepseek-chat",
+  base_url: "https://api.deepseek.com/v1",
+  api_key: process.env.DEEPSEEK_API_KEY!,
 });
-
-ai.use(openai_channel.model({
-  id: "gpt-5.6-luna",
-  upstream_model: "gpt-5.6-luna",
-  name: "GPT-5.6 Luna",
-  ai_sdk_provider_options: {
-    openai: { store: false, serviceTier: "priority" },
-  },
-}));
 ```
-
-合并顺序是：
-
-```text
-Channel 默认值 < Model 覆盖值 < AIService 已校验的 reasoning 选项
-```
-
-这些选项不会进入模型目录，也不接受 CityModel 客户端传入的 `providerOptions`。`store` 是 OpenAI Responses 的服务端应用状态保留策略，不是 prompt cache 开关。
 
 ## Reasoning 与 fallback
-
-`reasoning` 和 `fallback` 都属于具体模型：
 
 ```ts
 ai.use(channel.model({
@@ -134,29 +75,12 @@ ai.use(channel.model({
     default_effort: "high",
   },
   fallback: [{
-    match: (media) => media.media_type.startsWith("image/"),
+    match: (file) => file.media_type.startsWith("image/"),
     model_id: "vision-model",
   }],
 }));
 ```
 
-AIService 先完成 fallback，再按最终模型校验 reasoning。可信结果通过 `input.reasoning` 传入；AIChannel 会在调用 `stream()` 前把映射后的 providerOptions 注入 `input.call`。
+AIService 只把最新 user 消息的 `file` 依次交给规则。选出最终模型后再校验 reasoning，并把完整 `ModelCall` 原样交给目标 Channel。
 
-## 图片与其它模态
-
-语言模型统一使用 `stream()`。图片、视频、TTS、ASR 仍是 Channel 的显式方法：`image_create()`、`image_fetch()`、`video()`、`tts()`、`asr()`。
-
-图片 Channel 返回 `AIImageCreateResult` 和 `AIImageResult`。AIService 负责 `async_jobs` 存储、Queue 调度、状态落库和幂等计费；Channel 只负责上游协议与标准结果之间的转换。
-
-## 字段与方法
-
-| 成员 | 作用 |
-|---|---|
-| `id` | Federation 内 Channel 唯一 ID |
-| `env` / `env_key` | 声明并读取 Federation env |
-| `base_url` | Channel 子类使用的上游 API 根地址 |
-| `stream(input)` | 唯一语言模型执行入口 |
-| `input.call` | 已清理并注入服务端 providerOptions 的 V3 调用 |
-| `input.model` | 最终 Federation 模型 ID 与上游模型 ID |
-| `model(spec)` | 将 `AIModelSpec` 变成可注册的 `AIModelDefinition` |
-| `bill(input)` | 从受限的 `AIBillInput` 生成可选账单草稿 |
+Channel 与模型的 `provider_options` 只在服务端合并，由对应 Adapter 解释，不进入公开模型协议。

@@ -2,10 +2,11 @@
  * 用户端类型。
  */
 
-import type { UIMessage, UIMessageChunk } from "ai";
+import type { ModelStreamEvent } from "@downcity/type";
 import type { FetchLike } from "../http.js";
 import type { UserModelInput } from "../invoker/ai/types.js";
 import type {
+  AIActionMessage,
   AIImageCreateResult,
   AIImageResult,
   AIImageStatus,
@@ -58,17 +59,16 @@ export interface UserPactAccessOptions {
 }
 
 /** AI 模态返回类型 */
-export type UserTextResult = UIMessage;
-export type UserStreamChunk = UIMessageChunk;
+export type UserStreamChunk = ModelStreamEvent;
 export type UserStreamResult = ReadableStream<UserStreamChunk>;
-export type UserImageResult = UIMessage;
-export type UserVideoResult = UIMessage;
-export type UserTtsResult = UIMessage;
+export type UserImageResult = AIActionMessage;
+export type UserVideoResult = AIActionMessage;
+export type UserTtsResult = AIActionMessage;
 /** 语音识别返回结果。 */
 export interface UserAsrResult {
   /** 转写后的文本。 */
   text: string;
-  /** 与 AI SDK `TranscriptionResult` 对齐的带时间信息转写分段。 */
+  /** 带时间信息的标准转写分段。 */
   segments?: Array<{
     /** 当前时间片段识别得到的文本。 */
     text: string;
@@ -79,7 +79,7 @@ export interface UserAsrResult {
   }>;
   /** Provider 可选返回的 ISO-639-1 语言标识，例如 `zh` 或 `en`。 */
   language?: string;
-  /** 与 AI SDK `TranscriptionResult` 对齐的音频总时长，单位为秒。 */
+  /** 音频总时长，单位为秒。 */
   durationInSeconds?: number;
 }
 export type {

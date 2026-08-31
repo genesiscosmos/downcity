@@ -5,7 +5,7 @@
  * - 对 Agent 暴露 `models`、`asr`、`tts` 三个 action。
  * - 模型目录与真实 ASR/TTS 能力从运行时 Context 的 City 环境读取。
  * - 本地音频只负责读取并转换为 data URL，不加载或运行任何本地语音模型。
- * - TTS 返回已经落盘的本地音频 UIMessage Parts，并由 Action 声明 Assistant Message。
+ * - TTS 返回已经落盘的本地音频 Session Parts，并由 Action 声明 Assistant Message。
  */
 
 import fs from "node:fs/promises";
@@ -368,12 +368,12 @@ function normalize_asr_result(result: SoundPluginAsrResult): SoundPluginAsrResul
 }
 
 /**
- * 校验 TTS 返回的 AI SDK UIMessage。
+ * 校验 TTS 返回的 Downcity Session 消息。
  */
 function normalize_tts_result(result: SoundPluginTtsResult): SoundPluginTtsResult {
   const record = to_record(result);
   if (!record || !Array.isArray(record.parts)) {
-    throw new TypeError("SoundPlugin tts function must return an AI SDK UIMessage");
+    throw new TypeError("SoundPlugin tts function must return a Downcity Session message");
   }
   const has_audio_file = record.parts.some((part) => {
     const part_record = to_record(part);
@@ -382,7 +382,7 @@ function normalize_tts_result(result: SoundPluginTtsResult): SoundPluginTtsResul
       && part_record.mediaType.startsWith("audio/");
   });
   if (!has_audio_file) {
-    throw new TypeError("SoundPlugin tts UIMessage must contain an audio file part");
+    throw new TypeError("SoundPlugin tts Session message must contain an audio file part");
   }
   for (const part of record.parts) {
     const part_record = to_record(part);
@@ -497,7 +497,7 @@ export class SoundPlugin extends BasePlugin {
       "## Results",
       "",
       "ASR returns transcript text and may include timed segments, language, and duration.",
-      "TTS returns an AI SDK UIMessage whose audio file part already points to a local file, and that part is attached to the assistant response.",
+      "TTS returns a Downcity Session message whose audio file part already points to a local file, and that part is attached to the assistant response.",
       "Do not invent a transcript or audio result when a FED call fails.",
       "",
       `When unsure, use \`plugin_read { plugin: \"${this.name}\", action: \"...\" }\` to inspect the complete schema.`,
@@ -667,7 +667,7 @@ export class SoundPlugin extends BasePlugin {
     }),
     tts: create_action({
       description:
-        "Synthesize speech with a FED TTS model and return an AI SDK UIMessage containing audio.",
+        "Synthesize speech with a FED TTS model and return a Downcity Session message containing audio.",
       input_schema: {
         zod: SOUND_TTS_INPUT_SCHEMA,
         json_schema: {

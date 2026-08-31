@@ -8,6 +8,7 @@
  */
 
 import { WorkspaceBase } from "@downcity/workspace/protocol";
+import { define_runtime_tool } from "@downcity/type";
 import type {
   FileSystem,
   WorkspaceDirectoryEntry,
@@ -17,8 +18,6 @@ import type {
   WorkspaceShell,
   WorkspaceTools,
 } from "@downcity/workspace/protocol";
-import { createAITools } from "@cloudflare/computer/tools";
-import { tool } from "ai";
 import { z } from "zod";
 import type {
   CloudflareComputerFileApi,
@@ -150,13 +149,11 @@ export class CloudflareComputerWorkspace extends WorkspaceBase {
     this.path = normalize_root_path(options.root_path || "/workspace");
     this.remote_fs = options.computer.fs as CloudflareComputerFileApi;
     this.files = new CloudflareComputerFileSystem(this.remote_fs, this.path);
-    const computer_tools = {
-      ...createAITools({ workspace: options.computer }),
+    const computer_tools: WorkspaceTools = {
+      ...create_cloudflare_file_tools(this.files),
       exec: create_cloudflare_exec_tool(options.computer),
     };
-    // Cloudflare Computer 与 Downcity 可能由 pnpm 解析到 AI SDK 6 的不同补丁版本。
-    // ToolSet 的运行时协议兼容，但泛型 Schema 使用不同模块实例；只在适配边界统一类型。
-    this.tools = computer_tools as unknown as WorkspaceTools;
+    this.tools = computer_tools;
     this.env = Object.fromEntries(
       Object.entries(options.env || {}).filter(
         (entry): entry is [string, string] => entry[1] !== undefined,
@@ -211,14 +208,10 @@ export class CloudflareComputerWorkspace extends WorkspaceBase {
 function create_cloudflare_exec_tool(
   computer: CloudflareComputerWorkspaceOptions["computer"],
 ) {
-  return tool({
+  return define_runtime_tool<z.infer<typeof cloudflare_exec_input_schema>>({
     description:
       "Run a command in the Cloudflare Computer Workspace. The configured default runtime backend is used unless backend is provided.",
-    inputSchema: z.object({
-      command: z.string().min(1).describe("Shell command to execute."),
-      cwd: z.string().optional().describe("Optional Workspace working directory."),
-      backend: z.string().optional().describe("Optional configured Computer backend id."),
-    }),
+    input_schema: cloudflare_exec_input_schema,
     execute: async ({ command, cwd, backend }) => {
       try {
         const handle = await computer.shell.exec(command, {
@@ -245,6 +238,99 @@ function create_cloudflare_exec_tool(
       }
     },
   });
+}
+
+const cloudflare_exec_input_schema = z.object({
+  command: z.string().min(1).describe("Shell command to execute."),
+  cwd: z.string().optional().describe("Optional Workspace working directory."),
+  backend: z.string().optional().describe("Optional configured Computer backend id."),
+});
+
+const cloudflare_read_input_schema = z.object({
+  path: z.string().min(1).describe("Workspace-relative file path."),
+  offset: z.number().int().nonnegative().optional().describe("Zero-based first line."),
+  limit: z.number().int().positive().max(2_000).optional().describe("Maximum returned lines."),
+});
+
+const cloudflare_write_input_schema = z.object({
+  path: z.string().min(1).describe("Workspace-relative file path."),
+  content: z.string().describe("Complete UTF-8 file content."),
+});
+
+const cloudflare_edit_input_schema = z.object({
+  path: z.string().min(1).describe("Workspace-relative file path."),
+  edits: z.array(z.object({
+    old_text: z.string().min(1).describe("Exact text to replace once."),
+    new_text: z.string().describe("Replacement text."),
+  })).min(1).describe("Ordered exact replacements."),
+});
+
+const cloudflare_list_input_schema = z.object({
+  path: z.string().default(".").describe("Workspace-relative directory path."),
+});
+
+/** 创建不依赖第三方模型 SDK 的 Cloudflare 文件工具。 */
+function create_cloudflare_file_tools(files: FileSystem): WorkspaceTools {
+  return {
+    read: define_runtime_tool<z.infer<typeof cloudflare_read_input_schema>>({
+      description: "Read a UTF-8 file from the Cloudflare Computer Workspace.",
+      input_schema: cloudflare_read_input_schema,
+      execute: async (input) => {
+        const lines = (await files.read_file(input.path)).toString("utf8").split(/\r?\n/u);
+        const start_line = input.offset ?? 0;
+        const limit = input.limit ?? 2_000;
+        const selected = lines.slice(start_line, start_line + limit);
+        return {
+          path: input.path,
+          content: selected.join("\n"),
+          start_line,
+          end_line: selected.length > 0 ? start_line + selected.length - 1 : start_line,
+          total_lines: lines.length,
+          truncated: start_line + selected.length < lines.length,
+        };
+      },
+    }),
+    write: define_runtime_tool<z.infer<typeof cloudflare_write_input_schema>>({
+      description: "Write a complete UTF-8 file in the Cloudflare Computer Workspace.",
+      input_schema: cloudflare_write_input_schema,
+      execute: async (input) => {
+        await files.ensure_directory(resolve_parent_directory(input.path));
+        await files.write_file_atomically(input.path, input.content);
+        return { path: input.path, bytes_written: Buffer.byteLength(input.content) };
+      },
+    }),
+    edit: define_runtime_tool<z.infer<typeof cloudflare_edit_input_schema>>({
+      description: "Apply ordered exact replacements to a UTF-8 Workspace file.",
+      input_schema: cloudflare_edit_input_schema,
+      execute: async (input) => {
+        let content = (await files.read_file(input.path)).toString("utf8");
+        for (const edit of input.edits) {
+          const first_index = content.indexOf(edit.old_text);
+          if (first_index < 0 || content.indexOf(edit.old_text, first_index + 1) >= 0) {
+            throw new Error("Each edit old_text must match exactly once");
+          }
+          content = `${content.slice(0, first_index)}${edit.new_text}${content.slice(first_index + edit.old_text.length)}`;
+        }
+        await files.write_file_atomically(input.path, content);
+        return { path: input.path, edits_applied: input.edits.length };
+      },
+    }),
+    ls: define_runtime_tool<z.infer<typeof cloudflare_list_input_schema>>({
+      description: "List a directory in the Cloudflare Computer Workspace.",
+      input_schema: cloudflare_list_input_schema,
+      execute: async (input) => ({
+        path: input.path,
+        entries: await files.read_directory(input.path),
+      }),
+    }),
+  };
+}
+
+/** 从 Workspace 相对路径中读取父目录。 */
+function resolve_parent_directory(file_path: string): string {
+  const normalized = file_path.replaceAll("\\", "/");
+  const separator_index = normalized.lastIndexOf("/");
+  return separator_index > 0 ? normalized.slice(0, separator_index) : ".";
 }
 
 /** 将 Cloudflare Computer 的文本、字节或流结果统一转换为 Node Buffer。 */

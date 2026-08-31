@@ -8,7 +8,7 @@ import {
   type CityModelDescriptor,
 } from "@downcity/type";
 import { CityModel } from "./CityModel.js";
-import { create_client_ui_stream } from "./client-stream.js";
+import { create_client_model_stream } from "./client-stream.js";
 import type { UserModelRef } from "./types.js";
 import type { CityLanguageModelStreamRequestV1 } from "../../../types/AITransport.js";
 import type {
@@ -20,7 +20,6 @@ import type {
   UserAsrResult,
   UserServiceInput,
   UserStreamResult,
-  UserTextResult,
   UserTtsInput,
   UserTtsResult,
   UserVideoResult,
@@ -34,7 +33,7 @@ const PREFIX = "/v1/ai";
  *
  * 通过 User City .ai 访问：
  * ```ts
- * await city.ai.text({ model: "deepseek-v4-flash", prompt: "hello" });
+ * const stream = await city.ai.stream({ model: "deepseek-v4-flash", call });
  * const catalog = await city.ai.catalog();
  * ```
  */
@@ -61,27 +60,17 @@ export class AIInvoker {
    *
    * 关键点（中文）
    * - SDK 只暴露稳定 HTTP endpoint，不绑定任何第三方 provider。
-   * - 产品侧可以把该地址传给 OpenAI SDK 或 AI SDK provider 的 `baseURL`。
+   * - 产品侧可以把该地址传给 OpenAI SDK 或兼容客户端的 `baseURL`。
    */
   get base_url(): string {
     return `${this.baseUrl}/v1/ai`;
   }
 
-  /** 文本生成。支持 tools 参数（ai-sdk tool 格式，自动序列化去掉 execute） */
-  text(input: UserServiceInput): Promise<UserTextResult> {
-    return this.req<UserTextResult>(`${PREFIX}/text`, {
-      method: "POST",
-      body: JSON.stringify(this.input(this.serializeTools(input))),
-    });
-  }
-
   /**
-   * 使用 CityModel 流式生成 UIMessageChunk。
-   *
-   * Federation `/v1/ai/stream` 只传输 LanguageModelV3 事件；UIMessage 转换在客户端完成。
+   * 使用 CityModel 执行一个 Downcity Model Protocol step。
    */
   async stream(input: UserServiceInput): Promise<UserStreamResult> {
-    return create_client_ui_stream(input, this.resolve_city_model(input.model));
+    return create_client_model_stream(input, this.resolve_city_model(input.model));
   }
 
   /** 使用当前 City user 鉴权上下文调用模型流端点。 */
@@ -158,96 +147,6 @@ export class AIInvoker {
     });
   }
 
-  /**
-   * 解析 AI SDK / OpenAI function tool 的名称。
-   */
-  private resolveToolName(name: unknown, def: unknown): string {
-    const direct_name = typeof name === "string" ? name.trim() : "";
-    if (direct_name) return direct_name;
-    if (!def || typeof def !== "object") return "";
-    const record = def as {
-      name?: unknown;
-      function?: { name?: unknown };
-    };
-    const provider_name =
-      typeof record.name === "string" ? record.name.trim() : "";
-    if (provider_name) return provider_name;
-    return typeof record.function?.name === "string"
-      ? record.function.name.trim()
-      : "";
-  }
-
-  /**
-   * 解析 AI SDK v6 provider tool / OpenAI function tool 的参数 schema。
-   */
-  private resolveToolParameters(def: unknown): unknown {
-    if (!def || typeof def !== "object") return {};
-    const record = def as {
-      parameters?: unknown;
-      inputSchema?: unknown;
-      function?: { parameters?: unknown };
-    };
-    const input_schema = record.inputSchema as
-      | { jsonSchema?: unknown }
-      | undefined;
-    return (
-      record.function?.parameters ??
-      record.parameters ??
-      input_schema?.jsonSchema ??
-      record.inputSchema ??
-      {}
-    );
-  }
-
-  /**
-   * 将 ai-sdk tool 格式序列化为 OpenAI function 格式（去掉 execute，只保留 schema）。
-   */
-  private serializeToolDefinition(
-    name: unknown,
-    def: unknown,
-  ): Record<string, unknown> | null {
-    const tool_name = this.resolveToolName(name, def);
-    if (!tool_name) return null;
-    const record = def && typeof def === "object"
-      ? (def as {
-          description?: unknown;
-          function?: { description?: unknown };
-        })
-      : {};
-    return {
-      type: "function",
-      function: {
-        name: tool_name,
-        description:
-          typeof record.function?.description === "string"
-            ? record.function.description
-            : typeof record.description === "string"
-              ? record.description
-              : "",
-        parameters: this.resolveToolParameters(def),
-      },
-    };
-  }
-
-  /** 将 ai-sdk tool 格式序列化为 OpenAI function 格式（去掉 execute，只保留 schema） */
-  private serializeTools(input: UserServiceInput): UserServiceInput {
-    const { tools, ...rest } = input;
-    const body: Record<string, unknown> = { ...rest };
-    if (Array.isArray(tools)) {
-      // 关键点（中文）：AI SDK v6 传给自定义 provider 的 tools 是
-      // `{ type, name, inputSchema }`，City server 需要 OpenAI function 形态。
-      body.tools = tools
-        .map((def) => this.serializeToolDefinition(undefined, def))
-        .filter((def): def is Record<string, unknown> => def !== null);
-      return body as UserServiceInput;
-    }
-    if (tools && typeof tools === "object") {
-      body.tools = Object.entries(tools as Record<string, unknown>)
-        .map(([name, def]) => this.serializeToolDefinition(name, def))
-        .filter((def): def is Record<string, unknown> => def !== null);
-    }
-    return body as UserServiceInput;
-  }
 }
 
 // ===================================================================

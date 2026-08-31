@@ -35,9 +35,9 @@ async function execute_tool(tools, name, input, abort_signal) {
   const execute = tools[name]?.execute;
   assert.equal(typeof execute, "function", `${name} tool must be executable`);
   const result = await execute(input, {
-    toolCallId: `test-${name}`,
+    tool_call_id: `test-${name}`,
     messages: [],
-    abortSignal: abort_signal || new AbortController().signal,
+    abort_signal: abort_signal || new AbortController().signal,
   });
   assert.deepEqual(result.messages, []);
   return result.output;

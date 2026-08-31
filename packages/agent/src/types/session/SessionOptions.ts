@@ -7,7 +7,7 @@
  * - Composer 仍然是 Session 级能力，不向 Agent 的执行策略层泄漏。
  */
 
-import type { Tool } from "ai";
+import type { RuntimeTool as Tool } from "@downcity/type";
 import type { AgentModel } from "@/agent/AgentModel.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";

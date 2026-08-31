@@ -1,5 +1,5 @@
 /**
- * @file 验证 AI SDK Tool needsApproval 接入 Session Interaction。
+ * @file 验证 Downcity RuntimeTool 审批接入 Session Interaction。
  *
  * 关键点（中文）
  * - Tool 自己声明审批意图，Agent 不持有审批配置。
@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { MockLanguageModelV3 } from "ai/test";
+import { MockModelClient } from "./ModelClientMock.mjs";
 import { z } from "zod";
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";
@@ -84,7 +84,7 @@ async function run_approval_case(decision) {
   );
   let execution_count = 0;
   let tool_stream_count = 0;
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "native-tool-approval-model",
     doStream: async (options) => {
       if (!Array.isArray(options.tools) || options.tools.length === 0) {
@@ -108,8 +108,8 @@ async function run_approval_case(decision) {
     tools: {
       custom_approval: {
         description: "Execute a custom operation after approval.",
-        inputSchema: z.object({ value: z.string() }),
-        needsApproval: true,
+        input_schema: z.object({ value: z.string() }),
+        needs_approval: true,
         execute: async () => {
           execution_count += 1;
           return "tool-result";
@@ -164,10 +164,10 @@ async function run_approval_case(decision) {
   }
 }
 
-test("needsApproval 批准后执行 Tool 并恢复原 Turn", async () => {
+test("needs_approval 批准后执行 Tool 并恢复原 Turn", async () => {
   await run_approval_case("approved");
 });
 
-test("needsApproval 拒绝后不执行 Tool 副作用", async () => {
+test("needs_approval 拒绝后不执行 Tool 副作用", async () => {
   await run_approval_case("denied");
 });

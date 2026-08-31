@@ -6,7 +6,7 @@
  * 从最新快照严格递增。
  */
 
-import type { UIMessage } from "ai";
+import type { SessionUiMessage as UIMessage } from "@/types/session/SessionUiMessage.js";
 import { generate_id } from "@/utils/Id.js";
 import { SessionAssistantMessageWriter } from "@/session/messages/SessionAssistantMessageWriter.js";
 import { SessionMessageInteractionWriter } from "@/session/messages/SessionMessageInteractionWriter.js";
@@ -1006,7 +1006,7 @@ export class SessionActionMessageWriter {
   }
 }
 
-/** 把 AI SDK User parts 归一为 canonical User parts。 */
+/** 把 Downcity Session User parts 归一为 canonical User parts。 */
 export function normalize_session_user_parts(
   parts: UIMessage["parts"] | null | undefined,
 ): SessionUserMessagePart[] {

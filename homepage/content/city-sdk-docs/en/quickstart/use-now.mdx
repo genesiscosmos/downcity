@@ -11,7 +11,7 @@ import {
   AIService,
   AIChannel,
   type AIChannelStreamInput,
-  type LanguageModelV3StreamResult,
+  type AIChannelStreamResult,
 } from "@downcity/federation";
 import { Database } from "@downcity/database-sqlite";
 
@@ -25,27 +25,24 @@ class EchoChannel extends AIChannel {
 
   protected async stream(
     input: AIChannelStreamInput,
-  ): Promise<LanguageModelV3StreamResult> {
-    const input_text = input.call.prompt
-      .flatMap((message) => Array.isArray(message.content) ? message.content : [])
+  ): Promise<AIChannelStreamResult> {
+    const input_text = input.call.messages
+      .flatMap((message) => message.content)
       .filter((part) => part.type === "text")
       .map((part) => part.text)
       .join("\n");
     return {
       stream: new ReadableStream({
         start(controller) {
-          controller.enqueue({ type: "stream-start", warnings: [] });
-          controller.enqueue({ type: "text-start", id: "echo_text" });
-          controller.enqueue({ type: "text-delta", id: "echo_text", delta: `Echo: ${input_text}` });
-          controller.enqueue({ type: "text-end", id: "echo_text" });
+          controller.enqueue({ type: "model_start", request_id: crypto.randomUUID(), model_id: input.model.id });
+          controller.enqueue({ type: "text_start", content_id: "echo_text" });
+          controller.enqueue({ type: "text_delta", content_id: "echo_text", delta: `Echo: ${input_text}` });
+          controller.enqueue({ type: "text_finish", content_id: "echo_text" });
           controller.enqueue({
-            type: "finish",
-            finishReason: { unified: "stop", raw: "stop" },
-            usage: {
-              inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
-              outputTokens: { total: 0, text: 0, reasoning: 0 },
-            },
+            type: "model_usage",
+            usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
           });
+          controller.enqueue({ type: "model_finish", finish_reason: "stop" });
           controller.close();
         },
       }),
@@ -88,8 +85,15 @@ const user_embassy = new Embassy({
 });
 
 // SDK pathway
-const result = await user_embassy.user.ai.text({ model: "local-echo", prompt: "Hello" });
-
+const stream = await user_embassy.user.ai.stream({
+  model: "local-echo",
+  call: {
+    messages: [{ role: "user", content: [{ type: "text", text: "Hello" }] }],
+  },
+});
+for await (const event of stream) {
+  if (event.type === "text_delta") process.stdout.write(event.delta);
+}
 ```
 
 ## Next Steps

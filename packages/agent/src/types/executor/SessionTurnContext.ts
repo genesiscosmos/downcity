@@ -7,7 +7,7 @@
  * - 可变状态只能通过行为方法更新，消费者不能直接操作内部数组、lease 或 callback。
  */
 
-import type { UIMessage } from "ai";
+import type { SessionUiMessage as UIMessage } from "@/types/session/SessionUiMessage.js";
 import type { ShellApprovalGateway } from "@downcity/workspace";
 import type { SessionUserMessageV1 } from "@/executor/types/SessionRecords.js";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";

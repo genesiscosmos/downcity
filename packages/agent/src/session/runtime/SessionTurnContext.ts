@@ -7,7 +7,7 @@
  * - Plugin 每次只获得新建的只读快照，不能越过扩展边界访问内核运行能力。
  */
 
-import type { UIMessage } from "ai";
+import type { SessionUiMessage as UIMessage } from "@/types/session/SessionUiMessage.js";
 import type { SessionUserMessageV1 } from "@/executor/types/SessionRecords.js";
 import type {
   SessionTurnContext,

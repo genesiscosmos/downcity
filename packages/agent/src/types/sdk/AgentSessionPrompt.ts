@@ -6,16 +6,16 @@
  * - 首条输入、运行中补充输入、排队到下一轮的输入，调用侧都使用同一结构。
  */
 
-import type { UIDataTypes, UITools, UIMessagePart } from "ai";
+import type { SessionUiPart } from "@/types/session/SessionUiMessage.js";
 
 /**
  * Session user message part 类型。
  *
  * 说明（中文）
- * - 与 AI SDK 标准 `UIMessagePart` 等价，但已固定泛型参数，避免调用侧引入 `ai` 包。
+ * - 这是 Downcity Session 输入边界，不依赖模型协议或第三方 SDK。
  * - 可直接用于 `session.prompt({ query: [...parts] })` 传入 text parts、file parts 等。
  */
-export type SessionUserMessagePart = UIMessagePart<UIDataTypes, UITools>;
+export type SessionUserMessagePart = SessionUiPart;
 
 /**
  * Session prompt 输入。
@@ -39,7 +39,7 @@ export type SessionUserMessagePart = UIMessagePart<UIDataTypes, UITools>;
  * - `string` 会直接成为新的文本 User Message。
  * - `file` part 如果携带 Data URL，会在 Message 入库前解码到 Session 的 attachments 目录。
  * - 持久化 Message 里的 `url` 变成相对 Workspace 根目录的文件路径，而不是 Base64 内容。
- * - 模型执行前，Executor 再按该路径读取文件，并转换成 AI SDK / Provider 可消费的 ModelMessage。
+ * - 模型执行前，Executor 再按该路径读取文件，并转换成 Downcity `ModelMessage`。
  * - 远程 Session 中，Data URL 在服务端落盘；调用方本地路径必须对服务端可访问。
  */
 export interface AgentSessionPromptInput {
@@ -48,8 +48,8 @@ export interface AgentSessionPromptInput {
    *
    * 说明（中文）
    * - 支持两种格式：
-   *   1. `string`：纯文本用户输入，Session 会将其包装为 `role="user"` 的 UIMessage。
-   *   2. `SessionUserMessagePart[]`：AI SDK 标准 user message parts 数组，可直接携带 text parts、file parts 等。
+   *   1. `string`：纯文本用户输入，Session 会将其包装为用户消息。
+   *   2. `SessionUserMessagePart[]`：Downcity Session user parts，可直接携带 text、file 等内容。
    * - 调用侧永远只传"新的用户输入"。
    * - 它是否并入当前 turn，还是排到下一 turn，由 Session 内部决定。
    */

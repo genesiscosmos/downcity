@@ -13,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
 
-import { MockLanguageModelV3 } from "ai/test";
+import { MockModelClient } from "./ModelClientMock.mjs";
 import { Agent } from "../bin/index.js";
 import { create_workspace_entry } from "../bin/internal/index.js";
 import { City } from "../bin/index.js";
@@ -67,14 +67,14 @@ function create_stream_text_result(text) {
 }
 
 function create_mock_title_model(title_text) {
-  return new MockLanguageModelV3({
+  return new MockModelClient({
     modelId: "mock-session-title-model",
     doStream: async () => create_stream_text_result(title_text),
   });
 }
 
 function create_failing_title_model() {
-  return new MockLanguageModelV3({
+  return new MockModelClient({
     modelId: "mock-session-title-failing-model",
     doStream: async () => {
       throw new Error("mock title generation failed");
@@ -91,7 +91,7 @@ function create_delayed_title_model(title_text) {
   const released = new Promise((resolve) => {
     resolve_release = resolve;
   });
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "mock-session-title-delayed-model",
     doStream: async () => {
       resolve_started();

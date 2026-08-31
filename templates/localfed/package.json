@@ -9,7 +9,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/deepseek": "^2.0.35",
     "@downcity/federation": "workspace:*",
     "@downcity/database-sqlite": "workspace:*",
     "@downcity/services": "workspace:*",

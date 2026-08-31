@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { MockLanguageModelV3 } from "ai/test";
+import { MockModelClient } from "./ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";
 import { create_workspace_entry } from "../bin/internal/index.js";
@@ -117,7 +117,7 @@ test("显式注入的 ask_question 等待回答并继续同一个 Turn", async (
     path.join(os.tmpdir(), "downcity-session-ask-question-"),
   );
   let stream_count = 0;
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "session-ask-question-model",
     doStream: async (options) => {
       if (!Array.isArray(options.tools) || options.tools.length === 0) {

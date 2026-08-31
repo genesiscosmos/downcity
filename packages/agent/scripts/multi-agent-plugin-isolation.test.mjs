@@ -1,7 +1,7 @@
 /**
  * @file 验证多个 Agent 经 session.prompt 执行 plugin_call 时保持 registry 隔离。
  *
- * 两个 CityModel 并发进入原生 LanguageModelV3 tool loop，第二次模型调用必须只
+ * 两个 CityModel 并发进入原生 Downcity Model Protocol 工具循环，第二次模型调用必须只
  * 收到各自 Agent plugin action 返回的 owner。
  */
 
@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
-import { MockLanguageModelV3 } from "ai/test";
+import { MockModelClient } from "./ModelClientMock.mjs";
 
 import { Agent } from "../bin/index.js";
 import { create_workspace_entry } from "../bin/internal/index.js";
@@ -78,10 +78,10 @@ function create_plugin_call_stream(model_id) {
   };
 }
 
-/** 创建原生 LanguageModelV3 CityModel。 */
+/** 创建原生 Downcity ModelClient。 */
 function create_test_model(model_id, model_requests) {
   let request_count = 0;
-  const language_model = new MockLanguageModelV3({
+  const language_model = new MockModelClient({
     modelId: model_id,
     doStream: async (options) => {
       if (!Array.isArray(options.tools) || options.tools.length === 0) {

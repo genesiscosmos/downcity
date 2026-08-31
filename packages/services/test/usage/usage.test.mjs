@@ -126,15 +126,16 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
       idempotency_key: "test:topup:user_2",
     })
 
-    const invoke_response = await federation.fetch(new Request("http://localhost/v1/ai/text", {
+    const invoke_response = await federation.fetch(new Request("http://localhost/v1/ai/stream", {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${token.user_token}`,
       },
-      body: JSON.stringify({ model: "gpt-5.4", prompt: "hi" }),
+      body: JSON.stringify(create_model_request("gpt-5.4")),
     }))
     assert.equal(invoke_response.status, 200)
+    await invoke_response.text()
 
     const today = new Date().toISOString().slice(0, 10)
     const usage_response = await federation.fetch(new Request(
@@ -250,7 +251,7 @@ test("UsageService merges applied Credits and final AI usage by local day", asyn
     assert.equal(admin_overview.days[0].failed_count, 1)
     assert.equal(admin_overview.hours.length, 24)
     assert.ok(admin_overview.models.some((item) => item.key === "gpt-5.4" && item.execution_count === 4))
-    assert.ok(admin_overview.actions.some((item) => item.key === "text" && item.execution_count === 5))
+    assert.ok(admin_overview.actions.some((item) => item.key === "stream" && item.execution_count === 5))
     assert.ok(admin_overview.performance.sample_count > 0)
     assert.equal(typeof admin_overview.performance.p95_duration_ms, "number")
 
@@ -378,15 +379,30 @@ function admin_request(admin_secret, { path: pathname, method = "POST", body }) 
 }
 
 async function invoke_ai(federation, user_token, model) {
-  const response = await federation.fetch(new Request("http://localhost/v1/ai/text", {
+  const response = await federation.fetch(new Request("http://localhost/v1/ai/stream", {
     method: "POST",
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${user_token}`,
     },
-    body: JSON.stringify({ model, prompt: "hi" }),
+    body: JSON.stringify(create_model_request(model)),
   }))
+  await response.text()
   return response.status
+}
+
+/** 构造测试使用的标准 Downcity Model Protocol 请求。 */
+function create_model_request(model_id) {
+  return {
+    protocol_version: 1,
+    model_id,
+    call: {
+      messages: [{
+        role: "user",
+        content: [{ type: "text", text: "hi" }],
+      }],
+    },
+  }
 }
 
 async function get_recent_usage(federation, user_token, query) {

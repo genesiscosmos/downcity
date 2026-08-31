@@ -6,7 +6,10 @@
  * - Agent 只把 Shell 实例的 tools 合并到模型可调用工具集合中。
  */
 
-import { tool, type ToolExecutionOptions } from "ai";
+import {
+  define_runtime_tool,
+  type RuntimeToolExecutionOptions,
+} from "@downcity/type";
 import type {
   ShellExecInput,
   ShellSessionInput,
@@ -28,7 +31,7 @@ import type {
 type JsonObject = Record<string, unknown>;
 
 /**
- * 从 AI SDK tool 显式上下文中读取 Shell 运行快照。
+ * 从 RuntimeTool 显式上下文中读取 Shell 运行快照。
  */
 function resolve_shell_execution_context(value: unknown): ShellExecutionContext {
   if (!value || typeof value !== "object") return {};
@@ -206,7 +209,7 @@ function formatToolError(
  * 创建 shell tools。
  *
  * 关键点（中文）
- * - 每个 tool.execute 从 AI SDK `experimental_context` 读取显式上下文。
+ * - 每个 tool.execute 从 Downcity `context` 读取显式上下文。
  * - session、turn 与 env 随 action 请求传入 Shell，不依赖异步全局状态。
  */
 export function createShellTools(runner: ShellToolRunner): ShellToolSet {
@@ -224,24 +227,24 @@ export function createShellTools(runner: ShellToolRunner): ShellToolSet {
   function run_action_with_context(
     action: ShellToolAction,
     payload: JsonObject,
-    options: ToolExecutionOptions,
+    options: RuntimeToolExecutionOptions,
   ): Promise<ShellActionResponse> {
-    const execution_context = resolve_shell_execution_context(options.experimental_context);
+    const execution_context = resolve_shell_execution_context(options.context);
     return runner.run_action({
       action,
       payload,
       execution: {
         ...execution_context,
-        call_id: options.toolCallId || execution_context.call_id,
-        abort_signal: options.abortSignal || execution_context.abort_signal,
+        call_id: options.tool_call_id || execution_context.call_id,
+        abort_signal: options.abort_signal || execution_context.abort_signal,
       },
     });
   }
 
-  const shell_exec = tool({
+  const shell_exec = define_runtime_tool<ShellExecInput>({
     description:
       "Execute a short non-interactive shell command and wait for completion. Prefer shell_session for long-running or interactive commands.",
-    inputSchema: shellExecInputSchema,
+    input_schema: shellExecInputSchema,
     execute: async (
       {
         cmd,
@@ -253,7 +256,7 @@ export function createShellTools(runner: ShellToolRunner): ShellToolSet {
         sandbox = "safe",
         reason,
       }: ShellExecInput,
-      options: ToolExecutionOptions,
+      options: RuntimeToolExecutionOptions,
     ) => {
       const started_at = Date.now();
       try {
@@ -288,13 +291,13 @@ export function createShellTools(runner: ShellToolRunner): ShellToolSet {
     },
   });
 
-  const shell_session = tool({
+  const shell_session = define_runtime_tool<ShellSessionInput>({
     description:
       "Operate an interactive PTY shell session. Use action=start for long-running or interactive commands, send for stdin, read for latest output, list for sessions, and stop to close.",
-    inputSchema: shellSessionInputSchema,
+    input_schema: shellSessionInputSchema,
     execute: async (
       input: ShellSessionInput,
-      options: ToolExecutionOptions,
+      options: RuntimeToolExecutionOptions,
     ) => {
       const started_at = Date.now();
       try {

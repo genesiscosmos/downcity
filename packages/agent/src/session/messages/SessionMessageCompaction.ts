@@ -8,7 +8,11 @@
  * - 成功计划由 SessionMessages 把连续 Active 前缀写入不可变 Segment，并保存累计 Summary。
  */
 
-import { generateText, type LanguageModel } from "ai";
+import type { ModelClient } from "@downcity/type";
+import {
+  build_text_model_messages,
+  generate_model,
+} from "@executor/model/ModelGenerate.js";
 import { generate_id } from "@/utils/Id.js";
 import {
   build_initial_session_compaction_prompt,
@@ -36,7 +40,7 @@ export async function compose_session_compaction(input: {
   /** 当前累计 Summary 与 Active Message 快照。 */
   snapshot: Readonly<SessionContextSnapshot>;
   /** 生成累计 Summary 使用的模型。 */
-  model: LanguageModel;
+  model: ModelClient;
 }): Promise<SessionCompactionPlan | null> {
   const context_messages = input.snapshot.messages.filter(
     (message) => message.type === "user" || message.type === "assistant",
@@ -61,11 +65,9 @@ export async function compose_session_compaction(input: {
         new_conversation_text: conversation_text,
       })
     : build_initial_session_compaction_prompt({ conversation_text });
-  const result = await generateText({
-    model: input.model,
-    system: [{ role: "system", content: SESSION_COMPACTION_SYSTEM_PROMPT }],
-    prompt,
-    maxOutputTokens: SUMMARY_MAX_OUTPUT_TOKENS,
+  const result = await generate_model(input.model, {
+    messages: build_text_model_messages(SESSION_COMPACTION_SYSTEM_PROMPT, prompt),
+    max_output_tokens: SUMMARY_MAX_OUTPUT_TOKENS,
   });
   const summary = String(result.text || "").trim();
   if (!summary) {

@@ -98,7 +98,7 @@ export function parseRecordJson(value: unknown): Record<string, unknown> {
   }
 }
 
-/** 安全解析 UIMessage。 */
+/** 安全解析 Downcity 非语言 Action 消息。 */
 export function parseImageMessage(value: unknown): AIImageResult["result"] | undefined {
   const record = parseRecordJson(value);
   return record.role === "assistant" && Array.isArray(record.parts)
@@ -157,13 +157,13 @@ export function normalizeUsage(usage: unknown): {
   return normalizeAIUsage(usage);
 }
 
-/** 统计 UIMessage file parts 里的图片数量。 */
+/** 统计 Action 消息 file parts 里的图片数量。 */
 export function countImageOutputs(output: unknown): number | undefined {
   if (!isRecord(output) || !Array.isArray(output.parts)) return undefined;
   const count = output.parts.filter((part) => {
     if (!isRecord(part)) return false;
     const type = String(part.type ?? "");
-    const media_type = String(part.mediaType ?? part.media_type ?? "");
+    const media_type = String(part.media_type ?? "");
     return type === "file" && media_type.startsWith("image/");
   }).length;
   return count > 0 ? count : undefined;
@@ -178,7 +178,7 @@ export function isStorableRemoteFilePart(part: unknown): part is StoredImagePart
 
 /** 读取 file part 的媒体类型。 */
 export function readFilePartMediaType(part: Record<string, unknown>): string {
-  return readOptionalString(part.mediaType) ?? readOptionalString(part.media_type) ?? "application/octet-stream";
+  return readOptionalString(part.media_type) ?? "application/octet-stream";
 }
 
 /** 读取 file part 的建议文件名。 */

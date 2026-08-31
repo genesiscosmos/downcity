@@ -1,34 +1,27 @@
 ---
-title: OpenAI-Compatible Chat Completions
-description: Call Downcity's unified LanguageModelV3 path with the OpenAI SDK or curl.
+title: OpenAI Chat Completions
+description: Connect existing OpenAI-compatible clients through the adapter endpoint.
 ---
 
-Endpoint: `POST /v1/ai/chat/completions`.
-
-```ts
-const openai = new OpenAI({
-  baseURL: "https://federation.example/v1/ai",
-  apiKey: "user-token",
-});
-
-const result = await openai.chat.completions.create({
-  model: "gpt-5.6-luna",
-  messages: [{ role: "user", content: "hello" }],
-  stream: true,
-});
-```
-
-The request follows one path:
+`POST /v1/ai/chat/completions` is an adapter around Downcity Model Protocol:
 
 ```text
 OpenAI request
-  -> OpenAIChatCompletionsAdapter
-  -> LanguageModelV3CallOptions
-  -> AIService fallback/reasoning
-  -> AIChannel.stream()
+  -> ModelCall
+  -> AIService / AIChannel
+  -> ModelStreamEvent
   -> OpenAI JSON or SSE
 ```
 
-The adapter supports system, user, assistant, and tool messages; text and image URLs; function tools, tool choice, `reasoning_effort`, common sampling parameters, and `stream: true`.
+```bash
+curl "$FEDERATION_URL/v1/ai/chat/completions" \
+  -H "Authorization: Bearer $USER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-v4-flash",
+    "messages": [{"role":"user","content":"Hello"}],
+    "stream": true
+  }'
+```
 
-Client `providerOptions` never reach the upstream. Private upstream options must be configured by `ai_sdk_provider_options` on the AIChannel or AIModelSpec.
+Messages, tools, tool choice, images, reasoning, usage, and finish reasons are converted into the same Downcity execution path. The endpoint is not a raw passthrough.

@@ -1,6 +1,6 @@
 {
   "name": "@downcity/type",
-  "version": "0.1.197",
+  "version": "0.1.198",
   "description": "Downcity shared protocol types for cross-package SDK boundaries.",
   "type": "module",
   "main": "./bin/index.js",
@@ -41,9 +41,6 @@
     "version:patch": "node ../../scripts/bump-package-version.mjs ./package.json"
   },
   "license": "MIT",
-  "dependencies": {
-    "ai": "^6.0.193"
-  },
   "devDependencies": {
     "typescript": "^6.0.3"
   }

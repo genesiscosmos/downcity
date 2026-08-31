@@ -7,7 +7,11 @@
  * - 当 title 仍为空时，后续执行链路可以再次尝试生成。
  */
 
-import { streamText, type LanguageModel } from "ai";
+import type { ModelClient } from "@downcity/type";
+import {
+  build_text_model_messages,
+  generate_model,
+} from "@executor/model/ModelGenerate.js";
 import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.js";
 import type { SessionRecordV1 } from "@/executor/types/SessionRecords.js";
 import { is_session_message_record } from "@/executor/types/SessionRecords.js";
@@ -37,7 +41,7 @@ export interface EnsureSessionTitleParams {
   /**
    * 可选模型实例；传入时会尝试生成更短标题。
    */
-  model?: LanguageModel;
+  model?: ModelClient;
 
   /**
    * 当前模型展示标签；仅用于排障日志，不参与生成逻辑。
@@ -177,7 +181,7 @@ async function generateSessionTitle(input: {
   /**
    * 当前模型实例。
    */
-  model: LanguageModel;
+  model: ModelClient;
 
   /**
    * 当前 session 标识。
@@ -202,24 +206,19 @@ async function generateSessionTitle(input: {
   /** 标题请求取消信号。 */
   signal?: AbortSignal;
 }): Promise<string | undefined> {
-  let observedStreamError: unknown;
   try {
-    const result = streamText({
-      model: input.model,
-      system:
+    const result = await generate_model(input.model, {
+      messages: build_text_model_messages(
         "You generate minimal conversation titles. Output only the title itself, with no explanation and no quotation marks.",
-      prompt: [
+        [
         "Generate a short conversation title from the first user message below.",
         "Requirements: 3 to 12 Chinese characters or 2 to 6 English words; no period; no prefix.",
         "",
         input.firstUserText,
-      ].join("\n"),
-      onError: ({ error }) => {
-        observedStreamError = error;
-      },
-      abortSignal: input.signal,
-    });
-    const text = await result.text;
+        ].join("\n"),
+      ),
+    }, input.signal);
+    const text = result.text;
     const generatedTitle = normalizeGeneratedTitle(text);
     if (!generatedTitle) {
       await logSessionTitleDiagnostic({
@@ -236,7 +235,7 @@ async function generateSessionTitle(input: {
     }
     return generatedTitle;
   } catch (error) {
-    const effectiveError = observedStreamError || error;
+    const effectiveError = error;
     await logSessionTitleDiagnostic({
       logger: input.logger,
       session_id: input.session_id,

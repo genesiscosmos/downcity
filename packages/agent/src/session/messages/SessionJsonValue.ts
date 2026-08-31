@@ -37,7 +37,7 @@ export function to_session_json_object(input: unknown): JsonObject | undefined {
 }
 
 /**
- * 把 AI SDK Provider metadata 规整为可持久化快照。
+ * 把 Provider Adapter metadata 规整为可持久化快照。
  *
  * 关键点（中文）
  * - ProviderMetadata 顶层是 provider ID 到 JSON 对象的映射。

@@ -1,29 +1,26 @@
 ---
 title: AIService
-description: AIService unifies model registration, routing, LanguageModelV3, and OpenAI compatibility.
+description: Register, route, and execute models with Downcity Model Protocol.
 ---
 
-`AIService` is the Federation AI service. It registers `AIModelDefinition` values and owns authentication, availability, fallback, reasoning, metering, and billing.
-
-| Concept | Purpose |
-|---|---|
-| `AIChannel` | Federation execution boundary for one upstream AI channel |
-| `AIChannelStreamInput` | Explicit language call, resolved model, env, and reasoning |
-| `AIChannelActionInput` | Scoped input for image and other non-language actions |
-| `AIModelSpec` | Model declaration passed to `channel.model()` |
-| `AIModelDefinition` | Complete AIService runtime model |
-| `CityModelDescriptor` | Public client model catalog shape |
-| `CityModel` | Client model implementing AI SDK `LanguageModelV3` |
-
-Every language entry point converges on `AIChannel.stream(input)`:
+`AIService` is Federation's model control plane. It owns authentication, the model catalog, fallback, reasoning validation, metering, and billing. Agents, City clients, and providers exchange Downcity Model Protocol values rather than third-party model SDK types.
 
 ```text
-city.ai.text()          -> LanguageModelV3 -> AIChannel.stream
-city.ai.stream()        -> CityModel       -> AIChannel.stream
-CityModel.doGenerate()  -> CityModel       -> AIChannel.stream
-chat/completions        -> OpenAI adapter   -> AIChannel.stream
+Agent / city.ai.stream()
+  -> ModelCall
+  -> POST /v1/ai/stream
+  -> AIService routing, fallback, reasoning, metering
+  -> AIChannel
+  -> Provider Adapter
+  -> ModelStreamEvent
 ```
 
-The OpenAI-compatible endpoint only adapts protocols. It supports system/user/assistant/tool messages, image URLs, function tools, tool choice, reasoning, and JSON/SSE output. It never forwards the raw request upstream and does not require `AIChannel.openai()`.
+| Concept | Responsibility |
+|---|---|
+| `ModelCall` | Messages, files, tools, and generation options |
+| `ModelClient` | In-process interface: `stream(call, signal)` |
+| `ModelStreamEvent` | Text, reasoning, tool, usage, finish, and error events |
+| `AIChannel` | Federation's upstream execution boundary |
+| Provider Adapter | Converts between Downcity Protocol and a vendor HTTP protocol |
 
-See [AIChannel and model registration](./provider).
+OpenAI Chat Completions remains an external compatibility endpoint; its types do not enter routing or `AIChannel`.

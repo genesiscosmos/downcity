@@ -1,34 +1,27 @@
 ---
-title: OpenAI 兼容 Chat Completions
-description: 使用 OpenAI SDK 或 curl 调用 Downcity 的统一 LanguageModelV3 路径。
+title: OpenAI Chat Completions
+description: 通过兼容端点接入现有 OpenAI 客户端。
 ---
 
-端点：`POST /v1/ai/chat/completions`。
-
-```ts
-const openai = new OpenAI({
-  baseURL: "https://federation.example/v1/ai",
-  apiKey: "user-token",
-});
-
-const result = await openai.chat.completions.create({
-  model: "gpt-5.6-luna",
-  messages: [{ role: "user", content: "hello" }],
-  stream: true,
-});
-```
-
-请求进入后按以下顺序处理：
+`POST /v1/ai/chat/completions` 是 Downcity Model Protocol 外层的兼容 Adapter：
 
 ```text
 OpenAI request
-  -> OpenAIChatCompletionsAdapter
-  -> LanguageModelV3CallOptions
-  -> AIService fallback/reasoning
-  -> AIChannel.stream()
+  -> ModelCall
+  -> AIService / AIChannel
+  -> ModelStreamEvent
   -> OpenAI JSON 或 SSE
 ```
 
-支持 system、user、assistant、tool 消息，文本和图片 URL，function tools、tool choice、`reasoning_effort`、常用采样参数，以及 `stream: true`。
+```bash
+curl "$FEDERATION_URL/v1/ai/chat/completions" \
+  -H "Authorization: Bearer $USER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-v4-flash",
+    "messages": [{"role":"user","content":"你好"}],
+    "stream": true
+  }'
+```
 
-客户端发送的 `providerOptions` 不会进入上游。上游私有选项必须由 AIChannel 或 AIModelSpec 的 `ai_sdk_provider_options` 配置。
+Messages、tools、tool choice、图片、reasoning、usage 和 finish reason 都会转换到同一条 Downcity 执行链。该端点不是 raw passthrough。

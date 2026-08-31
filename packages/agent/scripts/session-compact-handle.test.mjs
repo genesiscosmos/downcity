@@ -12,7 +12,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { MockLanguageModelV3 } from "ai/test";
+import { MockModelClient } from "./ModelClientMock.mjs";
 
 import {
   Agent,
@@ -75,7 +75,7 @@ test("compact Handle 在队列命令完成后兑现并阻塞后续 Prompt", asyn
   );
   const agent = new Agent({
     id: "compact_handle_agent",
-    model: new MockLanguageModelV3({
+    model: new MockModelClient({
       modelId: "compact-handle-model",
       doStream: async () => create_stream_text_result("done"),
     }),

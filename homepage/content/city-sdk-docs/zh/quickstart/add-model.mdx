@@ -3,25 +3,35 @@ title: 添加模型
 description: 使用 AIChannel 和 AIService 注册模型。
 ---
 
-创建 `AIChannel`，实现标准 V3 stream，再注册 `AIModelSpec`：
+创建 `AIChannel`，实现 Downcity Model Protocol stream，再注册 `AIModelSpec`：
 
 ```ts
+import {
+  AIChannel,
+  AIService,
+  stream_openai_compatible_model,
+  type AIChannelStreamInput,
+  type AIChannelStreamResult,
+} from "@downcity/federation";
+
 class DeepSeekChannel extends AIChannel {
   constructor() {
     super({
       id: "deepseek",
       env_key: "DEEPSEEK_API_KEY",
       base_url: "https://api.deepseek.com/v1",
-      ai_sdk_provider_id: "deepseek",
     });
   }
 
-  protected async stream(input: AIChannelStreamInput) {
-    const deepseek = createDeepSeek({
-      apiKey: read_required_env(input, this.env_key ?? ""),
-      baseURL: this.base_url,
+  protected async stream(
+    input: AIChannelStreamInput,
+  ): Promise<AIChannelStreamResult> {
+    const api_key = input.env("DEEPSEEK_API_KEY");
+    if (!api_key) throw new Error("DEEPSEEK_API_KEY is required");
+    return stream_openai_compatible_model(input, {
+      api_key,
+      base_url: this.base_url ?? "https://api.deepseek.com/v1",
     });
-    return deepseek(input.model.upstream_model).doStream(input.call);
   }
 }
 
@@ -38,9 +48,9 @@ ai.use(channel.model({
 federation.use(ai);
 ```
 
-这一个 `stream()` 同时支持 `city.ai.text()`、`city.ai.stream()`、`CityModel` 和 `/v1/ai/chat/completions`。
+这一个 `stream()` 同时支持 `city.ai.stream()`、`CityModel` 和 `/v1/ai/chat/completions`。
 
-reasoning、fallback、计费和 providerOptions 详见 [AIChannel 与模型注册](/zh/city-sdk-docs/service/ai/provider)。
+reasoning、fallback、计费和 `provider_options` 详见 [AIChannel 与模型注册](/zh/city-sdk-docs/service/ai/provider)。
 ## 结构化价格
 
 模型可以通过 `pricing` 提供机器可读的价格方案。`unit` 表示计费对象，`scale` 表示每个价格对应的单位数量；多个方案可通过 `dimensions` 表达时段或档位。

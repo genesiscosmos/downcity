@@ -6,7 +6,7 @@
  * - RemoteAgent 与 Session 数据结构拆到独立类型文件。
  */
 
-import type { Tool } from "ai";
+import type { RuntimeTool as Tool } from "@downcity/type";
 import type { AgentModel } from "@/agent/AgentModel.js";
 import type { Plugin } from "@/types/plugin/PluginDefinition.js";
 import type { PluginWebServices } from "@/types/plugin/PluginServices.js";

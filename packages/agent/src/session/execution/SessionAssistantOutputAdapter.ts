@@ -1,7 +1,7 @@
 /**
- * AI SDK Assistant 输出到 Session canonical Message 的协议 Adapter。
+ * Downcity Session Assistant 输出到 canonical Message 的协议 Adapter。
  *
- * 本模块是 AI SDK 临时 ID、空 Part 与最终 UIMessage 快照能进入的最外层边界。
+ * 本模块是流式临时 ID、空 Part 与最终 SessionUiMessage 快照能进入的最外层边界。
  * 它只通过 SessionMessages 打开 Writer，不持有第二份 Assistant Message 状态。
  */
 
@@ -13,7 +13,10 @@ import {
 } from "@/session/SessionMessages.js";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import type { SessionToolInputReady } from "@/types/session/SessionTool.js";
-import type { UIMessage, UIMessageChunk } from "ai";
+import type {
+  SessionUiMessage as UIMessage,
+  SessionUiMessageChunk as UIMessageChunk,
+} from "@/types/session/SessionUiMessage.js";
 
 /** 单个 Turn 使用的 Assistant 输出 Adapter。 */
 export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
@@ -45,7 +48,7 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     this.step_pending = true;
   }
 
-  /** 把可持久化 AI SDK Chunk 写入当前 canonical Message。 */
+  /** 把可持久化 Session UI Chunk 写入当前 canonical Message。 */
   async write_chunk(chunk: UIMessageChunk): Promise<void> {
     if (!is_assistant_content_chunk(chunk.type)) return;
     await (await this.ensure_writer()).apply_chunk(chunk);
@@ -125,7 +128,7 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   }
 }
 
-/** 判断 AI SDK Chunk 是否属于 canonical Assistant 内容。 */
+/** 判断 Session UI Chunk 是否属于 canonical Assistant 内容。 */
 function is_assistant_content_chunk(type: string): boolean {
   return (
     type === "text-start" ||

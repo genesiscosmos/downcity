@@ -46,13 +46,12 @@ POST /v1/translate/en2zh  →  translate.action("en2zh")
 AIService 是内置的 Service，用于管理 AI 模型：
 
 ```ts
-import { createDeepSeek } from "@ai-sdk/deepseek";
 import {
   AIService,
   AIChannel,
-  read_required_env,
+  stream_openai_compatible_model,
   type AIChannelStreamInput,
-  type LanguageModelV3StreamResult,
+  type AIChannelStreamResult,
 } from "@downcity/federation";
 
 class DeepSeekChannel extends AIChannel {
@@ -61,19 +60,18 @@ class DeepSeekChannel extends AIChannel {
       id: "deepseek",
       base_url: "https://api.deepseek.com/v1",
       env_key: "DEEPSEEK_API_KEY",
-      ai_sdk_provider_id: "deepseek",
     });
   }
 
   protected async stream(
     input: AIChannelStreamInput,
-  ): Promise<LanguageModelV3StreamResult> {
-    const deepseek = createDeepSeek({
-      apiKey: read_required_env(input, this.env_key ?? ""),
-      baseURL: this.base_url,
+  ): Promise<AIChannelStreamResult> {
+    const api_key = input.env("DEEPSEEK_API_KEY");
+    if (!api_key) throw new Error("DEEPSEEK_API_KEY is required");
+    return stream_openai_compatible_model(input, {
+      api_key,
+      base_url: this.base_url ?? "https://api.deepseek.com/v1",
     });
-    const model = deepseek(input.model.upstream_model);
-    return model.doStream(input.call);
   }
 }
 

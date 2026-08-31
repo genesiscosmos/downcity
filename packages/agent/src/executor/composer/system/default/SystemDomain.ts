@@ -6,7 +6,7 @@
  * - `DefaultSessionSystemComposer` 只做组件适配；核心逻辑统一在本文件。
  */
 
-import type { SystemModelMessage } from "ai";
+import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import { transform_prompts_into_system_messages } from "@executor/composer/system/default/PromptRenderer.js";
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import { build_runtime_clock_system_prompt } from "@executor/composer/system/default/variables/VariableReplacer.js";
@@ -245,12 +245,12 @@ export async function build_session_system_messages(input: {
    * 本地 plugin system 文本集合。
    */
   local_plugin_system_prompts: string[];
-}): Promise<SystemModelMessage[]> {
+}): Promise<SessionSystemMessage[]> {
   const runtimeClockText = build_runtime_clock_system_prompt({
     projectPath: input.project_root,
     session_id: input.session_id,
   });
-  const runtimeClockMessages: SystemModelMessage[] = runtimeClockText
+  const runtimeClockMessages: SessionSystemMessage[] = runtimeClockText
     ? [{ role: "system", content: runtimeClockText }]
     : [];
   const runtimeSystemText = build_context_system_prompt({
@@ -258,7 +258,7 @@ export async function build_session_system_messages(input: {
     session_id: input.session_id,
     mode: input.mode,
   });
-  const runtimeRuleMessages: SystemModelMessage[] = runtimeSystemText
+  const runtimeRuleMessages: SessionSystemMessage[] = runtimeSystemText
     ? [{ role: "system", content: runtimeSystemText }]
     : [];
 
@@ -331,7 +331,7 @@ export async function resolve_session_system_messages(input: {
    */
   context: PluginContext;
 
-}): Promise<SystemModelMessage[]> {
+}): Promise<SessionSystemMessage[]> {
   const profile = resolve_system_context_profile(input.profile);
   return await build_session_system_messages({
     project_root: input.project_root,

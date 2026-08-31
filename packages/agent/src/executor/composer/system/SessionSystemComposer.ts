@@ -6,7 +6,7 @@
  * - 与 tools / step 编排解耦，避免 Executor 过载。
  */
 
-import type { SystemModelMessage } from "ai";
+import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import type { SessionComposeInput } from "@/types/session/SessionComposer.js";
 
 /**
@@ -21,5 +21,5 @@ export interface SessionSystemComposer {
   /**
    * 解析本轮 system messages。
    */
-  resolve(input: SessionComposeInput): Promise<SystemModelMessage[]>;
+  resolve(input: SessionComposeInput): Promise<SessionSystemMessage[]>;
 }

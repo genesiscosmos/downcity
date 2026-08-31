@@ -2,12 +2,12 @@
  * Action 与 Session Tool 共用的执行结果协议。
  *
  * 关键点（中文）
- * - `output` 是标准 Tool Result，原样交给 AI SDK 和 canonical Tool Part。
+ * - `output` 是标准 Tool Result，原样交给模型执行器和 canonical Tool Part。
  * - `messages` 是执行后写入 Session 的真实 User / Assistant Message 内容。
- * - Message Parts 直接复用 AI SDK UIMessage 协议，不再建立文件、图片或 Plugin 专用桥接。
+ * - Message Parts 复用 Downcity Session UI 协议，不再建立文件、图片或 Plugin 专用桥接。
  */
 
-import type { UIMessage } from "ai";
+import type { SessionUiMessage as UIMessage } from "@/types/session/SessionUiMessage.js";
 
 /** Action 执行后产生的一条 Session 消息。 */
 export interface ActionResultMessage {
@@ -20,7 +20,7 @@ export interface ActionResultMessage {
 
 /** Action 或 Tool 内部实现返回的统一结果。 */
 export interface ActionResult<TOutput = unknown> {
-  /** 返回给调用方、AI SDK 与 canonical Tool Part 的标准执行输出。 */
+  /** 返回给调用方、模型执行器与 canonical Tool Part 的标准执行输出。 */
   output: TOutput;
 
   /** 执行产生的真实 Session 消息；没有附加消息时传入空数组。 */

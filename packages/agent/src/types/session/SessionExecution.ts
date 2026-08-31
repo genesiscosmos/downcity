@@ -7,7 +7,8 @@
  * - 输出只返回执行结果；Assistant Message 通过显式输出端口写入唯一事实源。
  */
 
-import type { Tool, UIMessageChunk } from "ai";
+import type { RuntimeTool as Tool } from "@downcity/type";
+import type { SessionUiMessageChunk as UIMessageChunk } from "@/types/session/SessionUiMessage.js";
 import type {
   SessionRecordV1,
   SessionMessageRecordV1,
@@ -69,7 +70,7 @@ export type SessionAssistantStepCallback = (
  * UI stream chunk 回调入参。
  *
  * 关键点（中文）
- * - 这里直接复用 AI SDK 的 `UIMessageChunk` 结构，避免在 session 内核层再复制一套协议。
+ * - 这里复用 Downcity `SessionUiMessageChunk`，让 Session 内核只有一套流式投影。
  * - SDK / HTTP 若需要自己的事件模型，应在更上层做映射。
  */
 export type SessionUiMessageChunk = UIMessageChunk;

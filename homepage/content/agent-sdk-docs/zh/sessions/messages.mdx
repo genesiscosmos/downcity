@@ -44,7 +44,7 @@ Session 内只有一条按 `sequence` 排序的顶层 Message 序列。工具调
 
 普通 Tool Loop、Provider continuation 和恢复重试不会创建新的 Assistant Message；它们继续向当前 Assistant 追加有序 Part。只有新的 User Message（包括运行中 steer）真正进入消息序列时，才结束之前的 Assistant Message，后续输出再创建下一条 Assistant Message。模型 step 的边界由 `step-start` Part 表达，不需要额外的 segment 字段。
 
-`SessionMessage` 是持久化数据结构，AI SDK `UIMessage` 是 Executor 与 UI 边界格式。User / Assistant 的可序列化 UI parts 可以转换成 Session parts，再恢复为等价的 `UIMessage`；`action` 和 `error` 是 Downcity Session 自己的顶层类型，不会送入模型。
+`SessionMessage` 是持久化数据结构，内部 `SessionUiMessage` 是 Executor 与 UI 的流式投影。User / Assistant 的可序列化 UI parts 可以转换成 Session parts，再恢复为等价投影；`action` 和 `error` 是 Downcity Session 自己的顶层类型，不会送入模型。
 
 Turn 在产生任何 Assistant 内容前失败时，只写入一条 `error` Message，不会用错误文本伪造 Assistant 回复。若失败前已经产生部分内容，该 Assistant 会以 `status: "failed"` 保留，随后再写入结构化 `error` Message。
 
@@ -57,7 +57,7 @@ Turn 在产生任何 Assistant 内容前失败时，只写入一条 `error` Mess
 | `tool` | `tool_call_id`, `tool_name`, `state`, metadata | 工具输入、等待、运行和结果 |
 | `interaction` | `interaction_id`, `interaction_type`, `status`, `request`, `response` | 审批、问题等用户异步交互 |
 | `file` | `url`, `media_type`, `provider_metadata` | Assistant 生成或引用的文件 |
-| `source` | `source_type`, `source_id`, URL 或文档字段 | AI SDK URL / document source |
+| `source` | `source_type`, `source_id`, URL 或文档字段 | URL 或文档来源 |
 | `data` | `data_type`, `data`, `data_id` | 可持久化的结构化 UI 数据 |
 | `step-start` | 无业务字段 | 多 step 回复的边界 |
 
@@ -65,7 +65,7 @@ Turn 在产生任何 Assistant 内容前失败时，只写入一条 `error` Mess
 
 ### Tool Provider metadata
 
-Tool Part 会保留 AI SDK Provider 附着在工具调用和工具结果上的 metadata：
+Tool Part 会保留 Provider Adapter 附着在工具调用和工具结果上的 metadata：
 
 ```ts
 interface SessionAssistantToolPart {
@@ -81,7 +81,7 @@ interface SessionAssistantToolPart {
 
 这些字段是 Provider continuation 等能力所需的透明数据。应用可以读取并原样转存，但不应修改其中的 Provider 专属字段。旧 Session 没有这些可选字段时仍可正常读取。
 
-文本、推理、文件和 source 同样保留各自的 `provider_metadata`。相同 `data_id` 或 `source_id` 的流式更新会替换原 Part 并保留 `sequence`；带 `transient: true` 的 AI SDK data chunk 只用于实时 UI，不写入 Session。
+文本、推理、文件和 source 同样保留各自的 `provider_metadata`。相同 `data_id` 或 `source_id` 的流式更新会替换原 Part 并保留 `sequence`；带 `transient: true` 的 Session data chunk 只用于实时 UI，不写入 Session。
 
 Tool 状态不保存审批副本。用户参与使用独立 Interaction Part：
 
@@ -103,7 +103,7 @@ Part Mutation 表示一次原子快照中的两个变更，不是两个独立事
 
 每条 Message 都有稳定 `message_id`、创建后不变的 `sequence`，以及随完整快照更新递增的 `revision`。客户端不能用较低 revision 覆盖较高 revision。
 
-SDK 在每个模型 step 完成时校验最终 UIMessage 与 canonical chunks 的 Part 数量、类型、顺序和稳定标识。AI SDK 可能为只有 start/end、没有 delta 的 Text 或 Reasoning 生成空占位 Part；这类没有用户可见内容的 Part 会在对账前忽略，不进入 canonical history。其余最终快照不一致或 canonical part 写入失败都会使 Turn 失败，不会通过正文内容猜测 identity，也不会发布历史不完整的 completed Turn。客户端收到更高 revision 的完整 `message` Mutation 时，应替换整条 Message，而不是保留旧 revision 的 parts 数组。
+SDK 在每个模型 step 完成时校验最终 Session 投影与 canonical chunks 的 Part 数量、类型、顺序和稳定标识。只有 start/finish、没有 delta 的空 Text 或 Reasoning Part 会在对账前忽略，不进入 canonical history。其余最终快照不一致或 canonical part 写入失败都会使 Turn 失败，不会通过正文内容猜测 identity，也不会发布历史不完整的 completed Turn。客户端收到更高 revision 的完整 `message` Mutation 时，应替换整条 Message，而不是保留旧 revision 的 parts 数组。
 
 默认 `messages()` 只返回 `visibility: "visible"` 的 Message。调试或审计时可传 `include_internal: true`。Compact Summary 不是 Message，不占用 sequence，也不会出现在 `messages()` 结果中。
 

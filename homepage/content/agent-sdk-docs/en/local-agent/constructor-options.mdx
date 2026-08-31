@@ -106,19 +106,26 @@ Hosts that need additional base instructions should pass them explicitly through
 
 ## `model`
 
-The default `AgentModel` instance held by the Agent. `AgentModel` can be an AI SDK `LanguageModel` or a City `CityModel`; callers do not need to convert it first.
+The default `ModelClient` held by the Agent. Use a `CityModel` returned by the Federation catalog or create an in-process model through a Provider Adapter.
 
 ```ts
+const model = create_openai_compatible_model({
+  id: "gpt-5",
+  upstream_model: "gpt-5",
+  base_url: "https://api.openai.com/v1",
+  api_key: process.env.OPENAI_API_KEY!,
+});
+
 new Agent({
   id: "repo-helper",
-  model: openai.responses("gpt-5"),
+  model,
 });
 ```
 
 Key points:
 
-- the SDK does not select, persist, or restore model IDs; it only holds `AgentModel` instances
-- `CityModel` implements `LanguageModelV3` itself, so Agent calls it directly
+- the SDK does not select, persist, or restore model IDs; it only holds `ModelClient` instances
+- `CityModel` implements `ModelClient`, so Agent calls `stream(call, signal)` directly
 - a Session without its own model falls back to the Agent model
 - a local Session can override the Agent model with `session.set({ model })`
 - effective model resolution always checks the Session model before the Agent model

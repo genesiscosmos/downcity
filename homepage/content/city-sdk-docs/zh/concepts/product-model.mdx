@@ -50,7 +50,7 @@ Downcity 最核心的心智不是“一个产品对应一个后端”，而是�
 
 - 模型目录和 provider 配置
 - `user_token` 校验
-- `city.ai.text()`、`city.ai.stream()`、`city.ai.image_create()` / `city.ai.image_result()` 这类 AI service 调用能力
+- `city.ai.stream()`、`city.ai.image_create()` / `city.ai.image_result()` 这类 AI service 调用能力
 - usage 记录、日志、限额和商业 hooks
 - 多个产品可以共用的调用逻辑
 
@@ -96,7 +96,7 @@ Downcity 最核心的心智不是“一个产品对应一个后端”，而是�
 
 对产品来说，model 更像“可见能力”：
 
-- 可以显式传给 `city.ai.text({ model })`
+- 可以显式传给 `city.ai.stream({ model, call })`
 - 每次 AIService 调用都必须显式传入模型 ID 或 `CityModel`
 
 这意味着产品端看到的是稳定模型 ID，而不是上游 provider 的具体细节。

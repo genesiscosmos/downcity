@@ -8,10 +8,10 @@
  */
 
 import {
-  getToolName,
-  isTextUIPart,
-  isToolUIPart,
-} from "ai";
+  is_session_text_part as isTextUIPart,
+  is_session_tool_part as isToolUIPart,
+  read_session_tool_name,
+} from "@/types/session/SessionUiMessage.js";
 import type { SessionMessageRecordV1 } from "@/executor/types/SessionRecords.js";
 import type { JsonObject } from "@/types/common/Json.js";
 
@@ -161,7 +161,7 @@ export function summarize_ui_message_for_debug(
     .trim();
   const toolNames = parts
     .filter(isToolUIPart)
-    .map((part) => String(getToolName(part) || ""))
+    .map((part) => String(read_session_tool_name(part) || ""))
     .filter((name) => Boolean(name))
     .slice(0, 8);
   const partTypes = parts
@@ -228,7 +228,7 @@ function pickIncompleteToolParts(
   return parts
     .filter(isToolUIPart)
     .map((part) => ({
-      tool_name: String(getToolName(part) || "unknown_tool"),
+      tool_name: String(read_session_tool_name(part) || "unknown_tool"),
       state:
         typeof toJsonObject(part)?.state === "string"
           ? String(toJsonObject(part)?.state)

@@ -7,7 +7,11 @@
  * - 负责显式 Turn 上下文消费、executing 状态、Composer 编排与 Tool Loop 执行。
  */
 
-import type { LanguageModel, Tool, ToolExecutionOptions } from "ai";
+import type {
+  ModelClient,
+  RuntimeTool as Tool,
+  RuntimeToolExecutionOptions as ToolExecutionOptions,
+} from "@downcity/type";
 import { CoreEngineRunner } from "@executor/core-engine/CoreEngineRunner.js";
 import { ExecutorRecoveryPolicy } from "@executor/services/ExecutorRecoveryPolicy.js";
 import type { Logger } from "@/utils/logger/Logger.js";
@@ -54,7 +58,7 @@ type ExecutorOptions = {
   /**
    * 读取当前 session 使用的模型实例。
    */
-  get_model: () => LanguageModel | undefined;
+  get_model: () => ModelClient | undefined;
 
   /**
    * 统一日志器。
@@ -180,7 +184,7 @@ export class Executor implements SessionExecutor {
    */
   private async prepare_execute_input(
     query: string,
-    _model: LanguageModel,
+    _model: ModelClient,
     turn_context: SessionTurnContext,
     retry_count: number,
   ): Promise<SessionStepExecutionInput> {
@@ -206,7 +210,7 @@ export class Executor implements SessionExecutor {
    */
   private async execute_prepared_input(
     input: SessionStepExecutionInput,
-    model: LanguageModel,
+    model: ModelClient,
     turn_context: SessionTurnContext,
   ): Promise<SessionTurnExecutionResult> {
     return await this.core_engine_runner.execute({
@@ -225,10 +229,10 @@ export class Executor implements SessionExecutor {
    *
    * 关键点（中文）
    * - 调用方必须先提交 Session 统一输入队列，再调用本方法。
-   * - 每次调用只读取一次 model、system 与 tools，并把它们传给同一个 `streamText()`。
+   * - 每次调用只读取一次 model、system 与 tools，并把它们传给同一个模型 step。
    */
   private async resolve_step_inputs(turn_context: SessionTurnContext): Promise<{
-    model: LanguageModel;
+    model: ModelClient;
     system: SessionStepExecutionInput["system"];
     tools: SessionStepExecutionInput["tools"];
     context_window?: number;
@@ -258,7 +262,7 @@ export class Executor implements SessionExecutor {
   ): Promise<{
     compose_input: SessionComposeInput;
     input: SessionStepInput;
-    model: LanguageModel;
+    model: ModelClient;
   }> {
     if (refresh_plugins && turn_context) await this.refresh_step_runtime(turn_context);
     const compose_input = await this.get_compose_input(
@@ -295,7 +299,7 @@ export class Executor implements SessionExecutor {
    *
    * 关键点（中文）
    * - 每个 step 使用独立包装工具，不会在并行 Session 间共享可变指针。
-   * - Agent 与 Shell 工具通过 ToolExecutionOptions.experimental_context 读取显式快照。
+   * - Agent 与 Shell 工具通过 RuntimeToolExecutionOptions.context 读取显式快照。
    */
   private bind_turn_context_to_tools(
     tools: Record<string, Tool>,
@@ -311,7 +315,7 @@ export class Executor implements SessionExecutor {
       wrapped[name] = {
         ...tool,
         execute: async (args: unknown, options: ToolExecutionOptions) => {
-          const tool_call_id = String(options.toolCallId || "").trim();
+          const tool_call_id = String(options.tool_call_id || "").trim();
           if (!tool_call_id) {
             throw new Error(`Tool execution requires toolCallId: ${name}`);
           }
@@ -322,7 +326,7 @@ export class Executor implements SessionExecutor {
               input: args,
             });
           }
-          const abort_signal = options.abortSignal ||
+          const abort_signal = options.abort_signal ||
             turn_context.lifecycle.abort_signal;
           const execution_context: SessionToolExecutionContext = {
             session_turn_context: turn_context,
@@ -358,7 +362,7 @@ export class Executor implements SessionExecutor {
           };
           const output = await original_execute(args, {
             ...options,
-            experimental_context: execution_context,
+            context: execution_context,
           });
           if (!is_action_result(output)) return output;
           for (const message of output.messages) {
@@ -395,7 +399,7 @@ export class Executor implements SessionExecutor {
   /**
    * 读取当前 session 模型。
    */
-  private resolve_model_or_throw(): LanguageModel {
+  private resolve_model_or_throw(): ModelClient {
     const model = this.get_model();
     if (!model) {
       throw new Error("requires a configured model.");

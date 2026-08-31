@@ -2,7 +2,7 @@
  * Services 集成测试使用的固定文本 AIChannel。
  *
  * 测试模型通过与生产代码一致的 `AIChannel.model()` 注册，避免测试夹具绕过
- * City AI 的 runtime 结构与 LanguageModelV3 执行边界。
+ * City AI 的 runtime 结构与 Downcity Model Protocol 执行边界。
  */
 
 import { AIChannel } from "@downcity/federation"
@@ -31,7 +31,7 @@ export function create_test_text_model({
     async stream(input) {
       on_stream?.(input)
       if (fail) throw new Error("test model failure")
-      return create_text_stream(text)
+      return create_text_stream(id, text)
     }
   }
 
@@ -44,23 +44,20 @@ export function create_test_text_model({
   })
 }
 
-/** 创建满足 LanguageModelV3 契约的固定文本流。 */
-function create_text_stream(text) {
+/** 创建满足 Downcity Model Protocol 契约的固定文本流。 */
+function create_text_stream(model_id, text) {
   return {
     stream: new ReadableStream({
       start(controller) {
-        controller.enqueue({ type: "stream-start", warnings: [] })
-        controller.enqueue({ type: "text-start", id: "text_1" })
-        controller.enqueue({ type: "text-delta", id: "text_1", delta: text })
-        controller.enqueue({ type: "text-end", id: "text_1" })
+        controller.enqueue({ type: "model_start", request_id: "request_1", model_id })
+        controller.enqueue({ type: "text_start", content_id: "text_1" })
+        controller.enqueue({ type: "text_delta", content_id: "text_1", delta: text })
+        controller.enqueue({ type: "text_finish", content_id: "text_1" })
         controller.enqueue({
-          type: "finish",
-          finishReason: { unified: "stop", raw: "stop" },
-          usage: {
-            inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
-            outputTokens: { total: 1, text: 1, reasoning: 0 },
-          },
+          type: "model_usage",
+          usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
         })
+        controller.enqueue({ type: "model_finish", finish_reason: "stop" })
         controller.close()
       },
     }),

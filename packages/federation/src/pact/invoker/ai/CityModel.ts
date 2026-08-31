@@ -1,36 +1,24 @@
 /**
- * CityModel 原生 LanguageModelV3 实现。
+ * CityModel 原生 Downcity Model Protocol 客户端实现。
  *
- * Agent 将该类直接交给 AI SDK。类内部负责把标准模型调用编码为 City transport、
- * 请求 Federation、解析 SSE，并重新输出标准 LanguageModelV3 结果。
+ * 类内部负责请求 Federation 并把 SSE 解码成标准 ModelStreamEvent。
  */
 
-import { CITY_MODEL_KIND, type CityModel as CityModelContract } from "@downcity/type";
 import {
-  CITY_LANGUAGE_MODEL_PROTOCOL_V1,
-  type CityLanguageModelStreamEventV1,
-  type CityLanguageModelStreamRequestV1,
-  type CityTransportJsonValue,
-} from "../../../types/AITransport.js";
+  CITY_MODEL_KIND,
+  MODEL_PROTOCOL_VERSION,
+  ModelStreamValidator,
+  type CityModel as CityModelContract,
+  type ModelCall,
+  type ModelStreamEnvelope,
+  type ModelStreamEvent,
+  type ModelStreamRequest,
+} from "@downcity/type";
 import type { CityModelOptions } from "../../../types/AITransport.js";
-import {
-  decode_city_transport_value,
-  encode_city_transport_object,
-} from "../../../utils/CityLanguageModelCodec.js";
-import { collect_city_language_model_stream } from "../../../utils/CityLanguageModelResult.js";
-
-type CityCallOptions = Parameters<CityModelContract["doStream"]>[0];
-type CityStreamResult = Awaited<ReturnType<CityModelContract["doStream"]>>;
-type CityGenerateResult = Awaited<ReturnType<CityModelContract["doGenerate"]>>;
-type CityStreamPart = CityStreamResult["stream"] extends ReadableStream<infer T> ? T : never;
 
 /** Federation 模型目录中的可执行 City 模型。 */
 export class CityModel implements CityModelContract {
   readonly kind = CITY_MODEL_KIND;
-  readonly specificationVersion = "v3" as const;
-  readonly provider = "downcity";
-  readonly supportedUrls: Record<string, RegExp[]> = {};
-  readonly modelId: string;
   readonly id: string;
   readonly name: string;
   readonly description: string;
@@ -48,7 +36,6 @@ export class CityModel implements CityModelContract {
   constructor(options: CityModelOptions) {
     const descriptor = options.descriptor;
     this.id = descriptor.id;
-    this.modelId = descriptor.id;
     this.name = descriptor.name;
     this.description = descriptor.description;
     this.context_window = descriptor.context_window;
@@ -62,65 +49,40 @@ export class CityModel implements CityModelContract {
     this.request_stream = options.request_stream;
   }
 
-  /** 执行原生 City LanguageModel 流式调用。 */
-  async doStream(options: CityCallOptions): Promise<CityStreamResult> {
-    const request = this.create_request(options);
-    const response = await this.request_stream(request, options.abortSignal);
+  /** 使用 Downcity Model Protocol 执行一个模型 step。 */
+  async stream(call: ModelCall, signal?: AbortSignal): Promise<ReadableStream<ModelStreamEvent>> {
+    const request: ModelStreamRequest = {
+      protocol_version: MODEL_PROTOCOL_VERSION,
+      model_id: this.id,
+      call,
+    };
+    const response = await this.request_stream(request, signal);
     if (!response.body) throw new Error("Federation language model response body is empty");
     const content_type = response.headers?.get("content-type");
     if (content_type && !content_type.toLowerCase().includes("text/event-stream")) {
       throw new Error(`Federation language model returned unsupported content type: ${content_type}`);
     }
-    return {
-      stream: parse_city_model_stream(response.body),
-      request: { body: request },
-    };
-  }
-
-  /** 通过聚合原生流实现非流式模型调用。 */
-  async doGenerate(options: CityCallOptions): Promise<CityGenerateResult> {
-    const result = await this.doStream(options);
-    return collect_city_language_model_stream(result.stream, result.request?.body);
-  }
-
-  /** 将 AI SDK 调用参数转换为 City transport 请求。 */
-  private create_request(options: CityCallOptions): CityLanguageModelStreamRequestV1 {
-    const {
-      abortSignal: _abort_signal,
-      headers: _headers,
-      includeRawChunks: _include_raw_chunks,
-      providerOptions,
-      ...call
-    } = options;
-    const downcity_options = providerOptions?.downcity as Record<string, unknown> | undefined;
-    const reasoning_effort = read_optional_string(
-      downcity_options?.reasoningEffort ?? downcity_options?.reasoning_effort,
-    );
-    const reasoning = downcity_options?.reasoning === false ? false : undefined;
-    return {
-      protocol: CITY_LANGUAGE_MODEL_PROTOCOL_V1,
-      model_id: this.modelId,
-      call: encode_city_transport_object(call),
-      ...(reasoning_effort ? { reasoning_effort } : {}),
-      ...(reasoning === false ? { reasoning } : {}),
-    };
+    return parse_city_model_stream(response.body);
   }
 }
 
 /** 解析 Federation 返回的标准 SSE 数据流。 */
-function parse_city_model_stream(body: ReadableStream<Uint8Array>): ReadableStream<CityStreamPart> {
+function parse_city_model_stream(body: ReadableStream<Uint8Array>): ReadableStream<ModelStreamEvent> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let data_lines: string[] = [];
+  const validator = new ModelStreamValidator();
 
-  return new ReadableStream<CityStreamPart>({
+  return new ReadableStream<ModelStreamEvent>({
     async pull(controller) {
       try {
         while (true) {
           const event = read_sse_event();
           if (event !== undefined) {
-            controller.enqueue(parse_stream_event(event));
+            const parsed_event = parse_stream_event(event);
+            validator.accept(parsed_event);
+            controller.enqueue(parsed_event);
             return;
           }
           const chunk = await reader.read();
@@ -128,7 +90,12 @@ function parse_city_model_stream(body: ReadableStream<Uint8Array>): ReadableStre
             buffer += decoder.decode();
             consume_sse_lines(true);
             const final_event = read_sse_event();
-            if (final_event !== undefined) controller.enqueue(parse_stream_event(final_event));
+            if (final_event !== undefined) {
+              const parsed_event = parse_stream_event(final_event);
+              validator.accept(parsed_event);
+              controller.enqueue(parsed_event);
+            }
+            validator.finish();
             controller.close();
             return;
           }
@@ -169,18 +136,13 @@ function parse_city_model_stream(body: ReadableStream<Uint8Array>): ReadableStre
 }
 
 /** 校验并解码单个 City transport 流事件。 */
-function parse_stream_event(data: string): CityStreamPart {
-  const parsed = JSON.parse(data) as CityLanguageModelStreamEventV1;
-  if (parsed.protocol !== CITY_LANGUAGE_MODEL_PROTOCOL_V1) {
-    throw new Error(`Unsupported City language model protocol: ${String(parsed.protocol)}`);
+function parse_stream_event(data: string): ModelStreamEvent {
+  const parsed = JSON.parse(data) as ModelStreamEnvelope;
+  if (parsed.protocol_version !== MODEL_PROTOCOL_VERSION) {
+    throw new Error(`Unsupported Downcity model protocol: ${String(parsed.protocol_version)}`);
   }
-  if (!parsed.part || typeof parsed.part !== "object" || Array.isArray(parsed.part)) {
-    throw new Error("Federation returned an invalid City language model stream event");
+  if (!parsed.event || typeof parsed.event !== "object" || Array.isArray(parsed.event)) {
+    throw new Error("Federation returned an invalid Downcity model stream event");
   }
-  return decode_city_transport_value(parsed.part as CityTransportJsonValue) as CityStreamPart;
-}
-
-/** 读取非空可选字符串。 */
-function read_optional_string(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  return parsed.event;
 }

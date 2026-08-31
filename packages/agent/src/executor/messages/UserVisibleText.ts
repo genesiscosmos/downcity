@@ -21,7 +21,7 @@ import {
  * 生成真正应该落盘到 session 的 assistant message。
  *
  * 关键点（中文）
- * - session 正式历史应尽量保留 AI SDK 最终 assistant UIMessage。
+ * - Session 正式历史应保留最终 Assistant SessionUiMessage 投影。
  * - 运行中 step/tool 的中断恢复由 inflight 快照承担，不再通过跳过最终 message 收口。
  */
 export function resolve_assistant_message_for_persistence(

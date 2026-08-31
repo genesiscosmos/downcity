@@ -6,12 +6,12 @@
  * - Plugin Tool 与调用方自定义 Tool 不属于本类型，由 Agent 统一注册。
  */
 
-import type { Tool } from "ai";
+import type { RuntimeTool } from "@downcity/type";
 import type { FileSystem } from "@/types/workspace/FileSystem.js";
 import type { WorkspaceShell } from "@/shell/types/WorkspaceShell.js";
 
 /** 当前 Workspace 向 Agent 提供的模型工具集合。 */
-export type WorkspaceTools = Record<string, Tool>;
+export type WorkspaceTools = Record<string, RuntimeTool>;
 
 /** Workspace Tools 构造参数。 */
 export interface CreateWorkspaceToolsOptions {

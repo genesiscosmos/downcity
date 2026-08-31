@@ -1,11 +1,11 @@
 /**
  * 单个 Assistant Message 的流式写入器。
  *
- * Writer 把 AI SDK chunk、Executor Tool 输入屏障和最终关闭操作收口到同一条
+ * Writer 把 Session UI chunk、Executor Tool 输入屏障和最终关闭操作收口到同一条
  * 单写者队列，保证并发回调不会产生 revision 冲突。
  */
 
-import type { UIMessageChunk } from "ai";
+import type { SessionUiMessageChunk as UIMessageChunk } from "@/types/session/SessionUiMessage.js";
 import type { SessionMessages } from "@/session/SessionMessages.js";
 import {
   to_session_json_object,
@@ -44,7 +44,7 @@ export class SessionAssistantMessageWriter {
     this.message_id = message_id;
   }
 
-  /** 应用一个原始 AI SDK UI chunk。 */
+  /** 应用一个原始 Session UI chunk。 */
   async apply_chunk(chunk: UIMessageChunk): Promise<void> {
     await this.enqueue_write(async () => {
       await this.apply_chunk_serialized(chunk);
@@ -477,7 +477,7 @@ export class SessionAssistantMessageWriter {
           `Assistant canonical Tool Part not found: ${input.tool_call_id}`,
         );
       }
-      // 原生 needsApproval 恢复时，AI SDK 不会重新发送 Tool 输入；沿用已审批并
+      // 审批恢复时 Provider 不会重新发送 Tool 输入；沿用已审批并
       // 已转为 running 的 Part，仅补齐执行前的 canonical 输入屏障。
       if (
         current.state !== "input-streaming" &&
@@ -680,9 +680,9 @@ export class SessionAssistantMessageWriter {
   }
 
   /**
-   * 把 AI SDK 当前 stream 内的临时 chunk ID 映射为 Message 内唯一 Part ID。
+   * 把当前 stream 内的临时 chunk ID 映射为 Message 内唯一 Part ID。
    *
-   * AI SDK 会在不同 `streamText()` 调用中重复使用 `txt-0`、`reasoning-0`
+   * 不同模型 step 可能重复使用 `txt-0`、`reasoning-0`
    * 等 ID，因此这些 ID 只能用于关联当前尚未结束的文本片段。
    */
   private resolve_text_part_id(

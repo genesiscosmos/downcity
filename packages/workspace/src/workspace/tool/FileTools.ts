@@ -1,5 +1,5 @@
 /**
- * 文件 AI SDK tools。
+ * Workspace 文件工具。
  *
  * 关键点（中文）
  * - 模型看到独立的 read/write/edit 工具，不需要构造 shell 命令。
@@ -7,7 +7,7 @@
  */
 
 import path from "node:path";
-import { tool } from "ai";
+import { define_runtime_tool } from "@downcity/type";
 import type { WorkspaceToolActionResult } from "@/types/workspace/WorkspaceToolResult.js";
 import type {
   EditFileToolInput,
@@ -27,10 +27,10 @@ import {
 
 /** 创建 Workspace 持有的结构化文件工具。 */
 export function create_file_tools(runner: FileToolRunner): FileToolSet {
-  const read = tool({
+  const read = define_runtime_tool<ReadFileToolInput, WorkspaceToolActionResult<ReadFileToolResult>>({
     description:
       "Read a project file instead of using cat or sed. Chat attachments are hydrated by the Session and are not project file paths. Images and PDFs are attached to the next model step as local file parts. Text output is limited to 500 lines and 256KB by default; use offset and limit to continue. Other binary files return metadata only.",
-    inputSchema: read_file_tool_input_schema,
+    input_schema: read_file_tool_input_schema,
     execute: async (
       input: ReadFileToolInput,
     ): Promise<WorkspaceToolActionResult<ReadFileToolResult>> => {
@@ -48,7 +48,7 @@ export function create_file_tools(runner: FileToolRunner): FileToolSet {
           parts: [{
             type: "file",
             url: output.file_path,
-            mediaType: output.mime_type || "application/octet-stream",
+            media_type: output.mime_type || "application/octet-stream",
             filename: path.basename(output.file_path),
           }],
         });
@@ -57,10 +57,10 @@ export function create_file_tools(runner: FileToolRunner): FileToolSet {
     },
   });
 
-  const write = tool({
+  const write = define_runtime_tool<WriteFileToolInput, WorkspaceToolActionResult<WriteFileToolResult>>({
     description:
       "Create a new UTF-8 text file or atomically replace an existing file when overwrite=true. Parent directories are created automatically. Use edit for partial changes.",
-    inputSchema: write_file_tool_input_schema,
+    input_schema: write_file_tool_input_schema,
     execute: async (
       input: WriteFileToolInput,
     ): Promise<WorkspaceToolActionResult<WriteFileToolResult>> => {
@@ -72,10 +72,10 @@ export function create_file_tools(runner: FileToolRunner): FileToolSet {
     },
   });
 
-  const edit = tool({
+  const edit = define_runtime_tool<EditFileToolInput, WorkspaceToolActionResult<EditFileToolResult>>({
     description:
       "Atomically edit one text file using exact replacements. Every edits[].old_text must match exactly once in the original file, and edit regions must not overlap. Combine separate changes to one file in a single call.",
-    inputSchema: edit_file_tool_input_schema,
+    input_schema: edit_file_tool_input_schema,
     execute: async (
       input: EditFileToolInput,
     ): Promise<WorkspaceToolActionResult<EditFileToolResult>> => {

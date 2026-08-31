@@ -7,12 +7,6 @@
  */
 
 import fs from "fs-extra";
-import {
-  getToolName,
-  isTextUIPart,
-  isToolUIPart,
-  type UIMessagePart,
-} from "ai";
 import type {
   SessionActionRecordV1,
   SessionRecordV1,
@@ -28,7 +22,7 @@ import { extract_tool_calls_from_ui_message } from "@downcity/agent";
 import type { ControlTimelineEvent, ControlTimelineRole } from "@/city/agent/control/types/ControlViewData.js";
 import { truncateText } from "@/city/agent/control/CommonHelpers.js";
 
-type AnyUiPart = UIMessagePart<Record<string, never>, Record<string, never>>;
+type AnyUiPart = SessionMessageRecordV1["parts"][number];
 
 type ToolPartCompatShape = {
   type?: unknown;
@@ -95,6 +89,32 @@ function resolveToolName(part: ToolPartCompatShape, aiToolName?: string): string
   const rawType = typeof part.type === "string" ? part.type.trim() : "";
   if (rawType.startsWith("tool-")) return rawType.slice("tool-".length);
   return "unknown_tool";
+}
+
+/** 判断当前 part 是否为 Session 文本。 */
+function is_text_ui_part(part: unknown): part is { type: "text"; text?: unknown } {
+  return Boolean(
+    part &&
+    typeof part === "object" &&
+    (part as { type?: unknown }).type === "text",
+  );
+}
+
+/** 判断当前 part 是否为 Session 工具调用。 */
+function is_tool_ui_part(part: unknown): part is ToolPartCompatShape {
+  if (!part || typeof part !== "object") return false;
+  const type = (part as { type?: unknown }).type;
+  return typeof type === "string" &&
+    (type === "dynamic-tool" || type.startsWith("tool-"));
+}
+
+/** 从 Session 工具 part 读取稳定工具名称。 */
+function get_tool_name(part: ToolPartCompatShape): string {
+  const record = part as ToolPartCompatShape & { toolName?: unknown };
+  const dynamic_name = String(record.toolName ?? "").trim();
+  if (dynamic_name) return dynamic_name;
+  const type = typeof record.type === "string" ? record.type : "";
+  return type.startsWith("tool-") ? type.slice("tool-".length) : "";
 }
 
 function extractToolCallInput(part: ToolPartCompatShape): unknown {
@@ -208,7 +228,7 @@ export function toUiMessageTimeline(
     if (!part || typeof part !== "object") continue;
     const partObject = part as ToolPartCompatShape;
 
-    if (isTextUIPart(part)) {
+    if (is_text_ui_part(part)) {
       const text = String(part.text || "").trim();
       if (!text) continue;
       events.push(
@@ -223,8 +243,8 @@ export function toUiMessageTimeline(
       continue;
     }
 
-    if (isToolUIPart(part)) {
-      const tool_name = resolveToolName(partObject, String(getToolName(part) || ""));
+    if (is_tool_ui_part(part)) {
+      const tool_name = resolveToolName(partObject, get_tool_name(partObject));
       const inputText = stringifyForDisplay(extractToolCallInput(partObject));
       events.push(
         toUiMessageEvent({

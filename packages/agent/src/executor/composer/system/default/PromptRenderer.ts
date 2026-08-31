@@ -7,7 +7,7 @@
  * - 不关注具体 prompt 来源（静态/服务/运行时）。
  */
 
-import { type SystemModelMessage } from "ai";
+import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import {
   replace_variables_in_prompts,
   type PromptVariableMode,
@@ -41,7 +41,7 @@ export async function transform_prompts_into_system_messages(
      */
     variableMode?: PromptVariableMode;
   },
-): Promise<SystemModelMessage[]> {
+): Promise<SessionSystemMessage[]> {
   const nonEmptyPrompts = prompts.filter((item) => item.length > 0);
   return Promise.all(
     nonEmptyPrompts.map(async (item) => ({

@@ -3,25 +3,25 @@ title: 模型适配器
 description: 通过 AIChannel.stream() 一次适配上游协议。
 ---
 
-Downcity 有两种公开协议，但内部只有一条执行路径：
+Downcity 核心只有一种模型协议。OpenAI Chat Completions 只在 HTTP 边界适配：
 
 ```text
 City SDK / CityModel ------\
-                            -> LanguageModelV3CallOptions -> AIChannel.stream()
-OpenAI Chat Completions ---/                              -> V3 stream
+                            -> ModelCall -> AIService -> AIChannel.stream()
+OpenAI Chat Completions ---/                           -> ModelStreamEvent
 ```
 
-使用 AI SDK 模型时直接调用 `model.doStream(input.call)`。使用私有 HTTP 协议时实现 `stream(input)` 并返回 `LanguageModelV3StreamResult`，AIService 不理解厂商请求格式。
+OpenAI-compatible 上游使用 `stream_openai_compatible_model()`。私有 HTTP 协议应实现自己的 Adapter，把 `ModelCall` 转成厂商请求，并返回 `AIChannelStreamResult`；AIService 不理解厂商请求格式。
 
-OpenAI Chat Completions 只是同一 V3 路径外层的 HTTP adapter。没有 raw passthrough，也没有第二个 `openai` action，因此 tools、fallback、reasoning、计量和计费在不同客户端之间保持一致。
+OpenAI Chat Completions 只是同一 Model Protocol 路径外层的 HTTP Adapter。没有 raw passthrough，也没有第二条模型执行链，因此 tools、fallback、reasoning、计量和计费在不同客户端之间保持一致。
 
 Channel 负责：
 
 - 密钥和 base URL；
 - 上游模型工厂与协议选择；
-- 模型级 AI SDK providerOptions；
+- 模型级 `provider_options`；
 - usage 解释和计费；
-- 私有流到 V3 parts 的转换。
+- 私有流到 `ModelStreamEvent` 的转换。
 
 AIService 负责：
 

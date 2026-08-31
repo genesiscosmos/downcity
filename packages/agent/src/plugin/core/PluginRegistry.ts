@@ -31,7 +31,7 @@ import type {
 import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
 import type { SessionInteractionPort } from "@/types/session/SessionInteraction.js";
 import { execute_plugin_action } from "@/plugin/core/PluginActionExecution.js";
-import type { Tool } from "ai";
+import type { RuntimeTool as Tool } from "@downcity/type";
 import { create_plugin_tools } from "@/plugin/tool/PluginTools.js";
 import type {
   PluginRegistryChange,

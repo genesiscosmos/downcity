@@ -1,33 +1,33 @@
 ---
 title: AI 架构
-description: CityModel、AIService、AIChannel 与 LanguageModelV3 的统一调用路径。
+description: ModelClient、AIService、AIChannel 与 Provider Adapter 的统一调用路径。
 ---
 
 ```text
 City 客户端 / Agent
         |
         v
-CityModel（LanguageModelV3）
+CityModel（ModelClient）
         |
         v
 Federation AIService
   鉴权 -> 模型查找 -> fallback -> reasoning -> 计量
         |
         v
-AIChannel.stream(ctx, LanguageModelV3CallOptions)
+AIChannel.stream(AIChannelStreamInput)
         |
         v
-AI SDK 模型或私有上游适配器
+OpenAI-compatible 或私有 Provider Adapter
 ```
 
 `CityModel` 是客户端可执行模型，持有公开的 `CityModelDescriptor` 和 Federation transport，不知道上游密钥或厂商协议。
 
 `AIService` 是服务端编排器，负责路由、fallback、reasoning 校验、usage 归一化和计费。
 
-`AIChannel` 是服务端上游边界，负责连接配置、真实模型选择、AI SDK `providerOptions` 和 `LanguageModelV3StreamResult` 转换。
+`AIChannel` 是服务端上游边界，负责连接配置、真实模型选择、服务端 `provider_options`，并通过 Provider Adapter 返回 `ModelStreamEvent`。
 
 OpenAI 兼容端点只是适配器，不是第二条执行路径：
 
 ```text
-OpenAI JSON/SSE -> V3 call -> AIService -> AIChannel.stream -> V3 stream -> OpenAI JSON/SSE
+OpenAI JSON/SSE -> ModelCall -> AIService -> AIChannel.stream -> ModelStreamEvent -> OpenAI JSON/SSE
 ```

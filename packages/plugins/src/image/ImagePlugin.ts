@@ -398,15 +398,15 @@ function normalize_image_result_payload(
 }
 
 /**
- * 校验 image 函数返回的 UIMessage。
+ * 校验 image 函数返回的 Downcity Session 消息。
  *
- * 本函数只校验 provider / City 返回的 UIMessage 结构；
+ * 本函数只校验 provider / City 返回的 Session 消息结构；
  * 远程资源下载由 action 成功分支中的 ImageResultStorage 统一处理。
  */
 function normalize_image_result(result: ImagePluginResult): ImagePluginResult {
   const record = to_record(result);
   if (!record || !Array.isArray(record.parts)) {
-    throw new TypeError("ImagePlugin image provider must return an AI SDK UIMessage");
+    throw new TypeError("ImagePlugin image provider must return a Downcity Session message");
   }
   for (const part of record.parts) {
     const part_record = to_record(part);

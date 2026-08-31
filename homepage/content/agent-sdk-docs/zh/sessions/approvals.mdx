@@ -132,18 +132,18 @@ Session 会把该 Tool 与 Question Interaction 原子提交为 `waiting-user` /
 
 ## 普通 Tool 审批
 
-需要在执行前获得用户许可的 Tool，直接使用 AI SDK 原生 `needsApproval` 声明：
+需要在执行前获得用户许可的 RuntimeTool，使用 `needs_approval` 声明：
 
 ```ts
-import { tool } from "ai";
+import { define_runtime_tool } from "@downcity/type";
 import { z } from "zod";
 
-const delete_file = tool({
+const delete_file = define_runtime_tool({
   description: "删除工作区内的指定文件。",
-  inputSchema: z.object({
+  input_schema: z.object({
     path: z.string(),
   }),
-  needsApproval: true,
+  needs_approval: true,
   execute: async ({ path }) => {
     await remove_workspace_file(path);
     return { deleted: path };
@@ -158,7 +158,7 @@ const agent = new Agent({
 // Session 在创建时选择 Workspace。
 ```
 
-审批策略属于 Tool，不属于 Agent。模型产生 Tool Call 后，AI SDK 先完成 schema 校验；
+审批策略属于 Tool，不属于 Agent。模型产生 Tool Call 后，Agent 先完成 schema 校验；
 Session 再创建 `operation: "tool"` 的 Approval Interaction，并等待 `session.respond(...)`。
 批准后执行原 Tool Call，拒绝时 `execute` 不会运行。
 

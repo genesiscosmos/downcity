@@ -1,5 +1,5 @@
 /**
- * SessionMessage 与 AI SDK UIMessage 的内部投影转换。
+ * SessionMessage 与 Downcity SessionUiMessage 的内部投影转换。
  *
  * 关键点（中文）
  * - SessionMessage 是唯一持久化事实；UIMessage 只在 Executor/Composer 边界临时构造。
@@ -7,7 +7,7 @@
  * - part_id 只服务 Session Message identity，不传入模型协议。
  */
 
-import type { UIMessage } from "ai";
+import type { SessionUiMessage as UIMessage } from "@/types/session/SessionUiMessage.js";
 import {
   to_session_json_object,
   to_session_json_value,
@@ -98,7 +98,7 @@ export function to_executor_ui_message(
   } as SessionMessageRecordV1;
 }
 
-/** 把 AI SDK user parts 转换成可持久化 Session parts。 */
+/** 把 Session user parts 转换成可持久化 Session parts。 */
 export function from_ui_user_parts(
   parts: UIMessage["parts"] | null | undefined,
 ): SessionUserMessagePart[] {
@@ -143,7 +143,7 @@ export function from_ui_user_parts(
   });
 }
 
-/** 把最终 AI SDK assistant parts 转换成 Session parts。 */
+/** 把最终 Session assistant parts 转换成 Session parts。 */
 export function from_ui_assistant_parts(
   parts: UIMessage["parts"] | null | undefined,
 ): SessionAssistantMessagePart[] {
@@ -155,7 +155,7 @@ export function from_ui_assistant_parts(
     if (type === "text" || type === "reasoning") {
       const text = String(candidate.text || "");
       const provider_metadata = to_session_provider_metadata(candidate.providerMetadata);
-      // 关键点（中文）：AI SDK 会为只有 start/end、没有 delta 的流生成空占位 Part。
+      // 关键点（中文）：流式投影可能为只有 start/finish、没有 delta 的内容生成空占位 Part。
       // 纯空占位不保存；但 Responses API 的 reasoning 即使没有可见文本，
       // 也可能通过 itemId / encrypted content 与后续 message 形成必须原子重放的协议组。
       if (

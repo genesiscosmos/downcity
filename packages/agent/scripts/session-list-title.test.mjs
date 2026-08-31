@@ -13,13 +13,13 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
 
-import { MockLanguageModelV3 } from "ai/test";
+import { MockModelClient } from "./ModelClientMock.mjs";
 import { Agent } from "../bin/index.js";
 import { create_workspace_entry } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 
 function create_mock_title_model(title_text) {
-  return new MockLanguageModelV3({
+  return new MockModelClient({
     modelId: "mock-session-list-title-model",
     doStream: async () => ({
       stream: new ReadableStream({

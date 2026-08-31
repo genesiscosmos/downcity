@@ -60,7 +60,7 @@ export interface SessionUserTextPart {
   text: string;
   /** User 文本已经完整，不参与流式更新。 */
   state: "done";
-  /** AI SDK User text part 携带的可序列化 Provider metadata。 */
+  /** User text part 携带的可序列化 Provider metadata。 */
   provider_metadata?: SessionProviderMetadata;
 }
 
@@ -76,7 +76,7 @@ export interface SessionUserFilePart {
   media_type: string;
   /** 可选原始文件名。 */
   filename?: string;
-  /** AI SDK User file part 携带的可序列化 Provider metadata。 */
+  /** User file part 携带的可序列化 Provider metadata。 */
   provider_metadata?: SessionProviderMetadata;
 }
 
@@ -86,11 +86,11 @@ export interface SessionUserDataPart {
   part_id: string;
   /** part 类型固定为 data。 */
   type: "data";
-  /** 对应 AI SDK 的 data-* 类型名称。 */
+  /** Session data part 的类型名称。 */
   data_type: `data-${string}` | string;
   /** 可 JSON 序列化的数据。 */
   data: JsonValue;
-  /** AI SDK data part 的可选稳定标识。 */
+  /** Session data part 的可选稳定标识。 */
   data_id?: string;
 }
 
@@ -122,7 +122,7 @@ export interface SessionAssistantTextPart {
   text: string;
   /** 文本 part 是否已经结束。 */
   state: "streaming" | "done";
-  /** AI SDK text / reasoning part 携带的可序列化 Provider metadata。 */
+  /** Text / reasoning part 携带的可序列化 Provider metadata。 */
   provider_metadata?: SessionProviderMetadata;
 }
 
@@ -148,9 +148,9 @@ export interface SessionAssistantToolPart {
   output?: JsonValue;
   /** 工具失败信息。 */
   error?: string;
-  /** AI SDK 为工具调用提供的可选展示标题。 */
+  /** 工具调用的可选展示标题。 */
   title?: string;
-  /** AI SDK 工具调用携带的可序列化工具元数据。 */
+  /** 工具调用携带的可序列化工具元数据。 */
   tool_metadata?: JsonObject;
   /** 当前工具是否由运行时动态定义。 */
   dynamic?: boolean;
@@ -158,9 +158,9 @@ export interface SessionAssistantToolPart {
   raw_input?: JsonValue;
   /** 当前工具结果是否只是后续会被替换的临时结果。 */
   preliminary?: boolean;
-  /** 工具调用阶段由 AI SDK Provider 返回的可序列化 metadata。 */
+  /** 工具调用阶段由 Provider Adapter 返回的可序列化 metadata。 */
   call_provider_metadata?: SessionProviderMetadata;
-  /** 工具结果阶段由 AI SDK Provider 返回的可序列化 metadata。 */
+  /** 工具结果阶段由 Provider Adapter 返回的可序列化 metadata。 */
   result_provider_metadata?: SessionProviderMetadata;
   /** 当前工具是否由模型 Provider 直接执行。 */
   provider_executed?: boolean;
@@ -204,7 +204,7 @@ export interface SessionAssistantFilePart {
   url: string;
   /** 可选原始文件名。 */
   filename?: string;
-  /** AI SDK Assistant file part 携带的可序列化 Provider metadata。 */
+  /** Assistant file part 携带的可序列化 Provider metadata。 */
   provider_metadata?: SessionProviderMetadata;
 }
 
@@ -216,11 +216,11 @@ export interface SessionAssistantDataPart {
   sequence: number;
   /** part 类型固定为 data。 */
   type: "data";
-  /** 对应 AI SDK 的 data-* 类型名称。 */
+  /** Session data part 的类型名称。 */
   data_type: `data-${string}` | string;
   /** 可 JSON 序列化的数据。 */
   data: JsonValue;
-  /** AI SDK data part 的可选稳定标识。 */
+  /** Session data part 的可选稳定标识。 */
   data_id?: string;
 }
 
@@ -234,13 +234,13 @@ export interface SessionAssistantUrlSourcePart {
   type: "source";
   /** source 子类型固定为 URL。 */
   source_type: "url";
-  /** AI SDK source 的稳定标识。 */
+  /** Source 的稳定标识。 */
   source_id: string;
   /** source 指向的网页地址。 */
   url: string;
   /** source 的可选展示标题。 */
   title?: string;
-  /** AI SDK source part 携带的可序列化 Provider metadata。 */
+  /** Source part 携带的可序列化 Provider metadata。 */
   provider_metadata?: SessionProviderMetadata;
 }
 
@@ -254,7 +254,7 @@ export interface SessionAssistantDocumentSourcePart {
   type: "source";
   /** source 子类型固定为 document。 */
   source_type: "document";
-  /** AI SDK source 的稳定标识。 */
+  /** Source 的稳定标识。 */
   source_id: string;
   /** document source 的 IANA 媒体类型。 */
   media_type: string;
@@ -262,7 +262,7 @@ export interface SessionAssistantDocumentSourcePart {
   title: string;
   /** document source 的可选文件名。 */
   filename?: string;
-  /** AI SDK source part 携带的可序列化 Provider metadata。 */
+  /** Source part 携带的可序列化 Provider metadata。 */
   provider_metadata?: SessionProviderMetadata;
 }
 

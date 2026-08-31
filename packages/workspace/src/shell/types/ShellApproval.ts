@@ -15,7 +15,7 @@ import type {
 export interface ShellApprovalRequest {
   /** 当前请求关联的 Shell 运行标识。 */
   shell_id: string;
-  /** 当前请求关联的 AI SDK Tool Call 标识。 */
+  /** 当前请求关联的 Downcity Tool Call 标识。 */
   tool_call_id: string;
   /** 当前请求来源工具。 */
   tool_name: ShellApprovalToolName;

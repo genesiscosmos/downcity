@@ -10,7 +10,7 @@
 - `SessionTurnContext` 从 Turn 创建起唯一拥有取消信号、Step 快照和执行期资源。
 - `SessionComposer` 根据只读 Session 快照组装 system、messages 和 tools。
 - `Executor` 管理单次模型执行、上下文超限重试和 Step Plugin Lease；它只对外提供 `execute()`。
-- `CoreEngineRunner` 执行 `streamText()`、Tool Loop、续写和内存上下文折叠。
+- `CoreEngineRunner` 执行 Downcity 模型流、Tool Loop、续写和内存上下文折叠。
 - `SessionMessages` 是 Message 唯一事实源；Executor 不写文件、不持有 Store。
 
 ## 执行关系
@@ -79,7 +79,7 @@ executor/
   Executor.ts
   core-engine/       模型与 Tool Loop
   composer/system/   可复用的默认 system prompt 领域实现
-  messages/          AI SDK 消息转换
+  messages/          Session 与 Model Protocol 消息转换
   services/          执行恢复策略
   tools/             Tool 运行辅助
   types/             Executor 内部类型

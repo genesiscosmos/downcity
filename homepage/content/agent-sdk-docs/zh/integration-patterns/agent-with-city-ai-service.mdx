@@ -29,7 +29,7 @@ description: 理解 Agent、Downcity、City 和 AIService 在模型管理上的�
 global downcity.db: agent.execution.modelId
   -> Downcity 读取并校验
   -> City SDK 创建可执行 CityModel
-  -> Agent 直接调用 CityModel.doStream()
+  -> Agent 通过 Downcity Model Protocol 调用 CityModel.stream()
   -> Federation AIService 路由到 AIChannel 与上游协议
 ```
 
@@ -70,14 +70,13 @@ global downcity.db: agent.execution.modelId
 City 侧通常会这样注册模型：
 
 ```ts
-import { createDeepSeek } from "@ai-sdk/deepseek";
 import {
   Federation,
   AIService,
   AIChannel,
-  read_required_env,
+  stream_openai_compatible_model,
   type AIChannelStreamInput,
-  type LanguageModelV3StreamResult,
+  type AIChannelStreamResult,
 } from "@downcity/federation";
 
 const base = new Federation({ database });
@@ -88,19 +87,18 @@ class DeepSeekChannel extends AIChannel {
       id: "deepseek",
       base_url: "https://api.deepseek.com/v1",
       env_key: "DEEPSEEK_API_KEY",
-      ai_sdk_provider_id: "deepseek",
     });
   }
 
   protected async stream(
     input: AIChannelStreamInput,
-  ): Promise<LanguageModelV3StreamResult> {
-    const deepseek = createDeepSeek({
-      apiKey: read_required_env(input, this.env_key ?? ""),
-      baseURL: this.base_url,
+  ): Promise<AIChannelStreamResult> {
+    const api_key = input.env("DEEPSEEK_API_KEY");
+    if (!api_key) throw new Error("DEEPSEEK_API_KEY is required");
+    return stream_openai_compatible_model(input, {
+      api_key,
+      base_url: this.base_url ?? "https://api.deepseek.com/v1",
     });
-    const model = deepseek(input.model.upstream_model);
-    return model.doStream(input.call);
   }
 }
 
@@ -121,8 +119,8 @@ base.use(ai);
 注册后，`Federation AIService` 就拥有了：
 
 - 模型目录
-- SDK 通路
-- CityModel 原生 LanguageModelV3 通路
+- Downcity Model Protocol 通路
+- CityModel 原生 `ModelClient` 通路
 - OpenAI 兼容通路
 
 ## Downcity 如何读取和校验模型
@@ -134,7 +132,7 @@ Downcity 启动 Agent 项目前，会去 Federation AIService 读取模型目录
 1. 读取 City 连接配置
 2. 通过 Embassy User 调 `embassy.user.ai.catalog()`
 3. 检查 `execution.modelId` 是否存在
-4. 从目录取得已实现 `LanguageModelV3` 的 `CityModel`
+4. 从目录取得已实现 `ModelClient` 的 `CityModel`
 
 这也是为什么：
 

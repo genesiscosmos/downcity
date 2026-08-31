@@ -22,7 +22,7 @@ if (result.success) {
 
 ## Input shapes
 
-`query` accepts a string or an AI SDK User Part array:
+`query` accepts a string or a Downcity Session User Part array:
 
 ```ts
 const turn = await session.prompt({
@@ -38,7 +38,7 @@ const turn = await session.prompt({
 });
 ```
 
-The input API uses the AI SDK name `mediaType`; persisted `SessionMessage` values use `media_type`. They are different boundaries, so do not feed a read Message Part back into `prompt()` unchanged.
+The `SessionUserMessagePart` input uses `mediaType`; persisted `SessionMessage` values use `media_type`. These are the Session input and persistence boundaries, so do not feed a read Message Part back into `prompt()` unchanged.
 
 Data URL attachments are not written directly into Session Messages. The Session decodes each Data URL into the current Session's `.downcity/.../attachments/` directory and stores only a path relative to the Workspace root in the Message. Before model execution, the Session reads the attachment from that path and converts it into a model-consumable representation.
 

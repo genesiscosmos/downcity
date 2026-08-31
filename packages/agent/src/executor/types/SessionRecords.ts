@@ -3,11 +3,11 @@
  *
  * 关键点（中文）
  * - SessionMessage 是唯一持久化事实，record 只作为 Executor、Composer 和旧 UI 的内部投影。
- * - message record 继续使用 AI SDK `UIMessage`，action record 不属于 LLM 输入。
+ * - message record 使用 Downcity SessionUiMessage，action record 不属于 LLM 输入。
  * - 这些类型不定义 canonical Session 存储结构。
  */
 
-import type { UIMessage } from "ai";
+import type { SessionUiMessage as UIMessage } from "@/types/session/SessionUiMessage.js";
 import type { JsonObject } from "@/types/common/Json.js";
 
 /**
@@ -111,7 +111,7 @@ export type SessionActionMetadataV1 = {
  * action 类型的 Session record 结构。
  *
  * 关键点（中文）
- * - `action` 不是 AI SDK 原生 message record。
+ * - `action` 是 Downcity Session 自有的 message record。
  * - 它只存在于 session records 与前端 timeline，进入 LLM 前必须过滤。
  */
 export type SessionActionRecordV1 = {

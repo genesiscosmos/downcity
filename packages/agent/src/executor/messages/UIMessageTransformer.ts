@@ -7,15 +7,16 @@
  */
 
 import {
-  getToolName,
-  isTextUIPart,
-  isToolUIPart,
-  type UIMessage,
-} from "ai";
+  is_session_text_part as isTextUIPart,
+  is_session_tool_part as isToolUIPart,
+  read_session_tool_name,
+  type SessionUiMessage as UIMessage,
+  type SessionUiPart,
+} from "@/types/session/SessionUiMessage.js";
 import type { SessionUserMessagePart } from "@/types/sdk/AgentSessionPrompt.js";
 import type { JsonObject, JsonValue } from "@/types/common/Json.js";
 
-type ToolNameReadablePart = Parameters<typeof getToolName>[0];
+type ToolNameReadablePart = SessionUiPart;
 type ToolCallSummary = {
   tool: string;
   input: JsonObject;
@@ -71,7 +72,7 @@ function resolveToolName(part: ToolPartCompatShape, aiToolName?: string): string
 
 function tryReadAiToolName(part: SessionUserMessagePart): string {
   if (!isToolUIPart(part)) return "";
-  return String(getToolName(part as ToolNameReadablePart) || "").trim();
+  return String(read_session_tool_name(part as ToolNameReadablePart) || "").trim();
 }
 
 function extractToolOutput(part: ToolPartCompatShape): string {

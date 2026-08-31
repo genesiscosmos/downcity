@@ -7,8 +7,7 @@
  * 鉴权由 City 在路由入口统一强制执行。
  *
  * 路由（City 自动生成）：
- * - POST /v1/ai/text             — 文本生成
- * - POST /v1/ai/stream           — CityModel LanguageModelV3 模型流
+ * - POST /v1/ai/stream           — Downcity Model Protocol 模型流
  * - POST /v1/ai/video            — 视频生成
  * - POST /v1/ai/image/create     — 创建图片生成任务
  * - POST /v1/ai/image/result     — 查询图片生成任务
@@ -22,11 +21,12 @@ import { is_bureau_id } from "../../federation/identity/bureau-id.js";
 import type { ActionFn } from "../action.js";
 import { sqliteAsyncJobs } from "../async-job/schema.js";
 import type { AsyncJobRecord } from "../../types/AsyncJob.js";
-import type { CityModelDescriptor } from "@downcity/type";
+import type { CityModelDescriptor, ModelCall } from "@downcity/type";
 import type {
   AICreditsBridge,
   AIBillInput,
   AICharge,
+  AIChannelStreamResult,
   AIImageCreateResult,
   AIImageJobContext,
   AIImageResult,
@@ -36,8 +36,6 @@ import type {
   AIResolvedRoutingPlan,
   AIRoutingFallbackReason,
   AIServiceOptions,
-  LanguageModelV3CallOptions,
-  LanguageModelV3StreamResult,
 } from "../../types/AI.js";
 import type {
   OpenAIChatCompletionRequest,
@@ -102,10 +100,10 @@ import {
 } from "./ai-service-values.js";
 
 /** AIService 直接暴露的 action 模态列表。模型流与图片任务使用独立 handler。 */
-const MODALITIES = ["text", "video", "tts", "asr"] as const;
+const MODALITIES = ["video", "tts", "asr"] as const;
 /** 用户侧默认以 text 模态排序模型 */
 const DEFAULT_MODEL_MODE = "text";
-/** CityModel 原生 LanguageModelV3 运行模式。 */
+/** Downcity Model Protocol 原生运行模式。 */
 const LANGUAGE_MODEL_MODE = "language_model";
 /** 图片任务的内部 action 列表。 */
 const IMAGE_ACTION_MODES = ["image_create", "image_fetch"] as const;
@@ -122,7 +120,7 @@ type Modality = (typeof MODALITIES)[number];
 type EnvReader = (key: string) => string | undefined;
 
 /** 判断 AIChannel runtime 是否返回了标准模型流结果。 */
-function is_language_model_stream_result(value: unknown): value is LanguageModelV3StreamResult {
+function is_language_model_stream_result(value: unknown): value is AIChannelStreamResult {
   if (!value || typeof value !== "object") return false;
   const stream = (value as { stream?: unknown }).stream;
   return Boolean(stream && typeof stream === "object" && "getReader" in stream &&
@@ -289,7 +287,7 @@ export class AIService extends Service {
       return model.runtime.stream
         ? (ctx) => model.runtime.stream?.(
             ctx,
-            ctx.input.call as LanguageModelV3CallOptions,
+            ctx.input.call as unknown as ModelCall,
           )
         : undefined;
     }
@@ -317,9 +315,10 @@ export class AIService extends Service {
   private plan_text_execution(
     resolved: AIResolvedAction,
     ctx: Context,
+    call: ModelCall,
     mode: string,
   ): AIResolvedRoutingPlan {
-    return resolve_text_routing_plan(resolved, ctx.input, mode, {
+    return resolve_text_routing_plan(resolved, call, mode, {
       resolve_model: (input) => this.models.get(input),
       resolve_action: (model, target_mode) => this.getAction(model, target_mode),
       is_available: (model) => this.models.get_missing_env(model, ctx.env).length === 0,
@@ -330,10 +329,11 @@ export class AIService extends Service {
 
   private async handleModality(modality: Modality, ctx: Context): Promise<unknown | Response> {
     const initial_resolved = this.resolve({ model: this.normalizeModelId(ctx.input.model), mode: modality }, ctx.env);
-    const { resolved, fallback_from, fallback_reason, fallback_media_type } = this.plan_text_execution(initial_resolved, ctx, modality);
-    const reasoning = resolved.model && modality === "text"
-      ? resolve_model_reasoning(resolved.model, ctx.input)
-      : undefined;
+    const resolved = initial_resolved;
+    const fallback_from = undefined;
+    const fallback_reason = undefined;
+    const fallback_media_type = undefined;
+    const reasoning = undefined;
     this.attachResolvedModel(ctx, resolved.model, modality, { fallback_from, fallback_reason, fallback_media_type });
     attach_resolved_reasoning(ctx, reasoning);
     const started_at = Date.now();
@@ -370,23 +370,23 @@ export class AIService extends Service {
   }
 
   /**
-   * 执行 CityModel LanguageModelV3 模型流调用。
+   * 执行 Downcity Model Protocol 模型流调用。
    *
    * 路由、fallback、reasoning 和计费仍由 AIService 统一拥有；AIChannel 负责执行
    * 标准模型流，transport 模块只编码 SSE，避免把 Channel 决策泄漏到客户端。
    */
   private async handleLanguageModelStream(ctx: Context): Promise<Response> {
     const request = decode_city_language_model_request(ctx.input);
-    const call = prepare_city_language_model_call(request.call, ctx.request?.signal);
+    const call = prepare_city_language_model_call(request.call);
     ctx.input = {
       ...ctx.input,
       model: request.model_id,
       call,
-      ...(request.reasoning_effort ? { reasoning_effort: request.reasoning_effort } : {}),
-      ...(request.reasoning === false ? { reasoning: false } : {}),
+      ...(call.reasoning?.effort ? { reasoning_effort: call.reasoning.effort } : {}),
+      ...(call.reasoning?.enabled === false ? { reasoning: false } : {}),
     };
     const initial_resolved = this.resolve({ model: request.model_id, mode: LANGUAGE_MODEL_MODE }, ctx.env);
-    const routing = this.plan_text_execution(initial_resolved, ctx, LANGUAGE_MODEL_MODE);
+    const routing = this.plan_text_execution(initial_resolved, ctx, call, LANGUAGE_MODEL_MODE);
     const resolved = routing.resolved;
     const reasoning = resolved.model ? resolve_model_reasoning(resolved.model, ctx.input) : undefined;
     this.attachResolvedModel(ctx, resolved.model, LANGUAGE_MODEL_MODE, routing);
@@ -394,12 +394,30 @@ export class AIService extends Service {
     const started_at = Date.now();
     this.ensure_usage_id(ctx);
 
-    const output = await resolved.action(ctx);
+    let output: unknown;
+    try {
+      output = await resolved.action(ctx);
+    } catch (error) {
+      await this.settle_execution({
+        ctx,
+        output: undefined,
+        outcome: "failed",
+        started_at,
+      });
+      throw error;
+    }
     if (!is_language_model_stream_result(output)) {
-      throw httpError(500, "AIChannel stream did not return a LanguageModelV3 stream result");
+      const error = httpError(500, "AIChannel stream did not return a Downcity model stream result");
+      await this.settle_execution({
+        ctx,
+        output: undefined,
+        outcome: "failed",
+        started_at,
+      });
+      throw error;
     }
     const execution = create_city_language_model_stream({
-      result: output,
+      stream: output.stream,
     });
     const settlement = execution.completion.then(async (completion) => {
       const part = completion.result;
@@ -729,14 +747,14 @@ export class AIService extends Service {
     try {
       const body = ctx.input as unknown as OpenAIChatCompletionRequest;
       const model_id = this.normalizeModelId(body.model);
-      const call = openai_chat_request_to_language_model_call(body, ctx.request?.signal);
+      const call = openai_chat_request_to_language_model_call(body);
       ctx.input = {
         ...body,
         model: model_id,
         call,
       };
       const initial_resolved = this.resolve({ model: model_id, mode: LANGUAGE_MODEL_MODE }, ctx.env);
-      const routing = this.plan_text_execution(initial_resolved, ctx, LANGUAGE_MODEL_MODE);
+      const routing = this.plan_text_execution(initial_resolved, ctx, call, LANGUAGE_MODEL_MODE);
       const resolved = routing.resolved;
       const reasoning = resolved.model
         ? resolve_model_reasoning(resolved.model, body)
@@ -748,23 +766,22 @@ export class AIService extends Service {
 
       const output = await resolved.action(ctx);
       if (!is_language_model_stream_result(output)) {
-        throw httpError(500, "AIChannel stream did not return a LanguageModelV3 stream result");
+        throw httpError(500, "AIChannel stream did not return a Downcity model stream result");
       }
       const execution = await create_openai_chat_completion_response({
         model_id: resolved.model?.id ?? model_id ?? "",
         stream: body.stream === true,
-        result: output as LanguageModelV3StreamResult,
+        result: output,
       });
       const settlement = execution.completion.then(async (completion) => {
-        const result = completion.result;
-        if (result) this.attachOutputMetering(ctx, result, "openai", started_at);
-        const charge = result && resolved.model?.bill
-          ? resolved.model.bill(this.build_bill_input(ctx, resolved.model, result))
+        if (completion) this.attachOutputMetering(ctx, completion, "openai", started_at);
+        const charge = completion && resolved.model?.bill
+          ? resolved.model.bill(this.build_bill_input(ctx, resolved.model, completion))
           : undefined;
         await this.settle_execution({
           ctx,
-          output: result,
-          outcome: completion.outcome,
+          output: completion,
+          outcome: completion ? "succeeded" : "failed",
           started_at,
           charge,
         });
@@ -876,7 +893,7 @@ export class AIService extends Service {
    *
    * 关键说明（中文）
    * - Channel 可以返回统一的 `{ output, charge }`。
-   * - 普通 action 也可以直接返回 UIMessage / Response。
+   * - 普通 action 也可以直接返回 Downcity Action Message / Response。
    */
   private resolveChannelOutput(value: unknown): ResolvedChannelOutput {
     if (isChannelChargedOutput(value)) {

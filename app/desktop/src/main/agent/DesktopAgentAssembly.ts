@@ -133,7 +133,7 @@ export async function resolve_desktop_agent_model(
 /** 为 City 模型绑定 Desktop 当前 Session 选择的推理档位。 */
 export function configure_desktop_agent_model(model: AgentModel, reasoning_effort?: string): AgentModel {
   const effort = reasoning_effort?.trim();
-  if (!effort || typeof model !== "object" || model.specificationVersion !== "v3") return model;
+  if (!effort) return model;
   return new DesktopReasoningAgentModel(model, effort);
 }
 
@@ -172,67 +172,44 @@ export function create_desktop_agent_tools(): NonNullable<AgentOptions["tools"]>
   };
 }
 
-type LanguageModelV3 = Extract<AgentModel, { readonly specificationVersion: "v3" }>;
-
 /** 首次模型调用时解析并缓存 Desktop Federation 模型。 */
-class LazyDesktopAgentModel implements LanguageModelV3 {
-  readonly specificationVersion = "v3" as const;
-  readonly provider = "downcity";
-  readonly supportedUrls: Record<string, RegExp[]> = {};
-  readonly modelId: string;
+class LazyDesktopAgentModel implements AgentModel {
+  readonly id: string;
 
   constructor(
     model_id: string,
     private readonly resolve_model: () => Promise<AgentModel>,
   ) {
-    this.modelId = model_id;
+    this.id = model_id;
   }
 
-  async doGenerate(options: Parameters<LanguageModelV3["doGenerate"]>[0]) {
-    return await (await this.model()).doGenerate(options);
+  async stream(call: Parameters<AgentModel["stream"]>[0], signal?: AbortSignal) {
+    return await (await this.model()).stream(call, signal);
   }
 
-  async doStream(options: Parameters<LanguageModelV3["doStream"]>[0]) {
-    return await (await this.model()).doStream(options);
-  }
-
-  private async model(): Promise<LanguageModelV3> {
+  private async model(): Promise<AgentModel> {
     const model = await this.resolve_model();
-    if (
-      !model
-      || typeof model !== "object"
-      || !("specificationVersion" in model)
-      || model.specificationVersion !== "v3"
-    ) {
-      throw new Error(`Resolved model does not implement LanguageModelV3: ${this.modelId}`);
+    if (!model || typeof model.stream !== "function") {
+      throw new Error(`Resolved model does not implement ModelClient: ${this.id}`);
     }
     // 关键点（中文）：每个 Turn 重新读取共享 Federation Session，登录切换或退出后不能继续复用旧 Token。
-    return model as LanguageModelV3;
+    return model;
   }
 }
 
-/** 在不改变 Federation 模型对象的前提下注入 providerOptions。 */
-class DesktopReasoningAgentModel implements LanguageModelV3 {
-  readonly specificationVersion = "v3" as const;
-  readonly provider = "downcity";
-  readonly supportedUrls: Record<string, RegExp[]> = {};
-  readonly modelId: string;
+/** 在不改变 Federation 模型对象的前提下绑定 reasoning。 */
+class DesktopReasoningAgentModel implements AgentModel {
+  readonly id: string;
 
-  constructor(private readonly model: LanguageModelV3, private readonly reasoning_effort: string) {
-    this.modelId = model.modelId;
+  constructor(private readonly model: AgentModel, private readonly reasoning_effort: string) {
+    this.id = model.id;
   }
 
-  async doGenerate(options: Parameters<LanguageModelV3["doGenerate"]>[0]) {
-    return await this.model.doGenerate(this.with_reasoning(options));
-  }
-
-  async doStream(options: Parameters<LanguageModelV3["doStream"]>[0]) {
-    return await this.model.doStream(this.with_reasoning(options));
-  }
-
-  private with_reasoning<T extends Parameters<LanguageModelV3["doGenerate"]>[0]>(options: T): T {
-    const provider_options = { ...(options.providerOptions ?? {}), downcity: { ...(options.providerOptions?.downcity ?? {}), reasoningEffort: this.reasoning_effort } };
-    return { ...options, providerOptions: provider_options } as T;
+  async stream(call: Parameters<AgentModel["stream"]>[0], signal?: AbortSignal) {
+    return await this.model.stream({
+      ...call,
+      reasoning: { enabled: true, effort: this.reasoning_effort },
+    }, signal);
   }
 }
 

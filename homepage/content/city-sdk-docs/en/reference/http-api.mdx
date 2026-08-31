@@ -23,8 +23,7 @@ Each action declares which identities it allows. The default is `["user"]`; `[]`
 | Route | Method | Purpose | Pathway |
 | --- | --- | --- | --- |
 | `/v1/ai/models` | `GET` | Model catalog | — |
-| `/v1/ai/text` | `POST` | Text generation | SDK |
-| `/v1/ai/stream` | `POST` | CityModel LanguageModelV3 stream transport | CityModel |
+| `/v1/ai/stream` | `POST` | Downcity Model Protocol stream transport | CityModel |
 | `/v1/ai/image/create` | `POST` | Create image generation job | SDK |
 | `/v1/ai/image/result` | `POST` | Poll image generation job | SDK |
 | `/v1/ai/video` | `POST` | Video generation | SDK |
@@ -102,20 +101,6 @@ The same route returns different visibility by identity:
 ]}
 ```
 
-## `POST /v1/ai/text`
-
-Request:
-```json
-{ "model": "deepseek-v4-flash", "prompt": "Hello", "reasoning_effort": "high" }
-```
-
-`reasoning_effort` is optional, but when present it must match an ID from the model catalog's `reasoning.efforts`. If model fallback changes the execution model, AIService validates the level against that final model.
-
-Response:
-```json
-{ "id": "msg_xxx", "role": "assistant", "parts": [{ "type": "text", "text": "Hi!" }] }
-```
-
 Federation resolves both the user and Bureau identity from the bearer `user_token`. The request body
 does not participate in identity resolution.
 
@@ -134,12 +119,16 @@ does not participate in identity resolution.
 
 ## `POST /v1/ai/stream`
 
-This versioned LanguageModelV3 transport is internal to `CityModel`. It carries
-standard model prompts, function tools, reasoning, usage, and finish reasons as
-SSE events. Product code should use the `CityModel` returned by the model catalog
-instead of constructing transport requests manually. `city.ai.stream()` uses
-the same transport and converts model parts into `UIMessageChunk` objects in the
-SDK.
+This versioned Downcity Model Protocol transport accepts
+`{ protocol_version: 1, model_id, call }`, where `call` is a `ModelCall` containing
+messages, tools, reasoning, and generation options. SSE returns
+`{ protocol_version: 1, event: ModelStreamEvent }`. Product code should use the
+`CityModel` returned by the catalog or call `city.ai.stream({ model, call })`.
+Both paths consume the same standard event stream.
+
+When supplied, `call.reasoning.effort` must match the final model catalog's
+`reasoning.efforts`. AIService validates it again after fallback selects the
+execution model.
 
 ## `POST /v1/ai/chat/completions`
 

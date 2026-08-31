@@ -7,7 +7,7 @@
  * - Session 与 Plugin 数据通过 Agent 能力操作，不读取领域内部路径。
  */
 
-import type { SystemModelMessage } from "ai";
+import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import type { RpcRequest } from "@/city/transport/types/RpcProtocol.js";
 import type {
   RpcRequestHandlerOptions,
@@ -172,7 +172,7 @@ function normalizeSystemText(input: string | null | undefined): string {
   return String(input || "").trim();
 }
 
-function toSystemMessageText(message: SystemModelMessage): string {
+function toSystemMessageText(message: SessionSystemMessage): string {
   const content = message.content as unknown;
   if (typeof content === "string") return normalizeSystemText(content);
   if (!Array.isArray(content)) return "";
@@ -190,7 +190,7 @@ function toSystemMessageText(message: SystemModelMessage): string {
 /**
  * 把 system messages 转成 Console/downcity 可直接渲染的结构。
  */
-function toSystemPromptPayload(messages: SystemModelMessage[]): {
+function toSystemPromptPayload(messages: SessionSystemMessage[]): {
   sections: Array<{
     key: string;
     title: string;

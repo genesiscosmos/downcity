@@ -95,7 +95,7 @@ export async function requestUnrestrictedApproval(params: {
   inputPreview?: string;
   /** stdin 写入字符数。 */
   inputChars?: number;
-  /** 当前 AI SDK Tool Call。 */
+  /** 当前 Downcity Tool Call。 */
   toolCallId?: string;
   /** 人工审批最长等待时间。 */
   timeoutMs: number;

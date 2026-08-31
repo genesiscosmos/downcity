@@ -3,7 +3,8 @@
 import type { GroupMessage } from "@/types/group/Group.js";
 import type { Agent } from "@/agent/Agent.js";
 import type { AgentModel } from "@/agent/AgentModel.js";
-import { generateText, stepCountIs, tool, type LanguageModel } from "ai";
+import type { ModelClient, ModelJsonValue } from "@downcity/type";
+import { generate_model } from "@executor/model/ModelGenerate.js";
 import { z } from "zod";
 
 /** 一个投递节点内成员的发言方式。 */
@@ -64,16 +65,9 @@ const dispatch_group_input_schema = z.object({
   next: z.enum(["stop", "continue"]),
 });
 
-/** 内部调度工具只回显参数，不执行任何成员或业务操作。 */
-const dispatch_group_tool = tool({
-  description: "提交当前 Group 的成员投递路径。只调用一次；不要输出普通文本。没有成员需要回复时使用空 steps 和 next=stop。",
-  inputSchema: dispatch_group_input_schema,
-  execute: async (input) => ({ accepted: true, ...input }),
-});
-
 /** 使用 Group.model 理解群聊意图并通过内部 tool call 生成成员投递决定。 */
 export class AiDispatchStrategy implements DispatchStrategy {
-  private readonly model?: LanguageModel;
+  private readonly model?: ModelClient;
 
   constructor(options: AiDispatchStrategyOptions = {}) {
     this.model = options.model;
@@ -90,24 +84,24 @@ export class AiDispatchStrategy implements DispatchStrategy {
       throw new Error("Group requires a configured model for dispatch");
     }
     try {
-      const result = await generateText({
-        model: this.model,
-        tools: { dispatch_group: dispatch_group_tool },
-        toolChoice: { type: "tool", toolName: "dispatch_group" },
-        stopWhen: stepCountIs(1),
-        system: "你是群聊消息调度器。你只能调用 dispatch_group，不回答用户问题。普通任务默认只选择一个最合适的成员；只有用户明确要求多人分别回答，或确实存在并行的独立工作时，才把多个成员放在同一阶段。外层 steps 阶段按顺序执行，后一个阶段等待前一个阶段完成。只有真实存在的成员才能被选择。",
-        prompt: build_dispatch_prompt(input),
-        maxOutputTokens: 600,
-        providerOptions: {
-          downcity: {
-            reasoning: false,
-          },
-        },
+      const result = await generate_model(this.model, {
+        messages: [
+          { role: "system", content: [{ type: "text", text: "你是群聊消息调度器。你只能调用 dispatch_group，不回答用户问题。普通任务默认只选择一个最合适的成员；只有用户明确要求多人分别回答，或确实存在并行的独立工作时，才把多个成员放在同一阶段。外层 steps 阶段按顺序执行，后一个阶段等待前一个阶段完成。只有真实存在的成员才能被选择。" }] },
+          { role: "user", content: [{ type: "text", text: build_dispatch_prompt(input) }] },
+        ],
+        tools: [{
+          name: "dispatch_group",
+          description: "提交当前 Group 的成员投递路径。只调用一次；不要输出普通文本。没有成员需要回复时使用空 steps 和 next=stop。",
+          input_schema: z.toJSONSchema(dispatch_group_input_schema) as Record<string, ModelJsonValue>,
+        }],
+        tool_choice: { type: "tool", tool_name: "dispatch_group" },
+        max_output_tokens: 600,
+        reasoning: { enabled: false },
       });
-      if (result.toolCalls.length !== 1 || result.toolCalls[0]?.toolName !== "dispatch_group") {
+      if (result.tool_calls.length !== 1 || result.tool_calls[0]?.tool_name !== "dispatch_group") {
         throw new Error("Group dispatch model did not call dispatch_group");
       }
-      return normalize_dispatch_tool_input(result.toolCalls[0].input, input.members);
+      return normalize_dispatch_tool_input(result.tool_calls[0].input, input.members);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       throw new Error(`Group dispatch model failed: ${detail}`, { cause: error });

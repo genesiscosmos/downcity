@@ -6,7 +6,10 @@
  * 再把用户答案作为 Tool Result 交回同一 Turn 的后续模型 Step。
  */
 
-import { tool, type ToolExecutionOptions } from "ai";
+import {
+  define_runtime_tool,
+  type RuntimeToolExecutionOptions as ToolExecutionOptions,
+} from "@downcity/type";
 import { ask_questions_input_schema } from "./AskQuestionsToolSchemas.js";
 import type {
   AskQuestionsToolInput,
@@ -30,15 +33,15 @@ import type { SessionInteractionAnswer } from "@/types/session/SessionInteractio
  * });
  * ```
  */
-export const AskQuestionsTool = tool({
+export const AskQuestionsTool = define_runtime_tool<AskQuestionsToolInput, ActionResult<AskQuestionsToolOutput>>({
   description:
     "Ask the user one or more questions when missing information would materially change the outcome. The call waits for every answer, then returns them so you can continue the same task. Do not use it for information that can be inferred safely. For single_select and multi_select questions, every option MUST contain both a machine-readable value and a user-visible label; never omit value or use label as value. Example: { value: 'cn', label: '中国' }.",
-  inputSchema: ask_questions_input_schema,
+  input_schema: ask_questions_input_schema,
   execute: async (
     input: AskQuestionsToolInput,
     execution_options: ToolExecutionOptions,
   ): Promise<ActionResult<AskQuestionsToolOutput>> => {
-    const execution_context = execution_options.experimental_context as
+    const execution_context = execution_options.context as
       | Partial<SessionToolExecutionContext>
       | undefined;
     const action_execution = execution_context?.action_execution_context;

@@ -36,9 +36,9 @@ async function execute_action_tool(tools, name, input) {
   const execute = tools[name]?.execute;
   assert.equal(typeof execute, "function", `${name} tool must be executable`);
   return await execute(input, {
-    toolCallId: `test-${name}`,
+    tool_call_id: `test-${name}`,
     messages: [],
-    abortSignal: new AbortController().signal,
+    abort_signal: new AbortController().signal,
   });
 }
 
@@ -139,7 +139,7 @@ test("read returns images as next-step User File Parts", async (t) => {
     parts: [{
       type: "file",
       url: result.output.file_path,
-      mediaType: "image/png",
+      media_type: "image/png",
       filename: "input.bin",
     }],
   }]);
@@ -163,7 +163,7 @@ test("read returns PDFs as next-step User File Parts", async (t) => {
     parts: [{
       type: "file",
       url: result.output.file_path,
-      mediaType: "application/pdf",
+      media_type: "application/pdf",
       filename: "document.pdf",
     }],
   }]);

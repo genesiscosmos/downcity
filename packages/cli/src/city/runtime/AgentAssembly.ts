@@ -158,42 +158,28 @@ export function reload_cli_workspace_env(
   });
 }
 
-type LanguageModelV3 = Extract<AgentModel, { readonly specificationVersion: "v3" }>;
-
 /** 首次模型调用时解析并缓存真实 Federation 模型。 */
-class LazyCliAgentModel implements LanguageModelV3 {
-  readonly specificationVersion = "v3" as const;
-  readonly provider = "downcity";
-  readonly supportedUrls: Record<string, RegExp[]> = {};
-  readonly modelId: string;
-  private model_promise?: Promise<LanguageModelV3>;
+class LazyCliAgentModel implements AgentModel {
+  readonly id: string;
+  private model_promise?: Promise<AgentModel>;
 
   constructor(
     model_id: string,
     private readonly resolve_model: () => Promise<AgentModel>,
   ) {
-    this.modelId = model_id;
+    this.id = model_id;
   }
 
-  async doGenerate(options: Parameters<LanguageModelV3["doGenerate"]>[0]) {
-    return await (await this.model()).doGenerate(options);
+  async stream(call: Parameters<AgentModel["stream"]>[0], signal?: AbortSignal) {
+    return await (await this.model()).stream(call, signal);
   }
 
-  async doStream(options: Parameters<LanguageModelV3["doStream"]>[0]) {
-    return await (await this.model()).doStream(options);
-  }
-
-  private async model(): Promise<LanguageModelV3> {
+  private async model(): Promise<AgentModel> {
     this.model_promise ??= this.resolve_model().then((model) => {
-      if (
-        !model
-        || typeof model !== "object"
-        || !("specificationVersion" in model)
-        || model.specificationVersion !== "v3"
-      ) {
-        throw new Error(`Resolved model does not implement LanguageModelV3: ${this.modelId}`);
+      if (!model || typeof model.stream !== "function") {
+        throw new Error(`Resolved model does not implement ModelClient: ${this.id}`);
       }
-      return model as LanguageModelV3;
+      return model;
     });
     return await this.model_promise;
   }

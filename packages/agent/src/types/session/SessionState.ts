@@ -4,7 +4,7 @@
  * 这些类型只描述 Session 配置和 Metadata 状态，不承载 Message 行为。
  */
 
-import type { LanguageModel } from "ai";
+import type { ModelClient } from "@downcity/type";
 import type { SessionMessages } from "@/session/SessionMessages.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import type { SessionMutation } from "@/types/session/SessionMutation.js";
@@ -31,7 +31,7 @@ export interface SessionStateOptions {
   /** 在执行前补齐宿主级配置的异步钩子。 */
   ensure_configured_hook?: () => Promise<void>;
   /** 按 Session 优先、Agent 兜底规则读取当前模型。 */
-  get_model: () => LanguageModel | undefined;
+  get_model: () => ModelClient | undefined;
   /** 发布 Session Mutation 的函数。 */
   publish_event: (mutation: SessionMutation) => void;
 }

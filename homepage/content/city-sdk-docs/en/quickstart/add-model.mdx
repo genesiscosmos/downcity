@@ -3,25 +3,35 @@ title: Add a Model
 description: Register a model with AIChannel and AIService.
 ---
 
-Create an `AIChannel`, implement its standard V3 stream, then register an `AIModelSpec`:
+Create an `AIChannel`, implement its Downcity Model Protocol stream, then register an `AIModelSpec`:
 
 ```ts
+import {
+  AIChannel,
+  AIService,
+  stream_openai_compatible_model,
+  type AIChannelStreamInput,
+  type AIChannelStreamResult,
+} from "@downcity/federation";
+
 class DeepSeekChannel extends AIChannel {
   constructor() {
     super({
       id: "deepseek",
       env_key: "DEEPSEEK_API_KEY",
       base_url: "https://api.deepseek.com/v1",
-      ai_sdk_provider_id: "deepseek",
     });
   }
 
-  protected async stream(input: AIChannelStreamInput) {
-    const deepseek = createDeepSeek({
-      apiKey: read_required_env(input, this.env_key ?? ""),
-      baseURL: this.base_url,
+  protected async stream(
+    input: AIChannelStreamInput,
+  ): Promise<AIChannelStreamResult> {
+    const api_key = input.env("DEEPSEEK_API_KEY");
+    if (!api_key) throw new Error("DEEPSEEK_API_KEY is required");
+    return stream_openai_compatible_model(input, {
+      api_key,
+      base_url: this.base_url ?? "https://api.deepseek.com/v1",
     });
-    return deepseek(input.model.upstream_model).doStream(input.call);
   }
 }
 
@@ -38,6 +48,6 @@ ai.use(channel.model({
 federation.use(ai);
 ```
 
-This single `stream()` implementation powers `city.ai.text()`, `city.ai.stream()`, `CityModel`, and `/v1/ai/chat/completions`.
+This single `stream()` implementation powers `city.ai.stream()`, `CityModel`, and `/v1/ai/chat/completions`.
 
-See [AIChannel and model registration](/en/city-sdk-docs/service/ai/provider) for reasoning, fallback, billing, and providerOptions.
+See [AIChannel and model registration](/en/city-sdk-docs/service/ai/provider) for reasoning, fallback, billing, and `provider_options`.

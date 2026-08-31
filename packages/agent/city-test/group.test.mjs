@@ -5,7 +5,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { Agent, City, Group, Session } from "../bin/index.js";
 import { LocalStorageProvider, Workspace } from "@downcity/workspace";
-import { MockLanguageModelV3 } from "ai/test";
+import { MockModelClient } from "../scripts/ModelClientMock.mjs";
 
 async function wait_for_group_idle(group_session, timeout_ms = 1000) {
   await new Promise((resolve) => {
@@ -45,10 +45,10 @@ const test_dispatch_strategy = {
 
 function create_dispatch_tool_call(input, tool_call_id = "dispatch-call") {
   return {
-    type: "tool-call",
-    toolCallId: tool_call_id,
-    toolName: "dispatch_group",
-    input: JSON.stringify(input),
+    type: "tool_call",
+    tool_call_id,
+    tool_name: "dispatch_group",
+    input,
   };
 }
 
@@ -94,7 +94,7 @@ test("Group broadcasts user messages and collects member replies", async () => {
 test("Group.model uses AI dispatch to select only the returned members", async () => {
   RecordingSession.created = [];
   let dispatch_calls = 0;
-  const dispatch_model = new MockLanguageModelV3({
+  const dispatch_model = new MockModelClient({
     modelId: "group-dispatch-model",
     doGenerate: async () => ({
       content: [create_dispatch_tool_call(dispatch_calls++ === 0
@@ -121,7 +121,7 @@ test("Group.model uses AI dispatch to select only the returned members", async (
 
 test("AI Dispatch 返回空响应图时直接结束当前调度", async () => {
   RecordingSession.created = [];
-  const dispatch_model = new MockLanguageModelV3({
+  const dispatch_model = new MockModelClient({
     modelId: "empty-dispatch-model",
     doGenerate: async () => ({
       content: [create_dispatch_tool_call({ steps: [], next: "stop" })],
@@ -164,7 +164,7 @@ test("Group 没有 model 且未注入策略时记录调度失败", async () => {
 });
 
 test("AI Dispatch 失败时不切换到隐式规则策略", async () => {
-  const dispatch_model = new MockLanguageModelV3({
+  const dispatch_model = new MockModelClient({
     modelId: "failing-dispatch-model",
     doGenerate: async () => { throw new Error("dispatch unavailable"); },
   });
@@ -184,7 +184,7 @@ test("AI Dispatch 失败时不切换到隐式规则策略", async () => {
 });
 
 test("AI Dispatch 未调用 dispatch_group 时记录协议错误", async () => {
-  const dispatch_model = new MockLanguageModelV3({
+  const dispatch_model = new MockModelClient({
     modelId: "text-only-dispatch-model",
     doGenerate: async () => ({
       content: [{ type: "text", text: "我建议让 reviewer 回复。" }],
@@ -216,7 +216,7 @@ test("AI Dispatch 拒绝未知成员并允许跨阶段重复投递", async () =>
   for (const [index, { input, expected_agent_ids }] of inputs.entries()) {
     RecordingSession.created = [];
     let dispatch_calls = 0;
-    const dispatch_model = new MockLanguageModelV3({
+    const dispatch_model = new MockModelClient({
       modelId: `invalid-dispatch-model-${index}`,
       doGenerate: async () => ({
         content: [create_dispatch_tool_call(expected_agent_ids.length > 0 && dispatch_calls++ > 0

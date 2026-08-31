@@ -7,7 +7,8 @@
  * - assistant UI 消息只需要进入 session 语义基线；模型侧使用 SDK 返回的 response messages。
  */
 
-import type { ModelMessage, Tool } from "ai";
+import type { ModelMessage } from "@downcity/type";
+import type { RuntimeTool as Tool } from "@downcity/type";
 import type { SessionRecordV1 } from "@/executor/types/SessionRecords.js";
 import {
   pick_merged_user_messages,

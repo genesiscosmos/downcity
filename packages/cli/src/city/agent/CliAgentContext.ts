@@ -9,8 +9,8 @@ import type {
   Agent,
   AgentPlugins,
   AgentSessionCollection,
+  SessionSystemMessage,
 } from "@downcity/agent";
-import type { SystemModelMessage } from "ai";
 import type { WorkspaceBase } from "@downcity/workspace";
 
 /** CLI 单 Agent 控制面所需的最小执行能力。 */
@@ -37,7 +37,7 @@ export interface CliAgentContext {
     session_id: string;
     /** system message profile。 */
     profile?: "chat" | "task";
-  }) => Promise<SystemModelMessage[]>;
+  }) => Promise<SessionSystemMessage[]>;
   /** 注册当前 Workspace 下的 Plugin HTTP 路由。 */
   register_plugin_http_routes: (app: import("hono").Hono) => void;
 }

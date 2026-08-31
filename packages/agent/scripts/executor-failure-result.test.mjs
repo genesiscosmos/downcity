@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MockLanguageModelV3 } from "ai/test";
+import { MockModelClient } from "./ModelClientMock.mjs";
 
 import { CoreEngineRunner } from "../bin/executor/core-engine/CoreEngineRunner.js";
 import { ExecutorRecoveryPolicy } from "../bin/executor/services/ExecutorRecoveryPolicy.js";
@@ -63,7 +63,7 @@ function create_execution_input(model, turn_context) {
 }
 
 test("CoreEngine Provider 失败时只返回结构化错误", async () => {
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "failing-model",
     doStream: async () => {
       throw new Error("quota exceeded");
@@ -102,7 +102,7 @@ test("CoreEngine Provider 失败时只返回结构化错误", async () => {
 
 test("CoreEngine 成功流按 start、chunks、finish 完成 canonical step", async () => {
   const events = [];
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "canonical-step-model",
     doStream: async () => create_text_stream("done"),
   });
@@ -134,7 +134,7 @@ test("CoreEngine 成功流按 start、chunks、finish 完成 canonical step", as
 
 test("CoreEngine chunk 写入失败时中止 canonical step", async () => {
   const events = [];
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "canonical-step-failure-model",
     doStream: async () => create_text_stream("partial"),
   });

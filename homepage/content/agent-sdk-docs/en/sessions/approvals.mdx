@@ -132,19 +132,19 @@ a new Turn.
 
 ## General Tool approvals
 
-A Tool that requires user permission before execution declares it with the AI SDK's native
-`needsApproval` property:
+A RuntimeTool that requires user permission before execution declares it with
+`needs_approval`:
 
 ```ts
-import { tool } from "ai";
+import { define_runtime_tool } from "@downcity/type";
 import { z } from "zod";
 
-const delete_file = tool({
+const delete_file = define_runtime_tool({
   description: "Delete a specified file from the workspace.",
-  inputSchema: z.object({
+  input_schema: z.object({
     path: z.string(),
   }),
-  needsApproval: true,
+  needs_approval: true,
   execute: async ({ path }) => {
     await remove_workspace_file(path);
     return { deleted: path };
@@ -160,7 +160,7 @@ const agent = new Agent({
 ```
 
 The approval policy belongs to the Tool, not the Agent. After the model produces a Tool Call, the
-AI SDK validates its input against the schema. The Session then creates an Approval Interaction
+Agent validates its input against the schema. The Session then creates an Approval Interaction
 with `operation: "tool"` and waits for `session.respond(...)`. Approval resumes the original Tool
 Call; denial never runs `execute`.
 

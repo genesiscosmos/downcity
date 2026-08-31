@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
-import { MockLanguageModelV3 } from "ai/test";
+import { MockModelClient } from "./ModelClientMock.mjs";
 import { Agent } from "../bin/index.js";
 import { create_workspace_entry } from "../bin/internal/index.js";
 import { City } from "../bin/index.js";
@@ -71,7 +71,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
   let provider_request_count = 0;
   let plugin_stop_count = 0;
 
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "config-turn-boundary-model",
     doStream: async (options) => {
       const has_tools = Array.isArray(options.tools) && options.tools.length > 0;
@@ -184,7 +184,7 @@ test("Plugin registry changes do not rewrite an existing Session system", async 
   );
   const agent = new Agent({
     id: "fixed_plugin_system_agent",
-    model: new MockLanguageModelV3({ modelId: "fixed-plugin-system-model" }),
+    model: new MockModelClient({ modelId: "fixed-plugin-system-model" }),
   });
   const entry = create_workspace_entry(agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
   const runtime_plugin = create_plugin({
@@ -243,7 +243,7 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
     description: "Provides system text refreshed by session.syncshot()",
     system: () => content,
   });
-  const model = new MockLanguageModelV3({ modelId: "syncshot-model" });
+  const model = new MockModelClient({ modelId: "syncshot-model" });
   const agent = new Agent({
     id: "syncshot_agent",
     model,
@@ -308,7 +308,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     storage: new LocalStorageProvider(path.join(agent_path, "city-data")),
     workspaces: [workspace],
   });
-  const model = new MockLanguageModelV3({ modelId: "instruction-restart-model" });
+  const model = new MockModelClient({ modelId: "instruction-restart-model" });
   const first_agent = new Agent({
     id: "instruction_restart_agent",
     model,
@@ -422,7 +422,7 @@ test("empty Session snapshot suppresses Agent instruction after restart", async 
     storage: new LocalStorageProvider(path.join(agent_path, "city-data")),
     workspaces: [workspace],
   });
-  const model = new MockLanguageModelV3({ modelId: "empty-snapshot-model" });
+  const model = new MockModelClient({ modelId: "empty-snapshot-model" });
   const first_agent = new Agent({
     id: "empty_snapshot_agent",
     model,
@@ -469,7 +469,7 @@ test("running session model changes apply with steer at the next Session step", 
   const release_old_model = create_deferred();
   const model_calls = [];
 
-  const old_model = new MockLanguageModelV3({
+  const old_model = new MockModelClient({
     modelId: "old-model",
     doStream: async (options) => {
       const has_tools = Array.isArray(options.tools) && options.tools.length > 0;
@@ -480,7 +480,7 @@ test("running session model changes apply with steer at the next Session step", 
       return create_stream_text_result("old response");
     },
   });
-  const new_model = new MockLanguageModelV3({
+  const new_model = new MockModelClient({
     modelId: "new-model",
     doStream: async (options) => {
       const has_tools = Array.isArray(options.tools) && options.tools.length > 0;
@@ -578,7 +578,7 @@ test("running session approval mode changes stay queued until the next Session s
   const first_provider_request_started = create_deferred();
   const release_first_provider_request = create_deferred();
   let provider_request_count = 0;
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "approval-mode-boundary-model",
     doStream: async (options) => {
       const has_tools = Array.isArray(options.tools) && options.tools.length > 0;
@@ -682,11 +682,11 @@ test("session set options independently control Action persistence and Mutation 
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-session-set-options-"),
   );
-  const first_model = new MockLanguageModelV3({
+  const first_model = new MockModelClient({
     modelId: "set-options-first-model",
     doStream: async () => create_stream_text_result("first"),
   });
-  const second_model = new MockLanguageModelV3({
+  const second_model = new MockModelClient({
     modelId: "set-options-second-model",
     doStream: async () => create_stream_text_result("second"),
   });
@@ -785,7 +785,7 @@ test("restored Session rebinds the same model without emitting a configuration M
     storage: new LocalStorageProvider(path.join(agent_path, "city-data")),
     workspaces: [workspace],
   });
-  const create_model = () => new MockLanguageModelV3({
+  const create_model = () => new MockModelClient({
     modelId: "restored-session-model",
     doStream: async () => create_stream_text_result("restored"),
   });
@@ -869,14 +869,14 @@ test("config remains effective when its action message cannot be persisted", asy
     path.join(os.tmpdir(), "downcity-config-action-observability-"),
   );
   const model_calls = [];
-  const old_model = new MockLanguageModelV3({
+  const old_model = new MockModelClient({
     modelId: "old-observability-model",
     doStream: async () => {
       model_calls.push("old");
       return create_stream_text_result("old");
     },
   });
-  const new_model = new MockLanguageModelV3({
+  const new_model = new MockModelClient({
     modelId: "new-observability-model",
     doStream: async () => {
       model_calls.push("new");

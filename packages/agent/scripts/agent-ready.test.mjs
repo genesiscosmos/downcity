@@ -12,7 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
 
-import { MockLanguageModelV3 } from "ai/test";
+import { MockModelClient } from "./ModelClientMock.mjs";
 import { Agent } from "../bin/index.js";
 import { create_workspace_entry } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
@@ -105,7 +105,7 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
       },
     },
   });
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "agent-ready-model",
     doStream: async () => {
       model_stream_calls += 1;
@@ -161,7 +161,7 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
     const result = await turn.finished;
 
     assert.equal(result.success, true);
-    assert.equal(model_stream_calls, 2);
+    assert.equal(model_stream_calls, 1);
   } finally {
     lifecycle_ready.resolve();
     await agent.dispose();

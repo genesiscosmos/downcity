@@ -106,19 +106,26 @@ new Agent({
 
 ## `model`
 
-Agent 持有的默认 `AgentModel` 实例。`AgentModel` 可以是 AI SDK `LanguageModel` 或 City `CityModel`，不需要调用方提前转换。
+Agent 持有的默认 `ModelClient` 实例。可以使用 Federation 目录返回的 `CityModel`，也可以使用进程内 Provider Adapter 创建模型。
 
 ```ts
+const model = create_openai_compatible_model({
+  id: "gpt-5",
+  upstream_model: "gpt-5",
+  base_url: "https://api.openai.com/v1",
+  api_key: process.env.OPENAI_API_KEY!,
+});
+
 new Agent({
   id: "repo-helper",
-  model: openai.responses("gpt-5"),
+  model,
 });
 ```
 
 关键点：
 
-- SDK 不负责选择、保存或恢复模型 ID，只持有 `AgentModel` 实例
-- `CityModel` 自身实现 `LanguageModelV3`，Agent 直接调用
+- SDK 不负责选择、保存或恢复模型 ID，只持有 `ModelClient` 实例
+- `CityModel` 自身实现 `ModelClient`，Agent 直接调用 `stream(call, signal)`
 - Session 没有自己的模型时回退使用 Agent 模型
 - 本地 Session 可通过 `session.set({ model })` 覆盖 Agent 模型
 - 有效模型解析顺序固定为 Session 模型、Agent 模型

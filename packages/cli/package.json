@@ -1,6 +1,6 @@
 {
   "name": "downcity",
-  "version": "1.1.467",
+  "version": "1.1.469",
   "type": "module",
   "description": "Downcity CLI — local City container and Federation Server management",
   "bin": {
@@ -29,14 +29,6 @@
     "postpack": "node ../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.81",
-    "@ai-sdk/google": "^3.0.80",
-    "@ai-sdk/huggingface": "^1.0.50",
-    "@ai-sdk/moonshotai": "^2.0.23",
-    "@ai-sdk/open-responses": "^1.0.16",
-    "@ai-sdk/openai": "^3.0.67",
-    "@ai-sdk/openai-compatible": "^2.0.48",
-    "@ai-sdk/xai": "^3.0.93",
     "@downcity/agent": "workspace:^",
     "@downcity/federation": "workspace:^",
     "@downcity/local": "workspace:^",
@@ -46,8 +38,6 @@
     "@downcity/type": "workspace:*",
     "@earendil-works/pi-tui": "^0.74.2",
     "@larksuiteoapi/node-sdk": "^1.66.0",
-    "@openrouter/ai-sdk-provider": "^2.9.0",
-    "ai": "^6.0.193",
     "better-sqlite3": "^12.10.0",
     "chalk": "^5.6.2",
     "cli-highlight": "^2.1.11",
@@ -61,7 +51,6 @@
     "js-yaml": "^4.1.1",
     "nanoid": "^5.1.11",
     "node-cron": "^4.2.1",
-    "openai": "^6.39.1",
     "ora": "^9.4.0",
     "ws": "^8.21.0",
     "zod": "^4.4.3"

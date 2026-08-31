@@ -1,29 +1,26 @@
 ---
 title: AIService
-description: AIService 统一模型注册、路由、LanguageModelV3 和 OpenAI 兼容协议。
+description: 使用 Downcity Model Protocol 注册、路由并执行模型。
 ---
 
-`AIService` 是 Federation 的 AI 服务。它注册 `AIModelDefinition`，负责鉴权、模型可用性、fallback、reasoning、计量和计费。
-
-| 概念 | 作用 |
-|---|---|
-| `AIChannel` | Federation 到一个上游 AI 渠道的执行边界 |
-| `AIChannelStreamInput` | 显式语言调用、最终模型、env 与 reasoning |
-| `AIChannelActionInput` | 图片及其它非语言 action 的受限输入 |
-| `AIModelSpec` | `channel.model()` 的模型声明参数 |
-| `AIModelDefinition` | AIService 内部完整运行时模型 |
-| `CityModelDescriptor` | 客户端公开模型目录结构 |
-| `CityModel` | 实现 AI SDK `LanguageModelV3` 的客户端模型 |
-
-所有语言模型入口都统一到 `AIChannel.stream(input)`：
+`AIService` 是 Federation 的模型控制面，统一负责鉴权、模型目录、fallback、reasoning、计量和计费。Agent、City 客户端与 Provider 之间只交换 Downcity Model Protocol，不依赖第三方模型 SDK 类型。
 
 ```text
-city.ai.text()          -> LanguageModelV3 -> AIChannel.stream
-city.ai.stream()        -> CityModel       -> AIChannel.stream
-CityModel.doGenerate()  -> CityModel       -> AIChannel.stream
-chat/completions        -> OpenAI adapter   -> AIChannel.stream
+Agent / city.ai.stream()
+  -> ModelCall
+  -> POST /v1/ai/stream
+  -> AIService 路由、fallback、reasoning、计量
+  -> AIChannel
+  -> Provider Adapter
+  -> ModelStreamEvent
 ```
 
-OpenAI 兼容端点只负责协议转换，支持 system/user/assistant/tool、图片 URL、function tools、tool choice、reasoning、JSON/SSE。它不会把请求原样转发给上游，也不需要 `AIChannel.openai()`。
+| 概念 | 职责 |
+|---|---|
+| `ModelCall` | 消息、文件、工具和生成参数 |
+| `ModelClient` | 进程内模型调用接口：`stream(call, signal)` |
+| `ModelStreamEvent` | 文本、推理、工具、usage、完成与错误事件 |
+| `AIChannel` | Federation 内的上游执行边界 |
+| Provider Adapter | Downcity Protocol 与厂商 HTTP 协议互转 |
 
-详见 [AIChannel 与模型注册](./provider)。
+OpenAI Chat Completions 只作为外部兼容入口，不进入路由和 Channel 的核心类型。

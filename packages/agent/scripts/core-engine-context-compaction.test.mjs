@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MockLanguageModelV3 } from "ai/test";
+import { MockModelClient } from "./ModelClientMock.mjs";
 
 import {
   deep_compact_model_messages,
@@ -111,7 +111,7 @@ test("普通调用使用 95% 触发，compact 验收使用 50% 目标", () => {
 });
 
 test("最终 Step 达到 95% 时通过 Turn 结果请求 writer 收口后持久化 compact", async () => {
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "usage-trigger-model",
     doStream: async () => create_stream_text_result("done", 90, 5),
   });
@@ -132,7 +132,7 @@ test("最终 Step 达到 95% 时通过 Turn 结果请求 writer 收口后持久�
 });
 
 test("新的持久化 Summary 只按 50% 水位验收一次", async () => {
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "usage-validation-model",
     doStream: async () => create_stream_text_result("done", 55, 5),
   });
@@ -186,7 +186,7 @@ test("显式 compact 后在下一次 provider 调用前重载 canonical history"
     should_compact_on_error: () => false,
   });
   let reload_requested = true;
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "history-reload-model",
     doStream: async (options) => {
       provider_prompts.push(JSON.stringify(options.prompt));
@@ -226,7 +226,7 @@ test("显式 compact 后在下一次 provider 调用前重载 canonical history"
 
 test("Provider context-length error 在当前 tool-loop 内 deep compact 后重试", async () => {
   let provider_calls = 0;
-  const model = new MockLanguageModelV3({
+  const model = new MockModelClient({
     modelId: "context-error-model",
     doStream: async () => {
       provider_calls += 1;
@@ -256,15 +256,15 @@ test("Provider context-length error 在当前 tool-loop 内 deep compact 后重�
 test("deep compact 删除 reasoning，并完整保留最新并行 tool transaction", () => {
   const large_output = "tool-output-".repeat(8_000);
   const messages = [
-    { role: "user", content: "older request" },
+    { role: "user", content: [{ type: "text", text: "older request" }] },
     {
       role: "assistant",
       content: [
         { type: "reasoning", text: "old reasoning".repeat(2_000) },
         {
-          type: "tool-call",
-          toolCallId: "old-call",
-          toolName: "old_tool",
+          type: "tool_call",
+          tool_call_id: "old-call",
+          tool_name: "old_tool",
           input: { query: "old" },
         },
       ],
@@ -273,40 +273,36 @@ test("deep compact 删除 reasoning，并完整保留最新并行 tool transacti
       role: "tool",
       content: [
         {
-          type: "tool-result",
-          toolCallId: "old-call",
-          toolName: "old_tool",
-          output: { type: "text", value: large_output },
+          type: "tool_result",
+          tool_call_id: "old-call",
+          tool_name: "old_tool",
+          outcome: "succeeded",
+          content: [{ type: "text", text: large_output }],
         },
       ],
     },
-    { role: "user", content: "latest request" },
+    { role: "user", content: [{ type: "text", text: "latest request" }] },
     {
       role: "assistant",
       content: [
         {
           type: "reasoning",
           text: "latest reasoning".repeat(2_000),
-          providerOptions: { openai: { itemId: "rs_latest" } },
         },
         {
           type: "text",
           text: "running tools",
-          providerOptions: {
-            openai: { itemId: "msg_latest", phase: "final_answer" },
-          },
         },
         {
-          type: "tool-call",
-          toolCallId: "call-a",
-          toolName: "tool_a",
+          type: "tool_call",
+          tool_call_id: "call-a",
+          tool_name: "tool_a",
           input: { value: "a" },
-          providerOptions: { openai: { itemId: "fc_a" } },
         },
         {
-          type: "tool-call",
-          toolCallId: "call-b",
-          toolName: "tool_b",
+          type: "tool_call",
+          tool_call_id: "call-b",
+          tool_name: "tool_b",
           input: { value: "b" },
         },
       ],
@@ -315,17 +311,18 @@ test("deep compact 删除 reasoning，并完整保留最新并行 tool transacti
       role: "tool",
       content: [
         {
-          type: "tool-result",
-          toolCallId: "call-a",
-          toolName: "tool_a",
-          output: { type: "text", value: large_output },
-          providerOptions: { openai: { resultId: "result_a" } },
+          type: "tool_result",
+          tool_call_id: "call-a",
+          tool_name: "tool_a",
+          outcome: "succeeded",
+          content: [{ type: "text", text: large_output }],
         },
         {
-          type: "tool-result",
-          toolCallId: "call-b",
-          toolName: "tool_b",
-          output: { type: "json", value: { large_output } },
+          type: "tool_result",
+          tool_call_id: "call-b",
+          tool_name: "tool_b",
+          outcome: "succeeded",
+          content: [{ type: "json", value: { large_output } }],
         },
       ],
     },
@@ -349,9 +346,9 @@ test("deep compact 删除 reasoning，并完整保留最新并行 tool transacti
   for (const message of compacted) {
     if (!Array.isArray(message.content)) continue;
     for (const part of message.content) {
-      if (part.type === "tool-call") tool_call_ids.add(part.toolCallId);
-      if (part.type === "tool-result") tool_result_ids.add(part.toolCallId);
-      if (part.type === "tool-call" || part.type === "tool-result") {
+      if (part.type === "tool_call") tool_call_ids.add(part.tool_call_id);
+      if (part.type === "tool_result") tool_result_ids.add(part.tool_call_id);
+      if (part.type === "tool_call" || part.type === "tool_result") {
         active_tool_text.push(JSON.stringify(part));
       }
     }
@@ -376,22 +373,17 @@ test("单条 assistant 含大量 parts 时也会在消息内部折叠", () => {
   assert.ok(JSON.stringify(compacted).length < JSON.stringify(messages).length / 4);
 });
 
-test("tool approval request/response 与对应 call 一起保留且不产生孤儿", () => {
+test("最新工具调用与工具结果一起保留且不产生孤儿", () => {
   const compacted = deep_compact_model_messages([
-    { role: "user", content: "approve the operation" },
+    { role: "user", content: [{ type: "text", text: "run the operation" }] },
     {
       role: "assistant",
       content: [
         {
-          type: "tool-call",
-          toolCallId: "approval-call",
-          toolName: "dangerous_tool",
+          type: "tool_call",
+          tool_call_id: "operation-call",
+          tool_name: "operation_tool",
           input: { path: "/tmp/example" },
-        },
-        {
-          type: "tool-approval-request",
-          toolCallId: "approval-call",
-          approvalId: "approval-1",
         },
       ],
     },
@@ -399,16 +391,17 @@ test("tool approval request/response 与对应 call 一起保留且不产生孤�
       role: "tool",
       content: [
         {
-          type: "tool-approval-response",
-          approvalId: "approval-1",
-          approved: true,
-          providerExecuted: true,
+          type: "tool_result",
+          tool_call_id: "operation-call",
+          tool_name: "operation_tool",
+          outcome: "succeeded",
+          content: [{ type: "json", value: { changed: true } }],
         },
       ],
     },
   ]);
   const serialized = JSON.stringify(compacted);
-  assert.equal(serialized.includes('"toolCallId":"approval-call"'), true);
-  assert.equal(serialized.includes('"approvalId":"approval-1"'), true);
-  assert.equal(serialized.includes('"approved":true'), true);
+  assert.equal(serialized.includes('"tool_call_id":"operation-call"'), true);
+  assert.equal(serialized.includes('"outcome":"succeeded"'), true);
+  assert.equal(serialized.includes('"changed":true'), true);
 });
