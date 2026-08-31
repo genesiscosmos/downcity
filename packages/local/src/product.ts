@@ -8,21 +8,13 @@
 export { ensure_local_schema } from "./database/LocalSchema.js";
 export {
   LocalPluginLoader,
-  load_local_plugin_setup_module,
+  load_local_agent_plugin_module,
   verify_local_installed_plugin_integrity,
 } from "./runtime/LocalPluginLoader.js";
 export {
   resolve_local_agent_env,
   resolve_local_global_env,
 } from "./runtime/LocalEnvironment.js";
-export {
-  accepts_empty_local_plugin_config,
-  create_local_plugin_config_draft,
-  redact_local_plugin_write_only_values,
-  restore_local_plugin_write_only_values,
-  validate_local_plugin_config,
-  validate_local_plugin_config_schema,
-} from "./runtime/LocalPluginConfigSchema.js";
 export {
   AgentRepository,
   normalize_agent_id,
@@ -41,7 +33,6 @@ export type {
 export type {
   LocalInstalledPluginDefinition,
   LocalPluginConfig,
-  LocalPluginConfigDefinition,
   LocalPluginDefinition,
   LocalPluginRegistration,
 } from "./types/LocalPlugin.js";

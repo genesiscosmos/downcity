@@ -33,13 +33,13 @@ bot_token = "123456:token"
 ```
 
 ```bash
-city plugin config chat primary --interactive
+# Create primary on the Chat Plugin page in Desktop and configure it in the Mainview
 city plugin enable chat <agent_id> --profile primary
 ```
 
 ## Channel credentials
 
-Channel credentials are plaintext in `config.toml`, protected by user-only directory and file permissions (`0700` and `0600`). CLI and Desktop redact fields such as `bot_token` and `app_secret` in displayed output. Each Agent selects one profile in its own `agent.json`; profiles can be shared intentionally.
+Channel credentials are plaintext in `config.toml`, protected by user-only directory and file permissions (`0700` and `0600`). The Chat Mainview reads and saves the Profile through Chat-owned main actions. Reads never return plaintext `bot_token` or `app_secret` values, and leaving a credential blank preserves the saved value. Each Agent selects one Profile in its own `agent.json`; Profiles can be shared intentionally.
 
 ## Chat Access
 

@@ -17,7 +17,6 @@ import {
   list_plugin_catalog,
   resolve_plugin_catalog_item,
 } from "@/city/process/plugin/PluginCatalog.js";
-import { validate_local_plugin_config } from "@downcity/local/product";
 import type {
   AgentPluginReference,
   SetAgentPluginReferenceInput,
@@ -135,7 +134,7 @@ export function get_plugin_profile(
   return with_cli_local_data((data) => data.plugins.get_profile(plugin_id, profile));
 }
 
-/** 校验并保存一个 Plugin profile。 */
+/** 保存一个由 Plugin 自己负责校验的 Profile 配置。 */
 export async function save_plugin_profile(
   plugin_id_input: string,
   profile_input: string,
@@ -145,7 +144,6 @@ export async function save_plugin_profile(
   const profile = normalize_profile_id(profile_input);
   const plugin = await resolve_plugin_catalog_item(plugin_id);
   if (!plugin) throw new Error(`Plugin not found: ${plugin_id}`);
-  if (plugin.config_schema) validate_local_plugin_config(config, plugin.config_schema);
   return with_cli_local_data((data) => data.plugins.save_profile(plugin_id, profile, config));
 }
 

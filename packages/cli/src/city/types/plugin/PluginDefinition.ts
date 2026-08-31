@@ -24,13 +24,22 @@ export interface ResolvedPluginSource {
 }
 
 /** 来源目录 `plugin.json` 必须声明的可安装 Plugin 包。 */
-export interface PluginPackageDefinition extends Omit<LocalPluginDefinition, "config"> {
+export interface PluginPackageDefinition extends Omit<
+  LocalPluginDefinition,
+  "has_agent" | "has_main" | "has_renderer"
+> {
   /** 文件协议版本。 */
   schema_version: 1;
   /** Plugin 语义化版本号。 */
   version: string;
-  /** 相对来源目录的 setup ESM 入口。 */
-  setup: string;
+  /** 相对来源目录的 Agent Plugin ESM 入口。 */
+  agent?: string;
+
+  /** 相对来源目录的 Plugin main ESM 入口。 */
+  main?: string;
+
+  /** 相对来源目录的自包含 Mainview HTML 入口。 */
+  renderer?: string;
 }
 
 /** 已安装 Plugin 的管理视图。 */

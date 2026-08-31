@@ -29,8 +29,6 @@ import {
   resolve_plugin_catalog_item,
   list_plugin_catalog,
 } from "@/city/process/plugin/PluginCatalog.js";
-import { prompt_plugin_config } from "@/city/process/plugin/PluginConfigForm.js";
-import { redact_plugin_config } from "@/city/process/plugin/PluginConfigRedaction.js";
 import { run_interactive_plugin_manager } from "@/city/process/plugin/InteractivePluginManager.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import { emitCliBlock, emitCliList } from "@/shared/CliReporter.js";
@@ -75,7 +73,11 @@ export function registerPluginsCommand(program: Command): void {
         tone: "success",
         title: "Plugin installed",
         summary: installed.id,
-        facts: [{ label: "Setup", value: installed.setup }],
+        facts: [
+          ...(installed.agent ? [{ label: "Agent", value: installed.agent }] : []),
+          ...(installed.main ? [{ label: "Main", value: installed.main }] : []),
+          ...(installed.renderer ? [{ label: "Renderer", value: installed.renderer }] : []),
+        ],
       });
     });
 
@@ -132,9 +134,7 @@ function register_agent_reference_commands(plugin: Command): void {
       const resolved_agent_id = await resolve_cli_agent_id(agent_id);
       const catalog = await resolve_plugin_catalog_item(plugin_id);
       if (!catalog) throw new Error(`Plugin not found: ${plugin_id}`);
-      if (catalog.configuration === "required" && !options.profile) {
-        throw new Error(`Plugin profile is required: ${plugin_id}`);
-      }
+      if (!catalog.has_agent) throw new Error(`Plugin does not provide Agent capability: ${plugin_id}`);
       const reference = set_agent_plugin_reference({
         agent_id: resolved_agent_id,
         plugin_id,
@@ -198,14 +198,13 @@ function register_profile_commands(plugin: Command): void {
 
   plugin.command("config <plugin_id> [profile]")
     .option("--set <json>", t({ zh: "替换完整 profile JSON", en: "replace the complete profile JSON" }))
-    .option("--interactive", t({ zh: "打开 Schema 配置表单", en: "open the Schema form" }))
     .option("--remove", t({ zh: "删除该 profile", en: "remove this profile" }))
     .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
     .helpOption("--help", helpText())
     .action(async (
       plugin_id: string,
       profile_input: string | undefined,
-      options: { set?: string; interactive?: boolean; remove?: boolean; json?: boolean },
+      options: { set?: string; remove?: boolean; json?: boolean },
     ) => {
       const profile = String(profile_input || "default").trim();
       const catalog = await resolve_plugin_catalog_item(plugin_id);
@@ -216,23 +215,14 @@ function register_profile_commands(plugin: Command): void {
         return;
       }
       const existing = get_plugin_profile(plugin_id, profile);
-      let config: JsonObject | null = null;
-      if (options.set) config = parse_json_object(options.set, "profile");
-      if (options.interactive) {
-        if (!catalog.config_schema) throw new Error(`Plugin does not declare configuration: ${plugin_id}`);
-        config = await prompt_plugin_config({
-          plugin_name: plugin_id,
-          schema: catalog.config_schema,
-          current_config: existing ?? catalog.initial_config,
-        });
-      }
-      if (config) {
+      if (options.set) {
+        const config = parse_json_object(options.set, "profile");
         const saved = await save_plugin_profile(plugin_id, profile, config);
-        print_profile(plugin_id, profile, saved, catalog.config_schema, options.json === true);
+        print_profile_status(plugin_id, profile, saved, options.json === true);
         return;
       }
       if (!existing) throw new Error(`Plugin profile not found: ${plugin_id}/${profile}`);
-      print_profile(plugin_id, profile, existing, catalog.config_schema, options.json === true);
+      print_profile_status(plugin_id, profile, existing, options.json === true);
     });
 }
 
@@ -316,12 +306,11 @@ async function print_plugin_list(as_json: boolean): Promise<void> {
   });
 }
 
-/** 输出一个经过凭据脱敏的 Plugin profile。 */
-function print_profile(
+/** 输出 Profile 状态，不把 Plugin 私有配置或凭据写到终端。 */
+function print_profile_status(
   plugin_id: string,
   profile: string,
   config: JsonObject,
-  schema: JsonObject | undefined,
   as_json: boolean,
 ): void {
   printResult({
@@ -329,7 +318,12 @@ function print_profile(
     asJson: as_json,
     success: true,
     title: "plugin profile",
-    data: { plugin_id, profile, config: redact_plugin_config(config, schema) },
+    data: {
+      plugin_id,
+      profile,
+      configured: Object.keys(config).length > 0,
+      fields: Object.keys(config).sort(),
+    },
   });
 }
 

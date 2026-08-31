@@ -1,64 +1,50 @@
 ---
 title: Custom Plugin
-description: Build, publish, and configure an installable Downcity Plugin
+description: Build, package, and configure an installable Downcity Plugin
 ---
 
 # Custom Plugin
 
-A third-party directory defines exactly one Plugin. The Plugin's globally unique ID is also its final directory name, Agent reference key, and runtime Registry key.
+One directory defines one Plugin. The Plugin ID is its install directory, Agent reference key, and runtime identity. There is no separate Extension identity.
 
-## Development directory
+## Three optional entries
+
+```text
+Plugin
+├── agent      creates Agent runtime instances
+├── main       provides host management logic and actions
+└── renderer   provides the single Mainview
+```
+
+Each entry is optional, but at least one is required. A Plugin may provide only Agent capabilities, only a Mainview, or a complete runtime and configuration experience.
+
+Recommended development layout:
 
 ```text
 github-plugin/
 ├── plugin.json
 ├── package.json
 ├── README.md
-├── icon.svg
+├── assets/icon.svg
 ├── src/
 │   ├── plugin.ts
-│   └── setup.ts
-├── tsconfig.json
-└── dist/setup.js
+│   ├── agent.ts
+│   ├── main.ts
+│   └── mainview.ts
+└── dist/
+    ├── agent.js
+    ├── main.js
+    └── mainview.html
 ```
 
-`src/` and `tsconfig.json` are development-only files. Downcity does not prescribe a build tool and does not require `tsup.config.ts`. `package.json` belongs to the Plugin package and establishes an explicit ESM package boundary, so it must contain `"type": "module"` and is installed with the Plugin. The build script only needs to bundle the entry and its runtime dependencies into one self-contained ESM file. For example, `package.json` can invoke esbuild directly:
+`agent.js` and `main.js` must be self-contained ESM files. `mainview.html` must inline every script and style it needs. Downcity does not install dependencies or prescribe a build tool.
 
-```json
-{
-  "type": "module",
-  "scripts": {
-    "build": "esbuild src/setup.ts --bundle --platform=node --format=esm --outfile=dist/setup.js"
-  }
-}
-```
+## Direct SDK usage
 
-The SDK Plugin class is independent from the CLI configuration protocol. Its constructor parameters are entirely owned by the Plugin:
+The Plugin class constructor belongs entirely to the author. SDK users can create an instance directly without `plugin.json` or a Profile:
 
 ```ts
-import type { Plugin, PluginActions } from "@downcity/agent";
-
-export interface GithubPluginConfig {
-  api_url: string;
-  token: string;
-}
-
-export class GithubPlugin implements Plugin {
-  readonly name = "github";
-  readonly title = "GitHub";
-  readonly description = "GitHub integration";
-  readonly actions: PluginActions;
-
-  constructor(config: GithubPluginConfig) {
-    this.actions = {};
-  }
-}
-```
-
-SDK users assemble the instance directly:
-
-```ts
-const plugin = new GithubPlugin({
+const github_plugin = new GithubPlugin({
   api_url: "https://api.github.com",
   token: process.env.GITHUB_TOKEN ?? "",
 });
@@ -66,15 +52,13 @@ const plugin = new GithubPlugin({
 const agent = new Agent({
   id: "coding-pro",
   model,
-  plugins: [plugin],
+  plugins: [github_plugin],
 });
 ```
 
-The instance `name`, `plugin.json` `id`, directory name, and Agent reference must match. The SDK does not require a fixed constructor export or require the constructor to accept a profile.
+The following entry protocol is only needed when CLI or Desktop must install, discover, and manage the Plugin.
 
 ## Plugin definition
-
-The source directory contains one `plugin.json`:
 
 ```json
 {
@@ -83,74 +67,105 @@ The source directory contains one `plugin.json`:
   "version": "1.0.0",
   "title": "GitHub",
   "description": "GitHub integration",
-  "icon": "./icon.svg",
-  "setup": "dist/setup.js"
+  "icon": "./assets/icon.svg",
+  "agent": "./dist/agent.js",
+  "main": "./dist/main.js",
+  "renderer": "./dist/mainview.html"
 }
 ```
 
-`setup` points to a self-contained ESM module that exports the configuration Schema and host assembly function:
+`package.json` must declare `"type": "module"`. `README.md` is required user documentation. The icon may be an HTTP(S) URL or a file relative to the Plugin root.
+
+## Agent entry
+
+`agent` default-exports a factory. The host calls it for each Agent with a snapshot of the selected Profile:
 
 ```ts
-import type { PluginHostContext } from "@downcity/agent";
+import type { AgentPluginModule } from "@downcity/agent";
+import { GithubPlugin } from "./plugin.js";
 
-export const schema = {
-  type: "object",
-  properties: {
-    api_url: { type: "string", format: "uri" },
-    token: { type: "string", minLength: 1, writeOnly: true },
-  },
-  required: ["api_url", "token"],
-  additionalProperties: false,
-} as const;
+const create_agent_plugin: AgentPluginModule<GithubPlugin>["default"] = (context) => {
+  return new GithubPlugin(context.profile as unknown as GithubPluginConfig);
+};
 
-export function setup(context: PluginHostContext): GithubPlugin {
-  return new GithubPlugin(context.profile as GithubPluginConfig);
-}
+export default create_agent_plugin;
 ```
 
-`setup` is City's assembly boundary, not an install script or Plugin lifecycle hook. Each call creates a new Plugin instance. `context.data_path` is private runtime storage and never stores profile configuration. The global profile remains under `~/.downcity/plugins/<plugin_id>/config.toml` and can be selected by multiple Agents.
+Every call must return a new Plugin instance whose `name` equals `plugin.json.id`. The factory is a host assembly adapter, not an installer or a replacement for Agent Plugin `start/stop` lifecycle hooks.
 
-Plugin authors declare the complete JSON Schema from the setup module. Field-level `default` values initialize new profile forms only; they are not merged into runtime configuration when an Agent does not select a profile.
+## Main entry
 
-The setup path must point to one self-contained ESM file. The installer does not install dependencies, run build scripts, import the setup module, or copy source and development files outside the declared artifact set. If the Plugin uses runtime dependencies such as Zod, the build tool must bundle them into setup.
+`main` default-exports a lifecycle object. It registers actions for the Mainview and owns configuration validation and credential protection:
 
-The installed layout is deterministic:
+```ts
+import { define_plugin_main } from "@downcity/plugin";
+
+export default define_plugin_main({
+  activate({ plugin }) {
+    plugin.action({
+      id: "profile.read",
+      run: async (_input, context) => {
+        const config = await context.config.get();
+        return { api_url: config.api_url, token_configured: Boolean(config.token) };
+      },
+    });
+
+    plugin.action({
+      id: "profile.save",
+      run: async (input, context) => {
+        const current = await context.config.get();
+        const config = validate_and_restore_secret(input, current);
+        await context.config.set(config);
+        return { saved: true };
+      },
+    });
+  },
+});
+```
+
+One main is activated once per host. The current Profile is injected only for an action call, so one main can safely serve multiple Profiles. Do not cache a Profile in global state.
+
+## Mainview entry
+
+Mainview is the Plugin's only frontend slot. Browser source can use the action gateway:
+
+```ts
+import { plugin } from "@downcity/plugin/renderer";
+
+const profile = await plugin.invoke("profile.read");
+
+await plugin.invoke("profile.save", {
+  api_url: "https://api.github.com",
+  token: "",
+});
+```
+
+Bundle the code and styles into one self-contained `mainview.html`. Desktop runs it in an isolated iframe bound to the current Plugin/Profile. Mainview receives no Plugin ID, Profile ID, Node, Electron, host DOM, or arbitrary network access. External URLs, clipboard writes, and local file reveals must go through explicit main actions.
+
+## Profile interaction
 
 ```text
-~/.downcity/plugins/github/
-├── plugin.json
-├── config.toml
-├── package.json
-├── README.md
-├── icon.svg
-└── dist/setup.js
+Open Plugin
+→ create or select Profile
+→ configure it in Mainview
+→ enable Plugin for an Agent and select Profile
 ```
 
-`README.md` is required. `config.toml` contains only named plaintext profile values and uses file mode `0600`. CLI and Desktop load the setup Schema to build forms and redact fields marked `writeOnly`.
+A Profile is only host-provided configuration space. The host creates, selects, removes, and persists it, but does not interpret fields or generate a form from JSON Schema. Structure, validation, defaults, and Secret behavior belong to the Plugin.
 
-```toml
-schema_version = 1
+Configuration is stored under `~/.downcity/plugins/<plugin_id>/config.toml` with directory mode `0700` and file mode `0600`. The current store uses TOML, so values must be a TOML-compatible JSON object. `agent.json` stores only the Profile reference, and multiple Agents may explicitly share one Profile.
 
-[profiles.production]
-api_url = "https://api.github.com"
-token = "plain-local-token"
-```
-
-An Agent reference without an explicit profile always passes `{}` and never implicitly reads a persisted `default` profile. An explicitly selected profile is loaded from the global Plugin configuration and is an error when missing. Both paths are validated against the setup Schema. A Plugin whose Schema accepts `{}` can be enabled directly; a Plugin with required fields needs a named profile.
-
-## Install and configure
+## Install
 
 ```bash
 city plugin install ./github-plugin
-city plugin config github production --interactive
+# Create and configure production on the GitHub Plugin page in Desktop
 city plugin enable github my-agent --profile production
 city plugin update github
 city plugin uninstall github
 ```
 
-Updates atomically replace the complete Plugin directory while preserving `config.toml`. The CLI rejects an update when saved profiles fail the new Schema, and rejects profile or Plugin removal while an Agent still references it.
-
-Installation reads and copies only `plugin.json`, `package.json`, `README.md`, the declared setup file, and an optional local icon. It does not run `npm install`, build scripts, Plugin lifecycle hooks, or `setup()`. The setup exports and instance ID are validated when needed, and the installed artifacts receive a SHA-256 digest. Install only trusted sources.
+The installer copies only `plugin.json`, `package.json`, `README.md`, declared entries, and an optional local icon. It never runs dependency installation, build scripts, `agent`, or `main`. Entries cannot escape the Plugin root or use symlinks. Installed artifacts receive a SHA-256 integrity digest. Install only trusted sources.
 
 Continue with:
 

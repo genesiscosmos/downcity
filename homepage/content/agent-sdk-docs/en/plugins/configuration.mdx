@@ -1,11 +1,11 @@
 ---
 title: Plugin Configuration
-description: Understand the boundary between SDK Plugin assembly and CLI Agent Bindings
+description: Understand direct SDK assembly and City Profile boundaries
 ---
 
 # Plugin Configuration
 
-The Agent SDK registers already constructed Runtime Plugins. It does not define the CLI manifest, installer, or a `PluginFactory`:
+The Agent SDK only runs already constructed Plugin instances. It does not read City install directories or Profiles:
 
 ```ts
 await agent.plugins.register(new SkillPlugin());
@@ -14,61 +14,51 @@ await agent.plugins.unregister("skill");
 
 ## SDK hosts
 
-An embedded host passes runtime options directly through Plugin constructors:
+An embedded host passes runtime configuration directly through Plugin constructors. Their shape belongs entirely to the Plugin author:
 
 ```ts
 import { ChatPlugin, TelegramChannel } from "@downcity/plugins/chat";
 
-const chat = new ChatPlugin({
-  queue: {
-    max_concurrency: 4,
-    merge_debounce_ms: 500,
-  },
+const chat_plugin = new ChatPlugin({
+  queue: { max_concurrency: 4 },
   channels: [
     new TelegramChannel({
-      bot_token: process.env.TELEGRAM_BOT_TOKEN,
+      id: "telegram_main",
+      name: "Main Bot",
+      bot_token: process.env.TELEGRAM_BOT_TOKEN ?? "",
     }),
   ],
 });
 
-await agent.plugins.register(chat);
+await agent.plugins.register(chat_plugin);
 ```
 
-The SDK does not read the City database or interpret Agent Plugin Bindings. The host owns credential storage, configuration UI, and Runtime assembly.
+The SDK host owns credential sources, configuration UI, and instance assembly. It does not need Profiles.
 
-## CLI / City hosts
+## CLI / Desktop hosts
 
-The CLI uses a separate control-plane protocol:
+A generic host cannot guess arbitrary Plugin constructors, so it uses the optional `agent` factory from an installable Plugin package:
 
 ```text
 Plugin Catalog
-  → Plugin Resource (complete Item)
-  → Agent Plugin Binding (enabled + config + resource_ids)
-  → CLI Runtime Factory
-  → Agent Runtime Plugin
+→ user manages a Profile in the Plugin Mainview
+→ Agent stores a plugin_id → profile_id reference
+→ host reads the Profile snapshot and calls the agent factory
+→ Agent Runtime Plugin
 ```
 
-Built-in and external Plugins describe Binding configuration and optional Resource Items with standard JSON Schema. City validates and persists them through one path; when an Agent starts, the CLI resolves Resource IDs into complete Items before constructing Runtime Plugins.
-
-Example Chat Binding:
-
-```json
-{
-  "config": {},
-  "resource_ids": ["telegram-a1b2c3"]
-}
-```
-
-This Factory belongs to the CLI and is not part of the `@downcity/agent` public API.
+A Profile is only named configuration space under one Plugin. The host creates, selects, removes, and persists Profiles. Plugin-owned `main` actions validate content and provide safe projections, while the single Mainview owns editing. The host does not generate generic JSON Schema forms or put channels, accounts, or tokens in `agent.json`.
 
 ## Recommended mental model
 
 - Agent SDK: accepts and runs Plugin objects.
-- SDK host: constructs Plugins and owns its configuration source.
-- CLI / City: owns the Catalog, installation, Bindings, Schema forms, and Runtime Factory.
+- SDK host: constructs Plugins directly and owns its configuration source.
+- CLI / Desktop: owns the Catalog, installation, Profiles, and Agent references.
+- Plugin: owns its business configuration, main actions, and single Mainview.
 
 ## Related docs
 
 - [Plugin overview](/en/agent-sdk-docs/plugins/overview)
 - [Plugin availability](/en/agent-sdk-docs/plugins/plugin-availability)
 - [Plugin lifecycle](/en/agent-sdk-docs/plugins/lifecycle)
+- [Custom Plugin](/en/docs/plugin/custom)

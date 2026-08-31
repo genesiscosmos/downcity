@@ -1,7 +1,7 @@
 /**
  * 第三方单 Plugin 包安装器。
  *
- * 来源目录可以包含源码与任意开发工具；安装目录只保留清单、setup 入口、README、图标
+ * 来源目录可以包含源码与任意开发工具；安装目录只保留清单、运行入口、README、图标
  * 和用户自己的 `config.toml`。Plugin 定义的唯一 ID 同时是公开身份和最终目录名。
  */
 
@@ -10,10 +10,6 @@ import { createHash, randomUUID } from "node:crypto";
 import fs from "fs-extra";
 import { execa } from "execa";
 import { get_local_plugin_path } from "@downcity/local";
-import {
-  load_local_plugin_setup_module,
-  validate_local_plugin_config,
-} from "@downcity/local/product";
 import { create_cli_local_data } from "@/city/runtime/LocalData.js";
 import {
   get_installed_plugin,
@@ -86,15 +82,17 @@ export async function install_plugin(
     if (is_builtin_plugin(definition.id)) {
       throw new Error(`Plugin ID conflicts with builtin Plugin: ${definition.id}`);
     }
-    const setup_path = await assert_plugin_package_file(
-      plugin_root,
-      definition.setup,
-      "setup",
-    );
+    const declared_entries: Array<[label: string, relative_path: string]> = [];
+    if (definition.agent) declared_entries.push(["agent", definition.agent]);
+    if (definition.main) declared_entries.push(["main", definition.main]);
+    if (definition.renderer) declared_entries.push(["renderer", definition.renderer]);
+    const entry_paths = await Promise.all(declared_entries.map(async ([label, relative_path]) => [
+      relative_path,
+      await assert_plugin_package_file(plugin_root, relative_path, label),
+    ] as const));
     const icon_path = definition.icon && is_local_plugin_asset(definition.icon)
       ? await assert_plugin_package_file(plugin_root, definition.icon, "icon")
       : undefined;
-    await validate_existing_profiles(definition, setup_path);
 
     await fs.ensureDir(staging_dir, { mode: 0o700 });
     const installed_package_path = path.join(staging_dir, PLUGIN_PACKAGE_FILE_NAME);
@@ -102,10 +100,12 @@ export async function install_plugin(
     await fs.chmod(installed_package_path, 0o600);
     await fs.copyFile(readme_path, path.join(staging_dir, PLUGIN_README_FILE_NAME));
     await fs.chmod(path.join(staging_dir, PLUGIN_README_FILE_NAME), 0o600);
-    const installed_setup_path = resolve_plugin_path(staging_dir, definition.setup, "setup");
-    await fs.ensureDir(path.dirname(installed_setup_path), { mode: 0o700 });
-    await fs.copyFile(setup_path, installed_setup_path);
-    await fs.chmod(installed_setup_path, 0o600);
+    for (const [relative_path, source_path] of entry_paths) {
+      const installed_path = resolve_plugin_path(staging_dir, relative_path, "entry");
+      await fs.ensureDir(path.dirname(installed_path), { mode: 0o700 });
+      await fs.copyFile(source_path, installed_path);
+      await fs.chmod(installed_path, 0o600);
+    }
     if (icon_path && definition.icon) {
       const installed_icon_path = resolve_plugin_path(staging_dir, definition.icon, "icon");
       await fs.ensureDir(path.dirname(installed_icon_path), { mode: 0o700 });
@@ -115,7 +115,8 @@ export async function install_plugin(
     const integrity = await calculate_plugin_integrity(staging_dir, [
       PLUGIN_PACKAGE_FILE_NAME,
       PLUGIN_README_FILE_NAME,
-      definition.setup,
+      ...[definition.agent, definition.main, definition.renderer]
+        .filter((item): item is string => Boolean(item)),
       ...(definition.icon && is_local_plugin_asset(definition.icon) ? [definition.icon] : []),
     ]);
     const existing = get_installed_plugin(definition.id);
@@ -182,7 +183,9 @@ export async function read_plugin_definition(
       "title",
       "description",
       "icon",
-      "setup",
+      "agent",
+      "main",
+      "renderer",
       "source",
       "revision",
       "integrity",
@@ -205,9 +208,12 @@ export async function read_plugin_definition(
   const description = String(raw.description || "").trim();
   if (!description) throw new Error(`Plugin description is required: ${id}`);
   const icon = normalize_plugin_icon(raw.icon, id);
-  const setup = String(raw.setup || "").trim();
-  if (!setup) throw new Error(`Plugin setup is required: ${id}`);
-  resolve_plugin_path(plugin_root, setup, "setup");
+  const agent = normalize_plugin_entry(raw.agent, plugin_root, "agent", [".js", ".mjs"]);
+  const main = normalize_plugin_entry(raw.main, plugin_root, "main", [".js", ".mjs"]);
+  const renderer = normalize_plugin_entry(raw.renderer, plugin_root, "renderer", [".html"]);
+  if (!agent && !main && !renderer) {
+    throw new Error(`Plugin must provide agent, main, or renderer: ${id}`);
+  }
   const title = typeof raw.title === "string" ? raw.title.trim() : "";
   return {
     schema_version: 1,
@@ -216,8 +222,28 @@ export async function read_plugin_definition(
     ...(title ? { title } : {}),
     description,
     ...(icon ? { icon } : {}),
-    setup: setup.split(path.sep).join("/"),
+    ...(agent ? { agent } : {}),
+    ...(main ? { main } : {}),
+    ...(renderer ? { renderer } : {}),
   };
+}
+
+/** 校验并规范化 Plugin 的一个可选运行入口。 */
+function normalize_plugin_entry(
+  value: unknown,
+  plugin_root: string,
+  label: string,
+  extensions: string[],
+): string | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "string") throw new Error(`Plugin ${label} must be a string`);
+  const entry = value.trim();
+  if (!entry) return undefined;
+  if (!extensions.includes(path.extname(entry).toLowerCase())) {
+    throw new Error(`Plugin ${label} must use ${extensions.join(" or ")}`);
+  }
+  resolve_plugin_path(plugin_root, entry, label);
+  return entry.split(path.sep).join("/");
 }
 
 /** 校验并规范化 Plugin 图标地址。 */
@@ -236,34 +262,6 @@ function normalize_plugin_icon(value: unknown, plugin_id: string): string | unde
 /** 判断图标是否为 Plugin 根目录内的本地资源。 */
 function is_local_plugin_asset(icon: string): boolean {
   return !/^https?:\/\//iu.test(icon);
-}
-
-/** 更新前使用新 setup 模块导出的 Schema 验证全部已保存 profile。 */
-async function validate_existing_profiles(
-  definition: PluginPackageDefinition,
-  setup_path: string,
-): Promise<void> {
-  const data = create_cli_local_data();
-  try {
-    const profiles = data.plugins.read_config(definition.id).profiles;
-    if (Object.keys(profiles).length === 0) return;
-    const setup_hash = createHash("sha256")
-      .update(await fs.readFile(setup_path))
-      .digest("hex");
-    const module = await load_local_plugin_setup_module(setup_path, setup_hash);
-    for (const [profile, config] of Object.entries(profiles)) {
-      try {
-        validate_local_plugin_config(config, module.schema);
-      } catch (error) {
-        throw new Error(
-          `Plugin profile is incompatible with update: ${definition.id}/${profile}`,
-          { cause: error },
-        );
-      }
-    }
-  } finally {
-    data.database.close();
-  }
 }
 
 /** 安全解析 Plugin 根目录内的静态路径。 */

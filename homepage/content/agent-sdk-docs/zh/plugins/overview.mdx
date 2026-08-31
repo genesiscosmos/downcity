@@ -83,10 +83,7 @@ const plugins = agent.plugins.list();
 
 完整 plugin 可能包含：
 
-- `config`
 - `actions`
-- `setup`
-- `usage`
 - `hooks`
 - `resolves`
 - `system`
@@ -103,7 +100,7 @@ const plugins = agent.plugins.list();
 - agent 级：这个本地 SDK `Agent` 有没有注册该 plugin
 - runtime 级：这个托管 plugin 当前是启动还是停止
 - plugin 自身级：`availability()` 当前是否判定可用
-- project 级：宿主维护的 `plugins.*` 里有什么运行参数
+- Profile 级：City 宿主是否为 Agent 选择了一个 Plugin Profile
 
 不要把它们混成一个概念。
 

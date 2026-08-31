@@ -49,6 +49,19 @@ test("根入口不再导出默认内建集合工厂", async () => {
   assert.equal("BUILTIN_PLUGIN_CLASSES" in plugin_module, false);
 });
 
+test("内建 Plugin 子路径不再公开宿主通用配置 Schema", async () => {
+  const schema_exports = [
+    ["chat", "CHAT_PLUGIN_CONFIG_JSON_SCHEMA"],
+    ["image", "IMAGE_PLUGIN_CONFIG_JSON_SCHEMA"],
+    ["sound", "SOUND_PLUGIN_CONFIG_JSON_SCHEMA"],
+    ["web", "WEB_PLUGIN_CONFIG_JSON_SCHEMA"],
+  ];
+  for (const [plugin_name, export_name] of schema_exports) {
+    const plugin_module = await import(`@downcity/plugins/${plugin_name}`);
+    assert.equal(export_name in plugin_module, false, `${plugin_name} 不应导出 ${export_name}`);
+  }
+});
+
 test("memory 子路径导出 Provider 与 Storage Adapter", async () => {
   const memory_module = await import("@downcity/plugins/memory");
   assert.equal(typeof memory_module.MemoryPlugin, "function");

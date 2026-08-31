@@ -18,7 +18,7 @@ export type {
 export type {
   PluginHostContext,
   PluginHostExtensions,
-  PluginSetupModule,
+  AgentPluginModule,
 } from "./types/PluginHostContext.js";
 export {
   create_city_host_instance_id,

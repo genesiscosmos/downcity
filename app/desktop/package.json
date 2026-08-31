@@ -19,6 +19,7 @@
     "@downcity/agent": "workspace:^",
     "@downcity/federation": "workspace:^",
     "@downcity/local": "workspace:^",
+    "@downcity/plugin": "workspace:^",
     "@downcity/plugins": "workspace:^",
     "@downcity/workspace": "workspace:^",
     "@tiptap/core": "3.29.2",

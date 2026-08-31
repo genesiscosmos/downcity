@@ -268,9 +268,17 @@ City Storage 的 `groups/<group_id>/sessions/<group_session_id>/` 作用域持�
 Group 的调度策略决定当前消息由哪些成员发言、采用单人还是多人响应，以及是否继续传播；默认策略使用 Group.model 进行 AI 调度，没有模型或模型调用失败时回退确定性策略，不定义 leader、pipeline 或其他固定
 拓扑。Workspace 是 GroupSession 的执行资源，随后由成员 AgentSession 使用；Shell 仍属于 Workspace 的能力边界。
 
-### 4.5 Plugin 是 Agent 能力扩展
+### 4.5 Plugin 是唯一扩展产品单元
 
-Plugin 可以提供：
+Plugin 可以独立提供三类可选能力：
+
+- `agent`：默认导出 Agent Plugin factory，为每个 Agent 创建独享的运行实例。
+- `main`：默认导出宿主管理生命周期对象，注册 Plugin 自己的管理 actions。
+- `renderer`：唯一 Mainview，是一个自包含 HTML 文档。
+
+三类能力属于同一个 Plugin ID，不再引入 Extension 身份、多个 UI 插槽或 contributions DSL。SDK 用户也可以不经过安装协议，直接创建 Plugin 实例并传入 Agent。
+
+Agent Plugin 实例可以提供：
 
 - Tool Action。
 - Hook。
@@ -284,6 +292,8 @@ Plugin 通过 PluginContext 使用 Agent 内核允许的能力。PluginContext �
 
 Plugin 生命周期分为 Agent 级 `start/stop` 和可选的 Workspace 级 `enter_workspace/leave_workspace`。实现哪些钩子由 Plugin 自己决定，不构成 Plugin 分类。
 
+Plugin main 每个 Plugin 在宿主中只激活一次，不绑定某个 Profile。Mainview 通过结构化 action gateway 调用 main；宿主在调用时绑定 Plugin ID 与 Profile ID，并只向 action 注入当前 Profile 的配置存储。Renderer 不能直接访问 Electron、Node、Agent 状态或配置文件。
+
 ### 4.6 Agent 定义的本地事实源
 
 本地 Agent 定义保存在 `~/.downcity/agents/<agent_id>/`：
@@ -294,14 +304,14 @@ Plugin 生命周期分为 Agent 级 `start/stop` 和可选的 Workspace 级 `ent
 Plugin 以全局稳定 ID 为身份，定义与 City 级配置保存在 `~/.downcity/plugins/<plugin_id>/`：
 
 - `config.toml`：Plugin 自己拥有的明文 profile 配置，目录权限为 `0700`、文件权限为 `0600`。
-- `plugin.json`：仅第三方 Plugin 使用，是静态定义、图标地址、setup 入口与安装来源信息的唯一事实源；配置 Schema 由 setup 模块导出。
+- `plugin.json`：仅第三方 Plugin 使用，是静态定义、图标地址、可选 `agent`、`main`、`renderer` 入口与安装来源信息的唯一事实源。
 - `package.json`：仅第三方 Plugin 使用，声明 `"type": "module"` 并建立明确的 ESM package 边界。
 - `README.md`：第三方 Plugin 的必需用户文档，安装后保留在 Plugin ID 目录。
-- 自包含 setup 入口与本地图标：安装 `plugin.json.setup` 指向的单个入口，以及 `icon` 指向的 Plugin 根目录内相对资源；源码、TypeScript 配置和构建工具配置不进入 Plugin ID 目录。
+- 自包含入口与本地图标：安装清单声明的 `agent`、`main`、`renderer` 文件，以及 `icon` 指向的 Plugin 根目录内相对资源；源码、TypeScript 配置和构建工具配置不进入 Plugin ID 目录。`agent/main` 必须是 `.js` 或 `.mjs`，`renderer` 必须是单个自包含 `.html`。
 
 `config.toml` 是所有 Agent 共享的 Plugin 配置源；Agent 只保存 profile 引用。Plugin 运行时状态、缓存和私有文件使用 `PluginContext.data_path`，由宿主按 Agent/Plugin 隔离，不按 Workspace 复制。
 
-Agent 通过 `agent.json` 选择 Plugin 与可选 profile。Plugin profile 可以包含渠道、账号、端点等 Plugin 自己定义的结构；配置 Schema 由第三方 setup 模块导出，TOML 只保存 profile 值，TypeScript 类型由 Plugin 代码独立维护。框架不定义 Binding、Resource 或 Installation 持久化领域。内置 Plugin 由宿主注册，第三方 Plugin 由 `plugin.json.setup` 导出的 `schema` 与 `setup(context)` 进入 Loader；setup 每次创建一个新的 Plugin 实例，Plugin Class 的 constructor 参数完全由作者决定。
+Agent 通过 `agent.json` 选择具有 `agent` 能力的 Plugin 与可选 Profile。Agent 只保存 `plugin_id → profile_id` 引用，不保存渠道、账号、端点或 Token。Profile 只是宿主在某个 Plugin 下提供的命名配置隔离空间；CRUD 由宿主统一提供，内容结构、校验、凭据投影和编辑 UI 由 Plugin main 与唯一 Mainview 自己管理。Profile 值必须是 TOML 可表达的 JSON object。框架不定义 Binding、Resource 或 Installation 持久化领域，也不通过通用 Schema 猜测业务配置。内置 Plugin 由宿主注册；第三方 `agent` 入口默认导出 factory，每次为一个 Agent 创建新的 Plugin 实例，Plugin Class 的 constructor 参数完全由作者决定。
 
 `downcity.db` 继续保存 Workspace 索引、平台设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。Workspace 与平台设置以明文 JSON 保存，本地隔离依赖数据库文件权限。
 

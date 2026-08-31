@@ -5,14 +5,24 @@ description: What a Downcity Plugin is and how it extends Agent capabilities
 
 # Plugin
 
-A **Plugin** is a capability module that extends an Agent at runtime. Plugins are how the Agent SDK gains access to external systems, tools, channels, and workflows without changing the core execution engine.
+A **Plugin** is Downcity's single extension product unit. It may provide Agent runtime capabilities, its own host-side management logic, and one Mainview without introducing a separate Extension identity.
+
+```text
+Plugin
+├── agent      optional: Agent runtime capability
+├── main       optional: management logic and actions
+└── renderer   optional: the single Mainview
+```
 
 ## What a plugin does
 
 - Exposes tools the Agent can call during execution
 - Hooks into the Agent lifecycle (start, stop, session events)
 - Manages its own state, connections, and background tasks
+- Manages Profile configuration in its own Mainview
 - Runs inside the Agent process boundary, not as a separate service
+
+A Profile is only a host-provided configuration space under one Plugin. Create or select it on the Plugin page, configure it through that Plugin's Mainview, then let an Agent select the Plugin and Profile. Business configuration never lives in `agent.json`.
 
 ## Built-in plugins
 
@@ -29,37 +39,20 @@ Downcity ships several built-in plugins that cover common agent needs:
 
 ## Writing a plugin
 
-Plugins are plain TypeScript classes that implement the Plugin API:
+In the SDK, a Plugin remains a regular TypeScript instance and can be passed directly to an Agent without the install protocol:
 
 ```ts
-import { definePlugin } from "@downcity/agent-plugin";
-
-export default definePlugin({
-  id: "my-plugin",
-  name: "My Plugin",
-  version: "1.0.0",
-
-  async init(context) {
-    // lifecycle hook: called when the Agent starts
-  },
-
-  async destroy(context) {
-    // lifecycle hook: called when the Agent stops
-  },
-
-  tools: [
-    {
-      id: "myTool",
-      description: "Does something useful",
-      async handler(args) {
-        return { result: "done" };
-      },
-    },
-  ],
+const agent = new Agent({
+  id: "coding-pro",
+  model,
+  plugins: [new GithubPlugin({ token })],
 });
 ```
+
+Add a `plugin.json` with optional `agent`, `main`, and `renderer` entries only when the Plugin must be installed and managed by CLI or Desktop.
 
 ## Where to learn more
 
 - [Agent Plugins Docs](/en/plugins-docs) — built-in plugin manuals and examples
 - [Agent SDK](/en/agent-sdk-docs) — how to register and use plugins programmatically
+- [Custom Plugin](/en/docs/plugin/custom) — the three-entry install protocol

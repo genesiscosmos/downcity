@@ -1,9 +1,9 @@
 /**
- * City 提供给 Plugin setup 的宿主装配上下文。
+ * City 提供给 Agent Plugin factory 的宿主装配上下文。
  *
  * 设计边界（中文）：
- * - City 负责读取配置、创建上下文并调用 setup；
- * - setup 只负责创建一个新的 Plugin 实例；
+ * - City 负责读取 Profile、创建上下文并调用 factory；
+ * - factory 只负责创建一个新的 Plugin 实例；
  * - Agent 负责接管实例后的运行、Action 与生命周期；
  * - Agent 不反向依赖 City，也不读取 Plugin 安装目录。
  */
@@ -13,7 +13,7 @@ import type { JsonObject, Logger } from "@/index.js";
 /** City 可以为未来宿主能力增加的显式扩展集合。 */
 export type PluginHostExtensions = Readonly<Record<string, unknown>>;
 
-/** Plugin setup 的宿主装配上下文。 */
+/** Agent Plugin factory 的宿主装配上下文。 */
 export interface PluginHostContext {
   /** 当前 Plugin 的稳定 ID。 */
   readonly plugin_id: string;
@@ -31,13 +31,10 @@ export interface PluginHostContext {
   readonly extensions: PluginHostExtensions;
 }
 
-/** Plugin setup 模块导出的静态配置和实例装配函数。 */
-export interface PluginSetupModule<Plugin = unknown> {
-  /** Plugin 配置 JSON Schema。 */
-  readonly schema: JsonObject;
-
-  /** 根据 City 宿主上下文创建一个新的 Plugin 实例。 */
-  readonly setup: (
+/** `plugin.json.agent` 指向的 Agent Plugin 模块。 */
+export interface AgentPluginModule<Plugin = unknown> {
+  /** 根据 City 宿主上下文创建一个新的 Agent Plugin 实例。 */
+  readonly default: (
     context: PluginHostContext,
   ) => Plugin | Promise<Plugin>;
 }

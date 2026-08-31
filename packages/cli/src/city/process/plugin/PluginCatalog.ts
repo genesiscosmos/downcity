@@ -1,20 +1,13 @@
 /** City 全局 Plugin Catalog。 */
 
-import path from "node:path";
 import {
   list_installed_plugins,
   list_plugin_profiles,
 } from "@/city/process/registry/PluginRepository.js";
 import { create_cli_builtin_plugin_registrations } from "@/city/runtime/AgentAssembly.js";
 import { create_cli_local_data } from "@/city/runtime/LocalData.js";
-import {
-  accepts_empty_local_plugin_config,
-  create_local_plugin_config_draft,
-  load_local_plugin_setup_module,
-  verify_local_installed_plugin_integrity,
-} from "@downcity/local/product";
+import { verify_local_installed_plugin_integrity } from "@downcity/local/product";
 import type { PluginCatalogItem } from "@/city/types/plugin/PluginCatalog.js";
-import type { PluginCatalogConfiguration } from "@/city/types/plugin/PluginCatalog.js";
 
 /** 列出全部内置与第三方 Plugin。 */
 export function list_plugin_catalog(): PluginCatalogItem[] {
@@ -26,13 +19,9 @@ export function list_plugin_catalog(): PluginCatalogItem[] {
       description: definition.description,
       source: "builtin" as const,
       ...(definition.icon ? { icon: definition.icon } : {}),
-      ...(definition.config?.schema ? { config_schema: definition.config.schema } : {}),
-      initial_config: definition.config
-        ? create_local_plugin_config_draft(definition.config.schema)
-        : {},
-      configuration: (definition.config
-        ? accepts_empty_local_plugin_config(definition.config.schema) ? "optional" : "required"
-        : "none") as PluginCatalogConfiguration,
+      has_agent: definition.has_agent,
+      has_main: definition.has_main,
+      has_renderer: definition.has_renderer,
       profiles: list_plugin_profiles(definition.id),
     };
   });
@@ -44,8 +33,9 @@ export function list_plugin_catalog(): PluginCatalogItem[] {
     version: plugin.version,
     source: "installed" as const,
     source_label: plugin.source,
-    initial_config: {},
-    configuration: "required" as const,
+    has_agent: Boolean(plugin.agent),
+    has_main: Boolean(plugin.main),
+    has_renderer: Boolean(plugin.renderer),
     profiles: list_plugin_profiles(plugin.id),
   }));
   return [...builtin_items, ...installed_items]
@@ -55,8 +45,7 @@ export function list_plugin_catalog(): PluginCatalogItem[] {
 /**
  * 按稳定 ID 解析一个 Plugin 的完整管理视图。
  *
- * 第三方 Plugin 的 Schema 只由 setup 模块导出，因此仅在用户查看或修改该 Plugin
- * 时加载对应模块；普通列表和安装流程不会执行第三方代码。
+ * 解析管理视图只验证已安装制品完整性，不执行第三方 main 或 Agent 入口。
  */
 export async function resolve_plugin_catalog_item(
   plugin_id: string,
@@ -67,16 +56,8 @@ export async function resolve_plugin_catalog_item(
   try {
     const installed = data.plugins.get_installed(plugin_id);
     if (!installed) return null;
-    const plugin_root = data.plugins.plugin_path(plugin_id);
-    await verify_local_installed_plugin_integrity(plugin_root, installed);
-    const setup_path = path.join(plugin_root, installed.setup);
-    const module = await load_local_plugin_setup_module(setup_path, installed.integrity);
-    return {
-      ...item,
-      config_schema: module.schema,
-      initial_config: create_local_plugin_config_draft(module.schema),
-      configuration: accepts_empty_local_plugin_config(module.schema) ? "optional" : "required",
-    };
+    await verify_local_installed_plugin_integrity(data.plugins.plugin_path(plugin_id), installed);
+    return item;
   } finally {
     data.database.close();
   }

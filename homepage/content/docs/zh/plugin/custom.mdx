@@ -1,64 +1,50 @@
 ---
 title: 自定义插件
-description: 编写、发布并配置可安装的 Downcity Plugin
+description: 编写、打包并配置可安装的 Downcity Plugin
 ---
 
 # 自定义插件
 
-一个第三方目录只定义一个 Plugin。Plugin 的全局唯一 ID 同时是最终目录名、Agent 引用键和运行时 Registry key。
+一个目录只定义一个 Plugin。Plugin ID 同时是安装目录名、Agent 引用键和运行时身份，不需要再声明 Extension。
 
-## 开发目录
+## 三个可选入口
+
+```text
+Plugin
+├── agent      为 Agent 创建运行实例
+├── main       提供宿主管理逻辑与 actions
+└── renderer   提供唯一 Mainview
+```
+
+三个入口都可选，但至少提供一个。一个 Plugin 可以只提供 Agent 能力，也可以只提供 Mainview，或同时提供完整的运行与配置体验。
+
+推荐的开发目录：
 
 ```text
 github-plugin/
 ├── plugin.json
 ├── package.json
 ├── README.md
-├── icon.svg
+├── assets/icon.svg
 ├── src/
 │   ├── plugin.ts
-│   └── setup.ts
-├── tsconfig.json
-└── dist/setup.js
+│   ├── agent.ts
+│   ├── main.ts
+│   └── mainview.ts
+└── dist/
+    ├── agent.js
+    ├── main.js
+    └── mainview.html
 ```
 
-`src/` 和 `tsconfig.json` 只服务本地开发。Downcity 不规定构建工具，也不需要 `tsup.config.ts`。`package.json` 属于 Plugin 包，用来声明明确的 ESM package 边界，因此必须包含 `"type": "module"` 并会随 Plugin 安装。构建脚本只需把入口及其运行时依赖打包成一个自包含 ESM 文件；例如可直接在 `package.json` 中调用 esbuild：
+`agent.js` 与 `main.js` 必须是自包含 ESM，`mainview.html` 必须内联运行所需的脚本和样式。Downcity 不安装依赖，也不规定构建工具。
 
-```json
-{
-  "type": "module",
-  "scripts": {
-    "build": "esbuild src/setup.ts --bundle --platform=node --format=esm --outfile=dist/setup.js"
-  }
-}
-```
+## 直接用于 SDK
 
-SDK Plugin Class 不受 CLI 配置协议限制。构造参数完全由 Plugin 自己决定；需要 Provider、Client 或本地适配器时，直接在 SDK 中传入：
+Plugin Class 的 constructor 完全由作者决定。SDK 用户可以直接创建实例，不经过 `plugin.json` 或 Profile：
 
 ```ts
-import type { Plugin, PluginActions } from "@downcity/agent";
-
-export interface GithubPluginConfig {
-  api_url: string;
-  token: string;
-}
-
-export class GithubPlugin implements Plugin {
-  readonly name = "github";
-  readonly title = "GitHub";
-  readonly description = "GitHub 集成";
-  readonly actions: PluginActions;
-
-  constructor(config: GithubPluginConfig) {
-    this.actions = {};
-  }
-}
-```
-
-SDK 用户直接装配实例，Agent API 保持简单：
-
-```ts
-const plugin = new GithubPlugin({
+const github_plugin = new GithubPlugin({
   api_url: "https://api.github.com",
   token: process.env.GITHUB_TOKEN ?? "",
 });
@@ -66,15 +52,13 @@ const plugin = new GithubPlugin({
 const agent = new Agent({
   id: "coding-pro",
   model,
-  plugins: [plugin],
+  plugins: [github_plugin],
 });
 ```
 
-实例 `name`、`plugin.json` 的 `id`、目录名和 Agent 引用必须一致。SDK 不要求 Plugin 导出固定 constructor，也不要求 constructor 接收 profile。
+只有需要被 CLI 或 Desktop 安装、发现和管理时，才需要下面的入口协议。
 
 ## Plugin 定义
-
-源目录只保留一个 `plugin.json`：
 
 ```json
 {
@@ -83,116 +67,105 @@ const agent = new Agent({
   "version": "1.0.0",
   "title": "GitHub",
   "description": "GitHub 集成",
-  "icon": "./assets/github.svg",
-  "setup": "dist/setup.js"
+  "icon": "./assets/icon.svg",
+  "agent": "./dist/agent.js",
+  "main": "./dist/main.js",
+  "renderer": "./dist/mainview.html"
 }
 ```
 
-`setup` 指向一个自包含 ESM 模块。该模块导出配置 `schema` 和宿主装配函数：
+`package.json` 必须声明 `"type": "module"`。`README.md` 是必需的用户文档。图标可以是 HTTP(S) 地址或 Plugin 根目录内的相对文件。
+
+## Agent 入口
+
+`agent` 默认导出 factory。宿主为每个 Agent 调用一次并传入所选 Profile 的配置快照：
 
 ```ts
-import type { PluginHostContext } from "@downcity/agent";
+import type { AgentPluginModule } from "@downcity/agent";
+import { GithubPlugin } from "./plugin.js";
 
-export const schema = {
-  type: "object",
-  properties: {
-    api_url: { type: "string", format: "uri" },
-    token: { type: "string", minLength: 1, writeOnly: true },
-  },
-  required: ["api_url", "token"],
-  additionalProperties: false,
-} as const;
+const create_agent_plugin: AgentPluginModule<GithubPlugin>["default"] = (context) => {
+  return new GithubPlugin(context.profile as unknown as GithubPluginConfig);
+};
 
-export function setup(context: PluginHostContext): GithubPlugin {
-  return new GithubPlugin(context.profile as GithubPluginConfig);
-}
+export default create_agent_plugin;
 ```
 
-`setup` 是 City 的装配边界，不是安装脚本，也不是 Plugin 生命周期。每次调用都必须创建新的 Plugin 实例；`context.embassy`、`context.data_path` 和 `context.extensions` 只代表当前宿主提供的能力。`context.data_path` 是运行时私有目录，不用于保存 profile 配置；profile 由 City 在 `~/.downcity/plugins/<plugin_id>/config.toml` 中统一管理，多个 Agent 可以引用同一个 profile。需要登录态的 Plugin 应显式检查 `context.embassy` 是否存在。
+每次调用必须返回新的 Plugin 实例，实例 `name` 必须等于 `plugin.json.id`。factory 只是宿主装配适配器，不负责安装，也不替代 Agent Plugin 的 `start/stop` 生命周期。
 
-`icon` 可选，支持 `http://`、`https://` 远程地址，或 Plugin 根目录内的相对路径。相对路径对应的文件会随安装复制，并且不能使用 symlink 或路径逃逸。
+## Main 入口
 
-`README.md` 是第三方 Plugin 的必需文件，安装后会保留在 Plugin 目录，供 CLI、Desktop 和用户离线查看。
+`main` 默认导出生命周期对象。它注册 Mainview 可调用的 actions，并由 Plugin 自己完成配置校验和凭据保护：
 
-配置 `schema` 使用 JSON Schema 2020-12。常用字段包括：
+```ts
+import { define_plugin_main } from "@downcity/plugin";
 
-- `type`、`properties`、`required`、`additionalProperties`
-- `enum`、`const`、`oneOf`、`anyOf`、`allOf`
-- 字符串的 `minLength`、`maxLength`、`pattern`、`format`
-- 数值的 `minimum`、`maximum`、`multipleOf`
-- 数组的 `items`、`minItems`、`maxItems`、`uniqueItems`
-- `default`、`examples`、`title`、`description`
-- 敏感字段使用 `writeOnly: true`
+export default define_plugin_main({
+  activate({ plugin }) {
+    plugin.action({
+      id: "profile.read",
+      run: async (_input, context) => {
+        const config = await context.config.get();
+        return { api_url: config.api_url, token_configured: Boolean(config.token) };
+      },
+    });
 
-例如：
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "endpoint": {
-      "type": "string",
-      "format": "uri"
-    },
-    "mode": {
-      "type": "string",
-      "enum": ["safe", "fast"],
-      "default": "safe"
-    },
-    "token": {
-      "type": "string",
-      "minLength": 1,
-      "writeOnly": true
-    }
+    plugin.action({
+      id: "profile.save",
+      run: async (input, context) => {
+        const current = await context.config.get();
+        const config = validate_and_restore_secret(input, current);
+        await context.config.set(config);
+        return { saved: true };
+      },
+    });
   },
-  "required": ["endpoint", "token"],
-  "additionalProperties": false
-}
+});
 ```
 
-表单展示所需的占位符、排序或控件提示放在 `x_downcity` 下，不改变 JSON Schema 的运行时校验语义。
+一个 main 在宿主中只激活一次。当前 Profile 只在 action 调用时注入，所以同一个 main 可以安全服务多个 Profile。不要把 Profile 缓存在全局变量中。
 
-字段级 `default` 只作为 JSON Schema 注解，供新 Profile 表单初始化，不会自动写入未选择 Profile 的运行时配置。Schema 的唯一事实源是 `setup` 模块；`plugin.json` 不重复保存 `config`、`schema` 或 `defaults`。
+## Mainview 入口
 
-`setup` 必须指向单个自包含 ESM 文件。安装器不会执行依赖安装、构建脚本或调用 `setup()`，也不会复制入口之外的源码和开发文件。Plugin 使用 Zod 等运行时依赖时，构建工具必须把依赖打进入口。
+Mainview 是 Plugin 唯一的前端插槽。浏览器源码可以使用 action gateway：
 
-安装后的目录是确定的：
+```ts
+import { plugin } from "@downcity/plugin/renderer";
+
+const profile = await plugin.invoke("profile.read");
+
+await plugin.invoke("profile.save", {
+  api_url: "https://api.github.com",
+  token: "",
+});
+```
+
+把这段代码及样式打包进一个自包含 `mainview.html`。Desktop 会在隔离 iframe 中运行它，并绑定当前 Plugin/Profile。Mainview 不会获得 Plugin ID、Profile ID、Node、Electron、宿主 DOM 或任意网络权限；外链、剪贴板和本地文件定位必须通过 main 的明确 action 完成。
+
+## Profile 交互
 
 ```text
-~/.downcity/plugins/github/
-├── plugin.json
-├── config.toml
-├── package.json
-├── README.md
-├── assets/github.svg
-└── dist/setup.js
+进入 Plugin
+→ 创建或选择 Profile
+→ 在 Mainview 中配置
+→ Agent 启用 Plugin 并选择 Profile
 ```
 
-`config.toml` 只保存命名的明文 profile 值，文件权限为 `0600`。它属于 Plugin 的全局配置，不复制到 Agent 目录。CLI 与 Desktop 在需要配置或装配时加载 `setup` 模块的 `schema`，构建表单并脱敏 `writeOnly` 字段。普通安装和 Plugin 列表不会调用 `setup()`。Plugin 的运行时状态和缓存使用 `context.data_path`，CLI 与 Desktop 按 Agent 和 Plugin 隔离，不因进入不同 Workspace 而复制。
+Profile 只是宿主提供的配置空间。宿主统一负责创建、选择、删除和持久化，不解释字段，也不根据 JSON Schema 生成表单。内容结构、校验、默认值和 Secret 行为都属于 Plugin。
 
-```toml
-schema_version = 1
+配置保存在 `~/.downcity/plugins/<plugin_id>/config.toml`，目录权限为 `0700`，文件权限为 `0600`。当前存储使用 TOML，因此配置必须是 TOML 可表达的 JSON object。Agent 的 `agent.json` 只保存 Profile 引用；多个 Agent 可以显式复用同一 Profile。
 
-[profiles.production]
-api_url = "https://api.github.com"
-token = "plain-local-token"
-```
-
-Agent 的 Plugin 引用有两种运行语义：没有显式 profile 时直接使用空对象 `{}`，永远不会隐式读取名为 `default` 的 Profile；显式选择 profile 时读取该全局 Profile，不存在则报错。两种配置都会执行 setup 模块 Schema 校验。Schema 接受 `{}` 的 Plugin 可以直接启用，Schema 要求字段的 Plugin 必须先创建并显式选择 Profile。
-
-## 安装与配置
+## 安装
 
 ```bash
 city plugin install ./github-plugin
-city plugin config github production --interactive
+# 在 Desktop 的 GitHub Plugin 页面创建并配置 production
 city plugin enable github my-agent --profile production
 city plugin update github
 city plugin uninstall github
 ```
 
-更新会原子替换整个 Plugin 目录并保留 `config.toml`。新 Schema 无法校验已有 profile 时更新失败；仍被 Agent 引用的 profile 或 Plugin 不能删除。
-
-安装过程只读取并复制 `plugin.json`、`package.json` 与声明的 setup，不会执行 `npm install`、构建脚本、Plugin lifecycle 或调用 `setup()`。City 在配置或 Agent 装配时读取 `schema` 并验证 `setup` 导出；Agent 真正装配时再调用 `setup(context)` 并验证实例 ID。`package.json` 与 setup 会生成 SHA-256 摘要。只应安装可信来源。
+安装器只复制 `plugin.json`、`package.json`、`README.md`、声明的入口和可选本地图标，不执行依赖安装、构建脚本、`agent` 或 `main`。入口不能逃逸 Plugin 根目录或使用 symlink，安装制品会生成 SHA-256 完整性摘要。只安装可信来源。
 
 继续阅读：
 

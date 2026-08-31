@@ -83,10 +83,7 @@ Important points:
 
 A full plugin may include:
 
-- `config`
 - `actions`
-- `setup`
-- `usage`
 - `hooks`
 - `resolves`
 - `system`
@@ -103,7 +100,7 @@ There are multiple layers:
 - agent-level: did this local SDK `Agent` register the plugin
 - runtime-level: is this registered plugin currently ready or in error
 - plugin-level: does `availability()` currently say it is usable
-- project-level: what runtime options exist under host-managed `plugins.*`
+- Profile-level: whether a City host selected a Plugin Profile for the Agent
 
 Do not collapse these into one idea.
 

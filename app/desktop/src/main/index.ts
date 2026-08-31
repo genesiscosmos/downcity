@@ -108,8 +108,9 @@ ipcMain.handle("chat:list-workspace-files", (_event, workspace_id: string) => re
 ipcMain.handle("chat:read-workspace-file", (_event, workspace_id: string, relative_path: string) => require_agent_controller().read_workspace_file(workspace_id, relative_path));
 ipcMain.handle("plugin:list", () => plugin_controller.list());
 ipcMain.handle("plugin:get", (_event, plugin_id: string) => plugin_controller.get(plugin_id));
-ipcMain.handle("plugin:save-profile", (_event, plugin_id: string, input: import("../common/types/DesktopApi.js").DesktopSavePluginProfileInput) => plugin_controller.save_profile(plugin_id, input));
+ipcMain.handle("plugin:create-profile", (_event, plugin_id: string, input: import("../common/types/DesktopApi.js").DesktopCreatePluginProfileInput) => plugin_controller.create_profile(plugin_id, input));
 ipcMain.handle("plugin:remove-profile", (_event, plugin_id: string, profile_id: string) => plugin_controller.remove_profile(plugin_id, profile_id));
+ipcMain.handle("plugin:invoke", (_event, plugin_id: string, input: import("../common/types/DesktopApi.js").DesktopInvokePluginActionInput) => plugin_controller.invoke(plugin_id, input));
 ipcMain.handle("chat:create-session", (_event, agent_id: string, workspace_id: string) => require_agent_controller().create_session(agent_id, workspace_id));
 ipcMain.handle("chat:fork-session", (_event, agent_id: string, workspace_id: string, session_id: string, message_id: string) => require_agent_controller().fork_session(agent_id, workspace_id, session_id, message_id));
 ipcMain.handle("chat:rewrite-session-message", (_event, agent_id: string, workspace_id: string, session_id: string, input: import("../common/types/DesktopApi.js").DesktopChatRewriteInput) => require_agent_controller().rewrite_session_message(agent_id, workspace_id, session_id, input));
@@ -229,7 +230,10 @@ app.on("before-quit", (event) => {
   if (quitting) return;
   event.preventDefault();
   quitting = true;
-  void (agent_controller?.dispose() ?? Promise.resolve()).finally(() => {
+  void Promise.allSettled([
+    agent_controller?.dispose() ?? Promise.resolve(),
+    plugin_controller.dispose(),
+  ]).finally(() => {
     local_data.database.close();
     app.quit();
   });

@@ -21,7 +21,8 @@ import type {
   DesktopModelSummary,
   DesktopPluginSummary,
   DesktopPluginDefinition,
-  DesktopSavePluginProfileInput,
+  DesktopCreatePluginProfileInput,
+  DesktopInvokePluginActionInput,
   DesktopSessionConfiguration,
   DesktopSessionSummary,
   DesktopSettings,
@@ -242,10 +243,12 @@ export interface DesktopViewController {
   generate_agent_avatar(agent_id: string): Promise<void>;
   /** 读取 Plugin manifest 与全部 Profile。 */
   get_plugin(plugin_id: string): Promise<DesktopPluginDefinition>;
-  /** 保存 Plugin Profile 并刷新 catalog。 */
-  save_plugin_profile(plugin_id: string, input: DesktopSavePluginProfileInput): Promise<DesktopPluginDefinition>;
+  /** 创建 Plugin Profile 并刷新 catalog。 */
+  create_plugin_profile(plugin_id: string, input: DesktopCreatePluginProfileInput): Promise<DesktopPluginDefinition>;
   /** 删除 Plugin Profile 并刷新 catalog。 */
   remove_plugin_profile(plugin_id: string, profile_id: string): Promise<DesktopPluginDefinition>;
+  /** 调用当前 Plugin/Profile 范围内的 main action。 */
+  invoke_plugin_action(plugin_id: string, input: DesktopInvokePluginActionInput): ReturnType<Window["downcity"]["plugin"]["invoke"]>;
   /** 独立登记并打开 Workspace。 */
   create_workspace(value: CreateWorkspaceFormValue): Promise<void>;
   /** 修改 Session 输入草稿。 */

@@ -35,11 +35,11 @@ Use `chat` when you need:
 
 ## How users use it
 
-The CLI does not have a separate Chat configuration command. Use the shared Plugin Resource manager to create a channel Resource, then save its Resource ID in the current Agent Binding:
+Chat manages queues and channels in its own Plugin Mainview. Create or select a Profile on the Chat Plugin page in Desktop, then let an Agent reference it:
 
 ```bash
-city plugin resource create chat --interactive
-city plugin config chat <agent_id> --resources '["telegram-a1b2c3"]'
+# Configure primary in the Desktop Mainview
+city plugin enable chat <agent_id> --profile primary
 ```
 
 Use the generic Plugin Action command when you need to invoke a Chat Action from the terminal:
@@ -50,7 +50,7 @@ city plugin action chat send <agent_id> --input '{"chat_key":"telegram:123456","
 
 ## SDK Assembly
 
-In embedded SDK scenarios, `ChatPlugin` receives already constructed channel objects. The SDK host directly provides the ID, display name, and runtime credentials; it does not read City Plugin Resources:
+In embedded SDK scenarios, `ChatPlugin` receives already constructed channel objects. The SDK host directly provides the ID, display name, and runtime credentials; it does not read City Profiles:
 
 ```ts
 import {
@@ -85,7 +85,7 @@ const plugin = new ChatPlugin({
 });
 ```
 
-Plugin Resource Schema, Resolver, encrypted storage, and Binding ID resolution belong to the CLI control plane. They do not enter `@downcity/agent` or become a Store dependency of `ChatPlugin`.
+Profiles belong to the City control plane. They do not enter `@downcity/agent` or become a Store dependency of `ChatPlugin`. Chat-owned main actions validate Profile content and provide a credential-safe projection.
 
 ## Feishu dependency
 

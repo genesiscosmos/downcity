@@ -5,14 +5,24 @@ description: 什么是 Downcity 插件，以及它如何扩展 Agent 能力
 
 # 插件
 
-**插件（Plugin）** 是在 Agent 运行时扩展其能力的模块。插件让 Agent SDK 无需修改核心执行引擎，就能接入外部系统、工具、渠道和工作流。
+**插件（Plugin）** 是 Downcity 唯一的扩展产品单元。它既可以向 Agent 提供运行能力，也可以带上自己的宿主管理逻辑和唯一 Mainview，而不需要额外的 Extension 概念。
+
+```text
+Plugin
+├── agent      可选：Agent 运行能力
+├── main       可选：管理逻辑与 actions
+└── renderer   可选：唯一 Mainview
+```
 
 ## 插件能做什么
 
 - 向 Agent 暴露可调用的工具
 - 接入 Agent 生命周期（启动、停止、会话事件）
 - 管理自己的状态、连接和后台任务
+- 在自己的 Mainview 中管理 Profile 配置
 - 在 Agent 进程边界内运行，不作为独立服务
+
+Profile 只是宿主在某个 Plugin 下提供的配置隔离空间。进入 Plugin 页面后创建或选择 Profile，由 Plugin 自己的 Mainview 完成配置；Agent 只选择 Plugin 与 Profile，不保存渠道、账号或 Token。
 
 ## 内置插件
 
@@ -29,37 +39,20 @@ Downcity 内置了多个插件，覆盖常见的 Agent 需求：
 
 ## 编写插件
 
-插件是实现了 Plugin API 的普通 TypeScript 类：
+SDK 中的 Plugin 仍然是普通 TypeScript 实例，可以直接传给 Agent，不需要经过安装协议：
 
 ```ts
-import { definePlugin } from "@downcity/agent-plugin";
-
-export default definePlugin({
-  id: "my-plugin",
-  name: "My Plugin",
-  version: "1.0.0",
-
-  async init(context) {
-    // 生命周期钩子：Agent 启动时调用
-  },
-
-  async destroy(context) {
-    // 生命周期钩子：Agent 停止时调用
-  },
-
-  tools: [
-    {
-      id: "myTool",
-      description: "做一件有用的事",
-      async handler(args) {
-        return { result: "done" };
-      },
-    },
-  ],
+const agent = new Agent({
+  id: "coding-pro",
+  model,
+  plugins: [new GithubPlugin({ token })],
 });
 ```
+
+需要被 CLI 或 Desktop 安装和管理时，再通过 `plugin.json` 声明可选的 `agent`、`main` 与 `renderer` 入口。
 
 ## 继续阅读
 
 - [Agent Plugins Docs](/zh/plugins-docs) — 内置插件手册和示例
 - [Agent SDK](/zh/agent-sdk-docs) — 如何在代码中注册和使用插件
+- [自定义插件](/zh/docs/plugin/custom) — 可安装 Plugin 的三入口协议

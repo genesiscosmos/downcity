@@ -878,12 +878,22 @@ export function use_desktop_controller(): DesktopViewController {
     return await window.downcity.plugin.get(plugin_id);
   }, []);
 
-  const save_plugin_profile = useCallback(async (plugin_id: string, input: Parameters<typeof window.downcity.plugin.save_profile>[1]) => {
+  const create_plugin_profile = useCallback(async (plugin_id: string, input: Parameters<typeof window.downcity.plugin.create_profile>[1]) => {
     set_error("");
     try {
-      const definition = await window.downcity.plugin.save_profile(plugin_id, input);
+      const definition = await window.downcity.plugin.create_profile(plugin_id, input);
       set_plugins(await window.downcity.plugin.list());
       return definition;
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, []);
+
+  const invoke_plugin_action = useCallback(async (plugin_id: string, input: Parameters<typeof window.downcity.plugin.invoke>[1]) => {
+    set_error("");
+    try {
+      return await window.downcity.plugin.invoke(plugin_id, input);
     } catch (reason) {
       set_error(to_error_message(reason));
       throw reason;
@@ -1287,8 +1297,9 @@ export function use_desktop_controller(): DesktopViewController {
     remove_agent_avatar,
     generate_agent_avatar,
     get_plugin,
-    save_plugin_profile,
+    create_plugin_profile,
     remove_plugin_profile,
+    invoke_plugin_action,
     create_workspace,
     update_draft,
     update_draft_files,

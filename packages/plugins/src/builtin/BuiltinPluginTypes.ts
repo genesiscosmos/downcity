@@ -5,31 +5,33 @@
  * Embassy 服务，Plugin 自身只持有明确的服务接口。
  */
 
-import type { JsonObject, Plugin } from "@downcity/agent";
+import type { Plugin } from "@downcity/agent";
 import type { PluginHostContext } from "@downcity/agent";
+import type { PluginMainModule } from "@downcity/plugin";
+import { CHAT_PLUGIN_MAIN } from "@/chat/main/ChatPluginMain.js";
+import { CHAT_PLUGIN_RENDERER_HTML } from "@/chat/renderer/ChatPluginRenderer.js";
 import {
-  CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
+  IMAGE_PLUGIN_SETTINGS,
+  SOUND_PLUGIN_SETTINGS,
+  WEB_PLUGIN_SETTINGS,
+} from "@/builtin/PluginSettingsDefinitions.js";
+import { create_plugin_settings_main } from "@/builtin/main/PluginSettingsMain.js";
+import { create_plugin_settings_renderer } from "@/builtin/renderer/PluginSettingsRenderer.js";
+import {
   ChatPlugin,
   type ChatPluginConfig,
   type ChatPluginChannelConfig,
 } from "@/chat.js";
 import { FeishuChannel, QqChannel, TelegramChannel } from "@/chat.js";
 import { ContactPlugin } from "@/contact.js";
-import {
-  IMAGE_PLUGIN_CONFIG_JSON_SCHEMA,
-  ImagePlugin,
-} from "@/image.js";
+import { ImagePlugin } from "@/image.js";
 import {
   MemoryPlugin,
 } from "@/memory.js";
 import { SkillPlugin } from "@/skill.js";
-import {
-  SOUND_PLUGIN_CONFIG_JSON_SCHEMA,
-  SoundPlugin,
-} from "@/sound.js";
+import { SoundPlugin } from "@/sound.js";
 import { TaskPlugin } from "@/task.js";
 import {
-  WEB_PLUGIN_CONFIG_JSON_SCHEMA,
   WebPlugin,
   type WebPluginOptions,
 } from "@/web.js";
@@ -45,19 +47,29 @@ export interface BuiltinPluginDefinition {
 
   /** Plugin 的用途说明。 */
   description: string;
-  /** Plugin profile 的可选 JSON Schema。 */
-  config?: {
-    /** 校验 profile 并驱动管理表单的完整 JSON Schema。 */
-    schema: JsonObject;
-  };
+
+  /** 官方 Plugin 是否提供 Agent 能力。 */
+  has_agent: boolean;
+
+  /** 官方 Plugin 是否提供宿主 main。 */
+  has_main: boolean;
+
+  /** 官方 Plugin 是否提供唯一 Mainview。 */
+  has_renderer: boolean;
 }
 
 /** 官方 Plugin 注册协议。 */
 export interface BuiltinPluginRegistration {
   /** Plugin 的唯一静态定义。 */
   readonly definition: BuiltinPluginDefinition;
-  /** 使用 City 已校验的 profile 创建一个 Agent 独享的 Plugin 实例。 */
-  setup(context: PluginHostContext): Plugin | Promise<Plugin>;
+  /** 使用 City 读取的 Profile 创建一个 Agent 独享的 Plugin 实例。 */
+  create_agent(context: PluginHostContext): Plugin | Promise<Plugin>;
+
+  /** 可选的宿主 main 生命周期对象。 */
+  main?: PluginMainModule;
+
+  /** 可选的自包含 Mainview HTML。 */
+  renderer_html?: string;
 }
 
 /** 创建官方 Plugin 注册集合所需的宿主能力。 */
@@ -109,11 +121,13 @@ export function create_builtin_plugin_registrations(
         id: "chat",
         title: "Chat",
         description: "Connects Agents to Telegram, Feishu, and QQ channels.",
-        config: {
-          schema: CHAT_PLUGIN_CONFIG_JSON_SCHEMA,
-        },
+        has_agent: true,
+        has_main: true,
+        has_renderer: true,
       },
-      setup(context) {
+      main: CHAT_PLUGIN_MAIN,
+      renderer_html: CHAT_PLUGIN_RENDERER_HTML,
+      create_agent(context) {
         const config = context.profile as unknown as ChatPluginConfig;
         return new ChatPlugin({
           queue: config.queue,
@@ -126,8 +140,11 @@ export function create_builtin_plugin_registrations(
         id: "memory",
         title: "Memory",
         description: "Provides provider-neutral long-term memory, recall, revision, and deletion.",
+        has_agent: true,
+        has_main: false,
+        has_renderer: false,
       },
-      setup(context) {
+      create_agent(context) {
         return new MemoryPlugin({ root_path: context.data_path });
       },
     },
@@ -136,9 +153,13 @@ export function create_builtin_plugin_registrations(
         id: "web",
         title: "Web",
         description: "Provides web search, document reading, and optional browser sessions.",
-        config: { schema: WEB_PLUGIN_CONFIG_JSON_SCHEMA },
+        has_agent: true,
+        has_main: true,
+        has_renderer: true,
       },
-      setup(context) {
+      main: create_plugin_settings_main(WEB_PLUGIN_SETTINGS),
+      renderer_html: create_plugin_settings_renderer(WEB_PLUGIN_SETTINGS),
+      create_agent(context) {
         const config = context.profile as unknown as WebPluginOptions;
         return new WebPlugin(config);
       },
@@ -148,11 +169,13 @@ export function create_builtin_plugin_registrations(
         id: "image",
         title: "Image",
         description: "Discovers image models, generates images, and reads results.",
-        config: {
-          schema: IMAGE_PLUGIN_CONFIG_JSON_SCHEMA,
-        },
+        has_agent: true,
+        has_main: true,
+        has_renderer: true,
       },
-      setup: (context) => new ImagePlugin({
+      main: create_plugin_settings_main(IMAGE_PLUGIN_SETTINGS),
+      renderer_html: create_plugin_settings_renderer(IMAGE_PLUGIN_SETTINGS),
+      create_agent: (context) => new ImagePlugin({
         ...context.profile,
       }),
     },
@@ -161,11 +184,13 @@ export function create_builtin_plugin_registrations(
         id: "sound",
         title: "Sound",
         description: "Discovers speech models and provides ASR and TTS.",
-        config: {
-          schema: SOUND_PLUGIN_CONFIG_JSON_SCHEMA,
-        },
+        has_agent: true,
+        has_main: true,
+        has_renderer: true,
       },
-      setup: (context) => new SoundPlugin({
+      main: create_plugin_settings_main(SOUND_PLUGIN_SETTINGS),
+      renderer_html: create_plugin_settings_renderer(SOUND_PLUGIN_SETTINGS),
+      create_agent: (context) => new SoundPlugin({
         ...context.profile,
       }),
     },
@@ -178,9 +203,19 @@ function simple_registration(
   id: string,
   title: string,
   description: string,
-  setup: () => Plugin,
+  create_agent: () => Plugin,
 ): BuiltinPluginRegistration {
-  return { definition: { id, title, description }, setup };
+  return {
+    definition: {
+      id,
+      title,
+      description,
+      has_agent: true,
+      has_main: false,
+      has_renderer: false,
+    },
+    create_agent,
+  };
 }
 
 /** 创建 Chat Resource 对应的运行渠道。 */

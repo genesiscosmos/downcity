@@ -222,9 +222,6 @@ export interface DesktopUpdateAgentInput {
 /** Renderer 可见的 Plugin 来源。 */
 export type DesktopPluginSource = "builtin" | "installed";
 
-/** Plugin 对持久化 profile 的要求。 */
-export type DesktopPluginConfiguration = "none" | "optional" | "required";
-
 /** Renderer 可见的 Plugin catalog 摘要。 */
 export interface DesktopPluginSummary {
   /** Plugin 的全局稳定 ID。 */
@@ -243,26 +240,38 @@ export interface DesktopPluginSummary {
   profile_count: number;
   /** 当前 Plugin 可选择的 profile 标识。 */
   profile_ids: string[];
-  /** Plugin 不需要、可选或必须选择持久化 profile。 */
-  configuration: DesktopPluginConfiguration;
+  /** Plugin 是否能注册到 Agent。 */
+  has_agent: boolean;
+
+  /** Plugin 是否提供宿主 main。 */
+  has_main: boolean;
+
+  /** Plugin 是否提供唯一 Mainview。 */
+  has_renderer: boolean;
 }
 
 /** Renderer 可读取和编辑的完整 Plugin 定义。 */
 export interface DesktopPluginDefinition extends DesktopPluginSummary {
-  /** Plugin 声明的 JSON Schema；未声明时 Plugin 不需要配置。 */
-  config_schema?: import("@downcity/agent").JsonObject;
-  /** 根据 Schema default 与 const 注解创建的新 Profile 初始草稿。 */
-  initial_config: import("@downcity/agent").JsonObject;
-  /** 按稳定 Profile ID 索引的全部已保存配置。 */
-  profiles: Record<string, import("@downcity/agent").JsonObject>;
+  /** 第三方自包含 Mainview HTML；不存在时宿主展示无界面状态。 */
+  renderer_html?: string;
 }
 
-/** Desktop 保存 Plugin Profile 的输入。 */
-export interface DesktopSavePluginProfileInput {
+/** Desktop 创建 Plugin Profile 的输入。 */
+export interface DesktopCreatePluginProfileInput {
   /** Profile 的稳定标识。 */
   profile_id: string;
-  /** 经 Plugin setup 模块导出的 JSON Schema 校验后写入 TOML 的配置。 */
-  config: import("@downcity/agent").JsonObject;
+}
+
+/** Desktop 调用 Plugin main action 的输入。 */
+export interface DesktopInvokePluginActionInput {
+  /** 当前 Mainview 已选择的 Profile ID。 */
+  profile_id: string;
+
+  /** Plugin main 注册的稳定 action ID。 */
+  action_id: string;
+
+  /** Mainview 传给 action 的可选 JSON 输入。 */
+  input?: import("@downcity/plugin").PluginJsonValue;
 }
 
 /** Renderer 可见的 Session 摘要。 */
@@ -723,10 +732,12 @@ export interface DesktopApi {
     list(): Promise<DesktopPluginSummary[]>;
     /** 读取 Plugin manifest 与全部 Profile。 */
     get(plugin_id: string): Promise<DesktopPluginDefinition>;
-    /** 新建或替换一个 Profile。 */
-    save_profile(plugin_id: string, input: DesktopSavePluginProfileInput): Promise<DesktopPluginDefinition>;
+    /** 创建一个空 Profile，具体配置由 Plugin Mainview 写入。 */
+    create_profile(plugin_id: string, input: DesktopCreatePluginProfileInput): Promise<DesktopPluginDefinition>;
     /** 删除未被 Agent 引用的 Profile。 */
     remove_profile(plugin_id: string, profile_id: string): Promise<DesktopPluginDefinition>;
+    /** 在当前 Profile 范围内调用 Plugin main action。 */
+    invoke(plugin_id: string, input: DesktopInvokePluginActionInput): Promise<import("@downcity/plugin").PluginJsonValue>;
   };
   /** Electron 原生文件选择能力。 */
   dialog: {

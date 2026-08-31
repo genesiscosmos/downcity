@@ -55,7 +55,7 @@ export type {
 export type {
   PluginHostContext,
   PluginHostExtensions,
-  PluginSetupModule,
+  AgentPluginModule,
 } from "./city/index.js";
 export {
   create_city_host_instance_id,

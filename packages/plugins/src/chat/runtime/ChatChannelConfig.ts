@@ -6,7 +6,6 @@
  * - Plugin 只读取宿主构造时传入的 channel 配置，不负责修改或持久化。
  */
 
-import type { JsonObject } from "@downcity/agent";
 import type { PluginContext } from "@downcity/agent";
 import type { ChatRuntimeAccount } from "@/chat/types/ChatRuntimeAccount.js";
 import type {
@@ -14,7 +13,6 @@ import type {
   ChatChannelStateSnapshot,
 } from "@/chat/types/ChannelStatus.js";
 import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
-import { get_chat_plugin_channel_json_schema } from "@/chat/config/ChatPluginConfig.js";
 import {
   getChatChannelBot,
   isChatChannelEnabled,
@@ -22,10 +20,6 @@ import {
   resolveChannelAccount,
   resolveChannelAccountId,
 } from "./ChatChannelCore.js";
-
-function toJsonObject(input: unknown): JsonObject {
-  return JSON.parse(JSON.stringify(input)) as JsonObject;
-}
 
 /**
  * 生成可安全暴露给 UI 的渠道配置摘要。
@@ -97,7 +91,6 @@ export function getChatChannelStatus(
     detail: {
       ...(runtime?.detail || {}),
       config: buildChatChannelConfigSummary(context, channel, channelAccount),
-      channel_schema: toJsonObject(get_chat_plugin_channel_json_schema(channel)),
     },
   };
 }

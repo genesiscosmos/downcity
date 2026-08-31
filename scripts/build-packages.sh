@@ -25,6 +25,7 @@ ALL_PACKAGES=(
   "database-sqlite"
   "database-postgresql"
   "services"
+  "plugin"
   "plugins"
   "local"
   "ui"
@@ -41,7 +42,7 @@ usage() {
   echo "  --sandbox-windows-mxc --sandbox-windows-srt"
   echo "  --agent --workspace-cloudflare-computer --federation"
   echo "  --database-d1 --database-sqlite --database-postgresql"
-  echo "  --services --plugins --local --ui --cli --all"
+  echo "  --services --plugin --plugins --local --ui --cli --all"
   echo ""
   echo "  --no-bump           只构建，不修改 package version"
   echo "  --no-global-install 不同步本机全局 Downcity CLI"
@@ -92,12 +93,16 @@ add_build_package() {
       add_build_package "type"
       add_build_package "federation"
       ;;
+    plugin)
+      ;;
     plugins)
+      add_build_package "plugin"
       add_build_package "type"
       add_build_package "agent"
       ;;
     local)
       add_build_package "agent"
+      add_build_package "plugin"
       ;;
     cli)
       add_build_package "agent"
@@ -146,7 +151,7 @@ should_sync_global_cli() {
   local package_name
   for package_name in "${PACKAGES[@]}"; do
     case "$package_name" in
-      agent|federation|plugins|local|ui|cli)
+      agent|federation|plugin|plugins|local|ui|cli)
         return 0
         ;;
     esac
@@ -170,6 +175,7 @@ while [[ $# -gt 0 ]]; do
     --database-sqlite) add_package "database-sqlite" ;;
     --database-postgresql) add_package "database-postgresql" ;;
     --services) add_package "services" ;;
+    --plugin) add_package "plugin" ;;
     --plugins) add_package "plugins" ;;
     --local) add_package "local" ;;
     --ui) add_package "ui" ;;

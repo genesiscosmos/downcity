@@ -64,12 +64,17 @@ const HELP_ITEMS = [
     name: "patch:build",
     summary: "按 package 执行 patch bump + build。",
     detail:
-      "支持 `npm run patch:build -- --workspace --agent --local --services --plugins --cli`、`--ui`、`--all`、`--no-bump`。",
+      "支持 `npm run patch:build -- --workspace --agent --plugin --plugins --local --services --cli`、`--ui`、`--all`、`--no-bump`。",
   },
   {
     name: "agent:patch:build",
     summary: "只对 @downcity/agent 执行 patch bump + build。",
     detail: "等价于 `npm run patch:build -- --agent`，会先构建 @downcity/workspace 作为依赖。",
+  },
+  {
+    name: "plugin:patch:build",
+    summary: "只对 @downcity/plugin 执行 patch bump + build。",
+    detail: "等价于 `npm run patch:build -- --plugin`。",
   },
   {
     name: "plugins:patch:build",
@@ -90,7 +95,7 @@ const HELP_ITEMS = [
   {
     name: "all:patch:build",
     summary: "对全部 packages 执行 patch bump + build。",
-    detail: "等价于 `npm run patch:build -- --all`，会处理 workspace、agent、services、plugins、ui、cli。",
+    detail: "等价于 `npm run patch:build -- --all`，会处理 workspace、agent、plugin、plugins、local、services、ui、cli。",
   },
   {
     name: "install:ws",

@@ -1,103 +1,21 @@
 ---
 title: Plugin 开发指南
-description: 从目录结构、profile 配置到 Agent 运行时上下文，完整开发一个 Downcity Plugin
+description: 开发 Agent Plugin，并按需添加可安装的 main 与 Mainview
 ---
 
 # Plugin 开发指南
 
-这篇文档介绍 Downcity Plugin 的完整开发模型。Plugin 是一个独立的能力单元：它拥有自己的配置、action、状态和生命周期；运行时能力由 Agent 通过 `PluginContext` 按最小接口提供。
+Plugin 是一个独立能力单元，拥有自己的 actions、状态和生命周期。Plugin Class 属于 Agent SDK；可安装包只是 CLI/Desktop 的宿主适配层。
 
 ## 设计原则
 
-- Plugin 构造函数只接收自己的 `profile`，不接收 `Agent`、`City`、`Embassy` 或 `dependencies` 容器。
-- Plugin 内部创建并拥有自己的 provider、client、store、queue 和资源句柄。
-- Workspace 能力通过运行时 Context 暴露；图片、语音等外部服务通过 Plugin 构造函数注入对应的窄接口。
-- 配置是可持久化、可校验的 profile；运行态对象是实例内部状态，不能放进配置文件。
-- 一个 Plugin 只负责一个清晰的领域能力。需要不同实现时，创建新的 Plugin，而不是在一个 Plugin 内继续堆叠组合开关。
+- Plugin constructor 由作者设计，不强制接收 Profile。
+- Plugin 自己创建并拥有 provider、client、store、queue 和长期资源。
+- Workspace 能力通过运行时 `PluginContext` 暴露，外部服务通过窄接口注入。
+- 配置只保存可序列化的值，连接、实例、回调和宿主对象属于运行态。
+- 一个 Plugin 只负责一个清晰领域，不通过大量组合开关扩张边界。
 
-## 目录结构
-
-一个可发布的第三方 Plugin 最小目录如下：
-
-```text
-example-plugin/
-├── plugin.json
-├── package.json
-├── README.md
-├── icon.svg
-└── plugin.js
-```
-
-`plugin.js` 是安装产物的自包含 ESM 入口；文件名不固定，只要与 `plugin.json` 的 `entry` 一致即可。`src/` 和构建配置可以保留在源码仓库中，但安装目录必须包含 `plugin.json`、`package.json`、`README.md` 和入口文件。
-
-## plugin.json
-
-清单描述安装、展示和 profile Schema，不描述运行态依赖：
-
-```json
-{
-  "schema_version": 1,
-  "id": "example",
-  "version": "1.0.0",
-  "title": "Example",
-  "description": "A small example Plugin.",
-  "icon": "icon.svg",
-  "entry": "plugin.js",
-  "source": "github:owner/example-plugin",
-  "config": {
-    "schema": {
-      "type": "object",
-      "properties": {
-        "provider": {
-          "type": "string",
-          "enum": ["local", "remote"],
-          "default": "local"
-        }
-      },
-      "additionalProperties": false
-    },
-    "defaults": {
-      "provider": "local"
-    }
-  }
-}
-```
-
-`config.schema` 用于 CLI/Desktop 表单和启动前校验；`config.defaults` 是没有指定 profile 时传入构造函数的完整默认对象。Schema 中的字段 `default` 主要是表单提示，不替代 `defaults`。
-
-## profile 与运行态
-
-profile 只放用户可以保存、复制和审计的值，例如 provider 名称、模型 ID、超时和路径：
-
-```ts
-export interface ExampleProfile {
-  /** 选择 Plugin 使用的实现。 */
-  provider?: "local" | "remote";
-  /** 远程服务地址。 */
-  endpoint?: string;
-}
-```
-
-运行态对象必须在 Plugin 内部创建：
-
-```ts
-export class ExamplePlugin extends BasePlugin {
-  readonly name = "example";
-  private readonly client: ExampleClient;
-
-  constructor(profile: ExampleProfile = {}) {
-    super();
-    this.client = new ExampleClient({
-      provider: profile.provider ?? "local",
-      endpoint: profile.endpoint,
-    });
-  }
-}
-```
-
-不要把下面这些对象放入 profile：浏览器实例、数据库连接、队列、函数回调、Agent 实例或 City/Embassy 实例。
-
-## Plugin 类与入口
+## Plugin Class
 
 ```ts
 import { BasePlugin, create_action } from "@downcity/agent";
@@ -108,9 +26,8 @@ export class ExamplePlugin extends BasePlugin {
   readonly title = "Example";
   readonly description = "An example Plugin.";
 
-  constructor(profile: ExampleProfile = {}) {
+  constructor(private readonly client: ExampleClient) {
     super();
-    // 在这里校验 profile，并创建 Plugin 自己拥有的运行态依赖。
   }
 
   readonly actions = {
@@ -130,65 +47,18 @@ export class ExamplePlugin extends BasePlugin {
 }
 ```
 
-第三方入口必须导出 `plugin(profile)`：
-
-```ts
-import type { JsonObject, Plugin } from "@downcity/agent";
-
-export function plugin(profile: JsonObject): Plugin {
-  return new ExamplePlugin(profile as ExampleProfile);
-}
-```
-
-Loader 会对 profile 做 Schema 校验，然后为每个 Agent 创建一个独立实例。
-
-## PluginContext
-
-Action、system 和生命周期钩子可以使用 `PluginContext`：
-
-```ts
-interface PluginContext {
-  agent_id: string;
-  workspace_id: string;
-  workspace_path: string;
-  data_path: string;
-  files: FileSystem;
-  data_files: FileSystem;
-  logger: Logger;
-  ai?: PluginAiServices;
-  web?: PluginWebServices;
-  sessions: AgentSessions;
-  plugins: AgentPlugins;
-  workspace_env: Readonly<Record<string, string>>;
-  instructions: readonly string[];
-}
-```
-
-`files` 用于用户 Workspace；`data_files` 用于 Agent 私有持久化数据。不要把私有数据库、缓存或凭证写入用户 Workspace。
-
-## 使用 Agent 能力
-
-宿主在构造 Agent 时提供服务：
+SDK 宿主直接创建实例：
 
 ```ts
 const agent = new Agent({
   id: "assistant",
-  plugins: [new ExamplePlugin({ provider: "local" })],
+  plugins: [new ExamplePlugin(new ExampleClient())],
 });
 ```
 
-Plugin 只读取最小接口：
+## Action 与运行上下文
 
-```ts
-const models = await image_ai.catalog();
-if (!models) return { success: false, error: "AI service is unavailable" };
-```
-
-这让同一个 Plugin 可以在 CLI、Desktop 或嵌入式宿主中运行，而不依赖某个宿主的完整对象。
-
-## Action
-
-每个 action 都应该有明确输入 Schema、稳定结果和可取消的异步执行：
+每个 action 都应有明确输入、稳定结果和可取消执行：
 
 ```ts
 run: create_action({
@@ -203,11 +73,11 @@ run: create_action({
 })
 ```
 
-长任务必须响应 `execution.abort_signal`，并在外部请求中传递 `AbortSignal`。超时和取消由调用层控制，Plugin 不应自行阻塞 Agent。
+`PluginContext.files` 面向用户 Workspace，`data_files` 和 `data_path` 面向当前 Agent/Plugin 的私有数据。不要把私有数据库、缓存或凭据写入用户 Workspace。
 
 ## 生命周期
 
-生命周期资源只由 Plugin 自己创建和释放：
+长期资源必须由 Plugin 自己创建和释放：
 
 ```ts
 readonly lifecycle = {
@@ -226,65 +96,75 @@ readonly lifecycle = {
 };
 ```
 
-Agent 注册 Plugin 后启动生命周期，卸载或停止时调用 `stop`。`stop` 应该幂等，且释放浏览器、连接、定时器和队列等所有长期资源。
+`stop` 应幂等，并释放浏览器、连接、定时器、队列等所有长期资源。
 
-## 配置文件与装配
+## 可安装包
 
-本地宿主可以保存多个 profile：
+需要让 CLI/Desktop 加载时，使用一个 Plugin ID 声明三个可选入口：
 
-```toml
-schema_version = 1
-
-[profiles.default]
-provider = "local"
-
-[profiles.remote]
-provider = "remote"
-endpoint = "https://example.com"
+```text
+example-plugin/
+├── plugin.json
+├── package.json
+├── README.md
+├── dist/agent.js
+├── dist/main.js
+└── dist/mainview.html
 ```
 
-Agent 绑定 profile 名称后，Loader 会读取 profile、校验 Schema，并执行：
+```json
+{
+  "schema_version": 1,
+  "id": "example",
+  "version": "1.0.0",
+  "description": "A small example Plugin.",
+  "agent": "./dist/agent.js",
+  "main": "./dist/main.js",
+  "renderer": "./dist/mainview.html"
+}
+```
+
+- `agent` 默认导出 factory，为每个 Agent 返回新的 Plugin 实例。
+- `main` 默认导出管理生命周期对象并注册 Mainview actions。
+- `renderer` 是唯一、自包含 Mainview HTML。
+
+至少声明一个入口。不存在通用 `entry`、`config.schema` 或宿主生成表单。
+
+## Agent factory
 
 ```ts
-registration.create(profile)
+import type { AgentPluginModule } from "@downcity/agent";
+
+const create_agent_plugin: AgentPluginModule<ExamplePlugin>["default"] = (context) => {
+  const config = parse_example_config(context.profile);
+  return new ExamplePlugin(new ExampleClient(config));
+};
+
+export default create_agent_plugin;
 ```
 
-内建 Plugin 与第三方 Plugin 使用同一条路径。宿主负责配置来源和凭证，Plugin 只接收已经解析好的 profile。
+Profile 只是宿主配置空间。SDK Class 不需要知道它来自 TOML；factory 负责把配置快照转换成 Plugin 自己的 constructor 参数。
 
-## 数据边界
+## Main 与 Mainview
 
-- 用户创建和编辑的文件：`context.files`。
-- Plugin 私有索引、缓存和状态：`context.data_files`。
-- Workspace 级资源：由 `enter_workspace` / `leave_workspace` 管理。
-- Agent 级资源：由 `start` / `stop` 管理。
+如果 Plugin 需要配置体验，让 `main` 注册结构化 actions，由唯一 Mainview 调用。内容结构、默认值、校验和 Secret 投影全部由 Plugin 自己负责。宿主只提供 Profile CRUD 和绑定当前 Plugin/Profile 的 action gateway。
 
-Plugin 不应修改其他 Plugin 的私有目录，也不应保存宿主的完整配置对象。
+完整示例与安全边界见[自定义 Plugin](/zh/docs/plugin/custom)。
 
-## 测试
+## 测试重点
 
-测试重点是 profile、action、服务缺失、取消和生命周期：
-
-```ts
-it("uses the profile to select the provider", async () => {
-  const plugin = new ExamplePlugin({ provider: "local" });
-  expect(plugin.name).toBe("example");
-});
-
-it("returns a stable error when AI is unavailable", async () => {
-  const agent = new Agent({ id: "test", plugins: [new ExamplePlugin()] });
-  const result = await agent.plugins.call("example", "models", {});
-  expect(result.success).toBe(false);
-});
-```
-
-不要通过 `Agent.ai` 传递通用 AI 对象。Plugin 只接收自身需要的窄服务接口，测试时传入该接口的测试实现。
+- Plugin action 输入、结果与取消。
+- 生命周期资源是否完整释放。
+- Agent factory 是否每次返回新实例且 `name` 与 Plugin ID 一致。
+- main 是否拒绝非法配置，并且不会向 Mainview 泄漏凭据。
+- Renderer 是否只使用 action gateway。
 
 ## 发布检查清单
 
-1. `plugin.json` 的 `id`、`version`、`entry` 和 `config.schema` 正确。
-2. 入口导出 `plugin(profile)`，且每次调用都会创建新实例。
-3. profile 不包含连接、实例、回调和宿主对象。
-4. 所有长期资源都在 `stop` 中释放。
-5. action 输入经过 Schema 校验，异步任务响应取消信号。
+1. `plugin.json` 的 ID、版本和入口正确，至少有一个入口。
+2. `agent/main` 是自包含 ESM，`renderer` 是自包含 HTML。
+3. Agent factory 每次创建新实例。
+4. Profile 不包含连接、实例、回调或宿主对象。
+5. 所有长期资源都能释放，异步 action 响应取消。
 6. 私有数据使用 `data_files`，用户文件使用 `files`。
-7. CLI、Desktop 和嵌入式宿主都能通过同一 profile 构造 Plugin。
+7. Mainview 不直接访问 Node、Electron、Agent 或配置文件。

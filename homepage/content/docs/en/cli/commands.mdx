@@ -74,7 +74,6 @@ city plugin uninstall <plugin_id>
 city plugin inspect <plugin_id>
 city plugin profiles <plugin_id>
 city plugin config <plugin_id> [profile] --set '{"key":"value"}'
-city plugin config <plugin_id> [profile] --interactive
 city plugin config <plugin_id> [profile] --remove
 city plugin enable <plugin_id> [agent_id] --profile <profile>
 city plugin disable <plugin_id> [agent_id]
@@ -82,9 +81,9 @@ city plugin enabled [agent_id]
 city plugin action <plugin_id> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
-A third-party source directory defines exactly one Plugin. Its `plugin.json` declares `schema_version: 1`, a globally unique `id`, version, one self-contained ESM entry, and optional `config.schema/defaults`. The entry exports a Plugin constructor as the named `plugin` export, and `package.json` must declare `"type": "module"`. The final `~/.downcity/plugins/<plugin_id>/` directory contains only the installed `plugin.json`, `package.json`, entry, and local `config.toml`; source and build configuration are not copied. Installation never runs `npm install`, build scripts, Plugin lifecycle hooks, or the entry module.
+A third-party source directory defines exactly one Plugin. Its `plugin.json` declares `schema_version: 1`, a globally unique `id`, a version, and optional `agent`, `main`, and `renderer` entries. `agent/main` are self-contained ESM files, `renderer` is the single self-contained Mainview HTML, and at least one entry is required. `package.json` must declare `"type": "module"`, and `README.md` is required. The installed directory keeps only declared artifacts, documentation, an optional icon, and local `config.toml`. Installation never runs dependencies, build scripts, or third-party entries.
 
-Plugin configuration belongs to named profiles in `plugins/<plugin_id>/config.toml`. Accounts, channels, endpoints, and other structures are defined by the setup module's JSON Schema, while the Plugin code maintains its TypeScript type separately. Configuration is plaintext with file mode `0600`; CLI validates profiles, builds forms, and redacts `writeOnly` fields from that same Schema. An Agent without `--profile` receives `{}` and never implicitly reads a persisted `default` profile; named profiles are used only when explicitly selected.
+Plugin configuration belongs to named Profiles in `plugins/<plugin_id>/config.toml`. Desktop creates, selects, and removes Profiles in each Plugin page; the Plugin's own Mainview and main actions own the actual configuration. CLI `config --set` only replaces a complete JSON object explicitly. It does not generate a generic form or print credential values. An Agent without `--profile` receives `{}` and never implicitly reads a persisted `default` Profile.
 
 The Agent's `agent.json` stores only the Plugin ID and optional profile reference. Removing that entry disables the Plugin. A profile or third-party Plugin cannot be removed while an Agent still references it.
 

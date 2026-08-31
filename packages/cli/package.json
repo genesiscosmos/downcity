@@ -1,6 +1,6 @@
 {
   "name": "downcity",
-  "version": "1.1.466",
+  "version": "1.1.467",
   "type": "module",
   "description": "Downcity CLI — local City container and Federation Server management",
   "bin": {
@@ -40,6 +40,7 @@
     "@downcity/agent": "workspace:^",
     "@downcity/federation": "workspace:^",
     "@downcity/local": "workspace:^",
+    "@downcity/plugin": "workspace:^",
     "@downcity/plugins": "workspace:^",
     "@downcity/workspace": "workspace:^",
     "@downcity/type": "workspace:*",
@@ -47,8 +48,6 @@
     "@larksuiteoapi/node-sdk": "^1.66.0",
     "@openrouter/ai-sdk-provider": "^2.9.0",
     "ai": "^6.0.193",
-    "ajv": "^8.20.0",
-    "ajv-formats": "^3.0.1",
     "better-sqlite3": "^12.10.0",
     "chalk": "^5.6.2",
     "cli-highlight": "^2.1.11",

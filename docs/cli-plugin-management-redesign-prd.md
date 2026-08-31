@@ -1,11 +1,14 @@
 # Agent 与 Plugin 本地定义设计
 
+> 状态：已由 Plugin Mainview 方案取代旧的 setup/Schema 通用表单方案。
+
 ## 1. 产品结论
 
-- Agent 是身份、模型、主体指令和 Plugin 注册关系的拥有者。
-- Agent 是主体，Session 创建时选择 Workspace：`agent.sessions.create({ workspace })`。
-- Plugin 使用 `plugin.json` 声明的全局唯一 ID，不存在来源 Hash 生成的公开身份。
-- Plugin 完整拥有代码与配置；框架不定义 Binding、Resource 或 Installation 持久化领域。
+- Plugin 是唯一产品单元，不再引入 Extension 身份。
+- Plugin 可以选择提供 `agent`、`main` 和唯一 `renderer`。
+- Profile 只是宿主提供的命名配置隔离空间，位于某个 Plugin 下，不是 Plugin 类型。
+- 每个 Plugin 页面统一管理 Profile 的创建、选择和删除；具体内容由 Plugin Mainview 管理。
+- Agent 只保存 Plugin ID 与可选 Profile ID，不保存 Plugin 业务配置。
 - CLI 与 Desktop 读取同一套用户级文件协议。
 
 ## 2. 文件结构
@@ -21,13 +24,15 @@
 │       ├── config.toml
 │       ├── plugin.json
 │       ├── package.json
-│       └── dist/setup.js
+│       ├── README.md
+│       └── dist/
+│           ├── agent.js
+│           ├── main.js
+│           └── mainview.html
 └── downcity.db
 ```
 
-第三方 Plugin 的定义、ESM package 边界和自包含 setup 入口直接位于 `<plugin_id>/`，源码、TypeScript 配置和具体构建工具不进入安装目录；内置 Plugin 的注册由宿主注入，但配置仍使用相同的 `plugins/<plugin_id>/config.toml`。第三方 setup 模块导出 `schema` 与 `setup(context)`，内置 Plugin 由宿主直接注册。
-
-`config.toml` 是 City 级的 Plugin 配置，不属于某个 Agent。Agent 只在自己的 `agent.json` 中保存 Plugin ID 和 profile 引用；多个 Agent 可以引用同一个 profile。Plugin 的运行时状态、缓存和私有文件由 `PluginHostContext.data_path` 提供，当前宿主按 Agent 隔离，不按 Workspace 复制 Plugin 数据。
+三类入口都是可选的，但至少提供一个。安装器只复制清单声明的入口、`package.json`、`README.md`、可选图标，并保留本地 `config.toml`；源码和构建配置不进入安装目录。
 
 ## 3. Agent 定义
 
@@ -35,23 +40,16 @@
 {
   "schema_version": 2,
   "id": "lucas",
-  "version": "1.0.0",
-  "execution": { "model_id": "openai/gpt-5" },
   "plugins": {
     "skill": {},
     "chat": { "profile": "primary" }
-  },
-  "created_at": "...",
-  "updated_at": "..."
+  }
 }
 ```
 
-- `SOUL.md` 是 Agent 主体指令的唯一事实源。
-- Plugin 出现在 `plugins` 对象中即代表注册；移除即代表禁用。
-- 配置型 Plugin 可以选择一个命名 profile；无配置 Plugin 使用空引用。
-- Agent 定义不保存 Workspace ID 或路径。
+Plugin 出现在 `plugins` 对象中表示 Agent 启用它。只有提供 `agent` 能力的 Plugin 才能启用。没有 Profile 引用时 Agent factory 获得空配置；显式引用不存在的 Profile 时装配失败。
 
-## 4. Plugin Profile
+## 4. Profile
 
 ```toml
 schema_version = 1
@@ -66,19 +64,11 @@ name = "Primary Bot"
 bot_token = "123456:token"
 ```
 
-TOML Profile 是原始配置值；Loader 使用 setup 模块导出的 JSON Schema 校验后再调用 setup 创建 Plugin：
+Profile 是 City 级共享配置，不属于某个 Agent。多个 Agent 可以显式复用同一个 Profile。配置以明文 TOML 保存，目录权限为 `0700`、文件权限为 `0600`。
 
-```ts
-const config = selected_profile ?? {};
-validate_plugin_config(config, setup_module.schema);
-await setup_module.setup({ plugin_id, profile: config, ...host_context });
-```
-
-账号、渠道、端点和 Token 等结构由具体 Plugin 的 setup 模块 `schema` 定义。TOML 明文保存，Plugin 目录权限为 `0700`，配置文件权限为 `0600`；宿主按 JSON Schema 的 `writeOnly` 标记脱敏。
+宿主只负责 Profile CRUD 与配置存储，不解释业务字段。Plugin main 的 action 负责读写、校验和安全投影；Mainview 只通过 action gateway 编辑当前 Profile。凭据原文是否可回传、空输入是否保留旧值等规则必须由 Plugin 自己实现。
 
 ## 5. 第三方 Plugin
-
-一个来源目录只定义一个 Plugin，可以包含作者自己的源码和构建配置；安装协议只读取唯一的 `plugin.json`、声明 `"type": "module"` 的 `package.json` 与自包含入口：
 
 ```json
 {
@@ -87,29 +77,29 @@ await setup_module.setup({ plugin_id, profile: config, ...host_context });
   "version": "1.0.0",
   "description": "GitHub integration",
   "icon": "./assets/github.svg",
-  "setup": "dist/setup.js"
+  "agent": "./dist/agent.js",
+  "main": "./dist/main.js",
+  "renderer": "./dist/mainview.html"
 }
 ```
 
-setup 模块导出配置 Schema 与宿主装配函数：
+- `agent` 默认导出 Agent Plugin factory。
+- `main` 默认导出 `activate/deactivate` 生命周期对象，并注册管理 actions。
+- `renderer` 是唯一、自包含的 Mainview HTML。
 
-```ts
-export const schema = { type: "object", required: ["token"], properties: { token: { type: "string", writeOnly: true } }, additionalProperties: false };
-export function setup(context: PluginHostContext): GithubPlugin {
-  return new GithubPlugin(context.profile as GithubPluginConfig);
-}
+安装不会导入或执行 `agent/main`，不会运行依赖安装或构建脚本。入口与本地图标必须位于 Plugin 根目录内且不能使用 symlink。更新原子替换制品并保留 `config.toml`；仍被 Agent 引用的第三方 Plugin 不能卸载。
+
+## 6. 交互路径
+
+```text
+进入 Plugin
+→ 创建或选择 Profile
+→ 在 Plugin Mainview 中完成配置
+→ Agent 启用 Plugin 并选择 Profile
 ```
 
-Plugin 代码单独声明 TypeScript 配置类型，运行时协议以 setup 模块 `schema` 为准。setup 必须是单个自包含 ESM 文件；`package.json` 负责建立明确的 ESM package 边界。安装器不导入或执行第三方 setup，也不复制源码与开发文件。
+没有 Mainview 的 Plugin 仍可拥有 Profile，但必须通过它明确提供的其他入口管理内容。CLI 的 `config --set` 只是显式 JSON 替换能力，不承担通用业务表单职责。
 
-安装目标固定为 `plugins/<definition.id>/`。来源目录必须包含 `README.md`；安装器保留安装后的 `plugin.json`、`package.json`、`README.md`、自包含入口、可选本地图标与本地 `config.toml`。`config.toml` 始终保留在 Plugin 全局目录，不复制到 Agent 目录。`icon` 支持 `http(s)` URL 或 Plugin 根目录内的相对路径；本地资源必须经过路径和 symlink 校验。随机目录只用于 staging；更新原子替换整个 Plugin 目录并保留 `config.toml`。新 Schema 无法校验已有 profile 时拒绝更新；仍被 Agent 引用时拒绝卸载。
+## 7. 数据库边界
 
-## 6. 数据库边界
-
-`downcity.db` 只保存：
-
-- Workspace ID、路径和展示配置。
-- Agent HTTP Token。
-- 平台安全设置与控制面状态。
-
-数据库不保存 Agent 定义、Agent-Workspace 绑定、Plugin 配置、Plugin 制品或所谓 Resource。
+`downcity.db` 保存 Workspace 索引、Agent HTTP Token 和平台控制面状态，不保存 Agent 定义、Plugin Profile、Plugin 制品或 Agent-Plugin 引用。

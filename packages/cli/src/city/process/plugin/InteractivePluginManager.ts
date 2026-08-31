@@ -15,7 +15,6 @@ import {
   list_plugin_catalog,
 } from "@/city/process/plugin/PluginCatalog.js";
 import { install_plugin, update_plugin } from "@/city/process/plugin/PluginInstaller.js";
-import { prompt_plugin_config } from "@/city/process/plugin/PluginConfigForm.js";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import type { PluginCatalogItem } from "@/city/types/plugin/PluginCatalog.js";
 
@@ -59,7 +58,7 @@ export async function run_interactive_agent_plugin_manager(agent_id: string): Pr
       name: "plugin_id",
       message: `Agent Plugins · ${agent_id}`,
       choices: [
-        ...catalog.map((plugin) => {
+        ...catalog.filter((plugin) => plugin.has_agent).map((plugin) => {
           const reference = get_agent_plugin_reference(agent_id, plugin.plugin_id);
           return {
             title: `${reference ? "●" : "○"} ${plugin.title}`,
@@ -85,8 +84,10 @@ async function run_interactive_plugin_actions(plugin: PluginCatalogItem): Promis
     message: plugin.title,
     subtitle: plugin.description,
     choices: [
-      { title: "配置 profile", description: "编辑 Plugin 自己的 config.toml", value: "profile" },
-      { title: "注册到 Agent", description: "选择 Agent 和 profile", value: "agent" },
+      { title: "管理 Profile", description: "创建配置空间；具体配置由 Plugin Mainview 完成", value: "profile" },
+      ...(plugin.has_agent
+        ? [{ title: "注册到 Agent", description: "选择 Agent 和 Profile", value: "agent" }]
+        : []),
       ...(plugin.source === "installed"
         ? [
             { title: "更新", description: "从已保存来源更新 Plugin", value: "update" },
@@ -131,7 +132,7 @@ async function run_agent_plugin_actions(
     message: `${plugin.title} · ${agent_id}`,
     choices: [
       { title: reference ? "切换 profile" : "启用", value: "enable" },
-      { title: "配置 profile", value: "profile" },
+      { title: "管理 Profile", value: "profile" },
       ...(reference ? [{ title: "禁用", value: "disable" }] : []),
       { title: "返回", value: "back" },
     ],
@@ -157,46 +158,41 @@ async function run_agent_plugin_actions(
   }
 }
 
-/** 通过 Schema 表单编辑一个 profile。 */
+/** 创建一个由 Plugin Mainview 管理内容的空 Profile。 */
 async function configure_profile(plugin: PluginCatalogItem): Promise<void> {
-  if (!plugin.config_schema) {
-    emitCliBlock({ tone: "info", title: "Plugin has no configuration", summary: plugin.plugin_id });
-    return;
-  }
   const profile_response = await prompts({
     type: "text",
     name: "profile",
-    message: "Profile ID",
-    initial: plugin.profiles[0] || "default",
+    message: "新 Profile ID",
+    initial: "default",
   });
   const profile = String(profile_response.profile || "").trim();
   if (!profile) return;
   const existing = get_plugin_profile(plugin.plugin_id, profile);
-  const config = await prompt_plugin_config({
-    plugin_name: plugin.plugin_id,
-    schema: plugin.config_schema,
-    current_config: existing ?? plugin.initial_config,
+  if (!existing) await save_plugin_profile(plugin.plugin_id, profile, {});
+  emitCliBlock({
+    tone: existing ? "info" : "success",
+    title: existing ? "Plugin Profile already exists" : "Plugin Profile created",
+    summary: `${plugin.plugin_id}/${profile}`,
+    note: plugin.has_renderer
+      ? "请在 Downcity Desktop 的 Plugin Mainview 中完成配置。"
+      : "该 Plugin 没有 Mainview；可以使用显式 config --set 写入配置。",
   });
-  if (!config) return;
-  await save_plugin_profile(plugin.plugin_id, profile, config);
-  emitCliBlock({ tone: "success", title: "Plugin profile saved", summary: `${plugin.plugin_id}/${profile}` });
 }
 
-/** 根据 schema 对空配置的接受程度选择或创建 profile。 */
+/** 选择一个现有 Profile，或让 Agent 使用空配置。 */
 async function select_profile(plugin: PluginCatalogItem): Promise<string | null> {
-  if (plugin.configuration === "none" || plugin.configuration === "optional") return "";
-  if (plugin.profiles.length === 0) {
-    await configure_profile(plugin);
-    const refreshed = await resolve_plugin_catalog_item(plugin.plugin_id);
-    return refreshed?.profiles[0] ?? null;
-  }
   const response = await prompts({
     type: "select",
     name: "profile",
     message: "选择 Plugin profile",
-    choices: plugin.profiles.map((profile) => ({ title: profile, value: profile })),
+    choices: [
+      { title: "不使用 Profile", description: "使用空配置", value: "" },
+      ...plugin.profiles.map((profile) => ({ title: profile, value: profile })),
+    ],
   });
-  return String(response.profile || "").trim() || null;
+  if (response.profile === undefined) return null;
+  return String(response.profile || "").trim();
 }
 
 /** 安装一个用户显式信任的 Plugin。 */

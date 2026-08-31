@@ -1,101 +1,21 @@
 ---
 title: Plugin Development Guide
-description: Build a Downcity Plugin from its manifest and profile to its Agent runtime context
+description: Build an Agent Plugin and optionally add installable main and Mainview entries
 ---
 
 # Plugin Development Guide
 
-This guide covers the complete Downcity Plugin model. A Plugin is an independent capability unit with its own configuration, actions, state, and lifecycle. Runtime capabilities are exposed by the Agent through the smallest required `PluginContext` interfaces.
+A Plugin is an independent capability unit with its own actions, state, and lifecycle. The Plugin class belongs to the Agent SDK; an installable package is only an adapter for CLI/Desktop hosts.
 
 ## Design principles
 
-- The Plugin constructor accepts its own `profile`, not an `Agent`, `City`, `Embassy`, or `dependencies` bag.
-- The Plugin creates and owns its providers, clients, stores, queues, and resource handles.
-- Workspace capabilities are exposed through the runtime context; external services such as image or speech AI are injected into the Plugin constructor as narrow interfaces.
-- A profile contains persistent, validated values. Runtime objects belong to the Plugin instance and never belong in configuration files.
-- Keep one clear domain capability per Plugin. When an implementation needs a different boundary, create another Plugin instead of adding more composition switches.
+- The Plugin constructor belongs to the author and is not required to accept a Profile.
+- The Plugin creates and owns providers, clients, stores, queues, and long-lived resources.
+- Workspace capabilities come from runtime `PluginContext`; external services use narrow injected interfaces.
+- Configuration contains serializable values only. Connections, instances, callbacks, and host objects are runtime state.
+- Keep one clear domain per Plugin instead of expanding it through many composition switches.
 
-## Directory layout
-
-```text
-example-plugin/
-├── plugin.json
-├── package.json
-├── README.md
-├── icon.svg
-└── plugin.js
-```
-
-`plugin.js` is the self-contained ESM entry in the installation artifact; its filename is not fixed as long as it matches `plugin.json`'s `entry`. Source files and build configuration may remain in the source repository, but an installed directory must contain `plugin.json`, `package.json`, `README.md`, and the entry file.
-
-## plugin.json
-
-The manifest describes installation, presentation, and the profile schema. It does not describe runtime dependencies:
-
-```json
-{
-  "schema_version": 1,
-  "id": "example",
-  "version": "1.0.0",
-  "title": "Example",
-  "description": "A small example Plugin.",
-  "icon": "icon.svg",
-  "entry": "plugin.js",
-  "source": "github:owner/example-plugin",
-  "config": {
-    "schema": {
-      "type": "object",
-      "properties": {
-        "provider": {
-          "type": "string",
-          "enum": ["local", "remote"],
-          "default": "local"
-        }
-      },
-      "additionalProperties": false
-    },
-    "defaults": {
-      "provider": "local"
-    }
-  }
-}
-```
-
-`config.schema` drives CLI/Desktop forms and startup validation. `config.defaults` is the complete object passed to the constructor when no profile is selected. A field-level Schema `default` is primarily a form hint and does not replace `defaults`.
-
-## Profiles and runtime state
-
-A profile contains values that users can save, copy, and audit:
-
-```ts
-export interface ExampleProfile {
-  /** Selects the implementation used by the Plugin. */
-  provider?: "local" | "remote";
-  /** Remote service endpoint. */
-  endpoint?: string;
-}
-```
-
-Runtime objects are created inside the Plugin:
-
-```ts
-export class ExamplePlugin extends BasePlugin {
-  readonly name = "example";
-  private readonly client: ExampleClient;
-
-  constructor(profile: ExampleProfile = {}) {
-    super();
-    this.client = new ExampleClient({
-      provider: profile.provider ?? "local",
-      endpoint: profile.endpoint,
-    });
-  }
-}
-```
-
-Do not put browser instances, database connections, queues, callbacks, Agent instances, or City/Embassy instances in a profile.
-
-## Plugin class and entry point
+## Plugin class
 
 ```ts
 import { BasePlugin, create_action } from "@downcity/agent";
@@ -106,9 +26,8 @@ export class ExamplePlugin extends BasePlugin {
   readonly title = "Example";
   readonly description = "An example Plugin.";
 
-  constructor(profile: ExampleProfile = {}) {
+  constructor(private readonly client: ExampleClient) {
     super();
-    // Validate the profile and create the Plugin-owned runtime dependencies here.
   }
 
   readonly actions = {
@@ -128,65 +47,18 @@ export class ExamplePlugin extends BasePlugin {
 }
 ```
 
-Third-party entries must export `plugin(profile)`:
-
-```ts
-import type { JsonObject, Plugin } from "@downcity/agent";
-
-export function plugin(profile: JsonObject): Plugin {
-  return new ExamplePlugin(profile as ExampleProfile);
-}
-```
-
-The loader validates the profile with the manifest Schema and creates an isolated instance for each Agent.
-
-## PluginContext
-
-Actions, system text, and lifecycle hooks can use `PluginContext`:
-
-```ts
-interface PluginContext {
-  agent_id: string;
-  workspace_id: string;
-  workspace_path: string;
-  data_path: string;
-  files: FileSystem;
-  data_files: FileSystem;
-  logger: Logger;
-  ai?: PluginAiServices;
-  web?: PluginWebServices;
-  sessions: AgentSessions;
-  plugins: AgentPlugins;
-  workspace_env: Readonly<Record<string, string>>;
-  instructions: readonly string[];
-}
-```
-
-Use `files` for user Workspace data and `data_files` for Agent-private persistent data. Do not write private databases, caches, or credentials into the user Workspace.
-
-## Using Agent capabilities
-
-The host provides services when constructing the Agent:
+An SDK host creates the instance directly:
 
 ```ts
 const agent = new Agent({
   id: "assistant",
-  plugins: [new ExamplePlugin({ provider: "local" })],
+  plugins: [new ExamplePlugin(new ExampleClient())],
 });
 ```
 
-A Plugin reads only the smallest interface it needs:
+## Actions and runtime context
 
-```ts
-const models = await image_ai.catalog();
-if (!models) return { success: false, error: "AI service is unavailable" };
-```
-
-This keeps the same Plugin usable in CLI, Desktop, and embedded hosts without depending on a host's complete object graph.
-
-## Actions
-
-Every action should have an explicit input Schema, a stable result, and cancellable asynchronous execution:
+Every action should have explicit input, a stable result, and cancellable execution:
 
 ```ts
 run: create_action({
@@ -201,11 +73,11 @@ run: create_action({
 })
 ```
 
-Long-running work must respond to `execution.abort_signal` and pass the `AbortSignal` to external requests. Timeout and cancellation are controlled by the caller; a Plugin should not block the Agent itself.
+Use `PluginContext.files` for the user Workspace and `data_files` or `data_path` for private Agent/Plugin data. Never write private databases, caches, or credentials into the user Workspace.
 
 ## Lifecycle
 
-Only the Plugin creates and releases its own lifecycle resources:
+The Plugin must create and release its own long-lived resources:
 
 ```ts
 readonly lifecycle = {
@@ -224,65 +96,75 @@ readonly lifecycle = {
 };
 ```
 
-The Agent starts a Plugin after registration and calls `stop` when it is unloaded or stopped. `stop` should be idempotent and release browsers, connections, timers, queues, and every other long-lived resource.
+`stop` should be idempotent and release browsers, connections, timers, queues, and every other long-lived resource.
 
-## Configuration and assembly
+## Installable package
 
-A local host may save multiple profiles:
+To support CLI/Desktop loading, declare three optional entries under one Plugin ID:
 
-```toml
-schema_version = 1
-
-[profiles.default]
-provider = "local"
-
-[profiles.remote]
-provider = "remote"
-endpoint = "https://example.com"
+```text
+example-plugin/
+├── plugin.json
+├── package.json
+├── README.md
+├── dist/agent.js
+├── dist/main.js
+└── dist/mainview.html
 ```
 
-After an Agent binds a profile name, the loader reads and validates it, then executes:
+```json
+{
+  "schema_version": 1,
+  "id": "example",
+  "version": "1.0.0",
+  "description": "A small example Plugin.",
+  "agent": "./dist/agent.js",
+  "main": "./dist/main.js",
+  "renderer": "./dist/mainview.html"
+}
+```
+
+- `agent` default-exports a factory that returns a new Plugin instance for each Agent.
+- `main` default-exports a management lifecycle object and registers Mainview actions.
+- `renderer` is the single self-contained Mainview HTML.
+
+At least one entry is required. There is no generic `entry`, `config.schema`, or host-generated form.
+
+## Agent factory
 
 ```ts
-registration.create(profile)
+import type { AgentPluginModule } from "@downcity/agent";
+
+const create_agent_plugin: AgentPluginModule<ExamplePlugin>["default"] = (context) => {
+  const config = parse_example_config(context.profile);
+  return new ExamplePlugin(new ExampleClient(config));
+};
+
+export default create_agent_plugin;
 ```
 
-Built-in and third-party Plugins use the same path. The host owns the configuration source and credentials; the Plugin receives the resolved profile only.
+A Profile is only host-side configuration space. The SDK class does not need to know it came from TOML; the factory adapts a configuration snapshot to Plugin-owned constructor parameters.
 
-## Data boundaries
+## Main and Mainview
 
-- User-created and user-edited files: `context.files`.
-- Plugin-private indexes, caches, and state: `context.data_files`.
-- Workspace-scoped resources: `enter_workspace` / `leave_workspace`.
-- Agent-scoped resources: `start` / `stop`.
+When a Plugin needs configuration UI, let `main` register structured actions and call them from the single Mainview. The Plugin owns structure, defaults, validation, and Secret projection. The host only provides Profile CRUD and an action gateway bound to the current Plugin/Profile.
 
-A Plugin must not modify another Plugin's private directory or retain the host's complete configuration object.
+See [Custom Plugin](/en/docs/plugin/custom) for a complete example and security boundary.
 
-## Testing
+## Testing focus
 
-Test profiles, actions, missing services, cancellation, and lifecycle behavior:
-
-```ts
-it("uses the profile to select the provider", async () => {
-  const plugin = new ExamplePlugin({ provider: "local" });
-  expect(plugin.name).toBe("example");
-});
-
-it("returns a stable error when AI is unavailable", async () => {
-  const agent = new Agent({ id: "test", plugins: [new ExamplePlugin()] });
-  const result = await agent.plugins.call("example", "models", {});
-  expect(result.success).toBe(false);
-});
-```
-
-Do not pass a generic AI object through `Agent`. Inject only the narrow service required by the Plugin and use a test implementation of that service in Plugin tests.
+- Plugin action input, result, and cancellation.
+- Complete lifecycle resource cleanup.
+- Agent factory returns a new instance each time with `name` matching the Plugin ID.
+- main rejects invalid configuration and never leaks credentials to Mainview.
+- Renderer only uses the action gateway.
 
 ## Release checklist
 
-1. `plugin.json` has the correct `id`, `version`, `entry`, and `config.schema`.
-2. The entry exports `plugin(profile)` and creates a new instance for every call.
-3. Profiles contain no connections, instances, callbacks, or host objects.
-4. Every long-lived resource is released by `stop`.
-5. Action inputs are schema-validated and asynchronous work responds to cancellation.
+1. `plugin.json` has the correct ID, version, and at least one valid entry.
+2. `agent/main` are self-contained ESM and `renderer` is self-contained HTML.
+3. The Agent factory creates a new instance for every call.
+4. Profiles contain no connections, instances, callbacks, or host objects.
+5. Long-lived resources are released and asynchronous actions respond to cancellation.
 6. Private data uses `data_files`; user data uses `files`.
-7. CLI, Desktop, and embedded hosts can construct the Plugin from the same profile.
+7. Mainview never accesses Node, Electron, Agent, or configuration files directly.
