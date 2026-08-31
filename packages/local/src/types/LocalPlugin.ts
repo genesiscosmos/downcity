@@ -4,6 +4,21 @@ import type { JsonObject, Plugin } from "@downcity/agent";
 import type { PluginHostContext } from "@downcity/agent";
 import type { PluginMainModule } from "@downcity/plugin";
 
+/** Plugin Renderer 入口及其静态 UI 插槽声明。 */
+export interface LocalPluginRendererDefinition {
+  /** 相对 Plugin 根目录的 Renderer ESM 入口。 */
+  entry: string;
+
+  /** Renderer 是否提供 Plugin 专属 Sidebar。 */
+  sidebar: boolean;
+
+  /** Renderer 是否提供与 Sidebar 协作的业务 Mainview。 */
+  mainview: boolean;
+
+  /** Renderer 是否提供独立的设置中心 Config。 */
+  config: boolean;
+}
+
 /** 内置与第三方 Plugin 共享的静态领域定义。 */
 export interface LocalPluginDefinition {
   /** Plugin 的全局稳定 ID。 */
@@ -12,6 +27,8 @@ export interface LocalPluginDefinition {
   title?: string;
   /** 面向用户展示的用途说明。 */
   description: string;
+  /** Plugin 用户文档路径；第三方相对 Plugin 根，内置注册为宿主可读绝对路径。 */
+  readme: string;
   /** Plugin 图标地址；可为 http(s) URL 或 Plugin 根目录内的相对路径。 */
   icon?: string;
   /** Plugin 是否提供 Agent 运行能力。 */
@@ -20,8 +37,14 @@ export interface LocalPluginDefinition {
   /** Plugin 是否提供宿主 main 运行入口。 */
   has_main: boolean;
 
-  /** Plugin 是否提供唯一 Mainview。 */
-  has_renderer: boolean;
+  /** Plugin 是否提供专属 Sidebar。 */
+  has_sidebar: boolean;
+
+  /** Plugin 是否提供业务 Mainview。 */
+  has_mainview: boolean;
+
+  /** Plugin 是否提供设置中心 Config。 */
+  has_config: boolean;
 }
 
 /** 内置与第三方 Plugin 共享的运行注册协议。 */
@@ -38,7 +61,7 @@ export interface LocalPluginRegistration {
 /** `plugins/<plugin_id>/plugin.json` 中的第三方 Plugin 定义。 */
 export interface LocalInstalledPluginDefinition extends Omit<
   LocalPluginDefinition,
-  "has_agent" | "has_main" | "has_renderer"
+  "has_agent" | "has_main" | "has_sidebar" | "has_mainview" | "has_config"
 > {
   /** 文件协议版本。 */
   schema_version: 1;
@@ -50,8 +73,8 @@ export interface LocalInstalledPluginDefinition extends Omit<
   /** 相对 Plugin 目录的宿主 main ESM 入口。 */
   main?: string;
 
-  /** 相对 Plugin 目录的单文件 Mainview ESM 入口。 */
-  renderer?: string;
+  /** Renderer 入口及其静态 UI 插槽。 */
+  renderer?: LocalPluginRendererDefinition;
   /** 可供更新命令重放的规范化来源。 */
   source: string;
   /** Git 来源解析得到的 commit SHA。 */

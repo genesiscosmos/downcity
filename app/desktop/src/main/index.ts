@@ -29,7 +29,10 @@ let agent_controller: AgentController | undefined;
 const local_data = create_desktop_local_data();
 const settings_controller = new DesktopSettingsController(local_data);
 const global_env_controller = new DesktopGlobalEnvController(local_data);
-const plugin_controller = new PluginController(local_data);
+const plugin_controller = new PluginController(
+  local_data,
+  async (input) => await require_agent_controller().invoke_plugin_action(input),
+);
 let user_controller: DesktopUserController;
 let quitting = false;
 

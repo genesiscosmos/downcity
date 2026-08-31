@@ -118,16 +118,22 @@ example-plugin/
   "id": "example",
   "version": "1.0.0",
   "description": "A small example Plugin.",
+  "readme": "./README.md",
   "agent": "./dist/agent.js",
   "main": "./dist/main.js",
-  "renderer": "./dist/renderer.js"
+  "renderer": {
+    "entry": "./dist/renderer.js",
+    "sidebar": true,
+    "mainview": true,
+    "config": false
+  }
 }
 ```
 
 - `agent` default-exports a factory that returns a new Plugin instance for each Agent.
-- `main` default-exports a management lifecycle object and registers Mainview actions.
-- `renderer` default-exports the single React Mainview component and uses host-injected `ui.components`.
-- `README.md` documents purpose and configuration and is safely rendered by Desktop in the Plugin Overview.
+- `main` default-exports a management lifecycle object and registers Plugin-level and Profile configuration actions separately.
+- `renderer` default-exports a paired `sidebar + mainview` and/or an independent `config`; actual slots must match the static manifest flags and use host-injected `ui.components`.
+- `readme` must point to a `.md` user document inside the Plugin root. Desktop safely renders that file in the Plugin Overview.
 
 At least one entry is required. There is no generic `entry`, `config.schema`, or host-generated form.
 
@@ -146,9 +152,9 @@ export default create_agent_plugin;
 
 A Profile is only host-side configuration space. The SDK class does not need to know it came from TOML; the factory adapts a configuration snapshot to Plugin-owned constructor parameters.
 
-## Main and Mainview
+## Main and Renderer
 
-When a Plugin needs configuration UI, let `main` register structured actions and call them from the single Mainview. The Plugin owns structure, defaults, validation, and Secret projection. The host only provides Profile CRUD and an action gateway bound to the current Plugin/Profile.
+Plugin Sidebar/Mainview use `plugin.action()` and `plugin.invoke()`, coordinate through shared `navigation`, and do not depend on a Profile. Configuration uses `plugin.config_action()` and `config.invoke()`, with Settings binding the selected Profile. Only Plugins that declare Config have Profiles. The Plugin owns structure, defaults, validation, and Secret projection; the host owns Profile CRUD.
 
 See [Custom Plugin](/en/docs/plugin/custom) for a complete example and security boundary.
 
@@ -162,10 +168,10 @@ See [Custom Plugin](/en/docs/plugin/custom) for a complete example and security 
 
 ## Release checklist
 
-1. `plugin.json` has the correct ID, version, and at least one valid entry.
+1. `plugin.json` has the correct ID, version, `readme`, and at least one valid runtime entry.
 2. `agent/main` are self-contained ESM and `renderer` is a single-file React ESM bundle that shares the host React and JSX runtimes.
 3. The Agent factory creates a new instance for every call.
 4. Profiles contain no connections, instances, callbacks, or host objects.
 5. Long-lived resources are released and asynchronous actions respond to cancellation.
 6. Private data uses `data_files`; user data uses `files`.
-7. Mainview never accesses Node, Electron, Agent, or configuration files directly, and does not ship a second design system.
+7. Renderer code never accesses Node, Electron, Agent, or configuration files directly, and does not ship a second design system.

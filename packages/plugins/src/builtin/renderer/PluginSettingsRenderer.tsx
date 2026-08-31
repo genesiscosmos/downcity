@@ -1,19 +1,19 @@
-/** 官方简单设置 Plugin 的统一 React Mainview 生成器。 */
+/** 官方简单设置 Plugin 的统一 React Config 生成器。 */
 
 import { useCallback, useEffect, useState } from "react";
 import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
 import {
   define_plugin_renderer,
-  type PluginRendererComponent,
+  type PluginRendererDefinition,
   type PluginRendererUiComponents,
 } from "@downcity/plugin/react";
 import type { PluginSettingField, PluginSettingsDefinition } from "@/builtin/types/PluginSettings.js";
 
-/** 根据具体 Plugin 的字段声明创建使用宿主 UI Components 的 Mainview。 */
+/** 根据具体 Plugin 的字段声明创建使用宿主 UI Components 的 Config。 */
 export function create_plugin_settings_renderer(
   definition: PluginSettingsDefinition,
-): PluginRendererComponent {
-  return define_plugin_renderer(function PluginSettingsRenderer({ plugin, ui }) {
+): PluginRendererDefinition {
+  return define_plugin_renderer({ config: function PluginSettingsRenderer({ config, ui }) {
     const { Button, Callout, Group, Input, LoadingState, Page, Row, Select, Switch, Toolbar } = ui.components;
     const [draft, set_draft] = useState<PluginJsonObject>();
     const [loading, set_loading] = useState(true);
@@ -24,13 +24,13 @@ export function create_plugin_settings_renderer(
       set_loading(true);
       set_error("");
       try {
-        set_draft(await plugin.invoke<PluginJsonObject>("profile.read"));
+        set_draft(await config.invoke<PluginJsonObject>("profile.read"));
       } catch (reason) {
         set_error(to_error_message(reason));
       } finally {
         set_loading(false);
       }
-    }, [plugin]);
+    }, [config]);
 
     useEffect(() => { void load(); }, [load]);
 
@@ -48,7 +48,7 @@ export function create_plugin_settings_renderer(
       set_saving(true);
       set_error("");
       try {
-        const saved = await plugin.invoke<PluginJsonObject>("profile.save", draft);
+        const saved = await config.invoke<PluginJsonObject>("profile.save", draft);
         set_draft(saved);
         ui.toast({ type: "success", message: "Profile 已保存" });
       } catch (reason) {
@@ -74,7 +74,7 @@ export function create_plugin_settings_renderer(
         trailing={<SettingControl field={field} value={draft?.[field.key]} set_value={(value) => set_field(field, value)} components={{ Input, Select, Switch }} />}
       />)}</Group>
     </Page>;
-  });
+  } });
 }
 
 /** 根据字段类型选择宿主表单控件。 */

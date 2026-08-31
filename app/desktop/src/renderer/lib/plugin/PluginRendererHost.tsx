@@ -1,15 +1,10 @@
-/**
- * Plugin 唯一 React Mainview 的宿主容器。
- *
- * 容器负责加载第三方 ESM、注入绑定当前 Plugin/Profile 的 action gateway、统一 UI
- * Components、Toast 与确认对话框。Plugin 组件不会获得 Desktop controller 或 Profile ID。
- */
+/** Plugin Sidebar、Mainview 与 Config 的统一插槽宿主。 */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
 import type {
-  PluginRendererComponent,
   PluginRendererConfirmInput,
+  PluginRendererDefinition,
   PluginRendererUi,
 } from "@downcity/plugin/react";
 import { Button } from "@/components/ui/button";
@@ -24,12 +19,13 @@ import {
 import { create_plugin_renderer_ui_components } from "./PluginRendererComponents";
 import type {
   LoadedPluginRenderer,
+  PluginRendererCapabilities,
   PluginRendererConfirmationState,
   PluginRendererHostProps,
   PluginRendererToastState,
 } from "@/types/plugin/PluginRendererHost";
 
-/** 渲染内置或第三方 Plugin 的唯一 Mainview。 */
+/** 加载 Plugin Renderer，并且只渲染宿主指定的一个独立插槽。 */
 export function PluginRendererHost(props: PluginRendererHostProps) {
   const [loaded_renderer, set_loaded_renderer] = useState<LoadedPluginRenderer>();
   const [load_error, set_load_error] = useState("");
@@ -45,28 +41,18 @@ export function PluginRendererHost(props: PluginRendererHostProps) {
     set_loaded_renderer(undefined);
     set_load_error("");
     if (!props.renderer_url) return () => { disposed = true; };
-    const load_renderer = async () => {
-      try {
-        const module = await import(/* @vite-ignore */ props.renderer_url!) as { default?: unknown };
-        if (typeof module.default !== "function") {
-          throw new Error(`Plugin renderer must default export a Mainview component: ${props.plugin_id}`);
-        }
-        if (!disposed) set_loaded_renderer({
-          renderer_url: props.renderer_url!,
-          Component: module.default as PluginRendererComponent,
-        });
-      } catch (reason) {
-        if (!disposed) set_load_error(to_error_message(reason));
-      }
-    };
-    void load_renderer();
+    void import(/* @vite-ignore */ props.renderer_url)
+      .then((module: { default?: unknown }) => {
+        assert_renderer_definition(module.default, props.capabilities, props.plugin_id);
+        if (!disposed) set_loaded_renderer({ renderer_url: props.renderer_url!, definition: module.default });
+      })
+      .catch((reason) => { if (!disposed) set_load_error(to_error_message(reason)); });
     return () => { disposed = true; };
-  }, [props.plugin_id, props.renderer_url]);
+  }, [props.capabilities, props.plugin_id, props.renderer_url]);
 
   useEffect(() => () => {
     if (toast_timer_ref.current !== undefined) window.clearTimeout(toast_timer_ref.current);
     confirmation_resolve_ref.current?.(false);
-    confirmation_resolve_ref.current = undefined;
   }, []);
 
   const show_toast = useCallback<PluginRendererUi["toast"]>((input) => {
@@ -85,45 +71,72 @@ export function PluginRendererHost(props: PluginRendererHostProps) {
   }), []);
 
   const plugin = useMemo(() => ({
-    invoke: async <Result extends PluginJsonValue = PluginJsonValue>(
-      action_id: string,
-      input?: PluginJsonValue,
-    ): Promise<Result> => await props.invoke(action_id, input) as Result,
-  }), [props.invoke]);
-
-  const ui = useMemo<PluginRendererUi>(() => ({
-    components: ui_components,
-    toast: show_toast,
-    confirm,
-  }), [confirm, show_toast, ui_components]);
-
-  const Component = props.builtin_renderer
-    ?? (loaded_renderer && loaded_renderer.renderer_url === props.renderer_url
-      ? loaded_renderer.Component
-      : undefined);
+    invoke: async <Result = PluginJsonValue>(action_id: string, input?: PluginJsonValue): Promise<Result> =>
+      await props.invoke_mainview(action_id, input) as Result,
+  }), [props.invoke_mainview]);
+  const config = useMemo(() => ({
+    invoke: async <Result = PluginJsonValue>(action_id: string, input?: PluginJsonValue): Promise<Result> => {
+      if (!props.invoke_config) throw new Error("Plugin Config gateway is unavailable");
+      return await props.invoke_config(action_id, input) as Result;
+    },
+  }), [props.invoke_config]);
+  const navigate = useCallback((route: PluginJsonObject) => props.navigate?.(route), [props.navigate]);
+  const navigation = useMemo(() => ({
+    route: props.route ?? {},
+    navigate,
+  }), [navigate, props.route]);
+  const ui = useMemo<PluginRendererUi>(() => ({ components: ui_components, toast: show_toast, confirm }), [confirm, show_toast, ui_components]);
+  const definition = props.builtin_renderer ?? (loaded_renderer?.renderer_url === props.renderer_url ? loaded_renderer?.definition : undefined);
+  const definition_error = definition ? get_renderer_definition_error(definition, props.capabilities) : undefined;
+  const Config = definition?.config;
+  const Workspace = props.slot === "sidebar" ? definition?.sidebar : definition?.mainview;
 
   const close_confirmation = (confirmed: boolean) => {
     const resolve = confirmation_resolve_ref.current;
-    if (!resolve) return;
     confirmation_resolve_ref.current = undefined;
-    resolve(confirmed);
     set_confirmation(undefined);
+    resolve?.(confirmed);
   };
 
   return <div className="relative min-h-0 min-w-0 flex-1">
-    <div className="min-h-full">
-      {load_error ? <ui_components.Callout tone="danger">{load_error}</ui_components.Callout>
-        : !Component ? <ui_components.LoadingState label="正在加载 Plugin Mainview…" />
-          : <Component plugin={plugin} ui={ui} />}
-    </div>
-    {toast ? <div className={`fixed bottom-5 left-1/2 z-40 max-w-xl -translate-x-1/2 rounded-lg border px-3 py-2 text-xs shadow-xl ${toast.type === "error" ? "border-destructive/25 bg-background text-destructive" : "border-border bg-popover text-popover-foreground"}`}><div>{toast.message}</div>{toast.description ? <div className="mt-0.5 text-[11px] text-muted-foreground">{toast.description}</div> : null}</div> : null}
+    {load_error || definition_error ? <ui_components.Callout tone="danger">{load_error || `Plugin renderer definition is invalid: ${props.plugin_id} (${definition_error})`}</ui_components.Callout>
+      : !definition ? <ui_components.LoadingState label="正在加载 Plugin…" />
+        : props.slot === "config"
+          ? Config ? <Config config={config} ui={ui} /> : <ui_components.EmptyState title="Plugin 未提供 config" size="compact" />
+          : Workspace ? <Workspace plugin={plugin} navigation={navigation} ui={ui} /> : <ui_components.EmptyState title={`Plugin 未提供 ${props.slot}`} size="compact" />}
+    {toast ? <div className="fixed bottom-5 left-1/2 z-40 max-w-xl -translate-x-1/2 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl">{toast.message}</div> : null}
     <Dialog open={Boolean(confirmation)} onOpenChange={(open) => { if (!open) close_confirmation(false); }}>
-      <DialogContent size="sm">
-        <DialogHeader><div><DialogTitle>{confirmation?.input.title}</DialogTitle>{confirmation?.input.description ? <DialogDescription>{confirmation.input.description}</DialogDescription> : null}</div></DialogHeader>
-        <DialogFooter><Button onClick={() => close_confirmation(false)}>取消</Button><Button variant={confirmation?.input.destructive ? "destructive" : "primary"} onClick={() => close_confirmation(true)}>{confirmation?.input.action || "确认"}</Button></DialogFooter>
-      </DialogContent>
+      <DialogContent size="sm"><DialogHeader><div><DialogTitle>{confirmation?.input.title}</DialogTitle>{confirmation?.input.description ? <DialogDescription>{confirmation.input.description}</DialogDescription> : null}</div></DialogHeader><DialogFooter><Button onClick={() => close_confirmation(false)}>取消</Button><Button variant={confirmation?.input.destructive ? "destructive" : "primary"} onClick={() => close_confirmation(true)}>{confirmation?.input.action || "确认"}</Button></DialogFooter></DialogContent>
     </Dialog>
   </div>;
+}
+
+/** 校验 Renderer ESM 与静态清单声明完全一致。 */
+function assert_renderer_definition(
+  value: unknown,
+  capabilities: PluginRendererCapabilities,
+  plugin_id: string,
+): asserts value is PluginRendererDefinition {
+  const error = get_renderer_definition_error(value, capabilities);
+  if (error) throw new Error(`Plugin renderer definition is invalid: ${plugin_id} (${error})`);
+}
+
+/** 返回 Renderer 定义的结构或能力差异。 */
+function get_renderer_definition_error(
+  value: unknown,
+  capabilities: PluginRendererCapabilities,
+): string | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "default export must be an object";
+  const definition = value as PluginRendererDefinition;
+  const sidebar = typeof definition.sidebar === "function";
+  const mainview = typeof definition.mainview === "function";
+  const config = typeof definition.config === "function";
+  if (sidebar !== mainview) return "sidebar and mainview must be provided together";
+  if (!sidebar && !config) return "at least one UI capability is required";
+  if (sidebar !== capabilities.has_sidebar) return "sidebar does not match plugin.json";
+  if (mainview !== capabilities.has_mainview) return "mainview does not match plugin.json";
+  if (config !== capabilities.has_config) return "config does not match plugin.json";
+  return undefined;
 }
 
 /** 把未知失败转换为用户可见消息。 */

@@ -83,6 +83,7 @@ import type { DesktopLocalData } from "./DesktopLocalData.js";
 import type { LocalPluginLoader } from "@downcity/local/product";
 import { resolve_local_agent_env } from "@downcity/local/product";
 import { generate_agent_avatar_svg, read_downcity_logo_svg } from "./GeneratedAgentAvatar.js";
+import type { PluginJsonValue } from "@downcity/plugin";
 
 const session_model_settings_key = "desktop.session-models";
 const session_reasoning_settings_key = "desktop.session-reasoning";
@@ -139,6 +140,23 @@ export class AgentController {
   /** 等待 Desktop City 完成 Agent 装配与宿主登记。 */
   async ready(): Promise<void> {
     await this.ready_promise;
+  }
+
+  /** 在指定 Agent 与 Workspace 上调用已注册的 Agent Plugin action。 */
+  async invoke_plugin_action(input: {
+    /** 目标 Agent ID。 */ readonly agent_id: string;
+    /** 执行上下文 Workspace ID。 */ readonly workspace_id: string;
+    /** 目标 Plugin ID。 */ readonly plugin_id: string;
+    /** 目标 action ID。 */ readonly action_id: string;
+    /** 可选 action 输入。 */ readonly input?: PluginJsonValue;
+  }): Promise<PluginJsonValue> {
+    await this.ready_promise;
+    const entry = await this.require_workspace_entry(input.agent_id, input.workspace_id);
+    return await entry.plugins.run_action({
+      plugin: input.plugin_id,
+      action: input.action_id,
+      ...(input.input !== undefined ? { payload: input.input } : {}),
+    }) as unknown as PluginJsonValue;
   }
 
   /** 重新加载当前 City 已持有的全部 Workspace Global Env。 */

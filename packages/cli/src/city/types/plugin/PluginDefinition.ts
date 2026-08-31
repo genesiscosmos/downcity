@@ -26,7 +26,7 @@ export interface ResolvedPluginSource {
 /** 来源目录 `plugin.json` 必须声明的可安装 Plugin 包。 */
 export interface PluginPackageDefinition extends Omit<
   LocalPluginDefinition,
-  "has_agent" | "has_main" | "has_renderer"
+  "has_agent" | "has_main" | "has_sidebar" | "has_mainview" | "has_config"
 > {
   /** 文件协议版本。 */
   schema_version: 1;
@@ -38,8 +38,8 @@ export interface PluginPackageDefinition extends Omit<
   /** 相对来源目录的 Plugin main ESM 入口。 */
   main?: string;
 
-  /** 相对来源目录的单文件 Mainview ESM 入口。 */
-  renderer?: string;
+  /** Renderer 入口及其静态 Sidebar、Mainview 与 Config 插槽。 */
+  renderer?: import("@downcity/local/product").LocalPluginRendererDefinition;
 }
 
 /** 已安装 Plugin 的管理视图。 */

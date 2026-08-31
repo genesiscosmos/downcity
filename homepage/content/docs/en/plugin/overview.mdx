@@ -5,13 +5,13 @@ description: What a Downcity Plugin is and how it extends Agent capabilities
 
 # Plugin
 
-A **Plugin** is Downcity's single extension product unit. It may provide Agent runtime capabilities, its own host-side management logic, and one Mainview without introducing a separate Extension identity.
+A **Plugin** is Downcity's single extension product unit. It may provide Agent runtime capabilities, host-side management logic, a Sidebar + Mainview workspace, and Config without introducing a separate Extension identity.
 
 ```text
 Plugin
 ├── agent      optional: Agent runtime capability
 ├── main       optional: management logic and actions
-└── renderer   optional: the single Mainview
+└── renderer   optional: Sidebar + Mainview and/or Config
 ```
 
 ## What a plugin does
@@ -19,10 +19,10 @@ Plugin
 - Exposes tools the Agent can call during execution
 - Hooks into the Agent lifecycle (start, stop, session events)
 - Manages its own state, connections, and background tasks
-- Manages Profile configuration in its own Mainview
+- Provides a Profile-independent Sidebar + Mainview workspace and edits configuration in a separate Config under Settings
 - Runs inside the Agent process boundary, not as a separate service
 
-A Profile is only a host-provided configuration space under one Plugin. Create or select it on the Plugin page, configure it through that Plugin's Mainview, then let an Agent select the Plugin and Profile. Business configuration never lives in `agent.json`.
+A Profile is only host-provided configuration space for a Plugin that declares Config; it is unrelated to the functional workspace. Functional Plugins appear in the Plugin List under the Plugins Tab and own their Sidebar and Mainview. Config is centralized under Settings / Plugins. A Plugin without Config does not need a Profile. Business configuration never lives in `agent.json`.
 
 ## Built-in plugins
 
@@ -31,7 +31,6 @@ Downcity ships several built-in plugins that cover common agent needs:
 - **Chat** — connects messaging channels (Telegram, Feishu, QQ, etc.)
 - **Task** — schedules and runs background tasks
 - **Memory** — persists conversation history and context
-- **Contact** — manages user contact lists and relationships
 - **Shell** — executes local commands in a sandboxed environment
 - **Schedule** — cron-style job scheduling
 - **Web** — browses the web and extracts content

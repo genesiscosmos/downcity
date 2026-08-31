@@ -1,13 +1,13 @@
 # Agent 与 Plugin 本地定义设计
 
-> 状态：已由 Plugin Mainview 方案取代旧的 setup/Schema 通用表单方案。
+> 状态：已由 Plugin Renderer 三插槽方案取代旧的 setup/Schema 通用表单方案。
 
 ## 1. 产品结论
 
 - Plugin 是唯一产品单元，不再引入 Extension 身份。
-- Plugin 可以选择提供 `agent`、`main` 和唯一 `renderer`。
+- Plugin 可以选择提供 `agent`、`main` 和单一 `renderer` 入口。
 - Profile 只是宿主提供的命名配置隔离空间，位于某个 Plugin 下，不是 Plugin 类型。
-- 每个 Plugin 页面统一管理 Profile 的创建、选择和删除；具体内容由 Plugin Mainview 管理。
+- Plugin Sidebar + Mainview 提供不依赖 Profile 的业务工作区；Config 管理 Profile 具体内容。
 - Agent 只保存 Plugin ID 与可选 Profile ID，不保存 Plugin 业务配置。
 - CLI 与 Desktop 读取同一套用户级文件协议。
 
@@ -24,7 +24,7 @@
 │       ├── config.toml
 │       ├── plugin.json
 │       ├── package.json
-│       ├── README.md
+│       ├── README.md  # 实际路径由 plugin.json.readme 声明
 │       └── dist/
 │           ├── agent.js
 │           ├── main.js
@@ -32,7 +32,7 @@
 └── downcity.db
 ```
 
-三类入口都是可选的，但至少提供一个。安装器只复制清单声明的入口、`package.json`、`README.md`、可选图标，并保留本地 `config.toml`；源码和构建配置不进入安装目录。
+三类入口都是可选的，但至少提供一个。`plugin.json.readme` 必须声明 Plugin 根目录内的 `.md` 用户文档。安装器只复制清单声明的入口、`package.json`、声明的 README、可选图标，并保留本地 `config.toml`；源码和构建配置不进入安装目录。
 
 ## 3. Agent 定义
 
@@ -66,7 +66,7 @@ bot_token = "123456:token"
 
 Profile 是 City 级共享配置，不属于某个 Agent。多个 Agent 可以显式复用同一个 Profile。配置以明文 TOML 保存，目录权限为 `0700`、文件权限为 `0600`。
 
-宿主只负责 Profile CRUD 与配置存储，不解释业务字段。Plugin main 的 action 负责读写、校验和安全投影；Mainview 只通过 action gateway 编辑当前 Profile。凭据原文是否可回传、空输入是否保留旧值等规则必须由 Plugin 自己实现。
+只有声明 Config 的 Plugin 才拥有 Profile。宿主只负责 Profile CRUD 与配置存储，不解释业务字段。Plugin main 的 Config action 负责读写、校验和安全投影；Config 只通过独立 gateway 编辑当前 Profile。凭据原文是否可回传、空输入是否保留旧值等规则必须由 Plugin 自己实现。
 
 ## 5. 第三方 Plugin
 
@@ -76,29 +76,36 @@ Profile 是 City 级共享配置，不属于某个 Agent。多个 Agent 可以�
   "id": "github",
   "version": "1.0.0",
   "description": "GitHub integration",
+  "readme": "./README.md",
   "icon": "./assets/github.svg",
   "agent": "./dist/agent.js",
   "main": "./dist/main.js",
-  "renderer": "./dist/renderer.js"
+  "renderer": {
+    "entry": "./dist/renderer.js",
+    "sidebar": true,
+    "mainview": true,
+    "config": true
+  }
 }
 ```
 
 - `agent` 默认导出 Agent Plugin factory。
 - `main` 默认导出 `activate/deactivate` 生命周期对象，并注册管理 actions。
-- `renderer` 默认导出唯一 React Mainview；宿主注入统一 UI Components 与 action gateway。
+- `renderer` 默认导出成对的 Sidebar + Mainview 与/或独立 Config；实际导出必须与清单静态声明一致，宿主注入统一 UI Components 与各自 action gateway。
 
 安装不会导入或执行 `agent/main`，不会运行依赖安装或构建脚本。入口与本地图标必须位于 Plugin 根目录内且不能使用 symlink。更新原子替换制品并保留 `config.toml`；仍被 Agent 引用的第三方 Plugin 不能卸载。
 
 ## 6. 交互路径
 
 ```text
-进入 Plugin
-→ 创建或选择 Profile
-→ 在 Plugin Mainview 中完成配置
-→ Agent 启用 Plugin 并选择 Profile
+进入 Plugins Tab
+→ 从 Plugin List 打开功能型 Plugin
+→ 在 Plugin 专属 Sidebar 与 Mainview 中使用功能
+→ 有 Config 时到设置 / Plugins 创建或选择 Profile 并完成配置
+→ Agent 启用 Plugin；有 Config 时选择 Profile
 ```
 
-没有 Mainview 的 Plugin 仍可拥有 Profile，但必须通过它明确提供的其他入口管理内容。CLI 的 `config --set` 只是显式 JSON 替换能力，不承担通用业务表单职责。
+没有业务工作区的 Plugin 仍可提供 Config，并且不会出现在 Plugin List；没有 Config 的 Plugin 不提供 Profile。CLI 的 `config --set` 只是显式 JSON 替换能力，不承担通用业务表单职责。
 
 ## 7. 数据库边界
 

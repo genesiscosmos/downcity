@@ -1,21 +1,31 @@
 /**
  * Plugin main 的宿主运行协议。
  *
- * Plugin main 只注册管理动作并持有 Plugin 自己的长期资源。具体 Profile 配置由每次
- * action 调用上下文注入，避免一个全局 main 实例错误绑定到单个 Profile。
+ * Plugin main 只注册管理动作并持有 Plugin 自己的长期资源。业务动作与 Config 动作
+ * 分别注册，避免没有配置界面的 Plugin 被错误绑定到 Profile。
  */
 
 import type { PluginJsonObject, PluginJsonValue } from "./Json.js";
 
-/** Plugin main 注册的一个 Renderer 可调用动作。 */
+/** Plugin main 注册的一个 Sidebar/Mainview 业务动作。 */
 export interface PluginMainAction {
   /** Plugin 内稳定且唯一的动作 ID。 */
   readonly id: string;
 
   /** 执行动作；输入和输出必须可以序列化为 JSON。 */
+  readonly run: (input: PluginJsonValue | undefined) =>
+    PluginJsonValue | Promise<PluginJsonValue>;
+}
+
+/** Plugin main 注册的一个 Config 动作。 */
+export interface PluginConfigMainAction {
+  /** Plugin 内稳定且唯一的动作 ID。 */
+  readonly id: string;
+
+  /** 在当前 Profile 配置范围内执行动作。 */
   readonly run: (
     input: PluginJsonValue | undefined,
-    context: PluginMainActionContext,
+    context: PluginConfigMainActionContext,
   ) => PluginJsonValue | Promise<PluginJsonValue>;
 }
 
@@ -28,10 +38,31 @@ export interface PluginProfileConfigStore {
   set(config: PluginJsonObject): Promise<void>;
 }
 
-/** 每次 main action 调用获得的动态上下文。 */
-export interface PluginMainActionContext {
+/** 每次 Config action 调用获得的动态上下文。 */
+export interface PluginConfigMainActionContext {
   /** 已绑定当前 Plugin 和 Profile 的配置存储。 */
   readonly config: PluginProfileConfigStore;
+}
+
+/** 宿主登记且允许 Plugin main 感知的 Workspace。 */
+export interface PluginMainWorkspace {
+  /** Workspace 的稳定 ID。 */
+  readonly workspace_id: string;
+
+  /** Workspace 的用户可见名称。 */
+  readonly name: string;
+
+  /** Workspace 的绝对根路径。 */
+  readonly workspace_path: string;
+}
+
+/** Plugin main 可管理的宿主 Agent 摘要。 */
+export interface PluginMainAgent {
+  /** Agent 的稳定 ID。 */
+  readonly agent_id: string;
+
+  /** Agent 当前启用的 Plugin ID。 */
+  readonly plugin_ids: string[];
 }
 
 /** Plugin main 的结构化日志能力。 */
@@ -51,6 +82,30 @@ export interface PluginMainLogger {
 
 /** Plugin main 可使用的宿主系统能力。 */
 export interface PluginMainSystem {
+  /** 列出宿主当前登记的 Agent 及其 Plugin。 */
+  list_agents(): Promise<PluginMainAgent[]>;
+
+  /** 列出宿主当前登记的 Workspace，供 Plugin 自己的管理功能使用。 */
+  list_workspaces(): Promise<PluginMainWorkspace[]>;
+
+  /** 在指定 Agent 与 Workspace 上调用一个 Agent Plugin action。 */
+  invoke_agent_plugin(input: {
+    /** 目标 Agent 的稳定 ID。 */
+    readonly agent_id: string;
+
+    /** 提供执行上下文的 Workspace ID。 */
+    readonly workspace_id: string;
+
+    /** 目标 Agent Plugin ID。 */
+    readonly plugin_id: string;
+
+    /** 目标 action ID。 */
+    readonly action_id: string;
+
+    /** 传递给 action 的可选 JSON 输入。 */
+    readonly input?: PluginJsonValue;
+  }): Promise<PluginJsonValue>;
+
   /** 使用系统默认应用打开 HTTP 或 HTTPS 地址。 */
   open_external(input: {
     /** 要打开的绝对 URL。 */
@@ -75,8 +130,11 @@ export interface PluginMainSelf {
   /** 当前 Plugin 的稳定 ID。 */
   readonly id: string;
 
-  /** 注册一个供 Mainview 调用的动作。 */
+  /** 注册一个供 Plugin Sidebar/Mainview 调用的业务动作。 */
   action(action: PluginMainAction): void;
+
+  /** 注册一个供 Plugin Config 调用的配置动作。 */
+  config_action(action: PluginConfigMainAction): void;
 }
 
 /** Plugin main 激活时由宿主注入的稳定能力。 */

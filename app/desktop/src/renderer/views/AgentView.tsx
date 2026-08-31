@@ -183,7 +183,7 @@ function PluginEditor({ definition, plugins, controller, set_definition }: { /**
     const plugin_id = pending_profile_plugin_id;
     set_missing_profile_plugin(undefined);
     set_pending_profile_plugin_id(undefined);
-    if (plugin_id) controller.select_plugin(plugin_id);
+    if (plugin_id) controller.open_settings("plugins");
   };
   const set_plugin = (plugin: DesktopPluginSummary, enabled: boolean) => {
     const next_plugins = { ...definition.plugins };
@@ -202,7 +202,7 @@ function PluginEditor({ definition, plugins, controller, set_definition }: { /**
     <SettingGroup>{plugins.filter((plugin) => plugin.has_agent).map((plugin) => {
       const reference = definition.plugins[plugin.plugin_id];
       const profile_options = [{ value: "", label: "空配置" }, ...plugin.profile_ids.map((profile_id) => ({ value: profile_id, label: profile_id }))];
-      return <SettingItem key={plugin.plugin_id} label={plugin.title} description={plugin.description || plugin.plugin_id} leading={<TbComponents />}><div className="flex items-center gap-2">{reference ? plugin.profile_ids.length > 0 ? <Select value={reference.profile || ""} options={profile_options} on_value_change={(profile) => set_profile(plugin.plugin_id, profile)} className="min-w-28 max-w-44 rounded-full" align="end" /> : <Button className="rounded-full" onClick={() => open_missing_profile_dialog(plugin)}><TbPlus />Profile</Button> : null}<Switch checked={Boolean(reference)} onCheckedChange={(enabled) => set_plugin(plugin, enabled)} aria-label={`${plugin.title} 启用状态`} /></div></SettingItem>;
+      return <SettingItem key={plugin.plugin_id} label={plugin.title} description={plugin.description || plugin.plugin_id} leading={<TbComponents />}><div className="flex items-center gap-2">{reference && plugin.has_config ? plugin.profile_ids.length > 0 ? <Select value={reference.profile || ""} options={profile_options} on_value_change={(profile) => set_profile(plugin.plugin_id, profile)} className="min-w-28 max-w-44 rounded-full" align="end" /> : <Button className="rounded-full" onClick={() => open_missing_profile_dialog(plugin)}><TbPlus />Profile</Button> : null}<Switch checked={Boolean(reference)} onCheckedChange={(enabled) => set_plugin(plugin, enabled)} aria-label={`${plugin.title} 启用状态`} /></div></SettingItem>;
     })}{plugins.every((plugin) => !plugin.has_agent) ? <div className="py-8 text-center text-xs text-muted-foreground">暂无可用 Plugin</div> : null}</SettingGroup>
     <Dialog open={missing_profile_dialog_open} onOpenChange={set_missing_profile_dialog_open} onOpenChangeComplete={complete_missing_profile_dialog}>
       <DialogContent><DialogHeader><DialogTitle>为 {missing_profile_plugin?.title} 添加配置</DialogTitle><DialogDescription>创建一个命名 Profile 后，Agent 可以显式选择它。</DialogDescription></DialogHeader><DialogBody><div className="rounded-lg bg-muted/50 px-3 py-2.5 text-xs leading-5 text-muted-foreground">创建完成后返回当前 Agent 页面，再展开 Plugin 选择刚刚创建的 Profile。</div></DialogBody><DialogFooter><Button onClick={() => set_missing_profile_dialog_open(false)}>取消</Button><Button variant="primary" onClick={() => { set_pending_profile_plugin_id(missing_profile_plugin?.plugin_id); set_missing_profile_dialog_open(false); }}>去创建配置</Button></DialogFooter></DialogContent>

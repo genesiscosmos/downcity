@@ -29,6 +29,8 @@ Use `task` when you need:
 
 ## How users use it
 
+Task does not declare Config, so it needs no Profile. It appears under the Desktop Plugins Tab: its own Sidebar selects an Agent and Task, while the Mainview selects a Workspace and shows the Task list or details. This workspace reads the selected Agent's real Task runtime instead of copying state. The current Desktop workspace is read-only; create, edit, run, and delete operations still use Agent actions or the CLI.
+
 The CLI invokes task through the shared Plugin Action command:
 
 ```bash

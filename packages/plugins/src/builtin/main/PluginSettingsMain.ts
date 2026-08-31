@@ -17,11 +17,11 @@ export function create_plugin_settings_main(
 ): PluginMainModule {
   return define_plugin_main({
     activate({ plugin }) {
-      plugin.action({
+      plugin.config_action({
         id: "profile.read",
         run: async (_input, context) => await context.config.get(),
       });
-      plugin.action({
+      plugin.config_action({
         id: "profile.save",
         run: async (input, context) => {
           const config = normalize_settings(input, definition.fields);

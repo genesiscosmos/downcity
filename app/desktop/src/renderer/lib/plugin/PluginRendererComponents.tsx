@@ -16,6 +16,22 @@ import { cn } from "@/lib/utils";
 /** 创建稳定的宿主 Plugin UI Components 集合。 */
 export function create_plugin_renderer_ui_components(): PluginRendererUiComponents {
   return {
+    Sidebar: ({ children }) => <div className="sidebar-body-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-2">{children}</div>,
+    SidebarSection: ({ label, children }) => <section className="mb-4 min-w-0">
+      {label ? <h3 className="px-2 pb-1.5 pt-1 text-[0.625rem] font-medium uppercase tracking-[0.08em] text-muted-foreground/65">{label}</h3> : null}
+      <div className="space-y-0.5">{children}</div>
+    </section>,
+    SidebarItem: ({ label, description, leading, trailing, active, disabled, on_select }) => <button
+      type="button"
+      aria-current={active ? "page" : undefined}
+      disabled={disabled}
+      onClick={on_select}
+      className={cn("flex min-h-10 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30", active ? "bg-interaction-selected text-foreground" : "text-foreground/85 hover:bg-interaction-hover", disabled && "opacity-45")}
+    >
+      {leading ? <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">{leading}</span> : null}
+      <span className="min-w-0 flex-1"><span className="block truncate text-xs">{label}</span>{description ? <span className="mt-0.5 block truncate text-[10px] text-muted-foreground/65">{description}</span> : null}</span>
+      {trailing ? <span className="shrink-0 text-[10px] text-muted-foreground/65">{trailing}</span> : null}
+    </button>,
     Page: ({ children }) => <div className="flex min-w-0 flex-col gap-5">{children}</div>,
     Section: ({ title, description, action, surface = true, children }) => <section className="flex min-w-0 flex-col gap-2">
       {title || description || action ? <header className="flex min-w-0 items-start justify-between gap-4 px-2">
@@ -83,6 +99,25 @@ export function create_plugin_renderer_ui_components(): PluginRendererUiComponen
       </div> : <div className="min-w-0 flex-1" />}
       {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
     </div>,
+    Tabs: ({ value, label, items, on_value_change }) => <div role="tablist" aria-label={label} className="scrollbar-none flex min-w-0 overflow-x-auto border-b border-divider">
+      {items.map((item) => <button
+        key={item.value}
+        type="button"
+        role="tab"
+        aria-selected={item.value === value}
+        onClick={() => on_value_change(item.value)}
+        className={cn(
+          "relative flex h-9 shrink-0 items-center gap-1.5 px-3 text-xs outline-none transition-colors after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full",
+          item.value === value
+            ? "text-foreground after:bg-primary"
+            : "text-muted-foreground after:bg-transparent hover:text-foreground focus-visible:bg-interaction-hover",
+        )}
+      >
+        <span>{item.label}</span>
+        {typeof item.count === "number" ? <span className="tabular-nums text-[10px] text-muted-foreground/65">{item.count}</span> : null}
+      </button>)}
+    </div>,
+    CodeBlock: ({ children }) => <pre className="max-h-[32rem] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-surface-subtle px-4 py-3 font-mono text-[11px] leading-5 text-foreground/85">{children}</pre>,
     Button: ({ children, on_click, disabled, variant = "default", size = "default", title, aria_label }) => <Button variant={variant} size={size} disabled={disabled} onClick={on_click} title={title} aria-label={aria_label}>{children}</Button>,
     Input: ({ value, on_value_change, placeholder, disabled, type = "text", minimum, maximum }) => <input
       value={value}

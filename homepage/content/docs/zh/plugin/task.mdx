@@ -14,6 +14,10 @@ Task 插件让 Agent 能够调度和运行后台任务。它适用于定期数�
 - 处理重试和失败恢复
 - 提供延迟任务队列
 
+## Desktop 工作区
+
+Task 不声明 Config，因此不需要 Profile。它会出现在 Plugins Tab 的 Plugin List 中：左侧 Plugin Sidebar 用于选择 Agent 和 Task，右侧 Mainview 用于选择 Workspace 并查看 Task 列表或详情。这里直接读取所选 Agent 的 Task runtime，不保存第二份任务状态。当前 Desktop 工作区只读；创建、编辑、运行和删除仍通过 Task action 或 CLI 完成。
+
 ## 定义任务
 
 任务在项目定义中，并在启动时向 Task 插件注册。它们可以通过以下方式触发：

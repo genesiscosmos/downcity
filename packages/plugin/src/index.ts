@@ -19,12 +19,15 @@ export type {
 } from "./types/Json.js";
 
 export type {
+  PluginConfigMainAction,
+  PluginConfigMainActionContext,
   PluginMainAction,
-  PluginMainActionContext,
+  PluginMainAgent,
   PluginMainContext,
   PluginMainLogger,
   PluginMainModule,
   PluginMainSelf,
   PluginMainSystem,
+  PluginMainWorkspace,
   PluginProfileConfigStore,
 } from "./types/PluginMain.js";

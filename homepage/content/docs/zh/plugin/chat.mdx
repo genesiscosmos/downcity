@@ -33,13 +33,13 @@ bot_token = "123456:token"
 ```
 
 ```bash
-# 在 Desktop 的 Chat Plugin 页面创建 primary，并在 Mainview 中配置
+# 在 Desktop 设置 / Plugins 中创建并配置 primary
 city plugin enable chat <agent_id> --profile primary
 ```
 
 ## 渠道凭据
 
-渠道凭据明文保存在 `config.toml`，通过仅当前用户可访问的目录与文件权限保护（`0700` 和 `0600`）。Chat Mainview 通过 Chat 自己的 main actions 读取和保存 Profile；读取不会返回 `bot_token`、`app_secret` 原文，编辑时留空会保留已有凭据。每个 Agent 在自己的 `agent.json` 中选择一个 Profile，也可以显式复用同一 Profile。
+渠道凭据明文保存在 `config.toml`，通过仅当前用户可访问的目录与文件权限保护（`0700` 和 `0600`）。Chat Config 通过 Chat 自己的 Config actions 读取和保存配置；读取不会返回 `bot_token`、`app_secret` 原文，编辑时留空会保留已有凭据。每个 Agent 在自己的 `agent.json` 中选择一个 Profile，也可以显式复用同一 Profile。
 
 ## Chat Access
 

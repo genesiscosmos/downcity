@@ -41,20 +41,20 @@ A generic host cannot guess arbitrary Plugin constructors, so it uses the option
 
 ```text
 Plugin Catalog
-→ user manages a Profile in the Plugin Mainview
-→ Agent stores a plugin_id → profile_id reference
+→ user manages a Profile in Config under Settings / Plugins
+→ Agent stores plugin_id → profile_id for a Plugin with Config
 → host reads the Profile snapshot and calls the agent factory
 → Agent Runtime Plugin
 ```
 
-A Profile is only named configuration space under one Plugin. The host creates, selects, removes, and persists Profiles. Plugin-owned `main` actions validate content and provide safe projections, while the single Mainview owns editing. The host does not generate generic JSON Schema forms or put channels, accounts, or tokens in `agent.json`.
+A Profile is only named configuration space for a Plugin that declares Config; it is unrelated to the Sidebar/Mainview workspace. The host creates, selects, removes, and persists Profiles. Plugin-owned Config actions validate content and provide safe projections, while the `config` slot owns editing. A Plugin without Config needs no Profile, and the Agent stores only its enabled state. The host does not generate generic JSON Schema forms or put channels, accounts, or tokens in `agent.json`.
 
 ## Recommended mental model
 
 - Agent SDK: accepts and runs Plugin objects.
 - SDK host: constructs Plugins directly and owns its configuration source.
 - CLI / Desktop: owns the Catalog, installation, Profiles, and Agent references.
-- Plugin: owns its business configuration, main actions, and single Mainview.
+- Plugin: owns its business configuration, Config actions, and Config UI.
 
 ## Related docs
 

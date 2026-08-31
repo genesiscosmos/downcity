@@ -21,7 +21,6 @@ import type {
 } from "@/types/LocalPlugin.js";
 
 const PLUGIN_FILE_NAME = "plugin.json";
-const PLUGIN_README_FILE_NAME = "README.md";
 const CONFIG_FILE_NAME = "config.toml";
 
 /** 读取和写入用户级 Plugin 定义与配置。 */
@@ -55,6 +54,7 @@ export class PluginRepository {
       || value.id !== plugin_id
       || !value.version
       || !value.description
+      || !is_installed_readme_path(value.readme)
       || (!value.agent && !value.main && !value.renderer)
       || !value.source
       || !value.integrity
@@ -63,7 +63,7 @@ export class PluginRepository {
       || (value.icon !== undefined && typeof value.icon !== "string")
       || (value.agent !== undefined && typeof value.agent !== "string")
       || (value.main !== undefined && typeof value.main !== "string")
-      || (value.renderer !== undefined && typeof value.renderer !== "string")
+      || (value.renderer !== undefined && !is_installed_renderer(value.renderer))
     ) {
       throw new Error(`Invalid installed Plugin definition: ${plugin_id}`);
     }
@@ -71,12 +71,24 @@ export class PluginRepository {
   }
 
   /** 读取已安装 Plugin 自己拥有的用户说明；安装完整性由调用方先行校验。 */
-  read_installed_readme(plugin_id_input: string): string {
+  read_installed_readme(plugin_id_input: string, readme_path: string): string {
     const plugin_id = normalize_plugin_id(plugin_id_input);
-    return fs.readFileSync(
-      path.join(get_local_plugin_path(this.root_path, plugin_id), PLUGIN_README_FILE_NAME),
-      "utf8",
-    );
+    const plugin_root = path.resolve(get_local_plugin_path(this.root_path, plugin_id));
+    const resolved_path = path.resolve(plugin_root, readme_path);
+    if (resolved_path === plugin_root || !resolved_path.startsWith(`${plugin_root}${path.sep}`)) {
+      throw new Error(`Plugin README must stay inside the Plugin directory: ${plugin_id}`);
+    }
+    const real_root = fs.realpathSync(plugin_root);
+    const real_readme = fs.realpathSync(resolved_path);
+    const stats = fs.lstatSync(resolved_path);
+    if (
+      !stats.isFile()
+      || stats.isSymbolicLink()
+      || !real_readme.startsWith(`${real_root}${path.sep}`)
+    ) {
+      throw new Error(`Plugin README is invalid: ${plugin_id}`);
+    }
+    return fs.readFileSync(real_readme, "utf8");
   }
 
   /** 删除整个第三方 Plugin；调用方必须先完成 Agent 引用检查。 */
@@ -212,4 +224,30 @@ function assert_toml_value(value: unknown, path_label: string): asserts value is
 
 function is_plain_object(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+/** 判断已安装定义是否持有规范、安全的相对 Markdown 文档路径。 */
+function is_installed_readme_path(value: unknown): value is string {
+  if (typeof value !== "string" || !value || value !== value.trim()) return false;
+  if (value.includes("\\") || path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) {
+    return false;
+  }
+  return path.posix.extname(value).toLowerCase() === ".md"
+    && !value.split("/").includes("..");
+}
+
+/** 判断已安装 Renderer 是否包含规范入口和完整静态插槽声明。 */
+function is_installed_renderer(
+  value: unknown,
+): value is LocalInstalledPluginDefinition["renderer"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const renderer = value as Record<string, unknown>;
+  if (
+    typeof renderer.entry !== "string"
+    || typeof renderer.sidebar !== "boolean"
+    || typeof renderer.mainview !== "boolean"
+    || typeof renderer.config !== "boolean"
+  ) return false;
+  if (renderer.sidebar !== renderer.mainview) return false;
+  return renderer.sidebar || renderer.config;
 }

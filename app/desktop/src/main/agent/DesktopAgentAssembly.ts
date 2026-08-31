@@ -217,8 +217,7 @@ class DesktopReasoningAgentModel implements AgentModel {
 export function create_desktop_builtin_plugin_registrations(
   data: DesktopLocalData,
 ): BuiltinPluginRegistration[] {
-  return create_builtin_plugin_registrations({
-  });
+  return create_builtin_plugin_registrations();
 }
 
 

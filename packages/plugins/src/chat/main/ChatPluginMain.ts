@@ -16,13 +16,13 @@ import type {
 /** Chat Plugin 的宿主管理入口。 */
 export const CHAT_PLUGIN_MAIN = define_plugin_main({
   activate({ plugin }) {
-    plugin.action({
+    plugin.config_action({
       id: "profile.read",
       run: async (_input, context) => to_public_profile(
         await context.config.get() as unknown as ChatPluginConfig,
       ) as unknown as PluginJsonValue,
     });
-    plugin.action({
+    plugin.config_action({
       id: "profile.save",
       run: async (input, context) => {
         const current = await context.config.get() as unknown as ChatPluginConfig;

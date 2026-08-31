@@ -39,7 +39,7 @@ city plugin enable chat <agent_id> --profile primary
 
 ## Channel credentials
 
-Channel credentials are plaintext in `config.toml`, protected by user-only directory and file permissions (`0700` and `0600`). The Chat Mainview reads and saves the Profile through Chat-owned main actions. Reads never return plaintext `bot_token` or `app_secret` values, and leaving a credential blank preserves the saved value. Each Agent selects one Profile in its own `agent.json`; Profiles can be shared intentionally.
+Channel credentials are plaintext in `config.toml`, protected by user-only directory and file permissions (`0700` and `0600`). Chat Config reads and saves configuration through Chat-owned Config actions. Reads never return plaintext `bot_token` or `app_secret` values, and leaving a credential blank preserves the saved value. Each Agent selects one Profile in its own `agent.json`; Profiles can be shared intentionally.
 
 ## Chat Access
 

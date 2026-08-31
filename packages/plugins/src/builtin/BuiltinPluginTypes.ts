@@ -5,6 +5,7 @@
  * Embassy 服务，Plugin 自身只持有明确的服务接口。
  */
 
+import { fileURLToPath } from "node:url";
 import type { Plugin } from "@downcity/agent";
 import type { PluginHostContext } from "@downcity/agent";
 import type { PluginMainModule } from "@downcity/plugin";
@@ -15,26 +16,25 @@ import {
   WEB_PLUGIN_SETTINGS,
 } from "@/builtin/PluginSettingsDefinitions.js";
 import { create_plugin_settings_main } from "@/builtin/main/PluginSettingsMain.js";
-import { BUILTIN_PLUGIN_READMES } from "@/builtin/BuiltinPluginReadmes.js";
 import {
   ChatPlugin,
   type ChatPluginConfig,
   type ChatPluginChannelConfig,
 } from "@/chat.js";
 import { FeishuChannel, QqChannel, TelegramChannel } from "@/chat.js";
-import { ContactPlugin } from "@/contact.js";
 import { ImagePlugin } from "@/image.js";
 import {
   MemoryPlugin,
 } from "@/memory.js";
 import { SkillPlugin } from "@/skill.js";
+import { SKILL_PLUGIN_MAIN } from "@/skill/main/SkillPluginMain.js";
 import { SoundPlugin } from "@/sound.js";
 import { TaskPlugin } from "@/task.js";
+import { TASK_PLUGIN_MAIN } from "@/task/main/TaskPluginMain.js";
 import {
   WebPlugin,
   type WebPluginOptions,
 } from "@/web.js";
-import { WorkboardPlugin } from "@/workboard.js";
 
 /** 官方 Plugin definition 的最小结构协议。 */
 export interface BuiltinPluginDefinition {
@@ -47,7 +47,7 @@ export interface BuiltinPluginDefinition {
   /** Plugin 的用途说明。 */
   description: string;
 
-  /** 宿主 Overview 展示的完整 Markdown 用户说明。 */
+  /** 宿主可读取的独立 Markdown 用户文档绝对路径。 */
   readme: string;
 
   /** 官方 Plugin 是否提供 Agent 能力。 */
@@ -56,8 +56,14 @@ export interface BuiltinPluginDefinition {
   /** 官方 Plugin 是否提供宿主 main。 */
   has_main: boolean;
 
-  /** 官方 Plugin 是否提供唯一 Mainview。 */
-  has_renderer: boolean;
+  /** 官方 Plugin 是否提供专属 Sidebar。 */
+  has_sidebar: boolean;
+
+  /** 官方 Plugin 是否提供业务 Mainview。 */
+  has_mainview: boolean;
+
+  /** 官方 Plugin 是否提供设置中心 Config。 */
+  has_config: boolean;
 }
 
 /** 官方 Plugin 注册协议。 */
@@ -72,63 +78,50 @@ export interface BuiltinPluginRegistration {
 
 }
 
-/** 创建官方 Plugin 注册集合所需的宿主能力。 */
-export interface BuiltinPluginRegistrationsOptions {
-  /** Contact Plugin 对外报告的 HTTP 地址。 */
-  contact_http?: {
-    /** HTTP 监听地址。 */
-    host?: string;
-    /** HTTP 监听端口。 */
-    port?: number;
-  };
-
-}
-
 /** 创建 Downcity 官方 Plugin 注册集合。 */
-export function create_builtin_plugin_registrations(
-  options: BuiltinPluginRegistrationsOptions,
-): BuiltinPluginRegistration[] {
+export function create_builtin_plugin_registrations(): BuiltinPluginRegistration[] {
   return [
-    simple_registration(
-      "skill",
-      "Skill Catalog And Loader",
-      "Lists and reads local skills, and injects discovery guidance.",
-      BUILTIN_PLUGIN_READMES.skill,
-      () => new SkillPlugin(),
-    ),
-    simple_registration(
-      "workboard",
-      "Workboard Snapshot",
-      "Collects structured Agent runtime activity snapshots.",
-      BUILTIN_PLUGIN_READMES.workboard,
-      () => new WorkboardPlugin(),
-    ),
-    simple_registration(
-      "contact",
-      "Contact",
-      "Manages trusted relationships and exchanges with remote Agents.",
-      BUILTIN_PLUGIN_READMES.contact,
-      () => new ContactPlugin({
-        host: options.contact_http?.host,
-        port: options.contact_http?.port,
-      }),
-    ),
-    simple_registration(
-      "task",
-      "Task",
-      "Manages reusable tasks and their trigger runtime.",
-      BUILTIN_PLUGIN_READMES.task,
-      () => new TaskPlugin(),
-    ),
+    {
+      definition: {
+        id: "skill",
+        title: "Skill Catalog And Loader",
+        description: "Lists and reads local skills, and injects discovery guidance.",
+        readme: builtin_readme_path("skill"),
+        has_agent: true,
+        has_main: true,
+        has_sidebar: true,
+        has_mainview: true,
+        has_config: false,
+      },
+      main: SKILL_PLUGIN_MAIN,
+      create_agent: () => new SkillPlugin(),
+    },
+    {
+      definition: {
+        id: "task",
+        title: "Task",
+        description: "Manages reusable tasks and their trigger runtime.",
+        readme: builtin_readme_path("task"),
+        has_agent: true,
+        has_main: true,
+        has_sidebar: true,
+        has_mainview: true,
+        has_config: false,
+      },
+      main: TASK_PLUGIN_MAIN,
+      create_agent: () => new TaskPlugin(),
+    },
     {
       definition: {
         id: "chat",
         title: "Chat",
         description: "Connects Agents to Telegram, Feishu, and QQ channels.",
-        readme: BUILTIN_PLUGIN_READMES.chat,
+        readme: builtin_readme_path("chat"),
         has_agent: true,
         has_main: true,
-        has_renderer: true,
+        has_sidebar: false,
+        has_mainview: false,
+        has_config: true,
       },
       main: CHAT_PLUGIN_MAIN,
       create_agent(context) {
@@ -144,10 +137,12 @@ export function create_builtin_plugin_registrations(
         id: "memory",
         title: "Memory",
         description: "Provides provider-neutral long-term memory, recall, revision, and deletion.",
-        readme: BUILTIN_PLUGIN_READMES.memory,
+        readme: builtin_readme_path("memory"),
         has_agent: true,
         has_main: false,
-        has_renderer: false,
+        has_sidebar: false,
+        has_mainview: false,
+        has_config: false,
       },
       create_agent(context) {
         return new MemoryPlugin({ root_path: context.data_path });
@@ -158,10 +153,12 @@ export function create_builtin_plugin_registrations(
         id: "web",
         title: "Web",
         description: "Provides web search, document reading, and optional browser sessions.",
-        readme: BUILTIN_PLUGIN_READMES.web,
+        readme: builtin_readme_path("web"),
         has_agent: true,
         has_main: true,
-        has_renderer: true,
+        has_sidebar: false,
+        has_mainview: false,
+        has_config: true,
       },
       main: create_plugin_settings_main(WEB_PLUGIN_SETTINGS),
       create_agent(context) {
@@ -174,10 +171,12 @@ export function create_builtin_plugin_registrations(
         id: "image",
         title: "Image",
         description: "Discovers image models, generates images, and reads results.",
-        readme: BUILTIN_PLUGIN_READMES.image,
+        readme: builtin_readme_path("image"),
         has_agent: true,
         has_main: true,
-        has_renderer: true,
+        has_sidebar: false,
+        has_mainview: false,
+        has_config: true,
       },
       main: create_plugin_settings_main(IMAGE_PLUGIN_SETTINGS),
       create_agent: (context) => new ImagePlugin({
@@ -189,10 +188,12 @@ export function create_builtin_plugin_registrations(
         id: "sound",
         title: "Sound",
         description: "Discovers speech models and provides ASR and TTS.",
-        readme: BUILTIN_PLUGIN_READMES.sound,
+        readme: builtin_readme_path("sound"),
         has_agent: true,
         has_main: true,
-        has_renderer: true,
+        has_sidebar: false,
+        has_mainview: false,
+        has_config: true,
       },
       main: create_plugin_settings_main(SOUND_PLUGIN_SETTINGS),
       create_agent: (context) => new SoundPlugin({
@@ -202,27 +203,9 @@ export function create_builtin_plugin_registrations(
   ];
 }
 
-/** 获取并适配官方 ImagePlugin 所需的 Embassy 图片服务。 */
-/** 创建没有配置协议的简单注册。 */
-function simple_registration(
-  id: string,
-  title: string,
-  description: string,
-  readme: string,
-  create_agent: () => Plugin,
-): BuiltinPluginRegistration {
-  return {
-    definition: {
-      id,
-      title,
-      description,
-      readme,
-      has_agent: true,
-      has_main: false,
-      has_renderer: false,
-    },
-    create_agent,
-  };
+/** 返回随 package 发布的官方 Plugin Markdown 用户文档绝对路径。 */
+function builtin_readme_path(plugin_id: string): string {
+  return fileURLToPath(new URL(`../../readmes/${plugin_id}.readme.md`, import.meta.url));
 }
 
 /** 创建 Chat Resource 对应的运行渠道。 */

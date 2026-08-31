@@ -248,15 +248,21 @@ export interface DesktopPluginSummary {
   /** Plugin 是否提供宿主 main。 */
   has_main: boolean;
 
-  /** Plugin 是否提供唯一 Mainview。 */
-  has_renderer: boolean;
+  /** Plugin 是否提供专属 Sidebar。 */
+  has_sidebar: boolean;
+
+  /** Plugin 是否提供业务 Mainview。 */
+  has_mainview: boolean;
+
+  /** Plugin 是否提供设置中心 Config。 */
+  has_config: boolean;
 }
 
 /** Renderer 可读取和编辑的完整 Plugin 定义。 */
 export interface DesktopPluginDefinition extends DesktopPluginSummary {
   /** Plugin 自己拥有并由宿主安全渲染的 Markdown 用户说明。 */
   readme?: string;
-  /** 第三方 Mainview ESM 的受控宿主 URL；内置 Plugin 由 Renderer registry 解析。 */
+  /** 第三方 Renderer ESM 的受控宿主 URL；内置 Plugin 由 Renderer registry 解析。 */
   renderer_url?: string;
 }
 
@@ -266,10 +272,10 @@ export interface DesktopCreatePluginProfileInput {
   profile_id: string;
 }
 
-/** Desktop 调用 Plugin main action 的输入。 */
-export interface DesktopInvokePluginActionInput {
-  /** 当前 Mainview 已选择的 Profile ID。 */
-  profile_id: string;
+/** Desktop 调用 Plugin Mainview action 的输入。 */
+export interface DesktopInvokePluginMainviewActionInput {
+  /** 明确标识调用来自 Plugin 业务工作区。 */
+  surface: "mainview";
 
   /** Plugin main 注册的稳定 action ID。 */
   action_id: string;
@@ -277,6 +283,26 @@ export interface DesktopInvokePluginActionInput {
   /** Mainview 传给 action 的可选 JSON 输入。 */
   input?: import("@downcity/plugin").PluginJsonValue;
 }
+
+/** Desktop 调用 Plugin Config action 的输入。 */
+export interface DesktopInvokePluginConfigActionInput {
+  /** 明确标识调用来自设置中心的 Config 界面。 */
+  surface: "config";
+
+  /** 当前配置界面绑定的 Profile ID。 */
+  profile_id: string;
+
+  /** Plugin main 注册的稳定 action ID。 */
+  action_id: string;
+
+  /** Config 传给 action 的可选 JSON 输入。 */
+  input?: import("@downcity/plugin").PluginJsonValue;
+}
+
+/** Desktop Renderer 调用 Plugin main 的两个互斥动作范围。 */
+export type DesktopInvokePluginActionInput =
+  | DesktopInvokePluginMainviewActionInput
+  | DesktopInvokePluginConfigActionInput;
 
 /** Renderer 可见的 Session 摘要。 */
 export interface DesktopSessionSummary {
@@ -747,7 +773,7 @@ export interface DesktopApi {
     create_profile(plugin_id: string, input: DesktopCreatePluginProfileInput): Promise<DesktopPluginDefinition>;
     /** 删除未被 Agent 引用的 Profile。 */
     remove_profile(plugin_id: string, profile_id: string): Promise<DesktopPluginDefinition>;
-    /** 在当前 Profile 范围内调用 Plugin main action。 */
+    /** 按业务工作区或 Config 范围调用 Plugin main action。 */
     invoke(plugin_id: string, input: DesktopInvokePluginActionInput): Promise<import("@downcity/plugin").PluginJsonValue>;
   };
   /** Electron 原生文件选择能力。 */

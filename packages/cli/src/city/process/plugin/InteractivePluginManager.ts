@@ -84,7 +84,7 @@ async function run_interactive_plugin_actions(plugin: PluginCatalogItem): Promis
     message: plugin.title,
     subtitle: plugin.description,
     choices: [
-      { title: "管理 Profile", description: "创建配置空间；具体配置由 Plugin Mainview 完成", value: "profile" },
+      ...(plugin.has_config ? [{ title: "管理 Profile", description: "创建 Config 的命名配置空间", value: "profile" }] : []),
       ...(plugin.has_agent
         ? [{ title: "注册到 Agent", description: "选择 Agent 和 Profile", value: "agent" }]
         : []),
@@ -132,7 +132,7 @@ async function run_agent_plugin_actions(
     message: `${plugin.title} · ${agent_id}`,
     choices: [
       { title: reference ? "切换 profile" : "启用", value: "enable" },
-      { title: "管理 Profile", value: "profile" },
+      ...(plugin.has_config ? [{ title: "管理 Profile", value: "profile" }] : []),
       ...(reference ? [{ title: "禁用", value: "disable" }] : []),
       { title: "返回", value: "back" },
     ],
@@ -143,7 +143,7 @@ async function run_agent_plugin_actions(
     emitCliBlock({ tone: "success", title: "Plugin disabled", summary: `${plugin.plugin_id} · ${agent_id}` });
   }
   if (response.action === "enable") {
-    const profile = await select_profile(plugin);
+    const profile = plugin.has_config ? await select_profile(plugin) : "";
     if (profile === null) return;
     const saved = set_agent_plugin_reference({
       agent_id,
@@ -160,6 +160,7 @@ async function run_agent_plugin_actions(
 
 /** 创建一个由 Plugin Mainview 管理内容的空 Profile。 */
 async function configure_profile(plugin: PluginCatalogItem): Promise<void> {
+  if (!plugin.has_config) throw new Error(`Plugin does not provide Config: ${plugin.plugin_id}`);
   const profile_response = await prompts({
     type: "text",
     name: "profile",
@@ -174,9 +175,9 @@ async function configure_profile(plugin: PluginCatalogItem): Promise<void> {
     tone: existing ? "info" : "success",
     title: existing ? "Plugin Profile already exists" : "Plugin Profile created",
     summary: `${plugin.plugin_id}/${profile}`,
-    note: plugin.has_renderer
-      ? "请在 Downcity Desktop 的 Plugin Mainview 中完成配置。"
-      : "该 Plugin 没有 Mainview；可以使用显式 config --set 写入配置。",
+    note: plugin.has_config
+      ? "请在 Downcity Desktop 设置中心的 Plugin Config 中完成配置。"
+      : "该 Plugin 没有 Config；不能创建 Profile。",
   });
 }
 

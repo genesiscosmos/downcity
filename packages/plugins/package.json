@@ -1,8 +1,12 @@
 {
   "name": "@downcity/plugins",
-  "version": "1.0.283",
+  "version": "1.0.284",
   "type": "module",
   "description": "Downcity 内建 plugin 集合包",
+  "files": [
+    "bin",
+    "readmes"
+  ],
   "main": "./bin/index.js",
   "types": "./bin/index.d.ts",
   "exports": {
@@ -13,10 +17,6 @@
     "./chat": {
       "types": "./bin/chat.d.ts",
       "import": "./bin/chat.js"
-    },
-    "./contact": {
-      "types": "./bin/contact.d.ts",
-      "import": "./bin/contact.js"
     },
     "./image": {
       "types": "./bin/image.d.ts",
@@ -45,10 +45,6 @@
     "./web": {
       "types": "./bin/web.d.ts",
       "import": "./bin/web.js"
-    },
-    "./workboard": {
-      "types": "./bin/workboard.d.ts",
-      "import": "./bin/workboard.js"
     }
   },
   "scripts": {

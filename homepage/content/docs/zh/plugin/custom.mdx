@@ -13,10 +13,10 @@ description: 编写、打包并配置可安装的 Downcity Plugin
 Plugin
 ├── agent      为 Agent 创建运行实例
 ├── main       提供宿主管理逻辑与 actions
-└── renderer   提供唯一 Mainview
+└── renderer   声明 Sidebar + Mainview 业务工作区和/或 Config
 ```
 
-三个入口都可选，但至少提供一个。一个 Plugin 可以只提供 Agent 能力，也可以只提供 Mainview，或同时提供完整的运行与配置体验。
+三个入口都可选，但至少提供一个。一个 Plugin 可以只提供 Agent 能力、只提供 Sidebar + Mainview 业务工作区、只提供 Config，或同时提供完整体验。
 
 推荐的开发目录：
 
@@ -37,7 +37,7 @@ github-plugin/
     └── renderer.js
 ```
 
-三个入口都使用 ESM。`agent.js` 与 `main.js` 必须自包含；`renderer.js` 是单文件浏览器 bundle，默认导出唯一 React Mainview。Downcity 不安装依赖或运行构建脚本。
+三个入口都使用 ESM。`agent.js` 与 `main.js` 必须自包含；`renderer.js` 是单文件浏览器 bundle，默认导出一个 Renderer 定义，其中可以声明成对的 `sidebar + mainview` 与独立的 `config`。Downcity 不安装依赖或运行构建脚本。
 
 ## 直接用于 SDK
 
@@ -67,14 +67,20 @@ const agent = new Agent({
   "version": "1.0.0",
   "title": "GitHub",
   "description": "GitHub 集成",
+  "readme": "./README.md",
   "icon": "./assets/icon.svg",
   "agent": "./dist/agent.js",
   "main": "./dist/main.js",
-  "renderer": "./dist/renderer.js"
+  "renderer": {
+    "entry": "./dist/renderer.js",
+    "sidebar": true,
+    "mainview": true,
+    "config": true
+  }
 }
 ```
 
-`package.json` 必须声明 `"type": "module"`。`README.md` 是必需的用户文档，Desktop 会在 Plugin Overview 中安全渲染它；应写清用途、配置方式和必要凭据。图标可以是 HTTP(S) 地址或 Plugin 根目录内的相对文件，并会用于 Plugin 导航与 Overview。
+`renderer.sidebar` 与 `renderer.mainview` 必须同时为 `true` 或 `false`，`renderer.config` 可以独立声明；默认导出的实际组件必须与这三个静态能力完全一致。`package.json` 必须声明 `"type": "module"`。`readme` 必须声明 Plugin 根目录内的 `.md` 用户文档，Desktop 会在 Plugin Overview 中安全渲染它；文件名和子目录可自行组织，应写清用途、配置方式和必要凭据。图标可以是 HTTP(S) 地址或 Plugin 根目录内的相对文件，并会用于 Plugin 导航与 Overview。
 
 ## Agent 入口
 
@@ -95,14 +101,14 @@ export default create_agent_plugin;
 
 ## Main 入口
 
-`main` 默认导出生命周期对象。它注册 Mainview 可调用的 actions，并由 Plugin 自己完成配置校验和凭据保护：
+`main` 默认导出生命周期对象。`plugin.action()` 注册供 Sidebar/Mainview 调用且不依赖 Profile 的业务动作；`plugin.config_action()` 注册 Config 动作，并由 Plugin 自己完成配置校验和凭据保护：
 
 ```ts
 import { define_plugin_main } from "@downcity/plugin";
 
 export default define_plugin_main({
   activate({ plugin }) {
-    plugin.action({
+    plugin.config_action({
       id: "profile.read",
       run: async (_input, context) => {
         const config = await context.config.get();
@@ -110,7 +116,7 @@ export default define_plugin_main({
       },
     });
 
-    plugin.action({
+    plugin.config_action({
       id: "profile.save",
       run: async (input, context) => {
         const current = await context.config.get();
@@ -125,46 +131,48 @@ export default define_plugin_main({
 
 一个 main 在宿主中只激活一次。当前 Profile 只在 action 调用时注入，所以同一个 main 可以安全服务多个 Profile。不要把 Profile 缓存在全局变量中。
 
-## Mainview 入口
+需要实现类似 Skill 管理器的功能主页时，可以通过 `system.list_workspaces()` 读取宿主已经登记的 Workspace 摘要。Plugin main 是受信任本地 Node.js 代码；它负责验证 action 输入，并自行拥有文件、网络和长期资源的业务行为。
 
-Mainview 是 Plugin 唯一的前端插槽。Renderer 默认导出一个 React 组件，并组合宿主提供的 UI Components：
+## Renderer 入口
+
+Renderer 入口可以声明三个固定插槽。`sidebar` 与 `mainview` 共同构成 Plugin 工作区，必须成对出现，并共享宿主持有的 JSON route；`config` 与功能工作区无关，只在设置中心按当前 Profile 渲染。三者共用一个 bundle 和宿主 UI Components：
 
 ```tsx
 import { useEffect, useState } from "react";
 import { define_plugin_renderer } from "@downcity/plugin/react";
 
-export default define_plugin_renderer(function GithubMainview({ plugin, ui }) {
+export default define_plugin_renderer({ config: function GithubConfig({ config, ui }) {
   const { Button, Group, Input, LoadingState, Page, Row, Toolbar } = ui.components;
   const [profile, set_profile] = useState<{ api_url: string }>();
 
   useEffect(() => {
-    void plugin.invoke<{ api_url: string }>("profile.read").then(set_profile);
-  }, [plugin]);
+    void config.invoke<{ api_url: string }>("profile.read").then(set_profile);
+  }, [config]);
 
   if (!profile) return <LoadingState label="正在读取 Profile…" />;
   return <Page>
-    <Toolbar title="GitHub" actions={<Button variant="primary" on_click={() => void plugin.invoke("profile.save", profile).then(() => ui.toast({ type: "success", message: "已保存" }))}>保存</Button>} />
+    <Toolbar title="GitHub" actions={<Button variant="primary" on_click={() => void config.invoke("profile.save", profile).then(() => ui.toast({ type: "success", message: "已保存" }))}>保存</Button>} />
     <Group>
       <Row label="API URL" trailing={<Input value={profile.api_url} on_value_change={(api_url) => set_profile({ ...profile, api_url })} />} />
     </Group>
   </Page>;
-});
+} });
 ```
 
 Renderer bundle 必须把 `react` 与 `react/jsx-runtime` 保留为宿主外部依赖，并分别映射到 `downcity-plugin://runtime/react` 与 `downcity-plugin://runtime/react/jsx-runtime`。其他前端依赖应打包进同一个 `renderer.js`。
 
-Desktop 在宿主 React 树中加载 Renderer，并绑定当前 Plugin/Profile。组件只通过属性获得 `plugin.invoke()`、`ui.components`、Toast 和 Confirm，不会获得 Profile ID 或 Desktop controller。Renderer 属于受信任本地 UI 代码；只安装可信来源。外链、剪贴板、文件定位和业务读写应通过 main 的明确 action 完成。
+Desktop 在宿主 React 树中加载 Renderer。Sidebar 与 Mainview 通过 `plugin.invoke()` 调用 Plugin 级动作，并通过 `navigation` 协同导航；Config 通过 `config.invoke()` 调用已经绑定当前 Profile 的配置动作。三个插槽都只获得所需 gateway、`ui.components`、Toast 和 Confirm，不会获得 Profile ID 或 Desktop controller。Renderer 属于受信任本地 UI 代码；只安装可信来源。
 
 ## Profile 交互
 
 ```text
-进入 Plugin
-→ 创建或选择 Profile
-→ 在 Mainview 中配置
-→ Agent 启用 Plugin 并选择 Profile
+进入设置 / Plugins
+→ 为声明 Config 的 Plugin 创建或选择 Profile
+→ 在 Config 中配置
+→ Agent 启用 Plugin；有 Config 时选择 Profile
 ```
 
-Profile 只是宿主提供的配置空间。宿主统一负责创建、选择、删除和持久化，不解释字段，也不根据 JSON Schema 生成表单。内容结构、校验、默认值和 Secret 行为都属于 Plugin。
+Profile 只是声明 Config 的 Plugin 所使用的宿主配置空间，与 Sidebar/Mainview 无关。宿主统一负责创建、选择、删除和持久化，不解释字段，也不根据 JSON Schema 生成表单。内容结构、校验、默认值和 Secret 行为都属于 Plugin。没有 Config 的 Plugin 不需要 Profile。
 
 配置保存在 `~/.downcity/plugins/<plugin_id>/config.toml`，目录权限为 `0700`，文件权限为 `0600`。当前存储使用 TOML，因此配置必须是 TOML 可表达的 JSON object。Agent 的 `agent.json` 只保存 Profile 引用；多个 Agent 可以显式复用同一 Profile。
 
@@ -172,13 +180,13 @@ Profile 只是宿主提供的配置空间。宿主统一负责创建、选择、
 
 ```bash
 city plugin install ./github-plugin
-# 在 Desktop 的 GitHub Plugin 页面创建并配置 production
+# 在 Desktop 设置 / Plugins 中创建并配置 production
 city plugin enable github my-agent --profile production
 city plugin update github
 city plugin uninstall github
 ```
 
-安装器只复制 `plugin.json`、`package.json`、`README.md`、声明的入口和可选本地图标，不执行依赖安装、构建脚本或任何入口。入口不能逃逸 Plugin 根目录或使用 symlink，安装制品会生成 SHA-256 完整性摘要。只安装可信来源。
+安装器只复制 `plugin.json`、`package.json`、`readme` 声明的 Markdown 文件、运行入口和可选本地图标，不执行依赖安装、构建脚本或任何入口。所有本地路径都不能逃逸 Plugin 根目录或使用 symlink，安装制品会生成 SHA-256 完整性摘要。只安装可信来源。
 
 继续阅读：
 

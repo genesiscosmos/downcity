@@ -10,9 +10,7 @@ description: Downcity 当前全部内建插件的完整地图，包括公开 SDK
 - `skill`
 - `web`
 - `sound`
-- `workboard`
 - `chat`
-- `contact`
 - `schedule`
 - `task`
 - `memory`
@@ -25,14 +23,12 @@ description: Downcity 当前全部内建插件的完整地图，包括公开 SDK
 | Plugin | 导入路径 |
 | --- | --- |
 | `chat` | `@downcity/plugins/chat` |
-| `contact` | `@downcity/plugins/contact` |
 | `image` | `@downcity/plugins/image` |
 | `memory` | `@downcity/plugins/memory` |
 | `skill` | `@downcity/plugins/skill` |
 | `sound` | `@downcity/plugins/sound` |
 | `task` | `@downcity/plugins/task` |
 | `web` | `@downcity/plugins/web` |
-| `workboard` | `@downcity/plugins/workboard` |
 
 包不再提供默认内建集合工厂。每个 Agent 应按实际需要导入并实例化对应 plugin。
 
@@ -45,7 +41,6 @@ description: Downcity 当前全部内建插件的完整地图，包括公开 SDK
 - `skill`
 - `web`
 - `sound`
-- `workboard`
 - `chat`
 
 其中 `sound` 需要通过 constructor 注入 FED 模型目录、ASR 与 TTS 能力。内建 plugin 统一从各自包子路径导入并显式装配。
@@ -55,14 +50,12 @@ description: Downcity 当前全部内建插件的完整地图，包括公开 SDK
 - action plugin
 - hook / resolve plugin
 - system text plugin
-- runtime HTTP plugin
 - 一般 SDK 用户也能直接理解的 lifecycle plugin
 
 ### 平台内建或基础设施型 built-ins
 
 这组也是 built-in，但更偏平台内部集成：
 
-- `contact`
 - `schedule`
 - `task`
 - `memory`
@@ -74,7 +67,6 @@ description: Downcity 当前全部内建插件的完整地图，包括公开 SDK
 
 - 如果你关心用户能力型 plugin：先读 `skill`、`web`、`sound`、`chat`
 - 如果你关心平台规则层：读 `chat` 的内置授权能力
-- 如果你关心控制面和状态面：读 `workboard`
 - 如果你关心基础设施模式：读 `schedule`、`task`、`memory`、`shell`
 
 ## 职责地图
@@ -84,9 +76,7 @@ description: Downcity 当前全部内建插件的完整地图，包括公开 SDK
 | `skill` | 技能发现、安装指引与内容读取 | action + system |
 | `web` | 联网方法论注入与依赖准备 | action + system |
 | `sound` | 从 FED 发现语音模型，统一提供 ASR、TTS 与入站自动转写 | action + pipeline + system |
-| `workboard` | 工作快照与状态面 | availability + runtime HTTP |
 | `chat` | 渠道 runtime、队列 worker、chat 授权与角色解析 | lifecycle + actions + hooks + resolves + system |
-| `contact` | agent 间点对点连接与分享 | action + system + remote protocol |
 | `schedule` | plugin action 调度基础设施 | lifecycle-only infrastructure |
 | `task` | task 调度与 cron 执行 | lifecycle + actions + system |
 | `memory` | Provider 可替换的长期记忆与召回 | lifecycle + actions + system |

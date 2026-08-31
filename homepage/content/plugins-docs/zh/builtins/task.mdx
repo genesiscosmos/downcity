@@ -29,6 +29,8 @@ description: task 定义、task actions，以及归属于 plugin 实例的 cron 
 
 ## 用户怎么使用
 
+Task 不声明 Config，因此不需要 Profile。它出现在 Desktop 的 Plugins Tab 中：Plugin 自己的 Sidebar 用于选择 Agent 和 Task，Mainview 用于选择 Workspace 并查看 Task 列表或详情。这里读取的是对应 Agent 的真实 Task runtime，不复制第二份状态；当前 Desktop 工作区只读，创建、编辑、运行和删除仍通过 Agent action 或 CLI 完成。
+
 CLI 通过统一 Plugin Action 命令调用 task：
 
 ```bash

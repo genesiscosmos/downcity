@@ -10,9 +10,7 @@ The current built-in plugin capabilities in code include:
 - `skill`
 - `web`
 - `sound`
-- `workboard`
 - `chat`
-- `contact`
 - `schedule`
 - `task`
 - `memory`
@@ -25,14 +23,12 @@ Each SDK-facing built-in has an isolated package subpath:
 | Plugin | Import path |
 | --- | --- |
 | `chat` | `@downcity/plugins/chat` |
-| `contact` | `@downcity/plugins/contact` |
 | `image` | `@downcity/plugins/image` |
 | `memory` | `@downcity/plugins/memory` |
 | `skill` | `@downcity/plugins/skill` |
 | `sound` | `@downcity/plugins/sound` |
 | `task` | `@downcity/plugins/task` |
 | `web` | `@downcity/plugins/web` |
-| `workboard` | `@downcity/plugins/workboard` |
 
 There is no default built-in collection factory. Import and instantiate the exact plugins required by each Agent.
 
@@ -45,7 +41,6 @@ These are the ones most developers are likely to read first:
 - `skill`
 - `web`
 - `sound`
-- `workboard`
 - `chat`
 
 `sound` requires the FED model catalog plus ASR and TTS functions through its constructor. Built-in plugins are assembled explicitly from their individual package subpaths.
@@ -55,14 +50,12 @@ These are the clearest examples for:
 - action plugins
 - hook or resolve plugins
 - system text plugins
-- runtime HTTP plugins
 - lifecycle plugins that normal SDK users may still understand directly
 
 ### Platform-managed or infrastructure built-ins
 
 These are also built-ins in code, but they are more platform-oriented:
 
-- `contact`
 - `schedule`
 - `task`
 - `memory`
@@ -74,7 +67,6 @@ These plugins are usually read to understand how the platform is assembled, not 
 
 - If you want user-facing capability plugins, start with `skill`, `web`, `sound`, and `chat`
 - If you want platform rule layers, read the built-in authorization capability in `chat`
-- If you want control-plane or status surfaces, read `workboard`
 - If you want infrastructure patterns, read `schedule`, `task`, `memory`, and `shell`
 
 ## Responsibility map
@@ -84,9 +76,7 @@ These plugins are usually read to understand how the platform is assembled, not 
 | `skill` | skill discovery, installation guidance, and content loading | action + system |
 | `web` | web methodology injection and dependency preparation | action + system |
 | `sound` | FED speech-model discovery, ASR, TTS, and inbound auto-transcription | action + pipeline + system |
-| `workboard` | work snapshots and status surfaces | availability + runtime HTTP |
 | `chat` | channel runtime, queue worker, chat authorization, and role resolution | lifecycle + actions + hooks + resolves + system |
-| `contact` | peer-to-peer agent linking and sharing | action + system + remote protocol |
 | `schedule` | plugin action scheduling infrastructure | lifecycle-only infrastructure |
 | `task` | task scheduler and cron execution | lifecycle + actions + system |
 | `memory` | provider-neutral long-term memory and recall | lifecycle + actions + system |

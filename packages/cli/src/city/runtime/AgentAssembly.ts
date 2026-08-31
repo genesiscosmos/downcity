@@ -25,33 +25,18 @@ import { resolve_local_root_path } from "@downcity/local";
 import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
 
 /** 创建 CLI 与 Desktop 可共享语义的官方 Plugin 注册集合。 */
-export function create_cli_builtin_plugin_registrations(input: {
-  /** Downcity 用户级数据根目录。 */
-  root_path?: string;
-  /** Contact Plugin 报告的 HTTP 地址。 */
-  host?: string;
-  /** Contact Plugin 报告的 HTTP 端口。 */
-  port?: number;
-} = {}): LocalPluginRegistration[] {
-  return create_builtin_plugin_registrations({
-    contact_http: { host: input.host, port: input.port },
-  });
+export function create_cli_builtin_plugin_registrations(): LocalPluginRegistration[] {
+  return create_builtin_plugin_registrations();
 }
 
 /** 创建 CLI 读取本地 Plugin 定义与 profile 的 Loader。 */
 export function create_cli_plugin_loader(input: {
-  /** Downcity 用户级数据根目录。 */
-  root_path?: string;
-  /** Contact Plugin 报告的 HTTP 地址。 */
-  host?: string;
-  /** Contact Plugin 报告的 HTTP 端口。 */
-  port?: number;
   /** 当前 CLI 进程读取 Plugin 数据使用的仓储。 */
   plugin_repository: PluginRepository;
 }): LocalPluginLoader {
   return new LocalPluginLoader({
     plugin_repository: input.plugin_repository,
-    plugin_registrations: create_cli_builtin_plugin_registrations(input),
+    plugin_registrations: create_cli_builtin_plugin_registrations(),
   });
 }
 

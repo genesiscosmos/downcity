@@ -80,9 +80,9 @@ city plugin enabled [agent_id]
 city plugin action <plugin_id> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
-一个第三方来源目录只定义一个 Plugin。`plugin.json` 声明 `schema_version: 1`、全局唯一 `id`、版本，以及可选的 `agent`、`main`、`renderer`：`agent/main` 是自包含 ESM，`renderer` 是默认导出唯一 React Mainview Component 的单文件 ESM，三者至少提供一个。`package.json` 必须声明 `"type": "module"`，来源目录必须包含 `README.md`。安装目录只保留这些声明制品、文档、可选图标与本地 `config.toml`；安装过程不会执行依赖安装、构建脚本或任何第三方入口。
+一个第三方来源目录只定义一个 Plugin。`plugin.json` 声明 `schema_version: 1`、全局唯一 `id`、版本、必填的 `.md` `readme` 相对路径，以及可选的 `agent`、`main`、`renderer`。`agent/main` 是自包含 ESM；`renderer` 对象声明单文件 ESM 入口以及 `sidebar`、`mainview`、`config` 三项静态能力，Sidebar 与 Mainview 必须成对出现。三类运行入口至少提供一个。`package.json` 必须声明 `"type": "module"`。安装目录只保留这些声明制品、文档、可选图标与本地 `config.toml`；安装过程不会执行依赖安装、构建脚本或任何第三方入口。
 
-Plugin 配置属于 `plugins/<plugin_id>/config.toml` 中的命名 Profile。Desktop 在每个 Plugin 页面统一创建、选择和删除 Profile，具体配置由 Plugin 自己的 Mainview 与 main actions 管理。CLI 的 `config --set` 仅用于显式替换完整 JSON，不生成通用表单，也不会输出凭据原文。Agent 未选择 Profile 时只使用 `{}`，不会自动读取 `default`；只有明确传入 `--profile` 才使用命名 Profile。
+只有声明 Config 的 Plugin 才使用 `plugins/<plugin_id>/config.toml` 中的命名 Profile。Desktop 在设置 / Plugins 中统一创建、选择和删除 Profile，具体配置由 Plugin 自己的 Config UI 与 Config actions 管理。CLI 的 `config --set` 仅用于显式替换完整 JSON，不生成通用表单，也不会输出凭据原文。没有 Config 的 Plugin 启用时不选择 Profile；有 Config 时只有明确传入 `--profile` 才使用命名 Profile。
 
 Agent 的 `agent.json` 只保存 Plugin ID 和可选 profile 引用，移除该条目即禁用 Plugin。仍被 Agent 引用的 profile 或第三方 Plugin 不能删除。
 

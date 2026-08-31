@@ -70,7 +70,7 @@ const active_workspace_storage_key = "downcity.active_workspace_id";
 /** 返回导航目标所属的主导航业务集合；设置页不属于任何业务集合。 */
 function get_sidebar_mode_for_target(target: NavigationTarget): SidebarMode | undefined {
   if (target.kind === "workspace" || target.kind === "workspace_file") return "workspace";
-  if (target.kind === "plugin") return "plugins";
+  if (target.kind === "plugin" || target.kind === "plugins") return "plugins";
   if (target.kind === "settings") return undefined;
   return "chat";
 }
@@ -131,6 +131,7 @@ export function use_desktop_controller(): DesktopViewController {
   const [selection, set_selection] = useState<NavigationTarget | null>(null);
   const [active_workspace_id, set_active_workspace_id] = useState("");
   const [sidebar_mode, set_sidebar_mode_state] = useState<SidebarMode>("chat");
+  const [plugin_route, set_plugin_route] = useState<import("@downcity/plugin").PluginJsonObject>({});
   const [settings, set_settings] = useState<DesktopSettings>(default_settings);
   const [global_env, set_global_env] = useState("");
   const [user, set_user] = useState<DesktopUserSummary>(default_user);
@@ -371,6 +372,18 @@ export function use_desktop_controller(): DesktopViewController {
     set_error("");
     set_sidebar_mode_state("plugins");
     set_selection({ kind: "plugin", plugin_id });
+    set_plugin_route({});
+  }, []);
+
+  const select_plugins = useCallback(() => {
+    set_error("");
+    set_sidebar_mode_state("plugins");
+    set_selection({ kind: "plugins" });
+    set_plugin_route({});
+  }, []);
+
+  const navigate_plugin = useCallback((route: import("@downcity/plugin").PluginJsonObject) => {
+    set_plugin_route(structuredClone(route));
   }, []);
 
   const set_sidebar_mode = useCallback((mode: SidebarMode) => {
@@ -386,7 +399,7 @@ export function use_desktop_controller(): DesktopViewController {
       return;
     }
     if (mode === "plugins") {
-      set_selection(plugins[0] ? { kind: "plugin", plugin_id: plugins[0].plugin_id } : null);
+      set_selection({ kind: "plugins" });
       return;
     }
     set_selection(agents[0] ? { kind: "agent", agent_id: agents[0].agent_id } : null);
@@ -1303,6 +1316,7 @@ export function use_desktop_controller(): DesktopViewController {
     selection,
     active_workspace_id,
     sidebar_mode,
+    plugin_route,
     settings,
     global_env,
     user,
@@ -1314,6 +1328,8 @@ export function use_desktop_controller(): DesktopViewController {
     select_group,
     open_agent_chat,
     select_plugin,
+    select_plugins,
+    navigate_plugin,
     set_sidebar_mode,
     select_workspace,
     select_workspace_file,

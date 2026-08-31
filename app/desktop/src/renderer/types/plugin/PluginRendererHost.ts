@@ -1,34 +1,53 @@
-/** Plugin React Mainview 宿主的 Renderer 内部类型。 */
+/** Plugin React 插槽宿主的 Renderer 内部类型。 */
 
-import type { PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
 import type {
-  PluginRendererComponent,
   PluginRendererConfirmInput,
+  PluginRendererDefinition,
   PluginRendererToastInput,
 } from "@downcity/plugin/react";
 
-/** Plugin React Mainview 宿主属性。 */
+/** Plugin Renderer 当前承载的独立 UI 插槽。 */
+export type PluginRendererSlot = "sidebar" | "mainview" | "config";
+
+/** Plugin 清单声明的 Renderer 插槽能力。 */
+export interface PluginRendererCapabilities {
+  /** Plugin 是否声明专属 Sidebar。 */
+  readonly has_sidebar: boolean;
+  /** Plugin 是否声明业务 Mainview。 */
+  readonly has_mainview: boolean;
+  /** Plugin 是否声明设置中心 Config。 */
+  readonly has_config: boolean;
+}
+
+/** Plugin React 插槽宿主属性。 */
 export interface PluginRendererHostProps {
   /** 当前 Plugin 稳定 ID。 */
   readonly plugin_id: string;
-
-  /** 内置 Plugin 的静态 Mainview 组件。 */
-  readonly builtin_renderer?: PluginRendererComponent;
-
+  /** 当前要渲染的独立插槽。 */
+  readonly slot: PluginRendererSlot;
+  /** Plugin 清单声明的插槽能力，用于校验实际 ESM 导出。 */
+  readonly capabilities: PluginRendererCapabilities;
+  /** 内置 Plugin 的静态 Renderer 定义。 */
+  readonly builtin_renderer?: PluginRendererDefinition;
   /** 第三方 Plugin 的受控 ESM URL。 */
   readonly renderer_url?: string;
-
-  /** 调用已经绑定当前 Plugin/Profile 的 main action。 */
-  invoke(action_id: string, input?: PluginJsonValue): Promise<PluginJsonValue>;
+  /** 调用不绑定 Profile 的业务 action。 */
+  invoke_mainview(action_id: string, input?: PluginJsonValue): Promise<PluginJsonValue>;
+  /** 调用已经绑定当前 Profile 的 Config action。 */
+  invoke_config?(action_id: string, input?: PluginJsonValue): Promise<PluginJsonValue>;
+  /** Sidebar 与 Mainview 共享的宿主路由。 */
+  readonly route?: PluginJsonObject;
+  /** 替换 Sidebar 与 Mainview 共享的宿主路由。 */
+  navigate?(route: PluginJsonObject): void;
 }
 
-/** 已动态加载的第三方 Mainview。 */
+/** 已动态加载的第三方 Renderer。 */
 export interface LoadedPluginRenderer {
   /** 本次加载对应的 ESM URL。 */
   readonly renderer_url: string;
-
-  /** ESM 默认导出的 Mainview 组件。 */
-  readonly Component: PluginRendererComponent;
+  /** ESM 默认导出的三个独立插槽定义。 */
+  readonly definition: PluginRendererDefinition;
 }
 
 /** 正在等待用户选择的确认对话框。 */

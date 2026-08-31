@@ -5,13 +5,13 @@ description: 什么是 Downcity 插件，以及它如何扩展 Agent 能力
 
 # 插件
 
-**插件（Plugin）** 是 Downcity 唯一的扩展产品单元。它既可以向 Agent 提供运行能力，也可以带上自己的宿主管理逻辑和唯一 Mainview，而不需要额外的 Extension 概念。
+**插件（Plugin）** 是 Downcity 唯一的扩展产品单元。它既可以向 Agent 提供运行能力，也可以带上自己的宿主管理逻辑、Sidebar + Mainview 业务工作区和 Config，而不需要额外的 Extension 概念。
 
 ```text
 Plugin
 ├── agent      可选：Agent 运行能力
 ├── main       可选：管理逻辑与 actions
-└── renderer   可选：唯一 Mainview
+└── renderer   可选：Sidebar + Mainview 和/或 Config
 ```
 
 ## 插件能做什么
@@ -19,10 +19,10 @@ Plugin
 - 向 Agent 暴露可调用的工具
 - 接入 Agent 生命周期（启动、停止、会话事件）
 - 管理自己的状态、连接和后台任务
-- 在自己的 Mainview 中管理 Profile 配置
+- 提供不依赖 Profile 的 Sidebar + Mainview 工作区，并在设置中心的独立 Config 中管理配置
 - 在 Agent 进程边界内运行，不作为独立服务
 
-Profile 只是宿主在某个 Plugin 下提供的配置隔离空间。进入 Plugin 页面后创建或选择 Profile，由 Plugin 自己的 Mainview 完成配置；Agent 只选择 Plugin 与 Profile，不保存渠道、账号或 Token。
+Profile 只是宿主为声明 Config 的 Plugin 提供的配置隔离空间，与业务工作区无关。功能型 Plugin 在 Plugins Tab 的 Plugin List 中出现，并拥有自己的 Sidebar 与 Mainview；Config 则统一位于设置 / Plugins。没有 Config 的 Plugin 不需要 Profile。Agent 只保存 Plugin 启用状态和必要的 Profile 引用，不保存渠道、账号或 Token。
 
 ## 内置插件
 
@@ -31,7 +31,6 @@ Downcity 内置了多个插件，覆盖常见的 Agent 需求：
 - **Chat** — 连接聊天渠道（Telegram、飞书、QQ 等）
 - **Task** — 调度和运行后台任务
 - **Memory** — 持久化会话历史和上下文
-- **Contact** — 管理用户联系人列表
 - **Shell** — 在沙箱环境中执行本地命令
 - **Schedule** — 类 Cron 的作业调度
 - **Web** — 浏览网页并提取内容

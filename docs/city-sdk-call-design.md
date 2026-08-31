@@ -140,7 +140,7 @@ const implementer = new Agent({
 });
 ```
 
-City 不拥有 Plugin runtime，因此不会因为多个 Agent 共用一个 City 而共享 Memory、Contact、Task、Chat、Web 等有状态实例。
+City 不拥有 Plugin runtime，因此不会因为多个 Agent 共用一个 City 而共享 Memory、Task、Chat、Web 等有状态实例。
 
 ### 4.4 Agent、Workspace、Session 标识从哪里来
 

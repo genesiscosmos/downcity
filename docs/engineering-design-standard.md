@@ -274,9 +274,9 @@ Plugin 可以独立提供三类可选能力：
 
 - `agent`：默认导出 Agent Plugin factory，为每个 Agent 创建独享的运行实例。
 - `main`：默认导出宿主管理生命周期对象，注册 Plugin 自己的管理 actions。
-- `renderer`：唯一 Mainview，是默认导出 React 组件的单文件 ESM。
+- `renderer`：单文件 React ESM，默认导出三个固定插槽中的可选组合：成对出现的 `sidebar + mainview` 业务工作区，以及独立的 `config` 配置界面。
 
-三类能力属于同一个 Plugin ID，不再引入 Extension 身份、多个 UI 插槽或 contributions DSL。SDK 用户也可以不经过安装协议，直接创建 Plugin 实例并传入 Agent。
+三类能力属于同一个 Plugin ID，不再引入 Extension 身份或 contributions DSL。Sidebar + Mainview 与 Config 是语义固定、彼此分离的产品界面，不构成任意扩展点系统。SDK 用户也可以不经过安装协议，直接创建 Plugin 实例并传入 Agent。
 
 Agent Plugin 实例可以提供：
 
@@ -292,7 +292,7 @@ Plugin 通过 PluginContext 使用 Agent 内核允许的能力。PluginContext �
 
 Plugin 生命周期分为 Agent 级 `start/stop` 和可选的 Workspace 级 `enter_workspace/leave_workspace`。实现哪些钩子由 Plugin 自己决定，不构成 Plugin 分类。
 
-Plugin main 每个 Plugin 在宿主中只激活一次，不绑定某个 Profile。Mainview 通过结构化 action gateway 调用 main；宿主在调用时绑定 Plugin ID 与 Profile ID，并只向 action 注入当前 Profile 的配置存储。Renderer 是受信任本地 UI 代码，由宿主提供 React runtime、主题与 `ui.components`，但不注入 Desktop controller、Profile ID、Node 或 Electron 对象。业务能力仍必须通过 Plugin main action 暴露。
+Plugin main 每个 Plugin 在宿主中只激活一次，不绑定某个 Profile。Sidebar 与 Mainview 共享宿主持有的 JSON route，并通过 Plugin 级 action gateway 调用 main，不要求 Profile；Config 只在设置中心出现，使用独立 gateway，宿主仅在 Config action 调用时绑定 Profile ID 并注入当前配置存储。没有 Config 的 Plugin 不创建、不选择 Profile。Renderer 是受信任本地 UI 代码，由宿主提供 React runtime、主题与 `ui.components`，但不注入 Desktop controller、Profile ID、Node 或 Electron 对象。业务能力仍必须通过 Plugin main action 暴露。
 
 ### 4.6 Agent 定义的本地事实源
 
@@ -304,14 +304,14 @@ Plugin main 每个 Plugin 在宿主中只激活一次，不绑定某个 Profile�
 Plugin 以全局稳定 ID 为身份，定义与 City 级配置保存在 `~/.downcity/plugins/<plugin_id>/`：
 
 - `config.toml`：Plugin 自己拥有的明文 profile 配置，目录权限为 `0700`、文件权限为 `0600`。
-- `plugin.json`：仅第三方 Plugin 使用，是静态定义、图标地址、可选 `agent`、`main`、`renderer` 入口与安装来源信息的唯一事实源。
+- `plugin.json`：仅第三方 Plugin 使用，是静态定义、必填 `readme` 路径、图标地址、可选 `agent`、`main`、`renderer` 入口与安装来源信息的唯一事实源。
 - `package.json`：仅第三方 Plugin 使用，声明 `"type": "module"` 并建立明确的 ESM package 边界。
-- `README.md`：第三方 Plugin 的必需用户文档，安装后保留在 Plugin ID 目录。
+- README：第三方 Plugin 通过 `plugin.json.readme` 声明 Plugin 根目录内的必需 `.md` 用户文档；内置 Plugin 使用 package 随附的 `<plugin_id>.readme.md` 独立资产。两者都由宿主读取文件，不在 TypeScript 定义中保存正文。
 - 单文件入口与本地图标：安装清单声明的 `agent`、`main`、`renderer` 文件，以及 `icon` 指向的 Plugin 根目录内相对资源；源码、TypeScript 配置和构建工具配置不进入 Plugin ID 目录。三个运行入口都必须是 `.js` 或 `.mjs`；Renderer bundle 必须保持 React 与 `react/jsx-runtime` 为宿主外部依赖。
 
 `config.toml` 是所有 Agent 共享的 Plugin 配置源；Agent 只保存 profile 引用。Plugin 运行时状态、缓存和私有文件使用 `PluginContext.data_path`，由宿主按 Agent/Plugin 隔离，不按 Workspace 复制。
 
-Agent 通过 `agent.json` 选择具有 `agent` 能力的 Plugin 与可选 Profile。Agent 只保存 `plugin_id → profile_id` 引用，不保存渠道、账号、端点或 Token。Profile 只是宿主在某个 Plugin 下提供的命名配置隔离空间；CRUD 由宿主统一提供，内容结构、校验、凭据投影和编辑 UI 由 Plugin main 与唯一 Mainview 自己管理。Profile 值必须是 TOML 可表达的 JSON object。框架不定义 Binding、Resource 或 Installation 持久化领域，也不通过通用 Schema 猜测业务配置。内置 Plugin 由宿主注册；第三方 `agent` 入口默认导出 factory，每次为一个 Agent 创建新的 Plugin 实例，Plugin Class 的 constructor 参数完全由作者决定。
+Agent 通过 `agent.json` 选择具有 `agent` 能力的 Plugin；只有该 Plugin 声明 Config 时才额外保存 Profile 引用。Agent 不保存渠道、账号、端点或 Token。Profile 只是宿主在某个 Plugin 下提供的命名配置隔离空间，与 Plugin 的功能工作区无关；CRUD 由宿主统一提供，内容结构、校验、凭据投影和编辑 UI 由 Plugin main 与 Config 自己管理。Profile 值必须是 TOML 可表达的 JSON object。框架不定义 Binding、Resource 或 Installation 持久化领域，也不通过通用 Schema 猜测业务配置。内置 Plugin 由宿主注册；第三方 `agent` 入口默认导出 factory，每次为一个 Agent 创建新的 Plugin 实例，Plugin Class 的 constructor 参数完全由作者决定。
 
 `downcity.db` 继续保存 Workspace 索引、平台设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。Workspace 与平台设置以明文 JSON 保存，本地隔离依赖数据库文件权限。
 

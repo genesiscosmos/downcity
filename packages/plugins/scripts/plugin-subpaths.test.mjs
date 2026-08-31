@@ -8,18 +8,17 @@
 
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 
 const plugin_entries = [
   ["chat", "ChatPlugin"],
-  ["contact", "ContactPlugin"],
   ["image", "ImagePlugin"],
   ["memory", "MemoryPlugin"],
   ["skill", "SkillPlugin"],
   ["sound", "SoundPlugin"],
   ["task", "TaskPlugin"],
   ["web", "WebPlugin"],
-  ["workboard", "WorkboardPlugin"],
 ];
 
 test("所有内建 plugin 子路径均可独立导入", async () => {
@@ -49,18 +48,50 @@ test("根入口不再导出默认内建集合工厂", async () => {
   assert.equal("BUILTIN_PLUGIN_CLASSES" in plugin_module, false);
 });
 
-test("Renderer 子路径统一导出 React Mainview registry", async () => {
+test("已删除的 Contact 与 Workboard Plugin 不再公开", async () => {
+  const plugin_module = await import("@downcity/plugins");
+  assert.equal("ContactPlugin" in plugin_module, false);
+  assert.equal("WorkboardPlugin" in plugin_module, false);
+  await assert.rejects(() => import("@downcity/plugins/contact"), /Package subpath/u);
+  await assert.rejects(() => import("@downcity/plugins/workboard"), /Package subpath/u);
+  assert.deepEqual(
+    plugin_module.create_builtin_plugin_registrations()
+      .map((registration) => registration.definition.id)
+      .filter((plugin_id) => ["contact", "workboard"].includes(plugin_id)),
+    [],
+  );
+});
+
+test("内建 Plugin 注册使用随 package 发布的独立 README 资产", async () => {
+  const plugin_module = await import("@downcity/plugins");
+  const registrations = plugin_module.create_builtin_plugin_registrations();
+  for (const registration of registrations) {
+    assert.equal(
+      path.basename(registration.definition.readme),
+      `${registration.definition.id}.readme.md`,
+    );
+    assert.match(await fs.readFile(registration.definition.readme, "utf8"), /^# /u);
+  }
+});
+
+test("Renderer 子路径统一导出 React Surface registry", async () => {
   const plugin_react = await import("@downcity/plugin/react");
   const renderers = await import("@downcity/plugins/renderers");
   assert.equal(typeof plugin_react.define_plugin_renderer, "function");
   assert.deepEqual(Object.keys(renderers.BUILTIN_PLUGIN_RENDERERS).sort(), [
     "chat",
     "image",
+    "skill",
     "sound",
+    "task",
     "web",
   ]);
   for (const renderer of Object.values(renderers.BUILTIN_PLUGIN_RENDERERS)) {
-    assert.equal(typeof renderer, "function");
+    assert.equal(typeof renderer, "object");
+    assert.equal(
+      (typeof renderer.sidebar === "function" && typeof renderer.mainview === "function") || typeof renderer.config === "function",
+      true,
+    );
   }
 });
 

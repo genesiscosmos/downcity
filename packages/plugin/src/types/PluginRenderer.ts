@@ -1,15 +1,33 @@
-/** Plugin Mainview 的 React Renderer 与宿主 UI 注入协议。 */
+/** Plugin Sidebar、Mainview、Config 与宿主 UI 注入协议。 */
 
 import type { ReactNode } from "react";
-import type { PluginJsonValue } from "./Json.js";
+import type { PluginJsonObject, PluginJsonValue } from "./Json.js";
 
-/** Mainview 调用当前 Plugin/Profile main action 的最小网关。 */
-export interface PluginRendererGateway {
-  /** 调用当前 Plugin main 中的稳定 action。 */
-  invoke<Result extends PluginJsonValue = PluginJsonValue>(
+/** Plugin 业务 UI 调用 Plugin 级 main action 的最小网关。 */
+export interface PluginActionGateway {
+  /** 调用当前 Plugin main 中的稳定业务 action。 */
+  invoke<Result = PluginJsonValue>(
     action_id: string,
     input?: PluginJsonValue,
   ): Promise<Result>;
+}
+
+/** Plugin Config 调用当前 Profile 配置 action 的最小网关。 */
+export interface PluginConfigGateway {
+  /** 调用已经绑定当前 Profile 的稳定 Config action。 */
+  invoke<Result = PluginJsonValue>(
+    action_id: string,
+    input?: PluginJsonValue,
+  ): Promise<Result>;
+}
+
+/** Plugin Sidebar 与 Mainview 共享的宿主导航。 */
+export interface PluginRendererNavigation {
+  /** 当前 Plugin 工作区的 JSON 路由状态。 */
+  readonly route: PluginJsonObject;
+
+  /** 原子替换当前 Plugin 工作区路由。 */
+  navigate(route: PluginJsonObject): void;
 }
 
 /** 宿主 Toast 的输入。 */
@@ -55,6 +73,45 @@ export interface PluginRendererSelectOption {
 export interface PluginRendererPageProps {
   /** 页面内的全部 Mainview 内容。 */
   readonly children: ReactNode;
+}
+
+/** Plugin Sidebar 根布局属性。 */
+export interface PluginRendererSidebarProps {
+  /** Sidebar 内的全部导航内容。 */
+  readonly children: ReactNode;
+}
+
+/** Plugin Sidebar 分区属性。 */
+export interface PluginRendererSidebarSectionProps {
+  /** 分区的用户可见名称。 */
+  readonly label?: ReactNode;
+
+  /** 分区内的导航项。 */
+  readonly children: ReactNode;
+}
+
+/** Plugin Sidebar 导航项属性。 */
+export interface PluginRendererSidebarItemProps {
+  /** 导航项名称。 */
+  readonly label: ReactNode;
+
+  /** 可选的单行补充说明。 */
+  readonly description?: ReactNode;
+
+  /** 可选的左侧视觉元素。 */
+  readonly leading?: ReactNode;
+
+  /** 可选的右侧状态或数量。 */
+  readonly trailing?: ReactNode;
+
+  /** 当前导航项是否被选中。 */
+  readonly active?: boolean;
+
+  /** 是否禁止选择。 */
+  readonly disabled?: boolean;
+
+  /** 用户选择导航项时的回调。 */
+  readonly on_select: () => void;
 }
 
 /** Section 布局属性。 */
@@ -145,6 +202,39 @@ export interface PluginRendererToolbarProps {
 
   /** 可选的右侧操作。 */
   readonly actions?: ReactNode;
+}
+
+/** Tabs 中的一个稳定选项。 */
+export interface PluginRendererTabItem {
+  /** Tab 的稳定值。 */
+  readonly value: string;
+
+  /** Tab 的用户可见名称。 */
+  readonly label: ReactNode;
+
+  /** 可选的数量提示。 */
+  readonly count?: number;
+}
+
+/** Tabs 属性。 */
+export interface PluginRendererTabsProps {
+  /** 当前选中的稳定值。 */
+  readonly value: string;
+
+  /** Tab 组的无障碍名称。 */
+  readonly label: string;
+
+  /** 全部 Tab 选项。 */
+  readonly items: readonly PluginRendererTabItem[];
+
+  /** 用户切换 Tab 时的回调。 */
+  readonly on_value_change: (value: string) => void;
+}
+
+/** CodeBlock 属性。 */
+export interface PluginRendererCodeBlockProps {
+  /** 要展示的纯文本代码或说明内容。 */
+  readonly children: string;
 }
 
 /** Button 属性。 */
@@ -269,6 +359,12 @@ export interface PluginRendererStatusProps {
 
 /** 宿主注入的稳定 UI 组件集合。 */
 export interface PluginRendererUiComponents {
+  /** Plugin Sidebar 根布局。 */
+  readonly Sidebar: (props: PluginRendererSidebarProps) => ReactNode;
+  /** Plugin Sidebar 的标准分区。 */
+  readonly SidebarSection: (props: PluginRendererSidebarSectionProps) => ReactNode;
+  /** Plugin Sidebar 的标准导航项。 */
+  readonly SidebarItem: (props: PluginRendererSidebarItemProps) => ReactNode;
   /** Mainview 页面根布局。 */
   readonly Page: (props: PluginRendererPageProps) => ReactNode;
   /** 带标题和表面的内容分区。 */
@@ -283,6 +379,10 @@ export interface PluginRendererUiComponents {
   readonly Inline: (props: PluginRendererInlineProps) => ReactNode;
   /** 页面内工具栏。 */
   readonly Toolbar: (props: PluginRendererToolbarProps) => ReactNode;
+  /** 页面内的标准 Tab 导航。 */
+  readonly Tabs: (props: PluginRendererTabsProps) => ReactNode;
+  /** 适合展示说明文件的只读等宽文本块。 */
+  readonly CodeBlock: (props: PluginRendererCodeBlockProps) => ReactNode;
   /** 标准按钮。 */
   readonly Button: (props: PluginRendererButtonProps) => ReactNode;
   /** 标准文本或数字输入框。 */
@@ -313,14 +413,62 @@ export interface PluginRendererUi {
   readonly components: PluginRendererUiComponents;
 }
 
-/** Plugin 唯一 Mainview 接收的属性。 */
-export interface PluginRendererProps {
-  /** 已绑定当前 Plugin/Profile 身份的 action 网关。 */
-  readonly plugin: PluginRendererGateway;
+/** Plugin Sidebar 接收的属性。 */
+export interface PluginSidebarComponentProps {
+  /** 已绑定当前 Plugin 且不依赖 Profile 的业务 action 网关。 */
+  readonly plugin: PluginActionGateway;
+
+  /** 与 Mainview 共享且由宿主持有的路由。 */
+  readonly navigation: PluginRendererNavigation;
 
   /** 宿主提供的反馈能力和 UI 组件。 */
   readonly ui: PluginRendererUi;
 }
 
-/** Plugin Renderer 默认导出的唯一 Mainview 组件。 */
-export type PluginRendererComponent = (props: PluginRendererProps) => ReactNode;
+/** Plugin Mainview 接收的属性。 */
+export interface PluginMainviewComponentProps {
+  /** 已绑定当前 Plugin 且不依赖 Profile 的业务 action 网关。 */
+  readonly plugin: PluginActionGateway;
+
+  /** 与 Sidebar 共享且由宿主持有的路由。 */
+  readonly navigation: PluginRendererNavigation;
+
+  /** 宿主提供的反馈能力和 UI 组件。 */
+  readonly ui: PluginRendererUi;
+}
+
+/** Plugin Config 接收的属性。 */
+export interface PluginConfigComponentProps {
+  /** 已绑定当前 Plugin/Profile 身份的 Config action 网关。 */
+  readonly config: PluginConfigGateway;
+
+  /** 宿主提供的反馈能力和 UI 组件。 */
+  readonly ui: PluginRendererUi;
+}
+
+/** Plugin 自己拥有的业务 Sidebar 组件。 */
+export type PluginSidebarComponent = (
+  props: PluginSidebarComponentProps,
+) => ReactNode;
+
+/** Plugin 自己拥有的业务主界面组件。 */
+export type PluginMainviewComponent = (
+  props: PluginMainviewComponentProps,
+) => ReactNode;
+
+/** Plugin 自己拥有且绑定 Profile 的 Config 组件。 */
+export type PluginConfigComponent = (
+  props: PluginConfigComponentProps,
+) => ReactNode;
+
+/** 单一 Renderer 入口声明的三个独立 UI 插槽。 */
+export interface PluginRendererDefinition {
+  /** Plugin 工作区左侧的业务导航；必须与 Mainview 同时声明。 */
+  readonly sidebar?: PluginSidebarComponent;
+
+  /** Plugin 工作区右侧的业务主界面；必须与 Sidebar 同时声明。 */
+  readonly mainview?: PluginMainviewComponent;
+
+  /** 设置中心内由宿主绑定当前 Profile 的独立配置界面。 */
+  readonly config?: PluginConfigComponent;
+}

@@ -25,8 +25,14 @@ export interface PluginCatalogItem {
   /** Plugin 是否提供宿主 main。 */
   has_main: boolean;
 
-  /** Plugin 是否提供唯一 Mainview。 */
-  has_renderer: boolean;
+  /** Plugin 是否提供专属 Sidebar。 */
+  has_sidebar: boolean;
+
+  /** Plugin 是否提供业务 Mainview。 */
+  has_mainview: boolean;
+
+  /** Plugin 是否提供设置中心 Config。 */
+  has_config: boolean;
   /** 当前已保存的 profile ID。 */
   profiles: string[];
 }

@@ -131,7 +131,7 @@ async function installed_plugin_response(
   await verify_local_installed_plugin_integrity(plugin_root, definition);
   if (resource === "renderer.js") {
     if (!definition.renderer) return new Response("Not Found", { status: 404 });
-    const renderer_path = resolve_plugin_file_path(plugin_root, definition.renderer);
+    const renderer_path = resolve_plugin_file_path(plugin_root, definition.renderer.entry);
     return javascript_response(await fs.readFile(renderer_path, "utf8"));
   }
   if (!definition.icon || /^https?:\/\//iu.test(definition.icon)) {

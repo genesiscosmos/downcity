@@ -84,8 +84,6 @@ export class CliCityRuntime {
 
     const data = create_cli_local_data();
     const plugin_loader = create_cli_plugin_loader({
-      host,
-      port: http_port,
       plugin_repository: data.plugins,
     });
     const { embassy } = await new EmbassySessionResolver().create_user_client();

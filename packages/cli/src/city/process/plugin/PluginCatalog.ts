@@ -21,7 +21,9 @@ export function list_plugin_catalog(): PluginCatalogItem[] {
       ...(definition.icon ? { icon: definition.icon } : {}),
       has_agent: definition.has_agent,
       has_main: definition.has_main,
-      has_renderer: definition.has_renderer,
+      has_sidebar: definition.has_sidebar,
+      has_mainview: definition.has_mainview,
+      has_config: definition.has_config,
       profiles: list_plugin_profiles(definition.id),
     };
   });
@@ -35,7 +37,9 @@ export function list_plugin_catalog(): PluginCatalogItem[] {
     source_label: plugin.source,
     has_agent: Boolean(plugin.agent),
     has_main: Boolean(plugin.main),
-    has_renderer: Boolean(plugin.renderer),
+    has_sidebar: plugin.renderer?.sidebar === true,
+    has_mainview: plugin.renderer?.mainview === true,
+    has_config: plugin.renderer?.config === true,
     profiles: list_plugin_profiles(plugin.id),
   }));
   return [...builtin_items, ...installed_items]

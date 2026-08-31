@@ -8,19 +8,16 @@
  */
 
 export * from "./chat.js";
-export * from "./contact.js";
 export * from "./image.js";
 export * from "./memory.js";
 export * from "./skill.js";
 export * from "./sound.js";
 export * from "./task.js";
 export * from "./web.js";
-export * from "./workboard.js";
 export {
   create_builtin_plugin_registrations,
 } from "./builtin/BuiltinPluginTypes.js";
 export type {
   BuiltinPluginDefinition,
   BuiltinPluginRegistration,
-  BuiltinPluginRegistrationsOptions,
 } from "./builtin/BuiltinPluginTypes.js";

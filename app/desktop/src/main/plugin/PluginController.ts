@@ -1,13 +1,14 @@
 /**
- * Desktop Plugin catalog、Profile 外壳与 Mainview runtime 控制器。
+ * Desktop Plugin catalog、Profile 外壳与 Renderer runtime 控制器。
  *
- * Profile 的创建、引用和删除由宿主统一管理；具体配置只由 Plugin main action 读写。
- * Renderer 永远拿不到 Profile 原始配置，只能通过当前 Plugin/Profile 绑定的 action gateway。
+ * Profile 的创建、引用和删除由宿主统一管理；只有声明 Config 的 Plugin 才能持有
+ * Profile。业务工作区与设置中心分别调用独立的 action gateway。
  */
 
+import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { PluginMainModule } from "@downcity/plugin";
+import type { PluginJsonValue, PluginMainModule } from "@downcity/plugin";
 import {
   normalize_profile_id,
   verify_local_installed_plugin_integrity,
@@ -33,7 +34,16 @@ export class PluginController {
   /** Plugin main 的唯一生命周期拥有者。 */
   private readonly main_runtime: PluginMainRuntime;
 
-  constructor(private readonly data: DesktopLocalData) {
+  constructor(
+    private readonly data: DesktopLocalData,
+    invoke_agent_plugin: (input: {
+      /** 目标 Agent ID。 */ readonly agent_id: string;
+      /** 执行上下文 Workspace ID。 */ readonly workspace_id: string;
+      /** 目标 Plugin ID。 */ readonly plugin_id: string;
+      /** 目标 action ID。 */ readonly action_id: string;
+      /** 可选 action 输入。 */ readonly input?: PluginJsonValue;
+    }) => Promise<PluginJsonValue>,
+  ) {
     this.main_runtime = new PluginMainRuntime(data, {
       resolve_main: async (plugin_id) => {
         const plugin = await this.resolve_plugin(plugin_id);
@@ -41,6 +51,7 @@ export class PluginController {
           ?? await this.load_installed_main(plugin);
         return module ? { plugin_id, module } : null;
       },
+      invoke_agent_plugin,
     });
   }
 
@@ -75,8 +86,11 @@ export class PluginController {
       ? create_installed_plugin_renderer_url(plugin.installed)
       : undefined;
     const readme = plugin.installed
-      ? this.data.plugins.read_installed_readme(plugin.installed.id)
-      : plugin.definition.readme;
+      ? this.data.plugins.read_installed_readme(
+        plugin.installed.id,
+        plugin.installed.readme,
+      )
+      : fs.readFileSync(plugin.definition.readme, "utf8");
     return {
       ...this.create_summary(plugin),
       ...(readme?.trim() ? { readme } : {}),
@@ -89,7 +103,10 @@ export class PluginController {
     plugin_id: string,
     input: DesktopCreatePluginProfileInput,
   ): Promise<DesktopPluginDefinition> {
-    await this.resolve_plugin(plugin_id);
+    const plugin = await this.resolve_plugin(plugin_id);
+    if (!plugin.definition.has_config) {
+      throw new Error(`Plugin does not provide Config: ${plugin_id}`);
+    }
     const profile_id = normalize_profile_id(input.profile_id);
     if (this.data.plugins.get_profile(plugin_id, profile_id)) {
       throw new Error(`Plugin Profile already exists: ${plugin_id}/${profile_id}`);
@@ -103,7 +120,10 @@ export class PluginController {
     plugin_id: string,
     profile_id_input: string,
   ): Promise<DesktopPluginDefinition> {
-    await this.resolve_plugin(plugin_id);
+    const plugin = await this.resolve_plugin(plugin_id);
+    if (!plugin.definition.has_config) {
+      throw new Error(`Plugin does not provide Config: ${plugin_id}`);
+    }
     const profile_id = normalize_profile_id(profile_id_input);
     const agent_ids = this.data.agents.list()
       .filter((agent) => agent.plugins[plugin_id]?.profile === profile_id)
@@ -115,9 +135,16 @@ export class PluginController {
     return await this.get(plugin_id);
   }
 
-  /** 在当前 Profile 范围内调用 Plugin main action。 */
+  /** 按业务工作区或 Config 范围调用 Plugin main action。 */
   async invoke(plugin_id: string, input: DesktopInvokePluginActionInput) {
-    return await this.main_runtime.invoke(
+    if (input.surface === "mainview") {
+      return await this.main_runtime.invoke_plugin(
+        plugin_id,
+        input.action_id,
+        input.input,
+      );
+    }
+    return await this.main_runtime.invoke_config(
       plugin_id,
       input.profile_id,
       input.action_id,
@@ -187,11 +214,13 @@ export class PluginController {
       ...(icon_url ? { icon_url } : {}),
       source: plugin.source,
       agent_ids,
-      profile_count: profile_ids.length,
-      profile_ids,
+      profile_count: plugin.definition.has_config ? profile_ids.length : 0,
+      profile_ids: plugin.definition.has_config ? profile_ids : [],
       has_agent: plugin.definition.has_agent,
       has_main: plugin.definition.has_main,
-      has_renderer: plugin.definition.has_renderer,
+      has_sidebar: plugin.definition.has_sidebar,
+      has_mainview: plugin.definition.has_mainview,
+      has_config: plugin.definition.has_config,
     };
   }
 }
@@ -204,10 +233,13 @@ function to_installed_definition(
     id: installed.id,
     ...(installed.title ? { title: installed.title } : {}),
     description: installed.description,
+    readme: installed.readme,
     ...(installed.icon ? { icon: installed.icon } : {}),
     has_agent: Boolean(installed.agent),
     has_main: Boolean(installed.main),
-    has_renderer: Boolean(installed.renderer),
+    has_sidebar: installed.renderer?.sidebar === true,
+    has_mainview: installed.renderer?.mainview === true,
+    has_config: installed.renderer?.config === true,
   };
 }
 

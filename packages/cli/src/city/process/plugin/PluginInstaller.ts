@@ -26,7 +26,6 @@ import {
 
 const PLUGIN_CONFIG_FILE_NAME = "config.toml";
 const PLUGIN_PACKAGE_FILE_NAME = "package.json";
-const PLUGIN_README_FILE_NAME = "README.md";
 
 /** 从本地目录、Git URL 或 GitHub shorthand 安装一个 Plugin。 */
 export async function install_plugin(
@@ -73,7 +72,7 @@ export async function install_plugin(
     const definition = await read_plugin_definition(plugin_root);
     const readme_path = await assert_plugin_package_file(
       plugin_root,
-      PLUGIN_README_FILE_NAME,
+      definition.readme,
       "README",
     );
     if (expected_plugin_id && definition.id !== normalize_plugin_id(expected_plugin_id)) {
@@ -85,7 +84,7 @@ export async function install_plugin(
     const declared_entries: Array<[label: string, relative_path: string]> = [];
     if (definition.agent) declared_entries.push(["agent", definition.agent]);
     if (definition.main) declared_entries.push(["main", definition.main]);
-    if (definition.renderer) declared_entries.push(["renderer", definition.renderer]);
+    if (definition.renderer) declared_entries.push(["renderer", definition.renderer.entry]);
     const entry_paths = await Promise.all(declared_entries.map(async ([label, relative_path]) => [
       relative_path,
       await assert_plugin_package_file(plugin_root, relative_path, label),
@@ -98,8 +97,10 @@ export async function install_plugin(
     const installed_package_path = path.join(staging_dir, PLUGIN_PACKAGE_FILE_NAME);
     await fs.copyFile(package_path, installed_package_path);
     await fs.chmod(installed_package_path, 0o600);
-    await fs.copyFile(readme_path, path.join(staging_dir, PLUGIN_README_FILE_NAME));
-    await fs.chmod(path.join(staging_dir, PLUGIN_README_FILE_NAME), 0o600);
+    const installed_readme_path = resolve_plugin_path(staging_dir, definition.readme, "README");
+    await fs.ensureDir(path.dirname(installed_readme_path), { mode: 0o700 });
+    await fs.copyFile(readme_path, installed_readme_path);
+    await fs.chmod(installed_readme_path, 0o600);
     for (const [relative_path, source_path] of entry_paths) {
       const installed_path = resolve_plugin_path(staging_dir, relative_path, "entry");
       await fs.ensureDir(path.dirname(installed_path), { mode: 0o700 });
@@ -114,8 +115,8 @@ export async function install_plugin(
     }
     const integrity = await calculate_plugin_integrity(staging_dir, [
       PLUGIN_PACKAGE_FILE_NAME,
-      PLUGIN_README_FILE_NAME,
-      ...[definition.agent, definition.main, definition.renderer]
+      definition.readme,
+      ...[definition.agent, definition.main, definition.renderer?.entry]
         .filter((item): item is string => Boolean(item)),
       ...(definition.icon && is_local_plugin_asset(definition.icon) ? [definition.icon] : []),
     ]);
@@ -182,6 +183,7 @@ export async function read_plugin_definition(
       "version",
       "title",
       "description",
+      "readme",
       "icon",
       "agent",
       "main",
@@ -207,10 +209,11 @@ export async function read_plugin_definition(
   }
   const description = String(raw.description || "").trim();
   if (!description) throw new Error(`Plugin description is required: ${id}`);
+  const readme = normalize_plugin_readme(raw.readme, plugin_root, id);
   const icon = normalize_plugin_icon(raw.icon, id);
   const agent = normalize_plugin_entry(raw.agent, plugin_root, "agent", [".js", ".mjs"]);
   const main = normalize_plugin_entry(raw.main, plugin_root, "main", [".js", ".mjs"]);
-  const renderer = normalize_plugin_entry(raw.renderer, plugin_root, "renderer", [".js", ".mjs"]);
+  const renderer = normalize_plugin_renderer(raw.renderer, plugin_root);
   if (!agent && !main && !renderer) {
     throw new Error(`Plugin must provide agent, main, or renderer: ${id}`);
   }
@@ -221,11 +224,58 @@ export async function read_plugin_definition(
     version,
     ...(title ? { title } : {}),
     description,
+    readme,
     ...(icon ? { icon } : {}),
     ...(agent ? { agent } : {}),
     ...(main ? { main } : {}),
     ...(renderer ? { renderer } : {}),
   };
+}
+
+/** 校验 Renderer 入口及其静态 UI 插槽。 */
+function normalize_plugin_renderer(
+  value: unknown,
+  plugin_root: string,
+): PluginPackageDefinition["renderer"] {
+  if (value === undefined || value === null) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Plugin renderer must be an object");
+  }
+  const raw = value as Record<string, unknown>;
+  assert_known_fields(raw, ["entry", "sidebar", "mainview", "config"], "Plugin renderer");
+  const entry = normalize_plugin_entry(raw.entry, plugin_root, "renderer.entry", [".js", ".mjs"]);
+  if (!entry) throw new Error("Plugin renderer.entry is required");
+  for (const key of ["sidebar", "mainview", "config"] as const) {
+    if (typeof raw[key] !== "boolean") throw new Error(`Plugin renderer.${key} must be boolean`);
+  }
+  const sidebar = raw.sidebar as boolean;
+  const mainview = raw.mainview as boolean;
+  const config = raw.config as boolean;
+  if (sidebar !== mainview) {
+    throw new Error("Plugin renderer.sidebar and renderer.mainview must be declared together");
+  }
+  if (!sidebar && !config) throw new Error("Plugin renderer must provide a workspace UI or config");
+  return { entry, sidebar, mainview, config };
+}
+
+/** 校验并规范化 Plugin 必需的 Markdown 用户文档路径。 */
+function normalize_plugin_readme(
+  value: unknown,
+  plugin_root: string,
+  plugin_id: string,
+): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`Plugin readme is required: ${plugin_id}`);
+  }
+  const readme = value.trim().replace(/\\/gu, "/");
+  if (path.isAbsolute(readme) || path.win32.isAbsolute(readme)) {
+    throw new Error(`Plugin readme must be relative: ${plugin_id}`);
+  }
+  if (path.posix.extname(readme).toLowerCase() !== ".md") {
+    throw new Error(`Plugin readme must use .md: ${plugin_id}`);
+  }
+  resolve_plugin_path(plugin_root, readme, "README");
+  return readme;
 }
 
 /** 校验并规范化 Plugin 的一个可选运行入口。 */

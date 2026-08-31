@@ -12,8 +12,8 @@ import type { ChatPluginChannelEditorProps } from "@/chat/types/ChatPluginRender
 
 const channel_types: readonly ChatPluginPublicChannelConfig["type"][] = ["telegram", "feishu", "qq"];
 
-/** Chat Plugin 唯一 Mainview 组件。 */
-export const CHAT_PLUGIN_RENDERER = define_plugin_renderer(function ChatPluginRenderer({ plugin, ui }) {
+/** Chat Plugin 的 Profile 配置界面。 */
+export const CHAT_PLUGIN_RENDERER = define_plugin_renderer({ config: function ChatPluginRenderer({ config: config_gateway, ui }) {
   const { Button, Callout, EmptyState, Group, Input, LoadingState, Page, Row, Section, Select, Stack, Switch, Toolbar } = ui.components;
   const [profile, set_profile] = useState<ChatPluginPublicProfile>();
   const [loading, set_loading] = useState(true);
@@ -24,13 +24,13 @@ export const CHAT_PLUGIN_RENDERER = define_plugin_renderer(function ChatPluginRe
     set_loading(true);
     set_error("");
     try {
-      set_profile(await plugin.invoke("profile.read") as unknown as ChatPluginPublicProfile);
+      set_profile(await config_gateway.invoke("profile.read") as unknown as ChatPluginPublicProfile);
     } catch (reason) {
       set_error(to_error_message(reason));
     } finally {
       set_loading(false);
     }
-  }, [plugin]);
+  }, [config_gateway]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -39,7 +39,7 @@ export const CHAT_PLUGIN_RENDERER = define_plugin_renderer(function ChatPluginRe
     set_saving(true);
     set_error("");
     try {
-      const saved = await plugin.invoke("profile.save", profile as unknown as PluginJsonValue);
+      const saved = await config_gateway.invoke("profile.save", profile as unknown as PluginJsonValue);
       set_profile(saved as unknown as ChatPluginPublicProfile);
       ui.toast({ type: "success", message: "Chat Profile 已保存" });
     } catch (reason) {
@@ -101,7 +101,7 @@ export const CHAT_PLUGIN_RENDERER = define_plugin_renderer(function ChatPluginRe
         />)}</Stack>}
     </Section>
   </Page>;
-});
+} });
 
 /** 编辑一个具体 Channel，凭据输入只保存在当前草稿。 */
 function ChannelEditor({ channel, used_types, components, update, remove }: ChatPluginChannelEditorProps) {

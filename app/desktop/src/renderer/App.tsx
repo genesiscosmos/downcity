@@ -216,6 +216,7 @@ export function App() {
         load_earlier_history={async () => undefined}
       />;
     }
+    if (controller.selection.kind !== "session") return <WelcomeView />;
     const selected_session_id = controller.selection.session_id;
     const workspace_id = controller.selection.workspace_id;
     const session = (controller.sessions_by_workspace[workspace_id] ?? []).find((item) => item.agent_id === selected_agent.agent_id && item.session.session_id === selected_session_id)?.session;

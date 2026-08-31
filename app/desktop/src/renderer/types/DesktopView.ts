@@ -1,6 +1,7 @@
 /** Downcity Desktop Renderer 的页面和交互状态类型。 */
 
 import type { RespondSessionInteractionInput, SessionAssistantInteractionPart, SessionMessage } from "@downcity/agent";
+import type { PluginJsonObject } from "@downcity/plugin";
 import type {
   DesktopAgentSummary,
   DesktopAgentDefinition,
@@ -32,13 +33,14 @@ import type {
 } from "../../common/types/DesktopApi";
 
 /** 设置主视图当前展示的分区。 */
-export type SettingsSection = "user" | "models" | "general" | "appearance" | "chat";
+export type SettingsSection = "user" | "models" | "plugins" | "general" | "appearance" | "chat";
 
 /** 主导航侧边栏当前展示的业务集合。 */
 export type SidebarMode = "chat" | "workspace" | "plugins";
 
 /** 中间主视图当前展示的业务对象。 */
 export type NavigationTarget =
+  | { /** Plugin 工作区列表。 */ kind: "plugins" }
   | { /** Workspace 管理页。 */ kind: "workspace"; /** Workspace 标识。 */ workspace_id: string }
   | { /** Workspace 文件只读预览。 */ kind: "workspace_file"; /** Workspace 标识。 */ workspace_id: string; /** Workspace 内的相对文件路径。 */ relative_path: string }
   | { /** Agent 管理页。 */ kind: "agent"; /** Agent 标识。 */ agent_id: string }
@@ -159,6 +161,8 @@ export interface DesktopViewController {
   active_workspace_id: string;
   /** 主导航侧边栏当前模式。 */
   sidebar_mode: SidebarMode;
+  /** 当前 Plugin Sidebar 与 Mainview 共享的路由。 */
+  plugin_route: PluginJsonObject;
   /** Desktop 用户级偏好。 */
   settings: DesktopSettings;
   /** 当前 Global Env 快照。 */
@@ -179,6 +183,10 @@ export interface DesktopViewController {
   open_agent_chat(agent_id: string): Promise<void>;
   /** 选择 Plugin 详情页。 */
   select_plugin(plugin_id: string): void;
+  /** 返回 Plugin 工作区列表。 */
+  select_plugins(): void;
+  /** 替换当前 Plugin 工作区路由。 */
+  navigate_plugin(route: PluginJsonObject): void;
   /** 切换主导航侧边栏集合。 */
   set_sidebar_mode(mode: SidebarMode): void;
   /** 打开一个 Workspace，并将其设为 Chat 上下文。 */

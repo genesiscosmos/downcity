@@ -44,6 +44,9 @@ export class LocalPluginLoader {
       if (!registration.create_agent) {
         throw new Error(`Plugin does not provide Agent capability: ${plugin_id}`);
       }
+      if (reference.profile && !registration.definition.has_config) {
+        throw new Error(`Plugin does not provide Config: ${plugin_id}`);
+      }
       const plugin_config = reference.profile
         ? this.options.plugin_repository.get_profile(plugin_id, reference.profile)
         : {};
@@ -87,7 +90,9 @@ export class LocalPluginLoader {
           ...definition,
           has_agent: false,
           has_main: Boolean(definition.main),
-          has_renderer: Boolean(definition.renderer),
+          has_sidebar: definition.renderer?.sidebar === true,
+          has_mainview: definition.renderer?.mainview === true,
+          has_config: definition.renderer?.config === true,
         },
       };
     }
@@ -105,7 +110,9 @@ export class LocalPluginLoader {
         ...definition,
         has_agent: true,
         has_main: Boolean(definition.main),
-        has_renderer: Boolean(definition.renderer),
+        has_sidebar: definition.renderer?.sidebar === true,
+        has_mainview: definition.renderer?.mainview === true,
+        has_config: definition.renderer?.config === true,
       },
       create_agent: async (context) => await module.default(context),
     };
@@ -140,8 +147,8 @@ export async function verify_local_installed_plugin_integrity(
 ): Promise<void> {
   const files = [
     "package.json",
-    "README.md",
-    ...[definition.agent, definition.main, definition.renderer]
+    definition.readme,
+    ...[definition.agent, definition.main, definition.renderer?.entry]
       .filter((item): item is string => Boolean(item)),
   ];
   if (definition.icon && !/^https?:\/\//iu.test(definition.icon)) files.push(definition.icon);

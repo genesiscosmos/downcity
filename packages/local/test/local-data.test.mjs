@@ -181,10 +181,18 @@ test("PluginRepository 从安装目录读取 Plugin README", async () => {
   try {
     const plugins = new PluginRepository(root_path);
     const plugin_path = path.join(root_path, "plugins", "example");
-    await fs.mkdir(plugin_path, { recursive: true });
-    await fs.writeFile(path.join(plugin_path, "README.md"), "# Example\n\nPlugin guide.\n", "utf8");
+    const readme_path = path.join(plugin_path, "docs", "plugin-guide.md");
+    await fs.mkdir(path.dirname(readme_path), { recursive: true });
+    await fs.writeFile(readme_path, "# Example\n\nPlugin guide.\n", "utf8");
 
-    assert.equal(plugins.read_installed_readme("example"), "# Example\n\nPlugin guide.\n");
+    assert.equal(
+      plugins.read_installed_readme("example", "docs/plugin-guide.md"),
+      "# Example\n\nPlugin guide.\n",
+    );
+    assert.throws(
+      () => plugins.read_installed_readme("example", "../outside.md"),
+      /README must stay inside the Plugin directory/u,
+    );
   } finally {
     await fs.rm(root_path, { recursive: true, force: true });
   }

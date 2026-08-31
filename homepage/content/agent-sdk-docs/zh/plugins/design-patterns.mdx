@@ -66,9 +66,7 @@ ActionSchedule 有意不建模成 plugin；它是共享的 Agent action 模块�
 
 当 plugin 主要通过 HTTP 暴露状态或控制面时，使用这种形态。
 
-典型例子：
-
-- `workboard`
+这种形态适合由自定义 Plugin 提供专用状态端点，同时复用宿主的鉴权与生命周期。
 
 ## 一个实用判断
 

@@ -28,20 +28,29 @@ function write_plugin_source(root, input = {}) {
   const description = input.description ?? "Example Plugin for configuration tests.";
   const agent = input.agent === null ? undefined : input.agent ?? "dist/agent.js";
   const main = input.main === null ? undefined : input.main ?? "dist/main.js";
-  const renderer = input.renderer === null ? undefined : input.renderer ?? "dist/mainview.js";
+  const renderer_input = input.renderer === null ? undefined : input.renderer ?? "dist/mainview.js";
+  const renderer = typeof renderer_input === "string"
+    ? { entry: renderer_input, sidebar: true, mainview: true, config: true }
+    : renderer_input;
+  const readme_path = input.readme_path === null ? undefined : input.readme_path ?? "README.md";
   fs.writeFileSync(
     path.join(root, "package.json"),
     input.package_source ?? JSON.stringify({ type: "module" }),
   );
-  fs.writeFileSync(
-    path.join(root, "README.md"),
-    input.readme ?? "# Example Plugin\n\nConfiguration and usage.\n",
-  );
+  if (readme_path && input.write_readme !== false) {
+    const readme_file_path = path.join(root, readme_path);
+    fs.mkdirSync(path.dirname(readme_file_path), { recursive: true });
+    fs.writeFileSync(
+      readme_file_path,
+      input.readme ?? "# Example Plugin\n\nConfiguration and usage.\n",
+    );
+  }
   fs.writeFileSync(path.join(root, "plugin.json"), JSON.stringify({
     schema_version: 1,
     id,
     version,
     description,
+    ...(readme_path ? { readme: readme_path } : {}),
     ...(agent ? { agent } : {}),
     ...(main ? { main } : {}),
     ...(renderer ? { renderer } : {}),
@@ -71,15 +80,15 @@ export default function create_agent_plugin(context) {
     fs.writeFileSync(main_path, input.main_source ?? `
 export default {
   activate(context) {
-    context.plugin.action({ id: "profile.read", run: async (_input, action_context) => action_context.config.get() });
+    context.plugin.config_action({ id: "profile.read", run: async (_input, action_context) => action_context.config.get() });
   },
 };
 `);
   }
   if (renderer) {
-    const renderer_path = path.join(root, renderer);
+    const renderer_path = path.join(root, renderer.entry);
     fs.mkdirSync(path.dirname(renderer_path), { recursive: true });
-    fs.writeFileSync(renderer_path, input.renderer_source ?? "export default function ExampleMainview() { return null; }\n");
+    fs.writeFileSync(renderer_path, input.renderer_source ?? "export default { sidebar: function ExampleSidebar() { return null; }, mainview: function ExampleMainview() { return null; }, config: function ExampleConfig() { return null; } };\n");
   }
   if (input.source_config) {
     fs.writeFileSync(path.join(root, "config.toml"), input.source_config);
@@ -255,7 +264,8 @@ test("第三方 Plugin 使用 definition ID 目录和三入口协议", async () 
     assert.equal(installed.id, "example");
     assert.equal(installed.agent, "dist/agent.js");
     assert.equal(installed.main, "dist/main.js");
-    assert.equal(installed.renderer, "dist/mainview.js");
+    assert.deepEqual(installed.renderer, { entry: "dist/mainview.js", sidebar: true, mainview: true, config: true });
+    assert.equal(installed.readme, "README.md");
     assert.match(installed.integrity, /^sha256-[a-f0-9]{64}$/u);
     const plugin_dir = path.join(platform_root, "plugins", "example");
     assert.equal(fs.existsSync(path.join(plugin_dir, "plugin.json")), true);
@@ -442,15 +452,53 @@ test("第三方 Plugin 安装本地 icon 并保留远程 icon 地址", async () 
   }
 });
 
-test("第三方 Plugin 必须提供 README.md", async () => {
+test("第三方 Plugin 必须声明并提供 Markdown README", async () => {
   const platform_root = create_temp_root();
   const plugin_source = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
   try {
-    write_plugin_source(plugin_source);
-    fs.rmSync(path.join(plugin_source, "README.md"));
     const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
+
+    write_plugin_source(plugin_source, { readme_path: null });
+    await assert.rejects(() => installer.install_plugin(plugin_source), /readme is required/u);
+
+    write_plugin_source(plugin_source, { write_readme: false });
     await assert.rejects(() => installer.install_plugin(plugin_source), /README not found/u);
+
+    write_plugin_source(plugin_source, { readme_path: "../README.md", write_readme: false });
+    await assert.rejects(
+      () => installer.install_plugin(plugin_source),
+      /README must stay inside the Plugin directory/u,
+    );
+
+    write_plugin_source(plugin_source, { readme_path: "/README.md", write_readme: false });
+    await assert.rejects(() => installer.install_plugin(plugin_source), /readme must be relative/u);
+
+    write_plugin_source(plugin_source, { readme_path: "docs/guide.txt" });
+    await assert.rejects(() => installer.install_plugin(plugin_source), /readme must use .md/u);
+
+    write_plugin_source(plugin_source, {
+      readme_path: "docs/plugin-guide.md",
+      readme: "# Nested Guide\n",
+    });
+    const installed = await installer.install_plugin(plugin_source);
+    assert.equal(installed.readme, "docs/plugin-guide.md");
+    assert.equal(
+      fs.readFileSync(
+        path.join(platform_root, "plugins", "example", "docs", "plugin-guide.md"),
+        "utf8",
+      ),
+      "# Nested Guide\n",
+    );
+    fs.appendFileSync(
+      path.join(platform_root, "plugins", "example", "docs", "plugin-guide.md"),
+      "\nTampered.\n",
+    );
+    const catalog = await import("../bin/city/process/plugin/PluginCatalog.js");
+    await assert.rejects(
+      () => catalog.resolve_plugin_catalog_item("example"),
+      /integrity check failed/u,
+    );
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });
@@ -482,7 +530,7 @@ test("Plugin 安装拒绝内置 ID、非法清单与逃逸入口", async () => {
     await assert.rejects(() => installer.install_plugin(plugin_source), /agent must use .js or .mjs/u);
 
     write_plugin_source(plugin_source, { renderer: "dist/mainview.html" });
-    await assert.rejects(() => installer.install_plugin(plugin_source), /renderer must use .js or .mjs/u);
+    await assert.rejects(() => installer.install_plugin(plugin_source), /renderer\.entry must use .js or .mjs/u);
 
     write_plugin_source(plugin_source, { agent: null, main: null, renderer: null });
     await assert.rejects(() => installer.install_plugin(plugin_source), /must provide agent, main, or renderer/u);
@@ -622,16 +670,26 @@ test("内建 Plugin Catalog 暴露三类能力与 Profile 列表", async () => {
     assert.equal(chat.source, "builtin");
     assert.equal(chat.has_agent, true);
     assert.equal(chat.has_main, true);
-    assert.equal(chat.has_renderer, true);
+    assert.equal(chat.has_config, true);
+    assert.equal(chat.has_mainview, false);
     assert.deepEqual(chat.profiles, []);
     const memory = await catalog.resolve_plugin_catalog_item("memory");
     assert.equal(memory.has_agent, true);
     assert.equal(memory.has_main, false);
-    assert.equal(memory.has_renderer, false);
+    assert.equal(memory.has_config, false);
+    assert.equal(memory.has_mainview, false);
     const web = await catalog.resolve_plugin_catalog_item("web");
     assert.equal(web.has_agent, true);
     assert.equal(web.has_main, true);
-    assert.equal(web.has_renderer, true);
+    assert.equal(web.has_config, true);
+    assert.equal(web.has_mainview, false);
+    const skill = await catalog.resolve_plugin_catalog_item("skill");
+    assert.equal(skill.has_agent, true);
+    assert.equal(skill.has_main, true);
+    assert.equal(skill.has_config, false);
+    assert.equal(skill.has_sidebar, true);
+    assert.equal(skill.has_mainview, true);
+    assert.deepEqual(skill.profiles, []);
     const result = spawnSync(process.execPath, [path.resolve("bin/downcity.js"), "plugin", "list"], {
       encoding: "utf8",
       env: { ...process.env, NO_COLOR: "1" },

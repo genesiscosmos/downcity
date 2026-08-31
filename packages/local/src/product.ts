@@ -34,6 +34,7 @@ export type {
   LocalInstalledPluginDefinition,
   LocalPluginConfig,
   LocalPluginDefinition,
+  LocalPluginRendererDefinition,
   LocalPluginRegistration,
 } from "./types/LocalPlugin.js";
 export type {

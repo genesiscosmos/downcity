@@ -76,7 +76,7 @@ export function registerPluginsCommand(program: Command): void {
         facts: [
           ...(installed.agent ? [{ label: "Agent", value: installed.agent }] : []),
           ...(installed.main ? [{ label: "Main", value: installed.main }] : []),
-          ...(installed.renderer ? [{ label: "Renderer", value: installed.renderer }] : []),
+          ...(installed.renderer ? [{ label: "Renderer", value: installed.renderer.entry }] : []),
         ],
       });
     });
@@ -209,6 +209,7 @@ function register_profile_commands(plugin: Command): void {
       const profile = String(profile_input || "default").trim();
       const catalog = await resolve_plugin_catalog_item(plugin_id);
       if (!catalog) throw new Error(`Plugin not found: ${plugin_id}`);
+      if (!catalog.has_config) throw new Error(`Plugin does not provide Config: ${plugin_id}`);
       if (options.remove) {
         remove_plugin_profile(plugin_id, profile);
         emitCliBlock({ tone: "success", title: "Plugin profile removed", summary: `${plugin_id}/${profile}` });

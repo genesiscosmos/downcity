@@ -1,4 +1,4 @@
-/** 官方 Plugin 设置 Mainview 的内部声明类型。 */
+/** 官方 Plugin Config 的内部声明类型。 */
 
 /** 简单设置字段支持的值类型。 */
 export type PluginSettingFieldType = "string" | "number" | "boolean" | "select";
@@ -8,7 +8,7 @@ export interface PluginSettingField {
   /** Profile 配置中的稳定字段名。 */
   readonly key: string;
 
-  /** Mainview 展示名称。 */
+  /** Config 展示名称。 */
   readonly label: string;
 
   /** 可选的用户说明。 */
@@ -28,17 +28,17 @@ export interface PluginSettingField {
     /** 保存到配置的值。 */
     readonly value: string;
 
-    /** Mainview 展示文本。 */
+    /** Config 展示文本。 */
     readonly label: string;
   }[];
 }
 
-/** 一个简单设置 Mainview 的完整定义。 */
+/** 一个简单 Config 的完整定义。 */
 export interface PluginSettingsDefinition {
-  /** Mainview 标题。 */
+  /** Config 标题。 */
   readonly title: string;
 
-  /** Mainview 说明。 */
+  /** Config 说明。 */
   readonly description: string;
 
   /** Plugin 自己拥有的全部配置字段。 */

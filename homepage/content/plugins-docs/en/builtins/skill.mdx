@@ -9,6 +9,16 @@ description: How the built-in skill plugin discovers, verifies, and loads local 
 
 `find` and `install` are instruction-only actions. They use the input and active `SkillPlugin` scan configuration to return Shell guidance, but they never execute commands, access the network, or change files. The Agent follows the returned prompt with the `skills` CLI.
 
+## Desktop workspace
+
+Skill does not declare Config, so it needs no Profile. It appears in the Plugin List under the Plugins Tab and provides three scope entries in its own Sidebar:
+
+- **Workspace** selects a registered Workspace and browses, filters, reads, or removes its `.agents/skills`.
+- **Personal** manages Skills under `~/.agents/skills`.
+- **Discover** searches the public catalog through the official `skills` CLI and installs into Personal or a selected Workspace.
+
+After a scope is selected, the Mainview shows its Skill list and details. These management operations run through host `main` actions and are separate from the instruction-only Agent `find/install` actions below. Removing a Skill permanently deletes its directory from the selected scope after confirmation.
+
 ## Registration
 
 ```ts

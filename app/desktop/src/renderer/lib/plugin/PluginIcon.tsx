@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from "react";
 import {
-  TbAddressBook,
   TbChecklist,
   TbDatabase,
-  TbLayoutKanban,
   TbMessageCircle,
   TbPhoto,
   TbPlugConnected,
@@ -39,11 +37,9 @@ export function PluginIcon({ plugin_id, icon_url, class_name = "size-4" }: {
 /** 返回官方 Plugin 的稳定语义图标，未知 Plugin 使用通用连接图标。 */
 function render_fallback_plugin_icon(plugin_id: string, class_name: string) {
   if (plugin_id === "chat") return <TbMessageCircle className={class_name} />;
-  if (plugin_id === "contact") return <TbAddressBook className={class_name} />;
   if (plugin_id === "memory") return <TbDatabase className={class_name} />;
   if (plugin_id === "skill") return <TbSparkles className={class_name} />;
   if (plugin_id === "task") return <TbChecklist className={class_name} />;
-  if (plugin_id === "workboard") return <TbLayoutKanban className={class_name} />;
   if (plugin_id === "web") return <TbWorld className={class_name} />;
   if (plugin_id === "image") return <TbPhoto className={class_name} />;
   if (plugin_id === "sound") return <TbVolume className={class_name} />;
