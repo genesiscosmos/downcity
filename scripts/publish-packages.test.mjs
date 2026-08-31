@@ -3,7 +3,7 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import test from "node:test";
 
 import { resolve_publish_layers } from "../.github/scripts/resolve-publish-matrix.mjs";
@@ -15,6 +15,39 @@ import {
   resolve_scoped_selection,
   verify_publish_plan,
 } from "./publish-packages.mjs";
+
+const federation_extension_manifests = [
+  "packages/services/package.json",
+  "packages/database-d1/package.json",
+  "packages/database-postgresql/package.json",
+  "packages/database-sqlite/package.json",
+];
+
+/** 读取用于守护运行时所有权边界的 package manifest。 */
+function read_manifest(manifest_path) {
+  return JSON.parse(readFileSync(manifest_path, "utf8"));
+}
+
+test("Federation 扩展包只声明宿主持有的 peer 运行时", () => {
+  for (const manifest_path of federation_extension_manifests) {
+    const manifest = read_manifest(manifest_path);
+    assert.equal(
+      manifest.dependencies?.["@downcity/federation"],
+      undefined,
+      `${manifest.name} 不得拥有 Federation 运行时`,
+    );
+    assert.equal(
+      manifest.peerDependencies?.["@downcity/federation"],
+      "workspace:^",
+      `${manifest.name} 必须声明 Federation 兼容范围`,
+    );
+    assert.equal(
+      manifest.devDependencies?.["@downcity/federation"],
+      "workspace:*",
+      `${manifest.name} 必须使用 workspace Federation 完成本地构建`,
+    );
+  }
+});
 
 test("发布 manifest 会识别全部依赖字段中的 workspace 协议", () => {
   assert.deepEqual(

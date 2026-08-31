@@ -479,9 +479,6 @@ importers:
 
   packages/database-d1:
     dependencies:
-      '@downcity/federation':
-        specifier: workspace:*
-        version: link:../federation
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.4.0)(kysely@0.29.2)(postgres@3.4.9)(sql.js@1.14.1)
@@ -489,6 +486,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20260530.1
         version: 4.20260530.1
+      '@downcity/federation':
+        specifier: workspace:*
+        version: link:../federation
       miniflare:
         specifier: ^4.20260526.0
         version: 4.20260526.0
@@ -498,9 +498,6 @@ importers:
 
   packages/database-postgresql:
     dependencies:
-      '@downcity/federation':
-        specifier: workspace:*
-        version: link:../federation
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.4.0)(kysely@0.29.2)(postgres@3.4.9)(sql.js@1.14.1)
@@ -508,15 +505,15 @@ importers:
         specifier: ^3.4.9
         version: 3.4.9
     devDependencies:
+      '@downcity/federation':
+        specifier: workspace:*
+        version: link:../federation
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
 
   packages/database-sqlite:
     dependencies:
-      '@downcity/federation':
-        specifier: workspace:*
-        version: link:../federation
       better-sqlite3:
         specifier: ^12.10.0
         version: 12.10.0
@@ -524,6 +521,9 @@ importers:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.4.0)(kysely@0.29.2)(postgres@3.4.9)(sql.js@1.14.1)
     devDependencies:
+      '@downcity/federation':
+        specifier: workspace:*
+        version: link:../federation
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -800,9 +800,6 @@ importers:
 
   packages/services:
     dependencies:
-      '@downcity/federation':
-        specifier: workspace:*
-        version: link:../federation
       '@waffo/pancake-ts':
         specifier: ^0.11.0
         version: 0.11.0
@@ -822,6 +819,9 @@ importers:
       '@downcity/database-sqlite':
         specifier: workspace:*
         version: link:../database-sqlite
+      '@downcity/federation':
+        specifier: workspace:*
+        version: link:../federation
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
