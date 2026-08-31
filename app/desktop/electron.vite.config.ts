@@ -23,6 +23,8 @@ export default defineConfig({
       alias: { "@": resolve("src/renderer"), "@common": resolve("src/common") },
       dedupe: ["react", "react-dom"],
     },
+    // 关键点（中文）：Mermaid 包含动态图表模块和 CommonJS 依赖；作为直接依赖在启动阶段完整预构建。
+    optimizeDeps: { include: ["mermaid"] },
     plugins: [tailwindcss(), react()],
     server: {
       host: "127.0.0.1",

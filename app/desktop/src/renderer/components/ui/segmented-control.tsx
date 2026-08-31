@@ -31,6 +31,7 @@ interface SegmentedControlProps<Value extends string> {
 export function SegmentedControl<const Value extends string>(props: SegmentedControlProps<Value>) {
   const group_ref = useRef<HTMLDivElement>(null);
   const indicator_ref = useRef<HTMLSpanElement>(null);
+  const initialized_ref = useRef(false);
   const update_indicator = useCallback(() => {
     const group = group_ref.current;
     const indicator = indicator_ref.current;
@@ -47,13 +48,19 @@ export function SegmentedControl<const Value extends string>(props: SegmentedCon
   }, []);
 
   useLayoutEffect(() => {
+    const indicator = indicator_ref.current;
+    if (indicator && !initialized_ref.current) indicator.style.transition = "none";
     update_indicator();
+    const animation_frame = window.requestAnimationFrame(() => {
+      if (indicator) indicator.style.removeProperty("transition");
+      initialized_ref.current = true;
+    });
     const group = group_ref.current;
-    if (!group) return;
+    if (!group) return () => window.cancelAnimationFrame(animation_frame);
     const resize_observer = new ResizeObserver(update_indicator);
     resize_observer.observe(group);
     group.querySelectorAll<HTMLElement>("[data-segmented-option]").forEach((option) => resize_observer.observe(option));
-    return () => resize_observer.disconnect();
+    return () => { window.cancelAnimationFrame(animation_frame); resize_observer.disconnect(); };
   }, [props.value, update_indicator]);
 
   const handle_key_down = (event: KeyboardEvent<HTMLButtonElement>, current_value: Value) => {

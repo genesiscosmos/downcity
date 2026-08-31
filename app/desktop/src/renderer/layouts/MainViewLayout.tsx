@@ -2,7 +2,7 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 import { motion } from "framer-motion";
-import { TbMessages } from "react-icons/tb";
+import { TbMenu2 } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { SHELL_PANEL_TRANSITION } from "./shellMotion";
 
@@ -52,7 +52,7 @@ export function MainViewHeader({ title, left_actions, left_inset = 0, right_acti
 
 /** Chat Header 中的 Session Sidebar 开关。 */
 export function SessionSidebarButton({ collapsed, toggle_collapsed }: { /** Session Sidebar 是否折叠。 */ collapsed: boolean; /** 切换 Session Sidebar。 */ toggle_collapsed(): void }) {
-  return <Button size="icon" actived={!collapsed} onClick={toggle_collapsed} title={collapsed ? "展开 Session 列表" : "折叠 Session 列表"} aria-label={collapsed ? "展开 Session 列表" : "折叠 Session 列表"}><TbMessages /></Button>;
+  return <Button size="icon" actived={!collapsed} onClick={toggle_collapsed} title={collapsed ? "展开 Left Panel" : "折叠 Left Panel"} aria-label={collapsed ? "展开 Left Panel" : "折叠 Left Panel"}><TbMenu2 /></Button>;
 }
 
 /** 主视图的可增长内容区域。 */

@@ -20,6 +20,20 @@ const assistant_message: SessionAssistantMessage = {
   parts: [{ part_id: "text-1", sequence: 1, type: "text", text: "你", state: "streaming" }],
 };
 
+const user_message: SessionUserMessage = {
+  message_id: "user-1",
+  session_id: "session-1",
+  turn_id: "turn-1",
+  sequence: 1,
+  revision: 1,
+  visibility: "visible",
+  created_at: 1,
+  updated_at: 1,
+  type: "user",
+  input_type: "prompt",
+  parts: [{ part_id: "user-text-1", type: "text", text: "问题", state: "done" }],
+};
+
 test("按 delta 更新 assistant part 并拒绝旧 revision", () => {
   const delta: SessionMutation = {
     mutation_id: "mutation-1",
@@ -40,21 +54,37 @@ test("按 delta 更新 assistant part 并拒绝旧 revision", () => {
 });
 
 test("较旧 snapshot 不覆盖已经收到的实时消息", () => {
-  const user_message: SessionUserMessage = {
-    message_id: "user-1",
-    session_id: "session-1",
-    turn_id: "turn-1",
-    sequence: 1,
-    revision: 1,
-    visibility: "visible",
-    created_at: 1,
-    updated_at: 1,
-    type: "user",
-    input_type: "prompt",
-    parts: [{ part_id: "user-text-1", type: "text", text: "问题", state: "done" }],
-  };
   const live_message = { ...assistant_message, revision: 3 };
   const merged = merge_session_snapshot([live_message], [user_message, assistant_message]);
   assert.deepEqual(merged.map((message) => message.message_id), ["user-1", "assistant-1"]);
   assert.equal(merged[1].revision, 3);
+});
+
+test("用户消息与 assistant delta 通过同一 mutation 流连续投影", () => {
+  const with_user = apply_session_mutation([assistant_message], {
+    mutation_id: "mutation-user",
+    session_id: "session-1",
+    created_at: 1,
+    variant: "message",
+    type: "snapshot",
+    message_id: "user-1",
+    turn_id: "turn-1",
+    revision: 1,
+    message: user_message,
+  });
+  const updated = apply_session_mutation(with_user, {
+    mutation_id: "mutation-stream",
+    session_id: "session-1",
+    created_at: 2,
+    variant: "delta",
+    type: "text",
+    message_id: "assistant-1",
+    turn_id: "turn-1",
+    revision: 2,
+    part_id: "text-1",
+    delta: "好",
+  });
+  assert.deepEqual(updated.map((message) => message.message_id), ["user-1", "assistant-1"]);
+  assert.equal(updated[1].type === "assistant" && updated[1].parts[0].type === "text" ? updated[1].parts[0].text : "", "你好");
+  assert.equal(updated[1].type === "assistant" ? updated[1].status : "", "streaming");
 });

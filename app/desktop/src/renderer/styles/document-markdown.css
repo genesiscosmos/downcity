@@ -1,0 +1,89 @@
+/* Workspace Markdown 文档的独立阅读排版。 */
+
+.workspace-document-markdown {
+  min-width: 0;
+  max-width: 100%;
+  color: color-mix(in srgb, var(--foreground) 90%, transparent);
+  font-size: 0.875rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.workspace-document-markdown :where(p) { margin: 0.65rem 0; }
+
+.workspace-document-markdown :where(h1, h2, h3, h4) {
+  color: var(--foreground);
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.workspace-document-markdown :where(h1) {
+  margin: 0 0 1.25rem;
+  font-size: 1.75rem;
+}
+
+.workspace-document-markdown :where(h2) { margin: 1.8rem 0 0.7rem; font-size: 1.3rem; }
+.workspace-document-markdown :where(h3) { margin: 1.5rem 0 0.55rem; font-size: 1.1rem; }
+.workspace-document-markdown :where(h4) { margin: 1.25rem 0 0.45rem; font-size: 0.95rem; }
+.workspace-document-markdown :where(strong) { color: var(--foreground); font-weight: 650; }
+
+.workspace-document-markdown :where(a) {
+  color: var(--primary);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--primary) 35%, transparent);
+  text-underline-offset: 0.2em;
+}
+
+.workspace-document-markdown :where(a:hover) { text-decoration-color: var(--primary); }
+
+.workspace-document-markdown :where(ul, ol),
+.workspace-document-markdown [data-streamdown="unordered-list"],
+.workspace-document-markdown [data-streamdown="ordered-list"] {
+  margin: 0.9rem 0 !important;
+  padding-left: 1.5rem !important;
+}
+
+.workspace-document-markdown :where(li),
+.workspace-document-markdown [data-streamdown="list-item"] { margin: 0.28rem 0 !important; line-height: 1.72 !important; }
+
+.workspace-document-markdown :where(blockquote) {
+  margin: 1rem 0;
+  padding: 0.25rem 0 0.25rem 0.85rem;
+  border-left: 2px solid color-mix(in srgb, var(--foreground) 25%, transparent);
+  color: var(--muted-foreground);
+}
+
+.workspace-document-markdown :where(blockquote p) { margin: 0.25rem 0; }
+
+.workspace-document-markdown code:not(pre code) {
+  padding: 0.14rem 0.34rem;
+  border: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  border-radius: 0.32rem;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--muted) 48%, transparent) !important;
+  font-size: 0.88em;
+}
+
+.workspace-document-markdown :where(pre),
+.workspace-document-markdown [data-streamdown="code-block"] {
+  --vc-chat-code-foreground: var(--foreground);
+  --vc-chat-code-background: color-mix(in srgb, var(--muted) 36%, var(--background));
+  max-width: 100%;
+  margin: 1rem 0 !important;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border) 62%, transparent) !important;
+  border-radius: 0.5rem !important;
+  background: var(--vc-chat-code-background) !important;
+}
+
+.workspace-document-markdown [data-streamdown="code-block-header"] { padding: 0.45rem 0.8rem !important; background: transparent !important; }
+.workspace-document-markdown [data-streamdown="code-block-body"] { overflow-x: auto; padding: 0.8rem 1rem 1rem !important; background: transparent !important; font-size: 0.8rem !important; line-height: 1.65 !important; }
+.workspace-document-markdown :where(img) { display: block; max-width: 100%; height: auto; margin: 1rem 0; }
+.workspace-document-markdown :where(hr) { margin: 1.5rem 0; border: 0; border-top: 1px solid var(--border); }
+.workspace-document-markdown div[data-streamdown="table-wrapper"] { margin: 1rem 0 !important; overflow-x: auto; }
+
+@media (max-width: 720px) {
+  .workspace-document { padding: 1.25rem; }
+}

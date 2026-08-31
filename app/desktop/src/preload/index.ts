@@ -3,6 +3,10 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { DesktopAgentSummary, DesktopApi } from "../common/types/DesktopApi.js";
 
 const desktop_api: DesktopApi = {
+  system: {
+    open_external_url: (url) => ipcRenderer.invoke("system:open-external-url", url),
+    open_local_file: (file_path) => ipcRenderer.invoke("system:open-local-file", file_path),
+  },
   agent: {
     list: (): Promise<DesktopAgentSummary[]> => ipcRenderer.invoke("agent:list"),
     get: (agent_id) => ipcRenderer.invoke("agent:get", agent_id),

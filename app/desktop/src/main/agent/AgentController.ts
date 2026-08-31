@@ -573,9 +573,8 @@ export class AgentController {
 
   /** 永久删除 Session，并释放 Desktop 对它的进程内投影。 */
   async remove_session(agent_id: string, workspace_id: string, session_id: string): Promise<boolean> {
-    void workspace_id;
     const removed = await this.require_native_agent(agent_id).sessions.remove(session_id);
-    if (removed) this.release_session_projection(agent_id, workspace_id, session_id);
+    this.release_session_projection(agent_id, workspace_id, session_id);
     return removed;
   }
 
@@ -701,7 +700,7 @@ export class AgentController {
   /** 向 Session 提交输入；后续执行结果通过实时事件广播。 */
   async send_message(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatInput): Promise<DesktopChatSendResult> {
     const query = normalize_chat_input(input);
-    const session = await this.get_session(agent_id, workspace_id, session_id);
+    const session = await this.get_execution_session(agent_id, workspace_id, session_id);
     this.update_runtime({ agent_id, workspace_id, session_id, status: "submitted", updated_at: Date.now() });
     try {
       const turn = await session.prompt({ query });
@@ -732,7 +731,7 @@ export class AgentController {
 
   /** 将显式压缩命令加入 Session 的有序执行队列。 */
   async compact_session(agent_id: string, workspace_id: string, session_id: string): Promise<void> {
-    const session = await this.get_session(agent_id, workspace_id, session_id);
+    const session = await this.get_execution_session(agent_id, workspace_id, session_id);
     await session.compact();
   }
 
@@ -896,8 +895,14 @@ export class AgentController {
   private async get_session(agent_id: string, workspace_id: string, session_id: string): Promise<AgentSession> {
     const entry = await this.require_workspace_entry(agent_id, workspace_id);
     const session = await this.require_native_agent(agent_id).sessions.get(session_id, { workspace: entry.workspace });
-    await this.restore_session_model(agent_id, workspace_id, session);
     this.observe_session(agent_id, workspace_id, session);
+    return session;
+  }
+
+  /** 读取即将执行模型调用的 Session，并在执行边界恢复其模型覆盖。 */
+  private async get_execution_session(agent_id: string, workspace_id: string, session_id: string): Promise<AgentSession> {
+    const session = await this.get_session(agent_id, workspace_id, session_id);
+    await this.restore_session_model(agent_id, workspace_id, session);
     return session;
   }
 

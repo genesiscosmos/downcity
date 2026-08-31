@@ -694,6 +694,13 @@ export interface DesktopLoginResult {
 
 /** Preload 向 Renderer 暴露的最小 API。 */
 export interface DesktopApi {
+  /** Desktop 宿主提供的系统级打开能力。 */
+  system: {
+    /** 使用系统默认浏览器打开 HTTP(S) 地址。 */
+    open_external_url(url: string): Promise<void>;
+    /** 使用系统默认应用打开绝对本地文件。 */
+    open_local_file(file_path: string): Promise<void>;
+  };
   /** Agent 注册和运行能力。 */
   agent: {
     /** 列出共享 Registry 中的全部 Agent。 */

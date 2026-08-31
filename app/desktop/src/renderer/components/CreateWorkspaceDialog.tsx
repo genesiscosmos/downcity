@@ -1,6 +1,6 @@
 /** 独立登记 Workspace 的正式 Dialog。 */
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { TbFolder, TbFolderOpen } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,6 +8,8 @@ import type { CreateWorkspaceFormValue } from "@/types/DesktopView";
 
 /** 创建 Workspace 对话框属性。 */
 interface CreateWorkspaceDialogProps {
+  /** Dialog 当前是否打开。 */
+  open: boolean;
   /** 关闭对话框。 */
   close_dialog(): void;
   /** 提交 Workspace。 */
@@ -15,12 +17,22 @@ interface CreateWorkspaceDialogProps {
 }
 
 /** 选择本地目录并独立登记 Workspace。 */
-export function CreateWorkspaceDialog({ close_dialog, create_workspace }: CreateWorkspaceDialogProps) {
+export function CreateWorkspaceDialog({ open, close_dialog, create_workspace }: CreateWorkspaceDialogProps) {
   const [workspace_path, set_workspace_path] = useState("");
   const [name, set_name] = useState("");
   const [submitting, set_submitting] = useState(false);
   const [form_error, set_form_error] = useState("");
   const name_edited = useRef(false);
+  const reset_form = () => {
+    set_workspace_path("");
+    set_name("");
+    set_form_error("");
+    name_edited.current = false;
+  };
+
+  useEffect(() => {
+    if (open) reset_form();
+  }, [open]);
 
   const choose_directory = async () => {
     const next_path = await window.downcity.dialog.open_directory();
@@ -47,7 +59,7 @@ export function CreateWorkspaceDialog({ close_dialog, create_workspace }: Create
     }
   };
 
-  return <Dialog open onOpenChange={(open) => { if (!open && !submitting) close_dialog(); }}><DialogContent>
+  return <Dialog open={open} onOpenChange={(next_open) => { if (!next_open && !submitting) close_dialog(); }} onOpenChangeComplete={(next_open) => { if (!next_open) reset_form(); }}><DialogContent>
     <form onSubmit={(event) => void submit_form(event)}>
       <DialogHeader className="flex items-start gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><TbFolder className="size-4.5" /></div><div><DialogTitle>添加 Workspace</DialogTitle><DialogDescription>Workspace 是对话的一级上下文；添加后再为它创建 Agent。</DialogDescription></div></DialogHeader>
       <DialogBody className="flex flex-col gap-3">

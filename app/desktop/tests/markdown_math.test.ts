@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalize_markdown_math } from "../src/renderer/lib/chat/markdown_math.ts";
+import { normalize_markdown_math } from "../src/renderer/lib/markdown/normalize_markdown_math.ts";
 
 test("兼容 LaTeX 方括号公式", () => {
   assert.equal(normalize_markdown_math("\\[x^2\\]"), "$x^2$");

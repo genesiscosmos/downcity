@@ -5,6 +5,7 @@
 @import "./semantic-colors.css";
 @import "./tokens.css";
 @import "./chat.css";
+@import "./document-markdown.css";
 
 @layer base {
   * {
@@ -90,7 +91,6 @@
 .desktop-dialog-backdrop {
   opacity: 1;
   transition: opacity 200ms ease-out;
-  animation: desktop-dialog-backdrop-in 200ms ease-out both;
 }
 
 .desktop-dialog-backdrop[data-starting-style],
@@ -102,23 +102,12 @@
   opacity: 1;
   scale: 1;
   transition: opacity 200ms ease-out, scale 200ms ease-out;
-  animation: desktop-dialog-popup-in 200ms ease-out both;
 }
 
 .desktop-dialog-popup[data-starting-style],
 .desktop-dialog-popup[data-ending-style] {
   opacity: 0;
   scale: 0.97;
-}
-
-@keyframes desktop-dialog-backdrop-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes desktop-dialog-popup-in {
-  from { opacity: 0; scale: 0.97; }
-  to { opacity: 1; scale: 1; }
 }
 
 button,

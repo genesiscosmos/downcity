@@ -1,6 +1,6 @@
 /** 使用目录选择器和真实模型目录创建 Agent。 */
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { TbGhost3 } from "react-icons/tb";
 import { ModelSelector } from "@/components/model/ModelSelector";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import type { DesktopModelSummary, DesktopWorkspaceSummary } from "@common/types
 
 /** 创建 Agent 对话框属性。 */
 interface CreateAgentDialogProps {
+  /** Dialog 当前是否打开。 */ open: boolean;
   /** 关闭对话框。 */ close_dialog(): void;
   /** 提交创建。 */ create_agent(value: CreateAgentFormValue): Promise<void>;
   /** 当前 Federation 模型目录。 */ models: DesktopModelSummary[];
@@ -19,12 +20,22 @@ interface CreateAgentDialogProps {
 }
 
 /** 正式的 Agent 创建流程。 */
-export function CreateAgentDialog({ close_dialog, create_agent, models, models_loading, default_model_id, workspace }: CreateAgentDialogProps) {
+export function CreateAgentDialog({ open, close_dialog, create_agent, models, models_loading, default_model_id, workspace }: CreateAgentDialogProps) {
   const text_models = models.filter((model) => model.modalities.some((modality) => ["text", "stream", "openai"].includes(modality)));
   const [agent_id, set_agent_id] = useState(() => workspace ? to_agent_id(workspace.workspace_path) : "");
   const [model_id, set_model_id] = useState(default_model_id || text_models[0]?.model_id || "");
   const [submitting, set_submitting] = useState(false);
   const [form_error, set_form_error] = useState("");
+  const reset_form = () => {
+    set_agent_id(workspace ? to_agent_id(workspace.workspace_path) : "");
+    set_model_id(default_model_id || text_models[0]?.model_id || "");
+    set_form_error("");
+  };
+
+  useEffect(() => {
+    if (open) reset_form();
+  }, [open]);
+
   const submit_form = async (event: FormEvent) => {
     event.preventDefault();
     if (!agent_id.trim() || !model_id.trim()) {
@@ -43,7 +54,7 @@ export function CreateAgentDialog({ close_dialog, create_agent, models, models_l
     }
   };
 
-  return <Dialog open onOpenChange={(open) => { if (!open && !submitting) close_dialog(); }}><DialogContent>
+  return <Dialog open={open} onOpenChange={(next_open) => { if (!next_open && !submitting) close_dialog(); }} onOpenChangeComplete={(next_open) => { if (!next_open) reset_form(); }}><DialogContent>
     <form onSubmit={(event) => void submit_form(event)}>
       <DialogHeader className="flex items-start gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><TbGhost3 className="size-4.5" /></div><div><DialogTitle>创建 Agent</DialogTitle><DialogDescription>Agent 可在多个 Workspace 中执行；Workspace 在开始对话时选择。</DialogDescription></div></DialogHeader>
       <DialogBody className="flex flex-col gap-3">

@@ -1,12 +1,14 @@
 /** 运行时 Group 共享消息视图，保持与 Agent Session Chat 一致的视觉结构。 */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { TbCheck, TbChevronDown, TbChevronRight, TbFileText, TbLoader2, TbUsers } from "react-icons/tb";
+import { TbChevronDown, TbChevronRight, TbFileText, TbLoader2, TbUsers } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { DetailEditorSidebar } from "@/components/DetailEditorSidebar";
 import { LLMModelIcon } from "@/components/model/LLMModelIcon";
+import { SettingActionItem, SettingGroup, SettingItem, SettingSection, SettingsContainer, SettingsMainContent } from "@/components/settings/SettingComponents";
+import { Switch } from "@/components/ui/switch";
 import { ChatInputEditor } from "@/lib/chat/ChatInputEditor";
 import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopGroupStatusPhase, DesktopSettings } from "@common/types/DesktopApi";
@@ -90,19 +92,12 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
 }
 
 /** Group 联系人主页面，只展示摘要和可进入的具体配置项。 */
-export function GroupConfigView({ group, agents, open_config }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** 全部 Agent。 */ agents: DesktopAgentSummary[]; /** 打开具体配置项。 */ open_config(section: GroupEditorSection): void }) {
+export function GroupConfigView({ group, agents, open_config, sidebar, sidebar_collapsed = false, toggle_sidebar }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** 全部 Agent。 */ agents: DesktopAgentSummary[]; /** 打开具体配置项。 */ open_config(section: GroupEditorSection): void; /** Group Left Panel。 */ sidebar?: ReactNode; /** Group Left Panel 是否折叠。 */ sidebar_collapsed?: boolean; /** 切换 Group Left Panel。 */ toggle_sidebar?: () => void }) {
+  const content = <div className="min-h-0 min-w-0 flex-1 overflow-y-auto"><SettingsMainContent><SettingsContainer><SettingSection title="Group" description="配置协作模型、目标与参与成员"><SettingGroup><SettingActionItem icon={<LLMModelIcon model_id={group.model_id} />} label="Model" description="用于理解意图并调度成员的模型" trailing={<><span className="max-w-48 truncate">{group.model_id || "未配置"}</span><TbChevronRight /></>} on_select={() => open_config("model")} /><SettingActionItem icon={<TbFileText />} label="协作目标" description="说明 Group 的职责和协作方式" trailing={<><span>{group.instruction ? `${group.instruction.length} 字符` : "未设置"}</span><TbChevronRight /></>} on_select={() => open_config("instruction")} /><SettingActionItem icon={<TbUsers />} label="成员" description="选择参与该 Group 的 Agent" trailing={<><span>{group.members.length} 个</span><TbChevronRight /></>} on_select={() => open_config("members")} /></SettingGroup></SettingSection></SettingsContainer></SettingsMainContent></div>;
+  if (sidebar && toggle_sidebar) return <ChatSurfaceLayout sidebar={sidebar} reserve_shell_control={sidebar_collapsed} header_actions={<SessionSidebarButton collapsed={sidebar_collapsed} toggle_collapsed={toggle_sidebar} />} header_left={group.name}>{content}</ChatSurfaceLayout>;
   return <MainViewLayout>
     <MainViewHeader title={<span className="flex min-w-0 items-center gap-2"><GroupAvatar group={group} agents={agents} /><span className="truncate">{group.name}</span></span>} />
-    <MainViewBody>
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto"><div className="mx-auto w-full max-w-[42rem] px-6 pb-12 pt-14">
-        <div className="mb-9 flex min-w-0 items-center gap-4"><div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-subtle"><GroupAvatar group={group} agents={agents} /></div><div className="min-w-0"><h1 className="truncate text-lg font-semibold text-foreground">{group.name}</h1><p className="mt-1 truncate text-xs text-muted-foreground">{group.members.length} 个 Agent 成员</p></div></div>
-        <SettingsGroup title="Definition">
-          <EditablePropertyRow icon={<LLMModelIcon model_id={group.model_id} />} label="Model" value={group.model_id || "未配置"} active={false} on_select={() => open_config("model")} />
-          <EditablePropertyRow icon={<TbFileText />} label="目标" value={group.instruction ? `${group.instruction.length} characters` : "未设置"} active={false} on_select={() => open_config("instruction")} />
-          <EditablePropertyRow icon={<TbUsers />} label="成员" value={`${group.members.length} 个 Agent`} active={false} on_select={() => open_config("members")} last />
-        </SettingsGroup>
-      </div></div>
-    </MainViewBody>
+    <MainViewBody>{content}</MainViewBody>
   </MainViewLayout>;
 }
 
@@ -111,7 +106,7 @@ function format_group_session_title(session: DesktopGroupSessionSummary): string
   return session.preview_text?.trim().slice(0, 36) || `Session ${session.session_id.slice(0, 8)}`;
 }
 
-/** BayBar 中当前 Group 配置项的单一编辑器。 */
+/** 当前 Group 配置项的单一编辑器。 */
 export function GroupInfoSidebar({ group, agents, controller, close_sidebar, section, collapsed = false, embedded = false }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** 全部 Agent。 */ agents: DesktopAgentSummary[]; /** Desktop 根状态控制器。 */ controller: DesktopViewController; /** 关闭侧栏。 */ close_sidebar(): void; /** 当前编辑分区。 */ section?: GroupEditorSection; /** 是否折叠。 */ collapsed?: boolean; /** 是否嵌入 BayBar。 */ embedded?: boolean }) {
   const [editor_section, set_editor_section] = useState<GroupEditorSection | undefined>(section || "model");
   const [draft, set_draft] = useState(group);
@@ -133,25 +128,24 @@ export function GroupInfoSidebar({ group, agents, controller, close_sidebar, sec
     return () => { window.clearTimeout(timeout_id); };
   }, [controller.update_group, draft, draft_dirty, group.group_id]);
   const update_draft = (next: DesktopGroupSummary) => { version_ref.current += 1; set_draft(next); set_draft_dirty(true); };
-  const content = editor_section === "model" ? <GroupModelEditor group={draft} models={controller.models} models_loading={controller.models_loading} set_group={update_draft} /> : editor_section === "instruction" ? <textarea value={draft.instruction || ""} onChange={(event) => update_draft({ ...draft, instruction: event.target.value })} placeholder="Group 协作目标…" className="min-h-full w-full resize-none bg-background px-2 py-1 font-mono text-xs leading-6 text-foreground outline-none" autoFocus /> : <div className="space-y-1">{agents.map((agent) => { const active = draft.members.some((member) => member.agent_id === agent.agent_id); return <label key={agent.agent_id} className="flex min-h-10 items-center gap-2 rounded-lg px-2.5 text-xs hover:bg-interaction-hover"><input type="checkbox" checked={active} onChange={(event) => { const members = event.target.checked ? [...draft.members, { agent_id: agent.agent_id }] : draft.members.filter((member) => member.agent_id !== agent.agent_id); if (members.length > 0) update_draft({ ...draft, members }); }} /><AgentAvatar agent={agent} class_name="size-5 rounded" /><span className="min-w-0 flex-1 truncate">{agent.agent_id}</span></label>; })}</div>;
-  return <DetailEditorSidebar title={`${group.name} / ${editor_section === "model" ? "Model" : editor_section === "instruction" ? "目标" : "成员"}`} storage_key="downcity.group_config_width" default_width={400} max_width={560} on_close={close_sidebar} collapsed={collapsed} show_close={false} embedded={embedded}>{content}</DetailEditorSidebar>;
+  const content = editor_section === "model" ? <GroupModelEditor group={draft} models={controller.models} models_loading={controller.models_loading} set_group={update_draft} /> : editor_section === "instruction" ? <div className="overflow-hidden rounded-lg bg-surface-subtle p-3"><textarea value={draft.instruction || ""} onChange={(event) => update_draft({ ...draft, instruction: event.target.value })} placeholder="Group 协作目标…" className="min-h-80 w-full resize-none bg-transparent px-1 py-0.5 font-mono text-xs leading-6 text-foreground outline-none" autoFocus /></div> : <SettingGroup>{agents.map((agent) => { const active = draft.members.some((member) => member.agent_id === agent.agent_id); return <SettingItem key={agent.agent_id} label={agent.agent_id} description={active ? "已加入当前 Group" : "未加入当前 Group"} leading={<AgentAvatar agent={agent} class_name="size-5 rounded" />}><Switch checked={active} disabled={active && draft.members.length === 1} onCheckedChange={(checked) => { const members = checked ? [...draft.members, { agent_id: agent.agent_id }] : draft.members.filter((member) => member.agent_id !== agent.agent_id); if (members.length > 0) update_draft({ ...draft, members }); }} aria-label={`${agent.agent_id} 成员状态`} /></SettingItem>; })}</SettingGroup>;
+  const title = editor_section === "model" ? "Model" : editor_section === "instruction" ? "协作目标" : "成员";
+  const wrapped_content = <SettingsMainContent><SettingsContainer><SettingSection title={title} description={editor_section === "model" ? "选择 Group 调度成员时使用的模型" : editor_section === "instruction" ? "编辑 Group 的职责与协作目标" : "选择参与该 Group 的 Agent"}>{content}</SettingSection></SettingsContainer></SettingsMainContent>;
+  if (embedded) return wrapped_content;
+  return <DetailEditorSidebar title={`${group.name} / ${title}`} storage_key="downcity.group_config_width" default_width={400} max_width={560} on_close={close_sidebar} collapsed={collapsed} show_close={false}>{content}</DetailEditorSidebar>;
 }
 
 function GroupModelEditor({ group, models, models_loading, set_group }: { /** 当前编辑草稿。 */ group: DesktopGroupSummary; /** 可用模型。 */ models: DesktopViewController["models"]; /** 模型目录加载态。 */ models_loading: boolean; /** 更新 Group 草稿。 */ set_group(group: DesktopGroupSummary): void }) {
   const text_models = models.filter((model) => model.modalities.some((modality) => ["text", "stream", "openai"].includes(modality)));
   if (models_loading && text_models.length === 0) return <div className="py-8 text-center text-xs text-muted-foreground">模型加载中…</div>;
   if (text_models.length === 0) return <div className="py-8 text-center text-xs text-muted-foreground">暂无文本模型</div>;
-  return <div className="-mx-3 divide-y divide-border/45 border-y border-border/45">{text_models.map((model) => { const active = model.model_id === group.model_id; return <button key={model.model_id} type="button" onClick={() => set_group({ ...group, model_id: model.model_id })} aria-pressed={active} className={cn("group flex min-h-10 w-full items-center gap-2 px-3 text-left transition-colors hover:bg-interaction-hover", active && "bg-interaction-selected hover:bg-interaction-active")}><LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-4" /><span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground/90">{model.name}</span><TbCheck className={cn("size-4 shrink-0 transition-opacity", active ? "opacity-100" : "opacity-0")} /></button>; })}</div>;
+  return <SettingGroup>{text_models.map((model) => <SettingActionItem key={model.model_id} icon={<LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-4" />} label={model.name} description={model.description || model.model_id} active={model.model_id === group.model_id} on_select={() => set_group({ ...group, model_id: model.model_id })} />)}</SettingGroup>;
 }
 
 function GroupAvatar({ group, agents }: { /** Group 摘要。 */ group: DesktopGroupSummary; /** Agent 列表。 */ agents: DesktopAgentSummary[] }) {
   const member = agents.find((agent) => agent.agent_id === group.members[0]?.agent_id);
   return member ? <AgentAvatar agent={member} class_name="size-8 rounded-lg" /> : <TbUsers className="size-8 rounded-lg bg-foreground/[0.06] p-1.5 text-muted-foreground" />;
 }
-
-function SettingsGroup({ title, children }: { /** 分组标题。 */ title: string; /** 分组内容。 */ children: React.ReactNode }) { return <section className="mb-7"><h2 className="mb-2 px-1 text-xs font-semibold text-foreground">{title}</h2><div className="overflow-hidden rounded-lg bg-surface-subtle">{children}</div></section>; }
-
-function EditablePropertyRow({ icon, label, value, active, on_select, last = false }: { /** 属性图标。 */ icon: React.ReactNode; /** 属性名称。 */ label: string; /** 属性值。 */ value: string; /** 是否激活。 */ active: boolean; /** 打开编辑器。 */ on_select(): void; /** 是否最后一行。 */ last?: boolean }) { return <button type="button" className={`grid min-h-11 w-full grid-cols-[1rem_4rem_minmax(0,1fr)_1rem] items-center gap-3 px-3.5 text-left transition-colors ${active ? "bg-primary/[0.08]" : "hover:bg-foreground/[0.04]"} ${last ? "" : "border-b border-border/45"}`} onClick={on_select}><span className="text-muted-foreground [&_svg]:size-4">{icon}</span><span className="text-[0.6875rem] text-muted-foreground">{label}</span><span className="truncate text-right text-[0.6875rem] text-foreground/80">{value}</span><TbChevronRight className="size-3.5 text-muted-foreground" /></button>; }
 
 /** 按 Agent Chat 的左右消息结构渲染 Group 共享消息。 */
 function GroupMessageRow({ message, agents, read }: { /** Group 共享消息。 */ message: DesktopGroupMessage; /** 可用 Agent 列表。 */ agents: DesktopAgentSummary[]; /** 用户消息是否已完成 Dispatch。 */ read: boolean }) {

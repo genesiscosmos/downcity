@@ -82,6 +82,14 @@ function move_draft_value<Value>(current: Record<string, Value>, source_key: str
   return next;
 }
 
+/** 从 Session 索引状态中移除一个键，并在无需修改时保留原引用。 */
+function remove_session_value<Value>(current: Record<string, Value>, session_key: string): Record<string, Value> {
+  if (!(session_key in current)) return current;
+  const next = { ...current };
+  delete next[session_key];
+  return next;
+}
+
 /** 把未知失败统一转换为用户可见文本。 */
 function to_error_message(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
@@ -137,6 +145,8 @@ export function use_desktop_controller(): DesktopViewController {
   const mutation_batches_ref = useRef(new Map<string, SessionMutation[]>());
   const mutation_frame_ref = useRef<number | null>(null);
   const snapshot_request_ref = useRef(new Map<string, number>());
+  const deleting_session_keys_ref = useRef(new Set<string>());
+  const deleted_session_keys_ref = useRef(new Set<string>());
   const processing_queue_ref = useRef(new Set<string>());
   const previous_selection_ref = useRef<NavigationTarget | null>(null);
   const selection_by_sidebar_mode_ref = useRef<Partial<Record<SidebarMode, NavigationTarget>>>({});
@@ -159,7 +169,7 @@ export function use_desktop_controller(): DesktopViewController {
   /** 提交队首消息；同一 Session 同时只执行一个提交循环。 */
   const process_next_queue = useCallback(async (workspace_id: string, agent_id: string, session_id: string): Promise<void> => {
     const session_key = get_session_key(workspace_id, agent_id, session_id);
-    if (processing_queue_ref.current.has(session_key) || is_chat_busy(chat_runtime_ref.current[session_key])) return;
+    if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key) || processing_queue_ref.current.has(session_key) || is_chat_busy(chat_runtime_ref.current[session_key])) return;
     const queued = queue_ref.current[session_key]?.[0];
     if (!queued) return;
     processing_queue_ref.current.add(session_key);
@@ -176,6 +186,7 @@ export function use_desktop_controller(): DesktopViewController {
         [session_key]: (queue_ref.current[session_key] ?? []).filter((item) => item.message_id !== queued.message_id),
       });
     } catch (reason) {
+      if (deleted_session_keys_ref.current.has(session_key)) return;
       commit_queue({
         ...queue_ref.current,
         [session_key]: (queue_ref.current[session_key] ?? []).map((item) => item.message_id === queued.message_id ? { ...item, sending: false } : item),
@@ -310,6 +321,7 @@ export function use_desktop_controller(): DesktopViewController {
   useEffect(() => {
     const unsubscribe_mutation = window.downcity.chat.on_mutation(({ agent_id, workspace_id, session_id, mutation }) => {
       const session_key = get_session_key(workspace_id, agent_id, session_id);
+      if (deleted_session_keys_ref.current.has(session_key)) return;
       const batch = mutation_batches_ref.current.get(session_key) ?? [];
       batch.push(mutation);
       mutation_batches_ref.current.set(session_key, batch);
@@ -337,6 +349,7 @@ export function use_desktop_controller(): DesktopViewController {
     });
     const unsubscribe_runtime = window.downcity.chat.on_runtime(({ runtime }) => {
       const session_key = get_session_key(runtime.workspace_id, runtime.agent_id, runtime.session_id);
+      if (deleted_session_keys_ref.current.has(session_key)) return;
       chat_runtime_ref.current = { ...chat_runtime_ref.current, [session_key]: runtime };
       set_chat_runtime_by_session(chat_runtime_ref.current);
       set_sessions_by_workspace((current) => ({
@@ -598,11 +611,12 @@ export function use_desktop_controller(): DesktopViewController {
   }, [agents, selection, settings.default_text_model_id]);
 
   const select_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, preserve_sidebar = false) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id);
+    if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key)) return;
     set_error("");
     if (!preserve_sidebar) set_sidebar_mode_state("chat");
     set_active_workspace_id(workspace_id);
     set_selection({ kind: "session", workspace_id, agent_id, session_id });
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
     const request_id = (snapshot_request_ref.current.get(session_key) ?? 0) + 1;
     snapshot_request_ref.current.set(session_key, request_id);
     try {
@@ -621,6 +635,7 @@ export function use_desktop_controller(): DesktopViewController {
       set_chat_runtime_by_session(chat_runtime_ref.current);
       set_configuration_by_session((current) => ({ ...current, [session_key]: configuration }));
     } catch (reason) {
+      if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key) || snapshot_request_ref.current.get(session_key) !== request_id) return;
       set_error(to_error_message(reason));
     }
   }, []);
@@ -628,11 +643,15 @@ export function use_desktop_controller(): DesktopViewController {
   /** 刷新当前 Agent Session 的 canonical 快照，恢复窗口切换期间错过的 mutation。 */
   const refresh_session_snapshot = useCallback(async (workspace_id: string, agent_id: string, session_id: string): Promise<void> => {
     const session_key = get_session_key(workspace_id, agent_id, session_id);
+    if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key)) return;
+    const request_id = (snapshot_request_ref.current.get(session_key) ?? 0) + 1;
+    snapshot_request_ref.current.set(session_key, request_id);
     try {
       const [snapshot, configuration] = await Promise.all([
         window.downcity.chat.get_snapshot(agent_id, workspace_id, session_id),
         window.downcity.chat.get_configuration(agent_id, workspace_id, session_id),
       ]);
+      if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key) || snapshot_request_ref.current.get(session_key) !== request_id) return;
       set_messages_by_session((current) => ({ ...current, [session_key]: merge_session_snapshot(current[session_key] ?? [], snapshot.messages) }));
       const history_state = { loading: false, has_more: snapshot.has_more, next_before_sequence: snapshot.next_before_sequence };
       history_ref.current = { ...history_ref.current, [session_key]: history_state };
@@ -643,6 +662,7 @@ export function use_desktop_controller(): DesktopViewController {
       set_chat_runtime_by_session(chat_runtime_ref.current);
       set_configuration_by_session((current) => ({ ...current, [session_key]: configuration }));
     } catch (reason) {
+      if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key) || snapshot_request_ref.current.get(session_key) !== request_id) return;
       set_error(to_error_message(reason));
     }
   }, []);
@@ -767,21 +787,49 @@ export function use_desktop_controller(): DesktopViewController {
   }, []);
 
   const remove_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id);
+    deleting_session_keys_ref.current.add(session_key);
+    snapshot_request_ref.current.set(session_key, (snapshot_request_ref.current.get(session_key) ?? 0) + 1);
     try {
-      const removed = await window.downcity.chat.remove_session(agent_id, workspace_id, session_id);
-      if (!removed) return;
+      await window.downcity.chat.remove_session(agent_id, workspace_id, session_id);
+      deleting_session_keys_ref.current.delete(session_key);
+      deleted_session_keys_ref.current.add(session_key);
       set_sessions_by_workspace((current) => ({
         ...current,
         [workspace_id]: (current[workspace_id] ?? []).filter((item) => item.agent_id !== agent_id || item.session.session_id !== session_id),
       }));
+      set_messages_by_session((current) => remove_session_value(current, session_key));
+      chat_runtime_ref.current = remove_session_value(chat_runtime_ref.current, session_key);
+      set_chat_runtime_by_session(chat_runtime_ref.current);
+      history_ref.current = remove_session_value(history_ref.current, session_key);
+      set_history_by_session(history_ref.current);
+      set_configuration_by_session((current) => remove_session_value(current, session_key));
+      set_drafts_by_session((current) => remove_session_value(current, session_key));
+      set_draft_files_by_session((current) => remove_session_value(current, session_key));
+      set_draft_references_by_session((current) => remove_session_value(current, session_key));
+      commit_queue(remove_session_value(queue_ref.current, session_key));
+      processing_queue_ref.current.delete(session_key);
+      mutation_batches_ref.current.delete(session_key);
+      snapshot_request_ref.current.delete(session_key);
+      const fallback_selection: NavigationTarget = { kind: "draft", workspace_id, agent_id, draft_id: get_draft_session_id(agent_id) };
+      if (previous_selection_ref.current?.kind === "session" && previous_selection_ref.current.workspace_id === workspace_id && previous_selection_ref.current.agent_id === agent_id && previous_selection_ref.current.session_id === session_id) {
+        previous_selection_ref.current = fallback_selection;
+      }
+      for (const mode of Object.keys(selection_by_sidebar_mode_ref.current) as SidebarMode[]) {
+        const target = selection_by_sidebar_mode_ref.current[mode];
+        if (target?.kind === "session" && target.workspace_id === workspace_id && target.agent_id === agent_id && target.session_id === session_id) {
+          selection_by_sidebar_mode_ref.current[mode] = fallback_selection;
+        }
+      }
       set_selection((current) => current?.kind === "session" && current.workspace_id === workspace_id && current.agent_id === agent_id && current.session_id === session_id
-        ? { kind: "draft", workspace_id, agent_id, draft_id: get_draft_session_id(agent_id) }
+        ? fallback_selection
         : current);
     } catch (reason) {
+      deleting_session_keys_ref.current.delete(session_key);
       set_error(to_error_message(reason));
       throw reason;
     }
-  }, []);
+  }, [commit_queue]);
 
   const load_archived_sessions = useCallback(async (workspace_id: string) => {
     try {

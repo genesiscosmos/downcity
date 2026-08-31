@@ -1,19 +1,23 @@
-/** Agent 身份、配置索引与右侧定义编辑容器。 */
+/** Agent 身份、配置索引与 MainView 定义编辑内容。 */
 
 import { useEffect, useRef, useState } from "react";
-import { TbCheck, TbChevronRight, TbComponents, TbFileText, TbMessageCircle, TbPlus } from "react-icons/tb";
+import { TbChevronRight, TbComponents, TbFileText, TbMessageCircle, TbPlus } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { DetailEditorSidebar } from "@/components/DetailEditorSidebar";
 import { LLMModelIcon } from "@/components/model/LLMModelIcon";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { SettingActionItem, SettingGroup, SettingItem, SettingSection, SettingsContainer, SettingsMainContent } from "@/components/settings/SettingComponents";
 import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
-import { cn } from "@/lib/utils";
+import { ChatSurfaceLayout } from "@/layouts/ChatSurfaceLayout";
+import { SessionSidebarButton } from "@/layouts/MainViewLayout";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import type { DesktopViewController } from "@/types/DesktopView";
-import type { DesktopAgentDefinition, DesktopAgentPluginReference, DesktopAgentSummary, DesktopPluginSummary, DesktopSessionSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
+import type { DesktopAgentDefinition, DesktopAgentSummary, DesktopPluginSummary, DesktopSessionSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
-/** Agent 页面可以在右侧编辑的定义分区。 */
-export type AgentEditorSection = "model" | "soul" | "plugins" | "avatar";
+/** Agent 页面可以编辑的定义分区。 */
+export type AgentEditorSection = "model" | "soul" | "plugins";
 
 /** Agent 管理页属性。 */
 interface AgentViewProps {
@@ -24,6 +28,9 @@ interface AgentViewProps {
   /** Renderer 根控制器。 */ controller: DesktopViewController;
   /** 打开主 Session 对话。 */ open_main_session(): Promise<void>;
   /** 打开 Agent 信息编辑面板。 */ open_config(section: AgentEditorSection): void;
+  /** Agent Left Panel。 */ sidebar?: React.ReactNode;
+  /** Agent Left Panel 是否折叠。 */ sidebar_collapsed?: boolean;
+  /** 切换 Agent Left Panel。 */ toggle_sidebar?: () => void;
 }
 /** Agent 信息侧栏属性。 */
 interface AgentInfoSidebarProps {
@@ -43,7 +50,7 @@ interface AgentInfoSidebarProps {
   embedded?: boolean;
 }
 
-/** BayBar 中当前 Agent 配置项的单一编辑器。 */
+/** 当前 Agent 配置项的单一编辑器。 */
 export function AgentInfoSidebar({ agent, plugins, controller, close_sidebar, section, collapsed = false, embedded = false }: AgentInfoSidebarProps) {
   const [editor_section, set_editor_section] = useState<AgentEditorSection | undefined>(section || "model");
   useEffect(() => { if (section) set_editor_section(section); }, [section]);
@@ -78,26 +85,24 @@ export function AgentInfoSidebar({ agent, plugins, controller, close_sidebar, se
     }, 500);
     return () => window.clearTimeout(timeout_id);
   }, [agent.agent_id, controller.update_agent, definition, definition_dirty]);
-  const titles: Record<AgentEditorSection, string> = { model: "Model", soul: "SOUL.md", plugins: "Plugins", avatar: "Avatar" };
+  const titles: Record<AgentEditorSection, string> = { model: "Model", soul: "SOUL.md", plugins: "Plugins" };
   const content = editor_section ? <AgentEditorPanel embedded section={editor_section} definition={definition} plugins={plugins} controller={controller} loading={loading_definition} error={editor_error} set_definition={update_definition} close_editor={close_sidebar} /> : null;
+  if (embedded) return content;
   return <DetailEditorSidebar title={`${agent.agent_id} / ${titles[editor_section || "model"]}`} storage_key="downcity.agent_config_width" default_width={400} max_width={560} on_close={close_sidebar} collapsed={collapsed} show_close={false} embedded={embedded}>{content}</DetailEditorSidebar>;
 }
 
 /** 左侧展示 Agent 摘要，点击配置项后在右侧展开对应编辑容器。 */
-export function AgentView({ agent, workspaces, plugins, main_session, controller, open_main_session, open_config }: AgentViewProps) {
+export function AgentView({ agent, workspaces, plugins, main_session, controller, open_main_session, open_config, sidebar, sidebar_collapsed = false, toggle_sidebar }: AgentViewProps) {
+  const [avatar_dialog_open, set_avatar_dialog_open] = useState(false);
   const bound_plugins = plugins.filter((plugin) => plugin.agent_ids.includes(agent.agent_id));
   const recent_sessions = main_session ? [main_session.session] : [];
 
+  const content = <div className="min-h-0 min-w-0 flex-1 overflow-y-auto"><SettingsMainContent><SettingsContainer><button type="button" className="group flex w-fit min-w-0 items-center gap-4 rounded-2xl px-2 py-1 text-left outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring/30" onClick={() => set_avatar_dialog_open(true)}><AgentAvatar agent={agent} class_name="size-16 rounded-2xl" icon_class_name="size-8" /><span className="min-w-0"><span className="block truncate text-base font-medium text-foreground">{agent.agent_id}</span><span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">配置头像<TbChevronRight className="size-3.5" /></span></span></button><SettingSection title="Agent" description="配置 Agent 的默认能力与行为"><SettingGroup><SettingActionItem icon={<LLMModelIcon model_id={agent.model_id} />} label="Model" description="Agent 默认使用的文本模型" trailing={<><span className="max-w-48 truncate">{agent.model_id || "未配置"}</span><TbChevronRight /></>} on_select={() => open_config("model")} /><SettingActionItem icon={<TbFileText />} label="SOUL.md" description="定义 Agent 的身份、目标和行为方式" trailing={<TbChevronRight />} on_select={() => open_config("soul")} /><SettingActionItem icon={<TbComponents />} label="Plugins" description="启用工具、渠道与外部能力" trailing={<><span>{bound_plugins.length} 个</span><TbChevronRight /></>} on_select={() => open_config("plugins")} /></SettingGroup></SettingSection><SettingSection title="主对话" description="进入该 Agent 的持续对话">{recent_sessions.length > 0 ? <SettingGroup>{recent_sessions.map((session) => <SettingActionItem key={session.session_id} icon={<TbMessageCircle />} label={session.title || "主对话"} description={`${session.message_count} 条消息`} trailing={<TbChevronRight />} on_select={() => void open_main_session()} />)}</SettingGroup> : <Button className="rounded-full px-3" onClick={() => void open_main_session()}><TbMessageCircle />开始主对话</Button>}</SettingSection></SettingsContainer></SettingsMainContent><Dialog open={avatar_dialog_open} onOpenChange={set_avatar_dialog_open}><DialogContent><DialogHeader><DialogTitle>配置头像</DialogTitle><DialogDescription>设置 {agent.agent_id} 在 Chat 和 Group 中显示的头像。</DialogDescription></DialogHeader><DialogBody><div className="flex justify-center py-4"><AgentAvatar agent={agent} class_name="size-28 rounded-3xl" icon_class_name="size-12" /></div></DialogBody><DialogFooter><Button onClick={() => void controller.generate_agent_avatar(agent.agent_id)}>随机生成</Button><Button variant="primary" onClick={() => void controller.choose_agent_avatar(agent.agent_id)}>选择图片</Button></DialogFooter></DialogContent></Dialog></div>;
+  if (sidebar && toggle_sidebar) return <ChatSurfaceLayout sidebar={sidebar} reserve_shell_control={sidebar_collapsed} header_actions={<SessionSidebarButton collapsed={sidebar_collapsed} toggle_collapsed={toggle_sidebar} />} header_left={agent.agent_id}>{content}</ChatSurfaceLayout>;
   return <div className="flex h-full min-h-0 min-w-0 flex-1 bg-background">
     <MainViewLayout>
       <MainViewHeader title={<span className="flex min-w-0 items-center gap-1.5"><AgentAvatar agent={agent} /><span className="truncate">{agent.agent_id}</span></span>} />
-      <MainViewBody>
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto"><div className="mx-auto w-full max-w-[42rem] px-6 pb-12 pt-14">
-        <div className="mb-9 flex min-w-0 items-center gap-4"><div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-subtle text-muted-foreground"><AgentAvatar agent={agent} class_name="size-12 rounded-xl" icon_class_name="size-6" /></div><div className="min-w-0"><h1 className="truncate text-lg font-semibold text-foreground">{agent.agent_id}</h1><p className="mt-1 truncate text-xs text-muted-foreground">可进入 {workspaces.length} 个 Workspace</p></div></div>
-<SettingsGroup title="Definition"><EditablePropertyRow icon={<LLMModelIcon model_id={agent.model_id} />} label="Model" value={agent.model_id || "未配置"} active={false} on_select={() => open_config("model")} /><EditablePropertyRow icon={<TbFileText />} label="SOUL.md" value="Agent instruction" active={false} on_select={() => open_config("soul")} /><EditablePropertyRow icon={<TbComponents />} label="Plugins" value={`${bound_plugins.length} enabled`} active={false} on_select={() => open_config("plugins")} /><EditablePropertyRow icon={<AgentAvatar agent={agent} class_name="size-4 rounded" />} label="Avatar" value={agent.avatar_url ? "Default avatar" : "Default avatar"} active={false} on_select={() => open_config("avatar")} last /></SettingsGroup>
-        <SettingsGroup title="主对话">{recent_sessions.length > 0 ? recent_sessions.map((session) => <button key={session.session_id} className="flex min-h-11 w-full items-center gap-3 px-3.5 text-left hover:bg-foreground/[0.04]" onClick={() => void open_main_session()}><TbMessageCircle className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate text-xs text-foreground">{session.title || "主对话"}</span><span className="text-[0.625rem] text-muted-foreground">{session.message_count} messages</span></button>) : <Button variant="primary" onClick={() => void open_main_session()}><TbMessageCircle />开始主对话</Button>}</SettingsGroup>
-      </div></div>
-      </MainViewBody>
+      <MainViewBody>{content}</MainViewBody>
     </MainViewLayout>
   </div>;
 }
@@ -114,16 +119,16 @@ function AgentEditorPanel({ section, definition, plugins, controller, loading, e
   /** 收起右侧容器。 */ close_editor(): void;
   /** 是否嵌入已有信息侧栏。 */ embedded?: boolean;
 }) {
-  const titles: Record<AgentEditorSection, string> = { model: "Model", soul: "SOUL.md", plugins: "Plugins", avatar: "Avatar" };
+  const titles: Record<AgentEditorSection, string> = { model: "Model", soul: "SOUL.md", plugins: "Plugins" };
   const content = <>
         {loading && !definition ? <div className="py-10 text-center text-xs text-muted-foreground">加载中…</div> : null}
         {definition && section === "model" ? <ModelEditor definition={definition} controller={controller} set_definition={set_definition} /> : null}
         {definition && section === "soul" ? <SoulEditor definition={definition} controller={controller} set_definition={set_definition} /> : null}
         {definition && section === "plugins" ? <PluginEditor definition={definition} plugins={plugins} controller={controller} set_definition={set_definition} /> : null}
-        {section === "avatar" ? <div className="flex flex-col items-center gap-3 py-4"><AgentAvatar agent={controller.agents.find((item) => item.agent_id === definition?.agent_id) ?? { agent_id: "", model_id: "", version: "" }} class_name="size-24 rounded-2xl" /><div className="flex w-full gap-2"><Button className="flex-1" onClick={() => void controller.generate_agent_avatar(controller.agents.find((item) => item.agent_id === definition?.agent_id)?.agent_id || "")}>随机生成</Button><Button className="flex-1" onClick={() => void controller.choose_agent_avatar(controller.agents.find((item) => item.agent_id === definition?.agent_id)?.agent_id || "")}>选择图片</Button></div></div> : null}
         {error ? <div className="mt-3 text-[0.6875rem] leading-4 text-destructive">{error}</div> : null}
   </>;
-  return embedded ? <div className="mt-3 border-t border-border/45 pt-3">{content}</div> : <DetailEditorSidebar title={titles[section]} storage_key="downcity.agent_editor_width" default_width={400} max_width={560} on_close={close_editor}>{content}</DetailEditorSidebar>;
+  if (embedded && section === "soul") return <div className="h-full min-h-0 w-full">{content}</div>;
+  return embedded ? <SettingsMainContent><SettingsContainer><SettingSection title={titles[section]} description={section === "model" ? "选择 Agent 的默认文本模型" : "选择 Agent 可以使用的扩展能力"}>{content}</SettingSection></SettingsContainer></SettingsMainContent> : <DetailEditorSidebar title={titles[section]} storage_key="downcity.agent_editor_width" default_width={400} max_width={560} on_close={close_editor}>{content}</DetailEditorSidebar>;
 }
 
 /** 默认模型编辑器。 */
@@ -131,17 +136,12 @@ function ModelEditor({ definition, controller, set_definition }: { /** 未提交
   const text_models = controller.models.filter((model) => model.modalities.some((modality) => ["text", "stream", "openai"].includes(modality)));
   if (controller.models_loading && text_models.length === 0) return <div className="py-8 text-center text-xs text-muted-foreground">模型加载中…</div>;
   if (text_models.length === 0) return <div className="py-8 text-center text-xs text-muted-foreground">暂无文本模型</div>;
-  return <div className="-mx-3 divide-y divide-border/45 border-y border-border/45">
+  return <SettingGroup>
     {text_models.map((model) => {
       const active = model.model_id === definition.model_id;
-      return <button key={model.model_id} type="button" onClick={() => set_definition({ ...definition, model_id: model.model_id })} aria-pressed={active} className={cn("group flex min-h-10 w-full items-center gap-2 px-3 text-left transition-colors hover:bg-interaction-hover", active && "bg-interaction-selected hover:bg-interaction-active")}>
-        <LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-4" />
-        <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground/90" title={model.name}>{model.name}</span>
-        {model.context_window ? <span className="rounded bg-foreground/[0.04] px-1.5 text-[10px] leading-4 text-muted-foreground/75 tabular-nums">{format_context_window(model.context_window)}</span> : null}
-        <TbCheck className={cn("size-4 shrink-0 text-foreground transition-opacity", active ? "opacity-100" : "opacity-0")} aria-hidden="true" />
-      </button>;
+      return <SettingActionItem key={model.model_id} icon={<LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-4" />} label={model.name} description={model.description || model.model_id} trailing={model.context_window ? <span>{format_context_window(model.context_window)}</span> : undefined} active={active} on_select={() => set_definition({ ...definition, model_id: model.model_id })} />;
     })}
-  </div>;
+  </SettingGroup>;
 }
 
 /** 格式化模型上下文窗口，保持与设置页模型列表一致。 */
@@ -164,15 +164,27 @@ function SoulEditor({ definition, controller, set_definition }: { /** 未提交�
     autoFocus
     spellCheck={controller.settings.spellcheck_enabled}
     data-placeholder="开始编辑 SOUL.md…"
-    className="min-h-full w-full bg-background px-2 py-1 font-mono text-xs leading-6 text-foreground outline-none empty:before:pointer-events-none empty:before:text-muted-foreground/50 empty:before:content-[attr(data-placeholder)]"
+    className="h-full min-h-full w-full overflow-y-auto bg-background px-8 py-6 font-mono text-xs leading-6 text-foreground outline-none empty:before:pointer-events-none empty:before:text-muted-foreground/50 empty:before:content-[attr(data-placeholder)]"
     onInput={(event) => set_definition({ ...definition, instruction: event.currentTarget.innerText })}
   />;
 }
 
 /** Plugin 注册与 profile 编辑器。 */
 function PluginEditor({ definition, plugins, controller, set_definition }: { /** 未提交定义。 */ definition: DesktopAgentDefinition; /** 可用 Plugin。 */ plugins: DesktopPluginSummary[]; /** Desktop 根控制器。 */ controller: DesktopViewController; /** 替换定义。 */ set_definition(value: DesktopAgentDefinition): void }) {
-  const [expanded_plugins, set_expanded_plugins] = useState<Set<string>>(() => new Set());
   const [missing_profile_plugin, set_missing_profile_plugin] = useState<DesktopPluginSummary>();
+  const [missing_profile_dialog_open, set_missing_profile_dialog_open] = useState(false);
+  const [pending_profile_plugin_id, set_pending_profile_plugin_id] = useState<string>();
+  const open_missing_profile_dialog = (plugin: DesktopPluginSummary) => {
+    set_missing_profile_plugin(plugin);
+    set_missing_profile_dialog_open(true);
+  };
+  const complete_missing_profile_dialog = (open: boolean) => {
+    if (open) return;
+    const plugin_id = pending_profile_plugin_id;
+    set_missing_profile_plugin(undefined);
+    set_pending_profile_plugin_id(undefined);
+    if (plugin_id) controller.select_plugin(plugin_id);
+  };
   const set_plugin = (plugin: DesktopPluginSummary, enabled: boolean) => {
     const next_plugins = { ...definition.plugins };
     if (!enabled) {
@@ -184,54 +196,16 @@ function PluginEditor({ definition, plugins, controller, set_definition }: { /**
   };
   const set_profile = (plugin_id: string, profile: string) => set_definition({
     ...definition,
-    plugins: { ...definition.plugins, [plugin_id]: { profile } },
-  });
-  const toggle_expanded = (plugin_id: string) => set_expanded_plugins((current) => {
-    const next = new Set(current);
-    if (next.has(plugin_id)) next.delete(plugin_id);
-    else next.add(plugin_id);
-    return next;
+    plugins: { ...definition.plugins, [plugin_id]: profile ? { profile } : {} },
   });
   return <>
-    <div className="space-y-1">{plugins.filter((plugin) => plugin.has_agent).map((plugin) => {
+    <SettingGroup>{plugins.filter((plugin) => plugin.has_agent).map((plugin) => {
       const reference = definition.plugins[plugin.plugin_id];
-      const expanded = expanded_plugins.has(plugin.plugin_id);
-      return <div key={plugin.plugin_id} className="overflow-hidden rounded-xl border border-border/60 bg-surface-subtle">
-        <div className="flex min-h-11 items-center gap-2 px-3 hover:bg-interaction-hover">
-          <input type="checkbox" checked={Boolean(reference)} onChange={(event) => set_plugin(plugin, event.target.checked)} />
-          <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => toggle_expanded(plugin.plugin_id)}>
-            <TbChevronRight className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} />
-            <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{plugin.title}</span>
-            {reference?.profile
-              ? <span className="max-w-32 truncate rounded-md bg-primary/[0.1] px-1.5 py-0.5 font-mono text-[0.625rem] text-primary">{reference.profile}</span>
-              : <span className="text-[0.625rem] text-muted-foreground">空配置</span>}
-          </button>
-        </div>
-        {expanded ? <div className="grid gap-1.5 border-t border-border/50 bg-background/45 p-2">
-          <button type="button" className={`flex min-h-9 items-center gap-2 rounded-lg border px-2.5 text-left text-xs transition-colors ${reference && !reference.profile ? "border-primary/40 bg-primary/[0.1] text-foreground" : "border-transparent text-muted-foreground hover:border-border hover:bg-interaction-hover"}`} onClick={() => set_plugin(plugin, true)}>
-            <span className={`size-1.5 shrink-0 rounded-full ${reference && !reference.profile ? "bg-primary" : "bg-muted-foreground/40"}`} />
-            <span className="min-w-0 flex-1">空配置</span>
-          </button>
-          {plugin.profile_ids.map((profile_id) => <button key={profile_id} type="button" className={`flex min-h-9 items-center gap-2 rounded-lg border px-2.5 text-left text-xs transition-colors ${reference?.profile === profile_id ? "border-primary/40 bg-primary/[0.1] text-foreground" : "border-transparent text-muted-foreground hover:border-border hover:bg-interaction-hover"}`} onClick={() => set_profile(plugin.plugin_id, profile_id)}>
-            <span className={`size-1.5 shrink-0 rounded-full ${reference?.profile === profile_id ? "bg-primary" : "bg-muted-foreground/40"}`} />
-            <span className="min-w-0 flex-1 truncate font-mono">{profile_id}</span>
-            {reference?.profile === profile_id ? <span className="text-[0.625rem] text-primary">已选择</span> : null}
-          </button>)}
-          <Button onClick={() => set_missing_profile_plugin(plugin)}><TbPlus />添加配置</Button>
-        </div> : null}
-      </div>;
-    })}{plugins.every((plugin) => !plugin.has_agent) ? <div className="py-8 text-center text-xs text-muted-foreground">暂无可用 Plugin</div> : null}</div>
-    <Dialog open={Boolean(missing_profile_plugin)} onOpenChange={(open) => { if (!open) set_missing_profile_plugin(undefined); }}>
-      <DialogContent><DialogHeader><DialogTitle>为 {missing_profile_plugin?.title} 添加配置</DialogTitle><DialogDescription>创建一个命名 Profile 后，Agent 可以显式选择它。</DialogDescription></DialogHeader><DialogBody><div className="rounded-lg bg-muted/50 px-3 py-2.5 text-xs leading-5 text-muted-foreground">创建完成后返回当前 Agent 页面，再展开 Plugin 选择刚刚创建的 Profile。</div></DialogBody><DialogFooter><Button onClick={() => set_missing_profile_plugin(undefined)}>取消</Button><Button variant="primary" onClick={() => { const plugin_id = missing_profile_plugin?.plugin_id; set_missing_profile_plugin(undefined); if (plugin_id) controller.select_plugin(plugin_id); }}>去创建配置</Button></DialogFooter></DialogContent>
+      const profile_options = [{ value: "", label: "空配置" }, ...plugin.profile_ids.map((profile_id) => ({ value: profile_id, label: profile_id }))];
+      return <SettingItem key={plugin.plugin_id} label={plugin.title} description={plugin.description || plugin.plugin_id} leading={<TbComponents />}><div className="flex items-center gap-2">{reference ? plugin.profile_ids.length > 0 ? <Select value={reference.profile || ""} options={profile_options} on_value_change={(profile) => set_profile(plugin.plugin_id, profile)} className="min-w-28 max-w-44 rounded-full" align="end" /> : <Button className="rounded-full" onClick={() => open_missing_profile_dialog(plugin)}><TbPlus />Profile</Button> : null}<Switch checked={Boolean(reference)} onCheckedChange={(enabled) => set_plugin(plugin, enabled)} aria-label={`${plugin.title} 启用状态`} /></div></SettingItem>;
+    })}{plugins.every((plugin) => !plugin.has_agent) ? <div className="py-8 text-center text-xs text-muted-foreground">暂无可用 Plugin</div> : null}</SettingGroup>
+    <Dialog open={missing_profile_dialog_open} onOpenChange={set_missing_profile_dialog_open} onOpenChangeComplete={complete_missing_profile_dialog}>
+      <DialogContent><DialogHeader><DialogTitle>为 {missing_profile_plugin?.title} 添加配置</DialogTitle><DialogDescription>创建一个命名 Profile 后，Agent 可以显式选择它。</DialogDescription></DialogHeader><DialogBody><div className="rounded-lg bg-muted/50 px-3 py-2.5 text-xs leading-5 text-muted-foreground">创建完成后返回当前 Agent 页面，再展开 Plugin 选择刚刚创建的 Profile。</div></DialogBody><DialogFooter><Button onClick={() => set_missing_profile_dialog_open(false)}>取消</Button><Button variant="primary" onClick={() => { set_pending_profile_plugin_id(missing_profile_plugin?.plugin_id); set_missing_profile_dialog_open(false); }}>去创建配置</Button></DialogFooter></DialogContent>
     </Dialog>
   </>;
 }
-
-/** 设置式信息分组。 */
-function SettingsGroup({ title, children }: { /** 分组标题。 */ title: string; /** 分组内容。 */ children: React.ReactNode }) { return <section className="mb-7"><h2 className="mb-2 px-1 text-xs font-semibold text-foreground">{title}</h2><div className="overflow-hidden rounded-lg bg-surface-subtle">{children}</div></section>; }
-
-/** 可打开右侧编辑器的 Agent 定义行。 */
-function EditablePropertyRow({ icon, label, value, active, on_select, last = false }: { /** 属性图标。 */ icon: React.ReactNode; /** 属性名称。 */ label: string; /** 属性值。 */ value: string; /** 是否正在编辑。 */ active: boolean; /** 打开编辑器。 */ on_select(): void; /** 是否最后一行。 */ last?: boolean }) { return <button className={`grid min-h-11 w-full grid-cols-[1rem_6rem_minmax(0,1fr)_1rem] items-center gap-3 px-3.5 text-left transition-colors ${active ? "bg-primary/[0.08]" : "hover:bg-foreground/[0.04]"} ${last ? "" : "border-b border-border/45"}`} onClick={on_select}><span className="text-muted-foreground [&_svg]:size-4">{icon}</span><span className="text-[0.6875rem] text-muted-foreground">{label}</span><span className="truncate text-right text-[0.6875rem] text-foreground/80">{value}</span><TbChevronRight className="size-3.5 text-muted-foreground" /></button>; }
-
-/** 空分组占位。 */
-function EmptyRow({ text }: { /** 空状态文本。 */ text: string }) { return <div className="px-3.5 py-4 text-xs text-muted-foreground">{text}</div>; }

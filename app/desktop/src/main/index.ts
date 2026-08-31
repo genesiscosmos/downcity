@@ -60,6 +60,7 @@ function create_window(): BrowserWindow {
   });
   if (process.env.ELECTRON_RENDERER_URL) window.loadURL(process.env.ELECTRON_RENDERER_URL);
   else window.loadFile(path.join(current_directory, "../renderer/index.html"));
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.once("ready-to-show", () => window.show());
   return window;
 }
@@ -69,6 +70,17 @@ function require_agent_controller(): AgentController {
   if (!agent_controller) throw new Error("Desktop Agent controller is not ready");
   return agent_controller;
 }
+
+ipcMain.handle("system:open-external-url", async (_event, value: string) => {
+  const url = new URL(value);
+  if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("仅支持使用浏览器打开 HTTP(S) 地址");
+  await shell.openExternal(url.toString());
+});
+ipcMain.handle("system:open-local-file", async (_event, value: string) => {
+  if (!path.isAbsolute(value)) throw new Error("本地文件必须使用绝对路径");
+  const error = await shell.openPath(path.normalize(value));
+  if (error) throw new Error(error);
+});
 
 ipcMain.handle("agent:list", () => require_agent_controller().list_agents());
 ipcMain.handle("agent:get", (_event, agent_id: string) => require_agent_controller().get_agent(agent_id));
